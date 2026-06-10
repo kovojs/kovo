@@ -38,6 +38,26 @@ describe('core authoring APIs', () => {
     expect(CartBadge.definition.queries?.cart.key).toBe('cart');
   });
 
+  it('rejects non-JsonValue component state at authoring time', () => {
+    const assertDateState = () => {
+      component('clock-face', {
+        render: () => null,
+        // @ts-expect-error component state must satisfy JsonValue; Date cannot be serialized.
+        state: () => ({ now: new Date() }),
+      });
+    };
+    const assertMapState = () => {
+      component('filter-panel', {
+        render: () => null,
+        // @ts-expect-error component state must satisfy JsonValue; Map cannot be serialized.
+        state: () => ({ selected: new Map<string, string>() }),
+      });
+    };
+
+    expect(assertDateState).toBeTypeOf('function');
+    expect(assertMapState).toBeTypeOf('function');
+  });
+
   it('preserves query and form keys as typed authoring facts', () => {
     expect(query('cart').key).toBe('cart');
     expect(form('cart/add').key).toBe('cart/add');
