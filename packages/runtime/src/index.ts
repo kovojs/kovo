@@ -211,6 +211,41 @@ export function applyMutationResponse(store: QueryStore, body: string): AppliedM
   };
 }
 
+export interface BroadcastLike {
+  close?: () => void;
+  onmessage: ((event: { data: unknown }) => void) | null;
+  postMessage(message: unknown): void;
+}
+
+export interface MutationBroadcast {
+  close(): void;
+  publish(body: string): void;
+}
+
+export function installMutationBroadcast(options: {
+  channel: BroadcastLike;
+  store: QueryStore;
+}): MutationBroadcast {
+  options.channel.onmessage = (event) => {
+    if (!isMutationBroadcastMessage(event.data)) return;
+
+    applyMutationResponse(options.store, event.data.body);
+  };
+
+  return {
+    close() {
+      options.channel.onmessage = null;
+      options.channel.close?.();
+    },
+    publish(body: string) {
+      options.channel.postMessage({
+        body,
+        type: 'jiso:mutation-response',
+      });
+    },
+  };
+}
+
 function readFragmentChunks(body: string): FragmentChunk[] {
   const fragments: FragmentChunk[] = [];
 
@@ -240,4 +275,18 @@ function unescapeHtml(value: string): string {
     .replaceAll('&gt;', '>')
     .replaceAll('&lt;', '<')
     .replaceAll('&amp;', '&');
+}
+
+function isMutationBroadcastMessage(value: unknown): value is {
+  body: string;
+  type: 'jiso:mutation-response';
+} {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    'type' in value &&
+    value.type === 'jiso:mutation-response' &&
+    'body' in value &&
+    typeof value.body === 'string'
+  );
 }

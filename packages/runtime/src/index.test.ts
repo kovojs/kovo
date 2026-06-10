@@ -5,6 +5,7 @@ import {
   createQueryStore,
   dispatchDelegatedEvent,
   hydrateQueryScripts,
+  installMutationBroadcast,
   installJisoLoader,
   parseHandlerReference,
   readElementParams,
@@ -33,6 +34,15 @@ class FakeElement implements EventElementLike {
 
   getAttribute(name: string): string | null {
     return this.attributes.find((attribute) => attribute.name === name)?.value ?? null;
+  }
+}
+
+class FakeBroadcastChannel {
+  messages: unknown[] = [];
+  onmessage: ((event: { data: unknown }) => void) | null = null;
+
+  postMessage(message: unknown): void {
+    this.messages.push(message);
   }
 }
 
@@ -152,5 +162,28 @@ describe('query store', () => {
     applyMutationResponse(store, '<fw-query name="cart">{&quot;count&quot;:4}</fw-query>');
 
     expect(store.get('cart')).toEqual({ count: 4 });
+  });
+
+  it('rebroadcasts and applies mutation responses for same-user tab sync', () => {
+    const store = createQueryStore();
+    const channel = new FakeBroadcastChannel();
+    const broadcast = installMutationBroadcast({ channel, store });
+
+    broadcast.publish('<fw-query name="cart">{"count":5}</fw-query>');
+    expect(channel.messages).toEqual([
+      {
+        body: '<fw-query name="cart">{"count":5}</fw-query>',
+        type: 'jiso:mutation-response',
+      },
+    ]);
+
+    channel.onmessage?.({
+      data: {
+        body: '<fw-query name="cart">{"count":6}</fw-query>',
+        type: 'jiso:mutation-response',
+      },
+    });
+
+    expect(store.get('cart')).toEqual({ count: 6 });
   });
 });
