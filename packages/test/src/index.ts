@@ -31,6 +31,7 @@ export interface JisoTestRequest<Db> {
 export interface JisoTestHarnessOptions<Db> {
   db: Db;
   pages?: Record<string, string | (() => string | Promise<string>)>;
+  request?: Record<string, unknown>;
   touchGraph?: TouchGraph;
   verification?: DbVerificationConfig;
 }
@@ -60,7 +61,10 @@ export function createJisoTestHarness<Db>(
       Request extends { db: Db },
       Value,
     >(mutation: MutationDefinition<string, InputSchema, Errors, Request, Value>, input: unknown) {
-      const result = await runMutation(mutation, input, { db } as unknown as Request);
+      const result = await runMutation(mutation, input, {
+        ...options.request,
+        db,
+      } as unknown as Request);
       verifier?.assertCovered();
       return result;
     },

@@ -23,6 +23,9 @@ describe('commerce example', () => {
       pages: {
         '/cart': renderCartPage,
       },
+      request: {
+        session: { id: 's1', user: { id: 'u1' } },
+      },
       touchGraph: commerceTouchGraph as unknown as TouchGraph,
       verification: {
         domainByTable: {
@@ -79,10 +82,12 @@ describe('commerce example', () => {
       earlyHints: {
         Link: '</assets/tailwind.css>; rel=preload; as=style',
       },
-      html: '<link rel="stylesheet" href="/assets/tailwind.css">',
+      html: '<title>Jiso Commerce</title><meta name="description" content="Browse products and checkout with a verifiable cart."><meta property="og:description" content="Browse products and checkout with a verifiable cart."><script type="application/json" fw-i18n locale="en-US">{"cartLabel":"Cart","productStock":"{count} in stock"}</script><link rel="stylesheet" href="/assets/tailwind.css">',
     });
 
     expect(renderCartPage()).toContain('<link rel="stylesheet" href="/assets/tailwind.css">');
+    expect(renderCartPage()).toContain('<title>Jiso Commerce</title>');
+    expect(renderCartPage()).toContain('fw-i18n locale="en-US"');
     expect(renderCartPage()).toContain('class="min-h-dvh bg-slate-50 p-6"');
     expect(renderCartPage()).toContain('class="rounded bg-teal-600 px-2 py-0.5 text-white"');
   });
@@ -90,7 +95,7 @@ describe('commerce example', () => {
   it('ships graph facts for fw check and explain acceptance', () => {
     expect(fwCheck(commerceGraph)).toEqual({
       exitCode: 0,
-      output: 'fw-check/v1\nWARN UNGUARDED cart/add mutation is reachable without an auth guard.\n',
+      output: 'fw-check/v1\nOK\n',
     });
     expect(fwCheck(commerceGraph).output).not.toContain('FW310');
 
@@ -101,7 +106,7 @@ describe('commerce example', () => {
       output: [
         'fw-explain/v1',
         'MUTATION cart/add',
-        'guards: rateLimit:session',
+        'guards: authed,rateLimit:session',
         'writes: cart,product,order',
         'invalidates: cart,product,order',
         'manual-invalidates: -',

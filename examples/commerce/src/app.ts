@@ -1,5 +1,5 @@
 import { component } from '@jiso/core';
-import { domain, mutation, query, renderPageHints, s } from '@jiso/server';
+import { domain, guards, i18n, meta, mutation, query, renderPageHints, s, t } from '@jiso/server';
 import type { FwExplainInput } from '../../../packages/cli/src/index.js';
 
 export interface CommerceDb {
@@ -8,6 +8,11 @@ export interface CommerceDb {
   products: Map<string, { id: string; stock: number; unitPrice: number }>;
   read(table: string): unknown[];
   write(table: string, value: unknown): void;
+}
+
+export interface CommerceRequest {
+  db: CommerceDb;
+  session?: { id?: string; user?: { id: string } | null } | null;
 }
 
 export function createCommerceDb(): CommerceDb {
@@ -78,11 +83,15 @@ export const addToCart = mutation('cart/add', {
     productId: s.string(),
     quantity: s.number().int().min(1).default(1),
   }),
+  guard: guards.all(
+    guards.authed<CommerceRequest>(),
+    guards.rateLimit<CommerceRequest>({ max: 10, per: 'session' }),
+  ),
   registry: {
     queries: [cartQuery, productGridQuery, orderHistoryQuery],
     touches: [cart, product, order],
   },
-  handler(input, request: { db: CommerceDb }, context) {
+  handler(input, request: CommerceRequest, context) {
     const found = request.db.products.get(input.productId);
     if (!found || found.stock < input.quantity) {
       return context.fail('OUT_OF_STOCK', { availableQuantity: found?.stock ?? 0 });
@@ -105,6 +114,16 @@ export const addToCart = mutation('cart/add', {
     });
     return { productId: input.productId, quantity: input.quantity };
   },
+});
+
+export const commerceMeta = meta({
+  description: 'Browse products and checkout with a verifiable cart.',
+  title: 'Jiso Commerce',
+});
+
+export const commerceMessages = i18n('en-US', {
+  cartLabel: 'Cart',
+  productStock: '{count} in stock',
 });
 
 export function loadProductGrid(db: CommerceDb, input: ProductGridInput = {}): ProductGridResult {
@@ -149,10 +168,12 @@ export const CartBadge = component('cart-badge', {
   queries: { cart: cartQuery },
   state: () => ({}),
   render: () =>
-    '<cart-badge class="inline-flex items-center gap-2 rounded-md border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-900 shadow-sm" fw-deps="cart"><span>Cart</span><span class="rounded bg-teal-600 px-2 py-0.5 text-white" data-bind="cart.count">1</span></cart-badge>',
+    `<cart-badge class="inline-flex items-center gap-2 rounded-md border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-900 shadow-sm" fw-deps="cart"><span>${t(commerceMessages, 'cartLabel')}</span><span class="rounded bg-teal-600 px-2 py-0.5 text-white" data-bind="cart.count">1</span></cart-badge>`,
 });
 
 export const commercePageHints = renderPageHints({
+  i18n: commerceMessages,
+  meta: commerceMeta,
   stylesheets: ['/assets/tailwind.css'],
 });
 
@@ -197,7 +218,7 @@ export const commerceGraph = {
   ],
   mutations: [
     {
-      guards: ['rateLimit:session'],
+      guards: ['authed', 'rateLimit:session'],
       invalidates: ['cart', 'product', 'order'],
       key: 'cart/add',
       writes: ['cart', 'product', 'order'],

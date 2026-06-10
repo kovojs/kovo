@@ -85,6 +85,28 @@ describe('@jiso/test harness', () => {
     });
   });
 
+  it('merges request fixtures into mutation exec context', async () => {
+    const guarded = mutation('cart/add', {
+      guard(request: { db: { cart: string[] }; session?: { user?: { id: string } | null } }) {
+        return Boolean(request.session?.user);
+      },
+      input: s.object({ productId: s.string() }),
+      handler(input, request: { db: { cart: string[] }; session?: { user?: { id: string } } }) {
+        request.db.cart.push(`${request.session?.user?.id}:${input.productId}`);
+        return request.db.cart;
+      },
+    });
+    const harness = createJisoTestHarness({
+      db: { cart: [] as string[] },
+      request: { session: { user: { id: 'u1' } } },
+    });
+
+    await expect(harness.exec(guarded, { productId: 'p1' })).resolves.toMatchObject({
+      ok: true,
+      value: ['u1:p1'],
+    });
+  });
+
   it('exposes a stable db handle for direct harness assertions', async () => {
     const harness = createJisoTestHarness({ db: { cart: [] as string[] } });
 
