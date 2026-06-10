@@ -1,5 +1,6 @@
 import { component } from '@jiso/core';
 import { extractTouchGraphFromSource } from '@jiso/drizzle';
+import type { OptimisticPlan } from '@jiso/runtime';
 import {
   domain,
   guards,
@@ -91,6 +92,15 @@ export interface ProductGridResult {
   nextCursor: string | null;
 }
 
+export interface AddToCartInput {
+  productId: string;
+  quantity: number;
+}
+
+export interface CartQueryResult {
+  count: number;
+}
+
 export type AddToCartFailure = MutationFail<string, unknown>;
 export interface AddToCartFailureState {
   failure: AddToCartFailure;
@@ -106,6 +116,18 @@ export const orderHistoryQuery = query('orderHistory', {
   load: (_input: unknown) => ({ items: [] as CommerceDb['orders'] }),
   reads: [order],
 });
+
+export const addToCartOptimistic = {
+  queue: 'cart',
+  transforms: {
+    cart(current: unknown, input: AddToCartInput) {
+      const cart = current as CartQueryResult | undefined;
+      return {
+        count: (cart?.count ?? 0) + input.quantity,
+      };
+    },
+  },
+} satisfies OptimisticPlan<AddToCartInput>;
 
 const commerceGenerated = extractTouchGraphFromSource([
   {
@@ -389,7 +411,7 @@ export const commerceGraph = {
     },
   ],
   optimistic: [
-    { mutation: 'cart/add', query: 'cart', status: 'await-fragment' },
+    { mutation: 'cart/add', query: 'cart', status: 'hand-written' },
     { mutation: 'cart/add', query: 'productGrid', status: 'await-fragment' },
     { mutation: 'cart/add', query: 'orderHistory', status: 'await-fragment' },
   ],

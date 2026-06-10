@@ -42,6 +42,9 @@ importers:
       '@jiso/drizzle':
         specifier: workspace:*
         version: link:../../packages/drizzle
+      '@jiso/runtime':
+        specifier: workspace:*
+        version: link:../../packages/runtime
       '@jiso/server':
         specifier: workspace:*
         version: link:../../packages/server

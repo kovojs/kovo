@@ -9,6 +9,7 @@
   "dependencies": {
     "@jiso/core": "workspace:*",
     "@jiso/drizzle": "workspace:*",
+    "@jiso/runtime": "workspace:*",
     "@jiso/server": "workspace:*",
     "@jiso/test": "workspace:*"
   },

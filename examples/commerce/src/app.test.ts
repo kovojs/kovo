@@ -2,12 +2,13 @@ import { describe, expect, it } from 'vitest';
 import { execFileSync } from 'node:child_process';
 import { readFileSync, rmSync } from 'node:fs';
 
-import { createJisoTestHarness } from '@jiso/test';
+import { createJisoTestHarness, propertyTest } from '@jiso/test';
 import type { TouchGraph } from '@jiso/drizzle';
 import { fwCheck, fwExplain } from '../../../packages/cli/src/index.js';
 
 import {
   addToCart,
+  addToCartOptimistic,
   commerceGraph,
   commercePageHints,
   commerceSession,
@@ -21,6 +22,7 @@ import {
   renderProductGridPageFragment,
   submitAddToCart,
   submitAddToCartNoJs,
+  type AddToCartInput,
 } from './app.js';
 
 describe('commerce example', () => {
@@ -111,6 +113,33 @@ describe('commerce example', () => {
     });
 
     expect(db.orders[0]?.userId).toBe('u1');
+  });
+
+  it('predicts cart count with the hand-written addToCart optimistic transform', () => {
+    expect(addToCartOptimistic.queue).toBe('cart');
+    expect(
+      addToCartOptimistic.transforms.cart({ count: 1 }, { productId: 'p1', quantity: 2 }),
+    ).toEqual({
+      count: 3,
+    });
+
+    expect(
+      propertyTest<{ cart: { count: number } }, AddToCartInput, { count: number }>({
+        apply(state, input) {
+          return { cart: addToCartOptimistic.transforms.cart(state.cart, input) };
+        },
+        cases: [
+          { input: { productId: 'p1', quantity: 1 }, state: { cart: { count: 0 } } },
+          { input: { productId: 'p2', quantity: 3 }, state: { cart: { count: 2 } } },
+        ],
+        predict(state, input) {
+          return addToCartOptimistic.transforms.cart(state.cart, input);
+        },
+        shape(state) {
+          return state.cart;
+        },
+      }),
+    ).toEqual({ cases: 2 });
   });
 
   it('renders SPEC 6.3 no-JS add-to-cart forms as the page output', () => {
@@ -278,10 +307,10 @@ describe('commerce example', () => {
         'invalidates: cart,product,order',
         'manual-invalidates: -',
         'updates: cart->component:CartBadge,page:/cart; orderHistory->component:OrderHistory,page:/cart; productGrid->component:ProductGrid,page:/cart',
-        'OPTIMISTIC cart await-fragment',
+        'OPTIMISTIC cart hand-written',
         'OPTIMISTIC productGrid await-fragment',
         'OPTIMISTIC orderHistory await-fragment',
-        'OPTIMISTIC-SUMMARY total=3 hand-written=0 await-fragment=3 UNHANDLED=0',
+        'OPTIMISTIC-SUMMARY total=3 hand-written=1 await-fragment=2 UNHANDLED=0',
         '',
       ].join('\n'),
     });
