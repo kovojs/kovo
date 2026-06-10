@@ -8,6 +8,12 @@
     "conformance/*"
   ],
   "type": "module",
+  "scripts": {
+    "acceptance": "pnpm run check && pnpm run test && pnpm run check:fw",
+    "check": "vp check",
+    "check:fw": "vp run fw-check",
+    "test": "vitest --run"
+  },
   "devDependencies": {
     "@types/node": "25.9.2",
     "@typescript/native-preview": "7.0.0-dev.20260610.1",
