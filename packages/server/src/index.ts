@@ -147,6 +147,7 @@ export function write<
 }
 
 export interface QueryDefinition<Key extends string = string> {
+  load?: (input: unknown) => unknown;
   key: Key;
   reads: readonly Domain[];
 }
@@ -167,6 +168,24 @@ export interface ChangeRecord {
 export interface MutationRegistry {
   queries?: readonly QueryDefinition[];
   touches?: readonly Domain[];
+}
+
+export interface FragmentRenderer {
+  render(input: unknown): string | Promise<string>;
+  target: string;
+}
+
+export interface MutationWireRequest<Request> {
+  fragmentRenderers?: readonly FragmentRenderer[];
+  rawInput: unknown;
+  request: Request;
+  targets?: readonly string[];
+}
+
+export interface MutationWireResponse {
+  body: string;
+  headers: Record<string, string>;
+  status: 200 | 422;
 }
 
 export interface MutationDefinition<
@@ -242,6 +261,44 @@ export async function runMutation<
   };
 }
 
+export async function renderMutationResponse<
+  const Key extends string,
+  InputSchema extends Schema<unknown>,
+  Errors extends Record<string, Schema<unknown>>,
+  Request,
+  Value,
+>(
+  definition: MutationDefinition<Key, InputSchema, Errors, Request, Value>,
+  wireRequest: MutationWireRequest<Request>,
+): Promise<MutationWireResponse> {
+  const result = await runMutation(definition, wireRequest.rawInput, wireRequest.request);
+
+  if (!result.ok) {
+    return {
+      body: `<fw-fragment target="error"><output role="alert" data-error-code="${escapeAttribute(result.error.code)}">${escapeHtml(JSON.stringify(result.error.payload))}</output></fw-fragment>`,
+      headers: { 'Content-Type': 'text/vnd.jiso.fragment+html; charset=utf-8' },
+      status: 422,
+    };
+  }
+
+  const queryChunks = await renderQueryChunks(
+    definition.registry?.queries ?? [],
+    result.rerunQueries,
+    wireRequest.rawInput,
+  );
+  const fragmentChunks = await renderFragmentChunks(
+    wireRequest.fragmentRenderers ?? [],
+    wireRequest.targets ?? [],
+    wireRequest.rawInput,
+  );
+
+  return {
+    body: [...queryChunks, ...fragmentChunks].join('\n'),
+    headers: { 'Content-Type': 'text/vnd.jiso.fragment+html; charset=utf-8' },
+    status: 200,
+  };
+}
+
 function isMutationFail(value: unknown): value is MutationFail {
   return (
     typeof value === 'object' &&
@@ -273,4 +330,51 @@ function queriesToRerun(
   return queries
     .filter((queryDefinition) => queryDefinition.reads.some((read) => touched.has(read.key)))
     .map((queryDefinition) => queryDefinition.key);
+}
+
+async function renderQueryChunks(
+  queries: readonly QueryDefinition[],
+  rerunQueries: readonly string[],
+  input: unknown,
+): Promise<string[]> {
+  const rerun = new Set(rerunQueries);
+  const chunks: string[] = [];
+
+  for (const queryDefinition of queries) {
+    if (!rerun.has(queryDefinition.key)) continue;
+
+    const value = queryDefinition.load ? await queryDefinition.load(input) : null;
+    chunks.push(
+      `<fw-query name="${escapeAttribute(queryDefinition.key)}">${escapeHtml(JSON.stringify(value))}</fw-query>`,
+    );
+  }
+
+  return chunks;
+}
+
+async function renderFragmentChunks(
+  renderers: readonly FragmentRenderer[],
+  targets: readonly string[],
+  input: unknown,
+): Promise<string[]> {
+  const wanted = new Set(targets);
+  const chunks: string[] = [];
+
+  for (const renderer of renderers) {
+    if (wanted.size > 0 && !wanted.has(renderer.target)) continue;
+
+    chunks.push(
+      `<fw-fragment target="${escapeAttribute(renderer.target)}">${await renderer.render(input)}</fw-fragment>`,
+    );
+  }
+
+  return chunks;
+}
+
+function escapeHtml(value: string): string {
+  return value.replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;');
+}
+
+function escapeAttribute(value: string): string {
+  return escapeHtml(value).replaceAll('"', '&quot;');
 }
