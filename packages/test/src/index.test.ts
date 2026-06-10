@@ -1453,6 +1453,27 @@ describe('@jiso/test harness', () => {
     );
   });
 
+  it('fails verification when a keyed static write has no observed row predicate', () => {
+    const verifier = createDbVerifier(
+      {
+        'product.reserve': {
+          touches: [
+            { domain: 'product', keys: 'arg:productId', site: 'product.ts:1', via: 'products' },
+          ],
+          unresolved: [],
+        },
+      },
+      { domainByTable: { products: 'product' }, keyByTable: { products: 'id' } },
+    );
+    const db = verifier.wrap(createFakeDb());
+
+    db.write('products', { id: 'p1' });
+
+    expect(() => verifier.assertCovered()).toThrow(
+      'FW408 Declared row key differs from observed row predicate: products expected id observed <missing>',
+    );
+  });
+
   it('accepts observed row predicates that match the declared table key', () => {
     const verifier = createDbVerifier(
       {

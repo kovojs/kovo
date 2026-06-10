@@ -411,6 +411,7 @@ function assertObservedWritesCovered(
   const scopedTouchGraph = selectTouchGraph(touchGraph, touchGraphKey);
 
   assertRowKeys(observed, config);
+  assertKeyedWritesObserved(observed, scopedTouchGraph, config);
   assertMutationReadsCovered(observed, scopedTouchGraph);
 
   const unmappedWrites = observed.filter(
@@ -444,6 +445,45 @@ function assertObservedWritesCovered(
     const domains = uncovered.map((operation) => operation.domain).join(', ');
     throw new Error(`FW402 Write touched an undeclared domain: ${domains}`);
   }
+}
+
+function assertKeyedWritesObserved(
+  observed: readonly ObservedDbOperation[],
+  touchGraph: TouchGraph,
+  config: DbVerificationConfig,
+): void {
+  const entries = Object.values(touchGraph).filter((entry) => entry !== undefined);
+  const unresolvedWrites = entries.flatMap((entry) => entry.unresolved);
+  const unresolvedDomains = new Set(
+    unresolvedWrites.flatMap((site) => (site.domain ? [site.domain] : [])),
+  );
+  const hasUnscopedFw406 = unresolvedWrites.some((site) => site.domain === undefined);
+  if (hasUnscopedFw406) return;
+
+  const keyedTouchByTable = new Map(
+    entries
+      .flatMap((entry) => entry.touches)
+      .filter((touch) => touch.keys !== null)
+      .map((touch) => [touch.via, touch] as const),
+  );
+  const missing = observed.filter((operation) => {
+    if (operation.kind !== 'write' || operation.rowKey !== undefined) return false;
+
+    const touch = keyedTouchByTable.get(operation.table);
+    if (!touch || unresolvedDomains.has(touch.domain)) return false;
+
+    return config.keyByTable?.[operation.table] !== undefined;
+  });
+
+  if (missing.length === 0) return;
+
+  const details = missing
+    .map(
+      (operation) =>
+        `${operation.table} expected ${config.keyByTable?.[operation.table]} observed <missing>`,
+    )
+    .join(', ');
+  throw new Error(`FW408 Declared row key differs from observed row predicate: ${details}`);
 }
 
 function selectTouchGraph(touchGraph: TouchGraph, touchGraphKey: string | undefined): TouchGraph {

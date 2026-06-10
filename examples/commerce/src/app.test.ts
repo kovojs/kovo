@@ -459,6 +459,22 @@ describe('commerce example', () => {
       output:
         'fw-explain/v1\nQUERY orderHistory\nreads: order\nconsumers: component:OrderHistory,page:/cart\ninvalidated-by: cart.addItem\n',
     });
+    expect(fwExplain(commerceGraph, { kind: 'page', target: '/cart' })).toEqual({
+      exitCode: 0,
+      output: [
+        'fw-explain/v1',
+        'PAGE /cart',
+        'prefetch: false',
+        'modulepreloads: -',
+        'queries: cart,productGrid,orderHistory',
+        'view-transitions: -',
+        '',
+      ].join('\n'),
+    });
+    expect(fwExplain(commerceGraph, { unguarded: true })).toEqual({
+      exitCode: 0,
+      output: 'fw-explain/v1\nUNGUARDED\nSUMMARY total=0\n',
+    });
   });
 
   it('answers cart/add update intent mechanically from fw explain output', () => {
