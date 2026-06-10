@@ -108,6 +108,7 @@ export function compileComponentModule(options: CompileComponentOptions): Compil
   const serverFactStateDiagnostics = validateServerFactsInLocalState(source, options.fileName);
   const fragmentInputDiagnostics = validateFragmentTargetInputs(source, options.fileName);
   const dataBindDiagnostics = validateDataBindings(source, options);
+  const directDbDiagnostics = validateDirectDbAccess(source, options.fileName);
   const clientFileName = replaceExtension(options.fileName, '.client.js');
   const serverFileName = replaceExtension(options.fileName, '.server.js');
   const registryFileName = 'generated/registries.d.ts';
@@ -130,6 +131,7 @@ export function compileComponentModule(options: CompileComponentOptions): Compil
       ...serverFactStateDiagnostics,
       ...fragmentInputDiagnostics,
       ...dataBindDiagnostics,
+      ...directDbDiagnostics,
     ],
     files: [
       { fileName: serverFileName, source: serverSource },
@@ -459,6 +461,74 @@ function validateFragmentTargetInputs(source: string, fileName: string): Compile
     ...diagnosticFor(fileName, 'FW303'),
     message: `${diagnosticDefinitions.FW303.message} ${input}`,
   }));
+}
+
+function validateDirectDbAccess(source: string, fileName: string): CompilerDiagnostic[] {
+  if (!/\bmutation\s*\(/.test(source)) return [];
+
+  for (const handler of findHandlerBodies(source)) {
+    const params = handler.params.map(readParameterName).filter(Boolean);
+    const receivesDb = params.includes('db');
+    const requestParam = params.find(
+      (param) =>
+        param === 'request' || /request$/i.test(param) || param === 'ctx' || param === 'context',
+    );
+    const readsRequestDb =
+      requestParam !== undefined &&
+      new RegExp(`\\b${escapeRegExp(requestParam)}\\.db\\b`).test(handler.body);
+
+    if (receivesDb || readsRequestDb) {
+      return [diagnosticFor(fileName, 'FW330')];
+    }
+  }
+
+  return [];
+}
+
+function findHandlerBodies(source: string): { body: string; params: string[] }[] {
+  const handlers: { body: string; params: string[] }[] = [];
+  const methodPattern = /\bhandler\s*\((?<params>[^)]*)\)\s*\{/g;
+  const propertyPattern = /\bhandler\s*:\s*(?:async\s*)?\((?<params>[^)]*)\)\s*=>\s*\{/g;
+
+  for (const match of source.matchAll(methodPattern)) {
+    const bodyStart = match.index + match[0].lastIndexOf('{');
+    const bodyEnd = findMatchingToken(source, bodyStart, '{', '}');
+    if (bodyEnd === -1) continue;
+
+    handlers.push({
+      body: source.slice(bodyStart, bodyEnd + 1),
+      params: splitParameters(match.groups?.params ?? ''),
+    });
+  }
+
+  for (const match of source.matchAll(propertyPattern)) {
+    const bodyStart = match.index + match[0].lastIndexOf('{');
+    const bodyEnd = findMatchingToken(source, bodyStart, '{', '}');
+    if (bodyEnd === -1) continue;
+
+    handlers.push({
+      body: source.slice(bodyStart, bodyEnd + 1),
+      params: splitParameters(match.groups?.params ?? ''),
+    });
+  }
+
+  return handlers;
+}
+
+function splitParameters(params: string): string[] {
+  return params
+    .split(',')
+    .map((param) => param.trim())
+    .filter(Boolean);
+}
+
+function readParameterName(param: string): string {
+  const withoutType = param.split(':')[0]?.trim() ?? '';
+  return withoutType.replace(/^[.{\s]+|[}\s]+$/g, '');
+}
+
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
 function extractFirstRenderObjectPattern(source: string): string[] {

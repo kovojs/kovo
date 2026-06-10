@@ -432,6 +432,46 @@ export const CartRow = component('cart-row', {
       },
     ]);
   });
+
+  it('reports FW330 when mutation handlers access request db directly', () => {
+    const result = compileComponentModule({
+      fileName: 'cart.mutation.ts',
+      source: `
+export const addToCart = mutation('cart/add', {
+  input: addToCartInput,
+  handler(input, request) {
+    request.db.insert(cartItems).values(input);
+    return input.productId;
+  },
+});
+`,
+    });
+
+    expect(result.diagnostics).toEqual([
+      {
+        code: 'FW330',
+        fileName: 'cart.mutation.ts',
+        message: 'Direct db access in a mutation handler; route through domain.',
+        severity: 'lint',
+      },
+    ]);
+  });
+
+  it('does not report FW330 for domain-routed mutation handlers', () => {
+    const result = compileComponentModule({
+      fileName: 'cart.mutation.ts',
+      source: `
+export const addToCart = mutation('cart/add', {
+  input: addToCartInput,
+  handler(input, request, context) {
+    return cartDomain.addItem(input, request.session.user.id, context);
+  },
+});
+`,
+    });
+
+    expect(result.diagnostics).toEqual([]);
+  });
 });
 
 describe('jisoVitePlugin', () => {
