@@ -51,8 +51,8 @@ Every feature proposal is evaluated against five tests. A feature failing any te
                         AUTHORING                    COMPILED IR                  RUNTIME
 ┌──────────────────┐   ┌──────────────────────────┐   ┌──────────────────────────────────┐
 │  cart.tsx        │   │ cart.server.js           │   │ Self-describing HTML             │
-│  (JSX, inline    │──▶│   render fns, queries    │──▶│  • DSD custom elements (inert)   │
-│   closures,      │   │ cart.client.js           │   │  • on:click="#cart/Cart$remove"  │
+│  (JSX, inline    │──▶│   render fns, queries    │──▶│  • plain elements, fw-c stamps   │
+│   closures,      │   │ cart.client.js           │   │  • on:click="cart.js#Cart$remove"│
 │   single file)   │   │   named handler exports, │   │  • <script fw-query="cart"> JSON │
 │                  │   │   derives, transforms    │   │  • fw-deps="cart" stamps         │
 └──────────────────┘   └──────────────────────────┘   └──────────────────────────────────┘
@@ -61,14 +61,15 @@ Every feature proposal is evaluated against five tests. A feature failing any te
         │ compile(IR) ≡ IR       │ source-derived names             │ delegation + import() on
         ▼                        ▼                                  ▼ first interaction
 ┌─────────────────────────────────────────────────────────────────────────────────────────┐
-│ MPA SPINE: real navigations + Speculation Rules prerender + cross-document View          │
+│ MPA SPINE: real navigations + opt-in Speculation Rules prerender + cross-document View   │
 │ Transitions + bfcache. No client router. No hydration.                                   │
 ├─────────────────────────────────────────────────────────────────────────────────────────┤
 │ DATA PLANE: queries (typed reads) ← invalidation graph → mutations (typed writes)        │
-│ derived from domain layer / Drizzle AST. Optimistic transforms derived or hand-written.  │
+│ derived from domain layer / Drizzle AST. Optimistic transforms hand-written (v1);        │
+│ compiler-derived transforms arrive in v2.                                                │
 ├─────────────────────────────────────────────────────────────────────────────────────────┤
-│ WIRE: one fragment/query-JSON vocabulary across three transports:                        │
-│ document load · enhanced fetch (mutations) · SSE (live queries)                          │
+│ WIRE: one fragment/query-JSON vocabulary, transport-agnostic:                            │
+│ document load · enhanced fetch (mutations) · SSE live queries (v2)                       │
 └─────────────────────────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -85,7 +86,7 @@ Every feature proposal is evaluated against five tests. A feature failing any te
 
 ### 3.2 Rejected from prior art
 
-Client router and SPA navigation; hydration; hash-named heuristic chunks; load-bearing semantic optimizer; single global state blob; proprietary signals (TC39 Signals instead); opaque closure capture (`useLexicalScope`); client-side cache with invalidation lifecycle; manual invalidation calls as the primary mechanism.
+Client router and SPA navigation; hydration; hash-named heuristic chunks; load-bearing semantic optimizer; single global state blob; **runtime signal graphs in the core client — proprietary or TC39** (the client dependency graph is compile-time-known, so the compiler emits a per-query update plan instead; a TC39 Signals interop adapter is v2); opaque closure capture (`useLexicalScope`); client-side cache with invalidation lifecycle; manual invalidation calls as the primary mechanism; **shadow DOM** (tree-scoped IDREFs, form participation, and ARIA all break at the boundary — fatal to L0 platform behaviors and the no-JS form contract; style scoping comes from the compiler instead, §13.1); **custom-element registration** (resumability comes from delegation + `import()`, never from `customElements.define`; component identity is the `fw-c` stamp, dashed tags survive as inert sugar, and native hosts like `<tr fw-c="cart-row">` end the table-nesting papercut); **load-bearing import maps** (the compiler and server emit full module URLs with cache-busting they control; import maps remain an optional deployment strategy).
 
 ---
 
@@ -124,19 +125,18 @@ export const CartBadge = component('cart-badge', {
 
 ```html
 <cart-badge fw-deps="cart">
-  <template shadowrootmode="open">
-    <link rel="stylesheet" href="/components/cart-badge/cart-badge.css">
-    <button commandfor="cart-drawer" command="show-modal">
-      🛒 <span data-bind="cart.count">2</span>
-    </button>
-  </template>
+  <button commandfor="cart-drawer" command="show-modal">
+    🛒 <span data-bind="cart.count">2</span>
+  </button>
 </cart-badge>
 
-<!-- Query data ships ONCE per page, as a shared signal source -->
+<!-- Query data ships ONCE per page, as shared client data -->
 <script type="application/json" fw-query="cart">
   {"count": 2, "items": [{"productId": "p1", "qty": 2, "unitPrice": 1499}]}
 </script>
 ```
+
+Components render to **light DOM** as plain, never-registered elements — no shadow roots, no `customElements.define`, no upgrade step (§3.2). The load-bearing identity is the `fw-c` stamp; the compiler omits it when the host tag already spells the component name (`<cart-badge>` — dashed tags are inert sugar for Elements-panel readability) and emits it explicitly on native hosts (`<tr fw-c="cart-row">`, so content-model nesting like tables just works). Co-located CSS is compiler-scoped to the host (`@scope`, donut-scoped to exclude nested islands) and deduped into one per-page stylesheet (§13.1). Because there is no shadow boundary, IDREF wiring (`commandfor`, `for`, `aria-*`), native form participation, and find-in-page work document-wide — the L0 layer and the no-JS form fallback depend on exactly this.
 
 Everything is inspectable in the Elements panel: dependencies (`fw-deps`), data (the JSON), behavior (`on:*` attributes), pending mutations (`fw-pending`, §10.3).
 
@@ -160,14 +160,18 @@ export const Cart$removeItem = handler<CartState, { itemId: string }>((e, ctx) =
 ```
 
 ```html
-<button on:click="#cart/Cart$removeItem" data-p-item-id="i_42">×</button>
+<button on:click="/c/cart.client.js#Cart$removeItem" data-p-item-id="i_42">×</button>
+<!-- full URL + #export: no import-map indirection; cache-busting via query
+     strings/ETags the server controls. '#cart'-style aliases exist only at
+     the authoring/type level (§6.1); import maps are an optional deployment
+     strategy, never load-bearing. -->
 ```
 
 **Capture channels (exhaustive):** component/query state (via `ctx`), element params (`data-p-*`, typed), module scope (shared, not captured). Anything else is compile error `FW201`, whose message shows what the closure *would have* compiled to and the three fixes.
 
 ### 4.4 The loader
 
-A ~1KB inline script. Responsibilities: global event delegation (capture phase) for all `on:*` events; parse `spec/exportName`, resolve via import map, `import()`, invoke with `(event, ctx)`; first-interaction upgrade of custom elements (`customElements.define` on demand); enhanced form interception (§9); query-signal hydration from `fw-query` scripts; morph application. Nothing else lives in the always-loaded path.
+A ~1KB inline script. Responsibilities: global event delegation (capture phase) for all `on:*` events; parse `url#export` refs, `import()` the URL, invoke the export with `(event, ctx)`; enhanced form interception (§9); query-data hydration from `fw-query` scripts; running each query's compiled update plan (bindings → named derives → stamps) when its value changes; refetch-on-focus/visibility (§9.3); morph application — the morph layer itself accounts for islands it patches in (nothing is registered; there is no upgrade step or lifecycle callback). Nothing else lives in the always-loaded path.
 
 ---
 
@@ -178,16 +182,16 @@ A ~1KB inline script. Responsibilities: global event delegation (capture phase) 
 ```
 cart.tsx ──parse──▶ analyze ──lower──▶ cart.server.js + cart.client.js ──(prod only)──▶ minify*
                        │
-                       ├─▶ generated/registries/*.d.ts   (import map, fragment targets, query keys, domains)
+                       ├─▶ generated/registries/*.d.ts   (module aliases, fragment targets, query keys, domains)
                        ├─▶ generated/touch-graph.ts      (§11.3 — committed, reviewable)
-                       └─▶ generated/optimistic/*.ts     (§10.4 — committed, overridable)
+                       └─▶ generated/optimistic/*.ts     (§10.4 — v2; committed, overridable)
 ```
 
 \* Minification may never rename exported handler symbols or anything appearing in HTML attributes (Constitution #1 — enforced because those names are load-bearing at runtime).
 
 ### 5.2 Hard rules (normative)
 
-1. **Source-derived names.** Extracted handlers are named `Component$fnName`, or `Component$element_event` when anonymous (lint `FW210` nudges naming). Content hashes appear only in cache-busting query strings managed by the import map.
+1. **Source-derived names.** Extracted handlers are named `Component$fnName`, or `Component$element_event` when anonymous (lint `FW210` nudges naming). Content hashes appear only in cache-busting query strings on the emitted module URLs (or ETag-driven — a deployment choice the framework controls server-side).
 2. **1:1 file mapping.** `x.tsx` → exactly `x.server.js` + `x.client.js`. No heuristic chunking. A prod-only merge pass for tiny modules is opt-in (`jiso.config: mergeClientModules`), defaulting off.
 3. **Fixpoint invariant.** `compile(compile(src)) === compile(src)`; the IR is valid input. CI test ships in the starter template.
 4. **Platform-behavior emission.** Where the compiler proves a handler equivalent to a declarative platform feature (dialog open/close → invoker commands; popovers; `<details>`; pure-CSS state via `:has()`), it emits the attribute and drops the handler. `fw explain` reports each substitution.
@@ -200,9 +204,9 @@ The compiler's decision tree, on demand. Sub-commands (all output stable, diffab
 ```bash
 fw explain component cart        # lowerings: extracted handlers, capture channels, platform substitutions
 fw explain mutation cart/add     # writes → domains → invalidated queries → consumers; guard chain
-fw explain mutation cart/add --optimistic   # derivation traces + punts with reasons (§10.5)
+fw explain mutation cart/add --optimistic   # transform coverage per query; v2 adds derivation traces + punts (§10.5)
 fw explain query cart            # read set, consumers, every mutation that invalidates it
-fw explain page /products/:id    # emitted modulepreloads, speculation rules, query payloads
+fw explain page /products/:id    # emitted modulepreloads, per-route prefetch config, query payloads
 ```
 
 ---
@@ -215,7 +219,8 @@ One pattern, applied everywhere: **declare facts once → derive every surface �
 
 ```ts
 // generated/registries.d.ts (excerpt)
-interface ImportMapSpecs   { '#cart': typeof import('../components/cart/cart.client.js'); /* … */ }
+interface HandlerModules   { '#cart': typeof import('../components/cart/cart.client.js'); /* … */ }
+// '#cart' is a compile-time alias only — emission resolves it to a full URL (§4.3)
 interface FragmentTargets  { 'cart-badge': CartBadgeProps; 'cart-drawer': CartDrawerProps; }
 interface QueryRegistry    { 'cart': typeof cartQuery; 'product': typeof productQuery; }
 interface DomainKey        { /* 'cart' | 'product' | 'order' — from schema annotations */ }
@@ -293,19 +298,19 @@ Interactions must use the lowest layer that suffices. The compiler enforces L0 s
 | Layer | Mechanism | Example | JS shipped |
 |---|---|---|---|
 | **L0** | Platform behaviors: invoker commands, Popover API, `<details>`, `<dialog>`, `:has()`, scroll-driven animations | Open cart drawer | 0 |
-| **L1** | Pure client islands: local signal state + bindings | Price-range filter UI, tabs, carousel | handler module on first touch |
+| **L1** | Pure client islands: local state + bindings | Price-range filter UI, tabs, carousel | handler module on first touch |
 | **L2** | Mutations: real forms + enhanced fetch → fragment/query patch | Add to cart | loader (already present) + form module |
-| **L3** | Optimistic: declared/derived transforms over query signals | Instant badge tick | generated transform module |
-| **L4** | Live: SSE pushing the same fragment/query vocabulary | Order status, presence | `<fw-live>` subscriber |
+| **L3** | Optimistic: declared transforms over query values (compiler-derived in v2) | Instant badge tick | transform module |
+| **L4 (v2)** | Live: SSE pushing the same fragment/query vocabulary — v1 covers the common cases with BroadcastChannel tab sync + refetch-on-focus (§9.3) | Order status, presence | `<fw-live>` subscriber (v2) |
 
-**Cross-island coordination**, in order of preference: (1) **the URL** — filter writes `?max=500`, or is a GET form whose fragment response is the grid; (2) **typed fire-and-forget events** — registry-checked `emit('cart:added', {…})`, payload types may not overlap query data (lint `FW320`: if you're sending server facts over an event, you wanted an optimistic transform); (3) **shared signals** — last resort, lint-gated with required justification comment.
+**Cross-island coordination**, in order of preference: (1) **the URL** — filter writes `?max=500`, or is a GET form whose fragment response is the grid; (2) **typed fire-and-forget events** — registry-checked `emit('cart:added', {…})`, payload types may not overlap query data (lint `FW320`: if you're sending server facts over an event, you wanted an optimistic transform); (3) **shared client state** — last resort, lint-gated with required justification comment.
 
 ---
 
 ## 8. MPA Spine & Navigation
 
 - **No client router.** Each page is a complete document; route handlers are server functions returning rendered pages.
-- **Speculation Rules** emitted automatically for in-viewport same-origin links (`eagerness: moderate`, hover/pointerdown prerender). Configurable per-route; conservative defaults to bound discarded-render cost.
+- **Speculation Rules** are opt-in config, never auto-emitted: `prefetch: 'conservative' | 'moderate' | false` per route, **default off**. Auto-prerender owns a real footgun matrix — analytics firing inside prerendered pages, non-idempotent per-user renders, discarded-render server cost — so apps opt in route-by-route where renders are idempotent and cheap. The feature is one `<script type="speculationrules">` tag; the MPA is fast without it.
 - **Cross-document View Transitions** opt-in per element pair via `view-transition-name` props; the compiler stamps matching names across route templates.
 - **bfcache hygiene** is a framework guarantee: no `unload` handlers, `keepalive: true` on in-flight mutations at navigation, pending optimistic logs discarded on document teardown (stale-optimism-outliving-its-mutation is structurally impossible).
 - **Out-of-order streaming:** `<fw-defer>` renders a fallback, streams the real fragment later in the same response, morphs in — the fragment protocol reused within first render. Deferred query JSON is guaranteed to arrive before or with its consumers.
@@ -315,7 +320,7 @@ Interactions must use the lowest layer that suffices. The compiler enforces L0 s
 
 ## 9. Wire Protocol
 
-One vocabulary, three transports. All payloads are human-readable (Constitution #4).
+One vocabulary, transport-agnostic: document load and enhanced fetch in v1; SSE joins as a third transport in v2 (§9.3). All payloads are human-readable (Constitution #4).
 
 ### 9.1 Enhanced mutation round-trip
 
@@ -341,21 +346,22 @@ Content-Type: text/html; charset=utf-8
 ```
 
 - `FW-Targets` is read off the live DOM (`fw-deps` stamps), so islands patched in after page load participate. The server holds **no session of what's on screen** — it answers a stateless question.
-- `<fw-query>` replaces the client's shared signal value → all bindings/derives/stamps recompute across every dependent island.
-- `<fw-fragment>` is **DOM-morphed** (idiomorph-class algorithm): focus, scroll, selection, CSS transitions, and nested island state survive. Patched-in DSD islands are inert-until-touched like everything else — *a fragment update is a tiny navigation, not a different programming model.*
+- `<fw-query>` replaces the client's query value and runs that query's compiled update plan — bindings, named derives, stamps — across every dependent island. No runtime dependency tracking: the plan is known at compile time and emitted with the page.
+- `<fw-fragment>` is **DOM-morphed** (idiomorph-class algorithm): focus, scroll, selection, CSS transitions, and nested island state survive. Patched-in islands are inert-until-touched like everything else — *a fragment update is a tiny navigation, not a different programming model.*
 - **Without JS:** the same endpoint sees no `FW-Fragment` header and answers POST-redirect-GET with errors re-rendered into the full page. One handler, two response modes.
 
 ### 9.2 Errors
 
 Validation failures (schema, with field paths) and declared error codes return a fragment re-rendering the form with messages (default generated from schema paths; overridable per-form), HTTP 422. The enhanced path morphs just the form; the no-JS path re-renders the page. `ctx.submit`'s `onError` receives the typed union.
 
-### 9.3 Live (L4)
+### 9.3 Liveness (v1) and Live (L4 — v2)
 
-```html
-<fw-live query="cart"></fw-live>     <!-- subscribes to a query key, not a bespoke endpoint -->
-```
+**v1 ships liveness only where the server stays stateless:**
 
-SSE stream carrying the identical `<fw-query>` / `<fw-fragment>` chunks. Guards re-checked at subscription **and** at each push (a guard that passed at render must pass at patch time — fragments must not become a privilege-escalation side channel). Backed v1 by in-process emitter (single node) or Redis pub/sub (multi-node, the one stateful deployment component, named honestly); v2 by CDC (§14). Opt-in per query (`live: true`). Same-user multi-tab sync: BroadcastChannel rebroadcast, zero server cost.
+- **BroadcastChannel rebroadcast** — a mutation's `<fw-query>` response is rebroadcast to the user's other tabs; same-user multi-tab sync at zero server cost.
+- **Refetch on focus/visibility** — a loader behavior (per-query opt-out) that re-runs queries when a stale tab returns; it fakes an embarrassing share of "live" UX for one conditional in the loader.
+
+**The full L4 moves to v2**, arriving alongside the CDC adapter (§14): `<fw-live query="cart">` subscribing over SSE to the identical `<fw-query>`/`<fw-fragment>` chunks; guards re-checked at subscription **and** at each push (a guard that passed at render must pass at patch time — fragments must not become a privilege-escalation side channel); in-process emitter (single node) or Redis pub/sub (multi-node); instance-key routing; `live: true` opt-in per query. The vocabulary is transport-agnostic by construction, so SSE is an additive transport, not a rearchitecture — and the v1 server stays stateless, full stop.
 
 ---
 
@@ -393,7 +399,7 @@ export const cartQuery = query('cart', (db, req) =>
 Derived from this one expression, statically:
 - **Read set** `{cart, product}` — the JOIN *is* the declaration (forgetting a joined entity's dependency, RTK Query's endemic bug, is unrepresentable).
 - **Result type** from the select shape — drives the client JSON, `data-bind` paths, derive inputs, and optimistic transform parameters. A column rename in `schema.ts` propagates through `tsc` to every template.
-- **Instance key** from the WHERE eq-predicate — `cart:{cartId}`; pushes route only to pages holding that key.
+- **Instance key** from the WHERE eq-predicate — `cart:{cartId}`; scopes row-level invalidation (and, in v2, live pushes) to holders of that key.
 
 ### 10.3 Mutations & writes
 
@@ -440,10 +446,12 @@ export const adminRefund = mutation('admin/refund', { guard: role('admin'), /*�
 
 Optimism is keyed to **queries** (the data), never islands. One transform per (mutation × invalidated query); every island consuming the query updates from it — including islands written after the mutation (Constitution #2).
 
-**Derived (preferred):** for writes whose dataflow is closed over `{mutation input, schema constants, data the query already ships}` and queries within the shape grammar `{scalar-from-keyed-row, COUNT, SUM(arith), jsonAgg, filtered-COUNT, membership transitions}`, the compiler generates the transform (full derivation algebra in §10.5):
+**Hand-written (v1):** transforms are authored in the mutation file as pure `(data, input)` functions against the query's inferred result type — the same IR derivation will later emit. **Explicitly deferred:** `'await-fragment'` documents "considered; 1-RTT latency accepted here."
+
+**Derived (v2, preferred once available):** for writes whose dataflow is closed over `{mutation input, schema constants, data the query already ships}` and queries within the shape grammar `{scalar-from-keyed-row, COUNT, SUM(arith), jsonAgg, filtered-COUNT, membership transitions}`, the compiler generates the transform (full derivation algebra in §10.5). Because hand-written transforms share the IR, v2 adoption is incremental: deleting a hand-written transform lets derivation take over, pair by pair.
 
 ```ts
-// generated/optimistic/cart.add.ts — DO NOT EDIT (override in cart.mutations.ts)
+// generated/optimistic/cart.add.ts (v2) — DO NOT EDIT (override in cart.mutations.ts)
 export const derived = {
   [cartQuery.key]: (cart, $input) => {
     const r = cart.items.find(i => i.productId === $input.productId);
@@ -457,13 +465,13 @@ export const derived = {
 } satisfies OptimisticFor<typeof addToCart>;
 ```
 
-**Hand-written:** same IR, authored in the mutation file, for anything derivation punts on. **Explicitly deferred:** `'await-fragment'` documents "considered; 1-RTT latency accepted here."
-
-**Runtime protocol:** snapshot affected query values (`structuredClone` — safe by the `JsonValue` constraint) → apply transforms to the shared signals (all dependent islands update at once; affected islands get `fw-pending` + `aria-busy` automatically) → on success, `<fw-query>`/morph reconciles over the prediction (right guess ⇒ near-no-op; wrong guess ⇒ silent correction) → on error, restore snapshots, render error fragment.
+**Runtime protocol:** snapshot affected query values (`structuredClone` — safe by the `JsonValue` constraint) → apply transforms to the shared query values and run their update plans (all dependent islands update at once; affected islands get `fw-pending` + `aria-busy` automatically) → on success, `<fw-query>`/morph reconciles over the prediction (right guess ⇒ near-no-op; wrong guess ⇒ silent correction) → on error, restore snapshots, render error fragment.
 
 **Concurrency:** a per-query pending-transform log; arriving server truth is morphed in, then still-pending transforms re-applied in order (rebase). Safe because transforms are pure `(data, input)` functions. Mutations needing serialization declare `queue: 'cart'` (named FIFO). Navigation is a free reconciliation point: in-flight requests complete via `keepalive`, the log dies with the document.
 
-### 10.5 Derivation algebra (summary)
+### 10.5 Derivation algebra (v2 — summary)
+
+> **Phasing note:** everything in this subsection ships in v2 (see §14). It is specified now because the v1 transform IR, query shape inference, and runtime rebase protocol are designed to be derivation-compatible — v1 must not paint v2 into a corner.
 
 ```
 Stage 1  write  →  symbolic row-effects
@@ -496,16 +504,18 @@ Every punt is named in `fw explain --optimistic` with the exact expression and r
 
 ### 10.6 Exhaustiveness
 
-Per mutation, coverage = invalidated-query set (derived) × status:
+Per mutation, coverage = invalidated-query set (derived) × status. Ships in v1; the valid statuses in v1 are `hand-written` and `await-fragment`:
 
 ```
 fw check optimistic
 mutation cart/applyCoupon:
-  cartQuery.items      derived ✓
-  cartQuery.subtotal   derived ✓
-  cartQuery.discount   PUNTED (Opaque: compute_discount) — UNHANDLED ⚠ FW310
+  cartQuery.items      hand-written ✓
+  cartQuery.subtotal   hand-written ✓
+  cartQuery.discount   UNHANDLED ⚠ FW310
      → hand-write in cart.mutations.ts, or declare 'await-fragment'
 ```
+
+In v2, `derived ✓` joins the status set and punts report their reasons inline (e.g. `PUNTED (Opaque: compute_discount)`).
 
 Forgetting an optimistic update is a visible, suppressible diagnostic with the suppression recorded in source — never a silent UI inconsistency.
 
@@ -562,7 +572,7 @@ Dev server and the test harness wrap `db`; every executed statement is parsed (`
 | FW201 | error | Closure captures unserializable value (shows lowering + fixes) |
 | FW210 | lint | Anonymous handler — name it for stable identity |
 | FW301 | lint | Server fact in island-local state |
-| FW310 | warn | Invalidated query lacks optimistic transform (derive/write/defer) |
+| FW310 | warn | Invalidated query lacks optimistic transform (write/defer; v2 adds derive) |
 | FW320 | lint | Event payload overlaps query data — use a transform |
 | FW330 | lint | Direct db access in a mutation handler — route through domain |
 | FW402 | error | Write touched an undeclared domain (silent stale UI) |
@@ -581,10 +591,10 @@ For a Jiso app, the following are checkable **without executing a browser**:
 1. `tsc --noEmit` — all wiring (handlers, forms, targets, bindings, transforms, guards).
 2. `fw check` — touch-graph consistency, optimistic exhaustiveness, fixpoint invariant, unguarded-mutation audit.
 3. Graph queries over `fw explain` output — intent-level assertions ("every component displaying cart data is refreshed by cart/add") as set operations over printed, stable-format graphs.
-4. Property suite — derivation soundness (commuting diagrams), prediction ⊆ eventual-truth generative tests.
+4. Property suite — prediction ⊆ eventual-truth generative tests over hand-written transforms; v2 adds derivation soundness (commuting diagrams).
 5. HTTP-level integration tests — mutations as request/response assertions against pglite (real Postgres semantics, in-memory, no container).
 
-A Playwright pass remains for L0 platform behaviors and morph edge cases only. The pyramid is the pitch: most SPA testing exists to compensate for unverifiable wiring; Jiso makes the wiring proof-carrying.
+Browser tests are a first-class part of the **framework's** own suite — no pretense otherwise: morph runs on every mutation response, and its survival contract (focus, caret, scroll, transitions) plus L0 platform behaviors are irreducibly browser-bound. The reconciliation suite splits accordingly: a browser-free structural property suite (`morph(a, b) ≡ b` with keyed-node identity preserved — runs in jsdom-class DOM), and a named browser suite for the survival contract. The pitch is narrower and honest: **application wiring is proof-carrying**, so apps need few or no browser tests of their own — most SPA testing exists to compensate for unverifiable wiring, and Jiso removes that category, not testing itself.
 
 ---
 
@@ -610,7 +620,8 @@ jisoTest('cart mutations', async ({ exec, page, db }) => {
   expect(html.fragment('cart-badge')).toContain('data-bind="cart.count"');
 });
 
-// derivation soundness (generated alongside derived transforms)
+// transform soundness: prediction ⊆ eventual truth over generated states
+// (v2: generated alongside derived transforms as the commuting-diagram suite)
 propertyTest(addToCart, cartQuery);   // patch∘shape ≡ shape∘apply over generated states
 ```
 
@@ -622,7 +633,7 @@ Handlers unit-test as `(event, ctx)` functions; transforms as pure `(data, input
 
 These ship with v1 only if resolved; otherwise they are explicitly punted with documented workarounds.
 
-**13.1 CSS.** The thorniest unsolved piece. Direction: compiler-extracted co-located CSS → deduped constructable stylesheets shared across instances; design tokens as a documented custom-property contract crossing shadow boundaries; `::part` for sanctioned external styling. Must solve: FOUC/waterfall of per-shadow-root `<link>`s, SSR'd critical CSS, theming. **Status: needs a full design pass before v1 freeze.**
+**13.1 CSS.** Direction: compiler-extracted co-located CSS, each component's rules wrapped in `@scope` keyed to its host (dashed tag or `[fw-c=…]` stamp; donut-scoped so nested islands are excluded), deduped into one per-page stylesheet with critical CSS inlined. Design tokens are ordinary custom properties — no boundary to cross. Scoping is a compiler-enforced convention, not an encapsulation wall: external/theming CSS is just CSS. Must solve: extraction/dedupe pipeline, style delivery for late-arriving fragments (§9.1) and `<fw-defer>` streams, theming contract, `@scope` fallback for older engines (tag-prefixed selector rewrite). **Status: needs a design pass before v1 freeze — materially smaller since dropping shadow DOM (no FOUC waterfall, no per-root stylesheet plumbing).**
 
 **13.2 Lists at scale.** Template stamps cover insertion; required design: cursor pagination flowing through URL params, infinite scroll as fragment appends, keyed reordering under simultaneous optimistic updates + morphing (stable-key contract between stamps and morph).
 
@@ -641,9 +652,9 @@ Jiso-core defines a **capability interface** — `(writes → touch sets, querie
 | Stage | Ships | Mechanism |
 |---|---|---|
 | **v1** | Core model: domain layer with declared `touches` (#3) + flat tags as low-ceremony on-ramp (#2) + `invalidate()` escape hatch (#1, linted) | Works with ANY data access |
-| **v1 (blessed)** | `@jiso/drizzle`: touches **inferred** from ASTs, schema-as-registry, query shapes/keys derived, **derived optimism** | Postgres/MySQL/SQLite via Drizzle |
-| **v1.5** | Verification layer: runtime instrumentation as CI honesty check (FW402–409); unified typed change record `{domain, keys, input}` feeding optimism + live bus (CQRS's payload without its architecture) | pglite harness |
-| **v2** | CDC adapter (Postgres logical replication / Supabase Realtime) as live-query transport + the answer to out-of-band writes (cron, admin tools, other services) | Opt-in, per `live: true` query |
+| **v1 (blessed)** | `@jiso/drizzle`: touches **inferred** from ASTs, schema-as-registry, query shapes/keys derived; optimism hand-written against the transform IR (§10.4) | Postgres/MySQL/SQLite via Drizzle |
+| **v1.5** | Verification layer: runtime instrumentation as CI honesty check (FW402–409); unified typed change record `{domain, keys, input}` feeding optimism now and the v2 live bus later (CQRS's payload without its architecture) | pglite harness |
+| **v2** | **Derived optimism**: compiler-generated transforms via the §10.5 algebra, property-tested soundness, named punts; supersedes hand-written transforms pair by pair. **Live queries (L4)**: `<fw-live>` over SSE, guard-recheck-per-push, in-process/Redis bus — the design's first stateful infrastructure, deferred until something needs it. CDC adapter (Postgres logical replication / Supabase Realtime) as live-query transport + the answer to out-of-band writes (cron, admin tools, other services) | Derivation over the pinned Drizzle subset; live/CDC opt-in, per `live: true` query |
 | **v3** | Full runtime read/write tracking (Convex-style precision) **only if** a managed data product exists; never the default — it trades static printability away | Conditional |
 
 **Drizzle coupling, managed:** the extraction pass targets a pinned, conformance-tested subset of Drizzle's surface (tables as first-argument identifiers); the suite fails loudly on API drift. Raw SQL is a marked second-class citizen (FW406 annotation + runtime verification, excluded from derived optimism) — acceptable if the seam is visible, and it is.
@@ -658,22 +669,22 @@ Jiso-core defines a **capability interface** — `(writes → touch sets, querie
 | Cold-cache first-interaction latency | `modulepreload` from rendered attributes, 103 Early Hints, HTTP/3; measure, don't hide |
 | Drizzle API drift breaks inference | Pinned conformance suite; declared-`touches` floor always works |
 | Over-invalidation storms (coarse domains) | Row-level keys via schema annotations; FW403 surfaces excess |
-| `derive`/shared-signal creep toward SPA heap | Lints with required justifications; isomorphic opt-in as the sanctioned escape |
-| Derived-optimism wrong predictions | All-or-nothing derivation; property-tested soundness; punts are loud |
+| `derive`/shared-client-state creep toward SPA heap | Lints with required justifications; isomorphic opt-in as the sanctioned escape |
+| Derived-optimism wrong predictions (v2) | All-or-nothing derivation; property-tested soundness; punts are loud; deferred to v2 so v1 ships the proven hand-written path first |
 | Two-file IR + explicit data channels feel austere vs. React | Single-file sugar + editor tooling (cheap because everything is static); day-100 > day-1 |
-| Query-signal layer moves some rendering clientward | Bounded: paths/stamps/named derives only; complex rendering flips to fragments/isomorphic |
-| Live bus introduces stateful infra | Opt-in per query; named in deployment docs, not discovered in prod |
-| Prerender discards cost server renders | Conservative eagerness defaults + response caching |
+| Query-binding layer moves some rendering clientward | Bounded: paths/stamps/named derives only — a compiled update plan, no runtime signal graph; complex rendering flips to fragments/isomorphic |
+| Live bus introduces stateful infra | Deferred to v2 wholesale — the v1 server is stateless; BroadcastChannel + refetch-on-focus cover the interim (§9.3) |
+| Prerender discards cost server renders | Off by default; per-route opt-in where renders are idempotent, plus response caching |
 
 ---
 
 ## 16. Success Criteria (v1)
 
-1. **Perf:** TTI ≡ FCP on first load (no hydration gap); hover-prerendered navigations render in <50ms perceived; zero session-length memory growth across 100 navigations.
+1. **Perf:** TTI ≡ FCP on first load (no hydration gap); prerendered navigations render in <50ms perceived on routes that opt in; zero session-length memory growth across 100 navigations.
 2. **Legibility:** a developer who has never seen the codebase can identify what any button does, what data any island holds, and what any mutation changed — from devtools alone — in under a minute. (Run this as an actual usability study.)
-3. **Verifiability:** the demo app's full behavior surface passes `tsc` + `fw check` + graph assertions with **zero** browser-based tests except the L0/morph suite; an agent given only `fw explain` output answers "what updates when X is clicked" with 100% accuracy.
+3. **Verifiability:** the demo app's full behavior surface passes `tsc` + `fw check` + graph assertions with **no app-level browser tests** — browser testing lives in the framework-owned L0 and morph-survival suites; an agent given only `fw explain` output answers "what updates when X is clicked" with 100% accuracy.
 4. **Constitution holds:** fixpoint CI green; no feature shipped without an authorable lowering; `grep -r "invalidate(" app/` returns only documented escape-hatch sites.
-5. **Coverage:** derived optimism handles ≥70% of (mutation × query) pairs in the reference commerce app; every punt names its reason.
+5. **Coverage:** every (mutation × query) pair in the reference commerce app has an explicit optimistic status — hand-written transform or declared `'await-fragment'` — with zero unhandled FW310s. (The v2 target: derivation handles ≥70% of pairs, every punt naming its reason.)
 
 ---
 
@@ -688,7 +699,8 @@ cart.domain.ts     cart.addItem — upsert cart_items + decrement products.stock
 cart.queries.ts    cartQuery (count, jsonAgg) reads {cart, product}    [JOIN = declaration]
 cart.mutations.ts  addToCart: guard authed, schema input, OUT_OF_STOCK error
                    ⇒ invalidates {cart, product:productId}             [DERIVED]
-                   ⇒ optimistic: 2 transforms                          [DERIVED, §10.5]
+                   ⇒ optimistic: 2 transforms                          [HAND-WRITTEN, §10.4;
+                                                                        derived in v2, §10.5]
 product.tsx        <f.Form> — fields type-checked & completeness-checked vs schema
 cart-badge.tsx     fw-deps="cart", data-bind="cart.count"              [no code for updates]
 
