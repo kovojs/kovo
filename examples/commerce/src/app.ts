@@ -1,5 +1,17 @@
 import { component } from '@jiso/core';
-import { domain, guards, i18n, meta, mutation, query, renderPageHints, s, t } from '@jiso/server';
+import {
+  domain,
+  guards,
+  i18n,
+  meta,
+  mutation,
+  query,
+  renderNoJsMutationResponse,
+  renderPageHints,
+  s,
+  t,
+  type MutationFail,
+} from '@jiso/server';
 import type { FwExplainInput } from '../../../packages/cli/src/index.js';
 
 export interface CommerceDb {
@@ -63,6 +75,12 @@ export interface ProductGridInput {
 export interface ProductGridResult {
   items: { id: string; stock: number; unitPrice: number }[];
   nextCursor: string | null;
+}
+
+export type AddToCartFailure = MutationFail<string, unknown>;
+export interface AddToCartFailureState {
+  failure: AddToCartFailure;
+  productId?: string;
 }
 
 export const productGridQuery = query('productGrid', {
@@ -142,17 +160,52 @@ export function loadProductGrid(db: CommerceDb, input: ProductGridInput = {}): P
 }
 
 export function renderProductGrid(result: ProductGridResult): string {
-  const items = result.items
-    .map(
-      (item) =>
-        `<article data-key="${item.id}" class="rounded border border-slate-200 bg-white p-4"><h2 class="font-semibold">${item.id}</h2><p data-bind="productGrid.items.stock">${item.stock} in stock</p></article>`,
-    )
-    .join('');
+  const items = result.items.map((item) => renderProductCard(item)).join('');
   const more = result.nextCursor
     ? `<a href="/products?after=${result.nextCursor}" data-cursor="${result.nextCursor}">More</a>`
     : '';
 
   return `<section fw-c="product-grid" fw-deps="product" data-page-cursor="${result.nextCursor ?? ''}">${items}${more}</section>`;
+}
+
+function renderProductCard(
+  item: { id: string; stock: number },
+  failure?: AddToCartFailure,
+): string {
+  return [
+    `<article data-key="${item.id}" class="rounded border border-slate-200 bg-white p-4">`,
+    `<h2 class="font-semibold">${item.id}</h2>`,
+    `<p data-bind="productGrid.items.stock">${item.stock} in stock</p>`,
+    renderAddToCartForm(item, failure),
+    '</article>',
+  ].join('');
+}
+
+export function renderAddToCartForm(
+  item: { id: string; stock: number },
+  failure?: AddToCartFailure,
+): string {
+  const error = failure ? renderAddToCartError(failure) : '';
+
+  return [
+    '<form method="post" action="/_m/cart/add" enhance data-mutation="cart/add" class="mt-3 flex flex-wrap items-end gap-2">',
+    `<input type="hidden" name="productId" value="${escapeAttribute(item.id)}">`,
+    '<label class="grid gap-1 text-xs font-medium text-slate-700"><span>Qty</span>',
+    `<input class="w-16 rounded border border-slate-300 px-2 py-1" name="quantity" type="number" min="1" max="${item.stock}" value="1">`,
+    '</label>',
+    '<button class="rounded bg-slate-900 px-3 py-2 text-sm font-medium text-white" type="submit">Add</button>',
+    error,
+    '</form>',
+  ].join('');
+}
+
+function renderAddToCartError(failure: AddToCartFailure): string {
+  if (failure.error.code === 'OUT_OF_STOCK') {
+    const payload = failure.error.payload as { availableQuantity?: number };
+    return `<output role="alert" data-error-code="OUT_OF_STOCK" class="basis-full text-sm text-red-700">Only ${payload.availableQuantity ?? 0} available.</output>`;
+  }
+
+  return `<output role="alert" data-error-code="${escapeAttribute(failure.error.code)}" class="basis-full text-sm text-red-700">Unable to add this item.</output>`;
 }
 
 export function renderOrderHistory(db: CommerceDb): string {
@@ -177,9 +230,58 @@ export const commercePageHints = renderPageHints({
   stylesheets: ['/assets/tailwind.css'],
 });
 
-export function renderCartPage(): string {
-  const db = createCommerceDb();
-  return `<html><head>${commercePageHints.html}</head><body class="min-h-dvh bg-slate-50 p-6"><main class="mx-auto max-w-4xl"><fw-fragment target="cart-badge">${CartBadge.definition.render()}</fw-fragment><fw-fragment target="product-grid">${renderProductGrid(loadProductGrid(db))}</fw-fragment><fw-fragment target="order-history">${renderOrderHistory(db)}</fw-fragment></main></body></html>`;
+export function renderCartPage(
+  db = createCommerceDb(),
+  addToCartFailure?: AddToCartFailureState,
+): string {
+  const productGrid = renderProductGridWithFailure(loadProductGrid(db), addToCartFailure);
+  return `<html><head>${commercePageHints.html}</head><body class="min-h-dvh bg-slate-50 p-6"><main class="mx-auto max-w-4xl"><fw-fragment target="cart-badge">${CartBadge.definition.render()}</fw-fragment><fw-fragment target="product-grid">${productGrid}</fw-fragment><fw-fragment target="order-history">${renderOrderHistory(db)}</fw-fragment></main></body></html>`;
+}
+
+function renderProductGridWithFailure(
+  result: ProductGridResult,
+  addToCartFailure?: AddToCartFailureState,
+): string {
+  if (!addToCartFailure) return renderProductGrid(result);
+
+  const items = result.items
+    .map((item) =>
+      renderProductCard(
+        item,
+        addToCartFailure.productId === item.id ? addToCartFailure.failure : undefined,
+      ),
+    )
+    .join('');
+  const more = result.nextCursor
+    ? `<a href="/products?after=${result.nextCursor}" data-cursor="${result.nextCursor}">More</a>`
+    : '';
+
+  return `<section fw-c="product-grid" fw-deps="product" data-page-cursor="${result.nextCursor ?? ''}">${items}${more}</section>`;
+}
+
+export function submitAddToCartNoJs(rawInput: unknown, request: CommerceRequest) {
+  return renderNoJsMutationResponse(addToCart, {
+    rawInput,
+    redirectTo: '/cart',
+    renderFailurePage: (failure) =>
+      renderCartPage(request.db, {
+        failure,
+        productId: productIdFromRawInput(rawInput),
+      }),
+    request,
+  });
+}
+
+function escapeAttribute(value: string): string {
+  return value.replaceAll('&', '&amp;').replaceAll('"', '&quot;').replaceAll('<', '&lt;');
+}
+
+function productIdFromRawInput(rawInput: unknown): string | undefined {
+  if (typeof rawInput !== 'object' || rawInput === null || !('productId' in rawInput)) {
+    return undefined;
+  }
+  const productId = rawInput.productId;
+  return typeof productId === 'string' ? productId : undefined;
 }
 
 export const commerceTouchGraph = {

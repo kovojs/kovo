@@ -498,7 +498,15 @@ export type MorphFragment = (target: MorphTarget, html: string) => void;
 
 export type StructuralMorphKey = string | number;
 
+export interface StructuralMorphBrowserState {
+  focused?: boolean;
+  islandState?: unknown;
+  scroll?: { left: number; top: number };
+  selection?: { direction?: 'backward' | 'forward' | 'none'; end: number; start: number };
+}
+
 export interface StructuralMorphNode {
+  browserState?: StructuralMorphBrowserState;
   children?: StructuralMorphNode[];
   key?: StructuralMorphKey | null;
   props?: Record<string, unknown>;
@@ -509,7 +517,8 @@ export interface StructuralMorphNode {
 /**
  * Browser-free structural morph contract from SPEC.md §11.4 and §13.2:
  * the current tree is rewritten to the next tree shape while matching
- * sibling keys keep their object identity across insertion and reorder.
+ * sibling keys keep their object identity and browser-owned state across
+ * insertion and reorder.
  */
 export function morphStructuralTree(
   current: StructuralMorphNode,
@@ -1050,6 +1059,10 @@ function copyOptionalStructuralFields(
   } else {
     current.text = next.text;
   }
+
+  if (current.browserState === undefined && next.browserState !== undefined) {
+    current.browserState = cloneBrowserState(next.browserState);
+  }
 }
 
 function morphStructuralChildren(
@@ -1110,6 +1123,7 @@ function indexStructuralKeys(
 function cloneStructuralNode(node: StructuralMorphNode): StructuralMorphNode {
   const clone: StructuralMorphNode = { type: node.type };
 
+  if (node.browserState !== undefined) clone.browserState = cloneBrowserState(node.browserState);
   if (node.key !== undefined) clone.key = node.key;
   if (node.props !== undefined) clone.props = { ...node.props };
   if (node.text !== undefined) clone.text = node.text;
@@ -1118,6 +1132,15 @@ function cloneStructuralNode(node: StructuralMorphNode): StructuralMorphNode {
   }
 
   return clone;
+}
+
+function cloneBrowserState(state: StructuralMorphBrowserState): StructuralMorphBrowserState {
+  return {
+    ...(state.focused === undefined ? {} : { focused: state.focused }),
+    ...(state.islandState === undefined ? {} : { islandState: structuredClone(state.islandState) }),
+    ...(state.scroll === undefined ? {} : { scroll: { ...state.scroll } }),
+    ...(state.selection === undefined ? {} : { selection: { ...state.selection } }),
+  };
 }
 
 function readLiveTargets(root: TargetCollectorRoot): string[] {

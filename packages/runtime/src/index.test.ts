@@ -626,6 +626,70 @@ describe('query store', () => {
     expect(result.children?.[1]).toBe(first);
   });
 
+  it('preserves keyed browser state across fragment morphs and reorders', () => {
+    const input: StructuralMorphNode = {
+      browserState: {
+        focused: true,
+        islandState: { draftQuantity: 2 },
+        scroll: { left: 4, top: 24 },
+        selection: { direction: 'forward', end: 3, start: 1 },
+      },
+      key: 'line:input',
+      props: { name: 'quantity' },
+      text: '2',
+      type: 'input',
+    };
+    const current: StructuralMorphNode = {
+      children: [{ key: 'line:label', text: 'Quantity', type: 'label' }, input],
+      type: 'form',
+    };
+    const next: StructuralMorphNode = {
+      children: [
+        {
+          key: 'line:input',
+          props: { name: 'quantity', value: '3' },
+          text: '3',
+          type: 'input',
+        },
+        { key: 'line:label', text: 'Updated quantity', type: 'label' },
+      ],
+      type: 'form',
+    };
+
+    const result = morphStructuralTree(current, next);
+
+    expect(result.children?.[0]).toBe(input);
+    expect(result.children?.[0]?.browserState).toEqual({
+      focused: true,
+      islandState: { draftQuantity: 2 },
+      scroll: { left: 4, top: 24 },
+      selection: { direction: 'forward', end: 3, start: 1 },
+    });
+    expect(result.children?.[0]).toMatchObject({
+      props: { name: 'quantity', value: '3' },
+      text: '3',
+    });
+  });
+
+  it('clones browser state for newly inserted structural nodes', () => {
+    const current: StructuralMorphNode = { children: [], type: 'form' };
+    const nextChild: StructuralMorphNode = {
+      browserState: { scroll: { left: 0, top: 10 } },
+      key: 'new-panel',
+      text: 'New',
+      type: 'section',
+    };
+
+    const result = morphStructuralTree(current, {
+      children: [nextChild],
+      type: 'form',
+    });
+
+    expect(result.children?.[0]).not.toBe(nextChild);
+    expect(result.children?.[0]?.browserState).toEqual({ scroll: { left: 0, top: 10 } });
+    expect(result.children?.[0]?.browserState).not.toBe(nextChild.browserState);
+  });
+
   it('preserves keyed list identity across append fragments and later reorders', () => {
     const first = keyedListRow('product:1', 'Coffee');
     const second = keyedListRow('product:2', 'Tea');

@@ -11,9 +11,11 @@ import {
   commerceTouchGraph,
   createCommerceDb,
   loadProductGrid,
+  renderAddToCartForm,
   renderOrderHistory,
   renderCartPage,
   renderProductGrid,
+  submitAddToCartNoJs,
 } from './app.js';
 
 describe('commerce example', () => {
@@ -75,6 +77,57 @@ describe('commerce example', () => {
 
     expect(renderOrderHistory(db)).toContain('data-key="order-1"');
     expect(renderOrderHistory(db)).toContain('p1 x 2 - 2998');
+  });
+
+  it('renders SPEC 6.3 no-JS add-to-cart forms as the page output', () => {
+    const html = renderCartPage();
+
+    expect(renderAddToCartForm({ id: 'p1', stock: 5 })).toContain(
+      '<form method="post" action="/_m/cart/add" enhance data-mutation="cart/add"',
+    );
+    expect(html).toContain('name="productId" value="p1"');
+    expect(html).toContain('name="quantity" type="number" min="1" max="5" value="1"');
+    expect(html).toContain('type="submit">Add</button>');
+  });
+
+  it('handles no-JS addToCart success as POST-redirect-GET', async () => {
+    const db = createCommerceDb();
+
+    await expect(
+      submitAddToCartNoJs(
+        { productId: 'p1', quantity: 2 },
+        { db, session: { id: 's-no-js-success', user: { id: 'u1' } } },
+      ),
+    ).resolves.toEqual({
+      body: '',
+      headers: {
+        'Cache-Control': 'no-store',
+        Location: '/cart',
+      },
+      status: 303,
+    });
+
+    expect(renderCartPage(db)).toContain('3 in stock');
+    expect(renderOrderHistory(db)).toContain('data-key="order-1"');
+  });
+
+  it('handles no-JS addToCart failures as a full 422 page with the form rerendered', async () => {
+    const db = createCommerceDb();
+    const response = await submitAddToCartNoJs(
+      { productId: 'p2', quantity: 3 },
+      { db, session: { id: 's-no-js-fail', user: { id: 'u1' } } },
+    );
+
+    expect(response).toMatchObject({
+      headers: { 'Content-Type': 'text/html; charset=utf-8' },
+      status: 422,
+    });
+    expect(response.body).toContain('<html>');
+    expect(response.body).toContain('<form method="post" action="/_m/cart/add" enhance');
+    expect(response.body).toContain('name="productId" value="p2"');
+    expect(response.body).toContain('data-error-code="OUT_OF_STOCK"');
+    expect(response.body).toContain('Only 2 available.');
+    expect(renderOrderHistory(db)).not.toContain('order-1');
   });
 
   it('renders Tailwind-first stylesheet hints and static utility classes', () => {
