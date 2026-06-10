@@ -4,6 +4,7 @@ import {
   createTouchGraphEntry,
   diagnosticsForTouchGraph,
   jiso,
+  serializeDomainRegistry,
   serializeTouchGraph,
 } from './index.js';
 
@@ -71,5 +72,27 @@ describe('@jiso/drizzle touch graph helpers', () => {
         site: 'cart.domain.ts:20',
       },
     ]);
+  });
+
+  it('serializes deterministic domain registry output from table annotations', () => {
+    const cartItems = { ...jiso({ domain: 'cart', key: 'cartId' }), name: 'cart_items' };
+    const products = { ...jiso({ domain: 'product', key: 'id' }), name: 'products' };
+
+    expect(serializeDomainRegistry([{ table: products }, { table: cartItems }]))
+      .toBe(`export type DomainKey = "cart" | "product";
+
+export const tableDomains = {
+  "cart_items": "cart",
+  "products": "product",
+} as const satisfies Record<string, DomainKey>;
+`);
+  });
+
+  it('serializes an empty domain registry as a never-keyed map', () => {
+    expect(serializeDomainRegistry([])).toBe(`export type DomainKey = never;
+
+export const tableDomains = {
+} as const satisfies Record<string, DomainKey>;
+`);
   });
 });

@@ -30,6 +30,10 @@ export interface TouchGraphEntry {
 
 export type TouchGraph = Record<string, TouchGraphEntry>;
 
+export interface DomainRegistryInput {
+  table: JisoTableAnnotation & { name: string };
+}
+
 export interface WriteSummaryInput {
   operation: string;
   site: string;
@@ -47,6 +51,20 @@ export interface TouchGraphDiagnostic {
   message: string;
   severity: DiagnosticSeverity;
   site: string;
+}
+
+export function serializeDomainRegistry(tables: readonly DomainRegistryInput[]): string {
+  const rows = [...tables].sort((left, right) => left.table.name.localeCompare(right.table.name));
+  const domains = [...new Set(rows.map((row) => row.table.domain))].sort();
+  const domainKey = domains.map((domain) => JSON.stringify(domain)).join(' | ') || 'never';
+  const lines = [`export type DomainKey = ${domainKey};`, '', 'export const tableDomains = {'];
+
+  for (const row of rows) {
+    lines.push(`  ${JSON.stringify(row.table.name)}: ${JSON.stringify(row.table.domain)},`);
+  }
+
+  lines.push('} as const satisfies Record<string, DomainKey>;');
+  return `${lines.join('\n')}\n`;
 }
 
 export function createTouchGraphEntry(input: {
