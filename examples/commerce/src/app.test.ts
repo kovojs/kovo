@@ -1,4 +1,6 @@
 import { describe, expect, it } from 'vitest';
+import { execFileSync } from 'node:child_process';
+import { readFileSync, rmSync } from 'node:fs';
 
 import { createJisoTestHarness } from '@jiso/test';
 import type { TouchGraph } from '@jiso/drizzle';
@@ -181,6 +183,21 @@ describe('commerce example', () => {
     expect(renderCartPage()).toContain('fw-i18n locale="en-US"');
     expect(renderCartPage()).toContain('class="min-h-dvh bg-slate-50 p-6"');
     expect(renderCartPage()).toContain('class="rounded bg-teal-600 px-2 py-0.5 text-white"');
+  });
+
+  it('builds the linked Tailwind stylesheet for commerce utility classes', () => {
+    rmSync('examples/commerce/dist', { force: true, recursive: true });
+
+    execFileSync('corepack', ['pnpm', '--filter', '@jiso/example-commerce', 'run', 'build'], {
+      stdio: 'pipe',
+    });
+
+    const css = readFileSync('examples/commerce/dist/assets/tailwind.css', 'utf8');
+
+    expect(css).toContain('.bg-slate-50');
+    expect(css).toContain('.rounded');
+    expect(css).toContain('.text-red-700');
+    expect(css).toContain('.bg-teal-600');
   });
 
   it('ships graph facts for fw check and explain acceptance', () => {

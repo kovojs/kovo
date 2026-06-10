@@ -82,7 +82,7 @@ const parseWireResponses = (fixtureBody) => {
 const readWireFixture = async (name) =>
   readFile(new URL(`../fixtures/wire/${name}`, import.meta.url), 'utf8');
 
-test('Phase 0 wire fixtures are present and explicit', async () => {
+void test('Phase 0 wire fixtures are present and explicit', async () => {
   const fixtureNames = await readdir(new URL('../fixtures/wire/', import.meta.url));
 
   assert.deepEqual(fixtureNames.filter((name) => name.endsWith('.http')).sort(), [
@@ -100,7 +100,7 @@ test('Phase 0 wire fixtures are present and explicit', async () => {
   }
 });
 
-test('Phase 0 wire fixture response bodies match generated contracts byte-for-byte', async () => {
+void test('Phase 0 wire fixture response bodies match generated contracts byte-for-byte', async () => {
   for (const [name, expectedBodies] of Object.entries(generatedWireBodies)) {
     const responses = parseWireResponses(await readWireFixture(name));
 
@@ -112,7 +112,7 @@ test('Phase 0 wire fixture response bodies match generated contracts byte-for-by
   }
 });
 
-test('Phase 0 wire fixture responses keep stable protocol metadata', async () => {
+void test('Phase 0 wire fixture responses keep stable protocol metadata', async () => {
   const fixtures = {
     'defer-stream.http': [
       {
@@ -178,7 +178,7 @@ test('Phase 0 wire fixture responses keep stable protocol metadata', async () =>
   }
 });
 
-test('SSE remains a v2 backlog fixture, not a v1 wire contract', async () => {
+void test('SSE remains a v2 backlog fixture, not a v1 wire contract', async () => {
   const body = await readFile(new URL('../fixtures/wire/README.md', import.meta.url), 'utf8');
 
   assert.match(body, /SSE.*v2 backlog/i);

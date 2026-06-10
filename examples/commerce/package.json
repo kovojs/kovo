@@ -3,6 +3,9 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
+  "scripts": {
+    "build": "vite build"
+  },
   "dependencies": {
     "@jiso/core": "workspace:*",
     "@jiso/drizzle": "workspace:*",
@@ -10,6 +13,9 @@
     "@jiso/test": "workspace:*"
   },
   "devDependencies": {
+    "@tailwindcss/vite": "^4.3.0",
+    "tailwindcss": "^4.3.0",
+    "vite-plus": "^0.1.24",
     "vitest": "4.1.8"
   }
 }
