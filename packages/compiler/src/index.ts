@@ -198,16 +198,21 @@ export function assertFixpoint(result: CompileResult): void {
   }
 }
 
-export function collectMinifierReservedNames(result: CompileResult): string[] {
+export function collectMinifierReservedNames(
+  results: CompileResult | readonly CompileResult[],
+): string[] {
   const reserved = new Set<string>();
   const handlerExportPattern = /^export\s+const\s+([A-Za-z_$][\w$]*)\s*=\s*handler\s*\(/gm;
+  const items = Array.isArray(results) ? results : [results];
 
-  for (const file of result.files) {
-    if (!file.fileName.endsWith('.client.js')) continue;
+  for (const result of items) {
+    for (const file of result.files) {
+      if (!file.fileName.endsWith('.client.js')) continue;
 
-    for (const match of file.source.matchAll(handlerExportPattern)) {
-      const exportName = match[1];
-      if (exportName) reserved.add(exportName);
+      for (const match of file.source.matchAll(handlerExportPattern)) {
+        const exportName = match[1];
+        if (exportName) reserved.add(exportName);
+      }
     }
   }
 

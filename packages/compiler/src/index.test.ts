@@ -192,7 +192,7 @@ export const CartRow = component('cart-row', {
   });
 
   it('collects emitted handler export names for minifier preservation', () => {
-    const result = compileComponentModule({
+    const cartBadge = compileComponentModule({
       fileName: 'components/cart/cart-badge.tsx',
       source: `
 import { component } from '@jiso/core';
@@ -207,10 +207,23 @@ export const CartBadge = component('cart-badge', {
 });
 `,
     });
+    const cartDrawer = compileComponentModule({
+      fileName: 'components/cart/cart-drawer.tsx',
+      source: `
+import { component } from '@jiso/core';
 
-    expect(collectMinifierReservedNames(result)).toEqual([
+export const CartDrawer = component('cart-drawer', {
+  render: () => (
+    <button onClick={removeItem}>Remove</button>
+  ),
+});
+`,
+    });
+
+    expect(collectMinifierReservedNames([cartDrawer, cartBadge, cartBadge])).toEqual([
       'CartBadge$button_click',
       'CartBadge$removeItem',
+      'CartDrawer$removeItem',
     ]);
   });
 

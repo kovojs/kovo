@@ -316,6 +316,17 @@ void test('D3 deferred stream responses are consumed by the runtime', async () =
   assert.match(runtimeTests, /morph:<section>Reviews ready<\/section>/);
 });
 
+void test('P1 minifier name preservation evidence remains represented', async () => {
+  const compilerSource = await readProjectFile('packages/compiler/src/index.ts');
+  const compilerTests = await readProjectFile('packages/compiler/src/index.test.ts');
+
+  assert.match(compilerSource, /collectMinifierReservedNames/);
+  assert.match(compilerSource, /handlerExportPattern/);
+  assert.match(compilerTests, /collects emitted handler export names for minifier preservation/);
+  assert.match(compilerTests, /CartBadge\$button_click/);
+  assert.match(compilerTests, /CartDrawer\$removeItem/);
+});
+
 void test('framework-owned browser suite is wired into acceptance', async () => {
   const packageJson = JSON.parse(await readProjectFile('package.json'));
   const viteConfig = await readProjectFile('vite.config.ts');
