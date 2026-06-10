@@ -85,6 +85,23 @@ const readWireFixture = async (name) =>
 
 const readProjectFile = async (path) => readFile(new URL(`../${path}`, import.meta.url), 'utf8');
 
+const listProjectFiles = async (dir, predicate) => {
+  const entries = await readdir(new URL(`../${dir}`, import.meta.url), { withFileTypes: true });
+  const files = [];
+
+  for (const entry of entries) {
+    const path = `${dir}/${entry.name}`;
+
+    if (entry.isDirectory()) {
+      files.push(...(await listProjectFiles(path, predicate)));
+    } else if (predicate(path)) {
+      files.push(path);
+    }
+  }
+
+  return files;
+};
+
 void test('Phase 0 wire fixtures are present and explicit', async () => {
   const fixtureNames = await readdir(new URL('../fixtures/wire/', import.meta.url));
 
@@ -188,12 +205,10 @@ void test('SSE remains a v2 backlog fixture, not a v1 wire contract', async () =
 });
 
 void test('P10 constitution rejects forbidden browser architecture in framework code', async () => {
-  const sourcePaths = [
-    'packages/compiler/src/index.ts',
-    'packages/runtime/src/index.ts',
-    'packages/server/src/index.ts',
-    'packages/create-jiso/src/index.ts',
-  ];
+  const sourcePaths = await listProjectFiles(
+    'packages',
+    (path) => path.endsWith('.ts') && path.includes('/src/') && !path.endsWith('.test.ts'),
+  );
   const forbiddenPatterns = [
     /\bcustomElements\.define\b/,
     /\battachShadow\b/,
@@ -211,6 +226,16 @@ void test('P10 constitution rejects forbidden browser architecture in framework 
       assert.doesNotMatch(source, pattern, `${path} must not match ${pattern}`);
     }
   }
+});
+
+void test('P10 commerce keeps app invalidation declarative', async () => {
+  const source = await readProjectFile('examples/commerce/src/app.ts');
+
+  assert.doesNotMatch(
+    source,
+    /\binvalidate\s*\(/,
+    'commerce app should use inferred touch graph wiring instead of direct invalidate() calls',
+  );
 });
 
 void test('S2 loader budget and L0 no-upgrade path are acceptance evidence', async () => {
