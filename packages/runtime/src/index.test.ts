@@ -14,6 +14,7 @@ import {
   OptimisticRebaser,
   parseHandlerReference,
   readElementParams,
+  stampPendingQueries,
   submitEnhancedMutation,
   type DelegatedEvent,
   type EventElementLike,
@@ -80,6 +81,34 @@ class FakeMorphRoot {
       getAttribute: (name) => (name === 'fw-fragment-target' ? (dep.target ?? null) : null),
       ...(dep.id ? { id: dep.id } : {}),
     }));
+  }
+}
+
+class FakePendingElement {
+  attributes: Record<string, string>;
+
+  constructor(attributes: Record<string, string>) {
+    this.attributes = { ...attributes };
+  }
+
+  getAttribute(name: string): string | null {
+    return this.attributes[name] ?? null;
+  }
+
+  removeAttribute(name: string): void {
+    delete this.attributes[name];
+  }
+
+  setAttribute(name: string, value: string): void {
+    this.attributes[name] = value;
+  }
+}
+
+class FakePendingRoot {
+  constructor(readonly elements: FakePendingElement[]) {}
+
+  querySelectorAll(_selector: string): Iterable<FakePendingElement> {
+    return this.elements;
   }
 }
 
@@ -269,6 +298,30 @@ describe('query store', () => {
     expect(store.get('cart')).toEqual({ count: 3 });
     pending.restore();
     expect(store.get('cart')).toEqual({ count: 1 });
+  });
+
+  it('stamps and clears pending state on islands consuming optimistic queries', () => {
+    const cartBadge = new FakePendingElement({ 'fw-deps': 'cart' });
+    const recommendations = new FakePendingElement({ 'fw-deps': 'product:p1 cart' });
+    const profile = new FakePendingElement({ 'fw-deps': 'profile' });
+    const root = new FakePendingRoot([cartBadge, recommendations, profile]);
+
+    expect(stampPendingQueries(root, ['cart'], true)).toEqual(['cart', 'product:p1,cart']);
+    expect(cartBadge.attributes).toMatchObject({
+      'aria-busy': 'true',
+      'fw-pending': '',
+    });
+    expect(recommendations.attributes).toMatchObject({
+      'aria-busy': 'true',
+      'fw-pending': '',
+    });
+    expect(profile.attributes).not.toHaveProperty('fw-pending');
+
+    expect(stampPendingQueries(root, ['cart'], false)).toEqual(['cart', 'product:p1,cart']);
+    expect(cartBadge.attributes).not.toHaveProperty('fw-pending');
+    expect(cartBadge.attributes).not.toHaveProperty('aria-busy');
+    expect(recommendations.attributes).not.toHaveProperty('fw-pending');
+    expect(recommendations.attributes).not.toHaveProperty('aria-busy');
   });
 
   it('rebases pending optimistic transforms over arriving server truth', () => {

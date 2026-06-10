@@ -349,6 +349,16 @@ export interface TargetCollectorRoot {
   }>;
 }
 
+export interface PendingElementLike {
+  getAttribute(name: string): string | null;
+  removeAttribute(name: string): void;
+  setAttribute(name: string, value: string): void;
+}
+
+export interface PendingRoot {
+  querySelectorAll(selector: string): Iterable<PendingElementLike>;
+}
+
 export interface EnhancedMutationFetchOptions {
   body: unknown;
   headers: Record<string, string>;
@@ -452,6 +462,31 @@ export async function submitEnhancedMutation(
   };
 }
 
+export function stampPendingQueries(
+  root: PendingRoot,
+  queryNames: readonly string[],
+  pending: boolean,
+): string[] {
+  const affected = new Set(queryNames);
+  const stamped: string[] = [];
+
+  for (const element of root.querySelectorAll('[fw-deps]')) {
+    const deps = readDeps(element.getAttribute('fw-deps'));
+    if (!deps.some((dep) => affected.has(dep))) continue;
+
+    if (pending) {
+      element.setAttribute('fw-pending', '');
+      element.setAttribute('aria-busy', 'true');
+    } else {
+      element.removeAttribute('fw-pending');
+      element.removeAttribute('aria-busy');
+    }
+    stamped.push(deps.join(','));
+  }
+
+  return stamped;
+}
+
 export interface BroadcastLike {
   close?: () => void;
   onmessage: ((event: { data: unknown }) => void) | null;
@@ -518,6 +553,13 @@ function readLiveTargets(root: TargetCollectorRoot): string[] {
   }
 
   return [...targets];
+}
+
+function readDeps(value: string | null): string[] {
+  return (value ?? '')
+    .split(/[\s,]+/)
+    .map((dep) => dep.trim())
+    .filter(Boolean);
 }
 
 function readAttribute(attrs: string, name: string): string | null {
