@@ -125,6 +125,14 @@ describe('@jiso/drizzle touch graph helpers', () => {
     expect(
       diagnosticsForTouchGraph({
         'cart.addItem': createTouchGraphEntry({
+          reads: [
+            {
+              operation: 'insert-select',
+              predicate: 'non-eq',
+              site: 'cart.domain.ts:18',
+              table: { ...jiso({ domain: 'price', key: 'productId' }), name: 'prices' },
+            },
+          ],
           unresolved: [{ operation: 'raw', site: 'cart.domain.ts:20' }],
           writes: [
             {
@@ -148,6 +156,12 @@ describe('@jiso/drizzle touch graph helpers', () => {
         message: 'Non-eq predicate degraded to table-level invalidation.',
         severity: 'notice',
         site: 'cart.domain.ts:12',
+      },
+      {
+        code: 'FW409',
+        message: 'Non-eq predicate degraded to table-level invalidation.',
+        severity: 'notice',
+        site: 'cart.domain.ts:18',
       },
     ]);
   });

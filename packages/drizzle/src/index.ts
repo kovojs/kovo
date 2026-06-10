@@ -180,6 +180,14 @@ export function diagnosticsForTouchGraph(graph: TouchGraph): TouchGraphDiagnosti
         severity: diagnosticDefinitions.FW409.severity,
         site: touch.site,
       })),
+    ...(entry.reads ?? [])
+      .filter((read) => read.predicate === 'non-eq')
+      .map((read) => ({
+        code: 'FW409' as const,
+        message: diagnosticDefinitions.FW409.message,
+        severity: diagnosticDefinitions.FW409.severity,
+        site: read.site,
+      })),
   ]);
 }
 

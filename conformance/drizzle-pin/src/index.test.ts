@@ -32,6 +32,7 @@ describe('Drizzle pinned subset conformance', () => {
         reads: [
           {
             operation: 'insert-select',
+            predicate: 'non-eq',
             site: 'cart.domain.ts:15',
             table: { ...jiso({ domain: 'product', key: 'id' }), name: 'products' },
           },
@@ -76,7 +77,7 @@ describe('Drizzle pinned subset conformance', () => {
         '    ],',
         '    reads: [',
         '      { domain: "inventory", via: "inventory_snapshots", site: "cart.domain.ts:21", keys: "arg:productId", source: "update-from", branch: "stock-check", predicate: "eq" },',
-        '      { domain: "product", via: "products", site: "cart.domain.ts:15", keys: null, source: "insert-select" },',
+        '      { domain: "product", via: "products", site: "cart.domain.ts:15", keys: null, source: "insert-select", predicate: "non-eq" },',
         '    ],',
         '    unresolved: [',
         '      { code: \'FW406\', site: "cart.domain.ts:31", message: "Statically un-analyzable write site; manual touches required.", domain: "audit" },',
@@ -98,6 +99,12 @@ describe('Drizzle pinned subset conformance', () => {
         message: 'Non-eq predicate degraded to table-level invalidation.',
         severity: 'notice',
         site: 'cart.domain.ts:20',
+      },
+      {
+        code: 'FW409',
+        message: 'Non-eq predicate degraded to table-level invalidation.',
+        severity: 'notice',
+        site: 'cart.domain.ts:15',
       },
     ]);
   });
