@@ -2,5 +2,11 @@
   "name": "@jiso/conformance-drizzle-pin",
   "version": "0.0.0",
   "private": true,
-  "type": "module"
+  "type": "module",
+  "dependencies": {
+    "@jiso/drizzle": "workspace:*"
+  },
+  "devDependencies": {
+    "vitest": "4.1.8"
+  }
 }
