@@ -5,6 +5,7 @@ import {
   guards,
   mutation,
   query,
+  renderDeferredStream,
   renderPageHints,
   renderMutationResponse,
   renderNoJsMutationResponse,
@@ -40,6 +41,43 @@ describe('server mutation primitives', () => {
     expect(renderPageHints({ prefetch: false, prerenderUrls: ['/cart'] })).toEqual({
       earlyHints: {},
       html: '',
+    });
+  });
+
+  it('renders deferred streams with shell first and query JSON before fragments', () => {
+    expect(
+      renderDeferredStream({
+        closeHtml: '</body></html>',
+        chunks: [
+          {
+            fragments: [
+              {
+                html: '<section fw-c="reviews" fw-deps="product:p1"><article data-key="r1">5</article></section>',
+                target: 'reviews:p1',
+              },
+            ],
+            queries: [
+              { key: 'product:p1', name: 'reviews', value: { items: [{ id: 'r1', rating: 5 }] } },
+            ],
+          },
+        ],
+        shell:
+          '<!doctype html>\n<html><body><main><product-page fw-deps="product:p1"><fw-defer target="reviews:p1" state="pending"></fw-defer></product-page></main>',
+      }),
+    ).toEqual({
+      body: [
+        '<!doctype html>\n<html><body><main><product-page fw-deps="product:p1"><fw-defer target="reviews:p1" state="pending"></fw-defer></product-page></main>',
+        '--jiso-boundary',
+        '<fw-query name="reviews" key="product:p1">{"items":[{"id":"r1","rating":5}]}</fw-query>',
+        '<fw-fragment target="reviews:p1"><section fw-c="reviews" fw-deps="product:p1"><article data-key="r1">5</article></section></fw-fragment>',
+        '--jiso-boundary--',
+        '</body></html>',
+      ].join('\n'),
+      headers: {
+        'Content-Type': 'text/html; charset=utf-8',
+        'Transfer-Encoding': 'chunked',
+      },
+      status: 200,
     });
   });
 

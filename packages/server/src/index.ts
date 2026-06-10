@@ -263,6 +263,35 @@ export interface PageHints {
   html: string;
 }
 
+export interface DeferredQueryChunk {
+  key?: string;
+  name: string;
+  value: unknown;
+}
+
+export interface DeferredFragmentChunk {
+  html: string;
+  target: string;
+}
+
+export interface DeferredStreamOptions {
+  boundary?: string;
+  chunks: readonly DeferredStreamChunk[];
+  closeHtml?: string;
+  shell: string;
+}
+
+export interface DeferredStreamChunk {
+  fragments: readonly DeferredFragmentChunk[];
+  queries?: readonly DeferredQueryChunk[];
+}
+
+export interface DeferredStreamResponse {
+  body: string;
+  headers: Record<string, string>;
+  status: 200;
+}
+
 export interface MutationDefinition<
   Key extends string = string,
   InputSchema extends Schema<unknown> = Schema<unknown>,
@@ -310,6 +339,29 @@ export function renderPageHints(options: PageHintOptions): PageHints {
         ? { Link: modulepreloads.map((href) => `<${href}>; rel=modulepreload`).join(', ') }
         : {},
     html,
+  };
+}
+
+export function renderDeferredStream(options: DeferredStreamOptions): DeferredStreamResponse {
+  const boundary = options.boundary ?? 'jiso-boundary';
+  const chunks = options.chunks.map((chunk) =>
+    [
+      `--${boundary}`,
+      ...renderDeferredQueryChunks(chunk.queries ?? []),
+      ...chunk.fragments.map(
+        (fragment) =>
+          `<fw-fragment target="${escapeAttribute(fragment.target)}">${fragment.html}</fw-fragment>`,
+      ),
+    ].join('\n'),
+  );
+
+  return {
+    body: [options.shell, ...chunks, `--${boundary}--`, options.closeHtml ?? ''].join('\n'),
+    headers: {
+      'Content-Type': 'text/html; charset=utf-8',
+      'Transfer-Encoding': 'chunked',
+    },
+    status: 200,
   };
 }
 
@@ -532,6 +584,13 @@ function renderSpeculationRules(prefetch: RoutePrefetch, urls: readonly string[]
       ],
     }),
   )}</script>`;
+}
+
+function renderDeferredQueryChunks(queries: readonly DeferredQueryChunk[]): string[] {
+  return queries.map((queryChunk) => {
+    const key = queryChunk.key ? ` key="${escapeAttribute(queryChunk.key)}"` : '';
+    return `<fw-query name="${escapeAttribute(queryChunk.name)}"${key}>${escapeHtml(JSON.stringify(queryChunk.value))}</fw-query>`;
+  });
 }
 
 function escapeHtml(value: string): string {
