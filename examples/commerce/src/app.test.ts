@@ -457,6 +457,25 @@ describe('commerce example', () => {
         '',
       ].join('\n'),
     });
+    expect(
+      fwExplain(commerceGraph, { kind: 'mutation', optimistic: true, target: 'order/receipt' }),
+    ).toEqual({
+      exitCode: 0,
+      output: [
+        'fw-explain/v1',
+        'MUTATION order/receipt',
+        'guards: authed,rateLimit:session',
+        'writes: -',
+        'invalidates: -',
+        'manual-invalidates: -',
+        'updates: -',
+        'OPTIMISTIC cart await-fragment',
+        'OPTIMISTIC productGrid await-fragment',
+        'OPTIMISTIC orderHistory await-fragment',
+        'OPTIMISTIC-SUMMARY total=3 hand-written=0 await-fragment=3 UNHANDLED=0',
+        '',
+      ].join('\n'),
+    });
     expect(fwExplain(commerceGraph, { kind: 'query', target: 'cart' })).toEqual({
       exitCode: 0,
       output:
@@ -510,18 +529,23 @@ describe('commerce example', () => {
     }
   });
 
-  it('answers cart/add optimistic coverage mechanically from fw explain output', () => {
-    const mutation = fwExplain(commerceGraph, {
-      kind: 'mutation',
-      optimistic: true,
-      target: 'cart/add',
-    });
-    const statuses = optimisticStatuses(mutation.output);
+  it('answers commerce optimistic coverage mechanically from fw explain output', () => {
+    const page = fwExplain(commerceGraph, { kind: 'page', target: '/cart' });
+    const pageQueries = explainList(explainLine(page.output, 'queries: '));
 
-    for (const query of ['cart', 'productGrid', 'orderHistory']) {
-      expect(statuses.get(query)).toBeDefined();
-      expect(statuses.get(query)).not.toBe('UNHANDLED');
+    for (const mutation of commerceGraph.mutations) {
+      const explanation = fwExplain(commerceGraph, {
+        kind: 'mutation',
+        optimistic: true,
+        target: mutation.key,
+      });
+      const statuses = optimisticStatuses(explanation.output);
+
+      for (const query of pageQueries) {
+        expect(statuses.get(query)).toBeDefined();
+        expect(statuses.get(query)).not.toBe('UNHANDLED');
+      }
+      expect(explainLine(explanation.output, 'OPTIMISTIC-SUMMARY ')).toContain('UNHANDLED=0');
     }
-    expect(explainLine(mutation.output, 'OPTIMISTIC-SUMMARY ')).toContain('UNHANDLED=0');
   });
 });

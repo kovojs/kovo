@@ -469,6 +469,9 @@ export const commerceGraph = {
     { mutation: 'cart/add', query: 'cart', status: 'hand-written' },
     { mutation: 'cart/add', query: 'productGrid', status: 'await-fragment' },
     { mutation: 'cart/add', query: 'orderHistory', status: 'await-fragment' },
+    { mutation: 'order/receipt', query: 'cart', status: 'await-fragment' },
+    { mutation: 'order/receipt', query: 'productGrid', status: 'await-fragment' },
+    { mutation: 'order/receipt', query: 'orderHistory', status: 'await-fragment' },
   ],
   pages: [
     {
