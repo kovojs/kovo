@@ -6,11 +6,12 @@ import {
   meta,
   mutation,
   query,
-  renderNoJsMutationResponse,
+  renderMutationEndpointResponse,
   renderPageHints,
   s,
   t,
   type MutationFail,
+  type MutationWireHeaderSource,
 } from '@jiso/server';
 import type { FwExplainInput } from '../../../packages/cli/src/index.js';
 
@@ -260,7 +261,22 @@ function renderProductGridWithFailure(
 }
 
 export function submitAddToCartNoJs(rawInput: unknown, request: CommerceRequest) {
-  return renderNoJsMutationResponse(addToCart, {
+  return submitAddToCart(rawInput, request, {});
+}
+
+export function submitAddToCart(
+  rawInput: unknown,
+  request: CommerceRequest,
+  headers: MutationWireHeaderSource,
+) {
+  return renderMutationEndpointResponse(addToCart, {
+    failureTarget: 'product-form',
+    fragmentRenderers: [
+      { render: () => CartBadge.definition.render(), target: 'cart-badge' },
+      { render: () => renderProductGrid(loadProductGrid(request.db)), target: 'product-grid' },
+      { render: () => renderOrderHistory(request.db), target: 'order-history' },
+    ],
+    headers,
     rawInput,
     redirectTo: '/cart',
     renderFailurePage: (failure) =>

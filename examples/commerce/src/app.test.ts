@@ -15,6 +15,7 @@ import {
   renderOrderHistory,
   renderCartPage,
   renderProductGrid,
+  submitAddToCart,
   submitAddToCartNoJs,
 } from './app.js';
 
@@ -109,6 +110,43 @@ describe('commerce example', () => {
 
     expect(renderCartPage(db)).toContain('3 in stock');
     expect(renderOrderHistory(db)).toContain('data-key="order-1"');
+  });
+
+  it('handles enhanced addToCart through the same endpoint as fragment wire', async () => {
+    const db = createCommerceDb();
+
+    await expect(
+      submitAddToCart(
+        { productId: 'p1', quantity: 2 },
+        { db, session: { id: 's-enhanced-success', user: { id: 'u1' } } },
+        {
+          'FW-Fragment': 'true',
+          'FW-Targets': 'cart-badge,product-grid,order-history',
+        },
+      ),
+    ).resolves.toMatchObject({
+      headers: {
+        'Content-Type': 'text/vnd.jiso.fragment+html; charset=utf-8',
+      },
+      status: 200,
+    });
+
+    const response = await submitAddToCart(
+      { productId: 'p2', quantity: 1 },
+      { db, session: { id: 's-enhanced-success-2', user: { id: 'u1' } } },
+      {
+        'FW-Fragment': 'true',
+        'FW-Targets': 'cart-badge,product-grid,order-history',
+      },
+    );
+
+    expect(response.body).toContain('<fw-query name="cart">');
+    expect(response.body).toContain('<fw-query name="productGrid">');
+    expect(response.body).toContain('<fw-query name="orderHistory">');
+    expect(response.body).toContain('<fw-fragment target="cart-badge">');
+    expect(response.body).toContain('<fw-fragment target="product-grid">');
+    expect(response.body).toContain('<fw-fragment target="order-history">');
+    expect(response.body).toContain('data-key="order-2"');
   });
 
   it('handles no-JS addToCart failures as a full 422 page with the form rerendered', async () => {
