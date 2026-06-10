@@ -163,6 +163,7 @@ export interface MutationContext<Errors extends Record<string, Schema<unknown>>>
     code: Code,
     payload: InferSchema<Errors[Code]>,
   ): MutationFail<Code, InferSchema<Errors[Code]>>;
+  invalidate(domain: Domain, options?: InvalidateOptions): ChangeRecord;
 }
 
 export interface Domain<Key extends string = string> {
@@ -212,6 +213,8 @@ export interface ChangeRecord {
   domain: string;
   keys?: readonly string[];
   input?: unknown;
+  manual?: true;
+  reason?: string;
 }
 
 export interface MutationRegistry {
@@ -311,6 +314,12 @@ export interface MutationDefinition<
   registry?: MutationRegistry;
 }
 
+export interface InvalidateOptions {
+  input?: unknown;
+  keys?: readonly string[];
+  reason?: string;
+}
+
 export function mutation<
   const Key extends string,
   InputSchema extends Schema<unknown>,
@@ -385,6 +394,7 @@ export async function runMutation<
   }
 
   const input = definition.input.parse(rawInput) as InferSchema<InputSchema>;
+  const manualInvalidations: ChangeRecord[] = [];
   const context: MutationContext<Errors> = {
     fail(code, payload) {
       return {
@@ -393,16 +403,34 @@ export async function runMutation<
         status: 422,
       };
     },
+    invalidate(domain, options) {
+      const record = invalidate(domain, options);
+      manualInvalidations.push(record);
+      return record;
+    },
   };
   const value = await definition.handler(input, request, context);
 
   if (isMutationFail(value)) return value;
-  const changes = changeRecordsFor(definition.registry?.touches ?? [], input);
+  const changes = [
+    ...changeRecordsFor(definition.registry?.touches ?? [], input),
+    ...manualInvalidations,
+  ];
   return {
     changes,
     ok: true,
     rerunQueries: queriesToRerun(definition.registry?.queries ?? [], changes),
     value,
+  };
+}
+
+export function invalidate(domain: Domain, options: InvalidateOptions = {}): ChangeRecord {
+  return {
+    domain: domain.key,
+    ...(options.input === undefined ? {} : { input: options.input }),
+    ...(options.keys === undefined ? {} : { keys: options.keys }),
+    manual: true,
+    ...(options.reason === undefined ? {} : { reason: options.reason }),
   };
 }
 

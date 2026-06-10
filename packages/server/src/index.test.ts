@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import {
   domain,
   guards,
+  invalidate,
   mutation,
   query,
   renderDeferredStream,
@@ -247,6 +248,53 @@ describe('server mutation primitives', () => {
       ok: true,
       rerunQueries: ['cart'],
       value: 'p1',
+    });
+  });
+
+  it('emits manual invalidate escape-hatch records from mutation context', async () => {
+    const cart = domain('cart');
+    const product = domain('product');
+    const cartQuery = query('cart', { reads: [cart] });
+    const productQuery = query('product', { reads: [product] });
+    const syncInventory = mutation('inventory/sync', {
+      input: s.object({ productId: s.string() }),
+      registry: {
+        queries: [cartQuery, productQuery],
+      },
+      handler(input, _request, context) {
+        context.invalidate(product, {
+          input,
+          keys: [input.productId],
+          reason: 'external inventory webhook',
+        });
+        return input.productId;
+      },
+    });
+
+    await expect(runMutation(syncInventory, { productId: 'p1' }, {})).resolves.toEqual({
+      changes: [
+        {
+          domain: 'product',
+          input: { productId: 'p1' },
+          keys: ['p1'],
+          manual: true,
+          reason: 'external inventory webhook',
+        },
+      ],
+      ok: true,
+      rerunQueries: ['product'],
+      value: 'p1',
+    });
+  });
+
+  it('creates standalone manual invalidate records for external systems', () => {
+    const product = domain('product');
+
+    expect(invalidate(product, { keys: ['p1'], reason: 'stripe webhook' })).toEqual({
+      domain: 'product',
+      keys: ['p1'],
+      manual: true,
+      reason: 'stripe webhook',
     });
   });
 
