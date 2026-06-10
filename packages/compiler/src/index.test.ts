@@ -136,6 +136,23 @@ export const FilterButton = component('filter-button', {
     );
     expect(result.files[1]?.source).toContain('// no client handlers emitted');
   });
+
+  it('stamps cross-document view transition names as real CSS', () => {
+    const result = compileComponentModule({
+      fileName: 'product-card.tsx',
+      source: `
+export const ProductCard = component('product-card', {
+  render: () => <img viewTransitionName="product-p1-image" src="/p1.png" />,
+});
+`,
+    });
+
+    expect(result.viewTransitions).toEqual([{ name: 'product-p1-image' }]);
+    expect(result.files[0]?.source).toContain(
+      '<img style="view-transition-name: product-p1-image" src="/p1.png" />',
+    );
+    expect(result.files[2]?.source).toContain("'product-p1-image': unknown;");
+  });
 });
 
 describe('jisoVitePlugin', () => {

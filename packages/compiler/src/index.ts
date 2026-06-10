@@ -18,10 +18,11 @@ export interface CompileResult {
   diagnostics: CompilerDiagnostic[];
   files: EmittedFile[];
   platformSubstitutions: PlatformSubstitution[];
+  viewTransitions: ViewTransitionStamp[];
 }
 
 export function createEmptyCompileResult(): CompileResult {
-  return { diagnostics: [], files: [], platformSubstitutions: [] };
+  return { diagnostics: [], files: [], platformSubstitutions: [], viewTransitions: [] };
 }
 
 export interface CompileComponentOptions {
@@ -50,6 +51,10 @@ export interface PlatformSubstitution {
   target: string;
 }
 
+export interface ViewTransitionStamp {
+  name: string;
+}
+
 export interface JisoVitePlugin {
   name: 'jiso';
   transform: (
@@ -69,11 +74,13 @@ export function compileComponentModule(options: CompileComponentOptions): Compil
       diagnostics: [],
       files: [{ fileName: options.fileName, source: options.source }],
       platformSubstitutions: [],
+      viewTransitions: [],
     };
   }
 
   const componentName = inferComponentName(options);
-  const platformLowering = lowerPlatformBehaviors(options.source);
+  const viewTransitionLowering = lowerViewTransitions(options.source);
+  const platformLowering = lowerPlatformBehaviors(viewTransitionLowering.source);
   const source = platformLowering.source;
   const handlers = lowerEventHandlers({ ...options, source }, componentName);
   const clientFileName = replaceExtension(options.fileName, '.client.js');
@@ -88,6 +95,7 @@ export function compileComponentModule(options: CompileComponentOptions): Compil
     fragmentTargets: findFragmentTargets(source, componentName),
     handlers,
     platformSubstitutions: platformLowering.substitutions,
+    viewTransitions: viewTransitionLowering.stamps,
   });
 
   return {
@@ -98,6 +106,7 @@ export function compileComponentModule(options: CompileComponentOptions): Compil
       { fileName: registryFileName, source: registrySource },
     ],
     platformSubstitutions: platformLowering.substitutions,
+    viewTransitions: viewTransitionLowering.stamps,
   };
 }
 
@@ -185,6 +194,25 @@ function inferComponentName(options: CompileComponentOptions): string {
     .filter(Boolean)
     .map((part) => `${part[0]?.toUpperCase() ?? ''}${part.slice(1)}`)
     .join('');
+}
+
+function lowerViewTransitions(source: string): {
+  source: string;
+  stamps: ViewTransitionStamp[];
+} {
+  const stamps: ViewTransitionStamp[] = [];
+  const nextSource = source.replace(
+    /\sviewTransitionName=(["'])(?<name>[^"']+)\1/g,
+    (_match, _quote: string, name: string) => {
+      stamps.push({ name });
+      return ` style="view-transition-name: ${escapeAttribute(name)}"`;
+    },
+  );
+
+  return {
+    source: nextSource,
+    stamps,
+  };
 }
 
 function lowerPlatformBehaviors(source: string): {
@@ -415,6 +443,7 @@ function emitRegistryModule(options: {
   fragmentTargets: string[];
   handlers: HandlerLowering[];
   platformSubstitutions: PlatformSubstitution[];
+  viewTransitions: ViewTransitionStamp[];
 }): string {
   const handlerModuleLine = options.handlers.length
     ? `  '#${kebabCase(options.componentName)}': typeof import('../${options.clientFileName}');`
@@ -428,6 +457,9 @@ function emitRegistryModule(options: {
         `  '${options.componentName}:${substitution.tag}:${substitution.event}:${substitution.target}': '${substitution.kind}:${substitution.action}';`,
     )
     .join('\n');
+  const viewTransitionLines = options.viewTransitions
+    .map((stamp) => `  '${stamp.name}': unknown;`)
+    .join('\n');
 
   return `${irHeader}
 export interface HandlerModules {
@@ -440,6 +472,10 @@ ${fragmentTargetLines}
 
 export interface PlatformSubstitutions {
 ${platformSubstitutionLines}
+}
+
+export interface ViewTransitions {
+${viewTransitionLines}
 }
 `;
 }
