@@ -1,3 +1,11 @@
-# create-jiso template
+# Jiso Starter
 
-The starter template will ship in Phase 10 with the fixpoint CI test, graph assertion recipes, and Vite+ scaffold described in `IMPLEMENT_v1.md`.
+This starter uses Vite+ as the single project entrypoint:
+
+```sh
+vp check
+vp test
+vp run fw-check
+```
+
+Tailwind is the default app styling path. Keep class names in templates as static strings so the generated CSS contains every class that can appear in SSR pages, mutation fragments, and deferred streams. Safelist classes explicitly in `src/styles.css` when a fragment must emit a class that cannot be discovered statically.

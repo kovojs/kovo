@@ -22,6 +22,17 @@ export function createJisoProject(options: CreateJisoOptions): CreateJisoProject
         source: `${JSON.stringify(
           {
             name: packageName,
+            dependencies: {
+              '@jiso/core': 'workspace:*',
+            },
+            devDependencies: {
+              '@tailwindcss/vite': '^4.0.0',
+              '@typescript/native-preview': '^7.0.0-dev.20260610.1',
+              tailwindcss: '^4.0.0',
+              typescript: '^6.0.0',
+              'vite-plus': '^0.1.24',
+              vitest: '^4.1.8',
+            },
             private: true,
             scripts: {
               check: 'vp check',
@@ -37,9 +48,11 @@ export function createJisoProject(options: CreateJisoOptions): CreateJisoProject
       },
       {
         path: 'vite.config.ts',
-        source: `import { defineConfig } from 'vite-plus';
+        source: `import tailwindcss from '@tailwindcss/vite';
+import { defineConfig } from 'vite-plus';
 
 export default defineConfig({
+  plugins: [tailwindcss()],
   lint: {
     options: {
       typeAware: true,
@@ -91,12 +104,26 @@ jobs:
         source: `${JSON.stringify({ optimistic: [], touchGraph: {} }, null, 2)}\n`,
       },
       {
+        path: 'src/styles.css',
+        source: `@import "tailwindcss";
+
+@source "./**/*.{ts,tsx,html}";
+
+@theme {
+  --color-jiso-ink: #17202a;
+  --color-jiso-accent: #0f8b8d;
+}
+`,
+      },
+      {
         path: 'src/app.tsx',
         source: `import { component } from '@jiso/core';
+import './styles.css';
 
 export const App = component('app-root', {
   state: () => ({}),
-  render: () => '<main>Hello from Jiso</main>',
+  render: () =>
+    '<main class="mx-auto grid min-h-dvh max-w-3xl place-items-center px-6 text-jiso-ink"><h1 class="text-3xl font-semibold tracking-normal text-jiso-accent">Hello from Jiso</h1></main>',
 });
 `,
       },

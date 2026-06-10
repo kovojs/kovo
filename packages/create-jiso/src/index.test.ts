@@ -12,10 +12,23 @@ describe('create-jiso starter', () => {
       'vite.config.ts',
       '.github/workflows/ci.yml',
       'graph.json',
+      'src/styles.css',
       'src/app.tsx',
     ]);
+    expect(project.files.find((file) => file.path === 'package.json')?.source).toContain(
+      '"@tailwindcss/vite": "^4.0.0"',
+    );
     expect(project.files.find((file) => file.path === 'vite.config.ts')?.source).toContain(
       "command: 'fw check graph.json'",
+    );
+    expect(project.files.find((file) => file.path === 'vite.config.ts')?.source).toContain(
+      'plugins: [tailwindcss()]',
+    );
+    expect(project.files.find((file) => file.path === 'src/styles.css')?.source).toContain(
+      '@source "./**/*.{ts,tsx,html}";',
+    );
+    expect(project.files.find((file) => file.path === 'src/app.tsx')?.source).toContain(
+      'class="mx-auto grid min-h-dvh',
     );
     expect(
       project.files.find((file) => file.path === '.github/workflows/ci.yml')?.source,
