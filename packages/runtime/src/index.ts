@@ -127,6 +127,7 @@ export interface LoaderRoot {
     options?: { capture?: boolean },
   ): void;
   querySelectorAll?: (selector: string) => Iterable<QueryScriptLike>;
+  visibilityState?: 'hidden' | 'visible';
 }
 
 export interface DelegatedEvent {
@@ -158,7 +159,7 @@ export interface JisoLoader {
 
 const defaultDelegatedEvents = ['click', 'submit', 'input', 'change'] as const;
 
-export const jisoLoaderSource = `(()=>{const E=["click","submit","input","change"],P=e=>{const t=e.target?.closest?.("[on\\\\:"+e.type+"]");if(!t)return;const r=t.getAttribute("on:"+e.type);if(!r)return;const i=r.lastIndexOf("#");if(i<=0)return;const p={};for(const a of t.attributes||[])a.name.startsWith("data-p-")&&(p[a.name.slice(7).replace(/-([a-z0-9])/g,(_,c)=>c.toUpperCase())]=a.value);import(r.slice(0,i)).then(m=>m[r.slice(i+1)]?.(e,{params:p,state:{}}))};for(const e of E)addEventListener(e,P,{capture:!0});const R=()=>dispatchEvent(new CustomEvent("jiso:refetch"));addEventListener("visibilitychange",R);addEventListener("focus",R)})();`;
+export const jisoLoaderSource = `(()=>{const E=["click","submit","input","change"],P=e=>{const t=e.target?.closest?.("[on\\\\:"+e.type+"]");if(!t)return;const r=t.getAttribute("on:"+e.type);if(!r)return;const i=r.lastIndexOf("#");if(i<=0)return;const p={};for(const a of t.attributes||[])a.name.startsWith("data-p-")&&(p[a.name.slice(7).replace(/-([a-z0-9])/g,(_,c)=>c.toUpperCase())]=a.value);import(r.slice(0,i)).then(m=>m[r.slice(i+1)]?.(e,{params:p,state:{}}))};for(const e of E)addEventListener(e,P,{capture:!0});const R=()=>dispatchEvent(new CustomEvent("jiso:refetch"));addEventListener("visibilitychange",()=>document.visibilityState==="visible"&&R());addEventListener("focus",R)})();`;
 
 export function installJisoLoader(options: JisoLoaderOptions): JisoLoader {
   const events = options.events ?? defaultDelegatedEvents;
@@ -178,7 +179,10 @@ export function installJisoLoader(options: JisoLoaderOptions): JisoLoader {
   }
 
   if (options.refetchOnFocus) {
-    options.root.addEventListener('visibilitychange', options.refetchOnFocus);
+    options.root.addEventListener('visibilitychange', async () => {
+      if (options.root.visibilityState === 'hidden') return;
+      await options.refetchOnFocus?.();
+    });
     options.root.addEventListener('focus', options.refetchOnFocus);
   }
 

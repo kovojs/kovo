@@ -34,6 +34,7 @@ import {
 class FakeRoot {
   listeners = new Map<string, (event: DelegatedEvent) => void | Promise<void>>();
   scripts: QueryScript[] = [];
+  visibilityState: 'hidden' | 'visible' = 'visible';
 
   addEventListener(type: string, listener: (event: DelegatedEvent) => void | Promise<void>): void {
     this.listeners.set(type, listener);
@@ -302,7 +303,7 @@ describe('query store', () => {
     expect(plan).toHaveBeenCalledWith({ count: 1 });
   });
 
-  it('registers refetch-on-focus and visibility listeners without invoking them eagerly', async () => {
+  it('registers refetch-on-focus and visible-return listeners without invoking them eagerly', async () => {
     const root = new FakeRoot();
     const refetchOnFocus = vi.fn();
 
@@ -316,9 +317,19 @@ describe('query store', () => {
     expect(root.listeners.has('focus')).toBe(true);
     expect(refetchOnFocus).not.toHaveBeenCalled();
 
-    await root.listeners.get('focus')?.({ target: null, type: 'focus' });
+    root.visibilityState = 'hidden';
+    await root.listeners.get('visibilitychange')?.({ target: null, type: 'visibilitychange' });
+
+    expect(refetchOnFocus).not.toHaveBeenCalled();
+
+    root.visibilityState = 'visible';
+    await root.listeners.get('visibilitychange')?.({ target: null, type: 'visibilitychange' });
 
     expect(refetchOnFocus).toHaveBeenCalledTimes(1);
+
+    await root.listeners.get('focus')?.({ target: null, type: 'focus' });
+
+    expect(refetchOnFocus).toHaveBeenCalledTimes(2);
   });
 
   it('registers pagehide optimism cleanup without unload handlers', () => {
