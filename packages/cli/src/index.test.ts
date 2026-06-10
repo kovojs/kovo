@@ -58,6 +58,24 @@ describe('fw check', () => {
     });
   });
 
+  it('prints FW302 data-bind path lints using the SPEC §11.3 diagnostic registry message', () => {
+    expect(
+      fwCheck({
+        lints: [
+          {
+            code: 'FW302',
+            detail: 'cart.total',
+            site: 'CartBadge.tsx:12',
+          },
+        ],
+      }).output,
+    ).toMatchInlineSnapshot(`
+      "fw-check/v1
+      LINT FW302 CartBadge.tsx:12 data-bind path is not present in the declared query shape. cart.total
+      "
+    `);
+  });
+
   it('reports unresolved touch graph sites as FW406', () => {
     expect(
       fwCheck({
