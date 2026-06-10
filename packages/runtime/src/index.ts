@@ -393,6 +393,14 @@ export interface AppliedMutationResponse {
   queries: string[];
 }
 
+export interface MutationChangeRecord {
+  domain: string;
+  input?: unknown;
+  keys?: readonly string[];
+  manual?: true;
+  reason?: string;
+}
+
 export interface FragmentChunk {
   html: string;
   target: string;
@@ -438,6 +446,9 @@ export interface EnhancedMutationFetchOptions {
 }
 
 export interface EnhancedMutationResponseLike {
+  headers?: {
+    get(name: string): string | null;
+  };
   ok?: boolean;
   status?: number;
   text(): Promise<string>;
@@ -627,10 +638,13 @@ export function applyMutationResponseToDom(options: {
   };
 }
 
-export async function submitEnhancedMutation(
-  options: EnhancedMutationSubmitOptions,
-): Promise<
-  AppliedMutationResponse & { appliedFragments: string[]; idem: string; targets: string[] }
+export async function submitEnhancedMutation(options: EnhancedMutationSubmitOptions): Promise<
+  AppliedMutationResponse & {
+    appliedFragments: string[];
+    changes: MutationChangeRecord[];
+    idem: string;
+    targets: string[];
+  }
 > {
   const idem = options.idem ?? createIdem();
   const targets = readLiveTargets(options.root);
@@ -654,6 +668,7 @@ export async function submitEnhancedMutation(
 
   return {
     ...applied,
+    changes: readMutationChangeHeader(response),
     idem,
     targets,
   };
@@ -692,17 +707,21 @@ export interface BroadcastLike {
 
 export interface MutationBroadcast {
   close(): void;
-  publish(body: string): void;
+  publish(body: string, changes?: readonly MutationChangeRecord[]): void;
 }
 
 export function installMutationBroadcast(options: {
   channel: BroadcastLike;
+  onChanges?: (changes: readonly MutationChangeRecord[]) => void;
   store: QueryStore;
 }): MutationBroadcast {
   options.channel.onmessage = (event) => {
     if (!isMutationBroadcastMessage(event.data)) return;
 
     applyMutationResponse(options.store, event.data.body);
+    if (event.data.changes.length > 0) {
+      options.onChanges?.(event.data.changes);
+    }
   };
 
   return {
@@ -710,9 +729,10 @@ export function installMutationBroadcast(options: {
       options.channel.onmessage = null;
       options.channel.close?.();
     },
-    publish(body: string) {
+    publish(body: string, changes: readonly MutationChangeRecord[] = []) {
       options.channel.postMessage({
         body,
+        changes,
         type: 'jiso:mutation-response',
       });
     },
@@ -768,6 +788,16 @@ function createIdem(): string {
   return `idem_${Math.random().toString(36).slice(2)}`;
 }
 
+function readMutationChangeHeader(response: EnhancedMutationResponseLike): MutationChangeRecord[] {
+  const value = response.headers?.get('FW-Changes') ?? response.headers?.get('fw-changes');
+  if (!value) return [];
+
+  const parsed = JSON.parse(value) as unknown;
+  if (!Array.isArray(parsed)) return [];
+
+  return parsed.filter(isMutationChangeRecord);
+}
+
 function unescapeHtml(value: string): string {
   return value
     .replaceAll('&quot;', '"')
@@ -778,6 +808,7 @@ function unescapeHtml(value: string): string {
 
 function isMutationBroadcastMessage(value: unknown): value is {
   body: string;
+  changes: MutationChangeRecord[];
   type: 'jiso:mutation-response';
 } {
   return (
@@ -786,6 +817,21 @@ function isMutationBroadcastMessage(value: unknown): value is {
     'type' in value &&
     value.type === 'jiso:mutation-response' &&
     'body' in value &&
-    typeof value.body === 'string'
+    typeof value.body === 'string' &&
+    'changes' in value &&
+    Array.isArray(value.changes) &&
+    value.changes.every(isMutationChangeRecord)
+  );
+}
+
+function isMutationChangeRecord(value: unknown): value is MutationChangeRecord {
+  if (typeof value !== 'object' || value === null) return false;
+  if (!('domain' in value) || typeof value.domain !== 'string') return false;
+
+  return (
+    (!('keys' in value) ||
+      (Array.isArray(value.keys) && value.keys.every((key) => typeof key === 'string'))) &&
+    (!('manual' in value) || value.manual === true) &&
+    (!('reason' in value) || typeof value.reason === 'string')
   );
 }

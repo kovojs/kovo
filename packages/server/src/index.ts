@@ -598,7 +598,10 @@ export async function renderMutationResponse<
 
   return {
     body: [...queryChunks, ...fragmentChunks].join('\n'),
-    headers: { 'Content-Type': 'text/vnd.jiso.fragment+html; charset=utf-8' },
+    headers: {
+      'Content-Type': 'text/vnd.jiso.fragment+html; charset=utf-8',
+      'FW-Changes': JSON.stringify(result.changes),
+    },
     status: 200,
   };
 }

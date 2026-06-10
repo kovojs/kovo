@@ -508,7 +508,10 @@ describe('server mutation primitives', () => {
         '<fw-query name="cart">{"count":1,"items":[{"productId":"p1","qty":1,"unitPrice":1499}]}</fw-query>',
         '<fw-fragment target="cart-badge"><cart-badge fw-deps="cart"><span data-bind="cart.count">1</span></cart-badge></fw-fragment>',
       ].join('\n'),
-      headers: { 'Content-Type': 'text/vnd.jiso.fragment+html; charset=utf-8' },
+      headers: {
+        'Content-Type': 'text/vnd.jiso.fragment+html; charset=utf-8',
+        'FW-Changes': '[{"domain":"cart","input":{"productId":"p1"}}]',
+      },
       status: 200,
     });
   });
@@ -544,7 +547,10 @@ describe('server mutation primitives', () => {
       }),
     ).resolves.toEqual({
       body: '<fw-fragment target="recommendations" error-boundary="recommendations"><section role="alert">recommendations failed</section></fw-fragment>',
-      headers: { 'Content-Type': 'text/vnd.jiso.fragment+html; charset=utf-8' },
+      headers: {
+        'Content-Type': 'text/vnd.jiso.fragment+html; charset=utf-8',
+        'FW-Changes': '[]',
+      },
       status: 200,
     });
   });

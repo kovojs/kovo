@@ -20,6 +20,7 @@ import {
   stampPendingQueries,
   submitEnhancedMutation,
   type DelegatedEvent,
+  type EnhancedMutationFetchOptions,
   type EventElementLike,
 } from './index.js';
 
@@ -275,12 +276,16 @@ describe('query store', () => {
   it('rebroadcasts and applies mutation responses for same-user tab sync', () => {
     const store = createQueryStore();
     const channel = new FakeBroadcastChannel();
-    const broadcast = installMutationBroadcast({ channel, store });
+    const onChanges = vi.fn();
+    const broadcast = installMutationBroadcast({ channel, onChanges, store });
 
-    broadcast.publish('<fw-query name="cart">{"count":5}</fw-query>');
+    broadcast.publish('<fw-query name="cart">{"count":5}</fw-query>', [
+      { domain: 'cart', input: { productId: 'p1' } },
+    ]);
     expect(channel.messages).toEqual([
       {
         body: '<fw-query name="cart">{"count":5}</fw-query>',
+        changes: [{ domain: 'cart', input: { productId: 'p1' } }],
         type: 'jiso:mutation-response',
       },
     ]);
@@ -288,11 +293,13 @@ describe('query store', () => {
     channel.onmessage?.({
       data: {
         body: '<fw-query name="cart">{"count":6}</fw-query>',
+        changes: [{ domain: 'cart', keys: ['cart_1'] }],
         type: 'jiso:mutation-response',
       },
     });
 
     expect(store.get('cart')).toEqual({ count: 6 });
+    expect(onChanges).toHaveBeenCalledWith([{ domain: 'cart', keys: ['cart_1'] }]);
   });
 
   it('applies hand-written optimistic transforms through query update plans', () => {
@@ -502,6 +509,13 @@ describe('query store', () => {
     formData.set('productId', 'p1');
     formData.set('quantity', '1');
     const fetch = vi.fn(async () => ({
+      headers: {
+        get(name: string) {
+          return name === 'FW-Changes'
+            ? '[{"domain":"cart","input":{"productId":"p1","quantity":"1"}}]'
+            : null;
+        },
+      },
       async text() {
         return [
           '<fw-query name="cart">{"count":1}</fw-query>',
@@ -537,6 +551,7 @@ describe('query store', () => {
         { html: '<cart-badge>1</cart-badge>', target: 'cart-badge' },
         { html: '<section></section>', target: 'recommendations' },
       ],
+      changes: [{ domain: 'cart', input: { productId: 'p1', quantity: '1' } }],
       idem: 'idem_01HX',
       queries: ['cart'],
       targets: ['cart-badge', 'recommendations'],
@@ -552,7 +567,7 @@ describe('query store', () => {
     const root = new FakeMorphRoot();
     root.deps = [{ id: 'cart-badge' }];
     root.targets.set('cart-badge', new FakeMorphTarget());
-    const fetch = vi.fn(async (_url: string, options) => {
+    const fetch = vi.fn(async (_url: string, options: EnhancedMutationFetchOptions) => {
       const body = options.body as FormData;
 
       expect(body.get('productId')).toBe('p1');
