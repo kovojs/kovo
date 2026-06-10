@@ -553,6 +553,7 @@ export interface OptimisticEnhancedMutationSubmitOptions<
   input: Input;
   optimistic: OptimisticPlan<Input>;
   pendingRoot?: PendingRoot;
+  queue?: MutationQueue;
   rebaser: OptimisticRebaser;
 }
 
@@ -739,6 +740,26 @@ export async function submitEnhancedMutation(options: EnhancedMutationSubmitOpti
 }
 
 export async function submitOptimisticEnhancedMutation<Input>(
+  options: OptimisticEnhancedMutationSubmitOptions<Input>,
+): Promise<
+  AppliedMutationResponse & {
+    appliedFragments: string[];
+    changes: MutationChangeRecord[];
+    idem: string;
+    targets: string[];
+  }
+> {
+  if (options.queue) {
+    // SPEC.md §10.4: mutations that declare a named queue run as named FIFO.
+    return options.queue.run(options.optimistic.queue, () =>
+      submitOptimisticEnhancedMutationDirect(options),
+    );
+  }
+
+  return submitOptimisticEnhancedMutationDirect(options);
+}
+
+async function submitOptimisticEnhancedMutationDirect<Input>(
   options: OptimisticEnhancedMutationSubmitOptions<Input>,
 ): Promise<
   AppliedMutationResponse & {
