@@ -191,4 +191,28 @@ describe('@jiso/test harness', () => {
 
     expect(() => verifier.assertCovered()).not.toThrow();
   });
+
+  it('verifies observed query reads against declared domains', () => {
+    const verifier = createDbVerifier({}, { domainByTable: { cart_items: 'cart' } });
+    const db = verifier.wrap(createFakeDb());
+
+    db.read('cart_items');
+
+    expect(() => verifier.assertReadsCovered(['cart'])).not.toThrow();
+  });
+
+  it('fails read-side verification for undeclared query domains', () => {
+    const verifier = createDbVerifier(
+      {},
+      { domainByTable: { cart_items: 'cart', products: 'product' } },
+    );
+    const db = verifier.wrap(createFakeDb());
+
+    db.read('cart_items');
+    db.read('products');
+
+    expect(() => verifier.assertReadsCovered(['cart'])).toThrow(
+      'Observed query read outside declared domains: product',
+    );
+  });
 });

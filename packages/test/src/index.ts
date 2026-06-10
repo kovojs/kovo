@@ -80,6 +80,7 @@ export interface ObservedDbOperation {
 
 export interface DbVerifier {
   assertCovered(): void;
+  assertReadsCovered(domains: readonly string[]): void;
   observed: readonly ObservedDbOperation[];
   wrap<Db>(db: Db): Db;
 }
@@ -117,6 +118,17 @@ export function createDbVerifier(touchGraph: TouchGraph, config: DbVerificationC
       if (uncovered.length > 0) {
         const domains = uncovered.map((operation) => operation.domain).join(', ');
         throw new Error(`Observed write outside static touch graph: ${domains}`);
+      }
+    },
+    assertReadsCovered(domains: readonly string[]): void {
+      const allowedReads = new Set(domains);
+      const uncovered = observed.filter(
+        (operation) => operation.kind === 'read' && !allowedReads.has(operation.domain),
+      );
+
+      if (uncovered.length > 0) {
+        const readDomains = uncovered.map((operation) => operation.domain).join(', ');
+        throw new Error(`Observed query read outside declared domains: ${readDomains}`);
       }
     },
     observed,
