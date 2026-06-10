@@ -1,5 +1,5 @@
 import { component } from '@jiso/core';
-import { domain, mutation, query, s } from '@jiso/server';
+import { domain, mutation, query, renderPageHints, s } from '@jiso/server';
 
 export interface CommerceDb {
   cartItems: { productId: string; qty: number; unitPrice: number }[];
@@ -73,11 +73,16 @@ export const CartBadge = component('cart-badge', {
   fragmentTarget: true,
   queries: { cart: cartQuery },
   state: () => ({}),
-  render: () => '<cart-badge fw-deps="cart"><span data-bind="cart.count">1</span></cart-badge>',
+  render: () =>
+    '<cart-badge class="inline-flex items-center gap-2 rounded-md border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-900 shadow-sm" fw-deps="cart"><span>Cart</span><span class="rounded bg-teal-600 px-2 py-0.5 text-white" data-bind="cart.count">1</span></cart-badge>',
+});
+
+export const commercePageHints = renderPageHints({
+  stylesheets: ['/assets/tailwind.css'],
 });
 
 export function renderCartPage(): string {
-  return `<html><body><fw-fragment target="cart-badge">${CartBadge.definition.render()}</fw-fragment></body></html>`;
+  return `<html><head>${commercePageHints.html}</head><body class="min-h-dvh bg-slate-50 p-6"><main class="mx-auto max-w-4xl"><fw-fragment target="cart-badge">${CartBadge.definition.render()}</fw-fragment></main></body></html>`;
 }
 
 export const commerceTouchGraph = {
