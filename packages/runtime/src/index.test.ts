@@ -1714,7 +1714,7 @@ describe('query store', () => {
     const addToCart = form<
       'cart/add',
       { productId: string; quantity: number },
-      { code: 'OUT_OF_STOCK' }
+      { code: 'OUT_OF_STOCK'; data: { availableQuantity: number } }
     >('cart/add');
     const store = createQueryStore();
     const root = new FakeMorphRoot();
@@ -1722,7 +1722,7 @@ describe('query store', () => {
     const fetch = vi.fn(async () => ({
       status: 422,
       async text() {
-        return '<fw-error>{&quot;code&quot;:&quot;OUT_OF_STOCK&quot;}</fw-error>';
+        return '<fw-fragment target="error"><output role="alert" data-error-code="OUT_OF_STOCK">{"availableQuantity":0}</output></fw-fragment>';
       },
     }));
     const ctx = createSubmitContext({ fetch, root, store });
@@ -1732,7 +1732,43 @@ describe('query store', () => {
       onError,
     });
 
-    expect(onError).toHaveBeenCalledWith({ code: 'OUT_OF_STOCK' });
-    expect(result.fragments).toEqual([]);
+    expect(onError).toHaveBeenCalledWith({
+      code: 'OUT_OF_STOCK',
+      data: { availableQuantity: 0 },
+    });
+    expect(result.fragments).toEqual([
+      {
+        html: '<output role="alert" data-error-code="OUT_OF_STOCK">{"availableQuantity":0}</output>',
+        target: 'error',
+      },
+    ]);
+  });
+
+  it('passes schema validation field failures from ctx.submit on server-shaped 422 fragments', async () => {
+    const addToCart = form<
+      'cart/add',
+      { productId: string; quantity: number },
+      { code: 'VALIDATION'; fields: { quantity: string } }
+    >('cart/add');
+    const store = createQueryStore();
+    const root = new FakeMorphRoot();
+    const onError = vi.fn();
+    const fetch = vi.fn(async () => ({
+      status: 422,
+      async text() {
+        return '<fw-fragment target="product-form:p1"><output role="alert" data-error-path="quantity">Expected number &gt;= 1</output></fw-fragment>';
+      },
+    }));
+    const ctx = createSubmitContext({ fetch, root, store });
+
+    await ctx.submit(addToCart, {
+      input: { productId: 'p1', quantity: 0 },
+      onError,
+    });
+
+    expect(onError).toHaveBeenCalledWith({
+      code: 'VALIDATION',
+      fields: { quantity: 'Expected number >= 1' },
+    });
   });
 });

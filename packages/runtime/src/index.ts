@@ -855,13 +855,64 @@ function isValidationFailure(status: number | undefined, ok: boolean | undefined
 
 function parseMutationFailure(body: string): JsonValue {
   const errorMatch = /<fw-error\b[^>]*>(?<json>[\s\S]*?)<\/fw-error>/.exec(body);
-  const raw = errorMatch?.groups?.json ? unescapeHtml(errorMatch.groups.json) : body;
+  if (errorMatch?.groups?.json) return parseJsonOrUnknown(unescapeHtml(errorMatch.groups.json));
 
+  const declaredFailure = parseDeclaredFailureOutput(body);
+  if (declaredFailure) return declaredFailure;
+
+  const validationFailure = parseValidationFailureOutput(body);
+  if (validationFailure) return validationFailure;
+
+  return parseJsonOrUnknown(body);
+}
+
+function parseJsonOrUnknown(raw: string): JsonValue {
+  const value = parseJsonValue(raw);
+  if (value !== null) return value;
+
+  return { body: raw, code: 'unknown' };
+}
+
+function parseJsonValue(raw: string): JsonValue | null {
   try {
     return JSON.parse(raw) as JsonValue;
   } catch {
-    return { body: raw, code: 'unknown' };
+    return null;
   }
+}
+
+function parseDeclaredFailureOutput(body: string): JsonValue | null {
+  for (const match of body.matchAll(/<output\b(?<attrs>[^>]*)>(?<content>[\s\S]*?)<\/output>/g)) {
+    const code = readAttribute(match.groups?.attrs ?? '', 'data-error-code');
+    if (!code) continue;
+
+    return {
+      code,
+      data: parseOutputPayload(match.groups?.content ?? ''),
+    };
+  }
+
+  return null;
+}
+
+function parseValidationFailureOutput(body: string): JsonValue | null {
+  const fields: Record<string, string> = {};
+
+  for (const match of body.matchAll(/<output\b(?<attrs>[^>]*)>(?<content>[\s\S]*?)<\/output>/g)) {
+    const path = readAttribute(match.groups?.attrs ?? '', 'data-error-path');
+    if (!path) continue;
+
+    fields[path] = unescapeHtml(match.groups?.content ?? '').trim();
+  }
+
+  return Object.keys(fields).length > 0 ? { code: 'VALIDATION', fields } : null;
+}
+
+function parseOutputPayload(content: string): JsonValue {
+  const raw = unescapeHtml(content).trim();
+  if (!raw) return {};
+
+  return parseJsonValue(raw) ?? raw;
 }
 
 export function applyMutationResponse(store: QueryStore, body: string): AppliedMutationResponse {
