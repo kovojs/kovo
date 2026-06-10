@@ -920,19 +920,21 @@ function emitServerModule(
   handlers: HandlerLowering[],
   _clientFileName: string,
 ): string {
-  const renderedSource = stampDeclaredQueryDeps(
-    handlers.reduce(
-      (next, handler) =>
-        next.replace(
-          /on[A-Z][A-Za-z0-9]*=\{[^}]*\}/,
-          [
-            `${handler.attributeName}="${handler.attributeValue}"`,
-            ...handler.params.map(
-              (param) => `${param.attributeName}="${escapeAttribute(param.value)}"`,
-            ),
-          ].join(' '),
-        ),
-      source,
+  const renderedSource = stampInitialState(
+    stampDeclaredQueryDeps(
+      handlers.reduce(
+        (next, handler) =>
+          next.replace(
+            /on[A-Z][A-Za-z0-9]*=\{[^}]*\}/,
+            [
+              `${handler.attributeName}="${handler.attributeValue}"`,
+              ...handler.params.map(
+                (param) => `${param.attributeName}="${escapeAttribute(param.value)}"`,
+              ),
+            ].join(' '),
+          ),
+        source,
+      ),
     ),
   );
 
@@ -953,6 +955,20 @@ function stampDeclaredQueryDeps(source: string): string {
 
   const tagSource = source.slice(tag.start, tag.end + 1);
   const stampedTag = stampOpeningTagDeps(tagSource, deps);
+  if (stampedTag === tagSource) return source;
+
+  return `${source.slice(0, tag.start)}${stampedTag}${source.slice(tag.end + 1)}`;
+}
+
+function stampInitialState(source: string): string {
+  const stateJson = staticStateJson(source);
+  if (!stateJson) return source;
+
+  const tag = findFirstRenderedOpeningTag(source);
+  if (!tag) return source;
+
+  const tagSource = source.slice(tag.start, tag.end + 1);
+  const stampedTag = stampOpeningTagAttribute(tagSource, 'fw-state', stateJson);
   if (stampedTag === tagSource) return source;
 
   return `${source.slice(0, tag.start)}${stampedTag}${source.slice(tag.end + 1)}`;
@@ -994,8 +1010,14 @@ function stampOpeningTagDeps(tagSource: string, deps: readonly string[]): string
     return `${tagSource.slice(0, existing.index)}fw-deps=${existing[1]}${depValue}${existing[1]}${tagSource.slice(existing.index + existing[0].length)}`;
   }
 
+  return stampOpeningTagAttribute(tagSource, 'fw-deps', depValue);
+}
+
+function stampOpeningTagAttribute(tagSource: string, name: string, value: string): string {
   return tagSource.replace(/\s*\/?>$/, (suffix) =>
-    suffix.includes('/') ? ` fw-deps="${depValue}" />` : ` fw-deps="${depValue}">`,
+    suffix.includes('/')
+      ? ` ${name}="${escapeAttribute(value)}" />`
+      : ` ${name}="${escapeAttribute(value)}">`,
   );
 }
 
@@ -1013,6 +1035,21 @@ function splitDepValue(value: string): string[] {
     .split(/[\s,]+/)
     .map((dep) => dep.trim())
     .filter(Boolean);
+}
+
+function staticStateJson(source: string): string | null {
+  const stateObject = extractStateReturnObject(source);
+  if (!stateObject) return null;
+
+  const jsonCandidate = stateObject
+    .replace(/([{,]\s*)([A-Za-z_$][\w$]*)\s*:/g, '$1"$2":')
+    .replaceAll("'", '"');
+
+  try {
+    return JSON.stringify(JSON.parse(jsonCandidate) as unknown);
+  } catch {
+    return null;
+  }
 }
 
 function replaceExtension(fileName: string, extension: string): string {

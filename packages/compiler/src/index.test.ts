@@ -370,6 +370,27 @@ export const Recommendations = component('recommendations', {
     expect(() => assertFixpoint(result)).not.toThrow();
   });
 
+  it('stamps static island-local state onto rendered component markup', () => {
+    const result = compileComponentModule({
+      fileName: 'cart-badge.tsx',
+      source: `
+export const CartBadge = component('cart-badge', {
+  state: () => ({ bouncing: false, count: 2 }),
+  render: (_data, state) => (
+    <cart-badge class={state.bouncing ? 'bounce' : ''}>
+      {state.count}
+    </cart-badge>
+  ),
+});
+`,
+    });
+
+    expect(result.files[0]?.source).toContain(
+      'fw-state="{&quot;bouncing&quot;:false,&quot;count&quot;:2}"',
+    );
+    expect(() => assertFixpoint(result)).not.toThrow();
+  });
+
   it('reports FW301 when island-local state stores an obvious query fact', () => {
     const result = compileComponentModule({
       fileName: 'cart-badge.tsx',

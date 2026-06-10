@@ -21,6 +21,7 @@ import {
   OptimisticRebaser,
   parseHandlerReference,
   readElementParams,
+  readElementState,
   stampPendingQueries,
   submitEnhancedMutation,
   submitOptimisticEnhancedMutation,
@@ -199,6 +200,27 @@ describe('runtime loader', () => {
       expect.objectContaining({ type: 'click' }),
       expect.objectContaining({ params: { itemId: 'i_42' } }),
     );
+  });
+
+  it('hydrates serialized island state for delegated handlers', async () => {
+    const handler = vi.fn();
+    const importModule = vi.fn(async () => ({ CartBadge$button_click: handler }));
+    const element = new FakeElement({
+      'fw-state': '{"bouncing":false,"count":2}',
+      'on:click': '/c/cart-badge.client.js#CartBadge$button_click',
+    });
+
+    await dispatchDelegatedEvent({ target: element, type: 'click' }, importModule);
+
+    expect(handler).toHaveBeenCalledWith(
+      expect.objectContaining({ type: 'click' }),
+      expect.objectContaining({ state: { bouncing: false, count: 2 } }),
+    );
+  });
+
+  it('defaults missing or malformed serialized state to an empty object', () => {
+    expect(readElementState(new FakeElement({}))).toEqual({});
+    expect(readElementState(new FakeElement({ 'fw-state': '{' }))).toEqual({});
   });
 
   it('parses full handler references and data params', () => {
