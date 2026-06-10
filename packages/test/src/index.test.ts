@@ -339,6 +339,33 @@ describe('@jiso/test harness', () => {
     expect(() => verifier.assertCovered()).not.toThrow();
   });
 
+  it('limits domain-scoped FW406 coverage to the annotated domain', () => {
+    const verifier = createDbVerifier(
+      {
+        'cart.addItem': {
+          touches: [],
+          unresolved: [
+            {
+              code: 'FW406',
+              domain: 'audit',
+              message: 'Statically un-analyzable write site; manual touches required.',
+              site: 'cart.domain.ts:9',
+            },
+          ],
+        },
+      },
+      { domainByTable: { audit_log: 'audit', products: 'product' } },
+    );
+    const db = verifier.wrap(createFakeDb());
+
+    db.write('audit_log', 'p1');
+    db.write('products', 'p1');
+
+    expect(() => verifier.assertCovered()).toThrow(
+      'FW402 Write touched an undeclared domain: product',
+    );
+  });
+
   it('warns when a declared write domain is never observed', () => {
     const verifier = createDbVerifier(
       {

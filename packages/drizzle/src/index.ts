@@ -21,6 +21,7 @@ export interface TouchSite {
 
 export interface UnresolvedWriteSite {
   code: 'FW406';
+  domain?: string;
   message: string;
   site: string;
 }
@@ -46,6 +47,7 @@ export interface WriteSummaryInput {
 }
 
 export interface UnresolvedSummaryInput {
+  domain?: string;
   operation: string;
   site: string;
 }
@@ -88,6 +90,7 @@ export function createTouchGraphEntry(input: {
       .sort(compareTouchSites),
     unresolved: [...(input.unresolved ?? [])].map((site) => ({
       code: 'FW406',
+      ...(site.domain === undefined ? {} : { domain: site.domain }),
       message: diagnosticDefinitions.FW406.message,
       site: site.site,
     })),
@@ -111,7 +114,7 @@ export function serializeTouchGraph(graph: TouchGraph): string {
     lines.push('    unresolved: [');
     for (const unresolved of entry.unresolved) {
       lines.push(
-        `      { code: 'FW406', site: ${JSON.stringify(unresolved.site)}, message: ${JSON.stringify(unresolved.message)} },`,
+        `      { code: 'FW406', site: ${JSON.stringify(unresolved.site)}, message: ${JSON.stringify(unresolved.message)}${unresolved.domain === undefined ? '' : `, domain: ${JSON.stringify(unresolved.domain)}`} },`,
       );
     }
     lines.push('    ],');

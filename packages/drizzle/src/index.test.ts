@@ -51,7 +51,7 @@ describe('@jiso/drizzle touch graph helpers', () => {
     expect(
       serializeTouchGraph({
         'cart.addItem': createTouchGraphEntry({
-          unresolved: [{ operation: 'raw', site: 'cart.domain.ts:20' }],
+          unresolved: [{ domain: 'audit', operation: 'raw', site: 'cart.domain.ts:20' }],
           writes: [
             {
               branch: 'stock-check',
@@ -70,7 +70,7 @@ describe('@jiso/drizzle touch graph helpers', () => {
       { domain: "product", via: "products", site: "cart.domain.ts:12", keys: "arg:productId", branch: "stock-check", predicate: "non-eq" },
     ],
     unresolved: [
-      { code: 'FW406', site: "cart.domain.ts:20", message: "Statically un-analyzable write site; manual touches required." },
+      { code: 'FW406', site: "cart.domain.ts:20", message: "Statically un-analyzable write site; manual touches required.", domain: "audit" },
     ],
   },
 } as const;

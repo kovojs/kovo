@@ -154,13 +154,18 @@ export function createDbVerifier(touchGraph: TouchGraph, config: DbVerificationC
       const allowedWrites = new Set(
         Object.values(touchGraph).flatMap((entry) => entry.touches.map((touch) => touch.domain)),
       );
-      const hasFw406 = Object.values(touchGraph).some((entry) => entry.unresolved.length > 0);
+      const unresolvedWrites = Object.values(touchGraph).flatMap((entry) => entry.unresolved);
+      const unresolvedDomains = new Set(
+        unresolvedWrites.flatMap((site) => (site.domain ? [site.domain] : [])),
+      );
+      const hasUnscopedFw406 = unresolvedWrites.some((site) => site.domain === undefined);
       const uncovered = observed.filter(
         (operation) =>
           operation.kind === 'write' &&
           operation.domain !== undefined &&
           !allowedWrites.has(operation.domain) &&
-          !hasFw406,
+          !hasUnscopedFw406 &&
+          !unresolvedDomains.has(operation.domain),
       );
 
       if (uncovered.length > 0) {
