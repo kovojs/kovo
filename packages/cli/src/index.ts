@@ -175,6 +175,7 @@ export function fwExplain(input: FwExplainInput, options: FwExplainOptions): FwC
 
     lines.push(`QUERY ${query.query}`);
     lines.push(`reads: ${list(query.domains)}`);
+    lines.push(`consumers: ${list(queryConsumers(query.query, input))}`);
     lines.push(`invalidated-by: ${list(invalidatedBy(query, input.touchGraph ?? {}))}`);
     return ok(lines);
   }
@@ -268,6 +269,19 @@ function invalidatedBy(query: QueryReadSet, touchGraph: TouchGraph): string[] {
       entry.touches.some((touch) => query.domains.some((domain) => domain === touch.domain)),
     )
     .map(([writeName]) => writeName);
+}
+
+function queryConsumers(queryName: string, input: FwExplainInput): string[] {
+  const components =
+    input.components
+      ?.filter((component) => component.queries?.includes(queryName))
+      .map((component) => `component:${component.name}`) ?? [];
+  const pages =
+    input.pages
+      ?.filter((page) => page.queries?.includes(queryName))
+      .map((page) => `page:${page.route}`) ?? [];
+
+  return [...components, ...pages].sort();
 }
 
 function unguardedMutations(mutations: readonly MutationExplain[]): MutationExplain[] {

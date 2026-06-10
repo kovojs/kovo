@@ -80,7 +80,8 @@ describe('commerce example', () => {
     });
     expect(fwExplain(commerceGraph, { kind: 'query', target: 'cart' })).toEqual({
       exitCode: 0,
-      output: 'fw-explain/v1\nQUERY cart\nreads: cart\ninvalidated-by: cart.addItem\n',
+      output:
+        'fw-explain/v1\nQUERY cart\nreads: cart\nconsumers: component:CartBadge,page:/cart\ninvalidated-by: cart.addItem\n',
     });
   });
 });

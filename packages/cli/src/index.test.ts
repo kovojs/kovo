@@ -248,6 +248,14 @@ describe('fw explain', () => {
     expect(
       fwExplain(
         {
+          components: [
+            { name: 'Recommendations', queries: ['recommendations'] },
+            { name: 'CartBadge', queries: ['cart'] },
+          ],
+          pages: [
+            { queries: ['cart'], route: '/cart' },
+            { queries: ['cart'], route: '/checkout' },
+          ],
           queries: [{ domains: ['cart'], query: 'cart' }],
           touchGraph: {
             'cart.addItem': {
@@ -267,7 +275,8 @@ describe('fw explain', () => {
       ),
     ).toEqual({
       exitCode: 0,
-      output: 'fw-explain/v1\nQUERY cart\nreads: cart\ninvalidated-by: cart.addItem\n',
+      output:
+        'fw-explain/v1\nQUERY cart\nreads: cart\nconsumers: component:CartBadge,page:/cart,page:/checkout\ninvalidated-by: cart.addItem\n',
     });
   });
 
