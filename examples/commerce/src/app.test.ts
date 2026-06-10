@@ -211,6 +211,35 @@ describe('commerce example', () => {
     expect(response.body).toContain('data-key="order-2"');
   });
 
+  it('contains product-grid fragment failures with a per-island error boundary', async () => {
+    const db = createCommerceDb();
+    db.products.values = (() => {
+      throw new Error('catalog unavailable');
+    }) as typeof db.products.values;
+
+    const response = await submitAddToCart(
+      { productId: 'p1', quantity: 1 },
+      { db, session: { id: 's-enhanced-boundary', user: { id: 'u1' } } },
+      {
+        'FW-Fragment': 'true',
+        'FW-Targets': 'cart-badge,product-grid,order-history',
+      },
+    );
+
+    expect(response).toMatchObject({
+      headers: {
+        'Content-Type': 'text/vnd.jiso.fragment+html; charset=utf-8',
+      },
+      status: 200,
+    });
+    expect(response.body).toContain(
+      '<fw-fragment target="product-grid" error-boundary="product-grid">',
+    );
+    expect(response.body).toContain('Product grid failed: catalog unavailable');
+    expect(response.body).toContain('<fw-fragment target="cart-badge">');
+    expect(response.body).toContain('<fw-fragment target="order-history">');
+  });
+
   it('handles no-JS addToCart failures as a full 422 page with the form rerendered', async () => {
     const db = createCommerceDb();
     const response = await submitAddToCartNoJs(

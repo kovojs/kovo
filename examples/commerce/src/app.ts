@@ -3,6 +3,7 @@ import { extractTouchGraphFromSource } from '@jiso/drizzle';
 import type { OptimisticPlan } from '@jiso/runtime';
 import {
   domain,
+  errorBoundary,
   guards,
   i18n,
   meta,
@@ -357,7 +358,14 @@ export function submitAddToCart(
     failureTarget: 'product-form',
     fragmentRenderers: [
       { render: () => CartBadge.definition.render(), target: 'cart-badge' },
-      { render: () => renderProductGrid(loadProductGrid(request.db)), target: 'product-grid' },
+      errorBoundary(
+        { render: () => renderProductGrid(loadProductGrid(request.db)), target: 'product-grid' },
+        {
+          render(error) {
+            return `<section role="alert" class="rounded border border-red-200 bg-red-50 p-4 text-sm text-red-700">Product grid failed: ${escapeHtml((error as Error).message)}</section>`;
+          },
+        },
+      ),
       { render: () => renderOrderHistory(request.db), target: 'order-history' },
     ],
     headers,
@@ -374,6 +382,10 @@ export function submitAddToCart(
 
 function escapeAttribute(value: string): string {
   return value.replaceAll('&', '&amp;').replaceAll('"', '&quot;').replaceAll('<', '&lt;');
+}
+
+function escapeHtml(value: string): string {
+  return value.replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;');
 }
 
 function productIdFromRawInput(rawInput: unknown): string | undefined {
