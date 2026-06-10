@@ -9,6 +9,7 @@
 ## Progress Discipline
 
 - Make commits at meaningful checkpoints instead of accumulating a large uncommitted diff.
+- Use parallel sub-agents when there are independent, non-overlapping implementation, audit, or verification slices that can move `IMPLEMENT_v1.md` forward concurrently. Assign each sub-agent explicit file/module ownership, tell it not to revert others' work, and keep final integration, gate runs, and commits centralized in the main agent unless the delegation explicitly says otherwise.
 - Run the relevant tests or checks before each checkpoint commit.
 - Use the narrowest useful verification for the change just made, then broaden verification when touching shared behavior, package boundaries, or docs/runtime behavior.
 - If a check cannot be run, record why in the handoff/final response and do not imply the checkpoint is fully verified.
