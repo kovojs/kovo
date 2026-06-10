@@ -50,6 +50,7 @@ export interface PageExplain {
   prefetch?: 'conservative' | 'moderate' | false;
   queries?: readonly string[];
   route: string;
+  viewTransitions?: readonly string[];
 }
 
 export interface OptimisticCoverage {
@@ -259,6 +260,7 @@ export function fwExplain(input: FwExplainInput, options: FwExplainOptions): FwC
   lines.push(`prefetch: ${page.prefetch ?? false}`);
   lines.push(`modulepreloads: ${list(page.modulepreloads)}`);
   lines.push(`queries: ${list(page.queries)}`);
+  lines.push(`view-transitions: ${list(page.viewTransitions)}`);
   return ok(lines);
 }
 

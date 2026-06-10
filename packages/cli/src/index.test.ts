@@ -705,6 +705,7 @@ describe('fw explain', () => {
               prefetch: 'conservative',
               queries: ['cart'],
               route: '/cart',
+              viewTransitions: ['product-p1-image'],
             },
           ],
         },
@@ -713,7 +714,7 @@ describe('fw explain', () => {
     ).toEqual({
       exitCode: 0,
       output:
-        'fw-explain/v1\nPAGE /cart\nprefetch: conservative\nmodulepreloads: /c/cart-badge.client.js\nqueries: cart\n',
+        'fw-explain/v1\nPAGE /cart\nprefetch: conservative\nmodulepreloads: /c/cart-badge.client.js\nqueries: cart\nview-transitions: product-p1-image\n',
     });
   });
 
