@@ -303,6 +303,55 @@ describe('fw check', () => {
     });
   });
 
+  it('reports fixpoint invariant failures as stable ERROR diagnostics', () => {
+    // SPEC.md §5.2 requires generated output to be a CI-enforced compiler fixpoint.
+    expect(
+      fwCheck({
+        fixpointChecks: [
+          {
+            actual: 'sha256:bbb',
+            artifact: 'components/z.generated.tsx',
+            detail: 'compile(compile(src)) differed.',
+            expected: 'sha256:aaa',
+            ok: false,
+          },
+          {
+            artifact: 'components/ok.generated.tsx',
+            ok: true,
+          },
+          {
+            artifact: 'components/a.generated.tsx',
+            ok: false,
+          },
+        ],
+      }),
+    ).toEqual({
+      exitCode: 1,
+      output: [
+        'fw-check/v1',
+        'ERROR FIXPOINT components/a.generated.tsx Generated output must compile to itself.',
+        'ERROR FIXPOINT components/z.generated.tsx compile(compile(src)) differed. expected="sha256:aaa" actual="sha256:bbb"',
+        '',
+      ].join('\n'),
+    });
+  });
+
+  it('accepts satisfied fixpoint checks', () => {
+    expect(
+      fwCheck({
+        fixpointChecks: [
+          {
+            artifact: 'components/cart-badge.server.tsx',
+            ok: true,
+          },
+        ],
+      }),
+    ).toEqual({
+      exitCode: 0,
+      output: 'fw-check/v1\nOK\n',
+    });
+  });
+
   it('audits mutations reachable without an auth guard', () => {
     expect(
       fwCheck({

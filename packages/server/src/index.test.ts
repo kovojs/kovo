@@ -22,6 +22,7 @@ import {
   s,
   session,
   t,
+  tag,
 } from './index.js';
 
 describe('server mutation primitives', () => {
@@ -530,6 +531,48 @@ describe('server mutation primitives', () => {
       ok: true,
       rerunQueries: ['cart'],
       value: 'p1',
+    });
+  });
+
+  it('uses flat tags as the low-ceremony domain on-ramp', async () => {
+    const pricing = tag('pricing');
+    const pricingQuery = query('pricing', { reads: [pricing] });
+    const recalculate = mutation('pricing/recalculate', {
+      input: s.object({ productId: s.string() }),
+      registry: {
+        queries: [pricingQuery],
+        touches: [pricing],
+      },
+      handler(input, _request, context) {
+        context.invalidate(pricing, {
+          keys: [input.productId],
+          reason: 'external catalog feed',
+        });
+        return input.productId;
+      },
+    });
+
+    await expect(runMutation(recalculate, { productId: 'p1' }, {})).resolves.toEqual({
+      changes: [
+        {
+          domain: 'pricing',
+          input: { productId: 'p1' },
+        },
+        {
+          domain: 'pricing',
+          keys: ['p1'],
+          manual: true,
+          reason: 'external catalog feed',
+        },
+      ],
+      ok: true,
+      rerunQueries: ['pricing'],
+      value: 'p1',
+    });
+    expect(invalidate(pricing, { reason: 'manual price import' })).toEqual({
+      domain: 'pricing',
+      manual: true,
+      reason: 'manual price import',
     });
   });
 

@@ -7,6 +7,7 @@ import { diagnosticsForTouchGraph, type TouchGraph } from '@jiso/drizzle';
 
 export interface FwCheckInput {
   eventPayloads?: readonly EventPayloadFact[];
+  fixpointChecks?: readonly FixpointCheck[];
   lints?: readonly SemanticLint[];
   mutations?: readonly MutationExplain[];
   optimistic?: readonly OptimisticCoverage[];
@@ -55,6 +56,14 @@ export interface OptimisticCoverage {
   mutation: string;
   query: string;
   status: 'UNHANDLED' | 'await-fragment' | 'hand-written';
+}
+
+export interface FixpointCheck {
+  actual?: string;
+  artifact: string;
+  detail?: string;
+  expected?: string;
+  ok: boolean;
 }
 
 export interface EventPayloadFact {
@@ -268,6 +277,10 @@ export function fwCheck(input: FwCheckInput): FwCheckResult {
     lines.push(`LINT ${lint.code} ${lint.site} ${lintMessage(lint)}`);
   }
 
+  for (const failure of fixpointFailures(input.fixpointChecks ?? [])) {
+    lines.push(fixpointFailureLine(failure));
+  }
+
   for (const missed of missedQueryInvalidations(input.queries ?? [], input.touchGraph ?? {})) {
     lines.push(
       `ERROR FW407 ${missed.query} reads ${missed.domain} but no mutation touch graph writes that domain.`,
@@ -401,6 +414,30 @@ function optimisticCoverageWarnings(
 
 function optimisticCoverageWarning(mutation: string, query: string): string {
   return `WARN FW310 ${mutation} -> ${query} Invalidated query lacks optimistic transform.`;
+}
+
+function fixpointFailures(checks: readonly FixpointCheck[]): FixpointCheck[] {
+  return checks
+    .filter((check) => !check.ok)
+    .sort((left, right) => left.artifact.localeCompare(right.artifact));
+}
+
+function fixpointFailureLine(check: FixpointCheck): string {
+  const detail = stableText(check.detail ?? 'Generated output must compile to itself.');
+  const diff =
+    check.expected === undefined && check.actual === undefined
+      ? ''
+      : ` expected=${stableValue(check.expected)} actual=${stableValue(check.actual)}`;
+
+  return `ERROR FIXPOINT ${check.artifact} ${detail}${diff}`;
+}
+
+function stableValue(value: string | undefined): string {
+  return value === undefined ? '-' : JSON.stringify(value);
+}
+
+function stableText(value: string): string {
+  return value.split(/\s+/).filter(Boolean).join(' ');
 }
 
 function lintMessage(lint: SemanticLint): string {
