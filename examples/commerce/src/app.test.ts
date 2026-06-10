@@ -10,7 +10,10 @@ import {
   commercePageHints,
   commerceTouchGraph,
   createCommerceDb,
+  loadProductGrid,
+  renderOrderHistory,
   renderCartPage,
+  renderProductGrid,
 } from './app.js';
 
 describe('commerce example', () => {
@@ -24,6 +27,7 @@ describe('commerce example', () => {
       verification: {
         domainByTable: {
           cart_items: 'cart',
+          orders: 'order',
           products: 'product',
         },
       },
@@ -33,13 +37,41 @@ describe('commerce example', () => {
       changes: [
         { domain: 'cart', input: { productId: 'p1', quantity: 2 } },
         { domain: 'product', input: { productId: 'p1', quantity: 2 } },
+        { domain: 'order', input: { productId: 'p1', quantity: 2 } },
       ],
       ok: true,
-      rerunQueries: ['cart'],
+      rerunQueries: ['cart', 'productGrid', 'orderHistory'],
     });
     await expect(
       harness.page('/cart').then((page) => page.fragment('cart-badge')),
     ).resolves.toContain('data-bind="cart.count"');
+  });
+
+  it('renders cursor-paged product grid and order history with stable list keys', async () => {
+    const db = createCommerceDb();
+    const firstPage = loadProductGrid(db, { limit: 2 });
+    const secondPage = loadProductGrid(db, { after: firstPage.nextCursor ?? undefined, limit: 2 });
+
+    expect(renderProductGrid(firstPage)).toContain('data-key="p1"');
+    expect(renderProductGrid(firstPage)).toContain('data-key="p2"');
+    expect(renderProductGrid(firstPage)).toContain('href="/products?after=p2"');
+    expect(renderProductGrid(secondPage)).toContain('data-key="p3"');
+
+    await addToCart.handler(
+      { productId: 'p1', quantity: 2 },
+      { db },
+      {
+        fail(code, payload) {
+          return { error: { code, payload }, ok: false, status: 422 };
+        },
+        invalidate(domain, options) {
+          return { domain: domain.key, ...options, manual: true };
+        },
+      },
+    );
+
+    expect(renderOrderHistory(db)).toContain('data-key="order-1"');
+    expect(renderOrderHistory(db)).toContain('p1 x 2 - 2998');
   });
 
   it('renders Tailwind-first stylesheet hints and static utility classes', () => {
@@ -70,11 +102,13 @@ describe('commerce example', () => {
         'fw-explain/v1',
         'MUTATION cart/add',
         'guards: rateLimit:session',
-        'writes: cart,product',
-        'invalidates: cart',
+        'writes: cart,product,order',
+        'invalidates: cart,product,order',
         'manual-invalidates: -',
         'OPTIMISTIC cart await-fragment',
-        'OPTIMISTIC-SUMMARY total=1 hand-written=0 await-fragment=1 UNHANDLED=0',
+        'OPTIMISTIC productGrid await-fragment',
+        'OPTIMISTIC orderHistory await-fragment',
+        'OPTIMISTIC-SUMMARY total=3 hand-written=0 await-fragment=3 UNHANDLED=0',
         '',
       ].join('\n'),
     });
@@ -82,6 +116,16 @@ describe('commerce example', () => {
       exitCode: 0,
       output:
         'fw-explain/v1\nQUERY cart\nreads: cart\nconsumers: component:CartBadge,page:/cart\ninvalidated-by: cart.addItem\n',
+    });
+    expect(fwExplain(commerceGraph, { kind: 'query', target: 'productGrid' })).toEqual({
+      exitCode: 0,
+      output:
+        'fw-explain/v1\nQUERY productGrid\nreads: product\nconsumers: component:ProductGrid,page:/cart\ninvalidated-by: cart.addItem\n',
+    });
+    expect(fwExplain(commerceGraph, { kind: 'query', target: 'orderHistory' })).toEqual({
+      exitCode: 0,
+      output:
+        'fw-explain/v1\nQUERY orderHistory\nreads: order\nconsumers: component:OrderHistory,page:/cart\ninvalidated-by: cart.addItem\n',
     });
   });
 });
