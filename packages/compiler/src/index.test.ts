@@ -820,6 +820,32 @@ export const CartDrawer = component('cart-drawer', {
     ]);
   });
 
+  it('preserves fragment target metadata in collected CSS manifests', () => {
+    const cartBadge = compileComponentModule({
+      fileName: 'components/cart/cart-badge.tsx',
+      source: `
+import { component } from '@jiso/core';
+
+export const CartBadge = component('cart-badge', {
+  fragmentTarget: true,
+  styles: \`
+    .count { color: teal; }
+  \`,
+  render: () => <cart-badge><span class="count">1</span></cart-badge>,
+});
+`,
+    });
+
+    expect(collectCssAssetManifest(cartBadge).stylesheets).toEqual([
+      {
+        componentName: 'CartBadge',
+        fragmentTargets: ['cart-badge'],
+        href: '/assets/components/cart/cart-badge.css',
+        sourceFileName: 'components/cart/cart-badge.css',
+      },
+    ]);
+  });
+
   it('carries preload policy for late fragment stylesheet delivery', () => {
     const result = compileComponentModule({
       fileName: './components/reviews.tsx',
