@@ -44,6 +44,52 @@ describe('compileComponentModule', () => {
     expect(result.files[2]?.source).toContain("'cart-badge': unknown;");
   });
 
+  it('emits provided query, mutation, and domain key registry facts', () => {
+    const result = compileComponentModule({
+      fileName: 'components/cart/cart-badge.tsx',
+      registryFacts: {
+        domainKeys: ['product', 'cart', 'cart'],
+        mutations: {
+          'cart/add': 'typeof addToCart',
+          'cart/remove': 'typeof removeFromCart',
+        },
+        queries: {
+          cart: 'typeof cartQuery',
+          productGrid: 'typeof productGridQuery',
+        },
+      },
+      source: cartBadgeSource,
+    });
+
+    const registry = result.files[2]?.source ?? '';
+    expect(registry).toContain(
+      "'#cart-badge': typeof import('../components/cart/cart-badge.client.js');",
+    );
+    expect(registry).toContain("'cart-badge': unknown;");
+    expect(registry).toContain(`export interface QueryRegistry {
+  'cart': typeof cartQuery;
+  'productGrid': typeof productGridQuery;
+}`);
+    expect(registry).toContain(`export interface MutationRegistry {
+  'cart/add': typeof addToCart;
+  'cart/remove': typeof removeFromCart;
+}`);
+    expect(registry).toContain('export type DomainKey = "cart" | "product";');
+    expect(() => assertFixpoint(result)).not.toThrow();
+  });
+
+  it('emits empty registry fact surfaces when no facts are provided', () => {
+    const result = compileComponentModule({
+      fileName: 'components/cart/cart-badge.tsx',
+      source: cartBadgeSource,
+    });
+
+    const registry = result.files[2]?.source ?? '';
+    expect(registry).toMatch(/export interface QueryRegistry \{\n\n\}/);
+    expect(registry).toMatch(/export interface MutationRegistry \{\n\n\}/);
+    expect(registry).toContain('export type DomainKey = never;');
+  });
+
   it('reports FW210 for anonymous handlers', () => {
     const result = compileComponentModule({
       fileName: 'cart-badge.tsx',

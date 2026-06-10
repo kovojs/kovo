@@ -303,7 +303,7 @@ describe('server mutation primitives', () => {
     });
   });
 
-  it('rejects missing, oversized, or wrong-type files', async () => {
+  it('returns validation failures with field paths for schema errors', async () => {
     const uploadAvatar = mutation('profile/avatar', {
       input: s.object({
         avatar: s.file().maxBytes(4).mime(['image/png']),
@@ -317,13 +317,30 @@ describe('server mutation primitives', () => {
     const wrongType = new FormData();
     wrongType.set('avatar', formDataFile(['ok'], 'avatar.txt', 'text/plain'));
 
-    await expect(runMutation(uploadAvatar, new FormData(), {})).rejects.toThrow('Expected file');
-    await expect(runMutation(uploadAvatar, oversized, {})).rejects.toThrow(
-      'Expected file <= 4 bytes',
-    );
-    await expect(runMutation(uploadAvatar, wrongType, {})).rejects.toThrow(
-      'Expected file type image/png',
-    );
+    await expect(runMutation(uploadAvatar, new FormData(), {})).resolves.toEqual({
+      error: {
+        code: 'VALIDATION',
+        payload: { issues: [{ message: 'Expected file', path: ['avatar'] }] },
+      },
+      ok: false,
+      status: 422,
+    });
+    await expect(runMutation(uploadAvatar, oversized, {})).resolves.toEqual({
+      error: {
+        code: 'VALIDATION',
+        payload: { issues: [{ message: 'Expected file <= 4 bytes', path: ['avatar'] }] },
+      },
+      ok: false,
+      status: 422,
+    });
+    await expect(runMutation(uploadAvatar, wrongType, {})).resolves.toEqual({
+      error: {
+        code: 'VALIDATION',
+        payload: { issues: [{ message: 'Expected file type image/png', path: ['avatar'] }] },
+      },
+      ok: false,
+      status: 422,
+    });
   });
 
   it('returns typed validation failures from ctx.fail', async () => {
@@ -768,6 +785,56 @@ describe('server mutation primitives', () => {
       }),
     ).resolves.toEqual({
       body: '<fw-fragment target="error"><output role="alert" data-error-code="OUT_OF_STOCK">{"availableQuantity":0}</output></fw-fragment>',
+      headers: { 'Content-Type': 'text/vnd.jiso.fragment+html; charset=utf-8' },
+      status: 422,
+    });
+  });
+
+  it('renders schema validation failures into the submitted form target', async () => {
+    const addToCart = mutation('cart/add', {
+      input: s.object({
+        productId: s.string(),
+        quantity: s.number().int().min(1),
+      }),
+      handler(input) {
+        return input;
+      },
+    });
+
+    await expect(
+      renderMutationResponse(addToCart, {
+        failureTarget: 'product-form:p1',
+        rawInput: { productId: 'p1', quantity: 0 },
+        request: {},
+      }),
+    ).resolves.toEqual({
+      body: '<fw-fragment target="product-form:p1"><output role="alert" data-error-path="quantity">Expected number &gt;= 1</output></fw-fragment>',
+      headers: { 'Content-Type': 'text/vnd.jiso.fragment+html; charset=utf-8' },
+      status: 422,
+    });
+  });
+
+  it('lets enhanced forms override validation failure fragments', async () => {
+    const addToCart = mutation('cart/add', {
+      input: s.object({
+        productId: s.string(),
+        quantity: s.number().int().min(1),
+      }),
+      handler(input) {
+        return input;
+      },
+    });
+
+    await expect(
+      renderMutationResponse(addToCart, {
+        failureTarget: 'product-form:p1',
+        rawInput: { productId: 'p1', quantity: 0 },
+        renderFailureFragment: (failure, rawInput) =>
+          `<form fw-c="product-form" aria-invalid="true"><output role="alert" data-error-code="${failure.error.code}">${(rawInput as { quantity: number }).quantity}</output></form>`,
+        request: {},
+      }),
+    ).resolves.toEqual({
+      body: '<fw-fragment target="product-form:p1"><form fw-c="product-form" aria-invalid="true"><output role="alert" data-error-code="VALIDATION">0</output></form></fw-fragment>',
       headers: { 'Content-Type': 'text/vnd.jiso.fragment+html; charset=utf-8' },
       status: 422,
     });

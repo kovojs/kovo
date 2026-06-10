@@ -6,6 +6,25 @@ export interface Schema<T> {
 
 export type InferSchema<T> = T extends Schema<infer Value> ? Value : never;
 
+export interface ValidationIssue {
+  message: string;
+  path: readonly string[];
+}
+
+export interface ValidationFailurePayload {
+  issues: readonly ValidationIssue[];
+}
+
+export class SchemaValidationError extends Error {
+  readonly issues: readonly ValidationIssue[];
+
+  constructor(issues: readonly ValidationIssue[]) {
+    super(issues[0]?.message ?? 'Invalid input');
+    this.name = 'SchemaValidationError';
+    this.issues = issues;
+  }
+}
+
 export const s = {
   file(options: FileSchemaOptions = {}): FileSchema {
     return new FileSchemaImpl(options);
@@ -13,7 +32,7 @@ export const s = {
   string(): Schema<string> {
     return {
       parse(input: unknown): string {
-        if (typeof input !== 'string') throw new Error('Expected string');
+        if (typeof input !== 'string') throw validationError('Expected string');
         return input;
       },
     };
@@ -30,7 +49,11 @@ export const s = {
         const output: Partial<{ [Key in keyof Shape]: InferSchema<Shape[Key]> }> = {};
 
         for (const [key, schema] of Object.entries(shape) as [keyof Shape, Shape[keyof Shape]][]) {
-          output[key] = schema.parse(record[String(key)]) as InferSchema<Shape[keyof Shape]>;
+          try {
+            output[key] = schema.parse(record[String(key)]) as InferSchema<Shape[keyof Shape]>;
+          } catch (error) {
+            throw validationErrorFrom(error, [String(key)]);
+          }
         }
 
         return output as { [Key in keyof Shape]: InferSchema<Shape[Key]> };
@@ -87,10 +110,10 @@ class NumberSchemaImpl implements NumberSchema {
       input === undefined || input === null || input === '' ? this.#defaultValue : input;
     const number = typeof value === 'number' ? value : Number(value);
 
-    if (!Number.isFinite(number)) throw new Error('Expected number');
-    if (this.#integer && !Number.isInteger(number)) throw new Error('Expected integer');
+    if (!Number.isFinite(number)) throw validationError('Expected number');
+    if (this.#integer && !Number.isInteger(number)) throw validationError('Expected integer');
     if (this.#minimum !== undefined && number < this.#minimum) {
-      throw new Error(`Expected number >= ${this.#minimum}`);
+      throw validationError(`Expected number >= ${this.#minimum}`);
     }
 
     return number;
@@ -117,12 +140,12 @@ class FileSchemaImpl implements FileSchema {
   }
 
   parse(input: unknown): FileLike {
-    if (!isFileLike(input)) throw new Error('Expected file');
+    if (!isFileLike(input)) throw validationError('Expected file');
     if (this.#maxBytes !== undefined && input.size > this.#maxBytes) {
-      throw new Error(`Expected file <= ${this.#maxBytes} bytes`);
+      throw validationError(`Expected file <= ${this.#maxBytes} bytes`);
     }
     if (this.#mime && !this.#mime.includes(input.type)) {
-      throw new Error(`Expected file type ${this.#mime.join(', ')}`);
+      throw validationError(`Expected file type ${this.#mime.join(', ')}`);
     }
 
     return input;
@@ -301,9 +324,11 @@ export interface ErrorBoundaryRenderer {
 }
 
 export interface MutationWireRequest<Request> {
+  failureTarget?: string;
   fragment?: boolean;
   fragmentRenderers?: readonly FragmentRenderer[];
   idem?: string;
+  renderFailureFragment?: (failure: MutationFail, rawInput: unknown) => string | Promise<string>;
   replayStore?: MutationReplayStore;
   rawInput: unknown;
   request: Request;
@@ -324,9 +349,11 @@ export type MutationWireHeaderSource =
     };
 
 export interface MutationWireRequestOptions<Request> {
+  failureTarget?: string;
   fragmentRenderers?: readonly FragmentRenderer[];
   headers: MutationWireHeaderSource;
   rawInput: unknown;
+  renderFailureFragment?: (failure: MutationFail, rawInput: unknown) => string | Promise<string>;
   replayStore?: MutationReplayStore;
   request: Request;
 }
@@ -382,10 +409,14 @@ export function mutationWireRequestFromHeaders<Request>(
     fragment: headers.fragment,
     rawInput: options.rawInput,
     request: options.request,
+    ...(options.failureTarget === undefined ? {} : { failureTarget: options.failureTarget }),
     ...(options.fragmentRenderers === undefined
       ? {}
       : { fragmentRenderers: options.fragmentRenderers }),
     ...(headers.idem === undefined ? {} : { idem: headers.idem }),
+    ...(options.renderFailureFragment === undefined
+      ? {}
+      : { renderFailureFragment: options.renderFailureFragment }),
     ...(options.replayStore === undefined ? {} : { replayStore: options.replayStore }),
     targets: headers.targets,
   };
@@ -605,7 +636,10 @@ export async function runMutation<
     };
   }
 
-  const input = definition.input.parse(rawInput) as InferSchema<InputSchema>;
+  const inputResult = parseMutationInput(definition.input, rawInput);
+  if (!inputResult.ok) return inputResult.failure;
+
+  const input = inputResult.value as InferSchema<InputSchema>;
   const manualInvalidations: ChangeRecord[] = [];
   const context: MutationContext<Errors> = {
     fail(code, payload) {
@@ -663,7 +697,7 @@ export async function renderMutationResponse<
 
   if (!result.ok) {
     return storeMutationReplay(wireRequest, {
-      body: `<fw-fragment target="error"><output role="alert" data-error-code="${escapeAttribute(result.error.code)}">${escapeHtml(JSON.stringify(result.error.payload))}</output></fw-fragment>`,
+      body: await renderFailureFragment(result, wireRequest),
       headers: mutationWireResponseHeaders(wireRequest),
       status: 422,
     });
@@ -765,7 +799,49 @@ function rateLimitKey<Request extends SessionRequestLike>(
 function formLikeToRecord(input: unknown): Record<string, unknown> {
   if (input instanceof FormData) return Object.fromEntries(input.entries());
   if (typeof input === 'object' && input !== null) return input as Record<string, unknown>;
-  throw new Error('Expected object input');
+  throw validationError('Expected object input');
+}
+
+function validationError(message: string, path: readonly string[] = []): SchemaValidationError {
+  return new SchemaValidationError([{ message, path }]);
+}
+
+function validationErrorFrom(error: unknown, pathPrefix: readonly string[]): SchemaValidationError {
+  if (error instanceof SchemaValidationError) {
+    return new SchemaValidationError(
+      error.issues.map((issue) => ({
+        message: issue.message,
+        path: [...pathPrefix, ...issue.path],
+      })),
+    );
+  }
+
+  return validationError(error instanceof Error ? error.message : String(error), pathPrefix);
+}
+
+function parseMutationInput<InputSchema extends Schema<unknown>>(
+  schema: InputSchema,
+  rawInput: unknown,
+):
+  | { ok: true; value: InferSchema<InputSchema> }
+  | { failure: MutationFail<'VALIDATION', ValidationFailurePayload>; ok: false } {
+  try {
+    return { ok: true, value: schema.parse(rawInput) as InferSchema<InputSchema> };
+  } catch (error) {
+    if (!(error instanceof SchemaValidationError)) throw error;
+
+    return {
+      failure: {
+        error: {
+          code: 'VALIDATION',
+          payload: { issues: error.issues },
+        },
+        ok: false,
+        status: 422,
+      },
+      ok: false,
+    };
+  }
 }
 
 function changeRecordsFor(domains: readonly Domain[], input: unknown): ChangeRecord[] {
@@ -831,6 +907,50 @@ async function renderFragmentChunks(
   }
 
   return chunks;
+}
+
+async function renderFailureFragment<Request>(
+  failure: MutationFail,
+  wireRequest: MutationWireRequest<Request>,
+): Promise<string> {
+  const target = wireRequest.failureTarget ?? wireRequest.targets?.[0] ?? 'error';
+  const html = wireRequest.renderFailureFragment
+    ? await wireRequest.renderFailureFragment(failure, wireRequest.rawInput)
+    : renderDefaultFailureFragmentContent(failure);
+
+  return `<fw-fragment target="${escapeAttribute(target)}">${html}</fw-fragment>`;
+}
+
+function renderDefaultFailureFragmentContent(failure: MutationFail): string {
+  if (failure.error.code === 'VALIDATION' && isValidationFailurePayload(failure.error.payload)) {
+    return failure.error.payload.issues
+      .map(
+        (issue) =>
+          `<output role="alert" data-error-path="${escapeAttribute(issue.path.join('.'))}">${escapeHtml(issue.message)}</output>`,
+      )
+      .join('');
+  }
+
+  return `<output role="alert" data-error-code="${escapeAttribute(failure.error.code)}">${escapeHtml(JSON.stringify(failure.error.payload))}</output>`;
+}
+
+function isValidationFailurePayload(value: unknown): value is ValidationFailurePayload {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    'issues' in value &&
+    Array.isArray(value.issues) &&
+    value.issues.every(
+      (issue) =>
+        typeof issue === 'object' &&
+        issue !== null &&
+        'message' in issue &&
+        typeof issue.message === 'string' &&
+        'path' in issue &&
+        Array.isArray(issue.path) &&
+        issue.path.every((part: unknown) => typeof part === 'string'),
+    )
+  );
 }
 
 function renderDefaultFailurePage(failure: MutationFail): string {

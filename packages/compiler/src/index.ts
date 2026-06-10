@@ -28,8 +28,17 @@ export function createEmptyCompileResult(): CompileResult {
 export interface CompileComponentOptions {
   fileName: string;
   queryShapes?: Record<string, QueryShape>;
+  registryFacts?: RegistryFacts;
   source: string;
 }
+
+export interface RegistryFacts {
+  domainKeys?: readonly string[];
+  mutations?: RegistryTypeFacts;
+  queries?: RegistryTypeFacts;
+}
+
+export type RegistryTypeFacts = Readonly<Record<string, string>>;
 
 export type QueryShape =
   | 'array'
@@ -109,6 +118,7 @@ export function compileComponentModule(options: CompileComponentOptions): Compil
     fragmentTargets: findFragmentTargets(source, componentName),
     handlers,
     platformSubstitutions: platformLowering.substitutions,
+    ...(options.registryFacts ? { registryFacts: options.registryFacts } : {}),
     viewTransitions: viewTransitionLowering.stamps,
   });
 
@@ -727,6 +737,7 @@ function emitRegistryModule(options: {
   fragmentTargets: string[];
   handlers: HandlerLowering[];
   platformSubstitutions: PlatformSubstitution[];
+  registryFacts?: RegistryFacts;
   viewTransitions: ViewTransitionStamp[];
 }): string {
   const handlerModuleLine = options.handlers.length
@@ -744,6 +755,9 @@ function emitRegistryModule(options: {
   const viewTransitionLines = options.viewTransitions
     .map((stamp) => `  '${stamp.name}': unknown;`)
     .join('\n');
+  const queryRegistryLines = registryTypeFactLines(options.registryFacts?.queries);
+  const mutationRegistryLines = registryTypeFactLines(options.registryFacts?.mutations);
+  const domainKey = registryDomainKey(options.registryFacts?.domainKeys);
 
   return `${irHeader}
 export interface HandlerModules {
@@ -761,5 +775,27 @@ ${platformSubstitutionLines}
 export interface ViewTransitions {
 ${viewTransitionLines}
 }
+
+export interface QueryRegistry {
+${queryRegistryLines}
+}
+
+export interface MutationRegistry {
+${mutationRegistryLines}
+}
+
+export type DomainKey = ${domainKey};
 `;
+}
+
+function registryTypeFactLines(facts: RegistryTypeFacts | undefined): string {
+  return Object.entries(facts ?? {})
+    .sort(([left], [right]) => left.localeCompare(right))
+    .map(([key, typeExpression]) => `  '${key}': ${typeExpression};`)
+    .join('\n');
+}
+
+function registryDomainKey(domainKeys: readonly string[] | undefined): string {
+  const keys = [...new Set(domainKeys ?? [])].sort();
+  return keys.map((key) => JSON.stringify(key)).join(' | ') || 'never';
 }
