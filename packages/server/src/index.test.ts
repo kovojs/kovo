@@ -14,6 +14,7 @@ import {
   renderNoJsMutationResponse,
   runMutation,
   s,
+  session,
 } from './index.js';
 
 describe('server mutation primitives', () => {
@@ -243,6 +244,21 @@ describe('server mutation primitives', () => {
       ok: true,
       value: 'ok',
     });
+  });
+
+  it('parses typed sessions through the declared schema', () => {
+    const appSession = session(
+      s.object({
+        cartId: s.string(),
+        userId: s.string(),
+      }),
+    );
+
+    expect(appSession.parse({ session: { cartId: 'cart-1', userId: 'u1' } })).toEqual({
+      cartId: 'cart-1',
+      userId: 'u1',
+    });
+    expect(() => appSession.parse({})).toThrow('Expected object input');
   });
 
   it('guards mutations by session user role', async () => {

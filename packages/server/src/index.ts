@@ -143,6 +143,11 @@ export interface SessionRequestLike {
   } | null;
 }
 
+export interface SessionDefinition<Value> {
+  parse(request: { session?: unknown }): Value;
+  schema: Schema<Value>;
+}
+
 export interface RateLimitOptions<Request> {
   key?: (request: Request) => string;
   max: number;
@@ -191,6 +196,15 @@ export const guards = {
     return (request) => request.session?.user?.roles?.includes(role) ?? false;
   },
 };
+
+export function session<Value>(schema: Schema<Value>): SessionDefinition<Value> {
+  return {
+    parse(request) {
+      return schema.parse(request.session);
+    },
+    schema,
+  };
+}
 
 export interface MutationFail<Code extends string = string, Payload = unknown> {
   error: {
