@@ -255,6 +255,7 @@ void test('S2 loader budget and L0 no-upgrade path are acceptance evidence', asy
 
 void test('P2 loader smoke evidence remains represented in runtime tests', async () => {
   const runtimeTests = await readProjectFile('packages/runtime/src/index.test.ts');
+  const browserTests = await readProjectFile('packages/runtime/src/index.browser.test.ts');
 
   assert.match(
     runtimeTests,
@@ -266,10 +267,16 @@ void test('P2 loader smoke evidence remains represented in runtime tests', async
   );
   assert.match(runtimeTests, /expect\(importModule\)\.not\.toHaveBeenCalled\(\)/);
   assert.match(runtimeTests, /expect\(jisoLoaderSource\)\.not\.toContain\('customElements'\)/);
+  assert.match(
+    browserTests,
+    /keeps the loader idle until the first delegated interaction/,
+    'browser suite covers first-interaction handler import',
+  );
 });
 
-void test('P5 structural morph evidence remains represented before browser survival suite', async () => {
+void test('P5 morph evidence includes structural and browser survival suites', async () => {
   const runtimeTests = await readProjectFile('packages/runtime/src/index.test.ts');
+  const browserTests = await readProjectFile('packages/runtime/src/index.browser.test.ts');
 
   assert.match(runtimeTests, /preserves keyed structural node identity when sibling order changes/);
   assert.match(runtimeTests, /preserves keyed browser state across fragment morphs and reorders/);
@@ -281,4 +288,24 @@ void test('P5 structural morph evidence remains represented before browser survi
     runtimeTests,
     /preserves keyed list identity across append fragments and later reorders/,
   );
+  assert.match(
+    browserTests,
+    /preserves focus, selection, scroll, and keyed identity during a real DOM fragment morph/,
+  );
+  assert.match(browserTests, /document\.activeElement/);
+  assert.match(browserTests, /selectionStart/);
+  assert.match(browserTests, /scrollTop/);
+});
+
+void test('framework-owned browser suite is wired into acceptance', async () => {
+  const packageJson = JSON.parse(await readProjectFile('package.json'));
+  const viteConfig = await readProjectFile('vite.config.ts');
+  const browserConfig = await readProjectFile('vitest.browser.config.ts');
+
+  assert.match(packageJson.scripts.acceptance, /pnpm run test:browser/);
+  assert.equal(packageJson.scripts['test:browser'], 'vp run browser');
+  assert.match(viteConfig, /browser:\s*\{/);
+  assert.match(viteConfig, /vitest --config vitest\.browser\.config\.ts --run/);
+  assert.match(browserConfig, /@vitest\/browser-playwright/);
+  assert.match(browserConfig, /browser: 'chromium'/);
 });

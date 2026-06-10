@@ -23,6 +23,14 @@ export default defineConfig({
         command: 'vp pack',
         output: ['dist/**'],
       },
+      browser: {
+        command: 'vitest --config vitest.browser.config.ts --run',
+        input: [
+          { auto: true },
+          { pattern: 'vitest.browser.config.ts', base: 'workspace' },
+          { pattern: 'packages/runtime/src/**/*.browser.test.ts', base: 'workspace' },
+        ],
+      },
       'fw-check': {
         command: 'node --test tests/fw-check.node.mjs',
         input: [
@@ -35,6 +43,9 @@ export default defineConfig({
   },
   staged: {
     '*.{js,jsx,ts,tsx,json,md,yml,yaml}': 'vp check --fix',
+  },
+  test: {
+    exclude: ['**/node_modules/**', '**/dist/**', '**/*.browser.test.ts'],
   },
   pack: {
     entry: ['packages/*/src/index.ts'],

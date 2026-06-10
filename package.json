@@ -9,15 +9,18 @@
   ],
   "type": "module",
   "scripts": {
-    "acceptance": "pnpm run check && pnpm run test && pnpm run check:build && pnpm run check:fw",
+    "acceptance": "pnpm run check && pnpm run test && pnpm run test:browser && pnpm run check:build && pnpm run check:fw",
     "check": "vp check",
     "check:build": "vp run build",
     "check:fw": "vp run fw-check",
-    "test": "vitest --run"
+    "test": "vitest --run",
+    "test:browser": "vp run browser"
   },
   "devDependencies": {
     "@types/node": "25.9.2",
     "@typescript/native-preview": "7.0.0-dev.20260610.1",
+    "@vitest/browser-playwright": "4.1.8",
+    "playwright": "^1.60.0",
     "typescript": "^6.0.3",
     "vite-plus": "0.1.24",
     "vitest": "4.1.8"
