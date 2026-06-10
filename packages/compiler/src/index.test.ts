@@ -90,6 +90,45 @@ describe('compileComponentModule', () => {
     expect(() => assertFixpoint(result)).not.toThrow();
   });
 
+  it('emits scoped CSS artifacts for static co-located component CSS', () => {
+    const result = compileComponentModule({
+      fileName: 'components/cart/cart-badge.tsx',
+      source: `
+import { component } from '@jiso/core';
+
+export const CartBadge = component('cart-badge', {
+  fragmentTarget: true,
+  css: \`
+    button { color: teal; }
+    .count { font-weight: 700; }
+  \`,
+  render: () => <button><span class="count">1</span></button>,
+});
+`,
+    });
+
+    expect(result.files.map((file) => file.fileName)).toEqual([
+      'components/cart/cart-badge.server.js',
+      'components/cart/cart-badge.client.js',
+      'components/cart/cart-badge.css',
+      'generated/registries.d.ts',
+    ]);
+    expect(result.files.find((file) => file.fileName.endsWith('.css'))?.source).toBe(
+      [
+        '/* @jiso-ir */',
+        '@scope (cart-badge) to (:scope [fw-c]) {',
+        '  button { color: teal; }',
+        '      .count { font-weight: 700; }',
+        '}',
+        '',
+      ].join('\n'),
+    );
+    expect(result.files[0]?.source).toContain('export function renderSource()');
+    expect(result.files[1]?.source).toContain('// no client handlers emitted');
+    expect(result.files[3]?.source).toContain("'cart-badge': unknown;");
+    expect(() => assertFixpoint(result)).not.toThrow();
+  });
+
   it('emits empty registry fact surfaces when no facts are provided', () => {
     const result = compileComponentModule({
       fileName: 'components/cart/cart-badge.tsx',

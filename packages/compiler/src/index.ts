@@ -89,6 +89,7 @@ export interface JisoVitePlugin {
 }
 
 const irHeader = '// @jiso-ir';
+const cssIrHeader = '/* @jiso-ir */';
 
 export function compileComponentModule(options: CompileComponentOptions): CompileResult {
   if (isIr(options.source)) {
@@ -111,10 +112,12 @@ export function compileComponentModule(options: CompileComponentOptions): Compil
   const eventPayloadDiagnostics = validateEventPayloads(source, options);
   const directDbDiagnostics = validateDirectDbAccess(source, options.fileName);
   const clientFileName = replaceExtension(options.fileName, '.client.js');
+  const cssFileName = replaceExtension(options.fileName, '.css');
   const serverFileName = replaceExtension(options.fileName, '.server.js');
   const registryFileName = 'generated/registries.d.ts';
 
   const clientSource = emitClientModule(handlers);
+  const cssSource = emitCssModule(source, componentName);
   const serverSource = emitServerModule(source, handlers, clientFileName);
   const registrySource = emitRegistryModule({
     clientFileName,
@@ -138,6 +141,7 @@ export function compileComponentModule(options: CompileComponentOptions): Compil
     files: [
       { fileName: serverFileName, source: serverSource },
       { fileName: clientFileName, source: clientSource },
+      ...(cssSource ? [{ fileName: cssFileName, source: cssSource }] : []),
       { fileName: registryFileName, source: registrySource },
     ],
     platformSubstitutions: platformLowering.substitutions,
@@ -218,7 +222,14 @@ export function dedupeCss(chunks: readonly string[]): string {
 }
 
 function isIr(source: string): boolean {
-  return source.startsWith(irHeader);
+  return source.startsWith(irHeader) || source.startsWith(cssIrHeader);
+}
+
+function emitCssModule(source: string, componentName: string): string | null {
+  const css = extractStaticComponentCss(source);
+  if (!css) return null;
+
+  return `${cssIrHeader}\n${scopeComponentCss(componentHostSelector(source, componentName), css).scoped}`;
 }
 
 function prefixCssSelectors(
@@ -606,6 +617,25 @@ function extractStateReturnObject(source: string): string | null {
   if (objectEnd === -1) return null;
 
   return source.slice(objectStart, objectEnd + 1);
+}
+
+function extractStaticComponentCss(source: string): string | null {
+  const match = /\b(?:css|styles)\s*:\s*`/g.exec(source);
+  if (!match) return null;
+
+  const templateStart = match.index + match[0].lastIndexOf('`');
+  const templateEnd = findStringEnd(source, templateStart, '`');
+  if (templateEnd === -1) return null;
+
+  const css = source.slice(templateStart + 1, templateEnd);
+  return css.includes('${') ? null : css;
+}
+
+function componentHostSelector(source: string, componentName: string): string {
+  const explicitName = /component\(\s*['"]([^'"]+)['"]/.exec(source)?.[1];
+  const hostName = explicitName ?? kebabCase(componentName);
+
+  return hostName.includes('-') ? hostName : `[fw-c="${escapeAttribute(hostName)}"]`;
 }
 
 function eventPayloadPaths(source: string): string[] {
