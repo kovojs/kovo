@@ -515,6 +515,11 @@ export interface StylesheetAsset {
   preload?: boolean;
 }
 
+export interface StylesheetManifestEntry extends StylesheetAsset {
+  fragmentTargets?: readonly string[];
+  sourceFileName?: string;
+}
+
 export interface PageHintOptions {
   i18n?: I18nCatalog | readonly I18nCatalog[];
   meta?: RouteMeta | readonly RouteMeta[];
@@ -527,6 +532,18 @@ export interface PageHintOptions {
 export interface PageHints {
   earlyHints: Record<string, string>;
   html: string;
+}
+
+export function stylesheetsForTargets(
+  manifest: readonly StylesheetManifestEntry[],
+  targets?: readonly string[],
+): StylesheetAsset[] {
+  if (!targets) return dedupeStylesheets(manifest);
+
+  const wanted = new Set(targets);
+  return dedupeStylesheets(
+    manifest.filter((asset) => asset.fragmentTargets?.some((target) => wanted.has(target))),
+  );
 }
 
 export interface DeferredQueryChunk {

@@ -2,11 +2,13 @@ import { describe, expect, it } from 'vitest';
 
 import {
   assertFixpoint,
+  collectCssAssetManifest,
   collectMinifierReservedNames,
   compileComponentModule,
   dedupeCss,
   jisoVitePlugin,
   scopeComponentCss,
+  selectCssAssets,
 } from './index.js';
 
 const cartBadgeSource = `
@@ -123,9 +125,20 @@ export const CartBadge = component('cart-badge', {
         '',
       ].join('\n'),
     );
+    expect(result.cssAssets).toEqual([
+      {
+        componentName: 'CartBadge',
+        fragmentTargets: ['cart-badge'],
+        href: '/assets/components/cart/cart-badge.css',
+        sourceFileName: 'components/cart/cart-badge.css',
+      },
+    ]);
     expect(result.files[0]?.source).toContain('export function renderSource()');
     expect(result.files[1]?.source).toContain('// no client handlers emitted');
     expect(result.files[3]?.source).toContain("'cart-badge': unknown;");
+    expect(result.files[3]?.source).toContain(
+      "'CartBadge': { href: '/assets/components/cart/cart-badge.css'; sourceFileName: 'components/cart/cart-badge.css'; fragmentTargets: readonly ['cart-badge']; };",
+    );
     expect(() => assertFixpoint(result)).not.toThrow();
   });
 
@@ -742,5 +755,85 @@ describe('component CSS helpers', () => {
 
   it('dedupes normalized CSS chunks in page order', () => {
     expect(dedupeCss(['.a{}', '.a{}', ' .b{} '])).toBe('.a{}\n\n.b{}');
+  });
+
+  it('collects emitted component CSS artifacts as server stylesheet assets', () => {
+    const cartBadge = compileComponentModule({
+      fileName: 'components/cart/cart-badge.tsx',
+      source: `
+import { component } from '@jiso/core';
+
+export const CartBadge = component('cart-badge', {
+  css: \`
+    .count { color: teal; }
+  \`,
+  render: () => <cart-badge><span class="count">1</span></cart-badge>,
+});
+`,
+    });
+    const cartDrawer = compileComponentModule({
+      fileName: 'components/cart/cart-drawer.tsx',
+      source: `
+import { component } from '@jiso/core';
+
+export const CartDrawer = component('cart-drawer', {
+  css: \`
+    dialog { border: 0; }
+  \`,
+  render: () => <dialog id="cart-drawer">Cart</dialog>,
+});
+`,
+    });
+
+    const manifest = collectCssAssetManifest([cartBadge, cartDrawer, cartBadge], {
+      baseHref: '/_jiso/',
+    });
+
+    expect(manifest.stylesheets).toEqual([
+      {
+        componentName: 'CartBadge',
+        fragmentTargets: [],
+        href: '/_jiso/components/cart/cart-badge.css',
+        sourceFileName: 'components/cart/cart-badge.css',
+      },
+      {
+        componentName: 'CartDrawer',
+        fragmentTargets: [],
+        href: '/_jiso/components/cart/cart-drawer.css',
+        sourceFileName: 'components/cart/cart-drawer.css',
+      },
+    ]);
+    expect(selectCssAssets(manifest, ['components/cart/cart-drawer.css'])).toEqual([
+      {
+        componentName: 'CartDrawer',
+        fragmentTargets: [],
+        href: '/_jiso/components/cart/cart-drawer.css',
+        sourceFileName: 'components/cart/cart-drawer.css',
+      },
+    ]);
+  });
+
+  it('carries preload policy for late fragment stylesheet delivery', () => {
+    const result = compileComponentModule({
+      fileName: './components/reviews.tsx',
+      source: `
+export const Reviews = component('reviews', {
+  styles: \`
+    .reviews-card { border-radius: 0.5rem; }
+  \`,
+  render: () => <section class="reviews-card">Ready</section>,
+});
+`,
+    });
+
+    expect(collectCssAssetManifest(result, { preload: false }).stylesheets).toEqual([
+      {
+        componentName: 'Reviews',
+        fragmentTargets: [],
+        href: '/assets/components/reviews.css',
+        preload: false,
+        sourceFileName: './components/reviews.css',
+      },
+    ]);
   });
 });

@@ -22,6 +22,7 @@ import {
   runMutation,
   s,
   session,
+  stylesheetsForTargets,
   t,
   tag,
   type ChangeRecord,
@@ -211,6 +212,54 @@ describe('server mutation primitives', () => {
         '<link rel="modulepreload" href="/c/cart.client.js">',
       ].join(''),
     });
+  });
+
+  it('selects manifest stylesheets for pages and late fragments', () => {
+    const manifest = [
+      {
+        fragmentTargets: ['cart-badge'],
+        href: '/assets/components/cart/cart-badge.css',
+        sourceFileName: 'components/cart/cart-badge.css',
+      },
+      {
+        fragmentTargets: ['cart-drawer'],
+        href: '/assets/components/cart/cart-drawer.css',
+        sourceFileName: 'components/cart/cart-drawer.css',
+      },
+      {
+        fragmentTargets: ['cart-drawer'],
+        href: '/assets/components/cart/cart-drawer.css',
+        sourceFileName: 'components/cart/cart-drawer.css',
+      },
+    ];
+
+    expect(renderPageHints({ stylesheets: stylesheetsForTargets(manifest) })).toEqual({
+      earlyHints: {
+        Link: '</assets/components/cart/cart-badge.css>; rel=preload; as=style, </assets/components/cart/cart-drawer.css>; rel=preload; as=style',
+      },
+      html: [
+        '<link rel="stylesheet" href="/assets/components/cart/cart-badge.css">',
+        '<link rel="stylesheet" href="/assets/components/cart/cart-drawer.css">',
+      ].join(''),
+    });
+    expect(
+      renderDeferredStream({
+        chunks: [
+          {
+            fragments: [
+              {
+                html: '<cart-drawer>Ready</cart-drawer>',
+                stylesheets: stylesheetsForTargets(manifest, ['cart-drawer']),
+                target: 'cart-drawer',
+              },
+            ],
+          },
+        ],
+        shell: '<!doctype html><html><body><fw-defer target="cart-drawer"></fw-defer>',
+      }).body,
+    ).toContain(
+      '<fw-fragment target="cart-drawer"><link rel="stylesheet" href="/assets/components/cart/cart-drawer.css"><cart-drawer>Ready</cart-drawer></fw-fragment>',
+    );
   });
 
   it('encodes Early Hints link targets without changing rendered hrefs', () => {

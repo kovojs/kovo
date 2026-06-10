@@ -16,14 +16,42 @@ export interface EmittedFile {
 }
 
 export interface CompileResult {
+  cssAssets: readonly ComponentCssAsset[];
   diagnostics: CompilerDiagnostic[];
   files: EmittedFile[];
   platformSubstitutions: PlatformSubstitution[];
   viewTransitions: ViewTransitionStamp[];
 }
 
+export interface CssAsset {
+  href: string;
+  preload?: boolean;
+  sourceFileName: string;
+}
+
+export interface ComponentCssAsset extends CssAsset {
+  componentName: string;
+  fragmentTargets: readonly string[];
+}
+
+export interface CssAssetManifest {
+  byFileName: Readonly<Record<string, ComponentCssAsset>>;
+  stylesheets: readonly ComponentCssAsset[];
+}
+
+export interface CssAssetManifestOptions {
+  baseHref?: string;
+  preload?: boolean;
+}
+
 export function createEmptyCompileResult(): CompileResult {
-  return { diagnostics: [], files: [], platformSubstitutions: [], viewTransitions: [] };
+  return {
+    cssAssets: [],
+    diagnostics: [],
+    files: [],
+    platformSubstitutions: [],
+    viewTransitions: [],
+  };
 }
 
 export interface CompileComponentOptions {
@@ -94,6 +122,7 @@ const cssIrHeader = '/* @jiso-ir */';
 export function compileComponentModule(options: CompileComponentOptions): CompileResult {
   if (isIr(options.source)) {
     return {
+      cssAssets: [],
       diagnostics: [],
       files: [{ fileName: options.fileName, source: options.source }],
       platformSubstitutions: [],
@@ -118,11 +147,16 @@ export function compileComponentModule(options: CompileComponentOptions): Compil
 
   const clientSource = emitClientModule(handlers);
   const cssSource = emitCssModule(source, componentName);
+  const fragmentTargets = findFragmentTargets(source, componentName);
+  const cssAssets = cssSource
+    ? [componentCssAssetForFile(cssFileName, componentName, fragmentTargets)]
+    : [];
   const serverSource = emitServerModule(source, handlers, clientFileName);
   const registrySource = emitRegistryModule({
     clientFileName,
+    cssAssets,
     componentName,
-    fragmentTargets: findFragmentTargets(source, componentName),
+    fragmentTargets,
     handlers,
     platformSubstitutions: platformLowering.substitutions,
     ...(options.registryFacts ? { registryFacts: options.registryFacts } : {}),
@@ -144,6 +178,7 @@ export function compileComponentModule(options: CompileComponentOptions): Compil
       ...(cssSource ? [{ fileName: cssFileName, source: cssSource }] : []),
       { fileName: registryFileName, source: registrySource },
     ],
+    cssAssets,
     platformSubstitutions: platformLowering.substitutions,
     viewTransitions: viewTransitionLowering.stamps,
   };
@@ -221,8 +256,63 @@ export function dedupeCss(chunks: readonly string[]): string {
   return [...new Set(chunks.map((chunk) => chunk.trim()).filter(Boolean))].join('\n\n');
 }
 
+export function collectCssAssetManifest(
+  results: CompileResult | readonly CompileResult[],
+  options: CssAssetManifestOptions = {},
+): CssAssetManifest {
+  const byFileName: Record<string, ComponentCssAsset> = {};
+  const stylesheets: ComponentCssAsset[] = [];
+  const items = Array.isArray(results) ? results : [results];
+
+  for (const result of items) {
+    for (const cssAsset of result.cssAssets) {
+      if (byFileName[cssAsset.sourceFileName]) continue;
+
+      const asset = componentCssAssetForFile(
+        cssAsset.sourceFileName,
+        cssAsset.componentName,
+        cssAsset.fragmentTargets,
+        options,
+      );
+      byFileName[cssAsset.sourceFileName] = asset;
+      stylesheets.push(asset);
+    }
+  }
+
+  return { byFileName, stylesheets };
+}
+
+export function selectCssAssets(
+  manifest: CssAssetManifest,
+  fileNames: readonly string[],
+): ComponentCssAsset[] {
+  return fileNames.flatMap((fileName) => {
+    const asset = manifest.byFileName[fileName];
+    return asset ? [asset] : [];
+  });
+}
+
 function isIr(source: string): boolean {
   return source.startsWith(irHeader) || source.startsWith(cssIrHeader);
+}
+
+function componentCssAssetForFile(
+  fileName: string,
+  componentName: string,
+  fragmentTargets: readonly string[],
+  options: CssAssetManifestOptions = {},
+): ComponentCssAsset {
+  return {
+    componentName,
+    fragmentTargets,
+    href: `${options.baseHref ?? '/assets/'}${normalizeAssetPath(fileName)}`,
+    ...(options.preload === undefined ? {} : { preload: options.preload }),
+    sourceFileName: fileName,
+  };
+}
+
+function normalizeAssetPath(fileName: string): string {
+  return fileName.replace(/^\.?\//, '');
 }
 
 function emitCssModule(source: string, componentName: string): string | null {
@@ -1182,6 +1272,7 @@ function kebabCase(value: string): string {
 
 function emitRegistryModule(options: {
   clientFileName: string;
+  cssAssets: readonly ComponentCssAsset[];
   componentName: string;
   fragmentTargets: string[];
   handlers: HandlerLowering[];
@@ -1204,6 +1295,7 @@ function emitRegistryModule(options: {
   const viewTransitionLines = options.viewTransitions
     .map((stamp) => `  '${stamp.name}': unknown;`)
     .join('\n');
+  const stylesheetLines = options.cssAssets.map(componentStylesheetLine).join('\n');
   const queryRegistryLines = registryTypeFactLines(options.registryFacts?.queries);
   const mutationRegistryLines = registryTypeFactLines(options.registryFacts?.mutations);
   const domainKey = registryDomainKey(options.registryFacts?.domainKeys);
@@ -1223,6 +1315,10 @@ ${platformSubstitutionLines}
 
 export interface ViewTransitions {
 ${viewTransitionLines}
+}
+
+export interface ComponentStylesheets {
+${stylesheetLines}
 }
 
 export interface QueryRegistry {
@@ -1245,6 +1341,14 @@ ${mutationRegistryLines}
 
 export type DomainKey = ${domainKey};
 `;
+}
+
+function componentStylesheetLine(asset: ComponentCssAsset): string {
+  const fragmentTargets =
+    asset.fragmentTargets.length === 0
+      ? 'readonly []'
+      : `readonly [${asset.fragmentTargets.map((target) => `'${target}'`).join(', ')}]`;
+  return `  '${asset.componentName}': { href: '${asset.href}'; sourceFileName: '${asset.sourceFileName}'; fragmentTargets: ${fragmentTargets}; };`;
 }
 
 function registryTypeFactLines(facts: RegistryTypeFacts | undefined): string {
