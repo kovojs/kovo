@@ -238,6 +238,22 @@ void test('P10 commerce keeps app invalidation declarative', async () => {
   );
 });
 
+void test('P10 normative docs cover the constitution and compiler hard rules', async () => {
+  const constitution = await readProjectFile('docs/constitution.md');
+  const compilerRules = await readProjectFile('docs/compiler-hard-rules.md');
+
+  assert.match(constitution, /`SPEC\.md` is the source of truth/);
+  assert.match(constitution, /Legibility is load-bearing/);
+  assert.match(constitution, /Sugar must lower to authorable IR/);
+  assert.match(constitution, /The wire is the documentation/);
+  assert.match(constitution, /Server truth always wins/);
+  assert.match(compilerRules, /Source-derived names/);
+  assert.match(compilerRules, /One-to-one file mapping/);
+  assert.match(compilerRules, /Fixpoint invariant/);
+  assert.match(compilerRules, /Platform behavior emission/);
+  assert.match(compilerRules, /Teaching errors/);
+});
+
 void test('S2 loader budget and L0 no-upgrade path are acceptance evidence', async () => {
   const runtimeSource = await readProjectFile('packages/runtime/src/index.ts');
   const loaderMatch = /export const jisoLoaderSource = `(?<source>[\s\S]*?)`;/m.exec(runtimeSource);
