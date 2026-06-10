@@ -87,7 +87,7 @@ class FakeMorphTarget {
 }
 
 class FakeMorphRoot {
-  deps: { id?: string; target?: string }[] = [];
+  deps: { deps?: string; id?: string; target?: string }[] = [];
   targets = new Map<string, FakeMorphTarget>();
 
   findFragmentTarget(target: string): FakeMorphTarget | null {
@@ -99,7 +99,11 @@ class FakeMorphRoot {
     id?: string;
   }> {
     return this.deps.map((dep) => ({
-      getAttribute: (name) => (name === 'fw-fragment-target' ? (dep.target ?? null) : null),
+      getAttribute: (name) => {
+        if (name === 'fw-fragment-target') return dep.target ?? null;
+        if (name === 'fw-deps') return dep.deps ?? null;
+        return null;
+      },
       ...(dep.id ? { id: dep.id } : {}),
     }));
   }
@@ -859,7 +863,11 @@ describe('query store', () => {
     const channel = new FakeBroadcastChannel();
     const broadcast = installMutationBroadcast({ channel, store });
     const root = new FakeMorphRoot();
-    root.deps = [{ id: 'cart-badge' }, { target: 'recommendations' }, { id: 'cart-badge' }];
+    root.deps = [
+      { deps: 'cart', id: 'cart-badge' },
+      { deps: 'product:p1', target: 'recommendations' },
+      { deps: 'cart', id: 'cart-badge' },
+    ];
     root.targets.set('cart-badge', new FakeMorphTarget());
     root.targets.set('recommendations', new FakeMorphTarget());
     const formData = new FormData();
@@ -898,7 +906,7 @@ describe('query store', () => {
         Accept: 'text/vnd.jiso.fragment+html',
         'FW-Fragment': 'true',
         'FW-Idem': 'idem_01HX',
-        'FW-Targets': 'cart-badge,recommendations',
+        'FW-Targets': 'cart-badge=cart; recommendations=product:p1',
       },
       keepalive: true,
       method: 'POST',
@@ -912,7 +920,7 @@ describe('query store', () => {
       changes: [{ domain: 'cart', input: { productId: 'p1', quantity: '1' } }],
       idem: 'idem_01HX',
       queries: ['cart'],
-      targets: ['cart-badge', 'recommendations'],
+      targets: ['cart-badge=cart', 'recommendations=product:p1'],
     });
     expect(channel.messages).toEqual([
       {

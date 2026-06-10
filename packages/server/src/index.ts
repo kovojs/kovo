@@ -432,8 +432,9 @@ export function readMutationWireHeaders(headers: MutationWireHeaderSource): Muta
   const idem = readHeader(headers, 'FW-Idem')?.trim();
   const targets = dedupe(
     (readHeader(headers, 'FW-Targets') ?? '')
-      .split(',')
+      .split(/[;,]/)
       .map((target) => target.trim())
+      .map((target) => target.split('=')[0]?.trim() ?? '')
       .filter(Boolean),
   );
 

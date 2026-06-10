@@ -1009,7 +1009,7 @@ async function fetchEnhancedMutation(
       Accept: 'text/vnd.jiso.fragment+html',
       'FW-Fragment': 'true',
       'FW-Idem': idem,
-      'FW-Targets': targets.join(','),
+      'FW-Targets': targets.join('; '),
     },
     keepalive: true,
     method: (options.form.method ?? 'post').toUpperCase(),
@@ -1181,7 +1181,8 @@ function readLiveTargets(root: TargetCollectorRoot): string[] {
 
   for (const element of root.querySelectorAll('[fw-deps]')) {
     const target = element.getAttribute('fw-fragment-target') ?? element.id;
-    if (target) targets.add(target);
+    const deps = readDeps(element.getAttribute('fw-deps'));
+    if (target) targets.add(deps.length > 0 ? `${target}=${deps.join(' ')}` : target);
   }
 
   return [...targets];

@@ -51,7 +51,7 @@ describe('server mutation primitives', () => {
       readMutationWireHeaders({
         'fw-fragment': 'true',
         'FW-Idem': ' idem_01HX ',
-        'FW-Targets': 'cart-badge, recommendations, cart-badge',
+        'FW-Targets': 'cart-badge=cart; recommendations=product:p1, cart-badge=cart',
       }),
     ).toEqual({
       fragment: true,
