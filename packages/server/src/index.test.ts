@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { guards, mutation, runMutation, s } from './index.js';
+import { domain, guards, mutation, query, runMutation, s } from './index.js';
 
 describe('server mutation primitives', () => {
   it('coerces FormData once through the declared schema', async () => {
@@ -18,7 +18,9 @@ describe('server mutation primitives', () => {
     form.set('quantity', '2');
 
     await expect(runMutation(addToCart, form, {})).resolves.toEqual({
+      changes: [],
       ok: true,
+      rerunQueries: [],
       value: { productId: 'p1', quantity: 2 },
     });
   });
@@ -60,6 +62,37 @@ describe('server mutation primitives', () => {
       error: { code: 'UNAUTHORIZED', payload: {} },
       ok: false,
       status: 422,
+    });
+  });
+
+  it('derives post-commit rerun queries from declared touches', async () => {
+    const cart = domain('cart');
+    const product = domain('product');
+    const cartQuery = query('cart', { reads: [cart] });
+    const productQuery = query('product', { reads: [product] });
+    const addToCart = mutation('cart/add', {
+      input: s.object({
+        productId: s.string(),
+      }),
+      registry: {
+        queries: [cartQuery, productQuery],
+        touches: [cart],
+      },
+      handler(input) {
+        return input.productId;
+      },
+    });
+
+    await expect(runMutation(addToCart, { productId: 'p1' }, {})).resolves.toEqual({
+      changes: [
+        {
+          domain: 'cart',
+          input: { productId: 'p1' },
+        },
+      ],
+      ok: true,
+      rerunQueries: ['cart'],
+      value: 'p1',
     });
   });
 });

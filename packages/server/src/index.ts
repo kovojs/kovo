@@ -101,6 +101,8 @@ export interface MutationFail<Code extends string = string, Payload = unknown> {
 }
 
 export interface MutationSuccess<Value> {
+  changes: ChangeRecord[];
+  rerunQueries: string[];
   ok: true;
   value: Value;
 }
@@ -112,6 +114,59 @@ export interface MutationContext<Errors extends Record<string, Schema<unknown>>>
     code: Code,
     payload: InferSchema<Errors[Code]>,
   ): MutationFail<Code, InferSchema<Errors[Code]>>;
+}
+
+export interface Domain<Key extends string = string> {
+  key: Key;
+}
+
+export function domain<const Key extends string>(key: Key): Domain<Key> {
+  return { key };
+}
+
+export interface WriteDefinition<
+  Key extends string,
+  Touches extends readonly Domain[],
+  Args extends readonly unknown[],
+  Value,
+> {
+  key: Key;
+  run: (...args: Args) => Promise<Value> | Value;
+  touches: Touches;
+}
+
+export function write<
+  const Key extends string,
+  const Touches extends readonly Domain[],
+  Args extends readonly unknown[],
+  Value,
+>(
+  definition: WriteDefinition<Key, Touches, Args, Value>,
+): WriteDefinition<Key, Touches, Args, Value> {
+  return definition;
+}
+
+export interface QueryDefinition<Key extends string = string> {
+  key: Key;
+  reads: readonly Domain[];
+}
+
+export function query<const Key extends string>(
+  key: Key,
+  definition: Omit<QueryDefinition<Key>, 'key'>,
+): QueryDefinition<Key> {
+  return { ...definition, key };
+}
+
+export interface ChangeRecord {
+  domain: string;
+  keys?: readonly string[];
+  input?: unknown;
+}
+
+export interface MutationRegistry {
+  queries?: readonly QueryDefinition[];
+  touches?: readonly Domain[];
 }
 
 export interface MutationDefinition<
@@ -130,6 +185,7 @@ export interface MutationDefinition<
   ) => Promise<Value | MutationFail> | Value | MutationFail;
   input: InputSchema;
   key: Key;
+  registry?: MutationRegistry;
 }
 
 export function mutation<
@@ -177,7 +233,13 @@ export async function runMutation<
   const value = await definition.handler(input, request, context);
 
   if (isMutationFail(value)) return value;
-  return { ok: true, value };
+  const changes = changeRecordsFor(definition.registry?.touches ?? [], input);
+  return {
+    changes,
+    ok: true,
+    rerunQueries: queriesToRerun(definition.registry?.queries ?? [], changes),
+    value,
+  };
 }
 
 function isMutationFail(value: unknown): value is MutationFail {
@@ -194,4 +256,21 @@ function formLikeToRecord(input: unknown): Record<string, unknown> {
   if (input instanceof FormData) return Object.fromEntries(input.entries());
   if (typeof input === 'object' && input !== null) return input as Record<string, unknown>;
   throw new Error('Expected object input');
+}
+
+function changeRecordsFor(domains: readonly Domain[], input: unknown): ChangeRecord[] {
+  return domains.map((item) => ({
+    domain: item.key,
+    input,
+  }));
+}
+
+function queriesToRerun(
+  queries: readonly QueryDefinition[],
+  changes: readonly ChangeRecord[],
+): string[] {
+  const touched = new Set(changes.map((change) => change.domain));
+  return queries
+    .filter((queryDefinition) => queryDefinition.reads.some((read) => touched.has(read.key)))
+    .map((queryDefinition) => queryDefinition.key);
 }
