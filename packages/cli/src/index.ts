@@ -26,6 +26,7 @@ export interface ComponentExplain {
   fragments?: readonly string[];
   handlers?: readonly HandlerExplain[];
   name: string;
+  platformSubstitutions?: readonly PlatformSubstitutionExplain[];
   queries?: readonly string[];
 }
 
@@ -35,6 +36,14 @@ export interface HandlerExplain {
   params?: readonly string[];
   ref: string;
   substitution?: string;
+}
+
+export interface PlatformSubstitutionExplain {
+  action: string;
+  event: string;
+  kind: 'details' | 'dialog' | 'popover';
+  tag: string;
+  target: string;
 }
 
 export interface MutationExplain {
@@ -211,6 +220,18 @@ export function fwExplain(input: FwExplainInput, options: FwExplainOptions): FwC
           `ref=${handler.ref}`,
           `params=${list(handler.params)}`,
           `substitution=${handler.substitution ?? '-'}`,
+        ].join(' '),
+      );
+    }
+
+    for (const substitution of component.platformSubstitutions ?? []) {
+      lines.push(
+        [
+          `SUBSTITUTION ${substitution.kind}`,
+          `tag=${substitution.tag}`,
+          `event=${substitution.event}`,
+          `target=${substitution.target}`,
+          `action=${substitution.action}`,
         ].join(' '),
       );
     }

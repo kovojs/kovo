@@ -567,6 +567,15 @@ describe('fw explain', () => {
                 },
               ],
               name: 'CartBadge',
+              platformSubstitutions: [
+                {
+                  action: 'show-modal',
+                  event: 'click',
+                  kind: 'dialog',
+                  tag: 'button',
+                  target: 'cart-drawer',
+                },
+              ],
               queries: ['cart'],
             },
           ],
@@ -581,6 +590,7 @@ describe('fw explain', () => {
         'queries: cart',
         'fragments: cart-badge',
         'HANDLER click export=CartBadge$button_click ref=/c/cart-badge.client.js#CartBadge$button_click params=itemId substitution=-',
+        'SUBSTITUTION dialog tag=button event=click target=cart-drawer action=show-modal',
         '',
       ].join('\n'),
     });
