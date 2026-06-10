@@ -2,7 +2,25 @@ import { describe, expect, it } from 'vitest';
 
 import { mutation, s } from '@jiso/server';
 
-import { createJisoTestHarness, jisoTest } from './index.js';
+import { createDbVerifier, createJisoTestHarness, jisoTest } from './index.js';
+
+interface FakeDb {
+  read(table: string): unknown[];
+  write(table: string, value: unknown): void;
+}
+
+function createFakeDb(): FakeDb {
+  const tables = new Map<string, unknown[]>();
+
+  return {
+    read(table) {
+      return tables.get(table) ?? [];
+    },
+    write(table, value) {
+      tables.set(table, [...(tables.get(table) ?? []), value]);
+    },
+  };
+}
 
 describe('@jiso/test harness', () => {
   it('executes mutations against the provided db context', async () => {
@@ -57,5 +75,86 @@ describe('@jiso/test harness', () => {
         },
       ),
     ).resolves.toBeUndefined();
+  });
+
+  it('verifies observed writes against the static touch graph after exec', async () => {
+    const cartMutation = mutation('cart/add', {
+      input: s.object({ productId: s.string() }),
+      handler(input, request: { db: FakeDb }) {
+        request.db.write('cart_items', input.productId);
+        return request.db.read('cart_items');
+      },
+    });
+    const harness = createJisoTestHarness({
+      db: createFakeDb(),
+      touchGraph: {
+        'cart.addItem': {
+          touches: [{ domain: 'cart', keys: null, site: 'cart.domain.ts:1', via: 'cart_items' }],
+          unresolved: [],
+        },
+      },
+      verification: {
+        domainByTable: {
+          cart_items: 'cart',
+        },
+      },
+    });
+
+    await expect(harness.exec(cartMutation, { productId: 'p1' })).resolves.toMatchObject({
+      ok: true,
+      value: ['p1'],
+    });
+  });
+
+  it('fails verification for smuggled writes outside the static graph', async () => {
+    const cartMutation = mutation('cart/add', {
+      input: s.object({ productId: s.string() }),
+      handler(input, request: { db: FakeDb }) {
+        request.db.write('audit_log', input.productId);
+        return input.productId;
+      },
+    });
+    const harness = createJisoTestHarness({
+      db: createFakeDb(),
+      touchGraph: {
+        'cart.addItem': {
+          touches: [{ domain: 'cart', keys: null, site: 'cart.domain.ts:1', via: 'cart_items' }],
+          unresolved: [],
+        },
+      },
+      verification: {
+        domainByTable: {
+          audit_log: 'audit',
+          cart_items: 'cart',
+        },
+      },
+    });
+
+    await expect(harness.exec(cartMutation, { productId: 'p1' })).rejects.toThrow(
+      'Observed write outside static touch graph: audit',
+    );
+  });
+
+  it('allows observed writes when FW406 marks unresolved static analysis', () => {
+    const verifier = createDbVerifier(
+      {
+        'cart.addItem': {
+          touches: [],
+          unresolved: [
+            {
+              code: 'FW406',
+              message: 'Statically un-analyzable write site; manual touches required.',
+              site: 'cart.domain.ts:9',
+            },
+          ],
+        },
+      },
+      { domainByTable: { audit_log: 'audit' } },
+    );
+    const db = verifier.wrap(createFakeDb());
+
+    db.write('audit_log', 'p1');
+
+    expect(() => verifier.assertCovered()).not.toThrow();
   });
 });

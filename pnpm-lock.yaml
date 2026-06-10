@@ -98,6 +98,9 @@ importers:
       '@jiso/core':
         specifier: workspace:*
         version: link:../core
+      '@jiso/drizzle':
+        specifier: workspace:*
+        version: link:../drizzle
       '@jiso/server':
         specifier: workspace:*
         version: link:../server
