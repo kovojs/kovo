@@ -890,6 +890,30 @@ describe('server mutation primitives', () => {
       status: 422,
     });
   });
+
+  it('renders no-JS schema validation failures with field paths by default', async () => {
+    const addToCart = mutation('cart/add', {
+      input: s.object({
+        productId: s.string(),
+        quantity: s.number().int().min(1),
+      }),
+      handler(input) {
+        return input;
+      },
+    });
+
+    await expect(
+      renderNoJsMutationResponse(addToCart, {
+        rawInput: { productId: 'p1', quantity: 0 },
+        redirectTo: '/cart',
+        request: {},
+      }),
+    ).resolves.toEqual({
+      body: '<!doctype html><html><body><output role="alert" data-error-path="quantity">Expected number &gt;= 1</output></body></html>',
+      headers: { 'Content-Type': 'text/html; charset=utf-8' },
+      status: 422,
+    });
+  });
 });
 
 function formDataFile(bits: string[], name: string, type: string): Blob {

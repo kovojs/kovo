@@ -29,6 +29,83 @@ describe('fw check', () => {
     });
   });
 
+  it('derives FW310 gaps from mutation invalidations and query read sets', () => {
+    expect(
+      fwCheck({
+        mutations: [
+          {
+            guards: ['authed'],
+            invalidates: ['cart'],
+            key: 'cart/add',
+          },
+        ],
+        optimistic: [{ mutation: 'cart/add', query: 'productGrid', status: 'await-fragment' }],
+        queries: [
+          { domains: ['cart'], query: 'cart' },
+          { domains: ['product'], query: 'productGrid' },
+        ],
+        touchGraph: {
+          'cart.addItem': {
+            touches: [
+              { domain: 'cart', keys: null, site: 'cart.domain.ts:1', via: 'cart_items' },
+              { domain: 'product', keys: null, site: 'cart.domain.ts:2', via: 'products' },
+            ],
+            unresolved: [],
+          },
+        },
+      }),
+    ).toEqual({
+      exitCode: 0,
+      output:
+        'fw-check/v1\nWARN FW310 cart/add -> cart Invalidated query lacks optimistic transform.\n',
+    });
+  });
+
+  it('accepts explicit optimistic statuses for every invalidated query', () => {
+    expect(
+      fwCheck({
+        mutations: [{ guards: ['authed'], invalidates: ['cart', 'product'], key: 'cart/add' }],
+        optimistic: [
+          { mutation: 'cart/add', query: 'cart', status: 'hand-written' },
+          { mutation: 'cart/add', query: 'productGrid', status: 'await-fragment' },
+        ],
+        queries: [
+          { domains: ['cart'], query: 'cart' },
+          { domains: ['product'], query: 'productGrid' },
+        ],
+        touchGraph: {
+          'cart.addItem': {
+            touches: [
+              { domain: 'cart', keys: null, site: 'cart.domain.ts:1', via: 'cart_items' },
+              { domain: 'product', keys: null, site: 'cart.domain.ts:2', via: 'products' },
+            ],
+            unresolved: [],
+          },
+        },
+      }),
+    ).toEqual({
+      exitCode: 0,
+      output: 'fw-check/v1\nOK\n',
+    });
+  });
+
+  it('derives FW310 gaps from mutation writes when invalidates are absent', () => {
+    expect(
+      fwCheck({
+        mutations: [{ guards: ['authed'], key: 'cart/add', writes: ['cart'] }],
+        queries: [{ domains: ['cart'], query: 'cart' }],
+        touchGraph: {
+          'cart.addItem': {
+            touches: [{ domain: 'cart', keys: null, site: 'cart.domain.ts:1', via: 'cart_items' }],
+            unresolved: [],
+          },
+        },
+      }).output,
+    ).toBe(
+      'fw-check/v1\nWARN FW310 cart/add -> cart Invalidated query lacks optimistic transform.\n',
+    );
+  });
+
   it('reports semantic lints for local state, events, and direct db access', () => {
     expect(
       fwCheck({

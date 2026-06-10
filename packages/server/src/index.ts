@@ -954,6 +954,10 @@ function isValidationFailurePayload(value: unknown): value is ValidationFailureP
 }
 
 function renderDefaultFailurePage(failure: MutationFail): string {
+  if (failure.error.code === 'VALIDATION' && isValidationFailurePayload(failure.error.payload)) {
+    return `<!doctype html><html><body>${renderDefaultFailureFragmentContent(failure)}</body></html>`;
+  }
+
   return `<!doctype html><html><body><output role="alert" data-error-code="${escapeAttribute(failure.error.code)}">${escapeHtml(JSON.stringify(failure.error.payload))}</output></body></html>`;
 }
 

@@ -252,12 +252,12 @@ export function fwCheck(input: FwCheckInput): FwCheckResult {
     );
   }
 
-  for (const coverage of input.optimistic ?? []) {
-    if (coverage.status !== 'UNHANDLED') continue;
-
-    lines.push(
-      `WARN FW310 ${coverage.mutation} -> ${coverage.query} Invalidated query lacks optimistic transform.`,
-    );
+  for (const warning of optimisticCoverageWarnings(
+    input.mutations ?? [],
+    input.queries ?? [],
+    input.optimistic ?? [],
+  )) {
+    lines.push(warning);
   }
 
   for (const lint of input.lints ?? []) {
@@ -366,6 +366,41 @@ function optimisticSummary(coverages: readonly OptimisticCoverage[]): string {
     `await-fragment=${counts['await-fragment']}`,
     `UNHANDLED=${counts.UNHANDLED}`,
   ].join(' ');
+}
+
+function optimisticCoverageWarnings(
+  mutations: readonly MutationExplain[],
+  queries: readonly QueryReadSet[],
+  coverages: readonly OptimisticCoverage[],
+): string[] {
+  const covered = new Map(
+    coverages.map((coverage) => [`${coverage.mutation}\0${coverage.query}`, coverage.status]),
+  );
+  const warnings: string[] = [];
+
+  for (const coverage of coverages) {
+    if (coverage.status !== 'UNHANDLED') continue;
+
+    warnings.push(optimisticCoverageWarning(coverage.mutation, coverage.query));
+  }
+
+  for (const mutation of mutations) {
+    const domains = new Set(mutation.invalidates ?? mutation.writes ?? []);
+    if (domains.size === 0) continue;
+
+    for (const query of queries) {
+      if (!query.domains.some((domain) => domains.has(domain))) continue;
+      if (covered.has(`${mutation.key}\0${query.query}`)) continue;
+
+      warnings.push(optimisticCoverageWarning(mutation.key, query.query));
+    }
+  }
+
+  return warnings;
+}
+
+function optimisticCoverageWarning(mutation: string, query: string): string {
+  return `WARN FW310 ${mutation} -> ${query} Invalidated query lacks optimistic transform.`;
 }
 
 function lintMessage(lint: SemanticLint): string {
