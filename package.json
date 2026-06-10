@@ -9,8 +9,9 @@
   ],
   "type": "module",
   "scripts": {
-    "acceptance": "pnpm run check && pnpm run test && pnpm run check:fw",
+    "acceptance": "pnpm run check && pnpm run test && pnpm run check:build && pnpm run check:fw",
     "check": "vp check",
+    "check:build": "vp run build",
     "check:fw": "vp run fw-check",
     "test": "vitest --run"
   },
