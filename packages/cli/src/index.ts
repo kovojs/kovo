@@ -36,6 +36,7 @@ export interface MutationExplain {
   guards?: readonly string[];
   invalidates?: readonly string[];
   key: string;
+  manualInvalidates?: readonly string[];
   writes?: readonly string[];
 }
 
@@ -145,6 +146,7 @@ export function fwExplain(input: FwExplainInput, options: FwExplainOptions): FwC
     lines.push(`guards: ${list(mutation.guards)}`);
     lines.push(`writes: ${list(mutation.writes)}`);
     lines.push(`invalidates: ${list(mutation.invalidates)}`);
+    lines.push(`manual-invalidates: ${list(mutation.manualInvalidates)}`);
 
     if (options.optimistic) {
       for (const coverage of input.optimistic?.filter((item) => item.mutation === mutation.key) ??
@@ -202,6 +204,14 @@ export function fwCheck(input: FwCheckInput): FwCheckResult {
 
   for (const mutation of unguardedMutations(input.mutations ?? [])) {
     lines.push(`WARN UNGUARDED ${mutation.key} mutation is reachable without an auth guard.`);
+  }
+
+  for (const mutation of input.mutations ?? []) {
+    for (const domain of mutation.manualInvalidates ?? []) {
+      lines.push(
+        `WARN INVALIDATE ${mutation.key} -> ${domain} Manual invalidate escape hatch requires review.`,
+      );
+    }
   }
 
   if (lines.length === 1) {

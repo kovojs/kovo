@@ -122,6 +122,18 @@ describe('fw check', () => {
       output: 'fw-check/v1\nWARN UNGUARDED cart/add mutation is reachable without an auth guard.\n',
     });
   });
+
+  it('audits manual invalidate escape-hatch usage', () => {
+    expect(
+      fwCheck({
+        mutations: [{ key: 'inventory/sync', manualInvalidates: ['product'] }],
+      }),
+    ).toEqual({
+      exitCode: 0,
+      output:
+        'fw-check/v1\nWARN UNGUARDED inventory/sync mutation is reachable without an auth guard.\nWARN INVALIDATE inventory/sync -> product Manual invalidate escape hatch requires review.\n',
+    });
+  });
 });
 
 describe('fw explain', () => {
@@ -169,6 +181,7 @@ describe('fw explain', () => {
               guards: ['authed'],
               invalidates: ['cart'],
               key: 'cart/add',
+              manualInvalidates: ['product'],
               writes: ['cart', 'product'],
             },
           ],
@@ -187,6 +200,7 @@ describe('fw explain', () => {
         'guards: authed',
         'writes: cart,product',
         'invalidates: cart',
+        'manual-invalidates: product',
         'OPTIMISTIC cart hand-written',
         'OPTIMISTIC recommendations await-fragment',
         '',
