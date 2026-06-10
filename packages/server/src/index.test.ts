@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { File } from 'node:buffer';
+import { readFile } from 'node:fs/promises';
 
 import {
   domain,
@@ -555,8 +556,10 @@ describe('server mutation primitives', () => {
   it('renders enhanced mutation responses as query and fragment chunks', async () => {
     const cart = domain('cart');
     const cartQuery = query('cart', {
+      instanceKey: (input) => `cart:${(input as { cartId?: string }).cartId ?? 'c1'}`,
       load: () => ({ count: 1, items: [{ productId: 'p1', qty: 1, unitPrice: 1499 }] }),
       reads: [cart],
+      version: 7,
     });
     const addToCart = mutation('cart/add', {
       input: s.object({ productId: s.string() }),
@@ -574,18 +577,23 @@ describe('server mutation primitives', () => {
         fragmentRenderers: [
           {
             render: () =>
-              '<cart-badge fw-deps="cart"><span data-bind="cart.count">1</span></cart-badge>',
+              '<cart-badge fw-deps="cart"><button commandfor="cart-drawer" command="show-modal"><span data-bind="cart.count">1</span></button></cart-badge>',
             target: 'cart-badge',
           },
+          {
+            render: () => '<section fw-c="recommendations" fw-deps="product:p1"></section>',
+            target: 'recommendations',
+          },
         ],
-        rawInput: { productId: 'p1' },
+        rawInput: { cartId: 'c1', productId: 'p1' },
         request: {},
-        targets: ['cart-badge'],
+        targets: ['cart-badge', 'recommendations'],
       }),
     ).resolves.toEqual({
       body: [
-        '<fw-query name="cart">{"count":1,"items":[{"productId":"p1","qty":1,"unitPrice":1499}]}</fw-query>',
-        '<fw-fragment target="cart-badge"><cart-badge fw-deps="cart"><span data-bind="cart.count">1</span></cart-badge></fw-fragment>',
+        '<fw-query name="cart" key="cart:c1" version="7">{"count":1,"items":[{"productId":"p1","qty":1,"unitPrice":1499}]}</fw-query>',
+        '<fw-fragment target="cart-badge"><cart-badge fw-deps="cart"><button commandfor="cart-drawer" command="show-modal"><span data-bind="cart.count">1</span></button></cart-badge></fw-fragment>',
+        '<fw-fragment target="recommendations"><section fw-c="recommendations" fw-deps="product:p1"></section></fw-fragment>',
       ].join('\n'),
       headers: {
         'Content-Type': 'text/vnd.jiso.fragment+html; charset=utf-8',
@@ -593,6 +601,50 @@ describe('server mutation primitives', () => {
       },
       status: 200,
     });
+  });
+
+  it('matches the enhanced mutation wire fixture body byte-for-byte', async () => {
+    const cart = domain('cart');
+    const cartQuery = query('cart', {
+      instanceKey: 'cart:c1',
+      load: () => ({ count: 1, items: [{ productId: 'p1', qty: 1, unitPrice: 1499 }] }),
+      reads: [cart],
+      version: 7,
+    });
+    const addToCart = mutation('cart/add', {
+      input: s.object({ productId: s.string() }),
+      registry: {
+        queries: [cartQuery],
+        touches: [cart],
+      },
+      handler(input) {
+        return input;
+      },
+    });
+
+    const response = await renderMutationResponse(addToCart, {
+      fragmentRenderers: [
+        {
+          render: () =>
+            '<cart-badge fw-deps="cart"><button commandfor="cart-drawer" command="show-modal"><span data-bind="cart.count">1</span></button></cart-badge>',
+          target: 'cart-badge',
+        },
+        {
+          render: () => '<section fw-c="recommendations" fw-deps="product:p1"></section>',
+          target: 'recommendations',
+        },
+      ],
+      idem: 'idem_01HX',
+      rawInput: { productId: 'p1', quantity: 1 },
+      request: {},
+      targets: ['cart-badge', 'recommendations'],
+    });
+    const fixture = await readFile(
+      new URL('../../../fixtures/wire/enhanced-mutation.http', import.meta.url),
+      'utf8',
+    );
+
+    expect(`${response.body}\n`).toBe(readLastResponseBody(fixture));
   });
 
   it('replays enhanced mutation responses by FW-Idem without re-running the handler', async () => {
@@ -918,4 +970,14 @@ describe('server mutation primitives', () => {
 
 function formDataFile(bits: string[], name: string, type: string): Blob {
   return new File(bits, name, { type }) as unknown as Blob;
+}
+
+function readLastResponseBody(fixture: string): string {
+  const responseStart = fixture.lastIndexOf('<<< RESPONSE');
+  expect(responseStart).toBeGreaterThanOrEqual(0);
+
+  const headerEnd = fixture.indexOf('\n\n', responseStart);
+  expect(headerEnd).toBeGreaterThanOrEqual(0);
+
+  return fixture.slice(headerEnd + 2);
 }

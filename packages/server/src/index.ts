@@ -286,9 +286,11 @@ export function write<
 }
 
 export interface QueryDefinition<Key extends string = string> {
+  instanceKey?: ((input: unknown) => string | undefined) | string;
   load?: (input: unknown) => unknown;
   key: Key;
   reads: readonly Domain[];
+  version?: ((input: unknown, value: unknown) => number | string | undefined) | number | string;
 }
 
 export function query<const Key extends string>(
@@ -873,12 +875,43 @@ async function renderQueryChunks(
     if (!rerun.has(queryDefinition.key)) continue;
 
     const value = queryDefinition.load ? await queryDefinition.load(input) : null;
-    chunks.push(
-      `<fw-query name="${escapeAttribute(queryDefinition.key)}">${escapeHtml(JSON.stringify(value))}</fw-query>`,
-    );
+    chunks.push(renderQueryChunk(queryDefinition, input, value));
   }
 
   return chunks;
+}
+
+function renderQueryChunk(
+  queryDefinition: QueryDefinition,
+  input: unknown,
+  value: unknown,
+): string {
+  const key = readQueryInstanceKey(queryDefinition, input);
+  const version = readQueryVersion(queryDefinition, input, value);
+  const keyAttribute = key === undefined ? '' : ` key="${escapeAttribute(key)}"`;
+  const versionAttribute =
+    version === undefined ? '' : ` version="${escapeAttribute(String(version))}"`;
+
+  return `<fw-query name="${escapeAttribute(queryDefinition.key)}"${keyAttribute}${versionAttribute}>${escapeHtml(JSON.stringify(value))}</fw-query>`;
+}
+
+function readQueryInstanceKey(
+  queryDefinition: QueryDefinition,
+  input: unknown,
+): string | undefined {
+  if (queryDefinition.instanceKey === undefined) return undefined;
+  if (typeof queryDefinition.instanceKey === 'function') return queryDefinition.instanceKey(input);
+  return queryDefinition.instanceKey;
+}
+
+function readQueryVersion(
+  queryDefinition: QueryDefinition,
+  input: unknown,
+  value: unknown,
+): number | string | undefined {
+  if (queryDefinition.version === undefined) return undefined;
+  if (typeof queryDefinition.version === 'function') return queryDefinition.version(input, value);
+  return queryDefinition.version;
 }
 
 async function renderFragmentChunks(
