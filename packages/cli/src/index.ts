@@ -6,17 +6,17 @@ import { diagnosticDefinitions } from '@jiso/core';
 import { diagnosticsForTouchGraph, type TouchGraph } from '@jiso/drizzle';
 
 export interface FwCheckInput {
-  lints?: SemanticLint[];
-  mutations?: MutationExplain[];
-  optimistic?: OptimisticCoverage[];
-  queries?: QueryReadSet[];
+  lints?: readonly SemanticLint[];
+  mutations?: readonly MutationExplain[];
+  optimistic?: readonly OptimisticCoverage[];
+  queries?: readonly QueryReadSet[];
   touchGraph?: TouchGraph;
 }
 
 export interface FwExplainInput extends FwCheckInput {
-  components?: ComponentExplain[];
-  mutations?: MutationExplain[];
-  pages?: PageExplain[];
+  components?: readonly ComponentExplain[];
+  mutations?: readonly MutationExplain[];
+  pages?: readonly PageExplain[];
 }
 
 export interface ComponentExplain {

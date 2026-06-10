@@ -1,5 +1,6 @@
 import { component } from '@jiso/core';
 import { domain, mutation, query, renderPageHints, s } from '@jiso/server';
+import type { FwExplainInput } from '../../../packages/cli/src/index.js';
 
 export interface CommerceDb {
   cartItems: { productId: string; qty: number; unitPrice: number }[];
@@ -99,3 +100,32 @@ export const commerceTouchGraph = {
     unresolved: [],
   },
 } as const;
+
+export const commerceGraph = {
+  components: [
+    {
+      fragments: ['cart-badge'],
+      name: 'CartBadge',
+      queries: ['cart'],
+    },
+  ],
+  mutations: [
+    {
+      guards: ['rateLimit:session'],
+      invalidates: ['cart'],
+      key: 'cart/add',
+      writes: ['cart', 'product'],
+    },
+  ],
+  optimistic: [{ mutation: 'cart/add', query: 'cart', status: 'await-fragment' }],
+  pages: [
+    {
+      modulepreloads: [],
+      prefetch: false,
+      queries: ['cart'],
+      route: '/cart',
+    },
+  ],
+  queries: [{ domains: ['cart'], query: 'cart' }],
+  touchGraph: commerceTouchGraph as unknown as FwExplainInput['touchGraph'],
+} satisfies FwExplainInput;

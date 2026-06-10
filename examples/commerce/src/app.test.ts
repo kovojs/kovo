@@ -2,9 +2,11 @@ import { describe, expect, it } from 'vitest';
 
 import { createJisoTestHarness } from '@jiso/test';
 import type { TouchGraph } from '@jiso/drizzle';
+import { fwCheck, fwExplain } from '../../../packages/cli/src/index.js';
 
 import {
   addToCart,
+  commerceGraph,
   commercePageHints,
   commerceTouchGraph,
   createCommerceDb,
@@ -51,5 +53,33 @@ describe('commerce example', () => {
     expect(renderCartPage()).toContain('<link rel="stylesheet" href="/assets/tailwind.css">');
     expect(renderCartPage()).toContain('class="min-h-dvh bg-slate-50 p-6"');
     expect(renderCartPage()).toContain('class="rounded bg-teal-600 px-2 py-0.5 text-white"');
+  });
+
+  it('ships graph facts for fw check and explain acceptance', () => {
+    expect(fwCheck(commerceGraph)).toEqual({
+      exitCode: 0,
+      output: 'fw-check/v1\nWARN UNGUARDED cart/add mutation is reachable without an auth guard.\n',
+    });
+    expect(fwCheck(commerceGraph).output).not.toContain('FW310');
+
+    expect(
+      fwExplain(commerceGraph, { kind: 'mutation', optimistic: true, target: 'cart/add' }),
+    ).toEqual({
+      exitCode: 0,
+      output: [
+        'fw-explain/v1',
+        'MUTATION cart/add',
+        'guards: rateLimit:session',
+        'writes: cart,product',
+        'invalidates: cart',
+        'manual-invalidates: -',
+        'OPTIMISTIC cart await-fragment',
+        '',
+      ].join('\n'),
+    });
+    expect(fwExplain(commerceGraph, { kind: 'query', target: 'cart' })).toEqual({
+      exitCode: 0,
+      output: 'fw-explain/v1\nQUERY cart\nreads: cart\ninvalidated-by: cart.addItem\n',
+    });
   });
 });
