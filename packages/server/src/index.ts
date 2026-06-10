@@ -250,6 +250,19 @@ export interface NoJsMutationResponse {
   status: 303 | 422;
 }
 
+export type RoutePrefetch = 'conservative' | 'moderate' | false;
+
+export interface PageHintOptions {
+  modulepreloads?: readonly string[];
+  prefetch?: RoutePrefetch;
+  prerenderUrls?: readonly string[];
+}
+
+export interface PageHints {
+  earlyHints: Record<string, string>;
+  html: string;
+}
+
 export interface MutationDefinition<
   Key extends string = string,
   InputSchema extends Schema<unknown> = Schema<unknown>,
@@ -280,6 +293,24 @@ export function mutation<
   definition: Omit<MutationDefinition<Key, InputSchema, Errors, Request, Value>, 'key'>,
 ): MutationDefinition<Key, InputSchema, Errors, Request, Value> & { key: Key } {
   return { ...definition, key };
+}
+
+export function renderPageHints(options: PageHintOptions): PageHints {
+  const modulepreloads = dedupe(options.modulepreloads ?? []);
+  const html = [
+    ...modulepreloads.map((href) => `<link rel="modulepreload" href="${escapeAttribute(href)}">`),
+    renderSpeculationRules(options.prefetch ?? false, options.prerenderUrls ?? []),
+  ]
+    .filter(Boolean)
+    .join('');
+
+  return {
+    earlyHints:
+      modulepreloads.length > 0
+        ? { Link: modulepreloads.map((href) => `<${href}>; rel=modulepreload`).join(', ') }
+        : {},
+    html,
+  };
 }
 
 export async function runMutation<
@@ -484,10 +515,33 @@ function renderDefaultFailurePage(failure: MutationFail): string {
   return `<!doctype html><html><body><output role="alert" data-error-code="${escapeAttribute(failure.error.code)}">${escapeHtml(JSON.stringify(failure.error.payload))}</output></body></html>`;
 }
 
+function dedupe(values: readonly string[]): string[] {
+  return [...new Set(values.filter(Boolean))];
+}
+
+function renderSpeculationRules(prefetch: RoutePrefetch, urls: readonly string[]): string {
+  if (!prefetch || urls.length === 0) return '';
+
+  return `<script type="speculationrules">${escapeScriptJson(
+    JSON.stringify({
+      prerender: [
+        {
+          eagerness: prefetch,
+          urls: dedupe(urls),
+        },
+      ],
+    }),
+  )}</script>`;
+}
+
 function escapeHtml(value: string): string {
   return value.replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;');
 }
 
 function escapeAttribute(value: string): string {
   return escapeHtml(value).replaceAll('"', '&quot;');
+}
+
+function escapeScriptJson(value: string): string {
+  return value.replaceAll('<', '\\u003c');
 }

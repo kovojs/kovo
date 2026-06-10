@@ -5,6 +5,7 @@ import {
   guards,
   mutation,
   query,
+  renderPageHints,
   renderMutationResponse,
   renderNoJsMutationResponse,
   runMutation,
@@ -12,6 +13,36 @@ import {
 } from './index.js';
 
 describe('server mutation primitives', () => {
+  it('renders modulepreloads, opt-in speculation rules, and Early Hints headers', () => {
+    expect(
+      renderPageHints({
+        modulepreloads: ['/c/cart.client.js', '/c/cart.client.js', '/c/recs.client.js'],
+        prefetch: 'conservative',
+        prerenderUrls: ['/cart', '/checkout'],
+      }),
+    ).toEqual({
+      earlyHints: {
+        Link: '</c/cart.client.js>; rel=modulepreload, </c/recs.client.js>; rel=modulepreload',
+      },
+      html: [
+        '<link rel="modulepreload" href="/c/cart.client.js">',
+        '<link rel="modulepreload" href="/c/recs.client.js">',
+        '<script type="speculationrules">{"prerender":[{"eagerness":"conservative","urls":["/cart","/checkout"]}]}</script>',
+      ].join(''),
+    });
+  });
+
+  it('keeps speculation rules default-off for ordinary page hints', () => {
+    expect(renderPageHints({ modulepreloads: ['/c/cart.client.js'] })).toEqual({
+      earlyHints: { Link: '</c/cart.client.js>; rel=modulepreload' },
+      html: '<link rel="modulepreload" href="/c/cart.client.js">',
+    });
+    expect(renderPageHints({ prefetch: false, prerenderUrls: ['/cart'] })).toEqual({
+      earlyHints: {},
+      html: '',
+    });
+  });
+
   it('coerces FormData once through the declared schema', async () => {
     const addToCart = mutation('cart/add', {
       input: s.object({
