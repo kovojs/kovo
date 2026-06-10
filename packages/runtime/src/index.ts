@@ -126,6 +126,7 @@ export interface LoaderRoot {
     listener: (event: DelegatedEvent) => void | Promise<void>,
     options?: { capture?: boolean },
   ): void;
+  querySelectorAll?: (selector: string) => Iterable<QueryScriptLike>;
 }
 
 export interface DelegatedEvent {
@@ -161,6 +162,10 @@ export const jisoLoaderSource = `(()=>{const E=["click","submit","input","change
 
 export function installJisoLoader(options: JisoLoaderOptions): JisoLoader {
   const events = options.events ?? defaultDelegatedEvents;
+
+  if (options.queryStore && options.root.querySelectorAll) {
+    hydrateQueryScripts(options.queryStore, options.root.querySelectorAll('script[fw-query]'));
+  }
 
   for (const eventName of events) {
     options.root.addEventListener(

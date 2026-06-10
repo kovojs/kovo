@@ -33,10 +33,20 @@ import {
 
 class FakeRoot {
   listeners = new Map<string, (event: DelegatedEvent) => void | Promise<void>>();
+  scripts: QueryScript[] = [];
 
   addEventListener(type: string, listener: (event: DelegatedEvent) => void | Promise<void>): void {
     this.listeners.set(type, listener);
   }
+
+  querySelectorAll(selector: string): Iterable<QueryScript> {
+    return selector === 'script[fw-query]' ? this.scripts : [];
+  }
+}
+
+interface QueryScript {
+  getAttribute(name: string): string | null;
+  textContent: string | null;
 }
 
 class FakeElement implements EventElementLike {
@@ -149,6 +159,24 @@ describe('runtime loader', () => {
     expect(loader.events).toEqual(['click', 'submit', 'input', 'change']);
     expect([...root.listeners.keys()]).toEqual(['click', 'submit', 'input', 'change']);
     expect(importModule).not.toHaveBeenCalled();
+  });
+
+  it('hydrates initial fw-query scripts into the configured query store', () => {
+    const root = new FakeRoot();
+    const store = createQueryStore();
+    const plan = vi.fn();
+    root.scripts = [
+      {
+        getAttribute: (name) => (name === 'fw-query' ? 'cart' : null),
+        textContent: '{"count":2}',
+      },
+    ];
+    store.subscribe('cart', plan);
+
+    installJisoLoader({ importModule: vi.fn(), queryStore: store, root });
+
+    expect(store.get('cart')).toEqual({ count: 2 });
+    expect(plan).toHaveBeenCalledWith({ count: 2 });
   });
 
   it('imports and invokes a url#export handler only when a matching event arrives', async () => {
