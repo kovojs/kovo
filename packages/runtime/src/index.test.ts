@@ -65,6 +65,16 @@ class FakeElement implements EventElementLike {
   getAttribute(name: string): string | null {
     return this.attributes.find((attribute) => attribute.name === name)?.value ?? null;
   }
+
+  setAttribute(name: string, value: string): void {
+    const existing = this.attributes.find((attribute) => attribute.name === name);
+    if (existing) {
+      existing.value = value;
+      return;
+    }
+
+    this.attributes.push({ name, value });
+  }
 }
 
 class FakeBroadcastChannel {
@@ -216,6 +226,21 @@ describe('runtime loader', () => {
       expect.objectContaining({ type: 'click' }),
       expect.objectContaining({ state: { bouncing: false, count: 2 } }),
     );
+  });
+
+  it('persists handler state mutations back to the island host', async () => {
+    const handler = vi.fn((_event, ctx: { state: { count: number } }) => {
+      ctx.state.count += 1;
+    });
+    const importModule = vi.fn(async () => ({ Counter$button_click: handler }));
+    const element = new FakeElement({
+      'fw-state': '{"count":2}',
+      'on:click': '/c/counter.client.js#Counter$button_click',
+    });
+
+    await dispatchDelegatedEvent({ target: element, type: 'click' }, importModule);
+
+    expect(element.getAttribute('fw-state')).toBe('{"count":3}');
   });
 
   it('defaults missing or malformed serialized state to an empty object', () => {
