@@ -337,6 +337,40 @@ export interface MorphRoot {
 
 export type MorphFragment = (target: MorphTarget, html: string) => void;
 
+export interface EnhancedFormLike {
+  action: string;
+  method?: string;
+}
+
+export interface TargetCollectorRoot {
+  querySelectorAll(selector: string): Iterable<{
+    getAttribute(name: string): string | null;
+    id?: string;
+  }>;
+}
+
+export interface EnhancedMutationFetchOptions {
+  body: unknown;
+  headers: Record<string, string>;
+  keepalive: boolean;
+  method: string;
+}
+
+export type EnhancedMutationFetch = (
+  url: string,
+  options: EnhancedMutationFetchOptions,
+) => Promise<{ text(): Promise<string> }>;
+
+export interface EnhancedMutationSubmitOptions {
+  fetch: EnhancedMutationFetch;
+  form: EnhancedFormLike;
+  formData: unknown;
+  idem?: string;
+  morph?: MorphFragment;
+  root: MorphRoot & TargetCollectorRoot;
+  store: QueryStore;
+}
+
 export function applyMutationResponse(store: QueryStore, body: string): AppliedMutationResponse {
   const queries: string[] = [];
 
@@ -383,6 +417,38 @@ export function applyMutationResponseToDom(options: {
   return {
     ...applied,
     appliedFragments: applyFragments(options.root, applied.fragments, options.morph),
+  };
+}
+
+export async function submitEnhancedMutation(
+  options: EnhancedMutationSubmitOptions,
+): Promise<
+  AppliedMutationResponse & { appliedFragments: string[]; idem: string; targets: string[] }
+> {
+  const idem = options.idem ?? createIdem();
+  const targets = readLiveTargets(options.root);
+  const response = await options.fetch(options.form.action, {
+    body: options.formData,
+    headers: {
+      Accept: 'text/vnd.jiso.fragment+html',
+      'FW-Fragment': 'true',
+      'FW-Idem': idem,
+      'FW-Targets': targets.join(','),
+    },
+    keepalive: true,
+    method: (options.form.method ?? 'post').toUpperCase(),
+  });
+  const applied = applyMutationResponseToDom({
+    body: await response.text(),
+    root: options.root,
+    store: options.store,
+    ...(options.morph ? { morph: options.morph } : {}),
+  });
+
+  return {
+    ...applied,
+    idem,
+    targets,
   };
 }
 
@@ -443,9 +509,24 @@ function replaceFragment(target: MorphTarget, html: string): void {
   target.replaceWithHtml(html);
 }
 
+function readLiveTargets(root: TargetCollectorRoot): string[] {
+  const targets = new Set<string>();
+
+  for (const element of root.querySelectorAll('[fw-deps]')) {
+    const target = element.getAttribute('fw-fragment-target') ?? element.id;
+    if (target) targets.add(target);
+  }
+
+  return [...targets];
+}
+
 function readAttribute(attrs: string, name: string): string | null {
   const pattern = new RegExp(`\\b${name}="([^"]*)"`);
   return unescapeHtml(pattern.exec(attrs)?.[1] ?? '') || null;
+}
+
+function createIdem(): string {
+  return `idem_${Math.random().toString(36).slice(2)}`;
 }
 
 function unescapeHtml(value: string): string {

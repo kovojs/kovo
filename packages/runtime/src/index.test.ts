@@ -14,6 +14,7 @@ import {
   OptimisticRebaser,
   parseHandlerReference,
   readElementParams,
+  submitEnhancedMutation,
   type DelegatedEvent,
   type EventElementLike,
 } from './index.js';
@@ -64,10 +65,21 @@ class FakeMorphTarget {
 }
 
 class FakeMorphRoot {
+  deps: { id?: string; target?: string }[] = [];
   targets = new Map<string, FakeMorphTarget>();
 
   findFragmentTarget(target: string): FakeMorphTarget | null {
     return this.targets.get(target) ?? null;
+  }
+
+  querySelectorAll(_selector: string): Iterable<{
+    getAttribute(name: string): string | null;
+    id?: string;
+  }> {
+    return this.deps.map((dep) => ({
+      getAttribute: (name) => (name === 'fw-fragment-target' ? (dep.target ?? null) : null),
+      ...(dep.id ? { id: dep.id } : {}),
+    }));
   }
 }
 
@@ -383,5 +395,59 @@ describe('query store', () => {
     });
     expect(store.get('cart')).toEqual({ count: 7 });
     expect(root.targets.get('cart-badge')?.html).toContain('data-bind="cart.count"');
+  });
+
+  it('submits enhanced mutation forms with live targets and applies the fragment response', async () => {
+    const store = createQueryStore();
+    const root = new FakeMorphRoot();
+    root.deps = [{ id: 'cart-badge' }, { target: 'recommendations' }, { id: 'cart-badge' }];
+    root.targets.set('cart-badge', new FakeMorphTarget());
+    root.targets.set('recommendations', new FakeMorphTarget());
+    const formData = new FormData();
+    formData.set('productId', 'p1');
+    formData.set('quantity', '1');
+    const fetch = vi.fn(async () => ({
+      async text() {
+        return [
+          '<fw-query name="cart">{"count":1}</fw-query>',
+          '<fw-fragment target="cart-badge"><cart-badge>1</cart-badge></fw-fragment>',
+          '<fw-fragment target="recommendations"><section></section></fw-fragment>',
+        ].join('\n');
+      },
+    }));
+
+    const result = await submitEnhancedMutation({
+      fetch,
+      form: { action: '/_m/cart/add', method: 'post' },
+      formData,
+      idem: 'idem_01HX',
+      root,
+      store,
+    });
+
+    expect(fetch).toHaveBeenCalledWith('/_m/cart/add', {
+      body: formData,
+      headers: {
+        Accept: 'text/vnd.jiso.fragment+html',
+        'FW-Fragment': 'true',
+        'FW-Idem': 'idem_01HX',
+        'FW-Targets': 'cart-badge,recommendations',
+      },
+      keepalive: true,
+      method: 'POST',
+    });
+    expect(result).toEqual({
+      appliedFragments: ['cart-badge', 'recommendations'],
+      fragments: [
+        { html: '<cart-badge>1</cart-badge>', target: 'cart-badge' },
+        { html: '<section></section>', target: 'recommendations' },
+      ],
+      idem: 'idem_01HX',
+      queries: ['cart'],
+      targets: ['cart-badge', 'recommendations'],
+    });
+    expect(store.get('cart')).toEqual({ count: 1 });
+    expect(root.targets.get('cart-badge')?.html).toBe('<cart-badge>1</cart-badge>');
+    expect(root.targets.get('recommendations')?.html).toBe('<section></section>');
   });
 });
