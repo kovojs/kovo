@@ -319,7 +319,13 @@ function emitCssModule(source: string, componentName: string): string | null {
   const css = extractStaticComponentCss(source);
   if (!css) return null;
 
-  return `${cssIrHeader}\n${scopeComponentCss(componentHostSelector(source, componentName), css).scoped}`;
+  const scopedCss = scopeComponentCss(componentHostSelector(source, componentName), css);
+
+  return `${cssIrHeader}\n/* @jiso-scope-fallback */\n${formatFallbackCss(scopedCss.fallback)}\n\n${scopedCss.scoped}`;
+}
+
+function formatFallbackCss(css: string): string {
+  return css.replace(/}\s*/g, '}\n').trimEnd();
 }
 
 function prefixCssSelectors(

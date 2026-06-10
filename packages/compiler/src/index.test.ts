@@ -118,6 +118,10 @@ export const CartBadge = component('cart-badge', {
     expect(result.files.find((file) => file.fileName.endsWith('.css'))?.source).toBe(
       [
         '/* @jiso-ir */',
+        '/* @jiso-scope-fallback */',
+        'cart-badge button:not([fw-c]):not([fw-c] *) { color: teal; }',
+        'cart-badge .count:not([fw-c]):not([fw-c] *) { font-weight: 700; }',
+        '',
         '@scope (cart-badge) to (:scope [fw-c]) {',
         '  button { color: teal; }',
         '      .count { font-weight: 700; }',
@@ -159,6 +163,9 @@ export const CartRow = component('cart-row', {
 
     expect(result.files.find((file) => file.fileName.endsWith('.css'))?.source).toContain(
       '@scope ([fw-c="cart-row"]) to (:scope [fw-c])',
+    );
+    expect(result.files.find((file) => file.fileName.endsWith('.css'))?.source).toContain(
+      '[fw-c="cart-row"] td:not([fw-c]):not([fw-c] *) { padding: 0.5rem; }',
     );
     expect(() => assertFixpoint(result)).not.toThrow();
   });
