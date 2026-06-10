@@ -147,6 +147,7 @@ export interface ObservedDbOperation {
   branch: string | undefined;
   domain: string | undefined;
   kind: 'read' | 'write';
+  mutationRead: boolean | undefined;
   rowKey: string | undefined;
   sql: string | undefined;
   table: string;
@@ -207,6 +208,7 @@ export function createDbVerifier(touchGraph: TouchGraph, config: DbVerificationC
   return {
     assertCovered(): void {
       assertRowKeys(observed, config);
+      assertMutationReadsCovered(observed, touchGraph);
 
       const unmappedWrites = observed.filter(
         (operation) => operation.kind === 'write' && operation.domain === undefined,
@@ -509,6 +511,7 @@ function observe(
     branch: observationOptions(args)?.branch,
     domain: config.domainByTable[table],
     kind,
+    mutationRead: undefined,
     rowKey: observationOptions(args)?.rowKey,
     sql: undefined,
     table,
@@ -525,6 +528,7 @@ function observeSql(
       branch: undefined,
       domain: config.domainByTable[operation.table],
       kind: operation.kind,
+      mutationRead: operation.mutationRead,
       rowKey: operation.rowKey,
       sql: statement,
       table: operation.table,
@@ -532,13 +536,11 @@ function observeSql(
   }
 }
 
-function parseSqlStatement(
-  statement: string,
-): Array<Pick<ObservedDbOperation, 'kind' | 'rowKey' | 'table'>> {
+function parseSqlStatement(statement: string): ParsedOperation[] {
   return parse(statement).flatMap((parsed) => operationsForStatement(parsed, new Set()));
 }
 
-type ParsedOperation = Pick<ObservedDbOperation, 'kind' | 'rowKey' | 'table'>;
+type ParsedOperation = Pick<ObservedDbOperation, 'kind' | 'mutationRead' | 'rowKey' | 'table'>;
 
 function operationsForStatement(
   statement: Statement | WithStatementBinding,
@@ -592,8 +594,16 @@ function operationsForInsert(
   cteAliases: ReadonlySet<string>,
 ): ParsedOperation[] {
   return [
-    { kind: 'write', rowKey: undefined, table: tableName(statement.into) },
-    ...operationsForSelect(statement.insert, cteAliases),
+    {
+      kind: 'write',
+      mutationRead: undefined,
+      rowKey: undefined,
+      table: tableName(statement.into),
+    },
+    ...operationsForSelect(statement.insert, cteAliases).map((operation) => ({
+      ...operation,
+      mutationRead: operation.kind === 'read' ? true : operation.mutationRead,
+    })),
   ];
 }
 
@@ -603,14 +613,24 @@ function operationsForUpdate(
 ): ParsedOperation[] {
   const rowKey = rowKeyFromWhere(statement.where);
   return [
-    { kind: 'write', rowKey, table: tableName(statement.table) },
-    ...operationsForFrom(statement.from ? [statement.from] : [], rowKey, cteAliases),
+    { kind: 'write', mutationRead: undefined, rowKey, table: tableName(statement.table) },
+    ...operationsForFrom(statement.from ? [statement.from] : [], rowKey, cteAliases).map(
+      (operation) => ({
+        ...operation,
+        mutationRead: operation.kind === 'read' ? true : operation.mutationRead,
+      }),
+    ),
   ];
 }
 
 function operationsForDelete(statement: DeleteStatement): ParsedOperation[] {
   return [
-    { kind: 'write', rowKey: rowKeyFromWhere(statement.where), table: tableName(statement.from) },
+    {
+      kind: 'write',
+      mutationRead: undefined,
+      rowKey: rowKeyFromWhere(statement.where),
+      table: tableName(statement.from),
+    },
   ];
 }
 
@@ -654,7 +674,9 @@ function operationsForFrom(
   return from.flatMap((item) => {
     if (item.type === 'table') {
       const table = tableName(item.name);
-      return cteAliases.has(table) ? [] : [{ kind: 'read', rowKey, table }];
+      return cteAliases.has(table)
+        ? []
+        : [{ kind: 'read', mutationRead: undefined, rowKey, table }];
     }
 
     if (item.type === 'statement') {
@@ -749,6 +771,46 @@ function assertObservedReadsCovered(
       operation.kind === 'read' &&
       operation.domain !== undefined &&
       !allowedReads.has(operation.domain),
+  );
+
+  if (uncovered.length > 0) {
+    const readDomains = uncovered.map((operation) => operation.domain).join(', ');
+    throw new Error(`FW407 Query read from undeclared domain: ${readDomains}`);
+  }
+}
+
+function assertMutationReadsCovered(
+  observed: readonly ObservedDbOperation[],
+  touchGraph: TouchGraph,
+): void {
+  const unmappedReads = observed.filter(
+    (operation) =>
+      operation.kind === 'read' &&
+      operation.mutationRead === true &&
+      operation.domain === undefined,
+  );
+
+  if (unmappedReads.length > 0) {
+    const tables = unmappedReads.map((operation) => operation.table).join(', ');
+    throw new Error(`FW407 Query read from undeclared domain: ${tables}`);
+  }
+
+  const allowedReads = new Set(
+    Object.values(touchGraph).flatMap((entry) => (entry.reads ?? []).map((read) => read.domain)),
+  );
+  const unresolvedWrites = Object.values(touchGraph).flatMap((entry) => entry.unresolved);
+  const unresolvedDomains = new Set(
+    unresolvedWrites.flatMap((site) => (site.domain ? [site.domain] : [])),
+  );
+  const hasUnscopedFw406 = unresolvedWrites.some((site) => site.domain === undefined);
+  const uncovered = observed.filter(
+    (operation) =>
+      operation.kind === 'read' &&
+      operation.mutationRead === true &&
+      operation.domain !== undefined &&
+      !allowedReads.has(operation.domain) &&
+      !hasUnscopedFw406 &&
+      !unresolvedDomains.has(operation.domain),
   );
 
   if (uncovered.length > 0) {

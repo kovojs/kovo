@@ -1011,6 +1011,22 @@ describe('@jiso/test harness', () => {
       db: createFakeDb(),
       touchGraph: {
         'product.import': {
+          reads: [
+            {
+              domain: 'product',
+              keys: null,
+              site: 'product.ts:2',
+              source: 'insert-select',
+              via: 'products',
+            },
+            {
+              domain: 'vendor',
+              keys: null,
+              site: 'product.ts:3',
+              source: 'insert-select',
+              via: 'vendors',
+            },
+          ],
           touches: [
             { domain: 'product', keys: null, site: 'product.ts:1', via: 'product_snapshots' },
           ],
@@ -1052,10 +1068,70 @@ describe('@jiso/test harness', () => {
     );
   });
 
+  it('fails mutation exec when insert-select reads are missing from the touch graph', async () => {
+    const productImport = mutation('product/import', {
+      input: s.object({ productId: s.string() }),
+      registry: {
+        touches: [domain('product')],
+      },
+      handler(_input, request: { db: FakeDb }) {
+        request.db.sql(
+          [
+            'insert into product_snapshots (product_id, name)',
+            'select products.id, products.name',
+            'from products',
+            'join vendors on vendors.id = products.vendor_id',
+          ].join(' '),
+        );
+        return 'ok';
+      },
+    });
+    const harness = createJisoTestHarness({
+      db: createFakeDb(),
+      touchGraph: {
+        'product.import': {
+          reads: [
+            {
+              domain: 'product',
+              keys: null,
+              site: 'product.ts:2',
+              source: 'insert-select',
+              via: 'products',
+            },
+          ],
+          touches: [
+            { domain: 'product', keys: null, site: 'product.ts:1', via: 'product_snapshots' },
+          ],
+          unresolved: [],
+        },
+      },
+      verification: {
+        domainByTable: {
+          product_snapshots: 'product',
+          products: 'product',
+          vendors: 'vendor',
+        },
+      },
+    });
+
+    await expect(harness.exec(productImport, { productId: 'p1' })).rejects.toThrow(
+      'FW407 Query read from undeclared domain: vendor',
+    );
+  });
+
   it('verifies update-from SQL as a target write plus source reads', () => {
     const verifier = createDbVerifier(
       {
         'product.syncPrice': {
+          reads: [
+            {
+              domain: 'price',
+              keys: null,
+              site: 'product.ts:2',
+              source: 'update-from',
+              via: 'prices',
+            },
+          ],
           touches: [{ domain: 'product', keys: null, site: 'product.ts:1', via: 'products' }],
           unresolved: [],
         },
