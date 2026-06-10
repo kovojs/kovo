@@ -26,11 +26,11 @@ export interface UnresolvedWriteSite {
 }
 
 export interface TouchGraphEntry {
-  touches: TouchSite[];
-  unresolved: UnresolvedWriteSite[];
+  touches: readonly TouchSite[];
+  unresolved: readonly UnresolvedWriteSite[];
 }
 
-export type TouchGraph = Record<string, TouchGraphEntry>;
+export type TouchGraph = Readonly<Record<string, TouchGraphEntry>>;
 
 export interface DomainRegistryInput {
   table: JisoTableAnnotation & { name: string };

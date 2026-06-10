@@ -127,5 +127,5 @@ export const commerceGraph = {
     },
   ],
   queries: [{ domains: ['cart'], query: 'cart' }],
-  touchGraph: commerceTouchGraph as unknown as FwExplainInput['touchGraph'],
+  touchGraph: commerceTouchGraph,
 } satisfies FwExplainInput;
