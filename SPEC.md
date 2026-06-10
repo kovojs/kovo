@@ -10,17 +10,17 @@
 
 Jiso is a web-platform-native framework for building multi-page applications that are **interactive at first paint, legible at every layer, and statically verifiable end-to-end.**
 
-It takes resumability from Qwik, server-driven UI from htmx/LiveView, tag-based invalidation from RTK Query, rebase-based optimism from Replicache, and document-first architecture from the platform itself — and composes them around one organizing constraint: *every artifact the system produces (compiled output, HTML, wire traffic, dependency graphs) must be readable by a human in devtools and checkable by a machine without executing a browser.*
+It takes resumability from Qwik, server-driven UI from htmx/LiveView, tag-based invalidation from RTK Query, rebase-based optimism from Replicache, and document-first architecture from the platform itself — and composes them around one organizing constraint: _every artifact the system produces (compiled output, HTML, wire traffic, dependency graphs) must be readable by a human in devtools and checkable by a machine without executing a browser._
 
 ### 1.1 Thesis statement
 
-> An application's complete behavior — every handler wiring, form field, mutation contract, data dependency, and optimistic prediction — should be provable by `tsc` plus static graph queries, and auditable by reading the page source and the Network panel.
+> An application's complete behavior — every handler wiring, form field, mutation contract, data dependency, and optimistic prediction — should be provable by TypeScript static checking plus static graph queries, and auditable by reading the page source and the Network panel.
 
 ### 1.2 Who it's for
 
 - **Teams building content-and-CRUD products** (commerce, SaaS dashboards, marketplaces, internal tools) — the structural majority of the web — who want SPA-feeling UX without owning a client-state architecture.
-- **AI app builders and code-generation systems.** Jiso is designed to be the most machine-auditable compilation target an agent can emit: generated apps fail `tsc` if wiring is wrong, and intent can be verified against printed dependency graphs without headless browsers.
-- **Anyone debugging at 11pm.** The framework's promise: debugging always proceeds *down* into plainer code, never *up* into compiler internals.
+- **AI app builders and code-generation systems.** Jiso is designed to be the most machine-auditable compilation target an agent can emit: generated apps fail TypeScript static checking if wiring is wrong, and intent can be verified against printed dependency graphs without headless browsers.
+- **Anyone debugging at 11pm.** The framework's promise: debugging always proceeds _down_ into plainer code, never _up_ into compiler internals.
 
 ### 1.3 Explicit non-goals
 
@@ -35,13 +35,13 @@ It takes resumability from Qwik, server-driven UI from htmx/LiveView, tag-based 
 
 Every feature proposal is evaluated against five tests. A feature failing any test is redesigned or rejected. These are normative.
 
-| # | Test | Consequence |
-|---|------|-------------|
-| 1 | **Legibility is load-bearing.** Names appear in HTML attributes and wire traffic, so they structurally cannot be mangled. | Minifiers cannot rename handler exports; debugging never requires decompiling the framework. |
-| 2 | **No global knowledge at local sites.** Any API requiring the author to enumerate distant call sites from memory is a bug factory and is rejected. | Killed manual fragment targets, manual per-island optimism, query-side mutation registration. |
-| 3 | **Sugar must lower to authorable IR.** Every compiler feature emits valid Jiso source. Compiling the output is a no-op (CI-enforced fixpoint). | Any component can be ejected. Source maps are a nicety, not life support. |
-| 4 | **The wire is the documentation.** Named POSTs, schema-shaped JSON, readable HTML fragments. | An app's behavior surface is auditable from the Network panel or `tcpdump`. |
-| 5 | **Server truth always wins.** No client cache to invalidate; reconciliation is "morph the authority in." | Optimistic predictions are throwaway sketches; there is no consistency protocol. |
+| #   | Test                                                                                                                                               | Consequence                                                                                   |
+| --- | -------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------- |
+| 1   | **Legibility is load-bearing.** Names appear in HTML attributes and wire traffic, so they structurally cannot be mangled.                          | Minifiers cannot rename handler exports; debugging never requires decompiling the framework.  |
+| 2   | **No global knowledge at local sites.** Any API requiring the author to enumerate distant call sites from memory is a bug factory and is rejected. | Killed manual fragment targets, manual per-island optimism, query-side mutation registration. |
+| 3   | **Sugar must lower to authorable IR.** Every compiler feature emits valid Jiso source. Compiling the output is a no-op (CI-enforced fixpoint).     | Any component can be ejected. Source maps are a nicety, not life support.                     |
+| 4   | **The wire is the documentation.** Named POSTs, schema-shaped JSON, readable HTML fragments.                                                       | An app's behavior surface is auditable from the Network panel or `tcpdump`.                   |
+| 5   | **Server truth always wins.** No client cache to invalidate; reconciliation is "morph the authority in."                                           | Optimistic predictions are throwaway sketches; there is no consistency protocol.              |
 
 ---
 
@@ -75,14 +75,14 @@ Every feature proposal is evaluated against five tests. A feature failing any te
 
 ### 3.1 Inherited from prior art
 
-| Kept from | What |
-|-----------|------|
-| Qwik | Resumability, global event delegation, attribute-encoded handler refs, serialized state, execute-nothing-until-interaction |
-| htmx / LiveView | Server-rendered fragments as the mutation response; HTML over the wire |
-| RTK Query / Next tags | Keyed invalidation intersected with declared dependencies |
-| Replicache / Zero | Snapshot → predict → rebase log → authoritative reconcile |
-| Rails (touch/Russian-doll) | Writes through the data layer drive derived-view freshness |
-| Convex / Noria | The asymptote: inferred read/write sets — reached statically via Drizzle ASTs instead of at runtime |
+| Kept from                  | What                                                                                                                       |
+| -------------------------- | -------------------------------------------------------------------------------------------------------------------------- |
+| Qwik                       | Resumability, global event delegation, attribute-encoded handler refs, serialized state, execute-nothing-until-interaction |
+| htmx / LiveView            | Server-rendered fragments as the mutation response; HTML over the wire                                                     |
+| RTK Query / Next tags      | Keyed invalidation intersected with declared dependencies                                                                  |
+| Replicache / Zero          | Snapshot → predict → rebase log → authoritative reconcile                                                                  |
+| Rails (touch/Russian-doll) | Writes through the data layer drive derived-view freshness                                                                 |
+| Convex / Noria             | The asymptote: inferred read/write sets — reached statically via Drizzle ASTs instead of at runtime                        |
 
 ### 3.2 Rejected from prior art
 
@@ -100,13 +100,14 @@ import { component } from '@jiso/core';
 import { cartQuery } from './cart.queries.js';
 
 export const CartBadge = component('cart-badge', {
-  fragmentTarget: true,             // registers in FragmentTargets registry
-  queries: { cart: cartQuery },     // typed data dependencies
-  state: () => ({ bouncing: false }),  // LOCAL state: UI-only facts, JsonValue-constrained
+  fragmentTarget: true, // registers in FragmentTargets registry
+  queries: { cart: cartQuery }, // typed data dependencies
+  state: () => ({ bouncing: false }), // LOCAL state: UI-only facts, JsonValue-constrained
 
   render: ({ cart }, state) => (
     <button
-      commandfor="cart-drawer" command="show-modal"   // L0: platform behavior, zero JS
+      commandfor="cart-drawer"
+      command="show-modal" // L0: platform behavior, zero JS
       class={state.bouncing ? 'bounce' : ''}
     >
       🛒 <span data-bind="cart.count">{cart.count}</span>
@@ -132,7 +133,7 @@ export const CartBadge = component('cart-badge', {
 
 <!-- Query data ships ONCE per page, as shared client data -->
 <script type="application/json" fw-query="cart">
-  {"count": 2, "items": [{"productId": "p1", "qty": 2, "unitPrice": 1499}]}
+  { "count": 2, "items": [{ "productId": "p1", "qty": 2, "unitPrice": 1499 }] }
 </script>
 ```
 
@@ -167,7 +168,7 @@ export const Cart$removeItem = handler<CartState, { itemId: string }>((e, ctx) =
      strategy, never load-bearing. -->
 ```
 
-**Capture channels (exhaustive):** component/query state (via `ctx`), element params (`data-p-*`, typed), module scope (shared, not captured). Anything else is compile error `FW201`, whose message shows what the closure *would have* compiled to and the three fixes.
+**Capture channels (exhaustive):** component/query state (via `ctx`), element params (`data-p-*`, typed), module scope (shared, not captured). Anything else is compile error `FW201`, whose message shows what the closure _would have_ compiled to and the three fixes.
 
 ### 4.4 The loader
 
@@ -213,32 +214,44 @@ fw explain page /products/:id    # emitted modulepreloads, per-route prefetch co
 
 ## 6. Type System
 
-One pattern, applied everywhere: **declare facts once → derive every surface → validate residual strings against generated registries.** The only codegen is trivial registry `.d.ts` files; all checking is `tsc --noEmit` over code that runs as written.
+One pattern, applied everywhere: **declare facts once → derive every surface → validate residual strings against generated registries.** The only codegen is trivial registry `.d.ts` files; all wiring checks are TypeScript static checks over code that runs as written.
 
 ### 6.1 The registries (generated)
 
 ```ts
 // generated/registries.d.ts (excerpt)
-interface HandlerModules   { '#cart': typeof import('../components/cart/cart.client.js'); /* … */ }
+interface HandlerModules {
+  '#cart': typeof import('../components/cart/cart.client.js'); /* … */
+}
 // '#cart' is a compile-time alias only — emission resolves it to a full URL (§4.3)
-interface FragmentTargets  { 'cart-badge': CartBadgeProps; 'cart-drawer': CartDrawerProps; }
-interface QueryRegistry    { 'cart': typeof cartQuery; 'product': typeof productQuery; }
-interface DomainKey        { /* 'cart' | 'product' | 'order' — from schema annotations */ }
-interface MutationRegistry { 'cart/add': typeof addToCart; }
+interface FragmentTargets {
+  'cart-badge': CartBadgeProps;
+  'cart-drawer': CartDrawerProps;
+}
+interface QueryRegistry {
+  cart: typeof cartQuery;
+  product: typeof productQuery;
+}
+interface DomainKey {
+  /* 'cart' | 'product' | 'order' — from schema annotations */
+}
+interface MutationRegistry {
+  'cart/add': typeof addToCart;
+}
 ```
 
 ### 6.2 Typed surfaces (summary table)
 
-| Surface | Source of truth | What `tsc` proves |
-|---|---|---|
-| Handler refs | client module exports | `cart.remove` exists; params required & typed; typo = error |
-| Form fields | mutation input schema | names ∈ schema; types match; **completeness** (missing required field = error); coercion declared once |
-| Fragment targets | component registry | target exists; patched with the right component's props |
-| Query data / bindings | Drizzle select shape (`$infer`) | `data-bind` paths exist; column rename propagates to every template |
-| Invalidations | domain layer / touch graph | invalidated keys exist; optimistic exhaustiveness (§10.6) |
-| Errors | declared error codes | `onError` receives exhaustive discriminated union |
-| Guards | guard combinators | `req.session.user` non-null under `authed`; static audit of unguarded mutations |
-| State | `JsonValue` constraint | serializability by construction |
+| Surface               | Source of truth                 | What TypeScript proves                                                                                 |
+| --------------------- | ------------------------------- | ------------------------------------------------------------------------------------------------------ |
+| Handler refs          | client module exports           | `cart.remove` exists; params required & typed; typo = error                                            |
+| Form fields           | mutation input schema           | names ∈ schema; types match; **completeness** (missing required field = error); coercion declared once |
+| Fragment targets      | component registry              | target exists; patched with the right component's props                                                |
+| Query data / bindings | Drizzle select shape (`$infer`) | `data-bind` paths exist; column rename propagates to every template                                    |
+| Invalidations         | domain layer / touch graph      | invalidated keys exist; optimistic exhaustiveness (§10.6)                                              |
+| Errors                | declared error codes            | `onError` receives exhaustive discriminated union                                                      |
+| Guards                | guard combinators               | `req.session.user` non-null under `authed`; static audit of unguarded mutations                        |
+| State                 | `JsonValue` constraint          | serializability by construction                                                                        |
 
 ### 6.3 Example: end-to-end mutation typing
 
@@ -251,7 +264,7 @@ export const addToCart = mutation('cart/add', {
   guard: authed,
   input: s.object({
     productId: s.string(),
-    quantity:  s.number().int().min(1).default(1),   // FormData coercion declared here
+    quantity: s.number().int().min(1).default(1), // FormData coercion declared here
   }),
   errors: {
     OUT_OF_STOCK: s.object({ availableQuantity: s.number() }),
@@ -267,13 +280,15 @@ export const addToCart = mutation('cart/add', {
 
 ```tsx
 // product.tsx — the consuming form
-const f = form('cart/add');          // key validated against MutationRegistry; input type inferred
+const f = form('cart/add'); // key validated against MutationRegistry; input type inferred
 
-<f.Form>                             {/* ✗ compile error if a required field is missing */}
+<f.Form>
+  {' '}
+  {/* ✗ compile error if a required field is missing */}
   <f.hidden name="productId" value={props.productId} />
-  <f.input  name="quantity" type="number" min={1} />
+  <f.input name="quantity" type="number" min={1} />
   <button>Add to cart</button>
-</f.Form>
+</f.Form>;
 // Emits: <form method="post" action="/_m/cart/add" enhance> … — the no-JS fallback IS the output
 ```
 
@@ -293,15 +308,15 @@ ctx.submit(addToCart, {
 
 ## 7. The Interaction Ladder
 
-Interactions must use the lowest layer that suffices. The compiler enforces L0 substitutions; lints nudge the rest. Navigation between *places* is always a real navigation (§8); the ladder governs interaction *within* a place.
+Interactions must use the lowest layer that suffices. The compiler enforces L0 substitutions; lints nudge the rest. Navigation between _places_ is always a real navigation (§8); the ladder governs interaction _within_ a place.
 
-| Layer | Mechanism | Example | JS shipped |
-|---|---|---|---|
-| **L0** | Platform behaviors: invoker commands, Popover API, `<details>`, `<dialog>`, `:has()`, scroll-driven animations | Open cart drawer | 0 |
-| **L1** | Pure client islands: local state + bindings | Price-range filter UI, tabs, carousel | handler module on first touch |
-| **L2** | Mutations: real forms + enhanced fetch → fragment/query patch | Add to cart | loader (already present) + form module |
-| **L3** | Optimistic: declared transforms over query values (compiler-derived in v2) | Instant badge tick | transform module |
-| **L4 (v2)** | Live: SSE pushing the same fragment/query vocabulary — v1 covers the common cases with BroadcastChannel tab sync + refetch-on-focus (§9.3) | Order status, presence | `<fw-live>` subscriber (v2) |
+| Layer       | Mechanism                                                                                                                                  | Example                               | JS shipped                             |
+| ----------- | ------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------- | -------------------------------------- |
+| **L0**      | Platform behaviors: invoker commands, Popover API, `<details>`, `<dialog>`, `:has()`, scroll-driven animations                             | Open cart drawer                      | 0                                      |
+| **L1**      | Pure client islands: local state + bindings                                                                                                | Price-range filter UI, tabs, carousel | handler module on first touch          |
+| **L2**      | Mutations: real forms + enhanced fetch → fragment/query patch                                                                              | Add to cart                           | loader (already present) + form module |
+| **L3**      | Optimistic: declared transforms over query values (compiler-derived in v2)                                                                 | Instant badge tick                    | transform module                       |
+| **L4 (v2)** | Live: SSE pushing the same fragment/query vocabulary — v1 covers the common cases with BroadcastChannel tab sync + refetch-on-focus (§9.3) | Order status, presence                | `<fw-live>` subscriber (v2)            |
 
 **Cross-island coordination**, in order of preference: (1) **the URL** — filter writes `?max=500`, or is a GET form whose fragment response is the grid; (2) **typed fire-and-forget events** — registry-checked `emit('cart:added', {…})`, payload types may not overlap query data (lint `FW320`: if you're sending server facts over an event, you wanted an optimistic transform); (3) **shared client state** — last resort, lint-gated with required justification comment.
 
@@ -347,7 +362,7 @@ Content-Type: text/html; charset=utf-8
 
 - `FW-Targets` is read off the live DOM (`fw-deps` stamps), so islands patched in after page load participate. The server holds **no session of what's on screen** — it answers a stateless question.
 - `<fw-query>` replaces the client's query value and runs that query's compiled update plan — bindings, named derives, stamps — across every dependent island. No runtime dependency tracking: the plan is known at compile time and emitted with the page.
-- `<fw-fragment>` is **DOM-morphed** (idiomorph-class algorithm): focus, scroll, selection, CSS transitions, and nested island state survive. Patched-in islands are inert-until-touched like everything else — *a fragment update is a tiny navigation, not a different programming model.*
+- `<fw-fragment>` is **DOM-morphed** (idiomorph-class algorithm): focus, scroll, selection, CSS transitions, and nested island state survive. Patched-in islands are inert-until-touched like everything else — _a fragment update is a tiny navigation, not a different programming model._
 - **Without JS:** the same endpoint sees no `FW-Fragment` header and answers POST-redirect-GET with errors re-rendered into the full page. One handler, two response modes.
 
 ### 9.2 Errors
@@ -371,12 +386,22 @@ Validation failures (schema, with field paths) and declared error codes return a
 
 ```ts
 // schema.ts
-export const carts     = pgTable('carts', { id: text('id').primaryKey(), /*…*/ });
-export const cartItems = pgTable('cart_items', { /*…*/ }, jiso({ domain: 'cart' }));
-export const products  = pgTable('products', {
-  id: text('id').primaryKey(),
-  stock: integer('stock').notNull(),
-}, jiso({ domain: 'product', key: (t) => t.id }));      // row-level invalidation key
+export const carts = pgTable('carts', { id: text('id').primaryKey() /*…*/ });
+export const cartItems = pgTable(
+  'cart_items',
+  {
+    /*…*/
+  },
+  jiso({ domain: 'cart' }),
+);
+export const products = pgTable(
+  'products',
+  {
+    id: text('id').primaryKey(),
+    stock: integer('stock').notNull(),
+  },
+  jiso({ domain: 'product', key: (t) => t.id }),
+); // row-level invalidation key
 ```
 
 Tables default to a same-named domain; annotations group tables into logical domains and declare key granularity. The reverse index (table → domain), the `DomainKey` type, and key extractors are all generated from this single file.
@@ -386,19 +411,22 @@ Tables default to a same-named domain; annotations group tables into logical dom
 ```ts
 // cart.queries.ts
 export const cartQuery = query('cart', (db, req) =>
-  db.select({
+  db
+    .select({
       count: count(cartItems.id),
       items: jsonAgg(cartItems),
     })
     .from(carts)
     .leftJoin(cartItems, eq(cartItems.cartId, carts.id))
-    .leftJoin(products,  eq(products.id, cartItems.productId))
-    .where(eq(carts.id, req.session.cartId)));
+    .leftJoin(products, eq(products.id, cartItems.productId))
+    .where(eq(carts.id, req.session.cartId)),
+);
 ```
 
 Derived from this one expression, statically:
-- **Read set** `{cart, product}` — the JOIN *is* the declaration (forgetting a joined entity's dependency, RTK Query's endemic bug, is unrepresentable).
-- **Result type** from the select shape — drives the client JSON, `data-bind` paths, derive inputs, and optimistic transform parameters. A column rename in `schema.ts` propagates through `tsc` to every template.
+
+- **Read set** `{cart, product}` — the JOIN _is_ the declaration (forgetting a joined entity's dependency, RTK Query's endemic bug, is unrepresentable).
+- **Result type** from the select shape — drives the client JSON, `data-bind` paths, derive inputs, and optimistic transform parameters. A column rename in `schema.ts` propagates through TypeScript static checking to every template.
 - **Instance key** from the WHERE eq-predicate — `cart:{cartId}`; scopes row-level invalidation (and, in v2, live pushes) to holders of that key.
 
 ### 10.3 Mutations & writes
@@ -421,7 +449,7 @@ export const cart = domain({
 });
 ```
 
-**No `touches` on `addItem`, no `invalidate()` in handlers.** The static pass (§11) extracts `{cart_items→cart, products→product}` from the AST; calling `cart.addItem` *is* the invalidation declaration. `invalidate()` survives only as a linted escape hatch for external-system effects (e.g., a Stripe webhook changing data Jiso should refresh).
+**No `touches` on `addItem`, no `invalidate()` in handlers.** The static pass (§11) extracts `{cart_items→cart, products→product}` from the AST; calling `cart.addItem` _is_ the invalidation declaration. `invalidate()` survives only as a linted escape hatch for external-system effects (e.g., a Stripe webhook changing data Jiso should refresh).
 
 **Request lifecycle (normative):**
 
@@ -437,7 +465,7 @@ This ordering closes the read-your-writes hazard: responses can never render pre
 **Guards:**
 
 ```ts
-export const adminRefund = mutation('admin/refund', { guard: role('admin'), /*…*/ });
+export const adminRefund = mutation('admin/refund', { guard: role('admin') /*…*/ });
 // composable: guard: all(authed, rateLimit({ per: 'session', max: 10 }))
 // static audit: `fw explain --unguarded` lists every mutation reachable without `authed`
 ```
@@ -454,12 +482,12 @@ Optimism is keyed to **queries** (the data), never islands. One transform per (m
 // generated/optimistic/cart.add.ts (v2) — DO NOT EDIT (override in cart.mutations.ts)
 export const derived = {
   [cartQuery.key]: (cart, $input) => {
-    const r = cart.items.find(i => i.productId === $input.productId);
+    const r = cart.items.find((i) => i.productId === $input.productId);
     if (!r) cart.count += 1;
-    if (r)  r.qty += $input.quantity;
-    else    cart.items.push({ productId: $input.productId, qty: $input.quantity, pending: true });
+    if (r) r.qty += $input.quantity;
+    else cart.items.push({ productId: $input.productId, qty: $input.quantity, pending: true });
   },
-  [productQuery.key($i => ({ id: $i.productId }))]: (p, $input) => {
+  [productQuery.key(($i) => ({ id: $i.productId }))]: (p, $input) => {
     p.stock -= $input.quantity;
   },
 } satisfies OptimisticFor<typeof addToCart>;
@@ -553,8 +581,8 @@ Output is **committed and reviewable** — invalidation-graph changes appear as 
 export const touchGraph = {
   'cart.addItem': {
     touches: [
-      { domain: 'cart',    via: 'cart_items', site: 'cart.domain.ts:8',  keys: null },
-      { domain: 'product', via: 'products',   site: 'cart.domain.ts:12', keys: 'arg:productId' },
+      { domain: 'cart', via: 'cart_items', site: 'cart.domain.ts:8', keys: null },
+      { domain: 'product', via: 'products', site: 'cart.domain.ts:12', keys: 'arg:productId' },
     ],
     unresolved: [],
   },
@@ -567,28 +595,28 @@ Dev server and the test harness wrap `db`; every executed statement is parsed (`
 
 ### 11.3 Diagnostic codes (registry)
 
-| Code | Severity | Meaning |
-|---|---|---|
-| FW201 | error | Closure captures unserializable value (shows lowering + fixes) |
-| FW210 | lint | Anonymous handler — name it for stable identity |
-| FW301 | lint | Server fact in island-local state |
-| FW310 | warn | Invalidated query lacks optimistic transform (write/defer; v2 adds derive) |
-| FW320 | lint | Event payload overlaps query data — use a transform |
-| FW330 | lint | Direct db access in a mutation handler — route through domain |
-| FW402 | error | Write touched an undeclared domain (silent stale UI) |
-| FW403 | warn | Declared domain never observed written (stale claim / untested branch) |
-| FW404 | error | Write to unmapped table (map it or mark `exempt`, e.g. append-only logs) |
-| FW405 | warn | Conditional writes on branches never executed under instrumentation |
+| Code  | Severity   | Meaning                                                                           |
+| ----- | ---------- | --------------------------------------------------------------------------------- |
+| FW201 | error      | Closure captures unserializable value (shows lowering + fixes)                    |
+| FW210 | lint       | Anonymous handler — name it for stable identity                                   |
+| FW301 | lint       | Server fact in island-local state                                                 |
+| FW310 | warn       | Invalidated query lacks optimistic transform (write/defer; v2 adds derive)        |
+| FW320 | lint       | Event payload overlaps query data — use a transform                               |
+| FW330 | lint       | Direct db access in a mutation handler — route through domain                     |
+| FW402 | error      | Write touched an undeclared domain (silent stale UI)                              |
+| FW403 | warn       | Declared domain never observed written (stale claim / untested branch)            |
+| FW404 | error      | Write to unmapped table (map it or mark `exempt`, e.g. append-only logs)          |
+| FW405 | warn       | Conditional writes on branches never executed under instrumentation               |
 | FW406 | warn/error | Statically un-analyzable write site — manual `touches` required, runtime-verified |
-| FW407 | error | Query read from undeclared domain (missed invalidations) |
-| FW408 | error | Declared row key ≠ observed row predicate |
-| FW409 | notice | Non-eq predicate — degraded to table-level invalidation |
+| FW407 | error      | Query read from undeclared domain (missed invalidations)                          |
+| FW408 | error      | Declared row key ≠ observed row predicate                                         |
+| FW409 | notice     | Non-eq predicate — degraded to table-level invalidation                           |
 
 ### 11.4 The verification surface (the Keppo contract)
 
 For a Jiso app, the following are checkable **without executing a browser**:
 
-1. `tsc --noEmit` — all wiring (handlers, forms, targets, bindings, transforms, guards).
+1. TypeScript static checking — all wiring (handlers, forms, targets, bindings, transforms, guards).
 2. `fw check` — touch-graph consistency, optimistic exhaustiveness, fixpoint invariant, unguarded-mutation audit.
 3. Graph queries over `fw explain` output — intent-level assertions ("every component displaying cart data is refreshed by cart/add") as set operations over printed, stable-format graphs.
 4. Property suite — prediction ⊆ eventual-truth generative tests over hand-written transforms; v2 adds derivation soundness (commuting diagrams).
@@ -622,7 +650,7 @@ jisoTest('cart mutations', async ({ exec, page, db }) => {
 
 // transform soundness: prediction ⊆ eventual truth over generated states
 // (v2: generated alongside derived transforms as the commuting-diagram suite)
-propertyTest(addToCart, cartQuery);   // patch∘shape ≡ shape∘apply over generated states
+propertyTest(addToCart, cartQuery); // patch∘shape ≡ shape∘apply over generated states
 ```
 
 Handlers unit-test as `(event, ctx)` functions; transforms as pure `(data, input)`; the wire as HTTP.
@@ -649,13 +677,13 @@ These ship with v1 only if resolved; otherwise they are explicitly punted with d
 
 Jiso-core defines a **capability interface** — `(writes → touch sets, queries → read sets + result types + instance keys)` — not a portability promise. Adapters implement what they can; the floor is universal.
 
-| Stage | Ships | Mechanism |
-|---|---|---|
-| **v1** | Core model: domain layer with declared `touches` (#3) + flat tags as low-ceremony on-ramp (#2) + `invalidate()` escape hatch (#1, linted) | Works with ANY data access |
-| **v1 (blessed)** | `@jiso/drizzle`: touches **inferred** from ASTs, schema-as-registry, query shapes/keys derived; optimism hand-written against the transform IR (§10.4) | Postgres/MySQL/SQLite via Drizzle |
-| **v1.5** | Verification layer: runtime instrumentation as CI honesty check (FW402–409); unified typed change record `{domain, keys, input}` feeding optimism now and the v2 live bus later (CQRS's payload without its architecture) | pglite harness |
-| **v2** | **Derived optimism**: compiler-generated transforms via the §10.5 algebra, property-tested soundness, named punts; supersedes hand-written transforms pair by pair. **Live queries (L4)**: `<fw-live>` over SSE, guard-recheck-per-push, in-process/Redis bus — the design's first stateful infrastructure, deferred until something needs it. CDC adapter (Postgres logical replication / Supabase Realtime) as live-query transport + the answer to out-of-band writes (cron, admin tools, other services) | Derivation over the pinned Drizzle subset; live/CDC opt-in, per `live: true` query |
-| **v3** | Full runtime read/write tracking (Convex-style precision) **only if** a managed data product exists; never the default — it trades static printability away | Conditional |
+| Stage            | Ships                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        | Mechanism                                                                          |
+| ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------- |
+| **v1**           | Core model: domain layer with declared `touches` (#3) + flat tags as low-ceremony on-ramp (#2) + `invalidate()` escape hatch (#1, linted)                                                                                                                                                                                                                                                                                                                                                                    | Works with ANY data access                                                         |
+| **v1 (blessed)** | `@jiso/drizzle`: touches **inferred** from ASTs, schema-as-registry, query shapes/keys derived; optimism hand-written against the transform IR (§10.4)                                                                                                                                                                                                                                                                                                                                                       | Postgres-first via Drizzle; MySQL/SQLite conformance deferred to late hardening    |
+| **v1.5**         | Verification layer: runtime instrumentation as CI honesty check (FW402–409); unified typed change record `{domain, keys, input}` feeding optimism now and the v2 live bus later (CQRS's payload without its architecture)                                                                                                                                                                                                                                                                                    | pglite harness                                                                     |
+| **v2**           | **Derived optimism**: compiler-generated transforms via the §10.5 algebra, property-tested soundness, named punts; supersedes hand-written transforms pair by pair. **Live queries (L4)**: `<fw-live>` over SSE, guard-recheck-per-push, in-process/Redis bus — the design's first stateful infrastructure, deferred until something needs it. CDC adapter (Postgres logical replication / Supabase Realtime) as live-query transport + the answer to out-of-band writes (cron, admin tools, other services) | Derivation over the pinned Drizzle subset; live/CDC opt-in, per `live: true` query |
+| **v3**           | Full runtime read/write tracking (Convex-style precision) **only if** a managed data product exists; never the default — it trades static printability away                                                                                                                                                                                                                                                                                                                                                  | Conditional                                                                        |
 
 **Drizzle coupling, managed:** the extraction pass targets a pinned, conformance-tested subset of Drizzle's surface (tables as first-argument identifiers); the suite fails loudly on API drift. Raw SQL is a marked second-class citizen (FW406 annotation + runtime verification, excluded from derived optimism) — acceptable if the seam is visible, and it is.
 
@@ -663,18 +691,18 @@ Jiso-core defines a **capability interface** — `(writes → touch sets, querie
 
 ## 15. Risks & Honest Costs
 
-| Risk | Mitigation / Position |
-|---|---|
-| Chromium-led enhancements (speculation rules, invokers) | Graceful degradation is structural; baseline is a working website |
-| Cold-cache first-interaction latency | `modulepreload` from rendered attributes, 103 Early Hints, HTTP/3; measure, don't hide |
-| Drizzle API drift breaks inference | Pinned conformance suite; declared-`touches` floor always works |
-| Over-invalidation storms (coarse domains) | Row-level keys via schema annotations; FW403 surfaces excess |
-| `derive`/shared-client-state creep toward SPA heap | Lints with required justifications; isomorphic opt-in as the sanctioned escape |
-| Derived-optimism wrong predictions (v2) | All-or-nothing derivation; property-tested soundness; punts are loud; deferred to v2 so v1 ships the proven hand-written path first |
-| Two-file IR + explicit data channels feel austere vs. React | Single-file sugar + editor tooling (cheap because everything is static); day-100 > day-1 |
-| Query-binding layer moves some rendering clientward | Bounded: paths/stamps/named derives only — a compiled update plan, no runtime signal graph; complex rendering flips to fragments/isomorphic |
-| Live bus introduces stateful infra | Deferred to v2 wholesale — the v1 server is stateless; BroadcastChannel + refetch-on-focus cover the interim (§9.3) |
-| Prerender discards cost server renders | Off by default; per-route opt-in where renders are idempotent, plus response caching |
+| Risk                                                        | Mitigation / Position                                                                                                                       |
+| ----------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
+| Chromium-led enhancements (speculation rules, invokers)     | Graceful degradation is structural; baseline is a working website                                                                           |
+| Cold-cache first-interaction latency                        | `modulepreload` from rendered attributes, 103 Early Hints, HTTP/3; measure, don't hide                                                      |
+| Drizzle API drift breaks inference                          | Pinned conformance suite; declared-`touches` floor always works                                                                             |
+| Over-invalidation storms (coarse domains)                   | Row-level keys via schema annotations; FW403 surfaces excess                                                                                |
+| `derive`/shared-client-state creep toward SPA heap          | Lints with required justifications; isomorphic opt-in as the sanctioned escape                                                              |
+| Derived-optimism wrong predictions (v2)                     | All-or-nothing derivation; property-tested soundness; punts are loud; deferred to v2 so v1 ships the proven hand-written path first         |
+| Two-file IR + explicit data channels feel austere vs. React | Single-file sugar + editor tooling (cheap because everything is static); day-100 > day-1                                                    |
+| Query-binding layer moves some rendering clientward         | Bounded: paths/stamps/named derives only — a compiled update plan, no runtime signal graph; complex rendering flips to fragments/isomorphic |
+| Live bus introduces stateful infra                          | Deferred to v2 wholesale — the v1 server is stateless; BroadcastChannel + refetch-on-focus cover the interim (§9.3)                         |
+| Prerender discards cost server renders                      | Off by default; per-route opt-in where renders are idempotent, plus response caching                                                        |
 
 ---
 
@@ -682,7 +710,7 @@ Jiso-core defines a **capability interface** — `(writes → touch sets, querie
 
 1. **Perf:** TTI ≡ FCP on first load (no hydration gap); prerendered navigations render in <50ms perceived on routes that opt in; zero session-length memory growth across 100 navigations.
 2. **Legibility:** a developer who has never seen the codebase can identify what any button does, what data any island holds, and what any mutation changed — from devtools alone — in under a minute. (Run this as an actual usability study.)
-3. **Verifiability:** the demo app's full behavior surface passes `tsc` + `fw check` + graph assertions with **no app-level browser tests** — browser testing lives in the framework-owned L0 and morph-survival suites; an agent given only `fw explain` output answers "what updates when X is clicked" with 100% accuracy.
+3. **Verifiability:** the demo app's full behavior surface passes TypeScript static checking + `fw check` + graph assertions with **no app-level browser tests** — browser testing lives in the framework-owned L0 and morph-survival suites; an agent given only `fw explain` output answers "what updates when X is clicked" with 100% accuracy.
 4. **Constitution holds:** fixpoint CI green; no feature shipped without an authorable lowering; `grep -r "invalidate(" app/` returns only documented escape-hatch sites.
 5. **Coverage:** every (mutation × query) pair in the reference commerce app has an explicit optimistic status — hand-written transform or declared `'await-fragment'` — with zero unhandled FW310s. (The v2 target: derivation handles ≥70% of pairs, every punt naming its reason.)
 

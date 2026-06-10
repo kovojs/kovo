@@ -1,0 +1,11 @@
+{
+  "name": "@jiso/server",
+  "version": "0.0.0",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@jiso/core": "workspace:*"
+  }
+}

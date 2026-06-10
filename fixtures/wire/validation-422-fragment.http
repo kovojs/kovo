@@ -1,0 +1,17 @@
+### Validation failure returns a 422 fragment for enhanced forms
+
+>>> REQUEST
+POST /_m/cart/add HTTP/1.1
+Accept: text/vnd.jiso.fragment+html
+Content-Type: application/x-www-form-urlencoded
+FW-Idem: idem_01HY
+FW-Targets: product-form:p1
+
+productId=p1&quantity=99
+
+<<< RESPONSE
+HTTP/1.1 422 Unprocessable Content
+Content-Type: text/vnd.jiso.fragment+html; charset=utf-8
+FW-Idem: idem_01HY
+
+<fw-fragment target="product-form:p1"><form fw-c="product-form" aria-invalid="true"><output role="alert" data-error-code="OUT_OF_STOCK">Only 5 left.</output><input name="productId" value="p1"><input name="quantity" value="99"></form></fw-fragment>

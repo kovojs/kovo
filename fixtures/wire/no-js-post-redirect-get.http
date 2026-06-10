@@ -1,0 +1,24 @@
+### No-JS POST-redirect-GET uses the same mutation handler
+
+>>> REQUEST
+POST /cart/add HTTP/1.1
+Accept: text/html
+Content-Type: application/x-www-form-urlencoded
+
+productId=p1&quantity=1
+
+<<< RESPONSE
+HTTP/1.1 303 See Other
+Location: /cart
+Cache-Control: no-store
+
+>>> REQUEST
+GET /cart HTTP/1.1
+Accept: text/html
+
+<<< RESPONSE
+HTTP/1.1 200 OK
+Content-Type: text/html; charset=utf-8
+
+<!doctype html>
+<html><body><script type="application/json" fw-query="cart">{"count":1,"items":[{"productId":"p1","qty":1,"unitPrice":1499}]}</script><cart-badge fw-deps="cart"><span data-bind="cart.count">1</span></cart-badge></body></html>

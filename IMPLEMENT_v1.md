@@ -6,19 +6,19 @@
 
 ## Decisions adopted by this plan
 
-| Decision | Choice | Rationale |
-|---|---|---|
-| Derived optimism (§10.5) | **Out — v2.** v1 ships hand-written transforms over the same IR | Per spec phasing; v1 must keep the transform IR derivation-compatible |
-| Verification layer (§11.2, FW402–409) | **In** (the spec's v1.5) | The test harness needs the db wrapper anyway; verification is core to the pitch |
-| §13 design areas | 13.1 CSS, 13.2 lists, 13.3 streaming, 13.5 adopt-don't-invent all **in**; 13.4 stays a non-goal | 13.1 explicitly blocks v1 freeze |
-| Toolchain | **Vite+ (`vite-plus`) + Node server** | `vp` is the single project entrypoint for dev/build/test/check; it gives us Vite, Vitest, Oxlint, Oxfmt, Rolldown, tsdown, Vite Task, and the TypeScript Go toolchain in one place; see Spike S1 for the known tension |
-| Shadow DOM | **Dropped entirely.** All rendering is light DOM; CSS scoped by the compiler via `@scope` | Shadow boundaries break IDREF wiring, form participation, and ARIA — fatal to L0 and the no-JS contract (SPEC §3.2); §13.1 shrinks substantially |
-| Custom elements | **Dropped — nothing is ever registered.** Identity = `fw-c` stamp; dashed tags are inert sugar; native hosts (`<tr fw-c="…">`) allowed | Resumability comes from delegation + `import()`, not `customElements.define`; kills upgrade/FACE machinery and the `<table>`-nesting papercut |
-| Client reactivity | **No TC39 Signals, no runtime signal graph.** Compiler emits a per-query update plan (bindings → derives → stamps); Signals interop is a v2 adapter | The client dependency graph is compile-time-known; polyfill bytes don't belong in the always-loaded path, and the proposal hasn't shipped |
-| Import maps | **Demoted to optional deployment detail.** `on:*` refs carry full URLs + `#export`; cache-busting via query strings/ETags | Removes the blocking importmap script and the not-yet-mapped-spec problem for streamed/patched islands; typed `'#cart'` aliases survive at compile time |
-| Live/SSE (L4) | **Cut from v1 → v2.** v1 liveness = BroadcastChannel tab sync + refetch-on-focus; the server is fully stateless | The only stateful infra in the design served features CRUD apps defer for years; the wire vocabulary is transport-agnostic, so SSE is additive later |
-| Speculation Rules | **Opt-in per route, default off** (`prefetch: 'conservative' \| 'moderate' \| false`) | Auto-emission owns the prerender footgun matrix (analytics in prerendered pages, non-idempotent renders, discard cost); it's one script tag — seasoning, not spine |
-| Database story | Postgres-first via Drizzle; `pglite` for tests; MySQL/SQLite conformance deferred to late hardening | One engine while the IR is in flux |
+| Decision                              | Choice                                                                                                                                              | Rationale                                                                                                                                                                                                              |
+| ------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Derived optimism (§10.5)              | **Out — v2.** v1 ships hand-written transforms over the same IR                                                                                     | Per spec phasing; v1 must keep the transform IR derivation-compatible                                                                                                                                                  |
+| Verification layer (§11.2, FW402–409) | **In** (the spec's v1.5)                                                                                                                            | The test harness needs the db wrapper anyway; verification is core to the pitch                                                                                                                                        |
+| §13 design areas                      | 13.1 CSS, 13.2 lists, 13.3 streaming, 13.5 adopt-don't-invent all **in**; 13.4 stays a non-goal                                                     | 13.1 explicitly blocks v1 freeze                                                                                                                                                                                       |
+| Toolchain                             | **Vite+ (`vite-plus`) + Node server**                                                                                                               | `vp` is the single project entrypoint for dev/build/test/check; it gives us Vite, Vitest, Oxlint, Oxfmt, Rolldown, tsdown, Vite Task, and the TypeScript Go toolchain in one place; see Spike S1 for the known tension |
+| Shadow DOM                            | **Dropped entirely.** All rendering is light DOM; CSS scoped by the compiler via `@scope`                                                           | Shadow boundaries break IDREF wiring, form participation, and ARIA — fatal to L0 and the no-JS contract (SPEC §3.2); §13.1 shrinks substantially                                                                       |
+| Custom elements                       | **Dropped — nothing is ever registered.** Identity = `fw-c` stamp; dashed tags are inert sugar; native hosts (`<tr fw-c="…">`) allowed              | Resumability comes from delegation + `import()`, not `customElements.define`; kills upgrade/FACE machinery and the `<table>`-nesting papercut                                                                          |
+| Client reactivity                     | **No TC39 Signals, no runtime signal graph.** Compiler emits a per-query update plan (bindings → derives → stamps); Signals interop is a v2 adapter | The client dependency graph is compile-time-known; polyfill bytes don't belong in the always-loaded path, and the proposal hasn't shipped                                                                              |
+| Import maps                           | **Demoted to optional deployment detail.** `on:*` refs carry full URLs + `#export`; cache-busting via query strings/ETags                           | Removes the blocking importmap script and the not-yet-mapped-spec problem for streamed/patched islands; typed `'#cart'` aliases survive at compile time                                                                |
+| Live/SSE (L4)                         | **Cut from v1 → v2.** v1 liveness = BroadcastChannel tab sync + refetch-on-focus; the server is fully stateless                                     | The only stateful infra in the design served features CRUD apps defer for years; the wire vocabulary is transport-agnostic, so SSE is additive later                                                                   |
+| Speculation Rules                     | **Opt-in per route, default off** (`prefetch: 'conservative' \| 'moderate' \| false`)                                                               | Auto-emission owns the prerender footgun matrix (analytics in prerendered pages, non-idempotent renders, discard cost); it's one script tag — seasoning, not spine                                                     |
+| Database story                        | Postgres-first via Drizzle; `pglite` for tests; MySQL/SQLite conformance deferred to late hardening                                                 | One engine while the IR is in flux                                                                                                                                                                                     |
 
 ## Out of scope (do not build, do not stub)
 
@@ -98,13 +98,13 @@ Vite+ monorepo + CI skeleton: root `vite.config.ts`, local `vite-plus`, `@typesc
 
 For this phase invalidation runs off **declared `touches` only** — static extraction lands in P4, so nothing here blocks on ts-morph.
 
-**Exit:** commerce app boots: product page renders from real queries; `addToCart` works **no-JS** (POST-redirect-GET, errors re-rendered) — the fallback is validated before the enhanced path exists, because it *is* the output (§6.3).
+**Exit:** commerce app boots: product page renders from real queries; `addToCart` works **no-JS** (POST-redirect-GET, errors re-rendered) — the fallback is validated before the enhanced path exists, because it _is_ the output (§6.3).
 
 ## Phase 4 — Touch-set extraction & invalidation graph
 
 The §11.1 static pass over `write()` bodies (S4 hardened): resolution cases A–E, interprocedural bottom-up summaries with memoized fixpoint, `update…from`/`insert…select` read-set handling, parameterized key extraction, FW406/FW409. Committed `generated/touch-graph.ts`. Invalidation = touch graph ∩ declared query read sets, keyed where row-level keys exist. Drizzle conformance pin goes live in CI.
 
-**Compatibility constraint (v2):** the symbolic effect forms in §10.5 Stage 1 are *not* built, but the extraction layer's internal representation should keep eq-predicate match structure rather than flattening to table names, so the v2 deriver can extend it instead of re-parsing.
+**Compatibility constraint (v2):** the symbolic effect forms in §10.5 Stage 1 are _not_ built, but the extraction layer's internal representation should keep eq-predicate match structure rather than flattening to table names, so the v2 deriver can extend it instead of re-parsing.
 
 **Exit:** removing a `touches` declaration from `cart.addItem` changes nothing (it's inferred); the §11.3 example touch-graph diff appears in code review; FW404/FW406/FW409 golden diagnostics.
 
@@ -142,7 +142,7 @@ All §5.3 subcommands with **stable, diffable output** (snapshot-tested — agen
 
 ## Design workstreams (parallel tracks, not phases)
 
-- **D1 — CSS (§13.1).** *Blocks v1 freeze.* Design pass starts with S5 during P1–P2; implementation must land by end of P5 since fragments/morph interact with stylesheet identity. Must resolve: extraction of co-located CSS into an `@scope`-wrapped, deduped per-page stylesheet; critical-CSS inlining; style delivery for late-arriving fragments and `<fw-defer>` streams; theming/token contract; `@scope` fallback rewrite. Deliverable: a spec section PR replacing §13.1's "needs a design pass" with normative text, then implementation.
+- **D1 — CSS (§13.1).** _Blocks v1 freeze._ Design pass starts with S5 during P1–P2; implementation must land by end of P5 since fragments/morph interact with stylesheet identity. Must resolve: extraction of co-located CSS into an `@scope`-wrapped, deduped per-page stylesheet; critical-CSS inlining; style delivery for late-arriving fragments and `<fw-defer>` streams; theming/token contract; `@scope` fallback rewrite. Deliverable: a spec section PR replacing §13.1's "needs a design pass" with normative text, then implementation.
 - **D2 — Lists at scale (§13.2).** After S3 + P6 (depends on morph keying and optimism). Cursor pagination through URL params, infinite scroll as fragment appends, the stable-key contract between template stamps and morph under simultaneous optimistic reorder. Validated in the commerce app's product grid + order history.
 - **D3 — Streaming details (§13.3).** With P5. `<fw-defer>` priority hints, query-JSON arrives-before-consumers guarantee under HTTP/1.1; extend the P0 streaming fixture.
 - **D4 — Adopt-don't-invent (§13.5).** After P5, each item small and independent: typed per-route `meta()`, `s.file()` uploads riding the pending mechanism, per-island error boundaries, typed sessions, server-rendered i18n catalogs, rate-limit guard middleware. Each ships only with a commerce-app usage.
@@ -165,9 +165,9 @@ Commerce app reaches the full Appendix A surface plus D2/D4 features; `create-ji
 
 ```
 P0 ──▶ P1 ──▶ P2 ─────────────▶ P5 ──▶ P6 ──▶ P7
-        │                      ▲  ▲            
-        └──▶ P3 ──▶ P4 ────────┘  │            
-S1─S5 ──┘ (gates P1/P2/P4/P5/D1)  │            
+        │                      ▲  ▲
+        └──▶ P3 ──▶ P4 ────────┘  │
+S1─S5 ──┘ (gates P1/P2/P4/P5/D1)  │
 D1 (CSS) ── starts P1, lands by end P5
 D3 ──────── with P5        D2 ── after P6
 P8 (CLI) ── after P4+P6    D4 ── after P5

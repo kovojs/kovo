@@ -1,0 +1,19 @@
+### Deferred fragment stream sends shell first and late content later
+
+>>> REQUEST
+GET /products/p1 HTTP/1.1
+Accept: text/html
+
+<<< RESPONSE
+HTTP/1.1 200 OK
+Content-Type: text/html; charset=utf-8
+Transfer-Encoding: chunked
+
+<!doctype html>
+<html><body><main><product-page fw-deps="product:p1"><fw-defer target="reviews:p1" state="pending"></fw-defer></product-page></main>
+
+--jiso-boundary
+<fw-query name="reviews" key="product:p1">{"items":[{"id":"r1","rating":5}]}</fw-query>
+<fw-fragment target="reviews:p1"><section fw-c="reviews" fw-deps="product:p1"><article data-key="r1">5</article></section></fw-fragment>
+--jiso-boundary--
+</body></html>

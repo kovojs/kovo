@@ -1,0 +1,19 @@
+### Enhanced mutation fetch updates query data and fragments
+
+>>> REQUEST
+POST /_m/cart/add HTTP/1.1
+Accept: text/vnd.jiso.fragment+html
+Content-Type: application/x-www-form-urlencoded
+FW-Idem: idem_01HX
+FW-Targets: cart-badge,recommendations
+
+productId=p1&quantity=1
+
+<<< RESPONSE
+HTTP/1.1 200 OK
+Content-Type: text/vnd.jiso.fragment+html; charset=utf-8
+FW-Idem: idem_01HX
+
+<fw-query name="cart" key="cart:c1" version="7">{"count":1,"items":[{"productId":"p1","qty":1,"unitPrice":1499}]}</fw-query>
+<fw-fragment target="cart-badge"><cart-badge fw-deps="cart"><button commandfor="cart-drawer" command="show-modal"><span data-bind="cart.count">1</span></button></cart-badge></fw-fragment>
+<fw-fragment target="recommendations"><section fw-c="recommendations" fw-deps="product:p1"></section></fw-fragment>
