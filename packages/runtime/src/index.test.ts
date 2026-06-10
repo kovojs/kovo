@@ -21,6 +21,7 @@ import {
   readElementParams,
   stampPendingQueries,
   submitEnhancedMutation,
+  submitOptimisticEnhancedMutation,
   type DelegatedEvent,
   type EnhancedMutationFetchOptions,
   type EventElementLike,
@@ -673,6 +674,153 @@ describe('query store', () => {
     expect(store.get('cart')).toEqual({ count: 1 });
     expect(root.targets.get('cart-badge')?.html).toBe('<cart-badge>1</cart-badge>');
     expect(root.targets.get('recommendations')?.html).toBe('<section></section>');
+  });
+
+  it('submits enhanced mutations with optimistic transforms and reconciles server truth', async () => {
+    const store = createQueryStore();
+    const rebaser = new OptimisticRebaser(store);
+    const root = new FakeMorphRoot();
+    const cartBadge = new FakePendingElement({ 'fw-deps': 'cart' });
+    const pendingRoot = new FakePendingRoot([cartBadge]);
+    root.deps = [{ id: 'cart-badge' }];
+    root.targets.set('cart-badge', new FakeMorphTarget());
+    store.set('cart', { count: 1 });
+
+    const fetch = vi.fn(async () => {
+      expect(store.get('cart')).toEqual({ count: 3 });
+      expect(cartBadge.attributes).toMatchObject({
+        'aria-busy': 'true',
+        'fw-pending': '',
+      });
+
+      return {
+        async text() {
+          return [
+            '<fw-query name="cart">{"count":4}</fw-query>',
+            '<fw-fragment target="cart-badge"><cart-badge>4</cart-badge></fw-fragment>',
+          ].join('\n');
+        },
+      };
+    });
+
+    const result = await submitOptimisticEnhancedMutation({
+      fetch,
+      form: { action: '/_m/cart/add', method: 'post' },
+      formData: new FormData(),
+      idem: 'idem_optimistic',
+      input: { quantity: 2 },
+      optimistic: {
+        transforms: {
+          cart(current, input) {
+            const cart = current as { count: number };
+            return { count: cart.count + input.quantity };
+          },
+        },
+      },
+      pendingRoot,
+      rebaser,
+      root,
+      store,
+    });
+
+    expect(result.queries).toEqual(['cart']);
+    expect(store.get('cart')).toEqual({ count: 4 });
+    expect(rebaser.pendingCount('cart')).toBe(0);
+    expect(cartBadge.attributes).not.toHaveProperty('fw-pending');
+    expect(cartBadge.attributes).not.toHaveProperty('aria-busy');
+    expect(root.targets.get('cart-badge')?.html).toBe('<cart-badge>4</cart-badge>');
+  });
+
+  it('rebases other pending optimism while reconciling an optimistic submit', async () => {
+    const store = createQueryStore();
+    const rebaser = new OptimisticRebaser(store);
+    const root = new FakeMorphRoot();
+    const cartBadge = new FakePendingElement({ 'fw-deps': 'cart' });
+    const pendingRoot = new FakePendingRoot([cartBadge]);
+    root.deps = [{ id: 'cart-badge' }];
+    store.set('cart', { count: 0 });
+    const optimistic = {
+      transforms: {
+        cart(current: unknown, input: { quantity: number }) {
+          const cart = current as { count: number };
+          return { count: cart.count + input.quantity };
+        },
+      },
+    };
+    const fetch = vi.fn(async () => {
+      rebaser.add('idem_second', { quantity: 5 }, optimistic);
+      expect(store.get('cart')).toEqual({ count: 7 });
+
+      return {
+        async text() {
+          return '<fw-query name="cart">{"count":2}</fw-query>';
+        },
+      };
+    });
+
+    await submitOptimisticEnhancedMutation({
+      fetch,
+      form: { action: '/_m/cart/add', method: 'post' },
+      formData: new FormData(),
+      idem: 'idem_first',
+      input: { quantity: 2 },
+      optimistic,
+      pendingRoot,
+      rebaser,
+      root,
+      store,
+    });
+
+    expect(store.get('cart')).toEqual({ count: 7 });
+    expect(rebaser.pendingCount('cart')).toBe(1);
+    expect(cartBadge.attributes).toMatchObject({
+      'aria-busy': 'true',
+      'fw-pending': '',
+    });
+  });
+
+  it('discards optimistic state on enhanced mutation errors and applies the error fragment', async () => {
+    const store = createQueryStore();
+    const rebaser = new OptimisticRebaser(store);
+    const root = new FakeMorphRoot();
+    const cartForm = new FakePendingElement({ 'fw-deps': 'cart' });
+    const pendingRoot = new FakePendingRoot([cartForm]);
+    root.deps = [{ id: 'cart-form' }];
+    root.targets.set('cart-form', new FakeMorphTarget());
+    store.set('cart', { count: 1 });
+    const fetch = vi.fn(async () => ({
+      ok: false,
+      status: 422,
+      async text() {
+        return '<fw-fragment target="cart-form"><form>Out of stock</form></fw-fragment>';
+      },
+    }));
+
+    const result = await submitOptimisticEnhancedMutation({
+      fetch,
+      form: { action: '/_m/cart/add', method: 'post' },
+      formData: new FormData(),
+      input: { quantity: 2 },
+      optimistic: {
+        transforms: {
+          cart(current, input) {
+            const cart = current as { count: number };
+            return { count: cart.count + input.quantity };
+          },
+        },
+      },
+      pendingRoot,
+      rebaser,
+      root,
+      store,
+    });
+
+    expect(result.appliedFragments).toEqual(['cart-form']);
+    expect(store.get('cart')).toEqual({ count: 1 });
+    expect(rebaser.pendingCount('cart')).toBe(0);
+    expect(cartForm.attributes).not.toHaveProperty('fw-pending');
+    expect(cartForm.attributes).not.toHaveProperty('aria-busy');
+    expect(root.targets.get('cart-form')?.html).toBe('<form>Out of stock</form>');
   });
 
   it('submits typed forms through a ctx.submit-style helper', async () => {

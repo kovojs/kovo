@@ -547,6 +547,15 @@ export interface EnhancedMutationSubmitOptions {
   store: QueryStore;
 }
 
+export interface OptimisticEnhancedMutationSubmitOptions<
+  Input,
+> extends EnhancedMutationSubmitOptions {
+  input: Input;
+  optimistic: OptimisticPlan<Input>;
+  pendingRoot?: PendingRoot;
+  rebaser: OptimisticRebaser;
+}
+
 export type SubmitFormDefinition = Form<string, Record<string, JsonValue>, JsonValue>;
 
 export interface SubmitOptions<Input extends Record<string, JsonValue>, Failure extends JsonValue> {
@@ -668,20 +677,9 @@ function parseMutationFailure(body: string): JsonValue {
 }
 
 export function applyMutationResponse(store: QueryStore, body: string): AppliedMutationResponse {
-  const queries: string[] = [];
-
-  for (const match of body.matchAll(/<fw-query\b(?<attrs>[^>]*)>(?<json>[\s\S]*?)<\/fw-query>/g)) {
-    const name = readAttribute(match.groups?.attrs ?? '', 'name');
-    if (!name) continue;
-
-    store.set(name, JSON.parse(unescapeHtml(match.groups?.json ?? 'null')));
-    queries.push(name);
-  }
-
-  return {
-    fragments: readFragmentChunks(body),
-    queries,
-  };
+  return applyMutationResponseWithQueries(body, (name, value) => {
+    store.set(name, value);
+  });
 }
 
 export function applyFragments(
@@ -724,21 +722,9 @@ export async function submitEnhancedMutation(options: EnhancedMutationSubmitOpti
     targets: string[];
   }
 > {
-  const idem = options.idem ?? createIdem();
-  const targets = readLiveTargets(options.root);
-  const response = await options.fetch(options.form.action, {
-    body: options.formData,
-    headers: {
-      Accept: 'text/vnd.jiso.fragment+html',
-      'FW-Fragment': 'true',
-      'FW-Idem': idem,
-      'FW-Targets': targets.join(','),
-    },
-    keepalive: true,
-    method: (options.form.method ?? 'post').toUpperCase(),
-  });
+  const { body, changes, idem, targets } = await fetchEnhancedMutation(options);
   const applied = applyMutationResponseToDom({
-    body: await response.text(),
+    body,
     root: options.root,
     store: options.store,
     ...(options.morph ? { morph: options.morph } : {}),
@@ -746,10 +732,87 @@ export async function submitEnhancedMutation(options: EnhancedMutationSubmitOpti
 
   return {
     ...applied,
-    changes: readMutationChangeHeader(response),
+    changes,
     idem,
     targets,
   };
+}
+
+export async function submitOptimisticEnhancedMutation<Input>(
+  options: OptimisticEnhancedMutationSubmitOptions<Input>,
+): Promise<
+  AppliedMutationResponse & {
+    appliedFragments: string[];
+    changes: MutationChangeRecord[];
+    idem: string;
+    targets: string[];
+  }
+> {
+  const idem = options.idem ?? createIdem();
+  const queryNames = Object.keys(options.optimistic.transforms);
+
+  // SPEC.md §10.4: predict against query data, mark dependent islands pending,
+  // then reconcile the server fragment/query truth over remaining predictions.
+  options.rebaser.add(idem, options.input, options.optimistic);
+  if (options.pendingRoot) {
+    stampPendingQueries(options.pendingRoot, queryNames, true);
+  }
+
+  try {
+    const { body, changes, response, targets } = await fetchEnhancedMutation(options, idem);
+
+    if (isFailedMutationResponse(response)) {
+      options.rebaser.discardPendingOptimism(queryNames);
+      if (options.pendingRoot) {
+        stampPendingQueries(options.pendingRoot, queryNames, false);
+      }
+
+      const applied = applyMutationResponseToDom({
+        body,
+        root: options.root,
+        store: options.store,
+        ...(options.morph ? { morph: options.morph } : {}),
+      });
+
+      return {
+        ...applied,
+        changes,
+        idem,
+        targets,
+      };
+    }
+
+    const queryChunks = readQueryChunks(body);
+    const fragments = readFragmentChunks(body);
+    options.rebaser.settle(idem);
+    for (const query of queryChunks) {
+      options.rebaser.applyServerTruth(query.name, query.value);
+    }
+    const applied = {
+      appliedFragments: applyFragments(options.root, fragments, options.morph),
+      fragments,
+      queries: queryChunks.map((query) => query.name),
+    };
+    const settledQueries = queryNames.filter(
+      (queryName) => options.rebaser.pendingCount(queryName) === 0,
+    );
+    if (options.pendingRoot && settledQueries.length > 0) {
+      stampPendingQueries(options.pendingRoot, settledQueries, false);
+    }
+
+    return {
+      ...applied,
+      changes,
+      idem,
+      targets,
+    };
+  } catch (error) {
+    options.rebaser.discardPendingOptimism(queryNames);
+    if (options.pendingRoot) {
+      stampPendingQueries(options.pendingRoot, queryNames, false);
+    }
+    throw error;
+  }
 }
 
 export function stampPendingQueries(
@@ -815,6 +878,79 @@ export function installMutationBroadcast(options: {
       });
     },
   };
+}
+
+function applyMutationResponseWithQueries(
+  body: string,
+  applyQuery: (name: string, value: unknown) => void,
+): AppliedMutationResponse {
+  const queryChunks = readQueryChunks(body);
+
+  for (const query of queryChunks) {
+    applyQuery(query.name, query.value);
+  }
+
+  return {
+    fragments: readFragmentChunks(body),
+    queries: queryChunks.map((query) => query.name),
+  };
+}
+
+async function fetchEnhancedMutation(
+  options: EnhancedMutationSubmitOptions,
+  idem = options.idem ?? createIdem(),
+): Promise<{
+  body: string;
+  changes: MutationChangeRecord[];
+  idem: string;
+  response: EnhancedMutationResponseLike;
+  targets: string[];
+}> {
+  const targets = readLiveTargets(options.root);
+  const response = await options.fetch(options.form.action, {
+    body: options.formData,
+    headers: {
+      Accept: 'text/vnd.jiso.fragment+html',
+      'FW-Fragment': 'true',
+      'FW-Idem': idem,
+      'FW-Targets': targets.join(','),
+    },
+    keepalive: true,
+    method: (options.form.method ?? 'post').toUpperCase(),
+  });
+
+  return {
+    body: await response.text(),
+    changes: readMutationChangeHeader(response),
+    idem,
+    response,
+    targets,
+  };
+}
+
+function isFailedMutationResponse(response: EnhancedMutationResponseLike): boolean {
+  return response.ok === false || (response.status !== undefined && response.status >= 400);
+}
+
+interface QueryChunk {
+  name: string;
+  value: unknown;
+}
+
+function readQueryChunks(body: string): QueryChunk[] {
+  const queries: QueryChunk[] = [];
+
+  for (const match of body.matchAll(/<fw-query\b(?<attrs>[^>]*)>(?<json>[\s\S]*?)<\/fw-query>/g)) {
+    const name = readAttribute(match.groups?.attrs ?? '', 'name');
+    if (!name) continue;
+
+    queries.push({
+      name,
+      value: JSON.parse(unescapeHtml(match.groups?.json ?? 'null')),
+    });
+  }
+
+  return queries;
 }
 
 function readFragmentChunks(body: string): FragmentChunk[] {
