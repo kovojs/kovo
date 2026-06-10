@@ -9,6 +9,20 @@ import {
   type Schema,
   runMutation,
 } from '@jiso/server';
+import {
+  parse,
+  type DeleteStatement,
+  type Expr,
+  type From,
+  type InsertStatement,
+  type QName,
+  type SelectStatement,
+  type Statement,
+  type UpdateStatement,
+  type WithRecursiveStatement,
+  type WithStatement,
+  type WithStatementBinding,
+} from 'pgsql-ast-parser';
 
 export interface JisoTestContext<Db = unknown> {
   db: Db;
@@ -444,72 +458,161 @@ function observeSql(
 function parseSqlStatement(
   statement: string,
 ): Array<Pick<ObservedDbOperation, 'kind' | 'rowKey' | 'table'>> {
-  const normalized = statement.replaceAll(/--.*$/gm, ' ').replaceAll(/\s+/g, ' ').trim();
-  const verb = /^[a-z]+/i.exec(normalized)?.[0]?.toLowerCase();
-  const rowKey = parseWhereRowKey(normalized);
-  type ParsedOperation = Pick<ObservedDbOperation, 'kind' | 'rowKey' | 'table'>;
+  return parse(statement).flatMap((parsed) => operationsForStatement(parsed, new Set()));
+}
 
-  if (verb === 'insert') {
-    const table = /\binsert\s+into\s+("?[\w.]+"?)/i.exec(normalized)?.[1];
-    const operations: ParsedOperation[] = table
-      ? [{ kind: 'write' as const, rowKey, table: normalizeSqlIdentifier(table) }]
-      : [];
+type ParsedOperation = Pick<ObservedDbOperation, 'kind' | 'rowKey' | 'table'>;
 
-    if (/\bselect\b/i.test(normalized)) {
-      operations.push(...readOperationsFor(normalized, rowKey));
+function operationsForStatement(
+  statement: Statement | WithStatementBinding,
+  cteAliases: ReadonlySet<string>,
+): ParsedOperation[] {
+  switch (statement.type) {
+    case 'select':
+    case 'union':
+    case 'union all':
+    case 'values':
+    case 'with':
+    case 'with recursive':
+      return operationsForSelect(statement, cteAliases);
+    case 'insert':
+      return operationsForInsert(statement, cteAliases);
+    case 'update':
+      return operationsForUpdate(statement, cteAliases);
+    case 'delete':
+      return operationsForDelete(statement);
+    default:
+      return [];
+  }
+}
+
+function operationsForSelect(
+  statement: SelectStatement,
+  cteAliases: ReadonlySet<string>,
+): ParsedOperation[] {
+  switch (statement.type) {
+    case 'select': {
+      const rowKey = rowKeyFromWhere(statement.where);
+      return operationsForFrom(statement.from ?? [], rowKey, cteAliases);
+    }
+    case 'union':
+    case 'union all':
+      return [
+        ...operationsForSelect(statement.left, cteAliases),
+        ...operationsForSelect(statement.right, cteAliases),
+      ];
+    case 'with':
+      return operationsForWith(statement, cteAliases);
+    case 'with recursive':
+      return operationsForWithRecursive(statement, cteAliases);
+    case 'values':
+      return [];
+  }
+}
+
+function operationsForInsert(
+  statement: InsertStatement,
+  cteAliases: ReadonlySet<string>,
+): ParsedOperation[] {
+  return [
+    { kind: 'write', rowKey: undefined, table: tableName(statement.into) },
+    ...operationsForSelect(statement.insert, cteAliases),
+  ];
+}
+
+function operationsForUpdate(
+  statement: UpdateStatement,
+  cteAliases: ReadonlySet<string>,
+): ParsedOperation[] {
+  const rowKey = rowKeyFromWhere(statement.where);
+  return [
+    { kind: 'write', rowKey, table: tableName(statement.table) },
+    ...operationsForFrom(statement.from ? [statement.from] : [], rowKey, cteAliases),
+  ];
+}
+
+function operationsForDelete(statement: DeleteStatement): ParsedOperation[] {
+  return [
+    { kind: 'write', rowKey: rowKeyFromWhere(statement.where), table: tableName(statement.from) },
+  ];
+}
+
+function operationsForWith(
+  statement: WithStatement,
+  cteAliases: ReadonlySet<string>,
+): ParsedOperation[] {
+  const aliases = withAliases(
+    cteAliases,
+    statement.bind.map((binding) => binding.alias.name),
+  );
+  return [
+    ...statement.bind.flatMap((binding) => operationsForStatement(binding.statement, aliases)),
+    ...operationsForStatement(statement.in, aliases),
+  ];
+}
+
+function operationsForWithRecursive(
+  statement: WithRecursiveStatement,
+  cteAliases: ReadonlySet<string>,
+): ParsedOperation[] {
+  const aliases = withAliases(cteAliases, [statement.alias.name]);
+  return [
+    ...operationsForSelect(statement.bind, aliases),
+    ...operationsForStatement(statement.in, aliases),
+  ];
+}
+
+function withAliases(
+  currentAliases: ReadonlySet<string>,
+  addedAliases: readonly string[],
+): ReadonlySet<string> {
+  return new Set([...currentAliases, ...addedAliases]);
+}
+
+function operationsForFrom(
+  from: readonly From[],
+  rowKey: string | undefined,
+  cteAliases: ReadonlySet<string>,
+): ParsedOperation[] {
+  return from.flatMap((item) => {
+    if (item.type === 'table') {
+      const table = tableName(item.name);
+      return cteAliases.has(table) ? [] : [{ kind: 'read', rowKey, table }];
     }
 
-    return operations;
-  }
+    if (item.type === 'statement') {
+      return operationsForSelect(item.statement, cteAliases);
+    }
 
-  if (verb === 'update') {
-    const table = /\bupdate\s+("?[\w.]+"?)/i.exec(normalized)?.[1];
-    const operations: ParsedOperation[] = table
-      ? [{ kind: 'write' as const, rowKey, table: normalizeSqlIdentifier(table) }]
-      : [];
-    operations.push(...readOperationsFor(normalized, rowKey));
-    return operations;
-  }
-
-  if (verb === 'delete') {
-    const table = /\bdelete\s+from\s+("?[\w.]+"?)/i.exec(normalized)?.[1];
-    return table ? [{ kind: 'write', rowKey, table: normalizeSqlIdentifier(table) }] : [];
-  }
-
-  if (verb === 'select') {
-    return readOperationsFor(normalized, rowKey);
-  }
-
-  return [];
+    return [];
+  });
 }
 
-function readOperationsFor(
-  statement: string,
-  rowKey: string | undefined,
-): Array<Pick<ObservedDbOperation, 'kind' | 'rowKey' | 'table'>> {
-  const tables = new Set<string>();
+function rowKeyFromWhere(where: Expr | null | undefined): string | undefined {
+  return where ? rowKeysFromExpr(where)[0] : undefined;
+}
 
-  for (const match of statement.matchAll(/\b(?:from|join)\s+("?[\w.]+"?)/gi)) {
-    tables.add(normalizeSqlIdentifier(match[1] ?? ''));
+function rowKeysFromExpr(expression: Expr): string[] {
+  if (expression.type !== 'binary') return [];
+
+  if (expression.op === '=') {
+    const left = refName(expression.left);
+    const right = refName(expression.right);
+    if (left && !right) return [left];
+    if (right && !left) return [right];
+    if (left) return [left];
+    if (right) return [right];
   }
 
-  return [...tables].filter(Boolean).map((table) => ({ kind: 'read', rowKey, table }));
+  return [...rowKeysFromExpr(expression.left), ...rowKeysFromExpr(expression.right)];
 }
 
-function parseWhereRowKey(statement: string): string | undefined {
-  const where = /\bwhere\s+([\s\S]+)$/i.exec(statement)?.[1];
-  if (!where) return undefined;
-
-  const predicate =
-    /(?:"?[\w.]+"?\.)?"?([a-z_][\w]*)"?\s*=\s*(?:\$[0-9]+|\?|:[a-z_][\w]*|'[^']*'|[0-9]+)/i.exec(
-      where,
-    );
-
-  return predicate?.[1];
+function refName(expression: Expr): string | undefined {
+  return expression.type === 'ref' && expression.name !== '*' ? expression.name : undefined;
 }
 
-function normalizeSqlIdentifier(identifier: string): string {
-  return identifier.replaceAll('"', '').split('.').at(-1) ?? identifier;
+function tableName(identifier: QName): string {
+  return identifier.name;
 }
 
 function assertRowKeys(

@@ -8,7 +8,8 @@
   "dependencies": {
     "@jiso/core": "workspace:*",
     "@jiso/drizzle": "workspace:*",
-    "@jiso/server": "workspace:*"
+    "@jiso/server": "workspace:*",
+    "pgsql-ast-parser": "^12.0.2"
   },
   "devDependencies": {
     "vitest": "4.1.8"

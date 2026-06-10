@@ -767,6 +767,45 @@ describe('@jiso/test harness', () => {
     );
   });
 
+  it('verifies aliased and schema-qualified SQL reads through the parser', () => {
+    const verifier = createDbVerifier(
+      {},
+      { domainByTable: { cart_items: 'cart', products: 'product' } },
+    );
+    const db = verifier.wrap(createFakeDb());
+
+    db.sql(
+      'select c.product_id, p.name from public.cart_items c join catalog.products p on p.id = c.product_id where c.id = $1',
+    );
+
+    expect(() => verifier.assertReadsCovered(['cart', 'product'])).not.toThrow();
+    expect(() => verifier.assertReadsCovered(['cart'])).toThrow(
+      'FW407 Query read from undeclared domain: product',
+    );
+  });
+
+  it('verifies CTE source reads while ignoring the CTE alias as a table', () => {
+    const verifier = createDbVerifier(
+      {},
+      { domainByTable: { products: 'product', vendors: 'vendor' } },
+    );
+    const db = verifier.wrap(createFakeDb());
+
+    db.sql(
+      [
+        'with recent as (select id, vendor_id from products where id = $1)',
+        'select recent.id, vendors.name',
+        'from recent',
+        'join vendors on vendors.id = recent.vendor_id',
+      ].join(' '),
+    );
+
+    expect(() => verifier.assertReadsCovered(['product', 'vendor'])).not.toThrow();
+    expect(() => verifier.assertReadsCovered(['product'])).toThrow(
+      'FW407 Query read from undeclared domain: vendor',
+    );
+  });
+
   it('verifies insert-select SQL as a target write plus source reads', async () => {
     const productImport = mutation('product/import', {
       input: s.object({ productId: s.string() }),
@@ -868,6 +907,27 @@ describe('@jiso/test harness', () => {
     const db = verifier.wrap(createFakeDb());
 
     db.sql("update products set reserved = true where sku = 'sku-1'");
+
+    expect(() => verifier.assertCovered()).toThrow(
+      'FW408 Declared row key differs from observed row predicate: products expected id observed sku',
+    );
+  });
+
+  it('checks row keys parsed from raw SQL delete predicates', () => {
+    const verifier = createDbVerifier(
+      {
+        'product.delete': {
+          touches: [
+            { domain: 'product', keys: 'arg:productId', site: 'product.ts:1', via: 'products' },
+          ],
+          unresolved: [],
+        },
+      },
+      { domainByTable: { products: 'product' }, keyByTable: { products: 'id' } },
+    );
+    const db = verifier.wrap(createFakeDb());
+
+    db.sql("delete from public.products where sku = 'sku-1'");
 
     expect(() => verifier.assertCovered()).toThrow(
       'FW408 Declared row key differs from observed row predicate: products expected id observed sku',
