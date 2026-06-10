@@ -10,6 +10,7 @@ import {
   renderMutationEndpointResponse,
   renderPageHints,
   s,
+  session,
   t,
   type MutationFail,
   type MutationWireHeaderSource,
@@ -18,7 +19,7 @@ import type { FwExplainInput } from '../../../packages/cli/src/index.js';
 
 export interface CommerceDb {
   cartItems: { productId: string; qty: number; unitPrice: number }[];
-  orders: { id: string; productId: string; qty: number; total: number }[];
+  orders: { id: string; productId: string; qty: number; total: number; userId: string }[];
   products: Map<string, { id: string; stock: number; unitPrice: number }>;
   read(table: string): unknown[];
   write(table: string, value: unknown): void;
@@ -28,6 +29,15 @@ export interface CommerceRequest {
   db: CommerceDb;
   session?: { id?: string; user?: { id: string } | null } | null;
 }
+
+export const commerceSession = session(
+  s.object({
+    id: s.string(),
+    user: s.object({
+      id: s.string(),
+    }),
+  }),
+);
 
 export function createCommerceDb(): CommerceDb {
   const db: CommerceDb = {
@@ -49,7 +59,9 @@ export function createCommerceDb(): CommerceDb {
         db.cartItems.push(value as { productId: string; qty: number; unitPrice: number });
       }
       if (table === 'orders') {
-        db.orders.push(value as { id: string; productId: string; qty: number; total: number });
+        db.orders.push(
+          value as { id: string; productId: string; qty: number; total: number; userId: string },
+        );
       }
       if (table === 'products') {
         const product = value as { id: string; stock: number; unitPrice: number };
@@ -143,6 +155,7 @@ export const addToCart = mutation('cart/add', {
     queries: [cartQuery, productGridQuery, orderHistoryQuery],
   },
   handler(input, request: CommerceRequest, context) {
+    const currentSession = commerceSession.parse(request);
     const found = request.db.products.get(input.productId);
     if (!found || found.stock < input.quantity) {
       return context.fail('OUT_OF_STOCK', { availableQuantity: found?.stock ?? 0 });
@@ -158,6 +171,7 @@ export const addToCart = mutation('cart/add', {
       productId: input.productId,
       qty: input.quantity,
       total: found.unitPrice * input.quantity,
+      userId: currentSession.user.id,
     });
     request.db.write('products', {
       ...found,

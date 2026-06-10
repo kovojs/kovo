@@ -10,6 +10,7 @@ import {
   addToCart,
   commerceGraph,
   commercePageHints,
+  commerceSession,
   commerceTouchGraph,
   createCommerceDb,
   loadProductGrid,
@@ -79,7 +80,7 @@ describe('commerce example', () => {
 
     await addToCart.handler(
       { productId: 'p1', quantity: 2 },
-      { db },
+      { db, session: { id: 's-direct', user: { id: 'u-direct' } } },
       {
         fail(code, payload) {
           return { error: { code, payload }, ok: false, status: 422 };
@@ -92,6 +93,24 @@ describe('commerce example', () => {
 
     expect(renderOrderHistory(db)).toContain('data-key="order-1"');
     expect(renderOrderHistory(db)).toContain('p1 x 2 - 2998');
+  });
+
+  it('uses the typed commerce session schema in authenticated mutations', async () => {
+    const db = createCommerceDb();
+    const request = { db, session: { id: 's1', user: { id: 'u1' } } };
+
+    expect(commerceSession.parse(request)).toEqual({ id: 's1', user: { id: 'u1' } });
+
+    await addToCart.handler({ productId: 'p1', quantity: 1 }, request, {
+      fail(code, payload) {
+        return { error: { code, payload }, ok: false, status: 422 };
+      },
+      invalidate(domain, options) {
+        return { domain: domain.key, ...options, manual: true };
+      },
+    });
+
+    expect(db.orders[0]?.userId).toBe('u1');
   });
 
   it('renders SPEC 6.3 no-JS add-to-cart forms as the page output', () => {
