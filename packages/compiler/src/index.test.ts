@@ -434,6 +434,55 @@ export const CartBadge = component('cart-badge', {
     ]);
   });
 
+  it('reports FW320 when event payload fields overlap query data', () => {
+    const result = compileComponentModule({
+      fileName: 'cart.events.tsx',
+      queryShapes: {
+        productCard: {
+          product: {
+            id: 'string',
+            unitPrice: 'number',
+          },
+        },
+      },
+      source: `
+export function notifyPrice(product, emit) {
+  emit('cart:added', { product: { unitPrice: product.unitPrice } });
+}
+`,
+    });
+
+    expect(result.diagnostics).toEqual([
+      {
+        code: 'FW320',
+        fileName: 'cart.events.tsx',
+        message: 'Event payload overlaps query data; use a transform. product.unitPrice',
+        severity: 'lint',
+      },
+    ]);
+  });
+
+  it('does not report FW320 for event payloads that carry client intent only', () => {
+    const result = compileComponentModule({
+      fileName: 'cart.events.tsx',
+      queryShapes: {
+        productCard: {
+          product: {
+            id: 'string',
+            unitPrice: 'number',
+          },
+        },
+      },
+      source: `
+export function notifyIntent(productId, quantity, emit) {
+  emit('cart:add-requested', { productId, quantity });
+}
+`,
+    });
+
+    expect(result.diagnostics).toEqual([]);
+  });
+
   it('accepts fragment target render inputs declared as queries or stamped props', () => {
     const result = compileComponentModule({
       fileName: 'cart-row.tsx',

@@ -108,6 +108,7 @@ export function compileComponentModule(options: CompileComponentOptions): Compil
   const serverFactStateDiagnostics = validateServerFactsInLocalState(source, options.fileName);
   const fragmentInputDiagnostics = validateFragmentTargetInputs(source, options.fileName);
   const dataBindDiagnostics = validateDataBindings(source, options);
+  const eventPayloadDiagnostics = validateEventPayloads(source, options);
   const directDbDiagnostics = validateDirectDbAccess(source, options.fileName);
   const clientFileName = replaceExtension(options.fileName, '.client.js');
   const serverFileName = replaceExtension(options.fileName, '.server.js');
@@ -131,6 +132,7 @@ export function compileComponentModule(options: CompileComponentOptions): Compil
       ...serverFactStateDiagnostics,
       ...fragmentInputDiagnostics,
       ...dataBindDiagnostics,
+      ...eventPayloadDiagnostics,
       ...directDbDiagnostics,
     ],
     files: [
@@ -489,6 +491,22 @@ function validateFragmentTargetInputs(source: string, fileName: string): Compile
   }));
 }
 
+function validateEventPayloads(
+  source: string,
+  options: CompileComponentOptions,
+): CompilerDiagnostic[] {
+  if (!options.queryShapes) return [];
+
+  const queryPaths = new Set(queryShapePaths(options.queryShapes));
+  const overlapping = eventPayloadPaths(source).filter((path) => queryPaths.has(path));
+  if (overlapping.length === 0) return [];
+
+  return [...new Set(overlapping)].map((path) => ({
+    ...diagnosticFor(options.fileName, 'FW320'),
+    message: `${diagnosticDefinitions.FW320.message} ${path}`,
+  }));
+}
+
 function validateDirectDbAccess(source: string, fileName: string): CompilerDiagnostic[] {
   if (!/\bmutation\s*\(/.test(source)) return [];
 
@@ -588,6 +606,89 @@ function extractStateReturnObject(source: string): string | null {
   if (objectEnd === -1) return null;
 
   return source.slice(objectStart, objectEnd + 1);
+}
+
+function eventPayloadPaths(source: string): string[] {
+  const paths: string[] = [];
+
+  for (const match of source.matchAll(/\bemit\s*\(/g)) {
+    const callStart = match.index + match[0].lastIndexOf('(');
+    const callEnd = findMatchingToken(source, callStart, '(', ')');
+    if (callEnd === -1) continue;
+
+    const payload = splitArguments(source.slice(callStart + 1, callEnd))[1]?.trim();
+    if (!payload?.startsWith('{')) continue;
+
+    const payloadEnd = findMatchingToken(payload, 0, '{', '}');
+    if (payloadEnd === -1) continue;
+
+    paths.push(...objectLiteralPaths(payload.slice(0, payloadEnd + 1)));
+  }
+
+  return paths;
+}
+
+function objectLiteralPaths(objectSource: string, prefix = ''): string[] {
+  const paths: string[] = [];
+  let index = 1;
+
+  while (index < objectSource.length - 1) {
+    index = skipWhitespaceAndComments(objectSource, index);
+    if (objectSource[index] === ',') {
+      index += 1;
+      continue;
+    }
+
+    const key = readObjectKey(objectSource, index);
+    if (!key) {
+      index = skipObjectValue(objectSource, index);
+      continue;
+    }
+
+    const path = prefix ? `${prefix}.${key.name}` : key.name;
+    const afterKey = skipWhitespaceAndComments(objectSource, key.end);
+    if (objectSource[afterKey] !== ':') {
+      paths.push(path);
+      index = skipObjectValue(objectSource, afterKey);
+      continue;
+    }
+
+    const valueStart = skipWhitespaceAndComments(objectSource, afterKey + 1);
+    if (objectSource[valueStart] === '{') {
+      const valueEnd = findMatchingToken(objectSource, valueStart, '{', '}');
+      if (valueEnd !== -1) {
+        paths.push(...objectLiteralPaths(objectSource.slice(valueStart, valueEnd + 1), path));
+        index = skipObjectValue(objectSource, afterKey + 1);
+        continue;
+      }
+    }
+
+    paths.push(path);
+    index = skipObjectValue(objectSource, afterKey + 1);
+  }
+
+  return paths;
+}
+
+function queryShapePaths(queryShapes: Record<string, QueryShape>): string[] {
+  return Object.entries(queryShapes).flatMap(([queryName, shape]) => [
+    queryName,
+    ...queryShapeChildPaths(shape).flatMap((path) => [`${queryName}.${path}`, path]),
+  ]);
+}
+
+function queryShapeChildPaths(shape: QueryShape): string[] {
+  if (isArrayShape(shape)) {
+    const itemShape = shape[0];
+    return itemShape === undefined ? [] : queryShapeChildPaths(itemShape);
+  }
+
+  if (typeof shape !== 'object' || shape === null) return [];
+
+  return Object.entries(shape).flatMap(([key, child]) => [
+    key,
+    ...queryShapeChildPaths(child ?? 'object').map((path) => `${key}.${path}`),
+  ]);
 }
 
 function topLevelObjectKeys(objectSource: string): string[] {
