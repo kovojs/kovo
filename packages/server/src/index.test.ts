@@ -9,8 +9,10 @@ import {
   invalidate,
   meta,
   mutation,
+  mutationWireRequestFromHeaders,
   query,
   createMemoryMutationReplayStore,
+  readMutationWireHeaders,
   renderDeferredStream,
   renderPageHints,
   renderMutationResponse,
@@ -38,6 +40,44 @@ describe('server mutation primitives', () => {
         '<link rel="modulepreload" href="/c/recs.client.js">',
         '<script type="speculationrules">{"prerender":[{"eagerness":"conservative","urls":["/cart","/checkout"]}]}</script>',
       ].join(''),
+    });
+  });
+
+  it('reads enhanced mutation wire headers case-insensitively', () => {
+    expect(
+      readMutationWireHeaders({
+        'fw-fragment': 'true',
+        'FW-Idem': ' idem_01HX ',
+        'FW-Targets': 'cart-badge, recommendations, cart-badge',
+      }),
+    ).toEqual({
+      fragment: true,
+      idem: 'idem_01HX',
+      targets: ['cart-badge', 'recommendations'],
+    });
+  });
+
+  it('builds mutation wire requests from iterable HTTP headers', () => {
+    const replayStore = createMemoryMutationReplayStore();
+
+    expect(
+      mutationWireRequestFromHeaders({
+        headers: new Map([
+          ['FW-Fragment', 'true'],
+          ['FW-Idem', 'idem_01HY'],
+          ['FW-Targets', 'product-form:p1'],
+        ]),
+        rawInput: { productId: 'p1', quantity: 99 },
+        replayStore,
+        request: { sessionId: 's1' },
+      }),
+    ).toEqual({
+      fragment: true,
+      idem: 'idem_01HY',
+      rawInput: { productId: 'p1', quantity: 99 },
+      replayStore,
+      request: { sessionId: 's1' },
+      targets: ['product-form:p1'],
     });
   });
 
@@ -575,6 +615,7 @@ describe('server mutation primitives', () => {
       headers: {
         'Content-Type': 'text/vnd.jiso.fragment+html; charset=utf-8',
         'FW-Changes': '[{"domain":"cart","input":{"productId":"p1"}}]',
+        'FW-Idem': 'idem_01',
       },
       status: 200,
     });
@@ -605,7 +646,10 @@ describe('server mutation primitives', () => {
     });
     await expect(renderMutationResponse(addToCart, request)).resolves.toEqual({
       body: '<fw-fragment target="error"><output role="alert" data-error-code="OUT_OF_STOCK">{"availableQuantity":0}</output></fw-fragment>',
-      headers: { 'Content-Type': 'text/vnd.jiso.fragment+html; charset=utf-8' },
+      headers: {
+        'Content-Type': 'text/vnd.jiso.fragment+html; charset=utf-8',
+        'FW-Idem': 'idem_422',
+      },
       status: 422,
     });
     expect(attempts).toBe(1);

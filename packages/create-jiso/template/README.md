@@ -5,6 +5,7 @@ This starter uses Vite+ as the single project entrypoint:
 ```sh
 vp check
 vp test
+vp run build
 vp run fw-check
 ```
 

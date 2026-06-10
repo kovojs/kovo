@@ -67,6 +67,15 @@ export default defineConfig({
   },
   run: {
     tasks: {
+      build: {
+        command: 'vp build',
+        input: [
+          { pattern: 'index.html', base: 'workspace' },
+          { pattern: 'src/**/*', base: 'workspace' },
+          { pattern: 'vite.config.ts', base: 'workspace' },
+        ],
+        output: ['dist/**'],
+      },
       'fw-check': {
         command: 'fw check graph.json',
         input: [{ pattern: 'graph.json', base: 'workspace' }],
@@ -97,7 +106,24 @@ jobs:
       - run: vp install
       - run: vp check
       - run: vp test
+      - run: vp run build
       - run: vp run fw-check
+`,
+      },
+      {
+        path: 'README.md',
+        source: `# Jiso Starter
+
+This starter uses Vite+ as the single project entrypoint:
+
+\`\`\`sh
+vp check
+vp test
+vp run build
+vp run fw-check
+\`\`\`
+
+Tailwind is the default app styling path. Keep class names in templates as static strings so the generated CSS contains every class that can appear in SSR pages, mutation fragments, and deferred streams. Safelist classes explicitly in \`src/styles.css\` when a fragment must emit a class that cannot be discovered statically.
 `,
       },
       {
@@ -185,6 +211,33 @@ The v1 implementation depends on these hard rules:
 @theme {
   --color-jiso-ink: #17202a;
   --color-jiso-accent: #0f8b8d;
+}
+`,
+      },
+      {
+        path: 'index.html',
+        source: `<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Jiso Starter</title>
+  </head>
+  <body>
+    <div id="app"></div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
+`,
+      },
+      {
+        path: 'src/main.ts',
+        source: `import { App } from './app';
+
+const target = document.querySelector<HTMLDivElement>('#app');
+
+if (target) {
+  target.innerHTML = App.definition.render();
 }
 `,
       },

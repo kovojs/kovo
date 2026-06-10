@@ -301,12 +301,34 @@ export interface ErrorBoundaryRenderer {
 }
 
 export interface MutationWireRequest<Request> {
+  fragment?: boolean;
   fragmentRenderers?: readonly FragmentRenderer[];
   idem?: string;
   replayStore?: MutationReplayStore;
   rawInput: unknown;
   request: Request;
   targets?: readonly string[];
+}
+
+export interface MutationWireHeaders {
+  fragment: boolean;
+  idem?: string;
+  targets: readonly string[];
+}
+
+export type MutationWireHeaderSource =
+  | Iterable<readonly [string, string]>
+  | Record<string, readonly string[] | string | undefined>
+  | {
+      get(name: string): null | string;
+    };
+
+export interface MutationWireRequestOptions<Request> {
+  fragmentRenderers?: readonly FragmentRenderer[];
+  headers: MutationWireHeaderSource;
+  rawInput: unknown;
+  replayStore?: MutationReplayStore;
+  request: Request;
 }
 
 export interface MutationWireResponse {
@@ -331,6 +353,41 @@ export function createMemoryMutationReplayStore(): MutationReplayStore {
     set(idem, response) {
       responses.set(idem, cloneMutationWireResponse(response));
     },
+  };
+}
+
+export function readMutationWireHeaders(headers: MutationWireHeaderSource): MutationWireHeaders {
+  const fragment = readHeader(headers, 'FW-Fragment')?.toLowerCase() === 'true';
+  const idem = readHeader(headers, 'FW-Idem')?.trim();
+  const targets = dedupe(
+    (readHeader(headers, 'FW-Targets') ?? '')
+      .split(',')
+      .map((target) => target.trim())
+      .filter(Boolean),
+  );
+
+  return {
+    fragment,
+    ...(idem ? { idem } : {}),
+    targets,
+  };
+}
+
+export function mutationWireRequestFromHeaders<Request>(
+  options: MutationWireRequestOptions<Request>,
+): MutationWireRequest<Request> {
+  const headers = readMutationWireHeaders(options.headers);
+
+  return {
+    fragment: headers.fragment,
+    rawInput: options.rawInput,
+    request: options.request,
+    ...(options.fragmentRenderers === undefined
+      ? {}
+      : { fragmentRenderers: options.fragmentRenderers }),
+    ...(headers.idem === undefined ? {} : { idem: headers.idem }),
+    ...(options.replayStore === undefined ? {} : { replayStore: options.replayStore }),
+    targets: headers.targets,
   };
 }
 
@@ -607,7 +664,7 @@ export async function renderMutationResponse<
   if (!result.ok) {
     return storeMutationReplay(wireRequest, {
       body: `<fw-fragment target="error"><output role="alert" data-error-code="${escapeAttribute(result.error.code)}">${escapeHtml(JSON.stringify(result.error.payload))}</output></fw-fragment>`,
-      headers: { 'Content-Type': 'text/vnd.jiso.fragment+html; charset=utf-8' },
+      headers: mutationWireResponseHeaders(wireRequest),
       status: 422,
     });
   }
@@ -626,7 +683,7 @@ export async function renderMutationResponse<
   return storeMutationReplay(wireRequest, {
     body: [...queryChunks, ...fragmentChunks].join('\n'),
     headers: {
-      'Content-Type': 'text/vnd.jiso.fragment+html; charset=utf-8',
+      ...mutationWireResponseHeaders(wireRequest),
       'FW-Changes': JSON.stringify(result.changes),
     },
     status: 200,
@@ -797,6 +854,38 @@ function cloneMutationWireResponse(response: MutationWireResponse): MutationWire
     headers: { ...response.headers },
     status: response.status,
   };
+}
+
+function mutationWireResponseHeaders<Request>(
+  wireRequest: MutationWireRequest<Request>,
+): Record<string, string> {
+  return {
+    'Content-Type': 'text/vnd.jiso.fragment+html; charset=utf-8',
+    ...(wireRequest.idem ? { 'FW-Idem': wireRequest.idem } : {}),
+  };
+}
+
+function readHeader(headers: MutationWireHeaderSource, name: string): string | undefined {
+  if ('get' in headers && typeof headers.get === 'function') {
+    return headers.get(name) ?? headers.get(name.toLowerCase()) ?? undefined;
+  }
+
+  const wanted = name.toLowerCase();
+  if (Symbol.iterator in headers) {
+    for (const [key, value] of headers) {
+      if (key.toLowerCase() === wanted) return value;
+    }
+
+    return undefined;
+  }
+
+  for (const [key, value] of Object.entries(headers)) {
+    if (key.toLowerCase() !== wanted) continue;
+    if (Array.isArray(value)) return value.join(', ');
+    return value;
+  }
+
+  return undefined;
 }
 
 function dedupe(values: readonly string[]): string[] {

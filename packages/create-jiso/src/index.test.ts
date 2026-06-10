@@ -11,11 +11,14 @@ describe('create-jiso starter', () => {
       'package.json',
       'vite.config.ts',
       '.github/workflows/ci.yml',
+      'README.md',
       'graph.json',
       'docs/graph-assertions.md',
       'docs/deployment.md',
       'docs/framework-rules.md',
       'src/styles.css',
+      'index.html',
+      'src/main.ts',
       'src/app.tsx',
       'src/app.fixpoint.test.ts',
     ]);
@@ -29,11 +32,22 @@ describe('create-jiso starter', () => {
       "command: 'fw check graph.json'",
     );
     expect(project.files.find((file) => file.path === 'vite.config.ts')?.source).toContain(
+      "command: 'vp build'",
+    );
+    expect(project.files.find((file) => file.path === 'vite.config.ts')?.source).toContain(
+      "output: ['dist/**']",
+    );
+    expect(project.files.find((file) => file.path === 'vite.config.ts')?.source).toContain(
       'plugins: [tailwindcss()]',
     );
     expect(project.files.find((file) => file.path === 'src/styles.css')?.source).toContain(
       '@source "./**/*.{ts,tsx,html}";',
     );
+    const readme = project.files.find((file) => file.path === 'README.md')?.source;
+    expect(readme).toContain('vp check');
+    expect(readme).toContain('vp test');
+    expect(readme).toContain('vp run build');
+    expect(readme).toContain('vp run fw-check');
     expect(
       project.files.find((file) => file.path === 'docs/graph-assertions.md')?.source,
     ).toContain('fw explain mutation cart/add --optimistic graph.json');
@@ -64,9 +78,21 @@ describe('create-jiso starter', () => {
     expect(project.files.find((file) => file.path === 'src/app.tsx')?.source).toContain(
       'class="mx-auto grid min-h-dvh',
     );
+    expect(project.files.find((file) => file.path === 'index.html')?.source).toContain(
+      'src="/src/main.ts"',
+    );
+    expect(project.files.find((file) => file.path === 'src/main.ts')?.source).toContain(
+      'target.innerHTML = App.definition.render()',
+    );
     expect(
       project.files.find((file) => file.path === '.github/workflows/ci.yml')?.source,
     ).toContain('voidzero-dev/setup-vp@v1');
+    expect(
+      project.files.find((file) => file.path === '.github/workflows/ci.yml')?.source,
+    ).toContain('vp run build');
+    expect(
+      project.files.find((file) => file.path === '.github/workflows/ci.yml')?.source,
+    ).toContain('vp run fw-check');
     const fixpointTest = project.files.find(
       (file) => file.path === 'src/app.fixpoint.test.ts',
     )?.source;
