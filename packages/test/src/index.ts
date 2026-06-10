@@ -2,6 +2,7 @@ export type { DiagnosticCode } from '@jiso/core';
 import { diagnosticDefinitions, type DiagnosticCode, type DiagnosticSeverity } from '@jiso/core';
 import type { TouchGraph, TouchSite } from '@jiso/drizzle';
 import {
+  type InferSchema,
   type MutationDefinition,
   type MutationResult,
   type Schema,
@@ -103,6 +104,16 @@ export interface DbVerifier {
   observed: readonly ObservedDbOperation[];
   wrap<Db>(db: Db): Db;
 }
+
+export type MutationErrorExpectation<
+  Errors extends Record<string, Schema<unknown>>,
+  Code extends Extract<keyof Errors, string>,
+> =
+  | Code
+  | {
+      code: Code;
+      payload?: InferSchema<Errors[Code]>;
+    };
 
 export interface PropertyCase<State, Input> {
   input: Input;
@@ -255,6 +266,41 @@ export function createDbVerifier(touchGraph: TouchGraph, config: DbVerificationC
   };
 }
 
+export function assertMutationError<
+  const Key extends string,
+  InputSchema extends Schema<unknown>,
+  Errors extends Record<string, Schema<unknown>>,
+  Request,
+  Value,
+  const Code extends Extract<keyof Errors, string>,
+>(
+  mutation: MutationDefinition<Key, InputSchema, Errors, Request, Value>,
+  result: MutationResult<Value>,
+  expected: MutationErrorExpectation<Errors, Code>,
+): InferSchema<Errors[Code]> {
+  const expectation = typeof expected === 'string' ? { code: expected } : expected;
+
+  if (result.ok) {
+    throw new Error(`Expected ${mutation.key} to fail with ${expectation.code}, but it succeeded.`);
+  }
+
+  if (result.error.code !== expectation.code) {
+    throw new Error(
+      `Expected ${mutation.key} to fail with ${expectation.code}, got ${result.error.code}.`,
+    );
+  }
+
+  if ('payload' in expectation && !deepEqual(result.error.payload, expectation.payload)) {
+    throw new Error(
+      `Expected ${mutation.key} error ${expectation.code} payload ${formatValue(
+        expectation.payload,
+      )}, got ${formatValue(result.error.payload)}.`,
+    );
+  }
+
+  return result.error.payload as InferSchema<Errors[Code]>;
+}
+
 export async function jisoTest<Db>(
   _name: string,
   fn: (ctx: JisoTestContext<Db>) => void | Promise<void>,
@@ -318,6 +364,10 @@ function escapeRegExp(value: string): string {
 
 function deepEqual(left: unknown, right: unknown): boolean {
   return JSON.stringify(left) === JSON.stringify(right);
+}
+
+function formatValue(value: unknown): string {
+  return JSON.stringify(value) ?? String(value);
 }
 
 function observe(

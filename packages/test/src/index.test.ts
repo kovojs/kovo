@@ -2,7 +2,13 @@ import { describe, expect, it } from 'vitest';
 
 import { mutation, s } from '@jiso/server';
 
-import { createDbVerifier, createJisoTestHarness, jisoTest, propertyTest } from './index.js';
+import {
+  assertMutationError,
+  createDbVerifier,
+  createJisoTestHarness,
+  jisoTest,
+  propertyTest,
+} from './index.js';
 
 interface FakeDb {
   read(table: string, options?: { branch?: string; rowKey?: string }): unknown[];
@@ -73,6 +79,78 @@ describe('@jiso/test harness', () => {
       rerunQueries: [],
       value: ['p1'],
     });
+  });
+
+  it('asserts typed mutation error paths without rendering a browser', async () => {
+    const addToCart = mutation('cart/add', {
+      errors: {
+        OUT_OF_STOCK: s.object({ availableQuantity: s.number().int().min(0) }),
+      },
+      input: s.object({
+        productId: s.string(),
+        quantity: s.number().int().min(1),
+      }),
+      handler(input, request: { db: { stock: number } }, context) {
+        if (input.quantity > request.db.stock) {
+          return context.fail('OUT_OF_STOCK', { availableQuantity: request.db.stock });
+        }
+
+        return { added: input.quantity };
+      },
+    });
+    const harness = createJisoTestHarness({ db: { stock: 0 } });
+
+    const result = await harness.exec(addToCart, { productId: 'p1', quantity: 2 });
+    const payload = assertMutationError(addToCart, result, {
+      code: 'OUT_OF_STOCK',
+      payload: { availableQuantity: 0 },
+    });
+
+    const typedPayload: { availableQuantity: number } = payload;
+    expect(typedPayload.availableQuantity).toBe(0);
+
+    const assertDeclaredErrorCodes = () => {
+      // @ts-expect-error UNKNOWN_ERROR is not declared by this mutation's errors schema.
+      assertMutationError(addToCart, result, 'UNKNOWN_ERROR');
+    };
+    expect(assertDeclaredErrorCodes).toBeTypeOf('function');
+  });
+
+  it('reports mutation error-path assertion mismatches', async () => {
+    const addToCart = mutation('cart/add', {
+      errors: {
+        OUT_OF_STOCK: s.object({ availableQuantity: s.number().int().min(0) }),
+        PRICE_CHANGED: s.object({ currentPrice: s.number().min(0) }),
+      },
+      input: s.object({ quantity: s.number().int().min(1) }),
+      handler(input, request: { db: { stock: number } }, context) {
+        if (input.quantity > request.db.stock) {
+          return context.fail('OUT_OF_STOCK', { availableQuantity: request.db.stock });
+        }
+
+        return { added: input.quantity };
+      },
+    });
+    const failingHarness = createJisoTestHarness({ db: { stock: 0 } });
+    const successHarness = createJisoTestHarness({ db: { stock: 5 } });
+
+    const failure = await failingHarness.exec(addToCart, { quantity: 2 });
+    expect(() => assertMutationError(addToCart, failure, 'PRICE_CHANGED')).toThrow(
+      'Expected cart/add to fail with PRICE_CHANGED, got OUT_OF_STOCK.',
+    );
+    expect(() =>
+      assertMutationError(addToCart, failure, {
+        code: 'OUT_OF_STOCK',
+        payload: { availableQuantity: 1 },
+      }),
+    ).toThrow(
+      'Expected cart/add error OUT_OF_STOCK payload {"availableQuantity":1}, got {"availableQuantity":0}.',
+    );
+
+    const success = await successHarness.exec(addToCart, { quantity: 2 });
+    expect(() => assertMutationError(addToCart, success, 'OUT_OF_STOCK')).toThrow(
+      'Expected cart/add to fail with OUT_OF_STOCK, but it succeeded.',
+    );
   });
 
   it('asserts fragments from rendered HTML without a browser', async () => {
