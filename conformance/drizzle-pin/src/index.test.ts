@@ -158,4 +158,40 @@ describe('Drizzle pinned subset conformance', () => {
       },
     ]);
   });
+
+  it('pins local conditional table resolution as a safe over-approximation', () => {
+    const graph = extractTouchGraphFromSource([
+      {
+        fileName: 'product.domain.ts',
+        source: [
+          'export const archivedProducts = pgTable("archived_products", {}, jiso({ domain: "archive", key: "id" }));',
+          'export const products = pgTable("products", {}, jiso({ domain: "product", key: "id" }));',
+          'const writeTarget = useArchive ? archivedProducts : products;',
+          '',
+          'export async function syncProduct(db, productId) {',
+          '  await db.update(writeTarget).set({ reserved: true }).where(eq(writeTarget.id, productId));',
+          '}',
+          '',
+        ].join('\n'),
+      },
+    ]);
+
+    expect(serializeTouchGraph(graph)).toBe(
+      [
+        'export const touchGraph = {',
+        '  "syncProduct": {',
+        '    touches: [',
+        '      { domain: "archive", via: "archived_products", site: "product.domain.ts:6", keys: "arg:productId" },',
+        '      { domain: "product", via: "products", site: "product.domain.ts:6", keys: "arg:productId" },',
+        '    ],',
+        '    reads: [',
+        '    ],',
+        '    unresolved: [',
+        '    ],',
+        '  },',
+        '} as const;',
+        '',
+      ].join('\n'),
+    );
+  });
 });

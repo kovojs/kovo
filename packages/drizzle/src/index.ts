@@ -201,18 +201,24 @@ export function diagnosticsForTouchGraph(graph: TouchGraph): TouchGraphDiagnosti
 }
 
 export function extractTouchGraphFromSource(files: readonly SourceFileInput[]): TouchGraph {
-  const tables = new Map<string, ExtractedTable>();
+  const tables = new Map<string, ExtractedTable[]>();
+  const unresolvedIdentifiers = new Set<string>();
   const graph: Record<string, TouchGraphEntry> = {};
 
   for (const file of files) {
     for (const table of extractTables(file.source)) {
-      tables.set(table.identifier, {
+      appendTable(tables, table.identifier, {
         annotation: {
           domain: table.domain,
           ...(table.key ? { key: table.key } : {}),
           name: table.name,
         },
       });
+    }
+  }
+  for (const file of files) {
+    for (const identifier of extractUnresolvedConditionalIdentifiers(file.source, tables)) {
+      unresolvedIdentifiers.add(identifier);
     }
   }
 
@@ -224,43 +230,59 @@ export function extractTouchGraphFromSource(files: readonly SourceFileInput[]): 
 
       for (const call of extractDrizzleWriteCalls(fn.body)) {
         const site = `${file.fileName}:${lineForIndex(file.source, fn.bodyStart + call.index)}`;
-        const table = tables.get(call.tableExpression);
+        const resolvedTables = tables.get(call.tableExpression) ?? [];
 
-        if (table) {
-          const writePredicate = extractPredicateSummary(
-            call.statement,
-            call.tableExpression,
-            table.annotation,
-            tables,
-          );
-          writes.push({
-            operation: call.operation,
-            site,
-            table: table.annotation,
-            ...(writePredicate.predicate ? { predicate: writePredicate.predicate } : {}),
-            ...(writePredicate.key ? { writeKey: writePredicate.key } : {}),
-          });
+        if (resolvedTables.length > 0) {
+          for (const table of resolvedTables) {
+            const writePredicate = extractPredicateSummary(
+              call.statement,
+              call.tableExpression,
+              table.annotation,
+              tables,
+            );
+            writes.push({
+              operation: call.operation,
+              site,
+              table: table.annotation,
+              ...(writePredicate.predicate ? { predicate: writePredicate.predicate } : {}),
+              ...(writePredicate.key ? { writeKey: writePredicate.key } : {}),
+            });
+          }
           for (const readSource of call.readSources) {
-            const readTable = tables.get(readSource.tableExpression);
-            if (readTable) {
-              const readPredicate = extractPredicateSummary(
-                call.statement,
-                readSource.tableExpression,
-                readTable.annotation,
-                tables,
-              );
-              reads.push({
-                operation: readSource.operation,
-                ...(readPredicate.predicate ? { predicate: readPredicate.predicate } : {}),
-                ...(readPredicate.key ? { readKey: readPredicate.key } : {}),
-                site,
-                table: readTable.annotation,
-              });
+            const readTables = tables.get(readSource.tableExpression) ?? [];
+            if (readTables.length > 0) {
+              for (const readTable of readTables) {
+                const readPredicate = extractPredicateSummary(
+                  call.statement,
+                  readSource.tableExpression,
+                  readTable.annotation,
+                  tables,
+                );
+                reads.push({
+                  operation: readSource.operation,
+                  ...(readPredicate.predicate ? { predicate: readPredicate.predicate } : {}),
+                  ...(readPredicate.key ? { readKey: readPredicate.key } : {}),
+                  site,
+                  table: readTable.annotation,
+                });
+              }
+              if (unresolvedIdentifiers.has(readSource.tableExpression)) {
+                unresolved.push({
+                  operation: readSource.operation,
+                  site,
+                });
+              }
               continue;
             }
 
             unresolved.push({
               operation: readSource.operation,
+              site,
+            });
+          }
+          if (unresolvedIdentifiers.has(call.tableExpression)) {
+            unresolved.push({
+              operation: call.operation,
               site,
             });
           }
@@ -315,7 +337,7 @@ interface ExtractedPredicateSummary {
 
 function extractTables(source: string): ExtractedTableDeclaration[] {
   const tables: ExtractedTableDeclaration[] = [];
-  const byIdentifier = new Map<string, ExtractedTableDeclaration>();
+  const byIdentifier = new Map<string, ExtractedTableDeclaration[]>();
   const declarations =
     /(?:export\s+)?const\s+(?<identifier>[A-Za-z_$][\w$]*)\s*=\s*(?<initializer>[\s\S]*?);/g;
 
@@ -338,25 +360,25 @@ function extractTables(source: string): ExtractedTableDeclaration[] {
       name: stringArgument(initializer) ?? identifier,
     };
     tables.push(table);
-    byIdentifier.set(identifier, table);
+    appendTable(byIdentifier, identifier, table);
   }
 
   for (const match of matches) {
     const declaration = tableDeclarationFromMatch(match);
-    if (!declaration || byIdentifier.has(declaration.identifier)) continue;
+    if (!declaration || (byIdentifier.get(declaration.identifier)?.length ?? 0) > 0) continue;
 
-    const target = aliasTarget(declaration.initializer);
-    const table = target ? byIdentifier.get(target) : undefined;
-    if (!table) continue;
-
-    const alias = {
-      domain: table.domain,
-      identifier: declaration.identifier,
-      ...(table.key ? { key: table.key } : {}),
-      name: table.name,
-    };
-    tables.push(alias);
-    byIdentifier.set(alias.identifier, alias);
+    for (const target of aliasTargets(declaration.initializer)) {
+      for (const table of byIdentifier.get(target) ?? []) {
+        const alias = {
+          domain: table.domain,
+          identifier: declaration.identifier,
+          ...(table.key ? { key: table.key } : {}),
+          name: table.name,
+        };
+        tables.push(alias);
+        appendTable(byIdentifier, alias.identifier, alias);
+      }
+    }
   }
 
   return tables;
@@ -373,12 +395,50 @@ function tableDeclarationFromMatch(
   return identifier && initializer ? { identifier, initializer } : undefined;
 }
 
-function aliasTarget(initializer: string): string | undefined {
-  const direct = /^(?<identifier>[A-Za-z_$][\w$]*)$/.exec(initializer.trim())?.groups?.identifier;
-  if (direct) return direct;
+function aliasTargets(initializer: string): string[] {
+  const trimmed = initializer.trim();
+  const direct = /^(?<identifier>[A-Za-z_$][\w$]*)$/.exec(trimmed)?.groups?.identifier;
+  if (direct) return [direct];
 
-  return /^alias\s*\(\s*(?<identifier>[A-Za-z_$][\w$]*)\s*,/.exec(initializer.trim())?.groups
+  const alias = /^alias\s*\(\s*(?<identifier>[A-Za-z_$][\w$]*)\s*,/.exec(trimmed)?.groups
     ?.identifier;
+  if (alias) return [alias];
+
+  return conditionalBranches(trimmed).filter(Boolean);
+}
+
+function extractUnresolvedConditionalIdentifiers(
+  source: string,
+  tables: ReadonlyMap<string, readonly ExtractedTable[]>,
+): string[] {
+  const unresolved: string[] = [];
+  const declarations =
+    /(?:export\s+)?const\s+(?<identifier>[A-Za-z_$][\w$]*)\s*=\s*(?<initializer>[\s\S]*?);/g;
+
+  for (const match of source.matchAll(declarations)) {
+    const declaration = tableDeclarationFromMatch(match);
+    if (!declaration) continue;
+
+    const targets = conditionalBranches(declaration.initializer);
+    if (targets.length === 0) continue;
+
+    const resolvedCount = targets.filter((target) => (tables.get(target)?.length ?? 0) > 0).length;
+    if (resolvedCount > 0 && resolvedCount < targets.length)
+      unresolved.push(declaration.identifier);
+  }
+
+  return unresolved;
+}
+
+function conditionalBranches(initializer: string): string[] {
+  const groups = /^[\s\S]+?\?\s*(?<whenTrue>[^:]+?)\s*:\s*(?<whenFalse>[\s\S]+)$/.exec(
+    initializer.trim(),
+  )?.groups;
+  if (!groups) return [];
+
+  return [groups.whenTrue, groups.whenFalse]
+    .map((branch) => branch?.trim())
+    .flatMap((branch) => (/^[A-Za-z_$][\w$]*$/.test(branch ?? '') ? [branch as string] : ['']));
 }
 
 function extractFunctions(source: string): ExtractedFunction[] {
@@ -468,7 +528,7 @@ function extractPredicateSummary(
   statement: string,
   tableIdentifier: string,
   table: JisoTableAnnotation,
-  tables: ReadonlyMap<string, ExtractedTable>,
+  tables: ReadonlyMap<string, readonly ExtractedTable[]>,
 ): ExtractedPredicateSummary {
   const key = extractParameterizedKey(statement, tableIdentifier, table, tables);
   if (key) return { key };
@@ -480,7 +540,7 @@ function extractParameterizedKey(
   statement: string,
   tableIdentifier: string,
   table: JisoTableAnnotation,
-  tables: ReadonlyMap<string, ExtractedTable>,
+  tables: ReadonlyMap<string, readonly ExtractedTable[]>,
 ): string | undefined {
   if (!table.key) return undefined;
 
@@ -513,15 +573,19 @@ function hasNonEqPredicate(
 
 function argumentKey(
   expression: string,
-  tables: ReadonlyMap<string, ExtractedTable>,
+  tables: ReadonlyMap<string, readonly ExtractedTable[]>,
 ): string | undefined {
   const member = /^(?<base>[A-Za-z_$][\w$]*)\.(?<property>[A-Za-z_$][\w$]*)$/.exec(expression);
   if (member?.groups) {
-    if (tables.has(member.groups.base ?? '')) return undefined;
+    if ((tables.get(member.groups.base ?? '')?.length ?? 0) > 0) return undefined;
     return member.groups.property ? `arg:${member.groups.property}` : undefined;
   }
 
   return /^[A-Za-z_$][\w$]*$/.test(expression) ? `arg:${expression}` : undefined;
+}
+
+function appendTable<Table>(tables: Map<string, Table[]>, identifier: string, table: Table): void {
+  tables.set(identifier, [...(tables.get(identifier) ?? []), table]);
 }
 
 function findMatchingBrace(source: string, openBrace: number): number {

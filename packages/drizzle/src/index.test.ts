@@ -468,6 +468,91 @@ export const tableDomains = {
     ]);
   });
 
+  it('over-approximates local conditional table initializers', () => {
+    const graph = extractTouchGraphFromSource([
+      {
+        fileName: 'product.domain.ts',
+        source: `
+          export const archivedProducts = pgTable("archived_products", {}, jiso({ domain: "archive", key: "id" }));
+          export const prices = pgTable("prices", {}, jiso({ domain: "price", key: "productId" }));
+          export const products = pgTable("products", {}, jiso({ domain: "product", key: "id" }));
+          const priceSource = useArchive ? archivedProducts : prices;
+          const writeTarget = useArchive ? archivedProducts : products;
+
+          export async function syncProduct(db, productId) {
+            await db.update(writeTarget).set({ reserved: true }).from(priceSource).where(eq(writeTarget.id, productId));
+          }
+        `,
+      },
+    ]);
+
+    expect(graph).toEqual({
+      syncProduct: {
+        reads: [
+          {
+            domain: 'archive',
+            keys: null,
+            site: 'product.domain.ts:9',
+            source: 'update-from',
+            via: 'archived_products',
+          },
+          {
+            domain: 'price',
+            keys: null,
+            site: 'product.domain.ts:9',
+            source: 'update-from',
+            via: 'prices',
+          },
+        ],
+        touches: [
+          {
+            domain: 'archive',
+            keys: 'arg:productId',
+            site: 'product.domain.ts:9',
+            via: 'archived_products',
+          },
+          {
+            domain: 'product',
+            keys: 'arg:productId',
+            site: 'product.domain.ts:9',
+            via: 'products',
+          },
+        ],
+        unresolved: [],
+      },
+    });
+  });
+
+  it('keeps resolved conditional branches when another branch is unresolved', () => {
+    const graph = extractTouchGraphFromSource([
+      {
+        fileName: 'product.domain.ts',
+        source: `
+          export const products = pgTable("products", {}, jiso({ domain: "product", key: "id" }));
+          const writeTarget = useDynamic ? tableFor("archive") : products;
+
+          export async function syncProduct(db) {
+            await db.update(writeTarget).set({ reserved: true });
+          }
+        `,
+      },
+    ]);
+
+    expect(graph).toEqual({
+      syncProduct: {
+        reads: [],
+        touches: [{ domain: 'product', keys: null, site: 'product.domain.ts:6', via: 'products' }],
+        unresolved: [
+          {
+            code: 'FW406',
+            message: 'Statically un-analyzable write site; manual touches required.',
+            site: 'product.domain.ts:6',
+          },
+        ],
+      },
+    });
+  });
+
   it('marks aliases with unresolved bases as FW406', () => {
     const graph = extractTouchGraphFromSource([
       {
