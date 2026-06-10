@@ -114,11 +114,13 @@ Jiso keeps application wiring auditable through the generated graph file consume
 vp run fw-check
 fw explain component App graph.json
 fw explain mutation cart/add --optimistic graph.json
+fw explain --unguarded graph.json
 fw explain query cart graph.json
 fw explain page /cart graph.json
 \`\`\`
 
 Use \`fw check graph.json\` in CI for semantic checks that do not belong in \`vp check\`: optimistic coverage (\`FW310\`), touch-graph consistency, unguarded mutation audits, manual invalidation review, and Jiso-specific lints.
+Use \`fw explain --unguarded graph.json\` when you need the stable, diffable audit list from SPEC.md section 10.3.
 
 Keep every mutation/query pair explicit in \`graph.json\`:
 
@@ -168,6 +170,7 @@ The v1 implementation depends on these hard rules:
 - Use Tailwind as the default app styling path. Keep class names statically discoverable or safelisted so SSR pages, mutation fragments, and deferred streams never reference missing CSS.
 - Route writes through domain functions. Direct database access in mutation handlers is a framework lint because invalidation and verification depend on the domain graph.
 - The v1 server is stateless. Liveness comes from BroadcastChannel rebroadcast and refetch-on-focus/visibility, not Redis, SSE, or a live bus.
+- Unguarded mutation review should use \`fw explain --unguarded graph.json\` as the stable audit path.
 - Every mutation/query pair should have an explicit optimistic status: \`hand-written\`, \`await-fragment\`, or temporarily \`UNHANDLED\` while developing.
 `,
       },
