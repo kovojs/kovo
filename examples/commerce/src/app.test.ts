@@ -163,6 +163,7 @@ describe('commerce example', () => {
         'writes: cart,product,order',
         'invalidates: cart,product,order',
         'manual-invalidates: -',
+        'updates: cart->component:CartBadge,page:/cart; orderHistory->component:OrderHistory,page:/cart; productGrid->component:ProductGrid,page:/cart',
         'OPTIMISTIC cart await-fragment',
         'OPTIMISTIC productGrid await-fragment',
         'OPTIMISTIC orderHistory await-fragment',

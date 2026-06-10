@@ -226,6 +226,7 @@ export function fwExplain(input: FwExplainInput, options: FwExplainOptions): FwC
     lines.push(`writes: ${list(mutation.writes)}`);
     lines.push(`invalidates: ${list(mutation.invalidates)}`);
     lines.push(`manual-invalidates: ${list(mutation.manualInvalidates)}`);
+    lines.push(`updates: ${listMutationUpdates(mutationUpdates(mutation, input))}`);
 
     if (options.optimistic) {
       const coverages = input.optimistic?.filter((item) => item.mutation === mutation.key) ?? [];
@@ -403,6 +404,34 @@ function queryConsumers(queryName: string, input: FwExplainInput): string[] {
       .map((page) => `page:${page.route}`) ?? [];
 
   return [...components, ...pages].sort();
+}
+
+function mutationUpdates(
+  mutation: MutationExplain,
+  input: FwExplainInput,
+): Array<{ consumers: string[]; query: string }> {
+  const domains = new Set([
+    ...(mutation.invalidates ?? mutation.writes ?? []),
+    ...(mutation.manualInvalidates ?? []),
+  ]);
+  if (domains.size === 0) return [];
+
+  return (input.queries ?? [])
+    .filter((query) => query.domains.some((domain) => domains.has(domain)))
+    .map((query) => ({
+      consumers: queryConsumers(query.query, input),
+      query: query.query,
+    }))
+    .filter((update) => update.consumers.length > 0)
+    .sort((left, right) => left.query.localeCompare(right.query));
+}
+
+function listMutationUpdates(
+  updates: readonly { consumers: readonly string[]; query: string }[],
+): string {
+  if (updates.length === 0) return '-';
+
+  return updates.map((update) => `${update.query}->${list(update.consumers)}`).join('; ');
 }
 
 function unguardedMutations(mutations: readonly MutationExplain[]): MutationExplain[] {

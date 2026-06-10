@@ -535,6 +535,15 @@ describe('fw explain', () => {
             { mutation: 'cart/add', query: 'recommendations', status: 'await-fragment' },
             { mutation: 'cart/add', query: 'cart.discount', status: 'UNHANDLED' },
           ],
+          components: [
+            { name: 'CartBadge', queries: ['cart'] },
+            { name: 'Recommendations', queries: ['recommendations'] },
+          ],
+          pages: [{ queries: ['cart'], route: '/cart' }],
+          queries: [
+            { domains: ['cart'], query: 'cart' },
+            { domains: ['product'], query: 'recommendations' },
+          ],
         },
         { kind: 'mutation', optimistic: true, target: 'cart/add' },
       ),
@@ -547,6 +556,7 @@ describe('fw explain', () => {
         'writes: cart,product',
         'invalidates: cart',
         'manual-invalidates: product',
+        'updates: cart->component:CartBadge,page:/cart; recommendations->component:Recommendations',
         'OPTIMISTIC cart hand-written',
         'OPTIMISTIC recommendations await-fragment',
         'OPTIMISTIC cart.discount UNHANDLED',
@@ -653,6 +663,35 @@ describe('fw explain', () => {
       exitCode: 0,
       output:
         'fw-explain/v1\nQUERY cart\nreads: cart\nconsumers: component:CartBadge,page:/cart,page:/checkout\ninvalidated-by: cart.addItem\n',
+    });
+  });
+
+  it('explains mutation updates from writes when invalidates are absent', () => {
+    expect(
+      fwExplain(
+        {
+          components: [{ name: 'CartBadge', queries: ['cart'] }],
+          mutations: [{ guards: ['authed'], key: 'cart/add', writes: ['cart'] }],
+          pages: [{ queries: ['cart'], route: '/checkout' }],
+          queries: [
+            { domains: ['cart'], query: 'cart' },
+            { domains: ['product'], query: 'productGrid' },
+          ],
+        },
+        { kind: 'mutation', target: 'cart/add' },
+      ),
+    ).toEqual({
+      exitCode: 0,
+      output: [
+        'fw-explain/v1',
+        'MUTATION cart/add',
+        'guards: authed',
+        'writes: cart',
+        'invalidates: -',
+        'manual-invalidates: -',
+        'updates: cart->component:CartBadge,page:/checkout',
+        '',
+      ].join('\n'),
     });
   });
 
