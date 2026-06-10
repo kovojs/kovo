@@ -14,6 +14,7 @@ import {
   installMutationBroadcast,
   installJisoLoader,
   MutationQueue,
+  morphStructuralTree,
   OptimisticRebaser,
   parseHandlerReference,
   readElementParams,
@@ -22,6 +23,7 @@ import {
   type DelegatedEvent,
   type EnhancedMutationFetchOptions,
   type EventElementLike,
+  type StructuralMorphNode,
 } from './index.js';
 
 class FakeRoot {
@@ -469,6 +471,82 @@ describe('query store', () => {
       ]),
     ).toEqual(['cart-badge']);
     expect(root.targets.get('cart-badge')?.html).toBe('<cart-badge>new</cart-badge>');
+  });
+
+  it('morphs a structural tree to the next tree shape without DOM APIs', () => {
+    const current: StructuralMorphNode = {
+      children: [
+        { key: 'total', text: 'Cart total: $4', type: 'span' },
+        { text: 'stale helper', type: 'small' },
+      ],
+      props: { role: 'status' },
+      type: 'cart-badge',
+    };
+    const next: StructuralMorphNode = {
+      children: [
+        {
+          key: 'total',
+          props: { 'data-bind': 'cart.total' },
+          text: 'Cart total: $7',
+          type: 'span',
+        },
+        { key: 'count', text: '2 items', type: 'strong' },
+      ],
+      props: { role: 'status', 'aria-live': 'polite' },
+      type: 'cart-badge',
+    };
+
+    const result = morphStructuralTree(current, next);
+
+    expect(result).toBe(current);
+    expect(result).toEqual(next);
+    expect(result.children?.[1]).not.toBe(next.children?.[1]);
+  });
+
+  it('preserves keyed structural node identity when sibling order changes', () => {
+    const first: StructuralMorphNode = {
+      children: [{ text: '$4', type: 'span' }],
+      key: 'line:1',
+      props: { 'data-id': 'line:1' },
+      text: 'Coffee',
+      type: 'li',
+    };
+    const second: StructuralMorphNode = {
+      children: [{ text: '$3', type: 'span' }],
+      key: 'line:2',
+      props: { 'data-id': 'line:2' },
+      text: 'Tea',
+      type: 'li',
+    };
+    const current: StructuralMorphNode = {
+      children: [first, second],
+      type: 'ul',
+    };
+    const next: StructuralMorphNode = {
+      children: [
+        {
+          children: [{ text: '$5', type: 'span' }],
+          key: 'line:2',
+          props: { 'data-id': 'line:2', 'data-selected': 'true' },
+          text: 'Tea',
+          type: 'li',
+        },
+        {
+          children: [{ text: '$4', type: 'span' }],
+          key: 'line:1',
+          props: { 'data-id': 'line:1' },
+          text: 'Coffee',
+          type: 'li',
+        },
+      ],
+      type: 'ul',
+    };
+
+    const result = morphStructuralTree(current, next);
+
+    expect(result).toEqual(next);
+    expect(result.children?.[0]).toBe(second);
+    expect(result.children?.[1]).toBe(first);
   });
 
   it('updates query data and morphs fragments from one mutation response', () => {
