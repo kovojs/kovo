@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import { mutation, s } from '@jiso/server';
 
-import { createDbVerifier, createJisoTestHarness, jisoTest } from './index.js';
+import { createDbVerifier, createJisoTestHarness, jisoTest, propertyTest } from './index.js';
 
 interface FakeDb {
   read(table: string): unknown[];
@@ -23,6 +23,40 @@ function createFakeDb(): FakeDb {
 }
 
 describe('@jiso/test harness', () => {
+  it('property-tests optimistic predictions against eventual query truth', () => {
+    const result = propertyTest({
+      apply(state: { count: number }, input: { quantity: number }) {
+        return { count: state.count + input.quantity };
+      },
+      cases: [
+        { input: { quantity: 1 }, state: { count: 0 } },
+        { input: { quantity: 2 }, state: { count: 3 } },
+      ],
+      predict(state, input) {
+        return { count: state.count + input.quantity };
+      },
+    });
+
+    expect(result).toEqual({ cases: 2 });
+  });
+
+  it('reports the first optimistic prediction counterexample', () => {
+    expect(() =>
+      propertyTest({
+        apply(state: { count: number }, input: { quantity: number }) {
+          return { count: state.count + input.quantity };
+        },
+        cases: [
+          { input: { quantity: 1 }, state: { count: 0 } },
+          { input: { quantity: 2 }, state: { count: 3 } },
+        ],
+        predict(state) {
+          return { count: state.count };
+        },
+      }),
+    ).toThrow('Optimistic property failed for case 0: predicted {"count":0}, eventual {"count":1}');
+  });
+
   it('executes mutations against the provided db context', async () => {
     const addToCart = mutation('cart/add', {
       input: s.object({ productId: s.string() }),

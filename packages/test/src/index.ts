@@ -84,6 +84,22 @@ export interface DbVerifier {
   wrap<Db>(db: Db): Db;
 }
 
+export interface PropertyCase<State, Input> {
+  input: Input;
+  state: State;
+}
+
+export interface PropertyTestOptions<State, Input, ClientShape = unknown> {
+  apply: (state: State, input: Input) => State;
+  cases: Iterable<PropertyCase<State, Input>>;
+  predict: (state: State, input: Input) => ClientShape;
+  shape?: (state: State) => ClientShape;
+}
+
+export interface PropertyTestResult {
+  cases: number;
+}
+
 export function createDbVerifier(touchGraph: TouchGraph, config: DbVerificationConfig): DbVerifier {
   const observed: ObservedDbOperation[] = [];
 
@@ -143,6 +159,30 @@ export async function jisoTest<Db>(
   await fn(createJisoTestHarness(options));
 }
 
+export function propertyTest<State, Input, ClientShape = State>(
+  options: PropertyTestOptions<State, Input, ClientShape>,
+): PropertyTestResult {
+  let count = 0;
+  const shape = options.shape ?? ((state: State) => state as unknown as ClientShape);
+
+  for (const testCase of options.cases) {
+    const predicted = options.predict(structuredClone(testCase.state), testCase.input);
+    const eventual = shape(options.apply(structuredClone(testCase.state), testCase.input));
+
+    if (!deepEqual(predicted, eventual)) {
+      throw new Error(
+        `Optimistic property failed for case ${count}: predicted ${JSON.stringify(
+          predicted,
+        )}, eventual ${JSON.stringify(eventual)}`,
+      );
+    }
+
+    count += 1;
+  }
+
+  return { cases: count };
+}
+
 function createPageAssertion(html: string): PageAssertion {
   return {
     fragment(target: string): string {
@@ -170,6 +210,10 @@ function createPageAssertion(html: string): PageAssertion {
 
 function escapeRegExp(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function deepEqual(left: unknown, right: unknown): boolean {
+  return JSON.stringify(left) === JSON.stringify(right);
 }
 
 function observe(
