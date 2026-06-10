@@ -77,6 +77,17 @@ class FakeElement implements EventElementLike {
   }
 }
 
+class FakeFormElement extends FakeElement {
+  action: string;
+  method: string | undefined;
+
+  constructor(attributes: Record<string, string>, options: { action: string; method?: string }) {
+    super(attributes);
+    this.action = options.action;
+    this.method = options.method;
+  }
+}
+
 class FakeBroadcastChannel {
   messages: unknown[] = [];
   onmessage: ((event: { data: unknown }) => void) | null = null;
@@ -193,6 +204,75 @@ describe('runtime loader', () => {
 
     expect(store.get('cart')).toEqual({ count: 2 });
     expect(plan).toHaveBeenCalledWith({ count: 2 });
+  });
+
+  it('intercepts enhanced form submits through the loader bridge', async () => {
+    const loaderRoot = new FakeRoot();
+    const mutationRoot = new FakeMorphRoot();
+    const store = createQueryStore();
+    const preventDefault = vi.fn();
+    const importModule = vi.fn();
+    const formData = new FormData();
+    const form = new FakeFormElement(
+      {
+        enhance: '',
+        'data-mutation': 'cart/add',
+      },
+      {
+        action: '/_m/cart/add',
+        method: 'post',
+      },
+    );
+    mutationRoot.deps = [{ deps: 'cart', id: 'cart-badge' }];
+    mutationRoot.targets.set('cart-badge', new FakeMorphTarget());
+    formData.set('productId', 'p1');
+    const fetch = vi.fn(async () => ({
+      headers: {
+        get(name: string) {
+          return name === 'FW-Changes' ? '[{"domain":"cart","input":{"productId":"p1"}}]' : null;
+        },
+      },
+      async text() {
+        return [
+          '<fw-query name="cart">{"count":1}</fw-query>',
+          '<fw-fragment target="cart-badge"><cart-badge>1</cart-badge></fw-fragment>',
+        ].join('\n');
+      },
+    }));
+
+    installJisoLoader({
+      enhancedMutations: {
+        fetch,
+        formData: () => formData,
+        idem: () => 'idem_loader',
+        root: mutationRoot,
+        store,
+      },
+      importModule,
+      root: loaderRoot,
+    });
+
+    await loaderRoot.listeners.get('submit')?.({
+      preventDefault,
+      target: form,
+      type: 'submit',
+    });
+
+    expect(preventDefault).toHaveBeenCalledTimes(1);
+    expect(importModule).not.toHaveBeenCalled();
+    expect(fetch).toHaveBeenCalledWith('/_m/cart/add', {
+      body: formData,
+      headers: {
+        Accept: 'text/vnd.jiso.fragment+html',
+        'FW-Fragment': 'true',
+        'FW-Idem': 'idem_loader',
+        'FW-Targets': 'cart-badge=cart',
+      },
+      keepalive: true,
+      method: 'POST',
+    });
+    expect(store.get('cart')).toEqual({ count: 1 });
+    expect(mutationRoot.targets.get('cart-badge')?.html).toBe('<cart-badge>1</cart-badge>');
   });
 
   it('imports and invokes a url#export handler only when a matching event arrives', async () => {

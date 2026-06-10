@@ -131,6 +131,7 @@ export interface LoaderRoot {
 }
 
 export interface DelegatedEvent {
+  preventDefault?: () => void;
   type: string;
   target: EventTargetLike | null;
 }
@@ -148,6 +149,7 @@ export interface EventElementLike {
 
 export interface JisoLoaderOptions {
   discardPendingOptimism?: () => readonly string[] | void;
+  enhancedMutations?: EnhancedMutationLoaderOptions;
   events?: readonly string[];
   importModule: ImportHandlerModule;
   queryStore?: QueryStore;
@@ -162,7 +164,7 @@ export interface JisoLoader {
 
 const defaultDelegatedEvents = ['click', 'submit', 'input', 'change'] as const;
 
-export const jisoLoaderSource = `(()=>{const E=["click","submit","input","change"],H=t=>t.closest?.("[fw-state]")||t,S=t=>{try{return JSON.parse(H(t)?.getAttribute("fw-state")||"{}")}catch{return {}}},P=e=>{const t=e.target?.closest?.("[on\\\\:"+e.type+"]");if(!t)return;const r=t.getAttribute("on:"+e.type);if(!r)return;const i=r.lastIndexOf("#");if(i<=0)return;const p={},s=S(t),h=H(t);for(const a of t.attributes||[])a.name.startsWith("data-p-")&&(p[a.name.slice(7).replace(/-([a-z0-9])/g,(_,c)=>c.toUpperCase())]=a.value);import(r.slice(0,i)).then(m=>m[r.slice(i+1)]?.(e,{params:p,state:s})).then(()=>h?.setAttribute?.("fw-state",JSON.stringify(s)))};for(const e of E)addEventListener(e,P,{capture:!0});const R=()=>dispatchEvent(new CustomEvent("jiso:refetch"));addEventListener("visibilitychange",()=>document.visibilityState==="visible"&&R());addEventListener("focus",R)})();`;
+export const jisoLoaderSource = `(()=>{const E=["click","submit","input","change"],H=t=>t.closest?.("[fw-state]")||t,S=t=>{try{return JSON.parse(H(t)?.getAttribute("fw-state")||"{}")}catch{return {}}},P=e=>{if(e.type=="submit"){const f=e.target?.closest?.("form[enhance],form[data-enhance],form[data-mutation]");if(f)return e.preventDefault(),dispatchEvent(new CustomEvent("jiso:submit",{detail:f}))}const t=e.target?.closest?.("[on\\\\:"+e.type+"]");if(!t)return;const r=t.getAttribute("on:"+e.type);if(!r)return;const i=r.lastIndexOf("#");if(i<=0)return;const p={},s=S(t),h=H(t);for(const a of t.attributes||[])a.name.startsWith("data-p-")&&(p[a.name.slice(7).replace(/-([a-z0-9])/g,(_,c)=>c.toUpperCase())]=a.value);import(r.slice(0,i)).then(m=>m[r.slice(i+1)]?.(e,{params:p,state:s})).then(()=>h?.setAttribute?.("fw-state",JSON.stringify(s)))};for(const e of E)addEventListener(e,P,{capture:!0});const R=()=>dispatchEvent(new CustomEvent("jiso:refetch"));addEventListener("visibilitychange",()=>document.visibilityState==="visible"&&R());addEventListener("focus",R)})();`;
 
 export function installJisoLoader(options: JisoLoaderOptions): JisoLoader {
   const events = options.events ?? defaultDelegatedEvents;
@@ -179,6 +181,7 @@ export function installJisoLoader(options: JisoLoaderOptions): JisoLoader {
     options.root.addEventListener(
       eventName,
       async (event) => {
+        if (await dispatchEnhancedFormSubmit(event, options.enhancedMutations)) return;
         await dispatchDelegatedEvent(event, options.importModule);
       },
       { capture: true },
@@ -207,6 +210,52 @@ export function installJisoLoader(options: JisoLoaderOptions): JisoLoader {
   }
 
   return { events };
+}
+
+export interface EnhancedMutationLoaderOptions {
+  broadcast?: MutationBroadcast;
+  fetch: EnhancedMutationFetch;
+  formData?: (form: EnhancedFormElementLike) => unknown;
+  idem?: () => string;
+  morph?: MorphFragment;
+  root: MorphRoot & TargetCollectorRoot;
+  store: QueryStore;
+}
+
+export interface EnhancedFormElementLike extends EventElementLike, EnhancedFormLike {}
+
+export async function dispatchEnhancedFormSubmit(
+  event: DelegatedEvent,
+  options: EnhancedMutationLoaderOptions | undefined,
+): Promise<boolean> {
+  if (!options || event.type !== 'submit') return false;
+
+  const form = event.target?.closest?.('form[enhance],form[data-enhance],form[data-mutation]') as
+    | EnhancedFormElementLike
+    | null
+    | undefined;
+  if (!form || !isEnhancedForm(form)) return false;
+
+  event.preventDefault?.();
+  await submitEnhancedMutation({
+    fetch: options.fetch,
+    form,
+    formData: options.formData ? options.formData(form) : new FormData(form as HTMLFormElement),
+    root: options.root,
+    store: options.store,
+    ...(options.broadcast ? { broadcast: options.broadcast } : {}),
+    ...(options.idem ? { idem: options.idem() } : {}),
+    ...(options.morph ? { morph: options.morph } : {}),
+  });
+  return true;
+}
+
+function isEnhancedForm(form: EventElementLike): boolean {
+  return (
+    form.getAttribute('enhance') !== null ||
+    form.getAttribute('data-enhance') !== null ||
+    form.getAttribute('data-mutation') !== null
+  );
 }
 
 function filterRefetchEligibleQueries(
