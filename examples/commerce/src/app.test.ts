@@ -213,6 +213,32 @@ describe('commerce example', () => {
   });
 
   it('ships graph facts for fw check and explain acceptance', () => {
+    expect(commerceTouchGraph).toEqual({
+      'cart.addItem': {
+        reads: [],
+        touches: [
+          {
+            domain: 'cart',
+            keys: null,
+            site: 'examples/commerce/src/generated-touch-graph.ts:6',
+            via: 'cart_items',
+          },
+          {
+            domain: 'order',
+            keys: null,
+            site: 'examples/commerce/src/generated-touch-graph.ts:7',
+            via: 'orders',
+          },
+          {
+            domain: 'product',
+            keys: 'arg:productId',
+            site: 'examples/commerce/src/generated-touch-graph.ts:8',
+            via: 'products',
+          },
+        ],
+        unresolved: [],
+      },
+    });
     expect(fwCheck(commerceGraph)).toEqual({
       exitCode: 0,
       output: 'fw-check/v1\nOK\n',

@@ -1,4 +1,5 @@
 import { component } from '@jiso/core';
+import { extractTouchGraphFromSource } from '@jiso/drizzle';
 import {
   domain,
   guards,
@@ -316,19 +317,34 @@ function productIdFromRawInput(rawInput: unknown): string | undefined {
   return typeof productId === 'string' ? productId : undefined;
 }
 
+const commerceGenerated = extractTouchGraphFromSource([
+  {
+    fileName: 'examples/commerce/src/generated-touch-graph.ts',
+    source: [
+      'export const cartItems = pgTable("cart_items", {}, jiso({ domain: "cart", key: "productId" }));',
+      'export const orders = pgTable("orders", {}, jiso({ domain: "order", key: "id" }));',
+      'export const products = pgTable("products", {}, jiso({ domain: "product", key: "id" }));',
+      '',
+      'export async function addItem(db, input) {',
+      '  await db.insert(cartItems).values({ productId: input.productId, qty: input.quantity });',
+      '  await db.insert(orders).values({ productId: input.productId, qty: input.quantity });',
+      '  await db.update(products).set({ stock: 0 }).where(eq(products.id, input.productId));',
+      '}',
+      '',
+    ].join('\n'),
+  },
+]);
+
 export const commerceTouchGraph = {
-  'cart.addItem': {
-    touches: [
-      { domain: 'cart', keys: null, site: 'examples/commerce/src/app.ts:58', via: 'cart_items' },
+  'cart.addItem': commerceGenerated.addItem ?? {
+    touches: [],
+    unresolved: [
       {
-        domain: 'product',
-        keys: 'arg:productId',
-        site: 'examples/commerce/src/app.ts:63',
-        via: 'products',
+        code: 'FW406',
+        message: 'Statically un-analyzable write site; manual touches required.',
+        site: 'examples/commerce/src/generated-touch-graph.ts:1',
       },
-      { domain: 'order', keys: null, site: 'examples/commerce/src/app.ts:67', via: 'orders' },
     ],
-    unresolved: [],
   },
 } as const;
 
