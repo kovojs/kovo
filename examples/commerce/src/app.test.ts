@@ -74,6 +74,7 @@ describe('commerce example', () => {
         'invalidates: cart',
         'manual-invalidates: -',
         'OPTIMISTIC cart await-fragment',
+        'OPTIMISTIC-SUMMARY total=1 hand-written=0 await-fragment=1 UNHANDLED=0',
         '',
       ].join('\n'),
     });
