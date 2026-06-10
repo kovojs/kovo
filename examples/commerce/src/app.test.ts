@@ -38,6 +38,36 @@ function commerceFile(name: string, type: string, size: number) {
   };
 }
 
+function explainLine(output: string, prefix: string) {
+  const line = output.split('\n').find((item) => item.startsWith(prefix));
+
+  if (!line) {
+    throw new Error(`Missing fw explain line: ${prefix}`);
+  }
+
+  return line.slice(prefix.length);
+}
+
+function explainList(value: string) {
+  return value === '-' ? [] : value.split(',');
+}
+
+function mutationUpdateConsumers(output: string) {
+  const updates = explainLine(output, 'updates: ');
+
+  if (updates === '-') {
+    return new Map<string, string[]>();
+  }
+
+  return new Map(
+    updates.split('; ').map((entry) => {
+      const [query, consumers = ''] = entry.split('->');
+
+      return [query, explainList(consumers)];
+    }),
+  );
+}
+
 describe('commerce example', () => {
   it('executes addToCart and verifies rendered cart badge without a browser', async () => {
     const harness = createJisoTestHarness({
@@ -429,5 +459,19 @@ describe('commerce example', () => {
       output:
         'fw-explain/v1\nQUERY orderHistory\nreads: order\nconsumers: component:OrderHistory,page:/cart\ninvalidated-by: cart.addItem\n',
     });
+  });
+
+  it('answers cart/add update intent mechanically from fw explain output', () => {
+    const mutation = fwExplain(commerceGraph, { kind: 'mutation', target: 'cart/add' });
+    const updates = mutationUpdateConsumers(mutation.output);
+
+    for (const query of ['cart', 'productGrid', 'orderHistory']) {
+      const queryExplain = fwExplain(commerceGraph, { kind: 'query', target: query });
+      const consumers = explainList(explainLine(queryExplain.output, 'consumers: '));
+      const componentConsumers = consumers.filter((consumer) => consumer.startsWith('component:'));
+
+      expect(updates.get(query)).toEqual(expect.arrayContaining(componentConsumers));
+      expect(componentConsumers.length).toBeGreaterThan(0);
+    }
   });
 });
