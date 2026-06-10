@@ -4,6 +4,7 @@ import { join } from 'node:path';
 
 import { describe, expect, it, vi } from 'vitest';
 
+import { fwCheck, fwExplain, type FwExplainInput } from '../../../packages/cli/src/index.js';
 import { createJisoProject, main, writeJisoProject } from './index.js';
 
 describe('create-jiso starter', () => {
@@ -64,13 +65,7 @@ describe('create-jiso starter', () => {
     expect(readme).toContain('vp run fw-check');
     const graph = JSON.parse(
       project.files.find((file) => file.path === 'graph.json')?.source ?? '{}',
-    ) as {
-      components?: Array<{ name: string; queries?: string[] }>;
-      mutations?: Array<{ key: string; invalidates?: string[] }>;
-      optimistic?: Array<{ mutation: string; query: string; status: string }>;
-      queries?: Array<{ domains: string[]; query: string }>;
-      touchGraph?: Record<string, { touches: Array<{ domain: string }> }>;
-    };
+    ) as FwExplainInput;
     expect(graph.components?.map((component) => component.name)).toEqual([
       'CartBadge',
       'CartPanel',
@@ -85,6 +80,42 @@ describe('create-jiso starter', () => {
     expect(graph.touchGraph?.['cart.addItem']?.touches).toEqual([
       expect.objectContaining({ domain: 'cart' }),
     ]);
+    expect(fwCheck(graph)).toEqual({
+      exitCode: 0,
+      output: 'fw-check/v1\nOK\n',
+    });
+    expect(fwExplain(graph, { kind: 'query', target: 'cart' })).toEqual({
+      exitCode: 0,
+      output:
+        'fw-explain/v1\nQUERY cart\nreads: cart\nconsumers: component:CartBadge,component:CartPanel,page:/cart\ninvalidated-by: cart.addItem\n',
+    });
+    expect(fwExplain(graph, { kind: 'mutation', optimistic: true, target: 'cart/add' })).toEqual({
+      exitCode: 0,
+      output: [
+        'fw-explain/v1',
+        'MUTATION cart/add',
+        'guards: authed',
+        'writes: cart',
+        'invalidates: cart',
+        'manual-invalidates: -',
+        'updates: cart->component:CartBadge,component:CartPanel,page:/cart',
+        'OPTIMISTIC cart await-fragment',
+        'OPTIMISTIC-SUMMARY total=1 hand-written=0 await-fragment=1 UNHANDLED=0',
+        '',
+      ].join('\n'),
+    });
+    expect(fwExplain(graph, { kind: 'page', target: '/cart' })).toEqual({
+      exitCode: 0,
+      output: [
+        'fw-explain/v1',
+        'PAGE /cart',
+        'prefetch: false',
+        'modulepreloads: -',
+        'queries: cart',
+        'view-transitions: -',
+        '',
+      ].join('\n'),
+    });
     expect(
       project.files.find((file) => file.path === 'docs/graph-assertions.md')?.source,
     ).toContain('fw explain mutation cart/add --optimistic graph.json');
