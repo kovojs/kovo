@@ -10,6 +10,7 @@ import {
   meta,
   mutation,
   query,
+  createMemoryMutationReplayStore,
   renderDeferredStream,
   renderPageHints,
   renderMutationResponse,
@@ -535,6 +536,79 @@ describe('server mutation primitives', () => {
       },
       status: 200,
     });
+  });
+
+  it('replays enhanced mutation responses by FW-Idem without re-running the handler', async () => {
+    const cart = domain('cart');
+    const replayStore = createMemoryMutationReplayStore();
+    let writes = 0;
+    const cartQuery = query('cart', {
+      load: () => ({ count: writes }),
+      reads: [cart],
+    });
+    const addToCart = mutation('cart/add', {
+      input: s.object({ productId: s.string() }),
+      registry: {
+        queries: [cartQuery],
+        touches: [cart],
+      },
+      handler(input) {
+        writes += 1;
+        return input;
+      },
+    });
+    const request = {
+      idem: 'idem_01',
+      rawInput: { productId: 'p1' },
+      replayStore,
+      request: {},
+      targets: ['cart-badge'],
+    };
+
+    const first = await renderMutationResponse(addToCart, request);
+    first.headers['X-Mutated-By-Test'] = 'yes';
+    const second = await renderMutationResponse(addToCart, request);
+
+    expect(writes).toBe(1);
+    expect(second).toEqual({
+      body: '<fw-query name="cart">{"count":1}</fw-query>',
+      headers: {
+        'Content-Type': 'text/vnd.jiso.fragment+html; charset=utf-8',
+        'FW-Changes': '[{"domain":"cart","input":{"productId":"p1"}}]',
+      },
+      status: 200,
+    });
+  });
+
+  it('replays enhanced mutation validation failures by FW-Idem', async () => {
+    const replayStore = createMemoryMutationReplayStore();
+    let attempts = 0;
+    const addToCart = mutation('cart/add', {
+      errors: {
+        OUT_OF_STOCK: s.object({ availableQuantity: s.number().int().min(0) }),
+      },
+      input: s.object({ productId: s.string() }),
+      handler(_input, _request, context) {
+        attempts += 1;
+        return context.fail('OUT_OF_STOCK', { availableQuantity: 0 });
+      },
+    });
+    const request = {
+      idem: 'idem_422',
+      rawInput: { productId: 'p1' },
+      replayStore,
+      request: {},
+    };
+
+    await expect(renderMutationResponse(addToCart, request)).resolves.toMatchObject({
+      status: 422,
+    });
+    await expect(renderMutationResponse(addToCart, request)).resolves.toEqual({
+      body: '<fw-fragment target="error"><output role="alert" data-error-code="OUT_OF_STOCK">{"availableQuantity":0}</output></fw-fragment>',
+      headers: { 'Content-Type': 'text/vnd.jiso.fragment+html; charset=utf-8' },
+      status: 422,
+    });
+    expect(attempts).toBe(1);
   });
 
   it('delivers late stylesheets with enhanced mutation fragments', async () => {

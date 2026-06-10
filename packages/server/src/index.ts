@@ -302,6 +302,8 @@ export interface ErrorBoundaryRenderer {
 
 export interface MutationWireRequest<Request> {
   fragmentRenderers?: readonly FragmentRenderer[];
+  idem?: string;
+  replayStore?: MutationReplayStore;
   rawInput: unknown;
   request: Request;
   targets?: readonly string[];
@@ -311,6 +313,25 @@ export interface MutationWireResponse {
   body: string;
   headers: Record<string, string>;
   status: 200 | 422;
+}
+
+export interface MutationReplayStore {
+  get(idem: string): MutationWireResponse | undefined;
+  set(idem: string, response: MutationWireResponse): void;
+}
+
+export function createMemoryMutationReplayStore(): MutationReplayStore {
+  const responses = new Map<string, MutationWireResponse>();
+
+  return {
+    get(idem) {
+      const response = responses.get(idem);
+      return response ? cloneMutationWireResponse(response) : undefined;
+    },
+    set(idem, response) {
+      responses.set(idem, cloneMutationWireResponse(response));
+    },
+  };
 }
 
 export interface NoJsMutationRequest<Request, Value> {
@@ -578,14 +599,17 @@ export async function renderMutationResponse<
   definition: MutationDefinition<Key, InputSchema, Errors, Request, Value>,
   wireRequest: MutationWireRequest<Request>,
 ): Promise<MutationWireResponse> {
+  const replayed = wireRequest.idem ? wireRequest.replayStore?.get(wireRequest.idem) : undefined;
+  if (replayed) return replayed;
+
   const result = await runMutation(definition, wireRequest.rawInput, wireRequest.request);
 
   if (!result.ok) {
-    return {
+    return storeMutationReplay(wireRequest, {
       body: `<fw-fragment target="error"><output role="alert" data-error-code="${escapeAttribute(result.error.code)}">${escapeHtml(JSON.stringify(result.error.payload))}</output></fw-fragment>`,
       headers: { 'Content-Type': 'text/vnd.jiso.fragment+html; charset=utf-8' },
       status: 422,
-    };
+    });
   }
 
   const queryChunks = await renderQueryChunks(
@@ -599,14 +623,14 @@ export async function renderMutationResponse<
     wireRequest.rawInput,
   );
 
-  return {
+  return storeMutationReplay(wireRequest, {
     body: [...queryChunks, ...fragmentChunks].join('\n'),
     headers: {
       'Content-Type': 'text/vnd.jiso.fragment+html; charset=utf-8',
       'FW-Changes': JSON.stringify(result.changes),
     },
     status: 200,
-  };
+  });
 }
 
 export async function renderNoJsMutationResponse<
@@ -754,6 +778,25 @@ async function renderFragmentChunks(
 
 function renderDefaultFailurePage(failure: MutationFail): string {
   return `<!doctype html><html><body><output role="alert" data-error-code="${escapeAttribute(failure.error.code)}">${escapeHtml(JSON.stringify(failure.error.payload))}</output></body></html>`;
+}
+
+function storeMutationReplay<Request>(
+  wireRequest: MutationWireRequest<Request>,
+  response: MutationWireResponse,
+): MutationWireResponse {
+  if (wireRequest.idem) {
+    wireRequest.replayStore?.set(wireRequest.idem, response);
+  }
+
+  return response;
+}
+
+function cloneMutationWireResponse(response: MutationWireResponse): MutationWireResponse {
+  return {
+    body: response.body,
+    headers: { ...response.headers },
+    status: response.status,
+  };
 }
 
 function dedupe(values: readonly string[]): string[] {
