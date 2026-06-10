@@ -178,6 +178,65 @@ export const CartBadge = component('cart-badge', {
     expect(result.diagnostics).toEqual([]);
   });
 
+  it('reports FW301 when island-local state stores an obvious query fact', () => {
+    const result = compileComponentModule({
+      fileName: 'cart-badge.tsx',
+      source: `
+export const CartBadge = component('cart-badge', {
+  queries: { cart: cartQuery },
+  state: () => ({ cartCount: 0 }),
+  render: ({ cart }, state) => <span>{state.cartCount}</span>,
+});
+`,
+    });
+
+    expect(result.diagnostics).toEqual([
+      {
+        code: 'FW301',
+        fileName: 'cart-badge.tsx',
+        message: 'Server fact stored in island-local state.',
+        severity: 'lint',
+      },
+    ]);
+  });
+
+  it('reports FW301 for any state key prefixed by a declared query name', () => {
+    const result = compileComponentModule({
+      fileName: 'account-menu.tsx',
+      source: `
+export const AccountMenu = component('account-menu', {
+  queries: { account: accountQuery },
+  state: () => ({ accountNameDraft: '' }),
+  render: ({ account }, state) => <span>{state.accountNameDraft}</span>,
+});
+`,
+    });
+
+    expect(result.diagnostics).toMatchObject([
+      {
+        code: 'FW301',
+        fileName: 'account-menu.tsx',
+        message: 'Server fact stored in island-local state.',
+        severity: 'lint',
+      },
+    ]);
+  });
+
+  it('does not report FW301 for local UI-only state with declared queries', () => {
+    const result = compileComponentModule({
+      fileName: 'cart-badge.tsx',
+      source: `
+export const CartBadge = component('cart-badge', {
+  queries: { cart: cartQuery },
+  state: () => ({ bouncing: false }),
+  render: ({ cart }, state) => <span class={state.bouncing ? 'bounce' : ''}>{cart.count}</span>,
+});
+`,
+    });
+
+    expect(result.diagnostics).toEqual([]);
+  });
+
   it('reports FW302 when data-bind paths are absent from declared query shapes', () => {
     const result = compileComponentModule({
       fileName: 'cart-badge.tsx',

@@ -95,6 +95,7 @@ export function compileComponentModule(options: CompileComponentOptions): Compil
   const platformLowering = lowerPlatformBehaviors(viewTransitionLowering.source);
   const source = platformLowering.source;
   const handlers = lowerEventHandlers({ ...options, source }, componentName);
+  const serverFactStateDiagnostics = validateServerFactsInLocalState(source, options.fileName);
   const dataBindDiagnostics = validateDataBindings(source, options);
   const clientFileName = replaceExtension(options.fileName, '.client.js');
   const serverFileName = replaceExtension(options.fileName, '.server.js');
@@ -114,6 +115,7 @@ export function compileComponentModule(options: CompileComponentOptions): Compil
   return {
     diagnostics: [
       ...handlers.flatMap((handler) => (handler.diagnostic ? [handler.diagnostic] : [])),
+      ...serverFactStateDiagnostics,
       ...dataBindDiagnostics,
     ],
     files: [
@@ -358,6 +360,224 @@ function validateDataBindings(
       message: `data-bind path is not present in the declared query shape: ${path}`,
       severity: 'error' as const,
     }));
+}
+
+// SPEC 5.2: query data is shared/server-owned; island-local state is private/client-owned.
+function validateServerFactsInLocalState(source: string, fileName: string): CompilerDiagnostic[] {
+  const queryObject = extractObjectLiteralAfterProperty(source, 'queries');
+  const stateObject = extractStateReturnObject(source);
+  if (!queryObject || !stateObject) return [];
+
+  const queryNames = topLevelObjectKeys(queryObject);
+  const stateKeys = topLevelObjectKeys(stateObject);
+  if (queryNames.length === 0 || stateKeys.length === 0) return [];
+
+  const storesServerFact = stateKeys.some((stateKey) =>
+    queryNames.some((queryName) => stateKeyHasQueryPrefix(stateKey, queryName)),
+  );
+
+  return storesServerFact ? [diagnosticFor(fileName, 'FW301')] : [];
+}
+
+function extractObjectLiteralAfterProperty(source: string, propertyName: string): string | null {
+  const match = new RegExp(`\\b${propertyName}\\s*:\\s*\\{`).exec(source);
+  if (!match) return null;
+
+  const objectStart = match.index + match[0].lastIndexOf('{');
+  const objectEnd = findMatchingToken(source, objectStart, '{', '}');
+  if (objectEnd === -1) return null;
+
+  return source.slice(objectStart, objectEnd + 1);
+}
+
+function extractStateReturnObject(source: string): string | null {
+  const match = /\bstate\s*:\s*\(\s*\)\s*=>\s*\(\s*\{/.exec(source);
+  if (!match) return null;
+
+  const objectStart = match.index + match[0].lastIndexOf('{');
+  const objectEnd = findMatchingToken(source, objectStart, '{', '}');
+  if (objectEnd === -1) return null;
+
+  return source.slice(objectStart, objectEnd + 1);
+}
+
+function topLevelObjectKeys(objectSource: string): string[] {
+  const keys: string[] = [];
+  let index = 1;
+
+  while (index < objectSource.length - 1) {
+    index = skipWhitespaceAndComments(objectSource, index);
+    if (objectSource[index] === ',') {
+      index += 1;
+      continue;
+    }
+
+    const key = readObjectKey(objectSource, index);
+    if (!key) {
+      index = skipObjectValue(objectSource, index);
+      continue;
+    }
+
+    const afterKey = skipWhitespaceAndComments(objectSource, key.end);
+    if (objectSource[afterKey] === ':') {
+      keys.push(key.name);
+      index = skipObjectValue(objectSource, afterKey + 1);
+      continue;
+    }
+
+    index = skipObjectValue(objectSource, afterKey);
+  }
+
+  return keys;
+}
+
+function readObjectKey(source: string, start: number): { name: string; end: number } | null {
+  const char = source[start];
+  if (char === '"' || char === "'") {
+    const end = findStringEnd(source, start, char);
+    if (end === -1) return null;
+
+    return {
+      end: end + 1,
+      name: source.slice(start + 1, end),
+    };
+  }
+
+  const identifier = /^[A-Za-z_$][\w$]*/.exec(source.slice(start));
+  if (!identifier?.[0]) return null;
+
+  return {
+    end: start + identifier[0].length,
+    name: identifier[0],
+  };
+}
+
+function skipObjectValue(source: string, start: number): number {
+  let index = start;
+  let curlyDepth = 0;
+  let squareDepth = 0;
+  let parenDepth = 0;
+
+  while (index < source.length - 1) {
+    const char = source[index];
+    if (char === '"' || char === "'" || char === '`') {
+      const end = findStringEnd(source, index, char);
+      index = end === -1 ? source.length - 1 : end + 1;
+      continue;
+    }
+
+    if (char === '/' && source[index + 1] === '/') {
+      const nextLine = source.indexOf('\n', index + 2);
+      index = nextLine === -1 ? source.length - 1 : nextLine + 1;
+      continue;
+    }
+
+    if (char === '/' && source[index + 1] === '*') {
+      const commentEnd = source.indexOf('*/', index + 2);
+      index = commentEnd === -1 ? source.length - 1 : commentEnd + 2;
+      continue;
+    }
+
+    if (char === '{') curlyDepth += 1;
+    if (char === '}') {
+      if (curlyDepth === 0 && squareDepth === 0 && parenDepth === 0) return index;
+      curlyDepth -= 1;
+    }
+
+    if (char === '[') squareDepth += 1;
+    if (char === ']') squareDepth -= 1;
+    if (char === '(') parenDepth += 1;
+    if (char === ')') parenDepth -= 1;
+
+    if (char === ',' && curlyDepth === 0 && squareDepth === 0 && parenDepth === 0) {
+      return index + 1;
+    }
+
+    index += 1;
+  }
+
+  return index;
+}
+
+function skipWhitespaceAndComments(source: string, start: number): number {
+  let index = start;
+
+  while (index < source.length) {
+    if (/\s/.test(source[index] ?? '')) {
+      index += 1;
+      continue;
+    }
+
+    if (source[index] === '/' && source[index + 1] === '/') {
+      const nextLine = source.indexOf('\n', index + 2);
+      index = nextLine === -1 ? source.length : nextLine + 1;
+      continue;
+    }
+
+    if (source[index] === '/' && source[index + 1] === '*') {
+      const commentEnd = source.indexOf('*/', index + 2);
+      index = commentEnd === -1 ? source.length : commentEnd + 2;
+      continue;
+    }
+
+    return index;
+  }
+
+  return index;
+}
+
+function findMatchingToken(source: string, start: number, open: string, close: string): number {
+  let depth = 0;
+
+  for (let index = start; index < source.length; index += 1) {
+    const char = source[index];
+    if (char === '"' || char === "'" || char === '`') {
+      const end = findStringEnd(source, index, char);
+      index = end === -1 ? source.length : end;
+      continue;
+    }
+
+    if (char === '/' && source[index + 1] === '/') {
+      const nextLine = source.indexOf('\n', index + 2);
+      index = nextLine === -1 ? source.length : nextLine;
+      continue;
+    }
+
+    if (char === '/' && source[index + 1] === '*') {
+      const commentEnd = source.indexOf('*/', index + 2);
+      index = commentEnd === -1 ? source.length : commentEnd + 1;
+      continue;
+    }
+
+    if (char === open) depth += 1;
+    if (char === close) {
+      depth -= 1;
+      if (depth === 0) return index;
+    }
+  }
+
+  return -1;
+}
+
+function findStringEnd(source: string, start: number, quote: string): number {
+  for (let index = start + 1; index < source.length; index += 1) {
+    if (source[index] === '\\') {
+      index += 1;
+      continue;
+    }
+
+    if (source[index] === quote) return index;
+  }
+
+  return -1;
+}
+
+function stateKeyHasQueryPrefix(stateKey: string, queryName: string): boolean {
+  if (stateKey === queryName) return true;
+  if (!stateKey.startsWith(queryName)) return false;
+
+  const nextChar = stateKey[queryName.length];
+  return nextChar !== undefined && /[A-Z0-9_$]/.test(nextChar);
 }
 
 function pathExistsInQueryShapes(path: string, queryShapes: Record<string, QueryShape>): boolean {
