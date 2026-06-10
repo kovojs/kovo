@@ -75,6 +75,7 @@ export interface PgliteTestDb {
 
 export interface JisoTestExecOptions<Request> {
   request?: Partial<Omit<Request, 'db'>>;
+  touchGraphKey?: string;
 }
 
 export interface PageAssertion {
@@ -106,12 +107,13 @@ export function createJisoTestHarness<Db>(
       input: unknown,
       execOptions?: JisoTestExecOptions<Request>,
     ) {
+      const start = verifier?.observed.length ?? 0;
       const result = await runMutation(mutation, input, {
         ...options.request,
         ...execOptions?.request,
         db,
       } as unknown as Request);
-      verifier?.assertCovered();
+      verifier?.assertCoveredSince(start, execOptions?.touchGraphKey);
       return result;
     },
     async page(path) {
@@ -168,7 +170,8 @@ export interface DbVerificationDiagnostic {
 }
 
 export interface DbVerifier {
-  assertCovered(): void;
+  assertCovered(touchGraphKey?: string): void;
+  assertCoveredSince(start: number, touchGraphKey?: string): void;
   assertReadsCovered(domains: readonly string[]): void;
   assertReadsCoveredSince(start: number, domains: readonly string[]): void;
   diagnostics(): DbVerificationDiagnostic[];
@@ -206,40 +209,11 @@ export function createDbVerifier(touchGraph: TouchGraph, config: DbVerificationC
   const observed: ObservedDbOperation[] = [];
 
   return {
-    assertCovered(): void {
-      assertRowKeys(observed, config);
-      assertMutationReadsCovered(observed, touchGraph);
-
-      const unmappedWrites = observed.filter(
-        (operation) => operation.kind === 'write' && operation.domain === undefined,
-      );
-
-      if (unmappedWrites.length > 0) {
-        const tables = unmappedWrites.map((operation) => operation.table).join(', ');
-        throw new Error(`FW404 Write to unmapped table: ${tables}`);
-      }
-
-      const allowedWrites = new Set(
-        Object.values(touchGraph).flatMap((entry) => entry.touches.map((touch) => touch.domain)),
-      );
-      const unresolvedWrites = Object.values(touchGraph).flatMap((entry) => entry.unresolved);
-      const unresolvedDomains = new Set(
-        unresolvedWrites.flatMap((site) => (site.domain ? [site.domain] : [])),
-      );
-      const hasUnscopedFw406 = unresolvedWrites.some((site) => site.domain === undefined);
-      const uncovered = observed.filter(
-        (operation) =>
-          operation.kind === 'write' &&
-          operation.domain !== undefined &&
-          !allowedWrites.has(operation.domain) &&
-          !hasUnscopedFw406 &&
-          !unresolvedDomains.has(operation.domain),
-      );
-
-      if (uncovered.length > 0) {
-        const domains = uncovered.map((operation) => operation.domain).join(', ');
-        throw new Error(`FW402 Write touched an undeclared domain: ${domains}`);
-      }
+    assertCovered(touchGraphKey?: string): void {
+      assertObservedWritesCovered(observed, touchGraph, config, touchGraphKey);
+    },
+    assertCoveredSince(start: number, touchGraphKey?: string): void {
+      assertObservedWritesCovered(observed.slice(start), touchGraph, config, touchGraphKey);
     },
     assertReadsCovered(domains: readonly string[]): void {
       assertObservedReadsCovered(observed, domains, config);
@@ -426,6 +400,57 @@ export async function jisoTest<Db>(
   options: JisoTestHarnessOptions<Db>,
 ): Promise<void> {
   await fn(createJisoTestHarness(options));
+}
+
+function assertObservedWritesCovered(
+  observed: readonly ObservedDbOperation[],
+  touchGraph: TouchGraph,
+  config: DbVerificationConfig,
+  touchGraphKey?: string,
+): void {
+  const scopedTouchGraph = selectTouchGraph(touchGraph, touchGraphKey);
+
+  assertRowKeys(observed, config);
+  assertMutationReadsCovered(observed, scopedTouchGraph);
+
+  const unmappedWrites = observed.filter(
+    (operation) => operation.kind === 'write' && operation.domain === undefined,
+  );
+
+  if (unmappedWrites.length > 0) {
+    const tables = unmappedWrites.map((operation) => operation.table).join(', ');
+    throw new Error(`FW404 Write to unmapped table: ${tables}`);
+  }
+
+  const entries = Object.values(scopedTouchGraph).filter((entry) => entry !== undefined);
+  const allowedWrites = new Set(
+    entries.flatMap((entry) => entry.touches.map((touch) => touch.domain)),
+  );
+  const unresolvedWrites = entries.flatMap((entry) => entry.unresolved);
+  const unresolvedDomains = new Set(
+    unresolvedWrites.flatMap((site) => (site.domain ? [site.domain] : [])),
+  );
+  const hasUnscopedFw406 = unresolvedWrites.some((site) => site.domain === undefined);
+  const uncovered = observed.filter(
+    (operation) =>
+      operation.kind === 'write' &&
+      operation.domain !== undefined &&
+      !allowedWrites.has(operation.domain) &&
+      !hasUnscopedFw406 &&
+      !unresolvedDomains.has(operation.domain),
+  );
+
+  if (uncovered.length > 0) {
+    const domains = uncovered.map((operation) => operation.domain).join(', ');
+    throw new Error(`FW402 Write touched an undeclared domain: ${domains}`);
+  }
+}
+
+function selectTouchGraph(touchGraph: TouchGraph, touchGraphKey: string | undefined): TouchGraph {
+  if (touchGraphKey === undefined) return touchGraph;
+
+  const entry = touchGraph[touchGraphKey];
+  return entry === undefined ? {} : { [touchGraphKey]: entry };
 }
 
 export function propertyTest<State, Input, ClientShape = State>(
