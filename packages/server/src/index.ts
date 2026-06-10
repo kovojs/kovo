@@ -26,6 +26,39 @@ export class SchemaValidationError extends Error {
 }
 
 export const s = {
+  array<Item>(item: Schema<Item>): Schema<Item[]> {
+    return {
+      parse(input: unknown): Item[] {
+        const values =
+          input === undefined || input === null ? [] : Array.isArray(input) ? input : [input];
+
+        return values.map((value, index) => {
+          try {
+            return item.parse(value);
+          } catch (error) {
+            throw validationErrorFrom(error, [String(index)]);
+          }
+        });
+      },
+    };
+  },
+  boolean(): Schema<boolean> {
+    return {
+      parse(input: unknown): boolean {
+        if (typeof input === 'boolean') return input;
+        if (input === undefined || input === null || input === '') return false;
+        if (typeof input === 'number' && (input === 0 || input === 1)) return Boolean(input);
+
+        if (typeof input === 'string') {
+          const value = input.toLowerCase();
+          if (['1', 'on', 'true', 'yes'].includes(value)) return true;
+          if (['0', 'false', 'no', 'off'].includes(value)) return false;
+        }
+
+        throw validationError('Expected boolean');
+      },
+    };
+  },
   file(options: FileSchemaOptions = {}): FileSchema {
     return new FileSchemaImpl(options);
   },
@@ -811,7 +844,24 @@ function rateLimitKey<Request extends SessionRequestLike>(
 }
 
 function formLikeToRecord(input: unknown): Record<string, unknown> {
-  if (input instanceof FormData) return Object.fromEntries(input.entries());
+  if (input instanceof FormData) {
+    const record: Record<string, unknown> = {};
+
+    for (const [key, value] of input.entries()) {
+      const existing = record[key];
+
+      if (existing === undefined) {
+        record[key] = value;
+      } else if (Array.isArray(existing)) {
+        existing.push(value);
+      } else {
+        record[key] = [existing, value];
+      }
+    }
+
+    return record;
+  }
+
   if (typeof input === 'object' && input !== null) return input as Record<string, unknown>;
   throw validationError('Expected object input');
 }

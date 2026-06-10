@@ -305,6 +305,85 @@ describe('server mutation primitives', () => {
     });
   });
 
+  it('coerces checkbox booleans and repeated FormData fields through declared schemas', async () => {
+    const updatePreferences = mutation('preferences/update', {
+      input: s.object({
+        emailOptIn: s.boolean(),
+        tags: s.array(s.string()),
+      }),
+      handler(input) {
+        return input;
+      },
+    });
+    const form = new FormData();
+    form.set('emailOptIn', 'on');
+    form.append('tags', 'cart');
+    form.append('tags', 'deals');
+
+    await expect(runMutation(updatePreferences, form, {})).resolves.toEqual({
+      changes: [],
+      ok: true,
+      rerunQueries: [],
+      value: {
+        emailOptIn: true,
+        tags: ['cart', 'deals'],
+      },
+    });
+
+    await expect(runMutation(updatePreferences, new FormData(), {})).resolves.toEqual({
+      changes: [],
+      ok: true,
+      rerunQueries: [],
+      value: {
+        emailOptIn: false,
+        tags: [],
+      },
+    });
+  });
+
+  it('treats single submitted values as one-item arrays', async () => {
+    const filterProducts = mutation('products/filter', {
+      input: s.object({
+        categories: s.array(s.string()),
+      }),
+      handler(input) {
+        return input;
+      },
+    });
+    const form = new FormData();
+    form.set('categories', 'books');
+
+    await expect(runMutation(filterProducts, form, {})).resolves.toMatchObject({
+      ok: true,
+      value: {
+        categories: ['books'],
+      },
+    });
+  });
+
+  it('returns indexed validation paths for array schema errors', async () => {
+    const bulkAdd = mutation('cart/bulk-add', {
+      input: s.object({
+        quantities: s.array(s.number().int().min(1)),
+      }),
+      handler(input) {
+        return input;
+      },
+    });
+    const form = new FormData();
+    form.append('quantities', '1');
+    form.append('quantities', '0');
+
+    await expect(runMutation(bulkAdd, form, {})).resolves.toEqual({
+      error: {
+        code: 'VALIDATION',
+        payload: { issues: [{ message: 'Expected number >= 1', path: ['quantities', '1'] }] },
+      },
+      ok: false,
+      status: 422,
+    });
+  });
+
   it('coerces multipart file fields through s.file()', async () => {
     const uploadAvatar = mutation('profile/avatar', {
       input: s.object({
