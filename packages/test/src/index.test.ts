@@ -9,6 +9,7 @@ import {
   createPgliteTestDb,
   jisoTest,
   propertyTest,
+  type PgliteTestDb,
 } from './index.js';
 
 interface FakeDb {
@@ -491,6 +492,80 @@ describe('@jiso/test harness', () => {
       value: 'p1',
     });
     expect(harness.dbHandle().read('cart_items')).toEqual([]);
+  });
+
+  it('verifies direct db.query calls against the static touch graph', async () => {
+    const cartMutation = mutation('cart/add', {
+      input: s.object({ productId: s.string() }),
+      async handler(input, request: { db: Pick<PgliteTestDb, 'query'> }) {
+        await request.db.query('insert into audit_log (product_id) values ($1)', [input.productId]);
+        return input.productId;
+      },
+    });
+    const db = await createPgliteTestDb();
+
+    try {
+      await db.exec('create table audit_log (product_id text not null)');
+      const harness = createJisoTestHarness({
+        db,
+        touchGraph: {
+          'cart.addItem': {
+            touches: [{ domain: 'cart', keys: null, site: 'cart.domain.ts:1', via: 'cart_items' }],
+            unresolved: [],
+          },
+        },
+        verification: {
+          domainByTable: {
+            audit_log: 'audit',
+            cart_items: 'cart',
+          },
+        },
+      });
+
+      await expect(harness.exec(cartMutation, { productId: 'p1' })).rejects.toThrow(
+        'FW402 Write touched an undeclared domain: audit',
+      );
+    } finally {
+      await db.close();
+    }
+  });
+
+  it('verifies direct db.exec calls against the static touch graph', async () => {
+    const cartMutation = mutation('cart/add', {
+      input: s.object({ productId: s.string() }),
+      async handler(input, request: { db: Pick<PgliteTestDb, 'exec'> }) {
+        await request.db.exec(
+          `insert into cart_items (product_id, qty) values ('${input.productId}', 1)`,
+        );
+        return input.productId;
+      },
+    });
+    const db = await createPgliteTestDb();
+
+    try {
+      await db.exec('create table cart_items (product_id text primary key, qty integer not null)');
+      const harness = createJisoTestHarness({
+        db,
+        touchGraph: {
+          'cart.addItem': {
+            touches: [{ domain: 'cart', keys: null, site: 'cart.domain.ts:1', via: 'cart_items' }],
+            unresolved: [],
+          },
+        },
+        verification: {
+          domainByTable: {
+            cart_items: 'cart',
+          },
+        },
+      });
+
+      await expect(harness.exec(cartMutation, { productId: 'p1' })).resolves.toMatchObject({
+        ok: true,
+        value: 'p1',
+      });
+    } finally {
+      await db.close();
+    }
   });
 
   it('fails verification when raw SQL writes outside FW406 coverage', async () => {

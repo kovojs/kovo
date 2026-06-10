@@ -316,6 +316,13 @@ export function createDbVerifier(touchGraph: TouchGraph, config: DbVerificationC
             };
           }
 
+          if ((prop === 'query' || prop === 'exec') && typeof value === 'function') {
+            return (statement: string, ...args: unknown[]) => {
+              observeSql(statement, config, observed);
+              return value.call(target, statement, ...args);
+            };
+          }
+
           return value;
         },
       });
