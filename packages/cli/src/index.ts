@@ -5,6 +5,7 @@ import { readFileSync } from 'node:fs';
 import { diagnosticsForTouchGraph, type TouchGraph } from '@jiso/drizzle';
 
 export interface FwCheckInput {
+  mutations?: MutationExplain[];
   optimistic?: OptimisticCoverage[];
   queries?: QueryReadSet[];
   touchGraph?: TouchGraph;
@@ -199,6 +200,10 @@ export function fwCheck(input: FwCheckInput): FwCheckResult {
     );
   }
 
+  for (const mutation of unguardedMutations(input.mutations ?? [])) {
+    lines.push(`WARN UNGUARDED ${mutation.key} mutation is reachable without an auth guard.`);
+  }
+
   if (lines.length === 1) {
     lines.push('OK');
   }
@@ -238,6 +243,14 @@ function invalidatedBy(query: QueryReadSet, touchGraph: TouchGraph): string[] {
       entry.touches.some((touch) => query.domains.some((domain) => domain === touch.domain)),
     )
     .map(([writeName]) => writeName);
+}
+
+function unguardedMutations(mutations: readonly MutationExplain[]): MutationExplain[] {
+  return mutations.filter((mutation) => !hasAuthGuard(mutation.guards ?? []));
+}
+
+function hasAuthGuard(guards: readonly string[]): boolean {
+  return guards.some((guard) => guard === 'authed' || guard.startsWith('role:'));
 }
 
 function missedQueryInvalidations(

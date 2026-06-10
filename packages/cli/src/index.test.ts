@@ -82,6 +82,21 @@ describe('fw check', () => {
       output: 'fw-check/v1\nOK\n',
     });
   });
+
+  it('audits mutations reachable without an auth guard', () => {
+    expect(
+      fwCheck({
+        mutations: [
+          { guards: ['rateLimit:session'], key: 'cart/add' },
+          { guards: ['authed'], key: 'cart/remove' },
+          { guards: ['role:admin'], key: 'admin/refund' },
+        ],
+      }),
+    ).toEqual({
+      exitCode: 0,
+      output: 'fw-check/v1\nWARN UNGUARDED cart/add mutation is reachable without an auth guard.\n',
+    });
+  });
 });
 
 describe('fw explain', () => {
