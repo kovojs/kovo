@@ -71,12 +71,18 @@ export function createJisoTestHarness<Db>(
 
 export interface DbVerificationConfig {
   domainByTable: Record<string, string>;
+  keyByTable?: Record<string, string>;
 }
 
 export interface ObservedDbOperation {
   domain: string | undefined;
   kind: 'read' | 'write';
+  rowKey: string | undefined;
   table: string;
+}
+
+export interface DbObservationOptions {
+  rowKey?: string;
 }
 
 export interface DbVerificationDiagnostic {
@@ -115,6 +121,8 @@ export function createDbVerifier(touchGraph: TouchGraph, config: DbVerificationC
 
   return {
     assertCovered(): void {
+      assertRowKeys(observed, config);
+
       const unmappedWrites = observed.filter(
         (operation) => operation.kind === 'write' && operation.domain === undefined,
       );
@@ -142,6 +150,8 @@ export function createDbVerifier(touchGraph: TouchGraph, config: DbVerificationC
       }
     },
     assertReadsCovered(domains: readonly string[]): void {
+      assertRowKeys(observed, config);
+
       const unmappedReads = observed.filter(
         (operation) => operation.kind === 'read' && operation.domain === undefined,
       );
@@ -198,14 +208,14 @@ export function createDbVerifier(touchGraph: TouchGraph, config: DbVerificationC
 
           if (prop === 'read' && typeof value === 'function') {
             return (table: string, ...args: unknown[]) => {
-              observe('read', table, config, observed);
+              observe('read', table, args, config, observed);
               return value.call(target, table, ...args);
             };
           }
 
           if (prop === 'write' && typeof value === 'function') {
             return (table: string, ...args: unknown[]) => {
-              observe('write', table, config, observed);
+              observe('write', table, args, config, observed);
               return value.call(target, table, ...args);
             };
           }
@@ -287,12 +297,45 @@ function deepEqual(left: unknown, right: unknown): boolean {
 function observe(
   kind: ObservedDbOperation['kind'],
   table: string,
+  args: readonly unknown[],
   config: DbVerificationConfig,
   observed: ObservedDbOperation[],
 ): void {
   observed.push({
     domain: config.domainByTable[table],
     kind,
+    rowKey: observationOptions(args)?.rowKey,
     table,
   });
+}
+
+function assertRowKeys(
+  observed: readonly ObservedDbOperation[],
+  config: DbVerificationConfig,
+): void {
+  const mismatches = observed.filter((operation) => {
+    const expected = config.keyByTable?.[operation.table];
+    return (
+      expected !== undefined && operation.rowKey !== undefined && operation.rowKey !== expected
+    );
+  });
+
+  if (mismatches.length === 0) return;
+
+  const details = mismatches
+    .map(
+      (operation) =>
+        `${operation.table} expected ${config.keyByTable?.[operation.table]} observed ${operation.rowKey}`,
+    )
+    .join(', ');
+  throw new Error(`FW408 Declared row key differs from observed row predicate: ${details}`);
+}
+
+function observationOptions(args: readonly unknown[]): DbObservationOptions | undefined {
+  const last = args.at(-1);
+
+  if (typeof last !== 'object' || last === null || !('rowKey' in last)) return undefined;
+
+  const rowKey = (last as { rowKey?: unknown }).rowKey;
+  return typeof rowKey === 'string' ? { rowKey } : undefined;
 }

@@ -5,8 +5,8 @@ import { mutation, s } from '@jiso/server';
 import { createDbVerifier, createJisoTestHarness, jisoTest, propertyTest } from './index.js';
 
 interface FakeDb {
-  read(table: string): unknown[];
-  write(table: string, value: unknown): void;
+  read(table: string, options?: { rowKey?: string }): unknown[];
+  write(table: string, value: unknown, options?: { rowKey?: string }): void;
 }
 
 function createFakeDb(): FakeDb {
@@ -297,5 +297,45 @@ describe('@jiso/test harness', () => {
     expect(() => verifier.assertReadsCovered(['cart'])).toThrow(
       'FW407 Query read from undeclared domain: unmapped_table',
     );
+  });
+
+  it('fails verification when an observed write predicate uses the wrong row key', () => {
+    const verifier = createDbVerifier(
+      {
+        'product.reserve': {
+          touches: [
+            { domain: 'product', keys: 'arg:productId', site: 'product.ts:1', via: 'products' },
+          ],
+          unresolved: [],
+        },
+      },
+      { domainByTable: { products: 'product' }, keyByTable: { products: 'id' } },
+    );
+    const db = verifier.wrap(createFakeDb());
+
+    db.write('products', { id: 'p1' }, { rowKey: 'sku' });
+
+    expect(() => verifier.assertCovered()).toThrow(
+      'FW408 Declared row key differs from observed row predicate: products expected id observed sku',
+    );
+  });
+
+  it('accepts observed row predicates that match the declared table key', () => {
+    const verifier = createDbVerifier(
+      {
+        'product.reserve': {
+          touches: [
+            { domain: 'product', keys: 'arg:productId', site: 'product.ts:1', via: 'products' },
+          ],
+          unresolved: [],
+        },
+      },
+      { domainByTable: { products: 'product' }, keyByTable: { products: 'id' } },
+    );
+    const db = verifier.wrap(createFakeDb());
+
+    db.write('products', { id: 'p1' }, { rowKey: 'id' });
+
+    expect(() => verifier.assertCovered()).not.toThrow();
   });
 });
