@@ -481,7 +481,10 @@ function optimisticCoverageWarnings(
   }
 
   for (const mutation of mutations) {
-    const domains = new Set(mutation.invalidates ?? mutation.writes ?? []);
+    const domains = new Set([
+      ...(mutation.invalidates ?? mutation.writes ?? []),
+      ...(mutation.manualInvalidates ?? []),
+    ]);
     if (domains.size === 0) continue;
 
     for (const query of queries) {

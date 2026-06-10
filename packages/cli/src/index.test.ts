@@ -64,7 +64,14 @@ describe('fw check', () => {
   it('accepts explicit optimistic statuses for every invalidated query', () => {
     expect(
       fwCheck({
-        mutations: [{ guards: ['authed'], invalidates: ['cart', 'product'], key: 'cart/add' }],
+        mutations: [
+          {
+            guards: ['authed'],
+            invalidates: ['cart'],
+            key: 'cart/add',
+            manualInvalidates: ['product'],
+          },
+        ],
         optimistic: [
           { mutation: 'cart/add', query: 'cart', status: 'hand-written' },
           { mutation: 'cart/add', query: 'productGrid', status: 'await-fragment' },
@@ -85,8 +92,32 @@ describe('fw check', () => {
       }),
     ).toEqual({
       exitCode: 0,
-      output: 'fw-check/v1\nOK\n',
+      output:
+        'fw-check/v1\nWARN INVALIDATE cart/add -> product Manual invalidate escape hatch requires review.\n',
     });
+  });
+
+  it('derives FW310 gaps from manual invalidations', () => {
+    expect(
+      fwCheck({
+        mutations: [{ key: 'cart/add', manualInvalidates: ['product'] }],
+        queries: [{ domains: ['product'], query: 'productGrid' }],
+        touchGraph: {
+          'cart.addItem': {
+            touches: [{ domain: 'product', keys: null, site: 'cart.domain.ts:1', via: 'products' }],
+            unresolved: [],
+          },
+        },
+      }).output,
+    ).toBe(
+      [
+        'fw-check/v1',
+        'WARN FW310 cart/add -> productGrid Invalidated query lacks optimistic transform.',
+        'WARN UNGUARDED cart/add mutation is reachable without an auth guard.',
+        'WARN INVALIDATE cart/add -> product Manual invalidate escape hatch requires review.',
+        '',
+      ].join('\n'),
+    );
   });
 
   it('derives FW310 gaps from mutation writes when invalidates are absent', () => {
