@@ -1,5 +1,5 @@
 export type { DiagnosticCode } from '@jiso/core';
-import type { EventDefinition, JsonValue } from '@jiso/core';
+import type { EventDefinition, Form, FormFailure, FormInput, JsonValue } from '@jiso/core';
 
 export type ImportHandlerModule = (url: string) => Promise<Record<string, unknown>>;
 
@@ -437,10 +437,16 @@ export interface EnhancedMutationFetchOptions {
   method: string;
 }
 
+export interface EnhancedMutationResponseLike {
+  ok?: boolean;
+  status?: number;
+  text(): Promise<string>;
+}
+
 export type EnhancedMutationFetch = (
   url: string,
   options: EnhancedMutationFetchOptions,
-) => Promise<{ text(): Promise<string> }>;
+) => Promise<EnhancedMutationResponseLike>;
 
 export interface EnhancedMutationSubmitOptions {
   fetch: EnhancedMutationFetch;
@@ -450,6 +456,126 @@ export interface EnhancedMutationSubmitOptions {
   morph?: MorphFragment;
   root: MorphRoot & TargetCollectorRoot;
   store: QueryStore;
+}
+
+export type SubmitFormDefinition = Form<string, Record<string, JsonValue>, JsonValue>;
+
+export interface SubmitOptions<Input extends Record<string, JsonValue>, Failure extends JsonValue> {
+  action?: string;
+  idem?: string;
+  input: Input;
+  method?: string;
+  onError?: (failure: Failure) => void | Promise<void>;
+  parseError?: (body: string) => Failure;
+}
+
+export interface SubmitContextOptions {
+  actionFor?: (form: SubmitFormDefinition) => string;
+  fetch: EnhancedMutationFetch;
+  method?: string;
+  morph?: MorphFragment;
+  root: MorphRoot & TargetCollectorRoot;
+  store: QueryStore;
+}
+
+export interface SubmitContext {
+  submit<Definition extends SubmitFormDefinition>(
+    form: Definition,
+    options: SubmitOptions<FormInput<Definition>, FormFailure<Definition>>,
+  ): Promise<
+    AppliedMutationResponse & { appliedFragments: string[]; idem: string; targets: string[] }
+  >;
+}
+
+export function createSubmitContext(options: SubmitContextOptions): SubmitContext {
+  return {
+    async submit(form, submitOptions) {
+      let body = '';
+      let ok: boolean | undefined;
+      let status: number | undefined;
+      const response = await submitEnhancedMutation({
+        fetch: async (url, fetchOptions) => {
+          const result = await options.fetch(url, fetchOptions);
+          ok = result.ok;
+          status = result.status;
+
+          return {
+            ...result,
+            async text() {
+              body = await result.text();
+              return body;
+            },
+          };
+        },
+        form: createEnhancedFormLike(
+          submitOptions.action ?? options.actionFor?.(form) ?? `/_m/${form.key}`,
+          submitOptions.method ?? options.method,
+        ),
+        formData: formDataFromInput(submitOptions.input),
+        root: options.root,
+        store: options.store,
+        ...(submitOptions.idem ? { idem: submitOptions.idem } : {}),
+        ...(options.morph ? { morph: options.morph } : {}),
+      });
+
+      if (submitOptions.onError && isValidationFailure(status, ok)) {
+        const parseError =
+          submitOptions.parseError ??
+          ((value: string) => parseMutationFailure(value) as FormFailure<typeof form>);
+        await submitOptions.onError(parseError(body));
+      }
+
+      return response;
+    },
+  };
+}
+
+function createEnhancedFormLike(action: string, method: string | undefined): EnhancedFormLike {
+  return {
+    action,
+    ...(method ? { method } : {}),
+  };
+}
+
+function formDataFromInput(input: Record<string, JsonValue>): FormData {
+  const data = new FormData();
+
+  for (const [name, value] of Object.entries(input)) {
+    appendFormValue(data, name, value);
+  }
+
+  return data;
+}
+
+function appendFormValue(data: FormData, name: string, value: JsonValue): void {
+  if (Array.isArray(value)) {
+    for (const item of value) {
+      appendFormValue(data, name, item);
+    }
+    return;
+  }
+
+  if (value === null) {
+    data.append(name, '');
+    return;
+  }
+
+  data.append(name, typeof value === 'object' ? JSON.stringify(value) : String(value));
+}
+
+function isValidationFailure(status: number | undefined, ok: boolean | undefined): boolean {
+  return status === 422 || ok === false;
+}
+
+function parseMutationFailure(body: string): JsonValue {
+  const errorMatch = /<fw-error\b[^>]*>(?<json>[\s\S]*?)<\/fw-error>/.exec(body);
+  const raw = errorMatch?.groups?.json ? unescapeHtml(errorMatch.groups.json) : body;
+
+  try {
+    return JSON.parse(raw) as JsonValue;
+  } catch {
+    return { body: raw, code: 'unknown' };
+  }
 }
 
 export function applyMutationResponse(store: QueryStore, body: string): AppliedMutationResponse {

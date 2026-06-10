@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { event } from '@jiso/core';
+import { event, form } from '@jiso/core';
 
 import {
   applyFragments,
@@ -8,6 +8,7 @@ import {
   applyMutationResponse,
   createEventBus,
   createQueryStore,
+  createSubmitContext,
   dispatchDelegatedEvent,
   hydrateQueryScripts,
   installMutationBroadcast,
@@ -543,5 +544,74 @@ describe('query store', () => {
     expect(store.get('cart')).toEqual({ count: 1 });
     expect(root.targets.get('cart-badge')?.html).toBe('<cart-badge>1</cart-badge>');
     expect(root.targets.get('recommendations')?.html).toBe('<section></section>');
+  });
+
+  it('submits typed forms through a ctx.submit-style helper', async () => {
+    const addToCart = form<'cart/add', { productId: string; quantity: number }>('cart/add');
+    const store = createQueryStore();
+    const root = new FakeMorphRoot();
+    root.deps = [{ id: 'cart-badge' }];
+    root.targets.set('cart-badge', new FakeMorphTarget());
+    const fetch = vi.fn(async (_url: string, options) => {
+      const body = options.body as FormData;
+
+      expect(body.get('productId')).toBe('p1');
+      expect(body.get('quantity')).toBe('2');
+
+      return {
+        async text() {
+          return [
+            '<fw-query name="cart">{"count":2}</fw-query>',
+            '<fw-fragment target="cart-badge"><cart-badge>2</cart-badge></fw-fragment>',
+          ].join('\n');
+        },
+      };
+    });
+    const ctx = createSubmitContext({ fetch, root, store });
+
+    const result = await ctx.submit(addToCart, {
+      idem: 'idem_ctx',
+      input: { productId: 'p1', quantity: 2 },
+    });
+
+    expect(fetch).toHaveBeenCalledWith('/_m/cart/add', {
+      body: expect.any(FormData),
+      headers: {
+        Accept: 'text/vnd.jiso.fragment+html',
+        'FW-Fragment': 'true',
+        'FW-Idem': 'idem_ctx',
+        'FW-Targets': 'cart-badge',
+      },
+      keepalive: true,
+      method: 'POST',
+    });
+    expect(result.appliedFragments).toEqual(['cart-badge']);
+    expect(store.get('cart')).toEqual({ count: 2 });
+  });
+
+  it('passes typed validation failures from ctx.submit on 422 responses', async () => {
+    const addToCart = form<
+      'cart/add',
+      { productId: string; quantity: number },
+      { code: 'OUT_OF_STOCK' }
+    >('cart/add');
+    const store = createQueryStore();
+    const root = new FakeMorphRoot();
+    const onError = vi.fn();
+    const fetch = vi.fn(async () => ({
+      status: 422,
+      async text() {
+        return '<fw-error>{&quot;code&quot;:&quot;OUT_OF_STOCK&quot;}</fw-error>';
+      },
+    }));
+    const ctx = createSubmitContext({ fetch, root, store });
+
+    const result = await ctx.submit(addToCart, {
+      input: { productId: 'p1', quantity: 1 },
+      onError,
+    });
+
+    expect(onError).toHaveBeenCalledWith({ code: 'OUT_OF_STOCK' });
+    expect(result.fragments).toEqual([]);
   });
 });

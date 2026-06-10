@@ -49,11 +49,27 @@ export function query<const Key extends string, Result = unknown>(key: Key): Que
   return { key };
 }
 
-export interface Form<Key extends string> {
+export interface Form<
+  Key extends string,
+  Input extends Record<string, JsonValue> = Record<string, JsonValue>,
+  Failure extends JsonValue = JsonValue,
+> {
+  failure?: Failure;
+  input?: Input;
   key: Key;
 }
 
-export function form<const Key extends string>(key: Key): Form<Key> {
+export type FormInput<Definition> =
+  Definition extends Form<string, infer Input, JsonValue> ? Input : never;
+
+export type FormFailure<Definition> =
+  Definition extends Form<string, Record<string, JsonValue>, infer Failure> ? Failure : never;
+
+export function form<
+  const Key extends string,
+  Input extends Record<string, JsonValue> = Record<string, JsonValue>,
+  Failure extends JsonValue = JsonValue,
+>(key: Key): Form<Key, Input, Failure> {
   return { key };
 }
 
