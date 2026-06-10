@@ -57,7 +57,11 @@ importers:
         specifier: 4.1.8
         version: 4.1.8(@types/node@25.9.2)(vite@8.0.16(@types/node@25.9.2))
 
-  packages/create-jiso: {}
+  packages/create-jiso:
+    devDependencies:
+      vitest:
+        specifier: 4.1.8
+        version: 4.1.8(@types/node@25.9.2)(vite@8.0.16(@types/node@25.9.2))
 
   packages/drizzle:
     dependencies:
