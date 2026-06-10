@@ -37,6 +37,28 @@ describe('server mutation primitives', () => {
     });
   });
 
+  it('renders stylesheet assets for Tailwind-first CSS delivery', () => {
+    expect(
+      renderPageHints({
+        modulepreloads: ['/c/cart.client.js'],
+        stylesheets: [
+          '/assets/tailwind.css',
+          '/assets/tailwind.css',
+          { href: '/assets/print.css', preload: false },
+        ],
+      }),
+    ).toEqual({
+      earlyHints: {
+        Link: '</assets/tailwind.css>; rel=preload; as=style, </c/cart.client.js>; rel=modulepreload',
+      },
+      html: [
+        '<link rel="stylesheet" href="/assets/tailwind.css">',
+        '<link rel="stylesheet" href="/assets/print.css">',
+        '<link rel="modulepreload" href="/c/cart.client.js">',
+      ].join(''),
+    });
+  });
+
   it('renders typed route meta with page hints', () => {
     const productMeta = meta({
       description: 'Fast cart <checkout>',

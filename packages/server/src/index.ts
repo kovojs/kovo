@@ -327,11 +327,17 @@ export interface RouteMeta {
   title?: string;
 }
 
+export interface StylesheetAsset {
+  href: string;
+  preload?: boolean;
+}
+
 export interface PageHintOptions {
   meta?: RouteMeta | readonly RouteMeta[];
   modulepreloads?: readonly string[];
   prefetch?: RoutePrefetch;
   prerenderUrls?: readonly string[];
+  stylesheets?: readonly (string | StylesheetAsset)[];
 }
 
 export interface PageHints {
@@ -412,8 +418,10 @@ export function meta<const Meta extends RouteMeta>(definition: Meta): Meta {
 
 export function renderPageHints(options: PageHintOptions): PageHints {
   const modulepreloads = dedupe(options.modulepreloads ?? []);
+  const stylesheets = dedupeStylesheets(options.stylesheets ?? []);
   const html = [
     ...renderRouteMeta(options.meta),
+    ...stylesheets.map((asset) => `<link rel="stylesheet" href="${escapeAttribute(asset.href)}">`),
     ...modulepreloads.map((href) => `<link rel="modulepreload" href="${escapeAttribute(href)}">`),
     renderSpeculationRules(options.prefetch ?? false, options.prerenderUrls ?? []),
   ]
@@ -421,10 +429,7 @@ export function renderPageHints(options: PageHintOptions): PageHints {
     .join('');
 
   return {
-    earlyHints:
-      modulepreloads.length > 0
-        ? { Link: modulepreloads.map((href) => `<${href}>; rel=modulepreload`).join(', ') }
-        : {},
+    earlyHints: renderEarlyHints(stylesheets, modulepreloads),
     html,
   };
 }
@@ -690,6 +695,35 @@ function renderDefaultFailurePage(failure: MutationFail): string {
 
 function dedupe(values: readonly string[]): string[] {
   return [...new Set(values.filter(Boolean))];
+}
+
+function dedupeStylesheets(values: readonly (string | StylesheetAsset)[]): StylesheetAsset[] {
+  const seen = new Set<string>();
+  const assets: StylesheetAsset[] = [];
+
+  for (const value of values) {
+    const asset = typeof value === 'string' ? { href: value, preload: true } : value;
+    if (!asset.href || seen.has(asset.href)) continue;
+
+    seen.add(asset.href);
+    assets.push(asset);
+  }
+
+  return assets;
+}
+
+function renderEarlyHints(
+  stylesheets: readonly StylesheetAsset[],
+  modulepreloads: readonly string[],
+): Record<string, string> {
+  const links = [
+    ...stylesheets
+      .filter((asset) => asset.preload !== false)
+      .map((asset) => `<${asset.href}>; rel=preload; as=style`),
+    ...modulepreloads.map((href) => `<${href}>; rel=modulepreload`),
+  ];
+
+  return links.length > 0 ? { Link: links.join(', ') } : {};
 }
 
 function renderSpeculationRules(prefetch: RoutePrefetch, urls: readonly string[]): string {
