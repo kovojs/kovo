@@ -8,6 +8,7 @@ describe('diagnostic registry', () => {
       'FW201',
       'FW210',
       'FW301',
+      'FW302',
       'FW310',
       'FW320',
       'FW330',
@@ -39,6 +40,11 @@ describe('diagnostic registry', () => {
           "code": "FW301",
           "message": "Server fact stored in island-local state.",
           "severity": "lint",
+        },
+        "FW302": {
+          "code": "FW302",
+          "message": "data-bind path is not present in the declared query shape.",
+          "severity": "error",
         },
         "FW310": {
           "code": "FW310",

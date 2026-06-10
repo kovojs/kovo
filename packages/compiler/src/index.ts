@@ -27,8 +27,20 @@ export function createEmptyCompileResult(): CompileResult {
 
 export interface CompileComponentOptions {
   fileName: string;
+  queryShapes?: Record<string, QueryShape>;
   source: string;
 }
+
+export type QueryShape =
+  | 'array'
+  | 'boolean'
+  | 'number'
+  | 'object'
+  | 'string'
+  | readonly QueryShape[]
+  | {
+      readonly [key: string]: QueryShape;
+    };
 
 interface HandlerLowering {
   exportName: string;
@@ -83,6 +95,7 @@ export function compileComponentModule(options: CompileComponentOptions): Compil
   const platformLowering = lowerPlatformBehaviors(viewTransitionLowering.source);
   const source = platformLowering.source;
   const handlers = lowerEventHandlers({ ...options, source }, componentName);
+  const dataBindDiagnostics = validateDataBindings(source, options);
   const clientFileName = replaceExtension(options.fileName, '.client.js');
   const serverFileName = replaceExtension(options.fileName, '.server.js');
   const registryFileName = 'generated/registries.d.ts';
@@ -99,7 +112,10 @@ export function compileComponentModule(options: CompileComponentOptions): Compil
   });
 
   return {
-    diagnostics: handlers.flatMap((handler) => (handler.diagnostic ? [handler.diagnostic] : [])),
+    diagnostics: [
+      ...handlers.flatMap((handler) => (handler.diagnostic ? [handler.diagnostic] : [])),
+      ...dataBindDiagnostics,
+    ],
     files: [
       { fileName: serverFileName, source: serverSource },
       { fileName: clientFileName, source: clientSource },
@@ -324,6 +340,54 @@ function diagnosticFor(fileName: string, code: DiagnosticCode): CompilerDiagnost
     message: definition.message,
     severity: definition.severity,
   };
+}
+
+function validateDataBindings(
+  source: string,
+  options: CompileComponentOptions,
+): CompilerDiagnostic[] {
+  if (!options.queryShapes) return [];
+
+  return [...source.matchAll(/\bdata-bind=(["'])(?<path>[^"']+)\1/g)]
+    .map((match) => match.groups?.path ?? '')
+    .filter(Boolean)
+    .filter((path) => !pathExistsInQueryShapes(path, options.queryShapes ?? {}))
+    .map((path) => ({
+      code: 'FW302' as const,
+      fileName: options.fileName,
+      message: `data-bind path is not present in the declared query shape: ${path}`,
+      severity: 'error' as const,
+    }));
+}
+
+function pathExistsInQueryShapes(path: string, queryShapes: Record<string, QueryShape>): boolean {
+  const [queryName, ...segments] = path.split('.');
+  if (!queryName) return false;
+
+  const shape = queryShapes[queryName];
+  if (!shape || segments.length === 0) return Boolean(shape);
+
+  return pathExistsInShape(shape, segments);
+}
+
+function pathExistsInShape(shape: QueryShape, segments: readonly string[]): boolean {
+  if (segments.length === 0) return true;
+
+  if (isArrayShape(shape)) {
+    const itemShape = shape[0];
+    return itemShape !== undefined && pathExistsInShape(itemShape, segments);
+  }
+
+  if (typeof shape !== 'object' || shape === null) return false;
+
+  const [head, ...tail] = segments;
+  if (!head || !(head in shape)) return false;
+
+  return pathExistsInShape(shape[head] ?? 'object', tail);
+}
+
+function isArrayShape(shape: QueryShape): shape is readonly QueryShape[] {
+  return Array.isArray(shape);
 }
 
 function emitClientModule(handlers: HandlerLowering[]): string {

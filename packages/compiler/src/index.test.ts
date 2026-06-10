@@ -153,6 +153,55 @@ export const ProductCard = component('product-card', {
     );
     expect(result.files[2]?.source).toContain("'product-p1-image': unknown;");
   });
+
+  it('accepts data-bind paths present in declared query shapes', () => {
+    const result = compileComponentModule({
+      fileName: 'cart-badge.tsx',
+      queryShapes: {
+        cart: {
+          count: 'number',
+          items: [{ productId: 'string', qty: 'number' }],
+        },
+      },
+      source: `
+export const CartBadge = component('cart-badge', {
+  render: () => (
+    <cart-badge>
+      <span data-bind="cart.count">2</span>
+      <span data-bind="cart.items.productId">p1</span>
+    </cart-badge>
+  ),
+});
+`,
+    });
+
+    expect(result.diagnostics).toEqual([]);
+  });
+
+  it('reports FW302 when data-bind paths are absent from declared query shapes', () => {
+    const result = compileComponentModule({
+      fileName: 'cart-badge.tsx',
+      queryShapes: {
+        cart: {
+          count: 'number',
+        },
+      },
+      source: `
+export const CartBadge = component('cart-badge', {
+  render: () => <span data-bind="cart.total">2</span>,
+});
+`,
+    });
+
+    expect(result.diagnostics).toEqual([
+      {
+        code: 'FW302',
+        fileName: 'cart-badge.tsx',
+        message: 'data-bind path is not present in the declared query shape: cart.total',
+        severity: 'error',
+      },
+    ]);
+  });
 });
 
 describe('jisoVitePlugin', () => {

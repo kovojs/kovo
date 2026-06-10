@@ -4,6 +4,7 @@ export type DiagnosticCode =
   | 'FW201'
   | 'FW210'
   | 'FW301'
+  | 'FW302'
   | 'FW310'
   | 'FW320'
   | 'FW330'
@@ -37,6 +38,11 @@ export const diagnosticDefinitions = {
     code: 'FW301',
     severity: 'lint',
     message: 'Server fact stored in island-local state.',
+  },
+  FW302: {
+    code: 'FW302',
+    severity: 'error',
+    message: 'data-bind path is not present in the declared query shape.',
   },
   FW310: {
     code: 'FW310',
