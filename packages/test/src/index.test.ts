@@ -12,6 +12,7 @@ import {
 
 interface FakeDb {
   read(table: string, options?: { branch?: string; rowKey?: string }): unknown[];
+  sql(statement: string): unknown[];
   write(table: string, value: unknown, options?: { branch?: string; rowKey?: string }): void;
 }
 
@@ -21,6 +22,9 @@ function createFakeDb(): FakeDb {
   return {
     read(table) {
       return tables.get(table) ?? [];
+    },
+    sql() {
+      return [];
     },
     write(table, value) {
       tables.set(table, [...(tables.get(table) ?? []), value]);
@@ -316,6 +320,65 @@ describe('@jiso/test harness', () => {
     );
   });
 
+  it('verifies raw SQL writes against the static touch graph', async () => {
+    const cartMutation = mutation('cart/add', {
+      input: s.object({ productId: s.string() }),
+      handler(input, request: { db: FakeDb }) {
+        request.db.sql(`insert into cart_items (product_id) values ('${input.productId}')`);
+        return input.productId;
+      },
+    });
+    const harness = createJisoTestHarness({
+      db: createFakeDb(),
+      touchGraph: {
+        'cart.addItem': {
+          touches: [{ domain: 'cart', keys: null, site: 'cart.domain.ts:1', via: 'cart_items' }],
+          unresolved: [],
+        },
+      },
+      verification: {
+        domainByTable: {
+          cart_items: 'cart',
+        },
+      },
+    });
+
+    await expect(harness.exec(cartMutation, { productId: 'p1' })).resolves.toMatchObject({
+      ok: true,
+      value: 'p1',
+    });
+    expect(harness.dbHandle().read('cart_items')).toEqual([]);
+  });
+
+  it('fails verification when raw SQL writes outside FW406 coverage', async () => {
+    const cartMutation = mutation('cart/add', {
+      input: s.object({ productId: s.string() }),
+      handler(input, request: { db: FakeDb }) {
+        request.db.sql(`update audit_log set product_id = '${input.productId}' where id = 'a1'`);
+        return input.productId;
+      },
+    });
+    const harness = createJisoTestHarness({
+      db: createFakeDb(),
+      touchGraph: {
+        'cart.addItem': {
+          touches: [{ domain: 'cart', keys: null, site: 'cart.domain.ts:1', via: 'cart_items' }],
+          unresolved: [],
+        },
+      },
+      verification: {
+        domainByTable: {
+          audit_log: 'audit',
+          cart_items: 'cart',
+        },
+      },
+    });
+
+    await expect(harness.exec(cartMutation, { productId: 'p1' })).rejects.toThrow(
+      'FW402 Write touched an undeclared domain: audit',
+    );
+  });
+
   it('allows observed writes when FW406 marks unresolved static analysis', () => {
     const verifier = createDbVerifier(
       {
@@ -504,6 +567,44 @@ describe('@jiso/test harness', () => {
 
     expect(() => verifier.assertReadsCovered(['cart'])).toThrow(
       'FW407 Query read from undeclared domain: unmapped_table',
+    );
+  });
+
+  it('verifies raw SQL query reads with joins against declared domains', () => {
+    const verifier = createDbVerifier(
+      {},
+      { domainByTable: { cart_items: 'cart', products: 'product' } },
+    );
+    const db = verifier.wrap(createFakeDb());
+
+    db.sql(
+      'select cart_items.product_id, products.name from cart_items join products on products.id = cart_items.product_id',
+    );
+
+    expect(() => verifier.assertReadsCovered(['cart', 'product'])).not.toThrow();
+    expect(() => verifier.assertReadsCovered(['cart'])).toThrow(
+      'FW407 Query read from undeclared domain: product',
+    );
+  });
+
+  it('checks row keys parsed from raw SQL predicates', () => {
+    const verifier = createDbVerifier(
+      {
+        'product.reserve': {
+          touches: [
+            { domain: 'product', keys: 'arg:productId', site: 'product.ts:1', via: 'products' },
+          ],
+          unresolved: [],
+        },
+      },
+      { domainByTable: { products: 'product' }, keyByTable: { products: 'id' } },
+    );
+    const db = verifier.wrap(createFakeDb());
+
+    db.sql("update products set reserved = true where sku = 'sku-1'");
+
+    expect(() => verifier.assertCovered()).toThrow(
+      'FW408 Declared row key differs from observed row predicate: products expected id observed sku',
     );
   });
 

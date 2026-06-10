@@ -84,6 +84,7 @@ export interface ObservedDbOperation {
   domain: string | undefined;
   kind: 'read' | 'write';
   rowKey: string | undefined;
+  sql: string | undefined;
   table: string;
 }
 
@@ -266,6 +267,13 @@ export function createDbVerifier(touchGraph: TouchGraph, config: DbVerificationC
             };
           }
 
+          if (prop === 'sql' && typeof value === 'function') {
+            return (statement: string, ...args: unknown[]) => {
+              observeSql(statement, config, observed);
+              return value.call(target, statement, ...args);
+            };
+          }
+
           return value;
         },
       });
@@ -391,8 +399,77 @@ function observe(
     domain: config.domainByTable[table],
     kind,
     rowKey: observationOptions(args)?.rowKey,
+    sql: undefined,
     table,
   });
+}
+
+function observeSql(
+  statement: string,
+  config: DbVerificationConfig,
+  observed: ObservedDbOperation[],
+): void {
+  for (const operation of parseSqlStatement(statement)) {
+    observed.push({
+      branch: undefined,
+      domain: config.domainByTable[operation.table],
+      kind: operation.kind,
+      rowKey: operation.rowKey,
+      sql: statement,
+      table: operation.table,
+    });
+  }
+}
+
+function parseSqlStatement(
+  statement: string,
+): Array<Pick<ObservedDbOperation, 'kind' | 'rowKey' | 'table'>> {
+  const normalized = statement.replaceAll(/--.*$/gm, ' ').replaceAll(/\s+/g, ' ').trim();
+  const verb = /^[a-z]+/i.exec(normalized)?.[0]?.toLowerCase();
+  const rowKey = parseWhereRowKey(normalized);
+
+  if (verb === 'insert') {
+    const table = /\binsert\s+into\s+("?[\w.]+"?)/i.exec(normalized)?.[1];
+    return table ? [{ kind: 'write', rowKey, table: normalizeSqlIdentifier(table) }] : [];
+  }
+
+  if (verb === 'update') {
+    const table = /\bupdate\s+("?[\w.]+"?)/i.exec(normalized)?.[1];
+    return table ? [{ kind: 'write', rowKey, table: normalizeSqlIdentifier(table) }] : [];
+  }
+
+  if (verb === 'delete') {
+    const table = /\bdelete\s+from\s+("?[\w.]+"?)/i.exec(normalized)?.[1];
+    return table ? [{ kind: 'write', rowKey, table: normalizeSqlIdentifier(table) }] : [];
+  }
+
+  if (verb === 'select') {
+    const tables = new Set<string>();
+
+    for (const match of normalized.matchAll(/\b(?:from|join)\s+("?[\w.]+"?)/gi)) {
+      tables.add(normalizeSqlIdentifier(match[1] ?? ''));
+    }
+
+    return [...tables].filter(Boolean).map((table) => ({ kind: 'read', rowKey, table }));
+  }
+
+  return [];
+}
+
+function parseWhereRowKey(statement: string): string | undefined {
+  const where = /\bwhere\s+([\s\S]+)$/i.exec(statement)?.[1];
+  if (!where) return undefined;
+
+  const predicate =
+    /(?:"?[\w.]+"?\.)?"?([a-z_][\w]*)"?\s*=\s*(?:\$[0-9]+|\?|:[a-z_][\w]*|'[^']*'|[0-9]+)/i.exec(
+      where,
+    );
+
+  return predicate?.[1];
+}
+
+function normalizeSqlIdentifier(identifier: string): string {
+  return identifier.replaceAll('"', '').split('.').at(-1) ?? identifier;
 }
 
 function assertRowKeys(
