@@ -307,7 +307,14 @@ export interface NoJsMutationResponse {
 
 export type RoutePrefetch = 'conservative' | 'moderate' | false;
 
+export interface RouteMeta {
+  description?: string;
+  image?: string;
+  title?: string;
+}
+
 export interface PageHintOptions {
+  meta?: RouteMeta | readonly RouteMeta[];
   modulepreloads?: readonly string[];
   prefetch?: RoutePrefetch;
   prerenderUrls?: readonly string[];
@@ -385,9 +392,14 @@ export function mutation<
   return { ...definition, key };
 }
 
+export function meta<const Meta extends RouteMeta>(definition: Meta): Meta {
+  return definition;
+}
+
 export function renderPageHints(options: PageHintOptions): PageHints {
   const modulepreloads = dedupe(options.modulepreloads ?? []);
   const html = [
+    ...renderRouteMeta(options.meta),
     ...modulepreloads.map((href) => `<link rel="modulepreload" href="${escapeAttribute(href)}">`),
     renderSpeculationRules(options.prefetch ?? false, options.prerenderUrls ?? []),
   ]
@@ -679,6 +691,26 @@ function renderSpeculationRules(prefetch: RoutePrefetch, urls: readonly string[]
       ],
     }),
   )}</script>`;
+}
+
+function renderRouteMeta(metaInput: PageHintOptions['meta']): string[] {
+  const metas = Array.isArray(metaInput) ? metaInput : metaInput ? [metaInput] : [];
+  const tags: string[] = [];
+
+  for (const item of metas) {
+    if (item.title) tags.push(`<title>${escapeHtml(item.title)}</title>`);
+    if (item.description) {
+      tags.push(
+        `<meta name="description" content="${escapeAttribute(item.description)}">`,
+        `<meta property="og:description" content="${escapeAttribute(item.description)}">`,
+      );
+    }
+    if (item.image) {
+      tags.push(`<meta property="og:image" content="${escapeAttribute(item.image)}">`);
+    }
+  }
+
+  return tags;
 }
 
 function renderDeferredQueryChunks(queries: readonly DeferredQueryChunk[]): string[] {

@@ -5,6 +5,7 @@ import {
   domain,
   guards,
   invalidate,
+  meta,
   mutation,
   query,
   renderDeferredStream,
@@ -31,6 +32,32 @@ describe('server mutation primitives', () => {
         '<link rel="modulepreload" href="/c/cart.client.js">',
         '<link rel="modulepreload" href="/c/recs.client.js">',
         '<script type="speculationrules">{"prerender":[{"eagerness":"conservative","urls":["/cart","/checkout"]}]}</script>',
+      ].join(''),
+    });
+  });
+
+  it('renders typed route meta with page hints', () => {
+    const productMeta = meta({
+      description: 'Fast cart <checkout>',
+      image: '/products/p1.png',
+      title: 'Cart & Checkout',
+    });
+
+    expect(
+      renderPageHints({
+        meta: productMeta,
+        modulepreloads: ['/c/cart.client.js'],
+      }),
+    ).toEqual({
+      earlyHints: {
+        Link: '</c/cart.client.js>; rel=modulepreload',
+      },
+      html: [
+        '<title>Cart &amp; Checkout</title>',
+        '<meta name="description" content="Fast cart &lt;checkout&gt;">',
+        '<meta property="og:description" content="Fast cart &lt;checkout&gt;">',
+        '<meta property="og:image" content="/products/p1.png">',
+        '<link rel="modulepreload" href="/c/cart.client.js">',
       ].join(''),
     });
   });
