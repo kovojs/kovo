@@ -252,7 +252,10 @@ export interface MutationContext<Errors extends Record<string, Schema<unknown>>>
     code: Code,
     payload: InferSchema<Errors[Code]>,
   ): MutationFail<Code, InferSchema<Errors[Code]>>;
-  invalidate(domain: Domain, options?: InvalidateOptions): ChangeRecord;
+  invalidate<const DomainKey extends string, Input = unknown>(
+    domain: Domain<DomainKey>,
+    options?: InvalidateOptions<Input>,
+  ): ChangeRecord<DomainKey, Input>;
 }
 
 export interface Domain<Key extends string = string> {
@@ -306,10 +309,10 @@ export function query<const Key extends string>(
   return { ...definition, key };
 }
 
-export interface ChangeRecord {
-  domain: string;
+export interface ChangeRecord<DomainKey extends string = string, Input = unknown> {
+  domain: DomainKey;
   keys?: readonly string[];
-  input?: unknown;
+  input?: Input;
   manual?: true;
   reason?: string;
 }
@@ -528,8 +531,8 @@ export interface MutationDefinition<
   registry?: MutationRegistry;
 }
 
-export interface InvalidateOptions {
-  input?: unknown;
+export interface InvalidateOptions<Input = unknown> {
+  input?: Input;
   keys?: readonly string[];
   reason?: string;
 }
@@ -678,7 +681,10 @@ export async function runMutation<
   };
 }
 
-export function invalidate(domain: Domain, options: InvalidateOptions = {}): ChangeRecord {
+export function invalidate<const DomainKey extends string, Input = unknown>(
+  domain: Domain<DomainKey>,
+  options: InvalidateOptions<Input> = {},
+): ChangeRecord<DomainKey, Input> {
   return {
     domain: domain.key,
     ...(options.input === undefined ? {} : { input: options.input }),
@@ -852,7 +858,10 @@ function parseMutationInput<InputSchema extends Schema<unknown>>(
   }
 }
 
-function changeRecordsFor(domains: readonly Domain[], input: unknown): ChangeRecord[] {
+function changeRecordsFor<Input>(
+  domains: readonly Domain[],
+  input: Input,
+): ChangeRecord<string, Input>[] {
   return domains.map((item) => ({
     domain: item.key,
     input,

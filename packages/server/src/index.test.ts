@@ -23,6 +23,7 @@ import {
   session,
   t,
   tag,
+  type ChangeRecord,
 } from './index.js';
 
 describe('server mutation primitives', () => {
@@ -621,6 +622,34 @@ describe('server mutation primitives', () => {
       manual: true,
       reason: 'stripe webhook',
     });
+  });
+
+  it('types change records by domain key and invalidation input', () => {
+    const cart = domain('cart');
+    const record = invalidate(cart, {
+      input: { cartId: 'c1', quantity: 2 },
+      keys: ['c1'],
+    });
+    const typed = record satisfies ChangeRecord<'cart', { cartId: string; quantity: number }>;
+    const assertWrongDomainRejected = () => {
+      // @ts-expect-error cart invalidation records cannot satisfy the product domain.
+      const wrongDomain: ChangeRecord<'product', { cartId: string; quantity: number }> = record;
+      return wrongDomain;
+    };
+    const assertWrongInputRejected = () => {
+      // @ts-expect-error sku is not part of the invalidation input payload.
+      const wrongInput: ChangeRecord<'cart', { sku: string }> = record;
+      return wrongInput;
+    };
+
+    expect(typed).toEqual({
+      domain: 'cart',
+      input: { cartId: 'c1', quantity: 2 },
+      keys: ['c1'],
+      manual: true,
+    });
+    expect(assertWrongDomainRejected).toBeTypeOf('function');
+    expect(assertWrongInputRejected).toBeTypeOf('function');
   });
 
   it('renders enhanced mutation responses as query and fragment chunks', async () => {
