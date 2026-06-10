@@ -227,16 +227,30 @@ export function extractTouchGraphFromSource(files: readonly SourceFileInput[]): 
         const table = tables.get(call.tableExpression);
 
         if (table) {
+          const writeKey = extractParameterizedKey(
+            call.statement,
+            call.tableExpression,
+            table.annotation,
+            tables,
+          );
           writes.push({
             operation: call.operation,
             site,
             table: table.annotation,
+            ...(writeKey ? { writeKey } : {}),
           });
           for (const readSource of call.readSources) {
             const readTable = tables.get(readSource.tableExpression);
             if (readTable) {
+              const readKey = extractParameterizedKey(
+                call.statement,
+                readSource.tableExpression,
+                readTable.annotation,
+                tables,
+              );
               reads.push({
                 operation: readSource.operation,
+                ...(readKey ? { readKey } : {}),
                 site,
                 table: readTable.annotation,
               });
@@ -283,6 +297,7 @@ interface ExtractedWriteCall {
   index: number;
   operation: string;
   readSources: ExtractedReadSource[];
+  statement: string;
   tableExpression: string;
 }
 
@@ -358,14 +373,13 @@ function extractDrizzleWriteCalls(source: string): ExtractedWriteCall[] {
     const operation = groups.operation;
     const tableExpression = groups.tableExpression;
     if (!operation || !tableExpression) continue;
+    const statement = source.slice(match.index, statementEnd(source, match.index));
 
     calls.push({
       index: match.index,
       operation,
-      readSources: extractReadSources(
-        source.slice(match.index, statementEnd(source, match.index)),
-        operation,
-      ),
+      readSources: extractReadSources(statement, operation),
+      statement,
       tableExpression: tableExpression.trim(),
     });
   }
@@ -402,6 +416,41 @@ function extractReadSources(source: string, operation: string): ExtractedReadSou
 function statementEnd(source: string, start: number): number {
   const end = source.indexOf(';', start);
   return end === -1 ? source.length : end;
+}
+
+function extractParameterizedKey(
+  statement: string,
+  tableIdentifier: string,
+  table: JisoTableAnnotation,
+  tables: ReadonlyMap<string, ExtractedTable>,
+): string | undefined {
+  if (!table.key) return undefined;
+
+  for (const match of statement.matchAll(
+    /eq\s*\(\s*(?<left>[^,]+?)\s*,\s*(?<right>[^)]+?)\s*\)/g,
+  )) {
+    const left = match.groups?.left?.trim();
+    const right = match.groups?.right?.trim();
+    if (!left || !right) continue;
+
+    if (left === `${tableIdentifier}.${table.key}`) return argumentKey(right, tables);
+    if (right === `${tableIdentifier}.${table.key}`) return argumentKey(left, tables);
+  }
+
+  return undefined;
+}
+
+function argumentKey(
+  expression: string,
+  tables: ReadonlyMap<string, ExtractedTable>,
+): string | undefined {
+  const member = /^(?<base>[A-Za-z_$][\w$]*)\.(?<property>[A-Za-z_$][\w$]*)$/.exec(expression);
+  if (member?.groups) {
+    if (tables.has(member.groups.base ?? '')) return undefined;
+    return member.groups.property ? `arg:${member.groups.property}` : undefined;
+  }
+
+  return /^[A-Za-z_$][\w$]*$/.test(expression) ? `arg:${expression}` : undefined;
 }
 
 function findMatchingBrace(source: string, openBrace: number): number {

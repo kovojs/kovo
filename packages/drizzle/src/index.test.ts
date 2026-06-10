@@ -290,6 +290,75 @@ export const tableDomains = {
     });
   });
 
+  it('extracts direct parameterized keys from update and delete eq predicates', () => {
+    const graph = extractTouchGraphFromSource([
+      {
+        fileName: 'product.domain.ts',
+        source: `
+          export const cartItems = pgTable("cart_items", {}, jiso({ domain: "cart", key: "cartId" }));
+          export const products = pgTable("products", {}, jiso({ domain: "product", key: "id" }));
+
+          export async function updateProduct(db, input, productId) {
+            await db.update(products).set({ reserved: true }).where(eq(products.id, input.id));
+            await db.delete(cartItems).where(eq(cartItems.cartId, productId));
+          }
+        `,
+      },
+    ]);
+
+    expect(graph).toEqual({
+      updateProduct: {
+        reads: [],
+        touches: [
+          {
+            domain: 'cart',
+            keys: 'arg:productId',
+            site: 'product.domain.ts:7',
+            via: 'cart_items',
+          },
+          { domain: 'product', keys: 'arg:id', site: 'product.domain.ts:6', via: 'products' },
+        ],
+        unresolved: [],
+      },
+    });
+  });
+
+  it('keeps non-key and table-column predicates at table-level', () => {
+    const graph = extractTouchGraphFromSource([
+      {
+        fileName: 'product.domain.ts',
+        source: `
+          export const products = pgTable("products", {}, jiso({ domain: "product", key: "id" }));
+          export const prices = pgTable("prices", {}, jiso({ domain: "price", key: "productId" }));
+
+          export async function syncProduct(db, productId) {
+            await db.update(products).set({ reserved: true }).where(eq(products.sku, productId));
+            await db.update(products).set({ price: prices.amount }).from(prices).where(eq(products.id, prices.productId));
+          }
+        `,
+      },
+    ]);
+
+    expect(graph).toEqual({
+      syncProduct: {
+        reads: [
+          {
+            domain: 'price',
+            keys: null,
+            site: 'product.domain.ts:7',
+            source: 'update-from',
+            via: 'prices',
+          },
+        ],
+        touches: [
+          { domain: 'product', keys: null, site: 'product.domain.ts:6', via: 'products' },
+          { domain: 'product', keys: null, site: 'product.domain.ts:7', via: 'products' },
+        ],
+        unresolved: [],
+      },
+    });
+  });
+
   it('marks non-identifier Drizzle table expressions as FW406', () => {
     const graph = extractTouchGraphFromSource([
       {
