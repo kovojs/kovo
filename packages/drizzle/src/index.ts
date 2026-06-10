@@ -315,31 +315,70 @@ interface ExtractedPredicateSummary {
 
 function extractTables(source: string): ExtractedTableDeclaration[] {
   const tables: ExtractedTableDeclaration[] = [];
+  const byIdentifier = new Map<string, ExtractedTableDeclaration>();
   const declarations =
     /(?:export\s+)?const\s+(?<identifier>[A-Za-z_$][\w$]*)\s*=\s*(?<initializer>[\s\S]*?);/g;
 
-  for (const match of source.matchAll(declarations)) {
-    const groups = match.groups;
-    if (!groups) continue;
+  const matches = [...source.matchAll(declarations)];
 
-    const identifier = groups.identifier;
-    const initializer = groups.initializer;
-    if (!identifier || !initializer) continue;
+  for (const match of matches) {
+    const declaration = tableDeclarationFromMatch(match);
+    if (!declaration) continue;
 
+    const { identifier, initializer } = declaration;
     const domain = stringProperty(initializer, 'domain');
     if (!domain) continue;
 
     const key = stringProperty(initializer, 'key');
 
-    tables.push({
+    const table = {
       domain,
       identifier,
       ...(key ? { key } : {}),
       name: stringArgument(initializer) ?? identifier,
-    });
+    };
+    tables.push(table);
+    byIdentifier.set(identifier, table);
+  }
+
+  for (const match of matches) {
+    const declaration = tableDeclarationFromMatch(match);
+    if (!declaration || byIdentifier.has(declaration.identifier)) continue;
+
+    const target = aliasTarget(declaration.initializer);
+    const table = target ? byIdentifier.get(target) : undefined;
+    if (!table) continue;
+
+    const alias = {
+      domain: table.domain,
+      identifier: declaration.identifier,
+      ...(table.key ? { key: table.key } : {}),
+      name: table.name,
+    };
+    tables.push(alias);
+    byIdentifier.set(alias.identifier, alias);
   }
 
   return tables;
+}
+
+function tableDeclarationFromMatch(
+  match: RegExpMatchArray,
+): { identifier: string; initializer: string } | undefined {
+  const groups = match.groups;
+  if (!groups) return undefined;
+
+  const identifier = groups.identifier;
+  const initializer = groups.initializer;
+  return identifier && initializer ? { identifier, initializer } : undefined;
+}
+
+function aliasTarget(initializer: string): string | undefined {
+  const direct = /^(?<identifier>[A-Za-z_$][\w$]*)$/.exec(initializer.trim())?.groups?.identifier;
+  if (direct) return direct;
+
+  return /^alias\s*\(\s*(?<identifier>[A-Za-z_$][\w$]*)\s*,/.exec(initializer.trim())?.groups
+    ?.identifier;
 }
 
 function extractFunctions(source: string): ExtractedFunction[] {

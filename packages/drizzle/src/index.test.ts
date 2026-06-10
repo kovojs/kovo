@@ -416,6 +416,87 @@ export const tableDomains = {
     ]);
   });
 
+  it('resolves local Drizzle table aliases for writes, reads, and predicates', () => {
+    const graph = extractTouchGraphFromSource([
+      {
+        fileName: 'product.domain.ts',
+        source: `
+          export const prices = pgTable("prices", {}, jiso({ domain: "price", key: "productId" }));
+          export const products = pgTable("products", {}, jiso({ domain: "product", key: "id" }));
+          const priceAlias = alias(prices, "pr");
+          const productAlias = alias(products, "p");
+
+          export async function syncProduct(db, productId) {
+            await db.update(productAlias).set({ reserved: true }).where(eq(productAlias.id, productId));
+            await db.update(products).set({ price: priceAlias.amount }).from(priceAlias).where(gt(priceAlias.productId, productId));
+          }
+        `,
+      },
+    ]);
+
+    expect(graph).toEqual({
+      syncProduct: {
+        reads: [
+          {
+            domain: 'price',
+            keys: null,
+            predicate: 'non-eq',
+            site: 'product.domain.ts:9',
+            source: 'update-from',
+            via: 'prices',
+          },
+        ],
+        touches: [
+          {
+            domain: 'product',
+            keys: 'arg:productId',
+            site: 'product.domain.ts:8',
+            via: 'products',
+          },
+          { domain: 'product', keys: null, site: 'product.domain.ts:9', via: 'products' },
+        ],
+        unresolved: [],
+      },
+    });
+    expect(diagnosticsForTouchGraph(graph)).toEqual([
+      {
+        code: 'FW409',
+        message: 'Non-eq predicate degraded to table-level invalidation.',
+        severity: 'notice',
+        site: 'product.domain.ts:9',
+      },
+    ]);
+  });
+
+  it('marks aliases with unresolved bases as FW406', () => {
+    const graph = extractTouchGraphFromSource([
+      {
+        fileName: 'product.domain.ts',
+        source: `
+          const productAlias = alias(tableFor("products"), "p");
+
+          export async function syncProduct(db) {
+            await db.update(productAlias).set({ reserved: true });
+          }
+        `,
+      },
+    ]);
+
+    expect(graph).toEqual({
+      syncProduct: {
+        reads: [],
+        touches: [],
+        unresolved: [
+          {
+            code: 'FW406',
+            message: 'Statically un-analyzable write site; manual touches required.',
+            site: 'product.domain.ts:5',
+          },
+        ],
+      },
+    });
+  });
+
   it('marks non-identifier Drizzle table expressions as FW406', () => {
     const graph = extractTouchGraphFromSource([
       {
