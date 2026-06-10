@@ -188,6 +188,19 @@ export interface MutationWireResponse {
   status: 200 | 422;
 }
 
+export interface NoJsMutationRequest<Request, Value> {
+  rawInput: unknown;
+  redirectTo: string | ((result: MutationSuccess<Value>) => string);
+  renderFailurePage?: (failure: MutationFail) => string | Promise<string>;
+  request: Request;
+}
+
+export interface NoJsMutationResponse {
+  body: string;
+  headers: Record<string, string>;
+  status: 303 | 422;
+}
+
 export interface MutationDefinition<
   Key extends string = string,
   InputSchema extends Schema<unknown> = Schema<unknown>,
@@ -299,6 +312,43 @@ export async function renderMutationResponse<
   };
 }
 
+export async function renderNoJsMutationResponse<
+  const Key extends string,
+  InputSchema extends Schema<unknown>,
+  Errors extends Record<string, Schema<unknown>>,
+  Request,
+  Value,
+>(
+  definition: MutationDefinition<Key, InputSchema, Errors, Request, Value>,
+  noJsRequest: NoJsMutationRequest<Request, Value>,
+): Promise<NoJsMutationResponse> {
+  const result = await runMutation(definition, noJsRequest.rawInput, noJsRequest.request);
+
+  if (!result.ok) {
+    const body = noJsRequest.renderFailurePage
+      ? await noJsRequest.renderFailurePage(result)
+      : renderDefaultFailurePage(result);
+
+    return {
+      body,
+      headers: { 'Content-Type': 'text/html; charset=utf-8' },
+      status: 422,
+    };
+  }
+
+  return {
+    body: '',
+    headers: {
+      'Cache-Control': 'no-store',
+      Location:
+        typeof noJsRequest.redirectTo === 'function'
+          ? noJsRequest.redirectTo(result)
+          : noJsRequest.redirectTo,
+    },
+    status: 303,
+  };
+}
+
 function isMutationFail(value: unknown): value is MutationFail {
   return (
     typeof value === 'object' &&
@@ -369,6 +419,10 @@ async function renderFragmentChunks(
   }
 
   return chunks;
+}
+
+function renderDefaultFailurePage(failure: MutationFail): string {
+  return `<!doctype html><html><body><output role="alert" data-error-code="${escapeAttribute(failure.error.code)}">${escapeHtml(JSON.stringify(failure.error.payload))}</output></body></html>`;
 }
 
 function escapeHtml(value: string): string {

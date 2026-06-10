@@ -6,6 +6,7 @@ import {
   mutation,
   query,
   renderMutationResponse,
+  renderNoJsMutationResponse,
   runMutation,
   s,
 } from './index.js';
@@ -163,6 +164,57 @@ describe('server mutation primitives', () => {
     ).resolves.toEqual({
       body: '<fw-fragment target="error"><output role="alert" data-error-code="OUT_OF_STOCK">{"availableQuantity":0}</output></fw-fragment>',
       headers: { 'Content-Type': 'text/vnd.jiso.fragment+html; charset=utf-8' },
+      status: 422,
+    });
+  });
+
+  it('renders no-JS mutation success as POST-redirect-GET', async () => {
+    const addToCart = mutation('cart/add', {
+      input: s.object({
+        productId: s.string(),
+        quantity: s.number().int().min(1).default(1),
+      }),
+      handler(input) {
+        return input;
+      },
+    });
+
+    await expect(
+      renderNoJsMutationResponse(addToCart, {
+        rawInput: { productId: 'p1', quantity: 1 },
+        redirectTo: '/cart',
+        request: {},
+      }),
+    ).resolves.toEqual({
+      body: '',
+      headers: {
+        'Cache-Control': 'no-store',
+        Location: '/cart',
+      },
+      status: 303,
+    });
+  });
+
+  it('renders no-JS mutation failures as a full HTML 422 page', async () => {
+    const addToCart = mutation('cart/add', {
+      errors: {
+        OUT_OF_STOCK: s.object({ availableQuantity: s.number().int().min(0) }),
+      },
+      input: s.object({ productId: s.string() }),
+      handler(_input, _request, context) {
+        return context.fail('OUT_OF_STOCK', { availableQuantity: 0 });
+      },
+    });
+
+    await expect(
+      renderNoJsMutationResponse(addToCart, {
+        rawInput: { productId: 'p1' },
+        redirectTo: '/cart',
+        request: {},
+      }),
+    ).resolves.toEqual({
+      body: '<!doctype html><html><body><output role="alert" data-error-code="OUT_OF_STOCK">{"availableQuantity":0}</output></body></html>',
+      headers: { 'Content-Type': 'text/html; charset=utf-8' },
       status: 422,
     });
   });
