@@ -1,6 +1,12 @@
 import { describe, expect, it } from 'vitest';
 
-import { assertFixpoint, compileComponentModule, jisoVitePlugin } from './index.js';
+import {
+  assertFixpoint,
+  compileComponentModule,
+  dedupeCss,
+  jisoVitePlugin,
+  scopeComponentCss,
+} from './index.js';
 
 const cartBadgeSource = `
 import { component } from '@jiso/core';
@@ -85,5 +91,25 @@ describe('jisoVitePlugin', () => {
       code: expect.stringContaining('export function renderSource()'),
       map: null,
     });
+  });
+});
+
+describe('component CSS helpers', () => {
+  it('wraps component CSS in @scope and emits a prefixed fallback', () => {
+    const result = scopeComponentCss(
+      '[fw-c="cart-badge"]',
+      '.count { color: red; }\nbutton, a { color: blue; }',
+    );
+
+    expect(result.scoped).toBe(
+      '@scope ([fw-c="cart-badge"]) {\n  .count { color: red; }\n  button, a { color: blue; }\n}\n',
+    );
+    expect(result.fallback).toBe(
+      '[fw-c="cart-badge"] .count { color: red; }[fw-c="cart-badge"] button, [fw-c="cart-badge"] a { color: blue; }',
+    );
+  });
+
+  it('dedupes normalized CSS chunks in page order', () => {
+    expect(dedupeCss(['.a{}', '.a{}', ' .b{} '])).toBe('.a{}\n\n.b{}');
   });
 });

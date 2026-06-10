@@ -116,8 +116,45 @@ export function jisoVitePlugin(): JisoVitePlugin {
   };
 }
 
+export interface ScopedCssResult {
+  fallback: string;
+  scoped: string;
+}
+
+export function scopeComponentCss(hostSelector: string, css: string): ScopedCssResult {
+  const trimmed = css.trim();
+  return {
+    fallback: prefixCssSelectors(hostSelector, trimmed),
+    scoped: `@scope (${hostSelector}) {\n${indent(trimmed)}\n}\n`,
+  };
+}
+
+export function dedupeCss(chunks: readonly string[]): string {
+  return [...new Set(chunks.map((chunk) => chunk.trim()).filter(Boolean))].join('\n\n');
+}
+
 function isIr(source: string): boolean {
   return source.startsWith(irHeader);
+}
+
+function prefixCssSelectors(hostSelector: string, css: string): string {
+  return css.replace(
+    /(^|})(?<selector>[^{}@][^{}]*)\{/g,
+    (_match, boundary: string, selector: string) => {
+      const prefixed = selector
+        .split(',')
+        .map((part) => `${hostSelector} ${part.trim()}`)
+        .join(', ');
+      return `${boundary}${prefixed} {`;
+    },
+  );
+}
+
+function indent(value: string): string {
+  return value
+    .split('\n')
+    .map((line) => `  ${line}`)
+    .join('\n');
 }
 
 function inferComponentName(options: CompileComponentOptions): string {
