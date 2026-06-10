@@ -1176,11 +1176,18 @@ function renderEarlyHints(
   const links = [
     ...stylesheets
       .filter((asset) => asset.preload !== false)
-      .map((asset) => `<${asset.href}>; rel=preload; as=style`),
-    ...modulepreloads.map((href) => `<${href}>; rel=modulepreload`),
+      .map((asset) => `<${formatLinkHeaderTarget(asset.href)}>; rel=preload; as=style`),
+    ...modulepreloads.map((href) => `<${formatLinkHeaderTarget(href)}>; rel=modulepreload`),
   ];
 
   return links.length > 0 ? { Link: links.join(', ') } : {};
+}
+
+function formatLinkHeaderTarget(href: string): string {
+  return encodeURI(href).replace(
+    /[<>,]/g,
+    (char) => `%${char.charCodeAt(0).toString(16).toUpperCase()}`,
+  );
 }
 
 function renderSpeculationRules(prefetch: RoutePrefetch, urls: readonly string[]): string {

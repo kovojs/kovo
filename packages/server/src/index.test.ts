@@ -213,6 +213,23 @@ describe('server mutation primitives', () => {
     });
   });
 
+  it('encodes Early Hints link targets without changing rendered hrefs', () => {
+    expect(
+      renderPageHints({
+        modulepreloads: ['/c/cart client.js?target=<badge>'],
+        stylesheets: ['/assets/tailwind,print.css'],
+      }),
+    ).toEqual({
+      earlyHints: {
+        Link: '</assets/tailwind%2Cprint.css>; rel=preload; as=style, </c/cart%20client.js?target=%3Cbadge%3E>; rel=modulepreload',
+      },
+      html: [
+        '<link rel="stylesheet" href="/assets/tailwind,print.css">',
+        '<link rel="modulepreload" href="/c/cart client.js?target=&lt;badge&gt;">',
+      ].join(''),
+    });
+  });
+
   it('renders typed route meta with page hints', () => {
     const productMeta = meta({
       description: 'Fast cart <checkout>',
