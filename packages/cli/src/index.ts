@@ -105,7 +105,7 @@ export function main(args: readonly string[] = process.argv.slice(2)): number {
   }
 
   if (args[0] === 'check') {
-    const inputPath = args[1];
+    const inputPath = args[1] === 'optimistic' ? args[2] : args[1];
     const input = inputPath ? JSON.parse(readFileSync(inputPath, 'utf8')) : {};
     const result = fwCheck(input);
     const stream = result.exitCode === 0 ? process.stdout : process.stderr;

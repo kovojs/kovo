@@ -427,6 +427,44 @@ describe('fw check', () => {
         'fw-check/v1\nWARN UNGUARDED inventory/sync mutation is reachable without an auth guard.\nWARN INVALIDATE inventory/sync -> product Manual invalidate escape hatch requires review.\n',
     });
   });
+
+  it('accepts fw check optimistic as a CLI command', () => {
+    const tempDir = mkdtempSync(join(tmpdir(), 'jiso-cli-optimistic-'));
+    const graphPath = join(tempDir, 'graph.json');
+    let output = '';
+    const stdoutWrite = vi.spyOn(process.stdout, 'write').mockImplementation(((chunk) => {
+      output += chunk.toString();
+      return true;
+    }) as typeof process.stdout.write);
+
+    try {
+      writeFileSync(
+        graphPath,
+        JSON.stringify({
+          mutations: [{ guards: ['authed'], invalidates: ['cart'], key: 'cart/add' }],
+          optimistic: [{ mutation: 'cart/add', query: 'cart', status: 'UNHANDLED' }],
+          queries: [{ domains: ['cart'], query: 'cart' }],
+          touchGraph: {
+            'cart.addItem': {
+              touches: [
+                { domain: 'cart', keys: null, site: 'cart.domain.ts:1', via: 'cart_items' },
+              ],
+              unresolved: [],
+            },
+          },
+        }),
+      );
+
+      expect(main(['check', 'optimistic', graphPath])).toBe(0);
+    } finally {
+      stdoutWrite.mockRestore();
+      rmSync(tempDir, { force: true, recursive: true });
+    }
+
+    expect(output).toBe(
+      'fw-check/v1\nWARN FW310 cart/add -> cart Invalidated query lacks optimistic transform.\n',
+    );
+  });
 });
 
 describe('fw audit', () => {
