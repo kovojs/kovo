@@ -9,11 +9,27 @@ import {
 } from './index.js';
 
 describe('@jiso/drizzle touch graph helpers', () => {
-  it('creates deterministic touch graph entries from annotated tables', () => {
+  it('creates deterministic touch graph entries from annotated tables and read domains', () => {
     const cartItems = { ...jiso({ domain: 'cart', key: 'cartId' }), name: 'cart_items' };
     const products = { ...jiso({ domain: 'product', key: 'id' }), name: 'products' };
+    const priceRules = { ...jiso({ domain: 'pricing', key: 'id' }), name: 'price_rules' };
 
     const entry = createTouchGraphEntry({
+      reads: [
+        {
+          operation: 'insert-select',
+          site: 'cart.domain.ts:7',
+          table: products,
+        },
+        {
+          branch: 'discounted',
+          operation: 'update-from',
+          predicate: 'eq',
+          readKey: 'arg:ruleId',
+          site: 'cart.domain.ts:11',
+          table: priceRules,
+        },
+      ],
       writes: [
         {
           branch: 'stock-check',
@@ -32,6 +48,24 @@ describe('@jiso/drizzle touch graph helpers', () => {
     });
 
     expect(entry).toEqual({
+      reads: [
+        {
+          branch: 'discounted',
+          domain: 'pricing',
+          keys: 'arg:ruleId',
+          predicate: 'eq',
+          site: 'cart.domain.ts:11',
+          source: 'update-from',
+          via: 'price_rules',
+        },
+        {
+          domain: 'product',
+          keys: null,
+          site: 'cart.domain.ts:7',
+          source: 'insert-select',
+          via: 'products',
+        },
+      ],
       touches: [
         { domain: 'cart', keys: null, site: 'cart.domain.ts:8', via: 'cart_items' },
         {
@@ -51,6 +85,13 @@ describe('@jiso/drizzle touch graph helpers', () => {
     expect(
       serializeTouchGraph({
         'cart.addItem': createTouchGraphEntry({
+          reads: [
+            {
+              operation: 'update-from',
+              site: 'cart.domain.ts:11',
+              table: { ...jiso({ domain: 'price' }), name: 'prices' },
+            },
+          ],
           unresolved: [{ domain: 'audit', operation: 'raw', site: 'cart.domain.ts:20' }],
           writes: [
             {
@@ -68,6 +109,9 @@ describe('@jiso/drizzle touch graph helpers', () => {
   "cart.addItem": {
     touches: [
       { domain: "product", via: "products", site: "cart.domain.ts:12", keys: "arg:productId", branch: "stock-check", predicate: "non-eq" },
+    ],
+    reads: [
+      { domain: "price", via: "prices", site: "cart.domain.ts:11", keys: null, source: "update-from" },
     ],
     unresolved: [
       { code: 'FW406', site: "cart.domain.ts:20", message: "Statically un-analyzable write site; manual touches required.", domain: "audit" },
@@ -127,6 +171,27 @@ export const tableDomains = {
 
 export const tableDomains = {
 } as const satisfies Record<string, DomainKey>;
+`);
+  });
+
+  it('serializes legacy graph entries without read sites as empty reads', () => {
+    expect(
+      serializeTouchGraph({
+        'legacy.write': {
+          touches: [],
+          unresolved: [],
+        },
+      }),
+    ).toBe(`export const touchGraph = {
+  "legacy.write": {
+    touches: [
+    ],
+    reads: [
+    ],
+    unresolved: [
+    ],
+  },
+} as const;
 `);
   });
 });

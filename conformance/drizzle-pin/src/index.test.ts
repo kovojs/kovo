@@ -26,9 +26,27 @@ describe('Drizzle pinned subset conformance', () => {
     );
   });
 
-  it('pins write summaries, parameterized keys, unresolved sites, and diagnostics', () => {
+  it('pins write summaries, read domains, parameterized keys, unresolved sites, and diagnostics', () => {
     const graph = {
       'cart.addItem': createTouchGraphEntry({
+        reads: [
+          {
+            operation: 'insert-select',
+            site: 'cart.domain.ts:15',
+            table: { ...jiso({ domain: 'product', key: 'id' }), name: 'products' },
+          },
+          {
+            branch: 'stock-check',
+            operation: 'update-from',
+            predicate: 'eq',
+            readKey: 'arg:productId',
+            site: 'cart.domain.ts:21',
+            table: {
+              ...jiso({ domain: 'inventory', key: 'productId' }),
+              name: 'inventory_snapshots',
+            },
+          },
+        ],
         unresolved: [{ domain: 'audit', operation: 'raw', site: 'cart.domain.ts:31' }],
         writes: [
           {
@@ -55,6 +73,10 @@ describe('Drizzle pinned subset conformance', () => {
         '    touches: [',
         '      { domain: "cart", via: "cart_items", site: "cart.domain.ts:16", keys: null },',
         '      { domain: "product", via: "products", site: "cart.domain.ts:20", keys: "arg:productId", branch: "stock-check", predicate: "non-eq" },',
+        '    ],',
+        '    reads: [',
+        '      { domain: "inventory", via: "inventory_snapshots", site: "cart.domain.ts:21", keys: "arg:productId", source: "update-from", branch: "stock-check", predicate: "eq" },',
+        '      { domain: "product", via: "products", site: "cart.domain.ts:15", keys: null, source: "insert-select" },',
         '    ],',
         '    unresolved: [',
         '      { code: \'FW406\', site: "cart.domain.ts:31", message: "Statically un-analyzable write site; manual touches required.", domain: "audit" },',

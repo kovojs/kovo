@@ -192,6 +192,33 @@ describe('server mutation primitives', () => {
     });
   });
 
+  it('matches the deferred stream wire fixture body byte-for-byte', async () => {
+    const response = renderDeferredStream({
+      closeHtml: '</body></html>',
+      chunks: [
+        {
+          fragments: [
+            {
+              html: '<section fw-c="reviews" fw-deps="product:p1"><article data-key="r1">5</article></section>',
+              target: 'reviews:p1',
+            },
+          ],
+          queries: [
+            { key: 'product:p1', name: 'reviews', value: { items: [{ id: 'r1', rating: 5 }] } },
+          ],
+        },
+      ],
+      shell:
+        '<!doctype html>\n<html><body><main><product-page fw-deps="product:p1"><fw-defer target="reviews:p1" state="pending"></fw-defer></product-page></main>\n',
+    });
+    const fixture = await readFile(
+      new URL('../../../fixtures/wire/defer-stream.http', import.meta.url),
+      'utf8',
+    );
+
+    expect(`${response.body}\n`).toBe(readLastResponseBody(fixture));
+  });
+
   it('orders deferred stream chunks and fragments by priority while keeping query JSON first', () => {
     expect(
       renderDeferredStream({
@@ -890,6 +917,47 @@ describe('server mutation primitives', () => {
       headers: { 'Content-Type': 'text/vnd.jiso.fragment+html; charset=utf-8' },
       status: 422,
     });
+  });
+
+  it('matches the validation failure wire fixture body byte-for-byte', async () => {
+    const addToCart = mutation('cart/add', {
+      errors: {
+        OUT_OF_STOCK: s.object({ availableQuantity: s.number().int().min(0) }),
+      },
+      input: s.object({
+        productId: s.string(),
+        quantity: s.number().int().min(1),
+      }),
+      handler(_input, _request, context) {
+        return context.fail('OUT_OF_STOCK', { availableQuantity: 5 });
+      },
+    });
+
+    const response = await renderMutationResponse(addToCart, {
+      failureTarget: 'product-form:p1',
+      idem: 'idem_01HY',
+      rawInput: { productId: 'p1', quantity: 99 },
+      renderFailureFragment: (failure, rawInput) => {
+        const input = rawInput as { productId: string; quantity: number };
+        const data = failure.error.payload as { availableQuantity: number };
+
+        return [
+          '<form fw-c="product-form" aria-invalid="true">',
+          `<output role="alert" data-error-code="${failure.error.code}">Only ${data.availableQuantity} left.</output>`,
+          `<input name="productId" value="${input.productId}">`,
+          `<input name="quantity" value="${input.quantity}">`,
+          '</form>',
+        ].join('');
+      },
+      request: {},
+      targets: ['product-form:p1'],
+    });
+    const fixture = await readFile(
+      new URL('../../../fixtures/wire/validation-422-fragment.http', import.meta.url),
+      'utf8',
+    );
+
+    expect(`${response.body}\n`).toBe(readLastResponseBody(fixture));
   });
 
   it('renders no-JS mutation success as POST-redirect-GET', async () => {
