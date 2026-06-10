@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import {
   createTouchGraphEntry,
   diagnosticsForTouchGraph,
+  extractTouchGraphFromSource,
   jiso,
   serializeDomainRegistry,
   serializeTouchGraph,
@@ -207,5 +208,68 @@ export const tableDomains = {
   },
 } as const;
 `);
+  });
+
+  it('extracts direct Drizzle write calls from annotated source tables', () => {
+    const graph = extractTouchGraphFromSource([
+      {
+        fileName: 'cart.domain.ts',
+        source: `
+          export const cartItems = pgTable("cart_items", {}, jiso({ domain: "cart", key: "cartId" }));
+          export const products = pgTable("products", {}, jiso({ domain: "product", key: "id" }));
+
+          export async function addItem(db) {
+            await db.insert(cartItems).values({ productId: "p1" });
+            await db.update(products).set({ reserved: true });
+          }
+        `,
+      },
+    ]);
+
+    expect(graph).toEqual({
+      addItem: {
+        reads: [],
+        touches: [
+          { domain: 'cart', keys: null, site: 'cart.domain.ts:6', via: 'cart_items' },
+          { domain: 'product', keys: null, site: 'cart.domain.ts:7', via: 'products' },
+        ],
+        unresolved: [],
+      },
+    });
+  });
+
+  it('marks non-identifier Drizzle table expressions as FW406', () => {
+    const graph = extractTouchGraphFromSource([
+      {
+        fileName: 'cart.domain.ts',
+        source: `
+          export async function syncAudit(db) {
+            await db.insert(tableFor("audit")).values({ productId: "p1" });
+          }
+        `,
+      },
+    ]);
+
+    expect(graph).toEqual({
+      syncAudit: {
+        reads: [],
+        touches: [],
+        unresolved: [
+          {
+            code: 'FW406',
+            message: 'Statically un-analyzable write site; manual touches required.',
+            site: 'cart.domain.ts:3',
+          },
+        ],
+      },
+    });
+    expect(diagnosticsForTouchGraph(graph)).toEqual([
+      {
+        code: 'FW406',
+        message: 'Statically un-analyzable write site; manual touches required.',
+        severity: 'warn',
+        site: 'cart.domain.ts:3',
+      },
+    ]);
   });
 });

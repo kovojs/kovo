@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import {
   createTouchGraphEntry,
   diagnosticsForTouchGraph,
+  extractTouchGraphFromSource,
   jiso,
   serializeDomainRegistry,
   serializeTouchGraph,
@@ -107,5 +108,41 @@ describe('Drizzle pinned subset conformance', () => {
         site: 'cart.domain.ts:15',
       },
     ]);
+  });
+
+  it('pins direct table source extraction for the first supported Drizzle case', () => {
+    const graph = extractTouchGraphFromSource([
+      {
+        fileName: 'cart.domain.ts',
+        source: [
+          'export const cartItems = pgTable("cart_items", {}, jiso({ domain: "cart", key: "cartId" }));',
+          'export const products = pgTable("products", {}, jiso({ domain: "product", key: "id" }));',
+          '',
+          'export async function addItem(db) {',
+          '  await db.insert(cartItems).values({ productId: "p1" });',
+          '  await db.update(products).set({ reserved: true });',
+          '}',
+          '',
+        ].join('\n'),
+      },
+    ]);
+
+    expect(serializeTouchGraph(graph)).toBe(
+      [
+        'export const touchGraph = {',
+        '  "addItem": {',
+        '    touches: [',
+        '      { domain: "cart", via: "cart_items", site: "cart.domain.ts:5", keys: null },',
+        '      { domain: "product", via: "products", site: "cart.domain.ts:6", keys: null },',
+        '    ],',
+        '    reads: [',
+        '    ],',
+        '    unresolved: [',
+        '    ],',
+        '  },',
+        '} as const;',
+        '',
+      ].join('\n'),
+    );
   });
 });

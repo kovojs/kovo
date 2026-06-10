@@ -79,6 +79,15 @@ export interface TouchGraphDiagnostic {
   site: string;
 }
 
+export interface SourceFileInput {
+  fileName: string;
+  source: string;
+}
+
+interface ExtractedTable {
+  annotation: JisoTableAnnotation & { name: string };
+}
+
 export function serializeDomainRegistry(tables: readonly DomainRegistryInput[]): string {
   const rows = [...tables].sort((left, right) => left.table.name.localeCompare(right.table.name));
   const domains = [...new Set(rows.map((row) => row.table.domain))].sort();
@@ -189,6 +198,178 @@ export function diagnosticsForTouchGraph(graph: TouchGraph): TouchGraphDiagnosti
         site: read.site,
       })),
   ]);
+}
+
+export function extractTouchGraphFromSource(files: readonly SourceFileInput[]): TouchGraph {
+  const tables = new Map<string, ExtractedTable>();
+  const graph: Record<string, TouchGraphEntry> = {};
+
+  for (const file of files) {
+    for (const table of extractTables(file.source)) {
+      tables.set(table.identifier, {
+        annotation: {
+          domain: table.domain,
+          ...(table.key ? { key: table.key } : {}),
+          name: table.name,
+        },
+      });
+    }
+  }
+
+  for (const file of files) {
+    for (const fn of extractFunctions(file.source)) {
+      const writes: WriteSummaryInput[] = [];
+      const unresolved: UnresolvedSummaryInput[] = [];
+
+      for (const call of extractDrizzleWriteCalls(fn.body)) {
+        const site = `${file.fileName}:${lineForIndex(file.source, fn.bodyStart + call.index)}`;
+        const table = tables.get(call.tableExpression);
+
+        if (table) {
+          writes.push({
+            operation: call.operation,
+            site,
+            table: table.annotation,
+          });
+          continue;
+        }
+
+        unresolved.push({
+          operation: call.operation,
+          site,
+        });
+      }
+
+      if (writes.length > 0 || unresolved.length > 0) {
+        graph[fn.name] = createTouchGraphEntry({ unresolved, writes });
+      }
+    }
+  }
+
+  return graph;
+}
+
+interface ExtractedTableDeclaration {
+  domain: string;
+  identifier: string;
+  key?: string;
+  name: string;
+}
+
+interface ExtractedFunction {
+  body: string;
+  bodyStart: number;
+  name: string;
+}
+
+interface ExtractedWriteCall {
+  index: number;
+  operation: string;
+  tableExpression: string;
+}
+
+function extractTables(source: string): ExtractedTableDeclaration[] {
+  const tables: ExtractedTableDeclaration[] = [];
+  const declarations =
+    /(?:export\s+)?const\s+(?<identifier>[A-Za-z_$][\w$]*)\s*=\s*(?<initializer>[\s\S]*?);/g;
+
+  for (const match of source.matchAll(declarations)) {
+    const groups = match.groups;
+    if (!groups) continue;
+
+    const identifier = groups.identifier;
+    const initializer = groups.initializer;
+    if (!identifier || !initializer) continue;
+
+    const domain = stringProperty(initializer, 'domain');
+    if (!domain) continue;
+
+    const key = stringProperty(initializer, 'key');
+
+    tables.push({
+      domain,
+      identifier,
+      ...(key ? { key } : {}),
+      name: stringArgument(initializer) ?? identifier,
+    });
+  }
+
+  return tables;
+}
+
+function extractFunctions(source: string): ExtractedFunction[] {
+  const functions: ExtractedFunction[] = [];
+  const declarations =
+    /(?:export\s+)?(?:async\s+)?function\s+(?<name>[A-Za-z_$][\w$]*)\s*\([^)]*\)\s*\{/g;
+
+  for (const match of source.matchAll(declarations)) {
+    const groups = match.groups;
+    if (!groups || match.index === undefined) continue;
+
+    const name = groups.name;
+    if (!name) continue;
+
+    const openBrace = match.index + match[0].length - 1;
+    const closeBrace = findMatchingBrace(source, openBrace);
+    if (closeBrace === -1) continue;
+
+    functions.push({
+      body: source.slice(openBrace + 1, closeBrace),
+      bodyStart: openBrace + 1,
+      name,
+    });
+  }
+
+  return functions;
+}
+
+function extractDrizzleWriteCalls(source: string): ExtractedWriteCall[] {
+  const calls: ExtractedWriteCall[] = [];
+  const callPattern =
+    /\b(?:db|tx)\s*\.\s*(?<operation>insert|update|delete)\s*\(\s*(?<tableExpression>[^)]+?)\s*\)/g;
+
+  for (const match of source.matchAll(callPattern)) {
+    const groups = match.groups;
+    if (!groups || match.index === undefined) continue;
+
+    const operation = groups.operation;
+    const tableExpression = groups.tableExpression;
+    if (!operation || !tableExpression) continue;
+
+    calls.push({
+      index: match.index,
+      operation,
+      tableExpression: tableExpression.trim(),
+    });
+  }
+
+  return calls;
+}
+
+function findMatchingBrace(source: string, openBrace: number): number {
+  let depth = 0;
+
+  for (let index = openBrace; index < source.length; index += 1) {
+    const char = source[index];
+    if (char === '{') depth += 1;
+    if (char === '}') depth -= 1;
+    if (depth === 0) return index;
+  }
+
+  return -1;
+}
+
+function lineForIndex(source: string, index: number): number {
+  return source.slice(0, index).split('\n').length;
+}
+
+function stringArgument(source: string): string | undefined {
+  return /\(\s*["'](?<value>[^"']+)["']/.exec(source)?.groups?.value;
+}
+
+function stringProperty(source: string, name: string): string | undefined {
+  const pattern = new RegExp(`\\b${name}\\s*:\\s*["'](?<value>[^"']+)["']`);
+  return pattern.exec(source)?.groups?.value;
 }
 
 function compareTouchSites(left: TouchSite, right: TouchSite): number {
