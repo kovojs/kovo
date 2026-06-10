@@ -356,7 +356,7 @@ function lowerEventHandlers(
 
     handlers.push({
       attributeName: `on:${eventName}`,
-      attributeValue: `./${replaceExtension(options.fileName.split('/').at(-1) ?? options.fileName, '.client.js')}#${exportName}`,
+      attributeValue: `${clientModuleUrl(options.fileName)}#${exportName}`,
       ...(diagnostic ? { diagnostic } : {}),
       exportName,
       params,
@@ -395,12 +395,16 @@ function fw201Diagnostic(
   return {
     ...diagnosticFor(fileName, 'FW201'),
     help: [
-      `Would lower to: ${lowering.attributeName}="./${replaceExtension(fileName.split('/').at(-1) ?? fileName, '.client.js')}#${lowering.exportName}"`,
+      `Would lower to: ${lowering.attributeName}="${clientModuleUrl(fileName)}#${lowering.exportName}"`,
       `Blocked expression: ${lowering.expression}`,
       `Element params: ${lowering.params.map((param) => param.attributeName).join(', ') || '-'}`,
       'Fixes: move the value into component/query state via ctx; pass serializable element params with data-p-*; or keep shared constants in module scope.',
     ].join('\n'),
   };
+}
+
+function clientModuleUrl(fileName: string): string {
+  return `/c/${replaceExtension(fileName, '.client.js').replace(/^\/+/, '')}`;
 }
 
 function validateDataBindings(

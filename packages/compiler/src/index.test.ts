@@ -36,7 +36,7 @@ describe('compileComponentModule', () => {
     ]);
     expect(result.files[1]?.source).toContain('export const CartBadge$button_click');
     expect(result.files[0]?.source).toContain(
-      'on:click="./cart-badge.client.js#CartBadge$button_click"',
+      'on:click="/c/components/cart/cart-badge.client.js#CartBadge$button_click"',
     );
     expect(result.files[0]?.source).toContain('data-p-id="{item.id}"');
     expect(result.files[2]?.source).toContain(
@@ -141,7 +141,7 @@ export const CartBadge = component('cart-badge', {
       },
     ]);
     expect(result.diagnostics[0]?.help).toContain(
-      'Would lower to: on:click="./cart-badge.client.js#CartBadge$button_click"',
+      'Would lower to: on:click="/c/cart-badge.client.js#CartBadge$button_click"',
     );
     expect(result.diagnostics[0]?.help).toContain('Blocked expression: () => window.alert("x")');
     expect(result.diagnostics[0]?.help).toContain(
@@ -263,7 +263,7 @@ export const AccordionToggle = component('accordion-toggle', {
     // dialog-style commandfor equivalent in the current compiler model.
     expect(result.platformSubstitutions).toEqual([]);
     expect(result.files[0]?.source).toContain(
-      'on:click="./accordion-toggle.client.js#AccordionToggle$button_click"',
+      'on:click="/c/accordion-toggle.client.js#AccordionToggle$button_click"',
     );
     expect(result.files[1]?.source).toContain('export const AccordionToggle$button_click');
   });
