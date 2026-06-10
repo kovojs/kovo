@@ -12,6 +12,7 @@ describe('create-jiso starter', () => {
       'vite.config.ts',
       '.github/workflows/ci.yml',
       'graph.json',
+      'docs/graph-assertions.md',
       'src/styles.css',
       'src/app.tsx',
     ]);
@@ -27,6 +28,9 @@ describe('create-jiso starter', () => {
     expect(project.files.find((file) => file.path === 'src/styles.css')?.source).toContain(
       '@source "./**/*.{ts,tsx,html}";',
     );
+    expect(
+      project.files.find((file) => file.path === 'docs/graph-assertions.md')?.source,
+    ).toContain('fw explain mutation cart/add --optimistic graph.json');
     expect(project.files.find((file) => file.path === 'src/app.tsx')?.source).toContain(
       'class="mx-auto grid min-h-dvh',
     );

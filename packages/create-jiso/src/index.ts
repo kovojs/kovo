@@ -104,6 +104,42 @@ jobs:
         source: `${JSON.stringify({ optimistic: [], touchGraph: {} }, null, 2)}\n`,
       },
       {
+        path: 'docs/graph-assertions.md',
+        source: `# Graph Assertion Recipes
+
+Jiso keeps application wiring auditable through the generated graph file consumed by the CLI:
+
+\`\`\`sh
+vp run fw-check
+fw explain component App graph.json
+fw explain mutation cart/add --optimistic graph.json
+fw explain query cart graph.json
+fw explain page /cart graph.json
+\`\`\`
+
+Use \`fw check graph.json\` in CI for semantic checks that do not belong in \`vp check\`: optimistic coverage (\`FW310\`), touch-graph consistency, unguarded mutation audits, manual invalidation review, and Jiso-specific lints.
+
+Keep every mutation/query pair explicit in \`graph.json\`:
+
+\`\`\`json
+{
+  "optimistic": [
+    { "mutation": "cart/add", "query": "cart", "status": "hand-written" },
+    { "mutation": "cart/add", "query": "recommendations", "status": "await-fragment" }
+  ],
+  "touchGraph": {
+    "cart.addItem": {
+      "touches": [{ "domain": "cart", "keys": null, "site": "src/cart.ts:12", "via": "cart_items" }],
+      "unresolved": []
+    }
+  }
+}
+\`\`\`
+
+\`UNHANDLED\` optimistic entries are allowed while developing, but they produce \`FW310\` warnings and should be driven to zero before release.
+`,
+      },
+      {
         path: 'src/styles.css',
         source: `@import "tailwindcss";
 
