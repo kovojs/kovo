@@ -65,12 +65,34 @@ export type FormInput<Definition> =
 export type FormFailure<Definition> =
   Definition extends Form<string, Record<string, JsonValue>, infer Failure> ? Failure : never;
 
+export type FormFieldName<Definition> = Extract<keyof FormInput<Definition>, string>;
+
+type MissingFormFields<
+  Definition extends Form<string, Record<string, JsonValue>, JsonValue>,
+  Fields extends readonly string[],
+> = Exclude<FormFieldName<Definition>, Fields[number]>;
+
+type CompleteFormFields<
+  Definition extends Form<string, Record<string, JsonValue>, JsonValue>,
+  Fields extends readonly FormFieldName<Definition>[],
+> =
+  MissingFormFields<Definition, Fields> extends never
+    ? Fields
+    : readonly ['Missing form fields', MissingFormFields<Definition, Fields>];
+
 export function form<
   const Key extends string,
   Input extends Record<string, JsonValue> = Record<string, JsonValue>,
   Failure extends JsonValue = JsonValue,
 >(key: Key): Form<Key, Input, Failure> {
   return { key };
+}
+
+export function formFields<
+  Definition extends Form<string, Record<string, JsonValue>, JsonValue>,
+  const Fields extends readonly FormFieldName<Definition>[],
+>(_form: Definition, fields: CompleteFormFields<Definition, Fields>): Fields {
+  return fields as Fields;
 }
 
 export interface EventDefinition<Name extends string, Payload extends JsonValue = JsonValue> {

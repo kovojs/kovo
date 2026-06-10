@@ -4,9 +4,11 @@ import {
   component,
   event,
   form,
+  formFields,
   query,
   type EventPayload,
   type FormFailure,
+  type FormFieldName,
   type FormInput,
   type JsonValue,
 } from './index.js';
@@ -48,6 +50,30 @@ describe('core authoring APIs', () => {
     expect(addToCart.key).toBe('cart/add');
     expect(input.quantity).toBe(2);
     expect(failure.code).toBe('OUT_OF_STOCK');
+  });
+
+  it('checks form field completeness from typed mutation inputs', () => {
+    const addToCart = form<
+      'cart/add',
+      { productId: string; quantity: number },
+      { code: 'OUT_OF_STOCK' }
+    >('cart/add');
+    const fields = formFields(addToCart, ['productId', 'quantity'] as const);
+    const fieldName = 'productId' satisfies FormFieldName<typeof addToCart>;
+
+    expect(fields).toEqual(['productId', 'quantity']);
+    expect(fieldName).toBe('productId');
+
+    const assertMissingField = () => {
+      // @ts-expect-error quantity is required by the mutation input schema.
+      formFields(addToCart, ['productId'] as const);
+    };
+    const assertUnknownField = () => {
+      // @ts-expect-error sku is not part of the mutation input schema.
+      formFields(addToCart, ['productId', 'quantity', 'sku'] as const);
+    };
+    expect(assertMissingField).toBeTypeOf('function');
+    expect(assertUnknownField).toBeTypeOf('function');
   });
 
   it('preserves typed event names as registry facts', () => {
