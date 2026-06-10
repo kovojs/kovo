@@ -793,18 +793,20 @@ function emitServerModule(
   handlers: HandlerLowering[],
   _clientFileName: string,
 ): string {
-  const renderedSource = handlers.reduce(
-    (next, handler) =>
-      next.replace(
-        /on[A-Z][A-Za-z0-9]*=\{[^}]*\}/,
-        [
-          `${handler.attributeName}="${handler.attributeValue}"`,
-          ...handler.params.map(
-            (param) => `${param.attributeName}="${escapeAttribute(param.value)}"`,
-          ),
-        ].join(' '),
-      ),
-    source,
+  const renderedSource = stampDeclaredQueryDeps(
+    handlers.reduce(
+      (next, handler) =>
+        next.replace(
+          /on[A-Z][A-Za-z0-9]*=\{[^}]*\}/,
+          [
+            `${handler.attributeName}="${handler.attributeValue}"`,
+            ...handler.params.map(
+              (param) => `${param.attributeName}="${escapeAttribute(param.value)}"`,
+            ),
+          ].join(' '),
+        ),
+      source,
+    ),
   );
 
   return `${irHeader}
@@ -812,6 +814,78 @@ export function renderSource() {
   return ${templateLiteral(renderedSource)};
 }
 `;
+}
+
+function stampDeclaredQueryDeps(source: string): string {
+  const queryObject = extractObjectLiteralAfterProperty(source, 'queries');
+  const deps = topLevelObjectKeys(queryObject ?? '{}');
+  if (deps.length === 0) return source;
+
+  const tag = findFirstRenderedOpeningTag(source);
+  if (!tag) return source;
+
+  const tagSource = source.slice(tag.start, tag.end + 1);
+  const stampedTag = stampOpeningTagDeps(tagSource, deps);
+  if (stampedTag === tagSource) return source;
+
+  return `${source.slice(0, tag.start)}${stampedTag}${source.slice(tag.end + 1)}`;
+}
+
+function findFirstRenderedOpeningTag(source: string): { end: number; start: number } | null {
+  const renderMatch = /\brender\s*:/.exec(source);
+  if (!renderMatch) return null;
+
+  const tagMatch = /<[A-Za-z][\w:-]*\b/.exec(source.slice(renderMatch.index));
+  if (!tagMatch) return null;
+
+  const tagStart = renderMatch.index + tagMatch.index;
+  const tagEnd = findOpeningTagEnd(source, tagStart);
+  if (tagEnd === -1) return null;
+
+  return { end: tagEnd, start: tagStart };
+}
+
+function findOpeningTagEnd(source: string, start: number): number {
+  for (let index = start; index < source.length; index += 1) {
+    const char = source[index];
+    if (char === '"' || char === "'" || char === '`') {
+      const end = findStringEnd(source, index, char);
+      index = end === -1 ? source.length : end;
+      continue;
+    }
+
+    if (char === '>') return index;
+  }
+
+  return -1;
+}
+
+function stampOpeningTagDeps(tagSource: string, deps: readonly string[]): string {
+  const depValue = mergeDepValues(readFwDepsAttribute(tagSource), deps).join(' ');
+  const existing = /\bfw-deps=(["'])(?<deps>[^"']*)\1/.exec(tagSource);
+  if (existing?.groups) {
+    return `${tagSource.slice(0, existing.index)}fw-deps=${existing[1]}${depValue}${existing[1]}${tagSource.slice(existing.index + existing[0].length)}`;
+  }
+
+  return tagSource.replace(/\s*\/?>$/, (suffix) =>
+    suffix.includes('/') ? ` fw-deps="${depValue}" />` : ` fw-deps="${depValue}">`,
+  );
+}
+
+function readFwDepsAttribute(tagSource: string): string[] {
+  const match = /\bfw-deps=(["'])(?<deps>[^"']*)\1/.exec(tagSource);
+  return splitDepValue(match?.groups?.deps ?? '');
+}
+
+function mergeDepValues(existing: readonly string[], declared: readonly string[]): string[] {
+  return [...new Set([...existing, ...declared])];
+}
+
+function splitDepValue(value: string): string[] {
+  return value
+    .split(/[\s,]+/)
+    .map((dep) => dep.trim())
+    .filter(Boolean);
 }
 
 function replaceExtension(fileName: string, extension: string): string {

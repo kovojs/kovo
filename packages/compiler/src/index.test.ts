@@ -309,6 +309,47 @@ export const CartBadge = component('cart-badge', {
     expect(result.diagnostics).toEqual([]);
   });
 
+  it('stamps rendered component markup with declared query dependencies', () => {
+    const result = compileComponentModule({
+      fileName: 'cart-badge.tsx',
+      source: `
+export const CartBadge = component('cart-badge', {
+  queries: { cart: cartQuery, productPage: productPageQuery },
+  render: ({ cart, productPage }) => (
+    <cart-badge>
+      <span data-bind="cart.count">{cart.count}</span>
+      <span>{productPage.title}</span>
+    </cart-badge>
+  ),
+});
+`,
+    });
+
+    expect(result.files[0]?.source).toContain('<cart-badge fw-deps="cart productPage">');
+    expect(() => assertFixpoint(result)).not.toThrow();
+  });
+
+  it('merges declared query dependencies into existing fw-deps stamps', () => {
+    const result = compileComponentModule({
+      fileName: 'recommendations.tsx',
+      source: `
+export const Recommendations = component('recommendations', {
+  queries: { cart: cartQuery },
+  render: ({ cart }) => (
+    <section fw-c="recommendations" fw-deps="product:p1 cart">
+      {cart.count}
+    </section>
+  ),
+});
+`,
+    });
+
+    expect(result.files[0]?.source).toContain(
+      '<section fw-c="recommendations" fw-deps="product:p1 cart">',
+    );
+    expect(() => assertFixpoint(result)).not.toThrow();
+  });
+
   it('reports FW301 when island-local state stores an obvious query fact', () => {
     const result = compileComponentModule({
       fileName: 'cart-badge.tsx',
