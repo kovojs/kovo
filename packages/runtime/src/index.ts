@@ -151,7 +151,8 @@ export interface JisoLoaderOptions {
   events?: readonly string[];
   importModule: ImportHandlerModule;
   queryStore?: QueryStore;
-  refetchOnFocus?: () => void | Promise<void>;
+  refetchOnFocus?: (queries: readonly string[]) => void | Promise<void>;
+  refetchOnFocusOptOut?: readonly string[];
   root: LoaderRoot;
 }
 
@@ -165,9 +166,13 @@ export const jisoLoaderSource = `(()=>{const E=["click","submit","input","change
 
 export function installJisoLoader(options: JisoLoaderOptions): JisoLoader {
   const events = options.events ?? defaultDelegatedEvents;
+  let hydratedQueries: readonly string[] = [];
 
   if (options.queryStore && options.root.querySelectorAll) {
-    hydrateQueryScripts(options.queryStore, options.root.querySelectorAll('script[fw-query]'));
+    hydratedQueries = hydrateQueryScripts(
+      options.queryStore,
+      options.root.querySelectorAll('script[fw-query]'),
+    );
   }
 
   for (const eventName of events) {
@@ -181,11 +186,17 @@ export function installJisoLoader(options: JisoLoaderOptions): JisoLoader {
   }
 
   if (options.refetchOnFocus) {
+    const refetchEligibleQueries = () =>
+      filterRefetchEligibleQueries(hydratedQueries, options.refetchOnFocusOptOut ?? []);
+    const refetchOnFocus = async () => {
+      await options.refetchOnFocus?.(refetchEligibleQueries());
+    };
+
     options.root.addEventListener('visibilitychange', async () => {
       if (options.root.visibilityState === 'hidden') return;
-      await options.refetchOnFocus?.();
+      await refetchOnFocus();
     });
-    options.root.addEventListener('focus', options.refetchOnFocus);
+    options.root.addEventListener('focus', refetchOnFocus);
   }
 
   if (options.discardPendingOptimism) {
@@ -196,6 +207,24 @@ export function installJisoLoader(options: JisoLoaderOptions): JisoLoader {
   }
 
   return { events };
+}
+
+function filterRefetchEligibleQueries(
+  queries: readonly string[],
+  optOut: readonly string[],
+): readonly string[] {
+  const excluded = new Set(optOut);
+  const eligible: string[] = [];
+  const seen = new Set<string>();
+
+  for (const query of queries) {
+    if (excluded.has(query) || seen.has(query)) continue;
+
+    eligible.push(query);
+    seen.add(query);
+  }
+
+  return eligible;
 }
 
 export async function dispatchDelegatedEvent(
@@ -512,10 +541,21 @@ export function applyOptimisticTransforms<Input>(
   };
 }
 
-export function hydrateQueryScripts(store: QueryStore, scripts: Iterable<QueryScriptLike>): void {
+export function hydrateQueryScripts(
+  store: QueryStore,
+  scripts: Iterable<QueryScriptLike>,
+): readonly string[] {
+  const hydrated: string[] = [];
+
   for (const script of scripts) {
+    const name = script.getAttribute('fw-query');
     store.hydrate(script);
+    if (name) {
+      hydrated.push(name);
+    }
   }
+
+  return hydrated;
 }
 
 export interface AppliedMutationResponse {

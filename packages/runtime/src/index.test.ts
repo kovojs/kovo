@@ -379,6 +379,50 @@ describe('query store', () => {
     expect(refetchOnFocus).toHaveBeenCalledTimes(2);
   });
 
+  it('passes hydrated query names to refetch-on-focus with per-query opt-out', async () => {
+    const root = new FakeRoot();
+    const store = createQueryStore();
+    const refetchOnFocus = vi.fn();
+    root.scripts = [
+      {
+        getAttribute: (name) => (name === 'fw-query' ? 'cart' : null),
+        textContent: '{"count":1}',
+      },
+      {
+        getAttribute: (name) => (name === 'fw-query' ? 'inventory' : null),
+        textContent: '{"sku":"sku_1","available":true}',
+      },
+      {
+        getAttribute: (name) => (name === 'fw-query' ? 'analytics' : null),
+        textContent: '{"sampled":true}',
+      },
+      {
+        getAttribute: (name) => (name === 'fw-query' ? 'cart' : null),
+        textContent: '{"count":1}',
+      },
+    ];
+
+    installJisoLoader({
+      importModule: vi.fn(),
+      queryStore: store,
+      refetchOnFocus,
+      refetchOnFocusOptOut: ['analytics'],
+      root,
+    });
+
+    root.visibilityState = 'hidden';
+    await root.listeners.get('visibilitychange')?.({ target: null, type: 'visibilitychange' });
+
+    expect(refetchOnFocus).not.toHaveBeenCalled();
+
+    root.visibilityState = 'visible';
+    await root.listeners.get('visibilitychange')?.({ target: null, type: 'visibilitychange' });
+    await root.listeners.get('focus')?.({ target: null, type: 'focus' });
+
+    expect(refetchOnFocus).toHaveBeenNthCalledWith(1, ['cart', 'inventory']);
+    expect(refetchOnFocus).toHaveBeenNthCalledWith(2, ['cart', 'inventory']);
+  });
+
   it('registers pagehide optimism cleanup without unload handlers', () => {
     const root = new FakeRoot();
     const discardPendingOptimism = vi.fn();
