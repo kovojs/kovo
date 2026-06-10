@@ -762,6 +762,139 @@ describe('server mutation primitives', () => {
     });
   });
 
+  it('derives post-commit rerun queries from inferred touch sites when touches are absent or empty', async () => {
+    const cart = domain('cart');
+    const product = domain('product');
+    const cartQuery = query('cart', { reads: [cart] });
+    const productQuery = query('product', { reads: [product] });
+    const addToCart = mutation('cart/add', {
+      input: s.object({
+        productId: s.string(),
+      }),
+      registry: {
+        inferredTouches: [{ domain: 'product', keys: 'arg:productId' }],
+        queries: [cartQuery, productQuery],
+      },
+      handler(input) {
+        return input.productId;
+      },
+    });
+
+    await expect(runMutation(addToCart, { productId: 'p1' }, {})).resolves.toEqual({
+      changes: [
+        {
+          domain: 'product',
+          input: { productId: 'p1' },
+          keys: ['p1'],
+        },
+      ],
+      ok: true,
+      rerunQueries: ['product'],
+      value: 'p1',
+    });
+
+    const addToCartWithEmptyTouches = mutation('cart/add-empty', {
+      input: s.object({
+        productId: s.string(),
+      }),
+      registry: {
+        inferredTouches: [{ domain: 'product', keys: 'arg:productId' }],
+        queries: [cartQuery, productQuery],
+        touches: [],
+      },
+      handler(input) {
+        return input.productId;
+      },
+    });
+
+    await expect(runMutation(addToCartWithEmptyTouches, { productId: 'p1' }, {})).resolves.toEqual({
+      changes: [
+        {
+          domain: 'product',
+          input: { productId: 'p1' },
+          keys: ['p1'],
+        },
+      ],
+      ok: true,
+      rerunQueries: ['product'],
+      value: 'p1',
+    });
+  });
+
+  it('preserves manual invalidations when inferred touch sites are active', async () => {
+    const cart = domain('cart');
+    const product = domain('product');
+    const cartQuery = query('cart', { reads: [cart] });
+    const productQuery = query('product', { reads: [product] });
+    const addToCart = mutation('cart/add', {
+      input: s.object({
+        productId: s.string(),
+      }),
+      registry: {
+        inferredTouches: [{ domain: 'product', keys: 'arg:productId' }],
+        queries: [cartQuery, productQuery],
+      },
+      handler(input, _request, context) {
+        context.invalidate(cart, {
+          keys: [input.productId],
+          reason: 'cart side effect',
+        });
+        return input.productId;
+      },
+    });
+
+    await expect(runMutation(addToCart, { productId: 'p1' }, {})).resolves.toEqual({
+      changes: [
+        {
+          domain: 'product',
+          input: { productId: 'p1' },
+          keys: ['p1'],
+        },
+        {
+          domain: 'cart',
+          keys: ['p1'],
+          manual: true,
+          reason: 'cart side effect',
+        },
+      ],
+      ok: true,
+      rerunQueries: ['cart', 'product'],
+      value: 'p1',
+    });
+  });
+
+  it('keeps declared touches authoritative over inferred touch sites', async () => {
+    const cart = domain('cart');
+    const product = domain('product');
+    const cartQuery = query('cart', { reads: [cart] });
+    const productQuery = query('product', { reads: [product] });
+    const addToCart = mutation('cart/add', {
+      input: s.object({
+        productId: s.string(),
+      }),
+      registry: {
+        inferredTouches: [{ domain: 'product', keys: null }],
+        queries: [cartQuery, productQuery],
+        touches: [cart],
+      },
+      handler(input) {
+        return input.productId;
+      },
+    });
+
+    await expect(runMutation(addToCart, { productId: 'p1' }, {})).resolves.toEqual({
+      changes: [
+        {
+          domain: 'cart',
+          input: { productId: 'p1' },
+        },
+      ],
+      ok: true,
+      rerunQueries: ['cart'],
+      value: 'p1',
+    });
+  });
+
   it('uses flat tags as the low-ceremony domain on-ramp', async () => {
     const pricing = tag('pricing');
     const pricingQuery = query('pricing', { reads: [pricing] });

@@ -95,6 +95,37 @@ export const orderHistoryQuery = query('orderHistory', {
   reads: [order],
 });
 
+const commerceGenerated = extractTouchGraphFromSource([
+  {
+    fileName: 'examples/commerce/src/generated-touch-graph.ts',
+    source: [
+      'export const cartItems = pgTable("cart_items", {}, jiso({ domain: "cart", key: "productId" }));',
+      'export const orders = pgTable("orders", {}, jiso({ domain: "order", key: "id" }));',
+      'export const products = pgTable("products", {}, jiso({ domain: "product", key: "id" }));',
+      '',
+      'export async function addItem(db, input) {',
+      '  await db.insert(cartItems).values({ productId: input.productId, qty: input.quantity });',
+      '  await db.insert(orders).values({ productId: input.productId, qty: input.quantity });',
+      '  await db.update(products).set({ stock: 0 }).where(eq(products.id, input.productId));',
+      '}',
+      '',
+    ].join('\n'),
+  },
+]);
+
+export const commerceTouchGraph = {
+  'cart.addItem': commerceGenerated.addItem ?? {
+    touches: [],
+    unresolved: [
+      {
+        code: 'FW406',
+        message: 'Statically un-analyzable write site; manual touches required.',
+        site: 'examples/commerce/src/generated-touch-graph.ts:1',
+      },
+    ],
+  },
+} as const;
+
 export const addToCart = mutation('cart/add', {
   errors: {
     OUT_OF_STOCK: s.object({ availableQuantity: s.number().int().min(0) }),
@@ -108,8 +139,8 @@ export const addToCart = mutation('cart/add', {
     guards.rateLimit<CommerceRequest>({ max: 10, per: 'session' }),
   ),
   registry: {
+    inferredTouches: commerceTouchGraph['cart.addItem'].touches,
     queries: [cartQuery, productGridQuery, orderHistoryQuery],
-    touches: [cart, product, order],
   },
   handler(input, request: CommerceRequest, context) {
     const found = request.db.products.get(input.productId);
@@ -316,37 +347,6 @@ function productIdFromRawInput(rawInput: unknown): string | undefined {
   const productId = rawInput.productId;
   return typeof productId === 'string' ? productId : undefined;
 }
-
-const commerceGenerated = extractTouchGraphFromSource([
-  {
-    fileName: 'examples/commerce/src/generated-touch-graph.ts',
-    source: [
-      'export const cartItems = pgTable("cart_items", {}, jiso({ domain: "cart", key: "productId" }));',
-      'export const orders = pgTable("orders", {}, jiso({ domain: "order", key: "id" }));',
-      'export const products = pgTable("products", {}, jiso({ domain: "product", key: "id" }));',
-      '',
-      'export async function addItem(db, input) {',
-      '  await db.insert(cartItems).values({ productId: input.productId, qty: input.quantity });',
-      '  await db.insert(orders).values({ productId: input.productId, qty: input.quantity });',
-      '  await db.update(products).set({ stock: 0 }).where(eq(products.id, input.productId));',
-      '}',
-      '',
-    ].join('\n'),
-  },
-]);
-
-export const commerceTouchGraph = {
-  'cart.addItem': commerceGenerated.addItem ?? {
-    touches: [],
-    unresolved: [
-      {
-        code: 'FW406',
-        message: 'Statically un-analyzable write site; manual touches required.',
-        site: 'examples/commerce/src/generated-touch-graph.ts:1',
-      },
-    ],
-  },
-} as const;
 
 export const commerceGraph = {
   components: [

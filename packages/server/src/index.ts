@@ -351,8 +351,14 @@ export interface ChangeRecord<DomainKey extends string = string, Input = unknown
 }
 
 export interface MutationRegistry {
+  inferredTouches?: readonly MutationTouchSite[];
   queries?: readonly QueryDefinition[];
   touches?: readonly Domain[];
+}
+
+export interface MutationTouchSite {
+  domain: string;
+  keys: null | string;
 }
 
 export interface FragmentRenderer {
@@ -720,10 +726,7 @@ export async function runMutation<
   const value = await definition.handler(input, request, context);
 
   if (isMutationFail(value)) return value;
-  const changes = [
-    ...changeRecordsFor(definition.registry?.touches ?? [], input),
-    ...manualInvalidations,
-  ];
+  const changes = [...registryChangeRecords(definition.registry, input), ...manualInvalidations];
   return {
     changes,
     ok: true,
@@ -958,6 +961,72 @@ function changeRecordsFor<Input>(
     domain: item.key,
     input,
   }));
+}
+
+function registryChangeRecords<Input>(
+  registry: MutationRegistry | undefined,
+  input: Input,
+): ChangeRecord<string, Input>[] {
+  if (registry?.touches && registry.touches.length > 0) {
+    return changeRecordsFor(registry.touches, input);
+  }
+
+  return dedupeTouchSites(registry?.inferredTouches ?? []).map((touch) => ({
+    domain: touch.domain,
+    input,
+    ...touchKeyRecord(touch.keys, input),
+  }));
+}
+
+function dedupeTouchSites(touches: readonly MutationTouchSite[]): MutationTouchSite[] {
+  const seen = new Set<string>();
+  const deduped: MutationTouchSite[] = [];
+
+  for (const touch of touches) {
+    const key = `${touch.domain}\0${touch.keys ?? ''}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    deduped.push(touch);
+  }
+
+  return deduped;
+}
+
+function touchKeyRecord<Input>(
+  keySource: MutationTouchSite['keys'],
+  input: Input,
+): Pick<ChangeRecord<string, Input>, 'keys'> {
+  if (keySource === null) return {};
+  if (!keySource.startsWith('arg:')) return {};
+
+  const value = readPath(input, keySource.slice('arg:'.length));
+  if (value === undefined || value === null) return {};
+  if (Array.isArray(value)) {
+    const keys = value.flatMap((item) => {
+      const key = primitiveKey(item);
+      return key === undefined ? [] : [key];
+    });
+    return keys.length > 0 ? { keys } : {};
+  }
+
+  const key = primitiveKey(value);
+  return key === undefined ? {} : { keys: [key] };
+}
+
+function readPath(input: unknown, path: string): unknown {
+  return path.split('.').reduce<unknown>((value, segment) => {
+    if (value === null || typeof value !== 'object') return undefined;
+    if (!Object.hasOwn(value, segment)) return undefined;
+    return (value as Record<string, unknown>)[segment];
+  }, input);
+}
+
+function primitiveKey(value: unknown): string | undefined {
+  if (typeof value === 'string') return value;
+  if (typeof value === 'number' || typeof value === 'bigint' || typeof value === 'boolean') {
+    return String(value);
+  }
+  return undefined;
 }
 
 function mutationResponseInput<Value>(result: MutationSuccess<Value>, rawInput: unknown): unknown {

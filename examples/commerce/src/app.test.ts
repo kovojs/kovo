@@ -45,8 +45,8 @@ describe('commerce example', () => {
     await expect(harness.exec(addToCart, { productId: 'p1', quantity: 2 })).resolves.toMatchObject({
       changes: [
         { domain: 'cart', input: { productId: 'p1', quantity: 2 } },
-        { domain: 'product', input: { productId: 'p1', quantity: 2 } },
         { domain: 'order', input: { productId: 'p1', quantity: 2 } },
+        { domain: 'product', input: { productId: 'p1', quantity: 2 }, keys: ['p1'] },
       ],
       ok: true,
       rerunQueries: ['cart', 'productGrid', 'orderHistory'],
@@ -213,6 +213,8 @@ describe('commerce example', () => {
   });
 
   it('ships graph facts for fw check and explain acceptance', () => {
+    expect(addToCart.registry?.touches).toBeUndefined();
+    expect(addToCart.registry?.inferredTouches).toEqual(commerceTouchGraph['cart.addItem'].touches);
     expect(commerceTouchGraph).toEqual({
       'cart.addItem': {
         reads: [],
