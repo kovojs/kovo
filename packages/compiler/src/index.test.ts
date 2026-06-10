@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
   assertFixpoint,
+  collectMinifierReservedNames,
   compileComponentModule,
   dedupeCss,
   jisoVitePlugin,
@@ -88,6 +89,29 @@ describe('compileComponentModule', () => {
     expect(registry).toMatch(/export interface QueryRegistry \{\n\n\}/);
     expect(registry).toMatch(/export interface MutationRegistry \{\n\n\}/);
     expect(registry).toContain('export type DomainKey = never;');
+  });
+
+  it('collects emitted handler export names for minifier preservation', () => {
+    const result = compileComponentModule({
+      fileName: 'components/cart/cart-badge.tsx',
+      source: `
+import { component } from '@jiso/core';
+
+export const CartBadge = component('cart-badge', {
+  render: () => (
+    <div>
+      <button onClick={removeItem}>Remove</button>
+      <button onClick={() => clearCart(state.cartId)}>Clear</button>
+    </div>
+  ),
+});
+`,
+    });
+
+    expect(collectMinifierReservedNames(result)).toEqual([
+      'CartBadge$button_click',
+      'CartBadge$removeItem',
+    ]);
   });
 
   it('reports FW210 for anonymous handlers', () => {

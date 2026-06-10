@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
+import { gzipSync } from 'node:zlib';
 import { event, form } from '@jiso/core';
 
 import {
@@ -14,6 +15,7 @@ import {
   installMutationBroadcast,
   installPagehideOptimismCleanup,
   installJisoLoader,
+  jisoLoaderSource,
   MutationQueue,
   morphStructuralTree,
   OptimisticRebaser,
@@ -130,6 +132,13 @@ function keyedListRow(key: string, text: string): StructuralMorphNode {
 }
 
 describe('runtime loader', () => {
+  it('keeps the always-loaded bootstrap under the S2 gzip budget', () => {
+    expect(gzipSync(jisoLoaderSource).byteLength).toBeLessThanOrEqual(1024);
+    expect(jisoLoaderSource).toContain('import(r.slice(0,i))');
+    expect(jisoLoaderSource).not.toContain('customElements');
+    expect(jisoLoaderSource).not.toContain('unload');
+  });
+
   it('registers delegated capture listeners without importing handler modules', () => {
     const root = new FakeRoot();
     const importModule = vi.fn();
