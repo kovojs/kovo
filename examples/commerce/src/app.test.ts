@@ -68,6 +68,19 @@ function mutationUpdateConsumers(output: string) {
   );
 }
 
+function optimisticStatuses(output: string) {
+  return new Map(
+    output
+      .split('\n')
+      .filter((line) => line.startsWith('OPTIMISTIC '))
+      .map((line) => {
+        const [, query, status] = line.split(' ');
+
+        return [query, status] as const;
+      }),
+  );
+}
+
 describe('commerce example', () => {
   it('executes addToCart and verifies rendered cart badge without a browser', async () => {
     const harness = createJisoTestHarness({
@@ -489,5 +502,20 @@ describe('commerce example', () => {
       expect(updates.get(query)).toEqual(expect.arrayContaining(componentConsumers));
       expect(componentConsumers.length).toBeGreaterThan(0);
     }
+  });
+
+  it('answers cart/add optimistic coverage mechanically from fw explain output', () => {
+    const mutation = fwExplain(commerceGraph, {
+      kind: 'mutation',
+      optimistic: true,
+      target: 'cart/add',
+    });
+    const statuses = optimisticStatuses(mutation.output);
+
+    for (const query of ['cart', 'productGrid', 'orderHistory']) {
+      expect(statuses.get(query)).toBeDefined();
+      expect(statuses.get(query)).not.toBe('UNHANDLED');
+    }
+    expect(explainLine(mutation.output, 'OPTIMISTIC-SUMMARY ')).toContain('UNHANDLED=0');
   });
 });
