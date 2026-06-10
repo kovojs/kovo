@@ -11,6 +11,7 @@ import {
 
 export interface JisoTestContext<Db = unknown> {
   db: Db;
+  dbHandle(): Db;
   exec: <
     InputSchema extends Schema<unknown>,
     Errors extends Record<string, Schema<unknown>>,
@@ -46,16 +47,19 @@ export function createJisoTestHarness<Db>(
     options.touchGraph && options.verification
       ? createDbVerifier(options.touchGraph, options.verification)
       : null;
+  const db = verifier ? (verifier.wrap(options.db) as Db) : options.db;
 
   return {
-    db: verifier ? (verifier.wrap(options.db) as Db) : options.db,
+    db,
+    dbHandle(): Db {
+      return db;
+    },
     async exec<
       InputSchema extends Schema<unknown>,
       Errors extends Record<string, Schema<unknown>>,
       Request extends { db: Db },
       Value,
     >(mutation: MutationDefinition<string, InputSchema, Errors, Request, Value>, input: unknown) {
-      const db = verifier ? (verifier.wrap(options.db) as Db) : options.db;
       const result = await runMutation(mutation, input, { db } as unknown as Request);
       verifier?.assertCovered();
       return result;

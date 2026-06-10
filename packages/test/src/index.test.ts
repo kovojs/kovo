@@ -81,6 +81,47 @@ describe('@jiso/test harness', () => {
     });
   });
 
+  it('exposes a stable db handle for direct harness assertions', async () => {
+    const harness = createJisoTestHarness({ db: { cart: [] as string[] } });
+
+    expect(harness.dbHandle()).toBe(harness.db);
+    harness.dbHandle().cart.push('direct');
+
+    const addToCart = mutation('cart/add', {
+      input: s.object({ productId: s.string() }),
+      handler(input, request: { db: { cart: string[] } }) {
+        request.db.cart.push(input.productId);
+        return request.db.cart;
+      },
+    });
+
+    await expect(harness.exec(addToCart, { productId: 'p1' })).resolves.toMatchObject({
+      ok: true,
+      value: ['direct', 'p1'],
+    });
+  });
+
+  it('exposes the verifier-wrapped db handle for direct observed operations', () => {
+    const harness = createJisoTestHarness({
+      db: createFakeDb(),
+      touchGraph: {
+        'cart.addItem': {
+          touches: [{ domain: 'cart', keys: null, site: 'cart.domain.ts:1', via: 'cart_items' }],
+          unresolved: [],
+        },
+      },
+      verification: {
+        domainByTable: {
+          cart_items: 'cart',
+        },
+      },
+    });
+
+    harness.dbHandle().write('cart_items', 'p1');
+
+    expect(harness.dbHandle().read('cart_items')).toEqual(['p1']);
+  });
+
   it('asserts typed mutation error paths without rendering a browser', async () => {
     const addToCart = mutation('cart/add', {
       errors: {
