@@ -750,15 +750,16 @@ export async function renderMutationResponse<
     });
   }
 
+  const renderInput = mutationResponseInput(result, wireRequest.rawInput);
   const queryChunks = await renderQueryChunks(
     definition.registry?.queries ?? [],
     result.rerunQueries,
-    wireRequest.rawInput,
+    renderInput,
   );
   const fragmentChunks = await renderFragmentChunks(
     wireRequest.fragmentRenderers ?? [],
     wireRequest.targets ?? [],
-    wireRequest.rawInput,
+    renderInput,
   );
 
   return storeMutationReplay(wireRequest, {
@@ -916,6 +917,10 @@ function changeRecordsFor<Input>(
     domain: item.key,
     input,
   }));
+}
+
+function mutationResponseInput<Value>(result: MutationSuccess<Value>, rawInput: unknown): unknown {
+  return result.changes.find((change) => change.input !== undefined)?.input ?? rawInput;
 }
 
 function queriesToRerun(

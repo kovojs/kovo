@@ -781,6 +781,54 @@ describe('server mutation primitives', () => {
     });
   });
 
+  it('renders enhanced mutation responses from schema-coerced mutation input', async () => {
+    const cart = domain('cart');
+    const cartQuery = query('cart', {
+      load: (input) => ({ count: (input as { quantity: number }).quantity }),
+      reads: [cart],
+    });
+    const addToCart = mutation('cart/add', {
+      input: s.object({
+        productId: s.string(),
+        quantity: s.number().int().min(1),
+      }),
+      registry: {
+        queries: [cartQuery],
+        touches: [cart],
+      },
+      handler(input) {
+        return input.quantity;
+      },
+    });
+    const form = new FormData();
+    form.set('productId', 'p1');
+    form.set('quantity', '2');
+
+    await expect(
+      renderMutationResponse(addToCart, {
+        fragmentRenderers: [
+          {
+            render: (input) =>
+              `<cart-badge>${typeof (input as { quantity: unknown }).quantity}:${(input as { quantity: number }).quantity}</cart-badge>`,
+            target: 'cart-badge',
+          },
+        ],
+        rawInput: form,
+        request: {},
+        targets: ['cart-badge'],
+      }),
+    ).resolves.toMatchObject({
+      body: [
+        '<fw-query name="cart">{"count":2}</fw-query>',
+        '<fw-fragment target="cart-badge"><cart-badge>number:2</cart-badge></fw-fragment>',
+      ].join('\n'),
+      headers: {
+        'FW-Changes': '[{"domain":"cart","input":{"productId":"p1","quantity":2}}]',
+      },
+      status: 200,
+    });
+  });
+
   it('matches the enhanced mutation wire fixture body byte-for-byte', async () => {
     const cart = domain('cart');
     const cartQuery = query('cart', {
