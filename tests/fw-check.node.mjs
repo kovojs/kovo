@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { readdir, readFile } from 'node:fs/promises';
 import { test } from 'node:test';
+import { gzipSync } from 'node:zlib';
 
 const responseMarker = '<<< RESPONSE';
 const requestMarker = '>>> REQUEST';
@@ -81,6 +82,8 @@ const parseWireResponses = (fixtureBody) => {
 
 const readWireFixture = async (name) =>
   readFile(new URL(`../fixtures/wire/${name}`, import.meta.url), 'utf8');
+
+const readProjectFile = async (path) => readFile(new URL(`../${path}`, import.meta.url), 'utf8');
 
 void test('Phase 0 wire fixtures are present and explicit', async () => {
   const fixtureNames = await readdir(new URL('../fixtures/wire/', import.meta.url));
@@ -182,4 +185,75 @@ void test('SSE remains a v2 backlog fixture, not a v1 wire contract', async () =
   const body = await readFile(new URL('../fixtures/wire/README.md', import.meta.url), 'utf8');
 
   assert.match(body, /SSE.*v2 backlog/i);
+});
+
+void test('P10 constitution rejects forbidden browser architecture in framework code', async () => {
+  const sourcePaths = [
+    'packages/compiler/src/index.ts',
+    'packages/runtime/src/index.ts',
+    'packages/server/src/index.ts',
+    'packages/create-jiso/src/index.ts',
+  ];
+  const forbiddenPatterns = [
+    /\bcustomElements\.define\b/,
+    /\battachShadow\b/,
+    /\baddEventListener\(['"]unload['"]/,
+    /\bonunload\b/,
+    /<script\b[^>]*type=["']importmap["']/i,
+    /\bcreateBrowserRouter\b/,
+    /\bhydrateRoot\b/,
+  ];
+
+  for (const path of sourcePaths) {
+    const source = await readProjectFile(path);
+
+    for (const pattern of forbiddenPatterns) {
+      assert.doesNotMatch(source, pattern, `${path} must not match ${pattern}`);
+    }
+  }
+});
+
+void test('S2 loader budget and L0 no-upgrade path are acceptance evidence', async () => {
+  const runtimeSource = await readProjectFile('packages/runtime/src/index.ts');
+  const loaderMatch = /export const jisoLoaderSource = `(?<source>[\s\S]*?)`;/m.exec(runtimeSource);
+  assert.ok(loaderMatch?.groups?.source, 'runtime exports jisoLoaderSource');
+
+  const loaderSource = loaderMatch.groups.source;
+  assert.ok(gzipSync(loaderSource).byteLength <= 1024, 'loader remains inside the 1KB gzip budget');
+  assert.match(loaderSource, /import\(r\.slice\(0,i\)\)/, 'handlers import only from event refs');
+  assert.doesNotMatch(
+    loaderSource,
+    /customElements|attachShadow|unload/,
+    'loader has no upgrade/unload path',
+  );
+});
+
+void test('P2 loader smoke evidence remains represented in runtime tests', async () => {
+  const runtimeTests = await readProjectFile('packages/runtime/src/index.test.ts');
+
+  assert.match(
+    runtimeTests,
+    /registers delegated capture listeners without importing handler modules/,
+  );
+  assert.match(
+    runtimeTests,
+    /expect\(\[\.\.\.root\.listeners\.keys\(\)\]\)\.toEqual\(\['click', 'submit', 'input', 'change'\]\)/,
+  );
+  assert.match(runtimeTests, /expect\(importModule\)\.not\.toHaveBeenCalled\(\)/);
+  assert.match(runtimeTests, /expect\(jisoLoaderSource\)\.not\.toContain\('customElements'\)/);
+});
+
+void test('P5 structural morph evidence remains represented before browser survival suite', async () => {
+  const runtimeTests = await readProjectFile('packages/runtime/src/index.test.ts');
+
+  assert.match(runtimeTests, /preserves keyed structural node identity when sibling order changes/);
+  assert.match(runtimeTests, /preserves keyed browser state across fragment morphs and reorders/);
+  assert.match(runtimeTests, /focused: true/);
+  assert.match(runtimeTests, /scroll: \{ left: 4, top: 24 \}/);
+  assert.match(runtimeTests, /selection: \{ direction: 'forward', end: 3, start: 1 \}/);
+  assert.match(runtimeTests, /appends fragment chunks when the wire mode is append/);
+  assert.match(
+    runtimeTests,
+    /preserves keyed list identity across append fragments and later reorders/,
+  );
 });
