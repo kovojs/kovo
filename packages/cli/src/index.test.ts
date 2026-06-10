@@ -221,6 +221,7 @@ describe('fw explain', () => {
           optimistic: [
             { mutation: 'cart/add', query: 'cart', status: 'hand-written' },
             { mutation: 'cart/add', query: 'recommendations', status: 'await-fragment' },
+            { mutation: 'cart/add', query: 'cart.discount', status: 'UNHANDLED' },
           ],
         },
         { kind: 'mutation', optimistic: true, target: 'cart/add' },
@@ -236,6 +237,8 @@ describe('fw explain', () => {
         'manual-invalidates: product',
         'OPTIMISTIC cart hand-written',
         'OPTIMISTIC recommendations await-fragment',
+        'OPTIMISTIC cart.discount UNHANDLED',
+        'OPTIMISTIC-SUMMARY total=3 hand-written=1 await-fragment=1 UNHANDLED=1',
         '',
       ].join('\n'),
     });

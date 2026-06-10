@@ -157,10 +157,13 @@ export function fwExplain(input: FwExplainInput, options: FwExplainOptions): FwC
     lines.push(`manual-invalidates: ${list(mutation.manualInvalidates)}`);
 
     if (options.optimistic) {
-      for (const coverage of input.optimistic?.filter((item) => item.mutation === mutation.key) ??
-        []) {
+      const coverages = input.optimistic?.filter((item) => item.mutation === mutation.key) ?? [];
+
+      for (const coverage of coverages) {
         lines.push(`OPTIMISTIC ${coverage.query} ${coverage.status}`);
       }
+
+      lines.push(optimisticSummary(coverages));
     }
 
     return ok(lines);
@@ -273,6 +276,26 @@ function unguardedMutations(mutations: readonly MutationExplain[]): MutationExpl
 
 function hasAuthGuard(guards: readonly string[]): boolean {
   return guards.some((guard) => guard === 'authed' || guard.startsWith('role:'));
+}
+
+function optimisticSummary(coverages: readonly OptimisticCoverage[]): string {
+  const counts: Record<OptimisticCoverage['status'], number> = {
+    UNHANDLED: 0,
+    'await-fragment': 0,
+    'hand-written': 0,
+  };
+
+  for (const coverage of coverages) {
+    counts[coverage.status] += 1;
+  }
+
+  return [
+    'OPTIMISTIC-SUMMARY',
+    `total=${coverages.length}`,
+    `hand-written=${counts['hand-written']}`,
+    `await-fragment=${counts['await-fragment']}`,
+    `UNHANDLED=${counts.UNHANDLED}`,
+  ].join(' ');
 }
 
 function lintMessage(lint: SemanticLint): string {
