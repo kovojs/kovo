@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { mutation, s } from '@jiso/server';
+import { domain, mutation, query, s } from '@jiso/server';
 
 import {
   assertMutationError,
@@ -579,6 +579,86 @@ describe('@jiso/test harness', () => {
     expect(() => verifier.assertReadsCovered(['cart'])).toThrow(
       'FW407 Query read from undeclared domain: product',
     );
+  });
+
+  it('executes query loaders and verifies reads against declared domains', async () => {
+    const cart = domain('cart');
+    const db = createFakeDb();
+    const harness = createJisoTestHarness({
+      db,
+      touchGraph: {},
+      verification: {
+        domainByTable: {
+          cart_items: 'cart',
+        },
+      },
+    });
+    const cartQuery = query('cart', {
+      load() {
+        return harness.db.read('cart_items');
+      },
+      reads: [cart],
+    });
+
+    db.write('cart_items', 'p1');
+
+    await expect(harness.query(cartQuery)).resolves.toEqual(['p1']);
+  });
+
+  it('fails query-loader verification for reads outside declared domains', async () => {
+    const cart = domain('cart');
+    const harness = createJisoTestHarness({
+      db: createFakeDb(),
+      touchGraph: {},
+      verification: {
+        domainByTable: {
+          cart_items: 'cart',
+          products: 'product',
+        },
+      },
+    });
+    const cartQuery = query('cart', {
+      load() {
+        harness.db.read('products');
+        return harness.db.read('cart_items');
+      },
+      reads: [cart],
+    });
+
+    await expect(harness.query(cartQuery)).rejects.toThrow(
+      'FW407 Query read from undeclared domain: product',
+    );
+  });
+
+  it('scopes automatic query read verification to the current loader', async () => {
+    const cart = domain('cart');
+    const product = domain('product');
+    const harness = createJisoTestHarness({
+      db: createFakeDb(),
+      touchGraph: {},
+      verification: {
+        domainByTable: {
+          cart_items: 'cart',
+          products: 'product',
+        },
+      },
+    });
+    const productQuery = query('product', {
+      load() {
+        return harness.db.read('products');
+      },
+      reads: [product],
+    });
+    const cartQuery = query('cart', {
+      load() {
+        return harness.db.read('cart_items');
+      },
+      reads: [cart],
+    });
+
+    await harness.query(productQuery);
+
+    await expect(harness.query(cartQuery)).resolves.toEqual([]);
   });
 
   it('fails read-side verification for unmapped query tables', () => {

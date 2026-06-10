@@ -5,6 +5,7 @@ import {
   type InferSchema,
   type MutationDefinition,
   type MutationResult,
+  type QueryDefinition,
   type Schema,
   runMutation,
 } from '@jiso/server';
@@ -22,6 +23,7 @@ export interface JisoTestContext<Db = unknown> {
     input: unknown,
   ) => Promise<MutationResult<Value>>;
   page: (path: string) => Promise<PageAssertion>;
+  query: (query: QueryDefinition, input?: unknown) => Promise<unknown>;
 }
 
 export interface JisoTestRequest<Db> {
@@ -75,6 +77,17 @@ export function createJisoTestHarness<Db>(
       const html = typeof page === 'function' ? await page() : page;
       return createPageAssertion(html);
     },
+    async query(query, input) {
+      if (!query.load) throw new Error(`Query fixture has no loader: ${query.key}`);
+
+      const start = verifier?.observed.length ?? 0;
+      const result = await query.load(input);
+      verifier?.assertReadsCoveredSince(
+        start,
+        query.reads.map((domain) => domain.key),
+      );
+      return result;
+    },
   };
 }
 
@@ -109,6 +122,7 @@ export interface DbVerificationDiagnostic {
 export interface DbVerifier {
   assertCovered(): void;
   assertReadsCovered(domains: readonly string[]): void;
+  assertReadsCoveredSince(start: number, domains: readonly string[]): void;
   diagnostics(): DbVerificationDiagnostic[];
   observed: readonly ObservedDbOperation[];
   wrap<Db>(db: Db): Db;
@@ -179,29 +193,10 @@ export function createDbVerifier(touchGraph: TouchGraph, config: DbVerificationC
       }
     },
     assertReadsCovered(domains: readonly string[]): void {
-      assertRowKeys(observed, config);
-
-      const unmappedReads = observed.filter(
-        (operation) => operation.kind === 'read' && operation.domain === undefined,
-      );
-
-      if (unmappedReads.length > 0) {
-        const tables = unmappedReads.map((operation) => operation.table).join(', ');
-        throw new Error(`FW407 Query read from undeclared domain: ${tables}`);
-      }
-
-      const allowedReads = new Set(domains);
-      const uncovered = observed.filter(
-        (operation) =>
-          operation.kind === 'read' &&
-          operation.domain !== undefined &&
-          !allowedReads.has(operation.domain),
-      );
-
-      if (uncovered.length > 0) {
-        const readDomains = uncovered.map((operation) => operation.domain).join(', ');
-        throw new Error(`FW407 Query read from undeclared domain: ${readDomains}`);
-      }
+      assertObservedReadsCovered(observed, domains, config);
+    },
+    assertReadsCoveredSince(start: number, domains: readonly string[]): void {
+      assertObservedReadsCovered(observed.slice(start), domains, config);
     },
     diagnostics(): DbVerificationDiagnostic[] {
       const observedWrites = new Set(
@@ -496,6 +491,36 @@ function assertRowKeys(
     )
     .join(', ');
   throw new Error(`FW408 Declared row key differs from observed row predicate: ${details}`);
+}
+
+function assertObservedReadsCovered(
+  observed: readonly ObservedDbOperation[],
+  domains: readonly string[],
+  config: DbVerificationConfig,
+): void {
+  assertRowKeys(observed, config);
+
+  const unmappedReads = observed.filter(
+    (operation) => operation.kind === 'read' && operation.domain === undefined,
+  );
+
+  if (unmappedReads.length > 0) {
+    const tables = unmappedReads.map((operation) => operation.table).join(', ');
+    throw new Error(`FW407 Query read from undeclared domain: ${tables}`);
+  }
+
+  const allowedReads = new Set(domains);
+  const uncovered = observed.filter(
+    (operation) =>
+      operation.kind === 'read' &&
+      operation.domain !== undefined &&
+      !allowedReads.has(operation.domain),
+  );
+
+  if (uncovered.length > 0) {
+    const readDomains = uncovered.map((operation) => operation.domain).join(', ');
+    throw new Error(`FW407 Query read from undeclared domain: ${readDomains}`);
+  }
 }
 
 function observationOptions(args: readonly unknown[]): DbObservationOptions | undefined {

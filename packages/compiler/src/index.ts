@@ -7,6 +7,7 @@ export interface CompilerDiagnostic {
   severity: DiagnosticSeverity;
   message: string;
   fileName: string;
+  help?: string;
 }
 
 export interface EmittedFile {
@@ -322,7 +323,12 @@ function lowerEventHandlers(
     }
 
     if (capturesUnserializableValue(expression)) {
-      diagnostic = diagnosticFor(options.fileName, 'FW201');
+      diagnostic = fw201Diagnostic(options.fileName, {
+        attributeName: `on:${eventName}`,
+        exportName,
+        expression,
+        params,
+      });
     }
 
     handlers.push({
@@ -351,6 +357,26 @@ function diagnosticFor(fileName: string, code: DiagnosticCode): CompilerDiagnost
     fileName,
     message: definition.message,
     severity: definition.severity,
+  };
+}
+
+function fw201Diagnostic(
+  fileName: string,
+  lowering: {
+    attributeName: string;
+    exportName: string;
+    expression: string;
+    params: readonly ElementParam[];
+  },
+): CompilerDiagnostic {
+  return {
+    ...diagnosticFor(fileName, 'FW201'),
+    help: [
+      `Would lower to: ${lowering.attributeName}="./${replaceExtension(fileName.split('/').at(-1) ?? fileName, '.client.js')}#${lowering.exportName}"`,
+      `Blocked expression: ${lowering.expression}`,
+      `Element params: ${lowering.params.map((param) => param.attributeName).join(', ') || '-'}`,
+      'Fixes: move the value into component/query state via ctx; pass serializable element params with data-p-*; or keep shared constants in module scope.',
+    ].join('\n'),
   };
 }
 

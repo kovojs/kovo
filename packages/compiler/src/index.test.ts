@@ -116,6 +116,13 @@ describe('compileComponentModule', () => {
         severity: 'error',
       },
     ]);
+    expect(result.diagnostics[0]?.help).toContain(
+      'Would lower to: on:click="./cart-badge.client.js#CartBadge$button_click"',
+    );
+    expect(result.diagnostics[0]?.help).toContain('Blocked expression: () => window.alert("x")');
+    expect(result.diagnostics[0]?.help).toContain(
+      'Fixes: move the value into component/query state via ctx; pass serializable element params with data-p-*; or keep shared constants in module scope.',
+    );
   });
 
   it('preserves emitted IR on recompilation', () => {
