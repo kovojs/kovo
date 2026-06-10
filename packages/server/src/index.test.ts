@@ -369,6 +369,30 @@ describe('server mutation primitives', () => {
     });
   });
 
+  it('renders explicit numeric deferred fragment priority hints including zero', () => {
+    expect(
+      renderDeferredStream({
+        chunks: [
+          {
+            fragments: [{ html: '<section>normal</section>', priority: 0, target: 'normal' }],
+            queries: [{ name: 'cart', value: { count: 1 } }],
+          },
+        ],
+        closeHtml: '',
+        shell: '<!doctype html><html><body><fw-defer target="normal"></fw-defer>',
+      }).body,
+    ).toBe(
+      [
+        '<!doctype html><html><body><fw-defer target="normal"></fw-defer>',
+        '--jiso-boundary',
+        '<fw-query name="cart">{"count":1}</fw-query>',
+        '<fw-fragment target="normal" priority="0"><section>normal</section></fw-fragment>',
+        '--jiso-boundary--',
+        '',
+      ].join('\n'),
+    );
+  });
+
   it('delivers late stylesheets with deferred fragments', () => {
     expect(
       renderDeferredStream({

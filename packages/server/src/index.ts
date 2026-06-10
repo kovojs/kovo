@@ -664,9 +664,10 @@ export function renderDeferredStream(options: DeferredStreamOptions): DeferredSt
 }
 
 function renderDeferredFragmentChunk(fragment: DeferredFragmentChunk): string {
-  const priority = fragment.priority
-    ? ` priority="${escapeAttribute(String(fragment.priority))}"`
-    : '';
+  const priority =
+    fragment.priority !== undefined
+      ? ` priority="${escapeAttribute(String(fragment.priority))}"`
+      : '';
   const stylesheets = renderStylesheetLinks(fragment.stylesheets ?? []);
 
   return `<fw-fragment target="${escapeAttribute(fragment.target)}"${priority}>${stylesheets}${fragment.html}</fw-fragment>`;
