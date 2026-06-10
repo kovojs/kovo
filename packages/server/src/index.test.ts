@@ -1030,6 +1030,38 @@ describe('server mutation primitives', () => {
     });
   });
 
+  it('matches the no-JS POST redirect wire fixture response byte-for-byte', async () => {
+    const addToCart = mutation('cart/add', {
+      input: s.object({
+        productId: s.string(),
+        quantity: s.number().int().min(1).default(1),
+      }),
+      handler(input) {
+        return input;
+      },
+    });
+
+    const response = await renderNoJsMutationResponse(addToCart, {
+      rawInput: { productId: 'p1', quantity: 1 },
+      redirectTo: '/cart',
+      request: {},
+    });
+    const fixture = await readFile(
+      new URL('../../../fixtures/wire/no-js-post-redirect-get.http', import.meta.url),
+      'utf8',
+    );
+    const [postResponse] = readFixtureResponses(fixture);
+
+    expect(postResponse).toEqual({
+      body: `${response.body}`,
+      headers: {
+        'cache-control': response.headers['Cache-Control'],
+        location: response.headers.Location,
+      },
+      statusLine: 'HTTP/1.1 303 See Other',
+    });
+  });
+
   it('renders no-JS mutation failures as a full HTML 422 page', async () => {
     const addToCart = mutation('cart/add', {
       errors: {
@@ -1091,4 +1123,40 @@ function readLastResponseBody(fixture: string): string {
   expect(headerEnd).toBeGreaterThanOrEqual(0);
 
   return fixture.slice(headerEnd + 2);
+}
+
+function readFixtureResponses(
+  fixture: string,
+): { body: string; headers: Record<string, string>; statusLine: string }[] {
+  const responses: { body: string; headers: Record<string, string>; statusLine: string }[] = [];
+  let cursor = 0;
+
+  while (true) {
+    const responseStart = fixture.indexOf('<<< RESPONSE', cursor);
+    if (responseStart === -1) return responses;
+
+    const statusStart = fixture.indexOf('\n', responseStart);
+    expect(statusStart).toBeGreaterThanOrEqual(0);
+
+    const nextRequestStart = fixture.indexOf('\n>>> REQUEST', statusStart + 1);
+    const responseBlock =
+      nextRequestStart === -1
+        ? fixture.slice(statusStart + 1)
+        : fixture.slice(statusStart + 1, nextRequestStart);
+    const headerEnd = responseBlock.indexOf('\n\n');
+    const headerText =
+      headerEnd === -1 ? responseBlock.trimEnd() : responseBlock.slice(0, headerEnd);
+    const [statusLine = '', ...headerLines] = headerText.split('\n');
+    const body = headerEnd === -1 ? '' : responseBlock.slice(headerEnd + 2);
+    const headers = Object.fromEntries(
+      headerLines.map((line) => {
+        const separator = line.indexOf(':');
+        expect(separator).toBeGreaterThan(0);
+        return [line.slice(0, separator).toLowerCase(), line.slice(separator + 1).trim()];
+      }),
+    );
+
+    responses.push({ body, headers, statusLine });
+    cursor = nextRequestStart === -1 ? fixture.length : nextRequestStart + 1;
+  }
 }

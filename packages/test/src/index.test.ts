@@ -107,6 +107,52 @@ describe('@jiso/test harness', () => {
     });
   });
 
+  it('lets exec override request fixtures per assertion while keeping harness db authoritative', async () => {
+    const addToCart = mutation('cart/add', {
+      guard(request: { db: { cart: string[] }; session?: { user?: { id: string } | null } }) {
+        return Boolean(request.session?.user);
+      },
+      input: s.object({ productId: s.string() }),
+      handler(input, request: { db: { cart: string[] }; session?: { user?: { id: string } } }) {
+        request.db.cart.push(`${request.session?.user?.id}:${input.productId}`);
+        return request.db.cart;
+      },
+    });
+    const harness = createJisoTestHarness({
+      db: { cart: [] as string[] },
+      request: { session: { user: { id: 'default-user' } } },
+    });
+
+    await expect(
+      harness.exec(
+        addToCart,
+        { productId: 'p1' },
+        {
+          request: { session: { user: { id: 'u2' } } },
+        },
+      ),
+    ).resolves.toMatchObject({
+      ok: true,
+      value: ['u2:p1'],
+    });
+    await expect(harness.exec(addToCart, { productId: 'p2' })).resolves.toMatchObject({
+      ok: true,
+      value: ['u2:p1', 'default-user:p2'],
+    });
+
+    const assertDbOverrideRejected = () => {
+      void harness.exec(
+        addToCart,
+        { productId: 'p3' },
+        {
+          // @ts-expect-error Per-exec request fixtures cannot replace the harness db.
+          request: { db: { cart: [] as string[] } },
+        },
+      );
+    };
+    expect(assertDbOverrideRejected).toBeTypeOf('function');
+  });
+
   it('exposes a stable db handle for direct harness assertions', async () => {
     const harness = createJisoTestHarness({ db: { cart: [] as string[] } });
 

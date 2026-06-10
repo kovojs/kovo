@@ -21,6 +21,7 @@ export interface JisoTestContext<Db = unknown> {
   >(
     mutation: MutationDefinition<string, InputSchema, Errors, Request, Value>,
     input: unknown,
+    options?: JisoTestExecOptions<Request>,
   ) => Promise<MutationResult<Value>>;
   page: (path: string) => Promise<PageAssertion>;
   query: (query: QueryDefinition, input?: unknown) => Promise<unknown>;
@@ -36,6 +37,10 @@ export interface JisoTestHarnessOptions<Db> {
   request?: Record<string, unknown>;
   touchGraph?: TouchGraph;
   verification?: DbVerificationConfig;
+}
+
+export interface JisoTestExecOptions<Request> {
+  request?: Partial<Omit<Request, 'db'>>;
 }
 
 export interface PageAssertion {
@@ -62,9 +67,14 @@ export function createJisoTestHarness<Db>(
       Errors extends Record<string, Schema<unknown>>,
       Request extends { db: Db },
       Value,
-    >(mutation: MutationDefinition<string, InputSchema, Errors, Request, Value>, input: unknown) {
+    >(
+      mutation: MutationDefinition<string, InputSchema, Errors, Request, Value>,
+      input: unknown,
+      execOptions?: JisoTestExecOptions<Request>,
+    ) {
       const result = await runMutation(mutation, input, {
         ...options.request,
+        ...execOptions?.request,
         db,
       } as unknown as Request);
       verifier?.assertCovered();
