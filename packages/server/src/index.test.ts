@@ -3,6 +3,7 @@ import { File } from 'node:buffer';
 
 import {
   domain,
+  errorBoundary,
   guards,
   i18n,
   invalidate,
@@ -469,6 +470,67 @@ describe('server mutation primitives', () => {
       headers: { 'Content-Type': 'text/vnd.jiso.fragment+html; charset=utf-8' },
       status: 200,
     });
+  });
+
+  it('renders per-island error boundary fragments when a fragment renderer fails', async () => {
+    const addToCart = mutation('cart/add', {
+      input: s.object({ productId: s.string() }),
+      handler(input) {
+        return input;
+      },
+    });
+
+    await expect(
+      renderMutationResponse(addToCart, {
+        fragmentRenderers: [
+          errorBoundary(
+            {
+              render() {
+                throw new Error('recommendations failed');
+              },
+              target: 'recommendations',
+            },
+            {
+              render(error) {
+                return `<section role="alert">${(error as Error).message}</section>`;
+              },
+            },
+          ),
+        ],
+        rawInput: { productId: 'p1' },
+        request: {},
+        targets: ['recommendations'],
+      }),
+    ).resolves.toEqual({
+      body: '<fw-fragment target="recommendations" error-boundary="recommendations"><section role="alert">recommendations failed</section></fw-fragment>',
+      headers: { 'Content-Type': 'text/vnd.jiso.fragment+html; charset=utf-8' },
+      status: 200,
+    });
+  });
+
+  it('fails enhanced mutation rendering when an island errors without a boundary', async () => {
+    const addToCart = mutation('cart/add', {
+      input: s.object({ productId: s.string() }),
+      handler(input) {
+        return input;
+      },
+    });
+
+    await expect(
+      renderMutationResponse(addToCart, {
+        fragmentRenderers: [
+          {
+            render() {
+              throw new Error('unhandled island error');
+            },
+            target: 'recommendations',
+          },
+        ],
+        rawInput: { productId: 'p1' },
+        request: {},
+        targets: ['recommendations'],
+      }),
+    ).rejects.toThrow('unhandled island error');
   });
 
   it('renders typed failures as 422 validation fragments', async () => {

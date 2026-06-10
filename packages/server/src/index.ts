@@ -289,8 +289,14 @@ export interface MutationRegistry {
 }
 
 export interface FragmentRenderer {
+  errorBoundary?: ErrorBoundaryRenderer;
   render(input: unknown): string | Promise<string>;
   target: string;
+}
+
+export interface ErrorBoundaryRenderer {
+  render(error: unknown, input: unknown): string | Promise<string>;
+  target?: string;
 }
 
 export interface MutationWireRequest<Request> {
@@ -420,6 +426,13 @@ export function mutation<
 
 export function meta<const Meta extends RouteMeta>(definition: Meta): Meta {
   return definition;
+}
+
+export function errorBoundary<Renderer extends FragmentRenderer>(
+  renderer: Renderer,
+  boundary: ErrorBoundaryRenderer,
+): Renderer & { errorBoundary: ErrorBoundaryRenderer } {
+  return { ...renderer, errorBoundary: boundary };
 }
 
 export function i18n<const Messages extends Record<string, string>>(
@@ -707,9 +720,18 @@ async function renderFragmentChunks(
   for (const renderer of renderers) {
     if (wanted.size > 0 && !wanted.has(renderer.target)) continue;
 
-    chunks.push(
-      `<fw-fragment target="${escapeAttribute(renderer.target)}">${await renderer.render(input)}</fw-fragment>`,
-    );
+    try {
+      chunks.push(
+        `<fw-fragment target="${escapeAttribute(renderer.target)}">${await renderer.render(input)}</fw-fragment>`,
+      );
+    } catch (error) {
+      if (!renderer.errorBoundary) throw error;
+
+      const target = renderer.errorBoundary.target ?? renderer.target;
+      chunks.push(
+        `<fw-fragment target="${escapeAttribute(target)}" error-boundary="${escapeAttribute(renderer.target)}">${await renderer.errorBoundary.render(error, input)}</fw-fragment>`,
+      );
+    }
   }
 
   return chunks;
