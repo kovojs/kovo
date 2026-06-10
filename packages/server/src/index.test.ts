@@ -330,6 +330,18 @@ describe('server mutation primitives', () => {
     });
   });
 
+  it('renders moderate speculation rules with deduped escaped prerender urls only when opted in', () => {
+    expect(
+      renderPageHints({
+        prefetch: 'moderate',
+        prerenderUrls: ['/cart', '', '/cart', '/search?q=</script><x>'],
+      }),
+    ).toEqual({
+      earlyHints: {},
+      html: '<script type="speculationrules">{"prerender":[{"eagerness":"moderate","urls":["/cart","/search?q=\\u003c/script>\\u003cx>"]}]}</script>',
+    });
+  });
+
   it('renders deferred streams with shell first and query JSON before fragments', () => {
     expect(
       renderDeferredStream({
