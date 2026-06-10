@@ -612,6 +612,11 @@ export interface AppliedMutationResponse {
   queries: string[];
 }
 
+export interface AppliedDeferredStreamResponse extends AppliedMutationResponse {
+  appliedFragments: string[];
+  chunks: Array<AppliedMutationResponse & { appliedFragments: string[] }>;
+}
+
 export interface MutationChangeRecord {
   domain: string;
   input?: unknown;
@@ -979,6 +984,31 @@ export function applyDeferredChunkToDom(options: {
   };
 }
 
+export function applyDeferredStreamResponseToDom(options: {
+  body: string;
+  boundary?: string;
+  morph?: MorphFragment;
+  root: MorphRoot;
+  store: QueryStore;
+}): AppliedDeferredStreamResponse {
+  const chunks = deferredStreamChunks(options.body, options.boundary ?? 'jiso-boundary').map(
+    (body) =>
+      applyDeferredChunkToDom({
+        body,
+        root: options.root,
+        store: options.store,
+        ...(options.morph ? { morph: options.morph } : {}),
+      }),
+  );
+
+  return {
+    appliedFragments: chunks.flatMap((chunk) => chunk.appliedFragments),
+    chunks,
+    fragments: chunks.flatMap((chunk) => chunk.fragments),
+    queries: chunks.flatMap((chunk) => chunk.queries),
+  };
+}
+
 export async function submitEnhancedMutation(options: EnhancedMutationSubmitOptions): Promise<
   AppliedMutationResponse & {
     appliedFragments: string[];
@@ -1203,6 +1233,31 @@ function applyFragmentQueryBody(
     fragments: readFragmentChunks(body),
     queries: queryChunks.map((query) => query.name),
   };
+}
+
+function deferredStreamChunks(body: string, boundary: string): string[] {
+  const marker = `--${boundary}`;
+  const chunks: string[] = [];
+  let cursor = 0;
+
+  while (true) {
+    const markerStart = body.indexOf(marker, cursor);
+    if (markerStart === -1) return chunks;
+
+    const chunkStart = body.indexOf('\n', markerStart);
+    if (chunkStart === -1) return chunks;
+    if (body.startsWith(`${marker}--`, markerStart)) return chunks;
+
+    const nextMarkerStart = body.indexOf(`\n${marker}`, chunkStart + 1);
+    const chunk =
+      nextMarkerStart === -1
+        ? body.slice(chunkStart + 1)
+        : body.slice(chunkStart + 1, nextMarkerStart);
+    if (/<fw-(?:query|fragment)\b/.test(chunk)) {
+      chunks.push(chunk);
+    }
+    cursor = nextMarkerStart === -1 ? body.length : nextMarkerStart + 1;
+  }
 }
 
 async function fetchEnhancedMutation(

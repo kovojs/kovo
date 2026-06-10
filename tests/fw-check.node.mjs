@@ -297,6 +297,19 @@ void test('P5 morph evidence includes structural and browser survival suites', a
   assert.match(browserTests, /scrollTop/);
 });
 
+void test('D3 deferred stream responses are consumed by the runtime', async () => {
+  const runtimeSource = await readProjectFile('packages/runtime/src/index.ts');
+  const runtimeTests = await readProjectFile('packages/runtime/src/index.test.ts');
+
+  assert.match(runtimeSource, /applyDeferredStreamResponseToDom/);
+  assert.match(runtimeSource, /deferredStreamChunks/);
+  assert.match(runtimeSource, /--\$\{boundary\}/);
+  assert.match(runtimeTests, /applies full deferred stream responses in boundary order/);
+  assert.match(runtimeTests, /--jiso-boundary--/);
+  assert.match(runtimeTests, /reviews-plan/);
+  assert.match(runtimeTests, /morph:<section>Reviews ready<\/section>/);
+});
+
 void test('framework-owned browser suite is wired into acceptance', async () => {
   const packageJson = JSON.parse(await readProjectFile('package.json'));
   const viteConfig = await readProjectFile('vite.config.ts');

@@ -5,6 +5,7 @@ import { event, form } from '@jiso/core';
 import {
   applyDeferredChunk,
   applyDeferredChunkToDom,
+  applyDeferredStreamResponseToDom,
   applyFragments,
   applyOptimisticTransforms,
   applyMutationResponseToDom,
@@ -678,6 +679,81 @@ describe('query store', () => {
       queries: ['reviews'],
     });
     expect(root.targets.get('reviews:p1')?.html).toContain('/assets/reviews.css');
+  });
+
+  it('applies full deferred stream responses in boundary order', () => {
+    const store = createQueryStore();
+    const root = new FakeMorphRoot();
+    const observed: string[] = [];
+    root.targets.set('reviews:p1', new FakeMorphTarget());
+    root.targets.set('recommendations:p1', new FakeMorphTarget());
+    store.subscribe('reviews', (value) => {
+      observed.push(`reviews-plan:${JSON.stringify(value)}`);
+    });
+    store.subscribe('recommendations', (value) => {
+      observed.push(`recommendations-plan:${JSON.stringify(value)}`);
+    });
+
+    const result = applyDeferredStreamResponseToDom({
+      body: [
+        '<!doctype html><html><body><fw-defer target="reviews:p1"></fw-defer>',
+        '--jiso-boundary',
+        '<fw-query name="reviews">{"items":[{"id":"r1"}]}</fw-query>',
+        '<fw-fragment target="reviews:p1"><section>Reviews ready</section></fw-fragment>',
+        '--jiso-boundary',
+        '<fw-query name="recommendations">{"items":[{"id":"p2"}]}</fw-query>',
+        '<fw-fragment target="recommendations:p1"><section>Recommendations ready</section></fw-fragment>',
+        '--jiso-boundary--',
+        '</body></html>',
+      ].join('\n'),
+      morph(target, html) {
+        observed.push(
+          `morph:${html}:${JSON.stringify({
+            recommendations: store.get('recommendations'),
+            reviews: store.get('reviews'),
+          })}`,
+        );
+        target.replaceWithHtml(html);
+      },
+      root,
+      store,
+    });
+
+    expect(observed).toEqual([
+      'reviews-plan:{"items":[{"id":"r1"}]}',
+      'morph:<section>Reviews ready</section>:{"reviews":{"items":[{"id":"r1"}]}}',
+      'recommendations-plan:{"items":[{"id":"p2"}]}',
+      'morph:<section>Recommendations ready</section>:{"recommendations":{"items":[{"id":"p2"}]},"reviews":{"items":[{"id":"r1"}]}}',
+    ]);
+    expect(result).toEqual({
+      appliedFragments: ['reviews:p1', 'recommendations:p1'],
+      chunks: [
+        {
+          appliedFragments: ['reviews:p1'],
+          fragments: [{ html: '<section>Reviews ready</section>', target: 'reviews:p1' }],
+          queries: ['reviews'],
+        },
+        {
+          appliedFragments: ['recommendations:p1'],
+          fragments: [
+            {
+              html: '<section>Recommendations ready</section>',
+              target: 'recommendations:p1',
+            },
+          ],
+          queries: ['recommendations'],
+        },
+      ],
+      fragments: [
+        { html: '<section>Reviews ready</section>', target: 'reviews:p1' },
+        { html: '<section>Recommendations ready</section>', target: 'recommendations:p1' },
+      ],
+      queries: ['reviews', 'recommendations'],
+    });
+    expect(root.targets.get('reviews:p1')?.html).toBe('<section>Reviews ready</section>');
+    expect(root.targets.get('recommendations:p1')?.html).toBe(
+      '<section>Recommendations ready</section>',
+    );
   });
 
   it('rebroadcasts and applies mutation responses for same-user tab sync', () => {
