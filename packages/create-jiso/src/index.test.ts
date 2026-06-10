@@ -16,7 +16,11 @@ describe('create-jiso starter', () => {
       'docs/deployment.md',
       'src/styles.css',
       'src/app.tsx',
+      'src/app.fixpoint.test.ts',
     ]);
+    expect(project.files.find((file) => file.path === 'package.json')?.source).toContain(
+      '"@jiso/compiler": "workspace:*"',
+    );
     expect(project.files.find((file) => file.path === 'package.json')?.source).toContain(
       '"@tailwindcss/vite": "^4.0.0"',
     );
@@ -43,5 +47,14 @@ describe('create-jiso starter', () => {
     expect(
       project.files.find((file) => file.path === '.github/workflows/ci.yml')?.source,
     ).toContain('voidzero-dev/setup-vp@v1');
+    const fixpointTest = project.files.find(
+      (file) => file.path === 'src/app.fixpoint.test.ts',
+    )?.source;
+    expect(fixpointTest).toContain(
+      "import { assertFixpoint, compileComponentModule } from '@jiso/compiler';",
+    );
+    expect(fixpointTest).toContain('compileComponentModule');
+    expect(fixpointTest).toContain('assertFixpoint(result)');
+    expect(fixpointTest).toContain('SPEC.md section 5.2');
   });
 });

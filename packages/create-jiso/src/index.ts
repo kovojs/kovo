@@ -26,6 +26,7 @@ export function createJisoProject(options: CreateJisoOptions): CreateJisoProject
               '@jiso/core': 'workspace:*',
             },
             devDependencies: {
+              '@jiso/compiler': 'workspace:*',
               '@tailwindcss/vite': '^4.0.0',
               '@typescript/native-preview': '^7.0.0-dev.20260610.1',
               tailwindcss: '^4.0.0',
@@ -174,6 +175,32 @@ export const App = component('app-root', {
   state: () => ({}),
   render: () =>
     '<main class="mx-auto grid min-h-dvh max-w-3xl place-items-center px-6 text-jiso-ink"><h1 class="text-3xl font-semibold tracking-normal text-jiso-accent">Hello from Jiso</h1></main>',
+});
+`,
+      },
+      {
+        path: 'src/app.fixpoint.test.ts',
+        source: `import { assertFixpoint, compileComponentModule } from '@jiso/compiler';
+import { describe, expect, it } from 'vitest';
+
+describe('compiler fixpoint', () => {
+  it('keeps the starter component lowering authorable', () => {
+    // SPEC.md section 5.2 requires generated starters to enforce the compiler fixpoint.
+    const result = compileComponentModule({
+      fileName: 'src/app.tsx',
+      source: [
+        "import { component } from '@jiso/core';",
+        '',
+        "export const App = component('app-root', {",
+        '  state: () => ({}),',
+        "  render: () => '<main>Hello from Jiso</main>',",
+        '});',
+        '',
+      ].join('\\n'),
+    });
+
+    expect(() => assertFixpoint(result)).not.toThrow();
+  });
 });
 `,
       },
