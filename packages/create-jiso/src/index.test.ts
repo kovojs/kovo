@@ -1,4 +1,4 @@
-import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -7,6 +7,13 @@ import { describe, expect, it, vi } from 'vitest';
 import { createJisoProject, main, writeJisoProject } from './index.js';
 
 describe('create-jiso starter', () => {
+  it('keeps inline generation as the only starter source', () => {
+    const templateUrl = new URL('../template', import.meta.url);
+    const entries = existsSync(templateUrl) ? readdirSync(templateUrl, { recursive: true }) : [];
+
+    expect(entries).toEqual([]);
+  });
+
   it('generates a Vite+ scaffold with CI and fw-check recipe', () => {
     const project = createJisoProject({ name: 'My App' });
 
