@@ -6,6 +6,7 @@ import {
   assertMutationError,
   createDbVerifier,
   createJisoTestHarness,
+  createPgliteTestDb,
   jisoTest,
   propertyTest,
 } from './index.js';
@@ -361,6 +362,48 @@ describe('@jiso/test harness', () => {
       ok: true,
       value: ['p1'],
     });
+  });
+
+  it('runs mutation suites against an in-memory pglite database', async () => {
+    const db = await createPgliteTestDb();
+
+    try {
+      await db.exec('create table cart_items (product_id text primary key, qty integer not null)');
+
+      const addToCart = mutation('cart/add', {
+        input: s.object({ productId: s.string(), quantity: s.number().int().min(1) }),
+        async handler(input, request: { db: typeof db }) {
+          await request.db.write('cart_items', {
+            product_id: input.productId,
+            qty: input.quantity,
+          });
+          return request.db.read<{ product_id: string; qty: number }>('cart_items');
+        },
+      });
+      const harness = createJisoTestHarness({
+        db,
+        touchGraph: {
+          'cart.addItem': {
+            touches: [{ domain: 'cart', keys: null, site: 'cart.domain.ts:1', via: 'cart_items' }],
+            unresolved: [],
+          },
+        },
+        verification: {
+          domainByTable: {
+            cart_items: 'cart',
+          },
+        },
+      });
+
+      await expect(
+        harness.exec(addToCart, { productId: 'p1', quantity: 2 }),
+      ).resolves.toMatchObject({
+        ok: true,
+        value: [{ product_id: 'p1', qty: 2 }],
+      });
+    } finally {
+      await db.close();
+    }
   });
 
   it('fails verification for writes to domains outside the static graph', async () => {

@@ -6,6 +6,7 @@
     ".": "./src/index.ts"
   },
   "dependencies": {
+    "@electric-sql/pglite": "^0.5.1",
     "@jiso/core": "workspace:*",
     "@jiso/drizzle": "workspace:*",
     "@jiso/server": "workspace:*",
