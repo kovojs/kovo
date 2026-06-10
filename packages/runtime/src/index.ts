@@ -982,13 +982,24 @@ export interface MutationBroadcast {
 
 export function installMutationBroadcast(options: {
   channel: BroadcastLike;
+  morph?: MorphFragment;
   onChanges?: (changes: readonly MutationChangeRecord[]) => void;
+  root?: MorphRoot;
   store: QueryStore;
 }): MutationBroadcast {
   options.channel.onmessage = (event) => {
     if (!isMutationBroadcastMessage(event.data)) return;
 
-    applyMutationResponse(options.store, event.data.body);
+    if (options.root) {
+      applyMutationResponseToDom({
+        body: event.data.body,
+        ...(options.morph ? { morph: options.morph } : {}),
+        root: options.root,
+        store: options.store,
+      });
+    } else {
+      applyMutationResponse(options.store, event.data.body);
+    }
     if (event.data.changes.length > 0) {
       options.onChanges?.(event.data.changes);
     }

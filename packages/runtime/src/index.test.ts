@@ -451,6 +451,29 @@ describe('query store', () => {
     expect(onChanges).toHaveBeenCalledWith([{ domain: 'cart', keys: ['cart_1'] }]);
   });
 
+  it('morphs rebroadcast mutation fragments when a root is configured', () => {
+    const store = createQueryStore();
+    const channel = new FakeBroadcastChannel();
+    const root = new FakeMorphRoot();
+    root.targets.set('cart-badge', new FakeMorphTarget('<cart-badge>0</cart-badge>'));
+
+    installMutationBroadcast({ channel, root, store });
+
+    channel.onmessage?.({
+      data: {
+        body: [
+          '<fw-query name="cart">{"count":6}</fw-query>',
+          '<fw-fragment target="cart-badge"><cart-badge>6</cart-badge></fw-fragment>',
+        ].join('\n'),
+        changes: [],
+        type: 'jiso:mutation-response',
+      },
+    });
+
+    expect(store.get('cart')).toEqual({ count: 6 });
+    expect(root.targets.get('cart-badge')?.html).toBe('<cart-badge>6</cart-badge>');
+  });
+
   it('applies hand-written optimistic transforms through query update plans', () => {
     const store = createQueryStore();
     const plan = vi.fn();
