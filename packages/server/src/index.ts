@@ -363,8 +363,11 @@ export interface DeferredQueryChunk {
   value: unknown;
 }
 
+export type DeferredPriority = 'high' | 'normal' | 'low' | number;
+
 export interface DeferredFragmentChunk {
   html: string;
+  priority?: DeferredPriority;
   target: string;
 }
 
@@ -377,6 +380,7 @@ export interface DeferredStreamOptions {
 
 export interface DeferredStreamChunk {
   fragments: readonly DeferredFragmentChunk[];
+  priority?: DeferredPriority;
   queries?: readonly DeferredQueryChunk[];
 }
 
@@ -475,14 +479,11 @@ export function renderPageHints(options: PageHintOptions): PageHints {
 
 export function renderDeferredStream(options: DeferredStreamOptions): DeferredStreamResponse {
   const boundary = options.boundary ?? 'jiso-boundary';
-  const chunks = options.chunks.map((chunk) =>
+  const chunks = sortDeferredChunks(options.chunks).map((chunk) =>
     [
       `--${boundary}`,
       ...renderDeferredQueryChunks(chunk.queries ?? []),
-      ...chunk.fragments.map(
-        (fragment) =>
-          `<fw-fragment target="${escapeAttribute(fragment.target)}">${fragment.html}</fw-fragment>`,
-      ),
+      ...sortDeferredFragments(chunk.fragments).map(renderDeferredFragmentChunk),
     ].join('\n'),
   );
 
@@ -494,6 +495,14 @@ export function renderDeferredStream(options: DeferredStreamOptions): DeferredSt
     },
     status: 200,
   };
+}
+
+function renderDeferredFragmentChunk(fragment: DeferredFragmentChunk): string {
+  const priority = fragment.priority
+    ? ` priority="${escapeAttribute(String(fragment.priority))}"`
+    : '';
+
+  return `<fw-fragment target="${escapeAttribute(fragment.target)}"${priority}>${fragment.html}</fw-fragment>`;
 }
 
 export async function runMutation<
@@ -823,6 +832,40 @@ function renderDeferredQueryChunks(queries: readonly DeferredQueryChunk[]): stri
     const key = queryChunk.key ? ` key="${escapeAttribute(queryChunk.key)}"` : '';
     return `<fw-query name="${escapeAttribute(queryChunk.name)}"${key}>${escapeHtml(JSON.stringify(queryChunk.value))}</fw-query>`;
   });
+}
+
+function sortDeferredChunks(chunks: readonly DeferredStreamChunk[]): DeferredStreamChunk[] {
+  return stablePrioritySort(chunks, (chunk) => chunk.priority);
+}
+
+function sortDeferredFragments(
+  fragments: readonly DeferredFragmentChunk[],
+): DeferredFragmentChunk[] {
+  return stablePrioritySort(fragments, (fragment) => fragment.priority);
+}
+
+function stablePrioritySort<Value>(
+  values: readonly Value[],
+  priorityFor: (value: Value) => DeferredPriority | undefined,
+): Value[] {
+  return values
+    .map((value, index) => ({ index, priority: priorityRank(priorityFor(value)), value }))
+    .sort((left, right) => right.priority - left.priority || left.index - right.index)
+    .map((entry) => entry.value);
+}
+
+function priorityRank(priority: DeferredPriority | undefined): number {
+  if (typeof priority === 'number') return priority;
+
+  switch (priority) {
+    case 'high':
+      return 1;
+    case 'low':
+      return -1;
+    case 'normal':
+    case undefined:
+      return 0;
+  }
 }
 
 function escapeHtml(value: string): string {

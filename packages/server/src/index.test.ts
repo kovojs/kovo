@@ -150,6 +150,47 @@ describe('server mutation primitives', () => {
     });
   });
 
+  it('orders deferred stream chunks and fragments by priority while keeping query JSON first', () => {
+    expect(
+      renderDeferredStream({
+        chunks: [
+          {
+            fragments: [{ html: '<section>low</section>', target: 'low' }],
+            priority: 'low',
+            queries: [{ name: 'lowQuery', value: { ready: true } }],
+          },
+          {
+            fragments: [
+              { html: '<section>normal</section>', target: 'normal' },
+              { html: '<section>critical</section>', priority: 5, target: 'critical&details' },
+            ],
+            priority: 'high',
+            queries: [{ name: 'criticalQuery', value: { ready: true } }],
+          },
+        ],
+        shell: '<!doctype html><html><body><fw-defer target="critical&details"></fw-defer>',
+      }),
+    ).toEqual({
+      body: [
+        '<!doctype html><html><body><fw-defer target="critical&details"></fw-defer>',
+        '--jiso-boundary',
+        '<fw-query name="criticalQuery">{"ready":true}</fw-query>',
+        '<fw-fragment target="critical&amp;details" priority="5"><section>critical</section></fw-fragment>',
+        '<fw-fragment target="normal"><section>normal</section></fw-fragment>',
+        '--jiso-boundary',
+        '<fw-query name="lowQuery">{"ready":true}</fw-query>',
+        '<fw-fragment target="low"><section>low</section></fw-fragment>',
+        '--jiso-boundary--',
+        '',
+      ].join('\n'),
+      headers: {
+        'Content-Type': 'text/html; charset=utf-8',
+        'Transfer-Encoding': 'chunked',
+      },
+      status: 200,
+    });
+  });
+
   it('coerces FormData once through the declared schema', async () => {
     const addToCart = mutation('cart/add', {
       input: s.object({
