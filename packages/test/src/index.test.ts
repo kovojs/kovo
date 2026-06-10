@@ -220,6 +220,50 @@ describe('@jiso/test harness', () => {
     expect(() => verifier.assertCovered()).not.toThrow();
   });
 
+  it('warns when a declared write domain is never observed', () => {
+    const verifier = createDbVerifier(
+      {
+        'cart.addItem': {
+          touches: [
+            { domain: 'cart', keys: null, site: 'cart.domain.ts:1', via: 'cart_items' },
+            { domain: 'product', keys: null, site: 'cart.domain.ts:2', via: 'products' },
+          ],
+          unresolved: [],
+        },
+      },
+      { domainByTable: { cart_items: 'cart', products: 'product' } },
+    );
+    const db = verifier.wrap(createFakeDb());
+
+    db.write('cart_items', 'p1');
+
+    expect(verifier.diagnostics()).toEqual([
+      {
+        code: 'FW403',
+        domain: 'product',
+        message: 'Declared domain was never observed written.',
+        severity: 'warn',
+      },
+    ]);
+  });
+
+  it('does not warn for declared write domains observed under instrumentation', () => {
+    const verifier = createDbVerifier(
+      {
+        'cart.addItem': {
+          touches: [{ domain: 'cart', keys: null, site: 'cart.domain.ts:1', via: 'cart_items' }],
+          unresolved: [],
+        },
+      },
+      { domainByTable: { cart_items: 'cart' } },
+    );
+    const db = verifier.wrap(createFakeDb());
+
+    db.write('cart_items', 'p1');
+
+    expect(verifier.diagnostics()).toEqual([]);
+  });
+
   it('verifies observed query reads against declared domains', () => {
     const verifier = createDbVerifier({}, { domainByTable: { cart_items: 'cart' } });
     const db = verifier.wrap(createFakeDb());

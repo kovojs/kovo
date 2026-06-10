@@ -1,4 +1,5 @@
 export type { DiagnosticCode } from '@jiso/core';
+import { diagnosticDefinitions, type DiagnosticCode, type DiagnosticSeverity } from '@jiso/core';
 import type { TouchGraph } from '@jiso/drizzle';
 import {
   type MutationDefinition,
@@ -78,9 +79,17 @@ export interface ObservedDbOperation {
   table: string;
 }
 
+export interface DbVerificationDiagnostic {
+  code: DiagnosticCode;
+  domain: string;
+  message: string;
+  severity: DiagnosticSeverity;
+}
+
 export interface DbVerifier {
   assertCovered(): void;
   assertReadsCovered(domains: readonly string[]): void;
+  diagnostics(): DbVerificationDiagnostic[];
   observed: readonly ObservedDbOperation[];
   wrap<Db>(db: Db): Db;
 }
@@ -154,6 +163,29 @@ export function createDbVerifier(touchGraph: TouchGraph, config: DbVerificationC
         const readDomains = uncovered.map((operation) => operation.domain).join(', ');
         throw new Error(`FW407 Query read from undeclared domain: ${readDomains}`);
       }
+    },
+    diagnostics(): DbVerificationDiagnostic[] {
+      const observedWrites = new Set(
+        observed
+          .filter(
+            (operation): operation is ObservedDbOperation & { domain: string } =>
+              operation.kind === 'write' && operation.domain !== undefined,
+          )
+          .map((operation) => operation.domain),
+      );
+      const declaredWrites = new Set(
+        Object.values(touchGraph).flatMap((entry) => entry.touches.map((touch) => touch.domain)),
+      );
+
+      return [...declaredWrites]
+        .filter((domain) => !observedWrites.has(domain))
+        .sort()
+        .map((domain) => ({
+          code: 'FW403',
+          domain,
+          message: diagnosticDefinitions.FW403.message,
+          severity: diagnosticDefinitions.FW403.severity,
+        }));
     },
     observed,
     wrap<Db>(db: Db): Db {
