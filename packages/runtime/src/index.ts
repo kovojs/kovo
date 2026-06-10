@@ -132,9 +132,12 @@ export type QueryUpdatePlan<Value = unknown> = (value: Value) => void;
 export interface QueryStore {
   get<Value = unknown>(name: string): Value | undefined;
   hydrate(script: QueryScriptLike): void;
+  snapshot(names: readonly string[]): QuerySnapshot;
   set<Value = unknown>(name: string, value: Value): void;
   subscribe<Value = unknown>(name: string, plan: QueryUpdatePlan<Value>): () => void;
 }
+
+export type QuerySnapshot = Map<string, unknown>;
 
 export interface QueryScriptLike {
   getAttribute(name: string): string | null;
@@ -154,6 +157,15 @@ export function createQueryStore(): QueryStore {
       if (!name) return;
 
       this.set(name, JSON.parse(script.textContent ?? 'null'));
+    },
+    snapshot(names: readonly string[]): QuerySnapshot {
+      const snapshot = new Map<string, unknown>();
+
+      for (const name of names) {
+        snapshot.set(name, structuredClone(values.get(name)));
+      }
+
+      return snapshot;
     },
     set<Value = unknown>(name: string, value: Value): void {
       values.set(name, value);
@@ -175,6 +187,50 @@ export function createQueryStore(): QueryStore {
         existing.delete(plan as QueryUpdatePlan);
       };
     },
+  };
+}
+
+export type OptimisticTransform<Input = unknown, Value = unknown> = (
+  current: Value,
+  input: Input,
+) => Value;
+
+export interface OptimisticPlan<Input = unknown> {
+  queue?: string;
+  transforms: Record<string, OptimisticTransform<Input>>;
+}
+
+export interface PendingOptimism {
+  commit(): void;
+  restore(): void;
+  snapshot: QuerySnapshot;
+}
+
+export function applyOptimisticTransforms<Input>(
+  store: QueryStore,
+  input: Input,
+  plan: OptimisticPlan<Input>,
+): PendingOptimism {
+  const queryNames = Object.keys(plan.transforms);
+  const snapshot = store.snapshot(queryNames);
+
+  for (const queryName of queryNames) {
+    const transform = plan.transforms[queryName];
+    if (!transform) continue;
+
+    store.set(queryName, transform(store.get(queryName), input));
+  }
+
+  return {
+    commit() {
+      snapshot.clear();
+    },
+    restore() {
+      for (const [queryName, value] of snapshot) {
+        store.set(queryName, value);
+      }
+    },
+    snapshot,
   };
 }
 

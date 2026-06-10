@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 
 import {
   applyFragments,
+  applyOptimisticTransforms,
   applyMutationResponseToDom,
   applyMutationResponse,
   createQueryStore,
@@ -207,6 +208,53 @@ describe('query store', () => {
     });
 
     expect(store.get('cart')).toEqual({ count: 6 });
+  });
+
+  it('applies hand-written optimistic transforms through query update plans', () => {
+    const store = createQueryStore();
+    const plan = vi.fn();
+    store.set('cart', { count: 1 });
+    store.subscribe('cart', plan);
+
+    const pending = applyOptimisticTransforms(
+      store,
+      { quantity: 2 },
+      {
+        transforms: {
+          cart(current, input) {
+            const cart = current as { count: number };
+            return { count: cart.count + input.quantity };
+          },
+        },
+      },
+    );
+
+    expect(store.get('cart')).toEqual({ count: 3 });
+    expect(plan).toHaveBeenLastCalledWith({ count: 3 });
+    pending.commit();
+    expect(pending.snapshot.size).toBe(0);
+  });
+
+  it('restores optimistic snapshots on mutation error', () => {
+    const store = createQueryStore();
+    store.set('cart', { count: 1 });
+
+    const pending = applyOptimisticTransforms(
+      store,
+      { quantity: 2 },
+      {
+        transforms: {
+          cart(current, input) {
+            const cart = current as { count: number };
+            return { count: cart.count + input.quantity };
+          },
+        },
+      },
+    );
+
+    expect(store.get('cart')).toEqual({ count: 3 });
+    pending.restore();
+    expect(store.get('cart')).toEqual({ count: 1 });
   });
 
   it('applies fragment chunks through the morph adapter', () => {
