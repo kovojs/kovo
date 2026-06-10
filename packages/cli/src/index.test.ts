@@ -47,4 +47,39 @@ describe('fw check', () => {
         'fw-check/v1\nWARN FW406 cart.domain.ts:20 Statically un-analyzable write site; manual touches required.\n',
     });
   });
+
+  it('fails when a query reads a domain no mutation can invalidate', () => {
+    expect(
+      fwCheck({
+        queries: [{ domains: ['cart', 'product'], query: 'productPage' }],
+        touchGraph: {
+          'cart.addItem': {
+            touches: [{ domain: 'cart', keys: null, site: 'cart.domain.ts:1', via: 'cart_items' }],
+            unresolved: [],
+          },
+        },
+      }),
+    ).toEqual({
+      exitCode: 1,
+      output:
+        'fw-check/v1\nERROR FW407 productPage reads product but no mutation touch graph writes that domain.\n',
+    });
+  });
+
+  it('accepts query read domains covered by the touch graph', () => {
+    expect(
+      fwCheck({
+        queries: [{ domains: ['cart'], query: 'cart' }],
+        touchGraph: {
+          'cart.addItem': {
+            touches: [{ domain: 'cart', keys: null, site: 'cart.domain.ts:1', via: 'cart_items' }],
+            unresolved: [],
+          },
+        },
+      }),
+    ).toEqual({
+      exitCode: 0,
+      output: 'fw-check/v1\nOK\n',
+    });
+  });
 });

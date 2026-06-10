@@ -6,6 +6,7 @@ import { diagnosticsForTouchGraph, type TouchGraph } from '@jiso/drizzle';
 
 export interface FwCheckInput {
   optimistic?: OptimisticCoverage[];
+  queries?: QueryReadSet[];
   touchGraph?: TouchGraph;
 }
 
@@ -13,6 +14,11 @@ export interface OptimisticCoverage {
   mutation: string;
   query: string;
   status: 'UNHANDLED' | 'await-fragment' | 'hand-written';
+}
+
+export interface QueryReadSet {
+  domains: readonly string[];
+  query: string;
 }
 
 export interface FwCheckResult {
@@ -59,6 +65,12 @@ export function fwCheck(input: FwCheckInput): FwCheckResult {
     );
   }
 
+  for (const missed of missedQueryInvalidations(input.queries ?? [], input.touchGraph ?? {})) {
+    lines.push(
+      `ERROR FW407 ${missed.query} reads ${missed.domain} but no mutation touch graph writes that domain.`,
+    );
+  }
+
   if (lines.length === 1) {
     lines.push('OK');
   }
@@ -68,6 +80,21 @@ export function fwCheck(input: FwCheckInput): FwCheckResult {
     exitCode: failed ? 1 : 0,
     output: `${lines.join('\n')}\n`,
   };
+}
+
+function missedQueryInvalidations(
+  queries: readonly QueryReadSet[],
+  touchGraph: TouchGraph,
+): { domain: string; query: string }[] {
+  const touchedDomains = new Set(
+    Object.values(touchGraph).flatMap((entry) => entry.touches.map((touch) => touch.domain)),
+  );
+
+  return queries.flatMap((query) =>
+    query.domains
+      .filter((domain) => !touchedDomains.has(domain))
+      .map((domain) => ({ domain, query: query.query })),
+  );
 }
 
 if (import.meta.url === `file://${process.argv[1]}`) {
