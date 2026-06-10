@@ -1,6 +1,6 @@
 export type { DiagnosticCode } from '@jiso/core';
 import { diagnosticDefinitions, type DiagnosticCode, type DiagnosticSeverity } from '@jiso/core';
-import type { TouchGraph } from '@jiso/drizzle';
+import type { TouchGraph, TouchSite } from '@jiso/drizzle';
 import {
   type MutationDefinition,
   type MutationResult,
@@ -75,6 +75,7 @@ export interface DbVerificationConfig {
 }
 
 export interface ObservedDbOperation {
+  branch: string | undefined;
   domain: string | undefined;
   kind: 'read' | 'write';
   rowKey: string | undefined;
@@ -82,14 +83,17 @@ export interface ObservedDbOperation {
 }
 
 export interface DbObservationOptions {
+  branch?: string;
   rowKey?: string;
 }
 
 export interface DbVerificationDiagnostic {
+  branch?: string;
   code: DiagnosticCode;
   domain: string;
   message: string;
   severity: DiagnosticSeverity;
+  site?: string;
 }
 
 export interface DbVerifier {
@@ -183,19 +187,41 @@ export function createDbVerifier(touchGraph: TouchGraph, config: DbVerificationC
           )
           .map((operation) => operation.domain),
       );
+      const observedBranches = new Set(
+        observed
+          .filter(
+            (operation): operation is ObservedDbOperation & { branch: string } =>
+              operation.kind === 'write' && operation.branch !== undefined,
+          )
+          .map((operation) => operation.branch),
+      );
       const declaredWrites = new Set(
         Object.values(touchGraph).flatMap((entry) => entry.touches.map((touch) => touch.domain)),
       );
+      const unobservedBranches: DbVerificationDiagnostic[] = Object.values(touchGraph)
+        .flatMap((entry) => entry.touches)
+        .filter((touch) => hasUnobservedBranch(touch, observedBranches))
+        .sort((left, right) => left.branch.localeCompare(right.branch))
+        .map((touch) => ({
+          branch: touch.branch,
+          code: 'FW405' as const,
+          domain: touch.domain,
+          message: diagnosticDefinitions.FW405.message,
+          severity: diagnosticDefinitions.FW405.severity,
+          site: touch.site,
+        }));
 
-      return [...declaredWrites]
+      const unobservedDomains: DbVerificationDiagnostic[] = [...declaredWrites]
         .filter((domain) => !observedWrites.has(domain))
         .sort()
         .map((domain) => ({
-          code: 'FW403',
+          code: 'FW403' as const,
           domain,
           message: diagnosticDefinitions.FW403.message,
           severity: diagnosticDefinitions.FW403.severity,
         }));
+
+      return [...unobservedBranches, ...unobservedDomains];
     },
     observed,
     wrap<Db>(db: Db): Db {
@@ -302,6 +328,7 @@ function observe(
   observed: ObservedDbOperation[],
 ): void {
   observed.push({
+    branch: observationOptions(args)?.branch,
     domain: config.domainByTable[table],
     kind,
     rowKey: observationOptions(args)?.rowKey,
@@ -334,8 +361,22 @@ function assertRowKeys(
 function observationOptions(args: readonly unknown[]): DbObservationOptions | undefined {
   const last = args.at(-1);
 
-  if (typeof last !== 'object' || last === null || !('rowKey' in last)) return undefined;
+  if (typeof last !== 'object' || last === null || (!('branch' in last) && !('rowKey' in last))) {
+    return undefined;
+  }
 
   const rowKey = (last as { rowKey?: unknown }).rowKey;
-  return typeof rowKey === 'string' ? { rowKey } : undefined;
+  const branch = (last as { branch?: unknown }).branch;
+
+  return {
+    ...(typeof branch === 'string' ? { branch } : {}),
+    ...(typeof rowKey === 'string' ? { rowKey } : {}),
+  };
+}
+
+function hasUnobservedBranch(
+  touch: TouchSite,
+  observedBranches: ReadonlySet<string>,
+): touch is TouchSite & { branch: string } {
+  return touch.branch !== undefined && !observedBranches.has(touch.branch);
 }

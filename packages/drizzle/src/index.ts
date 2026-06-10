@@ -11,6 +11,7 @@ export function jiso(annotation: JisoTableAnnotation): JisoTableAnnotation {
 }
 
 export interface TouchSite {
+  branch?: string;
   domain: string;
   keys: null | string;
   site: string;
@@ -35,6 +36,7 @@ export interface DomainRegistryInput {
 }
 
 export interface WriteSummaryInput {
+  branch?: string;
   operation: string;
   site: string;
   table: JisoTableAnnotation & { name: string };
@@ -74,6 +76,7 @@ export function createTouchGraphEntry(input: {
   return {
     touches: [...(input.writes ?? [])]
       .map((write) => ({
+        ...(write.branch === undefined ? {} : { branch: write.branch }),
         domain: write.table.domain,
         keys: write.writeKey ?? null,
         site: write.site,
@@ -98,7 +101,7 @@ export function serializeTouchGraph(graph: TouchGraph): string {
     lines.push('    touches: [');
     for (const touch of entry.touches) {
       lines.push(
-        `      { domain: ${JSON.stringify(touch.domain)}, via: ${JSON.stringify(touch.via)}, site: ${JSON.stringify(touch.site)}, keys: ${JSON.stringify(touch.keys)} },`,
+        `      { domain: ${JSON.stringify(touch.domain)}, via: ${JSON.stringify(touch.via)}, site: ${JSON.stringify(touch.site)}, keys: ${JSON.stringify(touch.keys)}${touch.branch === undefined ? '' : `, branch: ${JSON.stringify(touch.branch)}`} },`,
       );
     }
     lines.push('    ],');
@@ -131,6 +134,7 @@ function compareTouchSites(left: TouchSite, right: TouchSite): number {
   return (
     left.domain.localeCompare(right.domain) ||
     left.via.localeCompare(right.via) ||
+    (left.branch ?? '').localeCompare(right.branch ?? '') ||
     left.site.localeCompare(right.site)
   );
 }

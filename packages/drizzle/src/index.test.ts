@@ -16,6 +16,7 @@ describe('@jiso/drizzle touch graph helpers', () => {
     const entry = createTouchGraphEntry({
       writes: [
         {
+          branch: 'stock-check',
           operation: 'update',
           site: 'cart.domain.ts:12',
           table: products,
@@ -32,7 +33,13 @@ describe('@jiso/drizzle touch graph helpers', () => {
     expect(entry).toEqual({
       touches: [
         { domain: 'cart', keys: null, site: 'cart.domain.ts:8', via: 'cart_items' },
-        { domain: 'product', keys: 'arg:productId', site: 'cart.domain.ts:12', via: 'products' },
+        {
+          branch: 'stock-check',
+          domain: 'product',
+          keys: 'arg:productId',
+          site: 'cart.domain.ts:12',
+          via: 'products',
+        },
       ],
       unresolved: [],
     });
@@ -43,11 +50,21 @@ describe('@jiso/drizzle touch graph helpers', () => {
       serializeTouchGraph({
         'cart.addItem': createTouchGraphEntry({
           unresolved: [{ operation: 'raw', site: 'cart.domain.ts:20' }],
+          writes: [
+            {
+              branch: 'stock-check',
+              operation: 'update',
+              site: 'cart.domain.ts:12',
+              table: { ...jiso({ domain: 'product', key: 'id' }), name: 'products' },
+              writeKey: 'arg:productId',
+            },
+          ],
         }),
       }),
     ).toBe(`export const touchGraph = {
   "cart.addItem": {
     touches: [
+      { domain: "product", via: "products", site: "cart.domain.ts:12", keys: "arg:productId", branch: "stock-check" },
     ],
     unresolved: [
       { code: 'FW406', site: "cart.domain.ts:20", message: "Statically un-analyzable write site; manual touches required." },

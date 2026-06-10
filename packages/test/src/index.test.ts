@@ -5,8 +5,8 @@ import { mutation, s } from '@jiso/server';
 import { createDbVerifier, createJisoTestHarness, jisoTest, propertyTest } from './index.js';
 
 interface FakeDb {
-  read(table: string, options?: { rowKey?: string }): unknown[];
-  write(table: string, value: unknown, options?: { rowKey?: string }): void;
+  read(table: string, options?: { branch?: string; rowKey?: string }): unknown[];
+  write(table: string, value: unknown, options?: { branch?: string; rowKey?: string }): void;
 }
 
 function createFakeDb(): FakeDb {
@@ -260,6 +260,68 @@ describe('@jiso/test harness', () => {
     const db = verifier.wrap(createFakeDb());
 
     db.write('cart_items', 'p1');
+
+    expect(verifier.diagnostics()).toEqual([]);
+  });
+
+  it('warns when a declared conditional write branch is never observed', () => {
+    const verifier = createDbVerifier(
+      {
+        'cart.addItem': {
+          touches: [
+            {
+              branch: 'stock-reserve',
+              domain: 'product',
+              keys: 'arg:productId',
+              site: 'cart.domain.ts:12',
+              via: 'products',
+            },
+          ],
+          unresolved: [],
+        },
+      },
+      { domainByTable: { products: 'product' } },
+    );
+
+    expect(verifier.diagnostics()).toEqual([
+      {
+        branch: 'stock-reserve',
+        code: 'FW405',
+        domain: 'product',
+        message: 'Conditional write branch was never executed under instrumentation.',
+        severity: 'warn',
+        site: 'cart.domain.ts:12',
+      },
+      {
+        code: 'FW403',
+        domain: 'product',
+        message: 'Declared domain was never observed written.',
+        severity: 'warn',
+      },
+    ]);
+  });
+
+  it('does not warn for conditional write branches observed under instrumentation', () => {
+    const verifier = createDbVerifier(
+      {
+        'cart.addItem': {
+          touches: [
+            {
+              branch: 'stock-reserve',
+              domain: 'product',
+              keys: 'arg:productId',
+              site: 'cart.domain.ts:12',
+              via: 'products',
+            },
+          ],
+          unresolved: [],
+        },
+      },
+      { domainByTable: { products: 'product' } },
+    );
+    const db = verifier.wrap(createFakeDb());
+
+    db.write('products', { id: 'p1' }, { branch: 'stock-reserve' });
 
     expect(verifier.diagnostics()).toEqual([]);
   });
