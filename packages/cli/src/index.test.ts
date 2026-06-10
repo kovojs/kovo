@@ -4,7 +4,7 @@ import { join } from 'node:path';
 
 import { describe, expect, it, vi } from 'vitest';
 
-import { fwCheck, fwExplain, main } from './index.js';
+import { fwAudit, fwCheck, fwExplain, main } from './index.js';
 
 describe('fw check', () => {
   it('emits stable OK output for an empty semantic graph', () => {
@@ -395,6 +395,89 @@ describe('fw check', () => {
       output:
         'fw-check/v1\nWARN UNGUARDED inventory/sync mutation is reachable without an auth guard.\nWARN INVALIDATE inventory/sync -> product Manual invalidate escape hatch requires review.\n',
     });
+  });
+});
+
+describe('fw audit', () => {
+  it('prints stable unguarded and manual invalidate audit output', () => {
+    expect(
+      fwAudit({
+        mutations: [
+          {
+            guards: ['rateLimit:session'],
+            invalidates: ['cart'],
+            key: 'cart/add',
+            writes: ['cart'],
+          },
+          { guards: ['authed'], key: 'cart/remove' },
+          { guards: ['role:admin'], key: 'admin/refund' },
+          { key: 'inventory/sync', manualInvalidates: ['product'], writes: ['product'] },
+        ],
+      }),
+    ).toEqual({
+      exitCode: 0,
+      output: [
+        'fw-audit/v1',
+        'UNGUARDED',
+        'MUTATION cart/add guards=rateLimit:session writes=cart invalidates=cart manual-invalidates=-',
+        'MUTATION inventory/sync guards=- writes=product invalidates=- manual-invalidates=product',
+        'MANUAL-INVALIDATES',
+        'MUTATION inventory/sync domains=product',
+        'SUMMARY unguarded=2 manual-invalidates=1',
+        '',
+      ].join('\n'),
+    });
+  });
+
+  it('prints OK when there are no audit findings', () => {
+    expect(
+      fwAudit({
+        mutations: [
+          { guards: ['authed'], key: 'cart/remove' },
+          { guards: ['role:admin'], key: 'admin/refund' },
+        ],
+      }),
+    ).toEqual({
+      exitCode: 0,
+      output: 'fw-audit/v1\nOK\n',
+    });
+  });
+
+  it('accepts fw audit as a CLI command', () => {
+    const tempDir = mkdtempSync(join(tmpdir(), 'jiso-cli-audit-'));
+    const graphPath = join(tempDir, 'graph.json');
+    let output = '';
+    const stdoutWrite = vi.spyOn(process.stdout, 'write').mockImplementation(((chunk) => {
+      output += chunk.toString();
+      return true;
+    }) as typeof process.stdout.write);
+
+    try {
+      writeFileSync(
+        graphPath,
+        JSON.stringify({
+          mutations: [
+            { guards: ['authed'], key: 'cart/remove' },
+            { guards: ['rateLimit:session'], key: 'cart/add', writes: ['cart'] },
+          ],
+        }),
+      );
+
+      expect(main(['audit', graphPath])).toBe(0);
+    } finally {
+      stdoutWrite.mockRestore();
+      rmSync(tempDir, { force: true, recursive: true });
+    }
+
+    expect(output).toBe(
+      [
+        'fw-audit/v1',
+        'UNGUARDED',
+        'MUTATION cart/add guards=rateLimit:session writes=cart invalidates=- manual-invalidates=-',
+        'SUMMARY unguarded=1 manual-invalidates=0',
+        '',
+      ].join('\n'),
+    );
   });
 });
 

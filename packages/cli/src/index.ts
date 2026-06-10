@@ -95,6 +95,7 @@ export interface FwCheckResult {
 
 const outputVersion = 'fw-check/v1';
 const explainOutputVersion = 'fw-explain/v1';
+const auditOutputVersion = 'fw-audit/v1';
 
 export function main(args: readonly string[] = process.argv.slice(2)): number {
   if (args.length === 0) {
@@ -106,6 +107,15 @@ export function main(args: readonly string[] = process.argv.slice(2)): number {
     const inputPath = args[1];
     const input = inputPath ? JSON.parse(readFileSync(inputPath, 'utf8')) : {};
     const result = fwCheck(input);
+    const stream = result.exitCode === 0 ? process.stdout : process.stderr;
+    stream.write(result.output);
+    return result.exitCode;
+  }
+
+  if (args[0] === 'audit') {
+    const inputPath = args[1];
+    const input = inputPath ? JSON.parse(readFileSync(inputPath, 'utf8')) : {};
+    const result = fwAudit(input);
     const stream = result.exitCode === 0 ? process.stdout : process.stderr;
     stream.write(result.output);
     return result.exitCode;
@@ -248,6 +258,48 @@ export function fwExplain(input: FwExplainInput, options: FwExplainOptions): FwC
   lines.push(`prefetch: ${page.prefetch ?? false}`);
   lines.push(`modulepreloads: ${list(page.modulepreloads)}`);
   lines.push(`queries: ${list(page.queries)}`);
+  return ok(lines);
+}
+
+export function fwAudit(input: FwExplainInput): FwCheckResult {
+  const unguarded = unguardedMutations(input.mutations ?? []);
+  const manualInvalidates = (input.mutations ?? []).filter(
+    (mutation) => (mutation.manualInvalidates?.length ?? 0) > 0,
+  );
+  const lines = [auditOutputVersion];
+
+  if (unguarded.length > 0) {
+    lines.push('UNGUARDED');
+
+    for (const mutation of unguarded) {
+      lines.push(
+        [
+          `MUTATION ${mutation.key}`,
+          `guards=${list(mutation.guards)}`,
+          `writes=${list(mutation.writes)}`,
+          `invalidates=${list(mutation.invalidates)}`,
+          `manual-invalidates=${list(mutation.manualInvalidates)}`,
+        ].join(' '),
+      );
+    }
+  }
+
+  if (manualInvalidates.length > 0) {
+    lines.push('MANUAL-INVALIDATES');
+
+    for (const mutation of manualInvalidates) {
+      lines.push(`MUTATION ${mutation.key} domains=${list(mutation.manualInvalidates)}`);
+    }
+  }
+
+  if (lines.length === 1) {
+    lines.push('OK');
+  } else {
+    lines.push(
+      `SUMMARY unguarded=${unguarded.length} manual-invalidates=${manualInvalidates.length}`,
+    );
+  }
+
   return ok(lines);
 }
 
