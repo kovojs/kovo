@@ -480,6 +480,16 @@ export interface NoJsMutationResponse {
   status: 303 | 422;
 }
 
+export interface MutationEndpointRequest<
+  Request,
+  Value,
+> extends MutationWireRequestOptions<Request> {
+  redirectTo: string | ((result: MutationSuccess<Value>) => string);
+  renderFailurePage?: (failure: MutationFail) => string | Promise<string>;
+}
+
+export type MutationEndpointResponse = MutationWireResponse | NoJsMutationResponse;
+
 export type RoutePrefetch = 'conservative' | 'moderate' | false;
 
 export interface RouteMeta {
@@ -770,6 +780,29 @@ export async function renderMutationResponse<
       'FW-Changes': JSON.stringify(result.changes),
     },
     status: 200,
+  });
+}
+
+export async function renderMutationEndpointResponse<
+  const Key extends string,
+  InputSchema extends Schema<unknown>,
+  Errors extends Record<string, Schema<unknown>>,
+  Request,
+  Value,
+>(
+  definition: MutationDefinition<Key, InputSchema, Errors, Request, Value>,
+  endpointRequest: MutationEndpointRequest<Request, Value>,
+): Promise<MutationEndpointResponse> {
+  const wireRequest = mutationWireRequestFromHeaders(endpointRequest);
+  if (wireRequest.fragment) return renderMutationResponse(definition, wireRequest);
+
+  return renderNoJsMutationResponse(definition, {
+    rawInput: endpointRequest.rawInput,
+    redirectTo: endpointRequest.redirectTo,
+    ...(endpointRequest.renderFailurePage === undefined
+      ? {}
+      : { renderFailurePage: endpointRequest.renderFailurePage }),
+    request: endpointRequest.request,
   });
 }
 
