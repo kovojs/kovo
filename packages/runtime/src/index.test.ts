@@ -1,6 +1,8 @@
 import { describe, expect, it, vi } from 'vitest';
 
 import {
+  applyFragments,
+  applyMutationResponseToDom,
   applyMutationResponse,
   createQueryStore,
   dispatchDelegatedEvent,
@@ -43,6 +45,26 @@ class FakeBroadcastChannel {
 
   postMessage(message: unknown): void {
     this.messages.push(message);
+  }
+}
+
+class FakeMorphTarget {
+  html: string;
+
+  constructor(html = '') {
+    this.html = html;
+  }
+
+  replaceWithHtml(html: string): void {
+    this.html = html;
+  }
+}
+
+class FakeMorphRoot {
+  targets = new Map<string, FakeMorphTarget>();
+
+  findFragmentTarget(target: string): FakeMorphTarget | null {
+    return this.targets.get(target) ?? null;
   }
 }
 
@@ -185,5 +207,46 @@ describe('query store', () => {
     });
 
     expect(store.get('cart')).toEqual({ count: 6 });
+  });
+
+  it('applies fragment chunks through the morph adapter', () => {
+    const root = new FakeMorphRoot();
+    root.targets.set('cart-badge', new FakeMorphTarget('<cart-badge>old</cart-badge>'));
+
+    expect(
+      applyFragments(root, [
+        { html: '<cart-badge>new</cart-badge>', target: 'cart-badge' },
+        { html: '<aside>ignored</aside>', target: 'missing' },
+      ]),
+    ).toEqual(['cart-badge']);
+    expect(root.targets.get('cart-badge')?.html).toBe('<cart-badge>new</cart-badge>');
+  });
+
+  it('updates query data and morphs fragments from one mutation response', () => {
+    const store = createQueryStore();
+    const root = new FakeMorphRoot();
+    root.targets.set('cart-badge', new FakeMorphTarget());
+
+    const result = applyMutationResponseToDom({
+      body: [
+        '<fw-query name="cart">{"count":7}</fw-query>',
+        '<fw-fragment target="cart-badge"><cart-badge><span data-bind="cart.count">7</span></cart-badge></fw-fragment>',
+      ].join('\n'),
+      root,
+      store,
+    });
+
+    expect(result).toEqual({
+      appliedFragments: ['cart-badge'],
+      fragments: [
+        {
+          html: '<cart-badge><span data-bind="cart.count">7</span></cart-badge>',
+          target: 'cart-badge',
+        },
+      ],
+      queries: ['cart'],
+    });
+    expect(store.get('cart')).toEqual({ count: 7 });
+    expect(root.targets.get('cart-badge')?.html).toContain('data-bind="cart.count"');
   });
 });

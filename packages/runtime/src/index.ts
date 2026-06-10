@@ -194,6 +194,16 @@ export interface FragmentChunk {
   target: string;
 }
 
+export interface MorphTarget {
+  replaceWithHtml(html: string): void;
+}
+
+export interface MorphRoot {
+  findFragmentTarget(target: string): MorphTarget | null;
+}
+
+export type MorphFragment = (target: MorphTarget, html: string) => void;
+
 export function applyMutationResponse(store: QueryStore, body: string): AppliedMutationResponse {
   const queries: string[] = [];
 
@@ -208,6 +218,38 @@ export function applyMutationResponse(store: QueryStore, body: string): AppliedM
   return {
     fragments: readFragmentChunks(body),
     queries,
+  };
+}
+
+export function applyFragments(
+  root: MorphRoot,
+  fragments: readonly FragmentChunk[],
+  morph: MorphFragment = replaceFragment,
+): string[] {
+  const applied: string[] = [];
+
+  for (const fragment of fragments) {
+    const target = root.findFragmentTarget(fragment.target);
+    if (!target) continue;
+
+    morph(target, fragment.html);
+    applied.push(fragment.target);
+  }
+
+  return applied;
+}
+
+export function applyMutationResponseToDom(options: {
+  body: string;
+  morph?: MorphFragment;
+  root: MorphRoot;
+  store: QueryStore;
+}): AppliedMutationResponse & { appliedFragments: string[] } {
+  const applied = applyMutationResponse(options.store, options.body);
+
+  return {
+    ...applied,
+    appliedFragments: applyFragments(options.root, applied.fragments, options.morph),
   };
 }
 
@@ -262,6 +304,10 @@ function readFragmentChunks(body: string): FragmentChunk[] {
   }
 
   return fragments;
+}
+
+function replaceFragment(target: MorphTarget, html: string): void {
+  target.replaceWithHtml(html);
 }
 
 function readAttribute(attrs: string, name: string): string | null {
