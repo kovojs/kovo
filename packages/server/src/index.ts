@@ -291,6 +291,7 @@ export interface MutationRegistry {
 export interface FragmentRenderer {
   errorBoundary?: ErrorBoundaryRenderer;
   render(input: unknown): string | Promise<string>;
+  stylesheets?: readonly (string | StylesheetAsset)[];
   target: string;
 }
 
@@ -368,6 +369,7 @@ export type DeferredPriority = 'high' | 'normal' | 'low' | number;
 export interface DeferredFragmentChunk {
   html: string;
   priority?: DeferredPriority;
+  stylesheets?: readonly (string | StylesheetAsset)[];
   target: string;
 }
 
@@ -501,8 +503,9 @@ function renderDeferredFragmentChunk(fragment: DeferredFragmentChunk): string {
   const priority = fragment.priority
     ? ` priority="${escapeAttribute(String(fragment.priority))}"`
     : '';
+  const stylesheets = renderStylesheetLinks(fragment.stylesheets ?? []);
 
-  return `<fw-fragment target="${escapeAttribute(fragment.target)}"${priority}>${fragment.html}</fw-fragment>`;
+  return `<fw-fragment target="${escapeAttribute(fragment.target)}"${priority}>${stylesheets}${fragment.html}</fw-fragment>`;
 }
 
 export async function runMutation<
@@ -734,7 +737,7 @@ async function renderFragmentChunks(
 
     try {
       chunks.push(
-        `<fw-fragment target="${escapeAttribute(renderer.target)}">${await renderer.render(input)}</fw-fragment>`,
+        `<fw-fragment target="${escapeAttribute(renderer.target)}">${renderStylesheetLinks(renderer.stylesheets ?? [])}${await renderer.render(input)}</fw-fragment>`,
       );
     } catch (error) {
       if (!renderer.errorBoundary) throw error;
@@ -828,6 +831,12 @@ function renderI18nCatalogs(i18nInput: PageHintOptions['i18n']): string[] {
     (catalog) =>
       `<script type="application/json" fw-i18n locale="${escapeAttribute(catalog.locale)}">${escapeScriptJson(JSON.stringify(catalog.messages))}</script>`,
   );
+}
+
+function renderStylesheetLinks(stylesheets: readonly (string | StylesheetAsset)[]): string {
+  return dedupeStylesheets(stylesheets)
+    .map((asset) => `<link rel="stylesheet" href="${escapeAttribute(asset.href)}">`)
+    .join('');
 }
 
 function renderDeferredQueryChunks(queries: readonly DeferredQueryChunk[]): string[] {

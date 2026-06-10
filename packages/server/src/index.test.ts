@@ -191,6 +191,27 @@ describe('server mutation primitives', () => {
     });
   });
 
+  it('delivers late stylesheets with deferred fragments', () => {
+    expect(
+      renderDeferredStream({
+        chunks: [
+          {
+            fragments: [
+              {
+                html: '<section class="reviews-card">Ready</section>',
+                stylesheets: ['/assets/reviews.css', '/assets/reviews.css'],
+                target: 'reviews:p1',
+              },
+            ],
+          },
+        ],
+        shell: '<!doctype html><html><body><fw-defer target="reviews:p1"></fw-defer>',
+      }).body,
+    ).toContain(
+      '<fw-fragment target="reviews:p1"><link rel="stylesheet" href="/assets/reviews.css"><section class="reviews-card">Ready</section></fw-fragment>',
+    );
+  });
+
   it('coerces FormData once through the declared schema', async () => {
     const addToCart = mutation('cart/add', {
       input: s.object({
@@ -512,6 +533,37 @@ describe('server mutation primitives', () => {
         'Content-Type': 'text/vnd.jiso.fragment+html; charset=utf-8',
         'FW-Changes': '[{"domain":"cart","input":{"productId":"p1"}}]',
       },
+      status: 200,
+    });
+  });
+
+  it('delivers late stylesheets with enhanced mutation fragments', async () => {
+    const addToCart = mutation('cart/add', {
+      input: s.object({ productId: s.string() }),
+      handler(input) {
+        return input;
+      },
+    });
+
+    await expect(
+      renderMutationResponse(addToCart, {
+        fragmentRenderers: [
+          {
+            render: () => '<cart-drawer class="drawer-open">Added</cart-drawer>',
+            stylesheets: [
+              '/assets/cart-drawer.css',
+              '/assets/cart-drawer.css',
+              { href: '/assets/theme.css', preload: false },
+            ],
+            target: 'cart-drawer',
+          },
+        ],
+        rawInput: { productId: 'p1' },
+        request: {},
+        targets: ['cart-drawer'],
+      }),
+    ).resolves.toMatchObject({
+      body: '<fw-fragment target="cart-drawer"><link rel="stylesheet" href="/assets/cart-drawer.css"><link rel="stylesheet" href="/assets/theme.css"><cart-drawer class="drawer-open">Added</cart-drawer></fw-fragment>',
       status: 200,
     });
   });
