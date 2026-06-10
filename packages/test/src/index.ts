@@ -73,7 +73,7 @@ export interface DbVerificationConfig {
 }
 
 export interface ObservedDbOperation {
-  domain: string;
+  domain: string | undefined;
   kind: 'read' | 'write';
   table: string;
 }
@@ -106,29 +106,53 @@ export function createDbVerifier(touchGraph: TouchGraph, config: DbVerificationC
 
   return {
     assertCovered(): void {
+      const unmappedWrites = observed.filter(
+        (operation) => operation.kind === 'write' && operation.domain === undefined,
+      );
+
+      if (unmappedWrites.length > 0) {
+        const tables = unmappedWrites.map((operation) => operation.table).join(', ');
+        throw new Error(`FW404 Write to unmapped table: ${tables}`);
+      }
+
       const allowedWrites = new Set(
         Object.values(touchGraph).flatMap((entry) => entry.touches.map((touch) => touch.domain)),
       );
       const hasFw406 = Object.values(touchGraph).some((entry) => entry.unresolved.length > 0);
       const uncovered = observed.filter(
         (operation) =>
-          operation.kind === 'write' && !allowedWrites.has(operation.domain) && !hasFw406,
+          operation.kind === 'write' &&
+          operation.domain !== undefined &&
+          !allowedWrites.has(operation.domain) &&
+          !hasFw406,
       );
 
       if (uncovered.length > 0) {
         const domains = uncovered.map((operation) => operation.domain).join(', ');
-        throw new Error(`Observed write outside static touch graph: ${domains}`);
+        throw new Error(`FW402 Write touched an undeclared domain: ${domains}`);
       }
     },
     assertReadsCovered(domains: readonly string[]): void {
+      const unmappedReads = observed.filter(
+        (operation) => operation.kind === 'read' && operation.domain === undefined,
+      );
+
+      if (unmappedReads.length > 0) {
+        const tables = unmappedReads.map((operation) => operation.table).join(', ');
+        throw new Error(`FW407 Query read from undeclared domain: ${tables}`);
+      }
+
       const allowedReads = new Set(domains);
       const uncovered = observed.filter(
-        (operation) => operation.kind === 'read' && !allowedReads.has(operation.domain),
+        (operation) =>
+          operation.kind === 'read' &&
+          operation.domain !== undefined &&
+          !allowedReads.has(operation.domain),
       );
 
       if (uncovered.length > 0) {
         const readDomains = uncovered.map((operation) => operation.domain).join(', ');
-        throw new Error(`Observed query read outside declared domains: ${readDomains}`);
+        throw new Error(`FW407 Query read from undeclared domain: ${readDomains}`);
       }
     },
     observed,
@@ -235,7 +259,7 @@ function observe(
   observed: ObservedDbOperation[],
 ): void {
   observed.push({
-    domain: config.domainByTable[table] ?? table,
+    domain: config.domainByTable[table],
     kind,
     table,
   });

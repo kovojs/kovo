@@ -140,7 +140,7 @@ describe('@jiso/test harness', () => {
     });
   });
 
-  it('fails verification for smuggled writes outside the static graph', async () => {
+  it('fails verification for writes to domains outside the static graph', async () => {
     const cartMutation = mutation('cart/add', {
       input: s.object({ productId: s.string() }),
       handler(input, request: { db: FakeDb }) {
@@ -165,7 +165,35 @@ describe('@jiso/test harness', () => {
     });
 
     await expect(harness.exec(cartMutation, { productId: 'p1' })).rejects.toThrow(
-      'Observed write outside static touch graph: audit',
+      'FW402 Write touched an undeclared domain: audit',
+    );
+  });
+
+  it('fails verification for writes to unmapped tables', async () => {
+    const cartMutation = mutation('cart/add', {
+      input: s.object({ productId: s.string() }),
+      handler(input, request: { db: FakeDb }) {
+        request.db.write('unknown_table', input.productId);
+        return input.productId;
+      },
+    });
+    const harness = createJisoTestHarness({
+      db: createFakeDb(),
+      touchGraph: {
+        'cart.addItem': {
+          touches: [{ domain: 'cart', keys: null, site: 'cart.domain.ts:1', via: 'cart_items' }],
+          unresolved: [],
+        },
+      },
+      verification: {
+        domainByTable: {
+          cart_items: 'cart',
+        },
+      },
+    });
+
+    await expect(harness.exec(cartMutation, { productId: 'p1' })).rejects.toThrow(
+      'FW404 Write to unmapped table: unknown_table',
     );
   });
 
@@ -212,7 +240,18 @@ describe('@jiso/test harness', () => {
     db.read('products');
 
     expect(() => verifier.assertReadsCovered(['cart'])).toThrow(
-      'Observed query read outside declared domains: product',
+      'FW407 Query read from undeclared domain: product',
+    );
+  });
+
+  it('fails read-side verification for unmapped query tables', () => {
+    const verifier = createDbVerifier({}, { domainByTable: { cart_items: 'cart' } });
+    const db = verifier.wrap(createFakeDb());
+
+    db.read('unmapped_table');
+
+    expect(() => verifier.assertReadsCovered(['cart'])).toThrow(
+      'FW407 Query read from undeclared domain: unmapped_table',
     );
   });
 });
