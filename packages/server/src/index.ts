@@ -1,13 +1,197 @@
 export type { DiagnosticCode, JsonValue } from '@jiso/core';
 
-export interface MutationDefinition<Input = unknown> {
-  key: string;
-  input?: Input;
+export interface Schema<T> {
+  parse(input: unknown): T;
 }
 
-export function mutation<const Key extends string, Input>(
+export type InferSchema<T> = T extends Schema<infer Value> ? Value : never;
+
+export const s = {
+  string(): Schema<string> {
+    return {
+      parse(input: unknown): string {
+        if (typeof input !== 'string') throw new Error('Expected string');
+        return input;
+      },
+    };
+  },
+  number(): NumberSchema {
+    return new NumberSchemaImpl();
+  },
+  object<const Shape extends Record<string, Schema<unknown>>>(
+    shape: Shape,
+  ): Schema<{ [Key in keyof Shape]: InferSchema<Shape[Key]> }> {
+    return {
+      parse(input: unknown): { [Key in keyof Shape]: InferSchema<Shape[Key]> } {
+        const record = formLikeToRecord(input);
+        const output: Partial<{ [Key in keyof Shape]: InferSchema<Shape[Key]> }> = {};
+
+        for (const [key, schema] of Object.entries(shape) as [keyof Shape, Shape[keyof Shape]][]) {
+          output[key] = schema.parse(record[String(key)]) as InferSchema<Shape[keyof Shape]>;
+        }
+
+        return output as { [Key in keyof Shape]: InferSchema<Shape[Key]> };
+      },
+    };
+  },
+};
+
+export interface NumberSchema extends Schema<number> {
+  default(value: number): NumberSchema;
+  int(): NumberSchema;
+  min(value: number): NumberSchema;
+}
+
+class NumberSchemaImpl implements NumberSchema {
+  #defaultValue: number | undefined;
+  #integer = false;
+  #minimum: number | undefined;
+
+  default(value: number): NumberSchema {
+    this.#defaultValue = value;
+    return this;
+  }
+
+  int(): NumberSchema {
+    this.#integer = true;
+    return this;
+  }
+
+  min(value: number): NumberSchema {
+    this.#minimum = value;
+    return this;
+  }
+
+  parse(input: unknown): number {
+    const value =
+      input === undefined || input === null || input === '' ? this.#defaultValue : input;
+    const number = typeof value === 'number' ? value : Number(value);
+
+    if (!Number.isFinite(number)) throw new Error('Expected number');
+    if (this.#integer && !Number.isInteger(number)) throw new Error('Expected integer');
+    if (this.#minimum !== undefined && number < this.#minimum) {
+      throw new Error(`Expected number >= ${this.#minimum}`);
+    }
+
+    return number;
+  }
+}
+
+export type Guard<Request> = (request: Request) => boolean | Promise<boolean>;
+
+export const guards = {
+  all<Request>(...items: Guard<Request>[]): Guard<Request> {
+    return async (request: Request) => {
+      for (const item of items) {
+        if (!(await item(request))) return false;
+      }
+
+      return true;
+    };
+  },
+};
+
+export interface MutationFail<Code extends string = string, Payload = unknown> {
+  error: {
+    code: Code;
+    payload: Payload;
+  };
+  ok: false;
+  status: 422;
+}
+
+export interface MutationSuccess<Value> {
+  ok: true;
+  value: Value;
+}
+
+export type MutationResult<Value> = MutationFail | MutationSuccess<Value>;
+
+export interface MutationContext<Errors extends Record<string, Schema<unknown>>> {
+  fail<const Code extends Extract<keyof Errors, string>>(
+    code: Code,
+    payload: InferSchema<Errors[Code]>,
+  ): MutationFail<Code, InferSchema<Errors[Code]>>;
+}
+
+export interface MutationDefinition<
+  Key extends string = string,
+  InputSchema extends Schema<unknown> = Schema<unknown>,
+  Errors extends Record<string, Schema<unknown>> = Record<string, Schema<unknown>>,
+  Request = unknown,
+  Value = unknown,
+> {
+  errors?: Errors;
+  guard?: Guard<Request>;
+  handler: (
+    input: InferSchema<InputSchema>,
+    request: Request,
+    context: MutationContext<Errors>,
+  ) => Promise<Value | MutationFail> | Value | MutationFail;
+  input: InputSchema;
+  key: Key;
+}
+
+export function mutation<
+  const Key extends string,
+  InputSchema extends Schema<unknown>,
+  Errors extends Record<string, Schema<unknown>> = Record<string, Schema<unknown>>,
+  Request = unknown,
+  Value = unknown,
+>(
   key: Key,
-  definition: Omit<MutationDefinition<Input>, 'key'>,
-): MutationDefinition<Input> & { key: Key } {
+  definition: Omit<MutationDefinition<Key, InputSchema, Errors, Request, Value>, 'key'>,
+): MutationDefinition<Key, InputSchema, Errors, Request, Value> & { key: Key } {
   return { ...definition, key };
+}
+
+export async function runMutation<
+  const Key extends string,
+  InputSchema extends Schema<unknown>,
+  Errors extends Record<string, Schema<unknown>>,
+  Request,
+  Value,
+>(
+  definition: MutationDefinition<Key, InputSchema, Errors, Request, Value>,
+  rawInput: unknown,
+  request: Request,
+): Promise<MutationResult<Value>> {
+  if (definition.guard && !(await definition.guard(request))) {
+    return {
+      error: { code: 'UNAUTHORIZED', payload: {} },
+      ok: false,
+      status: 422,
+    };
+  }
+
+  const input = definition.input.parse(rawInput) as InferSchema<InputSchema>;
+  const context: MutationContext<Errors> = {
+    fail(code, payload) {
+      return {
+        error: { code, payload },
+        ok: false,
+        status: 422,
+      };
+    },
+  };
+  const value = await definition.handler(input, request, context);
+
+  if (isMutationFail(value)) return value;
+  return { ok: true, value };
+}
+
+function isMutationFail(value: unknown): value is MutationFail {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    'ok' in value &&
+    value.ok === false &&
+    'error' in value
+  );
+}
+
+function formLikeToRecord(input: unknown): Record<string, unknown> {
+  if (input instanceof FormData) return Object.fromEntries(input.entries());
+  if (typeof input === 'object' && input !== null) return input as Record<string, unknown>;
+  throw new Error('Expected object input');
 }
