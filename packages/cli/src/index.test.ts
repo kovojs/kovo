@@ -635,6 +635,39 @@ describe('fw explain', () => {
     });
   });
 
+  it('explains missing optimistic coverage as derived UNHANDLED rows', () => {
+    expect(
+      fwExplain(
+        {
+          mutations: [{ guards: ['authed'], invalidates: ['cart'], key: 'cart/add' }],
+          optimistic: [
+            { mutation: 'cart/add', query: 'recommendations', status: 'await-fragment' },
+          ],
+          queries: [
+            { domains: ['cart'], query: 'cart' },
+            { domains: ['product'], query: 'recommendations' },
+          ],
+        },
+        { kind: 'mutation', optimistic: true, target: 'cart/add' },
+      ),
+    ).toEqual({
+      exitCode: 0,
+      output: [
+        'fw-explain/v1',
+        'MUTATION cart/add',
+        'guards: authed',
+        'writes: -',
+        'invalidates: cart',
+        'manual-invalidates: -',
+        'updates: -',
+        'OPTIMISTIC recommendations await-fragment',
+        'OPTIMISTIC cart UNHANDLED',
+        'OPTIMISTIC-SUMMARY total=2 hand-written=0 await-fragment=1 UNHANDLED=1',
+        '',
+      ].join('\n'),
+    });
+  });
+
   it('audits unguarded mutations with stable explain output', () => {
     const result = fwExplain(
       {

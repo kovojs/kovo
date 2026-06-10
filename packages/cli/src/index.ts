@@ -230,7 +230,7 @@ export function fwExplain(input: FwExplainInput, options: FwExplainOptions): FwC
     lines.push(`updates: ${listMutationUpdates(mutationUpdates(mutation, input))}`);
 
     if (options.optimistic) {
-      const coverages = input.optimistic?.filter((item) => item.mutation === mutation.key) ?? [];
+      const coverages = optimisticCoverageForMutation(mutation, input);
 
       for (const coverage of coverages) {
         lines.push(`OPTIMISTIC ${coverage.query} ${coverage.status}`);
@@ -500,6 +500,29 @@ function optimisticCoverageWarnings(
 
 function optimisticCoverageWarning(mutation: string, query: string): string {
   return `WARN FW310 ${mutation} -> ${query} Invalidated query lacks optimistic transform.`;
+}
+
+function optimisticCoverageForMutation(
+  mutation: MutationExplain,
+  input: FwExplainInput,
+): OptimisticCoverage[] {
+  const explicit = input.optimistic?.filter((item) => item.mutation === mutation.key) ?? [];
+  const covered = new Set(explicit.map((coverage) => coverage.query));
+  const domains = new Set([
+    ...(mutation.invalidates ?? mutation.writes ?? []),
+    ...(mutation.manualInvalidates ?? []),
+  ]);
+  const derivedUnhandled = (input.queries ?? [])
+    .filter((query) => query.domains.some((domain) => domains.has(domain)))
+    .filter((query) => !covered.has(query.query))
+    .map((query) => ({
+      mutation: mutation.key,
+      query: query.query,
+      status: 'UNHANDLED' as const,
+    }))
+    .sort((left, right) => left.query.localeCompare(right.query));
+
+  return [...explicit, ...derivedUnhandled];
 }
 
 function fixpointFailures(checks: readonly FixpointCheck[]): FixpointCheck[] {
