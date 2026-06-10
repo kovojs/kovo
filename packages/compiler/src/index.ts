@@ -634,8 +634,18 @@ function extractStaticComponentCss(source: string): string | null {
 function componentHostSelector(source: string, componentName: string): string {
   const explicitName = /component\(\s*['"]([^'"]+)['"]/.exec(source)?.[1];
   const hostName = explicitName ?? kebabCase(componentName);
+  const renderedHost = firstRenderedTagName(source);
 
-  return hostName.includes('-') ? hostName : `[fw-c="${escapeAttribute(hostName)}"]`;
+  return renderedHost === hostName ? hostName : `[fw-c="${escapeAttribute(hostName)}"]`;
+}
+
+function firstRenderedTagName(source: string): string | null {
+  const tag = findFirstRenderedOpeningTag(source);
+  if (!tag) return null;
+
+  return (
+    /^<(?<name>[A-Za-z][\w:-]*)/.exec(source.slice(tag.start, tag.end + 1))?.groups?.name ?? null
+  );
 }
 
 function eventPayloadPaths(source: string): string[] {

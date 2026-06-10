@@ -102,7 +102,7 @@ export const CartBadge = component('cart-badge', {
     button { color: teal; }
     .count { font-weight: 700; }
   \`,
-  render: () => <button><span class="count">1</span></button>,
+  render: () => <cart-badge><button><span class="count">1</span></button></cart-badge>,
 });
 `,
     });
@@ -126,6 +126,27 @@ export const CartBadge = component('cart-badge', {
     expect(result.files[0]?.source).toContain('export function renderSource()');
     expect(result.files[1]?.source).toContain('// no client handlers emitted');
     expect(result.files[3]?.source).toContain("'cart-badge': unknown;");
+    expect(() => assertFixpoint(result)).not.toThrow();
+  });
+
+  it('scopes native-host component CSS to the fw-c identity stamp', () => {
+    const result = compileComponentModule({
+      fileName: 'components/cart/cart-row.tsx',
+      source: `
+import { component } from '@jiso/core';
+
+export const CartRow = component('cart-row', {
+  styles: \`
+    td { padding: 0.5rem; }
+  \`,
+  render: () => <tr fw-c="cart-row"><td>p1</td></tr>,
+});
+`,
+    });
+
+    expect(result.files.find((file) => file.fileName.endsWith('.css'))?.source).toContain(
+      '@scope ([fw-c="cart-row"]) to (:scope [fw-c])',
+    );
     expect(() => assertFixpoint(result)).not.toThrow();
   });
 
