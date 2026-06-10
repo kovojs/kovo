@@ -120,6 +120,15 @@ class FakePendingRoot {
   }
 }
 
+function keyedListRow(key: string, text: string): StructuralMorphNode {
+  return {
+    key,
+    props: { 'data-row': key },
+    text,
+    type: 'li',
+  };
+}
+
 describe('runtime loader', () => {
   it('registers delegated capture listeners without importing handler modules', () => {
     const root = new FakeRoot();
@@ -584,6 +593,54 @@ describe('query store', () => {
     expect(result).toEqual(next);
     expect(result.children?.[0]).toBe(second);
     expect(result.children?.[1]).toBe(first);
+  });
+
+  it('preserves keyed list identity across append fragments and later reorders', () => {
+    const first = keyedListRow('product:1', 'Coffee');
+    const second = keyedListRow('product:2', 'Tea');
+    const current: StructuralMorphNode = {
+      children: [first, second],
+      type: 'ul',
+    };
+    const appended: StructuralMorphNode = {
+      children: [
+        keyedListRow('product:1', 'Coffee'),
+        keyedListRow('product:2', 'Tea'),
+        keyedListRow('product:3', 'Milk'),
+        keyedListRow('product:4', 'Honey'),
+      ],
+      type: 'ul',
+    };
+
+    const appendResult = morphStructuralTree(current, appended);
+    const third = appendResult.children?.[2];
+    const fourth = appendResult.children?.[3];
+
+    expect(appendResult.children).toEqual(appended.children);
+    expect(appendResult.children?.[0]).toBe(first);
+    expect(appendResult.children?.[1]).toBe(second);
+    expect(third).not.toBe(appended.children?.[2]);
+    expect(fourth).not.toBe(appended.children?.[3]);
+
+    const reordered: StructuralMorphNode = {
+      children: [
+        keyedListRow('product:2', 'Tea'),
+        keyedListRow('product:4', 'Honey'),
+        keyedListRow('product:5', 'Jam'),
+        keyedListRow('product:1', 'Coffee'),
+        keyedListRow('product:3', 'Milk'),
+      ],
+      type: 'ul',
+    };
+
+    const reorderResult = morphStructuralTree(appendResult, reordered);
+
+    expect(reorderResult.children).toEqual(reordered.children);
+    expect(reorderResult.children?.[0]).toBe(second);
+    expect(reorderResult.children?.[1]).toBe(fourth);
+    expect(reorderResult.children?.[2]).not.toBe(reordered.children?.[2]);
+    expect(reorderResult.children?.[3]).toBe(first);
+    expect(reorderResult.children?.[4]).toBe(third);
   });
 
   it('updates query data and morphs fragments from one mutation response', () => {
