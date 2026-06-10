@@ -13,6 +13,16 @@ import {
   type JsonValue,
 } from './index.js';
 
+declare module './index.js' {
+  interface QueryRegistry {
+    cart: { count: number };
+  }
+
+  interface MutationRegistry {
+    'cart/add': unknown;
+  }
+}
+
 describe('core authoring APIs', () => {
   it('preserves component names and definitions for compiler analysis', () => {
     const cart = query<'cart', { count: number }>('cart');
@@ -31,6 +41,17 @@ describe('core authoring APIs', () => {
   it('preserves query and form keys as typed authoring facts', () => {
     expect(query('cart').key).toBe('cart');
     expect(form('cart/add').key).toBe('cart/add');
+
+    const assertUnknownQuery = () => {
+      // @ts-expect-error query keys are checked against generated QueryRegistry facts.
+      query('missing-query');
+    };
+    const assertUnknownMutation = () => {
+      // @ts-expect-error form keys are checked against generated MutationRegistry facts.
+      form('missing/mutation');
+    };
+    expect(assertUnknownQuery).toBeTypeOf('function');
+    expect(assertUnknownMutation).toBeTypeOf('function');
   });
 
   it('preserves typed form input and failure facts', () => {

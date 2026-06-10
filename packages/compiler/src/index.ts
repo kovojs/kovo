@@ -1139,6 +1139,16 @@ export interface MutationRegistry {
 ${mutationRegistryLines}
 }
 
+declare module '@jiso/core' {
+  interface QueryRegistry {
+${queryRegistryLines}
+  }
+
+  interface MutationRegistry {
+${mutationRegistryLines}
+  }
+}
+
 export type DomainKey = ${domainKey};
 `;
 }

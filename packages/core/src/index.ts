@@ -45,7 +45,18 @@ export interface Query<Key extends string, Result> {
   result?: Result;
 }
 
-export function query<const Key extends string, Result = unknown>(key: Key): Query<Key, Result> {
+export interface QueryRegistry {}
+
+export interface MutationRegistry {}
+
+type RegistryKey<Registry> = keyof Registry extends never
+  ? string
+  : Extract<keyof Registry, string>;
+
+export function query<
+  const Key extends RegistryKey<QueryRegistry>,
+  Result = Key extends keyof QueryRegistry ? QueryRegistry[Key] : unknown,
+>(key: Key): Query<Key, Result> {
   return { key };
 }
 
@@ -81,7 +92,7 @@ type CompleteFormFields<
     : readonly ['Missing form fields', MissingFormFields<Definition, Fields>];
 
 export function form<
-  const Key extends string,
+  const Key extends RegistryKey<MutationRegistry>,
   Input extends Record<string, JsonValue> = Record<string, JsonValue>,
   Failure extends JsonValue = JsonValue,
 >(key: Key): Form<Key, Input, Failure> {

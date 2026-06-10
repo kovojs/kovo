@@ -75,6 +75,17 @@ describe('compileComponentModule', () => {
   'cart/add': typeof addToCart;
   'cart/remove': typeof removeFromCart;
 }`);
+    expect(registry).toContain(`declare module '@jiso/core' {
+  interface QueryRegistry {
+  'cart': typeof cartQuery;
+  'productGrid': typeof productGridQuery;
+  }
+
+  interface MutationRegistry {
+  'cart/add': typeof addToCart;
+  'cart/remove': typeof removeFromCart;
+  }
+}`);
     expect(registry).toContain('export type DomainKey = "cart" | "product";');
     expect(() => assertFixpoint(result)).not.toThrow();
   });
@@ -88,6 +99,15 @@ describe('compileComponentModule', () => {
     const registry = result.files[2]?.source ?? '';
     expect(registry).toMatch(/export interface QueryRegistry \{\n\n\}/);
     expect(registry).toMatch(/export interface MutationRegistry \{\n\n\}/);
+    expect(registry).toContain(`declare module '@jiso/core' {
+  interface QueryRegistry {
+
+  }
+
+  interface MutationRegistry {
+
+  }
+}`);
     expect(registry).toContain('export type DomainKey = never;');
   });
 
