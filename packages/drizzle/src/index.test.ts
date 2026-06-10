@@ -18,6 +18,7 @@ describe('@jiso/drizzle touch graph helpers', () => {
         {
           branch: 'stock-check',
           operation: 'update',
+          predicate: 'non-eq',
           site: 'cart.domain.ts:12',
           table: products,
           writeKey: 'arg:productId',
@@ -37,6 +38,7 @@ describe('@jiso/drizzle touch graph helpers', () => {
           branch: 'stock-check',
           domain: 'product',
           keys: 'arg:productId',
+          predicate: 'non-eq',
           site: 'cart.domain.ts:12',
           via: 'products',
         },
@@ -54,6 +56,7 @@ describe('@jiso/drizzle touch graph helpers', () => {
             {
               branch: 'stock-check',
               operation: 'update',
+              predicate: 'non-eq',
               site: 'cart.domain.ts:12',
               table: { ...jiso({ domain: 'product', key: 'id' }), name: 'products' },
               writeKey: 'arg:productId',
@@ -64,7 +67,7 @@ describe('@jiso/drizzle touch graph helpers', () => {
     ).toBe(`export const touchGraph = {
   "cart.addItem": {
     touches: [
-      { domain: "product", via: "products", site: "cart.domain.ts:12", keys: "arg:productId", branch: "stock-check" },
+      { domain: "product", via: "products", site: "cart.domain.ts:12", keys: "arg:productId", branch: "stock-check", predicate: "non-eq" },
     ],
     unresolved: [
       { code: 'FW406', site: "cart.domain.ts:20", message: "Statically un-analyzable write site; manual touches required." },
@@ -79,6 +82,14 @@ describe('@jiso/drizzle touch graph helpers', () => {
       diagnosticsForTouchGraph({
         'cart.addItem': createTouchGraphEntry({
           unresolved: [{ operation: 'raw', site: 'cart.domain.ts:20' }],
+          writes: [
+            {
+              operation: 'update',
+              predicate: 'non-eq',
+              site: 'cart.domain.ts:12',
+              table: { ...jiso({ domain: 'product', key: 'id' }), name: 'products' },
+            },
+          ],
         }),
       }),
     ).toEqual([
@@ -87,6 +98,12 @@ describe('@jiso/drizzle touch graph helpers', () => {
         message: 'Statically un-analyzable write site; manual touches required.',
         severity: 'warn',
         site: 'cart.domain.ts:20',
+      },
+      {
+        code: 'FW409',
+        message: 'Non-eq predicate degraded to table-level invalidation.',
+        severity: 'notice',
+        site: 'cart.domain.ts:12',
       },
     ]);
   });

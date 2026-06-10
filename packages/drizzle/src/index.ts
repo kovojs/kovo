@@ -14,6 +14,7 @@ export interface TouchSite {
   branch?: string;
   domain: string;
   keys: null | string;
+  predicate?: 'eq' | 'non-eq';
   site: string;
   via: string;
 }
@@ -38,6 +39,7 @@ export interface DomainRegistryInput {
 export interface WriteSummaryInput {
   branch?: string;
   operation: string;
+  predicate?: 'eq' | 'non-eq';
   site: string;
   table: JisoTableAnnotation & { name: string };
   writeKey?: string;
@@ -79,6 +81,7 @@ export function createTouchGraphEntry(input: {
         ...(write.branch === undefined ? {} : { branch: write.branch }),
         domain: write.table.domain,
         keys: write.writeKey ?? null,
+        ...(write.predicate === undefined ? {} : { predicate: write.predicate }),
         site: write.site,
         via: write.table.name,
       }))
@@ -101,7 +104,7 @@ export function serializeTouchGraph(graph: TouchGraph): string {
     lines.push('    touches: [');
     for (const touch of entry.touches) {
       lines.push(
-        `      { domain: ${JSON.stringify(touch.domain)}, via: ${JSON.stringify(touch.via)}, site: ${JSON.stringify(touch.site)}, keys: ${JSON.stringify(touch.keys)}${touch.branch === undefined ? '' : `, branch: ${JSON.stringify(touch.branch)}`} },`,
+        `      { domain: ${JSON.stringify(touch.domain)}, via: ${JSON.stringify(touch.via)}, site: ${JSON.stringify(touch.site)}, keys: ${JSON.stringify(touch.keys)}${touch.branch === undefined ? '' : `, branch: ${JSON.stringify(touch.branch)}`}${touch.predicate === undefined ? '' : `, predicate: ${JSON.stringify(touch.predicate)}`} },`,
       );
     }
     lines.push('    ],');
@@ -120,14 +123,22 @@ export function serializeTouchGraph(graph: TouchGraph): string {
 }
 
 export function diagnosticsForTouchGraph(graph: TouchGraph): TouchGraphDiagnostic[] {
-  return Object.values(graph).flatMap((entry) =>
-    entry.unresolved.map((unresolved) => ({
+  return Object.values(graph).flatMap((entry) => [
+    ...entry.unresolved.map((unresolved) => ({
       code: unresolved.code,
       message: unresolved.message,
       severity: diagnosticDefinitions[unresolved.code].severity,
       site: unresolved.site,
     })),
-  );
+    ...entry.touches
+      .filter((touch) => touch.predicate === 'non-eq')
+      .map((touch) => ({
+        code: 'FW409' as const,
+        message: diagnosticDefinitions.FW409.message,
+        severity: diagnosticDefinitions.FW409.severity,
+        site: touch.site,
+      })),
+  ]);
 }
 
 function compareTouchSites(left: TouchSite, right: TouchSite): number {
@@ -135,6 +146,7 @@ function compareTouchSites(left: TouchSite, right: TouchSite): number {
     left.domain.localeCompare(right.domain) ||
     left.via.localeCompare(right.via) ||
     (left.branch ?? '').localeCompare(right.branch ?? '') ||
+    (left.predicate ?? '').localeCompare(right.predicate ?? '') ||
     left.site.localeCompare(right.site)
   );
 }

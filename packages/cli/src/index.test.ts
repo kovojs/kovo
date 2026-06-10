@@ -48,6 +48,31 @@ describe('fw check', () => {
     });
   });
 
+  it('reports non-equality touch graph predicates as FW409 notices', () => {
+    expect(
+      fwCheck({
+        touchGraph: {
+          'cart.reserveStock': {
+            touches: [
+              {
+                domain: 'product',
+                keys: null,
+                predicate: 'non-eq',
+                site: 'product.domain.ts:20',
+                via: 'products',
+              },
+            ],
+            unresolved: [],
+          },
+        },
+      }),
+    ).toEqual({
+      exitCode: 0,
+      output:
+        'fw-check/v1\nNOTICE FW409 product.domain.ts:20 Non-eq predicate degraded to table-level invalidation.\n',
+    });
+  });
+
   it('fails when a query reads a domain no mutation can invalidate', () => {
     expect(
       fwCheck({
