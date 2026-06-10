@@ -5,6 +5,7 @@ export type DiagnosticCode =
   | 'FW210'
   | 'FW301'
   | 'FW302'
+  | 'FW303'
   | 'FW310'
   | 'FW320'
   | 'FW330'
@@ -43,6 +44,11 @@ export const diagnosticDefinitions = {
     code: 'FW302',
     severity: 'error',
     message: 'data-bind path is not present in the declared query shape.',
+  },
+  FW303: {
+    code: 'FW303',
+    severity: 'error',
+    message: 'Fragment target render input is not declared as query data or stamped props.',
   },
   FW310: {
     code: 'FW310',

@@ -106,6 +106,7 @@ export function compileComponentModule(options: CompileComponentOptions): Compil
   const source = platformLowering.source;
   const handlers = lowerEventHandlers({ ...options, source }, componentName);
   const serverFactStateDiagnostics = validateServerFactsInLocalState(source, options.fileName);
+  const fragmentInputDiagnostics = validateFragmentTargetInputs(source, options.fileName);
   const dataBindDiagnostics = validateDataBindings(source, options);
   const clientFileName = replaceExtension(options.fileName, '.client.js');
   const serverFileName = replaceExtension(options.fileName, '.server.js');
@@ -127,6 +128,7 @@ export function compileComponentModule(options: CompileComponentOptions): Compil
     diagnostics: [
       ...handlers.flatMap((handler) => (handler.diagnostic ? [handler.diagnostic] : [])),
       ...serverFactStateDiagnostics,
+      ...fragmentInputDiagnostics,
       ...dataBindDiagnostics,
     ],
     files: [
@@ -431,6 +433,36 @@ function validateServerFactsInLocalState(source: string, fileName: string): Comp
   return storesServerFact ? [diagnosticFor(fileName, 'FW301')] : [];
 }
 
+function validateFragmentTargetInputs(source: string, fileName: string): CompilerDiagnostic[] {
+  if (!/fragmentTarget\s*:\s*true/.test(source)) return [];
+
+  const queryObject = extractObjectLiteralAfterProperty(source, 'queries');
+  const propsObject = extractObjectLiteralAfterProperty(source, 'props');
+  const allowedInputs = new Set([
+    ...topLevelObjectKeys(queryObject ?? '{}'),
+    ...topLevelObjectKeys(propsObject ?? '{}'),
+  ]);
+  const renderInputs = extractFirstRenderObjectPattern(source);
+  if (renderInputs.length === 0) return [];
+
+  const missing = renderInputs.filter((input) => !allowedInputs.has(input));
+  return missing.map((input) => ({
+    ...diagnosticFor(fileName, 'FW303'),
+    message: `${diagnosticDefinitions.FW303.message} ${input}`,
+  }));
+}
+
+function extractFirstRenderObjectPattern(source: string): string[] {
+  const match = /\brender\s*:\s*\(\s*\{/.exec(source);
+  if (!match) return [];
+
+  const objectStart = match.index + match[0].lastIndexOf('{');
+  const objectEnd = findMatchingToken(source, objectStart, '{', '}');
+  if (objectEnd === -1) return [];
+
+  return topLevelObjectKeys(source.slice(objectStart, objectEnd + 1));
+}
+
 function extractObjectLiteralAfterProperty(source: string, propertyName: string): string | null {
   const match = new RegExp(`\\b${propertyName}\\s*:\\s*\\{`).exec(source);
   if (!match) return null;
@@ -477,6 +509,7 @@ function topLevelObjectKeys(objectSource: string): string[] {
       continue;
     }
 
+    keys.push(key.name);
     index = skipObjectValue(objectSource, afterKey);
   }
 

@@ -26,6 +26,9 @@ describe('create-jiso starter', () => {
       '"@jiso/compiler": "workspace:*"',
     );
     expect(project.files.find((file) => file.path === 'package.json')?.source).toContain(
+      '"fw": "workspace:*"',
+    );
+    expect(project.files.find((file) => file.path === 'package.json')?.source).toContain(
       '"@tailwindcss/vite": "^4.0.0"',
     );
     expect(project.files.find((file) => file.path === 'vite.config.ts')?.source).toContain(
@@ -48,6 +51,29 @@ describe('create-jiso starter', () => {
     expect(readme).toContain('vp test');
     expect(readme).toContain('vp run build');
     expect(readme).toContain('vp run fw-check');
+    const graph = JSON.parse(
+      project.files.find((file) => file.path === 'graph.json')?.source ?? '{}',
+    ) as {
+      components?: Array<{ name: string; queries?: string[] }>;
+      mutations?: Array<{ key: string; invalidates?: string[] }>;
+      optimistic?: Array<{ mutation: string; query: string; status: string }>;
+      queries?: Array<{ domains: string[]; query: string }>;
+      touchGraph?: Record<string, { touches: Array<{ domain: string }> }>;
+    };
+    expect(graph.components?.map((component) => component.name)).toEqual([
+      'CartBadge',
+      'CartPanel',
+    ]);
+    expect(graph.mutations).toEqual([
+      expect.objectContaining({ invalidates: ['cart'], key: 'cart/add' }),
+    ]);
+    expect(graph.optimistic).toEqual([
+      { mutation: 'cart/add', query: 'cart', status: 'await-fragment' },
+    ]);
+    expect(graph.queries).toEqual([{ domains: ['cart'], query: 'cart' }]);
+    expect(graph.touchGraph?.['cart.addItem']?.touches).toEqual([
+      expect.objectContaining({ domain: 'cart' }),
+    ]);
     expect(
       project.files.find((file) => file.path === 'docs/graph-assertions.md')?.source,
     ).toContain('fw explain mutation cart/add --optimistic graph.json');
@@ -60,6 +86,14 @@ describe('create-jiso starter', () => {
     expect(
       project.files.find((file) => file.path === 'docs/graph-assertions.md')?.source,
     ).toContain('SPEC.md section 9.1');
+    const graphAssertions = project.files.find(
+      (file) => file.path === 'docs/graph-assertions.md',
+    )?.source;
+    expect(graphAssertions).toContain('SPEC.md section 11.4.3');
+    expect(graphAssertions).toContain('fw explain query cart graph.json > .jiso/cart.query.txt');
+    expect(graphAssertions).toContain('diff -u .jiso/cart.expected-consumers.txt');
+    expect(graphAssertions).toContain("grep '^invalidated-by: .*cart.addItem'");
+    expect(graphAssertions).toContain("grep '^OPTIMISTIC cart await-fragment'");
     const deploymentDoc = project.files.find((file) => file.path === 'docs/deployment.md')?.source;
     expect(deploymentDoc).toContain('stateless');
     expect(deploymentDoc).toContain('BroadcastChannel');

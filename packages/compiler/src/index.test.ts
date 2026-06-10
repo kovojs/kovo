@@ -338,6 +338,46 @@ export const CartBadge = component('cart-badge', {
       },
     ]);
   });
+
+  it('accepts fragment target render inputs declared as queries or stamped props', () => {
+    const result = compileComponentModule({
+      fileName: 'cart-row.tsx',
+      source: `
+export const CartRow = component('cart-row', {
+  fragmentTarget: true,
+  props: { rowId: String },
+  queries: { cart: cartQuery },
+  render: ({ cart, rowId }) => <tr fw-c="cart-row" data-row={rowId}>{cart.count}</tr>,
+});
+`,
+    });
+
+    expect(result.diagnostics).toEqual([]);
+    expect(result.files[2]?.source).toContain("'cart-row': unknown;");
+  });
+
+  it('reports FW303 when fragment target render inputs cannot be rerendered from queries or stamped props', () => {
+    const result = compileComponentModule({
+      fileName: 'cart-row.tsx',
+      source: `
+export const CartRow = component('cart-row', {
+  fragmentTarget: true,
+  queries: { cart: cartQuery },
+  render: ({ cart, priceList }) => <tr fw-c="cart-row">{cart.count}{priceList.version}</tr>,
+});
+`,
+    });
+
+    expect(result.diagnostics).toEqual([
+      {
+        code: 'FW303',
+        fileName: 'cart-row.tsx',
+        message:
+          'Fragment target render input is not declared as query data or stamped props. priceList',
+        severity: 'error',
+      },
+    ]);
+  });
 });
 
 describe('jisoVitePlugin', () => {

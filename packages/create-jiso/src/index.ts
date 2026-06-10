@@ -12,6 +12,30 @@ export interface CreateJisoProject {
   name: string;
 }
 
+const starterGraph = {
+  components: [
+    { fragments: ['cart-badge'], name: 'CartBadge', queries: ['cart'] },
+    { fragments: ['cart-panel'], name: 'CartPanel', queries: ['cart'] },
+  ],
+  mutations: [
+    {
+      guards: ['authed'],
+      invalidates: ['cart'],
+      key: 'cart/add',
+      writes: ['cart'],
+    },
+  ],
+  optimistic: [{ mutation: 'cart/add', query: 'cart', status: 'await-fragment' }],
+  pages: [{ queries: ['cart'], route: '/cart' }],
+  queries: [{ domains: ['cart'], query: 'cart' }],
+  touchGraph: {
+    'cart.addItem': {
+      touches: [{ domain: 'cart', keys: null, site: 'src/cart.ts:12', via: 'cart_items' }],
+      unresolved: [],
+    },
+  },
+};
+
 export function createJisoProject(options: CreateJisoOptions): CreateJisoProject {
   const packageName = normalizePackageName(options.name);
 
@@ -29,6 +53,7 @@ export function createJisoProject(options: CreateJisoOptions): CreateJisoProject
               '@jiso/compiler': 'workspace:*',
               '@tailwindcss/vite': '^4.0.0',
               '@typescript/native-preview': '^7.0.0-dev.20260610.1',
+              fw: 'workspace:*',
               tailwindcss: '^4.0.0',
               typescript: '^6.0.0',
               'vite-plus': '^0.1.24',
@@ -128,7 +153,7 @@ Tailwind is the default app styling path. Keep class names in templates as stati
       },
       {
         path: 'graph.json',
-        source: `${JSON.stringify({ optimistic: [], touchGraph: {} }, null, 2)}\n`,
+        source: `${JSON.stringify(starterGraph, null, 2)}\n`,
       },
       {
         path: 'docs/graph-assertions.md',
@@ -138,7 +163,7 @@ Jiso keeps application wiring auditable through the generated graph file consume
 
 \`\`\`sh
 vp run fw-check
-fw explain component App graph.json
+fw explain component CartBadge graph.json
 fw explain mutation cart/add --optimistic graph.json
 fw explain --unguarded graph.json
 fw explain query cart graph.json
@@ -148,6 +173,29 @@ fw explain page /cart graph.json
 Use \`fw check graph.json\` in CI for semantic checks that do not belong in \`vp check\`: optimistic coverage (\`FW310\`), touch-graph consistency, unguarded mutation audits, manual invalidation review, and Jiso-specific lints.
 Use \`fw explain --unguarded graph.json\` when you need the stable, diffable audit list from SPEC.md section 10.3.
 When debugging enhanced mutations, keep the wire contract from SPEC.md section 9.1 visible: \`FW-Idem\` keys make duplicate POSTs replayable, and \`FW-Targets\` shows which live DOM dependencies asked for fragments.
+
+## Intent Assertions
+
+SPEC.md section 11.4.3 treats behavior checks as graph queries over stable \`fw explain\` output. Keep these assertions in CI beside ordinary tests when a product rule matters more than one rendered page snapshot.
+
+This starter's \`graph.json\` is a tiny runnable example. Replace it with the compiler-emitted app graph as your app grows.
+
+Assert that every component displaying cart data is registered as a cart consumer:
+
+\`\`\`sh
+mkdir -p .jiso
+fw explain query cart graph.json > .jiso/cart.query.txt
+awk -F': ' '/^consumers: / { print $2 }' .jiso/cart.query.txt | tr ',' '\\n' | grep '^component:' | sort > .jiso/cart.consumers.txt
+printf '%s\\n' component:CartBadge component:CartPanel | sort > .jiso/cart.expected-consumers.txt
+diff -u .jiso/cart.expected-consumers.txt .jiso/cart.consumers.txt
+\`\`\`
+
+Assert that \`cart/add\` refreshes those consumers by invalidating the cart query:
+
+\`\`\`sh
+grep '^invalidated-by: .*cart.addItem' .jiso/cart.query.txt
+fw explain mutation cart/add --optimistic graph.json | grep '^OPTIMISTIC cart await-fragment'
+\`\`\`
 
 Keep every mutation/query pair explicit in \`graph.json\`:
 

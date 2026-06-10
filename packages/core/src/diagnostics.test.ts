@@ -9,6 +9,7 @@ describe('diagnostic registry', () => {
       'FW210',
       'FW301',
       'FW302',
+      'FW303',
       'FW310',
       'FW320',
       'FW330',
@@ -44,6 +45,11 @@ describe('diagnostic registry', () => {
         "FW302": {
           "code": "FW302",
           "message": "data-bind path is not present in the declared query shape.",
+          "severity": "error",
+        },
+        "FW303": {
+          "code": "FW303",
+          "message": "Fragment target render input is not declared as query data or stamped props.",
           "severity": "error",
         },
         "FW310": {
