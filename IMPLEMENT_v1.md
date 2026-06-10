@@ -11,7 +11,7 @@
 | Derived optimism (§10.5) | **Out — v2.** v1 ships hand-written transforms over the same IR | Per spec phasing; v1 must keep the transform IR derivation-compatible |
 | Verification layer (§11.2, FW402–409) | **In** (the spec's v1.5) | The test harness needs the db wrapper anyway; verification is core to the pitch |
 | §13 design areas | 13.1 CSS, 13.2 lists, 13.3 streaming, 13.5 adopt-don't-invent all **in**; 13.4 stays a non-goal | 13.1 explicitly blocks v1 freeze |
-| Toolchain | **Vite plugin + Node (≥22) server** | Dev server, HMR, module graph for free; see Spike S1 for the known tension |
+| Toolchain | **Vite+ (`vite-plus`) + Node server** | `vp` is the single project entrypoint for dev/build/test/check; it gives us Vite, Vitest, Oxlint, Oxfmt, Rolldown, tsdown, Vite Task, and the TypeScript Go toolchain in one place; see Spike S1 for the known tension |
 | Shadow DOM | **Dropped entirely.** All rendering is light DOM; CSS scoped by the compiler via `@scope` | Shadow boundaries break IDREF wiring, form participation, and ARIA — fatal to L0 and the no-JS contract (SPEC §3.2); §13.1 shrinks substantially |
 | Custom elements | **Dropped — nothing is ever registered.** Identity = `fw-c` stamp; dashed tags are inert sugar; native hosts (`<tr fw-c="…">`) allowed | Resumability comes from delegation + `import()`, not `customElements.define`; kills upgrade/FACE machinery and the `<table>`-nesting papercut |
 | Client reactivity | **No TC39 Signals, no runtime signal graph.** Compiler emits a per-query update plan (bindings → derives → stamps); Signals interop is a v2 adapter | The client dependency graph is compile-time-known; polyfill bytes don't belong in the always-loaded path, and the proposal hasn't shipped |
@@ -26,16 +26,29 @@ Derived optimism & derivation algebra (§10.5 — but every v1 interface it will
 
 ---
 
+## Tooling baseline
+
+Use [Vite+](https://viteplus.dev/) as the repository toolchain from P0 onward.
+
+- Install the global `vp` command for contributors and CI; keep `vite-plus` as the local project package.
+- Keep package-manager choice deterministic through Vite+ (`vp install`, `vp add`, `vp remove`), with pnpm workspace layout still acceptable because Vite+ detects and manages it.
+- Add `@typescript/native-preview` and use the TypeScript Go path for fast type checking. Replace standalone `tsc --noEmit` gates with `vp check` wherever the check is purely static; keep explicit TypeScript invocation only for tests that intentionally compare classic `tsc` behavior.
+- Put lint and format config in the root `vite.config.ts`, not separate `.oxlintrc`, `oxlint.config.ts`, `.prettierrc`, or Biome config files. Enable `lint.options.typeAware: true` and `lint.options.typeCheck: true`.
+- Use Oxlint for linting and Oxfmt for formatting through `vp lint`, `vp fmt`, and `vp check`. `vp check` is the standing static gate: format check + lint + type check.
+- Use Vite Task through `vp run` for repo tasks and cacheable CI commands; avoid bespoke task runners unless Vite+ cannot express a required dependency edge.
+- Use `voidzero-dev/setup-vp` in GitHub Actions with Node 24 for tooling. The Jiso server runtime target remains Node ≥22 unless a later phase explicitly tightens it.
+- Editor setup should point Oxc format/lint tooling at `./vite.config.ts` so format-on-save and CI share one configuration.
+
 ## Repository layout
 
-pnpm workspace monorepo:
+Vite+ workspace monorepo:
 
 ```
 packages/
   core/        @jiso/core      component(), query()/form() types, JsonValue, registry type machinery
   runtime/     @jiso/runtime   ~1KB loader, handler(), query-data store + update plans, morph, enhanced forms, <fw-defer>
   server/      @jiso/server    mutation(), domain()/write(), guards, s.* schema, request lifecycle, page/fragment render, wire
-  compiler/    @jiso/compiler  parse→analyze→lower, registry emit, Vite plugin, fixpoint checker
+  compiler/    @jiso/compiler  parse→analyze→lower, registry emit, Vite+/Vite plugin, fixpoint checker
   drizzle/     @jiso/drizzle   jiso() schema annotations, touch-set extraction (ts-morph), query shape/key inference
   test/        @jiso/test      jisoTest, exec/page/db harness, pglite, propertyTest, db verification wrapper
   cli/         fw              explain, check, audit subcommands
@@ -44,15 +57,16 @@ examples/
   commerce/                    reference app (§16 yardstick) — grows with every phase from P3 on
 conformance/
   drizzle-pin/                 pinned-subset conformance suite (§14 "fails loudly on API drift")
+vite.config.ts                 Vite+ root config: dev/build/test plus lint/fmt/staged/task config
 ```
 
-**Standing CI gates, added as soon as each exists:** fixpoint (`compile(compile(src)) ≡ compile(src)`), minifier name-preservation (Constitution #1), Drizzle conformance pin, `observed ⊆ static ∪ FW406` (from P9), diagnostic-snapshot tests (every FW code's message text is a golden file — teaching errors are a feature, §5.2.5).
+**Standing CI gates, added as soon as each exists:** `vp check` (Oxfmt + Oxlint + TypeScript Go type checks), `vp test`, `vp build`/`vp pack` as applicable, fixpoint (`compile(compile(src)) ≡ compile(src)`), minifier name-preservation (Constitution #1), Drizzle conformance pin, `observed ⊆ static ∪ FW406` (from P9), diagnostic-snapshot tests (every FW code's message text is a golden file — teaching errors are a feature, §5.2.5).
 
 ---
 
 ## Risk spikes (run first or alongside P1 — each has a decision-gate writeup)
 
-- **S1 — Vite vs. the 1:1 file mapping.** Vite/Rollup want to chunk and hash; Jiso forbids both (§5.2.1–2). Prove: per-file `x.server.js`/`x.client.js` output, stable export names through prod minification (terser/esbuild `keep_fnames`/`mangle.reserved` driven by the compiler's export manifest), hashes confined to cache-busting query strings on the emitted module URLs. **Failure pivot:** use Vite for dev only; own esbuild pass for prod emit.
+- **S1 — Vite+ vs. the 1:1 file mapping.** Vite+/Vite/Rolldown want to chunk and hash; Jiso forbids both (§5.2.1–2). Prove: `vp dev` serves compiler-emitted modules with HMR, `vp build`/Rolldown can be configured for per-file `x.server.js`/`x.client.js` output, stable export names through prod minification (manifest-driven reserved names), and hashes confined to cache-busting query strings on emitted module URLs. **Failure pivot:** use Vite+ for dev/test/check/task orchestration, but own the production emit pass behind a `vp run` task.
 - **S2 — Loader budget.** Skeleton of all loader responsibilities (§4.4 — delegation, `url#export` `import()`, form interception, query-data hydration + compiled update plans, refetch-on-focus, morph hook) inside ~1KB gzipped, with morph **excluded** (lazy-loaded on first mutation/fragment). Decide what else is lazy. Gate: a perf budget test in CI.
 - **S3 — Morph engine.** Evaluate idiomorph/morphdom vs. writing our own against the §9.1 survival contract (focus, scroll, selection, CSS transitions, nested island state, `data-bind` stamps). Output: the keyed-node contract that 13.2 list reordering will also rely on, and the two-tier test harness — a jsdom-class structural property suite (`morph(a, b) ≡ b`, keyed identity preserved) plus a real-browser suite for the survival contract; the latter is first-class framework testing, not an exception (§11.4).
 - **S4 — ts-morph extraction robustness.** Prototype §11.1 resolution cases A–E against a corpus of real-world Drizzle code (scraped OSS repos). Measure what % lands in A/B (must be ≳90% to honor the spec's claim) and how often FW406 fires. Informs how loud the v1 messaging on raw-SQL ergonomics must be.
@@ -62,15 +76,15 @@ conformance/
 
 ## Phase 0 — Foundations
 
-Monorepo + CI skeleton; wire-format **golden fixtures** authored by hand from §9 (request/response transcripts for: enhanced mutation, no-JS POST-redirect-GET, 422 validation fragment, `<fw-defer>` stream — the SSE chunk fixture moves to the v2 backlog with L4). These fixtures are the contract every later phase tests against — the wire is the documentation (Constitution #4), so the fixtures come before any implementation. Diagnostic registry module (FW codes, severities, message templates) that all packages import.
+Vite+ monorepo + CI skeleton: root `vite.config.ts`, local `vite-plus`, `@typescript/native-preview`, Oxlint/Oxfmt config under `lint`/`fmt`, staged-file config, cacheable Vite Task entries, and GitHub Actions using `voidzero-dev/setup-vp` followed by `vp install`, `vp check`, `vp test`, and the initially empty build/pack tasks. Wire-format **golden fixtures** authored by hand from §9 (request/response transcripts for: enhanced mutation, no-JS POST-redirect-GET, 422 validation fragment, `<fw-defer>` stream — the SSE chunk fixture moves to the v2 backlog with L4). These fixtures are the contract every later phase tests against — the wire is the documentation (Constitution #4), so the fixtures come before any implementation. Diagnostic registry module (FW codes, severities, message templates) that all packages import.
 
-**Exit:** CI runs on empty packages; fixtures reviewed and frozen; spikes S1–S5 scheduled.
+**Exit:** `vp check`/`vp test` run on empty packages in CI; fixtures reviewed and frozen; spikes S1–S5 scheduled.
 
 ## Phase 1 — Compiler core & client IR
 
 `@jiso/compiler` parse→analyze→lower for components (§4, §5): closure extraction with the three capture channels, `Component$fnName` / `Component$element_event` naming, `data-p-*` param emission, FW201 (with the show-the-lowering message) and FW210; 1:1 file emit; fixpoint checker (the IR must round-trip — this forces the IR to be genuinely authorable Jiso source from day one); registry `.d.ts` emit (HandlerModules, FragmentTargets initially); `JsonValue` state constraint; platform-behavior emission (§5.2.4) for the dialog/popover/details/`:has()` set, each substitution recorded for `fw explain`.
 
-**Exit:** cart-badge example from §4 compiles to byte-stable IR; fixpoint gate green; FW201/FW210 golden diagnostics; Vite plugin serves the client modules in dev (S1 outcome applied).
+**Exit:** cart-badge example from §4 compiles to byte-stable IR; fixpoint gate green; FW201/FW210 golden diagnostics; Vite+ plugin serves the client modules through `vp dev` (S1 outcome applied).
 
 ## Phase 2 — Loader & MPA spine
 
@@ -98,7 +112,7 @@ The §11.1 static pass over `write()` bodies (S4 hardened): resolution cases A�
 
 The full §9.1 round-trip: `FW-Targets` read off the live DOM, `FW-Idem` replay, fragment rendering through the **same render functions** as full pages; `<fw-query>` patch → query-value update → the compiled per-query update plan re-runs `data-bind`/derives/stamps across islands (no runtime dependency tracking); morph application per S3 contract; `form('cart/add')` typed forms with field completeness checking (§6.3) and `ctx.submit` with the exhaustive error union; 422 validation fragments; FW301/FW320 lints; cross-island coordination ladder (URL > typed events > lint-gated shared client state, §7).
 
-**Exit:** wire fixtures from P0 pass byte-for-byte against the live server; morph survival contract green (focus/scroll/selection/island-state tests); column rename in `schema.ts` breaks `data-bind` consumers under `tsc --noEmit` (§6.2 row 4 proven).
+**Exit:** wire fixtures from P0 pass byte-for-byte against the live server; morph survival contract green (focus/scroll/selection/island-state tests); column rename in `schema.ts` breaks `data-bind` consumers under `vp check` with TypeScript Go type checks enabled (§6.2 row 4 proven).
 
 ## Phase 6 — Optimism (hand-written) & rebase runtime
 
@@ -116,7 +130,7 @@ The stateless liveness pair (§9.3): **BroadcastChannel rebroadcast** of mutatio
 
 ## Phase 8 — `fw` CLI: explain & check
 
-All §5.3 subcommands with **stable, diffable output** (snapshot-tested — agents and CI assertions consume this format, so it freezes here): `explain component|mutation|query|page`, `--optimistic` (v1 statuses), `--unguarded` audit; `fw check` = touch-graph consistency + FW310 exhaustiveness + fixpoint + unguarded audit. Graph-query examples for §11.4.3 intent assertions ship as documented recipes in the starter template.
+All §5.3 subcommands with **stable, diffable output** (snapshot-tested — agents and CI assertions consume this format, so it freezes here): `explain component|mutation|query|page`, `--optimistic` (v1 statuses), `--unguarded` audit; `fw check` = Jiso semantic checks only (touch-graph consistency + FW310 exhaustiveness + fixpoint + unguarded audit), and it is wired into Vite+ as a `vp run fw-check` task so `vp check` remains the formatter/linter/type-checker gate. Graph-query examples for §11.4.3 intent assertions ship as documented recipes in the starter template.
 
 **Exit:** §16.3's agent test is runnable: given only `fw explain` output for the commerce app, "what updates when X is clicked" is answerable mechanically; output format versioned and snapshot-locked.
 
@@ -135,11 +149,11 @@ All §5.3 subcommands with **stable, diffable output** (snapshot-tested — agen
 
 ## Phase 10 — Reference app completion, starter, docs, v1 acceptance
 
-Commerce app reaches the full Appendix A surface plus D2/D4 features; `create-jiso` starter (fixpoint CI test, graph-assertion recipes, deployment doc stating the stateless-server guarantee, §9.3); docs with the §2 constitution and §5.2 hard rules as normative pages. Then run §16 acceptance explicitly:
+Commerce app reaches the full Appendix A surface plus D2/D4 features; `create-jiso` starter (Vite+ scaffold, root `vite.config.ts` with Oxlint/Oxfmt/type-aware lint defaults, fixpoint CI test, graph-assertion recipes, deployment doc stating the stateless-server guarantee, §9.3); docs with the §2 constitution and §5.2 hard rules as normative pages. Then run §16 acceptance explicitly:
 
 1. **Perf:** TTI ≡ FCP; <50ms perceived prerendered nav on routes that opt in; zero memory growth across 100 navigations (automated).
 2. **Legibility:** the devtools usability study (§16.2) run with ≥5 outside developers — scheduled, not aspirational.
-3. **Verifiability:** commerce app's behavior surface passes `tsc` + `fw check` + graph assertions with no app-level browser tests; the framework-owned L0 and morph-survival browser suites are green.
+3. **Verifiability:** commerce app's behavior surface passes `vp check` + `vp run fw-check` + graph assertions with no app-level browser tests; the framework-owned L0 and morph-survival browser suites are green.
 4. **Constitution:** fixpoint green; every feature has an authorable lowering (audited); `grep -r "invalidate(" app/` returns only documented sites.
 5. **Coverage:** every (mutation × query) pair has an explicit optimistic status (hand-written or `'await-fragment'`), zero unhandled FW310s.
 
