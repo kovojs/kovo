@@ -112,6 +112,7 @@ export interface EventElementLike {
 }
 
 export interface JisoLoaderOptions {
+  discardPendingOptimism?: () => readonly string[] | void;
   events?: readonly string[];
   importModule: ImportHandlerModule;
   queryStore?: QueryStore;
@@ -141,6 +142,13 @@ export function installJisoLoader(options: JisoLoaderOptions): JisoLoader {
   if (options.refetchOnFocus) {
     options.root.addEventListener('visibilitychange', options.refetchOnFocus);
     options.root.addEventListener('focus', options.refetchOnFocus);
+  }
+
+  if (options.discardPendingOptimism) {
+    installPagehideOptimismCleanup({
+      discardPendingOptimism: options.discardPendingOptimism,
+      root: options.root,
+    });
   }
 
   return { events };
@@ -283,6 +291,11 @@ export interface PendingTransform<Input = unknown> {
   transform: OptimisticTransform<Input>;
 }
 
+export interface PagehideOptimismCleanupOptions {
+  discardPendingOptimism: () => readonly string[] | void;
+  root: LoaderRoot;
+}
+
 export type MutationTask<Value> = () => Promise<Value> | Value;
 
 export class MutationQueue {
@@ -312,6 +325,7 @@ export class MutationQueue {
 
 export class OptimisticRebaser {
   #pendingByQuery = new Map<string, PendingTransform[]>();
+  #serverTruthByQuery = new Map<string, unknown>();
   #store: QueryStore;
 
   constructor(store: QueryStore) {
@@ -321,6 +335,9 @@ export class OptimisticRebaser {
   add<Input>(id: string, input: Input, plan: OptimisticPlan<Input>): void {
     for (const [queryName, transform] of Object.entries(plan.transforms)) {
       const pending = this.#pendingByQuery.get(queryName) ?? [];
+      if (pending.length === 0) {
+        this.#serverTruthByQuery.set(queryName, structuredClone(this.#store.get(queryName)));
+      }
       pending.push({ id, input, transform: transform as OptimisticTransform });
       this.#pendingByQuery.set(queryName, pending);
 
@@ -333,6 +350,7 @@ export class OptimisticRebaser {
       const next = pending.filter((item) => item.id !== id);
       if (next.length === 0) {
         this.#pendingByQuery.delete(queryName);
+        this.#serverTruthByQuery.delete(queryName);
       } else {
         this.#pendingByQuery.set(queryName, next);
       }
@@ -341,17 +359,46 @@ export class OptimisticRebaser {
 
   applyServerTruth<Value>(queryName: string, value: Value): void {
     let next: unknown = value;
+    const pendingTransforms = this.#pendingByQuery.get(queryName) ?? [];
 
-    for (const pending of this.#pendingByQuery.get(queryName) ?? []) {
+    if (pendingTransforms.length > 0) {
+      this.#serverTruthByQuery.set(queryName, structuredClone(value));
+    } else {
+      this.#serverTruthByQuery.delete(queryName);
+    }
+
+    for (const pending of pendingTransforms) {
       next = pending.transform(next, pending.input);
     }
 
     this.#store.set(queryName, next);
   }
 
+  discardPendingOptimism(queryNames?: readonly string[]): string[] {
+    const discarded: string[] = [];
+
+    for (const queryName of queryNames ?? [...this.#pendingByQuery.keys()]) {
+      if (!this.#pendingByQuery.has(queryName)) continue;
+
+      this.#store.set(queryName, structuredClone(this.#serverTruthByQuery.get(queryName)));
+      this.#pendingByQuery.delete(queryName);
+      this.#serverTruthByQuery.delete(queryName);
+      discarded.push(queryName);
+    }
+
+    return discarded;
+  }
+
   pendingCount(queryName: string): number {
     return this.#pendingByQuery.get(queryName)?.length ?? 0;
   }
+}
+
+export function installPagehideOptimismCleanup(options: PagehideOptimismCleanupOptions): void {
+  // SPEC.md §8/§9.3: pagehide is bfcache-safe; unload handlers are forbidden.
+  options.root.addEventListener('pagehide', () => {
+    options.discardPendingOptimism();
+  });
 }
 
 export function applyOptimisticTransforms<Input>(

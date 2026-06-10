@@ -12,6 +12,7 @@ import {
   dispatchDelegatedEvent,
   hydrateQueryScripts,
   installMutationBroadcast,
+  installPagehideOptimismCleanup,
   installJisoLoader,
   MutationQueue,
   morphStructuralTree,
@@ -246,6 +247,20 @@ describe('query store', () => {
     expect(refetchOnFocus).toHaveBeenCalledTimes(1);
   });
 
+  it('registers pagehide optimism cleanup without unload handlers', () => {
+    const root = new FakeRoot();
+    const discardPendingOptimism = vi.fn();
+
+    installPagehideOptimismCleanup({ discardPendingOptimism, root });
+
+    expect(root.listeners.has('pagehide')).toBe(true);
+    expect(root.listeners.has('unload')).toBe(false);
+
+    void root.listeners.get('pagehide')?.({ target: null, type: 'pagehide' });
+
+    expect(discardPendingOptimism).toHaveBeenCalledTimes(1);
+  });
+
   it('applies mutation response query chunks and returns fragment chunks for morphing', () => {
     const store = createQueryStore();
     const plan = vi.fn();
@@ -399,6 +414,27 @@ describe('query store', () => {
 
     expect(store.get('cart')).toEqual({ count: 13 });
     expect(rebaser.pendingCount('cart')).toBe(1);
+  });
+
+  it('discards pending optimistic transforms back to server truth on pagehide', () => {
+    const store = createQueryStore();
+    const rebaser = new OptimisticRebaser(store);
+    store.set('cart', { count: 0 });
+    const transform = (current: unknown, input: { quantity: number }) => {
+      const cart = current as { count: number };
+      return { count: cart.count + input.quantity };
+    };
+
+    rebaser.add('m1', { quantity: 1 }, { transforms: { cart: transform } });
+    rebaser.add('m2', { quantity: 2 }, { transforms: { cart: transform } });
+    rebaser.applyServerTruth('cart', { count: 10 });
+
+    expect(store.get('cart')).toEqual({ count: 13 });
+
+    expect(rebaser.discardPendingOptimism()).toEqual(['cart']);
+
+    expect(store.get('cart')).toEqual({ count: 10 });
+    expect(rebaser.pendingCount('cart')).toBe(0);
   });
 
   it('serializes named mutation queues without blocking unrelated queues', async () => {
