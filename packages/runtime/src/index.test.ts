@@ -3,6 +3,8 @@ import { gzipSync } from 'node:zlib';
 import { event, form } from '@jiso/core';
 
 import {
+  applyDeferredChunk,
+  applyDeferredChunkToDom,
   applyFragments,
   applyOptimisticTransforms,
   applyMutationResponseToDom,
@@ -552,6 +554,63 @@ describe('query store', () => {
     applyMutationResponse(store, '<fw-query name="cart">{&quot;count&quot;:4}</fw-query>');
 
     expect(store.get('cart')).toEqual({ count: 4 });
+  });
+
+  it('applies deferred stream chunks through the same query and fragment parser', () => {
+    const store = createQueryStore();
+    const plan = vi.fn();
+    store.subscribe('reviews', plan);
+
+    const applied = applyDeferredChunk(
+      store,
+      [
+        '<fw-query name="reviews" key="product:p1">{"items":[{"id":"r1","rating":5}]}</fw-query>',
+        '<fw-fragment target="reviews:p1"><section fw-c="reviews">Ready</section></fw-fragment>',
+      ].join('\n'),
+    );
+
+    expect(store.get('reviews')).toEqual({ items: [{ id: 'r1', rating: 5 }] });
+    expect(plan).toHaveBeenCalledWith({ items: [{ id: 'r1', rating: 5 }] });
+    expect(applied).toEqual({
+      fragments: [{ html: '<section fw-c="reviews">Ready</section>', target: 'reviews:p1' }],
+      queries: ['reviews'],
+    });
+  });
+
+  it('updates deferred query data before morphing deferred fragments', () => {
+    const store = createQueryStore();
+    const root = new FakeMorphRoot();
+    const observed: string[] = [];
+    root.targets.set('reviews:p1', new FakeMorphTarget());
+    store.subscribe('reviews', (value) => {
+      observed.push(`plan:${JSON.stringify(value)}`);
+    });
+
+    const result = applyDeferredChunkToDom({
+      body: [
+        '<fw-query name="reviews">{"items":[{"id":"r1"}]}</fw-query>',
+        '<fw-fragment target="reviews:p1"><link rel="stylesheet" href="/assets/reviews.css"><section>Ready</section></fw-fragment>',
+      ].join('\n'),
+      morph(target, html) {
+        observed.push(`morph:${JSON.stringify(store.get('reviews'))}`);
+        target.replaceWithHtml(html);
+      },
+      root,
+      store,
+    });
+
+    expect(observed).toEqual(['plan:{"items":[{"id":"r1"}]}', 'morph:{"items":[{"id":"r1"}]}']);
+    expect(result).toEqual({
+      appliedFragments: ['reviews:p1'],
+      fragments: [
+        {
+          html: '<link rel="stylesheet" href="/assets/reviews.css"><section>Ready</section>',
+          target: 'reviews:p1',
+        },
+      ],
+      queries: ['reviews'],
+    });
+    expect(root.targets.get('reviews:p1')?.html).toContain('/assets/reviews.css');
   });
 
   it('rebroadcasts and applies mutation responses for same-user tab sync', () => {

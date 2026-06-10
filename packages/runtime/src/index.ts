@@ -865,7 +865,13 @@ function parseMutationFailure(body: string): JsonValue {
 }
 
 export function applyMutationResponse(store: QueryStore, body: string): AppliedMutationResponse {
-  return applyMutationResponseWithQueries(body, (name, value) => {
+  return applyFragmentQueryBody(body, (name, value) => {
+    store.set(name, value);
+  });
+}
+
+export function applyDeferredChunk(store: QueryStore, body: string): AppliedMutationResponse {
+  return applyFragmentQueryBody(body, (name, value) => {
     store.set(name, value);
   });
 }
@@ -898,7 +904,23 @@ export function applyMutationResponseToDom(options: {
   root: MorphRoot;
   store: QueryStore;
 }): AppliedMutationResponse & { appliedFragments: string[] } {
-  const applied = applyMutationResponse(options.store, options.body);
+  const applied = applyFragmentQueryBody(options.body, (name, value) => {
+    options.store.set(name, value);
+  });
+
+  return {
+    ...applied,
+    appliedFragments: applyFragments(options.root, applied.fragments, options.morph),
+  };
+}
+
+export function applyDeferredChunkToDom(options: {
+  body: string;
+  morph?: MorphFragment;
+  root: MorphRoot;
+  store: QueryStore;
+}): AppliedMutationResponse & { appliedFragments: string[] } {
+  const applied = applyDeferredChunk(options.store, options.body);
 
   return {
     ...applied,
@@ -1116,7 +1138,7 @@ export function installMutationBroadcast(options: {
   };
 }
 
-function applyMutationResponseWithQueries(
+function applyFragmentQueryBody(
   body: string,
   applyQuery: (name: string, value: unknown) => void,
 ): AppliedMutationResponse {
