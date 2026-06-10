@@ -1,6 +1,10 @@
-import { describe, expect, it } from 'vitest';
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 
-import { fwCheck, fwExplain } from './index.js';
+import { describe, expect, it, vi } from 'vitest';
+
+import { fwCheck, fwExplain, main } from './index.js';
 
 describe('fw check', () => {
   it('emits stable OK output for an empty semantic graph', () => {
@@ -260,6 +264,70 @@ describe('fw explain', () => {
         '',
       ].join('\n'),
     });
+  });
+
+  it('audits unguarded mutations with stable explain output', () => {
+    const result = fwExplain(
+      {
+        mutations: [
+          {
+            guards: ['rateLimit:session'],
+            invalidates: ['cart'],
+            key: 'cart/add',
+            writes: ['cart'],
+          },
+          { guards: ['authed'], key: 'cart/remove' },
+          { guards: ['role:admin'], key: 'admin/refund' },
+          { key: 'inventory/sync', manualInvalidates: ['product'], writes: ['product'] },
+        ],
+      },
+      { unguarded: true },
+    );
+
+    expect(result.exitCode).toBe(0);
+    expect(result.output).toMatchInlineSnapshot(`
+      "fw-explain/v1
+      UNGUARDED
+      MUTATION cart/add guards=rateLimit:session writes=cart invalidates=cart manual-invalidates=-
+      MUTATION inventory/sync guards=- writes=product invalidates=- manual-invalidates=product
+      SUMMARY total=2
+      "
+    `);
+  });
+
+  it('accepts fw explain --unguarded as a CLI audit mode', () => {
+    const tempDir = mkdtempSync(join(tmpdir(), 'jiso-cli-'));
+    const graphPath = join(tempDir, 'graph.json');
+    let output = '';
+    const stdoutWrite = vi.spyOn(process.stdout, 'write').mockImplementation(((chunk) => {
+      output += chunk.toString();
+      return true;
+    }) as typeof process.stdout.write);
+
+    try {
+      writeFileSync(
+        graphPath,
+        JSON.stringify({
+          mutations: [
+            { guards: ['authed'], key: 'cart/remove' },
+            { guards: ['rateLimit:session'], key: 'cart/add', writes: ['cart'] },
+          ],
+        }),
+      );
+
+      expect(main(['explain', '--unguarded', graphPath])).toBe(0);
+    } finally {
+      stdoutWrite.mockRestore();
+      rmSync(tempDir, { force: true, recursive: true });
+    }
+
+    expect(output).toMatchInlineSnapshot(`
+      "fw-explain/v1
+      UNGUARDED
+      MUTATION cart/add guards=rateLimit:session writes=cart invalidates=- manual-invalidates=-
+      SUMMARY total=1
+      "
+    `);
   });
 
   it('explains query read sets and the writes that invalidate them', () => {

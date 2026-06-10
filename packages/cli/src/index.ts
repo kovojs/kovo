@@ -91,12 +91,25 @@ export function main(args: readonly string[] = process.argv.slice(2)): number {
 
   if (args[0] === 'explain') {
     const optimistic = args.includes('--optimistic');
-    const positional = args.slice(1).filter((arg) => arg !== '--optimistic');
+    const unguarded = args.includes('--unguarded');
+    const positional = args
+      .slice(1)
+      .filter((arg) => arg !== '--optimistic' && arg !== '--unguarded');
+
+    if (unguarded) {
+      const [inputPath] = positional;
+      const input = inputPath ? JSON.parse(readFileSync(inputPath, 'utf8')) : {};
+      const result = fwExplain(input, { unguarded: true });
+      const stream = result.exitCode === 0 ? process.stdout : process.stderr;
+      stream.write(result.output);
+      return result.exitCode;
+    }
+
     const [kind, target, inputPath] = positional;
 
     if (!isExplainKind(kind) || !target) {
       process.stderr.write(
-        'fw: usage: fw explain component|mutation|query|page <target> [graph.json]\n',
+        'fw: usage: fw explain component|mutation|query|page <target> [graph.json] | fw explain --unguarded [graph.json]\n',
       );
       return 1;
     }
@@ -114,14 +127,40 @@ export function main(args: readonly string[] = process.argv.slice(2)): number {
 
 export type ExplainKind = 'component' | 'mutation' | 'page' | 'query';
 
-export interface FwExplainOptions {
+export type FwExplainOptions = FwTargetExplainOptions | FwUnguardedExplainOptions;
+
+export interface FwTargetExplainOptions {
   kind: ExplainKind;
   optimistic?: boolean;
   target: string;
 }
 
+export interface FwUnguardedExplainOptions {
+  unguarded: true;
+}
+
 export function fwExplain(input: FwExplainInput, options: FwExplainOptions): FwCheckResult {
   const lines = [explainOutputVersion];
+
+  if ('unguarded' in options) {
+    const mutations = unguardedMutations(input.mutations ?? []);
+    lines.push('UNGUARDED');
+
+    for (const mutation of mutations) {
+      lines.push(
+        [
+          `MUTATION ${mutation.key}`,
+          `guards=${list(mutation.guards)}`,
+          `writes=${list(mutation.writes)}`,
+          `invalidates=${list(mutation.invalidates)}`,
+          `manual-invalidates=${list(mutation.manualInvalidates)}`,
+        ].join(' '),
+      );
+    }
+
+    lines.push(`SUMMARY total=${mutations.length}`);
+    return ok(lines);
+  }
 
   if (options.kind === 'component') {
     const component = input.components?.find((item) => item.name === options.target);
@@ -248,7 +287,7 @@ function ok(lines: string[]): FwCheckResult {
   };
 }
 
-function notFound(options: FwExplainOptions): FwCheckResult {
+function notFound(options: FwTargetExplainOptions): FwCheckResult {
   return {
     exitCode: 1,
     output: `${explainOutputVersion}\nERROR NOT_FOUND ${options.kind} ${options.target}\n`,
