@@ -25,6 +25,39 @@ describe('fw check', () => {
     });
   });
 
+  it('reports semantic lints for local state, events, and direct db access', () => {
+    expect(
+      fwCheck({
+        lints: [
+          {
+            code: 'FW301',
+            detail: 'state.cartCount mirrors query cart.count.',
+            site: 'CartBadge.client.ts:8',
+          },
+          {
+            code: 'FW320',
+            detail: 'event cart:added carries product.unitPrice.',
+            site: 'cart.events.ts:3',
+          },
+          {
+            code: 'FW330',
+            detail: 'handler addToCart receives db.',
+            site: 'cart.mutation.ts:12',
+          },
+        ],
+      }),
+    ).toEqual({
+      exitCode: 0,
+      output: [
+        'fw-check/v1',
+        'LINT FW301 CartBadge.client.ts:8 Server fact stored in island-local state. state.cartCount mirrors query cart.count.',
+        'LINT FW320 cart.events.ts:3 Event payload overlaps query data; use a transform. event cart:added carries product.unitPrice.',
+        'LINT FW330 cart.mutation.ts:12 Direct db access in a mutation handler; route through domain. handler addToCart receives db.',
+        '',
+      ].join('\n'),
+    });
+  });
+
   it('reports unresolved touch graph sites as FW406', () => {
     expect(
       fwCheck({

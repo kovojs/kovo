@@ -2,9 +2,11 @@
 export type { DiagnosticCode } from '@jiso/core';
 import { readFileSync } from 'node:fs';
 
+import { diagnosticDefinitions } from '@jiso/core';
 import { diagnosticsForTouchGraph, type TouchGraph } from '@jiso/drizzle';
 
 export interface FwCheckInput {
+  lints?: SemanticLint[];
   mutations?: MutationExplain[];
   optimistic?: OptimisticCoverage[];
   queries?: QueryReadSet[];
@@ -56,6 +58,12 @@ export interface OptimisticCoverage {
 export interface QueryReadSet {
   domains: readonly string[];
   query: string;
+}
+
+export interface SemanticLint {
+  code: 'FW301' | 'FW320' | 'FW330';
+  detail?: string;
+  site: string;
 }
 
 export interface FwCheckResult {
@@ -196,6 +204,10 @@ export function fwCheck(input: FwCheckInput): FwCheckResult {
     );
   }
 
+  for (const lint of input.lints ?? []) {
+    lines.push(`LINT ${lint.code} ${lint.site} ${lintMessage(lint)}`);
+  }
+
   for (const missed of missedQueryInvalidations(input.queries ?? [], input.touchGraph ?? {})) {
     lines.push(
       `ERROR FW407 ${missed.query} reads ${missed.domain} but no mutation touch graph writes that domain.`,
@@ -261,6 +273,12 @@ function unguardedMutations(mutations: readonly MutationExplain[]): MutationExpl
 
 function hasAuthGuard(guards: readonly string[]): boolean {
   return guards.some((guard) => guard === 'authed' || guard.startsWith('role:'));
+}
+
+function lintMessage(lint: SemanticLint): string {
+  const base = diagnosticDefinitions[lint.code].message;
+
+  return lint.detail ? `${base} ${lint.detail}` : base;
 }
 
 function missedQueryInvalidations(
