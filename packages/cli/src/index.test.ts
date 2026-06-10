@@ -157,6 +157,24 @@ describe('fw check', () => {
     `);
   });
 
+  it('prints FW303 fragment target input diagnostics using the registry message', () => {
+    expect(
+      fwCheck({
+        lints: [
+          {
+            code: 'FW303',
+            detail: 'priceList',
+            site: 'CartRow.tsx:7',
+          },
+        ],
+      }).output,
+    ).toMatchInlineSnapshot(`
+      "fw-check/v1
+      LINT FW303 CartRow.tsx:7 Fragment target render input is not declared as query data or stamped props. priceList
+      "
+    `);
+  });
+
   it('reports FW320 when event payload facts overlap query data facts', () => {
     expect(
       fwCheck({

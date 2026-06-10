@@ -83,7 +83,7 @@ export interface QueryReadSet {
 }
 
 export interface SemanticLint {
-  code: 'FW301' | 'FW302' | 'FW320' | 'FW330';
+  code: 'FW301' | 'FW302' | 'FW303' | 'FW320' | 'FW330';
   detail?: string;
   site: string;
 }
