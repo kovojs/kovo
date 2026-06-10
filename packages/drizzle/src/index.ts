@@ -218,6 +218,7 @@ export function extractTouchGraphFromSource(files: readonly SourceFileInput[]): 
 
   for (const file of files) {
     for (const fn of extractFunctions(file.source)) {
+      const reads: ReadSummaryInput[] = [];
       const writes: WriteSummaryInput[] = [];
       const unresolved: UnresolvedSummaryInput[] = [];
 
@@ -231,6 +232,22 @@ export function extractTouchGraphFromSource(files: readonly SourceFileInput[]): 
             site,
             table: table.annotation,
           });
+          for (const readSource of call.readSources) {
+            const readTable = tables.get(readSource.tableExpression);
+            if (readTable) {
+              reads.push({
+                operation: readSource.operation,
+                site,
+                table: readTable.annotation,
+              });
+              continue;
+            }
+
+            unresolved.push({
+              operation: readSource.operation,
+              site,
+            });
+          }
           continue;
         }
 
@@ -240,8 +257,8 @@ export function extractTouchGraphFromSource(files: readonly SourceFileInput[]): 
         });
       }
 
-      if (writes.length > 0 || unresolved.length > 0) {
-        graph[fn.name] = createTouchGraphEntry({ unresolved, writes });
+      if (reads.length > 0 || writes.length > 0 || unresolved.length > 0) {
+        graph[fn.name] = createTouchGraphEntry({ reads, unresolved, writes });
       }
     }
   }
@@ -265,6 +282,12 @@ interface ExtractedFunction {
 interface ExtractedWriteCall {
   index: number;
   operation: string;
+  readSources: ExtractedReadSource[];
+  tableExpression: string;
+}
+
+interface ExtractedReadSource {
+  operation: 'insert-select' | 'update-from';
   tableExpression: string;
 }
 
@@ -339,11 +362,46 @@ function extractDrizzleWriteCalls(source: string): ExtractedWriteCall[] {
     calls.push({
       index: match.index,
       operation,
+      readSources: extractReadSources(
+        source.slice(match.index, statementEnd(source, match.index)),
+        operation,
+      ),
       tableExpression: tableExpression.trim(),
     });
   }
 
   return calls;
+}
+
+function extractReadSources(source: string, operation: string): ExtractedReadSource[] {
+  const sourceOperation =
+    operation === 'insert' && /\.select\s*\(/.test(source)
+      ? 'insert-select'
+      : operation === 'update' && /\.from\s*\(/.test(source)
+        ? 'update-from'
+        : null;
+  if (!sourceOperation) return [];
+
+  const sources: ExtractedReadSource[] = [];
+  const sourcePattern =
+    /\.(?:from|join|innerJoin|leftJoin|rightJoin|fullJoin)\s*\(\s*(?<tableExpression>[A-Za-z_$][\w$]*|[^,)]+)\s*(?:,|\))/g;
+
+  for (const match of source.matchAll(sourcePattern)) {
+    const tableExpression = match.groups?.tableExpression?.trim();
+    if (!tableExpression) continue;
+
+    sources.push({
+      operation: sourceOperation,
+      tableExpression,
+    });
+  }
+
+  return sources;
+}
+
+function statementEnd(source: string, start: number): number {
+  const end = source.indexOf(';', start);
+  return end === -1 ? source.length : end;
 }
 
 function findMatchingBrace(source: string, openBrace: number): number {

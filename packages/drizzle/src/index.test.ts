@@ -238,6 +238,58 @@ export const tableDomains = {
     });
   });
 
+  it('extracts direct insert-select and update-from read source tables', () => {
+    const graph = extractTouchGraphFromSource([
+      {
+        fileName: 'product.domain.ts',
+        source: `
+          export const products = pgTable("products", {}, jiso({ domain: "product", key: "id" }));
+          export const prices = pgTable("prices", {}, jiso({ domain: "price", key: "productId" }));
+          export const vendors = pgTable("vendors", {}, jiso({ domain: "vendor", key: "id" }));
+          export const snapshots = pgTable("product_snapshots", {}, jiso({ domain: "snapshot", key: "productId" }));
+
+          export async function importSnapshots(db) {
+            await db.insert(snapshots).select(db.select().from(products).innerJoin(vendors, eq(vendors.id, products.vendorId)));
+            await db.update(products).set({ price: prices.amount }).from(prices).where(eq(prices.productId, products.id));
+          }
+        `,
+      },
+    ]);
+
+    expect(graph).toEqual({
+      importSnapshots: {
+        reads: [
+          {
+            domain: 'price',
+            keys: null,
+            site: 'product.domain.ts:9',
+            source: 'update-from',
+            via: 'prices',
+          },
+          {
+            domain: 'product',
+            keys: null,
+            site: 'product.domain.ts:8',
+            source: 'insert-select',
+            via: 'products',
+          },
+          {
+            domain: 'vendor',
+            keys: null,
+            site: 'product.domain.ts:8',
+            source: 'insert-select',
+            via: 'vendors',
+          },
+        ],
+        touches: [
+          { domain: 'product', keys: null, site: 'product.domain.ts:9', via: 'products' },
+          { domain: 'snapshot', keys: null, site: 'product.domain.ts:8', via: 'product_snapshots' },
+        ],
+        unresolved: [],
+      },
+    });
+  });
+
   it('marks non-identifier Drizzle table expressions as FW406', () => {
     const graph = extractTouchGraphFromSource([
       {
@@ -271,5 +323,36 @@ export const tableDomains = {
         site: 'cart.domain.ts:3',
       },
     ]);
+  });
+
+  it('marks unresolved insert-select source tables as FW406', () => {
+    const graph = extractTouchGraphFromSource([
+      {
+        fileName: 'product.domain.ts',
+        source: `
+          export const snapshots = pgTable("product_snapshots", {}, jiso({ domain: "snapshot", key: "productId" }));
+
+          export async function importSnapshots(db) {
+            await db.insert(snapshots).select(db.select().from(tableFor("products")));
+          }
+        `,
+      },
+    ]);
+
+    expect(graph).toEqual({
+      importSnapshots: {
+        reads: [],
+        touches: [
+          { domain: 'snapshot', keys: null, site: 'product.domain.ts:5', via: 'product_snapshots' },
+        ],
+        unresolved: [
+          {
+            code: 'FW406',
+            message: 'Statically un-analyzable write site; manual touches required.',
+            site: 'product.domain.ts:5',
+          },
+        ],
+      },
+    });
   });
 });
