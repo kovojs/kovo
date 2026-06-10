@@ -10,6 +10,7 @@ import {
   hydrateQueryScripts,
   installMutationBroadcast,
   installJisoLoader,
+  OptimisticRebaser,
   parseHandlerReference,
   readElementParams,
   type DelegatedEvent,
@@ -255,6 +256,32 @@ describe('query store', () => {
     expect(store.get('cart')).toEqual({ count: 3 });
     pending.restore();
     expect(store.get('cart')).toEqual({ count: 1 });
+  });
+
+  it('rebases pending optimistic transforms over arriving server truth', () => {
+    const store = createQueryStore();
+    const rebaser = new OptimisticRebaser(store);
+    store.set('cart', { count: 0 });
+    const transform = (current: unknown, input: { quantity: number }) => {
+      const cart = current as { count: number };
+      return { count: cart.count + input.quantity };
+    };
+
+    rebaser.add('m1', { quantity: 1 }, { transforms: { cart: transform } });
+    rebaser.add('m2', { quantity: 2 }, { transforms: { cart: transform } });
+
+    expect(store.get('cart')).toEqual({ count: 3 });
+    expect(rebaser.pendingCount('cart')).toBe(2);
+
+    rebaser.applyServerTruth('cart', { count: 10 });
+
+    expect(store.get('cart')).toEqual({ count: 13 });
+
+    rebaser.settle('m1');
+    rebaser.applyServerTruth('cart', { count: 11 });
+
+    expect(store.get('cart')).toEqual({ count: 13 });
+    expect(rebaser.pendingCount('cart')).toBe(1);
   });
 
   it('applies fragment chunks through the morph adapter', () => {

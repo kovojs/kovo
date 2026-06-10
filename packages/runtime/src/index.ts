@@ -206,6 +206,56 @@ export interface PendingOptimism {
   snapshot: QuerySnapshot;
 }
 
+export interface PendingTransform<Input = unknown> {
+  id: string;
+  input: Input;
+  transform: OptimisticTransform<Input>;
+}
+
+export class OptimisticRebaser {
+  #pendingByQuery = new Map<string, PendingTransform[]>();
+  #store: QueryStore;
+
+  constructor(store: QueryStore) {
+    this.#store = store;
+  }
+
+  add<Input>(id: string, input: Input, plan: OptimisticPlan<Input>): void {
+    for (const [queryName, transform] of Object.entries(plan.transforms)) {
+      const pending = this.#pendingByQuery.get(queryName) ?? [];
+      pending.push({ id, input, transform: transform as OptimisticTransform });
+      this.#pendingByQuery.set(queryName, pending);
+
+      this.#store.set(queryName, transform(this.#store.get(queryName), input));
+    }
+  }
+
+  settle(id: string): void {
+    for (const [queryName, pending] of this.#pendingByQuery) {
+      const next = pending.filter((item) => item.id !== id);
+      if (next.length === 0) {
+        this.#pendingByQuery.delete(queryName);
+      } else {
+        this.#pendingByQuery.set(queryName, next);
+      }
+    }
+  }
+
+  applyServerTruth<Value>(queryName: string, value: Value): void {
+    let next: unknown = value;
+
+    for (const pending of this.#pendingByQuery.get(queryName) ?? []) {
+      next = pending.transform(next, pending.input);
+    }
+
+    this.#store.set(queryName, next);
+  }
+
+  pendingCount(queryName: string): number {
+    return this.#pendingByQuery.get(queryName)?.length ?? 0;
+  }
+}
+
 export function applyOptimisticTransforms<Input>(
   store: QueryStore,
   input: Input,
