@@ -193,11 +193,21 @@ export interface ScopedCssResult {
   scoped: string;
 }
 
-export function scopeComponentCss(hostSelector: string, css: string): ScopedCssResult {
+export interface ScopeComponentCssOptions {
+  nestedHostSelectors?: readonly string[];
+}
+
+export function scopeComponentCss(
+  hostSelector: string,
+  css: string,
+  options: ScopeComponentCssOptions = {},
+): ScopedCssResult {
   const trimmed = css.trim();
+  const nestedHostSelectors = options.nestedHostSelectors ?? ['[fw-c]'];
+
   return {
-    fallback: prefixCssSelectors(hostSelector, trimmed),
-    scoped: `@scope (${hostSelector}) {\n${indent(trimmed)}\n}\n`,
+    fallback: prefixCssSelectors(hostSelector, trimmed, nestedHostSelectors),
+    scoped: `@scope (${hostSelector}) to (${scopeLimitSelectors(nestedHostSelectors)}) {\n${indent(trimmed)}\n}\n`,
   };
 }
 
@@ -209,17 +219,33 @@ function isIr(source: string): boolean {
   return source.startsWith(irHeader);
 }
 
-function prefixCssSelectors(hostSelector: string, css: string): string {
+function prefixCssSelectors(
+  hostSelector: string,
+  css: string,
+  nestedHostSelectors: readonly string[],
+): string {
+  const nestedExclusion = selectorExclusion(nestedHostSelectors);
+
   return css.replace(
     /(^|})(?<selector>[^{}@][^{}]*)\{/g,
     (_match, boundary: string, selector: string) => {
       const prefixed = selector
         .split(',')
-        .map((part) => `${hostSelector} ${part.trim()}`)
+        .map((part) => `${hostSelector} ${part.trim()}${nestedExclusion}`)
         .join(', ');
       return `${boundary}${prefixed} {`;
     },
   );
+}
+
+function scopeLimitSelectors(nestedHostSelectors: readonly string[]): string {
+  return nestedHostSelectors.map((selector) => `:scope ${selector}`).join(', ');
+}
+
+function selectorExclusion(nestedHostSelectors: readonly string[]): string {
+  return nestedHostSelectors
+    .flatMap((selector) => [`:not(${selector})`, `:not(${selector} *)`])
+    .join('');
 }
 
 function indent(value: string): string {

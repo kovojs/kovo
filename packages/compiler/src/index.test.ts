@@ -535,10 +535,23 @@ describe('component CSS helpers', () => {
     );
 
     expect(result.scoped).toBe(
-      '@scope ([fw-c="cart-badge"]) {\n  .count { color: red; }\n  button, a { color: blue; }\n}\n',
+      '@scope ([fw-c="cart-badge"]) to (:scope [fw-c]) {\n  .count { color: red; }\n  button, a { color: blue; }\n}\n',
     );
     expect(result.fallback).toBe(
-      '[fw-c="cart-badge"] .count { color: red; }[fw-c="cart-badge"] button, [fw-c="cart-badge"] a { color: blue; }',
+      '[fw-c="cart-badge"] .count:not([fw-c]):not([fw-c] *) { color: red; }[fw-c="cart-badge"] button:not([fw-c]):not([fw-c] *), [fw-c="cart-badge"] a:not([fw-c]):not([fw-c] *) { color: blue; }',
+    );
+  });
+
+  it('excludes stamped and dashed nested island hosts from component CSS scopes', () => {
+    const result = scopeComponentCss('[fw-c="cart-badge"]', '.count { color: red; }', {
+      nestedHostSelectors: ['[fw-c]', 'cart-row'],
+    });
+
+    expect(result.scoped).toBe(
+      '@scope ([fw-c="cart-badge"]) to (:scope [fw-c], :scope cart-row) {\n  .count { color: red; }\n}\n',
+    );
+    expect(result.fallback).toBe(
+      '[fw-c="cart-badge"] .count:not([fw-c]):not([fw-c] *):not(cart-row):not(cart-row *) { color: red; }',
     );
   });
 
