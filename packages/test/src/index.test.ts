@@ -196,6 +196,12 @@ describe('@jiso/test harness', () => {
     expect(harness.dbHandle().read('cart_items')).toEqual(['p1']);
   });
 
+  it('returns no verification diagnostics when verification is not configured', () => {
+    const harness = createJisoTestHarness({ db: createFakeDb() });
+
+    expect(harness.verificationDiagnostics()).toEqual([]);
+  });
+
   it('asserts typed mutation error paths without rendering a browser', async () => {
     const addToCart = mutation('cart/add', {
       errors: {
@@ -363,6 +369,65 @@ describe('@jiso/test harness', () => {
       ok: true,
       value: ['p1'],
     });
+  });
+
+  it('exposes verification diagnostics through the harness context', async () => {
+    const cartMutation = mutation('cart/add', {
+      input: s.object({ productId: s.string() }),
+      handler(input, request: { db: FakeDb }) {
+        request.db.write('cart_items', input.productId, { branch: 'cart-line' });
+        return request.db.read('cart_items');
+      },
+    });
+    const harness = createJisoTestHarness({
+      db: createFakeDb(),
+      touchGraph: {
+        'cart.addItem': {
+          touches: [
+            {
+              branch: 'cart-line',
+              domain: 'cart',
+              keys: 'arg:productId',
+              site: 'cart.domain.ts:1',
+              via: 'cart_items',
+            },
+            {
+              branch: 'stock-reserve',
+              domain: 'product',
+              keys: 'arg:productId',
+              site: 'cart.domain.ts:2',
+              via: 'products',
+            },
+          ],
+          unresolved: [],
+        },
+      },
+      verification: {
+        domainByTable: {
+          cart_items: 'cart',
+          products: 'product',
+        },
+      },
+    });
+
+    await harness.exec(cartMutation, { productId: 'p1' });
+
+    expect(harness.verificationDiagnostics()).toEqual([
+      {
+        branch: 'stock-reserve',
+        code: 'FW405',
+        domain: 'product',
+        message: 'Conditional write branch was never executed under instrumentation.',
+        severity: 'warn',
+        site: 'cart.domain.ts:2',
+      },
+      {
+        code: 'FW403',
+        domain: 'product',
+        message: 'Declared domain was never observed written.',
+        severity: 'warn',
+      },
+    ]);
   });
 
   it('runs mutation suites against an in-memory pglite database', async () => {

@@ -40,6 +40,7 @@ export interface JisoTestContext<Db = unknown> {
   ) => Promise<MutationResult<Value>>;
   page: (path: string) => Promise<PageAssertion>;
   query: (query: QueryDefinition, input?: unknown) => Promise<unknown>;
+  verificationDiagnostics(): readonly DbVerificationDiagnostic[];
 }
 
 export interface JisoTestRequest<Db> {
@@ -130,6 +131,9 @@ export function createJisoTestHarness<Db>(
         query.reads.map((domain) => domain.key),
       );
       return result;
+    },
+    verificationDiagnostics(): readonly DbVerificationDiagnostic[] {
+      return verifier?.diagnostics() ?? [];
     },
   };
 }
