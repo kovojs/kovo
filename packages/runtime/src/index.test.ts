@@ -94,8 +94,28 @@ class FakeBroadcastChannel {
   messages: unknown[] = [];
   onmessage: ((event: { data: unknown }) => void) | null = null;
 
+  constructor(private readonly hub?: FakeBroadcastHub) {
+    hub?.connect(this);
+  }
+
   postMessage(message: unknown): void {
     this.messages.push(message);
+    this.hub?.deliver(this, message);
+  }
+}
+
+class FakeBroadcastHub {
+  private readonly channels = new Set<FakeBroadcastChannel>();
+
+  connect(channel: FakeBroadcastChannel): void {
+    this.channels.add(channel);
+  }
+
+  deliver(sender: FakeBroadcastChannel, message: unknown): void {
+    for (const channel of this.channels) {
+      if (channel === sender) continue;
+      channel.onmessage?.({ data: message });
+    }
   }
 }
 
@@ -513,6 +533,53 @@ describe('query store', () => {
     expect(refetchOnFocus).toHaveBeenNthCalledWith(2, ['cart', 'inventory']);
   });
 
+  it('refreshes stale hydrated query data when a visible tab regains focus', async () => {
+    const root = new FakeRoot();
+    const store = createQueryStore();
+    const cartPlan = vi.fn();
+    const analyticsPlan = vi.fn();
+    root.scripts = [
+      {
+        getAttribute: (name) => (name === 'fw-query' ? 'cart' : null),
+        textContent: '{"count":1}',
+      },
+      {
+        getAttribute: (name) => (name === 'fw-query' ? 'analytics' : null),
+        textContent: '{"sampled":true}',
+      },
+    ];
+
+    store.subscribe('cart', cartPlan);
+    store.subscribe('analytics', analyticsPlan);
+    installJisoLoader({
+      importModule: vi.fn(),
+      queryStore: store,
+      refetchOnFocus(queries) {
+        for (const query of queries) {
+          if (query === 'cart') store.set(query, { count: 2 });
+        }
+      },
+      refetchOnFocusOptOut: ['analytics'],
+      root,
+    });
+
+    expect(store.get('cart')).toEqual({ count: 1 });
+    expect(store.get('analytics')).toEqual({ sampled: true });
+
+    root.visibilityState = 'hidden';
+    await root.listeners.get('visibilitychange')?.({ target: null, type: 'visibilitychange' });
+
+    expect(store.get('cart')).toEqual({ count: 1 });
+
+    root.visibilityState = 'visible';
+    await root.listeners.get('visibilitychange')?.({ target: null, type: 'visibilitychange' });
+
+    expect(store.get('cart')).toEqual({ count: 2 });
+    expect(store.get('analytics')).toEqual({ sampled: true });
+    expect(cartPlan).toHaveBeenLastCalledWith({ count: 2 });
+    expect(analyticsPlan).toHaveBeenCalledTimes(1);
+  });
+
   it('registers pagehide optimism cleanup without unload handlers', () => {
     const root = new FakeRoot();
     const discardPendingOptimism = vi.fn();
@@ -663,6 +730,55 @@ describe('query store', () => {
 
     expect(store.get('cart')).toEqual({ count: 6 });
     expect(root.targets.get('cart-badge')?.html).toBe('<cart-badge>6</cart-badge>');
+  });
+
+  it('syncs mutation responses from one tab to another over BroadcastChannel', () => {
+    const hub = new FakeBroadcastHub();
+    const channelA = new FakeBroadcastChannel(hub);
+    const channelB = new FakeBroadcastChannel(hub);
+    const storeA = createQueryStore();
+    const storeB = createQueryStore();
+    const onChangesA = vi.fn();
+    const onChangesB = vi.fn();
+    const rootB = new FakeMorphRoot();
+    rootB.targets.set('cart-badge', new FakeMorphTarget('<cart-badge>1</cart-badge>'));
+
+    const broadcastA = installMutationBroadcast({
+      channel: channelA,
+      onChanges: onChangesA,
+      store: storeA,
+    });
+    installMutationBroadcast({
+      channel: channelB,
+      onChanges: onChangesB,
+      root: rootB,
+      store: storeB,
+    });
+
+    broadcastA.publish(
+      [
+        '<fw-query name="cart">{"count":5}</fw-query>',
+        '<fw-fragment target="cart-badge"><cart-badge>5</cart-badge></fw-fragment>',
+      ].join('\n'),
+      [{ domain: 'cart', keys: ['cart_1'] }],
+    );
+
+    expect(channelA.messages).toEqual([
+      {
+        body: [
+          '<fw-query name="cart">{"count":5}</fw-query>',
+          '<fw-fragment target="cart-badge"><cart-badge>5</cart-badge></fw-fragment>',
+        ].join('\n'),
+        changes: [{ domain: 'cart', keys: ['cart_1'] }],
+        type: 'jiso:mutation-response',
+      },
+    ]);
+    expect(channelB.messages).toEqual([]);
+    expect(storeA.get('cart')).toBeUndefined();
+    expect(onChangesA).not.toHaveBeenCalled();
+    expect(storeB.get('cart')).toEqual({ count: 5 });
+    expect(rootB.targets.get('cart-badge')?.html).toBe('<cart-badge>5</cart-badge>');
+    expect(onChangesB).toHaveBeenCalledWith([{ domain: 'cart', keys: ['cart_1'] }]);
   });
 
   it('applies hand-written optimistic transforms through query update plans', () => {
