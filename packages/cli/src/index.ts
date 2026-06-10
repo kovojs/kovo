@@ -1,5 +1,26 @@
 #!/usr/bin/env node
 export type { DiagnosticCode } from '@jiso/core';
+import { readFileSync } from 'node:fs';
+
+import { diagnosticsForTouchGraph, type TouchGraph } from '@jiso/drizzle';
+
+export interface FwCheckInput {
+  optimistic?: OptimisticCoverage[];
+  touchGraph?: TouchGraph;
+}
+
+export interface OptimisticCoverage {
+  mutation: string;
+  query: string;
+  status: 'UNHANDLED' | 'await-fragment' | 'hand-written';
+}
+
+export interface FwCheckResult {
+  exitCode: 0 | 1;
+  output: string;
+}
+
+const outputVersion = 'fw-check/v1';
 
 export function main(args: readonly string[] = process.argv.slice(2)): number {
   if (args.length === 0) {
@@ -7,8 +28,46 @@ export function main(args: readonly string[] = process.argv.slice(2)): number {
     return 0;
   }
 
+  if (args[0] === 'check') {
+    const inputPath = args[1];
+    const input = inputPath ? JSON.parse(readFileSync(inputPath, 'utf8')) : {};
+    const result = fwCheck(input);
+    const stream = result.exitCode === 0 ? process.stdout : process.stderr;
+    stream.write(result.output);
+    return result.exitCode;
+  }
+
   process.stderr.write(`fw: command not implemented yet: ${args.join(' ')}\n`);
   return 1;
+}
+
+export function fwCheck(input: FwCheckInput): FwCheckResult {
+  const lines = [outputVersion];
+  const diagnostics = diagnosticsForTouchGraph(input.touchGraph ?? {});
+
+  for (const diagnostic of diagnostics) {
+    lines.push(
+      `${diagnostic.severity.toUpperCase()} ${diagnostic.code} ${diagnostic.site} ${diagnostic.message}`,
+    );
+  }
+
+  for (const coverage of input.optimistic ?? []) {
+    if (coverage.status !== 'UNHANDLED') continue;
+
+    lines.push(
+      `WARN FW310 ${coverage.mutation} -> ${coverage.query} Invalidated query lacks optimistic transform.`,
+    );
+  }
+
+  if (lines.length === 1) {
+    lines.push('OK');
+  }
+
+  const failed = lines.some((line) => line.startsWith('ERROR '));
+  return {
+    exitCode: failed ? 1 : 0,
+    output: `${lines.join('\n')}\n`,
+  };
 }
 
 if (import.meta.url === `file://${process.argv[1]}`) {

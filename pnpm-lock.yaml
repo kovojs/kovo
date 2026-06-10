@@ -33,6 +33,13 @@ importers:
       '@jiso/core':
         specifier: workspace:*
         version: link:../core
+      '@jiso/drizzle':
+        specifier: workspace:*
+        version: link:../drizzle
+    devDependencies:
+      vitest:
+        specifier: 4.1.8
+        version: 4.1.8(@types/node@25.9.2)(vite@8.0.16(@types/node@25.9.2))
 
   packages/compiler:
     dependencies:
