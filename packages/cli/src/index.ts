@@ -6,9 +6,11 @@ import { diagnosticDefinitions } from '@jiso/core';
 import { diagnosticsForTouchGraph, type TouchGraph } from '@jiso/drizzle';
 
 export interface FwCheckInput {
+  eventPayloads?: readonly EventPayloadFact[];
   lints?: readonly SemanticLint[];
   mutations?: readonly MutationExplain[];
   optimistic?: readonly OptimisticCoverage[];
+  queryData?: readonly QueryDataFact[];
   queries?: readonly QueryReadSet[];
   touchGraph?: TouchGraph;
 }
@@ -53,6 +55,17 @@ export interface OptimisticCoverage {
   mutation: string;
   query: string;
   status: 'UNHANDLED' | 'await-fragment' | 'hand-written';
+}
+
+export interface EventPayloadFact {
+  event: string;
+  fields: readonly string[];
+  site: string;
+}
+
+export interface QueryDataFact {
+  fields: readonly string[];
+  query: string;
 }
 
 export interface QueryReadSet {
@@ -251,6 +264,10 @@ export function fwCheck(input: FwCheckInput): FwCheckResult {
     lines.push(`LINT ${lint.code} ${lint.site} ${lintMessage(lint)}`);
   }
 
+  for (const lint of eventPayloadQueryLints(input.eventPayloads ?? [], input.queryData ?? [])) {
+    lines.push(`LINT ${lint.code} ${lint.site} ${lintMessage(lint)}`);
+  }
+
   for (const missed of missedQueryInvalidations(input.queries ?? [], input.touchGraph ?? {})) {
     lines.push(
       `ERROR FW407 ${missed.query} reads ${missed.domain} but no mutation touch graph writes that domain.`,
@@ -370,6 +387,49 @@ function missedQueryInvalidations(
       .filter((domain) => !touchedDomains.has(domain))
       .map((domain) => ({ domain, query: query.query })),
   );
+}
+
+function eventPayloadQueryLints(
+  events: readonly EventPayloadFact[],
+  queries: readonly QueryDataFact[],
+): SemanticLint[] {
+  const queryFields = new Map<string, string[]>();
+
+  for (const query of queries) {
+    for (const field of query.fields) {
+      const existing = queryFields.get(normalizePath(field)) ?? [];
+      existing.push(query.query);
+      queryFields.set(normalizePath(field), existing);
+    }
+  }
+
+  return events.flatMap((event) =>
+    event.fields.flatMap((field) => {
+      const normalizedField = normalizePath(field);
+      const queryNames = queryFields.get(normalizedField);
+      if (!queryNames) return [];
+
+      return [
+        {
+          code: 'FW320',
+          detail: `event ${event.event} carries ${normalizedField} from query ${[
+            ...new Set(queryNames),
+          ]
+            .sort()
+            .join(',')}.`,
+          site: event.site,
+        },
+      ] satisfies SemanticLint[];
+    }),
+  );
+}
+
+function normalizePath(path: string): string {
+  return path
+    .split('.')
+    .map((part) => part.trim())
+    .filter(Boolean)
+    .join('.');
 }
 
 if (import.meta.url === `file://${process.argv[1]}`) {

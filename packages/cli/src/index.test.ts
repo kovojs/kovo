@@ -80,6 +80,69 @@ describe('fw check', () => {
     `);
   });
 
+  it('reports FW320 when event payload facts overlap query data facts', () => {
+    expect(
+      fwCheck({
+        eventPayloads: [
+          {
+            event: 'cart:added',
+            fields: ['productId', 'product.unitPrice', 'quantity'],
+            site: 'cart.events.ts:3',
+          },
+        ],
+        queryData: [
+          {
+            fields: ['id', 'product.unitPrice', 'title'],
+            query: 'productCard',
+          },
+        ],
+      }),
+    ).toEqual({
+      exitCode: 0,
+      output:
+        'fw-check/v1\nLINT FW320 cart.events.ts:3 Event payload overlaps query data; use a transform. event cart:added carries product.unitPrice from query productCard.\n',
+    });
+  });
+
+  it('keeps graph-derived FW320 output stable across duplicate query fields', () => {
+    expect(
+      fwCheck({
+        eventPayloads: [
+          {
+            event: 'cart:added',
+            fields: ['product.unitPrice'],
+            site: 'cart.events.ts:3',
+          },
+        ],
+        queryData: [
+          { fields: ['product.unitPrice'], query: 'recommendations' },
+          { fields: ['product.unitPrice'], query: 'cart' },
+          { fields: ['product.unitPrice'], query: 'cart' },
+        ],
+      }).output,
+    ).toBe(
+      'fw-check/v1\nLINT FW320 cart.events.ts:3 Event payload overlaps query data; use a transform. event cart:added carries product.unitPrice from query cart,recommendations.\n',
+    );
+  });
+
+  it('accepts event payload facts that do not overlap query data facts', () => {
+    expect(
+      fwCheck({
+        eventPayloads: [
+          {
+            event: 'cart:added',
+            fields: ['productId', 'quantity'],
+            site: 'cart.events.ts:3',
+          },
+        ],
+        queryData: [{ fields: ['product.unitPrice', 'title'], query: 'productCard' }],
+      }),
+    ).toEqual({
+      exitCode: 0,
+      output: 'fw-check/v1\nOK\n',
+    });
+  });
+
   it('reports unresolved touch graph sites as FW406', () => {
     expect(
       fwCheck({

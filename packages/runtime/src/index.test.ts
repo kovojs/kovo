@@ -206,6 +206,28 @@ describe('typed event bus', () => {
       'Event is not declared in the registry: inventory:changed',
     );
   });
+
+  it('rejects event payloads that carry query data facts', () => {
+    const cartAdded = event<'cart:added', { productId: string; quantity: number }>('cart:added', {
+      serverFactKeys: ['productId'],
+    });
+    const bus = createEventBus([cartAdded] as const, { queryDataKeys: ['productId'] });
+
+    expect(() => bus.emit('cart:added', { productId: 'p1', quantity: 2 })).toThrow(
+      'Event payload overlaps query data; use a transform. event cart:added carries productId.',
+    );
+  });
+
+  it('rejects undeclared actual payload keys that overlap query data', () => {
+    const bus = createEventBus(
+      [event<'cart:added', { productId: string; quantity: number }>('cart:added')] as const,
+      { queryDataKeys: ['productId'] },
+    );
+
+    expect(() => bus.emit('cart:added', { productId: 'p1', quantity: 2 })).toThrow(
+      'Event payload overlaps query data; use a transform. event cart:added carries productId.',
+    );
+  });
 });
 
 describe('query store', () => {

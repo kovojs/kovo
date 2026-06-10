@@ -1,3 +1,4 @@
+import { diagnosticDefinitions } from '@jiso/core';
 export type { DiagnosticCode } from '@jiso/core';
 import type { EventDefinition, Form, FormFailure, FormInput, JsonValue } from '@jiso/core';
 
@@ -48,19 +49,31 @@ export interface TypedEventBus<EventMap extends Record<string, unknown>> {
   ): EventSubscription;
 }
 
+export interface EventBusOptions {
+  queryDataKeys?: readonly string[];
+}
+
 export function createEventBus<
   const Definitions extends readonly EventDefinition<string, JsonValue>[],
->(definitions: Definitions): TypedEventBus<EventPayloadMap<Definitions>> {
+>(
+  definitions: Definitions,
+  options: EventBusOptions = {},
+): TypedEventBus<EventPayloadMap<Definitions>> {
   const events = definitions.map((definition) => definition.name) as Extract<
     keyof EventPayloadMap<Definitions>,
     string
   >[];
   const allowed = new Set<string>(events);
+  const queryDataKeys = new Set(options.queryDataKeys ?? []);
+  const eventServerFactKeys = new Map(
+    definitions.map((definition) => [definition.name, definition.serverFactKeys ?? []] as const),
+  );
   const listeners = new Map<string, Set<EventListener<unknown>>>();
 
   return {
     emit(name, payload) {
       assertKnownEvent(allowed, name);
+      assertPayloadDoesNotCarryQueryData(name, payload, eventServerFactKeys, queryDataKeys);
 
       for (const listener of listeners.get(name) ?? []) {
         void listener({ name, payload });
@@ -87,6 +100,24 @@ function assertKnownEvent(allowed: ReadonlySet<string>, name: string): void {
   if (!allowed.has(name)) {
     throw new Error(`Event is not declared in the registry: ${name}`);
   }
+}
+
+function assertPayloadDoesNotCarryQueryData(
+  name: string,
+  payload: unknown,
+  eventServerFactKeys: ReadonlyMap<string, readonly string[]>,
+  queryDataKeys: ReadonlySet<string>,
+): void {
+  if (queryDataKeys.size === 0) return;
+
+  const declaredKeys = eventServerFactKeys.get(name) ?? [];
+  const payloadKeys = typeof payload === 'object' && payload !== null ? Object.keys(payload) : [];
+  const overlap = [...new Set([...declaredKeys, ...payloadKeys])].find((key) =>
+    queryDataKeys.has(key),
+  );
+  if (!overlap) return;
+
+  throw new Error(`${diagnosticDefinitions.FW320.message} event ${name} carries ${overlap}.`);
 }
 
 export interface LoaderRoot {

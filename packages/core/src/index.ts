@@ -98,13 +98,22 @@ export function formFields<
 export interface EventDefinition<Name extends string, Payload extends JsonValue = JsonValue> {
   name: Name;
   payload?: Payload;
+  serverFactKeys?: readonly string[];
 }
 
 export type EventPayload<Definition> =
   Definition extends EventDefinition<string, infer Payload> ? Payload : never;
 
+export interface EventOptions<Payload extends JsonValue = JsonValue> {
+  serverFactKeys?: readonly Extract<keyof Payload, string>[];
+}
+
 export function event<const Name extends string, Payload extends JsonValue = JsonValue>(
   name: Name,
+  options: EventOptions<Payload> = {},
 ): EventDefinition<Name, Payload> {
-  return { name };
+  return {
+    name,
+    ...(options.serverFactKeys === undefined ? {} : { serverFactKeys: options.serverFactKeys }),
+  };
 }

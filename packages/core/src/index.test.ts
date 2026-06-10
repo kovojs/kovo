@@ -77,13 +77,24 @@ describe('core authoring APIs', () => {
   });
 
   it('preserves typed event names as registry facts', () => {
-    const cartAdded = event<'cart:added', { productId: string; quantity: number }>('cart:added');
+    const cartAdded = event<'cart:added', { productId: string; quantity: number }>('cart:added', {
+      serverFactKeys: ['productId'],
+    });
     const payload = {
       productId: 'p1',
       quantity: 2,
     } satisfies EventPayload<typeof cartAdded>;
 
     expect(cartAdded.name).toBe('cart:added');
+    expect(cartAdded.serverFactKeys).toEqual(['productId']);
     expect(payload.quantity).toBe(2);
+
+    const assertUnknownServerFactKey = () => {
+      event<'cart:added', { productId: string; quantity: number }>('cart:added', {
+        // @ts-expect-error sku is not part of the event payload.
+        serverFactKeys: ['sku'],
+      });
+    };
+    expect(assertUnknownServerFactKey).toBeTypeOf('function');
   });
 });
