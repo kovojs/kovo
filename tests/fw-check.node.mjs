@@ -272,6 +272,12 @@ void test('P2 loader smoke evidence remains represented in runtime tests', async
     /keeps the loader idle until the first delegated interaction/,
     'browser suite covers first-interaction handler import',
   );
+  assert.match(
+    browserTests,
+    /preserves L0 light-DOM IDREF and form behavior without handler imports/,
+    'browser suite covers L0 platform behavior through light DOM',
+  );
+  assert.match(browserTests, /new FormData\(form\)\.get\('query'\)/);
 });
 
 void test('P5 morph evidence includes structural and browser survival suites', async () => {

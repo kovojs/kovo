@@ -208,6 +208,41 @@ describe('runtime browser suite', () => {
     });
   });
 
+  it('preserves L0 light-DOM IDREF and form behavior without handler imports', async () => {
+    const root = document.createElement('main');
+    root.innerHTML = [
+      '<cart-filter fw-c="cart-filter">',
+      '<form id="filters">',
+      '<label for="query">Search</label>',
+      '<input id="query" name="query" value="coffee">',
+      '<button type="submit">Apply</button>',
+      '</form>',
+      '</cart-filter>',
+    ].join('');
+    document.body.append(root);
+    let imports = 0;
+
+    installJisoLoader({
+      async importModule() {
+        imports += 1;
+        return {};
+      },
+      root,
+    });
+
+    root.querySelector('label')?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+
+    await vi.waitFor(() => {
+      expect(document.activeElement).toBe(root.querySelector('#query'));
+    });
+
+    const form = root.querySelector('form');
+    if (!form) throw new Error('missing form fixture');
+
+    expect(new FormData(form).get('query')).toBe('coffee');
+    expect(imports).toBe(0);
+  });
+
   it('preserves focus, selection, scroll, and keyed identity during a real DOM fragment morph', () => {
     const root = document.createElement('main');
     root.innerHTML = [
