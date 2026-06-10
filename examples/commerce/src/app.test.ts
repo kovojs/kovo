@@ -492,14 +492,20 @@ describe('commerce example', () => {
 
   it('answers cart/add update intent mechanically from fw explain output', () => {
     const mutation = fwExplain(commerceGraph, { kind: 'mutation', target: 'cart/add' });
+    const page = fwExplain(commerceGraph, { kind: 'page', target: '/cart' });
     const updates = mutationUpdateConsumers(mutation.output);
+    const pageQueries = explainList(explainLine(page.output, 'queries: '));
 
-    for (const query of ['cart', 'productGrid', 'orderHistory']) {
+    expect(pageQueries).toEqual(['cart', 'productGrid', 'orderHistory']);
+
+    for (const query of pageQueries) {
       const queryExplain = fwExplain(commerceGraph, { kind: 'query', target: query });
       const consumers = explainList(explainLine(queryExplain.output, 'consumers: '));
       const componentConsumers = consumers.filter((consumer) => consumer.startsWith('component:'));
 
       expect(updates.get(query)).toEqual(expect.arrayContaining(componentConsumers));
+      expect(updates.get(query)).toContain('page:/cart');
+      expect(consumers).toContain('page:/cart');
       expect(componentConsumers.length).toBeGreaterThan(0);
     }
   });
