@@ -929,6 +929,44 @@ describe('server mutation primitives', () => {
     });
   });
 
+  it('renders append fragment mode for pagination fragments', async () => {
+    const product = domain('product');
+    const productQuery = query('productGrid', {
+      load: () => ({ items: [{ id: 'p3' }], nextCursor: null }),
+      reads: [product],
+    });
+    const loadMore = mutation('product/loadMore', {
+      input: s.object({ after: s.string() }),
+      registry: {
+        queries: [productQuery],
+        touches: [product],
+      },
+      handler(input) {
+        return input;
+      },
+    });
+
+    await expect(
+      renderMutationResponse(loadMore, {
+        fragmentRenderers: [
+          {
+            mode: 'append',
+            render: () => '<article data-key="p3"></article>',
+            target: 'product-grid',
+          },
+        ],
+        rawInput: { after: 'p2' },
+        request: {},
+        targets: ['product-grid'],
+      }),
+    ).resolves.toMatchObject({
+      body: expect.stringContaining(
+        '<fw-fragment target="product-grid" mode="append"><article data-key="p3"></article></fw-fragment>',
+      ),
+      status: 200,
+    });
+  });
+
   it('renders enhanced mutation responses from schema-coerced mutation input', async () => {
     const cart = domain('cart');
     const cartQuery = query('cart', {

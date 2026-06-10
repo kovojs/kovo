@@ -17,6 +17,7 @@ import {
   renderOrderHistory,
   renderCartPage,
   renderProductGrid,
+  renderProductGridPageFragment,
   submitAddToCart,
   submitAddToCartNoJs,
 } from './app.js';
@@ -64,6 +65,17 @@ describe('commerce example', () => {
     expect(renderProductGrid(firstPage)).toContain('data-key="p2"');
     expect(renderProductGrid(firstPage)).toContain('href="/products?after=p2"');
     expect(renderProductGrid(secondPage)).toContain('data-key="p3"');
+
+    const appendFragment = renderProductGridPageFragment(db, {
+      after: firstPage.nextCursor ?? undefined,
+      limit: 2,
+    });
+
+    expect(appendFragment).toContain('<fw-fragment target="product-grid" mode="append">');
+    expect(appendFragment).toContain('data-key="p3"');
+    expect(appendFragment).not.toContain('data-key="p1"');
+    expect(appendFragment).not.toContain('data-key="p2"');
+    expect(appendFragment).not.toContain('<section fw-c="product-grid"');
 
     await addToCart.handler(
       { productId: 'p1', quantity: 2 },

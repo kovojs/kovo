@@ -169,6 +169,22 @@ export function renderProductGrid(result: ProductGridResult): string {
   return `<section fw-c="product-grid" fw-deps="product" data-page-cursor="${result.nextCursor ?? ''}">${items}${more}</section>`;
 }
 
+export function renderProductGridAppend(result: ProductGridResult): string {
+  const items = result.items.map((item) => renderProductCard(item)).join('');
+  const more = result.nextCursor
+    ? `<a href="/products?after=${result.nextCursor}" data-cursor="${result.nextCursor}">More</a>`
+    : '';
+
+  return `${items}${more}`;
+}
+
+export function renderProductGridPageFragment(
+  db: CommerceDb,
+  input: ProductGridInput = {},
+): string {
+  return `<fw-fragment target="product-grid" mode="append">${renderProductGridAppend(loadProductGrid(db, input))}</fw-fragment>`;
+}
+
 function renderProductCard(
   item: { id: string; stock: number },
   failure?: AddToCartFailure,

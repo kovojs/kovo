@@ -357,6 +357,7 @@ export interface MutationRegistry {
 
 export interface FragmentRenderer {
   errorBoundary?: ErrorBoundaryRenderer;
+  mode?: 'append' | 'replace';
   render(input: unknown): string | Promise<string>;
   stylesheets?: readonly (string | StylesheetAsset)[];
   target: string;
@@ -671,6 +672,11 @@ function renderDeferredFragmentChunk(fragment: DeferredFragmentChunk): string {
   const stylesheets = renderStylesheetLinks(fragment.stylesheets ?? []);
 
   return `<fw-fragment target="${escapeAttribute(fragment.target)}"${priority}>${stylesheets}${fragment.html}</fw-fragment>`;
+}
+
+function renderFragmentOpen(target: string, mode?: 'append' | 'replace'): string {
+  const modeAttribute = mode === 'append' ? ' mode="append"' : '';
+  return `<fw-fragment target="${escapeAttribute(target)}"${modeAttribute}>`;
 }
 
 export async function runMutation<
@@ -1032,7 +1038,7 @@ async function renderFragmentChunks(
 
     try {
       chunks.push(
-        `<fw-fragment target="${escapeAttribute(renderer.target)}">${renderStylesheetLinks(renderer.stylesheets ?? [])}${await renderer.render(input)}</fw-fragment>`,
+        `${renderFragmentOpen(renderer.target, renderer.mode)}${renderStylesheetLinks(renderer.stylesheets ?? [])}${await renderer.render(input)}</fw-fragment>`,
       );
     } catch (error) {
       if (!renderer.errorBoundary) throw error;

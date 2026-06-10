@@ -622,10 +622,13 @@ export interface MutationChangeRecord {
 
 export interface FragmentChunk {
   html: string;
+  mode?: 'append' | 'replace';
   target: string;
 }
 
 export interface MorphTarget {
+  appendHtml?(html: string): void;
+  readHtml?(): string;
   replaceWithHtml(html: string): void;
 }
 
@@ -878,7 +881,11 @@ export function applyFragments(
     const target = root.findFragmentTarget(fragment.target);
     if (!target) continue;
 
-    morph(target, fragment.html);
+    if (fragment.mode === 'append') {
+      appendFragment(target, fragment.html, morph);
+    } else {
+      morph(target, fragment.html);
+    }
     applied.push(fragment.target);
   }
 
@@ -1193,6 +1200,7 @@ function readFragmentChunks(body: string): FragmentChunk[] {
 
     fragments.push({
       html: match.groups?.html ?? '',
+      ...(readAttribute(match.groups?.attrs ?? '', 'mode') === 'append' ? { mode: 'append' } : {}),
       target,
     });
   }
@@ -1202,6 +1210,21 @@ function readFragmentChunks(body: string): FragmentChunk[] {
 
 function replaceFragment(target: MorphTarget, html: string): void {
   target.replaceWithHtml(html);
+}
+
+function appendFragment(target: MorphTarget, html: string, morph: MorphFragment): void {
+  if (target.appendHtml) {
+    target.appendHtml(html);
+    return;
+  }
+
+  const current = target.readHtml?.();
+  if (current !== undefined) {
+    morph(target, `${current}${html}`);
+    return;
+  }
+
+  morph(target, html);
 }
 
 function copyOptionalStructuralFields(

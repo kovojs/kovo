@@ -107,6 +107,14 @@ class FakeMorphTarget {
   replaceWithHtml(html: string): void {
     this.html = html;
   }
+
+  appendHtml(html: string): void {
+    this.html += html;
+  }
+
+  readHtml(): string {
+    return this.html;
+  }
 }
 
 class FakeMorphRoot {
@@ -845,6 +853,30 @@ describe('query store', () => {
       ]),
     ).toEqual(['cart-badge']);
     expect(root.targets.get('cart-badge')?.html).toBe('<cart-badge>new</cart-badge>');
+  });
+
+  it('appends fragment chunks when the wire mode is append', () => {
+    const root = new FakeMorphRoot();
+    root.targets.set('product-grid', new FakeMorphTarget('<article data-key="p1"></article>'));
+    const store = createQueryStore();
+
+    const result = applyMutationResponseToDom({
+      body: '<fw-fragment target="product-grid" mode="append"><article data-key="p2"></article></fw-fragment>',
+      root,
+      store,
+    });
+
+    expect(result.fragments).toEqual([
+      {
+        html: '<article data-key="p2"></article>',
+        mode: 'append',
+        target: 'product-grid',
+      },
+    ]);
+    expect(result.appliedFragments).toEqual(['product-grid']);
+    expect(root.targets.get('product-grid')?.html).toBe(
+      '<article data-key="p1"></article><article data-key="p2"></article>',
+    );
   });
 
   it('morphs a structural tree to the next tree shape without DOM APIs', () => {
