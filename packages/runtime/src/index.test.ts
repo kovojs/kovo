@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 
 import {
+  applyMutationResponse,
   createQueryStore,
   dispatchDelegatedEvent,
   hydrateQueryScripts,
@@ -122,5 +123,34 @@ describe('query store', () => {
     await root.listeners.get('focus')?.({ target: null, type: 'focus' });
 
     expect(refetchOnFocus).toHaveBeenCalledTimes(1);
+  });
+
+  it('applies mutation response query chunks and returns fragment chunks for morphing', () => {
+    const store = createQueryStore();
+    const plan = vi.fn();
+
+    store.subscribe('cart', plan);
+    const applied = applyMutationResponse(
+      store,
+      [
+        '<fw-query name="cart">{"count":3}</fw-query>',
+        '<fw-fragment target="cart-badge"><cart-badge>3</cart-badge></fw-fragment>',
+      ].join('\n'),
+    );
+
+    expect(store.get('cart')).toEqual({ count: 3 });
+    expect(plan).toHaveBeenCalledWith({ count: 3 });
+    expect(applied).toEqual({
+      fragments: [{ html: '<cart-badge>3</cart-badge>', target: 'cart-badge' }],
+      queries: ['cart'],
+    });
+  });
+
+  it('accepts escaped JSON from text/html-compatible fw-query chunks', () => {
+    const store = createQueryStore();
+
+    applyMutationResponse(store, '<fw-query name="cart">{&quot;count&quot;:4}</fw-query>');
+
+    expect(store.get('cart')).toEqual({ count: 4 });
   });
 });

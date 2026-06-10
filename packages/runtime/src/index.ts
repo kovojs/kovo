@@ -183,3 +183,61 @@ export function hydrateQueryScripts(store: QueryStore, scripts: Iterable<QuerySc
     store.hydrate(script);
   }
 }
+
+export interface AppliedMutationResponse {
+  fragments: FragmentChunk[];
+  queries: string[];
+}
+
+export interface FragmentChunk {
+  html: string;
+  target: string;
+}
+
+export function applyMutationResponse(store: QueryStore, body: string): AppliedMutationResponse {
+  const queries: string[] = [];
+
+  for (const match of body.matchAll(/<fw-query\b(?<attrs>[^>]*)>(?<json>[\s\S]*?)<\/fw-query>/g)) {
+    const name = readAttribute(match.groups?.attrs ?? '', 'name');
+    if (!name) continue;
+
+    store.set(name, JSON.parse(unescapeHtml(match.groups?.json ?? 'null')));
+    queries.push(name);
+  }
+
+  return {
+    fragments: readFragmentChunks(body),
+    queries,
+  };
+}
+
+function readFragmentChunks(body: string): FragmentChunk[] {
+  const fragments: FragmentChunk[] = [];
+
+  for (const match of body.matchAll(
+    /<fw-fragment\b(?<attrs>[^>]*)>(?<html>[\s\S]*?)<\/fw-fragment>/g,
+  )) {
+    const target = readAttribute(match.groups?.attrs ?? '', 'target');
+    if (!target) continue;
+
+    fragments.push({
+      html: match.groups?.html ?? '',
+      target,
+    });
+  }
+
+  return fragments;
+}
+
+function readAttribute(attrs: string, name: string): string | null {
+  const pattern = new RegExp(`\\b${name}="([^"]*)"`);
+  return unescapeHtml(pattern.exec(attrs)?.[1] ?? '') || null;
+}
+
+function unescapeHtml(value: string): string {
+  return value
+    .replaceAll('&quot;', '"')
+    .replaceAll('&gt;', '>')
+    .replaceAll('&lt;', '<')
+    .replaceAll('&amp;', '&');
+}
