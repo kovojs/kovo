@@ -1,7 +1,9 @@
 import { describe, expect, it, vi } from 'vitest';
 
 import {
+  createQueryStore,
   dispatchDelegatedEvent,
+  hydrateQueryScripts,
   installJisoLoader,
   parseHandlerReference,
   readElementParams,
@@ -70,5 +72,55 @@ describe('runtime loader', () => {
     expect(readElementParams(new FakeElement({ 'data-p-product-id': 'p1' }))).toEqual({
       productId: 'p1',
     });
+  });
+});
+
+describe('query store', () => {
+  it('hydrates fw-query scripts and immediately runs subscribed update plans', () => {
+    const store = createQueryStore();
+    const plan = vi.fn();
+
+    store.subscribe('cart', plan);
+    hydrateQueryScripts(store, [
+      {
+        getAttribute: (name) => (name === 'fw-query' ? 'cart' : null),
+        textContent: '{"count":2}',
+      },
+    ]);
+
+    expect(store.get('cart')).toEqual({ count: 2 });
+    expect(plan).toHaveBeenCalledWith({ count: 2 });
+  });
+
+  it('runs update plans whenever a query value changes', () => {
+    const store = createQueryStore();
+    const plan = vi.fn();
+
+    const unsubscribe = store.subscribe<{ count: number }>('cart', plan);
+    store.set('cart', { count: 1 });
+    unsubscribe();
+    store.set('cart', { count: 2 });
+
+    expect(plan).toHaveBeenCalledTimes(1);
+    expect(plan).toHaveBeenCalledWith({ count: 1 });
+  });
+
+  it('registers refetch-on-focus and visibility listeners without invoking them eagerly', async () => {
+    const root = new FakeRoot();
+    const refetchOnFocus = vi.fn();
+
+    installJisoLoader({
+      importModule: vi.fn(),
+      refetchOnFocus,
+      root,
+    });
+
+    expect(root.listeners.has('visibilitychange')).toBe(true);
+    expect(root.listeners.has('focus')).toBe(true);
+    expect(refetchOnFocus).not.toHaveBeenCalled();
+
+    await root.listeners.get('focus')?.({ target: null, type: 'focus' });
+
+    expect(refetchOnFocus).toHaveBeenCalledTimes(1);
   });
 });

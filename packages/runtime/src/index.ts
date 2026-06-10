@@ -43,6 +43,8 @@ export interface EventElementLike {
 export interface JisoLoaderOptions {
   events?: readonly string[];
   importModule: ImportHandlerModule;
+  queryStore?: QueryStore;
+  refetchOnFocus?: () => void | Promise<void>;
   root: LoaderRoot;
 }
 
@@ -63,6 +65,11 @@ export function installJisoLoader(options: JisoLoaderOptions): JisoLoader {
       },
       { capture: true },
     );
+  }
+
+  if (options.refetchOnFocus) {
+    options.root.addEventListener('visibilitychange', options.refetchOnFocus);
+    options.root.addEventListener('focus', options.refetchOnFocus);
   }
 
   return { events };
@@ -118,4 +125,61 @@ export function readElementParams(element: EventElementLike): Record<string, str
 
 function camelCase(value: string): string {
   return value.replace(/-([a-z0-9])/g, (_, char: string) => char.toUpperCase());
+}
+
+export type QueryUpdatePlan<Value = unknown> = (value: Value) => void;
+
+export interface QueryStore {
+  get<Value = unknown>(name: string): Value | undefined;
+  hydrate(script: QueryScriptLike): void;
+  set<Value = unknown>(name: string, value: Value): void;
+  subscribe<Value = unknown>(name: string, plan: QueryUpdatePlan<Value>): () => void;
+}
+
+export interface QueryScriptLike {
+  getAttribute(name: string): string | null;
+  textContent: string | null;
+}
+
+export function createQueryStore(): QueryStore {
+  const values = new Map<string, unknown>();
+  const plans = new Map<string, Set<QueryUpdatePlan>>();
+
+  return {
+    get<Value = unknown>(name: string): Value | undefined {
+      return values.get(name) as Value | undefined;
+    },
+    hydrate(script: QueryScriptLike): void {
+      const name = script.getAttribute('fw-query');
+      if (!name) return;
+
+      this.set(name, JSON.parse(script.textContent ?? 'null'));
+    },
+    set<Value = unknown>(name: string, value: Value): void {
+      values.set(name, value);
+
+      for (const plan of plans.get(name) ?? []) {
+        plan(value);
+      }
+    },
+    subscribe<Value = unknown>(name: string, plan: QueryUpdatePlan<Value>): () => void {
+      const existing = plans.get(name) ?? new Set<QueryUpdatePlan>();
+      existing.add(plan as QueryUpdatePlan);
+      plans.set(name, existing);
+
+      if (values.has(name)) {
+        plan(values.get(name) as Value);
+      }
+
+      return () => {
+        existing.delete(plan as QueryUpdatePlan);
+      };
+    },
+  };
+}
+
+export function hydrateQueryScripts(store: QueryStore, scripts: Iterable<QueryScriptLike>): void {
+  for (const script of scripts) {
+    store.hydrate(script);
+  }
 }
