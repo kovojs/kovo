@@ -20,10 +20,23 @@ import {
   renderCartPage,
   renderProductGrid,
   renderProductGridPageFragment,
+  renderReceiptUploadForm,
   submitAddToCart,
   submitAddToCartNoJs,
   type AddToCartInput,
+  uploadReceipt,
 } from './app.js';
+
+function commerceFile(name: string, type: string, size: number) {
+  return {
+    async arrayBuffer() {
+      return new ArrayBuffer(size);
+    },
+    name,
+    size,
+    type,
+  };
+}
 
 describe('commerce example', () => {
   it('executes addToCart and verifies rendered cart badge without a browser', async () => {
@@ -151,6 +164,51 @@ describe('commerce example', () => {
     expect(html).toContain('name="productId" value="p1"');
     expect(html).toContain('name="quantity" type="number" min="1" max="5" value="1"');
     expect(html).toContain('type="submit">Add</button>');
+  });
+
+  it('renders a multipart receipt upload form on the commerce page', () => {
+    const form = renderReceiptUploadForm('order-1');
+    const html = renderCartPage();
+
+    expect(form).toContain(
+      '<form method="post" action="/_m/order/receipt" enhance data-mutation="order/receipt" enctype="multipart/form-data"',
+    );
+    expect(form).toContain('fw-deps="order"');
+    expect(form).toContain('aria-busy="false"');
+    expect(form).toContain('name="orderId" value="order-1"');
+    expect(form).toContain('name="receipt" type="file" accept="application/pdf,image/png"');
+    expect(html).toContain('data-mutation="order/receipt"');
+  });
+
+  it('coerces commerce receipt uploads through s.file()', async () => {
+    const receipt = commerceFile('receipt.pdf', 'application/pdf', 2048);
+
+    expect(
+      uploadReceipt.handler(
+        { orderId: 'order-1', receipt },
+        { db: createCommerceDb(), session: { id: 's-upload', user: { id: 'u1' } } },
+        {
+          fail(code, payload) {
+            return { error: { code, payload }, ok: false, status: 422 };
+          },
+          invalidate(domain, options) {
+            return { domain: domain.key, ...options, manual: true };
+          },
+        },
+      ),
+    ).toEqual({
+      fileName: 'receipt.pdf',
+      orderId: 'order-1',
+      size: 2048,
+      uploadedBy: 'u1',
+    });
+
+    expect(() =>
+      uploadReceipt.input.parse({
+        orderId: 'order-1',
+        receipt: commerceFile('receipt.txt', 'text/plain', 12),
+      }),
+    ).toThrow('Expected file type application/pdf, image/png');
   });
 
   it('handles no-JS addToCart success as POST-redirect-GET', async () => {
@@ -340,6 +398,19 @@ describe('commerce example', () => {
         'OPTIMISTIC productGrid await-fragment',
         'OPTIMISTIC orderHistory await-fragment',
         'OPTIMISTIC-SUMMARY total=3 hand-written=1 await-fragment=2 UNHANDLED=0',
+        '',
+      ].join('\n'),
+    });
+    expect(fwExplain(commerceGraph, { kind: 'mutation', target: 'order/receipt' })).toEqual({
+      exitCode: 0,
+      output: [
+        'fw-explain/v1',
+        'MUTATION order/receipt',
+        'guards: authed,rateLimit:session',
+        'writes: -',
+        'invalidates: -',
+        'manual-invalidates: -',
+        'updates: -',
         '',
       ].join('\n'),
     });

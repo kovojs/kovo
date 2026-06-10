@@ -4,6 +4,7 @@ import type { OptimisticPlan } from '@jiso/runtime';
 import {
   domain,
   errorBoundary,
+  type FileLike,
   guards,
   i18n,
   meta,
@@ -96,6 +97,11 @@ export interface ProductGridResult {
 export interface AddToCartInput {
   productId: string;
   quantity: number;
+}
+
+export interface UploadReceiptInput {
+  orderId: string;
+  receipt: FileLike;
 }
 
 export interface CartQueryResult {
@@ -204,6 +210,27 @@ export const addToCart = mutation('cart/add', {
   },
 });
 
+export const uploadReceipt = mutation('order/receipt', {
+  input: s.object({
+    orderId: s.string(),
+    receipt: s.file({ maxBytes: 64 * 1024, mime: ['application/pdf', 'image/png'] }),
+  }),
+  guard: guards.all(
+    guards.authed<CommerceRequest>(),
+    guards.rateLimit<CommerceRequest>({ max: 5, per: 'session' }),
+  ),
+  handler(input: UploadReceiptInput, request: CommerceRequest) {
+    const currentSession = commerceSession.parse(request);
+
+    return {
+      fileName: input.receipt.name,
+      orderId: input.orderId,
+      size: input.receipt.size,
+      uploadedBy: currentSession.user.id,
+    };
+  },
+});
+
 export const commerceMeta = meta({
   description: 'Browse products and checkout with a verifiable cart.',
   title: 'Jiso Commerce',
@@ -302,6 +329,18 @@ export function renderOrderHistory(db: CommerceDb): string {
   return `<ol fw-c="order-history" fw-deps="order">${items}</ol>`;
 }
 
+export function renderReceiptUploadForm(orderId = 'order-1'): string {
+  return [
+    '<form method="post" action="/_m/order/receipt" enhance data-mutation="order/receipt" enctype="multipart/form-data" fw-deps="order" class="mt-4 grid gap-2 rounded border border-slate-200 bg-white p-4" aria-busy="false">',
+    `<input type="hidden" name="orderId" value="${escapeAttribute(orderId)}">`,
+    '<label class="grid gap-1 text-sm font-medium text-slate-700"><span>Receipt</span>',
+    '<input name="receipt" type="file" accept="application/pdf,image/png" class="rounded border border-slate-300 px-2 py-1">',
+    '</label>',
+    '<button class="rounded bg-slate-900 px-3 py-2 text-sm font-medium text-white" type="submit">Upload receipt</button>',
+    '</form>',
+  ].join('');
+}
+
 export const CartBadge = component('cart-badge', {
   fragmentTarget: true,
   queries: { cart: cartQuery },
@@ -321,7 +360,7 @@ export function renderCartPage(
   addToCartFailure?: AddToCartFailureState,
 ): string {
   const productGrid = renderProductGridWithFailure(loadProductGrid(db), addToCartFailure);
-  return `<html><head>${commercePageHints.html}</head><body class="min-h-dvh bg-slate-50 p-6"><main class="mx-auto max-w-4xl"><fw-fragment target="cart-badge">${CartBadge.definition.render()}</fw-fragment><fw-fragment target="product-grid">${productGrid}</fw-fragment><fw-fragment target="order-history">${renderOrderHistory(db)}</fw-fragment></main></body></html>`;
+  return `<html><head>${commercePageHints.html}</head><body class="min-h-dvh bg-slate-50 p-6"><main class="mx-auto max-w-4xl"><fw-fragment target="cart-badge">${CartBadge.definition.render()}</fw-fragment><fw-fragment target="product-grid">${productGrid}</fw-fragment><fw-fragment target="order-history">${renderOrderHistory(db)}${renderReceiptUploadForm()}</fw-fragment></main></body></html>`;
 }
 
 function renderProductGridWithFailure(
@@ -420,6 +459,10 @@ export const commerceGraph = {
       invalidates: ['cart', 'product', 'order'],
       key: 'cart/add',
       writes: ['cart', 'product', 'order'],
+    },
+    {
+      guards: ['authed', 'rateLimit:session'],
+      key: 'order/receipt',
     },
   ],
   optimistic: [
