@@ -74,6 +74,82 @@ describe('server mutation primitives', () => {
     });
   });
 
+  it('guards mutations by authenticated session user', async () => {
+    const guarded = mutation('cart/add', {
+      guard: guards.authed<{ session?: { user?: { id: string } | null } | null }>(),
+      input: s.object({ productId: s.string() }),
+      handler() {
+        return 'ok';
+      },
+    });
+
+    await expect(runMutation(guarded, { productId: 'p1' }, { session: null })).resolves.toEqual({
+      error: { code: 'UNAUTHORIZED', payload: {} },
+      ok: false,
+      status: 422,
+    });
+    await expect(
+      runMutation(guarded, { productId: 'p1' }, { session: { user: { id: 'u1' } } }),
+    ).resolves.toMatchObject({
+      ok: true,
+      value: 'ok',
+    });
+  });
+
+  it('guards mutations by session user role', async () => {
+    const guarded = mutation('admin/refund', {
+      guard: guards.role('admin'),
+      input: s.object({ productId: s.string() }),
+      handler() {
+        return 'ok';
+      },
+    });
+
+    await expect(
+      runMutation(guarded, { productId: 'p1' }, { session: { user: { roles: ['staff'] } } }),
+    ).resolves.toEqual({
+      error: { code: 'UNAUTHORIZED', payload: {} },
+      ok: false,
+      status: 422,
+    });
+    await expect(
+      runMutation(guarded, { productId: 'p1' }, { session: { user: { roles: ['admin'] } } }),
+    ).resolves.toMatchObject({
+      ok: true,
+      value: 'ok',
+    });
+  });
+
+  it('rate-limits mutations by session by default', async () => {
+    const guarded = mutation('cart/add', {
+      guard: guards.rateLimit({ max: 1, per: 'session' }),
+      input: s.object({ productId: s.string() }),
+      handler() {
+        return 'ok';
+      },
+    });
+
+    await expect(
+      runMutation(guarded, { productId: 'p1' }, { session: { id: 's1' } }),
+    ).resolves.toMatchObject({
+      ok: true,
+      value: 'ok',
+    });
+    await expect(
+      runMutation(guarded, { productId: 'p1' }, { session: { id: 's1' } }),
+    ).resolves.toEqual({
+      error: { code: 'UNAUTHORIZED', payload: {} },
+      ok: false,
+      status: 422,
+    });
+    await expect(
+      runMutation(guarded, { productId: 'p1' }, { session: { id: 's2' } }),
+    ).resolves.toMatchObject({
+      ok: true,
+      value: 'ok',
+    });
+  });
+
   it('derives post-commit rerun queries from declared touches', async () => {
     const cart = domain('cart');
     const product = domain('product');

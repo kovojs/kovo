@@ -79,6 +79,25 @@ class NumberSchemaImpl implements NumberSchema {
 
 export type Guard<Request> = (request: Request) => boolean | Promise<boolean>;
 
+export interface SessionUserLike {
+  id?: string;
+  roles?: readonly string[];
+}
+
+export interface SessionRequestLike {
+  session?: {
+    id?: string;
+    user?: SessionUserLike | null;
+  } | null;
+}
+
+export interface RateLimitOptions<Request> {
+  key?: (request: Request) => string;
+  max: number;
+  per?: 'global' | 'session';
+  windowMs?: number;
+}
+
 export const guards = {
   all<Request>(...items: Guard<Request>[]): Guard<Request> {
     return async (request: Request) => {
@@ -88,6 +107,36 @@ export const guards = {
 
       return true;
     };
+  },
+  authed<Request extends SessionRequestLike>(): Guard<Request> {
+    return (request) => Boolean(request.session?.user);
+  },
+  rateLimit<Request extends SessionRequestLike>(
+    options: RateLimitOptions<Request>,
+  ): Guard<Request> {
+    const counts = new Map<string, { count: number; resetAt: number }>();
+
+    return (request) => {
+      const now = Date.now();
+      const key = rateLimitKey(request, options);
+      const existing = counts.get(key);
+
+      if (existing && (options.windowMs === undefined || existing.resetAt > now)) {
+        if (existing.count >= options.max) return false;
+
+        existing.count += 1;
+        return true;
+      }
+
+      counts.set(key, {
+        count: 1,
+        resetAt: options.windowMs === undefined ? Number.POSITIVE_INFINITY : now + options.windowMs,
+      });
+      return options.max > 0;
+    };
+  },
+  role<Request extends SessionRequestLike>(role: string): Guard<Request> {
+    return (request) => request.session?.user?.roles?.includes(role) ?? false;
   },
 };
 
@@ -357,6 +406,16 @@ function isMutationFail(value: unknown): value is MutationFail {
     value.ok === false &&
     'error' in value
   );
+}
+
+function rateLimitKey<Request extends SessionRequestLike>(
+  request: Request,
+  options: RateLimitOptions<Request>,
+): string {
+  if (options.key) return options.key(request);
+  if (options.per === 'global') return 'global';
+
+  return request.session?.id ?? request.session?.user?.id ?? 'anonymous';
 }
 
 function formLikeToRecord(input: unknown): Record<string, unknown> {
