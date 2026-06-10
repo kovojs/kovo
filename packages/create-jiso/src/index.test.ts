@@ -40,6 +40,12 @@ describe('create-jiso starter', () => {
     expect(
       project.files.find((file) => file.path === 'docs/graph-assertions.md')?.source,
     ).toContain('fw explain --unguarded graph.json');
+    expect(
+      project.files.find((file) => file.path === 'docs/graph-assertions.md')?.source,
+    ).toContain('`FW-Idem` keys make duplicate POSTs replayable');
+    expect(
+      project.files.find((file) => file.path === 'docs/graph-assertions.md')?.source,
+    ).toContain('SPEC.md section 9.1');
     const deploymentDoc = project.files.find((file) => file.path === 'docs/deployment.md')?.source;
     expect(deploymentDoc).toContain('stateless');
     expect(deploymentDoc).toContain('BroadcastChannel');
@@ -53,6 +59,8 @@ describe('create-jiso starter', () => {
     expect(frameworkRules).toContain('`data-bind` paths must exist');
     expect(frameworkRules).toContain('The v1 server is stateless');
     expect(frameworkRules).toContain('`fw explain --unguarded graph.json`');
+    expect(frameworkRules).toContain('`FW-Idem` replay for duplicate submissions');
+    expect(frameworkRules).toContain('readable `FW-Fragment`/`FW-Targets` headers');
     expect(project.files.find((file) => file.path === 'src/app.tsx')?.source).toContain(
       'class="mx-auto grid min-h-dvh',
     );
