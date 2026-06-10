@@ -32,7 +32,24 @@ interface HandlerLowering {
   exportName: string;
   attributeName: string;
   attributeValue: string;
+  params: ElementParam[];
   diagnostic?: CompilerDiagnostic;
+}
+
+interface ElementParam {
+  attributeName: string;
+  value: string;
+}
+
+export interface JisoVitePlugin {
+  name: 'jiso';
+  transform: (
+    source: string,
+    id: string,
+  ) => null | {
+    code: string;
+    map: null;
+  };
 }
 
 const irHeader = '// @jiso-ir';
@@ -49,15 +66,23 @@ export function compileComponentModule(options: CompileComponentOptions): Compil
   const handlers = lowerEventHandlers(options, componentName);
   const clientFileName = replaceExtension(options.fileName, '.client.js');
   const serverFileName = replaceExtension(options.fileName, '.server.js');
+  const registryFileName = 'generated/registries.d.ts';
 
   const clientSource = emitClientModule(handlers);
   const serverSource = emitServerModule(options.source, handlers, clientFileName);
+  const registrySource = emitRegistryModule({
+    clientFileName,
+    componentName,
+    fragmentTargets: findFragmentTargets(options.source, componentName),
+    handlers,
+  });
 
   return {
     diagnostics: handlers.flatMap((handler) => (handler.diagnostic ? [handler.diagnostic] : [])),
     files: [
       { fileName: serverFileName, source: serverSource },
       { fileName: clientFileName, source: clientSource },
+      { fileName: registryFileName, source: registrySource },
     ],
   };
 }
@@ -76,8 +101,19 @@ export function assertFixpoint(result: CompileResult): void {
   }
 }
 
-export function jisoVitePlugin(): { name: string } {
-  return { name: 'jiso' };
+export function jisoVitePlugin(): JisoVitePlugin {
+  return {
+    name: 'jiso',
+    transform(source: string, id: string) {
+      if (!/\.[cm]?tsx?$/.test(id) || !source.includes('component(')) return null;
+
+      const result = compileComponentModule({ fileName: id, source });
+      return {
+        code: result.files.find((file) => file.fileName.endsWith('.server.js'))?.source ?? source,
+        map: null,
+      };
+    },
+  };
 }
 
 function isIr(source: string): boolean {
@@ -113,6 +149,7 @@ function lowerEventHandlers(
     const event = match.groups?.event ?? 'Event';
     const expression = (match.groups?.expression ?? '').trim();
     const namedHandler = /^[A-Za-z_$][\w$]*$/.test(expression);
+    const params = namedHandler ? [] : extractElementParams(expression);
     const eventName = event.toLowerCase();
     const exportName = namedHandler
       ? `${componentName}$${expression}`
@@ -132,6 +169,7 @@ function lowerEventHandlers(
       attributeValue: `./${replaceExtension(options.fileName.split('/').at(-1) ?? options.fileName, '.client.js')}#${exportName}`,
       ...(diagnostic ? { diagnostic } : {}),
       exportName,
+      params,
     });
   }
 
@@ -178,7 +216,12 @@ function emitServerModule(
     (next, handler) =>
       next.replace(
         /on[A-Z][A-Za-z0-9]*=\{[^}]*\}/,
-        `${handler.attributeName}="${handler.attributeValue}"`,
+        [
+          `${handler.attributeName}="${handler.attributeValue}"`,
+          ...handler.params.map(
+            (param) => `${param.attributeName}="${escapeAttribute(param.value)}"`,
+          ),
+        ].join(' '),
       ),
     source,
   );
@@ -196,4 +239,91 @@ function replaceExtension(fileName: string, extension: string): string {
 
 function templateLiteral(value: string): string {
   return `\`${value.replaceAll('\\', '\\\\').replaceAll('`', '\\`').replaceAll('${', '\\${')}\``;
+}
+
+function extractElementParams(expression: string): ElementParam[] {
+  const callMatch = /^\(\)\s*=>\s*[A-Za-z_$][\w$]*\((?<args>.*)\)$/.exec(expression);
+  if (!callMatch?.groups?.args) return [];
+
+  return splitArguments(callMatch.groups.args)
+    .map((arg) => arg.trim())
+    .filter((arg) => arg.length > 0 && arg !== 'state')
+    .map((arg) => ({
+      attributeName: `data-p-${paramNameForExpression(arg)}`,
+      value: `{${arg}}`,
+    }));
+}
+
+function splitArguments(args: string): string[] {
+  const parts: string[] = [];
+  let start = 0;
+  let depth = 0;
+
+  for (let index = 0; index < args.length; index += 1) {
+    const char = args[index];
+    if (char === '(' || char === '[' || char === '{') depth += 1;
+    if (char === ')' || char === ']' || char === '}') depth -= 1;
+    if (char === ',' && depth === 0) {
+      parts.push(args.slice(start, index));
+      start = index + 1;
+    }
+  }
+
+  parts.push(args.slice(start));
+  return parts;
+}
+
+function paramNameForExpression(expression: string): string {
+  const segments = expression
+    .replace(/\[['"]([^'"]+)['"]\]/g, '.$1')
+    .split('.')
+    .filter(Boolean);
+  const last = segments.at(-1) ?? expression;
+  return last
+    .replace(/([a-z0-9])([A-Z])/g, '$1-$2')
+    .replace(/[^A-Za-z0-9]+/g, '-')
+    .replace(/^-|-$/g, '')
+    .toLowerCase();
+}
+
+function escapeAttribute(value: string): string {
+  return value.replaceAll('&', '&amp;').replaceAll('"', '&quot;');
+}
+
+function findFragmentTargets(source: string, componentName: string): string[] {
+  if (!/fragmentTarget\s*:\s*true/.test(source)) return [];
+
+  const explicitName = /component\(\s*['"]([^'"]+)['"]/.exec(source)?.[1];
+  return [explicitName ?? kebabCase(componentName)];
+}
+
+function kebabCase(value: string): string {
+  return value
+    .replace(/([a-z0-9])([A-Z])/g, '$1-$2')
+    .replace(/_/g, '-')
+    .toLowerCase();
+}
+
+function emitRegistryModule(options: {
+  clientFileName: string;
+  componentName: string;
+  fragmentTargets: string[];
+  handlers: HandlerLowering[];
+}): string {
+  const handlerModuleLine = options.handlers.length
+    ? `  '#${kebabCase(options.componentName)}': typeof import('../${options.clientFileName}');`
+    : '';
+  const fragmentTargetLines = options.fragmentTargets
+    .map((target) => `  '${target}': unknown;`)
+    .join('\n');
+
+  return `${irHeader}
+export interface HandlerModules {
+${handlerModuleLine}
+}
+
+export interface FragmentTargets {
+${fragmentTargetLines}
+}
+`;
 }
