@@ -80,6 +80,62 @@ describe('compileComponentModule', () => {
 
     expect(() => assertFixpoint(result)).not.toThrow();
   });
+
+  it('lowers provable dialog behavior to platform attributes instead of client handlers', () => {
+    const result = compileComponentModule({
+      fileName: 'cart-button.tsx',
+      source: `
+export const CartButton = component('cart-button', {
+  render: () => (
+    <button onClick={() => document.getElementById('cart-drawer')!.showModal()}>
+      Open cart
+    </button>
+  ),
+});
+`,
+    });
+
+    expect(result.diagnostics).toEqual([]);
+    expect(result.platformSubstitutions).toEqual([
+      {
+        action: 'show-modal',
+        event: 'click',
+        kind: 'dialog',
+        tag: 'button',
+        target: 'cart-drawer',
+      },
+    ]);
+    expect(result.files[0]?.source).toContain('commandfor="cart-drawer" command="show-modal"');
+    expect(result.files[1]?.source).toContain('// no client handlers emitted');
+    expect(result.files[2]?.source).toContain(
+      "'CartButton:button:click:cart-drawer': 'dialog:show-modal';",
+    );
+  });
+
+  it('lowers provable popover behavior to popover target attributes', () => {
+    const result = compileComponentModule({
+      fileName: 'filter-button.tsx',
+      source: `
+export const FilterButton = component('filter-button', {
+  render: () => <button onClick={() => document.getElementById('filters')!.togglePopover()}>Filters</button>,
+});
+`,
+    });
+
+    expect(result.platformSubstitutions).toEqual([
+      {
+        action: 'toggle',
+        event: 'click',
+        kind: 'popover',
+        tag: 'button',
+        target: 'filters',
+      },
+    ]);
+    expect(result.files[0]?.source).toContain(
+      'popovertarget="filters" popovertargetaction="toggle"',
+    );
+    expect(result.files[1]?.source).toContain('// no client handlers emitted');
+  });
 });
 
 describe('jisoVitePlugin', () => {

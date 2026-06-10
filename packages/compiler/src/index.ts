@@ -17,10 +17,11 @@ export interface EmittedFile {
 export interface CompileResult {
   diagnostics: CompilerDiagnostic[];
   files: EmittedFile[];
+  platformSubstitutions: PlatformSubstitution[];
 }
 
 export function createEmptyCompileResult(): CompileResult {
-  return { diagnostics: [], files: [] };
+  return { diagnostics: [], files: [], platformSubstitutions: [] };
 }
 
 export interface CompileComponentOptions {
@@ -41,6 +42,14 @@ interface ElementParam {
   value: string;
 }
 
+export interface PlatformSubstitution {
+  action: string;
+  event: string;
+  kind: 'dialog' | 'popover';
+  tag: string;
+  target: string;
+}
+
 export interface JisoVitePlugin {
   name: 'jiso';
   transform: (
@@ -59,22 +68,26 @@ export function compileComponentModule(options: CompileComponentOptions): Compil
     return {
       diagnostics: [],
       files: [{ fileName: options.fileName, source: options.source }],
+      platformSubstitutions: [],
     };
   }
 
   const componentName = inferComponentName(options);
-  const handlers = lowerEventHandlers(options, componentName);
+  const platformLowering = lowerPlatformBehaviors(options.source);
+  const source = platformLowering.source;
+  const handlers = lowerEventHandlers({ ...options, source }, componentName);
   const clientFileName = replaceExtension(options.fileName, '.client.js');
   const serverFileName = replaceExtension(options.fileName, '.server.js');
   const registryFileName = 'generated/registries.d.ts';
 
   const clientSource = emitClientModule(handlers);
-  const serverSource = emitServerModule(options.source, handlers, clientFileName);
+  const serverSource = emitServerModule(source, handlers, clientFileName);
   const registrySource = emitRegistryModule({
     clientFileName,
     componentName,
-    fragmentTargets: findFragmentTargets(options.source, componentName),
+    fragmentTargets: findFragmentTargets(source, componentName),
     handlers,
+    platformSubstitutions: platformLowering.substitutions,
   });
 
   return {
@@ -84,6 +97,7 @@ export function compileComponentModule(options: CompileComponentOptions): Compil
       { fileName: clientFileName, source: clientSource },
       { fileName: registryFileName, source: registrySource },
     ],
+    platformSubstitutions: platformLowering.substitutions,
   };
 }
 
@@ -171,6 +185,60 @@ function inferComponentName(options: CompileComponentOptions): string {
     .filter(Boolean)
     .map((part) => `${part[0]?.toUpperCase() ?? ''}${part.slice(1)}`)
     .join('');
+}
+
+function lowerPlatformBehaviors(source: string): {
+  source: string;
+  substitutions: PlatformSubstitution[];
+} {
+  const substitutions: PlatformSubstitution[] = [];
+  const nextSource = source.replace(
+    /<(?<tag>[A-Za-z][A-Za-z0-9-]*)\b(?<before>[^>]*)\sonClick=\{\(\)\s*=>\s*document\.getElementById\(['"](?<target>[^'"]+)['"]\)!?\.(?<method>showModal|close|showPopover|hidePopover|togglePopover)\(\)\s*\}/g,
+    (match, tag: string, before: string, target: string, method: string) => {
+      const substitution = platformSubstitutionFor(tag, target, method);
+      if (!substitution) return match;
+
+      substitutions.push(substitution);
+      return `<${tag}${before} ${platformAttributes(substitution)}`;
+    },
+  );
+
+  return {
+    source: nextSource,
+    substitutions,
+  };
+}
+
+function platformSubstitutionFor(
+  tag: string,
+  target: string,
+  method: string,
+): PlatformSubstitution | null {
+  if (method === 'showModal') {
+    return { action: 'show-modal', event: 'click', kind: 'dialog', tag, target };
+  }
+
+  if (method === 'close') {
+    return { action: 'close', event: 'click', kind: 'dialog', tag, target };
+  }
+
+  const popoverActionByMethod: Record<string, string> = {
+    hidePopover: 'hide',
+    showPopover: 'show',
+    togglePopover: 'toggle',
+  };
+  const action = popoverActionByMethod[method];
+  if (!action) return null;
+
+  return { action, event: 'click', kind: 'popover', tag, target };
+}
+
+function platformAttributes(substitution: PlatformSubstitution): string {
+  if (substitution.kind === 'dialog') {
+    return `commandfor="${escapeAttribute(substitution.target)}" command="${substitution.action}"`;
+  }
+
+  return `popovertarget="${escapeAttribute(substitution.target)}" popovertargetaction="${substitution.action}"`;
 }
 
 function lowerEventHandlers(
@@ -346,12 +414,19 @@ function emitRegistryModule(options: {
   componentName: string;
   fragmentTargets: string[];
   handlers: HandlerLowering[];
+  platformSubstitutions: PlatformSubstitution[];
 }): string {
   const handlerModuleLine = options.handlers.length
     ? `  '#${kebabCase(options.componentName)}': typeof import('../${options.clientFileName}');`
     : '';
   const fragmentTargetLines = options.fragmentTargets
     .map((target) => `  '${target}': unknown;`)
+    .join('\n');
+  const platformSubstitutionLines = options.platformSubstitutions
+    .map(
+      (substitution) =>
+        `  '${options.componentName}:${substitution.tag}:${substitution.event}:${substitution.target}': '${substitution.kind}:${substitution.action}';`,
+    )
     .join('\n');
 
   return `${irHeader}
@@ -361,6 +436,10 @@ ${handlerModuleLine}
 
 export interface FragmentTargets {
 ${fragmentTargetLines}
+}
+
+export interface PlatformSubstitutions {
+${platformSubstitutionLines}
 }
 `;
 }
