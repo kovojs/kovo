@@ -327,12 +327,18 @@ export interface RouteMeta {
   title?: string;
 }
 
+export interface I18nCatalog<Messages extends Record<string, string> = Record<string, string>> {
+  locale: string;
+  messages: Messages;
+}
+
 export interface StylesheetAsset {
   href: string;
   preload?: boolean;
 }
 
 export interface PageHintOptions {
+  i18n?: I18nCatalog | readonly I18nCatalog[];
   meta?: RouteMeta | readonly RouteMeta[];
   modulepreloads?: readonly string[];
   prefetch?: RoutePrefetch;
@@ -416,11 +422,31 @@ export function meta<const Meta extends RouteMeta>(definition: Meta): Meta {
   return definition;
 }
 
+export function i18n<const Messages extends Record<string, string>>(
+  locale: string,
+  messages: Messages,
+): I18nCatalog<Messages> {
+  return { locale, messages };
+}
+
+export function t<
+  Messages extends Record<string, string>,
+  Key extends Extract<keyof Messages, string>,
+>(catalog: I18nCatalog<Messages>, key: Key, values: Record<string, string | number> = {}): string {
+  const message = catalog.messages[key];
+  if (message === undefined) throw new Error(`Missing i18n message: ${key}`);
+
+  return message.replace(/\{(?<name>[A-Za-z0-9_]+)\}/g, (match, name: string) =>
+    Object.hasOwn(values, name) ? String(values[name]) : match,
+  );
+}
+
 export function renderPageHints(options: PageHintOptions): PageHints {
   const modulepreloads = dedupe(options.modulepreloads ?? []);
   const stylesheets = dedupeStylesheets(options.stylesheets ?? []);
   const html = [
     ...renderRouteMeta(options.meta),
+    ...renderI18nCatalogs(options.i18n),
     ...stylesheets.map((asset) => `<link rel="stylesheet" href="${escapeAttribute(asset.href)}">`),
     ...modulepreloads.map((href) => `<link rel="modulepreload" href="${escapeAttribute(href)}">`),
     renderSpeculationRules(options.prefetch ?? false, options.prerenderUrls ?? []),
@@ -759,6 +785,15 @@ function renderRouteMeta(metaInput: PageHintOptions['meta']): string[] {
   }
 
   return tags;
+}
+
+function renderI18nCatalogs(i18nInput: PageHintOptions['i18n']): string[] {
+  const catalogs = Array.isArray(i18nInput) ? i18nInput : i18nInput ? [i18nInput] : [];
+
+  return catalogs.map(
+    (catalog) =>
+      `<script type="application/json" fw-i18n locale="${escapeAttribute(catalog.locale)}">${escapeScriptJson(JSON.stringify(catalog.messages))}</script>`,
+  );
 }
 
 function renderDeferredQueryChunks(queries: readonly DeferredQueryChunk[]): string[] {

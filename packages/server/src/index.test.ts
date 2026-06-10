@@ -4,6 +4,7 @@ import { File } from 'node:buffer';
 import {
   domain,
   guards,
+  i18n,
   invalidate,
   meta,
   mutation,
@@ -15,6 +16,7 @@ import {
   runMutation,
   s,
   session,
+  t,
 } from './index.js';
 
 describe('server mutation primitives', () => {
@@ -82,6 +84,20 @@ describe('server mutation primitives', () => {
         '<meta property="og:image" content="/products/p1.png">',
         '<link rel="modulepreload" href="/c/cart.client.js">',
       ].join(''),
+    });
+  });
+
+  it('renders server-side i18n catalogs with page hints', () => {
+    const en = i18n('en-US', {
+      cartCount: 'Cart has {count} items',
+      unsafe: 'Use <strong>server text</strong>',
+    });
+
+    expect(t(en, 'cartCount', { count: 3 })).toBe('Cart has 3 items');
+    expect(t(en, 'cartCount')).toBe('Cart has {count} items');
+    expect(renderPageHints({ i18n: en })).toEqual({
+      earlyHints: {},
+      html: '<script type="application/json" fw-i18n locale="en-US">{"cartCount":"Cart has {count} items","unsafe":"Use \\u003cstrong>server text\\u003c/strong>"}</script>',
     });
   });
 
