@@ -13,6 +13,7 @@ describe('create-jiso starter', () => {
       '.github/workflows/ci.yml',
       'graph.json',
       'docs/graph-assertions.md',
+      'docs/deployment.md',
       'src/styles.css',
       'src/app.tsx',
     ]);
@@ -31,6 +32,11 @@ describe('create-jiso starter', () => {
     expect(
       project.files.find((file) => file.path === 'docs/graph-assertions.md')?.source,
     ).toContain('fw explain mutation cart/add --optimistic graph.json');
+    const deploymentDoc = project.files.find((file) => file.path === 'docs/deployment.md')?.source;
+    expect(deploymentDoc).toContain('stateless');
+    expect(deploymentDoc).toContain('BroadcastChannel');
+    expect(deploymentDoc).toContain('Refetch-on-focus/visibility');
+    expect(deploymentDoc).toContain('No SSE or live bus ships in v1');
     expect(project.files.find((file) => file.path === 'src/app.tsx')?.source).toContain(
       'class="mx-auto grid min-h-dvh',
     );
