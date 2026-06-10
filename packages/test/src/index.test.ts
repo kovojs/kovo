@@ -1411,6 +1411,46 @@ describe('@jiso/test harness', () => {
     );
   });
 
+  it('accepts raw SQL compound predicates when one observed row key matches', () => {
+    const verifier = createDbVerifier(
+      {
+        'product.reserve': {
+          touches: [
+            { domain: 'product', keys: 'arg:productId', site: 'product.ts:1', via: 'products' },
+          ],
+          unresolved: [],
+        },
+      },
+      { domainByTable: { products: 'product' }, keyByTable: { products: 'id' } },
+    );
+    const db = verifier.wrap(createFakeDb());
+
+    db.sql("update products set reserved = true where sku = 'sku-1' and id = 'p1'");
+
+    expect(() => verifier.assertCovered()).not.toThrow();
+  });
+
+  it('reports all raw SQL predicate keys when none matches the declared row key', () => {
+    const verifier = createDbVerifier(
+      {
+        'product.reserve': {
+          touches: [
+            { domain: 'product', keys: 'arg:productId', site: 'product.ts:1', via: 'products' },
+          ],
+          unresolved: [],
+        },
+      },
+      { domainByTable: { products: 'product' }, keyByTable: { products: 'id' } },
+    );
+    const db = verifier.wrap(createFakeDb());
+
+    db.sql("update products set reserved = true where sku = 'sku-1' and slug = 'beans'");
+
+    expect(() => verifier.assertCovered()).toThrow(
+      'FW408 Declared row key differs from observed row predicate: products expected id observed sku, slug',
+    );
+  });
+
   it('checks row keys parsed from raw SQL delete predicates', () => {
     const verifier = createDbVerifier(
       {

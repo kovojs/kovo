@@ -753,7 +753,8 @@ function operationsForFrom(
 }
 
 function rowKeyFromWhere(where: Expr | null | undefined): string | undefined {
-  return where ? rowKeysFromExpr(where)[0] : undefined;
+  const keys = where ? [...new Set(rowKeysFromExpr(where))] : [];
+  return keys.length > 0 ? keys.join(', ') : undefined;
 }
 
 function rowKeysFromExpr(expression: Expr): string[] {
@@ -799,7 +800,9 @@ function assertRowKeys(
   const mismatches = observed.filter((operation) => {
     const expected = config.keyByTable?.[operation.table];
     return (
-      expected !== undefined && operation.rowKey !== undefined && operation.rowKey !== expected
+      expected !== undefined &&
+      operation.rowKey !== undefined &&
+      !observedRowKeys(operation).has(expected)
     );
   });
 
@@ -812,6 +815,10 @@ function assertRowKeys(
     )
     .join(', ');
   throw new Error(`FW408 Declared row key differs from observed row predicate: ${details}`);
+}
+
+function observedRowKeys(operation: ObservedDbOperation): ReadonlySet<string> {
+  return new Set(operation.rowKey?.split(',').map((key) => key.trim()) ?? []);
 }
 
 function assertObservedReadsCovered(
