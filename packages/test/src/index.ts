@@ -352,15 +352,18 @@ export function propertyTest<State, Input, ClientShape = State>(
 function createPageAssertion(html: string): PageAssertion {
   return {
     fragment(target: string): string {
-      const escapedTarget = escapeRegExp(target);
       const explicitFragment = new RegExp(
-        `<fw-fragment\\b[^>]*target="${escapedTarget}"[^>]*>(?<html>[\\s\\S]*?)<\\/fw-fragment>`,
+        `<fw-fragment\\b(?=[^>]*\\s${attributeEquals('target', target)})[^>]*>(?<html>[\\s\\S]*?)<\\/fw-fragment>`,
       ).exec(html)?.groups?.html;
       if (explicitFragment !== undefined) return explicitFragment;
 
-      const stampedElement = new RegExp(
-        `<(?<tag>[a-z][a-z0-9-]*)\\b[^>]*(?:fw-c="${escapedTarget}"|fw-deps="[^"]*")`,
-      ).exec(html);
+      const stampedElement =
+        new RegExp(
+          `<(?<tag>[a-z][a-z0-9-]*)\\b(?=[^>]*\\s${attributeEquals('fw-c', target)})[^>]*>`,
+        ).exec(html) ??
+        new RegExp(
+          `<(?<tag>${escapeRegExp(target)})\\b(?=[^>]*\\sfw-deps(?:\\s|=|>|\\/))[^>]*>`,
+        ).exec(html);
       if (!stampedElement?.groups?.tag) return '';
 
       const tag = stampedElement.groups.tag;
@@ -372,6 +375,14 @@ function createPageAssertion(html: string): PageAssertion {
     },
     html,
   };
+}
+
+function attributeEquals(name: string, value: string): string {
+  const escapedName = escapeRegExp(name);
+  const escapedValue = escapeRegExp(value);
+  const valuePattern = `(?:"${escapedValue}"|'${escapedValue}'|${escapedValue})`;
+
+  return `${escapedName}\\s*=\\s*${valuePattern}(?=\\s|>|\\/)`;
 }
 
 function escapeRegExp(value: string): string {

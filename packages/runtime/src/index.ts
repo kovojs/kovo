@@ -580,6 +580,7 @@ export type EnhancedMutationFetch = (
 ) => Promise<EnhancedMutationResponseLike>;
 
 export interface EnhancedMutationSubmitOptions {
+  broadcast?: MutationBroadcast;
   fetch: EnhancedMutationFetch;
   form: EnhancedFormLike;
   formData: unknown;
@@ -612,6 +613,7 @@ export interface SubmitOptions<Input extends Record<string, JsonValue>, Failure 
 
 export interface SubmitContextOptions {
   actionFor?: (form: SubmitFormDefinition) => string;
+  broadcast?: MutationBroadcast;
   fetch: EnhancedMutationFetch;
   method?: string;
   morph?: MorphFragment;
@@ -655,6 +657,7 @@ export function createSubmitContext(options: SubmitContextOptions): SubmitContex
         formData: formDataFromInput(submitOptions.input),
         root: options.root,
         store: options.store,
+        ...(options.broadcast ? { broadcast: options.broadcast } : {}),
         ...(submitOptions.idem ? { idem: submitOptions.idem } : {}),
         ...(options.morph ? { morph: options.morph } : {}),
       });
@@ -765,13 +768,14 @@ export async function submitEnhancedMutation(options: EnhancedMutationSubmitOpti
     targets: string[];
   }
 > {
-  const { body, changes, idem, targets } = await fetchEnhancedMutation(options);
+  const { body, changes, idem, response, targets } = await fetchEnhancedMutation(options);
   const applied = applyMutationResponseToDom({
     body,
     root: options.root,
     store: options.store,
     ...(options.morph ? { morph: options.morph } : {}),
   });
+  publishSuccessfulMutation(options, response, body, changes);
 
   return {
     ...applied,
@@ -856,6 +860,7 @@ async function submitOptimisticEnhancedMutationDirect<Input>(
       fragments,
       queries: queryChunks.map((query) => query.name),
     };
+    publishSuccessfulMutation(options, response, body, changes);
     const settledQueries = queryNames.filter(
       (queryName) => options.rebaser.pendingCount(queryName) === 0,
     );
@@ -876,6 +881,17 @@ async function submitOptimisticEnhancedMutationDirect<Input>(
     }
     throw error;
   }
+}
+
+function publishSuccessfulMutation(
+  options: EnhancedMutationSubmitOptions,
+  response: EnhancedMutationResponseLike,
+  body: string,
+  changes: readonly MutationChangeRecord[],
+): void {
+  if (isFailedMutationResponse(response)) return;
+
+  options.broadcast?.publish(body, changes);
 }
 
 export function stampPendingQueries(

@@ -768,6 +768,8 @@ describe('query store', () => {
 
   it('submits enhanced mutation forms with live targets and applies the fragment response', async () => {
     const store = createQueryStore();
+    const channel = new FakeBroadcastChannel();
+    const broadcast = installMutationBroadcast({ channel, store });
     const root = new FakeMorphRoot();
     root.deps = [{ id: 'cart-badge' }, { target: 'recommendations' }, { id: 'cart-badge' }];
     root.targets.set('cart-badge', new FakeMorphTarget());
@@ -796,6 +798,7 @@ describe('query store', () => {
       fetch,
       form: { action: '/_m/cart/add', method: 'post' },
       formData,
+      broadcast,
       idem: 'idem_01HX',
       root,
       store,
@@ -823,14 +826,60 @@ describe('query store', () => {
       queries: ['cart'],
       targets: ['cart-badge', 'recommendations'],
     });
+    expect(channel.messages).toEqual([
+      {
+        body: [
+          '<fw-query name="cart">{"count":1}</fw-query>',
+          '<fw-fragment target="cart-badge"><cart-badge>1</cart-badge></fw-fragment>',
+          '<fw-fragment target="recommendations"><section></section></fw-fragment>',
+        ].join('\n'),
+        changes: [{ domain: 'cart', input: { productId: 'p1', quantity: '1' } }],
+        type: 'jiso:mutation-response',
+      },
+    ]);
     expect(store.get('cart')).toEqual({ count: 1 });
     expect(root.targets.get('cart-badge')?.html).toBe('<cart-badge>1</cart-badge>');
     expect(root.targets.get('recommendations')?.html).toBe('<section></section>');
   });
 
+  it('does not rebroadcast failed enhanced mutation responses', async () => {
+    const store = createQueryStore();
+    const channel = new FakeBroadcastChannel();
+    const broadcast = installMutationBroadcast({ channel, store });
+    const root = new FakeMorphRoot();
+    root.deps = [{ id: 'cart-form' }];
+    root.targets.set('cart-form', new FakeMorphTarget());
+    const fetch = vi.fn(async () => ({
+      headers: {
+        get() {
+          return null;
+        },
+      },
+      ok: false,
+      status: 422,
+      async text() {
+        return '<fw-fragment target="cart-form"><form>Out of stock</form></fw-fragment>';
+      },
+    }));
+
+    const result = await submitEnhancedMutation({
+      fetch,
+      form: { action: '/_m/cart/add', method: 'post' },
+      formData: new FormData(),
+      broadcast,
+      root,
+      store,
+    });
+
+    expect(result.appliedFragments).toEqual(['cart-form']);
+    expect(channel.messages).toEqual([]);
+  });
+
   it('submits enhanced mutations with optimistic transforms and reconciles server truth', async () => {
     const store = createQueryStore();
     const rebaser = new OptimisticRebaser(store);
+    const channel = new FakeBroadcastChannel();
+    const broadcast = installMutationBroadcast({ channel, store });
     const root = new FakeMorphRoot();
     const cartBadge = new FakePendingElement({ 'fw-deps': 'cart' });
     const pendingRoot = new FakePendingRoot([cartBadge]);
@@ -859,6 +908,7 @@ describe('query store', () => {
       fetch,
       form: { action: '/_m/cart/add', method: 'post' },
       formData: new FormData(),
+      broadcast,
       idem: 'idem_optimistic',
       input: { quantity: 2 },
       optimistic: {
@@ -876,6 +926,16 @@ describe('query store', () => {
     });
 
     expect(result.queries).toEqual(['cart']);
+    expect(channel.messages).toEqual([
+      {
+        body: [
+          '<fw-query name="cart">{"count":4}</fw-query>',
+          '<fw-fragment target="cart-badge"><cart-badge>4</cart-badge></fw-fragment>',
+        ].join('\n'),
+        changes: [],
+        type: 'jiso:mutation-response',
+      },
+    ]);
     expect(store.get('cart')).toEqual({ count: 4 });
     expect(rebaser.pendingCount('cart')).toBe(0);
     expect(cartBadge.attributes).not.toHaveProperty('fw-pending');

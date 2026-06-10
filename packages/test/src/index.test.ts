@@ -237,6 +237,38 @@ describe('@jiso/test harness', () => {
     ).resolves.toContain('data-bind="cart.count"');
   });
 
+  it('asserts explicitly wrapped fragments with normal HTML attribute variants', async () => {
+    const harness = createJisoTestHarness({
+      db: {},
+      pages: {
+        '/cart':
+          "<fw-fragment strategy='morph' target='cart-badge'><cart-badge><span>1</span></cart-badge></fw-fragment>",
+      },
+    });
+
+    await expect(harness.page('/cart').then((page) => page.fragment('cart-badge'))).resolves.toBe(
+      '<cart-badge><span>1</span></cart-badge>',
+    );
+  });
+
+  it('asserts stamped fragment targets without matching unrelated fw-deps elements', async () => {
+    const harness = createJisoTestHarness({
+      db: {},
+      pages: {
+        '/cart':
+          '<section fw-c=\'cart-badge\'><span>1</span></section><cart-form fw-deps="cart"><button>Add</button></cart-form>',
+      },
+    });
+
+    const page = await harness.page('/cart');
+
+    expect(page.fragment('cart-badge')).toBe("<section fw-c='cart-badge'><span>1</span></section>");
+    expect(page.fragment('cart-form')).toBe(
+      '<cart-form fw-deps="cart"><button>Add</button></cart-form>',
+    );
+    expect(page.fragment('missing-target')).toBe('');
+  });
+
   it('runs a provided callback with a harness context', async () => {
     await expect(
       jisoTest(
