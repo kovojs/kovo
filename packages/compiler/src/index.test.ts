@@ -325,6 +325,41 @@ export const FilterButton = component('filter-button', {
     expect(result.files[1]?.source).toContain('// no client handlers emitted');
   });
 
+  it('lowers provable details summary toggles by dropping redundant JavaScript', () => {
+    const result = compileComponentModule({
+      fileName: 'shipping-details.tsx',
+      source: `
+export const ShippingDetails = component('shipping-details', {
+  render: () => (
+    <details id="shipping">
+      <summary onClick={() => document.getElementById('shipping')!.open = !document.getElementById('shipping')!.open}>
+        Shipping
+      </summary>
+      <p>Usually ships tomorrow.</p>
+    </details>
+  ),
+});
+`,
+    });
+
+    expect(result.diagnostics).toEqual([]);
+    expect(result.platformSubstitutions).toEqual([
+      {
+        action: 'toggle',
+        event: 'click',
+        kind: 'details',
+        tag: 'summary',
+        target: 'shipping',
+      },
+    ]);
+    expect(result.files[0]?.source).toContain('<summary>');
+    expect(result.files[0]?.source).not.toContain('on:click=');
+    expect(result.files[1]?.source).toContain('// no client handlers emitted');
+    expect(result.files[2]?.source).toContain(
+      "'ShippingDetails:summary:click:shipping': 'details:toggle';",
+    );
+  });
+
   it('keeps unsupported details JavaScript as a handler instead of inventing platform attributes', () => {
     const result = compileComponentModule({
       fileName: 'accordion-toggle.tsx',

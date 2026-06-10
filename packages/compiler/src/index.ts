@@ -68,7 +68,7 @@ interface ElementParam {
 export interface PlatformSubstitution {
   action: string;
   event: string;
-  kind: 'dialog' | 'popover';
+  kind: 'details' | 'dialog' | 'popover';
   tag: string;
   target: string;
 }
@@ -308,7 +308,20 @@ function lowerPlatformBehaviors(source: string): {
   substitutions: PlatformSubstitution[];
 } {
   const substitutions: PlatformSubstitution[] = [];
-  const nextSource = source.replace(
+  const detailsLowered = source.replace(
+    /<summary\b(?<before>[^>]*)\sonClick=\{\(\)\s*=>\s*document\.getElementById\(['"](?<target>[^'"]+)['"]\)!?\.open\s*=\s*!\s*document\.getElementById\(['"]\k<target>['"]\)!?\.open\s*\}/g,
+    (_match, before: string, target: string) => {
+      substitutions.push({
+        action: 'toggle',
+        event: 'click',
+        kind: 'details',
+        tag: 'summary',
+        target,
+      });
+      return `<summary${before}`;
+    },
+  );
+  const nextSource = detailsLowered.replace(
     /<(?<tag>[A-Za-z][A-Za-z0-9-]*)\b(?<before>[^>]*)\sonClick=\{\(\)\s*=>\s*document\.getElementById\(['"](?<target>[^'"]+)['"]\)!?\.(?<method>showModal|close|requestClose|showPopover|hidePopover|togglePopover)\(\)\s*\}/g,
     (match, tag: string, before: string, target: string, method: string) => {
       const substitution = platformSubstitutionFor(tag, target, method);
@@ -357,6 +370,10 @@ function platformSubstitutionFor(
 function platformAttributes(substitution: PlatformSubstitution): string {
   if (substitution.kind === 'dialog') {
     return `commandfor="${escapeAttribute(substitution.target)}" command="${substitution.action}"`;
+  }
+
+  if (substitution.kind === 'details') {
+    return '';
   }
 
   return `popovertarget="${escapeAttribute(substitution.target)}" popovertargetaction="${substitution.action}"`;
