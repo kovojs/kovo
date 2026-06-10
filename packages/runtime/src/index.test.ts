@@ -1,10 +1,12 @@
 import { describe, expect, it, vi } from 'vitest';
+import { event } from '@jiso/core';
 
 import {
   applyFragments,
   applyOptimisticTransforms,
   applyMutationResponseToDom,
   applyMutationResponse,
+  createEventBus,
   createQueryStore,
   dispatchDelegatedEvent,
   hydrateQueryScripts,
@@ -149,6 +151,45 @@ describe('runtime loader', () => {
     expect(readElementParams(new FakeElement({ 'data-p-product-id': 'p1' }))).toEqual({
       productId: 'p1',
     });
+  });
+});
+
+describe('typed event bus', () => {
+  it('emits declared cross-island events with typed payloads', () => {
+    const cartAdded = event<'cart:added', { productId: string; quantity: number }>('cart:added');
+    const bus = createEventBus([cartAdded] as const);
+    const listener = vi.fn();
+
+    bus.on('cart:added', listener);
+    bus.emit('cart:added', { productId: 'p1', quantity: 2 });
+
+    expect(bus.events).toEqual(['cart:added']);
+    expect(listener).toHaveBeenCalledWith({
+      name: 'cart:added',
+      payload: { productId: 'p1', quantity: 2 },
+    });
+  });
+
+  it('unsubscribes typed event listeners', () => {
+    const bus = createEventBus([event<'cart:added', { productId: string }>('cart:added')] as const);
+    const listener = vi.fn();
+
+    const subscription = bus.on('cart:added', listener);
+    subscription.off();
+    bus.emit('cart:added', { productId: 'p1' });
+
+    expect(listener).not.toHaveBeenCalled();
+  });
+
+  it('rejects events that were not declared in the registry', () => {
+    const bus = createEventBus([event<'cart:added', { productId: string }>('cart:added')] as const);
+
+    expect(() => bus.emit('inventory:changed' as never, { sku: 'sku_1' } as never)).toThrow(
+      'Event is not declared in the registry: inventory:changed',
+    );
+    expect(() => bus.on('inventory:changed' as never, vi.fn())).toThrow(
+      'Event is not declared in the registry: inventory:changed',
+    );
   });
 });
 

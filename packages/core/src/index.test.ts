@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { component, form, query, type JsonValue } from './index.js';
+import { component, event, form, query, type EventPayload, type JsonValue } from './index.js';
 
 describe('core authoring APIs', () => {
   it('preserves component names and definitions for compiler analysis', () => {
@@ -20,5 +20,16 @@ describe('core authoring APIs', () => {
   it('preserves query and form keys as typed authoring facts', () => {
     expect(query('cart').key).toBe('cart');
     expect(form('cart/add').key).toBe('cart/add');
+  });
+
+  it('preserves typed event names as registry facts', () => {
+    const cartAdded = event<'cart:added', { productId: string; quantity: number }>('cart:added');
+    const payload = {
+      productId: 'p1',
+      quantity: 2,
+    } satisfies EventPayload<typeof cartAdded>;
+
+    expect(cartAdded.name).toBe('cart:added');
+    expect(payload.quantity).toBe(2);
   });
 });

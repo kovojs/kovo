@@ -56,3 +56,17 @@ export interface Form<Key extends string> {
 export function form<const Key extends string>(key: Key): Form<Key> {
   return { key };
 }
+
+export interface EventDefinition<Name extends string, Payload extends JsonValue = JsonValue> {
+  name: Name;
+  payload?: Payload;
+}
+
+export type EventPayload<Definition> =
+  Definition extends EventDefinition<string, infer Payload> ? Payload : never;
+
+export function event<const Name extends string, Payload extends JsonValue = JsonValue>(
+  name: Name,
+): EventDefinition<Name, Payload> {
+  return { name };
+}

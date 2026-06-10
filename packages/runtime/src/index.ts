@@ -1,4 +1,5 @@
 export type { DiagnosticCode } from '@jiso/core';
+import type { EventDefinition, JsonValue } from '@jiso/core';
 
 export type ImportHandlerModule = (url: string) => Promise<Record<string, unknown>>;
 
@@ -16,6 +17,76 @@ export function handler<State = unknown, Params = Record<string, string>>(
   fn: ClientHandler<State, Params>,
 ): ClientHandler<State, Params> {
   return fn;
+}
+
+export type EventPayloadMap<Definitions extends readonly EventDefinition<string, JsonValue>[]> = {
+  [Definition in Definitions[number] as Definition['name']]: Definition extends EventDefinition<
+    string,
+    infer Payload
+  >
+    ? Payload
+    : never;
+};
+
+export interface TypedEvent<Name extends string = string, Payload = unknown> {
+  name: Name;
+  payload: Payload;
+}
+
+export type EventListener<Payload> = (event: TypedEvent<string, Payload>) => void | Promise<void>;
+
+export interface EventSubscription {
+  off(): void;
+}
+
+export interface TypedEventBus<EventMap extends Record<string, unknown>> {
+  emit<Name extends Extract<keyof EventMap, string>>(name: Name, payload: EventMap[Name]): void;
+  events: readonly Extract<keyof EventMap, string>[];
+  on<Name extends Extract<keyof EventMap, string>>(
+    name: Name,
+    listener: EventListener<EventMap[Name]>,
+  ): EventSubscription;
+}
+
+export function createEventBus<
+  const Definitions extends readonly EventDefinition<string, JsonValue>[],
+>(definitions: Definitions): TypedEventBus<EventPayloadMap<Definitions>> {
+  const events = definitions.map((definition) => definition.name) as Extract<
+    keyof EventPayloadMap<Definitions>,
+    string
+  >[];
+  const allowed = new Set<string>(events);
+  const listeners = new Map<string, Set<EventListener<unknown>>>();
+
+  return {
+    emit(name, payload) {
+      assertKnownEvent(allowed, name);
+
+      for (const listener of listeners.get(name) ?? []) {
+        void listener({ name, payload });
+      }
+    },
+    events,
+    on(name, listener) {
+      assertKnownEvent(allowed, name);
+
+      const existing = listeners.get(name) ?? new Set<EventListener<unknown>>();
+      existing.add(listener as EventListener<unknown>);
+      listeners.set(name, existing);
+
+      return {
+        off() {
+          existing.delete(listener as EventListener<unknown>);
+        },
+      };
+    },
+  };
+}
+
+function assertKnownEvent(allowed: ReadonlySet<string>, name: string): void {
+  if (!allowed.has(name)) {
+    throw new Error(`Event is not declared in the registry: ${name}`);
+  }
 }
 
 export interface LoaderRoot {
