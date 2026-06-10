@@ -26,7 +26,24 @@ importers:
 
   conformance/drizzle-pin: {}
 
-  examples/commerce: {}
+  examples/commerce:
+    dependencies:
+      '@jiso/core':
+        specifier: workspace:*
+        version: link:../../packages/core
+      '@jiso/drizzle':
+        specifier: workspace:*
+        version: link:../../packages/drizzle
+      '@jiso/server':
+        specifier: workspace:*
+        version: link:../../packages/server
+      '@jiso/test':
+        specifier: workspace:*
+        version: link:../../packages/test
+    devDependencies:
+      vitest:
+        specifier: 4.1.8
+        version: 4.1.8(@types/node@25.9.2)(vite@8.0.16(@types/node@25.9.2))
 
   packages/cli:
     dependencies:

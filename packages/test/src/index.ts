@@ -9,14 +9,13 @@ import {
 
 export interface JisoTestContext<Db = unknown> {
   db: Db;
-  exec: <Value>(
-    mutation: MutationDefinition<
-      string,
-      Schema<unknown>,
-      Record<string, Schema<unknown>>,
-      JisoTestRequest<Db>,
-      Value
-    >,
+  exec: <
+    InputSchema extends Schema<unknown>,
+    Errors extends Record<string, Schema<unknown>>,
+    Request extends { db: Db },
+    Value,
+  >(
+    mutation: MutationDefinition<string, InputSchema, Errors, Request, Value>,
     input: unknown,
   ) => Promise<MutationResult<Value>>;
   page: (path: string) => Promise<PageAssertion>;
@@ -48,9 +47,14 @@ export function createJisoTestHarness<Db>(
 
   return {
     db: verifier ? (verifier.wrap(options.db) as Db) : options.db,
-    async exec(mutation, input) {
+    async exec<
+      InputSchema extends Schema<unknown>,
+      Errors extends Record<string, Schema<unknown>>,
+      Request extends { db: Db },
+      Value,
+    >(mutation: MutationDefinition<string, InputSchema, Errors, Request, Value>, input: unknown) {
       const db = verifier ? (verifier.wrap(options.db) as Db) : options.db;
-      const result = await runMutation(mutation, input, { db });
+      const result = await runMutation(mutation, input, { db } as unknown as Request);
       verifier?.assertCovered();
       return result;
     },

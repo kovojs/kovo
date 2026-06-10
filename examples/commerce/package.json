@@ -2,5 +2,14 @@
   "name": "@jiso/example-commerce",
   "version": "0.0.0",
   "private": true,
-  "type": "module"
+  "type": "module",
+  "dependencies": {
+    "@jiso/core": "workspace:*",
+    "@jiso/drizzle": "workspace:*",
+    "@jiso/server": "workspace:*",
+    "@jiso/test": "workspace:*"
+  },
+  "devDependencies": {
+    "vitest": "4.1.8"
+  }
 }
