@@ -268,7 +268,7 @@ function lowerPlatformBehaviors(source: string): {
 } {
   const substitutions: PlatformSubstitution[] = [];
   const nextSource = source.replace(
-    /<(?<tag>[A-Za-z][A-Za-z0-9-]*)\b(?<before>[^>]*)\sonClick=\{\(\)\s*=>\s*document\.getElementById\(['"](?<target>[^'"]+)['"]\)!?\.(?<method>showModal|close|showPopover|hidePopover|togglePopover)\(\)\s*\}/g,
+    /<(?<tag>[A-Za-z][A-Za-z0-9-]*)\b(?<before>[^>]*)\sonClick=\{\(\)\s*=>\s*document\.getElementById\(['"](?<target>[^'"]+)['"]\)!?\.(?<method>showModal|close|requestClose|showPopover|hidePopover|togglePopover)\(\)\s*\}/g,
     (match, tag: string, before: string, target: string, method: string) => {
       const substitution = platformSubstitutionFor(tag, target, method);
       if (!substitution) return match;
@@ -295,6 +295,11 @@ function platformSubstitutionFor(
 
   if (method === 'close') {
     return { action: 'close', event: 'click', kind: 'dialog', tag, target };
+  }
+
+  // SPEC §5.2.4: provable dialog handlers lower to platform invoker commands.
+  if (method === 'requestClose') {
+    return { action: 'request-close', event: 'click', kind: 'dialog', tag, target };
   }
 
   const popoverActionByMethod: Record<string, string> = {

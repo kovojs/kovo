@@ -189,6 +189,37 @@ export const CartButton = component('cart-button', {
     );
   });
 
+  it('lowers requestClose dialog behavior to a valid invoker command', () => {
+    const result = compileComponentModule({
+      fileName: 'cart-close-button.tsx',
+      source: `
+export const CartCloseButton = component('cart-close-button', {
+  render: () => (
+    <button onClick={() => document.getElementById('cart-drawer')!.requestClose()}>
+      Close cart
+    </button>
+  ),
+});
+`,
+    });
+
+    expect(result.diagnostics).toEqual([]);
+    expect(result.platformSubstitutions).toEqual([
+      {
+        action: 'request-close',
+        event: 'click',
+        kind: 'dialog',
+        tag: 'button',
+        target: 'cart-drawer',
+      },
+    ]);
+    expect(result.files[0]?.source).toContain('commandfor="cart-drawer" command="request-close"');
+    expect(result.files[1]?.source).toContain('// no client handlers emitted');
+    expect(result.files[2]?.source).toContain(
+      "'CartCloseButton:button:click:cart-drawer': 'dialog:request-close';",
+    );
+  });
+
   it('lowers provable popover behavior to popover target attributes', () => {
     const result = compileComponentModule({
       fileName: 'filter-button.tsx',
@@ -212,6 +243,29 @@ export const FilterButton = component('filter-button', {
       'popovertarget="filters" popovertargetaction="toggle"',
     );
     expect(result.files[1]?.source).toContain('// no client handlers emitted');
+  });
+
+  it('keeps unsupported details JavaScript as a handler instead of inventing platform attributes', () => {
+    const result = compileComponentModule({
+      fileName: 'accordion-toggle.tsx',
+      source: `
+export const AccordionToggle = component('accordion-toggle', {
+  render: () => (
+    <button onClick={() => document.getElementById('shipping')!.open = true}>
+      Shipping
+    </button>
+  ),
+});
+`,
+    });
+
+    // SPEC §5.2.4 names <details> as an L0 target, but this JS assignment has no
+    // dialog-style commandfor equivalent in the current compiler model.
+    expect(result.platformSubstitutions).toEqual([]);
+    expect(result.files[0]?.source).toContain(
+      'on:click="./accordion-toggle.client.js#AccordionToggle$button_click"',
+    );
+    expect(result.files[1]?.source).toContain('export const AccordionToggle$button_click');
   });
 
   it('stamps cross-document view transition names as real CSS', () => {

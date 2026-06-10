@@ -312,6 +312,18 @@ export interface OptimisticPlan<Input = unknown> {
   transforms: Record<string, OptimisticTransform<Input>>;
 }
 
+export type OptimisticFor<
+  Definition extends Form<string, Record<string, JsonValue>, JsonValue>,
+  QueryValues extends Record<string, unknown>,
+> = Omit<OptimisticPlan<FormInput<Definition>>, 'transforms'> & {
+  transforms: {
+    [QueryName in keyof QueryValues]: OptimisticTransform<
+      FormInput<Definition>,
+      QueryValues[QueryName]
+    >;
+  };
+};
+
 export interface PendingOptimism {
   commit(): void;
   restore(): void;

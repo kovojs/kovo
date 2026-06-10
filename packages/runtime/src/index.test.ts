@@ -27,6 +27,7 @@ import {
   type DelegatedEvent,
   type EnhancedMutationFetchOptions,
   type EventElementLike,
+  type OptimisticFor,
   type StructuralMorphNode,
 } from './index.js';
 
@@ -383,6 +384,65 @@ describe('query store', () => {
     expect(plan).toHaveBeenLastCalledWith({ count: 3 });
     pending.commit();
     expect(pending.snapshot.size).toBe(0);
+  });
+
+  it('types hand-written optimistic plans from mutation forms and query shapes', () => {
+    const addToCart = form<'cart/add', { productId: string; quantity: number }>('cart/add');
+    const optimistic = {
+      queue: 'cart',
+      transforms: {
+        cart(current, input) {
+          return {
+            count: current.count + input.quantity,
+            productIds: [...current.productIds, input.productId],
+          };
+        },
+      },
+    } satisfies OptimisticFor<typeof addToCart, { cart: { count: number; productIds: string[] } }>;
+
+    expect(
+      optimistic.transforms.cart(
+        { count: 1, productIds: [] },
+        {
+          productId: 'p1',
+          quantity: 2,
+        },
+      ),
+    ).toEqual({
+      count: 3,
+      productIds: ['p1'],
+    });
+  });
+
+  it('rejects optimistic plans that do not match mutation input or query values', () => {
+    const addToCart = form<'cart/add', { productId: string; quantity: number }>('cart/add');
+    const assertWrongInputRejected = () => {
+      ({
+        transforms: {
+          cart(current, input) {
+            return {
+              // @ts-expect-error sku is not part of the mutation input schema.
+              count: current.count + input.sku,
+            };
+          },
+        },
+      }) satisfies OptimisticFor<typeof addToCart, { cart: { count: number } }>;
+    };
+    const assertWrongQueryValueRejected = () => {
+      ({
+        transforms: {
+          cart(current, input) {
+            return {
+              // @ts-expect-error missingCount is not part of the cart query value.
+              count: current.missingCount + input.quantity,
+            };
+          },
+        },
+      }) satisfies OptimisticFor<typeof addToCart, { cart: { count: number } }>;
+    };
+
+    expect(assertWrongInputRejected).toBeTypeOf('function');
+    expect(assertWrongQueryValueRejected).toBeTypeOf('function');
   });
 
   it('restores optimistic snapshots on mutation error', () => {
