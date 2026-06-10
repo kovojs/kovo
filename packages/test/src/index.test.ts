@@ -767,6 +767,92 @@ describe('@jiso/test harness', () => {
     );
   });
 
+  it('verifies insert-select SQL as a target write plus source reads', async () => {
+    const productImport = mutation('product/import', {
+      input: s.object({ productId: s.string() }),
+      registry: {
+        touches: [domain('product')],
+      },
+      handler(_input, request: { db: FakeDb }) {
+        request.db.sql(
+          [
+            'insert into product_snapshots (product_id, name)',
+            'select products.id, products.name',
+            'from products',
+            'join vendors on vendors.id = products.vendor_id',
+          ].join(' '),
+        );
+        return 'ok';
+      },
+    });
+    const harness = createJisoTestHarness({
+      db: createFakeDb(),
+      touchGraph: {
+        'product.import': {
+          touches: [
+            { domain: 'product', keys: null, site: 'product.ts:1', via: 'product_snapshots' },
+          ],
+          unresolved: [],
+        },
+      },
+      verification: {
+        domainByTable: {
+          product_snapshots: 'product',
+          products: 'product',
+          vendors: 'vendor',
+        },
+      },
+    });
+
+    await expect(harness.exec(productImport, { productId: 'p1' })).resolves.toMatchObject({
+      ok: true,
+      value: 'ok',
+    });
+
+    const verifier = createDbVerifier(
+      {},
+      {
+        domainByTable: {
+          product_snapshots: 'product',
+          products: 'product',
+          vendors: 'vendor',
+        },
+      },
+    );
+    const db = verifier.wrap(createFakeDb());
+    db.sql(
+      'insert into product_snapshots select products.id from products join vendors on vendors.id = products.vendor_id',
+    );
+
+    expect(() => verifier.assertReadsCovered(['product', 'vendor'])).not.toThrow();
+    expect(() => verifier.assertReadsCovered(['product'])).toThrow(
+      'FW407 Query read from undeclared domain: vendor',
+    );
+  });
+
+  it('verifies update-from SQL as a target write plus source reads', () => {
+    const verifier = createDbVerifier(
+      {
+        'product.syncPrice': {
+          touches: [{ domain: 'product', keys: null, site: 'product.ts:1', via: 'products' }],
+          unresolved: [],
+        },
+      },
+      { domainByTable: { prices: 'price', products: 'product' } },
+    );
+    const db = verifier.wrap(createFakeDb());
+
+    db.sql(
+      'update products set price = prices.amount from prices where prices.product_id = products.id',
+    );
+
+    expect(() => verifier.assertCovered()).not.toThrow();
+    expect(() => verifier.assertReadsCovered(['price'])).not.toThrow();
+    expect(() => verifier.assertReadsCovered(['product'])).toThrow(
+      'FW407 Query read from undeclared domain: price',
+    );
+  });
+
   it('checks row keys parsed from raw SQL predicates', () => {
     const verifier = createDbVerifier(
       {

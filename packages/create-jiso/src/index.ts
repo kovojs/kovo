@@ -1,3 +1,7 @@
+#!/usr/bin/env node
+import { existsSync, mkdirSync, readdirSync, statSync, writeFileSync } from 'node:fs';
+import { basename, dirname, isAbsolute, relative, resolve } from 'node:path';
+
 export interface CreateJisoOptions {
   name: string;
 }
@@ -10,6 +14,12 @@ export interface GeneratedFile {
 export interface CreateJisoProject {
   files: GeneratedFile[];
   name: string;
+}
+
+export interface WriteJisoProjectResult {
+  files: string[];
+  name: string;
+  root: string;
 }
 
 const starterGraph = {
@@ -332,10 +342,111 @@ describe('compiler fixpoint', () => {
   };
 }
 
+export function writeJisoProject(
+  targetDirectory: string,
+  options: Partial<CreateJisoOptions> = {},
+): WriteJisoProjectResult {
+  const root = resolve(targetDirectory);
+  const name = options.name ?? basename(root);
+  const project = createJisoProject({ name });
+
+  assertWritableTarget(root);
+
+  for (const file of project.files) {
+    const destination = resolve(root, file.path);
+
+    const relativeDestination = relative(root, destination);
+
+    if (
+      relativeDestination === '' ||
+      relativeDestination.startsWith('..') ||
+      isAbsolute(relativeDestination)
+    ) {
+      throw new Error(`Refusing to write outside target directory: ${file.path}`);
+    }
+
+    mkdirSync(dirname(destination), { recursive: true });
+    writeFileSync(destination, file.source, 'utf8');
+  }
+
+  return {
+    files: project.files.map((file) => file.path),
+    name: project.name,
+    root,
+  };
+}
+
+export function main(args: readonly string[] = process.argv.slice(2)): number {
+  const [targetDirectory, ...rest] = args;
+
+  if (!targetDirectory || targetDirectory === '--help' || targetDirectory === '-h') {
+    process.stdout.write('usage: create-jiso <target-directory> [--name <package-name>]\n');
+    return targetDirectory ? 0 : 1;
+  }
+
+  const name = readNameOption(rest);
+
+  try {
+    const result = writeJisoProject(targetDirectory, name ? { name } : {});
+    process.stdout.write(`create-jiso: wrote ${result.files.length} files to ${result.root}\n`);
+    return 0;
+  } catch (error) {
+    process.stderr.write(
+      `create-jiso: ${error instanceof Error ? error.message : String(error)}\n`,
+    );
+    return 1;
+  }
+}
+
 function normalizePackageName(name: string): string {
-  return name
+  const normalized = name
     .trim()
     .toLowerCase()
     .replace(/[^a-z0-9-]+/g, '-')
     .replace(/^-|-$/g, '');
+
+  return normalized || 'jiso-app';
+}
+
+function assertWritableTarget(root: string): void {
+  if (!existsSync(root)) {
+    return;
+  }
+
+  const stats = statSync(root);
+
+  if (!stats.isDirectory()) {
+    throw new Error(`Target exists and is not a directory: ${root}`);
+  }
+
+  const existingEntries = readdirSync(root);
+
+  if (existingEntries.length > 0) {
+    throw new Error(`Target directory is not empty: ${root}`);
+  }
+}
+
+function readNameOption(args: readonly string[]): string | undefined {
+  let name: string | undefined;
+
+  for (let index = 0; index < args.length; index += 1) {
+    const arg = args[index];
+    if (!arg) continue;
+
+    if (arg === '--name') {
+      name = args[index + 1];
+      index += 1;
+      continue;
+    }
+
+    if (arg.startsWith('--name=')) {
+      name = arg.slice('--name='.length);
+    }
+  }
+
+  return name;
+}
+
+if (import.meta.url === `file://${process.argv[1]}`) {
+  process.exitCode = main();
 }

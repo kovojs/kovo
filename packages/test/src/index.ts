@@ -447,15 +447,28 @@ function parseSqlStatement(
   const normalized = statement.replaceAll(/--.*$/gm, ' ').replaceAll(/\s+/g, ' ').trim();
   const verb = /^[a-z]+/i.exec(normalized)?.[0]?.toLowerCase();
   const rowKey = parseWhereRowKey(normalized);
+  type ParsedOperation = Pick<ObservedDbOperation, 'kind' | 'rowKey' | 'table'>;
 
   if (verb === 'insert') {
     const table = /\binsert\s+into\s+("?[\w.]+"?)/i.exec(normalized)?.[1];
-    return table ? [{ kind: 'write', rowKey, table: normalizeSqlIdentifier(table) }] : [];
+    const operations: ParsedOperation[] = table
+      ? [{ kind: 'write' as const, rowKey, table: normalizeSqlIdentifier(table) }]
+      : [];
+
+    if (/\bselect\b/i.test(normalized)) {
+      operations.push(...readOperationsFor(normalized, rowKey));
+    }
+
+    return operations;
   }
 
   if (verb === 'update') {
     const table = /\bupdate\s+("?[\w.]+"?)/i.exec(normalized)?.[1];
-    return table ? [{ kind: 'write', rowKey, table: normalizeSqlIdentifier(table) }] : [];
+    const operations: ParsedOperation[] = table
+      ? [{ kind: 'write' as const, rowKey, table: normalizeSqlIdentifier(table) }]
+      : [];
+    operations.push(...readOperationsFor(normalized, rowKey));
+    return operations;
   }
 
   if (verb === 'delete') {
@@ -464,16 +477,23 @@ function parseSqlStatement(
   }
 
   if (verb === 'select') {
-    const tables = new Set<string>();
-
-    for (const match of normalized.matchAll(/\b(?:from|join)\s+("?[\w.]+"?)/gi)) {
-      tables.add(normalizeSqlIdentifier(match[1] ?? ''));
-    }
-
-    return [...tables].filter(Boolean).map((table) => ({ kind: 'read', rowKey, table }));
+    return readOperationsFor(normalized, rowKey);
   }
 
   return [];
+}
+
+function readOperationsFor(
+  statement: string,
+  rowKey: string | undefined,
+): Array<Pick<ObservedDbOperation, 'kind' | 'rowKey' | 'table'>> {
+  const tables = new Set<string>();
+
+  for (const match of statement.matchAll(/\b(?:from|join)\s+("?[\w.]+"?)/gi)) {
+    tables.add(normalizeSqlIdentifier(match[1] ?? ''));
+  }
+
+  return [...tables].filter(Boolean).map((table) => ({ kind: 'read', rowKey, table }));
 }
 
 function parseWhereRowKey(statement: string): string | undefined {

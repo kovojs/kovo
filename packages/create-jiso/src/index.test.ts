@@ -1,6 +1,10 @@
-import { describe, expect, it } from 'vitest';
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 
-import { createJisoProject } from './index.js';
+import { describe, expect, it, vi } from 'vitest';
+
+import { createJisoProject, main, writeJisoProject } from './index.js';
 
 describe('create-jiso starter', () => {
   it('generates a Vite+ scaffold with CI and fw-check recipe', () => {
@@ -136,5 +140,65 @@ describe('create-jiso starter', () => {
     expect(fixpointTest).toContain('compileComponentModule');
     expect(fixpointTest).toContain('assertFixpoint(result)');
     expect(fixpointTest).toContain('SPEC.md section 5.2');
+  });
+
+  it('writes createJisoProject files to an empty target directory deterministically', () => {
+    const root = mkdtempSync(join(tmpdir(), 'create-jiso-'));
+
+    try {
+      const result = writeJisoProject(root, { name: 'Example Shop' });
+      const project = createJisoProject({ name: 'Example Shop' });
+
+      expect(result).toEqual({
+        files: project.files.map((file) => file.path),
+        name: 'example-shop',
+        root,
+      });
+
+      for (const file of project.files) {
+        expect(readFileSync(join(root, file.path), 'utf8')).toBe(file.source);
+      }
+
+      expect(JSON.parse(readFileSync(join(root, 'package.json'), 'utf8'))).toMatchObject({
+        name: 'example-shop',
+        private: true,
+      });
+    } finally {
+      rmSync(root, { force: true, recursive: true });
+    }
+  });
+
+  it('creates a new target directory from the CLI and derives the package name', () => {
+    const parent = mkdtempSync(join(tmpdir(), 'create-jiso-cli-'));
+    const root = join(parent, 'Hello CLI');
+    const stdout = vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
+
+    try {
+      expect(main([root])).toBe(0);
+      expect(stdout).toHaveBeenCalledWith(`create-jiso: wrote 13 files to ${root}\n`);
+      expect(JSON.parse(readFileSync(join(root, 'package.json'), 'utf8'))).toMatchObject({
+        name: 'hello-cli',
+      });
+      expect(existsSync(join(root, 'src/app.fixpoint.test.ts'))).toBe(true);
+    } finally {
+      stdout.mockRestore();
+      rmSync(parent, { force: true, recursive: true });
+    }
+  });
+
+  it('refuses to write into a non-empty target directory', () => {
+    const root = mkdtempSync(join(tmpdir(), 'create-jiso-collision-'));
+    const existingPath = join(root, 'README.md');
+    writeFileSync(existingPath, 'existing', 'utf8');
+
+    try {
+      expect(() => writeJisoProject(root, { name: 'Collision' })).toThrow(
+        `Target directory is not empty: ${root}`,
+      );
+      expect(readFileSync(existingPath, 'utf8')).toBe('existing');
+      expect(existsSync(join(root, 'package.json'))).toBe(false);
+    } finally {
+      rmSync(root, { force: true, recursive: true });
+    }
   });
 });
