@@ -359,6 +359,63 @@ export const tableDomains = {
     });
   });
 
+  it('marks direct non-equality predicates as FW409 degraded table-level invalidation', () => {
+    const graph = extractTouchGraphFromSource([
+      {
+        fileName: 'product.domain.ts',
+        source: `
+          export const products = pgTable("products", {}, jiso({ domain: "product", key: "id" }));
+          export const prices = pgTable("prices", {}, jiso({ domain: "price", key: "productId" }));
+
+          export async function syncProduct(db, productId) {
+            await db.update(products).set({ reserved: true }).where(gt(products.id, productId));
+            await db.update(products).set({ price: prices.amount }).from(prices).where(gt(prices.productId, productId));
+          }
+        `,
+      },
+    ]);
+
+    expect(graph).toEqual({
+      syncProduct: {
+        reads: [
+          {
+            domain: 'price',
+            keys: null,
+            predicate: 'non-eq',
+            site: 'product.domain.ts:7',
+            source: 'update-from',
+            via: 'prices',
+          },
+        ],
+        touches: [
+          { domain: 'product', keys: null, site: 'product.domain.ts:7', via: 'products' },
+          {
+            domain: 'product',
+            keys: null,
+            predicate: 'non-eq',
+            site: 'product.domain.ts:6',
+            via: 'products',
+          },
+        ],
+        unresolved: [],
+      },
+    });
+    expect(diagnosticsForTouchGraph(graph)).toEqual([
+      {
+        code: 'FW409',
+        message: 'Non-eq predicate degraded to table-level invalidation.',
+        severity: 'notice',
+        site: 'product.domain.ts:6',
+      },
+      {
+        code: 'FW409',
+        message: 'Non-eq predicate degraded to table-level invalidation.',
+        severity: 'notice',
+        site: 'product.domain.ts:7',
+      },
+    ]);
+  });
+
   it('marks non-identifier Drizzle table expressions as FW406', () => {
     const graph = extractTouchGraphFromSource([
       {

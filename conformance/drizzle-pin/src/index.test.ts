@@ -119,9 +119,10 @@ describe('Drizzle pinned subset conformance', () => {
           'export const products = pgTable("products", {}, jiso({ domain: "product", key: "id" }));',
           'export const prices = pgTable("prices", {}, jiso({ domain: "price", key: "productId" }));',
           '',
-          'export async function addItem(db, productId) {',
+          'export async function addItem(db, productId, cartIds) {',
           '  await db.insert(cartItems).values({ productId: "p1" });',
           '  await db.update(products).set({ reserved: true }).from(prices).where(eq(products.id, productId));',
+          '  await db.delete(cartItems).where(inArray(cartItems.cartId, cartIds));',
           '}',
           '',
         ].join('\n'),
@@ -134,6 +135,7 @@ describe('Drizzle pinned subset conformance', () => {
         '  "addItem": {',
         '    touches: [',
         '      { domain: "cart", via: "cart_items", site: "cart.domain.ts:6", keys: null },',
+        '      { domain: "cart", via: "cart_items", site: "cart.domain.ts:8", keys: null, predicate: "non-eq" },',
         '      { domain: "product", via: "products", site: "cart.domain.ts:7", keys: "arg:productId" },',
         '    ],',
         '    reads: [',
@@ -146,5 +148,13 @@ describe('Drizzle pinned subset conformance', () => {
         '',
       ].join('\n'),
     );
+    expect(diagnosticsForTouchGraph(graph)).toEqual([
+      {
+        code: 'FW409',
+        message: 'Non-eq predicate degraded to table-level invalidation.',
+        severity: 'notice',
+        site: 'cart.domain.ts:8',
+      },
+    ]);
   });
 });

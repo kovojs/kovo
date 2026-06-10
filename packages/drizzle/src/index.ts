@@ -227,7 +227,7 @@ export function extractTouchGraphFromSource(files: readonly SourceFileInput[]): 
         const table = tables.get(call.tableExpression);
 
         if (table) {
-          const writeKey = extractParameterizedKey(
+          const writePredicate = extractPredicateSummary(
             call.statement,
             call.tableExpression,
             table.annotation,
@@ -237,12 +237,13 @@ export function extractTouchGraphFromSource(files: readonly SourceFileInput[]): 
             operation: call.operation,
             site,
             table: table.annotation,
-            ...(writeKey ? { writeKey } : {}),
+            ...(writePredicate.predicate ? { predicate: writePredicate.predicate } : {}),
+            ...(writePredicate.key ? { writeKey: writePredicate.key } : {}),
           });
           for (const readSource of call.readSources) {
             const readTable = tables.get(readSource.tableExpression);
             if (readTable) {
-              const readKey = extractParameterizedKey(
+              const readPredicate = extractPredicateSummary(
                 call.statement,
                 readSource.tableExpression,
                 readTable.annotation,
@@ -250,7 +251,8 @@ export function extractTouchGraphFromSource(files: readonly SourceFileInput[]): 
               );
               reads.push({
                 operation: readSource.operation,
-                ...(readKey ? { readKey } : {}),
+                ...(readPredicate.predicate ? { predicate: readPredicate.predicate } : {}),
+                ...(readPredicate.key ? { readKey: readPredicate.key } : {}),
                 site,
                 table: readTable.annotation,
               });
@@ -304,6 +306,11 @@ interface ExtractedWriteCall {
 interface ExtractedReadSource {
   operation: 'insert-select' | 'update-from';
   tableExpression: string;
+}
+
+interface ExtractedPredicateSummary {
+  key?: string;
+  predicate?: 'non-eq';
 }
 
 function extractTables(source: string): ExtractedTableDeclaration[] {
@@ -418,6 +425,18 @@ function statementEnd(source: string, start: number): number {
   return end === -1 ? source.length : end;
 }
 
+function extractPredicateSummary(
+  statement: string,
+  tableIdentifier: string,
+  table: JisoTableAnnotation,
+  tables: ReadonlyMap<string, ExtractedTable>,
+): ExtractedPredicateSummary {
+  const key = extractParameterizedKey(statement, tableIdentifier, table, tables);
+  if (key) return { key };
+
+  return hasNonEqPredicate(statement, tableIdentifier, table) ? { predicate: 'non-eq' } : {};
+}
+
 function extractParameterizedKey(
   statement: string,
   tableIdentifier: string,
@@ -438,6 +457,19 @@ function extractParameterizedKey(
   }
 
   return undefined;
+}
+
+function hasNonEqPredicate(
+  statement: string,
+  tableIdentifier: string,
+  table: JisoTableAnnotation,
+): boolean {
+  if (!table.key) return false;
+
+  const where = /\.where\s*\(\s*(?<predicate>[^;]+?)\s*\)/.exec(statement)?.groups?.predicate;
+  if (!where || !where.includes(`${tableIdentifier}.${table.key}`)) return false;
+  if (/^eq\s*\(/.test(where)) return false;
+  return true;
 }
 
 function argumentKey(
