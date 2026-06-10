@@ -10,6 +10,41 @@ export interface FwCheckInput {
   touchGraph?: TouchGraph;
 }
 
+export interface FwExplainInput extends FwCheckInput {
+  components?: ComponentExplain[];
+  mutations?: MutationExplain[];
+  pages?: PageExplain[];
+}
+
+export interface ComponentExplain {
+  fragments?: readonly string[];
+  handlers?: readonly HandlerExplain[];
+  name: string;
+  queries?: readonly string[];
+}
+
+export interface HandlerExplain {
+  event: string;
+  exportName: string;
+  params?: readonly string[];
+  ref: string;
+  substitution?: string;
+}
+
+export interface MutationExplain {
+  guards?: readonly string[];
+  invalidates?: readonly string[];
+  key: string;
+  writes?: readonly string[];
+}
+
+export interface PageExplain {
+  modulepreloads?: readonly string[];
+  prefetch?: 'conservative' | 'moderate' | false;
+  queries?: readonly string[];
+  route: string;
+}
+
 export interface OptimisticCoverage {
   mutation: string;
   query: string;
@@ -27,6 +62,7 @@ export interface FwCheckResult {
 }
 
 const outputVersion = 'fw-check/v1';
+const explainOutputVersion = 'fw-explain/v1';
 
 export function main(args: readonly string[] = process.argv.slice(2)): number {
   if (args.length === 0) {
@@ -43,8 +79,100 @@ export function main(args: readonly string[] = process.argv.slice(2)): number {
     return result.exitCode;
   }
 
+  if (args[0] === 'explain') {
+    const optimistic = args.includes('--optimistic');
+    const positional = args.slice(1).filter((arg) => arg !== '--optimistic');
+    const [kind, target, inputPath] = positional;
+
+    if (!isExplainKind(kind) || !target) {
+      process.stderr.write(
+        'fw: usage: fw explain component|mutation|query|page <target> [graph.json]\n',
+      );
+      return 1;
+    }
+
+    const input = inputPath ? JSON.parse(readFileSync(inputPath, 'utf8')) : {};
+    const result = fwExplain(input, { kind, optimistic, target });
+    const stream = result.exitCode === 0 ? process.stdout : process.stderr;
+    stream.write(result.output);
+    return result.exitCode;
+  }
+
   process.stderr.write(`fw: command not implemented yet: ${args.join(' ')}\n`);
   return 1;
+}
+
+export type ExplainKind = 'component' | 'mutation' | 'page' | 'query';
+
+export interface FwExplainOptions {
+  kind: ExplainKind;
+  optimistic?: boolean;
+  target: string;
+}
+
+export function fwExplain(input: FwExplainInput, options: FwExplainOptions): FwCheckResult {
+  const lines = [explainOutputVersion];
+
+  if (options.kind === 'component') {
+    const component = input.components?.find((item) => item.name === options.target);
+    if (!component) return notFound(options);
+
+    lines.push(`COMPONENT ${component.name}`);
+    lines.push(`queries: ${list(component.queries)}`);
+    lines.push(`fragments: ${list(component.fragments)}`);
+
+    for (const handler of component.handlers ?? []) {
+      lines.push(
+        [
+          `HANDLER ${handler.event}`,
+          `export=${handler.exportName}`,
+          `ref=${handler.ref}`,
+          `params=${list(handler.params)}`,
+          `substitution=${handler.substitution ?? '-'}`,
+        ].join(' '),
+      );
+    }
+
+    return ok(lines);
+  }
+
+  if (options.kind === 'mutation') {
+    const mutation = input.mutations?.find((item) => item.key === options.target);
+    if (!mutation) return notFound(options);
+
+    lines.push(`MUTATION ${mutation.key}`);
+    lines.push(`guards: ${list(mutation.guards)}`);
+    lines.push(`writes: ${list(mutation.writes)}`);
+    lines.push(`invalidates: ${list(mutation.invalidates)}`);
+
+    if (options.optimistic) {
+      for (const coverage of input.optimistic?.filter((item) => item.mutation === mutation.key) ??
+        []) {
+        lines.push(`OPTIMISTIC ${coverage.query} ${coverage.status}`);
+      }
+    }
+
+    return ok(lines);
+  }
+
+  if (options.kind === 'query') {
+    const query = input.queries?.find((item) => item.query === options.target);
+    if (!query) return notFound(options);
+
+    lines.push(`QUERY ${query.query}`);
+    lines.push(`reads: ${list(query.domains)}`);
+    lines.push(`invalidated-by: ${list(invalidatedBy(query, input.touchGraph ?? {}))}`);
+    return ok(lines);
+  }
+
+  const page = input.pages?.find((item) => item.route === options.target);
+  if (!page) return notFound(options);
+
+  lines.push(`PAGE ${page.route}`);
+  lines.push(`prefetch: ${page.prefetch ?? false}`);
+  lines.push(`modulepreloads: ${list(page.modulepreloads)}`);
+  lines.push(`queries: ${list(page.queries)}`);
+  return ok(lines);
 }
 
 export function fwCheck(input: FwCheckInput): FwCheckResult {
@@ -80,6 +208,36 @@ export function fwCheck(input: FwCheckInput): FwCheckResult {
     exitCode: failed ? 1 : 0,
     output: `${lines.join('\n')}\n`,
   };
+}
+
+function ok(lines: string[]): FwCheckResult {
+  return {
+    exitCode: 0,
+    output: `${lines.join('\n')}\n`,
+  };
+}
+
+function notFound(options: FwExplainOptions): FwCheckResult {
+  return {
+    exitCode: 1,
+    output: `${explainOutputVersion}\nERROR NOT_FOUND ${options.kind} ${options.target}\n`,
+  };
+}
+
+function list(values: readonly string[] | undefined): string {
+  return values && values.length > 0 ? values.join(',') : '-';
+}
+
+function isExplainKind(value: string | undefined): value is ExplainKind {
+  return value === 'component' || value === 'mutation' || value === 'page' || value === 'query';
+}
+
+function invalidatedBy(query: QueryReadSet, touchGraph: TouchGraph): string[] {
+  return Object.entries(touchGraph)
+    .filter(([, entry]) =>
+      entry.touches.some((touch) => query.domains.some((domain) => domain === touch.domain)),
+    )
+    .map(([writeName]) => writeName);
 }
 
 function missedQueryInvalidations(
