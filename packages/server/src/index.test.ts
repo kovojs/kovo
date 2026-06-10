@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { File } from 'node:buffer';
 
 import {
   domain,
@@ -102,6 +103,57 @@ describe('server mutation primitives', () => {
       rerunQueries: [],
       value: { productId: 'p1', quantity: 2 },
     });
+  });
+
+  it('coerces multipart file fields through s.file()', async () => {
+    const uploadAvatar = mutation('profile/avatar', {
+      input: s.object({
+        avatar: s.file({ maxBytes: 16, mime: ['image/png'] }),
+      }),
+      handler(input) {
+        return {
+          name: input.avatar.name,
+          size: input.avatar.size,
+          type: input.avatar.type,
+        };
+      },
+    });
+    const form = new FormData();
+    form.set('avatar', formDataFile(['avatar'], 'avatar.png', 'image/png'));
+
+    await expect(runMutation(uploadAvatar, form, {})).resolves.toEqual({
+      changes: [],
+      ok: true,
+      rerunQueries: [],
+      value: {
+        name: 'avatar.png',
+        size: 6,
+        type: 'image/png',
+      },
+    });
+  });
+
+  it('rejects missing, oversized, or wrong-type files', async () => {
+    const uploadAvatar = mutation('profile/avatar', {
+      input: s.object({
+        avatar: s.file().maxBytes(4).mime(['image/png']),
+      }),
+      handler(input) {
+        return input.avatar.name;
+      },
+    });
+    const oversized = new FormData();
+    oversized.set('avatar', formDataFile(['large'], 'avatar.png', 'image/png'));
+    const wrongType = new FormData();
+    wrongType.set('avatar', formDataFile(['ok'], 'avatar.txt', 'text/plain'));
+
+    await expect(runMutation(uploadAvatar, new FormData(), {})).rejects.toThrow('Expected file');
+    await expect(runMutation(uploadAvatar, oversized, {})).rejects.toThrow(
+      'Expected file <= 4 bytes',
+    );
+    await expect(runMutation(uploadAvatar, wrongType, {})).rejects.toThrow(
+      'Expected file type image/png',
+    );
   });
 
   it('returns typed validation failures from ctx.fail', async () => {
@@ -412,3 +464,7 @@ describe('server mutation primitives', () => {
     });
   });
 });
+
+function formDataFile(bits: string[], name: string, type: string): Blob {
+  return new File(bits, name, { type }) as unknown as Blob;
+}

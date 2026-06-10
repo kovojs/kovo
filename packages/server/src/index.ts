@@ -7,6 +7,9 @@ export interface Schema<T> {
 export type InferSchema<T> = T extends Schema<infer Value> ? Value : never;
 
 export const s = {
+  file(options: FileSchemaOptions = {}): FileSchema {
+    return new FileSchemaImpl(options);
+  },
   string(): Schema<string> {
     return {
       parse(input: unknown): string {
@@ -35,6 +38,23 @@ export const s = {
     };
   },
 };
+
+export interface FileLike {
+  arrayBuffer(): Promise<ArrayBuffer>;
+  name: string;
+  size: number;
+  type: string;
+}
+
+export interface FileSchema extends Schema<FileLike> {
+  maxBytes(value: number): FileSchema;
+  mime(types: readonly string[]): FileSchema;
+}
+
+export interface FileSchemaOptions {
+  maxBytes?: number;
+  mime?: readonly string[];
+}
 
 export interface NumberSchema extends Schema<number> {
   default(value: number): NumberSchema;
@@ -74,6 +94,38 @@ class NumberSchemaImpl implements NumberSchema {
     }
 
     return number;
+  }
+}
+
+class FileSchemaImpl implements FileSchema {
+  #maxBytes: number | undefined;
+  #mime: readonly string[] | undefined;
+
+  constructor(options: FileSchemaOptions = {}) {
+    this.#maxBytes = options.maxBytes;
+    this.#mime = options.mime;
+  }
+
+  maxBytes(value: number): FileSchema {
+    this.#maxBytes = value;
+    return this;
+  }
+
+  mime(types: readonly string[]): FileSchema {
+    this.#mime = types;
+    return this;
+  }
+
+  parse(input: unknown): FileLike {
+    if (!isFileLike(input)) throw new Error('Expected file');
+    if (this.#maxBytes !== undefined && input.size > this.#maxBytes) {
+      throw new Error(`Expected file <= ${this.#maxBytes} bytes`);
+    }
+    if (this.#mime && !this.#mime.includes(input.type)) {
+      throw new Error(`Expected file type ${this.#mime.join(', ')}`);
+    }
+
+    return input;
   }
 }
 
@@ -516,6 +568,21 @@ function isMutationFail(value: unknown): value is MutationFail {
     'ok' in value &&
     value.ok === false &&
     'error' in value
+  );
+}
+
+function isFileLike(value: unknown): value is FileLike {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    'arrayBuffer' in value &&
+    typeof value.arrayBuffer === 'function' &&
+    'name' in value &&
+    typeof value.name === 'string' &&
+    'size' in value &&
+    typeof value.size === 'number' &&
+    'type' in value &&
+    typeof value.type === 'string'
   );
 }
 
