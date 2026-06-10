@@ -14,6 +14,7 @@ describe('create-jiso starter', () => {
       'graph.json',
       'docs/graph-assertions.md',
       'docs/deployment.md',
+      'docs/framework-rules.md',
       'src/styles.css',
       'src/app.tsx',
       'src/app.fixpoint.test.ts',
@@ -41,6 +42,13 @@ describe('create-jiso starter', () => {
     expect(deploymentDoc).toContain('BroadcastChannel');
     expect(deploymentDoc).toContain('Refetch-on-focus/visibility');
     expect(deploymentDoc).toContain('No SSE or live bus ships in v1');
+    const frameworkRules = project.files.find(
+      (file) => file.path === 'docs/framework-rules.md',
+    )?.source;
+    expect(frameworkRules).toContain('SPEC.md');
+    expect(frameworkRules).toContain('TypeScript static checking plus `fw check`');
+    expect(frameworkRules).toContain('`data-bind` paths must exist');
+    expect(frameworkRules).toContain('The v1 server is stateless');
     expect(project.files.find((file) => file.path === 'src/app.tsx')?.source).toContain(
       'class="mx-auto grid min-h-dvh',
     );
