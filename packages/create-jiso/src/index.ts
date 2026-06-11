@@ -74,10 +74,10 @@ export function createJisoProject(options: CreateJisoOptions): CreateJisoProject
             },
             devDependencies: {
               '@jiso/compiler': 'workspace:*',
-              '@tailwindcss/vite': '^4.0.0',
+              '@tailwindcss/vite': '^4.1.0',
               '@typescript/native-preview': '^7.0.0-dev.20260610.1',
               fw: 'workspace:*',
-              tailwindcss: '^4.0.0',
+              tailwindcss: '^4.1.0',
               typescript: '^6.0.0',
               'vite-plus': '^0.1.24',
               vitest: '^4.1.8',
@@ -181,7 +181,7 @@ vp run fw-check
 vp run graph-assertions
 \`\`\`
 
-Tailwind is the default app styling path. Keep class names in templates as static strings so the generated CSS contains every class that can appear in SSR pages, mutation fragments, and deferred streams. Safelist classes explicitly in \`src/styles.css\` when a fragment must emit a class that cannot be discovered statically.
+Tailwind is the default app styling path. Keep class names in templates as static strings so the generated CSS contains every class that can appear in SSR pages, mutation fragments, and deferred streams. Safelist classes explicitly with \`@source inline("...")\` in \`src/styles.css\` when a fragment must emit a class that cannot be discovered statically.
 `,
       },
       {
@@ -324,7 +324,7 @@ The v1 implementation depends on these hard rules:
 - Generated output must remain authorable Jiso source, and the fixpoint test must stay in CI.
 - Handler references, fragment targets, form fields, query bindings, guards, invalidations, and optimistic coverage are checked by TypeScript static checking plus \`fw check\`.
 - \`data-bind\` paths must exist in declared query result shapes; column renames should fail static checks instead of becoming stale DOM.
-- Use Tailwind as the default app styling path. Keep class names statically discoverable or safelisted so SSR pages, mutation fragments, and deferred streams never reference missing CSS.
+- Use Tailwind as the default app styling path. Keep class names statically discoverable or safelisted with \`@source inline("...")\` so SSR pages, mutation fragments, and deferred streams never reference missing CSS.
 - Route writes through domain functions. Direct database access in mutation handlers is a framework lint because invalidation and verification depend on the domain graph.
 - The v1 server is stateless. Liveness comes from BroadcastChannel rebroadcast and refetch-on-focus/visibility, not Redis, SSE, or a live bus.
 - Unguarded mutation review should use \`fw explain --unguarded graph.json\` as the stable audit path.
@@ -338,6 +338,7 @@ The v1 implementation depends on these hard rules:
 
 @source "../index.html";
 @source "./**/*.{ts,tsx,html}";
+@source inline("bg-emerald-50 text-emerald-700 border-emerald-200 bg-amber-50 text-amber-700 border-amber-200");
 
 @theme {
   --color-jiso-ink: #17202a;

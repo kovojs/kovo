@@ -41,7 +41,10 @@ describe('create-jiso starter', () => {
       '"fw": "workspace:*"',
     );
     expect(project.files.find((file) => file.path === 'package.json')?.source).toContain(
-      '"@tailwindcss/vite": "^4.0.0"',
+      '"@tailwindcss/vite": "^4.1.0"',
+    );
+    expect(project.files.find((file) => file.path === 'package.json')?.source).toContain(
+      '"tailwindcss": "^4.1.0"',
     );
     expect(project.files.find((file) => file.path === 'vite.config.ts')?.source).toContain(
       "command: 'fw check graph.json'",
@@ -64,12 +67,16 @@ describe('create-jiso starter', () => {
     expect(project.files.find((file) => file.path === 'src/styles.css')?.source).toContain(
       '@source "../index.html";',
     );
+    expect(project.files.find((file) => file.path === 'src/styles.css')?.source).toContain(
+      '@source inline("bg-emerald-50 text-emerald-700 border-emerald-200 bg-amber-50 text-amber-700 border-amber-200");',
+    );
     const readme = project.files.find((file) => file.path === 'README.md')?.source;
     expect(readme).toContain('vp check');
     expect(readme).toContain('vp test');
     expect(readme).toContain('vp run build');
     expect(readme).toContain('vp run fw-check');
     expect(readme).toContain('vp run graph-assertions');
+    expect(readme).toContain('@source inline("...")');
     const graph = JSON.parse(
       project.files.find((file) => file.path === 'graph.json')?.source ?? '{}',
     ) as FwExplainInput;
@@ -181,6 +188,7 @@ describe('create-jiso starter', () => {
     expect(frameworkRules).toContain('`fw explain --unguarded graph.json`');
     expect(frameworkRules).toContain('`FW-Idem` replay for duplicate submissions');
     expect(frameworkRules).toContain('readable `FW-Fragment`/`FW-Targets` headers');
+    expect(frameworkRules).toContain('@source inline("...")');
     expect(project.files.find((file) => file.path === 'src/app.tsx')?.source).toContain(
       'class="mx-auto grid min-h-dvh',
     );

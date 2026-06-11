@@ -269,6 +269,7 @@ void test('P10 normative docs cover the constitution and compiler hard rules', a
   assert.match(compilerRules, /Teaching errors/);
   assert.match(spec, /\*\*13\.1 CSS\.\*\* Jiso v1 is Tailwind-first/);
   assert.match(spec, /dynamic classes must be safelisted explicitly/);
+  assert.match(spec, /@source inline\("\.\.\."\)/);
   assert.match(spec, /wraps them in `@scope` keyed to the host/);
   assert.doesNotMatch(spec, /needs a design pass before v1 freeze/);
 });
@@ -582,8 +583,13 @@ void test('P10 starter wires graph assertions into CI', async () => {
   assert.doesNotMatch(starterSource, /innerHTML = App\.definition\.render\(\)/);
   assert.match(starterSource, /@source "\.\.\/index\.html";/);
   assert.match(starterSource, /@source "\.\/\*\*\/\*\.\{ts,tsx,html\}";/);
+  assert.match(starterSource, /@source inline\("bg-emerald-50 text-emerald-700/);
+  assert.match(starterSource, /'@tailwindcss\/vite': '\^4\.1\.0'/);
+  assert.match(starterSource, /tailwindcss: '\^4\.1\.0'/);
+  assert.match(starterSource, /@source inline\("\.\.\."\)/);
   assert.match(starterSource, /<link rel="stylesheet" href="\/src\/styles\.css" \/>/);
   assert.match(starterTests, /vp run graph-assertions/);
+  assert.match(starterTests, /@source inline\("bg-emerald-50 text-emerald-700/);
   assert.match(starterTests, /create-jiso: wrote 13 files/);
 });
 
