@@ -62,6 +62,7 @@ export interface PageExplain {
   prefetch?: 'conservative' | 'moderate' | false;
   queries?: readonly string[];
   route: string;
+  stylesheets?: readonly string[];
   viewTransitions?: readonly string[];
 }
 
@@ -285,6 +286,7 @@ export function fwExplain(input: FwExplainInput, options: FwExplainOptions): FwC
   lines.push(`PAGE ${page.route}`);
   lines.push(`prefetch: ${page.prefetch ?? false}`);
   lines.push(`modulepreloads: ${list(page.modulepreloads)}`);
+  lines.push(`stylesheets: ${list(page.stylesheets)}`);
   lines.push(`queries: ${list(page.queries)}`);
   lines.push(`view-transitions: ${list(page.viewTransitions)}`);
   return ok(lines);

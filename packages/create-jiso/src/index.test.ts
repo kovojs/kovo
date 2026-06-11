@@ -118,6 +118,7 @@ describe('create-jiso starter', () => {
         'PAGE /cart',
         'prefetch: false',
         'modulepreloads: -',
+        'stylesheets: /src/styles.css',
         'queries: cart',
         'view-transitions: -',
         '',
@@ -189,6 +190,11 @@ describe('create-jiso starter', () => {
     expect(graphAssertionScript).toContain("fwExplain(['query', 'cart'])");
     expect(graphAssertionScript).toContain("['component:CartBadge', 'component:CartPanel']");
     expect(graphAssertionScript).toContain('OPTIMISTIC-SUMMARY .*UNHANDLED=0');
+    expect(graphAssertionScript).toContain("fwExplain(['page', '/cart'])");
+    expect(graphAssertionScript).toContain("explainLine(cartPage, 'prefetch: ')");
+    expect(graphAssertionScript).toContain("explainLine(cartPage, 'modulepreloads: ')");
+    expect(graphAssertionScript).toContain("explainLine(cartPage, 'stylesheets: ')");
+    expect(graphAssertionScript).toContain("explainLine(cartPage, 'queries: ')");
     const fixpointTest = project.files.find(
       (file) => file.path === 'src/app.fixpoint.test.ts',
     )?.source;

@@ -168,6 +168,9 @@ export const jisoLoaderSource = `(()=>{const E=["click","submit","input","change
 
 export function installJisoLoader(options: JisoLoaderOptions): JisoLoader {
   const events = options.events ?? defaultDelegatedEvents;
+  const enhancedMutations = options.enhancedMutations
+    ? withDefaultMutationBroadcast(options.enhancedMutations)
+    : undefined;
   let hydratedQueries: readonly string[] = [];
 
   if (options.queryStore && options.root.querySelectorAll) {
@@ -181,7 +184,7 @@ export function installJisoLoader(options: JisoLoaderOptions): JisoLoader {
     options.root.addEventListener(
       eventName,
       async (event) => {
-        if (await dispatchEnhancedFormSubmit(event, options.enhancedMutations)) return;
+        if (await dispatchEnhancedFormSubmit(event, enhancedMutations)) return;
         await dispatchDelegatedEvent(event, options.importModule);
       },
       { capture: true },
@@ -210,6 +213,27 @@ export function installJisoLoader(options: JisoLoaderOptions): JisoLoader {
   }
 
   return { events };
+}
+
+function withDefaultMutationBroadcast(
+  options: EnhancedMutationLoaderOptions,
+): EnhancedMutationLoaderOptions {
+  if (options.broadcast) return options;
+  if (typeof globalThis.BroadcastChannel !== 'function') return options;
+
+  try {
+    return {
+      ...options,
+      broadcast: installMutationBroadcast({
+        ...(options.morph ? { morph: options.morph } : {}),
+        channel: new globalThis.BroadcastChannel('jiso:mutation-response') as BroadcastLike,
+        root: options.root,
+        store: options.store,
+      }),
+    };
+  } catch {
+    return options;
+  }
 }
 
 export interface EnhancedMutationLoaderOptions {

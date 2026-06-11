@@ -619,6 +619,7 @@ describe('commerce example', () => {
         'PAGE /cart',
         'prefetch: false',
         'modulepreloads: -',
+        'stylesheets: /assets/tailwind.css',
         'queries: cart,productGrid,orderHistory',
         'view-transitions: -',
         '',

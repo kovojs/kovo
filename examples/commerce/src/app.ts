@@ -523,6 +523,7 @@ export const commerceGraph = {
       prefetch: false,
       queries: ['cart', 'productGrid', 'orderHistory'],
       route: '/cart',
+      stylesheets: [...commerceStylesheets],
     },
   ],
   queries: [

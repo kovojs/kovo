@@ -36,7 +36,7 @@ const starterGraph = {
     },
   ],
   optimistic: [{ mutation: 'cart/add', query: 'cart', status: 'await-fragment' }],
-  pages: [{ queries: ['cart'], route: '/cart' }],
+  pages: [{ queries: ['cart'], route: '/cart', stylesheets: ['/src/styles.css'] }],
   queries: [{ domains: ['cart'], query: 'cart' }],
   touchGraph: {
     'cart.addItem': {
@@ -207,6 +207,12 @@ const cartAdd = fwExplain(['mutation', 'cart/add', '--optimistic']);
 assert.match(cartAdd, /^updates: cart->component:CartBadge,component:CartPanel,page:\\/cart$/m);
 assert.match(cartAdd, /^OPTIMISTIC cart await-fragment$/m);
 assert.match(cartAdd, /^OPTIMISTIC-SUMMARY .*UNHANDLED=0$/m);
+
+const cartPage = fwExplain(['page', '/cart']);
+assert.equal(explainLine(cartPage, 'prefetch: '), 'false');
+assert.deepEqual(explainList(explainLine(cartPage, 'modulepreloads: ')), []);
+assert.deepEqual(explainList(explainLine(cartPage, 'stylesheets: ')), ['/src/styles.css']);
+assert.deepEqual(explainList(explainLine(cartPage, 'queries: ')), ['cart']);
 
 process.stdout.write('graph-assertions/v1\\nOK\\n');
 `,

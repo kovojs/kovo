@@ -510,6 +510,9 @@ void test('P10 starter wires graph assertions into CI', async () => {
   assert.match(starterSource, /- run: vp run graph-assertions/);
   assert.match(starterSource, /path: 'scripts\/graph-assertions\.mjs'/);
   assert.match(starterSource, /OPTIMISTIC-SUMMARY \.\*UNHANDLED=0/);
+  assert.match(starterSource, /fwExplain\(\['page', '\/cart'\]\)/);
+  assert.match(starterSource, /explainLine\(cartPage, 'queries: '\)/);
+  assert.match(starterSource, /explainLine\(cartPage, 'stylesheets: '\)/);
   assert.doesNotMatch(starterSource, /src\/main\.ts/);
   assert.doesNotMatch(starterSource, /innerHTML = App\.definition\.render\(\)/);
   assert.match(starterSource, /@source "\.\.\/index\.html";/);

@@ -418,6 +418,91 @@ describe('runtime loader', () => {
     expect(mutationRoot.targets.get('cart-badge')?.html).toBe('<cart-badge>1</cart-badge>');
   });
 
+  it('auto-wires enhanced mutation broadcasts through the loader bridge', async () => {
+    const globalRecord = globalThis as unknown as Record<string, unknown>;
+    const originalBroadcastChannel = globalRecord.BroadcastChannel;
+    const hub = new FakeBroadcastHub();
+    const channelNames: string[] = [];
+    class TestBroadcastChannel extends FakeBroadcastChannel {
+      constructor(name: string) {
+        channelNames.push(name);
+        super(hub);
+      }
+    }
+    globalRecord.BroadcastChannel = TestBroadcastChannel;
+
+    try {
+      const loaderRootA = new FakeRoot();
+      const loaderRootB = new FakeRoot();
+      const mutationRootA = new FakeMorphRoot();
+      const mutationRootB = new FakeMorphRoot();
+      const storeA = createQueryStore();
+      const storeB = createQueryStore();
+      const formData = new FormData();
+      const form = new FakeFormElement(
+        {
+          enhance: '',
+          'data-mutation': 'cart/add',
+        },
+        {
+          action: '/_m/cart/add',
+          method: 'post',
+        },
+      );
+      const fetch = vi.fn(async () => ({
+        headers: { get: () => null },
+        async text() {
+          return [
+            '<fw-query name="cart">{"count":4}</fw-query>',
+            '<fw-fragment target="cart-badge"><cart-badge>4</cart-badge></fw-fragment>',
+          ].join('\n');
+        },
+      }));
+
+      mutationRootA.deps = [{ deps: 'cart', id: 'cart-badge' }];
+      mutationRootB.deps = [{ deps: 'cart', id: 'cart-badge' }];
+      mutationRootA.targets.set('cart-badge', new FakeMorphTarget('<cart-badge>0</cart-badge>'));
+      mutationRootB.targets.set('cart-badge', new FakeMorphTarget('<cart-badge>0</cart-badge>'));
+
+      installJisoLoader({
+        enhancedMutations: {
+          fetch,
+          formData: () => formData,
+          idem: () => 'idem_auto_broadcast',
+          root: mutationRootB,
+          store: storeB,
+        },
+        importModule: vi.fn(),
+        root: loaderRootB,
+      });
+      installJisoLoader({
+        enhancedMutations: {
+          fetch,
+          formData: () => formData,
+          idem: () => 'idem_auto_broadcast',
+          root: mutationRootA,
+          store: storeA,
+        },
+        importModule: vi.fn(),
+        root: loaderRootA,
+      });
+
+      await loaderRootA.listeners.get('submit')?.({
+        preventDefault: vi.fn(),
+        target: form,
+        type: 'submit',
+      });
+
+      expect(channelNames).toEqual(['jiso:mutation-response', 'jiso:mutation-response']);
+      expect(storeA.get('cart')).toEqual({ count: 4 });
+      expect(storeB.get('cart')).toEqual({ count: 4 });
+      expect(mutationRootA.targets.get('cart-badge')?.html).toBe('<cart-badge>4</cart-badge>');
+      expect(mutationRootB.targets.get('cart-badge')?.html).toBe('<cart-badge>4</cart-badge>');
+    } finally {
+      globalRecord.BroadcastChannel = originalBroadcastChannel;
+    }
+  });
+
   it('imports and invokes a url#export handler only when a matching event arrives', async () => {
     const handler = vi.fn();
     const importModule = vi.fn(async () => ({ CartBadge$button_click: handler }));
