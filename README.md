@@ -1,0 +1,65 @@
+# Jiso
+
+A web-platform-native framework for building multi-page applications that are **interactive at first paint, legible at every layer, and statically verifiable end-to-end.**
+
+> An application's complete behavior — every handler wiring, navigation target, form field, mutation contract, data dependency, and optimistic prediction — should be provable by TypeScript static checking plus static graph queries, and auditable by reading the page source and the Network panel.
+
+One organizing constraint governs everything: every artifact the system produces (compiled output, HTML, wire traffic, dependency graphs) must be readable by a human in devtools and checkable by a machine without executing a browser.
+
+**Status:** pre-v1, under active implementation. Nothing here is published to npm yet.
+
+## Documents
+
+| Document                                                     | Role                                                               |
+| ------------------------------------------------------------ | ------------------------------------------------------------------ |
+| [`SPEC.md`](SPEC.md)                                         | The normative source of truth for framework behavior               |
+| [`IMPLEMENT_v1.md`](IMPLEMENT_v1.md)                         | Implementation roadmap and sequencing for v1                       |
+| [`docs/constitution.md`](docs/constitution.md)               | The five design tests every feature must pass (summary of SPEC §2) |
+| [`docs/compiler-hard-rules.md`](docs/compiler-hard-rules.md) | Compiler release gates (summary of SPEC §5.2)                      |
+| [`AGENTS.md`](AGENTS.md) / [`CLAUDE.md`](CLAUDE.md)          | Instructions for coding agents working in this repo                |
+
+## Prior art
+
+Jiso composes ideas from systems that each solved one piece:
+
+| Kept from                  | What                                                                                                                                                                                                             |
+| -------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Qwik                       | Resumability, global event delegation, attribute-encoded handler refs, serialized state, execute-nothing-undeclared (SPEC §4.7 — interaction is the default trigger; every other trigger is a legible attribute) |
+| htmx / LiveView            | Server-rendered fragments as the mutation response; HTML over the wire                                                                                                                                           |
+| RTK Query / Next tags      | Keyed invalidation intersected with declared dependencies                                                                                                                                                        |
+| Replicache / Zero          | Snapshot → predict → rebase log → authoritative reconcile                                                                                                                                                        |
+| Rails (touch/Russian-doll) | Writes through the data layer drive derived-view freshness                                                                                                                                                       |
+| Convex / Noria             | The asymptote: inferred read/write sets — reached statically via Drizzle ASTs instead of at runtime                                                                                                              |
+
+What it deliberately rejects (client routers, hydration, shadow DOM, custom elements, runtime signal graphs, portals, and more — each with its reason) is in SPEC §3.1.
+
+## Repository layout
+
+| Path                   | Contents                                                |
+| ---------------------- | ------------------------------------------------------- |
+| `packages/core`        | Component model, diagnostics registry                   |
+| `packages/compiler`    | Lowering pipeline, registries, `fw explain`             |
+| `packages/runtime`     | Loader, update plan, morph, optimistic protocol         |
+| `packages/server`      | Mutations, queries, guards, wire protocol               |
+| `packages/drizzle`     | Touch-set extraction and schema-as-registry adapter     |
+| `packages/cli`         | The `fw` command-line surface                           |
+| `packages/test`        | `jisoTest` harness                                      |
+| `packages/create-jiso` | Starter-template scaffolder                             |
+| `examples/commerce`    | The reference commerce app (SPEC §16 acceptance target) |
+| `conformance/`         | Pinned Drizzle-surface conformance suite                |
+| `docs/`                | Repo-facing summaries, studies, and checklists          |
+
+## Development
+
+Workspace tooling is [Vite+](https://viteplus.dev) (`vp`) on pnpm.
+
+```bash
+pnpm install
+pnpm run check        # vp check — typecheck + lint
+pnpm run test         # vitest unit/integration suites
+pnpm run acceptance   # full gate: check, tests, browser suite, build, perf, conformance, fw-check
+```
+
+## Name
+
+"Jiso" — short, pronounceable, no known collisions in the framework space. Launch-readiness checks (trademark, domain, npm scope) are tracked in [`docs/prelaunch-checklist.md`](docs/prelaunch-checklist.md).
