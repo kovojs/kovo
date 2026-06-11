@@ -348,6 +348,35 @@ describe('server mutation primitives', () => {
     });
   });
 
+  it('bounds memory mutation replay records by ttl and entry count', () => {
+    vi.useFakeTimers();
+    try {
+      const replayStore = createMemoryMutationReplayStore({ maxEntries: 1, ttlMs: 100 });
+      const first = {
+        body: 'first',
+        headers: { 'FW-Idem': 'idem_01' },
+        status: 200,
+      } as const;
+      const second = {
+        body: 'second',
+        headers: { 'FW-Idem': 'idem_02' },
+        status: 200,
+      } as const;
+
+      replayStore.set('session-a', 'idem_01', first);
+      replayStore.set('session-a', 'idem_02', second);
+
+      expect(replayStore.get('session-a', 'idem_01')).toBeUndefined();
+      expect(replayStore.get('session-a', 'idem_02')).toEqual(second);
+
+      vi.advanceTimersByTime(100);
+
+      expect(replayStore.get('session-a', 'idem_02')).toBeUndefined();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('routes mutation endpoints without FW-Fragment through the no-JS POST redirect', async () => {
     const addToCart = mutation('cart/add', {
       input: s.object({ productId: s.string() }),
@@ -2347,6 +2376,56 @@ describe('server mutation primitives', () => {
     const replayedFirst = await renderMutationResponse(addToCart, {
       idem: 'idem_shared',
       rawInput: { csrf: csrfToken(requestA, csrf), productId: 'p1' },
+      replayStore,
+      request: requestA,
+    });
+
+    expect(writes).toBe(2);
+    expect(first.body).toContain('"session":"s1"');
+    expect(second.body).toContain('"session":"s2"');
+    expect(replayedFirst.body).toBe(first.body);
+  });
+
+  it('scopes enhanced mutation replay records by request session id', async () => {
+    const replayStore = createMemoryMutationReplayStore();
+    let writes = 0;
+    const cart = domain('cart');
+    const cartQuery = query('cart', {
+      load: (_input, context: { request: { session: { id: string } } }) => ({
+        count: writes,
+        session: context.request.session.id,
+      }),
+      reads: [cart],
+    });
+    const addToCart = mutation('cart/add', {
+      input: s.object({ productId: s.string() }),
+      registry: {
+        queries: [cartQuery],
+        touches: [cart],
+      },
+      handler(input) {
+        writes += 1;
+        return input;
+      },
+    });
+    const requestA = { session: { id: 's1' } };
+    const requestB = { session: { id: 's2' } };
+
+    const first = await renderMutationResponse(addToCart, {
+      idem: 'idem_shared',
+      rawInput: { productId: 'p1' },
+      replayStore,
+      request: requestA,
+    });
+    const second = await renderMutationResponse(addToCart, {
+      idem: 'idem_shared',
+      rawInput: { productId: 'p1' },
+      replayStore,
+      request: requestB,
+    });
+    const replayedFirst = await renderMutationResponse(addToCart, {
+      idem: 'idem_shared',
+      rawInput: { productId: 'p1' },
       replayStore,
       request: requestA,
     });

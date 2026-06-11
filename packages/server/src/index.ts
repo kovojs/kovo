@@ -2102,6 +2102,19 @@ function mutationReplayScope<Request>(
     return request.sessionId;
   }
 
+  if (
+    typeof request === 'object' &&
+    request !== null &&
+    'session' in request &&
+    typeof request.session === 'object' &&
+    request.session !== null &&
+    'id' in request.session &&
+    typeof request.session.id === 'string' &&
+    request.session.id !== ''
+  ) {
+    return request.session.id;
+  }
+
   return null;
 }
 
