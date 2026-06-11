@@ -461,8 +461,17 @@ void test('Drizzle pinned conformance suite is an explicit gate', async () => {
   assert.match(viteConfig, /'conformance-drizzle':\s*\{/);
   assert.match(ciWorkflow, /vp run conformance-drizzle/);
   assert.match(conformanceTest, /Drizzle pinned subset conformance/);
+  assert.match(conformanceTest, /from 'drizzle-orm'/);
+  assert.match(conformanceTest, /from 'drizzle-orm\/pg-core'/);
+  assert.match(conformanceTest, /imports the pinned real Drizzle Postgres subset/);
   assert.match(conformanceTest, /pins direct table source extraction/);
   assert.match(conformanceTest, /pins local conditional table resolution/);
+  assert.equal(
+    JSON.parse(await readProjectFile('conformance/drizzle-pin/package.json')).devDependencies[
+      'drizzle-orm'
+    ],
+    '0.45.2',
+  );
 });
 
 void test('D3 deferred stream responses are consumed by the runtime', async () => {

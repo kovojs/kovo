@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest';
 
+import { eq, gt, inArray } from 'drizzle-orm';
+import { alias, boolean, integer, pgTable, text, timestamp } from 'drizzle-orm/pg-core';
+
 import {
   createTouchGraphEntry,
   diagnosticsForTouchGraph,
@@ -10,6 +13,28 @@ import {
 } from '../../../packages/drizzle/src/index.js';
 
 describe('Drizzle pinned subset conformance', () => {
+  it('imports the pinned real Drizzle Postgres subset used by extraction examples', () => {
+    const products = pgTable('products', {
+      archived: boolean('archived').notNull().default(false),
+      createdAt: timestamp('created_at').notNull(),
+      id: text('id').primaryKey(),
+      stock: integer('stock').notNull(),
+    });
+    const cartItems = pgTable('cart_items', {
+      cartId: text('cart_id').notNull(),
+      productId: text('product_id').notNull(),
+      qty: integer('qty').notNull(),
+    });
+    const productAlias = alias(products, 'p');
+
+    expect(products.id).toBeDefined();
+    expect(cartItems.productId).toBeDefined();
+    expect(productAlias.id).toBeDefined();
+    expect(eq(products.id, 'p1')).toBeDefined();
+    expect(gt(products.stock, 0)).toBeDefined();
+    expect(inArray(cartItems.cartId, ['c1', 'c2'])).toBeDefined();
+  });
+
   it('pins table annotations as the domain registry source', () => {
     const cartItems = { ...jiso({ domain: 'cart', key: 'cartId' }), name: 'cart_items' };
     const products = { ...jiso({ domain: 'product', key: 'id' }), name: 'products' };
