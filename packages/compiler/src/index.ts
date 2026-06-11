@@ -457,25 +457,18 @@ function lowerStaticLinks(source: string): string {
 }
 
 function lowerStaticHrefCalls(source: string): string {
-  let output = '';
-  let cursor = 0;
+  let output = source;
 
-  for (const match of source.matchAll(/\bhref\s*\(/g)) {
-    const callStart = match.index;
-    if (callStart < cursor) continue;
-
-    const argsStart = callStart + match[0].length - 1;
-    const callEnd = findMatchingToken(source, argsStart, '(', ')');
-    if (callEnd === -1) continue;
-
-    const lowered = lowerStaticHrefCall(source.slice(argsStart + 1, callEnd));
+  for (const call of parsedCallExpressions(source)
+    .filter((item) => item.name === 'href')
+    .sort((left, right) => right.start - left.start)) {
+    const lowered = lowerStaticHrefCall(call.arguments);
     if (!lowered) continue;
 
-    output += source.slice(cursor, callStart) + JSON.stringify(lowered);
-    cursor = callEnd + 1;
+    output = `${output.slice(0, call.start)}${JSON.stringify(lowered)}${output.slice(call.end)}`;
   }
 
-  return cursor === 0 ? source : output + source.slice(cursor);
+  return output;
 }
 
 function normalizeStaticHrefAttributes(source: string): string {
@@ -485,8 +478,8 @@ function normalizeStaticHrefAttributes(source: string): string {
   );
 }
 
-function lowerStaticHrefCall(argsSource: string): string | null {
-  const [pathArg, optionsArg] = splitArguments(argsSource).map((arg) => arg.trim());
+function lowerStaticHrefCall(args: readonly string[]): string | null {
+  const [pathArg, optionsArg] = args.map((arg) => arg.trim());
   const path = literalStringValue(pathArg ?? '');
   if (!path) return null;
 

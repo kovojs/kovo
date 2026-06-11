@@ -1114,6 +1114,34 @@ export const ProductLinks = component('product-links', {
     expect(() => assertFixpoint(result)).not.toThrow();
   });
 
+  it('ignores static href call text inside strings and comments', () => {
+    const result = compileComponentModule({
+      fileName: 'product-links.tsx',
+      registryFacts: {
+        routes: ['/products/:id'],
+      },
+      source: `
+export const ProductLinks = component('product-links', {
+  render: () => {
+    const sample = "href('/products/:id', { params: { id: 'p1' } })";
+    // href('/products/:id', { params: { id: 'p2' } })
+    return <a href={href('/products/:id', { params: { id: 'p3' } })}>Product</a>;
+  },
+});
+`,
+    });
+
+    expect(result.diagnostics).toEqual([]);
+    expect(result.files[0]?.source).toContain(
+      "const sample = \"href('/products/:id', { params: { id: 'p1' } })\"",
+    );
+    expect(result.files[0]?.source).toContain('href="/products/p3"');
+    expect(result.files[0]?.source).not.toContain(
+      "href('/products/:id', { params: { id: 'p3' } })",
+    );
+    expect(() => assertFixpoint(result)).not.toThrow();
+  });
+
   it('reports FW220 for literal navigation targets outside the route table', () => {
     const result = compileComponentModule({
       fileName: 'product-links.tsx',
