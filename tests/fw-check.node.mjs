@@ -696,21 +696,71 @@ export const CartList = component('cart-list', {
 });
 
 void test('P1 compiler validates HTML content-model parser stability', async () => {
-  const coreSource = await readProjectFile('packages/core/src/diagnostics.ts');
-  const compilerSource = await readProjectFile('packages/compiler/src/index.ts');
-  const compilerMarkupSource = await readProjectFile('packages/compiler/src/validate/markup.ts');
-  const compilerTests = await readProjectFile('packages/compiler/src/index.test.ts');
+  assert.equal(diagnosticDefinitions.FW225.message, 'JSX nesting violates the HTML content model.');
+  assert.deepEqual(
+    compileComponentModule({
+      fileName: 'components/cart/cart-table.tsx',
+      registryFacts: {
+        components: ['cart-row'],
+      },
+      source: `
+import { component } from '@jiso/core';
 
-  assert.match(coreSource, /FW225/);
-  assert.match(coreSource, /JSX nesting violates the HTML content model/);
-  assert.match(compilerSource, /validateHtmlContentModel/);
-  assert.match(compilerMarkupSource, /blockTagsThatCloseParagraph/);
-  assert.match(compilerMarkupSource, /diagnosticDefinitions\.FW225\.message/);
-  assert.match(
-    compilerTests,
-    /accepts native table rows when the parser keeps the authored tree shape/,
+export const CartTable = component('cart-table', {
+  render: () => (
+    <table>
+      <tbody>
+        <tr fw-c="cart-row">
+          <td>Cart row</td>
+        </tr>
+      </tbody>
+    </table>
+  ),
+});
+`,
+    }).diagnostics,
+    [],
   );
-  assert.match(compilerTests, /reports FW225 for parser-reparented HTML content-model violations/);
+  assert.deepEqual(
+    compileComponentModule({
+      fileName: 'components/cart/cart-shell.tsx',
+      source: `
+import { component } from '@jiso/core';
+
+export const CartShell = component('cart-shell', {
+  render: () => (
+    <section>
+      <p>
+        Cart intro
+        <div>Parser closes the paragraph before this div.</div>
+      </p>
+      <tr>
+        <td>Detached row</td>
+      </tr>
+    </section>
+  ),
+});
+`,
+    }).diagnostics,
+    [
+      {
+        code: 'FW225',
+        fileName: 'components/cart/cart-shell.tsx',
+        length: 5,
+        message: `${diagnosticDefinitions.FW225.message} <div> cannot appear inside <p>`,
+        severity: 'error',
+        start: { column: 9, line: 9 },
+      },
+      {
+        code: 'FW225',
+        fileName: 'components/cart/cart-shell.tsx',
+        length: 4,
+        message: `${diagnosticDefinitions.FW225.message} <tr> must be inside a table section or table`,
+        severity: 'error',
+        start: { column: 7, line: 11 },
+      },
+    ],
+  );
 });
 
 void test('P1 compiler validates declared execution trigger names', async () => {
