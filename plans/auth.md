@@ -1,6 +1,6 @@
 # Auth — agnostic core seams + blessed better-auth adapter (D5)
 
-Status: design agreed 2026-06-11; SPEC A-track text landed; A-track core seams implemented; S6 bounded spike artifact landed; B-track not started
+Status: design agreed 2026-06-11; SPEC A-track text landed; A-track core seams implemented; S6 bounded spike artifact landed; B2/B3 initial adapter seam landed
 Scope: SPEC additions (session population, guard-failure contract, mutation response headers, raw endpoints), `@jiso/core`/`@jiso/server` seams, a new `@jiso/better-auth` package, a `conformance/better-auth-pin/` suite, and starter/example adoption. Referenced from `IMPLEMENT_v1.md` as workstream **D5**.
 
 ## Progress checklist
@@ -12,8 +12,8 @@ Scope: SPEC additions (session population, guard-failure contract, mutation resp
 - [x] A3 mutation response-header channel (`ctx.setCookie` / header passthrough). Evidence: `packages/server/src/index.test.ts` covers enhanced Set-Cookie forwarding, no-JS PRG Set-Cookie forwarding, and no typed-failure leakage; focused server tests and `vp check` passed in `agent/auth-headers`.
 - [x] A4 `endpoint()` raw endpoint primitive with CSRF exemption + unguarded-audit enrollment.
 - [ ] B1 schema bridge: better-auth tables into `schema.ts` domains with declared touches.
-- [ ] B2 typed session mapper (`betterAuthSession(auth, map)`).
-- [ ] B3 guard bindings: `authed` / `role()` / org-scoping over the mapped session.
+- [x] B2 typed session mapper (`betterAuthSession(auth, map)`). Evidence: `packages/better-auth/src/index.ts` exports a dependency-light Better Auth-like `auth.api.getSession({ headers })` provider adapter that returns `null` for anonymous sessions per SPEC §6.5 and maps the inferred Better Auth `session`/`user` payload through an app-owned total mapper; `packages/better-auth/src/index.test.ts` covers runtime mapping, anonymous requests, and a `@ts-expect-error` totality check that dropped declared session fields fail under `vp check`.
+- [x] B3 guard bindings: `authed` / `role()` / org-scoping over the mapped session. Evidence: `packages/better-auth/src/index.ts` exports `authed()`, typed `role<Request>()`, and `activeOrganization()` guards over the mapped session while preserving SPEC §10.3 unauthenticated vs unauthorized guard failures; focused tests cover success/failure behavior and stale role-name type failures without requiring live Better Auth services.
 - [ ] B4 ejectable credential mutations (sign-in / sign-up / sign-out) wrapping `auth.api`.
 - [ ] B5 `mount()` for browser-redirect protocols (OAuth callbacks, SAML ACS, magic links).
 - [ ] B6 pinned better-auth conformance suite in CI.
