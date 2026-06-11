@@ -118,6 +118,16 @@ void test('Phase 0 wire fixtures are present and explicit', async () => {
     assert.match(body, /^>>> REQUEST/m, `${name} includes a request transcript`);
     assert.match(body, /^<<< RESPONSE/m, `${name} includes a response transcript`);
   }
+
+  for (const name of ['enhanced-mutation.http', 'validation-422-fragment.http']) {
+    const body = await readWireFixture(name);
+    assert.match(body, /^FW-Fragment: true$/m, `${name} declares enhanced fragment mode`);
+    assert.match(
+      body,
+      /^Accept: text\/vnd\.jiso\.fragment\+html$/m,
+      `${name} requests fragment HTML`,
+    );
+  }
 });
 
 void test('Phase 0 wire fixture response bodies match generated contracts byte-for-byte', async () => {
@@ -241,6 +251,7 @@ void test('P10 commerce keeps app invalidation declarative', async () => {
 void test('P10 normative docs cover the constitution and compiler hard rules', async () => {
   const constitution = await readProjectFile('docs/constitution.md');
   const compilerRules = await readProjectFile('docs/compiler-hard-rules.md');
+  const spec = await readProjectFile('SPEC.md');
 
   assert.match(constitution, /`SPEC\.md` is the source of truth/);
   assert.match(constitution, /Legibility is load-bearing/);
@@ -252,6 +263,10 @@ void test('P10 normative docs cover the constitution and compiler hard rules', a
   assert.match(compilerRules, /Fixpoint invariant/);
   assert.match(compilerRules, /Platform behavior emission/);
   assert.match(compilerRules, /Teaching errors/);
+  assert.match(spec, /\*\*13\.1 CSS\.\*\* Jiso v1 is Tailwind-first/);
+  assert.match(spec, /dynamic classes must be safelisted explicitly/);
+  assert.match(spec, /wraps them in `@scope` keyed to the host/);
+  assert.doesNotMatch(spec, /needs a design pass before v1 freeze/);
 });
 
 void test('P10 legibility study packet is ready but not claimed complete', async () => {

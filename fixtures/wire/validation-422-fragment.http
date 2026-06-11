@@ -4,6 +4,7 @@
 POST /_m/cart/add HTTP/1.1
 Accept: text/vnd.jiso.fragment+html
 Content-Type: application/x-www-form-urlencoded
+FW-Fragment: true
 FW-Idem: idem_01HY
 FW-Targets: product-form:p1
 

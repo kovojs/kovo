@@ -172,10 +172,12 @@ describe('create-jiso starter', () => {
     const fixpointTest = project.files.find(
       (file) => file.path === 'src/app.fixpoint.test.ts',
     )?.source;
+    expect(fixpointTest).toContain("import { readFileSync } from 'node:fs';");
     expect(fixpointTest).toContain(
       "import { assertFixpoint, compileComponentModule } from '@jiso/compiler';",
     );
     expect(fixpointTest).toContain('compileComponentModule');
+    expect(fixpointTest).toContain("source: readFileSync(new URL('./app.tsx', import.meta.url)");
     expect(fixpointTest).toContain('assertFixpoint(result)');
     expect(fixpointTest).toContain('SPEC.md section 5.2');
   });

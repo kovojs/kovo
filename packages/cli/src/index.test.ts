@@ -137,6 +137,37 @@ describe('fw check', () => {
     );
   });
 
+  it('derives FW310 gaps from writes even when explicit invalidates are incomplete', () => {
+    expect(
+      fwCheck({
+        mutations: [
+          {
+            guards: ['authed'],
+            invalidates: ['cart'],
+            key: 'cart/add',
+            writes: ['cart', 'product'],
+          },
+        ],
+        optimistic: [{ mutation: 'cart/add', query: 'cart', status: 'hand-written' }],
+        queries: [
+          { domains: ['cart'], query: 'cart' },
+          { domains: ['product'], query: 'productGrid' },
+        ],
+        touchGraph: {
+          'cart.addItem': {
+            touches: [
+              { domain: 'cart', keys: null, site: 'cart.domain.ts:1', via: 'cart_items' },
+              { domain: 'product', keys: null, site: 'cart.domain.ts:2', via: 'products' },
+            ],
+            unresolved: [],
+          },
+        },
+      }).output,
+    ).toBe(
+      'fw-check/v1\nWARN FW310 cart/add -> productGrid Invalidated query lacks optimistic transform.\n',
+    );
+  });
+
   it('reports semantic lints for local state, events, and direct db access', () => {
     expect(
       fwCheck({
@@ -802,6 +833,44 @@ describe('fw explain', () => {
         'invalidates: -',
         'manual-invalidates: -',
         'updates: cart->component:CartBadge,page:/checkout',
+        '',
+      ].join('\n'),
+    });
+  });
+
+  it('explains mutation updates from writes even when invalidates are incomplete', () => {
+    expect(
+      fwExplain(
+        {
+          components: [
+            { name: 'CartBadge', queries: ['cart'] },
+            { name: 'ProductGrid', queries: ['productGrid'] },
+          ],
+          mutations: [
+            {
+              guards: ['authed'],
+              invalidates: ['cart'],
+              key: 'cart/add',
+              writes: ['cart', 'product'],
+            },
+          ],
+          queries: [
+            { domains: ['cart'], query: 'cart' },
+            { domains: ['product'], query: 'productGrid' },
+          ],
+        },
+        { kind: 'mutation', target: 'cart/add' },
+      ),
+    ).toEqual({
+      exitCode: 0,
+      output: [
+        'fw-explain/v1',
+        'MUTATION cart/add',
+        'guards: authed',
+        'writes: cart,product',
+        'invalidates: cart',
+        'manual-invalidates: -',
+        'updates: cart->component:CartBadge; productGrid->component:ProductGrid',
         '',
       ].join('\n'),
     });

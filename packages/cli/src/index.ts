@@ -433,10 +433,7 @@ function mutationUpdates(
   mutation: MutationExplain,
   input: FwExplainInput,
 ): Array<{ consumers: string[]; query: string }> {
-  const domains = new Set([
-    ...(mutation.invalidates ?? mutation.writes ?? []),
-    ...(mutation.manualInvalidates ?? []),
-  ]);
+  const domains = mutationAffectedDomains(mutation);
   if (domains.size === 0) return [];
 
   return (input.queries ?? [])
@@ -502,10 +499,7 @@ function optimisticCoverageWarnings(
   }
 
   for (const mutation of mutations) {
-    const domains = new Set([
-      ...(mutation.invalidates ?? mutation.writes ?? []),
-      ...(mutation.manualInvalidates ?? []),
-    ]);
+    const domains = mutationAffectedDomains(mutation);
     if (domains.size === 0) continue;
 
     for (const query of queries) {
@@ -529,10 +523,7 @@ function optimisticCoverageForMutation(
 ): OptimisticCoverage[] {
   const explicit = input.optimistic?.filter((item) => item.mutation === mutation.key) ?? [];
   const covered = new Set(explicit.map((coverage) => coverage.query));
-  const domains = new Set([
-    ...(mutation.invalidates ?? mutation.writes ?? []),
-    ...(mutation.manualInvalidates ?? []),
-  ]);
+  const domains = mutationAffectedDomains(mutation);
   const derivedUnhandled = (input.queries ?? [])
     .filter((query) => query.domains.some((domain) => domains.has(domain)))
     .filter((query) => !covered.has(query.query))
@@ -544,6 +535,14 @@ function optimisticCoverageForMutation(
     .sort((left, right) => left.query.localeCompare(right.query));
 
   return [...explicit, ...derivedUnhandled];
+}
+
+function mutationAffectedDomains(mutation: MutationExplain): Set<string> {
+  return new Set([
+    ...(mutation.writes ?? []),
+    ...(mutation.invalidates ?? []),
+    ...(mutation.manualInvalidates ?? []),
+  ]);
 }
 
 function fixpointFailures(checks: readonly FixpointCheck[]): FixpointCheck[] {

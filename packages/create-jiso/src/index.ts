@@ -313,7 +313,9 @@ export const App = component('app-root', {
       },
       {
         path: 'src/app.fixpoint.test.ts',
-        source: `import { assertFixpoint, compileComponentModule } from '@jiso/compiler';
+        source: `import { readFileSync } from 'node:fs';
+
+import { assertFixpoint, compileComponentModule } from '@jiso/compiler';
 import { describe, expect, it } from 'vitest';
 
 describe('compiler fixpoint', () => {
@@ -321,15 +323,7 @@ describe('compiler fixpoint', () => {
     // SPEC.md section 5.2 requires generated starters to enforce the compiler fixpoint.
     const result = compileComponentModule({
       fileName: 'src/app.tsx',
-      source: [
-        "import { component } from '@jiso/core';",
-        '',
-        "export const App = component('app-root', {",
-        '  state: () => ({}),',
-        "  render: () => '<main>Hello from Jiso</main>',",
-        '});',
-        '',
-      ].join('\\n'),
+      source: readFileSync(new URL('./app.tsx', import.meta.url), 'utf8'),
     });
 
     expect(() => assertFixpoint(result)).not.toThrow();
