@@ -357,6 +357,7 @@ function sourceFilesWithProjectExtractionResolved(
 
 export function extractQueryFactsFromSource(files: readonly SourceFileInput[]): QueryFact[] {
   const tables = new Map<string, ExtractedTable[]>();
+  const sourceColumnShapes = sourceColumnShapesForFiles(files);
   const facts: QueryFact[] = [];
 
   for (const file of files) {
@@ -377,7 +378,11 @@ export function extractQueryFactsFromSource(files: readonly SourceFileInput[]): 
   }
 
   for (const file of files) {
-    for (const query of extractQueryDefinitions(file.source, file.columnShapes ?? {})) {
+    const columnShapes = {
+      ...sourceColumnShapesForFile(file.source, sourceColumnShapes),
+      ...file.columnShapes,
+    };
+    for (const query of extractQueryDefinitions(file.source, columnShapes)) {
       const reads = queryReadDomains(query.body, tables);
       const site = `${file.fileName}:${lineForIndex(file.source, query.index)}`;
       const diagnostics = opaqueProjectionDiagnostics(
@@ -398,6 +403,73 @@ export function extractQueryFactsFromSource(files: readonly SourceFileInput[]): 
   }
 
   return facts.sort((left, right) => left.query.localeCompare(right.query));
+}
+
+function sourceColumnShapesForFiles(
+  files: readonly SourceFileInput[],
+): ReadonlyMap<string, Readonly<Record<string, QueryShape>>> {
+  const shapes = new Map<string, Record<string, QueryShape>>();
+
+  for (const file of files) {
+    const declarations = constDeclarations(file.source);
+    const localShapes = new Map<string, Record<string, QueryShape>>();
+
+    for (const { identifier, initializer } of declarations) {
+      if (!isAnnotatedTableInitializer(initializer)) continue;
+
+      const columns = tableColumnShapesFromSource(initializer);
+      if (Object.keys(columns).length === 0) continue;
+
+      const tableName = stringArgument(initializer) ?? identifier;
+      localShapes.set(identifier, columns);
+      shapes.set(identifier, columns);
+      shapes.set(tableName, columns);
+    }
+
+    for (const declaration of declarations) {
+      if (localShapes.has(declaration.identifier)) continue;
+
+      for (const target of aliasTargets(declaration.initializer)) {
+        const columns = localShapes.get(target);
+        if (!columns) continue;
+
+        localShapes.set(declaration.identifier, columns);
+        shapes.set(declaration.identifier, columns);
+      }
+    }
+  }
+
+  for (const file of files) {
+    for (const alias of importExportTableAliases(file.source)) {
+      const columns = shapes.get(alias.imported);
+      if (columns) shapes.set(alias.local, columns);
+    }
+  }
+
+  return shapes;
+}
+
+function sourceColumnShapesForFile(
+  source: string,
+  shapes: ReadonlyMap<string, Readonly<Record<string, QueryShape>>>,
+): Readonly<Record<string, QueryShape>> {
+  const scoped: Record<string, QueryShape> = {};
+
+  for (const [identifier, columns] of shapes) {
+    for (const [column, shape] of Object.entries(columns)) {
+      scoped[`${identifier}.${column}`] = shape;
+    }
+  }
+
+  for (const namespace of namespaceImportAliases(source)) {
+    for (const [identifier, columns] of shapes) {
+      for (const [column, shape] of Object.entries(columns)) {
+        scoped[`${namespace}.${identifier}.${column}`] = shape;
+      }
+    }
+  }
+
+  return scoped;
 }
 
 function sourceWithProjectExtractionResolved(
@@ -521,6 +593,36 @@ function tableColumnShapes(initializer: Node): Record<string, QueryShape> {
     if (!name) continue;
 
     shapes[name] = columnBuilderShape(property.getInitializer()?.getText() ?? '');
+  }
+
+  return shapes;
+}
+
+function tableColumnShapesFromSource(initializer: string): Record<string, QueryShape> {
+  const openParen = initializer.indexOf('(');
+  if (openParen === -1) return {};
+
+  const closeParen = findMatchingParen(initializer, openParen);
+  if (closeParen === -1) return {};
+
+  const columns = splitTopLevelArgs(initializer.slice(openParen + 1, closeParen))[1]?.trim();
+  if (!columns?.startsWith('{')) return {};
+
+  const objectEnd = findMatchingBrace(columns, 0);
+  if (objectEnd === -1) return {};
+
+  const shapes: Record<string, QueryShape> = {};
+  for (const entry of splitTopLevelArgs(columns.slice(1, objectEnd))) {
+    const separator = entry.indexOf(':');
+    if (separator === -1) continue;
+
+    const name = entry
+      .slice(0, separator)
+      .trim()
+      .replace(/^["']|["']$/g, '');
+    if (!name) continue;
+
+    shapes[name] = columnBuilderShape(entry.slice(separator + 1));
   }
 
   return shapes;

@@ -504,6 +504,47 @@ export const tableDomains = {
     ]);
   });
 
+  it('derives source query shapes from Drizzle column builders instead of selected aliases', () => {
+    const facts = extractQueryFactsFromSource([
+      {
+        fileName: 'product.queries.ts',
+        source: `
+          export const products = pgTable("products", {
+            archived: boolean("archived"),
+            metadata: json("metadata"),
+            name: text("name"),
+            stock: integer("stock"),
+          }, jiso({ domain: "product", key: "id" }));
+
+          export const productQuery = query("product", {
+            load(_input, db) {
+              return db.select({
+                archived: products.archived,
+                discount: products.name,
+                metadata: products.metadata,
+                stock: products.stock,
+              }).from(products);
+            },
+          });
+        `,
+      },
+    ]);
+
+    expect(facts).toEqual([
+      {
+        query: 'product',
+        reads: ['product'],
+        shape: {
+          archived: 'boolean',
+          discount: 'string',
+          metadata: 'object',
+          stock: 'number',
+        },
+        site: 'product.queries.ts:9',
+      },
+    ]);
+  });
+
   it('reports FW410 for opaque query projections without declared output schemas', () => {
     const facts = extractQueryFactsFromSource([
       {
