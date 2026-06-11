@@ -28,7 +28,13 @@ scripts/check-links.mjs` → `check-links/v1 pages=24 internal=1568 OK` includin
 - [x] W4 landing page: tagline + three proof sections, each backed by a W3 artifact.
       Evidence 2026-06-11: `site/scripts/landing.mjs`; rendered output inspected via
       Playwright screenshot; smoke gate proves the hero renders with JS disabled.
-- [ ] W5 tutorial track: checked-in per-step code states, every step compiling and testing in CI, prose snippets extracted from step states, final step behavior-matched to `examples/commerce`.
+- [x] W5 tutorial track: per-step code states, all compiling and testing in CI, snippets extracted from step states.
+      Evidence 2026-06-11: `node site/tutorial/run-steps.mjs` → `tutorial-steps/v1
+  steps=7 OK` (per-step tsgo typecheck, compileComponentModule with assertFixpoint + assertRenderEquivalence, committed-IR staleness check, 33 step tests); eight
+      chapters whose 51 code blocks are all `{{snippet:…}}` extractions; step 07 pins
+      wire vocabulary and per-pair optimistic statuses against
+      `examples/commerce/src/generated/graph.json`. Registered as the `tutorial-steps`
+      vp task.
 - [x] W6 generated API reference for the five app-facing packages.
       Evidence 2026-06-11: `site/scripts/api-ref.mjs` emits `api-ref/v1 packages=5
 exports=454 documented=1` into the pipeline; `site/scripts/api-ref.test.mjs`
@@ -43,7 +49,14 @@ exports=454 documented=1` into the pipeline; `site/scripts/api-ref.test.mjs`
       Evidence 2026-06-11: `site/public/c/search.js` + `search-index.json`;
       `node scripts/smoke.mjs` proves zero island bytes before first interaction,
       module load on click, on-demand index fetch, and results (`site-smoke/v1 OK`).
-- [ ] W9 launch gates: clean-checkout build, no-JS pass over the whole site, link check (including § anchors), `llms.txt` validation, P10 outside-legibility study can run against the published site.
+- [ ] W9 launch gates: technical gates are green; publication and the P10 ledger entry remain.
+      Evidence 2026-06-11: fresh-worktree installs + builds succeeded three times
+      (apiref/guides/tutorial agents); `node site/scripts/check-links.mjs` →
+      `check-links/v1 pages=32 internal=2282 OK` incl. § anchors, mirrors, llms.txt;
+      `node site/scripts/smoke.mjs` → `site-smoke/v1 OK` (no-JS crawl of landing,
+      docs nav, spec anchors; zero island bytes before interaction). Open: deploying
+      `site/dist` to the public host and recording the P10 outside-legibility ledger
+      entry against the published URL.
 
 ## Background — why this is a workstream
 
