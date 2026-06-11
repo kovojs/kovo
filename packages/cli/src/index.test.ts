@@ -465,6 +465,25 @@ describe('fw check', () => {
     });
   });
 
+  it('prints static diagnostic source positions when present', () => {
+    expect(
+      fwCheck({
+        diagnostics: [
+          {
+            code: 'FW302',
+            message: 'data-bind path is not present in the declared query shape. cart.missing',
+            site: 'cart-badge.tsx',
+            start: { column: 23, line: 3 },
+          },
+        ],
+      }),
+    ).toEqual({
+      exitCode: 1,
+      output:
+        'fw-check/v1\nERROR FW302 cart-badge.tsx:3:23 data-bind path is not present in the declared query shape. cart.missing\n',
+    });
+  });
+
   it('prints runtime verification diagnostics as fw check findings', () => {
     expect(
       fwCheck({

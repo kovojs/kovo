@@ -8,6 +8,13 @@ export interface CompilerDiagnostic {
   message: string;
   fileName: string;
   help?: string;
+  length?: number;
+  start?: SourcePosition;
+}
+
+export interface SourcePosition {
+  column: number;
+  line: number;
 }
 
 export interface EmittedFile {
@@ -60,6 +67,8 @@ export interface QueryTemplateStampFact {
 }
 
 interface DataBindAttribute {
+  index: number;
+  length: number;
   name: string;
   path: string;
 }
@@ -951,11 +960,17 @@ function lowerEventHandlers(
 
     let diagnostic: CompilerDiagnostic | undefined;
     if (!namedHandler) {
-      diagnostic = diagnosticFor(options.fileName, 'FW210');
+      diagnostic = diagnosticFor(
+        options.fileName,
+        'FW210',
+        options.source,
+        attributeStart,
+        event.length,
+      );
     }
 
     if (capturesUnserializableValue(expression)) {
-      diagnostic = fw201Diagnostic(options.fileName, {
+      diagnostic = fw201Diagnostic(options.fileName, options.source, attributeStart, {
         attributeName: `on:${eventName}`,
         exportName,
         expression,
@@ -1046,18 +1061,42 @@ function capturesUnserializableValue(expression: string): boolean {
   );
 }
 
-function diagnosticFor(fileName: string, code: DiagnosticCode): CompilerDiagnostic {
+function diagnosticFor(
+  fileName: string,
+  code: DiagnosticCode,
+  source?: string,
+  offset?: number,
+  length?: number,
+): CompilerDiagnostic {
   const definition = diagnosticDefinitions[code];
   return {
     code,
     fileName,
+    ...(source !== undefined && offset !== undefined
+      ? {
+          ...(length === undefined ? {} : { length }),
+          start: offsetToPosition(source, offset),
+        }
+      : {}),
     message: definition.message,
     severity: definition.severity,
   };
 }
 
+function offsetToPosition(source: string, offset: number): SourcePosition {
+  const prefix = source.slice(0, Math.max(0, offset));
+  const lineBreaks = prefix.match(/\n/g);
+  const line = (lineBreaks?.length ?? 0) + 1;
+  const lastLineBreak = prefix.lastIndexOf('\n');
+  const column = offset - lastLineBreak;
+
+  return { column, line };
+}
+
 function fw201Diagnostic(
   fileName: string,
+  source: string,
+  offset: number,
   lowering: {
     attributeName: string;
     exportName: string;
@@ -1066,7 +1105,7 @@ function fw201Diagnostic(
   },
 ): CompilerDiagnostic {
   return {
-    ...diagnosticFor(fileName, 'FW201'),
+    ...diagnosticFor(fileName, 'FW201', source, offset, lowering.attributeName.length),
     help: [
       `Would lower to: ${lowering.attributeName}="${clientModuleUrl(fileName)}#${lowering.exportName}"`,
       `Blocked expression: ${lowering.expression}`,
@@ -1093,7 +1132,7 @@ function validateDataBindings(
     .filter((binding) => !binding.path.startsWith('.'))
     .filter((binding) => !pathExistsInQueryShapes(binding.path, queryShapes))
     .map((binding) => ({
-      ...diagnosticFor(options.fileName, 'FW302'),
+      ...diagnosticFor(options.fileName, 'FW302', source, binding.index, binding.length),
       message: `${diagnosticDefinitions.FW302.message} ${binding.path}`,
     }))
     .concat(
@@ -1328,6 +1367,8 @@ function dataBindAttributes(source: string): DataBindAttribute[] {
     ...source.matchAll(/\b(?<name>data-bind(?::[A-Za-z_$][\w$:-]*)?)=(["'])(?<path>[^"']+)\2/g),
   ]
     .map((match) => ({
+      index: match.index ?? 0,
+      length: match[0].length,
       name: match.groups?.name ?? '',
       path: match.groups?.path ?? '',
     }))
@@ -1789,11 +1830,11 @@ const delegatedDomEvents = new Set([
 function validateEventTriggerNames(source: string, fileName: string): CompilerDiagnostic[] {
   return eventTriggerAttributes(source).flatMap((attribute) => {
     if (!isKnownEventOrTrigger(attribute.name)) {
-      return [eventTriggerDiagnostic(fileName, 'FW212', attribute.name)];
+      return [eventTriggerDiagnostic(fileName, source, 'FW212', attribute)];
     }
 
     if (attribute.name === 'load' && !hasFw211Justification(source, attribute.index)) {
-      return [eventTriggerDiagnostic(fileName, 'FW211', attribute.name)];
+      return [eventTriggerDiagnostic(fileName, source, 'FW211', attribute)];
     }
 
     return [];
@@ -1820,12 +1861,13 @@ function hasFw211Justification(source: string, index: number): boolean {
 
 function eventTriggerDiagnostic(
   fileName: string,
+  source: string,
   code: 'FW211' | 'FW212',
-  name: string,
+  attribute: { index: number; name: string },
 ): CompilerDiagnostic {
   return {
-    ...diagnosticFor(fileName, code),
-    message: `${diagnosticDefinitions[code].message} on:${name}`,
+    ...diagnosticFor(fileName, code, source, attribute.index, attribute.name.length + 3),
+    message: `${diagnosticDefinitions[code].message} on:${attribute.name}`,
   };
 }
 

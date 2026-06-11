@@ -531,6 +531,8 @@ void test('P1 compiler emits FW311 update coverage facts', async () => {
   assert.match(coreSource, /FW311/);
   assert.match(coreSource, /Query-dependent DOM position has no update status/);
   assert.match(compilerSource, /interface QueryUpdateCoverageFact/);
+  assert.match(compilerSource, /interface SourcePosition/);
+  assert.match(compilerSource, /function offsetToPosition/);
   assert.match(compilerSource, /collectQueryUpdateCoverage/);
   assert.match(compilerSource, /fw311Diagnostic/);
   assert.match(compilerSource, /status: 'renderOnce'/);
@@ -886,6 +888,7 @@ void test('P10 commerce graph assertions answer behavior mechanically', async ()
   assert.match(cliTests, /hand-write in the mutation module, or declare 'await-fragment'/);
   assert.match(cliTests, /ignores unrelated statuses/);
   assert.match(cliTests, /prints stable FW311 update coverage rows and warnings/);
+  assert.match(cliTests, /prints static diagnostic source positions when present/);
   assert.match(cliTests, /accepts fw check coverage as a CLI command/);
   assert.match(cliTests, /WARN FW311 component=CartBadge query=cart\.discount/);
   assert.match(coreSource, /interface InvalidationSets/);

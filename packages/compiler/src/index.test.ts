@@ -497,6 +497,7 @@ export const CartDrawer = component('cart-drawer', {
     expect(result.diagnostics[0]?.help).toContain(
       'Fixes: move the value into component/query state via ctx; pass serializable element params with data-p-*; or keep shared constants in module scope.',
     );
+    expect(result.diagnostics[0]?.start).toEqual({ column: 9, line: 1 });
   });
 
   it('preserves emitted IR on recompilation', () => {
@@ -891,14 +892,18 @@ export const ExecutionTriggers = component('execution-triggers', {
       {
         code: 'FW211',
         fileName: 'execution-triggers.tsx',
+        length: 7,
         message: 'on:load eager trigger requires a justification comment. on:load',
         severity: 'lint',
+        start: { column: 21, line: 5 },
       },
       {
         code: 'FW212',
         fileName: 'execution-triggers.tsx',
+        length: 8,
         message: 'Unknown on:* event or execution trigger name. on:media',
         severity: 'lint',
+        start: { column: 21, line: 6 },
       },
     ]);
   });
@@ -1158,8 +1163,10 @@ export const CartBadge = component('cart-badge', {
       {
         code: 'FW302',
         fileName: 'cart-badge.tsx',
+        length: 22,
         message: 'data-bind path is not present in the declared query shape. cart.count',
         severity: 'error',
+        start: { column: 23, line: 3 },
       },
     ]);
   });
@@ -1818,8 +1825,10 @@ export const CartBadge = component('cart-badge', {
       {
         code: 'FW302',
         fileName: 'cart-badge.tsx',
+        length: 22,
         message: 'data-bind path is not present in the declared query shape. cart.total',
         severity: 'error',
+        start: { column: 23, line: 3 },
       },
     ]);
   });

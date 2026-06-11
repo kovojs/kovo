@@ -181,9 +181,16 @@ export interface VerificationDiagnosticFact {
 
 export interface StaticDiagnosticFact {
   code: DiagnosticCode;
+  length?: number;
   message?: string;
   severity?: DiagnosticSeverity;
   site: string;
+  start?: SourcePosition;
+}
+
+export interface SourcePosition {
+  column: number;
+  line: number;
 }
 
 interface CliTouchGraphEntry {
@@ -648,7 +655,13 @@ function verificationDiagnosticLine(diagnostic: VerificationDiagnosticFact): str
 function staticDiagnosticLine(diagnostic: StaticDiagnosticFact): string {
   const definition = diagnosticDefinitions[diagnostic.code];
   const severity = diagnostic.severity ?? definition.severity;
-  return `${severity.toUpperCase()} ${diagnostic.code} ${diagnostic.site} ${diagnostic.message ?? definition.message}`;
+  return `${severity.toUpperCase()} ${diagnostic.code} ${diagnosticSite(diagnostic)} ${diagnostic.message ?? definition.message}`;
+}
+
+function diagnosticSite(diagnostic: StaticDiagnosticFact): string {
+  return diagnostic.start
+    ? `${diagnostic.site}:${diagnostic.start.line}:${diagnostic.start.column}`
+    : diagnostic.site;
 }
 
 function notFound(options: FwTargetExplainOptions): FwCheckResult {
