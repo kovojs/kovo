@@ -34,6 +34,11 @@ Scope: SPEC addition (proposed §9.5 "The request shell"), `@jiso/server` shell 
       now serves the perf proof through `createApp()` -> `createRequestHandler()` ->
       `toNodeHandler()`, including the versioned `/c/?v=` module registry path.
 - [ ] R5 Vite+ plugin: dev middleware over the same handler; build wiring (manifest → stylesheet hints, compiled client modules → versioned emit).
+      Progress 2026-06-11: `packages/server/src/vite.ts` adds `jisoAppShellVitePlugin()`,
+      a Vite-shaped dev middleware that delegates to the same `createRequestHandler()` /
+      `toNodeHandler()` path used by R3/R4. `packages/server/src/vite.test.ts` proves a
+      route served through the plugin over `node:http`. Remaining R5 work: build manifest
+      wiring for stylesheet hints and compiled client-module versioned emit.
 - [ ] R6 static export: synthetic-request replay to `.html` files with the L0/L1-only constraint and teaching errors for non-exportable routes.
 - [ ] R7 adoption: starter becomes a routed app served by `vp dev`; commerce runs end-to-end over HTTP; a jiso docs site ships from `vp run export` as the first outside consumer.
 

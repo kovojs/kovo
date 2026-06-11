@@ -112,6 +112,13 @@ export type {
 } from './shell.js';
 export { nodeRequestToWebRequest, toNodeHandler, writeWebResponseToNode } from './node.js';
 export type { NodeHandlerOptions, NodeRequestHandler } from './node.js';
+export { jisoAppShellVitePlugin } from './vite.js';
+export type {
+  JisoAppShellViteDevServer,
+  JisoAppShellViteInput,
+  JisoAppShellViteMiddleware,
+  JisoAppShellVitePlugin,
+} from './vite.js';
 export { runWebhook, webhook } from './webhook.js';
 export type {
   WebhookChangeOptions,
