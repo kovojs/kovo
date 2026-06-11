@@ -492,7 +492,7 @@ describe('server mutation primitives', () => {
     });
   });
 
-  it('matches the deferred stream wire fixture body byte-for-byte', async () => {
+  it('matches the deferred stream wire fixture response byte-for-byte', async () => {
     const response = renderDeferredStream({
       closeHtml: '</body></html>',
       chunks: [
@@ -522,7 +522,7 @@ describe('server mutation primitives', () => {
       'utf8',
     );
 
-    expect(`${response.body}\n`).toBe(readLastResponseBody(fixture));
+    expect(normalizeWireResponse(response, 'OK')).toEqual(readFixtureResponses(fixture).at(-1));
   });
 
   it('orders deferred stream chunks and fragments by priority while keeping query JSON first', () => {
@@ -1508,7 +1508,7 @@ describe('server mutation primitives', () => {
     });
   });
 
-  it('matches the enhanced mutation wire fixture body byte-for-byte', async () => {
+  it('matches the enhanced mutation wire fixture response byte-for-byte', async () => {
     const cart = domain('cart');
     const cartQuery = query('cart', {
       instanceKey: 'cart:c1',
@@ -1549,7 +1549,7 @@ describe('server mutation primitives', () => {
       'utf8',
     );
 
-    expect(`${response.body}\n`).toBe(readLastResponseBody(fixture));
+    expect(normalizeWireResponse(response, 'OK')).toEqual(readFixtureResponses(fixture).at(-1));
   });
 
   it('replays enhanced mutation responses by FW-Idem without re-running the handler', async () => {
@@ -1798,7 +1798,7 @@ describe('server mutation primitives', () => {
     });
   });
 
-  it('matches the validation failure wire fixture body byte-for-byte', async () => {
+  it('matches the validation failure wire fixture response byte-for-byte', async () => {
     const addToCart = mutation('cart/add', {
       errors: {
         OUT_OF_STOCK: s.object({ availableQuantity: s.number().int().min(0) }),
@@ -1836,7 +1836,9 @@ describe('server mutation primitives', () => {
       'utf8',
     );
 
-    expect(`${response.body}\n`).toBe(readLastResponseBody(fixture));
+    expect(normalizeWireResponse(response, 'Unprocessable Content')).toEqual(
+      readFixtureResponses(fixture).at(-1),
+    );
   });
 
   it('renders no-JS mutation success as POST-redirect-GET', async () => {
@@ -1951,14 +1953,17 @@ function formDataFile(bits: string[], name: string, type: string): Blob {
   return new File(bits, name, { type }) as unknown as Blob;
 }
 
-function readLastResponseBody(fixture: string): string {
-  const responseStart = fixture.lastIndexOf('<<< RESPONSE');
-  expect(responseStart).toBeGreaterThanOrEqual(0);
-
-  const headerEnd = fixture.indexOf('\n\n', responseStart);
-  expect(headerEnd).toBeGreaterThanOrEqual(0);
-
-  return fixture.slice(headerEnd + 2);
+function normalizeWireResponse(
+  response: { body: string; headers: Record<string, string>; status: number },
+  reason: string,
+): { body: string; headers: Record<string, string>; statusLine: string } {
+  return {
+    body: `${response.body}\n`,
+    headers: Object.fromEntries(
+      Object.entries(response.headers).map(([name, value]) => [name.toLowerCase(), value]),
+    ),
+    statusLine: `HTTP/1.1 ${response.status} ${reason}`,
+  };
 }
 
 function readFixtureResponses(
