@@ -287,14 +287,8 @@ const compilerValidators: readonly CompilerValidator[] = [
 export function compileComponentModule(options: CompileComponentOptions): CompileResult {
   if (isIr(options.source)) {
     return {
-      componentGraphFacts: [],
-      cssAssets: [],
-      diagnostics: [],
+      ...createEmptyCompileResult(),
       files: [{ fileName: options.fileName, source: options.source }],
-      platformSubstitutions: [],
-      queryUpdatePlans: [],
-      updateCoverage: [],
-      viewTransitions: [],
     };
   }
 
@@ -1346,19 +1340,9 @@ function queryPathUsesKnownQuery(path: string, knownQueries: ReadonlySet<string>
 function dedupeUpdateCoverage(
   facts: readonly QueryUpdateCoverageFact[],
 ): QueryUpdateCoverageFact[] {
-  const seen = new Set<string>();
-  return facts.filter((fact) => {
-    const key = [
-      fact.componentName,
-      fact.query,
-      fact.position,
-      fact.status,
-      fact.detail ?? '',
-    ].join('\0');
-    if (seen.has(key)) return false;
-    seen.add(key);
-    return true;
-  });
+  return dedupeBy(facts, (fact) =>
+    [fact.componentName, fact.query, fact.position, fact.status, fact.detail ?? ''].join('\0'),
+  );
 }
 
 function dataBindPaths(source: string): string[] {
@@ -2010,9 +1994,13 @@ function explicitComponentNames(source: string): string[] {
 }
 
 function dedupeDiagnostics(diagnostics: readonly CompilerDiagnostic[]): CompilerDiagnostic[] {
+  return dedupeBy(diagnostics, (diagnostic) => `${diagnostic.code}\0${diagnostic.message}`);
+}
+
+function dedupeBy<Value>(values: readonly Value[], keyFor: (value: Value) => string): Value[] {
   const seen = new Set<string>();
-  return diagnostics.filter((diagnostic) => {
-    const key = `${diagnostic.code}\0${diagnostic.message}`;
+  return values.filter((value) => {
+    const key = keyFor(value);
     if (seen.has(key)) return false;
     seen.add(key);
     return true;
