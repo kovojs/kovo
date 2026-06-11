@@ -1205,6 +1205,7 @@ void test('P10 starter wires graph assertions into CI', async () => {
 void test('P9 verification layer evidence remains represented', async () => {
   const cliSource = await readProjectFile('packages/cli/src/index.ts');
   const cliTests = await readProjectFile('packages/cli/src/index.test.ts');
+  const graphSource = await readProjectFile('packages/core/src/graph.ts');
   const runtimeSource = await readProjectFile('packages/runtime/src/index.ts');
   const runtimeTests = await readProjectFile('packages/runtime/src/index.test.ts');
   const testHarnessSource = await readProjectFile('packages/test/src/index.ts');
@@ -1264,8 +1265,8 @@ void test('P9 verification layer evidence remains represented', async () => {
   );
   assert.match(testHarnessTests, /reports FW410 for nested query output shape mismatches/);
   assert.match(testHarnessSource, /diagnosticDefinitions\[code\]\.message/);
-  assert.match(cliSource, /verificationDiagnostics\?: readonly VerificationDiagnosticFact/);
-  assert.match(cliSource, /diagnostics\?: readonly StaticDiagnosticFact/);
+  assert.match(graphSource, /verificationDiagnostics\?: readonly VerificationDiagnosticFact/);
+  assert.match(graphSource, /diagnostics\?: readonly StaticDiagnosticFact/);
   assert.match(cliSource, /function verificationDiagnosticLine/);
   assert.match(cliSource, /function staticDiagnosticLine/);
   assert.match(cliSource, /function diagnosticSite/);
@@ -1303,15 +1304,16 @@ void test('P9 verification layer evidence remains represented', async () => {
 void test('P8 component explain includes handler, derive, trigger, and merge facts', async () => {
   const cliSource = await readProjectFile('packages/cli/src/index.ts');
   const cliTests = await readProjectFile('packages/cli/src/index.test.ts');
+  const graphSource = await readProjectFile('packages/core/src/graph.ts');
 
   assert.match(
-    cliSource,
+    graphSource,
     /export type CaptureChannel = 'ctx' \| 'element-params' \| 'module-scope'/,
   );
   assert.match(cliSource, /captures=\$\{list\(handler\.captures\)\}/);
-  assert.match(cliSource, /interface DeriveExplain/);
-  assert.match(cliSource, /interface TriggerExplain/);
-  assert.match(cliSource, /interface AttributeMergeExplain/);
+  assert.match(graphSource, /interface DeriveExplain/);
+  assert.match(graphSource, /interface TriggerExplain/);
+  assert.match(graphSource, /interface AttributeMergeExplain/);
   assert.match(cliSource, /DERIVE \$\{derive\.name\}/);
   assert.match(cliSource, /TRIGGER \$\{trigger\.trigger\}/);
   assert.match(cliSource, /MERGE \$\{merge\.element\}/);
@@ -1322,7 +1324,7 @@ void test('P8 component explain includes handler, derive, trigger, and merge fac
   assert.match(cliTests, /MERGE button attr=aria-expanded/);
   assert.match(cliTests, /MERGE button attr=data-bind:hidden/);
   assert.match(cliSource, /unscoped: true/);
-  assert.match(cliSource, /scopeAudits\?: readonly ScopeAuditFact\[\]/);
+  assert.match(graphSource, /scopeAudits\?: readonly ScopeAuditFact\[\]/);
   assert.match(cliSource, /function unscopedAccesses/);
   assert.match(cliSource, /function unguardedAccesses/);
   assert.match(cliSource, /endpoints: true/);
