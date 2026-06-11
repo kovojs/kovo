@@ -1,9 +1,21 @@
 import { kebabCase } from './shared.ts';
+import { topLevelObjectEntries, topLevelObjectKeys } from './scan/object.js';
+import {
+  componentOptionSource,
+  firstComponentModel,
+  parseComponentModule as parseComponentModuleModel,
+  type ComponentModuleModel,
+} from './scan/parse.js';
 
 export interface ComponentGraphFact {
   fragments?: readonly string[];
   name: string;
   queries?: readonly string[];
+}
+
+export interface FragmentTargetFact {
+  propsType: string;
+  target: string;
 }
 
 export interface RegistryFacts {
@@ -68,6 +80,37 @@ export function deriveAppGraph(options: CompileAppGraphOptions): CompileAppGraph
   };
 }
 
+export function findFragmentTargetFacts(
+  source: string,
+  componentName: string,
+): FragmentTargetFact[] {
+  const model = parseComponentModuleModel('component.tsx', source);
+  const fragmentTarget = componentOptionSource(model, 'fragmentTarget');
+  if (fragmentTarget !== 'true') return [];
+
+  const explicitName = firstComponentModel(model)?.explicitName;
+  return [
+    {
+      propsType: fragmentTargetPropsType(source),
+      target: explicitName ?? kebabCase(componentName),
+    },
+  ];
+}
+
+export function componentGraphFact(
+  componentName: string,
+  model: ComponentModuleModel,
+  fragmentTargets: readonly string[],
+): ComponentGraphFact {
+  const queries = componentQueryNames(model);
+
+  return {
+    ...(fragmentTargets.length === 0 ? {} : { fragments: fragmentTargets }),
+    name: componentName,
+    ...(queries.length === 0 ? {} : { queries }),
+  };
+}
+
 export function deriveRegistryFactsFromGraph(
   graph: RegistryGraphInput,
   options: RegistryTypeFactOptions = {},
@@ -98,6 +141,37 @@ function deriveComponentFactsFromGraph(graph: RegistryGraphInput): string[] {
   return [...new Set((graph.components ?? []).map((component) => kebabCase(component.name)))].sort(
     (left, right) => left.localeCompare(right),
   );
+}
+
+function componentQueryNames(model: ComponentModuleModel): string[] {
+  return topLevelObjectKeys(componentOptionSource(model, 'queries') ?? '{}');
+}
+
+function fragmentTargetPropsType(source: string): string {
+  const propsObject = componentOptionSource(
+    parseComponentModuleModel('component.tsx', source),
+    'props',
+  );
+  if (!propsObject) return '{}';
+
+  const props = topLevelObjectEntries(propsObject)
+    .map((entry) => ({
+      key: entry.key,
+      type: propConstructorType(entry.value),
+    }))
+    .filter((entry): entry is { key: string; type: string } => entry.type !== undefined);
+
+  if (props.length === 0) return '{}';
+
+  return `{ ${props.map((prop) => `${prop.key}: ${prop.type}`).join('; ')} }`;
+}
+
+function propConstructorType(value: string): string | undefined {
+  const trimmed = value.trim();
+  if (trimmed === 'String') return 'string';
+  if (trimmed === 'Number') return 'number';
+  if (trimmed === 'Boolean') return 'boolean';
+  return undefined;
 }
 
 function deriveInvalidationFactsFromGraph(

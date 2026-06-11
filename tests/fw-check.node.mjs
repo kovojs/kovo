@@ -1389,14 +1389,14 @@ void test('P3 Drizzle query facts include select shapes and instance keys', asyn
 void test('P1 fragment targets emit typed registry facts', async () => {
   const coreSource = await readProjectFile('packages/core/src/index.ts');
   const coreTests = await readProjectFile('packages/core/src/index.test.ts');
+  const compilerGraphSource = await readProjectFile('packages/compiler/src/graph.ts');
   const compilerRegistrySource = await readProjectFile('packages/compiler/src/emit/registry.ts');
-  const compilerSource = await readProjectFile('packages/compiler/src/index.ts');
   const compilerTests = await readProjectFile('packages/compiler/src/index.test.ts');
 
   assert.match(coreSource, /interface FragmentTargets/);
   assert.match(coreSource, /function fragmentTarget/);
   assert.match(coreTests, /fragment target names and props from generated registry facts/);
-  assert.match(compilerSource, /fragmentTargetPropsType/);
+  assert.match(compilerGraphSource, /fragmentTargetPropsType/);
   assert.match(compilerRegistrySource, /interface FragmentTargets \{/);
   assert.match(compilerTests, /'cart-row': \{ rowId: string \};/);
   assert.doesNotMatch(compilerTests, /'cart-row': unknown;/);

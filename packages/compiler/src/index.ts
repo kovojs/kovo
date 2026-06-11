@@ -5,7 +5,12 @@ import { diagnosticFor, type CompilerDiagnostic } from './diagnostics.js';
 import { emitClientModule } from './emit/client.js';
 import { emitRegistryModule } from './emit/registry.js';
 import { emitServerModule, renderEquivalenceCheck, serverRenderSource } from './emit/server.js';
-import type { ComponentGraphFact, RegistryFacts } from './graph.js';
+import {
+  componentGraphFact,
+  findFragmentTargetFacts,
+  type ComponentGraphFact,
+  type RegistryFacts,
+} from './graph.js';
 import {
   clientModuleUrl,
   clientModuleVersion,
@@ -16,7 +21,7 @@ import {
 import { lowerNavigationSugar } from './lower/navigation.js';
 import { lowerPlatformBehaviors, type PlatformSubstitution } from './lower/platform.js';
 import { lowerViewTransitions } from './lower/view-transitions.js';
-import { topLevelObjectEntries, topLevelObjectKeys } from './scan/object.js';
+import { topLevelObjectKeys } from './scan/object.js';
 import {
   callExpressions,
   componentFragmentTargetNames,
@@ -34,7 +39,7 @@ import {
   parseComponentModule as parseComponentModuleModel,
   propertyAccessPaths,
 } from './scan/parse.js';
-import { dedupeBy, escapeAttribute, kebabCase, replaceExtension } from './shared.js';
+import { dedupeBy, escapeAttribute, replaceExtension } from './shared.js';
 import {
   collectQueryUpdateCoverage,
   collectQueryUpdatePlans,
@@ -907,68 +912,4 @@ function isQueryShapeObject(shape: QueryShape): shape is { readonly [key: string
     !Array.isArray(shape) &&
     !isQueryShapeWrapper(shape)
   );
-}
-
-interface FragmentTargetFact {
-  propsType: string;
-  target: string;
-}
-
-function findFragmentTargetFacts(source: string, componentName: string): FragmentTargetFact[] {
-  const model = parseComponentModuleModel('component.tsx', source);
-  const fragmentTarget = componentOptionSource(model, 'fragmentTarget');
-  if (fragmentTarget !== 'true') return [];
-
-  const explicitName = firstComponentModel(model)?.explicitName;
-  return [
-    {
-      propsType: fragmentTargetPropsType(source),
-      target: explicitName ?? kebabCase(componentName),
-    },
-  ];
-}
-
-function componentGraphFact(
-  componentName: string,
-  model: ComponentModuleModel,
-  fragmentTargets: readonly string[],
-): ComponentGraphFact {
-  const queries = componentQueryNames(model);
-
-  return {
-    ...(fragmentTargets.length === 0 ? {} : { fragments: fragmentTargets }),
-    name: componentName,
-    ...(queries.length === 0 ? {} : { queries }),
-  };
-}
-
-function componentQueryNames(model: ComponentModuleModel): string[] {
-  return topLevelObjectKeys(componentOptionSource(model, 'queries') ?? '{}');
-}
-
-function fragmentTargetPropsType(source: string): string {
-  const propsObject = componentOptionSource(
-    parseComponentModuleModel('component.tsx', source),
-    'props',
-  );
-  if (!propsObject) return '{}';
-
-  const props = topLevelObjectEntries(propsObject)
-    .map((entry) => ({
-      key: entry.key,
-      type: propConstructorType(entry.value),
-    }))
-    .filter((entry): entry is { key: string; type: string } => entry.type !== undefined);
-
-  if (props.length === 0) return '{}';
-
-  return `{ ${props.map((prop) => `${prop.key}: ${prop.type}`).join('; ')} }`;
-}
-
-function propConstructorType(value: string): string | undefined {
-  const trimmed = value.trim();
-  if (trimmed === 'String') return 'string';
-  if (trimmed === 'Number') return 'number';
-  if (trimmed === 'Boolean') return 'boolean';
-  return undefined;
 }
