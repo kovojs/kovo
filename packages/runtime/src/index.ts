@@ -1655,9 +1655,7 @@ export function applyMutationResponse(store: QueryStore, body: string): AppliedM
 }
 
 export function applyDeferredChunk(store: QueryStore, body: string): AppliedMutationResponse {
-  return applyFragmentQueryBody(body, (name, value, key) => {
-    store.set(name, value, key);
-  });
+  return applyMutationResponse(store, body);
 }
 
 export function applyFragments(
@@ -1729,29 +1727,7 @@ export function applyDeferredChunkToDom(options: {
   root: MorphRoot;
   store: QueryStore;
 }): AppliedMutationResponse & { appliedFragments: string[] } {
-  const applied = applyFragmentQueryBody(
-    options.body,
-    (name, value, key) => {
-      options.store.set(name, value, key);
-      applyCompiledQueryUpdatePlanIfSupported(
-        options.root,
-        name,
-        value,
-        options.queryPlans?.[name],
-      );
-    },
-    options.onError,
-  );
-
-  return {
-    ...applied,
-    appliedFragments: applyFragments(
-      options.root,
-      applied.fragments,
-      options.morph,
-      options.islandSignalScope,
-    ),
-  };
+  return applyMutationResponseToDom(options);
 }
 
 export function applyQueryBindings(
