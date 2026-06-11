@@ -587,6 +587,12 @@ params, relational API, `execute(sql)`, right/full joins, a string column named 
       bodies, and malformed-JSON reporting. `index.test.ts` also exercises the public mutation
       apply path with `&#39;`/`&apos;` escaped query JSON. Same-session evidence:
       `pnpm exec vitest --run packages/runtime/src`.
+      Partial evidence 2026-06-11: loader-owned enhanced mutation and typed refetch responses
+      now add newly introduced `fw-query` names to the loader refetch ledger, so later visible
+      returns can refetch queries that were not present at install time. `index.test.ts` covers
+      mutation-added and refetch-added query names. Same-session evidence:
+      `pnpm exec vitest --run packages/runtime/src/index.test.ts -t "refetch|visible-return"`,
+      `pnpm exec vitest --run packages/runtime/src`, and `pnpm run check`.
 
 Verification: runtime node + browser suites; gzip budget; the new parity suite is the gate for
 any future inline-loader edit. A `definedProps()` helper for the ~30 optional-spread sites is
