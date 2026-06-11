@@ -1686,6 +1686,56 @@ export const tableDomains = {
     });
   });
 
+  it('does not borrow project write predicates from later writes in the same expression', () => {
+    const graph = extractTouchGraphFromProject({
+      files: [
+        {
+          fileName: 'drizzle-types.d.ts',
+          source: `
+            declare module "drizzle-orm/pg-core" {
+              export class PgDatabase<TQueryResultHKT = unknown, TFullSchema = unknown, TSchema = unknown> {
+                update(table: unknown): { set(value: unknown): { where(value: unknown): Promise<void> } };
+              }
+            }
+          `,
+        },
+        {
+          fileName: 'product.domain.ts',
+          source: `
+            import type { PgDatabase } from "drizzle-orm/pg-core";
+
+            export const products = pgTable("products", {}, jiso({ domain: "product", key: "id" }));
+
+            export async function restock(db: PgDatabase, id: string) {
+              await Promise.all([db.update(products).set({ stock: 1 }), db.update(products).set({ stock: 2 }).where(eq(products.id, id))]);
+            }
+          `,
+        },
+      ],
+    });
+
+    expect(graph).toEqual({
+      restock: {
+        reads: [],
+        touches: [
+          {
+            domain: 'product',
+            keys: null,
+            site: 'product.domain.ts:7',
+            via: 'products',
+          },
+          {
+            domain: 'product',
+            keys: 'arg:id',
+            site: 'product.domain.ts:7',
+            via: 'products',
+          },
+        ],
+        unresolved: [],
+      },
+    });
+  });
+
   it('recognizes destructured Drizzle receiver aliases', () => {
     const graph = extractTouchGraphFromSource([
       {

@@ -235,6 +235,13 @@ export function diagnosticsForQueryFacts(facts: readonly QueryFact[]): TouchGrap
 }
 
 export function extractTouchGraphFromSource(files: readonly SourceFileInput[]): TouchGraph {
+  return extractTouchGraphFromPreparedFiles(files, (file) => extractFunctions(file.source));
+}
+
+function extractTouchGraphFromPreparedFiles(
+  files: readonly SourceFileInput[],
+  functionsForFile: (file: SourceFileInput) => ExtractedFunction[],
+): TouchGraph {
   const tables = new Map<string, ExtractedTable[]>();
   const unresolvedIdentifiers = new Set<string>();
   const graph: Record<string, TouchGraphEntry> = {};
@@ -263,7 +270,7 @@ export function extractTouchGraphFromSource(files: readonly SourceFileInput[]): 
 
   for (const file of files) {
     const fileTables = tablesForFile(file.source, tables);
-    const functions = extractFunctions(file.source);
+    const functions = functionsForFile(file);
     const functionsByName = new Map(functions.map((fn) => [fn.name, fn]));
     const localFunctionNames = new Set(functionsByName.keys());
     const callsByName = new Map(
@@ -312,9 +319,16 @@ export function extractTouchGraphFromSource(files: readonly SourceFileInput[]): 
 }
 
 export function extractTouchGraphFromProject(options: TouchGraphProjectOptions): TouchGraph {
-  const files = sourceFilesWithProjectExtractionResolved(options);
+  const extraction = createProjectExtraction(options);
+  const files = sourceFilesWithProjectExtractionResolvedFromProject(extraction);
+  const projectWriteCalls = projectWriteCallsByFileName(extraction);
 
-  return extractTouchGraphFromSource(files);
+  return extractTouchGraphFromPreparedFiles(files, (file) =>
+    extractFunctions(file.source).map((fn) => {
+      const writeCalls = projectWriteCalls.get(file.fileName)?.get(fn.name);
+      return writeCalls ? { ...fn, writeCalls } : fn;
+    }),
+  );
 }
 
 export function extractQueryFactsFromProject(options: TouchGraphProjectOptions): QueryFact[] {
@@ -326,6 +340,17 @@ export function extractQueryFactsFromProject(options: TouchGraphProjectOptions):
 function sourceFilesWithProjectExtractionResolved(
   options: TouchGraphProjectOptions,
 ): SourceFileInput[] {
+  return sourceFilesWithProjectExtractionResolvedFromProject(createProjectExtraction(options));
+}
+
+interface ProjectExtraction {
+  columnShapesByTable: ReadonlyMap<string, Readonly<Record<string, QueryShape>>>;
+  files: readonly SourceFileInput[];
+  sourceFiles: readonly SourceFile[];
+  tableNamesBySymbol: ReadonlyMap<string, string>;
+}
+
+function createProjectExtraction(options: TouchGraphProjectOptions): ProjectExtraction {
   const project = new Project({
     compilerOptions: {
       allowJs: false,
@@ -345,16 +370,173 @@ function sourceFilesWithProjectExtractionResolved(
   const tableNamesBySymbol = projectTableNamesBySymbol(sourceFiles);
   const columnShapesByTable = projectColumnShapesByTable(sourceFiles, tableNamesBySymbol);
 
-  return options.files.map((file, index) => {
-    const sourceFile = sourceFiles[index];
+  return {
+    columnShapesByTable,
+    files: options.files,
+    sourceFiles,
+    tableNamesBySymbol,
+  };
+}
+
+function sourceFilesWithProjectExtractionResolvedFromProject(
+  extraction: ProjectExtraction,
+): SourceFileInput[] {
+  return extraction.files.map((file, index) => {
+    const sourceFile = extraction.sourceFiles[index];
     if (!sourceFile) throw new Error(`Missing source file for ${file.fileName}`);
 
     return {
-      columnShapes: columnShapesForFile(sourceFile, tableNamesBySymbol, columnShapesByTable),
+      columnShapes: columnShapesForFile(
+        sourceFile,
+        extraction.tableNamesBySymbol,
+        extraction.columnShapesByTable,
+      ),
       fileName: file.fileName,
-      source: sourceWithProjectExtractionResolved(file.source, sourceFile, tableNamesBySymbol),
+      source: sourceWithProjectExtractionResolved(
+        file.source,
+        sourceFile,
+        extraction.tableNamesBySymbol,
+      ),
     };
   });
+}
+
+function projectWriteCallsByFileName(
+  extraction: ProjectExtraction,
+): Map<string, Map<string, readonly ExtractedWriteCall[]>> {
+  const callsByFile = new Map<string, Map<string, readonly ExtractedWriteCall[]>>();
+
+  extraction.sourceFiles.forEach((sourceFile, index) => {
+    const file = extraction.files[index];
+    if (!file) return;
+
+    const callsByFunction = new Map<string, readonly ExtractedWriteCall[]>();
+
+    for (const fn of sourceFile.getFunctions()) {
+      const name = fn.getName();
+      const body = fn.getBody();
+      if (!name || !body) continue;
+
+      callsByFunction.set(
+        name,
+        extractProjectDrizzleWriteCalls(body, file, extraction.tableNamesBySymbol),
+      );
+    }
+
+    for (const declaration of sourceFile.getVariableDeclarations()) {
+      const name = declaration.getNameNode();
+      const initializer = declaration.getInitializer();
+      if (!Node.isIdentifier(name) || !initializer) continue;
+      if (!Node.isArrowFunction(initializer) && !Node.isFunctionExpression(initializer)) continue;
+
+      const body = initializer.getBody();
+      callsByFunction.set(
+        name.getText(),
+        extractProjectDrizzleWriteCalls(body, file, extraction.tableNamesBySymbol),
+      );
+    }
+
+    callsByFile.set(file.fileName, callsByFunction);
+  });
+
+  return callsByFile;
+}
+
+function extractProjectDrizzleWriteCalls(
+  body: Node,
+  file: SourceFileInput,
+  tableNamesBySymbol: ReadonlyMap<string, string>,
+): ExtractedWriteCall[] {
+  const calls: ExtractedWriteCall[] = [];
+
+  for (const call of body.getDescendantsOfKind(SyntaxKind.CallExpression)) {
+    if (!isDrizzleWriteCall(call)) continue;
+
+    const expression = call.getExpression();
+    if (!Node.isPropertyAccessExpression(expression)) continue;
+    if (!isDrizzleReceiver(expression.getExpression())) continue;
+
+    const operation = expression.getName();
+    const tableArgument = call.getArguments()[0];
+    if (!tableArgument) continue;
+
+    const chain = drizzleWriteChainRoot(call);
+    const statement = sourceWithProjectTableIdentifiersResolved(
+      chain,
+      file.source,
+      tableNamesBySymbol,
+    );
+    const tableExpression =
+      projectTableNameForNode(tableArgument, tableNamesBySymbol) ??
+      sourceWithProjectTableIdentifiersResolved(tableArgument, file.source, tableNamesBySymbol);
+
+    calls.push({
+      index: 0,
+      operation,
+      readSources: extractReadSources(statement, operation),
+      site: `${file.fileName}:${lineForIndex(file.source, call.getStart())}`,
+      statement,
+      tableExpression: tableExpression.trim(),
+    });
+  }
+
+  return calls;
+}
+
+function drizzleWriteChainRoot(call: CallExpression): Node {
+  let chain: Node = call;
+
+  while (true) {
+    const parent = chain.getParent();
+
+    if (parent && Node.isPropertyAccessExpression(parent) && parent.getExpression() === chain) {
+      chain = parent;
+      continue;
+    }
+    if (parent && Node.isCallExpression(parent) && parent.getExpression() === chain) {
+      chain = parent;
+      continue;
+    }
+
+    return chain;
+  }
+}
+
+function sourceWithProjectTableIdentifiersResolved(
+  node: Node,
+  source: string,
+  tableNamesBySymbol: ReadonlyMap<string, string>,
+): string {
+  const start = node.getStart();
+  const replacements = node.getDescendantsOfKind(SyntaxKind.Identifier).flatMap((identifier) => {
+    const tableName = tableNamesBySymbol.get(resolvedSymbolKey(identifier.getSymbol()) ?? '');
+    if (!tableName || identifier.getText() === tableName) return [];
+
+    return [
+      {
+        end: identifier.getEnd() - start,
+        start: identifier.getStart() - start,
+        value: tableName,
+      },
+    ];
+  });
+
+  return applySourceReplacements(source.slice(start, node.getEnd()), replacements);
+}
+
+function projectTableNameForNode(
+  node: Node,
+  tableNamesBySymbol: ReadonlyMap<string, string>,
+): string | undefined {
+  const direct = tableNamesBySymbol.get(resolvedSymbolKey(node.getSymbol()) ?? '');
+  if (direct) return direct;
+
+  for (const identifier of node.getDescendantsOfKind(SyntaxKind.Identifier)) {
+    const tableName = tableNamesBySymbol.get(resolvedSymbolKey(identifier.getSymbol()) ?? '');
+    if (tableName) return tableName;
+  }
+
+  return undefined;
 }
 
 export function extractQueryFactsFromSource(files: readonly SourceFileInput[]): QueryFact[] {
@@ -708,6 +890,7 @@ interface ExtractedFunction {
   bodyStart: number;
   name: string;
   params: string;
+  writeCalls?: readonly ExtractedWriteCall[];
 }
 
 interface ExtractedQueryDefinition {
@@ -723,6 +906,7 @@ interface ExtractedWriteCall {
   index: number;
   operation: string;
   readSources: ExtractedReadSource[];
+  site?: string;
   statement: string;
   tableExpression: string;
 }
@@ -1072,8 +1256,9 @@ function directSummaryForFunction(
   const unresolved: UnresolvedSummaryInput[] = [];
   const receiverNames = drizzleReceiverNames(fn.params, fn.body);
 
-  for (const call of extractDrizzleWriteCalls(fn.body, receiverNames)) {
-    const site = `${file.fileName}:${lineForIndex(file.source, fn.bodyStart + call.index)}`;
+  for (const call of fn.writeCalls ?? extractDrizzleWriteCalls(fn.body, receiverNames)) {
+    const site =
+      call.site ?? `${file.fileName}:${lineForIndex(file.source, fn.bodyStart + call.index)}`;
     const resolvedTables = tables.get(call.tableExpression) ?? [];
 
     if (resolvedTables.length > 0) {
