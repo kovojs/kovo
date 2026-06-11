@@ -136,6 +136,10 @@ Do this first or pay it on every commit.
       Partial evidence 2026-06-11: the P2 page-hints tranche now imports the built server API
       and asserts `renderPageHints` suppresses empty speculation rules and de-dupes prerender
       URLs instead of grepping server source or server test names.
+      Partial evidence 2026-06-11: the P2 view-transition tranche now imports the built
+      compiler API and asserts `compileComponentModule` records view-transition facts, merges the
+      CSS declaration into an existing style attribute once, removes `viewTransitionName`, and
+      emits the registry type instead of grepping compiler source or compiler test names.
 - [x] **Make create-jiso templates real files** (`create-jiso/src/index.ts:63-473`, ~470 lines of
       escaped template literals including a CI workflow and double-escaped regexes inside
       `.mjs`-in-string). Move to a `templates/` directory copied at scaffold time with `{{name}}`

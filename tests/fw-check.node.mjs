@@ -538,17 +538,27 @@ void test('P2 page hints keep speculation rules opt-in and non-empty', async () 
 });
 
 void test('P2 compiler merges view transition stamps into existing styles', async () => {
-  const compilerSource = await readProjectFile('packages/compiler/src/index.ts');
-  const viewTransitionSource = await readProjectFile(
-    'packages/compiler/src/lower/view-transitions.ts',
-  );
-  const compilerTests = await readProjectFile('packages/compiler/src/index.test.ts');
+  const result = compileComponentModule({
+    fileName: 'components/product-card.tsx',
+    source: `
+import { component } from '@jiso/core';
 
-  assert.match(compilerSource, /lowerViewTransitions/);
-  assert.match(viewTransitionSource, /appendViewTransitionStyle/);
-  assert.match(compilerTests, /merges cross-document view transition stamps/);
-  assert.match(compilerTests, /opacity: \.8; view-transition-name: product-p1-image/);
-  assert.match(compilerTests, /serverSource\.match\(\/\\sstyle=\/g\)/);
+export const ProductCard = component('product-card', {
+  render: () => <img style="opacity: .8" viewTransitionName="product-p1-image" src="/p1.png" />,
+});
+`,
+  });
+  const serverSource = result.files.find((file) => file.kind === 'server')?.source ?? '';
+  const registrySource = result.files.find((file) => file.kind === 'registry')?.source ?? '';
+
+  assert.deepEqual(result.viewTransitions, [{ name: 'product-p1-image' }]);
+  assert.match(
+    serverSource,
+    /<img style="opacity: \.8; view-transition-name: product-p1-image" src="\/p1\.png" \/>/,
+  );
+  assert.equal(serverSource.match(/\sstyle=/g)?.length, 1);
+  assert.doesNotMatch(serverSource, /viewTransitionName=/);
+  assert.match(registrySource, /'product-p1-image': unknown;/);
 });
 
 void test('P1 compiler validates component-scoped IDREFs', async () => {
