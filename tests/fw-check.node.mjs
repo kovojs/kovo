@@ -269,6 +269,17 @@ void test('P10 legibility study packet is ready but not claimed complete', async
   assert.match(study, /Do not mark v1 legibility complete/);
 });
 
+void test('Appendix B pre-launch checklist is tracked explicitly', async () => {
+  const checklist = await readProjectFile('docs/prelaunch-checklist.md');
+
+  assert.match(checklist, /SPEC\.md` Appendix B/);
+  assert.match(checklist, /Trademark screen/);
+  assert.match(checklist, /jiso\.dev/);
+  assert.match(checklist, /`@jiso` npm/);
+  assert.match(checklist, /Linguistic screen/);
+  assert.match(checklist, /Do not mark v1 pre-launch complete/);
+});
+
 void test('S2 loader budget and L0 no-upgrade path are acceptance evidence', async () => {
   const runtimeSource = await readProjectFile('packages/runtime/src/index.ts');
   const loaderMatch = /export const jisoLoaderSource = `(?<source>[\s\S]*?)`;/m.exec(runtimeSource);
