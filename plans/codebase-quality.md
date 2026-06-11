@@ -295,6 +295,9 @@ area, keeping `src/index.ts` barrels and API surface verbatim (mirrors compiler 
   internals (`stampPendingQueries`, `abortRemovedIslandSignals`, `hydrateQueryScripts`, …)
   that blur the public contract.
 - **drizzle** → `extract/` (AST), `graph.ts`, `serialize.ts` (falls out of Phase 3 item 2).
+  Evidence: v1 invalidation registry derivation and serialization now live in
+  `@jiso/drizzle`, with unit coverage for touch graph × query read-set matching and generated
+  `InvalidationSets` output.
 
 ## SPEC reconciliation queue
 

@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
   createTouchGraphEntry,
+  deriveInvalidationRegistry,
   diagnosticsForQueryFacts,
   diagnosticsForTouchGraph,
   extractTouchGraphFromProject,
@@ -9,6 +10,7 @@ import {
   extractQueryFactsFromProject,
   extractQueryFactsFromSource,
   jiso,
+  serializeInvalidationRegistry,
   serializeDomainRegistry,
   serializeTouchGraph,
 } from './index.js';
@@ -198,6 +200,78 @@ export const tableDomains = {
 
 export const tableDomains = {
 } as const satisfies Record<string, DomainKey>;
+`);
+  });
+
+  it('derives v1 invalidation registry sets from touch graph and query read sets', () => {
+    const registry = deriveInvalidationRegistry({
+      mutations: [{ mutation: 'cart/add', touchGraphKey: 'cart.addItem' }],
+      queries: [
+        { domains: ['cart'], query: 'cart' },
+        { domains: ['order'], query: 'orderHistory' },
+        {
+          domains: ['product'],
+          instanceKey: { domain: 'product', key: 'arg:id' },
+          query: 'productGrid',
+        },
+        { domains: ['pricing'], query: 'priceRules' },
+      ],
+      touchGraph: {
+        'cart.addItem': createTouchGraphEntry({
+          writes: [
+            {
+              operation: 'insert',
+              site: 'cart.domain.ts:8',
+              table: annotatedTable('cart_items', jiso({ domain: 'cart', key: 'cartId' })),
+            },
+            {
+              operation: 'insert',
+              site: 'cart.domain.ts:12',
+              table: annotatedTable('orders', jiso({ domain: 'order' })),
+            },
+            {
+              operation: 'update',
+              site: 'cart.domain.ts:16',
+              table: annotatedTable('products', jiso({ domain: 'product', key: 'id' })),
+              writeKey: 'arg:productId',
+            },
+          ],
+        }),
+      },
+    });
+
+    expect(registry).toEqual({
+      'cart/add': [
+        { domains: ['cart'], keys: null, query: 'cart' },
+        { domains: ['order'], keys: null, query: 'orderHistory' },
+        { domains: ['product'], keys: { product: 'arg:productId' }, query: 'productGrid' },
+      ],
+    });
+  });
+
+  it('serializes v1 invalidation registry facts for generated artifacts', () => {
+    expect(
+      serializeInvalidationRegistry(
+        {
+          'cart/add': [
+            { domains: ['cart'], keys: null, query: 'cart' },
+            { domains: ['order'], keys: null, query: 'orderHistory' },
+            { domains: ['product'], keys: { product: 'arg:productId' }, query: 'productGrid' },
+          ],
+        },
+        { constName: 'commerceInvalidationSets', typeName: 'CommerceInvalidationSets' },
+      ),
+    ).toBe(`export const commerceInvalidationSets = {
+  "cart/add": [
+    { query: "cart", domains: ["cart"], keys: null },
+    { query: "orderHistory", domains: ["order"], keys: null },
+    { query: "productGrid", domains: ["product"], keys: { "product": "arg:productId" } },
+  ],
+} as const;
+
+export interface CommerceInvalidationSets {
+  'cart/add': 'cart' | 'orderHistory' | 'productGrid';
+}
 `);
   });
 

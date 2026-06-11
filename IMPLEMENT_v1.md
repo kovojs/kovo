@@ -22,7 +22,7 @@ Audited against the repository on 2026-06-11. Checkmarks mean the behavior, API,
 - [x] P3 server/core have `domain`, `query`, `mutation`, `route`, typed `href`/`Link`/`redirect`, typed sessions, CSRF issuance/validation, FormData coercion, guards/rate limits, mutation replay, query endpoints, rerun query fragments, and commerce app usage.
 - [ ] P3 is still incomplete for all planned audits and static route/query guard guarantees at v1 scale.
 - [x] P4 Drizzle extraction has AST-backed table/write extraction, arrow-handler coverage, FW406/FW409 diagnostics, query shape derivation with nullable wrappers, projection-less select diagnostics, and conformance coverage.
-- [ ] P4 is not fully frozen: the emitted `generated/touch-graph.ts` workflow and complete v1 invalidation registry contract still need hardening.
+- [ ] P4 is not fully frozen: v1 invalidation registry derivation/serialization is covered in `@jiso/drizzle`, but the emitted `generated/touch-graph.ts` commerce workflow still needs hardening.
 - [x] P5 has enhanced mutation/deferred fragments, DOM morphing, query patch application, typed read refetch, template stamps, isomorphic/update-coverage statuses, Tailwind stylesheet hints, and runtime/browser tests for morph survival and fragment parsing.
 - [x] P5 byte-for-byte live-server fixture exit is covered; runtime acceptance now proves form field and navigation route renames fail under `vp check` (`packages/runtime/src/index.test.ts`, SPEC §6.2/§6.3/§6.4/§16.6).
 - [x] P6 optimism has typed `OptimisticFor`, generated `InvalidationSets`, `await-fragment` statuses, pending stamps, named queues, rebase/restore behavior, unified change-record consumption, and property/runtime tests.
