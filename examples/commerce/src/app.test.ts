@@ -15,7 +15,9 @@ import {
   commerceSession,
   commerceTouchGraph,
   createCommerceDb,
+  loadCartQuery,
   loadProductGrid,
+  renderCommercePageHints,
   renderAddToCartForm,
   renderOrderHistory,
   renderCartPage,
@@ -571,10 +573,24 @@ describe('commerce example', () => {
     });
 
     expect(renderCartPage()).toContain('<link rel="stylesheet" href="/assets/tailwind.css">');
-    expect(renderCartPage()).toContain('<title>Jiso Commerce (1)</title>');
+    expect(renderCartPage()).toContain('<title>Jiso Commerce (0)</title>');
     expect(renderCartPage()).toContain('fw-i18n locale="en-US"');
     expect(renderCartPage()).toContain('class="min-h-dvh bg-slate-50 p-6"');
     expect(renderCartPage()).toContain('class="rounded bg-teal-600 px-2 py-0.5 text-white"');
+  });
+
+  it('resolves commerce route meta from loaded cart query data', () => {
+    const db = createCommerceDb();
+    db.write('cart_items', { productId: 'p1', qty: 3, unitPrice: 1499 });
+    db.write('cart_items', { productId: 'p2', qty: 2, unitPrice: 2599 });
+
+    expect(loadCartQuery(db)).toEqual({ count: 5 });
+    expect(renderCommercePageHints(loadCartQuery(db)).html).toContain(
+      '<title>Jiso Commerce (5)</title>',
+    );
+    expect(renderCartPage(db)).toContain(
+      '<meta name="description" content="Browse products and checkout with 5 verifiable cart item.">',
+    );
   });
 
   it('builds the linked Tailwind stylesheet for commerce utility classes', () => {

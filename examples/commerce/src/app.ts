@@ -240,7 +240,7 @@ export const commerceMessages = i18n('en-US', {
 
 export const commerceStylesheets = ['/assets/tailwind.css'] as const;
 
-export const commerceMeta = metaFromQuery(cartQuery, cartQuery.load({}), (cart) =>
+export const commerceMeta = metaFromQuery(cartQuery, (cart) =>
   meta({
     description: `Browse products and checkout with ${cart.count} verifiable cart item.`,
     title: `Jiso Commerce (${cart.count})`,
@@ -259,6 +259,12 @@ export function loadProductGrid(db: CommerceDb, input: ProductGridInput = {}): P
   return {
     items,
     nextCursor: next ? (items.at(-1)?.id ?? null) : null,
+  };
+}
+
+export function loadCartQuery(db: CommerceDb): CartQueryResult {
+  return {
+    count: db.cartItems.reduce((total, item) => total + item.qty, 0),
   };
 }
 
@@ -360,18 +366,26 @@ export const CartBadge = component('cart-badge', {
     `<cart-badge class="inline-flex items-center gap-2 rounded-md border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-900 shadow-sm" fw-deps="cart"><span>${t(commerceMessages, 'cartLabel')}</span><span class="rounded bg-teal-600 px-2 py-0.5 text-white" data-bind="cart.count">1</span></cart-badge>`,
 });
 
-export const commercePageHints = renderPageHints({
-  i18n: commerceMessages,
-  meta: commerceMeta,
-  stylesheets: commerceStylesheets,
-});
+export function renderCommercePageHints(cart: CartQueryResult = cartQuery.load({})) {
+  return renderPageHints(
+    {
+      i18n: commerceMessages,
+      meta: commerceMeta,
+      stylesheets: commerceStylesheets,
+    },
+    { queries: { cart } },
+  );
+}
+
+export const commercePageHints = renderCommercePageHints();
 
 export function renderCartPage(
   db = createCommerceDb(),
   addToCartFailure?: AddToCartFailureState,
 ): string {
+  const pageHints = renderCommercePageHints(loadCartQuery(db));
   const productGrid = renderProductGridWithFailure(loadProductGrid(db), addToCartFailure);
-  return `<html><head>${commercePageHints.html}</head><body class="min-h-dvh bg-slate-50 p-6"><main class="mx-auto max-w-4xl"><fw-fragment target="cart-badge">${CartBadge.definition.render()}</fw-fragment><fw-fragment target="product-grid">${productGrid}</fw-fragment><fw-fragment target="order-history">${renderOrderHistory(db)}${renderReceiptUploadForm()}</fw-fragment></main></body></html>`;
+  return `<html><head>${pageHints.html}</head><body class="min-h-dvh bg-slate-50 p-6"><main class="mx-auto max-w-4xl"><fw-fragment target="cart-badge">${CartBadge.definition.render()}</fw-fragment><fw-fragment target="product-grid">${productGrid}</fw-fragment><fw-fragment target="order-history">${renderOrderHistory(db)}${renderReceiptUploadForm()}</fw-fragment></main></body></html>`;
 }
 
 function renderProductGridWithFailure(
@@ -526,8 +540,8 @@ export const commerceGraph = {
     {
       i18n: ['en-US:cartLabel,productStock'],
       meta: {
-        description: commerceMeta.description,
-        title: commerceMeta.title,
+        description: 'Browse products and checkout with 1 verifiable cart item.',
+        title: 'Jiso Commerce (1)',
       },
       modulepreloads: [],
       prefetch: false,

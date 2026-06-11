@@ -355,7 +355,15 @@ describe('server mutation primitives', () => {
       }),
       reads: [domain('product')],
     });
-    const productMeta = metaFromQuery(productQuery, productQuery.load({ id: 'p1' }), (product) => ({
+    const eagerProductMeta = metaFromQuery(
+      productQuery,
+      productQuery.load({ id: 'p1' }),
+      (product) => ({
+        description: `${product.stock} available`,
+        title: product.name,
+      }),
+    );
+    const productMeta = metaFromQuery(productQuery, (product) => ({
       description: `${product.stock} available`,
       title: product.name,
     }));
@@ -365,7 +373,7 @@ describe('server mutation primitives', () => {
       title: product.missingName,
     }));
 
-    expect(renderPageHints({ meta: productMeta })).toEqual({
+    expect(renderPageHints({ meta: eagerProductMeta })).toEqual({
       earlyHints: {},
       html: [
         '<title>Coffee</title>',
@@ -373,6 +381,22 @@ describe('server mutation primitives', () => {
         '<meta property="og:description" content="5 available">',
       ].join(''),
     });
+    expect(
+      renderPageHints(
+        { meta: productMeta },
+        { queries: { product: { id: 'p2', name: 'Tea', stock: 3 } } },
+      ),
+    ).toEqual({
+      earlyHints: {},
+      html: [
+        '<title>Tea</title>',
+        '<meta name="description" content="3 available">',
+        '<meta property="og:description" content="3 available">',
+      ].join(''),
+    });
+    expect(() => renderPageHints({ meta: productMeta })).toThrow(
+      'Missing query data for route meta: product',
+    );
   });
 
   it('renders server-side i18n catalogs with page hints', () => {

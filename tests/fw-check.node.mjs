@@ -487,9 +487,13 @@ void test('D4 commerce adopt-dont-invent features stay represented', async () =>
   const serverTests = await readProjectFile('packages/server/src/index.test.ts');
 
   assert.match(commerceSource, /meta\(\{/);
-  assert.match(commerceSource, /metaFromQuery\(cartQuery/);
+  assert.match(commerceSource, /metaFromQuery\(cartQuery, \(cart\)/);
+  assert.match(commerceSource, /renderCommercePageHints\(loadCartQuery\(db\)\)/);
+  assert.match(commerceSource, /queries: \{ cart \}/);
   assert.match(serverSource, /function metaFromQuery/);
+  assert.match(serverSource, /Missing query data for route meta/);
   assert.match(serverTests, /derives typed route meta from query results/);
+  assert.match(commerceTests, /resolves commerce route meta from loaded cart query data/);
   assert.match(commerceSource, /i18n\('en-US'/);
   assert.match(commerceSource, /s\.file\(\{ maxBytes: 64 \* 1024/);
   assert.match(commerceSource, /fw-upload-progress/);

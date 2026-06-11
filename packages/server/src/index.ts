@@ -517,6 +517,13 @@ export interface RouteMeta {
   title?: string;
 }
 
+export interface RouteMetaFactory {
+  queries: readonly string[];
+  resolve(values: Record<string, unknown>): RouteMeta;
+}
+
+export type RouteMetaSource = RouteMeta | RouteMetaFactory;
+
 export interface I18nCatalog<Messages extends Record<string, string> = Record<string, string>> {
   locale: string;
   messages: Messages;
@@ -534,11 +541,15 @@ export interface StylesheetManifestEntry extends StylesheetAsset {
 
 export interface PageHintOptions {
   i18n?: I18nCatalog | readonly I18nCatalog[];
-  meta?: RouteMeta | readonly RouteMeta[];
+  meta?: RouteMetaSource | readonly RouteMetaSource[];
   modulepreloads?: readonly string[];
   prefetch?: RoutePrefetch;
   prerenderUrls?: readonly string[];
   stylesheets?: readonly (string | StylesheetAsset)[];
+}
+
+export interface PageHintRenderContext {
+  queries?: Record<string, unknown>;
 }
 
 export interface PageHints {
@@ -638,11 +649,38 @@ export function meta<const Meta extends RouteMeta>(definition: Meta): Meta {
   return definition;
 }
 
+export function metaFromQuery<const Query extends QueryDefinition, const Meta extends RouteMeta>(
+  queryDefinition: Query,
+  derive: (value: QueryResult<Query>) => Meta,
+): RouteMetaFactory;
 export function metaFromQuery<
   const Query extends { load?: (input: never) => unknown },
   const Meta extends RouteMeta,
->(_query: Query, value: QueryResult<Query>, derive: (value: QueryResult<Query>) => Meta): Meta {
-  return derive(value);
+>(_query: Query, value: QueryResult<Query>, derive: (value: QueryResult<Query>) => Meta): Meta;
+export function metaFromQuery<
+  const Query extends { key?: string; load?: (input: never) => unknown },
+  const Meta extends RouteMeta,
+>(
+  queryDefinition: Query,
+  valueOrDerive: QueryResult<Query> | ((value: QueryResult<Query>) => Meta),
+  maybeDerive?: (value: QueryResult<Query>) => Meta,
+): Meta | RouteMetaFactory {
+  if (typeof valueOrDerive === 'function') {
+    const key = queryDefinition.key;
+    const derive = valueOrDerive as (value: QueryResult<Query>) => Meta;
+    if (!key) throw new Error('metaFromQuery requires a query key for deferred meta');
+
+    return {
+      queries: [key],
+      resolve(values) {
+        const value = values[key] as QueryResult<Query>;
+        return derive(value);
+      },
+    };
+  }
+
+  if (!maybeDerive) throw new Error('metaFromQuery requires a derive function');
+  return maybeDerive(valueOrDerive);
 }
 
 export function errorBoundary<Renderer extends FragmentRenderer>(
@@ -671,11 +709,14 @@ export function t<
   );
 }
 
-export function renderPageHints(options: PageHintOptions): PageHints {
+export function renderPageHints(
+  options: PageHintOptions,
+  context: PageHintRenderContext = {},
+): PageHints {
   const modulepreloads = dedupe(options.modulepreloads ?? []);
   const stylesheets = dedupeStylesheets(options.stylesheets ?? []);
   const html = [
-    ...renderRouteMeta(options.meta),
+    ...renderRouteMeta(options.meta, context),
     ...renderI18nCatalogs(options.i18n),
     ...stylesheets.map((asset) => `<link rel="stylesheet" href="${escapeAttribute(asset.href)}">`),
     ...modulepreloads.map((href) => `<link rel="modulepreload" href="${escapeAttribute(href)}">`),
@@ -1400,24 +1441,49 @@ function renderSpeculationRules(prefetch: RoutePrefetch, urls: readonly string[]
   )}</script>`;
 }
 
-function renderRouteMeta(metaInput: PageHintOptions['meta']): string[] {
+function renderRouteMeta(
+  metaInput: PageHintOptions['meta'],
+  context: PageHintRenderContext,
+): string[] {
   const metas = Array.isArray(metaInput) ? metaInput : metaInput ? [metaInput] : [];
   const tags: string[] = [];
 
   for (const item of metas) {
-    if (item.title) tags.push(`<title>${escapeHtml(item.title)}</title>`);
-    if (item.description) {
+    const resolved = resolveRouteMeta(item, context);
+
+    if (resolved.title) tags.push(`<title>${escapeHtml(resolved.title)}</title>`);
+    if (resolved.description) {
       tags.push(
-        `<meta name="description" content="${escapeAttribute(item.description)}">`,
-        `<meta property="og:description" content="${escapeAttribute(item.description)}">`,
+        `<meta name="description" content="${escapeAttribute(resolved.description)}">`,
+        `<meta property="og:description" content="${escapeAttribute(resolved.description)}">`,
       );
     }
-    if (item.image) {
-      tags.push(`<meta property="og:image" content="${escapeAttribute(item.image)}">`);
+    if (resolved.image) {
+      tags.push(`<meta property="og:image" content="${escapeAttribute(resolved.image)}">`);
     }
   }
 
   return tags;
+}
+
+function resolveRouteMeta(source: RouteMetaSource, context: PageHintRenderContext): RouteMeta {
+  if (!isRouteMetaFactory(source)) return source;
+
+  const queries = context.queries ?? {};
+  const values: Record<string, unknown> = {};
+
+  for (const query of source.queries) {
+    if (!Object.hasOwn(queries, query)) {
+      throw new Error(`Missing query data for route meta: ${query}`);
+    }
+    values[query] = queries[query];
+  }
+
+  return source.resolve(values);
+}
+
+function isRouteMetaFactory(source: RouteMetaSource): source is RouteMetaFactory {
+  return typeof (source as RouteMetaFactory).resolve === 'function';
 }
 
 function renderI18nCatalogs(i18nInput: PageHintOptions['i18n']): string[] {
