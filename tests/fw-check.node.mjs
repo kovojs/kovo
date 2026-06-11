@@ -5,6 +5,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { test } from 'node:test';
 import { promisify } from 'node:util';
+import { runInNewContext } from 'node:vm';
 import { gzipSync } from 'node:zlib';
 
 import { missingBuildMessage } from '../scripts/fw-check.mjs';
@@ -14,13 +15,18 @@ import {
   assertRenderEquivalence,
   collectMinifierReservedNames,
   compileComponentModule,
+  deriveAppGraph,
+  deriveRegistryFactsFromGraph,
+  emitQueryPlanBootstrapModule,
   queryShapesFromFacts,
 } from '../dist/compiler/src/index.mjs';
 import { diagnosticDefinitions } from '../dist/core/src/index.mjs';
 import {
   applyMutationResponseToDom,
   applyCompiledQueryUpdatePlan,
+  applyDeferredStreamResponseToDom,
   createQueryStore,
+  derive,
   installPagehideOptimismCleanup,
   installJisoLoader,
   jisoLoaderSource,
@@ -281,6 +287,148 @@ const objectEntriesFromSnippet = (snippet) => {
   }
 
   return keys;
+};
+
+class GateMorphTarget {
+  constructor(html = '') {
+    this.html = html;
+  }
+
+  appendHtml(html) {
+    this.html += html;
+  }
+
+  readHtml() {
+    return this.html;
+  }
+
+  replaceWithHtml(html) {
+    this.html = html;
+  }
+}
+
+class GateQueryElement {
+  constructor(attributes, options = {}) {
+    this.attributes = Object.entries(attributes).map(([name, value]) => ({ name, value }));
+    this.textContent = options.textContent ?? null;
+    if (options.value !== undefined) this.value = options.value;
+  }
+
+  getAttribute(name) {
+    return this.attributes.find((attribute) => attribute.name === name)?.value ?? null;
+  }
+
+  matches(selector) {
+    const exactAttribute = /^\[([^=\]]+)="([^"]*)"\]$/.exec(selector);
+    if (exactAttribute) return this.getAttribute(exactAttribute[1]) === exactAttribute[2];
+
+    const presentAttribute = /^\[([^=\]]+)\]$/.exec(selector);
+    return presentAttribute ? this.getAttribute(presentAttribute[1]) !== null : false;
+  }
+
+  removeAttribute(name) {
+    this.attributes = this.attributes.filter((attribute) => attribute.name !== name);
+  }
+
+  setAttribute(name, value) {
+    const existing = this.attributes.find((attribute) => attribute.name === name);
+    if (existing) {
+      existing.value = value;
+      return;
+    }
+    this.attributes.push({ name, value });
+  }
+}
+
+class GateTemplateStampHost extends GateQueryElement {
+  items = [];
+
+  reconcileTemplateStamp(items) {
+    this.items = items.map((item) => ({ ...item }));
+    this.textContent = items.map((item) => item.html).join('');
+  }
+}
+
+class GateMorphRoot {
+  constructor() {
+    this.bindings = [];
+    this.elements = [];
+    this.targets = new Map();
+  }
+
+  findFragmentTarget(target) {
+    return this.targets.get(target) ?? null;
+  }
+
+  querySelectorAll(selector) {
+    if (selector === '[data-bind]') {
+      return this.bindings.filter((element) => element.getAttribute('data-bind') !== null);
+    }
+    if (selector === '*') return [...this.bindings, ...this.elements];
+
+    return [...this.bindings, ...this.elements].filter((element) => element.matches(selector));
+  }
+}
+
+const executeGeneratedClientModule = (source) => {
+  const exports = {};
+  const moduleSource = source
+    .replace(/import\s+\{([^}]+)\}\s+from\s+['"]@jiso\/runtime['"];\n?/g, (_match, names) => {
+      const bindings = names
+        .split(',')
+        .map((name) => name.trim())
+        .filter(Boolean)
+        .join(', ');
+      return `const { ${bindings} } = runtime;\n`;
+    })
+    .replace(/export const ([A-Za-z_$][\w$]*)/g, 'const $1 = exports.$1');
+
+  runInNewContext(moduleSource, {
+    exports,
+    runtime: { applyCompiledQueryUpdatePlan, derive },
+  });
+
+  return exports;
+};
+
+const executeGeneratedBootstrapModule = (source, planModules) => {
+  const calls = [];
+  const deferredApplications = [];
+  const exports = {};
+  const store = createQueryStore();
+  const documentRoot = new GateMorphRoot();
+  const moduleSource = source
+    .replace(
+      /import\s+\{ applyDeferredStreamResponseToDom, createQueryStore, installJisoLoader \}\s+from\s+['"]@jiso\/runtime['"];\n?/,
+      'const { applyDeferredStreamResponseToDom, createQueryStore, installJisoLoader } = runtime;\n',
+    )
+    .replace(
+      /import\s+\{ ([A-Za-z_$][\w$]*) \}\s+from\s+['"]([^'"]+)['"];\n?/g,
+      (_match, exportName, importPath) =>
+        `const { ${exportName} } = planModules[${JSON.stringify(importPath)}];\n`,
+    )
+    .replace(/export function ([A-Za-z_$][\w$]*)/g, 'exports.$1 = function $1');
+
+  runInNewContext(moduleSource, {
+    document: documentRoot,
+    exports,
+    fetch() {},
+    planModules,
+    runtime: {
+      applyDeferredStreamResponseToDom(options) {
+        deferredApplications.push(options);
+        return applyDeferredStreamResponseToDom(options);
+      },
+      createQueryStore() {
+        return store;
+      },
+      installJisoLoader(options) {
+        calls.push(options);
+      },
+    },
+  });
+
+  return { calls, deferredApplications, documentRoot, exports, store };
 };
 
 const assignmentExpressionsFromSource = (source) =>
@@ -2631,16 +2779,7 @@ void test('D4 commerce adopt-dont-invent features stay represented', async () =>
 });
 
 void test('P10 commerce graph assertions answer behavior mechanically', async () => {
-  const cliSource = await readProjectFile('packages/cli/src/index.ts');
-  const cliTests = await readProjectFile('packages/cli/src/index.test.ts');
-  const compilerSource = await readProjectFile('packages/compiler/src/index.ts');
-  const compilerTests = await readProjectFile('packages/compiler/src/index.test.ts');
-  const coreSource = await readProjectFile('packages/core/src/index.ts');
-  const fwCheckRunner = await readProjectFile('scripts/fw-check.mjs');
   const graphArtifact = await readProjectFile('examples/commerce/src/generated/graph.json');
-  const runtimeSource = await readProjectFile('packages/runtime/src/index.ts');
-  const runtimeTests = await readProjectFile('packages/runtime/src/index.test.ts');
-  const viteConfig = await readProjectFile('vite.config.ts');
   const commerceGraph = JSON.parse(graphArtifact);
   const cartQueryExplain = fwExplain(commerceGraph, { kind: 'query', target: 'cart' }).output;
   const cartAddExplain = fwExplain(commerceGraph, {
@@ -2674,43 +2813,88 @@ void test('P10 commerce graph assertions answer behavior mechanically', async ()
   assert.match(cartAddExplain, /^OPTIMISTIC-SUMMARY .*UNHANDLED=0$/m);
   assert.equal(explainValue(uploadReceiptExplain, 'file-fields: '), 'receipt');
   assert.equal(explainValue(uploadReceiptExplain, 'invalidates: '), '-');
-  assert.match(cliTests, /hand-write in the mutation module, or declare 'await-fragment'/);
-  assert.match(cliTests, /ignores unrelated statuses/);
-  assert.match(cliSource, /diagnosticDefinitions\.FW310\.message/);
-  assert.match(cliTests, /prints stable FW311 update coverage rows and warnings/);
-  assert.match(cliTests, /prints static diagnostic source positions when present/);
-  assert.match(cliTests, /fails fw check coverage as a CLI command when coverage is unhandled/);
-  assert.match(cliTests, /WARN FW311 component=CartBadge query=cart\.discount/);
-  assert.match(coreSource, /interface InvalidationSets/);
-  assert.match(await readProjectFile('packages/core/src/diagnostics.ts'), /FW311/);
-  assert.match(compilerSource, /componentGraphFacts: readonly ComponentGraphFact\[\]/);
-  const compilerGraphSource = await readProjectFile('packages/compiler/src/graph.ts');
-  assert.match(compilerGraphSource, /function deriveAppGraph/);
-  assert.match(
-    compilerGraphSource,
-    /invalidations\?: Readonly<Record<string, readonly string\[\]>>/,
+  assert.equal(
+    diagnosticDefinitions.FW310.message,
+    'Invalidated query lacks optimistic transform.',
   );
-  assert.match(compilerGraphSource, /function deriveRegistryFactsFromGraph/);
-  assert.match(compilerGraphSource, /function deriveInvalidationFactsFromGraph/);
-  assert.match(
-    await readProjectFile('packages/compiler/src/emit/registry.ts'),
-    /function invalidationSetFactLines/,
+  assert.equal(
+    diagnosticDefinitions.FW311.message,
+    'Query-dependent DOM position has no update status.',
   );
-  assert.match(compilerTests, /export interface InvalidationSets/);
-  assert.match(compilerTests, /derives app graph component facts from compiled component results/);
-  assert.match(compilerTests, /derives registry facts from graph query, mutation, and page facts/);
-  assert.match(runtimeSource, /type InvalidatedQueryValues/);
-  assert.match(runtimeSource, /OptimisticEntry/);
-  assert.match(
-    runtimeTests,
-    /requires optimistic coverage from generated invalidation sets by default/,
+  assert.equal(
+    fwCheck(
+      {
+        mutations: [{ key: 'cart/add', writes: ['cart'] }],
+        optimistic: [{ mutation: 'cart/add', query: 'orderHistory', status: 'await-fragment' }],
+        queries: [
+          { domains: ['cart'], query: 'cart' },
+          { domains: ['order'], query: 'orderHistory' },
+        ],
+        touchGraph: {
+          'order.write': {
+            touches: [{ domain: 'order', keys: null, site: 'order.ts:1', via: 'orders' }],
+            unresolved: [],
+          },
+        },
+        updateCoverage: [
+          {
+            component: 'CartBadge',
+            query: 'cart.discount',
+            status: 'UNHANDLED',
+          },
+          {
+            component: 'OrderHistory',
+            query: 'orderHistory',
+            status: 'fragment',
+          },
+        ],
+      },
+      { family: 'all' },
+    ).output,
+    [
+      'fw-check/v1',
+      'WARN FW310 cart/add -> cart Invalidated query lacks optimistic transform.',
+      'WARN FW311 component=CartBadge query=cart.discount position=undefined Query-dependent DOM position has no update status.',
+      'COVERAGE component=OrderHistory query=orderHistory position=undefined status=fragment',
+      'WARN UNGUARDED cart/add mutation is reachable without an auth guard.',
+      '',
+    ].join('\n'),
   );
-  assert.match(runtimeTests, /productGrid: 'await-fragment'/);
-  assert.match(fwCheckRunner, /tests\/fw-check\.node\.mjs/);
-  assert.match(fwCheckRunner, /dist\/cli\/src\/index\.mjs/);
-  assert.match(fwCheckRunner, /examples\/commerce\/src\/generated\/graph\.json/);
-  assert.match(viteConfig, /command: 'node scripts\/fw-check\.mjs'/);
-  assert.match(viteConfig, /examples\/commerce\/src\/generated\/graph\.json/);
+  assert.deepEqual(deriveRegistryFactsFromGraph(commerceGraph), {
+    components: ['cart-badge', 'order-history', 'product-grid'],
+    domainKeys: ['attachment', 'cart', 'order', 'product'],
+    invalidations: {
+      'cart/add': ['cart', 'orderHistory', 'productGrid'],
+    },
+    routes: ['/cart'],
+  });
+  const cartBadge = compileComponentModule({
+    fileName: 'cart-badge.tsx',
+    source: `
+export const CartBadge = component('cart-badge', {
+  queries: { cart: cartQuery },
+  render: ({ cart }) => <cart-badge><span data-bind="cart.count">{cart.count}</span></cart-badge>,
+});
+`,
+  });
+  assert.deepEqual(cartBadge.componentGraphFacts, [
+    {
+      name: 'CartBadge',
+      queries: ['cart'],
+    },
+  ]);
+  assert.deepEqual(
+    deriveAppGraph({
+      components: [cartBadge],
+      graph: { queries: [{ domains: ['cart'], query: 'cart' }] },
+    }).registryFacts,
+    {
+      components: ['cart-badge'],
+      domainKeys: ['cart'],
+      invalidations: {},
+      routes: [],
+    },
+  );
   assert.deepEqual(
     Object.keys(commerceGraph.touchGraph)
       .filter((key) => ['cart.addItem', 'order.receipt', 'payment.webhook'].includes(key))
@@ -4308,90 +4492,319 @@ void test('Conformance suites are an explicit gate', async () => {
 });
 
 void test('D3 deferred stream responses are consumed by the runtime', async () => {
-  const compilerBootstrapSource = await readProjectFile('packages/compiler/src/emit/bootstrap.ts');
-  const compilerBindingValidationSource = await readProjectFile(
-    'packages/compiler/src/validate/bindings.ts',
-  );
-  const compilerClientEmitSource = await readProjectFile('packages/compiler/src/emit/client.ts');
-  const compilerSource = await readProjectFile('packages/compiler/src/index.ts');
-  const compilerTests = await readProjectFile('packages/compiler/src/index.test.ts');
-  const serverDeferredStreamSource = await readProjectFile(
-    'packages/server/src/deferred-stream.ts',
-  );
-  const serverHintsSource = await readProjectFile('packages/server/src/hints.ts');
-  const serverTests = await readProjectFile('packages/server/src/index.test.ts');
-  const runtimeSource = await readProjectFile('packages/runtime/src/index.ts');
-  const runtimeWireParserSource = await readProjectFile('packages/runtime/src/wire-parser.ts');
-  const runtimeTests = await readProjectFile('packages/runtime/src/index.test.ts');
+  const compiled = compileComponentModule({
+    fileName: 'cart-badge.tsx',
+    source: `
+export const CartBadge$isEmpty = derive(['cart'], (cart) => cart.count === 0);
 
-  assert.match(compilerBindingValidationSource, /collectQueryUpdatePlans/);
-  assert.match(compilerClientEmitSource, /\$queryUpdatePlans/);
-  assert.match(compilerSource, /emitQueryPlanBootstrapModule/);
-  assert.match(compilerBootstrapSource, /installJisoLoader/);
-  assert.match(compilerBootstrapSource, /enhancedMutations: \{/);
-  assert.match(compilerBootstrapSource, /applyDeferredStreamResponseToDom/);
-  assert.match(compilerBootstrapSource, /applyJisoDeferredStreamResponse/);
-  assert.match(compilerClientEmitSource, /applyCompiledQueryUpdatePlan/);
-  assert.match(compilerClientEmitSource, /emitDerivePlan/);
-  assert.match(compilerClientEmitSource, /emitStampPlan/);
-  assert.match(compilerClientEmitSource, /deriveExports/);
-  assert.match(compilerTests, /emits per-query data-bind update plans for compiled components/);
-  assert.match(compilerTests, /emits named derives into compiled query update plans/);
-  assert.match(
-    compilerTests,
-    /lowers inline attribute expressions into compiled query update stamps/,
+export const CartBadge = component('cart-badge', {
+  queries: { cart: {} },
+  render: () => (
+    <cart-badge>
+      <span data-bind="cart.count">0</span>
+      <button data-bind:hidden="cart.empty">Checkout</button>
+      <output data-derive="cart.CartBadge$isEmpty">false</output>
+      <button disabled={cart.count === 0}>Disabled</button>
+      <ul data-bind-list="cart.items" fw-key="productId">
+        <template fw-stamp>
+          <li><span data-bind=".qty">0</span> x <span data-bind=".name">Item</span></li>
+        </template>
+      </ul>
+    </cart-badge>
+  ),
+});
+`,
+  });
+
+  assert.deepEqual(compiled.diagnostics, []);
+  assert.deepEqual(compiled.queryUpdatePlans, [
+    {
+      componentName: 'CartBadge',
+      derives: [
+        {
+          exportName: 'CartBadge$isEmpty',
+          expression: 'cart.count === 0',
+          input: 'cart',
+          name: 'CartBadge$isEmpty',
+          param: 'cart',
+          selector: '[data-derive="cart.CartBadge$isEmpty"]',
+        },
+      ],
+      paths: ['cart.count', 'cart.empty', 'cart.items'],
+      query: 'cart',
+      stamps: [
+        {
+          attr: 'disabled',
+          derive: {
+            exportName: 'CartBadge$button_disabled_derive',
+            expression: 'cart.count === 0',
+            input: 'cart',
+            name: 'CartBadge$button_disabled_derive',
+            param: 'cart',
+            selector: '[data-derive="cart.CartBadge$button_disabled_derive"]',
+          },
+          selector: '[data-derive="cart.CartBadge$button_disabled_derive"]',
+        },
+      ],
+      templateStamps: [
+        {
+          itemBindings: ['.name', '.qty'],
+          key: 'productId',
+          list: 'cart.items',
+          selector: '[data-bind-list="cart.items"]',
+          template:
+            '<li><span data-bind=".qty">0</span> x <span data-bind=".name">Item</span></li>',
+        },
+      ],
+    },
+  ]);
+
+  const clientExports = executeGeneratedClientModule(compiled.files[1]?.source ?? '');
+  const countBinding = new GateQueryElement({ 'data-bind': 'cart.count' }, { textContent: '0' });
+  const emptyButton = new GateQueryElement({
+    'data-bind:hidden': 'cart.empty',
+    hidden: 'true',
+  });
+  const namedDerive = new GateQueryElement(
+    { 'data-derive': 'cart.CartBadge$isEmpty' },
+    { textContent: 'true' },
   );
-  assert.match(compilerTests, /derives data-bind stamps for sole text-child query expressions/);
-  assert.match(compilerTests, /wraps mixed text query expressions in synthesized data-bind spans/);
-  assert.match(
-    compilerTests,
-    /emits an app bootstrap that wires compiled query plans into the loader/,
+  const disabledStamp = new GateQueryElement({
+    'data-derive': 'cart.CartBadge$button_disabled_derive',
+    disabled: 'true',
+  });
+  const itemStamp = new GateTemplateStampHost({ 'data-bind-list': 'cart.items' });
+  const compiledRoot = new GateMorphRoot();
+  compiledRoot.bindings.push(countBinding);
+  compiledRoot.elements.push(emptyButton, namedDerive, disabledStamp, itemStamp);
+
+  assert.deepEqual(
+    clientExports.CartBadge$queryUpdatePlans.cart(compiledRoot, {
+      count: 2,
+      empty: false,
+      items: [
+        { name: 'Coffee', productId: 'p1', qty: 1 },
+        { name: 'Tea', productId: 'p2', qty: 3 },
+      ],
+    }),
+    {
+      bindings: ['cart.count', 'cart.empty'],
+      derives: ['CartBadge$isEmpty'],
+      stamps: ['disabled'],
+      templateStamps: ['[data-bind-list="cart.items"]'],
+    },
   );
-  assert.match(compilerTests, /\.\.\.CartBadge\$queryUpdatePlans/);
-  assert.match(compilerTests, /export function applyJisoDeferredStreamResponse/);
-  assert.match(compilerTests, /return applyDeferredStreamResponseToDom/);
-  assert.match(runtimeSource, /applyDeferredStreamResponseToDom/);
-  assert.match(runtimeSource, /export function applyCompiledQueryUpdatePlan/);
-  assert.match(runtimeSource, /bindings[\s\S]*derives[\s\S]*stamps/);
-  assert.match(runtimeSource, /export function applyQueryBindings/);
-  assert.match(runtimeSource, /deferredStreamChunks/);
-  assert.match(runtimeWireParserSource, /export function deferredStreamChunks/);
-  assert.match(runtimeWireParserSource, /--\$\{boundary\}/);
-  assert.match(serverDeferredStreamSource, /mode\?: 'append' \| 'replace'/);
-  assert.match(serverHintsSource, /bootstrapScript\?: string/);
-  assert.match(
-    serverHintsSource,
-    /<script type="module" src="\$\{escapeAttribute\(options\.bootstrapScript\)\}"><\/script>/,
+  assert.equal(countBinding.textContent, '2');
+  assert.equal(emptyButton.getAttribute('hidden'), 'false');
+  assert.equal(namedDerive.textContent, 'false');
+  assert.equal(disabledStamp.getAttribute('disabled'), 'false');
+  assert.deepEqual(
+    itemStamp.items.map(({ html, key }) => ({ html, key })),
+    [
+      {
+        html: '<li><span data-bind=".qty">1</span> x <span data-bind=".name">Coffee</span></li>',
+        key: 'p1',
+      },
+      {
+        html: '<li><span data-bind=".qty">3</span> x <span data-bind=".name">Tea</span></li>',
+        key: 'p2',
+      },
+    ],
   );
-  assert.match(
-    serverTests,
-    /renders deferred append fragment mode for streamed pagination fragments/,
+
+  const order = [];
+  const orderedRoot = new GateMorphRoot();
+  const orderedBinding = new GateQueryElement(
+    { 'data-bind': 'cart.count' },
+    { textContent: 'stale' },
   );
-  assert.match(serverTests, /renders and preloads the generated app bootstrap script/);
-  assert.match(
-    runtimeTests,
-    /applies query update bindings from mutation chunks without requiring a fragment/,
+  const orderedDerive = new GateQueryElement(
+    { 'data-derive': 'cart.summary' },
+    { textContent: 'stale' },
   );
-  assert.match(
-    runtimeTests,
-    /runs compiled query update plans in bindings -> named derives -> stamps order/,
+  const orderedStamp = new GateQueryElement({ 'data-derive': 'cart.disabled' });
+  orderedRoot.bindings.push(orderedBinding);
+  orderedRoot.elements.push(orderedDerive, orderedStamp);
+  applyCompiledQueryUpdatePlan(
+    orderedRoot,
+    'cart',
+    { count: 6, disabled: true, items: [1] },
+    {
+      derives: [
+        {
+          name: 'summary',
+          select(value) {
+            order.push(`derive-after-binding:${orderedBinding.textContent}`);
+            return `items:${value.items.length}`;
+          },
+          selector: '[data-derive="cart.summary"]',
+        },
+      ],
+      stamps: [
+        {
+          attr: 'disabled',
+          select(value) {
+            order.push(`stamp-after-derive:${orderedDerive.textContent}`);
+            return value.disabled;
+          },
+          selector: '[data-derive="cart.disabled"]',
+        },
+      ],
+    },
   );
-  assert.match(runtimeSource, /queryPlans\?: CompiledQueryUpdatePlans/);
-  assert.match(
-    runtimeSource,
-    /installMutationBroadcast[\s\S]*queryPlans\?: CompiledQueryUpdatePlans/,
+  assert.deepEqual(order, ['derive-after-binding:6', 'stamp-after-derive:items:1']);
+  assert.equal(orderedStamp.getAttribute('disabled'), 'true');
+
+  const bootstrap = emitQueryPlanBootstrapModule([
+    {
+      exportName: 'CartBadge$queryUpdatePlans',
+      importPath: '../components/cart-badge.client.js',
+    },
+  ]);
+  const bootstrapRoot = new GateMorphRoot();
+  bootstrapRoot.targets.set('cart-badge', new GateMorphTarget());
+  bootstrapRoot.bindings.push(
+    new GateQueryElement({ 'data-bind': 'cart.count' }, { textContent: '0' }),
   );
-  assert.match(runtimeTests, /morph:1:1 items:1/);
-  assert.match(runtimeTests, /morph:6:6 items/);
-  assert.match(runtimeTests, /morph:2:2 items/);
-  assert.match(runtimeTests, /applies full deferred stream responses in boundary order/);
-  assert.match(runtimeTests, /1 review:1/);
-  const deferredFixture = await readProjectFile('fixtures/wire/defer-stream.http');
-  assert.match(deferredFixture, /priority="5"/);
-  assert.match(deferredFixture, /<link rel="stylesheet" href="\/assets\/reviews\.css">/);
-  assert.match(runtimeTests, /--jiso-boundary--/);
-  assert.match(runtimeTests, /reviews-plan/);
-  assert.match(runtimeTests, /morph:<section>Reviews ready<\/section>/);
+  const bootstrapRuntime = executeGeneratedBootstrapModule(bootstrap.source, {
+    '../components/cart-badge.client.js': {
+      CartBadge$queryUpdatePlans: clientExports.CartBadge$queryUpdatePlans,
+    },
+  });
+  assert.equal(bootstrapRuntime.calls.length, 1);
+  assert.equal(bootstrapRuntime.calls[0].queryStore, bootstrapRuntime.store);
+  assert.equal(
+    bootstrapRuntime.calls[0].enhancedMutations.queryPlans.cart,
+    clientExports.CartBadge$queryUpdatePlans.cart,
+  );
+  assert.equal(bootstrapRuntime.calls[0].enhancedMutations.store, bootstrapRuntime.store);
+  const deferredApplyResult = bootstrapRuntime.deferredApplications.length;
+  assert.equal(deferredApplyResult, 0);
+  const bootstrapApplyRuntime = executeGeneratedBootstrapModule(bootstrap.source, {
+    '../components/cart-badge.client.js': {
+      CartBadge$queryUpdatePlans: clientExports.CartBadge$queryUpdatePlans,
+    },
+  });
+  const applyResult = bootstrapApplyRuntime.exports.applyJisoDeferredStreamResponse(
+    [
+      '<!doctype html><main><fw-defer target="cart-badge"></fw-defer></main>',
+      '--jiso-boundary',
+      '<fw-query name="cart">{"count":9,"empty":false,"items":[]}</fw-query>',
+      '<fw-fragment target="cart-badge"><cart-badge><span data-bind="cart.count">9</span></cart-badge></fw-fragment>',
+      '--jiso-boundary--',
+    ].join('\n'),
+    { root: bootstrapRoot },
+  );
+  assert.equal(applyResult.appliedFragments[0], 'cart-badge');
+  assert.equal(bootstrapRoot.bindings[0].textContent, '9');
+  assert.equal(
+    bootstrapRoot.targets.get('cart-badge').html,
+    '<cart-badge><span data-bind="cart.count">9</span></cart-badge>',
+  );
+
+  assert.deepEqual(
+    renderPageHints({
+      bootstrapScript: '/c/generated/app.client.js',
+      modulepreloads: ['/c/cart.client.js', '/c/generated/app.client.js'],
+    }),
+    {
+      earlyHints: {
+        Link: '</c/cart.client.js>; rel=modulepreload, </c/generated/app.client.js>; rel=modulepreload',
+      },
+      html: [
+        '<link rel="modulepreload" href="/c/cart.client.js">',
+        '<link rel="modulepreload" href="/c/generated/app.client.js">',
+        '<script type="module" src="/c/generated/app.client.js"></script>',
+      ].join(''),
+    },
+  );
+
+  const serverStream = renderDeferredStream({
+    boundary: 'gate-boundary',
+    chunks: [
+      {
+        fragments: [
+          { html: '<article>A</article>', mode: 'append', target: 'reviews' },
+          { html: '<section>Replace</section>', priority: 'high', target: 'summary' },
+        ],
+        queries: [{ name: 'reviews', value: { items: ['A'] } }],
+      },
+      {
+        fragments: [{ html: '<article>B</article>', mode: 'append', target: 'reviews' }],
+        priority: 'high',
+        queries: [{ name: 'reviews', value: { items: ['A', 'B'] } }],
+      },
+    ],
+    closeHtml: '',
+    shell: '<!doctype html><main><fw-defer target="reviews"></fw-defer></main>',
+  });
+  const serverRoot = new GateMorphRoot();
+  serverRoot.targets.set('reviews', new GateMorphTarget('<article>Initial</article>'));
+  serverRoot.targets.set('summary', new GateMorphTarget('<section>Old</section>'));
+  const serverStore = createQueryStore();
+  const serverApplied = applyDeferredStreamResponseToDom({
+    body: serverStream.body,
+    boundary: 'gate-boundary',
+    root: serverRoot,
+    store: serverStore,
+  });
+  assert.deepEqual(
+    serverApplied.chunks.map((chunk) => chunk.queries),
+    [['reviews'], ['reviews']],
+  );
+  assert.deepEqual(
+    serverApplied.chunks.map((chunk) => chunk.fragments),
+    [
+      [{ html: '<article>B</article>', mode: 'append', target: 'reviews' }],
+      [
+        { html: '<section>Replace</section>', target: 'summary' },
+        { html: '<article>A</article>', mode: 'append', target: 'reviews' },
+      ],
+    ],
+  );
+  assert.deepEqual(serverApplied.appliedFragments, ['reviews', 'summary', 'reviews']);
+  assert.deepEqual(serverStore.get('reviews'), { items: ['A'] });
+  assert.equal(
+    serverRoot.targets.get('reviews').html,
+    '<article>Initial</article><article>B</article><article>A</article>',
+  );
+  assert.equal(serverRoot.targets.get('summary').html, '<section>Replace</section>');
+
+  const fixtureBody = parseWireResponses(await readWireFixture('defer-stream.http'))[0].body;
+  const fixtureRoot = new GateMorphRoot();
+  fixtureRoot.targets.set('reviews:p1', new GateMorphTarget());
+  fixtureRoot.targets.set('recommendations:p1', new GateMorphTarget());
+  const fixtureStore = createQueryStore();
+  const fixtureApplied = applyDeferredStreamResponseToDom({
+    body: fixtureBody,
+    queryPlans: {
+      reviews(root, value) {
+        return applyCompiledQueryUpdatePlan(root, 'reviews', value, { bindings: true });
+      },
+      recommendations(root, value) {
+        return applyCompiledQueryUpdatePlan(root, 'recommendations', value, { bindings: true });
+      },
+    },
+    root: fixtureRoot,
+    store: fixtureStore,
+  });
+  assert.equal(fixtureApplied.chunks.length, 1);
+  assert.deepEqual(
+    fixtureApplied.chunks[0].fragments.map((fragment) => fragment.target),
+    ['reviews:p1', 'recommendations:p1'],
+  );
+  assert.deepEqual(fixtureApplied.queries, ['reviews', 'recommendations']);
+  assert.deepEqual(fixtureApplied.appliedFragments, ['reviews:p1', 'recommendations:p1']);
+  assert.deepEqual(fixtureStore.get('reviews', 'product:p1'), {
+    items: [{ id: 'r1', rating: 5 }],
+  });
+  assert.deepEqual(fixtureStore.get('recommendations', 'product:p1'), {
+    items: [{ id: 'rec-1' }],
+  });
+  assert.ok(fixtureRoot.targets.get('reviews:p1').html.includes('/assets/reviews.css'));
+  assert.ok(
+    fixtureRoot.targets.get('reviews:p1').html.includes('<article fw-key="r1">5</article>'),
+  );
 });
 
 void test('P1 minifier name preservation evidence remains represented', async () => {

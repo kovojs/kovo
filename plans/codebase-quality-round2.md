@@ -103,6 +103,10 @@ Do this first or pay it on every commit.
       `tests/fw-check.node.mjs` now parses `examples/commerce/src/generated/graph.json` and
       asserts `fwCheck`/`fwExplain` behavior directly instead of grepping commerce test names,
       touch-graph literals, or property-case counts. The wider source-text ledger remains open.
+      Partial evidence 2026-06-11: the P10 commerce graph assertion tranche now exercises
+      `fwCheck`/`fwExplain` commerce behavior, FW310/FW311 warning rows, compiler-derived graph
+      and registry facts, and generated invalidation facts directly instead of grepping CLI,
+      compiler, core, runtime, Vite task, or wrapper source/test names.
       Partial evidence 2026-06-11: the `P10 starter wires graph assertions into CI` tranche now
       parses `packages/create-jiso/templates/package.json` and `graph.json`, asserts starter
       graph structure, exercises the real template graph through `fwCheck`/`fwExplain`, evaluates
@@ -218,6 +222,14 @@ Do this first or pay it on every commit.
       and asserts delegated listener registration without eager imports, load/idle/visible
       trigger dispatch, typed refetch request/application, compiled template stamps, and
       listener disposal instead of grepping runtime/browser source or test names.
+      Partial evidence 2026-06-11: the D3 deferred-stream tranche now imports built
+      compiler/server/runtime APIs and asserts compiled query update plan facts, generated client
+      plan execution, generated bootstrap loader/deferred-apply behavior, ordered
+      bindings/derives/stamps application, server deferred stream append/replace ordering,
+      bootstrap script hints, and pinned `fixtures/wire/defer-stream.http` application through
+      the runtime instead of grepping compiler/server/runtime source or test names. Verification:
+      `node --test --test-name-pattern "D3 deferred stream responses are consumed by the runtime"
+tests/fw-check.node.mjs` passed.
       Partial evidence 2026-06-11: the D2 keyed-commerce tranche now parses the committed
       commerce graph and asserts product/order fragment and optimism facts, then exercises built
       runtime/server APIs for keyed morph identity, keyed query-instance reruns, keyed enhanced
