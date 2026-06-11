@@ -106,6 +106,10 @@ type RouteHrefOptions<Definition> = keyof RouteParams<Definition> extends never
   ? { params?: RouteParams<Definition>; search?: Partial<RouteSearch<Definition>> }
   : { params: RouteParams<Definition>; search?: Partial<RouteSearch<Definition>> };
 
+type RouteGetFormArgs<Definition> = keyof RouteParams<Definition> extends never
+  ? [options?: { params?: RouteParams<Definition> }]
+  : [options: { params: RouteParams<Definition> }];
+
 export function route<
   const Path extends string,
   Params extends Record<string, string> = PathParams<Path>,
@@ -190,6 +194,26 @@ export interface Form<
   key: Key;
 }
 
+export interface GetFormInput<Name extends string> {
+  name: Name;
+}
+
+export interface GetFormDescriptor {
+  action: string;
+  method: 'get';
+}
+
+export interface GetForm<
+  Path extends string,
+  Search extends Record<string, JsonValue> = Record<string, JsonValue>,
+> {
+  action: string;
+  Form: GetFormDescriptor;
+  input<const Name extends Extract<keyof Search, string>>(name: Name): GetFormInput<Name>;
+  method: 'get';
+  path: Path;
+}
+
 export interface FormValidationFailure {
   code: 'VALIDATION';
   fields: Record<string, string>;
@@ -218,13 +242,42 @@ type CompleteFormFields<
     ? Fields
     : readonly ['Missing form fields', MissingFormFields<Definition, Fields>];
 
-export function form<
+function createMutationForm<
   const Key extends RegistryKey<MutationRegistry>,
   Input extends Record<string, JsonValue> = Record<string, JsonValue>,
   Failure extends JsonValue = JsonValue,
 >(key: Key): Form<Key, Input, Failure> {
   return { key };
 }
+
+function getRouteForm<const Path extends RegistryKey<RouteRegistry>>(
+  path: Path,
+  ...args: RouteGetFormArgs<RouteFor<Path>>
+): GetForm<Path, RouteSearch<RouteFor<Path>>> {
+  const options = args[0] ?? {};
+  const params = (options as { params?: Record<string, string> }).params;
+  const action = buildHref(path, {
+    ...(params === undefined ? {} : { params }),
+    search: {},
+  });
+
+  return {
+    action,
+    Form: {
+      action,
+      method: 'get',
+    },
+    input(name) {
+      return { name };
+    },
+    method: 'get',
+    path,
+  };
+}
+
+export const form = Object.assign(createMutationForm, {
+  get: getRouteForm,
+});
 
 export function formFields<
   Definition extends Form<string, Record<string, JsonValue>, JsonValue>,

@@ -33,6 +33,7 @@ declare module './index.js' {
 
   interface RouteRegistry {
     '/cart': ReturnType<typeof route<'/cart'>>;
+    '/products': ReturnType<typeof route<'/products', {}, { max: number; sort: string }>>;
     '/products/:id': ReturnType<
       typeof route<'/products/:id', { id: string }, { max: number; sort: string }>
     >;
@@ -198,6 +199,32 @@ describe('core authoring APIs', () => {
     expect(assertMissingParam).toBeTypeOf('function');
     expect(assertUnknownRoute).toBeTypeOf('function');
     expect(assertUnknownSearch).toBeTypeOf('function');
+  });
+
+  it('types GET form fields against route search schemas', () => {
+    const productFilter = form.get('/products');
+    const productDetailFilter = form.get('/products/:id', { params: { id: 'p1' } });
+
+    expect(productFilter).toMatchObject({
+      action: '/products',
+      Form: { action: '/products', method: 'get' },
+      method: 'get',
+      path: '/products',
+    });
+    expect(productFilter.input('max')).toEqual({ name: 'max' });
+    expect(productDetailFilter.action).toBe('/products/p1');
+
+    const assertUnknownSearchField = () => {
+      // @ts-expect-error sku is not part of the route search schema.
+      productFilter.input('sku');
+    };
+    const assertMissingRouteParam = () => {
+      // @ts-expect-error id is required for GET forms targeting product detail routes.
+      form.get('/products/:id');
+    };
+
+    expect(assertUnknownSearchField).toBeTypeOf('function');
+    expect(assertMissingRouteParam).toBeTypeOf('function');
   });
 
   it('preserves typed event names as registry facts', () => {

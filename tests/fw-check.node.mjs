@@ -421,7 +421,12 @@ void test('P3 typed routes validate navigation targets', async () => {
   assert.match(coreSource, /function href/);
   assert.match(coreSource, /function Link/);
   assert.match(coreSource, /function redirect/);
+  assert.match(coreSource, /GetForm</);
+  assert.match(coreSource, /get: getRouteForm/);
   assert.match(coreTests, /builds typed route hrefs, links, and redirects/);
+  assert.match(coreTests, /types GET form fields against route search schemas/);
+  assert.match(coreTests, /productFilter\.input\('max'\)/);
+  assert.match(coreTests, /productFilter\.input\('sku'\)/);
   assert.match(compilerSource, /routes\?: readonly string\[\]/);
   assert.match(compilerSource, /validateLiteralHrefs/);
   assert.match(compilerSource, /routeRegistryFactLines/);
