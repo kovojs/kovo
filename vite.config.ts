@@ -37,6 +37,7 @@ export default defineConfig({
         input: [
           { auto: true },
           { pattern: 'vitest.browser.config.ts', base: 'workspace' },
+          { pattern: 'tests/browser-acceptance.mjs', base: 'workspace' },
           { pattern: 'packages/runtime/src/**/*.browser.test.ts', base: 'workspace' },
         ],
       },
@@ -107,6 +108,7 @@ export default defineConfig({
           { pattern: 'pnpm-lock.yaml', base: 'workspace' },
           { pattern: 'scripts/fw-check.mjs', base: 'workspace' },
           { pattern: 'tests/fw-check.node.mjs', base: 'workspace' },
+          { pattern: 'tests/browser-acceptance.mjs', base: 'workspace' },
           { pattern: 'tests/p10-perf.node.mjs', base: 'workspace' },
           { pattern: 'vite.config.ts', base: 'workspace' },
           { pattern: 'vitest.browser.config.ts', base: 'workspace' },

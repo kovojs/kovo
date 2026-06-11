@@ -236,6 +236,12 @@ Do this first or pay it on every commit.
       the runtime instead of grepping compiler/server/runtime source or test names. Verification:
       `node --test --test-name-pattern "D3 deferred stream responses are consumed by the runtime"
 tests/fw-check.node.mjs` passed.
+      Partial evidence 2026-06-11: the browser/perf acceptance wiring tranche now parses package
+      scripts, CI run-step order, and Vite task definitions structurally, and imports shared
+      browser/perf acceptance contracts consumed by the browser config and P10 perf runner instead
+      of grepping config or perf-script source names. Verification: focused
+      `node --test --test-name-pattern "framework-owned browser suite|P10 perf acceptance"
+      tests/fw-check.node.mjs` passed.
       Partial evidence 2026-06-11: the D2 keyed-commerce tranche now parses the committed
       commerce graph and asserts product/order fragment and optimism facts, then exercises built
       runtime/server APIs for keyed morph identity, keyed query-instance reruns, keyed enhanced

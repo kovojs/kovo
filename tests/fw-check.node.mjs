@@ -4946,34 +4946,70 @@ export const CartTotal = component('cart-total', {
 });
 
 void test('framework-owned browser suite is wired into acceptance', async () => {
+  const { browserSuiteAcceptance } = await import('./browser-acceptance.mjs');
   const packageJson = JSON.parse(await readProjectFile('package.json'));
   const ciWorkflow = await readProjectFile('.github/workflows/ci.yml');
   const viteConfig = await readProjectFile('vite.config.ts');
-  const browserConfig = await readProjectFile('vitest.browser.config.ts');
+  const ciSteps = parseWorkflowSteps(ciWorkflow).map((step) => step.run ?? step.uses);
+  const tasks = parseTemplateViteTasks(viteConfig);
 
-  assert.match(packageJson.scripts.acceptance, /pnpm run test:browser/);
+  assert.equal(
+    packageJson.scripts.acceptance.split(' && ').includes('pnpm run test:browser'),
+    true,
+  );
   assert.equal(packageJson.scripts['test:browser'], 'vp run browser');
-  assert.match(ciWorkflow, /vp run browser/);
-  assert.match(viteConfig, /browser:\s*\{/);
-  assert.match(viteConfig, /vitest --config vitest\.browser\.config\.ts --run/);
-  assert.match(browserConfig, /@vitest\/browser-playwright/);
-  assert.match(browserConfig, /browser: 'chromium'/);
+  assert.equal(ciSteps.includes('vp run browser'), true);
+  assert.deepEqual(tasks.browser, {
+    command: 'vitest --config vitest.browser.config.ts --run',
+    input: [
+      { base: 'workspace', pattern: 'vitest.browser.config.ts' },
+      { base: 'workspace', pattern: 'tests/browser-acceptance.mjs' },
+      { base: 'workspace', pattern: 'packages/runtime/src/**/*.browser.test.ts' },
+    ],
+  });
+  assert.deepEqual(browserSuiteAcceptance, {
+    browser: 'chromium',
+    headless: true,
+    include: ['packages/runtime/src/**/*.browser.test.ts'],
+    providerPackage: '@vitest/browser-playwright',
+  });
 });
 
 void test('P10 perf acceptance is wired through Playwright and CDP', async () => {
+  const { p10PerfAcceptance } = await import('./p10-perf.node.mjs');
   const packageJson = JSON.parse(await readProjectFile('package.json'));
   const ciWorkflow = await readProjectFile('.github/workflows/ci.yml');
   const viteConfig = await readProjectFile('vite.config.ts');
-  const perfScript = await readProjectFile('tests/p10-perf.node.mjs');
+  const acceptanceSteps = packageJson.scripts.acceptance.split(' && ');
+  const ciSteps = parseWorkflowSteps(ciWorkflow).map((step) => step.run ?? step.uses);
+  const tasks = parseTemplateViteTasks(viteConfig);
 
-  assert.match(packageJson.scripts.acceptance, /pnpm run test:p10-perf/);
+  assert.equal(acceptanceSteps.includes('pnpm run test:p10-perf'), true);
   assert.equal(packageJson.scripts['test:p10-perf'], 'vp run p10-perf');
-  assert.match(ciWorkflow, /vp run build[\s\S]*vp run p10-perf[\s\S]*vp run fw-check/);
-  assert.match(viteConfig, /'p10-perf':\s*\{/);
-  assert.match(perfScript, /first-contentful-paint/);
-  assert.match(perfScript, /ttiMinusFcpMs/);
-  assert.match(perfScript, /TTI is equivalent to FCP/);
-  assert.match(perfScript, /activationStart/);
-  assert.match(perfScript, /Runtime\.getHeapUsage/);
-  assert.match(perfScript, /navigationCount,\s*100/);
+  assert.ok(
+    acceptanceSteps.indexOf('pnpm run check:build') <
+      acceptanceSteps.indexOf('pnpm run test:p10-perf'),
+  );
+  assert.ok(
+    acceptanceSteps.indexOf('pnpm run test:p10-perf') <
+      acceptanceSteps.indexOf('pnpm run check:fw'),
+  );
+  assert.ok(ciSteps.indexOf('vp run build') < ciSteps.indexOf('vp run p10-perf'));
+  assert.ok(ciSteps.indexOf('vp run p10-perf') < ciSteps.indexOf('vp run fw-check'));
+  assert.deepEqual(tasks['p10-perf'], {
+    command: 'node tests/p10-perf.node.mjs',
+    input: [
+      { base: 'workspace', pattern: 'tests/p10-perf.node.mjs' },
+      { base: 'workspace', pattern: 'dist/**' },
+    ],
+  });
+  assert.deepEqual(p10PerfAcceptance, {
+    browser: 'chromium',
+    cdpMethods: ['HeapProfiler.collectGarbage', 'Runtime.getHeapUsage'],
+    heapNoiseBudget: 65536,
+    navigationCount: 100,
+    paintEntry: 'first-contentful-paint',
+    prerenderTimingField: 'activationStart',
+    ttiMetric: 'ttiMinusFcpMs',
+  });
 });
