@@ -368,6 +368,10 @@ pipeline throws the tree away and communicates via mutated source text.
       `derive()` export whose expression contains `;` in a string or unusual formatting — its
       stamps vanish from `collectQueryUpdatePlans` with no diagnostic. scan/parse.ts already
       walks every CallExpression; use it.
+      Evidence 2026-06-11: `scan/parse.ts` now records exported const call initializers and
+      `collectQueryUpdatePlans` builds named `derive(...)` facts from the parsed call model
+      instead of a whole-source regex. `packages/compiler/src/index.test.ts` covers a multiline
+      named derive whose expression contains a semicolon inside a string literal.
 - [ ] **MED — Extract `src/types.ts`; break the layering inversion.** Canonical fact types live
       in index.ts, which imports every phase; phases import back (bindings.ts:15-25, emit/server.ts:10,
       lower/handlers.ts:7), and three modules dodge the cycle with diverging private structural

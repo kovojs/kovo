@@ -2238,6 +2238,45 @@ export const CartBadge = component('cart-badge', {
     expect(() => assertFixpoint(result)).not.toThrow();
   });
 
+  it('keeps named derives whose expressions contain semicolons in strings', () => {
+    const result = compileComponentModule({
+      fileName: 'cart-badge.tsx',
+      source: `
+export const CartBadge$label = derive(
+  ['cart'],
+  (cart) => cart.count === 0 ? 'empty; cart' : \`items: \${cart.count}\`,
+);
+
+export const CartBadge = component('cart-badge', {
+  render: () => (
+    <cart-badge>
+      <output data-derive="cart.CartBadge$label">empty</output>
+    </cart-badge>
+  ),
+});
+`,
+    });
+
+    expect(result.queryUpdatePlans).toEqual([
+      {
+        componentName: 'CartBadge',
+        derives: [
+          {
+            exportName: 'CartBadge$label',
+            expression: "cart.count === 0 ? 'empty; cart' : `items: ${cart.count}`",
+            input: 'cart',
+            name: 'CartBadge$label',
+            param: 'cart',
+            selector: '[data-derive="cart.CartBadge$label"]',
+          },
+        ],
+        paths: [],
+        query: 'cart',
+      },
+    ]);
+    expect(() => assertFixpoint(result)).not.toThrow();
+  });
+
   it('lowers inline attribute expressions into compiled query update stamps', () => {
     const result = compileComponentModule({
       fileName: 'cart-badge.tsx',

@@ -159,7 +159,7 @@ export function collectQueryUpdatePlans(
     listStampsByQuery.set(query, [...(listStampsByQuery.get(query) ?? []), stamp]);
   }
 
-  const deriveStamps = dataDeriveStamps(model, exportedDerives(source));
+  const deriveStamps = dataDeriveStamps(model, exportedDerives(model));
 
   for (const derive of deriveStamps.derives) {
     const derives = derivesByQuery.get(derive.input) ?? [];
@@ -210,25 +210,44 @@ export function collectQueryUpdatePlans(
     }));
 }
 
-function exportedDerives(source: string): Map<string, Omit<QueryDeriveFact, 'selector'>> {
+function exportedDerives(
+  model: ComponentModuleModel,
+): Map<string, Omit<QueryDeriveFact, 'selector'>> {
   const derives = new Map<string, Omit<QueryDeriveFact, 'selector'>>();
-  const pattern =
-    /export\s+const\s+([A-Za-z_$][\w$]*)\s*=\s*derive\s*\(\s*\[\s*(['"])([A-Za-z_$][\w$]*)\2\s*\]\s*,\s*\(\s*([A-Za-z_$][\w$]*)\s*\)\s*=>\s*([^;]+?)\s*\)\s*;/g;
 
-  for (const match of source.matchAll(pattern)) {
-    const [, exportName, , input, param, expression] = match;
-    if (!exportName || !input || !param || !expression) continue;
+  for (const call of callExpressions(model)) {
+    if (call.name !== 'derive' || !call.exportedConstName) continue;
+
+    const [inputArgument, deriveArgument] = call.arguments;
+    const input = deriveInputName(inputArgument);
+    const derive = deriveArrowParts(deriveArgument);
+    if (!input || !derive) continue;
+    const exportName = call.exportedConstName;
 
     derives.set(exportName, {
       exportName,
-      expression: expression.trim(),
+      expression: derive.expression,
       input,
       name: exportName,
-      param,
+      param: derive.param,
     });
   }
 
   return derives;
+}
+
+function deriveInputName(argument: string | undefined): string | null {
+  const match = /^\[\s*(['"])([A-Za-z_$][\w$]*)\1\s*\]$/.exec(argument?.trim() ?? '');
+  return match?.[2] ?? null;
+}
+
+function deriveArrowParts(
+  argument: string | undefined,
+): { expression: string; param: string } | null {
+  const match = /^\(?\s*([A-Za-z_$][\w$]*)\s*\)?\s*=>\s*([\s\S]+)$/.exec(argument?.trim() ?? '');
+  if (!match?.[1] || !match[2]) return null;
+
+  return { expression: match[2].trim(), param: match[1] };
 }
 
 function dataDeriveStamps(
