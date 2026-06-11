@@ -708,8 +708,9 @@ void test('P3 server data-plane APIs stay exported and covered', async () => {
   assert.match(serverSource, /export function notFound/);
   assert.match(serverSource, /export function csrfToken/);
   assert.match(serverSource, /export function csrfField/);
-  assert.match(serverSource, /csrf\?: CsrfValidationOptions<Request>/);
-  assert.match(serverSource, /definition\.csrf && !validateCsrfToken/);
+  assert.match(serverSource, /csrf\?: CsrfValidationOptions<Request> \| false/);
+  assert.match(serverSource, /function mutationCsrfOptions/);
+  assert.match(serverSource, /csrf === undefined \|\|/);
   assert.match(
     serverTests,
     /runs query endpoints through args schemas, guards, and request context/,
@@ -718,6 +719,8 @@ void test('P3 server data-plane APIs stay exported and covered', async () => {
   assert.match(serverTests, /dispatches typed read endpoints through a query registry/);
   assert.match(serverTests, /runs route pages through guards and notFound page outcomes/);
   assert.match(serverTests, /validates mutation CSRF tokens before running guards/);
+  assert.match(serverTests, /uses default mutation CSRF options before schema parsing/);
+  assert.match(serverTests, /preserves legacy mutation execution when csrf is explicitly false/);
 });
 
 void test('P5 morph evidence includes structural and browser survival suites', async () => {

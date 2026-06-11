@@ -675,6 +675,7 @@ export interface ErrorBoundaryRenderer {
 }
 
 export interface MutationWireRequest<Request> {
+  csrf?: CsrfValidationOptions<Request>;
   failureTarget?: string;
   failureStylesheets?: readonly (string | StylesheetAsset)[];
   fragment?: boolean;
@@ -701,6 +702,7 @@ export type MutationWireHeaderSource =
     };
 
 export interface MutationWireRequestOptions<Request> {
+  csrf?: CsrfValidationOptions<Request>;
   failureTarget?: string;
   failureStylesheets?: readonly (string | StylesheetAsset)[];
   fragmentRenderers?: readonly FragmentRenderer[];
@@ -791,6 +793,7 @@ export function mutationWireRequestFromHeaders<Request>(
     ...(options.fragmentRenderers === undefined
       ? {}
       : { fragmentRenderers: options.fragmentRenderers }),
+    ...(options.csrf === undefined ? {} : { csrf: options.csrf }),
     ...(headers.idem === undefined ? {} : { idem: headers.idem }),
     ...(options.renderFailureFragment === undefined
       ? {}
@@ -801,6 +804,7 @@ export function mutationWireRequestFromHeaders<Request>(
 }
 
 export interface NoJsMutationRequest<Request, Value> {
+  csrf?: CsrfValidationOptions<Request>;
   rawInput: unknown;
   redirectTo: string | ((result: MutationSuccess<Value>) => string);
   renderFailurePage?: (failure: MutationFail) => string | Promise<string>;
@@ -982,7 +986,7 @@ export interface MutationDefinition<
   Value = unknown,
   GuardedRequest extends Request = Request,
 > {
-  csrf?: CsrfValidationOptions<Request>;
+  csrf?: CsrfValidationOptions<Request> | false;
   errors?: Errors;
   guard?: Guard<Request, GuardedRequest>;
   handler: (
@@ -1012,6 +1016,10 @@ export interface InvalidateOptions<Input = unknown> {
   input?: Input;
   keys?: readonly string[];
   reason?: string;
+}
+
+export interface RunMutationOptions<Request> {
+  csrf?: CsrfValidationOptions<Request>;
 }
 
 export function mutation<
@@ -1310,8 +1318,10 @@ export async function runMutation<
   definition: MutationDefinition<Key, InputSchema, Errors, Request, Value, GuardedRequest>,
   rawInput: unknown,
   request: Request,
+  options: RunMutationOptions<Request> = {},
 ): Promise<MutationResult<Value>> {
-  if (definition.csrf && !validateCsrfToken(rawInput, request, definition.csrf)) {
+  const csrf = mutationCsrfOptions(definition, options.csrf);
+  if (csrf === undefined || (csrf !== false && !validateCsrfToken(rawInput, request, csrf))) {
     return {
       error: { code: 'CSRF', payload: {} },
       ok: false,
@@ -1418,9 +1428,10 @@ export async function renderMutationResponse<
   definition: MutationDefinition<Key, InputSchema, Errors, Request, Value, GuardedRequest>,
   wireRequest: MutationWireRequest<Request>,
 ): Promise<MutationWireResponse> {
+  const csrf = mutationCsrfOptions(definition, wireRequest.csrf);
   if (
-    definition.csrf &&
-    !validateCsrfToken(wireRequest.rawInput, wireRequest.request, definition.csrf)
+    csrf === undefined ||
+    (csrf !== false && !validateCsrfToken(wireRequest.rawInput, wireRequest.request, csrf))
   ) {
     return {
       body: await renderFailureFragment(
@@ -1436,14 +1447,19 @@ export async function renderMutationResponse<
     };
   }
 
-  const replayScope = mutationReplayScope(definition, wireRequest);
+  const replayScope = mutationReplayScope(csrf, wireRequest);
   const replayed =
     wireRequest.idem && replayScope
       ? wireRequest.replayStore?.get(replayScope, wireRequest.idem)
       : undefined;
   if (replayed) return replayed;
 
-  const result = await runMutation(definition, wireRequest.rawInput, wireRequest.request);
+  const result = await runMutation(
+    definition,
+    wireRequest.rawInput,
+    wireRequest.request,
+    runMutationOptions(wireRequest.csrf),
+  );
 
   if (!result.ok) {
     const response = {
@@ -1457,7 +1473,7 @@ export async function renderMutationResponse<
 
     return result.error.code === 'VALIDATION'
       ? response
-      : storeMutationReplay(definition, wireRequest, response);
+      : storeMutationReplay(csrf, wireRequest, response);
   }
 
   const renderInput = mutationResponseInput(result, wireRequest.rawInput);
@@ -1477,13 +1493,13 @@ export async function renderMutationResponse<
     );
   } catch (error) {
     return storeMutationReplay(
-      definition,
+      csrf,
       wireRequest,
       mutationRenderErrorResponse(error, result.changes, wireRequest),
     );
   }
 
-  return storeMutationReplay(definition, wireRequest, {
+  return storeMutationReplay(csrf, wireRequest, {
     body: [...queryChunks, ...fragmentChunks].join('\n'),
     headers: {
       ...mutationWireResponseHeaders(wireRequest),
@@ -1523,6 +1539,7 @@ export async function renderMutationEndpointResponse<
   if (wireRequest.fragment) return renderMutationResponse(definition, wireRequest);
 
   return renderNoJsMutationResponse(definition, {
+    ...(endpointRequest.csrf === undefined ? {} : { csrf: endpointRequest.csrf }),
     rawInput: endpointRequest.rawInput,
     redirectTo: endpointRequest.redirectTo,
     ...(endpointRequest.renderFailurePage === undefined
@@ -1543,7 +1560,12 @@ export async function renderNoJsMutationResponse<
   definition: MutationDefinition<Key, InputSchema, Errors, Request, Value, GuardedRequest>,
   noJsRequest: NoJsMutationRequest<Request, Value>,
 ): Promise<NoJsMutationResponse> {
-  const result = await runMutation(definition, noJsRequest.rawInput, noJsRequest.request);
+  const result = await runMutation(
+    definition,
+    noJsRequest.rawInput,
+    noJsRequest.request,
+    runMutationOptions(noJsRequest.csrf),
+  );
 
   if (!result.ok) {
     const body = noJsRequest.renderFailurePage
@@ -1757,6 +1779,20 @@ function validateCsrfToken<Request>(
   if (typeof submitted !== 'string') return false;
 
   return secureEqual(submitted, createCsrfToken(sessionId, options.secret));
+}
+
+function mutationCsrfOptions<Request>(
+  definition: { csrf?: CsrfValidationOptions<Request> | false },
+  defaultOptions?: CsrfValidationOptions<Request>,
+): CsrfValidationOptions<Request> | false | undefined {
+  if (definition.csrf === false) return false;
+  return definition.csrf ?? defaultOptions;
+}
+
+function runMutationOptions<Request>(
+  csrf: CsrfValidationOptions<Request> | undefined,
+): RunMutationOptions<Request> {
+  return csrf === undefined ? {} : { csrf };
 }
 
 function createCsrfToken(sessionId: string, secret: string): string {
@@ -2072,11 +2108,11 @@ function renderDefaultFailurePage(failure: MutationFail): string {
 }
 
 function storeMutationReplay<Request>(
-  definition: { csrf?: CsrfValidationOptions<Request> },
+  csrf: CsrfValidationOptions<Request> | false,
   wireRequest: MutationWireRequest<Request>,
   response: MutationWireResponse,
 ): MutationWireResponse {
-  const replayScope = mutationReplayScope(definition, wireRequest);
+  const replayScope = mutationReplayScope(csrf, wireRequest);
   if (wireRequest.idem && replayScope) {
     wireRequest.replayStore?.set(replayScope, wireRequest.idem, response);
   }
@@ -2085,10 +2121,10 @@ function storeMutationReplay<Request>(
 }
 
 function mutationReplayScope<Request>(
-  definition: { csrf?: CsrfValidationOptions<Request> },
+  csrf: CsrfValidationOptions<Request> | false,
   wireRequest: MutationWireRequest<Request>,
 ): string | null {
-  const csrfSessionId = definition.csrf?.sessionId(wireRequest.request);
+  const csrfSessionId = csrf === false ? undefined : csrf.sessionId(wireRequest.request);
   if (csrfSessionId) return csrfSessionId;
 
   const request = wireRequest.request;
