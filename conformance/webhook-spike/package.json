@@ -1,0 +1,16 @@
+{
+  "name": "@jiso/conformance-webhook-spike",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "vitest --run src/index.test.ts"
+  },
+  "dependencies": {
+    "@jiso/core": "workspace:*",
+    "@jiso/server": "workspace:*"
+  },
+  "devDependencies": {
+    "vitest": "4.1.8"
+  }
+}
