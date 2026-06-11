@@ -634,20 +634,65 @@ export const CartSearch = component('cart-search', {
 });
 
 void test('P1 compiler validates static id uniqueness', async () => {
-  const coreSource = await readProjectFile('packages/core/src/diagnostics.ts');
-  const compilerSource = await readProjectFile('packages/compiler/src/index.ts');
-  const compilerMarkupSource = await readProjectFile('packages/compiler/src/validate/markup.ts');
-  const compilerTests = await readProjectFile('packages/compiler/src/index.test.ts');
+  assert.equal(
+    diagnosticDefinitions.FW224.message,
+    'Static id appears in a repeatable component or duplicate page composition.',
+  );
+  assert.deepEqual(
+    compileComponentModule({
+      fileName: 'components/cart/cart-shell.tsx',
+      source: `
+import { component } from '@jiso/core';
 
-  assert.match(coreSource, /FW224/);
-  assert.match(coreSource, /Static id appears in a repeatable component/);
-  assert.match(compilerSource, /validateStaticIds/);
-  assert.match(compilerMarkupSource, /repeatableLiteralIds/);
-  assert.match(compilerMarkupSource, /fw224Diagnostic/);
-  assert.match(compilerTests, /reports FW224 for duplicate literal ids in component scope/);
-  assert.match(compilerTests, /reports FW224 for static ids inside repeatable list stamps/);
-  assert.match(compilerTests, /duplicate id="cart-title"/);
-  assert.match(compilerTests, /repeatable id="cart-row"/);
+export const CartShell = component('cart-shell', {
+  render: () => (
+    <section>
+      <h2 id="cart-title">Cart</h2>
+      <output id="cart-title">2 items</output>
+    </section>
+  ),
+});
+`,
+    }).diagnostics,
+    [
+      {
+        code: 'FW224',
+        fileName: 'components/cart/cart-shell.tsx',
+        length: 15,
+        message: `${diagnosticDefinitions.FW224.message} duplicate id="cart-title"`,
+        severity: 'error',
+        start: { column: 15, line: 8 },
+      },
+    ],
+  );
+  assert.deepEqual(
+    compileComponentModule({
+      fileName: 'components/cart/cart-list.tsx',
+      source: `
+import { component } from '@jiso/core';
+
+export const CartList = component('cart-list', {
+  render: () => (
+    <ul data-bind-list="cart.items" fw-key="productId">
+      <template fw-stamp>
+        <li id="cart-row"><span data-bind=".name">Mug</span></li>
+      </template>
+    </ul>
+  ),
+});
+`,
+    }).diagnostics,
+    [
+      {
+        code: 'FW224',
+        fileName: 'components/cart/cart-list.tsx',
+        length: 13,
+        message: `${diagnosticDefinitions.FW224.message} repeatable id="cart-row"`,
+        severity: 'error',
+        start: { column: 13, line: 8 },
+      },
+    ],
+  );
 });
 
 void test('P1 compiler validates HTML content-model parser stability', async () => {
