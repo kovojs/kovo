@@ -1255,6 +1255,30 @@ export const ProductCard = component('product-card', {
     expect(serverSource).not.toContain('viewTransitionName=');
   });
 
+  it('ignores view transition attribute text inside strings and comments', () => {
+    const result = compileComponentModule({
+      fileName: 'product-card.tsx',
+      source: `
+export const ProductCard = component('product-card', {
+  render: () => {
+    const sample = '<img viewTransitionName="not-real" />';
+    // <img viewTransitionName="also-not-real" />
+    return <img viewTransitionName="product-p1-image" src="/p1.png" />;
+  },
+});
+`,
+    });
+    const serverSource = result.files[0]?.source ?? '';
+
+    expect(result.viewTransitions).toEqual([{ name: 'product-p1-image' }]);
+    expect(serverSource).toContain('const sample = \'<img viewTransitionName="not-real" />\'');
+    expect(serverSource).toContain(
+      '<img src="/p1.png" style="view-transition-name: product-p1-image" />',
+    );
+    expect(serverSource).not.toContain('viewTransitionName="product-p1-image"');
+    expect(() => assertFixpoint(result)).not.toThrow();
+  });
+
   it('accepts data-bind paths present in declared query shapes', () => {
     const result = compileComponentModule({
       fileName: 'cart-badge.tsx',

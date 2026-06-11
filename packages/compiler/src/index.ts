@@ -359,19 +359,50 @@ function lowerViewTransitions(source: string): {
   source: string;
   stamps: ViewTransitionStamp[];
 } {
-  const stamps: ViewTransitionStamp[] = [];
-  const nextSource = source.replace(
-    /<(?<tag>[A-Za-z][A-Za-z0-9:.-]*)(?<before>[^<>]*?)\sviewTransitionName=(["'])(?<name>[^"']+)\3(?<after>[^<>]*?)>/g,
-    (_match, tag: string, before: string, _quote: string, name: string, after: string) => {
-      stamps.push({ name });
-      return `<${tag}${appendViewTransitionStyle(`${before}${after}`, name)}>`;
-    },
-  );
+  const matches = parsedJsxElements(source)
+    .map((item) => ({
+      attribute: item.attributes.find(
+        (attribute) => attribute.name === 'viewTransitionName' && attribute.value !== undefined,
+      ),
+      element: item,
+    }))
+    .filter(
+      (
+        item,
+      ): item is {
+        attribute: JsxAttributeModel & { value: string };
+        element: JsxElementModel;
+      } => item.attribute !== undefined,
+    );
+  const stamps = matches.map((item) => ({ name: item.attribute.value }));
+  let nextSource = source;
+
+  for (const match of matches.sort((left, right) => right.element.start - left.element.start)) {
+    const opening = nextSource.slice(match.element.start, match.element.openingEnd);
+    const tagPrefix = `<${match.element.tag}`;
+    const attributes = opening.slice(tagPrefix.length, -1);
+    const withoutViewTransition = removeJsxAttribute(
+      attributes,
+      match.attribute.start - match.element.start - tagPrefix.length,
+      match.attribute.end - match.element.start - tagPrefix.length,
+    );
+    const replacement = `<${match.element.tag}${appendViewTransitionStyle(withoutViewTransition, match.attribute.value)}>`;
+    nextSource = `${nextSource.slice(0, match.element.start)}${replacement}${nextSource.slice(match.element.openingEnd)}`;
+  }
 
   return {
     source: nextSource,
     stamps,
   };
+}
+
+function removeJsxAttribute(attributes: string, start: number, end: number): string {
+  let removeStart = start;
+  while (removeStart > 0 && /\s/.test(attributes[removeStart - 1] ?? '')) {
+    removeStart -= 1;
+  }
+
+  return `${attributes.slice(0, removeStart)}${attributes.slice(end)}`;
 }
 
 function appendViewTransitionStyle(attributes: string, name: string): string {
