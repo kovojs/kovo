@@ -2278,7 +2278,7 @@ describe('server mutation primitives', () => {
     });
   });
 
-  it('fails enhanced mutation rendering when an island errors without a boundary', async () => {
+  it('renders a defined error fragment when an island errors without a boundary', async () => {
     const addToCart = mutation('cart/add', {
       input: s.object({ productId: s.string() }),
       handler(input) {
@@ -2300,7 +2300,60 @@ describe('server mutation primitives', () => {
         request: {},
         targets: ['recommendations'],
       }),
-    ).rejects.toThrow('unhandled island error');
+    ).resolves.toEqual({
+      body: '<fw-fragment target="recommendations"><output role="alert" data-error-code="RENDER_ERROR">unhandled island error</output></fw-fragment>',
+      headers: {
+        'Content-Type': 'text/vnd.jiso.fragment+html; charset=utf-8',
+        'FW-Changes': '[]',
+      },
+      status: 500,
+    });
+  });
+
+  it('replays post-commit render failures without re-running the handler', async () => {
+    const replayStore = createMemoryMutationReplayStore();
+    const cart = domain('cart');
+    let writes = 0;
+    const addToCart = mutation('cart/add', {
+      input: s.object({ productId: s.string() }),
+      registry: {
+        touches: [cart],
+      },
+      handler(input) {
+        writes += 1;
+        return input;
+      },
+    });
+    const request = {
+      fragmentRenderers: [
+        {
+          render() {
+            throw new Error('post-commit render failed');
+          },
+          target: 'cart-badge',
+        },
+      ],
+      idem: 'idem_render_failure',
+      rawInput: { productId: 'p1' },
+      replayStore,
+      request: { sessionId: 's1' },
+      targets: ['cart-badge'],
+    };
+
+    const first = await renderMutationResponse(addToCart, request);
+    const second = await renderMutationResponse(addToCart, request);
+
+    expect(writes).toBe(1);
+    expect(first).toEqual({
+      body: '<fw-fragment target="cart-badge"><output role="alert" data-error-code="RENDER_ERROR">post-commit render failed</output></fw-fragment>',
+      headers: {
+        'Content-Type': 'text/vnd.jiso.fragment+html; charset=utf-8',
+        'FW-Changes': '[{"domain":"cart"}]',
+        'FW-Idem': 'idem_render_failure',
+      },
+      status: 500,
+    });
+    expect(second).toEqual(first);
   });
 
   it('renders typed failures as 422 validation fragments', async () => {

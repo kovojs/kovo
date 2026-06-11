@@ -645,7 +645,7 @@ export interface MutationWireRequestOptions<Request> {
 export interface MutationWireResponse {
   body: string;
   headers: Record<string, string>;
-  status: 200 | 422;
+  status: 200 | 422 | 500;
 }
 
 export interface MutationReplayStore {
@@ -1376,17 +1376,27 @@ export async function renderMutationResponse<
   }
 
   const renderInput = mutationResponseInput(result, wireRequest.rawInput);
-  const queryChunks = await renderQueryChunks(
-    definition.registry?.queries ?? [],
-    result.rerunQueryInstances ?? result.rerunQueries.map((key) => ({ key })),
-    renderInput,
-    wireRequest.request,
-  );
-  const fragmentChunks = await renderFragmentChunks(
-    wireRequest.fragmentRenderers ?? [],
-    wireRequest.targets ?? [],
-    renderInput,
-  );
+  let queryChunks: string[];
+  let fragmentChunks: string[];
+  try {
+    queryChunks = await renderQueryChunks(
+      definition.registry?.queries ?? [],
+      result.rerunQueryInstances ?? result.rerunQueries.map((key) => ({ key })),
+      renderInput,
+      wireRequest.request,
+    );
+    fragmentChunks = await renderFragmentChunks(
+      wireRequest.fragmentRenderers ?? [],
+      wireRequest.targets ?? [],
+      renderInput,
+    );
+  } catch (error) {
+    return storeMutationReplay(
+      definition,
+      wireRequest,
+      mutationRenderErrorResponse(error, result.changes, wireRequest),
+    );
+  }
 
   return storeMutationReplay(definition, wireRequest, {
     body: [...queryChunks, ...fragmentChunks].join('\n'),
@@ -1396,6 +1406,21 @@ export async function renderMutationResponse<
     },
     status: 200,
   });
+}
+
+function mutationRenderErrorResponse<Request>(
+  error: unknown,
+  changes: readonly ChangeRecord[],
+  wireRequest: MutationWireRequest<Request>,
+): MutationWireResponse {
+  return {
+    body: renderMutationRenderErrorFragment(error, wireRequest),
+    headers: {
+      ...mutationWireResponseHeaders(wireRequest),
+      'FW-Changes': JSON.stringify(mutationWireChangeRecords(changes)),
+    },
+    status: 500,
+  };
 }
 
 export async function renderMutationEndpointResponse<
@@ -1902,6 +1927,16 @@ async function renderFailureFragment<Request>(
     : renderDefaultFailureFragmentContent(failure);
 
   return `<fw-fragment target="${escapeAttribute(target)}">${renderStylesheetLinks(wireRequest.failureStylesheets ?? [])}${html}</fw-fragment>`;
+}
+
+function renderMutationRenderErrorFragment<Request>(
+  error: unknown,
+  wireRequest: MutationWireRequest<Request>,
+): string {
+  const target = wireRequest.failureTarget ?? wireRequest.targets?.[0] ?? 'error';
+  const message = error instanceof Error ? error.message : 'Mutation response rendering failed.';
+
+  return `<fw-fragment target="${escapeAttribute(target)}"><output role="alert" data-error-code="RENDER_ERROR">${escapeHtml(message)}</output></fw-fragment>`;
 }
 
 function renderDefaultFailureFragmentContent(failure: MutationFail): string {
