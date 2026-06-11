@@ -1495,6 +1495,22 @@ export const CartBadge = component('cart-badge', {
     ]);
   });
 
+  it('ignores query declarations inside strings and comments', () => {
+    const result = compileComponentModule({
+      fileName: 'cart-badge.tsx',
+      source: `
+const sample = 'queries: { fake: fakeQuery } <span>{fake.count}</span>';
+// queries: { otherFake: otherFakeQuery } <span>{otherFake.count}</span>
+export const CartBadge = component('cart-badge', {
+  queries: { cart: cartQuery },
+  render: ({ cart }) => <span>{renderOnce(cart.count)}</span>,
+});
+`,
+    });
+
+    expect(result.diagnostics).toEqual([]);
+  });
+
   it('emits an app bootstrap that wires compiled query plans into the loader', () => {
     const bootstrap = emitQueryPlanBootstrapModule([
       {

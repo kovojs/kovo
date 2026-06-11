@@ -1472,12 +1472,7 @@ function fw311Diagnostic(fileName: string, fact: QueryUpdateCoverageFact): Compi
 }
 
 function explicitComponentNames(source: string): string[] {
-  const parsed = componentExplicitNames(parseComponentModuleModel('component.tsx', source));
-  if (parsed.length > 0) return parsed;
-
-  return [...source.matchAll(/\bcomponent\s*\(\s*(["'])(?<name>[^"']+)\1/g)].flatMap((match) =>
-    match.groups?.name ? [match.groups.name] : [],
-  );
+  return componentExplicitNames(parseComponentModuleModel('component.tsx', source));
 }
 
 function dedupeDiagnostics(diagnostics: readonly CompilerDiagnostic[]): CompilerDiagnostic[] {
@@ -2348,7 +2343,9 @@ function componentGraphFact(
 }
 
 function componentQueryNames(source: string): string[] {
-  return topLevelObjectKeys(extractObjectLiteralAfterProperty(source, 'queries') ?? '{}');
+  return topLevelObjectKeys(
+    componentOptionSource(parseComponentModuleModel('component.tsx', source), 'queries') ?? '{}',
+  );
 }
 
 function fragmentTargetPropsType(source: string): string {
