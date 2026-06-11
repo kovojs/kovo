@@ -315,6 +315,7 @@ void test('P10 v1 acceptance ledger tracks every freeze criterion', async () => 
   assert.match(ledger, /Constitution/);
   assert.match(ledger, /Coverage/);
   assert.match(ledger, /Navigation typed/);
+  assert.match(ledger, /route-rename proof in `packages\/runtime\/src\/index\.test\.ts`/);
   assert.match(ledger, /Declared execution/);
   assert.match(ledger, /Update coverage/);
   assert.match(ledger, /Pre-launch/);
