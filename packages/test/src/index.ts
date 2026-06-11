@@ -584,9 +584,9 @@ export function propertyTest<State, Input, ClientShape = State>(
 
     if (!deepEqual(predicted, eventual)) {
       throw new Error(
-        `Optimistic property failed for case ${count}: predicted ${JSON.stringify(
+        `Optimistic property failed for case ${count}: predicted ${formatValue(
           predicted,
-        )}, eventual ${JSON.stringify(eventual)}`,
+        )}, eventual ${formatValue(eventual)}`,
       );
     }
 

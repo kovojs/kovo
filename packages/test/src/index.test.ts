@@ -66,7 +66,25 @@ describe('@jiso/test harness', () => {
           return { count: state.count };
         },
       }),
-    ).toThrow('Optimistic property failed for case 0: predicted {"count":0}, eventual {"count":1}');
+    ).toThrow(
+      'Optimistic property failed for case 0: predicted { count: 0 }, eventual { count: 1 }',
+    );
+  });
+
+  it('formats optimistic counterexamples without dropping undefined fields', () => {
+    expect(() =>
+      propertyTest<{ value: undefined }, {}, unknown>({
+        apply() {
+          return { value: undefined };
+        },
+        cases: [{ input: {}, state: { value: undefined } }],
+        predict() {
+          return undefined;
+        },
+      }),
+    ).toThrow(
+      'Optimistic property failed for case 0: predicted undefined, eventual { value: undefined }',
+    );
   });
 
   it('compares optimistic predictions structurally instead of by JSON key order', () => {
