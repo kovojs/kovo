@@ -1584,7 +1584,7 @@ export async function renderMutationResponse<
       body: [...queryChunks, ...fragmentChunks].join('\n'),
       headers: {
         ...mutationWireResponseHeaders(wireRequest),
-        'FW-Changes': JSON.stringify(mutationWireChangeRecords(result.changes)),
+        'FW-Changes': mutationWireChangeHeader(result.changes),
       },
       status: 200,
     },
@@ -1601,7 +1601,7 @@ function mutationRenderErrorResponse<Request>(
     body: renderMutationRenderErrorFragment(error, wireRequest),
     headers: {
       ...mutationWireResponseHeaders(wireRequest),
-      'FW-Changes': JSON.stringify(mutationWireChangeRecords(changes)),
+      'FW-Changes': mutationWireChangeHeader(changes),
     },
     status: 500,
   };
@@ -1934,6 +1934,17 @@ function mutationWireChangeRecords(
     domain: change.domain,
     ...(change.keys === undefined ? {} : { keys: change.keys }),
   }));
+}
+
+function mutationWireChangeHeader(changes: readonly ChangeRecord[]): string {
+  return asciiJsonHeaderValue(mutationWireChangeRecords(changes));
+}
+
+function asciiJsonHeaderValue(value: unknown): string {
+  return JSON.stringify(value).replace(
+    /[^\x20-\x7e]/g,
+    (character) => `\\u${character.charCodeAt(0).toString(16).padStart(4, '0')}`,
+  );
 }
 
 function dedupeTouchSites(touches: readonly MutationTouchSite[]): MutationTouchSite[] {

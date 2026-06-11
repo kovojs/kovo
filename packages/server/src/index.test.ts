@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { File } from 'node:buffer';
 import { readFile } from 'node:fs/promises';
+import { validateHeaderValue } from 'node:http';
 
 import {
   domain,
@@ -2275,6 +2276,35 @@ describe('server mutation primitives', () => {
       },
       status: 200,
     });
+  });
+
+  it('keeps FW-Changes headers ASCII-safe when input and keys contain Unicode', async () => {
+    const cart = domain('cart');
+    const addToCart = mutation('cart/add', {
+      input: s.object({ cartId: s.string(), note: s.string(), productId: s.string() }),
+      handler(input, _request, context) {
+        context.invalidate(cart, {
+          input,
+          keys: [input.cartId],
+          reason: 'private reason',
+        });
+        return input;
+      },
+    });
+
+    const response = await renderMutationResponse(addToCart, {
+      rawInput: { cartId: '東京-🔐', note: 'secret café token'.repeat(256), productId: 'p1' },
+      request: {},
+    });
+    const header = response.headers['FW-Changes'];
+
+    expect(header).toBe('[{"domain":"cart","keys":["\\u6771\\u4eac-\\ud83d\\udd10"]}]');
+    expect(header).toBeDefined();
+    if (header === undefined) throw new Error('expected FW-Changes header');
+    expect(header).not.toContain('secret');
+    expect(header).not.toContain('café');
+    expect(() => validateHeaderValue('FW-Changes', header)).not.toThrow();
+    expect(JSON.parse(header)).toEqual([{ domain: 'cart', keys: ['東京-🔐'] }]);
   });
 
   it('renders append fragment mode for pagination fragments', async () => {
