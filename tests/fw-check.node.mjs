@@ -424,6 +424,20 @@ void test('P2 loader smoke evidence remains represented in runtime tests', async
     /preserves L0 popover behavior without handler imports/,
     'browser suite covers declarative L0 popover behavior',
   );
+  assert.match(
+    browserTests,
+    /keeps the P2 L0\+L1 demo interactive at first paint with zero JS before declared triggers/,
+    'browser suite covers the P2 exit demo as a standalone smoke',
+  );
+  assert.match(browserTests, /commandfor="details-dialog"/);
+  assert.match(browserTests, /fw-c="catalog-tabs"/);
+  assert.match(browserTests, /fw-c="catalog-filter"/);
+  assert.match(browserTests, /fw-c="sales-chart" on:visible="\/demo\/chart\.js#mount"/);
+  assert.match(browserTests, /expect\(imports\)\.toEqual\(\[\]\)/);
+  assert.match(
+    browserTests,
+    /expect\(imports\)\.toEqual\(\['\/demo\/filter\.js', '\/demo\/tabs\.js', '\/demo\/chart\.js'\]\)/,
+  );
   assert.match(browserTests, /:popover-open/);
   assert.match(browserTests, /new FormData\(form\)\.get\('query'\)/);
 });
@@ -1097,7 +1111,11 @@ void test('P9 verification layer evidence remains represented', async () => {
   assert.match(cliTests, /ERROR FW410 cart\.queries\.ts:5/);
   assert.match(cliTests, /ERROR FW302 cart-badge\.tsx:3:23/);
   assert.match(cliTests, /prints runtime verification diagnostics as fw check findings/);
+  assert.match(cliTests, /WARN FW403 domain:order/);
+  assert.match(cliTests, /ERROR FW404 domain:unknown_table/);
+  assert.match(cliTests, /ERROR FW407 cart\.queries\.ts:7/);
   assert.match(cliTests, /ERROR FW408 product\.domain\.ts:9/);
+  assert.match(cliTests, /ERROR FW410 cart\.queries\.ts:11/);
   assert.match(runtimeSource, /export interface MutationChangeRecord/);
   assert.match(runtimeSource, /export interface OptimisticChange/);
   assert.match(runtimeSource, /change\?: OptimisticChange<Input>/);

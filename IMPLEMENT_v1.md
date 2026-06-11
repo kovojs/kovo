@@ -15,7 +15,7 @@ Audited against the repository on 2026-06-11. Checkmarks mean the behavior, API,
 - [x] P1 compiler has component lowering, handler export facts, registry emit, typed routes/link validation, IDREF/id diagnostics, render-equivalence facts, update coverage, derived query stamps, and a TS parser-backed intermediate model in active use.
 - [ ] P1 compiler is not fully complete: the module split is partial, some compiler help text is still local, and the full parser migration/dead scanner deletion remains tracked in `plans/improve-compiler.md`.
 - [x] P2 runtime has delegated event loading, execution triggers, `ctx.signal`, query hydration/update plans, visible-return typed-read refetch, BroadcastChannel plumbing, bfcache-safe pagehide handling, immutable no-`customElements` loader constraints, and a 4KB inline loader budget.
-- [ ] P2 exit demo/smoke is not fully proven as a standalone L0+L1 demo acceptance checkpoint.
+- [x] P2 exit demo/smoke is proven by a standalone browser L0+L1 smoke covering tabs, dialog, filter island, declared visible trigger, and zero handler imports before interaction/trigger.
 - [x] P3 server/core have `domain`, `query`, `mutation`, `route`, typed `href`/`Link`/`redirect`, typed sessions, CSRF issuance/validation, FormData coercion, guards/rate limits, mutation replay, query endpoints, rerun query fragments, and commerce app usage.
 - [ ] P3 is still incomplete for all planned audits and static route/query guard guarantees at v1 scale.
 - [x] P4 Drizzle extraction has AST-backed table/write extraction, arrow-handler coverage, FW406/FW409 diagnostics, query shape derivation with nullable wrappers, projection-less select diagnostics, and conformance coverage.
@@ -29,7 +29,7 @@ Audited against the repository on 2026-06-11. Checkmarks mean the behavior, API,
 - [x] P8 CLI has stable `fw check`, `fw explain`, optimistic/update coverage, unguarded/unscoped audits, and diffable output tests.
 - [x] P8 output format/versioning and agent-answerability acceptance are represented by `fw-explain/v1`/`fw-check/v1` snapshots and commerce graph-answerability tests.
 - [x] P9 `@jiso/test` has pglite-backed harnessing, static-vs-observed write/read verification, FW402/FW403/FW404/FW405/FW407/FW408/FW410 diagnostics, raw pglite interception, and structural optimistic property checks.
-- [ ] P9 v1.5 is not complete until the full diagnostic table, commerce mutation suite, and runtime/static verification loop are accepted end-to-end.
+- [ ] P9 v1.5 has full FW402/FW403/FW404/FW405/FW407/FW408/FW410 diagnostic table evidence, but remains open for commerce mutation suite and runtime/static verification-loop acceptance.
 - [x] D1 Tailwind-first path is implemented in commerce and starter scaffolds with stylesheet delivery tests.
 - [x] D2 keyed append/reorder behavior has commerce/runtime tests.
 - [x] D3 deferred streaming has fixtures, stylesheet hints, and priority/query ordering coverage.

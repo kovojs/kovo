@@ -506,6 +506,27 @@ describe('fw check', () => {
             domain: 'product',
             site: 'product.domain.ts:9',
           },
+          {
+            code: 'FW403',
+            domain: 'order',
+          },
+          {
+            code: 'FW404',
+            detail: 'observed table unknown_table',
+            domain: 'unknown_table',
+          },
+          {
+            code: 'FW407',
+            detail: 'observed table products',
+            domain: 'product',
+            site: 'cart.queries.ts:7',
+          },
+          {
+            code: 'FW410',
+            detail: 'cart Expected number',
+            domain: 'cart',
+            site: 'cart.queries.ts:11',
+          },
         ],
       }),
     ).toEqual({
@@ -515,6 +536,10 @@ describe('fw check', () => {
         'WARN FW405 cart.domain.ts:2 Conditional write branch was never executed under instrumentation. domain=product branch=stock-reserve',
         'ERROR FW402 domain:audit Write touched an undeclared domain. domain=audit observed table audit_log',
         'ERROR FW408 product.domain.ts:9 Declared row key differs from observed row predicate. domain=product expected id observed sku',
+        'WARN FW403 domain:order Declared domain was never observed written. domain=order',
+        'ERROR FW404 domain:unknown_table Write to unmapped table. domain=unknown_table observed table unknown_table',
+        'ERROR FW407 cart.queries.ts:7 Query read from undeclared domain. domain=product observed table products',
+        'ERROR FW410 cart.queries.ts:11 Query result shape failed declared output schema. domain=cart cart Expected number',
         '',
       ].join('\n'),
     });
