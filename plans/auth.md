@@ -10,7 +10,7 @@ Scope: SPEC additions (session population, guard-failure contract, mutation resp
 - [ ] A1 session-resolution seam in the request lifecycle.
 - [ ] A2 guard-failure contract (`onUnauthenticated` redirect, 403 path for failed `role()`).
 - [ ] A3 mutation response-header channel (`ctx.setCookie` / header passthrough).
-- [ ] A4 `endpoint()` raw endpoint primitive with CSRF exemption + unguarded-audit enrollment.
+- [x] A4 `endpoint()` raw endpoint primitive with CSRF exemption + unguarded-audit enrollment.
 - [ ] B1 schema bridge: better-auth tables into `schema.ts` domains with declared touches.
 - [ ] B2 typed session mapper (`betterAuthSession(auth, map)`).
 - [ ] B3 guard bindings: `authed` / `role()` / org-scoping over the mapped session.

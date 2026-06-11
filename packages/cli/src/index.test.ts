@@ -705,6 +705,51 @@ describe('fw check', () => {
     });
   });
 
+  it('audits endpoints reachable without an auth declaration', () => {
+    expect(
+      fwCheck({
+        endpoints: [
+          {
+            auth: 'none',
+            csrf: 'exempt',
+            csrfJustification: 'oauth callback',
+            method: 'POST',
+            name: 'auth/callback',
+            path: '/auth/callback',
+          },
+          {
+            auth: 'verifier:stripe-signature',
+            csrf: 'exempt',
+            csrfJustification: 'signed stripe webhook',
+            method: 'POST',
+            name: 'stripe/webhook',
+            path: '/webhooks/stripe',
+          },
+        ],
+      }),
+    ).toEqual({
+      exitCode: 0,
+      output:
+        'fw-check/v1\nWARN UNGUARDED auth/callback endpoint is reachable without an auth declaration.\n',
+    });
+  });
+
+  it('warns when endpoint CSRF exemptions are missing the named justification', () => {
+    expect(
+      fwCheck({
+        endpoints: [{ csrf: 'exempt', method: 'POST', name: 'stripe/webhook', path: '/stripe' }],
+      }),
+    ).toEqual({
+      exitCode: 0,
+      output: [
+        'fw-check/v1',
+        'WARN UNGUARDED stripe/webhook endpoint is reachable without an auth declaration.',
+        'WARN ENDPOINT stripe/webhook csrf exemption requires a named justification.',
+        '',
+      ].join('\n'),
+    });
+  });
+
   it('audits manual invalidate escape-hatch usage', () => {
     expect(
       fwCheck({
@@ -1042,6 +1087,40 @@ describe('fw audit', () => {
         'MANUAL-INVALIDATES',
         'MUTATION inventory/sync domains=product',
         'SUMMARY unguarded=2 manual-invalidates=1',
+        '',
+      ].join('\n'),
+    });
+  });
+
+  it('prints stable endpoint audit output', () => {
+    expect(
+      fwAudit({
+        endpoints: [
+          {
+            auth: 'none',
+            csrf: 'exempt',
+            csrfJustification: 'oauth callback',
+            method: 'GET',
+            name: 'auth/callback',
+            path: '/auth/callback',
+          },
+          {
+            auth: 'verifier:stripe-signature',
+            csrf: 'exempt',
+            csrfJustification: 'signed stripe webhook',
+            method: 'POST',
+            name: 'stripe/webhook',
+            path: '/webhooks/stripe',
+          },
+        ],
+      }),
+    ).toEqual({
+      exitCode: 0,
+      output: [
+        'fw-audit/v1',
+        'UNGUARDED',
+        'ENDPOINT auth/callback method=GET path=/auth/callback mount=exact auth=none csrf=exempt:oauth callback',
+        'SUMMARY unguarded=1 manual-invalidates=0',
         '',
       ].join('\n'),
     });
@@ -1388,6 +1467,42 @@ describe('fw explain', () => {
       PAGE /admin guards=- queries=adminOrders
       QUERY adminOrders guards=- reads=order
       SUMMARY total=3
+      "
+    `);
+  });
+
+  it('audits unguarded endpoints with stable explain output', () => {
+    const result = fwExplain(
+      {
+        endpoints: [
+          {
+            auth: 'none',
+            csrf: 'exempt',
+            csrfJustification: 'oauth callback',
+            method: 'GET',
+            mount: 'prefix',
+            name: 'auth/mount',
+            path: '/auth',
+          },
+          {
+            auth: 'verifier:stripe-signature',
+            csrf: 'exempt',
+            csrfJustification: 'signed stripe webhook',
+            method: 'POST',
+            name: 'stripe/webhook',
+            path: '/webhooks/stripe',
+          },
+        ],
+      },
+      { unguarded: true },
+    );
+
+    expect(result.exitCode).toBe(0);
+    expect(result.output).toMatchInlineSnapshot(`
+      "fw-explain/v1
+      UNGUARDED
+      ENDPOINT auth/mount method=GET path=/auth mount=prefix auth=none csrf=exempt:oauth callback
+      SUMMARY total=1
       "
     `);
   });

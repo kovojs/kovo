@@ -58,6 +58,34 @@ export interface FragmentTargets {}
 
 export interface RouteRegistry {}
 
+export interface EndpointRegistry {}
+
+export type EndpointMethod = 'DELETE' | 'GET' | 'PATCH' | 'POST' | 'PUT' | (string & {});
+
+export type EndpointMount = 'exact' | 'prefix';
+
+export interface EndpointCsrfExemption {
+  exempt: true;
+  justification: string;
+}
+
+export type EndpointAuthDeclaration =
+  | { kind: 'custom'; name: string }
+  | { kind: 'none'; justification: string }
+  | { kind: 'verifier'; name: string };
+
+export interface Endpoint<
+  Path extends string,
+  Method extends EndpointMethod = EndpointMethod,
+  Mount extends EndpointMount = 'exact',
+> {
+  auth?: EndpointAuthDeclaration;
+  csrf?: EndpointCsrfExemption;
+  method?: Method;
+  mount: Mount;
+  path: Path;
+}
+
 export interface InvalidationSets {}
 
 export interface TouchSite {

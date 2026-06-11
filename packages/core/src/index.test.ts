@@ -12,6 +12,7 @@ import {
   redirect,
   route,
   type EventPayload,
+  type Endpoint,
   type FormFailure,
   type FormFieldName,
   type FormInput,
@@ -62,6 +63,10 @@ declare module './index.js' {
     '/products/:id': ReturnType<
       typeof route<'/products/:id', { id: string }, { max: number; sort: string }>
     >;
+  }
+
+  interface EndpointRegistry {
+    '/webhooks/inventory': Endpoint<'/webhooks/inventory', 'POST'>;
   }
 }
 

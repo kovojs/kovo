@@ -13,6 +13,7 @@ import {
 
 export interface FwCheckInput {
   diagnostics?: readonly StaticDiagnosticFact[];
+  endpoints?: readonly EndpointExplain[];
   eventPayloads?: readonly EventPayloadFact[];
   fixpointChecks?: readonly FixpointCheck[];
   lints?: readonly SemanticLint[];
@@ -118,6 +119,17 @@ export interface PageExplain {
   viewTransitions?: readonly string[];
 }
 
+export interface EndpointExplain {
+  auth?: string;
+  csrf?: 'checked' | 'exempt';
+  csrfJustification?: string;
+  guards?: readonly string[];
+  method?: string;
+  mount?: 'exact' | 'prefix';
+  name?: string;
+  path: string;
+}
+
 export interface OptimisticCoverage {
   mutation: string;
   query: string;
@@ -218,7 +230,7 @@ interface TouchGraphDiagnosticFact {
 
 interface UnguardedAccessFact {
   detail: string;
-  kind: 'mutation' | 'page' | 'query';
+  kind: 'endpoint' | 'mutation' | 'page' | 'query';
   name: string;
 }
 
@@ -378,6 +390,7 @@ function graphInputShapeError(input: Record<string, unknown>, path: string): Inp
   const arrayFields = [
     'components',
     'diagnostics',
+    'endpoints',
     'eventPayloads',
     'fixpointChecks',
     'lints',
@@ -725,6 +738,14 @@ export function fwCheck(
       lines.push(unguardedWarningLine(access));
     }
 
+    for (const endpoint of input.endpoints ?? []) {
+      if (endpoint.csrf === 'exempt' && !endpoint.csrfJustification) {
+        lines.push(
+          `WARN ENDPOINT ${endpointName(endpoint)} csrf exemption requires a named justification.`,
+        );
+      }
+    }
+
     for (const mutation of input.mutations ?? []) {
       for (const domain of mutation.manualInvalidates ?? []) {
         lines.push(
@@ -930,6 +951,19 @@ function listMutationUpdates(
 
 function unguardedAccesses(input: FwExplainInput): UnguardedAccessFact[] {
   return [
+    ...(input.endpoints ?? [])
+      .filter((endpoint) => !hasEndpointAuth(endpoint))
+      .map((endpoint) => ({
+        detail: [
+          `method=${endpoint.method ?? 'ANY'}`,
+          `path=${endpoint.path}`,
+          `mount=${endpoint.mount ?? 'exact'}`,
+          `auth=${endpointAuth(endpoint)}`,
+          `csrf=${endpointCsrf(endpoint)}`,
+        ].join(' '),
+        kind: 'endpoint' as const,
+        name: endpointName(endpoint),
+      })),
     ...(input.mutations ?? [])
       .filter((mutation) => !hasAuthGuard(mutation.guards ?? []))
       .map((mutation) => ({
@@ -964,6 +998,10 @@ function unguardedLine(access: UnguardedAccessFact): string {
 }
 
 function unguardedWarningLine(access: UnguardedAccessFact): string {
+  if (access.kind === 'endpoint') {
+    return `WARN UNGUARDED ${access.name} endpoint is reachable without an auth declaration.`;
+  }
+
   if (access.kind === 'mutation') {
     return `WARN UNGUARDED ${access.name} mutation is reachable without an auth guard.`;
   }
@@ -977,6 +1015,31 @@ function compareUnguardedAccess(left: UnguardedAccessFact, right: UnguardedAcces
 
 function hasAuthGuard(guards: readonly string[]): boolean {
   return guards.some((guard) => guard === 'authed' || guard.startsWith('role:'));
+}
+
+function hasEndpointAuth(endpoint: EndpointExplain): boolean {
+  if (hasAuthGuard(endpoint.guards ?? [])) return true;
+  if (!endpoint.auth) return false;
+
+  return (
+    endpoint.auth === 'authed' ||
+    endpoint.auth.startsWith('role:') ||
+    endpoint.auth.startsWith('custom:') ||
+    endpoint.auth.startsWith('verifier:')
+  );
+}
+
+function endpointName(endpoint: EndpointExplain): string {
+  return endpoint.name ?? endpoint.path;
+}
+
+function endpointAuth(endpoint: EndpointExplain): string {
+  return endpoint.auth ?? list(endpoint.guards);
+}
+
+function endpointCsrf(endpoint: EndpointExplain): string {
+  if (endpoint.csrf !== 'exempt') return endpoint.csrf ?? 'checked';
+  return `exempt:${endpoint.csrfJustification ?? '-'}`;
 }
 
 function optimisticSummary(coverages: readonly OptimisticCoverage[]): string {

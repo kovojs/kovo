@@ -7,7 +7,7 @@ Scope: SPEC additions (`webhook()`, route response outcomes, storage capability,
 
 - [ ] S7 spike: raw-body capture without double-buffering + the webhook verify→tx→change-record lifecycle, proven against a recorded Stripe fixture (decision-gate writeup).
 - [ ] SPEC PR: `webhook()` primitive, `respond.file()`/`respond.stream()` route outcomes, storage capability interface, `--endpoints` audit, and the stated JSON-API non-goal.
-- [ ] E1 `endpoint()` floor implementation (shared with D5 A4), with this plan's refinements: pre-parse raw-body access, prefix mounts, no ambient session.
+- [x] E1 `endpoint()` floor implementation (shared with D5 A4), with this plan's refinements: pre-parse raw-body access, prefix mounts, no ambient session.
 - [ ] E2 `webhook()` shaped primitive: verifier slot, loose input schema, idempotency, Tx lifecycle, domain writes, change record.
 - [ ] E3 verifier kit: generic `hmacSignature()` + `stripeSignature` + `standardWebhooks` presets, custom `verify` escape, provider test vectors in CI.
 - [ ] E4 `respond.file()`/`respond.stream()` route outcomes (ETag/304; exports and downloads become ordinary guarded routes).
