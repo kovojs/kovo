@@ -1146,27 +1146,42 @@ void test('P10 commerce graph assertions answer behavior mechanically', async ()
 });
 
 void test('P10 starter wires graph assertions into CI', async () => {
-  const starterSource = await readProjectFile('packages/create-jiso/src/index.ts');
+  const starterSource = (
+    await Promise.all([
+      readProjectFile('packages/create-jiso/src/index.ts'),
+      readProjectFile('packages/create-jiso/templates/package.json'),
+      readProjectFile('packages/create-jiso/templates/vite.config.ts'),
+      readProjectFile('packages/create-jiso/templates/.github/workflows/ci.yml'),
+      readProjectFile('packages/create-jiso/templates/README.md'),
+      readProjectFile('packages/create-jiso/templates/graph.json'),
+      readProjectFile('packages/create-jiso/templates/scripts/emit-graph.mjs'),
+      readProjectFile('packages/create-jiso/templates/scripts/graph-assertions.mjs'),
+      readProjectFile('packages/create-jiso/templates/src/client.ts'),
+      readProjectFile('packages/create-jiso/templates/src/app.fixpoint.test.ts'),
+      readProjectFile('packages/create-jiso/templates/src/styles.css'),
+      readProjectFile('packages/create-jiso/templates/index.html'),
+    ])
+  ).join('\n');
   const starterTests = await readProjectFile('packages/create-jiso/src/index.test.ts');
 
-  assert.match(starterSource, /'graph-assertions': 'vp run graph-assertions'/);
-  assert.match(starterSource, /'emit-graph': 'node scripts\/emit-graph\.mjs'/);
-  assert.match(starterSource, /session: 'starterSession'/);
-  assert.match(starterSource, /inputFields: \['productId', 'quantity'\]/);
-  assert.match(starterSource, /i18n: \['en-US:cartTitle'\]/);
-  assert.match(starterSource, /title: 'Jiso Starter Cart'/);
+  assert.match(starterSource, /"graph-assertions": "vp run graph-assertions"/);
+  assert.match(starterSource, /"emit-graph": "node scripts\/emit-graph\.mjs"/);
+  assert.match(starterSource, /"session": "starterSession"/);
+  assert.match(starterSource, /"inputFields": \["productId", "quantity"\]/);
+  assert.match(starterSource, /"i18n": \["en-US:cartTitle"\]/);
+  assert.match(starterSource, /"title": "Jiso Starter Cart"/);
   assert.match(starterSource, /command: 'node scripts\/emit-graph\.mjs && fw check graph\.json'/);
   assert.match(
     starterSource,
     /command: 'node scripts\/emit-graph\.mjs && node scripts\/graph-assertions\.mjs'/,
   );
   assert.match(starterSource, /- run: vp run graph-assertions/);
-  assert.match(starterSource, /path: 'scripts\/emit-graph\.mjs'/);
-  assert.match(starterSource, /path: 'scripts\/graph-assertions\.mjs'/);
+  assert.match(starterSource, /'scripts\/emit-graph\.mjs'/);
+  assert.match(starterSource, /'scripts\/graph-assertions\.mjs'/);
   assert.match(starterSource, /deriveAppGraph/);
   assert.match(starterSource, /assertRenderEquivalence/);
-  assert.match(starterSource, /path: 'src\/client\.ts'/);
-  assert.match(starterSource, /'@jiso\/runtime': 'workspace:\*'/);
+  assert.match(starterSource, /'src\/client\.ts'/);
+  assert.match(starterSource, /"@jiso\/runtime": "workspace:\*"/);
   assert.match(starterSource, /installJisoLoader\(\{/);
   assert.match(starterSource, /enhancedMutations: \{/);
   assert.match(starterSource, /queryPlans,/);
@@ -1185,19 +1200,19 @@ void test('P10 starter wires graph assertions into CI', async () => {
   assert.match(starterSource, /@source "\.\.\/index\.html";/);
   assert.match(starterSource, /@source "\.\/\*\*\/\*\.\{ts,tsx,html\}";/);
   assert.match(starterSource, /@source inline\("bg-emerald-50 text-emerald-700/);
-  assert.match(starterSource, /'@tailwindcss\/vite': '\^4\.1\.0'/);
-  assert.match(starterSource, /tailwindcss: '\^4\.1\.0'/);
+  assert.match(starterSource, /"@tailwindcss\/vite": "\^4\.1\.0"/);
+  assert.match(starterSource, /"tailwindcss": "\^4\.1\.0"/);
   assert.match(starterSource, /@source inline\("\.\.\."\)/);
   assert.match(starterSource, /<link rel="stylesheet" href="\/src\/styles\.css" \/>/);
   assert.match(starterSource, /<script type="module" src="\/src\/client\.ts"><\/script>/);
   assert.match(starterTests, /vp run graph-assertions/);
-  assert.match(starterTests, /assertRenderEquivalence\(result\)/);
-  assert.match(starterTests, /@source inline\("bg-emerald-50 text-emerald-700/);
+  assert.match(starterTests, /src\/app\.fixpoint\.test\.ts/);
+  assert.match(starterSource, /@source inline\("bg-emerald-50 text-emerald-700/);
   assert.match(
     starterTests,
     /builds generated starter CSS with static and safelisted Tailwind utilities/,
   );
-  assert.match(starterTests, /node_modules\/\.bin\/vite/);
+  assert.match(starterTests, /resolveBin\('vite'\)/);
   assert.match(starterTests, /\.bg-emerald-50/);
   assert.match(starterTests, /create-jiso: wrote 15 files/);
 });

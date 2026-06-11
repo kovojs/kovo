@@ -18,5 +18,6 @@
     "types": ["node", "vitest"],
     "verbatimModuleSyntax": true
   },
-  "include": ["packages/**/*.ts", "vite.config.ts"]
+  "include": ["packages/**/*.ts", "vite.config.ts"],
+  "exclude": ["packages/create-jiso/templates/**"]
 }

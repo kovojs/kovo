@@ -2,6 +2,7 @@ import { defineConfig } from 'vite-plus';
 
 export default defineConfig({
   lint: {
+    ignorePatterns: ['packages/create-jiso/templates/**'],
     options: {
       typeAware: true,
       typeCheck: true,
