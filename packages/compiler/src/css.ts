@@ -1,4 +1,5 @@
 import { findMatchingToken, findStringEnd } from './scan/text.js';
+import { firstComponentModel, type ComponentModuleModel } from './scan/parse.js';
 import { escapeAttribute, indent, kebabCase } from './shared.js';
 
 const cssIrHeader = '/* @jiso-ir */';
@@ -110,11 +111,15 @@ export function componentCssAssetForFile(
   };
 }
 
-export function emitCssModule(source: string, componentName: string): string | null {
-  const css = extractStaticComponentCss(source);
+export function emitCssModule(
+  source: string,
+  componentName: string,
+  model?: ComponentModuleModel,
+): string | null {
+  const css = extractStaticComponentCss(source, model);
   if (!css) return null;
 
-  const scopedCss = scopeComponentCss(componentHostSelector(source, componentName), css);
+  const scopedCss = scopeComponentCss(componentHostSelector(source, componentName, model), css);
 
   return `${cssIrHeader}\n/* @jiso-scope-fallback */\n${formatFallbackCss(scopedCss.fallback)}\n\n${scopedCss.scoped}`;
 }
@@ -204,22 +209,44 @@ function selectorExclusion(nestedHostSelectors: readonly string[]): string {
     .join('');
 }
 
-function extractStaticComponentCss(source: string): string | null {
+function extractStaticComponentCss(source: string, model?: ComponentModuleModel): string | null {
+  const cssOption = model
+    ? firstComponentModel(model)?.options.find(
+        (option) => option.key === 'css' || option.key === 'styles',
+      )
+    : null;
+  if (cssOption) return extractStaticCssTemplate(cssOption.value);
+
   const match = /\b(?:css|styles)\s*:\s*`/g.exec(source);
   if (!match) return null;
-
   const templateStart = match.index + match[0].lastIndexOf('`');
-  const templateEnd = findStringEnd(source, templateStart, '`');
+
+  return extractStaticCssTemplate(source.slice(templateStart));
+}
+
+function extractStaticCssTemplate(value: string): string | null {
+  const trimmed = value.trim();
+  if (!trimmed.startsWith('`')) return null;
+
+  const templateEnd = findStringEnd(trimmed, 0, '`');
   if (templateEnd === -1) return null;
 
-  const css = source.slice(templateStart + 1, templateEnd);
+  const css = trimmed.slice(1, templateEnd);
   return css.includes('${') ? null : css;
 }
 
-function componentHostSelector(source: string, componentName: string): string {
-  const explicitName = /component\(\s*['"]([^'"]+)['"]/.exec(source)?.[1];
+function componentHostSelector(
+  source: string,
+  componentName: string,
+  model?: ComponentModuleModel,
+): string {
+  const component = model ? firstComponentModel(model) : null;
+  const explicitName =
+    component?.explicitName ?? /component\(\s*['"]([^'"]+)['"]/.exec(source)?.[1];
   const hostName = explicitName ?? kebabCase(componentName);
-  const renderedHost = firstRenderedTagName(source);
+  const renderedHost = component?.renderHost
+    ? openingTagName(source.slice(component.renderHost.start, component.renderHost.end))
+    : firstRenderedTagName(source);
 
   return renderedHost === hostName ? hostName : `[fw-c="${escapeAttribute(hostName)}"]`;
 }
@@ -228,9 +255,11 @@ function firstRenderedTagName(source: string): string | null {
   const tag = findFirstRenderedOpeningTag(source);
   if (!tag) return null;
 
-  return (
-    /^<(?<name>[A-Za-z][\w:-]*)/.exec(source.slice(tag.start, tag.end + 1))?.groups?.name ?? null
-  );
+  return openingTagName(source.slice(tag.start, tag.end + 1));
+}
+
+function openingTagName(source: string): string | null {
+  return /^<(?<name>[A-Za-z][\w:-]*)/.exec(source)?.groups?.name ?? null;
 }
 
 function findFirstRenderedOpeningTag(source: string): { end: number; start: number } | null {

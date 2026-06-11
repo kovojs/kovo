@@ -677,6 +677,34 @@ export const CartRow = component('cart-row', {
     expect(() => assertFixpoint(result)).not.toThrow();
   });
 
+  it('scopes CSS to the returned host instead of tag text inside render bodies', () => {
+    const result = compileComponentModule({
+      fileName: 'components/cart/cart-badge.tsx',
+      source: `
+import { component } from '@jiso/core';
+
+export const CartBadge = component('cart-badge', {
+  css: \`
+    button { color: teal; }
+  \`,
+  render: () => {
+    const sample = '<cart-badge></cart-badge>';
+    // <also-not-the-host></also-not-the-host>
+    return <section fw-c="cart-badge"><button>1</button></section>;
+  },
+});
+`,
+    });
+
+    const cssSource = result.files.find((file) => file.fileName.endsWith('.css'))?.source ?? '';
+    expect(cssSource).toContain('@scope ([fw-c="cart-badge"]) to (:scope [fw-c])');
+    expect(cssSource).toContain(
+      '[fw-c="cart-badge"] button:not([fw-c]):not([fw-c] *) { color: teal; }',
+    );
+    expect(cssSource).not.toContain('@scope (cart-badge)');
+    expect(() => assertFixpoint(result)).not.toThrow();
+  });
+
   it('emits empty registry fact surfaces when no facts are provided', () => {
     const result = compileComponentModule({
       fileName: 'components/cart/cart-badge.tsx',

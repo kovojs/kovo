@@ -384,6 +384,11 @@ pipeline throws the tree away and communicates via mutated source text.
       in the parsed model; `scan/text.ts:39`'s `findStringEnd` has no template-interpolation
       handling — retire it where the model suffices, fix it where it must stay (CSS literal
       balancing).
+      Evidence 2026-06-11: `emitCssModule` now consumes the already parsed `ComponentModuleModel`
+      for component CSS options, explicit component names, and returned render hosts; the source
+      scanner remains only as a fallback. `packages/compiler/src/index.test.ts` covers an
+      adversarial render body with tag text in a string/comment and proves CSS scopes to the
+      returned JSX host instead.
 - [ ] **MED — Make the render-equivalence gate real.** emit/server.ts:28-41 compares
       `serverRenderSource(...)` against itself round-tripped through its own escaper — it can
       only fail if the escape pair disagrees. Execute the emitted server module's render against
