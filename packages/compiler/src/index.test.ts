@@ -692,6 +692,23 @@ export const CartShell = component('cart-shell', {
     ]);
   });
 
+  it('ignores ID and IDREF text inside strings and comments', () => {
+    const result = compileComponentModule({
+      fileName: 'cart-shell.tsx',
+      source: `
+export const CartShell = component('cart-shell', {
+  render: () => {
+    const sample = '<label for="missing">Search</label><input id="duplicate" id="duplicate" />';
+    // <button popovertarget="missing-popover"></button>
+    return <section><span id="cart-title">Cart</span></section>;
+  },
+});
+`,
+    });
+
+    expect(result.diagnostics).toEqual([]);
+  });
+
   it('reports FW224 for duplicate literal ids in component scope', () => {
     const result = compileComponentModule({
       fileName: 'cart-shell.tsx',

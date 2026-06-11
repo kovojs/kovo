@@ -9,6 +9,7 @@ export interface JsxAttributeModel {
   end: number;
   name: string;
   start: number;
+  value?: string;
 }
 
 export interface JsxElementModel {
@@ -189,11 +190,13 @@ function jsxElementModel(
     attributes: node.attributes.properties.flatMap((property) => {
       if (!ts.isJsxAttribute(property)) return [];
 
+      const value = staticJsxAttributeValue(property);
       return [
         {
           end: property.getEnd(),
           name: property.name.getText(sourceFile),
           start: property.getStart(sourceFile),
+          ...(value === undefined ? {} : { value }),
         },
       ];
     }),
@@ -202,6 +205,11 @@ function jsxElementModel(
     start: node.getStart(sourceFile),
     tag: node.tagName.getText(sourceFile),
   };
+}
+
+function staticJsxAttributeValue(attribute: ts.JsxAttribute): string | undefined {
+  const initializer = attribute.initializer;
+  return initializer && ts.isStringLiteral(initializer) ? initializer.text : undefined;
 }
 
 function arrowObjectPatternKeys(expression: ts.Expression): string[] {

@@ -1233,11 +1233,7 @@ function validateDirectDbAccess(source: string, fileName: string): CompilerDiagn
 }
 
 function validateIdrefs(source: string, fileName: string): CompilerDiagnostic[] {
-  const ids = new Set(
-    [...source.matchAll(/\bid\s*=\s*(["'])(?<id>[^"']+)\1/g)].flatMap((match) =>
-      match.groups?.id ? [match.groups.id] : [],
-    ),
-  );
+  const ids = new Set(literalIds(source));
   if (ids.size === 0) return idrefValues(source).map((value) => fw221Diagnostic(fileName, value));
 
   const missing = idrefValues(source).filter((value) => !ids.has(value));
@@ -1261,9 +1257,7 @@ function validateStaticIds(source: string, fileName: string): CompilerDiagnostic
 }
 
 function literalIds(source: string): string[] {
-  return [...source.matchAll(/\bid\s*=\s*(["'])(?<id>[^"']+)\1/g)]
-    .map((match) => match.groups?.id ?? '')
-    .filter(Boolean);
+  return jsxAttributeValues(source, 'id');
 }
 
 function repeatableLiteralIds(source: string): string[] {
@@ -1592,19 +1586,41 @@ function fw221Diagnostic(fileName: string, value: string): CompilerDiagnostic {
 
 function idrefValues(source: string): string[] {
   const values: string[] = [];
-  const pattern =
-    /\b(?<name>commandfor|popovertarget|for|htmlFor|aria-labelledby|aria-describedby|aria-controls|aria-owns|aria-activedescendant)\s*=\s*(["'])(?<value>[^"']+)\2/g;
+  const idrefAttributes = new Set([
+    'aria-activedescendant',
+    'aria-controls',
+    'aria-describedby',
+    'aria-labelledby',
+    'aria-owns',
+    'commandfor',
+    'for',
+    'htmlFor',
+    'popovertarget',
+  ]);
 
-  for (const match of source.matchAll(pattern)) {
-    const rawValue = match.groups?.value;
+  for (const attribute of jsxAttributes(source)) {
+    if (!idrefAttributes.has(attribute.name)) continue;
+    const rawValue = attribute.value;
     if (!rawValue) continue;
 
-    const name = match.groups?.name;
-    const multiValue = name?.startsWith('aria-') && name !== 'aria-activedescendant';
+    const multiValue =
+      attribute.name.startsWith('aria-') && attribute.name !== 'aria-activedescendant';
     values.push(...(multiValue ? rawValue.split(/\s+/).filter(Boolean) : [rawValue]));
   }
 
   return values;
+}
+
+function jsxAttributeValues(source: string, name: string): string[] {
+  return jsxAttributes(source).flatMap((attribute) =>
+    attribute.name === name && attribute.value ? [attribute.value] : [],
+  );
+}
+
+function jsxAttributes(source: string): Array<{ name: string; value?: string }> {
+  return jsxElements(parseComponentModuleModel('component.tsx', source)).flatMap((element) => [
+    ...element.attributes,
+  ]);
 }
 
 function findHandlerBodies(source: string): { body: string; params: string[] }[] {
