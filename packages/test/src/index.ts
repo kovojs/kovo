@@ -127,7 +127,12 @@ export function createJisoTestHarness<Db>(
       if (!query.load) throw new Error(`Query fixture has no loader: ${query.key}`);
 
       const start = verifier?.observed.length ?? 0;
-      const result = await query.load(input);
+      const result = await query.load(input, {
+        request: {
+          ...options.request,
+          db,
+        },
+      });
       verifier?.assertReadsCoveredSince(
         start,
         query.reads.map((domain) => domain.key),

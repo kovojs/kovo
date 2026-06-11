@@ -1126,6 +1126,9 @@ describe('@jiso/test harness', () => {
     const db = createFakeDb();
     const harness = createJisoTestHarness({
       db,
+      request: {
+        session: { cartId: 'c1' },
+      },
       touchGraph: {},
       verification: {
         domainByTable: {
@@ -1134,15 +1137,18 @@ describe('@jiso/test harness', () => {
       },
     });
     const cartQuery = query('cart', {
-      load() {
-        return harness.db.read('cart_items');
+      load(_input, context: { request: { db: FakeDb; session?: { cartId: string } } }) {
+        return {
+          cartId: context.request.session?.cartId,
+          items: context.request.db.read('cart_items'),
+        };
       },
       reads: [cart],
     });
 
     db.write('cart_items', 'p1');
 
-    await expect(harness.query(cartQuery)).resolves.toEqual(['p1']);
+    await expect(harness.query(cartQuery)).resolves.toEqual({ cartId: 'c1', items: ['p1'] });
   });
 
   it('fails query-loader verification for reads outside declared domains', async () => {

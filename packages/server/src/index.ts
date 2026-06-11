@@ -361,9 +361,18 @@ export function write<
   return definition;
 }
 
-export interface QueryDefinition<Key extends string = string, Value = unknown, Input = unknown> {
+export interface QueryLoadContext<Request = unknown> {
+  request: Request;
+}
+
+export interface QueryDefinition<
+  Key extends string = string,
+  Value = unknown,
+  Input = unknown,
+  Request = unknown,
+> {
   instanceKey?: ((input: unknown) => string | undefined) | string;
-  load?(input: Input): Value;
+  load?(input: Input, context: QueryLoadContext<Request>): Value;
   key: Key;
   reads: readonly Domain[];
   version?: ((input: Input, value: Value) => number | string | undefined) | number | string;
@@ -371,14 +380,12 @@ export interface QueryDefinition<Key extends string = string, Value = unknown, I
 
 export function query<
   const Key extends string,
-  const Definition extends Omit<QueryDefinition<Key>, 'key'>,
+  const Definition extends Omit<QueryDefinition<Key, unknown, unknown, never>, 'key'>,
 >(key: Key, definition: Definition): Definition & { key: Key } {
   return { ...definition, key };
 }
 
-export type QueryResult<Query> = Query extends {
-  load: (input: never) => infer Value;
-}
+export type QueryResult<Query> = Query extends { load: (...args: never[]) => infer Value }
   ? Awaited<Value>
   : unknown;
 
@@ -1023,6 +1030,7 @@ export async function renderMutationResponse<
     definition.registry?.queries ?? [],
     result.rerunQueryInstances ?? result.rerunQueries.map((key) => ({ key })),
     renderInput,
+    wireRequest.request,
   );
   const fragmentChunks = await renderFragmentChunks(
     wireRequest.fragmentRenderers ?? [],
@@ -1317,6 +1325,7 @@ async function renderQueryChunks(
   queries: readonly QueryDefinition[],
   rerunQueries: readonly QueryRerun[],
   input: unknown,
+  request: unknown,
 ): Promise<string[]> {
   const chunks: string[] = [];
 
@@ -1325,7 +1334,7 @@ async function renderQueryChunks(
       continue;
     }
 
-    const value = queryDefinition.load ? await queryDefinition.load(input) : null;
+    const value = queryDefinition.load ? await queryDefinition.load(input, { request }) : null;
     chunks.push(renderQueryChunk(queryDefinition, input, value));
   }
 

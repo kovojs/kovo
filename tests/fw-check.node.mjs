@@ -455,11 +455,14 @@ void test('P3 typed routes validate navigation targets', async () => {
 void test('P3 mutation lifecycle includes an explicit transaction boundary', async () => {
   const serverSource = await readProjectFile('packages/server/src/index.ts');
   const serverTests = await readProjectFile('packages/server/src/index.test.ts');
+  const testHarnessSource = await readProjectFile('packages/test/src/index.ts');
 
   assert.match(serverSource, /transaction\?: <Result>/);
   assert.match(serverSource, /run: \(transactionRequest: GuardedRequest\) => Promise<Result>/);
   assert.match(serverSource, /definition\.transaction/);
   assert.match(serverSource, /class MutationRollback extends Error/);
+  assert.match(serverSource, /interface QueryLoadContext/);
+  assert.match(serverSource, /queryDefinition\.load\(input, \{ request \}\)/);
   assert.match(serverTests, /runs guarded mutation handlers inside the configured transaction/);
   assert.match(serverTests, /types transaction callbacks with the mutation request shape/);
   assert.match(serverTests, /transaction callbacks must receive the typed request shape/);
@@ -468,6 +471,8 @@ void test('P3 mutation lifecycle includes an explicit transaction boundary', asy
     serverTests,
     /renders mutation query chunks after the configured transaction commits/,
   );
+  assert.match(serverTests, /reruns post-commit queries with the same request context/);
+  assert.match(testHarnessSource, /request: \{\n\s+\.\.\.options\.request,\n\s+db,/);
 });
 
 void test('P5 morph evidence includes structural and browser survival suites', async () => {

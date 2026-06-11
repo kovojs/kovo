@@ -1262,6 +1262,45 @@ describe('server mutation primitives', () => {
     });
   });
 
+  it('reruns post-commit queries with the same request context', async () => {
+    interface RequestContext {
+      session: {
+        cartId: string;
+      };
+    }
+
+    const cart = domain('cart');
+    const cartQuery = query('cart', {
+      instanceKey: (_input) => 'cart:c1',
+      load(_input, context: { request: RequestContext }) {
+        const cartId: string = context.request.session.cartId;
+        return { cartId };
+      },
+      reads: [cart],
+    });
+    const addToCart = mutation('cart/add', {
+      input: s.object({ productId: s.string() }),
+      registry: {
+        queries: [cartQuery],
+        touches: [cart],
+      },
+      handler(input, request: RequestContext) {
+        return `${request.session.cartId}:${input.productId}`;
+      },
+    });
+
+    await expect(
+      renderMutationResponse(addToCart, {
+        fragment: true,
+        rawInput: { productId: 'p1' },
+        request: { session: { cartId: 'c1' } },
+      }),
+    ).resolves.toMatchObject({
+      body: '<fw-query name="cart" key="cart:c1">{"cartId":"c1"}</fw-query>',
+      status: 200,
+    });
+  });
+
   it('derives post-commit rerun queries from inferred touch sites when touches are absent or empty', async () => {
     const cart = domain('cart');
     const product = domain('product');
