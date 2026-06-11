@@ -510,10 +510,11 @@ export const tableDomains = {
         fileName: 'product.queries.ts',
         source: `
           export const products = pgTable("products", {
-            archived: boolean("archived"),
+            archived: boolean("archived").notNull(),
+            id: text("id").primaryKey(),
             metadata: json("metadata"),
             name: text("name"),
-            stock: integer("stock"),
+            stock: integer("stock").notNull(),
           }, jiso({ domain: "product", key: "id" }));
 
           export const productQuery = query("product", {
@@ -521,6 +522,7 @@ export const tableDomains = {
               return db.select({
                 archived: products.archived,
                 discount: products.name,
+                id: products.id,
                 metadata: products.metadata,
                 stock: products.stock,
               }).from(products);
@@ -536,11 +538,18 @@ export const tableDomains = {
         reads: ['product'],
         shape: {
           archived: 'boolean',
-          discount: 'string',
-          metadata: 'object',
+          discount: {
+            kind: 'nullable',
+            shape: 'string',
+          },
+          id: 'string',
+          metadata: {
+            kind: 'nullable',
+            shape: 'object',
+          },
           stock: 'number',
         },
-        site: 'product.queries.ts:9',
+        site: 'product.queries.ts:10',
       },
     ]);
   });
@@ -753,11 +762,12 @@ export const tableDomains = {
           fileName: 'product.queries.ts',
           source: `
             export const products = pgTable("products", {
-              archived: boolean("archived"),
+              archived: boolean("archived").notNull(),
               createdAt: timestamp("created_at"),
+              id: text("id").primaryKey(),
               metadata: json("metadata"),
               name: text("name"),
-              stock: integer("stock"),
+              stock: integer("stock").notNull(),
             }, jiso({ domain: "product", key: "id" }));
 
             export const productQuery = query("product", {
@@ -766,6 +776,7 @@ export const tableDomains = {
                   archived: products.archived,
                   createdAt: products.createdAt,
                   discount: products.name,
+                  id: products.id,
                   metadata: products.metadata,
                   stock: products.stock,
                 }).from(products);
@@ -782,12 +793,22 @@ export const tableDomains = {
         reads: ['product'],
         shape: {
           archived: 'boolean',
-          createdAt: 'string',
-          discount: 'string',
-          metadata: 'object',
+          createdAt: {
+            kind: 'nullable',
+            shape: 'string',
+          },
+          discount: {
+            kind: 'nullable',
+            shape: 'string',
+          },
+          id: 'string',
+          metadata: {
+            kind: 'nullable',
+            shape: 'object',
+          },
           stock: 'number',
         },
-        site: 'product.queries.ts:10',
+        site: 'product.queries.ts:11',
       },
     ]);
   });
@@ -800,7 +821,7 @@ export const tableDomains = {
           source: `
             export const products = pgTable("products", {
               id: text("id"),
-              name: text("name"),
+              name: text("name").notNull(),
             }, jiso({ domain: "product", key: "id" }));
             export const reviews = pgTable("reviews", {
               productId: text("product_id"),

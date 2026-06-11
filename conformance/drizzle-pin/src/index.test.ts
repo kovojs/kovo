@@ -59,11 +59,12 @@ describe('Drizzle pinned subset conformance', () => {
           fileName: 'conformance/drizzle-pin/src/product.queries.ts',
           source: `
             export const products = pgTable('products', {
-              archived: boolean('archived'),
+              archived: boolean('archived').notNull(),
               createdAt: timestamp('created_at'),
+              id: text('id').primaryKey(),
               metadata: jsonb('metadata'),
               name: text('name'),
-              stock: integer('stock'),
+              stock: integer('stock').notNull(),
             }, jiso({ domain: 'product', key: 'id' }));
 
             export const productQuery = query('product', {
@@ -72,6 +73,7 @@ describe('Drizzle pinned subset conformance', () => {
                   archived: products.archived,
                   createdAt: products.createdAt,
                   discount: products.name,
+                  id: products.id,
                   metadata: products.metadata,
                   stock: products.stock,
                 }).from(products);
@@ -88,12 +90,22 @@ describe('Drizzle pinned subset conformance', () => {
         reads: ['product'],
         shape: {
           archived: 'boolean',
-          createdAt: 'string',
-          discount: 'string',
-          metadata: 'object',
+          createdAt: {
+            kind: 'nullable',
+            shape: 'string',
+          },
+          discount: {
+            kind: 'nullable',
+            shape: 'string',
+          },
+          id: 'string',
+          metadata: {
+            kind: 'nullable',
+            shape: 'object',
+          },
           stock: 'number',
         },
-        site: 'conformance/drizzle-pin/src/product.queries.ts:10',
+        site: 'conformance/drizzle-pin/src/product.queries.ts:11',
       },
     ]);
   });
@@ -106,7 +118,7 @@ describe('Drizzle pinned subset conformance', () => {
           source: `
             export const products = pgTable('products', {
               id: text('id'),
-              name: text('name'),
+              name: text('name').notNull(),
             }, jiso({ domain: 'product', key: 'id' }));
             export const reviews = pgTable('reviews', {
               productId: text('product_id'),

@@ -639,6 +639,11 @@ function columnBuilderShape(source: string): QueryShape {
   const builder = /^(?<name>[A-Za-z_$][\w$]*)\s*\(/.exec(source.trim())?.groups?.name;
   if (!builder) return 'string';
 
+  const baseShape = columnBuilderBaseShape(builder);
+  return columnBuilderIsNonNull(source) ? baseShape : nullableShape(baseShape);
+}
+
+function columnBuilderBaseShape(builder: string): QueryShape {
   if (/^(?:boolean)$/.test(builder)) return 'boolean';
   if (
     /^(?:bigint|doublePrecision|integer|numeric|real|smallint|serial|bigserial|smallserial)$/.test(
@@ -649,6 +654,10 @@ function columnBuilderShape(source: string): QueryShape {
   }
   if (/^(?:json|jsonb)$/.test(builder)) return 'object';
   return 'string';
+}
+
+function columnBuilderIsNonNull(source: string): boolean {
+  return /\.(?:notNull|primaryKey)\s*\(/.test(source);
 }
 
 function columnShapesForFile(
