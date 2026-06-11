@@ -1411,13 +1411,17 @@ function validateResidualStamps(
     ...explicitComponentNames(source),
     ...(options.registryFacts?.components ?? []),
   ]);
-  for (const tag of scanOpeningTags(source)) {
-    const component = readStaticAttribute(tag.attrs, 'fw-c');
-    if (component && !knownComponents.has(component)) {
-      diagnostics.push(fw226Diagnostic(options.fileName, `fw-c="${component}"`));
+  for (const attribute of jsxAttributes(source)) {
+    if (attribute.name === 'fw-c') {
+      const component = attribute.value;
+      if (component && !knownComponents.has(component)) {
+        diagnostics.push(fw226Diagnostic(options.fileName, `fw-c="${component}"`));
+      }
     }
 
-    for (const dep of splitDepValue(readStaticAttribute(tag.attrs, 'fw-deps') ?? '')) {
+    if (attribute.name !== 'fw-deps') continue;
+
+    for (const dep of splitDepValue(attribute.value ?? '')) {
       const query = dep.split(':', 1)[0] ?? dep;
       if (!knownQueries.has(query)) {
         diagnostics.push(fw226Diagnostic(options.fileName, `fw-deps="${dep}"`));

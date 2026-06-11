@@ -1766,6 +1766,28 @@ export const Recommendations = component('recommendations', {
     ]);
   });
 
+  it('ignores residual stamp text inside strings and comments', () => {
+    const result = compileComponentModule({
+      fileName: 'recommendations.tsx',
+      source: `
+export const Recommendations = component('recommendations', {
+  queries: { cart: cartQuery },
+  render: ({ cart }) => {
+    const sample = '<section fw-c="unknown-component" fw-deps="missingQuery:p1"></section>';
+    // <section fw-c="other-unknown" fw-deps="otherMissing:p1"></section>
+    return (
+      <section fw-c="recommendations" fw-deps="cart">
+        <span>{renderOnce(cart.count)}</span>
+      </section>
+    );
+  },
+});
+`,
+    });
+
+    expect(result.diagnostics).toEqual([]);
+  });
+
   it('stamps static island-local state onto rendered component markup', () => {
     const result = compileComponentModule({
       fileName: 'cart-badge.tsx',
