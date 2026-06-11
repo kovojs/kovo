@@ -512,6 +512,8 @@ void test('D4 commerce adopt-dont-invent features stay represented', async () =>
   assert.match(commerceTests, /file-fields: receipt/);
   assert.match(commerceTests, /meta: title=Jiso Commerce/);
   assert.match(commerceTests, /Jiso Commerce \(1\)/);
+  assert.match(runtimeTests, /FormFailure<typeof addToCart>/);
+  assert.match(runtimeTests, /failure\.code === 'VALIDATION'/);
   assert.match(runtimeSource, /onUploadProgress\?: \(progress: UploadProgress/);
   assert.match(runtimeSource, /updateUploadProgressElements\(form, progress\)/);
   assert.match(runtimeSource, /stampEnhancedMutationPending\(options, true\)/);

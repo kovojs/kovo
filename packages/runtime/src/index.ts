@@ -866,7 +866,7 @@ export interface OptimisticEnhancedMutationSubmitOptions<
 
 export type SubmitFormDefinition = Form<string, Record<string, JsonValue>, JsonValue>;
 
-export interface SubmitOptions<Input extends Record<string, JsonValue>, Failure extends JsonValue> {
+export interface SubmitOptions<Input extends Record<string, JsonValue>, Failure> {
   action?: string;
   idem?: string;
   input: Input;

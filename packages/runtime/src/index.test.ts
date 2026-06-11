@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { runInThisContext } from 'node:vm';
 import { gzipSync } from 'node:zlib';
-import { event, form } from '@jiso/core';
+import { event, form, type FormFailure } from '@jiso/core';
 
 import {
   applyDeferredChunk,
@@ -2286,7 +2286,14 @@ describe('query store', () => {
     >('cart/add');
     const store = createQueryStore();
     const root = new FakeMorphRoot();
-    const onError = vi.fn();
+    const onError = vi.fn((failure: FormFailure<typeof addToCart>) => {
+      if (failure.code === 'VALIDATION') {
+        expect(failure.fields.quantity).toBeTypeOf('string');
+        return;
+      }
+
+      expect(failure.data.availableQuantity).toBeTypeOf('number');
+    });
     const fetch = vi.fn(async () => ({
       status: 422,
       async text() {

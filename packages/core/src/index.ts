@@ -72,11 +72,18 @@ export interface Form<
   key: Key;
 }
 
+export interface FormValidationFailure {
+  code: 'VALIDATION';
+  fields: Record<string, string>;
+}
+
 export type FormInput<Definition> =
   Definition extends Form<string, infer Input, JsonValue> ? Input : never;
 
 export type FormFailure<Definition> =
-  Definition extends Form<string, Record<string, JsonValue>, infer Failure> ? Failure : never;
+  Definition extends Form<string, Record<string, JsonValue>, infer Failure>
+    ? Failure | FormValidationFailure
+    : never;
 
 export type FormFieldName<Definition> = Extract<keyof FormInput<Definition>, string>;
 

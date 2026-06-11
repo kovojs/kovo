@@ -92,10 +92,15 @@ describe('core authoring APIs', () => {
     const failure = {
       code: 'OUT_OF_STOCK',
     } satisfies FormFailure<typeof addToCart>;
+    const validationFailure = {
+      code: 'VALIDATION',
+      fields: { quantity: 'Expected number >= 1' },
+    } satisfies FormFailure<typeof addToCart>;
 
     expect(addToCart.key).toBe('cart/add');
     expect(input.quantity).toBe(2);
     expect(failure.code).toBe('OUT_OF_STOCK');
+    expect(validationFailure.fields.quantity).toBe('Expected number >= 1');
   });
 
   it('checks form field completeness from typed mutation inputs', () => {
