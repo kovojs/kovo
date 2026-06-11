@@ -1771,6 +1771,29 @@ export const CartBadge = component('cart-badge', {
     expect(result.diagnostics).toEqual([]);
   });
 
+  it('ignores query-looking text inside renderOnce string literals', () => {
+    const result = compileComponentModule({
+      fileName: 'cart-badge.tsx',
+      source: `
+export const CartBadge = component('cart-badge', {
+  queries: { cart: cartQuery },
+  render: ({ cart }) => <span>{renderOnce(cart.label ?? "cart.discount")}</span>,
+});
+`,
+    });
+
+    expect(result.diagnostics).toEqual([]);
+    expect(result.updateCoverage).toEqual([
+      {
+        componentName: 'CartBadge',
+        detail: 'declared renderOnce',
+        position: 'expression',
+        query: 'cart.label',
+        status: 'renderOnce',
+      },
+    ]);
+  });
+
   it('emits an app bootstrap that wires compiled query plans into the loader', () => {
     const bootstrap = emitQueryPlanBootstrapModule([
       {

@@ -3,7 +3,7 @@ import { diagnosticDefinitions, type DiagnosticCode } from '@jiso/core';
 import { componentCssAssetForFile, emitCssModule, type ComponentCssAsset } from './css.js';
 import { diagnosticFor, type CompilerDiagnostic } from './diagnostics.js';
 import type { ComponentGraphFact, RegistryFacts, RegistryTypeFacts } from './graph.js';
-import { findMatchingToken, findStringEnd } from './scan/text.js';
+import { findStringEnd } from './scan/text.js';
 import {
   callExpressions,
   componentExplicitNames,
@@ -19,7 +19,9 @@ import {
   jsxElements,
   jsxExpressions,
   mutationHandlers,
+  objectLiteralPropertyPaths,
   parseComponentModule as parseComponentModuleModel,
+  propertyAccessPaths,
 } from './scan/parse.js';
 import { escapeAttribute, indent, kebabCase } from './shared.js';
 import { validateEventTriggerNames } from './validate/event-triggers.js';
@@ -1065,9 +1067,9 @@ function soleQueryPathExpression(expression: string): string | null {
 }
 
 function queryPathsInExpression(expression: string, knownQueries: ReadonlySet<string>): string[] {
-  return [...expression.matchAll(/\b(?<path>[A-Za-z_$][\w$]*(?:\.[A-Za-z_$][\w$]*)+)\b/g)]
-    .map((match) => match.groups?.path ?? '')
-    .filter((path) => queryPathUsesKnownQuery(path, knownQueries));
+  return propertyAccessPaths('expression.tsx', expression).filter((path) =>
+    queryPathUsesKnownQuery(path, knownQueries),
+  );
 }
 
 function queryPathUsesKnownQuery(path: string, knownQueries: ReadonlySet<string>): boolean {
@@ -1719,52 +1721,7 @@ function eventPayloadPaths(source: string): string[] {
     const payload = call.arguments[1]?.trim();
     if (!payload?.startsWith('{')) continue;
 
-    const payloadEnd = findMatchingToken(payload, 0, '{', '}');
-    if (payloadEnd === -1) continue;
-
-    paths.push(...objectLiteralPaths(payload.slice(0, payloadEnd + 1)));
-  }
-
-  return paths;
-}
-
-function objectLiteralPaths(objectSource: string, prefix = ''): string[] {
-  const paths: string[] = [];
-  let index = 1;
-
-  while (index < objectSource.length - 1) {
-    index = skipWhitespaceAndComments(objectSource, index);
-    if (objectSource[index] === ',') {
-      index += 1;
-      continue;
-    }
-
-    const key = readObjectKey(objectSource, index);
-    if (!key) {
-      index = skipObjectValue(objectSource, index);
-      continue;
-    }
-
-    const path = prefix ? `${prefix}.${key.name}` : key.name;
-    const afterKey = skipWhitespaceAndComments(objectSource, key.end);
-    if (objectSource[afterKey] !== ':') {
-      paths.push(path);
-      index = skipObjectValue(objectSource, afterKey);
-      continue;
-    }
-
-    const valueStart = skipWhitespaceAndComments(objectSource, afterKey + 1);
-    if (objectSource[valueStart] === '{') {
-      const valueEnd = findMatchingToken(objectSource, valueStart, '{', '}');
-      if (valueEnd !== -1) {
-        paths.push(...objectLiteralPaths(objectSource.slice(valueStart, valueEnd + 1), path));
-        index = skipObjectValue(objectSource, afterKey + 1);
-        continue;
-      }
-    }
-
-    paths.push(path);
-    index = skipObjectValue(objectSource, afterKey + 1);
+    paths.push(...objectLiteralPropertyPaths('payload.tsx', payload));
   }
 
   return paths;

@@ -220,6 +220,90 @@ export function identifierReferences(fileName: string, source: string): string[]
   return referenced.filter((name) => !declared.has(name));
 }
 
+export function propertyAccessPaths(fileName: string, source: string): string[] {
+  const sourceFile = parseExpressionSource(fileName, source);
+  const paths: string[] = [];
+
+  const visit = (node: ts.Node): void => {
+    if (
+      ts.isPropertyAccessExpression(node) &&
+      !(ts.isPropertyAccessExpression(node.parent) && node.parent.expression === node)
+    ) {
+      const path = propertyAccessPath(node);
+      if (path) paths.push(path);
+    }
+
+    ts.forEachChild(node, visit);
+  };
+
+  visit(sourceFile);
+
+  return paths;
+}
+
+export function objectLiteralPropertyPaths(fileName: string, source: string): string[] {
+  const sourceFile = parseExpressionSource(fileName, source);
+  const initializer = firstVariableInitializer(sourceFile);
+  if (!initializer || !ts.isObjectLiteralExpression(initializer)) return [];
+
+  return objectLiteralPaths(initializer);
+}
+
+function parseExpressionSource(fileName: string, source: string): ts.SourceFile {
+  return ts.createSourceFile(
+    fileName,
+    `const __jisoExpression = (${source});`,
+    ts.ScriptTarget.Latest,
+    true,
+    ts.ScriptKind.TSX,
+  );
+}
+
+function firstVariableInitializer(sourceFile: ts.SourceFile): ts.Expression | null {
+  const statement = sourceFile.statements[0];
+  if (!statement || !ts.isVariableStatement(statement)) return null;
+
+  const initializer = statement.declarationList.declarations[0]?.initializer;
+  return initializer ? unwrapParenthesizedExpression(initializer) : null;
+}
+
+function propertyAccessPath(expression: ts.PropertyAccessExpression): string | null {
+  const segments: string[] = [expression.name.text];
+  let current: ts.Expression = expression.expression;
+
+  while (ts.isPropertyAccessExpression(current)) {
+    segments.unshift(current.name.text);
+    current = current.expression;
+  }
+
+  if (!ts.isIdentifier(current)) return null;
+
+  segments.unshift(current.text);
+  return segments.join('.');
+}
+
+function objectLiteralPaths(expression: ts.ObjectLiteralExpression, prefix = ''): string[] {
+  return expression.properties.flatMap((property) => {
+    if (ts.isShorthandPropertyAssignment(property)) {
+      return [pathWithPrefix(prefix, property.name.text)];
+    }
+
+    if (!ts.isPropertyAssignment(property)) return [];
+
+    const key = propertyNameText(property.name);
+    if (!key) return [];
+
+    const path = pathWithPrefix(prefix, key);
+    return ts.isObjectLiteralExpression(property.initializer)
+      ? objectLiteralPaths(property.initializer, path)
+      : [path];
+  });
+}
+
+function pathWithPrefix(prefix: string, key: string): string {
+  return prefix ? `${prefix}.${key}` : key;
+}
+
 function isDeclaredIdentifier(node: ts.Identifier): boolean {
   const parent = node.parent;
   return (
