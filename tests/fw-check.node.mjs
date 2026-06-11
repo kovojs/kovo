@@ -8,6 +8,7 @@ import {
   collectMinifierReservedNames,
   compileComponentModule,
 } from '../dist/compiler/src/index.mjs';
+import { readElementParams } from '../dist/runtime/src/index.mjs';
 
 const responseMarker = '<<< RESPONSE';
 const requestMarker = '>>> REQUEST';
@@ -2012,18 +2013,41 @@ export const CartDrawer = component('cart-drawer', {
 });
 
 void test('P1 typed data param coercion remains represented', async () => {
-  const compilerHandlersSource = await readProjectFile('packages/compiler/src/lower/handlers.ts');
-  const compilerTests = await readProjectFile('packages/compiler/src/index.test.ts');
-  const runtimeHandlersSource = await readProjectFile('packages/runtime/src/handlers.ts');
-  const runtimeTests = await readProjectFile('packages/runtime/src/index.test.ts');
+  const result = compileComponentModule({
+    fileName: 'components/cart/cart-actions.tsx',
+    source: `
+import { component } from '@jiso/core';
 
-  assert.match(compilerHandlersSource, /fw-param-types/);
-  assert.match(compilerHandlersSource, /inferElementParamType/);
-  assert.match(compilerTests, /fw-param-types="quantity:number"/);
-  assert.match(compilerTests, /fw-param-types="selected:boolean"/);
-  assert.match(runtimeHandlersSource, /readElementParamTypes/);
-  assert.match(runtimeHandlersSource, /coerceElementParam/);
-  assert.match(runtimeTests, /quantity:number featured:boolean/);
+export const CartActions = component('cart-actions', {
+  render: () => (
+    <div>
+      <button onClick={() => state.count += item.quantity}>Add</button>
+      <button onClick={() => item.selected ? select(item.id) : deselect(item.id)}>Select</button>
+    </div>
+  ),
+});
+`,
+  });
+  const serverSource = result.files.find((file) => file.source.includes('renderSource'))?.source;
+  assert.ok(serverSource, 'compiled output includes server render source');
+  assert.match(serverSource, /fw-param-types="quantity:number"/);
+  assert.match(serverSource, /fw-param-types="selected:boolean"/);
+  assert.deepEqual(
+    readElementParams({
+      attributes: [
+        { name: 'data-p-product-id', value: 'p1' },
+        { name: 'data-p-quantity', value: '2' },
+        { name: 'data-p-featured', value: 'false' },
+      ],
+      getAttribute: (name) =>
+        name === 'fw-param-types' ? 'quantity:number featured:boolean' : null,
+    }),
+    {
+      featured: false,
+      productId: 'p1',
+      quantity: 2,
+    },
+  );
 });
 
 void test('P1 render-equivalence gate remains represented', async () => {

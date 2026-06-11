@@ -124,6 +124,9 @@ Do this first or pay it on every commit.
       API and asserts `compileComponentModule` handler exports, emitted handler bodies, and
       `collectMinifierReservedNames` output instead of grepping compiler source or compiler test
       names.
+      Partial evidence 2026-06-11: the P1 typed-param tranche now asserts compiler-emitted
+      `fw-param-types` for number/boolean params and runtime `readElementParams` coercion through
+      built compiler/runtime APIs instead of grepping compiler/runtime source or test names.
 - [x] **Make create-jiso templates real files** (`create-jiso/src/index.ts:63-473`, ~470 lines of
       escaped template literals including a CI workflow and double-escaped regexes inside
       `.mjs`-in-string). Move to a `templates/` directory copied at scaffold time with `{{name}}`
