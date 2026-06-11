@@ -187,6 +187,10 @@ Do this first or pay it on every commit.
       APIs and asserts guarded transaction ordering, typed-failure rollback, post-commit query
       rerendering with the original request context, and mutation change headers instead of
       grepping server or test source names.
+      Partial evidence 2026-06-11: the P3 server data-plane tranche now imports built server
+      APIs and asserts query args/guards/context, query endpoint rendering, registry dispatch
+      misses, route guard/notFound rendering, CSRF field/token validation, and CSRF-before-guard
+      ordering instead of grepping server or test source names.
 - [x] **Make create-jiso templates real files** (`create-jiso/src/index.ts:63-473`, ~470 lines of
       escaped template literals including a CI workflow and double-escaped regexes inside
       `.mjs`-in-string). Move to a `templates/` directory copied at scaffold time with `{{name}}`

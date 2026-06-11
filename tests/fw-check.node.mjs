@@ -12,15 +12,23 @@ import {
 import { diagnosticDefinitions } from '../dist/core/src/index.mjs';
 import { readElementParams } from '../dist/runtime/src/index.mjs';
 import {
+  csrfField,
+  csrfToken,
   domain,
   mutation,
+  notFound,
+  query,
+  renderQueryEndpointResponse,
+  renderQueryRegistryEndpointResponse,
   renderDocument,
   renderDocumentQueryScript,
   renderMutationResponse,
   renderPageHints,
   renderQueryScript,
   runMutation,
-  query,
+  runQuery,
+  runRoutePage,
+  renderRoutePageResponse,
   route as serverRoute,
   s,
 } from '../dist/server/src/index.mjs';
@@ -1416,38 +1424,127 @@ void test('P3 mutation lifecycle includes an explicit transaction boundary', asy
 });
 
 void test('P3 server data-plane APIs stay exported and covered', async () => {
-  const serverSource = await readProjectFile('packages/server/src/index.ts');
-  const serverTests = await readProjectFile('packages/server/src/index.test.ts');
+  const product = domain('product');
+  const productQuery = query('productDetail', {
+    args: s.object({ id: s.string(), max: s.number().int().default(10) }),
+    guard: (request) => request.session?.userId === 'u1',
+    instanceKey: (input) => `product:${input.id}`,
+    load(input, { request }) {
+      return { id: input.id, max: input.max, userId: request.session?.userId };
+    },
+    reads: [product],
+    version: (input) => input.max,
+  });
 
-  assert.match(serverSource, /export async function runQuery/);
-  assert.match(serverSource, /export async function renderQueryEndpointResponse/);
-  assert.match(serverSource, /export async function renderQueryRegistryEndpointResponse/);
-  assert.match(serverSource, /args\?: Schema<Input>/);
-  assert.match(serverSource, /guard\?: Guard<Request>/);
-  assert.match(serverSource, /load\?\(input: Input, context\?: QueryLoadContext<Request>\)/);
-  assert.match(serverSource, /export async function runRoutePage/);
-  assert.match(serverSource, /export async function renderRoutePageResponse/);
-  assert.match(serverSource, /export function notFound/);
-  assert.match(serverSource, /export function csrfToken/);
-  assert.match(serverSource, /export function csrfField/);
-  assert.match(serverSource, /csrf\?: CsrfValidationOptions<Request> \| false/);
-  assert.match(serverSource, /function mutationCsrfOptions/);
-  assert.match(serverSource, /csrf === undefined \|\|/);
-  assert.match(
-    serverTests,
-    /runs query endpoints through args schemas, guards, and request context/,
+  assert.deepEqual(await runQuery(productQuery, { id: 'p1' }, { session: { userId: 'u1' } }), {
+    input: { id: 'p1', max: 10 },
+    ok: true,
+    value: { id: 'p1', max: 10, userId: 'u1' },
+  });
+  assert.deepEqual(await runQuery(productQuery, {}, { session: { userId: 'u1' } }), {
+    error: {
+      code: 'VALIDATION',
+      payload: { issues: [{ message: 'Expected string', path: ['id'] }] },
+    },
+    ok: false,
+    status: 422,
+  });
+  assert.deepEqual(await runQuery(productQuery, { id: 'p1' }, { session: null }), {
+    error: { code: 'UNAUTHORIZED', payload: {} },
+    ok: false,
+    status: 422,
+  });
+  assert.deepEqual(
+    await renderQueryEndpointResponse(productQuery, {
+      request: { session: { userId: 'u1' } },
+      search: new URLSearchParams([
+        ['id', 'p1'],
+        ['max', '3'],
+      ]),
+    }),
+    {
+      body: '<fw-query name="product:p1" version="3">{"id":"p1","max":3,"userId":"u1"}</fw-query>',
+      headers: { 'Content-Type': 'text/html; charset=utf-8' },
+      status: 200,
+    },
   );
-  assert.match(serverTests, /matches the typed read wire fixture response byte-for-byte/);
-  assert.match(
-    serverTests,
-    /matches the P0 wire fixtures through a live HTTP server byte-for-byte/,
+  assert.deepEqual(
+    await renderQueryRegistryEndpointResponse({ queries: [productQuery] }, 'missing', {
+      request: {},
+    }),
+    {
+      body: 'Not Found',
+      headers: { 'Content-Type': 'text/plain; charset=utf-8' },
+      status: 404,
+    },
   );
-  assert.match(serverTests, /fetchWireFixture/);
-  assert.match(serverTests, /dispatches typed read endpoints through a query registry/);
-  assert.match(serverTests, /runs route pages through guards and notFound page outcomes/);
-  assert.match(serverTests, /validates mutation CSRF tokens before running guards/);
-  assert.match(serverTests, /uses default mutation CSRF options before schema parsing/);
-  assert.match(serverTests, /preserves legacy mutation execution when csrf is explicitly false/);
+
+  const productRoute = serverRoute('/products/:id', {
+    guard: (request) => request.session?.userId === 'u1',
+    page(context, request) {
+      if (context.params.id === 'missing') return notFound();
+      return `${request.session.userId}:${context.params.id}:${context.search.tab}`;
+    },
+    params: s.object({ id: s.string() }),
+    search: s.object({ tab: s.string() }),
+  });
+  assert.deepEqual(
+    await runRoutePage(
+      productRoute,
+      { params: { id: 'p1' }, search: { tab: 'details' } },
+      { session: { userId: 'u1' } },
+    ),
+    {
+      ok: true,
+      value: 'u1:p1:details',
+    },
+  );
+  assert.deepEqual(
+    await renderRoutePageResponse(
+      productRoute,
+      { params: { id: 'missing' }, search: { tab: 'details' } },
+      { session: { userId: 'u1' } },
+    ),
+    {
+      body: 'Not Found',
+      headers: { 'Content-Type': 'text/html; charset=utf-8' },
+      status: 404,
+    },
+  );
+
+  const request = { session: { id: 's1' } };
+  const csrf = {
+    field: 'csrf',
+    secret: 'test-secret',
+    sessionId: (candidate) => candidate.session.id,
+  };
+  let guardCalls = 0;
+  const addToCart = mutation('cart/add', {
+    csrf,
+    guard() {
+      guardCalls += 1;
+      return true;
+    },
+    input: s.object({ productId: s.string() }),
+    handler(input) {
+      return input.productId;
+    },
+  });
+  const token = csrfToken(request, csrf);
+  assert.equal(csrfField(request, csrf), `<input type="hidden" name="csrf" value="${token}">`);
+  assert.deepEqual(await runMutation(addToCart, { csrf: token, productId: 'p1' }, request), {
+    changes: [],
+    ok: true,
+    rerunQueries: [],
+    value: 'p1',
+  });
+  assert.equal(guardCalls, 1);
+  assert.deepEqual(await runMutation(addToCart, { productId: 'p1' }, request), {
+    error: { code: 'CSRF', payload: {} },
+    ok: false,
+    status: 422,
+  });
+  assert.equal(guardCalls, 1);
 });
 
 void test('P3 route and query guard removal is mechanically audited by fw check', () => {
