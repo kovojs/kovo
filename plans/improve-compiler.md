@@ -24,7 +24,7 @@ Scope: `packages/compiler/src/` only (plus `tests/fw-check.node.mjs` where gate 
 - [x] Extracted markup validators into `src/validate/markup.ts`: FW221 IDREFs, FW224 static ids, FW225 content model, FW226 residual stamps, and FW231/FW232/FW233 primitive merge conflicts.
 - [x] Fixed known Phase 0 miscompiles that are directly covered by regression tests: self-closing same-name JSX, nested handler braces/span rewrites, exact handler attribute replacement, static state string JSON, handler parameter substring collisions, and conditional at-rule CSS fallback scoping.
 - [x] Migrated large parts of Phase 3 onto the parser model: component/options extraction, JSX element/attribute validators, mutation handler extraction, query binding/stamp collection, update coverage, event trigger justification, and identifier-reference analysis for FW201.
-- [ ] Finish the Phase 2 module split: most orchestration and several validators/lowerers/emitters still live in `packages/compiler/src/index.ts`.
+- [x] Finish the Phase 2 module split: `packages/compiler/src/index.ts` is now a public barrel/orchestrator with public types, compile orchestration, Vite factory wrapper, fixpoint helpers, and name inference; validators, lowerers, emitters, graph derivation, CSS, diagnostics, and scanners live in dedicated modules.
 - [ ] Finish the Phase 3 parser migration; the `findMatchingClosingTag` scanner path is gone, but broader dead scanner cleanup remains under audit.
       Evidence 2026-06-11: `rg` confirms `findMatchingClosingTag` is absent. The remaining
       top-level object scanner is live in `src/scan/object.ts` and is used by component
