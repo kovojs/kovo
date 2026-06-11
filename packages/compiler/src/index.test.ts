@@ -2308,6 +2308,8 @@ export const Recommendations = component('recommendations', {
         message:
           'fw-deps or fw-c names an unknown query instance or component. fw-c="unknown-component"',
         severity: 'error',
+        start: { column: 14, line: 5 },
+        length: 24,
       },
       {
         code: 'FW226',
@@ -2315,6 +2317,8 @@ export const Recommendations = component('recommendations', {
         message:
           'fw-deps or fw-c names an unknown query instance or component. fw-deps="missingQuery:p1"',
         severity: 'error',
+        start: { column: 39, line: 5 },
+        length: 30,
       },
     ]);
   });
@@ -2637,6 +2641,8 @@ export const CartTable = component('cart-table', {
         ].join('\n'),
         message: 'Fragment-target children cannot lower to a component reference. CartRow',
         severity: 'error',
+        start: { column: 9, line: 12 },
+        length: 35,
       },
     ]);
   });

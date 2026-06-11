@@ -1302,8 +1302,8 @@ function validateFragmentTargetChildren(
 
   return targetNames.flatMap((name) =>
     fragmentTargetChildBodies(source, model, name)
-      .filter((body) => capturesUnserializableValue(body))
-      .map((body) => fw230Diagnostic(fileName, name, body)),
+      .filter((body) => capturesUnserializableValue(body.source))
+      .map((body) => fw230Diagnostic(fileName, source, name, body)),
   );
 }
 
@@ -1315,25 +1315,37 @@ function fragmentTargetChildBodies(
   source: string,
   model: ComponentModuleModel,
   name: string,
-): string[] {
-  const bodies: string[] = [];
+): TemplateBody[] {
+  const bodies: TemplateBody[] = [];
 
   for (const element of jsxElements(model).filter((item) => item.tag === name)) {
     if (element.selfClosing) continue;
 
-    const body = source.slice(element.openingEnd, element.closingStart).trim();
-    if (body) bodies.push(body);
+    const raw = source.slice(element.openingEnd, element.closingStart);
+    const leadingWhitespace = /^\s*/.exec(raw)?.[0].length ?? 0;
+    const body = raw.trim();
+    if (body) {
+      bodies.push({
+        offset: element.openingEnd + leadingWhitespace,
+        source: body,
+      });
+    }
   }
 
   return bodies;
 }
 
-function fw230Diagnostic(fileName: string, target: string, body: string): CompilerDiagnostic {
+function fw230Diagnostic(
+  fileName: string,
+  source: string,
+  target: string,
+  body: TemplateBody,
+): CompilerDiagnostic {
   return {
-    ...diagnosticFor(fileName, 'FW230'),
+    ...diagnosticFor(fileName, 'FW230', source, body.offset, body.source.length),
     help: [
       `Would hoist children to: ${target}$slot_children`,
-      `Blocked children: ${body}`,
+      `Blocked children: ${body.source}`,
       'Fixes: pass serializable props, move browser/request/db values behind a server fragment, or render children inside the fragment target itself.',
     ].join('\n'),
     message: `${diagnosticDefinitions.FW230.message} ${target}`,
@@ -1564,7 +1576,15 @@ function validateResidualStamps(
     if (attribute.name === 'fw-c') {
       const component = attribute.value;
       if (component && !knownComponents.has(component)) {
-        diagnostics.push(fw226Diagnostic(options.fileName, `fw-c="${component}"`));
+        diagnostics.push(
+          fw226Diagnostic(
+            options.fileName,
+            source,
+            `fw-c="${component}"`,
+            attribute.start,
+            attribute.end - attribute.start,
+          ),
+        );
       }
     }
 
@@ -1573,7 +1593,15 @@ function validateResidualStamps(
     for (const dep of splitDepValue(attribute.value ?? '')) {
       const query = dep.split(':', 1)[0] ?? dep;
       if (!knownQueries.has(query)) {
-        diagnostics.push(fw226Diagnostic(options.fileName, `fw-deps="${dep}"`));
+        diagnostics.push(
+          fw226Diagnostic(
+            options.fileName,
+            source,
+            `fw-deps="${dep}"`,
+            attribute.start,
+            attribute.end - attribute.start,
+          ),
+        );
       }
     }
   }
@@ -1662,9 +1690,15 @@ function attributeMergeDiagnostic(
   };
 }
 
-function fw226Diagnostic(fileName: string, detail: string): CompilerDiagnostic {
+function fw226Diagnostic(
+  fileName: string,
+  source: string,
+  detail: string,
+  index: number,
+  length: number,
+): CompilerDiagnostic {
   return {
-    ...diagnosticFor(fileName, 'FW226'),
+    ...diagnosticFor(fileName, 'FW226', source, index, length),
     message: `${diagnosticDefinitions.FW226.message} ${detail}`,
   };
 }
