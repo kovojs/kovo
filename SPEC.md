@@ -887,7 +887,7 @@ Dev server and the test harness wrap `db`; every executed statement is parsed (`
 | FW407 | error      | Query read from undeclared domain (missed invalidations)                                                      |
 | FW408 | error      | Declared row key ≠ observed row predicate                                                                     |
 | FW409 | notice     | Non-eq predicate — degraded to table-level invalidation                                                       |
-| FW410 | warn/error | Opaque query projection (`sql<T>`, raw SQL) — declared output schema required, shape runtime-verified (§10.2) |
+| FW410 | error      | Opaque query projection (`sql<T>`, raw SQL) — declared output schema required, shape runtime-verified (§10.2) |
 
 ### 11.4 The verification surface (the Keppo contract)
 
