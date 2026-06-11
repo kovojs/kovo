@@ -2408,6 +2408,8 @@ export const CartBadge = component('cart-badge', {
         fileName: 'cart-badge.tsx',
         message: 'Server fact stored in island-local state.',
         severity: 'lint',
+        start: { column: 17, line: 4 },
+        length: 16,
       },
     ]);
   });
@@ -2424,12 +2426,14 @@ export const AccountMenu = component('account-menu', {
 `,
     });
 
-    expect(result.diagnostics).toMatchObject([
+    expect(result.diagnostics).toEqual([
       {
         code: 'FW301',
         fileName: 'account-menu.tsx',
         message: 'Server fact stored in island-local state.',
         severity: 'lint',
+        start: { column: 17, line: 4 },
+        length: 24,
       },
     ]);
   });

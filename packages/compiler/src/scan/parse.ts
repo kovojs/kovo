@@ -64,7 +64,7 @@ export interface ComponentModel {
   options: readonly ComponentOptionEntry[];
   renderHost?: RenderHostModel;
   renderInputs: readonly RenderInputModel[];
-  stateReturnObject?: string;
+  stateReturnObject?: StateReturnObjectModel;
 }
 
 export interface RenderHostModel {
@@ -75,6 +75,12 @@ export interface RenderHostModel {
 export interface RenderInputModel {
   end: number;
   name: string;
+  start: number;
+}
+
+export interface StateReturnObjectModel {
+  end: number;
+  source: string;
   start: number;
 }
 
@@ -173,6 +179,12 @@ export function componentRenderHost(model: ComponentModuleModel): RenderHostMode
 }
 
 export function componentStateReturnObject(model: ComponentModuleModel): string | null {
+  return componentStateReturnObjectModel(model)?.source ?? null;
+}
+
+export function componentStateReturnObjectModel(
+  model: ComponentModuleModel,
+): StateReturnObjectModel | null {
   return firstComponentModel(model)?.stateReturnObject ?? null;
 }
 
@@ -655,7 +667,7 @@ function arrowReturnObjectSource(
   sourceFile: ts.SourceFile,
   source: string,
   expression: ts.Expression,
-): string | null {
+): StateReturnObjectModel | null {
   if (!ts.isArrowFunction(expression)) return null;
 
   const body = ts.isParenthesizedExpression(expression.body)
@@ -663,5 +675,11 @@ function arrowReturnObjectSource(
     : expression.body;
   if (!ts.isObjectLiteralExpression(body)) return null;
 
-  return source.slice(body.getStart(sourceFile), body.getEnd());
+  const start = body.getStart(sourceFile);
+  const end = body.getEnd();
+  return {
+    end,
+    source: source.slice(start, end),
+    start,
+  };
 }

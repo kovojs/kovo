@@ -11,6 +11,7 @@ import {
   componentOptionSource,
   componentRenderInputModels,
   componentRenderHost,
+  componentStateReturnObjectModel,
   componentStateReturnObject,
   firstComponentModel,
   identifierReferences,
@@ -221,7 +222,7 @@ const irHeader = '// @jiso-ir';
 const cssIrHeader = '/* @jiso-ir */';
 
 const compilerValidators: readonly CompilerValidator[] = [
-  ({ model, options }) => validateServerFactsInLocalState(model, options.fileName),
+  ({ model, options, source }) => validateServerFactsInLocalState(source, model, options.fileName),
   ({ model, options, source }) => validateFragmentTargetInputs(source, model, options.fileName),
   ({ model, options, source }) => validateFragmentTargetChildren(source, model, options.fileName),
   ({ model, options, source }) => validateDataBindings(source, model, options),
@@ -1277,22 +1278,33 @@ function queryShapeAtPath(shape: QueryShape, segments: readonly string[]): Query
 
 // SPEC 5.2: query data is shared/server-owned; island-local state is private/client-owned.
 function validateServerFactsInLocalState(
+  source: string,
   model: ComponentModuleModel,
   fileName: string,
 ): CompilerDiagnostic[] {
   const queryObject = componentOptionSource(model, 'queries');
-  const stateObject = componentStateReturnObject(model);
+  const stateObject = componentStateReturnObjectModel(model);
   if (!queryObject || !stateObject) return [];
 
   const queryNames = topLevelObjectKeys(queryObject);
-  const stateKeys = topLevelObjectKeys(stateObject);
+  const stateKeys = topLevelObjectKeys(stateObject.source);
   if (queryNames.length === 0 || stateKeys.length === 0) return [];
 
   const storesServerFact = stateKeys.some((stateKey) =>
     queryNames.some((queryName) => stateKeyHasQueryPrefix(stateKey, queryName)),
   );
 
-  return storesServerFact ? [diagnosticFor(fileName, 'FW301')] : [];
+  return storesServerFact
+    ? [
+        diagnosticFor(
+          fileName,
+          'FW301',
+          source,
+          stateObject.start,
+          stateObject.end - stateObject.start,
+        ),
+      ]
+    : [];
 }
 
 function validateFragmentTargetInputs(
