@@ -1122,6 +1122,26 @@ export const ProductLinks = component('product-links', {
     ]);
   });
 
+  it('ignores literal navigation target text inside strings and comments', () => {
+    const result = compileComponentModule({
+      fileName: 'product-links.tsx',
+      registryFacts: {
+        routes: ['/cart', '/products/:id'],
+      },
+      source: `
+export const ProductLinks = component('product-links', {
+  render: () => {
+    const sample = '<a href="/missing">Missing</a><form action="/checkout"></form>';
+    // <a href="/also-missing">Missing</a>
+    return <a href="/products/p1">Product</a>;
+  },
+});
+`,
+    });
+
+    expect(result.diagnostics).toEqual([]);
+  });
+
   it('keeps unsupported details JavaScript as a handler instead of inventing platform attributes', () => {
     const result = compileComponentModule({
       fileName: 'accordion-toggle.tsx',

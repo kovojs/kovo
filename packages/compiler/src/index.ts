@@ -1489,8 +1489,10 @@ function validateLiteralHrefs(
 }
 
 function literalNavigationTargets(source: string): string[] {
-  return [...source.matchAll(/\b(?:href|action)\s*=\s*(["'])(?<target>[^"']+)\1/g)].flatMap(
-    (match) => (match.groups?.target ? [match.groups.target] : []),
+  return jsxAttributes(source).flatMap((attribute) =>
+    (attribute.name === 'href' || attribute.name === 'action') && attribute.value
+      ? [attribute.value]
+      : [],
   );
 }
 
