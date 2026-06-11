@@ -1274,6 +1274,7 @@ void test('Drizzle pinned conformance suite is an explicit gate', async () => {
 });
 
 void test('D3 deferred stream responses are consumed by the runtime', async () => {
+  const compilerBootstrapSource = await readProjectFile('packages/compiler/src/emit/bootstrap.ts');
   const compilerSource = await readProjectFile('packages/compiler/src/index.ts');
   const compilerTests = await readProjectFile('packages/compiler/src/index.test.ts');
   const serverSource = await readProjectFile('packages/server/src/index.ts');
@@ -1284,10 +1285,10 @@ void test('D3 deferred stream responses are consumed by the runtime', async () =
   assert.match(compilerSource, /collectQueryUpdatePlans/);
   assert.match(compilerSource, /\$queryUpdatePlans/);
   assert.match(compilerSource, /emitQueryPlanBootstrapModule/);
-  assert.match(compilerSource, /installJisoLoader/);
-  assert.match(compilerSource, /enhancedMutations: \{/);
-  assert.match(compilerSource, /applyDeferredStreamResponseToDom/);
-  assert.match(compilerSource, /applyJisoDeferredStreamResponse/);
+  assert.match(compilerBootstrapSource, /installJisoLoader/);
+  assert.match(compilerBootstrapSource, /enhancedMutations: \{/);
+  assert.match(compilerBootstrapSource, /applyDeferredStreamResponseToDom/);
+  assert.match(compilerBootstrapSource, /applyJisoDeferredStreamResponse/);
   assert.match(compilerSource, /applyCompiledQueryUpdatePlan/);
   assert.match(compilerSource, /bindings: true, derives: \[\], stamps: \[\]/);
   assert.match(compilerTests, /emits per-query data-bind update plans for compiled components/);

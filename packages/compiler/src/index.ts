@@ -9,6 +9,8 @@ import { validateEventTriggerNames } from './validate/event-triggers.js';
 
 export type { DiagnosticCode };
 export type { CompilerDiagnostic, SourcePosition } from './diagnostics.js';
+export type { QueryPlanBootstrapInput, QueryPlanBootstrapOptions } from './emit/bootstrap.js';
+export { emitQueryPlanBootstrapModule } from './emit/bootstrap.js';
 export type {
   CompileAppGraphOptions,
   CompileAppGraphResult,
@@ -73,15 +75,6 @@ export interface QueryUpdateCoverageFact {
   position: string;
   query: string;
   status: 'UNHANDLED' | 'fragment' | 'isomorphic' | 'plan' | 'renderOnce';
-}
-
-export interface QueryPlanBootstrapInput {
-  exportName: string;
-  importPath: string;
-}
-
-export interface QueryPlanBootstrapOptions {
-  fileName?: string;
 }
 
 export function createEmptyCompileResult(): CompileResult {
@@ -310,55 +303,6 @@ export function jisoVitePlugin(): JisoVitePlugin {
         map: null,
       };
     },
-  };
-}
-
-export function emitQueryPlanBootstrapModule(
-  inputs: readonly QueryPlanBootstrapInput[],
-  options: QueryPlanBootstrapOptions = {},
-): EmittedFile {
-  const fileName = options.fileName ?? 'generated/app.client.js';
-  const imports = inputs
-    .map((input) => `import { ${input.exportName} } from ${JSON.stringify(input.importPath)};`)
-    .join('\n');
-  const spreads =
-    inputs.length > 0
-      ? inputs.map((input) => `  ...${input.exportName},`).join('\n')
-      : '  // no compiled query update plans';
-
-  return {
-    fileName,
-    source: `${irHeader}
-import { applyDeferredStreamResponseToDom, createQueryStore, installJisoLoader } from '@jiso/runtime';
-${imports ? `${imports}\n` : ''}
-const store = createQueryStore();
-const queryPlans = {
-${spreads}
-};
-
-installJisoLoader({
-  importModule: (specifier) => import(specifier),
-  root: document,
-  queryStore: store,
-  enhancedMutations: {
-    fetch: (url, options) => fetch(url, options),
-    queryPlans,
-    root: document,
-    store,
-  },
-});
-
-export function applyJisoDeferredStreamResponse(body, options = {}) {
-  return applyDeferredStreamResponseToDom({
-    body,
-    ...(options.boundary ? { boundary: options.boundary } : {}),
-    ...(options.morph ? { morph: options.morph } : {}),
-    queryPlans,
-    root: options.root ?? document,
-    store,
-  });
-}
-`,
   };
 }
 
