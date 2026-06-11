@@ -2393,10 +2393,52 @@ export const addToCart = mutation('cart/add', {
     ]);
   });
 
+  it('reports FW330 for arrow mutation handlers that receive db directly', () => {
+    const result = compileComponentModule({
+      fileName: 'cart.mutation.ts',
+      source: `
+export const addToCart = mutation('cart/add', {
+  input: addToCartInput,
+  handler: async (input, db) => {
+    await db.insert(cartItems).values(input);
+    return input.productId;
+  },
+});
+`,
+    });
+
+    expect(result.diagnostics).toEqual([
+      {
+        code: 'FW330',
+        fileName: 'cart.mutation.ts',
+        message: 'Direct db access in a mutation handler; route through domain.',
+        severity: 'lint',
+      },
+    ]);
+  });
+
   it('does not report FW330 for domain-routed mutation handlers', () => {
     const result = compileComponentModule({
       fileName: 'cart.mutation.ts',
       source: `
+export const addToCart = mutation('cart/add', {
+  input: addToCartInput,
+  handler(input, request, context) {
+    return cartDomain.addItem(input, request.session.user.id, context);
+  },
+});
+`,
+    });
+
+    expect(result.diagnostics).toEqual([]);
+  });
+
+  it('ignores mutation handler text inside strings and comments', () => {
+    const result = compileComponentModule({
+      fileName: 'cart.mutation.ts',
+      source: `
+const sample = "export const bad = mutation('cart/add', { handler(input, request) { request.db.insert(cartItems).values(input); } });";
+// export const bad = mutation('cart/add', { handler(input, db) { db.insert(cartItems).values(input); } });
 export const addToCart = mutation('cart/add', {
   input: addToCartInput,
   handler(input, request, context) {

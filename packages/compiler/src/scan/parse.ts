@@ -5,6 +5,11 @@ export interface ComponentOptionEntry {
   value: string;
 }
 
+export interface MutationHandlerModel {
+  body: string;
+  params: readonly string[];
+}
+
 export interface CallExpressionModel {
   arguments: readonly string[];
   end: number;
@@ -64,6 +69,7 @@ export interface ComponentModuleModel {
   jsxComments: readonly JsxCommentModel[];
   jsxExpressions: readonly JsxExpressionModel[];
   jsxElements: readonly JsxElementModel[];
+  mutationHandlers: readonly MutationHandlerModel[];
 }
 
 export function parseComponentModule(fileName: string, source: string): ComponentModuleModel {
@@ -79,6 +85,7 @@ export function parseComponentModule(fileName: string, source: string): Componen
   const jsxComments: JsxCommentModel[] = [];
   const jsxExpressions: JsxExpressionModel[] = [];
   const jsxElements: JsxElementModel[] = [];
+  const mutationHandlers: MutationHandlerModel[] = [];
 
   const visit = (node: ts.Node): void => {
     if (ts.isVariableDeclaration(node) && ts.isIdentifier(node.name) && isExportedVariable(node)) {
@@ -101,6 +108,9 @@ export function parseComponentModule(fileName: string, source: string): Componen
     }
     if (ts.isCallExpression(node) && ts.isIdentifier(node.expression)) {
       calls.push(callExpressionModel(sourceFile, source, node));
+      if (node.expression.text === 'mutation') {
+        mutationHandlers.push(...mutationHandlerModels(sourceFile, source, node));
+      }
     }
 
     ts.forEachChild(node, visit);
@@ -108,7 +118,7 @@ export function parseComponentModule(fileName: string, source: string): Componen
 
   visit(sourceFile);
 
-  return { calls, components, jsxComments, jsxExpressions, jsxElements };
+  return { calls, components, jsxComments, jsxExpressions, jsxElements, mutationHandlers };
 }
 
 function isExportedVariable(node: ts.VariableDeclaration): boolean {
@@ -181,6 +191,10 @@ export function jsxComments(model: ComponentModuleModel): JsxCommentModel[] {
   return [...model.jsxComments];
 }
 
+export function mutationHandlers(model: ComponentModuleModel): MutationHandlerModel[] {
+  return [...model.mutationHandlers];
+}
+
 function componentModelFromInitializer(
   sourceFile: ts.SourceFile,
   source: string,
@@ -242,6 +256,46 @@ function componentOptions(
         value: source.slice(
           property.initializer.getStart(sourceFile),
           property.initializer.getEnd(),
+        ),
+      },
+    ];
+  });
+}
+
+function mutationHandlerModels(
+  sourceFile: ts.SourceFile,
+  source: string,
+  call: ts.CallExpression,
+): MutationHandlerModel[] {
+  const options = call.arguments[1];
+  if (!options || !ts.isObjectLiteralExpression(options)) return [];
+
+  return options.properties.flatMap((property) => {
+    if (ts.isMethodDeclaration(property) && propertyNameText(property.name) === 'handler') {
+      return property.body
+        ? [
+            {
+              body: source.slice(property.body.getStart(sourceFile), property.body.getEnd()),
+              params: property.parameters.map((param) =>
+                source.slice(param.getStart(sourceFile), param.getEnd()),
+              ),
+            },
+          ]
+        : [];
+    }
+
+    if (!ts.isPropertyAssignment(property) || propertyNameText(property.name) !== 'handler') {
+      return [];
+    }
+
+    const initializer = property.initializer;
+    if (!ts.isArrowFunction(initializer) && !ts.isFunctionExpression(initializer)) return [];
+
+    return [
+      {
+        body: source.slice(initializer.body.getStart(sourceFile), initializer.body.getEnd()),
+        params: initializer.parameters.map((param) =>
+          source.slice(param.getStart(sourceFile), param.getEnd()),
         ),
       },
     ];

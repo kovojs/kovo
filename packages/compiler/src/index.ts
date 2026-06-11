@@ -17,6 +17,7 @@ import {
   type JsxElementModel,
   jsxElements,
   jsxExpressions,
+  mutationHandlers,
   parseComponentModule as parseComponentModuleModel,
 } from './scan/parse.js';
 import { escapeAttribute, indent, kebabCase } from './shared.js';
@@ -1606,40 +1607,10 @@ function isNativeHtmlTag(tag: string): boolean {
 }
 
 function findHandlerBodies(source: string): { body: string; params: string[] }[] {
-  const handlers: { body: string; params: string[] }[] = [];
-  const methodPattern = /\bhandler\s*\((?<params>[^)]*)\)\s*\{/g;
-  const propertyPattern = /\bhandler\s*:\s*(?:async\s*)?\((?<params>[^)]*)\)\s*=>\s*\{/g;
-
-  for (const match of source.matchAll(methodPattern)) {
-    const bodyStart = match.index + match[0].lastIndexOf('{');
-    const bodyEnd = findMatchingToken(source, bodyStart, '{', '}');
-    if (bodyEnd === -1) continue;
-
-    handlers.push({
-      body: source.slice(bodyStart, bodyEnd + 1),
-      params: splitParameters(match.groups?.params ?? ''),
-    });
-  }
-
-  for (const match of source.matchAll(propertyPattern)) {
-    const bodyStart = match.index + match[0].lastIndexOf('{');
-    const bodyEnd = findMatchingToken(source, bodyStart, '{', '}');
-    if (bodyEnd === -1) continue;
-
-    handlers.push({
-      body: source.slice(bodyStart, bodyEnd + 1),
-      params: splitParameters(match.groups?.params ?? ''),
-    });
-  }
-
-  return handlers;
-}
-
-function splitParameters(params: string): string[] {
-  return params
-    .split(',')
-    .map((param) => param.trim())
-    .filter(Boolean);
+  return mutationHandlers(parseComponentModuleModel('component.tsx', source)).map((handler) => ({
+    body: handler.body,
+    params: [...handler.params],
+  }));
 }
 
 function readParameterName(param: string): string {
