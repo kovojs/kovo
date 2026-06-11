@@ -66,6 +66,7 @@ export type QueryShape =
     };
 
 export interface QueryFact {
+  diagnostics?: readonly TouchGraphDiagnostic[];
   instanceKey?: {
     domain: string;
     key: string;
@@ -237,6 +238,10 @@ export function diagnosticsForTouchGraph(graph: TouchGraph): TouchGraphDiagnosti
   ]);
 }
 
+export function diagnosticsForQueryFacts(facts: readonly QueryFact[]): TouchGraphDiagnostic[] {
+  return facts.flatMap((fact) => [...(fact.diagnostics ?? [])]);
+}
+
 export function extractTouchGraphFromSource(files: readonly SourceFileInput[]): TouchGraph {
   const tables = new Map<string, ExtractedTable[]>();
   const unresolvedIdentifiers = new Set<string>();
@@ -368,12 +373,20 @@ export function extractQueryFactsFromSource(files: readonly SourceFileInput[]): 
   for (const file of files) {
     for (const query of extractQueryDefinitions(file.source)) {
       const reads = queryReadDomains(query.body, tables);
+      const site = `${file.fileName}:${lineForIndex(file.source, query.index)}`;
+      const diagnostics = opaqueProjectionDiagnostics(
+        query.query,
+        query.opaquePaths,
+        site,
+        hasDeclaredQueryOutputSchema(query.body),
+      );
       facts.push({
+        ...(diagnostics.length > 0 ? { diagnostics } : {}),
         ...queryInstanceKey(query.body, tables),
         query: query.query,
         reads,
         shape: query.shape,
-        site: `${file.fileName}:${lineForIndex(file.source, query.index)}`,
+        site,
       });
     }
   }
@@ -506,6 +519,7 @@ interface ExtractedFunction {
 interface ExtractedQueryDefinition {
   body: string;
   index: number;
+  opaquePaths: readonly string[];
   query: string;
   shape: QueryShape;
 }
@@ -550,21 +564,27 @@ function extractQueryDefinitions(source: string): ExtractedQueryDefinition[] {
     if (objectEnd === -1) continue;
 
     const body = source.slice(objectStart, objectEnd + 1);
-    const shape = selectShapeFromQueryBody(body);
-    if (!shape) continue;
+    const selection = selectShapeFromQueryBody(body);
+    if (!selection) continue;
 
     definitions.push({
       body,
       index: match.index,
+      opaquePaths: selection.opaquePaths,
       query,
-      shape,
+      shape: selection.shape,
     });
   }
 
   return definitions;
 }
 
-function selectShapeFromQueryBody(body: string): QueryShape | null {
+interface QueryShapeSelection {
+  opaquePaths: readonly string[];
+  shape: QueryShape;
+}
+
+function selectShapeFromQueryBody(body: string): QueryShapeSelection | null {
   const selectCall = /\.select\s*\(/.exec(body);
   if (!selectCall) return null;
 
@@ -577,8 +597,9 @@ function selectShapeFromQueryBody(body: string): QueryShape | null {
   return queryShapeFromObjectLiteral(body.slice(objectStart + 1, objectEnd));
 }
 
-function queryShapeFromObjectLiteral(source: string): QueryShape {
+function queryShapeFromObjectLiteral(source: string, prefix = ''): QueryShapeSelection {
   const shape: Record<string, QueryShape> = {};
+  const opaquePaths: string[] = [];
 
   for (const entry of splitTopLevelArgs(source)) {
     const separator = entry.indexOf(':');
@@ -591,12 +612,18 @@ function queryShapeFromObjectLiteral(source: string): QueryShape {
     if (!key) continue;
 
     const value = entry.slice(separator + 1).trim();
-    shape[key] = value.startsWith('{')
-      ? queryShapeFromObjectLiteral(value.slice(1, findMatchingBrace(value, 0)))
-      : scalarQueryShape(key, value);
+    const path = prefix ? `${prefix}.${key}` : key;
+    if (value.startsWith('{')) {
+      const nested = queryShapeFromObjectLiteral(value.slice(1, findMatchingBrace(value, 0)), path);
+      shape[key] = nested.shape;
+      opaquePaths.push(...nested.opaquePaths);
+    } else {
+      shape[key] = scalarQueryShape(key, value);
+      if (isOpaqueProjection(value)) opaquePaths.push(path);
+    }
   }
 
-  return shape;
+  return { opaquePaths, shape };
 }
 
 function scalarQueryShape(key: string, expression: string): QueryShape {
@@ -605,6 +632,30 @@ function scalarQueryShape(key: string, expression: string): QueryShape {
   if (/sql\s*<\s*string\s*>/.test(expression)) return 'string';
   if (/(count|qty|quantity|total|price|stock|amount)$/i.test(key)) return 'number';
   return 'string';
+}
+
+function isOpaqueProjection(expression: string): boolean {
+  return /\bsql\s*(?:<|`|\(|\.)|\braw\s*\(/.test(expression);
+}
+
+function hasDeclaredQueryOutputSchema(body: string): boolean {
+  return /\boutput\s*:/.test(body);
+}
+
+function opaqueProjectionDiagnostics(
+  query: string,
+  opaquePaths: readonly string[],
+  line: string,
+  hasOutput: boolean,
+): TouchGraphDiagnostic[] {
+  if (hasOutput) return [];
+
+  return opaquePaths.map((path) => ({
+    code: 'FW410',
+    message: `${diagnosticDefinitions.FW410.message} ${query}.${path} requires a declared output schema for opaque sql/raw projection.`,
+    severity: diagnosticDefinitions.FW410.severity,
+    site: line,
+  }));
 }
 
 function queryReadDomains(

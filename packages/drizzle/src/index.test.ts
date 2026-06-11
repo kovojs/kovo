@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
   createTouchGraphEntry,
+  diagnosticsForQueryFacts,
   diagnosticsForTouchGraph,
   extractTouchGraphFromProject,
   extractTouchGraphFromSource,
@@ -249,6 +250,7 @@ export const tableDomains = {
           export const products = pgTable("products", {}, jiso({ domain: "product", key: "id" }));
 
           export const cartQuery = query("cart", {
+            output: s.object({ count: s.number() }),
             async load(input, db) {
               return db.select({
                 count: sql<number>\`count(*)\`,
@@ -279,6 +281,58 @@ export const tableDomains = {
           productId: 'string',
         },
         site: 'cart.queries.ts:5',
+      },
+    ]);
+  });
+
+  it('reports FW410 for opaque query projections without declared output schemas', () => {
+    const facts = extractQueryFactsFromSource([
+      {
+        fileName: 'cart.queries.ts',
+        source: `
+          export const cartItems = pgTable("cart_items", {}, jiso({ domain: "cart", key: "cartId" }));
+
+          export const cartQuery = query("cart", {
+            async load(input, db) {
+              return db.select({
+                count: sql<number>\`count(*)\`,
+              }).from(cartItems).where(eq(cartItems.cartId, input.cartId));
+            },
+          });
+        `,
+      },
+    ]);
+
+    expect(facts).toEqual([
+      {
+        diagnostics: [
+          {
+            code: 'FW410',
+            message:
+              'Query result shape failed declared output schema. cart.count requires a declared output schema for opaque sql/raw projection.',
+            severity: 'error',
+            site: 'cart.queries.ts:4',
+          },
+        ],
+        instanceKey: {
+          domain: 'cart',
+          key: 'arg:cartId',
+        },
+        query: 'cart',
+        reads: ['cart'],
+        shape: {
+          count: 'number',
+        },
+        site: 'cart.queries.ts:4',
+      },
+    ]);
+    expect(diagnosticsForQueryFacts(facts)).toEqual([
+      {
+        code: 'FW410',
+        message:
+          'Query result shape failed declared output schema. cart.count requires a declared output schema for opaque sql/raw projection.',
+        severity: 'error',
+        site: 'cart.queries.ts:4',
       },
     ]);
   });

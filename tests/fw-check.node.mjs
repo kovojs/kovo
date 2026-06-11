@@ -898,7 +898,11 @@ void test('P9 verification layer evidence remains represented', async () => {
   assert.match(testHarnessTests, /reports FW410 for nested query output shape mismatches/);
   assert.match(testHarnessSource, /diagnosticDefinitions\[code\]\.message/);
   assert.match(cliSource, /verificationDiagnostics\?: readonly VerificationDiagnosticFact/);
+  assert.match(cliSource, /diagnostics\?: readonly StaticDiagnosticFact/);
   assert.match(cliSource, /function verificationDiagnosticLine/);
+  assert.match(cliSource, /function staticDiagnosticLine/);
+  assert.match(cliTests, /prints static Drizzle FW410 diagnostics as fw check findings/);
+  assert.match(cliTests, /ERROR FW410 cart\.queries\.ts:5/);
   assert.match(cliTests, /prints runtime verification diagnostics as fw check findings/);
   assert.match(cliTests, /ERROR FW408 product\.domain\.ts:9/);
   assert.match(runtimeSource, /export interface MutationChangeRecord/);
@@ -986,8 +990,11 @@ void test('P3 Drizzle query facts include select shapes and instance keys', asyn
   const drizzleTests = await readProjectFile('packages/drizzle/src/index.test.ts');
 
   assert.match(drizzleSource, /export interface QueryFact/);
+  assert.match(drizzleSource, /diagnostics\?: readonly TouchGraphDiagnostic/);
+  assert.match(drizzleSource, /diagnosticsForQueryFacts/);
   assert.match(drizzleSource, /extractQueryFactsFromSource/);
   assert.match(drizzleSource, /selectShapeFromQueryBody/);
+  assert.match(drizzleSource, /opaqueProjectionDiagnostics/);
   assert.match(drizzleSource, /queryInstanceKey/);
   assert.match(
     drizzleTests,
@@ -995,6 +1002,10 @@ void test('P3 Drizzle query facts include select shapes and instance keys', asyn
   );
   assert.match(drizzleTests, /instanceKey: \{\s*domain: 'cart',\s*key: 'arg:cartId'/);
   assert.match(drizzleTests, /reads: \['cart', 'product'\]/);
+  assert.match(
+    drizzleTests,
+    /reports FW410 for opaque query projections without declared output schemas/,
+  );
   assert.match(
     drizzleTests,
     /omits instance keys when Drizzle query predicates do not target an annotated table key/,

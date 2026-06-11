@@ -448,6 +448,23 @@ describe('fw check', () => {
     });
   });
 
+  it('prints static Drizzle FW410 diagnostics as fw check findings', () => {
+    expect(
+      fwCheck({
+        diagnostics: [
+          {
+            code: 'FW410',
+            site: 'cart.queries.ts:5',
+          },
+        ],
+      }),
+    ).toEqual({
+      exitCode: 1,
+      output:
+        'fw-check/v1\nERROR FW410 cart.queries.ts:5 Query result shape failed declared output schema.\n',
+    });
+  });
+
   it('prints runtime verification diagnostics as fw check findings', () => {
     expect(
       fwCheck({

@@ -5,6 +5,7 @@ import { readFileSync } from 'node:fs';
 import { diagnosticDefinitions, type DiagnosticCode, type DiagnosticSeverity } from '@jiso/core';
 
 export interface FwCheckInput {
+  diagnostics?: readonly StaticDiagnosticFact[];
   eventPayloads?: readonly EventPayloadFact[];
   fixpointChecks?: readonly FixpointCheck[];
   lints?: readonly SemanticLint[];
@@ -150,6 +151,13 @@ export interface VerificationDiagnosticFact {
   message?: string;
   severity?: DiagnosticSeverity;
   site?: string;
+}
+
+export interface StaticDiagnosticFact {
+  code: DiagnosticCode;
+  message?: string;
+  severity?: DiagnosticSeverity;
+  site: string;
 }
 
 interface CliTouchGraphEntry {
@@ -459,6 +467,10 @@ export function fwCheck(input: FwCheckInput): FwCheckResult {
     );
   }
 
+  for (const diagnostic of input.diagnostics ?? []) {
+    lines.push(staticDiagnosticLine(diagnostic));
+  }
+
   for (const diagnostic of input.verificationDiagnostics ?? []) {
     lines.push(verificationDiagnosticLine(diagnostic));
   }
@@ -570,6 +582,12 @@ function verificationDiagnosticLine(diagnostic: VerificationDiagnosticFact): str
   const suffix = details.length > 0 ? ` ${details.join(' ')}` : '';
 
   return `${severity.toUpperCase()} ${diagnostic.code} ${site} ${diagnostic.message ?? definition.message}${suffix}`;
+}
+
+function staticDiagnosticLine(diagnostic: StaticDiagnosticFact): string {
+  const definition = diagnosticDefinitions[diagnostic.code];
+  const severity = diagnostic.severity ?? definition.severity;
+  return `${severity.toUpperCase()} ${diagnostic.code} ${diagnostic.site} ${diagnostic.message ?? definition.message}`;
 }
 
 function notFound(options: FwTargetExplainOptions): FwCheckResult {
