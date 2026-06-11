@@ -145,6 +145,7 @@ const parseTemplateViteTasks = (source) => {
   const tasks = {};
   let currentTask;
   let currentArray;
+  let currentMultilineProperty;
 
   for (const line of source.split('\n')) {
     const indent = line.search(/\S|$/);
@@ -156,6 +157,7 @@ const parseTemplateViteTasks = (source) => {
       if (taskMatch) {
         currentTask = taskMatch[1];
         currentArray = undefined;
+        currentMultilineProperty = undefined;
         tasks[currentTask] = {};
         continue;
       }
@@ -166,6 +168,22 @@ const parseTemplateViteTasks = (source) => {
     if (indent === 8 && trimmed === '},') {
       currentTask = undefined;
       currentArray = undefined;
+      currentMultilineProperty = undefined;
+      continue;
+    }
+
+    if (currentMultilineProperty) {
+      const stringMatch = /^'([^']+)',?$/.exec(trimmed);
+      if (stringMatch) {
+        tasks[currentTask][currentMultilineProperty] = stringMatch[1];
+        currentMultilineProperty = undefined;
+        continue;
+      }
+    }
+
+    const multilinePropertyMatch = /^(command):$/.exec(trimmed);
+    if (multilinePropertyMatch) {
+      currentMultilineProperty = multilinePropertyMatch[1];
       continue;
     }
 
@@ -4486,6 +4504,9 @@ void test('Conformance suites are an explicit gate', async () => {
   const packageJson = JSON.parse(await readProjectFile('package.json'));
   const viteConfig = await readProjectFile('vite.config.ts');
   const ciWorkflow = await readProjectFile('.github/workflows/ci.yml');
+  const acceptanceSteps = packageJson.scripts.acceptance.split(' && ');
+  const ciSteps = parseWorkflowSteps(ciWorkflow).map((step) => step.run ?? step.uses);
+  const tasks = parseTemplateViteTasks(viteConfig);
   const authSpikePackageJson = JSON.parse(
     await readProjectFile('conformance/auth-spike/package.json'),
   );
@@ -4500,17 +4521,31 @@ void test('Conformance suites are an explicit gate', async () => {
     await readProjectFile('conformance/drizzle-pin/package.json'),
   );
 
-  assert.match(packageJson.scripts.acceptance, /pnpm run test:conformance/);
+  assert.equal(acceptanceSteps.includes('pnpm run test:conformance'), true);
   assert.equal(packageJson.scripts['test:conformance'], 'vp run conformance');
   assert.equal(drizzlePackageJson.dependencies['ts-morph'], '^28.0.0');
   assert.equal(drizzlePinPackageJson.devDependencies['drizzle-orm'], '0.45.2');
-  assert.match(viteConfig, /conformance:\s*\{/);
-  assert.match(viteConfig, /'conformance-drizzle':\s*\{/);
-  assert.match(viteConfig, /@jiso\/conformance-drizzle-pin/);
-  assert.match(viteConfig, /@jiso\/conformance-auth-spike/);
-  assert.match(viteConfig, /@jiso\/conformance-webhook-spike/);
-  assert.match(viteConfig, /@jiso\/conformance-app-shell-spike/);
-  assert.match(ciWorkflow, /vp run conformance/);
+  assert.equal(ciSteps.includes('vp run conformance'), true);
+  assert.deepEqual(tasks['conformance-drizzle'], {
+    command: 'vitest --run conformance/drizzle-pin/src/index.test.ts',
+    input: [
+      { base: 'workspace', pattern: 'conformance/drizzle-pin/src/index.test.ts' },
+      { base: 'workspace', pattern: 'packages/drizzle/src/**/*.ts' },
+    ],
+  });
+  assert.deepEqual(tasks.conformance, {
+    command:
+      'pnpm --filter @jiso/conformance-drizzle-pin test && pnpm --filter @jiso/conformance-auth-spike test && pnpm --filter @jiso/conformance-webhook-spike test && pnpm --filter @jiso/conformance-app-shell-spike test',
+    input: [
+      { base: 'workspace', pattern: 'conformance/**/package.json' },
+      { base: 'workspace', pattern: 'conformance/**/src/**/*.ts' },
+      { base: 'workspace', pattern: 'conformance/**/docs/**' },
+      { base: 'workspace', pattern: 'packages/core/src/**/*.ts' },
+      { base: 'workspace', pattern: 'packages/server/src/**/*.ts' },
+      { base: 'workspace', pattern: 'packages/drizzle/src/**/*.ts' },
+      { base: 'workspace', pattern: 'packages/better-auth/src/**/*.ts' },
+    ],
+  });
   assert.equal(authSpikePackageJson.name, '@jiso/conformance-auth-spike');
   assert.equal(webhookSpikePackageJson.name, '@jiso/conformance-webhook-spike');
   assert.equal(appShellSpikePackageJson.name, '@jiso/conformance-app-shell-spike');

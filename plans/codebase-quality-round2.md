@@ -138,6 +138,10 @@ Do this first or pay it on every commit.
       `pnpm exec vitest --run conformance/drizzle-pin/src/index.test.ts` from
       `tests/fw-check.node.mjs` instead of grepping Drizzle implementation symbols,
       package-test names, or conformance-test source.
+      Partial evidence 2026-06-11: the conformance wiring tranche now parses package scripts, CI
+      run steps, and Vite task definitions structurally while keeping the Drizzle package and
+      conformance suites executable, instead of grepping Vite/CI source text for conformance task
+      names.
       Partial evidence 2026-06-11: the P1 render-equivalence tranche now imports the built
       compiler API, asserts `compileComponentModule` render-equivalence checks and
       `assertRenderEquivalence` failure behavior, then asserts the `ERROR RENDER_EQUIV` CLI
