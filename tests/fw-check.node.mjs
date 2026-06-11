@@ -596,6 +596,9 @@ void test('P1 compiler validates residual fw-c and fw-deps stamps', async () => 
 
 void test('P1 compiler emits FW311 update coverage facts', async () => {
   const coreSource = await readProjectFile('packages/core/src/diagnostics.ts');
+  const componentContractsSource = await readProjectFile(
+    'packages/compiler/src/validate/component-contracts.ts',
+  );
   const compilerDiagnosticsSource = await readProjectFile('packages/compiler/src/diagnostics.ts');
   const compilerSource = await readProjectFile('packages/compiler/src/index.ts');
   const compilerBindingsSource = await readProjectFile(
@@ -609,7 +612,7 @@ void test('P1 compiler emits FW311 update coverage facts', async () => {
   assert.match(compilerDiagnosticsSource, /interface SourcePosition/);
   assert.match(compilerDiagnosticsSource, /function offsetToPosition/);
   assert.match(compilerSource, /collectQueryUpdateCoverage/);
-  assert.match(compilerSource, /fw311Diagnostic/);
+  assert.match(componentContractsSource, /fw311Diagnostic/);
   assert.match(compilerBindingsSource, /status: 'renderOnce'/);
   assert.match(compilerBindingsSource, /status: 'isomorphic'/);
   assert.match(compilerBindingsSource, /status: 'UNHANDLED'/);
@@ -674,14 +677,17 @@ void test('P1 compiler validates primitive composition attribute merges', async 
 void test('P1 compiler validates fragment-target child hoisting failures', async () => {
   const coreSource = await readProjectFile('packages/core/src/diagnostics.ts');
   const compilerSource = await readProjectFile('packages/compiler/src/index.ts');
+  const componentContractsSource = await readProjectFile(
+    'packages/compiler/src/validate/component-contracts.ts',
+  );
   const compilerTests = await readProjectFile('packages/compiler/src/index.test.ts');
 
   assert.match(coreSource, /FW230/);
   assert.match(coreSource, /Fragment-target children cannot lower to a component reference/);
   assert.match(compilerSource, /validateFragmentTargetChildren/);
-  assert.match(compilerSource, /fragmentTargetUsageNames/);
-  assert.match(compilerSource, /fragmentTargetChildBodies/);
-  assert.match(compilerSource, /fw230Diagnostic/);
+  assert.match(componentContractsSource, /fragmentTargetUsageNames/);
+  assert.match(componentContractsSource, /fragmentTargetChildBodies/);
+  assert.match(componentContractsSource, /fw230Diagnostic/);
   assert.match(
     compilerTests,
     /accepts fragment target children that can hoist through serializable props/,
