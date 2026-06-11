@@ -24,10 +24,8 @@ assert.deepEqual(fileNames, [
   'generated/registries.d.ts',
 ]);
 
-const serverSource =
-  result.files.find((file) => file.fileName.endsWith('.server.js'))?.source ?? '';
-const clientSource =
-  result.files.find((file) => file.fileName.endsWith('.client.js'))?.source ?? '';
+const serverSource = result.files.find((file) => file.kind === 'server')?.source ?? '';
+const clientSource = result.files.find((file) => file.kind === 'client')?.source ?? '';
 
 assert.match(
   serverSource,

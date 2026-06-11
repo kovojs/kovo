@@ -41,6 +41,7 @@ export { collectCssAssetManifest, dedupeCss, scopeComponentCss, selectCssAssets 
 
 export interface EmittedFile {
   fileName: string;
+  kind: 'client' | 'css' | 'registry' | 'server';
   source: string;
 }
 
@@ -199,7 +200,13 @@ export function compileComponentModule(options: CompileComponentOptions): Compil
   if (isIr(options.source)) {
     return {
       ...createEmptyCompileResult(),
-      files: [{ fileName: options.fileName, source: options.source }],
+      files: [
+        {
+          fileName: options.fileName,
+          kind: emittedFileKind(options.fileName),
+          source: options.source,
+        },
+      ],
     };
   }
 
@@ -247,10 +254,10 @@ export function compileComponentModule(options: CompileComponentOptions): Compil
       ...validationDiagnostics,
     ],
     files: [
-      { fileName: serverFileName, source: serverSource },
-      { fileName: clientFileName, source: clientSource },
-      ...(cssSource ? [{ fileName: cssFileName, source: cssSource }] : []),
-      { fileName: registryFileName, source: registrySource },
+      { fileName: serverFileName, kind: 'server', source: serverSource },
+      { fileName: clientFileName, kind: 'client', source: clientSource },
+      ...(cssSource ? [{ fileName: cssFileName, kind: 'css' as const, source: cssSource }] : []),
+      { fileName: registryFileName, kind: 'registry', source: registrySource },
     ],
     cssAssets,
     platformSubstitutions: platformLowering.substitutions,
@@ -266,6 +273,7 @@ export function assertFixpoint(result: CompileResult): void {
     const sameFile =
       recompiled.files.length === 1 &&
       recompiled.files[0]?.fileName === file.fileName &&
+      recompiled.files[0]?.kind === file.kind &&
       recompiled.files[0]?.source === file.source;
 
     if (!sameFile) {
@@ -287,7 +295,7 @@ export function collectMinifierReservedNames(
 
   for (const result of items) {
     for (const file of result.files) {
-      if (!file.fileName.endsWith('.client.js')) continue;
+      if (file.kind !== 'client') continue;
 
       for (const match of file.source.matchAll(handlerExportPattern)) {
         const exportName = match[1];
@@ -307,11 +315,18 @@ export function jisoVitePlugin(): JisoVitePlugin {
 
       const result = compileComponentModule({ fileName: id, source });
       return {
-        code: result.files.find((file) => file.fileName.endsWith('.server.js'))?.source ?? source,
+        code: result.files.find((file) => file.kind === 'server')?.source ?? source,
         map: null,
       };
     },
   };
+}
+
+function emittedFileKind(fileName: string): EmittedFile['kind'] {
+  if (fileName.endsWith('.client.js')) return 'client';
+  if (fileName.endsWith('.css')) return 'css';
+  if (fileName.endsWith('.server.js')) return 'server';
+  return 'registry';
 }
 
 function isIr(source: string): boolean {

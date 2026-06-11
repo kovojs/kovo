@@ -11,6 +11,7 @@ export interface QueryPlanBootstrapOptions {
 
 export interface BootstrapEmittedFile {
   fileName: string;
+  kind: 'client';
   source: string;
 }
 
@@ -29,6 +30,7 @@ export function emitQueryPlanBootstrapModule(
 
   return {
     fileName,
+    kind: 'client',
     source: `${irHeader}
 import { applyDeferredStreamResponseToDom, createQueryStore, installJisoLoader } from '@jiso/runtime';
 ${imports ? `${imports}\n` : ''}
