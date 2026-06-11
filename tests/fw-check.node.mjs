@@ -541,6 +541,9 @@ void test('P1 compiler emits FW311 update coverage facts', async () => {
   const coreSource = await readProjectFile('packages/core/src/diagnostics.ts');
   const compilerDiagnosticsSource = await readProjectFile('packages/compiler/src/diagnostics.ts');
   const compilerSource = await readProjectFile('packages/compiler/src/index.ts');
+  const compilerBindingsSource = await readProjectFile(
+    'packages/compiler/src/validate/bindings.ts',
+  );
   const compilerTests = await readProjectFile('packages/compiler/src/index.test.ts');
 
   assert.match(coreSource, /FW311/);
@@ -550,8 +553,8 @@ void test('P1 compiler emits FW311 update coverage facts', async () => {
   assert.match(compilerDiagnosticsSource, /function offsetToPosition/);
   assert.match(compilerSource, /collectQueryUpdateCoverage/);
   assert.match(compilerSource, /fw311Diagnostic/);
-  assert.match(compilerSource, /status: 'renderOnce'/);
-  assert.match(compilerSource, /status: 'UNHANDLED'/);
+  assert.match(compilerBindingsSource, /status: 'renderOnce'/);
+  assert.match(compilerBindingsSource, /status: 'UNHANDLED'/);
   assert.match(compilerTests, /classifies query-dependent render positions for FW311 coverage/);
   assert.match(compilerTests, /status: 'plan'/);
   assert.match(compilerTests, /status: 'renderOnce'/);
@@ -561,6 +564,9 @@ void test('P1 compiler emits FW311 update coverage facts', async () => {
 void test('P1 compiler validates binding stamp expression drift', async () => {
   const coreSource = await readProjectFile('packages/core/src/diagnostics.ts');
   const compilerSource = await readProjectFile('packages/compiler/src/index.ts');
+  const compilerBindingsSource = await readProjectFile(
+    'packages/compiler/src/validate/bindings.ts',
+  );
   const compilerTests = await readProjectFile('packages/compiler/src/index.test.ts');
 
   assert.match(coreSource, /FW222/);
@@ -568,8 +574,8 @@ void test('P1 compiler validates binding stamp expression drift', async () => {
   assert.match(coreSource, /Hand-written binding stamp disagrees/);
   assert.match(coreSource, /Redundant hand-written binding stamp/);
   assert.match(compilerSource, /validateStampExpressionDrift/);
-  assert.match(compilerSource, /bindingExpressionStamps/);
-  assert.match(compilerSource, /soleWrappedQueryExpression/);
+  assert.match(compilerBindingsSource, /bindingExpressionStamps/);
+  assert.match(compilerBindingsSource, /soleWrappedQueryExpression/);
   assert.match(
     compilerTests,
     /reports FW222 and FW223 for hand-written stamps around typed expressions in sugar/,
@@ -1113,11 +1119,14 @@ void test('P8 component explain includes handler, derive, trigger, and merge fac
 
 void test('P5 data-bind paths are checked against generated query shape facts', async () => {
   const compilerSource = await readProjectFile('packages/compiler/src/index.ts');
+  const compilerBindingsSource = await readProjectFile(
+    'packages/compiler/src/validate/bindings.ts',
+  );
   const compilerTests = await readProjectFile('packages/compiler/src/index.test.ts');
 
   assert.match(compilerSource, /queryShapeFacts\?: readonly QueryShapeFact\[\]/);
-  assert.match(compilerSource, /queryShapesFromFacts/);
-  assert.match(compilerSource, /function dataBindListStamps/);
+  assert.match(compilerBindingsSource, /queryShapesFromFacts/);
+  assert.match(compilerBindingsSource, /function dataBindListStamps/);
   assert.match(compilerSource, /interface QueryTemplateStampFact/);
   assert.match(compilerSource, /templateStamps/);
   assert.match(compilerTests, /validates data-bind paths against generated query shape facts/);
