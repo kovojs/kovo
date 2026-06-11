@@ -251,8 +251,38 @@ export interface JisoVitePlugin {
   };
 }
 
+interface ValidatorContext {
+  componentName: string;
+  options: CompileComponentOptions;
+  source: string;
+  updateCoverage: readonly QueryUpdateCoverageFact[];
+}
+
+type CompilerValidator = (context: ValidatorContext) => readonly CompilerDiagnostic[];
+
 const irHeader = '// @jiso-ir';
 const cssIrHeader = '/* @jiso-ir */';
+
+const compilerValidators: readonly CompilerValidator[] = [
+  ({ options, source }) => validateServerFactsInLocalState(source, options.fileName),
+  ({ options, source }) => validateFragmentTargetInputs(source, options.fileName),
+  ({ options, source }) => validateFragmentTargetChildren(source, options.fileName),
+  ({ options, source }) => validateDataBindings(source, options),
+  ({ options, source }) => validateStampExpressionDrift(source, options),
+  ({ options, source }) => validateEventPayloads(source, options),
+  ({ options, source }) => validateDirectDbAccess(source, options.fileName),
+  ({ options }) => validateIdrefs(options.source, options.fileName),
+  ({ options, source }) => validateStaticIds(source, options.fileName),
+  ({ options, source }) => validateLiteralHrefs(source, options),
+  ({ options, source }) => validateHtmlContentModel(source, options.fileName),
+  ({ options, source }) => validateEventTriggerNames(source, options.fileName),
+  ({ componentName, options, source }) => validateResidualStamps(source, options, componentName),
+  ({ options, source }) => validateAttributeMergeConflicts(source, options.fileName),
+  ({ options, updateCoverage }) =>
+    updateCoverage
+      .filter((fact) => fact.status === 'UNHANDLED')
+      .map((fact) => fw311Diagnostic(options.fileName, fact)),
+];
 
 export function compileComponentModule(options: CompileComponentOptions): CompileResult {
   if (isIr(options.source)) {
@@ -274,22 +304,11 @@ export function compileComponentModule(options: CompileComponentOptions): Compil
   const navigationLowering = lowerNavigationSugar(platformLowering.source);
   const source = navigationLowering.source;
   const handlers = lowerEventHandlers({ ...options, source }, componentName);
-  const serverFactStateDiagnostics = validateServerFactsInLocalState(source, options.fileName);
-  const fragmentInputDiagnostics = validateFragmentTargetInputs(source, options.fileName);
-  const fragmentChildrenDiagnostics = validateFragmentTargetChildren(source, options.fileName);
-  const dataBindDiagnostics = validateDataBindings(source, options);
-  const stampExpressionDiagnostics = validateStampExpressionDrift(source, options);
   const queryUpdatePlans = collectQueryUpdatePlans(source, componentName);
   const updateCoverage = collectQueryUpdateCoverage(source, options, componentName);
-  const eventPayloadDiagnostics = validateEventPayloads(source, options);
-  const directDbDiagnostics = validateDirectDbAccess(source, options.fileName);
-  const idrefDiagnostics = validateIdrefs(options.source, options.fileName);
-  const staticIdDiagnostics = validateStaticIds(source, options.fileName);
-  const literalHrefDiagnostics = validateLiteralHrefs(source, options);
-  const htmlContentModelDiagnostics = validateHtmlContentModel(source, options.fileName);
-  const eventTriggerDiagnostics = validateEventTriggerNames(source, options.fileName);
-  const residualStampDiagnostics = validateResidualStamps(source, options, componentName);
-  const attributeMergeDiagnostics = validateAttributeMergeConflicts(source, options.fileName);
+  const validationDiagnostics = compilerValidators.flatMap((validator) =>
+    validator({ componentName, options, source, updateCoverage }),
+  );
   const clientFileName = replaceExtension(options.fileName, '.client.js');
   const cssFileName = replaceExtension(options.fileName, '.css');
   const serverFileName = replaceExtension(options.fileName, '.server.js');
@@ -320,23 +339,7 @@ export function compileComponentModule(options: CompileComponentOptions): Compil
     componentGraphFacts,
     diagnostics: [
       ...handlers.flatMap((handler) => (handler.diagnostic ? [handler.diagnostic] : [])),
-      ...serverFactStateDiagnostics,
-      ...fragmentInputDiagnostics,
-      ...fragmentChildrenDiagnostics,
-      ...dataBindDiagnostics,
-      ...stampExpressionDiagnostics,
-      ...eventPayloadDiagnostics,
-      ...directDbDiagnostics,
-      ...idrefDiagnostics,
-      ...staticIdDiagnostics,
-      ...literalHrefDiagnostics,
-      ...htmlContentModelDiagnostics,
-      ...eventTriggerDiagnostics,
-      ...residualStampDiagnostics,
-      ...attributeMergeDiagnostics,
-      ...updateCoverage
-        .filter((fact) => fact.status === 'UNHANDLED')
-        .map((fact) => fw311Diagnostic(options.fileName, fact)),
+      ...validationDiagnostics,
     ],
     files: [
       { fileName: serverFileName, source: serverSource },
