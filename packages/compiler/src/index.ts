@@ -20,6 +20,7 @@ import {
   type JsxAttributeModel,
   type JsxElementModel,
   jsxElements,
+  jsxExpressions,
   mutationHandlers,
   objectLiteralPropertyPaths,
   parseComponentModule as parseComponentModuleModel,
@@ -733,6 +734,17 @@ function lowerInlineAttributeDerives(
     });
   }
 
+  for (const expression of jsxExpressions(model)) {
+    const binding = inlineMixedTextBinding(expression, model, source, knownQueries);
+    if (!binding) continue;
+
+    replacements.push({
+      end: binding.end,
+      start: binding.start,
+      value: `<span data-bind="${escapeAttribute(binding.path)}">{${binding.path}}</span>`,
+    });
+  }
+
   if (replacements.length === 0) return { source };
 
   const lowered = replacements
@@ -811,6 +823,71 @@ function inlineTextBinding(
 
   const query = expression.split('.', 1)[0];
   return query && knownQueries.has(query) ? expression : null;
+}
+
+function inlineMixedTextBinding(
+  expression: { end: number; expression: string; start: number },
+  model: ComponentModuleModel,
+  source: string,
+  knownQueries: ReadonlySet<string>,
+): { end: number; path: string; start: number } | null {
+  const path = soleKnownQueryPath(expression.expression, knownQueries);
+  if (!path) return null;
+  if (isJsxAttributeExpression(expression, model)) return null;
+
+  const element = innermostContainingElement(expression, model);
+  if (!element) return null;
+  if (element.attributes.some((attribute) => isBindingAttributeName(attribute.name))) return null;
+  if (inlineTextBinding(element, source, knownQueries) !== null) return null;
+
+  const start = source.lastIndexOf('{', expression.start);
+  const end = source.indexOf('}', expression.end);
+  if (start === -1 || end === -1 || start < element.openingEnd || end > element.closingStart) {
+    return null;
+  }
+
+  return { end: end + 1, path, start };
+}
+
+function soleKnownQueryPath(expression: string, knownQueries: ReadonlySet<string>): string | null {
+  const path =
+    /^(?<path>[A-Za-z_$][\w$]*(?:\.[A-Za-z_$][\w$]*)+)$/.exec(expression.trim())?.groups?.path ??
+    null;
+  if (!path) return null;
+
+  const query = path.split('.', 1)[0];
+  return query && knownQueries.has(query) ? path : null;
+}
+
+function isJsxAttributeExpression(
+  expression: { end: number; start: number },
+  model: ComponentModuleModel,
+): boolean {
+  return jsxElements(model).some((element) =>
+    element.attributes.some(
+      (attribute) =>
+        attribute.expressionStart !== undefined &&
+        attribute.expressionEnd !== undefined &&
+        expression.start >= attribute.expressionStart &&
+        expression.end <= attribute.expressionEnd,
+    ),
+  );
+}
+
+function innermostContainingElement(
+  expression: { end: number; start: number },
+  model: ComponentModuleModel,
+): JsxElementModel | null {
+  return (
+    jsxElements(model)
+      .filter(
+        (element) =>
+          !element.selfClosing &&
+          expression.start >= element.openingEnd &&
+          expression.end <= element.closingStart,
+      )
+      .sort((left, right) => left.end - left.start - (right.end - right.start))[0] ?? null
+  );
 }
 
 function isBindingAttributeName(name: string): boolean {
