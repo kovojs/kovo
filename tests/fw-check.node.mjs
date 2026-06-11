@@ -489,14 +489,17 @@ void test('P1 compiler validates HTML content-model parser stability', async () 
 
 void test('P1 compiler validates declared execution trigger names', async () => {
   const coreSource = await readProjectFile('packages/core/src/diagnostics.ts');
+  const compilerEventTriggerSource = await readProjectFile(
+    'packages/compiler/src/validate/event-triggers.ts',
+  );
   const compilerSource = await readProjectFile('packages/compiler/src/index.ts');
   const compilerTests = await readProjectFile('packages/compiler/src/index.test.ts');
 
   assert.match(coreSource, /FW211/);
   assert.match(coreSource, /FW212/);
   assert.match(compilerSource, /validateEventTriggerNames/);
-  assert.match(compilerSource, /declaredExecutionTriggers/);
-  assert.match(compilerSource, /hasFw211Justification/);
+  assert.match(compilerEventTriggerSource, /declaredExecutionTriggers/);
+  assert.match(compilerEventTriggerSource, /hasFw211Justification/);
   assert.match(compilerTests, /accepts known delegated events and declared execution triggers/);
   assert.match(
     compilerTests,
@@ -525,14 +528,15 @@ void test('P1 compiler validates residual fw-c and fw-deps stamps', async () => 
 
 void test('P1 compiler emits FW311 update coverage facts', async () => {
   const coreSource = await readProjectFile('packages/core/src/diagnostics.ts');
+  const compilerDiagnosticsSource = await readProjectFile('packages/compiler/src/diagnostics.ts');
   const compilerSource = await readProjectFile('packages/compiler/src/index.ts');
   const compilerTests = await readProjectFile('packages/compiler/src/index.test.ts');
 
   assert.match(coreSource, /FW311/);
   assert.match(coreSource, /Query-dependent DOM position has no update status/);
   assert.match(compilerSource, /interface QueryUpdateCoverageFact/);
-  assert.match(compilerSource, /interface SourcePosition/);
-  assert.match(compilerSource, /function offsetToPosition/);
+  assert.match(compilerDiagnosticsSource, /interface SourcePosition/);
+  assert.match(compilerDiagnosticsSource, /function offsetToPosition/);
   assert.match(compilerSource, /collectQueryUpdateCoverage/);
   assert.match(compilerSource, /fw311Diagnostic/);
   assert.match(compilerSource, /status: 'renderOnce'/);

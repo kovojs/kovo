@@ -1,10 +1,13 @@
-import { diagnosticDefinitions, type DiagnosticCode, type DiagnosticSeverity } from '@jiso/core';
+import { diagnosticDefinitions, type DiagnosticCode } from '@jiso/core';
 
 import { componentCssAssetForFile, emitCssModule, type ComponentCssAsset } from './css.js';
+import { diagnosticFor, type CompilerDiagnostic } from './diagnostics.js';
 import { findMatchingToken, findStringEnd } from './scan/text.js';
 import { escapeAttribute, indent, kebabCase } from './shared.js';
+import { validateEventTriggerNames } from './validate/event-triggers.js';
 
 export type { DiagnosticCode };
+export type { CompilerDiagnostic, SourcePosition } from './diagnostics.js';
 export type {
   ComponentCssAsset,
   CssAsset,
@@ -14,21 +17,6 @@ export type {
   ScopeComponentCssOptions,
 } from './css.js';
 export { collectCssAssetManifest, dedupeCss, scopeComponentCss, selectCssAssets } from './css.js';
-
-export interface CompilerDiagnostic {
-  code: DiagnosticCode;
-  severity: DiagnosticSeverity;
-  message: string;
-  fileName: string;
-  help?: string;
-  length?: number;
-  start?: SourcePosition;
-}
-
-export interface SourcePosition {
-  column: number;
-  line: number;
-}
 
 export interface EmittedFile {
   fileName: string;
@@ -867,38 +855,6 @@ function capturesUnserializableValue(expression: string): boolean {
   );
 }
 
-function diagnosticFor(
-  fileName: string,
-  code: DiagnosticCode,
-  source?: string,
-  offset?: number,
-  length?: number,
-): CompilerDiagnostic {
-  const definition = diagnosticDefinitions[code];
-  return {
-    code,
-    fileName,
-    ...(source !== undefined && offset !== undefined
-      ? {
-          ...(length === undefined ? {} : { length }),
-          start: offsetToPosition(source, offset),
-        }
-      : {}),
-    message: definition.message,
-    severity: definition.severity,
-  };
-}
-
-function offsetToPosition(source: string, offset: number): SourcePosition {
-  const prefix = source.slice(0, Math.max(0, offset));
-  const lineBreaks = prefix.match(/\n/g);
-  const line = (lineBreaks?.length ?? 0) + 1;
-  const lastLineBreak = prefix.lastIndexOf('\n');
-  const column = offset - lastLineBreak;
-
-  return { column, line };
-}
-
 function fw201Diagnostic(
   fileName: string,
   source: string,
@@ -1592,79 +1548,6 @@ function isSelfClosing(attrs: string): boolean {
 
 function hasFwComponentStamp(attrs: string): boolean {
   return /\bfw-c\s*=/.test(attrs);
-}
-
-const declaredExecutionTriggers = new Set(['idle', 'load', 'visible']);
-
-const delegatedDomEvents = new Set([
-  'beforeinput',
-  'blur',
-  'change',
-  'click',
-  'close',
-  'contextmenu',
-  'dblclick',
-  'focus',
-  'focusin',
-  'focusout',
-  'input',
-  'keydown',
-  'keyup',
-  'pointercancel',
-  'pointerdown',
-  'pointerenter',
-  'pointerleave',
-  'pointermove',
-  'pointerout',
-  'pointerover',
-  'pointerup',
-  'reset',
-  'submit',
-  'toggle',
-]);
-
-function validateEventTriggerNames(source: string, fileName: string): CompilerDiagnostic[] {
-  return eventTriggerAttributes(source).flatMap((attribute) => {
-    if (!isKnownEventOrTrigger(attribute.name)) {
-      return [eventTriggerDiagnostic(fileName, source, 'FW212', attribute)];
-    }
-
-    if (attribute.name === 'load' && !hasFw211Justification(source, attribute.index)) {
-      return [eventTriggerDiagnostic(fileName, source, 'FW211', attribute)];
-    }
-
-    return [];
-  });
-}
-
-function eventTriggerAttributes(source: string): Array<{ index: number; name: string }> {
-  return [...source.matchAll(/\bon:(?<name>[a-z][a-z0-9-]*)\s*=/g)].map((match) => ({
-    index: match.index ?? 0,
-    name: match.groups?.name ?? '',
-  }));
-}
-
-function isKnownEventOrTrigger(name: string): boolean {
-  return declaredExecutionTriggers.has(name) || delegatedDomEvents.has(name);
-}
-
-function hasFw211Justification(source: string, index: number): boolean {
-  const prefix = source.slice(Math.max(0, index - 240), index);
-  return /(?:\/\*[\s\S]*?FW211[\s\S]*?\*\/|\/\/[^\n]*FW211|<!--[\s\S]*?FW211[\s\S]*?-->)/.test(
-    prefix,
-  );
-}
-
-function eventTriggerDiagnostic(
-  fileName: string,
-  source: string,
-  code: 'FW211' | 'FW212',
-  attribute: { index: number; name: string },
-): CompilerDiagnostic {
-  return {
-    ...diagnosticFor(fileName, code, source, attribute.index, attribute.name.length + 3),
-    message: `${diagnosticDefinitions[code].message} on:${attribute.name}`,
-  };
 }
 
 function validateResidualStamps(
