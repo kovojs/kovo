@@ -1222,6 +1222,13 @@ export const CartBadge = component('cart-badge', {
     ]);
     expect(result.diagnostics).toEqual([
       {
+        code: 'FW223',
+        fileName: 'cart-badge.tsx',
+        message:
+          'Redundant hand-written binding stamp in sugar; the compiler derives it. data-bind="cart.count" wraps {cart.count}',
+        severity: 'lint',
+      },
+      {
         code: 'FW311',
         fileName: 'cart-badge.tsx',
         message:
@@ -1340,7 +1347,62 @@ export const Recommendations = component('recommendations', {
 `,
     });
 
-    expect(result.diagnostics).toEqual([]);
+    expect(result.diagnostics).toEqual([
+      {
+        code: 'FW223',
+        fileName: 'recommendations.tsx',
+        message:
+          'Redundant hand-written binding stamp in sugar; the compiler derives it. data-bind="cart.count" wraps {cart.count}',
+        severity: 'lint',
+      },
+    ]);
+  });
+
+  it('reports FW222 and FW223 for hand-written stamps around typed expressions in sugar', () => {
+    const redundant = compileComponentModule({
+      fileName: 'cart-badge.tsx',
+      source: `
+export const CartBadge = component('cart-badge', {
+  queries: { cart: cartQuery },
+  render: ({ cart }) => <span data-bind="cart.count">{cart.count}</span>,
+});
+`,
+    });
+    const drift = compileComponentModule({
+      fileName: 'cart-badge.tsx',
+      source: `
+export const CartBadge = component('cart-badge', {
+  queries: { cart: cartQuery },
+  render: ({ cart }) => <span data-bind="cart.count">{cart.total}</span>,
+});
+`,
+    });
+
+    expect(redundant.diagnostics).toEqual([
+      {
+        code: 'FW223',
+        fileName: 'cart-badge.tsx',
+        message:
+          'Redundant hand-written binding stamp in sugar; the compiler derives it. data-bind="cart.count" wraps {cart.count}',
+        severity: 'lint',
+      },
+    ]);
+    expect(drift.diagnostics).toEqual([
+      {
+        code: 'FW222',
+        fileName: 'cart-badge.tsx',
+        message:
+          'Hand-written binding stamp disagrees with the typed expression it wraps. data-bind="cart.count" wraps {cart.total}',
+        severity: 'error',
+      },
+      {
+        code: 'FW311',
+        fileName: 'cart-badge.tsx',
+        message:
+          'Query-dependent DOM position has no update status. CartBadge cart.total expression',
+        severity: 'warn',
+      },
+    ]);
   });
 
   it('reports FW226 for residual stamps naming unknown components or query instances', () => {
@@ -1359,6 +1421,13 @@ export const Recommendations = component('recommendations', {
     });
 
     expect(result.diagnostics).toEqual([
+      {
+        code: 'FW223',
+        fileName: 'recommendations.tsx',
+        message:
+          'Redundant hand-written binding stamp in sugar; the compiler derives it. data-bind="cart.count" wraps {cart.count}',
+        severity: 'lint',
+      },
       {
         code: 'FW226',
         fileName: 'recommendations.tsx',

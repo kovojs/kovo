@@ -525,6 +525,25 @@ void test('P1 compiler emits FW311 update coverage facts', async () => {
   assert.match(compilerTests, /code: 'FW311'/);
 });
 
+void test('P1 compiler validates binding stamp expression drift', async () => {
+  const coreSource = await readProjectFile('packages/core/src/diagnostics.ts');
+  const compilerSource = await readProjectFile('packages/compiler/src/index.ts');
+  const compilerTests = await readProjectFile('packages/compiler/src/index.test.ts');
+
+  assert.match(coreSource, /FW222/);
+  assert.match(coreSource, /FW223/);
+  assert.match(coreSource, /Hand-written binding stamp disagrees/);
+  assert.match(coreSource, /Redundant hand-written binding stamp/);
+  assert.match(compilerSource, /validateStampExpressionDrift/);
+  assert.match(compilerSource, /bindingExpressionStamps/);
+  assert.match(compilerSource, /soleWrappedQueryExpression/);
+  assert.match(
+    compilerTests,
+    /reports FW222 and FW223 for hand-written stamps around typed expressions in sugar/,
+  );
+  assert.match(compilerTests, /data-bind="cart\.count" wraps \{cart\.total\}/);
+});
+
 void test('P3 typed routes validate navigation targets', async () => {
   const coreSource = await readProjectFile('packages/core/src/index.ts');
   const coreTests = await readProjectFile('packages/core/src/index.test.ts');

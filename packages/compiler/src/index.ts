@@ -261,6 +261,7 @@ export function compileComponentModule(options: CompileComponentOptions): Compil
   const serverFactStateDiagnostics = validateServerFactsInLocalState(source, options.fileName);
   const fragmentInputDiagnostics = validateFragmentTargetInputs(source, options.fileName);
   const dataBindDiagnostics = validateDataBindings(source, options);
+  const stampExpressionDiagnostics = validateStampExpressionDrift(source, options);
   const queryUpdatePlans = collectQueryUpdatePlans(source, componentName);
   const updateCoverage = collectQueryUpdateCoverage(source, options, componentName);
   const eventPayloadDiagnostics = validateEventPayloads(source, options);
@@ -303,6 +304,7 @@ export function compileComponentModule(options: CompileComponentOptions): Compil
       ...serverFactStateDiagnostics,
       ...fragmentInputDiagnostics,
       ...dataBindDiagnostics,
+      ...stampExpressionDiagnostics,
       ...eventPayloadDiagnostics,
       ...directDbDiagnostics,
       ...idrefDiagnostics,
@@ -995,6 +997,54 @@ function validateDataBindings(
           message: `${diagnosticDefinitions.FW302.message} ${stamp.list}`,
         })),
     );
+}
+
+function validateStampExpressionDrift(
+  source: string,
+  options: CompileComponentOptions,
+): CompilerDiagnostic[] {
+  const knownQueries = knownQueryNames(source, options);
+
+  return bindingExpressionStamps(source)
+    .filter(
+      (stamp) =>
+        queryPathUsesKnownQuery(stamp.binding, knownQueries) &&
+        queryPathUsesKnownQuery(stamp.expression, knownQueries),
+    )
+    .map((stamp) => {
+      const code = stamp.binding === stamp.expression ? 'FW223' : 'FW222';
+
+      return {
+        ...diagnosticFor(options.fileName, code),
+        message: `${diagnosticDefinitions[code].message} data-bind="${stamp.binding}" wraps {${stamp.expression}}`,
+      };
+    });
+}
+
+function bindingExpressionStamps(source: string): Array<{ binding: string; expression: string }> {
+  return [...source.matchAll(/<(?<tag>[A-Za-z][\w:-]*)\b(?<attrs>[^>]*)>/g)].flatMap((match) => {
+    const attrs = match.groups?.attrs ?? '';
+    const binding = readStaticAttribute(attrs, 'data-bind');
+    if (!binding) return [];
+
+    const tag = match.groups?.tag ?? '';
+    const start = match.index ?? 0;
+    const end = findMatchingClosingTag(source, tag, start);
+    if (end === -1) return [];
+
+    const openEnd = findOpeningTagEnd(source, start);
+    if (openEnd === -1) return [];
+
+    const closeTag = `</${tag}>`;
+    const closeStart = end - closeTag.length;
+    const expression = soleWrappedQueryExpression(source.slice(openEnd + 1, closeStart));
+    return expression ? [{ binding, expression }] : [];
+  });
+}
+
+function soleWrappedQueryExpression(source: string): string | null {
+  const match = /^\s*\{\s*(?<path>[A-Za-z_$][\w$]*(?:\.[A-Za-z_$][\w$]*)+)\s*\}\s*$/.exec(source);
+  return match?.groups?.path ?? null;
 }
 
 function collectQueryUpdatePlans(source: string, componentName: string): QueryUpdatePlanFact[] {
