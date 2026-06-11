@@ -7,6 +7,7 @@ describe('diagnostic registry', () => {
     expect(Object.keys(diagnosticDefinitions)).toEqual([
       'FW201',
       'FW210',
+      'FW221',
       'FW301',
       'FW302',
       'FW303',
@@ -36,6 +37,11 @@ describe('diagnostic registry', () => {
           "code": "FW210",
           "message": "Anonymous handler; name it for stable identity.",
           "severity": "lint",
+        },
+        "FW221": {
+          "code": "FW221",
+          "message": "IDREF references an id not present in component scope.",
+          "severity": "error",
         },
         "FW301": {
           "code": "FW301",

@@ -168,6 +168,7 @@ export function compileComponentModule(options: CompileComponentOptions): Compil
   const queryUpdatePlans = collectQueryUpdatePlans(source, componentName);
   const eventPayloadDiagnostics = validateEventPayloads(source, options);
   const directDbDiagnostics = validateDirectDbAccess(source, options.fileName);
+  const idrefDiagnostics = validateIdrefs(options.source, options.fileName);
   const clientFileName = replaceExtension(options.fileName, '.client.js');
   const cssFileName = replaceExtension(options.fileName, '.css');
   const serverFileName = replaceExtension(options.fileName, '.server.js');
@@ -201,6 +202,7 @@ export function compileComponentModule(options: CompileComponentOptions): Compil
       ...dataBindDiagnostics,
       ...eventPayloadDiagnostics,
       ...directDbDiagnostics,
+      ...idrefDiagnostics,
     ],
     files: [
       { fileName: serverFileName, source: serverSource },
@@ -811,6 +813,42 @@ function validateDirectDbAccess(source: string, fileName: string): CompilerDiagn
   }
 
   return [];
+}
+
+function validateIdrefs(source: string, fileName: string): CompilerDiagnostic[] {
+  const ids = new Set(
+    [...source.matchAll(/\bid\s*=\s*(["'])(?<id>[^"']+)\1/g)].flatMap((match) =>
+      match.groups?.id ? [match.groups.id] : [],
+    ),
+  );
+  if (ids.size === 0) return idrefValues(source).map((value) => fw221Diagnostic(fileName, value));
+
+  const missing = idrefValues(source).filter((value) => !ids.has(value));
+  return [...new Set(missing)].map((value) => fw221Diagnostic(fileName, value));
+}
+
+function fw221Diagnostic(fileName: string, value: string): CompilerDiagnostic {
+  return {
+    ...diagnosticFor(fileName, 'FW221'),
+    message: `${diagnosticDefinitions.FW221.message} ${value}`,
+  };
+}
+
+function idrefValues(source: string): string[] {
+  const values: string[] = [];
+  const pattern =
+    /\b(?<name>commandfor|popovertarget|for|htmlFor|aria-labelledby|aria-describedby|aria-controls|aria-owns|aria-activedescendant)\s*=\s*(["'])(?<value>[^"']+)\2/g;
+
+  for (const match of source.matchAll(pattern)) {
+    const rawValue = match.groups?.value;
+    if (!rawValue) continue;
+
+    const name = match.groups?.name;
+    const multiValue = name?.startsWith('aria-') && name !== 'aria-activedescendant';
+    values.push(...(multiValue ? rawValue.split(/\s+/).filter(Boolean) : [rawValue]));
+  }
+
+  return values;
 }
 
 function findHandlerBodies(source: string): { body: string; params: string[] }[] {

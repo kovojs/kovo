@@ -451,6 +451,67 @@ export const ShippingDetails = component('shipping-details', {
     );
   });
 
+  it('accepts literal IDREFs that reference ids in component scope', () => {
+    const result = compileComponentModule({
+      fileName: 'cart-shell.tsx',
+      source: `
+export const CartShell = component('cart-shell', {
+  render: () => (
+    <section>
+      <label for="cart-search">Search</label>
+      <input id="cart-search" aria-describedby="cart-help cart-extra" />
+      <p id="cart-help">Filter cart items.</p>
+      <p id="cart-extra">Updates as you type.</p>
+      <button commandfor="cart-drawer" command="show-modal">Open</button>
+      <dialog id="cart-drawer">Cart</dialog>
+    </section>
+  ),
+});
+`,
+    });
+
+    expect(result.diagnostics).toEqual([]);
+  });
+
+  it('reports FW221 for literal IDREFs that miss component scope ids', () => {
+    const result = compileComponentModule({
+      fileName: 'cart-shell.tsx',
+      source: `
+export const CartShell = component('cart-shell', {
+  render: () => (
+    <section>
+      <label for="cart-search">Search</label>
+      <input id="cart-query" aria-describedby="cart-help missing-help" />
+      <p id="cart-help">Filter cart items.</p>
+      <button popovertarget="filters">Filters</button>
+    </section>
+  ),
+});
+`,
+    });
+
+    expect(result.diagnostics).toEqual([
+      {
+        code: 'FW221',
+        fileName: 'cart-shell.tsx',
+        message: 'IDREF references an id not present in component scope. cart-search',
+        severity: 'error',
+      },
+      {
+        code: 'FW221',
+        fileName: 'cart-shell.tsx',
+        message: 'IDREF references an id not present in component scope. missing-help',
+        severity: 'error',
+      },
+      {
+        code: 'FW221',
+        fileName: 'cart-shell.tsx',
+        message: 'IDREF references an id not present in component scope. filters',
+        severity: 'error',
+      },
+    ]);
+  });
+
   it('keeps unsupported details JavaScript as a handler instead of inventing platform attributes', () => {
     const result = compileComponentModule({
       fileName: 'accordion-toggle.tsx',

@@ -391,6 +391,22 @@ void test('P2 compiler merges view transition stamps into existing styles', asyn
   assert.match(compilerTests, /serverSource\.match\(\/\\sstyle=\/g\)/);
 });
 
+void test('P1 compiler validates component-scoped IDREFs', async () => {
+  const coreSource = await readProjectFile('packages/core/src/diagnostics.ts');
+  const coreTests = await readProjectFile('packages/core/src/diagnostics.test.ts');
+  const compilerSource = await readProjectFile('packages/compiler/src/index.ts');
+  const compilerTests = await readProjectFile('packages/compiler/src/index.test.ts');
+
+  assert.match(coreSource, /FW221/);
+  assert.match(coreSource, /IDREF references an id not present in component scope/);
+  assert.match(coreTests, /"FW221"/);
+  assert.match(compilerSource, /validateIdrefs/);
+  assert.match(compilerSource, /aria-describedby/);
+  assert.match(compilerSource, /diagnosticDefinitions\.FW221\.message/);
+  assert.match(compilerTests, /accepts literal IDREFs that reference ids in component scope/);
+  assert.match(compilerTests, /reports FW221 for literal IDREFs that miss component scope ids/);
+});
+
 void test('P3 mutation lifecycle includes an explicit transaction boundary', async () => {
   const serverSource = await readProjectFile('packages/server/src/index.ts');
   const serverTests = await readProjectFile('packages/server/src/index.test.ts');

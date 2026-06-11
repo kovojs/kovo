@@ -3,6 +3,7 @@ export type DiagnosticSeverity = 'error' | 'warn' | 'lint' | 'notice';
 export type DiagnosticCode =
   | 'FW201'
   | 'FW210'
+  | 'FW221'
   | 'FW301'
   | 'FW302'
   | 'FW303'
@@ -34,6 +35,11 @@ export const diagnosticDefinitions = {
     code: 'FW210',
     severity: 'lint',
     message: 'Anonymous handler; name it for stable identity.',
+  },
+  FW221: {
+    code: 'FW221',
+    severity: 'error',
+    message: 'IDREF references an id not present in component scope.',
   },
   FW301: {
     code: 'FW301',
