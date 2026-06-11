@@ -383,6 +383,10 @@ describe('server mutation primitives', () => {
       earlyHints: {},
       html: '',
     });
+    expect(renderPageHints({ prefetch: 'moderate', prerenderUrls: ['', ''] })).toEqual({
+      earlyHints: {},
+      html: '',
+    });
   });
 
   it('renders moderate speculation rules with deduped escaped prerender urls only when opted in', () => {

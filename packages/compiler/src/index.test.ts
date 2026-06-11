@@ -428,9 +428,28 @@ export const ProductCard = component('product-card', {
 
     expect(result.viewTransitions).toEqual([{ name: 'product-p1-image' }]);
     expect(result.files[0]?.source).toContain(
-      '<img style="view-transition-name: product-p1-image" src="/p1.png" />',
+      '<img src="/p1.png" style="view-transition-name: product-p1-image" />',
     );
     expect(result.files[2]?.source).toContain("'product-p1-image': unknown;");
+  });
+
+  it('merges cross-document view transition stamps into existing static styles', () => {
+    const result = compileComponentModule({
+      fileName: 'product-card.tsx',
+      source: `
+export const ProductCard = component('product-card', {
+  render: () => <img style="opacity: .8" viewTransitionName="product-p1-image" src="/p1.png" />,
+});
+`,
+    });
+    const serverSource = result.files[0]?.source ?? '';
+
+    expect(result.viewTransitions).toEqual([{ name: 'product-p1-image' }]);
+    expect(serverSource).toContain(
+      '<img style="opacity: .8; view-transition-name: product-p1-image" src="/p1.png" />',
+    );
+    expect(serverSource.match(/\sstyle=/g)).toHaveLength(1);
+    expect(serverSource).not.toContain('viewTransitionName=');
   });
 
   it('accepts data-bind paths present in declared query shapes', () => {

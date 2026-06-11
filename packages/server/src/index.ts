@@ -1372,14 +1372,15 @@ function formatLinkHeaderTarget(href: string): string {
 }
 
 function renderSpeculationRules(prefetch: RoutePrefetch, urls: readonly string[]): string {
-  if (!prefetch || urls.length === 0) return '';
+  const prerenderUrls = dedupe(urls);
+  if (!prefetch || prerenderUrls.length === 0) return '';
 
   return `<script type="speculationrules">${escapeScriptJson(
     JSON.stringify({
       prerender: [
         {
           eagerness: prefetch,
-          urls: dedupe(urls),
+          urls: prerenderUrls,
         },
       ],
     }),

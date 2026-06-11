@@ -354,6 +354,25 @@ void test('P3 server renders initial query scripts for document-load hydration',
   assert.match(serverTests, /\\\\u003c\/script>/);
 });
 
+void test('P2 page hints keep speculation rules opt-in and non-empty', async () => {
+  const serverSource = await readProjectFile('packages/server/src/index.ts');
+  const serverTests = await readProjectFile('packages/server/src/index.test.ts');
+
+  assert.match(serverSource, /const prerenderUrls = dedupe\(urls\)/);
+  assert.match(serverSource, /prerenderUrls\.length === 0/);
+  assert.match(serverTests, /prefetch: 'moderate', prerenderUrls: \['', ''\]/);
+});
+
+void test('P2 compiler merges view transition stamps into existing styles', async () => {
+  const compilerSource = await readProjectFile('packages/compiler/src/index.ts');
+  const compilerTests = await readProjectFile('packages/compiler/src/index.test.ts');
+
+  assert.match(compilerSource, /appendViewTransitionStyle/);
+  assert.match(compilerTests, /merges cross-document view transition stamps/);
+  assert.match(compilerTests, /opacity: \.8; view-transition-name: product-p1-image/);
+  assert.match(compilerTests, /serverSource\.match\(\/\\sstyle=\/g\)/);
+});
+
 void test('P3 mutation lifecycle includes an explicit transaction boundary', async () => {
   const serverSource = await readProjectFile('packages/server/src/index.ts');
   const serverTests = await readProjectFile('packages/server/src/index.test.ts');

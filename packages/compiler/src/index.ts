@@ -391,10 +391,10 @@ function lowerViewTransitions(source: string): {
 } {
   const stamps: ViewTransitionStamp[] = [];
   const nextSource = source.replace(
-    /\sviewTransitionName=(["'])(?<name>[^"']+)\1/g,
-    (_match, _quote: string, name: string) => {
+    /<(?<tag>[A-Za-z][A-Za-z0-9:.-]*)(?<before>[^<>]*?)\sviewTransitionName=(["'])(?<name>[^"']+)\3(?<after>[^<>]*?)>/g,
+    (_match, tag: string, before: string, _quote: string, name: string, after: string) => {
       stamps.push({ name });
-      return ` style="view-transition-name: ${escapeAttribute(name)}"`;
+      return `<${tag}${appendViewTransitionStyle(`${before}${after}`, name)}>`;
     },
   );
 
@@ -402,6 +402,27 @@ function lowerViewTransitions(source: string): {
     source: nextSource,
     stamps,
   };
+}
+
+function appendViewTransitionStyle(attributes: string, name: string): string {
+  const transition = `view-transition-name: ${escapeAttribute(name)}`;
+  const selfClosing = /\s*\/\s*$/.test(attributes);
+  const baseAttributes = selfClosing ? attributes.replace(/\s*\/\s*$/, '') : attributes;
+  const styleMatch = /(\sstyle=)(["'])(?<style>[^"']*)\2/.exec(baseAttributes);
+  const suffix = selfClosing ? ' /' : '';
+
+  if (!styleMatch?.groups) {
+    return `${baseAttributes} style="${transition}"${suffix}`;
+  }
+
+  const existing = (styleMatch.groups.style ?? '').trim();
+  const separator = existing === '' || existing.endsWith(';') ? '' : ';';
+  const style = existing === '' ? transition : `${existing}${separator} ${transition}`;
+
+  return `${baseAttributes.replace(
+    styleMatch[0],
+    `${styleMatch[1]}${styleMatch[2]}${style}${styleMatch[2]}`,
+  )}${suffix}`;
 }
 
 function lowerPlatformBehaviors(source: string): {
