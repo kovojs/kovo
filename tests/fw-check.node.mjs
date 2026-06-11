@@ -472,6 +472,7 @@ void test('Drizzle pinned conformance suite is an explicit gate', async () => {
   const viteConfig = await readProjectFile('vite.config.ts');
   const ciWorkflow = await readProjectFile('.github/workflows/ci.yml');
   const conformanceTest = await readProjectFile('conformance/drizzle-pin/src/index.test.ts');
+  const drizzleTests = await readProjectFile('packages/drizzle/src/index.test.ts');
 
   assert.match(packageJson.scripts.acceptance, /pnpm run test:conformance/);
   assert.equal(packageJson.scripts['test:conformance'], 'vp run conformance-drizzle');
@@ -483,6 +484,8 @@ void test('Drizzle pinned conformance suite is an explicit gate', async () => {
   assert.match(conformanceTest, /imports the pinned real Drizzle Postgres subset/);
   assert.match(conformanceTest, /pins direct table source extraction/);
   assert.match(conformanceTest, /pins local conditional table resolution/);
+  assert.match(drizzleTests, /folds local helper writes and reads into caller summaries/);
+  assert.match(drizzleTests, /dedupes recursive helper summaries at a fixed point/);
   assert.equal(
     JSON.parse(await readProjectFile('conformance/drizzle-pin/package.json')).devDependencies[
       'drizzle-orm'
