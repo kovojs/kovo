@@ -1,6 +1,6 @@
 # Machine endpoints — webhooks, exports, downloads (D6)
 
-Status: design agreed 2026-06-11; the `endpoint()` floor and `csrf: false` opt-out are already normative (SPEC §9.1, §6.6, landed with the D5 A-track); D6 SPEC additions are now normative; `webhook()` implementation and reference-app adoption remain open
+Status: design agreed 2026-06-11; the `endpoint()` floor and `csrf: false` opt-out are already normative (SPEC §9.1, §6.6, landed with the D5 A-track); D6 SPEC additions are now normative; the bounded `webhook()` primitive slice is implemented; reference-app adoption remains open
 Scope: SPEC additions (`webhook()`, route response outcomes, storage capability, `--endpoints` audit), `@jiso/server` + `@jiso/core` surfaces, a verifier kit with provider presets, storage adapters, and reference-app adoption. Referenced from `IMPLEMENT_v1.md` as workstream **D6**. Shares the `endpoint()` deliverable with `plans/auth.md` A4.
 
 ## Progress checklist
@@ -21,7 +21,18 @@ Scope: SPEC additions (`webhook()`, route response outcomes, storage capability,
       requirements; SPEC §11.4 defines `fw explain --endpoints`; SPEC §13.5 defines the
       storage capability interface and blessed adapter floor.
 - [x] E1 `endpoint()` floor implementation (shared with D5 A4), with this plan's refinements: pre-parse raw-body access, prefix mounts, no ambient session.
-- [ ] E2 `webhook()` shaped primitive: verifier slot, loose input schema, idempotency, Tx lifecycle, domain writes, change record.
+- [x] E2 `webhook()` shaped primitive: verifier slot, loose input schema, idempotency, Tx lifecycle, domain writes, change record.
+      Evidence 2026-06-11: `@jiso/server` exports `webhook()`/`runWebhook()` from
+      `packages/server/src/webhook.ts`. The bounded slice lowers a named webhook to a
+      registry-visible POST endpoint with resolved verifier auth metadata and no ambient session,
+      captures raw bytes once for verifier-kit checks, loosely parses JSON through the declared
+      input schema while preserving provider fields, uses `createMemoryMutationReplayStore()` for
+      provider-event id replay, exposes a transaction hook and `recordChange(domain, ...)`, and
+      returns sanitized `FW-Changes` wire records after commit. `packages/server/src/webhook.test.ts`
+      covers verify→parse→replay→tx→handler→change-record ordering, duplicate replay without
+      handler re-execution, tamper rejection before parsing, rollback on `fail()`, and the
+      `verify: 'none'` justification type guard. Still intentionally out of scope: compiler/static
+      extraction, durable replay storage, audit rendering, and reference-app adoption.
 - [x] E3 verifier kit: generic `hmacSignature()` + `stripeSignature` + `standardWebhooks` presets, custom `verify` escape, provider test vectors in CI.
       Evidence 2026-06-11: `@jiso/core` exports the pure verifier kit from
       `packages/core/src/verifier.ts`. `hmacSignature()` verifies raw payload bytes with

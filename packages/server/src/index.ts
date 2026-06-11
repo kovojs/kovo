@@ -110,6 +110,22 @@ export type {
   ShellDispatchMatch,
   ShellDispatchPhase,
 } from './shell.js';
+export { runWebhook, webhook } from './webhook.js';
+export type {
+  WebhookChangeOptions,
+  WebhookDeclaration,
+  WebhookDefinition,
+  WebhookFail,
+  WebhookFailureStatus,
+  WebhookHandlerContext,
+  WebhookReplayReservation,
+  WebhookReplayStore,
+  WebhookResponseStatus,
+  WebhookRunResult,
+  WebhookSuccessStatus,
+  WebhookTransactionContext,
+  WebhookWireResponse,
+} from './webhook.js';
 
 export interface Schema<T> {
   parse(input: unknown): T;
