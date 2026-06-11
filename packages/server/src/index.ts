@@ -67,6 +67,16 @@ export type {
   StylesheetAsset,
   StylesheetManifestEntry,
 } from './hints.js';
+export { findRouteAmbiguities, matchRoute, normalizePathname } from './match.js';
+export type { PathnameNormalization, RouteAmbiguity, RouteLike, RouteMatch } from './match.js';
+export { matchShellDispatch, shellDispatchTable } from './shell.js';
+export type {
+  EndpointLike,
+  ShellDispatchEntry,
+  ShellDispatchInput,
+  ShellDispatchMatch,
+  ShellDispatchPhase,
+} from './shell.js';
 
 export interface Schema<T> {
   parse(input: unknown): T;

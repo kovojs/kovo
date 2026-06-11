@@ -7,7 +7,7 @@ Scope: SPEC addition (proposed §9.5 "The request shell"), `@jiso/server` shell 
 
 - [ ] S8 spike: serve the pinned wire fixtures over real HTTP through a prototype dispatch path (enhanced mutation, no-JS PRG, 422 fragment, typed read, `<fw-defer>` stream, `/c/` module load) before freezing the `createApp()` shape (decision-gate writeup).
 - [ ] SPEC PR: §9.5 request shell — dispatch table, document assembly contract, `createApp()` config surface (including the §6.5 `sessionProvider` home), error shells, export semantics, and the FW228/FW229 diagnostics.
-- [ ] R1 route matcher + dispatch table (pure, no I/O).
+- [x] R1 route matcher + dispatch table (pure, no I/O). Evidence 2026-06-11: `packages/server/src/match.ts` and `packages/server/src/shell.ts` add no-I/O helpers for static-first route matching, raw params, trailing-slash 308 metadata, FW228-style ambiguity detection, and the printable reserved dispatch order; `packages/server/src/shell.test.ts` covers the slice.
 - [ ] R2 document assembly (`renderDocument`, deferred-stream variant, error shells).
 - [ ] R3 `createApp()` aggregate + `createRequestHandler(app)` over web-standard `Request → Response`.
 - [ ] R4 node:http adapter (incl. Early Hints); `tests/p10-perf.node.mjs` migrates onto it as the parity proof.
