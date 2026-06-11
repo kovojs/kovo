@@ -1,6 +1,12 @@
 import { diagnosticDefinitions } from '@jiso/core';
 
 import { diagnosticFor, type CompilerDiagnostic } from '../diagnostics.js';
+import {
+  jsxComments,
+  jsxElements,
+  parseComponentModule,
+  type JsxCommentModel,
+} from '../scan/parse.js';
 
 const declaredExecutionTriggers = new Set(['idle', 'load', 'visible']);
 
@@ -46,10 +52,17 @@ export function validateEventTriggerNames(source: string, fileName: string): Com
 }
 
 function eventTriggerAttributes(source: string): Array<{ index: number; name: string }> {
-  return [...source.matchAll(/\bon:(?<name>[a-z][a-z0-9-]*)\s*=/g)].map((match) => ({
-    index: match.index ?? 0,
-    name: match.groups?.name ?? '',
-  }));
+  return jsxElements(parseComponentModule('component.tsx', source)).flatMap((element) =>
+    element.attributes.flatMap((attribute) => {
+      const name = eventTriggerName(attribute.name);
+      return name === null ? [] : [{ index: attribute.start, name }];
+    }),
+  );
+}
+
+function eventTriggerName(attributeName: string): string | null {
+  const match = /^on:(?<name>[a-z][a-z0-9-]*)$/.exec(attributeName);
+  return match?.groups?.name ?? null;
 }
 
 function isKnownEventOrTrigger(name: string): boolean {
@@ -57,10 +70,19 @@ function isKnownEventOrTrigger(name: string): boolean {
 }
 
 function hasFw211Justification(source: string, index: number): boolean {
-  const prefix = source.slice(Math.max(0, index - 240), index);
-  return /(?:\/\*[\s\S]*?FW211[\s\S]*?\*\/|\/\/[^\n]*FW211|<!--[\s\S]*?FW211[\s\S]*?-->)/.test(
-    prefix,
-  );
+  const comments = jsxComments(parseComponentModule('component.tsx', source))
+    .filter((comment) => comment.end <= index && comment.text.includes('FW211'))
+    .sort((left, right) => right.end - left.end);
+  const nearest = comments[0];
+  return nearest !== undefined && isAttachedJustificationGap(source, nearest, index);
+}
+
+function isAttachedJustificationGap(
+  source: string,
+  comment: JsxCommentModel,
+  attributeIndex: number,
+): boolean {
+  return /^[\s<>"'=/\w:.-]*$/.test(source.slice(comment.end, attributeIndex));
 }
 
 function eventTriggerDiagnostic(

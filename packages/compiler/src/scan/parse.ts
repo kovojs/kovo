@@ -18,6 +18,12 @@ export interface JsxExpressionModel {
   start: number;
 }
 
+export interface JsxCommentModel {
+  end: number;
+  start: number;
+  text: string;
+}
+
 export interface JsxAttributeModel {
   end: number;
   expression?: string;
@@ -49,6 +55,7 @@ export interface ComponentModel {
 export interface ComponentModuleModel {
   calls: readonly CallExpressionModel[];
   components: readonly ComponentModel[];
+  jsxComments: readonly JsxCommentModel[];
   jsxExpressions: readonly JsxExpressionModel[];
   jsxElements: readonly JsxElementModel[];
 }
@@ -63,6 +70,7 @@ export function parseComponentModule(fileName: string, source: string): Componen
   );
   const calls: CallExpressionModel[] = [];
   const components: ComponentModel[] = [];
+  const jsxComments: JsxCommentModel[] = [];
   const jsxExpressions: JsxExpressionModel[] = [];
   const jsxElements: JsxElementModel[] = [];
 
@@ -79,8 +87,11 @@ export function parseComponentModule(fileName: string, source: string): Componen
     if (ts.isJsxElement(node) || ts.isJsxSelfClosingElement(node)) {
       jsxElements.push(jsxElementModel(sourceFile, source, node));
     }
-    if (ts.isJsxExpression(node) && node.expression) {
-      jsxExpressions.push(jsxExpressionModel(sourceFile, source, node.expression));
+    if (ts.isJsxExpression(node)) {
+      const comment = jsxCommentModel(sourceFile, source, node);
+      if (comment) jsxComments.push(comment);
+      if (node.expression)
+        jsxExpressions.push(jsxExpressionModel(sourceFile, source, node.expression));
     }
     if (ts.isCallExpression(node) && ts.isIdentifier(node.expression)) {
       calls.push(callExpressionModel(sourceFile, source, node));
@@ -91,7 +102,7 @@ export function parseComponentModule(fileName: string, source: string): Componen
 
   visit(sourceFile);
 
-  return { calls, components, jsxExpressions, jsxElements };
+  return { calls, components, jsxComments, jsxExpressions, jsxElements };
 }
 
 function isExportedVariable(node: ts.VariableDeclaration): boolean {
@@ -154,6 +165,10 @@ export function callExpressions(model: ComponentModuleModel): CallExpressionMode
 
 export function jsxExpressions(model: ComponentModuleModel): JsxExpressionModel[] {
   return [...model.jsxExpressions];
+}
+
+export function jsxComments(model: ComponentModuleModel): JsxCommentModel[] {
+  return [...model.jsxComments];
 }
 
 function componentModelFromInitializer(
@@ -296,6 +311,23 @@ function jsxExpressionModel(
     end,
     expression: source.slice(start, end).trim(),
     start,
+  };
+}
+
+function jsxCommentModel(
+  sourceFile: ts.SourceFile,
+  source: string,
+  node: ts.JsxExpression,
+): JsxCommentModel | null {
+  const start = node.getStart(sourceFile);
+  const end = node.getEnd();
+  const text = source.slice(start, end);
+  if (!/^\{\s*\/\*[\s\S]*\*\/\s*\}$/.test(text)) return null;
+
+  return {
+    end,
+    start,
+    text,
   };
 }
 
