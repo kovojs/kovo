@@ -242,10 +242,16 @@ export function main(args: readonly string[] = process.argv.slice(2)): number {
   }
 
   if (args[0] === 'audit') {
-    const inputPath = args[1];
+    const failOnFindings = args.includes('--fail-on-findings');
+    const positional = args.slice(1).filter((arg) => arg !== '--fail-on-findings');
+    if (positional.length > 1) {
+      process.stderr.write('fw: usage: fw audit [--fail-on-findings] [graph.json]\n');
+      return 1;
+    }
+    const [inputPath] = positional;
     const input = readGraphInput(inputPath);
     if (!input.ok) return writeInputError(input.error);
-    const result = fwAudit(input.value);
+    const result = fwAudit(input.value, { failOnFindings });
     const stream = result.exitCode === 0 ? process.stdout : process.stderr;
     stream.write(result.output);
     return result.exitCode;
@@ -548,7 +554,11 @@ export function fwExplain(input: FwExplainInput, options: FwExplainOptions): FwC
   return ok(lines);
 }
 
-export function fwAudit(input: FwExplainInput): FwCheckResult {
+export interface FwAuditOptions {
+  failOnFindings?: boolean;
+}
+
+export function fwAudit(input: FwExplainInput, options: FwAuditOptions = {}): FwCheckResult {
   const unguarded = unguardedAccesses(input);
   const manualInvalidates = (input.mutations ?? []).filter(
     (mutation) => (mutation.manualInvalidates?.length ?? 0) > 0,
@@ -579,7 +589,11 @@ export function fwAudit(input: FwExplainInput): FwCheckResult {
     );
   }
 
-  return ok(lines);
+  const findingCount = unguarded.length + manualInvalidates.length;
+  return {
+    exitCode: options.failOnFindings && findingCount > 0 ? 1 : 0,
+    output: `${lines.join('\n')}\n`,
+  };
 }
 
 export function fwCheck(

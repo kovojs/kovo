@@ -919,6 +919,29 @@ describe('fw audit', () => {
     });
   });
 
+  it('fails on audit findings when requested', () => {
+    expect(
+      fwAudit(
+        {
+          mutations: [
+            { guards: ['authed'], key: 'cart/remove' },
+            { guards: ['rateLimit:session'], key: 'cart/add', writes: ['cart'] },
+          ],
+        },
+        { failOnFindings: true },
+      ),
+    ).toEqual({
+      exitCode: 1,
+      output: [
+        'fw-audit/v1',
+        'UNGUARDED',
+        'MUTATION cart/add guards=rateLimit:session writes=cart invalidates=- manual-invalidates=-',
+        'SUMMARY unguarded=1 manual-invalidates=0',
+        '',
+      ].join('\n'),
+    });
+  });
+
   it('accepts fw audit as a CLI command', () => {
     const tempDir = mkdtempSync(join(tmpdir(), 'jiso-cli-audit-'));
     const graphPath = join(tempDir, 'graph.json');
@@ -942,6 +965,43 @@ describe('fw audit', () => {
       expect(main(['audit', graphPath])).toBe(0);
     } finally {
       stdoutWrite.mockRestore();
+      rmSync(tempDir, { force: true, recursive: true });
+    }
+
+    expect(output).toBe(
+      [
+        'fw-audit/v1',
+        'UNGUARDED',
+        'MUTATION cart/add guards=rateLimit:session writes=cart invalidates=- manual-invalidates=-',
+        'SUMMARY unguarded=1 manual-invalidates=0',
+        '',
+      ].join('\n'),
+    );
+  });
+
+  it('fails fw audit when requested and findings exist', () => {
+    const tempDir = mkdtempSync(join(tmpdir(), 'jiso-cli-audit-'));
+    const graphPath = join(tempDir, 'graph.json');
+    let output = '';
+    const stderrWrite = vi.spyOn(process.stderr, 'write').mockImplementation(((chunk) => {
+      output += chunk.toString();
+      return true;
+    }) as typeof process.stderr.write);
+
+    try {
+      writeFileSync(
+        graphPath,
+        JSON.stringify({
+          mutations: [
+            { guards: ['authed'], key: 'cart/remove' },
+            { guards: ['rateLimit:session'], key: 'cart/add', writes: ['cart'] },
+          ],
+        }),
+      );
+
+      expect(main(['audit', '--fail-on-findings', graphPath])).toBe(1);
+    } finally {
+      stderrWrite.mockRestore();
       rmSync(tempDir, { force: true, recursive: true });
     }
 
