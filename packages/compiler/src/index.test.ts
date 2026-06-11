@@ -1262,12 +1262,16 @@ export const ProductLinks = component('product-links', {
         fileName: 'product-links.tsx',
         message: 'Literal href or form action matches no declared route. /product/p1',
         severity: 'error',
+        start: { column: 10, line: 5 },
+        length: 18,
       },
       {
         code: 'FW220',
         fileName: 'product-links.tsx',
         message: 'Literal href or form action matches no declared route. /checkout',
         severity: 'error',
+        start: { column: 26, line: 6 },
+        length: 18,
       },
     ]);
   });

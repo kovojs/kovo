@@ -103,6 +103,12 @@ interface LiteralIdValue {
   value: string;
 }
 
+interface LiteralNavigationTarget {
+  index: number;
+  length: number;
+  value: string;
+}
+
 interface TemplateBody {
   offset: number;
   source: string;
@@ -1778,20 +1784,26 @@ function validateLiteralHrefs(
   if (!routes) return [];
 
   const missing = literalNavigationTargets(source).filter((target) => {
-    if (isExternalNavigationTarget(target)) return false;
-    return !routes.some((routePath) => routePathMatchesUrl(routePath, target));
+    if (isExternalNavigationTarget(target.value)) return false;
+    return !routes.some((routePath) => routePathMatchesUrl(routePath, target.value));
   });
 
-  return [...new Set(missing)].map((target) => ({
-    ...diagnosticFor(options.fileName, 'FW220'),
-    message: `${diagnosticDefinitions.FW220.message} ${target}`,
+  return dedupeBy(missing, (target) => target.value).map((target) => ({
+    ...diagnosticFor(options.fileName, 'FW220', source, target.index, target.length),
+    message: `${diagnosticDefinitions.FW220.message} ${target.value}`,
   }));
 }
 
-function literalNavigationTargets(source: string): string[] {
+function literalNavigationTargets(source: string): LiteralNavigationTarget[] {
   return jsxAttributes(parseComponentModuleModel('component.tsx', source)).flatMap((attribute) =>
     (attribute.name === 'href' || attribute.name === 'action') && attribute.value
-      ? [attribute.value]
+      ? [
+          {
+            index: attribute.start,
+            length: attribute.end - attribute.start,
+            value: attribute.value,
+          },
+        ]
       : [],
   );
 }
