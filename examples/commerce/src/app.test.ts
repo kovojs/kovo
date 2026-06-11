@@ -149,6 +149,21 @@ function optimisticStatuses(output: string) {
   );
 }
 
+function queryChunkNames(html: string) {
+  return [...html.matchAll(/<fw-query name="([^"]+)">/g)].map((match) => match[1]);
+}
+
+function fragmentTargetForQuery(query: string) {
+  const component = commerceGraph.components.find((item) => item.queries.includes(query));
+  const fragment = component?.fragments[0];
+
+  if (!fragment) {
+    throw new Error(`Missing commerce fragment target for query ${query}`);
+  }
+
+  return fragment;
+}
+
 function keyedListNode(
   type: string,
   keys: readonly string[],
@@ -830,5 +845,75 @@ describe('commerce example', () => {
       }
       expect(explainLine(explanation.output, 'OPTIMISTIC-SUMMARY ')).toContain('UNHANDLED=0');
     }
+  });
+
+  it('accepts cart/add mutation-query pairs through static graph, verifier, and enhanced wire', async () => {
+    const mutation = fwExplain(commerceGraph, {
+      kind: 'mutation',
+      optimistic: true,
+      target: 'cart/add',
+    });
+    const affectedQueries = [...mutationUpdateConsumers(mutation.output).keys()];
+    const statuses = optimisticStatuses(mutation.output);
+    const db = createCommerceDb();
+    const harness = createJisoTestHarness({
+      db,
+      request: {
+        session: { id: 's-commerce-acceptance', user: { id: 'u1' } },
+      },
+      touchGraph: commerceTouchGraph as unknown as TouchGraph,
+      verification: {
+        domainByTable: {
+          cart_items: 'cart',
+          orders: 'order',
+          products: 'product',
+        },
+      },
+    });
+    const verifiedDb = harness.dbHandle();
+    verifiedDb.transaction = (run) => run(verifiedDb);
+
+    // SPEC.md §10.4/§11.2: every invalidated query pair must have an explicit
+    // optimistic status, and executed writes must stay within the static graph.
+    expect(Object.fromEntries(statuses)).toEqual({
+      cart: 'hand-written',
+      orderHistory: 'await-fragment',
+      productGrid: 'await-fragment',
+    });
+    await expect(
+      harness.exec(
+        addToCart,
+        commerceCsrfInput(
+          { productId: 'p1', quantity: 2 },
+          { db: verifiedDb, session: { id: 's-commerce-acceptance', user: { id: 'u1' } } },
+        ),
+        { touchGraphKey: 'cart.addItem' },
+      ),
+    ).resolves.toMatchObject({
+      ok: true,
+      rerunQueries: expect.arrayContaining(affectedQueries),
+    });
+    expect(harness.verificationDiagnostics()).toEqual([]);
+
+    const response = await submitAddToCart(
+      { productId: 'p2', quantity: 1 },
+      { db: verifiedDb, session: { id: 's-commerce-acceptance-2', user: { id: 'u1' } } },
+      {
+        'FW-Fragment': 'true',
+        'FW-Targets': affectedQueries.map(fragmentTargetForQuery).join(','),
+      },
+    );
+
+    expect(response).toMatchObject({
+      headers: {
+        'Content-Type': 'text/vnd.jiso.fragment+html; charset=utf-8',
+      },
+      status: 200,
+    });
+    expect(queryChunkNames(response.body).sort()).toEqual([...affectedQueries].sort());
+    for (const query of affectedQueries) {
+      expect(response.body).toContain(`<fw-fragment target="${fragmentTargetForQuery(query)}">`);
+    }
+    expect(response.body).toContain('fw-key="order-2"');
   });
 });

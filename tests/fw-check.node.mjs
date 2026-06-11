@@ -966,6 +966,12 @@ void test('P10 commerce graph assertions answer behavior mechanically', async ()
     commerceTests,
     /answers commerce optimistic coverage mechanically from fw explain output/,
   );
+  assert.match(
+    commerceTests,
+    /accepts cart\/add mutation-query pairs through static graph, verifier, and enhanced wire/,
+  );
+  assert.match(commerceTests, /touchGraphKey: 'cart\.addItem'/);
+  assert.match(commerceTests, /queryChunkNames\(response\.body\)\.sort\(\)/);
   assert.match(commerceTests, /mutationUpdateConsumers\(mutation\.output\)/);
   assert.match(commerceTests, /const queryExplain = fwExplain\(commerceGraph, \{ kind: 'query'/);
   assert.match(commerceTests, /expect\(updates\.get\(query\)\)\.toContain\('page:\/cart'\)/);
