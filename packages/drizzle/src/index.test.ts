@@ -542,6 +542,52 @@ export const tableDomains = {
     ]);
   });
 
+  it('derives project query shapes from Drizzle column builders instead of selected aliases', () => {
+    const facts = extractQueryFactsFromProject({
+      files: [
+        {
+          fileName: 'product.queries.ts',
+          source: `
+            export const products = pgTable("products", {
+              archived: boolean("archived"),
+              createdAt: timestamp("created_at"),
+              metadata: json("metadata"),
+              name: text("name"),
+              stock: integer("stock"),
+            }, jiso({ domain: "product", key: "id" }));
+
+            export const productQuery = query("product", {
+              load(_input, db) {
+                return db.select({
+                  archived: products.archived,
+                  createdAt: products.createdAt,
+                  discount: products.name,
+                  metadata: products.metadata,
+                  stock: products.stock,
+                }).from(products);
+              },
+            });
+          `,
+        },
+      ],
+    });
+
+    expect(facts).toEqual([
+      {
+        query: 'product',
+        reads: ['product'],
+        shape: {
+          archived: 'boolean',
+          createdAt: 'string',
+          discount: 'string',
+          metadata: 'object',
+          stock: 'number',
+        },
+        site: 'product.queries.ts:10',
+      },
+    ]);
+  });
+
   it('extracts direct insert-select and update-from read source tables', () => {
     const graph = extractTouchGraphFromSource([
       {

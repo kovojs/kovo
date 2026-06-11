@@ -121,6 +121,7 @@ export interface TouchGraphDiagnostic {
 }
 
 export interface SourceFileInput {
+  columnShapes?: Readonly<Record<string, QueryShape>>;
   fileName: string;
   source: string;
 }
@@ -359,12 +360,14 @@ function sourceFilesWithProjectExtractionResolved(
     project.createSourceFile(file.fileName, file.source, { overwrite: true }),
   );
   const tableNamesBySymbol = projectTableNamesBySymbol(sourceFiles);
+  const columnShapesByTable = projectColumnShapesByTable(sourceFiles, tableNamesBySymbol);
 
   return options.files.map((file, index) => {
     const sourceFile = sourceFiles[index];
     if (!sourceFile) throw new Error(`Missing source file for ${file.fileName}`);
 
     return {
+      columnShapes: columnShapesForFile(sourceFile, tableNamesBySymbol, columnShapesByTable),
       fileName: file.fileName,
       source: sourceWithProjectExtractionResolved(file.source, sourceFile, tableNamesBySymbol),
     };
@@ -393,7 +396,7 @@ export function extractQueryFactsFromSource(files: readonly SourceFileInput[]): 
   }
 
   for (const file of files) {
-    for (const query of extractQueryDefinitions(file.source)) {
+    for (const query of extractQueryDefinitions(file.source, file.columnShapes ?? {})) {
       const reads = queryReadDomains(query.body, tables);
       const site = `${file.fileName}:${lineForIndex(file.source, query.index)}`;
       const diagnostics = opaqueProjectionDiagnostics(
@@ -500,6 +503,93 @@ function projectTableNamesBySymbol(
   return namesBySymbol;
 }
 
+function projectColumnShapesByTable(
+  sourceFiles: readonly SourceFile[],
+  tableNamesBySymbol: ReadonlyMap<string, string>,
+): ReadonlyMap<string, Readonly<Record<string, QueryShape>>> {
+  const shapes = new Map<string, Record<string, QueryShape>>();
+
+  for (const sourceFile of sourceFiles) {
+    for (const declaration of sourceFile.getVariableDeclarations()) {
+      const initializer = declaration.getInitializer();
+      if (!initializer || !isAnnotatedTableInitializer(initializer.getText())) continue;
+
+      const tableName = tableNamesBySymbol.get(
+        resolvedSymbolKey(declaration.getNameNode().getSymbol()) ?? '',
+      );
+      if (!tableName) continue;
+
+      const columns = tableColumnShapes(initializer);
+      if (Object.keys(columns).length > 0) shapes.set(tableName, columns);
+    }
+  }
+
+  return shapes;
+}
+
+function tableColumnShapes(initializer: Node): Record<string, QueryShape> {
+  const call = Node.isCallExpression(initializer) ? initializer : undefined;
+  const columns = call?.getArguments()[1];
+  if (!columns || !Node.isObjectLiteralExpression(columns)) return {};
+
+  const shapes: Record<string, QueryShape> = {};
+  for (const property of columns.getProperties()) {
+    if (!Node.isPropertyAssignment(property)) continue;
+
+    const name = propertyNameText(property.getNameNode());
+    if (!name) continue;
+
+    shapes[name] = columnBuilderShape(property.getInitializer()?.getText() ?? '');
+  }
+
+  return shapes;
+}
+
+function propertyNameText(name: Node): string | undefined {
+  if (Node.isIdentifier(name) || Node.isStringLiteral(name) || Node.isNumericLiteral(name)) {
+    return name.getText().replace(/^["']|["']$/g, '');
+  }
+  return undefined;
+}
+
+function columnBuilderShape(source: string): QueryShape {
+  const builder = /^(?<name>[A-Za-z_$][\w$]*)\s*\(/.exec(source.trim())?.groups?.name;
+  if (!builder) return 'string';
+
+  if (/^(?:boolean)$/.test(builder)) return 'boolean';
+  if (
+    /^(?:bigint|doublePrecision|integer|numeric|real|smallint|serial|bigserial|smallserial)$/.test(
+      builder,
+    )
+  ) {
+    return 'number';
+  }
+  if (/^(?:json|jsonb)$/.test(builder)) return 'object';
+  return 'string';
+}
+
+function columnShapesForFile(
+  sourceFile: SourceFile,
+  tableNamesBySymbol: ReadonlyMap<string, string>,
+  columnShapesByTable: ReadonlyMap<string, Readonly<Record<string, QueryShape>>>,
+): Readonly<Record<string, QueryShape>> {
+  const shapes: Record<string, QueryShape> = {};
+
+  for (const identifier of sourceFile.getDescendantsOfKind(SyntaxKind.Identifier)) {
+    const symbolKey = resolvedSymbolKey(identifier.getSymbol());
+    const tableName = tableNamesBySymbol.get(symbolKey ?? '');
+    const tableShapes = tableName ? columnShapesByTable.get(tableName) : undefined;
+    if (!tableShapes) continue;
+
+    for (const [column, shape] of Object.entries(tableShapes)) {
+      shapes[`${identifier.getText()}.${column}`] = shape;
+      shapes[`${tableName}.${column}`] = shape;
+    }
+  }
+
+  return shapes;
+}
+
 function applySourceReplacements(
   source: string,
   replacements: readonly { end: number; start: number; value: string }[],
@@ -571,7 +661,10 @@ interface FunctionTouchSummary {
   writes: WriteSummaryInput[];
 }
 
-function extractQueryDefinitions(source: string): ExtractedQueryDefinition[] {
+function extractQueryDefinitions(
+  source: string,
+  columnShapes: Readonly<Record<string, QueryShape>> = {},
+): ExtractedQueryDefinition[] {
   const definitions: ExtractedQueryDefinition[] = [];
   const pattern =
     /(?:export\s+)?const\s+[A-Za-z_$][\w$]*\s*=\s*query\s*\(\s*["'](?<query>[^"']+)["']\s*,/g;
@@ -587,7 +680,7 @@ function extractQueryDefinitions(source: string): ExtractedQueryDefinition[] {
     if (objectEnd === -1) continue;
 
     const body = source.slice(objectStart, objectEnd + 1);
-    const selection = selectShapeFromQueryBody(body);
+    const selection = selectShapeFromQueryBody(body, columnShapes);
     if (!selection) continue;
 
     definitions.push({
@@ -609,7 +702,10 @@ interface QueryShapeSelection {
   shape: QueryShape;
 }
 
-function selectShapeFromQueryBody(body: string): QueryShapeSelection | null {
+function selectShapeFromQueryBody(
+  body: string,
+  columnShapes: Readonly<Record<string, QueryShape>> = {},
+): QueryShapeSelection | null {
   const selectCall = /\.select\s*\(/.exec(body);
   if (!selectCall) return null;
 
@@ -638,10 +734,14 @@ function selectShapeFromQueryBody(body: string): QueryShapeSelection | null {
   const objectEnd = findMatchingBrace(projection, 0);
   if (objectEnd === -1) return null;
 
-  return queryShapeFromObjectLiteral(projection.slice(1, objectEnd));
+  return queryShapeFromObjectLiteral(projection.slice(1, objectEnd), '', columnShapes);
 }
 
-function queryShapeFromObjectLiteral(source: string, prefix = ''): QueryShapeSelection {
+function queryShapeFromObjectLiteral(
+  source: string,
+  prefix = '',
+  columnShapes: Readonly<Record<string, QueryShape>> = {},
+): QueryShapeSelection {
   const shape: Record<string, QueryShape> = {};
   const opaquePaths: string[] = [];
 
@@ -658,11 +758,15 @@ function queryShapeFromObjectLiteral(source: string, prefix = ''): QueryShapeSel
     const value = entry.slice(separator + 1).trim();
     const path = prefix ? `${prefix}.${key}` : key;
     if (value.startsWith('{')) {
-      const nested = queryShapeFromObjectLiteral(value.slice(1, findMatchingBrace(value, 0)), path);
+      const nested = queryShapeFromObjectLiteral(
+        value.slice(1, findMatchingBrace(value, 0)),
+        path,
+        columnShapes,
+      );
       shape[key] = nested.shape;
       opaquePaths.push(...nested.opaquePaths);
     } else {
-      shape[key] = scalarQueryShape(key, value);
+      shape[key] = scalarQueryShape(key, value, columnShapes);
       if (isOpaqueProjection(value)) opaquePaths.push(path);
     }
   }
@@ -670,10 +774,16 @@ function queryShapeFromObjectLiteral(source: string, prefix = ''): QueryShapeSel
   return { opaquePaths, shape };
 }
 
-function scalarQueryShape(key: string, expression: string): QueryShape {
+function scalarQueryShape(
+  key: string,
+  expression: string,
+  columnShapes: Readonly<Record<string, QueryShape>> = {},
+): QueryShape {
   if (/sql\s*<\s*number\s*>/.test(expression)) return 'number';
   if (/sql\s*<\s*boolean\s*>/.test(expression)) return 'boolean';
   if (/sql\s*<\s*string\s*>/.test(expression)) return 'string';
+  const columnShape = columnShapes[expression.trim()];
+  if (columnShape) return columnShape;
   if (/(count|qty|quantity|total|price|stock|amount)$/i.test(key)) return 'number';
   return 'string';
 }

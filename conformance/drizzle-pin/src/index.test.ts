@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { eq, gt, inArray, sql } from 'drizzle-orm';
-import { alias, boolean, integer, pgTable, text, timestamp } from 'drizzle-orm/pg-core';
+import { alias, boolean, integer, jsonb, pgTable, text, timestamp } from 'drizzle-orm/pg-core';
 
 import {
   createTouchGraphEntry,
@@ -29,6 +29,7 @@ describe('Drizzle pinned subset conformance', () => {
       archived: boolean('archived').notNull().default(false),
       createdAt: timestamp('created_at').notNull(),
       id: text('id').primaryKey(),
+      metadata: jsonb('metadata'),
       stock: integer('stock').notNull(),
     });
     const cartItems = pgTable('cart_items', {
@@ -39,11 +40,58 @@ describe('Drizzle pinned subset conformance', () => {
     const productAlias = alias(products, 'p');
 
     expect(products.id).toBeDefined();
+    expect(products.metadata).toBeDefined();
     expect(cartItems.productId).toBeDefined();
     expect(productAlias.id).toBeDefined();
     expect(eq(products.id, 'p1')).toBeDefined();
     expect(gt(products.stock, 0)).toBeDefined();
     expect(inArray(cartItems.cartId, ['c1', 'c2'])).toBeDefined();
+  });
+
+  it('pins project query shapes for real Drizzle column builders', () => {
+    const facts = extractQueryFactsFromProject({
+      files: [
+        {
+          fileName: 'conformance/drizzle-pin/src/product.queries.ts',
+          source: `
+            export const products = pgTable('products', {
+              archived: boolean('archived'),
+              createdAt: timestamp('created_at'),
+              metadata: jsonb('metadata'),
+              name: text('name'),
+              stock: integer('stock'),
+            }, jiso({ domain: 'product', key: 'id' }));
+
+            export const productQuery = query('product', {
+              load(_input, db) {
+                return db.select({
+                  archived: products.archived,
+                  createdAt: products.createdAt,
+                  discount: products.name,
+                  metadata: products.metadata,
+                  stock: products.stock,
+                }).from(products);
+              },
+            });
+          `,
+        },
+      ],
+    });
+
+    expect(facts).toEqual([
+      {
+        query: 'product',
+        reads: ['product'],
+        shape: {
+          archived: 'boolean',
+          createdAt: 'string',
+          discount: 'string',
+          metadata: 'object',
+          stock: 'number',
+        },
+        site: 'conformance/drizzle-pin/src/product.queries.ts:10',
+      },
+    ]);
   });
 
   it('accepts jiso annotations as the real Drizzle pgTable extra config', () => {
