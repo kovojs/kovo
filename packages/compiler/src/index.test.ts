@@ -98,6 +98,9 @@ export const CartActions = component('cart-actions', {
       fileName: 'components/cart/cart-badge.tsx',
       registryFacts: {
         domainKeys: ['product', 'cart', 'cart'],
+        invalidations: {
+          'cart/add': ['cart', 'productGrid', 'orderHistory', 'cart'],
+        },
         mutations: {
           'cart/add': 'typeof addToCart',
           'cart/remove': 'typeof removeFromCart',
@@ -127,6 +130,9 @@ export const CartActions = component('cart-actions', {
   'cart/add': typeof addToCart;
   'cart/remove': typeof removeFromCart;
 }`);
+    expect(registry).toContain(`export interface InvalidationSets {
+  'cart/add': 'cart' | 'orderHistory' | 'productGrid';
+}`);
     expect(registry).toContain(`declare module '@jiso/core' {
   interface FragmentTargets {
   'cart-badge': {};
@@ -145,6 +151,10 @@ export const CartActions = component('cart-actions', {
   interface RouteRegistry {
   '/cart': import('@jiso/core').Route<'/cart'>;
   '/products/:id': import('@jiso/core').Route<'/products/:id'>;
+  }
+
+  interface InvalidationSets {
+  'cart/add': 'cart' | 'orderHistory' | 'productGrid';
   }
 }`);
     expect(registry).toContain('export type DomainKey = "cart" | "product";');
@@ -240,6 +250,7 @@ export const CartRow = component('cart-row', {
     expect(registry).toMatch(/export interface QueryRegistry \{\n\n\}/);
     expect(registry).toMatch(/export interface MutationRegistry \{\n\n\}/);
     expect(registry).toMatch(/export interface RouteRegistry \{\n\n\}/);
+    expect(registry).toMatch(/export interface InvalidationSets \{\n\n\}/);
     expect(registry).toContain(`declare module '@jiso/core' {
   interface FragmentTargets {
   'cart-badge': {};
@@ -254,6 +265,10 @@ export const CartRow = component('cart-row', {
   }
 
   interface RouteRegistry {
+
+  }
+
+  interface InvalidationSets {
 
   }
 }`);

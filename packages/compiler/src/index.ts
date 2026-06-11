@@ -82,6 +82,7 @@ export interface CompileComponentOptions {
 
 export interface RegistryFacts {
   domainKeys?: readonly string[];
+  invalidations?: Readonly<Record<string, readonly string[]>>;
   mutations?: RegistryTypeFacts;
   queries?: RegistryTypeFacts;
   routes?: readonly string[];
@@ -1708,6 +1709,7 @@ function emitRegistryModule(options: {
   const queryRegistryLines = registryTypeFactLines(options.registryFacts?.queries);
   const mutationRegistryLines = registryTypeFactLines(options.registryFacts?.mutations);
   const routeRegistryLines = routeRegistryFactLines(options.registryFacts?.routes);
+  const invalidationSetLines = invalidationSetFactLines(options.registryFacts?.invalidations);
   const domainKey = registryDomainKey(options.registryFacts?.domainKeys);
 
   return `${irHeader}
@@ -1747,6 +1749,10 @@ export interface RouteRegistry {
 ${routeRegistryLines}
 }
 
+export interface InvalidationSets {
+${invalidationSetLines}
+}
+
 declare module '@jiso/core' {
   interface FragmentTargets {
 ${fragmentTargetLines}
@@ -1762,6 +1768,10 @@ ${mutationRegistryLines}
 
   interface RouteRegistry {
 ${routeRegistryLines}
+  }
+
+  interface InvalidationSets {
+${invalidationSetLines}
   }
 }
 
@@ -1788,6 +1798,22 @@ function routeRegistryFactLines(routes: readonly string[] | undefined): string {
   return [...new Set(routes ?? [])]
     .sort((left, right) => left.localeCompare(right))
     .map((routePath) => `  '${routePath}': import('@jiso/core').Route<'${routePath}'>;`)
+    .join('\n');
+}
+
+function invalidationSetFactLines(
+  invalidations: Readonly<Record<string, readonly string[]>> | undefined,
+): string {
+  return Object.entries(invalidations ?? {})
+    .sort(([left], [right]) => left.localeCompare(right))
+    .map(([mutationKey, queryKeys]) => {
+      const queryUnion =
+        [...new Set(queryKeys)]
+          .sort()
+          .map((queryKey) => `'${queryKey}'`)
+          .join(' | ') || 'never';
+      return `  '${mutationKey}': ${queryUnion};`;
+    })
     .join('\n');
 }
 

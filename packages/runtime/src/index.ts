@@ -1,6 +1,14 @@
 import { diagnosticDefinitions } from '@jiso/core';
 export type { DiagnosticCode } from '@jiso/core';
-import type { EventDefinition, Form, FormFailure, FormInput, JsonValue } from '@jiso/core';
+import type {
+  EventDefinition,
+  Form,
+  FormFailure,
+  FormInput,
+  InvalidationSets,
+  JsonValue,
+  QueryRegistry,
+} from '@jiso/core';
 
 export type ImportHandlerModule = (url: string) => Promise<Record<string, unknown>>;
 
@@ -523,12 +531,28 @@ export interface OptimisticPlan<Input = unknown> {
   transforms: Record<string, OptimisticTransform<Input>>;
 }
 
+export type OptimisticEntry<Input = unknown, Value = unknown> =
+  | OptimisticTransform<Input, Value>
+  | 'await-fragment';
+
+type MutationKey<Definition> =
+  Definition extends Form<infer Key, Record<string, JsonValue>, JsonValue> ? Key : never;
+
+type InvalidatedQueryNames<Definition> =
+  MutationKey<Definition> extends keyof InvalidationSets
+    ? Extract<InvalidationSets[MutationKey<Definition>], Extract<keyof QueryRegistry, string>>
+    : never;
+
+type InvalidatedQueryValues<Definition> = {
+  [QueryName in InvalidatedQueryNames<Definition>]: QueryRegistry[QueryName];
+};
+
 export type OptimisticFor<
   Definition extends Form<string, Record<string, JsonValue>, JsonValue>,
-  QueryValues extends Record<string, unknown>,
+  QueryValues extends Record<string, unknown> = InvalidatedQueryValues<Definition>,
 > = Omit<OptimisticPlan<FormInput<Definition>>, 'transforms'> & {
   transforms: {
-    [QueryName in keyof QueryValues]: OptimisticTransform<
+    [QueryName in keyof QueryValues]: OptimisticEntry<
       FormInput<Definition>,
       QueryValues[QueryName]
     >;

@@ -608,8 +608,13 @@ void test('D4 commerce adopt-dont-invent features stay represented', async () =>
 void test('P10 commerce graph assertions answer behavior mechanically', async () => {
   const commerceTests = await readProjectFile('examples/commerce/src/app.test.ts');
   const cliTests = await readProjectFile('packages/cli/src/index.test.ts');
+  const compilerSource = await readProjectFile('packages/compiler/src/index.ts');
+  const compilerTests = await readProjectFile('packages/compiler/src/index.test.ts');
+  const coreSource = await readProjectFile('packages/core/src/index.ts');
   const fwCheckRunner = await readProjectFile('scripts/fw-check.mjs');
   const graphArtifact = await readProjectFile('examples/commerce/src/generated/graph.json');
+  const runtimeSource = await readProjectFile('packages/runtime/src/index.ts');
+  const runtimeTests = await readProjectFile('packages/runtime/src/index.test.ts');
   const viteConfig = await readProjectFile('vite.config.ts');
 
   assert.match(
@@ -626,6 +631,17 @@ void test('P10 commerce graph assertions answer behavior mechanically', async ()
   assert.match(commerceTests, /expect\(statuses\.get\(query\)\)\.not\.toBe\('UNHANDLED'\)/);
   assert.match(cliTests, /hand-write in the mutation module, or declare 'await-fragment'/);
   assert.match(cliTests, /ignores unrelated statuses/);
+  assert.match(coreSource, /interface InvalidationSets/);
+  assert.match(compilerSource, /invalidations\?: Readonly<Record<string, readonly string\[\]>>/);
+  assert.match(compilerSource, /function invalidationSetFactLines/);
+  assert.match(compilerTests, /export interface InvalidationSets/);
+  assert.match(runtimeSource, /type InvalidatedQueryValues/);
+  assert.match(runtimeSource, /OptimisticEntry/);
+  assert.match(
+    runtimeTests,
+    /requires optimistic coverage from generated invalidation sets by default/,
+  );
+  assert.match(runtimeTests, /productGrid: 'await-fragment'/);
   assert.match(commerceTests, /\.\.\.mutationUpdateConsumers\(explanation\.output\)\.keys\(\)/);
   assert.match(commerceTests, /applyCommerceAddToCartEffect/);
   assert.match(commerceTests, /shapeCommerceCartQuery/);

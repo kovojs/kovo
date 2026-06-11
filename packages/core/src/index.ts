@@ -53,6 +53,8 @@ export interface FragmentTargets {}
 
 export interface RouteRegistry {}
 
+export interface InvalidationSets {}
+
 type RegistryKey<Registry> = keyof Registry extends never
   ? string
   : Extract<keyof Registry, string>;
