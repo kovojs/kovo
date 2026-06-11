@@ -15,6 +15,17 @@ describe('fw check', () => {
     });
   });
 
+  it('reports unknown diagnostic codes as stable input errors', () => {
+    expect(
+      fwCheck({
+        lints: [{ code: 'FW999', site: 'cart.tsx:1' }],
+      } as never),
+    ).toEqual({
+      exitCode: 1,
+      output: 'fw-check/v1\nERROR INPUT lints[0].code unknown diagnostic code "FW999"\n',
+    });
+  });
+
   it('fails on FW310 optimistic coverage gaps', () => {
     expect(
       fwCheck({
@@ -919,6 +930,7 @@ describe('fw check', () => {
         [
           'export const diagnosticDefinitions = {};',
           'export function diagnosticDefinitionText() { return ""; }',
+          'export function validateFwExplainInput() { return []; }',
           '',
         ].join('\n'),
         'utf8',

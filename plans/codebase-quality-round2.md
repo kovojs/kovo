@@ -126,6 +126,19 @@ Do this first or pay it on every commit.
       of treating them as file paths, fix `fw <unknown>` claiming "not implemented yet" (:347),
       and stop deriving the exit code by scraping formatted output lines (:799-803 — findings
       should be structured first, rendered second).
+      Evidence 2026-06-11 for schema sub-slice: `packages/core/src/graph.ts` is the canonical
+      home for `FwExplainInput`/graph fact types and `validateFwExplainInput`;
+      `packages/cli/src/index.ts` and `packages/compiler/src/graph.ts` consume the core types;
+      `examples/commerce/src/app.ts` imports `FwExplainInput` from `@jiso/core`. Unknown
+      diagnostic-code validation is covered by `packages/core/src/graph.test.ts` and
+      `packages/cli/src/index.test.ts`. Verified with `pnpm run check`,
+      `pnpm exec vitest --run packages/core/src/graph.test.ts packages/core/src/diagnostics.test.ts packages/cli/src/index.test.ts packages/compiler/src/index.test.ts examples/commerce/src/app.test.ts`
+      (all but the commerce Tailwind build subtest passed; that subtest failed because
+      `corepack pnpm --filter @jiso/example-commerce exec which vite` cannot resolve `vite` in
+      the side worktree), and
+      `pnpm exec vitest --run examples/commerce/src/app.test.ts -t "ships graph facts for fw check and explain acceptance"`.
+      Remaining in this checklist item: CLI dispatch block deduplication, unknown-flag rejection,
+      unknown-command wording, and structured exit-code derivation.
 
 Verification: full `pnpm run acceptance` (the gate is the thing changing — its replacement must
 catch a seeded regression: mutate a fixture graph and confirm red). Commit per item.

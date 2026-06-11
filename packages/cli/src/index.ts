@@ -6,221 +6,29 @@ import { pathToFileURL } from 'node:url';
 import {
   diagnosticDefinitionText,
   diagnosticDefinitions,
+  validateFwExplainInput,
   type DiagnosticCode,
   type DiagnosticSeverity,
+  type EndpointExplain,
+  type EventPayloadFact,
+  type FixpointCheck,
+  type FwCheckInput,
+  type FwExplainInput,
+  type GraphInputValidationError,
+  type MutationExplain,
+  type OptimisticCoverage,
+  type QueryReadSet,
+  type QueryDataFact,
+  type RenderEquivalenceCheck,
+  type ScopeAuditFact,
+  type SemanticLint,
+  type StaticDiagnosticFact,
   type TouchGraph,
+  type UpdateCoverageFact,
+  type VerificationDiagnosticFact,
 } from '@jiso/core';
 
-export interface FwCheckInput {
-  diagnostics?: readonly StaticDiagnosticFact[];
-  endpoints?: readonly EndpointExplain[];
-  eventPayloads?: readonly EventPayloadFact[];
-  fixpointChecks?: readonly FixpointCheck[];
-  lints?: readonly SemanticLint[];
-  mutations?: readonly MutationExplain[];
-  optimistic?: readonly OptimisticCoverage[];
-  ownerDomains?: readonly OwnerDomainFact[];
-  pages?: readonly PageExplain[];
-  queryData?: readonly QueryDataFact[];
-  queries?: readonly QueryReadSet[];
-  renderEquivalenceChecks?: readonly RenderEquivalenceCheck[];
-  scopeAudits?: readonly ScopeAuditFact[];
-  touchGraph?: TouchGraph;
-  updateCoverage?: readonly UpdateCoverageFact[];
-  verificationDiagnostics?: readonly VerificationDiagnosticFact[];
-}
-
-export interface FwExplainInput extends FwCheckInput {
-  components?: readonly ComponentExplain[];
-  mutations?: readonly MutationExplain[];
-  pages?: readonly PageExplain[];
-}
-
-export interface ComponentExplain {
-  attributeMerges?: readonly AttributeMergeExplain[];
-  derives?: readonly DeriveExplain[];
-  fragments?: readonly string[];
-  handlers?: readonly HandlerExplain[];
-  name: string;
-  platformSubstitutions?: readonly PlatformSubstitutionExplain[];
-  queries?: readonly string[];
-  triggers?: readonly TriggerExplain[];
-}
-
-export interface AttributeMergeExplain {
-  attr: string;
-  decision: string;
-  diagnostics?: readonly DiagnosticCode[];
-  element: string;
-  rule: string;
-}
-
-export interface DeriveExplain {
-  inputs: readonly string[];
-  name: string;
-  ref: string;
-  target: string;
-}
-
-export interface HandlerExplain {
-  captures?: readonly CaptureChannel[];
-  event: string;
-  exportName: string;
-  params?: readonly string[];
-  ref: string;
-  substitution?: string;
-}
-
-export type CaptureChannel = 'ctx' | 'element-params' | 'module-scope';
-
-export interface TriggerExplain {
-  deps?: readonly string[];
-  exportName: string;
-  justification?: string;
-  ref: string;
-  trigger: 'idle' | 'load' | 'visible';
-}
-
-export interface PlatformSubstitutionExplain {
-  action: string;
-  event: string;
-  kind: 'details' | 'dialog' | 'popover';
-  tag: string;
-  target: string;
-}
-
-export interface MutationExplain {
-  enctype?: 'application/x-www-form-urlencoded' | 'multipart/form-data';
-  fileFields?: readonly string[];
-  guards?: readonly string[];
-  invalidates?: readonly string[];
-  inputFields?: readonly string[];
-  key: string;
-  manualInvalidates?: readonly string[];
-  session?: string;
-  writes?: readonly string[];
-}
-
-export interface PageMetaExplain {
-  description?: string;
-  image?: string;
-  title?: string;
-}
-
-export interface PageExplain {
-  guards?: readonly string[];
-  i18n?: readonly string[];
-  meta?: PageMetaExplain;
-  modulepreloads?: readonly string[];
-  prefetch?: 'conservative' | 'moderate' | false;
-  queries?: readonly string[];
-  route: string;
-  stylesheets?: readonly string[];
-  viewTransitions?: readonly string[];
-}
-
-export interface EndpointExplain {
-  auth?: string;
-  csrf?: 'checked' | 'exempt';
-  csrfJustification?: string;
-  guards?: readonly string[];
-  method?: string;
-  mount?: 'exact' | 'prefix';
-  name?: string;
-  path: string;
-  writes?: readonly string[];
-}
-
-export interface OptimisticCoverage {
-  mutation: string;
-  query: string;
-  status: 'UNHANDLED' | 'await-fragment' | 'hand-written';
-}
-
-export interface OwnerDomainFact {
-  domain: string;
-  owner: string;
-}
-
-export interface ScopeAuditFact {
-  detail?: string;
-  domain: string;
-  kind: 'query' | 'write';
-  name: string;
-  scope: 'args' | 'session' | 'unscoped' | 'unknown';
-  site: string;
-}
-
-export interface UpdateCoverageFact {
-  component: string;
-  detail?: string;
-  position: string;
-  query: string;
-  status: 'UNHANDLED' | 'fragment' | 'isomorphic' | 'plan' | 'renderOnce';
-}
-
-export interface FixpointCheck {
-  actual?: string;
-  artifact: string;
-  detail?: string;
-  expected?: string;
-  ok: boolean;
-}
-
-export interface RenderEquivalenceCheck {
-  actual?: string;
-  artifact: string;
-  detail?: string;
-  expected?: string;
-  ok: boolean;
-}
-
-export interface EventPayloadFact {
-  event: string;
-  fields: readonly string[];
-  site: string;
-}
-
-export interface QueryDataFact {
-  fields: readonly string[];
-  query: string;
-}
-
-export interface QueryReadSet {
-  domains: readonly string[];
-  guards?: readonly string[];
-  query: string;
-}
-
-export interface SemanticLint {
-  code: DiagnosticCode;
-  detail?: string;
-  site: string;
-}
-
-export interface VerificationDiagnosticFact {
-  branch?: string;
-  code: DiagnosticCode;
-  detail?: string;
-  domain?: string;
-  message?: string;
-  severity?: DiagnosticSeverity;
-  site?: string;
-}
-
-export interface StaticDiagnosticFact {
-  code: DiagnosticCode;
-  length?: number;
-  message?: string;
-  severity?: DiagnosticSeverity;
-  site: string;
-  start?: SourcePosition;
-}
-
-export interface SourcePosition {
-  column: number;
-  line: number;
-}
+export type { FwCheckInput, FwExplainInput } from '@jiso/core';
 
 interface TouchGraphDiagnosticFact {
   code: DiagnosticCode;
@@ -351,7 +159,14 @@ export function main(args: readonly string[] = process.argv.slice(2)): number {
 interface InputReadError {
   expected?: 'array' | 'object';
   field?: string;
-  kind: 'invalid-field-shape' | 'invalid-json' | 'invalid-shape' | 'not-found' | 'read-error';
+  kind:
+    | 'invalid-field-shape'
+    | 'invalid-json'
+    | 'invalid-shape'
+    | 'invalid-value'
+    | 'not-found'
+    | 'read-error';
+  message?: string;
   path: string;
 }
 
@@ -381,8 +196,13 @@ function readGraphInput(path: string | undefined): InputReadResult {
     return { error: { kind: 'invalid-shape', path }, ok: false };
   }
 
-  const shapeError = graphInputShapeError(parsed as Record<string, unknown>, path);
-  if (shapeError) return { error: shapeError, ok: false };
+  const validationErrors = validateFwExplainInput(parsed);
+  if (validationErrors.length > 0) {
+    const validationError = validationErrors[0];
+    if (validationError) {
+      return { error: graphInputValidationReadError(validationError, path), ok: false };
+    }
+  }
 
   return { ok: true, value: parsed as FwExplainInput };
 }
@@ -392,6 +212,7 @@ function writeInputError(error: InputReadError): 1 {
     'invalid-field-shape': `fw: input JSON field ${error.field ?? '-'} must be an ${error.expected ?? 'object'}: ${error.path}`,
     'invalid-json': `fw: input file is not valid JSON: ${error.path}`,
     'invalid-shape': `fw: input JSON must be an object: ${error.path}`,
+    'invalid-value': `fw: input JSON invalid: ${error.path}: ${error.field ?? '$'} ${error.message ?? 'is invalid'}`,
     'not-found': `fw: input file not found: ${error.path}`,
     'read-error': `fw: unable to read input file: ${error.path}`,
   };
@@ -399,42 +220,21 @@ function writeInputError(error: InputReadError): 1 {
   return 1;
 }
 
-function graphInputShapeError(input: Record<string, unknown>, path: string): InputReadError | null {
-  const arrayFields = [
-    'components',
-    'diagnostics',
-    'endpoints',
-    'eventPayloads',
-    'fixpointChecks',
-    'lints',
-    'mutations',
-    'optimistic',
-    'ownerDomains',
-    'pages',
-    'queryData',
-    'queries',
-    'renderEquivalenceChecks',
-    'scopeAudits',
-    'updateCoverage',
-    'verificationDiagnostics',
-  ];
-
-  for (const field of arrayFields) {
-    if (input[field] !== undefined && !Array.isArray(input[field])) {
-      return { expected: 'array', field, kind: 'invalid-field-shape', path };
-    }
+function graphInputValidationReadError(
+  error: GraphInputValidationError,
+  path: string,
+): InputReadError {
+  const arrayShape = /^([A-Za-z]+) must be an array$/.exec(error.message);
+  const arrayField = arrayShape?.[1];
+  if (arrayField) {
+    return { expected: 'array', field: arrayField, kind: 'invalid-field-shape', path };
   }
-
-  if (
-    input.touchGraph !== undefined &&
-    (typeof input.touchGraph !== 'object' ||
-      input.touchGraph === null ||
-      Array.isArray(input.touchGraph))
-  ) {
+  if (error.message === 'touchGraph must be an object') {
     return { expected: 'object', field: 'touchGraph', kind: 'invalid-field-shape', path };
   }
+  if (error.path === '$') return { kind: 'invalid-shape', path };
 
-  return null;
+  return { field: error.path, kind: 'invalid-value', message: error.message, path };
 }
 
 function isNodeErrorCode(error: unknown, code: string): boolean {
@@ -475,6 +275,10 @@ export interface FwUnscopedExplainOptions {
 }
 
 export function fwExplain(input: FwExplainInput, options: FwExplainOptions): FwCheckResult {
+  const validationErrors = validateFwExplainInput(input);
+  if (validationErrors.length > 0)
+    return invalidGraphInputResult(explainOutputVersion, validationErrors);
+
   const lines = [explainOutputVersion];
 
   if ('unscoped' in options) {
@@ -655,6 +459,10 @@ export interface FwAuditOptions {
 }
 
 export function fwAudit(input: FwExplainInput, options: FwAuditOptions = {}): FwCheckResult {
+  const validationErrors = validateFwExplainInput(input);
+  if (validationErrors.length > 0)
+    return invalidGraphInputResult(auditOutputVersion, validationErrors);
+
   const unguarded = unguardedAccesses(input);
   const manualInvalidates = (input.mutations ?? []).filter(
     (mutation) => (mutation.manualInvalidates?.length ?? 0) > 0,
@@ -696,6 +504,9 @@ export function fwCheck(
   input: FwCheckInput,
   options: { family?: FwCheckFamily } = {},
 ): FwCheckResult {
+  const validationErrors = validateFwExplainInput(input);
+  if (validationErrors.length > 0) return invalidGraphInputResult(outputVersion, validationErrors);
+
   const lines = [outputVersion];
   const family = options.family ?? 'all';
   const includeAll = family === 'all';
@@ -792,6 +603,17 @@ export function fwCheck(
   const failed = lines.some(isCheckFailureLine);
   return {
     exitCode: failed ? 1 : 0,
+    output: `${lines.join('\n')}\n`,
+  };
+}
+
+function invalidGraphInputResult(
+  version: string,
+  errors: readonly GraphInputValidationError[],
+): FwCheckResult {
+  const lines = [version, ...errors.map((error) => `ERROR INPUT ${error.path} ${error.message}`)];
+  return {
+    exitCode: 1,
     output: `${lines.join('\n')}\n`,
   };
 }

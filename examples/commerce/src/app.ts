@@ -28,7 +28,7 @@ import {
   type MutationWireHeaderSource,
   type StoredFileUpload,
 } from '@jiso/server';
-import type { FwExplainInput } from '../../../packages/cli/src/index.js';
+import type { FwExplainInput } from '@jiso/core';
 import { commerceTouchGraph } from './generated/touch-graph.js';
 
 export { commerceTouchGraph } from './generated/touch-graph.js';

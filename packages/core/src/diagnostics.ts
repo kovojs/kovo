@@ -61,6 +61,10 @@ export function diagnosticDefinitionText(
   return `${message} ${help}`;
 }
 
+export function isDiagnosticCode(value: unknown): value is DiagnosticCode {
+  return typeof value === 'string' && value in diagnosticDefinitions;
+}
+
 export const diagnosticDefinitions = {
   FW201: {
     code: 'FW201',

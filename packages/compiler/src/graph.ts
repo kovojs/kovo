@@ -1,3 +1,5 @@
+import type { ComponentExplain, FwExplainInput } from '@jiso/core';
+
 import { kebabCase } from './shared.ts';
 import {
   componentOptionObjectEntries,
@@ -8,11 +10,7 @@ import {
   type ComponentModuleModel,
 } from './scan/parse.js';
 
-export interface ComponentGraphFact {
-  fragments?: readonly string[];
-  name: string;
-  queries?: readonly string[];
-}
+export type ComponentGraphFact = Pick<ComponentExplain, 'fragments' | 'name' | 'queries'>;
 
 export interface FragmentTargetFact {
   propsType: string;
@@ -30,21 +28,10 @@ export interface RegistryFacts {
 
 export type RegistryTypeFacts = Readonly<Record<string, string>>;
 
-export interface RegistryGraphInput {
-  components?: readonly ComponentGraphFact[];
-  mutations?: readonly {
-    invalidates?: readonly string[];
-    key: string;
-    writes?: readonly string[];
-  }[];
-  pages?: readonly {
-    route: string;
-  }[];
-  queries?: readonly {
-    domains: readonly string[];
-    query: string;
-  }[];
-}
+export type RegistryGraphInput = Pick<
+  FwExplainInput,
+  'components' | 'mutations' | 'pages' | 'queries'
+>;
 
 interface CompileGraphComponentInput {
   componentGraphFacts: readonly ComponentGraphFact[];
