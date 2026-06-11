@@ -19,6 +19,7 @@ import {
   query,
   route,
   createMemoryMutationReplayStore,
+  createMemoryVersionedClientModuleRegistry,
   csrfField,
   csrfToken,
   readMutationWireHeaders,
@@ -39,6 +40,7 @@ import {
   stylesheetsForTargets,
   t,
   tag,
+  versionedClientModuleHref,
   type ChangeRecord,
   type MutationReplayStore,
 } from './index.js';
@@ -369,6 +371,85 @@ describe('server mutation primitives', () => {
         '<script type="module" src="/c/generated/app.client.js"></script>',
       ].join(''),
     });
+  });
+
+  it('renders versioned client module hrefs in page hints', () => {
+    const bootstrapScript = versionedClientModuleHref('/c/generated/app.client.js', 'build-1');
+    const cartModule = versionedClientModuleHref('/c/cart.client.js', 'cart-1');
+
+    expect(
+      renderPageHints({
+        bootstrapScript,
+        modulepreloads: [cartModule, bootstrapScript],
+      }),
+    ).toEqual({
+      earlyHints: {
+        Link: '</c/cart.client.js?v=cart-1>; rel=modulepreload, </c/generated/app.client.js?v=build-1>; rel=modulepreload',
+      },
+      html: [
+        '<link rel="modulepreload" href="/c/cart.client.js?v=cart-1">',
+        '<link rel="modulepreload" href="/c/generated/app.client.js?v=build-1">',
+        '<script type="module" src="/c/generated/app.client.js?v=build-1"></script>',
+      ].join(''),
+    });
+    expect(versionedClientModuleHref('/c/cart.client.js#Cart$add', 'cart-1')).toBe(
+      '/c/cart.client.js?v=cart-1#Cart$add',
+    );
+  });
+
+  it('retains old versioned client module responses after newer deploys register', () => {
+    const registry = createMemoryVersionedClientModuleRegistry();
+    const oldHref = registry.put({
+      path: '/c/cart.client.js',
+      source: 'export const version = "old";',
+      version: 'old',
+    });
+    const newHref = registry.put({
+      path: '/c/cart.client.js',
+      source: 'export const version = "new";',
+      version: 'new',
+    });
+
+    expect(oldHref).toBe('/c/cart.client.js?v=old');
+    expect(newHref).toBe('/c/cart.client.js?v=new');
+    expect(registry.resolve(oldHref)).toEqual({
+      body: 'export const version = "old";',
+      headers: {
+        'Cache-Control': 'public, max-age=31536000, immutable',
+        'Content-Type': 'text/javascript; charset=utf-8',
+      },
+      status: 200,
+    });
+    expect(registry.resolve(newHref)).toMatchObject({
+      body: 'export const version = "new";',
+      status: 200,
+    });
+  });
+
+  it('can bound retained client module versions per path', () => {
+    const registry = createMemoryVersionedClientModuleRegistry({ maxVersionsPerPath: 1 });
+    const oldHref = registry.put({
+      path: '/c/cart.client.js',
+      source: 'export const version = "old";',
+      version: 'old',
+    });
+    const newHref = registry.put({
+      path: '/c/cart.client.js',
+      source: 'export const version = "new";',
+      version: 'new',
+    });
+
+    expect(registry.resolve(oldHref)).toEqual({
+      body: 'Not Found',
+      headers: { 'Content-Type': 'text/plain; charset=utf-8' },
+      status: 404,
+    });
+    expect(registry.resolve('/c/cart.client.js')).toEqual({
+      body: 'Not Found',
+      headers: { 'Content-Type': 'text/plain; charset=utf-8' },
+      status: 404,
+    });
+    expect(registry.resolve(newHref)).toMatchObject({ body: 'export const version = "new";' });
   });
 
   it('reads enhanced mutation wire headers case-insensitively', () => {
