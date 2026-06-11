@@ -1246,6 +1246,20 @@ describe('@jiso/test harness', () => {
     );
   });
 
+  it('checks row keys parsed from raw SQL query predicates', () => {
+    const verifier = createDbVerifier(
+      {},
+      { domainByTable: { products: 'product' }, keyByTable: { products: 'id' } },
+    );
+    const db = verifier.wrap(createFakeDb());
+
+    db.sql("select * from products where sku = 'sku-1'");
+
+    expect(() => verifier.assertReadsCovered(['product'])).toThrow(
+      'FW408 Declared row key differs from observed row predicate: products expected id observed sku',
+    );
+  });
+
   it('verifies CTE source reads while ignoring the CTE alias as a table', () => {
     const verifier = createDbVerifier(
       {},

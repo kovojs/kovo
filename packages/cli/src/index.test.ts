@@ -363,6 +363,12 @@ describe('fw check', () => {
             detail: 'observed table audit_log',
             domain: 'audit',
           },
+          {
+            code: 'FW408',
+            detail: 'expected id observed sku',
+            domain: 'product',
+            site: 'product.domain.ts:9',
+          },
         ],
       }),
     ).toEqual({
@@ -371,6 +377,7 @@ describe('fw check', () => {
         'fw-check/v1',
         'WARN FW405 cart.domain.ts:2 Conditional write branch was never executed under instrumentation. domain=product branch=stock-reserve',
         'ERROR FW402 domain:audit Write touched an undeclared domain. domain=audit observed table audit_log',
+        'ERROR FW408 product.domain.ts:9 Declared row key differs from observed row predicate. domain=product expected id observed sku',
         '',
       ].join('\n'),
     });

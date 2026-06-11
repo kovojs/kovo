@@ -603,6 +603,7 @@ void test('P9 verification layer evidence remains represented', async () => {
     testHarnessTests,
     /accepts raw SQL compound predicates when one observed row key matches/,
   );
+  assert.match(testHarnessTests, /checks row keys parsed from raw SQL query predicates/);
   assert.match(testHarnessTests, /FW408 Declared row key differs from observed row predicate/);
   assert.match(testHarnessSource, /diagnosticMessage\('FW402'/);
   assert.match(testHarnessSource, /diagnosticMessage\('FW404'/);
@@ -612,6 +613,7 @@ void test('P9 verification layer evidence remains represented', async () => {
   assert.match(cliSource, /verificationDiagnostics\?: readonly VerificationDiagnosticFact/);
   assert.match(cliSource, /function verificationDiagnosticLine/);
   assert.match(cliTests, /prints runtime verification diagnostics as fw check findings/);
+  assert.match(cliTests, /ERROR FW408 product\.domain\.ts:9/);
 });
 
 void test('P8 component explain includes handler capture channels', async () => {
