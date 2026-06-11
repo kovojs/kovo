@@ -2478,6 +2478,31 @@ describe('query store', () => {
     expect(observed).toEqual(['morph:5:5 items:5']);
   });
 
+  it('lets mutation DOM apply interpose query writes before compiled plans run', () => {
+    const root = new FakeMorphRoot();
+    const store = createQueryStore();
+    const count = new FakeQueryBindingElement('cart.count', { textContent: '0' });
+    const observedQueries: string[] = [];
+    root.bindings.push(count);
+
+    const result = applyMutationResponseToDom({
+      applyQuery(query) {
+        observedQueries.push(`${query.name}:${query.key ?? ''}`);
+        store.set(query.name, { count: (query.value as { count: number }).count + 10 }, query.key);
+        return { value: store.get(query.name, query.key) };
+      },
+      body: '<fw-query name="cart">{"count":5}</fw-query>',
+      queryPlans: { cart: { bindings: true } },
+      root,
+      store,
+    });
+
+    expect(result.queries).toEqual(['cart']);
+    expect(observedQueries).toEqual(['cart:']);
+    expect(store.get('cart')).toEqual({ count: 15 });
+    expect(count.textContent).toBe('15');
+  });
+
   it('applies deferred stream chunks through the same query and fragment parser', () => {
     const store = createQueryStore();
     const plan = vi.fn();
@@ -4092,6 +4117,8 @@ describe('query store', () => {
     const cartBadge = new FakePendingElement({ 'fw-deps': 'cart' });
     const pendingRoot = new FakePendingRoot([cartBadge]);
     root.deps = [{ id: 'cart-badge' }];
+    const count = new FakeQueryBindingElement('cart.count', { textContent: '0' });
+    root.bindings.push(count);
     store.set('cart', { count: 0 });
     const optimistic = {
       transforms: {
@@ -4120,12 +4147,14 @@ describe('query store', () => {
       input: { quantity: 2 },
       optimistic,
       pendingRoot,
+      queryPlans: { cart: { bindings: true } },
       rebaser,
       root,
       store,
     });
 
     expect(store.get('cart')).toEqual({ count: 7 });
+    expect(count.textContent).toBe('7');
     expect(rebaser.pendingCount('cart')).toBe(1);
     expect(cartBadge.attributes).toMatchObject({
       'aria-busy': 'true',

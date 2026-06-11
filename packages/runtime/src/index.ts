@@ -64,7 +64,7 @@ export type {
 } from './morph.js';
 export { createQueryStore, hydrateQueryScripts } from './query-store.js';
 export type { QueryScriptLike, QuerySnapshot, QueryStore, QueryUpdatePlan } from './query-store.js';
-export type { FragmentChunk } from './wire-parser.js';
+export type { FragmentChunk, QueryChunk } from './wire-parser.js';
 
 export interface DeriveDefinition<Inputs extends readonly string[], Value> {
   inputs: Inputs;
@@ -1327,6 +1327,8 @@ export function applyMutationResponse(store: QueryStore, body: string): AppliedM
 export const applyDeferredChunk: typeof applyMutationResponse = applyMutationResponse;
 
 export interface ApplyMutationResponseToDomOptions {
+  applyQuery?: (query: QueryChunk) => { value: unknown } | void;
+  beforeApplyQueries?: (queries: readonly QueryChunk[]) => void;
   body: string;
   islandSignalScope?: IslandSignalScope;
   morph?: MorphFragment;
@@ -1344,15 +1346,21 @@ export function applyMutationResponseToDom(
   const applied = applyFragmentQueryBody(
     options.body,
     (name, value, key) => {
-      options.store.set(name, value, key);
+      const query = { ...(key === undefined ? {} : { key }), name, value };
+      const queryResult = options.applyQuery?.(query);
+      const planValue = queryResult ? queryResult.value : value;
+      if (!queryResult) {
+        options.store.set(name, value, key);
+      }
       applyCompiledQueryUpdatePlanIfSupported(
         options.root,
         name,
-        value,
+        planValue,
         options.queryPlans?.[name],
       );
     },
     options.onError,
+    options.beforeApplyQueries,
   );
 
   return {
@@ -1629,6 +1637,7 @@ async function submitOptimisticEnhancedMutationDirect<Input>(
         root: options.root,
         store: options.store,
         ...(options.morph ? { morph: options.morph } : {}),
+        ...(options.islandSignalScope ? { islandSignalScope: options.islandSignalScope } : {}),
       });
 
       return {
@@ -1639,28 +1648,31 @@ async function submitOptimisticEnhancedMutationDirect<Input>(
       };
     }
 
-    const queryChunks = readQueryChunks(body, options.onError);
-    const fragments = readFragmentChunks(body);
-    const uncoveredQueries = uncoveredOptimisticQueries(queryChunks, queryNames, optimisticKeys);
-    for (const queryName of uncoveredQueries) {
-      options.rebaser.settleWithoutServerTruth(idem, queryName, optimisticKeys[queryName]);
-      options.onError?.(uncoveredOptimisticQueryError(queryName, optimisticKeys[queryName]));
-    }
-    options.rebaser.settle(idem);
-    for (const query of queryChunks) {
-      options.rebaser.applyServerTruth(query.name, query.value, query.key);
-      applyCompiledQueryUpdatePlanIfSupported(
-        options.root,
-        query.name,
-        query.value,
-        options.queryPlans?.[query.name],
-      );
-    }
-    const applied = {
-      appliedFragments: applyFragments(options.root, fragments, options.morph),
-      fragments,
-      queries: queryChunks.map((query) => query.name),
-    };
+    const applied = applyMutationResponseToDom({
+      applyQuery(query) {
+        options.rebaser.applyServerTruth(query.name, query.value, query.key);
+        return { value: options.store.get(query.name, query.key) };
+      },
+      beforeApplyQueries(queryChunks) {
+        const uncoveredQueries = uncoveredOptimisticQueries(
+          queryChunks,
+          queryNames,
+          optimisticKeys,
+        );
+        for (const queryName of uncoveredQueries) {
+          options.rebaser.settleWithoutServerTruth(idem, queryName, optimisticKeys[queryName]);
+          options.onError?.(uncoveredOptimisticQueryError(queryName, optimisticKeys[queryName]));
+        }
+        options.rebaser.settle(idem);
+      },
+      body,
+      ...(options.islandSignalScope ? { islandSignalScope: options.islandSignalScope } : {}),
+      ...(options.morph ? { morph: options.morph } : {}),
+      ...(options.onError ? { onError: options.onError } : {}),
+      ...(options.queryPlans ? { queryPlans: options.queryPlans } : {}),
+      root: options.root,
+      store: options.store,
+    });
     publishSuccessfulMutation(options, response, body, changes);
     const settledQueries = queryNames.filter(
       (queryName) => options.rebaser.pendingCount(queryName, optimisticKeys[queryName]) === 0,
@@ -1811,8 +1823,10 @@ function applyFragmentQueryBody(
   body: string,
   applyQuery: (name: string, value: unknown, key: string | undefined) => void,
   onError?: (error: unknown) => void,
+  beforeApplyQueries?: (queries: readonly QueryChunk[]) => void,
 ): AppliedMutationResponse {
   const queryChunks = readQueryChunks(body, onError);
+  beforeApplyQueries?.(queryChunks);
 
   for (const query of queryChunks) {
     applyQuery(query.name, query.value, query.key);

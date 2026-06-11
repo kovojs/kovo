@@ -313,7 +313,12 @@ params, relational API, `execute(sql)`, right/full joins, a string column named 
       the parallel path. Also: `parseMutationFailure` (index.ts:1256-1301) rolls its own
       `<fw-error>`/`<output>` regexes — route through wire-parser; delete dead
       `QueryStore.hydrate` (query-store.ts:31-39, never called, divergent error policy vs
-      `hydrateQueryScripts`).
+      `hydrateQueryScripts`). Evidence 2026-06-11: `applyMutationResponseToDom` now exposes
+      query pre-apply and per-query interposition hooks, `submitOptimisticEnhancedMutationDirect`
+      routes successful optimistic responses through that shared DOM apply path, compiled query
+      plans receive rebased values from the hook, and the dead `QueryStore.hydrate` method was
+      removed. Same-session evidence: focused runtime apply/rebase tests and the full
+      `packages/runtime/src/index.test.ts` suite.
 - [x] **MED — Fix ambient-scope argument override in handlers.ts.**
       `abortRemovedIslandSignals(currentHtml, nextHtml, scope)` ignores its explicit `scope`
       whenever the module-level `activeIslandSignalScope` is set
