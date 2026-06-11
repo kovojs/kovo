@@ -40,6 +40,17 @@ Scope: SPEC addition (proposed §9.5 "The request shell"), `@jiso/server` shell 
       route served through the plugin over `node:http`. Remaining R5 work: build manifest
       wiring for stylesheet hints and compiled client-module versioned emit.
 - [ ] R6 static export: synthetic-request replay to `.html` files with the L0/L1-only constraint and teaching errors for non-exportable routes.
+      Progress 2026-06-11: `packages/server/src/static-export.ts` adds the production-shaped
+      `exportStaticApp()` foundation, replaying eligible static GET routes through
+      `createRequestHandler(app)` and returning deterministic `.html` artifacts with body,
+      status, and sorted response headers. The same module emits FW229 diagnostics for guarded
+      routes, apps with a session provider that cannot yet prove route independence, and param
+      routes without static-path metadata; `packages/server/src/static-export.test.ts` covers
+      handler/document parity, successful `.html` export, guard/session failures, and loud
+      param-route skip/error behavior, including explicit `onNonExportable: 'skip'` diagnostics.
+      Remaining R6 work: CLI/task wiring, output file writes,
+      `/c/` module and asset copying, and SPEC/compiler surfacing for the static-path
+      enumeration field and session-dependence metadata.
 - [ ] R7 adoption: starter becomes a routed app served by `vp dev`; commerce runs end-to-end over HTTP; a jiso docs site ships from `vp run export` as the first outside consumer.
 
 ## Background — the gap

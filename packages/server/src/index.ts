@@ -139,6 +139,13 @@ export type {
   JisoAppShellViteMiddleware,
   JisoAppShellVitePlugin,
 } from './vite.js';
+export { exportStaticApp, StaticExportError } from './static-export.js';
+export type {
+  StaticExportArtifact,
+  StaticExportDiagnostic,
+  StaticExportOptions,
+  StaticExportResult,
+} from './static-export.js';
 export { runWebhook, webhook } from './webhook.js';
 export type {
   WebhookChangeOptions,
