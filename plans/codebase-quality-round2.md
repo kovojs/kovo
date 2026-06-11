@@ -574,6 +574,17 @@ index.test.ts:4227 while here — it weakens the byte-for-byte claim) + acceptan
       project-typechecked. Add tsconfigs (or extend the root include) and wire them into
       `vp check`. Share one wire-transcript fixture parser between fw-check and app-shell-spike
       (currently two implementations of the `>>> REQUEST` format).
+      Partial evidence 2026-06-11: `examples/commerce/tsconfig.json` and per-spike
+      conformance tsconfigs now typecheck commerce plus all four conformance spikes through
+      `vp run typecheck-examples`, and root `pnpm run check` runs that task after `vp check`.
+      Hidden commerce strictness holes fixed in `examples/commerce/src/app.ts` and
+      `examples/commerce/src/app.test.ts`; `@jiso/example-commerce` now declares the `vite`
+      binary used by its build test. Verified with `pnpm vp run typecheck-examples`,
+      `pnpm exec vitest --run examples/commerce/src/app.test.ts`, `pnpm run check`,
+      `pnpm run check:build`, and `pnpm run check:fw`. Remaining: the wire-transcript fixture
+      parser is still duplicated between `tests/fw-check.node.mjs` and
+      `conformance/app-shell-spike/src/index.test.ts`; sharing it requires edits outside this
+      slice's allowed write scope.
 - [ ] **LOW** — better-auth guard-failure literals restate server shapes
       (better-auth/src/index.ts:126-142) — import the constants or keep the cross-package
       agreement test and note it; create-jiso error-path output to stdout while exiting 1;

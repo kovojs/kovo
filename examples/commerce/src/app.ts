@@ -381,8 +381,8 @@ export const attachmentDownloadRoute = route('/attachments/:id', {
       return respond.stream(stored.body, {
         contentType: found.contentType,
         disposition: 'inline',
-        etag: stored.etag,
         filename: found.filename,
+        ...(stored.etag ? { etag: stored.etag } : {}),
       });
     });
   },
@@ -687,7 +687,7 @@ export function submitAddToCart(
         request.db,
         {
           failure,
-          productId,
+          ...(productId ? { productId } : {}),
         },
         request,
       ),

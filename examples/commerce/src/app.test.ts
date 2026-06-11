@@ -39,6 +39,7 @@ import {
   submitAddToCart,
   submitAddToCartNoJs,
   type AddToCartInput,
+  type ProductGridInput,
   uploadReceipt,
   runPaymentWebhook,
   type UploadReceiptInput,
@@ -139,13 +140,17 @@ function mutationUpdateConsumers(output: string) {
     return new Map<string, string[]>();
   }
 
-  return new Map(
-    updates.split('; ').map((entry) => {
-      const [query, consumers = ''] = entry.split('->');
+  const result = new Map<string, string[]>();
+  for (const entry of updates.split('; ')) {
+    const [query, consumers = ''] = entry.split('->');
+    if (!query) {
+      throw new Error(`Malformed fw explain update entry: ${entry}`);
+    }
 
-      return [query, explainList(consumers)];
-    }),
-  );
+    result.set(query, explainList(consumers));
+  }
+
+  return result;
 }
 
 function optimisticStatuses(output: string) {
@@ -162,7 +167,14 @@ function optimisticStatuses(output: string) {
 }
 
 function queryChunkNames(html: string) {
-  return [...html.matchAll(/<fw-query name="([^"]+)">/g)].map((match) => match[1]);
+  return [...html.matchAll(/<fw-query name="([^"]+)">/g)].map((match) => {
+    const name = match[1];
+    if (!name) {
+      throw new Error(`Malformed fw-query chunk: ${match[0]}`);
+    }
+
+    return name;
+  });
 }
 
 function stripeHeader(body: string, secret: string, timestamp = Math.floor(Date.now() / 1000)) {
@@ -212,13 +224,20 @@ function keyedListNode(
 ): StructuralMorphNode {
   return {
     children: keys.map((key) => ({
-      browserState: stateByKey[key],
+      ...(stateByKey[key] ? { browserState: stateByKey[key] } : {}),
       key,
       props: { 'fw-key': key },
       text: key,
       type: 'li',
     })),
     type,
+  };
+}
+
+function productGridInput(after: string | null, limit?: number): ProductGridInput {
+  return {
+    ...(after ? { after } : {}),
+    ...(limit === undefined ? {} : { limit }),
   };
 }
 
@@ -287,17 +306,17 @@ describe('commerce example', () => {
   it('renders cursor-paged product grid and order history with stable list keys', async () => {
     const db = createCommerceDb();
     const firstPage = loadProductGrid(db, { limit: 2 });
-    const secondPage = loadProductGrid(db, { after: firstPage.nextCursor ?? undefined, limit: 2 });
+    const secondPage = loadProductGrid(db, productGridInput(firstPage.nextCursor, 2));
 
     expect(renderProductGrid(firstPage)).toContain('fw-key="p1"');
     expect(renderProductGrid(firstPage)).toContain('fw-key="p2"');
     expect(renderProductGrid(firstPage)).toContain('href="/products?after=p2"');
     expect(renderProductGrid(secondPage)).toContain('fw-key="p3"');
 
-    const appendFragment = renderProductGridPageFragment(db, {
-      after: firstPage.nextCursor ?? undefined,
-      limit: 2,
-    });
+    const appendFragment = renderProductGridPageFragment(
+      db,
+      productGridInput(firstPage.nextCursor, 2),
+    );
 
     expect(appendFragment).toContain('<fw-fragment target="product-grid" mode="append">');
     expect(appendFragment).toContain('fw-key="p3"');
@@ -326,7 +345,7 @@ describe('commerce example', () => {
     const db = createCommerceDb();
     const firstPage = loadProductGrid(db, { limit: 2 });
     const firstPageKeys = firstPage.items.map((item) => item.id);
-    const secondPage = loadProductGrid(db, { after: firstPage.nextCursor ?? undefined, limit: 2 });
+    const secondPage = loadProductGrid(db, productGridInput(firstPage.nextCursor, 2));
     const currentGrid = keyedListNode('product-grid', firstPageKeys, {
       p1: { islandState: { pendingMutation: 'cart/add' } },
     });
@@ -339,9 +358,9 @@ describe('commerce example', () => {
     const thirdProduct = appendedGrid.children?.[2];
 
     expect(renderProductGrid(firstPage)).toContain('fw-key="p1"');
-    expect(
-      renderProductGridPageFragment(db, { after: firstPage.nextCursor ?? undefined }),
-    ).toContain('<fw-fragment target="product-grid" mode="append">');
+    expect(renderProductGridPageFragment(db, productGridInput(firstPage.nextCursor))).toContain(
+      '<fw-fragment target="product-grid" mode="append">',
+    );
     expect(appendedGrid.children?.[0]).toBe(firstProduct);
     expect(appendedGrid.children?.[1]).toBe(secondProduct);
     expect(thirdProduct).not.toBeUndefined();
@@ -1079,13 +1098,15 @@ describe('commerce example', () => {
       fwExplain(
         {
           ...commerceGraph,
-          scopeAudits: [
-            {
-              ...commerceGraph.scopeAudits![0],
-              scope: 'unscoped',
-              site: 'examples/commerce/src/app.ts:deliberately-unscoped-download',
-            },
-          ],
+          scopeAudits: commerceGraph.scopeAudits.map((fact, index) =>
+            index === 0
+              ? {
+                  ...fact,
+                  scope: 'unscoped',
+                  site: 'examples/commerce/src/app.ts:deliberately-unscoped-download',
+                }
+              : fact,
+          ),
         },
         { unscoped: true },
       ),
@@ -1133,7 +1154,8 @@ describe('commerce example', () => {
       });
       const statuses = optimisticStatuses(explanation.output);
       const affectedQueries = [...mutationUpdateConsumers(explanation.output).keys()];
-      matrix[mutation.key] = {};
+      const mutationMatrix: Record<string, string> = {};
+      matrix[mutation.key] = mutationMatrix;
 
       for (const query of commerceGraph.queries) {
         const queryInvalidators = invalidatedBy.get(query.query) ?? [];
@@ -1143,10 +1165,10 @@ describe('commerce example', () => {
         if (invalidated) {
           expect(statuses.get(query.query)).toBeDefined();
           expect(statuses.get(query.query)).not.toBe('UNHANDLED');
-          matrix[mutation.key][query.query] = statuses.get(query.query) ?? 'missing';
+          mutationMatrix[query.query] = statuses.get(query.query) ?? 'missing';
         } else {
           expect(statuses.get(query.query)).toBeUndefined();
-          matrix[mutation.key][query.query] = 'no-invalidation';
+          mutationMatrix[query.query] = 'no-invalidation';
         }
       }
       expect(explainLine(explanation.output, 'OPTIMISTIC-SUMMARY ')).toContain('UNHANDLED=0');
@@ -1283,7 +1305,9 @@ describe('commerce example', () => {
       },
       status: 200,
     });
-    expect(queryChunkNames(response.body).sort()).toEqual([...affectedQueries].sort());
+    expect(queryChunkNames(response.body).sort((a, b) => a.localeCompare(b))).toEqual(
+      [...affectedQueries].sort((a, b) => a.localeCompare(b)),
+    );
     for (const query of affectedQueries) {
       expect(response.body).toContain(`<fw-fragment target="${fragmentTargetForQuery(query)}">`);
     }

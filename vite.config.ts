@@ -70,6 +70,23 @@ export default defineConfig({
           { pattern: 'packages/better-auth/src/**/*.ts', base: 'workspace' },
         ],
       },
+      'typecheck-examples': {
+        command:
+          'tsc -p examples/commerce/tsconfig.json --noEmit && tsc -p conformance/drizzle-pin/tsconfig.json --noEmit && tsc -p conformance/auth-spike/tsconfig.json --noEmit && tsc -p conformance/webhook-spike/tsconfig.json --noEmit && tsc -p conformance/app-shell-spike/tsconfig.json --noEmit',
+        input: [
+          { auto: true },
+          { pattern: 'examples/commerce/package.json', base: 'workspace' },
+          { pattern: 'examples/commerce/tsconfig.json', base: 'workspace' },
+          { pattern: 'examples/commerce/vite.config.ts', base: 'workspace' },
+          { pattern: 'examples/commerce/src/**/*.ts', base: 'workspace' },
+          { pattern: 'conformance/**/package.json', base: 'workspace' },
+          { pattern: 'conformance/**/tsconfig.json', base: 'workspace' },
+          { pattern: 'conformance/**/src/**/*.ts', base: 'workspace' },
+          { pattern: 'packages/*/package.json', base: 'workspace' },
+          { pattern: 'packages/**/src/**/*.ts', base: 'workspace' },
+          { pattern: 'tsconfig.json', base: 'workspace' },
+        ],
+      },
       'fw-check': {
         command: 'node scripts/fw-check.mjs',
         input: [
