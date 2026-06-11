@@ -461,7 +461,7 @@ export async function dispatchDelegatedEvent(
   const state = readElementState(element);
   const context: HandlerContext = {
     params: readElementParams(element),
-    signal: createHandlerSignal(),
+    signal: createHandlerSignal(element),
     state,
   };
 
@@ -530,8 +530,67 @@ function findElementStateHost(element: EventElementLike): EventElementLike | nul
   );
 }
 
-function createHandlerSignal(): AbortSignal {
-  return new AbortController().signal;
+const islandSignalControllers = new Map<string, AbortController>();
+
+function createHandlerSignal(element: EventElementLike): AbortSignal {
+  const key = islandSignalKey(element);
+  if (!key) return new AbortController().signal;
+
+  const existing = islandSignalControllers.get(key);
+  if (existing && !existing.signal.aborted) return existing.signal;
+
+  const controller = new AbortController();
+  islandSignalControllers.set(key, controller);
+  return controller.signal;
+}
+
+function islandSignalKey(element: EventElementLike): string | null {
+  const island = element.closest?.('[fw-c]') ?? element;
+  return islandSignalIdentity(
+    island.getAttribute('fw-c'),
+    island.getAttribute('fw-key'),
+    island.getAttribute('id'),
+  );
+}
+
+export function abortRemovedIslandSignals(currentHtml: string, nextHtml: string): string[] {
+  const next = fwComponentIds(nextHtml);
+  const removed = [...fwComponentIds(currentHtml)].filter((id) => !next.has(id));
+
+  for (const id of removed) {
+    const controller = islandSignalControllers.get(id);
+    if (!controller) continue;
+
+    controller.abort();
+    islandSignalControllers.delete(id);
+  }
+
+  return removed;
+}
+
+function fwComponentIds(html: string): Set<string> {
+  return new Set(
+    [...html.matchAll(/<[^>]*\bfw-c\s*=\s*(["'])(?<component>[^"']+)\1[^>]*>/g)].flatMap(
+      (match) => {
+        const tag = match[0];
+        const component = match.groups?.component ?? null;
+        const key = readAttribute(tag, 'fw-key');
+        const id = readAttribute(tag, 'id');
+        const identity = islandSignalIdentity(component, key, id);
+        return identity ? [identity] : [];
+      },
+    ),
+  );
+}
+
+function islandSignalIdentity(
+  component: string | null,
+  key: string | null,
+  id: string | null,
+): string | null {
+  if (!component) return null;
+  const instance = key ?? id;
+  return instance ? [component, instance].join('\0') : component;
 }
 
 function camelCase(value: string): string {
@@ -1338,6 +1397,7 @@ export function applyFragments(
     if (fragment.mode === 'append') {
       appendFragment(target, fragment.html, morph);
     } else {
+      abortRemovedIslandSignals(target.readHtml?.() ?? '', fragment.html);
       morph(target, fragment.html);
     }
     applied.push(fragment.target);

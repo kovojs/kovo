@@ -364,7 +364,12 @@ void test('P2 loader smoke evidence remains represented in runtime tests', async
   assert.match(runtimeTests, /expect\(importModule\)\.not\.toHaveBeenCalled\(\)/);
   assert.match(runtimeTests, /expect\(jisoLoaderSource\)\.not\.toContain\('customElements'\)/);
   assert.match(runtimeSource, /insertAdjacentHTML\("beforeend"/);
-  assert.match(runtimeSource, /signal: createHandlerSignal\(\)/);
+  assert.match(runtimeSource, /signal: createHandlerSignal\(element\)/);
+  assert.match(runtimeSource, /islandSignalControllers/);
+  assert.match(
+    runtimeSource,
+    /abortRemovedIslandSignals\(target\.readHtml\?\.\(\) \?\? '', fragment\.html\)/,
+  );
   assert.match(runtimeSource, /visibleObserver\?: VisibleObserverFactory/);
   assert.match(runtimeSource, /export async function refetchQueries/);
   assert.match(runtimeSource, /`\/_q\/\$\{encodeURIComponent\(query\)\}`/);
@@ -373,6 +378,11 @@ void test('P2 loader smoke evidence remains represented in runtime tests', async
   assert.match(runtimeSource, /reconcileTemplateStamp\(items\)/);
   assert.match(runtimeSource, /readTemplateStampKey/);
   assert.match(runtimeTests, /invokes chained handler refs left-to-right with one context/);
+  assert.match(
+    runtimeTests,
+    /scopes ctx\.signal to the island and aborts when fragment morph removes it/,
+  );
+  assert.match(runtimeTests, /aborts removed island ctx\.signal during fragment application/);
   assert.match(runtimeTests, /installs declared load, idle, and visible execution triggers/);
   assert.match(runtimeTests, /ships an inline enhanced form round trip in the bootstrap source/);
   assert.match(runtimeTests, /refetches typed read endpoints and applies returned query chunks/);

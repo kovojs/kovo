@@ -10,6 +10,7 @@ import {
   applyFragments,
   applyCompiledQueryUpdatePlan,
   applyOptimisticTransforms,
+  abortRemovedIslandSignals,
   applyMutationResponseToDom,
   applyMutationResponse,
   applyQueryBindings,
@@ -703,6 +704,127 @@ describe('runtime loader', () => {
     expect(importModule).toHaveBeenNthCalledWith(2, '/c/b.js');
     expect(calls).toEqual(['first:1:false', 'second:2:false']);
     expect(element.getAttribute('fw-state')).toBe('{"count":3}');
+  });
+
+  it('scopes ctx.signal to the island and aborts when fragment morph removes it', async () => {
+    const signals: AbortSignal[] = [];
+    const handler = vi.fn((_event, ctx: { signal: AbortSignal }) => {
+      signals.push(ctx.signal);
+    });
+    const importModule = vi.fn(async () => ({ CartFilter$mount: handler }));
+    const element = new FakeElement({
+      'fw-c': 'cart-filter',
+      'on:visible': '/c/cart-filter.client.js#CartFilter$mount',
+    });
+
+    await dispatchDelegatedEvent({ target: element, type: 'visible' }, importModule);
+    await dispatchDelegatedEvent({ target: element, type: 'visible' }, importModule);
+
+    expect(signals).toHaveLength(2);
+    expect(signals[0]).toBe(signals[1]);
+    expect(signals[0]?.aborted).toBe(false);
+
+    expect(
+      abortRemovedIslandSignals(
+        '<section><cart-filter fw-c="cart-filter"></cart-filter></section>',
+        '<section></section>',
+      ),
+    ).toEqual(['cart-filter']);
+    expect(signals[0]?.aborted).toBe(true);
+  });
+
+  it('keeps ctx.signal alive when fragment morph preserves the island identity', async () => {
+    const signals: AbortSignal[] = [];
+    const handler = vi.fn((_event, ctx: { signal: AbortSignal }) => {
+      signals.push(ctx.signal);
+    });
+    const importModule = vi.fn(async () => ({ CartFilter$mount: handler }));
+    const element = new FakeElement({
+      'fw-c': 'cart-filter',
+      'on:visible': '/c/cart-filter.client.js#CartFilter$mount',
+    });
+
+    await dispatchDelegatedEvent({ target: element, type: 'visible' }, importModule);
+
+    expect(
+      abortRemovedIslandSignals(
+        '<section><cart-filter fw-c="cart-filter"></cart-filter></section>',
+        '<section><cart-filter fw-c="cart-filter">Updated</cart-filter></section>',
+      ),
+    ).toEqual([]);
+    expect(signals[0]?.aborted).toBe(false);
+
+    abortRemovedIslandSignals(
+      '<section><cart-filter fw-c="cart-filter"></cart-filter></section>',
+      '<section></section>',
+    );
+  });
+
+  it('aborts removed island ctx.signal during fragment application', async () => {
+    let signal: AbortSignal | undefined;
+    const handler = vi.fn((_event, ctx: { signal: AbortSignal }) => {
+      signal = ctx.signal;
+    });
+    const importModule = vi.fn(async () => ({ CartFilter$mount: handler }));
+    const element = new FakeElement({
+      'fw-c': 'cart-filter',
+      'on:visible': '/c/cart-filter.client.js#CartFilter$mount',
+    });
+    const root = new FakeMorphRoot();
+    root.targets.set(
+      'cart-shell',
+      new FakeMorphTarget('<section><cart-filter fw-c="cart-filter"></cart-filter></section>'),
+    );
+
+    await dispatchDelegatedEvent({ target: element, type: 'visible' }, importModule);
+    expect(signal?.aborted).toBe(false);
+
+    applyMutationResponseToDom({
+      body: '<fw-fragment target="cart-shell"><section></section></fw-fragment>',
+      root,
+      store: createQueryStore(),
+    });
+
+    expect(signal?.aborted).toBe(true);
+  });
+
+  it('keeps repeated keyed island ctx.signals independent', async () => {
+    const signals: AbortSignal[] = [];
+    const handler = vi.fn((_event, ctx: { signal: AbortSignal }) => {
+      signals.push(ctx.signal);
+    });
+    const importModule = vi.fn(async () => ({ CartRow$mount: handler }));
+    const first = new FakeElement({
+      'fw-c': 'cart-row',
+      'fw-key': 'row-1',
+      'on:visible': '/c/cart-row.client.js#CartRow$mount',
+    });
+    const second = new FakeElement({
+      'fw-c': 'cart-row',
+      'fw-key': 'row-2',
+      'on:visible': '/c/cart-row.client.js#CartRow$mount',
+    });
+
+    await dispatchDelegatedEvent({ target: first, type: 'visible' }, importModule);
+    await dispatchDelegatedEvent({ target: second, type: 'visible' }, importModule);
+
+    expect(signals[0]).not.toBe(signals[1]);
+
+    expect(
+      abortRemovedIslandSignals(
+        [
+          '<ol>',
+          '<li fw-c="cart-row" fw-key="row-1"></li>',
+          '<li fw-c="cart-row" fw-key="row-2"></li>',
+          '</ol>',
+        ].join(''),
+        '<ol><li fw-c="cart-row" fw-key="row-2"></li></ol>',
+      ),
+    ).toEqual(['cart-row\u0000row-1']);
+    expect(signals[0]?.aborted).toBe(true);
+    expect(signals[1]?.aborted).toBe(false);
+
+    abortRemovedIslandSignals('<li fw-c="cart-row" fw-key="row-2"></li>', '');
   });
 
   it('hydrates serialized island state for delegated handlers', async () => {
