@@ -1981,6 +1981,7 @@ async function submitOptimisticEnhancedMutationDirect<Input>(
       const applied = applyMutationResponseToDom({
         body,
         ...(options.queryPlans ? { queryPlans: options.queryPlans } : {}),
+        ...(options.onError ? { onError: options.onError } : {}),
         root: options.root,
         store: options.store,
         ...(options.morph ? { morph: options.morph } : {}),
@@ -1994,7 +1995,7 @@ async function submitOptimisticEnhancedMutationDirect<Input>(
       };
     }
 
-    const queryChunks = readQueryChunks(body);
+    const queryChunks = readQueryChunks(body, options.onError);
     const fragments = readFragmentChunks(body);
     const uncoveredQueries = uncoveredOptimisticQueries(queryChunks, queryNames, optimisticKeys);
     for (const queryName of uncoveredQueries) {

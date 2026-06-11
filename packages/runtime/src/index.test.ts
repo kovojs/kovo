@@ -3828,6 +3828,65 @@ describe('query store', () => {
     });
   });
 
+  it('reports malformed optimistic server query chunks while applying unrelated fragments', async () => {
+    const store = createQueryStore();
+    const rebaser = new OptimisticRebaser(store);
+    const root = new FakeMorphRoot();
+    const cartBadge = new FakePendingElement({ 'fw-deps': 'cart' });
+    const pendingRoot = new FakePendingRoot([cartBadge]);
+    const onError = vi.fn();
+    root.deps = [{ id: 'cart-badge' }];
+    root.targets.set('cart-badge', new FakeMorphTarget());
+    store.set('cart', { count: 0 });
+
+    const result = await submitOptimisticEnhancedMutation({
+      fetch: vi.fn(async () => ({
+        async text() {
+          return [
+            '<fw-query name="cart">{</fw-query>',
+            '<fw-fragment target="cart-badge"><cart-badge>stale</cart-badge></fw-fragment>',
+          ].join('\n');
+        },
+      })),
+      form: { action: '/_m/cart/add', method: 'post' },
+      formData: new FormData(),
+      idem: 'idem_malformed_optimistic',
+      input: { quantity: 2 },
+      onError,
+      optimistic: {
+        transforms: {
+          cart(current, input) {
+            const cart = current as { count: number };
+            return { count: cart.count + input.quantity };
+          },
+        },
+      },
+      pendingRoot,
+      rebaser,
+      root,
+      store,
+    });
+
+    expect(result.queries).toEqual([]);
+    expect(root.targets.get('cart-badge')?.html).toBe('<cart-badge>stale</cart-badge>');
+    expect(store.get('cart')).toEqual({ count: 0 });
+    expect(rebaser.pendingCount('cart')).toBe(0);
+    expect(cartBadge.attributes).not.toHaveProperty('fw-pending');
+    expect(cartBadge.attributes).not.toHaveProperty('aria-busy');
+    expect(onError).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({
+        message: expect.stringContaining('Malformed JSON in fw-query cart'),
+      }),
+    );
+    expect(onError).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({
+        message: 'Optimistic transform for cart was not covered by server query truth.',
+      }),
+    );
+  });
+
   it('discards optimistic state on enhanced mutation errors and applies the error fragment', async () => {
     const store = createQueryStore();
     const rebaser = new OptimisticRebaser(store);
