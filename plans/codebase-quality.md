@@ -300,6 +300,9 @@ area, keeping `src/index.ts` barrels and API surface verbatim (mirrors compiler 
   dedupe/rendering, and speculation rules now live in `packages/server/src/hints.ts`, with
   `src/index.ts` preserving the public barrel exports. The extracted helper owns SPEC §13.1's
   shared stylesheet delivery behavior for pages, mutation fragments, and deferred fragments.
+  Evidence: deferred stream rendering, stream chunk sorting, deferred query chunks, and deferred
+  fragment chunks now live in `packages/server/src/deferred-stream.ts`, with shared escaping in
+  `packages/server/src/html.ts`; `src/index.ts` preserves the public barrel exports.
 - **runtime** → `events.ts`, `loader.ts`, `store.ts`, `optimistic.ts`, `wire.ts`, `morph.ts`,
   `broadcast.ts` (seams verified clean — almost nothing crosses them). Also stop exporting
   internals (`stampPendingQueries`, `abortRemovedIslandSignals`, `hydrateQueryScripts`, …)

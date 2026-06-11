@@ -1,3 +1,5 @@
+import { escapeAttribute, escapeHtml, escapeScriptJson } from './html.js';
+
 export type RoutePrefetch = 'conservative' | 'moderate' | false;
 
 export interface RouteMeta {
@@ -219,18 +221,6 @@ function renderI18nCatalogs(i18nInput: PageHintOptions['i18n']): string[] {
     (catalog) =>
       `<script type="application/json" fw-i18n locale="${escapeAttribute(catalog.locale)}">${escapeScriptJson(JSON.stringify(catalog.messages))}</script>`,
   );
-}
-
-function escapeHtml(value: string): string {
-  return value.replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;');
-}
-
-function escapeAttribute(value: string): string {
-  return escapeHtml(value).replaceAll('"', '&quot;');
-}
-
-function escapeScriptJson(value: string): string {
-  return value.replaceAll('<', '\\u003c');
 }
 
 function escapeStyleText(value: string): string {
