@@ -16,7 +16,7 @@ covers source quality: security, correctness, architecture, drift, and test qual
 - [x] Phase 4 compiler work is underway with the companion plan now carrying detailed checked items.
 - [x] Phase 5 duplicate de-drift is implemented for the tracked items: inline loader generation, test-harness/runtime fragment semantics, TouchGraph type sharing, FW help-string unification, commerce generated artifacts, and runtime export aliases are done.
 - [x] Phase 6 API honesty/correctness items are mostly implemented: CLI check-family filtering, stable input errors, fail-on-findings, entry-point guards, structural test equality, pglite verifier passthrough, and `jisoTest` runner registration.
-- [ ] Phase 6 remaining API work: `form()` registry-value inference alignment is done, and the broad dead/duplicate code sweep is partially complete.
+- [ ] Phase 6 remaining API work: `form()` registry-value inference alignment is done, and the broad dead/duplicate code sweep is mostly complete; remaining cleanup is tracked with compiler module work.
 - [ ] Module splits remain mostly open outside the compiler; server/runtime/drizzle are still monolithic `src/index.ts` implementations.
 - [ ] SPEC reconciliation queue remains open unless addressed separately in `SPEC.md`.
 
@@ -269,6 +269,10 @@ good sub-agent candidates with explicit file ownership.
       `renderQueryChunk` vs `renderQueryEndpointChunk` and the twin record-accumulators in server
       (index.ts:1728-1753, 1437, 1531), `findHandlerBodies` twin loops (compiler — already in the
       companion plan).
+
+  Implemented so far: Drizzle identifier/const-declaration regex and ignored-call sets are
+  shared; server record accumulation and query chunk rendering use shared helpers. Remaining:
+  any compiler/module-split cleanup that still applies after `plans/improve-compiler.md`.
 
 Verification: per-package vitest + root `pnpm run check`; CLI behavior changes (1-4) update
 `tests/fw-check.node.mjs` expectations where output text is pinned.

@@ -624,7 +624,7 @@ export async function renderQueryEndpointResponse<const Key extends string, Valu
   }
 
   return {
-    body: renderQueryChunk(definition, result.input, result.value, { endpoint: true }),
+    body: renderQueryEndpointChunk(definition, result.input, result.value),
     headers: { 'Content-Type': 'text/html; charset=utf-8' },
     status: 200,
   };
@@ -1904,21 +1904,7 @@ function retryAfterHeaders(result: { retryAfter?: number }): Record<string, stri
 
 function formLikeToRecord(input: unknown): Record<string, unknown> {
   if (input instanceof FormData) {
-    const record: Record<string, unknown> = {};
-
-    for (const [key, value] of input.entries()) {
-      const existing = record[key];
-
-      if (existing === undefined) {
-        record[key] = value;
-      } else if (Array.isArray(existing)) {
-        existing.push(value);
-      } else {
-        record[key] = [existing, value];
-      }
-    }
-
-    return record;
+    return entriesToRecord(input.entries());
   }
 
   if (typeof input === 'object' && input !== null) return input as Record<string, unknown>;
@@ -1997,31 +1983,41 @@ function validationFailurePayload(error: SchemaValidationError): ValidationFailu
 }
 
 function querySearchInputToRecord(search: QuerySearchInput): Record<string, unknown> {
+  return entriesToRecord(querySearchInputEntries(search));
+}
+
+function querySearchInputEntries(search: QuerySearchInput): Iterable<readonly [string, unknown]> {
+  if (search instanceof URLSearchParams || Symbol.iterator in search) return search;
+
+  return Object.entries(search).flatMap(([key, value]) =>
+    value === undefined
+      ? []
+      : Array.isArray(value)
+        ? value.map((item) => [key, item] as const)
+        : [[key, value] as const],
+  );
+}
+
+function entriesToRecord(entries: Iterable<readonly [string, unknown]>): Record<string, unknown> {
   const record: Record<string, unknown> = {};
-  const entries =
-    search instanceof URLSearchParams || Symbol.iterator in search
-      ? search
-      : Object.entries(search).flatMap(([key, value]) =>
-          value === undefined
-            ? []
-            : Array.isArray(value)
-              ? value.map((item) => [key, item] as const)
-              : [[key, value] as const],
-        );
 
   for (const [key, value] of entries) {
-    const existing = record[key];
-
-    if (existing === undefined) {
-      record[key] = value;
-    } else if (Array.isArray(existing)) {
-      existing.push(value);
-    } else {
-      record[key] = [existing, value];
-    }
+    appendRecordValue(record, key, value);
   }
 
   return record;
+}
+
+function appendRecordValue(record: Record<string, unknown>, key: string, value: unknown): void {
+  const existing = record[key];
+
+  if (existing === undefined) {
+    record[key] = value;
+  } else if (Array.isArray(existing)) {
+    existing.push(value);
+  } else {
+    record[key] = [existing, value];
+  }
 }
 
 function validateCsrfToken<Request>(
@@ -2213,7 +2209,7 @@ async function renderQueryChunks(
       throw new Error(`Rerun query failed: ${queryDefinition.key}`);
     }
 
-    chunks.push(renderQueryChunk(queryDefinition, result.input, result.value));
+    chunks.push(renderQueryRerunChunk(queryDefinition, result.input, result.value));
   }
 
   return chunks;
@@ -2229,21 +2225,47 @@ function queryMatchesRerun(
   return readQueryInstanceKey(queryDefinition, input) === target.instanceKey;
 }
 
-function renderQueryChunk<const Key extends string, Value, Input, Request>(
+function renderQueryRerunChunk<const Key extends string, Value, Input, Request>(
   queryDefinition: QueryDefinition<Key, Value, Input, Request>,
   input: Input,
   value: Value,
-  options: { endpoint?: boolean } = {},
 ): string {
   const key = readQueryInstanceKey(queryDefinition, input);
-  const name = options.endpoint ? (key ?? queryDefinition.key) : queryDefinition.key;
-  const version = readQueryVersion(queryDefinition, input, value);
-  const keyAttribute =
-    options.endpoint || key === undefined ? '' : ` key="${escapeAttribute(key)}"`;
-  const versionAttribute =
-    version === undefined ? '' : ` version="${escapeAttribute(String(version))}"`;
 
-  return `<fw-query name="${escapeAttribute(name)}"${keyAttribute}${versionAttribute}>${escapeHtml(JSON.stringify(value))}</fw-query>`;
+  return renderQueryWireChunk({
+    key,
+    name: queryDefinition.key,
+    value,
+    version: readQueryVersion(queryDefinition, input, value),
+  });
+}
+
+function renderQueryEndpointChunk<const Key extends string, Value, Input, Request>(
+  queryDefinition: QueryDefinition<Key, Value, Input, Request>,
+  input: Input,
+  value: Value,
+): string {
+  const key = readQueryInstanceKey(queryDefinition, input);
+
+  return renderQueryWireChunk({
+    key: undefined,
+    name: key ?? queryDefinition.key,
+    value,
+    version: readQueryVersion(queryDefinition, input, value),
+  });
+}
+
+function renderQueryWireChunk(options: {
+  key: string | undefined;
+  name: string;
+  value: unknown;
+  version: number | string | undefined;
+}): string {
+  const keyAttribute = options.key === undefined ? '' : ` key="${escapeAttribute(options.key)}"`;
+  const versionAttribute =
+    options.version === undefined ? '' : ` version="${escapeAttribute(String(options.version))}"`;
+
+  return `<fw-query name="${escapeAttribute(options.name)}"${keyAttribute}${versionAttribute}>${escapeHtml(JSON.stringify(options.value))}</fw-query>`;
 }
 
 export interface QueryScriptRenderOptions {
