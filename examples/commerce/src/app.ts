@@ -497,12 +497,18 @@ export const commerceGraph = {
     {
       guards: ['authed', 'rateLimit:session'],
       invalidates: ['cart', 'product', 'order'],
+      inputFields: ['productId', 'quantity'],
       key: 'cart/add',
+      session: 'commerceSession',
       writes: ['cart', 'product', 'order'],
     },
     {
+      enctype: 'multipart/form-data',
+      fileFields: ['receipt'],
       guards: ['authed', 'rateLimit:session'],
+      inputFields: ['orderId', 'receipt'],
       key: 'order/receipt',
+      session: 'commerceSession',
     },
   ],
   optimistic: [
@@ -515,6 +521,11 @@ export const commerceGraph = {
   ],
   pages: [
     {
+      i18n: ['en-US:cartLabel,productStock'],
+      meta: {
+        description: commerceMeta.description,
+        title: commerceMeta.title,
+      },
       modulepreloads: [],
       prefetch: false,
       queries: ['cart', 'productGrid', 'orderHistory'],

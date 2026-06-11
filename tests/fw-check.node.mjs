@@ -491,8 +491,14 @@ void test('D4 commerce adopt-dont-invent features stay represented', async () =>
   assert.match(commerceSource, /errorBoundary\(/);
   assert.match(commerceSource, /commerceSession = session\(/);
   assert.match(commerceSource, /guards\.rateLimit<CommerceRequest>/);
+  assert.match(commerceSource, /inputFields: \['orderId', 'receipt'\]/);
+  assert.match(commerceSource, /fileFields: \['receipt'\]/);
+  assert.match(commerceSource, /i18n: \['en-US:cartLabel,productStock'\]/);
   assert.match(commerceTests, /coerces commerce receipt uploads through s\.file\(\)/);
   assert.match(commerceTests, /fw-upload-progress value="0" max="100"/);
+  assert.match(commerceTests, /session: commerceSession/);
+  assert.match(commerceTests, /file-fields: receipt/);
+  assert.match(commerceTests, /meta: title=Jiso Commerce/);
   assert.match(runtimeSource, /onUploadProgress\?: \(progress: UploadProgress/);
   assert.match(runtimeSource, /updateUploadProgressElements\(form, progress\)/);
   assert.match(runtimeSource, /stampEnhancedMutationPending\(options, true\)/);
@@ -522,6 +528,10 @@ void test('P10 commerce graph assertions answer behavior mechanically', async ()
   assert.match(commerceTests, /const queryExplain = fwExplain\(commerceGraph, \{ kind: 'query'/);
   assert.match(commerceTests, /expect\(updates\.get\(query\)\)\.toContain\('page:\/cart'\)/);
   assert.match(commerceTests, /expect\(statuses\.get\(query\)\)\.not\.toBe\('UNHANDLED'\)/);
+  assert.match(commerceTests, /applyCommerceAddToCartEffect/);
+  assert.match(commerceTests, /shapeCommerceCartQuery/);
+  assert.match(commerceTests, /commerceAddToCartPropertyCases/);
+  assert.match(commerceTests, /cases: 18/);
 });
 
 void test('P10 starter wires graph assertions into CI', async () => {

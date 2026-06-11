@@ -50,14 +50,26 @@ export interface PlatformSubstitutionExplain {
 }
 
 export interface MutationExplain {
+  enctype?: 'application/x-www-form-urlencoded' | 'multipart/form-data';
+  fileFields?: readonly string[];
   guards?: readonly string[];
   invalidates?: readonly string[];
+  inputFields?: readonly string[];
   key: string;
   manualInvalidates?: readonly string[];
+  session?: string;
   writes?: readonly string[];
 }
 
+export interface PageMetaExplain {
+  description?: string;
+  image?: string;
+  title?: string;
+}
+
 export interface PageExplain {
+  i18n?: readonly string[];
+  meta?: PageMetaExplain;
   modulepreloads?: readonly string[];
   prefetch?: 'conservative' | 'moderate' | false;
   queries?: readonly string[];
@@ -250,6 +262,10 @@ export function fwExplain(input: FwExplainInput, options: FwExplainOptions): FwC
 
     lines.push(`MUTATION ${mutation.key}`);
     lines.push(`guards: ${list(mutation.guards)}`);
+    if (mutation.session) lines.push(`session: ${mutation.session}`);
+    if (mutation.enctype) lines.push(`enctype: ${mutation.enctype}`);
+    if (mutation.inputFields) lines.push(`input-fields: ${list(mutation.inputFields)}`);
+    if (mutation.fileFields) lines.push(`file-fields: ${list(mutation.fileFields)}`);
     lines.push(`writes: ${list(mutation.writes)}`);
     lines.push(`invalidates: ${list(mutation.invalidates)}`);
     lines.push(`manual-invalidates: ${list(mutation.manualInvalidates)}`);
@@ -285,6 +301,17 @@ export function fwExplain(input: FwExplainInput, options: FwExplainOptions): FwC
 
   lines.push(`PAGE ${page.route}`);
   lines.push(`prefetch: ${page.prefetch ?? false}`);
+  if (page.meta) {
+    lines.push(
+      [
+        'meta:',
+        `title=${page.meta.title ?? '-'}`,
+        `description=${page.meta.description ?? '-'}`,
+        `image=${page.meta.image ?? '-'}`,
+      ].join(' '),
+    );
+  }
+  if (page.i18n) lines.push(`i18n: ${list(page.i18n)}`);
   lines.push(`modulepreloads: ${list(page.modulepreloads)}`);
   lines.push(`stylesheets: ${list(page.stylesheets)}`);
   lines.push(`queries: ${list(page.queries)}`);

@@ -647,10 +647,14 @@ describe('fw explain', () => {
         {
           mutations: [
             {
+              enctype: 'multipart/form-data',
+              fileFields: ['receipt'],
               guards: ['authed'],
               invalidates: ['cart'],
+              inputFields: ['productId', 'quantity', 'receipt'],
               key: 'cart/add',
               manualInvalidates: ['product'],
+              session: 'commerceSession',
               writes: ['cart', 'product'],
             },
           ],
@@ -677,6 +681,10 @@ describe('fw explain', () => {
         'fw-explain/v1',
         'MUTATION cart/add',
         'guards: authed',
+        'session: commerceSession',
+        'enctype: multipart/form-data',
+        'input-fields: productId,quantity,receipt',
+        'file-fields: receipt',
         'writes: cart,product',
         'invalidates: cart',
         'manual-invalidates: product',
@@ -916,6 +924,11 @@ describe('fw explain', () => {
         {
           pages: [
             {
+              i18n: ['en-US:cartLabel,productStock'],
+              meta: {
+                description: 'Browse products.',
+                title: 'Jiso Commerce',
+              },
               modulepreloads: ['/c/cart-badge.client.js'],
               prefetch: 'conservative',
               queries: ['cart'],
@@ -930,7 +943,7 @@ describe('fw explain', () => {
     ).toEqual({
       exitCode: 0,
       output:
-        'fw-explain/v1\nPAGE /cart\nprefetch: conservative\nmodulepreloads: /c/cart-badge.client.js\nstylesheets: /assets/tailwind.css\nqueries: cart\nview-transitions: product-p1-image\n',
+        'fw-explain/v1\nPAGE /cart\nprefetch: conservative\nmeta: title=Jiso Commerce description=Browse products. image=-\ni18n: en-US:cartLabel,productStock\nmodulepreloads: /c/cart-badge.client.js\nstylesheets: /assets/tailwind.css\nqueries: cart\nview-transitions: product-p1-image\n',
     });
   });
 

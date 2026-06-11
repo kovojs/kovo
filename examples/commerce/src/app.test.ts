@@ -39,6 +39,63 @@ function commerceFile(name: string, type: string, size: number) {
   };
 }
 
+interface CommerceAddToCartPropertyState {
+  cartItems: { productId: string; qty: number }[];
+  products: Record<string, { stock: number }>;
+}
+
+function applyCommerceAddToCartEffect(
+  state: CommerceAddToCartPropertyState,
+  input: AddToCartInput,
+): CommerceAddToCartPropertyState {
+  const product = state.products[input.productId];
+  if (!product || product.stock < input.quantity) {
+    throw new Error(`Invalid property case for ${input.productId}`);
+  }
+
+  return {
+    cartItems: [...state.cartItems, { productId: input.productId, qty: input.quantity }],
+    products: {
+      ...state.products,
+      [input.productId]: {
+        stock: product.stock - input.quantity,
+      },
+    },
+  };
+}
+
+function shapeCommerceCartQuery(state: CommerceAddToCartPropertyState): { count: number } {
+  return {
+    count: state.cartItems.reduce((total, item) => total + item.qty, 0),
+  };
+}
+
+function commerceAddToCartPropertyCases(): {
+  input: AddToCartInput;
+  state: CommerceAddToCartPropertyState;
+}[] {
+  const cases: { input: AddToCartInput; state: CommerceAddToCartPropertyState }[] = [];
+
+  for (const productId of ['p1', 'p2']) {
+    for (const quantity of [1, 2, 3]) {
+      for (const initialCount of [0, 1, 5]) {
+        cases.push({
+          input: { productId, quantity },
+          state: {
+            cartItems: initialCount === 0 ? [] : [{ productId: 'existing', qty: initialCount }],
+            products: {
+              p1: { stock: 6 },
+              p2: { stock: 4 },
+            },
+          },
+        });
+      }
+    }
+  }
+
+  return cases;
+}
+
 function explainLine(output: string, prefix: string) {
   const line = output.split('\n').find((item) => item.startsWith(prefix));
 
@@ -285,22 +342,19 @@ describe('commerce example', () => {
     });
 
     expect(
-      propertyTest<{ cart: { count: number } }, AddToCartInput, { count: number }>({
+      propertyTest<CommerceAddToCartPropertyState, AddToCartInput, { count: number }>({
         apply(state, input) {
-          return { cart: addToCartOptimistic.transforms.cart(state.cart, input) };
+          return applyCommerceAddToCartEffect(state, input);
         },
-        cases: [
-          { input: { productId: 'p1', quantity: 1 }, state: { cart: { count: 0 } } },
-          { input: { productId: 'p2', quantity: 3 }, state: { cart: { count: 2 } } },
-        ],
+        cases: commerceAddToCartPropertyCases(),
         predict(state, input) {
-          return addToCartOptimistic.transforms.cart(state.cart, input);
+          return addToCartOptimistic.transforms.cart(shapeCommerceCartQuery(state), input);
         },
         shape(state) {
-          return state.cart;
+          return shapeCommerceCartQuery(state);
         },
       }),
-    ).toEqual({ cases: 2 });
+    ).toEqual({ cases: 18 });
   });
 
   it('renders SPEC 6.3 no-JS add-to-cart forms as the page output', () => {
@@ -582,6 +636,8 @@ describe('commerce example', () => {
         'fw-explain/v1',
         'MUTATION cart/add',
         'guards: authed,rateLimit:session',
+        'session: commerceSession',
+        'input-fields: productId,quantity',
         'writes: cart,product,order',
         'invalidates: cart,product,order',
         'manual-invalidates: -',
@@ -599,6 +655,10 @@ describe('commerce example', () => {
         'fw-explain/v1',
         'MUTATION order/receipt',
         'guards: authed,rateLimit:session',
+        'session: commerceSession',
+        'enctype: multipart/form-data',
+        'input-fields: orderId,receipt',
+        'file-fields: receipt',
         'writes: -',
         'invalidates: -',
         'manual-invalidates: -',
@@ -614,6 +674,10 @@ describe('commerce example', () => {
         'fw-explain/v1',
         'MUTATION order/receipt',
         'guards: authed,rateLimit:session',
+        'session: commerceSession',
+        'enctype: multipart/form-data',
+        'input-fields: orderId,receipt',
+        'file-fields: receipt',
         'writes: -',
         'invalidates: -',
         'manual-invalidates: -',
@@ -646,6 +710,8 @@ describe('commerce example', () => {
         'fw-explain/v1',
         'PAGE /cart',
         'prefetch: false',
+        'meta: title=Jiso Commerce description=Browse products and checkout with a verifiable cart. image=-',
+        'i18n: en-US:cartLabel,productStock',
         'modulepreloads: -',
         'stylesheets: /assets/tailwind.css',
         'queries: cart,productGrid,orderHistory',
