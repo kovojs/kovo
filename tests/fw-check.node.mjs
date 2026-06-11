@@ -10,6 +10,7 @@ import {
   assertRenderEquivalence,
   collectMinifierReservedNames,
   compileComponentModule,
+  queryShapesFromFacts,
 } from '../dist/compiler/src/index.mjs';
 import { diagnosticDefinitions } from '../dist/core/src/index.mjs';
 import {
@@ -2704,43 +2705,188 @@ void test('P8 component explain includes handler, derive, trigger, and merge fac
 });
 
 void test('P5 data-bind paths are checked against generated query shape facts', async () => {
-  const compilerSource = await readProjectFile('packages/compiler/src/index.ts');
-  const compilerBindingsSource = await readProjectFile(
-    'packages/compiler/src/validate/bindings.ts',
+  assert.equal(
+    diagnosticDefinitions.FW302.message,
+    'data-bind path is not present in the declared query shape.',
   );
-  const compilerTests = await readProjectFile('packages/compiler/src/index.test.ts');
-  const drizzlePinTests = await readProjectFile('conformance/drizzle-pin/src/index.test.ts');
+  assert.equal(
+    diagnosticDefinitions.FW227.help,
+    [
+      'Fixes: write the nullable traversal with ?., extract a named derive that handles null explicitly, or make the projection non-null in the query.',
+      'SPEC §4.8 requires empty-on-null semantics to be explicit so the server renderer and loader cannot drift.',
+    ].join('\n'),
+  );
 
-  assert.match(compilerSource, /queryShapeFacts\?: readonly QueryShapeFact\[\]/);
-  assert.match(compilerBindingsSource, /queryShapesFromFacts/);
-  assert.match(compilerBindingsSource, /function dataBindListStamps/);
-  assert.match(compilerSource, /interface QueryTemplateStampFact/);
-  assert.match(compilerSource, /templateStamps/);
-  assert.match(compilerTests, /validates data-bind paths against generated query shape facts/);
-  assert.match(
-    compilerTests,
-    /reports FW302 when generated query shape facts no longer contain a binding path/,
+  const generatedCartShapeFacts = [
+    {
+      query: 'cart',
+      shape: {
+        count: 'number',
+        empty: 'boolean',
+        items: [{ name: 'string', productId: 'string', qty: 'number' }],
+      },
+      source: 'generated/queries/cart.shape.ts',
+    },
+  ];
+  assert.deepEqual(queryShapesFromFacts(generatedCartShapeFacts), {
+    cart: {
+      count: 'number',
+      empty: 'boolean',
+      items: [{ name: 'string', productId: 'string', qty: 'number' }],
+    },
+  });
+
+  const validCartBindings = compileComponentModule({
+    fileName: 'cart-badge.tsx',
+    queryShapeFacts: generatedCartShapeFacts,
+    source: `
+export const CartBadge = component('cart-badge', {
+  render: () => (
+    <cart-badge>
+      <span data-bind="cart.count">2</span>
+      <button data-bind:hidden="cart.empty">Checkout</button>
+      <ul data-bind-list="cart.items" fw-key="productId">
+        <template fw-stamp>
+          <li><span data-bind=".qty">0</span> x <span data-bind=".name">Item</span></li>
+        </template>
+      </ul>
+    </cart-badge>
+  ),
+});
+`,
+  });
+  assert.deepEqual(validCartBindings.diagnostics, []);
+  assert.deepEqual(validCartBindings.queryUpdatePlans, [
+    {
+      componentName: 'CartBadge',
+      paths: ['cart.count', 'cart.empty', 'cart.items'],
+      query: 'cart',
+      templateStamps: [
+        {
+          itemBindings: ['.name', '.qty'],
+          key: 'productId',
+          list: 'cart.items',
+          selector: '[data-bind-list="cart.items"]',
+          template:
+            '<li><span data-bind=".qty">0</span> x <span data-bind=".name">Item</span></li>',
+        },
+      ],
+    },
+  ]);
+
+  const staleGeneratedShape = compileComponentModule({
+    fileName: 'cart-badge.tsx',
+    queryShapeFacts: [
+      {
+        query: 'cart',
+        shape: { itemCount: 'number' },
+        source: 'generated/queries/cart.shape.ts',
+      },
+    ],
+    source: `
+export const CartBadge = component('cart-badge', {
+  render: () => <span data-bind="cart.count">2</span>,
+});
+`,
+  });
+  assert.deepEqual(
+    staleGeneratedShape.diagnostics.map(({ code, message }) => ({ code, message })),
+    [
+      {
+        code: 'FW302',
+        message: 'data-bind path is not present in the declared query shape. cart.count',
+      },
+    ],
   );
-  assert.match(compilerTests, /validates ejected list stamps against array element query shapes/);
-  assert.match(compilerTests, /data-bind-list="cart\.items"/);
-  assert.match(compilerTests, /templateStamps: \[/);
-  assert.match(compilerTests, /generated\/queries\/cart\.shape\.ts/);
-  assert.match(
-    compilerTests,
-    /data-bind path is not present in the declared query shape\. cart\.count/,
+
+  const invalidListStamp = compileComponentModule({
+    fileName: 'cart-badge.tsx',
+    queryShapeFacts: generatedCartShapeFacts,
+    source: `
+export const CartBadge = component('cart-badge', {
+  render: () => (
+    <ul data-bind-list="cart.items" fw-key="sku">
+      <template fw-stamp>
+        <li><span data-bind=".missing">0</span></li>
+      </template>
+    </ul>
+  ),
+});
+`,
+  });
+  assert.deepEqual(
+    invalidListStamp.diagnostics.map(({ code, message }) => ({ code, message })),
+    [
+      {
+        code: 'FW302',
+        message: 'data-bind path is not present in the declared query shape. cart.items',
+      },
+    ],
   );
-  assert.match(drizzlePinTests, /pins nullable project query shapes for real Drizzle left joins/);
-  assert.match(drizzlePinTests, /\.leftJoin\(reviews, eq\(reviews\.productId, products\.id\)\)/);
-  assert.match(
-    compilerTests,
-    /accepts optional binding path segments through nullable query shape metadata/,
+
+  const nullableFacts = [
+    {
+      query: 'product',
+      shape: {
+        name: 'string',
+        review: {
+          kind: 'nullable',
+          shape: {
+            rating: {
+              kind: 'nullable',
+              shape: 'number',
+            },
+          },
+        },
+      },
+      source: 'generated/queries/product.shape.ts',
+    },
+  ];
+  assert.deepEqual(queryShapesFromFacts(nullableFacts), {
+    product: {
+      name: 'string',
+      review: {
+        kind: 'nullable',
+        shape: {
+          rating: {
+            kind: 'nullable',
+            shape: 'number',
+          },
+        },
+      },
+    },
+  });
+  const optionalNullablePath = compileComponentModule({
+    fileName: 'product-card.tsx',
+    queryShapeFacts: nullableFacts,
+    source: `
+export const ProductCard = component('product-card', {
+  render: () => <span data-bind="product.review?.rating">5</span>,
+});
+`,
+  });
+  assert.deepEqual(optionalNullablePath.diagnostics, []);
+
+  const unsafeNullablePath = compileComponentModule({
+    fileName: 'product-card.tsx',
+    queryShapeFacts: nullableFacts,
+    source: `
+export const ProductCard = component('product-card', {
+  render: () => <span data-bind="product.review.rating">5</span>,
+});
+`,
+  });
+  assert.deepEqual(
+    unsafeNullablePath.diagnostics.map(({ code, help, message }) => ({ code, help, message })),
+    [
+      {
+        code: 'FW227',
+        help: diagnosticDefinitions.FW227.help,
+        message:
+          'Binding path traverses a nullable segment without ?. product.review.rating (segment: review)',
+      },
+    ],
   );
-  assert.match(
-    compilerTests,
-    /reports FW227 when binding paths traverse nullable query shape metadata without optional segments/,
-  );
-  assert.match(compilerTests, /product\.details\?\.name/);
-  assert.match(compilerTests, /product\.details\.name \(segment: details\)/);
 });
 
 void test('S1 production build proves the compiler 1:1 emit contract', async () => {

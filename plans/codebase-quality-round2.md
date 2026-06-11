@@ -220,6 +220,11 @@ Do this first or pay it on every commit.
       APIs and asserts page critical-CSS/style hint rendering, target-filtered stylesheet
       manifests, deferred fragment stylesheet links, and enhanced mutation failure-fragment
       stylesheet links instead of grepping commerce, compiler, or server source/test names.
+      Partial evidence 2026-06-11: the P5 data-bind query-shape tranche now imports built
+      compiler/core APIs and asserts `queryShapesFromFacts`,
+      `compileComponentModule` data-bind success/failure diagnostics, ejected list
+      `templateStamps`, generated nullable left-join/project shapes, optional nullable paths, and
+      FW227 help text instead of grepping compiler or conformance source/test names.
 - [x] **Make create-jiso templates real files** (`create-jiso/src/index.ts:63-473`, ~470 lines of
       escaped template literals including a CI workflow and double-escaped regexes inside
       `.mjs`-in-string). Move to a `templates/` directory copied at scaffold time with `{{name}}`
