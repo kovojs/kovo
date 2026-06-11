@@ -2,7 +2,7 @@
 export type { DiagnosticCode } from '@jiso/core';
 import { readFileSync } from 'node:fs';
 
-import { diagnosticDefinitions } from '@jiso/core';
+import { diagnosticDefinitions, type DiagnosticCode, type DiagnosticSeverity } from '@jiso/core';
 import { diagnosticsForTouchGraph, type TouchGraph } from '@jiso/drizzle';
 
 export interface FwCheckInput {
@@ -14,6 +14,7 @@ export interface FwCheckInput {
   queryData?: readonly QueryDataFact[];
   queries?: readonly QueryReadSet[];
   touchGraph?: TouchGraph;
+  verificationDiagnostics?: readonly VerificationDiagnosticFact[];
 }
 
 export interface FwExplainInput extends FwCheckInput {
@@ -112,6 +113,16 @@ export interface SemanticLint {
   code: 'FW301' | 'FW302' | 'FW303' | 'FW320' | 'FW330';
   detail?: string;
   site: string;
+}
+
+export interface VerificationDiagnosticFact {
+  branch?: string;
+  code: DiagnosticCode;
+  detail?: string;
+  domain?: string;
+  message?: string;
+  severity?: DiagnosticSeverity;
+  site?: string;
 }
 
 export interface FwCheckResult {
@@ -371,6 +382,10 @@ export function fwCheck(input: FwCheckInput): FwCheckResult {
     );
   }
 
+  for (const diagnostic of input.verificationDiagnostics ?? []) {
+    lines.push(verificationDiagnosticLine(diagnostic));
+  }
+
   for (const warning of optimisticCoverageWarnings(
     input.mutations ?? [],
     input.queries ?? [],
@@ -429,6 +444,20 @@ function ok(lines: string[]): FwCheckResult {
     exitCode: 0,
     output: `${lines.join('\n')}\n`,
   };
+}
+
+function verificationDiagnosticLine(diagnostic: VerificationDiagnosticFact): string {
+  const definition = diagnosticDefinitions[diagnostic.code];
+  const severity = diagnostic.severity ?? definition.severity;
+  const site = diagnostic.site ?? (diagnostic.domain ? `domain:${diagnostic.domain}` : '-');
+  const details = [
+    diagnostic.domain ? `domain=${diagnostic.domain}` : '',
+    diagnostic.branch ? `branch=${diagnostic.branch}` : '',
+    diagnostic.detail ?? '',
+  ].filter(Boolean);
+  const suffix = details.length > 0 ? ` ${details.join(' ')}` : '';
+
+  return `${severity.toUpperCase()} ${diagnostic.code} ${site} ${diagnostic.message ?? definition.message}${suffix}`;
 }
 
 function notFound(options: FwTargetExplainOptions): FwCheckResult {

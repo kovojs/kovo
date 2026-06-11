@@ -348,6 +348,34 @@ describe('fw check', () => {
     });
   });
 
+  it('prints runtime verification diagnostics as fw check findings', () => {
+    expect(
+      fwCheck({
+        verificationDiagnostics: [
+          {
+            branch: 'stock-reserve',
+            code: 'FW405',
+            domain: 'product',
+            site: 'cart.domain.ts:2',
+          },
+          {
+            code: 'FW402',
+            detail: 'observed table audit_log',
+            domain: 'audit',
+          },
+        ],
+      }),
+    ).toEqual({
+      exitCode: 1,
+      output: [
+        'fw-check/v1',
+        'WARN FW405 cart.domain.ts:2 Conditional write branch was never executed under instrumentation. domain=product branch=stock-reserve',
+        'ERROR FW402 domain:audit Write touched an undeclared domain. domain=audit observed table audit_log',
+        '',
+      ].join('\n'),
+    });
+  });
+
   it('fails when a query reads a domain no mutation can invalidate', () => {
     expect(
       fwCheck({
