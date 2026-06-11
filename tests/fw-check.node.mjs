@@ -555,10 +555,15 @@ void test('P1 compiler emits FW311 update coverage facts', async () => {
   assert.match(compilerSource, /collectQueryUpdateCoverage/);
   assert.match(compilerSource, /fw311Diagnostic/);
   assert.match(compilerBindingsSource, /status: 'renderOnce'/);
+  assert.match(compilerBindingsSource, /status: 'isomorphic'/);
   assert.match(compilerBindingsSource, /status: 'UNHANDLED'/);
   assert.match(compilerTests, /classifies query-dependent render positions for FW311 coverage/);
   assert.match(compilerTests, /status: 'plan'/);
   assert.match(compilerTests, /status: 'renderOnce'/);
+  assert.match(
+    compilerTests,
+    /classifies query-dependent render positions as isomorphic when declared/,
+  );
   assert.match(compilerTests, /code: 'FW311'/);
 });
 

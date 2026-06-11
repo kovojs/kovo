@@ -2154,6 +2154,34 @@ export const CartBadge = component('cart-badge', {
     ]);
   });
 
+  it('classifies query-dependent render positions as isomorphic when declared', () => {
+    const result = compileComponentModule({
+      fileName: 'cart-badge.tsx',
+      source: `
+export const CartBadge = component('cart-badge', {
+  isomorphic: true,
+  queries: { cart: {} },
+  render: () => (
+    <cart-badge>
+      <strong className={cart.discount}>Discount</strong>
+    </cart-badge>
+  ),
+});
+`,
+    });
+
+    expect(result.updateCoverage).toEqual([
+      {
+        componentName: 'CartBadge',
+        detail: 'declared isomorphic island',
+        position: 'expression',
+        query: 'cart.discount',
+        status: 'isomorphic',
+      },
+    ]);
+    expect(result.diagnostics).toEqual([]);
+  });
+
   it('ignores query declarations inside strings and comments', () => {
     const result = compileComponentModule({
       fileName: 'cart-badge.tsx',

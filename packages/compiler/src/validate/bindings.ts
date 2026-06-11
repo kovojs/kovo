@@ -293,6 +293,22 @@ export function collectQueryUpdateCoverage(
     coveredPaths.add(path);
   }
 
+  if (componentOptionSource(model, 'isomorphic')?.trim() === 'true') {
+    for (const expression of jsxQueryExpressionPaths(model, knownQueries)) {
+      const path = expression.path;
+      if (coveredPaths.has(path)) continue;
+
+      facts.push({
+        componentName,
+        detail: 'declared isomorphic island',
+        position: 'expression',
+        query: path,
+        status: 'isomorphic',
+      });
+      coveredPaths.add(path);
+    }
+  }
+
   for (const expression of jsxQueryExpressionPaths(model, knownQueries)) {
     const path = expression.path;
     if (coveredPaths.has(path)) continue;
