@@ -265,7 +265,7 @@ good sub-agent candidates with explicit file ownership.
       `query()` derives `Result` from its registry; `form()` requires hand-supplied
       `Input`/`Failure` generics while the registry value position sits unused. Align before
       codegen starts populating real types.
-- [ ] **Dead/duplicate code sweep**: `exportTableAliases` ⊂ `importExportTableAliases`
+- [x] **Dead/duplicate code sweep**: `exportTableAliases` ⊂ `importExportTableAliases`
       (`drizzle/index.ts:995-1014` vs 973-993), duplicated keyword sets and const-decl regexes
       (drizzle), unused `getDiagnosticDefinition` export (`core/diagnostics.ts:200-202`),
       `renderQueryChunk` vs `renderQueryEndpointChunk` and the twin record-accumulators in server
@@ -273,8 +273,10 @@ good sub-agent candidates with explicit file ownership.
       companion plan).
 
   Implemented so far: Drizzle identifier/const-declaration regex and ignored-call sets are
-  shared; server record accumulation and query chunk rendering use shared helpers. Remaining:
-  any compiler/module-split cleanup that still applies after `plans/improve-compiler.md`.
+  shared; the subset `exportTableAliases` helper is gone and all alias propagation uses
+  `importExportTableAliases`; the unused core diagnostic-definition export is gone; server record
+  accumulation and query chunk rendering use shared helpers. Remaining compiler cleanup is tracked
+  by `plans/improve-compiler.md`.
 
 Verification: per-package vitest + root `pnpm run check`; CLI behavior changes (1-4) update
 `tests/fw-check.node.mjs` expectations where output text is pinned.
