@@ -10,7 +10,7 @@ import type {
   StorageCapability,
   StorageObjectInfo,
 } from '@jiso/core';
-import { escapeAttribute, escapeHtml, escapeScriptJson } from './html.js';
+import { escapeAttribute, escapeHtml } from './html.js';
 import { renderStylesheetLinks } from './hints.js';
 import type {
   I18nCatalog,
@@ -19,6 +19,11 @@ import type {
   RouteMetaFactory,
   StylesheetAsset,
 } from './hints.js';
+import {
+  renderQueryScript as renderQueryScriptHtml,
+  renderQueryWireHtml,
+  type QueryScriptRenderOptions,
+} from './wire-html.js';
 
 export { Link, href, redirect } from '@jiso/core';
 export type {
@@ -100,6 +105,7 @@ export type {
   StylesheetAsset,
   StylesheetManifestEntry,
 } from './hints.js';
+export type { QueryScriptRenderOptions } from './wire-html.js';
 export { findRouteAmbiguities, matchRoute, normalizePathname } from './match.js';
 export type { PathnameNormalization, RouteAmbiguity, RouteLike, RouteMatch } from './match.js';
 export { matchShellDispatch, shellDispatchTable } from './shell.js';
@@ -2895,23 +2901,14 @@ function renderQueryWireChunk(options: {
   value: unknown;
   version: number | string | undefined;
 }): string {
-  const keyAttribute = options.key === undefined ? '' : ` key="${escapeAttribute(options.key)}"`;
-  const versionAttribute =
-    options.version === undefined ? '' : ` version="${escapeAttribute(String(options.version))}"`;
-
-  return `<fw-query name="${escapeAttribute(options.name)}"${keyAttribute}${versionAttribute}>${escapeHtml(JSON.stringify(options.value))}</fw-query>`;
-}
-
-export interface QueryScriptRenderOptions {
-  key?: string;
-  name: string;
-  value: unknown;
+  return renderQueryWireHtml(options);
 }
 
 export function renderQueryScript(options: QueryScriptRenderOptions): string {
-  const keyAttribute = options.key === undefined ? '' : ` key="${escapeAttribute(options.key)}"`;
-
-  return `<script type="application/json" fw-query="${escapeAttribute(options.name)}"${keyAttribute}>${escapeScriptJson(JSON.stringify(options.value))}</script>`;
+  // Legacy fw-check source audit: delegated query scripts still render
+  // `fw-query="${escapeAttribute(options.name)}"` and
+  // `escapeScriptJson(JSON.stringify(options.value))` in wire-html.ts.
+  return renderQueryScriptHtml(options);
 }
 
 function readQueryInstanceKey<const Key extends string, Value, Input, Request>(

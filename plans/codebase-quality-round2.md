@@ -362,12 +362,16 @@ optional sugar — take it only if it falls out of the split.
 Coordinate with the in-flight uncommitted work (document.ts, app.ts, app.test.ts) — integrate or
 land it first; don't fork it.
 
-- [ ] **HIGH — One wire-html emitter.** The `fw-query` markup is hand-built in four places:
+- [x] **HIGH — One wire-html emitter.** The `fw-query` markup is hand-built in four places:
       `renderQueryScript` (index.ts:2870-2874), its byte-identical copy
       `renderDocumentQueryScript` (document.ts:162-166), deferred-stream.ts:71-76, and
       `renderQueryWireChunk` (index.ts:2851-2862). Create `wire-html.ts`; delete the document.ts
       copy and the duplicated `QueryScriptRenderOptions` interface (declared twice, aliased in
       index.ts to dodge its own collision); every extraction from here on removes the original.
+      Evidence 2026-06-11: `packages/server/src/wire-html.ts` now owns `<fw-query>` and
+      query-script serialization; `index.ts`, `document.ts`, and `deferred-stream.ts` route
+      through it while preserving existing public exports. Verified with
+      `pnpm exec vitest --run packages/server/src`, `pnpm run check`, and `pnpm run check:fw`.
 - [ ] **HIGH — One `onError` diagnostic seam.** Seven bare `catch {}` sites on 500 paths
       (index.ts:903, :1583, :1619, :1862, :2002; client-modules.ts:82; app.ts:203) give operators
       zero signal. Thread `onError(error, context)` through all of them; add `{ cause }` to the

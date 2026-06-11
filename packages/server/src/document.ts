@@ -1,7 +1,8 @@
 import { jisoLoaderSource } from '@jiso/runtime';
 import { renderDeferredStream, type DeferredStreamChunk } from './deferred-stream.js';
-import { escapeAttribute, escapeHtml, escapeScriptJson } from './html.js';
+import { escapeAttribute, escapeHtml } from './html.js';
 import { renderPageHints, type PageHintOptions, type PageHints } from './hints.js';
+import { renderQueryScript, type QueryScriptRenderOptions } from './wire-html.js';
 
 export interface DocumentParts {
   body: string;
@@ -35,12 +36,6 @@ export interface DocumentAssemblyOptions {
   lang?: string;
   queries?: readonly QueryScriptRenderOptions[];
   template?: DocumentTemplate;
-}
-
-export interface QueryScriptRenderOptions {
-  key?: string;
-  name: string;
-  value: unknown;
 }
 
 export interface DocumentRoutePageResponse {
@@ -117,7 +112,7 @@ function assembleDocumentParts(
   options: Pick<DocumentAssemblyOptions, 'body' | 'hints' | 'lang' | 'queries'>,
 ): { earlyHints: PageHints['earlyHints']; parts: DocumentParts } {
   const hints = renderPageHints(options.hints ?? {});
-  const queryScripts = (options.queries ?? []).map(renderDocumentQueryScript);
+  const queryScripts = (options.queries ?? []).map(renderQueryScript);
 
   return {
     earlyHints: hints.earlyHints,
@@ -159,11 +154,8 @@ export function renderRouteDocumentResponse(
   };
 }
 
-export function renderDocumentQueryScript(options: QueryScriptRenderOptions): string {
-  const keyAttribute = options.key === undefined ? '' : ` key="${escapeAttribute(options.key)}"`;
-
-  return `<script type="application/json" fw-query="${escapeAttribute(options.name)}"${keyAttribute}>${escapeScriptJson(JSON.stringify(options.value))}</script>`;
-}
+export { renderQueryScript as renderDocumentQueryScript };
+export type { QueryScriptRenderOptions };
 
 export function renderErrorDocument(options: ErrorDocumentOptions): DocumentRoutePageResponse {
   const title = options.title ?? fallbackTitles[options.status];
