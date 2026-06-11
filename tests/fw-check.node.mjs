@@ -1017,7 +1017,10 @@ void test('D4 commerce adopt-dont-invent features stay represented', async () =>
   assert.match(commerceSource, /inputFields: \['orderId', 'receipt'\]/);
   assert.match(commerceSource, /fileFields: \['receipt'\]/);
   assert.match(commerceSource, /i18n: \['en-US:cartLabel,productStock'\]/);
-  assert.match(commerceTests, /coerces commerce receipt uploads through s\.file\(\)/);
+  assert.match(
+    commerceTests,
+    /coerces commerce receipt uploads through storage-backed s\.file\(\)/,
+  );
   assert.match(commerceTests, /fw-upload-progress value="0" max="100"/);
   assert.match(commerceTests, /session: commerceSession/);
   assert.match(commerceTests, /file-fields: receipt/);
@@ -1065,7 +1068,7 @@ void test('P10 commerce graph assertions answer behavior mechanically', async ()
     /accepts the commerce mutation-query matrix through static graph, verifier, and enhanced wire/,
   );
   assert.match(commerceTests, /touchGraphKey: 'cart\.addItem'/);
-  assert.match(commerceTests, /touchGraphKey: 'order\/receipt'/);
+  assert.match(commerceTests, /touchGraphKey: 'order\.receipt'/);
   assert.match(commerceTests, /queryChunkNames\(response\.body\)\.sort\(\)/);
   assert.match(commerceTests, /mutationUpdateConsumers\(addToCartExplanation\.output\)/);
   assert.match(commerceTests, /uploadReceiptAffectedQueries/);
@@ -1074,7 +1077,8 @@ void test('P10 commerce graph assertions answer behavior mechanically', async ()
     commerceTests,
     /expect\(explainLine\(uploadReceiptExplanation\.output, 'invalidates: '\)\)\.toBe\('-'\)/,
   );
-  assert.match(commerceTests, /noWriteHarness\.verificationDiagnostics\(\)/);
+  assert.match(commerceTests, /harness\.verificationDiagnostics\(\)/);
+  assert.match(commerceTests, /receiptHarness\.verificationDiagnostics\(\)/);
   assert.match(commerceTests, /const queryExplain = fwExplain\(commerceGraph, \{ kind: 'query'/);
   assert.match(commerceTests, /expect\(updates\.get\(query\)\)\.toContain\('page:\/cart'\)/);
   assert.match(commerceTests, /expect\(statuses\.get\(query\.query\)\)\.not\.toBe\('UNHANDLED'\)/);
@@ -1435,6 +1439,8 @@ void test('P4 commerce touch graph is a committed generated artifact', async () 
   const cartItemsLine = lineNumberFor(commerceSource, "request.db.write('cart_items'");
   const ordersLine = lineNumberFor(commerceSource, "request.db.write('orders'");
   const productsLine = lineNumberFor(commerceSource, "request.db.write('products'");
+  const attachmentsLine = lineNumberFor(commerceSource, "request.db.write('attachments'");
+  const webhookOrdersLine = lineNumberFor(commerceSource, "tx.write('orders'");
 
   assert.match(commerceSource, /from '\.\/generated\/touch-graph\.js'/);
   assert.doesNotMatch(commerceSource, /extractTouchGraphFromSource/);
@@ -1465,6 +1471,32 @@ export const commerceTouchGraph = {
         predicate: 'eq',
         site: 'examples/commerce/src/app.ts:${productsLine}',
         via: 'products',
+      },
+    ],
+    reads: [],
+    unresolved: [],
+  },
+  'order.receipt': {
+    touches: [
+      {
+        domain: 'attachment',
+        keys: 'arg:orderId',
+        predicate: 'eq',
+        site: 'examples/commerce/src/app.ts:${attachmentsLine}',
+        via: 'attachments',
+      },
+    ],
+    reads: [],
+    unresolved: [],
+  },
+  'payment.webhook': {
+    touches: [
+      {
+        domain: 'order',
+        keys: 'arg:data.object.id',
+        predicate: 'eq',
+        site: 'examples/commerce/src/app.ts:${webhookOrdersLine}',
+        via: 'orders',
       },
     ],
     reads: [],
