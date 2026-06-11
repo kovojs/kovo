@@ -142,24 +142,45 @@ export interface NumberSchema extends Schema<number> {
   min(value: number): NumberSchema;
 }
 
+interface NumberSchemaOptions {
+  defaultValue?: number;
+  integer?: boolean;
+  minimum?: number;
+}
+
 class NumberSchemaImpl implements NumberSchema {
-  #defaultValue: number | undefined;
-  #integer = false;
-  #minimum: number | undefined;
+  readonly #defaultValue: number | undefined;
+  readonly #integer: boolean;
+  readonly #minimum: number | undefined;
+
+  constructor(options: NumberSchemaOptions = {}) {
+    this.#defaultValue = options.defaultValue;
+    this.#integer = options.integer ?? false;
+    this.#minimum = options.minimum;
+  }
 
   default(value: number): NumberSchema {
-    this.#defaultValue = value;
-    return this;
+    return new NumberSchemaImpl({
+      defaultValue: value,
+      integer: this.#integer,
+      ...(this.#minimum === undefined ? {} : { minimum: this.#minimum }),
+    });
   }
 
   int(): NumberSchema {
-    this.#integer = true;
-    return this;
+    return new NumberSchemaImpl({
+      ...(this.#defaultValue === undefined ? {} : { defaultValue: this.#defaultValue }),
+      integer: true,
+      ...(this.#minimum === undefined ? {} : { minimum: this.#minimum }),
+    });
   }
 
   min(value: number): NumberSchema {
-    this.#minimum = value;
-    return this;
+    return new NumberSchemaImpl({
+      ...(this.#defaultValue === undefined ? {} : { defaultValue: this.#defaultValue }),
+      integer: this.#integer,
+      minimum: value,
+    });
   }
 
   parse(input: unknown): number {
@@ -178,8 +199,8 @@ class NumberSchemaImpl implements NumberSchema {
 }
 
 class FileSchemaImpl implements FileSchema {
-  #maxBytes: number | undefined;
-  #mime: readonly string[] | undefined;
+  readonly #maxBytes: number | undefined;
+  readonly #mime: readonly string[] | undefined;
 
   constructor(options: FileSchemaOptions = {}) {
     this.#maxBytes = options.maxBytes;
@@ -187,13 +208,17 @@ class FileSchemaImpl implements FileSchema {
   }
 
   maxBytes(value: number): FileSchema {
-    this.#maxBytes = value;
-    return this;
+    return new FileSchemaImpl({
+      maxBytes: value,
+      ...(this.#mime === undefined ? {} : { mime: this.#mime }),
+    });
   }
 
   mime(types: readonly string[]): FileSchema {
-    this.#mime = types;
-    return this;
+    return new FileSchemaImpl({
+      ...(this.#maxBytes === undefined ? {} : { maxBytes: this.#maxBytes }),
+      mime: types,
+    });
   }
 
   parse(input: unknown): FileLike {
