@@ -859,6 +859,8 @@ void test('P10 perf acceptance is wired through Playwright and CDP', async () =>
   assert.match(ciWorkflow, /vp run build[\s\S]*vp run p10-perf[\s\S]*vp run fw-check/);
   assert.match(viteConfig, /'p10-perf':\s*\{/);
   assert.match(perfScript, /first-contentful-paint/);
+  assert.match(perfScript, /ttiMinusFcpMs/);
+  assert.match(perfScript, /TTI is equivalent to FCP/);
   assert.match(perfScript, /activationStart/);
   assert.match(perfScript, /Runtime\.getHeapUsage/);
   assert.match(perfScript, /navigationCount,\s*100/);

@@ -75,6 +75,7 @@ try {
         handlerImportsBeforeInteraction: globalThis.__handlerImports ?? 0,
         hasSpeculationRules: document.querySelector('script[type="speculationrules"]') !== null,
         lastDelegatedListenerMark: globalThis.__jisoPerf.lastDelegatedListenerMark,
+        ttiMinusFcpMs: globalThis.__jisoPerf.lastDelegatedListenerMark - (paint?.startTime ?? 0),
       };
     });
 
@@ -84,6 +85,7 @@ try {
       firstLoad.lastDelegatedListenerMark <= firstLoad.fcp,
       'delegated listeners are installed no later than first contentful paint',
     );
+    assert.ok(firstLoad.ttiMinusFcpMs <= 0, 'TTI is equivalent to FCP for the loader spine');
     assert.equal(firstLoad.clientModuleLoadsBeforeInteraction, 0);
     assert.equal(firstLoad.handlerImportsBeforeInteraction, 0);
 
