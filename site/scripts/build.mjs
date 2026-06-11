@@ -3,6 +3,7 @@ import { existsSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+import { generateApiReference } from './api-ref.mjs';
 import { captureAll } from './capture.mjs';
 import { renderDocument, renderDocsPage } from './chrome.mjs';
 import { renderLanding } from './landing.mjs';
@@ -94,6 +95,7 @@ function resolveSpecAnchors(html, specIds) {
 }
 
 async function main() {
+  await generateApiReference(); // W6: emit gen/api before sections load.
   await rm(outDir, { force: true, recursive: true });
   await mkdir(outDir, { recursive: true });
 
