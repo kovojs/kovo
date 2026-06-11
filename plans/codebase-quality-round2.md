@@ -132,6 +132,12 @@ Do this first or pay it on every commit.
       built runtime APIs for `FW-Changes` parsing/sanitization, malformed header reporting,
       BroadcastChannel publication, keyed optimistic transforms from unified change records, and
       server-truth reconciliation instead of grepping runtime source or test names.
+      Partial evidence 2026-06-11: the P4 Drizzle extraction/conformance tranche now keeps the
+      `ts-morph` and pinned `drizzle-orm` versions as structured `package.json` assertions, then
+      executes `pnpm exec vitest --run packages/drizzle/src/index.test.ts` and
+      `pnpm exec vitest --run conformance/drizzle-pin/src/index.test.ts` from
+      `tests/fw-check.node.mjs` instead of grepping Drizzle implementation symbols,
+      package-test names, or conformance-test source.
       Partial evidence 2026-06-11: the P1 render-equivalence tranche now imports the built
       compiler API, asserts `compileComponentModule` render-equivalence checks and
       `assertRenderEquivalence` failure behavior, then asserts the `ERROR RENDER_EQUIV` CLI

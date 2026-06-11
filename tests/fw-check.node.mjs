@@ -4428,7 +4428,6 @@ void test('Conformance suites are an explicit gate', async () => {
   const packageJson = JSON.parse(await readProjectFile('package.json'));
   const viteConfig = await readProjectFile('vite.config.ts');
   const ciWorkflow = await readProjectFile('.github/workflows/ci.yml');
-  const conformanceTest = await readProjectFile('conformance/drizzle-pin/src/index.test.ts');
   const authSpikePackageJson = JSON.parse(
     await readProjectFile('conformance/auth-spike/package.json'),
   );
@@ -4439,14 +4438,14 @@ void test('Conformance suites are an explicit gate', async () => {
     await readProjectFile('conformance/app-shell-spike/package.json'),
   );
   const drizzlePackageJson = JSON.parse(await readProjectFile('packages/drizzle/package.json'));
-  const drizzleSource = await readProjectFile('packages/drizzle/src/index.ts');
-  const drizzleTests = await readProjectFile('packages/drizzle/src/index.test.ts');
+  const drizzlePinPackageJson = JSON.parse(
+    await readProjectFile('conformance/drizzle-pin/package.json'),
+  );
 
   assert.match(packageJson.scripts.acceptance, /pnpm run test:conformance/);
   assert.equal(packageJson.scripts['test:conformance'], 'vp run conformance');
   assert.equal(drizzlePackageJson.dependencies['ts-morph'], '^28.0.0');
-  assert.match(drizzleSource, /function extractTouchGraphFromProject/);
-  assert.match(drizzleSource, /function isDrizzleReceiver/);
+  assert.equal(drizzlePinPackageJson.devDependencies['drizzle-orm'], '0.45.2');
   assert.match(viteConfig, /conformance:\s*\{/);
   assert.match(viteConfig, /'conformance-drizzle':\s*\{/);
   assert.match(viteConfig, /@jiso\/conformance-drizzle-pin/);
@@ -4457,37 +4456,15 @@ void test('Conformance suites are an explicit gate', async () => {
   assert.equal(authSpikePackageJson.name, '@jiso/conformance-auth-spike');
   assert.equal(webhookSpikePackageJson.name, '@jiso/conformance-webhook-spike');
   assert.equal(appShellSpikePackageJson.name, '@jiso/conformance-app-shell-spike');
-  assert.match(conformanceTest, /Drizzle pinned subset conformance/);
-  assert.match(conformanceTest, /from 'drizzle-orm'/);
-  assert.match(conformanceTest, /from 'drizzle-orm\/pg-core'/);
-  assert.match(conformanceTest, /imports the pinned real Drizzle Postgres subset/);
-  assert.match(conformanceTest, /recognizes real Drizzle receiver types in project extraction/);
-  assert.match(conformanceTest, /pins project query facts for the real Drizzle Postgres subset/);
-  assert.match(conformanceTest, /diagnosticsForQueryFacts/);
-  assert.match(conformanceTest, /pins direct table source extraction/);
-  assert.match(conformanceTest, /pins local conditional table resolution/);
-  assert.match(conformanceTest, /pins domain write callback extraction/);
-  assert.match(drizzleTests, /folds local helper writes and reads into caller summaries/);
-  assert.match(drizzleTests, /dedupes recursive helper summaries at a fixed point/);
-  assert.match(drizzleTests, /extracts write callback bodies from domain authoring surfaces/);
-  assert.match(
-    drizzleTests,
-    /extracts configured write callbacks and folds local helper summaries/,
-  );
-  assert.match(drizzleTests, /resolves namespace-imported Drizzle schema identifiers/);
-  assert.match(drizzleTests, /resolves named import and re-export Drizzle schema aliases/);
-  assert.match(
-    drizzleTests,
-    /uses typed receiver origins instead of likely receiver names in project extraction/,
-  );
-  assert.match(drizzleTests, /recognizes renamed Drizzle receiver parameters/);
-  assert.match(drizzleTests, /recognizes destructured Drizzle receiver aliases/);
-  assert.match(drizzleTests, /marks external helpers receiving a Drizzle receiver as FW406/);
-  assert.equal(
-    JSON.parse(await readProjectFile('conformance/drizzle-pin/package.json')).devDependencies[
-      'drizzle-orm'
-    ],
-    '0.45.2',
+
+  await execFileAsync('pnpm', ['exec', 'vitest', '--run', 'packages/drizzle/src/index.test.ts'], {
+    cwd: new URL('..', import.meta.url),
+    maxBuffer: 1024 * 1024 * 10,
+  });
+  await execFileAsync(
+    'pnpm',
+    ['exec', 'vitest', '--run', 'conformance/drizzle-pin/src/index.test.ts'],
+    { cwd: new URL('..', import.meta.url), maxBuffer: 1024 * 1024 * 10 },
   );
 });
 
