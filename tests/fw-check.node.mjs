@@ -9,11 +9,13 @@ const requestMarker = '>>> REQUEST';
 const generatedWireBodies = {
   'defer-stream.http': [
     `<!doctype html>
-<html><body><main><product-page fw-deps="product:p1"><fw-defer target="reviews:p1" state="pending"></fw-defer></product-page></main>
+<html><body><main><product-page fw-deps="product:p1"><fw-defer target="reviews:p1" state="pending"></fw-defer><fw-defer target="recommendations:p1" state="pending"></fw-defer></product-page></main>
 
 --jiso-boundary
 <fw-query name="reviews" key="product:p1">{"items":[{"id":"r1","rating":5}]}</fw-query>
-<fw-fragment target="reviews:p1"><section fw-c="reviews" fw-deps="product:p1"><article data-key="r1">5</article></section></fw-fragment>
+<fw-query name="recommendations" key="product:p1">{"items":[{"id":"rec-1"}]}</fw-query>
+<fw-fragment target="reviews:p1" priority="5"><section fw-c="reviews" fw-deps="product:p1"><article data-key="r1">5</article></section></fw-fragment>
+<fw-fragment target="recommendations:p1"><section fw-c="recommendations" fw-deps="product:p1"><article data-key="rec-1">Beans</article></section></fw-fragment>
 --jiso-boundary--
 </body></html>
 `,
@@ -617,6 +619,7 @@ void test('D3 deferred stream responses are consumed by the runtime', async () =
   assert.match(runtimeSource, /deferredStreamChunks/);
   assert.match(runtimeSource, /--\$\{boundary\}/);
   assert.match(runtimeTests, /applies full deferred stream responses in boundary order/);
+  assert.match(await readProjectFile('fixtures/wire/defer-stream.http'), /priority="5"/);
   assert.match(runtimeTests, /--jiso-boundary--/);
   assert.match(runtimeTests, /reviews-plan/);
   assert.match(runtimeTests, /morph:<section>Reviews ready<\/section>/);

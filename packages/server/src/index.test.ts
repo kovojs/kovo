@@ -446,16 +446,22 @@ describe('server mutation primitives', () => {
           fragments: [
             {
               html: '<section fw-c="reviews" fw-deps="product:p1"><article data-key="r1">5</article></section>',
+              priority: 5,
               target: 'reviews:p1',
+            },
+            {
+              html: '<section fw-c="recommendations" fw-deps="product:p1"><article data-key="rec-1">Beans</article></section>',
+              target: 'recommendations:p1',
             },
           ],
           queries: [
             { key: 'product:p1', name: 'reviews', value: { items: [{ id: 'r1', rating: 5 }] } },
+            { key: 'product:p1', name: 'recommendations', value: { items: [{ id: 'rec-1' }] } },
           ],
         },
       ],
       shell:
-        '<!doctype html>\n<html><body><main><product-page fw-deps="product:p1"><fw-defer target="reviews:p1" state="pending"></fw-defer></product-page></main>\n',
+        '<!doctype html>\n<html><body><main><product-page fw-deps="product:p1"><fw-defer target="reviews:p1" state="pending"></fw-defer><fw-defer target="recommendations:p1" state="pending"></fw-defer></product-page></main>\n',
     });
     const fixture = await readFile(
       new URL('../../../fixtures/wire/defer-stream.http', import.meta.url),
