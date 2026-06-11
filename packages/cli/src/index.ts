@@ -28,11 +28,29 @@ export interface FwExplainInput extends FwCheckInput {
 }
 
 export interface ComponentExplain {
+  attributeMerges?: readonly AttributeMergeExplain[];
+  derives?: readonly DeriveExplain[];
   fragments?: readonly string[];
   handlers?: readonly HandlerExplain[];
   name: string;
   platformSubstitutions?: readonly PlatformSubstitutionExplain[];
   queries?: readonly string[];
+  triggers?: readonly TriggerExplain[];
+}
+
+export interface AttributeMergeExplain {
+  attr: string;
+  decision: string;
+  diagnostics?: readonly DiagnosticCode[];
+  element: string;
+  rule: string;
+}
+
+export interface DeriveExplain {
+  inputs: readonly string[];
+  name: string;
+  ref: string;
+  target: string;
 }
 
 export interface HandlerExplain {
@@ -45,6 +63,14 @@ export interface HandlerExplain {
 }
 
 export type CaptureChannel = 'ctx' | 'element-params' | 'module-scope';
+
+export interface TriggerExplain {
+  deps?: readonly string[];
+  exportName: string;
+  justification?: string;
+  ref: string;
+  trigger: 'idle' | 'load' | 'visible';
+}
 
 export interface PlatformSubstitutionExplain {
   action: string;
@@ -350,6 +376,41 @@ export function fwExplain(input: FwExplainInput, options: FwExplainOptions): FwC
           `event=${substitution.event}`,
           `target=${substitution.target}`,
           `action=${substitution.action}`,
+        ].join(' '),
+      );
+    }
+
+    for (const derive of component.derives ?? []) {
+      lines.push(
+        [
+          `DERIVE ${derive.name}`,
+          `inputs=${list(derive.inputs)}`,
+          `ref=${derive.ref}`,
+          `target=${derive.target}`,
+        ].join(' '),
+      );
+    }
+
+    for (const trigger of component.triggers ?? []) {
+      lines.push(
+        [
+          `TRIGGER ${trigger.trigger}`,
+          `export=${trigger.exportName}`,
+          `ref=${trigger.ref}`,
+          `deps=${list(trigger.deps)}`,
+          `justification=${trigger.justification ?? '-'}`,
+        ].join(' '),
+      );
+    }
+
+    for (const merge of component.attributeMerges ?? []) {
+      lines.push(
+        [
+          `MERGE ${merge.element}`,
+          `attr=${merge.attr}`,
+          `rule=${merge.rule}`,
+          `decision=${merge.decision}`,
+          `diagnostics=${list(merge.diagnostics)}`,
         ].join(' '),
       );
     }

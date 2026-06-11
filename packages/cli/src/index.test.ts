@@ -788,6 +788,30 @@ describe('fw explain', () => {
         {
           components: [
             {
+              attributeMerges: [
+                {
+                  attr: 'aria-expanded',
+                  decision: 'author-wins',
+                  diagnostics: ['FW232'],
+                  element: 'button',
+                  rule: 'aria-author-override',
+                },
+                {
+                  attr: 'data-bind:hidden',
+                  decision: 'error',
+                  diagnostics: ['FW233'],
+                  element: 'button',
+                  rule: 'binding-target-conflict',
+                },
+              ],
+              derives: [
+                {
+                  inputs: ['cart'],
+                  name: 'CartBadge$isEmpty',
+                  ref: '/c/cart-badge.client.js#CartBadge$isEmpty',
+                  target: 'button[data-bind:disabled]',
+                },
+              ],
               fragments: ['cart-badge'],
               handlers: [
                 {
@@ -809,6 +833,15 @@ describe('fw explain', () => {
                 },
               ],
               queries: ['cart'],
+              triggers: [
+                {
+                  deps: ['cart'],
+                  exportName: 'CartBadge$mountChart',
+                  justification: 'chart boots when visible',
+                  ref: '/c/cart-badge.client.js#CartBadge$mountChart',
+                  trigger: 'visible',
+                },
+              ],
             },
           ],
         },
@@ -823,6 +856,10 @@ describe('fw explain', () => {
         'fragments: cart-badge',
         'HANDLER click export=CartBadge$button_click ref=/c/cart-badge.client.js#CartBadge$button_click captures=ctx,element-params params=itemId substitution=-',
         'SUBSTITUTION dialog tag=button event=click target=cart-drawer action=show-modal',
+        'DERIVE CartBadge$isEmpty inputs=cart ref=/c/cart-badge.client.js#CartBadge$isEmpty target=button[data-bind:disabled]',
+        'TRIGGER visible export=CartBadge$mountChart ref=/c/cart-badge.client.js#CartBadge$mountChart deps=cart justification=chart boots when visible',
+        'MERGE button attr=aria-expanded rule=aria-author-override decision=author-wins diagnostics=FW232',
+        'MERGE button attr=data-bind:hidden rule=binding-target-conflict decision=error diagnostics=FW233',
         '',
       ].join('\n'),
     });

@@ -1053,7 +1053,7 @@ void test('P9 verification layer evidence remains represented', async () => {
   );
 });
 
-void test('P8 component explain includes handler capture channels', async () => {
+void test('P8 component explain includes handler, derive, trigger, and merge facts', async () => {
   const cliSource = await readProjectFile('packages/cli/src/index.ts');
   const cliTests = await readProjectFile('packages/cli/src/index.test.ts');
 
@@ -1062,8 +1062,18 @@ void test('P8 component explain includes handler capture channels', async () => 
     /export type CaptureChannel = 'ctx' \| 'element-params' \| 'module-scope'/,
   );
   assert.match(cliSource, /captures=\$\{list\(handler\.captures\)\}/);
+  assert.match(cliSource, /interface DeriveExplain/);
+  assert.match(cliSource, /interface TriggerExplain/);
+  assert.match(cliSource, /interface AttributeMergeExplain/);
+  assert.match(cliSource, /DERIVE \$\{derive\.name\}/);
+  assert.match(cliSource, /TRIGGER \$\{trigger\.trigger\}/);
+  assert.match(cliSource, /MERGE \$\{merge\.element\}/);
   assert.match(cliTests, /captures: \['ctx', 'element-params'\]/);
   assert.match(cliTests, /captures=ctx,element-params params=itemId/);
+  assert.match(cliTests, /DERIVE CartBadge\$isEmpty inputs=cart/);
+  assert.match(cliTests, /TRIGGER visible export=CartBadge\$mountChart/);
+  assert.match(cliTests, /MERGE button attr=aria-expanded/);
+  assert.match(cliTests, /MERGE button attr=data-bind:hidden/);
   assert.match(cliSource, /unscoped: true/);
   assert.match(cliSource, /scopeAudits\?: readonly ScopeAuditFact\[\]/);
   assert.match(cliSource, /function unscopedAccesses/);
