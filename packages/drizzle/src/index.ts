@@ -904,6 +904,8 @@ function extractTables(source: string): ExtractedTableDeclaration[] {
     if (!declaration) continue;
 
     const { identifier, initializer } = declaration;
+    if (!isAnnotatedTableInitializer(initializer)) continue;
+
     const domain = stringProperty(initializer, 'domain');
     if (!domain) continue;
 

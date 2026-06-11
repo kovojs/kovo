@@ -291,6 +291,35 @@ export const tableDomains = {
     });
   });
 
+  it('does not treat arbitrary domain objects as source tables', () => {
+    const graph = extractTouchGraphFromSource([
+      {
+        fileName: 'cart.domain.ts',
+        source: `
+          export const cartConfig = { domain: "cart", key: "cartId", name: "cart_items" };
+
+          export async function addItem(db) {
+            await db.insert(cartConfig).values({ productId: "p1" });
+          }
+        `,
+      },
+    ]);
+
+    expect(graph).toEqual({
+      addItem: {
+        reads: [],
+        touches: [],
+        unresolved: [
+          {
+            code: 'FW406',
+            message: 'Statically un-analyzable write site; manual touches required.',
+            site: 'cart.domain.ts:5',
+          },
+        ],
+      },
+    });
+  });
+
   it('extracts query result shapes, read domains, and instance keys from Drizzle selects', () => {
     const facts = extractQueryFactsFromSource([
       {
