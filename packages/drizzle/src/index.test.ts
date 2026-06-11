@@ -4,6 +4,7 @@ import {
   createTouchGraphEntry,
   diagnosticsForTouchGraph,
   extractTouchGraphFromSource,
+  extractQueryFactsFromSource,
   jiso,
   serializeDomainRegistry,
   serializeTouchGraph,
@@ -236,6 +237,77 @@ export const tableDomains = {
         unresolved: [],
       },
     });
+  });
+
+  it('extracts query result shapes, read domains, and instance keys from Drizzle selects', () => {
+    const facts = extractQueryFactsFromSource([
+      {
+        fileName: 'cart.queries.ts',
+        source: `
+          export const cartItems = pgTable("cart_items", {}, jiso({ domain: "cart", key: "cartId" }));
+          export const products = pgTable("products", {}, jiso({ domain: "product", key: "id" }));
+
+          export const cartQuery = query("cart", {
+            async load(input, db) {
+              return db.select({
+                count: sql<number>\`count(*)\`,
+                productId: products.id,
+                item: {
+                  qty: cartItems.qty,
+                },
+              }).from(cartItems).innerJoin(products, eq(products.id, cartItems.productId)).where(eq(cartItems.cartId, input.cartId));
+            },
+          });
+        `,
+      },
+    ]);
+
+    expect(facts).toEqual([
+      {
+        instanceKey: {
+          domain: 'cart',
+          key: 'arg:cartId',
+        },
+        query: 'cart',
+        reads: ['cart', 'product'],
+        shape: {
+          count: 'number',
+          item: {
+            qty: 'number',
+          },
+          productId: 'string',
+        },
+        site: 'cart.queries.ts:5',
+      },
+    ]);
+  });
+
+  it('omits instance keys when Drizzle query predicates do not target an annotated table key', () => {
+    const facts = extractQueryFactsFromSource([
+      {
+        fileName: 'product.queries.ts',
+        source: `
+          export const products = pgTable("products", {}, jiso({ domain: "product", key: "id" }));
+
+          export const productQuery = query("product", {
+            load(input, db) {
+              return db.select({ sku: products.sku }).from(products).where(eq(products.sku, input.sku));
+            },
+          });
+        `,
+      },
+    ]);
+
+    expect(facts).toEqual([
+      {
+        query: 'product',
+        reads: ['product'],
+        shape: {
+          sku: 'string',
+        },
+        site: 'product.queries.ts:4',
+      },
+    ]);
   });
 
   it('extracts direct insert-select and update-from read source tables', () => {

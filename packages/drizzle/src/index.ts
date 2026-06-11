@@ -44,6 +44,28 @@ export interface TouchGraphEntry {
 
 export type TouchGraph = Readonly<Record<string, TouchGraphEntry>>;
 
+export type QueryShape =
+  | 'array'
+  | 'boolean'
+  | 'number'
+  | 'object'
+  | 'string'
+  | readonly QueryShape[]
+  | {
+      readonly [key: string]: QueryShape;
+    };
+
+export interface QueryFact {
+  instanceKey?: {
+    domain: string;
+    key: string;
+  };
+  query: string;
+  reads: readonly string[];
+  shape: QueryShape;
+  site: string;
+}
+
 export interface DomainRegistryInput {
   table: JisoTableAnnotation & { name: string };
 }
@@ -277,6 +299,43 @@ export function extractTouchGraphFromSource(files: readonly SourceFileInput[]): 
   return graph;
 }
 
+export function extractQueryFactsFromSource(files: readonly SourceFileInput[]): QueryFact[] {
+  const tables = new Map<string, ExtractedTable[]>();
+  const facts: QueryFact[] = [];
+
+  for (const file of files) {
+    for (const table of extractTables(file.source)) {
+      appendTable(tables, table.identifier, {
+        annotation: {
+          domain: table.domain,
+          ...(table.key ? { key: table.key } : {}),
+          name: table.name,
+        },
+      });
+    }
+  }
+  for (const file of files) {
+    for (const alias of exportTableAliases(file.source)) {
+      appendTableEntries(tables, alias.local, tables.get(alias.imported) ?? []);
+    }
+  }
+
+  for (const file of files) {
+    for (const query of extractQueryDefinitions(file.source)) {
+      const reads = queryReadDomains(query.body, tables);
+      facts.push({
+        ...queryInstanceKey(query.body, tables),
+        query: query.query,
+        reads,
+        shape: query.shape,
+        site: `${file.fileName}:${lineForIndex(file.source, query.index)}`,
+      });
+    }
+  }
+
+  return facts.sort((left, right) => left.query.localeCompare(right.query));
+}
+
 interface ExtractedTableDeclaration {
   domain: string;
   identifier: string;
@@ -289,6 +348,13 @@ interface ExtractedFunction {
   bodyStart: number;
   name: string;
   params: string;
+}
+
+interface ExtractedQueryDefinition {
+  body: string;
+  index: number;
+  query: string;
+  shape: QueryShape;
 }
 
 interface ExtractedWriteCall {
@@ -313,6 +379,157 @@ interface FunctionTouchSummary {
   reads: ReadSummaryInput[];
   unresolved: UnresolvedSummaryInput[];
   writes: WriteSummaryInput[];
+}
+
+function extractQueryDefinitions(source: string): ExtractedQueryDefinition[] {
+  const definitions: ExtractedQueryDefinition[] = [];
+  const pattern =
+    /(?:export\s+)?const\s+[A-Za-z_$][\w$]*\s*=\s*query\s*\(\s*["'](?<query>[^"']+)["']\s*,/g;
+
+  for (const match of source.matchAll(pattern)) {
+    const query = match.groups?.query;
+    if (!query) continue;
+
+    const objectStart = source.indexOf('{', match.index + match[0].length);
+    if (objectStart === -1) continue;
+
+    const objectEnd = findMatchingBrace(source, objectStart);
+    if (objectEnd === -1) continue;
+
+    const body = source.slice(objectStart, objectEnd + 1);
+    const shape = selectShapeFromQueryBody(body);
+    if (!shape) continue;
+
+    definitions.push({
+      body,
+      index: match.index,
+      query,
+      shape,
+    });
+  }
+
+  return definitions;
+}
+
+function selectShapeFromQueryBody(body: string): QueryShape | null {
+  const selectCall = /\.select\s*\(/.exec(body);
+  if (!selectCall) return null;
+
+  const objectStart = body.indexOf('{', selectCall.index);
+  if (objectStart === -1) return null;
+
+  const objectEnd = findMatchingBrace(body, objectStart);
+  if (objectEnd === -1) return null;
+
+  return queryShapeFromObjectLiteral(body.slice(objectStart + 1, objectEnd));
+}
+
+function queryShapeFromObjectLiteral(source: string): QueryShape {
+  const shape: Record<string, QueryShape> = {};
+
+  for (const entry of splitTopLevelArgs(source)) {
+    const separator = entry.indexOf(':');
+    if (separator === -1) continue;
+
+    const key = entry
+      .slice(0, separator)
+      .trim()
+      .replace(/^["']|["']$/g, '');
+    if (!key) continue;
+
+    const value = entry.slice(separator + 1).trim();
+    shape[key] = value.startsWith('{')
+      ? queryShapeFromObjectLiteral(value.slice(1, findMatchingBrace(value, 0)))
+      : scalarQueryShape(key, value);
+  }
+
+  return shape;
+}
+
+function scalarQueryShape(key: string, expression: string): QueryShape {
+  if (/sql\s*<\s*number\s*>/.test(expression)) return 'number';
+  if (/sql\s*<\s*boolean\s*>/.test(expression)) return 'boolean';
+  if (/sql\s*<\s*string\s*>/.test(expression)) return 'string';
+  if (/(count|qty|quantity|total|price|stock|amount)$/i.test(key)) return 'number';
+  return 'string';
+}
+
+function queryReadDomains(
+  body: string,
+  tables: ReadonlyMap<string, readonly ExtractedTable[]>,
+): string[] {
+  const domains = new Set<string>();
+
+  for (const tableExpression of queryTableExpressions(body)) {
+    for (const table of tables.get(tableExpression) ?? []) {
+      domains.add(table.annotation.domain);
+    }
+  }
+
+  return [...domains].sort();
+}
+
+function queryTableExpressions(body: string): string[] {
+  return [
+    ...body.matchAll(
+      /\.(?:from|innerJoin|leftJoin|rightJoin|fullJoin)\s*\(\s*(?<table>[A-Za-z_$][\w$]*(?:\.[A-Za-z_$][\w$]*)?)/g,
+    ),
+  ].flatMap((match) => (match.groups?.table ? [match.groups.table] : []));
+}
+
+function queryInstanceKey(
+  body: string,
+  tables: ReadonlyMap<string, readonly ExtractedTable[]>,
+): Pick<QueryFact, 'instanceKey'> | null {
+  const where = /\.where\s*\(\s*eq\s*\(\s*(?<left>[^,]+?)\s*,\s*(?<right>[^)]+?)\s*\)/.exec(body);
+  const left = where?.groups?.left;
+  const right = where?.groups?.right;
+  if (!left || !right) return null;
+
+  for (const side of [left, right]) {
+    const tableKey = tableKeyExpression(side.trim(), tables);
+    if (!tableKey) continue;
+
+    const other = side === left ? right : left;
+    const inputKey = inputKeyExpression(other.trim());
+    if (!inputKey) continue;
+
+    return {
+      instanceKey: {
+        domain: tableKey.domain,
+        key: inputKey,
+      },
+    };
+  }
+
+  return null;
+}
+
+function tableKeyExpression(
+  expression: string,
+  tables: ReadonlyMap<string, readonly ExtractedTable[]>,
+): { domain: string } | null {
+  const match =
+    /^(?<table>[A-Za-z_$][\w$]*(?:\.[A-Za-z_$][\w$]*)?)\.(?<key>[A-Za-z_$][\w$]*)$/.exec(
+      expression,
+    );
+  if (!match?.groups) return null;
+  const tableName = match.groups.table;
+  const key = match.groups.key;
+  if (!tableName || !key) return null;
+
+  for (const table of tables.get(tableName) ?? []) {
+    if (table.annotation.key === key) {
+      return { domain: table.annotation.domain };
+    }
+  }
+
+  return null;
+}
+
+function inputKeyExpression(expression: string): string | null {
+  const match = /^input\.(?<key>[A-Za-z_$][\w$]*)$/.exec(expression);
+  return match?.groups?.key ? `arg:${match.groups.key}` : null;
 }
 
 function directSummaryForFunction(

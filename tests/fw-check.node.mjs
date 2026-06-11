@@ -732,6 +732,26 @@ void test('P5 data-bind paths are checked against generated query shape facts', 
   );
 });
 
+void test('P3 Drizzle query facts include select shapes and instance keys', async () => {
+  const drizzleSource = await readProjectFile('packages/drizzle/src/index.ts');
+  const drizzleTests = await readProjectFile('packages/drizzle/src/index.test.ts');
+
+  assert.match(drizzleSource, /export interface QueryFact/);
+  assert.match(drizzleSource, /extractQueryFactsFromSource/);
+  assert.match(drizzleSource, /selectShapeFromQueryBody/);
+  assert.match(drizzleSource, /queryInstanceKey/);
+  assert.match(
+    drizzleTests,
+    /extracts query result shapes, read domains, and instance keys from Drizzle selects/,
+  );
+  assert.match(drizzleTests, /instanceKey: \{\s*domain: 'cart',\s*key: 'arg:cartId'/);
+  assert.match(drizzleTests, /reads: \['cart', 'product'\]/);
+  assert.match(
+    drizzleTests,
+    /omits instance keys when Drizzle query predicates do not target an annotated table key/,
+  );
+});
+
 void test('P1 fragment targets emit typed registry facts', async () => {
   const coreSource = await readProjectFile('packages/core/src/index.ts');
   const coreTests = await readProjectFile('packages/core/src/index.test.ts');
