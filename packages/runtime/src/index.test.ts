@@ -1,7 +1,16 @@
 import { describe, expect, it, vi } from 'vitest';
 import { runInThisContext } from 'node:vm';
 import { gzipSync } from 'node:zlib';
-import { event, form, type FormFailure } from '@jiso/core';
+import {
+  event,
+  form,
+  formFields,
+  href,
+  Link,
+  redirect,
+  type FormFailure,
+  type Route,
+} from '@jiso/core';
 
 import {
   applyDeferredChunk,
@@ -52,6 +61,12 @@ declare module '@jiso/core' {
   interface QueryRegistry {
     cart: { count: number };
     productGrid: { products: { id: string; pending: boolean }[] };
+  }
+
+  interface RouteRegistry {
+    '/cart': Route<'/cart'>;
+    '/catalog': Route<'/catalog', {}, { max: number; sort: string }>;
+    '/catalog/:id': Route<'/catalog/:id', { id: string }, { max: number; sort: string }>;
   }
 }
 
@@ -4120,6 +4135,81 @@ describe('query store', () => {
     expect(result.appliedFragments).toEqual(['cart-badge']);
     expect(observed).toEqual(['morph:2:2 items']);
     expect(store.get('cart')).toEqual({ count: 2 });
+  });
+
+  it('proves form field and navigation path renames fail under type checking', () => {
+    const addToCartAfterFieldRename = form<'cart/add', { sku: string; quantity: number }>(
+      'cart/add',
+    );
+    const store = createQueryStore();
+    const root = new FakeMorphRoot();
+    const ctx = createSubmitContext({
+      async fetch() {
+        return {
+          async text() {
+            return '';
+          },
+        };
+      },
+      root,
+      store,
+    });
+    const catalogFilter = form.get('/catalog');
+
+    expect(formFields(addToCartAfterFieldRename, ['sku', 'quantity'] as const)).toEqual([
+      'sku',
+      'quantity',
+    ]);
+    expect(href('/catalog/:id', { params: { id: 'p 1' }, search: { max: 500 } })).toBe(
+      '/catalog/p%201?max=500',
+    );
+    expect(Link('/catalog/:id', { params: { id: 'p1' }, search: { sort: 'price' } })).toEqual({
+      href: '/catalog/p1?sort=price',
+    });
+    expect(redirect('/cart', {})).toEqual({ location: '/cart', status: 303 });
+    expect(catalogFilter.input('max')).toEqual({ name: 'max' });
+
+    const submitRenamedShape = () =>
+      ctx.submit(addToCartAfterFieldRename, { input: { quantity: 1, sku: 'sku-1' } });
+    const assertLegacyFormFieldsRejected = () => {
+      // @ts-expect-error SPEC.md §6.2/§6.3: mutation input field renames make old form fields red under vp check.
+      formFields(addToCartAfterFieldRename, ['productId', 'quantity'] as const);
+    };
+    const assertLegacySubmitInputRejected = () => {
+      void ctx.submit(addToCartAfterFieldRename, {
+        // @ts-expect-error SPEC.md §6.2/§6.3: productId was renamed to sku in the form input schema.
+        input: { productId: 'p1', quantity: 1 },
+      });
+    };
+    const assertLegacyHrefRejected = () => {
+      // @ts-expect-error SPEC.md §6.4/§16.6: route path renames make old href consumers red.
+      href('/legacy-catalog/:id', { params: { id: 'p1' } });
+    };
+    const assertLegacyLinkRejected = () => {
+      // @ts-expect-error SPEC.md §6.4/§16.6: route path renames make old Link consumers red.
+      Link('/legacy-catalog/:id', { params: { id: 'p1' } });
+    };
+    const assertLegacyRedirectRejected = () => {
+      // @ts-expect-error SPEC.md §6.4/§16.6: route path renames make old redirect consumers red.
+      redirect('/legacy-catalog/:id', { params: { id: 'p1' } });
+    };
+    const assertLegacyGetFormRejected = () => {
+      // @ts-expect-error SPEC.md §6.4/§16.6: route path renames make old GET forms red.
+      form.get('/legacy-catalog');
+    };
+    const assertLegacySearchFieldRejected = () => {
+      // @ts-expect-error SPEC.md §6.4: GET form fields must stay inside the route search schema.
+      catalogFilter.input('sku');
+    };
+
+    expect(submitRenamedShape).toBeTypeOf('function');
+    expect(assertLegacyFormFieldsRejected).toBeTypeOf('function');
+    expect(assertLegacySubmitInputRejected).toBeTypeOf('function');
+    expect(assertLegacyHrefRejected).toBeTypeOf('function');
+    expect(assertLegacyLinkRejected).toBeTypeOf('function');
+    expect(assertLegacyRedirectRejected).toBeTypeOf('function');
+    expect(assertLegacyGetFormRejected).toBeTypeOf('function');
+    expect(assertLegacySearchFieldRejected).toBeTypeOf('function');
   });
 
   it('passes typed validation failures from ctx.submit on 422 responses', async () => {
