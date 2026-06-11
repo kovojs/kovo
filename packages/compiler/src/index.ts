@@ -90,6 +90,39 @@ export interface RegistryFacts {
 
 export type RegistryTypeFacts = Readonly<Record<string, string>>;
 
+export interface RegistryGraphInput {
+  mutations?: readonly {
+    invalidates?: readonly string[];
+    key: string;
+    writes?: readonly string[];
+  }[];
+  pages?: readonly {
+    route: string;
+  }[];
+  queries?: readonly {
+    domains: readonly string[];
+    query: string;
+  }[];
+}
+
+export interface RegistryTypeFactOptions {
+  mutations?: RegistryTypeFacts;
+  queries?: RegistryTypeFacts;
+}
+
+export function deriveRegistryFactsFromGraph(
+  graph: RegistryGraphInput,
+  options: RegistryTypeFactOptions = {},
+): RegistryFacts {
+  return {
+    domainKeys: deriveDomainKeysFromGraph(graph),
+    invalidations: deriveInvalidationFactsFromGraph(graph),
+    ...(Object.keys(options.mutations ?? {}).length > 0 ? { mutations: options.mutations } : {}),
+    ...(Object.keys(options.queries ?? {}).length > 0 ? { queries: options.queries } : {}),
+    routes: [...new Set((graph.pages ?? []).map((page) => page.route))].sort(),
+  };
+}
+
 export type QueryShape =
   | 'array'
   | 'boolean'
@@ -1985,6 +2018,36 @@ function invalidationSetFactLines(
       return `  '${mutationKey}': ${queryUnion};`;
     })
     .join('\n');
+}
+
+function deriveDomainKeysFromGraph(graph: RegistryGraphInput): string[] {
+  return [
+    ...(graph.queries ?? []).flatMap((query) => query.domains),
+    ...(graph.mutations ?? []).flatMap((mutation) => mutation.writes ?? []),
+    ...(graph.mutations ?? []).flatMap((mutation) => mutation.invalidates ?? []),
+  ]
+    .filter((key, index, keys) => keys.indexOf(key) === index)
+    .sort((left, right) => left.localeCompare(right));
+}
+
+function deriveInvalidationFactsFromGraph(
+  graph: RegistryGraphInput,
+): Readonly<Record<string, readonly string[]>> {
+  const queries = graph.queries ?? [];
+  const invalidations: Record<string, string[]> = {};
+
+  for (const mutation of graph.mutations ?? []) {
+    const invalidatedDomains = mutation.invalidates ?? mutation.writes ?? [];
+    const invalidatedQueries = queries
+      .filter((query) => query.domains.some((domain) => invalidatedDomains.includes(domain)))
+      .map((query) => query.query);
+
+    if (invalidatedQueries.length > 0) {
+      invalidations[mutation.key] = [...new Set(invalidatedQueries)].sort();
+    }
+  }
+
+  return invalidations;
 }
 
 function registryDomainKey(domainKeys: readonly string[] | undefined): string {

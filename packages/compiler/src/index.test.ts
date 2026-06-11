@@ -5,6 +5,7 @@ import {
   collectCssAssetManifest,
   collectMinifierReservedNames,
   compileComponentModule,
+  deriveRegistryFactsFromGraph,
   dedupeCss,
   emitQueryPlanBootstrapModule,
   jisoVitePlugin,
@@ -158,6 +159,64 @@ export const CartActions = component('cart-actions', {
   }
 }`);
     expect(registry).toContain('export type DomainKey = "cart" | "product";');
+    expect(() => assertFixpoint(result)).not.toThrow();
+  });
+
+  it('derives registry facts from graph query, mutation, and page facts', () => {
+    const registryFacts = deriveRegistryFactsFromGraph(
+      {
+        mutations: [
+          { invalidates: ['cart'], key: 'cart/add', writes: ['cart', 'order'] },
+          { key: 'product/reserve', writes: ['product'] },
+        ],
+        pages: [{ route: '/cart' }, { route: '/products/:id' }, { route: '/cart' }],
+        queries: [
+          { domains: ['cart'], query: 'cart' },
+          { domains: ['product'], query: 'productGrid' },
+          { domains: ['order'], query: 'orderHistory' },
+        ],
+      },
+      {
+        mutations: {
+          'cart/add': 'typeof addToCart',
+        },
+        queries: {
+          cart: 'typeof cartQuery',
+        },
+      },
+    );
+
+    expect(registryFacts).toEqual({
+      domainKeys: ['cart', 'order', 'product'],
+      invalidations: {
+        'cart/add': ['cart'],
+        'product/reserve': ['productGrid'],
+      },
+      mutations: {
+        'cart/add': 'typeof addToCart',
+      },
+      queries: {
+        cart: 'typeof cartQuery',
+      },
+      routes: ['/cart', '/products/:id'],
+    });
+
+    const result = compileComponentModule({
+      fileName: 'components/cart/cart-badge.tsx',
+      registryFacts,
+      source: cartBadgeSource,
+    });
+    const registry = result.files[2]?.source ?? '';
+
+    expect(registry).toContain(`export interface RouteRegistry {
+  '/cart': import('@jiso/core').Route<'/cart'>;
+  '/products/:id': import('@jiso/core').Route<'/products/:id'>;
+}`);
+    expect(registry).toContain(`export interface InvalidationSets {
+  'cart/add': 'cart';
+  'product/reserve': 'productGrid';
+}`);
+    expect(registry).toContain('export type DomainKey = "cart" | "order" | "product";');
     expect(() => assertFixpoint(result)).not.toThrow();
   });
 

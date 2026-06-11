@@ -659,8 +659,11 @@ void test('P10 commerce graph assertions answer behavior mechanically', async ()
   assert.match(cliTests, /ignores unrelated statuses/);
   assert.match(coreSource, /interface InvalidationSets/);
   assert.match(compilerSource, /invalidations\?: Readonly<Record<string, readonly string\[\]>>/);
+  assert.match(compilerSource, /function deriveRegistryFactsFromGraph/);
+  assert.match(compilerSource, /function deriveInvalidationFactsFromGraph/);
   assert.match(compilerSource, /function invalidationSetFactLines/);
   assert.match(compilerTests, /export interface InvalidationSets/);
+  assert.match(compilerTests, /derives registry facts from graph query, mutation, and page facts/);
   assert.match(runtimeSource, /type InvalidatedQueryValues/);
   assert.match(runtimeSource, /OptimisticEntry/);
   assert.match(
