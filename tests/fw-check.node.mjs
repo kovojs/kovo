@@ -919,25 +919,60 @@ void test('P1 compiler emits FW311 update coverage facts', async () => {
 });
 
 void test('P1 compiler validates binding stamp expression drift', async () => {
-  const coreSource = await readProjectFile('packages/core/src/diagnostics.ts');
-  const compilerSource = await readProjectFile('packages/compiler/src/index.ts');
-  const compilerBindingsSource = await readProjectFile(
-    'packages/compiler/src/validate/bindings.ts',
+  assert.equal(
+    diagnosticDefinitions.FW222.message,
+    'Hand-written binding stamp disagrees with the typed expression it wraps.',
   );
-  const compilerTests = await readProjectFile('packages/compiler/src/index.test.ts');
+  assert.equal(
+    diagnosticDefinitions.FW223.message,
+    'Redundant hand-written binding stamp in sugar; the compiler derives it.',
+  );
+  assert.deepEqual(
+    compileComponentModule({
+      fileName: 'components/cart/cart-badge.tsx',
+      source: `
+import { component } from '@jiso/core';
 
-  assert.match(coreSource, /FW222/);
-  assert.match(coreSource, /FW223/);
-  assert.match(coreSource, /Hand-written binding stamp disagrees/);
-  assert.match(coreSource, /Redundant hand-written binding stamp/);
-  assert.match(compilerSource, /validateStampExpressionDrift/);
-  assert.match(compilerBindingsSource, /bindingExpressionStamps/);
-  assert.match(compilerBindingsSource, /soleWrappedQueryExpression/);
-  assert.match(
-    compilerTests,
-    /reports FW222 and FW223 for hand-written stamps around typed expressions in sugar/,
+export const CartBadge = component('cart-badge', {
+  queries: { cart: cartQuery },
+  render: ({ cart }) => <span data-bind="cart.count">{cart.count}</span>,
+});
+`,
+    }).diagnostics,
+    [
+      {
+        code: 'FW223',
+        fileName: 'components/cart/cart-badge.tsx',
+        length: 22,
+        message: `${diagnosticDefinitions.FW223.message} data-bind="cart.count" wraps {cart.count}`,
+        severity: 'lint',
+        start: { column: 31, line: 6 },
+      },
+    ],
   );
-  assert.match(compilerTests, /data-bind="cart\.count" wraps \{cart\.total\}/);
+  assert.deepEqual(
+    compileComponentModule({
+      fileName: 'components/cart/cart-badge.tsx',
+      source: `
+import { component } from '@jiso/core';
+
+export const CartBadge = component('cart-badge', {
+  queries: { cart: cartQuery },
+  render: ({ cart }) => <span data-bind="cart.count">{cart.total}</span>,
+});
+`,
+    }).diagnostics.filter((diagnostic) => diagnostic.code === 'FW222'),
+    [
+      {
+        code: 'FW222',
+        fileName: 'components/cart/cart-badge.tsx',
+        length: 22,
+        message: `${diagnosticDefinitions.FW222.message} data-bind="cart.count" wraps {cart.total}`,
+        severity: 'error',
+        start: { column: 31, line: 6 },
+      },
+    ],
+  );
 });
 
 void test('P1 compiler validates primitive composition attribute merges', async () => {
