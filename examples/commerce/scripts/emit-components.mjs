@@ -27,7 +27,7 @@ const { assertFixpoint, assertRenderEquivalence, compileComponentModule } =
 
 const scriptDir = dirname(fileURLToPath(import.meta.url));
 const commerceRoot = resolve(scriptDir, '..');
-const componentNames = ['cart-badge', 'order-history'];
+const componentNames = ['cart-badge', 'order-history', 'product-grid'];
 
 for (const name of componentNames) {
   const sourcePath = resolve(commerceRoot, `src/components/${name}.tsx`);

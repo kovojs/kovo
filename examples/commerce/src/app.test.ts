@@ -892,7 +892,7 @@ describe('commerce example', () => {
       stdio: 'pipe',
     });
 
-    for (const name of ['cart-badge', 'order-history']) {
+    for (const name of ['cart-badge', 'order-history', 'product-grid']) {
       const authored = readFileSync(new URL(`./components/${name}.tsx`, import.meta.url), 'utf8');
       const generated = readFileSync(new URL(`./generated/${name}.tsx`, import.meta.url), 'utf8');
 

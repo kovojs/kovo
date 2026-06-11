@@ -3,7 +3,6 @@ import type { OptimisticFor } from '@jiso/runtime';
 import {
   createMemoryMutationReplayStore,
   errorBoundary,
-  csrfField,
   csrfToken,
   guards,
   i18n,
@@ -29,6 +28,7 @@ import type { FwExplainInput } from '@jiso/core';
 import { attachment, cart, order, product } from './domains.js';
 import { CartBadge } from './generated/cart-badge.js';
 import { OrderHistory } from './generated/order-history.js';
+import * as productGridComponent from './generated/product-grid.js';
 import { commerceTouchGraph } from './generated/touch-graph.js';
 import { cartQuery, orderHistoryQuery, productGridQuery } from './queries.js';
 
@@ -422,25 +422,31 @@ export function loadCartQuery(db: CommerceDb): CartQueryResult {
   };
 }
 
-export function renderProductGrid(result: ProductGridResult, request?: CommerceRequest): string {
-  const items = result.items.map((item) => renderProductCard(item, undefined, request)).join('');
-  const more = result.nextCursor
-    ? `<a href="/products?after=${result.nextCursor}" data-cursor="${result.nextCursor}">More</a>`
-    : '';
+// The product grid (cards, no-JS add-to-cart forms, failure output) is
+// authored as a TSX component in src/components/product-grid.tsx and compiled
+// through @jiso/compiler (SPEC.md sections 3, 4.1, 5.2); the app imports its
+// committed lowered IR from src/generated/. Bound via a namespace import so
+// the import block stays one line: the committed touch graph pins the
+// mutation handlers' write-site line numbers in this file.
+export const {
+  ProductGrid,
+  productFormTarget,
+  renderAddToCartError,
+  renderAddToCartForm,
+  renderProductGridItems,
+} = productGridComponent;
 
-  return `<section fw-c="product-grid" fw-deps="product" data-page-cursor="${result.nextCursor ?? ''}">${items}${more}</section>`;
+export function renderProductGrid(result: ProductGridResult, request?: CommerceRequest): string {
+  // SPEC.md section 4.2: the markup comes from the compiled TSX component;
+  // fw-c and fw-deps are compiler-derived (section 4.8).
+  return ProductGrid.definition.render({ productGrid: result }, { request });
 }
 
 export function renderProductGridAppend(
   result: ProductGridResult,
   request?: CommerceRequest,
 ): string {
-  const items = result.items.map((item) => renderProductCard(item, undefined, request)).join('');
-  const more = result.nextCursor
-    ? `<a href="/products?after=${result.nextCursor}" data-cursor="${result.nextCursor}">More</a>`
-    : '';
-
-  return `${items}${more}`;
+  return renderProductGridItems(result, undefined, request);
 }
 
 export function renderProductGridPageFragment(
@@ -470,54 +476,6 @@ export function renderProductGridDeferredStream(db: CommerceDb, input: ProductGr
     shell:
       '<!doctype html><html><body><main class="min-h-dvh bg-slate-50 p-6"><fw-defer target="product-grid" state="pending"></fw-defer>',
   });
-}
-
-function renderProductCard(
-  item: { id: string; stock: number },
-  failure?: AddToCartFailure,
-  request?: CommerceRequest,
-): string {
-  return [
-    `<article fw-key="${item.id}" class="rounded border border-slate-200 bg-white p-4">`,
-    `<h2 class="font-semibold">${item.id}</h2>`,
-    `<p data-bind="productGrid.items.stock">${item.stock} in stock</p>`,
-    renderAddToCartForm(item, failure, request),
-    '</article>',
-  ].join('');
-}
-
-export function renderAddToCartForm(
-  item: { id: string; stock: number },
-  failure?: AddToCartFailure,
-  request?: CommerceRequest,
-): string {
-  const error = failure ? renderAddToCartError(failure) : '';
-  const csrf = request?.session?.id ? csrfField(request, commerceCsrf) : '';
-
-  return [
-    [
-      '<form method="post" action="/_m/cart/add" enhance data-mutation="cart/add"',
-      `fw-fragment-target="${escapeAttribute(productFormTarget(item.id))}"`,
-      'class="mt-3 flex flex-wrap items-end gap-2">',
-    ].join(' '),
-    csrf,
-    `<input type="hidden" name="productId" value="${escapeAttribute(item.id)}">`,
-    '<label class="grid gap-1 text-xs font-medium text-slate-700"><span>Qty</span>',
-    `<input class="w-16 rounded border border-slate-300 px-2 py-1" name="quantity" type="number" min="1" max="${item.stock}" value="1">`,
-    '</label>',
-    '<button class="rounded bg-slate-900 px-3 py-2 text-sm font-medium text-white" type="submit">Add</button>',
-    error,
-    '</form>',
-  ].join('');
-}
-
-function renderAddToCartError(failure: AddToCartFailure): string {
-  if (failure.error.code === 'OUT_OF_STOCK') {
-    const payload = failure.error.payload as { availableQuantity?: number };
-    return `<output role="alert" data-error-code="OUT_OF_STOCK" class="basis-full text-sm text-red-700">Only ${payload.availableQuantity ?? 0} available.</output>`;
-  }
-
-  return `<output role="alert" data-error-code="${escapeAttribute(failure.error.code)}" class="basis-full text-sm text-red-700">Unable to add this item.</output>`;
 }
 
 export function renderOrderHistory(db: CommerceDb): string {
@@ -599,22 +557,10 @@ function renderProductGridWithFailure(
   addToCartFailure?: AddToCartFailureState,
   request?: CommerceRequest,
 ): string {
-  if (!addToCartFailure) return renderProductGrid(result, request);
-
-  const items = result.items
-    .map((item) =>
-      renderProductCard(
-        item,
-        addToCartFailure.productId === item.id ? addToCartFailure.failure : undefined,
-        request,
-      ),
-    )
-    .join('');
-  const more = result.nextCursor
-    ? `<a href="/products?after=${result.nextCursor}" data-cursor="${result.nextCursor}">More</a>`
-    : '';
-
-  return `<section fw-c="product-grid" fw-deps="product" data-page-cursor="${result.nextCursor ?? ''}">${items}${more}</section>`;
+  return ProductGrid.definition.render(
+    { productGrid: result },
+    { failure: addToCartFailure, request },
+  );
 }
 
 export function submitAddToCartNoJs(rawInput: unknown, request: CommerceRequest) {
@@ -700,10 +646,6 @@ function renderAddToCartFailureFragment(
   if (!product) return renderAddToCartError(failure);
 
   return renderAddToCartForm(product, failure, request);
-}
-
-function productFormTarget(productId: string): string {
-  return `product-form:${productId}`;
 }
 
 function escapeAttribute(value: string): string {
