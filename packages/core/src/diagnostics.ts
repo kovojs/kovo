@@ -196,7 +196,3 @@ export const diagnosticDefinitions = {
     message: 'Query result shape failed declared output schema.',
   },
 } as const satisfies Record<DiagnosticCode, DiagnosticDefinition>;
-
-export function getDiagnosticDefinition(code: DiagnosticCode): DiagnosticDefinition {
-  return diagnosticDefinitions[code];
-}
