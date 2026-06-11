@@ -12,11 +12,17 @@ import {
 import { diagnosticDefinitions } from '../dist/core/src/index.mjs';
 import { readElementParams } from '../dist/runtime/src/index.mjs';
 import {
+  domain,
+  mutation,
   renderDocument,
   renderDocumentQueryScript,
+  renderMutationResponse,
   renderPageHints,
   renderQueryScript,
+  runMutation,
+  query,
   route as serverRoute,
+  s,
 } from '../dist/server/src/index.mjs';
 import { href, Link, redirect, route } from '../dist/core/src/index.mjs';
 
@@ -1314,27 +1320,99 @@ export const ProductLinks = component('product-links', {
 });
 
 void test('P3 mutation lifecycle includes an explicit transaction boundary', async () => {
-  const serverSource = await readProjectFile('packages/server/src/index.ts');
-  const serverTests = await readProjectFile('packages/server/src/index.test.ts');
-  const testHarnessSource = await readProjectFile('packages/test/src/index.ts');
+  const transactionEvents = [];
+  const transactional = mutation('cart/add', {
+    csrf: false,
+    guard(request) {
+      transactionEvents.push(`guard:${request.user}`);
+      return request.user === 'u1';
+    },
+    input: s.object({ productId: s.string() }),
+    async transaction(request, run) {
+      transactionEvents.push(`begin:${request.tx === true ? 'tx' : 'plain'}`);
+      const value = await run({ ...request, tx: true });
+      transactionEvents.push('commit');
+      return value;
+    },
+    handler(input, request) {
+      transactionEvents.push(`handler:${request.tx === true ? 'tx' : 'plain'}`);
+      return input.productId;
+    },
+  });
 
-  assert.match(serverSource, /transaction\?: <Result>/);
-  assert.match(serverSource, /run: \(transactionRequest: GuardedRequest\) => Promise<Result>/);
-  assert.match(serverSource, /definition\.transaction/);
-  assert.match(serverSource, /class MutationRollback extends Error/);
-  assert.match(serverSource, /interface QueryLoadContext/);
-  assert.match(serverSource, /resolveLifecycleRequest\(request, options\)/);
-  assert.match(serverSource, /definition\.load\(input, \{ request: lifecycleRequest \}\)/);
-  assert.match(serverTests, /runs guarded mutation handlers inside the configured transaction/);
-  assert.match(serverTests, /types transaction callbacks with the mutation request shape/);
-  assert.match(serverTests, /transaction callbacks must receive the typed request shape/);
-  assert.match(serverTests, /rolls back configured transactions for typed mutation failures/);
-  assert.match(
-    serverTests,
-    /renders mutation query chunks after the configured transaction commits/,
+  assert.deepEqual(await runMutation(transactional, { productId: 'p1' }, { user: 'u1' }), {
+    changes: [],
+    ok: true,
+    rerunQueries: [],
+    value: 'p1',
+  });
+  assert.deepEqual(transactionEvents, ['guard:u1', 'begin:plain', 'handler:tx', 'commit']);
+
+  const rollbackEvents = [];
+  const failing = mutation('cart/fail', {
+    csrf: false,
+    errors: {
+      OUT_OF_STOCK: s.object({ availableQuantity: s.number().int().min(0) }),
+    },
+    input: s.object({ productId: s.string() }),
+    async transaction(request, run) {
+      rollbackEvents.push('begin');
+      try {
+        return await run(request);
+      } catch (error) {
+        rollbackEvents.push('rollback');
+        throw error;
+      }
+    },
+    handler(_input, _request, context) {
+      rollbackEvents.push('handler');
+      return context.fail('OUT_OF_STOCK', { availableQuantity: 0 });
+    },
+  });
+  assert.deepEqual(await runMutation(failing, { productId: 'p1' }, {}), {
+    error: {
+      code: 'OUT_OF_STOCK',
+      payload: { availableQuantity: 0 },
+    },
+    ok: false,
+    status: 422,
+  });
+  assert.deepEqual(rollbackEvents, ['begin', 'handler', 'rollback']);
+
+  const cart = domain('cart');
+  const cartQuery = query('cart', {
+    instanceKey: () => 'cart:c1',
+    load(_input, context) {
+      return { cartId: context.request.session.cartId };
+    },
+    reads: [cart],
+  });
+  const addToCart = mutation('cart/add', {
+    csrf: false,
+    input: s.object({ productId: s.string() }),
+    registry: {
+      queries: [cartQuery],
+      touches: [cart],
+    },
+    handler(input, request) {
+      return `${request.session.cartId}:${input.productId}`;
+    },
+  });
+  assert.deepEqual(
+    await renderMutationResponse(addToCart, {
+      fragment: true,
+      rawInput: { productId: 'p1' },
+      request: { session: { cartId: 'c1' } },
+    }),
+    {
+      body: '<fw-query name="cart" key="cart:c1">{"cartId":"c1"}</fw-query>',
+      headers: {
+        'Content-Type': 'text/vnd.jiso.fragment+html; charset=utf-8',
+        'FW-Changes': '[{"domain":"cart"}]',
+      },
+      status: 200,
+    },
   );
-  assert.match(serverTests, /reruns post-commit queries with the same request context/);
-  assert.match(testHarnessSource, /request: \{\n\s+\.\.\.options\.request,\n\s+db,/);
 });
 
 void test('P3 server data-plane APIs stay exported and covered', async () => {

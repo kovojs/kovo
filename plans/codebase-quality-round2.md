@@ -183,6 +183,10 @@ Do this first or pay it on every commit.
       core/server/compiler APIs and asserts `href`/`Link`/`redirect`/`route`, static
       `Link`/`href` lowering, FW220 diagnostics, and route registry emission instead of grepping
       core, compiler, server, or test source names.
+      Partial evidence 2026-06-11: the P3 mutation-lifecycle tranche now imports built server
+      APIs and asserts guarded transaction ordering, typed-failure rollback, post-commit query
+      rerendering with the original request context, and mutation change headers instead of
+      grepping server or test source names.
 - [x] **Make create-jiso templates real files** (`create-jiso/src/index.ts:63-473`, ~470 lines of
       escaped template literals including a CI workflow and double-escaped regexes inside
       `.mjs`-in-string). Move to a `templates/` directory copied at scaffold time with `{{name}}`
