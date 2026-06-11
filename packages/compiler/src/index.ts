@@ -7,6 +7,7 @@ import { findMatchingToken, findStringEnd } from './scan/text.js';
 import {
   callExpressions,
   componentExplicitNames,
+  componentFragmentTargetNames,
   componentOptionSource,
   componentRenderInputs,
   componentStateReturnObject,
@@ -1139,25 +1140,9 @@ function validateFragmentTargetChildren(source: string, fileName: string): Compi
 }
 
 function fragmentTargetUsageNames(source: string): string[] {
-  const names: string[] = [];
-  const declarationPattern =
-    /\bexport\s+const\s+(?<local>[A-Z][A-Za-z0-9_]*)\s*=\s*component\s*\(\s*(["'])(?<name>[^"']+)\2\s*,\s*\{/g;
-
-  for (const match of source.matchAll(declarationPattern)) {
-    const objectStart = match.index + match[0].lastIndexOf('{');
-    const objectEnd = findMatchingToken(source, objectStart, '{', '}');
-    if (objectEnd === -1) continue;
-
-    const optionsObject = source.slice(objectStart, objectEnd + 1);
-    if (!/\bfragmentTarget\s*:\s*true\b/.test(optionsObject)) continue;
-
-    const local = match.groups?.local;
-    const explicit = match.groups?.name;
-    if (local) names.push(local);
-    if (explicit) names.push(explicit);
-  }
-
-  return [...new Set(names)];
+  return [
+    ...new Set(componentFragmentTargetNames(parseComponentModuleModel('component.tsx', source))),
+  ];
 }
 
 function fragmentTargetChildBodies(source: string, name: string): string[] {

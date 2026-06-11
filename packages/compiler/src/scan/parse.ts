@@ -132,6 +132,18 @@ export function componentExplicitNames(model: ComponentModuleModel): string[] {
   );
 }
 
+export function componentFragmentTargetNames(model: ComponentModuleModel): string[] {
+  return model.components.flatMap((component) => {
+    if (component.options.find((option) => option.key === 'fragmentTarget')?.value !== 'true') {
+      return [];
+    }
+
+    return [component.localName, component.explicitName].filter(
+      (name): name is string => name !== undefined,
+    );
+  });
+}
+
 export function jsxElements(model: ComponentModuleModel): JsxElementModel[] {
   return [...model.jsxElements];
 }

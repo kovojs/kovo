@@ -2238,6 +2238,27 @@ export const CartTable = component('cart-table', {
     expect(result.diagnostics).toEqual([]);
   });
 
+  it('ignores fragment target declarations inside strings and comments', () => {
+    const result = compileComponentModule({
+      fileName: 'cart-row.tsx',
+      source: `
+const sample = "export const CartRow = component('cart-row', { fragmentTarget: true, render: () => null });";
+// export const OtherRow = component('other-row', { fragmentTarget: true, render: () => null });
+export const CartTable = component('cart-table', {
+  render: () => (
+    <table>
+      <CartRow>
+        <span>{window.location.href}</span>
+      </CartRow>
+    </table>
+  ),
+});
+`,
+    });
+
+    expect(result.diagnostics).toEqual([]);
+  });
+
   it('reports FW330 when mutation handlers access request db directly', () => {
     const result = compileComponentModule({
       fileName: 'cart.mutation.ts',
