@@ -61,6 +61,18 @@ Scope: SPEC addition (proposed §9.5 "The request shell"), `@jiso/server` shell 
       `/c/` module and asset copying, and SPEC/compiler surfacing for the static-path
       enumeration field and session-dependence metadata.
 - [ ] R7 adoption: starter becomes a routed app served by `vp dev`; commerce runs end-to-end over HTTP; a jiso docs site ships from `vp run export` as the first outside consumer.
+      Progress 2026-06-11: commerce is now TSX-authored ahead of the HTTP serve
+      entry — `CartBadge`, `OrderHistory`, and `ProductGrid` are authored in
+      `examples/commerce/src/components/*.tsx` (SPEC §5.2 1:1 mapping), compiled
+      by `scripts/emit-components.mjs` through `@jiso/compiler` with the §5.2.3
+      fixpoint/render-equivalence gates, and served from committed lowered IR in
+      `src/generated/*.tsx` with compiler-derived stamps (§4.2/§4.8); zero
+      string-template components remain. Evidence:
+      `npx vitest --run examples/commerce` (25/25, including the "compiles
+      TSX-authored components to committed IR through the fixpoint gate" test),
+      `pnpm run check`, `pnpm run check:fw` (generated/touch-graph.ts
+      byte-identical), `pnpm run test:conformance`. The R7 `serve` entry itself
+      remains open.
 
 ## Background — the gap
 

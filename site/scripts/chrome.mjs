@@ -36,7 +36,9 @@ export const SiteHeader = component('site-header', {
           ${NAV.map(
             (item) =>
               `<a href="${item.href}" class="${
-                activePath.startsWith(item.href.split('/')[1] ? `/${item.href.split('/')[1]}` : item.href)
+                activePath.startsWith(
+                  item.href.split('/')[1] ? `/${item.href.split('/')[1]}` : item.href,
+                )
                   ? 'text-jiso-accent-dark'
                   : 'hover:text-jiso-ink'
               } hidden sm:inline">${item.label}</a>`,

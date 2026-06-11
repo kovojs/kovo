@@ -74,6 +74,21 @@ Audited against the repository on 2026-06-11. Checkmarks mean the behavior, API,
 - [ ] D7 UI libraries (`@jiso/headless-ui` + vendored `@jiso/ui` + `examples/gallery`) is planned in `plans/ui.md`; design agreed 2026-06-11 (package prefix registration with FW234, `jiso-` prefix, behavior attributes on the package prefix, shadcn-style vendoring via `fw add`); F1 SPEC text, F2 compiler-side prefix enforcement, and F3 package behavior-attribute IDREF validation are landed; real package-discovery facts, `fw explain component <prefixed>` provenance, packages, gallery, and primitives remain open.
 - [ ] D8 app shell (request dispatch, document assembly, node adapter, Vite+ plugin, static export) is planned in `plans/app-shell.md`; design agreed 2026-06-11 (lives in `@jiso/server`, web-standard `Request → Response`, closed dispatch table with no middleware, L0/L1-only static export); S8/R1/R2/R3/R4 are implemented and R5 has dev middleware over the app handler; SPEC §9.5, R5 build wiring, R6 static export, and R7 adoption remain open; first outside consumer is the jiso docs site.
 - [ ] P10 v1 acceptance ledger is wired with concrete dated doc ledgers for the outside legibility study and prelaunch checks; docs freeze, actual outside study results, external launch evidence, and final clean-checkout acceptance run remain open.
+- [x] §16 commerce reference app is TSX-authored: `CartBadge`, `OrderHistory`, and `ProductGrid` (cards, no-JS add-to-cart forms, failure output) live in per-component `examples/commerce/src/components/*.tsx` (SPEC §5.2 1:1 mapping); `examples/commerce/scripts/emit-components.mjs` compiles them through `@jiso/compiler` and commits the lowered IR to `src/generated/*.tsx` behind the §5.2.3 fixpoint and render-equivalence gates (Constitution #3), so served stamps (`fw-c`, `fw-deps`, `data-bind`) are compiler-derived (§4.2/§4.8) and zero string-template components remain. Enablers: server-side JSX runtime at `@jiso/server/jsx-runtime` (§3/§4.2) and compiler-derived `fw-c` identity stamps on native render hosts (§4.2). Evidence 2026-06-11: `npx vitest --run examples/commerce` (25/25 — includes the "compiles TSX-authored components to committed IR through the fixpoint gate" test running `emit-components.mjs --check`, and the graph-facts test proving `generated/touch-graph.ts` stayed byte-identical); `pnpm run check`; `pnpm run check:build`; `pnpm run check:fw`; `pnpm run test:conformance`.
+      Open questions from this slice (SPEC silent/ambiguous — not coded through):
+      (1) SPEC §4 does not define JSX text-child escaping. `@jiso/server/jsx-runtime`
+      composes child strings raw so pre-rendered component HTML and helpers
+      (`csrfField`) compose without a wrapper type, which also means query data
+      interpolated as a text child is not HTML-escaped; needs a SPEC ruling
+      (escape-by-default plus an explicit raw marker would match §6.6 soundness).
+      (2) SPEC Appendix A assigns mutation-form rendering to `<f.Form>`, which
+      `@jiso/server` does not provide; commerce passes per-request CSRF/failure
+      facts as an explicit second render argument outside the declared queries
+      (§4.1 render-inputs rule covers the first argument only).
+      (3) §4.8 attribute-expression lowering replaces the authored attribute with
+      `data-derive`/`data-derive-attr`, dropping the server-rendered initial
+      attribute value; commerce authors against destructured locals so `href` and
+      `data-page-cursor` stay in the served HTML (the no-JS contract needs them).
 
 ## Decisions adopted by this plan
 

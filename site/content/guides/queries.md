@@ -72,7 +72,9 @@ Two derived attributes carry the whole dependency story into the HTML itself:
 The page ships the query value once, as shared client data:
 
 ```html
-<script type="application/json" fw-query="cart">{ "count": 2 }</script>
+<script type="application/json" fw-query="cart">
+  { "count": 2 }
+</script>
 ```
 
 Open view-source on any Jiso page and you can read its complete data-dependency story — that is
@@ -95,7 +97,13 @@ On the schema side, tables are annotated once:
 
 ```ts
 // schema.ts — Drizzle-blessed path (SPEC §10.1)
-export const cartItems = pgTable('cart_items', { /* … */ }, jiso({ domain: 'cart' }));
+export const cartItems = pgTable(
+  'cart_items',
+  {
+    /* … */
+  },
+  jiso({ domain: 'cart' }),
+);
 export const products = pgTable(
   'products',
   { id: text('id').primaryKey(), stock: integer('stock').notNull() },
@@ -129,7 +137,7 @@ manual `touches` are required at the write site and runtime-verified — that is
 verification invariant `observed ⊆ static ∪ declared` is enforced in tests (SPEC §11.2, and the
 [testing guide](/guides/testing/)).
 
-Because the JOIN *is* the declaration, the classic staleness bug — forgetting that a query also
+Because the JOIN _is_ the declaration, the classic staleness bug — forgetting that a query also
 reads a joined table — is unrepresentable on the blessed path: the read set is derived from the
 query expression, not recalled from memory (SPEC §10.2).
 

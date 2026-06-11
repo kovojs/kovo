@@ -7,8 +7,8 @@ order: 1
 # Installation
 
 > **Pre-release status.** Jiso is pre-v1 and nothing is published to npm yet. The scaffolder and
-> commands below describe the intended flow and work today *inside the
-> [jiso repository](https://github.com/jiso-sh/jiso)* as workspace packages. Until packages are
+> commands below describe the intended flow and work today _inside the
+> [jiso repository](https://github.com/jiso-sh/jiso)_ as workspace packages. Until packages are
 > published, clone the repo and work in a workspace member — the [Tutorial](/tutorial/) does
 > exactly that.
 
@@ -35,14 +35,14 @@ CI from day one.
 
 ## The everyday commands
 
-| Command | What it does |
-| --- | --- |
-| `vp dev` | Dev server with the Jiso compile step |
-| `vp check` | Typecheck + lint — this is where Jiso's static errors surface |
-| `vp test` | Vitest suites |
-| `vp run build` | Production build |
-| `vp run fw-check` | Framework semantic checks over the emitted app graph |
-| `vp run graph-assertions` | Your app's own behavior assertions, as graph queries |
+| Command                   | What it does                                                  |
+| ------------------------- | ------------------------------------------------------------- |
+| `vp dev`                  | Dev server with the Jiso compile step                         |
+| `vp check`                | Typecheck + lint — this is where Jiso's static errors surface |
+| `vp test`                 | Vitest suites                                                 |
+| `vp run build`            | Production build                                              |
+| `vp run fw-check`         | Framework semantic checks over the emitted app graph          |
+| `vp run graph-assertions` | Your app's own behavior assertions, as graph queries          |
 
 Everything routes through [Vite+](https://viteplus.dev) (`vp`) as the single project entrypoint.
 

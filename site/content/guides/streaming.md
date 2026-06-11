@@ -44,15 +44,21 @@ export function renderProductGridDeferredStream(db: CommerceDb) {
 The response is one chunked HTML document. On the wire, in order:
 
 ```html
-<!doctype html><html><body><main class="min-h-dvh bg-slate-50 p-6">
-<fw-defer target="product-grid" state="pending"></fw-defer>
---jiso-boundary
-<fw-query name="productGrid">{"items":[…],"nextCursor":"p2"}</fw-query>
-<fw-fragment target="product-grid"><link rel="stylesheet" href="/assets/tailwind.css">
-  <section fw-c="product-grid" fw-deps="product">…</section>
-</fw-fragment>
---jiso-boundary--
-</main></body></html>
+<!doctype html>
+<html>
+  <body>
+    <main class="min-h-dvh bg-slate-50 p-6">
+      <fw-defer target="product-grid" state="pending"></fw-defer>
+      --jiso-boundary
+      <fw-query name="productGrid">{"items":[…],"nextCursor":"p2"}</fw-query>
+      <fw-fragment target="product-grid"
+        ><link rel="stylesheet" href="/assets/tailwind.css" />
+        <section fw-c="product-grid" fw-deps="product">…</section>
+      </fw-fragment>
+      --jiso-boundary--
+    </main>
+  </body>
+</html>
 ```
 
 The vocabulary is exactly the mutation response's — `<fw-query>` then `<fw-fragment>` — arriving
@@ -61,7 +67,7 @@ like everything else on the wire.
 
 ## Fallback → morph-in
 
-The `<fw-defer>` element *is* the fallback: whatever you render inside it (a skeleton, a spinner,
+The `<fw-defer>` element _is_ the fallback: whatever you render inside it (a skeleton, a spinner,
 a static placeholder) paints with the shell at first byte. When the matching
 `<fw-fragment target="…">` chunk arrives, it is morphed in (SPEC §8). Morph semantics mean the
 swap preserves what a replace would destroy: focus, scroll position, selection, CSS transitions,
@@ -99,7 +105,7 @@ fragments: [
     html: renderProductGrid(productGrid),
     stylesheets: ['/assets/tailwind.css'],
   },
-]
+];
 ```
 
 The same Tailwind rule applies as everywhere: classes in deferred HTML must be statically
@@ -122,9 +128,9 @@ const store = createQueryStore();
 installJisoLoader({ importModule: (s) => import(s), root: document, queryStore: store });
 
 applyDeferredStreamResponseToDom({
-  body,            // the streamed document text
+  body, // the streamed document text
   root: document,
-  store,           // <fw-query> chunks land here and run their update plans
+  store, // <fw-query> chunks land here and run their update plans
 });
 ```
 
@@ -138,20 +144,20 @@ initial HTML — every tab panel, dialog body, accordion content. There is no cl
 mount (SPEC §4.5). So the decision is about **server render cost at first paint**, not payload
 hygiene:
 
-**Use it when** a subtree is expensive to *produce* and the rest of the page isn't —
+**Use it when** a subtree is expensive to _produce_ and the rest of the page isn't —
 recommendations behind a slow model, an analytics panel aggregating wide tables, third-party-data
 sections with unpredictable latency. The cheap 95% of the page paints at first byte; the slow
 section streams in seconds later with no client round-trip.
 
 **Don't use it for:**
 
-- *Big-but-cheap subtrees.* Streaming doesn't shrink HTML; it reorders it. A long static page is
+- _Big-but-cheap subtrees._ Streaming doesn't shrink HTML; it reorders it. A long static page is
   fine as a long static page.
-- *Below-the-fold JS deferral.* That's `on:visible` — execution triggers defer *JavaScript*, not
+- _Below-the-fold JS deferral._ That's `on:visible` — execution triggers defer _JavaScript_, not
   HTML (SPEC §4.7).
-- *Data that updates after load.* That's a query with refetch or a mutation response (SPEC §9.3,
+- _Data that updates after load._ That's a query with refetch or a mutation response (SPEC §9.3,
   §9.1). Defer is strictly a first-render mechanism.
-- *Navigation.* Pages are complete documents; defer streams within one response, it does not
+- _Navigation._ Pages are complete documents; defer streams within one response, it does not
   splice between pages (SPEC §8).
 
 A reasonable default: render everything inline until a route's server time is dominated by one

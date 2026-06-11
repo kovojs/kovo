@@ -4,7 +4,8 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "build": "vite build",
+    "build": "vp build",
+    "emit-components": "node scripts/emit-components.mjs",
     "emit-graph": "node scripts/emit-graph.mjs"
   },
   "dependencies": {

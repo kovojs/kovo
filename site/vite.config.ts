@@ -38,6 +38,13 @@ export default defineConfig({
           { pattern: 'scripts/smoke.mjs', base: 'workspace' },
         ],
       },
+      'tutorial-steps': {
+        command: 'node tutorial/run-steps.mjs',
+        input: [
+          { pattern: 'content/tutorial/**/*', base: 'workspace' },
+          { pattern: 'tutorial/**/*', base: 'workspace' },
+        ],
+      },
     },
   },
 });

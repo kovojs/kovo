@@ -6,7 +6,7 @@ order: 2
 
 # The mental model
 
-Most frameworks ship a runtime that *interprets* your application. Jiso compiles your application
+Most frameworks ship a runtime that _interprets_ your application. Jiso compiles your application
 into artifacts that need almost no interpreter — and every artifact is designed to be read by a
 human and checked by a machine **without executing a browser**.
 
@@ -61,12 +61,12 @@ and bfcache hygiene carry the polish.
 
 The interaction ladder (SPEC §7) is enforced, not aspirational:
 
-| Layer | Mechanism | JS shipped |
-| --- | --- | --- |
-| L0 | Platform behaviors: `<dialog>`, popovers, invoker commands, `:has()` | 0 |
-| L1 | Client islands: local state + the update plan | handler module on first touch |
-| L2 | Mutations: real forms + enhanced fetch → fragment/query patch | loader + form module |
-| L3 | Optimistic: declared transforms over query values | transform module |
+| Layer | Mechanism                                                            | JS shipped                    |
+| ----- | -------------------------------------------------------------------- | ----------------------------- |
+| L0    | Platform behaviors: `<dialog>`, popovers, invoker commands, `:has()` | 0                             |
+| L1    | Client islands: local state + the update plan                        | handler module on first touch |
+| L2    | Mutations: real forms + enhanced fetch → fragment/query patch        | loader + form module          |
+| L3    | Optimistic: declared transforms over query values                    | transform module              |
 
 The compiler substitutes L0 where a platform behavior suffices, and lints push everything else
 down the ladder. The search dialog on this site is an L1 island — open view-source and find
@@ -75,6 +75,6 @@ down the ladder. The search dialog on this site is an L1 island — open view-so
 ## The wire is the documentation
 
 A mutation is a named form POST (`POST /_m/cart/add`); the response is readable HTML fragments
-plus query JSON (SPEC §9.1). What you see in the Network panel *is* the protocol — there is no
+plus query JSON (SPEC §9.1). What you see in the Network panel _is_ the protocol — there is no
 framework RPC envelope to decode. This is Constitution #4, and it's why debugging a Jiso app
 rarely requires the framework's source at all.

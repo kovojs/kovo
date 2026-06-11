@@ -36,7 +36,7 @@ export const addToCartOptimistic = {
 
 Three things to notice:
 
-- **The keys are query names**, and the set of required keys is the mutation's *derived*
+- **The keys are query names**, and the set of required keys is the mutation's _derived_
   invalidation set — the compiler emits each mutation's invalidated-query keys into the registries,
   so `OptimisticFor<typeof addToCartForm>` demands an entry per invalidated query in plain `tsc`
   (SPEC §10.6, §6.1). Add a write that touches a new domain and this object goes red.
@@ -143,8 +143,8 @@ const store = createQueryStore();
 const rebaser = new OptimisticRebaser(store);
 
 rebaser.add('m1', { productId: 'p1', quantity: 2 }, addToCartOptimistic); // predict
-rebaser.applyServerTruth('cart', { count: 7 });  // morph truth in, re-apply pending
-rebaser.settle('m1');                            // m1's response landed
+rebaser.applyServerTruth('cart', { count: 7 }); // morph truth in, re-apply pending
+rebaser.settle('m1'); // m1's response landed
 ```
 
 Navigation is a free reconciliation point: in-flight mutations complete via `keepalive`, and the
@@ -159,14 +159,14 @@ is contained in eventual truth over generated states (SPEC §12, §11.4):
 ```ts
 import { propertyTest } from '@jiso/test';
 
-expect(
-  addToCartOptimistic.transforms.cart({ count: 1 }, { productId: 'p1', quantity: 2 }),
-).toEqual({ count: 3 });
+expect(addToCartOptimistic.transforms.cart({ count: 1 }, { productId: 'p1', quantity: 2 })).toEqual(
+  { count: 3 },
+);
 
 // prediction ⊆ eventual truth: patch(shape(s), input) ≡ shape(apply(effect, s, input))
 propertyTest({
-  apply: (state, input) => applyAddToCartEffect(state, input),   // server-side effect
-  shape: (state) => shapeCartQuery(state),                       // what the query ships
+  apply: (state, input) => applyAddToCartEffect(state, input), // server-side effect
+  shape: (state) => shapeCartQuery(state), // what the query ships
   predict: (state, input) => addToCartOptimistic.transforms.cart(shapeCartQuery(state), input),
   cases: generatedCartStates(),
 });
@@ -183,7 +183,7 @@ incremental: delete a hand-written transform and derivation takes over, pair by 
 cases punt loudly, with the exact expression and reason named in `fw explain --optimistic`
 (SPEC §10.4, §10.5).
 
-## When *not* to predict
+## When _not_ to predict
 
 `'await-fragment'` is the right answer more often than SPA habits suggest:
 

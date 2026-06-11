@@ -76,10 +76,7 @@ export const ProductCard = component('product-card', {
 
 /** The pinned enhanced-mutation wire fixture (SPEC §9.1), rendered verbatim. */
 export async function captureWireTrace(repoRoot) {
-  const fixture = await readFile(
-    new URL('fixtures/wire/enhanced-mutation.http', repoRoot),
-    'utf8',
-  );
+  const fixture = await readFile(new URL('fixtures/wire/enhanced-mutation.http', repoRoot), 'utf8');
 
   const exchange = fixture.split('>>> REQUEST')[1];
   if (!exchange) throw new Error('capture: enhanced-mutation.http fixture shape changed');
@@ -93,7 +90,8 @@ export async function captureWireTrace(repoRoot) {
       .trim()
       .split('\n')
       .map((line) => {
-        if (/^(POST|GET|HTTP\/)/.test(line)) return `<span class="tok-code">${escapeHtml(line)}</span>`;
+        if (/^(POST|GET|HTTP\/)/.test(line))
+          return `<span class="tok-code">${escapeHtml(line)}</span>`;
         if (/^[A-Za-z-]+:/.test(line)) return `<span class="tok-header">${escapeHtml(line)}</span>`;
         return escapeHtml(line);
       })

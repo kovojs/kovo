@@ -16,7 +16,7 @@ fragments, and deferred fragments all declare the stylesheets they need.
 The starter wires Tailwind through Vite+ and declares its sources in `src/styles.css`:
 
 ```css
-@import "tailwindcss";
+@import 'tailwindcss';
 
 @source "../index.html";
 @source "./**/*.{ts,tsx,html}";
@@ -45,7 +45,7 @@ development. In Jiso, HTML is produced in three ways that never execute in your 
 3. **Deferred streams** — `<fw-defer>` content that streams in after the shell
    (SPEC §8).
 
-All three reference the *same single generated stylesheet*. If a class only ever appears in a
+All three reference the _same single generated stylesheet_. If a class only ever appears in a
 fragment the server renders after a mutation — say, an error state — and Tailwind never saw it,
 the fragment arrives unstyled in production with no build error. So the rule is (SPEC §13.1):
 
@@ -140,7 +140,8 @@ Deferred chunks do the same — this is the commerce app's streamed product grid
 import { renderDeferredStream } from '@jiso/server';
 
 renderDeferredStream({
-  shell: '<!doctype html><html><body><main><fw-defer target="product-grid" state="pending"></fw-defer>',
+  shell:
+    '<!doctype html><html><body><main><fw-defer target="product-grid" state="pending"></fw-defer>',
   chunks: [
     {
       queries: [{ name: 'productGrid', value: productGrid }],
@@ -160,7 +161,8 @@ renderDeferredStream({
 The streamed chunk arrives as a fragment whose first child is its stylesheet link:
 
 ```html
-<fw-fragment target="product-grid"><link rel="stylesheet" href="/assets/tailwind.css">
+<fw-fragment target="product-grid"
+  ><link rel="stylesheet" href="/assets/tailwind.css" />
   <section fw-c="product-grid" fw-deps="product">…</section>
 </fw-fragment>
 ```

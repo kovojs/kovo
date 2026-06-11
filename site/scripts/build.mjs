@@ -8,6 +8,7 @@ import { captureAll } from './capture.mjs';
 import { renderDocument, renderDocsPage } from './chrome.mjs';
 import { renderLanding } from './landing.mjs';
 import { parseFrontmatter, renderMarkdown } from './md.mjs';
+import { loadTutorialSnippets, substituteSnippets } from '../tutorial/extract-snippets.mjs';
 
 /**
  * Static export (plan W2/W9 surface; site-local stand-in for D8 R6).
@@ -66,7 +67,9 @@ function sectionIndexBody(section) {
   return [
     `# ${section.title}`,
     '',
-    ...section.pages.map((page) => `- [${page.title}](${page.url})${page.description ? ` — ${page.description}` : ''}`),
+    ...section.pages.map(
+      (page) => `- [${page.title}](${page.url})${page.description ? ` — ${page.description}` : ''}`,
+    ),
   ].join('\n');
 }
 
@@ -103,9 +106,7 @@ function resolveSpecAnchors(html, specIds) {
   return html.replace(/href="\/spec\/#([0-9-]+)"/g, (_match, anchor) => {
     let candidate = anchor;
     while (candidate && !specIds.has(candidate)) {
-      candidate = candidate.includes('-')
-        ? candidate.slice(0, candidate.lastIndexOf('-'))
-        : '';
+      candidate = candidate.includes('-') ? candidate.slice(0, candidate.lastIndexOf('-')) : '';
     }
     return `href="/spec/${candidate ? `#${candidate}` : ''}"`;
   });
@@ -127,6 +128,10 @@ async function main() {
 
   // W3: regenerate every artifact from the real toolchain; throws on drift.
   const captures = await captureAll(repoRoot);
+
+  // W5: tutorial snippets are extracted from the checked-in step states —
+  // {{snippet:…}} references that no longer resolve fail the build.
+  const snippets = loadTutorialSnippets();
 
   // /spec renders first so every page's § citations resolve against its ids.
   const specSource = await readFile(new URL('SPEC.md', repoRoot), 'utf8');
@@ -154,41 +159,46 @@ async function main() {
     const rendered = await renderMarkdown(indexBody);
     await writePage(
       `/${section.key}/`,
-      finishPage(renderDocument({
-        body: renderDocsPage({ activePath: `/${section.key}/`, groups, html: rendered.html }),
-        description: `${section.title} — Jiso documentation`,
-        path: `/${section.key}/`,
-        title: `${section.title} · Jiso`,
-      })),
+      finishPage(
+        renderDocument({
+          body: renderDocsPage({ activePath: `/${section.key}/`, groups, html: rendered.html }),
+          description: `${section.title} — Jiso documentation`,
+          path: `/${section.key}/`,
+          title: `${section.title} · Jiso`,
+        }),
+      ),
     );
 
     for (const [position, page] of section.pages.entries()) {
       const { headings, html, text, title } = await renderMarkdown(
-        substituteCaptures(page.body, captures),
+        substituteSnippets(substituteCaptures(page.body, captures), snippets),
       );
       const prev = section.pages[position - 1];
       const next = section.pages[position + 1];
 
       await writePage(
         page.url,
-        finishPage(renderDocument({
-          body: renderDocsPage({
-            activePath: page.url,
-            groups,
-            html,
-            next: next && { title: next.title, url: next.url },
-            prev: prev && { title: prev.title, url: prev.url },
+        finishPage(
+          renderDocument({
+            body: renderDocsPage({
+              activePath: page.url,
+              groups,
+              html,
+              next: next && { title: next.title, url: next.url },
+              prev: prev && { title: prev.title, url: prev.url },
+            }),
+            description: page.description || `${page.title} — Jiso documentation`,
+            path: page.url,
+            title: `${page.title || title} · Jiso`,
           }),
-          description: page.description || `${page.title} — Jiso documentation`,
-          path: page.url,
-          title: `${page.title || title} · Jiso`,
-        })),
+        ),
       );
 
-      // Agent surface: raw markdown mirror at a stable URL.
+      // Agent surface: raw markdown mirror at a stable URL (tutorial snippets
+      // substituted so the mirror carries real code, not placeholders).
       const mirrorTarget = path.join(outDir, page.mirror.replace(/^\//, ''));
       await mkdir(path.dirname(mirrorTarget), { recursive: true });
-      await writeFile(mirrorTarget, page.source, 'utf8');
+      await writeFile(mirrorTarget, substituteSnippets(page.source, snippets), 'utf8');
 
       searchIndex.push({
         section: section.title,
@@ -202,8 +212,9 @@ async function main() {
   // /spec — SPEC.md verbatim, number-derived § anchors (plan exit criterion 6).
   await writePage(
     '/spec/',
-    finishPage(renderDocument({
-      body: `<div class="mx-auto max-w-7xl px-4 py-10 sm:px-6">
+    finishPage(
+      renderDocument({
+        body: `<div class="mx-auto max-w-7xl px-4 py-10 sm:px-6">
         <p class="mb-8 max-w-3xl rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
           This is the normative specification, rendered verbatim from
           <a class="underline" href="https://github.com/jiso-sh/jiso/blob/main/SPEC.md" rel="external">SPEC.md</a>
@@ -211,10 +222,11 @@ async function main() {
         </p>
         <article class="prose">${specHtml}</article>
       </div>`,
-      description: 'Jiso — Product Requirements & Technical Specification (normative).',
-      path: '/spec/',
-      title: 'Specification · Jiso',
-    })),
+        description: 'Jiso — Product Requirements & Technical Specification (normative).',
+        path: '/spec/',
+        title: 'Specification · Jiso',
+      }),
+    ),
   );
   await writeFile(path.join(outDir, 'spec.md'), specSource, 'utf8');
   searchIndex.push({
@@ -227,13 +239,15 @@ async function main() {
   // Landing (W4).
   await writePage(
     '/',
-    finishPage(renderDocument({
-      body: renderLanding(captures),
-      description:
-        'The TypeScript web framework where agents get build-time errors and users get instant pages.',
-      path: '/',
-      title: 'Jiso — agents get build-time errors, users get instant pages',
-    })),
+    finishPage(
+      renderDocument({
+        body: renderLanding(captures),
+        description:
+          'The TypeScript web framework where agents get build-time errors and users get instant pages.',
+        path: '/',
+        title: 'Jiso — agents get build-time errors, users get instant pages',
+      }),
+    ),
   );
 
   // W8 search index.

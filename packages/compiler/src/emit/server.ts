@@ -6,6 +6,7 @@ import {
   componentOptionObjectKeys,
   componentRenderHost,
   componentStateReturnObject,
+  firstComponentModel,
   parseComponentModule,
 } from '../scan/parse.js';
 import { escapeAttribute, splitDepValue } from '../shared.js';
@@ -24,7 +25,9 @@ export function renderSource() {
 }
 
 export function serverRenderSource(source: string, handlers: readonly HandlerLowering[]): string {
-  return stampInitialState(stampDeclaredQueryDeps(replaceHandlerAttributes(source, handlers)));
+  return stampInitialState(
+    stampDeclaredQueryDeps(stampComponentIdentity(replaceHandlerAttributes(source, handlers))),
+  );
 }
 
 export function renderEquivalenceCheck(
@@ -98,6 +101,29 @@ function stampDeclaredQueryDeps(source: string): string {
 
   const tagSource = source.slice(tag.start, tag.end);
   const stampedTag = stampOpeningTagDeps(tagSource, deps);
+  if (stampedTag === tagSource) return source;
+
+  return `${source.slice(0, tag.start)}${stampedTag}${source.slice(tag.end)}`;
+}
+
+// SPEC.md §4.2: component identity is the fw-c stamp. The compiler omits it
+// when the host tag already spells the component name (dashed tags are inert
+// sugar) and emits it explicitly on native hosts (`<tr fw-c="cart-row">`), so
+// authored sugar never hand-writes the stamp (§4.8 residual-string rule).
+function stampComponentIdentity(source: string): string {
+  const model = parseComponentModule('component.tsx', source);
+  const componentName = firstComponentModel(model)?.explicitName;
+  if (!componentName) return source;
+
+  const tag = componentRenderHost(model);
+  if (!tag) return source;
+
+  const tagSource = source.slice(tag.start, tag.end);
+  const tagName = /^<([a-z][\w-]*)/.exec(tagSource)?.[1];
+  if (!tagName || tagName === componentName || tagName.includes('-')) return source;
+  if (/\bfw-c=/.test(tagSource)) return source;
+
+  const stampedTag = stampOpeningTagAttribute(tagSource, 'fw-c', componentName);
   if (stampedTag === tagSource) return source;
 
   return `${source.slice(0, tag.start)}${stampedTag}${source.slice(tag.end)}`;

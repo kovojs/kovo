@@ -2,14 +2,26 @@ import { defineConfig } from 'vite-plus';
 
 export default defineConfig({
   lint: {
-    ignorePatterns: ['packages/create-jiso/templates/**'],
+    // site/tutorial/steps/*/src/generated holds compiler-emitted IR pinned
+    // byte-identical to @jiso/compiler output; lint governs authored code.
+    ignorePatterns: ['packages/create-jiso/templates/**', 'site/tutorial/steps/*/src/generated/**'],
     options: {
       typeAware: true,
       typeCheck: true,
     },
   },
   fmt: {
-    ignorePatterns: ['dist/**', 'coverage/**', 'node_modules/**'],
+    // examples/commerce/src/generated and the tutorial step generated dirs
+    // hold compiler-emitted IR that must stay byte-identical to
+    // @jiso/compiler output (SPEC.md section 5.2.3 staleness and fixpoint
+    // pins), so the formatter must not rewrite them.
+    ignorePatterns: [
+      'dist/**',
+      'coverage/**',
+      'node_modules/**',
+      'examples/commerce/src/generated/**',
+      'site/tutorial/steps/*/src/generated/**',
+    ],
     semi: true,
     singleQuote: true,
     sortPackageJson: true,

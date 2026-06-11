@@ -1589,7 +1589,8 @@ export const ProductLinks = component('product-links', {
 
     expect(result.diagnostics).toEqual([]);
     expect(serverSource).toContain('const sample = \'<Link to="/missing">Missing</Link>\'');
-    expect(serverSource).toContain('<a href="/products/p%201">Product</a>');
+    // SPEC.md section 4.2: the lowered native <a> host also receives the derived fw-c stamp.
+    expect(serverSource).toContain('<a href="/products/p%201" fw-c="product-links">Product</a>');
     expect(serverSource).not.toContain('<Link to="/products/:id"');
     expect(() => assertFixpoint(result)).not.toThrow();
   });
@@ -1766,8 +1767,9 @@ export const ProductCard = component('product-card', {
     });
 
     expect(result.viewTransitions).toEqual([{ name: 'product-p1-image' }]);
+    // SPEC.md section 4.2: the native <img> host also receives the derived fw-c stamp.
     expect(result.files[0]?.source).toContain(
-      '<img src="/p1.png" style="view-transition-name: product-p1-image" />',
+      '<img src="/p1.png" style="view-transition-name: product-p1-image" fw-c="product-card" />',
     );
     expect(result.files[2]?.source).toContain("'product-p1-image': unknown;");
   });
@@ -1784,8 +1786,9 @@ export const ProductCard = component('product-card', {
     const serverSource = result.files[0]?.source ?? '';
 
     expect(result.viewTransitions).toEqual([{ name: 'product-p1-image' }]);
+    // SPEC.md section 4.2: the native <img> host also receives the derived fw-c stamp.
     expect(serverSource).toContain(
-      '<img style="opacity: .8; view-transition-name: product-p1-image" src="/p1.png" />',
+      '<img style="opacity: .8; view-transition-name: product-p1-image" src="/p1.png" fw-c="product-card" />',
     );
     expect(serverSource.match(/\sstyle=/g)).toHaveLength(1);
     expect(serverSource).not.toContain('viewTransitionName=');
@@ -1808,8 +1811,9 @@ export const ProductCard = component('product-card', {
 
     expect(result.viewTransitions).toEqual([{ name: 'product-p1-image' }]);
     expect(serverSource).toContain('const sample = \'<img viewTransitionName="not-real" />\'');
+    // SPEC.md section 4.2: the native <img> host also receives the derived fw-c stamp.
     expect(serverSource).toContain(
-      '<img src="/p1.png" style="view-transition-name: product-p1-image" />',
+      '<img src="/p1.png" style="view-transition-name: product-p1-image" fw-c="product-card" />',
     );
     expect(serverSource).not.toContain('viewTransitionName="product-p1-image"');
     expect(() => assertFixpoint(result)).not.toThrow();
@@ -2717,6 +2721,48 @@ export const CartBadge = component('cart-badge', {
 
     expect(result.files[0]?.source).toContain('<cart-badge fw-deps="cart productPage">');
     expect(() => assertFixpoint(result)).not.toThrow();
+  });
+
+  it('stamps fw-c component identity on native render hosts', () => {
+    // SPEC.md section 4.2: identity is the fw-c stamp; the compiler omits it when
+    // the host tag spells the component name and emits it explicitly on native hosts.
+    const result = compileComponentModule({
+      fileName: 'order-history.tsx',
+      source: `
+export const OrderHistory = component('order-history', {
+  queries: { orderHistory: orderHistoryQuery },
+  render: ({ orderHistory }) => (
+    <ol>
+      <li fw-key="order-1">Order</li>
+    </ol>
+  ),
+});
+`,
+    });
+
+    expect(result.files[0]?.source).toContain('<ol fw-c="order-history" fw-deps="orderHistory">');
+    expect(() => assertFixpoint(result)).not.toThrow();
+    expect(() => assertRenderEquivalence(result)).not.toThrow();
+  });
+
+  it('keeps hand-written fw-c stamps on native hosts unchanged in ejected IR', () => {
+    // SPEC.md section 4.2 / Constitution #3: hand-written stamps remain valid input.
+    const result = compileComponentModule({
+      fileName: 'order-history.tsx',
+      source: `
+export const OrderHistory = component('order-history', {
+  render: () => (
+    <ol fw-c="order-history">
+      <li fw-key="order-1">Order</li>
+    </ol>
+  ),
+});
+`,
+    });
+
+    const serverSource = result.files[0]?.source ?? '';
+    expect(serverSource).toContain('<ol fw-c="order-history">');
+    expect(serverSource.match(/fw-c=/g)).toHaveLength(1);
   });
 
   it('does not stamp query or state declarations from strings and comments', () => {

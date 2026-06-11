@@ -26,7 +26,10 @@ function pageIds(html) {
 }
 
 function pageLinks(html) {
-  return [...html.matchAll(/\shref="([^"]+)"/g)].map((match) => match[1]);
+  // Highlighted code samples (tutorial snippets, captures) can contain
+  // literal href= text; only real document links are checkable.
+  const withoutCode = html.replace(/<pre[\s\S]*?<\/pre>/g, '');
+  return [...withoutCode.matchAll(/\shref="([^"]+)"/g)].map((match) => match[1]);
 }
 
 function targetFor(urlPath) {
@@ -71,8 +74,7 @@ async function main() {
       }
 
       if (fragment && target.endsWith('.html')) {
-        const ids =
-          idsByTarget.get(target) ?? pageIds(await readFile(target, 'utf8'));
+        const ids = idsByTarget.get(target) ?? pageIds(await readFile(target, 'utf8'));
         idsByTarget.set(target, ids);
         if (!ids.has(fragment)) {
           failures.push(`${relative}: broken anchor "${href}"`);
