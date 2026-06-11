@@ -1261,6 +1261,34 @@ export const CartBadge = component('cart-badge', {
     ]);
   });
 
+  it('ignores data-bind-list text inside strings and comments', () => {
+    const result = compileComponentModule({
+      fileName: 'cart-badge.tsx',
+      queryShapes: {
+        cart: {
+          items: [{ name: 'string', productId: 'string' }],
+        },
+      },
+      source: `
+export const CartBadge = component('cart-badge', {
+  render: () => {
+    const sample = '<ul data-bind-list="cart.missing" fw-key="id"><template fw-stamp><li><span data-bind=".name">Item</span></li></template></ul>';
+    // <ul data-bind-list="cart.otherMissing" fw-key="id"><template fw-stamp><li><span data-bind=".name">Item</span></li></template></ul>
+    return (
+      <ul data-bind-list="cart.items" fw-key="productId">
+        <template fw-stamp>
+          <li><span data-bind=".name">Item</span></li>
+        </template>
+      </ul>
+    );
+  },
+});
+`,
+    });
+
+    expect(result.diagnostics).toEqual([]);
+  });
+
   it('emits per-query data-bind update plans for compiled components', () => {
     const result = compileComponentModule({
       fileName: 'cart-badge.tsx',

@@ -14,7 +14,9 @@ export interface JsxAttributeModel {
 
 export interface JsxElementModel {
   attributes: readonly JsxAttributeModel[];
+  closingStart: number;
   end: number;
+  openingEnd: number;
   selfClosing: boolean;
   start: number;
   tag: string;
@@ -54,7 +56,7 @@ export function parseComponentModule(fileName: string, source: string): Componen
       );
       if (model) components.push(model);
     }
-    if (ts.isJsxOpeningElement(node) || ts.isJsxSelfClosingElement(node)) {
+    if (ts.isJsxElement(node) || ts.isJsxSelfClosingElement(node)) {
       jsxElements.push(jsxElementModel(sourceFile, node));
     }
 
@@ -184,10 +186,15 @@ function propertyNameText(name: ts.PropertyName): string | null {
 
 function jsxElementModel(
   sourceFile: ts.SourceFile,
-  node: ts.JsxOpeningElement | ts.JsxSelfClosingElement,
+  node: ts.JsxElement | ts.JsxSelfClosingElement,
 ): JsxElementModel {
+  const openingElement = ts.isJsxElement(node) ? node.openingElement : node;
+  const closingStart = ts.isJsxElement(node)
+    ? node.closingElement.getStart(sourceFile)
+    : node.getEnd();
+
   return {
-    attributes: node.attributes.properties.flatMap((property) => {
+    attributes: openingElement.attributes.properties.flatMap((property) => {
       if (!ts.isJsxAttribute(property)) return [];
 
       const value = staticJsxAttributeValue(property);
@@ -200,10 +207,12 @@ function jsxElementModel(
         },
       ];
     }),
+    closingStart,
     end: node.getEnd(),
-    selfClosing: ts.isJsxSelfClosingElement(node),
+    openingEnd: openingElement.getEnd(),
+    selfClosing: !ts.isJsxElement(node),
     start: node.getStart(sourceFile),
-    tag: node.tagName.getText(sourceFile),
+    tag: openingElement.tagName.getText(sourceFile),
   };
 }
 

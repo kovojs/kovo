@@ -12,6 +12,7 @@ import {
   componentStateReturnObject,
   firstComponentModel,
   type JsxAttributeModel,
+  type JsxElementModel,
   jsxElements,
   parseComponentModule as parseComponentModuleModel,
 } from './scan/parse.js';
@@ -1005,10 +1006,6 @@ function dedupeUpdateCoverage(
   );
 }
 
-function dataBindPaths(source: string): string[] {
-  return dataBindAttributes(source).map((binding) => binding.path);
-}
-
 function dataBindAttributes(source: string): DataBindAttribute[] {
   return jsxAttributes(source)
     .filter(
@@ -1026,37 +1023,54 @@ function dataBindAttributes(source: string): DataBindAttribute[] {
 }
 
 function dataBindListStamps(source: string): QueryTemplateStampFact[] {
-  return scanOpeningTags(source)
-    .flatMap((match) => {
-      const list = readStaticAttribute(match.attrs, 'data-bind-list');
-      const key = readStaticAttribute(match.attrs, 'fw-key');
+  const elements = parsedJsxElements(source);
+
+  return elements
+    .flatMap((element) => {
+      const list = jsxStaticAttributeValue(element, 'data-bind-list');
+      const key = jsxStaticAttributeValue(element, 'fw-key');
       if (!list || !key) return [];
 
-      const end = findMatchingClosingTag(source, match.name, match.start);
-      const body = end === -1 ? '' : source.slice(match.start, end);
+      const template = templateStampContent(source, elements, element);
 
       return [
         {
-          itemBindings: dataBindPaths(body)
+          itemBindings: elements
+            .filter((candidate) => isWithinElement(candidate, element))
+            .flatMap((candidate) => candidate.attributes)
+            .filter(
+              (attribute) =>
+                isBindingAttribute(attribute.name) &&
+                attribute.value !== undefined &&
+                attribute.value !== '',
+            )
+            .map((attribute) => attribute.value ?? '')
             .filter((path) => path.startsWith('.'))
             .sort(),
           key,
           list,
           selector: `[data-bind-list="${list}"]`,
-          template: templateStampContent(body),
+          template,
         },
       ];
     })
     .filter((stamp) => stamp.itemBindings.length > 0);
 }
 
-function templateStampContent(source: string): string {
-  const open = /<template\b(?=[^>]*\bfw-stamp\b)(?<attrs>[^>]*)>/i.exec(source);
-  if (!open) return '';
+function templateStampContent(
+  source: string,
+  elements: readonly JsxElementModel[],
+  container: JsxElementModel,
+): string {
+  const template = elements.find(
+    (element) =>
+      element.tag === 'template' &&
+      isWithinElement(element, container) &&
+      hasJsxAttribute(element, 'fw-stamp'),
+  );
+  if (!template || template.selfClosing) return '';
 
-  const start = (open.index ?? 0) + open[0].length;
-  const end = source.indexOf('</template>', start);
-  return end === -1 ? '' : source.slice(start, end).trim();
+  return source.slice(template.openingEnd, template.closingStart).trim();
 }
 
 function listStampExistsInQueryShapes(
@@ -1269,13 +1283,12 @@ function repeatableLiteralIds(source: string): string[] {
 }
 
 function dataBindListTemplateBodies(source: string): string[] {
-  return scanOpeningTags(source).flatMap((tag) => {
-    if (!readStaticAttribute(tag.attrs, 'data-bind-list')) return [];
+  const elements = parsedJsxElements(source);
 
-    const end = findMatchingClosingTag(source, tag.name, tag.start);
-    if (end === -1) return [];
+  return elements.flatMap((element) => {
+    if (jsxStaticAttributeValue(element, 'data-bind-list') === undefined) return [];
 
-    const template = templateStampContent(source.slice(tag.start, end));
+    const template = templateStampContent(source, elements, element);
     return template ? [template] : [];
   });
 }
@@ -1626,9 +1639,23 @@ function jsxAttributeValues(source: string, name: string): string[] {
 }
 
 function jsxAttributes(source: string): JsxAttributeModel[] {
-  return jsxElements(parseComponentModuleModel('component.tsx', source)).flatMap((element) => [
-    ...element.attributes,
-  ]);
+  return parsedJsxElements(source).flatMap((element) => [...element.attributes]);
+}
+
+function parsedJsxElements(source: string): JsxElementModel[] {
+  return jsxElements(parseComponentModuleModel('component.tsx', source));
+}
+
+function hasJsxAttribute(element: JsxElementModel, name: string): boolean {
+  return element.attributes.some((attribute) => attribute.name === name);
+}
+
+function jsxStaticAttributeValue(element: JsxElementModel, name: string): string | undefined {
+  return element.attributes.find((attribute) => attribute.name === name)?.value;
+}
+
+function isWithinElement(candidate: JsxElementModel, container: JsxElementModel): boolean {
+  return candidate.start > container.start && candidate.end < container.end;
 }
 
 function findHandlerBodies(source: string): { body: string; params: string[] }[] {
