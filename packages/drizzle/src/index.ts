@@ -734,13 +734,19 @@ function selectShapeFromQueryBody(
   const objectEnd = findMatchingBrace(projection, 0);
   if (objectEnd === -1) return null;
 
-  return queryShapeFromObjectLiteral(projection.slice(1, objectEnd), '', columnShapes);
+  return queryShapeFromObjectLiteral(
+    projection.slice(1, objectEnd),
+    '',
+    columnShapes,
+    nullableJoinTables(body),
+  );
 }
 
 function queryShapeFromObjectLiteral(
   source: string,
   prefix = '',
   columnShapes: Readonly<Record<string, QueryShape>> = {},
+  nullableTables: ReadonlySet<string> = new Set(),
 ): QueryShapeSelection {
   const shape: Record<string, QueryShape> = {};
   const opaquePaths: string[] = [];
@@ -762,11 +768,12 @@ function queryShapeFromObjectLiteral(
         value.slice(1, findMatchingBrace(value, 0)),
         path,
         columnShapes,
+        nullableTables,
       );
       shape[key] = nested.shape;
       opaquePaths.push(...nested.opaquePaths);
     } else {
-      shape[key] = scalarQueryShape(key, value, columnShapes);
+      shape[key] = scalarQueryShape(key, value, columnShapes, nullableTables);
       if (isOpaqueProjection(value)) opaquePaths.push(path);
     }
   }
@@ -778,14 +785,52 @@ function scalarQueryShape(
   key: string,
   expression: string,
   columnShapes: Readonly<Record<string, QueryShape>> = {},
+  nullableTables: ReadonlySet<string> = new Set(),
 ): QueryShape {
   if (/sql\s*<\s*number\s*>/.test(expression)) return 'number';
   if (/sql\s*<\s*boolean\s*>/.test(expression)) return 'boolean';
   if (/sql\s*<\s*string\s*>/.test(expression)) return 'string';
-  const columnShape = columnShapes[expression.trim()];
-  if (columnShape) return columnShape;
+  const trimmed = expression.trim();
+  const columnShape = columnShapes[trimmed];
+  if (columnShape) {
+    return nullableTables.has(tableExpressionBase(trimmed))
+      ? nullableShape(columnShape)
+      : columnShape;
+  }
   if (/(count|qty|quantity|total|price|stock|amount)$/i.test(key)) return 'number';
   return 'string';
+}
+
+function nullableShape(shape: QueryShape): QueryShape {
+  if (
+    typeof shape === 'object' &&
+    shape !== null &&
+    !Array.isArray(shape) &&
+    'kind' in shape &&
+    shape.kind === 'nullable'
+  ) {
+    return shape;
+  }
+  return { kind: 'nullable', shape };
+}
+
+function nullableJoinTables(body: string): ReadonlySet<string> {
+  const tables = new Set<string>();
+  const joins = /\.leftJoin\s*\(\s*(?<table>[A-Za-z_$][\w$]*(?:\.[A-Za-z_$][\w$]*)?)/g;
+
+  for (const match of body.matchAll(joins)) {
+    const table = match.groups?.table;
+    if (table) tables.add(table);
+  }
+
+  return tables;
+}
+
+function tableExpressionBase(expression: string): string {
+  const match = /^(?<table>[A-Za-z_$][\w$]*(?:\.[A-Za-z_$][\w$]*)?)\.[A-Za-z_$][\w$]*$/.exec(
+    expression,
+  );
+  return match?.groups?.table ?? '';
 }
 
 function isOpaqueProjection(expression: string): boolean {

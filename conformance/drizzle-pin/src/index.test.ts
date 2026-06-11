@@ -94,6 +94,52 @@ describe('Drizzle pinned subset conformance', () => {
     ]);
   });
 
+  it('pins nullable project query shapes for real Drizzle left joins', () => {
+    const facts = extractQueryFactsFromProject({
+      files: [
+        {
+          fileName: 'conformance/drizzle-pin/src/product.queries.ts',
+          source: `
+            export const products = pgTable('products', {
+              id: text('id'),
+              name: text('name'),
+            }, jiso({ domain: 'product', key: 'id' }));
+            export const reviews = pgTable('reviews', {
+              productId: text('product_id'),
+              rating: integer('rating'),
+            }, jiso({ domain: 'review', key: 'productId' }));
+
+            export const productQuery = query('product', {
+              load(_input, db) {
+                return db.select({
+                  name: products.name,
+                  review: { rating: reviews.rating },
+                }).from(products).leftJoin(reviews, eq(reviews.productId, products.id));
+              },
+            });
+          `,
+        },
+      ],
+    });
+
+    expect(facts).toEqual([
+      {
+        query: 'product',
+        reads: ['product', 'review'],
+        shape: {
+          name: 'string',
+          review: {
+            rating: {
+              kind: 'nullable',
+              shape: 'number',
+            },
+          },
+        },
+        site: 'conformance/drizzle-pin/src/product.queries.ts:11',
+      },
+    ]);
+  });
+
   it('accepts jiso annotations as the real Drizzle pgTable extra config', () => {
     const cartItems = pgTable(
       'cart_items',

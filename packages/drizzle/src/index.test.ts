@@ -588,6 +588,52 @@ export const tableDomains = {
     ]);
   });
 
+  it('wraps selected left-joined table columns as nullable project query shapes', () => {
+    const facts = extractQueryFactsFromProject({
+      files: [
+        {
+          fileName: 'product.queries.ts',
+          source: `
+            export const products = pgTable("products", {
+              id: text("id"),
+              name: text("name"),
+            }, jiso({ domain: "product", key: "id" }));
+            export const reviews = pgTable("reviews", {
+              productId: text("product_id"),
+              rating: integer("rating"),
+            }, jiso({ domain: "review", key: "productId" }));
+
+            export const productQuery = query("product", {
+              load(_input, db) {
+                return db.select({
+                  name: products.name,
+                  review: { rating: reviews.rating },
+                }).from(products).leftJoin(reviews, eq(reviews.productId, products.id));
+              },
+            });
+          `,
+        },
+      ],
+    });
+
+    expect(facts).toEqual([
+      {
+        query: 'product',
+        reads: ['product', 'review'],
+        shape: {
+          name: 'string',
+          review: {
+            rating: {
+              kind: 'nullable',
+              shape: 'number',
+            },
+          },
+        },
+        site: 'product.queries.ts:11',
+      },
+    ]);
+  });
+
   it('extracts direct insert-select and update-from read source tables', () => {
     const graph = extractTouchGraphFromSource([
       {
