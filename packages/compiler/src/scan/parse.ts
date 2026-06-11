@@ -5,6 +5,19 @@ export interface ComponentOptionEntry {
   value: string;
 }
 
+export interface CallExpressionModel {
+  arguments: readonly string[];
+  end: number;
+  name: string;
+  start: number;
+}
+
+export interface JsxExpressionModel {
+  end: number;
+  expression: string;
+  start: number;
+}
+
 export interface JsxAttributeModel {
   end: number;
   expression?: string;
@@ -34,7 +47,9 @@ export interface ComponentModel {
 }
 
 export interface ComponentModuleModel {
+  calls: readonly CallExpressionModel[];
   components: readonly ComponentModel[];
+  jsxExpressions: readonly JsxExpressionModel[];
   jsxElements: readonly JsxElementModel[];
 }
 
@@ -46,7 +61,9 @@ export function parseComponentModule(fileName: string, source: string): Componen
     true,
     ts.ScriptKind.TSX,
   );
+  const calls: CallExpressionModel[] = [];
   const components: ComponentModel[] = [];
+  const jsxExpressions: JsxExpressionModel[] = [];
   const jsxElements: JsxElementModel[] = [];
 
   const visit = (node: ts.Node): void => {
@@ -62,13 +79,19 @@ export function parseComponentModule(fileName: string, source: string): Componen
     if (ts.isJsxElement(node) || ts.isJsxSelfClosingElement(node)) {
       jsxElements.push(jsxElementModel(sourceFile, source, node));
     }
+    if (ts.isJsxExpression(node) && node.expression) {
+      jsxExpressions.push(jsxExpressionModel(sourceFile, source, node.expression));
+    }
+    if (ts.isCallExpression(node) && ts.isIdentifier(node.expression)) {
+      calls.push(callExpressionModel(sourceFile, source, node));
+    }
 
     ts.forEachChild(node, visit);
   };
 
   visit(sourceFile);
 
-  return { components, jsxElements };
+  return { calls, components, jsxExpressions, jsxElements };
 }
 
 function isExportedVariable(node: ts.VariableDeclaration): boolean {
@@ -111,6 +134,14 @@ export function componentExplicitNames(model: ComponentModuleModel): string[] {
 
 export function jsxElements(model: ComponentModuleModel): JsxElementModel[] {
   return [...model.jsxElements];
+}
+
+export function callExpressions(model: ComponentModuleModel): CallExpressionModel[] {
+  return [...model.calls];
+}
+
+export function jsxExpressions(model: ComponentModuleModel): JsxExpressionModel[] {
+  return [...model.jsxExpressions];
 }
 
 function componentModelFromInitializer(
@@ -225,6 +256,35 @@ function jsxElementModel(
 function staticJsxAttributeValue(attribute: ts.JsxAttribute): string | undefined {
   const initializer = attribute.initializer;
   return initializer && ts.isStringLiteral(initializer) ? initializer.text : undefined;
+}
+
+function callExpressionModel(
+  sourceFile: ts.SourceFile,
+  source: string,
+  node: ts.CallExpression,
+): CallExpressionModel {
+  return {
+    arguments: node.arguments.map((argument) =>
+      source.slice(argument.getStart(sourceFile), argument.getEnd()),
+    ),
+    end: node.getEnd(),
+    name: node.expression.getText(sourceFile),
+    start: node.getStart(sourceFile),
+  };
+}
+
+function jsxExpressionModel(
+  sourceFile: ts.SourceFile,
+  source: string,
+  expression: ts.Expression,
+): JsxExpressionModel {
+  const start = expression.getStart(sourceFile);
+  const end = expression.getEnd();
+  return {
+    end,
+    expression: source.slice(start, end).trim(),
+    start,
+  };
 }
 
 function jsxAttributeExpression(

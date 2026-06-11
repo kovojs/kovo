@@ -1532,6 +1532,22 @@ export const CartBadge = component('cart-badge', {
     expect(result.diagnostics).toEqual([]);
   });
 
+  it('ignores query expressions inside strings and comments', () => {
+    const result = compileComponentModule({
+      fileName: 'cart-badge.tsx',
+      source: `
+const sample = '<strong>{cart.discount}</strong><span>{renderOnce(cart.currency)}</span>';
+// <em>{cart.total}</em>
+export const CartBadge = component('cart-badge', {
+  queries: { cart: cartQuery },
+  render: ({ cart }) => <span>{renderOnce(cart.count)}</span>,
+});
+`,
+    });
+
+    expect(result.diagnostics).toEqual([]);
+  });
+
   it('emits an app bootstrap that wires compiled query plans into the loader', () => {
     const bootstrap = emitQueryPlanBootstrapModule([
       {
@@ -2056,6 +2072,29 @@ export function notifyPrice(product, emit) {
         },
       },
       source: `
+export function notifyIntent(productId, quantity, emit) {
+  emit('cart:add-requested', { productId, quantity });
+}
+`,
+    });
+
+    expect(result.diagnostics).toEqual([]);
+  });
+
+  it('ignores event payload text inside strings and comments', () => {
+    const result = compileComponentModule({
+      fileName: 'cart.events.tsx',
+      queryShapes: {
+        productCard: {
+          product: {
+            id: 'string',
+            unitPrice: 'number',
+          },
+        },
+      },
+      source: `
+const sample = "emit('cart:added', { product: { unitPrice: product.unitPrice } })";
+// emit('cart:added', { product: { unitPrice: product.unitPrice } });
 export function notifyIntent(productId, quantity, emit) {
   emit('cart:add-requested', { productId, quantity });
 }

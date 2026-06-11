@@ -5,6 +5,7 @@ import { diagnosticFor, type CompilerDiagnostic } from './diagnostics.js';
 import type { ComponentGraphFact, RegistryFacts, RegistryTypeFacts } from './graph.js';
 import { findMatchingToken, findStringEnd } from './scan/text.js';
 import {
+  callExpressions,
   componentExplicitNames,
   componentOptionSource,
   componentRenderInputs,
@@ -13,6 +14,7 @@ import {
   type JsxAttributeModel,
   type JsxElementModel,
   jsxElements,
+  jsxExpressions,
   parseComponentModule as parseComponentModuleModel,
 } from './scan/parse.js';
 import { escapeAttribute, indent, kebabCase } from './shared.js';
@@ -953,21 +955,24 @@ function queryNameFromPath(path: string): string | null {
 function renderOnceQueryPaths(source: string, knownQueries: ReadonlySet<string>): string[] {
   const paths: string[] = [];
 
-  for (const match of source.matchAll(/\brenderOnce\s*\(/g)) {
-    const callStart = match.index + match[0].lastIndexOf('(');
-    const callEnd = findMatchingToken(source, callStart, '(', ')');
-    if (callEnd === -1) continue;
-
-    paths.push(...queryPathsInExpression(source.slice(callStart + 1, callEnd), knownQueries));
+  for (const call of parsedCallExpressions(source).filter((item) => item.name === 'renderOnce')) {
+    paths.push(...queryPathsInExpression(call.arguments.join(', '), knownQueries));
   }
 
   return [...new Set(paths)];
 }
 
 function jsxQueryExpressionPaths(source: string, knownQueries: ReadonlySet<string>): string[] {
-  return [...source.matchAll(/\{\s*(?<path>[A-Za-z_$][\w$]*(?:\.[A-Za-z_$][\w$]*)+)\s*\}/g)]
-    .map((match) => match.groups?.path ?? '')
+  return jsxExpressions(parseComponentModuleModel('component.tsx', source))
+    .map((expression) => soleQueryPathExpression(expression.expression))
+    .filter((path): path is string => path !== null)
     .filter((path) => queryPathUsesKnownQuery(path, knownQueries));
+}
+
+function soleQueryPathExpression(expression: string): string | null {
+  return (
+    /^(?<path>[A-Za-z_$][\w$]*(?:\.[A-Za-z_$][\w$]*)+)$/.exec(expression)?.groups?.path ?? null
+  );
 }
 
 function queryPathsInExpression(expression: string, knownQueries: ReadonlySet<string>): string[] {
@@ -1569,6 +1574,10 @@ function parsedJsxElements(source: string): JsxElementModel[] {
   return jsxElements(parseComponentModuleModel('component.tsx', source));
 }
 
+function parsedCallExpressions(source: string): ReturnType<typeof callExpressions> {
+  return callExpressions(parseComponentModuleModel('component.tsx', source));
+}
+
 function hasJsxAttribute(element: JsxElementModel, name: string): boolean {
   return element.attributes.some((attribute) => attribute.name === name);
 }
@@ -1700,12 +1709,8 @@ function extractStateReturnObject(source: string): string | null {
 function eventPayloadPaths(source: string): string[] {
   const paths: string[] = [];
 
-  for (const match of source.matchAll(/\bemit\s*\(/g)) {
-    const callStart = match.index + match[0].lastIndexOf('(');
-    const callEnd = findMatchingToken(source, callStart, '(', ')');
-    if (callEnd === -1) continue;
-
-    const payload = splitArguments(source.slice(callStart + 1, callEnd))[1]?.trim();
+  for (const call of parsedCallExpressions(source).filter((item) => item.name === 'emit')) {
+    const payload = call.arguments[1]?.trim();
     if (!payload?.startsWith('{')) continue;
 
     const payloadEnd = findMatchingToken(payload, 0, '{', '}');
