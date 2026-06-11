@@ -7,6 +7,7 @@ export type {
   UnresolvedWriteSite,
 } from '@jiso/core';
 import {
+  diagnosticDefinitionText,
   diagnosticDefinitions,
   type DiagnosticCode,
   type DiagnosticSeverity,
@@ -27,6 +28,26 @@ import {
 } from 'ts-morph';
 
 let sourceExtractionFileId = 0;
+
+const IDENTIFIER_SOURCE = String.raw`[A-Za-z_$][\w$]*`;
+const DEFAULT_DRIZZLE_RECEIVER_NAMES = new Set(['db', 'tx']);
+const IGNORED_LOCAL_CALL_NAMES = new Set([
+  'delete',
+  'eq',
+  'for',
+  'function',
+  'if',
+  'insert',
+  'jiso',
+  'pgTable',
+  'return',
+  'select',
+  'switch',
+  'update',
+  'while',
+]);
+const EXPORTED_CONST_DECLARATION_SOURCE = String.raw`(?:export\s+)?const\s+`;
+const VARIABLE_DECLARATION_SOURCE = String.raw`(?:export\s+)?(?:const|let|var)\s+`;
 
 export interface JisoTableAnnotation {
   domain: string;
@@ -932,8 +953,10 @@ function extractQueryDefinitions(
   columnShapes: Readonly<Record<string, QueryShape>> = {},
 ): ExtractedQueryDefinition[] {
   const definitions: ExtractedQueryDefinition[] = [];
-  const pattern =
-    /(?:export\s+)?const\s+[A-Za-z_$][\w$]*\s*=\s*query\s*\(\s*["'](?<query>[^"']+)["']\s*,/g;
+  const pattern = new RegExp(
+    `${EXPORTED_CONST_DECLARATION_SOURCE}${IDENTIFIER_SOURCE}\\s*=\\s*query\\s*\\(\\s*["'](?<query>[^"']+)["']\\s*,`,
+    'g',
+  );
 
   for (const match of source.matchAll(pattern)) {
     const query = match.groups?.query;
@@ -1185,7 +1208,7 @@ function opaqueProjectionDiagnostics(
   if (hasOutput) return [];
 
   const definition = diagnosticDefinitions.FW410;
-  const message = definition.help ?? definition.message;
+  const message = diagnosticDefinitionText('FW410', { preferHelp: true });
   return opaquePaths.map((path) => ({
     code: 'FW410',
     message: `${message} ${query}.${path} uses sql/raw projection without output.`,
@@ -1534,7 +1557,10 @@ function tablesForFile(
 
 function namespaceImportAliases(source: string): string[] {
   const aliases: string[] = [];
-  const pattern = /import\s+\*\s+as\s+(?<alias>[A-Za-z_$][\w$]*)\s+from\s+["'][^"']+["']/g;
+  const pattern = new RegExp(
+    `import\\s+\\*\\s+as\\s+(?<alias>${IDENTIFIER_SOURCE})\\s+from\\s+["'][^"']+["']`,
+    'g',
+  );
 
   for (const match of source.matchAll(pattern)) {
     const alias = match.groups?.alias;
@@ -1548,15 +1574,16 @@ function importExportTableAliases(source: string): { imported: string; local: st
   const aliases: { imported: string; local: string }[] = [];
   const pattern =
     /\b(?:import|export)\s*\{\s*(?<specifiers>[^}]+)\s*\}(?:\s*from\s*["'][^"']+["'])?/g;
+  const specifierPattern = new RegExp(
+    `^(?<imported>${IDENTIFIER_SOURCE})(?:\\s+as\\s+(?<local>${IDENTIFIER_SOURCE}))?$`,
+  );
 
   for (const match of source.matchAll(pattern)) {
     const specifiers = match.groups?.specifiers;
     if (!specifiers) continue;
 
     for (const specifier of specifiers.split(',')) {
-      const parts = /^(?<imported>[A-Za-z_$][\w$]*)(?:\s+as\s+(?<local>[A-Za-z_$][\w$]*))?$/.exec(
-        specifier.trim(),
-      )?.groups;
+      const parts = specifierPattern.exec(specifier.trim())?.groups;
       const imported = parts?.imported;
       const local = parts?.local;
       if (imported && local && imported !== local) aliases.push({ imported, local });
@@ -1609,8 +1636,10 @@ function conditionalBranches(initializer: string): string[] {
 
 function extractFunctions(source: string): ExtractedFunction[] {
   const functions: ExtractedFunction[] = [];
-  const declarations =
-    /(?:export\s+)?(?:async\s+)?function\s+(?<name>[A-Za-z_$][\w$]*)\s*\((?<params>[^)]*)\)\s*\{/g;
+  const declarations = new RegExp(
+    `(?:export\\s+)?(?:async\\s+)?function\\s+(?<name>${IDENTIFIER_SOURCE})\\s*\\((?<params>[^)]*)\\)\\s*\\{`,
+    'g',
+  );
 
   for (const match of source.matchAll(declarations)) {
     const groups = match.groups;
@@ -1640,8 +1669,10 @@ function extractFunctions(source: string): ExtractedFunction[] {
 
 function extractVariableAssignedFunctions(source: string): ExtractedFunction[] {
   const functions: ExtractedFunction[] = [];
-  const declarations =
-    /(?:export\s+)?(?:const|let|var)\s+(?<name>[A-Za-z_$][\w$]*)\s*(?::[^=]+)?=\s*/g;
+  const declarations = new RegExp(
+    `${VARIABLE_DECLARATION_SOURCE}(?<name>${IDENTIFIER_SOURCE})\\s*(?::[^=]+)?=\\s*`,
+    'g',
+  );
 
   for (const match of source.matchAll(declarations)) {
     const groups = match.groups;
@@ -1663,8 +1694,9 @@ function variableAssignedFunction(
   initializerStart: number,
 ): Pick<ExtractedFunction, 'body' | 'bodyStart' | 'params'> | null {
   const initializer = source.slice(initializerStart);
-  const functionExpression =
-    /^(?:async\s*)?function(?:\s+[A-Za-z_$][\w$]*)?\s*\((?<params>[^)]*)\)\s*\{/.exec(initializer);
+  const functionExpression = new RegExp(
+    `^(?:async\\s*)?function(?:\\s+${IDENTIFIER_SOURCE})?\\s*\\((?<params>[^)]*)\\)\\s*\\{`,
+  ).exec(initializer);
 
   if (functionExpression?.groups) {
     const openBrace = initializerStart + functionExpression[0].length - 1;
@@ -1678,9 +1710,9 @@ function variableAssignedFunction(
     };
   }
 
-  const arrowExpression = /^(?:async\s*)?(?<params>\([^)]*\)|[A-Za-z_$][\w$]*)\s*=>\s*/.exec(
-    initializer,
-  );
+  const arrowExpression = new RegExp(
+    `^(?:async\\s*)?(?<params>\\([^)]*\\)|${IDENTIFIER_SOURCE})\\s*=>\\s*`,
+  ).exec(initializer);
   const params = arrowExpression?.groups?.params;
   if (!arrowExpression || !params) return null;
 
@@ -1699,7 +1731,10 @@ function variableAssignedFunction(
 
 function extractDomainWriteCallbacks(source: string): ExtractedFunction[] {
   const callbacks: ExtractedFunction[] = [];
-  const declarations = /(?:export\s+)?const\s+(?<domain>[A-Za-z_$][\w$]*)\s*=\s*domain\s*\(/g;
+  const declarations = new RegExp(
+    `${EXPORTED_CONST_DECLARATION_SOURCE}(?<domain>${IDENTIFIER_SOURCE})\\s*=\\s*domain\\s*\\(`,
+    'g',
+  );
 
   for (const match of source.matchAll(declarations)) {
     const domainName = match.groups?.domain;
@@ -1731,7 +1766,7 @@ function extractDomainObjectWriteCallbacks(
   fullSource: string,
 ): ExtractedFunction[] {
   const callbacks: ExtractedFunction[] = [];
-  const properties = /\b(?<member>[A-Za-z_$][\w$]*)\s*:\s*write\s*\(/g;
+  const properties = new RegExp(`\\b(?<member>${IDENTIFIER_SOURCE})\\s*:\\s*write\\s*\\(`, 'g');
 
   for (const match of objectSource.matchAll(properties)) {
     const memberName = match.groups?.member;
@@ -1782,26 +1817,11 @@ function arrowCallbackFromWriteArgs(
 
 function extractLocalFunctionCalls(source: string): string[] {
   const calls: string[] = [];
-  const callPattern = /\b(?<name>[A-Za-z_$][\w$]*)\s*\(/g;
-  const ignored = new Set([
-    'delete',
-    'eq',
-    'for',
-    'function',
-    'if',
-    'insert',
-    'jiso',
-    'pgTable',
-    'return',
-    'select',
-    'switch',
-    'update',
-    'while',
-  ]);
+  const callPattern = new RegExp(`\\b(?<name>${IDENTIFIER_SOURCE})\\s*\\(`, 'g');
 
   for (const match of source.matchAll(callPattern)) {
     const name = match.groups?.name;
-    if (!name || ignored.has(name)) continue;
+    if (!name || IGNORED_LOCAL_CALL_NAMES.has(name)) continue;
 
     const previous = source.slice(0, match.index).trimEnd().at(-1);
     if (previous === '.') continue;
@@ -1814,11 +1834,13 @@ function extractLocalFunctionCalls(source: string): string[] {
 
 function extractDrizzleWriteCalls(
   source: string,
-  receiverNames: ReadonlySet<string> = new Set(['db', 'tx']),
+  receiverNames: ReadonlySet<string> = DEFAULT_DRIZZLE_RECEIVER_NAMES,
 ): ExtractedWriteCall[] {
   const calls: ExtractedWriteCall[] = [];
-  const callPattern =
-    /(?<receiver>[A-Za-z_$][\w$]*)\s*\.\s*(?<operation>insert|update|delete)\s*\(\s*(?<tableExpression>[^)]+?)\s*\)/g;
+  const callPattern = new RegExp(
+    `(?<receiver>${IDENTIFIER_SOURCE})\\s*\\.\\s*(?<operation>insert|update|delete)\\s*\\(\\s*(?<tableExpression>[^)]+?)\\s*\\)`,
+    'g',
+  );
 
   for (const match of source.matchAll(callPattern)) {
     const groups = match.groups;
@@ -1853,28 +1875,13 @@ function extractExternalDbArgumentCalls(
   localFunctionNames: ReadonlySet<string>,
 ): ExternalDbArgumentCall[] {
   const calls: ExternalDbArgumentCall[] = [];
-  const ignored = new Set([
-    'delete',
-    'eq',
-    'for',
-    'function',
-    'if',
-    'insert',
-    'jiso',
-    'pgTable',
-    'return',
-    'select',
-    'switch',
-    'update',
-    'while',
-  ]);
-  const pattern = /\b(?<name>[A-Za-z_$][\w$]*)\s*\((?<args>[^)]*)\)/g;
+  const pattern = new RegExp(`\\b(?<name>${IDENTIFIER_SOURCE})\\s*\\((?<args>[^)]*)\\)`, 'g');
 
   for (const match of source.matchAll(pattern)) {
     const name = match.groups?.name;
     const args = match.groups?.args;
     if (!name || !args || match.index === undefined) continue;
-    if (ignored.has(name) || localFunctionNames.has(name)) continue;
+    if (IGNORED_LOCAL_CALL_NAMES.has(name) || localFunctionNames.has(name)) continue;
 
     const previous = source.slice(0, match.index).trimEnd().at(-1);
     if (previous === '.') continue;
@@ -1887,11 +1894,11 @@ function extractExternalDbArgumentCalls(
 }
 
 function drizzleReceiverNames(params: string, body = ''): Set<string> {
-  const names = new Set(['db', 'tx']);
+  const names = new Set(DEFAULT_DRIZZLE_RECEIVER_NAMES);
 
   for (const param of splitTopLevelArgs(params)) {
     const trimmed = param.trim();
-    const identifier = /^(?<name>[A-Za-z_$][\w$]*)\b/.exec(trimmed)?.groups?.name;
+    const identifier = new RegExp(`^(?<name>${IDENTIFIER_SOURCE})\\b`).exec(trimmed)?.groups?.name;
     if (identifier && isLikelyDrizzleReceiver(identifier)) names.add(identifier);
 
     for (const match of trimmed.matchAll(/\b(?<name>db|tx)\b/g)) {
@@ -1900,7 +1907,10 @@ function drizzleReceiverNames(params: string, body = ''): Set<string> {
     }
   }
   for (const match of body.matchAll(
-    /\b(?:const|let)\s*\{\s*(?:db|tx)\s*:\s*(?<alias>[A-Za-z_$][\w$]*)\s*\}/g,
+    new RegExp(
+      `\\b(?:const|let)\\s*\\{\\s*(?:db|tx)\\s*:\\s*(?<alias>${IDENTIFIER_SOURCE})\\s*\\}`,
+      'g',
+    ),
   )) {
     const alias = match.groups?.alias;
     if (alias) names.add(alias);

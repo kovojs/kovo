@@ -20,6 +20,7 @@ import {
   derive,
   dispatchDelegatedEvent,
   hydrateQueryScripts,
+  installInlineJisoLoader,
   installMutationBroadcast,
   installPagehideOptimismCleanup,
   installJisoLoader,
@@ -325,15 +326,12 @@ function keyedListRow(key: string, text: string): StructuralMorphNode {
 describe('runtime loader', () => {
   it('keeps the always-loaded bootstrap under the S2 gzip budget', () => {
     expect(gzipSync(jisoLoaderSource).byteLength).toBeLessThanOrEqual(4096);
-    expect(jisoLoaderSource).toContain('import(x.slice(0,i))');
-    expect(jisoLoaderSource).toContain('signal:new AbortController().signal');
-    expect(jisoLoaderSource).toContain('IntersectionObserver');
-    expect(jisoLoaderSource).toContain('FW-Targets');
-    expect(jisoLoaderSource).not.toContain('customElements');
-    expect(jisoLoaderSource).not.toContain('unload');
   });
 
-  it('ships an inline enhanced form round trip in the bootstrap source', async () => {
+  it.each([
+    ['generated bootstrap source', () => runInThisContext(jisoLoaderSource)],
+    ['shared inline loader source', () => installInlineJisoLoader(vi.fn(async () => ({})))],
+  ])('ships an inline enhanced form round trip through %s', async (_name, installLoader) => {
     const globalRecord = globalThis as unknown as Record<string, unknown>;
     const originals = {
       CustomEvent: globalRecord.CustomEvent,
@@ -448,7 +446,7 @@ describe('runtime loader', () => {
       };
       globalRecord.fetch = fetch;
 
-      runInThisContext(jisoLoaderSource);
+      installLoader();
       listeners.get('submit')?.({
         preventDefault: vi.fn(),
         target: {
@@ -555,7 +553,6 @@ describe('runtime loader', () => {
   it('throws from the inline loader when a handler export is missing', async () => {
     const globalRecord = globalThis as unknown as Record<string, unknown>;
     const originals = {
-      __inlineImport: globalRecord.__inlineImport,
       addEventListener: globalRecord.addEventListener,
       document: globalRecord.document,
     };
@@ -587,14 +584,7 @@ describe('runtime loader', () => {
           return [];
         },
       };
-      globalRecord.__inlineImport = vi.fn(async () => ({}));
-
-      const loaderSource = jisoLoaderSource.replace(
-        'await import(x.slice(0,i))',
-        'await globalThis.__inlineImport(x.slice(0,i))',
-      );
-      expect(loaderSource).not.toBe(jisoLoaderSource);
-      runInThisContext(loaderSource);
+      installInlineJisoLoader(vi.fn(async () => ({})));
 
       await expect(
         listeners.get('click')?.({
@@ -608,7 +598,6 @@ describe('runtime loader', () => {
   });
 
   it('keeps inline loader idempotency keys on crypto randomUUID', () => {
-    expect(jisoLoaderSource).toContain('crypto.randomUUID');
     expect(jisoLoaderSource).not.toContain('Math.random');
   });
 

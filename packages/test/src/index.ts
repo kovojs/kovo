@@ -641,15 +641,10 @@ function findFragmentTargetElement(html: string, target: string): OpeningElement
   return findOpeningElement(html, (element) => {
     const fragmentTarget = readHtmlAttribute(element.attrs, 'fw-fragment-target');
     const id = readHtmlAttribute(element.attrs, 'id');
-    const component = readHtmlAttribute(element.attrs, 'fw-c');
-    const deps = readHtmlAttribute(element.attrs, 'fw-deps');
 
-    return (
-      fragmentTarget === target ||
-      id === target ||
-      component === target ||
-      (element.tag === target && deps !== null)
-    );
+    // SPEC.md §9.1: fragment chunks address the runtime target by name; the
+    // browser runtime resolves that name with id / fw-fragment-target only.
+    return fragmentTarget === target || id === target;
   });
 }
 

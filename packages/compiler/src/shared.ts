@@ -9,6 +9,19 @@ export function indent(value: string): string {
     .join('\n');
 }
 
+export function dedupeBy<Value>(
+  values: readonly Value[],
+  keyFor: (value: Value) => string,
+): Value[] {
+  const seen = new Set<string>();
+  return values.filter((value) => {
+    const key = keyFor(value);
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
 export function kebabCase(value: string): string {
   return value
     .replace(/([a-z0-9])([A-Z])/g, '$1-$2')

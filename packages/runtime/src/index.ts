@@ -270,7 +270,167 @@ const defaultDelegatedEvents = ['click', 'submit', 'input', 'change'] as const;
 const defaultIslandSignalScope: IslandSignalScope = {};
 const islandSignalControllers = new WeakMap<IslandSignalScope, Map<string, AbortController>>();
 
-export const jisoLoaderSource = `(()=>{const E=["click","submit","input","change"],d=document,H=t=>t.closest?.("[fw-state]")||t,S=t=>{try{return JSON.parse(H(t)?.getAttribute("fw-state")||"{}")}catch{return {}}};let n=0;const I=()=>crypto.randomUUID?.()||"idem_"+Date.now().toString(36)+"_"+n++,T=()=>[...d.querySelectorAll("[fw-deps]")].map(e=>{const a=(e.getAttribute("fw-deps")||"").trim().replace(/[\\\\s,]+/g," "),t=e.getAttribute("fw-fragment-target")||e.id;return t&&(a?t+"="+a:t)}).filter(Boolean),P=async e=>{if(e.type=="submit"){const f=e.target.closest("form[enhance],form[data-enhance],form[data-mutation]");if(f){e.preventDefault();fetch(f.action,{body:new FormData(f),headers:{Accept:"text/vnd.jiso.fragment+html","FW-Fragment":"true","FW-Idem":I(),"FW-Targets":T().join("; ")},keepalive:!0,method:(f.method||"post").toUpperCase()}).then(r=>r.text()).then(b=>{const p=new DOMParser().parseFromString(b,"text/html");p.querySelectorAll("fw-query").forEach(m=>dispatchEvent(new CustomEvent("jiso:query",{detail:{body:m.textContent,name:m.getAttribute("name")}})));p.querySelectorAll("fw-fragment").forEach(m=>{const t=m.getAttribute("target"),l=t&&(d.getElementById(t)||d.querySelector('[fw-fragment-target="'+t+'"]'));l&&(m.getAttribute("mode")=="append"?l.insertAdjacentHTML("beforeend",m.innerHTML):l.innerHTML=m.innerHTML)})}).catch(()=>f.submit?f.submit():(f.setAttribute?.("data-error-code","NETWORK_ERROR"),f.setAttribute?.("fw-error","")));return}}const t=e.target.closest("[on\\\\:"+e.type+"]"),r=t?.getAttribute("on:"+e.type);if(!r)return;const p={},y=(t.getAttribute("fw-param-types")||"").split(/[\\\\s,]+/).reduce((o,v)=>{const[k,q]=v.split(":");return k&&(o[k]=q),o},{}),s=S(t),h=H(t),c={params:p,state:s,signal:new AbortController().signal};for(const a of t.attributes||[])if(a.name.startsWith("data-p-")){const k=a.name.slice(7).replace(/-([a-z0-9])/g,(_,c)=>c.toUpperCase()),q=y[k],v=a.value;p[k]=q=="number"?+v:q=="boolean"?v=="true":v}for(const x of r.split(/\\s+/)){const i=x.lastIndexOf("#");if(i>0){const m=await import(x.slice(0,i)),f=m[x.slice(i+1)];if(typeof f!="function")throw Error("Handler export not found: "+x);await f(e,c)}}h?.setAttribute?.("fw-state",JSON.stringify(s))},D=(t,e)=>P({type:t,target:e});for(const e of E)addEventListener(e,P,{capture:!0});d.querySelectorAll("[on\\\\:load]").forEach(e=>D("load",e));d.querySelectorAll("[on\\\\:idle]").forEach(e=>(globalThis.requestIdleCallback||setTimeout)(()=>D("idle",e)));if(globalThis.IntersectionObserver){const o=new IntersectionObserver(a=>a.map(v=>v.isIntersecting&&(o.unobserve(v.target),D("visible",v.target))));d.querySelectorAll("[on\\\\:visible]").forEach(e=>o.observe(e))}})();`;
+export type InlineImportHandlerModule = ImportHandlerModule;
+
+export function installInlineJisoLoader(importModule: InlineImportHandlerModule): void {
+  const events = ['click', 'submit', 'input', 'change'];
+  const doc = document;
+  let idemCounter = 0;
+  const createInlineIdem = () =>
+    crypto.randomUUID?.() ?? `idem_${Date.now().toString(36)}_${(idemCounter += 1).toString(36)}`;
+  const readStateHost = (element: Element) => element.closest?.('[fw-state]') ?? element;
+  const readState = (element: Element) => {
+    try {
+      return JSON.parse(readStateHost(element)?.getAttribute('fw-state') ?? '{}');
+    } catch {
+      return {};
+    }
+  };
+  const readDeps = (value: string | null) =>
+    (value ?? '')
+      .split(/[\s,]+/)
+      .map((dep) => dep.trim())
+      .filter(Boolean);
+  const readTargets = () =>
+    [...doc.querySelectorAll('[fw-deps]')]
+      .map((element) => {
+        const deps = readDeps(element.getAttribute('fw-deps'));
+        const target = element.getAttribute('fw-fragment-target') || element.id;
+        return target && (deps.length > 0 ? `${target}=${deps.join(' ')}` : target);
+      })
+      .filter(Boolean);
+  const findFragmentTarget = (target: string) =>
+    doc.getElementById(target) ?? doc.querySelector(`[fw-fragment-target="${target}"]`);
+  const applyFragment = (fragment: Element) => {
+    const target = fragment.getAttribute('target');
+    const element = target && findFragmentTarget(target);
+    if (!element) return;
+    if (fragment.getAttribute('mode') === 'append') {
+      element.insertAdjacentHTML('beforeend', fragment.innerHTML);
+    } else {
+      element.innerHTML = fragment.innerHTML;
+    }
+  };
+  const applyResponseBody = (body: string) => {
+    const parsed = new DOMParser().parseFromString(body, 'text/html');
+    parsed.querySelectorAll('fw-query').forEach((query) => {
+      dispatchEvent(
+        new CustomEvent('jiso:query', {
+          detail: { body: query.textContent, name: query.getAttribute('name') },
+        }),
+      );
+    });
+    parsed.querySelectorAll('fw-fragment').forEach(applyFragment);
+  };
+  const fallbackSubmit = (form: HTMLFormElement) => {
+    if (typeof form.submit === 'function') {
+      form.submit();
+      return;
+    }
+    form.setAttribute?.('data-error-code', 'NETWORK_ERROR');
+    form.setAttribute?.('fw-error', '');
+  };
+  const submitEnhancedForm = (event: Event, form: HTMLFormElement) => {
+    event.preventDefault();
+    fetch(form.action, {
+      body: new FormData(form),
+      headers: {
+        Accept: 'text/vnd.jiso.fragment+html',
+        'FW-Fragment': 'true',
+        'FW-Idem': createInlineIdem(),
+        'FW-Targets': readTargets().join('; '),
+      },
+      keepalive: true,
+      method: (form.method || 'post').toUpperCase(),
+    })
+      .then((response) => response.text())
+      .then(applyResponseBody)
+      .catch(() => fallbackSubmit(form));
+  };
+  const readParamTypes = (element: Element) =>
+    (element.getAttribute('fw-param-types') || '').split(/[\s,]+/).reduce(
+      (types, entry) => {
+        const [name, type] = entry.split(':');
+        if (name) types[name] = type;
+        return types;
+      },
+      {} as Record<string, string | undefined>,
+    );
+  const dispatch = async (event: Event) => {
+    if (event.type === 'submit') {
+      const form = (event.target as Element | null)?.closest?.(
+        'form[enhance],form[data-enhance],form[data-mutation]',
+      ) as HTMLFormElement | null | undefined;
+      if (form) {
+        submitEnhancedForm(event, form);
+        return;
+      }
+    }
+    const element = (event.target as Element | null)?.closest?.(`[on\\:${event.type}]`);
+    const refs = element?.getAttribute(`on:${event.type}`);
+    if (!element || !refs) return;
+    const params: Record<string, string | number | boolean> = {};
+    const paramTypes = readParamTypes(element);
+    const state = readState(element);
+    const stateHost = readStateHost(element);
+    const context = { params, state, signal: new AbortController().signal };
+
+    for (const attribute of element.attributes || []) {
+      if (!attribute.name.startsWith('data-p-')) continue;
+      const name = attribute.name
+        .slice('data-p-'.length)
+        .replace(/-([a-z0-9])/g, (_match, char: string) => char.toUpperCase());
+      const type = paramTypes[name];
+      const value = attribute.value;
+      params[name] =
+        type === 'number' ? Number(value) : type === 'boolean' ? value === 'true' : value;
+    }
+    for (const ref of refs.split(/\s+/).filter(Boolean)) {
+      const hashIndex = ref.lastIndexOf('#');
+      if (hashIndex <= 0 || hashIndex === ref.length - 1)
+        throw Error(`Invalid handler reference: ${ref}`);
+      const mod = await importModule(ref.slice(0, hashIndex));
+      const fn = mod[ref.slice(hashIndex + 1)];
+      if (typeof fn !== 'function') throw Error(`Handler export not found: ${ref}`);
+      await fn(event, context);
+    }
+    stateHost?.setAttribute?.('fw-state', JSON.stringify(state));
+  };
+  const trigger = (type: string, target: Element) => {
+    void dispatch({ target, type } as unknown as Event);
+  };
+
+  for (const event of events) addEventListener(event, dispatch, { capture: true });
+  doc.querySelectorAll('[on\\:load]').forEach((element) => trigger('load', element));
+  doc
+    .querySelectorAll('[on\\:idle]')
+    .forEach((element) =>
+      (globalThis.requestIdleCallback || setTimeout)(() => trigger('idle', element)),
+    );
+  if (globalThis.IntersectionObserver) {
+    const observer = new IntersectionObserver((entries) =>
+      entries.forEach((entry) => {
+        if (!entry.isIntersecting) return;
+        observer.unobserve(entry.target);
+        trigger('visible', entry.target);
+      }),
+    );
+    doc.querySelectorAll('[on\\:visible]').forEach((element) => observer.observe(element));
+  }
+}
+
+function minifyInlineLoaderSource(source: string): string {
+  return source
+    .replace(/\/\/[^\n\r]*/g, '')
+    .replace(/\s+/g, ' ')
+    .replace(/\s*([{}()[\].,;:?+\-*/%=<>!|&])\s*/g, '$1')
+    .replace(/;}/g, '}')
+    .trim();
+}
+
+export const jisoLoaderSource = minifyInlineLoaderSource(
+  `(${installInlineJisoLoader.toString()})((url)=>import(url));`,
+);
 
 export function installJisoLoader(options: JisoLoaderOptions): JisoLoader {
   const events = options.events ?? defaultDelegatedEvents;

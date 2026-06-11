@@ -40,6 +40,23 @@ export interface DiagnosticDefinition {
   message: string;
 }
 
+export interface DiagnosticTextOptions {
+  includeHelp?: boolean;
+  preferHelp?: boolean;
+}
+
+export function diagnosticDefinitionText(
+  code: DiagnosticCode,
+  options: DiagnosticTextOptions = {},
+): string {
+  const definition = diagnosticDefinitions[code];
+  const help = 'help' in definition ? definition.help : undefined;
+  const message = options.preferHelp ? (help ?? definition.message) : definition.message;
+  if (!options.includeHelp || !help || message === help) return message;
+
+  return `${message} ${help}`;
+}
+
 export const diagnosticDefinitions = {
   FW201: {
     code: 'FW201',

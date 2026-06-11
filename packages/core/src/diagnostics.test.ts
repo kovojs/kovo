@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { diagnosticDefinitions } from './diagnostics.js';
+import { diagnosticDefinitions, diagnosticDefinitionText } from './diagnostics.js';
 
 describe('diagnostic registry', () => {
   it('contains the Phase 0 diagnostic registry from SPEC §11.3', () => {
@@ -203,5 +203,14 @@ describe('diagnostic registry', () => {
         },
       }
     `);
+  });
+
+  it('renders registry messages with optional help text for diagnostic consumers', () => {
+    expect(diagnosticDefinitionText('FW407', { includeHelp: true })).toBe(
+      'Query read from undeclared domain. No mutation touch graph writes that domain.',
+    );
+    expect(diagnosticDefinitionText('FW410', { preferHelp: true })).toBe(
+      'Opaque query projection requires a declared output schema.',
+    );
   });
 });

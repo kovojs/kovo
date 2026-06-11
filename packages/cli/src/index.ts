@@ -4,6 +4,7 @@ import { readFileSync } from 'node:fs';
 import { pathToFileURL } from 'node:url';
 
 import {
+  diagnosticDefinitionText,
   diagnosticDefinitions,
   type DiagnosticCode,
   type DiagnosticSeverity,
@@ -716,11 +717,8 @@ export function fwCheck(
       input.touchGraph ?? {},
       input.mutations ?? [],
     )) {
-      const definition = diagnosticDefinitions.FW407;
-      const help = definition.help ? ` ${definition.help}` : '';
-      lines.push(
-        `ERROR FW407 ${missed.query} reads ${missed.domain}. ${definition.message}${help}`,
-      );
+      const message = diagnosticDefinitionText('FW407', { includeHelp: true });
+      lines.push(`ERROR FW407 ${missed.query} reads ${missed.domain}. ${message}`);
     }
 
     for (const access of unguardedAccesses(input)) {

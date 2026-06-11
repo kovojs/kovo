@@ -32,6 +32,7 @@ import {
   renderQueryRegistryEndpointResponse,
   renderQueryScript,
   renderRoutePageResponse,
+  renderVersionedClientModuleResponse,
   runMutation,
   runQuery,
   runRoutePage,
@@ -450,6 +451,37 @@ describe('server mutation primitives', () => {
       status: 404,
     });
     expect(registry.resolve(newHref)).toMatchObject({ body: 'export const version = "new";' });
+  });
+
+  it('serves versioned client module requests through the immutable registry', () => {
+    const registry = createMemoryVersionedClientModuleRegistry();
+    const href = registry.put({
+      contentType: 'text/javascript; charset=utf-8',
+      path: '/c/cart.client.js',
+      source: 'export const version = "build-1";',
+      version: 'build-1',
+    });
+
+    expect(renderVersionedClientModuleResponse(registry, { url: href })).toEqual({
+      body: 'export const version = "build-1";',
+      headers: {
+        'Cache-Control': 'public, max-age=31536000, immutable',
+        'Content-Type': 'text/javascript; charset=utf-8',
+      },
+      status: 200,
+    });
+    expect(renderVersionedClientModuleResponse(registry, { url: '/c/cart.client.js' })).toEqual({
+      body: 'Not Found',
+      headers: { 'Content-Type': 'text/plain; charset=utf-8' },
+      status: 404,
+    });
+    expect(
+      renderVersionedClientModuleResponse(registry, { url: '/assets/cart.client.js' }),
+    ).toEqual({
+      body: 'Not Found',
+      headers: { 'Content-Type': 'text/plain; charset=utf-8' },
+      status: 404,
+    });
   });
 
   it('reads enhanced mutation wire headers case-insensitively', () => {

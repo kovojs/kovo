@@ -22,12 +22,24 @@ interface TestSchema<Value> {
   parse(input: unknown): Value;
 }
 
+interface ServerSchema<Value = unknown> {
+  parse(input: unknown): Value;
+}
+
 interface CartAddRegistryMutation {
   errors: {
     OUT_OF_STOCK: TestSchema<{ availableQuantity: number }>;
   };
   input: TestSchema<{ productId: string; quantity: number }>;
   key: 'cart/add';
+}
+
+interface PriceUpdateRegistryMutation {
+  errors: {
+    PRICE_CHANGED: ServerSchema<{ currentPrice: number }>;
+  };
+  input: ServerSchema<{ productId: string; price: number }>;
+  key: 'cart/price';
 }
 
 declare module './index.js' {
@@ -37,6 +49,7 @@ declare module './index.js' {
 
   interface MutationRegistry {
     'cart/add': CartAddRegistryMutation;
+    'cart/price': PriceUpdateRegistryMutation;
   }
 
   interface FragmentTargets {
@@ -170,6 +183,38 @@ describe('core authoring APIs', () => {
     };
     expect(assertMissingInput).toBeTypeOf('function');
     expect(assertUnknownInput).toBeTypeOf('function');
+    expect(assertUnknownFailure).toBeTypeOf('function');
+  });
+
+  it('derives form facts from server-style MutationRegistry value types', () => {
+    const priceUpdate = form('cart/price');
+    const input = {
+      price: 1499,
+      productId: 'p1',
+    } satisfies FormInput<typeof priceUpdate>;
+    const failure = {
+      code: 'PRICE_CHANGED',
+      data: { currentPrice: 1299 },
+    } satisfies FormFailure<typeof priceUpdate>;
+
+    expect(priceUpdate.key).toBe('cart/price');
+    expect(input.price).toBe(1499);
+    expect(failure.data.currentPrice).toBe(1299);
+
+    const assertMissingInput = () => {
+      // @ts-expect-error price is required by the server mutation input schema.
+      const missing = { productId: 'p1' } satisfies FormInput<typeof priceUpdate>;
+      return missing;
+    };
+    const assertUnknownFailure = () => {
+      const unknown = {
+        // @ts-expect-error OUT_OF_STOCK is not declared by this server mutation error schema.
+        code: 'OUT_OF_STOCK',
+        data: { currentPrice: 1299 },
+      } satisfies FormFailure<typeof priceUpdate>;
+      return unknown;
+    };
+    expect(assertMissingInput).toBeTypeOf('function');
     expect(assertUnknownFailure).toBeTypeOf('function');
   });
 

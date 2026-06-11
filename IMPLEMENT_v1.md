@@ -4,6 +4,38 @@
 **Scope:** §14 roadmap rows **v1**, **v1 (blessed)**, and **v1.5** (runtime verification layer), plus the §13 open design areas as explicit workstreams.
 **Shape:** dependency-ordered phases with deliverables and exit criteria. No timelines or headcount assumptions.
 
+## Progress checklist
+
+Audited against the repository on 2026-06-11. Checkmarks mean the behavior, API, tests, or gate wiring exists in the codebase; unchecked items are still roadmap work or only partially represented.
+
+- [x] Vite+ baseline is wired at the root (`vite-plus`, `vp check`, `vp run` tasks, Oxlint/Oxfmt config in `vite.config.ts`, `@typescript/native-preview`, and CI via `voidzero-dev/setup-vp`).
+- [x] Workspace packages exist for `core`, `compiler`, `runtime`, `server`, `drizzle`, `cli`, `test`, and `create-jiso`.
+- [x] P0 wire fixtures exist for enhanced mutation, no-JS PRG, 422 fragment, typed read, and `<fw-defer>` stream.
+- [x] Core diagnostics registry exists and is consumed by compiler/drizzle/cli/test surfaces.
+- [x] P1 compiler has component lowering, handler export facts, registry emit, typed routes/link validation, IDREF/id diagnostics, render-equivalence facts, update coverage, derived query stamps, and a TS parser-backed intermediate model in active use.
+- [ ] P1 compiler is not fully complete: the module split is partial, some compiler help text is still local, and the full parser migration/dead scanner deletion remains tracked in `plans/improve-compiler.md`.
+- [x] P2 runtime has delegated event loading, execution triggers, `ctx.signal`, query hydration/update plans, visible-return typed-read refetch, BroadcastChannel plumbing, bfcache-safe pagehide handling, immutable no-`customElements` loader constraints, and a 4KB inline loader budget.
+- [ ] P2 exit demo/smoke is not fully proven as a standalone L0+L1 demo acceptance checkpoint.
+- [x] P3 server/core have `domain`, `query`, `mutation`, `route`, typed `href`/`Link`/`redirect`, typed sessions, CSRF issuance/validation, FormData coercion, guards/rate limits, mutation replay, query endpoints, rerun query fragments, and commerce app usage.
+- [ ] P3 is still incomplete for all planned audits and static route/query guard guarantees at v1 scale.
+- [x] P4 Drizzle extraction has AST-backed table/write extraction, arrow-handler coverage, FW406/FW409 diagnostics, query shape derivation with nullable wrappers, projection-less select diagnostics, and conformance coverage.
+- [ ] P4 is not fully frozen: the emitted `generated/touch-graph.ts` workflow and complete v1 invalidation registry contract still need hardening.
+- [x] P5 has enhanced mutation/deferred fragments, DOM morphing, query patch application, typed read refetch, template stamps, isomorphic/update-coverage statuses, Tailwind stylesheet hints, and runtime/browser tests for morph survival and fragment parsing.
+- [ ] P5 byte-for-byte live-server fixture exit and complete form/navigation rename proofs still need final acceptance coverage.
+- [x] P6 optimism has typed `OptimisticFor`, generated `InvalidationSets`, `await-fragment` statuses, pending stamps, named queues, rebase/restore behavior, unified change-record consumption, and property/runtime tests.
+- [ ] P6 final acceptance still needs full commerce-level coverage for every mutation/query pair and navigation/bfcache edge.
+- [x] P7 stateless liveness has BroadcastChannel mutation sync and visible-return/refetch behavior.
+- [ ] P7 deployment documentation still needs the explicit stateless-server/Redis-negative acceptance check.
+- [x] P8 CLI has stable `fw check`, `fw explain`, optimistic/update coverage, unguarded/unscoped audits, and diffable output tests.
+- [ ] P8 output format/versioning and agent-answerability acceptance should still be treated as hardening work.
+- [x] P9 `@jiso/test` has pglite-backed harnessing, static-vs-observed write/read verification, FW402/FW403/FW404/FW405/FW407/FW408/FW410 diagnostics, raw pglite interception, and structural optimistic property checks.
+- [ ] P9 v1.5 is not complete until the full diagnostic table, commerce mutation suite, and runtime/static verification loop are accepted end-to-end.
+- [x] D1 Tailwind-first path is implemented in commerce and starter scaffolds with stylesheet delivery tests.
+- [x] D2 keyed append/reorder behavior has commerce/runtime tests.
+- [x] D3 deferred streaming has fixtures, stylesheet hints, and priority/query ordering coverage.
+- [x] D4 has initial adopted features: route meta, file uploads, i18n catalogs, rate-limit guard, and typed sessions.
+- [ ] P10 v1 acceptance, docs freeze, outside legibility study, and prelaunch checklist remain open.
+
 ## Decisions adopted by this plan
 
 | Decision                                   | Choice                                                                                                                                                                                                                                                                                                                                                                                                                                                    | Rationale                                                                                                                                                                                                              |

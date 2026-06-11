@@ -334,6 +334,8 @@ Per SPEC.md section 9.3, v1 liveness is intentionally limited to client-owned be
 - Refetch-on-focus/visibility re-runs stale queries when a backgrounded tab becomes active again.
 
 No SSE or live bus ships in v1. SSE-backed \`<fw-live>\` subscriptions and live-bus infrastructure are v2 features, using the same fragment/query vocabulary as an additive transport.
+
+Client handler modules are immutable URLs under \`/c/*?v=...\`. Keep old versioned client module artifacts published across deploys until documents that reference them have aged out; never rewrite a versioned \`/c/\` URL to the latest module.
 `,
       },
       {

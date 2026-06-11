@@ -1016,6 +1016,10 @@ export interface VersionedClientModuleRegistry {
   resolve(href: string): VersionedClientModuleResponse;
 }
 
+export interface VersionedClientModuleRequest {
+  url?: string | null;
+}
+
 export interface MemoryVersionedClientModuleRegistryOptions {
   maxVersionsPerPath?: number;
 }
@@ -1062,6 +1066,25 @@ export function createMemoryVersionedClientModuleRegistry(
       };
     },
   };
+}
+
+export function renderVersionedClientModuleResponse(
+  registry: VersionedClientModuleRegistry,
+  request: string | VersionedClientModuleRequest,
+): VersionedClientModuleResponse {
+  const href = typeof request === 'string' ? request : request.url;
+  if (!href) return missingClientModuleResponse();
+
+  let url: URL;
+  try {
+    url = clientModuleUrl(href);
+  } catch {
+    return missingClientModuleResponse();
+  }
+
+  if (!url.searchParams.has('v')) return missingClientModuleResponse();
+
+  return registry.resolve(`${url.pathname}${url.search}${url.hash}`);
 }
 
 function missingClientModuleResponse(): VersionedClientModuleResponse {

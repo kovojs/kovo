@@ -26,7 +26,7 @@ import {
   parseComponentModule as parseComponentModuleModel,
   propertyAccessPaths,
 } from './scan/parse.js';
-import { escapeAttribute, indent, kebabCase } from './shared.js';
+import { dedupeBy, escapeAttribute, indent, kebabCase } from './shared.js';
 import {
   collectQueryUpdateCoverage,
   collectQueryUpdatePlans,
@@ -430,8 +430,8 @@ export function jisoVitePlugin(): JisoVitePlugin {
     configureServer(server) {
       root = server.config?.root ?? root;
       server.middlewares.use((req, res, next) => {
-        const path = devClientModulePath(req.url);
-        const source = path ? clientModules.get(path) : undefined;
+        const key = devClientModuleKey(req.url);
+        const source = key ? clientModules.get(key) : undefined;
         if (source === undefined) {
           next();
           return;
@@ -450,7 +450,10 @@ export function jisoVitePlugin(): JisoVitePlugin {
       const result = compileComponentModule({ fileName, source });
       for (const file of result.files) {
         if (file.kind === 'client') {
-          clientModules.set(clientModuleUrl(fileName), file.source);
+          clientModules.set(
+            clientModuleUrl(fileName, clientModuleVersion(file.source)),
+            file.source,
+          );
         }
       }
 
@@ -476,11 +479,14 @@ function slashPath(fileName: string): string {
   return fileName.replaceAll('\\', '/');
 }
 
-function devClientModulePath(url: string | undefined): string | null {
+function devClientModuleKey(url: string | undefined): string | null {
   if (!url) return null;
 
-  const path = url.split(/[?#]/, 1)[0] ?? '';
-  return path.startsWith('/c/') ? path : null;
+  const [path = '', query = ''] = url.split(/[?#]/, 2);
+  const version = new URLSearchParams(query).get('v');
+  if (!path.startsWith('/c/') || !version) return null;
+
+  return `${path}?v=${version}`;
 }
 
 function emittedFileKind(fileName: string): EmittedFile['kind'] {
@@ -1496,7 +1502,7 @@ function validateStaticIds(
     diagnostics.push(fw224Diagnostic(fileName, source, `repeatable id="${id.value}"`, id));
   }
 
-  return dedupeDiagnostics(diagnostics);
+  return dedupeBy(diagnostics, diagnosticKey);
 }
 
 function literalIdValues(model: ComponentModuleModel, offset = 0): LiteralIdValue[] {
@@ -1658,7 +1664,7 @@ function validateResidualStamps(
     }
   }
 
-  return dedupeDiagnostics(diagnostics);
+  return dedupeBy(diagnostics, diagnosticKey);
 }
 
 const ambiguousRelationshipAttributes = new Set([
@@ -1712,7 +1718,7 @@ function validateAttributeMergeConflicts(
     }
   }
 
-  return dedupeDiagnostics(diagnostics);
+  return dedupeBy(diagnostics, diagnosticKey);
 }
 
 function countValues(values: readonly string[]): Map<string, number> {
@@ -1771,18 +1777,8 @@ function explicitComponentNames(model: ComponentModuleModel): string[] {
   return componentExplicitNames(model);
 }
 
-function dedupeDiagnostics(diagnostics: readonly CompilerDiagnostic[]): CompilerDiagnostic[] {
-  return dedupeBy(diagnostics, (diagnostic) => `${diagnostic.code}\0${diagnostic.message}`);
-}
-
-function dedupeBy<Value>(values: readonly Value[], keyFor: (value: Value) => string): Value[] {
-  const seen = new Set<string>();
-  return values.filter((value) => {
-    const key = keyFor(value);
-    if (seen.has(key)) return false;
-    seen.add(key);
-    return true;
-  });
+function diagnosticKey(diagnostic: CompilerDiagnostic): string {
+  return `${diagnostic.code}\0${diagnostic.message}`;
 }
 
 function validateLiteralHrefs(

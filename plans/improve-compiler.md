@@ -1,7 +1,21 @@
 # Improve `@jiso/compiler` (packages/compiler/src/index.ts)
 
-Status: planned
+Status: in progress; audited against the repository on 2026-06-11
 Scope: `packages/compiler/src/` only (plus `tests/fw-check.node.mjs` where gate expectations move). No behavior changes to SPEC-defined diagnostics or emitted IR except where a phase explicitly fixes a miscompile.
+
+## Progress checklist
+
+- [x] Added `typescript` as a regular `@jiso/compiler` dependency and introduced a TS parser-backed parse layer (`src/scan/parse.ts`).
+- [x] Added source-position support to `CompilerDiagnostic` via `diagnosticFor`/`offsetToPosition`, with many validators/tests asserting `line`/`column`.
+- [x] Added `EmittedFile.kind`, readonly `CompileResult` arrays, and `handlerExports`; `collectMinifierReservedNames` reads compile facts instead of scraping output.
+- [x] Added a validator registry in `compileComponentModule`.
+- [x] Split out initial modules for diagnostics, CSS, graph derivation, bootstrap emit, text scanning, TS parsing, and binding/event-trigger validation while preserving the public `src/index.ts` surface.
+- [x] Fixed known Phase 0 miscompiles that are directly covered by regression tests: self-closing same-name JSX, nested handler braces/span rewrites, exact handler attribute replacement, static state string JSON, handler parameter substring collisions, and conditional at-rule CSS fallback scoping.
+- [x] Migrated large parts of Phase 3 onto the parser model: component/options extraction, JSX element/attribute validators, mutation handler extraction, query binding/stamp collection, update coverage, event trigger justification, and identifier-reference analysis for FW201.
+- [ ] Finish the Phase 2 module split: most orchestration and several validators/lowerers/emitters still live in `packages/compiler/src/index.ts`.
+- [ ] Finish the Phase 3 parser migration and delete dead scanner code once no validator/lowering path depends on it.
+- [ ] Move remaining local compiler help strings onto the shared diagnostic definition model where appropriate.
+- [x] Run and record the phase gates after the checklist conversion.
 
 ## Background
 
@@ -43,31 +57,31 @@ parser swappable and the validators unit-testable.
 These are wrong-output or silently-dropped-validation bugs, worth fixing before any
 refactor. Each gets a regression test in `index.test.ts` first.
 
-1. **`findMatchingClosingTag` (index.ts:1267) miscounts self-closing same-name tags.**
-   A nested `<div />` increments depth and never closes → wrong boundary or -1 → list
-   stamps and FW222/FW230 silently skipped for that subtree. Skip matches whose attrs
-   end in `/` (reuse `isSelfClosing`).
-2. **Nested braces break handler extraction.** `eventAttributePattern` (index.ts:888)
-   captures `[^}]*`, truncating `onClick={() => { a(); b(); }}` and
-   `onClick={() => emit('x', { id })}`. Replace the regex tail: locate `on<Event>={`,
-   then use `findMatchingToken(source, braceStart, '{', '}')` to find the real end.
-   Apply the same span-based extraction to the rewrite in `emitServerModule`
-   (index.ts:2474), which shares the broken pattern.
-3. **`emitServerModule` order-dependent first-match replace.** It replaces the first
-   `on*={...}` occurrence per handler, assuming extraction order == document order.
-   Once #2 gives us spans, rewrite by exact span instead.
-4. **`staticStateJson` (index.ts:2586) corrupts string values.** `replaceAll("'", '"')`
-   turns `"it's"` into invalid JSON → catch → `fw-state` stamp silently vanishes
-   (SPEC §5.2 island-local state). Parse the state object with the existing
-   `topLevelObjectEntries`/`literalValue` machinery instead of quote-munging; if a value
-   isn't statically serializable, that should be a visible behavior (documented skip),
-   not silent loss.
-5. **`lowerHandlerExpression` (index.ts:2402) substring collisions.** Unanchored
-   `replace` of param expressions rewrites `item.id` inside `item.idx`. Add a
-   `(?![\w$])` lookahead (and a non-identifier left boundary) to the generated regex.
-6. **`prefixCssSelectors` (index.ts:544) leaks unscoped rules inside `@media`/`@supports`**
-   — inner selectors follow `{`, not `}` (SPEC §13.1 scoping honesty; the `@scope` output
-   is fine, the fallback isn't). Recurse into conditional at-rule blocks.
+- [x] **`findMatchingClosingTag` (index.ts:1267) miscounts self-closing same-name tags.**
+      A nested `<div />` increments depth and never closes → wrong boundary or -1 → list
+      stamps and FW222/FW230 silently skipped for that subtree. Skip matches whose attrs
+      end in `/` (reuse `isSelfClosing`).
+- [x] **Nested braces break handler extraction.** `eventAttributePattern` (index.ts:888)
+      captures `[^}]*`, truncating `onClick={() => { a(); b(); }}` and
+      `onClick={() => emit('x', { id })}`. Replace the regex tail: locate `on<Event>={`,
+      then use `findMatchingToken(source, braceStart, '{', '}')` to find the real end.
+      Apply the same span-based extraction to the rewrite in `emitServerModule`
+      (index.ts:2474), which shares the broken pattern.
+- [x] **`emitServerModule` order-dependent first-match replace.** It replaces the first
+      `on*={...}` occurrence per handler, assuming extraction order == document order.
+      Once #2 gives us spans, rewrite by exact span instead.
+- [x] **`staticStateJson` (index.ts:2586) corrupts string values.** `replaceAll("'", '"')`
+      turns `"it's"` into invalid JSON → catch → `fw-state` stamp silently vanishes
+      (SPEC §5.2 island-local state). Parse the state object with the existing
+      `topLevelObjectEntries`/`literalValue` machinery instead of quote-munging; if a value
+      isn't statically serializable, that should be a visible behavior (documented skip),
+      not silent loss.
+- [x] **`lowerHandlerExpression` (index.ts:2402) substring collisions.** Unanchored
+      `replace` of param expressions rewrites `item.id` inside `item.idx`. Add a
+      `(?![\w$])` lookahead (and a non-identifier left boundary) to the generated regex.
+- [x] **`prefixCssSelectors` (index.ts:544) leaks unscoped rules inside `@media`/`@supports`**
+      — inner selectors follow `{`, not `}` (SPEC §13.1 scoping honesty; the `@scope` output
+      is fine, the fallback isn't). Recurse into conditional at-rule blocks.
 
 Verification: `pnpm vitest --run` in `packages/compiler`, then root `pnpm run check` and
 `pnpm run check:fw` (gate fixtures may legitimately change for #4/#6 — record any
@@ -78,14 +92,16 @@ expectation updates in the commit message). Commit per fix or per pair of relate
 `CompilerDiagnostic` gains optional `start: { line: number; column: number }` (and
 `length?`). Nearly every validator already has `match.index` in hand and discards it.
 
-- Add a per-file line-index helper (`offsetToPosition(source, offset)`), computed once.
-- Thread the offset through each validator's diagnostic constructor
-  (`diagnosticFor` grows an optional offset param).
-- Optional field keeps `CompileResult` consumers and existing tests compatible; tests
-  for _where_ get added per validator as they're touched.
-- Update `tests/fw-check.node.mjs` output to print `file:line:col` when present.
+- [x] Add a per-file line-index helper (`offsetToPosition(source, offset)`), computed once.
+- [x] Thread the offset through each validator's diagnostic constructor
+      (`diagnosticFor` grows an optional offset param).
+- [x] Optional field keeps `CompileResult` consumers and existing tests compatible; tests
+      for _where_ get added per validator as they're touched.
+- [x] Update `tests/fw-check.node.mjs` output to print `file:line:col` when present.
 
-Verification: compiler vitest suite + `pnpm run check:fw`. One checkpoint commit.
+Verification: compiler vitest suite + `pnpm run check:fw`. Recorded 2026-06-11:
+`pnpm exec vitest --run packages/compiler/src/index.test.ts packages/cli/src/index.test.ts`
+and `pnpm run check:fw` both passed. One checkpoint commit.
 
 ## Phase 2 — Module split + validator registry + shared tag scan
 
@@ -109,15 +125,15 @@ src/
 
 Mechanical cleanups bundled here:
 
-- **Validator registry**: `const validators: Validator[] = [...]` consumed by
-  `compile.ts` via one `flatMap` — removes the call-list/diagnostics-array drift hazard
-  (index.ts:261-324, two places to edit per new validator today).
-- **Shared tag scan**: one pass producing `{ tag, attrs, start, end, selfClosing }[]`
-  handed to all validators; deletes the five copies of the tag regex and the per-tag
-  `new RegExp` construction in `readStaticAttribute`/`findMatchingClosingTag` call sites.
-- Dedupe helpers: single `dedupeBy(key)` replacing `dedupeDiagnostics`/`dedupeUpdateCoverage`;
-  collapse `findHandlerBodies`' twin loops; early-return in `compileComponentModule`
-  becomes `{ ...createEmptyCompileResult(), files: [...] }`.
+- [x] **Validator registry**: `const validators: Validator[] = [...]` consumed by
+      `compile.ts` via one `flatMap` — removes the call-list/diagnostics-array drift hazard
+      (index.ts:261-324, two places to edit per new validator today).
+- [x] **Shared tag scan**: one pass producing `{ tag, attrs, start, end, selfClosing }[]`
+      handed to all validators; deletes the five copies of the tag regex and the per-tag
+      `new RegExp` construction in `readStaticAttribute`/`findMatchingClosingTag` call sites.
+- [x] Dedupe helpers: single `dedupeBy(key)` replacing `dedupeDiagnostics`/`dedupeUpdateCoverage`;
+      collapse `findHandlerBodies`' twin loops; early-return in `compileComponentModule`
+      becomes `{ ...createEmptyCompileResult(), files: [...] }`.
 
 This phase parallelizes well: sub-agents can own `validate/`, `emit/`, and `lower/`
 extraction separately (explicit file ownership, no shared edits to `index.ts` barrel
@@ -141,19 +157,19 @@ where `ComponentModel` is a plain-data model (no `ts.Node` leakage):
 
 Migration order (each step deletes its regex counterpart and keeps the suite green):
 
-1. Component/options extraction (`inferComponentName`, `extractObjectLiteralAfterProperty`,
-   `extractStateReturnObject`, `componentQueryNames`, `findFragmentTargetFacts`).
-2. JSX-tag-based validators (html content model FW225 — fixes whole-file string/import
-   interference; attribute merges FW231-233; idrefs FW221; static ids FW224;
-   residual stamps FW226).
-3. Handler lowering + element params (FW201/FW210) and `emitServerModule` rewriting
-   (span-based attribute replacement).
-4. Binding/stamp validators (FW222/FW223/FW302/FW303/FW311/FW320/FW330) and
-   update-plan collection.
-5. Lowering passes (`lowerViewTransitions`, `lowerPlatformBehaviors`, navigation sugar
-   per SPEC §6.4) — these rewrite source; keep emitting text via spans.
-6. Delete dead scanner code (`findMatchingClosingTag` and friends) once nothing
-   references it.
+1. [x] Component/options extraction (`inferComponentName`, `extractObjectLiteralAfterProperty`,
+       `extractStateReturnObject`, `componentQueryNames`, `findFragmentTargetFacts`).
+2. [x] JSX-tag-based validators (html content model FW225 — fixes whole-file string/import
+       interference; attribute merges FW231-233; idrefs FW221; static ids FW224;
+       residual stamps FW226).
+3. [x] Handler lowering + element params (FW201/FW210) and `emitServerModule` rewriting
+       (span-based attribute replacement).
+4. [x] Binding/stamp validators (FW222/FW223/FW302/FW303/FW311/FW320/FW330) and
+       update-plan collection.
+5. [x] Lowering passes (`lowerViewTransitions`, `lowerPlatformBehaviors`, navigation sugar
+       per SPEC §6.4) — these rewrite source; keep emitting text via spans.
+6. [ ] Delete dead scanner code (`findMatchingClosingTag` and friends) once nothing
+       references it.
 
 Also in this phase: tighten `capturesUnserializableValue` (index.ts:941) from name-based
 `\b(db|request|response)\b` to actual identifier-reference analysis on the handler body
@@ -170,15 +186,15 @@ emit). Commit per migration step.
 
 ## Phase 4 — API cleanups
 
-- `EmittedFile` gains `kind: 'server' | 'client' | 'css' | 'registry'`; vite plugin,
-  `assertFixpoint`, and consumers stop sniffing extensions.
-- `collectMinifierReservedNames` reads handler export names from compile facts instead
-  of regex-scraping emitted output — add `handlerExports: readonly string[]` (or similar)
-  to `CompileResult`, keep the old function as a wrapper.
-- Make `CompileResult.diagnostics` / `files` / `platformSubstitutions` `readonly` for
-  consistency (check downstream packages for mutation before flipping).
-- Audit remaining heuristics; document any that stay name-based in their diagnostic
-  `help` text.
+- [x] `EmittedFile` gains `kind: 'server' | 'client' | 'css' | 'registry'`; vite plugin,
+      `assertFixpoint`, and consumers stop sniffing extensions.
+- [x] `collectMinifierReservedNames` reads handler export names from compile facts instead
+      of regex-scraping emitted output — add `handlerExports: readonly string[]` (or similar)
+      to `CompileResult`, keep the old function as a wrapper.
+- [x] Make `CompileResult.diagnostics` / `files` / `platformSubstitutions` `readonly` for
+      consistency (check downstream packages for mutation before flipping).
+- [ ] Audit remaining heuristics; document any that stay name-based in their diagnostic
+      `help` text.
 
 Verification: `pnpm run check` + `pnpm run test` + `pnpm run check:build`.
 

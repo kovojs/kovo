@@ -1,7 +1,6 @@
 import assert from 'node:assert/strict';
 import { readdir, readFile } from 'node:fs/promises';
 import { test } from 'node:test';
-import { gzipSync } from 'node:zlib';
 
 const responseMarker = '<<< RESPONSE';
 const requestMarker = '>>> REQUEST';
@@ -320,33 +319,40 @@ void test('pre-launch checklist is tracked explicitly', async () => {
 
 void test('S2 loader budget and L0 no-upgrade path are acceptance evidence', async () => {
   const runtimeSource = await readProjectFile('packages/runtime/src/index.ts');
-  const loaderMatch = /export const jisoLoaderSource = `(?<source>[\s\S]*?)`;/m.exec(runtimeSource);
-  assert.ok(loaderMatch?.groups?.source, 'runtime exports jisoLoaderSource');
+  const runtimeTests = await readProjectFile('packages/runtime/src/index.test.ts');
 
-  const loaderSource = loaderMatch.groups.source;
-  assert.ok(gzipSync(loaderSource).byteLength <= 4096, 'loader remains inside the 4KB gzip budget');
-  assert.match(loaderSource, /import\(x\.slice\(0,i\)\)/, 'handlers import only from event refs');
+  assert.match(runtimeSource, /export function installInlineJisoLoader/);
+  assert.match(runtimeSource, /export const jisoLoaderSource = minifyInlineLoaderSource/);
+  assert.match(runtimeSource, /installInlineJisoLoader\.toString\(\)/);
+  assert.match(runtimeSource, /\(\(url\)=>import\(url\)\)/, 'handlers import only from event refs');
   assert.match(
-    loaderSource,
-    /signal:new AbortController\(\)\.signal/,
+    runtimeSource,
+    /signal: new AbortController\(\)\.signal/,
     'inline handlers receive ctx.signal',
   );
   assert.match(
-    loaderSource,
+    runtimeSource,
     /IntersectionObserver/,
     'inline loader schedules declared visible triggers',
   );
-  assert.match(loaderSource, /FW-Targets/, 'enhanced form submits send live targets');
-  assert.match(loaderSource, /keepalive:!0/, 'enhanced form submits use keepalive');
-  assert.match(loaderSource, /DOMParser/, 'loader parses mutation response chunks');
-  assert.match(loaderSource, /fw-fragment/, 'loader applies fragment chunks');
-  assert.match(loaderSource, /on\\\\\\\\:load/, 'inline loader schedules declared load triggers');
-  assert.match(loaderSource, /on\\\\\\\\:idle/, 'inline loader schedules declared idle triggers');
+  assert.match(runtimeSource, /FW-Targets/, 'enhanced form submits send live targets');
+  assert.match(runtimeSource, /keepalive: true/, 'enhanced form submits use keepalive');
+  assert.match(runtimeSource, /DOMParser/, 'loader parses mutation response chunks');
+  assert.match(runtimeSource, /fw-fragment/, 'loader applies fragment chunks');
+  assert.match(runtimeSource, /on\\\\:load/, 'inline loader schedules declared load triggers');
+  assert.match(runtimeSource, /on\\\\:idle/, 'inline loader schedules declared idle triggers');
   assert.doesNotMatch(
-    loaderSource,
-    /customElements|attachShadow|unload/,
+    runtimeSource.slice(
+      runtimeSource.indexOf('export function installInlineJisoLoader'),
+      runtimeSource.indexOf('function minifyInlineLoaderSource'),
+    ),
+    /\bcustomElements\.define\b|attachShadow|\bunload\b/,
     'loader has no upgrade/unload path',
   );
+  assert.match(runtimeTests, /gzipSync\(jisoLoaderSource\)\.byteLength/);
+  assert.match(runtimeTests, /toBeLessThanOrEqual\(4096\)/);
+  assert.match(runtimeTests, /generated bootstrap source/);
+  assert.match(runtimeTests, /shared inline loader source/);
 });
 
 void test('P2 loader smoke evidence remains represented in runtime tests', async () => {
@@ -363,8 +369,8 @@ void test('P2 loader smoke evidence remains represented in runtime tests', async
     /expect\(\[\.\.\.root\.listeners\.keys\(\)\]\)\.toEqual\(\['click', 'submit', 'input', 'change'\]\)/,
   );
   assert.match(runtimeTests, /expect\(importModule\)\.not\.toHaveBeenCalled\(\)/);
-  assert.match(runtimeTests, /expect\(jisoLoaderSource\)\.not\.toContain\('customElements'\)/);
-  assert.match(runtimeSource, /insertAdjacentHTML\("beforeend"/);
+  assert.match(runtimeSource, /export function installInlineJisoLoader/);
+  assert.match(runtimeSource, /insertAdjacentHTML\(['"]beforeend['"]/);
   assert.match(runtimeSource, /signal: createHandlerSignal\(element\)/);
   assert.match(runtimeSource, /islandSignalControllers/);
   assert.match(
@@ -385,7 +391,7 @@ void test('P2 loader smoke evidence remains represented in runtime tests', async
   );
   assert.match(runtimeTests, /aborts removed island ctx\.signal during fragment application/);
   assert.match(runtimeTests, /installs declared load, idle, and visible execution triggers/);
-  assert.match(runtimeTests, /ships an inline enhanced form round trip in the bootstrap source/);
+  assert.match(runtimeTests, /ships an inline enhanced form round trip through %s/);
   assert.match(runtimeTests, /refetches typed read endpoints and applies returned query chunks/);
   assert.match(
     runtimeTests,
@@ -1080,8 +1086,12 @@ void test('P9 verification layer evidence remains represented', async () => {
   assert.match(cliSource, /diagnostics\?: readonly StaticDiagnosticFact/);
   assert.match(cliSource, /function verificationDiagnosticLine/);
   assert.match(cliSource, /function staticDiagnosticLine/);
+  assert.match(cliSource, /function diagnosticSite/);
+  assert.match(cliSource, /start\.line/);
+  assert.match(cliSource, /start\.column/);
   assert.match(cliTests, /prints static Drizzle FW410 diagnostics as fw check findings/);
   assert.match(cliTests, /ERROR FW410 cart\.queries\.ts:5/);
+  assert.match(cliTests, /ERROR FW302 cart-badge\.tsx:3:23/);
   assert.match(cliTests, /prints runtime verification diagnostics as fw check findings/);
   assert.match(cliTests, /ERROR FW408 product\.domain\.ts:9/);
   assert.match(runtimeSource, /export interface MutationChangeRecord/);
@@ -1168,7 +1178,8 @@ void test('S1 production build proves the compiler 1:1 emit contract', async () 
   const prodEmitCheck = await readProjectFile('scripts/prod-emit-check.mjs');
 
   assert.match(compilerSource, /configureServer/);
-  assert.match(compilerSource, /devClientModulePath/);
+  assert.match(compilerSource, /devClientModuleKey/);
+  assert.match(compilerSource, /URLSearchParams\(query\)\.get\('v'\)/);
   assert.match(compilerSource, /clientModules\.set/);
   assert.match(compilerTests, /serves emitted client modules from Vite dev middleware/);
   assert.match(viteConfig, /command: 'vp pack && node scripts\/prod-emit-check\.mjs'/);

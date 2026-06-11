@@ -384,7 +384,7 @@ describe('@jiso/test harness', () => {
     );
   });
 
-  it('asserts stamped fragment targets without matching unrelated fw-deps elements', async () => {
+  it('does not resolve fragments by fw-c stamps or same-tag fw-deps elements', async () => {
     const harness = createJisoTestHarness({
       db: {},
       pages: {
@@ -395,10 +395,8 @@ describe('@jiso/test harness', () => {
 
     const page = await harness.page('/cart');
 
-    expect(page.fragment('cart-badge')).toBe("<section fw-c='cart-badge'><span>1</span></section>");
-    expect(page.fragment('cart-form')).toBe(
-      '<cart-form fw-deps="cart"><button>Add</button></cart-form>',
-    );
+    expect(page.fragment('cart-badge')).toBe('');
+    expect(page.fragment('cart-form')).toBe('');
     expect(page.fragment('missing-target')).toBe('');
   });
 
@@ -437,17 +435,31 @@ describe('@jiso/test harness', () => {
     );
   });
 
-  it('asserts stamped fragment targets with nested same-tag children', async () => {
+  it('asserts id fragment targets with nested same-tag children', async () => {
     const harness = createJisoTestHarness({
       db: {},
       pages: {
         '/cart':
-          '<section fw-c="cart-badge"><section class="inner"><span>1</span></section><p>done</p></section>',
+          '<section id="cart-badge"><section class="inner"><span>1</span></section><p>done</p></section>',
       },
     });
 
     await expect(harness.page('/cart').then((page) => page.fragment('cart-badge'))).resolves.toBe(
-      '<section fw-c="cart-badge"><section class="inner"><span>1</span></section><p>done</p></section>',
+      '<section id="cart-badge"><section class="inner"><span>1</span></section><p>done</p></section>',
+    );
+  });
+
+  it('asserts fw-fragment-target fragments with nested same-tag children', async () => {
+    const harness = createJisoTestHarness({
+      db: {},
+      pages: {
+        '/cart':
+          '<article fw-fragment-target="cart-badge"><article class="inner"><span>1</span></article><p>done</p></article>',
+      },
+    });
+
+    await expect(harness.page('/cart').then((page) => page.fragment('cart-badge'))).resolves.toBe(
+      '<article fw-fragment-target="cart-badge"><article class="inner"><span>1</span></article><p>done</p></article>',
     );
   });
 

@@ -1,6 +1,7 @@
 import { diagnosticDefinitions } from '@jiso/core';
 
 import { diagnosticFor, type CompilerDiagnostic } from '../diagnostics.js';
+import { dedupeBy } from '../shared.js';
 import {
   callExpressions,
   componentOptionSource,
@@ -328,7 +329,7 @@ export function collectQueryUpdateCoverage(
     coveredPaths.add(path);
   }
 
-  return dedupeUpdateCoverage(facts);
+  return dedupeBy(facts, updateCoverageKey);
 }
 
 export function queryUpdateCoverageSpan(
@@ -452,12 +453,8 @@ function queryPathUsesKnownQuery(path: string, knownQueries: ReadonlySet<string>
   return query !== null && knownQueries.has(query);
 }
 
-function dedupeUpdateCoverage(
-  facts: readonly QueryUpdateCoverageFact[],
-): QueryUpdateCoverageFact[] {
-  return dedupeBy(facts, (fact) =>
-    [fact.componentName, fact.query, fact.position, fact.status, fact.detail ?? ''].join('\0'),
-  );
+function updateCoverageKey(fact: QueryUpdateCoverageFact): string {
+  return [fact.componentName, fact.query, fact.position, fact.status, fact.detail ?? ''].join('\0');
 }
 
 function dataBindAttributes(model: ComponentModuleModel): DataBindAttribute[] {
@@ -808,14 +805,4 @@ function findStringEnd(source: string, start: number, quote: string): number {
   }
 
   return -1;
-}
-
-function dedupeBy<Value>(values: readonly Value[], keyFor: (value: Value) => string): Value[] {
-  const seen = new Set<string>();
-  return values.filter((value) => {
-    const key = keyFor(value);
-    if (seen.has(key)) return false;
-    seen.add(key);
-    return true;
-  });
 }

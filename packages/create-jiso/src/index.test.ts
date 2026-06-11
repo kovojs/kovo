@@ -205,6 +205,8 @@ describe('create-jiso starter', () => {
     expect(deploymentDoc).toContain('BroadcastChannel');
     expect(deploymentDoc).toContain('Refetch-on-focus/visibility');
     expect(deploymentDoc).toContain('No SSE or live bus ships in v1');
+    expect(deploymentDoc).toContain('Keep old versioned client module artifacts published');
+    expect(deploymentDoc).toContain('never rewrite a versioned `/c/` URL to the latest module');
     const frameworkRules = project.files.find(
       (file) => file.path === 'docs/framework-rules.md',
     )?.source;

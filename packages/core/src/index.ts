@@ -1,5 +1,10 @@
-export type { DiagnosticCode, DiagnosticDefinition, DiagnosticSeverity } from './diagnostics.js';
-export { diagnosticDefinitions } from './diagnostics.js';
+export type {
+  DiagnosticCode,
+  DiagnosticDefinition,
+  DiagnosticSeverity,
+  DiagnosticTextOptions,
+} from './diagnostics.js';
+export { diagnosticDefinitions, diagnosticDefinitionText } from './diagnostics.js';
 
 export type JsonValue =
   | null
@@ -221,7 +226,7 @@ export function query<
 export interface Form<
   Key extends string,
   Input extends Record<string, JsonValue> = Record<string, JsonValue>,
-  Failure extends JsonValue = JsonValue,
+  Failure = JsonValue,
 > {
   failure?: Failure;
   input?: Input;
@@ -259,20 +264,18 @@ interface SchemaLike<Value> {
 
 type InferSchemaLike<Schema> = Schema extends SchemaLike<infer Value> ? Value : never;
 
-type RegistryMutation<Key extends string, Input extends Record<string, JsonValue>, Failure> = {
-  errors?: Record<string, SchemaLike<JsonValue>>;
-  input: SchemaLike<Input>;
-  key: Key;
-} & {
-  __failure?: Failure;
-};
-
-type RegistryMutationInput<Key extends string> = Key extends keyof MutationRegistry
-  ? MutationRegistry[Key] extends Form<string, infer Input, JsonValue>
-    ? Input
-    : MutationRegistry[Key] extends RegistryMutation<string, infer Input, JsonValue>
+type RegistryMutationInputSchema<Value> = Value extends { input: infer InputSchema }
+  ? InferSchemaLike<InputSchema> extends infer Input
+    ? Input extends Record<string, JsonValue>
       ? Input
       : Record<string, JsonValue>
+    : Record<string, JsonValue>
+  : Record<string, JsonValue>;
+
+type RegistryMutationInput<Key extends string> = Key extends keyof MutationRegistry
+  ? MutationRegistry[Key] extends Form<string, infer Input, unknown>
+    ? Input
+    : RegistryMutationInputSchema<MutationRegistry[Key]>
   : Record<string, JsonValue>;
 
 type RegistryMutationFailure<Key extends string> = Key extends keyof MutationRegistry
@@ -284,7 +287,7 @@ type RegistryMutationFailure<Key extends string> = Key extends keyof MutationReg
   : JsonValue;
 
 type MutationErrorFailures<Errors> =
-  Errors extends Record<string, SchemaLike<JsonValue>>
+  Errors extends Record<string, SchemaLike<unknown>>
     ? {
         [Code in Extract<keyof Errors, string>]: {
           code: Code;
@@ -294,7 +297,7 @@ type MutationErrorFailures<Errors> =
     : JsonValue;
 
 export type FormInput<Definition> =
-  Definition extends Form<string, infer Input, JsonValue> ? Input : never;
+  Definition extends Form<string, infer Input, unknown> ? Input : never;
 
 export type FormFailure<Definition> =
   Definition extends Form<string, Record<string, JsonValue>, infer Failure>
@@ -304,12 +307,12 @@ export type FormFailure<Definition> =
 export type FormFieldName<Definition> = Extract<keyof FormInput<Definition>, string>;
 
 type MissingFormFields<
-  Definition extends Form<string, Record<string, JsonValue>, JsonValue>,
+  Definition extends Form<string, Record<string, JsonValue>, unknown>,
   Fields extends readonly string[],
 > = Exclude<FormFieldName<Definition>, Fields[number]>;
 
 type CompleteFormFields<
-  Definition extends Form<string, Record<string, JsonValue>, JsonValue>,
+  Definition extends Form<string, Record<string, JsonValue>, unknown>,
   Fields extends readonly FormFieldName<Definition>[],
 > =
   MissingFormFields<Definition, Fields> extends never
@@ -319,7 +322,7 @@ type CompleteFormFields<
 function createMutationForm<
   const Key extends RegistryKey<MutationRegistry>,
   Input extends Record<string, JsonValue> = RegistryMutationInput<Key>,
-  Failure extends JsonValue = RegistryMutationFailure<Key>,
+  Failure = RegistryMutationFailure<Key>,
 >(key: Key): Form<Key, Input, Failure> {
   return { key };
 }
@@ -354,7 +357,7 @@ export const form = Object.assign(createMutationForm, {
 });
 
 export function formFields<
-  Definition extends Form<string, Record<string, JsonValue>, JsonValue>,
+  Definition extends Form<string, Record<string, JsonValue>, unknown>,
   const Fields extends readonly FormFieldName<Definition>[],
 >(_form: Definition, fields: CompleteFormFields<Definition, Fields>): Fields {
   return fields as Fields;

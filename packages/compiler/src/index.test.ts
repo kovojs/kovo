@@ -31,6 +31,24 @@ export const CartBadge = component('cart-badge', {
 });
 `;
 
+function createMiddlewareResponse(): {
+  body: string;
+  headers: Record<string, string>;
+  setHeader(name: string, value: string): void;
+  end(body: string): void;
+} {
+  return {
+    body: '',
+    headers: {},
+    setHeader(name, value) {
+      this.headers[name] = value;
+    },
+    end(body) {
+      this.body = body;
+    },
+  };
+}
+
 function expectHandlerRef(source: string, path: string, exportName: string): void {
   expect(source).toMatch(
     new RegExp(`${escapeRegExp(path)}\\?v=[0-9a-f]{8}#${escapeRegExp(exportName)}`),
@@ -3232,6 +3250,46 @@ describe('jisoVitePlugin', () => {
     middlewares[0]?.({ url: clientRef ?? '' }, res, vi.fn());
 
     expect(res.body).toContain('export const CartBadge$button_click');
+  });
+
+  it('retains old versioned client modules after a newer transform', () => {
+    const plugin = jisoVitePlugin();
+    const middlewares: JisoViteMiddleware[] = [];
+    const source = (handler: string) => `
+import { component } from '@jiso/core';
+
+export const CartBadge = component('cart-badge', {
+  render: () => <button onClick={${handler}}>Add</button>,
+});
+`;
+    plugin.configureServer?.({
+      middlewares: {
+        use(handler) {
+          middlewares.push(handler);
+        },
+      },
+    });
+
+    const first = plugin.transform?.(source('removeItem'), 'components/cart/cart-badge.tsx');
+    const oldClientRef = first?.code.match(
+      /\/c\/components\/cart\/cart-badge\.client\.js\?v=[0-9a-f]{8}/,
+    )?.[0];
+    const second = plugin.transform?.(source('clearCart'), 'components/cart/cart-badge.tsx');
+    const newClientRef = second?.code.match(
+      /\/c\/components\/cart\/cart-badge\.client\.js\?v=[0-9a-f]{8}/,
+    )?.[0];
+    const oldResponse = createMiddlewareResponse();
+    const newResponse = createMiddlewareResponse();
+
+    expect(oldClientRef).toBeDefined();
+    expect(newClientRef).toBeDefined();
+    expect(newClientRef).not.toBe(oldClientRef);
+
+    middlewares[0]?.({ url: oldClientRef ?? '' }, oldResponse, vi.fn());
+    middlewares[0]?.({ url: newClientRef ?? '' }, newResponse, vi.fn());
+
+    expect(oldResponse.body).toContain('return removeItem(event, ctx);');
+    expect(newResponse.body).toContain('return clearCart(event, ctx);');
   });
 
   it('passes through unknown Vite dev middleware requests', () => {

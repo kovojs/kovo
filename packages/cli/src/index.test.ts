@@ -846,7 +846,11 @@ describe('fw check', () => {
       );
       writeFileSync(
         join(parent, 'node_modules/@jiso/core/index.js'),
-        'export const diagnosticDefinitions = {};\n',
+        [
+          'export const diagnosticDefinitions = {};',
+          'export function diagnosticDefinitionText() { return ""; }',
+          '',
+        ].join('\n'),
         'utf8',
       );
       writeFileSync(join(parent, 'package.json'), '{"type":"module"}\n', 'utf8');
