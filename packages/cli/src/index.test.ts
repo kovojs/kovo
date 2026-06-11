@@ -604,6 +604,7 @@ describe('fw explain', () => {
               fragments: ['cart-badge'],
               handlers: [
                 {
+                  captures: ['ctx', 'element-params'],
                   event: 'click',
                   exportName: 'CartBadge$button_click',
                   params: ['itemId'],
@@ -633,7 +634,7 @@ describe('fw explain', () => {
         'COMPONENT CartBadge',
         'queries: cart',
         'fragments: cart-badge',
-        'HANDLER click export=CartBadge$button_click ref=/c/cart-badge.client.js#CartBadge$button_click params=itemId substitution=-',
+        'HANDLER click export=CartBadge$button_click ref=/c/cart-badge.client.js#CartBadge$button_click captures=ctx,element-params params=itemId substitution=-',
         'SUBSTITUTION dialog tag=button event=click target=cart-drawer action=show-modal',
         '',
       ].join('\n'),

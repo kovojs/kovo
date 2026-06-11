@@ -31,12 +31,15 @@ export interface ComponentExplain {
 }
 
 export interface HandlerExplain {
+  captures?: readonly CaptureChannel[];
   event: string;
   exportName: string;
   params?: readonly string[];
   ref: string;
   substitution?: string;
 }
+
+export type CaptureChannel = 'ctx' | 'element-params' | 'module-scope';
 
 export interface PlatformSubstitutionExplain {
   action: string;
@@ -218,6 +221,7 @@ export function fwExplain(input: FwExplainInput, options: FwExplainOptions): FwC
           `HANDLER ${handler.event}`,
           `export=${handler.exportName}`,
           `ref=${handler.ref}`,
+          `captures=${list(handler.captures)}`,
           `params=${list(handler.params)}`,
           `substitution=${handler.substitution ?? '-'}`,
         ].join(' '),

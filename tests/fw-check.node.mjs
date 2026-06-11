@@ -450,6 +450,19 @@ void test('P9 verification layer evidence remains represented', async () => {
   assert.match(testHarnessTests, /FW408 Declared row key differs from observed row predicate/);
 });
 
+void test('P8 component explain includes handler capture channels', async () => {
+  const cliSource = await readProjectFile('packages/cli/src/index.ts');
+  const cliTests = await readProjectFile('packages/cli/src/index.test.ts');
+
+  assert.match(
+    cliSource,
+    /export type CaptureChannel = 'ctx' \| 'element-params' \| 'module-scope'/,
+  );
+  assert.match(cliSource, /captures=\$\{list\(handler\.captures\)\}/);
+  assert.match(cliTests, /captures: \['ctx', 'element-params'\]/);
+  assert.match(cliTests, /captures=ctx,element-params params=itemId/);
+});
+
 void test('Drizzle pinned conformance suite is an explicit gate', async () => {
   const packageJson = JSON.parse(await readProjectFile('package.json'));
   const viteConfig = await readProjectFile('vite.config.ts');
