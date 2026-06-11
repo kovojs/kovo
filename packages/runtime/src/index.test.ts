@@ -2017,6 +2017,28 @@ describe('query store', () => {
     });
   });
 
+  it('keeps nested fw-fragment children inside their parent fragment chunk', () => {
+    const store = createQueryStore();
+    const applied = applyMutationResponse(
+      store,
+      [
+        '<fw-fragment target="cart-badge">',
+        '<cart-badge><span>1</span><fw-fragment target="nested"><span>nested</span></fw-fragment></cart-badge>',
+        '</fw-fragment>',
+      ].join(''),
+    );
+
+    expect(applied).toEqual({
+      fragments: [
+        {
+          html: '<cart-badge><span>1</span><fw-fragment target="nested"><span>nested</span></fw-fragment></cart-badge>',
+          target: 'cart-badge',
+        },
+      ],
+      queries: [],
+    });
+  });
+
   it('reports malformed mutation query chunks while applying valid DOM updates', () => {
     const store = createQueryStore();
     const root = new FakeMorphRoot();

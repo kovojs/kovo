@@ -2335,21 +2335,86 @@ function readQueryChunks(body: string, onError?: (error: unknown) => void): Quer
 
 function readFragmentChunks(body: string): FragmentChunk[] {
   const fragments: FragmentChunk[] = [];
+  const fragmentTag = /<\/?fw-fragment\b/gi;
+  let offset = 0;
 
-  for (const match of body.matchAll(
-    /<fw-fragment\b(?<attrs>[^>]*)>(?<html>[\s\S]*?)<\/fw-fragment>/g,
-  )) {
-    const target = readAttribute(match.groups?.attrs ?? '', 'target');
-    if (!target) continue;
+  while (offset < body.length) {
+    fragmentTag.lastIndex = offset;
+    const match = fragmentTag.exec(body);
+    if (!match) break;
+    if (match[0].startsWith('</')) {
+      offset = match.index + match[0].length;
+      continue;
+    }
+
+    const openingEnd = tagClose(body, match.index + match[0].length);
+    if (openingEnd === undefined) break;
+    const end = matchingFragmentEnd(body, match.index);
+    if (!end) break;
+
+    const attrs = body.slice(match.index + match[0].length, openingEnd);
+    const target = readAttribute(attrs, 'target');
+    if (!target) {
+      offset = end.end;
+      continue;
+    }
 
     fragments.push({
-      html: match.groups?.html ?? '',
-      ...(readAttribute(match.groups?.attrs ?? '', 'mode') === 'append' ? { mode: 'append' } : {}),
+      html: body.slice(openingEnd + 1, end.closeStart),
+      ...(readAttribute(attrs, 'mode') === 'append' ? { mode: 'append' } : {}),
       target,
     });
+    offset = end.end;
   }
 
   return fragments;
+}
+
+function matchingFragmentEnd(
+  body: string,
+  start: number,
+): { closeStart: number; end: number } | null {
+  const fragmentTag = /<\/?fw-fragment\b/gi;
+  fragmentTag.lastIndex = start;
+  let depth = 0;
+
+  for (let match = fragmentTag.exec(body); match; match = fragmentTag.exec(body)) {
+    const close = tagClose(body, match.index + match[0].length);
+    if (close === undefined) return null;
+
+    if (match[0].startsWith('</')) {
+      depth -= 1;
+      if (depth === 0) return { closeStart: match.index, end: close + 1 };
+    } else if (!/\/\s*>$/.test(body.slice(match.index, close + 1))) {
+      depth += 1;
+    }
+
+    fragmentTag.lastIndex = close + 1;
+  }
+
+  return null;
+}
+
+function tagClose(source: string, start: number): number | undefined {
+  let quote: '"' | "'" | undefined;
+
+  for (let index = start; index < source.length; index += 1) {
+    const char = source[index];
+
+    if (quote !== undefined) {
+      if (char === quote) quote = undefined;
+      continue;
+    }
+
+    if (char === '"' || char === "'") {
+      quote = char;
+      continue;
+    }
+
+    if (char === '>') return index;
+  }
+
+  return undefined;
 }
 
 function replaceFragment(target: MorphTarget, html: string): void {
