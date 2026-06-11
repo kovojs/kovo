@@ -660,8 +660,10 @@ export function fwCheck(
       input.touchGraph ?? {},
       input.mutations ?? [],
     )) {
+      const definition = diagnosticDefinitions.FW407;
+      const help = definition.help ? ` ${definition.help}` : '';
       lines.push(
-        `ERROR FW407 ${missed.query} reads ${missed.domain} but no mutation touch graph writes that domain.`,
+        `ERROR FW407 ${missed.query} reads ${missed.domain}. ${definition.message}${help}`,
       );
     }
 

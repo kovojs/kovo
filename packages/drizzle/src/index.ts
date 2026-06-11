@@ -870,10 +870,12 @@ function opaqueProjectionDiagnostics(
 ): TouchGraphDiagnostic[] {
   if (hasOutput) return [];
 
+  const definition = diagnosticDefinitions.FW410;
+  const message = definition.help ?? definition.message;
   return opaquePaths.map((path) => ({
     code: 'FW410',
-    message: `Opaque query projection requires a declared output schema. ${query}.${path} uses sql/raw projection without output.`,
-    severity: diagnosticDefinitions.FW410.severity,
+    message: `${message} ${query}.${path} uses sql/raw projection without output.`,
+    severity: definition.severity,
     site: line,
   }));
 }

@@ -122,7 +122,7 @@ describe('fw check', () => {
     ).toBe(
       [
         'fw-check/v1',
-        'ERROR FW407 adminOrders reads order but no mutation touch graph writes that domain.',
+        'ERROR FW407 adminOrders reads order. Query read from undeclared domain. No mutation touch graph writes that domain.',
         'WARN UNGUARDED page /admin is reachable without an auth guard.',
         'WARN UNGUARDED query adminOrders is reachable without an auth guard.',
         '',
@@ -534,7 +534,7 @@ describe('fw check', () => {
     ).toEqual({
       exitCode: 1,
       output:
-        'fw-check/v1\nERROR FW407 productPage reads product but no mutation touch graph writes that domain.\n',
+        'fw-check/v1\nERROR FW407 productPage reads product. Query read from undeclared domain. No mutation touch graph writes that domain.\n',
     });
   });
 

@@ -35,6 +35,7 @@ export type DiagnosticCode =
 
 export interface DiagnosticDefinition {
   code: DiagnosticCode;
+  help?: string;
   severity: DiagnosticSeverity;
   message: string;
 }
@@ -42,6 +43,7 @@ export interface DiagnosticDefinition {
 export const diagnosticDefinitions = {
   FW201: {
     code: 'FW201',
+    help: 'Fixes: move the value into component/query state via ctx; pass serializable element params with data-p-*; or keep shared constants in module scope.',
     severity: 'error',
     message: 'Closure captures unserializable value.',
   },
@@ -97,6 +99,7 @@ export const diagnosticDefinitions = {
   },
   FW230: {
     code: 'FW230',
+    help: 'Fixes: pass serializable props, move browser/request/db values behind a server fragment, or render children inside the fragment target itself.',
     severity: 'error',
     message: 'Fragment-target children cannot lower to a component reference.',
   },
@@ -177,6 +180,7 @@ export const diagnosticDefinitions = {
   },
   FW407: {
     code: 'FW407',
+    help: 'No mutation touch graph writes that domain.',
     severity: 'error',
     message: 'Query read from undeclared domain.',
   },
@@ -192,6 +196,7 @@ export const diagnosticDefinitions = {
   },
   FW410: {
     code: 'FW410',
+    help: 'Opaque query projection requires a declared output schema.',
     severity: 'error',
     message: 'Query result shape failed declared output schema.',
   },

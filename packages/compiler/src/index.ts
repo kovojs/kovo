@@ -894,13 +894,14 @@ function fw201Diagnostic(
     params: readonly ElementParam[];
   },
 ): CompilerDiagnostic {
+  const definition = diagnosticDefinitions.FW201;
   return {
     ...diagnosticFor(fileName, 'FW201', source, offset, lowering.attributeName.length),
     help: [
       `Would lower to: ${lowering.attributeName}="${clientModuleUrl(fileName)}#${lowering.exportName}"`,
       `Blocked expression: ${lowering.expression}`,
       `Element params: ${lowering.params.map((param) => param.attributeName).join(', ') || '-'}`,
-      'Fixes: move the value into component/query state via ctx; pass serializable element params with data-p-*; or keep shared constants in module scope.',
+      definition.help ?? '',
     ].join('\n'),
   };
 }
@@ -1414,12 +1415,13 @@ function fw230Diagnostic(
   target: string,
   body: TemplateBody,
 ): CompilerDiagnostic {
+  const definition = diagnosticDefinitions.FW230;
   return {
     ...diagnosticFor(fileName, 'FW230', source, body.offset, body.source.length),
     help: [
       `Would hoist children to: ${target}$slot_children`,
       `Blocked children: ${body.source}`,
-      'Fixes: pass serializable props, move browser/request/db values behind a server fragment, or render children inside the fragment target itself.',
+      definition.help ?? '',
     ].join('\n'),
     message: `${diagnosticDefinitions.FW230.message} ${target}`,
   };

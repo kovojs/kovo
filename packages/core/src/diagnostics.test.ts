@@ -44,6 +44,7 @@ describe('diagnostic registry', () => {
       {
         "FW201": {
           "code": "FW201",
+          "help": "Fixes: move the value into component/query state via ctx; pass serializable element params with data-p-*; or keep shared constants in module scope.",
           "message": "Closure captures unserializable value.",
           "severity": "error",
         },
@@ -99,6 +100,7 @@ describe('diagnostic registry', () => {
         },
         "FW230": {
           "code": "FW230",
+          "help": "Fixes: pass serializable props, move browser/request/db values behind a server fragment, or render children inside the fragment target itself.",
           "message": "Fragment-target children cannot lower to a component reference.",
           "severity": "error",
         },
@@ -179,6 +181,7 @@ describe('diagnostic registry', () => {
         },
         "FW407": {
           "code": "FW407",
+          "help": "No mutation touch graph writes that domain.",
           "message": "Query read from undeclared domain.",
           "severity": "error",
         },
@@ -194,6 +197,7 @@ describe('diagnostic registry', () => {
         },
         "FW410": {
           "code": "FW410",
+          "help": "Opaque query projection requires a declared output schema.",
           "message": "Query result shape failed declared output schema.",
           "severity": "error",
         },
