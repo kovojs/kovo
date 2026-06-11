@@ -9,6 +9,11 @@ import {
   compileComponentModule,
 } from '../dist/compiler/src/index.mjs';
 import { readElementParams } from '../dist/runtime/src/index.mjs';
+import {
+  renderDocument,
+  renderDocumentQueryScript,
+  renderQueryScript,
+} from '../dist/server/src/index.mjs';
 
 const responseMarker = '<<< RESPONSE';
 const requestMarker = '>>> REQUEST';
@@ -500,15 +505,23 @@ void test('P2 loader smoke evidence remains represented in runtime tests', async
 });
 
 void test('P3 server renders initial query scripts for document-load hydration', async () => {
-  const serverSource = await readProjectFile('packages/server/src/index.ts');
-  const serverTests = await readProjectFile('packages/server/src/index.test.ts');
+  const query = {
+    key: 'cart:c1',
+    name: 'cart',
+    value: { html: '</script>' },
+  };
+  const queryScript =
+    '<script type="application/json" fw-query="cart" key="cart:c1">{"html":"\\u003c/script>"}</script>';
 
-  assert.match(serverSource, /export function renderQueryScript/);
-  assert.match(serverSource, /fw-query="\$\{escapeAttribute\(options\.name\)\}"/);
-  assert.match(serverSource, /escapeScriptJson\(JSON\.stringify\(options\.value\)\)/);
-  assert.match(serverTests, /renders initial query scripts for document-load hydration/);
-  assert.match(serverTests, /key="cart:c1"/);
-  assert.match(serverTests, /\\\\u003c\/script>/);
+  assert.equal(renderQueryScript(query), queryScript);
+  assert.equal(renderDocumentQueryScript(query), queryScript);
+  assert.match(
+    renderDocument({
+      body: '<main></main>',
+      queries: [query],
+    }).html,
+    /<head>[\s\S]*<script type="application\/json" fw-query="cart" key="cart:c1">\{"html":"\\u003c\/script>"\}<\/script>[\s\S]*<\/head><body><main><\/main><\/body>/,
+  );
 });
 
 void test('P2 page hints keep speculation rules opt-in and non-empty', async () => {
