@@ -408,11 +408,17 @@ pipeline throws the tree away and communicates via mutated source text.
       scanner remains only as a fallback. `packages/compiler/src/index.test.ts` covers an
       adversarial render body with tag text in a string/comment and proves CSS scopes to the
       returned JSX host instead.
-- [ ] **MED — Make the render-equivalence gate real.** emit/server.ts:28-41 compares
+- [x] **MED — Make the render-equivalence gate real.** emit/server.ts:28-41 compares
       `serverRenderSource(...)` against itself round-tripped through its own escaper — it can
       only fail if the escape pair disagrees. Execute the emitted server module's render against
       the authored render over the test corpus (SPEC §5.2.3's semantic gate, currently
       tautological).
+      Evidence 2026-06-11: `packages/compiler/src/emit/server.ts` now executes the emitted
+      `renderSource()` body for the artifact side of the check, with `packages/compiler/src/index.test.ts`
+      covering an adversarial emitted template escape (`\u0032`) that the old raw extractor would
+      have treated as equivalent while actual execution renders different HTML. Verified with
+      `pnpm exec vitest --run packages/compiler/src/index.test.ts`, `pnpm run check`,
+      `pnpm run check:build`, and `pnpm run check:fw`.
 - [ ] **LOW** — `validateDirectDbAccess` early-returns after the first offending handler per file
       (component-contracts.ts:174-191); FW201 silently replaces FW210 for handlers that are both
       anonymous and unserializable (lower/handlers.ts:44-62); `graph.ts:1` imports `'./shared.ts'`

@@ -16,6 +16,7 @@ import {
   scopeComponentCss,
   selectCssAssets,
 } from './index.js';
+import { renderEquivalenceCheck } from './emit/server.js';
 
 const cartBadgeSource = `
 import { component } from '@jiso/core';
@@ -703,6 +704,30 @@ export const CartBadge = component('cart-badge', {
     expect(() => assertRenderEquivalence(failed)).toThrow(
       'Render equivalence failed for components/cart/cart-badge.server.js',
     );
+  });
+
+  it('executes emitted renderSource for render-equivalence checks', () => {
+    const expected = '<cart-badge>u0032</cart-badge>';
+    const serverSource = [
+      '// @jiso-ir',
+      'export function renderSource() {',
+      '  return `<cart-badge>\\u0032</cart-badge>`;',
+      '}',
+      '',
+    ].join('\n');
+
+    const check = renderEquivalenceCheck(
+      'components/cart/cart-badge.server.js',
+      expected,
+      serverSource,
+    );
+
+    expect(check).toEqual({
+      actual: '<cart-badge>2</cart-badge>',
+      artifact: 'components/cart/cart-badge.server.js',
+      expected,
+      ok: false,
+    });
   });
 
   it('scopes native-host component CSS to the fw-c identity stamp', () => {
