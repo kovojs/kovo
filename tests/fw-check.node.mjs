@@ -836,6 +836,27 @@ void test('D2 commerce validates keyed append and optimistic reorder', async () 
   );
 });
 
+void test('P6 navigation bfcache optimism cleanup acceptance is represented', async () => {
+  const runtimeSource = await readProjectFile('packages/runtime/src/index.ts');
+  const runtimeTests = await readProjectFile('packages/runtime/src/index.test.ts');
+
+  assert.match(runtimeSource, /export function installPagehideOptimismCleanup/);
+  assert.match(runtimeSource, /options\.root\.addEventListener\('pagehide'/);
+  assert.match(runtimeSource, /keepalive: true/);
+  assert.doesNotMatch(runtimeSource, /\baddEventListener\(['"]unload['"]/);
+  assert.match(
+    runtimeTests,
+    /cleans up mid-flight optimistic navigation while the keepalive mutation continues/,
+  );
+  assert.match(runtimeTests, /SPEC\.md §8\/§10\.4/);
+  assert.match(runtimeTests, /discardPendingOptimism\(\)/);
+  assert.match(runtimeTests, /stampPendingQueries\(pendingRoot, discarded, false\)/);
+  assert.match(runtimeTests, /expect\(options\.keepalive\)\.toBe\(true\)/);
+  assert.match(runtimeTests, /type: 'pagehide'/);
+  assert.match(runtimeTests, /expect\(store\.get\('cart'\)\)\.toEqual\(\{ count: 1 \}\)/);
+  assert.match(runtimeTests, /expect\(store\.get\('cart'\)\)\.toEqual\(\{ count: 2 \}\)/);
+});
+
 void test('P3 commerce mutation runs through the transaction lifecycle', async () => {
   const commerceSource = await readProjectFile('examples/commerce/src/app.ts');
   const commerceTests = await readProjectFile('examples/commerce/src/app.test.ts');
