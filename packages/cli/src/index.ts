@@ -1033,7 +1033,7 @@ function optimisticCoverageWarnings(
 }
 
 function optimisticCoverageWarning(mutation: string, query: string): string {
-  return `WARN FW310 ${mutation} -> ${query} Invalidated query lacks optimistic transform.`;
+  return `WARN FW310 ${mutation} -> ${query} ${diagnosticDefinitions.FW310.message}`;
 }
 
 function updateCoverageLines(coverage: readonly UpdateCoverageFact[]): string[] {
