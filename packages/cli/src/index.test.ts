@@ -1507,6 +1507,86 @@ describe('fw explain', () => {
     `);
   });
 
+  it('prints all endpoints with stable explain output', () => {
+    const result = fwExplain(
+      {
+        endpoints: [
+          {
+            auth: 'verifier:stripe-signature',
+            csrf: 'exempt',
+            csrfJustification: 'signed stripe webhook',
+            method: 'POST',
+            name: 'stripe/webhook',
+            path: '/webhooks/stripe',
+            writes: ['order'],
+          },
+          {
+            auth: 'custom:api-key',
+            csrf: 'checked',
+            method: 'GET',
+            name: 'inventory/export',
+            path: '/exports/inventory.csv',
+          },
+        ],
+      },
+      { endpoints: true },
+    );
+
+    expect(result.exitCode).toBe(0);
+    expect(result.output).toMatchInlineSnapshot(`
+      "fw-explain/v1
+      ENDPOINTS
+      ENDPOINT inventory/export method=GET path=/exports/inventory.csv mount=exact auth=custom:api-key csrf=checked writes=-
+      ENDPOINT stripe/webhook method=POST path=/webhooks/stripe mount=exact auth=verifier:stripe-signature csrf=exempt:signed stripe webhook writes=order
+      SUMMARY total=2
+      "
+    `);
+  });
+
+  it('accepts fw explain --endpoints as a CLI audit mode', () => {
+    const tempDir = mkdtempSync(join(tmpdir(), 'jiso-cli-endpoints-'));
+    const graphPath = join(tempDir, 'graph.json');
+    let output = '';
+    const stdoutWrite = vi.spyOn(process.stdout, 'write').mockImplementation(((chunk) => {
+      output += chunk.toString();
+      return true;
+    }) as typeof process.stdout.write);
+
+    try {
+      writeFileSync(
+        graphPath,
+        JSON.stringify({
+          endpoints: [
+            {
+              auth: 'verifier:stripe-signature',
+              csrf: 'exempt',
+              csrfJustification: 'signed stripe webhook',
+              method: 'POST',
+              name: 'stripe/webhook',
+              path: '/webhooks/stripe',
+              writes: ['order'],
+            },
+          ],
+        }),
+      );
+
+      expect(main(['explain', '--endpoints', graphPath])).toBe(0);
+    } finally {
+      stdoutWrite.mockRestore();
+      rmSync(tempDir, { force: true, recursive: true });
+    }
+
+    expect(output).toBe(
+      [
+        'fw-explain/v1',
+        'ENDPOINTS',
+        'ENDPOINT stripe/webhook method=POST path=/webhooks/stripe mount=exact auth=verifier:stripe-signature csrf=exempt:signed stripe webhook writes=order',
+        'SUMMARY total=1',
+        '',
+      ].join('\n'),
+    );
+  });
+
   it('accepts fw explain --unguarded as a CLI audit mode', () => {
     const tempDir = mkdtempSync(join(tmpdir(), 'jiso-cli-'));
     const graphPath = join(tempDir, 'graph.json');

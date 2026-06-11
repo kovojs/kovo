@@ -128,6 +128,7 @@ export interface EndpointExplain {
   mount?: 'exact' | 'prefix';
   name?: string;
   path: string;
+  writes?: readonly string[];
 }
 
 export interface OptimisticCoverage {
@@ -281,6 +282,7 @@ export function main(args: readonly string[] = process.argv.slice(2)): number {
 
   if (args[0] === 'explain') {
     const optimistic = args.includes('--optimistic');
+    const endpoints = args.includes('--endpoints');
     const unscoped = args.includes('--unscoped');
     const unguarded = args.includes('--unguarded');
     const failOnFindings = args.includes('--fail-on-findings');
@@ -289,10 +291,21 @@ export function main(args: readonly string[] = process.argv.slice(2)): number {
       .filter(
         (arg) =>
           arg !== '--fail-on-findings' &&
+          arg !== '--endpoints' &&
           arg !== '--optimistic' &&
           arg !== '--unguarded' &&
           arg !== '--unscoped',
       );
+
+    if (endpoints) {
+      const [inputPath] = positional;
+      const input = readGraphInput(inputPath);
+      if (!input.ok) return writeInputError(input.error);
+      const result = fwExplain(input.value, { endpoints: true });
+      const stream = result.exitCode === 0 ? process.stdout : process.stderr;
+      stream.write(result.output);
+      return result.exitCode;
+    }
 
     if (unscoped) {
       const [inputPath] = positional;
@@ -318,7 +331,7 @@ export function main(args: readonly string[] = process.argv.slice(2)): number {
 
     if (!isExplainKind(kind) || !target) {
       process.stderr.write(
-        'fw: usage: fw explain component|mutation|query|page <target> [graph.json] | fw explain --unguarded [--fail-on-findings] [graph.json] | fw explain --unscoped [--fail-on-findings] [graph.json]\n',
+        'fw: usage: fw explain component|mutation|query|page <target> [graph.json] | fw explain --endpoints [graph.json] | fw explain --unguarded [--fail-on-findings] [graph.json] | fw explain --unscoped [--fail-on-findings] [graph.json]\n',
       );
       return 1;
     }
@@ -436,9 +449,14 @@ function isNodeErrorCode(error: unknown, code: string): boolean {
 export type ExplainKind = 'component' | 'mutation' | 'page' | 'query';
 
 export type FwExplainOptions =
+  | FwEndpointExplainOptions
   | FwTargetExplainOptions
   | FwUnguardedExplainOptions
   | FwUnscopedExplainOptions;
+
+export interface FwEndpointExplainOptions {
+  endpoints: true;
+}
 
 export interface FwTargetExplainOptions {
   kind: ExplainKind;
@@ -481,6 +499,18 @@ export function fwExplain(input: FwExplainInput, options: FwExplainOptions): FwC
 
     lines.push(`SUMMARY total=${accesses.length}`);
     return explainAuditResult(lines, accesses.length, options.failOnFindings);
+  }
+
+  if ('endpoints' in options) {
+    const endpoints = [...(input.endpoints ?? [])].sort(compareEndpointExplain);
+    lines.push('ENDPOINTS');
+
+    for (const endpoint of endpoints) {
+      lines.push(endpointExplainLine(endpoint));
+    }
+
+    lines.push(`SUMMARY total=${endpoints.length}`);
+    return ok(lines);
   }
 
   if (options.kind === 'component') {
@@ -997,6 +1027,18 @@ function unguardedLine(access: UnguardedAccessFact): string {
   return `${access.kind.toUpperCase()} ${access.name} ${access.detail}`;
 }
 
+function endpointExplainLine(endpoint: EndpointExplain): string {
+  return [
+    `ENDPOINT ${endpointName(endpoint)}`,
+    `method=${endpoint.method ?? 'ANY'}`,
+    `path=${endpoint.path}`,
+    `mount=${endpoint.mount ?? 'exact'}`,
+    `auth=${endpointAuth(endpoint)}`,
+    `csrf=${endpointCsrf(endpoint)}`,
+    `writes=${list(endpoint.writes)}`,
+  ].join(' ');
+}
+
 function unguardedWarningLine(access: UnguardedAccessFact): string {
   if (access.kind === 'endpoint') {
     return `WARN UNGUARDED ${access.name} endpoint is reachable without an auth declaration.`;
@@ -1031,6 +1073,10 @@ function hasEndpointAuth(endpoint: EndpointExplain): boolean {
 
 function endpointName(endpoint: EndpointExplain): string {
   return endpoint.name ?? endpoint.path;
+}
+
+function compareEndpointExplain(left: EndpointExplain, right: EndpointExplain): number {
+  return endpointName(left).localeCompare(endpointName(right));
 }
 
 function endpointAuth(endpoint: EndpointExplain): string {

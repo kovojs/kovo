@@ -1283,7 +1283,12 @@ void test('P8 component explain includes handler, derive, trigger, and merge fac
   assert.match(cliSource, /scopeAudits\?: readonly ScopeAuditFact\[\]/);
   assert.match(cliSource, /function unscopedAccesses/);
   assert.match(cliSource, /function unguardedAccesses/);
+  assert.match(cliSource, /endpoints: true/);
+  assert.match(cliSource, /ENDPOINTS/);
+  assert.match(cliSource, /writes=\$\{list\(endpoint\.writes\)\}/);
   assert.match(cliTests, /accepts fw explain --unscoped as a CLI audit mode/);
+  assert.match(cliTests, /accepts fw explain --endpoints as a CLI audit mode/);
+  assert.match(cliTests, /prints all endpoints with stable explain output/);
   assert.match(cliTests, /audits unguarded queries and pages with stable explain output/);
   assert.match(cliTests, /UNSCOPED QUERY cartById/);
 });
@@ -1517,6 +1522,7 @@ void test('D3 deferred stream responses are consumed by the runtime', async () =
   const serverHintsSource = await readProjectFile('packages/server/src/hints.ts');
   const serverTests = await readProjectFile('packages/server/src/index.test.ts');
   const runtimeSource = await readProjectFile('packages/runtime/src/index.ts');
+  const runtimeWireParserSource = await readProjectFile('packages/runtime/src/wire-parser.ts');
   const runtimeTests = await readProjectFile('packages/runtime/src/index.test.ts');
 
   assert.match(compilerBindingValidationSource, /collectQueryUpdatePlans/);
@@ -1550,7 +1556,8 @@ void test('D3 deferred stream responses are consumed by the runtime', async () =
   assert.match(runtimeSource, /bindings[\s\S]*derives[\s\S]*stamps/);
   assert.match(runtimeSource, /export function applyQueryBindings/);
   assert.match(runtimeSource, /deferredStreamChunks/);
-  assert.match(runtimeSource, /--\$\{boundary\}/);
+  assert.match(runtimeWireParserSource, /export function deferredStreamChunks/);
+  assert.match(runtimeWireParserSource, /--\$\{boundary\}/);
   assert.match(serverDeferredStreamSource, /mode\?: 'append' \| 'replace'/);
   assert.match(serverHintsSource, /bootstrapScript\?: string/);
   assert.match(

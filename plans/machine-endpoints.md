@@ -12,7 +12,10 @@ Scope: SPEC additions (`webhook()`, route response outcomes, storage capability,
 - [ ] E3 verifier kit: generic `hmacSignature()` + `stripeSignature` + `standardWebhooks` presets, custom `verify` escape, provider test vectors in CI.
 - [ ] E4 `respond.file()`/`respond.stream()` route outcomes (ETag/304; exports and downloads become ordinary guarded routes).
 - [ ] E5 storage capability interface + filesystem and S3-compatible adapters; retrofit D4 `s.file()` uploads onto it.
-- [ ] E6 `fw explain --endpoints` audit surface (snapshot-locked like the rest of P8 output).
+- [x] E6 `fw explain --endpoints` audit surface (snapshot-locked like the rest of P8 output).
+      Evidence 2026-06-11: `packages/cli/src/index.ts` prints a stable `ENDPOINTS`
+      inventory with method/path/mount/auth/CSRF/write-domain fields, and
+      `packages/cli/src/index.test.ts` covers both the pure `fwExplain` API and the CLI command.
 - [ ] E7 reference-app adoption: payment webhook, order CSV export route, attachment download behind the `--unscoped` audit.
 
 ## Background — the gap
