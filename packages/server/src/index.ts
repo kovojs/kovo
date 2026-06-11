@@ -622,7 +622,7 @@ export async function renderQueryEndpointResponse<const Key extends string, Valu
   }
 
   return {
-    body: renderQueryEndpointChunk(definition, result.input, result.value),
+    body: renderQueryChunk(definition, result.input, result.value, { endpoint: true }),
     headers: { 'Content-Type': 'text/html; charset=utf-8' },
     status: 200,
   };
@@ -2060,27 +2060,17 @@ function renderQueryChunk<const Key extends string, Value, Input, Request>(
   queryDefinition: QueryDefinition<Key, Value, Input, Request>,
   input: Input,
   value: Value,
+  options: { endpoint?: boolean } = {},
 ): string {
   const key = readQueryInstanceKey(queryDefinition, input);
+  const name = options.endpoint ? (key ?? queryDefinition.key) : queryDefinition.key;
   const version = readQueryVersion(queryDefinition, input, value);
-  const keyAttribute = key === undefined ? '' : ` key="${escapeAttribute(key)}"`;
+  const keyAttribute =
+    options.endpoint || key === undefined ? '' : ` key="${escapeAttribute(key)}"`;
   const versionAttribute =
     version === undefined ? '' : ` version="${escapeAttribute(String(version))}"`;
 
-  return `<fw-query name="${escapeAttribute(queryDefinition.key)}"${keyAttribute}${versionAttribute}>${escapeHtml(JSON.stringify(value))}</fw-query>`;
-}
-
-function renderQueryEndpointChunk<const Key extends string, Value, Input, Request>(
-  queryDefinition: QueryDefinition<Key, Value, Input, Request>,
-  input: Input,
-  value: Value,
-): string {
-  const name = readQueryInstanceKey(queryDefinition, input) ?? queryDefinition.key;
-  const version = readQueryVersion(queryDefinition, input, value);
-  const versionAttribute =
-    version === undefined ? '' : ` version="${escapeAttribute(String(version))}"`;
-
-  return `<fw-query name="${escapeAttribute(name)}"${versionAttribute}>${escapeHtml(JSON.stringify(value))}</fw-query>`;
+  return `<fw-query name="${escapeAttribute(name)}"${keyAttribute}${versionAttribute}>${escapeHtml(JSON.stringify(value))}</fw-query>`;
 }
 
 export interface QueryScriptRenderOptions {
