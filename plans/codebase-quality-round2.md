@@ -165,6 +165,11 @@ Do this first or pay it on every commit.
       APIs and asserts `diagnosticDefinitions.FW222`/`FW223` plus `compileComponentModule`
       diagnostics for redundant and disagreeing hand-written `data-bind` stamps instead of
       grepping core or compiler source/test names.
+      Partial evidence 2026-06-11: the P1 attribute-merge tranche now imports built
+      core/compiler APIs and asserts `diagnosticDefinitions.FW231`/`FW232`/`FW233` plus
+      `compileComponentModule` diagnostics for duplicate unmergeable attributes,
+      primitive-owned ARIA/state overrides, and duplicate binding slots instead of grepping core
+      or compiler source/test names.
 - [x] **Make create-jiso templates real files** (`create-jiso/src/index.ts:63-473`, ~470 lines of
       escaped template literals including a CI workflow and double-escaped regexes inside
       `.mjs`-in-string). Move to a `templates/` directory copied at scaffold time with `{{name}}`

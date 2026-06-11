@@ -976,29 +976,101 @@ export const CartBadge = component('cart-badge', {
 });
 
 void test('P1 compiler validates primitive composition attribute merges', async () => {
-  const coreSource = await readProjectFile('packages/core/src/diagnostics.ts');
-  const compilerSource = await readProjectFile('packages/compiler/src/index.ts');
-  const compilerMarkupSource = await readProjectFile('packages/compiler/src/validate/markup.ts');
-  const compilerTests = await readProjectFile('packages/compiler/src/index.test.ts');
-
-  assert.match(coreSource, /FW231/);
-  assert.match(coreSource, /FW232/);
-  assert.match(coreSource, /FW233/);
-  assert.match(coreSource, /Unmergeable attribute conflict/);
-  assert.match(coreSource, /Author overrides a primitive-owned ARIA or state attribute/);
-  assert.match(coreSource, /Two writers target the same binding slot/);
-  const compilerParseSource = await readProjectFile('packages/compiler/src/scan/parse.ts');
-  assert.match(compilerSource, /validateAttributeMergeConflicts/);
-  assert.match(compilerParseSource, /interface JsxAttributeModel/);
-  assert.match(compilerParseSource, /function jsxElements/);
-  assert.match(compilerMarkupSource, /ambiguousRelationshipAttributes/);
-  assert.match(compilerMarkupSource, /primitiveOwnedOverrideAttributes/);
-  assert.match(compilerMarkupSource, /attributeMergeDiagnostic/);
-  assert.match(
-    compilerTests,
-    /reports FW231, FW232, and FW233 for residual attribute merge conflicts/,
+  assert.equal(
+    diagnosticDefinitions.FW231.message,
+    'Unmergeable attribute conflict in primitive composition.',
   );
-  assert.match(compilerTests, /data-bind:hidden/);
+  assert.equal(
+    diagnosticDefinitions.FW232.message,
+    'Author overrides a primitive-owned ARIA or state attribute.',
+  );
+  assert.equal(diagnosticDefinitions.FW233.message, 'Two writers target the same binding slot.');
+  assert.deepEqual(
+    compileComponentModule({
+      fileName: 'components/primitive-merge.tsx',
+      source: `
+import { component } from '@jiso/core';
+
+export const PrimitiveMerge = component('primitive-merge', {
+  render: () => (
+    <primitive-merge>
+      <dialog id="drawer"></dialog>
+      <dialog id="confirm"></dialog>
+      <button commandfor="drawer" commandfor="confirm" data-p-id="one" data-p-id="two" fw-c="primitive-merge" fw-c="primitive-merge">Open</button>
+      <button aria-expanded="false" aria-expanded="true" role="button" role="link" data-state="closed" data-state="open">Toggle</button>
+      <span data-bind="cart.count" data-bind="cart.total" data-bind:hidden="cart.empty" data-bind:hidden="cart.loading">2</span>
+    </primitive-merge>
+  ),
+});
+`,
+    }).diagnostics.filter((diagnostic) => ['FW231', 'FW232', 'FW233'].includes(diagnostic.code)),
+    [
+      {
+        code: 'FW231',
+        fileName: 'components/primitive-merge.tsx',
+        length: 19,
+        message: `${diagnosticDefinitions.FW231.message} commandfor`,
+        severity: 'error',
+        start: { column: 15, line: 9 },
+      },
+      {
+        code: 'FW231',
+        fileName: 'components/primitive-merge.tsx',
+        length: 15,
+        message: `${diagnosticDefinitions.FW231.message} data-p-id`,
+        severity: 'error',
+        start: { column: 56, line: 9 },
+      },
+      {
+        code: 'FW231',
+        fileName: 'components/primitive-merge.tsx',
+        length: 22,
+        message: `${diagnosticDefinitions.FW231.message} fw-c`,
+        severity: 'error',
+        start: { column: 88, line: 9 },
+      },
+      {
+        code: 'FW232',
+        fileName: 'components/primitive-merge.tsx',
+        length: 21,
+        message: `${diagnosticDefinitions.FW232.message} aria-expanded`,
+        severity: 'lint',
+        start: { column: 15, line: 10 },
+      },
+      {
+        code: 'FW232',
+        fileName: 'components/primitive-merge.tsx',
+        length: 13,
+        message: `${diagnosticDefinitions.FW232.message} role`,
+        severity: 'lint',
+        start: { column: 58, line: 10 },
+      },
+      {
+        code: 'FW232',
+        fileName: 'components/primitive-merge.tsx',
+        length: 19,
+        message: `${diagnosticDefinitions.FW232.message} data-state`,
+        severity: 'lint',
+        start: { column: 84, line: 10 },
+      },
+      {
+        code: 'FW233',
+        fileName: 'components/primitive-merge.tsx',
+        length: 22,
+        message: `${diagnosticDefinitions.FW233.message} data-bind`,
+        severity: 'error',
+        start: { column: 13, line: 11 },
+      },
+      {
+        code: 'FW233',
+        fileName: 'components/primitive-merge.tsx',
+        length: 29,
+        message: `${diagnosticDefinitions.FW233.message} data-bind:hidden`,
+        severity: 'error',
+        start: { column: 59, line: 11 },
+      },
+    ],
+  );
 });
 
 void test('P1 compiler validates fragment-target child hoisting failures', async () => {
