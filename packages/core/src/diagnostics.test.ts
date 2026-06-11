@@ -23,6 +23,7 @@ describe('diagnostic registry', () => {
       'FW407',
       'FW408',
       'FW409',
+      'FW410',
     ]);
   });
 
@@ -118,6 +119,11 @@ describe('diagnostic registry', () => {
           "code": "FW409",
           "message": "Non-eq predicate degraded to table-level invalidation.",
           "severity": "notice",
+        },
+        "FW410": {
+          "code": "FW410",
+          "message": "Query result shape failed declared output schema.",
+          "severity": "error",
         },
       }
     `);

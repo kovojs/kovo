@@ -18,7 +18,8 @@ export type DiagnosticCode =
   | 'FW406'
   | 'FW407'
   | 'FW408'
-  | 'FW409';
+  | 'FW409'
+  | 'FW410';
 
 export interface DiagnosticDefinition {
   code: DiagnosticCode;
@@ -116,6 +117,11 @@ export const diagnosticDefinitions = {
     code: 'FW409',
     severity: 'notice',
     message: 'Non-eq predicate degraded to table-level invalidation.',
+  },
+  FW410: {
+    code: 'FW410',
+    severity: 'error',
+    message: 'Query result shape failed declared output schema.',
   },
 } as const satisfies Record<DiagnosticCode, DiagnosticDefinition>;
 

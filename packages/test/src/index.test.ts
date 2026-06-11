@@ -1151,6 +1151,79 @@ describe('@jiso/test harness', () => {
     await expect(harness.query(cartQuery)).resolves.toEqual({ cartId: 'c1', items: ['p1'] });
   });
 
+  it('validates query loader results against declared output schemas', async () => {
+    const cart = domain('cart');
+    const harness = createJisoTestHarness({
+      db: createFakeDb(),
+      touchGraph: {},
+      verification: {
+        domainByTable: {
+          cart_items: 'cart',
+        },
+      },
+    });
+    const cartQuery = query('cart', {
+      load() {
+        harness.db.read('cart_items');
+        return { count: 2 };
+      },
+      output: s.object({ count: s.number().int().min(0) }),
+      reads: [cart],
+    });
+
+    await expect(harness.query(cartQuery)).resolves.toEqual({ count: 2 });
+  });
+
+  it('fails query output verification when observed result shape violates the schema', async () => {
+    const cart = domain('cart');
+    const harness = createJisoTestHarness({
+      db: createFakeDb(),
+      touchGraph: {},
+      verification: {
+        domainByTable: {
+          cart_items: 'cart',
+        },
+      },
+    });
+    const cartQuery = query('cart', {
+      load() {
+        harness.db.read('cart_items');
+        return { count: 'two' };
+      },
+      output: s.object({ count: s.number().int().min(0) }),
+      reads: [cart],
+    });
+
+    await expect(harness.query(cartQuery)).rejects.toThrow(
+      'FW410 Query result shape failed declared output schema: cart Expected number',
+    );
+  });
+
+  it('reports FW410 for nested query output shape mismatches', async () => {
+    const product = domain('product');
+    const harness = createJisoTestHarness({
+      db: createFakeDb(),
+      touchGraph: {},
+      verification: {
+        domainByTable: {
+          products: 'product',
+        },
+      },
+    });
+    const productQuery = query('product/list', {
+      load() {
+        harness.db.read('products');
+        return { items: [{ id: 7 }] };
+      },
+      output: s.object({ items: s.array(s.object({ id: s.string() })) }),
+      reads: [product],
+    });
+
+    await expect(harness.query(productQuery)).rejects.toThrow(
+      'FW410 Query result shape failed declared output schema: product/list Expected string',
+    );
+  });
+
   it('fails query-loader verification for reads outside declared domains', async () => {
     const cart = domain('cart');
     const harness = createJisoTestHarness({

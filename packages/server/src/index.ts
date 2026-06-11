@@ -374,6 +374,7 @@ export interface QueryDefinition<
   instanceKey?: ((input: unknown) => string | undefined) | string;
   load?(input: Input, context: QueryLoadContext<Request>): Value;
   key: Key;
+  output?: Schema<Value>;
   reads: readonly Domain[];
   version?: ((input: Input, value: Value) => number | string | undefined) | number | string;
 }

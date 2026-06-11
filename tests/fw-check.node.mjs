@@ -783,6 +783,13 @@ void test('P9 verification layer evidence remains represented', async () => {
   assert.match(testHarnessSource, /diagnosticMessage\('FW404'/);
   assert.match(testHarnessSource, /diagnosticMessage\('FW407'/);
   assert.match(testHarnessSource, /diagnosticMessage\('FW408'/);
+  assert.match(testHarnessSource, /diagnosticMessage\(\s*'FW410'/);
+  assert.match(testHarnessTests, /validates query loader results against declared output schemas/);
+  assert.match(
+    testHarnessTests,
+    /fails query output verification when observed result shape violates the schema/,
+  );
+  assert.match(testHarnessTests, /reports FW410 for nested query output shape mismatches/);
   assert.match(testHarnessSource, /diagnosticDefinitions\[code\]\.message/);
   assert.match(cliSource, /verificationDiagnostics\?: readonly VerificationDiagnosticFact/);
   assert.match(cliSource, /function verificationDiagnosticLine/);

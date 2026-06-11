@@ -137,6 +137,18 @@ export function createJisoTestHarness<Db>(
         start,
         query.reads.map((domain) => domain.key),
       );
+      if (query.output) {
+        try {
+          query.output.parse(result);
+        } catch (error) {
+          throw new Error(
+            diagnosticMessage(
+              'FW410',
+              `${query.key} ${error instanceof Error ? error.message : String(error)}`,
+            ),
+          );
+        }
+      }
       return result;
     },
     verificationDiagnostics(): readonly DbVerificationDiagnostic[] {
