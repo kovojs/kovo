@@ -218,7 +218,7 @@ const compilerValidators: readonly CompilerValidator[] = [
   ({ model, options, source }) => validateEventTriggerNames(source, model, options.fileName),
   ({ componentName, model, options, source }) =>
     validateResidualStamps(source, model, options, componentName),
-  ({ model, options }) => validateAttributeMergeConflicts(model, options.fileName),
+  ({ model, options, source }) => validateAttributeMergeConflicts(source, model, options.fileName),
   ({ options, updateCoverage }) =>
     updateCoverage
       .filter((fact) => fact.status === 'UNHANDLED')
@@ -1554,6 +1554,7 @@ const ambiguousRelationshipAttributes = new Set([
 const primitiveOwnedOverrideAttributes = new Set(['role', 'data-state']);
 
 function validateAttributeMergeConflicts(
+  source: string,
   model: ComponentModuleModel,
   fileName: string,
 ): CompilerDiagnostic[] {
@@ -1565,9 +1566,11 @@ function validateAttributeMergeConflicts(
 
     for (const [name, count] of counts) {
       if (count < 2) continue;
+      const attribute = element.attributes.find((item) => item.name === name);
+      if (!attribute) continue;
 
       if (isBindingAttribute(name)) {
-        diagnostics.push(attributeMergeDiagnostic(fileName, 'FW233', name));
+        diagnostics.push(attributeMergeDiagnostic(source, fileName, 'FW233', name, attribute));
         continue;
       }
 
@@ -1577,12 +1580,12 @@ function validateAttributeMergeConflicts(
         name === 'fw-c' ||
         name === 'fw-state'
       ) {
-        diagnostics.push(attributeMergeDiagnostic(fileName, 'FW231', name));
+        diagnostics.push(attributeMergeDiagnostic(source, fileName, 'FW231', name, attribute));
         continue;
       }
 
       if (name.startsWith('aria-') || primitiveOwnedOverrideAttributes.has(name)) {
-        diagnostics.push(attributeMergeDiagnostic(fileName, 'FW232', name));
+        diagnostics.push(attributeMergeDiagnostic(source, fileName, 'FW232', name, attribute));
       }
     }
   }
@@ -1605,12 +1608,14 @@ function isBindingAttribute(name: string): boolean {
 }
 
 function attributeMergeDiagnostic(
+  source: string,
   fileName: string,
   code: 'FW231' | 'FW232' | 'FW233',
   detail: string,
+  attribute: JsxAttributeModel,
 ): CompilerDiagnostic {
   return {
-    ...diagnosticFor(fileName, code),
+    ...diagnosticFor(fileName, code, source, attribute.start, attribute.end - attribute.start),
     message: `${diagnosticDefinitions[code].message} ${detail}`,
   };
 }
