@@ -11,6 +11,7 @@ import {
   componentRenderInputs,
   componentStateReturnObject,
   firstComponentModel,
+  type JsxAttributeModel,
   jsxElements,
   parseComponentModule as parseComponentModuleModel,
 } from './scan/parse.js';
@@ -1009,16 +1010,19 @@ function dataBindPaths(source: string): string[] {
 }
 
 function dataBindAttributes(source: string): DataBindAttribute[] {
-  return [
-    ...source.matchAll(/\b(?<name>data-bind(?::[A-Za-z_$][\w$:-]*)?)=(["'])(?<path>[^"']+)\2/g),
-  ]
-    .map((match) => ({
-      index: match.index ?? 0,
-      length: match[0].length,
-      name: match.groups?.name ?? '',
-      path: match.groups?.path ?? '',
-    }))
-    .filter((binding) => binding.name && binding.path);
+  return jsxAttributes(source)
+    .filter(
+      (attribute) =>
+        isBindingAttribute(attribute.name) &&
+        attribute.value !== undefined &&
+        attribute.value !== '',
+    )
+    .map((attribute) => ({
+      index: attribute.start,
+      length: attribute.end - attribute.start,
+      name: attribute.name,
+      path: attribute.value ?? '',
+    }));
 }
 
 function dataBindListStamps(source: string): QueryTemplateStampFact[] {
@@ -1617,7 +1621,7 @@ function jsxAttributeValues(source: string, name: string): string[] {
   );
 }
 
-function jsxAttributes(source: string): Array<{ name: string; value?: string }> {
+function jsxAttributes(source: string): JsxAttributeModel[] {
   return jsxElements(parseComponentModuleModel('component.tsx', source)).flatMap((element) => [
     ...element.attributes,
   ]);

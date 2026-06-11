@@ -1188,6 +1188,28 @@ export const CartBadge = component('cart-badge', {
     ]);
   });
 
+  it('ignores data-bind text inside strings and comments', () => {
+    const result = compileComponentModule({
+      fileName: 'cart-badge.tsx',
+      queryShapes: {
+        cart: {
+          count: 'number',
+        },
+      },
+      source: `
+export const CartBadge = component('cart-badge', {
+  render: () => {
+    const sample = '<span data-bind="cart.missing">0</span>';
+    // <span data-bind="cart.otherMissing">0</span>
+    return <span data-bind="cart.count">2</span>;
+  },
+});
+`,
+    });
+
+    expect(result.diagnostics).toEqual([]);
+  });
+
   it('validates ejected list stamps against array element query shapes', () => {
     const valid = compileComponentModule({
       fileName: 'cart-badge.tsx',
