@@ -249,7 +249,7 @@ export function extractTouchGraphFromSource(files: readonly SourceFileInput[]): 
     }
   }
   for (const file of files) {
-    for (const alias of exportTableAliases(file.source)) {
+    for (const alias of importExportTableAliases(file.source)) {
       appendTableEntries(tables, alias.local, tables.get(alias.imported) ?? []);
     }
   }
@@ -371,7 +371,7 @@ export function extractQueryFactsFromSource(files: readonly SourceFileInput[]): 
     }
   }
   for (const file of files) {
-    for (const alias of exportTableAliases(file.source)) {
+    for (const alias of importExportTableAliases(file.source)) {
       appendTableEntries(tables, alias.local, tables.get(alias.imported) ?? []);
     }
   }
@@ -1142,27 +1142,6 @@ function importExportTableAliases(source: string): { imported: string; local: st
   const aliases: { imported: string; local: string }[] = [];
   const pattern =
     /\b(?:import|export)\s*\{\s*(?<specifiers>[^}]+)\s*\}(?:\s*from\s*["'][^"']+["'])?/g;
-
-  for (const match of source.matchAll(pattern)) {
-    const specifiers = match.groups?.specifiers;
-    if (!specifiers) continue;
-
-    for (const specifier of specifiers.split(',')) {
-      const parts = /^(?<imported>[A-Za-z_$][\w$]*)(?:\s+as\s+(?<local>[A-Za-z_$][\w$]*))?$/.exec(
-        specifier.trim(),
-      )?.groups;
-      const imported = parts?.imported;
-      const local = parts?.local;
-      if (imported && local && imported !== local) aliases.push({ imported, local });
-    }
-  }
-
-  return aliases;
-}
-
-function exportTableAliases(source: string): { imported: string; local: string }[] {
-  const aliases: { imported: string; local: string }[] = [];
-  const pattern = /\bexport\s*\{\s*(?<specifiers>[^}]+)\s*\}(?:\s*from\s*["'][^"']+["'])?/g;
 
   for (const match of source.matchAll(pattern)) {
     const specifiers = match.groups?.specifiers;
