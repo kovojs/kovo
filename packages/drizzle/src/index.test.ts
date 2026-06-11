@@ -724,6 +724,45 @@ export const tableDomains = {
     });
   });
 
+  it('degrades compound key predicates to table-level invalidation', () => {
+    const graph = extractTouchGraphFromSource([
+      {
+        fileName: 'product.domain.ts',
+        source: `
+          export const products = pgTable("products", {}, jiso({ domain: "product", key: "id" }));
+
+          export async function syncProducts(db, primaryId, fallbackId) {
+            await db.update(products).set({ reserved: true }).where(or(eq(products.id, primaryId), eq(products.id, fallbackId)));
+          }
+        `,
+      },
+    ]);
+
+    expect(graph).toEqual({
+      syncProducts: {
+        reads: [],
+        touches: [
+          {
+            domain: 'product',
+            keys: null,
+            predicate: 'non-eq',
+            site: 'product.domain.ts:5',
+            via: 'products',
+          },
+        ],
+        unresolved: [],
+      },
+    });
+    expect(diagnosticsForTouchGraph(graph)).toEqual([
+      {
+        code: 'FW409',
+        message: 'Non-eq predicate degraded to table-level invalidation.',
+        severity: 'notice',
+        site: 'product.domain.ts:5',
+      },
+    ]);
+  });
+
   it('marks direct non-equality predicates as FW409 degraded table-level invalidation', () => {
     const graph = extractTouchGraphFromSource([
       {

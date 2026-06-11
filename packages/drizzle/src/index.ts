@@ -1388,44 +1388,53 @@ function extractPredicateSummary(
   table: JisoTableAnnotation,
   tables: ReadonlyMap<string, readonly ExtractedTable[]>,
 ): ExtractedPredicateSummary {
-  const key = extractParameterizedKey(statement, tableIdentifier, table, tables);
+  const predicate = wherePredicate(statement);
+  const key = predicate
+    ? extractParameterizedKey(predicate, tableIdentifier, table, tables)
+    : undefined;
   if (key) return { key };
 
-  return hasNonEqPredicate(statement, tableIdentifier, table) ? { predicate: 'non-eq' } : {};
+  return hasNonEqPredicate(predicate, tableIdentifier, table) ? { predicate: 'non-eq' } : {};
+}
+
+function wherePredicate(statement: string): string | undefined {
+  const where = /\.where\s*\(/.exec(statement);
+  if (!where || where.index === undefined) return undefined;
+
+  const openParen = where.index + where[0].length - 1;
+  const closeParen = findMatchingParen(statement, openParen);
+  if (closeParen === -1) return undefined;
+
+  return statement.slice(openParen + 1, closeParen).trim();
 }
 
 function extractParameterizedKey(
-  statement: string,
+  predicate: string,
   tableIdentifier: string,
   table: JisoTableAnnotation,
   tables: ReadonlyMap<string, readonly ExtractedTable[]>,
 ): string | undefined {
   if (!table.key) return undefined;
 
-  for (const match of statement.matchAll(
-    /eq\s*\(\s*(?<left>[^,]+?)\s*,\s*(?<right>[^)]+?)\s*\)/g,
-  )) {
-    const left = match.groups?.left?.trim();
-    const right = match.groups?.right?.trim();
-    if (!left || !right) continue;
+  const match = /^eq\s*\(\s*(?<left>[^,]+?)\s*,\s*(?<right>[^)]+?)\s*\)$/.exec(predicate);
+  const left = match?.groups?.left?.trim();
+  const right = match?.groups?.right?.trim();
+  if (!left || !right) return undefined;
 
-    if (left === `${tableIdentifier}.${table.key}`) return argumentKey(right, tables);
-    if (right === `${tableIdentifier}.${table.key}`) return argumentKey(left, tables);
-  }
-
+  if (left === `${tableIdentifier}.${table.key}`) return argumentKey(right, tables);
+  if (right === `${tableIdentifier}.${table.key}`) return argumentKey(left, tables);
   return undefined;
 }
 
 function hasNonEqPredicate(
-  statement: string,
+  predicate: string | undefined,
   tableIdentifier: string,
   table: JisoTableAnnotation,
 ): boolean {
   if (!table.key) return false;
 
-  const where = /\.where\s*\(\s*(?<predicate>[^;]+?)\s*\)/.exec(statement)?.groups?.predicate;
-  if (!where || !where.includes(`${tableIdentifier}.${table.key}`)) return false;
-  if (/^eq\s*\(/.test(where)) return false;
+  if (!predicate || !predicate.includes(`${tableIdentifier}.${table.key}`)) return false;
+  if (/^eq\s*\(/.test(predicate)) return false;
   return true;
 }
 
