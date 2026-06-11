@@ -570,17 +570,17 @@ describe('commerce example', () => {
     expect(fwExplain(commerceGraph, { kind: 'query', target: 'cart' })).toEqual({
       exitCode: 0,
       output:
-        'fw-explain/v1\nQUERY cart\nreads: cart\nconsumers: component:CartBadge,page:/cart\ninvalidated-by: cart.addItem\n',
+        'fw-explain/v1\nQUERY cart\nreads: cart\nconsumers: component:CartBadge,page:/cart\ninvalidated-by: cart.addItem,cart/add\n',
     });
     expect(fwExplain(commerceGraph, { kind: 'query', target: 'productGrid' })).toEqual({
       exitCode: 0,
       output:
-        'fw-explain/v1\nQUERY productGrid\nreads: product\nconsumers: component:ProductGrid,page:/cart\ninvalidated-by: cart.addItem\n',
+        'fw-explain/v1\nQUERY productGrid\nreads: product\nconsumers: component:ProductGrid,page:/cart\ninvalidated-by: cart.addItem,cart/add\n',
     });
     expect(fwExplain(commerceGraph, { kind: 'query', target: 'orderHistory' })).toEqual({
       exitCode: 0,
       output:
-        'fw-explain/v1\nQUERY orderHistory\nreads: order\nconsumers: component:OrderHistory,page:/cart\ninvalidated-by: cart.addItem\n',
+        'fw-explain/v1\nQUERY orderHistory\nreads: order\nconsumers: component:OrderHistory,page:/cart\ninvalidated-by: cart.addItem,cart/add\n',
     });
     expect(fwExplain(commerceGraph, { kind: 'page', target: '/cart' })).toEqual({
       exitCode: 0,

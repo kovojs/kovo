@@ -392,6 +392,46 @@ void test('D4 commerce adopt-dont-invent features stay represented', async () =>
   assert.match(commerceTests, /fw-i18n locale="en-US"/);
 });
 
+void test('P10 commerce graph assertions answer behavior mechanically', async () => {
+  const commerceTests = await readProjectFile('examples/commerce/src/app.test.ts');
+
+  assert.match(
+    commerceTests,
+    /answers cart\/add update intent mechanically from fw explain output/,
+  );
+  assert.match(
+    commerceTests,
+    /answers commerce optimistic coverage mechanically from fw explain output/,
+  );
+  assert.match(commerceTests, /mutationUpdateConsumers\(mutation\.output\)/);
+  assert.match(commerceTests, /const queryExplain = fwExplain\(commerceGraph, \{ kind: 'query'/);
+  assert.match(commerceTests, /expect\(updates\.get\(query\)\)\.toContain\('page:\/cart'\)/);
+  assert.match(commerceTests, /expect\(statuses\.get\(query\)\)\.not\.toBe\('UNHANDLED'\)/);
+});
+
+void test('P9 verification layer evidence remains represented', async () => {
+  const testHarnessSource = await readProjectFile('packages/test/src/index.ts');
+  const testHarnessTests = await readProjectFile('packages/test/src/index.test.ts');
+
+  assert.match(testHarnessSource, /observeSql\(statement, config, observed\)/);
+  assert.match(testHarnessSource, /prop === 'pglite'/);
+  assert.match(
+    testHarnessTests,
+    /verifies observed writes against the static touch graph after exec/,
+  );
+  assert.match(testHarnessTests, /verifies raw pglite handle calls against the static touch graph/);
+  assert.match(
+    testHarnessTests,
+    /fails query-loader verification for reads outside declared domains/,
+  );
+  assert.match(testHarnessTests, /verifies update-from SQL as a target write plus source reads/);
+  assert.match(
+    testHarnessTests,
+    /accepts raw SQL compound predicates when one observed row key matches/,
+  );
+  assert.match(testHarnessTests, /FW408 Declared row key differs from observed row predicate/);
+});
+
 void test('Drizzle pinned conformance suite is an explicit gate', async () => {
   const packageJson = JSON.parse(await readProjectFile('package.json'));
   const viteConfig = await readProjectFile('vite.config.ts');

@@ -383,6 +383,19 @@ describe('fw check', () => {
     });
   });
 
+  it('accepts query read domains covered by declared mutation invalidations', () => {
+    expect(
+      fwCheck({
+        mutations: [{ guards: ['authed'], invalidates: ['cart'], key: 'cart/add' }],
+        queries: [{ domains: ['cart'], query: 'cart' }],
+      }),
+    ).toEqual({
+      exitCode: 0,
+      output:
+        'fw-check/v1\nWARN FW310 cart/add -> cart Invalidated query lacks optimistic transform.\n',
+    });
+  });
+
   it('reports fixpoint invariant failures as stable ERROR diagnostics', () => {
     // SPEC.md §5.2 requires generated output to be a CI-enforced compiler fixpoint.
     expect(
@@ -806,6 +819,26 @@ describe('fw explain', () => {
       exitCode: 0,
       output:
         'fw-explain/v1\nQUERY cart\nreads: cart\nconsumers: component:CartBadge,page:/cart,page:/checkout\ninvalidated-by: cart.addItem\n',
+    });
+  });
+
+  it('explains query invalidations from declared mutation domains without a touch graph', () => {
+    expect(
+      fwExplain(
+        {
+          components: [{ name: 'CartBadge', queries: ['cart'] }],
+          mutations: [
+            { guards: ['authed'], key: 'cart/add', writes: ['cart'] },
+            { guards: ['authed'], invalidates: ['cart'], key: 'cart/remove' },
+          ],
+          queries: [{ domains: ['cart'], query: 'cart' }],
+        },
+        { kind: 'query', target: 'cart' },
+      ),
+    ).toEqual({
+      exitCode: 0,
+      output:
+        'fw-explain/v1\nQUERY cart\nreads: cart\nconsumers: component:CartBadge\ninvalidated-by: cart/add,cart/remove\n',
     });
   });
 

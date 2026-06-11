@@ -270,7 +270,7 @@ export function fwExplain(input: FwExplainInput, options: FwExplainOptions): FwC
     lines.push(`QUERY ${query.query}`);
     lines.push(`reads: ${list(query.domains)}`);
     lines.push(`consumers: ${list(queryConsumers(query.query, input))}`);
-    lines.push(`invalidated-by: ${list(invalidatedBy(query, input.touchGraph ?? {}))}`);
+    lines.push(`invalidated-by: ${list(invalidatedBy(query, input))}`);
     return ok(lines);
   }
 
@@ -357,7 +357,11 @@ export function fwCheck(input: FwCheckInput): FwCheckResult {
     lines.push(fixpointFailureLine(failure));
   }
 
-  for (const missed of missedQueryInvalidations(input.queries ?? [], input.touchGraph ?? {})) {
+  for (const missed of missedQueryInvalidations(
+    input.queries ?? [],
+    input.touchGraph ?? {},
+    input.mutations ?? [],
+  )) {
     lines.push(
       `ERROR FW407 ${missed.query} reads ${missed.domain} but no mutation touch graph writes that domain.`,
     );
@@ -408,12 +412,24 @@ function isExplainKind(value: string | undefined): value is ExplainKind {
   return value === 'component' || value === 'mutation' || value === 'page' || value === 'query';
 }
 
-function invalidatedBy(query: QueryReadSet, touchGraph: TouchGraph): string[] {
-  return Object.entries(touchGraph)
-    .filter(([, entry]) =>
-      entry.touches.some((touch) => query.domains.some((domain) => domain === touch.domain)),
-    )
-    .map(([writeName]) => writeName);
+function invalidatedBy(query: QueryReadSet, input: FwExplainInput): string[] {
+  const invalidators = new Set<string>();
+
+  for (const [writeName, entry] of Object.entries(input.touchGraph ?? {})) {
+    if (entry.touches.some((touch) => query.domains.some((domain) => domain === touch.domain))) {
+      invalidators.add(writeName);
+    }
+  }
+
+  for (const mutation of input.mutations ?? []) {
+    const domains = mutationAffectedDomains(mutation);
+
+    if (query.domains.some((domain) => domains.has(domain))) {
+      invalidators.add(mutation.key);
+    }
+  }
+
+  return [...invalidators].sort();
 }
 
 function queryConsumers(queryName: string, input: FwExplainInput): string[] {
@@ -578,14 +594,18 @@ function lintMessage(lint: SemanticLint): string {
 function missedQueryInvalidations(
   queries: readonly QueryReadSet[],
   touchGraph: TouchGraph,
+  mutations: readonly MutationExplain[],
 ): { domain: string; query: string }[] {
   const touchedDomains = new Set(
     Object.values(touchGraph).flatMap((entry) => entry.touches.map((touch) => touch.domain)),
   );
+  const mutationDomains = new Set(
+    mutations.flatMap((mutation) => [...mutationAffectedDomains(mutation)]),
+  );
 
   return queries.flatMap((query) =>
     query.domains
-      .filter((domain) => !touchedDomains.has(domain))
+      .filter((domain) => !touchedDomains.has(domain) && !mutationDomains.has(domain))
       .map((domain) => ({ domain, query: query.query })),
   );
 }
