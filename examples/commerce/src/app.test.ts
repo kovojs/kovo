@@ -42,6 +42,12 @@ function commerceFile(name: string, type: string, size: number) {
   };
 }
 
+function lineNumberFor(source: string, needle: string): number {
+  const index = source.indexOf(needle);
+  expect(index).not.toBe(-1);
+  return source.slice(0, index).split('\n').length;
+}
+
 interface CommerceAddToCartPropertyState {
   cartItems: { productId: string; qty: number }[];
   products: Record<string, { stock: number }>;
@@ -631,9 +637,16 @@ describe('commerce example', () => {
   });
 
   it('ships graph facts for fw check and explain acceptance', () => {
+    execFileSync('node', ['examples/commerce/scripts/emit-graph.mjs', '--check'], {
+      stdio: 'pipe',
+    });
     const graphArtifact = JSON.parse(
       readFileSync(new URL('./generated/graph.json', import.meta.url), 'utf8'),
     );
+    const commerceSource = readFileSync(new URL('./app.ts', import.meta.url), 'utf8');
+    const cartItemsLine = lineNumberFor(commerceSource, "request.db.write('cart_items'");
+    const ordersLine = lineNumberFor(commerceSource, "request.db.write('orders'");
+    const productsLine = lineNumberFor(commerceSource, "request.db.write('products'");
 
     expect(graphArtifact).toEqual(commerceGraph);
     expect(fwCheck(graphArtifact).output).toBe('fw-check/v1\nOK\n');
@@ -646,20 +659,20 @@ describe('commerce example', () => {
           {
             domain: 'cart',
             keys: null,
-            site: 'examples/commerce/src/app.ts:196',
+            site: `examples/commerce/src/app.ts:${cartItemsLine}`,
             via: 'cart_items',
           },
           {
             domain: 'order',
             keys: null,
-            site: 'examples/commerce/src/app.ts:201',
+            site: `examples/commerce/src/app.ts:${ordersLine}`,
             via: 'orders',
           },
           {
             domain: 'product',
             keys: 'arg:productId',
             predicate: 'eq',
-            site: 'examples/commerce/src/app.ts:208',
+            site: `examples/commerce/src/app.ts:${productsLine}`,
             via: 'products',
           },
         ],

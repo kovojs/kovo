@@ -64,6 +64,8 @@ export default defineConfig({
           { pattern: 'AGENTS.md', base: 'workspace' },
           { pattern: '.github/workflows/ci.yml', base: 'workspace' },
           { pattern: 'docs/**', base: 'workspace' },
+          { pattern: 'examples/commerce/package.json', base: 'workspace' },
+          { pattern: 'examples/commerce/scripts/**', base: 'workspace' },
           { pattern: 'examples/commerce/src/**', base: 'workspace' },
           { pattern: 'examples/commerce/src/generated/graph.json', base: 'workspace' },
           { pattern: 'fixtures/wire/**', base: 'workspace' },
