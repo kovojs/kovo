@@ -963,22 +963,22 @@ Jiso-core defines a **capability interface** — `(writes → touch sets, querie
 
 ## 15. Risks & Honest Costs
 
-| Risk                                                               | Mitigation / Position                                                                                                                             |
-| ------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Chromium-led enhancements (speculation rules, invokers)            | Graceful degradation is structural; baseline is a working website                                                                                 |
-| Cold-cache first-interaction latency                               | `modulepreload` from rendered attributes, 103 Early Hints, HTTP/3; measure, don't hide                                                            |
-| Drizzle API drift breaks inference                                 | Pinned conformance suite; declared-`touches` floor always works                                                                                   |
-| Over-invalidation storms (coarse domains)                          | Row-level keys via schema annotations; FW403 surfaces excess                                                                                      |
-| `derive`/shared-client-state creep toward SPA heap                 | Lints with required justifications; isomorphic opt-in (`isomorphic: true`, §4.8, FW302) as the sanctioned escape                                  |
-| Derived-optimism wrong predictions (v2)                            | All-or-nothing derivation; property-tested soundness; punts are loud; deferred to v2 so v1 ships the proven hand-written path first               |
-| Two-file IR + explicit data channels feel austere vs. React        | Single-file sugar + editor tooling (cheap because everything is static); day-100 > day-1                                                          |
-| Query-binding layer moves some rendering clientward                | Bounded: paths/stamps/named derives only (§4.8) — no runtime signal graph; complex rendering flips to fragments or isomorphic islands (§4.8)      |
-| Live bus introduces stateful infra                                 | Deferred to v2 wholesale — the v1 server is stateless; BroadcastChannel + refetch-on-focus cover the interim (§9.3)                               |
-| Prerender discards cost server renders                             | Off by default; per-route opt-in where renders are idempotent, plus response caching                                                              |
-| TypeScript unsoundness (`any`, casts) hollowing proof claims       | Starter ships strict config + lint bans in app code (§6.6); wire and deploy-skew boundaries are runtime-validated regardless                      |
-| Deep template-literal types (params, `data-bind`) slow `tsc`       | Paths are shallow by construction (flat query shapes); TypeScript Go toolchain; registry types stay trivial lookups, not recursive solves         |
-| Projected children all ship in initial HTML (no client lazy mount) | Stated posture (§4.5); `<fw-defer>` is the relief valve for expensive subtrees; payload measured under §16.1                                      |
-| `on:*` chaining + trigger observers grow the loader                | Gated by the S2 4KB budget before the composition API freezes; the budget leaves room for clear control flow over compiler-synthesized shortcuts  |
+| Risk                                                               | Mitigation / Position                                                                                                                            |
+| ------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Chromium-led enhancements (speculation rules, invokers)            | Graceful degradation is structural; baseline is a working website                                                                                |
+| Cold-cache first-interaction latency                               | `modulepreload` from rendered attributes, 103 Early Hints, HTTP/3; measure, don't hide                                                           |
+| Drizzle API drift breaks inference                                 | Pinned conformance suite; declared-`touches` floor always works                                                                                  |
+| Over-invalidation storms (coarse domains)                          | Row-level keys via schema annotations; FW403 surfaces excess                                                                                     |
+| `derive`/shared-client-state creep toward SPA heap                 | Lints with required justifications; isomorphic opt-in (`isomorphic: true`, §4.8, FW302) as the sanctioned escape                                 |
+| Derived-optimism wrong predictions (v2)                            | All-or-nothing derivation; property-tested soundness; punts are loud; deferred to v2 so v1 ships the proven hand-written path first              |
+| Two-file IR + explicit data channels feel austere vs. React        | Single-file sugar + editor tooling (cheap because everything is static); day-100 > day-1                                                         |
+| Query-binding layer moves some rendering clientward                | Bounded: paths/stamps/named derives only (§4.8) — no runtime signal graph; complex rendering flips to fragments or isomorphic islands (§4.8)     |
+| Live bus introduces stateful infra                                 | Deferred to v2 wholesale — the v1 server is stateless; BroadcastChannel + refetch-on-focus cover the interim (§9.3)                              |
+| Prerender discards cost server renders                             | Off by default; per-route opt-in where renders are idempotent, plus response caching                                                             |
+| TypeScript unsoundness (`any`, casts) hollowing proof claims       | Starter ships strict config + lint bans in app code (§6.6); wire and deploy-skew boundaries are runtime-validated regardless                     |
+| Deep template-literal types (params, `data-bind`) slow `tsc`       | Paths are shallow by construction (flat query shapes); TypeScript Go toolchain; registry types stay trivial lookups, not recursive solves        |
+| Projected children all ship in initial HTML (no client lazy mount) | Stated posture (§4.5); `<fw-defer>` is the relief valve for expensive subtrees; payload measured under §16.1                                     |
+| `on:*` chaining + trigger observers grow the loader                | Gated by the S2 4KB budget before the composition API freezes; the budget leaves room for clear control flow over compiler-synthesized shortcuts |
 
 ---
 

@@ -1139,7 +1139,103 @@ export const CartBadge = component('cart-badge', {
   'CartBadge:cart': readonly ['cart.count', 'cart.items', 'cart.total'];
   'CartBadge:product': readonly ['product.name'];
 }`);
+    expect(result.updateCoverage).toEqual([
+      {
+        componentName: 'CartBadge',
+        detail: 'data-bind',
+        position: 'binding',
+        query: 'cart.count',
+        status: 'plan',
+      },
+      {
+        componentName: 'CartBadge',
+        detail: 'data-bind',
+        position: 'binding',
+        query: 'cart.total',
+        status: 'plan',
+      },
+      {
+        componentName: 'CartBadge',
+        detail: 'data-bind',
+        position: 'binding',
+        query: 'product.name',
+        status: 'plan',
+      },
+      {
+        componentName: 'CartBadge',
+        detail: 'data-bind-list',
+        position: 'template',
+        query: 'cart.items',
+        status: 'plan',
+      },
+    ]);
     expect(() => assertFixpoint(result)).not.toThrow();
+  });
+
+  it('classifies query-dependent render positions for FW311 coverage', () => {
+    const result = compileComponentModule({
+      fileName: 'cart-badge.tsx',
+      source: `
+export const CartBadge = component('cart-badge', {
+  queries: { cart: {}, product: {} },
+  render: () => (
+    <cart-badge>
+      <span data-bind="cart.count">{cart.count}</span>
+      <span>{renderOnce(cart.currency)}</span>
+      <strong>{cart.discount}</strong>
+      <em>{product.name}</em>
+    </cart-badge>
+  ),
+});
+`,
+    });
+
+    expect(result.updateCoverage).toEqual([
+      {
+        componentName: 'CartBadge',
+        detail: 'data-bind',
+        position: 'binding',
+        query: 'cart.count',
+        status: 'plan',
+      },
+      {
+        componentName: 'CartBadge',
+        detail: 'declared renderOnce',
+        position: 'expression',
+        query: 'cart.currency',
+        status: 'renderOnce',
+      },
+      {
+        componentName: 'CartBadge',
+        detail: 'query expression has no data-bind, renderOnce, fragment, or isomorphic status',
+        position: 'expression',
+        query: 'cart.discount',
+        status: 'UNHANDLED',
+      },
+      {
+        componentName: 'CartBadge',
+        detail: 'query expression has no data-bind, renderOnce, fragment, or isomorphic status',
+        position: 'expression',
+        query: 'product.name',
+        status: 'UNHANDLED',
+      },
+    ]);
+    expect(result.diagnostics).toEqual([
+      {
+        code: 'FW311',
+        fileName: 'cart-badge.tsx',
+        message:
+          'Query-dependent DOM position has no update status. CartBadge cart.discount expression',
+        severity: 'warn',
+      },
+      {
+        code: 'FW311',
+        fileName: 'cart-badge.tsx',
+        message:
+          'Query-dependent DOM position has no update status. CartBadge product.name expression',
+        severity: 'warn',
+      },
+    ]);
   });
 
   it('emits an app bootstrap that wires compiled query plans into the loader', () => {
@@ -1210,7 +1306,7 @@ export const Recommendations = component('recommendations', {
   queries: { cart: cartQuery },
   render: ({ cart }) => (
     <section fw-c="recommendations" fw-deps="product:p1 cart">
-      {cart.count}
+      {renderOnce(cart.count)}
     </section>
   ),
 });
@@ -1352,7 +1448,7 @@ export const AccountMenu = component('account-menu', {
 export const CartBadge = component('cart-badge', {
   queries: { cart: cartQuery },
   state: () => ({ bouncing: false }),
-  render: ({ cart }, state) => <span class={state.bouncing ? 'bounce' : ''}>{cart.count}</span>,
+  render: ({ cart }, state) => <span class={state.bouncing ? 'bounce' : ''}>{renderOnce(cart.count)}</span>,
 });
 `,
     });
@@ -1442,7 +1538,7 @@ export const CartRow = component('cart-row', {
   fragmentTarget: true,
   props: { rowId: String },
   queries: { cart: cartQuery },
-  render: ({ cart, rowId }) => <tr fw-c="cart-row" data-row={rowId}>{cart.count}</tr>,
+  render: ({ cart, rowId }) => <tr fw-c="cart-row" data-row={rowId}>{renderOnce(cart.count)}</tr>,
 });
 `,
     });
@@ -1461,7 +1557,7 @@ export const CartRow = component('cart-row', {
 export const CartRow = component('cart-row', {
   fragmentTarget: true,
   queries: { cart: cartQuery },
-  render: ({ cart, priceList }) => <tr fw-c="cart-row">{cart.count}{priceList.version}</tr>,
+  render: ({ cart, priceList }) => <tr fw-c="cart-row">{renderOnce(cart.count)}{priceList.version}</tr>,
 });
 `,
     });

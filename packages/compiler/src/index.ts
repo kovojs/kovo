@@ -22,6 +22,7 @@ export interface CompileResult {
   files: EmittedFile[];
   platformSubstitutions: PlatformSubstitution[];
   queryUpdatePlans: readonly QueryUpdatePlanFact[];
+  updateCoverage: readonly QueryUpdateCoverageFact[];
   viewTransitions: ViewTransitionStamp[];
 }
 
@@ -58,6 +59,14 @@ export interface QueryTemplateStampFact {
   template: string;
 }
 
+export interface QueryUpdateCoverageFact {
+  componentName: string;
+  detail?: string;
+  position: string;
+  query: string;
+  status: 'UNHANDLED' | 'fragment' | 'isomorphic' | 'plan' | 'renderOnce';
+}
+
 export interface CssAssetManifest {
   byFileName: Readonly<Record<string, ComponentCssAsset>>;
   stylesheets: readonly ComponentCssAsset[];
@@ -85,6 +94,7 @@ export function createEmptyCompileResult(): CompileResult {
     files: [],
     platformSubstitutions: [],
     queryUpdatePlans: [],
+    updateCoverage: [],
     viewTransitions: [],
   };
 }
@@ -237,6 +247,7 @@ export function compileComponentModule(options: CompileComponentOptions): Compil
       files: [{ fileName: options.fileName, source: options.source }],
       platformSubstitutions: [],
       queryUpdatePlans: [],
+      updateCoverage: [],
       viewTransitions: [],
     };
   }
@@ -251,6 +262,7 @@ export function compileComponentModule(options: CompileComponentOptions): Compil
   const fragmentInputDiagnostics = validateFragmentTargetInputs(source, options.fileName);
   const dataBindDiagnostics = validateDataBindings(source, options);
   const queryUpdatePlans = collectQueryUpdatePlans(source, componentName);
+  const updateCoverage = collectQueryUpdateCoverage(source, options, componentName);
   const eventPayloadDiagnostics = validateEventPayloads(source, options);
   const directDbDiagnostics = validateDirectDbAccess(source, options.fileName);
   const idrefDiagnostics = validateIdrefs(options.source, options.fileName);
@@ -298,6 +310,9 @@ export function compileComponentModule(options: CompileComponentOptions): Compil
       ...htmlContentModelDiagnostics,
       ...eventTriggerDiagnostics,
       ...residualStampDiagnostics,
+      ...updateCoverage
+        .filter((fact) => fact.status === 'UNHANDLED')
+        .map((fact) => fw311Diagnostic(options.fileName, fact)),
     ],
     files: [
       { fileName: serverFileName, source: serverSource },
@@ -308,6 +323,7 @@ export function compileComponentModule(options: CompileComponentOptions): Compil
     cssAssets,
     platformSubstitutions: platformLowering.substitutions,
     queryUpdatePlans,
+    updateCoverage,
     viewTransitions: viewTransitionLowering.stamps,
   };
 }
@@ -1023,6 +1039,128 @@ function collectQueryUpdatePlans(source: string, componentName: string): QueryUp
     }));
 }
 
+function collectQueryUpdateCoverage(
+  source: string,
+  options: CompileComponentOptions,
+  componentName: string,
+): QueryUpdateCoverageFact[] {
+  const facts: QueryUpdateCoverageFact[] = [];
+  const coveredPaths = new Set<string>();
+  const knownQueries = knownQueryNames(source, options);
+
+  for (const path of dataBindPaths(source).filter((path) => !path.startsWith('.'))) {
+    const query = queryNameFromPath(path);
+    if (!query) continue;
+
+    facts.push({
+      componentName,
+      detail: 'data-bind',
+      position: 'binding',
+      query: path,
+      status: 'plan',
+    });
+    coveredPaths.add(path);
+  }
+
+  for (const stamp of dataBindListStamps(source)) {
+    facts.push({
+      componentName,
+      detail: 'data-bind-list',
+      position: 'template',
+      query: stamp.list,
+      status: 'plan',
+    });
+    coveredPaths.add(stamp.list);
+  }
+
+  for (const path of renderOnceQueryPaths(source, knownQueries)) {
+    facts.push({
+      componentName,
+      detail: 'declared renderOnce',
+      position: 'expression',
+      query: path,
+      status: 'renderOnce',
+    });
+    coveredPaths.add(path);
+  }
+
+  for (const path of jsxQueryExpressionPaths(source, knownQueries)) {
+    if (coveredPaths.has(path)) continue;
+
+    facts.push({
+      componentName,
+      detail: 'query expression has no data-bind, renderOnce, fragment, or isomorphic status',
+      position: 'expression',
+      query: path,
+      status: 'UNHANDLED',
+    });
+    coveredPaths.add(path);
+  }
+
+  return dedupeUpdateCoverage(facts);
+}
+
+function knownQueryNames(source: string, options: CompileComponentOptions): Set<string> {
+  return new Set([
+    ...componentQueryNames(source),
+    ...Object.keys(options.registryFacts?.queries ?? {}),
+    ...Object.keys(componentQueryShapes(options) ?? {}),
+  ]);
+}
+
+function queryNameFromPath(path: string): string | null {
+  return path.split('.', 1)[0] ?? null;
+}
+
+function renderOnceQueryPaths(source: string, knownQueries: ReadonlySet<string>): string[] {
+  const paths: string[] = [];
+
+  for (const match of source.matchAll(/\brenderOnce\s*\(/g)) {
+    const callStart = match.index + match[0].lastIndexOf('(');
+    const callEnd = findMatchingToken(source, callStart, '(', ')');
+    if (callEnd === -1) continue;
+
+    paths.push(...queryPathsInExpression(source.slice(callStart + 1, callEnd), knownQueries));
+  }
+
+  return [...new Set(paths)];
+}
+
+function jsxQueryExpressionPaths(source: string, knownQueries: ReadonlySet<string>): string[] {
+  return [...source.matchAll(/\{\s*(?<path>[A-Za-z_$][\w$]*(?:\.[A-Za-z_$][\w$]*)+)\s*\}/g)]
+    .map((match) => match.groups?.path ?? '')
+    .filter((path) => queryPathUsesKnownQuery(path, knownQueries));
+}
+
+function queryPathsInExpression(expression: string, knownQueries: ReadonlySet<string>): string[] {
+  return [...expression.matchAll(/\b(?<path>[A-Za-z_$][\w$]*(?:\.[A-Za-z_$][\w$]*)+)\b/g)]
+    .map((match) => match.groups?.path ?? '')
+    .filter((path) => queryPathUsesKnownQuery(path, knownQueries));
+}
+
+function queryPathUsesKnownQuery(path: string, knownQueries: ReadonlySet<string>): boolean {
+  const query = queryNameFromPath(path);
+  return query !== null && knownQueries.has(query);
+}
+
+function dedupeUpdateCoverage(
+  facts: readonly QueryUpdateCoverageFact[],
+): QueryUpdateCoverageFact[] {
+  const seen = new Set<string>();
+  return facts.filter((fact) => {
+    const key = [
+      fact.componentName,
+      fact.query,
+      fact.position,
+      fact.status,
+      fact.detail ?? '',
+    ].join('\0');
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
 function dataBindPaths(source: string): string[] {
   return [...source.matchAll(/\bdata-bind=(["'])(?<path>[^"']+)\1/g)]
     .map((match) => match.groups?.path ?? '')
@@ -1439,6 +1577,13 @@ function fw226Diagnostic(fileName: string, detail: string): CompilerDiagnostic {
   return {
     ...diagnosticFor(fileName, 'FW226'),
     message: `${diagnosticDefinitions.FW226.message} ${detail}`,
+  };
+}
+
+function fw311Diagnostic(fileName: string, fact: QueryUpdateCoverageFact): CompilerDiagnostic {
+  return {
+    ...diagnosticFor(fileName, 'FW311'),
+    message: `${diagnosticDefinitions.FW311.message} ${fact.componentName} ${fact.query} ${fact.position}`,
   };
 }
 

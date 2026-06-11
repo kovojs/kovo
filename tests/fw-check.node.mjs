@@ -507,6 +507,24 @@ void test('P1 compiler validates residual fw-c and fw-deps stamps', async () => 
   );
 });
 
+void test('P1 compiler emits FW311 update coverage facts', async () => {
+  const coreSource = await readProjectFile('packages/core/src/diagnostics.ts');
+  const compilerSource = await readProjectFile('packages/compiler/src/index.ts');
+  const compilerTests = await readProjectFile('packages/compiler/src/index.test.ts');
+
+  assert.match(coreSource, /FW311/);
+  assert.match(coreSource, /Query-dependent DOM position has no update status/);
+  assert.match(compilerSource, /interface QueryUpdateCoverageFact/);
+  assert.match(compilerSource, /collectQueryUpdateCoverage/);
+  assert.match(compilerSource, /fw311Diagnostic/);
+  assert.match(compilerSource, /status: 'renderOnce'/);
+  assert.match(compilerSource, /status: 'UNHANDLED'/);
+  assert.match(compilerTests, /classifies query-dependent render positions for FW311 coverage/);
+  assert.match(compilerTests, /status: 'plan'/);
+  assert.match(compilerTests, /status: 'renderOnce'/);
+  assert.match(compilerTests, /code: 'FW311'/);
+});
+
 void test('P3 typed routes validate navigation targets', async () => {
   const coreSource = await readProjectFile('packages/core/src/index.ts');
   const coreTests = await readProjectFile('packages/core/src/index.test.ts');
