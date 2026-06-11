@@ -358,6 +358,25 @@ void test('D2 commerce validates keyed append and optimistic reorder', async () 
   assert.match(commerceTests, /order-history/);
 });
 
+void test('D4 commerce adopt-dont-invent features stay represented', async () => {
+  const commerceSource = await readProjectFile('examples/commerce/src/app.ts');
+  const commerceTests = await readProjectFile('examples/commerce/src/app.test.ts');
+
+  assert.match(commerceSource, /meta\(\{/);
+  assert.match(commerceSource, /i18n\('en-US'/);
+  assert.match(commerceSource, /s\.file\(\{ maxBytes: 64 \* 1024/);
+  assert.match(commerceSource, /errorBoundary\(/);
+  assert.match(commerceSource, /commerceSession = session\(/);
+  assert.match(commerceSource, /guards\.rateLimit<CommerceRequest>/);
+  assert.match(commerceTests, /coerces commerce receipt uploads through s\.file\(\)/);
+  assert.match(
+    commerceTests,
+    /contains product-grid fragment failures with a per-island error boundary/,
+  );
+  assert.match(commerceTests, /uses the typed commerce session schema in authenticated mutations/);
+  assert.match(commerceTests, /fw-i18n locale="en-US"/);
+});
+
 void test('D3 deferred stream responses are consumed by the runtime', async () => {
   const runtimeSource = await readProjectFile('packages/runtime/src/index.ts');
   const runtimeTests = await readProjectFile('packages/runtime/src/index.test.ts');

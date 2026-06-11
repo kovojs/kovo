@@ -446,6 +446,12 @@ describe('commerce example', () => {
   });
 
   it('renders Tailwind-first stylesheet hints and static utility classes', () => {
+    const commerceSource = readFileSync(new URL('./app.ts', import.meta.url), 'utf8');
+    const catalogSource =
+      /export const commerceMessages = i18n\('en-US', \{(?<body>[\s\S]*?)\}\);/.exec(commerceSource)
+        ?.groups?.body;
+
+    expect(catalogSource?.match(/\bcartLabel:/g) ?? []).toHaveLength(1);
     expect(commercePageHints).toEqual({
       earlyHints: {
         Link: '</assets/tailwind.css>; rel=preload; as=style',
