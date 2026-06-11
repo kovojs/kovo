@@ -159,6 +159,7 @@ void test('Phase 0 wire fixture responses keep stable protocol metadata', async 
       {
         headers: {
           'content-type': 'text/vnd.jiso.fragment+html; charset=utf-8',
+          'fw-changes': '[{"domain":"cart","input":{"productId":"p1"}}]',
           'fw-idem': 'idem_01HX',
         },
         statusLine: 'HTTP/1.1 200 OK',

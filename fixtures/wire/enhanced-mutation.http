@@ -13,6 +13,7 @@ productId=p1&quantity=1
 <<< RESPONSE
 HTTP/1.1 200 OK
 Content-Type: text/vnd.jiso.fragment+html; charset=utf-8
+FW-Changes: [{"domain":"cart","input":{"productId":"p1"}}]
 FW-Idem: idem_01HX
 
 <fw-query name="cart" key="cart:c1" version="7">{"count":1,"items":[{"productId":"p1","qty":1,"unitPrice":1499}]}</fw-query>
