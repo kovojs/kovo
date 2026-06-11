@@ -6,6 +6,32 @@ export type {
 } from './diagnostics.js';
 export { diagnosticDefinitions, diagnosticDefinitionText } from './diagnostics.js';
 export type {
+  FileSystemStorageOptions,
+  MemoryStorageOptions,
+  S3CompatibleGetObjectInput,
+  S3CompatibleGetObjectOutput,
+  S3CompatibleHeadObjectInput,
+  S3CompatibleObjectClient,
+  S3CompatibleObjectMetadata,
+  S3CompatiblePutObjectInput,
+  S3CompatiblePutObjectOutput,
+  S3CompatibleStorageOptions,
+  StorageBody,
+  StorageCapability,
+  StorageGetResult,
+  StorageObjectInfo,
+  StoragePutOptions,
+  StoragePutResult,
+  StorageStreamResult,
+} from './storage.js';
+export {
+  createFileSystemStorage,
+  createMemoryStorage,
+  createS3CompatibleStorage,
+  normalizeStorageKey,
+  storageBodyToBytes,
+} from './storage.js';
+export type {
   CustomWebhookVerifier,
   HmacMultiSignature,
   HmacSecret,

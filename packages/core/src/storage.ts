@@ -1,0 +1,461 @@
+import { createHash } from 'node:crypto';
+import { createReadStream } from 'node:fs';
+import { mkdir, readFile, stat as fsStat, writeFile } from 'node:fs/promises';
+import path from 'node:path';
+import { Readable } from 'node:stream';
+
+export type StorageBody = string | ArrayBuffer | ArrayBufferView | ReadableStream<Uint8Array>;
+
+export interface StoragePutOptions {
+  contentType?: string;
+  etag?: string;
+  metadata?: Readonly<Record<string, string>>;
+}
+
+export interface StorageObjectInfo {
+  contentType?: string;
+  etag?: string;
+  key: string;
+  lastModified?: Date;
+  metadata?: Readonly<Record<string, string>>;
+  size: number;
+}
+
+export interface StoragePutResult extends StorageObjectInfo {}
+
+export interface StorageGetResult extends StorageObjectInfo {
+  body: Uint8Array;
+}
+
+export interface StorageStreamResult extends StorageObjectInfo {
+  body: ReadableStream<Uint8Array>;
+}
+
+export interface StorageCapability {
+  get(key: string): Promise<StorageGetResult | undefined>;
+  put(key: string, body: StorageBody, options?: StoragePutOptions): Promise<StoragePutResult>;
+  stat(key: string): Promise<StorageObjectInfo | undefined>;
+  stream(key: string): Promise<StorageStreamResult | undefined>;
+}
+
+export interface FileSystemStorageOptions {
+  root: string;
+}
+
+export interface MemoryStorageOptions {
+  now?: () => Date;
+}
+
+export interface S3CompatiblePutObjectInput {
+  body: StorageBody;
+  bucket: string;
+  contentType?: string;
+  key: string;
+  metadata?: Readonly<Record<string, string>>;
+}
+
+export interface S3CompatibleGetObjectInput {
+  bucket: string;
+  key: string;
+}
+
+export interface S3CompatibleHeadObjectInput {
+  bucket: string;
+  key: string;
+}
+
+export interface S3CompatibleObjectMetadata {
+  contentLength?: number;
+  contentType?: string;
+  etag?: string;
+  lastModified?: Date | string;
+  metadata?: Readonly<Record<string, string>>;
+}
+
+export interface S3CompatiblePutObjectOutput extends S3CompatibleObjectMetadata {
+  size?: number;
+}
+
+export interface S3CompatibleGetObjectOutput extends S3CompatibleObjectMetadata {
+  body: StorageBody;
+}
+
+export interface S3CompatibleObjectClient {
+  getObject(input: S3CompatibleGetObjectInput): Promise<S3CompatibleGetObjectOutput | undefined>;
+  headObject(input: S3CompatibleHeadObjectInput): Promise<S3CompatibleObjectMetadata | undefined>;
+  putObject(input: S3CompatiblePutObjectInput): Promise<S3CompatiblePutObjectOutput>;
+}
+
+export interface S3CompatibleStorageOptions {
+  bucket: string;
+  client: S3CompatibleObjectClient;
+  prefix?: string;
+}
+
+interface StoredMemoryObject {
+  body: Uint8Array;
+  info: StorageObjectInfo;
+}
+
+interface FileSystemMetadataRecord {
+  contentType?: string;
+  etag?: string;
+  lastModified: string;
+  metadata?: Readonly<Record<string, string>>;
+  size: number;
+}
+
+const textEncoder = new TextEncoder();
+const sidecarSuffix = '.jiso-storage.json';
+
+export function createMemoryStorage(options: MemoryStorageOptions = {}): StorageCapability {
+  const objects = new Map<string, StoredMemoryObject>();
+  const now = options.now ?? (() => new Date());
+
+  return {
+    async get(key) {
+      const normalizedKey = normalizeStorageKey(key);
+      const object = objects.get(normalizedKey);
+      if (object === undefined) return undefined;
+
+      return {
+        ...copyInfo(object.info),
+        body: copyBytes(object.body),
+      };
+    },
+    async put(key, body, putOptions = {}) {
+      const normalizedKey = normalizeStorageKey(key);
+      const bytes = await storageBodyToBytes(body);
+      const info = objectInfo(normalizedKey, bytes.byteLength, putOptions, now());
+      objects.set(normalizedKey, {
+        body: copyBytes(bytes),
+        info,
+      });
+      return copyInfo(info);
+    },
+    async stat(key) {
+      const normalizedKey = normalizeStorageKey(key);
+      const object = objects.get(normalizedKey);
+      return object === undefined ? undefined : copyInfo(object.info);
+    },
+    async stream(key) {
+      const normalizedKey = normalizeStorageKey(key);
+      const object = objects.get(normalizedKey);
+      if (object === undefined) return undefined;
+
+      return {
+        ...copyInfo(object.info),
+        body: bytesToReadableStream(object.body),
+      };
+    },
+  };
+}
+
+export function createFileSystemStorage(options: FileSystemStorageOptions): StorageCapability {
+  const root = path.resolve(options.root);
+
+  return {
+    async get(key) {
+      const normalizedKey = normalizeStorageKey(key);
+      const filePath = storageFilePath(root, normalizedKey);
+      const [bytes, info] = await Promise.all([
+        readFile(filePath).catch((error: unknown) => {
+          if (isNotFoundError(error)) return undefined;
+          throw error;
+        }),
+        fileSystemStat(root, normalizedKey),
+      ]);
+      if (bytes === undefined || info === undefined) return undefined;
+
+      return {
+        ...info,
+        body: new Uint8Array(bytes),
+      };
+    },
+    async put(key, body, putOptions = {}) {
+      const normalizedKey = normalizeStorageKey(key);
+      const filePath = storageFilePath(root, normalizedKey);
+      const bytes = await storageBodyToBytes(body);
+      const lastModified = new Date();
+      const info = objectInfo(normalizedKey, bytes.byteLength, putOptions, lastModified);
+
+      await mkdir(path.dirname(filePath), { recursive: true });
+      await writeFile(filePath, bytes);
+      await writeFile(metadataFilePath(filePath), JSON.stringify(metadataRecord(info)), 'utf8');
+
+      return info;
+    },
+    async stat(key) {
+      return fileSystemStat(root, normalizeStorageKey(key));
+    },
+    async stream(key) {
+      const normalizedKey = normalizeStorageKey(key);
+      const filePath = storageFilePath(root, normalizedKey);
+      const info = await fileSystemStat(root, normalizedKey);
+      if (info === undefined) return undefined;
+
+      return {
+        ...info,
+        body: Readable.toWeb(createReadStream(filePath)) as ReadableStream<Uint8Array>,
+      };
+    },
+  };
+}
+
+export function createS3CompatibleStorage(options: S3CompatibleStorageOptions): StorageCapability {
+  const prefix = options.prefix === undefined ? undefined : normalizeStoragePrefix(options.prefix);
+
+  return {
+    async get(key) {
+      const normalizedKey = normalizeStorageKey(key);
+      const output = await options.client.getObject({
+        bucket: options.bucket,
+        key: s3ObjectKey(prefix, normalizedKey),
+      });
+      if (output === undefined) return undefined;
+
+      const body = await storageBodyToBytes(output.body);
+      return {
+        ...s3ObjectInfo(normalizedKey, output, body.byteLength),
+        body,
+      };
+    },
+    async put(key, body, putOptions = {}) {
+      const normalizedKey = normalizeStorageKey(key);
+      const size = storageBodySize(body);
+      const output = await options.client.putObject({
+        bucket: options.bucket,
+        key: s3ObjectKey(prefix, normalizedKey),
+        body,
+        ...(putOptions.contentType === undefined ? {} : { contentType: putOptions.contentType }),
+        ...(putOptions.metadata === undefined ? {} : { metadata: putOptions.metadata }),
+      });
+
+      return s3ObjectInfo(normalizedKey, output, output.size ?? size ?? 0, putOptions.etag);
+    },
+    async stat(key) {
+      const normalizedKey = normalizeStorageKey(key);
+      const output = await options.client.headObject({
+        bucket: options.bucket,
+        key: s3ObjectKey(prefix, normalizedKey),
+      });
+      return output === undefined ? undefined : s3ObjectInfo(normalizedKey, output, 0);
+    },
+    async stream(key) {
+      const normalizedKey = normalizeStorageKey(key);
+      const output = await options.client.getObject({
+        bucket: options.bucket,
+        key: s3ObjectKey(prefix, normalizedKey),
+      });
+      if (output === undefined) return undefined;
+
+      return {
+        ...s3ObjectInfo(normalizedKey, output, 0),
+        body: storageBodyToReadableStream(output.body),
+      };
+    },
+  };
+}
+
+export function normalizeStorageKey(key: string): string {
+  if (key.length === 0) throw new Error('Storage key must not be empty.');
+  if (key.includes('\0')) throw new Error('Storage key must not contain null bytes.');
+  if (key.startsWith('/')) throw new Error('Storage key must be relative.');
+
+  const parts = key.split('/');
+  if (parts.some((part) => part.length === 0 || part === '.' || part === '..')) {
+    throw new Error('Storage key must not contain empty, current, or parent path segments.');
+  }
+
+  return parts.join('/');
+}
+
+export async function storageBodyToBytes(body: StorageBody): Promise<Uint8Array> {
+  if (typeof body === 'string') return textEncoder.encode(body);
+  if (body instanceof ArrayBuffer) return new Uint8Array(body.slice(0));
+  if (ArrayBuffer.isView(body)) {
+    return new Uint8Array(body.buffer.slice(body.byteOffset, body.byteOffset + body.byteLength));
+  }
+
+  const reader = body.getReader();
+  const chunks: Uint8Array[] = [];
+  let length = 0;
+
+  while (true) {
+    const result = await reader.read();
+    if (result.done) break;
+    chunks.push(result.value);
+    length += result.value.byteLength;
+  }
+
+  const bytes = new Uint8Array(length);
+  let offset = 0;
+  for (const chunk of chunks) {
+    bytes.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+
+  return bytes;
+}
+
+function objectInfo(
+  key: string,
+  size: number,
+  options: StoragePutOptions,
+  lastModified: Date,
+): StorageObjectInfo {
+  return {
+    key,
+    lastModified,
+    size,
+    ...(options.contentType === undefined ? {} : { contentType: options.contentType }),
+    ...(options.etag === undefined
+      ? { etag: storageEtag(key, size, lastModified) }
+      : { etag: options.etag }),
+    ...(options.metadata === undefined ? {} : { metadata: { ...options.metadata } }),
+  };
+}
+
+function metadataRecord(info: StorageObjectInfo): FileSystemMetadataRecord {
+  return {
+    lastModified: info.lastModified?.toISOString() ?? new Date().toISOString(),
+    size: info.size,
+    ...(info.contentType === undefined ? {} : { contentType: info.contentType }),
+    ...(info.etag === undefined ? {} : { etag: info.etag }),
+    ...(info.metadata === undefined ? {} : { metadata: info.metadata }),
+  };
+}
+
+async function fileSystemStat(root: string, key: string): Promise<StorageObjectInfo | undefined> {
+  const filePath = storageFilePath(root, key);
+  const fileStats = await fsStat(filePath).catch((error: unknown) => {
+    if (isNotFoundError(error)) return undefined;
+    throw error;
+  });
+  if (fileStats === undefined) return undefined;
+
+  const record = await readFile(metadataFilePath(filePath), 'utf8')
+    .then((value) => JSON.parse(value) as Partial<FileSystemMetadataRecord>)
+    .catch((error: unknown) => {
+      if (isNotFoundError(error)) return undefined;
+      throw error;
+    });
+
+  return {
+    key,
+    lastModified:
+      record?.lastModified === undefined ? fileStats.mtime : new Date(record.lastModified),
+    size: fileStats.size,
+    ...(record?.contentType === undefined ? {} : { contentType: record.contentType }),
+    ...(record?.etag === undefined ? {} : { etag: record.etag }),
+    ...(record?.metadata === undefined ? {} : { metadata: record.metadata }),
+  };
+}
+
+function storageFilePath(root: string, key: string): string {
+  const filePath = path.resolve(root, key);
+  const relativePath = path.relative(root, filePath);
+  if (relativePath.startsWith('..') || path.isAbsolute(relativePath)) {
+    throw new Error('Storage key resolves outside the storage root.');
+  }
+  return filePath;
+}
+
+function metadataFilePath(filePath: string): string {
+  return `${filePath}${sidecarSuffix}`;
+}
+
+function isNotFoundError(error: unknown): boolean {
+  return (
+    typeof error === 'object' &&
+    error !== null &&
+    'code' in error &&
+    (error as { code?: unknown }).code === 'ENOENT'
+  );
+}
+
+function storageEtag(key: string, size: number, lastModified: Date): string {
+  const hash = createHash('sha256')
+    .update(key)
+    .update('\0')
+    .update(String(size))
+    .update('\0')
+    .update(String(lastModified.getTime()))
+    .digest('hex');
+  return `"${hash}"`;
+}
+
+function copyInfo(info: StorageObjectInfo): StorageObjectInfo {
+  return {
+    ...info,
+    ...(info.lastModified === undefined ? {} : { lastModified: new Date(info.lastModified) }),
+    ...(info.metadata === undefined ? {} : { metadata: { ...info.metadata } }),
+  };
+}
+
+function copyBytes(bytes: Uint8Array): Uint8Array {
+  return new Uint8Array(bytes);
+}
+
+function bytesToReadableStream(bytes: Uint8Array): ReadableStream<Uint8Array> {
+  return new ReadableStream<Uint8Array>({
+    start(controller) {
+      controller.enqueue(copyBytes(bytes));
+      controller.close();
+    },
+  });
+}
+
+function storageBodyToReadableStream(body: StorageBody): ReadableStream<Uint8Array> {
+  if (typeof body === 'string' || body instanceof ArrayBuffer || ArrayBuffer.isView(body)) {
+    return new ReadableStream<Uint8Array>({
+      async start(controller) {
+        controller.enqueue(await storageBodyToBytes(body));
+        controller.close();
+      },
+    });
+  }
+
+  return body;
+}
+
+function storageBodySize(body: StorageBody): number | undefined {
+  if (typeof body === 'string') return textEncoder.encode(body).byteLength;
+  if (body instanceof ArrayBuffer) return body.byteLength;
+  if (ArrayBuffer.isView(body)) return body.byteLength;
+  return undefined;
+}
+
+function normalizeStoragePrefix(prefix: string): string {
+  return prefix
+    .split('/')
+    .filter((part) => part.length > 0)
+    .map(normalizeStorageKey)
+    .join('/');
+}
+
+function s3ObjectKey(prefix: string | undefined, key: string): string {
+  return prefix === undefined || prefix.length === 0 ? key : `${prefix}/${key}`;
+}
+
+function s3ObjectInfo(
+  key: string,
+  metadata: S3CompatibleObjectMetadata,
+  fallbackSize: number,
+  fallbackEtag?: string,
+): StorageObjectInfo {
+  return {
+    key,
+    size: metadata.contentLength ?? fallbackSize,
+    ...(metadata.contentType === undefined ? {} : { contentType: metadata.contentType }),
+    ...(metadata.etag === undefined
+      ? fallbackEtag === undefined
+        ? {}
+        : { etag: fallbackEtag }
+      : { etag: metadata.etag }),
+    ...(metadata.lastModified === undefined
+      ? {}
+      : { lastModified: new Date(metadata.lastModified) }),
+    ...(metadata.metadata === undefined ? {} : { metadata: { ...metadata.metadata } }),
+  };
+}
