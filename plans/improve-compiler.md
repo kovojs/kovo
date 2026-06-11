@@ -13,6 +13,7 @@ Scope: `packages/compiler/src/` only (plus `tests/fw-check.node.mjs` where gate 
 - [x] Extracted SPEC §6.4 literal navigation target validation (FW220 route-table checks for `href`/`action`) into `src/validate/navigation.ts`.
 - [x] Extracted SPEC §6.4 static navigation sugar lowering (`<Link>`, `href()`, and literal `href={...}` normalization) into `src/lower/navigation.ts`.
 - [x] Extracted handler lowering/FW201-FW210 event attribute analysis into `src/lower/handlers.ts`, preserving versioned `on:*` refs and element param derivation.
+- [x] Extracted view-transition lowering into `src/lower/view-transitions.ts`, preserving static stamp collection and style merging.
 - [x] Extracted server IR emission/render-equivalence source stamping into `src/emit/server.ts`, preserving handler attribute replacement plus SPEC §5.2 `fw-deps`/`fw-state` stamps.
 - [x] Consolidated object-literal scanner helpers into `src/scan/object.ts`; callers in `index.ts`, `lower/navigation.ts`, and `validate/bindings.ts` now share one implementation.
 - [x] Extracted markup validators into `src/validate/markup.ts`: FW221 IDREFs, FW224 static ids, FW225 content model, FW226 residual stamps, and FW231/FW232/FW233 primitive merge conflicts.

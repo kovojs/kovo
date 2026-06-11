@@ -489,9 +489,13 @@ void test('P2 page hints keep speculation rules opt-in and non-empty', async () 
 
 void test('P2 compiler merges view transition stamps into existing styles', async () => {
   const compilerSource = await readProjectFile('packages/compiler/src/index.ts');
+  const viewTransitionSource = await readProjectFile(
+    'packages/compiler/src/lower/view-transitions.ts',
+  );
   const compilerTests = await readProjectFile('packages/compiler/src/index.test.ts');
 
-  assert.match(compilerSource, /appendViewTransitionStyle/);
+  assert.match(compilerSource, /lowerViewTransitions/);
+  assert.match(viewTransitionSource, /appendViewTransitionStyle/);
   assert.match(compilerTests, /merges cross-document view transition stamps/);
   assert.match(compilerTests, /opacity: \.8; view-transition-name: product-p1-image/);
   assert.match(compilerTests, /serverSource\.match\(\/\\sstyle=\/g\)/);
