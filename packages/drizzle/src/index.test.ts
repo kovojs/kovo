@@ -1826,6 +1826,58 @@ export interface CommerceInvalidationSets {
     });
   });
 
+  it('uses typed receiver origins inside project domain write callbacks', () => {
+    const graph = extractTouchGraphFromProject({
+      files: [
+        {
+          fileName: 'drizzle-types.d.ts',
+          source: `
+            declare module "drizzle-orm/pg-core" {
+              export class PgDatabase<TQueryResultHKT = unknown, TFullSchema = unknown, TSchema = unknown> {
+                update(table: unknown): { set(value: unknown): { where(value: unknown): Promise<void> } };
+              }
+            }
+          `,
+        },
+        {
+          fileName: 'cart.domain.ts',
+          source: [
+            'import type { PgDatabase } from "drizzle-orm/pg-core";',
+            '',
+            'interface FakeDb {',
+            '  update(table: unknown): { set(value: unknown): { where(value: unknown): Promise<void> } };',
+            '}',
+            '',
+            'export const cartItems = pgTable("cart_items", {}, jiso({ domain: "cart", key: "productId" }));',
+            '',
+            'export const cart = domain({',
+            '  addItem: write(async (writer: PgDatabase, db: FakeDb, productId: string) => {',
+            '    await writer.update(cartItems).set({ productId }).where(eq(cartItems.productId, productId));',
+            '    await db.update(cartItems).set({ productId }).where(eq(cartItems.productId, productId));',
+            '  }),',
+            '});',
+            '',
+          ].join('\n'),
+        },
+      ],
+    });
+
+    expect(graph).toEqual({
+      'cart.addItem': {
+        reads: [],
+        touches: [
+          {
+            domain: 'cart',
+            keys: 'arg:productId',
+            site: 'cart.domain.ts:11',
+            via: 'cart_items',
+          },
+        ],
+        unresolved: [],
+      },
+    });
+  });
+
   it('resolves imported table symbols instead of same-name tables from other modules', () => {
     const graph = extractTouchGraphFromProject({
       files: [

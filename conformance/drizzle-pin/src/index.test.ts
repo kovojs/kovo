@@ -219,6 +219,43 @@ describe('Drizzle pinned subset conformance', () => {
     });
   });
 
+  it('pins real Drizzle receiver types inside domain write callbacks', () => {
+    const graph = extractTouchGraphFromProject({
+      files: [
+        {
+          fileName: 'conformance/drizzle-pin/src/cart.domain.ts',
+          source: [
+            "import type { PgDatabase } from 'drizzle-orm/pg-core';",
+            '',
+            "export const cartItems = pgTable('cart_items', {}, jiso({ domain: 'cart', key: 'productId' }));",
+            '',
+            'export const cart = domain({',
+            '  addItem: write(async (writer: PgDatabase<any, any, any>, productId: string) => {',
+            '    await writer.insert(cartItems).values({ productId });',
+            '  }),',
+            '});',
+            '',
+          ].join('\n'),
+        },
+      ],
+    });
+
+    expect(graph).toEqual({
+      'cart.addItem': {
+        reads: [],
+        touches: [
+          {
+            domain: 'cart',
+            keys: null,
+            site: 'conformance/drizzle-pin/src/cart.domain.ts:7',
+            via: 'cart_items',
+          },
+        ],
+        unresolved: [],
+      },
+    });
+  });
+
   it('pins project query facts for the real Drizzle Postgres subset', () => {
     expect(sql<number>`count(*)`).toBeDefined();
 

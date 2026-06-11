@@ -340,10 +340,46 @@ function projectWriteCallsByFileName(
       );
     }
 
+    for (const [name, callback] of projectDomainWriteCallbacks(sourceFile)) {
+      callsByFunction.set(
+        name,
+        extractProjectDrizzleWriteCalls(callback.body, file, extraction.tableNamesBySymbol),
+      );
+    }
+
     callsByFile.set(file.fileName, callsByFunction);
   });
 
   return callsByFile;
+}
+
+function projectDomainWriteCallbacks(sourceFile: SourceFile): Map<string, { body: Node }> {
+  const callbacks = new Map<string, { body: Node }>();
+
+  for (const declaration of sourceFile.getVariableDeclarations()) {
+    const domainName = declaration.getNameNode();
+    const initializer = declaration.getInitializer();
+    if (!Node.isIdentifier(domainName) || !initializer) continue;
+    if (!Node.isCallExpression(initializer)) continue;
+    const expression = initializer.getExpression();
+    if (!Node.isIdentifier(expression) || expression.getText() !== 'domain') continue;
+
+    const domainObject = initializer.getArguments()[0];
+    if (!domainObject || !Node.isObjectLiteralExpression(domainObject)) continue;
+
+    for (const property of domainObject.getProperties()) {
+      if (!Node.isPropertyAssignment(property)) continue;
+      const memberName = propertyNameText(property.getNameNode());
+      if (!memberName) continue;
+
+      const callback = writeCallbackFunction(property.getInitializer());
+      if (!callback) continue;
+
+      callbacks.set(`${domainName.getText()}.${memberName}`, { body: functionBody(callback) });
+    }
+  }
+
+  return callbacks;
 }
 
 function extractProjectDrizzleWriteCalls(
@@ -1695,88 +1731,78 @@ function variableAssignedFunction(
 
 function extractDomainWriteCallbacks(source: string): ExtractedFunction[] {
   const callbacks: ExtractedFunction[] = [];
-  const declarations = new RegExp(
-    `${EXPORTED_CONST_DECLARATION_SOURCE}(?<domain>${IDENTIFIER_SOURCE})\\s*=\\s*domain\\s*\\(`,
-    'g',
+  const sourceFile = parseSourceFile(source);
+
+  for (const declaration of sourceFile.getVariableDeclarations()) {
+    const domainName = declaration.getNameNode();
+    const initializer = declaration.getInitializer();
+    if (!Node.isIdentifier(domainName) || !initializer) continue;
+    if (!Node.isCallExpression(initializer)) continue;
+    const expression = initializer.getExpression();
+    if (!Node.isIdentifier(expression) || expression.getText() !== 'domain') continue;
+
+    const domainObject = initializer.getArguments()[0];
+    if (!domainObject || !Node.isObjectLiteralExpression(domainObject)) continue;
+
+    for (const property of domainObject.getProperties()) {
+      if (!Node.isPropertyAssignment(property)) continue;
+      const memberName = propertyNameText(property.getNameNode());
+      if (!memberName) continue;
+
+      const callback = writeCallbackFunction(property.getInitializer());
+      if (!callback) continue;
+
+      callbacks.push(
+        extractedFunctionFromCallback(`${domainName.getText()}.${memberName}`, callback),
+      );
+    }
+  }
+
+  return callbacks;
+}
+
+function writeCallbackFunction(
+  initializer: Node | undefined,
+): ReturnType<CallExpression['getArguments']>[number] | null {
+  if (!initializer || !Node.isCallExpression(initializer)) return null;
+  const expression = initializer.getExpression();
+  if (!Node.isIdentifier(expression) || expression.getText() !== 'write') return null;
+
+  return (
+    initializer
+      .getArguments()
+      .findLast(
+        (argument) => Node.isArrowFunction(argument) || Node.isFunctionExpression(argument),
+      ) ?? null
   );
-
-  for (const match of source.matchAll(declarations)) {
-    const domainName = match.groups?.domain;
-    if (!domainName || match.index === undefined) continue;
-
-    const objectStart = source.indexOf('{', match.index + match[0].length);
-    if (objectStart === -1) continue;
-
-    const objectEnd = findMatchingBrace(source, objectStart);
-    if (objectEnd === -1) continue;
-
-    callbacks.push(
-      ...extractDomainObjectWriteCallbacks(
-        domainName,
-        source.slice(objectStart + 1, objectEnd),
-        objectStart + 1,
-        source,
-      ),
-    );
-  }
-
-  return callbacks;
 }
 
-function extractDomainObjectWriteCallbacks(
-  domainName: string,
-  objectSource: string,
-  objectOffset: number,
-  fullSource: string,
-): ExtractedFunction[] {
-  const callbacks: ExtractedFunction[] = [];
-  const properties = new RegExp(`\\b(?<member>${IDENTIFIER_SOURCE})\\s*:\\s*write\\s*\\(`, 'g');
-
-  for (const match of objectSource.matchAll(properties)) {
-    const memberName = match.groups?.member;
-    if (!memberName || match.index === undefined) continue;
-
-    const openParen = objectSource.indexOf('(', match.index + match[0].lastIndexOf('write'));
-    if (openParen === -1) continue;
-
-    const absoluteOpenParen = objectOffset + openParen;
-    const closeParen = findMatchingParen(fullSource, absoluteOpenParen);
-    if (closeParen === -1) continue;
-
-    const callback = arrowCallbackFromWriteArgs(fullSource, absoluteOpenParen + 1, closeParen);
-    if (!callback) continue;
-
-    callbacks.push({
-      body: fullSource.slice(callback.bodyStart, callback.bodyEnd),
-      bodyStart: callback.bodyStart,
-      name: `${domainName}.${memberName}`,
-      params: callback.params,
-    });
-  }
-
-  return callbacks;
-}
-
-function arrowCallbackFromWriteArgs(
-  source: string,
-  argsStart: number,
-  argsEnd: number,
-): { bodyEnd: number; bodyStart: number; params: string } | null {
-  const args = source.slice(argsStart, argsEnd);
-  const arrowCallbacks = [...args.matchAll(/(?:async\s*)?\((?<params>[^)]*)\)\s*=>\s*\{/g)];
-  const callback = arrowCallbacks.at(-1);
-  const params = callback?.groups?.params;
-  if (!callback || params === undefined || callback.index === undefined) return null;
-
-  const bodyOpen = argsStart + callback.index + callback[0].length - 1;
-  const bodyClose = findMatchingBrace(source, bodyOpen);
-  if (bodyClose === -1) return null;
+function extractedFunctionFromCallback(name: string, callback: Node): ExtractedFunction {
+  const params =
+    Node.isArrowFunction(callback) || Node.isFunctionExpression(callback)
+      ? callback
+          .getParameters()
+          .map((param) => param.getText())
+          .join(', ')
+      : '';
+  const body = functionBody(callback);
+  const bodyStart = Node.isBlock(body) ? body.getStart() + 1 : body.getStart();
+  const bodyEnd = Node.isBlock(body) ? body.getEnd() - 1 : body.getEnd();
 
   return {
-    bodyEnd: bodyClose,
-    bodyStart: bodyOpen + 1,
+    body: body.getSourceFile().getFullText().slice(bodyStart, bodyEnd),
+    bodyStart,
+    name,
     params,
   };
+}
+
+function functionBody(callback: Node): Node {
+  if (Node.isArrowFunction(callback) || Node.isFunctionExpression(callback)) {
+    return callback.getBody();
+  }
+
+  throw new Error('Expected a write callback function');
 }
 
 function extractLocalFunctionCalls(source: string): string[] {
