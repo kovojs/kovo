@@ -30,7 +30,7 @@ scripts/check-links.mjs` → `check-links/v1 pages=24 internal=1568 OK` includin
       Playwright screenshot; smoke gate proves the hero renders with JS disabled.
 - [x] W5 tutorial track: per-step code states, all compiling and testing in CI, snippets extracted from step states.
       Evidence 2026-06-11: `node site/tutorial/run-steps.mjs` → `tutorial-steps/v1
-  steps=7 OK` (per-step tsgo typecheck, compileComponentModule with assertFixpoint + assertRenderEquivalence, committed-IR staleness check, 33 step tests); eight
+steps=7 OK` (per-step tsgo typecheck, compileComponentModule with assertFixpoint + assertRenderEquivalence, committed-IR staleness check, 33 step tests); eight
       chapters whose 51 code blocks are all `{{snippet:…}}` extractions; step 07 pins
       wire vocabulary and per-pair optimistic statuses against
       `examples/commerce/src/generated/graph.json`. Registered as the `tutorial-steps`
