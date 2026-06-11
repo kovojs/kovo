@@ -303,7 +303,9 @@ area, keeping `src/index.ts` barrels and API surface verbatim (mirrors compiler 
 - **drizzle** → `extract/` (AST), `graph.ts`, `serialize.ts` (falls out of Phase 3 item 2).
   Evidence: v1 invalidation registry derivation and serialization now live in
   `@jiso/drizzle`, with unit coverage for touch graph × query read-set matching and generated
-  `InvalidationSets` output.
+  `InvalidationSets` output. Initial split: invalidation registry derivation/serialization is
+  isolated in `packages/drizzle/src/invalidation.ts`, with `src/index.ts` preserving the public
+  barrel.
 
 ## SPEC reconciliation queue
 
