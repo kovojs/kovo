@@ -236,6 +236,14 @@ Do this first or pay it on every commit.
       `compileComponentModule` data-bind success/failure diagnostics, ejected list
       `templateStamps`, generated nullable left-join/project shapes, optional nullable paths, and
       FW227 help text instead of grepping compiler or conformance source/test names.
+      Partial evidence 2026-06-11: the P3 Drizzle query-facts tranche now uses the built Drizzle
+      APIs when importable to assert QueryFact shapes/diagnostics, `diagnosticsForQueryFacts`,
+      source/project extraction, instance-key derivation, opaque-projection FW410 diagnostics,
+      exempt-table FW411 query diagnostics, write-side exempt omission, non-key predicates, and
+      imported table symbol resolution. Current built-bundle import hits the known `__filename`
+      ESM issue, so the gate documents that failure and falls back to executable Vitest coverage
+      for the same source tests rather than grepping package source or test text. Verification:
+      `node --test --test-name-pattern "P3 Drizzle query facts" tests/fw-check.node.mjs`.
 - [x] **Make create-jiso templates real files** (`create-jiso/src/index.ts:63-473`, ~470 lines of
       escaped template literals including a CI workflow and double-escaped regexes inside
       `.mjs`-in-string). Move to a `templates/` directory copied at scaffold time with `{{name}}`
