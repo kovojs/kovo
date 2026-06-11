@@ -3,7 +3,6 @@ import { diagnosticDefinitions, type DiagnosticCode } from '@jiso/core';
 import { componentCssAssetForFile, emitCssModule, type ComponentCssAsset } from './css.js';
 import { diagnosticFor, type CompilerDiagnostic } from './diagnostics.js';
 import type { ComponentGraphFact, RegistryFacts, RegistryTypeFacts } from './graph.js';
-import { findMatchingClosingTag, scanOpeningTags } from './scan/tags.js';
 import { findMatchingToken, findStringEnd } from './scan/text.js';
 import {
   componentExplicitNames,
@@ -1170,17 +1169,10 @@ function fragmentTargetUsageNames(source: string): string[] {
 function fragmentTargetChildBodies(source: string, name: string): string[] {
   const bodies: string[] = [];
 
-  for (const tag of scanOpeningTags(source).filter((item) => item.name === name)) {
-    if (tag.selfClosing) continue;
+  for (const element of parsedJsxElements(source).filter((item) => item.tag === name)) {
+    if (element.selfClosing) continue;
 
-    const end = findMatchingClosingTag(source, name, tag.start);
-    if (end === -1) continue;
-
-    const openEnd = findOpeningTagEnd(source, tag.start);
-    if (openEnd === -1) continue;
-
-    const closeTag = `</${name}>`;
-    const body = source.slice(openEnd + 1, end - closeTag.length).trim();
+    const body = source.slice(element.openingEnd, element.closingStart).trim();
     if (body) bodies.push(body);
   }
 
