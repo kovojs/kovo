@@ -597,7 +597,7 @@ export const CartBadge = component('cart-badge', {
       {
         code: 'FW302',
         fileName: 'cart-badge.tsx',
-        message: 'data-bind path is not present in the declared query shape: cart.total',
+        message: 'data-bind path is not present in the declared query shape. cart.total',
         severity: 'error',
       },
     ]);

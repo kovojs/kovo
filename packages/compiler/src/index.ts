@@ -577,10 +577,8 @@ function validateDataBindings(
     .filter(Boolean)
     .filter((path) => !pathExistsInQueryShapes(path, options.queryShapes ?? {}))
     .map((path) => ({
-      code: 'FW302' as const,
-      fileName: options.fileName,
-      message: `data-bind path is not present in the declared query shape: ${path}`,
-      severity: 'error' as const,
+      ...diagnosticFor(options.fileName, 'FW302'),
+      message: `${diagnosticDefinitions.FW302.message} ${path}`,
     }));
 }
 
