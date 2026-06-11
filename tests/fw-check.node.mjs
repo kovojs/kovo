@@ -428,11 +428,16 @@ void test('P9 verification layer evidence remains represented', async () => {
 
   assert.match(testHarnessSource, /observeSql\(statement, config, observed\)/);
   assert.match(testHarnessSource, /prop === 'pglite'/);
+  assert.match(testHarnessSource, /prop === 'transaction'/);
   assert.match(
     testHarnessTests,
     /verifies observed writes against the static touch graph after exec/,
   );
   assert.match(testHarnessTests, /verifies raw pglite handle calls against the static touch graph/);
+  assert.match(
+    testHarnessTests,
+    /verifies raw pglite transaction handle calls against the static touch graph/,
+  );
   assert.match(
     testHarnessTests,
     /fails query-loader verification for reads outside declared domains/,

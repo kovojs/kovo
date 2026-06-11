@@ -325,6 +325,15 @@ function wrapSqlHandle<Handle extends object>(
     get(target, prop, receiver) {
       const value = Reflect.get(target, prop, receiver);
 
+      if (prop === 'transaction' && typeof value === 'function') {
+        return (callback: (tx: object) => Promise<unknown>, ...args: unknown[]) =>
+          value.call(
+            target,
+            (tx: object) => callback(wrapSqlHandle(tx, config, observed)),
+            ...args,
+          );
+      }
+
       if ((prop === 'query' || prop === 'exec') && typeof value === 'function') {
         return (statement: string, ...args: unknown[]) => {
           observeSql(statement, config, observed);
