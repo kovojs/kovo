@@ -244,7 +244,7 @@ export function compileComponentModule(options: CompileComponentOptions): Compil
   return {
     componentGraphFacts,
     diagnostics: [
-      ...versionedHandlers.flatMap((handler) => (handler.diagnostic ? [handler.diagnostic] : [])),
+      ...versionedHandlers.flatMap((handler) => handler.diagnostics ?? []),
       ...packagePrefixDiagnostics,
       ...validationDiagnostics,
     ],

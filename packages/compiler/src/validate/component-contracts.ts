@@ -133,6 +133,8 @@ export function validateDirectDbAccess(
 ): CompilerDiagnostic[] {
   if (!/\bmutation\s*\(/.test(source)) return [];
 
+  const diagnostics: CompilerDiagnostic[] = [];
+
   for (const handler of mutationHandlers(model)) {
     const params = handler.params.map(readParameterName).filter(Boolean);
     const dbParamIndex = params.indexOf('db');
@@ -149,7 +151,7 @@ export function validateDirectDbAccess(
 
     if (receivesDb) {
       const span = handler.paramSpans[dbParamIndex];
-      return [
+      diagnostics.push(
         diagnosticFor(
           fileName,
           'FW330',
@@ -157,16 +159,17 @@ export function validateDirectDbAccess(
           span?.start,
           span ? span.end - span.start : undefined,
         ),
-      ];
+      );
+      continue;
     }
 
     if (readsRequestDb) {
       const index = handler.bodyStart + (requestDb?.index ?? 0);
-      return [diagnosticFor(fileName, 'FW330', source, index, requestDb?.[0].length)];
+      diagnostics.push(diagnosticFor(fileName, 'FW330', source, index, requestDb?.[0].length));
     }
   }
 
-  return [];
+  return diagnostics;
 }
 
 export function unhandledUpdateCoverageDiagnostics(
