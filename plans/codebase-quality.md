@@ -286,6 +286,10 @@ area, keeping `src/index.ts` barrels and API surface verbatim (mirrors compiler 
 
 - **server** → `schema.ts`, `guards.ts`, `csrf.ts`, `query.ts`, `mutation.ts`, `route.ts`,
   `hints.ts`, `stream.ts`, `html.ts` (Phase 1 already touches most of these seams).
+  Evidence: versioned client module serving is now isolated in
+  `packages/server/src/client-modules.ts`, with `src/index.ts` preserving the public barrel
+  exports. The extracted helper owns SPEC §6.6 deploy-skew behavior for immutable retained
+  handler module URLs.
 - **runtime** → `events.ts`, `loader.ts`, `store.ts`, `optimistic.ts`, `wire.ts`, `morph.ts`,
   `broadcast.ts` (seams verified clean — almost nothing crosses them). Also stop exporting
   internals (`stampPendingQueries`, `abortRemovedIslandSignals`, `hydrateQueryScripts`, …)
