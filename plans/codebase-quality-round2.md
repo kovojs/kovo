@@ -175,6 +175,10 @@ Do this first or pay it on every commit.
       accept/fail diagnostics for serializable fragment-target children and browser-value child
       captures, including the hoist help text, instead of grepping core or compiler source/test
       names.
+      Partial evidence 2026-06-11: the P1 update-coverage tranche now imports built
+      core/compiler APIs and asserts `diagnosticDefinitions.FW311`,
+      `compileComponentModule.updateCoverage`, compiler FW311 diagnostics, and the `fwCheck`
+      coverage warning output instead of grepping core, compiler, or CLI source/test names.
 - [x] **Make create-jiso templates real files** (`create-jiso/src/index.ts:63-473`, ~470 lines of
       escaped template literals including a CI workflow and double-escaped regexes inside
       `.mjs`-in-string). Move to a `templates/` directory copied at scaffold time with `{{name}}`

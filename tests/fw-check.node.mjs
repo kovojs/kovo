@@ -887,35 +887,113 @@ export const Recommendations = component('recommendations', {
 });
 
 void test('P1 compiler emits FW311 update coverage facts', async () => {
-  const coreSource = await readProjectFile('packages/core/src/diagnostics.ts');
-  const componentContractsSource = await readProjectFile(
-    'packages/compiler/src/validate/component-contracts.ts',
+  assert.equal(
+    diagnosticDefinitions.FW311.message,
+    'Query-dependent DOM position has no update status.',
   );
-  const compilerDiagnosticsSource = await readProjectFile('packages/compiler/src/diagnostics.ts');
-  const compilerSource = await readProjectFile('packages/compiler/src/index.ts');
-  const compilerBindingsSource = await readProjectFile(
-    'packages/compiler/src/validate/bindings.ts',
-  );
-  const compilerTests = await readProjectFile('packages/compiler/src/index.test.ts');
+  const result = compileComponentModule({
+    fileName: 'components/cart/cart-badge.tsx',
+    source: `
+import { component } from '@jiso/core';
 
-  assert.match(coreSource, /FW311/);
-  assert.match(coreSource, /Query-dependent DOM position has no update status/);
-  assert.match(compilerSource, /interface QueryUpdateCoverageFact/);
-  assert.match(compilerDiagnosticsSource, /interface SourcePosition/);
-  assert.match(compilerDiagnosticsSource, /function offsetToPosition/);
-  assert.match(compilerSource, /collectQueryUpdateCoverage/);
-  assert.match(componentContractsSource, /fw311Diagnostic/);
-  assert.match(compilerBindingsSource, /status: 'renderOnce'/);
-  assert.match(compilerBindingsSource, /status: 'isomorphic'/);
-  assert.match(compilerBindingsSource, /status: 'UNHANDLED'/);
-  assert.match(compilerTests, /classifies query-dependent render positions for FW311 coverage/);
-  assert.match(compilerTests, /status: 'plan'/);
-  assert.match(compilerTests, /status: 'renderOnce'/);
-  assert.match(
-    compilerTests,
-    /classifies query-dependent render positions as isomorphic when declared/,
+export const CartBadge = component('cart-badge', {
+  queries: { cart: {}, product: {} },
+  render: () => (
+    <cart-badge>
+      <span data-bind="cart.count">{cart.count}</span>
+      <button data-bind:hidden="cart.empty">Checkout</button>
+      <span>{renderOnce(cart.currency)}</span>
+      <strong className={cart.discount}>Discount</strong>
+      <em className={product.name}>Product</em>
+    </cart-badge>
+  ),
+});
+`,
+  });
+
+  assert.deepEqual(result.updateCoverage, [
+    {
+      componentName: 'CartBadge',
+      detail: 'data-bind',
+      position: 'binding',
+      query: 'cart.count',
+      status: 'plan',
+    },
+    {
+      componentName: 'CartBadge',
+      detail: 'data-bind:hidden',
+      position: 'attribute',
+      query: 'cart.empty',
+      status: 'plan',
+    },
+    {
+      componentName: 'CartBadge',
+      detail: 'declared renderOnce',
+      position: 'expression',
+      query: 'cart.currency',
+      status: 'renderOnce',
+    },
+    {
+      componentName: 'CartBadge',
+      detail: 'query expression has no data-bind, renderOnce, fragment, or isomorphic status',
+      position: 'expression',
+      query: 'cart.discount',
+      status: 'UNHANDLED',
+    },
+    {
+      componentName: 'CartBadge',
+      detail: 'query expression has no data-bind, renderOnce, fragment, or isomorphic status',
+      position: 'expression',
+      query: 'product.name',
+      status: 'UNHANDLED',
+    },
+  ]);
+  assert.deepEqual(
+    result.diagnostics.filter((diagnostic) => diagnostic.code === 'FW311'),
+    [
+      {
+        code: 'FW311',
+        fileName: 'components/cart/cart-badge.tsx',
+        length: 13,
+        message: `${diagnosticDefinitions.FW311.message} CartBadge cart.discount expression`,
+        severity: 'warn',
+        start: { column: 26, line: 11 },
+      },
+      {
+        code: 'FW311',
+        fileName: 'components/cart/cart-badge.tsx',
+        length: 12,
+        message: `${diagnosticDefinitions.FW311.message} CartBadge product.name expression`,
+        severity: 'warn',
+        start: { column: 22, line: 12 },
+      },
+    ],
   );
-  assert.match(compilerTests, /code: 'FW311'/);
+  assert.equal(
+    fwCheck({
+      updateCoverage: [
+        {
+          component: 'CartBadge',
+          detail: 'text binding',
+          position: 'text',
+          query: 'cart.count',
+          status: 'plan',
+        },
+        {
+          component: 'CartBadge',
+          position: 'conditional <dot>',
+          query: 'cart.discount',
+          status: 'UNHANDLED',
+        },
+      ],
+    }).output,
+    [
+      'fw-check/v1',
+      'COVERAGE component=CartBadge query=cart.count position="text" status=plan detail="text binding"',
+      'WARN FW311 component=CartBadge query=cart.discount position="conditional <dot>" Query-dependent DOM position has no update status.',
+      '',
+    ].join('\n'),
+  );
 });
 
 void test('P1 compiler validates binding stamp expression drift', async () => {
