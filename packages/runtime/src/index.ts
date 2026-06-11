@@ -172,6 +172,7 @@ export interface VisibleObserverEntry {
 }
 
 export interface UploadProgressElementLike {
+  removeAttribute?: (name: string) => void;
   setAttribute(name: string, value: string): void;
 }
 
@@ -432,15 +433,19 @@ function isEnhancedForm(form: EventElementLike): boolean {
 
 function updateUploadProgressElements(form: EventElementLike, progress: UploadProgress): void {
   const progressElements = form.querySelectorAll?.('[fw-upload-progress]') ?? [];
-  const total = progress.total ?? 100;
+  const total = progress.total;
   const value =
-    progress.total && progress.total > 0
-      ? Math.min(100, Math.round((progress.loaded / progress.total) * 100))
-      : progress.loaded;
+    total !== undefined && total > 0
+      ? Math.min(100, Math.round((progress.loaded / total) * 100))
+      : undefined;
 
   for (const element of progressElements) {
+    element.setAttribute('max', '100');
+    if (value === undefined) {
+      element.removeAttribute?.('value');
+      continue;
+    }
     element.setAttribute('value', String(value));
-    element.setAttribute('max', progress.total ? '100' : String(total));
   }
 }
 

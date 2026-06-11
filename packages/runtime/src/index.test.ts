@@ -87,6 +87,10 @@ class FakeElement implements EventElementLike {
     return this.attributes.find((attribute) => attribute.name === name)?.value ?? null;
   }
 
+  removeAttribute(name: string): void {
+    this.attributes = this.attributes.filter((attribute) => attribute.name !== name);
+  }
+
   setAttribute(name: string, value: string): void {
     const existing = this.attributes.find((attribute) => attribute.name === name);
     if (existing) {
@@ -607,6 +611,60 @@ describe('runtime loader', () => {
     expect(mutationRoot.targets.get('cart-badge')?.html).toBe('<cart-badge>1</cart-badge>');
     expect(pendingForm.attributes).not.toHaveProperty('fw-pending');
     expect(pendingForm.attributes).not.toHaveProperty('aria-busy');
+  });
+
+  it('renders upload progress as indeterminate when total bytes are unknown', async () => {
+    const loaderRoot = new FakeRoot();
+    const mutationRoot = new FakeMorphRoot();
+    const store = createQueryStore();
+    const preventDefault = vi.fn();
+    const importModule = vi.fn();
+    const formData = new FormData();
+    const form = new FakeFormElement(
+      {
+        enhance: '',
+        'data-mutation': 'cart/add',
+      },
+      {
+        action: '/_m/cart/add',
+        method: 'post',
+      },
+    );
+    const progressElement = new FakeElement({ 'fw-upload-progress': '', max: '100', value: '0' });
+    form.progressElements = [progressElement];
+    const fetch = vi.fn(async (_url: string, options: EnhancedMutationFetchOptions) => ({
+      headers: {
+        get() {
+          return null;
+        },
+      },
+      async text() {
+        options.onUploadProgress?.({ loaded: 512 });
+        return '<fw-query name="cart">{"count":1}</fw-query>';
+      },
+    }));
+
+    installJisoLoader({
+      enhancedMutations: {
+        fetch,
+        formData: () => formData,
+        root: mutationRoot,
+        store,
+      },
+      importModule,
+      root: loaderRoot,
+    });
+
+    await loaderRoot.listeners.get('submit')?.({
+      preventDefault,
+      target: form,
+      type: 'submit',
+    });
+
+    expect(preventDefault).toHaveBeenCalledTimes(1);
+    expect(progressElement.getAttribute('value')).toBeNull();
+    expect(progressElement.getAttribute('max')).toBe('100');
+    expect(store.get('cart')).toEqual({ count: 1 });
   });
 
   it('reports enhanced loader submit failures after preventing native submit', async () => {
