@@ -420,6 +420,32 @@ void test('D2 commerce validates keyed append and optimistic reorder', async () 
   );
 });
 
+void test('P3 commerce mutation runs through the transaction lifecycle', async () => {
+  const commerceSource = await readProjectFile('examples/commerce/src/app.ts');
+  const commerceTests = await readProjectFile('examples/commerce/src/app.test.ts');
+
+  assert.match(commerceSource, /transaction<Result>\(run: \(db: CommerceDb\)/);
+  assert.match(commerceSource, /cloneCommerceDb/);
+  assert.match(commerceSource, /request\.db\.transaction/);
+  assert.match(commerceTests, /commits and rolls back commerce database transactions/);
+  assert.match(commerceTests, /expect\(transactions\)\.toBe\(2\)/);
+});
+
+void test('D1 commerce enhanced fragments carry Tailwind stylesheet hints', async () => {
+  const commerceSource = await readProjectFile('examples/commerce/src/app.ts');
+  const commerceTests = await readProjectFile('examples/commerce/src/app.test.ts');
+  const serverSource = await readProjectFile('packages/server/src/index.ts');
+  const serverTests = await readProjectFile('packages/server/src/index.test.ts');
+
+  assert.match(commerceSource, /commerceStylesheets = \['\/assets\/tailwind\.css'\] as const/);
+  assert.match(commerceSource, /stylesheets: commerceStylesheets/);
+  assert.match(commerceTests, /response\.body\.match/);
+  assert.match(commerceTests, /toHaveLength\(3\)/);
+  assert.match(commerceTests, /<link rel="stylesheet" href="\/assets\/tailwind\.css">/);
+  assert.match(serverSource, /error-boundary=.*renderStylesheetLinks\(renderer\.stylesheets/);
+  assert.match(serverTests, /recommendations\.css/);
+});
+
 void test('D4 commerce adopt-dont-invent features stay represented', async () => {
   const commerceSource = await readProjectFile('examples/commerce/src/app.ts');
   const commerceTests = await readProjectFile('examples/commerce/src/app.test.ts');

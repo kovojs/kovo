@@ -1220,7 +1220,7 @@ async function renderFragmentChunks(
 
       const target = renderer.errorBoundary.target ?? renderer.target;
       chunks.push(
-        `<fw-fragment target="${escapeAttribute(target)}" error-boundary="${escapeAttribute(renderer.target)}">${await renderer.errorBoundary.render(error, input)}</fw-fragment>`,
+        `<fw-fragment target="${escapeAttribute(target)}" error-boundary="${escapeAttribute(renderer.target)}">${renderStylesheetLinks(renderer.stylesheets ?? [])}${await renderer.errorBoundary.render(error, input)}</fw-fragment>`,
       );
     }
   }

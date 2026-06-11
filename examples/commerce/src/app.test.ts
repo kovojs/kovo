@@ -100,6 +100,26 @@ function keyedListNode(
 }
 
 describe('commerce example', () => {
+  it('commits and rolls back commerce database transactions', async () => {
+    const db = createCommerceDb();
+
+    await expect(
+      db.transaction(async (tx) => {
+        tx.write('cart_items', { productId: 'p1', qty: 1, unitPrice: 1499 });
+        return 'committed';
+      }),
+    ).resolves.toBe('committed');
+    expect(db.cartItems).toEqual([{ productId: 'p1', qty: 1, unitPrice: 1499 }]);
+
+    await expect(
+      db.transaction(async (tx) => {
+        tx.write('cart_items', { productId: 'p2', qty: 1, unitPrice: 2599 });
+        throw new Error('rollback');
+      }),
+    ).rejects.toThrow('rollback');
+    expect(db.cartItems).toEqual([{ productId: 'p1', qty: 1, unitPrice: 1499 }]);
+  });
+
   it('executes addToCart and verifies rendered cart badge without a browser', async () => {
     const harness = createJisoTestHarness({
       db: createCommerceDb(),
@@ -362,6 +382,13 @@ describe('commerce example', () => {
 
   it('handles enhanced addToCart through the same endpoint as fragment wire', async () => {
     const db = createCommerceDb();
+    const transaction = db.transaction.bind(db);
+    let transactions = 0;
+
+    db.transaction = (run) => {
+      transactions += 1;
+      return transaction(run);
+    };
 
     await expect(
       submitAddToCart(
@@ -394,7 +421,9 @@ describe('commerce example', () => {
     expect(response.body).toContain('<fw-fragment target="cart-badge">');
     expect(response.body).toContain('<fw-fragment target="product-grid">');
     expect(response.body).toContain('<fw-fragment target="order-history">');
+    expect(response.body.match(/\/assets\/tailwind\.css/g) ?? []).toHaveLength(3);
     expect(response.body).toContain('data-key="order-2"');
+    expect(transactions).toBe(2);
   });
 
   it('contains product-grid fragment failures with a per-island error boundary', async () => {
@@ -421,6 +450,7 @@ describe('commerce example', () => {
     expect(response.body).toContain(
       '<fw-fragment target="product-grid" error-boundary="product-grid">',
     );
+    expect(response.body).toContain('<link rel="stylesheet" href="/assets/tailwind.css">');
     expect(response.body).toContain('Product grid failed: catalog unavailable');
     expect(response.body).toContain('<fw-fragment target="cart-badge">');
     expect(response.body).toContain('<fw-fragment target="order-history">');

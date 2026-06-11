@@ -1584,6 +1584,7 @@ describe('server mutation primitives', () => {
               render() {
                 throw new Error('recommendations failed');
               },
+              stylesheets: ['/assets/recommendations.css'],
               target: 'recommendations',
             },
             {
@@ -1598,7 +1599,7 @@ describe('server mutation primitives', () => {
         targets: ['recommendations'],
       }),
     ).resolves.toEqual({
-      body: '<fw-fragment target="recommendations" error-boundary="recommendations"><section role="alert">recommendations failed</section></fw-fragment>',
+      body: '<fw-fragment target="recommendations" error-boundary="recommendations"><link rel="stylesheet" href="/assets/recommendations.css"><section role="alert">recommendations failed</section></fw-fragment>',
       headers: {
         'Content-Type': 'text/vnd.jiso.fragment+html; charset=utf-8',
         'FW-Changes': '[]',

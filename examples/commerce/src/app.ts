@@ -25,6 +25,7 @@ export interface CommerceDb {
   orders: { id: string; productId: string; qty: number; total: number; userId: string }[];
   products: Map<string, { id: string; stock: number; unitPrice: number }>;
   read(table: string): unknown[];
+  transaction<Result>(run: (db: CommerceDb) => Promise<Result>): Promise<Result>;
   write(table: string, value: unknown): void;
 }
 
@@ -57,6 +58,16 @@ export function createCommerceDb(): CommerceDb {
       if (table === 'products') return [...db.products.values()];
       return [];
     },
+    async transaction(run) {
+      const draft = cloneCommerceDb(db);
+      const result = await run(draft);
+
+      db.cartItems = draft.cartItems;
+      db.orders = draft.orders;
+      db.products = draft.products;
+
+      return result;
+    },
     write(table, value) {
       if (table === 'cart_items') {
         db.cartItems.push(value as { productId: string; qty: number; unitPrice: number });
@@ -73,6 +84,22 @@ export function createCommerceDb(): CommerceDb {
     },
   };
   return db;
+}
+
+function cloneCommerceDb(source: CommerceDb): CommerceDb {
+  const clone = createCommerceDb();
+
+  clone.cartItems = source.cartItems.map((item) => ({ ...item }));
+  clone.orders = source.orders.map((item) => ({ ...item }));
+  clone.products = new Map(
+    [...source.products.entries()].map(([key, value]) => [key, { ...value }]),
+  );
+  if (Object.hasOwn(source.products, 'values')) {
+    const values = Reflect.get(source.products, 'values') as typeof source.products.values;
+    clone.products.values = values.bind(source.products) as typeof clone.products.values;
+  }
+
+  return clone;
 }
 
 export const cart = domain('cart');
@@ -183,6 +210,9 @@ export const addToCart = mutation('cart/add', {
     inferredTouches: commerceTouchGraph['cart.addItem'].touches,
     queries: [cartQuery, productGridQuery, orderHistoryQuery],
   },
+  transaction(request: CommerceRequest, run) {
+    return request.db.transaction((db) => run({ ...request, db }));
+  },
   handler(input, request: CommerceRequest, context) {
     const currentSession = commerceSession.parse(request);
     const found = request.db.products.get(input.productId);
@@ -240,6 +270,8 @@ export const commerceMessages = i18n('en-US', {
   cartLabel: 'Cart',
   productStock: '{count} in stock',
 });
+
+export const commerceStylesheets = ['/assets/tailwind.css'] as const;
 
 export function loadProductGrid(db: CommerceDb, input: ProductGridInput = {}): ProductGridResult {
   const limit = input.limit ?? 2;
@@ -352,7 +384,7 @@ export const CartBadge = component('cart-badge', {
 export const commercePageHints = renderPageHints({
   i18n: commerceMessages,
   meta: commerceMeta,
-  stylesheets: ['/assets/tailwind.css'],
+  stylesheets: commerceStylesheets,
 });
 
 export function renderCartPage(
@@ -396,16 +428,28 @@ export function submitAddToCart(
   return renderMutationEndpointResponse(addToCart, {
     failureTarget: 'product-form',
     fragmentRenderers: [
-      { render: () => CartBadge.definition.render(), target: 'cart-badge' },
+      {
+        render: () => CartBadge.definition.render(),
+        stylesheets: commerceStylesheets,
+        target: 'cart-badge',
+      },
       errorBoundary(
-        { render: () => renderProductGrid(loadProductGrid(request.db)), target: 'product-grid' },
+        {
+          render: () => renderProductGrid(loadProductGrid(request.db)),
+          stylesheets: commerceStylesheets,
+          target: 'product-grid',
+        },
         {
           render(error) {
             return `<section role="alert" class="rounded border border-red-200 bg-red-50 p-4 text-sm text-red-700">Product grid failed: ${escapeHtml((error as Error).message)}</section>`;
           },
         },
       ),
-      { render: () => renderOrderHistory(request.db), target: 'order-history' },
+      {
+        render: () => renderOrderHistory(request.db),
+        stylesheets: commerceStylesheets,
+        target: 'order-history',
+      },
     ],
     headers,
     rawInput,
