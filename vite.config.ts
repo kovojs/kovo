@@ -20,8 +20,13 @@ export default defineConfig({
     },
     tasks: {
       build: {
-        command: 'vp pack',
+        command: 'vp pack && node scripts/prod-emit-check.mjs',
         output: ['dist/**'],
+        input: [
+          { auto: true },
+          { pattern: 'scripts/prod-emit-check.mjs', base: 'workspace' },
+          { pattern: 'packages/compiler/src/**', base: 'workspace' },
+        ],
       },
       browser: {
         command: 'vitest --config vitest.browser.config.ts --run',

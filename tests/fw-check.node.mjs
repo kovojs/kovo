@@ -732,6 +732,20 @@ void test('P5 data-bind paths are checked against generated query shape facts', 
   );
 });
 
+void test('S1 production build proves the compiler 1:1 emit contract', async () => {
+  const viteConfig = await readProjectFile('vite.config.ts');
+  const prodEmitCheck = await readProjectFile('scripts/prod-emit-check.mjs');
+
+  assert.match(viteConfig, /command: 'vp pack && node scripts\/prod-emit-check\.mjs'/);
+  assert.match(viteConfig, /scripts\/prod-emit-check\.mjs/);
+  assert.match(viteConfig, /packages\/compiler\/src\/\*\*/);
+  assert.match(prodEmitCheck, /compileComponentModule/);
+  assert.match(prodEmitCheck, /product-card\.server\.js/);
+  assert.match(prodEmitCheck, /product-card\.client\.js/);
+  assert.match(prodEmitCheck, /ProductCard\\\$button_click/);
+  assert.match(prodEmitCheck, /prod-emit-check\/v1/);
+});
+
 void test('P3 Drizzle query facts include select shapes and instance keys', async () => {
   const drizzleSource = await readProjectFile('packages/drizzle/src/index.ts');
   const drizzleTests = await readProjectFile('packages/drizzle/src/index.test.ts');
