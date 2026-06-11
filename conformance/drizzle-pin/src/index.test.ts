@@ -1,13 +1,15 @@
 import { describe, expect, it } from 'vitest';
 
-import { eq, gt, inArray } from 'drizzle-orm';
+import { eq, gt, inArray, sql } from 'drizzle-orm';
 import { alias, boolean, integer, pgTable, text, timestamp } from 'drizzle-orm/pg-core';
 
 import {
   createTouchGraphEntry,
+  diagnosticsForQueryFacts,
   diagnosticsForTouchGraph,
   extractTouchGraphFromProject,
   extractTouchGraphFromSource,
+  extractQueryFactsFromProject,
   jiso,
   serializeDomainRegistry,
   serializeTouchGraph,
@@ -68,6 +70,87 @@ describe('Drizzle pinned subset conformance', () => {
         unresolved: [],
       },
     });
+  });
+
+  it('pins project query facts for the real Drizzle Postgres subset', () => {
+    expect(sql<number>`count(*)`).toBeDefined();
+
+    const facts = extractQueryFactsFromProject({
+      files: [
+        {
+          fileName: 'conformance/drizzle-pin/src/cart.schema.ts',
+          source: `
+            export const items = pgTable('cart_items', {}, jiso({ domain: 'cart', key: 'id' }));
+          `,
+        },
+        {
+          fileName: 'conformance/drizzle-pin/src/order.schema.ts',
+          source: `
+            export const items = pgTable('order_items', {}, jiso({ domain: 'order', key: 'id' }));
+          `,
+        },
+        {
+          fileName: 'conformance/drizzle-pin/src/cart.queries.ts',
+          source: `
+            import { sql } from 'drizzle-orm';
+            import { items } from './cart.schema';
+
+            export const cartQuery = query('cart', {
+              load(input, db) {
+                return db.select({ id: items.id }).from(items).where(eq(items.id, input.id));
+              },
+            });
+
+            export const cartCountQuery = query('cart/count', {
+              load(_input, db) {
+                return db.select({ count: sql<number>\`count(*)\` }).from(items);
+              },
+            });
+          `,
+        },
+      ],
+    });
+
+    expect(facts).toEqual([
+      {
+        instanceKey: {
+          domain: 'cart',
+          key: 'arg:id',
+        },
+        query: 'cart',
+        reads: ['cart'],
+        shape: {
+          id: 'string',
+        },
+        site: 'conformance/drizzle-pin/src/cart.queries.ts:5',
+      },
+      {
+        diagnostics: [
+          {
+            code: 'FW410',
+            message:
+              'Query result shape failed declared output schema. cart/count.count requires a declared output schema for opaque sql/raw projection.',
+            severity: 'error',
+            site: 'conformance/drizzle-pin/src/cart.queries.ts:11',
+          },
+        ],
+        query: 'cart/count',
+        reads: ['cart'],
+        shape: {
+          count: 'number',
+        },
+        site: 'conformance/drizzle-pin/src/cart.queries.ts:11',
+      },
+    ]);
+    expect(diagnosticsForQueryFacts(facts)).toEqual([
+      {
+        code: 'FW410',
+        message:
+          'Query result shape failed declared output schema. cart/count.count requires a declared output schema for opaque sql/raw projection.',
+        severity: 'error',
+        site: 'conformance/drizzle-pin/src/cart.queries.ts:11',
+      },
+    ]);
   });
 
   it('pins table annotations as the domain registry source', () => {

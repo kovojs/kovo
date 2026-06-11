@@ -1128,6 +1128,7 @@ void test('P3 Drizzle query facts include select shapes and instance keys', asyn
   assert.match(drizzleSource, /export interface QueryFact/);
   assert.match(drizzleSource, /diagnostics\?: readonly TouchGraphDiagnostic/);
   assert.match(drizzleSource, /diagnosticsForQueryFacts/);
+  assert.match(drizzleSource, /extractQueryFactsFromProject/);
   assert.match(drizzleSource, /extractQueryFactsFromSource/);
   assert.match(drizzleSource, /selectShapeFromQueryBody/);
   assert.match(drizzleSource, /opaqueProjectionDiagnostics/);
@@ -1146,6 +1147,7 @@ void test('P3 Drizzle query facts include select shapes and instance keys', asyn
     drizzleTests,
     /omits instance keys when Drizzle query predicates do not target an annotated table key/,
   );
+  assert.match(drizzleTests, /resolves imported table symbols in project query facts/);
 });
 
 void test('P1 fragment targets emit typed registry facts', async () => {
@@ -1228,6 +1230,8 @@ void test('Drizzle pinned conformance suite is an explicit gate', async () => {
   assert.match(conformanceTest, /from 'drizzle-orm\/pg-core'/);
   assert.match(conformanceTest, /imports the pinned real Drizzle Postgres subset/);
   assert.match(conformanceTest, /recognizes real Drizzle receiver types in project extraction/);
+  assert.match(conformanceTest, /pins project query facts for the real Drizzle Postgres subset/);
+  assert.match(conformanceTest, /diagnosticsForQueryFacts/);
   assert.match(conformanceTest, /pins direct table source extraction/);
   assert.match(conformanceTest, /pins local conditional table resolution/);
   assert.match(conformanceTest, /pins domain write callback extraction/);

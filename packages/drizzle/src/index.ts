@@ -320,6 +320,20 @@ export function extractTouchGraphFromSource(files: readonly SourceFileInput[]): 
 }
 
 export function extractTouchGraphFromProject(options: TouchGraphProjectOptions): TouchGraph {
+  const files = sourceFilesWithProjectExtractionResolved(options);
+
+  return extractTouchGraphFromSource(files);
+}
+
+export function extractQueryFactsFromProject(options: TouchGraphProjectOptions): QueryFact[] {
+  const files = sourceFilesWithProjectExtractionResolved(options);
+
+  return extractQueryFactsFromSource(files);
+}
+
+function sourceFilesWithProjectExtractionResolved(
+  options: TouchGraphProjectOptions,
+): SourceFileInput[] {
   const project = new Project({
     compilerOptions: {
       allowJs: false,
@@ -332,11 +346,13 @@ export function extractTouchGraphFromProject(options: TouchGraphProjectOptions):
     },
     skipAddingFilesFromTsConfig: true,
   });
+
   const sourceFiles = options.files.map((file) =>
     project.createSourceFile(file.fileName, file.source, { overwrite: true }),
   );
   const tableNamesBySymbol = projectTableNamesBySymbol(sourceFiles);
-  const files = options.files.map((file, index) => {
+
+  return options.files.map((file, index) => {
     const sourceFile = sourceFiles[index];
     if (!sourceFile) throw new Error(`Missing source file for ${file.fileName}`);
 
@@ -345,8 +361,6 @@ export function extractTouchGraphFromProject(options: TouchGraphProjectOptions):
       source: sourceWithProjectExtractionResolved(file.source, sourceFile, tableNamesBySymbol),
     };
   });
-
-  return extractTouchGraphFromSource(files);
 }
 
 export function extractQueryFactsFromSource(files: readonly SourceFileInput[]): QueryFact[] {

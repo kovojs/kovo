@@ -6,6 +6,7 @@ import {
   diagnosticsForTouchGraph,
   extractTouchGraphFromProject,
   extractTouchGraphFromSource,
+  extractQueryFactsFromProject,
   extractQueryFactsFromSource,
   jiso,
   serializeDomainRegistry,
@@ -361,6 +362,52 @@ export const tableDomains = {
           sku: 'string',
         },
         site: 'product.queries.ts:4',
+      },
+    ]);
+  });
+
+  it('resolves imported table symbols in project query facts', () => {
+    const facts = extractQueryFactsFromProject({
+      files: [
+        {
+          fileName: 'cart.schema.ts',
+          source: `
+            export const items = pgTable("cart_items", {}, jiso({ domain: "cart", key: "id" }));
+          `,
+        },
+        {
+          fileName: 'order.schema.ts',
+          source: `
+            export const items = pgTable("order_items", {}, jiso({ domain: "order", key: "id" }));
+          `,
+        },
+        {
+          fileName: 'cart.queries.ts',
+          source: `
+            import { items } from "./cart.schema";
+
+            export const cartQuery = query("cart", {
+              load(input, db) {
+                return db.select({ id: items.id }).from(items).where(eq(items.id, input.id));
+              },
+            });
+          `,
+        },
+      ],
+    });
+
+    expect(facts).toEqual([
+      {
+        instanceKey: {
+          domain: 'cart',
+          key: 'arg:id',
+        },
+        query: 'cart',
+        reads: ['cart'],
+        shape: {
+          id: 'string',
+        },
+        site: 'cart.queries.ts:4',
       },
     ]);
   });
