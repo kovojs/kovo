@@ -16,6 +16,31 @@
       "queries": ["orderHistory"]
     }
   ],
+  "endpoints": [
+    {
+      "auth": "verifier:stripe:v1:hmac-sha256",
+      "csrf": "exempt",
+      "csrfJustification": "payment/stripe webhook verifier stripe:v1:hmac-sha256",
+      "method": "POST",
+      "name": "payment/stripe",
+      "path": "/webhooks/stripe",
+      "writes": ["order"]
+    },
+    {
+      "auth": "authed",
+      "csrf": "checked",
+      "method": "GET",
+      "name": "orders/export",
+      "path": "/exports/orders.csv"
+    },
+    {
+      "auth": "authed",
+      "csrf": "checked",
+      "method": "GET",
+      "name": "attachments/download",
+      "path": "/attachments/:id"
+    }
+  ],
   "mutations": [
     {
       "guards": ["authed", "rateLimit:session"],
@@ -31,7 +56,8 @@
       "guards": ["authed", "rateLimit:session"],
       "inputFields": ["orderId", "receipt"],
       "key": "order/receipt",
-      "session": "commerceSession"
+      "session": "commerceSession",
+      "writes": ["attachment"]
     }
   ],
   "optimistic": [
@@ -49,6 +75,12 @@
       "mutation": "cart/add",
       "query": "orderHistory",
       "status": "await-fragment"
+    }
+  ],
+  "ownerDomains": [
+    {
+      "domain": "attachment",
+      "owner": "userId"
     }
   ],
   "pages": [
@@ -79,27 +111,63 @@
       "query": "orderHistory"
     }
   ],
+  "scopeAudits": [
+    {
+      "detail": "attachment download filters id plus session user",
+      "domain": "attachment",
+      "kind": "query",
+      "name": "attachments/download",
+      "scope": "session",
+      "site": "examples/commerce/src/app.ts:attachmentDownloadRoute"
+    }
+  ],
   "touchGraph": {
     "cart.addItem": {
       "touches": [
         {
           "domain": "cart",
           "keys": null,
-          "site": "examples/commerce/src/app.ts:197",
+          "site": "examples/commerce/src/app.ts:238",
           "via": "cart_items"
         },
         {
           "domain": "order",
           "keys": null,
-          "site": "examples/commerce/src/app.ts:202",
+          "site": "examples/commerce/src/app.ts:243",
           "via": "orders"
         },
         {
           "domain": "product",
           "keys": "arg:productId",
           "predicate": "eq",
-          "site": "examples/commerce/src/app.ts:209",
+          "site": "examples/commerce/src/app.ts:250",
           "via": "products"
+        }
+      ],
+      "reads": [],
+      "unresolved": []
+    },
+    "payment.webhook": {
+      "touches": [
+        {
+          "domain": "order",
+          "keys": "arg:data.object.id",
+          "predicate": "eq",
+          "site": "examples/commerce/src/app.ts:342",
+          "via": "orders"
+        }
+      ],
+      "reads": [],
+      "unresolved": []
+    },
+    "order.receipt": {
+      "touches": [
+        {
+          "domain": "attachment",
+          "keys": "arg:orderId",
+          "predicate": "eq",
+          "site": "examples/commerce/src/app.ts:292",
+          "via": "attachments"
         }
       ],
       "reads": [],

@@ -1,25 +1,32 @@
-import { component, form } from '@jiso/core';
+import { component, createMemoryStorage, form, stripeSignature } from '@jiso/core';
 import type { OptimisticFor } from '@jiso/runtime';
 import {
+  createMemoryMutationReplayStore,
   domain,
   errorBoundary,
   csrfField,
   csrfToken,
-  type FileLike,
   guards,
   i18n,
   meta,
   metaFromQuery,
   mutation,
+  notFound,
   query,
   renderDeferredStream,
   renderMutationEndpointResponse,
   renderPageHints,
+  renderRoutePageResponse,
+  respond,
+  route,
+  runWebhook,
   s,
   session,
   t,
+  webhook,
   type MutationFail,
   type MutationWireHeaderSource,
+  type StoredFileUpload,
 } from '@jiso/server';
 import type { FwExplainInput } from '../../../packages/cli/src/index.js';
 import { commerceTouchGraph } from './generated/touch-graph.js';
@@ -27,6 +34,15 @@ import { commerceTouchGraph } from './generated/touch-graph.js';
 export { commerceTouchGraph } from './generated/touch-graph.js';
 
 export interface CommerceDb {
+  attachments: {
+    contentType: string;
+    filename: string;
+    id: string;
+    orderId: string;
+    size: number;
+    storageKey: string;
+    userId: string;
+  }[];
   cartItems: { productId: string; qty: number; unitPrice: number }[];
   orders: { id: string; productId: string; qty: number; total: number; userId: string }[];
   products: Map<string, { id: string; stock: number; unitPrice: number }>;
@@ -59,6 +75,7 @@ export const commerceCsrf = {
 
 export function createCommerceDb(): CommerceDb {
   const db: CommerceDb = {
+    attachments: [],
     cartItems: [],
     orders: [],
     products: new Map([
@@ -68,6 +85,7 @@ export function createCommerceDb(): CommerceDb {
     ]),
     read(table) {
       if (table === 'cart_items') return db.cartItems;
+      if (table === 'attachments') return db.attachments;
       if (table === 'orders') return db.orders;
       if (table === 'products') return [...db.products.values()];
       return [];
@@ -86,6 +104,9 @@ export function createCommerceDb(): CommerceDb {
       if (table === 'cart_items') {
         db.cartItems.push(value as { productId: string; qty: number; unitPrice: number });
       }
+      if (table === 'attachments') {
+        db.attachments.push(value as CommerceDb['attachments'][number]);
+      }
       if (table === 'orders') {
         db.orders.push(
           value as { id: string; productId: string; qty: number; total: number; userId: string },
@@ -103,6 +124,7 @@ export function createCommerceDb(): CommerceDb {
 function cloneCommerceDb(source: CommerceDb): CommerceDb {
   const clone = createCommerceDb();
 
+  clone.attachments = source.attachments.map((item) => ({ ...item }));
   clone.cartItems = source.cartItems.map((item) => ({ ...item }));
   clone.orders = source.orders.map((item) => ({ ...item }));
   clone.products = new Map(
@@ -117,6 +139,7 @@ function cloneCommerceDb(source: CommerceDb): CommerceDb {
 }
 
 export const cart = domain('cart');
+export const attachment = domain('attachment');
 export const order = domain('order');
 export const product = domain('product');
 
@@ -144,8 +167,26 @@ export const addToCartForm = form<'cart/add', AddToCartInput>('cart/add');
 
 export interface UploadReceiptInput {
   orderId: string;
-  receipt: FileLike;
+  receipt: StoredFileUpload;
 }
+
+export interface PaymentWebhookInput {
+  data: {
+    object: {
+      id: string;
+      productId: string;
+      quantity: number;
+      total: number;
+      userId: string;
+    };
+  };
+  id: string;
+  type: string;
+}
+
+export const commerceAttachmentStorage = createMemoryStorage();
+export const commercePaymentWebhookSecret = 'whsec_commerce_reference_app';
+export const commercePaymentReplayStore = createMemoryMutationReplayStore();
 
 export interface CartQueryResult {
   count: number;
@@ -230,23 +271,138 @@ export const addToCartOptimistic = {
 export const uploadReceipt = mutation('order/receipt', {
   input: s.object({
     orderId: s.string(),
-    receipt: s.file({ maxBytes: 64 * 1024, mime: ['application/pdf', 'image/png'] }),
+    receipt: s.file({ maxBytes: 64 * 1024, mime: ['application/pdf', 'image/png'] }).store({
+      key: (file) => `receipts/${file.name}`,
+      metadata: (file) => ({ filename: file.name }),
+      storage: commerceAttachmentStorage,
+    }),
   }),
   guard: guards.all(
     guards.authed<CommerceRequest>(),
     guards.rateLimit<CommerceRequest>({ max: 5, per: 'session' }),
   ),
+  registry: {
+    inferredTouches: commerceTouchGraph['order.receipt'].touches,
+    queries: [cartQuery, productGridQuery, orderHistoryQuery],
+  },
   handler(input: UploadReceiptInput, request: CommerceRequest) {
     const currentSession = commerceSession.parse(request);
+    const attachmentId = `attachment-${request.db.attachments.length + 1}`;
+
+    request.db.write('attachments', {
+      contentType: input.receipt.storage.contentType ?? input.receipt.file.type,
+      filename: input.receipt.file.name,
+      id: attachmentId,
+      orderId: input.orderId,
+      size: input.receipt.storage.size,
+      storageKey: input.receipt.key,
+      userId: currentSession.user.id,
+    });
 
     return {
-      fileName: input.receipt.name,
+      attachmentId,
+      fileName: input.receipt.file.name,
       orderId: input.orderId,
-      size: input.receipt.size,
+      size: input.receipt.storage.size,
       uploadedBy: currentSession.user.id,
     };
   },
 });
+
+export const paymentWebhook = webhook('payment/stripe', {
+  path: '/webhooks/stripe',
+  verify: stripeSignature({ secret: commercePaymentWebhookSecret }),
+  input: s.object({
+    data: s.object({
+      object: s.object({
+        id: s.string(),
+        productId: s.string(),
+        quantity: s.number().int().min(1),
+        total: s.number().int().min(0),
+        userId: s.string(),
+      }),
+    }),
+    id: s.string(),
+    type: s.string(),
+  }),
+  idempotency: (input) => input.id,
+  replayStore: commercePaymentReplayStore,
+  transaction(context, run) {
+    const request = context.request as Request & { db?: CommerceDb };
+    if (!request.db) throw new Error('commerce payment webhook requires db on request');
+    return request.db.transaction((db) => run(db));
+  },
+  handler(input: PaymentWebhookInput, context) {
+    if (input.type !== 'checkout.session.completed') {
+      return context.fail('IGNORED_EVENT', { type: input.type }, { status: 422 });
+    }
+
+    const paid = input.data.object;
+    const tx = context.tx as CommerceDb;
+    tx.write('orders', {
+      id: paid.id,
+      productId: paid.productId,
+      qty: paid.quantity,
+      total: paid.total,
+      userId: paid.userId,
+    });
+    context.recordChange(order, {
+      input: { eventId: input.id, orderId: paid.id },
+      keys: [paid.id],
+      reason: 'payment webhook',
+    });
+
+    return { orderId: paid.id };
+  },
+});
+
+export const orderCsvRoute = route('/exports/orders.csv', {
+  guard: guards.authed<CommerceRequest>(),
+  page(_context, request) {
+    return respond.stream(ordersCsvStream(request.db.orders, request.session.user.id), {
+      contentType: 'text/csv; charset=utf-8',
+      etag: `"orders-${request.db.orders.length}"`,
+      filename: 'orders.csv',
+    });
+  },
+});
+
+export const attachmentDownloadRoute = route('/attachments/:id', {
+  guard: guards.authed<CommerceRequest>(),
+  page(context, request) {
+    const found = request.db.attachments.find(
+      (item) => item.id === context.params.id && item.userId === request.session.user.id,
+    );
+    if (!found) return notFound();
+
+    return commerceAttachmentStorage.stream(found.storageKey).then((stored) => {
+      if (!stored) return notFound();
+
+      return respond.stream(stored.body, {
+        contentType: found.contentType,
+        disposition: 'inline',
+        etag: stored.etag,
+        filename: found.filename,
+      });
+    });
+  },
+});
+
+export function renderOrderCsvRoute(request: CommerceRequest) {
+  return renderRoutePageResponse(orderCsvRoute, {}, request);
+}
+
+export function renderAttachmentDownloadRoute(
+  db: CommerceDb,
+  id: string,
+  request: CommerceRequest,
+) {
+  return renderRoutePageResponse(attachmentDownloadRoute, { params: { id } }, { ...request, db });
+}
+
+export function runPaymentWebhook(request: Request & { db?: CommerceDb }) {
+  return runWebhook(paymentWebhook, request);
+}
 
 export const commerceMessages = i18n('en-US', {
   cartLabel: 'Cart',
@@ -400,6 +556,32 @@ export function renderReceiptUploadForm(orderId = 'order-1'): string {
     '<button class="rounded bg-slate-900 px-3 py-2 text-sm font-medium text-white" type="submit">Upload receipt</button>',
     '</form>',
   ].join('');
+}
+
+function ordersCsvStream(orders: CommerceDb['orders'], userId: string): ReadableStream<Uint8Array> {
+  const lines = [
+    'id,productId,qty,total,userId',
+    ...orders
+      .filter((order) => order.userId === userId)
+      .map((order) =>
+        [order.id, order.productId, String(order.qty), String(order.total), order.userId]
+          .map(csvCell)
+          .join(','),
+      ),
+    '',
+  ];
+  const body = new TextEncoder().encode(lines.join('\n'));
+
+  return new ReadableStream<Uint8Array>({
+    start(controller) {
+      controller.enqueue(body);
+      controller.close();
+    },
+  });
+}
+
+function csvCell(value: string): string {
+  return /[",\n\r]/.test(value) ? `"${value.replaceAll('"', '""')}"` : value;
 }
 
 export const CartBadge = component('cart-badge', {
@@ -579,6 +761,31 @@ export const commerceGraph = {
       queries: ['orderHistory'],
     },
   ],
+  endpoints: [
+    {
+      auth: 'verifier:stripe:v1:hmac-sha256',
+      csrf: 'exempt',
+      csrfJustification: 'payment/stripe webhook verifier stripe:v1:hmac-sha256',
+      method: 'POST',
+      name: 'payment/stripe',
+      path: '/webhooks/stripe',
+      writes: ['order'],
+    },
+    {
+      auth: 'authed',
+      csrf: 'checked',
+      method: 'GET',
+      name: 'orders/export',
+      path: '/exports/orders.csv',
+    },
+    {
+      auth: 'authed',
+      csrf: 'checked',
+      method: 'GET',
+      name: 'attachments/download',
+      path: '/attachments/:id',
+    },
+  ],
   mutations: [
     {
       guards: ['authed', 'rateLimit:session'],
@@ -595,6 +802,7 @@ export const commerceGraph = {
       inputFields: ['orderId', 'receipt'],
       key: 'order/receipt',
       session: 'commerceSession',
+      writes: ['attachment'],
     },
   ],
   optimistic: [
@@ -602,6 +810,7 @@ export const commerceGraph = {
     { mutation: 'cart/add', query: 'productGrid', status: 'await-fragment' },
     { mutation: 'cart/add', query: 'orderHistory', status: 'await-fragment' },
   ],
+  ownerDomains: [{ domain: 'attachment', owner: 'userId' }],
   pages: [
     {
       i18n: ['en-US:cartLabel,productStock'],
@@ -620,6 +829,16 @@ export const commerceGraph = {
     { domains: ['cart'], query: 'cart' },
     { domains: ['product'], query: 'productGrid' },
     { domains: ['order'], query: 'orderHistory' },
+  ],
+  scopeAudits: [
+    {
+      detail: 'attachment download filters id plus session user',
+      domain: 'attachment',
+      kind: 'query',
+      name: 'attachments/download',
+      scope: 'session',
+      site: 'examples/commerce/src/app.ts:attachmentDownloadRoute',
+    },
   ],
   touchGraph: commerceTouchGraph,
 } satisfies FwExplainInput;
