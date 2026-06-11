@@ -1094,7 +1094,41 @@ function extractFunctions(source: string): ExtractedFunction[] {
     });
   }
 
-  return [...functions, ...extractDomainWriteCallbacks(source)];
+  return [
+    ...functions,
+    ...extractConstArrowFunctions(source),
+    ...extractDomainWriteCallbacks(source),
+  ];
+}
+
+function extractConstArrowFunctions(source: string): ExtractedFunction[] {
+  const functions: ExtractedFunction[] = [];
+  const declarations =
+    /(?:export\s+)?const\s+(?<name>[A-Za-z_$][\w$]*)\s*(?::[^=]+)?=\s*(?:async\s*)?(?<params>\([^)]*\)|[A-Za-z_$][\w$]*)\s*=>\s*/g;
+
+  for (const match of source.matchAll(declarations)) {
+    const groups = match.groups;
+    if (!groups || match.index === undefined) continue;
+
+    const name = groups.name;
+    const params = groups.params;
+    if (!name || !params) continue;
+
+    const bodyStart = match.index + match[0].length;
+    const openBrace = source[bodyStart] === '{' ? bodyStart : -1;
+    const bodyEnd =
+      openBrace === -1 ? statementEnd(source, bodyStart) : findMatchingBrace(source, openBrace);
+    if (bodyEnd === -1) continue;
+
+    functions.push({
+      body: source.slice(openBrace === -1 ? bodyStart : openBrace + 1, bodyEnd),
+      bodyStart: openBrace === -1 ? bodyStart : openBrace + 1,
+      name,
+      params: params.replace(/^\(|\)$/g, ''),
+    });
+  }
+
+  return functions;
 }
 
 function extractDomainWriteCallbacks(source: string): ExtractedFunction[] {

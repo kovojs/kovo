@@ -242,6 +242,55 @@ export const tableDomains = {
     });
   });
 
+  it('extracts direct Drizzle write calls from exported arrow handlers', () => {
+    const graph = extractTouchGraphFromSource([
+      {
+        fileName: 'cart.domain.ts',
+        source: `
+          export const cartItems = pgTable("cart_items", {}, jiso({ domain: "cart", key: "cartId" }));
+          export const products = pgTable("products", {}, jiso({ domain: "product", key: "id" }));
+
+          export const addItem = async (db) => {
+            await db.insert(cartItems).values({ productId: "p1" });
+            await db.update(products).set({ reserved: true });
+          };
+        `,
+      },
+    ]);
+
+    expect(graph).toEqual({
+      addItem: {
+        reads: [],
+        touches: [
+          { domain: 'cart', keys: null, site: 'cart.domain.ts:6', via: 'cart_items' },
+          { domain: 'product', keys: null, site: 'cart.domain.ts:7', via: 'products' },
+        ],
+        unresolved: [],
+      },
+    });
+  });
+
+  it('extracts expression-bodied arrow write handlers', () => {
+    const graph = extractTouchGraphFromSource([
+      {
+        fileName: 'cart.domain.ts',
+        source: `
+          export const cartItems = pgTable("cart_items", {}, jiso({ domain: "cart", key: "cartId" }));
+
+          export const addItem = (db) => db.insert(cartItems).values({ productId: "p1" });
+        `,
+      },
+    ]);
+
+    expect(graph).toEqual({
+      addItem: {
+        reads: [],
+        touches: [{ domain: 'cart', keys: null, site: 'cart.domain.ts:4', via: 'cart_items' }],
+        unresolved: [],
+      },
+    });
+  });
+
   it('extracts query result shapes, read domains, and instance keys from Drizzle selects', () => {
     const facts = extractQueryFactsFromSource([
       {
@@ -903,9 +952,9 @@ export const tableDomains = {
           export const auditLog = pgTable("audit_log", {}, jiso({ domain: "audit", key: "productId" }));
           export const cartItems = pgTable("cart_items", {}, jiso({ domain: "cart", key: "productId" }));
 
-          async function writeAudit(db, productId) {
+          const writeAudit = async (db, productId) => {
             await db.insert(auditLog).values({ productId });
-          }
+          };
 
           export const cart = domain({
             addItem: write({ touches: [cartItems] }, async (db, productId) => {
