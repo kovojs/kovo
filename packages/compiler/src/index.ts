@@ -49,10 +49,10 @@ export interface EmittedFile {
 export interface CompileResult {
   componentGraphFacts: readonly ComponentGraphFact[];
   cssAssets: readonly ComponentCssAsset[];
-  diagnostics: CompilerDiagnostic[];
-  files: EmittedFile[];
+  diagnostics: readonly CompilerDiagnostic[];
+  files: readonly EmittedFile[];
   handlerExports: readonly string[];
-  platformSubstitutions: PlatformSubstitution[];
+  platformSubstitutions: readonly PlatformSubstitution[];
   queryUpdatePlans: readonly QueryUpdatePlanFact[];
   updateCoverage: readonly QueryUpdateCoverageFact[];
   viewTransitions: ViewTransitionStamp[];
