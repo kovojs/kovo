@@ -57,7 +57,7 @@ Every feature proposal is evaluated against five tests. A feature failing any te
 │                  │   │   derives, transforms    │   │  • fw-deps="cart" stamps         │
 └──────────────────┘   └──────────────────────────┘   └──────────────────────────────────┘
         │                        │                                  │
-        │ fixpoint:              │ 1:1 file mapping,                │ ~4KB loader: global event
+        │ fixpoint:              │ 1:1 file mapping,                │ 4KB loader: global event
         │ compile(IR) ≡ IR       │ source-derived names             │ delegation + import() on
         ▼                        ▼                                  ▼ first interaction
 ┌─────────────────────────────────────────────────────────────────────────────────────────┐
@@ -161,7 +161,7 @@ export const Cart$removeItem = handler<CartState, { itemId: string }>((e, ctx) =
 
 ### 4.4 The loader
 
-A ~4KB inline script. Responsibilities: global event delegation (capture phase) for all `on:*` events — including chained refs (space-separated, invoked left-to-right, §4.6) and the three execution triggers (`on:visible` via one shared IntersectionObserver, `on:idle`, `on:load` — §4.7); parse `url#export` refs, `import()` the URL, invoke the export with `(event, ctx)`; per-island `AbortSignal`s (`ctx.signal`, aborted when the morph layer removes the island, §4.7); enhanced form interception (§9); query-data hydration from `fw-query` scripts; running the update plan (bindings → named derives → stamps, §4.8) when a query value or island state changes — executed by walking the self-describing attributes, no separate plan artifact; refetch-on-focus/visibility over the typed read endpoint (§9.3, §9.4); morph application — the morph layer itself accounts for islands it patches in and aborts the signals of islands it removes (nothing is registered; there is no upgrade step or lifecycle callback). Nothing else lives in the always-loaded path.
+A 4KB inline script. Responsibilities: global event delegation (capture phase) for all `on:*` events — including chained refs (space-separated, invoked left-to-right, §4.6) and the three execution triggers (`on:visible` via one shared IntersectionObserver, `on:idle`, `on:load` — §4.7); parse `url#export` refs, `import()` the URL, invoke the export with `(event, ctx)`; per-island `AbortSignal`s (`ctx.signal`, aborted when the morph layer removes the island, §4.7); enhanced form interception (§9); query-data hydration from `fw-query` scripts; running the update plan (bindings → named derives → stamps, §4.8) when a query value or island state changes — executed by walking the self-describing attributes, no separate plan artifact; refetch-on-focus/visibility over the typed read endpoint (§9.3, §9.4); morph application — the morph layer itself accounts for islands it patches in and aborts the signals of islands it removes (nothing is registered; there is no upgrade step or lifecycle callback). Nothing else lives in the always-loaded path.
 
 ### 4.5 Composition: children, slots, layouts
 
@@ -978,7 +978,7 @@ Jiso-core defines a **capability interface** — `(writes → touch sets, querie
 | TypeScript unsoundness (`any`, casts) hollowing proof claims       | Starter ships strict config + lint bans in app code (§6.6); wire and deploy-skew boundaries are runtime-validated regardless                      |
 | Deep template-literal types (params, `data-bind`) slow `tsc`       | Paths are shallow by construction (flat query shapes); TypeScript Go toolchain; registry types stay trivial lookups, not recursive solves         |
 | Projected children all ship in initial HTML (no client lazy mount) | Stated posture (§4.5); `<fw-defer>` is the relief valve for expensive subtrees; payload measured under §16.1                                      |
-| `on:*` chaining + trigger observers grow the loader                | Gated by the S2 ~4KB budget before the composition API freezes; the budget leaves room for clear control flow over compiler-synthesized shortcuts |
+| `on:*` chaining + trigger observers grow the loader                | Gated by the S2 4KB budget before the composition API freezes; the budget leaves room for clear control flow over compiler-synthesized shortcuts  |
 
 ---
 
