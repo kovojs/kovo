@@ -16,7 +16,15 @@ Scope: SPEC addition (proposed §9.5 "The request shell"), `@jiso/server` shell 
       preserving non-HTML route outcomes, and provides stable 403/404/500 error documents.
       `packages/server/src/shell.test.ts` covers hints, loader/query ordering, deferred
       chunk placement, template override, safe query JSON escaping, and error shells.
-- [ ] R3 `createApp()` aggregate + `createRequestHandler(app)` over web-standard `Request → Response`.
+- [x] R3 `createApp()` aggregate + `createRequestHandler(app)` over web-standard `Request → Response`. Evidence
+      2026-06-11: `packages/server/src/app.ts` adds a closed app aggregate for routes,
+      endpoints, query/mutation registries, session provider, CSRF, error shells, document
+      options, client modules, and route rendering, plus a web-standard handler covering
+      trailing-slash 308s, `/c/` modules, `/_q/` queries, endpoint-before-route dispatch,
+      route GET/HEAD rendering through the existing route page renderer, 405s, and stable
+      404/500 documents. `packages/server/src/app.test.ts` covers the scaffold and confirms
+      no `use` middleware surface. Mutation dispatch remains stored-only in this narrow R3
+      scaffold and is tracked for the next request-handler slice.
 - [ ] R4 node:http adapter (incl. Early Hints); `tests/p10-perf.node.mjs` migrates onto it as the parity proof.
 - [ ] R5 Vite+ plugin: dev middleware over the same handler; build wiring (manifest → stylesheet hints, compiled client modules → versioned emit).
 - [ ] R6 static export: synthetic-request replay to `.html` files with the L0/L1-only constraint and teaching errors for non-exportable routes.

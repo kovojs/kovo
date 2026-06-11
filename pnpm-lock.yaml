@@ -181,6 +181,9 @@ importers:
       '@jiso/core':
         specifier: workspace:*
         version: link:../core
+      '@jiso/runtime':
+        specifier: workspace:*
+        version: link:../runtime
     devDependencies:
       vitest:
         specifier: 4.1.8

@@ -6,7 +6,8 @@
     ".": "./src/index.ts"
   },
   "dependencies": {
-    "@jiso/core": "workspace:*"
+    "@jiso/core": "workspace:*",
+    "@jiso/runtime": "workspace:*"
   },
   "devDependencies": {
     "vitest": "4.1.8"

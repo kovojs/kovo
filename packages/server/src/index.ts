@@ -33,6 +33,16 @@ export type {
   Redirect,
   Route,
 } from '@jiso/core';
+export { createApp, createRequestHandler } from './app.js';
+export type {
+  AppDocumentOptions,
+  AppErrorShellOptions,
+  AppRouteRenderContext,
+  CreateAppOptions,
+  ErrorShellRenderer,
+  JisoApp,
+  RequestHandler,
+} from './app.js';
 export {
   createMemoryVersionedClientModuleRegistry,
   renderVersionedClientModuleResponse,
@@ -54,6 +64,29 @@ export type {
   DeferredStreamOptions,
   DeferredStreamResponse,
 } from './deferred-stream.js';
+export {
+  renderDeferredDocument,
+  renderDocument,
+  renderDocumentQueryScript,
+  renderErrorDocument,
+  renderRouteDocumentResponse,
+} from './document.js';
+export type {
+  DeferredDocumentAssemblyOptions,
+  DeferredDocumentFrame,
+  DeferredDocumentRenderResult,
+  DeferredDocumentTemplate,
+  DeferredDocumentTemplateContext,
+  DocumentAssemblyOptions,
+  DocumentParts,
+  DocumentRenderResult,
+  DocumentResponseOptions,
+  DocumentRoutePageResponse,
+  DocumentTemplate,
+  DocumentTemplateContext,
+  ErrorDocumentOptions,
+  QueryScriptRenderOptions as DocumentQueryScriptRenderOptions,
+} from './document.js';
 export { renderPageHints, stylesheetsForTargets } from './hints.js';
 export type {
   I18nCatalog,
