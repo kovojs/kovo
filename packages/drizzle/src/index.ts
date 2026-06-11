@@ -964,8 +964,10 @@ function extractQueryDefinitions(
 
 interface QueryShapeSelection {
   diagnostics?: readonly TouchGraphDiagnostic[];
+  hasTablelessScalar: boolean;
   opaquePaths: readonly string[];
   shape: QueryShape;
+  scalarTables: ReadonlySet<string>;
 }
 
 function selectShapeFromQueryBody(
@@ -990,8 +992,10 @@ function selectShapeFromQueryBody(
           site: '',
         },
       ],
+      hasTablelessScalar: false,
       opaquePaths: [],
       shape: {},
+      scalarTables: new Set(),
     };
   }
 
@@ -1019,7 +1023,9 @@ function queryShapeFromObjectLiteral(
   nullableTables: ReadonlySet<string> = new Set(),
 ): QueryShapeSelection {
   const shape: Record<string, QueryShape> = {};
+  let hasTablelessScalar = false;
   const opaquePaths: string[] = [];
+  const scalarTables = new Set<string>();
 
   for (const entry of splitTopLevelArgs(source)) {
     const separator = entry.indexOf(':');
@@ -1040,15 +1046,32 @@ function queryShapeFromObjectLiteral(
         columnShapes,
         nullableTables,
       );
-      shape[key] = nested.shape;
+      shape[key] = nullableNestedShape(nested, nullableTables) ?? nested.shape;
       opaquePaths.push(...nested.opaquePaths);
     } else {
       shape[key] = scalarQueryShape(key, value, columnShapes, nullableTables);
       if (isOpaqueProjection(value)) opaquePaths.push(path);
+      const table = scalarProjectionTable(value);
+      if (table) {
+        scalarTables.add(table);
+      } else {
+        hasTablelessScalar = true;
+      }
     }
   }
 
-  return { opaquePaths, shape };
+  return { hasTablelessScalar, opaquePaths, shape, scalarTables };
+}
+
+function nullableNestedShape(
+  nested: QueryShapeSelection,
+  nullableTables: ReadonlySet<string>,
+): QueryShape | undefined {
+  if (nested.hasTablelessScalar) return undefined;
+  if (nested.scalarTables.size !== 1) return undefined;
+
+  const [table] = nested.scalarTables;
+  return table && nullableTables.has(table) ? nullableShape(nested.shape) : undefined;
 }
 
 function scalarQueryShape(
@@ -1101,6 +1124,11 @@ function tableExpressionBase(expression: string): string {
     expression,
   );
   return match?.groups?.table ?? '';
+}
+
+function scalarProjectionTable(expression: string): string | undefined {
+  const table = tableExpressionBase(expression.trim());
+  return table || undefined;
 }
 
 function isOpaqueProjection(expression: string): boolean {

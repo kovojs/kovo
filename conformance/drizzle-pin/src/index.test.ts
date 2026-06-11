@@ -145,9 +145,12 @@ describe('Drizzle pinned subset conformance', () => {
         shape: {
           name: 'string',
           review: {
-            rating: {
-              kind: 'nullable',
-              shape: 'number',
+            kind: 'nullable',
+            shape: {
+              rating: {
+                kind: 'nullable',
+                shape: 'number',
+              },
             },
           },
         },
