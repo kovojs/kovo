@@ -614,6 +614,7 @@ void test('P3 typed routes validate navigation targets', async () => {
   const coreSource = await readProjectFile('packages/core/src/index.ts');
   const coreTests = await readProjectFile('packages/core/src/index.test.ts');
   const diagnosticsSource = await readProjectFile('packages/core/src/diagnostics.ts');
+  const compilerGraphSource = await readProjectFile('packages/compiler/src/graph.ts');
   const compilerSource = await readProjectFile('packages/compiler/src/index.ts');
   const compilerTests = await readProjectFile('packages/compiler/src/index.test.ts');
   const serverSource = await readProjectFile('packages/server/src/index.ts');
@@ -632,7 +633,7 @@ void test('P3 typed routes validate navigation targets', async () => {
   assert.match(coreTests, /types GET form fields against route search schemas/);
   assert.match(coreTests, /productFilter\.input\('max'\)/);
   assert.match(coreTests, /productFilter\.input\('sku'\)/);
-  assert.match(compilerSource, /routes\?: readonly string\[\]/);
+  assert.match(compilerGraphSource, /routes\?: readonly string\[\]/);
   assert.match(compilerSource, /lowerNavigationSugar/);
   assert.match(compilerSource, /lowerStaticLinks/);
   assert.match(compilerSource, /lowerStaticHrefCalls/);
@@ -900,10 +901,14 @@ void test('P10 commerce graph assertions answer behavior mechanically', async ()
   assert.match(coreSource, /interface InvalidationSets/);
   assert.match(await readProjectFile('packages/core/src/diagnostics.ts'), /FW311/);
   assert.match(compilerSource, /componentGraphFacts: readonly ComponentGraphFact\[\]/);
-  assert.match(compilerSource, /function deriveAppGraph/);
-  assert.match(compilerSource, /invalidations\?: Readonly<Record<string, readonly string\[\]>>/);
-  assert.match(compilerSource, /function deriveRegistryFactsFromGraph/);
-  assert.match(compilerSource, /function deriveInvalidationFactsFromGraph/);
+  const compilerGraphSource = await readProjectFile('packages/compiler/src/graph.ts');
+  assert.match(compilerGraphSource, /function deriveAppGraph/);
+  assert.match(
+    compilerGraphSource,
+    /invalidations\?: Readonly<Record<string, readonly string\[\]>>/,
+  );
+  assert.match(compilerGraphSource, /function deriveRegistryFactsFromGraph/);
+  assert.match(compilerGraphSource, /function deriveInvalidationFactsFromGraph/);
   assert.match(compilerSource, /function invalidationSetFactLines/);
   assert.match(compilerTests, /export interface InvalidationSets/);
   assert.match(compilerTests, /derives app graph component facts from compiled component results/);
