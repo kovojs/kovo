@@ -74,7 +74,10 @@ try {
   );
   await noJsPage.goto(`${origin}/spec/`);
   check(
-    await noJsPage.locator('[id="6-4"]').count().then((count) => count === 1),
+    await noJsPage
+      .locator('[id="6-4"]')
+      .count()
+      .then((count) => count === 1),
     'no-JS: spec § anchors exist',
   );
   await noJs.close();
@@ -101,10 +104,7 @@ try {
   await page.waitForFunction(
     () => (document.getElementById('site-search-results')?.children.length ?? 0) > 0,
   );
-  const firstResult = await page
-    .locator('#site-search-results a')
-    .first()
-    .getAttribute('href');
+  const firstResult = await page.locator('#site-search-results a').first().getAttribute('href');
   check(Boolean(firstResult?.startsWith('/')), 'JS: search returns linked results');
   check(scriptRequests.includes('/search-index.json'), 'JS: index fetched on demand');
 

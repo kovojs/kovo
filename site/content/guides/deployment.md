@@ -26,7 +26,7 @@ The v1 server is stateless, full stop (SPEC §9.3). Concretely:
 
 What this buys you operationally: any instance can answer any request, so horizontal scaling is
 load-balancer-plain — no sticky sessions, no Redis for UI state, no draining protocol beyond
-finishing in-flight requests. Session *data* follows whatever your `sessionProvider` reads
+finishing in-flight requests. Session _data_ follows whatever your `sessionProvider` reads
 (a signed cookie, a session table); the framework itself pins nothing to an instance (SPEC §6.5).
 
 Two request-shaped consequences worth knowing at the infrastructure layer:
@@ -51,7 +51,7 @@ HTML pointing at Tuesday-minus-one's handler modules:
 <button on:click="/c/cart.client.js?v=8f3a1c#Cart$removeItem">×</button>
 ```
 
-The loader imports that URL on *first interaction* — which may be hours after the deploy that
+The loader imports that URL on _first interaction_ — which may be hours after the deploy that
 replaced the module. If deploys delete old artifacts, the user's first click throws a 404 from
 inside a page that looks perfectly healthy.
 
@@ -76,12 +76,12 @@ shape is answered by schema validation and the 422 path — never undefined beha
 
 It helps to see the two artifact classes a deploy touches and their opposite caching rules:
 
-| Artifact | URL stability | Cache policy | On deploy |
-| --- | --- | --- | --- |
-| HTML documents | stable paths (`/cart`) | revalidate (`no-store` on PRG responses) | replaced — next navigation gets the new page |
-| `/c/*` client modules | versioned, immutable | `immutable`, long max-age | added — old versions retained |
+| Artifact              | URL stability          | Cache policy                             | On deploy                                    |
+| --------------------- | ---------------------- | ---------------------------------------- | -------------------------------------------- |
+| HTML documents        | stable paths (`/cart`) | revalidate (`no-store` on PRG responses) | replaced — next navigation gets the new page |
+| `/c/*` client modules | versioned, immutable   | `immutable`, long max-age                | added — old versions retained                |
 
-Documents update by navigation; modules update by being *referenced* from newer documents. A tab
+Documents update by navigation; modules update by being _referenced_ from newer documents. A tab
 that never navigates keeps working against its original module set indefinitely — that is the
 point of the retention rule, and it also makes rollbacks boring: rolling back re-publishes a
 previous document set whose module URLs are still being served, because you never deleted them.

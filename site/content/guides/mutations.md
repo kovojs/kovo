@@ -45,7 +45,7 @@ export const addToCart = mutation('cart/add', {
 
 Everything here is declared exactly once and derived everywhere else (SPEC §6.3):
 
-- **`input`** is the single source of truth for field names, types, *and* FormData coercion.
+- **`input`** is the single source of truth for field names, types, _and_ FormData coercion.
   Attribute and form values arrive as strings; `s.number().int().min(1).default(1)` says how
   `quantity` becomes a number, once, schema-style. The same schema validates the wire at runtime —
   types-without-validators was rejected (SPEC §6.6).
@@ -60,15 +60,15 @@ The rendered form is a real form. This is what the commerce app serves:
 
 ```html
 <form method="post" action="/_m/cart/add" enhance>
-  <input type="hidden" name="fw-csrf" value="…">
-  <input type="hidden" name="productId" value="p1">
-  <input name="quantity" type="number" min="1" value="1">
+  <input type="hidden" name="fw-csrf" value="…" />
+  <input type="hidden" name="productId" value="p1" />
+  <input name="quantity" type="number" min="1" value="1" />
   <button type="submit">Add</button>
 </form>
 ```
 
 With JavaScript disabled, this form simply posts. Nothing about it is framework-flavored except
-the `enhance` marker the loader uses to intercept submission when JS *is* present.
+the `enhance` marker the loader uses to intercept submission when JS _is_ present.
 
 On the authoring side, field names and completeness are type-checked against the mutation's input
 schema — a missing required field or a typo'd `name` is a compile error, not a silent 422 in
@@ -108,7 +108,7 @@ CSRF validation → replay lookup by idempotency key → parse + coerce input (s
                      ↘ on fail(): ROLLBACK → typed error fragment, 422
 ```
 
-Queries re-run *after* commit, so a response can never render pre-commit data — which would
+Queries re-run _after_ commit, so a response can never render pre-commit data — which would
 visibly revert the user's optimistic update (SPEC §10.3). The `FW-Idem` hidden field makes
 duplicate submissions replayable: the server answers a duplicate with the stored response instead
 of re-executing the handler (SPEC §9.1).

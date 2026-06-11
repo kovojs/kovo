@@ -105,8 +105,8 @@ production — `onConflictDoUpdate`, CTEs, constraint behavior and all.
 
 ## The verifier: observed ⊆ static ∪ declared
 
-The static pass *over-approximates* a write's touch set (it unions all branches); runtime
-execution *under-approximates* (only executed branches). The verifier wraps `db`, parses every
+The static pass _over-approximates_ a write's touch set (it unions all branches); runtime
+execution _under-approximates_ (only executed branches). The verifier wraps `db`, parses every
 executed statement with a SQL AST parser, and enforces the invariant that makes the whole
 invalidation story honest (SPEC §11.2):
 
@@ -130,19 +130,19 @@ schemas — the runtime half of FW410 (SPEC §11.2).
 These are the diagnostics the verification layer produces (SPEC §11.3). The pattern: **4xx codes
 police the boundary between declared dataflow and actual dataflow**, from both sides.
 
-| Code | Severity | What it catches |
-| --- | --- | --- |
-| FW402 | error | Write touched an undeclared domain — the silent-stale-UI bug |
-| FW403 | warn | Declared domain never observed written — stale claim or untested branch |
-| FW404 | error | Write to an unmapped table — map it or mark `exempt` (write-side only, SPEC §10.1) |
-| FW405 | warn | Conditional writes on branches never executed under instrumentation |
-| FW406 | warn/error | Statically un-analyzable write site — manual `touches` required, runtime-verified |
-| FW407 | error | Query read from an undeclared domain — missed invalidations |
-| FW408 | error | Declared row key ≠ observed row predicate |
-| FW409 | notice | Non-eq predicate — degraded to table-level invalidation |
-| FW410 | error | Opaque projection (`sql<T>`, raw SQL) without a declared output schema, shape runtime-verified |
+| Code  | Severity   | What it catches                                                                                |
+| ----- | ---------- | ---------------------------------------------------------------------------------------------- |
+| FW402 | error      | Write touched an undeclared domain — the silent-stale-UI bug                                   |
+| FW403 | warn       | Declared domain never observed written — stale claim or untested branch                        |
+| FW404 | error      | Write to an unmapped table — map it or mark `exempt` (write-side only, SPEC §10.1)             |
+| FW405 | warn       | Conditional writes on branches never executed under instrumentation                            |
+| FW406 | warn/error | Statically un-analyzable write site — manual `touches` required, runtime-verified              |
+| FW407 | error      | Query read from an undeclared domain — missed invalidations                                    |
+| FW408 | error      | Declared row key ≠ observed row predicate                                                      |
+| FW409 | notice     | Non-eq predicate — degraded to table-level invalidation                                        |
+| FW410 | error      | Opaque projection (`sql<T>`, raw SQL) without a declared output schema, shape runtime-verified |
 
-Adjacent and worth knowing: FW411 (a query reads an `exempt` table — caught statically *and* by
+Adjacent and worth knowing: FW411 (a query reads an `exempt` table — caught statically _and_ by
 the verifier when raw SQL smuggles the read, SPEC §10.1, §11.2).
 
 The asymmetric severities are deliberate. Excess declaration (FW403, FW409) degrades to warnings
@@ -161,10 +161,9 @@ import { propertyTest } from '@jiso/test';
 expect(
   propertyTest({
     apply: (state, input) => applyAddToCartEffect(state, input), // server effect on real state
-    shape: (state) => shapeCartQuery(state),                     // state → what the query ships
-    predict: (state, input) =>
-      addToCartOptimistic.transforms.cart(shapeCartQuery(state), input),
-    cases: generatedCartStates(),                                // seeded {state, input} cases
+    shape: (state) => shapeCartQuery(state), // state → what the query ships
+    predict: (state, input) => addToCartOptimistic.transforms.cart(shapeCartQuery(state), input),
+    cases: generatedCartStates(), // seeded {state, input} cases
   }),
 ).toEqual({ cases: 18 });
 ```

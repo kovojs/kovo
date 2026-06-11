@@ -1,6 +1,6 @@
 ---
 title: Compiler internals
-description: "Advanced: what the compiler emits, the IR contract, the fixpoint, and ejection."
+description: 'Advanced: what the compiler emits, the IR contract, the fixpoint, and ejection.'
 order: 9
 ---
 
@@ -36,7 +36,7 @@ plain `{cart.count}` expression bound into the markup.
 
 ## What the compiler emits
 
-**The server module.** Your render, with the wiring *derived* and stamped as attributes
+**The server module.** Your render, with the wiring _derived_ and stamped as attributes
 (SPEC §4.8):
 
 {{capture:lowering-server}}
@@ -64,7 +64,7 @@ component consumes:
 
 The closure's capture channels are checked here: a handler may reach component/query state via
 `ctx`, element params via `data-p-*`, and module scope — anything else is compile error FW201,
-whose message shows what the closure *would have* compiled to and the fixes (SPEC §4.3).
+whose message shows what the closure _would have_ compiled to and the fixes (SPEC §4.3).
 
 ## The IR contract: emitted output is valid source
 

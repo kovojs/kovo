@@ -152,7 +152,7 @@ assert.match(cartAdd, /^OPTIMISTIC-SUMMARY .*UNHANDLED=0$/m);
 ```
 
 These run in the starter's CI as `vp run graph-assertions`, next to `vp run fw-check`. The
-difference in kind from a rendering test: a graph assertion states *intent* ("cart consumers are
+difference in kind from a rendering test: a graph assertion states _intent_ ("cart consumers are
 exactly these") and holds as the app grows — a new component that reads cart data either joins
 the consumer set correctly or turns CI red.
 
@@ -194,7 +194,7 @@ Constitution #4 in SPEC §2):
 3. **Read the response.** `FW-Changes` names the committed domains; the body's `<fw-query>` and
    `<fw-fragment>` chunks are exactly what will patch in. If data is stale, check whether the
    query's `<fw-query>` chunk is present.
-4. **Cross-check against intent.** `fw explain mutation cart/add` says what *should* have
+4. **Cross-check against intent.** `fw explain mutation cart/add` says what _should_ have
    happened — the `invalidates:` and `updates:` lines. Wire says what did. The diff between them
    localizes the bug: missing from `invalidates:` is a touch-graph problem (see
    [queries & invalidation](/guides/queries/)); present there but absent on the wire is a
@@ -202,7 +202,7 @@ Constitution #4 in SPEC §2):
 5. **For a 422**, the body is the re-rendered form with `data-error-code` — readable as HTML
    (see [the 422 path](/guides/mutations/)).
 
-Debugging proceeds *down* into plainer artifacts — graph text, HTTP, HTML — never up into
+Debugging proceeds _down_ into plainer artifacts — graph text, HTTP, HTML — never up into
 framework internals (SPEC §1).
 
 ## Next
