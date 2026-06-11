@@ -480,7 +480,7 @@ void test('P3 mutation lifecycle includes an explicit transaction boundary', asy
   assert.match(serverSource, /definition\.transaction/);
   assert.match(serverSource, /class MutationRollback extends Error/);
   assert.match(serverSource, /interface QueryLoadContext/);
-  assert.match(serverSource, /queryDefinition\.load\(input, \{ request \}\)/);
+  assert.match(serverSource, /definition\.load\(input, \{ request \}\)/);
   assert.match(serverTests, /runs guarded mutation handlers inside the configured transaction/);
   assert.match(serverTests, /types transaction callbacks with the mutation request shape/);
   assert.match(serverTests, /transaction callbacks must receive the typed request shape/);
@@ -491,6 +491,30 @@ void test('P3 mutation lifecycle includes an explicit transaction boundary', asy
   );
   assert.match(serverTests, /reruns post-commit queries with the same request context/);
   assert.match(testHarnessSource, /request: \{\n\s+\.\.\.options\.request,\n\s+db,/);
+});
+
+void test('P3 server data-plane APIs stay exported and covered', async () => {
+  const serverSource = await readProjectFile('packages/server/src/index.ts');
+  const serverTests = await readProjectFile('packages/server/src/index.test.ts');
+
+  assert.match(serverSource, /export async function runQuery/);
+  assert.match(serverSource, /export async function renderQueryEndpointResponse/);
+  assert.match(serverSource, /args\?: Schema<Input>/);
+  assert.match(serverSource, /guard\?: Guard<Request>/);
+  assert.match(serverSource, /load\?\(input: Input, context\?: QueryLoadContext<Request>\)/);
+  assert.match(serverSource, /export async function runRoutePage/);
+  assert.match(serverSource, /export async function renderRoutePageResponse/);
+  assert.match(serverSource, /export function notFound/);
+  assert.match(serverSource, /export function csrfToken/);
+  assert.match(serverSource, /export function csrfField/);
+  assert.match(serverSource, /csrf\?: CsrfValidationOptions<Request>/);
+  assert.match(serverSource, /definition\.csrf && !validateCsrfToken/);
+  assert.match(
+    serverTests,
+    /runs query endpoints through args schemas, guards, and request context/,
+  );
+  assert.match(serverTests, /runs route pages through guards and notFound page outcomes/);
+  assert.match(serverTests, /validates mutation CSRF tokens before running guards/);
 });
 
 void test('P5 morph evidence includes structural and browser survival suites', async () => {

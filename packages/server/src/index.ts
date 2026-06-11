@@ -1,3 +1,5 @@
+import { createHmac, timingSafeEqual } from 'node:crypto';
+
 import type { JsonValue } from '@jiso/core';
 
 export { Link, href, redirect } from '@jiso/core';
@@ -365,30 +367,159 @@ export interface QueryLoadContext<Request = unknown> {
   request: Request;
 }
 
+export interface QueryEndpointRequest<Request = unknown> {
+  request: Request;
+  search?: QuerySearchInput;
+}
+
+export type QuerySearchInput =
+  | URLSearchParams
+  | Iterable<readonly [string, string]>
+  | Record<string, readonly string[] | string | undefined>;
+
+export interface QueryEndpointResponse {
+  body: string;
+  headers: Record<string, string>;
+  status: 200 | 422;
+}
+
 export interface QueryDefinition<
   Key extends string = string,
   Value = unknown,
   Input = unknown,
   Request = unknown,
 > {
+  args?: Schema<Input>;
+  guard?: Guard<Request>;
   instanceKey?: ((input: unknown) => string | undefined) | string;
-  load?(input: Input, context: QueryLoadContext<Request>): Value;
+  load?(input: Input, context?: QueryLoadContext<Request>): Promise<Value> | Value;
   key: Key;
   output?: Schema<Value>;
   reads: readonly Domain[];
   version?: ((input: Input, value: Value) => number | string | undefined) | number | string;
 }
 
+type BivariantGuard<Request> = {
+  call(request: Request): boolean | Promise<boolean>;
+}['call'];
+
+interface QueryArgsDeclarationDefinition<Key extends string, Value, Input, Request> {
+  args: Schema<Input>;
+  guard?: BivariantGuard<Request>;
+  instanceKey?: ((input: unknown) => string | undefined) | string;
+  key?: Key;
+  load?(input: Input, context?: QueryLoadContext<Request>): Promise<Value> | Value;
+  output?: Schema<Value>;
+  reads: readonly Domain[];
+  version?: ((input: Input, value: Value) => number | string | undefined) | number | string;
+}
+
+type BivariantQueryGuard = {
+  call(request: unknown): boolean | Promise<boolean>;
+}['call'];
+
+type BivariantQueryLoad = {
+  call(input: unknown, context?: QueryLoadContext<unknown>): unknown;
+}['call'];
+
+type BivariantQueryVersion = {
+  call(input: unknown, value: unknown): number | string | undefined;
+}['call'];
+
+export interface RegisteredQueryDefinition {
+  args?: Schema<unknown>;
+  guard?: BivariantQueryGuard;
+  instanceKey?: ((input: unknown) => string | undefined) | string;
+  key: string;
+  load?: BivariantQueryLoad;
+  output?: Schema<unknown>;
+  reads: readonly Domain[];
+  version?: BivariantQueryVersion | number | string;
+}
+
 export function query<
   const Key extends string,
-  const Definition extends Omit<QueryDefinition<Key, unknown, unknown, never>, 'key'>,
->(key: Key, definition: Definition): Definition & { key: Key } {
+  Input,
+  Request,
+  Value,
+  const Definition extends Omit<QueryArgsDeclarationDefinition<Key, Value, Input, Request>, 'key'>,
+>(key: Key, definition: Definition): Definition & { key: Key };
+export function query<
+  const Key extends string,
+  const Definition extends Omit<RegisteredQueryDefinition, 'key'>,
+>(key: Key, definition: Definition): Definition & { key: Key };
+export function query<const Key extends string>(
+  key: Key,
+  definition: Omit<RegisteredQueryDefinition, 'key'>,
+): Omit<RegisteredQueryDefinition, 'key'> & { key: Key } {
   return { ...definition, key };
 }
 
 export type QueryResult<Query> = Query extends { load: (...args: never[]) => infer Value }
   ? Awaited<Value>
   : unknown;
+
+export async function runQuery<const Key extends string, Value, Input, Request>(
+  definition: QueryDefinition<Key, Value, Input, Request>,
+  rawInput: unknown,
+  request: Request,
+): Promise<QueryEndpointResult<Value, Input>> {
+  const argsResult = parseQueryInput(definition, rawInput);
+  if (!argsResult.ok) return argsResult.failure;
+
+  if (definition.guard && !(await definition.guard(request))) {
+    return {
+      error: { code: 'UNAUTHORIZED', payload: {} },
+      ok: false,
+      status: 422,
+    };
+  }
+
+  const input = argsResult.value;
+  const value = definition.load ? await definition.load(input, { request }) : (null as Value);
+  return { input, ok: true, value };
+}
+
+export type QueryEndpointResult<Value, Input = unknown> =
+  | QueryEndpointSuccess<Value, Input>
+  | QueryEndpointFailure;
+
+export interface QueryEndpointSuccess<Value, Input = unknown> {
+  input: Input;
+  ok: true;
+  value: Value;
+}
+
+export interface QueryEndpointFailure {
+  error: {
+    code: 'UNAUTHORIZED' | 'VALIDATION';
+    payload: Record<string, unknown> | ValidationFailurePayload;
+  };
+  ok: false;
+  status: 422;
+}
+
+export async function renderQueryEndpointResponse<const Key extends string, Value, Input, Request>(
+  definition: QueryDefinition<Key, Value, Input, Request>,
+  endpointRequest: QueryEndpointRequest<Request>,
+): Promise<QueryEndpointResponse> {
+  const rawInput = querySearchInputToRecord(endpointRequest.search ?? {});
+  const result = await runQuery(definition, rawInput, endpointRequest.request);
+
+  if (!result.ok) {
+    return {
+      body: JSON.stringify(result.error),
+      headers: { 'Content-Type': 'application/json; charset=utf-8' },
+      status: 422,
+    };
+  }
+
+  return {
+    body: renderQueryChunk(definition, result.input, result.value),
+    headers: { 'Content-Type': 'text/vnd.jiso.query+html; charset=utf-8' },
+    status: 200,
+  };
+}
 
 export interface ChangeRecord<DomainKey extends string = string, Input = unknown> {
   domain: DomainKey;
@@ -405,7 +536,7 @@ export interface QueryRerun {
 
 export interface MutationRegistry {
   inferredTouches?: readonly MutationTouchSite[];
-  queries?: readonly QueryDefinition[];
+  queries?: readonly RegisteredQueryDefinition[];
   touches?: readonly Domain[];
 }
 
@@ -586,11 +717,13 @@ export interface RouteDefinition<
   SearchSchema extends MaybeSchema<Record<string, JsonValue>> = undefined,
   Request = unknown,
   Page = unknown,
+  GuardedRequest extends Request = Request,
 > extends PageHintOptions {
+  guard?: Guard<Request, GuardedRequest>;
   page?: (
     context: RouteRequest<Path, ParamsSchema, SearchSchema>,
-    request: Request,
-  ) => Page | Promise<Page>;
+    request: GuardedRequest,
+  ) => Page | NotFound | Promise<Page | NotFound>;
   params?: ParamsSchema;
   search?: SearchSchema;
 }
@@ -601,8 +734,20 @@ export interface RouteDeclaration<
   SearchSchema extends MaybeSchema<Record<string, JsonValue>> = undefined,
   Request = unknown,
   Page = unknown,
-> extends RouteDefinition<Path, ParamsSchema, SearchSchema, Request, Page> {
+  GuardedRequest extends Request = Request,
+> extends RouteDefinition<Path, ParamsSchema, SearchSchema, Request, Page, GuardedRequest> {
   path: Path;
+}
+
+export interface NotFound {
+  notFound: true;
+  status: 404;
+}
+
+export interface RoutePageResponse {
+  body: string;
+  headers: Record<string, string>;
+  status: 200 | 404 | 422;
 }
 
 export interface RouteRequestInput {
@@ -700,6 +845,7 @@ export interface MutationDefinition<
   Value = unknown,
   GuardedRequest extends Request = Request,
 > {
+  csrf?: CsrfValidationOptions<Request>;
   errors?: Errors;
   guard?: Guard<Request, GuardedRequest>;
   handler: (
@@ -714,6 +860,15 @@ export interface MutationDefinition<
     request: Request,
     run: (transactionRequest: GuardedRequest) => Promise<Result>,
   ) => Promise<Result>;
+}
+
+export interface CsrfOptions<Request> {
+  secret: string;
+  sessionId: (request: Request) => string | undefined;
+}
+
+export interface CsrfValidationOptions<Request> extends CsrfOptions<Request> {
+  field?: string;
 }
 
 export interface InvalidateOptions<Input = unknown> {
@@ -745,11 +900,26 @@ export function route<
   const SearchSchema extends MaybeSchema<Record<string, JsonValue>> = undefined,
   Request = unknown,
   Page = unknown,
+  GuardedRequest extends Request = Request,
 >(
   path: Path,
-  definition: RouteDefinition<Path, ParamsSchema, SearchSchema, Request, Page> = {},
-): RouteDeclaration<Path, ParamsSchema, SearchSchema, Request, Page> {
+  definition: RouteDefinition<Path, ParamsSchema, SearchSchema, Request, Page, GuardedRequest> = {},
+): RouteDeclaration<Path, ParamsSchema, SearchSchema, Request, Page, GuardedRequest> {
   return { ...definition, path };
+}
+
+export function csrfToken<Request>(request: Request, options: CsrfOptions<Request>): string {
+  const sessionId = options.sessionId(request);
+  if (!sessionId) throw new Error('csrfToken requires a session id');
+
+  return createCsrfToken(sessionId, options.secret);
+}
+
+export function csrfField<Request>(
+  request: Request,
+  options: CsrfOptions<Request> & { field?: string },
+): string {
+  return `<input type="hidden" name="${escapeAttribute(options.field ?? 'fw-csrf')}" value="${escapeAttribute(csrfToken(request, options))}">`;
 }
 
 export function parseRouteRequest<
@@ -773,6 +943,83 @@ export function parseRouteRequest<
     params: params as RouteParamsFor<Path, ParamsSchema>,
     path: definition.path,
     search: search as RouteSearchFor<SearchSchema>,
+  };
+}
+
+export function notFound(): NotFound {
+  return { notFound: true, status: 404 };
+}
+
+export async function runRoutePage<
+  const Path extends string,
+  ParamsSchema extends MaybeSchema<Record<string, string>>,
+  SearchSchema extends MaybeSchema<Record<string, JsonValue>>,
+  Request,
+  Page,
+  GuardedRequest extends Request = Request,
+>(
+  definition: RouteDeclaration<Path, ParamsSchema, SearchSchema, Request, Page, GuardedRequest>,
+  input: RouteRequestInput,
+  request: Request,
+): Promise<RoutePageResult<Page>> {
+  const routeRequest = parseRouteRequest(definition, input);
+
+  if (definition.guard && !(await definition.guard(request))) {
+    return {
+      error: { code: 'UNAUTHORIZED', payload: {} },
+      ok: false,
+      status: 422,
+    };
+  }
+
+  const value = await definition.page?.(routeRequest, request as GuardedRequest);
+  if (isNotFound(value)) return { ok: false, status: 404 };
+  return { ok: true, value: value as Page };
+}
+
+export type RoutePageResult<Page> = RoutePageSuccess<Page> | RoutePageFailure;
+
+export interface RoutePageSuccess<Page> {
+  ok: true;
+  value: Page;
+}
+
+export interface RoutePageFailure {
+  error?: {
+    code: 'UNAUTHORIZED';
+    payload: Record<string, unknown>;
+  };
+  ok: false;
+  status: 404 | 422;
+}
+
+export async function renderRoutePageResponse<
+  const Path extends string,
+  ParamsSchema extends MaybeSchema<Record<string, string>>,
+  SearchSchema extends MaybeSchema<Record<string, JsonValue>>,
+  Request,
+  Page,
+  GuardedRequest extends Request = Request,
+>(
+  definition: RouteDeclaration<Path, ParamsSchema, SearchSchema, Request, Page, GuardedRequest>,
+  input: RouteRequestInput,
+  request: Request,
+  render: (value: Page) => string | Promise<string> = (value) => String(value ?? ''),
+): Promise<RoutePageResponse> {
+  const result = await runRoutePage(definition, input, request);
+
+  if (!result.ok) {
+    return {
+      body: result.status === 404 ? 'Not Found' : 'Unauthorized',
+      headers: { 'Content-Type': 'text/html; charset=utf-8' },
+      status: result.status,
+    };
+  }
+
+  return {
+    body: await render(result.value),
+    headers: { 'Content-Type': 'text/html; charset=utf-8' },
+    status: 200,
   };
 }
 
@@ -920,6 +1167,14 @@ export async function runMutation<
   if (!inputResult.ok) return inputResult.failure;
 
   const input = inputResult.value as InferSchema<InputSchema>;
+
+  if (definition.csrf && !validateCsrfToken(rawInput, request, definition.csrf)) {
+    return {
+      error: { code: 'CSRF', payload: {} },
+      ok: false,
+      status: 422,
+    };
+  }
 
   if (definition.guard && !(await definition.guard(request))) {
     return {
@@ -1121,6 +1376,17 @@ function isMutationFail(value: unknown): value is MutationFail {
   );
 }
 
+function isNotFound(value: unknown): value is NotFound {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    'notFound' in value &&
+    value.notFound === true &&
+    'status' in value &&
+    value.status === 404
+  );
+}
+
 function isFileLike(value: unknown): value is FileLike {
   return (
     typeof value === 'object' &&
@@ -1209,6 +1475,89 @@ function parseMutationInput<InputSchema extends Schema<unknown>>(
       ok: false,
     };
   }
+}
+
+function parseQueryInput<const Key extends string, Value, Input, Request>(
+  definition: QueryDefinition<Key, Value, Input, Request>,
+  rawInput: unknown,
+): { ok: true; value: Input } | { failure: QueryEndpointFailure; ok: false } {
+  if (!definition.args) return { ok: true, value: rawInput as Input };
+
+  try {
+    return { ok: true, value: definition.args.parse(rawInput) };
+  } catch (error) {
+    if (!(error instanceof SchemaValidationError)) throw error;
+
+    return {
+      failure: {
+        error: {
+          code: 'VALIDATION',
+          payload: validationFailurePayload(error),
+        },
+        ok: false,
+        status: 422,
+      },
+      ok: false,
+    };
+  }
+}
+
+function validationFailurePayload(error: SchemaValidationError): ValidationFailurePayload {
+  return { issues: error.issues };
+}
+
+function querySearchInputToRecord(search: QuerySearchInput): Record<string, unknown> {
+  const record: Record<string, unknown> = {};
+  const entries =
+    search instanceof URLSearchParams || Symbol.iterator in search
+      ? search
+      : Object.entries(search).flatMap(([key, value]) =>
+          value === undefined
+            ? []
+            : Array.isArray(value)
+              ? value.map((item) => [key, item] as const)
+              : [[key, value] as const],
+        );
+
+  for (const [key, value] of entries) {
+    const existing = record[key];
+
+    if (existing === undefined) {
+      record[key] = value;
+    } else if (Array.isArray(existing)) {
+      existing.push(value);
+    } else {
+      record[key] = [existing, value];
+    }
+  }
+
+  return record;
+}
+
+function validateCsrfToken<Request>(
+  rawInput: unknown,
+  request: Request,
+  options: CsrfValidationOptions<Request>,
+): boolean {
+  const sessionId = options.sessionId(request);
+  if (!sessionId) return false;
+
+  const submitted = formLikeToRecord(rawInput)[options.field ?? 'fw-csrf'];
+  if (typeof submitted !== 'string') return false;
+
+  return secureEqual(submitted, createCsrfToken(sessionId, options.secret));
+}
+
+function createCsrfToken(sessionId: string, secret: string): string {
+  return createHmac('sha256', secret).update(sessionId).digest('base64url');
+}
+
+function secureEqual(left: string, right: string): boolean {
+  const leftBuffer = Buffer.from(left);
+  const rightBuffer = Buffer.from(right);
+  if (leftBuffer.byteLength !== rightBuffer.byteLength) return false;
+
+  return timingSafeEqual(leftBuffer, rightBuffer);
 }
 
 function changeRecordsFor<Input>(
@@ -1335,8 +1684,10 @@ async function renderQueryChunks(
       continue;
     }
 
-    const value = queryDefinition.load ? await queryDefinition.load(input, { request }) : null;
-    chunks.push(renderQueryChunk(queryDefinition, input, value));
+    const result = await runQuery(queryDefinition, input, request);
+    if (!result.ok) continue;
+
+    chunks.push(renderQueryChunk(queryDefinition, result.input, result.value));
   }
 
   return chunks;
@@ -1352,10 +1703,10 @@ function queryMatchesRerun(
   return readQueryInstanceKey(queryDefinition, input) === target.instanceKey;
 }
 
-function renderQueryChunk(
-  queryDefinition: QueryDefinition,
-  input: unknown,
-  value: unknown,
+function renderQueryChunk<const Key extends string, Value, Input, Request>(
+  queryDefinition: QueryDefinition<Key, Value, Input, Request>,
+  input: Input,
+  value: Value,
 ): string {
   const key = readQueryInstanceKey(queryDefinition, input);
   const version = readQueryVersion(queryDefinition, input, value);
@@ -1378,8 +1729,8 @@ export function renderQueryScript(options: QueryScriptRenderOptions): string {
   return `<script type="application/json" fw-query="${escapeAttribute(options.name)}"${keyAttribute}>${escapeScriptJson(JSON.stringify(options.value))}</script>`;
 }
 
-function readQueryInstanceKey(
-  queryDefinition: QueryDefinition,
+function readQueryInstanceKey<const Key extends string, Value, Input, Request>(
+  queryDefinition: QueryDefinition<Key, Value, Input, Request>,
   input: unknown,
 ): string | undefined {
   if (queryDefinition.instanceKey === undefined) return undefined;
@@ -1387,10 +1738,10 @@ function readQueryInstanceKey(
   return queryDefinition.instanceKey;
 }
 
-function readQueryVersion(
-  queryDefinition: QueryDefinition,
-  input: unknown,
-  value: unknown,
+function readQueryVersion<const Key extends string, Value, Input, Request>(
+  queryDefinition: QueryDefinition<Key, Value, Input, Request>,
+  input: Input,
+  value: Value,
 ): number | string | undefined {
   if (queryDefinition.version === undefined) return undefined;
   if (typeof queryDefinition.version === 'function') return queryDefinition.version(input, value);

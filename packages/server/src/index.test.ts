@@ -12,19 +12,26 @@ import {
   meta,
   metaFromQuery,
   mutation,
+  notFound,
   parseRouteRequest,
   mutationWireRequestFromHeaders,
   query,
   route,
   createMemoryMutationReplayStore,
+  csrfField,
+  csrfToken,
   readMutationWireHeaders,
   renderDeferredStream,
   renderPageHints,
   renderMutationEndpointResponse,
   renderMutationResponse,
   renderNoJsMutationResponse,
+  renderQueryEndpointResponse,
   renderQueryScript,
+  renderRoutePageResponse,
   runMutation,
+  runQuery,
+  runRoutePage,
   s,
   session,
   stylesheetsForTargets,
@@ -78,6 +85,115 @@ describe('server mutation primitives', () => {
       redirect('/products/:id', { params: { id: 'p1' }, search: { sku: 'sku-1' } });
     };
     expect(assertBadRedirect).toBeTypeOf('function');
+  });
+
+  it('runs query endpoints through args schemas, guards, and request context', async () => {
+    type ProductQueryInput = { id: string; max: number };
+    type ProductQueryRequest = { session?: { userId?: string } | null };
+
+    const productQuery = query('productDetail', {
+      args: s.object({ id: s.string(), max: s.number().int().default(10) }),
+      guard: (request: ProductQueryRequest) => request.session?.userId === 'u1',
+      instanceKey: (input) => `product:${(input as { id: string }).id}`,
+      load(input: ProductQueryInput, { request }: { request: ProductQueryRequest }) {
+        return { id: input.id, max: input.max, userId: request.session?.userId };
+      },
+      reads: [domain('product')],
+      version: (input: ProductQueryInput) => input.max,
+    });
+
+    await expect(
+      runQuery(productQuery, { id: 'p1' }, { session: { userId: 'u1' } }),
+    ).resolves.toEqual({
+      input: { id: 'p1', max: 10 },
+      ok: true,
+      value: { id: 'p1', max: 10, userId: 'u1' },
+    });
+    await expect(runQuery(productQuery, {}, { session: { userId: 'u1' } })).resolves.toEqual({
+      error: {
+        code: 'VALIDATION',
+        payload: { issues: [{ message: 'Expected string', path: ['id'] }] },
+      },
+      ok: false,
+      status: 422,
+    });
+    await expect(runQuery(productQuery, { id: 'p1' }, { session: null })).resolves.toEqual({
+      error: { code: 'UNAUTHORIZED', payload: {} },
+      ok: false,
+      status: 422,
+    });
+
+    await expect(
+      renderQueryEndpointResponse(productQuery, {
+        request: { session: { userId: 'u1' } },
+        search: new URLSearchParams([
+          ['id', 'p1'],
+          ['max', '3'],
+        ]),
+      }),
+    ).resolves.toEqual({
+      body: '<fw-query name="productDetail" key="product:p1" version="3">{"id":"p1","max":3,"userId":"u1"}</fw-query>',
+      headers: { 'Content-Type': 'text/vnd.jiso.query+html; charset=utf-8' },
+      status: 200,
+    });
+  });
+
+  it('runs route pages through guards and notFound page outcomes', async () => {
+    const productRoute = route('/products/:id', {
+      guard: (request: { session?: { userId?: string } | null }) =>
+        request.session?.userId === 'u1',
+      page(context, request: { session: { userId: string } }) {
+        if (context.params.id === 'missing') return notFound();
+        return `${request.session.userId}:${context.params.id}:${context.search.tab}`;
+      },
+      params: s.object({ id: s.string() }),
+      search: s.object({ tab: s.string() }),
+    });
+
+    await expect(
+      runRoutePage(
+        productRoute,
+        { params: { id: 'p1' }, search: { tab: 'details' } },
+        { session: { userId: 'u1' } },
+      ),
+    ).resolves.toEqual({
+      ok: true,
+      value: 'u1:p1:details',
+    });
+    await expect(
+      runRoutePage(
+        productRoute,
+        { params: { id: 'p1' }, search: { tab: 'details' } },
+        { session: null },
+      ),
+    ).resolves.toEqual({
+      error: { code: 'UNAUTHORIZED', payload: {} },
+      ok: false,
+      status: 422,
+    });
+    await expect(
+      renderRoutePageResponse(
+        productRoute,
+        { params: { id: 'missing' }, search: { tab: 'details' } },
+        { session: { userId: 'u1' } },
+      ),
+    ).resolves.toEqual({
+      body: 'Not Found',
+      headers: { 'Content-Type': 'text/html; charset=utf-8' },
+      status: 404,
+    });
+    await expect(
+      renderRoutePageResponse(
+        productRoute,
+        { params: { id: 'p1' }, search: { tab: 'reviews' } },
+        { session: { userId: 'u1' } },
+        (value) => `<main>${value}</main>`,
+      ),
+    ).resolves.toEqual({
+      body: '<main>u1:p1:reviews</main>',
+      headers: { 'Content-Type': 'text/html; charset=utf-8' },
+      status: 200,
+    });
   });
 
   it('renders modulepreloads, opt-in speculation rules, and Early Hints headers', () => {
@@ -962,6 +1078,46 @@ describe('server mutation primitives', () => {
       status: 422,
     });
     expect(guardCalls).toBe(0);
+  });
+
+  it('validates mutation CSRF tokens before running guards', async () => {
+    const request = { session: { id: 's1' } };
+    const csrf = {
+      field: 'csrf',
+      secret: 'test-secret',
+      sessionId(candidate: typeof request) {
+        return candidate.session.id;
+      },
+    };
+    let guardCalls = 0;
+    const addToCart = mutation('cart/add', {
+      csrf,
+      guard() {
+        guardCalls += 1;
+        return true;
+      },
+      input: s.object({ productId: s.string() }),
+      handler(input) {
+        return input.productId;
+      },
+    });
+    const token = csrfToken(request, csrf);
+
+    expect(csrfField(request, csrf)).toBe(`<input type="hidden" name="csrf" value="${token}">`);
+    await expect(
+      runMutation(addToCart, { csrf: token, productId: 'p1' }, request),
+    ).resolves.toMatchObject({
+      ok: true,
+      value: 'p1',
+    });
+    expect(guardCalls).toBe(1);
+
+    await expect(runMutation(addToCart, { productId: 'p1' }, request)).resolves.toEqual({
+      error: { code: 'CSRF', payload: {} },
+      ok: false,
+      status: 422,
+    });
+    expect(guardCalls).toBe(1);
   });
 
   it('runs guarded mutation handlers inside the configured transaction', async () => {
