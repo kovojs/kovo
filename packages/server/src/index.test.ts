@@ -27,6 +27,7 @@ import {
   renderMutationResponse,
   renderNoJsMutationResponse,
   renderQueryEndpointResponse,
+  renderQueryRegistryEndpointResponse,
   renderQueryScript,
   renderRoutePageResponse,
   runMutation,
@@ -132,9 +133,63 @@ describe('server mutation primitives', () => {
         ]),
       }),
     ).resolves.toEqual({
-      body: '<fw-query name="productDetail" key="product:p1" version="3">{"id":"p1","max":3,"userId":"u1"}</fw-query>',
-      headers: { 'Content-Type': 'text/vnd.jiso.query+html; charset=utf-8' },
+      body: '<fw-query name="product:p1" version="3">{"id":"p1","max":3,"userId":"u1"}</fw-query>',
+      headers: { 'Content-Type': 'text/html; charset=utf-8' },
       status: 200,
+    });
+  });
+
+  it('matches the typed read wire fixture response byte-for-byte', async () => {
+    const productQuery = query('product', {
+      args: s.object({ id: s.string() }),
+      instanceKey: (input) => `product:${(input as { id: string }).id}`,
+      load(input: { id: string }) {
+        expect(input).toEqual({ id: 'p1' });
+        return { name: 'Mug', stock: 4 };
+      },
+      reads: [domain('product')],
+    });
+    const response = await renderQueryEndpointResponse(productQuery, {
+      request: {},
+      search: new URLSearchParams([['id', 'p1']]),
+    });
+    const fixture = await readFile(
+      new URL('../../../fixtures/wire/typed-read.http', import.meta.url),
+      'utf8',
+    );
+
+    expect(normalizeWireResponse(response, 'OK')).toEqual(readFixtureResponses(fixture).at(-1));
+  });
+
+  it('dispatches typed read endpoints through a query registry', async () => {
+    const productQuery = query('product', {
+      args: s.object({ id: s.string() }),
+      instanceKey: (input) => `product:${(input as { id: string }).id}`,
+      load(input: { id: string }) {
+        return { id: input.id, name: 'Mug' };
+      },
+      reads: [domain('product')],
+    });
+
+    await expect(
+      renderQueryRegistryEndpointResponse({ queries: [productQuery] }, 'product', {
+        request: {},
+        search: new URLSearchParams([['id', 'p1']]),
+      }),
+    ).resolves.toEqual({
+      body: '<fw-query name="product:p1">{"id":"p1","name":"Mug"}</fw-query>',
+      headers: { 'Content-Type': 'text/html; charset=utf-8' },
+      status: 200,
+    });
+
+    await expect(
+      renderQueryRegistryEndpointResponse({ queries: [productQuery] }, 'missing', {
+        request: {},
+      }),
+    ).resolves.toEqual({
+      body: 'Not Found',
+      headers: { 'Content-Type': 'text/plain; charset=utf-8' },
+      status: 404,
     });
   });
 

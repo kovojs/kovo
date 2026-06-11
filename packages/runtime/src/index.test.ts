@@ -29,6 +29,7 @@ import {
   parseHandlerReferences,
   readElementParams,
   readElementState,
+  refetchQueries,
   stampPendingQueries,
   submitEnhancedMutation,
   submitOptimisticEnhancedMutation,
@@ -1007,6 +1008,81 @@ describe('query store', () => {
     expect(store.get('analytics')).toEqual({ sampled: true });
     expect(cartPlan).toHaveBeenLastCalledWith({ count: 2 });
     expect(analyticsPlan).toHaveBeenCalledTimes(1);
+  });
+
+  it('refetches typed read endpoints and applies returned query chunks', async () => {
+    const store = createQueryStore();
+    const plan = vi.fn();
+    const fetch = vi.fn(async (url: string) => ({
+      status: 200,
+      text: async () =>
+        url === '/_q/cart'
+          ? '<fw-query name="cart">{"count":2}</fw-query>'
+          : '<fw-query name="inventory">{"available":true}</fw-query>',
+    }));
+
+    store.subscribe('cart', plan);
+
+    await expect(
+      refetchQueries({
+        fetch,
+        queries: ['cart', 'inventory'],
+        queryStore: store,
+      }),
+    ).resolves.toEqual([
+      { fragments: [], queries: ['cart'] },
+      { fragments: [], queries: ['inventory'] },
+    ]);
+    expect(fetch).toHaveBeenNthCalledWith(1, '/_q/cart', {
+      headers: { Accept: 'text/html', 'FW-Fragment': 'true' },
+      method: 'GET',
+    });
+    expect(fetch).toHaveBeenNthCalledWith(2, '/_q/inventory', {
+      headers: { Accept: 'text/html', 'FW-Fragment': 'true' },
+      method: 'GET',
+    });
+    expect(store.get('cart')).toEqual({ count: 2 });
+    expect(store.get('inventory')).toEqual({ available: true });
+    expect(plan).toHaveBeenLastCalledWith({ count: 2 });
+  });
+
+  it('uses typed read refetching from focus listeners when configured', async () => {
+    const root = new FakeRoot();
+    const store = createQueryStore();
+    const plan = vi.fn();
+    const fetch = vi.fn(async () => ({
+      status: 200,
+      text: async () => '<fw-query name="cart">{"count":3}</fw-query>',
+    }));
+
+    root.scripts = [
+      {
+        getAttribute: (name) => (name === 'fw-query' ? 'cart' : null),
+        textContent: '{"count":1}',
+      },
+    ];
+    store.subscribe('cart', plan);
+
+    installJisoLoader({
+      importModule: vi.fn(),
+      queryRefetch: { fetch },
+      queryStore: store,
+      root,
+    });
+
+    expect(root.listeners.has('visibilitychange')).toBe(true);
+    expect(root.listeners.has('focus')).toBe(true);
+    expect(store.get('cart')).toEqual({ count: 1 });
+
+    root.visibilityState = 'visible';
+    await root.listeners.get('visibilitychange')?.({ target: null, type: 'visibilitychange' });
+
+    expect(fetch).toHaveBeenCalledWith('/_q/cart', {
+      headers: { Accept: 'text/html', 'FW-Fragment': 'true' },
+      method: 'GET',
+    });
+    expect(store.get('cart')).toEqual({ count: 3 });
+    expect(plan).toHaveBeenLastCalledWith({ count: 3 });
   });
 
   it('registers pagehide optimism cleanup without unload handlers', () => {

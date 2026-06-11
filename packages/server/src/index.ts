@@ -380,7 +380,11 @@ export type QuerySearchInput =
 export interface QueryEndpointResponse {
   body: string;
   headers: Record<string, string>;
-  status: 200 | 422;
+  status: 200 | 404 | 422;
+}
+
+export interface QueryEndpointRegistry<Request = unknown> {
+  queries: readonly QueryDefinition<string, unknown, unknown, Request>[];
 }
 
 export interface QueryDefinition<
@@ -515,10 +519,28 @@ export async function renderQueryEndpointResponse<const Key extends string, Valu
   }
 
   return {
-    body: renderQueryChunk(definition, result.input, result.value),
-    headers: { 'Content-Type': 'text/vnd.jiso.query+html; charset=utf-8' },
+    body: renderQueryEndpointChunk(definition, result.input, result.value),
+    headers: { 'Content-Type': 'text/html; charset=utf-8' },
     status: 200,
   };
+}
+
+export async function renderQueryRegistryEndpointResponse<Request>(
+  registry: QueryEndpointRegistry<Request>,
+  queryKey: string,
+  endpointRequest: QueryEndpointRequest<Request>,
+): Promise<QueryEndpointResponse> {
+  const definition = registry.queries.find((queryDefinition) => queryDefinition.key === queryKey);
+
+  if (!definition) {
+    return {
+      body: 'Not Found',
+      headers: { 'Content-Type': 'text/plain; charset=utf-8' },
+      status: 404,
+    };
+  }
+
+  return renderQueryEndpointResponse(definition, endpointRequest);
 }
 
 export interface ChangeRecord<DomainKey extends string = string, Input = unknown> {
@@ -1715,6 +1737,19 @@ function renderQueryChunk<const Key extends string, Value, Input, Request>(
     version === undefined ? '' : ` version="${escapeAttribute(String(version))}"`;
 
   return `<fw-query name="${escapeAttribute(queryDefinition.key)}"${keyAttribute}${versionAttribute}>${escapeHtml(JSON.stringify(value))}</fw-query>`;
+}
+
+function renderQueryEndpointChunk<const Key extends string, Value, Input, Request>(
+  queryDefinition: QueryDefinition<Key, Value, Input, Request>,
+  input: Input,
+  value: Value,
+): string {
+  const name = readQueryInstanceKey(queryDefinition, input) ?? queryDefinition.key;
+  const version = readQueryVersion(queryDefinition, input, value);
+  const versionAttribute =
+    version === undefined ? '' : ` version="${escapeAttribute(String(version))}"`;
+
+  return `<fw-query name="${escapeAttribute(name)}"${versionAttribute}>${escapeHtml(JSON.stringify(value))}</fw-query>`;
 }
 
 export interface QueryScriptRenderOptions {

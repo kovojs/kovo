@@ -180,12 +180,34 @@ export interface JisoLoaderOptions {
   enhancedMutations?: EnhancedMutationLoaderOptions;
   events?: readonly string[];
   importModule: ImportHandlerModule;
+  queryRefetch?: QueryRefetchOptions;
   requestIdle?: (callback: () => void) => void;
   visibleObserver?: VisibleObserverFactory;
   queryStore?: QueryStore;
   refetchOnFocus?: (queries: readonly string[]) => void | Promise<void>;
   refetchOnFocusOptOut?: readonly string[];
   root: LoaderRoot;
+}
+
+export interface QueryRefetchOptions {
+  fetch: QueryRefetchFetch;
+  urlForQuery?: (query: string) => string | undefined;
+}
+
+export interface QueryRefetchFetch {
+  (
+    url: string,
+    init: {
+      headers: Record<string, string>;
+      method: 'GET';
+    },
+  ): Promise<QueryRefetchResponse> | QueryRefetchResponse;
+}
+
+export interface QueryRefetchResponse {
+  ok?: boolean;
+  status?: number;
+  text(): Promise<string> | string;
 }
 
 export interface JisoLoader {
@@ -221,11 +243,19 @@ export function installJisoLoader(options: JisoLoaderOptions): JisoLoader {
     );
   }
 
-  if (options.refetchOnFocus) {
+  if (options.refetchOnFocus || (options.queryRefetch && options.queryStore)) {
     const refetchEligibleQueries = () =>
       filterRefetchEligibleQueries(hydratedQueries, options.refetchOnFocusOptOut ?? []);
     const refetchOnFocus = async () => {
-      await options.refetchOnFocus?.(refetchEligibleQueries());
+      const queries = refetchEligibleQueries();
+      await options.refetchOnFocus?.(queries);
+      if (options.queryRefetch && options.queryStore) {
+        await refetchQueries({
+          ...options.queryRefetch,
+          queries,
+          queryStore: options.queryStore,
+        });
+      }
     };
 
     options.root.addEventListener('visibilitychange', async () => {
@@ -864,6 +894,36 @@ export function hydrateQueryScripts(
   }
 
   return hydrated;
+}
+
+export async function refetchQueries(
+  options: QueryRefetchOptions & {
+    queries: readonly string[];
+    queryStore: QueryStore;
+  },
+): Promise<AppliedMutationResponse[]> {
+  const applied: AppliedMutationResponse[] = [];
+
+  for (const query of options.queries) {
+    const url = options.urlForQuery?.(query) ?? `/_q/${encodeURIComponent(query)}`;
+    if (!url) continue;
+
+    const response = await options.fetch(url, {
+      headers: {
+        Accept: 'text/html',
+        'FW-Fragment': 'true',
+      },
+      method: 'GET',
+    });
+
+    if (response.ok === false || (response.status !== undefined && response.status >= 400)) {
+      continue;
+    }
+
+    applied.push(applyMutationResponse(options.queryStore, await response.text()));
+  }
+
+  return applied;
 }
 
 export interface AppliedMutationResponse {

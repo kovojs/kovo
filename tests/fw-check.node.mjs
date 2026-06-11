@@ -32,6 +32,7 @@ const generatedWireBodies = {
 <html><body><script type="application/json" fw-query="cart">{"count":1,"items":[{"productId":"p1","qty":1,"unitPrice":1499}]}</script><cart-badge fw-deps="cart"><span data-bind="cart.count">1</span></cart-badge></body></html>
 `,
   ],
+  'typed-read.http': ['<fw-query name="product:p1">{"name":"Mug","stock":4}</fw-query>\n'],
   'validation-422-fragment.http': [
     `<fw-fragment target="product-form:p1"><form fw-c="product-form" aria-invalid="true"><output role="alert" data-error-code="OUT_OF_STOCK">Only 5 left.</output><input name="productId" value="p1"><input name="quantity" value="99"></form></fw-fragment>
 `,
@@ -117,6 +118,7 @@ void test('Phase 0 wire fixtures are present and explicit', async () => {
     'defer-stream.http',
     'enhanced-mutation.http',
     'no-js-post-redirect-get.http',
+    'typed-read.http',
     'validation-422-fragment.http',
   ]);
 
@@ -179,6 +181,14 @@ void test('Phase 0 wire fixture responses keep stable protocol metadata', async 
         },
         statusLine: 'HTTP/1.1 303 See Other',
       },
+      {
+        headers: {
+          'content-type': 'text/html; charset=utf-8',
+        },
+        statusLine: 'HTTP/1.1 200 OK',
+      },
+    ],
+    'typed-read.http': [
       {
         headers: {
           'content-type': 'text/html; charset=utf-8',
@@ -356,9 +366,14 @@ void test('P2 loader smoke evidence remains represented in runtime tests', async
   assert.match(runtimeSource, /insertAdjacentHTML\("beforeend"/);
   assert.match(runtimeSource, /signal: createHandlerSignal\(\)/);
   assert.match(runtimeSource, /visibleObserver\?: VisibleObserverFactory/);
+  assert.match(runtimeSource, /export async function refetchQueries/);
+  assert.match(runtimeSource, /`\/_q\/\$\{encodeURIComponent\(query\)\}`/);
+  assert.match(runtimeSource, /Accept: 'text\/html'/);
   assert.match(runtimeTests, /invokes chained handler refs left-to-right with one context/);
   assert.match(runtimeTests, /installs declared load, idle, and visible execution triggers/);
   assert.match(runtimeTests, /ships an inline enhanced form round trip in the bootstrap source/);
+  assert.match(runtimeTests, /refetches typed read endpoints and applies returned query chunks/);
+  assert.match(runtimeTests, /uses typed read refetching from focus listeners when configured/);
   assert.match(
     browserTests,
     /keeps the loader idle until the first delegated interaction/,
@@ -499,6 +514,7 @@ void test('P3 server data-plane APIs stay exported and covered', async () => {
 
   assert.match(serverSource, /export async function runQuery/);
   assert.match(serverSource, /export async function renderQueryEndpointResponse/);
+  assert.match(serverSource, /export async function renderQueryRegistryEndpointResponse/);
   assert.match(serverSource, /args\?: Schema<Input>/);
   assert.match(serverSource, /guard\?: Guard<Request>/);
   assert.match(serverSource, /load\?\(input: Input, context\?: QueryLoadContext<Request>\)/);
@@ -513,6 +529,8 @@ void test('P3 server data-plane APIs stay exported and covered', async () => {
     serverTests,
     /runs query endpoints through args schemas, guards, and request context/,
   );
+  assert.match(serverTests, /matches the typed read wire fixture response byte-for-byte/);
+  assert.match(serverTests, /dispatches typed read endpoints through a query registry/);
   assert.match(serverTests, /runs route pages through guards and notFound page outcomes/);
   assert.match(serverTests, /validates mutation CSRF tokens before running guards/);
 });
