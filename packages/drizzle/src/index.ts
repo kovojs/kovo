@@ -16,8 +16,10 @@ export interface JisoTableAnnotation {
   key?: string;
 }
 
-export function jiso(annotation: JisoTableAnnotation): JisoTableAnnotation {
-  return annotation;
+export type JisoTableExtraConfig = JisoTableAnnotation & ((self: unknown) => []);
+
+export function jiso(annotation: JisoTableAnnotation): JisoTableExtraConfig {
+  return Object.assign((() => []) as (self: unknown) => [], annotation) as JisoTableExtraConfig;
 }
 
 export interface TouchSite {

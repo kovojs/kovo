@@ -15,6 +15,14 @@ import {
   serializeTouchGraph,
 } from '../../../packages/drizzle/src/index.js';
 
+function annotatedTable(name: string, annotation: ReturnType<typeof jiso>) {
+  return {
+    domain: annotation.domain,
+    ...(annotation.key ? { key: annotation.key } : {}),
+    name,
+  };
+}
+
 describe('Drizzle pinned subset conformance', () => {
   it('imports the pinned real Drizzle Postgres subset used by extraction examples', () => {
     const products = pgTable('products', {
@@ -36,6 +44,19 @@ describe('Drizzle pinned subset conformance', () => {
     expect(eq(products.id, 'p1')).toBeDefined();
     expect(gt(products.stock, 0)).toBeDefined();
     expect(inArray(cartItems.cartId, ['c1', 'c2'])).toBeDefined();
+  });
+
+  it('accepts jiso annotations as the real Drizzle pgTable extra config', () => {
+    const cartItems = pgTable(
+      'cart_items',
+      {
+        cartId: text('cart_id').notNull(),
+        productId: text('product_id').notNull(),
+      },
+      jiso({ domain: 'cart', key: 'productId' }),
+    );
+
+    expect(cartItems.productId).toBeDefined();
   });
 
   it('recognizes real Drizzle receiver types in project extraction', () => {
@@ -154,8 +175,8 @@ describe('Drizzle pinned subset conformance', () => {
   });
 
   it('pins table annotations as the domain registry source', () => {
-    const cartItems = { ...jiso({ domain: 'cart', key: 'cartId' }), name: 'cart_items' };
-    const products = { ...jiso({ domain: 'product', key: 'id' }), name: 'products' };
+    const cartItems = annotatedTable('cart_items', jiso({ domain: 'cart', key: 'cartId' }));
+    const products = annotatedTable('products', jiso({ domain: 'product', key: 'id' }));
 
     expect(serializeDomainRegistry([{ table: products }, { table: cartItems }])).toBe(
       [
@@ -178,7 +199,7 @@ describe('Drizzle pinned subset conformance', () => {
             operation: 'insert-select',
             predicate: 'non-eq',
             site: 'cart.domain.ts:15',
-            table: { ...jiso({ domain: 'product', key: 'id' }), name: 'products' },
+            table: annotatedTable('products', jiso({ domain: 'product', key: 'id' })),
           },
           {
             branch: 'stock-check',
@@ -186,10 +207,10 @@ describe('Drizzle pinned subset conformance', () => {
             predicate: 'eq',
             readKey: 'arg:productId',
             site: 'cart.domain.ts:21',
-            table: {
-              ...jiso({ domain: 'inventory', key: 'productId' }),
-              name: 'inventory_snapshots',
-            },
+            table: annotatedTable(
+              'inventory_snapshots',
+              jiso({ domain: 'inventory', key: 'productId' }),
+            ),
           },
         ],
         unresolved: [{ domain: 'audit', operation: 'raw', site: 'cart.domain.ts:31' }],
@@ -199,13 +220,13 @@ describe('Drizzle pinned subset conformance', () => {
             operation: 'update',
             predicate: 'non-eq',
             site: 'cart.domain.ts:20',
-            table: { ...jiso({ domain: 'product', key: 'id' }), name: 'products' },
+            table: annotatedTable('products', jiso({ domain: 'product', key: 'id' })),
             writeKey: 'arg:productId',
           },
           {
             operation: 'insert',
             site: 'cart.domain.ts:16',
-            table: { ...jiso({ domain: 'cart', key: 'cartId' }), name: 'cart_items' },
+            table: annotatedTable('cart_items', jiso({ domain: 'cart', key: 'cartId' })),
           },
         ],
       }),

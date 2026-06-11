@@ -13,11 +13,19 @@ import {
   serializeTouchGraph,
 } from './index.js';
 
+function annotatedTable(name: string, annotation: ReturnType<typeof jiso>) {
+  return {
+    domain: annotation.domain,
+    ...(annotation.key ? { key: annotation.key } : {}),
+    name,
+  };
+}
+
 describe('@jiso/drizzle touch graph helpers', () => {
   it('creates deterministic touch graph entries from annotated tables and read domains', () => {
-    const cartItems = { ...jiso({ domain: 'cart', key: 'cartId' }), name: 'cart_items' };
-    const products = { ...jiso({ domain: 'product', key: 'id' }), name: 'products' };
-    const priceRules = { ...jiso({ domain: 'pricing', key: 'id' }), name: 'price_rules' };
+    const cartItems = annotatedTable('cart_items', jiso({ domain: 'cart', key: 'cartId' }));
+    const products = annotatedTable('products', jiso({ domain: 'product', key: 'id' }));
+    const priceRules = annotatedTable('price_rules', jiso({ domain: 'pricing', key: 'id' }));
 
     const entry = createTouchGraphEntry({
       reads: [
@@ -94,7 +102,7 @@ describe('@jiso/drizzle touch graph helpers', () => {
             {
               operation: 'update-from',
               site: 'cart.domain.ts:11',
-              table: { ...jiso({ domain: 'price' }), name: 'prices' },
+              table: annotatedTable('prices', jiso({ domain: 'price' })),
             },
           ],
           unresolved: [{ domain: 'audit', operation: 'raw', site: 'cart.domain.ts:20' }],
@@ -104,7 +112,7 @@ describe('@jiso/drizzle touch graph helpers', () => {
               operation: 'update',
               predicate: 'non-eq',
               site: 'cart.domain.ts:12',
-              table: { ...jiso({ domain: 'product', key: 'id' }), name: 'products' },
+              table: annotatedTable('products', jiso({ domain: 'product', key: 'id' })),
               writeKey: 'arg:productId',
             },
           ],
@@ -135,7 +143,7 @@ describe('@jiso/drizzle touch graph helpers', () => {
               operation: 'insert-select',
               predicate: 'non-eq',
               site: 'cart.domain.ts:18',
-              table: { ...jiso({ domain: 'price', key: 'productId' }), name: 'prices' },
+              table: annotatedTable('prices', jiso({ domain: 'price', key: 'productId' })),
             },
           ],
           unresolved: [{ operation: 'raw', site: 'cart.domain.ts:20' }],
@@ -144,7 +152,7 @@ describe('@jiso/drizzle touch graph helpers', () => {
               operation: 'update',
               predicate: 'non-eq',
               site: 'cart.domain.ts:12',
-              table: { ...jiso({ domain: 'product', key: 'id' }), name: 'products' },
+              table: annotatedTable('products', jiso({ domain: 'product', key: 'id' })),
             },
           ],
         }),
@@ -172,8 +180,8 @@ describe('@jiso/drizzle touch graph helpers', () => {
   });
 
   it('serializes deterministic domain registry output from table annotations', () => {
-    const cartItems = { ...jiso({ domain: 'cart', key: 'cartId' }), name: 'cart_items' };
-    const products = { ...jiso({ domain: 'product', key: 'id' }), name: 'products' };
+    const cartItems = annotatedTable('cart_items', jiso({ domain: 'cart', key: 'cartId' }));
+    const products = annotatedTable('products', jiso({ domain: 'product', key: 'id' }));
 
     expect(serializeDomainRegistry([{ table: products }, { table: cartItems }]))
       .toBe(`export type DomainKey = "cart" | "product";
