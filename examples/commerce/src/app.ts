@@ -1,5 +1,4 @@
 import { component } from '@jiso/core';
-import { extractTouchGraphFromSource } from '@jiso/drizzle';
 import type { OptimisticPlan } from '@jiso/runtime';
 import {
   domain,
@@ -19,6 +18,9 @@ import {
   type MutationWireHeaderSource,
 } from '@jiso/server';
 import type { FwExplainInput } from '../../../packages/cli/src/index.js';
+import { commerceTouchGraph } from './generated/touch-graph.js';
+
+export { commerceTouchGraph } from './generated/touch-graph.js';
 
 export interface CommerceDb {
   cartItems: { productId: string; qty: number; unitPrice: number }[];
@@ -162,37 +164,6 @@ export const addToCartOptimistic = {
     },
   },
 } satisfies OptimisticPlan<AddToCartInput>;
-
-const commerceGenerated = extractTouchGraphFromSource([
-  {
-    fileName: 'examples/commerce/src/generated-touch-graph.ts',
-    source: [
-      'export const cartItems = pgTable("cart_items", {}, jiso({ domain: "cart", key: "productId" }));',
-      'export const orders = pgTable("orders", {}, jiso({ domain: "order", key: "id" }));',
-      'export const products = pgTable("products", {}, jiso({ domain: "product", key: "id" }));',
-      '',
-      'export async function addItem(db, input) {',
-      '  await db.insert(cartItems).values({ productId: input.productId, qty: input.quantity });',
-      '  await db.insert(orders).values({ productId: input.productId, qty: input.quantity });',
-      '  await db.update(products).set({ stock: 0 }).where(eq(products.id, input.productId));',
-      '}',
-      '',
-    ].join('\n'),
-  },
-]);
-
-export const commerceTouchGraph = {
-  'cart.addItem': commerceGenerated.addItem ?? {
-    touches: [],
-    unresolved: [
-      {
-        code: 'FW406',
-        message: 'Statically un-analyzable write site; manual touches required.',
-        site: 'examples/commerce/src/generated-touch-graph.ts:1',
-      },
-    ],
-  },
-} as const;
 
 export const addToCart = mutation('cart/add', {
   errors: {
@@ -372,6 +343,7 @@ export function renderReceiptUploadForm(orderId = 'order-1'): string {
     '<label class="grid gap-1 text-sm font-medium text-slate-700"><span>Receipt</span>',
     '<input name="receipt" type="file" accept="application/pdf,image/png" class="rounded border border-slate-300 px-2 py-1">',
     '</label>',
+    '<progress fw-upload-progress value="0" max="100" class="h-2 w-full" aria-label="Receipt upload progress"></progress>',
     '<button class="rounded bg-slate-900 px-3 py-2 text-sm font-medium text-white" type="submit">Upload receipt</button>',
     '</form>',
   ].join('');

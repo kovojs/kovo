@@ -481,14 +481,22 @@ void test('D1 commerce enhanced fragments carry Tailwind stylesheet hints', asyn
 void test('D4 commerce adopt-dont-invent features stay represented', async () => {
   const commerceSource = await readProjectFile('examples/commerce/src/app.ts');
   const commerceTests = await readProjectFile('examples/commerce/src/app.test.ts');
+  const runtimeSource = await readProjectFile('packages/runtime/src/index.ts');
+  const runtimeTests = await readProjectFile('packages/runtime/src/index.test.ts');
 
   assert.match(commerceSource, /meta\(\{/);
   assert.match(commerceSource, /i18n\('en-US'/);
   assert.match(commerceSource, /s\.file\(\{ maxBytes: 64 \* 1024/);
+  assert.match(commerceSource, /fw-upload-progress/);
   assert.match(commerceSource, /errorBoundary\(/);
   assert.match(commerceSource, /commerceSession = session\(/);
   assert.match(commerceSource, /guards\.rateLimit<CommerceRequest>/);
   assert.match(commerceTests, /coerces commerce receipt uploads through s\.file\(\)/);
+  assert.match(commerceTests, /fw-upload-progress value="0" max="100"/);
+  assert.match(runtimeSource, /onUploadProgress\?: \(progress: UploadProgress/);
+  assert.match(runtimeSource, /stampEnhancedMutationPending\(options, true\)/);
+  assert.match(runtimeTests, /onUploadProgress: uploadProgress/);
+  assert.match(runtimeTests, /'fw-deps': 'order'/);
   assert.match(
     commerceTests,
     /contains product-grid fragment failures with a per-island error boundary/,
@@ -597,6 +605,20 @@ void test('P1 fragment targets emit typed registry facts', async () => {
   assert.match(compilerSource, /interface FragmentTargets \{/);
   assert.match(compilerTests, /'cart-row': \{ rowId: string \};/);
   assert.doesNotMatch(compilerTests, /'cart-row': unknown;/);
+});
+
+void test('P4 commerce touch graph is a committed generated artifact', async () => {
+  const commerceSource = await readProjectFile('examples/commerce/src/app.ts');
+  const touchGraphSource = await readProjectFile('examples/commerce/src/generated/touch-graph.ts');
+
+  assert.match(commerceSource, /from '\.\/generated\/touch-graph\.js'/);
+  assert.doesNotMatch(commerceSource, /extractTouchGraphFromSource/);
+  assert.match(touchGraphSource, /export const commerceTouchGraph = \{/);
+  assert.match(touchGraphSource, /'cart\.addItem'/);
+  assert.match(touchGraphSource, /domain: 'cart'/);
+  assert.match(touchGraphSource, /domain: 'order'/);
+  assert.match(touchGraphSource, /domain: 'product'/);
+  assert.match(touchGraphSource, /keys: 'arg:productId'/);
 });
 
 void test('Drizzle pinned conformance suite is an explicit gate', async () => {

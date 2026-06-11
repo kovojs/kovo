@@ -325,6 +325,7 @@ describe('commerce example', () => {
     expect(form).toContain('aria-busy="false"');
     expect(form).toContain('name="orderId" value="order-1"');
     expect(form).toContain('name="receipt" type="file" accept="application/pdf,image/png"');
+    expect(form).toContain('fw-upload-progress value="0" max="100"');
     expect(html).toContain('data-mutation="order/receipt"');
   });
 
@@ -547,19 +548,20 @@ describe('commerce example', () => {
           {
             domain: 'cart',
             keys: null,
-            site: 'examples/commerce/src/generated-touch-graph.ts:6',
+            site: 'examples/commerce/src/generated/touch-graph.ts:6',
             via: 'cart_items',
           },
           {
             domain: 'order',
             keys: null,
-            site: 'examples/commerce/src/generated-touch-graph.ts:7',
+            site: 'examples/commerce/src/generated/touch-graph.ts:7',
             via: 'orders',
           },
           {
             domain: 'product',
             keys: 'arg:productId',
-            site: 'examples/commerce/src/generated-touch-graph.ts:8',
+            predicate: 'eq',
+            site: 'examples/commerce/src/generated/touch-graph.ts:8',
             via: 'products',
           },
         ],

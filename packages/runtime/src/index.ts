@@ -242,6 +242,8 @@ export interface EnhancedMutationLoaderOptions {
   formData?: (form: EnhancedFormElementLike) => unknown;
   idem?: () => string;
   morph?: MorphFragment;
+  onUploadProgress?: (progress: UploadProgress, form: EnhancedFormElementLike) => void;
+  pendingRoot?: PendingRoot;
   root: MorphRoot & TargetCollectorRoot;
   store: QueryStore;
 }
@@ -265,6 +267,11 @@ export async function dispatchEnhancedFormSubmit(
     fetch: options.fetch,
     form,
     formData: options.formData ? options.formData(form) : new FormData(form as HTMLFormElement),
+    ...(options.onUploadProgress
+      ? { onUploadProgress: (progress) => options.onUploadProgress?.(progress, form) }
+      : {}),
+    ...(options.pendingRoot ? { pendingQueries: readDeps(form.getAttribute('fw-deps')) } : {}),
+    ...(options.pendingRoot ? { pendingRoot: options.pendingRoot } : {}),
     root: options.root,
     store: options.store,
     ...(options.broadcast ? { broadcast: options.broadcast } : {}),
@@ -781,6 +788,12 @@ export interface EnhancedMutationFetchOptions {
   headers: Record<string, string>;
   keepalive: boolean;
   method: string;
+  onUploadProgress?: (progress: UploadProgress) => void;
+}
+
+export interface UploadProgress {
+  loaded: number;
+  total?: number;
 }
 
 export interface EnhancedMutationResponseLike {
@@ -804,6 +817,9 @@ export interface EnhancedMutationSubmitOptions {
   formData: unknown;
   idem?: string;
   morph?: MorphFragment;
+  onUploadProgress?: (progress: UploadProgress) => void;
+  pendingQueries?: readonly string[];
+  pendingRoot?: PendingRoot;
   root: MorphRoot & TargetCollectorRoot;
   store: QueryStore;
 }
@@ -1088,21 +1104,38 @@ export async function submitEnhancedMutation(options: EnhancedMutationSubmitOpti
     targets: string[];
   }
 > {
-  const { body, changes, idem, response, targets } = await fetchEnhancedMutation(options);
-  const applied = applyMutationResponseToDom({
-    body,
-    root: options.root,
-    store: options.store,
-    ...(options.morph ? { morph: options.morph } : {}),
-  });
-  publishSuccessfulMutation(options, response, body, changes);
+  stampEnhancedMutationPending(options, true);
 
-  return {
-    ...applied,
-    changes,
-    idem,
-    targets,
-  };
+  let body = '';
+  let changes: MutationChangeRecord[] = [];
+  let idem = options.idem ?? '';
+  let response: EnhancedMutationResponseLike | undefined;
+  let targets: string[] = [];
+
+  try {
+    const fetched = await fetchEnhancedMutation(options);
+    body = fetched.body;
+    changes = fetched.changes;
+    idem = fetched.idem;
+    response = fetched.response;
+    targets = fetched.targets;
+    const applied = applyMutationResponseToDom({
+      body,
+      root: options.root,
+      store: options.store,
+      ...(options.morph ? { morph: options.morph } : {}),
+    });
+    publishSuccessfulMutation(options, response, body, changes);
+
+    return {
+      ...applied,
+      changes,
+      idem,
+      targets,
+    };
+  } finally {
+    stampEnhancedMutationPending(options, false);
+  }
 }
 
 export async function submitOptimisticEnhancedMutation<Input>(
@@ -1240,6 +1273,17 @@ export function stampPendingQueries(
   return stamped;
 }
 
+function stampEnhancedMutationPending(
+  options: EnhancedMutationSubmitOptions,
+  pending: boolean,
+): string[] {
+  if (!options.pendingRoot || !options.pendingQueries || options.pendingQueries.length === 0) {
+    return [];
+  }
+
+  return stampPendingQueries(options.pendingRoot, options.pendingQueries, pending);
+}
+
 export interface BroadcastLike {
   close?: () => void;
   onmessage: ((event: { data: unknown }) => void) | null;
@@ -1353,6 +1397,7 @@ async function fetchEnhancedMutation(
     },
     keepalive: true,
     method: (options.form.method ?? 'post').toUpperCase(),
+    ...(options.onUploadProgress ? { onUploadProgress: options.onUploadProgress } : {}),
   });
 
   return {

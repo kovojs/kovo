@@ -352,14 +352,18 @@ describe('runtime loader', () => {
   it('intercepts enhanced form submits through the loader bridge', async () => {
     const loaderRoot = new FakeRoot();
     const mutationRoot = new FakeMorphRoot();
+    const pendingForm = new FakePendingElement({ 'fw-deps': 'order' });
+    const pendingRoot = new FakePendingRoot([pendingForm]);
     const store = createQueryStore();
     const preventDefault = vi.fn();
     const importModule = vi.fn();
+    const uploadProgress = vi.fn();
     const formData = new FormData();
     const form = new FakeFormElement(
       {
         enhance: '',
         'data-mutation': 'cart/add',
+        'fw-deps': 'order',
       },
       {
         action: '/_m/cart/add',
@@ -369,13 +373,18 @@ describe('runtime loader', () => {
     mutationRoot.deps = [{ deps: 'cart', id: 'cart-badge' }];
     mutationRoot.targets.set('cart-badge', new FakeMorphTarget());
     formData.set('productId', 'p1');
-    const fetch = vi.fn(async () => ({
+    const fetch = vi.fn(async (_url: string, options: EnhancedMutationFetchOptions) => ({
       headers: {
         get(name: string) {
           return name === 'FW-Changes' ? '[{"domain":"cart","input":{"productId":"p1"}}]' : null;
         },
       },
       async text() {
+        options.onUploadProgress?.({ loaded: 512, total: 1024 });
+        expect(pendingForm.attributes).toMatchObject({
+          'aria-busy': 'true',
+          'fw-pending': '',
+        });
         return [
           '<fw-query name="cart">{"count":1}</fw-query>',
           '<fw-fragment target="cart-badge"><cart-badge>1</cart-badge></fw-fragment>',
@@ -388,6 +397,8 @@ describe('runtime loader', () => {
         fetch,
         formData: () => formData,
         idem: () => 'idem_loader',
+        onUploadProgress: uploadProgress,
+        pendingRoot,
         root: mutationRoot,
         store,
       },
@@ -413,9 +424,13 @@ describe('runtime loader', () => {
       },
       keepalive: true,
       method: 'POST',
+      onUploadProgress: expect.any(Function),
     });
+    expect(uploadProgress).toHaveBeenCalledWith({ loaded: 512, total: 1024 }, form);
     expect(store.get('cart')).toEqual({ count: 1 });
     expect(mutationRoot.targets.get('cart-badge')?.html).toBe('<cart-badge>1</cart-badge>');
+    expect(pendingForm.attributes).not.toHaveProperty('fw-pending');
+    expect(pendingForm.attributes).not.toHaveProperty('aria-busy');
   });
 
   it('auto-wires enhanced mutation broadcasts through the loader bridge', async () => {
