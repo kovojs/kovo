@@ -1243,39 +1243,68 @@ function extractFunctions(source: string): ExtractedFunction[] {
 
   return [
     ...functions,
-    ...extractConstArrowFunctions(source),
+    ...extractVariableAssignedFunctions(source),
     ...extractDomainWriteCallbacks(source),
   ];
 }
 
-function extractConstArrowFunctions(source: string): ExtractedFunction[] {
+function extractVariableAssignedFunctions(source: string): ExtractedFunction[] {
   const functions: ExtractedFunction[] = [];
   const declarations =
-    /(?:export\s+)?const\s+(?<name>[A-Za-z_$][\w$]*)\s*(?::[^=]+)?=\s*(?:async\s*)?(?<params>\([^)]*\)|[A-Za-z_$][\w$]*)\s*=>\s*/g;
+    /(?:export\s+)?(?:const|let|var)\s+(?<name>[A-Za-z_$][\w$]*)\s*(?::[^=]+)?=\s*/g;
 
   for (const match of source.matchAll(declarations)) {
     const groups = match.groups;
     if (!groups || match.index === undefined) continue;
 
     const name = groups.name;
-    const params = groups.params;
-    if (!name || !params) continue;
+    if (!name) continue;
 
-    const bodyStart = match.index + match[0].length;
-    const openBrace = source[bodyStart] === '{' ? bodyStart : -1;
-    const bodyEnd =
-      openBrace === -1 ? statementEnd(source, bodyStart) : findMatchingBrace(source, openBrace);
-    if (bodyEnd === -1) continue;
-
-    functions.push({
-      body: source.slice(openBrace === -1 ? bodyStart : openBrace + 1, bodyEnd),
-      bodyStart: openBrace === -1 ? bodyStart : openBrace + 1,
-      name,
-      params: params.replace(/^\(|\)$/g, ''),
-    });
+    const initializerStart = match.index + match[0].length;
+    const assigned = variableAssignedFunction(source, initializerStart);
+    if (assigned) functions.push({ name, ...assigned });
   }
 
   return functions;
+}
+
+function variableAssignedFunction(
+  source: string,
+  initializerStart: number,
+): Pick<ExtractedFunction, 'body' | 'bodyStart' | 'params'> | null {
+  const initializer = source.slice(initializerStart);
+  const functionExpression =
+    /^(?:async\s*)?function(?:\s+[A-Za-z_$][\w$]*)?\s*\((?<params>[^)]*)\)\s*\{/.exec(initializer);
+
+  if (functionExpression?.groups) {
+    const openBrace = initializerStart + functionExpression[0].length - 1;
+    const closeBrace = findMatchingBrace(source, openBrace);
+    if (closeBrace === -1) return null;
+
+    return {
+      body: source.slice(openBrace + 1, closeBrace),
+      bodyStart: openBrace + 1,
+      params: functionExpression.groups.params ?? '',
+    };
+  }
+
+  const arrowExpression = /^(?:async\s*)?(?<params>\([^)]*\)|[A-Za-z_$][\w$]*)\s*=>\s*/.exec(
+    initializer,
+  );
+  const params = arrowExpression?.groups?.params;
+  if (!arrowExpression || !params) return null;
+
+  const bodyStart = initializerStart + arrowExpression[0].length;
+  const openBrace = source[bodyStart] === '{' ? bodyStart : -1;
+  const bodyEnd =
+    openBrace === -1 ? statementEnd(source, bodyStart) : findMatchingBrace(source, openBrace);
+  if (bodyEnd === -1) return null;
+
+  return {
+    body: source.slice(openBrace === -1 ? bodyStart : openBrace + 1, bodyEnd),
+    bodyStart: openBrace === -1 ? bodyStart : openBrace + 1,
+    params: params.replace(/^\(|\)$/g, ''),
+  };
 }
 
 function extractDomainWriteCallbacks(source: string): ExtractedFunction[] {

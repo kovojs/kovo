@@ -299,6 +299,46 @@ export const tableDomains = {
     });
   });
 
+  it('extracts writes from exported variable-assigned mutation handlers', () => {
+    const graph = extractTouchGraphFromSource([
+      {
+        fileName: 'cart.domain.ts',
+        source: `
+          export const cartItems = pgTable("cart_items", {}, jiso({ domain: "cart", key: "cartId" }));
+          export const products = pgTable("products", {}, jiso({ domain: "product", key: "id" }));
+
+          export const restockProduct = async function (db) {
+            await db.update(products).set({ stock: 10 });
+          };
+          export let addItem = (db) => {
+            await db.insert(cartItems).values({ productId: "p1" });
+          };
+          export var removeProduct = function removeProduct(db) {
+            await db.delete(products);
+          };
+        `,
+      },
+    ]);
+
+    expect(graph).toEqual({
+      addItem: {
+        reads: [],
+        touches: [{ domain: 'cart', keys: null, site: 'cart.domain.ts:9', via: 'cart_items' }],
+        unresolved: [],
+      },
+      removeProduct: {
+        reads: [],
+        touches: [{ domain: 'product', keys: null, site: 'cart.domain.ts:12', via: 'products' }],
+        unresolved: [],
+      },
+      restockProduct: {
+        reads: [],
+        touches: [{ domain: 'product', keys: null, site: 'cart.domain.ts:6', via: 'products' }],
+        unresolved: [],
+      },
+    });
+  });
+
   it('does not treat arbitrary domain objects as source tables', () => {
     const graph = extractTouchGraphFromSource([
       {
