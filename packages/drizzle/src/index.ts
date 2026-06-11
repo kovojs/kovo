@@ -8,6 +8,7 @@ import {
   type CallExpression,
   type CompilerOptions,
   type SourceFile,
+  type Symbol as MorphSymbol,
 } from 'ts-morph';
 
 export interface JisoTableAnnotation {
@@ -329,13 +330,14 @@ export function extractTouchGraphFromProject(options: TouchGraphProjectOptions):
   const sourceFiles = options.files.map((file) =>
     project.createSourceFile(file.fileName, file.source, { overwrite: true }),
   );
+  const tableNamesBySymbol = projectTableNamesBySymbol(sourceFiles);
   const files = options.files.map((file, index) => {
     const sourceFile = sourceFiles[index];
     if (!sourceFile) throw new Error(`Missing source file for ${file.fileName}`);
 
     return {
       fileName: file.fileName,
-      source: sourceWithUntypedWriteReceiversRemoved(file.source, sourceFile),
+      source: sourceWithProjectExtractionResolved(file.source, sourceFile, tableNamesBySymbol),
     };
   });
 
@@ -379,8 +381,12 @@ export function extractQueryFactsFromSource(files: readonly SourceFileInput[]): 
   return facts.sort((left, right) => left.query.localeCompare(right.query));
 }
 
-function sourceWithUntypedWriteReceiversRemoved(source: string, sourceFile: SourceFile): string {
-  const replacements: { end: number; start: number }[] = [];
+function sourceWithProjectExtractionResolved(
+  source: string,
+  sourceFile: SourceFile,
+  tableNamesBySymbol: ReadonlyMap<string, string>,
+): string {
+  const replacements: { end: number; start: number; value: string }[] = [];
 
   for (const call of sourceFile.getDescendantsOfKind(SyntaxKind.CallExpression)) {
     if (!isDrizzleWriteCall(call)) continue;
@@ -389,15 +395,25 @@ function sourceWithUntypedWriteReceiversRemoved(source: string, sourceFile: Sour
     if (isDrizzleReceiver(expression.getExpression())) continue;
 
     const name = expression.getNameNode();
-    replacements.push({ end: name.getEnd(), start: name.getStart() });
+    replacements.push({
+      end: name.getEnd(),
+      start: name.getStart(),
+      value: '__jisoIgnoredWrite',
+    });
   }
 
-  return replacements
-    .sort((left, right) => right.start - left.start)
-    .reduce(
-      (next, range) => `${next.slice(0, range.start)}__jisoIgnoredWrite${next.slice(range.end)}`,
-      source,
-    );
+  for (const identifier of sourceFile.getDescendantsOfKind(SyntaxKind.Identifier)) {
+    const tableName = tableNamesBySymbol.get(resolvedSymbolKey(identifier.getSymbol()) ?? '');
+    if (!tableName || identifier.getText() === tableName) continue;
+
+    replacements.push({
+      end: identifier.getEnd(),
+      start: identifier.getStart(),
+      value: tableName,
+    });
+  }
+
+  return applySourceReplacements(source, replacements);
 }
 
 function isDrizzleWriteCall(call: CallExpression): boolean {
@@ -425,6 +441,52 @@ function isDrizzleReceiver(receiver: Node): boolean {
       .some((declaration) => declaration.getSourceFile().getFilePath().includes('drizzle-orm')) ??
     false
   );
+}
+
+function projectTableNamesBySymbol(
+  sourceFiles: readonly SourceFile[],
+): ReadonlyMap<string, string> {
+  const namesBySymbol = new Map<string, string>();
+  let nextTable = 0;
+
+  for (const sourceFile of sourceFiles) {
+    for (const declaration of sourceFile.getVariableDeclarations()) {
+      const initializer = declaration.getInitializer();
+      if (!initializer || !isAnnotatedTableInitializer(initializer.getText())) continue;
+
+      const symbolKey = resolvedSymbolKey(declaration.getNameNode().getSymbol());
+      if (!symbolKey) continue;
+
+      namesBySymbol.set(symbolKey, `__jisoProjectTable${nextTable}`);
+      nextTable += 1;
+    }
+  }
+
+  return namesBySymbol;
+}
+
+function applySourceReplacements(
+  source: string,
+  replacements: readonly { end: number; start: number; value: string }[],
+): string {
+  return [...replacements]
+    .sort((left, right) => right.start - left.start)
+    .reduce(
+      (next, range) => `${next.slice(0, range.start)}${range.value}${next.slice(range.end)}`,
+      source,
+    );
+}
+
+function resolvedSymbolKey(symbol: MorphSymbol | undefined): string | undefined {
+  const target = symbol?.getAliasedSymbol() ?? symbol;
+  const declaration = target?.getDeclarations()[0];
+  if (!declaration) return undefined;
+
+  return `${declaration.getSourceFile().getFilePath()}:${declaration.getStart()}`;
+}
+
+function isAnnotatedTableInitializer(source: string): boolean {
+  return /\b(?:pgTable|sqliteTable|mysqlTable)\s*\(/.test(source) && /\bjiso\s*\(/.test(source);
 }
 
 interface ExtractedTableDeclaration {
