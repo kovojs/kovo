@@ -123,6 +123,10 @@ Do this first or pay it on every commit.
       row-key predicate checks, FW402/FW404/FW407/FW408/FW410/FW411 messages, and query output
       schema validation instead of grepping `packages/test` source or test names. Verification:
       `node --test tests/fw-check.node.mjs` and `pnpm run check` passed.
+      Partial evidence 2026-06-11: the P9 runtime change-record/optimism tranche now exercises
+      built runtime APIs for `FW-Changes` parsing/sanitization, malformed header reporting,
+      BroadcastChannel publication, keyed optimistic transforms from unified change records, and
+      server-truth reconciliation instead of grepping runtime source or test names.
       Partial evidence 2026-06-11: the P1 render-equivalence tranche now imports the built
       compiler API, asserts `compileComponentModule` render-equivalence checks and
       `assertRenderEquivalence` failure behavior, then asserts the `ERROR RENDER_EQUIV` CLI
