@@ -89,6 +89,9 @@ export default defineConfig({
   pack: {
     entry: ['packages/*/src/index.ts'],
     dts: true,
+    deps: {
+      neverBundle: ['typescript'],
+    },
     clean: true,
   },
 });

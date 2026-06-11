@@ -5,6 +5,11 @@ import { diagnosticFor, type CompilerDiagnostic } from './diagnostics.js';
 import type { ComponentGraphFact, RegistryFacts, RegistryTypeFacts } from './graph.js';
 import { findMatchingClosingTag, readStaticAttribute, scanOpeningTags } from './scan/tags.js';
 import { findMatchingToken, findStringEnd } from './scan/text.js';
+import {
+  componentOptionSource,
+  firstComponentModel,
+  parseComponentModule as parseComponentModuleModel,
+} from './scan/parse.js';
 import { escapeAttribute, indent, kebabCase } from './shared.js';
 import { validateEventTriggerNames } from './validate/event-triggers.js';
 
@@ -312,8 +317,10 @@ function isIr(source: string): boolean {
 }
 
 function inferComponentName(options: CompileComponentOptions): string {
-  const exportMatch = /export\s+const\s+([A-Z][A-Za-z0-9_]*)\s*=/.exec(options.source);
-  if (exportMatch?.[1]) return exportMatch[1];
+  const component = firstComponentModel(
+    parseComponentModuleModel(options.fileName, options.source),
+  );
+  if (component?.localName) return component.localName;
 
   const baseName =
     options.fileName
@@ -1647,6 +1654,12 @@ function extractFirstRenderObjectPattern(source: string): string[] {
 }
 
 function extractObjectLiteralAfterProperty(source: string, propertyName: string): string | null {
+  const parsed = componentOptionSource(
+    parseComponentModuleModel('component.tsx', source),
+    propertyName,
+  );
+  if (parsed?.startsWith('{')) return parsed;
+
   const match = new RegExp(`\\b${propertyName}\\s*:\\s*\\{`).exec(source);
   if (!match) return null;
 
@@ -2275,9 +2288,11 @@ interface FragmentTargetFact {
 }
 
 function findFragmentTargetFacts(source: string, componentName: string): FragmentTargetFact[] {
-  if (!/fragmentTarget\s*:\s*true/.test(source)) return [];
+  const model = parseComponentModuleModel('component.tsx', source);
+  const fragmentTarget = componentOptionSource(model, 'fragmentTarget');
+  if (fragmentTarget !== 'true' && !/fragmentTarget\s*:\s*true/.test(source)) return [];
 
-  const explicitName = /component\(\s*['"]([^'"]+)['"]/.exec(source)?.[1];
+  const explicitName = firstComponentModel(model)?.explicitName;
   return [
     {
       propsType: fragmentTargetPropsType(source),

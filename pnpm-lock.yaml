@@ -89,6 +89,9 @@ importers:
       '@jiso/core':
         specifier: workspace:*
         version: link:../core
+      typescript:
+        specifier: ^6.0.3
+        version: 6.0.3
     devDependencies:
       vitest:
         specifier: 4.1.8

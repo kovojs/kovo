@@ -6,7 +6,8 @@
     ".": "./src/index.ts"
   },
   "dependencies": {
-    "@jiso/core": "workspace:*"
+    "@jiso/core": "workspace:*",
+    "typescript": "^6.0.3"
   },
   "devDependencies": {
     "vitest": "4.1.8"
