@@ -110,6 +110,12 @@ interface LiteralNavigationTarget {
   value: string;
 }
 
+interface QueryPathExpressionFact {
+  end: number;
+  path: string;
+  start: number;
+}
+
 interface TemplateBody {
   offset: number;
   source: string;
@@ -122,6 +128,11 @@ export interface QueryUpdateCoverageFact {
   query: string;
   status: 'UNHANDLED' | 'fragment' | 'isomorphic' | 'plan' | 'renderOnce';
 }
+
+const updateCoverageSpans = new WeakMap<
+  QueryUpdateCoverageFact,
+  { length: number; start: number }
+>();
 
 export function createEmptyCompileResult(): CompileResult {
   return {
@@ -237,10 +248,10 @@ const compilerValidators: readonly CompilerValidator[] = [
   ({ componentName, model, options, source }) =>
     validateResidualStamps(source, model, options, componentName),
   ({ model, options, source }) => validateAttributeMergeConflicts(source, model, options.fileName),
-  ({ options, updateCoverage }) =>
+  ({ options, source, updateCoverage }) =>
     updateCoverage
       .filter((fact) => fact.status === 'UNHANDLED')
-      .map((fact) => fw311Diagnostic(options.fileName, fact)),
+      .map((fact) => fw311Diagnostic(options.fileName, source, fact)),
 ];
 
 export function compileComponentModule(options: CompileComponentOptions): CompileResult {
@@ -1069,20 +1080,35 @@ function collectQueryUpdateCoverage(
     coveredPaths.add(path);
   }
 
-  for (const path of jsxQueryExpressionPaths(model, knownQueries)) {
+  for (const expression of jsxQueryExpressionPaths(model, knownQueries)) {
+    const path = expression.path;
     if (coveredPaths.has(path)) continue;
 
-    facts.push({
-      componentName,
-      detail: 'query expression has no data-bind, renderOnce, fragment, or isomorphic status',
-      position: 'expression',
-      query: path,
-      status: 'UNHANDLED',
-    });
+    const fact = withUpdateCoverageSpan(
+      {
+        componentName,
+        detail: 'query expression has no data-bind, renderOnce, fragment, or isomorphic status',
+        position: 'expression',
+        query: path,
+        status: 'UNHANDLED',
+      },
+      expression.start,
+      expression.end - expression.start,
+    );
+    facts.push(fact);
     coveredPaths.add(path);
   }
 
   return dedupeUpdateCoverage(facts);
+}
+
+function withUpdateCoverageSpan(
+  fact: QueryUpdateCoverageFact,
+  start: number,
+  length: number,
+): QueryUpdateCoverageFact {
+  updateCoverageSpans.set(fact, { length, start });
+  return fact;
 }
 
 function knownQueryNames(
@@ -1116,11 +1142,20 @@ function renderOnceQueryPaths(
 function jsxQueryExpressionPaths(
   model: ComponentModuleModel,
   knownQueries: ReadonlySet<string>,
-): string[] {
+): QueryPathExpressionFact[] {
   return jsxExpressions(model)
-    .map((expression) => soleQueryPathExpression(expression.expression))
-    .filter((path): path is string => path !== null)
-    .filter((path) => queryPathUsesKnownQuery(path, knownQueries));
+    .map((expression) => {
+      const path = soleQueryPathExpression(expression.expression);
+      return path === null
+        ? null
+        : {
+            end: expression.end,
+            path,
+            start: expression.start,
+          };
+    })
+    .filter((expression): expression is QueryPathExpressionFact => expression !== null)
+    .filter((expression) => queryPathUsesKnownQuery(expression.path, knownQueries));
 }
 
 function soleQueryPathExpression(expression: string): string | null {
@@ -1763,9 +1798,14 @@ function fw226Diagnostic(
   };
 }
 
-function fw311Diagnostic(fileName: string, fact: QueryUpdateCoverageFact): CompilerDiagnostic {
+function fw311Diagnostic(
+  fileName: string,
+  source: string,
+  fact: QueryUpdateCoverageFact,
+): CompilerDiagnostic {
+  const span = updateCoverageSpans.get(fact);
   return {
-    ...diagnosticFor(fileName, 'FW311'),
+    ...diagnosticFor(fileName, 'FW311', source, span?.start, span?.length),
     message: `${diagnosticDefinitions.FW311.message} ${fact.componentName} ${fact.query} ${fact.position}`,
   };
 }

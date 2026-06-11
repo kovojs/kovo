@@ -1852,16 +1852,20 @@ export const CartBadge = component('cart-badge', {
       {
         code: 'FW311',
         fileName: 'cart-badge.tsx',
+        length: 13,
         message:
           'Query-dependent DOM position has no update status. CartBadge cart.discount expression',
         severity: 'warn',
+        start: { column: 16, line: 9 },
       },
       {
         code: 'FW311',
         fileName: 'cart-badge.tsx',
+        length: 12,
         message:
           'Query-dependent DOM position has no update status. CartBadge product.name expression',
         severity: 'warn',
+        start: { column: 12, line: 10 },
       },
     ]);
   });
@@ -2125,9 +2129,11 @@ export const CartBadge = component('cart-badge', {
       {
         code: 'FW311',
         fileName: 'cart-badge.tsx',
+        length: 10,
         message:
           'Query-dependent DOM position has no update status. CartBadge cart.total expression',
         severity: 'warn',
+        start: { column: 55, line: 4 },
       },
     ]);
   });
