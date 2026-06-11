@@ -585,6 +585,8 @@ void test('P10 starter wires graph assertions into CI', async () => {
 void test('P9 verification layer evidence remains represented', async () => {
   const cliSource = await readProjectFile('packages/cli/src/index.ts');
   const cliTests = await readProjectFile('packages/cli/src/index.test.ts');
+  const runtimeSource = await readProjectFile('packages/runtime/src/index.ts');
+  const runtimeTests = await readProjectFile('packages/runtime/src/index.test.ts');
   const testHarnessSource = await readProjectFile('packages/test/src/index.ts');
   const testHarnessTests = await readProjectFile('packages/test/src/index.test.ts');
 
@@ -623,6 +625,15 @@ void test('P9 verification layer evidence remains represented', async () => {
   assert.match(cliSource, /function verificationDiagnosticLine/);
   assert.match(cliTests, /prints runtime verification diagnostics as fw check findings/);
   assert.match(cliTests, /ERROR FW408 product\.domain\.ts:9/);
+  assert.match(runtimeSource, /export interface MutationChangeRecord/);
+  assert.match(runtimeSource, /readMutationChangeHeader\(response\)/);
+  assert.match(runtimeSource, /publishSuccessfulMutation\(options, response, body, changes\)/);
+  assert.match(runtimeTests, /submits enhanced mutations with optimistic transforms/);
+  assert.match(runtimeTests, /expect\(result\.changes\)\.toEqual/);
+  assert.match(
+    runtimeTests,
+    /changes: \[\{ domain: 'cart', input: \{ productId: 'p1', quantity: 2 \} \}\]/,
+  );
 });
 
 void test('P8 component explain includes handler capture channels', async () => {

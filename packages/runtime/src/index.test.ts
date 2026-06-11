@@ -2059,6 +2059,13 @@ describe('query store', () => {
       });
 
       return {
+        headers: {
+          get(name: string) {
+            return name === 'FW-Changes'
+              ? '[{"domain":"cart","input":{"productId":"p1","quantity":2}}]'
+              : null;
+          },
+        },
         async text() {
           return [
             '<fw-query name="cart">{"count":4}</fw-query>',
@@ -2090,13 +2097,14 @@ describe('query store', () => {
     });
 
     expect(result.queries).toEqual(['cart']);
+    expect(result.changes).toEqual([{ domain: 'cart', input: { productId: 'p1', quantity: 2 } }]);
     expect(channel.messages).toEqual([
       {
         body: [
           '<fw-query name="cart">{"count":4}</fw-query>',
           '<fw-fragment target="cart-badge"><cart-badge>4</cart-badge></fw-fragment>',
         ].join('\n'),
-        changes: [],
+        changes: [{ domain: 'cart', input: { productId: 'p1', quantity: 2 } }],
         type: 'jiso:mutation-response',
       },
     ]);
