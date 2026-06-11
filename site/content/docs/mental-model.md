@@ -20,13 +20,12 @@ cart.tsx          ──►     cart.server.js        ──►     Self-describ
                           (named handler exports)       • fw-deps="cart" stamps
 ```
 
-## Components lower, they don't hydrate
+## Components compile, they don't hydrate
 
-A component is a server render function. The compiler lowers your JSX into two plain files — a
-server module that renders HTML strings and a client module of named handler exports — with a 1:1
-file mapping (SPEC §5.2). There is no hydration step because there is nothing to hydrate: the
-HTML carries everything the page needs to be interactive, as attributes you can read in
-view-source.
+You author components in TSX — JSX renders, inline closures, one file per component. The
+compiler turns each one into a server render module and a client module of named handler exports
+(SPEC §5.2). There is no hydration step because there is nothing to hydrate: the HTML carries
+everything the page needs to be interactive, as attributes you can read in view-source.
 
 Three attribute families do the work:
 
@@ -41,13 +40,15 @@ Three attribute families do the work:
   what asks the server for a fresh fragment (SPEC §9.1).
 
 The compiler **derives** these stamps from your JSX — you don't hand-write them, and if you do
-write one that drifts from what lowering derives, that's a compile error, not a runtime surprise.
+write one that drifts from what the compiler derives, that's a compile error, not a runtime
+surprise.
 
-## Sugar must lower to authorable IR
+## No framework-private output
 
-Everything the compiler emits is valid Jiso source you could have written yourself, and compiling
-the output again is a no-op — a fixpoint that CI enforces (Constitution #3, SPEC §5.2). You can
-eject any component and keep going. There is no framework-private representation.
+Everything the compiler emits is plain, readable code, and compiling its own output again is a
+no-op — a fixpoint that CI enforces (Constitution #3, SPEC §5.2). You can eject any component and
+keep going. What that output looks like and why it's designed to be authorable is an advanced
+topic: see the [Compiler Internals guide](/guides/compiler-internals/).
 
 ## Navigation is the browser's job
 

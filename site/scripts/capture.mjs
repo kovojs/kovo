@@ -143,10 +143,50 @@ export function captureLoaderBudget() {
   return { budget: LOADER_BUDGET_BYTES, gzipBytes, rawBytes };
 }
 
+/**
+ * A complete TSX → IR lowering example for the Compiler Internals guide,
+ * compiled by the real compiler on every build so the emitted output in the
+ * docs can never drift from what the compiler actually produces (SPEC §5.2).
+ */
+export function captureLowering() {
+  const source = `import { component } from '@jiso/core';
+
+export const CartBadge = component('cart-badge', {
+  queries: { cart: cartQuery },
+  state: () => ({ count: 0 }),
+  render: (props, state) => (
+    <button class="badge" onClick={() => state.count += 1}>
+      Cart (<span>{cart.count}</span>)
+    </button>
+  ),
+});
+`;
+
+  const result = compileComponentModule({ fileName: 'src/cart-badge.tsx', source });
+  const errors = result.diagnostics.filter((entry) => entry.severity === 'error');
+  if (errors.length > 0) {
+    throw new Error(`capture: lowering example no longer compiles: ${JSON.stringify(errors)}`);
+  }
+
+  const server = result.files.find((file) => file.kind === 'server')?.source;
+  const client = result.files.find((file) => file.kind === 'client')?.source;
+  if (!server || !client) throw new Error('capture: lowering example emitted no server/client IR');
+
+  const lint = result.diagnostics.find((entry) => entry.code === 'FW210');
+
+  return {
+    client: client.trim(),
+    input: source.trim(),
+    lint: lint ? `${lint.code} ${lint.severity}: ${lint.message}` : '',
+    server: server.trim(),
+  };
+}
+
 export async function captureAll(repoRoot) {
   return {
     fwExplain: await captureFwExplain(repoRoot),
     loader: captureLoaderBudget(),
+    lowering: captureLowering(),
     teachingError: captureTeachingError(),
     wireTrace: await captureWireTrace(repoRoot),
   };

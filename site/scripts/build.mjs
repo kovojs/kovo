@@ -69,6 +69,23 @@ function sectionIndexBody(section) {
   ].join('\n');
 }
 
+/** Content pages can embed build-time captures with {{capture:name}} — the
+ * value is regenerated from the real toolchain every build (W3 doctrine), so
+ * embedded compiler/CLI output cannot drift. Unknown names fail the build. */
+function substituteCaptures(body, captures) {
+  const values = {
+    'lowering-client': `\`\`\`js\n${captures.lowering.client}\n\`\`\``,
+    'lowering-input': `\`\`\`tsx\n${captures.lowering.input}\n\`\`\``,
+    'lowering-lint': captures.lowering.lint,
+    'lowering-server': `\`\`\`js\n${captures.lowering.server}\n\`\`\``,
+  };
+  return body.replace(/\{\{capture:([a-z-]+)\}\}/g, (_match, name) => {
+    const value = values[name];
+    if (value === undefined) throw new Error(`build: unknown capture "${name}"`);
+    return value;
+  });
+}
+
 /** SPEC subsections like "**13.1 CSS.**" are bold paragraphs, not headings —
  * stamp them with the same number-derived ids so § citations can resolve. */
 function stampSpecParagraphIds(html) {
@@ -144,7 +161,9 @@ async function main() {
     );
 
     for (const [position, page] of section.pages.entries()) {
-      const { headings, html, text, title } = await renderMarkdown(page.body);
+      const { headings, html, text, title } = await renderMarkdown(
+        substituteCaptures(page.body, captures),
+      );
       const prev = section.pages[position - 1];
       const next = section.pages[position + 1];
 
