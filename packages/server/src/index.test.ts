@@ -45,6 +45,21 @@ import {
 const mutation = ((key: string, definition: Parameters<typeof defineMutation>[1]) =>
   defineMutation(key, { csrf: false, ...definition })) as typeof defineMutation;
 
+function deferred<Value = void>(): {
+  promise: Promise<Value>;
+  reject(reason?: unknown): void;
+  resolve(value: Value | PromiseLike<Value>): void;
+} {
+  let resolve: (value: Value | PromiseLike<Value>) => void = () => undefined;
+  let reject: (reason?: unknown) => void = () => undefined;
+  const promise = new Promise<Value>((resolvePromise, rejectPromise) => {
+    resolve = resolvePromise;
+    reject = rejectPromise;
+  });
+
+  return { promise, reject, resolve };
+}
+
 describe('server mutation primitives', () => {
   it('declares route schemas, route-owned hints, and typed PRG redirects', async () => {
     const productRoute = route('/products/:id', {
@@ -2433,6 +2448,143 @@ describe('server mutation primitives', () => {
       },
       status: 200,
     });
+  });
+
+  it('replays duplicate requests while post-commit query rendering is pending', async () => {
+    const cart = domain('cart');
+    const replayStore = createMemoryMutationReplayStore();
+    const queryStarted = deferred();
+    const queryRelease = deferred();
+    let writes = 0;
+    let loads = 0;
+    const cartQuery = query('cart', {
+      async load() {
+        loads += 1;
+        queryStarted.resolve();
+        await queryRelease.promise;
+        return { count: writes };
+      },
+      reads: [cart],
+    });
+    const addToCart = mutation('cart/add', {
+      input: s.object({ productId: s.string() }),
+      registry: {
+        queries: [cartQuery],
+        touches: [cart],
+      },
+      handler(input) {
+        writes += 1;
+        return input;
+      },
+    });
+    const request = {
+      idem: 'idem_pending_query',
+      rawInput: { productId: 'p1' },
+      replayStore,
+      request: { sessionId: 's1' },
+      targets: ['cart-badge'],
+    };
+
+    const first = renderMutationResponse(addToCart, request);
+    await queryStarted.promise;
+    const second = renderMutationResponse(addToCart, request);
+    await Promise.resolve();
+
+    expect(writes).toBe(1);
+    expect(loads).toBe(1);
+
+    queryRelease.resolve();
+    await expect(Promise.all([first, second])).resolves.toEqual([
+      {
+        body: '<fw-query name="cart">{"count":1}</fw-query>',
+        headers: {
+          'Content-Type': 'text/vnd.jiso.fragment+html; charset=utf-8',
+          'FW-Changes': '[{"domain":"cart"}]',
+          'FW-Idem': 'idem_pending_query',
+        },
+        status: 200,
+      },
+      {
+        body: '<fw-query name="cart">{"count":1}</fw-query>',
+        headers: {
+          'Content-Type': 'text/vnd.jiso.fragment+html; charset=utf-8',
+          'FW-Changes': '[{"domain":"cart"}]',
+          'FW-Idem': 'idem_pending_query',
+        },
+        status: 200,
+      },
+    ]);
+    expect(writes).toBe(1);
+    expect(loads).toBe(1);
+  });
+
+  it('replays duplicate requests while post-commit fragment rendering is pending', async () => {
+    const cart = domain('cart');
+    const replayStore = createMemoryMutationReplayStore();
+    const fragmentStarted = deferred();
+    const fragmentRelease = deferred();
+    let writes = 0;
+    let renders = 0;
+    const addToCart = mutation('cart/add', {
+      input: s.object({ productId: s.string() }),
+      registry: {
+        touches: [cart],
+      },
+      handler(input) {
+        writes += 1;
+        return input;
+      },
+    });
+    const request = {
+      fragmentRenderers: [
+        {
+          async render() {
+            renders += 1;
+            fragmentStarted.resolve();
+            await fragmentRelease.promise;
+            return '<cart-badge>1</cart-badge>';
+          },
+          target: 'cart-badge',
+        },
+      ],
+      idem: 'idem_pending_fragment',
+      rawInput: { productId: 'p1' },
+      replayStore,
+      request: { sessionId: 's1' },
+      targets: ['cart-badge'],
+    };
+
+    const first = renderMutationResponse(addToCart, request);
+    await fragmentStarted.promise;
+    const second = renderMutationResponse(addToCart, request);
+    await Promise.resolve();
+
+    expect(writes).toBe(1);
+    expect(renders).toBe(1);
+
+    fragmentRelease.resolve();
+    await expect(Promise.all([first, second])).resolves.toEqual([
+      {
+        body: '<fw-fragment target="cart-badge"><cart-badge>1</cart-badge></fw-fragment>',
+        headers: {
+          'Content-Type': 'text/vnd.jiso.fragment+html; charset=utf-8',
+          'FW-Changes': '[{"domain":"cart"}]',
+          'FW-Idem': 'idem_pending_fragment',
+        },
+        status: 200,
+      },
+      {
+        body: '<fw-fragment target="cart-badge"><cart-badge>1</cart-badge></fw-fragment>',
+        headers: {
+          'Content-Type': 'text/vnd.jiso.fragment+html; charset=utf-8',
+          'FW-Changes': '[{"domain":"cart"}]',
+          'FW-Idem': 'idem_pending_fragment',
+        },
+        status: 200,
+      },
+    ]);
+    expect(writes).toBe(1);
+    expect(renders).toBe(1);
   });
 
   it('replays enhanced mutation validation failures by FW-Idem', async () => {

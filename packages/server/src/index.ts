@@ -729,8 +729,16 @@ export interface MutationWireResponse {
 }
 
 export interface MutationReplayStore {
-  get(scope: string, idem: string): MutationWireResponse | undefined;
+  get(
+    scope: string,
+    idem: string,
+  ): MutationWireResponse | Promise<MutationWireResponse> | undefined;
+  reserve?(scope: string, idem: string): MutationReplayReservation | undefined;
   set(scope: string, idem: string, response: MutationWireResponse): void;
+}
+
+export interface MutationReplayReservation {
+  commit(response: MutationWireResponse): void;
 }
 
 export function createMemoryMutationReplayStore(
@@ -738,7 +746,7 @@ export function createMemoryMutationReplayStore(
 ): MutationReplayStore {
   const maxEntries = options.maxEntries ?? 1_000;
   const ttlMs = options.ttlMs ?? 5 * 60_000;
-  const responses = new Map<string, { expiresAt: number; response: MutationWireResponse }>();
+  const responses = new Map<string, MutationReplayRecord>();
 
   return {
     get(scope, idem) {
@@ -750,23 +758,71 @@ export function createMemoryMutationReplayStore(
         return undefined;
       }
 
+      if ('pending' in record) {
+        return record.pending.then(cloneMutationWireResponse);
+      }
+
       return cloneMutationWireResponse(record.response);
     },
-    set(scope, idem, response) {
+    reserve(scope, idem) {
       evictExpiredMutationReplays(responses);
+      const key = mutationReplayKey(scope, idem);
+      if (responses.has(key)) return undefined;
+
       while (responses.size >= maxEntries) {
         const oldest = responses.keys().next().value;
         if (oldest === undefined) break;
         responses.delete(oldest);
       }
 
-      responses.set(mutationReplayKey(scope, idem), {
-        expiresAt: Date.now() + ttlMs,
-        response: cloneMutationWireResponse(response),
+      let resolvePending: (response: MutationWireResponse) => void = () => undefined;
+      const pending = new Promise<MutationWireResponse>((resolve) => {
+        resolvePending = resolve;
       });
+      responses.set(key, {
+        expiresAt: Date.now() + ttlMs,
+        pending,
+        resolve: resolvePending,
+      });
+
+      return {
+        commit(response) {
+          const cloned = cloneMutationWireResponse(response);
+          responses.set(key, {
+            expiresAt: Date.now() + ttlMs,
+            response: cloned,
+          });
+          resolvePending(cloned);
+        },
+      };
+    },
+    set(scope, idem, response) {
+      evictExpiredMutationReplays(responses);
+      const key = mutationReplayKey(scope, idem);
+      const existing = responses.get(key);
+      while (!existing && responses.size >= maxEntries) {
+        const oldest = responses.keys().next().value;
+        if (oldest === undefined) break;
+        responses.delete(oldest);
+      }
+
+      const cloned = cloneMutationWireResponse(response);
+      responses.set(key, {
+        expiresAt: Date.now() + ttlMs,
+        response: cloned,
+      });
+      if (existing && 'pending' in existing) existing.resolve(cloned);
     },
   };
 }
+
+type MutationReplayRecord =
+  | { expiresAt: number; response: MutationWireResponse }
+  | {
+      expiresAt: number;
+      pending: Promise<MutationWireResponse>;
+      resolve(response: MutationWireResponse): void;
+    };
 
 export function readMutationWireHeaders(headers: MutationWireHeaderSource): MutationWireHeaders {
   const fragment = readHeader(headers, 'FW-Fragment')?.toLowerCase() === 'true';
@@ -1480,6 +1536,8 @@ export async function renderMutationResponse<
   );
 
   if (!result.ok) {
+    const replayReservation =
+      result.error.code === 'VALIDATION' ? undefined : reserveMutationReplay(csrf, wireRequest);
     const response = {
       body: await renderFailureFragment(result, wireRequest),
       headers: {
@@ -1491,9 +1549,10 @@ export async function renderMutationResponse<
 
     return result.error.code === 'VALIDATION'
       ? response
-      : storeMutationReplay(csrf, wireRequest, response);
+      : storeMutationReplay(csrf, wireRequest, response, replayReservation);
   }
 
+  const replayReservation = reserveMutationReplay(csrf, wireRequest);
   const renderInput = mutationResponseInput(result, wireRequest.rawInput);
   let queryChunks: string[];
   let fragmentChunks: string[];
@@ -1514,17 +1573,23 @@ export async function renderMutationResponse<
       csrf,
       wireRequest,
       mutationRenderErrorResponse(error, result.changes, wireRequest),
+      replayReservation,
     );
   }
 
-  return storeMutationReplay(csrf, wireRequest, {
-    body: [...queryChunks, ...fragmentChunks].join('\n'),
-    headers: {
-      ...mutationWireResponseHeaders(wireRequest),
-      'FW-Changes': JSON.stringify(mutationWireChangeRecords(result.changes)),
+  return storeMutationReplay(
+    csrf,
+    wireRequest,
+    {
+      body: [...queryChunks, ...fragmentChunks].join('\n'),
+      headers: {
+        ...mutationWireResponseHeaders(wireRequest),
+        'FW-Changes': JSON.stringify(mutationWireChangeRecords(result.changes)),
+      },
+      status: 200,
     },
-    status: 200,
-  });
+    replayReservation,
+  );
 }
 
 function mutationRenderErrorResponse<Request>(
@@ -2143,13 +2208,27 @@ function storeMutationReplay<Request>(
   csrf: CsrfValidationOptions<Request> | false,
   wireRequest: MutationWireRequest<Request>,
   response: MutationWireResponse,
+  reservation?: MutationReplayReservation,
 ): MutationWireResponse {
-  const replayScope = mutationReplayScope(csrf, wireRequest);
-  if (wireRequest.idem && replayScope) {
+  if (reservation) {
+    reservation.commit(response);
+  } else {
+    const replayScope = mutationReplayScope(csrf, wireRequest);
+    if (!wireRequest.idem || !replayScope) return response;
     wireRequest.replayStore?.set(replayScope, wireRequest.idem, response);
   }
 
   return response;
+}
+
+function reserveMutationReplay<Request>(
+  csrf: CsrfValidationOptions<Request> | false,
+  wireRequest: MutationWireRequest<Request>,
+): MutationReplayReservation | undefined {
+  const replayScope = mutationReplayScope(csrf, wireRequest);
+  if (!wireRequest.idem || !replayScope) return undefined;
+
+  return wireRequest.replayStore?.reserve?.(replayScope, wireRequest.idem);
 }
 
 function mutationReplayScope<Request>(
@@ -2190,9 +2269,7 @@ function mutationReplayKey(scope: string, idem: string): string {
   return `${scope}\0${idem}`;
 }
 
-function evictExpiredMutationReplays(
-  responses: Map<string, { expiresAt: number; response: MutationWireResponse }>,
-): void {
+function evictExpiredMutationReplays(responses: Map<string, MutationReplayRecord>): void {
   const now = Date.now();
   for (const [key, record] of responses) {
     if (record.expiresAt <= now) responses.delete(key);
