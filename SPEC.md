@@ -903,7 +903,7 @@ Browser tests are a first-class part of the **framework's** own suite — no pre
 ```ts
 import { jisoTest } from '@jiso/test';
 
-jisoTest('cart mutations', async ({ exec, page, db }) => {
+const cartMutations = jisoTest('cart mutations', async ({ exec, page, db }) => {
   await db.seed({ products: [{ id: 'p1', stock: 5 }] });
 
   // mutations as functions — touch-checking automatic on every exec
@@ -919,6 +919,7 @@ jisoTest('cart mutations', async ({ exec, page, db }) => {
   const html = await page('/cart');
   expect(html.fragment('cart-badge')).toContain('data-bind="cart.count"');
 });
+it(cartMutations.name, cartMutations.run);
 
 // transform soundness: prediction ⊆ eventual truth over generated states
 // (v2: generated alongside derived transforms as the commuting-diagram suite)
