@@ -140,6 +140,10 @@ Do this first or pay it on every commit.
       compiler API and asserts `compileComponentModule` records view-transition facts, merges the
       CSS declaration into an existing style attribute once, removes `viewTransitionName`, and
       emits the registry type instead of grepping compiler source or compiler test names.
+      Partial evidence 2026-06-11: the P1 IDREF tranche now imports built core/compiler APIs and
+      asserts `diagnosticDefinitions.FW221` plus `compileComponentModule` accept/fail diagnostics
+      for literal `for`, `aria-describedby`, and `popovertarget` IDREFs instead of grepping core
+      or compiler source/test names.
 - [x] **Make create-jiso templates real files** (`create-jiso/src/index.ts:63-473`, ~470 lines of
       escaped template literals including a CI workflow and double-escaped regexes inside
       `.mjs`-in-string). Move to a `templates/` directory copied at scaffold time with `{{name}}`

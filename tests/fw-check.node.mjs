@@ -9,6 +9,7 @@ import {
   collectMinifierReservedNames,
   compileComponentModule,
 } from '../dist/compiler/src/index.mjs';
+import { diagnosticDefinitions } from '../dist/core/src/index.mjs';
 import { readElementParams } from '../dist/runtime/src/index.mjs';
 import {
   renderDocument,
@@ -562,20 +563,74 @@ export const ProductCard = component('product-card', {
 });
 
 void test('P1 compiler validates component-scoped IDREFs', async () => {
-  const coreSource = await readProjectFile('packages/core/src/diagnostics.ts');
-  const coreTests = await readProjectFile('packages/core/src/diagnostics.test.ts');
-  const compilerSource = await readProjectFile('packages/compiler/src/index.ts');
-  const compilerMarkupSource = await readProjectFile('packages/compiler/src/validate/markup.ts');
-  const compilerTests = await readProjectFile('packages/compiler/src/index.test.ts');
+  assert.equal(
+    diagnosticDefinitions.FW221.message,
+    'IDREF references an id not present in component scope.',
+  );
+  assert.deepEqual(
+    compileComponentModule({
+      fileName: 'components/cart/cart-search.tsx',
+      source: `
+import { component } from '@jiso/core';
 
-  assert.match(coreSource, /FW221/);
-  assert.match(coreSource, /IDREF references an id not present in component scope/);
-  assert.match(coreTests, /"FW221"/);
-  assert.match(compilerSource, /validateIdrefs/);
-  assert.match(compilerMarkupSource, /aria-describedby/);
-  assert.match(compilerMarkupSource, /diagnosticDefinitions\.FW221\.message/);
-  assert.match(compilerTests, /accepts literal IDREFs that reference ids in component scope/);
-  assert.match(compilerTests, /reports FW221 for literal IDREFs that miss component scope ids/);
+export const CartSearch = component('cart-search', {
+  render: () => (
+    <section>
+      <label for="cart-query">Search</label>
+      <input id="cart-query" aria-describedby="cart-help" />
+      <p id="cart-help">Help</p>
+    </section>
+  ),
+});
+`,
+    }).diagnostics,
+    [],
+  );
+  assert.deepEqual(
+    compileComponentModule({
+      fileName: 'components/cart/cart-search.tsx',
+      source: `
+import { component } from '@jiso/core';
+
+export const CartSearch = component('cart-search', {
+  render: () => (
+    <section>
+      <label for="missing-label">Search</label>
+      <input id="cart-query" aria-describedby="cart-help missing-help" />
+      <p id="cart-help">Help</p>
+      <button popovertarget="missing-popover">Filters</button>
+    </section>
+  ),
+});
+`,
+    }).diagnostics,
+    [
+      {
+        code: 'FW221',
+        fileName: 'components/cart/cart-search.tsx',
+        length: 19,
+        message: `${diagnosticDefinitions.FW221.message} missing-label`,
+        severity: 'error',
+        start: { column: 14, line: 7 },
+      },
+      {
+        code: 'FW221',
+        fileName: 'components/cart/cart-search.tsx',
+        length: 41,
+        message: `${diagnosticDefinitions.FW221.message} missing-help`,
+        severity: 'error',
+        start: { column: 30, line: 8 },
+      },
+      {
+        code: 'FW221',
+        fileName: 'components/cart/cart-search.tsx',
+        length: 31,
+        message: `${diagnosticDefinitions.FW221.message} missing-popover`,
+        severity: 'error',
+        start: { column: 15, line: 10 },
+      },
+    ],
+  );
 });
 
 void test('P1 compiler validates static id uniqueness', async () => {
