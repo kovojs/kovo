@@ -321,6 +321,10 @@ area, keeping `src/index.ts` barrels and API surface verbatim (mirrors compiler 
   `InvalidationSets` output. Initial split: invalidation registry derivation/serialization is
   isolated in `packages/drizzle/src/invalidation.ts`, with `src/index.ts` preserving the public
   barrel.
+  Evidence: touch graph entry construction, domain/touch graph serialization, and graph
+  diagnostics now live in `packages/drizzle/src/graph.ts`, with `src/index.ts` preserving the
+  public barrel exports. The extracted helper owns the committed touch graph output and
+  FW406/FW409 diagnostics for SPEC §10.6 and §11.1.
 
 ## SPEC reconciliation queue
 
