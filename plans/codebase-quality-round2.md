@@ -117,9 +117,11 @@ Do this first or pay it on every commit.
       with structured `diagnostics` and `verificationDiagnostics` facts for FW302/FW402/FW403/
       FW404/FW405/FW407/FW408/FW410/FW411 instead of grepping CLI implementation symbols or CLI
       test names. The `@jiso/test` harness checks in that tranche remain source-shaped.
-      Partial evidence 2026-06-11: the P1 render-equivalence tranche now asserts the
-      `ERROR RENDER_EQUIV` CLI contract by calling `fwCheck` with structured
-      `renderEquivalenceChecks` instead of grepping CLI implementation symbols or CLI test names.
+      Partial evidence 2026-06-11: the P1 render-equivalence tranche now imports the built
+      compiler API, asserts `compileComponentModule` render-equivalence checks and
+      `assertRenderEquivalence` failure behavior, then asserts the `ERROR RENDER_EQUIV` CLI
+      contract by calling `fwCheck` with structured `renderEquivalenceChecks` instead of
+      grepping compiler/CLI implementation symbols or test names.
       Partial evidence 2026-06-11: the P1 minifier-name tranche now imports the built compiler
       API and asserts `compileComponentModule` handler exports, emitted handler bodies, and
       `collectMinifierReservedNames` output instead of grepping compiler source or compiler test

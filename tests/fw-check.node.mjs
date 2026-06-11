@@ -5,6 +5,7 @@ import { test } from 'node:test';
 import { missingBuildMessage } from '../scripts/fw-check.mjs';
 import { fwCheck, fwExplain } from '../dist/cli/src/index.mjs';
 import {
+  assertRenderEquivalence,
   collectMinifierReservedNames,
   compileComponentModule,
 } from '../dist/compiler/src/index.mjs';
@@ -2064,14 +2065,40 @@ export const CartActions = component('cart-actions', {
 });
 
 void test('P1 render-equivalence gate remains represented', async () => {
-  const compilerServerEmitSource = await readProjectFile('packages/compiler/src/emit/server.ts');
-  const compilerSource = await readProjectFile('packages/compiler/src/index.ts');
-  const compilerTests = await readProjectFile('packages/compiler/src/index.test.ts');
+  const result = compileComponentModule({
+    fileName: 'components/cart/cart-total.tsx',
+    source: `
+import { component } from '@jiso/core';
 
-  assert.match(compilerSource, /assertRenderEquivalence/);
-  assert.match(compilerSource, /renderEquivalenceChecks/);
-  assert.match(compilerServerEmitSource, /emittedServerRenderSource/);
-  assert.match(compilerTests, /reports render-equivalence failures/);
+export const CartTotal = component('cart-total', {
+  render: () => <cart-total><span data-bind="cart.total">{cart.total}</span></cart-total>,
+});
+`,
+  });
+  assert.equal(result.renderEquivalenceChecks.length, 1);
+  assert.equal(result.renderEquivalenceChecks[0]?.artifact, 'components/cart/cart-total.server.js');
+  assert.equal(result.renderEquivalenceChecks[0]?.ok, true);
+  assert.match(result.renderEquivalenceChecks[0]?.actual ?? '', /component\('cart-total'/);
+  assert.equal(
+    result.renderEquivalenceChecks[0]?.actual,
+    result.renderEquivalenceChecks[0]?.expected,
+  );
+  assert.doesNotThrow(() => assertRenderEquivalence(result));
+  assert.throws(
+    () =>
+      assertRenderEquivalence({
+        ...result,
+        renderEquivalenceChecks: [
+          {
+            actual: '<cart-total>0</cart-total>',
+            artifact: 'components/cart/cart-total.server.js',
+            expected: '<cart-total>1</cart-total>',
+            ok: false,
+          },
+        ],
+      }),
+    /Render equivalence failed for components\/cart\/cart-total\.server\.js/,
+  );
   assert.equal(
     fwCheck({
       renderEquivalenceChecks: [
