@@ -254,4 +254,39 @@ describe('Drizzle pinned subset conformance', () => {
       ].join('\n'),
     );
   });
+
+  it('pins domain write callback extraction for the Jiso authoring surface', () => {
+    const graph = extractTouchGraphFromSource([
+      {
+        fileName: 'cart.domain.ts',
+        source: [
+          'export const cartItems = pgTable("cart_items", {}, jiso({ domain: "cart", key: "productId" }));',
+          '',
+          'export const cart = domain({',
+          '  addItem: write(async (db, productId) => {',
+          '    await db.insert(cartItems).values({ productId });',
+          '  }),',
+          '});',
+          '',
+        ].join('\n'),
+      },
+    ]);
+
+    expect(serializeTouchGraph(graph)).toBe(
+      [
+        'export const touchGraph = {',
+        '  "cart.addItem": {',
+        '    touches: [',
+        '      { domain: "cart", via: "cart_items", site: "cart.domain.ts:5", keys: null },',
+        '    ],',
+        '    reads: [',
+        '    ],',
+        '    unresolved: [',
+        '    ],',
+        '  },',
+        '} as const;',
+        '',
+      ].join('\n'),
+    );
+  });
 });

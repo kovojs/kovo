@@ -1029,7 +1029,90 @@ function extractFunctions(source: string): ExtractedFunction[] {
     });
   }
 
-  return functions;
+  return [...functions, ...extractDomainWriteCallbacks(source)];
+}
+
+function extractDomainWriteCallbacks(source: string): ExtractedFunction[] {
+  const callbacks: ExtractedFunction[] = [];
+  const declarations = /(?:export\s+)?const\s+(?<domain>[A-Za-z_$][\w$]*)\s*=\s*domain\s*\(/g;
+
+  for (const match of source.matchAll(declarations)) {
+    const domainName = match.groups?.domain;
+    if (!domainName || match.index === undefined) continue;
+
+    const objectStart = source.indexOf('{', match.index + match[0].length);
+    if (objectStart === -1) continue;
+
+    const objectEnd = findMatchingBrace(source, objectStart);
+    if (objectEnd === -1) continue;
+
+    callbacks.push(
+      ...extractDomainObjectWriteCallbacks(
+        domainName,
+        source.slice(objectStart + 1, objectEnd),
+        objectStart + 1,
+        source,
+      ),
+    );
+  }
+
+  return callbacks;
+}
+
+function extractDomainObjectWriteCallbacks(
+  domainName: string,
+  objectSource: string,
+  objectOffset: number,
+  fullSource: string,
+): ExtractedFunction[] {
+  const callbacks: ExtractedFunction[] = [];
+  const properties = /\b(?<member>[A-Za-z_$][\w$]*)\s*:\s*write\s*\(/g;
+
+  for (const match of objectSource.matchAll(properties)) {
+    const memberName = match.groups?.member;
+    if (!memberName || match.index === undefined) continue;
+
+    const openParen = objectSource.indexOf('(', match.index + match[0].lastIndexOf('write'));
+    if (openParen === -1) continue;
+
+    const absoluteOpenParen = objectOffset + openParen;
+    const closeParen = findMatchingParen(fullSource, absoluteOpenParen);
+    if (closeParen === -1) continue;
+
+    const callback = arrowCallbackFromWriteArgs(fullSource, absoluteOpenParen + 1, closeParen);
+    if (!callback) continue;
+
+    callbacks.push({
+      body: fullSource.slice(callback.bodyStart, callback.bodyEnd),
+      bodyStart: callback.bodyStart,
+      name: `${domainName}.${memberName}`,
+      params: callback.params,
+    });
+  }
+
+  return callbacks;
+}
+
+function arrowCallbackFromWriteArgs(
+  source: string,
+  argsStart: number,
+  argsEnd: number,
+): { bodyEnd: number; bodyStart: number; params: string } | null {
+  const args = source.slice(argsStart, argsEnd);
+  const arrowCallbacks = [...args.matchAll(/(?:async\s*)?\((?<params>[^)]*)\)\s*=>\s*\{/g)];
+  const callback = arrowCallbacks.at(-1);
+  const params = callback?.groups?.params;
+  if (!callback || params === undefined || callback.index === undefined) return null;
+
+  const bodyOpen = argsStart + callback.index + callback[0].length - 1;
+  const bodyClose = findMatchingBrace(source, bodyOpen);
+  if (bodyClose === -1) return null;
+
+  return {
+    bodyEnd: bodyClose,
+    bodyStart: bodyOpen + 1,
+    params,
+  };
 }
 
 function extractLocalFunctionCalls(source: string): string[] {
@@ -1306,6 +1389,19 @@ function findMatchingBrace(source: string, openBrace: number): number {
     const char = source[index];
     if (char === '{') depth += 1;
     if (char === '}') depth -= 1;
+    if (depth === 0) return index;
+  }
+
+  return -1;
+}
+
+function findMatchingParen(source: string, openParen: number): number {
+  let depth = 0;
+
+  for (let index = openParen; index < source.length; index += 1) {
+    const char = source[index];
+    if (char === '(') depth += 1;
+    if (char === ')') depth -= 1;
     if (depth === 0) return index;
   }
 

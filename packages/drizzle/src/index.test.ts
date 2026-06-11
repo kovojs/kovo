@@ -762,6 +762,94 @@ export const tableDomains = {
     });
   });
 
+  it('extracts write callback bodies from domain authoring surfaces', () => {
+    const graph = extractTouchGraphFromSource([
+      {
+        fileName: 'cart.domain.ts',
+        source: `
+          export const cartItems = pgTable("cart_items", {}, jiso({ domain: "cart", key: "productId" }));
+
+          export const cart = domain({
+            addItem: write(async (db, productId) => {
+              await db.insert(cartItems).values({ productId });
+            }),
+          });
+        `,
+      },
+    ]);
+
+    expect(graph).toEqual({
+      'cart.addItem': {
+        reads: [],
+        touches: [
+          {
+            domain: 'cart',
+            keys: null,
+            site: 'cart.domain.ts:6',
+            via: 'cart_items',
+          },
+        ],
+        unresolved: [],
+      },
+    });
+  });
+
+  it('extracts configured write callbacks and folds local helper summaries', () => {
+    const graph = extractTouchGraphFromSource([
+      {
+        fileName: 'cart.domain.ts',
+        source: `
+          export const auditLog = pgTable("audit_log", {}, jiso({ domain: "audit", key: "productId" }));
+          export const cartItems = pgTable("cart_items", {}, jiso({ domain: "cart", key: "productId" }));
+
+          async function writeAudit(db, productId) {
+            await db.insert(auditLog).values({ productId });
+          }
+
+          export const cart = domain({
+            addItem: write({ touches: [cartItems] }, async (db, productId) => {
+              await db.update(cartItems).set({ productId }).where(eq(cartItems.productId, productId));
+              await writeAudit(db, productId);
+            }),
+          });
+        `,
+      },
+    ]);
+
+    expect(graph).toEqual({
+      'cart.addItem': {
+        reads: [],
+        touches: [
+          {
+            domain: 'audit',
+            keys: null,
+            site: 'cart.domain.ts:6',
+            via: 'audit_log',
+          },
+          {
+            domain: 'cart',
+            keys: 'arg:productId',
+            site: 'cart.domain.ts:11',
+            via: 'cart_items',
+          },
+        ],
+        unresolved: [],
+      },
+      writeAudit: {
+        reads: [],
+        touches: [
+          {
+            domain: 'audit',
+            keys: null,
+            site: 'cart.domain.ts:6',
+            via: 'audit_log',
+          },
+        ],
+        unresolved: [],
+      },
+    });
+  });
+
   it('uses typed receiver origins instead of likely receiver names in project extraction', () => {
     const graph = extractTouchGraphFromProject({
       files: [

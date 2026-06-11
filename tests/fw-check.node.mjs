@@ -957,8 +957,14 @@ void test('Drizzle pinned conformance suite is an explicit gate', async () => {
   assert.match(conformanceTest, /recognizes real Drizzle receiver types in project extraction/);
   assert.match(conformanceTest, /pins direct table source extraction/);
   assert.match(conformanceTest, /pins local conditional table resolution/);
+  assert.match(conformanceTest, /pins domain write callback extraction/);
   assert.match(drizzleTests, /folds local helper writes and reads into caller summaries/);
   assert.match(drizzleTests, /dedupes recursive helper summaries at a fixed point/);
+  assert.match(drizzleTests, /extracts write callback bodies from domain authoring surfaces/);
+  assert.match(
+    drizzleTests,
+    /extracts configured write callbacks and folds local helper summaries/,
+  );
   assert.match(drizzleTests, /resolves namespace-imported Drizzle schema identifiers/);
   assert.match(drizzleTests, /resolves named import and re-export Drizzle schema aliases/);
   assert.match(
