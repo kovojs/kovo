@@ -427,6 +427,39 @@ export const tableDomains = {
     });
   });
 
+  it('recognizes semicolonless source-mode table and alias declarations', () => {
+    const graph = extractTouchGraphFromSource([
+      {
+        fileName: 'cart.domain.ts',
+        source: `
+          export const cartItems = pgTable("cart_items", {
+            cartId: text("cart_id"),
+          }, jiso({ domain: "cart", key: "cartId" }))
+          const writeTarget = cartItems
+
+          export async function addItem(db, cartId) {
+            await db.update(writeTarget).set({ touched: true }).where(eq(writeTarget.cartId, cartId))
+          }
+        `,
+      },
+    ]);
+
+    expect(graph).toEqual({
+      addItem: {
+        reads: [],
+        touches: [
+          {
+            domain: 'cart',
+            keys: 'arg:cartId',
+            site: 'cart.domain.ts:8',
+            via: 'cart_items',
+          },
+        ],
+        unresolved: [],
+      },
+    });
+  });
+
   it('extracts query result shapes, read domains, and instance keys from Drizzle selects', () => {
     const facts = extractQueryFactsFromSource([
       {

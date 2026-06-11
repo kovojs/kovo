@@ -1098,16 +1098,9 @@ function writeSummaryKey(write: WriteSummaryInput): string {
 function extractTables(source: string): ExtractedTableDeclaration[] {
   const tables: ExtractedTableDeclaration[] = [];
   const byIdentifier = new Map<string, ExtractedTableDeclaration[]>();
-  const declarations =
-    /(?:export\s+)?const\s+(?<identifier>[A-Za-z_$][\w$]*)\s*=\s*(?<initializer>[\s\S]*?);/g;
+  const declarations = constDeclarations(source);
 
-  const matches = [...source.matchAll(declarations)];
-
-  for (const match of matches) {
-    const declaration = tableDeclarationFromMatch(match);
-    if (!declaration) continue;
-
-    const { identifier, initializer } = declaration;
+  for (const { identifier, initializer } of declarations) {
     if (!isAnnotatedTableInitializer(initializer)) continue;
 
     const domain = stringProperty(initializer, 'domain');
@@ -1125,9 +1118,8 @@ function extractTables(source: string): ExtractedTableDeclaration[] {
     appendTable(byIdentifier, identifier, table);
   }
 
-  for (const match of matches) {
-    const declaration = tableDeclarationFromMatch(match);
-    if (!declaration || (byIdentifier.get(declaration.identifier)?.length ?? 0) > 0) continue;
+  for (const declaration of declarations) {
+    if ((byIdentifier.get(declaration.identifier)?.length ?? 0) > 0) continue;
 
     for (const target of aliasTargets(declaration.initializer)) {
       for (const table of byIdentifier.get(target) ?? []) {
@@ -1198,15 +1190,62 @@ function importExportTableAliases(source: string): { imported: string; local: st
   return aliases;
 }
 
-function tableDeclarationFromMatch(
-  match: RegExpMatchArray,
-): { identifier: string; initializer: string } | undefined {
-  const groups = match.groups;
-  if (!groups) return undefined;
+function constDeclarations(source: string): { identifier: string; initializer: string }[] {
+  const declarations: { identifier: string; initializer: string }[] = [];
+  const pattern = /(?:export\s+)?const\s+(?<identifier>[A-Za-z_$][\w$]*)\s*=\s*/g;
 
-  const identifier = groups.identifier;
-  const initializer = groups.initializer;
-  return identifier && initializer ? { identifier, initializer } : undefined;
+  for (const match of source.matchAll(pattern)) {
+    const identifier = match.groups?.identifier;
+    if (!identifier || match.index === undefined) continue;
+
+    const initializerStart = match.index + match[0].length;
+    const initializerEnd = constInitializerEnd(source, initializerStart);
+    declarations.push({
+      identifier,
+      initializer: source.slice(initializerStart, initializerEnd).trim(),
+    });
+  }
+
+  return declarations;
+}
+
+function constInitializerEnd(source: string, start: number): number {
+  let depth = 0;
+
+  for (let index = start; index < source.length; index += 1) {
+    const char = source[index];
+    if (char === '"' || char === "'" || char === '`') {
+      const stringEnd = findStringEnd(source, index, char);
+      index = stringEnd === -1 ? source.length : stringEnd;
+      continue;
+    }
+    if (source.startsWith('//', index)) {
+      const commentEnd = source.indexOf('\n', index + 2);
+      index = commentEnd === -1 ? source.length : commentEnd;
+      continue;
+    }
+    if (source.startsWith('/*', index)) {
+      const commentEnd = source.indexOf('*/', index + 2);
+      index = commentEnd === -1 ? source.length : commentEnd + 1;
+      continue;
+    }
+
+    if (char === '(' || char === '{' || char === '[') depth += 1;
+    if (char === ')' || char === '}' || char === ']') depth -= 1;
+    if (depth !== 0) continue;
+
+    if (char === ';') return index;
+    if (char === '\n' && isDeclarationBoundary(source, index + 1)) return index;
+  }
+
+  return source.length;
+}
+
+function isDeclarationBoundary(source: string, start: number): boolean {
+  const next = source.slice(skipTrivia(source, start));
+  return (
+    next.length === 0 || /^(?:export\s+)?(?:const|let|var|async\s+function|function)\b/.test(next)
+  );
 }
 
 function aliasTargets(initializer: string): string[] {
@@ -1226,13 +1265,8 @@ function extractUnresolvedConditionalIdentifiers(
   tables: ReadonlyMap<string, readonly ExtractedTable[]>,
 ): string[] {
   const unresolved: string[] = [];
-  const declarations =
-    /(?:export\s+)?const\s+(?<identifier>[A-Za-z_$][\w$]*)\s*=\s*(?<initializer>[\s\S]*?);/g;
 
-  for (const match of source.matchAll(declarations)) {
-    const declaration = tableDeclarationFromMatch(match);
-    if (!declaration) continue;
-
+  for (const declaration of constDeclarations(source)) {
     const targets = conditionalBranches(declaration.initializer);
     if (targets.length === 0) continue;
 
