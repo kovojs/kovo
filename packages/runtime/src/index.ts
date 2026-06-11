@@ -136,7 +136,25 @@ export interface LoaderRoot {
     options?: { capture?: boolean },
   ): void;
   querySelectorAll?: (selector: string) => Iterable<EventElementLike | QueryScriptLike>;
+  removeEventListener?: (
+    type: string,
+    listener: (event: DelegatedEvent) => void | Promise<void>,
+    options?: { capture?: boolean },
+  ) => void;
   visibilityState?: 'hidden' | 'visible';
+}
+
+export interface LoaderLifecycleTarget {
+  addEventListener(
+    type: string,
+    listener: (event: DelegatedEvent) => void | Promise<void>,
+    options?: { capture?: boolean },
+  ): void;
+  removeEventListener?: (
+    type: string,
+    listener: (event: DelegatedEvent) => void | Promise<void>,
+    options?: { capture?: boolean },
+  ) => void;
 }
 
 export interface DelegatedEvent {
@@ -180,6 +198,7 @@ export interface JisoLoaderOptions {
   discardPendingOptimism?: () => readonly string[] | void;
   enhancedMutations?: EnhancedMutationLoaderOptions;
   events?: readonly string[];
+  focusTarget?: LoaderLifecycleTarget;
   importModule: ImportHandlerModule;
   queryRefetch?: QueryRefetchOptions;
   requestIdle?: (callback: () => void) => void;
@@ -212,6 +231,7 @@ export interface QueryRefetchResponse {
 }
 
 export interface JisoLoader {
+  dispose(): void;
   events: readonly string[];
 }
 
@@ -221,9 +241,11 @@ export const jisoLoaderSource = `(()=>{const E=["click","submit","input","change
 
 export function installJisoLoader(options: JisoLoaderOptions): JisoLoader {
   const events = options.events ?? defaultDelegatedEvents;
-  const enhancedMutations = options.enhancedMutations
+  const enhancedMutationSetup = options.enhancedMutations
     ? withDefaultMutationBroadcast(options.enhancedMutations)
     : undefined;
+  const enhancedMutations = enhancedMutationSetup?.options;
+  const disposers: Array<() => void> = [];
   let hydratedQueries: readonly string[] = [];
 
   if (options.queryStore && options.root.querySelectorAll) {
@@ -234,12 +256,14 @@ export function installJisoLoader(options: JisoLoaderOptions): JisoLoader {
   }
 
   for (const eventName of events) {
-    options.root.addEventListener(
+    addLoaderListener(
+      options.root,
       eventName,
       async (event) => {
         if (await dispatchEnhancedFormSubmit(event, enhancedMutations)) return;
         await dispatchDelegatedEvent(event, options.importModule);
       },
+      disposers,
       { capture: true },
     );
   }
@@ -247,6 +271,7 @@ export function installJisoLoader(options: JisoLoaderOptions): JisoLoader {
   if (options.refetchOnFocus || (options.queryRefetch && options.queryStore)) {
     const refetchEligibleQueries = () =>
       filterRefetchEligibleQueries(hydratedQueries, options.refetchOnFocusOptOut ?? []);
+    let refetchInFlight: Promise<void> | undefined;
     const refetchOnFocus = async () => {
       const queries = refetchEligibleQueries();
       await options.refetchOnFocus?.(queries);
@@ -258,28 +283,70 @@ export function installJisoLoader(options: JisoLoaderOptions): JisoLoader {
         });
       }
     };
+    const refetchOnce = () => {
+      refetchInFlight ??= refetchOnFocus().finally(() => {
+        refetchInFlight = undefined;
+      });
+      return refetchInFlight;
+    };
 
-    options.root.addEventListener('visibilitychange', async () => {
-      if (options.root.visibilityState === 'hidden') return;
-      await refetchOnFocus();
-    });
-    options.root.addEventListener('focus', refetchOnFocus);
+    addLoaderListener(
+      options.root,
+      'visibilitychange',
+      async () => {
+        if (options.root.visibilityState === 'hidden') return;
+        await refetchOnce();
+      },
+      disposers,
+    );
+    addLoaderListener(focusTargetFor(options), 'focus', refetchOnce, disposers);
   }
 
   if (options.discardPendingOptimism) {
-    installPagehideOptimismCleanup({
-      discardPendingOptimism: options.discardPendingOptimism,
-      root: options.root,
-    });
+    disposers.push(
+      installPagehideOptimismCleanup({
+        discardPendingOptimism: options.discardPendingOptimism,
+        root: options.root,
+      }),
+    );
   }
 
-  installExecutionTriggers(options);
+  disposers.push(installExecutionTriggers(options));
+  if (enhancedMutationSetup?.dispose) {
+    disposers.push(enhancedMutationSetup.dispose);
+  }
 
-  return { events };
+  return {
+    dispose() {
+      for (const dispose of disposers.splice(0).reverse()) dispose();
+    },
+    events,
+  };
 }
 
-function installExecutionTriggers(options: JisoLoaderOptions): void {
-  if (!options.root.querySelectorAll) return;
+function addLoaderListener(
+  target: LoaderLifecycleTarget,
+  type: string,
+  listener: (event: DelegatedEvent) => void | Promise<void>,
+  disposers: Array<() => void>,
+  options?: { capture?: boolean },
+): void {
+  target.addEventListener(type, listener, options);
+  disposers.push(() => {
+    target.removeEventListener?.(type, listener, options);
+  });
+}
+
+function focusTargetFor(options: JisoLoaderOptions): LoaderLifecycleTarget {
+  if (options.focusTarget) return options.focusTarget;
+  if (typeof globalThis.addEventListener === 'function') {
+    return globalThis as unknown as LoaderLifecycleTarget;
+  }
+  return options.root;
+}
+
+function installExecutionTriggers(options: JisoLoaderOptions): () => void {
+  if (!options.root.querySelectorAll) return () => undefined;
 
   for (const element of options.root.querySelectorAll(
     '[on\\:load]',
@@ -308,7 +375,7 @@ function installExecutionTriggers(options: JisoLoaderOptions): void {
   const visibleElements = [
     ...(options.root.querySelectorAll('[on\\:visible]') as Iterable<EventElementLike>),
   ];
-  if (visibleElements.length === 0) return;
+  if (visibleElements.length === 0) return () => undefined;
 
   const createObserver =
     options.visibleObserver ??
@@ -323,7 +390,7 @@ function installExecutionTriggers(options: JisoLoaderOptions): void {
             );
           }) as unknown as VisibleObserver
       : undefined);
-  if (!createObserver) return;
+  if (!createObserver) return () => undefined;
 
   const seen = new Set<EventElementLike>();
   const observer = createObserver((entries) => {
@@ -339,27 +406,40 @@ function installExecutionTriggers(options: JisoLoaderOptions): void {
   for (const element of visibleElements) {
     observer.observe(element);
   }
+
+  return () => {
+    for (const element of new Set([...seen, ...visibleElements])) {
+      observer.unobserve(element);
+    }
+  };
 }
 
-function withDefaultMutationBroadcast(
-  options: EnhancedMutationLoaderOptions,
-): EnhancedMutationLoaderOptions {
-  if (options.broadcast) return options;
-  if (typeof globalThis.BroadcastChannel !== 'function') return options;
+function withDefaultMutationBroadcast(options: EnhancedMutationLoaderOptions): {
+  dispose?: () => void;
+  options: EnhancedMutationLoaderOptions;
+} {
+  if (options.broadcast) return { options };
+  if (typeof globalThis.BroadcastChannel !== 'function') return { options };
 
   try {
+    const broadcast = installMutationBroadcast({
+      ...(options.morph ? { morph: options.morph } : {}),
+      channel: new globalThis.BroadcastChannel('jiso:mutation-response') as BroadcastLike,
+      ...(options.queryPlans ? { queryPlans: options.queryPlans } : {}),
+      root: options.root,
+      store: options.store,
+    });
     return {
-      ...options,
-      broadcast: installMutationBroadcast({
-        ...(options.morph ? { morph: options.morph } : {}),
-        channel: new globalThis.BroadcastChannel('jiso:mutation-response') as BroadcastLike,
-        ...(options.queryPlans ? { queryPlans: options.queryPlans } : {}),
-        root: options.root,
-        store: options.store,
-      }),
+      dispose: () => {
+        broadcast.close();
+      },
+      options: {
+        ...options,
+        broadcast,
+      },
     };
   } catch {
-    return options;
+    return { options };
   }
 }
 
@@ -887,11 +967,17 @@ export class OptimisticRebaser {
   }
 }
 
-export function installPagehideOptimismCleanup(options: PagehideOptimismCleanupOptions): void {
+export function installPagehideOptimismCleanup(
+  options: PagehideOptimismCleanupOptions,
+): () => void {
   // SPEC.md §8/§9.3: pagehide is bfcache-safe; unload handlers are forbidden.
-  options.root.addEventListener('pagehide', () => {
+  const listener = () => {
     options.discardPendingOptimism();
-  });
+  };
+  options.root.addEventListener('pagehide', listener);
+  return () => {
+    options.root.removeEventListener?.('pagehide', listener);
+  };
 }
 
 export function applyOptimisticTransforms<Input>(

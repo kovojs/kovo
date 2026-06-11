@@ -37,6 +37,7 @@ import {
   type DelegatedEvent,
   type EnhancedMutationFetchOptions,
   type EventElementLike,
+  type MutationBroadcast,
   type OptimisticFor,
   type StructuralMorphNode,
 } from './index.js';
@@ -60,6 +61,15 @@ class FakeRoot {
 
   addEventListener(type: string, listener: (event: DelegatedEvent) => void | Promise<void>): void {
     this.listeners.set(type, listener);
+  }
+
+  removeEventListener(
+    type: string,
+    listener: (event: DelegatedEvent) => void | Promise<void>,
+  ): void {
+    if (this.listeners.get(type) === listener) {
+      this.listeners.delete(type);
+    }
   }
 
   querySelectorAll(selector: string): Iterable<QueryScript | FakeElement> {
@@ -119,6 +129,7 @@ class FakeFormElement extends FakeElement {
 }
 
 class FakeBroadcastChannel {
+  closed = false;
   messages: unknown[] = [];
   onmessage: ((event: { data: unknown }) => void) | null = null;
 
@@ -129,6 +140,10 @@ class FakeBroadcastChannel {
   postMessage(message: unknown): void {
     this.messages.push(message);
     this.hub?.deliver(this, message);
+  }
+
+  close(): void {
+    this.closed = true;
   }
 }
 
@@ -1076,6 +1091,89 @@ describe('runtime loader', () => {
     expect(observer.unobserve).toHaveBeenCalledWith(visibleElement);
     expect(handlers.mount).toHaveBeenCalledTimes(1);
   });
+
+  it('disposes loader listeners, visible observers, and auto-created broadcasts', () => {
+    const globalRecord = globalThis as unknown as Record<string, unknown>;
+    const originalBroadcastChannel = globalRecord.BroadcastChannel;
+    const root = new FakeRoot();
+    const focusTarget = new FakeRoot();
+    const mutationRoot = new FakeMorphRoot();
+    const store = createQueryStore();
+    const visibleElement = new FakeElement({ 'on:visible': '/c/chart.js#mount' });
+    const discardPendingOptimism = vi.fn();
+    const observer = {
+      observe: vi.fn(),
+      unobserve: vi.fn(),
+    };
+    const channels: FakeBroadcastChannel[] = [];
+    class TestBroadcastChannel extends FakeBroadcastChannel {
+      constructor() {
+        super();
+        channels.push(this);
+      }
+    }
+    globalRecord.BroadcastChannel = TestBroadcastChannel;
+    root.elements.set('[on\\:visible]', [visibleElement]);
+
+    try {
+      const loader = installJisoLoader({
+        discardPendingOptimism,
+        enhancedMutations: {
+          fetch: vi.fn(),
+          root: mutationRoot,
+          store,
+        },
+        focusTarget,
+        importModule: vi.fn(),
+        queryRefetch: { fetch: vi.fn() },
+        queryStore: store,
+        root,
+        visibleObserver: () => observer,
+      });
+
+      expect(root.listeners.has('click')).toBe(true);
+      expect(root.listeners.has('visibilitychange')).toBe(true);
+      expect(root.listeners.has('pagehide')).toBe(true);
+      expect(focusTarget.listeners.has('focus')).toBe(true);
+      expect(observer.observe).toHaveBeenCalledWith(visibleElement);
+      expect(channels[0]?.closed).toBe(false);
+
+      loader.dispose();
+
+      expect(root.listeners.size).toBe(0);
+      expect(focusTarget.listeners.size).toBe(0);
+      expect(observer.unobserve).toHaveBeenCalledWith(visibleElement);
+      expect(channels[0]?.closed).toBe(true);
+    } finally {
+      globalRecord.BroadcastChannel = originalBroadcastChannel;
+    }
+  });
+
+  it('does not close caller-owned mutation broadcasts on dispose', () => {
+    const root = new FakeRoot();
+    const mutationRoot = new FakeMorphRoot();
+    const store = createQueryStore();
+    const close = vi.fn();
+    const broadcast: MutationBroadcast = {
+      close,
+      publish: vi.fn(),
+    };
+
+    const loader = installJisoLoader({
+      enhancedMutations: {
+        broadcast,
+        fetch: vi.fn(),
+        root: mutationRoot,
+        store,
+      },
+      importModule: vi.fn(),
+      root,
+    });
+
+    loader.dispose();
+
+    expect(close).not.toHaveBeenCalled();
+  });
 });
 
 describe('typed event bus', () => {
@@ -1174,6 +1272,7 @@ describe('query store', () => {
     const refetchOnFocus = vi.fn();
 
     installJisoLoader({
+      focusTarget: root,
       importModule: vi.fn(),
       refetchOnFocus,
       root,
@@ -1222,6 +1321,7 @@ describe('query store', () => {
     ];
 
     installJisoLoader({
+      focusTarget: root,
       importModule: vi.fn(),
       queryStore: store,
       refetchOnFocus,
@@ -1240,6 +1340,39 @@ describe('query store', () => {
 
     expect(refetchOnFocus).toHaveBeenNthCalledWith(1, ['cart', 'inventory']);
     expect(refetchOnFocus).toHaveBeenNthCalledWith(2, ['cart', 'inventory']);
+  });
+
+  it('dedupes overlapping visible-return and focus refetches', async () => {
+    const root = new FakeRoot();
+    const refetchOnFocus = vi.fn();
+    let resolveRefetch: (() => void) | undefined;
+    const refetchDone = new Promise<void>((resolve) => {
+      resolveRefetch = resolve;
+    });
+    refetchOnFocus.mockReturnValue(refetchDone);
+
+    installJisoLoader({
+      focusTarget: root,
+      importModule: vi.fn(),
+      refetchOnFocus,
+      root,
+    });
+
+    root.visibilityState = 'visible';
+    const visibleRefetch = root.listeners.get('visibilitychange')?.({
+      target: null,
+      type: 'visibilitychange',
+    });
+    const focusRefetch = root.listeners.get('focus')?.({ target: null, type: 'focus' });
+
+    expect(refetchOnFocus).toHaveBeenCalledTimes(1);
+
+    resolveRefetch?.();
+    await Promise.all([visibleRefetch, focusRefetch]);
+
+    await root.listeners.get('focus')?.({ target: null, type: 'focus' });
+
+    expect(refetchOnFocus).toHaveBeenCalledTimes(2);
   });
 
   it('refreshes stale hydrated query data when a visible tab regains focus', async () => {
@@ -1261,6 +1394,7 @@ describe('query store', () => {
     store.subscribe('cart', cartPlan);
     store.subscribe('analytics', analyticsPlan);
     installJisoLoader({
+      focusTarget: root,
       importModule: vi.fn(),
       queryStore: store,
       refetchOnFocus(queries) {
@@ -1343,6 +1477,7 @@ describe('query store', () => {
     store.subscribe('cart', plan);
 
     installJisoLoader({
+      focusTarget: root,
       importModule: vi.fn(),
       queryRefetch: { fetch },
       queryStore: store,

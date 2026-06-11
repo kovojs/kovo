@@ -387,11 +387,22 @@ void test('P2 loader smoke evidence remains represented in runtime tests', async
   assert.match(runtimeTests, /ships an inline enhanced form round trip in the bootstrap source/);
   assert.match(runtimeTests, /refetches typed read endpoints and applies returned query chunks/);
   assert.match(runtimeTests, /uses typed read refetching from focus listeners when configured/);
+  assert.match(runtimeTests, /dedupes overlapping visible-return and focus refetches/);
+  assert.match(
+    runtimeTests,
+    /disposes loader listeners, visible observers, and auto-created broadcasts/,
+  );
+  assert.match(runtimeTests, /does not close caller-owned mutation broadcasts on dispose/);
   assert.match(runtimeTests, /reconciles compiled template stamps with keyed item descriptors/);
   assert.match(
     browserTests,
     /keeps the loader idle until the first delegated interaction/,
     'browser suite covers first-interaction handler import',
+  );
+  assert.match(
+    browserTests,
+    /dedupes document visible-return and window focus typed-read refetches/,
+    'browser suite covers window focus refetch dedupe and dispose',
   );
   assert.match(
     browserTests,
