@@ -98,6 +98,7 @@ export interface CompileComponentOptions {
 }
 
 export interface RegistryFacts {
+  components?: readonly string[];
   domainKeys?: readonly string[];
   invalidations?: Readonly<Record<string, readonly string[]>>;
   mutations?: RegistryTypeFacts;
@@ -158,7 +159,10 @@ export function deriveRegistryFactsFromGraph(
   graph: RegistryGraphInput,
   options: RegistryTypeFactOptions = {},
 ): RegistryFacts {
+  const components = deriveComponentFactsFromGraph(graph);
+
   return {
+    ...(components.length > 0 ? { components } : {}),
     domainKeys: deriveDomainKeysFromGraph(graph),
     invalidations: deriveInvalidationFactsFromGraph(graph),
     ...(Object.keys(options.mutations ?? {}).length > 0 ? { mutations: options.mutations } : {}),
@@ -253,6 +257,7 @@ export function compileComponentModule(options: CompileComponentOptions): Compil
   const literalHrefDiagnostics = validateLiteralHrefs(source, options);
   const htmlContentModelDiagnostics = validateHtmlContentModel(source, options.fileName);
   const eventTriggerDiagnostics = validateEventTriggerNames(source, options.fileName);
+  const residualStampDiagnostics = validateResidualStamps(source, options, componentName);
   const clientFileName = replaceExtension(options.fileName, '.client.js');
   const cssFileName = replaceExtension(options.fileName, '.css');
   const serverFileName = replaceExtension(options.fileName, '.server.js');
@@ -292,6 +297,7 @@ export function compileComponentModule(options: CompileComponentOptions): Compil
       ...literalHrefDiagnostics,
       ...htmlContentModelDiagnostics,
       ...eventTriggerDiagnostics,
+      ...residualStampDiagnostics,
     ],
     files: [
       { fileName: serverFileName, source: serverSource },
@@ -1394,6 +1400,64 @@ function eventTriggerDiagnostic(
   };
 }
 
+function validateResidualStamps(
+  source: string,
+  options: CompileComponentOptions,
+  componentName: string,
+): CompilerDiagnostic[] {
+  const diagnostics: CompilerDiagnostic[] = [];
+  const knownQueries = new Set([
+    ...Object.keys(options.registryFacts?.queries ?? {}),
+    ...componentQueryNames(source),
+  ]);
+  const knownComponents = new Set([
+    kebabCase(componentName),
+    ...explicitComponentNames(source),
+    ...(options.registryFacts?.components ?? []),
+  ]);
+  const tagPattern = /<(?<tag>[A-Za-z][\w:-]*)\b(?<attrs>[^>]*)>/g;
+
+  for (const match of source.matchAll(tagPattern)) {
+    const attrs = match.groups?.attrs ?? '';
+    const component = readStaticAttribute(attrs, 'fw-c');
+    if (component && !knownComponents.has(component)) {
+      diagnostics.push(fw226Diagnostic(options.fileName, `fw-c="${component}"`));
+    }
+
+    for (const dep of splitDepValue(readStaticAttribute(attrs, 'fw-deps') ?? '')) {
+      const query = dep.split(':', 1)[0] ?? dep;
+      if (!knownQueries.has(query)) {
+        diagnostics.push(fw226Diagnostic(options.fileName, `fw-deps="${dep}"`));
+      }
+    }
+  }
+
+  return dedupeDiagnostics(diagnostics);
+}
+
+function fw226Diagnostic(fileName: string, detail: string): CompilerDiagnostic {
+  return {
+    ...diagnosticFor(fileName, 'FW226'),
+    message: `${diagnosticDefinitions.FW226.message} ${detail}`,
+  };
+}
+
+function explicitComponentNames(source: string): string[] {
+  return [...source.matchAll(/\bcomponent\s*\(\s*(["'])(?<name>[^"']+)\1/g)].flatMap((match) =>
+    match.groups?.name ? [match.groups.name] : [],
+  );
+}
+
+function dedupeDiagnostics(diagnostics: readonly CompilerDiagnostic[]): CompilerDiagnostic[] {
+  const seen = new Set<string>();
+  return diagnostics.filter((diagnostic) => {
+    const key = `${diagnostic.code}\0${diagnostic.message}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
 function validateLiteralHrefs(
   source: string,
   options: CompileComponentOptions,
@@ -2430,6 +2494,12 @@ function deriveDomainKeysFromGraph(graph: RegistryGraphInput): string[] {
   ]
     .filter((key, index, keys) => keys.indexOf(key) === index)
     .sort((left, right) => left.localeCompare(right));
+}
+
+function deriveComponentFactsFromGraph(graph: RegistryGraphInput): string[] {
+  return [...new Set((graph.components ?? []).map((component) => kebabCase(component.name)))].sort(
+    (left, right) => left.localeCompare(right),
+  );
 }
 
 function deriveInvalidationFactsFromGraph(

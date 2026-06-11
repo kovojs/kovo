@@ -488,6 +488,25 @@ void test('P1 compiler validates declared execution trigger names', async () => 
   );
 });
 
+void test('P1 compiler validates residual fw-c and fw-deps stamps', async () => {
+  const coreSource = await readProjectFile('packages/core/src/diagnostics.ts');
+  const compilerSource = await readProjectFile('packages/compiler/src/index.ts');
+  const compilerTests = await readProjectFile('packages/compiler/src/index.test.ts');
+
+  assert.match(coreSource, /FW226/);
+  assert.match(coreSource, /fw-deps or fw-c names an unknown query instance or component/);
+  assert.match(compilerSource, /validateResidualStamps/);
+  assert.match(compilerSource, /fw226Diagnostic/);
+  assert.match(
+    compilerTests,
+    /validates residual fw-c and fw-deps stamps against known component and query facts/,
+  );
+  assert.match(
+    compilerTests,
+    /reports FW226 for residual stamps naming unknown components or query instances/,
+  );
+});
+
 void test('P3 typed routes validate navigation targets', async () => {
   const coreSource = await readProjectFile('packages/core/src/index.ts');
   const coreTests = await readProjectFile('packages/core/src/index.test.ts');

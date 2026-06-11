@@ -271,6 +271,7 @@ export const ProductGrid = component('product-grid', {
       },
     ]);
     expect(derived.registryFacts).toEqual({
+      components: ['cart-badge', 'product-grid'],
       domainKeys: ['cart', 'product'],
       invalidations: {
         'cart/add': ['cart'],
@@ -659,6 +660,9 @@ export const CartShell = component('cart-shell', {
   it('accepts native table rows when the parser keeps the authored tree shape', () => {
     const result = compileComponentModule({
       fileName: 'cart-table.tsx',
+      registryFacts: {
+        components: ['cart-row'],
+      },
       source: `
 export const CartTable = component('cart-table', {
   render: () => (
@@ -1196,6 +1200,11 @@ export const CartBadge = component('cart-badge', {
   it('merges declared query dependencies into existing fw-deps stamps', () => {
     const result = compileComponentModule({
       fileName: 'recommendations.tsx',
+      registryFacts: {
+        queries: {
+          product: 'typeof productQuery',
+        },
+      },
       source: `
 export const Recommendations = component('recommendations', {
   queries: { cart: cartQuery },
@@ -1211,7 +1220,64 @@ export const Recommendations = component('recommendations', {
     expect(result.files[0]?.source).toContain(
       '<section fw-c="recommendations" fw-deps="product:p1 cart">',
     );
+    expect(result.diagnostics).toEqual([]);
     expect(() => assertFixpoint(result)).not.toThrow();
+  });
+
+  it('validates residual fw-c and fw-deps stamps against known component and query facts', () => {
+    const result = compileComponentModule({
+      fileName: 'recommendations.tsx',
+      registryFacts: {
+        queries: {
+          product: 'typeof productQuery',
+        },
+      },
+      source: `
+export const Recommendations = component('recommendations', {
+  queries: { cart: cartQuery },
+  render: ({ cart }) => (
+    <section fw-c="recommendations" fw-deps="product:p1 cart">
+      <span data-bind="cart.count">{cart.count}</span>
+    </section>
+  ),
+});
+`,
+    });
+
+    expect(result.diagnostics).toEqual([]);
+  });
+
+  it('reports FW226 for residual stamps naming unknown components or query instances', () => {
+    const result = compileComponentModule({
+      fileName: 'recommendations.tsx',
+      source: `
+export const Recommendations = component('recommendations', {
+  queries: { cart: cartQuery },
+  render: ({ cart }) => (
+    <section fw-c="unknown-component" fw-deps="cart missingQuery:p1">
+      <span data-bind="cart.count">{cart.count}</span>
+    </section>
+  ),
+});
+`,
+    });
+
+    expect(result.diagnostics).toEqual([
+      {
+        code: 'FW226',
+        fileName: 'recommendations.tsx',
+        message:
+          'fw-deps or fw-c names an unknown query instance or component. fw-c="unknown-component"',
+        severity: 'error',
+      },
+      {
+        code: 'FW226',
+        fileName: 'recommendations.tsx',
+        message:
+          'fw-deps or fw-c names an unknown query instance or component. fw-deps="missingQuery:p1"',
+        severity: 'error',
+      },
+    ]);
   });
 
   it('stamps static island-local state onto rendered component markup', () => {
