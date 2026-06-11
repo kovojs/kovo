@@ -390,9 +390,12 @@ void test('P3 mutation lifecycle includes an explicit transaction boundary', asy
   const serverTests = await readProjectFile('packages/server/src/index.test.ts');
 
   assert.match(serverSource, /transaction\?: <Result>/);
+  assert.match(serverSource, /run: \(transactionRequest: Request\) => Promise<Result>/);
   assert.match(serverSource, /definition\.transaction/);
   assert.match(serverSource, /class MutationRollback extends Error/);
   assert.match(serverTests, /runs guarded mutation handlers inside the configured transaction/);
+  assert.match(serverTests, /types transaction callbacks with the mutation request shape/);
+  assert.match(serverTests, /transaction callbacks must receive the typed request shape/);
   assert.match(serverTests, /rolls back configured transactions for typed mutation failures/);
   assert.match(
     serverTests,

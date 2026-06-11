@@ -31,7 +31,7 @@ export interface JisoTestContext<Db = unknown> {
   exec: <
     InputSchema extends Schema<unknown>,
     Errors extends Record<string, Schema<unknown>>,
-    Request extends { db: Db },
+    Request extends { db: unknown },
     Value,
   >(
     mutation: MutationDefinition<string, InputSchema, Errors, Request, Value>,
@@ -100,7 +100,7 @@ export function createJisoTestHarness<Db>(
     async exec<
       InputSchema extends Schema<unknown>,
       Errors extends Record<string, Schema<unknown>>,
-      Request extends { db: Db },
+      Request extends { db: unknown },
       Value,
     >(
       mutation: MutationDefinition<string, InputSchema, Errors, Request, Value>,

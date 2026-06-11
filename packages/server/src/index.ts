@@ -629,7 +629,7 @@ export interface MutationDefinition<
   registry?: MutationRegistry;
   transaction?: <Result>(
     request: Request,
-    run: (transactionRequest: unknown) => Promise<Result>,
+    run: (transactionRequest: Request) => Promise<Result>,
   ) => Promise<Result>;
 }
 
@@ -833,9 +833,7 @@ export async function runMutation<
 
   try {
     value = definition.transaction
-      ? await definition.transaction(request, (transactionRequest) =>
-          runHandler(transactionRequest as Request),
-        )
+      ? await definition.transaction(request, runHandler)
       : await runHandler(request);
   } catch (error) {
     if (error instanceof MutationRollback) return error.failure;

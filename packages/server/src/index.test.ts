@@ -918,6 +918,55 @@ describe('server mutation primitives', () => {
     expect(events).toEqual(['guard', 'begin', 'handler:tx', 'commit']);
   });
 
+  it('types transaction callbacks with the mutation request shape', async () => {
+    interface TxRequest {
+      db: {
+        txOnly(): void;
+        write(table: string): void;
+      };
+    }
+
+    const events: string[] = [];
+    const typeOnly = undefined as unknown as boolean;
+    const transactional = mutation('cart/add', {
+      input: s.object({ productId: s.string() }),
+      transaction(request: TxRequest, run) {
+        request.db.txOnly();
+        if (typeOnly) {
+          // @ts-expect-error transaction callbacks must receive the typed request shape.
+          void run({ db: { write() {} } });
+        }
+        return run(request);
+      },
+      handler(input, request: TxRequest) {
+        request.db.txOnly();
+        request.db.write('cart_items');
+        return input.productId;
+      },
+    });
+
+    await expect(
+      runMutation(
+        transactional,
+        { productId: 'p1' },
+        {
+          db: {
+            txOnly() {
+              events.push('tx');
+            },
+            write(table) {
+              events.push(`write:${table}`);
+            },
+          },
+        },
+      ),
+    ).resolves.toMatchObject({
+      ok: true,
+      value: 'p1',
+    });
+    expect(events).toEqual(['tx', 'tx', 'write:cart_items']);
+  });
+
   it('rolls back configured transactions for typed mutation failures', async () => {
     const events: string[] = [];
     const transactional = mutation('cart/add', {
