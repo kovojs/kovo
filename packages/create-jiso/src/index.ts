@@ -273,7 +273,7 @@ fw explain query cart graph.json
 fw explain page /cart graph.json
 \`\`\`
 
-Use \`fw check graph.json\` in CI for semantic checks that do not belong in \`vp check\`: optimistic coverage (\`FW310\`), touch-graph consistency, unguarded mutation audits, manual invalidation review, and Jiso-specific lints.
+Use \`fw check graph.json\` in CI for semantic checks that do not belong in \`vp check\`: optimistic coverage (\`FW310\`), update coverage (\`FW311\`), touch-graph consistency, unguarded mutation audits, manual invalidation review, and Jiso-specific lints.
 Use \`fw explain --unguarded graph.json\` when you need the stable, diffable audit list from SPEC.md section 10.3.
 When debugging enhanced mutations, keep the wire contract from SPEC.md section 9.1 visible: \`FW-Idem\` keys make duplicate POSTs replayable, and \`FW-Targets\` shows which live DOM dependencies asked for fragments.
 
@@ -319,7 +319,7 @@ Keep every mutation/query pair explicit in \`graph.json\`:
 }
 \`\`\`
 
-\`UNHANDLED\` optimistic entries are allowed while developing, but they produce \`FW310\` warnings and should be driven to zero before release.
+\`UNHANDLED\` optimistic entries are useful while developing, but \`fw check\` fails on \`FW310\` warnings so they stay visible in CI.
 `,
       },
       {
@@ -352,7 +352,7 @@ The v1 implementation depends on these hard rules:
 - The v1 server is stateless. Liveness comes from BroadcastChannel rebroadcast and refetch-on-focus/visibility, not Redis, SSE, or a live bus.
 - Unguarded mutation review should use \`fw explain --unguarded graph.json\` as the stable audit path.
 - Enhanced mutations must preserve the SPEC.md section 9.1 wire contract: \`FW-Idem\` replay for duplicate submissions, readable \`FW-Fragment\`/\`FW-Targets\` headers, and HTML/\`<fw-query>\` responses in the Network panel.
-- Every mutation/query pair should have an explicit optimistic status: \`hand-written\`, \`await-fragment\`, or temporarily \`UNHANDLED\` while developing.
+- Every mutation/query pair should have an explicit optimistic status: \`hand-written\` or \`await-fragment\`; \`UNHANDLED\` is a temporary development state that fails \`fw check\`.
 `,
       },
       {

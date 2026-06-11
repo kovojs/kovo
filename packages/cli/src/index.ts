@@ -740,11 +740,17 @@ export function fwCheck(
     lines.push('OK');
   }
 
-  const failed = lines.some((line) => line.startsWith('ERROR '));
+  const failed = lines.some(isCheckFailureLine);
   return {
     exitCode: failed ? 1 : 0,
     output: `${lines.join('\n')}\n`,
   };
+}
+
+function isCheckFailureLine(line: string): boolean {
+  return (
+    line.startsWith('ERROR ') || line.startsWith('WARN FW310 ') || line.startsWith('WARN FW311 ')
+  );
 }
 
 function checkFamilyArg(value: string | undefined): FwCheckFamily {

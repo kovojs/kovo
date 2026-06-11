@@ -15,7 +15,7 @@ describe('fw check', () => {
     });
   });
 
-  it('reports FW310 optimistic coverage gaps without failing the command', () => {
+  it('fails on FW310 optimistic coverage gaps', () => {
     expect(
       fwCheck({
         optimistic: [
@@ -24,7 +24,7 @@ describe('fw check', () => {
         ],
       }),
     ).toEqual({
-      exitCode: 0,
+      exitCode: 1,
       output:
         'fw-check/v1\nWARN FW310 cart/add -> cartQuery.items Invalidated query lacks optimistic transform.\n',
     });
@@ -56,7 +56,7 @@ describe('fw check', () => {
         ],
       }),
     ).toEqual({
-      exitCode: 0,
+      exitCode: 1,
       output: [
         'fw-check/v1',
         'COVERAGE component=CartBadge query=cart.count position="text" status=plan detail="text binding"',
@@ -156,7 +156,7 @@ describe('fw check', () => {
         },
       }),
     ).toEqual({
-      exitCode: 0,
+      exitCode: 1,
       output:
         'fw-check/v1\nWARN FW310 cart/add -> cart Invalidated query lacks optimistic transform.\n',
     });
@@ -555,14 +555,14 @@ describe('fw check', () => {
     });
   });
 
-  it('accepts query read domains covered by declared mutation invalidations', () => {
+  it('fails when declared mutation invalidations lack optimistic coverage', () => {
     expect(
       fwCheck({
         mutations: [{ guards: ['authed'], invalidates: ['cart'], key: 'cart/add' }],
         queries: [{ domains: ['cart'], query: 'cart' }],
       }),
     ).toEqual({
-      exitCode: 0,
+      exitCode: 1,
       output:
         'fw-check/v1\nWARN FW310 cart/add -> cart Invalidated query lacks optimistic transform.\n',
     });
@@ -692,14 +692,14 @@ describe('fw check', () => {
     });
   });
 
-  it('accepts fw check optimistic as a CLI command', () => {
+  it('fails fw check optimistic as a CLI command when coverage is unhandled', () => {
     const tempDir = mkdtempSync(join(tmpdir(), 'jiso-cli-optimistic-'));
     const graphPath = join(tempDir, 'graph.json');
     let output = '';
-    const stdoutWrite = vi.spyOn(process.stdout, 'write').mockImplementation(((chunk) => {
+    const stderrWrite = vi.spyOn(process.stderr, 'write').mockImplementation(((chunk) => {
       output += chunk.toString();
       return true;
-    }) as typeof process.stdout.write);
+    }) as typeof process.stderr.write);
 
     try {
       writeFileSync(
@@ -734,9 +734,9 @@ describe('fw check', () => {
         }),
       );
 
-      expect(main(['check', 'optimistic', graphPath])).toBe(0);
+      expect(main(['check', 'optimistic', graphPath])).toBe(1);
     } finally {
-      stdoutWrite.mockRestore();
+      stderrWrite.mockRestore();
       rmSync(tempDir, { force: true, recursive: true });
     }
 
@@ -745,14 +745,14 @@ describe('fw check', () => {
     );
   });
 
-  it('accepts fw check coverage as a CLI command', () => {
+  it('fails fw check coverage as a CLI command when coverage is unhandled', () => {
     const tempDir = mkdtempSync(join(tmpdir(), 'jiso-cli-coverage-'));
     const graphPath = join(tempDir, 'graph.json');
     let output = '';
-    const stdoutWrite = vi.spyOn(process.stdout, 'write').mockImplementation(((chunk) => {
+    const stderrWrite = vi.spyOn(process.stderr, 'write').mockImplementation(((chunk) => {
       output += chunk.toString();
       return true;
-    }) as typeof process.stdout.write);
+    }) as typeof process.stderr.write);
 
     try {
       writeFileSync(
@@ -786,9 +786,9 @@ describe('fw check', () => {
         }),
       );
 
-      expect(main(['check', 'coverage', graphPath])).toBe(0);
+      expect(main(['check', 'coverage', graphPath])).toBe(1);
     } finally {
-      stdoutWrite.mockRestore();
+      stderrWrite.mockRestore();
       rmSync(tempDir, { force: true, recursive: true });
     }
 

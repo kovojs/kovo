@@ -925,7 +925,7 @@ void test('P10 commerce graph assertions answer behavior mechanically', async ()
   assert.match(cliTests, /ignores unrelated statuses/);
   assert.match(cliTests, /prints stable FW311 update coverage rows and warnings/);
   assert.match(cliTests, /prints static diagnostic source positions when present/);
-  assert.match(cliTests, /accepts fw check coverage as a CLI command/);
+  assert.match(cliTests, /fails fw check coverage as a CLI command when coverage is unhandled/);
   assert.match(cliTests, /WARN FW311 component=CartBadge query=cart\.discount/);
   assert.match(coreSource, /interface InvalidationSets/);
   assert.match(await readProjectFile('packages/core/src/diagnostics.ts'), /FW311/);
