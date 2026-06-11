@@ -455,12 +455,24 @@ export function assertMutationError<
   return result.error.payload as InferSchema<Errors[Code]>;
 }
 
-export async function jisoTest<Db>(
-  _name: string,
+export function jisoTest<Db>(
+  name: string,
   fn: (ctx: JisoTestContext<Db>) => void | Promise<void>,
   options: JisoTestHarnessOptions<Db>,
-): Promise<void> {
-  await fn(createJisoTestHarness(options));
+): JisoTestCase {
+  const run = async () => {
+    await fn(createJisoTestHarness(options));
+  };
+
+  return {
+    name,
+    run,
+  };
+}
+
+export interface JisoTestCase {
+  name: string;
+  run(): Promise<void>;
 }
 
 function assertObservedWritesCovered(

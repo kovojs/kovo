@@ -375,8 +375,32 @@ describe('@jiso/test harness', () => {
             '/cart': '<fw-fragment target="cart-badge"><cart-badge></cart-badge></fw-fragment>',
           },
         },
-      ),
+      ).run(),
     ).resolves.toBeUndefined();
+  });
+
+  it('returns a named test case that can be registered with a runner', async () => {
+    const calls: string[] = [];
+    const testCase = jisoTest(
+      'cart page',
+      async ({ page }) => {
+        const result = await page('/cart');
+        calls.push(result.fragment('cart-badge'));
+      },
+      {
+        db: {},
+        pages: {
+          '/cart': '<fw-fragment target="cart-badge"><cart-badge></cart-badge></fw-fragment>',
+        },
+      },
+    );
+
+    expect(testCase.name).toBe('cart page');
+    expect(calls).toEqual([]);
+
+    await testCase.run();
+
+    expect(calls).toEqual(['<cart-badge></cart-badge>']);
   });
 
   it('verifies observed writes against the static touch graph after exec', async () => {
