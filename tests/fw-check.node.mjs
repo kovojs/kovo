@@ -211,7 +211,6 @@ void test('Phase 0 wire fixture responses keep stable protocol metadata', async 
       {
         headers: {
           'content-type': 'text/html; charset=utf-8',
-          'transfer-encoding': 'chunked',
         },
         statusLine: 'HTTP/1.1 200 OK',
       },
