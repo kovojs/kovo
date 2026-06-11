@@ -605,13 +605,37 @@ function createPageAssertion(html: string): PageAssertion {
 
       const tag = stampedElement.groups.tag;
       const start = stampedElement.index;
-      const end = html.indexOf(`</${tag}>`, start);
-      if (end < 0) return '';
+      const end = matchingElementEnd(html, tag, start);
+      if (end === undefined) return '';
 
-      return html.slice(start, end + tag.length + 3);
+      return html.slice(start, end);
     },
     html,
   };
+}
+
+function matchingElementEnd(html: string, tag: string, start: number): number | undefined {
+  const tagPattern = new RegExp(`<\\/?${escapeRegExp(tag)}\\b[^>]*>`, 'g');
+  tagPattern.lastIndex = start;
+  let depth = 0;
+
+  for (const match of html.matchAll(tagPattern)) {
+    const token = match[0];
+    if (token.startsWith('</')) {
+      depth -= 1;
+      if (depth === 0) return match.index + token.length;
+      continue;
+    }
+
+    if (token.endsWith('/>')) {
+      if (depth === 0) return match.index + token.length;
+      continue;
+    }
+
+    depth += 1;
+  }
+
+  return undefined;
 }
 
 function attributeEquals(name: string, value: string): string {

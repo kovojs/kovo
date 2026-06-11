@@ -360,6 +360,20 @@ describe('@jiso/test harness', () => {
     expect(page.fragment('missing-target')).toBe('');
   });
 
+  it('asserts stamped fragment targets with nested same-tag children', async () => {
+    const harness = createJisoTestHarness({
+      db: {},
+      pages: {
+        '/cart':
+          '<section fw-c="cart-badge"><section class="inner"><span>1</span></section><p>done</p></section>',
+      },
+    });
+
+    await expect(harness.page('/cart').then((page) => page.fragment('cart-badge'))).resolves.toBe(
+      '<section fw-c="cart-badge"><section class="inner"><span>1</span></section><p>done</p></section>',
+    );
+  });
+
   it('runs a provided callback with a harness context', async () => {
     await expect(
       jisoTest(
