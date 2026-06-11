@@ -317,7 +317,10 @@ void test('S2 loader budget and L0 no-upgrade path are acceptance evidence', asy
   assert.match(loaderSource, /import\(r\.slice\(0,i\)\)/, 'handlers import only from event refs');
   assert.match(loaderSource, /FW-Targets/, 'enhanced form submits send live targets');
   assert.match(loaderSource, /keepalive:!0/, 'enhanced form submits use keepalive');
-  assert.match(loaderSource, /<fw-fragment/, 'loader parses fragment chunks');
+  assert.match(loaderSource, /DOMParser/, 'loader parses mutation response chunks');
+  assert.match(loaderSource, /fw-fragment/, 'loader applies fragment chunks');
+  assert.match(loaderSource, /on\\\\\\\\:load/, 'inline loader schedules declared load triggers');
+  assert.match(loaderSource, /on\\\\\\\\:idle/, 'inline loader schedules declared idle triggers');
   assert.doesNotMatch(
     loaderSource,
     /customElements|attachShadow|unload/,
@@ -341,6 +344,10 @@ void test('P2 loader smoke evidence remains represented in runtime tests', async
   assert.match(runtimeTests, /expect\(importModule\)\.not\.toHaveBeenCalled\(\)/);
   assert.match(runtimeTests, /expect\(jisoLoaderSource\)\.not\.toContain\('customElements'\)/);
   assert.match(runtimeSource, /insertAdjacentHTML\("beforeend"/);
+  assert.match(runtimeSource, /signal: createHandlerSignal\(\)/);
+  assert.match(runtimeSource, /visibleObserver\?: VisibleObserverFactory/);
+  assert.match(runtimeTests, /invokes chained handler refs left-to-right with one context/);
+  assert.match(runtimeTests, /installs declared load, idle, and visible execution triggers/);
   assert.match(runtimeTests, /ships an inline enhanced form round trip in the bootstrap source/);
   assert.match(
     browserTests,

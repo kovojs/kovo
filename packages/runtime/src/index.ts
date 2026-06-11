@@ -14,6 +14,7 @@ export type ImportHandlerModule = (url: string) => Promise<Record<string, unknow
 
 export interface HandlerContext<State = unknown, Params = Record<string, string>> {
   params: Params;
+  signal: AbortSignal;
   state: State;
 }
 
@@ -134,7 +135,7 @@ export interface LoaderRoot {
     listener: (event: DelegatedEvent) => void | Promise<void>,
     options?: { capture?: boolean },
   ): void;
-  querySelectorAll?: (selector: string) => Iterable<QueryScriptLike>;
+  querySelectorAll?: (selector: string) => Iterable<EventElementLike | QueryScriptLike>;
   visibilityState?: 'hidden' | 'visible';
 }
 
@@ -156,6 +157,20 @@ export interface EventElementLike {
   attributes?: Iterable<{ name: string; value: string }>;
 }
 
+export interface VisibleObserver {
+  observe(element: EventElementLike): void;
+  unobserve(element: EventElementLike): void;
+}
+
+export type VisibleObserverFactory = (
+  callback: (entries: readonly VisibleObserverEntry[]) => void,
+) => VisibleObserver;
+
+export interface VisibleObserverEntry {
+  isIntersecting: boolean;
+  target: EventElementLike;
+}
+
 export interface UploadProgressElementLike {
   setAttribute(name: string, value: string): void;
 }
@@ -165,6 +180,8 @@ export interface JisoLoaderOptions {
   enhancedMutations?: EnhancedMutationLoaderOptions;
   events?: readonly string[];
   importModule: ImportHandlerModule;
+  requestIdle?: (callback: () => void) => void;
+  visibleObserver?: VisibleObserverFactory;
   queryStore?: QueryStore;
   refetchOnFocus?: (queries: readonly string[]) => void | Promise<void>;
   refetchOnFocusOptOut?: readonly string[];
@@ -177,7 +194,7 @@ export interface JisoLoader {
 
 const defaultDelegatedEvents = ['click', 'submit', 'input', 'change'] as const;
 
-export const jisoLoaderSource = `(()=>{const E=["click","submit","input","change"],H=t=>t.closest?.("[fw-state]")||t,S=t=>{try{return JSON.parse(H(t)?.getAttribute("fw-state")||"{}")}catch{return {}}},I=()=>Math.random().toString(36).slice(2),T=()=>[...document.querySelectorAll("[fw-deps]")].map(e=>{const d=(e.getAttribute("fw-deps")||"").trim().replace(/[\\\\s,]+/g," "),t=e.getAttribute("fw-fragment-target")||e.id;return t&&(d?t+"="+d:t)}).filter(Boolean),P=e=>{if(e.type=="submit"){const f=e.target.closest("form[enhance],form[data-enhance],form[data-mutation]");if(f){e.preventDefault();const x=I();fetch(f.action,{body:new FormData(f),headers:{Accept:"text/vnd.jiso.fragment+html","FW-Fragment":"true","FW-Idem":x,"FW-Targets":T().join("; ")},keepalive:!0,method:(f.method||"post").toUpperCase()}).then(r=>r.text()).then(b=>{for(const m of b.matchAll(/<fw-query\\b([^>]*)>([\\s\\S]*?)<\\/fw-query>/g)){const n=m[1].match(/name="([^"]+)"/)?.[1];dispatchEvent(new CustomEvent("jiso:query",{detail:{body:m[2],name:n}}))}for(const m of b.matchAll(/<fw-fragment\\b([^>]*)>([\\s\\S]*?)<\\/fw-fragment>/g)){const a=m[1],t=a.match(/target="([^"]+)"/)?.[1],l=t&&(document.getElementById(t)||document.querySelector('[fw-fragment-target="'+t+'"]'));l&&(a.includes("append")?l.insertAdjacentHTML("beforeend",m[2]):l.innerHTML=m[2])}});return}}const t=e.target.closest("[on\\\\:"+e.type+"]");if(!t)return;const r=t.getAttribute("on:"+e.type);if(!r)return;const i=r.lastIndexOf("#");if(i<=0)return;const p={},s=S(t),h=H(t);for(const a of t.attributes||[])a.name.startsWith("data-p-")&&(p[a.name.slice(7).replace(/-([a-z0-9])/g,(_,c)=>c.toUpperCase())]=a.value);import(r.slice(0,i)).then(m=>m[r.slice(i+1)]?.(e,{params:p,state:s})).then(()=>h?.setAttribute?.("fw-state",JSON.stringify(s)))};for(const e of E)addEventListener(e,P,{capture:!0})})();`;
+export const jisoLoaderSource = `(()=>{const E=["click","submit","input","change"],d=document,H=t=>t.closest?.("[fw-state]")||t,S=t=>{try{return JSON.parse(H(t)?.getAttribute("fw-state")||"{}")}catch{return {}}},I=()=>Math.random().toString(36).slice(2),T=()=>[...d.querySelectorAll("[fw-deps]")].map(e=>{const a=(e.getAttribute("fw-deps")||"").trim().replace(/[\\\\s,]+/g," "),t=e.getAttribute("fw-fragment-target")||e.id;return t&&(a?t+"="+a:t)}).filter(Boolean),P=async e=>{if(e.type=="submit"){const f=e.target.closest("form[enhance],form[data-enhance],form[data-mutation]");if(f){e.preventDefault();fetch(f.action,{body:new FormData(f),headers:{Accept:"text/vnd.jiso.fragment+html","FW-Fragment":"true","FW-Idem":I(),"FW-Targets":T().join("; ")},keepalive:!0,method:(f.method||"post").toUpperCase()}).then(r=>r.text()).then(b=>{const p=new DOMParser().parseFromString(b,"text/html");p.querySelectorAll("fw-query").forEach(m=>dispatchEvent(new CustomEvent("jiso:query",{detail:{body:m.textContent,name:m.getAttribute("name")}})));p.querySelectorAll("fw-fragment").forEach(m=>{const t=m.getAttribute("target"),l=t&&(d.getElementById(t)||d.querySelector('[fw-fragment-target="'+t+'"]'));l&&(m.hasAttribute("append")?l.insertAdjacentHTML("beforeend",m.innerHTML):l.innerHTML=m.innerHTML)})});return}}const t=e.target.closest("[on\\\\:"+e.type+"]"),r=t?.getAttribute("on:"+e.type);if(!r)return;const p={},s=S(t),h=H(t),c={params:p,state:s};for(const a of t.attributes||[])a.name.startsWith("data-p-")&&(p[a.name.slice(7).replace(/-([a-z0-9])/g,(_,c)=>c.toUpperCase())]=a.value);{const i=r.lastIndexOf("#"),m=await import(r.slice(0,i));await m[r.slice(i+1)]?.(e,c)}h?.setAttribute?.("fw-state",JSON.stringify(s))};for(const e of E)addEventListener(e,P,{capture:!0});d.querySelectorAll("[on\\\\:load]").forEach(e=>P({type:"load",target:e}));d.querySelectorAll("[on\\\\:idle]").forEach(e=>setTimeout(P,0,{type:"idle",target:e}))})();`;
 
 export function installJisoLoader(options: JisoLoaderOptions): JisoLoader {
   const events = options.events ?? defaultDelegatedEvents;
@@ -189,7 +206,7 @@ export function installJisoLoader(options: JisoLoaderOptions): JisoLoader {
   if (options.queryStore && options.root.querySelectorAll) {
     hydratedQueries = hydrateQueryScripts(
       options.queryStore,
-      options.root.querySelectorAll('script[fw-query]'),
+      options.root.querySelectorAll('script[fw-query]') as Iterable<QueryScriptLike>,
     );
   }
 
@@ -225,7 +242,72 @@ export function installJisoLoader(options: JisoLoaderOptions): JisoLoader {
     });
   }
 
+  installExecutionTriggers(options);
+
   return { events };
+}
+
+function installExecutionTriggers(options: JisoLoaderOptions): void {
+  if (!options.root.querySelectorAll) return;
+
+  for (const element of options.root.querySelectorAll(
+    '[on\\:load]',
+  ) as Iterable<EventElementLike>) {
+    void dispatchDelegatedEvent({ target: element, type: 'load' }, options.importModule);
+  }
+
+  const requestIdle =
+    options.requestIdle ??
+    (typeof globalThis.requestIdleCallback === 'function'
+      ? (callback: () => void) => {
+          globalThis.requestIdleCallback(callback);
+        }
+      : (callback: () => void) => {
+          setTimeout(callback, 0);
+        });
+
+  for (const element of options.root.querySelectorAll(
+    '[on\\:idle]',
+  ) as Iterable<EventElementLike>) {
+    requestIdle(() => {
+      void dispatchDelegatedEvent({ target: element, type: 'idle' }, options.importModule);
+    });
+  }
+
+  const visibleElements = [
+    ...(options.root.querySelectorAll('[on\\:visible]') as Iterable<EventElementLike>),
+  ];
+  if (visibleElements.length === 0) return;
+
+  const createObserver =
+    options.visibleObserver ??
+    (typeof globalThis.IntersectionObserver === 'function'
+      ? (callback: (entries: readonly VisibleObserverEntry[]) => void) =>
+          new globalThis.IntersectionObserver((entries) => {
+            callback(
+              entries.map((entry) => ({
+                isIntersecting: entry.isIntersecting,
+                target: entry.target as unknown as EventElementLike,
+              })),
+            );
+          }) as unknown as VisibleObserver
+      : undefined);
+  if (!createObserver) return;
+
+  const seen = new Set<EventElementLike>();
+  const observer = createObserver((entries) => {
+    for (const entry of entries) {
+      if (!entry.isIntersecting || seen.has(entry.target)) continue;
+
+      seen.add(entry.target);
+      observer.unobserve(entry.target);
+      void dispatchDelegatedEvent({ target: entry.target, type: 'visible' }, options.importModule);
+    }
+  });
+
+  for (const element of visibleElements) {
+    observer.observe(element);
+  }
 }
 
 function withDefaultMutationBroadcast(
@@ -345,26 +427,31 @@ export async function dispatchDelegatedEvent(
   const element = event.target?.closest?.(`[on\\:${event.type}]`);
   if (!element) return;
 
-  const ref = element.getAttribute(`on:${event.type}`);
-  if (!ref) return;
-
-  const { exportName, url } = parseHandlerReference(ref);
-  const mod = await importModule(url);
-  const fn = mod[exportName];
-
-  if (typeof fn !== 'function') {
-    throw new Error(`Handler export not found: ${ref}`);
-  }
-
   const stateHost = findElementStateHost(element);
   const state = readElementState(element);
-
-  await (fn as ClientHandler)(event as Event, {
+  const context: HandlerContext = {
     params: readElementParams(element),
+    signal: createHandlerSignal(),
     state,
-  });
+  };
+
+  for (const ref of parseHandlerReferences(element.getAttribute(`on:${event.type}`))) {
+    const { exportName, url } = parseHandlerReference(ref);
+    const mod = await importModule(url);
+    const fn = mod[exportName];
+
+    if (typeof fn !== 'function') {
+      throw new Error(`Handler export not found: ${ref}`);
+    }
+
+    await (fn as ClientHandler)(event as Event, context);
+  }
 
   writeElementState(stateHost ?? element, state);
+}
+
+export function parseHandlerReferences(refs: string | null): string[] {
+  return refs?.split(/\s+/).filter(Boolean) ?? [];
 }
 
 export function parseHandlerReference(ref: string): { exportName: string; url: string } {
@@ -411,6 +498,10 @@ function findElementStateHost(element: EventElementLike): EventElementLike | nul
   return (
     element.closest?.('[fw-state]') ?? (element.getAttribute('fw-state') === null ? null : element)
   );
+}
+
+function createHandlerSignal(): AbortSignal {
+  return new AbortController().signal;
 }
 
 function camelCase(value: string): string {

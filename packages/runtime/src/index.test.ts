@@ -26,6 +26,7 @@ import {
   morphStructuralTree,
   OptimisticRebaser,
   parseHandlerReference,
+  parseHandlerReferences,
   readElementParams,
   readElementState,
   stampPendingQueries,
@@ -51,6 +52,7 @@ declare module '@jiso/core' {
 
 class FakeRoot {
   listeners = new Map<string, (event: DelegatedEvent) => void | Promise<void>>();
+  elements = new Map<string, FakeElement[]>();
   scripts: QueryScript[] = [];
   visibilityState: 'hidden' | 'visible' = 'visible';
 
@@ -58,8 +60,8 @@ class FakeRoot {
     this.listeners.set(type, listener);
   }
 
-  querySelectorAll(selector: string): Iterable<QueryScript> {
-    return selector === 'script[fw-query]' ? this.scripts : [];
+  querySelectorAll(selector: string): Iterable<QueryScript | FakeElement> {
+    return selector === 'script[fw-query]' ? this.scripts : (this.elements.get(selector) ?? []);
   }
 }
 
@@ -300,6 +302,7 @@ describe('runtime loader', () => {
     const globalRecord = globalThis as unknown as Record<string, unknown>;
     const originals = {
       CustomEvent: globalRecord.CustomEvent,
+      DOMParser: globalRecord.DOMParser,
       FormData: globalRecord.FormData,
       addEventListener: globalRecord.addEventListener,
       dispatchEvent: globalRecord.dispatchEvent,
@@ -340,6 +343,45 @@ describe('runtime loader', () => {
 
         get detail(): unknown {
           return this.init?.detail;
+        }
+      };
+      globalRecord.DOMParser = class DOMParser {
+        parseFromString(body: string) {
+          const queryMatch = /<fw-query\b([^>]*)>([\s\S]*?)<\/fw-query>/.exec(body);
+          const fragmentMatch = /<fw-fragment\b([^>]*)>([\s\S]*?)<\/fw-fragment>/.exec(body);
+          const queryAttributes = queryMatch?.[1] ?? '';
+          const fragmentAttributes = fragmentMatch?.[1] ?? '';
+          const queryElement = queryMatch
+            ? {
+                getAttribute(name: string) {
+                  return name === 'name'
+                    ? (/name="([^"]+)"/.exec(queryAttributes)?.[1] ?? null)
+                    : null;
+                },
+                textContent: queryMatch[2],
+              }
+            : null;
+          const fragmentElement = fragmentMatch
+            ? {
+                getAttribute(name: string) {
+                  return name === 'target'
+                    ? (/target="([^"]+)"/.exec(fragmentAttributes)?.[1] ?? null)
+                    : null;
+                },
+                hasAttribute(name: string) {
+                  return name === 'append' && fragmentAttributes.includes('append');
+                },
+                innerHTML: fragmentMatch[2],
+              }
+            : null;
+
+          return {
+            querySelectorAll(selector: string) {
+              if (selector === 'fw-query') return queryElement ? [queryElement] : [];
+              if (selector === 'fw-fragment') return fragmentElement ? [fragmentElement] : [];
+              return [];
+            },
+          };
         }
       };
       globalRecord.FormData = function FormData() {
@@ -621,8 +663,32 @@ describe('runtime loader', () => {
     expect(importModule).toHaveBeenCalledWith('/c/cart-badge.client.js');
     expect(handler).toHaveBeenCalledWith(
       expect.objectContaining({ type: 'click' }),
-      expect.objectContaining({ params: { itemId: 'i_42' } }),
+      expect.objectContaining({ params: { itemId: 'i_42' }, signal: expect.any(AbortSignal) }),
     );
+  });
+
+  it('invokes chained handler refs left-to-right with one context and persisted state', async () => {
+    const calls: string[] = [];
+    const first = vi.fn((_event, ctx: { signal: AbortSignal; state: { count: number } }) => {
+      calls.push(`first:${ctx.state.count}:${ctx.signal.aborted}`);
+      ctx.state.count += 1;
+    });
+    const second = vi.fn((_event, ctx: { signal: AbortSignal; state: { count: number } }) => {
+      calls.push(`second:${ctx.state.count}:${ctx.signal.aborted}`);
+      ctx.state.count += 1;
+    });
+    const importModule = vi.fn(async (url: string) => (url === '/c/a.js' ? { first } : { second }));
+    const element = new FakeElement({
+      'fw-state': '{"count":1}',
+      'on:click': '/c/a.js#first /c/b.js#second',
+    });
+
+    await dispatchDelegatedEvent({ target: element, type: 'click' }, importModule);
+
+    expect(importModule).toHaveBeenNthCalledWith(1, '/c/a.js');
+    expect(importModule).toHaveBeenNthCalledWith(2, '/c/b.js');
+    expect(calls).toEqual(['first:1:false', 'second:2:false']);
+    expect(element.getAttribute('fw-state')).toBe('{"count":3}');
   });
 
   it('hydrates serialized island state for delegated handlers', async () => {
@@ -666,9 +732,67 @@ describe('runtime loader', () => {
       exportName: 'Cart$remove',
       url: '/c/cart.client.js?v=1',
     });
+    expect(parseHandlerReferences('/a.js#one  /b.js#two\n/c.js#three')).toEqual([
+      '/a.js#one',
+      '/b.js#two',
+      '/c.js#three',
+    ]);
     expect(readElementParams(new FakeElement({ 'data-p-product-id': 'p1' }))).toEqual({
       productId: 'p1',
     });
+  });
+
+  it('installs declared load, idle, and visible execution triggers', async () => {
+    const root = new FakeRoot();
+    const loadElement = new FakeElement({ 'on:load': '/c/load.js#start' });
+    const idleElement = new FakeElement({ 'on:idle': '/c/idle.js#warm' });
+    const visibleElement = new FakeElement({ 'on:visible': '/c/chart.js#mount' });
+    const idleCallbacks: Array<() => void> = [];
+    let visibleCallback: (
+      entries: { isIntersecting: boolean; target: FakeElement }[],
+    ) => void = () => {};
+    const observer = {
+      observe: vi.fn(),
+      unobserve: vi.fn(),
+    };
+    const handlers = {
+      mount: vi.fn(),
+      start: vi.fn(),
+      warm: vi.fn(),
+    };
+    const importModule = vi.fn(async (url: string) => {
+      if (url === '/c/load.js') return { start: handlers.start };
+      if (url === '/c/idle.js') return { warm: handlers.warm };
+      return { mount: handlers.mount };
+    });
+
+    root.elements.set('[on\\:load]', [loadElement]);
+    root.elements.set('[on\\:idle]', [idleElement]);
+    root.elements.set('[on\\:visible]', [visibleElement]);
+
+    installJisoLoader({
+      importModule,
+      requestIdle: (callback) => {
+        idleCallbacks.push(callback);
+      },
+      root,
+      visibleObserver: (callback) => {
+        visibleCallback = callback as typeof visibleCallback;
+        return observer;
+      },
+    });
+
+    await vi.waitFor(() => expect(handlers.start).toHaveBeenCalledTimes(1));
+    expect(handlers.warm).not.toHaveBeenCalled();
+    idleCallbacks[0]?.();
+    await vi.waitFor(() => expect(handlers.warm).toHaveBeenCalledTimes(1));
+
+    expect(observer.observe).toHaveBeenCalledWith(visibleElement);
+    visibleCallback([{ isIntersecting: true, target: visibleElement }]);
+    await vi.waitFor(() => expect(handlers.mount).toHaveBeenCalledTimes(1));
+    visibleCallback([{ isIntersecting: true, target: visibleElement }]);
+    expect(observer.unobserve).toHaveBeenCalledWith(visibleElement);
+    expect(handlers.mount).toHaveBeenCalledTimes(1);
   });
 });
 
