@@ -29,6 +29,43 @@ describe('fw check', () => {
     });
   });
 
+  it('prints stable FW311 update coverage rows and warnings', () => {
+    expect(
+      fwCheck({
+        updateCoverage: [
+          {
+            component: 'CartBadge',
+            position: 'conditional <dot>',
+            query: 'cart.discount',
+            status: 'UNHANDLED',
+          },
+          {
+            component: 'CartBadge',
+            detail: 'text binding',
+            position: 'text',
+            query: 'cart.count',
+            status: 'plan',
+          },
+          {
+            component: 'CartDrawer',
+            position: 'root',
+            query: 'cart',
+            status: 'fragment',
+          },
+        ],
+      }),
+    ).toEqual({
+      exitCode: 0,
+      output: [
+        'fw-check/v1',
+        'COVERAGE component=CartBadge query=cart.count position="text" status=plan detail="text binding"',
+        'WARN FW311 component=CartBadge query=cart.discount position="conditional <dot>" Query-dependent DOM position has no update status.',
+        'COVERAGE component=CartDrawer query=cart position="root" status=fragment',
+        '',
+      ].join('\n'),
+    });
+  });
+
   it('derives FW310 gaps from mutation invalidations and query read sets', () => {
     expect(
       fwCheck({
@@ -542,6 +579,41 @@ describe('fw check', () => {
 
     expect(output).toBe(
       'fw-check/v1\nWARN FW310 cart/add -> cart Invalidated query lacks optimistic transform.\n',
+    );
+  });
+
+  it('accepts fw check coverage as a CLI command', () => {
+    const tempDir = mkdtempSync(join(tmpdir(), 'jiso-cli-coverage-'));
+    const graphPath = join(tempDir, 'graph.json');
+    let output = '';
+    const stdoutWrite = vi.spyOn(process.stdout, 'write').mockImplementation(((chunk) => {
+      output += chunk.toString();
+      return true;
+    }) as typeof process.stdout.write);
+
+    try {
+      writeFileSync(
+        graphPath,
+        JSON.stringify({
+          updateCoverage: [
+            {
+              component: 'CartBadge',
+              position: 'conditional <dot>',
+              query: 'cart.discount',
+              status: 'UNHANDLED',
+            },
+          ],
+        }),
+      );
+
+      expect(main(['check', 'coverage', graphPath])).toBe(0);
+    } finally {
+      stdoutWrite.mockRestore();
+      rmSync(tempDir, { force: true, recursive: true });
+    }
+
+    expect(output).toBe(
+      'fw-check/v1\nWARN FW311 component=CartBadge query=cart.discount position="conditional <dot>" Query-dependent DOM position has no update status.\n',
     );
   });
 });

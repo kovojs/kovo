@@ -9,6 +9,7 @@ export type DiagnosticCode =
   | 'FW302'
   | 'FW303'
   | 'FW310'
+  | 'FW311'
   | 'FW320'
   | 'FW330'
   | 'FW402'
@@ -67,6 +68,11 @@ export const diagnosticDefinitions = {
     code: 'FW310',
     severity: 'warn',
     message: 'Invalidated query lacks optimistic transform.',
+  },
+  FW311: {
+    code: 'FW311',
+    severity: 'warn',
+    message: 'Query-dependent DOM position has no update status.',
   },
   FW320: {
     code: 'FW320',

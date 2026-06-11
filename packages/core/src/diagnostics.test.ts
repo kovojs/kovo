@@ -13,6 +13,7 @@ describe('diagnostic registry', () => {
       'FW302',
       'FW303',
       'FW310',
+      'FW311',
       'FW320',
       'FW330',
       'FW402',
@@ -68,6 +69,11 @@ describe('diagnostic registry', () => {
         "FW310": {
           "code": "FW310",
           "message": "Invalidated query lacks optimistic transform.",
+          "severity": "warn",
+        },
+        "FW311": {
+          "code": "FW311",
+          "message": "Query-dependent DOM position has no update status.",
           "severity": "warn",
         },
         "FW320": {

@@ -14,6 +14,7 @@ export interface FwCheckInput {
   queryData?: readonly QueryDataFact[];
   queries?: readonly QueryReadSet[];
   touchGraph?: TouchGraph;
+  updateCoverage?: readonly UpdateCoverageFact[];
   verificationDiagnostics?: readonly VerificationDiagnosticFact[];
 }
 
@@ -85,6 +86,14 @@ export interface OptimisticCoverage {
   status: 'UNHANDLED' | 'await-fragment' | 'hand-written';
 }
 
+export interface UpdateCoverageFact {
+  component: string;
+  detail?: string;
+  position: string;
+  query: string;
+  status: 'UNHANDLED' | 'fragment' | 'isomorphic' | 'plan' | 'renderOnce';
+}
+
 export interface FixpointCheck {
   actual?: string;
   artifact: string;
@@ -141,7 +150,7 @@ export function main(args: readonly string[] = process.argv.slice(2)): number {
   }
 
   if (args[0] === 'check') {
-    const inputPath = args[1] === 'optimistic' ? args[2] : args[1];
+    const inputPath = args[1] === 'optimistic' || args[1] === 'coverage' ? args[2] : args[1];
     const input = inputPath ? JSON.parse(readFileSync(inputPath, 'utf8')) : {};
     const result = fwCheck(input);
     const stream = result.exitCode === 0 ? process.stdout : process.stderr;
@@ -397,6 +406,10 @@ export function fwCheck(input: FwCheckInput): FwCheckResult {
     lines.push(warning);
   }
 
+  for (const line of updateCoverageLines(input.updateCoverage ?? [])) {
+    lines.push(line);
+  }
+
   for (const lint of input.lints ?? []) {
     lines.push(`LINT ${lint.code} ${lint.site} ${lintMessage(lint)}`);
   }
@@ -603,6 +616,43 @@ function optimisticCoverageWarnings(
 
 function optimisticCoverageWarning(mutation: string, query: string): string {
   return `WARN FW310 ${mutation} -> ${query} Invalidated query lacks optimistic transform.`;
+}
+
+function updateCoverageLines(coverage: readonly UpdateCoverageFact[]): string[] {
+  return [...coverage]
+    .sort(compareUpdateCoverage)
+    .map((fact) =>
+      fact.status === 'UNHANDLED'
+        ? [
+            'WARN FW311',
+            `component=${fact.component}`,
+            `query=${fact.query}`,
+            `position=${JSON.stringify(fact.position)}`,
+            diagnosticDefinitions.FW311.message,
+            fact.detail ?? '',
+          ]
+            .filter(Boolean)
+            .join(' ')
+        : [
+            'COVERAGE',
+            `component=${fact.component}`,
+            `query=${fact.query}`,
+            `position=${JSON.stringify(fact.position)}`,
+            `status=${fact.status}`,
+            fact.detail ? `detail=${JSON.stringify(fact.detail)}` : '',
+          ]
+            .filter(Boolean)
+            .join(' '),
+    );
+}
+
+function compareUpdateCoverage(left: UpdateCoverageFact, right: UpdateCoverageFact): number {
+  return (
+    left.component.localeCompare(right.component) ||
+    left.query.localeCompare(right.query) ||
+    left.position.localeCompare(right.position) ||
+    left.status.localeCompare(right.status)
+  );
 }
 
 function optimisticUnhandledFixLine(): string {
