@@ -7,8 +7,19 @@ describe('diagnostic registry', () => {
     expect(Object.keys(diagnosticDefinitions)).toEqual([
       'FW201',
       'FW210',
+      'FW211',
+      'FW212',
       'FW220',
       'FW221',
+      'FW222',
+      'FW223',
+      'FW224',
+      'FW225',
+      'FW226',
+      'FW230',
+      'FW231',
+      'FW232',
+      'FW233',
       'FW301',
       'FW302',
       'FW303',
@@ -41,6 +52,16 @@ describe('diagnostic registry', () => {
           "message": "Anonymous handler; name it for stable identity.",
           "severity": "lint",
         },
+        "FW211": {
+          "code": "FW211",
+          "message": "on:load eager trigger requires a justification comment.",
+          "severity": "lint",
+        },
+        "FW212": {
+          "code": "FW212",
+          "message": "Unknown on:* event or execution trigger name.",
+          "severity": "lint",
+        },
         "FW220": {
           "code": "FW220",
           "message": "Literal href or form action matches no declared route.",
@@ -49,6 +70,51 @@ describe('diagnostic registry', () => {
         "FW221": {
           "code": "FW221",
           "message": "IDREF references an id not present in component scope.",
+          "severity": "error",
+        },
+        "FW222": {
+          "code": "FW222",
+          "message": "Hand-written binding stamp disagrees with the typed expression it wraps.",
+          "severity": "error",
+        },
+        "FW223": {
+          "code": "FW223",
+          "message": "Redundant hand-written binding stamp in sugar; the compiler derives it.",
+          "severity": "lint",
+        },
+        "FW224": {
+          "code": "FW224",
+          "message": "Static id appears in a repeatable component or duplicate page composition.",
+          "severity": "error",
+        },
+        "FW225": {
+          "code": "FW225",
+          "message": "JSX nesting violates the HTML content model.",
+          "severity": "error",
+        },
+        "FW226": {
+          "code": "FW226",
+          "message": "fw-deps or fw-c names an unknown query instance or component.",
+          "severity": "error",
+        },
+        "FW230": {
+          "code": "FW230",
+          "message": "Fragment-target children cannot lower to a component reference.",
+          "severity": "error",
+        },
+        "FW231": {
+          "code": "FW231",
+          "message": "Unmergeable attribute conflict in primitive composition.",
+          "severity": "error",
+        },
+        "FW232": {
+          "code": "FW232",
+          "message": "Author overrides a primitive-owned ARIA or state attribute.",
+          "severity": "lint",
+        },
+        "FW233": {
+          "code": "FW233",
+          "message": "Two writers target the same binding slot.",
           "severity": "error",
         },
         "FW301": {

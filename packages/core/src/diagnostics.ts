@@ -3,8 +3,19 @@ export type DiagnosticSeverity = 'error' | 'warn' | 'lint' | 'notice';
 export type DiagnosticCode =
   | 'FW201'
   | 'FW210'
+  | 'FW211'
+  | 'FW212'
   | 'FW220'
   | 'FW221'
+  | 'FW222'
+  | 'FW223'
+  | 'FW224'
+  | 'FW225'
+  | 'FW226'
+  | 'FW230'
+  | 'FW231'
+  | 'FW232'
+  | 'FW233'
   | 'FW301'
   | 'FW302'
   | 'FW303'
@@ -39,6 +50,16 @@ export const diagnosticDefinitions = {
     severity: 'lint',
     message: 'Anonymous handler; name it for stable identity.',
   },
+  FW211: {
+    code: 'FW211',
+    severity: 'lint',
+    message: 'on:load eager trigger requires a justification comment.',
+  },
+  FW212: {
+    code: 'FW212',
+    severity: 'lint',
+    message: 'Unknown on:* event or execution trigger name.',
+  },
   FW220: {
     code: 'FW220',
     severity: 'error',
@@ -48,6 +69,51 @@ export const diagnosticDefinitions = {
     code: 'FW221',
     severity: 'error',
     message: 'IDREF references an id not present in component scope.',
+  },
+  FW222: {
+    code: 'FW222',
+    severity: 'error',
+    message: 'Hand-written binding stamp disagrees with the typed expression it wraps.',
+  },
+  FW223: {
+    code: 'FW223',
+    severity: 'lint',
+    message: 'Redundant hand-written binding stamp in sugar; the compiler derives it.',
+  },
+  FW224: {
+    code: 'FW224',
+    severity: 'error',
+    message: 'Static id appears in a repeatable component or duplicate page composition.',
+  },
+  FW225: {
+    code: 'FW225',
+    severity: 'error',
+    message: 'JSX nesting violates the HTML content model.',
+  },
+  FW226: {
+    code: 'FW226',
+    severity: 'error',
+    message: 'fw-deps or fw-c names an unknown query instance or component.',
+  },
+  FW230: {
+    code: 'FW230',
+    severity: 'error',
+    message: 'Fragment-target children cannot lower to a component reference.',
+  },
+  FW231: {
+    code: 'FW231',
+    severity: 'error',
+    message: 'Unmergeable attribute conflict in primitive composition.',
+  },
+  FW232: {
+    code: 'FW232',
+    severity: 'lint',
+    message: 'Author overrides a primitive-owned ARIA or state attribute.',
+  },
+  FW233: {
+    code: 'FW233',
+    severity: 'error',
+    message: 'Two writers target the same binding slot.',
   },
   FW301: {
     code: 'FW301',

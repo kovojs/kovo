@@ -656,6 +656,64 @@ export const CartShell = component('cart-shell', {
     ]);
   });
 
+  it('accepts native table rows when the parser keeps the authored tree shape', () => {
+    const result = compileComponentModule({
+      fileName: 'cart-table.tsx',
+      source: `
+export const CartTable = component('cart-table', {
+  render: () => (
+    <table>
+      <tbody>
+        <tr fw-c="cart-row">
+          <td>Cart row</td>
+        </tr>
+      </tbody>
+    </table>
+  ),
+});
+`,
+    });
+
+    expect(result.diagnostics).toEqual([]);
+  });
+
+  it('reports FW225 for parser-reparented HTML content-model violations', () => {
+    const result = compileComponentModule({
+      fileName: 'cart-shell.tsx',
+      source: `
+export const CartShell = component('cart-shell', {
+  render: () => (
+    <section>
+      <p>
+        Cart intro
+        <div>Parser closes the paragraph before this div.</div>
+      </p>
+      <tr>
+        <td>Detached row</td>
+      </tr>
+    </section>
+  ),
+});
+`,
+    });
+
+    expect(result.diagnostics).toEqual([
+      {
+        code: 'FW225',
+        fileName: 'cart-shell.tsx',
+        message: 'JSX nesting violates the HTML content model. <div> cannot appear inside <p>',
+        severity: 'error',
+      },
+      {
+        code: 'FW225',
+        fileName: 'cart-shell.tsx',
+        message:
+          'JSX nesting violates the HTML content model. <tr> must be inside a table section or table',
+        severity: 'error',
+      },
+    ]);
+  });
+
   it('accepts literal navigation targets that match declared routes', () => {
     const result = compileComponentModule({
       fileName: 'product-links.tsx',

@@ -251,6 +251,7 @@ export function compileComponentModule(options: CompileComponentOptions): Compil
   const directDbDiagnostics = validateDirectDbAccess(source, options.fileName);
   const idrefDiagnostics = validateIdrefs(options.source, options.fileName);
   const literalHrefDiagnostics = validateLiteralHrefs(source, options);
+  const htmlContentModelDiagnostics = validateHtmlContentModel(source, options.fileName);
   const clientFileName = replaceExtension(options.fileName, '.client.js');
   const cssFileName = replaceExtension(options.fileName, '.css');
   const serverFileName = replaceExtension(options.fileName, '.server.js');
@@ -288,6 +289,7 @@ export function compileComponentModule(options: CompileComponentOptions): Compil
       ...directDbDiagnostics,
       ...idrefDiagnostics,
       ...literalHrefDiagnostics,
+      ...htmlContentModelDiagnostics,
     ],
     files: [
       { fileName: serverFileName, source: serverSource },
@@ -1207,6 +1209,115 @@ function validateIdrefs(source: string, fileName: string): CompilerDiagnostic[] 
 
   const missing = idrefValues(source).filter((value) => !ids.has(value));
   return [...new Set(missing)].map((value) => fw221Diagnostic(fileName, value));
+}
+
+const blockTagsThatCloseParagraph = new Set([
+  'address',
+  'article',
+  'aside',
+  'blockquote',
+  'div',
+  'dl',
+  'fieldset',
+  'footer',
+  'form',
+  'h1',
+  'h2',
+  'h3',
+  'h4',
+  'h5',
+  'h6',
+  'header',
+  'hr',
+  'main',
+  'nav',
+  'ol',
+  'p',
+  'pre',
+  'section',
+  'table',
+  'ul',
+]);
+
+const voidHtmlTags = new Set([
+  'area',
+  'base',
+  'br',
+  'col',
+  'embed',
+  'hr',
+  'img',
+  'input',
+  'link',
+  'meta',
+  'param',
+  'source',
+  'track',
+  'wbr',
+]);
+
+function validateHtmlContentModel(source: string, fileName: string): CompilerDiagnostic[] {
+  const diagnostics: CompilerDiagnostic[] = [];
+  const stack: string[] = [];
+  const tagPattern = /<(?<closing>\/?)(?<tag>[A-Za-z][A-Za-z0-9-]*)(?<attrs>[^<>]*)>/g;
+
+  for (const match of source.matchAll(tagPattern)) {
+    const rawTag = match.groups?.tag ?? '';
+    if (!isNativeHtmlTag(rawTag)) continue;
+
+    const tag = rawTag.toLowerCase();
+    const attrs = match.groups?.attrs ?? '';
+    const closing = match.groups?.closing === '/';
+
+    if (closing) {
+      const index = stack.lastIndexOf(tag);
+      if (index !== -1) stack.splice(index);
+      continue;
+    }
+
+    if (blockTagsThatCloseParagraph.has(tag) && stack.includes('p')) {
+      diagnostics.push(htmlContentModelDiagnostic(fileName, `<${tag}> cannot appear inside <p>`));
+    }
+
+    if (
+      tag === 'tr' &&
+      !hasFwComponentStamp(attrs) &&
+      !hasAncestor(stack, ['table', 'tbody', 'thead', 'tfoot'])
+    ) {
+      diagnostics.push(
+        htmlContentModelDiagnostic(fileName, '<tr> must be inside a table section or table'),
+      );
+    }
+
+    if (isSelfClosing(attrs) || voidHtmlTags.has(tag)) continue;
+
+    stack.push(tag);
+  }
+
+  return diagnostics;
+}
+
+function htmlContentModelDiagnostic(fileName: string, detail: string): CompilerDiagnostic {
+  return {
+    ...diagnosticFor(fileName, 'FW225'),
+    message: `${diagnosticDefinitions.FW225.message} ${detail}`,
+  };
+}
+
+function isNativeHtmlTag(tag: string): boolean {
+  return tag === tag.toLowerCase() && !tag.includes('-');
+}
+
+function hasAncestor(stack: readonly string[], tags: readonly string[]): boolean {
+  return stack.some((tag) => tags.includes(tag));
+}
+
+function isSelfClosing(attrs: string): boolean {
+  return /\/\s*$/.test(attrs);
+}
+
+function hasFwComponentStamp(attrs: string): boolean {
+  return /\bfw-c\s*=/.test(attrs);
 }
 
 function validateLiteralHrefs(

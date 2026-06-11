@@ -444,6 +444,23 @@ void test('P1 compiler validates component-scoped IDREFs', async () => {
   assert.match(compilerTests, /reports FW221 for literal IDREFs that miss component scope ids/);
 });
 
+void test('P1 compiler validates HTML content-model parser stability', async () => {
+  const coreSource = await readProjectFile('packages/core/src/diagnostics.ts');
+  const compilerSource = await readProjectFile('packages/compiler/src/index.ts');
+  const compilerTests = await readProjectFile('packages/compiler/src/index.test.ts');
+
+  assert.match(coreSource, /FW225/);
+  assert.match(coreSource, /JSX nesting violates the HTML content model/);
+  assert.match(compilerSource, /validateHtmlContentModel/);
+  assert.match(compilerSource, /blockTagsThatCloseParagraph/);
+  assert.match(compilerSource, /diagnosticDefinitions\.FW225\.message/);
+  assert.match(
+    compilerTests,
+    /accepts native table rows when the parser keeps the authored tree shape/,
+  );
+  assert.match(compilerTests, /reports FW225 for parser-reparented HTML content-model violations/);
+});
+
 void test('P3 typed routes validate navigation targets', async () => {
   const coreSource = await readProjectFile('packages/core/src/index.ts');
   const coreTests = await readProjectFile('packages/core/src/index.test.ts');
