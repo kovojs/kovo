@@ -1339,11 +1339,15 @@ export async function renderMutationResponse<
   const result = await runMutation(definition, wireRequest.rawInput, wireRequest.request);
 
   if (!result.ok) {
-    return storeMutationReplay(definition, wireRequest, {
+    const response = {
       body: await renderFailureFragment(result, wireRequest),
       headers: mutationWireResponseHeaders(wireRequest),
       status: 422,
-    });
+    } satisfies MutationWireResponse;
+
+    return result.error.code === 'VALIDATION'
+      ? response
+      : storeMutationReplay(definition, wireRequest, response);
   }
 
   const renderInput = mutationResponseInput(result, wireRequest.rawInput);

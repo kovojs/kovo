@@ -2052,6 +2052,38 @@ describe('server mutation primitives', () => {
     expect(attempts).toBe(1);
   });
 
+  it('does not replay pure schema validation failures by FW-Idem', async () => {
+    const replayStore = createMemoryMutationReplayStore();
+    let writes = 0;
+    const addToCart = mutation('cart/add', {
+      input: s.object({ productId: s.string() }),
+      handler(input) {
+        writes += 1;
+        return input;
+      },
+    });
+    const baseRequest = {
+      idem: 'idem_validation',
+      replayStore,
+      request: { sessionId: 's1' },
+    };
+
+    await expect(
+      renderMutationResponse(addToCart, {
+        ...baseRequest,
+        rawInput: { quantity: 1 },
+      }),
+    ).resolves.toMatchObject({ status: 422 });
+    await expect(
+      renderMutationResponse(addToCart, {
+        ...baseRequest,
+        rawInput: { productId: 'p1' },
+      }),
+    ).resolves.toMatchObject({ status: 200 });
+
+    expect(writes).toBe(1);
+  });
+
   it('does not replay enhanced mutation responses before validating CSRF', async () => {
     const request = { session: { id: 's1' } };
     const csrf = {
