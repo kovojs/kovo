@@ -368,3 +368,17 @@ void test('framework-owned browser suite is wired into acceptance', async () => 
   assert.match(browserConfig, /@vitest\/browser-playwright/);
   assert.match(browserConfig, /browser: 'chromium'/);
 });
+
+void test('P10 perf acceptance is wired through Playwright and CDP', async () => {
+  const packageJson = JSON.parse(await readProjectFile('package.json'));
+  const viteConfig = await readProjectFile('vite.config.ts');
+  const perfScript = await readProjectFile('tests/p10-perf.node.mjs');
+
+  assert.match(packageJson.scripts.acceptance, /pnpm run test:p10-perf/);
+  assert.equal(packageJson.scripts['test:p10-perf'], 'vp run p10-perf');
+  assert.match(viteConfig, /'p10-perf':\s*\{/);
+  assert.match(perfScript, /first-contentful-paint/);
+  assert.match(perfScript, /activationStart/);
+  assert.match(perfScript, /Runtime\.getHeapUsage/);
+  assert.match(perfScript, /navigationCount,\s*100/);
+});

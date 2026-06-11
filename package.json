@@ -9,12 +9,13 @@
   ],
   "type": "module",
   "scripts": {
-    "acceptance": "pnpm run check && pnpm run test && pnpm run test:browser && pnpm run check:build && pnpm run check:fw",
+    "acceptance": "pnpm run check && pnpm run test && pnpm run test:browser && pnpm run check:build && pnpm run test:p10-perf && pnpm run check:fw",
     "check": "vp check",
     "check:build": "vp run build",
     "check:fw": "vp run fw-check",
     "test": "vitest --run",
-    "test:browser": "vp run browser"
+    "test:browser": "vp run browser",
+    "test:p10-perf": "vp run p10-perf"
   },
   "devDependencies": {
     "@types/node": "25.9.2",

@@ -31,6 +31,14 @@ export default defineConfig({
           { pattern: 'packages/runtime/src/**/*.browser.test.ts', base: 'workspace' },
         ],
       },
+      'p10-perf': {
+        command: 'node tests/p10-perf.node.mjs',
+        input: [
+          { auto: true },
+          { pattern: 'tests/p10-perf.node.mjs', base: 'workspace' },
+          { pattern: 'dist/**', base: 'workspace' },
+        ],
+      },
       'fw-check': {
         command: 'node --test tests/fw-check.node.mjs',
         input: [
