@@ -161,6 +161,10 @@ Do this first or pay it on every commit.
       compiler API and asserts `compileComponentModule` records view-transition facts, merges the
       CSS declaration into an existing style attribute once, removes `viewTransitionName`, and
       emits the registry type instead of grepping compiler source or compiler test names.
+      Partial evidence 2026-06-11: the S1 production-build tranche now executes
+      `scripts/prod-emit-check.mjs` and exercises the built `jisoVitePlugin` transform plus dev
+      middleware roundtrip for SPEC §5 source-derived handler URLs and 1:1 client/server output
+      instead of grepping compiler, Vite plugin, Vite task, or test-name source.
       Partial evidence 2026-06-11: the P1 IDREF tranche now imports built core/compiler APIs and
       asserts `diagnosticDefinitions.FW221` plus `compileComponentModule` accept/fail diagnostics
       for literal `for`, `aria-describedby`, and `popovertarget` IDREFs instead of grepping core

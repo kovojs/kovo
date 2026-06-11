@@ -4,6 +4,7 @@ import { chmod, mkdtemp, readdir, readFile, rm, writeFile } from 'node:fs/promis
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { test } from 'node:test';
+import { fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
 import { runInNewContext } from 'node:vm';
 import { gzipSync } from 'node:zlib';
@@ -18,6 +19,7 @@ import {
   deriveAppGraph,
   deriveRegistryFactsFromGraph,
   emitQueryPlanBootstrapModule,
+  jisoVitePlugin,
   queryShapesFromFacts,
 } from '../dist/compiler/src/index.mjs';
 import { diagnosticDefinitions } from '../dist/core/src/index.mjs';
@@ -3985,26 +3987,82 @@ export const ProductCard = component('product-card', {
 });
 
 void test('S1 production build proves the compiler 1:1 emit contract', async () => {
-  const compilerSource = await readProjectFile('packages/compiler/src/index.ts');
-  const compilerViteSource = await readProjectFile('packages/compiler/src/vite.ts');
-  const compilerTests = await readProjectFile('packages/compiler/src/index.test.ts');
-  const viteConfig = await readProjectFile('vite.config.ts');
-  const prodEmitCheck = await readProjectFile('scripts/prod-emit-check.mjs');
+  const projectRoot = fileURLToPath(new URL('..', import.meta.url));
+  const prodEmit = await execFileAsync('node', ['scripts/prod-emit-check.mjs'], {
+    cwd: projectRoot,
+    maxBuffer: 1024 * 1024 * 10,
+  });
+  assert.equal(prodEmit.stderr, '');
+  assert.deepEqual(prodEmit.stdout.trim().split(/\r?\n/), ['prod-emit-check/v1', 'OK']);
 
-  assert.match(compilerSource, /createJisoVitePlugin/);
-  assert.match(compilerViteSource, /configureServer/);
-  assert.match(compilerViteSource, /devClientModuleKey/);
-  assert.match(compilerViteSource, /URLSearchParams\(query\)\.get\('v'\)/);
-  assert.match(compilerViteSource, /clientModules\.set/);
-  assert.match(compilerTests, /serves emitted client modules from Vite dev middleware/);
-  assert.match(viteConfig, /command: 'vp pack && node scripts\/prod-emit-check\.mjs'/);
-  assert.match(viteConfig, /scripts\/prod-emit-check\.mjs/);
-  assert.match(viteConfig, /packages\/compiler\/src\/\*\*/);
-  assert.match(prodEmitCheck, /compileComponentModule/);
-  assert.match(prodEmitCheck, /product-card\.server\.js/);
-  assert.match(prodEmitCheck, /product-card\.client\.js/);
-  assert.match(prodEmitCheck, /ProductCard\\\$button_click/);
-  assert.match(prodEmitCheck, /prod-emit-check\/v1/);
+  const plugin = jisoVitePlugin();
+  let middleware;
+  plugin.configureServer?.({
+    config: { root: projectRoot },
+    middlewares: {
+      use(handler) {
+        middleware = handler;
+      },
+    },
+  });
+  assert.equal(plugin.name, 'jiso');
+  assert.equal(typeof middleware, 'function');
+
+  const transformed = plugin.transform(
+    `
+import { component } from '@jiso/core';
+
+export const ProductCard = component('product-card', {
+  render: () => (
+    <article>
+      <button onClick={() => addToCart(product.id)}>Add</button>
+    </article>
+  ),
+});
+`,
+    join(projectRoot, 'routes/products/product-card.tsx'),
+  );
+  assert.ok(transformed);
+  assert.equal(transformed.map, null);
+
+  const handlerHref = transformed.code.match(
+    /on:click="(\/c\/routes\/products\/product-card\.client\.js\?v=([0-9a-f]{8})#ProductCard\$button_click)"/,
+  );
+  assert.ok(handlerHref);
+  assert.equal(
+    transformed.code.includes('export const ProductCard$button_click'),
+    false,
+    'server output references the emitted client module instead of inlining the handler',
+  );
+
+  const [, clientHandlerHref = '', version = ''] = handlerHref;
+  const clientModuleHref = clientHandlerHref.split('#')[0] ?? '';
+  const [clientPath = ''] = clientModuleHref.split('?');
+  const headers = new Map();
+  let body = '';
+  let nextCalls = 0;
+  const response = {
+    setHeader(name, value) {
+      headers.set(name, value);
+    },
+    end(value) {
+      body = value;
+    },
+  };
+
+  middleware({ url: `${clientPath}?cache=1&v=${version}` }, response, () => {
+    nextCalls += 1;
+  });
+
+  assert.equal(nextCalls, 0);
+  assert.equal(response.statusCode, 200);
+  assert.equal(headers.get('Content-Type'), 'text/javascript');
+  assert.match(body, /export const ProductCard\$button_click = handler/);
+
+  middleware({ url: `${clientPath}?v=00000000` }, response, () => {
+    nextCalls += 1;
+  });
+  assert.equal(nextCalls, 1);
 });
 
 void test('P3 Drizzle query facts include select shapes and instance keys', async () => {
