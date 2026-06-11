@@ -733,7 +733,7 @@ export interface MutationReplayStore {
     scope: string,
     idem: string,
   ): MutationWireResponse | Promise<MutationWireResponse> | undefined;
-  reserve?(scope: string, idem: string): MutationReplayReservation | undefined;
+  reserve(scope: string, idem: string): MutationReplayReservation | undefined;
   set(scope: string, idem: string, response: MutationWireResponse): void;
 }
 
@@ -2374,7 +2374,7 @@ function reserveMutationReplay<Request>(
   const replayScope = mutationReplayScope(csrf, wireRequest);
   if (!wireRequest.idem || !replayScope) return undefined;
 
-  return wireRequest.replayStore?.reserve?.(replayScope, wireRequest.idem);
+  return wireRequest.replayStore?.reserve(replayScope, wireRequest.idem);
 }
 
 function mutationReplayScope<Request>(

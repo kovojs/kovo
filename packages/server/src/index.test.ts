@@ -1455,6 +1455,9 @@ describe('server mutation primitives', () => {
           status: 200,
         };
       },
+      reserve() {
+        throw new Error('replay reserve should not run before CSRF validation');
+      },
       set() {},
     };
     const addToCart = defineMutation('cart/add', {
@@ -2783,6 +2786,9 @@ describe('server mutation primitives', () => {
           headers: {},
           status: 200,
         };
+      },
+      reserve() {
+        throw new Error('replay reserve should not run before CSRF validation');
       },
       set() {},
     };
