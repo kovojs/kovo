@@ -1,4 +1,14 @@
-import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { execFileSync } from 'node:child_process';
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+  symlinkSync,
+  writeFileSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -282,6 +292,36 @@ describe('create-jiso starter', () => {
     }
   });
 
+  it('builds generated starter CSS with static and safelisted Tailwind utilities', () => {
+    const tempParent = join(process.cwd(), 'node_modules/.tmp');
+    mkdirSync(tempParent, { recursive: true });
+    const root = mkdtempSync(join(tempParent, 'create-jiso-build-'));
+
+    try {
+      writeJisoProject(root, { name: 'Build Proof' });
+      linkStarterBuildDependencies(root);
+
+      execFileSync(
+        join(process.cwd(), 'node_modules/.bin/vite'),
+        ['build', '--clearScreen', 'false'],
+        {
+          cwd: root,
+          stdio: 'pipe',
+        },
+      );
+
+      const cssFile = readdirSync(join(root, 'dist/assets')).find((file) => file.endsWith('.css'));
+      expect(cssFile).toBeTypeOf('string');
+      const css = readFileSync(join(root, 'dist/assets', cssFile ?? ''), 'utf8');
+
+      expect(css).toContain('.text-jiso-accent');
+      expect(css).toContain('.bg-emerald-50');
+      expect(css).toContain('.border-emerald-200');
+    } finally {
+      rmSync(root, { force: true, recursive: true });
+    }
+  });
+
   it('creates a new target directory from the CLI and derives the package name', () => {
     const parent = mkdtempSync(join(tmpdir(), 'create-jiso-cli-'));
     const root = join(parent, 'Hello CLI');
@@ -316,3 +356,19 @@ describe('create-jiso starter', () => {
     }
   });
 });
+
+function linkStarterBuildDependencies(root: string): void {
+  const commerceNodeModules = join(process.cwd(), 'examples/commerce/node_modules');
+  const nodeModules = join(root, 'node_modules');
+  mkdirSync(join(nodeModules, '@jiso'), { recursive: true });
+  mkdirSync(join(nodeModules, '@tailwindcss'), { recursive: true });
+
+  symlinkSync(
+    join(commerceNodeModules, '@tailwindcss/vite'),
+    join(nodeModules, '@tailwindcss/vite'),
+  );
+  symlinkSync(join(commerceNodeModules, '@jiso/core'), join(nodeModules, '@jiso/core'));
+  symlinkSync(join(commerceNodeModules, '@jiso/runtime'), join(nodeModules, '@jiso/runtime'));
+  symlinkSync(join(commerceNodeModules, 'tailwindcss'), join(nodeModules, 'tailwindcss'));
+  symlinkSync(join(commerceNodeModules, 'vite-plus'), join(nodeModules, 'vite-plus'));
+}

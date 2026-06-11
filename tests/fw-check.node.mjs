@@ -606,6 +606,12 @@ void test('P10 starter wires graph assertions into CI', async () => {
   assert.match(starterSource, /<script type="module" src="\/src\/client\.ts"><\/script>/);
   assert.match(starterTests, /vp run graph-assertions/);
   assert.match(starterTests, /@source inline\("bg-emerald-50 text-emerald-700/);
+  assert.match(
+    starterTests,
+    /builds generated starter CSS with static and safelisted Tailwind utilities/,
+  );
+  assert.match(starterTests, /node_modules\/\.bin\/vite/);
+  assert.match(starterTests, /\.bg-emerald-50/);
   assert.match(starterTests, /create-jiso: wrote 14 files/);
 });
 
