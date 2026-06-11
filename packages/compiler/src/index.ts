@@ -5,6 +5,7 @@ import { componentCssAssetForFile, emitCssModule, type ComponentCssAsset } from 
 import { diagnosticFor, type CompilerDiagnostic } from './diagnostics.js';
 import { emitRegistryModule } from './emit/registry.js';
 import type { ComponentGraphFact, RegistryFacts } from './graph.js';
+import { lowerNavigationSugar } from './lower/navigation.js';
 import { lowerPlatformBehaviors, type PlatformSubstitution } from './lower/platform.js';
 import { findStringEnd } from './scan/text.js';
 import {
@@ -559,15 +560,6 @@ function removeJsxAttribute(attributes: string, start: number, end: number): str
   return `${attributes.slice(0, removeStart)}${attributes.slice(end)}`;
 }
 
-function removeJsxAttributes(
-  attributes: string,
-  ranges: readonly { end: number; start: number }[],
-): string {
-  return [...ranges]
-    .sort((left, right) => right.start - left.start)
-    .reduce((next, range) => removeJsxAttribute(next, range.start, range.end), attributes);
-}
-
 function appendViewTransitionStyle(attributes: string, name: string): string {
   const transition = `view-transition-name: ${escapeAttribute(name)}`;
   const selfClosing = /\s*\/\s*$/.test(attributes);
@@ -587,12 +579,6 @@ function appendViewTransitionStyle(attributes: string, name: string): string {
     styleMatch[0],
     `${styleMatch[1]}${styleMatch[2]}${style}${styleMatch[2]}`,
   )}${suffix}`;
-}
-
-function lowerNavigationSugar(source: string): { source: string } {
-  return {
-    source: normalizeStaticHrefAttributes(lowerStaticHrefCalls(lowerStaticLinks(source))),
-  };
 }
 
 function lowerInlineAttributeDerives(
@@ -819,102 +805,11 @@ function sanitizeIdentifier(value: string): string {
   return /^[A-Za-z_$]/.test(sanitized) ? sanitized : `_${sanitized}`;
 }
 
-function lowerStaticLinks(source: string): string {
-  let output = source;
-
-  for (const link of parsedJsxElements(source)
-    .filter((element) => element.tag === 'Link' && !element.selfClosing)
-    .sort((left, right) => right.start - left.start)) {
-    const target = jsxStaticAttributeValue(link, 'to');
-    if (!target) continue;
-
-    const params = navigationObjectAttributeValue(link, 'params');
-    const search = navigationObjectAttributeValue(link, 'search');
-    if (params === null || search === null) continue;
-
-    const opening = output.slice(link.start, link.openingEnd);
-    const tagPrefix = '<Link';
-    const attributes = opening.slice(tagPrefix.length, -1);
-    const anchorAttributes = removeJsxAttributes(
-      attributes,
-      link.attributes
-        .filter((attribute) => ['params', 'search', 'to'].includes(attribute.name))
-        .map((attribute) => ({
-          end: attribute.end - link.start - tagPrefix.length,
-          start: attribute.start - link.start - tagPrefix.length,
-        })),
-    );
-    const spacing = anchorAttributes.trim() === '' ? '' : anchorAttributes;
-    const href = buildStaticHref(target, params ?? {}, search ?? {});
-    const children = output.slice(link.openingEnd, link.closingStart);
-
-    output = `${output.slice(0, link.start)}<a${spacing} href="${escapeAttribute(href)}">${children}</a>${output.slice(link.end)}`;
-  }
-
-  return output;
-}
-
-function lowerStaticHrefCalls(source: string): string {
-  let output = source;
-
-  for (const call of parsedCallExpressions(source)
-    .filter((item) => item.name === 'href')
-    .sort((left, right) => right.start - left.start)) {
-    const lowered = lowerStaticHrefCall(call.arguments);
-    if (!lowered) continue;
-
-    output = `${output.slice(0, call.start)}${JSON.stringify(lowered)}${output.slice(call.end)}`;
-  }
-
-  return output;
-}
-
-function normalizeStaticHrefAttributes(source: string): string {
-  let output = source;
-
-  for (const attribute of jsxAttributes(parseComponentModuleModel('component.tsx', source))
-    .filter((item) => item.name === 'href' && item.expression !== undefined)
-    .sort((left, right) => right.start - left.start)) {
-    const target = literalStringValue(attribute.expression ?? '');
-    if (target === null) continue;
-
-    output = `${output.slice(0, attribute.start)}href="${escapeAttribute(target)}"${output.slice(attribute.end)}`;
-  }
-
-  return output;
-}
-
-function lowerStaticHrefCall(args: readonly string[]): string | null {
-  const [pathArg, optionsArg] = args.map((arg) => arg.trim());
-  const path = literalStringValue(pathArg ?? '');
-  if (!path) return null;
-
-  const options = parseLiteralObject(optionsArg ?? '{}');
-  if (options === null) return null;
-
-  const params = objectRecordValue(options.params);
-  const search = objectRecordValue(options.search);
-  if (params === null || search === null) return null;
-
-  return buildStaticHref(path, params ?? {}, search ?? {});
-}
-
 type StaticNavigationValue = string | number | boolean | null;
-type StaticNavigationObject = Record<string, StaticNavigationValue>;
 type StaticLiteralValue = StaticNavigationValue | StaticLiteralObject;
 
 interface StaticLiteralObject {
   [key: string]: StaticLiteralValue;
-}
-
-function navigationObjectAttributeValue(
-  element: JsxElementModel,
-  name: string,
-): StaticNavigationObject | null | undefined {
-  const expression = element.attributes.find((attribute) => attribute.name === name)?.expression;
-  if (expression === undefined) return undefined;
-  const value = parseLiteralObject(expression);
-  return value ? navigationObjectValue(value) : null;
 }
 
 function parseLiteralObject(source: string): StaticLiteralObject | null {
@@ -929,20 +824,6 @@ function parseLiteralObject(source: string): StaticLiteralObject | null {
   }
 
   return entries;
-}
-
-function objectRecordValue(
-  value: StaticLiteralValue | undefined,
-): StaticNavigationObject | null | undefined {
-  if (value === undefined) return undefined;
-  return navigationObjectValue(value);
-}
-
-function navigationObjectValue(value: StaticLiteralValue | null): StaticNavigationObject | null {
-  if (typeof value !== 'object' || value === null) return null;
-  return Object.values(value).every((entry) => typeof entry !== 'object' || entry === null)
-    ? (value as StaticNavigationObject)
-    : null;
 }
 
 function literalValue(value: string): StaticLiteralValue | undefined {
@@ -965,25 +846,6 @@ function literalStringValue(value: string): string | null {
   const quote = trimmed[0];
   if ((quote !== '"' && quote !== "'") || trimmed.at(-1) !== quote) return null;
   return trimmed.slice(1, -1);
-}
-
-function buildStaticHref(
-  path: string,
-  params: Record<string, string | number | boolean | null>,
-  searchValues: Record<string, string | number | boolean | null>,
-): string {
-  const pathname = path.replace(/:([A-Za-z_$][\w$]*)/g, (_match, key: string) =>
-    encodeURIComponent(String(params[key] ?? '')),
-  );
-  const search = new URLSearchParams();
-
-  for (const [key, value] of Object.entries(searchValues)) {
-    if (value === null || value === undefined) continue;
-    search.set(key, String(value));
-  }
-
-  const query = search.toString();
-  return query ? `${pathname}?${query}` : pathname;
 }
 
 function lowerEventHandlers(
@@ -1715,16 +1577,8 @@ function parsedJsxElements(source: string): JsxElementModel[] {
   return jsxElements(parseComponentModuleModel('component.tsx', source));
 }
 
-function parsedCallExpressions(source: string): ReturnType<typeof callExpressions> {
-  return callExpressions(parseComponentModuleModel('component.tsx', source));
-}
-
 function hasJsxAttribute(element: JsxElementModel, name: string): boolean {
   return element.attributes.some((attribute) => attribute.name === name);
-}
-
-function jsxStaticAttributeValue(element: JsxElementModel, name: string): string | undefined {
-  return element.attributes.find((attribute) => attribute.name === name)?.value;
 }
 
 function isWithinElement(candidate: JsxElementModel, container: JsxElementModel): boolean {

@@ -296,6 +296,10 @@ area, keeping `src/index.ts` barrels and API surface verbatim (mirrors compiler 
   `packages/server/src/client-modules.ts`, with `src/index.ts` preserving the public barrel
   exports. The extracted helper owns SPEC §6.6 deploy-skew behavior for immutable retained
   handler module URLs.
+  Evidence: page hint rendering, route meta resolution, i18n hint scripts, stylesheet hint
+  dedupe/rendering, and speculation rules now live in `packages/server/src/hints.ts`, with
+  `src/index.ts` preserving the public barrel exports. The extracted helper owns SPEC §13.1's
+  shared stylesheet delivery behavior for pages, mutation fragments, and deferred fragments.
 - **runtime** → `events.ts`, `loader.ts`, `store.ts`, `optimistic.ts`, `wire.ts`, `morph.ts`,
   `broadcast.ts` (seams verified clean — almost nothing crosses them). Also stop exporting
   internals (`stampPendingQueries`, `abortRemovedIslandSignals`, `hydrateQueryScripts`, …)

@@ -11,6 +11,7 @@ Scope: `packages/compiler/src/` only (plus `tests/fw-check.node.mjs` where gate 
 - [x] Added a validator registry in `compileComponentModule`.
 - [x] Split out initial modules for diagnostics, CSS, graph derivation, bootstrap/registry emit, text scanning, TS parsing, and binding/event-trigger validation while preserving the public `src/index.ts` surface.
 - [x] Extracted SPEC §6.4 literal navigation target validation (FW220 route-table checks for `href`/`action`) into `src/validate/navigation.ts`.
+- [x] Extracted SPEC §6.4 static navigation sugar lowering (`<Link>`, `href()`, and literal `href={...}` normalization) into `src/lower/navigation.ts`.
 - [x] Fixed known Phase 0 miscompiles that are directly covered by regression tests: self-closing same-name JSX, nested handler braces/span rewrites, exact handler attribute replacement, static state string JSON, handler parameter substring collisions, and conditional at-rule CSS fallback scoping.
 - [x] Migrated large parts of Phase 3 onto the parser model: component/options extraction, JSX element/attribute validators, mutation handler extraction, query binding/stamp collection, update coverage, event trigger justification, and identifier-reference analysis for FW201.
 - [ ] Finish the Phase 2 module split: most orchestration and several validators/lowerers/emitters still live in `packages/compiler/src/index.ts`.
