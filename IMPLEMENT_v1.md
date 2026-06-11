@@ -17,6 +17,10 @@ Audited against the repository on 2026-06-11. Checkmarks mean the behavior, API,
       Evidence 2026-06-11: FW201's conservative free-identifier denylist and the static
       FW201/FW230 detail labels now live in shared `diagnosticDefinitions`; remaining
       compiler-local help is dynamic lowering evidence required by SPEC §4.3 and §4.5.
+      Additional evidence 2026-06-11: SPEC §6.4 literal navigation validation for
+      FW220 (`href`/`action` route-table checks) now lives in
+      `packages/compiler/src/validate/navigation.ts`, further shrinking
+      `packages/compiler/src/index.ts` without changing emitted IR or diagnostics.
 - [x] P2 runtime has delegated event loading, execution triggers, `ctx.signal`, query hydration/update plans, visible-return typed-read refetch, BroadcastChannel plumbing, bfcache-safe pagehide handling, immutable no-`customElements` loader constraints, and a 4KB inline loader budget.
 - [x] P2 exit demo/smoke is proven by a standalone browser L0+L1 smoke covering tabs, dialog, filter island, declared visible trigger, and zero handler imports before interaction/trigger.
 - [x] P3 server/core have `domain`, `query`, `mutation`, `route`, typed `href`/`Link`/`redirect`, typed sessions, CSRF issuance/validation, FormData coercion, guards/rate limits, mutation replay, query endpoints, rerun query fragments, and commerce app usage.
