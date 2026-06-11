@@ -31,6 +31,14 @@ export const CartBadge = component('cart-badge', {
 });
 `;
 
+const prefixFixtureSource = `
+import { component } from '@jiso/core';
+
+export const Shell = component('shell', {
+  render: () => <section></section>,
+});
+`;
+
 function createMiddlewareResponse(): {
   body: string;
   headers: Record<string, string>;
@@ -449,6 +457,122 @@ export const ProductGrid = component('product-grid', {
       },
       routes: ['/cart'],
     });
+  });
+
+  it('reports FW234 when component packages claim the same effective prefix', () => {
+    const result = compileComponentModule({
+      fileName: 'components/shell.tsx',
+      packageComponentPrefixes: [
+        { packageName: '@acme/primitives', prefix: 'acme-' },
+        { packageName: '@other/acme-widgets', prefix: 'acme-' },
+      ],
+      source: prefixFixtureSource,
+    });
+
+    expect(result.diagnostics).toEqual([
+      expect.objectContaining({
+        code: 'FW234',
+        fileName: 'components/shell.tsx',
+        help: expect.stringContaining(
+          'SPEC §6.1.1 keeps package prefixes app-wide unique because the effective prefix is emitted into rendered hosts, residual fw-c values, scoped CSS, and package behavior attributes.',
+        ),
+        message: expect.stringContaining(
+          'Effective package prefix "acme-" is claimed by @acme/primitives and @other/acme-widgets.',
+        ),
+        severity: 'error',
+      }),
+    ]);
+    expect(result.diagnostics[0]?.help).toContain('effectivePrefix: "other-acme-"');
+  });
+
+  it('accepts an explicit package prefix alias as the collision escape hatch', () => {
+    const result = compileComponentModule({
+      fileName: 'components/shell.tsx',
+      packageComponentPrefixes: [
+        { packageName: '@acme/primitives', prefix: 'acme-' },
+        {
+          effectivePrefix: 'other-acme-',
+          packageName: '@other/acme-widgets',
+          prefix: 'acme-',
+        },
+      ],
+      source: prefixFixtureSource,
+    });
+
+    expect(result.diagnostics).toEqual([]);
+  });
+
+  it('reports FW234 when non-jiso packages use the reserved jiso prefix family', () => {
+    const result = compileComponentModule({
+      fileName: 'components/shell.tsx',
+      packageComponentPrefixes: [
+        { packageName: '@jiso/headless-ui', prefix: 'jiso-' },
+        { packageName: '@acme/widgets', prefix: 'acme-', effectivePrefix: 'jiso-widgets-' },
+      ],
+      source: prefixFixtureSource,
+    });
+
+    expect(result.diagnostics).toEqual([
+      expect.objectContaining({
+        code: 'FW234',
+        fileName: 'components/shell.tsx',
+        help: expect.stringContaining(
+          'SPEC §6.1.1 reserves the jiso-* prefix family for packages whose manifest name is in the @jiso/* scope.',
+        ),
+        message: expect.stringContaining(
+          '@acme/widgets cannot use reserved jiso-* package prefix "jiso-widgets-".',
+        ),
+        severity: 'error',
+      }),
+    ]);
+  });
+
+  it('reports FW234 when packages try to claim the framework fw attribute namespace', () => {
+    const result = compileComponentModule({
+      fileName: 'components/shell.tsx',
+      packageComponentPrefixes: [{ packageName: '@acme/widgets', prefix: 'fw-' }],
+      source: prefixFixtureSource,
+    });
+
+    expect(result.diagnostics).toEqual([
+      expect.objectContaining({
+        code: 'FW234',
+        fileName: 'components/shell.tsx',
+        help: expect.stringContaining(
+          'SPEC §6.1.1 reserves the fw-* attribute namespace for framework-owned attributes and future loader/compiler growth.',
+        ),
+        message: expect.stringContaining(
+          '@acme/widgets cannot use reserved fw-* package prefix "fw-".',
+        ),
+        severity: 'error',
+      }),
+    ]);
+  });
+
+  it('reports FW234 for missing or invalid package prefix facts', () => {
+    const result = compileComponentModule({
+      fileName: 'components/shell.tsx',
+      packageComponentPrefixes: [
+        { packageName: '@missing/prefix' },
+        { packageName: '@bad/prefix', prefix: 'BadPrefix' },
+      ],
+      source: prefixFixtureSource,
+    });
+
+    expect(result.diagnostics).toEqual([
+      expect.objectContaining({
+        code: 'FW234',
+        message: expect.stringContaining(
+          '@missing/prefix is imported as a component package but does not declare package.json jiso.prefix.',
+        ),
+      }),
+      expect.objectContaining({
+        code: 'FW234',
+        message: expect.stringContaining(
+          '@bad/prefix declares invalid package.json jiso.prefix "BadPrefix".',
+        ),
+      }),
+    ]);
   });
 
   it('emits scoped CSS artifacts for static co-located component CSS', () => {
@@ -876,6 +1000,65 @@ export const CartShell = component('cart-shell', {
     expect(result.diagnostics).toEqual([]);
   });
 
+  it('accepts package-prefixed behavior IDREFs that reference ids in component scope', () => {
+    const result = compileComponentModule({
+      fileName: 'pricing-link.tsx',
+      packageComponentPrefixes: [
+        {
+          idrefBehaviorAttributes: ['tooltip'],
+          packageName: '@jiso/headless-ui',
+          prefix: 'jiso-',
+        },
+      ],
+      source: `
+export const PricingLink = component('pricing-link', {
+  render: () => (
+    <section>
+      <a href="/pricing" jiso-tooltip="pricing-tip">Pricing</a>
+      <p id="pricing-tip">Starts at $20.</p>
+    </section>
+  ),
+});
+`,
+    });
+
+    expect(result.diagnostics).toEqual([]);
+  });
+
+  it('reports FW221 for package-prefixed behavior IDREFs that miss component scope ids', () => {
+    const result = compileComponentModule({
+      fileName: 'pricing-link.tsx',
+      packageComponentPrefixes: [
+        {
+          effectivePrefix: 'acme-ui-',
+          idrefBehaviorAttributes: ['tooltip'],
+          packageName: '@acme/headless-ui',
+          prefix: 'acme-',
+        },
+      ],
+      source: `
+export const PricingLink = component('pricing-link', {
+  render: () => (
+    <section>
+      <a href="/pricing" acme-ui-tooltip="missing-tip" fw-tooltip="framework-owned">Pricing</a>
+    </section>
+  ),
+});
+`,
+    });
+
+    expect(result.diagnostics).toEqual([
+      {
+        code: 'FW221',
+        fileName: 'pricing-link.tsx',
+        length: 29,
+        message: 'IDREF references an id not present in component scope. missing-tip',
+        severity: 'error',
+        start: { column: 26, line: 5 },
+      },
+    ]);
+  });
+
   it('reports FW221 for literal IDREFs that miss component scope ids', () => {
     const result = compileComponentModule({
       fileName: 'cart-shell.tsx',
@@ -1301,7 +1484,8 @@ export const ProductLinks = component('product-links', {
 
     expect(result.diagnostics).toEqual([]);
     expect(serverSource).toContain('const sample = \'<Link to="/missing">Missing</Link>\'');
-    expect(serverSource).toContain('<a href="/products/p%201">Product</a>');
+    // SPEC.md section 4.2: the lowered native <a> host also receives the derived fw-c stamp.
+    expect(serverSource).toContain('<a href="/products/p%201" fw-c="product-links">Product</a>');
     expect(serverSource).not.toContain('<Link to="/products/:id"');
     expect(() => assertFixpoint(result)).not.toThrow();
   });
@@ -1478,8 +1662,9 @@ export const ProductCard = component('product-card', {
     });
 
     expect(result.viewTransitions).toEqual([{ name: 'product-p1-image' }]);
+    // SPEC.md section 4.2: the native <img> host also receives the derived fw-c stamp.
     expect(result.files[0]?.source).toContain(
-      '<img src="/p1.png" style="view-transition-name: product-p1-image" />',
+      '<img src="/p1.png" style="view-transition-name: product-p1-image" fw-c="product-card" />',
     );
     expect(result.files[2]?.source).toContain("'product-p1-image': unknown;");
   });
@@ -1496,8 +1681,9 @@ export const ProductCard = component('product-card', {
     const serverSource = result.files[0]?.source ?? '';
 
     expect(result.viewTransitions).toEqual([{ name: 'product-p1-image' }]);
+    // SPEC.md section 4.2: the native <img> host also receives the derived fw-c stamp.
     expect(serverSource).toContain(
-      '<img style="opacity: .8; view-transition-name: product-p1-image" src="/p1.png" />',
+      '<img style="opacity: .8; view-transition-name: product-p1-image" src="/p1.png" fw-c="product-card" />',
     );
     expect(serverSource.match(/\sstyle=/g)).toHaveLength(1);
     expect(serverSource).not.toContain('viewTransitionName=');
@@ -1520,8 +1706,9 @@ export const ProductCard = component('product-card', {
 
     expect(result.viewTransitions).toEqual([{ name: 'product-p1-image' }]);
     expect(serverSource).toContain('const sample = \'<img viewTransitionName="not-real" />\'');
+    // SPEC.md section 4.2: the native <img> host also receives the derived fw-c stamp.
     expect(serverSource).toContain(
-      '<img src="/p1.png" style="view-transition-name: product-p1-image" />',
+      '<img src="/p1.png" style="view-transition-name: product-p1-image" fw-c="product-card" />',
     );
     expect(serverSource).not.toContain('viewTransitionName="product-p1-image"');
     expect(() => assertFixpoint(result)).not.toThrow();
@@ -2390,6 +2577,48 @@ export const CartBadge = component('cart-badge', {
 
     expect(result.files[0]?.source).toContain('<cart-badge fw-deps="cart productPage">');
     expect(() => assertFixpoint(result)).not.toThrow();
+  });
+
+  it('stamps fw-c component identity on native render hosts', () => {
+    // SPEC.md section 4.2: identity is the fw-c stamp; the compiler omits it when
+    // the host tag spells the component name and emits it explicitly on native hosts.
+    const result = compileComponentModule({
+      fileName: 'order-history.tsx',
+      source: `
+export const OrderHistory = component('order-history', {
+  queries: { orderHistory: orderHistoryQuery },
+  render: ({ orderHistory }) => (
+    <ol>
+      <li fw-key="order-1">Order</li>
+    </ol>
+  ),
+});
+`,
+    });
+
+    expect(result.files[0]?.source).toContain('<ol fw-c="order-history" fw-deps="orderHistory">');
+    expect(() => assertFixpoint(result)).not.toThrow();
+    expect(() => assertRenderEquivalence(result)).not.toThrow();
+  });
+
+  it('keeps hand-written fw-c stamps on native hosts unchanged in ejected IR', () => {
+    // SPEC.md section 4.2 / Constitution #3: hand-written stamps remain valid input.
+    const result = compileComponentModule({
+      fileName: 'order-history.tsx',
+      source: `
+export const OrderHistory = component('order-history', {
+  render: () => (
+    <ol fw-c="order-history">
+      <li fw-key="order-1">Order</li>
+    </ol>
+  ),
+});
+`,
+    });
+
+    const serverSource = result.files[0]?.source ?? '';
+    expect(serverSource).toContain('<ol fw-c="order-history">');
+    expect(serverSource.match(/fw-c=/g)).toHaveLength(1);
   });
 
   it('does not stamp query or state declarations from strings and comments', () => {

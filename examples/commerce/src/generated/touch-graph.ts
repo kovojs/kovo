@@ -6,21 +6,47 @@ export const commerceTouchGraph = {
       {
         domain: 'cart',
         keys: null,
-        site: 'examples/commerce/src/app.ts:197',
+        site: 'examples/commerce/src/app.ts:238',
         via: 'cart_items',
       },
       {
         domain: 'order',
         keys: null,
-        site: 'examples/commerce/src/app.ts:202',
+        site: 'examples/commerce/src/app.ts:243',
         via: 'orders',
       },
       {
         domain: 'product',
         keys: 'arg:productId',
         predicate: 'eq',
-        site: 'examples/commerce/src/app.ts:209',
+        site: 'examples/commerce/src/app.ts:250',
         via: 'products',
+      },
+    ],
+    reads: [],
+    unresolved: [],
+  },
+  'order.receipt': {
+    touches: [
+      {
+        domain: 'attachment',
+        keys: 'arg:orderId',
+        predicate: 'eq',
+        site: 'examples/commerce/src/app.ts:292',
+        via: 'attachments',
+      },
+    ],
+    reads: [],
+    unresolved: [],
+  },
+  'payment.webhook': {
+    touches: [
+      {
+        domain: 'order',
+        keys: 'arg:data.object.id',
+        predicate: 'eq',
+        site: 'examples/commerce/src/app.ts:342',
+        via: 'orders',
       },
     ],
     reads: [],

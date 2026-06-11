@@ -16,11 +16,43 @@ Scope: SPEC addition (proposed §9.5 "The request shell"), `@jiso/server` shell 
       preserving non-HTML route outcomes, and provides stable 403/404/500 error documents.
       `packages/server/src/shell.test.ts` covers hints, loader/query ordering, deferred
       chunk placement, template override, safe query JSON escaping, and error shells.
-- [ ] R3 `createApp()` aggregate + `createRequestHandler(app)` over web-standard `Request → Response`.
-- [ ] R4 node:http adapter (incl. Early Hints); `tests/p10-perf.node.mjs` migrates onto it as the parity proof.
+- [x] R3 `createApp()` aggregate + `createRequestHandler(app)` over web-standard `Request → Response`. Evidence
+      2026-06-11: `packages/server/src/app.ts` adds a closed app aggregate for routes,
+      endpoints, query/mutation registries, session provider, CSRF, error shells, document
+      options, client modules, and route rendering, plus a web-standard handler covering
+      trailing-slash 308s, `/c/` modules, `/_q/` queries, endpoint-before-route dispatch,
+      route GET/HEAD rendering through the existing route page renderer, 405s, and stable
+      404/500 documents. `packages/server/src/app.test.ts` covers the scaffold and confirms
+      no `use` middleware surface. Mutation dispatch remains stored-only in this narrow R3
+      scaffold and is tracked for the next request-handler slice.
+- [x] R4 node:http adapter (incl. Early Hints); `tests/p10-perf.node.mjs` migrates onto it as the parity proof. Evidence
+      2026-06-11: `packages/server/src/node.ts` adds `toNodeHandler()` plus request/response
+      conversion helpers for Node `IncomingMessage`/`ServerResponse`, streams web response
+      bodies, suppresses HEAD bodies, and emits 103 Early Hints from the `Link` header when
+      Node supports `writeEarlyHints`. `packages/server/src/node.test.ts` covers loopback
+      request bodies, final headers, Early Hints, and HEAD semantics. `tests/p10-perf.node.mjs`
+      now serves the perf proof through `createApp()` -> `createRequestHandler()` ->
+      `toNodeHandler()`, including the versioned `/c/?v=` module registry path.
 - [ ] R5 Vite+ plugin: dev middleware over the same handler; build wiring (manifest → stylesheet hints, compiled client modules → versioned emit).
+      Progress 2026-06-11: `packages/server/src/vite.ts` adds `jisoAppShellVitePlugin()`,
+      a Vite-shaped dev middleware that delegates to the same `createRequestHandler()` /
+      `toNodeHandler()` path used by R3/R4. `packages/server/src/vite.test.ts` proves a
+      route served through the plugin over `node:http`. Remaining R5 work: build manifest
+      wiring for stylesheet hints and compiled client-module versioned emit.
 - [ ] R6 static export: synthetic-request replay to `.html` files with the L0/L1-only constraint and teaching errors for non-exportable routes.
 - [ ] R7 adoption: starter becomes a routed app served by `vp dev`; commerce runs end-to-end over HTTP; a jiso docs site ships from `vp run export` as the first outside consumer.
+      Progress 2026-06-11: commerce is now TSX-authored ahead of the HTTP serve
+      entry — `CartBadge`, `OrderHistory`, and `ProductGrid` are authored in
+      `examples/commerce/src/components/*.tsx` (SPEC §5.2 1:1 mapping), compiled
+      by `scripts/emit-components.mjs` through `@jiso/compiler` with the §5.2.3
+      fixpoint/render-equivalence gates, and served from committed lowered IR in
+      `src/generated/*.tsx` with compiler-derived stamps (§4.2/§4.8); zero
+      string-template components remain. Evidence:
+      `npx vitest --run examples/commerce` (25/25, including the "compiles
+      TSX-authored components to committed IR through the fixpoint gate" test),
+      `pnpm run check`, `pnpm run check:fw` (generated/touch-graph.ts
+      byte-identical), `pnpm run test:conformance`. The R7 `serve` entry itself
+      remains open.
 
 ## Background — the gap
 

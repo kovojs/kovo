@@ -1,0 +1,372 @@
+import { isDiagnosticCode, type DiagnosticCode, type DiagnosticSeverity } from './diagnostics.js';
+
+export interface TouchSite {
+  branch?: string;
+  domain: string;
+  keys: null | string;
+  predicate?: 'eq' | 'non-eq';
+  site: string;
+  via: string;
+}
+
+export interface ReadSite {
+  branch?: string;
+  domain: string;
+  keys: null | string;
+  predicate?: 'eq' | 'non-eq';
+  site: string;
+  source: string;
+  via: string;
+}
+
+export interface UnresolvedWriteSite {
+  code: 'FW406';
+  domain?: string;
+  message: string;
+  site: string;
+}
+
+export interface TouchGraphEntry {
+  reads?: readonly ReadSite[];
+  touches: readonly TouchSite[];
+  unresolved: readonly UnresolvedWriteSite[];
+}
+
+export type TouchGraph = Readonly<Record<string, TouchGraphEntry>>;
+
+export interface FwCheckInput {
+  diagnostics?: readonly StaticDiagnosticFact[];
+  endpoints?: readonly EndpointExplain[];
+  eventPayloads?: readonly EventPayloadFact[];
+  fixpointChecks?: readonly FixpointCheck[];
+  lints?: readonly SemanticLint[];
+  mutations?: readonly MutationExplain[];
+  optimistic?: readonly OptimisticCoverage[];
+  ownerDomains?: readonly OwnerDomainFact[];
+  pages?: readonly PageExplain[];
+  queryData?: readonly QueryDataFact[];
+  queries?: readonly QueryReadSet[];
+  renderEquivalenceChecks?: readonly RenderEquivalenceCheck[];
+  scopeAudits?: readonly ScopeAuditFact[];
+  touchGraph?: TouchGraph;
+  updateCoverage?: readonly UpdateCoverageFact[];
+  verificationDiagnostics?: readonly VerificationDiagnosticFact[];
+}
+
+export interface FwExplainInput extends FwCheckInput {
+  components?: readonly ComponentExplain[];
+  mutations?: readonly MutationExplain[];
+  pages?: readonly PageExplain[];
+}
+
+export interface ComponentExplain {
+  attributeMerges?: readonly AttributeMergeExplain[];
+  derives?: readonly DeriveExplain[];
+  fragments?: readonly string[];
+  handlers?: readonly HandlerExplain[];
+  name: string;
+  platformSubstitutions?: readonly PlatformSubstitutionExplain[];
+  queries?: readonly string[];
+  triggers?: readonly TriggerExplain[];
+}
+
+export interface AttributeMergeExplain {
+  attr: string;
+  decision: string;
+  diagnostics?: readonly DiagnosticCode[];
+  element: string;
+  rule: string;
+}
+
+export interface DeriveExplain {
+  inputs: readonly string[];
+  name: string;
+  ref: string;
+  target: string;
+}
+
+export interface HandlerExplain {
+  captures?: readonly CaptureChannel[];
+  event: string;
+  exportName: string;
+  params?: readonly string[];
+  ref: string;
+  substitution?: string;
+}
+
+export type CaptureChannel = 'ctx' | 'element-params' | 'module-scope';
+
+export interface TriggerExplain {
+  deps?: readonly string[];
+  exportName: string;
+  justification?: string;
+  ref: string;
+  trigger: 'idle' | 'load' | 'visible';
+}
+
+export interface PlatformSubstitutionExplain {
+  action: string;
+  event: string;
+  kind: 'details' | 'dialog' | 'popover';
+  tag: string;
+  target: string;
+}
+
+export interface MutationExplain {
+  enctype?: 'application/x-www-form-urlencoded' | 'multipart/form-data';
+  fileFields?: readonly string[];
+  guards?: readonly string[];
+  invalidates?: readonly string[];
+  inputFields?: readonly string[];
+  key: string;
+  manualInvalidates?: readonly string[];
+  session?: string;
+  writes?: readonly string[];
+}
+
+export interface PageMetaExplain {
+  description?: string;
+  image?: string;
+  title?: string;
+}
+
+export interface PageExplain {
+  guards?: readonly string[];
+  i18n?: readonly string[];
+  meta?: PageMetaExplain;
+  modulepreloads?: readonly string[];
+  prefetch?: 'conservative' | 'moderate' | false;
+  queries?: readonly string[];
+  route: string;
+  stylesheets?: readonly string[];
+  viewTransitions?: readonly string[];
+}
+
+export interface EndpointExplain {
+  auth?: string;
+  csrf?: 'checked' | 'exempt';
+  csrfJustification?: string;
+  guards?: readonly string[];
+  method?: string;
+  mount?: 'exact' | 'prefix';
+  name?: string;
+  path: string;
+  writes?: readonly string[];
+}
+
+export interface OptimisticCoverage {
+  mutation: string;
+  query: string;
+  status: 'UNHANDLED' | 'await-fragment' | 'hand-written';
+}
+
+export interface OwnerDomainFact {
+  domain: string;
+  owner: string;
+}
+
+export interface ScopeAuditFact {
+  detail?: string;
+  domain: string;
+  kind: 'query' | 'write';
+  name: string;
+  scope: 'args' | 'session' | 'unscoped' | 'unknown';
+  site: string;
+}
+
+export interface UpdateCoverageFact {
+  component: string;
+  detail?: string;
+  position: string;
+  query: string;
+  status: 'UNHANDLED' | 'fragment' | 'isomorphic' | 'plan' | 'renderOnce';
+}
+
+export interface FixpointCheck {
+  actual?: string;
+  artifact: string;
+  detail?: string;
+  expected?: string;
+  ok: boolean;
+}
+
+export interface RenderEquivalenceCheck {
+  actual?: string;
+  artifact: string;
+  detail?: string;
+  expected?: string;
+  ok: boolean;
+}
+
+export interface EventPayloadFact {
+  event: string;
+  fields: readonly string[];
+  site: string;
+}
+
+export interface QueryDataFact {
+  fields: readonly string[];
+  query: string;
+}
+
+export interface QueryReadSet {
+  domains: readonly string[];
+  guards?: readonly string[];
+  query: string;
+}
+
+export interface SemanticLint {
+  code: DiagnosticCode;
+  detail?: string;
+  site: string;
+}
+
+export interface VerificationDiagnosticFact {
+  branch?: string;
+  code: DiagnosticCode;
+  detail?: string;
+  domain?: string;
+  message?: string;
+  severity?: DiagnosticSeverity;
+  site?: string;
+}
+
+export interface StaticDiagnosticFact {
+  code: DiagnosticCode;
+  length?: number;
+  message?: string;
+  severity?: DiagnosticSeverity;
+  site: string;
+  start?: SourcePosition;
+}
+
+export interface SourcePosition {
+  column: number;
+  line: number;
+}
+
+export interface GraphInputValidationError {
+  message: string;
+  path: string;
+}
+
+const arrayFields = [
+  'components',
+  'diagnostics',
+  'endpoints',
+  'eventPayloads',
+  'fixpointChecks',
+  'lints',
+  'mutations',
+  'optimistic',
+  'ownerDomains',
+  'pages',
+  'queryData',
+  'queries',
+  'renderEquivalenceChecks',
+  'scopeAudits',
+  'updateCoverage',
+  'verificationDiagnostics',
+] as const;
+
+export function validateFwExplainInput(input: unknown): GraphInputValidationError[] {
+  const errors: GraphInputValidationError[] = [];
+  if (!isRecord(input)) {
+    return [{ message: 'input JSON must be an object', path: '$' }];
+  }
+
+  for (const field of arrayFields) {
+    if (input[field] !== undefined && !Array.isArray(input[field])) {
+      errors.push({ message: `${field} must be an array`, path: field });
+    }
+  }
+
+  if (input.touchGraph !== undefined && !isRecord(input.touchGraph)) {
+    errors.push({ message: 'touchGraph must be an object', path: 'touchGraph' });
+  }
+
+  validateDiagnosticFactCodes(input.diagnostics, 'diagnostics', errors);
+  validateDiagnosticFactCodes(input.verificationDiagnostics, 'verificationDiagnostics', errors);
+  validateDiagnosticFactCodes(input.lints, 'lints', errors);
+  validateAttributeMergeDiagnosticCodes(input.components, errors);
+  validateTouchGraphDiagnosticCodes(input.touchGraph, errors);
+
+  return errors;
+}
+
+function validateDiagnosticFactCodes(
+  values: unknown,
+  path: string,
+  errors: GraphInputValidationError[],
+): void {
+  if (!Array.isArray(values)) return;
+
+  values.forEach((value, index) => {
+    if (!isRecord(value) || value.code === undefined) return;
+    validateDiagnosticCode(value.code, `${path}[${index}].code`, errors);
+  });
+}
+
+function validateAttributeMergeDiagnosticCodes(
+  components: unknown,
+  errors: GraphInputValidationError[],
+): void {
+  if (!Array.isArray(components)) return;
+
+  components.forEach((component, componentIndex) => {
+    if (!isRecord(component) || !Array.isArray(component.attributeMerges)) return;
+
+    component.attributeMerges.forEach((merge, mergeIndex) => {
+      if (!isRecord(merge) || !Array.isArray(merge.diagnostics)) return;
+
+      merge.diagnostics.forEach((code, codeIndex) => {
+        validateDiagnosticCode(
+          code,
+          `components[${componentIndex}].attributeMerges[${mergeIndex}].diagnostics[${codeIndex}]`,
+          errors,
+        );
+      });
+    });
+  });
+}
+
+function validateTouchGraphDiagnosticCodes(
+  touchGraph: unknown,
+  errors: GraphInputValidationError[],
+): void {
+  if (!isRecord(touchGraph)) return;
+
+  for (const [entryName, entry] of Object.entries(touchGraph)) {
+    if (!isRecord(entry) || !Array.isArray(entry.unresolved)) continue;
+
+    entry.unresolved.forEach((unresolved, index) => {
+      if (!isRecord(unresolved) || unresolved.code === undefined) return;
+      validateDiagnosticCode(
+        unresolved.code,
+        `touchGraph.${quotePathSegment(entryName)}.unresolved[${index}].code`,
+        errors,
+      );
+    });
+  }
+}
+
+function validateDiagnosticCode(
+  value: unknown,
+  path: string,
+  errors: GraphInputValidationError[],
+): void {
+  if (isDiagnosticCode(value)) return;
+
+  errors.push({
+    message: `unknown diagnostic code ${JSON.stringify(value)}`,
+    path,
+  });
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function quotePathSegment(value: string): string {
+  return /^[A-Za-z_$][\w$]*$/.test(value) ? value : JSON.stringify(value);
+}

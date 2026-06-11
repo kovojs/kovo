@@ -12,8 +12,8 @@ Audited against the repository on 2026-06-11. Checkmarks mean the behavior, API,
 - [x] Workspace packages exist for `core`, `compiler`, `runtime`, `server`, `drizzle`, `cli`, `test`, and `create-jiso`.
 - [x] P0 wire fixtures exist for enhanced mutation, no-JS PRG, 422 fragment, typed read, and `<fw-defer>` stream.
 - [x] Core diagnostics registry exists and is consumed by compiler/drizzle/cli/test surfaces.
-- [x] P1 compiler has component lowering, handler export facts, registry emit, typed routes/link validation, IDREF/id diagnostics, render-equivalence facts, update coverage, derived query stamps, and a TS parser-backed intermediate model in active use.
-- [x] P1 compiler module split and parser migration/dead scanner cleanup are complete; `plans/improve-compiler.md` now carries checked evidence for the finished compiler cleanup audit.
+- [x] P1 compiler has component lowering, handler export facts, registry emit, typed routes/link validation, IDREF/id diagnostics, render-equivalence facts, update coverage, derived query stamps, and a TS parser-backed intermediate model feeding validators. Round-2 audit caveat 2026-06-11: lowering still chains source-string transforms and the render-equivalence proof is structural, not an executed authored-render-vs-emitted-render comparison.
+- [ ] P1 compiler module split and parser migration/dead scanner cleanup are partial; `plans/improve-compiler.md` carries checked evidence for completed slices, while `plans/codebase-quality-round2.md` Phase 2 tracks the remaining architecture work.
       Evidence 2026-06-11: FW201's conservative free-identifier denylist and the static
       FW201/FW230 detail labels now live in shared `diagnosticDefinitions`; remaining
       compiler-local help is dynamic lowering evidence required by SPEC §4.3 and §4.5.
@@ -30,11 +30,10 @@ Audited against the repository on 2026-06-11. Checkmarks mean the behavior, API,
       render-equivalence stamping now live in `packages/compiler/src/emit/server.ts`, and
       duplicate top-level object scanner helpers were consolidated into
       `packages/compiler/src/scan/object.ts`.
-- [x] P1 final compiler cleanup evidence: `packages/compiler/src/index.ts` is now a
-      public barrel/orchestrator, component graph facts live in the parser model, the
-      dead `findMatchingClosingTag` path is absent, and the remaining object/text scanners
-      are documented as live only for parser-spanned literal serialization and CSS/static
-      literal balancing.
+- [ ] P1 final compiler cleanup evidence is partial: component graph facts live in the parser
+      model and the dead `findMatchingClosingTag` path is absent, but `packages/compiler/src/index.ts`
+      still owns core fact types, the compile pipeline, and helpers, and duplicate query-shape
+      helpers remain in validator modules. Round-2 Phase 2 tracks the remaining compiler IR split.
 - [x] P2 runtime has delegated event loading, execution triggers, `ctx.signal`, query hydration/update plans, visible-return typed-read refetch, BroadcastChannel plumbing, bfcache-safe pagehide handling, immutable no-`customElements` loader constraints, and a 4KB inline loader budget.
 - [x] P2 exit demo/smoke is proven by a standalone browser L0+L1 smoke covering tabs, dialog, filter island, declared visible trigger, and zero handler imports before interaction/trigger.
 - [x] P3 server/core have `domain`, `query`, `mutation`, `route`, typed `href`/`Link`/`redirect`, typed sessions, CSRF issuance/validation, FormData coercion, guards/rate limits, mutation replay, query endpoints, rerun query fragments, and commerce app usage.
@@ -42,7 +41,7 @@ Audited against the repository on 2026-06-11. Checkmarks mean the behavior, API,
       Evidence 2026-06-11: `tests/fw-check.node.mjs` now executes `fwCheck()`
       against a graph with removed mutation, route, and query guards and pins the
       stable `fw-check/v1` unguarded warnings required by SPEC §6.4 and the P3 exit.
-- [x] P4 Drizzle extraction has AST-backed table/write extraction, arrow-handler coverage, FW406/FW409 diagnostics, query shape derivation with nullable wrappers, projection-less select diagnostics, and conformance coverage.
+- [x] P4 Drizzle extraction has ts-morph-backed project/table/write coverage, arrow-handler coverage, FW406/FW409 diagnostics, query shape derivation with nullable wrappers, projection-less select diagnostics, and conformance coverage. Round-2 audit caveat 2026-06-11: source-mode/query extraction still includes string/regex parsing and AST discoveries are rewritten back into source text, so end-to-end ts-morph extraction remains open in `plans/codebase-quality-round2.md` Phase 3.
 - [x] P4 generated touch-graph workflow is frozen: `@jiso/drizzle` derives/serializes v1 invalidation registries, the commerce generator emits `commerceInvalidationSets` plus `@jiso/core` registry augmentation, and `fw-check` pins the generated artifact byte-for-byte.
 - [x] P5 has enhanced mutation/deferred fragments, DOM morphing, query patch application, typed read refetch, template stamps, isomorphic/update-coverage statuses, Tailwind stylesheet hints, and runtime/browser tests for morph survival and fragment parsing.
 - [x] P5 byte-for-byte live-server fixture exit is covered; runtime acceptance now proves form field and navigation route renames fail under `vp check` (`packages/runtime/src/index.test.ts`, SPEC §6.2/§6.3/§6.4/§16.6).
@@ -60,7 +59,7 @@ Audited against the repository on 2026-06-11. Checkmarks mean the behavior, API,
 - [x] P6 optimism has typed `OptimisticFor`, generated `InvalidationSets`, `await-fragment` statuses, pending stamps, named queues, rebase/restore behavior, unified change-record consumption, and property/runtime tests.
 - [x] P6 final acceptance has full commerce-level coverage for every mutation/query pair. Evidence added: `examples/commerce/src/app.test.ts` now derives the complete `cart/add` and `order/receipt` x `cart`/`productGrid`/`orderHistory` matrix from `fw explain`, requires explicit optimistic statuses for every invalidated query, proves `order/receipt` has no invalidation for every commerce query, and checks the enhanced `cart/add` response carries every authoritative `<fw-query>`/fragment chunk (SPEC §10.4, §16.5). Navigation/bfcache edge evidence proves a mid-flight optimistic mutation is submitted with `keepalive`, `pagehide` discards the pending log and clears `fw-pending` back to server truth, and the later keepalive response reconciles authoritative query truth without stale optimism (`packages/runtime/src/index.test.ts`, SPEC §8/§10.4).
 - [x] P7 stateless liveness has BroadcastChannel mutation sync and visible-return/refetch behavior.
-- [x] P7 deployment documentation states the stateless-server guarantee and has Redis/SSE/live-bus negative checks in starter tests.
+- [x] P7 deployment/starter docs state the stateless-server guarantee; starter tests pin BroadcastChannel/refetch liveness and no SSE/live-bus in the generated deployment doc. Redis is mentioned only in generated framework rules and is not currently pinned by starter tests.
 - [x] P8 CLI has stable `fw check`, `fw explain`, optimistic/update coverage, unguarded/unscoped audits, and diffable output tests.
 - [x] P8 output format/versioning and agent-answerability acceptance are represented by `fw-explain/v1`/`fw-check/v1` snapshots and commerce graph-answerability tests.
 - [x] P9 `@jiso/test` has pglite-backed harnessing, static-vs-observed write/read verification, FW402/FW403/FW404/FW405/FW407/FW408/FW410 diagnostics, raw pglite interception, and structural optimistic property checks.
@@ -71,10 +70,25 @@ Audited against the repository on 2026-06-11. Checkmarks mean the behavior, API,
 - [x] D3 deferred streaming has fixtures, stylesheet hints, and priority/query ordering coverage.
 - [x] D4 has initial adopted features: route meta, file uploads, i18n catalogs, rate-limit guard, and typed sessions.
 - [ ] D5 auth (agnostic core seams + blessed `@jiso/better-auth` adapter) is planned in `plans/auth.md`; the A-track core seams are implemented (session provider, guard-failure contract, mutation response headers, and endpoint floor), while the S6 better-auth spike and B-track adapter remain open.
-- [ ] D6 machine endpoints (`webhook()` primitive, route file/stream outcomes, storage capability, `--endpoints` audit) is planned in `plans/machine-endpoints.md`; the SPEC PR is landed, and the `endpoint()` floor, route file/stream outcomes, verifier kit, core storage capability/adapters, storage-backed `s.file()` uploads, and `fw explain --endpoints` audit are implemented; `webhook()` and reference-app adoption remain open.
-- [ ] D7 UI libraries (`@jiso/headless-ui` + vendored `@jiso/ui` + `examples/gallery`) is planned in `plans/ui.md`; design agreed 2026-06-11 (package prefix registration with FW234, `jiso-` prefix, behavior attributes on the package prefix, shadcn-style vendoring via `fw add`); F1 SPEC text is landed, and implementation tracks are not started.
-- [ ] D8 app shell (request dispatch, document assembly, node adapter, Vite+ plugin, static export) is planned in `plans/app-shell.md`; design agreed 2026-06-11 (lives in `@jiso/server`, web-standard `Request → Response`, closed dispatch table with no middleware, L0/L1-only static export); SPEC §9.5 PR and all tracks open; first outside consumer is the jiso docs site.
+- [ ] D6 machine endpoints (`webhook()` primitive, route file/stream outcomes, storage capability, `--endpoints` audit) is planned in `plans/machine-endpoints.md`; the SPEC PR is landed, and the `endpoint()` floor, route file/stream outcomes, verifier kit, core storage capability/adapters, storage-backed `s.file()` uploads, bounded `webhook()` primitive, and `fw explain --endpoints` audit are implemented; reference-app adoption remains open.
+- [ ] D7 UI libraries (`@jiso/headless-ui` + vendored `@jiso/ui` + `examples/gallery`) is planned in `plans/ui.md`; design agreed 2026-06-11 (package prefix registration with FW234, `jiso-` prefix, behavior attributes on the package prefix, shadcn-style vendoring via `fw add`); F1 SPEC text, F2 compiler-side prefix enforcement, and F3 package behavior-attribute IDREF validation are landed; real package-discovery facts, `fw explain component <prefixed>` provenance, packages, gallery, and primitives remain open.
+- [ ] D8 app shell (request dispatch, document assembly, node adapter, Vite+ plugin, static export) is planned in `plans/app-shell.md`; design agreed 2026-06-11 (lives in `@jiso/server`, web-standard `Request → Response`, closed dispatch table with no middleware, L0/L1-only static export); S8/R1/R2/R3/R4 are implemented and R5 has dev middleware over the app handler; SPEC §9.5, R5 build wiring, R6 static export, and R7 adoption remain open; first outside consumer is the jiso docs site.
 - [ ] P10 v1 acceptance ledger is wired with concrete dated doc ledgers for the outside legibility study and prelaunch checks; docs freeze, actual outside study results, external launch evidence, and final clean-checkout acceptance run remain open.
+- [x] §16 commerce reference app is TSX-authored: `CartBadge`, `OrderHistory`, and `ProductGrid` (cards, no-JS add-to-cart forms, failure output) live in per-component `examples/commerce/src/components/*.tsx` (SPEC §5.2 1:1 mapping); `examples/commerce/scripts/emit-components.mjs` compiles them through `@jiso/compiler` and commits the lowered IR to `src/generated/*.tsx` behind the §5.2.3 fixpoint and render-equivalence gates (Constitution #3), so served stamps (`fw-c`, `fw-deps`, `data-bind`) are compiler-derived (§4.2/§4.8) and zero string-template components remain. Enablers: server-side JSX runtime at `@jiso/server/jsx-runtime` (§3/§4.2) and compiler-derived `fw-c` identity stamps on native render hosts (§4.2). Evidence 2026-06-11: `npx vitest --run examples/commerce` (25/25 — includes the "compiles TSX-authored components to committed IR through the fixpoint gate" test running `emit-components.mjs --check`, and the graph-facts test proving `generated/touch-graph.ts` stayed byte-identical); `pnpm run check`; `pnpm run check:build`; `pnpm run check:fw`; `pnpm run test:conformance`.
+      Open questions from this slice (SPEC silent/ambiguous — not coded through):
+      (1) SPEC §4 does not define JSX text-child escaping. `@jiso/server/jsx-runtime`
+      composes child strings raw so pre-rendered component HTML and helpers
+      (`csrfField`) compose without a wrapper type, which also means query data
+      interpolated as a text child is not HTML-escaped; needs a SPEC ruling
+      (escape-by-default plus an explicit raw marker would match §6.6 soundness).
+      (2) SPEC Appendix A assigns mutation-form rendering to `<f.Form>`, which
+      `@jiso/server` does not provide; commerce passes per-request CSRF/failure
+      facts as an explicit second render argument outside the declared queries
+      (§4.1 render-inputs rule covers the first argument only).
+      (3) §4.8 attribute-expression lowering replaces the authored attribute with
+      `data-derive`/`data-derive-attr`, dropping the server-rendered initial
+      attribute value; commerce authors against destructured locals so `href` and
+      `data-page-cursor` stay in the served HTML (the no-JS contract needs them).
 
 ## Decisions adopted by this plan
 

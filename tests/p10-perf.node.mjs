@@ -3,49 +3,65 @@ import { createServer } from 'node:http';
 
 import { chromium } from 'playwright';
 
-const { renderPageHints } = await import('../dist/server/src/index.mjs');
+const {
+  createApp,
+  createMemoryVersionedClientModuleRegistry,
+  createRequestHandler,
+  endpoint,
+  renderPageHints,
+  toNodeHandler,
+} = await import('../dist/server/src/index.mjs');
 const { jisoLoaderSource } = await import('../dist/runtime/src/index.mjs');
 
 const navigationCount = 100;
 const heapNoiseBudget = 64 * 1024;
 
-const server = createServer((request, response) => {
-  const url = new URL(request.url ?? '/', 'http://127.0.0.1');
-
-  if (url.pathname === '/c/handler.js') {
-    response.writeHead(200, { 'content-type': 'text/javascript; charset=utf-8' });
-    response.end(`
+const clientModules = createMemoryVersionedClientModuleRegistry();
+const handlerHref = clientModules.put({
+  path: '/c/handler.js',
+  source: `
 globalThis.__clientModuleLoads = (globalThis.__clientModuleLoads ?? 0) + 1;
 export function increment(_event, ctx) {
   ctx.state.count += 1;
 }
-`);
-    return;
-  }
-
-  if (url.pathname === '/next') {
-    response.writeHead(200, { 'content-type': 'text/html; charset=utf-8' });
-    response.end(renderDocument({ route: '/next', title: 'Next' }));
-    return;
-  }
-
-  if (url.pathname.startsWith('/nav/')) {
-    response.writeHead(200, { 'content-type': 'text/html; charset=utf-8' });
-    response.end(renderDocument({ route: url.pathname, title: `Nav ${url.pathname}` }));
-    return;
-  }
-
-  const hints = renderPageHints({
-    modulepreloads: ['/c/handler.js'],
-    prefetch: 'moderate',
-    prerenderUrls: ['/next'],
-  });
-  response.writeHead(200, {
-    'content-type': 'text/html; charset=utf-8',
-    ...(hints.earlyHints.Link ? { Link: hints.earlyHints.Link } : {}),
-  });
-  response.end(renderDocument({ head: hints.html, route: '/', title: 'Home' }));
+`,
+  version: 'p10',
 });
+const app = createApp({
+  clientModules,
+  endpoints: [
+    endpoint('/next', {
+      handler: () => htmlResponse(renderDocument({ route: '/next', title: 'Next' })),
+      method: 'GET',
+    }),
+    endpoint('/nav', {
+      csrf: false,
+      csrfJustification: 'perf loopback only serves GET navigation proof pages',
+      handler: (request) => {
+        const url = new URL(request.url);
+        return htmlResponse(renderDocument({ route: url.pathname, title: `Nav ${url.pathname}` }));
+      },
+      method: 'GET',
+      mount: 'prefix',
+    }),
+    endpoint('/', {
+      handler: () => {
+        const hints = renderPageHints({
+          modulepreloads: [handlerHref],
+          prefetch: 'moderate',
+          prerenderUrls: ['/next'],
+        });
+
+        return htmlResponse(
+          renderDocument({ head: hints.html, route: '/', title: 'Home' }),
+          hints.earlyHints.Link ? { Link: hints.earlyHints.Link } : {},
+        );
+      },
+      method: 'GET',
+    }),
+  ],
+});
+const server = createServer(toNodeHandler(createRequestHandler(app)));
 
 try {
   await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
@@ -188,11 +204,20 @@ function renderDocument({ head = '', route, title }) {
   <body>
     <main data-route="${route}">
       <h1>${title}</h1>
-      <button id="action" fw-state="{&quot;count&quot;:0}" on:click="/c/handler.js#increment">Add</button>
+      <button id="action" fw-state="{&quot;count&quot;:0}" on:click="${handlerHref}#increment">Add</button>
       <a id="next" href="/next">Next</a>
     </main>
   </body>
 </html>`;
+}
+
+function htmlResponse(body, headers = {}) {
+  return new Response(body, {
+    headers: {
+      'Content-Type': 'text/html; charset=utf-8',
+      ...headers,
+    },
+  });
 }
 
 function median(values) {

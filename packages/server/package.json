@@ -3,10 +3,13 @@
   "version": "0.0.0",
   "type": "module",
   "exports": {
-    ".": "./src/index.ts"
+    ".": "./src/index.ts",
+    "./jsx-runtime": "./src/jsx-runtime.ts",
+    "./jsx-dev-runtime": "./src/jsx-runtime.ts"
   },
   "dependencies": {
-    "@jiso/core": "workspace:*"
+    "@jiso/core": "workspace:*",
+    "@jiso/runtime": "workspace:*"
   },
   "devDependencies": {
     "vitest": "4.1.8"

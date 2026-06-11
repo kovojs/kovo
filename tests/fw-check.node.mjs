@@ -2,7 +2,8 @@ import assert from 'node:assert/strict';
 import { readdir, readFile } from 'node:fs/promises';
 import { test } from 'node:test';
 
-import { fwCheck } from '../dist/cli/src/index.mjs';
+import { missingBuildMessage } from '../scripts/fw-check.mjs';
+import { fwCheck, fwExplain } from '../dist/cli/src/index.mjs';
 
 const responseMarker = '<<< RESPONSE';
 const requestMarker = '>>> REQUEST';
@@ -95,6 +96,12 @@ const lineNumberFor = (source, needle) => {
   return source.slice(0, index).split('\n').length;
 };
 
+const explainValue = (output, prefix) => {
+  const line = output.split('\n').find((item) => item.startsWith(prefix));
+  assert.ok(line, `explain output includes ${prefix}`);
+  return line.slice(prefix.length);
+};
+
 const listProjectFiles = async (dir, predicate) => {
   const entries = await readdir(new URL(`../${dir}`, import.meta.url), { withFileTypes: true });
   const files = [];
@@ -111,6 +118,13 @@ const listProjectFiles = async (dir, predicate) => {
 
   return files;
 };
+
+void test('fw-check wrapper explains the production build prerequisite', () => {
+  assert.equal(
+    missingBuildMessage('dist/missing-cli.mjs'),
+    'fw-check requires dist/missing-cli.mjs. Run `vp run build` first.',
+  );
+});
 
 void test('Phase 0 wire fixtures are present and explicit', async () => {
   const fixtureNames = await readdir(new URL('../fixtures/wire/', import.meta.url));
@@ -1017,7 +1031,10 @@ void test('D4 commerce adopt-dont-invent features stay represented', async () =>
   assert.match(commerceSource, /inputFields: \['orderId', 'receipt'\]/);
   assert.match(commerceSource, /fileFields: \['receipt'\]/);
   assert.match(commerceSource, /i18n: \['en-US:cartLabel,productStock'\]/);
-  assert.match(commerceTests, /coerces commerce receipt uploads through s\.file\(\)/);
+  assert.match(
+    commerceTests,
+    /coerces commerce receipt uploads through storage-backed s\.file\(\)/,
+  );
   assert.match(commerceTests, /fw-upload-progress value="0" max="100"/);
   assert.match(commerceTests, /session: commerceSession/);
   assert.match(commerceTests, /file-fields: receipt/);
@@ -1040,7 +1057,6 @@ void test('D4 commerce adopt-dont-invent features stay represented', async () =>
 });
 
 void test('P10 commerce graph assertions answer behavior mechanically', async () => {
-  const commerceTests = await readProjectFile('examples/commerce/src/app.test.ts');
   const cliSource = await readProjectFile('packages/cli/src/index.ts');
   const cliTests = await readProjectFile('packages/cli/src/index.test.ts');
   const compilerSource = await readProjectFile('packages/compiler/src/index.ts');
@@ -1051,33 +1067,39 @@ void test('P10 commerce graph assertions answer behavior mechanically', async ()
   const runtimeSource = await readProjectFile('packages/runtime/src/index.ts');
   const runtimeTests = await readProjectFile('packages/runtime/src/index.test.ts');
   const viteConfig = await readProjectFile('vite.config.ts');
+  const commerceGraph = JSON.parse(graphArtifact);
+  const cartQueryExplain = fwExplain(commerceGraph, { kind: 'query', target: 'cart' }).output;
+  const cartAddExplain = fwExplain(commerceGraph, {
+    kind: 'mutation',
+    optimistic: true,
+    target: 'cart/add',
+  }).output;
+  const uploadReceiptExplain = fwExplain(commerceGraph, {
+    kind: 'mutation',
+    optimistic: true,
+    target: 'order/receipt',
+  }).output;
 
+  assert.deepEqual(fwCheck(commerceGraph), { exitCode: 0, output: 'fw-check/v1\nOK\n' });
+  assert.equal(explainValue(cartQueryExplain, 'consumers: '), 'component:CartBadge,page:/cart');
+  assert.equal(explainValue(cartQueryExplain, 'invalidated-by: '), 'cart/add');
+  assert.equal(explainValue(cartQueryExplain, 'domain-writes: '), 'cart.addItem');
+  assert.equal(explainValue(cartAddExplain, 'session: '), 'commerceSession');
+  assert.equal(explainValue(cartAddExplain, 'input-fields: '), 'productId,quantity');
+  assert.equal(explainValue(cartAddExplain, 'writes: '), 'cart,product,order');
+  assert.equal(explainValue(cartAddExplain, 'invalidates: '), 'cart,product,order');
+  assert.match(explainValue(cartAddExplain, 'updates: '), /cart->component:CartBadge,page:\/cart/);
   assert.match(
-    commerceTests,
-    /answers cart\/add update intent mechanically from fw explain output/,
+    explainValue(cartAddExplain, 'updates: '),
+    /productGrid->component:ProductGrid,page:\/cart/,
   );
   assert.match(
-    commerceTests,
-    /answers the full commerce mutation-query matrix mechanically from fw explain output/,
+    explainValue(cartAddExplain, 'updates: '),
+    /orderHistory->component:OrderHistory,page:\/cart/,
   );
-  assert.match(
-    commerceTests,
-    /accepts the commerce mutation-query matrix through static graph, verifier, and enhanced wire/,
-  );
-  assert.match(commerceTests, /touchGraphKey: 'cart\.addItem'/);
-  assert.match(commerceTests, /touchGraphKey: 'order\/receipt'/);
-  assert.match(commerceTests, /queryChunkNames\(response\.body\)\.sort\(\)/);
-  assert.match(commerceTests, /mutationUpdateConsumers\(addToCartExplanation\.output\)/);
-  assert.match(commerceTests, /uploadReceiptAffectedQueries/);
-  assert.match(commerceTests, /no-invalidation/);
-  assert.match(
-    commerceTests,
-    /expect\(explainLine\(uploadReceiptExplanation\.output, 'invalidates: '\)\)\.toBe\('-'\)/,
-  );
-  assert.match(commerceTests, /noWriteHarness\.verificationDiagnostics\(\)/);
-  assert.match(commerceTests, /const queryExplain = fwExplain\(commerceGraph, \{ kind: 'query'/);
-  assert.match(commerceTests, /expect\(updates\.get\(query\)\)\.toContain\('page:\/cart'\)/);
-  assert.match(commerceTests, /expect\(statuses\.get\(query\.query\)\)\.not\.toBe\('UNHANDLED'\)/);
+  assert.match(cartAddExplain, /^OPTIMISTIC-SUMMARY .*UNHANDLED=0$/m);
+  assert.equal(explainValue(uploadReceiptExplain, 'file-fields: '), 'receipt');
+  assert.equal(explainValue(uploadReceiptExplain, 'invalidates: '), '-');
   assert.match(cliTests, /hand-write in the mutation module, or declare 'await-fragment'/);
   assert.match(cliTests, /ignores unrelated statuses/);
   assert.match(cliSource, /diagnosticDefinitions\.FW310\.message/);
@@ -1110,44 +1132,56 @@ void test('P10 commerce graph assertions answer behavior mechanically', async ()
     /requires optimistic coverage from generated invalidation sets by default/,
   );
   assert.match(runtimeTests, /productGrid: 'await-fragment'/);
-  assert.match(commerceTests, /\.\.\.mutationUpdateConsumers\(explanation\.output\)\.keys\(\)/);
-  assert.match(commerceTests, /applyCommerceAddToCartEffect/);
-  assert.match(commerceTests, /shapeCommerceCartQuery/);
-  assert.match(commerceTests, /commerceAddToCartPropertyCases/);
-  assert.match(commerceTests, /cases: 18/);
-  assert.match(commerceTests, /generated\/graph\.json/);
-  assert.match(commerceTests, /fwCheck\(graphArtifact\)/);
   assert.match(fwCheckRunner, /tests\/fw-check\.node\.mjs/);
   assert.match(fwCheckRunner, /dist\/cli\/src\/index\.mjs/);
   assert.match(fwCheckRunner, /examples\/commerce\/src\/generated\/graph\.json/);
   assert.match(viteConfig, /command: 'node scripts\/fw-check\.mjs'/);
   assert.match(viteConfig, /examples\/commerce\/src\/generated\/graph\.json/);
-  assert.match(graphArtifact, /"touchGraph"/);
-  assert.match(graphArtifact, /"cart\.addItem"/);
+  assert.deepEqual(
+    Object.keys(commerceGraph.touchGraph)
+      .filter((key) => ['cart.addItem', 'order.receipt', 'payment.webhook'].includes(key))
+      .sort(),
+    ['cart.addItem', 'order.receipt', 'payment.webhook'],
+  );
 });
 
 void test('P10 starter wires graph assertions into CI', async () => {
-  const starterSource = await readProjectFile('packages/create-jiso/src/index.ts');
+  const starterSource = (
+    await Promise.all([
+      readProjectFile('packages/create-jiso/src/index.ts'),
+      readProjectFile('packages/create-jiso/templates/package.json'),
+      readProjectFile('packages/create-jiso/templates/vite.config.ts'),
+      readProjectFile('packages/create-jiso/templates/.github/workflows/ci.yml'),
+      readProjectFile('packages/create-jiso/templates/README.md'),
+      readProjectFile('packages/create-jiso/templates/graph.json'),
+      readProjectFile('packages/create-jiso/templates/scripts/emit-graph.mjs'),
+      readProjectFile('packages/create-jiso/templates/scripts/graph-assertions.mjs'),
+      readProjectFile('packages/create-jiso/templates/src/client.ts'),
+      readProjectFile('packages/create-jiso/templates/src/app.fixpoint.test.ts'),
+      readProjectFile('packages/create-jiso/templates/src/styles.css'),
+      readProjectFile('packages/create-jiso/templates/index.html'),
+    ])
+  ).join('\n');
   const starterTests = await readProjectFile('packages/create-jiso/src/index.test.ts');
 
-  assert.match(starterSource, /'graph-assertions': 'vp run graph-assertions'/);
-  assert.match(starterSource, /'emit-graph': 'node scripts\/emit-graph\.mjs'/);
-  assert.match(starterSource, /session: 'starterSession'/);
-  assert.match(starterSource, /inputFields: \['productId', 'quantity'\]/);
-  assert.match(starterSource, /i18n: \['en-US:cartTitle'\]/);
-  assert.match(starterSource, /title: 'Jiso Starter Cart'/);
+  assert.match(starterSource, /"graph-assertions": "vp run graph-assertions"/);
+  assert.match(starterSource, /"emit-graph": "node scripts\/emit-graph\.mjs"/);
+  assert.match(starterSource, /"session": "starterSession"/);
+  assert.match(starterSource, /"inputFields": \["productId", "quantity"\]/);
+  assert.match(starterSource, /"i18n": \["en-US:cartTitle"\]/);
+  assert.match(starterSource, /"title": "Jiso Starter Cart"/);
   assert.match(starterSource, /command: 'node scripts\/emit-graph\.mjs && fw check graph\.json'/);
   assert.match(
     starterSource,
     /command: 'node scripts\/emit-graph\.mjs && node scripts\/graph-assertions\.mjs'/,
   );
   assert.match(starterSource, /- run: vp run graph-assertions/);
-  assert.match(starterSource, /path: 'scripts\/emit-graph\.mjs'/);
-  assert.match(starterSource, /path: 'scripts\/graph-assertions\.mjs'/);
+  assert.match(starterSource, /'scripts\/emit-graph\.mjs'/);
+  assert.match(starterSource, /'scripts\/graph-assertions\.mjs'/);
   assert.match(starterSource, /deriveAppGraph/);
   assert.match(starterSource, /assertRenderEquivalence/);
-  assert.match(starterSource, /path: 'src\/client\.ts'/);
-  assert.match(starterSource, /'@jiso\/runtime': 'workspace:\*'/);
+  assert.match(starterSource, /'src\/client\.ts'/);
+  assert.match(starterSource, /"@jiso\/runtime": "workspace:\*"/);
   assert.match(starterSource, /installJisoLoader\(\{/);
   assert.match(starterSource, /enhancedMutations: \{/);
   assert.match(starterSource, /queryPlans,/);
@@ -1166,19 +1200,19 @@ void test('P10 starter wires graph assertions into CI', async () => {
   assert.match(starterSource, /@source "\.\.\/index\.html";/);
   assert.match(starterSource, /@source "\.\/\*\*\/\*\.\{ts,tsx,html\}";/);
   assert.match(starterSource, /@source inline\("bg-emerald-50 text-emerald-700/);
-  assert.match(starterSource, /'@tailwindcss\/vite': '\^4\.1\.0'/);
-  assert.match(starterSource, /tailwindcss: '\^4\.1\.0'/);
+  assert.match(starterSource, /"@tailwindcss\/vite": "\^4\.1\.0"/);
+  assert.match(starterSource, /"tailwindcss": "\^4\.1\.0"/);
   assert.match(starterSource, /@source inline\("\.\.\."\)/);
   assert.match(starterSource, /<link rel="stylesheet" href="\/src\/styles\.css" \/>/);
   assert.match(starterSource, /<script type="module" src="\/src\/client\.ts"><\/script>/);
   assert.match(starterTests, /vp run graph-assertions/);
-  assert.match(starterTests, /assertRenderEquivalence\(result\)/);
-  assert.match(starterTests, /@source inline\("bg-emerald-50 text-emerald-700/);
+  assert.match(starterTests, /src\/app\.fixpoint\.test\.ts/);
+  assert.match(starterSource, /@source inline\("bg-emerald-50 text-emerald-700/);
   assert.match(
     starterTests,
     /builds generated starter CSS with static and safelisted Tailwind utilities/,
   );
-  assert.match(starterTests, /node_modules\/\.bin\/vite/);
+  assert.match(starterTests, /resolveBin\('vite'\)/);
   assert.match(starterTests, /\.bg-emerald-50/);
   assert.match(starterTests, /create-jiso: wrote 15 files/);
 });
@@ -1186,6 +1220,7 @@ void test('P10 starter wires graph assertions into CI', async () => {
 void test('P9 verification layer evidence remains represented', async () => {
   const cliSource = await readProjectFile('packages/cli/src/index.ts');
   const cliTests = await readProjectFile('packages/cli/src/index.test.ts');
+  const graphSource = await readProjectFile('packages/core/src/graph.ts');
   const runtimeSource = await readProjectFile('packages/runtime/src/index.ts');
   const runtimeTests = await readProjectFile('packages/runtime/src/index.test.ts');
   const testHarnessSource = await readProjectFile('packages/test/src/index.ts');
@@ -1245,8 +1280,8 @@ void test('P9 verification layer evidence remains represented', async () => {
   );
   assert.match(testHarnessTests, /reports FW410 for nested query output shape mismatches/);
   assert.match(testHarnessSource, /diagnosticDefinitions\[code\]\.message/);
-  assert.match(cliSource, /verificationDiagnostics\?: readonly VerificationDiagnosticFact/);
-  assert.match(cliSource, /diagnostics\?: readonly StaticDiagnosticFact/);
+  assert.match(graphSource, /verificationDiagnostics\?: readonly VerificationDiagnosticFact/);
+  assert.match(graphSource, /diagnostics\?: readonly StaticDiagnosticFact/);
   assert.match(cliSource, /function verificationDiagnosticLine/);
   assert.match(cliSource, /function staticDiagnosticLine/);
   assert.match(cliSource, /function diagnosticSite/);
@@ -1284,15 +1319,16 @@ void test('P9 verification layer evidence remains represented', async () => {
 void test('P8 component explain includes handler, derive, trigger, and merge facts', async () => {
   const cliSource = await readProjectFile('packages/cli/src/index.ts');
   const cliTests = await readProjectFile('packages/cli/src/index.test.ts');
+  const graphSource = await readProjectFile('packages/core/src/graph.ts');
 
   assert.match(
-    cliSource,
+    graphSource,
     /export type CaptureChannel = 'ctx' \| 'element-params' \| 'module-scope'/,
   );
   assert.match(cliSource, /captures=\$\{list\(handler\.captures\)\}/);
-  assert.match(cliSource, /interface DeriveExplain/);
-  assert.match(cliSource, /interface TriggerExplain/);
-  assert.match(cliSource, /interface AttributeMergeExplain/);
+  assert.match(graphSource, /interface DeriveExplain/);
+  assert.match(graphSource, /interface TriggerExplain/);
+  assert.match(graphSource, /interface AttributeMergeExplain/);
   assert.match(cliSource, /DERIVE \$\{derive\.name\}/);
   assert.match(cliSource, /TRIGGER \$\{trigger\.trigger\}/);
   assert.match(cliSource, /MERGE \$\{merge\.element\}/);
@@ -1303,7 +1339,7 @@ void test('P8 component explain includes handler, derive, trigger, and merge fac
   assert.match(cliTests, /MERGE button attr=aria-expanded/);
   assert.match(cliTests, /MERGE button attr=data-bind:hidden/);
   assert.match(cliSource, /unscoped: true/);
-  assert.match(cliSource, /scopeAudits\?: readonly ScopeAuditFact\[\]/);
+  assert.match(graphSource, /scopeAudits\?: readonly ScopeAuditFact\[\]/);
   assert.match(cliSource, /function unscopedAccesses/);
   assert.match(cliSource, /function unguardedAccesses/);
   assert.match(cliSource, /endpoints: true/);
@@ -1435,6 +1471,8 @@ void test('P4 commerce touch graph is a committed generated artifact', async () 
   const cartItemsLine = lineNumberFor(commerceSource, "request.db.write('cart_items'");
   const ordersLine = lineNumberFor(commerceSource, "request.db.write('orders'");
   const productsLine = lineNumberFor(commerceSource, "request.db.write('products'");
+  const attachmentsLine = lineNumberFor(commerceSource, "request.db.write('attachments'");
+  const webhookOrdersLine = lineNumberFor(commerceSource, "tx.write('orders'");
 
   assert.match(commerceSource, /from '\.\/generated\/touch-graph\.js'/);
   assert.doesNotMatch(commerceSource, /extractTouchGraphFromSource/);
@@ -1465,6 +1503,32 @@ export const commerceTouchGraph = {
         predicate: 'eq',
         site: 'examples/commerce/src/app.ts:${productsLine}',
         via: 'products',
+      },
+    ],
+    reads: [],
+    unresolved: [],
+  },
+  'order.receipt': {
+    touches: [
+      {
+        domain: 'attachment',
+        keys: 'arg:orderId',
+        predicate: 'eq',
+        site: 'examples/commerce/src/app.ts:${attachmentsLine}',
+        via: 'attachments',
+      },
+    ],
+    reads: [],
+    unresolved: [],
+  },
+  'payment.webhook': {
+    touches: [
+      {
+        domain: 'order',
+        keys: 'arg:data.object.id',
+        predicate: 'eq',
+        site: 'examples/commerce/src/app.ts:${webhookOrdersLine}',
+        via: 'orders',
       },
     ],
     reads: [],

@@ -6,221 +6,29 @@ import { pathToFileURL } from 'node:url';
 import {
   diagnosticDefinitionText,
   diagnosticDefinitions,
+  validateFwExplainInput,
   type DiagnosticCode,
   type DiagnosticSeverity,
+  type EndpointExplain,
+  type EventPayloadFact,
+  type FixpointCheck,
+  type FwCheckInput,
+  type FwExplainInput,
+  type GraphInputValidationError,
+  type MutationExplain,
+  type OptimisticCoverage,
+  type QueryReadSet,
+  type QueryDataFact,
+  type RenderEquivalenceCheck,
+  type ScopeAuditFact,
+  type SemanticLint,
+  type StaticDiagnosticFact,
   type TouchGraph,
+  type UpdateCoverageFact,
+  type VerificationDiagnosticFact,
 } from '@jiso/core';
 
-export interface FwCheckInput {
-  diagnostics?: readonly StaticDiagnosticFact[];
-  endpoints?: readonly EndpointExplain[];
-  eventPayloads?: readonly EventPayloadFact[];
-  fixpointChecks?: readonly FixpointCheck[];
-  lints?: readonly SemanticLint[];
-  mutations?: readonly MutationExplain[];
-  optimistic?: readonly OptimisticCoverage[];
-  ownerDomains?: readonly OwnerDomainFact[];
-  pages?: readonly PageExplain[];
-  queryData?: readonly QueryDataFact[];
-  queries?: readonly QueryReadSet[];
-  renderEquivalenceChecks?: readonly RenderEquivalenceCheck[];
-  scopeAudits?: readonly ScopeAuditFact[];
-  touchGraph?: TouchGraph;
-  updateCoverage?: readonly UpdateCoverageFact[];
-  verificationDiagnostics?: readonly VerificationDiagnosticFact[];
-}
-
-export interface FwExplainInput extends FwCheckInput {
-  components?: readonly ComponentExplain[];
-  mutations?: readonly MutationExplain[];
-  pages?: readonly PageExplain[];
-}
-
-export interface ComponentExplain {
-  attributeMerges?: readonly AttributeMergeExplain[];
-  derives?: readonly DeriveExplain[];
-  fragments?: readonly string[];
-  handlers?: readonly HandlerExplain[];
-  name: string;
-  platformSubstitutions?: readonly PlatformSubstitutionExplain[];
-  queries?: readonly string[];
-  triggers?: readonly TriggerExplain[];
-}
-
-export interface AttributeMergeExplain {
-  attr: string;
-  decision: string;
-  diagnostics?: readonly DiagnosticCode[];
-  element: string;
-  rule: string;
-}
-
-export interface DeriveExplain {
-  inputs: readonly string[];
-  name: string;
-  ref: string;
-  target: string;
-}
-
-export interface HandlerExplain {
-  captures?: readonly CaptureChannel[];
-  event: string;
-  exportName: string;
-  params?: readonly string[];
-  ref: string;
-  substitution?: string;
-}
-
-export type CaptureChannel = 'ctx' | 'element-params' | 'module-scope';
-
-export interface TriggerExplain {
-  deps?: readonly string[];
-  exportName: string;
-  justification?: string;
-  ref: string;
-  trigger: 'idle' | 'load' | 'visible';
-}
-
-export interface PlatformSubstitutionExplain {
-  action: string;
-  event: string;
-  kind: 'details' | 'dialog' | 'popover';
-  tag: string;
-  target: string;
-}
-
-export interface MutationExplain {
-  enctype?: 'application/x-www-form-urlencoded' | 'multipart/form-data';
-  fileFields?: readonly string[];
-  guards?: readonly string[];
-  invalidates?: readonly string[];
-  inputFields?: readonly string[];
-  key: string;
-  manualInvalidates?: readonly string[];
-  session?: string;
-  writes?: readonly string[];
-}
-
-export interface PageMetaExplain {
-  description?: string;
-  image?: string;
-  title?: string;
-}
-
-export interface PageExplain {
-  guards?: readonly string[];
-  i18n?: readonly string[];
-  meta?: PageMetaExplain;
-  modulepreloads?: readonly string[];
-  prefetch?: 'conservative' | 'moderate' | false;
-  queries?: readonly string[];
-  route: string;
-  stylesheets?: readonly string[];
-  viewTransitions?: readonly string[];
-}
-
-export interface EndpointExplain {
-  auth?: string;
-  csrf?: 'checked' | 'exempt';
-  csrfJustification?: string;
-  guards?: readonly string[];
-  method?: string;
-  mount?: 'exact' | 'prefix';
-  name?: string;
-  path: string;
-  writes?: readonly string[];
-}
-
-export interface OptimisticCoverage {
-  mutation: string;
-  query: string;
-  status: 'UNHANDLED' | 'await-fragment' | 'hand-written';
-}
-
-export interface OwnerDomainFact {
-  domain: string;
-  owner: string;
-}
-
-export interface ScopeAuditFact {
-  detail?: string;
-  domain: string;
-  kind: 'query' | 'write';
-  name: string;
-  scope: 'args' | 'session' | 'unscoped' | 'unknown';
-  site: string;
-}
-
-export interface UpdateCoverageFact {
-  component: string;
-  detail?: string;
-  position: string;
-  query: string;
-  status: 'UNHANDLED' | 'fragment' | 'isomorphic' | 'plan' | 'renderOnce';
-}
-
-export interface FixpointCheck {
-  actual?: string;
-  artifact: string;
-  detail?: string;
-  expected?: string;
-  ok: boolean;
-}
-
-export interface RenderEquivalenceCheck {
-  actual?: string;
-  artifact: string;
-  detail?: string;
-  expected?: string;
-  ok: boolean;
-}
-
-export interface EventPayloadFact {
-  event: string;
-  fields: readonly string[];
-  site: string;
-}
-
-export interface QueryDataFact {
-  fields: readonly string[];
-  query: string;
-}
-
-export interface QueryReadSet {
-  domains: readonly string[];
-  guards?: readonly string[];
-  query: string;
-}
-
-export interface SemanticLint {
-  code: DiagnosticCode;
-  detail?: string;
-  site: string;
-}
-
-export interface VerificationDiagnosticFact {
-  branch?: string;
-  code: DiagnosticCode;
-  detail?: string;
-  domain?: string;
-  message?: string;
-  severity?: DiagnosticSeverity;
-  site?: string;
-}
-
-export interface StaticDiagnosticFact {
-  code: DiagnosticCode;
-  length?: number;
-  message?: string;
-  severity?: DiagnosticSeverity;
-  site: string;
-  start?: SourcePosition;
-}
-
-export interface SourcePosition {
-  column: number;
-  line: number;
-}
+export type { FwCheckInput, FwExplainInput } from '@jiso/core';
 
 interface TouchGraphDiagnosticFact {
   code: DiagnosticCode;
@@ -241,6 +49,7 @@ export interface FwCheckResult {
 }
 
 type FwCheckFamily = 'all' | 'coverage' | 'optimistic';
+type CliCommandResult = FwCheckResult | { error: string; exitCode: 1 };
 
 const outputVersion = 'fw-check/v1';
 const explainOutputVersion = 'fw-explain/v1';
@@ -256,102 +65,64 @@ export function main(args: readonly string[] = process.argv.slice(2)): number {
     const parsed = parseCheckArgs(args.slice(1));
     if (!parsed.ok) return writeCheckUsageError(parsed);
     const { family, inputPath } = parsed;
-    const input = readGraphInput(inputPath);
-    if (!input.ok) return writeInputError(input.error);
-    const result = fwCheck(input.value, { family });
-    const stream = result.exitCode === 0 ? process.stdout : process.stderr;
-    stream.write(result.output);
-    return result.exitCode;
+    return writeCommandResult(runGraphCommand(inputPath, (input) => fwCheck(input, { family })));
   }
 
   if (args[0] === 'audit') {
-    const failOnFindings = args.includes('--fail-on-findings');
-    const positional = args.slice(1).filter((arg) => arg !== '--fail-on-findings');
-    if (positional.length > 1) {
-      process.stderr.write('fw: usage: fw audit [--fail-on-findings] [graph.json]\n');
-      return 1;
-    }
-    const [inputPath] = positional;
-    const input = readGraphInput(inputPath);
-    if (!input.ok) return writeInputError(input.error);
-    const result = fwAudit(input.value, { failOnFindings });
-    const stream = result.exitCode === 0 ? process.stdout : process.stderr;
-    stream.write(result.output);
-    return result.exitCode;
+    const parsed = parseAuditArgs(args.slice(1));
+    if (!parsed.ok) return writeUsageError(parsed.message);
+    return writeCommandResult(
+      runGraphCommand(parsed.inputPath, (input) =>
+        fwAudit(input, { failOnFindings: parsed.failOnFindings }),
+      ),
+    );
   }
 
   if (args[0] === 'explain') {
-    const optimistic = args.includes('--optimistic');
-    const endpoints = args.includes('--endpoints');
-    const unscoped = args.includes('--unscoped');
-    const unguarded = args.includes('--unguarded');
-    const failOnFindings = args.includes('--fail-on-findings');
-    const positional = args
-      .slice(1)
-      .filter(
-        (arg) =>
-          arg !== '--fail-on-findings' &&
-          arg !== '--endpoints' &&
-          arg !== '--optimistic' &&
-          arg !== '--unguarded' &&
-          arg !== '--unscoped',
-      );
-
-    if (endpoints) {
-      const [inputPath] = positional;
-      const input = readGraphInput(inputPath);
-      if (!input.ok) return writeInputError(input.error);
-      const result = fwExplain(input.value, { endpoints: true });
-      const stream = result.exitCode === 0 ? process.stdout : process.stderr;
-      stream.write(result.output);
-      return result.exitCode;
-    }
-
-    if (unscoped) {
-      const [inputPath] = positional;
-      const input = readGraphInput(inputPath);
-      if (!input.ok) return writeInputError(input.error);
-      const result = fwExplain(input.value, { failOnFindings, unscoped: true });
-      const stream = result.exitCode === 0 ? process.stdout : process.stderr;
-      stream.write(result.output);
-      return result.exitCode;
-    }
-
-    if (unguarded) {
-      const [inputPath] = positional;
-      const input = readGraphInput(inputPath);
-      if (!input.ok) return writeInputError(input.error);
-      const result = fwExplain(input.value, { failOnFindings, unguarded: true });
-      const stream = result.exitCode === 0 ? process.stdout : process.stderr;
-      stream.write(result.output);
-      return result.exitCode;
-    }
-
-    const [kind, target, inputPath] = positional;
-
-    if (!isExplainKind(kind) || !target) {
-      process.stderr.write(
-        'fw: usage: fw explain component|mutation|query|page <target> [graph.json] | fw explain --endpoints [graph.json] | fw explain --unguarded [--fail-on-findings] [graph.json] | fw explain --unscoped [--fail-on-findings] [graph.json]\n',
-      );
-      return 1;
-    }
-
-    const input = readGraphInput(inputPath);
-    if (!input.ok) return writeInputError(input.error);
-    const result = fwExplain(input.value, { kind, optimistic, target });
-    const stream = result.exitCode === 0 ? process.stdout : process.stderr;
-    stream.write(result.output);
-    return result.exitCode;
+    const parsed = parseExplainArgs(args.slice(1));
+    if (!parsed.ok) return writeUsageError(parsed.message);
+    return writeCommandResult(
+      runGraphCommand(parsed.inputPath, (input) => fwExplain(input, parsed.options)),
+    );
   }
 
-  process.stderr.write(`fw: command not implemented yet: ${args.join(' ')}\n`);
+  process.stderr.write(
+    `fw: unknown command ${stableValue(args[0])}. expected explain, check, or audit.\n`,
+  );
   return 1;
+}
+
+function runGraphCommand(
+  inputPath: string | undefined,
+  run: (input: FwExplainInput) => FwCheckResult,
+): CliCommandResult {
+  const input = readGraphInput(inputPath);
+  if (!input.ok) return { error: inputErrorMessage(input.error), exitCode: 1 };
+  return run(input.value);
+}
+
+function writeCommandResult(result: CliCommandResult): 0 | 1 {
+  if ('error' in result) {
+    process.stderr.write(`${result.error}\n`);
+    return 1;
+  }
+
+  const stream = result.exitCode === 0 ? process.stdout : process.stderr;
+  stream.write(result.output);
+  return result.exitCode;
 }
 
 interface InputReadError {
   expected?: 'array' | 'object';
   field?: string;
-  kind: 'invalid-field-shape' | 'invalid-json' | 'invalid-shape' | 'not-found' | 'read-error';
+  kind:
+    | 'invalid-field-shape'
+    | 'invalid-json'
+    | 'invalid-shape'
+    | 'invalid-value'
+    | 'not-found'
+    | 'read-error';
+  message?: string;
   path: string;
 }
 
@@ -381,60 +152,49 @@ function readGraphInput(path: string | undefined): InputReadResult {
     return { error: { kind: 'invalid-shape', path }, ok: false };
   }
 
-  const shapeError = graphInputShapeError(parsed as Record<string, unknown>, path);
-  if (shapeError) return { error: shapeError, ok: false };
+  const validationErrors = validateFwExplainInput(parsed);
+  if (validationErrors.length > 0) {
+    const validationError = validationErrors[0];
+    if (validationError) {
+      return { error: graphInputValidationReadError(validationError, path), ok: false };
+    }
+  }
 
   return { ok: true, value: parsed as FwExplainInput };
 }
 
-function writeInputError(error: InputReadError): 1 {
+function inputErrorMessage(error: InputReadError): string {
   const messages: Record<InputReadError['kind'], string> = {
     'invalid-field-shape': `fw: input JSON field ${error.field ?? '-'} must be an ${error.expected ?? 'object'}: ${error.path}`,
     'invalid-json': `fw: input file is not valid JSON: ${error.path}`,
     'invalid-shape': `fw: input JSON must be an object: ${error.path}`,
+    'invalid-value': `fw: input JSON invalid: ${error.path}: ${error.field ?? '$'} ${error.message ?? 'is invalid'}`,
     'not-found': `fw: input file not found: ${error.path}`,
     'read-error': `fw: unable to read input file: ${error.path}`,
   };
-  process.stderr.write(`${messages[error.kind]}\n`);
+  return messages[error.kind];
+}
+
+function writeUsageError(message: string): 1 {
+  process.stderr.write(`${message}\n`);
   return 1;
 }
 
-function graphInputShapeError(input: Record<string, unknown>, path: string): InputReadError | null {
-  const arrayFields = [
-    'components',
-    'diagnostics',
-    'endpoints',
-    'eventPayloads',
-    'fixpointChecks',
-    'lints',
-    'mutations',
-    'optimistic',
-    'ownerDomains',
-    'pages',
-    'queryData',
-    'queries',
-    'renderEquivalenceChecks',
-    'scopeAudits',
-    'updateCoverage',
-    'verificationDiagnostics',
-  ];
-
-  for (const field of arrayFields) {
-    if (input[field] !== undefined && !Array.isArray(input[field])) {
-      return { expected: 'array', field, kind: 'invalid-field-shape', path };
-    }
+function graphInputValidationReadError(
+  error: GraphInputValidationError,
+  path: string,
+): InputReadError {
+  const arrayShape = /^([A-Za-z]+) must be an array$/.exec(error.message);
+  const arrayField = arrayShape?.[1];
+  if (arrayField) {
+    return { expected: 'array', field: arrayField, kind: 'invalid-field-shape', path };
   }
-
-  if (
-    input.touchGraph !== undefined &&
-    (typeof input.touchGraph !== 'object' ||
-      input.touchGraph === null ||
-      Array.isArray(input.touchGraph))
-  ) {
+  if (error.message === 'touchGraph must be an object') {
     return { expected: 'object', field: 'touchGraph', kind: 'invalid-field-shape', path };
   }
+  if (error.path === '$') return { kind: 'invalid-shape', path };
 
-  return null;
+  return { field: error.path, kind: 'invalid-value', message: error.message, path };
 }
 
 function isNodeErrorCode(error: unknown, code: string): boolean {
@@ -475,6 +235,10 @@ export interface FwUnscopedExplainOptions {
 }
 
 export function fwExplain(input: FwExplainInput, options: FwExplainOptions): FwCheckResult {
+  const validationErrors = validateFwExplainInput(input);
+  if (validationErrors.length > 0)
+    return invalidGraphInputResult(explainOutputVersion, validationErrors);
+
   const lines = [explainOutputVersion];
 
   if ('unscoped' in options) {
@@ -655,6 +419,10 @@ export interface FwAuditOptions {
 }
 
 export function fwAudit(input: FwExplainInput, options: FwAuditOptions = {}): FwCheckResult {
+  const validationErrors = validateFwExplainInput(input);
+  if (validationErrors.length > 0)
+    return invalidGraphInputResult(auditOutputVersion, validationErrors);
+
   const unguarded = unguardedAccesses(input);
   const manualInvalidates = (input.mutations ?? []).filter(
     (mutation) => (mutation.manualInvalidates?.length ?? 0) > 0,
@@ -696,25 +464,38 @@ export function fwCheck(
   input: FwCheckInput,
   options: { family?: FwCheckFamily } = {},
 ): FwCheckResult {
+  const validationErrors = validateFwExplainInput(input);
+  if (validationErrors.length > 0) return invalidGraphInputResult(outputVersion, validationErrors);
+
   const lines = [outputVersion];
   const family = options.family ?? 'all';
   const includeAll = family === 'all';
+  let failed = false;
+
+  const pushFinding = (line: string, fail = false): void => {
+    lines.push(line);
+    failed ||= fail;
+  };
 
   if (includeAll) {
     const diagnostics = diagnosticsForTouchGraph(input.touchGraph ?? {});
 
     for (const diagnostic of diagnostics) {
-      lines.push(
+      pushFinding(
         `${diagnostic.severity.toUpperCase()} ${diagnostic.code} ${diagnostic.site} ${diagnostic.message}`,
+        diagnostic.severity === 'error',
       );
     }
 
     for (const diagnostic of input.diagnostics ?? []) {
-      lines.push(staticDiagnosticLine(diagnostic));
+      pushFinding(staticDiagnosticLine(diagnostic), diagnosticSeverity(diagnostic) === 'error');
     }
 
     for (const diagnostic of input.verificationDiagnostics ?? []) {
-      lines.push(verificationDiagnosticLine(diagnostic));
+      pushFinding(
+        verificationDiagnosticLine(diagnostic),
+        diagnosticSeverity(diagnostic) === 'error',
+      );
     }
   }
 
@@ -724,35 +505,35 @@ export function fwCheck(
       input.queries ?? [],
       input.optimistic ?? [],
     )) {
-      lines.push(warning);
+      pushFinding(warning, true);
     }
   }
 
   if (includeAll || family === 'coverage') {
-    for (const line of updateCoverageLines(input.updateCoverage ?? [])) {
-      lines.push(line);
+    for (const fact of sortedUpdateCoverage(input.updateCoverage ?? [])) {
+      pushFinding(updateCoverageLine(fact), fact.status === 'UNHANDLED');
     }
   }
 
   if (includeAll) {
     for (const finding of unscopedAccesses(input)) {
-      lines.push(`WARN ${unscopedLine(finding)}`);
+      pushFinding(`WARN ${unscopedLine(finding)}`);
     }
 
     for (const lint of input.lints ?? []) {
-      lines.push(`LINT ${lint.code} ${lint.site} ${lintMessage(lint)}`);
+      pushFinding(`LINT ${lint.code} ${lint.site} ${lintMessage(lint)}`);
     }
 
     for (const lint of eventPayloadQueryLints(input.eventPayloads ?? [], input.queryData ?? [])) {
-      lines.push(`LINT ${lint.code} ${lint.site} ${lintMessage(lint)}`);
+      pushFinding(`LINT ${lint.code} ${lint.site} ${lintMessage(lint)}`);
     }
 
     for (const failure of fixpointFailures(input.fixpointChecks ?? [])) {
-      lines.push(fixpointFailureLine(failure));
+      pushFinding(fixpointFailureLine(failure), true);
     }
 
     for (const failure of renderEquivalenceFailures(input.renderEquivalenceChecks ?? [])) {
-      lines.push(renderEquivalenceFailureLine(failure));
+      pushFinding(renderEquivalenceFailureLine(failure), true);
     }
 
     for (const missed of missedQueryInvalidations(
@@ -761,16 +542,16 @@ export function fwCheck(
       input.mutations ?? [],
     )) {
       const message = diagnosticDefinitionText('FW407', { includeHelp: true });
-      lines.push(`ERROR FW407 ${missed.query} reads ${missed.domain}. ${message}`);
+      pushFinding(`ERROR FW407 ${missed.query} reads ${missed.domain}. ${message}`, true);
     }
 
     for (const access of unguardedAccesses(input)) {
-      lines.push(unguardedWarningLine(access));
+      pushFinding(unguardedWarningLine(access));
     }
 
     for (const endpoint of input.endpoints ?? []) {
       if (endpoint.csrf === 'exempt' && !endpoint.csrfJustification) {
-        lines.push(
+        pushFinding(
           `WARN ENDPOINT ${endpointName(endpoint)} csrf exemption requires a named justification.`,
         );
       }
@@ -778,7 +559,7 @@ export function fwCheck(
 
     for (const mutation of input.mutations ?? []) {
       for (const domain of mutation.manualInvalidates ?? []) {
-        lines.push(
+        pushFinding(
           `WARN INVALIDATE ${mutation.key} -> ${domain} Manual invalidate escape hatch requires review.`,
         );
       }
@@ -789,17 +570,27 @@ export function fwCheck(
     lines.push('OK');
   }
 
-  const failed = lines.some(isCheckFailureLine);
   return {
     exitCode: failed ? 1 : 0,
     output: `${lines.join('\n')}\n`,
   };
 }
 
-function isCheckFailureLine(line: string): boolean {
-  return (
-    line.startsWith('ERROR ') || line.startsWith('WARN FW310 ') || line.startsWith('WARN FW311 ')
-  );
+function invalidGraphInputResult(
+  version: string,
+  errors: readonly GraphInputValidationError[],
+): FwCheckResult {
+  const lines = [version, ...errors.map((error) => `ERROR INPUT ${error.path} ${error.message}`)];
+  return {
+    exitCode: 1,
+    output: `${lines.join('\n')}\n`,
+  };
+}
+
+function diagnosticSeverity(
+  diagnostic: Pick<StaticDiagnosticFact, 'code' | 'severity'>,
+): DiagnosticSeverity {
+  return diagnostic.severity ?? diagnosticDefinitions[diagnostic.code].severity;
 }
 
 function checkFamilyArg(value: string | undefined): FwCheckFamily {
@@ -827,6 +618,101 @@ function writeCheckUsageError(error: Extract<CheckArgParseResult, { ok: false }>
       : 'fw: usage: fw check [optimistic|coverage] [graph.json]\n';
   process.stderr.write(message);
   return 1;
+}
+
+type AuditArgParseResult =
+  | { failOnFindings: boolean; inputPath: string | undefined; ok: true }
+  | { message: string; ok: false };
+
+function parseAuditArgs(args: readonly string[]): AuditArgParseResult {
+  const parsed = parseFlaggedArgs(args, ['--fail-on-findings']);
+  if (!parsed.ok) return parsed;
+  if (parsed.positional.length > 1) {
+    return { message: 'fw: usage: fw audit [--fail-on-findings] [graph.json]', ok: false };
+  }
+
+  return {
+    failOnFindings: parsed.flags.has('--fail-on-findings'),
+    inputPath: parsed.positional[0],
+    ok: true,
+  };
+}
+
+type ExplainArgParseResult =
+  | { inputPath: string | undefined; ok: true; options: FwExplainOptions }
+  | { message: string; ok: false };
+
+function parseExplainArgs(args: readonly string[]): ExplainArgParseResult {
+  const parsed = parseFlaggedArgs(args, [
+    '--endpoints',
+    '--fail-on-findings',
+    '--optimistic',
+    '--unguarded',
+    '--unscoped',
+  ]);
+  if (!parsed.ok) return parsed;
+
+  const { flags, positional } = parsed;
+  const modeFlags = ['--endpoints', '--unguarded', '--unscoped'].filter((flag) => flags.has(flag));
+  if (modeFlags.length > 1) return explainUsage();
+
+  if (flags.has('--endpoints')) {
+    if (flags.has('--fail-on-findings') || flags.has('--optimistic') || positional.length > 1) {
+      return explainUsage();
+    }
+    return { inputPath: positional[0], ok: true, options: { endpoints: true } };
+  }
+
+  if (flags.has('--unguarded') || flags.has('--unscoped')) {
+    if (flags.has('--optimistic') || positional.length > 1) return explainUsage();
+    const options = flags.has('--unguarded')
+      ? ({ failOnFindings: flags.has('--fail-on-findings'), unguarded: true } as const)
+      : ({ failOnFindings: flags.has('--fail-on-findings'), unscoped: true } as const);
+    return { inputPath: positional[0], ok: true, options };
+  }
+
+  if (flags.has('--fail-on-findings')) return explainUsage();
+
+  const [kind, target, inputPath, extra] = positional;
+  if (!isExplainKind(kind) || !target || extra) return explainUsage();
+
+  return {
+    inputPath,
+    ok: true,
+    options: { kind, optimistic: flags.has('--optimistic'), target },
+  };
+}
+
+function explainUsage(): ExplainArgParseResult {
+  return {
+    message:
+      'fw: usage: fw explain component|mutation|query|page <target> [--optimistic] [graph.json] | fw explain --endpoints [graph.json] | fw explain --unguarded [--fail-on-findings] [graph.json] | fw explain --unscoped [--fail-on-findings] [graph.json]',
+    ok: false,
+  };
+}
+
+type FlagParseResult =
+  | { flags: Set<string>; ok: true; positional: string[] }
+  | { message: string; ok: false };
+
+function parseFlaggedArgs(
+  args: readonly string[],
+  allowedFlags: readonly string[],
+): FlagParseResult {
+  const allowed = new Set(allowedFlags);
+  const flags = new Set<string>();
+  const positional: string[] = [];
+
+  for (const arg of args) {
+    if (arg.startsWith('--')) {
+      if (!allowed.has(arg)) return { message: `fw: unknown flag ${stableValue(arg)}`, ok: false };
+      flags.add(arg);
+    } else {
+      positional.push(arg);
+    }
+  }
+
+  return { flags, ok: true, positional };
 }
 
 function ok(lines: string[]): FwCheckResult {
@@ -1143,32 +1029,34 @@ function optimisticCoverageWarning(mutation: string, query: string): string {
   return `WARN FW310 ${mutation} -> ${query} ${diagnosticDefinitions.FW310.message}`;
 }
 
-function updateCoverageLines(coverage: readonly UpdateCoverageFact[]): string[] {
-  return [...coverage]
-    .sort(compareUpdateCoverage)
-    .map((fact) =>
-      fact.status === 'UNHANDLED'
-        ? [
-            'WARN FW311',
-            `component=${fact.component}`,
-            `query=${fact.query}`,
-            `position=${JSON.stringify(fact.position)}`,
-            diagnosticDefinitions.FW311.message,
-            fact.detail ?? '',
-          ]
-            .filter(Boolean)
-            .join(' ')
-        : [
-            'COVERAGE',
-            `component=${fact.component}`,
-            `query=${fact.query}`,
-            `position=${JSON.stringify(fact.position)}`,
-            `status=${fact.status}`,
-            fact.detail ? `detail=${JSON.stringify(fact.detail)}` : '',
-          ]
-            .filter(Boolean)
-            .join(' '),
-    );
+function sortedUpdateCoverage(coverage: readonly UpdateCoverageFact[]): UpdateCoverageFact[] {
+  return [...coverage].sort(compareUpdateCoverage);
+}
+
+function updateCoverageLine(fact: UpdateCoverageFact): string {
+  if (fact.status === 'UNHANDLED') {
+    return [
+      'WARN FW311',
+      `component=${fact.component}`,
+      `query=${fact.query}`,
+      `position=${JSON.stringify(fact.position)}`,
+      diagnosticDefinitions.FW311.message,
+      fact.detail ?? '',
+    ]
+      .filter(Boolean)
+      .join(' ');
+  }
+
+  return [
+    'COVERAGE',
+    `component=${fact.component}`,
+    `query=${fact.query}`,
+    `position=${JSON.stringify(fact.position)}`,
+    `status=${fact.status}`,
+    fact.detail ? `detail=${JSON.stringify(fact.detail)}` : '',
+  ]
+    .filter(Boolean)
+    .join(' ');
 }
 
 function unscopedAccesses(input: FwCheckInput): ScopeAuditFact[] {
