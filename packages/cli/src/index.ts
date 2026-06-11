@@ -232,6 +232,8 @@ export interface FwCheckResult {
   output: string;
 }
 
+type FwCheckFamily = 'all' | 'coverage' | 'optimistic';
+
 const outputVersion = 'fw-check/v1';
 const explainOutputVersion = 'fw-explain/v1';
 const auditOutputVersion = 'fw-audit/v1';
@@ -243,9 +245,10 @@ export function main(args: readonly string[] = process.argv.slice(2)): number {
   }
 
   if (args[0] === 'check') {
-    const inputPath = args[1] === 'optimistic' || args[1] === 'coverage' ? args[2] : args[1];
+    const family = checkFamilyArg(args[1]);
+    const inputPath = family === 'all' ? args[1] : args[2];
     const input = inputPath ? JSON.parse(readFileSync(inputPath, 'utf8')) : {};
-    const result = fwCheck(input);
+    const result = fwCheck(input, { family });
     const stream = result.exitCode === 0 ? process.stdout : process.stderr;
     stream.write(result.output);
     return result.exitCode;
@@ -525,71 +528,85 @@ export function fwAudit(input: FwExplainInput): FwCheckResult {
   return ok(lines);
 }
 
-export function fwCheck(input: FwCheckInput): FwCheckResult {
+export function fwCheck(
+  input: FwCheckInput,
+  options: { family?: FwCheckFamily } = {},
+): FwCheckResult {
   const lines = [outputVersion];
-  const diagnostics = diagnosticsForTouchGraph(input.touchGraph ?? {});
+  const family = options.family ?? 'all';
+  const includeAll = family === 'all';
 
-  for (const diagnostic of diagnostics) {
-    lines.push(
-      `${diagnostic.severity.toUpperCase()} ${diagnostic.code} ${diagnostic.site} ${diagnostic.message}`,
-    );
-  }
+  if (includeAll) {
+    const diagnostics = diagnosticsForTouchGraph(input.touchGraph ?? {});
 
-  for (const diagnostic of input.diagnostics ?? []) {
-    lines.push(staticDiagnosticLine(diagnostic));
-  }
-
-  for (const diagnostic of input.verificationDiagnostics ?? []) {
-    lines.push(verificationDiagnosticLine(diagnostic));
-  }
-
-  for (const warning of optimisticCoverageWarnings(
-    input.mutations ?? [],
-    input.queries ?? [],
-    input.optimistic ?? [],
-  )) {
-    lines.push(warning);
-  }
-
-  for (const line of updateCoverageLines(input.updateCoverage ?? [])) {
-    lines.push(line);
-  }
-
-  for (const finding of unscopedAccesses(input)) {
-    lines.push(`WARN ${unscopedLine(finding)}`);
-  }
-
-  for (const lint of input.lints ?? []) {
-    lines.push(`LINT ${lint.code} ${lint.site} ${lintMessage(lint)}`);
-  }
-
-  for (const lint of eventPayloadQueryLints(input.eventPayloads ?? [], input.queryData ?? [])) {
-    lines.push(`LINT ${lint.code} ${lint.site} ${lintMessage(lint)}`);
-  }
-
-  for (const failure of fixpointFailures(input.fixpointChecks ?? [])) {
-    lines.push(fixpointFailureLine(failure));
-  }
-
-  for (const missed of missedQueryInvalidations(
-    input.queries ?? [],
-    input.touchGraph ?? {},
-    input.mutations ?? [],
-  )) {
-    lines.push(
-      `ERROR FW407 ${missed.query} reads ${missed.domain} but no mutation touch graph writes that domain.`,
-    );
-  }
-
-  for (const access of unguardedAccesses(input)) {
-    lines.push(unguardedWarningLine(access));
-  }
-
-  for (const mutation of input.mutations ?? []) {
-    for (const domain of mutation.manualInvalidates ?? []) {
+    for (const diagnostic of diagnostics) {
       lines.push(
-        `WARN INVALIDATE ${mutation.key} -> ${domain} Manual invalidate escape hatch requires review.`,
+        `${diagnostic.severity.toUpperCase()} ${diagnostic.code} ${diagnostic.site} ${diagnostic.message}`,
       );
+    }
+
+    for (const diagnostic of input.diagnostics ?? []) {
+      lines.push(staticDiagnosticLine(diagnostic));
+    }
+
+    for (const diagnostic of input.verificationDiagnostics ?? []) {
+      lines.push(verificationDiagnosticLine(diagnostic));
+    }
+  }
+
+  if (includeAll || family === 'optimistic') {
+    for (const warning of optimisticCoverageWarnings(
+      input.mutations ?? [],
+      input.queries ?? [],
+      input.optimistic ?? [],
+    )) {
+      lines.push(warning);
+    }
+  }
+
+  if (includeAll || family === 'coverage') {
+    for (const line of updateCoverageLines(input.updateCoverage ?? [])) {
+      lines.push(line);
+    }
+  }
+
+  if (includeAll) {
+    for (const finding of unscopedAccesses(input)) {
+      lines.push(`WARN ${unscopedLine(finding)}`);
+    }
+
+    for (const lint of input.lints ?? []) {
+      lines.push(`LINT ${lint.code} ${lint.site} ${lintMessage(lint)}`);
+    }
+
+    for (const lint of eventPayloadQueryLints(input.eventPayloads ?? [], input.queryData ?? [])) {
+      lines.push(`LINT ${lint.code} ${lint.site} ${lintMessage(lint)}`);
+    }
+
+    for (const failure of fixpointFailures(input.fixpointChecks ?? [])) {
+      lines.push(fixpointFailureLine(failure));
+    }
+
+    for (const missed of missedQueryInvalidations(
+      input.queries ?? [],
+      input.touchGraph ?? {},
+      input.mutations ?? [],
+    )) {
+      lines.push(
+        `ERROR FW407 ${missed.query} reads ${missed.domain} but no mutation touch graph writes that domain.`,
+      );
+    }
+
+    for (const access of unguardedAccesses(input)) {
+      lines.push(unguardedWarningLine(access));
+    }
+
+    for (const mutation of input.mutations ?? []) {
+      for (const domain of mutation.manualInvalidates ?? []) {
+        lines.push(
+          `WARN INVALIDATE ${mutation.key} -> ${domain} Manual invalidate escape hatch requires review.`,
+        );
+      }
     }
   }
 
@@ -602,6 +619,10 @@ export function fwCheck(input: FwCheckInput): FwCheckResult {
     exitCode: failed ? 1 : 0,
     output: `${lines.join('\n')}\n`,
   };
+}
+
+function checkFamilyArg(value: string | undefined): FwCheckFamily {
+  return value === 'optimistic' || value === 'coverage' ? value : 'all';
 }
 
 function ok(lines: string[]): FwCheckResult {

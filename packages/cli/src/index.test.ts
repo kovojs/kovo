@@ -659,12 +659,27 @@ describe('fw check', () => {
           mutations: [{ guards: ['authed'], invalidates: ['cart'], key: 'cart/add' }],
           optimistic: [{ mutation: 'cart/add', query: 'cart', status: 'UNHANDLED' }],
           queries: [{ domains: ['cart'], query: 'cart' }],
+          updateCoverage: [
+            {
+              component: 'CartBadge',
+              position: 'conditional <dot>',
+              query: 'cart.discount',
+              status: 'UNHANDLED',
+            },
+          ],
           touchGraph: {
             'cart.addItem': {
+              reads: [{ domain: 'product', keys: null, site: 'cart.domain.ts:2', via: 'products' }],
               touches: [
                 { domain: 'cart', keys: null, site: 'cart.domain.ts:1', via: 'cart_items' },
               ],
-              unresolved: [],
+              unresolved: [
+                {
+                  code: 'FW406',
+                  message: 'Statically un-analyzable write site; manual touches required.',
+                  site: 'cart.domain.ts:3',
+                },
+              ],
             },
           },
         }),
@@ -694,6 +709,23 @@ describe('fw check', () => {
       writeFileSync(
         graphPath,
         JSON.stringify({
+          mutations: [{ guards: ['authed'], invalidates: ['cart'], key: 'cart/add' }],
+          optimistic: [{ mutation: 'cart/add', query: 'cart', status: 'UNHANDLED' }],
+          queries: [{ domains: ['product'], query: 'productPage' }],
+          touchGraph: {
+            'cart.addItem': {
+              touches: [
+                { domain: 'cart', keys: null, site: 'cart.domain.ts:1', via: 'cart_items' },
+              ],
+              unresolved: [
+                {
+                  code: 'FW406',
+                  message: 'Statically un-analyzable write site; manual touches required.',
+                  site: 'cart.domain.ts:3',
+                },
+              ],
+            },
+          },
           updateCoverage: [
             {
               component: 'CartBadge',
