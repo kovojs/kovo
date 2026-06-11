@@ -2045,6 +2045,33 @@ describe('server mutation primitives', () => {
     });
   });
 
+  it('omits mutation input and manual reasons from FW-Changes headers', async () => {
+    const cart = domain('cart');
+    const addToCart = mutation('cart/add', {
+      input: s.object({ cartId: s.string(), note: s.string(), productId: s.string() }),
+      handler(input, _request, context) {
+        context.invalidate(cart, {
+          input,
+          keys: [input.cartId],
+          reason: 'manual refresh includes private note',
+        });
+        return input;
+      },
+    });
+
+    await expect(
+      renderMutationResponse(addToCart, {
+        rawInput: { cartId: 'c1', note: 'secret café token', productId: 'p1' },
+        request: {},
+      }),
+    ).resolves.toMatchObject({
+      headers: {
+        'FW-Changes': '[{"domain":"cart","keys":["c1"]}]',
+      },
+      status: 200,
+    });
+  });
+
   it('renders append fragment mode for pagination fragments', async () => {
     const product = domain('product');
     const productQuery = query('productGrid', {
