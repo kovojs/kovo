@@ -1,4 +1,5 @@
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { execFileSync } from 'node:child_process';
+import { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -780,6 +781,38 @@ describe('fw check', () => {
     }
 
     expect(output).toBe('fw: usage: fw check [optimistic|coverage] [graph.json]\n');
+  });
+
+  it('runs as a CLI entrypoint when the script path contains spaces', () => {
+    const parent = mkdtempSync(join(tmpdir(), 'jiso-cli-entry-'));
+    const spacedDir = join(parent, 'entry path with spaces');
+    const entryPath = join(spacedDir, 'fw.ts');
+
+    try {
+      mkdirSync(spacedDir, { recursive: true });
+      mkdirSync(join(parent, 'node_modules/@jiso/core'), { recursive: true });
+      writeFileSync(
+        join(parent, 'node_modules/@jiso/core/package.json'),
+        '{"type":"module","exports":"./index.js"}\n',
+        'utf8',
+      );
+      writeFileSync(
+        join(parent, 'node_modules/@jiso/core/index.js'),
+        'export const diagnosticDefinitions = {};\n',
+        'utf8',
+      );
+      writeFileSync(join(parent, 'package.json'), '{"type":"module"}\n', 'utf8');
+      symlinkSync(new URL('./index.ts', import.meta.url), entryPath);
+
+      const output = execFileSync(process.execPath, ['--preserve-symlinks-main', entryPath], {
+        encoding: 'utf8',
+        stdio: ['ignore', 'pipe', 'pipe'],
+      });
+
+      expect(output).toBe('fw: explain, check, audit\n');
+    } finally {
+      rmSync(parent, { force: true, recursive: true });
+    }
   });
 
   it('reports a stable error for missing check input files', () => {
