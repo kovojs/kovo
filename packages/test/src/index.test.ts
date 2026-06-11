@@ -384,6 +384,41 @@ describe('@jiso/test harness', () => {
     expect(page.fragment('missing-target')).toBe('');
   });
 
+  it('asserts runtime-style id and fw-fragment-target fragments', async () => {
+    const harness = createJisoTestHarness({
+      db: {},
+      pages: {
+        '/cart': [
+          '<section id="cart-badge" fw-deps="cart"><span>1</span></section>',
+          '<aside fw-fragment-target="cart-summary" fw-deps="cart"><span>2</span></aside>',
+        ].join(''),
+      },
+    });
+
+    const page = await harness.page('/cart');
+
+    expect(page.fragment('cart-badge')).toBe(
+      '<section id="cart-badge" fw-deps="cart"><span>1</span></section>',
+    );
+    expect(page.fragment('cart-summary')).toBe(
+      '<aside fw-fragment-target="cart-summary" fw-deps="cart"><span>2</span></aside>',
+    );
+  });
+
+  it('asserts fragments whose opening attributes contain quoted angle brackets', async () => {
+    const harness = createJisoTestHarness({
+      db: {},
+      pages: {
+        '/cart':
+          '<section id="cart-badge" data-label="1 > 0"><span>1</span><section>nested</section></section>',
+      },
+    });
+
+    await expect(harness.page('/cart').then((page) => page.fragment('cart-badge'))).resolves.toBe(
+      '<section id="cart-badge" data-label="1 > 0"><span>1</span><section>nested</section></section>',
+    );
+  });
+
   it('asserts stamped fragment targets with nested same-tag children', async () => {
     const harness = createJisoTestHarness({
       db: {},

@@ -597,53 +597,133 @@ function createPageAssertion(html: string): PageAssertion {
       const explicitFragment = explicitFragmentHtml(html, target);
       if (explicitFragment !== undefined) return explicitFragment;
 
-      const stampedElement =
-        new RegExp(
-          `<(?<tag>[a-z][a-z0-9-]*)\\b(?=[^>]*\\s${attributeEquals('fw-c', target)})[^>]*>`,
-        ).exec(html) ??
-        new RegExp(
-          `<(?<tag>${escapeRegExp(target)})\\b(?=[^>]*\\sfw-deps(?:\\s|=|>|\\/))[^>]*>`,
-        ).exec(html);
-      if (!stampedElement?.groups?.tag) return '';
+      const stampedElement = findFragmentTargetElement(html, target);
+      if (!stampedElement) return '';
 
-      const tag = stampedElement.groups.tag;
-      const start = stampedElement.index;
-      const end = matchingElementEnd(html, tag, start);
+      const { index, tag } = stampedElement;
+      const end = matchingElementEnd(html, tag, index);
       if (end === undefined) return '';
 
-      return html.slice(start, end);
+      return html.slice(index, end);
     },
     html,
   };
 }
 
 function explicitFragmentHtml(html: string, target: string): string | undefined {
-  const fragmentStart = new RegExp(
-    `<fw-fragment\\b(?=[^>]*\\s${attributeEquals('target', target)})[^>]*>`,
-  ).exec(html);
+  const fragmentStart = findOpeningElement(
+    html,
+    (element) =>
+      element.tag === 'fw-fragment' && readHtmlAttribute(element.attrs, 'target') === target,
+  );
   if (!fragmentStart) return undefined;
 
   const start = fragmentStart.index;
   const end = matchingElementEnd(html, 'fw-fragment', start);
   if (end === undefined) return undefined;
 
-  return html.slice(start + fragmentStart[0].length, end - '</fw-fragment>'.length);
+  return html.slice(fragmentStart.end, end - '</fw-fragment>'.length);
+}
+
+interface OpeningElement {
+  attrs: string;
+  end: number;
+  index: number;
+  tag: string;
+}
+
+function findFragmentTargetElement(html: string, target: string): OpeningElement | undefined {
+  return findOpeningElement(html, (element) => {
+    const fragmentTarget = readHtmlAttribute(element.attrs, 'fw-fragment-target');
+    const id = readHtmlAttribute(element.attrs, 'id');
+    const component = readHtmlAttribute(element.attrs, 'fw-c');
+    const deps = readHtmlAttribute(element.attrs, 'fw-deps');
+
+    return (
+      fragmentTarget === target ||
+      id === target ||
+      component === target ||
+      (element.tag === target && deps !== null)
+    );
+  });
+}
+
+function findOpeningElement(
+  html: string,
+  predicate: (element: OpeningElement) => boolean,
+): OpeningElement | undefined {
+  let offset = 0;
+
+  while (offset < html.length) {
+    const start = html.indexOf('<', offset);
+    if (start === -1) return undefined;
+
+    const element = readOpeningElement(html, start);
+    if (element) {
+      if (predicate(element)) return element;
+      offset = element.end;
+    } else {
+      offset = start + 1;
+    }
+  }
+
+  return undefined;
+}
+
+function readOpeningElement(html: string, start: number): OpeningElement | undefined {
+  const head = /^<(?<tag>[a-z][a-z0-9-]*)\b/i.exec(html.slice(start));
+  if (!head?.groups?.tag) return undefined;
+
+  const close = openingTagClose(html, start + head[0].length);
+  if (close === undefined) return undefined;
+
+  return {
+    attrs: html.slice(start + head[0].length, close),
+    end: close + 1,
+    index: start,
+    tag: head.groups.tag.toLowerCase(),
+  };
+}
+
+function openingTagClose(html: string, start: number): number | undefined {
+  let quote: '"' | "'" | undefined;
+
+  for (let index = start; index < html.length; index += 1) {
+    const char = html[index];
+
+    if (quote !== undefined) {
+      if (char === quote) quote = undefined;
+      continue;
+    }
+
+    if (char === '"' || char === "'") {
+      quote = char;
+      continue;
+    }
+
+    if (char === '>') return index;
+  }
+
+  return undefined;
 }
 
 function matchingElementEnd(html: string, tag: string, start: number): number | undefined {
-  const tagPattern = new RegExp(`<\\/?${escapeRegExp(tag)}\\b[^>]*>`, 'g');
+  const tagPattern = new RegExp(`<\\/?${escapeRegExp(tag)}\\b`, 'gi');
   tagPattern.lastIndex = start;
   let depth = 0;
 
   for (const match of html.matchAll(tagPattern)) {
-    const token = match[0];
+    const close = openingTagClose(html, match.index + match[0].length);
+    if (close === undefined) return undefined;
+
+    const token = html.slice(match.index, close + 1);
     if (token.startsWith('</')) {
       depth -= 1;
       if (depth === 0) return match.index + token.length;
       continue;
     }
 
-    if (token.endsWith('/>')) {
+    if (/\/\s*>$/.test(token)) {
       if (depth === 0) return match.index + token.length;
       continue;
     }
@@ -654,12 +734,15 @@ function matchingElementEnd(html: string, tag: string, start: number): number | 
   return undefined;
 }
 
-function attributeEquals(name: string, value: string): string {
-  const escapedName = escapeRegExp(name);
-  const escapedValue = escapeRegExp(value);
-  const valuePattern = `(?:"${escapedValue}"|'${escapedValue}'|${escapedValue})`;
+function readHtmlAttribute(attrs: string, name: string): string | null {
+  const pattern = new RegExp(
+    `(?:^|\\s)${escapeRegExp(name)}(?:\\s*=\\s*(?:"(?<double>[^"]*)"|'(?<single>[^']*)'|(?<bare>[^\\s"'=<>\`]+)))?(?=\\s|$|/)`,
+    'i',
+  );
+  const match = pattern.exec(attrs);
+  if (!match) return null;
 
-  return `${escapedName}\\s*=\\s*${valuePattern}(?=\\s|>|\\/)`;
+  return match.groups?.double ?? match.groups?.single ?? match.groups?.bare ?? '';
 }
 
 function escapeRegExp(value: string): string {
