@@ -9,7 +9,7 @@ Scope: SPEC additions (session population, guard-failure contract, mutation resp
 - [x] SPEC A-track text: session population seam, guard-failure contract, mutation response-header channel, `endpoint()` primitive (normative text; supersedes the gaps listed under Background).
 - [ ] A1 session-resolution seam in the request lifecycle.
 - [ ] A2 guard-failure contract (`onUnauthenticated` redirect, 403 path for failed `role()`).
-- [ ] A3 mutation response-header channel (`ctx.setCookie` / header passthrough).
+- [x] A3 mutation response-header channel (`ctx.setCookie` / header passthrough). Evidence: `packages/server/src/index.test.ts` covers enhanced Set-Cookie forwarding, no-JS PRG Set-Cookie forwarding, and no typed-failure leakage; focused server tests and `vp check` passed in `agent/auth-headers`.
 - [x] A4 `endpoint()` raw endpoint primitive with CSRF exemption + unguarded-audit enrollment.
 - [ ] B1 schema bridge: better-auth tables into `schema.ts` domains with declared touches.
 - [ ] B2 typed session mapper (`betterAuthSession(auth, map)`).

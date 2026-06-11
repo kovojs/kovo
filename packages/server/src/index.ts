@@ -461,6 +461,7 @@ export interface MutationSuccess<Value> {
   rerunQueryInstances?: QueryRerun[];
   rerunQueries: string[];
   ok: true;
+  responseHeaders?: MutationResponseHeaders;
   value: Value;
 }
 
@@ -475,6 +476,24 @@ export interface MutationContext<Errors extends Record<string, Schema<unknown>>>
     domain: Domain<DomainKey>,
     options?: InvalidateOptions<Input>,
   ): ChangeRecord<DomainKey, Input>;
+  setCookie?: {
+    (rawSetCookie: string): void;
+    (name: string, value: string, options?: CookieOptions): void;
+  };
+}
+
+export type MutationResponseHeaderValue = string | string[];
+
+export type MutationResponseHeaders = Record<string, MutationResponseHeaderValue>;
+
+export interface CookieOptions {
+  domain?: string;
+  expires?: Date | string;
+  httpOnly?: boolean;
+  maxAge?: number;
+  path?: string;
+  sameSite?: 'lax' | 'none' | 'strict';
+  secure?: boolean;
 }
 
 export interface Domain<Key extends string = string> {
@@ -786,7 +805,7 @@ export interface MutationWireRequestOptions<Request> {
 
 export interface MutationWireResponse {
   body: string;
-  headers: Record<string, string>;
+  headers: MutationResponseHeaders;
   status: 200 | 422 | 429 | 500;
 }
 
@@ -940,7 +959,7 @@ export interface NoJsMutationRequest<Request, Value> {
 
 export interface NoJsMutationResponse {
   body: string;
-  headers: Record<string, string>;
+  headers: MutationResponseHeaders;
   status: 303 | 422 | 429 | 500;
 }
 
@@ -1453,6 +1472,17 @@ export async function runMutation<
   }
 
   const manualInvalidations: ChangeRecord[] = [];
+  const responseHeaders: MutationResponseHeaders = {};
+  function setCookie(rawSetCookie: string): void;
+  function setCookie(name: string, value: string, options?: CookieOptions): void;
+  function setCookie(nameOrRawSetCookie: string, value?: string, options?: CookieOptions): void {
+    const cookie =
+      value === undefined
+        ? validateRawSetCookie(nameOrRawSetCookie)
+        : serializeCookie(nameOrRawSetCookie, value, options);
+    appendResponseHeader(responseHeaders, 'Set-Cookie', cookie);
+  }
+
   const context: MutationContext<Errors> = {
     fail(code, payload) {
       return {
@@ -1466,6 +1496,7 @@ export async function runMutation<
       manualInvalidations.push(record);
       return record;
     },
+    setCookie,
   };
   const runHandler = async (handlerRequest: GuardedRequest): Promise<Value> => {
     const handlerValue = await definition.handler(input, handlerRequest, context);
@@ -1494,6 +1525,7 @@ export async function runMutation<
   return {
     changes,
     ok: true,
+    ...(Object.keys(responseHeaders).length > 0 ? { responseHeaders } : {}),
     ...(rerunQueryInstances.some((query) => query.instanceKey !== undefined)
       ? { rerunQueryInstances }
       : {}),
@@ -1611,7 +1643,7 @@ export async function renderMutationResponse<
     return storeMutationReplay(
       csrf,
       wireRequest,
-      mutationRenderErrorResponse(error, result.changes, wireRequest),
+      mutationRenderErrorResponse(error, result.changes, wireRequest, result.responseHeaders),
       replayReservation,
     );
   }
@@ -1621,10 +1653,13 @@ export async function renderMutationResponse<
     wireRequest,
     {
       body: [...queryChunks, ...fragmentChunks].join('\n'),
-      headers: {
-        ...mutationWireResponseHeaders(wireRequest),
-        'FW-Changes': mutationWireChangeHeader(result.changes),
-      },
+      headers: mergeMutationResponseHeaders(
+        mutationWireResponseHeaders(wireRequest),
+        {
+          'FW-Changes': mutationWireChangeHeader(result.changes),
+        },
+        result.responseHeaders,
+      ),
       status: 200,
     },
     replayReservation,
@@ -1635,13 +1670,17 @@ function mutationRenderErrorResponse<Request>(
   error: unknown,
   changes: readonly ChangeRecord[],
   wireRequest: MutationWireRequest<Request>,
+  responseHeaders?: MutationResponseHeaders,
 ): MutationWireResponse {
   return {
     body: renderMutationRenderErrorFragment(error, wireRequest),
-    headers: {
-      ...mutationWireResponseHeaders(wireRequest),
-      'FW-Changes': mutationWireChangeHeader(changes),
-    },
+    headers: mergeMutationResponseHeaders(
+      mutationWireResponseHeaders(wireRequest),
+      {
+        'FW-Changes': mutationWireChangeHeader(changes),
+      },
+      responseHeaders,
+    ),
     status: 500,
   };
 }
@@ -1721,13 +1760,16 @@ export async function renderNoJsMutationResponse<
 
   return {
     body: '',
-    headers: {
-      'Cache-Control': 'no-store',
-      Location:
-        typeof noJsRequest.redirectTo === 'function'
-          ? noJsRequest.redirectTo(result)
-          : noJsRequest.redirectTo,
-    },
+    headers: mergeMutationResponseHeaders(
+      {
+        'Cache-Control': 'no-store',
+        Location:
+          typeof noJsRequest.redirectTo === 'function'
+            ? noJsRequest.redirectTo(result)
+            : noJsRequest.redirectTo,
+      },
+      result.responseHeaders,
+    ),
     status: 303,
   };
 }
@@ -1874,6 +1916,110 @@ function rateLimitKey<Request extends SessionRequestLike>(
 
 function retryAfterHeaders(result: { retryAfter?: number }): Record<string, string> {
   return result.retryAfter === undefined ? {} : { 'Retry-After': String(result.retryAfter) };
+}
+
+function mergeMutationResponseHeaders(
+  ...sources: readonly (MutationResponseHeaders | undefined)[]
+): MutationResponseHeaders {
+  const headers: MutationResponseHeaders = {};
+
+  for (const source of sources) {
+    if (!source) continue;
+
+    for (const [name, value] of Object.entries(source)) {
+      appendResponseHeader(headers, name, value);
+    }
+  }
+
+  return headers;
+}
+
+function appendResponseHeader(
+  headers: MutationResponseHeaders,
+  name: string,
+  value: MutationResponseHeaderValue,
+): void {
+  const existingName = findResponseHeaderName(headers, name);
+  const targetName = existingName ?? name;
+  if (name.toLowerCase() !== 'set-cookie') {
+    headers[targetName] = Array.isArray(value) ? [...value] : value;
+    return;
+  }
+
+  const nextValues = Array.isArray(value) ? value : [value];
+  const existing = existingName === undefined ? undefined : headers[existingName];
+  if (existing === undefined) {
+    headers[targetName] = [...nextValues];
+    return;
+  }
+
+  headers[targetName] = [...(Array.isArray(existing) ? existing : [existing]), ...nextValues];
+}
+
+function findResponseHeaderName(
+  headers: MutationResponseHeaders,
+  name: string,
+): string | undefined {
+  const wanted = name.toLowerCase();
+  return Object.keys(headers).find((candidate) => candidate.toLowerCase() === wanted);
+}
+
+function validateRawSetCookie(value: string): string {
+  if (!value) throw new Error('ctx.setCookie requires a non-empty Set-Cookie value');
+  assertNoHeaderControlCharacters(value, 'Set-Cookie');
+  return value;
+}
+
+function serializeCookie(name: string, value: string, options: CookieOptions = {}): string {
+  assertCookieName(name);
+  assertCookieOctets(value, 'cookie value');
+  const parts = [`${name}=${value}`];
+
+  if (options.maxAge !== undefined) {
+    if (!Number.isInteger(options.maxAge)) throw new Error('Cookie maxAge must be an integer');
+    parts.push(`Max-Age=${options.maxAge}`);
+  }
+  if (options.domain !== undefined) {
+    assertCookieOctets(options.domain, 'cookie domain');
+    parts.push(`Domain=${options.domain}`);
+  }
+  if (options.path !== undefined) {
+    assertCookieOctets(options.path, 'cookie path');
+    parts.push(`Path=${options.path}`);
+  }
+  if (options.expires !== undefined) {
+    const expires =
+      options.expires instanceof Date ? options.expires.toUTCString() : options.expires;
+    assertCookieOctets(expires, 'cookie expires');
+    parts.push(`Expires=${expires}`);
+  }
+  if (options.httpOnly) parts.push('HttpOnly');
+  if (options.secure) parts.push('Secure');
+  if (options.sameSite !== undefined) {
+    const sameSite = {
+      lax: 'Lax',
+      none: 'None',
+      strict: 'Strict',
+    }[options.sameSite];
+    parts.push(`SameSite=${sameSite}`);
+  }
+
+  return parts.join('; ');
+}
+
+function assertCookieName(value: string): void {
+  if (!/^[!#$%&'*+\-.^_`|~0-9A-Za-z]+$/.test(value)) {
+    throw new Error('Cookie name must be an HTTP token');
+  }
+}
+
+function assertCookieOctets(value: string, label: string): void {
+  assertNoHeaderControlCharacters(value, label);
+  if (value.includes(';')) throw new Error(`${label} must not contain semicolons`);
+}
+
+function assertNoHeaderControlCharacters(value: string, label: string): void {
+  if (/[\r\n]/.test(value)) throw new Error(`${label} must not contain CR or LF`);
 }
 
 function formLikeToRecord(input: unknown): Record<string, unknown> {
@@ -2463,9 +2609,18 @@ function evictExpiredMutationReplays(responses: Map<string, MutationReplayRecord
 function cloneMutationWireResponse(response: MutationWireResponse): MutationWireResponse {
   return {
     body: response.body,
-    headers: { ...response.headers },
+    headers: cloneMutationResponseHeaders(response.headers),
     status: response.status,
   };
+}
+
+function cloneMutationResponseHeaders(headers: MutationResponseHeaders): MutationResponseHeaders {
+  return Object.fromEntries(
+    Object.entries(headers).map(([name, value]) => [
+      name,
+      Array.isArray(value) ? [...value] : value,
+    ]),
+  );
 }
 
 function mutationWireResponseHeaders<Request>(

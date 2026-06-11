@@ -50,6 +50,7 @@ import {
   type ChangeRecord,
   type EndpointRequest,
   type MutationReplayStore,
+  type MutationResponseHeaderValue,
 } from './index.js';
 
 const mutation = ((key: string, definition: Parameters<typeof defineMutation>[1]) =>
@@ -2108,6 +2109,91 @@ describe('server mutation primitives', () => {
     });
   });
 
+  it('forwards committed mutation Set-Cookie headers in enhanced responses', async () => {
+    const signIn = mutation('auth/sign-in', {
+      input: s.object({ email: s.string() }),
+      handler(input, _request, context) {
+        context.setCookie?.('jiso_session=s1; Path=/; HttpOnly; SameSite=Lax');
+        context.setCookie?.('jiso_csrf', 'c1', {
+          httpOnly: true,
+          path: '/',
+          sameSite: 'strict',
+          secure: true,
+        });
+
+        return input.email;
+      },
+    });
+
+    await expect(
+      renderMutationResponse(signIn, {
+        rawInput: { email: 'ada@example.test' },
+        request: {},
+      }),
+    ).resolves.toEqual({
+      body: '',
+      headers: {
+        'Content-Type': 'text/vnd.jiso.fragment+html; charset=utf-8',
+        'FW-Changes': '[]',
+        'Set-Cookie': [
+          'jiso_session=s1; Path=/; HttpOnly; SameSite=Lax',
+          'jiso_csrf=c1; Path=/; HttpOnly; Secure; SameSite=Strict',
+        ],
+      },
+      status: 200,
+    });
+  });
+
+  it('forwards committed mutation Set-Cookie headers in no-JS PRG responses', async () => {
+    const signOut = mutation('auth/sign-out', {
+      input: s.object({}),
+      handler(_input, _request, context) {
+        context.setCookie?.('jiso_session=; Path=/; Max-Age=0; HttpOnly');
+        return 'signed-out';
+      },
+    });
+
+    await expect(
+      renderNoJsMutationResponse(signOut, {
+        rawInput: {},
+        redirectTo: '/login',
+        request: {},
+      }),
+    ).resolves.toEqual({
+      body: '',
+      headers: {
+        'Cache-Control': 'no-store',
+        Location: '/login',
+        'Set-Cookie': ['jiso_session=; Path=/; Max-Age=0; HttpOnly'],
+      },
+      status: 303,
+    });
+  });
+
+  it('does not leak mutation Set-Cookie headers when the handler returns a typed failure', async () => {
+    const signIn = mutation('auth/sign-in', {
+      errors: {
+        INVALID_CREDENTIALS: s.object({}),
+      },
+      input: s.object({ email: s.string() }),
+      handler(_input, _request, context) {
+        context.setCookie?.('jiso_session=s1; Path=/; HttpOnly');
+        return context.fail('INVALID_CREDENTIALS', {});
+      },
+    });
+
+    await expect(
+      renderMutationResponse(signIn, {
+        rawInput: { email: 'ada@example.test' },
+        request: {},
+      }),
+    ).resolves.toEqual({
+      body: '<fw-fragment target="error"><output role="alert" data-error-code="INVALID_CREDENTIALS">{}</output></fw-fragment>',
+      headers: { 'Content-Type': 'text/vnd.jiso.fragment+html; charset=utf-8' },
+      status: 422,
+    });
+  });
+
   it('derives post-commit rerun queries from declared touches', async () => {
     const cart = domain('cart');
     const product = domain('product');
@@ -2629,7 +2715,7 @@ describe('server mutation primitives', () => {
 
     expect(header).toBe('[{"domain":"cart","keys":["\\u6771\\u4eac-\\ud83d\\udd10"]}]');
     expect(header).toBeDefined();
-    if (header === undefined) throw new Error('expected FW-Changes header');
+    if (typeof header !== 'string') throw new Error('expected FW-Changes header');
     expect(header).not.toContain('secret');
     expect(header).not.toContain('café');
     expect(() => validateHeaderValue('FW-Changes', header)).not.toThrow();
@@ -3760,11 +3846,19 @@ type WireFixtureHandlers = {
   enhancedAddToCart(
     headers: Record<string, string>,
     rawInput: FormData,
-  ): Promise<{ body: string; headers: Record<string, string>; status: number }>;
+  ): Promise<{
+    body: string;
+    headers: Record<string, MutationResponseHeaderValue>;
+    status: number;
+  }>;
   noJsAddToCart(
     headers: Record<string, string>,
     rawInput: FormData,
-  ): Promise<{ body: string; headers: Record<string, string>; status: number }>;
+  ): Promise<{
+    body: string;
+    headers: Record<string, MutationResponseHeaderValue>;
+    status: number;
+  }>;
   product(
     search: URLSearchParams,
   ): Promise<{ body: string; headers: Record<string, string>; status: number }>;
@@ -3863,7 +3957,11 @@ function liveFixtureHeaders(request: IncomingMessage): Record<string, string> {
 
 function writeLiveFixtureResponse(
   response: ServerResponse,
-  wireResponse: { body: string; headers: Record<string, string>; status: number },
+  wireResponse: {
+    body: string;
+    headers: Record<string, MutationResponseHeaderValue>;
+    status: number;
+  },
   reason: string,
 ): void {
   response.statusCode = wireResponse.status;
@@ -3970,13 +4068,16 @@ function readFixtureRequests(
 }
 
 function normalizeWireResponse(
-  response: { body: string; headers: Record<string, string>; status: number },
+  response: { body: string; headers: Record<string, MutationResponseHeaderValue>; status: number },
   reason: string,
 ): { body: string; headers: Record<string, string>; statusLine: string } {
   return {
     body: `${response.body}\n`,
     headers: Object.fromEntries(
-      Object.entries(response.headers).map(([name, value]) => [name.toLowerCase(), value]),
+      Object.entries(response.headers).map(([name, value]) => [
+        name.toLowerCase(),
+        Array.isArray(value) ? value.join('\n') : value,
+      ]),
     ),
     statusLine: `HTTP/1.1 ${response.status} ${reason}`,
   };
