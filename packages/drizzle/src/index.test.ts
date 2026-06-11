@@ -368,6 +368,65 @@ export const tableDomains = {
     });
   });
 
+  it('does not treat source consts with domain and key properties as tables', () => {
+    const graph = extractTouchGraphFromSource([
+      {
+        fileName: 'cart.domain.ts',
+        source: `
+          export const cartConfig = {
+            domain: "cart",
+            key: "cartId",
+            pgTable: "cart_items",
+            jiso: true,
+          };
+
+          export async function addItem(db) {
+            await db.insert(cartConfig).values({ productId: "p1" });
+          }
+        `,
+      },
+    ]);
+
+    expect(graph).toEqual({
+      addItem: {
+        reads: [],
+        touches: [],
+        unresolved: [
+          {
+            code: 'FW406',
+            message: 'Statically un-analyzable write site; manual touches required.',
+            site: 'cart.domain.ts:10',
+          },
+        ],
+      },
+    });
+  });
+
+  it('recognizes source-mode pgTable initializers with jiso annotations as tables', () => {
+    const graph = extractTouchGraphFromSource([
+      {
+        fileName: 'cart.domain.ts',
+        source: `
+          export const cartItems = pgTable("cart_items", {
+            cartId: text("cart_id"),
+          }, jiso({ domain: "cart", key: "cartId" }));
+
+          export async function addItem(db) {
+            await db.insert(cartItems).values({ productId: "p1" });
+          }
+        `,
+      },
+    ]);
+
+    expect(graph).toEqual({
+      addItem: {
+        reads: [],
+        touches: [{ domain: 'cart', keys: null, site: 'cart.domain.ts:7', via: 'cart_items' }],
+        unresolved: [],
+      },
+    });
+  });
+
   it('extracts query result shapes, read domains, and instance keys from Drizzle selects', () => {
     const facts = extractQueryFactsFromSource([
       {

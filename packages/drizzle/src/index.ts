@@ -592,7 +592,10 @@ function resolvedSymbolKey(symbol: MorphSymbol | undefined): string | undefined 
 }
 
 function isAnnotatedTableInitializer(source: string): boolean {
-  return /\b(?:pgTable|sqliteTable|mysqlTable)\s*\(/.test(source) && /\bjiso\s*\(/.test(source);
+  const initializer = source.trim();
+  return (
+    /^(?:pgTable|sqliteTable|mysqlTable)\s*\(/.test(initializer) && /\bjiso\s*\(/.test(initializer)
+  );
 }
 
 interface ExtractedTableDeclaration {
