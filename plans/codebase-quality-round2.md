@@ -696,6 +696,10 @@ index.test.ts:4227 while here — it weakens the byte-for-byte claim) + acceptan
       (:1176-1179 — identical to the general path) and the third FW411 message copy; move
       `diagnosticsForTouchGraph` to one home and delete the verbatim CLI copy
       (drizzle/graph.ts:136-161 vs cli/src/index.ts:850-874).
+      Partial evidence 2026-06-11: `packages/test/src/index.ts` no longer carries the dead
+      FW411 formatter special case or local FW411 message copy; `index.test.ts` derives FW411
+      assertion text from `diagnosticDefinitions`. Same-session evidence:
+      `pnpm exec vitest --run packages/test/src` and `pnpm run check`.
 - [ ] **MED — Commerce example: one source of truth.** `cartQuery.load` returns a constant while
       `loadCartQuery(db)` does the real read (app.ts:123-126 vs :280-284);
       `productGridQuery.load` conjures a fresh `createCommerceDb()` (:161); the committed
