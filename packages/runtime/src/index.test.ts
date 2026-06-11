@@ -627,7 +627,7 @@ describe('query store', () => {
   it('applies deferred stream chunks through the same query and fragment parser', () => {
     const store = createQueryStore();
     const plan = vi.fn();
-    store.subscribe('reviews', plan);
+    store.subscribe('reviews', plan, 'product:p1');
 
     const applied = applyDeferredChunk(
       store,
@@ -637,12 +637,39 @@ describe('query store', () => {
       ].join('\n'),
     );
 
-    expect(store.get('reviews')).toEqual({ items: [{ id: 'r1', rating: 5 }] });
+    expect(store.get('reviews')).toBeUndefined();
+    expect(store.get('reviews', 'product:p1')).toEqual({ items: [{ id: 'r1', rating: 5 }] });
     expect(plan).toHaveBeenCalledWith({ items: [{ id: 'r1', rating: 5 }] });
     expect(applied).toEqual({
       fragments: [{ html: '<section fw-c="reviews">Ready</section>', target: 'reviews:p1' }],
       queries: ['reviews'],
     });
+  });
+
+  it('keeps keyed query chunks isolated by instance key', () => {
+    const store = createQueryStore();
+    const p1Plan = vi.fn();
+    const p2Plan = vi.fn();
+    const unkeyedPlan = vi.fn();
+
+    store.subscribe('reviews', p1Plan, 'product:p1');
+    store.subscribe('reviews', p2Plan, 'product:p2');
+    store.subscribe('reviews', unkeyedPlan);
+
+    applyDeferredChunk(
+      store,
+      [
+        '<fw-query name="reviews" key="product:p1">{"items":[{"id":"r1"}]}</fw-query>',
+        '<fw-query name="reviews" key="product:p2">{"items":[{"id":"r2"}]}</fw-query>',
+      ].join('\n'),
+    );
+
+    expect(store.get('reviews')).toBeUndefined();
+    expect(store.get('reviews', 'product:p1')).toEqual({ items: [{ id: 'r1' }] });
+    expect(store.get('reviews', 'product:p2')).toEqual({ items: [{ id: 'r2' }] });
+    expect(p1Plan).toHaveBeenCalledWith({ items: [{ id: 'r1' }] });
+    expect(p2Plan).toHaveBeenCalledWith({ items: [{ id: 'r2' }] });
+    expect(unkeyedPlan).not.toHaveBeenCalled();
   });
 
   it('updates deferred query data before morphing deferred fragments', () => {
@@ -783,6 +810,30 @@ describe('query store', () => {
 
     expect(store.get('cart')).toEqual({ count: 6 });
     expect(onChanges).toHaveBeenCalledWith([{ domain: 'cart', keys: ['cart_1'] }]);
+  });
+
+  it('rebroadcasts keyed query chunks to the matching keyed store entry', () => {
+    const store = createQueryStore();
+    const channel = new FakeBroadcastChannel();
+    const keyedPlan = vi.fn();
+    const unkeyedPlan = vi.fn();
+
+    store.subscribe('reviews', keyedPlan, 'product:p1');
+    store.subscribe('reviews', unkeyedPlan);
+    installMutationBroadcast({ channel, store });
+
+    channel.onmessage?.({
+      data: {
+        body: '<fw-query name="reviews" key="product:p1">{"items":[{"id":"r1"}]}</fw-query>',
+        changes: [{ domain: 'product', keys: ['p1'] }],
+        type: 'jiso:mutation-response',
+      },
+    });
+
+    expect(store.get('reviews')).toBeUndefined();
+    expect(store.get('reviews', 'product:p1')).toEqual({ items: [{ id: 'r1' }] });
+    expect(keyedPlan).toHaveBeenCalledWith({ items: [{ id: 'r1' }] });
+    expect(unkeyedPlan).not.toHaveBeenCalled();
   });
 
   it('morphs rebroadcast mutation fragments when a root is configured', () => {

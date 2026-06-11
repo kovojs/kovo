@@ -151,6 +151,45 @@ describe('server mutation primitives', () => {
     });
   });
 
+  it('rerenders only matching keyed query instances in enhanced mutation responses', async () => {
+    const product = domain('product');
+    const productP1 = query('productDetail', {
+      instanceKey: 'product:p1',
+      load: () => ({ id: 'p1', stock: 0 }),
+      reads: [product],
+    });
+    const productP2 = query('productDetail', {
+      instanceKey: 'product:p2',
+      load: () => ({ id: 'p2', stock: 10 }),
+      reads: [product],
+    });
+    const reserveProduct = mutation('product/reserve', {
+      input: s.object({ productId: s.string() }),
+      registry: {
+        inferredTouches: [{ domain: 'product', keys: 'arg:productId' }],
+        queries: [productP1, productP2],
+      },
+      handler(input) {
+        return input;
+      },
+    });
+
+    await expect(
+      renderMutationEndpointResponse(reserveProduct, {
+        fragmentRenderers: [],
+        headers: {
+          'FW-Fragment': 'true',
+        },
+        rawInput: { productId: 'p1' },
+        redirectTo: '/products/p1',
+        request: {},
+      }),
+    ).resolves.toMatchObject({
+      body: '<fw-query name="productDetail" key="product:p1">{"id":"p1","stock":0}</fw-query>',
+      status: 200,
+    });
+  });
+
   it('routes mutation endpoint validation failures by request mode', async () => {
     const addToCart = mutation('cart/add', {
       input: s.object({
@@ -878,6 +917,38 @@ describe('server mutation primitives', () => {
       ],
       ok: true,
       rerunQueries: ['product'],
+      value: 'p1',
+    });
+  });
+
+  it('narrows post-commit rerun query instances by row keys', async () => {
+    const product = domain('product');
+    const productP1 = query('productDetail', { instanceKey: 'product:p1', reads: [product] });
+    const productP2 = query('productDetail', { instanceKey: 'product:p2', reads: [product] });
+    const reserveProduct = mutation('product/reserve', {
+      input: s.object({
+        productId: s.string(),
+      }),
+      registry: {
+        inferredTouches: [{ domain: 'product', keys: 'arg:productId' }],
+        queries: [productP1, productP2],
+      },
+      handler(input) {
+        return input.productId;
+      },
+    });
+
+    await expect(runMutation(reserveProduct, { productId: 'p1' }, {})).resolves.toEqual({
+      changes: [
+        {
+          domain: 'product',
+          input: { productId: 'p1' },
+          keys: ['p1'],
+        },
+      ],
+      ok: true,
+      rerunQueries: ['productDetail'],
+      rerunQueryInstances: [{ instanceKey: 'product:p1', key: 'productDetail' }],
       value: 'p1',
     });
   });

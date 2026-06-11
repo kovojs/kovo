@@ -358,11 +358,11 @@ function camelCase(value: string): string {
 export type QueryUpdatePlan<Value = unknown> = (value: Value) => void;
 
 export interface QueryStore {
-  get<Value = unknown>(name: string): Value | undefined;
+  get<Value = unknown>(name: string, key?: string): Value | undefined;
   hydrate(script: QueryScriptLike): void;
   snapshot(names: readonly string[]): QuerySnapshot;
-  set<Value = unknown>(name: string, value: Value): void;
-  subscribe<Value = unknown>(name: string, plan: QueryUpdatePlan<Value>): () => void;
+  set<Value = unknown>(name: string, value: Value, key?: string): void;
+  subscribe<Value = unknown>(name: string, plan: QueryUpdatePlan<Value>, key?: string): () => void;
 }
 
 export type QuerySnapshot = Map<string, unknown>;
@@ -377,14 +377,18 @@ export function createQueryStore(): QueryStore {
   const plans = new Map<string, Set<QueryUpdatePlan>>();
 
   return {
-    get<Value = unknown>(name: string): Value | undefined {
-      return values.get(name) as Value | undefined;
+    get<Value = unknown>(name: string, key?: string): Value | undefined {
+      return values.get(queryStoreKey(name, key)) as Value | undefined;
     },
     hydrate(script: QueryScriptLike): void {
       const name = script.getAttribute('fw-query');
       if (!name) return;
 
-      this.set(name, JSON.parse(script.textContent ?? 'null'));
+      this.set(
+        name,
+        JSON.parse(script.textContent ?? 'null'),
+        script.getAttribute('key') ?? undefined,
+      );
     },
     snapshot(names: readonly string[]): QuerySnapshot {
       const snapshot = new Map<string, unknown>();
@@ -395,20 +399,26 @@ export function createQueryStore(): QueryStore {
 
       return snapshot;
     },
-    set<Value = unknown>(name: string, value: Value): void {
-      values.set(name, value);
+    set<Value = unknown>(name: string, value: Value, key?: string): void {
+      const storeKey = queryStoreKey(name, key);
+      values.set(storeKey, value);
 
-      for (const plan of plans.get(name) ?? []) {
+      for (const plan of plans.get(storeKey) ?? []) {
         plan(value);
       }
     },
-    subscribe<Value = unknown>(name: string, plan: QueryUpdatePlan<Value>): () => void {
-      const existing = plans.get(name) ?? new Set<QueryUpdatePlan>();
+    subscribe<Value = unknown>(
+      name: string,
+      plan: QueryUpdatePlan<Value>,
+      key?: string,
+    ): () => void {
+      const storeKey = queryStoreKey(name, key);
+      const existing = plans.get(storeKey) ?? new Set<QueryUpdatePlan>();
       existing.add(plan as QueryUpdatePlan);
-      plans.set(name, existing);
+      plans.set(storeKey, existing);
 
-      if (values.has(name)) {
-        plan(values.get(name) as Value);
+      if (values.has(storeKey)) {
+        plan(values.get(storeKey) as Value);
       }
 
       return () => {
@@ -416,6 +426,10 @@ export function createQueryStore(): QueryStore {
       };
     },
   };
+}
+
+function queryStoreKey(name: string, key: string | undefined): string {
+  return key === undefined ? name : `${name}\0${key}`;
 }
 
 export type OptimisticTransform<Input = unknown, Value = unknown> = (
@@ -921,14 +935,14 @@ function parseOutputPayload(content: string): JsonValue {
 }
 
 export function applyMutationResponse(store: QueryStore, body: string): AppliedMutationResponse {
-  return applyFragmentQueryBody(body, (name, value) => {
-    store.set(name, value);
+  return applyFragmentQueryBody(body, (name, value, key) => {
+    store.set(name, value, key);
   });
 }
 
 export function applyDeferredChunk(store: QueryStore, body: string): AppliedMutationResponse {
-  return applyFragmentQueryBody(body, (name, value) => {
-    store.set(name, value);
+  return applyFragmentQueryBody(body, (name, value, key) => {
+    store.set(name, value, key);
   });
 }
 
@@ -960,8 +974,8 @@ export function applyMutationResponseToDom(options: {
   root: MorphRoot;
   store: QueryStore;
 }): AppliedMutationResponse & { appliedFragments: string[] } {
-  const applied = applyFragmentQueryBody(options.body, (name, value) => {
-    options.store.set(name, value);
+  const applied = applyFragmentQueryBody(options.body, (name, value, key) => {
+    options.store.set(name, value, key);
   });
 
   return {
@@ -1221,12 +1235,12 @@ export function installMutationBroadcast(options: {
 
 function applyFragmentQueryBody(
   body: string,
-  applyQuery: (name: string, value: unknown) => void,
+  applyQuery: (name: string, value: unknown, key: string | undefined) => void,
 ): AppliedMutationResponse {
   const queryChunks = readQueryChunks(body);
 
   for (const query of queryChunks) {
-    applyQuery(query.name, query.value);
+    applyQuery(query.name, query.value, query.key);
   }
 
   return {
@@ -1297,6 +1311,7 @@ function isFailedMutationResponse(response: EnhancedMutationResponseLike): boole
 }
 
 interface QueryChunk {
+  key?: string;
   name: string;
   value: unknown;
 }
@@ -1305,10 +1320,13 @@ function readQueryChunks(body: string): QueryChunk[] {
   const queries: QueryChunk[] = [];
 
   for (const match of body.matchAll(/<fw-query\b(?<attrs>[^>]*)>(?<json>[\s\S]*?)<\/fw-query>/g)) {
-    const name = readAttribute(match.groups?.attrs ?? '', 'name');
+    const attrs = match.groups?.attrs ?? '';
+    const name = readAttribute(attrs, 'name');
     if (!name) continue;
+    const key = readAttribute(attrs, 'key') ?? undefined;
 
     queries.push({
+      ...(key === undefined ? {} : { key }),
       name,
       value: JSON.parse(unescapeHtml(match.groups?.json ?? 'null')),
     });

@@ -363,6 +363,8 @@ void test('P5 morph evidence includes structural and browser survival suites', a
 
 void test('D2 commerce validates keyed append and optimistic reorder', async () => {
   const commerceTests = await readProjectFile('examples/commerce/src/app.test.ts');
+  const runtimeTests = await readProjectFile('packages/runtime/src/index.test.ts');
+  const serverTests = await readProjectFile('packages/server/src/index.test.ts');
 
   assert.match(
     commerceTests,
@@ -372,6 +374,13 @@ void test('D2 commerce validates keyed append and optimistic reorder', async () 
   assert.match(commerceTests, /morphStructuralTree/);
   assert.match(commerceTests, /pendingMutation: 'cart\/add'/);
   assert.match(commerceTests, /order-history/);
+  assert.match(serverTests, /narrows post-commit rerun query instances by row keys/);
+  assert.match(
+    serverTests,
+    /rerenders only matching keyed query instances in enhanced mutation responses/,
+  );
+  assert.match(runtimeTests, /keeps keyed query chunks isolated by instance key/);
+  assert.match(runtimeTests, /rebroadcasts keyed query chunks to the matching keyed store entry/);
 });
 
 void test('D4 commerce adopt-dont-invent features stay represented', async () => {

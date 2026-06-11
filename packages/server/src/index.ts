@@ -273,6 +273,7 @@ export interface MutationFail<Code extends string = string, Payload = unknown> {
 
 export interface MutationSuccess<Value> {
   changes: ChangeRecord[];
+  rerunQueryInstances?: QueryRerun[];
   rerunQueries: string[];
   ok: true;
   value: Value;
@@ -348,6 +349,11 @@ export interface ChangeRecord<DomainKey extends string = string, Input = unknown
   input?: Input;
   manual?: true;
   reason?: string;
+}
+
+export interface QueryRerun {
+  instanceKey?: string;
+  key: string;
 }
 
 export interface MutationRegistry {
@@ -744,10 +750,14 @@ export async function runMutation<
 
   if (isMutationFail(value)) return value;
   const changes = [...registryChangeRecords(definition.registry, input), ...manualInvalidations];
+  const rerunQueryInstances = queriesToRerun(definition.registry?.queries ?? [], changes, input);
   return {
     changes,
     ok: true,
-    rerunQueries: queriesToRerun(definition.registry?.queries ?? [], changes),
+    ...(rerunQueryInstances.some((query) => query.instanceKey !== undefined)
+      ? { rerunQueryInstances }
+      : {}),
+    rerunQueries: [...new Set(rerunQueryInstances.map((query) => query.key))],
     value,
   };
 }
@@ -791,7 +801,7 @@ export async function renderMutationResponse<
   const renderInput = mutationResponseInput(result, wireRequest.rawInput);
   const queryChunks = await renderQueryChunks(
     definition.registry?.queries ?? [],
-    result.rerunQueries,
+    result.rerunQueryInstances ?? result.rerunQueries.map((key) => ({ key })),
     renderInput,
   );
   const fragmentChunks = await renderFragmentChunks(
@@ -1053,29 +1063,61 @@ function mutationResponseInput<Value>(result: MutationSuccess<Value>, rawInput: 
 function queriesToRerun(
   queries: readonly QueryDefinition[],
   changes: readonly ChangeRecord[],
-): string[] {
-  const touched = new Set(changes.map((change) => change.domain));
+  input: unknown,
+): QueryRerun[] {
   return queries
-    .filter((queryDefinition) => queryDefinition.reads.some((read) => touched.has(read.key)))
-    .map((queryDefinition) => queryDefinition.key);
+    .filter((queryDefinition) =>
+      changes.some((change) => queryTouchedByChange(queryDefinition, change, input)),
+    )
+    .map((queryDefinition) => {
+      const instanceKey = readQueryInstanceKey(queryDefinition, input);
+      return {
+        ...(instanceKey === undefined ? {} : { instanceKey }),
+        key: queryDefinition.key,
+      };
+    });
+}
+
+function queryTouchedByChange(
+  queryDefinition: QueryDefinition,
+  change: ChangeRecord,
+  input: unknown,
+): boolean {
+  if (!queryDefinition.reads.some((read) => read.key === change.domain)) return false;
+
+  const instanceKey = readQueryInstanceKey(queryDefinition, input);
+  if (instanceKey === undefined || (change.keys?.length ?? 0) === 0) return true;
+
+  return change.keys?.some((key) => instanceKey === `${change.domain}:${key}`) ?? false;
 }
 
 async function renderQueryChunks(
   queries: readonly QueryDefinition[],
-  rerunQueries: readonly string[],
+  rerunQueries: readonly QueryRerun[],
   input: unknown,
 ): Promise<string[]> {
-  const rerun = new Set(rerunQueries);
   const chunks: string[] = [];
 
   for (const queryDefinition of queries) {
-    if (!rerun.has(queryDefinition.key)) continue;
+    if (!rerunQueries.some((target) => queryMatchesRerun(queryDefinition, input, target))) {
+      continue;
+    }
 
     const value = queryDefinition.load ? await queryDefinition.load(input) : null;
     chunks.push(renderQueryChunk(queryDefinition, input, value));
   }
 
   return chunks;
+}
+
+function queryMatchesRerun(
+  queryDefinition: QueryDefinition,
+  input: unknown,
+  target: QueryRerun,
+): boolean {
+  if (queryDefinition.key !== target.key) return false;
+
+  return readQueryInstanceKey(queryDefinition, input) === target.instanceKey;
 }
 
 function renderQueryChunk(
