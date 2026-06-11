@@ -159,21 +159,21 @@ const defaultDelegatedEvents = ['click', 'submit', 'input', 'change'] as const;
 
 export type InlineImportHandlerModule = ImportHandlerModule;
 
-export function installInlineJisoLoader(importModule: InlineImportHandlerModule): void {
+const inlineJisoLoaderInstallerSource = String.raw`function installInlineJisoLoader(importModule) {
   const events = ['click', 'submit', 'input', 'change'];
   const doc = document;
   let idemCounter = 0;
   const createInlineIdem = () =>
-    crypto.randomUUID?.() ?? `idem_${Date.now().toString(36)}_${(idemCounter += 1).toString(36)}`;
-  const readStateHost = (element: Element) => element.closest?.('[fw-state]') ?? element;
-  const readState = (element: Element) => {
+    crypto.randomUUID?.() ?? 'idem_' + Date.now().toString(36) + '_' + (idemCounter += 1).toString(36);
+  const readStateHost = (element) => element.closest?.('[fw-state]') ?? element;
+  const readState = (element) => {
     try {
       return JSON.parse(readStateHost(element)?.getAttribute('fw-state') ?? '{}');
     } catch {
       return {};
     }
   };
-  const readDeps = (value: string | null) =>
+  const readDeps = (value) =>
     (value ?? '')
       .split(/[\s,]+/)
       .map((dep) => dep.trim())
@@ -182,13 +182,13 @@ export function installInlineJisoLoader(importModule: InlineImportHandlerModule)
     [...doc.querySelectorAll('[fw-deps]')]
       .map((element) => {
         const deps = readDeps(element.getAttribute('fw-deps'));
-        const target = element.getAttribute('fw-fragment-target') || element.id;
-        return target && (deps.length > 0 ? `${target}=${deps.join(' ')}` : target);
+        const target = element.getAttribute('fw-fragment-target') ?? element.id;
+        return target && (deps.length > 0 ? target + '=' + deps.join(' ') : target);
       })
       .filter(Boolean);
-  const findFragmentTarget = (target: string) =>
-    doc.getElementById(target) ?? doc.querySelector(`[fw-fragment-target="${target}"]`);
-  const applyFragment = (fragment: Element) => {
+  const findFragmentTarget = (target) =>
+    doc.getElementById(target) ?? doc.querySelector('[fw-fragment-target="' + target + '"]');
+  const applyFragment = (fragment) => {
     const target = fragment.getAttribute('target');
     const element = target && findFragmentTarget(target);
     if (!element) return;
@@ -198,18 +198,22 @@ export function installInlineJisoLoader(importModule: InlineImportHandlerModule)
       element.innerHTML = fragment.innerHTML;
     }
   };
-  const applyResponseBody = (body: string) => {
+  const applyResponseBody = (body) => {
     const parsed = new DOMParser().parseFromString(body, 'text/html');
     parsed.querySelectorAll('fw-query').forEach((query) => {
       dispatchEvent(
         new CustomEvent('jiso:query', {
-          detail: { body: query.textContent, name: query.getAttribute('name') },
+          detail: {
+            body: query.textContent,
+            key: query.getAttribute('key') ?? undefined,
+            name: query.getAttribute('name'),
+          },
         }),
       );
     });
     parsed.querySelectorAll('fw-fragment').forEach(applyFragment);
   };
-  const fallbackSubmit = (form: HTMLFormElement) => {
+  const fallbackSubmit = (form) => {
     if (typeof form.submit === 'function') {
       form.submit();
       return;
@@ -217,7 +221,7 @@ export function installInlineJisoLoader(importModule: InlineImportHandlerModule)
     form.setAttribute?.('data-error-code', 'NETWORK_ERROR');
     form.setAttribute?.('fw-error', '');
   };
-  const submitEnhancedForm = (event: Event, form: HTMLFormElement) => {
+  const submitEnhancedForm = (event, form) => {
     event.preventDefault();
     fetch(form.action, {
       body: new FormData(form),
@@ -234,29 +238,29 @@ export function installInlineJisoLoader(importModule: InlineImportHandlerModule)
       .then(applyResponseBody)
       .catch(() => fallbackSubmit(form));
   };
-  const readParamTypes = (element: Element) =>
+  const readParamTypes = (element) =>
     (element.getAttribute('fw-param-types') || '').split(/[\s,]+/).reduce(
       (types, entry) => {
         const [name, type] = entry.split(':');
         if (name) types[name] = type;
         return types;
       },
-      {} as Record<string, string | undefined>,
+      {},
     );
-  const dispatch = async (event: Event) => {
+  const dispatch = async (event) => {
     if (event.type === 'submit') {
-      const form = (event.target as Element | null)?.closest?.(
+      const form = event.target?.closest?.(
         'form[enhance],form[data-enhance],form[data-mutation]',
-      ) as HTMLFormElement | null | undefined;
+      );
       if (form) {
         submitEnhancedForm(event, form);
         return;
       }
     }
-    const element = (event.target as Element | null)?.closest?.(`[on\\:${event.type}]`);
-    const refs = element?.getAttribute(`on:${event.type}`);
+    const element = event.target?.closest?.('[on\\:' + event.type + ']');
+    const refs = element?.getAttribute('on:' + event.type);
     if (!element || !refs) return;
-    const params: Record<string, string | number | boolean> = {};
+    const params = {};
     const paramTypes = readParamTypes(element);
     const state = readState(element);
     const stateHost = readStateHost(element);
@@ -266,7 +270,7 @@ export function installInlineJisoLoader(importModule: InlineImportHandlerModule)
       if (!attribute.name.startsWith('data-p-')) continue;
       const name = attribute.name
         .slice('data-p-'.length)
-        .replace(/-([a-z0-9])/g, (_match, char: string) => char.toUpperCase());
+        .replace(/-([a-z0-9])/g, (_match, char) => char.toUpperCase());
       const type = paramTypes[name];
       const value = attribute.value;
       params[name] =
@@ -275,16 +279,16 @@ export function installInlineJisoLoader(importModule: InlineImportHandlerModule)
     for (const ref of refs.split(/\s+/).filter(Boolean)) {
       const hashIndex = ref.lastIndexOf('#');
       if (hashIndex <= 0 || hashIndex === ref.length - 1)
-        throw Error(`Invalid handler reference: ${ref}`);
+        throw Error('Invalid handler reference: ' + ref);
       const mod = await importModule(ref.slice(0, hashIndex));
       const fn = mod[ref.slice(hashIndex + 1)];
-      if (typeof fn !== 'function') throw Error(`Handler export not found: ${ref}`);
+      if (typeof fn !== 'function') throw Error('Handler export not found: ' + ref);
       await fn(event, context);
     }
     stateHost?.setAttribute?.('fw-state', JSON.stringify(state));
   };
-  const trigger = (type: string, target: Element) => {
-    void dispatch({ target, type } as unknown as Event);
+  const trigger = (type, target) => {
+    void dispatch({ target, type });
   };
 
   for (const event of events) addEventListener(event, dispatch, { capture: true });
@@ -304,20 +308,19 @@ export function installInlineJisoLoader(importModule: InlineImportHandlerModule)
     );
     doc.querySelectorAll('[on\\:visible]').forEach((element) => observer.observe(element));
   }
+}`;
+
+function readInlineJisoLoaderInstaller(): (importModule: InlineImportHandlerModule) => void {
+  return (0, eval)(`(${inlineJisoLoaderInstallerSource})`) as (
+    importModule: InlineImportHandlerModule,
+  ) => void;
 }
 
-function minifyInlineLoaderSource(source: string): string {
-  return source
-    .replace(/\/\/[^\n\r]*/g, '')
-    .replace(/\s+/g, ' ')
-    .replace(/\s*([{}()[\].,;:?+\-*/%=<>!|&])\s*/g, '$1')
-    .replace(/;}/g, '}')
-    .trim();
+export function installInlineJisoLoader(importModule: InlineImportHandlerModule): void {
+  readInlineJisoLoaderInstaller()(importModule);
 }
 
-export const jisoLoaderSource = minifyInlineLoaderSource(
-  `(${installInlineJisoLoader.toString()})((url)=>import(url));`,
-);
+export const jisoLoaderSource = `(${inlineJisoLoaderInstallerSource})((url)=>import(url));`;
 
 export function installJisoLoader(options: JisoLoaderOptions): JisoLoader {
   const events = options.events ?? defaultDelegatedEvents;

@@ -279,7 +279,13 @@ params, relational API, `execute(sql)`, right/full joins, a string column named 
       parity tests: falsy-vs-nullish fragment-target fallback (:185 vs :1934), param-type entry
       requirements (:241 vs handlers.ts:142), dropped `fw-query` `key` attribute (:206), island
       signal scoping (:263), multi-target `FW-Targets`, thrown error messages — through both the
-      minified and source loaders.
+      minified and source loaders. 2026-06-11 bounded slice: runtime now exports the shipped inline
+      bootstrap from a pinned JavaScript source literal instead of `Function.prototype.toString()`
+      plus regex minify.
+      `packages/runtime/src/index.test.ts` executes both the bootstrap source and
+      `installInlineJisoLoader`, pinning multi-target `FW-Targets` separator parity,
+      nullish-only fragment-target fallback, and keyed `fw-query` event detail. Same-session
+      evidence: `pnpm exec vitest --run packages/runtime/src/index.test.ts`.
 - [ ] **HIGH — Ship the DOM morph.** The only real keyed DOM morph (focus/selection/scroll
       capture-restore) lives in index.browser.test.ts:12-182; every consumer must rewrite it, and
       the flagship browser test substantially tests its own test code. Promote to a

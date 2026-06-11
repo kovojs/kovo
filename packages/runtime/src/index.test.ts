@@ -367,18 +367,36 @@ describe('runtime loader', () => {
       action: '/_m/cart/add',
       method: 'post',
     };
-    const depElement = {
-      id: 'cart-badge',
-      getAttribute(name: string) {
-        if (name === 'fw-deps') return 'cart';
-        if (name === 'fw-fragment-target') return null;
-        return null;
+    const depElements = [
+      {
+        id: 'cart-badge',
+        getAttribute(name: string) {
+          if (name === 'fw-deps') return 'cart';
+          if (name === 'fw-fragment-target') return null;
+          return null;
+        },
       },
-    };
+      {
+        id: 'inventory-panel',
+        getAttribute(name: string) {
+          if (name === 'fw-deps') return 'inventory stock';
+          if (name === 'fw-fragment-target') return 'inventory';
+          return null;
+        },
+      },
+      {
+        id: 'empty-fragment-target-fallback',
+        getAttribute(name: string) {
+          if (name === 'fw-deps') return 'debug';
+          if (name === 'fw-fragment-target') return '';
+          return null;
+        },
+      },
+    ];
     const fetch = vi.fn(async () => ({
       async text() {
         return [
-          '<fw-query name="cart">{"count":1}</fw-query>',
+          '<fw-query name="cart" key="cart:c1">{"count":1}</fw-query>',
           '<fw-fragment target="cart-badge"><cart-badge>1</cart-badge></fw-fragment>',
           '<fw-fragment target="cart-list" mode="append"><li>2</li></fw-fragment>',
         ].join('\n');
@@ -406,9 +424,9 @@ describe('runtime loader', () => {
           const queryElement = queryMatch
             ? {
                 getAttribute(name: string) {
-                  return name === 'name'
-                    ? (/name="([^"]+)"/.exec(queryAttributes)?.[1] ?? null)
-                    : null;
+                  if (name === 'name') return /name="([^"]+)"/.exec(queryAttributes)?.[1] ?? null;
+                  if (name === 'key') return /key="([^"]+)"/.exec(queryAttributes)?.[1] ?? null;
+                  return null;
                 },
                 textContent: queryMatch[2],
               }
@@ -456,7 +474,7 @@ describe('runtime loader', () => {
           return selector === '[fw-fragment-target="cart-list"]' ? appendTarget : null;
         },
         querySelectorAll(selector: string) {
-          return selector === '[fw-deps]' ? [depElement] : [];
+          return selector === '[fw-deps]' ? depElements : [];
         },
         visibilityState: 'visible',
       };
@@ -487,14 +505,14 @@ describe('runtime loader', () => {
           'FW-Idem': expect.stringMatching(
             /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/,
           ),
-          'FW-Targets': 'cart-badge=cart',
+          'FW-Targets': 'cart-badge=cart; inventory=inventory stock',
         },
         keepalive: true,
         method: 'POST',
       });
       expect(dispatched).toEqual([
         expect.objectContaining({
-          detail: { body: '{"count":1}', name: 'cart' },
+          detail: { body: '{"count":1}', key: 'cart:c1', name: 'cart' },
           type: 'jiso:query',
         }),
       ]);
