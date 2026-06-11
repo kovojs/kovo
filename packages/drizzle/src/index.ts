@@ -395,7 +395,7 @@ export function extractQueryFactsFromSource(files: readonly SourceFileInput[]): 
         query.opaquePaths,
         site,
         hasDeclaredQueryOutputSchema(query.body),
-      );
+      ).concat(query.diagnostics?.map((diagnostic) => ({ ...diagnostic, site })) ?? []);
       facts.push({
         ...(diagnostics.length > 0 ? { diagnostics } : {}),
         ...queryInstanceKey(query.body, tables),
@@ -534,6 +534,7 @@ interface ExtractedFunction {
 
 interface ExtractedQueryDefinition {
   body: string;
+  diagnostics?: readonly TouchGraphDiagnostic[];
   index: number;
   opaquePaths: readonly string[];
   query: string;
@@ -585,6 +586,7 @@ function extractQueryDefinitions(source: string): ExtractedQueryDefinition[] {
 
     definitions.push({
       body,
+      ...(selection.diagnostics ? { diagnostics: selection.diagnostics } : {}),
       index: match.index,
       opaquePaths: selection.opaquePaths,
       query,
@@ -596,6 +598,7 @@ function extractQueryDefinitions(source: string): ExtractedQueryDefinition[] {
 }
 
 interface QueryShapeSelection {
+  diagnostics?: readonly TouchGraphDiagnostic[];
   opaquePaths: readonly string[];
   shape: QueryShape;
 }
@@ -604,13 +607,32 @@ function selectShapeFromQueryBody(body: string): QueryShapeSelection | null {
   const selectCall = /\.select\s*\(/.exec(body);
   if (!selectCall) return null;
 
-  const objectStart = body.indexOf('{', selectCall.index);
-  if (objectStart === -1) return null;
+  const openParen = selectCall.index + selectCall[0].length - 1;
+  const closeParen = findMatchingParen(body, openParen);
+  if (closeParen === -1) return null;
 
-  const objectEnd = findMatchingBrace(body, objectStart);
+  const projection = body.slice(openParen + 1, closeParen).trim();
+  if (projection.length === 0) {
+    return {
+      diagnostics: [
+        {
+          code: 'FW406',
+          message: `${diagnosticDefinitions.FW406.message} Query uses db.select() without an explicit projection.`,
+          severity: diagnosticDefinitions.FW406.severity,
+          site: '',
+        },
+      ],
+      opaquePaths: [],
+      shape: {},
+    };
+  }
+
+  if (!projection.startsWith('{')) return null;
+
+  const objectEnd = findMatchingBrace(projection, 0);
   if (objectEnd === -1) return null;
 
-  return queryShapeFromObjectLiteral(body.slice(objectStart + 1, objectEnd));
+  return queryShapeFromObjectLiteral(projection.slice(1, objectEnd));
 }
 
 function queryShapeFromObjectLiteral(source: string, prefix = ''): QueryShapeSelection {

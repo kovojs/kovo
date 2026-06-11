@@ -452,6 +452,50 @@ export const tableDomains = {
     ]);
   });
 
+  it('keeps projection-less selects visible as FW406 query facts', () => {
+    const facts = extractQueryFactsFromSource([
+      {
+        fileName: 'product.queries.ts',
+        source: `
+          export const products = pgTable("products", {}, jiso({ domain: "product", key: "id" }));
+
+          export const productQuery = query("product", {
+            load(_input, db) {
+              return db.select().from(products);
+            },
+          });
+        `,
+      },
+    ]);
+
+    expect(facts).toEqual([
+      {
+        diagnostics: [
+          {
+            code: 'FW406',
+            message:
+              'Statically un-analyzable write site; manual touches required. Query uses db.select() without an explicit projection.',
+            severity: 'warn',
+            site: 'product.queries.ts:4',
+          },
+        ],
+        query: 'product',
+        reads: ['product'],
+        shape: {},
+        site: 'product.queries.ts:4',
+      },
+    ]);
+    expect(diagnosticsForQueryFacts(facts)).toEqual([
+      {
+        code: 'FW406',
+        message:
+          'Statically un-analyzable write site; manual touches required. Query uses db.select() without an explicit projection.',
+        severity: 'warn',
+        site: 'product.queries.ts:4',
+      },
+    ]);
+  });
+
   it('resolves imported table symbols in project query facts', () => {
     const facts = extractQueryFactsFromProject({
       files: [
