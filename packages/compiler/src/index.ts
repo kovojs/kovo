@@ -6,6 +6,7 @@ import type { ComponentGraphFact, RegistryFacts, RegistryTypeFacts } from './gra
 import { findMatchingClosingTag, readStaticAttribute, scanOpeningTags } from './scan/tags.js';
 import { findMatchingToken, findStringEnd } from './scan/text.js';
 import {
+  componentExplicitNames,
   componentOptionSource,
   componentRenderInputs,
   componentStateReturnObject,
@@ -1522,6 +1523,9 @@ function fw311Diagnostic(fileName: string, fact: QueryUpdateCoverageFact): Compi
 }
 
 function explicitComponentNames(source: string): string[] {
+  const parsed = componentExplicitNames(parseComponentModuleModel('component.tsx', source));
+  if (parsed.length > 0) return parsed;
+
   return [...source.matchAll(/\bcomponent\s*\(\s*(["'])(?<name>[^"']+)\1/g)].flatMap((match) =>
     match.groups?.name ? [match.groups.name] : [],
   );

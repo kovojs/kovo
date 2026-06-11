@@ -28,7 +28,7 @@ export function parseComponentModule(fileName: string, source: string): Componen
   const components: ComponentModel[] = [];
 
   const visit = (node: ts.Node): void => {
-    if (ts.isVariableDeclaration(node) && ts.isIdentifier(node.name)) {
+    if (ts.isVariableDeclaration(node) && ts.isIdentifier(node.name) && isExportedVariable(node)) {
       const model = componentModelFromInitializer(
         sourceFile,
         source,
@@ -44,6 +44,17 @@ export function parseComponentModule(fileName: string, source: string): Componen
   visit(sourceFile);
 
   return { components };
+}
+
+function isExportedVariable(node: ts.VariableDeclaration): boolean {
+  const statement = node.parent.parent;
+  return ts.isVariableStatement(statement) && hasExportModifier(statement);
+}
+
+function hasExportModifier(node: ts.VariableStatement): boolean {
+  return Boolean(
+    ts.getModifiers(node)?.some((modifier) => modifier.kind === ts.SyntaxKind.ExportKeyword),
+  );
 }
 
 export function firstComponentModel(model: ComponentModuleModel): ComponentModel | null {
@@ -65,6 +76,12 @@ export function componentRenderInputs(model: ComponentModuleModel): string[] {
 
 export function componentStateReturnObject(model: ComponentModuleModel): string | null {
   return firstComponentModel(model)?.stateReturnObject ?? null;
+}
+
+export function componentExplicitNames(model: ComponentModuleModel): string[] {
+  return model.components.flatMap((component) =>
+    component.explicitName === undefined ? [] : [component.explicitName],
+  );
 }
 
 function componentModelFromInitializer(
