@@ -349,6 +349,23 @@ describe('@jiso/test harness', () => {
     );
   });
 
+  it('asserts explicitly wrapped fragments with nested fw-fragment children', async () => {
+    const harness = createJisoTestHarness({
+      db: {},
+      pages: {
+        '/cart': [
+          '<fw-fragment target="cart-badge">',
+          '<cart-badge><span>1</span><fw-fragment target="nested"><span>nested</span></fw-fragment></cart-badge>',
+          '</fw-fragment>',
+        ].join(''),
+      },
+    });
+
+    await expect(harness.page('/cart').then((page) => page.fragment('cart-badge'))).resolves.toBe(
+      '<cart-badge><span>1</span><fw-fragment target="nested"><span>nested</span></fw-fragment></cart-badge>',
+    );
+  });
+
   it('asserts stamped fragment targets without matching unrelated fw-deps elements', async () => {
     const harness = createJisoTestHarness({
       db: {},

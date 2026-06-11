@@ -594,9 +594,7 @@ export function propertyTest<State, Input, ClientShape = State>(
 function createPageAssertion(html: string): PageAssertion {
   return {
     fragment(target: string): string {
-      const explicitFragment = new RegExp(
-        `<fw-fragment\\b(?=[^>]*\\s${attributeEquals('target', target)})[^>]*>(?<html>[\\s\\S]*?)<\\/fw-fragment>`,
-      ).exec(html)?.groups?.html;
+      const explicitFragment = explicitFragmentHtml(html, target);
       if (explicitFragment !== undefined) return explicitFragment;
 
       const stampedElement =
@@ -617,6 +615,19 @@ function createPageAssertion(html: string): PageAssertion {
     },
     html,
   };
+}
+
+function explicitFragmentHtml(html: string, target: string): string | undefined {
+  const fragmentStart = new RegExp(
+    `<fw-fragment\\b(?=[^>]*\\s${attributeEquals('target', target)})[^>]*>`,
+  ).exec(html);
+  if (!fragmentStart) return undefined;
+
+  const start = fragmentStart.index;
+  const end = matchingElementEnd(html, 'fw-fragment', start);
+  if (end === undefined) return undefined;
+
+  return html.slice(start + fragmentStart[0].length, end - '</fw-fragment>'.length);
 }
 
 function matchingElementEnd(html: string, tag: string, start: number): number | undefined {
