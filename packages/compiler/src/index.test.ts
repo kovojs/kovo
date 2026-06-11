@@ -130,6 +130,31 @@ export const CartActions = component('cart-actions', {
     );
   });
 
+  it('does not rewrite one element param inside a longer member expression', () => {
+    const result = compileComponentModule({
+      fileName: 'components/cart/cart-actions.tsx',
+      source: `
+import { component } from '@jiso/core';
+
+export const CartActions = component('cart-actions', {
+  render: () => (
+    <button onClick={() => emit('cart:add', { id: item.id, idx: item.idx })}>Add</button>
+  ),
+});
+`,
+    });
+
+    const serverSource = result.files[0]?.source ?? '';
+    const clientSource = result.files[1]?.source ?? '';
+
+    expect(serverSource).toContain('data-p-id="{item.id}"');
+    expect(serverSource).toContain('data-p-idx="{item.idx}"');
+    expect(clientSource).toContain(
+      "return emit('cart:add', { id: ctx.params.id, idx: ctx.params.idx });",
+    );
+    expect(clientSource).not.toContain('id: ctx.params.idx');
+  });
+
   it('ignores event handler text inside strings and comments', () => {
     const result = compileComponentModule({
       fileName: 'components/cart/cart-actions.tsx',
