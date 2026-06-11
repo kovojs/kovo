@@ -259,6 +259,12 @@ tests/fw-check.node.mjs` passed.
       commerce-shaped mutation through the built server APIs, proving the request-scoped
       `transaction` hook commits successful draft writes and rolls back `context.fail()` paths
       instead of grepping commerce source or test names.
+      Partial evidence 2026-06-11: the S2 loader-budget tranche still preserves the 4KB gzip
+      budget, but now executes the built inline loader in a VM-style DOM/fetch harness and asserts
+      enhanced mutation behavior, multi-target refetch headers, query/fragments application, and
+      event detail instead of grepping inline loader implementation strings. Verification:
+      `node --test --test-name-pattern "S2 loader budget" tests/fw-check.node.mjs`,
+      `pnpm run check:build`, `node --test tests/fw-check.node.mjs`, and `pnpm run check`.
       Partial evidence 2026-06-11: the D1 stylesheet-delivery tranche now imports built server
       APIs and asserts page critical-CSS/style hint rendering, target-filtered stylesheet
       manifests, deferred fragment stylesheet links, and enhanced mutation failure-fragment
