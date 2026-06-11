@@ -1206,9 +1206,10 @@ export const ProductCard = component('product-card', {
   const registrySource = result.files.find((file) => file.kind === 'registry')?.source ?? '';
 
   assert.deepEqual(result.viewTransitions, [{ name: 'product-p1-image' }]);
+  // SPEC §4.2: identity is emitted explicitly on native hosts (fw-c).
   assert.match(
     serverSource,
-    /<img style="opacity: \.8; view-transition-name: product-p1-image" src="\/p1\.png" \/>/,
+    /<img style="opacity: \.8; view-transition-name: product-p1-image" src="\/p1\.png" fw-c="product-card" \/>/,
   );
   assert.equal(serverSource.match(/\sstyle=/g)?.length, 1);
   assert.doesNotMatch(serverSource, /viewTransitionName=/);

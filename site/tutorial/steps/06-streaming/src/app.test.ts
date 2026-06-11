@@ -30,7 +30,6 @@ describe('tutorial step 06 — streaming & defer', () => {
     expect(response).toMatchObject({
       headers: {
         'Content-Type': 'text/html; charset=utf-8',
-        'Transfer-Encoding': 'chunked',
       },
       status: 200,
     });

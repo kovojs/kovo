@@ -13,7 +13,7 @@ Scope: a `site/` workspace package containing the docs site as a jiso app (stati
       export are the site-local stand-in for D8 R2/R6 until the app shell lands.
 - [x] W2 content pipeline: markdown + frontmatter → pages, shiki at build, sidebar/IA, § auto-links, `.md` mirrors + `llms.txt`.
       Evidence 2026-06-11: `site/scripts/md.mjs` + `build.mjs`; `node
-      scripts/check-links.mjs` → `check-links/v1 pages=24 internal=1568 OK` including
+scripts/check-links.mjs` → `check-links/v1 pages=24 internal=1568 OK` including
       §-anchor resolution against `/spec/`; mirrors and `llms.txt` validated by the
       same gate.
 - [x] W3 artifact-capture harness: visuals regenerated from the real toolchain every build.
@@ -31,7 +31,7 @@ Scope: a `site/` workspace package containing the docs site as a jiso app (stati
 - [ ] W5 tutorial track: checked-in per-step code states, every step compiling and testing in CI, prose snippets extracted from step states, final step behavior-matched to `examples/commerce`.
 - [x] W6 generated API reference for the five app-facing packages.
       Evidence 2026-06-11: `site/scripts/api-ref.mjs` emits `api-ref/v1 packages=5
-      exports=454 documented=1` into the pipeline; `site/scripts/api-ref.test.mjs`
+exports=454 documented=1` into the pipeline; `site/scripts/api-ref.test.mjs`
       5/5 (export completeness, undocumented markers, determinism). The 453
       undocumented exports are rendered flagged, per exit criterion 4.
 - [x] W7 launch guides: the eight task guides plus the advanced Compiler Internals guide.
