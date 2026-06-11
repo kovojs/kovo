@@ -17,7 +17,9 @@
   },
   "devDependencies": {
     "@jiso/compiler": "workspace:*",
+    "@jiso/test": "workspace:*",
     "@tailwindcss/vite": "^4.3.0",
+    "fw": "workspace:*",
     "marked": "^16.0.0",
     "shiki": "^3.0.0",
     "tailwindcss": "^4.3.0",
