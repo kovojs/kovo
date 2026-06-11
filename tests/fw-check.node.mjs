@@ -254,6 +254,21 @@ void test('P10 normative docs cover the constitution and compiler hard rules', a
   assert.match(compilerRules, /Teaching errors/);
 });
 
+void test('P10 legibility study packet is ready but not claimed complete', async () => {
+  const study = await readProjectFile('docs/legibility-study.md');
+
+  assert.match(study, /SPEC\.md` section 16\.2 requires an actual usability study/);
+  assert.match(study, /Required participants: 5 outside developers/);
+  assert.match(study, /under 60 seconds/);
+  assert.match(study, /Button behavior/);
+  assert.match(study, /Island data/);
+  assert.match(study, /Mutation effects/);
+  assert.match(study, /Optimism/);
+  assert.match(study, /Failure path/);
+  assert.match(study, /pending-5/);
+  assert.match(study, /Do not mark v1 legibility complete/);
+});
+
 void test('S2 loader budget and L0 no-upgrade path are acceptance evidence', async () => {
   const runtimeSource = await readProjectFile('packages/runtime/src/index.ts');
   const loaderMatch = /export const jisoLoaderSource = `(?<source>[\s\S]*?)`;/m.exec(runtimeSource);
