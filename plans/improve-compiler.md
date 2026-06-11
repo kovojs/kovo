@@ -136,6 +136,8 @@ Mechanical cleanups bundled here:
       becomes `{ ...createEmptyCompileResult(), files: [...] }`.
 - [x] Extract registry emission into `src/emit/registry.ts`, preserving registry emit as part
       of every compile.
+- [x] Extract platform behavior lowering into `src/lower/platform.ts`, preserving the public
+      `PlatformSubstitution` type export while shrinking the compiler orchestration module.
 
 This phase parallelizes well: sub-agents can own `validate/`, `emit/`, and `lower/`
 extraction separately (explicit file ownership, no shared edits to `index.ts` barrel
