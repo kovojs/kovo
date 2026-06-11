@@ -333,7 +333,11 @@ export function renderAddToCartForm(
   const error = failure ? renderAddToCartError(failure) : '';
 
   return [
-    '<form method="post" action="/_m/cart/add" enhance data-mutation="cart/add" class="mt-3 flex flex-wrap items-end gap-2">',
+    [
+      '<form method="post" action="/_m/cart/add" enhance data-mutation="cart/add"',
+      `fw-fragment-target="${escapeAttribute(productFormTarget(item.id))}"`,
+      'class="mt-3 flex flex-wrap items-end gap-2">',
+    ].join(' '),
     `<input type="hidden" name="productId" value="${escapeAttribute(item.id)}">`,
     '<label class="grid gap-1 text-xs font-medium text-slate-700"><span>Qty</span>',
     `<input class="w-16 rounded border border-slate-300 px-2 py-1" name="quantity" type="number" min="1" max="${item.stock}" value="1">`,
@@ -425,8 +429,9 @@ export function submitAddToCart(
   request: CommerceRequest,
   headers: MutationWireHeaderSource,
 ) {
+  const productId = productIdFromRawInput(rawInput);
   return renderMutationEndpointResponse(addToCart, {
-    failureTarget: 'product-form',
+    failureTarget: productId ? productFormTarget(productId) : 'product-form',
     fragmentRenderers: [
       {
         render: () => CartBadge.definition.render(),
@@ -454,13 +459,32 @@ export function submitAddToCart(
     headers,
     rawInput,
     redirectTo: '/cart',
+    renderFailureFragment: (failure) =>
+      renderAddToCartFailureFragment(request.db, rawInput, failure),
     renderFailurePage: (failure) =>
       renderCartPage(request.db, {
         failure,
-        productId: productIdFromRawInput(rawInput),
+        productId,
       }),
     request,
   });
+}
+
+function renderAddToCartFailureFragment(
+  db: CommerceDb,
+  rawInput: unknown,
+  failure: AddToCartFailure,
+): string {
+  const productId = productIdFromRawInput(rawInput);
+  const product = productId ? db.products.get(productId) : undefined;
+
+  if (!product) return renderAddToCartError(failure);
+
+  return renderAddToCartForm(product, failure);
+}
+
+function productFormTarget(productId: string): string {
+  return `product-form:${productId}`;
 }
 
 function escapeAttribute(value: string): string {

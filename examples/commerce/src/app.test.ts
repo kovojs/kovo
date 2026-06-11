@@ -475,6 +475,32 @@ describe('commerce example', () => {
     expect(renderOrderHistory(db)).not.toContain('order-1');
   });
 
+  it('handles enhanced addToCart failures as a rerendered form fragment', async () => {
+    const db = createCommerceDb();
+    const response = await submitAddToCart(
+      { productId: 'p2', quantity: 3 },
+      { db, session: { id: 's-enhanced-fail', user: { id: 'u1' } } },
+      {
+        'FW-Fragment': 'true',
+        'FW-Targets': 'product-form:p2',
+      },
+    );
+
+    expect(response).toMatchObject({
+      headers: {
+        'Content-Type': 'text/vnd.jiso.fragment+html; charset=utf-8',
+      },
+      status: 422,
+    });
+    expect(response.body).toContain('<fw-fragment target="product-form:p2">');
+    expect(response.body).toContain('<form method="post" action="/_m/cart/add" enhance');
+    expect(response.body).toContain('fw-fragment-target="product-form:p2"');
+    expect(response.body).toContain('name="productId" value="p2"');
+    expect(response.body).toContain('data-error-code="OUT_OF_STOCK"');
+    expect(response.body).toContain('Only 2 available.');
+    expect(renderOrderHistory(db)).not.toContain('order-1');
+  });
+
   it('renders Tailwind-first stylesheet hints and static utility classes', () => {
     const commerceSource = readFileSync(new URL('./app.ts', import.meta.url), 'utf8');
     const catalogSource =

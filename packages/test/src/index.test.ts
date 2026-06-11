@@ -1545,6 +1545,56 @@ describe('@jiso/test harness', () => {
     );
   });
 
+  it('verifies update expression subqueries as mutation reads', () => {
+    const verifier = createDbVerifier(
+      {
+        'product.syncPrice': {
+          touches: [{ domain: 'product', keys: null, site: 'product.ts:1', via: 'products' }],
+          unresolved: [],
+        },
+      },
+      { domainByTable: { prices: 'price', products: 'product' } },
+    );
+    const db = verifier.wrap(createFakeDb());
+
+    db.sql(
+      'update products set unit_price = (select max(amount) from prices) where id in (select product_id from prices)',
+    );
+
+    expect(() => verifier.assertCovered()).toThrow(
+      'FW407 Query read from undeclared domain: price',
+    );
+  });
+
+  it('verifies select expression subqueries as query reads', () => {
+    const verifier = createDbVerifier(
+      {
+        'product.load': {
+          reads: [
+            {
+              domain: 'product',
+              keys: null,
+              site: 'product.ts:1',
+              source: 'select',
+              via: 'products',
+            },
+          ],
+          touches: [],
+          unresolved: [],
+        },
+      },
+      { domainByTable: { prices: 'price', products: 'product' } },
+    );
+    const db = verifier.wrap(createFakeDb());
+
+    db.sql('select * from products where id in (select product_id from prices)');
+
+    expect(() => verifier.assertReadsCovered(['product'])).toThrow(
+      'FW407 Query read from undeclared domain: price',
+    );
+    expect(() => verifier.assertReadsCovered(['product', 'price'])).not.toThrow();
+  });
+
   it('checks row keys parsed from raw SQL predicates', () => {
     const verifier = createDbVerifier(
       {

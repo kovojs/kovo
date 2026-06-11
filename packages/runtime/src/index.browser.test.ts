@@ -243,6 +243,37 @@ describe('runtime browser suite', () => {
     expect(imports).toBe(0);
   });
 
+  it('preserves L0 popover behavior without handler imports', async () => {
+    const root = document.createElement('main');
+    root.innerHTML = [
+      '<button popovertarget="filters" popovertargetaction="toggle">Filters</button>',
+      '<section id="filters" popover>Filter controls</section>',
+    ].join('');
+    document.body.append(root);
+    let imports = 0;
+
+    installJisoLoader({
+      async importModule() {
+        imports += 1;
+        return {};
+      },
+      root,
+    });
+
+    const button = root.querySelector('button');
+    const popover = root.querySelector<HTMLElement>('#filters');
+    if (!button || !popover) throw new Error('missing popover fixture');
+
+    expect(popover.matches(':popover-open')).toBe(false);
+
+    button.click();
+
+    await vi.waitFor(() => {
+      expect(popover.matches(':popover-open')).toBe(true);
+    });
+    expect(imports).toBe(0);
+  });
+
   it('preserves focus, selection, scroll, and keyed identity during a real DOM fragment morph', () => {
     const root = document.createElement('main');
     root.innerHTML = [

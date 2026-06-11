@@ -339,6 +339,12 @@ void test('P2 loader smoke evidence remains represented in runtime tests', async
     /preserves L0 light-DOM IDREF and form behavior without handler imports/,
     'browser suite covers L0 platform behavior through light DOM',
   );
+  assert.match(
+    browserTests,
+    /preserves L0 popover behavior without handler imports/,
+    'browser suite covers declarative L0 popover behavior',
+  );
+  assert.match(browserTests, /:popover-open/);
   assert.match(browserTests, /new FormData\(form\)\.get\('query'\)/);
 });
 
@@ -458,8 +464,13 @@ void test('D1 commerce enhanced fragments carry Tailwind stylesheet hints', asyn
 
   assert.match(commerceSource, /commerceStylesheets = \['\/assets\/tailwind\.css'\] as const/);
   assert.match(commerceSource, /stylesheets: commerceStylesheets/);
+  assert.match(commerceSource, /renderFailureFragment: \(failure\) =>/);
+  assert.match(commerceSource, /renderAddToCartFailureFragment\(request\.db, rawInput, failure\)/);
+  assert.match(commerceSource, /return renderAddToCartForm\(product, failure\)/);
   assert.match(commerceTests, /response\.body\.match/);
   assert.match(commerceTests, /toHaveLength\(3\)/);
+  assert.match(commerceTests, /enhanced addToCart failures as a rerendered form fragment/);
+  assert.match(commerceTests, /fw-fragment-target="product-form:p2"/);
   assert.match(commerceTests, /<link rel="stylesheet" href="\/assets\/tailwind\.css">/);
   assert.match(serverSource, /error-boundary=.*renderStylesheetLinks\(renderer\.stylesheets/);
   assert.match(serverTests, /recommendations\.css/);
@@ -543,6 +554,9 @@ void test('P9 verification layer evidence remains represented', async () => {
     /fails query-loader verification for reads outside declared domains/,
   );
   assert.match(testHarnessTests, /verifies update-from SQL as a target write plus source reads/);
+  assert.match(testHarnessSource, /operationsForNestedStatements/);
+  assert.match(testHarnessTests, /verifies update expression subqueries as mutation reads/);
+  assert.match(testHarnessTests, /verifies select expression subqueries as query reads/);
   assert.match(
     testHarnessTests,
     /accepts raw SQL compound predicates when one observed row key matches/,

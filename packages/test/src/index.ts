@@ -654,7 +654,7 @@ function operationsForStatement(
     case 'update':
       return operationsForUpdate(statement, cteAliases);
     case 'delete':
-      return operationsForDelete(statement);
+      return operationsForDelete(statement, cteAliases);
     default:
       return [];
   }
@@ -667,7 +667,10 @@ function operationsForSelect(
   switch (statement.type) {
     case 'select': {
       const rowKey = rowKeyFromWhere(statement.where);
-      return operationsForFrom(statement.from ?? [], rowKey, cteAliases);
+      return [
+        ...operationsForFrom(statement.from ?? [], rowKey, cteAliases),
+        ...operationsForNestedStatements([statement.columns, statement.where], cteAliases),
+      ];
     }
     case 'union':
     case 'union all':
@@ -715,10 +718,16 @@ function operationsForUpdate(
         mutationRead: operation.kind === 'read' ? true : operation.mutationRead,
       }),
     ),
+    ...markMutationReads(
+      operationsForNestedStatements([statement.sets, statement.where], cteAliases),
+    ),
   ];
 }
 
-function operationsForDelete(statement: DeleteStatement): ParsedOperation[] {
+function operationsForDelete(
+  statement: DeleteStatement,
+  cteAliases: ReadonlySet<string>,
+): ParsedOperation[] {
   return [
     {
       kind: 'write',
@@ -726,6 +735,7 @@ function operationsForDelete(statement: DeleteStatement): ParsedOperation[] {
       rowKey: rowKeyFromWhere(statement.where),
       table: tableName(statement.from),
     },
+    ...markMutationReads(operationsForNestedStatements([statement.where], cteAliases)),
   ];
 }
 
@@ -780,6 +790,48 @@ function operationsForFrom(
 
     return [];
   });
+}
+
+function operationsForNestedStatements(
+  values: readonly unknown[],
+  cteAliases: ReadonlySet<string>,
+): ParsedOperation[] {
+  return values.flatMap((value) => operationsForNestedStatement(value, cteAliases));
+}
+
+function operationsForNestedStatement(
+  value: unknown,
+  cteAliases: ReadonlySet<string>,
+): ParsedOperation[] {
+  if (Array.isArray(value)) {
+    return value.flatMap((item) => operationsForNestedStatement(item, cteAliases));
+  }
+  if (!value || typeof value !== 'object') return [];
+
+  if (isSelectStatement(value)) {
+    return operationsForSelect(value, cteAliases);
+  }
+
+  return Object.values(value).flatMap((item) => operationsForNestedStatement(item, cteAliases));
+}
+
+function isSelectStatement(value: object): value is SelectStatement {
+  return (
+    'type' in value &&
+    (value.type === 'select' ||
+      value.type === 'union' ||
+      value.type === 'union all' ||
+      value.type === 'values' ||
+      value.type === 'with' ||
+      value.type === 'with recursive')
+  );
+}
+
+function markMutationReads(operations: ParsedOperation[]): ParsedOperation[] {
+  return operations.map((operation) => ({
+    ...operation,
+    mutationRead: operation.kind === 'read' ? true : operation.mutationRead,
+  }));
 }
 
 function rowKeyFromWhere(where: Expr | null | undefined): string | undefined {
