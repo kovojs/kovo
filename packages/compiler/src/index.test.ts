@@ -254,6 +254,58 @@ export const CartActions = component('cart-actions', {
     expect(clientSource).not.toContain('id: ctx.params.idx');
   });
 
+  it('rewrites handler captures without touching strings or template literal text', () => {
+    const result = compileComponentModule({
+      fileName: 'components/cart/cart-actions.tsx',
+      source: `
+import { component } from '@jiso/core';
+
+export const CartActions = component('cart-actions', {
+  state: () => ({ count: 0 }),
+  render: () => (
+    <button onClick={() => {
+      log('state changed for item.id');
+      log(\`literal item.quantity stays text\`);
+      state.count += item.quantity;
+    }}>Add</button>
+  ),
+});
+`,
+    });
+
+    const clientSource = result.files[1]?.source ?? '';
+
+    expect(clientSource).toContain("log('state changed for item.id');");
+    expect(clientSource).toContain('log(`literal item.quantity stays text`);');
+    expect(clientSource).toContain('ctx.state.count += ctx.params.quantity;');
+    expect(clientSource).not.toContain('ctx.state changed');
+    expect(clientSource).not.toContain('literal ctx.params.quantity stays text');
+  });
+
+  it('extracts element params from wrapper calls with quoted commas', () => {
+    const result = compileComponentModule({
+      fileName: 'components/cart/cart-actions.tsx',
+      source: `
+import { component } from '@jiso/core';
+
+export const CartActions = component('cart-actions', {
+  render: () => (
+    <button onClick={() => track('cart,add', item.id, { qty: item.quantity })}>Add</button>
+  ),
+});
+`,
+    });
+
+    const serverSource = result.files[0]?.source ?? '';
+    const clientSource = result.files[1]?.source ?? '';
+
+    expect(serverSource).toContain('data-p-id="{item.id}"');
+    expect(serverSource).toContain('data-p-quantity="{item.quantity}"');
+    expect(clientSource).toContain(
+      "return track('cart,add', ctx.params.id, { qty: ctx.params.quantity });",
+    );
+  });
+
   it('ignores event handler text inside strings and comments', () => {
     const result = compileComponentModule({
       fileName: 'components/cart/cart-actions.tsx',

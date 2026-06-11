@@ -370,6 +370,11 @@ pipeline throws the tree away and communicates via mutated source text.
       contents), :277-294 (`splitArguments` is quote-blind). All become AST-node operations on
       the model. Add the adversarial tests first: `'state'` in strings, quoted commas in args,
       member expressions in template literals.
+      Evidence 2026-06-11: `emit/client.ts` now rewrites anonymous handler bodies by applying
+      TypeScript AST source-span replacements for `state` and serializable element params, so
+      string/template literal text is not rewritten. `lower/handlers.ts` now skips quoted and
+      template strings while splitting wrapper-call arguments. `packages/compiler/src/index.test.ts`
+      covers literal `state`/member-looking text and quoted commas in handler arguments.
 - [ ] **HIGH — Kill the derive mega-regex.** validate/bindings.ts:215-216 silently drops any
       `derive()` export whose expression contains `;` in a string or unusual formatting — its
       stamps vanish from `collectQueryUpdatePlans` with no diagnostic. scan/parse.ts already

@@ -281,6 +281,14 @@ function splitArguments(args: string): string[] {
 
   for (let index = 0; index < args.length; index += 1) {
     const char = args[index];
+    if (char === '"' || char === "'") {
+      index = skipQuotedString(args, index, char);
+      continue;
+    }
+    if (char === '`') {
+      index = skipTemplateLiteral(args, index);
+      continue;
+    }
     if (char === '(' || char === '[' || char === '{') depth += 1;
     if (char === ')' || char === ']' || char === '}') depth -= 1;
     if (char === ',' && depth === 0) {
@@ -291,6 +299,32 @@ function splitArguments(args: string): string[] {
 
   parts.push(args.slice(start));
   return parts;
+}
+
+function skipQuotedString(source: string, start: number, quote: string): number {
+  for (let index = start + 1; index < source.length; index += 1) {
+    const char = source[index];
+    if (char === '\\') {
+      index += 1;
+      continue;
+    }
+    if (char === quote) return index;
+  }
+
+  return source.length - 1;
+}
+
+function skipTemplateLiteral(source: string, start: number): number {
+  for (let index = start + 1; index < source.length; index += 1) {
+    const char = source[index];
+    if (char === '\\') {
+      index += 1;
+      continue;
+    }
+    if (char === '`') return index;
+  }
+
+  return source.length - 1;
 }
 
 function paramNameForExpression(expression: string): string {
