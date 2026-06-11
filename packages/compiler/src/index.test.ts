@@ -527,6 +527,28 @@ export const ProductGrid = component('product-grid', {
     ]);
   });
 
+  it('reports FW234 when packages try to claim the framework fw attribute namespace', () => {
+    const result = compileComponentModule({
+      fileName: 'components/shell.tsx',
+      packageComponentPrefixes: [{ packageName: '@acme/widgets', prefix: 'fw-' }],
+      source: prefixFixtureSource,
+    });
+
+    expect(result.diagnostics).toEqual([
+      expect.objectContaining({
+        code: 'FW234',
+        fileName: 'components/shell.tsx',
+        help: expect.stringContaining(
+          'SPEC §6.1.1 reserves the fw-* attribute namespace for framework-owned attributes and future loader/compiler growth.',
+        ),
+        message: expect.stringContaining(
+          '@acme/widgets cannot use reserved fw-* package prefix "fw-".',
+        ),
+        severity: 'error',
+      }),
+    ]);
+  });
+
   it('reports FW234 for missing or invalid package prefix facts', () => {
     const result = compileComponentModule({
       fileName: 'components/shell.tsx',
@@ -976,6 +998,65 @@ export const CartShell = component('cart-shell', {
     });
 
     expect(result.diagnostics).toEqual([]);
+  });
+
+  it('accepts package-prefixed behavior IDREFs that reference ids in component scope', () => {
+    const result = compileComponentModule({
+      fileName: 'pricing-link.tsx',
+      packageComponentPrefixes: [
+        {
+          idrefBehaviorAttributes: ['tooltip'],
+          packageName: '@jiso/headless-ui',
+          prefix: 'jiso-',
+        },
+      ],
+      source: `
+export const PricingLink = component('pricing-link', {
+  render: () => (
+    <section>
+      <a href="/pricing" jiso-tooltip="pricing-tip">Pricing</a>
+      <p id="pricing-tip">Starts at $20.</p>
+    </section>
+  ),
+});
+`,
+    });
+
+    expect(result.diagnostics).toEqual([]);
+  });
+
+  it('reports FW221 for package-prefixed behavior IDREFs that miss component scope ids', () => {
+    const result = compileComponentModule({
+      fileName: 'pricing-link.tsx',
+      packageComponentPrefixes: [
+        {
+          effectivePrefix: 'acme-ui-',
+          idrefBehaviorAttributes: ['tooltip'],
+          packageName: '@acme/headless-ui',
+          prefix: 'acme-',
+        },
+      ],
+      source: `
+export const PricingLink = component('pricing-link', {
+  render: () => (
+    <section>
+      <a href="/pricing" acme-ui-tooltip="missing-tip" fw-tooltip="framework-owned">Pricing</a>
+    </section>
+  ),
+});
+`,
+    });
+
+    expect(result.diagnostics).toEqual([
+      {
+        code: 'FW221',
+        fileName: 'pricing-link.tsx',
+        length: 29,
+        message: 'IDREF references an id not present in component scope. missing-tip',
+        severity: 'error',
+        start: { column: 26, line: 5 },
+      },
+    ]);
   });
 
   it('reports FW221 for literal IDREFs that miss component scope ids', () => {

@@ -3,6 +3,7 @@ import { diagnosticDefinitions } from '@jiso/core';
 import type { CompilerDiagnostic } from '../diagnostics.js';
 
 export interface PackageComponentPrefixFact {
+  idrefBehaviorAttributes?: readonly string[];
   effectivePrefix?: string;
   packageName: string;
   prefix?: string | null;
@@ -83,6 +84,24 @@ export function validatePackageComponentPrefixes(
       continue;
     }
 
+    const frameworkReservedPrefix = reservedFrameworkPrefixViolation(
+      declaredPrefix,
+      effectivePrefix,
+    );
+    if (frameworkReservedPrefix) {
+      diagnostics.push(
+        packagePrefixDiagnostic(
+          fileName,
+          `${fact.packageName} cannot use reserved fw-* package prefix "${frameworkReservedPrefix}".`,
+          [
+            'SPEC §6.1.1 reserves the fw-* attribute namespace for framework-owned attributes and future loader/compiler growth.',
+            'Fix: choose a package-owned prefix such as "acme-" for package behavior attributes.',
+          ],
+        ),
+      );
+      continue;
+    }
+
     byPrefix.set(effectivePrefix, [...(byPrefix.get(effectivePrefix) ?? []), { fact }]);
   }
 
@@ -125,6 +144,15 @@ function reservedJisoPrefixViolation(
   if (isJisoPackage(fact.packageName)) return null;
   if (declaredPrefix.startsWith('jiso-')) return declaredPrefix;
   if (effectivePrefix.startsWith('jiso-')) return effectivePrefix;
+  return null;
+}
+
+function reservedFrameworkPrefixViolation(
+  declaredPrefix: string,
+  effectivePrefix: string,
+): string | null {
+  if (declaredPrefix.startsWith('fw-')) return declaredPrefix;
+  if (effectivePrefix.startsWith('fw-')) return effectivePrefix;
   return null;
 }
 

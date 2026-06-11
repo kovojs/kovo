@@ -223,7 +223,13 @@ const compilerValidators: readonly CompilerValidator[] = [
     validateStampExpressionDrift(options.source, originalModel, options),
   ({ model, options, source }) => validateEventPayloads(source, model, options),
   ({ model, options, source }) => validateDirectDbAccess(source, model, options.fileName),
-  ({ options, originalModel }) => validateIdrefs(options.source, originalModel, options.fileName),
+  ({ options, originalModel }) =>
+    validateIdrefs(
+      options.source,
+      originalModel,
+      options.fileName,
+      options.packageComponentPrefixes,
+    ),
   ({ model, options, source }) => validateStaticIds(source, model, options.fileName),
   ({ options, source }) => validateLiteralHrefs(source, options),
   ({ model, options, source }) => validateHtmlContentModel(source, model, options.fileName),
