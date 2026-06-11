@@ -396,7 +396,7 @@ describe('create-jiso starter', () => {
 });
 
 function linkStarterBuildDependencies(root: string): void {
-  const commerceNodeModules = join(process.cwd(), '../..', 'examples/commerce/node_modules');
+  const commerceNodeModules = join(process.cwd(), 'examples/commerce/node_modules');
   const nodeModules = join(root, 'node_modules');
   mkdirSync(join(nodeModules, '@jiso'), { recursive: true });
   mkdirSync(join(nodeModules, '@tailwindcss'), { recursive: true });

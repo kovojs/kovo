@@ -818,8 +818,11 @@ void test('D1 commerce enhanced fragments carry Tailwind stylesheet hints', asyn
   assert.match(commerceSource, /renderDeferredStream/);
   assert.match(commerceSource, /stylesheets: commerceStylesheets/);
   assert.match(commerceSource, /renderFailureFragment: \(failure\) =>/);
-  assert.match(commerceSource, /renderAddToCartFailureFragment\(request\.db, rawInput, failure\)/);
-  assert.match(commerceSource, /return renderAddToCartForm\(product, failure\)/);
+  assert.match(
+    commerceSource,
+    /renderAddToCartFailureFragment\(request\.db, rawInput, failure, request\)/,
+  );
+  assert.match(commerceSource, /return renderAddToCartForm\(product, failure, request\)/);
   assert.match(commerceTests, /response\.body\.match/);
   assert.match(commerceTests, /toHaveLength\(3\)/);
   assert.match(commerceTests, /enhanced addToCart failures as a rerendered form fragment/);

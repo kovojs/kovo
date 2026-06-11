@@ -3,6 +3,8 @@ import type { OptimisticPlan } from '@jiso/runtime';
 import {
   domain,
   errorBoundary,
+  csrfField,
+  csrfToken,
   type FileLike,
   guards,
   i18n,
@@ -46,6 +48,14 @@ export const commerceSession = session(
     }),
   }),
 );
+
+export const commerceCsrf = {
+  field: 'csrf',
+  secret: 'commerce-example-secret',
+  sessionId(request: CommerceRequest) {
+    return request.session?.id;
+  },
+};
 
 export function createCommerceDb(): CommerceDb {
   const db: CommerceDb = {
@@ -168,6 +178,7 @@ export const addToCartOptimistic = {
 } satisfies OptimisticPlan<AddToCartInput>;
 
 export const addToCart = mutation('cart/add', {
+  csrf: commerceCsrf,
   errors: {
     OUT_OF_STOCK: s.object({ availableQuantity: s.number().int().min(0) }),
   },
@@ -269,8 +280,8 @@ export function loadCartQuery(db: CommerceDb): CartQueryResult {
   };
 }
 
-export function renderProductGrid(result: ProductGridResult): string {
-  const items = result.items.map((item) => renderProductCard(item)).join('');
+export function renderProductGrid(result: ProductGridResult, request?: CommerceRequest): string {
+  const items = result.items.map((item) => renderProductCard(item, undefined, request)).join('');
   const more = result.nextCursor
     ? `<a href="/products?after=${result.nextCursor}" data-cursor="${result.nextCursor}">More</a>`
     : '';
@@ -278,8 +289,11 @@ export function renderProductGrid(result: ProductGridResult): string {
   return `<section fw-c="product-grid" fw-deps="product" data-page-cursor="${result.nextCursor ?? ''}">${items}${more}</section>`;
 }
 
-export function renderProductGridAppend(result: ProductGridResult): string {
-  const items = result.items.map((item) => renderProductCard(item)).join('');
+export function renderProductGridAppend(
+  result: ProductGridResult,
+  request?: CommerceRequest,
+): string {
+  const items = result.items.map((item) => renderProductCard(item, undefined, request)).join('');
   const more = result.nextCursor
     ? `<a href="/products?after=${result.nextCursor}" data-cursor="${result.nextCursor}">More</a>`
     : '';
@@ -319,12 +333,13 @@ export function renderProductGridDeferredStream(db: CommerceDb, input: ProductGr
 function renderProductCard(
   item: { id: string; stock: number },
   failure?: AddToCartFailure,
+  request?: CommerceRequest,
 ): string {
   return [
     `<article fw-key="${item.id}" class="rounded border border-slate-200 bg-white p-4">`,
     `<h2 class="font-semibold">${item.id}</h2>`,
     `<p data-bind="productGrid.items.stock">${item.stock} in stock</p>`,
-    renderAddToCartForm(item, failure),
+    renderAddToCartForm(item, failure, request),
     '</article>',
   ].join('');
 }
@@ -332,8 +347,10 @@ function renderProductCard(
 export function renderAddToCartForm(
   item: { id: string; stock: number },
   failure?: AddToCartFailure,
+  request?: CommerceRequest,
 ): string {
   const error = failure ? renderAddToCartError(failure) : '';
+  const csrf = request?.session?.id ? csrfField(request, commerceCsrf) : '';
 
   return [
     [
@@ -341,6 +358,7 @@ export function renderAddToCartForm(
       `fw-fragment-target="${escapeAttribute(productFormTarget(item.id))}"`,
       'class="mt-3 flex flex-wrap items-end gap-2">',
     ].join(' '),
+    csrf,
     `<input type="hidden" name="productId" value="${escapeAttribute(item.id)}">`,
     '<label class="grid gap-1 text-xs font-medium text-slate-700"><span>Qty</span>',
     `<input class="w-16 rounded border border-slate-300 px-2 py-1" name="quantity" type="number" min="1" max="${item.stock}" value="1">`,
@@ -405,23 +423,26 @@ export const commercePageHints = renderCommercePageHints();
 export function renderCartPage(
   db = createCommerceDb(),
   addToCartFailure?: AddToCartFailureState,
+  request?: CommerceRequest,
 ): string {
   const pageHints = renderCommercePageHints(loadCartQuery(db));
-  const productGrid = renderProductGridWithFailure(loadProductGrid(db), addToCartFailure);
+  const productGrid = renderProductGridWithFailure(loadProductGrid(db), addToCartFailure, request);
   return `<html><head>${pageHints.html}</head><body class="min-h-dvh bg-slate-50 p-6"><main class="mx-auto max-w-4xl"><fw-fragment target="cart-badge">${CartBadge.definition.render()}</fw-fragment><fw-fragment target="product-grid">${productGrid}</fw-fragment><fw-fragment target="order-history">${renderOrderHistory(db)}${renderReceiptUploadForm()}</fw-fragment></main></body></html>`;
 }
 
 function renderProductGridWithFailure(
   result: ProductGridResult,
   addToCartFailure?: AddToCartFailureState,
+  request?: CommerceRequest,
 ): string {
-  if (!addToCartFailure) return renderProductGrid(result);
+  if (!addToCartFailure) return renderProductGrid(result, request);
 
   const items = result.items
     .map((item) =>
       renderProductCard(
         item,
         addToCartFailure.productId === item.id ? addToCartFailure.failure : undefined,
+        request,
       ),
     )
     .join('');
@@ -442,7 +463,9 @@ export function submitAddToCart(
   headers: MutationWireHeaderSource,
 ) {
   const productId = productIdFromRawInput(rawInput);
+  const submittedInput = appendCommerceCsrf(rawInput, request);
   return renderMutationEndpointResponse(addToCart, {
+    csrf: commerceCsrf,
     failureTarget: productId ? productFormTarget(productId) : 'product-form',
     failureStylesheets: commerceStylesheets,
     fragmentRenderers: [
@@ -453,7 +476,7 @@ export function submitAddToCart(
       },
       errorBoundary(
         {
-          render: () => renderProductGrid(loadProductGrid(request.db)),
+          render: () => renderProductGrid(loadProductGrid(request.db), request),
           stylesheets: commerceStylesheets,
           target: 'product-grid',
         },
@@ -470,30 +493,49 @@ export function submitAddToCart(
       },
     ],
     headers,
-    rawInput,
+    rawInput: submittedInput,
     redirectTo: '/cart',
     renderFailureFragment: (failure) =>
-      renderAddToCartFailureFragment(request.db, rawInput, failure),
+      renderAddToCartFailureFragment(request.db, rawInput, failure, request),
     renderFailurePage: (failure) =>
-      renderCartPage(request.db, {
-        failure,
-        productId,
-      }),
+      renderCartPage(
+        request.db,
+        {
+          failure,
+          productId,
+        },
+        request,
+      ),
     request,
   });
+}
+
+export function commerceCsrfInput(rawInput: unknown, request: CommerceRequest): unknown {
+  return appendCommerceCsrf(rawInput, request);
+}
+
+function appendCommerceCsrf(rawInput: unknown, request: CommerceRequest): unknown {
+  if (typeof rawInput !== 'object' || rawInput === null) return rawInput;
+  if ('csrf' in rawInput) return rawInput;
+  if (!request.session?.id) return rawInput;
+  return {
+    ...rawInput,
+    csrf: csrfToken(request, commerceCsrf),
+  };
 }
 
 function renderAddToCartFailureFragment(
   db: CommerceDb,
   rawInput: unknown,
   failure: AddToCartFailure,
+  request: CommerceRequest,
 ): string {
   const productId = productIdFromRawInput(rawInput);
   const product = productId ? db.products.get(productId) : undefined;
 
   if (!product) return renderAddToCartError(failure);
 
-  return renderAddToCartForm(product, failure);
+  return renderAddToCartForm(product, failure, request);
 }
 
 function productFormTarget(productId: string): string {

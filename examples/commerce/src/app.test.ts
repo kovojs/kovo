@@ -10,6 +10,7 @@ import { fwCheck, fwExplain } from '../../../packages/cli/src/index.js';
 import {
   addToCart,
   addToCartOptimistic,
+  commerceCsrfInput,
   commerceGraph,
   commercePageHints,
   commerceSession,
@@ -205,7 +206,15 @@ describe('commerce example', () => {
       },
     });
 
-    await expect(harness.exec(addToCart, { productId: 'p1', quantity: 2 })).resolves.toMatchObject({
+    await expect(
+      harness.exec(
+        addToCart,
+        commerceCsrfInput(
+          { productId: 'p1', quantity: 2 },
+          { db: harness.dbHandle(), session: { id: 's1', user: { id: 'u1' } } },
+        ),
+      ),
+    ).resolves.toMatchObject({
       changes: [
         { domain: 'cart', input: { productId: 'p1', quantity: 2 } },
         { domain: 'order', input: { productId: 'p1', quantity: 2 } },
