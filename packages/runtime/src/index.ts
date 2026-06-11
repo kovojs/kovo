@@ -59,7 +59,13 @@ export interface TypedEventBus<EventMap extends Record<string, unknown>> {
 }
 
 export interface EventBusOptions {
+  onError?: (error: unknown, context: RuntimeErrorContext) => void;
   queryDataKeys?: readonly string[];
+}
+
+export interface RuntimeErrorContext {
+  event?: DelegatedEvent | TypedEvent<string, unknown>;
+  phase: 'delegated-event' | 'event-listener' | 'execution-trigger' | 'enhanced-mutation';
 }
 
 export function createEventBus<
@@ -84,8 +90,11 @@ export function createEventBus<
       assertKnownEvent(allowed, name);
       assertPayloadDoesNotCarryQueryData(name, payload, eventServerFactKeys, queryDataKeys);
 
+      const event = { name, payload };
       for (const listener of listeners.get(name) ?? []) {
-        void listener({ name, payload });
+        void Promise.resolve(listener(event)).catch((error) => {
+          options.onError?.(error, { event, phase: 'event-listener' });
+        });
       }
     },
     events,
@@ -200,6 +209,7 @@ export interface JisoLoaderOptions {
   events?: readonly string[];
   focusTarget?: LoaderLifecycleTarget;
   importModule: ImportHandlerModule;
+  onError?: (error: unknown, context: RuntimeErrorContext) => void;
   queryRefetch?: QueryRefetchOptions;
   requestIdle?: (callback: () => void) => void;
   visibleObserver?: VisibleObserverFactory;
@@ -260,8 +270,16 @@ export function installJisoLoader(options: JisoLoaderOptions): JisoLoader {
       options.root,
       eventName,
       async (event) => {
-        if (await dispatchEnhancedFormSubmit(event, enhancedMutations)) return;
-        await dispatchDelegatedEvent(event, options.importModule);
+        const enhancedSubmit = isEnhancedSubmitEvent(event, enhancedMutations);
+        try {
+          if (await dispatchEnhancedFormSubmit(event, enhancedMutations)) return;
+          await dispatchDelegatedEvent(event, options.importModule);
+        } catch (error) {
+          options.onError?.(error, {
+            event,
+            phase: enhancedSubmit ? 'enhanced-mutation' : 'delegated-event',
+          });
+        }
       },
       disposers,
       { capture: true },
@@ -351,7 +369,7 @@ function installExecutionTriggers(options: JisoLoaderOptions): () => void {
   for (const element of options.root.querySelectorAll(
     '[on\\:load]',
   ) as Iterable<EventElementLike>) {
-    void dispatchDelegatedEvent({ target: element, type: 'load' }, options.importModule);
+    dispatchExecutionTrigger({ target: element, type: 'load' }, options);
   }
 
   const requestIdle =
@@ -368,7 +386,7 @@ function installExecutionTriggers(options: JisoLoaderOptions): () => void {
     '[on\\:idle]',
   ) as Iterable<EventElementLike>) {
     requestIdle(() => {
-      void dispatchDelegatedEvent({ target: element, type: 'idle' }, options.importModule);
+      dispatchExecutionTrigger({ target: element, type: 'idle' }, options);
     });
   }
 
@@ -399,7 +417,7 @@ function installExecutionTriggers(options: JisoLoaderOptions): () => void {
 
       seen.add(entry.target);
       observer.unobserve(entry.target);
-      void dispatchDelegatedEvent({ target: entry.target, type: 'visible' }, options.importModule);
+      dispatchExecutionTrigger({ target: entry.target, type: 'visible' }, options);
     }
   });
 
@@ -412,6 +430,12 @@ function installExecutionTriggers(options: JisoLoaderOptions): () => void {
       observer.unobserve(element);
     }
   };
+}
+
+function dispatchExecutionTrigger(event: DelegatedEvent, options: JisoLoaderOptions): void {
+  void dispatchDelegatedEvent(event, options.importModule).catch((error) => {
+    options.onError?.(error, { event, phase: 'execution-trigger' });
+  });
 }
 
 function withDefaultMutationBroadcast(options: EnhancedMutationLoaderOptions): {
@@ -503,6 +527,19 @@ export async function dispatchEnhancedFormSubmit(
   return true;
 }
 
+function isEnhancedSubmitEvent(
+  event: DelegatedEvent,
+  options: EnhancedMutationLoaderOptions | undefined,
+): boolean {
+  if (!options || event.type !== 'submit') return false;
+
+  const form = event.target?.closest?.('form[enhance],form[data-enhance],form[data-mutation]') as
+    | EventElementLike
+    | null
+    | undefined;
+  return !!form && isEnhancedForm(form);
+}
+
 function isEnhancedForm(form: EventElementLike): boolean {
   return (
     form.getAttribute('enhance') !== null ||
@@ -562,19 +599,21 @@ export async function dispatchDelegatedEvent(
     state,
   };
 
-  for (const ref of parseHandlerReferences(element.getAttribute(`on:${event.type}`))) {
-    const { exportName, url } = parseHandlerReference(ref);
-    const mod = await importModule(url);
-    const fn = mod[exportName];
+  try {
+    for (const ref of parseHandlerReferences(element.getAttribute(`on:${event.type}`))) {
+      const { exportName, url } = parseHandlerReference(ref);
+      const mod = await importModule(url);
+      const fn = mod[exportName];
 
-    if (typeof fn !== 'function') {
-      throw new Error(`Handler export not found: ${ref}`);
+      if (typeof fn !== 'function') {
+        throw new Error(`Handler export not found: ${ref}`);
+      }
+
+      await (fn as ClientHandler)(event as Event, context);
     }
-
-    await (fn as ClientHandler)(event as Event, context);
+  } finally {
+    writeElementState(stateHost ?? element, state);
   }
-
-  writeElementState(stateHost ?? element, state);
 }
 
 export function parseHandlerReferences(refs: string | null): string[] {

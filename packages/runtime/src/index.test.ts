@@ -741,6 +741,50 @@ describe('runtime loader', () => {
     expect(pendingForm.attributes).not.toHaveProperty('aria-busy');
   });
 
+  it('reports enhanced loader submit failures through the loader error hook', async () => {
+    const loaderRoot = new FakeRoot();
+    const mutationRoot = new FakeMorphRoot();
+    const store = createQueryStore();
+    const preventDefault = vi.fn();
+    const onError = vi.fn();
+    const error = new Error('network down');
+    const form = new FakeFormElement(
+      { enhance: '' },
+      {
+        action: '/_m/cart/add',
+        method: 'post',
+      },
+    );
+
+    installJisoLoader({
+      enhancedMutations: {
+        fetch: vi.fn(async () => {
+          throw error;
+        }),
+        formData: () => new FormData(),
+        root: mutationRoot,
+        store,
+      },
+      importModule: vi.fn(),
+      onError,
+      root: loaderRoot,
+    });
+
+    await expect(
+      loaderRoot.listeners.get('submit')?.({
+        preventDefault,
+        target: form,
+        type: 'submit',
+      }),
+    ).resolves.toBeUndefined();
+
+    expect(preventDefault).toHaveBeenCalledTimes(1);
+    expect(onError).toHaveBeenCalledWith(error, {
+      event: { preventDefault, target: form, type: 'submit' },
+      phase: 'enhanced-mutation',
+    });
+  });
+
   it('auto-wires enhanced mutation broadcasts through the loader bridge', async () => {
     const globalRecord = globalThis as unknown as Record<string, unknown>;
     const originalBroadcastChannel = globalRecord.BroadcastChannel;
@@ -1019,6 +1063,49 @@ describe('runtime loader', () => {
     expect(element.getAttribute('fw-state')).toBe('{"count":3}');
   });
 
+  it('persists delegated handler state before reporting a later handler failure', async () => {
+    const first = vi.fn((_event, ctx: { state: { count: number } }) => {
+      ctx.state.count += 1;
+    });
+    const importModule = vi.fn(async (url: string) => (url === '/c/a.js' ? { first } : {}));
+    const element = new FakeElement({
+      'fw-state': '{"count":2}',
+      'on:click': '/c/a.js#first /c/b.js#missing',
+    });
+
+    await expect(
+      dispatchDelegatedEvent({ target: element, type: 'click' }, importModule),
+    ).rejects.toThrow('Handler export not found: /c/b.js#missing');
+
+    expect(element.getAttribute('fw-state')).toBe('{"count":3}');
+  });
+
+  it('reports delegated loader failures through the loader error hook', async () => {
+    const loaderRoot = new FakeRoot();
+    const onError = vi.fn();
+    const element = new FakeElement({
+      'on:click': '/c/cart-badge.client.js#missing',
+    });
+
+    installJisoLoader({
+      importModule: vi.fn(async () => ({})),
+      onError,
+      root: loaderRoot,
+    });
+
+    await expect(
+      loaderRoot.listeners.get('click')?.({
+        target: element,
+        type: 'click',
+      }),
+    ).resolves.toBeUndefined();
+
+    expect(onError).toHaveBeenCalledWith(expect.any(Error), {
+      event: { target: element, type: 'click' },
+      phase: 'delegated-event',
+    });
+  });
+
   it('defaults missing or malformed serialized state to an empty object', () => {
     expect(readElementState(new FakeElement({}))).toEqual({});
     expect(readElementState(new FakeElement({ 'fw-state': '{' }))).toEqual({});
@@ -1234,6 +1321,27 @@ describe('typed event bus', () => {
     expect(() => bus.emit('cart:added', { productId: 'p1', quantity: 2 })).toThrow(
       'Event payload overlaps query data; use a transform. event cart:added carries productId.',
     );
+  });
+
+  it('reports async listener failures through the event bus error hook', async () => {
+    const error = new Error('listener failed');
+    const onError = vi.fn();
+    const cartAdded = event<'cart:added', { productId: string }>('cart:added');
+    const bus = createEventBus([cartAdded] as const, { onError });
+
+    bus.on('cart:added', async () => {
+      throw error;
+    });
+    bus.emit('cart:added', { productId: 'p1' });
+    await Promise.resolve();
+
+    expect(onError).toHaveBeenCalledWith(error, {
+      event: {
+        name: 'cart:added',
+        payload: { productId: 'p1' },
+      },
+      phase: 'event-listener',
+    });
   });
 });
 
