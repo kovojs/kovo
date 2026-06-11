@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
   assertFixpoint,
+  assertRenderEquivalence,
   collectCssAssetManifest,
   collectMinifierReservedNames,
   compileComponentModule,
@@ -66,6 +67,7 @@ describe('compileComponentModule', () => {
     );
     expect(result.files[2]?.source).toContain("'cart-badge': {};");
     expect(result.files[2]?.source).toContain("'CartBadge:cart': readonly ['cart.count'];");
+    expect(() => assertRenderEquivalence(result)).not.toThrow();
   });
 
   it('versions handler URLs from the emitted client module source', () => {
@@ -483,6 +485,29 @@ export const CartBadge = component('cart-badge', {
       "'CartBadge': { href: '/assets/components/cart/cart-badge.css'; sourceFileName: 'components/cart/cart-badge.css'; fragmentTargets: readonly ['cart-badge']; };",
     );
     expect(() => assertFixpoint(result)).not.toThrow();
+    expect(() => assertRenderEquivalence(result)).not.toThrow();
+  });
+
+  it('reports render-equivalence failures with the emitted server artifact', () => {
+    const result = compileComponentModule({
+      fileName: 'components/cart/cart-badge.tsx',
+      source: cartBadgeSource,
+    });
+    const failed = {
+      ...result,
+      renderEquivalenceChecks: [
+        {
+          actual: '<cart-badge>3</cart-badge>',
+          artifact: 'components/cart/cart-badge.server.js',
+          expected: '<cart-badge>2</cart-badge>',
+          ok: false,
+        },
+      ],
+    };
+
+    expect(() => assertRenderEquivalence(failed)).toThrow(
+      'Render equivalence failed for components/cart/cart-badge.server.js',
+    );
   });
 
   it('scopes native-host component CSS to the fw-c identity stamp', () => {

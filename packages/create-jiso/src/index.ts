@@ -448,7 +448,7 @@ export const App = component('app-root', {
         path: 'src/app.fixpoint.test.ts',
         source: `import { readFileSync } from 'node:fs';
 
-import { assertFixpoint, compileComponentModule } from '@jiso/compiler';
+import { assertFixpoint, assertRenderEquivalence, compileComponentModule } from '@jiso/compiler';
 import { describe, expect, it } from 'vitest';
 
 describe('compiler fixpoint', () => {
@@ -460,6 +460,7 @@ describe('compiler fixpoint', () => {
     });
 
     expect(() => assertFixpoint(result)).not.toThrow();
+    expect(() => assertRenderEquivalence(result)).not.toThrow();
   });
 });
 `,

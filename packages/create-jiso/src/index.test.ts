@@ -5,6 +5,7 @@ import {
   mkdtempSync,
   readdirSync,
   readFileSync,
+  realpathSync,
   rmSync,
   symlinkSync,
   writeFileSync,
@@ -270,11 +271,12 @@ describe('create-jiso starter', () => {
     )?.source;
     expect(fixpointTest).toContain("import { readFileSync } from 'node:fs';");
     expect(fixpointTest).toContain(
-      "import { assertFixpoint, compileComponentModule } from '@jiso/compiler';",
+      "import { assertFixpoint, assertRenderEquivalence, compileComponentModule } from '@jiso/compiler';",
     );
     expect(fixpointTest).toContain('compileComponentModule');
     expect(fixpointTest).toContain("source: readFileSync(new URL('./app.tsx', import.meta.url)");
     expect(fixpointTest).toContain('assertFixpoint(result)');
+    expect(fixpointTest).toContain('assertRenderEquivalence(result)');
     expect(fixpointTest).toContain('SPEC.md section 5.2');
   });
 
@@ -394,17 +396,26 @@ describe('create-jiso starter', () => {
 });
 
 function linkStarterBuildDependencies(root: string): void {
-  const commerceNodeModules = join(process.cwd(), 'examples/commerce/node_modules');
+  const commerceNodeModules = join(process.cwd(), '../..', 'examples/commerce/node_modules');
   const nodeModules = join(root, 'node_modules');
   mkdirSync(join(nodeModules, '@jiso'), { recursive: true });
   mkdirSync(join(nodeModules, '@tailwindcss'), { recursive: true });
 
   symlinkSync(
-    join(commerceNodeModules, '@tailwindcss/vite'),
+    realpathSync(join(commerceNodeModules, '@tailwindcss/vite')),
     join(nodeModules, '@tailwindcss/vite'),
   );
-  symlinkSync(join(commerceNodeModules, '@jiso/core'), join(nodeModules, '@jiso/core'));
-  symlinkSync(join(commerceNodeModules, '@jiso/runtime'), join(nodeModules, '@jiso/runtime'));
-  symlinkSync(join(commerceNodeModules, 'tailwindcss'), join(nodeModules, 'tailwindcss'));
-  symlinkSync(join(commerceNodeModules, 'vite-plus'), join(nodeModules, 'vite-plus'));
+  symlinkSync(
+    realpathSync(join(commerceNodeModules, '@jiso/core')),
+    join(nodeModules, '@jiso/core'),
+  );
+  symlinkSync(
+    realpathSync(join(commerceNodeModules, '@jiso/runtime')),
+    join(nodeModules, '@jiso/runtime'),
+  );
+  symlinkSync(
+    realpathSync(join(commerceNodeModules, 'tailwindcss')),
+    join(nodeModules, 'tailwindcss'),
+  );
+  symlinkSync(realpathSync(join(commerceNodeModules, 'vite-plus')), join(nodeModules, 'vite-plus'));
 }

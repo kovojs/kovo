@@ -72,8 +72,16 @@ export interface CompileResult {
   handlerExports: readonly string[];
   platformSubstitutions: readonly PlatformSubstitution[];
   queryUpdatePlans: readonly QueryUpdatePlanFact[];
+  renderEquivalenceChecks: readonly RenderEquivalenceCheck[];
   updateCoverage: readonly QueryUpdateCoverageFact[];
   viewTransitions: ViewTransitionStamp[];
+}
+
+export interface RenderEquivalenceCheck {
+  actual: string;
+  artifact: string;
+  expected: string;
+  ok: boolean;
 }
 
 export interface QueryUpdatePlanFact {
@@ -131,6 +139,7 @@ export function createEmptyCompileResult(): CompileResult {
     handlerExports: [],
     platformSubstitutions: [],
     queryUpdatePlans: [],
+    renderEquivalenceChecks: [],
     updateCoverage: [],
     viewTransitions: [],
   };
@@ -290,6 +299,7 @@ export function compileComponentModule(options: CompileComponentOptions): Compil
     ? [componentCssAssetForFile(cssFileName, componentName, fragmentTargets, {}, cssSource)]
     : [];
   const serverSource = emitServerModule(source, versionedHandlers, clientFileName);
+  const serverRenderedSource = serverRenderSource(source, versionedHandlers);
   const registrySource = emitRegistryModule({
     clientFileName,
     cssAssets,
@@ -318,6 +328,9 @@ export function compileComponentModule(options: CompileComponentOptions): Compil
     cssAssets,
     platformSubstitutions: platformLowering.substitutions,
     queryUpdatePlans,
+    renderEquivalenceChecks: [
+      renderEquivalenceCheck(serverFileName, serverRenderedSource, serverSource),
+    ],
     updateCoverage,
     viewTransitions: viewTransitionLowering.stamps,
   };
@@ -334,6 +347,14 @@ export function assertFixpoint(result: CompileResult): void {
 
     if (!sameFile) {
       throw new Error(`Fixpoint failed for ${file.fileName}`);
+    }
+  }
+}
+
+export function assertRenderEquivalence(result: CompileResult): void {
+  for (const check of result.renderEquivalenceChecks) {
+    if (!check.ok) {
+      throw new Error(`Render equivalence failed for ${check.artifact}`);
     }
   }
 }
@@ -1963,15 +1984,66 @@ function emitServerModule(
   handlers: HandlerLowering[],
   _clientFileName: string,
 ): string {
-  const renderedSource = stampInitialState(
-    stampDeclaredQueryDeps(replaceHandlerAttributes(source, handlers)),
-  );
+  const renderedSource = serverRenderSource(source, handlers);
 
   return `${irHeader}
 export function renderSource() {
   return ${templateLiteral(renderedSource)};
 }
 `;
+}
+
+function serverRenderSource(source: string, handlers: readonly HandlerLowering[]): string {
+  return stampInitialState(stampDeclaredQueryDeps(replaceHandlerAttributes(source, handlers)));
+}
+
+function renderEquivalenceCheck(
+  artifact: string,
+  expected: string,
+  serverSource: string,
+): RenderEquivalenceCheck {
+  const actual = emittedServerRenderSource(serverSource);
+
+  return {
+    actual,
+    artifact,
+    expected,
+    ok: actual === expected,
+  };
+}
+
+function emittedServerRenderSource(serverSource: string): string {
+  const returnIndex = serverSource.indexOf('return `');
+  if (returnIndex < 0) return '';
+
+  const start = returnIndex + 'return `'.length;
+  let escaped = false;
+  let raw = '';
+
+  for (let index = start; index < serverSource.length; index += 1) {
+    const char = serverSource[index];
+    if (escaped) {
+      if (char === '$' && serverSource[index + 1] === '{') {
+        raw += '${';
+        index += 1;
+      } else {
+        raw += char;
+      }
+      escaped = false;
+      continue;
+    }
+
+    if (char === '\\') {
+      escaped = true;
+      continue;
+    }
+
+    if (char === '`') return raw;
+
+    raw += char;
+  }
+
+  return '';
 }
 
 function replaceHandlerAttributes(source: string, handlers: readonly HandlerLowering[]): string {

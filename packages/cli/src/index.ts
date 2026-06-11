@@ -21,6 +21,7 @@ export interface FwCheckInput {
   pages?: readonly PageExplain[];
   queryData?: readonly QueryDataFact[];
   queries?: readonly QueryReadSet[];
+  renderEquivalenceChecks?: readonly RenderEquivalenceCheck[];
   scopeAudits?: readonly ScopeAuditFact[];
   touchGraph?: TouchGraph;
   updateCoverage?: readonly UpdateCoverageFact[];
@@ -145,6 +146,14 @@ export interface UpdateCoverageFact {
 }
 
 export interface FixpointCheck {
+  actual?: string;
+  artifact: string;
+  detail?: string;
+  expected?: string;
+  ok: boolean;
+}
+
+export interface RenderEquivalenceCheck {
   actual?: string;
   artifact: string;
   detail?: string;
@@ -377,6 +386,7 @@ function graphInputShapeError(input: Record<string, unknown>, path: string): Inp
     'pages',
     'queryData',
     'queries',
+    'renderEquivalenceChecks',
     'scopeAudits',
     'updateCoverage',
     'verificationDiagnostics',
@@ -695,6 +705,10 @@ export function fwCheck(
 
     for (const failure of fixpointFailures(input.fixpointChecks ?? [])) {
       lines.push(fixpointFailureLine(failure));
+    }
+
+    for (const failure of renderEquivalenceFailures(input.renderEquivalenceChecks ?? [])) {
+      lines.push(renderEquivalenceFailureLine(failure));
     }
 
     for (const missed of missedQueryInvalidations(
@@ -1148,6 +1162,26 @@ function fixpointFailureLine(check: FixpointCheck): string {
       : ` expected=${stableValue(check.expected)} actual=${stableValue(check.actual)}`;
 
   return `ERROR FIXPOINT ${check.artifact} ${detail}${diff}`;
+}
+
+function renderEquivalenceFailures(
+  checks: readonly RenderEquivalenceCheck[],
+): RenderEquivalenceCheck[] {
+  return checks
+    .filter((check) => !check.ok)
+    .sort((left, right) => left.artifact.localeCompare(right.artifact));
+}
+
+function renderEquivalenceFailureLine(check: RenderEquivalenceCheck): string {
+  const detail = stableText(
+    check.detail ?? 'Authored and lowered render output must match byte-for-byte.',
+  );
+  const diff =
+    check.expected === undefined && check.actual === undefined
+      ? ''
+      : ` expected=${stableValue(check.expected)} actual=${stableValue(check.actual)}`;
+
+  return `ERROR RENDER_EQUIV ${check.artifact} ${detail}${diff}`;
 }
 
 function stableValue(value: string | undefined): string {

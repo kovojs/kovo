@@ -281,6 +281,7 @@ void test('P10 normative docs cover the constitution and compiler hard rules', a
   assert.match(compilerRules, /capture channels \(`ctx`, `element-params`, `module-scope`\)/);
   assert.match(compilerRules, /One-to-one file mapping/);
   assert.match(compilerRules, /Fixpoint invariant/);
+  assert.match(compilerRules, /render-equivalence gate/);
   assert.match(compilerRules, /Platform behavior emission/);
   assert.match(compilerRules, /Teaching errors/);
   assert.match(spec, /\*\*13\.1 CSS\.\*\* Jiso v1 is Tailwind-first/);
@@ -978,6 +979,7 @@ void test('P10 starter wires graph assertions into CI', async () => {
   assert.match(starterSource, /path: 'scripts\/emit-graph\.mjs'/);
   assert.match(starterSource, /path: 'scripts\/graph-assertions\.mjs'/);
   assert.match(starterSource, /deriveAppGraph/);
+  assert.match(starterSource, /assertRenderEquivalence/);
   assert.match(starterSource, /path: 'src\/client\.ts'/);
   assert.match(starterSource, /'@jiso\/runtime': 'workspace:\*'/);
   assert.match(starterSource, /installJisoLoader\(\{/);
@@ -1004,6 +1006,7 @@ void test('P10 starter wires graph assertions into CI', async () => {
   assert.match(starterSource, /<link rel="stylesheet" href="\/src\/styles\.css" \/>/);
   assert.match(starterSource, /<script type="module" src="\/src\/client\.ts"><\/script>/);
   assert.match(starterTests, /vp run graph-assertions/);
+  assert.match(starterTests, /assertRenderEquivalence\(result\)/);
   assert.match(starterTests, /@source inline\("bg-emerald-50 text-emerald-700/);
   assert.match(
     starterTests,
@@ -1394,6 +1397,21 @@ void test('P1 typed data param coercion remains represented', async () => {
   assert.match(runtimeSource, /readElementParamTypes/);
   assert.match(runtimeSource, /coerceElementParam/);
   assert.match(runtimeTests, /quantity:number featured:boolean/);
+});
+
+void test('P1 render-equivalence gate remains represented', async () => {
+  const compilerSource = await readProjectFile('packages/compiler/src/index.ts');
+  const compilerTests = await readProjectFile('packages/compiler/src/index.test.ts');
+  const cliSource = await readProjectFile('packages/cli/src/index.ts');
+  const cliTests = await readProjectFile('packages/cli/src/index.test.ts');
+
+  assert.match(compilerSource, /assertRenderEquivalence/);
+  assert.match(compilerSource, /renderEquivalenceChecks/);
+  assert.match(compilerSource, /emittedServerRenderSource/);
+  assert.match(compilerTests, /reports render-equivalence failures/);
+  assert.match(cliSource, /renderEquivalenceChecks/);
+  assert.match(cliSource, /ERROR RENDER_EQUIV/);
+  assert.match(cliTests, /reports render-equivalence failures as stable ERROR diagnostics/);
 });
 
 void test('framework-owned browser suite is wired into acceptance', async () => {

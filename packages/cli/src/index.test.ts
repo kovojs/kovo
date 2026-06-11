@@ -617,6 +617,54 @@ describe('fw check', () => {
     });
   });
 
+  it('reports render-equivalence failures as stable ERROR diagnostics', () => {
+    expect(
+      fwCheck({
+        renderEquivalenceChecks: [
+          {
+            actual: 'sha256:lowered',
+            artifact: 'components/z.server.js',
+            detail: 'render(src) differed from render(compile(src)).',
+            expected: 'sha256:authored',
+            ok: false,
+          },
+          {
+            artifact: 'components/ok.server.js',
+            ok: true,
+          },
+          {
+            artifact: 'components/a.server.js',
+            ok: false,
+          },
+        ],
+      }),
+    ).toEqual({
+      exitCode: 1,
+      output: [
+        'fw-check/v1',
+        'ERROR RENDER_EQUIV components/a.server.js Authored and lowered render output must match byte-for-byte.',
+        'ERROR RENDER_EQUIV components/z.server.js render(src) differed from render(compile(src)). expected="sha256:authored" actual="sha256:lowered"',
+        '',
+      ].join('\n'),
+    });
+  });
+
+  it('accepts satisfied render-equivalence checks', () => {
+    expect(
+      fwCheck({
+        renderEquivalenceChecks: [
+          {
+            artifact: 'components/cart-badge.server.js',
+            ok: true,
+          },
+        ],
+      }),
+    ).toEqual({
+      exitCode: 0,
+      output: 'fw-check/v1\nOK\n',
+    });
+  });
+
   it('audits mutations reachable without an auth guard', () => {
     expect(
       fwCheck({
