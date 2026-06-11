@@ -280,6 +280,7 @@ export interface RateLimitOptions<Request> {
 }
 
 const defaultRateLimitWindowMs = 60_000;
+const defaultRateLimitMaxKeys = 10_000;
 
 export const guards = {
   all<Request, RefinedRequest extends Request = Request>(
@@ -319,7 +320,8 @@ export const guards = {
         return true;
       }
 
-      while (options.maxKeys !== undefined && counts.size >= options.maxKeys) {
+      const maxKeys = options.maxKeys ?? defaultRateLimitMaxKeys;
+      while (counts.size >= maxKeys) {
         const oldest = counts.keys().next().value;
         if (oldest === undefined) break;
         counts.delete(oldest);

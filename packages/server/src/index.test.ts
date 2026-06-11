@@ -1797,6 +1797,41 @@ describe('server mutation primitives', () => {
     ).resolves.toMatchObject({ error: { code: 'RATE_LIMITED' }, ok: false, status: 429 });
   });
 
+  it('evicts oldest rate-limit keys when the key cap is reached', async () => {
+    interface TenantRequest {
+      session?: { id?: string };
+      tenant: string;
+    }
+
+    const guarded = mutation('cart/keyed-add', {
+      guard: guards.rateLimit<TenantRequest>({
+        key: (request) => request.tenant,
+        max: 1,
+        maxKeys: 2,
+      }),
+      input: s.object({ productId: s.string() }),
+      handler() {
+        return 'ok';
+      },
+    });
+
+    await expect(runMutation(guarded, { productId: 'p1' }, { tenant: 'a' })).resolves.toMatchObject(
+      { ok: true },
+    );
+    await expect(runMutation(guarded, { productId: 'p1' }, { tenant: 'b' })).resolves.toMatchObject(
+      { ok: true },
+    );
+    await expect(runMutation(guarded, { productId: 'p1' }, { tenant: 'c' })).resolves.toMatchObject(
+      { ok: true },
+    );
+    await expect(runMutation(guarded, { productId: 'p1' }, { tenant: 'a' })).resolves.toMatchObject(
+      { ok: true },
+    );
+    await expect(runMutation(guarded, { productId: 'p1' }, { tenant: 'c' })).resolves.toMatchObject(
+      { error: { code: 'RATE_LIMITED' }, ok: false, status: 429 },
+    );
+  });
+
   it('preserves rate-limit status and retry-after headers in mutation wire responses', async () => {
     const guarded = mutation('cart/add', {
       guard: guards.rateLimit({ max: 1, per: 'session', windowMs: 60_000 }),
