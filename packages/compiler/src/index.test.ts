@@ -1712,6 +1712,68 @@ export const CartRow = component('cart-row', {
     ]);
   });
 
+  it('accepts fragment target children that can hoist through serializable props', () => {
+    const result = compileComponentModule({
+      fileName: 'cart-row.tsx',
+      source: `
+export const CartRow = component('cart-row', {
+  fragmentTarget: true,
+  props: { rowId: String },
+  render: ({ rowId }) => <tr fw-c="cart-row" data-row={rowId}></tr>,
+});
+
+export const CartTable = component('cart-table', {
+  render: ({ cart }) => (
+    <table>
+      <CartRow rowId={cart.rowId}>
+        <span>{cart.count}</span>
+      </CartRow>
+    </table>
+  ),
+});
+`,
+    });
+
+    expect(result.diagnostics).toEqual([]);
+  });
+
+  it('reports FW230 when fragment target children capture unserializable values', () => {
+    const result = compileComponentModule({
+      fileName: 'cart-row.tsx',
+      source: `
+export const CartRow = component('cart-row', {
+  fragmentTarget: true,
+  props: { rowId: String },
+  render: ({ rowId }) => <tr fw-c="cart-row" data-row={rowId}></tr>,
+});
+
+export const CartTable = component('cart-table', {
+  render: ({ cart }) => (
+    <table>
+      <CartRow rowId={cart.rowId}>
+        <span>{window.location.href}</span>
+      </CartRow>
+    </table>
+  ),
+});
+`,
+    });
+
+    expect(result.diagnostics).toEqual([
+      {
+        code: 'FW230',
+        fileName: 'cart-row.tsx',
+        help: [
+          'Would hoist children to: CartRow$slot_children',
+          'Blocked children: <span>{window.location.href}</span>',
+          'Fixes: pass serializable props, move browser/request/db values behind a server fragment, or render children inside the fragment target itself.',
+        ].join('\n'),
+        message: 'Fragment-target children cannot lower to a component reference. CartRow',
+        severity: 'error',
+      },
+    ]);
+  });
+
   it('reports FW330 when mutation handlers access request db directly', () => {
     const result = compileComponentModule({
       fileName: 'cart.mutation.ts',

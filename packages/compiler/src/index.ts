@@ -260,6 +260,7 @@ export function compileComponentModule(options: CompileComponentOptions): Compil
   const handlers = lowerEventHandlers({ ...options, source }, componentName);
   const serverFactStateDiagnostics = validateServerFactsInLocalState(source, options.fileName);
   const fragmentInputDiagnostics = validateFragmentTargetInputs(source, options.fileName);
+  const fragmentChildrenDiagnostics = validateFragmentTargetChildren(source, options.fileName);
   const dataBindDiagnostics = validateDataBindings(source, options);
   const stampExpressionDiagnostics = validateStampExpressionDrift(source, options);
   const queryUpdatePlans = collectQueryUpdatePlans(source, componentName);
@@ -304,6 +305,7 @@ export function compileComponentModule(options: CompileComponentOptions): Compil
       ...handlers.flatMap((handler) => (handler.diagnostic ? [handler.diagnostic] : [])),
       ...serverFactStateDiagnostics,
       ...fragmentInputDiagnostics,
+      ...fragmentChildrenDiagnostics,
       ...dataBindDiagnostics,
       ...stampExpressionDiagnostics,
       ...eventPayloadDiagnostics,
@@ -1349,6 +1351,74 @@ function validateFragmentTargetInputs(source: string, fileName: string): Compile
     ...diagnosticFor(fileName, 'FW303'),
     message: `${diagnosticDefinitions.FW303.message} ${input}`,
   }));
+}
+
+function validateFragmentTargetChildren(source: string, fileName: string): CompilerDiagnostic[] {
+  const targetNames = fragmentTargetUsageNames(source);
+  if (targetNames.length === 0) return [];
+
+  return targetNames.flatMap((name) =>
+    fragmentTargetChildBodies(source, name)
+      .filter((body) => capturesUnserializableValue(body))
+      .map((body) => fw230Diagnostic(fileName, name, body)),
+  );
+}
+
+function fragmentTargetUsageNames(source: string): string[] {
+  const names: string[] = [];
+  const declarationPattern =
+    /\bexport\s+const\s+(?<local>[A-Z][A-Za-z0-9_]*)\s*=\s*component\s*\(\s*(["'])(?<name>[^"']+)\2\s*,\s*\{/g;
+
+  for (const match of source.matchAll(declarationPattern)) {
+    const objectStart = match.index + match[0].lastIndexOf('{');
+    const objectEnd = findMatchingToken(source, objectStart, '{', '}');
+    if (objectEnd === -1) continue;
+
+    const optionsObject = source.slice(objectStart, objectEnd + 1);
+    if (!/\bfragmentTarget\s*:\s*true\b/.test(optionsObject)) continue;
+
+    const local = match.groups?.local;
+    const explicit = match.groups?.name;
+    if (local) names.push(local);
+    if (explicit) names.push(explicit);
+  }
+
+  return [...new Set(names)];
+}
+
+function fragmentTargetChildBodies(source: string, name: string): string[] {
+  const bodies: string[] = [];
+  const openPattern = new RegExp(`<${escapeRegExp(name)}\\b(?<attrs>[^>]*)>`, 'g');
+
+  for (const match of source.matchAll(openPattern)) {
+    const attrs = match.groups?.attrs ?? '';
+    if (isSelfClosing(attrs)) continue;
+
+    const start = match.index ?? 0;
+    const end = findMatchingClosingTag(source, name, start);
+    if (end === -1) continue;
+
+    const openEnd = findOpeningTagEnd(source, start);
+    if (openEnd === -1) continue;
+
+    const closeTag = `</${name}>`;
+    const body = source.slice(openEnd + 1, end - closeTag.length).trim();
+    if (body) bodies.push(body);
+  }
+
+  return bodies;
+}
+
+function fw230Diagnostic(fileName: string, target: string, body: string): CompilerDiagnostic {
+  return {
+    ...diagnosticFor(fileName, 'FW230'),
+    help: [
+      `Would hoist children to: ${target}$slot_children`,
+      `Blocked children: ${body}`,
+      'Fixes: pass serializable props, move browser/request/db values behind a server fragment, or render children inside the fragment target itself.',
+    ].join('\n'),
+    message: `${diagnosticDefinitions.FW230.message} ${target}`,
+  };
 }
 
 function validateEventPayloads(

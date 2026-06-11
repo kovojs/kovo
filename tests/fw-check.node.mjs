@@ -566,6 +566,28 @@ void test('P1 compiler validates primitive composition attribute merges', async 
   assert.match(compilerTests, /data-bind:hidden/);
 });
 
+void test('P1 compiler validates fragment-target child hoisting failures', async () => {
+  const coreSource = await readProjectFile('packages/core/src/diagnostics.ts');
+  const compilerSource = await readProjectFile('packages/compiler/src/index.ts');
+  const compilerTests = await readProjectFile('packages/compiler/src/index.test.ts');
+
+  assert.match(coreSource, /FW230/);
+  assert.match(coreSource, /Fragment-target children cannot lower to a component reference/);
+  assert.match(compilerSource, /validateFragmentTargetChildren/);
+  assert.match(compilerSource, /fragmentTargetUsageNames/);
+  assert.match(compilerSource, /fragmentTargetChildBodies/);
+  assert.match(compilerSource, /fw230Diagnostic/);
+  assert.match(
+    compilerTests,
+    /accepts fragment target children that can hoist through serializable props/,
+  );
+  assert.match(
+    compilerTests,
+    /reports FW230 when fragment target children capture unserializable values/,
+  );
+  assert.match(compilerTests, /Would hoist children to: CartRow\$slot_children/);
+});
+
 void test('P3 typed routes validate navigation targets', async () => {
   const coreSource = await readProjectFile('packages/core/src/index.ts');
   const coreTests = await readProjectFile('packages/core/src/index.test.ts');
