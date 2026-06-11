@@ -158,12 +158,7 @@ export function matchShellDispatch<
     };
   }
 
-  return {
-    entry: { kind: 'not-found', phase: 'not-found' },
-    kind: 'not-found',
-    normalization,
-    pathname: normalization.pathname,
-  };
+  throw new Error('Unreachable shell dispatch table exhausted');
 }
 
 function endpointMethodMatches(endpoint: EndpointLike, method: string | undefined): boolean {

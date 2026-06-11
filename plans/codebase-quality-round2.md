@@ -518,6 +518,15 @@ land it first; don't fork it.
       spread clobbering `Link` (document.ts:153-156); untested cookie-rejection branches
       (index.ts:2405-2461), `t()` throw (:1681), `metaFromQuery` error branches, session Proxy
       traps (:2076-2095).
+      Partial evidence 2026-06-11: server LOW cleanup sub-slice removed the unreachable
+      `matchShellDispatch` post-loop fallback, cached route table compilation in
+      `packages/server/src/match.ts` with mutation invalidation coverage, removed buffered
+      deferred-stream `Transfer-Encoding`, stripped duplicate static error-document titles while
+      preserving other meta, and tightened `isHeaderSource` to reject arbitrary non-header
+      objects. Verified with `pnpm exec vitest --run packages/server/src`, `pnpm run check`, and
+      `pnpm run check:build`. `pnpm run check:fw` was run after the build and failed only because
+      out-of-scope `tests/fw-check.node.mjs` still hardcodes `defer-stream.http` metadata with
+      `transfer-encoding: chunked`; the fixture now reflects the buffered response contract.
 
 Verification: server vitest + wire fixtures byte-for-byte (remove the newline fudge at
 index.test.ts:4227 while here — it weakens the byte-for-byte claim) + acceptance.

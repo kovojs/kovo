@@ -118,6 +118,7 @@ export type {
   StylesheetManifestEntry,
 } from './hints.js';
 export type { QueryScriptRenderOptions } from './wire-html.js';
+export { isHeaderSource, readHeader } from './response.js';
 export type { ResponseHeaderValue, ResponseHeaders, ServerResponseBase } from './response.js';
 export { findRouteAmbiguities, matchRoute, normalizePathname } from './match.js';
 export type { PathnameNormalization, RouteAmbiguity, RouteLike, RouteMatch } from './match.js';

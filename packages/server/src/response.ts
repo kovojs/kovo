@@ -20,11 +20,17 @@ export type HeaderSource =
     };
 
 export function isHeaderSource(value: unknown): value is HeaderSource {
-  return (
-    typeof value === 'object' &&
-    value !== null &&
-    ('get' in value || Symbol.iterator in value || Object.keys(value).length > 0)
-  );
+  if (typeof value !== 'object' || value === null) return false;
+
+  if ('get' in value) return typeof value.get === 'function';
+
+  const iterator = (value as { [Symbol.iterator]?: unknown })[Symbol.iterator];
+  if (typeof iterator === 'function') {
+    return !Array.isArray(value) || value.every(isHeaderTuple);
+  }
+
+  const entries = Object.entries(value);
+  return entries.length > 0 && entries.every(([, header]) => isHeaderRecordValue(header));
 }
 
 export function readHeader(headers: HeaderSource, name: string): string | undefined {
@@ -83,4 +89,21 @@ function findHeaderName(headers: HeaderSource, name: string): string | undefined
   }
 
   return Object.keys(headers).find((candidate) => candidate.toLowerCase() === wanted);
+}
+
+function isHeaderRecordValue(value: unknown): boolean {
+  return (
+    value === undefined ||
+    typeof value === 'string' ||
+    (Array.isArray(value) && value.every((entry) => typeof entry === 'string'))
+  );
+}
+
+function isHeaderTuple(value: unknown): value is readonly [string, string] {
+  return (
+    Array.isArray(value) &&
+    value.length === 2 &&
+    typeof value[0] === 'string' &&
+    typeof value[1] === 'string'
+  );
 }

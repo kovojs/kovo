@@ -1326,7 +1326,6 @@ describe('server mutation primitives', () => {
       ].join('\n'),
       headers: {
         'Content-Type': 'text/html; charset=utf-8',
-        'Transfer-Encoding': 'chunked',
       },
       status: 200,
     });
@@ -1401,7 +1400,6 @@ describe('server mutation primitives', () => {
       ].join('\n'),
       headers: {
         'Content-Type': 'text/html; charset=utf-8',
-        'Transfer-Encoding': 'chunked',
       },
       status: 200,
     });

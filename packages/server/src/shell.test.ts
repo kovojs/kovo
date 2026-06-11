@@ -3,9 +3,11 @@ import { describe, expect, it } from 'vitest';
 import {
   endpoint,
   findRouteAmbiguities,
+  isHeaderSource,
   matchRoute,
   matchShellDispatch,
   normalizePathname,
+  readHeader,
   renderDeferredDocument,
   renderDocument,
   renderDocumentQueryScript,
@@ -49,6 +51,18 @@ describe('server app shell route matching', () => {
       file: 'readme.md',
       id: 'sku%2F1',
     });
+  });
+
+  it('invalidates cached route tables when a route path changes', () => {
+    const mutableRoute = { path: '/products/:id' };
+    const routes = [mutableRoute];
+
+    expect(matchRoute(routes, '/products/p1')?.params).toEqual({ id: 'p1' });
+
+    mutableRoute.path = '/collections/:id';
+
+    expect(matchRoute(routes, '/products/p1')).toBeUndefined();
+    expect(matchRoute(routes, '/collections/c1')?.params).toEqual({ id: 'c1' });
   });
 
   it('reports FW228 ambiguities when two route patterns can match one pathname', () => {
@@ -190,7 +204,6 @@ describe('server app shell document assembly', () => {
       headers: {
         'Content-Type': 'text/html; charset=utf-8',
         Link: '</app.css>; rel=preload; as=style',
-        'Transfer-Encoding': 'chunked',
       },
       status: 200,
     });
@@ -224,6 +237,22 @@ describe('server app shell document assembly', () => {
     expect(response.body).toContain('<p>Missing &lt;cart&gt;</p>');
   });
 
+  it('renders one error document title while preserving other static meta hints', () => {
+    const response = renderErrorDocument({
+      hints: {
+        meta: { description: 'Original description', title: 'Original title' },
+      },
+      status: 500,
+      title: 'Server unavailable',
+    });
+    expect(typeof response.body).toBe('string');
+    const body = response.body as string;
+
+    expect(body.match(/<title>/g)).toHaveLength(1);
+    expect(body).toContain('<title>Server unavailable</title>');
+    expect(body).toContain('<meta name="description" content="Original description">');
+  });
+
   it('escapes document query script JSON for safe initial hydration', () => {
     expect(
       renderDocumentQueryScript({
@@ -233,6 +262,22 @@ describe('server app shell document assembly', () => {
     ).toBe(
       '<script type="application/json" fw-query="cart">{"html":"\\u003c/script>\\u003cscript>alert(1)\\u003c/script>"}</script>',
     );
+  });
+});
+
+describe('server response header utilities', () => {
+  it('accepts concrete header sources without treating arbitrary objects as headers', () => {
+    expect(isHeaderSource(new Headers({ 'Content-Type': 'text/html' }))).toBe(true);
+    expect(isHeaderSource(new Map([['Content-Type', 'text/html']]))).toBe(true);
+    expect(isHeaderSource({ 'Content-Type': 'text/html', Vary: ['Accept'] })).toBe(true);
+
+    expect(isHeaderSource({ status: 200 })).toBe(false);
+    expect(isHeaderSource(['Content-Type', 'text/html'])).toBe(false);
+
+    const headers = { 'CONTENT-TYPE': 'text/html', Vary: ['Accept', 'Cookie'] };
+    expect(isHeaderSource(headers)).toBe(true);
+    expect(readHeader(headers, 'content-type')).toBe('text/html');
+    expect(readHeader(headers, 'vary')).toBe('Accept, Cookie');
   });
 });
 

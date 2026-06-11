@@ -1,7 +1,12 @@
 import { jisoLoaderSource } from '@jiso/runtime';
 import { renderDeferredStream, type DeferredStreamChunk } from './deferred-stream.js';
 import { escapeAttribute, escapeHtml } from './html.js';
-import { renderPageHints, type PageHintOptions, type PageHints } from './hints.js';
+import {
+  renderPageHints,
+  type PageHintOptions,
+  type PageHints,
+  type RouteMetaSource,
+} from './hints.js';
 import { readHeader, type ServerResponseBase } from './response.js';
 import { renderQueryScript, type QueryScriptRenderOptions } from './wire-html.js';
 
@@ -165,7 +170,7 @@ export function renderErrorDocument(options: ErrorDocumentOptions): DocumentRout
     body: `<main><h1>${escapeHtml(title)}</h1><p>${escapeHtml(message)}</p></main>`,
     hints: {
       ...options.hints,
-      meta: [{ title }, ...(arrayFrom(options.hints?.meta) ?? [])],
+      meta: [{ title }, ...withoutStaticTitleMeta(routeMetaArray(options.hints?.meta))],
     },
     ...(options.lang === undefined ? {} : { lang: options.lang }),
     ...(options.template === undefined ? {} : { template: options.template }),
@@ -230,4 +235,17 @@ function langFromHints(hints: PageHintOptions | undefined): string | undefined {
 function arrayFrom<T>(value: T | readonly T[] | undefined): readonly T[] | undefined {
   if (value === undefined) return undefined;
   return (Array.isArray(value) ? value : [value]) as readonly T[];
+}
+
+function routeMetaArray(value: PageHintOptions['meta']): readonly RouteMetaSource[] {
+  if (value === undefined) return [];
+  return Array.isArray(value) ? (value as readonly RouteMetaSource[]) : [value as RouteMetaSource];
+}
+
+function withoutStaticTitleMeta(metas: readonly RouteMetaSource[]): readonly RouteMetaSource[] {
+  return metas.map((meta) => {
+    if ('resolve' in meta) return meta;
+    const { title: _title, ...rest } = meta;
+    return rest;
+  });
 }

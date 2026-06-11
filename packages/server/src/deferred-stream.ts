@@ -53,7 +53,6 @@ export function renderDeferredStream(options: DeferredStreamOptions): DeferredSt
     body: [options.shell, ...chunks, `--${boundary}--`, options.closeHtml ?? ''].join('\n'),
     headers: {
       'Content-Type': 'text/html; charset=utf-8',
-      'Transfer-Encoding': 'chunked',
     },
     status: 200,
   };
