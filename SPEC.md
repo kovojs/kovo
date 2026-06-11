@@ -754,6 +754,8 @@ export const derived = {
 
 **Runtime protocol:** snapshot affected query values (`structuredClone` — safe by the `JsonValue` constraint) → apply transforms to the shared query values and run their update plans (all dependent islands update at once; affected islands get `fw-pending` + `aria-busy` automatically) → on success, `<fw-query>`/morph reconciles over the prediction (right guess ⇒ near-no-op; wrong guess ⇒ silent correction) → on error, restore snapshots, render error fragment.
 
+Successful enhanced mutation responses should include `<fw-query>` chunks for every invalidated query instance the server can derive and rerun in the request (§10.3). The client treats missing server truth for an optimistic transform as a visible runtime diagnostic, then settles that transform without promoting the prediction to authoritative data; this preserves the no-silent-inconsistency rule while allowing explicitly fragment-only or temporarily uncovered responses during development.
+
 **Concurrency:** a per-query pending-transform log; arriving server truth is morphed in, then still-pending transforms re-applied in order (rebase). Safe because transforms are pure `(data, input)` functions. Mutations needing serialization declare `queue: 'cart'` (named FIFO). Navigation is a free reconciliation point: in-flight requests complete via `keepalive`, the log dies with the document.
 
 ### 10.5 Derivation algebra (v2 — summary)

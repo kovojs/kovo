@@ -661,6 +661,9 @@ export const CartDrawer = component('cart-drawer', {
     expect(result.diagnostics[0]?.help).toContain(
       'Fixes: move the value into component/query state via ctx; pass serializable element params with data-p-*; or keep shared constants in module scope.',
     );
+    expect(result.diagnostics[0]?.help).toContain(
+      'The compiler conservatively blocks free identifier references named window, document, db, request, response, Date, Map, or Set.',
+    );
     expect(result.diagnostics[0]?.start).toEqual({ column: 9, line: 1 });
   });
 
@@ -3078,6 +3081,33 @@ export const CartTable = component('cart-table', {
     });
 
     expect(result.diagnostics).toEqual([]);
+  });
+
+  it('ignores fragment target declarations inside strings and comments for graph facts', () => {
+    const result = compileComponentModule({
+      fileName: 'cart-row.tsx',
+      source: `
+const sample = "export const CartRow = component('cart-row', { fragmentTarget: true, render: () => null });";
+// export const OtherRow = component('other-row', { fragmentTarget: true, render: () => null });
+export const CartTable = component('cart-table', {
+  queries: { cart: {} },
+  render: () => (
+    <table>
+      <CartRow>
+        <span>{cart.count}</span>
+      </CartRow>
+    </table>
+  ),
+});
+`,
+    });
+
+    expect(result.componentGraphFacts).toEqual([
+      {
+        name: 'CartTable',
+        queries: ['cart'],
+      },
+    ]);
   });
 
   it('reports FW330 when mutation handlers access request db directly', () => {

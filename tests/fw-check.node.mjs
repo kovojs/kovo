@@ -650,6 +650,7 @@ void test('P3 typed routes validate navigation targets', async () => {
   const coreTests = await readProjectFile('packages/core/src/index.test.ts');
   const diagnosticsSource = await readProjectFile('packages/core/src/diagnostics.ts');
   const compilerGraphSource = await readProjectFile('packages/compiler/src/graph.ts');
+  const compilerRegistrySource = await readProjectFile('packages/compiler/src/emit/registry.ts');
   const compilerSource = await readProjectFile('packages/compiler/src/index.ts');
   const compilerTests = await readProjectFile('packages/compiler/src/index.test.ts');
   const serverSource = await readProjectFile('packages/server/src/index.ts');
@@ -673,7 +674,7 @@ void test('P3 typed routes validate navigation targets', async () => {
   assert.match(compilerSource, /lowerStaticLinks/);
   assert.match(compilerSource, /lowerStaticHrefCalls/);
   assert.match(compilerSource, /validateLiteralHrefs/);
-  assert.match(compilerSource, /routeRegistryFactLines/);
+  assert.match(compilerRegistrySource, /routeRegistryFactLines/);
   assert.match(
     compilerTests,
     /reports FW220 for literal navigation targets outside the route table/,
@@ -952,7 +953,10 @@ void test('P10 commerce graph assertions answer behavior mechanically', async ()
   );
   assert.match(compilerGraphSource, /function deriveRegistryFactsFromGraph/);
   assert.match(compilerGraphSource, /function deriveInvalidationFactsFromGraph/);
-  assert.match(compilerSource, /function invalidationSetFactLines/);
+  assert.match(
+    await readProjectFile('packages/compiler/src/emit/registry.ts'),
+    /function invalidationSetFactLines/,
+  );
   assert.match(compilerTests, /export interface InvalidationSets/);
   assert.match(compilerTests, /derives app graph component facts from compiled component results/);
   assert.match(compilerTests, /derives registry facts from graph query, mutation, and page facts/);
@@ -1224,6 +1228,7 @@ void test('P3 Drizzle query facts include select shapes and instance keys', asyn
 void test('P1 fragment targets emit typed registry facts', async () => {
   const coreSource = await readProjectFile('packages/core/src/index.ts');
   const coreTests = await readProjectFile('packages/core/src/index.test.ts');
+  const compilerRegistrySource = await readProjectFile('packages/compiler/src/emit/registry.ts');
   const compilerSource = await readProjectFile('packages/compiler/src/index.ts');
   const compilerTests = await readProjectFile('packages/compiler/src/index.test.ts');
 
@@ -1231,7 +1236,7 @@ void test('P1 fragment targets emit typed registry facts', async () => {
   assert.match(coreSource, /function fragmentTarget/);
   assert.match(coreTests, /fragment target names and props from generated registry facts/);
   assert.match(compilerSource, /fragmentTargetPropsType/);
-  assert.match(compilerSource, /interface FragmentTargets \{/);
+  assert.match(compilerRegistrySource, /interface FragmentTargets \{/);
   assert.match(compilerTests, /'cart-row': \{ rowId: string \};/);
   assert.doesNotMatch(compilerTests, /'cart-row': unknown;/);
 });

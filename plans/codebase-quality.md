@@ -18,7 +18,9 @@ covers source quality: security, correctness, architecture, drift, and test qual
 - [x] Phase 6 API honesty/correctness items are mostly implemented: CLI check-family filtering, stable input errors, fail-on-findings, entry-point guards, structural test equality, pglite verifier passthrough, and `jisoTest` runner registration.
 - [ ] Phase 6 remaining API work: `form()` registry-value inference alignment is done, and the broad dead/duplicate code sweep is mostly complete; remaining cleanup is tracked with compiler module work.
 - [ ] Module splits remain mostly open outside the compiler; server/runtime/drizzle are still monolithic `src/index.ts` implementations.
-- [ ] SPEC reconciliation queue remains open unless addressed separately in `SPEC.md`.
+- [x] SPEC reconciliation queue is closed for doc-only drift: CSRF ordering, `FW-Changes`,
+      5xx envelopes, mutation response coverage, fragment content type/vocabulary, immutable
+      module serving/versioning, and FW410 severity now match the verified implementation.
 
 ## Cross-cutting themes
 
@@ -290,23 +292,38 @@ area, keeping `src/index.ts` barrels and API surface verbatim (mirrors compiler 
   that blur the public contract.
 - **drizzle** → `extract/` (AST), `graph.ts`, `serialize.ts` (falls out of Phase 3 item 2).
 
-## SPEC reconciliation queue (per CLAUDE.md: SPEC wins or gets updated — currently neither)
+## SPEC reconciliation queue
 
-Resolve each in SPEC.md before or alongside the code change that depends on it:
+Closed on 2026-06-11 as documentation/spec reconciliation only; no package runtime, server, or
+compiler implementation changes were needed.
 
-1. CSRF ordering: §6.6 "verified before the guard chain" vs §10.3 lifecycle listing parse
-   first — Phase 1 item 2 proposes CSRF-first.
-2. `FW-Changes` content: define the record as `{domain, keys}` (no input echo) — Phase 1 item 4.
-3. Error envelope: §9.2 defines only the 422 path; define 5xx and unify JSON-vs-fragment error
-   bodies — Phase 1 item 7.
-4. Mutation response coverage: must the server echo every invalidated query? Determines
-   Phase 2 item 7's diagnostic vs error.
-5. Content-type drift: server emits `text/vnd.jiso.fragment+html` (server/index.ts:1889,
-   pinned by fw-check) vs §9.1's `text/html`; also `strategy="morph"` vs `mode="append"`
-   fragment vocabulary.
-6. Module serving/versioning: §6.6's immutable-versioned-module guarantee has no implementation
-   in `packages/server` — schedule or re-scope the spec claim.
-7. FW410 severity: SPEC §11.3 says warn/error; `core/diagnostics.ts` fixes it at error.
+1. [x] **CSRF ordering.** SPEC §6.6 and §10.3 now agree on CSRF before schema parsing, replay
+       lookup, and guards. Verified in `packages/server/src/index.ts` (`runMutation` and
+       `renderMutationResponse`) and pinned by server tests for default CSRF-before-parse and
+       no replay lookup before CSRF validation.
+2. [x] **`FW-Changes` content.** SPEC §9.1 defines the public header as sanitized
+       `{domain, keys}` records with no input echo. Verified by `mutationWireChangeRecords` in
+       `packages/server/src/index.ts`, runtime header sanitization in `packages/runtime/src/index.ts`,
+       and server/runtime tests for omitted input, ASCII-safe headers, and malformed header handling.
+3. [x] **Error envelope.** SPEC §9.2 defines stable 5xx behavior: query endpoint JSON
+       `SERVER_ERROR`, route HTML fallback/error shell, and enhanced mutation 500 fragments
+       (`SERVER_ERROR` for handler exceptions, `RENDER_ERROR` for post-commit render failures).
+       Verified by server tests covering query, route, enhanced mutation, and no-JS mutation 500s.
+4. [x] **Mutation response coverage.** SPEC §10.4 now says successful enhanced mutations should
+       include rerun `<fw-query>` chunks for derivable invalidated query instances; omitted server
+       truth for an optimistic transform is a visible runtime diagnostic, not silent truth promotion.
+       Verified by runtime `uncoveredOptimisticQueries`/`settleWithoutServerTruth` behavior and tests
+       reporting omitted optimistic server truth.
+5. [x] **Fragment content type/vocabulary.** SPEC §9.1 uses
+       `text/vnd.jiso.fragment+html; charset=utf-8`, `<fw-fragment>`, default morph semantics, and
+       `mode="append"`. Verified by server mutation/deferred response tests and runtime fragment
+       parsing/application tests.
+6. [x] **Module serving/versioning.** SPEC §6.6's immutable versioned module guarantee is
+       implemented by the server memory registry and compiler-emitted `?v=` handler URLs. Verified by
+       server tests for retained old module versions, immutable cache headers, and versioned hrefs,
+       plus compiler tests for versioned handler URLs and retained dev-middleware modules.
+7. [x] **FW410 severity.** SPEC §11.3 fixes FW410 at `error`, matching
+       `packages/core/src/diagnostics.ts` and drizzle/core tests.
 
 ## Sequencing summary
 

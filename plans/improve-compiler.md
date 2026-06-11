@@ -9,11 +9,11 @@ Scope: `packages/compiler/src/` only (plus `tests/fw-check.node.mjs` where gate 
 - [x] Added source-position support to `CompilerDiagnostic` via `diagnosticFor`/`offsetToPosition`, with many validators/tests asserting `line`/`column`.
 - [x] Added `EmittedFile.kind`, readonly `CompileResult` arrays, and `handlerExports`; `collectMinifierReservedNames` reads compile facts instead of scraping output.
 - [x] Added a validator registry in `compileComponentModule`.
-- [x] Split out initial modules for diagnostics, CSS, graph derivation, bootstrap emit, text scanning, TS parsing, and binding/event-trigger validation while preserving the public `src/index.ts` surface.
+- [x] Split out initial modules for diagnostics, CSS, graph derivation, bootstrap/registry emit, text scanning, TS parsing, and binding/event-trigger validation while preserving the public `src/index.ts` surface.
 - [x] Fixed known Phase 0 miscompiles that are directly covered by regression tests: self-closing same-name JSX, nested handler braces/span rewrites, exact handler attribute replacement, static state string JSON, handler parameter substring collisions, and conditional at-rule CSS fallback scoping.
 - [x] Migrated large parts of Phase 3 onto the parser model: component/options extraction, JSX element/attribute validators, mutation handler extraction, query binding/stamp collection, update coverage, event trigger justification, and identifier-reference analysis for FW201.
 - [ ] Finish the Phase 2 module split: most orchestration and several validators/lowerers/emitters still live in `packages/compiler/src/index.ts`.
-- [ ] Finish the Phase 3 parser migration and delete dead scanner code once no validator/lowering path depends on it.
+- [ ] Finish the Phase 3 parser migration; the `findMatchingClosingTag` scanner path is gone, but broader dead scanner cleanup remains under audit.
 - [ ] Move remaining local compiler help strings onto the shared diagnostic definition model where appropriate.
 - [x] Run and record the phase gates after the checklist conversion.
 
@@ -134,6 +134,8 @@ Mechanical cleanups bundled here:
 - [x] Dedupe helpers: single `dedupeBy(key)` replacing `dedupeDiagnostics`/`dedupeUpdateCoverage`;
       collapse `findHandlerBodies`' twin loops; early-return in `compileComponentModule`
       becomes `{ ...createEmptyCompileResult(), files: [...] }`.
+- [x] Extract registry emission into `src/emit/registry.ts`, preserving registry emit as part
+      of every compile.
 
 This phase parallelizes well: sub-agents can own `validate/`, `emit/`, and `lower/`
 extraction separately (explicit file ownership, no shared edits to `index.ts` barrel
@@ -168,14 +170,12 @@ Migration order (each step deletes its regex counterpart and keeps the suite gre
        update-plan collection.
 5. [x] Lowering passes (`lowerViewTransitions`, `lowerPlatformBehaviors`, navigation sugar
        per SPEC §6.4) — these rewrite source; keep emitting text via spans.
-6. [ ] Delete dead scanner code (`findMatchingClosingTag` and friends) once nothing
-       references it.
+6. [x] Delete the dead `findMatchingClosingTag` scanner path and remove the string/comment-blind
+       `fragmentTarget: true` fallback from graph fact collection.
 
-Also in this phase: tighten `capturesUnserializableValue` (index.ts:941) from name-based
-`\b(db|request|response)\b` to actual identifier-reference analysis on the handler body
-(kills false FW201 on a local `const response = ...`); replace the magic 240-char
-comment window in `hasFw211Justification` with "comment attached to the JSX attribute's
-node" semantics.
+Also in this phase: `capturesUnserializableValue` now uses identifier-reference analysis, but
+retains a conservative free-identifier denylist documented in FW201 help text. FW211
+justification is parser-model based in `validate/event-triggers.ts`.
 
 `assertFixpoint` and the vitest suite are the safety net: emitted IR must be
 byte-identical for inputs the regex path handled correctly; intentional differences
@@ -193,7 +193,7 @@ emit). Commit per migration step.
       to `CompileResult`, keep the old function as a wrapper.
 - [x] Make `CompileResult.diagnostics` / `files` / `platformSubstitutions` `readonly` for
       consistency (check downstream packages for mutation before flipping).
-- [ ] Audit remaining heuristics; document any that stay name-based in their diagnostic
+- [x] Audit remaining heuristics; document any that stay name-based in their diagnostic
       `help` text.
 
 Verification: `pnpm run check` + `pnpm run test` + `pnpm run check:build`.

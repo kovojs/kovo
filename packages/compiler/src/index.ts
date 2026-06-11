@@ -3,7 +3,8 @@ import { isAbsolute, relative } from 'node:path';
 
 import { componentCssAssetForFile, emitCssModule, type ComponentCssAsset } from './css.js';
 import { diagnosticFor, type CompilerDiagnostic } from './diagnostics.js';
-import type { ComponentGraphFact, RegistryFacts, RegistryTypeFacts } from './graph.js';
+import { emitRegistryModule } from './emit/registry.js';
+import type { ComponentGraphFact, RegistryFacts } from './graph.js';
 import { findStringEnd } from './scan/text.js';
 import {
   callExpressions,
@@ -1240,6 +1241,7 @@ function fw201Diagnostic(
       `Blocked expression: ${lowering.expression}`,
       `Element params: ${lowering.params.map((param) => param.attributeName).join(', ') || '-'}`,
       definition.help ?? '',
+      'The compiler conservatively blocks free identifier references named window, document, db, request, response, Date, Map, or Set.',
     ].join('\n'),
   };
 }
@@ -2601,7 +2603,7 @@ interface FragmentTargetFact {
 function findFragmentTargetFacts(source: string, componentName: string): FragmentTargetFact[] {
   const model = parseComponentModuleModel('component.tsx', source);
   const fragmentTarget = componentOptionSource(model, 'fragmentTarget');
-  if (fragmentTarget !== 'true' && !/fragmentTarget\s*:\s*true/.test(source)) return [];
+  if (fragmentTarget !== 'true') return [];
 
   const explicitName = firstComponentModel(model)?.explicitName;
   return [
@@ -2655,153 +2657,4 @@ function propConstructorType(value: string): string | undefined {
   if (trimmed === 'Number') return 'number';
   if (trimmed === 'Boolean') return 'boolean';
   return undefined;
-}
-
-function emitRegistryModule(options: {
-  clientFileName: string;
-  cssAssets: readonly ComponentCssAsset[];
-  componentName: string;
-  fragmentTargetFacts: readonly FragmentTargetFact[];
-  handlers: HandlerLowering[];
-  platformSubstitutions: PlatformSubstitution[];
-  queryUpdatePlans: readonly QueryUpdatePlanFact[];
-  registryFacts?: RegistryFacts;
-  viewTransitions: ViewTransitionStamp[];
-}): string {
-  const handlerModuleLine = options.handlers.length
-    ? `  '#${kebabCase(options.componentName)}': typeof import('../${options.clientFileName}');`
-    : '';
-  const fragmentTargetLines = options.fragmentTargetFacts
-    .map((fact) => `  '${fact.target}': ${fact.propsType};`)
-    .join('\n');
-  const platformSubstitutionLines = options.platformSubstitutions
-    .map(
-      (substitution) =>
-        `  '${options.componentName}:${substitution.tag}:${substitution.event}:${substitution.target}': '${substitution.kind}:${substitution.action}';`,
-    )
-    .join('\n');
-  const viewTransitionLines = options.viewTransitions
-    .map((stamp) => `  '${stamp.name}': unknown;`)
-    .join('\n');
-  const queryUpdatePlanLines = options.queryUpdatePlans
-    .map(
-      (plan) =>
-        `  '${plan.componentName}:${plan.query}': readonly [${plan.paths.map((path) => `'${path}'`).join(', ')}];`,
-    )
-    .join('\n');
-  const stylesheetLines = options.cssAssets.map(componentStylesheetLine).join('\n');
-  const queryRegistryLines = registryTypeFactLines(options.registryFacts?.queries);
-  const mutationRegistryLines = registryTypeFactLines(options.registryFacts?.mutations);
-  const routeRegistryLines = routeRegistryFactLines(options.registryFacts?.routes);
-  const invalidationSetLines = invalidationSetFactLines(options.registryFacts?.invalidations);
-  const domainKey = registryDomainKey(options.registryFacts?.domainKeys);
-
-  return `${irHeader}
-export interface HandlerModules {
-${handlerModuleLine}
-}
-
-export interface FragmentTargets {
-${fragmentTargetLines}
-}
-
-export interface PlatformSubstitutions {
-${platformSubstitutionLines}
-}
-
-export interface ViewTransitions {
-${viewTransitionLines}
-}
-
-export interface QueryUpdatePlans {
-${queryUpdatePlanLines}
-}
-
-export interface ComponentStylesheets {
-${stylesheetLines}
-}
-
-export interface QueryRegistry {
-${queryRegistryLines}
-}
-
-export interface MutationRegistry {
-${mutationRegistryLines}
-}
-
-export interface RouteRegistry {
-${routeRegistryLines}
-}
-
-export interface InvalidationSets {
-${invalidationSetLines}
-}
-
-declare module '@jiso/core' {
-  interface FragmentTargets {
-${fragmentTargetLines}
-  }
-
-  interface QueryRegistry {
-${queryRegistryLines}
-  }
-
-  interface MutationRegistry {
-${mutationRegistryLines}
-  }
-
-  interface RouteRegistry {
-${routeRegistryLines}
-  }
-
-  interface InvalidationSets {
-${invalidationSetLines}
-  }
-}
-
-export type DomainKey = ${domainKey};
-`;
-}
-
-function componentStylesheetLine(asset: ComponentCssAsset): string {
-  const fragmentTargets =
-    asset.fragmentTargets.length === 0
-      ? 'readonly []'
-      : `readonly [${asset.fragmentTargets.map((target) => `'${target}'`).join(', ')}]`;
-  return `  '${asset.componentName}': { href: '${asset.href}'; sourceFileName: '${asset.sourceFileName}'; fragmentTargets: ${fragmentTargets}; };`;
-}
-
-function registryTypeFactLines(facts: RegistryTypeFacts | undefined): string {
-  return Object.entries(facts ?? {})
-    .sort(([left], [right]) => left.localeCompare(right))
-    .map(([key, typeExpression]) => `  '${key}': ${typeExpression};`)
-    .join('\n');
-}
-
-function routeRegistryFactLines(routes: readonly string[] | undefined): string {
-  return [...new Set(routes ?? [])]
-    .sort((left, right) => left.localeCompare(right))
-    .map((routePath) => `  '${routePath}': import('@jiso/core').Route<'${routePath}'>;`)
-    .join('\n');
-}
-
-function invalidationSetFactLines(
-  invalidations: Readonly<Record<string, readonly string[]>> | undefined,
-): string {
-  return Object.entries(invalidations ?? {})
-    .sort(([left], [right]) => left.localeCompare(right))
-    .map(([mutationKey, queryKeys]) => {
-      const queryUnion =
-        [...new Set(queryKeys)]
-          .sort()
-          .map((queryKey) => `'${queryKey}'`)
-          .join(' | ') || 'never';
-      return `  '${mutationKey}': ${queryUnion};`;
-    })
-    .join('\n');
-}
-
-function registryDomainKey(domainKeys: readonly string[] | undefined): string {
-  const keys = [...new Set(domainKeys ?? [])].sort();
-  return keys.map((key) => JSON.stringify(key)).join(' | ') || 'never';
 }

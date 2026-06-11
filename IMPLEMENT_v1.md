@@ -25,9 +25,9 @@ Audited against the repository on 2026-06-11. Checkmarks mean the behavior, API,
 - [x] P6 optimism has typed `OptimisticFor`, generated `InvalidationSets`, `await-fragment` statuses, pending stamps, named queues, rebase/restore behavior, unified change-record consumption, and property/runtime tests.
 - [ ] P6 final acceptance still needs full commerce-level coverage for every mutation/query pair and navigation/bfcache edge.
 - [x] P7 stateless liveness has BroadcastChannel mutation sync and visible-return/refetch behavior.
-- [ ] P7 deployment documentation still needs the explicit stateless-server/Redis-negative acceptance check.
+- [x] P7 deployment documentation states the stateless-server guarantee and has Redis/SSE/live-bus negative checks in starter tests.
 - [x] P8 CLI has stable `fw check`, `fw explain`, optimistic/update coverage, unguarded/unscoped audits, and diffable output tests.
-- [ ] P8 output format/versioning and agent-answerability acceptance should still be treated as hardening work.
+- [x] P8 output format/versioning and agent-answerability acceptance are represented by `fw-explain/v1`/`fw-check/v1` snapshots and commerce graph-answerability tests.
 - [x] P9 `@jiso/test` has pglite-backed harnessing, static-vs-observed write/read verification, FW402/FW403/FW404/FW405/FW407/FW408/FW410 diagnostics, raw pglite interception, and structural optimistic property checks.
 - [ ] P9 v1.5 is not complete until the full diagnostic table, commerce mutation suite, and runtime/static verification loop are accepted end-to-end.
 - [x] D1 Tailwind-first path is implemented in commerce and starter scaffolds with stylesheet delivery tests.
