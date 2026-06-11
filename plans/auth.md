@@ -1,6 +1,6 @@
 # Auth — agnostic core seams + blessed better-auth adapter (D5)
 
-Status: design agreed 2026-06-11; SPEC A-track text landed; implementation not started
+Status: design agreed 2026-06-11; SPEC A-track text landed; A-track core seams implemented; S6/B-track not started
 Scope: SPEC additions (session population, guard-failure contract, mutation response headers, raw endpoints), `@jiso/core`/`@jiso/server` seams, a new `@jiso/better-auth` package, a `conformance/better-auth-pin/` suite, and starter/example adoption. Referenced from `IMPLEMENT_v1.md` as workstream **D5**.
 
 ## Progress checklist
