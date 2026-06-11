@@ -725,7 +725,7 @@ describe('server mutation primitives', () => {
           {
             fragments: [
               {
-                html: '<section fw-c="reviews" fw-deps="product:p1"><article data-key="r1">5</article></section>',
+                html: '<section fw-c="reviews" fw-deps="product:p1"><article fw-key="r1">5</article></section>',
                 target: 'reviews:p1',
               },
             ],
@@ -742,7 +742,7 @@ describe('server mutation primitives', () => {
         '<!doctype html>\n<html><body><main><product-page fw-deps="product:p1"><fw-defer target="reviews:p1" state="pending"></fw-defer></product-page></main>',
         '--jiso-boundary',
         '<fw-query name="reviews" key="product:p1">{"items":[{"id":"r1","rating":5}]}</fw-query>',
-        '<fw-fragment target="reviews:p1"><section fw-c="reviews" fw-deps="product:p1"><article data-key="r1">5</article></section></fw-fragment>',
+        '<fw-fragment target="reviews:p1"><section fw-c="reviews" fw-deps="product:p1"><article fw-key="r1">5</article></section></fw-fragment>',
         '--jiso-boundary--',
         '</body></html>',
       ].join('\n'),
@@ -761,13 +761,13 @@ describe('server mutation primitives', () => {
         {
           fragments: [
             {
-              html: '<section fw-c="reviews" fw-deps="product:p1"><article data-key="r1">5</article></section>',
+              html: '<section fw-c="reviews" fw-deps="product:p1"><article fw-key="r1">5</article></section>',
               priority: 5,
               stylesheets: ['/assets/reviews.css'],
               target: 'reviews:p1',
             },
             {
-              html: '<section fw-c="recommendations" fw-deps="product:p1"><article data-key="rec-1">Beans</article></section>',
+              html: '<section fw-c="recommendations" fw-deps="product:p1"><article fw-key="rec-1">Beans</article></section>',
               target: 'recommendations:p1',
             },
           ],
@@ -860,7 +860,7 @@ describe('server mutation primitives', () => {
           {
             fragments: [
               {
-                html: '<article data-key="p3">Third</article>',
+                html: '<article fw-key="p3">Third</article>',
                 mode: 'append',
                 target: 'product-grid',
               },
@@ -874,7 +874,7 @@ describe('server mutation primitives', () => {
       [
         '<!doctype html><html><body><fw-defer target="product-grid"></fw-defer>',
         '--jiso-boundary',
-        '<fw-fragment target="product-grid" mode="append"><article data-key="p3">Third</article></fw-fragment>',
+        '<fw-fragment target="product-grid" mode="append"><article fw-key="p3">Third</article></fw-fragment>',
         '--jiso-boundary--',
         '',
       ].join('\n'),
@@ -1866,7 +1866,7 @@ describe('server mutation primitives', () => {
         fragmentRenderers: [
           {
             mode: 'append',
-            render: () => '<article data-key="p3"></article>',
+            render: () => '<article fw-key="p3"></article>',
             target: 'product-grid',
           },
         ],
@@ -1876,7 +1876,7 @@ describe('server mutation primitives', () => {
       }),
     ).resolves.toMatchObject({
       body: expect.stringContaining(
-        '<fw-fragment target="product-grid" mode="append"><article data-key="p3"></article></fw-fragment>',
+        '<fw-fragment target="product-grid" mode="append"><article fw-key="p3"></article></fw-fragment>',
       ),
       status: 200,
     });

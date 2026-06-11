@@ -2080,25 +2080,25 @@ describe('query store', () => {
 
   it('appends fragment chunks when the wire mode is append', () => {
     const root = new FakeMorphRoot();
-    root.targets.set('product-grid', new FakeMorphTarget('<article data-key="p1"></article>'));
+    root.targets.set('product-grid', new FakeMorphTarget('<article fw-key="p1"></article>'));
     const store = createQueryStore();
 
     const result = applyMutationResponseToDom({
-      body: '<fw-fragment target="product-grid" mode="append"><article data-key="p2"></article></fw-fragment>',
+      body: '<fw-fragment target="product-grid" mode="append"><article fw-key="p2"></article></fw-fragment>',
       root,
       store,
     });
 
     expect(result.fragments).toEqual([
       {
-        html: '<article data-key="p2"></article>',
+        html: '<article fw-key="p2"></article>',
         mode: 'append',
         target: 'product-grid',
       },
     ]);
     expect(result.appliedFragments).toEqual(['product-grid']);
     expect(root.targets.get('product-grid')?.html).toBe(
-      '<article data-key="p1"></article><article data-key="p2"></article>',
+      '<article fw-key="p1"></article><article fw-key="p2"></article>',
     );
   });
 

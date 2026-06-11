@@ -151,7 +151,7 @@ function keyedListNode(
     children: keys.map((key) => ({
       browserState: stateByKey[key],
       key,
-      props: { 'data-key': key },
+      props: { 'fw-key': key },
       text: key,
       type: 'li',
     })),
@@ -218,10 +218,10 @@ describe('commerce example', () => {
     const firstPage = loadProductGrid(db, { limit: 2 });
     const secondPage = loadProductGrid(db, { after: firstPage.nextCursor ?? undefined, limit: 2 });
 
-    expect(renderProductGrid(firstPage)).toContain('data-key="p1"');
-    expect(renderProductGrid(firstPage)).toContain('data-key="p2"');
+    expect(renderProductGrid(firstPage)).toContain('fw-key="p1"');
+    expect(renderProductGrid(firstPage)).toContain('fw-key="p2"');
     expect(renderProductGrid(firstPage)).toContain('href="/products?after=p2"');
-    expect(renderProductGrid(secondPage)).toContain('data-key="p3"');
+    expect(renderProductGrid(secondPage)).toContain('fw-key="p3"');
 
     const appendFragment = renderProductGridPageFragment(db, {
       after: firstPage.nextCursor ?? undefined,
@@ -229,9 +229,9 @@ describe('commerce example', () => {
     });
 
     expect(appendFragment).toContain('<fw-fragment target="product-grid" mode="append">');
-    expect(appendFragment).toContain('data-key="p3"');
-    expect(appendFragment).not.toContain('data-key="p1"');
-    expect(appendFragment).not.toContain('data-key="p2"');
+    expect(appendFragment).toContain('fw-key="p3"');
+    expect(appendFragment).not.toContain('fw-key="p1"');
+    expect(appendFragment).not.toContain('fw-key="p2"');
     expect(appendFragment).not.toContain('<section fw-c="product-grid"');
 
     await addToCart.handler(
@@ -247,7 +247,7 @@ describe('commerce example', () => {
       },
     );
 
-    expect(renderOrderHistory(db)).toContain('data-key="order-1"');
+    expect(renderOrderHistory(db)).toContain('fw-key="order-1"');
     expect(renderOrderHistory(db)).toContain('p1 x 2 - 2998');
   });
 
@@ -267,7 +267,7 @@ describe('commerce example', () => {
     );
     const thirdProduct = appendedGrid.children?.[2];
 
-    expect(renderProductGrid(firstPage)).toContain('data-key="p1"');
+    expect(renderProductGrid(firstPage)).toContain('fw-key="p1"');
     expect(
       renderProductGridPageFragment(db, { after: firstPage.nextCursor ?? undefined }),
     ).toContain('<fw-fragment target="product-grid" mode="append">');
@@ -310,7 +310,7 @@ describe('commerce example', () => {
       keyedListNode('order-history', ['order-1', 'order-draft']),
     );
 
-    expect(renderOrderHistory(db)).toContain('data-key="order-1"');
+    expect(renderOrderHistory(db)).toContain('fw-key="order-1"');
     expect(reconciledHistory.children?.[0]?.key).toBe('order-1');
     expect(reconciledHistory.children?.[1]).toBe(optimisticOrder);
     expect(reconciledHistory.children?.[1]?.browserState).toEqual({
@@ -454,7 +454,7 @@ describe('commerce example', () => {
     });
 
     expect(renderCartPage(db)).toContain('3 in stock');
-    expect(renderOrderHistory(db)).toContain('data-key="order-1"');
+    expect(renderOrderHistory(db)).toContain('fw-key="order-1"');
   });
 
   it('handles enhanced addToCart through the same endpoint as fragment wire', async () => {
@@ -499,7 +499,7 @@ describe('commerce example', () => {
     expect(response.body).toContain('<fw-fragment target="product-grid">');
     expect(response.body).toContain('<fw-fragment target="order-history">');
     expect(response.body.match(/\/assets\/tailwind\.css/g) ?? []).toHaveLength(3);
-    expect(response.body).toContain('data-key="order-2"');
+    expect(response.body).toContain('fw-key="order-2"');
     expect(transactions).toBe(2);
   });
 

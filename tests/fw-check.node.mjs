@@ -14,8 +14,8 @@ const generatedWireBodies = {
 --jiso-boundary
 <fw-query name="reviews" key="product:p1">{"items":[{"id":"r1","rating":5}]}</fw-query>
 <fw-query name="recommendations" key="product:p1">{"items":[{"id":"rec-1"}]}</fw-query>
-<fw-fragment target="reviews:p1" priority="5"><link rel="stylesheet" href="/assets/reviews.css"><section fw-c="reviews" fw-deps="product:p1"><article data-key="r1">5</article></section></fw-fragment>
-<fw-fragment target="recommendations:p1"><section fw-c="recommendations" fw-deps="product:p1"><article data-key="rec-1">Beans</article></section></fw-fragment>
+<fw-fragment target="reviews:p1" priority="5"><link rel="stylesheet" href="/assets/reviews.css"><section fw-c="reviews" fw-deps="product:p1"><article fw-key="r1">5</article></section></fw-fragment>
+<fw-fragment target="recommendations:p1"><section fw-c="recommendations" fw-deps="product:p1"><article fw-key="rec-1">Beans</article></section></fw-fragment>
 --jiso-boundary--
 </body></html>
 `,
@@ -561,6 +561,8 @@ void test('P5 morph evidence includes structural and browser survival suites', a
   assert.match(browserTests, /document\.activeElement/);
   assert.match(browserTests, /selectionStart/);
   assert.match(browserTests, /scrollTop/);
+  assert.match(browserTests, /fw-key="p1"/);
+  assert.match(browserTests, /getAttribute\('fw-key'\)/);
 });
 
 void test('D2 commerce validates keyed append and optimistic reorder', async () => {
@@ -573,6 +575,8 @@ void test('D2 commerce validates keyed append and optimistic reorder', async () 
     /preserves commerce list identity through append and simultaneous optimistic reorder/,
   );
   assert.match(commerceTests, /renderProductGridPageFragment/);
+  assert.match(commerceTests, /fw-key="p1"/);
+  assert.match(commerceTests, /fw-key="order-1"/);
   assert.match(commerceTests, /morphStructuralTree/);
   assert.match(commerceTests, /pendingMutation: 'cart\/add'/);
   assert.match(commerceTests, /order-history/);

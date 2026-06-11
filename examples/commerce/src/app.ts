@@ -321,7 +321,7 @@ function renderProductCard(
   failure?: AddToCartFailure,
 ): string {
   return [
-    `<article data-key="${item.id}" class="rounded border border-slate-200 bg-white p-4">`,
+    `<article fw-key="${item.id}" class="rounded border border-slate-200 bg-white p-4">`,
     `<h2 class="font-semibold">${item.id}</h2>`,
     `<p data-bind="productGrid.items.stock">${item.stock} in stock</p>`,
     renderAddToCartForm(item, failure),
@@ -362,7 +362,7 @@ function renderAddToCartError(failure: AddToCartFailure): string {
 
 export function renderOrderHistory(db: CommerceDb): string {
   const items = db.orders
-    .map((item) => `<li data-key="${item.id}">${item.productId} x ${item.qty} - ${item.total}</li>`)
+    .map((item) => `<li fw-key="${item.id}">${item.productId} x ${item.qty} - ${item.total}</li>`)
     .join('');
 
   return `<ol fw-c="order-history" fw-deps="order">${items}</ol>`;

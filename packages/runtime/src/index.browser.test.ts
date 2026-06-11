@@ -70,10 +70,14 @@ function morphElement(current: Element, next: Element): Element {
 }
 
 function canReuse(current: Element, next: Element): boolean {
-  const currentKey = current.getAttribute('data-key');
-  const nextKey = next.getAttribute('data-key');
+  const currentKey = morphKey(current);
+  const nextKey = morphKey(next);
 
   return current.tagName === next.tagName && currentKey === nextKey;
+}
+
+function morphKey(element: Element): string | null {
+  return element.getAttribute('fw-key') ?? element.getAttribute('data-key');
 }
 
 function syncAttributes(current: Element, next: Element): void {
@@ -129,7 +133,7 @@ function restoreActiveState(state: ReturnType<typeof captureActiveState>): void 
 }
 
 function captureScrollStates(root: Element) {
-  return [...root.querySelectorAll<HTMLElement>('[data-key]')]
+  return [...root.querySelectorAll<HTMLElement>('[fw-key], [data-key]')]
     .filter((element) => element.scrollLeft !== 0 || element.scrollTop !== 0)
     .map((element) => ({
       element,
@@ -150,7 +154,7 @@ function restoreScrollStates(states: ReturnType<typeof captureScrollStates>): vo
 function morphChildren(current: Element, next: Element): void {
   const currentByKey = new Map(
     [...current.children]
-      .map((child) => [child.getAttribute('data-key'), child] as const)
+      .map((child) => [morphKey(child), child] as const)
       .filter((entry): entry is [string, Element] => entry[0] !== null),
   );
   const nextChildren = [...next.childNodes];
@@ -161,7 +165,7 @@ function morphChildren(current: Element, next: Element): void {
     if (!(nextChild instanceof Element)) {
       desiredNode = nextChild.cloneNode(true) as ChildNode;
     } else {
-      const key = nextChild.getAttribute('data-key');
+      const key = morphKey(nextChild);
       const existing = key ? currentByKey.get(key) : undefined;
       desiredNode = existing
         ? morphElement(existing, nextChild)
@@ -284,14 +288,14 @@ describe('runtime browser suite', () => {
     const root = document.createElement('main');
     root.innerHTML = [
       '<form fw-c="cart-form">',
-      '<label data-key="label">Quantity</label>',
-      '<div data-key="panel" style="height: 20px; overflow: auto"><p style="height: 80px">Panel</p></div>',
-      '<textarea data-key="quantity" name="quantity">12345</textarea>',
+      '<label fw-key="label">Quantity</label>',
+      '<div fw-key="panel" style="height: 20px; overflow: auto"><p style="height: 80px">Panel</p></div>',
+      '<textarea fw-key="quantity" name="quantity">12345</textarea>',
       '</form>',
     ].join('');
     document.body.append(root);
     const textarea = root.querySelector('textarea');
-    const panel = root.querySelector<HTMLDivElement>('[data-key="panel"]');
+    const panel = root.querySelector<HTMLDivElement>('[fw-key="panel"]');
 
     if (!textarea || !panel) throw new Error('missing browser fixture');
 
@@ -303,9 +307,9 @@ describe('runtime browser suite', () => {
       body: [
         '<fw-fragment target="cart-form">',
         '<form fw-c="cart-form">',
-        '<textarea data-key="quantity" name="quantity">67890</textarea>',
-        '<div data-key="panel" style="height: 20px; overflow: auto"><p style="height: 80px">Updated panel</p></div>',
-        '<label data-key="label">Updated quantity</label>',
+        '<textarea fw-key="quantity" name="quantity">67890</textarea>',
+        '<div fw-key="panel" style="height: 20px; overflow: auto"><p style="height: 80px">Updated panel</p></div>',
+        '<label fw-key="label">Updated quantity</label>',
         '</form>',
         '</fw-fragment>',
       ].join(''),
@@ -321,7 +325,7 @@ describe('runtime browser suite', () => {
     expect(textarea.selectionStart).toBe(1);
     expect(textarea.selectionEnd).toBe(3);
     expect(textarea.selectionDirection).toBe('forward');
-    expect(root.querySelector<HTMLDivElement>('[data-key="panel"]')).toBe(panel);
+    expect(root.querySelector<HTMLDivElement>('[fw-key="panel"]')).toBe(panel);
     expect(panel.scrollTop).toBe(4);
     expect(root.querySelector('label')?.textContent).toBe('Updated quantity');
   });
@@ -330,14 +334,14 @@ describe('runtime browser suite', () => {
     const root = document.createElement('main');
     root.innerHTML = [
       '<section fw-c="product-grid">',
-      '<article data-key="p1"><input value="keep"></article>',
-      '<article data-key="p2">Second</article>',
+      '<article fw-key="p1"><input value="keep"></article>',
+      '<article fw-key="p2">Second</article>',
       '</section>',
     ].join('');
     document.body.append(root);
     const grid = root.querySelector('[fw-c="product-grid"]');
-    const first = root.querySelector('[data-key="p1"]');
-    const second = root.querySelector('[data-key="p2"]');
+    const first = root.querySelector('[fw-key="p1"]');
+    const second = root.querySelector('[fw-key="p2"]');
     const input = root.querySelector('input');
 
     if (!grid || !first || !second || !input) throw new Error('missing append fixture');
@@ -347,8 +351,8 @@ describe('runtime browser suite', () => {
     const appendResult = applyMutationResponseToDom({
       body: [
         '<fw-fragment target="product-grid" mode="append">',
-        '<article data-key="p3">Third</article>',
-        '<article data-key="p4">Fourth</article>',
+        '<article fw-key="p3">Third</article>',
+        '<article fw-key="p4">Fourth</article>',
         '</fw-fragment>',
       ].join(''),
       morph: keyedDomMorph,
@@ -358,10 +362,10 @@ describe('runtime browser suite', () => {
 
     expect(appendResult.appliedFragments).toEqual(['product-grid']);
     expect(root.querySelector('[fw-c="product-grid"]')).toBe(grid);
-    expect(root.querySelector('[data-key="p1"]')).toBe(first);
-    expect(root.querySelector('[data-key="p2"]')).toBe(second);
+    expect(root.querySelector('[fw-key="p1"]')).toBe(first);
+    expect(root.querySelector('[fw-key="p2"]')).toBe(second);
     expect(document.activeElement).toBe(input);
-    expect([...grid.children].map((child) => child.getAttribute('data-key'))).toEqual([
+    expect([...grid.children].map((child) => child.getAttribute('fw-key'))).toEqual([
       'p1',
       'p2',
       'p3',
@@ -372,10 +376,10 @@ describe('runtime browser suite', () => {
       body: [
         '<fw-fragment target="product-grid">',
         '<section fw-c="product-grid">',
-        '<article data-key="p4">Fourth updated</article>',
-        '<article data-key="p1"><input value="keep"></article>',
-        '<article data-key="p3">Third</article>',
-        '<article data-key="p2">Second</article>',
+        '<article fw-key="p4">Fourth updated</article>',
+        '<article fw-key="p1"><input value="keep"></article>',
+        '<article fw-key="p3">Third</article>',
+        '<article fw-key="p2">Second</article>',
         '</section>',
         '</fw-fragment>',
       ].join(''),
@@ -385,9 +389,9 @@ describe('runtime browser suite', () => {
     });
 
     expect(root.querySelector('[fw-c="product-grid"]')).toBe(grid);
-    expect(root.querySelector('[data-key="p1"]')).toBe(first);
-    expect(root.querySelector('[data-key="p2"]')).toBe(second);
-    expect([...grid.children].map((child) => child.getAttribute('data-key'))).toEqual([
+    expect(root.querySelector('[fw-key="p1"]')).toBe(first);
+    expect(root.querySelector('[fw-key="p2"]')).toBe(second);
+    expect([...grid.children].map((child) => child.getAttribute('fw-key'))).toEqual([
       'p4',
       'p1',
       'p3',
