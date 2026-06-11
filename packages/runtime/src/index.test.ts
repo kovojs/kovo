@@ -445,7 +445,9 @@ describe('runtime loader', () => {
         headers: {
           Accept: 'text/vnd.jiso.fragment+html',
           'FW-Fragment': 'true',
-          'FW-Idem': expect.any(String),
+          'FW-Idem': expect.stringMatching(
+            /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/,
+          ),
           'FW-Targets': 'cart-badge=cart',
         },
         keepalive: true,
@@ -461,6 +463,11 @@ describe('runtime loader', () => {
     } finally {
       Object.assign(globalRecord, originals);
     }
+  });
+
+  it('keeps inline loader idempotency keys on crypto randomUUID', () => {
+    expect(jisoLoaderSource).toContain('crypto.randomUUID');
+    expect(jisoLoaderSource).not.toContain('Math.random');
   });
 
   it('registers delegated capture listeners without importing handler modules', () => {
