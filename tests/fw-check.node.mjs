@@ -377,6 +377,21 @@ void test('D4 commerce adopt-dont-invent features stay represented', async () =>
   assert.match(commerceTests, /fw-i18n locale="en-US"/);
 });
 
+void test('Drizzle pinned conformance suite is an explicit gate', async () => {
+  const packageJson = JSON.parse(await readProjectFile('package.json'));
+  const viteConfig = await readProjectFile('vite.config.ts');
+  const ciWorkflow = await readProjectFile('.github/workflows/ci.yml');
+  const conformanceTest = await readProjectFile('conformance/drizzle-pin/src/index.test.ts');
+
+  assert.match(packageJson.scripts.acceptance, /pnpm run test:conformance/);
+  assert.equal(packageJson.scripts['test:conformance'], 'vp run conformance-drizzle');
+  assert.match(viteConfig, /'conformance-drizzle':\s*\{/);
+  assert.match(ciWorkflow, /vp run conformance-drizzle/);
+  assert.match(conformanceTest, /Drizzle pinned subset conformance/);
+  assert.match(conformanceTest, /pins direct table source extraction/);
+  assert.match(conformanceTest, /pins local conditional table resolution/);
+});
+
 void test('D3 deferred stream responses are consumed by the runtime', async () => {
   const runtimeSource = await readProjectFile('packages/runtime/src/index.ts');
   const runtimeTests = await readProjectFile('packages/runtime/src/index.test.ts');

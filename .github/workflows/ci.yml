@@ -20,4 +20,5 @@ jobs:
       - run: vp run browser
       - run: vp run build
       - run: vp run p10-perf
+      - run: vp run conformance-drizzle
       - run: vp run fw-check

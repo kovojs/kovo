@@ -39,6 +39,14 @@ export default defineConfig({
           { pattern: 'dist/**', base: 'workspace' },
         ],
       },
+      'conformance-drizzle': {
+        command: 'vitest --run conformance/drizzle-pin/src/index.test.ts',
+        input: [
+          { auto: true },
+          { pattern: 'conformance/drizzle-pin/src/index.test.ts', base: 'workspace' },
+          { pattern: 'packages/drizzle/src/**/*.ts', base: 'workspace' },
+        ],
+      },
       'fw-check': {
         command: 'node --test tests/fw-check.node.mjs',
         input: [
