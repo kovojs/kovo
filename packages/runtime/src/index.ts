@@ -1257,6 +1257,7 @@ export interface MorphRoot {
 export type MorphFragment = (target: MorphTarget, html: string) => void;
 
 export interface QueryBindingElement {
+  attributes?: unknown;
   getAttribute(name: string): string | null;
   removeAttribute?: (name: string) => void;
   setAttribute?: (name: string, value: string) => void;
@@ -1700,6 +1701,22 @@ export function applyQueryBindings(
     applied.push(path);
   }
 
+  for (const element of queryAllElements(root)) {
+    for (const attribute of bindingAttributes(element)) {
+      const boundAttribute = attribute.name.slice('data-bind:'.length);
+      const path = attribute.value;
+      if (!path.startsWith(`${queryName}.`)) continue;
+
+      const boundValue = valueAtPath(value, path.slice(queryName.length + 1));
+      if (boundValue === undefined || boundValue === null) {
+        element.removeAttribute?.(boundAttribute);
+      } else {
+        element.setAttribute?.(boundAttribute, formatBoundValue(boundValue));
+      }
+      applied.push(path);
+    }
+  }
+
   return applied;
 }
 
@@ -1727,10 +1744,14 @@ export function applyCompiledQueryUpdatePlan(
   }
 
   for (const stamp of plan.stamps ?? []) {
-    const rendered = formatBoundValue(stamp.select(value, root));
+    const selected = stamp.select(value, root);
 
     for (const element of root.querySelectorAll(stamp.selector)) {
-      element.setAttribute?.(stamp.attr, rendered);
+      if (selected === undefined || selected === null) {
+        element.removeAttribute?.(stamp.attr);
+      } else {
+        element.setAttribute?.(stamp.attr, formatBoundValue(selected));
+      }
       applied.stamps.push(stamp.attr);
     }
   }
@@ -2192,9 +2213,45 @@ function supportsQueryBindings(root: MorphRoot): root is MorphRoot & QueryBindin
 
 function valueAtPath(value: unknown, path: string): unknown {
   return path.split('.').reduce<unknown>((current, segment) => {
+    const key = segment.endsWith('?') ? segment.slice(0, -1) : segment;
     if (typeof current !== 'object' || current === null) return undefined;
-    return (current as Record<string, unknown>)[segment];
+    return (current as Record<string, unknown>)[key];
   }, value);
+}
+
+function queryAllElements(root: QueryBindingRoot): QueryBindingElement[] {
+  try {
+    return Array.from(root.querySelectorAll('*'));
+  } catch {
+    return [];
+  }
+}
+
+function bindingAttributes(element: QueryBindingElement): Array<{ name: string; value: string }> {
+  if (!element.attributes) return [];
+  const attributes = element.attributes;
+
+  if (
+    typeof attributes === 'object' &&
+    attributes !== null &&
+    'length' in attributes &&
+    typeof (attributes as { length: unknown }).length === 'number'
+  ) {
+    return Array.from(
+      { length: (attributes as { length: number }).length },
+      (_, index) => (attributes as ArrayLike<{ name: string; value: string }>)[index],
+    )
+      .filter((attribute): attribute is { name: string; value: string } => Boolean(attribute))
+      .filter((attribute) => attribute.name.startsWith('data-bind:') && attribute.value !== '');
+  }
+
+  if (typeof attributes === 'object' && attributes !== null) {
+    return Object.entries(attributes)
+      .map(([name, value]) => ({ name, value: String(value) }))
+      .filter((attribute) => attribute.name.startsWith('data-bind:') && attribute.value !== '');
+  }
+
+  return [];
 }
 
 function writeQueryPlanElement(element: QueryBindingElement, rendered: string): void {

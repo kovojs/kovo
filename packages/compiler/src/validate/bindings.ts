@@ -57,25 +57,53 @@ export function validateDataBindings(
 
   const listStamps = dataBindListStamps(source, model);
   const listBindings = dataBindListAttributes(model);
+  const bindingAttributes = dataBindAttributes(model);
 
-  return dataBindAttributes(model)
+  const bindingDiagnostics = bindingAttributes
     .filter((binding) => !binding.path.startsWith('.'))
-    .filter((binding) => !pathExistsInQueryShapes(binding.path, queryShapes))
-    .map((binding) => ({
-      ...diagnosticFor(options.fileName, 'FW302', source, binding.index, binding.length),
-      message: `${diagnosticDefinitions.FW302.message} ${binding.path}`,
-    }))
-    .concat(
-      listStamps
-        .filter((stamp) => !listStampExistsInQueryShapes(stamp, queryShapes))
-        .map((stamp) => {
-          const binding = listBindings.find((candidate) => candidate.path === stamp.list);
-          return {
-            ...diagnosticFor(options.fileName, 'FW302', source, binding?.index, binding?.length),
-            message: `${diagnosticDefinitions.FW302.message} ${stamp.list}`,
-          };
-        }),
-    );
+    .flatMap((binding) => {
+      const result = validatePathInQueryShapes(binding.path, queryShapes);
+      if (!result.exists) {
+        return [
+          {
+            ...diagnosticFor(options.fileName, 'FW302', source, binding.index, binding.length),
+            message: `${diagnosticDefinitions.FW302.message} ${binding.path}`,
+          },
+        ];
+      }
+
+      return result.nullableTraversal
+        ? [fw227Diagnostic(source, options.fileName, binding, result.nullableTraversal)]
+        : [];
+    });
+
+  const listDiagnostics = listStamps.flatMap((stamp) => {
+    const binding = listBindings.find((candidate) => candidate.path === stamp.list);
+    const result = validateListStampInQueryShapes(stamp, queryShapes);
+    if (!result.exists) {
+      return [
+        {
+          ...diagnosticFor(options.fileName, 'FW302', source, binding?.index, binding?.length),
+          message: `${diagnosticDefinitions.FW302.message} ${stamp.list}`,
+        },
+      ];
+    }
+
+    return result.nullableTraversal && binding
+      ? [fw227Diagnostic(source, options.fileName, binding, result.nullableTraversal)]
+      : [];
+  });
+
+  const itemDiagnostics = nullableItemBindingDiagnostics(
+    source,
+    model,
+    bindingAttributes,
+    listStamps,
+    queryShapes,
+    options.fileName,
+  );
+
+  return bindingDiagnostics.concat(listDiagnostics, itemDiagnostics);
 }
 
 export function validateStampExpressionDrift(
@@ -373,7 +401,9 @@ function bindingExpressionStamps(
 }
 
 function soleWrappedQueryExpression(source: string): string | null {
-  const match = /^\s*\{\s*(?<path>[A-Za-z_$][\w$]*(?:\.[A-Za-z_$][\w$]*)+)\s*\}\s*$/.exec(source);
+  const match = /^\s*\{\s*(?<path>[A-Za-z_$][\w$]*(?:\??\.[A-Za-z_$][\w$]*)+)\s*\}\s*$/.exec(
+    source,
+  );
   return match?.groups?.path ?? null;
 }
 
@@ -439,7 +469,7 @@ function jsxQueryExpressionPaths(
 
 function soleQueryPathExpression(expression: string): string | null {
   return (
-    /^(?<path>[A-Za-z_$][\w$]*(?:\.[A-Za-z_$][\w$]*)+)$/.exec(expression)?.groups?.path ?? null
+    /^(?<path>[A-Za-z_$][\w$]*(?:\??\.[A-Za-z_$][\w$]*)+)$/.exec(expression)?.groups?.path ?? null
   );
 }
 
@@ -555,27 +585,49 @@ function templateStamp(
   };
 }
 
-function listStampExistsInQueryShapes(
-  stamp: QueryTemplateStampFact,
-  queryShapes: Record<string, QueryShape>,
-): boolean {
-  const [queryName, ...segments] = stamp.list.split('.');
-  if (!queryName || segments.length === 0) return false;
-
-  const listShape = queryShapes[queryName];
-  if (!listShape) return false;
-
-  const shapeAtList = queryShapeAtPath(listShape, segments);
-  if (!isArrayShape(shapeAtList)) return false;
-
-  const itemShape = shapeAtList[0];
-  if (itemShape === undefined) return false;
-  if (!pathExistsInShape(itemShape, [stamp.key])) return false;
-
-  return stamp.itemBindings.every((path) => pathExistsInShape(itemShape, path.slice(1).split('.')));
+interface NullableTraversal {
+  segment: string;
 }
 
-function queryShapeAtPath(shape: QueryShape, segments: readonly string[]): QueryShape {
+interface PathShapeValidation {
+  exists: boolean;
+  nullableTraversal?: NullableTraversal;
+}
+
+function validateListStampInQueryShapes(
+  stamp: QueryTemplateStampFact,
+  queryShapes: Record<string, QueryShape>,
+): PathShapeValidation {
+  const [querySegment, ...segments] = parseBindingPath(stamp.list);
+  const queryName = querySegment?.name;
+  if (!queryName || segments.length === 0) return { exists: false };
+
+  const listShape = queryShapes[queryName];
+  if (!listShape) return { exists: false };
+
+  const shapeAtList = queryShapeAtPath(listShape, segments);
+  if (!isArrayShape(shapeAtList)) return { exists: false };
+
+  const itemShape = shapeAtList[0];
+  if (itemShape === undefined) return { exists: false };
+  if (!validatePathInShape(itemShape, [requiredPathSegment(stamp.key)]).exists) {
+    return { exists: false };
+  }
+
+  const listValidation = validatePathInShape(listShape, segments);
+  if (!listValidation.exists) return { exists: false };
+  if (listValidation.nullableTraversal) return listValidation;
+
+  for (const path of stamp.itemBindings) {
+    if (!validatePathInShape(itemShape, parseBindingPath(path.slice(1))).exists) {
+      return { exists: false };
+    }
+  }
+
+  return { exists: true };
+}
+
+function queryShapeAtPath(shape: QueryShape, segments: readonly BindingPathSegment[]): QueryShape {
   const current = unwrapQueryShape(shape);
   if (segments.length === 0) return current;
   if (isArrayShape(current)) return queryShapeAtPath(current[0] ?? 'object', segments);
@@ -583,7 +635,7 @@ function queryShapeAtPath(shape: QueryShape, segments: readonly string[]): Query
 
   const [head, ...tail] = segments;
   if (!head) return current;
-  return queryShapeAtPath(current[head] ?? 'object', tail);
+  return queryShapeAtPath(current[head.name] ?? 'object', tail);
 }
 
 function componentQueryShapes(options: CompileComponentOptions): Record<string, QueryShape> | null {
@@ -597,31 +649,135 @@ function queryShapesFromFacts(facts: readonly QueryShapeFact[]): Record<string, 
   return Object.fromEntries(facts.map((fact) => [fact.query, fact.shape]));
 }
 
-function pathExistsInQueryShapes(path: string, queryShapes: Record<string, QueryShape>): boolean {
-  const [queryName, ...segments] = path.split('.');
-  if (!queryName) return false;
+function validatePathInQueryShapes(
+  path: string,
+  queryShapes: Record<string, QueryShape>,
+): PathShapeValidation {
+  const [querySegment, ...segments] = parseBindingPath(path);
+  const queryName = querySegment?.name;
+  if (!queryName) return { exists: false };
 
   const shape = queryShapes[queryName];
-  if (!shape || segments.length === 0) return Boolean(shape);
+  if (!shape || segments.length === 0) return { exists: Boolean(shape) };
 
-  return pathExistsInShape(shape, segments);
+  return validatePathInShape(shape, segments);
 }
 
-function pathExistsInShape(shape: QueryShape, segments: readonly string[]): boolean {
+function validatePathInShape(
+  shape: QueryShape,
+  segments: readonly BindingPathSegment[],
+): PathShapeValidation {
   const current = unwrapQueryShape(shape);
-  if (segments.length === 0) return true;
+  if (segments.length === 0) return { exists: true };
 
   if (isArrayShape(current)) {
     const itemShape = current[0];
-    return itemShape !== undefined && pathExistsInShape(itemShape, segments);
+    return itemShape === undefined ? { exists: false } : validatePathInShape(itemShape, segments);
   }
 
-  if (!isQueryShapeObject(current)) return false;
+  if (!isQueryShapeObject(current)) return { exists: false };
 
   const [head, ...tail] = segments;
-  if (!head || !(head in current)) return false;
+  if (!head || !(head.name in current)) return { exists: false };
 
-  return pathExistsInShape(current[head] ?? 'object', tail);
+  const child = current[head.name] ?? 'object';
+  const nullableTraversal = tail.length > 0 && isQueryShapeWrapper(child) && !head.optional;
+  if (nullableTraversal) {
+    const childValidation = validatePathInShape(child, tail);
+    return childValidation.exists
+      ? { exists: true, nullableTraversal: { segment: head.name } }
+      : { exists: false };
+  }
+
+  return validatePathInShape(child, tail);
+}
+
+interface BindingPathSegment {
+  name: string;
+  optional: boolean;
+}
+
+function parseBindingPath(path: string): BindingPathSegment[] {
+  return path
+    .split('.')
+    .filter((segment) => segment !== '')
+    .map((segment) => ({
+      name: segment.endsWith('?') ? segment.slice(0, -1) : segment,
+      optional: segment.endsWith('?'),
+    }));
+}
+
+function requiredPathSegment(name: string): BindingPathSegment {
+  return { name, optional: false };
+}
+
+function nullableItemBindingDiagnostics(
+  source: string,
+  model: ComponentModuleModel,
+  bindingAttributes: readonly DataBindAttribute[],
+  listStamps: readonly QueryTemplateStampFact[],
+  queryShapes: Record<string, QueryShape>,
+  fileName: string,
+): CompilerDiagnostic[] {
+  const elements = jsxElements(model);
+  const diagnostics: CompilerDiagnostic[] = [];
+
+  for (const stamp of listStamps) {
+    const [querySegment, ...segments] = parseBindingPath(stamp.list);
+    const queryName = querySegment?.name;
+    const listShape = queryName ? queryShapes[queryName] : undefined;
+    if (!listShape) continue;
+
+    const shapeAtList = queryShapeAtPath(listShape, segments);
+    if (!isArrayShape(shapeAtList)) continue;
+
+    const itemShape = shapeAtList[0];
+    if (itemShape === undefined) continue;
+
+    const containers = elements.filter(
+      (element) =>
+        jsxStaticAttributeValue(element, 'data-bind-list') === stamp.list &&
+        jsxStaticAttributeValue(element, 'fw-key') === stamp.key,
+    );
+
+    for (const container of containers) {
+      for (const binding of bindingAttributes.filter((candidate) =>
+        candidate.path.startsWith('.'),
+      )) {
+        const element = elements.find((candidate) =>
+          candidate.attributes.some(
+            (attribute) =>
+              attribute.start === binding.index && attribute.end === binding.index + binding.length,
+          ),
+        );
+        if (!element || !isWithinElement(element, container)) continue;
+
+        const result = validatePathInShape(itemShape, parseBindingPath(binding.path.slice(1)));
+        if (result.exists && result.nullableTraversal) {
+          diagnostics.push(fw227Diagnostic(source, fileName, binding, result.nullableTraversal));
+        }
+      }
+    }
+  }
+
+  return dedupeBy(diagnostics, (diagnostic) =>
+    [diagnostic.code, diagnostic.fileName, diagnostic.start?.line, diagnostic.start?.column].join(
+      ':',
+    ),
+  );
+}
+
+function fw227Diagnostic(
+  source: string,
+  fileName: string,
+  binding: DataBindAttribute,
+  traversal: NullableTraversal,
+): CompilerDiagnostic {
+  return {
+    ...diagnosticFor(fileName, 'FW227', source, binding.index, binding.length),
+    help: diagnosticDefinitions.FW227.help,
+    message: `${diagnosticDefinitions.FW227.message} ${binding.path} (segment: ${traversal.segment})`,
+  };
 }
 
 function isArrayShape(shape: QueryShape): shape is readonly QueryShape[] {

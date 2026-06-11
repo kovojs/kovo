@@ -42,6 +42,13 @@ Audited against the repository on 2026-06-11. Checkmarks mean the behavior, API,
 - [x] P5 has enhanced mutation/deferred fragments, DOM morphing, query patch application, typed read refetch, template stamps, isomorphic/update-coverage statuses, Tailwind stylesheet hints, and runtime/browser tests for morph survival and fragment parsing.
 - [x] P5 byte-for-byte live-server fixture exit is covered; runtime acceptance now proves form field and navigation route renames fail under `vp check` (`packages/runtime/src/index.test.ts`, SPEC §6.2/§6.3/§6.4/§16.6).
 - [ ] FW227 nullable binding paths (SPEC §4.8, §6.2): optional-segment (`?.`) path grammar lowered by the compiler (P1), shared empty-rendering semantics in server renderer and loader/stamps (P2/P5), null-aware path typing against inferred query shapes with the leftJoin-nullability proof under `vp check` (P5), and a golden teaching error.
+      Evidence 2026-06-11: `packages/compiler/src/index.test.ts` covers optional
+      `?.` data-bind lowering, query-shape FW227 diagnostics for nullable traversal
+      without `?.`, and FW302 precedence for missing fields under nullable wrappers.
+      `packages/runtime/src/index.test.ts` covers loader empty semantics for optional
+      paths: text bindings render `""`, direct `data-bind:*` attributes are removed,
+      and compiled attribute stamps remove attributes on nullish derive output.
+      Remaining: the full leftJoin TypeScript proof under `vp check` is not claimed.
 - [x] P6 optimism has typed `OptimisticFor`, generated `InvalidationSets`, `await-fragment` statuses, pending stamps, named queues, rebase/restore behavior, unified change-record consumption, and property/runtime tests.
 - [x] P6 final acceptance has full commerce-level coverage for every mutation/query pair. Evidence added: `examples/commerce/src/app.test.ts` now derives the complete `cart/add` and `order/receipt` x `cart`/`productGrid`/`orderHistory` matrix from `fw explain`, requires explicit optimistic statuses for every invalidated query, proves `order/receipt` has no invalidation for every commerce query, and checks the enhanced `cart/add` response carries every authoritative `<fw-query>`/fragment chunk (SPEC §10.4, §16.5). Navigation/bfcache edge evidence proves a mid-flight optimistic mutation is submitted with `keepalive`, `pagehide` discards the pending log and clears `fw-pending` back to server truth, and the later keepalive response reconciles authoritative query truth without stale optimism (`packages/runtime/src/index.test.ts`, SPEC §8/§10.4).
 - [x] P7 stateless liveness has BroadcastChannel mutation sync and visible-return/refetch behavior.

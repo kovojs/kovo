@@ -1591,7 +1591,7 @@ export const CartBadge = component('cart-badge', {
     expect(result.diagnostics).toEqual([]);
   });
 
-  it('unwraps nullable and optional query shape metadata for data-bind validation', () => {
+  it('accepts optional binding path segments through nullable query shape metadata', () => {
     const result = compileComponentModule({
       fileName: 'product-card.tsx',
       queryShapeFacts: [
@@ -1618,14 +1618,93 @@ export const CartBadge = component('cart-badge', {
 export const ProductCard = component('product-card', {
   render: () => (
     <article>
-      <span data-bind="product.details.name">Coffee</span>
-      <span data-bind="product.inventory.stock">12</span>
+      <span data-bind="product.details?.name">Coffee</span>
+      <span data-bind="product.inventory?.stock">12</span>
     </article>
   ),
 });
 `,
     });
 
+    expect(result.diagnostics).toEqual([]);
+  });
+
+  it('reports FW227 when binding paths traverse nullable query shape metadata without optional segments', () => {
+    const result = compileComponentModule({
+      fileName: 'product-card.tsx',
+      queryShapeFacts: [
+        {
+          query: 'product',
+          shape: {
+            details: {
+              kind: 'nullable',
+              shape: {
+                name: 'string',
+              },
+            },
+          },
+          source: 'generated/queries/product.shape.ts',
+        },
+      ],
+      source: `
+export const ProductCard = component('product-card', {
+  render: () => <span data-bind="product.details.name">Coffee</span>,
+});
+`,
+    });
+
+    expect(result.diagnostics).toEqual([
+      {
+        code: 'FW227',
+        fileName: 'product-card.tsx',
+        help: [
+          'Fixes: write the nullable traversal with ?., extract a named derive that handles null explicitly, or make the projection non-null in the query.',
+          'SPEC §4.8 requires empty-on-null semantics to be explicit so the server renderer and loader cannot drift.',
+        ].join('\n'),
+        length: 32,
+        message:
+          'Binding path traverses a nullable segment without ?. product.details.name (segment: details)',
+        severity: 'error',
+        start: { column: 23, line: 3 },
+      },
+    ]);
+  });
+
+  it('lowers optional query traversal sugar to optional data-bind path segments', () => {
+    const result = compileComponentModule({
+      fileName: 'deal-card.tsx',
+      queryShapes: {
+        deal: {
+          contact: {
+            kind: 'nullable',
+            shape: {
+              name: 'string',
+            },
+          },
+        },
+      },
+      source: `
+export const DealCard = component('deal-card', {
+  queries: { deal: {} },
+  render: () => (
+    <deal-card>
+      <span>{deal.contact?.name}</span>
+    </deal-card>
+  ),
+});
+`,
+    });
+
+    expect(result.files[0]?.source).toContain(
+      '<span data-bind="deal.contact?.name">{deal.contact?.name}</span>',
+    );
+    expect(result.queryUpdatePlans).toEqual([
+      {
+        componentName: 'DealCard',
+        paths: ['deal.contact?.name'],
+        query: 'deal',
+      },
+    ]);
     expect(result.diagnostics).toEqual([]);
   });
 

@@ -12,6 +12,7 @@ export type DiagnosticCode =
   | 'FW224'
   | 'FW225'
   | 'FW226'
+  | 'FW227'
   | 'FW230'
   | 'FW231'
   | 'FW232'
@@ -122,6 +123,15 @@ export const diagnosticDefinitions = {
     code: 'FW226',
     severity: 'error',
     message: 'fw-deps or fw-c names an unknown query instance or component.',
+  },
+  FW227: {
+    code: 'FW227',
+    help: [
+      'Fixes: write the nullable traversal with ?., extract a named derive that handles null explicitly, or make the projection non-null in the query.',
+      'SPEC §4.8 requires empty-on-null semantics to be explicit so the server renderer and loader cannot drift.',
+    ].join('\n'),
+    severity: 'error',
+    message: 'Binding path traverses a nullable segment without ?.',
   },
   FW230: {
     code: 'FW230',

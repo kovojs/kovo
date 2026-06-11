@@ -218,6 +218,7 @@ class FakeMorphRoot {
       }
   > {
     if (_selector === '[data-bind]') return this.bindings;
+    if (_selector === '*') return [...this.bindings, ...this.planElements];
     const planElements = this.planElements.filter((element) => element.matches(_selector));
     if (planElements.length > 0) return planElements;
 
@@ -2201,6 +2202,28 @@ describe('query store', () => {
     expect(items.textContent).toBe('[{"id":"p1"}]');
   });
 
+  it('applies optional binding path segments and removes empty attribute bindings', () => {
+    const root = new FakeMorphRoot();
+    const name = new FakeQueryBindingElement('deal.contact?.name', { textContent: 'Ada' });
+    const label = new FakeQueryPlanElement({
+      'aria-label': 'Ada',
+      'data-bind:aria-label': 'deal.contact?.name',
+    });
+    root.bindings.push(name);
+    root.planElements.push(label);
+
+    expect(applyQueryBindings(root, 'deal', { contact: null })).toEqual([
+      'deal.contact?.name',
+      'deal.contact?.name',
+    ]);
+    expect(name.textContent).toBe('');
+    expect(label.getAttribute('aria-label')).toBeNull();
+
+    applyQueryBindings(root, 'deal', { contact: { name: 'Grace' } });
+    expect(name.textContent).toBe('Grace');
+    expect(label.getAttribute('aria-label')).toBe('Grace');
+  });
+
   it('runs compiled query update plans in bindings -> named derives -> stamps order', () => {
     const root = new FakeMorphRoot();
     const count = new FakeQueryBindingElement('cart.count', { textContent: '1' });
@@ -2250,6 +2273,38 @@ describe('query store', () => {
     expect(count.textContent).toBe('2');
     expect(summary.textContent).toBe('2 items');
     expect(host.getAttribute('data-cart-summary')).toBe('2 items');
+  });
+
+  it('removes compiled attribute stamps when the selected value is empty', () => {
+    const root = new FakeMorphRoot();
+    const host = new FakeQueryPlanElement({ 'aria-label': 'Ada', 'data-plan': 'deal-host' });
+    root.planElements.push(host);
+
+    const applied = applyCompiledQueryUpdatePlan(
+      root,
+      'deal',
+      { contact: null },
+      {
+        bindings: false,
+        stamps: [
+          {
+            attr: 'aria-label',
+            selector: '[data-plan="deal-host"]',
+            select(value) {
+              return (value as { contact: { name: string } | null }).contact?.name;
+            },
+          },
+        ],
+      },
+    );
+
+    expect(applied).toEqual({
+      bindings: [],
+      derives: [],
+      stamps: ['aria-label'],
+      templateStamps: [],
+    });
+    expect(host.getAttribute('aria-label')).toBeNull();
   });
 
   it('declares named derive inputs beside the pure derive function', () => {

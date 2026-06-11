@@ -16,6 +16,7 @@ describe('diagnostic registry', () => {
       'FW224',
       'FW225',
       'FW226',
+      'FW227',
       'FW230',
       'FW231',
       'FW232',
@@ -102,6 +103,13 @@ describe('diagnostic registry', () => {
         "FW226": {
           "code": "FW226",
           "message": "fw-deps or fw-c names an unknown query instance or component.",
+          "severity": "error",
+        },
+        "FW227": {
+          "code": "FW227",
+          "help": "Fixes: write the nullable traversal with ?., extract a named derive that handles null explicitly, or make the projection non-null in the query.
+      SPEC §4.8 requires empty-on-null semantics to be explicit so the server renderer and loader cannot drift.",
+          "message": "Binding path traverses a nullable segment without ?.",
           "severity": "error",
         },
         "FW230": {

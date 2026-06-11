@@ -717,7 +717,7 @@ function inlineTextBinding(
   if (element.attributes.some((attribute) => isBindingAttributeName(attribute.name))) return null;
 
   const content = source.slice(element.openingEnd, element.closingStart);
-  const expression = /^\s*\{\s*(?<path>[A-Za-z_$][\w$]*(?:\.[A-Za-z_$][\w$]*)+)\s*\}\s*$/.exec(
+  const expression = /^\s*\{\s*(?<path>[A-Za-z_$][\w$]*(?:\??\.[A-Za-z_$][\w$]*)+)\s*\}\s*$/.exec(
     content,
   )?.groups?.path;
   if (!expression) return null;
@@ -752,7 +752,7 @@ function inlineMixedTextBinding(
 
 function soleKnownQueryPath(expression: string, knownQueries: ReadonlySet<string>): string | null {
   const path =
-    /^(?<path>[A-Za-z_$][\w$]*(?:\.[A-Za-z_$][\w$]*)+)$/.exec(expression.trim())?.groups?.path ??
+    /^(?<path>[A-Za-z_$][\w$]*(?:\??\.[A-Za-z_$][\w$]*)+)$/.exec(expression.trim())?.groups?.path ??
     null;
   if (!path) return null;
 
@@ -1598,7 +1598,10 @@ function emitTemplateStampPlan(stamp: QueryTemplateStampFact): string {
     stamp.list.split('.').slice(1).join('.'),
   )}, selector: ${JSON.stringify(stamp.selector)}, render(item) {
       const record = item && typeof item === "object" ? item : {};
-      const read = (path) => path.split(".").reduce((value, part) => value && typeof value === "object" ? value[part] : undefined, record);
+      const read = (path) => path.split(".").reduce((value, part) => {
+        const key = part.endsWith("?") ? part.slice(0, -1) : part;
+        return value && typeof value === "object" ? value[key] : undefined;
+      }, record);
       let html = ${JSON.stringify(stamp.template)};
 ${stamp.itemBindings
   .map(
