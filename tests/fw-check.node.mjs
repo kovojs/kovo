@@ -382,6 +382,7 @@ void test('S2 loader budget and L0 no-upgrade path are acceptance evidence', asy
 void test('P2 loader smoke evidence remains represented in runtime tests', async () => {
   const runtimeSource = await readProjectFile('packages/runtime/src/index.ts');
   const runtimeHandlersSource = await readProjectFile('packages/runtime/src/handlers.ts');
+  const runtimeMorphSource = await readProjectFile('packages/runtime/src/morph.ts');
   const runtimeTests = await readProjectFile('packages/runtime/src/index.test.ts');
   const browserTests = await readProjectFile('packages/runtime/src/index.browser.test.ts');
 
@@ -399,7 +400,7 @@ void test('P2 loader smoke evidence remains represented in runtime tests', async
   assert.match(runtimeHandlersSource, /signal: createHandlerSignal\(element\)/);
   assert.match(runtimeHandlersSource, /islandSignalControllers/);
   assert.match(
-    runtimeSource,
+    runtimeMorphSource,
     /abortRemovedIslandSignals\(target\.readHtml\?\.\(\) \?\? '', fragment\.html, islandSignalScope\)/,
   );
   assert.match(runtimeSource, /visibleObserver\?: VisibleObserverFactory/);

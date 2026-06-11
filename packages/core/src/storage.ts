@@ -1,9 +1,3 @@
-import { createHash } from 'node:crypto';
-import { createReadStream } from 'node:fs';
-import { mkdir, readFile, stat as fsStat, writeFile } from 'node:fs/promises';
-import path from 'node:path';
-import { Readable } from 'node:stream';
-
 export type StorageBody = string | ArrayBuffer | ArrayBufferView | ReadableStream<Uint8Array>;
 
 export interface StoragePutOptions {
@@ -152,12 +146,13 @@ export function createMemoryStorage(options: MemoryStorageOptions = {}): Storage
 }
 
 export function createFileSystemStorage(options: FileSystemStorageOptions): StorageCapability {
-  const root = path.resolve(options.root);
+  const root = options.root;
 
   return {
     async get(key) {
       const normalizedKey = normalizeStorageKey(key);
-      const filePath = storageFilePath(root, normalizedKey);
+      const { readFile } = await import('node:fs/promises');
+      const filePath = await storageFilePath(root, normalizedKey);
       const [bytes, info] = await Promise.all([
         readFile(filePath).catch((error: unknown) => {
           if (isNotFoundError(error)) return undefined;
@@ -174,7 +169,9 @@ export function createFileSystemStorage(options: FileSystemStorageOptions): Stor
     },
     async put(key, body, putOptions = {}) {
       const normalizedKey = normalizeStorageKey(key);
-      const filePath = storageFilePath(root, normalizedKey);
+      const { mkdir, writeFile } = await import('node:fs/promises');
+      const path = await import('node:path');
+      const filePath = await storageFilePath(root, normalizedKey);
       const bytes = await storageBodyToBytes(body);
       const lastModified = new Date();
       const info = objectInfo(normalizedKey, bytes.byteLength, putOptions, lastModified);
@@ -190,7 +187,9 @@ export function createFileSystemStorage(options: FileSystemStorageOptions): Stor
     },
     async stream(key) {
       const normalizedKey = normalizeStorageKey(key);
-      const filePath = storageFilePath(root, normalizedKey);
+      const { createReadStream } = await import('node:fs');
+      const { Readable } = await import('node:stream');
+      const filePath = await storageFilePath(root, normalizedKey);
       const info = await fileSystemStat(root, normalizedKey);
       if (info === undefined) return undefined;
 
@@ -327,7 +326,8 @@ function metadataRecord(info: StorageObjectInfo): FileSystemMetadataRecord {
 }
 
 async function fileSystemStat(root: string, key: string): Promise<StorageObjectInfo | undefined> {
-  const filePath = storageFilePath(root, key);
+  const { readFile, stat: fsStat } = await import('node:fs/promises');
+  const filePath = await storageFilePath(root, key);
   const fileStats = await fsStat(filePath).catch((error: unknown) => {
     if (isNotFoundError(error)) return undefined;
     throw error;
@@ -352,9 +352,11 @@ async function fileSystemStat(root: string, key: string): Promise<StorageObjectI
   };
 }
 
-function storageFilePath(root: string, key: string): string {
-  const filePath = path.resolve(root, key);
-  const relativePath = path.relative(root, filePath);
+async function storageFilePath(root: string, key: string): Promise<string> {
+  const path = await import('node:path');
+  const resolvedRoot = path.resolve(root);
+  const filePath = path.resolve(resolvedRoot, key);
+  const relativePath = path.relative(resolvedRoot, filePath);
   if (relativePath.startsWith('..') || path.isAbsolute(relativePath)) {
     throw new Error('Storage key resolves outside the storage root.');
   }
@@ -375,14 +377,7 @@ function isNotFoundError(error: unknown): boolean {
 }
 
 function storageEtag(key: string, size: number, lastModified: Date): string {
-  const hash = createHash('sha256')
-    .update(key)
-    .update('\0')
-    .update(String(size))
-    .update('\0')
-    .update(String(lastModified.getTime()))
-    .digest('hex');
-  return `"${hash}"`;
+  return `"jiso-${encodeURIComponent(key)}-${size}-${lastModified.getTime()}"`;
 }
 
 function copyInfo(info: StorageObjectInfo): StorageObjectInfo {
