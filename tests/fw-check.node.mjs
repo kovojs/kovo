@@ -1497,22 +1497,39 @@ declare module '@jiso/core' {
   );
 });
 
-void test('Drizzle pinned conformance suite is an explicit gate', async () => {
+void test('Conformance suites are an explicit gate', async () => {
   const packageJson = JSON.parse(await readProjectFile('package.json'));
   const viteConfig = await readProjectFile('vite.config.ts');
   const ciWorkflow = await readProjectFile('.github/workflows/ci.yml');
   const conformanceTest = await readProjectFile('conformance/drizzle-pin/src/index.test.ts');
+  const authSpikePackageJson = JSON.parse(
+    await readProjectFile('conformance/auth-spike/package.json'),
+  );
+  const webhookSpikePackageJson = JSON.parse(
+    await readProjectFile('conformance/webhook-spike/package.json'),
+  );
+  const appShellSpikePackageJson = JSON.parse(
+    await readProjectFile('conformance/app-shell-spike/package.json'),
+  );
   const drizzlePackageJson = JSON.parse(await readProjectFile('packages/drizzle/package.json'));
   const drizzleSource = await readProjectFile('packages/drizzle/src/index.ts');
   const drizzleTests = await readProjectFile('packages/drizzle/src/index.test.ts');
 
   assert.match(packageJson.scripts.acceptance, /pnpm run test:conformance/);
-  assert.equal(packageJson.scripts['test:conformance'], 'vp run conformance-drizzle');
+  assert.equal(packageJson.scripts['test:conformance'], 'vp run conformance');
   assert.equal(drizzlePackageJson.dependencies['ts-morph'], '^28.0.0');
   assert.match(drizzleSource, /function extractTouchGraphFromProject/);
   assert.match(drizzleSource, /function isDrizzleReceiver/);
+  assert.match(viteConfig, /conformance:\s*\{/);
   assert.match(viteConfig, /'conformance-drizzle':\s*\{/);
-  assert.match(ciWorkflow, /vp run conformance-drizzle/);
+  assert.match(viteConfig, /@jiso\/conformance-drizzle-pin/);
+  assert.match(viteConfig, /@jiso\/conformance-auth-spike/);
+  assert.match(viteConfig, /@jiso\/conformance-webhook-spike/);
+  assert.match(viteConfig, /@jiso\/conformance-app-shell-spike/);
+  assert.match(ciWorkflow, /vp run conformance/);
+  assert.equal(authSpikePackageJson.name, '@jiso/conformance-auth-spike');
+  assert.equal(webhookSpikePackageJson.name, '@jiso/conformance-webhook-spike');
+  assert.equal(appShellSpikePackageJson.name, '@jiso/conformance-app-shell-spike');
   assert.match(conformanceTest, /Drizzle pinned subset conformance/);
   assert.match(conformanceTest, /from 'drizzle-orm'/);
   assert.match(conformanceTest, /from 'drizzle-orm\/pg-core'/);

@@ -55,6 +55,20 @@ export default defineConfig({
           { pattern: 'packages/drizzle/src/**/*.ts', base: 'workspace' },
         ],
       },
+      conformance: {
+        command:
+          'pnpm --filter @jiso/conformance-drizzle-pin test && pnpm --filter @jiso/conformance-auth-spike test && pnpm --filter @jiso/conformance-webhook-spike test && pnpm --filter @jiso/conformance-app-shell-spike test',
+        input: [
+          { auto: true },
+          { pattern: 'conformance/**/package.json', base: 'workspace' },
+          { pattern: 'conformance/**/src/**/*.ts', base: 'workspace' },
+          { pattern: 'conformance/**/docs/**', base: 'workspace' },
+          { pattern: 'packages/core/src/**/*.ts', base: 'workspace' },
+          { pattern: 'packages/server/src/**/*.ts', base: 'workspace' },
+          { pattern: 'packages/drizzle/src/**/*.ts', base: 'workspace' },
+          { pattern: 'packages/better-auth/src/**/*.ts', base: 'workspace' },
+        ],
+      },
       'fw-check': {
         command: 'node scripts/fw-check.mjs',
         input: [

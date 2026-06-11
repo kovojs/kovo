@@ -15,7 +15,7 @@
     "check:fw": "vp run fw-check",
     "test": "vitest --run",
     "test:browser": "vp run browser",
-    "test:conformance": "vp run conformance-drizzle",
+    "test:conformance": "vp run conformance",
     "test:p10-perf": "vp run p10-perf"
   },
   "devDependencies": {
