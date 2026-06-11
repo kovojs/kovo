@@ -554,6 +554,42 @@ export const tableDomains = {
     ]);
   });
 
+  it('derives source query result shape from the returned select', () => {
+    const facts = extractQueryFactsFromSource([
+      {
+        fileName: 'product.queries.ts',
+        source: `
+          export const auditLog = pgTable("audit_log", {
+            id: text("id").primaryKey(),
+            message: text("message").notNull(),
+          }, jiso({ domain: "audit", key: "id" }));
+          export const products = pgTable("products", {
+            id: text("id").primaryKey(),
+            name: text("name").notNull(),
+          }, jiso({ domain: "product", key: "id" }));
+
+          export const productQuery = query("product", {
+            async load(_input, db) {
+              await db.select({ message: auditLog.message }).from(auditLog);
+              return db.select({ name: products.name }).from(products);
+            },
+          });
+        `,
+      },
+    ]);
+
+    expect(facts).toEqual([
+      {
+        query: 'product',
+        reads: ['audit', 'product'],
+        shape: {
+          name: 'string',
+        },
+        site: 'product.queries.ts:11',
+      },
+    ]);
+  });
+
   it('reports FW410 for opaque query projections without declared output schemas', () => {
     const facts = extractQueryFactsFromSource([
       {
@@ -807,6 +843,44 @@ export const tableDomains = {
             shape: 'object',
           },
           stock: 'number',
+        },
+        site: 'product.queries.ts:11',
+      },
+    ]);
+  });
+
+  it('derives project query result shape from the returned select', () => {
+    const facts = extractQueryFactsFromProject({
+      files: [
+        {
+          fileName: 'product.queries.ts',
+          source: `
+            export const auditLog = pgTable("audit_log", {
+              id: text("id").primaryKey(),
+              message: text("message").notNull(),
+            }, jiso({ domain: "audit", key: "id" }));
+            export const products = pgTable("products", {
+              id: text("id").primaryKey(),
+              name: text("name").notNull(),
+            }, jiso({ domain: "product", key: "id" }));
+
+            export const productQuery = query("product", {
+              async load(_input, db) {
+                await db.select({ message: auditLog.message }).from(auditLog);
+                return db.select({ name: products.name }).from(products);
+              },
+            });
+          `,
+        },
+      ],
+    });
+
+    expect(facts).toEqual([
+      {
+        query: 'product',
+        reads: ['audit', 'product'],
+        shape: {
+          name: 'string',
         },
         site: 'product.queries.ts:11',
       },

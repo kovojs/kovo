@@ -801,8 +801,8 @@ function selectShapeFromQueryBody(
   body: string,
   columnShapes: Readonly<Record<string, QueryShape>> = {},
 ): QueryShapeSelection | null {
-  const selectCall = /\.select\s*\(/.exec(body);
-  if (!selectCall) return null;
+  const selectCall = returnedSelectCall(body) ?? /\.select\s*\(/.exec(body);
+  if (!selectCall || selectCall.index === undefined) return null;
 
   const openParen = selectCall.index + selectCall[0].length - 1;
   const closeParen = findMatchingParen(body, openParen);
@@ -835,6 +835,10 @@ function selectShapeFromQueryBody(
     columnShapes,
     nullableJoinTables(body),
   );
+}
+
+function returnedSelectCall(body: string): RegExpExecArray | null {
+  return /\breturn\s+(?:await\s+)?[\s\S]*?\.select\s*\(/.exec(body);
 }
 
 function queryShapeFromObjectLiteral(
