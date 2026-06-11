@@ -13,6 +13,7 @@ import {
   componentRenderInputs,
   componentStateReturnObject,
   firstComponentModel,
+  identifierReferences,
   type JsxAttributeModel,
   type JsxElementModel,
   jsxElements,
@@ -741,9 +742,9 @@ function uniqueAnonymousHandlerName(
 }
 
 function capturesUnserializableValue(expression: string): boolean {
-  return (
-    /\b(window|document|db|request|response)\b/.test(expression) ||
-    /\bnew\s+(Date|Map|Set)\b/.test(expression)
+  const references = new Set(identifierReferences('expression.tsx', expression));
+  return ['window', 'document', 'db', 'request', 'response', 'Date', 'Map', 'Set'].some((name) =>
+    references.has(name),
   );
 }
 

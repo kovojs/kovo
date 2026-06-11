@@ -521,6 +521,32 @@ export const CartDrawer = component('cart-drawer', {
     expect(result.diagnostics[0]?.start).toEqual({ column: 9, line: 1 });
   });
 
+  it('does not report FW201 for local variables named like non-serializable captures', () => {
+    const result = compileComponentModule({
+      fileName: 'cart-badge.tsx',
+      source: `
+export const CartBadge = component('cart-badge', {
+  render: () => (
+    <button onClick={() => { const response = { ok: true }; return response.ok; }}>
+      Check
+    </button>
+  ),
+});
+`,
+    });
+
+    expect(result.diagnostics).toEqual([
+      {
+        code: 'FW210',
+        fileName: 'cart-badge.tsx',
+        length: 5,
+        message: 'Anonymous handler; name it for stable identity.',
+        severity: 'lint',
+        start: { column: 13, line: 4 },
+      },
+    ]);
+  });
+
   it('preserves emitted IR on recompilation', () => {
     const result = compileComponentModule({
       fileName: 'cart-badge.tsx',
@@ -2317,6 +2343,33 @@ export const CartTable = component('cart-table', {
         severity: 'error',
       },
     ]);
+  });
+
+  it('does not report FW230 for local child variables named like non-serializable captures', () => {
+    const result = compileComponentModule({
+      fileName: 'cart-row.tsx',
+      source: `
+export const CartRow = component('cart-row', {
+  fragmentTarget: true,
+  props: { rowId: String },
+  render: ({ rowId }) => <tr fw-c="cart-row" data-row={rowId}></tr>,
+});
+
+export const CartTable = component('cart-table', {
+  render: ({ cart }) => {
+    return (
+      <table>
+        <CartRow rowId={cart.rowId}>
+          <span>{(() => { const response = { label: 'ok' }; return response.label; })()}</span>
+        </CartRow>
+      </table>
+    );
+  },
+});
+`,
+    });
+
+    expect(result.diagnostics).toEqual([]);
   });
 
   it('ignores fragment target child text inside strings and comments', () => {

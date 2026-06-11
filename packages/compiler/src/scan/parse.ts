@@ -195,6 +195,55 @@ export function mutationHandlers(model: ComponentModuleModel): MutationHandlerMo
   return [...model.mutationHandlers];
 }
 
+export function identifierReferences(fileName: string, source: string): string[] {
+  const sourceFile = ts.createSourceFile(
+    fileName,
+    source,
+    ts.ScriptTarget.Latest,
+    true,
+    ts.ScriptKind.TSX,
+  );
+  const declared = new Set<string>();
+  const referenced: string[] = [];
+
+  const visit = (node: ts.Node): void => {
+    if (ts.isIdentifier(node)) {
+      if (isDeclaredIdentifier(node)) declared.add(node.text);
+      if (isReferenceIdentifier(node)) referenced.push(node.text);
+    }
+
+    ts.forEachChild(node, visit);
+  };
+
+  visit(sourceFile);
+
+  return referenced.filter((name) => !declared.has(name));
+}
+
+function isDeclaredIdentifier(node: ts.Identifier): boolean {
+  const parent = node.parent;
+  return (
+    (ts.isVariableDeclaration(parent) && parent.name === node) ||
+    (ts.isParameter(parent) && parent.name === node) ||
+    (ts.isFunctionDeclaration(parent) && parent.name === node) ||
+    (ts.isFunctionExpression(parent) && parent.name === node) ||
+    (ts.isClassDeclaration(parent) && parent.name === node) ||
+    (ts.isPropertyDeclaration(parent) && parent.name === node) ||
+    (ts.isBindingElement(parent) && parent.name === node)
+  );
+}
+
+function isReferenceIdentifier(node: ts.Identifier): boolean {
+  const parent = node.parent;
+  if (isDeclaredIdentifier(node)) return false;
+  if (ts.isPropertyAccessExpression(parent) && parent.name === node) return false;
+  if (ts.isPropertyAssignment(parent) && parent.name === node) return false;
+  if (ts.isMethodDeclaration(parent) && parent.name === node) return false;
+  if (ts.isPropertyDeclaration(parent) && parent.name === node) return false;
+  if (ts.isShorthandPropertyAssignment(parent)) return true;
+  return true;
+}
+
 function componentModelFromInitializer(
   sourceFile: ts.SourceFile,
   source: string,
