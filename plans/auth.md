@@ -1,12 +1,12 @@
 # Auth — agnostic core seams + blessed better-auth adapter (D5)
 
-Status: design agreed 2026-06-11; implementation not started
+Status: design agreed 2026-06-11; SPEC A-track text landed; implementation not started
 Scope: SPEC additions (session population, guard-failure contract, mutation response headers, raw endpoints), `@jiso/core`/`@jiso/server` seams, a new `@jiso/better-auth` package, a `conformance/better-auth-pin/` suite, and starter/example adoption. Referenced from `IMPLEMENT_v1.md` as workstream **D5**.
 
 ## Progress checklist
 
 - [ ] S6 spike: wrapped-mutation credential flow proven end-to-end against pinned better-auth.
-- [ ] SPEC PR: session population seam, guard-failure contract, mutation response-header channel, `endpoint()` primitive (normative text; supersedes the gaps listed under Background).
+- [x] SPEC A-track text: session population seam, guard-failure contract, mutation response-header channel, `endpoint()` primitive (normative text; supersedes the gaps listed under Background).
 - [ ] A1 session-resolution seam in the request lifecycle.
 - [ ] A2 guard-failure contract (`onUnauthenticated` redirect, 403 path for failed `role()`).
 - [ ] A3 mutation response-header channel (`ctx.setCookie` / header passthrough).
