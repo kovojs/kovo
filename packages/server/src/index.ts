@@ -1971,7 +1971,9 @@ async function renderQueryChunks(
     }
 
     const result = await runQuery(queryDefinition, input, request);
-    if (!result.ok) continue;
+    if (!result.ok) {
+      throw new Error(`Rerun query failed: ${queryDefinition.key}`);
+    }
 
     chunks.push(renderQueryChunk(queryDefinition, result.input, result.value));
   }

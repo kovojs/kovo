@@ -2201,6 +2201,40 @@ describe('server mutation primitives', () => {
     });
   });
 
+  it('renders a defined error when a post-commit rerun query fails', async () => {
+    const cart = domain('cart');
+    const cartQuery = query('cart', {
+      guard: () => false,
+      load: () => ({ count: 1 }),
+      reads: [cart],
+    });
+    const addToCart = mutation('cart/add', {
+      input: s.object({ productId: s.string() }),
+      registry: {
+        queries: [cartQuery],
+        touches: [cart],
+      },
+      handler(input) {
+        return input;
+      },
+    });
+
+    await expect(
+      renderMutationResponse(addToCart, {
+        rawInput: { productId: 'p1' },
+        request: {},
+        targets: ['cart-badge'],
+      }),
+    ).resolves.toEqual({
+      body: '<fw-fragment target="cart-badge"><output role="alert" data-error-code="RENDER_ERROR">Rerun query failed: cart</output></fw-fragment>',
+      headers: {
+        'Content-Type': 'text/vnd.jiso.fragment+html; charset=utf-8',
+        'FW-Changes': '[{"domain":"cart"}]',
+      },
+      status: 500,
+    });
+  });
+
   it('omits mutation input and manual reasons from FW-Changes headers', async () => {
     const cart = domain('cart');
     const addToCart = mutation('cart/add', {
