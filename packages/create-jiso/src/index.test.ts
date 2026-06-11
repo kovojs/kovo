@@ -244,6 +244,24 @@ describe('create-jiso starter', () => {
     }
   });
 
+  it('writes CLI failure output to stderr while returning a non-zero exit code', () => {
+    const root = mkdtempSync(join(tmpdir(), 'create-jiso-cli-error-'));
+    const stdout = vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
+    const stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+
+    try {
+      writeFileSync(join(root, 'README.md'), 'existing', 'utf8');
+
+      expect(main([root])).toBe(1);
+      expect(stdout).not.toHaveBeenCalled();
+      expect(stderr).toHaveBeenCalledWith(`create-jiso: Target directory is not empty: ${root}\n`);
+    } finally {
+      stdout.mockRestore();
+      stderr.mockRestore();
+      rmSync(root, { force: true, recursive: true });
+    }
+  });
+
   it('runs as a CLI entrypoint when the script path contains spaces', () => {
     const parent = mkdtempSync(join(tmpdir(), 'create-jiso-entry-'));
     const spacedDir = join(parent, 'entry path with spaces');

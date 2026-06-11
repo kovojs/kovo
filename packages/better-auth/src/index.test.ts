@@ -1,4 +1,4 @@
-import type { Guard, SessionProvider } from '@jiso/server';
+import { guards as serverGuards, type Guard, type SessionProvider } from '@jiso/server';
 import { describe, expect, expectTypeOf, it } from 'vitest';
 import {
   activeOrganization,
@@ -127,6 +127,41 @@ describe('betterAuthSession', () => {
 });
 
 describe('guard bindings', () => {
+  it('keeps adapter guard failures aligned with the server guard contract', async () => {
+    type ServerSessionRequest = {
+      session?: {
+        user?: {
+          roles?: readonly string[];
+        } | null;
+      } | null;
+    };
+
+    const anonymous = { session: null } satisfies AppRequest;
+    const memberOnly = {
+      session: {
+        activeOrganizationId: null,
+        id: 'session-1',
+        user: {
+          email: 'ada@example.com',
+          id: 'user-1',
+          roles: ['member'],
+        },
+      },
+    } satisfies AppRequest;
+
+    // SPEC.md §6.5 and §10.3: @jiso/server does not export guard-failure constants, so this
+    // package pins the adapter literals against the canonical server guards instead.
+    expect(await role<AppRequest>('admin')(anonymous)).toEqual(
+      await serverGuards.role<ServerSessionRequest>('admin')(anonymous),
+    );
+    expect(await role<AppRequest>('admin')(memberOnly)).toEqual(
+      await serverGuards.role<ServerSessionRequest>('admin')(memberOnly),
+    );
+    expect(await activeOrganization<AppRequest>()(memberOnly)).toEqual(
+      await serverGuards.role<ServerSessionRequest>('admin')(memberOnly),
+    );
+  });
+
   it('uses the core authed guard contract over the mapped session', async () => {
     const guard = authed<AppRequest>();
 

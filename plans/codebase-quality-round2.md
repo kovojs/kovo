@@ -589,10 +589,20 @@ index.test.ts:4227 while here — it weakens the byte-for-byte claim) + acceptan
       parser is still duplicated between `tests/fw-check.node.mjs` and
       `conformance/app-shell-spike/src/index.test.ts`; sharing it requires edits outside this
       slice's allowed write scope.
-- [ ] **LOW** — better-auth guard-failure literals restate server shapes
+- [x] **LOW** — better-auth guard-failure literals restate server shapes
       (better-auth/src/index.ts:126-142) — import the constants or keep the cross-package
       agreement test and note it; create-jiso error-path output to stdout while exiting 1;
       auth-spike dead narrowing guard (auth-spike/src/index.test.ts:260-263).
+      Evidence 2026-06-11: `@jiso/server` guard-failure constructors remain private, so
+      `packages/better-auth/src/index.test.ts` now records that API-boundary choice and compares
+      adapter unauthenticated/unauthorized failures against canonical server guard results;
+      `packages/create-jiso/src/index.test.ts` covers caught CLI errors returning 1 with no
+      stdout and the error on stderr; `conformance/auth-spike/src/index.test.ts` replaces the
+      post-expect unreachable narrowing branch with an assertion helper. Verified with
+      `pnpm exec vitest --run packages/better-auth/src/index.test.ts`,
+      `pnpm exec vitest --run packages/create-jiso/src/index.test.ts`,
+      `pnpm exec vitest --run conformance/auth-spike/src/index.test.ts`, `pnpm run check`,
+      `pnpm run check:build`, and `pnpm run check:fw`.
 
 Verification: test/drizzle/commerce vitest + conformance + acceptance; a new adversarial
 concurrency test for the harness (two interleaved `exec` calls attribute correctly or fail
