@@ -21,6 +21,7 @@ describe('diagnostic registry', () => {
       'FW231',
       'FW232',
       'FW233',
+      'FW234',
       'FW301',
       'FW302',
       'FW303',
@@ -136,6 +137,12 @@ describe('diagnostic registry', () => {
         "FW233": {
           "code": "FW233",
           "message": "Two writers target the same binding slot.",
+          "severity": "error",
+        },
+        "FW234": {
+          "code": "FW234",
+          "help": "SPEC §6.1.1 requires lowercase, dash-terminated, app-wide unique package component prefixes; jiso-* is reserved for @jiso/* packages.",
+          "message": "Package component prefix registration conflict or reservation violation.",
           "severity": "error",
         },
         "FW301": {

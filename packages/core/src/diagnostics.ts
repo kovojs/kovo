@@ -17,6 +17,7 @@ export type DiagnosticCode =
   | 'FW231'
   | 'FW232'
   | 'FW233'
+  | 'FW234'
   | 'FW301'
   | 'FW302'
   | 'FW303'
@@ -158,6 +159,12 @@ export const diagnosticDefinitions = {
     code: 'FW233',
     severity: 'error',
     message: 'Two writers target the same binding slot.',
+  },
+  FW234: {
+    code: 'FW234',
+    help: 'SPEC §6.1.1 requires lowercase, dash-terminated, app-wide unique package component prefixes; jiso-* is reserved for @jiso/* packages.',
+    severity: 'error',
+    message: 'Package component prefix registration conflict or reservation violation.',
   },
   FW301: {
     code: 'FW301',

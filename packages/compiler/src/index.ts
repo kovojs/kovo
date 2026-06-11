@@ -50,6 +50,10 @@ import {
   validateStaticIds,
 } from './validate/markup.js';
 import { validateLiteralHrefs } from './validate/navigation.js';
+import {
+  validatePackageComponentPrefixes,
+  type PackageComponentPrefixFact,
+} from './validate/package-prefixes.js';
 import { createJisoVitePlugin, type JisoVitePlugin } from './vite.js';
 
 export type { DiagnosticCode };
@@ -77,6 +81,7 @@ export type {
   ScopeComponentCssOptions,
 } from './css.js';
 export { collectCssAssetManifest, dedupeCss, scopeComponentCss, selectCssAssets } from './css.js';
+export type { PackageComponentPrefixFact } from './validate/package-prefixes.js';
 
 export interface EmittedFile {
   fileName: string;
@@ -161,6 +166,7 @@ export function createEmptyCompileResult(): CompileResult {
 
 export interface CompileComponentOptions {
   fileName: string;
+  packageComponentPrefixes?: readonly PackageComponentPrefixFact[];
   queryShapeFacts?: readonly QueryShapeFact[];
   queryShapes?: Record<string, QueryShape>;
   registryFacts?: RegistryFacts;
@@ -258,6 +264,10 @@ export function compileComponentModule(options: CompileComponentOptions): Compil
   const handlers = lowerEventHandlers({ ...options, source }, componentName);
   const queryUpdatePlans = collectQueryUpdatePlans(source, model, componentName);
   const updateCoverage = collectQueryUpdateCoverage(source, model, options, componentName);
+  const packagePrefixDiagnostics = validatePackageComponentPrefixes(
+    options.packageComponentPrefixes,
+    options.fileName,
+  );
   const validationDiagnostics = compilerValidators.flatMap((validator) =>
     validator({ componentName, model, options, originalModel, source, updateCoverage }),
   );
@@ -296,6 +306,7 @@ export function compileComponentModule(options: CompileComponentOptions): Compil
     componentGraphFacts,
     diagnostics: [
       ...versionedHandlers.flatMap((handler) => (handler.diagnostic ? [handler.diagnostic] : [])),
+      ...packagePrefixDiagnostics,
       ...validationDiagnostics,
     ],
     files: [
