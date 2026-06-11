@@ -752,6 +752,11 @@ void test('P3 server data-plane APIs stay exported and covered', async () => {
     /runs query endpoints through args schemas, guards, and request context/,
   );
   assert.match(serverTests, /matches the typed read wire fixture response byte-for-byte/);
+  assert.match(
+    serverTests,
+    /matches the P0 wire fixtures through a live HTTP server byte-for-byte/,
+  );
+  assert.match(serverTests, /fetchWireFixture/);
   assert.match(serverTests, /dispatches typed read endpoints through a query registry/);
   assert.match(serverTests, /runs route pages through guards and notFound page outcomes/);
   assert.match(serverTests, /validates mutation CSRF tokens before running guards/);

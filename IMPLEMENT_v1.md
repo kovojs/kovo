@@ -21,7 +21,7 @@ Audited against the repository on 2026-06-11. Checkmarks mean the behavior, API,
 - [x] P4 Drizzle extraction has AST-backed table/write extraction, arrow-handler coverage, FW406/FW409 diagnostics, query shape derivation with nullable wrappers, projection-less select diagnostics, and conformance coverage.
 - [ ] P4 is not fully frozen: the emitted `generated/touch-graph.ts` workflow and complete v1 invalidation registry contract still need hardening.
 - [x] P5 has enhanced mutation/deferred fragments, DOM morphing, query patch application, typed read refetch, template stamps, isomorphic/update-coverage statuses, Tailwind stylesheet hints, and runtime/browser tests for morph survival and fragment parsing.
-- [ ] P5 byte-for-byte live-server fixture exit and complete form/navigation rename proofs still need final acceptance coverage.
+- [ ] P5 byte-for-byte live-server fixture exit is covered; complete form/navigation rename proofs still need final acceptance coverage.
 - [x] P6 optimism has typed `OptimisticFor`, generated `InvalidationSets`, `await-fragment` statuses, pending stamps, named queues, rebase/restore behavior, unified change-record consumption, and property/runtime tests.
 - [ ] P6 final acceptance still needs full commerce-level coverage for every mutation/query pair and navigation/bfcache edge.
 - [x] P7 stateless liveness has BroadcastChannel mutation sync and visible-return/refetch behavior.
