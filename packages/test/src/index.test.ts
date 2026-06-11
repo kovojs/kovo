@@ -69,6 +69,20 @@ describe('@jiso/test harness', () => {
     ).toThrow('Optimistic property failed for case 0: predicted {"count":0}, eventual {"count":1}');
   });
 
+  it('compares optimistic predictions structurally instead of by JSON key order', () => {
+    expect(
+      propertyTest({
+        apply(_state: { one: number; two: number }) {
+          return { one: 1, two: 2 };
+        },
+        cases: [{ input: {}, state: { one: 0, two: 0 } }],
+        predict() {
+          return { two: 2, one: 1 };
+        },
+      }),
+    ).toEqual({ cases: 1 });
+  });
+
   it('executes mutations against the provided db context', async () => {
     const addToCart = mutation('cart/add', {
       input: s.object({ productId: s.string() }),
@@ -271,6 +285,29 @@ describe('@jiso/test harness', () => {
     const success = await successHarness.exec(addToCart, { quantity: 2 });
     expect(() => assertMutationError(addToCart, success, 'OUT_OF_STOCK')).toThrow(
       'Expected cart/add to fail with OUT_OF_STOCK, but it succeeded.',
+    );
+  });
+
+  it('compares mutation error payloads structurally without dropping undefined fields', async () => {
+    const addToCart = mutation('cart/add', {
+      errors: {
+        OUT_OF_STOCK: s.object({ availableQuantity: s.number().int().min(0) }),
+      },
+      input: s.object({ quantity: s.number().int().min(1) }),
+      handler(_input, _request: { db: Record<string, never> }, context) {
+        return context.fail('OUT_OF_STOCK', { availableQuantity: 0 });
+      },
+    });
+    const harness = createJisoTestHarness({ db: {} });
+    const failure = await harness.exec(addToCart, { quantity: 2 });
+
+    expect(() =>
+      assertMutationError(addToCart, failure, {
+        code: 'OUT_OF_STOCK',
+        payload: { availableQuantity: 0, reason: undefined } as { availableQuantity: number },
+      }),
+    ).toThrow(
+      'Expected cart/add error OUT_OF_STOCK payload {"availableQuantity":0}, got {"availableQuantity":0}.',
     );
   });
 
