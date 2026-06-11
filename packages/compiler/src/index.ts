@@ -1,4 +1,5 @@
 import { diagnosticDefinitions, type DiagnosticCode } from '@jiso/core';
+import { isAbsolute, relative } from 'node:path';
 
 import { componentCssAssetForFile, emitCssModule, type ComponentCssAsset } from './css.js';
 import { diagnosticFor, type CompilerDiagnostic } from './diagnostics.js';
@@ -220,6 +221,9 @@ export interface JisoVitePlugin {
 }
 
 export interface JisoViteDevServer {
+  config?: {
+    root?: string;
+  };
   middlewares: {
     use(handler: JisoViteMiddleware): void;
   };
@@ -395,9 +399,11 @@ export function collectMinifierReservedNames(
 
 export function jisoVitePlugin(): JisoVitePlugin {
   const clientModules = new Map<string, string>();
+  let root = process.cwd();
 
   return {
     configureServer(server) {
+      root = server.config?.root ?? root;
       server.middlewares.use((req, res, next) => {
         const path = devClientModulePath(req.url);
         const source = path ? clientModules.get(path) : undefined;
@@ -415,10 +421,11 @@ export function jisoVitePlugin(): JisoVitePlugin {
     transform(source: string, id: string) {
       if (!/\.[cm]?tsx?$/.test(id) || !source.includes('component(')) return null;
 
-      const result = compileComponentModule({ fileName: id, source });
+      const fileName = viteComponentFileName(id, root);
+      const result = compileComponentModule({ fileName, source });
       for (const file of result.files) {
         if (file.kind === 'client') {
-          clientModules.set(clientModuleUrl(id), file.source);
+          clientModules.set(clientModuleUrl(fileName), file.source);
         }
       }
 
@@ -428,6 +435,20 @@ export function jisoVitePlugin(): JisoVitePlugin {
       };
     },
   };
+}
+
+function viteComponentFileName(id: string, root: string): string {
+  const fileName = id.split(/[?#]/, 1)[0] ?? id;
+  if (!isAbsolute(fileName)) return slashPath(fileName);
+
+  const relativeFileName = relative(root, fileName);
+  if (!relativeFileName.startsWith('..')) return slashPath(relativeFileName);
+
+  return slashPath(fileName.replace(/^\/+/, ''));
+}
+
+function slashPath(fileName: string): string {
+  return fileName.replaceAll('\\', '/');
 }
 
 function devClientModulePath(url: string | undefined): string | null {

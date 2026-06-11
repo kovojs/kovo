@@ -2982,6 +2982,44 @@ describe('jisoVitePlugin', () => {
     expect(res.body).toContain('return removeItem(ctx.state, ctx.params.id);');
   });
 
+  it('serves project-relative client modules when Vite passes absolute ids', () => {
+    const plugin = jisoVitePlugin();
+    const middlewares: JisoViteMiddleware[] = [];
+    plugin.configureServer?.({
+      config: { root: '/workspace/app' },
+      middlewares: {
+        use(handler) {
+          middlewares.push(handler);
+        },
+      },
+    });
+
+    const transformed = plugin.transform?.(
+      cartBadgeSource,
+      '/workspace/app/src/components/cart/cart-badge.tsx',
+    );
+    const clientRef = transformed?.code.match(
+      /\/c\/src\/components\/cart\/cart-badge\.client\.js\?v=[0-9a-f]{8}/,
+    )?.[0];
+    expect(clientRef).toBeDefined();
+    expect(transformed?.code).not.toContain('/c/workspace/app/');
+
+    const res = {
+      body: '',
+      headers: {} as Record<string, string>,
+      setHeader(name: string, value: string) {
+        this.headers[name] = value;
+      },
+      end(body: string) {
+        this.body = body;
+      },
+    };
+
+    middlewares[0]?.({ url: clientRef ?? '' }, res, vi.fn());
+
+    expect(res.body).toContain('export const CartBadge$button_click');
+  });
+
   it('passes through unknown Vite dev middleware requests', () => {
     const plugin = jisoVitePlugin();
     const middlewares: JisoViteMiddleware[] = [];
