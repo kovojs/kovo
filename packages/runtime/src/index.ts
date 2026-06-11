@@ -232,6 +232,7 @@ function withDefaultMutationBroadcast(
       broadcast: installMutationBroadcast({
         ...(options.morph ? { morph: options.morph } : {}),
         channel: new globalThis.BroadcastChannel('jiso:mutation-response') as BroadcastLike,
+        ...(options.queryPlans ? { queryPlans: options.queryPlans } : {}),
         root: options.root,
         store: options.store,
       }),
@@ -249,6 +250,7 @@ export interface EnhancedMutationLoaderOptions {
   morph?: MorphFragment;
   onUploadProgress?: (progress: UploadProgress, form: EnhancedFormElementLike) => void;
   pendingRoot?: PendingRoot;
+  queryPlans?: CompiledQueryUpdatePlans;
   root: MorphRoot & TargetCollectorRoot;
   store: QueryStore;
 }
@@ -283,6 +285,7 @@ export async function dispatchEnhancedFormSubmit(
     ...(options.broadcast ? { broadcast: options.broadcast } : {}),
     ...(options.idem ? { idem: options.idem() } : {}),
     ...(options.morph ? { morph: options.morph } : {}),
+    ...(options.queryPlans ? { queryPlans: options.queryPlans } : {}),
   });
   return true;
 }
@@ -923,6 +926,7 @@ export interface EnhancedMutationSubmitOptions {
   onUploadProgress?: (progress: UploadProgress) => void;
   pendingQueries?: readonly string[];
   pendingRoot?: PendingRoot;
+  queryPlans?: CompiledQueryUpdatePlans;
   root: MorphRoot & TargetCollectorRoot;
   store: QueryStore;
 }
@@ -955,6 +959,7 @@ export interface SubmitContextOptions {
   fetch: EnhancedMutationFetch;
   method?: string;
   morph?: MorphFragment;
+  queryPlans?: CompiledQueryUpdatePlans;
   root: MorphRoot & TargetCollectorRoot;
   store: QueryStore;
 }
@@ -998,6 +1003,7 @@ export function createSubmitContext(options: SubmitContextOptions): SubmitContex
         ...(options.broadcast ? { broadcast: options.broadcast } : {}),
         ...(submitOptions.idem ? { idem: submitOptions.idem } : {}),
         ...(options.morph ? { morph: options.morph } : {}),
+        ...(options.queryPlans ? { queryPlans: options.queryPlans } : {}),
       });
 
       if (submitOptions.onError && isValidationFailure(status, ok)) {
@@ -1292,6 +1298,7 @@ export async function submitEnhancedMutation(options: EnhancedMutationSubmitOpti
     targets = fetched.targets;
     const applied = applyMutationResponseToDom({
       body,
+      ...(options.queryPlans ? { queryPlans: options.queryPlans } : {}),
       root: options.root,
       store: options.store,
       ...(options.morph ? { morph: options.morph } : {}),
@@ -1362,6 +1369,7 @@ async function submitOptimisticEnhancedMutationDirect<Input>(
 
       const applied = applyMutationResponseToDom({
         body,
+        ...(options.queryPlans ? { queryPlans: options.queryPlans } : {}),
         root: options.root,
         store: options.store,
         ...(options.morph ? { morph: options.morph } : {}),
@@ -1380,6 +1388,12 @@ async function submitOptimisticEnhancedMutationDirect<Input>(
     options.rebaser.settle(idem);
     for (const query of queryChunks) {
       options.rebaser.applyServerTruth(query.name, query.value, query.key);
+      applyCompiledQueryUpdatePlanIfSupported(
+        options.root,
+        query.name,
+        query.value,
+        options.queryPlans?.[query.name],
+      );
     }
     const applied = {
       appliedFragments: applyFragments(options.root, fragments, options.morph),
@@ -1471,6 +1485,7 @@ export function installMutationBroadcast(options: {
   channel: BroadcastLike;
   morph?: MorphFragment;
   onChanges?: (changes: readonly MutationChangeRecord[]) => void;
+  queryPlans?: CompiledQueryUpdatePlans;
   root?: MorphRoot;
   store: QueryStore;
 }): MutationBroadcast {
@@ -1481,6 +1496,7 @@ export function installMutationBroadcast(options: {
       applyMutationResponseToDom({
         body: event.data.body,
         ...(options.morph ? { morph: options.morph } : {}),
+        ...(options.queryPlans ? { queryPlans: options.queryPlans } : {}),
         root: options.root,
         store: options.store,
       });

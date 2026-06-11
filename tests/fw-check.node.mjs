@@ -754,7 +754,16 @@ void test('D3 deferred stream responses are consumed by the runtime', async () =
     runtimeTests,
     /runs compiled query update plans in bindings -> named derives -> stamps order/,
   );
+  assert.match(runtimeSource, /queryPlans\?: CompiledQueryUpdatePlans/);
+  assert.match(
+    runtimeSource,
+    /installMutationBroadcast[\s\S]*queryPlans\?: CompiledQueryUpdatePlans/,
+  );
+  assert.match(runtimeTests, /morph:1:1 items:1/);
+  assert.match(runtimeTests, /morph:6:6 items/);
+  assert.match(runtimeTests, /morph:2:2 items/);
   assert.match(runtimeTests, /applies full deferred stream responses in boundary order/);
+  assert.match(runtimeTests, /1 review:1/);
   assert.match(await readProjectFile('fixtures/wire/defer-stream.http'), /priority="5"/);
   assert.match(runtimeTests, /--jiso-boundary--/);
   assert.match(runtimeTests, /reviews-plan/);

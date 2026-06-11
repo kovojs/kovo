@@ -1161,6 +1161,9 @@ describe('query store', () => {
     const store = createQueryStore();
     const root = new FakeMorphRoot();
     const observed: string[] = [];
+    const reviewsSummary = new FakeQueryPlanElement({ 'data-derive': 'reviews.summary' });
+    const recommendationsHost = new FakeQueryPlanElement({ 'data-plan': 'recommendations-host' });
+    root.planElements.push(reviewsSummary, recommendationsHost);
     root.targets.set('reviews:p1', new FakeMorphTarget());
     root.targets.set('recommendations:p1', new FakeMorphTarget());
     store.subscribe('reviews', (value) => {
@@ -1184,12 +1187,33 @@ describe('query store', () => {
       ].join('\n'),
       morph(target, html) {
         observed.push(
-          `morph:${html}:${JSON.stringify({
+          `morph:${html}:${reviewsSummary.textContent}:${recommendationsHost.getAttribute(
+            'data-count',
+          )}:${JSON.stringify({
             recommendations: store.get('recommendations'),
             reviews: store.get('reviews'),
           })}`,
         );
         target.replaceWithHtml(html);
+      },
+      queryPlans: {
+        recommendations: {
+          stamps: [
+            {
+              attr: 'data-count',
+              selector: '[data-plan="recommendations-host"]',
+              select: (value) => (value as { items: unknown[] }).items.length,
+            },
+          ],
+        },
+        reviews: {
+          derives: [
+            {
+              name: 'summary',
+              select: (value) => `${(value as { items: unknown[] }).items.length} review`,
+            },
+          ],
+        },
       },
       root,
       store,
@@ -1197,9 +1221,9 @@ describe('query store', () => {
 
     expect(observed).toEqual([
       'reviews-plan:{"items":[{"id":"r1"}]}',
-      'morph:<section>Reviews ready</section>:{"reviews":{"items":[{"id":"r1"}]}}',
+      'morph:<section>Reviews ready</section>:1 review:null:{"reviews":{"items":[{"id":"r1"}]}}',
       'recommendations-plan:{"items":[{"id":"p2"}]}',
-      'morph:<section>Recommendations ready</section>:{"recommendations":{"items":[{"id":"p2"}]},"reviews":{"items":[{"id":"r1"}]}}',
+      'morph:<section>Recommendations ready</section>:1 review:1:{"recommendations":{"items":[{"id":"p2"}]},"reviews":{"items":[{"id":"r1"}]}}',
     ]);
     expect(result).toEqual({
       appliedFragments: ['reviews:p1', 'recommendations:p1'],
@@ -1289,9 +1313,32 @@ describe('query store', () => {
     const store = createQueryStore();
     const channel = new FakeBroadcastChannel();
     const root = new FakeMorphRoot();
+    const count = new FakeQueryBindingElement('cart.count', { textContent: '1' });
+    const summary = new FakeQueryPlanElement({ 'data-derive': 'cart.summary' });
+    const observed: string[] = [];
+    root.bindings.push(count);
+    root.planElements.push(summary);
     root.targets.set('cart-badge', new FakeMorphTarget('<cart-badge>0</cart-badge>'));
 
-    installMutationBroadcast({ channel, root, store });
+    installMutationBroadcast({
+      channel,
+      morph(target, html) {
+        observed.push(`morph:${count.textContent}:${summary.textContent}`);
+        target.replaceWithHtml(html);
+      },
+      queryPlans: {
+        cart: {
+          derives: [
+            {
+              name: 'summary',
+              select: (value) => `${(value as { count: number }).count} items`,
+            },
+          ],
+        },
+      },
+      root,
+      store,
+    });
 
     channel.onmessage?.({
       data: {
@@ -1305,6 +1352,7 @@ describe('query store', () => {
     });
 
     expect(store.get('cart')).toEqual({ count: 6 });
+    expect(observed).toEqual(['morph:6:6 items']);
     expect(root.targets.get('cart-badge')?.html).toBe('<cart-badge>6</cart-badge>');
   });
 
@@ -1973,6 +2021,12 @@ describe('query store', () => {
     const channel = new FakeBroadcastChannel();
     const broadcast = installMutationBroadcast({ channel, store });
     const root = new FakeMorphRoot();
+    const count = new FakeQueryBindingElement('cart.count', { textContent: '0' });
+    const summary = new FakeQueryPlanElement({ 'data-derive': 'cart.summary' });
+    const host = new FakeQueryPlanElement({ 'data-plan': 'cart-host' });
+    const observed: string[] = [];
+    root.bindings.push(count);
+    root.planElements.push(summary, host);
     root.deps = [
       { deps: 'cart', id: 'cart-badge' },
       { deps: 'product:p1', target: 'recommendations' },
@@ -2006,6 +2060,29 @@ describe('query store', () => {
       formData,
       broadcast,
       idem: 'idem_01HX',
+      morph(target, html) {
+        observed.push(
+          `morph:${count.textContent}:${summary.textContent}:${host.getAttribute('data-count')}`,
+        );
+        target.replaceWithHtml(html);
+      },
+      queryPlans: {
+        cart: {
+          derives: [
+            {
+              name: 'summary',
+              select: (value) => `${(value as { count: number }).count} items`,
+            },
+          ],
+          stamps: [
+            {
+              attr: 'data-count',
+              selector: '[data-plan="cart-host"]',
+              select: (value) => (value as { count: number }).count,
+            },
+          ],
+        },
+      },
       root,
       store,
     });
@@ -2044,6 +2121,7 @@ describe('query store', () => {
       },
     ]);
     expect(store.get('cart')).toEqual({ count: 1 });
+    expect(observed).toEqual(['morph:1:1 items:1', 'morph:1:1 items:1']);
     expect(root.targets.get('cart-badge')?.html).toBe('<cart-badge>1</cart-badge>');
     expect(root.targets.get('recommendations')?.html).toBe('<section></section>');
   });
@@ -2434,6 +2512,11 @@ describe('query store', () => {
     const addToCart = form<'cart/add', { productId: string; quantity: number }>('cart/add');
     const store = createQueryStore();
     const root = new FakeMorphRoot();
+    const count = new FakeQueryBindingElement('cart.count', { textContent: '0' });
+    const summary = new FakeQueryPlanElement({ 'data-derive': 'cart.summary' });
+    const observed: string[] = [];
+    root.bindings.push(count);
+    root.planElements.push(summary);
     root.deps = [{ id: 'cart-badge' }];
     root.targets.set('cart-badge', new FakeMorphTarget());
     const fetch = vi.fn(async (_url: string, options: EnhancedMutationFetchOptions) => {
@@ -2451,7 +2534,25 @@ describe('query store', () => {
         },
       };
     });
-    const ctx = createSubmitContext({ fetch, root, store });
+    const ctx = createSubmitContext({
+      fetch,
+      morph(target, html) {
+        observed.push(`morph:${count.textContent}:${summary.textContent}`);
+        target.replaceWithHtml(html);
+      },
+      queryPlans: {
+        cart: {
+          derives: [
+            {
+              name: 'summary',
+              select: (value) => `${(value as { count: number }).count} items`,
+            },
+          ],
+        },
+      },
+      root,
+      store,
+    });
 
     const result = await ctx.submit(addToCart, {
       idem: 'idem_ctx',
@@ -2470,6 +2571,7 @@ describe('query store', () => {
       method: 'POST',
     });
     expect(result.appliedFragments).toEqual(['cart-badge']);
+    expect(observed).toEqual(['morph:2:2 items']);
     expect(store.get('cart')).toEqual({ count: 2 });
   });
 
