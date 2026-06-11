@@ -91,6 +91,12 @@ interface DataBindAttribute {
   path: string;
 }
 
+interface IdrefValue {
+  index: number;
+  length: number;
+  value: string;
+}
+
 export interface QueryUpdateCoverageFact {
   componentName: string;
   detail?: string;
@@ -205,7 +211,7 @@ const compilerValidators: readonly CompilerValidator[] = [
   ({ model, options, source }) => validateStampExpressionDrift(source, model, options),
   ({ options, source }) => validateEventPayloads(source, options),
   ({ options, source }) => validateDirectDbAccess(source, options.fileName),
-  ({ options, originalModel }) => validateIdrefs(originalModel, options.fileName),
+  ({ options, originalModel }) => validateIdrefs(options.source, originalModel, options.fileName),
   ({ model, options, source }) => validateStaticIds(source, model, options.fileName),
   ({ options, source }) => validateLiteralHrefs(source, options),
   ({ model, options }) => validateHtmlContentModel(model, options.fileName),
@@ -1355,12 +1361,20 @@ function validateDirectDbAccess(source: string, fileName: string): CompilerDiagn
   return [];
 }
 
-function validateIdrefs(model: ComponentModuleModel, fileName: string): CompilerDiagnostic[] {
+function validateIdrefs(
+  source: string,
+  model: ComponentModuleModel,
+  fileName: string,
+): CompilerDiagnostic[] {
   const ids = new Set(literalIds(model));
-  if (ids.size === 0) return idrefValues(model).map((value) => fw221Diagnostic(fileName, value));
+  if (ids.size === 0) {
+    return idrefValues(model).map((value) => fw221Diagnostic(fileName, source, value));
+  }
 
-  const missing = idrefValues(model).filter((value) => !ids.has(value));
-  return [...new Set(missing)].map((value) => fw221Diagnostic(fileName, value));
+  const missing = idrefValues(model).filter((value) => !ids.has(value.value));
+  return dedupeBy(missing, (value) => value.value).map((value) =>
+    fw221Diagnostic(fileName, source, value),
+  );
 }
 
 function validateStaticIds(
@@ -1665,15 +1679,15 @@ function routePathMatchesUrl(routePath: string, target: string): boolean {
   return new RegExp(pattern).test(pathname);
 }
 
-function fw221Diagnostic(fileName: string, value: string): CompilerDiagnostic {
+function fw221Diagnostic(fileName: string, source: string, value: IdrefValue): CompilerDiagnostic {
   return {
-    ...diagnosticFor(fileName, 'FW221'),
-    message: `${diagnosticDefinitions.FW221.message} ${value}`,
+    ...diagnosticFor(fileName, 'FW221', source, value.index, value.length),
+    message: `${diagnosticDefinitions.FW221.message} ${value.value}`,
   };
 }
 
-function idrefValues(model: ComponentModuleModel): string[] {
-  const values: string[] = [];
+function idrefValues(model: ComponentModuleModel): IdrefValue[] {
+  const values: IdrefValue[] = [];
   const idrefAttributes = new Set([
     'aria-activedescendant',
     'aria-controls',
@@ -1693,7 +1707,24 @@ function idrefValues(model: ComponentModuleModel): string[] {
 
     const multiValue =
       attribute.name.startsWith('aria-') && attribute.name !== 'aria-activedescendant';
-    values.push(...(multiValue ? rawValue.split(/\s+/).filter(Boolean) : [rawValue]));
+    values.push(
+      ...(multiValue
+        ? rawValue
+            .split(/\s+/)
+            .filter(Boolean)
+            .map((value) => ({
+              index: attribute.start,
+              length: attribute.end - attribute.start,
+              value,
+            }))
+        : [
+            {
+              index: attribute.start,
+              length: attribute.end - attribute.start,
+              value: rawValue,
+            },
+          ]),
+    );
   }
 
   return values;

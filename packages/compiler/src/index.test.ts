@@ -776,20 +776,26 @@ export const CartShell = component('cart-shell', {
       {
         code: 'FW221',
         fileName: 'cart-shell.tsx',
+        length: 17,
         message: 'IDREF references an id not present in component scope. cart-search',
         severity: 'error',
+        start: { column: 14, line: 5 },
       },
       {
         code: 'FW221',
         fileName: 'cart-shell.tsx',
+        length: 41,
         message: 'IDREF references an id not present in component scope. missing-help',
         severity: 'error',
+        start: { column: 30, line: 6 },
       },
       {
         code: 'FW221',
         fileName: 'cart-shell.tsx',
+        length: 23,
         message: 'IDREF references an id not present in component scope. filters',
         severity: 'error',
+        start: { column: 15, line: 8 },
       },
     ]);
   });
