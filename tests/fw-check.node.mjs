@@ -771,6 +771,7 @@ void test('P3 commerce mutation runs through the transaction lifecycle', async (
 void test('D1 commerce enhanced fragments carry Tailwind stylesheet hints', async () => {
   const commerceSource = await readProjectFile('examples/commerce/src/app.ts');
   const commerceTests = await readProjectFile('examples/commerce/src/app.test.ts');
+  const compilerCssSource = await readProjectFile('packages/compiler/src/css.ts');
   const compilerSource = await readProjectFile('packages/compiler/src/index.ts');
   const compilerTests = await readProjectFile('packages/compiler/src/index.test.ts');
   const serverSource = await readProjectFile('packages/server/src/index.ts');
@@ -799,8 +800,9 @@ void test('D1 commerce enhanced fragments carry Tailwind stylesheet hints', asyn
   assert.match(serverSource, /criticalCss\?: string/);
   assert.match(serverSource, /data-jiso-critical-href/);
   assert.match(serverSource, /escapeStyleText/);
-  assert.match(compilerSource, /criticalCss\?: string/);
-  assert.match(compilerSource, /cssAsset\.criticalCss/);
+  assert.match(compilerCssSource, /criticalCss\?: string/);
+  assert.match(compilerCssSource, /cssAsset\.criticalCss/);
+  assert.match(compilerSource, /from '\.\/css\.js'/);
   assert.match(compilerTests, /criticalCss: expect\.stringContaining/);
   assert.match(serverSource, /renderStylesheetLinks\(wireRequest\.failureStylesheets/);
   assert.match(serverSource, /error-boundary=.*renderStylesheetLinks\(renderer\.stylesheets/);
