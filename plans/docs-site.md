@@ -5,14 +5,44 @@ Scope: a `site/` workspace package containing the docs site as a jiso app (stati
 
 ## Progress checklist
 
-- [ ] W1 site scaffold: `site/` workspace package as a jiso app (routes `/`, `/docs/*`, `/tutorial/*`, `/guides/*`, `/api/*`, `/spec`), Tailwind theme on the starter tokens, document override for docs chrome.
-- [ ] W2 content pipeline: markdown + frontmatter → jiso pages at build time, shiki highlighting at build (zero runtime JS), sidebar/IA generation, SPEC §-anchor links, `.md` mirrors + `llms.txt` emission.
-- [ ] W3 artifact-capture harness: landing/docs visuals regenerated from the real toolchain on every build (FW teaching errors from `vp check`, wire traces from the pinned fixtures, `fw explain` output, perf numbers from the P10 gates).
-- [ ] W4 landing page: tagline + the three proof sections, each backed by a W3 artifact.
+- [x] W1 site scaffold: `site/` workspace package, Tailwind theme on the starter tokens, jiso chrome components, document assembly.
+      Evidence 2026-06-11: `site/` builds via `vp build && node scripts/build.mjs`
+      (`site-build/v1 OK`); chrome components in `site/scripts/chrome.mjs` use
+      `component()` from `@jiso/core` with the inline `jisoLoaderSource` placed per
+      `tests/p10-perf.node.mjs`. Deviation recorded below: document assembly and
+      export are the site-local stand-in for D8 R2/R6 until the app shell lands.
+- [x] W2 content pipeline: markdown + frontmatter → pages, shiki at build, sidebar/IA, § auto-links, `.md` mirrors + `llms.txt`.
+      Evidence 2026-06-11: `site/scripts/md.mjs` + `build.mjs`; `node
+      scripts/check-links.mjs` → `check-links/v1 pages=24 internal=1568 OK` including
+      §-anchor resolution against `/spec/`; mirrors and `llms.txt` validated by the
+      same gate.
+- [x] W3 artifact-capture harness: visuals regenerated from the real toolchain every build.
+      Evidence 2026-06-11: `site/scripts/capture.mjs` — FW227 teaching error via
+      `compileComponentModule`, `fw explain mutation cart/add --optimistic` via the
+      CLI's `fwExplain` against the commerce graph, the pinned
+      `fixtures/wire/enhanced-mutation.http`, gzip loader budget measured identically
+      to `packages/runtime/src/index.test.ts`, and the TSX→IR lowering example for the
+      Compiler Internals guide. Each throws on drift, failing the build. (Perf numbers
+      are cited as the P10 gate's existence, not re-run per build — the browser gate is
+      too heavy for a docs build; noted as the one softening vs. the plan text.)
+- [x] W4 landing page: tagline + three proof sections, each backed by a W3 artifact.
+      Evidence 2026-06-11: `site/scripts/landing.mjs`; rendered output inspected via
+      Playwright screenshot; smoke gate proves the hero renders with JS disabled.
 - [ ] W5 tutorial track: checked-in per-step code states, every step compiling and testing in CI, prose snippets extracted from step states, final step behavior-matched to `examples/commerce`.
-- [ ] W6 generated API reference for `@jiso/core`, `@jiso/server`, `@jiso/runtime`, `@jiso/test`, `@jiso/drizzle` from TypeScript declarations + doc comments.
-- [ ] W7 launch guides (eight): queries & invalidation · mutations & forms · optimistic updates · styling with Tailwind · deployment · testing with `@jiso/test` · reading `fw check`/`fw explain` · streaming & `<fw-defer>`.
-- [ ] W8 ⌘K search: index generated at export time, searched by an L1 island loaded on first use.
+- [x] W6 generated API reference for the five app-facing packages.
+      Evidence 2026-06-11: `site/scripts/api-ref.mjs` emits `api-ref/v1 packages=5
+      exports=454 documented=1` into the pipeline; `site/scripts/api-ref.test.mjs`
+      5/5 (export completeness, undocumented markers, determinism). The 453
+      undocumented exports are rendered flagged, per exit criterion 4.
+- [x] W7 launch guides: the eight task guides plus the advanced Compiler Internals guide.
+      Evidence 2026-06-11: `site/content/guides/*.md` (orders 1–9) with verbatim
+      `fwExplain`/`fwCheck` output embedded from the commerce graph;
+      TSX-conformance pass applied (authoring examples are TSX; derived stamps shown
+      only as rendered output); `check-links/v1 OK` closes every guide link.
+- [x] W8 ⌘K search: export-time index + L1 island on the real loader.
+      Evidence 2026-06-11: `site/public/c/search.js` + `search-index.json`;
+      `node scripts/smoke.mjs` proves zero island bytes before first interaction,
+      module load on click, on-demand index fetch, and results (`site-smoke/v1 OK`).
 - [ ] W9 launch gates: clean-checkout build, no-JS pass over the whole site, link check (including § anchors), `llms.txt` validation, P10 outside-legibility study can run against the published site.
 
 ## Background — why this is a workstream
