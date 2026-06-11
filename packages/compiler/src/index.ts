@@ -16,12 +16,19 @@ export interface EmittedFile {
 }
 
 export interface CompileResult {
+  componentGraphFacts: readonly ComponentGraphFact[];
   cssAssets: readonly ComponentCssAsset[];
   diagnostics: CompilerDiagnostic[];
   files: EmittedFile[];
   platformSubstitutions: PlatformSubstitution[];
   queryUpdatePlans: readonly QueryUpdatePlanFact[];
   viewTransitions: ViewTransitionStamp[];
+}
+
+export interface ComponentGraphFact {
+  fragments?: readonly string[];
+  name: string;
+  queries?: readonly string[];
 }
 
 export interface CssAsset {
@@ -63,6 +70,7 @@ export interface QueryPlanBootstrapOptions {
 
 export function createEmptyCompileResult(): CompileResult {
   return {
+    componentGraphFacts: [],
     cssAssets: [],
     diagnostics: [],
     files: [],
@@ -91,6 +99,7 @@ export interface RegistryFacts {
 export type RegistryTypeFacts = Readonly<Record<string, string>>;
 
 export interface RegistryGraphInput {
+  components?: readonly ComponentGraphFact[];
   mutations?: readonly {
     invalidates?: readonly string[];
     key: string;
@@ -108,6 +117,32 @@ export interface RegistryGraphInput {
 export interface RegistryTypeFactOptions {
   mutations?: RegistryTypeFacts;
   queries?: RegistryTypeFacts;
+}
+
+export interface CompileAppGraphOptions {
+  components?: readonly CompileResult[];
+  graph?: RegistryGraphInput;
+  registryTypes?: RegistryTypeFactOptions;
+}
+
+export interface CompileAppGraphResult {
+  graph: RegistryGraphInput;
+  registryFacts: RegistryFacts;
+}
+
+export function deriveAppGraph(options: CompileAppGraphOptions): CompileAppGraphResult {
+  const graph: RegistryGraphInput = {
+    ...options.graph,
+    components: [
+      ...(options.graph?.components ?? []),
+      ...(options.components ?? []).flatMap((component) => component.componentGraphFacts),
+    ],
+  };
+
+  return {
+    graph,
+    registryFacts: deriveRegistryFactsFromGraph(graph, options.registryTypes),
+  };
 }
 
 export function deriveRegistryFactsFromGraph(
@@ -183,6 +218,7 @@ const cssIrHeader = '/* @jiso-ir */';
 export function compileComponentModule(options: CompileComponentOptions): CompileResult {
   if (isIr(options.source)) {
     return {
+      componentGraphFacts: [],
       cssAssets: [],
       diagnostics: [],
       files: [{ fileName: options.fileName, source: options.source }],
@@ -215,6 +251,7 @@ export function compileComponentModule(options: CompileComponentOptions): Compil
   const cssSource = emitCssModule(source, componentName);
   const fragmentTargetFacts = findFragmentTargetFacts(source, componentName);
   const fragmentTargets = fragmentTargetFacts.map((fact) => fact.target);
+  const componentGraphFacts = [componentGraphFact(componentName, source, fragmentTargets)];
   const cssAssets = cssSource
     ? [componentCssAssetForFile(cssFileName, componentName, fragmentTargets, {}, cssSource)]
     : [];
@@ -232,6 +269,7 @@ export function compileComponentModule(options: CompileComponentOptions): Compil
   });
 
   return {
+    componentGraphFacts,
     diagnostics: [
       ...handlers.flatMap((handler) => (handler.diagnostic ? [handler.diagnostic] : [])),
       ...serverFactStateDiagnostics,
@@ -1843,6 +1881,24 @@ function findFragmentTargetFacts(source: string, componentName: string): Fragmen
       target: explicitName ?? kebabCase(componentName),
     },
   ];
+}
+
+function componentGraphFact(
+  componentName: string,
+  source: string,
+  fragmentTargets: readonly string[],
+): ComponentGraphFact {
+  const queries = componentQueryNames(source);
+
+  return {
+    ...(fragmentTargets.length === 0 ? {} : { fragments: fragmentTargets }),
+    name: componentName,
+    ...(queries.length === 0 ? {} : { queries }),
+  };
+}
+
+function componentQueryNames(source: string): string[] {
+  return topLevelObjectKeys(extractObjectLiteralAfterProperty(source, 'queries') ?? '{}');
 }
 
 function fragmentTargetPropsType(source: string): string {

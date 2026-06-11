@@ -658,11 +658,14 @@ void test('P10 commerce graph assertions answer behavior mechanically', async ()
   assert.match(cliTests, /hand-write in the mutation module, or declare 'await-fragment'/);
   assert.match(cliTests, /ignores unrelated statuses/);
   assert.match(coreSource, /interface InvalidationSets/);
+  assert.match(compilerSource, /componentGraphFacts: readonly ComponentGraphFact\[\]/);
+  assert.match(compilerSource, /function deriveAppGraph/);
   assert.match(compilerSource, /invalidations\?: Readonly<Record<string, readonly string\[\]>>/);
   assert.match(compilerSource, /function deriveRegistryFactsFromGraph/);
   assert.match(compilerSource, /function deriveInvalidationFactsFromGraph/);
   assert.match(compilerSource, /function invalidationSetFactLines/);
   assert.match(compilerTests, /export interface InvalidationSets/);
+  assert.match(compilerTests, /derives app graph component facts from compiled component results/);
   assert.match(compilerTests, /derives registry facts from graph query, mutation, and page facts/);
   assert.match(runtimeSource, /type InvalidatedQueryValues/);
   assert.match(runtimeSource, /OptimisticEntry/);

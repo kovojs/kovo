@@ -5,6 +5,7 @@ import {
   collectCssAssetManifest,
   collectMinifierReservedNames,
   compileComponentModule,
+  deriveAppGraph,
   deriveRegistryFactsFromGraph,
   dedupeCss,
   emitQueryPlanBootstrapModule,
@@ -19,6 +20,7 @@ import { component } from '@jiso/core';
 
 export const CartBadge = component('cart-badge', {
   fragmentTarget: true,
+  queries: { cart: {} },
   render: () => (
     <button onClick={() => removeItem(state, item.id)}>
       <span data-bind="cart.count">2</span>
@@ -218,6 +220,63 @@ export const CartActions = component('cart-actions', {
 }`);
     expect(registry).toContain('export type DomainKey = "cart" | "order" | "product";');
     expect(() => assertFixpoint(result)).not.toThrow();
+  });
+
+  it('derives app graph component facts from compiled component results', () => {
+    const cartBadge = compileComponentModule({
+      fileName: 'components/cart/cart-badge.tsx',
+      source: cartBadgeSource,
+    });
+    const productGrid = compileComponentModule({
+      fileName: 'components/products/product-grid.tsx',
+      source: `
+import { component } from '@jiso/core';
+
+export const ProductGrid = component('product-grid', {
+  queries: { productGrid: {} },
+  render: () => <section><ul data-bind="productGrid.items"></ul></section>,
+});
+`,
+    });
+
+    expect(cartBadge.componentGraphFacts).toEqual([
+      {
+        fragments: ['cart-badge'],
+        name: 'CartBadge',
+        queries: ['cart'],
+      },
+    ]);
+
+    const derived = deriveAppGraph({
+      components: [cartBadge, productGrid],
+      graph: {
+        mutations: [{ invalidates: ['cart'], key: 'cart/add', writes: ['cart'] }],
+        pages: [{ route: '/cart' }],
+        queries: [
+          { domains: ['cart'], query: 'cart' },
+          { domains: ['product'], query: 'productGrid' },
+        ],
+      },
+    });
+
+    expect(derived.graph.components).toEqual([
+      {
+        fragments: ['cart-badge'],
+        name: 'CartBadge',
+        queries: ['cart'],
+      },
+      {
+        name: 'ProductGrid',
+        queries: ['productGrid'],
+      },
+    ]);
+    expect(derived.registryFacts).toEqual({
+      domainKeys: ['cart', 'product'],
+      invalidations: {
+        'cart/add': ['cart'],
+      },
+      routes: ['/cart'],
+    });
   });
 
   it('emits scoped CSS artifacts for static co-located component CSS', () => {
