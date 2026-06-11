@@ -726,14 +726,13 @@ describe('fw explain', () => {
         'updates: cart->component:CartBadge,page:/cart; recommendations->component:Recommendations',
         'OPTIMISTIC cart hand-written',
         'OPTIMISTIC recommendations await-fragment',
-        'OPTIMISTIC cart.discount UNHANDLED',
-        'OPTIMISTIC-SUMMARY total=3 hand-written=1 await-fragment=1 UNHANDLED=1',
+        'OPTIMISTIC-SUMMARY total=2 hand-written=1 await-fragment=1 UNHANDLED=0',
         '',
       ].join('\n'),
     });
   });
 
-  it('explains missing optimistic coverage as derived UNHANDLED rows', () => {
+  it('explains missing optimistic coverage as derived UNHANDLED rows and ignores unrelated statuses', () => {
     expect(
       fwExplain(
         {
@@ -758,9 +757,9 @@ describe('fw explain', () => {
         'invalidates: cart',
         'manual-invalidates: -',
         'updates: -',
-        'OPTIMISTIC recommendations await-fragment',
         'OPTIMISTIC cart UNHANDLED',
-        'OPTIMISTIC-SUMMARY total=2 hand-written=0 await-fragment=1 UNHANDLED=1',
+        "  -> hand-write in the mutation module, or declare 'await-fragment'",
+        'OPTIMISTIC-SUMMARY total=1 hand-written=0 await-fragment=0 UNHANDLED=1',
         '',
       ].join('\n'),
     });

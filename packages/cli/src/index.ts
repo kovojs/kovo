@@ -287,6 +287,9 @@ export function fwExplain(input: FwExplainInput, options: FwExplainOptions): FwC
 
       for (const coverage of coverages) {
         lines.push(`OPTIMISTIC ${coverage.query} ${coverage.status}`);
+        if (coverage.status === 'UNHANDLED') {
+          lines.push(optimisticUnhandledFixLine());
+        }
       }
 
       lines.push(optimisticSummary(coverages));
@@ -602,15 +605,23 @@ function optimisticCoverageWarning(mutation: string, query: string): string {
   return `WARN FW310 ${mutation} -> ${query} Invalidated query lacks optimistic transform.`;
 }
 
+function optimisticUnhandledFixLine(): string {
+  return "  -> hand-write in the mutation module, or declare 'await-fragment'";
+}
+
 function optimisticCoverageForMutation(
   mutation: MutationExplain,
   input: FwExplainInput,
 ): OptimisticCoverage[] {
-  const explicit = input.optimistic?.filter((item) => item.mutation === mutation.key) ?? [];
+  const affectedQueries = new Set(
+    mutationAffectedQueries(mutation, input).map((query) => query.query),
+  );
+  const explicit =
+    input.optimistic?.filter(
+      (item) => item.mutation === mutation.key && affectedQueries.has(item.query),
+    ) ?? [];
   const covered = new Set(explicit.map((coverage) => coverage.query));
-  const domains = mutationAffectedDomains(mutation);
-  const derivedUnhandled = (input.queries ?? [])
-    .filter((query) => query.domains.some((domain) => domains.has(domain)))
+  const derivedUnhandled = mutationAffectedQueries(mutation, input)
     .filter((query) => !covered.has(query.query))
     .map((query) => ({
       mutation: mutation.key,
@@ -620,6 +631,18 @@ function optimisticCoverageForMutation(
     .sort((left, right) => left.query.localeCompare(right.query));
 
   return [...explicit, ...derivedUnhandled];
+}
+
+function mutationAffectedQueries(
+  mutation: MutationExplain,
+  input: FwExplainInput,
+): readonly QueryReadSet[] {
+  const domains = mutationAffectedDomains(mutation);
+  if (domains.size === 0) return [];
+
+  return (input.queries ?? []).filter((query) =>
+    query.domains.some((domain) => domains.has(domain)),
+  );
 }
 
 function mutationAffectedDomains(mutation: MutationExplain): Set<string> {

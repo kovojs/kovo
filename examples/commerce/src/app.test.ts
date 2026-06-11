@@ -698,10 +698,7 @@ describe('commerce example', () => {
         'invalidates: -',
         'manual-invalidates: -',
         'updates: -',
-        'OPTIMISTIC cart await-fragment',
-        'OPTIMISTIC productGrid await-fragment',
-        'OPTIMISTIC orderHistory await-fragment',
-        'OPTIMISTIC-SUMMARY total=3 hand-written=0 await-fragment=3 UNHANDLED=0',
+        'OPTIMISTIC-SUMMARY total=0 hand-written=0 await-fragment=0 UNHANDLED=0',
         '',
       ].join('\n'),
     });
@@ -762,9 +759,6 @@ describe('commerce example', () => {
   });
 
   it('answers commerce optimistic coverage mechanically from fw explain output', () => {
-    const page = fwExplain(commerceGraph, { kind: 'page', target: '/cart' });
-    const pageQueries = explainList(explainLine(page.output, 'queries: '));
-
     for (const mutation of commerceGraph.mutations) {
       const explanation = fwExplain(commerceGraph, {
         kind: 'mutation',
@@ -772,8 +766,9 @@ describe('commerce example', () => {
         target: mutation.key,
       });
       const statuses = optimisticStatuses(explanation.output);
+      const affectedQueries = [...mutationUpdateConsumers(explanation.output).keys()];
 
-      for (const query of pageQueries) {
+      for (const query of affectedQueries) {
         expect(statuses.get(query)).toBeDefined();
         expect(statuses.get(query)).not.toBe('UNHANDLED');
       }
