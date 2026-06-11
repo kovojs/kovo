@@ -16,6 +16,12 @@ class DomFragmentTarget implements MorphTarget {
     return this.element.innerHTML;
   }
 
+  appendHtml(html: string): void {
+    const template = document.createElement('template');
+    template.innerHTML = html.trim();
+    this.element.append(...Array.from(template.content.childNodes));
+  }
+
   replaceWithHtml(html: string): void {
     const template = document.createElement('template');
     template.innerHTML = html.trim();
@@ -318,5 +324,74 @@ describe('runtime browser suite', () => {
     expect(root.querySelector<HTMLDivElement>('[data-key="panel"]')).toBe(panel);
     expect(panel.scrollTop).toBe(4);
     expect(root.querySelector('label')?.textContent).toBe('Updated quantity');
+  });
+
+  it('appends real DOM fragments without replacing keyed list nodes', () => {
+    const root = document.createElement('main');
+    root.innerHTML = [
+      '<section fw-c="product-grid">',
+      '<article data-key="p1"><input value="keep"></article>',
+      '<article data-key="p2">Second</article>',
+      '</section>',
+    ].join('');
+    document.body.append(root);
+    const grid = root.querySelector('[fw-c="product-grid"]');
+    const first = root.querySelector('[data-key="p1"]');
+    const second = root.querySelector('[data-key="p2"]');
+    const input = root.querySelector('input');
+
+    if (!grid || !first || !second || !input) throw new Error('missing append fixture');
+
+    input.focus();
+
+    const appendResult = applyMutationResponseToDom({
+      body: [
+        '<fw-fragment target="product-grid" mode="append">',
+        '<article data-key="p3">Third</article>',
+        '<article data-key="p4">Fourth</article>',
+        '</fw-fragment>',
+      ].join(''),
+      morph: keyedDomMorph,
+      root: new DomFragmentRoot(root),
+      store: createQueryStore(),
+    });
+
+    expect(appendResult.appliedFragments).toEqual(['product-grid']);
+    expect(root.querySelector('[fw-c="product-grid"]')).toBe(grid);
+    expect(root.querySelector('[data-key="p1"]')).toBe(first);
+    expect(root.querySelector('[data-key="p2"]')).toBe(second);
+    expect(document.activeElement).toBe(input);
+    expect([...grid.children].map((child) => child.getAttribute('data-key'))).toEqual([
+      'p1',
+      'p2',
+      'p3',
+      'p4',
+    ]);
+
+    applyMutationResponseToDom({
+      body: [
+        '<fw-fragment target="product-grid">',
+        '<section fw-c="product-grid">',
+        '<article data-key="p4">Fourth updated</article>',
+        '<article data-key="p1"><input value="keep"></article>',
+        '<article data-key="p3">Third</article>',
+        '<article data-key="p2">Second</article>',
+        '</section>',
+        '</fw-fragment>',
+      ].join(''),
+      morph: keyedDomMorph,
+      root: new DomFragmentRoot(root),
+      store: createQueryStore(),
+    });
+
+    expect(root.querySelector('[fw-c="product-grid"]')).toBe(grid);
+    expect(root.querySelector('[data-key="p1"]')).toBe(first);
+    expect(root.querySelector('[data-key="p2"]')).toBe(second);
+    expect([...grid.children].map((child) => child.getAttribute('data-key'))).toEqual([
+      'p4',
+      'p1',
+      'p3',
+      'p2',
+    ]);
   });
 });

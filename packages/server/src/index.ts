@@ -579,6 +579,7 @@ export type DeferredPriority = 'high' | 'normal' | 'low' | number;
 
 export interface DeferredFragmentChunk {
   html: string;
+  mode?: 'append' | 'replace';
   priority?: DeferredPriority;
   stylesheets?: readonly (string | StylesheetAsset)[];
   target: string;
@@ -756,9 +757,10 @@ function renderDeferredFragmentChunk(fragment: DeferredFragmentChunk): string {
     fragment.priority !== undefined
       ? ` priority="${escapeAttribute(String(fragment.priority))}"`
       : '';
+  const mode = fragment.mode === 'append' ? ' mode="append"' : '';
   const stylesheets = renderStylesheetLinks(fragment.stylesheets ?? []);
 
-  return `<fw-fragment target="${escapeAttribute(fragment.target)}"${priority}>${stylesheets}${fragment.html}</fw-fragment>`;
+  return `<fw-fragment target="${escapeAttribute(fragment.target)}"${mode}${priority}>${stylesheets}${fragment.html}</fw-fragment>`;
 }
 
 function renderFragmentOpen(target: string, mode?: 'append' | 'replace'): string {

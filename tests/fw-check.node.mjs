@@ -317,6 +317,7 @@ void test('S2 loader budget and L0 no-upgrade path are acceptance evidence', asy
 });
 
 void test('P2 loader smoke evidence remains represented in runtime tests', async () => {
+  const runtimeSource = await readProjectFile('packages/runtime/src/index.ts');
   const runtimeTests = await readProjectFile('packages/runtime/src/index.test.ts');
   const browserTests = await readProjectFile('packages/runtime/src/index.browser.test.ts');
 
@@ -330,6 +331,7 @@ void test('P2 loader smoke evidence remains represented in runtime tests', async
   );
   assert.match(runtimeTests, /expect\(importModule\)\.not\.toHaveBeenCalled\(\)/);
   assert.match(runtimeTests, /expect\(jisoLoaderSource\)\.not\.toContain\('customElements'\)/);
+  assert.match(runtimeSource, /insertAdjacentHTML\("beforeend"/);
   assert.match(runtimeTests, /ships an inline enhanced form round trip in the bootstrap source/);
   assert.match(
     browserTests,
@@ -414,6 +416,7 @@ void test('P5 morph evidence includes structural and browser survival suites', a
     browserTests,
     /preserves focus, selection, scroll, and keyed identity during a real DOM fragment morph/,
   );
+  assert.match(browserTests, /appends real DOM fragments without replacing keyed list nodes/);
   assert.match(browserTests, /document\.activeElement/);
   assert.match(browserTests, /selectionStart/);
   assert.match(browserTests, /scrollTop/);
@@ -693,6 +696,8 @@ void test('Drizzle pinned conformance suite is an explicit gate', async () => {
 void test('D3 deferred stream responses are consumed by the runtime', async () => {
   const compilerSource = await readProjectFile('packages/compiler/src/index.ts');
   const compilerTests = await readProjectFile('packages/compiler/src/index.test.ts');
+  const serverSource = await readProjectFile('packages/server/src/index.ts');
+  const serverTests = await readProjectFile('packages/server/src/index.test.ts');
   const runtimeSource = await readProjectFile('packages/runtime/src/index.ts');
   const runtimeTests = await readProjectFile('packages/runtime/src/index.test.ts');
 
@@ -703,6 +708,11 @@ void test('D3 deferred stream responses are consumed by the runtime', async () =
   assert.match(runtimeSource, /export function applyQueryBindings/);
   assert.match(runtimeSource, /deferredStreamChunks/);
   assert.match(runtimeSource, /--\$\{boundary\}/);
+  assert.match(serverSource, /mode\?: 'append' \| 'replace'/);
+  assert.match(
+    serverTests,
+    /renders deferred append fragment mode for streamed pagination fragments/,
+  );
   assert.match(
     runtimeTests,
     /applies query update bindings from mutation chunks without requiring a fragment/,

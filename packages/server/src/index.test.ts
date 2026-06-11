@@ -590,6 +590,34 @@ describe('server mutation primitives', () => {
     );
   });
 
+  it('renders deferred append fragment mode for streamed pagination fragments', () => {
+    expect(
+      renderDeferredStream({
+        chunks: [
+          {
+            fragments: [
+              {
+                html: '<article data-key="p3">Third</article>',
+                mode: 'append',
+                target: 'product-grid',
+              },
+            ],
+          },
+        ],
+        closeHtml: '',
+        shell: '<!doctype html><html><body><fw-defer target="product-grid"></fw-defer>',
+      }).body,
+    ).toBe(
+      [
+        '<!doctype html><html><body><fw-defer target="product-grid"></fw-defer>',
+        '--jiso-boundary',
+        '<fw-fragment target="product-grid" mode="append"><article data-key="p3">Third</article></fw-fragment>',
+        '--jiso-boundary--',
+        '',
+      ].join('\n'),
+    );
+  });
+
   it('delivers late stylesheets with deferred fragments', () => {
     expect(
       renderDeferredStream({
