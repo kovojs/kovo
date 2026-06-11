@@ -223,78 +223,44 @@ export function extractTouchGraphFromSource(files: readonly SourceFileInput[]): 
   }
 
   for (const file of files) {
-    for (const fn of extractFunctions(file.source)) {
-      const reads: ReadSummaryInput[] = [];
-      const writes: WriteSummaryInput[] = [];
-      const unresolved: UnresolvedSummaryInput[] = [];
+    const functions = extractFunctions(file.source);
+    const functionsByName = new Map(functions.map((fn) => [fn.name, fn]));
+    const callsByName = new Map(
+      functions.map((fn) => [
+        fn.name,
+        extractLocalFunctionCalls(fn.body).filter((call) => functionsByName.has(call)),
+      ]),
+    );
+    const summaries = new Map(
+      functions.map((fn) => [
+        fn.name,
+        directSummaryForFunction(fn, file, tables, unresolvedIdentifiers),
+      ]),
+    );
 
-      for (const call of extractDrizzleWriteCalls(fn.body)) {
-        const site = `${file.fileName}:${lineForIndex(file.source, fn.bodyStart + call.index)}`;
-        const resolvedTables = tables.get(call.tableExpression) ?? [];
+    let changed = true;
+    while (changed) {
+      changed = false;
 
-        if (resolvedTables.length > 0) {
-          for (const table of resolvedTables) {
-            const writePredicate = extractPredicateSummary(
-              call.statement,
-              call.tableExpression,
-              table.annotation,
-              tables,
-            );
-            writes.push({
-              operation: call.operation,
-              site,
-              table: table.annotation,
-              ...(writePredicate.predicate ? { predicate: writePredicate.predicate } : {}),
-              ...(writePredicate.key ? { writeKey: writePredicate.key } : {}),
-            });
-          }
-          for (const readSource of call.readSources) {
-            const readTables = tables.get(readSource.tableExpression) ?? [];
-            if (readTables.length > 0) {
-              for (const readTable of readTables) {
-                const readPredicate = extractPredicateSummary(
-                  call.statement,
-                  readSource.tableExpression,
-                  readTable.annotation,
-                  tables,
-                );
-                reads.push({
-                  operation: readSource.operation,
-                  ...(readPredicate.predicate ? { predicate: readPredicate.predicate } : {}),
-                  ...(readPredicate.key ? { readKey: readPredicate.key } : {}),
-                  site,
-                  table: readTable.annotation,
-                });
-              }
-              if (unresolvedIdentifiers.has(readSource.tableExpression)) {
-                unresolved.push({
-                  operation: readSource.operation,
-                  site,
-                });
-              }
-              continue;
-            }
+      for (const fn of functions) {
+        const summary = summaries.get(fn.name);
+        if (!summary) continue;
 
-            unresolved.push({
-              operation: readSource.operation,
-              site,
-            });
-          }
-          if (unresolvedIdentifiers.has(call.tableExpression)) {
-            unresolved.push({
-              operation: call.operation,
-              site,
-            });
-          }
-          continue;
+        for (const call of callsByName.get(fn.name) ?? []) {
+          const calleeSummary = summaries.get(call);
+          if (!calleeSummary) continue;
+
+          if (mergeSummary(summary, calleeSummary)) changed = true;
         }
-
-        unresolved.push({
-          operation: call.operation,
-          site,
-        });
       }
+    }
 
+    for (const fn of functions) {
+      const { reads, unresolved, writes } = summaries.get(fn.name) ?? {
+        reads: [],
+        unresolved: [],
+        writes: [],
+      };
       if (reads.length > 0 || writes.length > 0 || unresolved.length > 0) {
         graph[fn.name] = createTouchGraphEntry({ reads, unresolved, writes });
       }
@@ -333,6 +299,144 @@ interface ExtractedReadSource {
 interface ExtractedPredicateSummary {
   key?: string;
   predicate?: 'non-eq';
+}
+
+interface FunctionTouchSummary {
+  reads: ReadSummaryInput[];
+  unresolved: UnresolvedSummaryInput[];
+  writes: WriteSummaryInput[];
+}
+
+function directSummaryForFunction(
+  fn: ExtractedFunction,
+  file: SourceFileInput,
+  tables: ReadonlyMap<string, readonly ExtractedTable[]>,
+  unresolvedIdentifiers: ReadonlySet<string>,
+): FunctionTouchSummary {
+  const reads: ReadSummaryInput[] = [];
+  const writes: WriteSummaryInput[] = [];
+  const unresolved: UnresolvedSummaryInput[] = [];
+
+  for (const call of extractDrizzleWriteCalls(fn.body)) {
+    const site = `${file.fileName}:${lineForIndex(file.source, fn.bodyStart + call.index)}`;
+    const resolvedTables = tables.get(call.tableExpression) ?? [];
+
+    if (resolvedTables.length > 0) {
+      for (const table of resolvedTables) {
+        const writePredicate = extractPredicateSummary(
+          call.statement,
+          call.tableExpression,
+          table.annotation,
+          tables,
+        );
+        writes.push({
+          operation: call.operation,
+          site,
+          table: table.annotation,
+          ...(writePredicate.predicate ? { predicate: writePredicate.predicate } : {}),
+          ...(writePredicate.key ? { writeKey: writePredicate.key } : {}),
+        });
+      }
+      for (const readSource of call.readSources) {
+        const readTables = tables.get(readSource.tableExpression) ?? [];
+        if (readTables.length > 0) {
+          for (const readTable of readTables) {
+            const readPredicate = extractPredicateSummary(
+              call.statement,
+              readSource.tableExpression,
+              readTable.annotation,
+              tables,
+            );
+            reads.push({
+              operation: readSource.operation,
+              ...(readPredicate.predicate ? { predicate: readPredicate.predicate } : {}),
+              ...(readPredicate.key ? { readKey: readPredicate.key } : {}),
+              site,
+              table: readTable.annotation,
+            });
+          }
+          if (unresolvedIdentifiers.has(readSource.tableExpression)) {
+            unresolved.push({
+              operation: readSource.operation,
+              site,
+            });
+          }
+          continue;
+        }
+
+        unresolved.push({
+          operation: readSource.operation,
+          site,
+        });
+      }
+      if (unresolvedIdentifiers.has(call.tableExpression)) {
+        unresolved.push({
+          operation: call.operation,
+          site,
+        });
+      }
+      continue;
+    }
+
+    unresolved.push({
+      operation: call.operation,
+      site,
+    });
+  }
+
+  return { reads, unresolved, writes };
+}
+
+function mergeSummary(target: FunctionTouchSummary, source: FunctionTouchSummary): boolean {
+  let changed = false;
+
+  changed = pushUnique(target.reads, source.reads, readSummaryKey) || changed;
+  changed = pushUnique(target.unresolved, source.unresolved, unresolvedSummaryKey) || changed;
+  changed = pushUnique(target.writes, source.writes, writeSummaryKey) || changed;
+
+  return changed;
+}
+
+function pushUnique<T>(target: T[], source: readonly T[], keyFor: (item: T) => string): boolean {
+  const keys = new Set(target.map(keyFor));
+  let changed = false;
+
+  for (const item of source) {
+    const key = keyFor(item);
+    if (keys.has(key)) continue;
+
+    keys.add(key);
+    target.push(item);
+    changed = true;
+  }
+
+  return changed;
+}
+
+function readSummaryKey(read: ReadSummaryInput): string {
+  return [
+    read.operation,
+    read.table.name,
+    read.site,
+    read.readKey ?? '',
+    read.predicate ?? '',
+    read.branch ?? '',
+  ].join('\0');
+}
+
+function unresolvedSummaryKey(unresolved: UnresolvedSummaryInput): string {
+  return [unresolved.operation, unresolved.site, unresolved.domain ?? ''].join('\0');
+}
+
+function writeSummaryKey(write: WriteSummaryInput): string {
+  return [
+    write.operation,
+    write.table.name,
+    write.site,
+    write.writeKey ?? '',
+    write.predicate ?? '',
+    write.branch ?? '',
+  ].join('\0');
 }
 
 function extractTables(source: string): ExtractedTableDeclaration[] {
@@ -465,6 +569,38 @@ function extractFunctions(source: string): ExtractedFunction[] {
   }
 
   return functions;
+}
+
+function extractLocalFunctionCalls(source: string): string[] {
+  const calls: string[] = [];
+  const callPattern = /\b(?<name>[A-Za-z_$][\w$]*)\s*\(/g;
+  const ignored = new Set([
+    'delete',
+    'eq',
+    'for',
+    'function',
+    'if',
+    'insert',
+    'jiso',
+    'pgTable',
+    'return',
+    'select',
+    'switch',
+    'update',
+    'while',
+  ]);
+
+  for (const match of source.matchAll(callPattern)) {
+    const name = match.groups?.name;
+    if (!name || ignored.has(name)) continue;
+
+    const previous = source.slice(0, match.index).trimEnd().at(-1);
+    if (previous === '.') continue;
+
+    calls.push(name);
+  }
+
+  return [...new Set(calls)];
 }
 
 function extractDrizzleWriteCalls(source: string): ExtractedWriteCall[] {

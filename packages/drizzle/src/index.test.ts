@@ -290,6 +290,111 @@ export const tableDomains = {
     });
   });
 
+  it('folds local helper writes and reads into caller summaries', () => {
+    const graph = extractTouchGraphFromSource([
+      {
+        fileName: 'cart.domain.ts',
+        source: `
+          export const cartItems = pgTable("cart_items", {}, jiso({ domain: "cart", key: "productId" }));
+          export const products = pgTable("products", {}, jiso({ domain: "product", key: "id" }));
+          export const vendors = pgTable("vendors", {}, jiso({ domain: "vendor", key: "id" }));
+          export const snapshots = pgTable("product_snapshots", {}, jiso({ domain: "snapshot", key: "productId" }));
+
+          async function insertCartItem(db, input) {
+            await db.insert(cartItems).values({ productId: input.productId });
+          }
+
+          async function snapshotProducts(db) {
+            await db.insert(snapshots).select(db.select().from(products).innerJoin(vendors, eq(vendors.id, products.vendorId)));
+          }
+
+          export async function addItem(db, input) {
+            await insertCartItem(db, input);
+            await snapshotProducts(db);
+          }
+        `,
+      },
+    ]);
+
+    expect(graph.addItem).toEqual({
+      reads: [
+        {
+          domain: 'product',
+          keys: null,
+          site: 'cart.domain.ts:12',
+          source: 'insert-select',
+          via: 'products',
+        },
+        {
+          domain: 'vendor',
+          keys: null,
+          site: 'cart.domain.ts:12',
+          source: 'insert-select',
+          via: 'vendors',
+        },
+      ],
+      touches: [
+        { domain: 'cart', keys: null, site: 'cart.domain.ts:8', via: 'cart_items' },
+        { domain: 'snapshot', keys: null, site: 'cart.domain.ts:12', via: 'product_snapshots' },
+      ],
+      unresolved: [],
+    });
+    expect(graph.insertCartItem).toEqual({
+      reads: [],
+      touches: [{ domain: 'cart', keys: null, site: 'cart.domain.ts:8', via: 'cart_items' }],
+      unresolved: [],
+    });
+    expect(graph.snapshotProducts).toEqual({
+      reads: [
+        {
+          domain: 'product',
+          keys: null,
+          site: 'cart.domain.ts:12',
+          source: 'insert-select',
+          via: 'products',
+        },
+        {
+          domain: 'vendor',
+          keys: null,
+          site: 'cart.domain.ts:12',
+          source: 'insert-select',
+          via: 'vendors',
+        },
+      ],
+      touches: [
+        { domain: 'snapshot', keys: null, site: 'cart.domain.ts:12', via: 'product_snapshots' },
+      ],
+      unresolved: [],
+    });
+  });
+
+  it('dedupes recursive helper summaries at a fixed point', () => {
+    const graph = extractTouchGraphFromSource([
+      {
+        fileName: 'cart.domain.ts',
+        source: `
+          export const cartItems = pgTable("cart_items", {}, jiso({ domain: "cart", key: "productId" }));
+
+          async function insertCartItem(db) {
+            await db.insert(cartItems).values({ productId: "p1" });
+            await retryInsert(db);
+          }
+
+          async function retryInsert(db) {
+            await insertCartItem(db);
+          }
+        `,
+      },
+    ]);
+
+    expect(graph.insertCartItem?.touches).toEqual([
+      { domain: 'cart', keys: null, site: 'cart.domain.ts:5', via: 'cart_items' },
+    ]);
+    expect(graph.retryInsert?.touches).toEqual([
+      { domain: 'cart', keys: null, site: 'cart.domain.ts:5', via: 'cart_items' },
+    ]);
+  });
+
   it('extracts direct parameterized keys from update and delete eq predicates', () => {
     const graph = extractTouchGraphFromSource([
       {
