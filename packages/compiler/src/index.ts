@@ -268,6 +268,7 @@ export function compileComponentModule(options: CompileComponentOptions): Compil
   const eventPayloadDiagnostics = validateEventPayloads(source, options);
   const directDbDiagnostics = validateDirectDbAccess(source, options.fileName);
   const idrefDiagnostics = validateIdrefs(options.source, options.fileName);
+  const staticIdDiagnostics = validateStaticIds(source, options.fileName);
   const literalHrefDiagnostics = validateLiteralHrefs(source, options);
   const htmlContentModelDiagnostics = validateHtmlContentModel(source, options.fileName);
   const eventTriggerDiagnostics = validateEventTriggerNames(source, options.fileName);
@@ -311,6 +312,7 @@ export function compileComponentModule(options: CompileComponentOptions): Compil
       ...eventPayloadDiagnostics,
       ...directDbDiagnostics,
       ...idrefDiagnostics,
+      ...staticIdDiagnostics,
       ...literalHrefDiagnostics,
       ...htmlContentModelDiagnostics,
       ...eventTriggerDiagnostics,
@@ -1477,6 +1479,53 @@ function validateIdrefs(source: string, fileName: string): CompilerDiagnostic[] 
 
   const missing = idrefValues(source).filter((value) => !ids.has(value));
   return [...new Set(missing)].map((value) => fw221Diagnostic(fileName, value));
+}
+
+function validateStaticIds(source: string, fileName: string): CompilerDiagnostic[] {
+  const diagnostics: CompilerDiagnostic[] = [];
+  const seen = new Set<string>();
+
+  for (const id of literalIds(source)) {
+    if (seen.has(id)) diagnostics.push(fw224Diagnostic(fileName, `duplicate id="${id}"`));
+    seen.add(id);
+  }
+
+  for (const id of repeatableLiteralIds(source)) {
+    diagnostics.push(fw224Diagnostic(fileName, `repeatable id="${id}"`));
+  }
+
+  return dedupeDiagnostics(diagnostics);
+}
+
+function literalIds(source: string): string[] {
+  return [...source.matchAll(/\bid\s*=\s*(["'])(?<id>[^"']+)\1/g)]
+    .map((match) => match.groups?.id ?? '')
+    .filter(Boolean);
+}
+
+function repeatableLiteralIds(source: string): string[] {
+  return dataBindListTemplateBodies(source).flatMap(literalIds);
+}
+
+function dataBindListTemplateBodies(source: string): string[] {
+  return [...source.matchAll(/<(?<tag>[A-Za-z][\w:-]*)\b(?<attrs>[^>]*)>/g)].flatMap((match) => {
+    const attrs = match.groups?.attrs ?? '';
+    if (!readStaticAttribute(attrs, 'data-bind-list')) return [];
+
+    const start = match.index ?? 0;
+    const end = findMatchingClosingTag(source, match.groups?.tag ?? '', start);
+    if (end === -1) return [];
+
+    const template = templateStampContent(source.slice(start, end));
+    return template ? [template] : [];
+  });
+}
+
+function fw224Diagnostic(fileName: string, detail: string): CompilerDiagnostic {
+  return {
+    ...diagnosticFor(fileName, 'FW224'),
+    message: `${diagnosticDefinitions.FW224.message} ${detail}`,
+  };
 }
 
 const blockTagsThatCloseParagraph = new Set([

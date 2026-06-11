@@ -657,6 +657,105 @@ export const CartShell = component('cart-shell', {
     ]);
   });
 
+  it('reports FW224 for duplicate literal ids in component scope', () => {
+    const result = compileComponentModule({
+      fileName: 'cart-shell.tsx',
+      source: `
+export const CartShell = component('cart-shell', {
+  render: () => (
+    <section>
+      <h2 id="cart-title">Cart</h2>
+      <output id="cart-title">2 items</output>
+    </section>
+  ),
+});
+`,
+    });
+
+    expect(result.diagnostics).toEqual([
+      {
+        code: 'FW224',
+        fileName: 'cart-shell.tsx',
+        message:
+          'Static id appears in a repeatable component or duplicate page composition. duplicate id="cart-title"',
+        severity: 'error',
+      },
+    ]);
+  });
+
+  it('reports FW224 without FW221 when an IDREF targets a duplicated id', () => {
+    const result = compileComponentModule({
+      fileName: 'cart-shell.tsx',
+      source: `
+export const CartShell = component('cart-shell', {
+  render: () => (
+    <section>
+      <button commandfor="cart-drawer" command="show-modal">Open</button>
+      <dialog id="cart-drawer">Cart</dialog>
+      <dialog id="cart-drawer">Duplicate</dialog>
+    </section>
+  ),
+});
+`,
+    });
+
+    expect(result.diagnostics).toEqual([
+      {
+        code: 'FW224',
+        fileName: 'cart-shell.tsx',
+        message:
+          'Static id appears in a repeatable component or duplicate page composition. duplicate id="cart-drawer"',
+        severity: 'error',
+      },
+    ]);
+  });
+
+  it('reports FW224 for static ids inside repeatable list stamps', () => {
+    const result = compileComponentModule({
+      fileName: 'cart-list.tsx',
+      source: `
+export const CartList = component('cart-list', {
+  render: () => (
+    <ul data-bind-list="cart.items" fw-key="productId">
+      <template fw-stamp>
+        <li id="cart-row"><span data-bind=".name">Mug</span></li>
+      </template>
+    </ul>
+  ),
+});
+`,
+    });
+
+    expect(result.diagnostics).toEqual([
+      {
+        code: 'FW224',
+        fileName: 'cart-list.tsx',
+        message:
+          'Static id appears in a repeatable component or duplicate page composition. repeatable id="cart-row"',
+        severity: 'error',
+      },
+    ]);
+  });
+
+  it('allows static ids on non-repeated data-bind-list containers', () => {
+    const result = compileComponentModule({
+      fileName: 'cart-list.tsx',
+      source: `
+export const CartList = component('cart-list', {
+  render: () => (
+    <ul id="cart-items" data-bind-list="cart.items" fw-key="productId">
+      <template fw-stamp>
+        <li><span data-bind=".name">Mug</span></li>
+      </template>
+    </ul>
+  ),
+});
+`,
+    });
+
+    expect(result.diagnostics).toEqual([]);
+  });
+
   it('accepts native table rows when the parser keeps the authored tree shape', () => {
     const result = compileComponentModule({
       fileName: 'cart-table.tsx',

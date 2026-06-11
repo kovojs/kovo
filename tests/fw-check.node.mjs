@@ -454,6 +454,22 @@ void test('P1 compiler validates component-scoped IDREFs', async () => {
   assert.match(compilerTests, /reports FW221 for literal IDREFs that miss component scope ids/);
 });
 
+void test('P1 compiler validates static id uniqueness', async () => {
+  const coreSource = await readProjectFile('packages/core/src/diagnostics.ts');
+  const compilerSource = await readProjectFile('packages/compiler/src/index.ts');
+  const compilerTests = await readProjectFile('packages/compiler/src/index.test.ts');
+
+  assert.match(coreSource, /FW224/);
+  assert.match(coreSource, /Static id appears in a repeatable component/);
+  assert.match(compilerSource, /validateStaticIds/);
+  assert.match(compilerSource, /repeatableLiteralIds/);
+  assert.match(compilerSource, /fw224Diagnostic/);
+  assert.match(compilerTests, /reports FW224 for duplicate literal ids in component scope/);
+  assert.match(compilerTests, /reports FW224 for static ids inside repeatable list stamps/);
+  assert.match(compilerTests, /duplicate id="cart-title"/);
+  assert.match(compilerTests, /repeatable id="cart-row"/);
+});
+
 void test('P1 compiler validates HTML content-model parser stability', async () => {
   const coreSource = await readProjectFile('packages/core/src/diagnostics.ts');
   const compilerSource = await readProjectFile('packages/compiler/src/index.ts');
