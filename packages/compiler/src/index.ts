@@ -200,7 +200,7 @@ export function compileComponentModule(options: CompileComponentOptions): Compil
   );
   const source = deriveLowering.source;
   const model = parseComponentModuleModel(options.fileName, source);
-  const handlers = lowerEventHandlers({ ...options, source }, componentName);
+  const handlers = lowerEventHandlers({ ...options, source }, componentName, model);
   const queryUpdatePlans = collectQueryUpdatePlans(source, model, componentName);
   const updateCoverage = collectQueryUpdateCoverage(source, model, options, componentName);
   const packagePrefixDiagnostics = validatePackageComponentPrefixes(

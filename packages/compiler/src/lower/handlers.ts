@@ -2,7 +2,12 @@ import { diagnosticDefinitions } from '@jiso/core';
 
 import { diagnosticFor, type CompilerDiagnostic } from '../diagnostics.js';
 import { literalValue } from '../scan/object.js';
-import { identifierReferences, jsxElements, parseComponentModule } from '../scan/parse.js';
+import {
+  identifierReferences,
+  jsxElements,
+  parseComponentModule,
+  type ComponentModuleModel,
+} from '../scan/parse.js';
 import { replaceExtension } from '../shared.js';
 import type { CompileComponentOptions } from '../types.js';
 
@@ -29,11 +34,12 @@ type ElementParamType = 'boolean' | 'number' | 'string';
 export function lowerEventHandlers(
   options: CompileComponentOptions,
   componentName: string,
+  model = parseComponentModule(options.fileName, options.source),
 ): HandlerLowering[] {
   const handlers: HandlerLowering[] = [];
   const anonymousNameCounts = new Map<string, number>();
 
-  for (const eventAttribute of eventAttributes(options.source)) {
+  for (const eventAttribute of eventAttributes(model)) {
     const { attributeEnd, attributeStart, event, expression, tag } = eventAttribute;
     const namedHandler = /^[A-Za-z_$][\w$]*$/.test(expression);
     const params = namedHandler ? [] : extractElementParams(expression);
@@ -138,7 +144,7 @@ export function emitElementParamTypes(params: readonly ElementParam[]): string {
   return `fw-param-types="${entries}"`;
 }
 
-function eventAttributes(source: string): Array<{
+function eventAttributes(model: ComponentModuleModel): Array<{
   attributeEnd: number;
   attributeStart: number;
   event: string;
@@ -153,7 +159,7 @@ function eventAttributes(source: string): Array<{
     tag: string;
   }> = [];
 
-  for (const element of jsxElements(parseComponentModule('component.tsx', source))) {
+  for (const element of jsxElements(model)) {
     for (const attribute of element.attributes) {
       const event = jsxEventAttributeName(attribute.name);
       if (!event || attribute.expression === undefined) continue;

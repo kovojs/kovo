@@ -364,6 +364,10 @@ pipeline throws the tree away and communicates via mutated source text.
       shifted coordinates; `validateIdrefs`/`validateStampExpressionDrift` are already
       special-cased onto the original source (index.ts:216-220) — make that the rule, not the
       exception.
+      Partial evidence 2026-06-11: `compileComponentModule` now passes its already-parsed
+      `ComponentModuleModel` into `lowerEventHandlers`, and `lower/handlers.ts` walks that model
+      instead of reparsing the lowered source with a fake filename for event-attribute discovery.
+      Same-session evidence: `pnpm exec vitest --run packages/compiler/src/index.test.ts`.
 - [ ] **HIGH — Retire regex rewriting of handler bodies.** emit/client.ts:89
       (`/\bstate\b/g → ctx.state` corrupts `log('state changed')`), :96 (member-expression
       substitution inside string literals), lower/handlers.ts:262 (harvests params from string
