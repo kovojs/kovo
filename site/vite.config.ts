@@ -31,6 +31,13 @@ export default defineConfig({
         command: 'node scripts/check-links.mjs',
         input: [{ pattern: 'dist/**', base: 'workspace' }],
       },
+      smoke: {
+        command: 'node scripts/smoke.mjs',
+        input: [
+          { pattern: 'dist/**', base: 'workspace' },
+          { pattern: 'scripts/smoke.mjs', base: 'workspace' },
+        ],
+      },
     },
   },
 });
