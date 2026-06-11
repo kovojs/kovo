@@ -186,6 +186,21 @@ describe('server mutation primitives', () => {
     expect(normalizeWireResponse(response, 'OK')).toEqual(readFixtureResponses(fixture).at(-1));
   });
 
+  it('renders query endpoint loader exceptions as stable 500 JSON', async () => {
+    const productQuery = query('product', {
+      load() {
+        throw new Error('database password leaked in stack');
+      },
+      reads: [domain('product')],
+    });
+
+    await expect(renderQueryEndpointResponse(productQuery, { request: {} })).resolves.toEqual({
+      body: '{"code":"SERVER_ERROR","payload":{}}',
+      headers: { 'Content-Type': 'application/json; charset=utf-8' },
+      status: 500,
+    });
+  });
+
   it('dispatches typed read endpoints through a query registry', async () => {
     const productQuery = query('product', {
       args: s.object({ id: s.string() }),
@@ -274,6 +289,33 @@ describe('server mutation primitives', () => {
       headers: { 'Content-Type': 'text/html; charset=utf-8' },
       status: 200,
     });
+  });
+
+  it('renders route page and renderer exceptions as stable 500 HTML', async () => {
+    const throwingPage = route('/products/:id', {
+      page() {
+        throw new Error('private route load detail');
+      },
+    });
+    const throwingRenderer = route('/cart', {
+      page() {
+        return 'cart';
+      },
+    });
+    const serverErrorResponse = {
+      body: 'Internal Server Error',
+      headers: { 'Content-Type': 'text/html; charset=utf-8' },
+      status: 500,
+    };
+
+    await expect(
+      renderRoutePageResponse(throwingPage, { params: { id: 'p1' } }, {}),
+    ).resolves.toEqual(serverErrorResponse);
+    await expect(
+      renderRoutePageResponse(throwingRenderer, {}, {}, () => {
+        throw new Error('private render detail');
+      }),
+    ).resolves.toEqual(serverErrorResponse);
   });
 
   it('renders modulepreloads, opt-in speculation rules, and Early Hints headers', () => {

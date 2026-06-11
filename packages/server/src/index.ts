@@ -468,7 +468,7 @@ export type QuerySearchInput =
 export interface QueryEndpointResponse {
   body: string;
   headers: Record<string, string>;
-  status: 200 | 404 | 422 | 429;
+  status: 200 | 404 | 422 | 429 | 500;
 }
 
 export interface QueryEndpointRegistry<Request = unknown> {
@@ -599,7 +599,16 @@ export async function renderQueryEndpointResponse<const Key extends string, Valu
   endpointRequest: QueryEndpointRequest<Request>,
 ): Promise<QueryEndpointResponse> {
   const rawInput = querySearchInputToRecord(endpointRequest.search ?? {});
-  const result = await runQuery(definition, rawInput, endpointRequest.request);
+  let result: QueryEndpointResult<Value, Input>;
+  try {
+    result = await runQuery(definition, rawInput, endpointRequest.request);
+  } catch {
+    return {
+      body: JSON.stringify(serverErrorPayload()),
+      headers: { 'Content-Type': 'application/json; charset=utf-8' },
+      status: 500,
+    };
+  }
 
   if (!result.ok) {
     return {
@@ -888,7 +897,7 @@ export interface NotFound {
 export interface RoutePageResponse {
   body: string;
   headers: Record<string, string>;
-  status: 200 | 404 | 422 | 429;
+  status: 200 | 404 | 422 | 429 | 500;
 }
 
 export interface RouteRequestInput {
@@ -1154,7 +1163,12 @@ export async function renderRoutePageResponse<
   request: Request,
   render: (value: Page) => string | Promise<string> = (value) => String(value ?? ''),
 ): Promise<RoutePageResponse> {
-  const result = await runRoutePage(definition, input, request);
+  let result: RoutePageResult<Page>;
+  try {
+    result = await runRoutePage(definition, input, request);
+  } catch {
+    return htmlServerErrorResponse();
+  }
 
   if (!result.ok) {
     return {
@@ -1172,11 +1186,15 @@ export async function renderRoutePageResponse<
     };
   }
 
-  return {
-    body: await render(result.value),
-    headers: { 'Content-Type': 'text/html; charset=utf-8' },
-    status: 200,
-  };
+  try {
+    return {
+      body: await render(result.value),
+      headers: { 'Content-Type': 'text/html; charset=utf-8' },
+      status: 200,
+    };
+  } catch {
+    return htmlServerErrorResponse();
+  }
 }
 
 export function meta<const Meta extends RouteMeta>(definition: Meta): Meta {
@@ -1603,6 +1621,18 @@ function isMutationFail(value: unknown): value is MutationFail {
     value.ok === false &&
     'error' in value
   );
+}
+
+function serverErrorPayload(): { code: 'SERVER_ERROR'; payload: Record<string, never> } {
+  return { code: 'SERVER_ERROR', payload: {} };
+}
+
+function htmlServerErrorResponse(): RoutePageResponse {
+  return {
+    body: 'Internal Server Error',
+    headers: { 'Content-Type': 'text/html; charset=utf-8' },
+    status: 500,
+  };
 }
 
 function isNotFound(value: unknown): value is NotFound {
