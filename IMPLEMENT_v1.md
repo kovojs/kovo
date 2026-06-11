@@ -239,6 +239,7 @@ D1 (Tailwind-first CSS) ── starts P1, lands by end P5
 D3 ──────── with P5        D2 ── after P6
 P8 (CLI) ── after P4+P6    D4 ── after P5
 D5 (auth) ── after P3; adapter gated by S6 (plans/auth.md)
+D6 (machine endpoints) ── after P3; shares endpoint() with D5 A4; webhooks gated by S7 (plans/machine-endpoints.md)
 P9 ──────── after P4+P6 (retrofits P6/P7 onto change record)
 P10 ─────── after everything
 ```
