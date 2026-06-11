@@ -10,7 +10,12 @@ import {
   compileComponentModule,
 } from '../dist/compiler/src/index.mjs';
 import { diagnosticDefinitions } from '../dist/core/src/index.mjs';
-import { readElementParams } from '../dist/runtime/src/index.mjs';
+import {
+  applyMutationResponseToDom,
+  createQueryStore,
+  morphStructuralTree,
+  readElementParams,
+} from '../dist/runtime/src/index.mjs';
 import {
   csrfField,
   csrfToken,
@@ -1582,30 +1587,81 @@ void test('P3 route and query guard removal is mechanically audited by fw check'
   );
 });
 
-void test('P5 morph evidence includes structural and browser survival suites', async () => {
-  const runtimeTests = await readProjectFile('packages/runtime/src/index.test.ts');
-  const browserTests = await readProjectFile('packages/runtime/src/index.browser.test.ts');
+void test('P5 morph evidence preserves keyed identity and applies fragments', () => {
+  const first = {
+    browserState: {
+      focused: true,
+      scroll: { left: 4, top: 24 },
+      selection: { direction: 'forward', end: 3, start: 1 },
+    },
+    children: [{ key: 'label', text: 'Alpha', type: 'span' }],
+    key: 'p1',
+    type: 'article',
+  };
+  const second = {
+    children: [{ key: 'label', text: 'Beta', type: 'span' }],
+    key: 'p2',
+    type: 'article',
+  };
+  const current = { children: [first, second], type: 'section' };
 
-  assert.match(runtimeTests, /preserves keyed structural node identity when sibling order changes/);
-  assert.match(runtimeTests, /preserves keyed browser state across fragment morphs and reorders/);
-  assert.match(runtimeTests, /focused: true/);
-  assert.match(runtimeTests, /scroll: \{ left: 4, top: 24 \}/);
-  assert.match(runtimeTests, /selection: \{ direction: 'forward', end: 3, start: 1 \}/);
-  assert.match(runtimeTests, /appends fragment chunks when the wire mode is append/);
-  assert.match(
-    runtimeTests,
-    /preserves keyed list identity across append fragments and later reorders/,
-  );
-  assert.match(
-    browserTests,
-    /preserves focus, selection, scroll, and keyed identity during a real DOM fragment morph/,
-  );
-  assert.match(browserTests, /appends real DOM fragments without replacing keyed list nodes/);
-  assert.match(browserTests, /document\.activeElement/);
-  assert.match(browserTests, /selectionStart/);
-  assert.match(browserTests, /scrollTop/);
-  assert.match(browserTests, /fw-key="p1"/);
-  assert.match(browserTests, /getAttribute\('fw-key'\)/);
+  morphStructuralTree(current, {
+    children: [
+      {
+        children: [{ key: 'label', text: 'Beta next', type: 'span' }],
+        key: 'p2',
+        type: 'article',
+      },
+      {
+        children: [{ key: 'label', text: 'Alpha next', type: 'span' }],
+        key: 'p1',
+        type: 'article',
+      },
+      { key: 'p3', text: 'Gamma', type: 'article' },
+    ],
+    type: 'section',
+  });
+
+  assert.strictEqual(current.children[0], second);
+  assert.strictEqual(current.children[1], first);
+  assert.deepEqual(current.children[1].browserState, {
+    focused: true,
+    scroll: { left: 4, top: 24 },
+    selection: { direction: 'forward', end: 3, start: 1 },
+  });
+  assert.equal(current.children[1].children[0].text, 'Alpha next');
+
+  const target = {
+    html: '<article fw-key="p1">Old</article>',
+    appendHtml(html) {
+      this.html += html;
+    },
+    readHtml() {
+      return this.html;
+    },
+    replaceWithHtml(html) {
+      this.html = html;
+    },
+  };
+  const root = {
+    findFragmentTarget(fragmentTarget) {
+      return fragmentTarget === 'products' ? target : null;
+    },
+  };
+  const store = createQueryStore();
+  const result = applyMutationResponseToDom({
+    body: [
+      '<fw-query name="productGrid" key="category:all">{"count":2}</fw-query>',
+      '<fw-fragment target="products" mode="append"><article fw-key="p2">New</article></fw-fragment>',
+      '<fw-fragment target="missing"><article>Ignored</article></fw-fragment>',
+    ].join('\n'),
+    root,
+    store,
+  });
+
+  assert.deepEqual(result.appliedFragments, ['products']);
+  assert.deepEqual(store.get('productGrid', 'category:all'), { count: 2 });
+  assert.equal(target.html, '<article fw-key="p1">Old</article><article fw-key="p2">New</article>');
 });
 
 void test('D2 commerce validates keyed append and optimistic reorder', async () => {

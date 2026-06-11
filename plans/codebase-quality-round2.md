@@ -191,6 +191,10 @@ Do this first or pay it on every commit.
       APIs and asserts query args/guards/context, query endpoint rendering, registry dispatch
       misses, route guard/notFound rendering, CSRF field/token validation, and CSRF-before-guard
       ordering instead of grepping server or test source names.
+      Partial evidence 2026-06-11: the P5 morph tranche now imports built runtime APIs and
+      asserts `morphStructuralTree` keyed reorder identity, browser-state preservation, keyed
+      query updates, append fragment application, and missing-target suppression instead of
+      grepping runtime or browser test source names.
 - [x] **Make create-jiso templates real files** (`create-jiso/src/index.ts:63-473`, ~470 lines of
       escaped template literals including a CI workflow and double-escaped regexes inside
       `.mjs`-in-string). Move to a `templates/` directory copied at scaffold time with `{{name}}`
