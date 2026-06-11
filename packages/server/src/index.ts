@@ -328,20 +328,26 @@ export function write<
   return definition;
 }
 
-export interface QueryDefinition<Key extends string = string> {
+export interface QueryDefinition<Key extends string = string, Value = unknown, Input = unknown> {
   instanceKey?: ((input: unknown) => string | undefined) | string;
-  load?: (input: unknown) => unknown;
+  load?(input: Input): Value;
   key: Key;
   reads: readonly Domain[];
-  version?: ((input: unknown, value: unknown) => number | string | undefined) | number | string;
+  version?: ((input: Input, value: Value) => number | string | undefined) | number | string;
 }
 
-export function query<const Key extends string>(
-  key: Key,
-  definition: Omit<QueryDefinition<Key>, 'key'>,
-): QueryDefinition<Key> {
+export function query<
+  const Key extends string,
+  const Definition extends Omit<QueryDefinition<Key>, 'key'>,
+>(key: Key, definition: Definition): Definition & { key: Key } {
   return { ...definition, key };
 }
+
+export type QueryResult<Query> = Query extends {
+  load: (input: never) => infer Value;
+}
+  ? Awaited<Value>
+  : unknown;
 
 export interface ChangeRecord<DomainKey extends string = string, Input = unknown> {
   domain: DomainKey;
@@ -630,6 +636,13 @@ export function mutation<
 
 export function meta<const Meta extends RouteMeta>(definition: Meta): Meta {
   return definition;
+}
+
+export function metaFromQuery<
+  const Query extends { load?: (input: never) => unknown },
+  const Meta extends RouteMeta,
+>(_query: Query, value: QueryResult<Query>, derive: (value: QueryResult<Query>) => Meta): Meta {
+  return derive(value);
 }
 
 export function errorBoundary<Renderer extends FragmentRenderer>(

@@ -483,8 +483,13 @@ void test('D4 commerce adopt-dont-invent features stay represented', async () =>
   const commerceTests = await readProjectFile('examples/commerce/src/app.test.ts');
   const runtimeSource = await readProjectFile('packages/runtime/src/index.ts');
   const runtimeTests = await readProjectFile('packages/runtime/src/index.test.ts');
+  const serverSource = await readProjectFile('packages/server/src/index.ts');
+  const serverTests = await readProjectFile('packages/server/src/index.test.ts');
 
   assert.match(commerceSource, /meta\(\{/);
+  assert.match(commerceSource, /metaFromQuery\(cartQuery/);
+  assert.match(serverSource, /function metaFromQuery/);
+  assert.match(serverTests, /derives typed route meta from query results/);
   assert.match(commerceSource, /i18n\('en-US'/);
   assert.match(commerceSource, /s\.file\(\{ maxBytes: 64 \* 1024/);
   assert.match(commerceSource, /fw-upload-progress/);
@@ -499,6 +504,7 @@ void test('D4 commerce adopt-dont-invent features stay represented', async () =>
   assert.match(commerceTests, /session: commerceSession/);
   assert.match(commerceTests, /file-fields: receipt/);
   assert.match(commerceTests, /meta: title=Jiso Commerce/);
+  assert.match(commerceTests, /Jiso Commerce \(1\)/);
   assert.match(runtimeSource, /onUploadProgress\?: \(progress: UploadProgress/);
   assert.match(runtimeSource, /updateUploadProgressElements\(form, progress\)/);
   assert.match(runtimeSource, /stampEnhancedMutationPending\(options, true\)/);

@@ -9,6 +9,7 @@ import {
   i18n,
   invalidate,
   meta,
+  metaFromQuery,
   mutation,
   mutationWireRequestFromHeaders,
   query,
@@ -341,6 +342,35 @@ describe('server mutation primitives', () => {
         '<meta property="og:description" content="Fast cart &lt;checkout&gt;">',
         '<meta property="og:image" content="/products/p1.png">',
         '<link rel="modulepreload" href="/c/cart.client.js">',
+      ].join(''),
+    });
+  });
+
+  it('derives typed route meta from query results', () => {
+    const productQuery = query('product', {
+      load: (_input: { id: string }) => ({
+        id: 'p1',
+        name: 'Coffee',
+        stock: 5,
+      }),
+      reads: [domain('product')],
+    });
+    const productMeta = metaFromQuery(productQuery, productQuery.load({ id: 'p1' }), (product) => ({
+      description: `${product.stock} available`,
+      title: product.name,
+    }));
+
+    metaFromQuery(productQuery, productQuery.load({ id: 'p1' }), (product) => ({
+      // @ts-expect-error query-derived meta can only use fields present in the query result.
+      title: product.missingName,
+    }));
+
+    expect(renderPageHints({ meta: productMeta })).toEqual({
+      earlyHints: {},
+      html: [
+        '<title>Coffee</title>',
+        '<meta name="description" content="5 available">',
+        '<meta property="og:description" content="5 available">',
       ].join(''),
     });
   });

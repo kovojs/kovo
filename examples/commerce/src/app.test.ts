@@ -567,11 +567,11 @@ describe('commerce example', () => {
       earlyHints: {
         Link: '</assets/tailwind.css>; rel=preload; as=style',
       },
-      html: '<title>Jiso Commerce</title><meta name="description" content="Browse products and checkout with a verifiable cart."><meta property="og:description" content="Browse products and checkout with a verifiable cart."><script type="application/json" fw-i18n locale="en-US">{"cartLabel":"Cart","productStock":"{count} in stock"}</script><link rel="stylesheet" href="/assets/tailwind.css">',
+      html: '<title>Jiso Commerce (1)</title><meta name="description" content="Browse products and checkout with 1 verifiable cart item."><meta property="og:description" content="Browse products and checkout with 1 verifiable cart item."><script type="application/json" fw-i18n locale="en-US">{"cartLabel":"Cart","productStock":"{count} in stock"}</script><link rel="stylesheet" href="/assets/tailwind.css">',
     });
 
     expect(renderCartPage()).toContain('<link rel="stylesheet" href="/assets/tailwind.css">');
-    expect(renderCartPage()).toContain('<title>Jiso Commerce</title>');
+    expect(renderCartPage()).toContain('<title>Jiso Commerce (1)</title>');
     expect(renderCartPage()).toContain('fw-i18n locale="en-US"');
     expect(renderCartPage()).toContain('class="min-h-dvh bg-slate-50 p-6"');
     expect(renderCartPage()).toContain('class="rounded bg-teal-600 px-2 py-0.5 text-white"');
@@ -710,7 +710,7 @@ describe('commerce example', () => {
         'fw-explain/v1',
         'PAGE /cart',
         'prefetch: false',
-        'meta: title=Jiso Commerce description=Browse products and checkout with a verifiable cart. image=-',
+        'meta: title=Jiso Commerce (1) description=Browse products and checkout with 1 verifiable cart item. image=-',
         'i18n: en-US:cartLabel,productStock',
         'modulepreloads: -',
         'stylesheets: /assets/tailwind.css',

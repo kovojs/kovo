@@ -7,6 +7,7 @@ import {
   guards,
   i18n,
   meta,
+  metaFromQuery,
   mutation,
   query,
   renderMutationEndpointResponse,
@@ -232,17 +233,19 @@ export const uploadReceipt = mutation('order/receipt', {
   },
 });
 
-export const commerceMeta = meta({
-  description: 'Browse products and checkout with a verifiable cart.',
-  title: 'Jiso Commerce',
-});
-
 export const commerceMessages = i18n('en-US', {
   cartLabel: 'Cart',
   productStock: '{count} in stock',
 });
 
 export const commerceStylesheets = ['/assets/tailwind.css'] as const;
+
+export const commerceMeta = metaFromQuery(cartQuery, cartQuery.load({}), (cart) =>
+  meta({
+    description: `Browse products and checkout with ${cart.count} verifiable cart item.`,
+    title: `Jiso Commerce (${cart.count})`,
+  }),
+);
 
 export function loadProductGrid(db: CommerceDb, input: ProductGridInput = {}): ProductGridResult {
   const limit = input.limit ?? 2;
