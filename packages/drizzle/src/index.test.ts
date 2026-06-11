@@ -464,6 +464,37 @@ export const tableDomains = {
     ]);
   });
 
+  it('does not treat comments or strings as declared query output schemas', () => {
+    const facts = extractQueryFactsFromSource([
+      {
+        fileName: 'cart.queries.ts',
+        source: `
+          export const cartItems = pgTable("cart_items", {}, jiso({ domain: "cart", key: "cartId" }));
+
+          export const cartQuery = query("cart", {
+            // output: s.object({ count: s.number() }),
+            description: "output: not a schema",
+            async load(input, db) {
+              return db.select({
+                count: sql<number>\`count(*)\`,
+              }).from(cartItems).where(eq(cartItems.cartId, input.cartId));
+            },
+          });
+        `,
+      },
+    ]);
+
+    expect(diagnosticsForQueryFacts(facts)).toEqual([
+      {
+        code: 'FW410',
+        message:
+          'Query result shape failed declared output schema. cart.count requires a declared output schema for opaque sql/raw projection.',
+        severity: 'error',
+        site: 'cart.queries.ts:4',
+      },
+    ]);
+  });
+
   it('omits instance keys when Drizzle query predicates do not target an annotated table key', () => {
     const facts = extractQueryFactsFromSource([
       {

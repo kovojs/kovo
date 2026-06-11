@@ -819,7 +819,44 @@ function isOpaqueProjection(expression: string): boolean {
 }
 
 function hasDeclaredQueryOutputSchema(body: string): boolean {
-  return /\boutput\s*:/.test(body);
+  const objectStart = body.indexOf('{');
+  if (objectStart === -1) return false;
+
+  const objectEnd = findMatchingBrace(body, objectStart);
+  if (objectEnd === -1) return false;
+
+  let index = objectStart + 1;
+  while (index < objectEnd) {
+    index = skipTrivia(body, index);
+    if (index >= objectEnd) return false;
+
+    const property = readObjectPropertyName(body, index);
+    if (property) {
+      const afterName = skipTrivia(body, property.end);
+      if (body[afterName] === ':' && property.name === 'output') return true;
+    }
+
+    index = nextTopLevelEntry(body, index, objectEnd);
+  }
+
+  return false;
+}
+
+function readObjectPropertyName(
+  source: string,
+  start: number,
+): { end: number; name: string } | null {
+  const quote = source[start];
+  if (quote === '"' || quote === "'") {
+    const end = findStringEnd(source, start, quote);
+    if (end === -1) return null;
+    return { end: end + 1, name: source.slice(start + 1, end) };
+  }
+
+  const identifier = /^[A-Za-z_$][\w$]*/.exec(source.slice(start));
+  if (!identifier) return null;
+
+  return { end: start + identifier[0].length, name: identifier[0] };
 }
 
 function opaqueProjectionDiagnostics(
@@ -1664,6 +1701,74 @@ function splitTopLevelArgs(source: string): string[] {
 
   args.push(source.slice(start));
   return args.filter((arg) => arg.trim().length > 0);
+}
+
+function skipTrivia(source: string, start: number): number {
+  let index = start;
+
+  while (index < source.length) {
+    if (/\s/.test(source[index] ?? '')) {
+      index += 1;
+      continue;
+    }
+
+    if (source.startsWith('//', index)) {
+      const end = source.indexOf('\n', index + 2);
+      index = end === -1 ? source.length : end + 1;
+      continue;
+    }
+
+    if (source.startsWith('/*', index)) {
+      const end = source.indexOf('*/', index + 2);
+      index = end === -1 ? source.length : end + 2;
+      continue;
+    }
+
+    return index;
+  }
+
+  return index;
+}
+
+function nextTopLevelEntry(source: string, start: number, end: number): number {
+  let depth = 0;
+
+  for (let index = start; index < end; index += 1) {
+    const char = source[index];
+    if (char === '"' || char === "'" || char === '`') {
+      const stringEnd = findStringEnd(source, index, char);
+      index = stringEnd === -1 ? end : stringEnd;
+      continue;
+    }
+    if (source.startsWith('//', index)) {
+      const commentEnd = source.indexOf('\n', index + 2);
+      index = commentEnd === -1 ? end : commentEnd;
+      continue;
+    }
+    if (source.startsWith('/*', index)) {
+      const commentEnd = source.indexOf('*/', index + 2);
+      index = commentEnd === -1 ? end : commentEnd + 1;
+      continue;
+    }
+
+    if (char === '(' || char === '{' || char === '[') depth += 1;
+    if (char === ')' || char === '}' || char === ']') depth -= 1;
+    if (char === ',' && depth === 0) return index + 1;
+  }
+
+  return end;
+}
+
+function findStringEnd(source: string, start: number, quote: string): number {
+  for (let index = start + 1; index < source.length; index += 1) {
+    if (source[index] === '\\') {
+      index += 1;
+      continue;
+    }
+    if (source[index] === quote) return index;
+  }
+
+  return -1;
 }
 
 function findMatchingBrace(source: string, openBrace: number): number {
