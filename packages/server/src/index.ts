@@ -879,7 +879,7 @@ export interface NoJsMutationRequest<Request, Value> {
 export interface NoJsMutationResponse {
   body: string;
   headers: Record<string, string>;
-  status: 303 | 422 | 429;
+  status: 303 | 422 | 429 | 500;
 }
 
 export interface MutationEndpointRequest<
@@ -1637,12 +1637,17 @@ export async function renderMutationResponse<
       : undefined;
   if (replayed) return replayed;
 
-  const result = await runMutation(
-    definition,
-    wireRequest.rawInput,
-    wireRequest.request,
-    runMutationOptions(wireRequest.csrf),
-  );
+  let result: MutationResult<Value>;
+  try {
+    result = await runMutation(
+      definition,
+      wireRequest.rawInput,
+      wireRequest.request,
+      runMutationOptions(wireRequest.csrf),
+    );
+  } catch {
+    return mutationServerErrorResponse(wireRequest);
+  }
 
   if (!result.ok) {
     const replayReservation =
@@ -1716,6 +1721,16 @@ function mutationRenderErrorResponse<Request>(
   };
 }
 
+function mutationServerErrorResponse<Request>(
+  wireRequest: MutationWireRequest<Request>,
+): MutationWireResponse {
+  return {
+    body: renderMutationServerErrorFragment(wireRequest),
+    headers: mutationWireResponseHeaders(wireRequest),
+    status: 500,
+  };
+}
+
 export async function renderMutationEndpointResponse<
   const Key extends string,
   InputSchema extends Schema<unknown>,
@@ -1752,12 +1767,17 @@ export async function renderNoJsMutationResponse<
   definition: MutationDefinition<Key, InputSchema, Errors, Request, Value, GuardedRequest>,
   noJsRequest: NoJsMutationRequest<Request, Value>,
 ): Promise<NoJsMutationResponse> {
-  const result = await runMutation(
-    definition,
-    noJsRequest.rawInput,
-    noJsRequest.request,
-    runMutationOptions(noJsRequest.csrf),
-  );
+  let result: MutationResult<Value>;
+  try {
+    result = await runMutation(
+      definition,
+      noJsRequest.rawInput,
+      noJsRequest.request,
+      runMutationOptions(noJsRequest.csrf),
+    );
+  } catch {
+    return noJsMutationServerErrorResponse();
+  }
 
   if (!result.ok) {
     const body = noJsRequest.renderFailurePage
@@ -1799,6 +1819,14 @@ function isMutationFail(value: unknown): value is MutationFail {
 
 function serverErrorPayload(): { code: 'SERVER_ERROR'; payload: Record<string, never> } {
   return { code: 'SERVER_ERROR', payload: {} };
+}
+
+function noJsMutationServerErrorResponse(): NoJsMutationResponse {
+  return {
+    body: 'Internal Server Error',
+    headers: { 'Content-Type': 'text/html; charset=utf-8' },
+    status: 500,
+  };
 }
 
 function htmlServerErrorResponse(): RoutePageResponse {
@@ -2272,6 +2300,14 @@ function renderMutationRenderErrorFragment<Request>(
   const message = error instanceof Error ? error.message : 'Mutation response rendering failed.';
 
   return `<fw-fragment target="${escapeAttribute(target)}"><output role="alert" data-error-code="RENDER_ERROR">${escapeHtml(message)}</output></fw-fragment>`;
+}
+
+function renderMutationServerErrorFragment<Request>(
+  wireRequest: MutationWireRequest<Request>,
+): string {
+  const target = wireRequest.failureTarget ?? wireRequest.targets?.[0] ?? 'error';
+
+  return `<fw-fragment target="${escapeAttribute(target)}">${renderStylesheetLinks(wireRequest.failureStylesheets ?? [])}<output role="alert" data-error-code="SERVER_ERROR">Internal Server Error</output></fw-fragment>`;
 }
 
 function renderDefaultFailureFragmentContent(failure: MutationFail): string {

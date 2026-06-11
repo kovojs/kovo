@@ -3065,6 +3065,26 @@ describe('server mutation primitives', () => {
     expect(second).toEqual(first);
   });
 
+  it('renders enhanced mutation handler exceptions as 500 fragments', async () => {
+    const addToCart = mutation('cart/add', {
+      input: s.object({ productId: s.string() }),
+      handler() {
+        throw new Error('handler unavailable');
+      },
+    });
+
+    await expect(
+      renderMutationResponse(addToCart, {
+        rawInput: { productId: 'p1' },
+        request: {},
+      }),
+    ).resolves.toEqual({
+      body: '<fw-fragment target="error"><output role="alert" data-error-code="SERVER_ERROR">Internal Server Error</output></fw-fragment>',
+      headers: { 'Content-Type': 'text/vnd.jiso.fragment+html; charset=utf-8' },
+      status: 500,
+    });
+  });
+
   it('renders typed failures as 422 validation fragments', async () => {
     const addToCart = mutation('cart/add', {
       errors: {
@@ -3291,6 +3311,27 @@ describe('server mutation primitives', () => {
       body: '<!doctype html><html><body><output role="alert" data-error-code="OUT_OF_STOCK">{"availableQuantity":0}</output></body></html>',
       headers: { 'Content-Type': 'text/html; charset=utf-8' },
       status: 422,
+    });
+  });
+
+  it('renders no-JS mutation handler exceptions as an HTML 500 response', async () => {
+    const addToCart = mutation('cart/add', {
+      input: s.object({ productId: s.string() }),
+      handler() {
+        throw new Error('handler unavailable');
+      },
+    });
+
+    await expect(
+      renderNoJsMutationResponse(addToCart, {
+        rawInput: { productId: 'p1' },
+        redirectTo: '/cart',
+        request: {},
+      }),
+    ).resolves.toEqual({
+      body: 'Internal Server Error',
+      headers: { 'Content-Type': 'text/html; charset=utf-8' },
+      status: 500,
     });
   });
 
