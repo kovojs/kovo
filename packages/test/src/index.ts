@@ -275,6 +275,10 @@ export function createDbVerifier(touchGraph: TouchGraph, config: DbVerificationC
           if (prop === '__jisoObserved') return observed;
           const value = Reflect.get(target, prop, receiver);
 
+          if (prop === 'pglite' && typeof value === 'object' && value !== null) {
+            return wrapSqlHandle(value, config, observed);
+          }
+
           if (prop === 'read' && typeof value === 'function') {
             return (table: string, ...args: unknown[]) => {
               observe('read', table, args, config, observed);
@@ -310,6 +314,27 @@ export function createDbVerifier(touchGraph: TouchGraph, config: DbVerificationC
       return proxy as Db;
     },
   };
+}
+
+function wrapSqlHandle<Handle extends object>(
+  handle: Handle,
+  config: DbVerificationConfig,
+  observed: ObservedDbOperation[],
+): Handle {
+  return new Proxy(handle as Record<PropertyKey, unknown>, {
+    get(target, prop, receiver) {
+      const value = Reflect.get(target, prop, receiver);
+
+      if ((prop === 'query' || prop === 'exec') && typeof value === 'function') {
+        return (statement: string, ...args: unknown[]) => {
+          observeSql(statement, config, observed);
+          return value.call(target, statement, ...args);
+        };
+      }
+
+      return typeof value === 'function' ? value.bind(target) : value;
+    },
+  }) as Handle;
 }
 
 export async function createPgliteTestDb(options: PGliteOptions = {}): Promise<PgliteTestDb> {

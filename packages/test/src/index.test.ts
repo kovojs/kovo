@@ -811,6 +811,44 @@ describe('@jiso/test harness', () => {
     }
   });
 
+  it('verifies raw pglite handle calls against the static touch graph', async () => {
+    const cartMutation = mutation('cart/add', {
+      input: s.object({ productId: s.string() }),
+      async handler(input, request: { db: Pick<PgliteTestDb, 'pglite'> }) {
+        await request.db.pglite.query('insert into audit_log (product_id) values ($1)', [
+          input.productId,
+        ]);
+        return input.productId;
+      },
+    });
+    const db = await createPgliteTestDb();
+
+    try {
+      await db.exec('create table audit_log (product_id text not null)');
+      const harness = createJisoTestHarness({
+        db,
+        touchGraph: {
+          'cart.addItem': {
+            touches: [{ domain: 'cart', keys: null, site: 'cart.domain.ts:1', via: 'cart_items' }],
+            unresolved: [],
+          },
+        },
+        verification: {
+          domainByTable: {
+            audit_log: 'audit',
+            cart_items: 'cart',
+          },
+        },
+      });
+
+      await expect(harness.exec(cartMutation, { productId: 'p1' })).rejects.toThrow(
+        'FW402 Write touched an undeclared domain: audit',
+      );
+    } finally {
+      await db.close();
+    }
+  });
+
   it('fails verification when raw SQL writes outside FW406 coverage', async () => {
     const cartMutation = mutation('cart/add', {
       input: s.object({ productId: s.string() }),
