@@ -912,6 +912,38 @@ describe('fw check', () => {
     expect(output).toBe('fw: usage: fw check [optimistic|coverage] [graph.json]\n');
   });
 
+  it('rejects unknown flags before treating them as graph paths', () => {
+    let output = '';
+    const stderrWrite = vi.spyOn(process.stderr, 'write').mockImplementation(((chunk) => {
+      output += chunk.toString();
+      return true;
+    }) as typeof process.stderr.write);
+
+    try {
+      expect(main(['explain', '--json', 'component', 'CartBadge'])).toBe(1);
+    } finally {
+      stderrWrite.mockRestore();
+    }
+
+    expect(output).toBe('fw: unknown flag "--json"\n');
+  });
+
+  it('reports unknown commands without implying missing implementation', () => {
+    let output = '';
+    const stderrWrite = vi.spyOn(process.stderr, 'write').mockImplementation(((chunk) => {
+      output += chunk.toString();
+      return true;
+    }) as typeof process.stderr.write);
+
+    try {
+      expect(main(['compile'])).toBe(1);
+    } finally {
+      stderrWrite.mockRestore();
+    }
+
+    expect(output).toBe('fw: unknown command "compile". expected explain, check, or audit.\n');
+  });
+
   it('runs as a CLI entrypoint when the script path contains spaces', () => {
     const parent = mkdtempSync(join(tmpdir(), 'jiso-cli-entry-'));
     const spacedDir = join(parent, 'entry path with spaces');

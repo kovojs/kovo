@@ -122,7 +122,7 @@ Do this first or pay it on every commit.
       Evidence 2026-06-11: `README.md` documents the five gate mechanisms and acceptance order;
       `scripts/fw-check.mjs` preflights `dist/cli/src/index.mjs` and
       `tests/fw-check.node.mjs` pins the friendly missing-build message.
-- [ ] **Give the graph schema one home.** Move `FwExplainInput` and friends from
+- [x] **Give the graph schema one home.** Move `FwExplainInput` and friends from
       `cli/src/index.ts:14-241` to `@jiso/core`, with element-level validation (an unknown
       diagnostic code currently crashes `fw` with a raw TypeError —
       `diagnosticDefinitions[lint.code].message` at cli/src/index.ts:1309, :855, :878, :891).
@@ -143,8 +143,13 @@ Do this first or pay it on every commit.
       `corepack pnpm --filter @jiso/example-commerce exec which vite` cannot resolve `vite` in
       the side worktree), and
       `pnpm exec vitest --run examples/commerce/src/app.test.ts -t "ships graph facts for fw check and explain acceptance"`.
-      Remaining in this checklist item: CLI dispatch block deduplication, unknown-flag rejection,
-      unknown-command wording, and structured exit-code derivation.
+      Evidence 2026-06-11 for CLI cleanup sub-slice: `packages/cli/src/index.ts` now routes
+      check/audit/explain through one `runGraphCommand`/`writeCommandResult` path, parses
+      audit/explain flags before reading graph paths, reports unknown commands without implying
+      missing implementation, and computes `fwCheck` failure status from structured findings
+      before rendering output. `packages/cli/src/index.test.ts` covers unknown diagnostic codes,
+      unknown flags, unknown commands, and the existing CLI check families. Verified with
+      `pnpm exec vitest --run packages/cli/src/index.test.ts`.
 
 Verification: full `pnpm run acceptance` (the gate is the thing changing — its replacement must
 catch a seeded regression: mutate a fixture graph and confirm red). Commit per item.
