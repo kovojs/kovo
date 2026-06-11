@@ -461,6 +461,23 @@ void test('P1 compiler validates HTML content-model parser stability', async () 
   assert.match(compilerTests, /reports FW225 for parser-reparented HTML content-model violations/);
 });
 
+void test('P1 compiler validates declared execution trigger names', async () => {
+  const coreSource = await readProjectFile('packages/core/src/diagnostics.ts');
+  const compilerSource = await readProjectFile('packages/compiler/src/index.ts');
+  const compilerTests = await readProjectFile('packages/compiler/src/index.test.ts');
+
+  assert.match(coreSource, /FW211/);
+  assert.match(coreSource, /FW212/);
+  assert.match(compilerSource, /validateEventTriggerNames/);
+  assert.match(compilerSource, /declaredExecutionTriggers/);
+  assert.match(compilerSource, /hasFw211Justification/);
+  assert.match(compilerTests, /accepts known delegated events and declared execution triggers/);
+  assert.match(
+    compilerTests,
+    /reports FW211 and FW212 for unjustified eager execution and unknown triggers/,
+  );
+});
+
 void test('P3 typed routes validate navigation targets', async () => {
   const coreSource = await readProjectFile('packages/core/src/index.ts');
   const coreTests = await readProjectFile('packages/core/src/index.test.ts');

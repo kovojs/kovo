@@ -252,6 +252,7 @@ export function compileComponentModule(options: CompileComponentOptions): Compil
   const idrefDiagnostics = validateIdrefs(options.source, options.fileName);
   const literalHrefDiagnostics = validateLiteralHrefs(source, options);
   const htmlContentModelDiagnostics = validateHtmlContentModel(source, options.fileName);
+  const eventTriggerDiagnostics = validateEventTriggerNames(source, options.fileName);
   const clientFileName = replaceExtension(options.fileName, '.client.js');
   const cssFileName = replaceExtension(options.fileName, '.css');
   const serverFileName = replaceExtension(options.fileName, '.server.js');
@@ -290,6 +291,7 @@ export function compileComponentModule(options: CompileComponentOptions): Compil
       ...idrefDiagnostics,
       ...literalHrefDiagnostics,
       ...htmlContentModelDiagnostics,
+      ...eventTriggerDiagnostics,
     ],
     files: [
       { fileName: serverFileName, source: serverSource },
@@ -1318,6 +1320,78 @@ function isSelfClosing(attrs: string): boolean {
 
 function hasFwComponentStamp(attrs: string): boolean {
   return /\bfw-c\s*=/.test(attrs);
+}
+
+const declaredExecutionTriggers = new Set(['idle', 'load', 'visible']);
+
+const delegatedDomEvents = new Set([
+  'beforeinput',
+  'blur',
+  'change',
+  'click',
+  'close',
+  'contextmenu',
+  'dblclick',
+  'focus',
+  'focusin',
+  'focusout',
+  'input',
+  'keydown',
+  'keyup',
+  'pointercancel',
+  'pointerdown',
+  'pointerenter',
+  'pointerleave',
+  'pointermove',
+  'pointerout',
+  'pointerover',
+  'pointerup',
+  'reset',
+  'submit',
+  'toggle',
+]);
+
+function validateEventTriggerNames(source: string, fileName: string): CompilerDiagnostic[] {
+  return eventTriggerAttributes(source).flatMap((attribute) => {
+    if (!isKnownEventOrTrigger(attribute.name)) {
+      return [eventTriggerDiagnostic(fileName, 'FW212', attribute.name)];
+    }
+
+    if (attribute.name === 'load' && !hasFw211Justification(source, attribute.index)) {
+      return [eventTriggerDiagnostic(fileName, 'FW211', attribute.name)];
+    }
+
+    return [];
+  });
+}
+
+function eventTriggerAttributes(source: string): Array<{ index: number; name: string }> {
+  return [...source.matchAll(/\bon:(?<name>[a-z][a-z0-9-]*)\s*=/g)].map((match) => ({
+    index: match.index ?? 0,
+    name: match.groups?.name ?? '',
+  }));
+}
+
+function isKnownEventOrTrigger(name: string): boolean {
+  return declaredExecutionTriggers.has(name) || delegatedDomEvents.has(name);
+}
+
+function hasFw211Justification(source: string, index: number): boolean {
+  const prefix = source.slice(Math.max(0, index - 240), index);
+  return /(?:\/\*[\s\S]*?FW211[\s\S]*?\*\/|\/\/[^\n]*FW211|<!--[\s\S]*?FW211[\s\S]*?-->)/.test(
+    prefix,
+  );
+}
+
+function eventTriggerDiagnostic(
+  fileName: string,
+  code: 'FW211' | 'FW212',
+  name: string,
+): CompilerDiagnostic {
+  return {
+    ...diagnosticFor(fileName, code),
+    message: `${diagnosticDefinitions[code].message} on:${name}`,
+  };
 }
 
 function validateLiteralHrefs(

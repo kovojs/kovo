@@ -714,6 +714,58 @@ export const CartShell = component('cart-shell', {
     ]);
   });
 
+  it('accepts known delegated events and declared execution triggers', () => {
+    const result = compileComponentModule({
+      fileName: 'execution-triggers.tsx',
+      source: `
+export const ExecutionTriggers = component('execution-triggers', {
+  render: () => (
+    <section>
+      <button on:click="/c/cart.client.js#Cart$add">Add</button>
+      <search-index on:idle="/c/search.client.js#Search$warm"></search-index>
+      <sales-chart on:visible="/c/chart.client.js#SalesChart$mount"></sales-chart>
+      {/* FW211: stock ticker intentionally starts at parse for market-open pages. */}
+      <stock-ticker on:load="/c/ticker.client.js#Ticker$start"></stock-ticker>
+    </section>
+  ),
+});
+`,
+    });
+
+    expect(result.diagnostics).toEqual([]);
+  });
+
+  it('reports FW211 and FW212 for unjustified eager execution and unknown triggers', () => {
+    const result = compileComponentModule({
+      fileName: 'execution-triggers.tsx',
+      source: `
+export const ExecutionTriggers = component('execution-triggers', {
+  render: () => (
+    <section>
+      <stock-ticker on:load="/c/ticker.client.js#Ticker$start"></stock-ticker>
+      <video-player on:media="/c/video.client.js#Video$mount"></video-player>
+    </section>
+  ),
+});
+`,
+    });
+
+    expect(result.diagnostics).toEqual([
+      {
+        code: 'FW211',
+        fileName: 'execution-triggers.tsx',
+        message: 'on:load eager trigger requires a justification comment. on:load',
+        severity: 'lint',
+      },
+      {
+        code: 'FW212',
+        fileName: 'execution-triggers.tsx',
+        message: 'Unknown on:* event or execution trigger name. on:media',
+        severity: 'lint',
+      },
+    ]);
+  });
+
   it('accepts literal navigation targets that match declared routes', () => {
     const result = compileComponentModule({
       fileName: 'product-links.tsx',
