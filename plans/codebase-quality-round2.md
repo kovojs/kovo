@@ -193,7 +193,7 @@ must be "FW406 unresolved," never "silently wrong."
       objects (pinned-runtime mode); unknown → FW406, never a guess.
 - [ ] **HIGH — Cover the invisible read/write surfaces or mark them.** Relational query API
       (`db.query.users.findMany()`) matches neither read (:1138) nor write (:598) extraction;
-      `db.execute(sql\`\`)` is skipped by `extractExternalDbArgumentCalls` (:1820). Either
+      `db.execute(sql``)` is skipped by `extractExternalDbArgumentCalls` (:1820). Either
       extract them or emit FW406 for any db-receiving expression the extractor cannot classify —
       the static set must not under-approximate silently.
 - [ ] **MED — Make the drizzle-orm coupling real and tested.** The `>=0.45.2 <1` pin is
@@ -378,16 +378,16 @@ acceptance at the end.
 
 ## Sequencing summary
 
-| Phase | Theme                                  | Depends on | Parallelizable                          |
-| ----- | -------------------------------------- | ---------- | ---------------------------------------- |
-| 0     | Ledger honesty                         | —          | trivial, do inline                       |
-| 1     | Gate de-tautologization + graph schema | 0          | gate vs create-jiso vs CLI: 3 slices     |
-| 2     | Compiler IR                            | 1          | one track (architecture change)          |
-| 3     | Drizzle AST                            | 1          | parallel with 2 (separate packages)      |
-| 4     | Runtime                                | 1          | parallel with 2/3                        |
-| 5     | Server                                 | 1 + in-flight document/app work landed | parallel with 2/3/4 |
-| 6     | Harness + example                      | 3 (shapes), 5 (escapers) | partial overlap        |
-| 7     | Test restructuring                     | folds into 2-6 | per-package with its phase           |
+| Phase | Theme                                  | Depends on                             | Parallelizable                       |
+| ----- | -------------------------------------- | -------------------------------------- | ------------------------------------ |
+| 0     | Ledger honesty                         | —                                      | trivial, do inline                   |
+| 1     | Gate de-tautologization + graph schema | 0                                      | gate vs create-jiso vs CLI: 3 slices |
+| 2     | Compiler IR                            | 1                                      | one track (architecture change)      |
+| 3     | Drizzle AST                            | 1                                      | parallel with 2 (separate packages)  |
+| 4     | Runtime                                | 1                                      | parallel with 2/3                    |
+| 5     | Server                                 | 1 + in-flight document/app work landed | parallel with 2/3/4                  |
+| 6     | Harness + example                      | 3 (shapes), 5 (escapers)               | partial overlap                      |
+| 7     | Test restructuring                     | folds into 2-6                         | per-package with its phase           |
 
 Phases 2-5 are independent packages and run as parallel sub-agent worktree tracks per CLAUDE.md
 (explicit file ownership; integration, gate runs, and checkpoint commits centralized in the main
