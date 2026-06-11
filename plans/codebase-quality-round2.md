@@ -248,6 +248,10 @@ Do this first or pay it on every commit.
       ESM issue, so the gate documents that failure and falls back to executable Vitest coverage
       for the same source tests rather than grepping package source or test text. Verification:
       `node --test --test-name-pattern "P3 Drizzle query facts" tests/fw-check.node.mjs`.
+      Partial evidence 2026-06-11: the P1 fragment-target registry tranche now imports built
+      core/compiler APIs and asserts `fragmentTarget()` descriptor behavior plus compiler-emitted
+      component graph fragments and `FragmentTargets` registry prop types instead of grepping
+      core/compiler source or test names.
 - [x] **Make create-jiso templates real files** (`create-jiso/src/index.ts:63-473`, ~470 lines of
       escaped template literals including a CI workflow and double-escaped regexes inside
       `.mjs`-in-string). Move to a `templates/` directory copied at scaffold time with `{{name}}`

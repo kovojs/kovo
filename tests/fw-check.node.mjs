@@ -61,7 +61,7 @@ import {
   stylesheetsForTargets,
   t,
 } from '../dist/server/src/index.mjs';
-import { href, Link, redirect, route } from '../dist/core/src/index.mjs';
+import { fragmentTarget, href, Link, redirect, route } from '../dist/core/src/index.mjs';
 
 const generatedWireBodies = {
   'defer-stream.http': [
@@ -3825,19 +3825,34 @@ void test('P3 Drizzle query facts include select shapes and instance keys', asyn
 });
 
 void test('P1 fragment targets emit typed registry facts', async () => {
-  const coreSource = await readProjectFile('packages/core/src/index.ts');
-  const coreTests = await readProjectFile('packages/core/src/index.test.ts');
-  const compilerGraphSource = await readProjectFile('packages/compiler/src/graph.ts');
-  const compilerRegistrySource = await readProjectFile('packages/compiler/src/emit/registry.ts');
-  const compilerTests = await readProjectFile('packages/compiler/src/index.test.ts');
+  assert.deepEqual(fragmentTarget('cart-row', { rowId: 'row-1' }), {
+    props: { rowId: 'row-1' },
+    target: 'cart-row',
+  });
 
-  assert.match(coreSource, /interface FragmentTargets/);
-  assert.match(coreSource, /function fragmentTarget/);
-  assert.match(coreTests, /fragment target names and props from generated registry facts/);
-  assert.match(compilerGraphSource, /fragmentTargetPropsType/);
-  assert.match(compilerRegistrySource, /interface FragmentTargets \{/);
-  assert.match(compilerTests, /'cart-row': \{ rowId: string \};/);
-  assert.doesNotMatch(compilerTests, /'cart-row': unknown;/);
+  const result = compileComponentModule({
+    fileName: 'cart-row.tsx',
+    source: `
+export const CartRow = component('cart-row', {
+  fragmentTarget: true,
+  props: { rowId: String },
+  render: ({ rowId }) => <tr fw-c="cart-row" data-row={rowId}></tr>,
+});
+`,
+  });
+  const registrySource = result.files.find((file) => file.kind === 'registry')?.source ?? '';
+
+  assert.deepEqual(result.componentGraphFacts, [
+    {
+      fragments: ['cart-row'],
+      name: 'CartRow',
+    },
+  ]);
+  assert.match(
+    registrySource,
+    /interface FragmentTargets \{\n  'cart-row': \{ rowId: string \};\n\}/,
+  );
+  assert.doesNotMatch(registrySource, /'cart-row': unknown;/);
 });
 
 void test('P4 commerce touch graph is a committed generated artifact', async () => {
