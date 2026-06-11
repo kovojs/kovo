@@ -629,11 +629,10 @@ export function createQueryStore(): QueryStore {
       const name = script.getAttribute('fw-query');
       if (!name) return;
 
-      this.set(
-        name,
-        JSON.parse(script.textContent ?? 'null'),
-        script.getAttribute('key') ?? undefined,
-      );
+      const parsed = parseJsonValue(script.textContent ?? 'null');
+      if (!parsed.ok) return;
+
+      this.set(name, parsed.value, script.getAttribute('key') ?? undefined);
     },
     snapshot(
       names: readonly string[],
@@ -1320,17 +1319,17 @@ function parseMutationFailure(body: string): JsonValue {
 }
 
 function parseJsonOrUnknown(raw: string): JsonValue {
-  const value = parseJsonValue(raw);
-  if (value !== null) return value;
+  const parsed = parseJsonValue(raw);
+  if (parsed.ok) return parsed.value;
 
   return { body: raw, code: 'unknown' };
 }
 
-function parseJsonValue(raw: string): JsonValue | null {
+function parseJsonValue(raw: string): { ok: true; value: JsonValue } | { ok: false } {
   try {
-    return JSON.parse(raw) as JsonValue;
+    return { ok: true, value: JSON.parse(raw) as JsonValue };
   } catch {
-    return null;
+    return { ok: false };
   }
 }
 
@@ -1365,7 +1364,8 @@ function parseOutputPayload(content: string): JsonValue {
   const raw = unescapeHtml(content).trim();
   if (!raw) return {};
 
-  return parseJsonValue(raw) ?? raw;
+  const parsed = parseJsonValue(raw);
+  return parsed.ok ? parsed.value : raw;
 }
 
 export function applyMutationResponse(store: QueryStore, body: string): AppliedMutationResponse {
@@ -1952,10 +1952,13 @@ function readQueryChunks(body: string): QueryChunk[] {
     if (!name) continue;
     const key = readAttribute(attrs, 'key') ?? undefined;
 
+    const parsed = parseJsonValue(unescapeHtml(match.groups?.json ?? 'null'));
+    if (!parsed.ok) continue;
+
     queries.push({
       ...(key === undefined ? {} : { key }),
       name,
-      value: JSON.parse(unescapeHtml(match.groups?.json ?? 'null')),
+      value: parsed.value,
     });
   }
 
@@ -2137,10 +2140,10 @@ function readMutationChangeHeader(response: EnhancedMutationResponseLike): Mutat
   const value = response.headers?.get('FW-Changes') ?? response.headers?.get('fw-changes');
   if (!value) return [];
 
-  const parsed = JSON.parse(value) as unknown;
-  if (!Array.isArray(parsed)) return [];
+  const parsed = parseJsonValue(value);
+  if (!parsed.ok || !Array.isArray(parsed.value)) return [];
 
-  return parsed.flatMap((record) => {
+  return parsed.value.flatMap((record) => {
     const sanitized = sanitizeMutationChangeRecord(record);
     return sanitized ? [sanitized] : [];
   });
