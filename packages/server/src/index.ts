@@ -624,20 +624,41 @@ export interface MutationWireResponse {
 }
 
 export interface MutationReplayStore {
-  get(idem: string): MutationWireResponse | undefined;
-  set(idem: string, response: MutationWireResponse): void;
+  get(scope: string, idem: string): MutationWireResponse | undefined;
+  set(scope: string, idem: string, response: MutationWireResponse): void;
 }
 
-export function createMemoryMutationReplayStore(): MutationReplayStore {
-  const responses = new Map<string, MutationWireResponse>();
+export function createMemoryMutationReplayStore(
+  options: { maxEntries?: number; ttlMs?: number } = {},
+): MutationReplayStore {
+  const maxEntries = options.maxEntries ?? 1_000;
+  const ttlMs = options.ttlMs ?? 5 * 60_000;
+  const responses = new Map<string, { expiresAt: number; response: MutationWireResponse }>();
 
   return {
-    get(idem) {
-      const response = responses.get(idem);
-      return response ? cloneMutationWireResponse(response) : undefined;
+    get(scope, idem) {
+      const key = mutationReplayKey(scope, idem);
+      const record = responses.get(key);
+      if (!record) return undefined;
+      if (record.expiresAt <= Date.now()) {
+        responses.delete(key);
+        return undefined;
+      }
+
+      return cloneMutationWireResponse(record.response);
     },
-    set(idem, response) {
-      responses.set(idem, cloneMutationWireResponse(response));
+    set(scope, idem, response) {
+      evictExpiredMutationReplays(responses);
+      while (responses.size >= maxEntries) {
+        const oldest = responses.keys().next().value;
+        if (oldest === undefined) break;
+        responses.delete(oldest);
+      }
+
+      responses.set(mutationReplayKey(scope, idem), {
+        expiresAt: Date.now() + ttlMs,
+        response: cloneMutationWireResponse(response),
+      });
     },
   };
 }
@@ -1185,11 +1206,6 @@ export async function runMutation<
   rawInput: unknown,
   request: Request,
 ): Promise<MutationResult<Value>> {
-  const inputResult = parseMutationInput(definition.input, rawInput);
-  if (!inputResult.ok) return inputResult.failure;
-
-  const input = inputResult.value as InferSchema<InputSchema>;
-
   if (definition.csrf && !validateCsrfToken(rawInput, request, definition.csrf)) {
     return {
       error: { code: 'CSRF', payload: {} },
@@ -1197,6 +1213,11 @@ export async function runMutation<
       status: 422,
     };
   }
+
+  const inputResult = parseMutationInput(definition.input, rawInput);
+  if (!inputResult.ok) return inputResult.failure;
+
+  const input = inputResult.value as InferSchema<InputSchema>;
 
   if (definition.guard && !(await definition.guard(request))) {
     return {
@@ -1290,13 +1311,35 @@ export async function renderMutationResponse<
   definition: MutationDefinition<Key, InputSchema, Errors, Request, Value, GuardedRequest>,
   wireRequest: MutationWireRequest<Request>,
 ): Promise<MutationWireResponse> {
-  const replayed = wireRequest.idem ? wireRequest.replayStore?.get(wireRequest.idem) : undefined;
+  if (
+    definition.csrf &&
+    !validateCsrfToken(wireRequest.rawInput, wireRequest.request, definition.csrf)
+  ) {
+    return {
+      body: await renderFailureFragment(
+        {
+          error: { code: 'CSRF', payload: {} },
+          ok: false,
+          status: 422,
+        },
+        wireRequest,
+      ),
+      headers: mutationWireResponseHeaders(wireRequest),
+      status: 422,
+    };
+  }
+
+  const replayScope = mutationReplayScope(definition, wireRequest);
+  const replayed =
+    wireRequest.idem && replayScope
+      ? wireRequest.replayStore?.get(replayScope, wireRequest.idem)
+      : undefined;
   if (replayed) return replayed;
 
   const result = await runMutation(definition, wireRequest.rawInput, wireRequest.request);
 
   if (!result.ok) {
-    return storeMutationReplay(wireRequest, {
+    return storeMutationReplay(definition, wireRequest, {
       body: await renderFailureFragment(result, wireRequest),
       headers: mutationWireResponseHeaders(wireRequest),
       status: 422,
@@ -1316,7 +1359,7 @@ export async function renderMutationResponse<
     renderInput,
   );
 
-  return storeMutationReplay(wireRequest, {
+  return storeMutationReplay(definition, wireRequest, {
     body: [...queryChunks, ...fragmentChunks].join('\n'),
     headers: {
       ...mutationWireResponseHeaders(wireRequest),
@@ -1864,14 +1907,50 @@ function renderDefaultFailurePage(failure: MutationFail): string {
 }
 
 function storeMutationReplay<Request>(
+  definition: { csrf?: CsrfValidationOptions<Request> },
   wireRequest: MutationWireRequest<Request>,
   response: MutationWireResponse,
 ): MutationWireResponse {
-  if (wireRequest.idem) {
-    wireRequest.replayStore?.set(wireRequest.idem, response);
+  const replayScope = mutationReplayScope(definition, wireRequest);
+  if (wireRequest.idem && replayScope) {
+    wireRequest.replayStore?.set(replayScope, wireRequest.idem, response);
   }
 
   return response;
+}
+
+function mutationReplayScope<Request>(
+  definition: { csrf?: CsrfValidationOptions<Request> },
+  wireRequest: MutationWireRequest<Request>,
+): string | null {
+  const csrfSessionId = definition.csrf?.sessionId(wireRequest.request);
+  if (csrfSessionId) return csrfSessionId;
+
+  const request = wireRequest.request;
+  if (
+    typeof request === 'object' &&
+    request !== null &&
+    'sessionId' in request &&
+    typeof request.sessionId === 'string' &&
+    request.sessionId !== ''
+  ) {
+    return request.sessionId;
+  }
+
+  return null;
+}
+
+function mutationReplayKey(scope: string, idem: string): string {
+  return `${scope}\0${idem}`;
+}
+
+function evictExpiredMutationReplays(
+  responses: Map<string, { expiresAt: number; response: MutationWireResponse }>,
+): void {
+  const now = Date.now();
+  for (const [key, record] of responses) {
+    if (record.expiresAt <= now) responses.delete(key);
+  }
 }
 
 function cloneMutationWireResponse(response: MutationWireResponse): MutationWireResponse {

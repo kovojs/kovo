@@ -39,6 +39,7 @@ import {
   t,
   tag,
   type ChangeRecord,
+  type MutationReplayStore,
 } from './index.js';
 
 describe('server mutation primitives', () => {
@@ -1997,7 +1998,7 @@ describe('server mutation primitives', () => {
       idem: 'idem_01',
       rawInput: { productId: 'p1' },
       replayStore,
-      request: {},
+      request: { sessionId: 's1' },
       targets: ['cart-badge'],
     };
 
@@ -2034,7 +2035,7 @@ describe('server mutation primitives', () => {
       idem: 'idem_422',
       rawInput: { productId: 'p1' },
       replayStore,
-      request: {},
+      request: { sessionId: 's1' },
     };
 
     await expect(renderMutationResponse(addToCart, request)).resolves.toMatchObject({
@@ -2049,6 +2050,108 @@ describe('server mutation primitives', () => {
       status: 422,
     });
     expect(attempts).toBe(1);
+  });
+
+  it('does not replay enhanced mutation responses before validating CSRF', async () => {
+    const request = { session: { id: 's1' } };
+    const csrf = {
+      field: 'csrf',
+      secret: 'test-secret',
+      sessionId(candidate: typeof request) {
+        return candidate.session.id;
+      },
+    };
+    let getCalls = 0;
+    let writes = 0;
+    const replayStore: MutationReplayStore = {
+      get() {
+        getCalls += 1;
+        return {
+          body: '<fw-query name="cart">{"count":999}</fw-query>',
+          headers: {},
+          status: 200,
+        };
+      },
+      set() {},
+    };
+    const addToCart = mutation('cart/add', {
+      csrf,
+      input: s.object({ productId: s.string() }),
+      handler(input) {
+        writes += 1;
+        return input;
+      },
+    });
+
+    const response = await renderMutationResponse(addToCart, {
+      idem: 'idem_01',
+      rawInput: { productId: 'p1' },
+      replayStore,
+      request,
+    });
+
+    expect(getCalls).toBe(0);
+    expect(writes).toBe(0);
+    expect(response).toMatchObject({ status: 422 });
+    expect(response.body).toContain('data-error-code="CSRF"');
+  });
+
+  it('scopes enhanced mutation replay records by CSRF session id', async () => {
+    const replayStore = createMemoryMutationReplayStore();
+    const csrf = {
+      field: 'csrf',
+      secret: 'test-secret',
+      sessionId(candidate: { session: { id: string } }) {
+        return candidate.session.id;
+      },
+    };
+    let writes = 0;
+    const cart = domain('cart');
+    const cartQuery = query('cart', {
+      load: (_input, context: { request: { session: { id: string } } }) => ({
+        count: writes,
+        session: context.request.session.id,
+      }),
+      reads: [cart],
+    });
+    const addToCart = mutation('cart/add', {
+      csrf,
+      input: s.object({ csrf: s.string(), productId: s.string() }),
+      registry: {
+        queries: [cartQuery],
+        touches: [cart],
+      },
+      handler(input) {
+        writes += 1;
+        return input;
+      },
+    });
+    const requestA = { session: { id: 's1' } };
+    const requestB = { session: { id: 's2' } };
+
+    const first = await renderMutationResponse(addToCart, {
+      idem: 'idem_shared',
+      rawInput: { csrf: csrfToken(requestA, csrf), productId: 'p1' },
+      replayStore,
+      request: requestA,
+    });
+    const second = await renderMutationResponse(addToCart, {
+      idem: 'idem_shared',
+      rawInput: { csrf: csrfToken(requestB, csrf), productId: 'p1' },
+      replayStore,
+      request: requestB,
+    });
+    const replayedFirst = await renderMutationResponse(addToCart, {
+      idem: 'idem_shared',
+      rawInput: { csrf: csrfToken(requestA, csrf), productId: 'p1' },
+      replayStore,
+      request: requestA,
+    });
+
+    expect(writes).toBe(2);
+    expect(first.body).toContain('"session":"s1"');
+    expect(second.body).toContain('"session":"s2"');
+    expect(replayedFirst.body).toBe(first.body);
   });
 
   it('delivers late stylesheets with enhanced mutation fragments', async () => {
