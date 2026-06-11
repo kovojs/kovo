@@ -203,6 +203,10 @@ Do this first or pay it on every commit.
       `jisoLoaderSource` artifact and asserts the 4KB gzip budget, dynamic import wrapper,
       declared trigger support, enhanced mutation wire features, fragment parsing, and no-upgrade/
       no-unload constraints instead of grepping runtime source or test names.
+      Partial evidence 2026-06-11: the P2 loader-smoke tranche now imports built runtime APIs
+      and asserts delegated listener registration without eager imports, load/idle/visible
+      trigger dispatch, typed refetch request/application, compiled template stamps, and
+      listener disposal instead of grepping runtime/browser source or test names.
 - [x] **Make create-jiso templates real files** (`create-jiso/src/index.ts:63-473`, ~470 lines of
       escaped template literals including a CI workflow and double-escaped regexes inside
       `.mjs`-in-string). Move to a `templates/` directory copied at scaffold time with `{{name}}`

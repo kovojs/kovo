@@ -13,12 +13,15 @@ import {
 import { diagnosticDefinitions } from '../dist/core/src/index.mjs';
 import {
   applyMutationResponseToDom,
+  applyCompiledQueryUpdatePlan,
   createQueryStore,
   installPagehideOptimismCleanup,
+  installJisoLoader,
   jisoLoaderSource,
   morphStructuralTree,
   OptimisticRebaser,
   readElementParams,
+  refetchQueries,
   stampPendingQueries,
   submitOptimisticEnhancedMutation,
 } from '../dist/runtime/src/index.mjs';
@@ -421,93 +424,181 @@ void test('S2 loader budget and L0 no-upgrade path are acceptance evidence', asy
   );
 });
 
-void test('P2 loader smoke evidence remains represented in runtime tests', async () => {
-  const runtimeSource = await readProjectFile('packages/runtime/src/index.ts');
-  const runtimeHandlersSource = await readProjectFile('packages/runtime/src/handlers.ts');
-  const runtimeMorphSource = await readProjectFile('packages/runtime/src/morph.ts');
-  const runtimeTests = await readProjectFile('packages/runtime/src/index.test.ts');
-  const browserTests = await readProjectFile('packages/runtime/src/index.browser.test.ts');
+void test('P2 loader smoke evidence is asserted through runtime behavior', async () => {
+  const listeners = new Map();
+  const rootElements = new Map();
+  const root = {
+    addEventListener(type, listener, options) {
+      listeners.set(type, { listener, options });
+    },
+    removeEventListener(type, listener) {
+      if (listeners.get(type)?.listener === listener) listeners.delete(type);
+    },
+    querySelectorAll(selector) {
+      return rootElements.get(selector) ?? [];
+    },
+    visibilityState: 'visible',
+  };
+  const eventElement = (attributes) => ({
+    attributes: Object.entries(attributes).map(([name, value]) => ({ name, value })),
+    getAttribute(name) {
+      return attributes[name] ?? null;
+    },
+    setAttribute(name, value) {
+      attributes[name] = value;
+    },
+    closest(selector) {
+      const trigger = selector.match(/^\[on\\:(.+)\]$/)?.[1];
+      if (trigger && attributes[`on:${trigger}`] !== undefined) return this;
+      if (selector === '[fw-state]' && attributes['fw-state'] !== undefined) return this;
+      return null;
+    },
+  });
+  const calls = [];
+  const waitForCalls = async (count) => {
+    for (let attempts = 0; attempts < 10 && calls.length < count; attempts += 1) {
+      await new Promise((resolve) => {
+        setTimeout(resolve, 0);
+      });
+    }
+    assert.equal(calls.length, count);
+  };
+  const handlers = {
+    idle(_event, context) {
+      calls.push(['idle', context.signal instanceof AbortSignal]);
+    },
+    load(_event, context) {
+      calls.push(['load', context.signal instanceof AbortSignal]);
+    },
+    visible(_event, context) {
+      calls.push(['visible', context.signal instanceof AbortSignal]);
+    },
+  };
+  const loadElement = eventElement({ 'on:load': '/loader.js#load' });
+  const idleElement = eventElement({ 'on:idle': '/loader.js#idle' });
+  const visibleElement = eventElement({ 'on:visible': '/loader.js#visible' });
+  const idleCallbacks = [];
+  let visibleCallback;
+  const observer = {
+    observed: [],
+    unobserved: [],
+    observe(element) {
+      this.observed.push(element);
+    },
+    unobserve(element) {
+      this.unobserved.push(element);
+    },
+  };
+  rootElements.set('[on\\:load]', [loadElement]);
+  rootElements.set('[on\\:idle]', [idleElement]);
+  rootElements.set('[on\\:visible]', [visibleElement]);
+  let importCount = 0;
 
-  assert.match(
-    runtimeTests,
-    /registers delegated capture listeners without importing handler modules/,
+  const loader = installJisoLoader({
+    importModule: async () => {
+      importCount += 1;
+      return handlers;
+    },
+    requestIdle(callback) {
+      idleCallbacks.push(callback);
+    },
+    root,
+    visibleObserver(callback) {
+      visibleCallback = callback;
+      return observer;
+    },
+  });
+
+  assert.deepEqual(loader.events, ['click', 'submit', 'input', 'change']);
+  assert.deepEqual([...listeners.keys()], ['click', 'submit', 'input', 'change']);
+  assert.equal(listeners.get('click')?.options.capture, true);
+  assert.equal(importCount, 0);
+  await waitForCalls(1);
+  assert.deepEqual(calls, [['load', true]]);
+
+  idleCallbacks[0]();
+  await waitForCalls(2);
+  assert.deepEqual(calls, [
+    ['load', true],
+    ['idle', true],
+  ]);
+
+  assert.deepEqual(observer.observed, [visibleElement]);
+  visibleCallback([{ isIntersecting: true, target: visibleElement }]);
+  await waitForCalls(3);
+  visibleCallback([{ isIntersecting: true, target: visibleElement }]);
+  assert.deepEqual(calls, [
+    ['load', true],
+    ['idle', true],
+    ['visible', true],
+  ]);
+  assert.deepEqual(observer.unobserved, [visibleElement]);
+
+  const store = createQueryStore();
+  const refetched = await refetchQueries({
+    fetch: async (url, options) => {
+      assert.equal(url, '/_q/cart');
+      assert.deepEqual(options, {
+        headers: {
+          Accept: 'text/html',
+          'FW-Fragment': 'true',
+        },
+        method: 'GET',
+      });
+      return {
+        ok: true,
+        status: 200,
+        async text() {
+          return '<fw-query name="cart">{"count":2}</fw-query>';
+        },
+      };
+    },
+    queries: ['cart'],
+    queryStore: store,
+  });
+  assert.deepEqual(refetched, [{ fragments: [], queries: ['cart'] }]);
+  assert.deepEqual(store.get('cart'), { count: 2 });
+
+  let reconciledItems;
+  const templateHost = {
+    getAttribute() {
+      return null;
+    },
+    reconcileTemplateStamp(items) {
+      reconciledItems = items;
+    },
+  };
+  const applied = applyCompiledQueryUpdatePlan(
+    {
+      querySelectorAll(selector) {
+        return selector === '[data-list]' ? [templateHost] : [];
+      },
+    },
+    'cart',
+    { items: [{ id: 'p1', qty: 2 }] },
+    {
+      templateStamps: [
+        {
+          key: 'id',
+          list: 'items',
+          render: (item) => `<li>${item.id}:${item.qty}</li>`,
+          selector: '[data-list]',
+        },
+      ],
+    },
   );
-  assert.match(
-    runtimeTests,
-    /expect\(\[\.\.\.root\.listeners\.keys\(\)\]\)\.toEqual\(\['click', 'submit', 'input', 'change'\]\)/,
-  );
-  assert.match(runtimeTests, /expect\(importModule\)\.not\.toHaveBeenCalled\(\)/);
-  assert.match(runtimeSource, /export function installInlineJisoLoader/);
-  assert.match(runtimeSource, /insertAdjacentHTML\(['"]beforeend['"]/);
-  assert.match(runtimeHandlersSource, /signal: createHandlerSignal\(element, islandSignalScope\)/);
-  assert.match(runtimeHandlersSource, /islandSignalControllers/);
-  assert.match(
-    runtimeMorphSource,
-    /abortRemovedIslandSignals\(target\.readHtml\?\.\(\) \?\? '', fragment\.html, islandSignalScope\)/,
-  );
-  assert.match(runtimeSource, /visibleObserver\?: VisibleObserverFactory/);
-  assert.match(runtimeSource, /export async function refetchQueries/);
-  assert.match(runtimeSource, /`\/_q\/\$\{encodeURIComponent\(query\)\}`/);
-  assert.match(runtimeSource, /Accept: 'text\/html'/);
-  assert.match(runtimeSource, /interface CompiledQueryTemplateStamp/);
-  assert.match(runtimeSource, /reconcileTemplateStamp\(items\)/);
-  assert.match(runtimeSource, /readTemplateStampKey/);
-  assert.match(runtimeTests, /invokes chained handler refs left-to-right with one context/);
-  assert.match(
-    runtimeTests,
-    /scopes ctx\.signal to the island and aborts when fragment morph removes it/,
-  );
-  assert.match(runtimeTests, /aborts removed island ctx\.signal during fragment application/);
-  assert.match(runtimeTests, /installs declared load, idle, and visible execution triggers/);
-  assert.match(runtimeTests, /ships an inline enhanced form round trip through %s/);
-  assert.match(runtimeTests, /refetches typed read endpoints and applies returned query chunks/);
-  assert.match(
-    runtimeTests,
-    /uses typed read refetching from visible-return listeners when configured/,
-  );
-  assert.match(runtimeTests, /dedupes overlapping visible-return refetches/);
-  assert.match(
-    runtimeTests,
-    /disposes loader listeners, visible observers, and auto-created broadcasts/,
-  );
-  assert.match(runtimeTests, /does not close caller-owned mutation broadcasts on dispose/);
-  assert.match(runtimeTests, /reconciles compiled template stamps with keyed item descriptors/);
-  assert.match(
-    browserTests,
-    /keeps the loader idle until the first delegated interaction/,
-    'browser suite covers first-interaction handler import',
-  );
-  assert.match(
-    browserTests,
-    /refetches typed reads on document visible-return without a window focus duplicate/,
-    'browser suite covers visible-return refetch without window focus duplication',
-  );
-  assert.match(
-    browserTests,
-    /preserves L0 light-DOM IDREF and form behavior without handler imports/,
-    'browser suite covers L0 platform behavior through light DOM',
-  );
-  assert.match(
-    browserTests,
-    /preserves L0 popover behavior without handler imports/,
-    'browser suite covers declarative L0 popover behavior',
-  );
-  assert.match(
-    browserTests,
-    /keeps the P2 L0\+L1 demo interactive at first paint with zero JS before declared triggers/,
-    'browser suite covers the P2 exit demo as a standalone smoke',
-  );
-  assert.match(browserTests, /commandfor="details-dialog"/);
-  assert.match(browserTests, /fw-c="catalog-tabs"/);
-  assert.match(browserTests, /fw-c="catalog-filter"/);
-  assert.match(browserTests, /fw-c="sales-chart" on:visible="\/demo\/chart\.js#mount"/);
-  assert.match(browserTests, /expect\(imports\)\.toEqual\(\[\]\)/);
-  assert.match(
-    browserTests,
-    /expect\(imports\)\.toEqual\(\['\/demo\/filter\.js', '\/demo\/tabs\.js', '\/demo\/chart\.js'\]\)/,
-  );
-  assert.match(browserTests, /:popover-open/);
-  assert.match(browserTests, /new FormData\(form\)\.get\('query'\)/);
+  assert.deepEqual(applied.templateStamps, ['[data-list]']);
+  assert.deepEqual(reconciledItems, [
+    {
+      html: '<li>p1:2</li>',
+      index: 0,
+      key: 'p1',
+      value: { id: 'p1', qty: 2 },
+    },
+  ]);
+
+  loader.dispose();
+  assert.deepEqual([...listeners.keys()], []);
 });
 
 void test('P3 server renders initial query scripts for document-load hydration', async () => {
