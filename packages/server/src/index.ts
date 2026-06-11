@@ -6,6 +6,7 @@ import type {
   EndpointMethod,
   EndpointMount,
   JsonValue,
+  Redirect as CoreRedirect,
 } from '@jiso/core';
 import { escapeAttribute, escapeHtml, escapeScriptJson } from './html.js';
 import { renderStylesheetLinks } from './hints.js';
@@ -295,6 +296,7 @@ class FileSchemaImpl implements FileSchema {
 }
 
 export interface GuardFailure {
+  auth?: 'unauthenticated' | 'unauthorized';
   code: 'RATE_LIMITED' | 'UNAUTHORIZED';
   payload?: Record<string, unknown>;
   retryAfter?: number;
@@ -328,7 +330,53 @@ export type AuthenticatedRequest<Request extends SessionRequestLike> = Request &
 
 export interface SessionDefinition<Value> {
   parse(request: { session?: unknown }): Value;
+  provider<RawRequest>(
+    provider: SessionProvider<RawRequest, Value>,
+  ): SessionProvider<RawRequest, Value>;
   schema: Schema<Value>;
+}
+
+export type MaybePromise<Value> = Promise<Value> | Value;
+
+export type SessionProvider<RawRequest, SessionValue> = (
+  request: RawRequest,
+) => MaybePromise<SessionValue | null | undefined>;
+
+export interface RequestLifecycleOptions<RawRequest, SessionValue = unknown> {
+  sessionProvider?: SessionProvider<RawRequest, SessionValue>;
+}
+
+export interface UnauthenticatedContext<Request> {
+  next: string;
+  request: Request;
+}
+
+export type UnauthenticatedHandler<Request> = (
+  context: UnauthenticatedContext<Request>,
+) => CoreRedirect | Promise<CoreRedirect>;
+
+export interface ForbiddenContext<Request> {
+  request: Request;
+}
+
+export type ForbiddenRenderer<Request> = (
+  context: ForbiddenContext<Request>,
+) => string | Promise<string>;
+
+export interface GuardFailureResponseOptions<
+  Request,
+  SessionValue = unknown,
+> extends RequestLifecycleOptions<Request, SessionValue> {
+  currentUrl?: string;
+  loginPath?: string;
+  onUnauthenticated?: UnauthenticatedHandler<Request>;
+  renderForbidden?: ForbiddenRenderer<Request>;
+}
+
+interface HttpGuardFailureResponse {
+  body: string;
+  headers: Record<string, string>;
+  status: 303 | 403;
 }
 
 export interface RateLimitOptions<Request> {
@@ -356,7 +404,7 @@ export const guards = {
     };
   },
   authed<Request extends SessionRequestLike>(): Guard<Request, AuthenticatedRequest<Request>> {
-    return (request) => Boolean(request.session?.user);
+    return (request) => (request.session?.user ? true : unauthenticatedGuardFailure());
   },
   rateLimit<Request extends SessionRequestLike>(
     options: RateLimitOptions<Request>,
@@ -395,7 +443,10 @@ export const guards = {
     };
   },
   role<Request extends SessionRequestLike>(role: string): Guard<Request> {
-    return (request) => request.session?.user?.roles?.includes(role) ?? false;
+    return (request) => {
+      if (!request.session?.user) return unauthenticatedGuardFailure();
+      return request.session.user.roles?.includes(role) ? true : unauthorizedGuardFailure();
+    };
   },
 };
 
@@ -428,6 +479,24 @@ function rateLimitFailure(resetAt: number, now: number): GuardFailure {
   };
 }
 
+function unauthenticatedGuardFailure(): GuardFailure {
+  return {
+    auth: 'unauthenticated',
+    code: 'UNAUTHORIZED',
+    payload: {},
+    status: 422,
+  };
+}
+
+function unauthorizedGuardFailure(): GuardFailure {
+  return {
+    auth: 'unauthorized',
+    code: 'UNAUTHORIZED',
+    payload: {},
+    status: 422,
+  };
+}
+
 function evictExpiredRateLimits(
   counts: Map<string, { count: number; resetAt: number }>,
   now: number,
@@ -441,6 +510,9 @@ export function session<Value>(schema: Schema<Value>): SessionDefinition<Value> 
   return {
     parse(request) {
       return schema.parse(request.session);
+    },
+    provider(provider) {
+      return provider;
     },
     schema,
   };
@@ -536,7 +608,10 @@ export interface QueryLoadContext<Request = unknown> {
   request: Request;
 }
 
-export interface QueryEndpointRequest<Request = unknown> {
+export interface QueryEndpointRequest<
+  Request = unknown,
+  SessionValue = unknown,
+> extends GuardFailureResponseOptions<Request, SessionValue> {
   request: Request;
   search?: QuerySearchInput;
 }
@@ -549,7 +624,7 @@ export type QuerySearchInput =
 export interface QueryEndpointResponse {
   body: string;
   headers: Record<string, string>;
-  status: 200 | 404 | 422 | 429 | 500;
+  status: 200 | 303 | 403 | 404 | 422 | 429 | 500;
 }
 
 export interface QueryEndpointRegistry<Request = unknown> {
@@ -636,13 +711,16 @@ export async function runQuery<const Key extends string, Value, Input, Request>(
   definition: QueryDefinition<Key, Value, Input, Request>,
   rawInput: unknown,
   request: Request,
+  options: RequestLifecycleOptions<Request> = {},
 ): Promise<QueryEndpointResult<Value, Input>> {
   const argsResult = parseQueryInput(definition, rawInput);
   if (!argsResult.ok) return argsResult.failure;
 
-  const guardFailure = await runGuard(definition.guard, request);
+  const lifecycleRequest = await resolveLifecycleRequest(request, options);
+  const guardFailure = await runGuard(definition.guard, lifecycleRequest);
   if (guardFailure) {
     return {
+      ...(guardFailure.auth === undefined ? {} : { auth: guardFailure.auth }),
       error: { code: guardFailure.code, payload: guardFailure.payload ?? {} },
       ok: false,
       ...(guardFailure.retryAfter === undefined ? {} : { retryAfter: guardFailure.retryAfter }),
@@ -651,7 +729,9 @@ export async function runQuery<const Key extends string, Value, Input, Request>(
   }
 
   const input = argsResult.value;
-  const value = definition.load ? await definition.load(input, { request }) : (null as Value);
+  const value = definition.load
+    ? await definition.load(input, { request: lifecycleRequest })
+    : (null as Value);
   return { input, ok: true, value };
 }
 
@@ -666,6 +746,7 @@ export interface QueryEndpointSuccess<Value, Input = unknown> {
 }
 
 export interface QueryEndpointFailure {
+  auth?: GuardFailure['auth'];
   error: {
     code: 'RATE_LIMITED' | 'UNAUTHORIZED' | 'VALIDATION';
     payload: Record<string, unknown> | ValidationFailurePayload;
@@ -681,8 +762,10 @@ export async function renderQueryEndpointResponse<const Key extends string, Valu
 ): Promise<QueryEndpointResponse> {
   const rawInput = querySearchInputToRecord(endpointRequest.search ?? {});
   let result: QueryEndpointResult<Value, Input>;
+  let lifecycleRequest: Request;
   try {
-    result = await runQuery(definition, rawInput, endpointRequest.request);
+    lifecycleRequest = await resolveLifecycleRequest(endpointRequest.request, endpointRequest);
+    result = await runQuery(definition, rawInput, lifecycleRequest);
   } catch {
     return {
       body: JSON.stringify(serverErrorPayload()),
@@ -692,6 +775,14 @@ export async function renderQueryEndpointResponse<const Key extends string, Valu
   }
 
   if (!result.ok) {
+    const authResponse = await renderHttpGuardFailureResponse(result, lifecycleRequest, {
+      ...endpointRequest,
+      currentUrl:
+        endpointRequest.currentUrl ??
+        queryEndpointCurrentUrl(definition.key, endpointRequest.search ?? {}),
+    });
+    if (authResponse) return authResponse;
+
     return {
       body: JSON.stringify(result.error),
       headers: {
@@ -764,7 +855,10 @@ export interface ErrorBoundaryRenderer {
   target?: string;
 }
 
-export interface MutationWireRequest<Request> {
+export interface MutationWireRequest<
+  Request,
+  SessionValue = unknown,
+> extends RequestLifecycleOptions<Request, SessionValue> {
   csrf?: CsrfValidationOptions<Request>;
   failureTarget?: string;
   failureStylesheets?: readonly (string | StylesheetAsset)[];
@@ -791,7 +885,10 @@ export type MutationWireHeaderSource =
       get(name: string): null | string;
     };
 
-export interface MutationWireRequestOptions<Request> {
+export interface MutationWireRequestOptions<
+  Request,
+  SessionValue = unknown,
+> extends RequestLifecycleOptions<Request, SessionValue> {
   csrf?: CsrfValidationOptions<Request>;
   failureTarget?: string;
   failureStylesheets?: readonly (string | StylesheetAsset)[];
@@ -932,6 +1029,7 @@ export function mutationWireRequestFromHeaders<Request>(
     fragment: headers.fragment,
     rawInput: options.rawInput,
     request: options.request,
+    ...(options.sessionProvider === undefined ? {} : { sessionProvider: options.sessionProvider }),
     ...(options.failureTarget === undefined ? {} : { failureTarget: options.failureTarget }),
     ...(options.failureStylesheets === undefined
       ? {}
@@ -949,7 +1047,11 @@ export function mutationWireRequestFromHeaders<Request>(
   };
 }
 
-export interface NoJsMutationRequest<Request, Value> {
+export interface NoJsMutationRequest<
+  Request,
+  Value,
+  SessionValue = unknown,
+> extends RequestLifecycleOptions<Request, SessionValue> {
   csrf?: CsrfValidationOptions<Request>;
   rawInput: unknown;
   redirectTo: string | ((result: MutationSuccess<Value>) => string);
@@ -966,7 +1068,8 @@ export interface NoJsMutationResponse {
 export interface MutationEndpointRequest<
   Request,
   Value,
-> extends MutationWireRequestOptions<Request> {
+  SessionValue = unknown,
+> extends MutationWireRequestOptions<Request, SessionValue> {
   redirectTo: string | ((result: MutationSuccess<Value>) => string);
   renderFailurePage?: (failure: MutationFail) => string | Promise<string>;
 }
@@ -992,6 +1095,7 @@ export interface RouteDefinition<
   GuardedRequest extends Request = Request,
 > extends PageHintOptions {
   guard?: Guard<Request, GuardedRequest>;
+  onUnauthenticated?: UnauthenticatedHandler<Request>;
   page?: (
     context: RouteRequest<Path, ParamsSchema, SearchSchema>,
     request: GuardedRequest,
@@ -1090,7 +1194,7 @@ export const respond = {
 export interface RoutePageResponse {
   body: RouteResponseBody;
   headers: Record<string, string>;
-  status: 200 | 304 | 404 | 422 | 429 | 500;
+  status: 200 | 303 | 304 | 403 | 404 | 422 | 429 | 500;
 }
 
 export interface RouteRequestInput {
@@ -1138,7 +1242,10 @@ export interface InvalidateOptions<Input = unknown> {
   reason?: string;
 }
 
-export interface RunMutationOptions<Request> {
+export interface RunMutationOptions<
+  Request,
+  SessionValue = unknown,
+> extends RequestLifecycleOptions<Request, SessionValue> {
   csrf?: CsrfValidationOptions<Request>;
 }
 
@@ -1273,12 +1380,15 @@ export async function runRoutePage<
   definition: RouteDeclaration<Path, ParamsSchema, SearchSchema, Request, Page, GuardedRequest>,
   input: RouteRequestInput,
   request: Request,
+  options: RequestLifecycleOptions<Request> = {},
 ): Promise<RoutePageResult<Page>> {
   const routeRequest = parseRouteRequest(definition, input);
 
-  const guardFailure = await runGuard(definition.guard, request);
+  const lifecycleRequest = await resolveLifecycleRequest(request, options);
+  const guardFailure = await runGuard(definition.guard, lifecycleRequest);
   if (guardFailure) {
     return {
+      ...(guardFailure.auth === undefined ? {} : { auth: guardFailure.auth }),
       error: { code: guardFailure.code, payload: guardFailure.payload ?? {} },
       ok: false,
       ...(guardFailure.retryAfter === undefined ? {} : { retryAfter: guardFailure.retryAfter }),
@@ -1286,7 +1396,7 @@ export async function runRoutePage<
     };
   }
 
-  const value = await definition.page?.(routeRequest, request as GuardedRequest);
+  const value = await definition.page?.(routeRequest, lifecycleRequest as GuardedRequest);
   if (isNotFound(value)) return { ok: false, status: 404 };
   if (isRouteResponseOutcome(value)) return { ok: true, outcome: value };
   return { ok: true, value: value as Page };
@@ -1307,6 +1417,7 @@ export interface RoutePageOutcomeSuccess {
 }
 
 export interface RoutePageFailure {
+  auth?: GuardFailure['auth'];
   error?: {
     code: 'RATE_LIMITED' | 'UNAUTHORIZED';
     payload: Record<string, unknown>;
@@ -1328,15 +1439,26 @@ export async function renderRoutePageResponse<
   input: RouteRequestInput,
   request: Request,
   render: (value: Page) => string | Promise<string> = (value) => String(value ?? ''),
+  options: GuardFailureResponseOptions<Request> = {},
 ): Promise<RoutePageResponse> {
   let result: RoutePageResult<Page>;
+  let lifecycleRequest: Request;
   try {
-    result = await runRoutePage(definition, input, request);
+    lifecycleRequest = await resolveLifecycleRequest(request, options);
+    result = await runRoutePage(definition, input, lifecycleRequest);
   } catch {
     return htmlServerErrorResponse();
   }
 
   if (!result.ok) {
+    const onUnauthenticated = definition.onUnauthenticated ?? options.onUnauthenticated;
+    const authResponse = await renderHttpGuardFailureResponse(result, lifecycleRequest, {
+      ...options,
+      currentUrl: options.currentUrl ?? routeCurrentUrl(definition, input),
+      ...(onUnauthenticated === undefined ? {} : { onUnauthenticated }),
+    });
+    if (authResponse) return authResponse;
+
     return {
       body:
         result.status === 404
@@ -1460,8 +1582,9 @@ export async function runMutation<
   if (!inputResult.ok) return inputResult.failure;
 
   const input = inputResult.value as InferSchema<InputSchema>;
+  const lifecycleRequest = await resolveLifecycleRequest(request, options);
 
-  const guardFailure = await runGuard(definition.guard, request);
+  const guardFailure = await runGuard(definition.guard, lifecycleRequest);
   if (guardFailure) {
     return {
       error: { code: guardFailure.code, payload: guardFailure.payload ?? {} },
@@ -1507,13 +1630,13 @@ export async function runMutation<
 
     return handlerValue as Value;
   };
-  const guardedRequest = request as GuardedRequest;
+  const guardedRequest = lifecycleRequest as GuardedRequest;
 
   let value: Value;
 
   try {
     value = definition.transaction
-      ? await definition.transaction(request, runHandler)
+      ? await definition.transaction(lifecycleRequest, runHandler)
       : await runHandler(guardedRequest);
   } catch (error) {
     if (error instanceof MutationRollback) return error.failure;
@@ -1600,7 +1723,7 @@ export async function renderMutationResponse<
       definition,
       wireRequest.rawInput,
       wireRequest.request,
-      runMutationOptions(wireRequest.csrf),
+      runMutationOptions(wireRequest.csrf, wireRequest),
     );
   } catch {
     return mutationServerErrorResponse(wireRequest);
@@ -1717,6 +1840,9 @@ export async function renderMutationEndpointResponse<
       ? {}
       : { renderFailurePage: endpointRequest.renderFailurePage }),
     request: endpointRequest.request,
+    ...(endpointRequest.sessionProvider === undefined
+      ? {}
+      : { sessionProvider: endpointRequest.sessionProvider }),
   });
 }
 
@@ -1737,7 +1863,7 @@ export async function renderNoJsMutationResponse<
       definition,
       noJsRequest.rawInput,
       noJsRequest.request,
-      runMutationOptions(noJsRequest.csrf),
+      runMutationOptions(noJsRequest.csrf, noJsRequest),
     );
   } catch {
     return noJsMutationServerErrorResponse();
@@ -1786,6 +1912,184 @@ function isMutationFail(value: unknown): value is MutationFail {
 
 function serverErrorPayload(): { code: 'SERVER_ERROR'; payload: Record<string, never> } {
   return { code: 'SERVER_ERROR', payload: {} };
+}
+
+async function resolveLifecycleRequest<Request, SessionValue>(
+  request: Request,
+  options: RequestLifecycleOptions<Request, SessionValue> = {},
+): Promise<Request> {
+  if (!options.sessionProvider) return request;
+
+  const sessionValue = (await options.sessionProvider(request)) ?? null;
+  return requestWithSession(request, sessionValue);
+}
+
+function requestWithSession<Request, SessionValue>(
+  request: Request,
+  sessionValue: SessionValue | null,
+): Request {
+  if ((typeof request !== 'object' && typeof request !== 'function') || request === null) {
+    return { session: sessionValue } as Request;
+  }
+
+  return new Proxy(request as object, {
+    get(target, property, receiver) {
+      if (property === 'session') return sessionValue;
+
+      const value = Reflect.get(target, property, receiver) as unknown;
+      return typeof value === 'function' ? value.bind(target) : value;
+    },
+    getOwnPropertyDescriptor(target, property) {
+      if (property === 'session') {
+        return {
+          configurable: true,
+          enumerable: true,
+          value: sessionValue,
+          writable: false,
+        };
+      }
+
+      return Reflect.getOwnPropertyDescriptor(target, property);
+    },
+    has(target, property) {
+      return property === 'session' || property in target;
+    },
+    ownKeys(target) {
+      const keys = Reflect.ownKeys(target);
+      return keys.includes('session') ? keys : [...keys, 'session'];
+    },
+  }) as Request;
+}
+
+async function renderHttpGuardFailureResponse<Request>(
+  result: {
+    auth?: GuardFailure['auth'];
+    error?: { code: string };
+    ok: false;
+    status: number;
+  },
+  request: Request,
+  options: GuardFailureResponseOptions<Request>,
+): Promise<HttpGuardFailureResponse | undefined> {
+  if (result.status !== 422 || result.error?.code !== 'UNAUTHORIZED') return undefined;
+
+  if (guardFailureIsUnauthenticated(result, request)) {
+    const next = options.currentUrl ?? '/';
+    const context = { next, request };
+    const redirectResult = await (options.onUnauthenticated
+      ? options.onUnauthenticated(context)
+      : defaultOnUnauthenticated(context, options.loginPath));
+
+    return {
+      body: '',
+      headers: { Location: redirectResult.location },
+      status: redirectResult.status,
+    };
+  }
+
+  return {
+    body: options.renderForbidden ? await options.renderForbidden({ request }) : 'Forbidden',
+    headers: { 'Content-Type': 'text/html; charset=utf-8' },
+    status: 403,
+  };
+}
+
+function defaultOnUnauthenticated<Request>(
+  context: UnauthenticatedContext<Request>,
+  loginPath = '/login',
+): CoreRedirect {
+  return {
+    location: loginLocationWithNext(loginPath, context.next),
+    status: 303,
+  };
+}
+
+function loginLocationWithNext(loginPath: string, next: string): string {
+  const base = 'https://jiso.local';
+  const url = new URL(loginPath, base);
+  url.searchParams.set('next', next);
+
+  return url.origin === base ? `${url.pathname}${url.search}${url.hash}` : url.toString();
+}
+
+function guardFailureIsUnauthenticated<Request>(
+  result: { auth?: GuardFailure['auth'] },
+  request: Request,
+): boolean {
+  if (result.auth === 'unauthenticated') return true;
+  if (result.auth === 'unauthorized') return false;
+
+  return requestSession(request) == null;
+}
+
+function requestSession(request: unknown): unknown {
+  if (
+    (typeof request === 'object' || typeof request === 'function') &&
+    request !== null &&
+    'session' in request
+  ) {
+    return (request as { session?: unknown }).session;
+  }
+
+  return undefined;
+}
+
+function routeCurrentUrl<
+  const Path extends string,
+  ParamsSchema extends MaybeSchema<Record<string, string>>,
+  SearchSchema extends MaybeSchema<Record<string, JsonValue>>,
+  Request,
+  Page,
+>(
+  definition: RouteDeclaration<Path, ParamsSchema, SearchSchema, Request, Page>,
+  input: RouteRequestInput,
+): string {
+  const routeRequest = parseRouteRequest(definition, input);
+  const pathname = definition.path.replace(/:([A-Za-z_$][\w$]*)/g, (_match, key: string) =>
+    encodeURIComponent(searchParamValue((routeRequest.params as Record<string, unknown>)[key])),
+  );
+  const search = searchParamsString(routeRequest.search as Record<string, unknown>);
+
+  return search ? `${pathname}?${search}` : pathname;
+}
+
+function queryEndpointCurrentUrl(queryKey: string, search: QuerySearchInput): string {
+  const params = new URLSearchParams();
+  for (const [key, value] of querySearchInputEntries(search)) {
+    appendSearchParams(params, key, value);
+  }
+
+  const query = params.toString();
+  return `/_q/${encodeURIComponent(queryKey)}${query ? `?${query}` : ''}`;
+}
+
+function searchParamsString(search: Record<string, unknown>): string {
+  const params = new URLSearchParams();
+  for (const [key, value] of Object.entries(search)) {
+    appendSearchParams(params, key, value);
+  }
+
+  return params.toString();
+}
+
+function appendSearchParams(params: URLSearchParams, key: string, value: unknown): void {
+  if (value === undefined || value === null) return;
+  if (Array.isArray(value)) {
+    for (const item of value) appendSearchParams(params, key, item);
+    return;
+  }
+
+  params.append(key, searchParamValue(value));
+}
+
+function searchParamValue(value: unknown): string {
+  if (value === undefined || value === null) return '';
+  if (typeof value === 'string') return value;
+  if (typeof value === 'number' || typeof value === 'boolean' || typeof value === 'bigint') {
+    return `${value}`;
+  }
+
+  return JSON.stringify(value) ?? '';
 }
 
 function noJsMutationServerErrorResponse(): NoJsMutationResponse {
@@ -2181,8 +2485,14 @@ function endpointRequestWithoutSession(request: Request): EndpointRequest {
 
 function runMutationOptions<Request>(
   csrf: CsrfValidationOptions<Request> | undefined,
+  lifecycle?: RequestLifecycleOptions<Request>,
 ): RunMutationOptions<Request> {
-  return csrf === undefined ? {} : { csrf };
+  return {
+    ...(csrf === undefined ? {} : { csrf }),
+    ...(lifecycle?.sessionProvider === undefined
+      ? {}
+      : { sessionProvider: lifecycle.sessionProvider }),
+  };
 }
 
 function createCsrfToken(sessionId: string, secret: string): string {

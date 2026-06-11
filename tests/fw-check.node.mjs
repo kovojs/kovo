@@ -761,7 +761,8 @@ void test('P3 mutation lifecycle includes an explicit transaction boundary', asy
   assert.match(serverSource, /definition\.transaction/);
   assert.match(serverSource, /class MutationRollback extends Error/);
   assert.match(serverSource, /interface QueryLoadContext/);
-  assert.match(serverSource, /definition\.load\(input, \{ request \}\)/);
+  assert.match(serverSource, /resolveLifecycleRequest\(request, options\)/);
+  assert.match(serverSource, /definition\.load\(input, \{ request: lifecycleRequest \}\)/);
   assert.match(serverTests, /runs guarded mutation handlers inside the configured transaction/);
   assert.match(serverTests, /types transaction callbacks with the mutation request shape/);
   assert.match(serverTests, /transaction callbacks must receive the typed request shape/);
@@ -997,7 +998,12 @@ void test('D4 commerce adopt-dont-invent features stay represented', async () =>
   assert.match(serverSource, /interface Guard<Request, RefinedRequest extends Request = Request>/);
   assert.match(serverSource, /AuthenticatedRequest<Request extends SessionRequestLike>/);
   assert.match(serverSource, /guard\?: Guard<Request, GuardedRequest>/);
-  assert.match(serverSource, /request as GuardedRequest/);
+  assert.match(serverSource, /lifecycleRequest as GuardedRequest/);
+  assert.match(serverTests, /resolves app session providers before route and query guards/);
+  assert.match(
+    serverTests,
+    /maps route and query guard failures to login redirects and 403 shells/,
+  );
   assert.match(serverTests, /derives typed route meta from query results/);
   assert.match(serverTests, /refines typed session users inside authed mutation handlers/);
   assert.match(commerceTests, /resolves commerce route meta from loaded cart query data/);

@@ -7,8 +7,8 @@ Scope: SPEC additions (session population, guard-failure contract, mutation resp
 
 - [ ] S6 spike: wrapped-mutation credential flow proven end-to-end against pinned better-auth.
 - [x] SPEC A-track text: session population seam, guard-failure contract, mutation response-header channel, `endpoint()` primitive (normative text; supersedes the gaps listed under Background).
-- [ ] A1 session-resolution seam in the request lifecycle.
-- [ ] A2 guard-failure contract (`onUnauthenticated` redirect, 403 path for failed `role()`).
+- [x] A1 session-resolution seam in the request lifecycle. Evidence: `packages/server/src/index.ts` exposes `sessionProvider`/`SessionProvider` lifecycle options and resolves the provider before route/query/mutation guards without runtime-parsing the declared session shape; `packages/server/src/index.test.ts` covers provider ordering and static provider/session assignability.
+- [x] A2 guard-failure contract (`onUnauthenticated` redirect, 403 path for failed `role()`). Evidence: `packages/server/src/index.ts` maps route/query unauthenticated guard failures to 303 login redirects with `next` and authenticated unauthorized failures to 403 shells while keeping mutation guard failures on the typed 422 path; focused server tests cover default and route-level override behavior.
 - [x] A3 mutation response-header channel (`ctx.setCookie` / header passthrough). Evidence: `packages/server/src/index.test.ts` covers enhanced Set-Cookie forwarding, no-JS PRG Set-Cookie forwarding, and no typed-failure leakage; focused server tests and `vp check` passed in `agent/auth-headers`.
 - [x] A4 `endpoint()` raw endpoint primitive with CSRF exemption + unguarded-audit enrollment.
 - [ ] B1 schema bridge: better-auth tables into `schema.ts` domains with declared touches.
