@@ -942,6 +942,29 @@ describe('fw check', () => {
     expect(output).toBe(`fw: input JSON field mutations must be an array: ${graphPath}\n`);
   });
 
+  it('reports a stable error for malformed render-equivalence check facts', () => {
+    const tempDir = mkdtempSync(join(tmpdir(), 'jiso-cli-render-equiv-shape-'));
+    const graphPath = join(tempDir, 'graph.json');
+    let output = '';
+    const stderrWrite = vi.spyOn(process.stderr, 'write').mockImplementation(((chunk) => {
+      output += chunk.toString();
+      return true;
+    }) as typeof process.stderr.write);
+
+    try {
+      writeFileSync(graphPath, '{"renderEquivalenceChecks":{}}');
+
+      expect(main(['check', graphPath])).toBe(1);
+    } finally {
+      stderrWrite.mockRestore();
+      rmSync(tempDir, { force: true, recursive: true });
+    }
+
+    expect(output).toBe(
+      `fw: input JSON field renderEquivalenceChecks must be an array: ${graphPath}\n`,
+    );
+  });
+
   it('reports a stable error for touchGraph with the wrong shape', () => {
     const tempDir = mkdtempSync(join(tmpdir(), 'jiso-cli-touch-graph-shape-'));
     const graphPath = join(tempDir, 'graph.json');
