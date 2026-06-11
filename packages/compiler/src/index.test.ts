@@ -2579,6 +2579,8 @@ export const CartRow = component('cart-row', {
         message:
           'Fragment target render input is not declared as query data or stamped props. priceList',
         severity: 'error',
+        start: { column: 20, line: 5 },
+        length: 9,
       },
     ]);
   });

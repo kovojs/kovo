@@ -54,12 +54,18 @@ export interface ComponentModel {
   localName?: string;
   options: readonly ComponentOptionEntry[];
   renderHost?: RenderHostModel;
-  renderInputs: readonly string[];
+  renderInputs: readonly RenderInputModel[];
   stateReturnObject?: string;
 }
 
 export interface RenderHostModel {
   end: number;
+  start: number;
+}
+
+export interface RenderInputModel {
+  end: number;
+  name: string;
   start: number;
 }
 
@@ -146,6 +152,10 @@ export function componentOptionSource(
 }
 
 export function componentRenderInputs(model: ComponentModuleModel): string[] {
+  return componentRenderInputModels(model).map((input) => input.name);
+}
+
+export function componentRenderInputModels(model: ComponentModuleModel): RenderInputModel[] {
   return [...(firstComponentModel(model)?.renderInputs ?? [])];
 }
 
@@ -353,7 +363,7 @@ function componentModelFromInitializer(
     localName,
     options,
     ...(render ? renderHostModel(sourceFile, render) : {}),
-    renderInputs: render ? arrowObjectPatternKeys(render) : [],
+    renderInputs: render ? arrowObjectPatternKeys(sourceFile, render) : [],
     ...(stateReturnObject === null ? {} : { stateReturnObject }),
   };
 }
@@ -546,14 +556,25 @@ function jsxAttributeExpression(
   };
 }
 
-function arrowObjectPatternKeys(expression: ts.Expression): string[] {
+function arrowObjectPatternKeys(
+  sourceFile: ts.SourceFile,
+  expression: ts.Expression,
+): RenderInputModel[] {
   if (!ts.isArrowFunction(expression)) return [];
 
   const firstParam = expression.parameters[0];
   if (!firstParam || !ts.isObjectBindingPattern(firstParam.name)) return [];
 
   return firstParam.name.elements.flatMap((element) =>
-    ts.isIdentifier(element.name) ? [element.name.text] : [],
+    ts.isIdentifier(element.name)
+      ? [
+          {
+            end: element.name.getEnd(),
+            name: element.name.text,
+            start: element.name.getStart(sourceFile),
+          },
+        ]
+      : [],
   );
 }
 

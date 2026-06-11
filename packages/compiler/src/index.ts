@@ -9,8 +9,8 @@ import {
   componentExplicitNames,
   componentFragmentTargetNames,
   componentOptionSource,
+  componentRenderInputModels,
   componentRenderHost,
-  componentRenderInputs,
   componentStateReturnObject,
   firstComponentModel,
   identifierReferences,
@@ -1282,13 +1282,13 @@ function validateFragmentTargetInputs(
     ...topLevelObjectKeys(queryObject ?? '{}'),
     ...topLevelObjectKeys(propsObject ?? '{}'),
   ]);
-  const renderInputs = extractFirstRenderObjectPattern(source);
+  const renderInputs = componentRenderInputModels(model);
   if (renderInputs.length === 0) return [];
 
-  const missing = renderInputs.filter((input) => !allowedInputs.has(input));
+  const missing = renderInputs.filter((input) => !allowedInputs.has(input.name));
   return missing.map((input) => ({
-    ...diagnosticFor(fileName, 'FW303'),
-    message: `${diagnosticDefinitions.FW303.message} ${input}`,
+    ...diagnosticFor(fileName, 'FW303', source, input.start, input.end - input.start),
+    message: `${diagnosticDefinitions.FW303.message} ${input.name}`,
   }));
 }
 
@@ -1887,10 +1887,6 @@ function readParameterName(param: string): string {
 
 function escapeRegExp(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-}
-
-function extractFirstRenderObjectPattern(source: string): string[] {
-  return componentRenderInputs(parseComponentModuleModel('component.tsx', source));
 }
 
 function eventPayloadPaths(source: string): string[] {
