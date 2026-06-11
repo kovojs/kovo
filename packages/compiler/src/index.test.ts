@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import {
   assertFixpoint,
@@ -11,6 +11,7 @@ import {
   dedupeCss,
   emitQueryPlanBootstrapModule,
   jisoVitePlugin,
+  type JisoViteMiddleware,
   queryShapesFromFacts,
   scopeComponentCss,
   selectCssAssets,
@@ -2943,6 +2944,64 @@ describe('jisoVitePlugin', () => {
       code: expect.stringContaining('export function renderSource()'),
       map: null,
     });
+  });
+
+  it('serves emitted client modules from Vite dev middleware', () => {
+    const plugin = jisoVitePlugin();
+    const middlewares: JisoViteMiddleware[] = [];
+    plugin.configureServer?.({
+      middlewares: {
+        use(handler) {
+          middlewares.push(handler);
+        },
+      },
+    });
+
+    const transformed = plugin.transform?.(cartBadgeSource, 'components/cart/cart-badge.tsx');
+    const clientRef = transformed?.code.match(
+      /\/c\/components\/cart\/cart-badge\.client\.js\?v=[0-9a-f]{8}/,
+    )?.[0];
+    expect(clientRef).toBeDefined();
+    const res = {
+      body: '',
+      headers: {} as Record<string, string>,
+      setHeader(name: string, value: string) {
+        this.headers[name] = value;
+      },
+      end(body: string) {
+        this.body = body;
+      },
+    };
+    const next = vi.fn();
+
+    middlewares[0]?.({ url: clientRef ?? '' }, res, next);
+
+    expect(next).not.toHaveBeenCalled();
+    expect(res.headers['Content-Type']).toBe('text/javascript');
+    expect(res.body).toContain('export const CartBadge$button_click');
+    expect(res.body).toContain('return removeItem(ctx.state, ctx.params.id);');
+  });
+
+  it('passes through unknown Vite dev middleware requests', () => {
+    const plugin = jisoVitePlugin();
+    const middlewares: JisoViteMiddleware[] = [];
+    plugin.configureServer?.({
+      middlewares: {
+        use(handler) {
+          middlewares.push(handler);
+        },
+      },
+    });
+    const res = {
+      end: vi.fn(),
+      setHeader: vi.fn(),
+    };
+    const next = vi.fn();
+
+    middlewares[0]?.({ url: '/src/app.tsx' }, res, next);
+
+    expect(next).toHaveBeenCalledTimes(1);
+    expect(res.end).not.toHaveBeenCalled();
   });
 });
 

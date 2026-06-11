@@ -208,6 +208,7 @@ export interface ViewTransitionStamp {
 }
 
 export interface JisoVitePlugin {
+  configureServer?: (server: JisoViteDevServer) => void;
   name: 'jiso';
   transform: (
     source: string,
@@ -217,6 +218,22 @@ export interface JisoVitePlugin {
     map: null;
   };
 }
+
+export interface JisoViteDevServer {
+  middlewares: {
+    use(handler: JisoViteMiddleware): void;
+  };
+}
+
+export type JisoViteMiddleware = (
+  req: { url?: string },
+  res: {
+    end(body: string): void;
+    setHeader(name: string, value: string): void;
+    statusCode?: number;
+  },
+  next: () => void,
+) => void;
 
 interface ValidatorContext {
   componentName: string;
@@ -377,18 +394,47 @@ export function collectMinifierReservedNames(
 }
 
 export function jisoVitePlugin(): JisoVitePlugin {
+  const clientModules = new Map<string, string>();
+
   return {
+    configureServer(server) {
+      server.middlewares.use((req, res, next) => {
+        const path = devClientModulePath(req.url);
+        const source = path ? clientModules.get(path) : undefined;
+        if (source === undefined) {
+          next();
+          return;
+        }
+
+        res.statusCode = 200;
+        res.setHeader('Content-Type', 'text/javascript');
+        res.end(source);
+      });
+    },
     name: 'jiso',
     transform(source: string, id: string) {
       if (!/\.[cm]?tsx?$/.test(id) || !source.includes('component(')) return null;
 
       const result = compileComponentModule({ fileName: id, source });
+      for (const file of result.files) {
+        if (file.kind === 'client') {
+          clientModules.set(clientModuleUrl(id), file.source);
+        }
+      }
+
       return {
         code: result.files.find((file) => file.kind === 'server')?.source ?? source,
         map: null,
       };
     },
   };
+}
+
+function devClientModulePath(url: string | undefined): string | null {
+  if (!url) return null;
+
+  const path = url.split(/[?#]/, 1)[0] ?? '';
+  return path.startsWith('/c/') ? path : null;
 }
 
 function emittedFileKind(fileName: string): EmittedFile['kind'] {

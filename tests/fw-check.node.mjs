@@ -1148,9 +1148,15 @@ void test('P5 data-bind paths are checked against generated query shape facts', 
 });
 
 void test('S1 production build proves the compiler 1:1 emit contract', async () => {
+  const compilerSource = await readProjectFile('packages/compiler/src/index.ts');
+  const compilerTests = await readProjectFile('packages/compiler/src/index.test.ts');
   const viteConfig = await readProjectFile('vite.config.ts');
   const prodEmitCheck = await readProjectFile('scripts/prod-emit-check.mjs');
 
+  assert.match(compilerSource, /configureServer/);
+  assert.match(compilerSource, /devClientModulePath/);
+  assert.match(compilerSource, /clientModules\.set/);
+  assert.match(compilerTests, /serves emitted client modules from Vite dev middleware/);
   assert.match(viteConfig, /command: 'vp pack && node scripts\/prod-emit-check\.mjs'/);
   assert.match(viteConfig, /scripts\/prod-emit-check\.mjs/);
   assert.match(viteConfig, /packages\/compiler\/src\/\*\*/);
