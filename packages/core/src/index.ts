@@ -253,6 +253,46 @@ export interface FormValidationFailure {
   fields: Record<string, string>;
 }
 
+interface SchemaLike<Value> {
+  parse(input: unknown): Value;
+}
+
+type InferSchemaLike<Schema> = Schema extends SchemaLike<infer Value> ? Value : never;
+
+type RegistryMutation<Key extends string, Input extends Record<string, JsonValue>, Failure> = {
+  errors?: Record<string, SchemaLike<JsonValue>>;
+  input: SchemaLike<Input>;
+  key: Key;
+} & {
+  __failure?: Failure;
+};
+
+type RegistryMutationInput<Key extends string> = Key extends keyof MutationRegistry
+  ? MutationRegistry[Key] extends Form<string, infer Input, JsonValue>
+    ? Input
+    : MutationRegistry[Key] extends RegistryMutation<string, infer Input, JsonValue>
+      ? Input
+      : Record<string, JsonValue>
+  : Record<string, JsonValue>;
+
+type RegistryMutationFailure<Key extends string> = Key extends keyof MutationRegistry
+  ? MutationRegistry[Key] extends Form<string, Record<string, JsonValue>, infer Failure>
+    ? Failure
+    : MutationRegistry[Key] extends { errors?: infer Errors }
+      ? MutationErrorFailures<Errors>
+      : JsonValue
+  : JsonValue;
+
+type MutationErrorFailures<Errors> =
+  Errors extends Record<string, SchemaLike<JsonValue>>
+    ? {
+        [Code in Extract<keyof Errors, string>]: {
+          code: Code;
+          data: InferSchemaLike<Errors[Code]>;
+        };
+      }[Extract<keyof Errors, string>]
+    : JsonValue;
+
 export type FormInput<Definition> =
   Definition extends Form<string, infer Input, JsonValue> ? Input : never;
 
@@ -278,8 +318,8 @@ type CompleteFormFields<
 
 function createMutationForm<
   const Key extends RegistryKey<MutationRegistry>,
-  Input extends Record<string, JsonValue> = Record<string, JsonValue>,
-  Failure extends JsonValue = JsonValue,
+  Input extends Record<string, JsonValue> = RegistryMutationInput<Key>,
+  Failure extends JsonValue = RegistryMutationFailure<Key>,
 >(key: Key): Form<Key, Input, Failure> {
   return { key };
 }

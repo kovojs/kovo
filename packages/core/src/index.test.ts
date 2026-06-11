@@ -18,13 +18,25 @@ import {
   type JsonValue,
 } from './index.js';
 
+interface TestSchema<Value> {
+  parse(input: unknown): Value;
+}
+
+interface CartAddRegistryMutation {
+  errors: {
+    OUT_OF_STOCK: TestSchema<{ availableQuantity: number }>;
+  };
+  input: TestSchema<{ productId: string; quantity: number }>;
+  key: 'cart/add';
+}
+
 declare module './index.js' {
   interface QueryRegistry {
     cart: { count: number };
   }
 
   interface MutationRegistry {
-    'cart/add': unknown;
+    'cart/add': CartAddRegistryMutation;
   }
 
   interface FragmentTargets {
@@ -115,6 +127,52 @@ describe('core authoring APIs', () => {
     expect(validationFailure.fields.quantity).toBe('Expected number >= 1');
   });
 
+  it('derives form input and failure facts from generated mutation registry values', () => {
+    const addToCart = form('cart/add');
+    const input = {
+      productId: 'p1',
+      quantity: 2,
+    } satisfies FormInput<typeof addToCart>;
+    const failure = {
+      code: 'OUT_OF_STOCK',
+      data: { availableQuantity: 0 },
+    } satisfies FormFailure<typeof addToCart>;
+    const validationFailure = {
+      code: 'VALIDATION',
+      fields: { quantity: 'Expected number >= 1' },
+    } satisfies FormFailure<typeof addToCart>;
+
+    expect(addToCart.key).toBe('cart/add');
+    expect(input.quantity).toBe(2);
+    expect(failure.data.availableQuantity).toBe(0);
+    expect(validationFailure.code).toBe('VALIDATION');
+
+    const assertMissingInput = () => {
+      // @ts-expect-error quantity is required by the generated mutation input schema.
+      const missing = { productId: 'p1' } satisfies FormInput<typeof addToCart>;
+      return missing;
+    };
+    const assertUnknownInput = () => {
+      const unknown = {
+        productId: 'p1',
+        quantity: 2,
+        // @ts-expect-error sku is not part of the generated mutation input schema.
+        sku: 'sku-1',
+      } satisfies FormInput<typeof addToCart>;
+      return unknown;
+    };
+    const assertUnknownFailure = () => {
+      // @ts-expect-error PRICE_CHANGED is not declared by the generated mutation error schema.
+      const unknown = { code: 'PRICE_CHANGED', data: { currentPrice: 2 } } satisfies FormFailure<
+        typeof addToCart
+      >;
+      return unknown;
+    };
+    expect(assertMissingInput).toBeTypeOf('function');
+    expect(assertUnknownInput).toBeTypeOf('function');
+    expect(assertUnknownFailure).toBeTypeOf('function');
+  });
+
   it('checks form field completeness from typed mutation inputs', () => {
     const addToCart = form<
       'cart/add',
@@ -133,6 +191,26 @@ describe('core authoring APIs', () => {
     };
     const assertUnknownField = () => {
       // @ts-expect-error sku is not part of the mutation input schema.
+      formFields(addToCart, ['productId', 'quantity', 'sku'] as const);
+    };
+    expect(assertMissingField).toBeTypeOf('function');
+    expect(assertUnknownField).toBeTypeOf('function');
+  });
+
+  it('checks form field completeness from generated mutation registry input facts', () => {
+    const addToCart = form('cart/add');
+    const fields = formFields(addToCart, ['productId', 'quantity'] as const);
+    const fieldName = 'quantity' satisfies FormFieldName<typeof addToCart>;
+
+    expect(fields).toEqual(['productId', 'quantity']);
+    expect(fieldName).toBe('quantity');
+
+    const assertMissingField = () => {
+      // @ts-expect-error quantity is required by the generated mutation input schema.
+      formFields(addToCart, ['productId'] as const);
+    };
+    const assertUnknownField = () => {
+      // @ts-expect-error sku is not part of the generated mutation input schema.
       formFields(addToCart, ['productId', 'quantity', 'sku'] as const);
     };
     expect(assertMissingField).toBeTypeOf('function');
