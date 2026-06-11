@@ -1,11 +1,11 @@
 # Auth — agnostic core seams + blessed better-auth adapter (D5)
 
-Status: design agreed 2026-06-11; SPEC A-track text landed; A-track core seams implemented; S6/B-track not started
+Status: design agreed 2026-06-11; SPEC A-track text landed; A-track core seams implemented; S6 bounded spike artifact landed; B-track not started
 Scope: SPEC additions (session population, guard-failure contract, mutation response headers, raw endpoints), `@jiso/core`/`@jiso/server` seams, a new `@jiso/better-auth` package, a `conformance/better-auth-pin/` suite, and starter/example adoption. Referenced from `IMPLEMENT_v1.md` as workstream **D5**.
 
 ## Progress checklist
 
-- [ ] S6 spike: wrapped-mutation credential flow proven end-to-end against pinned better-auth.
+- [x] S6 spike artifact: wrapped-mutation credential flow decision gate documented without touching core/server internals. Evidence: `docs/auth-s6-spike.md` records the flow, SPEC anchors, official Better Auth API evidence, and caveats; `conformance/auth-spike/src/index.test.ts` locally exercises multiple `Set-Cookie` forwarding, typed invalid-credential failure, session mapping, and sign-out clearing with a Better Auth-like `Response`/`Headers` fixture. This is not the B6 real-package pin.
 - [x] SPEC A-track text: session population seam, guard-failure contract, mutation response-header channel, `endpoint()` primitive (normative text; supersedes the gaps listed under Background).
 - [x] A1 session-resolution seam in the request lifecycle. Evidence: `packages/server/src/index.ts` exposes `sessionProvider`/`SessionProvider` lifecycle options and resolves the provider before route/query/mutation guards without runtime-parsing the declared session shape; `packages/server/src/index.test.ts` covers provider ordering and static provider/session assignability.
 - [x] A2 guard-failure contract (`onUnauthenticated` redirect, 403 path for failed `role()`). Evidence: `packages/server/src/index.ts` maps route/query unauthenticated guard failures to 303 login redirects with `next` and authenticated unauthorized failures to 403 shells while keeping mutation guard failures on the typed 422 path; focused server tests cover default and route-level override behavior.
@@ -54,6 +54,8 @@ These are core seams regardless of which auth library an app uses. Each needs no
 ## Spike S6 — wrapped-mutation flow (run before committing to the B-track)
 
 Prove end-to-end against pinned better-auth: form POST → Jiso `mutation()` → `auth.api.signInEmail({ asResponse: true })` → `Set-Cookie` forwarded through A3 → PRG redirect → guarded page renders with `req.session.user` populated → sign-out clears it. Both enhanced and no-JS paths. The whole blessed-path design hangs on this integration style working cleanly; if it doesn't (cookie semantics, header timing), the fallback is B5-style mounting for credential flows too, at the cost of the typed-form/no-JS story — a decision-gate writeup either way, per the existing spike discipline.
+
+**S6 result (2026-06-11):** proceed with B4 as the intended adapter shape, gated by B6. `docs/auth-s6-spike.md` captures the bounded decision gate using official Better Auth docs evidence for server-side `auth.api`, `asResponse`, `returnHeaders`, and cookie pass-through requirements; the local `conformance/auth-spike/` fixture verifies the Jiso-side header/session/error contract without live external services. Because this slice deliberately avoids adding Better Auth as a dependency, B6 remains responsible for pinning the real package and verifying actual endpoint types, cookie multiplicity, error classes, and SQL touch behavior against pglite.
 
 ## Out of scope
 
