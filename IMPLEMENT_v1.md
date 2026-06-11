@@ -24,7 +24,10 @@ Audited against the repository on 2026-06-11. Checkmarks mean the behavior, API,
 - [x] P2 runtime has delegated event loading, execution triggers, `ctx.signal`, query hydration/update plans, visible-return typed-read refetch, BroadcastChannel plumbing, bfcache-safe pagehide handling, immutable no-`customElements` loader constraints, and a 4KB inline loader budget.
 - [x] P2 exit demo/smoke is proven by a standalone browser L0+L1 smoke covering tabs, dialog, filter island, declared visible trigger, and zero handler imports before interaction/trigger.
 - [x] P3 server/core have `domain`, `query`, `mutation`, `route`, typed `href`/`Link`/`redirect`, typed sessions, CSRF issuance/validation, FormData coercion, guards/rate limits, mutation replay, query endpoints, rerun query fragments, and commerce app usage.
-- [ ] P3 is still incomplete for all planned audits and static route/query guard guarantees at v1 scale.
+- [x] P3 planned audits and static route/query guard guarantees are represented at v1 scale.
+      Evidence 2026-06-11: `tests/fw-check.node.mjs` now executes `fwCheck()`
+      against a graph with removed mutation, route, and query guards and pins the
+      stable `fw-check/v1` unguarded warnings required by SPEC §6.4 and the P3 exit.
 - [x] P4 Drizzle extraction has AST-backed table/write extraction, arrow-handler coverage, FW406/FW409 diagnostics, query shape derivation with nullable wrappers, projection-less select diagnostics, and conformance coverage.
 - [x] P4 generated touch-graph workflow is frozen: `@jiso/drizzle` derives/serializes v1 invalidation registries, the commerce generator emits `commerceInvalidationSets` plus `@jiso/core` registry augmentation, and `fw-check` pins the generated artifact byte-for-byte.
 - [x] P5 has enhanced mutation/deferred fragments, DOM morphing, query patch application, typed read refetch, template stamps, isomorphic/update-coverage statuses, Tailwind stylesheet hints, and runtime/browser tests for morph survival and fragment parsing.

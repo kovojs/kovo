@@ -2,6 +2,8 @@ import assert from 'node:assert/strict';
 import { readdir, readFile } from 'node:fs/promises';
 import { test } from 'node:test';
 
+import { fwCheck } from '../dist/cli/src/index.mjs';
+
 const responseMarker = '<<< RESPONSE';
 const requestMarker = '>>> REQUEST';
 
@@ -779,6 +781,41 @@ void test('P3 server data-plane APIs stay exported and covered', async () => {
   assert.match(serverTests, /validates mutation CSRF tokens before running guards/);
   assert.match(serverTests, /uses default mutation CSRF options before schema parsing/);
   assert.match(serverTests, /preserves legacy mutation execution when csrf is explicitly false/);
+});
+
+void test('P3 route and query guard removal is mechanically audited by fw check', () => {
+  // SPEC.md section 6.4 and IMPLEMENT_v1.md P3 require route/query guards to surface
+  // through the unguarded audit when removed.
+  assert.deepEqual(
+    fwCheck({
+      mutations: [
+        { guards: ['authed'], key: 'cart/add', writes: ['cart'] },
+        { guards: ['rateLimit:session'], key: 'inventory/sync', writes: ['product'] },
+      ],
+      optimistic: [
+        { mutation: 'cart/add', query: 'cart', status: 'hand-written' },
+        { mutation: 'inventory/sync', query: 'adminOrders', status: 'await-fragment' },
+      ],
+      pages: [
+        { guards: ['authed'], queries: ['cart'], route: '/cart' },
+        { guards: [], queries: ['adminOrders'], route: '/admin' },
+      ],
+      queries: [
+        { domains: ['cart'], guards: ['authed'], query: 'cart' },
+        { domains: ['product'], guards: [], query: 'adminOrders' },
+      ],
+    }),
+    {
+      exitCode: 0,
+      output: [
+        'fw-check/v1',
+        'WARN UNGUARDED inventory/sync mutation is reachable without an auth guard.',
+        'WARN UNGUARDED page /admin is reachable without an auth guard.',
+        'WARN UNGUARDED query adminOrders is reachable without an auth guard.',
+        '',
+      ].join('\n'),
+    },
+  );
 });
 
 void test('P5 morph evidence includes structural and browser survival suites', async () => {
