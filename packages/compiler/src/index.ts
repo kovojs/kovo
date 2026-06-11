@@ -1118,7 +1118,6 @@ function fw201Diagnostic(
       `Blocked expression: ${lowering.expression}`,
       `Element params: ${lowering.params.map((param) => param.attributeName).join(', ') || '-'}`,
       definition.help ?? '',
-      'The compiler conservatively blocks free identifier references named window, document, db, request, response, Date, Map, or Set.',
     ].join('\n'),
   };
 }

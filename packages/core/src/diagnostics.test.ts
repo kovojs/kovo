@@ -44,7 +44,8 @@ describe('diagnostic registry', () => {
       {
         "FW201": {
           "code": "FW201",
-          "help": "Fixes: move the value into component/query state via ctx; pass serializable element params with data-p-*; or keep shared constants in module scope.",
+          "help": "Fixes: move the value into component/query state via ctx; pass serializable element params with data-p-*; or keep shared constants in module scope.
+      The compiler conservatively blocks free identifier references named window, document, db, request, response, Date, Map, or Set.",
           "message": "Closure captures unserializable value.",
           "severity": "error",
         },

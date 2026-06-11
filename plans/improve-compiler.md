@@ -15,6 +15,9 @@ Scope: `packages/compiler/src/` only (plus `tests/fw-check.node.mjs` where gate 
 - [ ] Finish the Phase 2 module split: most orchestration and several validators/lowerers/emitters still live in `packages/compiler/src/index.ts`.
 - [ ] Finish the Phase 3 parser migration; the `findMatchingClosingTag` scanner path is gone, but broader dead scanner cleanup remains under audit.
 - [ ] Move remaining local compiler help strings onto the shared diagnostic definition model where appropriate.
+      Evidence 2026-06-11: FW201's conservative free-identifier denylist moved from the
+      compiler-local diagnostic builder onto shared `diagnosticDefinitions`, matching the
+      SPEC §4.3 requirement that FW201 help document the lowering and fixes.
 - [x] Run and record the phase gates after the checklist conversion.
 
 ## Background
