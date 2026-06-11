@@ -1158,6 +1158,22 @@ describe('@jiso/test harness', () => {
     );
   });
 
+  it('passes non-string query arguments through before SQL verification', () => {
+    const verifier = createDbVerifier({}, { domainByTable: { cart_items: 'cart' } });
+    const calls: unknown[] = [];
+    const db = verifier.wrap({
+      query(statement: unknown) {
+        calls.push(statement);
+        return ['ok'];
+      },
+    });
+    const queryObject = { text: 'select * from cart_items' };
+
+    expect(db.query(queryObject)).toEqual(['ok']);
+    expect(calls).toEqual([queryObject]);
+    expect(verifier.observed).toEqual([]);
+  });
+
   it('executes query loaders and verifies reads against declared domains', async () => {
     const cart = domain('cart');
     const db = createFakeDb();

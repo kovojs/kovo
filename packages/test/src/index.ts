@@ -312,15 +312,15 @@ export function createDbVerifier(touchGraph: TouchGraph, config: DbVerificationC
           }
 
           if (prop === 'sql' && typeof value === 'function') {
-            return (statement: string, ...args: unknown[]) => {
-              observeSql(statement, config, observed);
+            return (statement: unknown, ...args: unknown[]) => {
+              observeSqlIfString(statement, config, observed);
               return value.call(target, statement, ...args);
             };
           }
 
           if ((prop === 'query' || prop === 'exec') && typeof value === 'function') {
-            return (statement: string, ...args: unknown[]) => {
-              observeSql(statement, config, observed);
+            return (statement: unknown, ...args: unknown[]) => {
+              observeSqlIfString(statement, config, observed);
               return value.call(target, statement, ...args);
             };
           }
@@ -353,8 +353,8 @@ function wrapSqlHandle<Handle extends object>(
       }
 
       if ((prop === 'query' || prop === 'exec') && typeof value === 'function') {
-        return (statement: string, ...args: unknown[]) => {
-          observeSql(statement, config, observed);
+        return (statement: unknown, ...args: unknown[]) => {
+          observeSqlIfString(statement, config, observed);
           return value.call(target, statement, ...args);
         };
       }
@@ -362,6 +362,15 @@ function wrapSqlHandle<Handle extends object>(
       return typeof value === 'function' ? value.bind(target) : value;
     },
   }) as Handle;
+}
+
+function observeSqlIfString(
+  statement: unknown,
+  config: DbVerificationConfig,
+  observed: ObservedDbOperation[],
+): void {
+  if (typeof statement !== 'string') return;
+  observeSql(statement, config, observed);
 }
 
 export async function createPgliteTestDb(options: PGliteOptions = {}): Promise<PgliteTestDb> {
