@@ -259,6 +259,7 @@ void test('P10 normative docs cover the constitution and compiler hard rules', a
   assert.match(constitution, /The wire is the documentation/);
   assert.match(constitution, /Server truth always wins/);
   assert.match(compilerRules, /Source-derived names/);
+  assert.match(compilerRules, /capture channels \(`ctx`, `element-params`, `module-scope`\)/);
   assert.match(compilerRules, /One-to-one file mapping/);
   assert.match(compilerRules, /Fixpoint invariant/);
   assert.match(compilerRules, /Platform behavior emission/);
