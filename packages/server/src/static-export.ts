@@ -1,3 +1,7 @@
+import { mkdir, writeFile } from 'node:fs/promises';
+import * as path from 'node:path';
+import { fileURLToPath } from 'node:url';
+
 import { createRequestHandler, type JisoApp, type RequestHandler } from './app.js';
 import { normalizePathname } from './match.js';
 
@@ -17,6 +21,7 @@ export interface StaticExportDiagnostic {
 export interface StaticExportOptions {
   onNonExportable?: 'error' | 'skip';
   origin?: string;
+  outDir?: string | URL;
 }
 
 export interface StaticExportResult {
@@ -58,7 +63,39 @@ export async function exportStaticApp(
     artifacts.push(await exportRouteArtifact(handler, route.path, origin));
   }
 
+  if (options.outDir !== undefined) {
+    await writeStaticExportArtifacts(artifacts, options.outDir);
+  }
+
   return { artifacts, diagnostics };
+}
+
+async function writeStaticExportArtifacts(
+  artifacts: readonly StaticExportArtifact[],
+  outDir: string | URL,
+): Promise<void> {
+  const root = path.resolve(outDir instanceof URL ? fileURLToPath(outDir) : outDir);
+
+  await Promise.all(
+    artifacts.map(async (artifact) => {
+      const targetPath = staticExportArtifactTargetPath(root, artifact.path);
+
+      await mkdir(path.dirname(targetPath), { recursive: true });
+      await writeFile(targetPath, artifact.body, 'utf8');
+    }),
+  );
+}
+
+function staticExportArtifactTargetPath(root: string, artifactPath: string): string {
+  const targetPath = path.resolve(root, artifactPath.replace(/^\/+/, ''));
+  if (targetPath === root || targetPath.startsWith(`${root}${path.sep}`)) return targetPath;
+
+  throw new StaticExportError([
+    staticExportDiagnostic(
+      artifactPath,
+      `FW229 static export refused to write '${artifactPath}' outside the configured output directory.`,
+    ),
+  ]);
 }
 
 async function exportRouteArtifact(

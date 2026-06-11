@@ -1,3 +1,8 @@
+import { mkdtemp, readFile, rm } from 'node:fs/promises';
+import * as os from 'node:os';
+import * as path from 'node:path';
+import { pathToFileURL } from 'node:url';
+
 import { describe, expect, it } from 'vitest';
 
 import { createApp, createRequestHandler } from './app.js';
@@ -59,6 +64,42 @@ describe('server static export', () => {
     await expect(handled.text()).resolves.toBe(exported.artifacts[0]?.body);
     expect(exported.artifacts[0]?.body).toContain('<main data-url="/">from-page</main>');
     expect(exported.artifacts[0]?.body).toContain('installInlineJisoLoader');
+  });
+
+  it('writes replayed html artifacts under the configured output directory', async () => {
+    const outDir = await mkdtemp(path.join(os.tmpdir(), 'jiso-static-export-'));
+    try {
+      const app = createApp({
+        renderRoute(value, context) {
+          return `<main data-route="${context.route.path}">${String(value)}</main>`;
+        },
+        routes: [
+          route('/', {
+            page: () => 'home',
+          }),
+          route('/docs/intro', {
+            page: () => 'intro',
+          }),
+        ],
+      });
+
+      const result = await exportStaticApp(app, { outDir: pathToFileURL(outDir) });
+
+      expect(result.diagnostics).toEqual([]);
+      expect(result.artifacts.map((artifact) => artifact.path)).toEqual([
+        '/index.html',
+        '/docs/intro.html',
+      ]);
+      await expect(readFile(path.join(outDir, 'index.html'), 'utf8')).resolves.toBe(
+        result.artifacts[0]?.body,
+      );
+      await expect(readFile(path.join(outDir, 'docs/intro.html'), 'utf8')).resolves.toBe(
+        result.artifacts[1]?.body,
+      );
+      expect(result.artifacts[1]?.body).toContain('<main data-route="/docs/intro">intro</main>');
+    } finally {
+      await rm(outDir, { force: true, recursive: true });
+    }
   });
 
   it('fails loudly for guarded and session-provider routes', async () => {

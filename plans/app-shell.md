@@ -57,7 +57,11 @@ Scope: SPEC addition (proposed §9.5 "The request shell"), `@jiso/server` shell 
       routes without static-path metadata; `packages/server/src/static-export.test.ts` covers
       handler/document parity, successful `.html` export, guard/session failures, and loud
       param-route skip/error behavior, including explicit `onNonExportable: 'skip'` diagnostics.
-      Remaining R6 work: CLI/task wiring, output file writes,
+      Additional evidence 2026-06-11: `exportStaticApp(app, { outDir })` writes replayed `.html`
+      artifacts to disk with nested parent-directory creation; `packages/server/src/static-export.test.ts`
+      verifies the on-disk bytes match the returned handler-replayed artifacts, with
+      `pnpm exec vitest --run packages/server/src/static-export.test.ts packages/server/src/app.test.ts`,
+      `pnpm run check`, and `pnpm run check:fw` passing. Remaining R6 work: CLI/task wiring,
       `/c/` module and asset copying, and SPEC/compiler surfacing for the static-path
       enumeration field and session-dependence metadata.
 - [ ] R7 adoption: starter becomes a routed app served by `vp dev`; commerce runs end-to-end over HTTP; a jiso docs site ships from `vp run export` as the first outside consumer.
