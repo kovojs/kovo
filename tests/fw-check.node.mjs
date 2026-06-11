@@ -1295,9 +1295,6 @@ void test('P10 starter wires graph assertions into CI', async () => {
 });
 
 void test('P9 verification layer evidence remains represented', async () => {
-  const cliSource = await readProjectFile('packages/cli/src/index.ts');
-  const cliTests = await readProjectFile('packages/cli/src/index.test.ts');
-  const graphSource = await readProjectFile('packages/core/src/graph.ts');
   const runtimeSource = await readProjectFile('packages/runtime/src/index.ts');
   const runtimeTests = await readProjectFile('packages/runtime/src/index.test.ts');
   const testHarnessSource = await readProjectFile('packages/test/src/index.ts');
@@ -1357,22 +1354,85 @@ void test('P9 verification layer evidence remains represented', async () => {
   );
   assert.match(testHarnessTests, /reports FW410 for nested query output shape mismatches/);
   assert.match(testHarnessSource, /diagnosticDefinitions\[code\]\.message/);
-  assert.match(graphSource, /verificationDiagnostics\?: readonly VerificationDiagnosticFact/);
-  assert.match(graphSource, /diagnostics\?: readonly StaticDiagnosticFact/);
-  assert.match(cliSource, /function verificationDiagnosticLine/);
-  assert.match(cliSource, /function staticDiagnosticLine/);
-  assert.match(cliSource, /function diagnosticSite/);
-  assert.match(cliSource, /start\.line/);
-  assert.match(cliSource, /start\.column/);
-  assert.match(cliTests, /prints static Drizzle FW410 diagnostics as fw check findings/);
-  assert.match(cliTests, /ERROR FW410 cart\.queries\.ts:5/);
-  assert.match(cliTests, /ERROR FW302 cart-badge\.tsx:3:23/);
-  assert.match(cliTests, /prints runtime verification diagnostics as fw check findings/);
-  assert.match(cliTests, /WARN FW403 domain:order/);
-  assert.match(cliTests, /ERROR FW404 domain:unknown_table/);
-  assert.match(cliTests, /ERROR FW407 cart\.queries\.ts:7/);
-  assert.match(cliTests, /ERROR FW408 product\.domain\.ts:9/);
-  assert.match(cliTests, /ERROR FW410 cart\.queries\.ts:11/);
+  assert.equal(
+    fwCheck({
+      diagnostics: [
+        {
+          code: 'FW410',
+          site: 'cart.queries.ts:5',
+        },
+        {
+          code: 'FW302',
+          message: 'data-bind path is not present in the declared query shape. cart.missing',
+          site: 'cart-badge.tsx',
+          start: { column: 23, line: 3 },
+        },
+      ],
+      verificationDiagnostics: [
+        {
+          branch: 'stock-reserve',
+          code: 'FW405',
+          domain: 'product',
+          site: 'cart.domain.ts:2',
+        },
+        {
+          code: 'FW402',
+          detail: 'observed table audit_log',
+          domain: 'audit',
+        },
+        {
+          code: 'FW403',
+          domain: 'order',
+        },
+        {
+          code: 'FW404',
+          detail: 'observed table unknown_table',
+          domain: 'unknown_table',
+        },
+        {
+          code: 'FW407',
+          detail: 'observed table products',
+          domain: 'product',
+          site: 'cart.queries.ts:7',
+        },
+        {
+          code: 'FW408',
+          detail: 'expected id observed sku',
+          domain: 'product',
+          site: 'product.domain.ts:9',
+        },
+        {
+          code: 'FW410',
+          detail: 'cart Expected number',
+          domain: 'cart',
+          site: 'cart.queries.ts:11',
+        },
+      ],
+    }).output,
+    [
+      'fw-check/v1',
+      'ERROR FW410 cart.queries.ts:5 Query result shape failed declared output schema.',
+      'ERROR FW302 cart-badge.tsx:3:23 data-bind path is not present in the declared query shape. cart.missing',
+      'WARN FW405 cart.domain.ts:2 Conditional write branch was never executed under instrumentation. domain=product branch=stock-reserve',
+      'ERROR FW402 domain:audit Write touched an undeclared domain. domain=audit observed table audit_log',
+      'WARN FW403 domain:order Declared domain was never observed written. domain=order',
+      'ERROR FW404 domain:unknown_table Write to unmapped table. domain=unknown_table observed table unknown_table',
+      'ERROR FW407 cart.queries.ts:7 Query read from undeclared domain. domain=product observed table products',
+      'ERROR FW408 product.domain.ts:9 Declared row key differs from observed row predicate. domain=product expected id observed sku',
+      'ERROR FW410 cart.queries.ts:11 Query result shape failed declared output schema. domain=cart cart Expected number',
+      '',
+    ].join('\n'),
+  );
+  assert.equal(
+    fwCheck({
+      diagnostics: [{ code: 'FW411', site: 'cart.queries.ts:9' }],
+    }).output,
+    [
+      'fw-check/v1',
+      'ERROR FW411 cart.queries.ts:9 Query read set includes an exempt table.',
+      '',
+    ].join('\n'),
+  );
   assert.match(runtimeSource, /export interface MutationChangeRecord/);
   assert.match(runtimeSource, /export interface OptimisticChange/);
   assert.match(runtimeSource, /change\?: OptimisticChange<Input>/);

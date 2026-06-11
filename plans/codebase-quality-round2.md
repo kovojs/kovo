@@ -113,6 +113,10 @@ Do this first or pay it on every commit.
       a synthetic graph and direct `fwExplain` assertions for handler captures, derives,
       execution triggers, attribute merges, endpoint listing, unguarded access, and owner-domain
       scope audits instead of grepping CLI implementation symbols or CLI test names.
+      Partial evidence 2026-06-11: the P9 static/runtime diagnostic tranche now calls `fwCheck`
+      with structured `diagnostics` and `verificationDiagnostics` facts for FW302/FW402/FW403/
+      FW404/FW405/FW407/FW408/FW410/FW411 instead of grepping CLI implementation symbols or CLI
+      test names. The `@jiso/test` harness checks in that tranche remain source-shaped.
 - [x] **Make create-jiso templates real files** (`create-jiso/src/index.ts:63-473`, ~470 lines of
       escaped template literals including a CI workflow and double-escaped regexes inside
       `.mjs`-in-string). Move to a `templates/` directory copied at scaffold time with `{{name}}`
