@@ -78,7 +78,22 @@ describe('create-jiso starter', () => {
       'CartPanel',
     ]);
     expect(graph.mutations).toEqual([
-      expect.objectContaining({ invalidates: ['cart'], key: 'cart/add' }),
+      expect.objectContaining({
+        inputFields: ['productId', 'quantity'],
+        invalidates: ['cart'],
+        key: 'cart/add',
+        session: 'starterSession',
+      }),
+    ]);
+    expect(graph.pages).toEqual([
+      expect.objectContaining({
+        i18n: ['en-US:cartTitle'],
+        meta: {
+          description: 'Starter cart backed by query data.',
+          title: 'Jiso Starter Cart',
+        },
+        route: '/cart',
+      }),
     ]);
     expect(graph.optimistic).toEqual([
       { mutation: 'cart/add', query: 'cart', status: 'await-fragment' },
@@ -102,6 +117,8 @@ describe('create-jiso starter', () => {
         'fw-explain/v1',
         'MUTATION cart/add',
         'guards: authed',
+        'session: starterSession',
+        'input-fields: productId,quantity',
         'writes: cart',
         'invalidates: cart',
         'manual-invalidates: -',
@@ -117,6 +134,8 @@ describe('create-jiso starter', () => {
         'fw-explain/v1',
         'PAGE /cart',
         'prefetch: false',
+        'meta: title=Jiso Starter Cart description=Starter cart backed by query data. image=-',
+        'i18n: en-US:cartTitle',
         'modulepreloads: -',
         'stylesheets: /src/styles.css',
         'queries: cart',
@@ -191,6 +210,10 @@ describe('create-jiso starter', () => {
     expect(graphAssertionScript).toContain("['component:CartBadge', 'component:CartPanel']");
     expect(graphAssertionScript).toContain('OPTIMISTIC-SUMMARY .*UNHANDLED=0');
     expect(graphAssertionScript).toContain("fwExplain(['page', '/cart'])");
+    expect(graphAssertionScript).toContain("explainLine(cartAdd, 'session: ')");
+    expect(graphAssertionScript).toContain("explainLine(cartAdd, 'input-fields: ')");
+    expect(graphAssertionScript).toContain("explainLine(cartPage, 'meta: ')");
+    expect(graphAssertionScript).toContain("explainLine(cartPage, 'i18n: ')");
     expect(graphAssertionScript).toContain("explainLine(cartPage, 'prefetch: ')");
     expect(graphAssertionScript).toContain("explainLine(cartPage, 'modulepreloads: ')");
     expect(graphAssertionScript).toContain("explainLine(cartPage, 'stylesheets: ')");

@@ -545,11 +545,19 @@ void test('P10 starter wires graph assertions into CI', async () => {
   const starterTests = await readProjectFile('packages/create-jiso/src/index.test.ts');
 
   assert.match(starterSource, /'graph-assertions': 'vp run graph-assertions'/);
+  assert.match(starterSource, /session: 'starterSession'/);
+  assert.match(starterSource, /inputFields: \['productId', 'quantity'\]/);
+  assert.match(starterSource, /i18n: \['en-US:cartTitle'\]/);
+  assert.match(starterSource, /title: 'Jiso Starter Cart'/);
   assert.match(starterSource, /command: 'node scripts\/graph-assertions\.mjs'/);
   assert.match(starterSource, /- run: vp run graph-assertions/);
   assert.match(starterSource, /path: 'scripts\/graph-assertions\.mjs'/);
   assert.match(starterSource, /OPTIMISTIC-SUMMARY \.\*UNHANDLED=0/);
   assert.match(starterSource, /fwExplain\(\['page', '\/cart'\]\)/);
+  assert.match(starterSource, /explainLine\(cartAdd, 'session: '\)/);
+  assert.match(starterSource, /explainLine\(cartAdd, 'input-fields: '\)/);
+  assert.match(starterSource, /explainLine\(cartPage, 'meta: '\)/);
+  assert.match(starterSource, /explainLine\(cartPage, 'i18n: '\)/);
   assert.match(starterSource, /explainLine\(cartPage, 'queries: '\)/);
   assert.match(starterSource, /explainLine\(cartPage, 'stylesheets: '\)/);
   assert.doesNotMatch(starterSource, /src\/main\.ts/);

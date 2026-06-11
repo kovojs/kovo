@@ -31,12 +31,25 @@ const starterGraph = {
     {
       guards: ['authed'],
       invalidates: ['cart'],
+      inputFields: ['productId', 'quantity'],
       key: 'cart/add',
+      session: 'starterSession',
       writes: ['cart'],
     },
   ],
   optimistic: [{ mutation: 'cart/add', query: 'cart', status: 'await-fragment' }],
-  pages: [{ queries: ['cart'], route: '/cart', stylesheets: ['/src/styles.css'] }],
+  pages: [
+    {
+      i18n: ['en-US:cartTitle'],
+      meta: {
+        description: 'Starter cart backed by query data.',
+        title: 'Jiso Starter Cart',
+      },
+      queries: ['cart'],
+      route: '/cart',
+      stylesheets: ['/src/styles.css'],
+    },
+  ],
   queries: [{ domains: ['cart'], query: 'cart' }],
   touchGraph: {
     'cart.addItem': {
@@ -204,12 +217,16 @@ assert.match(explainLine(cartQuery, 'invalidated-by: '), /(^|,)cart\\/add(,|$)/)
 assert.match(explainLine(cartQuery, 'domain-writes: '), /(^|,)cart\\.addItem(,|$)/);
 
 const cartAdd = fwExplain(['mutation', 'cart/add', '--optimistic']);
+assert.equal(explainLine(cartAdd, 'session: '), 'starterSession');
+assert.deepEqual(explainList(explainLine(cartAdd, 'input-fields: ')), ['productId', 'quantity']);
 assert.match(cartAdd, /^updates: cart->component:CartBadge,component:CartPanel,page:\\/cart$/m);
 assert.match(cartAdd, /^OPTIMISTIC cart await-fragment$/m);
 assert.match(cartAdd, /^OPTIMISTIC-SUMMARY .*UNHANDLED=0$/m);
 
 const cartPage = fwExplain(['page', '/cart']);
 assert.equal(explainLine(cartPage, 'prefetch: '), 'false');
+assert.match(explainLine(cartPage, 'meta: '), /title=Jiso Starter Cart/);
+assert.deepEqual(explainList(explainLine(cartPage, 'i18n: ')), ['en-US:cartTitle']);
 assert.deepEqual(explainList(explainLine(cartPage, 'modulepreloads: ')), []);
 assert.deepEqual(explainList(explainLine(cartPage, 'stylesheets: ')), ['/src/styles.css']);
 assert.deepEqual(explainList(explainLine(cartPage, 'queries: ')), ['cart']);
