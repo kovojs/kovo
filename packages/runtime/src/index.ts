@@ -346,7 +346,6 @@ export function installJisoLoader(options: JisoLoaderOptions): JisoLoader {
       },
       disposers,
     );
-    addLoaderListener(focusTargetFor(options), 'focus', refetchOnce, disposers);
   }
 
   if (options.discardPendingOptimism) {
@@ -385,14 +384,6 @@ function addLoaderListener(
   disposers.push(() => {
     target.removeEventListener?.(type, listener, options);
   });
-}
-
-function focusTargetFor(options: JisoLoaderOptions): LoaderLifecycleTarget {
-  if (options.focusTarget) return options.focusTarget;
-  if (typeof globalThis.addEventListener === 'function') {
-    return globalThis as unknown as LoaderLifecycleTarget;
-  }
-  return options.root;
 }
 
 function installExecutionTriggers(

@@ -1564,7 +1564,7 @@ describe('runtime loader', () => {
       expect(root.listeners.has('click')).toBe(true);
       expect(root.listeners.has('visibilitychange')).toBe(true);
       expect(root.listeners.has('pagehide')).toBe(true);
-      expect(focusTarget.listeners.has('focus')).toBe(true);
+      expect(focusTarget.listeners.has('focus')).toBe(false);
       expect(observer.observe).toHaveBeenCalledWith(visibleElement);
       expect(channels[0]?.closed).toBe(false);
 
@@ -1718,7 +1718,7 @@ describe('query store', () => {
     expect(plan).toHaveBeenCalledWith({ count: 1 });
   });
 
-  it('registers refetch-on-focus and visible-return listeners without invoking them eagerly', async () => {
+  it('registers visible-return refetch without invoking it eagerly', async () => {
     const root = new FakeRoot();
     const refetchOnFocus = vi.fn();
 
@@ -1730,7 +1730,7 @@ describe('query store', () => {
     });
 
     expect(root.listeners.has('visibilitychange')).toBe(true);
-    expect(root.listeners.has('focus')).toBe(true);
+    expect(root.listeners.has('focus')).toBe(false);
     expect(refetchOnFocus).not.toHaveBeenCalled();
 
     root.visibilityState = 'hidden';
@@ -1743,9 +1743,7 @@ describe('query store', () => {
 
     expect(refetchOnFocus).toHaveBeenCalledTimes(1);
 
-    await root.listeners.get('focus')?.({ target: null, type: 'focus' });
-
-    expect(refetchOnFocus).toHaveBeenCalledTimes(2);
+    expect(refetchOnFocus).toHaveBeenCalledTimes(1);
   });
 
   it('passes hydrated query names to refetch-on-focus with per-query opt-out', async () => {
@@ -1787,13 +1785,12 @@ describe('query store', () => {
 
     root.visibilityState = 'visible';
     await root.listeners.get('visibilitychange')?.({ target: null, type: 'visibilitychange' });
-    await root.listeners.get('focus')?.({ target: null, type: 'focus' });
 
     expect(refetchOnFocus).toHaveBeenNthCalledWith(1, ['cart', 'inventory']);
-    expect(refetchOnFocus).toHaveBeenNthCalledWith(2, ['cart', 'inventory']);
+    expect(refetchOnFocus).toHaveBeenCalledTimes(1);
   });
 
-  it('dedupes overlapping visible-return and focus refetches', async () => {
+  it('dedupes overlapping visible-return refetches', async () => {
     const root = new FakeRoot();
     const refetchOnFocus = vi.fn();
     let resolveRefetch: (() => void) | undefined;
@@ -1810,18 +1807,21 @@ describe('query store', () => {
     });
 
     root.visibilityState = 'visible';
-    const visibleRefetch = root.listeners.get('visibilitychange')?.({
+    const firstRefetch = root.listeners.get('visibilitychange')?.({
       target: null,
       type: 'visibilitychange',
     });
-    const focusRefetch = root.listeners.get('focus')?.({ target: null, type: 'focus' });
+    const secondRefetch = root.listeners.get('visibilitychange')?.({
+      target: null,
+      type: 'visibilitychange',
+    });
 
     expect(refetchOnFocus).toHaveBeenCalledTimes(1);
 
     resolveRefetch?.();
-    await Promise.all([visibleRefetch, focusRefetch]);
+    await Promise.all([firstRefetch, secondRefetch]);
 
-    await root.listeners.get('focus')?.({ target: null, type: 'focus' });
+    await root.listeners.get('visibilitychange')?.({ target: null, type: 'visibilitychange' });
 
     expect(refetchOnFocus).toHaveBeenCalledTimes(2);
   });
@@ -1910,7 +1910,7 @@ describe('query store', () => {
     expect(plan).toHaveBeenLastCalledWith({ count: 2 });
   });
 
-  it('uses typed read refetching from focus listeners when configured', async () => {
+  it('uses typed read refetching from visible-return listeners when configured', async () => {
     const root = new FakeRoot();
     const store = createQueryStore();
     const plan = vi.fn();
@@ -1936,7 +1936,7 @@ describe('query store', () => {
     });
 
     expect(root.listeners.has('visibilitychange')).toBe(true);
-    expect(root.listeners.has('focus')).toBe(true);
+    expect(root.listeners.has('focus')).toBe(false);
     expect(store.get('cart')).toEqual({ count: 1 });
 
     root.visibilityState = 'visible';

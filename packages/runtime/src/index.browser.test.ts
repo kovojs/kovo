@@ -218,7 +218,7 @@ describe('runtime browser suite', () => {
     });
   });
 
-  it('dedupes document visible-return and window focus typed-read refetches', async () => {
+  it('refetches typed reads on document visible-return without a window focus duplicate', async () => {
     document.body.innerHTML =
       '<script fw-query="cart" type="application/json">{"count":1}</script>';
     const store = createQueryStore();
@@ -245,6 +245,11 @@ describe('runtime browser suite', () => {
 
     resolveText?.('<fw-query name="cart">{"count":2}</fw-query>');
     await vi.waitFor(() => expect(store.get('cart')).toEqual({ count: 2 }));
+
+    window.dispatchEvent(new Event('focus'));
+    await Promise.resolve();
+
+    expect(fetch).toHaveBeenCalledTimes(1);
 
     loader.dispose();
     window.dispatchEvent(new Event('focus'));

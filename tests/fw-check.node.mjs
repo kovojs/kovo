@@ -387,8 +387,11 @@ void test('P2 loader smoke evidence remains represented in runtime tests', async
   assert.match(runtimeTests, /installs declared load, idle, and visible execution triggers/);
   assert.match(runtimeTests, /ships an inline enhanced form round trip in the bootstrap source/);
   assert.match(runtimeTests, /refetches typed read endpoints and applies returned query chunks/);
-  assert.match(runtimeTests, /uses typed read refetching from focus listeners when configured/);
-  assert.match(runtimeTests, /dedupes overlapping visible-return and focus refetches/);
+  assert.match(
+    runtimeTests,
+    /uses typed read refetching from visible-return listeners when configured/,
+  );
+  assert.match(runtimeTests, /dedupes overlapping visible-return refetches/);
   assert.match(
     runtimeTests,
     /disposes loader listeners, visible observers, and auto-created broadcasts/,
@@ -402,8 +405,8 @@ void test('P2 loader smoke evidence remains represented in runtime tests', async
   );
   assert.match(
     browserTests,
-    /dedupes document visible-return and window focus typed-read refetches/,
-    'browser suite covers window focus refetch dedupe and dispose',
+    /refetches typed reads on document visible-return without a window focus duplicate/,
+    'browser suite covers visible-return refetch without window focus duplication',
   );
   assert.match(
     browserTests,
