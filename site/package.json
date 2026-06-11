@@ -4,8 +4,8 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "build": "vite build && node scripts/build.mjs",
-    "build:css": "vite build",
+    "build": "vp build && node scripts/build.mjs",
+    "build:css": "vp build",
     "build:pages": "node scripts/build.mjs",
     "check:links": "node scripts/check-links.mjs",
     "test": "vitest --run"

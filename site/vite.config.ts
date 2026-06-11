@@ -17,7 +17,7 @@ export default defineConfig({
   run: {
     tasks: {
       'build-site': {
-        command: 'vite build && node scripts/build.mjs',
+        command: 'vp build && node scripts/build.mjs',
         input: [
           { pattern: 'content/**/*', base: 'workspace' },
           { pattern: 'public/**/*', base: 'workspace' },
