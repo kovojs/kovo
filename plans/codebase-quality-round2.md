@@ -486,9 +486,16 @@ land it first; don't fork it.
       scoped replay, and render-failure replay tests. Verified with
       `pnpm exec vitest --run packages/server/src`, `pnpm run check`, and `pnpm run check:fw`
       after `pnpm run check:build` produced the required `dist/` artifacts.
-- [ ] **MED — Unify the eight `{body, headers, status}` response types** behind one base; one
+- [x] **MED — Unify the eight `{body, headers, status}` response types** behind one base; one
       case-insensitive header utility (today: `readHeader` index.ts:3091 fully case-insensitive
       vs document.ts:137 two-casings vs `findResponseHeaderName` index.ts:2397).
+      Evidence 2026-06-11: `packages/server/src/response.ts` defines the shared
+      `ServerResponseBase` plus the single `readHeader`/`appendResponseHeader` case-insensitive
+      header utility; `client-modules.ts`, `deferred-stream.ts`, `document.ts`, `index.ts`, and
+      `webhook.ts` now extend that base for the server response shapes and reuse the shared
+      header helpers. `packages/server/src/shell.test.ts` covers uppercase `CONTENT-TYPE`
+      document wrapping. Verified with `pnpm exec vitest --run packages/server/src`,
+      `pnpm run check`, `pnpm run check:build`, and `pnpm run check:fw`.
 - [ ] **MED — Split `index.ts`** along the round-1 seam list (schema, guards/session,
       csrf/cookies, query, mutation+replay, route, header utils), index.ts a pure barrel. The
       absence of module-level mutable state makes this mechanical today. Name the stringly

@@ -1,4 +1,5 @@
 import { reportServerError, type ServerErrorHandler } from './diagnostics.js';
+import type { ServerResponseBase } from './response.js';
 
 export interface VersionedClientModuleInput {
   contentType?: string;
@@ -7,11 +8,11 @@ export interface VersionedClientModuleInput {
   version: string;
 }
 
-export interface VersionedClientModuleResponse {
-  body: string;
-  headers: Record<string, string>;
-  status: 200 | 404;
-}
+export interface VersionedClientModuleResponse extends ServerResponseBase<
+  string,
+  Record<string, string>,
+  200 | 404
+> {}
 
 export interface VersionedClientModuleRegistry {
   put(module: VersionedClientModuleInput): string;

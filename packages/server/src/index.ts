@@ -25,6 +25,16 @@ import {
   renderQueryWireHtml,
   type QueryScriptRenderOptions,
 } from './wire-html.js';
+import {
+  appendResponseHeader,
+  cloneResponseHeaders,
+  isHeaderSource,
+  readHeader,
+  type HeaderSource,
+  type ResponseHeaderValue,
+  type ResponseHeaders,
+  type ServerResponseBase,
+} from './response.js';
 
 export { Link, href, redirect } from '@jiso/core';
 export type {
@@ -108,6 +118,7 @@ export type {
   StylesheetManifestEntry,
 } from './hints.js';
 export type { QueryScriptRenderOptions } from './wire-html.js';
+export type { ResponseHeaderValue, ResponseHeaders, ServerResponseBase } from './response.js';
 export { findRouteAmbiguities, matchRoute, normalizePathname } from './match.js';
 export type { PathnameNormalization, RouteAmbiguity, RouteLike, RouteMatch } from './match.js';
 export { matchShellDispatch, shellDispatchTable } from './shell.js';
@@ -557,11 +568,11 @@ export interface GuardFailureResponseOptions<
   renderForbidden?: ForbiddenRenderer<Request>;
 }
 
-interface HttpGuardFailureResponse {
-  body: string;
-  headers: Record<string, string>;
-  status: 303 | 403;
-}
+interface HttpGuardFailureResponse extends ServerResponseBase<
+  string,
+  Record<string, string>,
+  303 | 403
+> {}
 
 export interface RateLimitOptions<Request> {
   key?: (request: Request) => string;
@@ -738,9 +749,9 @@ export interface MutationContext<Errors extends Record<string, Schema<unknown>>>
   };
 }
 
-export type MutationResponseHeaderValue = string | string[];
+export type MutationResponseHeaderValue = ResponseHeaderValue;
 
-export type MutationResponseHeaders = Record<string, MutationResponseHeaderValue>;
+export type MutationResponseHeaders = ResponseHeaders;
 
 export interface CookieOptions {
   domain?: string;
@@ -805,11 +816,11 @@ export type QuerySearchInput =
   | Iterable<readonly [string, string]>
   | Record<string, readonly string[] | string | undefined>;
 
-export interface QueryEndpointResponse {
-  body: string;
-  headers: Record<string, string>;
-  status: 200 | 303 | 403 | 404 | 422 | 429 | 500;
-}
+export interface QueryEndpointResponse extends ServerResponseBase<
+  string,
+  Record<string, string>,
+  200 | 303 | 403 | 404 | 422 | 429 | 500
+> {}
 
 export interface QueryEndpointRegistry<Request = unknown> {
   queries: readonly QueryDefinition<string, unknown, unknown, Request>[];
@@ -1067,12 +1078,7 @@ export interface MutationWireHeaders {
   targets: readonly string[];
 }
 
-export type MutationWireHeaderSource =
-  | Iterable<readonly [string, string]>
-  | Record<string, readonly string[] | string | undefined>
-  | {
-      get(name: string): null | string;
-    };
+export type MutationWireHeaderSource = HeaderSource;
 
 export interface MutationWireRequestOptions<
   Request,
@@ -1089,11 +1095,11 @@ export interface MutationWireRequestOptions<
   request: Request;
 }
 
-export interface MutationWireResponse {
-  body: string;
-  headers: MutationResponseHeaders;
-  status: 200 | 422 | 429 | 500;
-}
+export interface MutationWireResponse extends ServerResponseBase<
+  string,
+  MutationResponseHeaders,
+  200 | 422 | 429 | 500
+> {}
 
 export interface MutationReplayStore {
   get(
@@ -1249,11 +1255,11 @@ export interface NoJsMutationRequest<
   request: Request;
 }
 
-export interface NoJsMutationResponse {
-  body: string;
-  headers: MutationResponseHeaders;
-  status: 303 | 422 | 429 | 500;
-}
+export interface NoJsMutationResponse extends ServerResponseBase<
+  string,
+  MutationResponseHeaders,
+  303 | 422 | 429 | 500
+> {}
 
 export interface MutationEndpointRequest<
   Request,
@@ -1381,11 +1387,11 @@ export const respond = {
   },
 };
 
-export interface RoutePageResponse {
-  body: RouteResponseBody;
-  headers: Record<string, string>;
-  status: 200 | 303 | 304 | 403 | 404 | 422 | 429 | 500;
-}
+export interface RoutePageResponse extends ServerResponseBase<
+  RouteResponseBody,
+  Record<string, string>,
+  200 | 303 | 304 | 403 | 404 | 422 | 429 | 500
+> {}
 
 export interface RouteRequestInput {
   params?: unknown;
@@ -2395,14 +2401,6 @@ function requestHeader(request: unknown, name: string): string | undefined {
   return undefined;
 }
 
-function isHeaderSource(value: unknown): value is MutationWireHeaderSource {
-  return (
-    typeof value === 'object' &&
-    value !== null &&
-    ('get' in value || Symbol.iterator in value || Object.keys(value).length > 0)
-  );
-}
-
 function isFileLike(value: unknown): value is FileLike {
   return (
     typeof value === 'object' &&
@@ -2446,36 +2444,6 @@ function mergeMutationResponseHeaders(
   }
 
   return headers;
-}
-
-function appendResponseHeader(
-  headers: MutationResponseHeaders,
-  name: string,
-  value: MutationResponseHeaderValue,
-): void {
-  const existingName = findResponseHeaderName(headers, name);
-  const targetName = existingName ?? name;
-  if (name.toLowerCase() !== 'set-cookie') {
-    headers[targetName] = Array.isArray(value) ? [...value] : value;
-    return;
-  }
-
-  const nextValues = Array.isArray(value) ? value : [value];
-  const existing = existingName === undefined ? undefined : headers[existingName];
-  if (existing === undefined) {
-    headers[targetName] = [...nextValues];
-    return;
-  }
-
-  headers[targetName] = [...(Array.isArray(existing) ? existing : [existing]), ...nextValues];
-}
-
-function findResponseHeaderName(
-  headers: MutationResponseHeaders,
-  name: string,
-): string | undefined {
-  const wanted = name.toLowerCase();
-  return Object.keys(headers).find((candidate) => candidate.toLowerCase() === wanted);
 }
 
 function validateRawSetCookie(value: string): string {
@@ -3165,12 +3133,7 @@ function cloneMutationWireResponse(response: MutationWireResponse): MutationWire
 }
 
 function cloneMutationResponseHeaders(headers: MutationResponseHeaders): MutationResponseHeaders {
-  return Object.fromEntries(
-    Object.entries(headers).map(([name, value]) => [
-      name,
-      Array.isArray(value) ? [...value] : value,
-    ]),
-  );
+  return cloneResponseHeaders(headers);
 }
 
 function mutationWireResponseHeaders<Request>(
@@ -3180,29 +3143,6 @@ function mutationWireResponseHeaders<Request>(
     'Content-Type': 'text/vnd.jiso.fragment+html; charset=utf-8',
     ...(wireRequest.idem ? { 'FW-Idem': wireRequest.idem } : {}),
   };
-}
-
-function readHeader(headers: MutationWireHeaderSource, name: string): string | undefined {
-  if ('get' in headers && typeof headers.get === 'function') {
-    return headers.get(name) ?? headers.get(name.toLowerCase()) ?? undefined;
-  }
-
-  const wanted = name.toLowerCase();
-  if (Symbol.iterator in headers) {
-    for (const [key, value] of headers) {
-      if (key.toLowerCase() === wanted) return value;
-    }
-
-    return undefined;
-  }
-
-  for (const [key, value] of Object.entries(headers)) {
-    if (key.toLowerCase() !== wanted) continue;
-    if (Array.isArray(value)) return value.join(', ');
-    return value;
-  }
-
-  return undefined;
 }
 
 function dedupe(values: readonly string[]): string[] {

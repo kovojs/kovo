@@ -11,6 +11,7 @@ import {
   type DocumentTemplate,
 } from './document.js';
 import { matchShellDispatch } from './shell.js';
+import type { ServerResponseBase } from './response.js';
 import {
   renderQueryRegistryEndpointResponse,
   renderRoutePageResponse,
@@ -241,11 +242,7 @@ async function renderConfiguredError(
 }
 
 function routeResponseToWebResponse(
-  response: {
-    body: RouteResponseBody;
-    headers: Record<string, string>;
-    status: number;
-  },
+  response: ServerResponseBase<RouteResponseBody, Record<string, string>>,
   request: Request,
 ): Response {
   return new Response(request.method === 'HEAD' ? null : webResponseBody(response.body), {

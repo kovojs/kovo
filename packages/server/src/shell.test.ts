@@ -152,6 +152,14 @@ describe('server app shell document assembly', () => {
       status: 200,
     });
 
+    expect(
+      renderRouteDocumentResponse({
+        body: '<main>Caps</main>',
+        headers: { 'CONTENT-TYPE': 'text/html' },
+        status: 200,
+      }).body,
+    ).toContain('<!doctype html>');
+
     const csv = {
       body: 'id,total\n1,42\n',
       headers: { 'Content-Type': 'text/csv' },

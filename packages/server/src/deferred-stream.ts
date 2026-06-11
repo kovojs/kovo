@@ -1,6 +1,7 @@
 import { renderStylesheetLinks } from './hints.js';
 import type { StylesheetAsset } from './hints.js';
 import { escapeAttribute } from './html.js';
+import type { ServerResponseBase } from './response.js';
 import { renderQueryWireHtml } from './wire-html.js';
 
 export interface DeferredQueryChunk {
@@ -32,11 +33,11 @@ export interface DeferredStreamChunk {
   queries?: readonly DeferredQueryChunk[];
 }
 
-export interface DeferredStreamResponse {
-  body: string;
-  headers: Record<string, string>;
-  status: 200;
-}
+export interface DeferredStreamResponse extends ServerResponseBase<
+  string,
+  Record<string, string>,
+  200
+> {}
 
 export function renderDeferredStream(options: DeferredStreamOptions): DeferredStreamResponse {
   const boundary = options.boundary ?? 'jiso-boundary';

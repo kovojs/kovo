@@ -14,6 +14,7 @@ import type {
   MutationResponseHeaders,
   Schema,
 } from './index.js';
+import type { ServerResponseBase } from './response.js';
 
 export type WebhookFailureStatus = 400 | 401 | 422 | 429 | 500;
 export type WebhookSuccessStatus = 200;
@@ -35,11 +36,11 @@ export interface WebhookChangeOptions<Input = unknown> {
   reason?: string;
 }
 
-export interface WebhookWireResponse {
-  body: string;
-  headers: MutationResponseHeaders;
-  status: WebhookResponseStatus;
-}
+export interface WebhookWireResponse extends ServerResponseBase<
+  string,
+  MutationResponseHeaders,
+  WebhookResponseStatus
+> {}
 
 export interface WebhookReplayStore {
   get(scope: string, idem: string): Promise<WebhookWireResponse> | WebhookWireResponse | undefined;

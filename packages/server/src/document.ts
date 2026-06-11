@@ -2,6 +2,7 @@ import { jisoLoaderSource } from '@jiso/runtime';
 import { renderDeferredStream, type DeferredStreamChunk } from './deferred-stream.js';
 import { escapeAttribute, escapeHtml } from './html.js';
 import { renderPageHints, type PageHintOptions, type PageHints } from './hints.js';
+import { readHeader, type ServerResponseBase } from './response.js';
 import { renderQueryScript, type QueryScriptRenderOptions } from './wire-html.js';
 
 export interface DocumentParts {
@@ -38,11 +39,11 @@ export interface DocumentAssemblyOptions {
   template?: DocumentTemplate;
 }
 
-export interface DocumentRoutePageResponse {
-  body: ReadableStream<Uint8Array> | string | Uint8Array;
-  headers: Record<string, string>;
-  status: 200 | 303 | 304 | 403 | 404 | 422 | 429 | 500;
-}
+export interface DocumentRoutePageResponse extends ServerResponseBase<
+  ReadableStream<Uint8Array> | string | Uint8Array,
+  Record<string, string>,
+  200 | 303 | 304 | 403 | 404 | 422 | 429 | 500
+> {}
 
 export interface DocumentResponseOptions extends Omit<DocumentAssemblyOptions, 'body'> {}
 
@@ -66,11 +67,11 @@ export interface DocumentRenderResult {
   html: string;
 }
 
-export interface DeferredDocumentRenderResult {
-  body: string;
-  headers: Record<string, string>;
-  status: 200;
-}
+export interface DeferredDocumentRenderResult extends ServerResponseBase<
+  string,
+  Record<string, string>,
+  200
+> {}
 
 const fallbackTitles = {
   403: 'Forbidden',
@@ -129,7 +130,7 @@ export function renderRouteDocumentResponse(
   response: DocumentRoutePageResponse,
   options: DocumentResponseOptions = {},
 ): DocumentRoutePageResponse {
-  const contentType = response.headers['Content-Type'] ?? response.headers['content-type'];
+  const contentType = readHeader(response.headers, 'Content-Type');
   if (
     response.status !== 200 ||
     typeof response.body !== 'string' ||
