@@ -16,42 +16,18 @@ import {
   jsxElements,
 } from '../scan/parse.js';
 import { dedupeBy } from '../shared.js';
+import type {
+  QueryShape,
+  QueryShapeFact,
+  QueryShapeWrapper,
+  QueryUpdateCoverageFact,
+} from '../types.js';
 import { queryUpdateCoverageSpan } from './bindings.js';
-
-interface QueryShapeWrapper {
-  kind: 'nullable' | 'optional';
-  shape: QueryShape;
-}
-
-type QueryShape =
-  | 'array'
-  | 'boolean'
-  | 'number'
-  | 'object'
-  | 'string'
-  | QueryShapeWrapper
-  | readonly QueryShape[]
-  | {
-      readonly [key: string]: QueryShape;
-    };
-
-interface QueryShapeFact {
-  query: string;
-  shape: QueryShape;
-}
 
 interface ComponentContractValidationOptions {
   fileName: string;
   queryShapeFacts?: readonly QueryShapeFact[];
   queryShapes?: Record<string, QueryShape>;
-}
-
-interface QueryUpdateCoverageFact {
-  componentName: string;
-  detail?: string;
-  position: string;
-  query: string;
-  status: 'UNHANDLED' | 'fragment' | 'isomorphic' | 'plan' | 'renderOnce';
 }
 
 interface TemplateBody {

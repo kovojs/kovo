@@ -7,7 +7,7 @@ import {
   parseComponentModule,
 } from '../scan/parse.js';
 import { escapeAttribute, splitDepValue } from '../shared.js';
-import type { RenderEquivalenceCheck } from '../index.js';
+import type { RenderEquivalenceCheck } from '../types.js';
 
 const irHeader = '// @jiso-ir';
 

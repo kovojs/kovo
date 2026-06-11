@@ -1,9 +1,9 @@
 import { diagnosticDefinitions } from '@jiso/core';
 
 import { diagnosticFor, type CompilerDiagnostic } from '../diagnostics.js';
-import type { CompileComponentOptions } from '../index.js';
 import { jsxElements, parseComponentModule } from '../scan/parse.js';
 import { dedupeBy } from '../shared.js';
+import type { CompileComponentOptions } from '../types.js';
 
 interface LiteralNavigationTarget {
   index: number;

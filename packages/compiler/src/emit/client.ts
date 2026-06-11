@@ -2,36 +2,12 @@ import ts from 'typescript';
 
 import type { ElementParam, HandlerLowering } from '../lower/handlers.js';
 import { dedupeBy, indent } from '../shared.js';
-
-interface QueryDeriveFact {
-  expression: string;
-  exportName: string;
-  input: string;
-  name: string;
-  param: string;
-  selector: string;
-}
-
-interface QueryStampFact {
-  attr: string;
-  derive: QueryDeriveFact;
-  selector: string;
-}
-
-interface QueryTemplateStampFact {
-  itemBindings: readonly string[];
-  key: string;
-  list: string;
-  selector: string;
-  template: string;
-}
-
-interface QueryUpdatePlanFact {
-  derives?: readonly QueryDeriveFact[];
-  query: string;
-  stamps?: readonly QueryStampFact[];
-  templateStamps?: readonly QueryTemplateStampFact[];
-}
+import type {
+  QueryDeriveFact,
+  QueryStampFact,
+  QueryTemplateStampFact,
+  QueryUpdatePlanFact,
+} from '../types.js';
 
 export function emitClientModule(
   handlers: HandlerLowering[],

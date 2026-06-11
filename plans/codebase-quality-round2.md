@@ -390,6 +390,10 @@ pipeline throws the tree away and communicates via mutated source text.
       last already lacks `source` on `QueryShapeFact`). One types module, delete the copies,
       make index.ts a true barrel + thin orchestrator. Deduplicate `queryShapesFromFacts` (3
       copies), the shape-wrapper quartet (2), `removeJsxAttribute` (2).
+      Evidence 2026-06-11: `packages/compiler/src/types.ts` is now the canonical home for
+      `CompileComponentOptions`, query/update/shape facts, and `RenderEquivalenceCheck`; the
+      client emitter plus binding/navigation/component-contract validators import those types
+      directly instead of depending on the index barrel or carrying private structural copies.
 - [ ] **MED — Move analysis out of validate/.** `collectQueryUpdatePlans` and coverage
       classification feed emit, not validation; positions travel through a module-global
       `WeakMap` (`updateCoverageSpans`, bindings.ts:45-48) read back in component-contracts.ts:271.

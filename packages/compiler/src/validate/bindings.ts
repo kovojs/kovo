@@ -22,7 +22,7 @@ import type {
   QueryTemplateStampFact,
   QueryUpdateCoverageFact,
   QueryUpdatePlanFact,
-} from '../index.js';
+} from '../types.js';
 
 interface DataBindAttribute {
   index: number;

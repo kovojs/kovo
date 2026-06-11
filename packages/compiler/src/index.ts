@@ -5,12 +5,7 @@ import type { CompilerDiagnostic } from './diagnostics.js';
 import { emitClientModule } from './emit/client.js';
 import { emitRegistryModule } from './emit/registry.js';
 import { emitServerModule, renderEquivalenceCheck, serverRenderSource } from './emit/server.js';
-import {
-  componentGraphFact,
-  findFragmentTargetFacts,
-  type ComponentGraphFact,
-  type RegistryFacts,
-} from './graph.js';
+import { componentGraphFact, findFragmentTargetFacts, type ComponentGraphFact } from './graph.js';
 import {
   clientModuleUrl,
   clientModuleVersion,
@@ -50,10 +45,15 @@ import {
   validateStaticIds,
 } from './validate/markup.js';
 import { validateLiteralHrefs } from './validate/navigation.js';
-import {
-  validatePackageComponentPrefixes,
-  type PackageComponentPrefixFact,
-} from './validate/package-prefixes.js';
+import { validatePackageComponentPrefixes } from './validate/package-prefixes.js';
+import type {
+  CompileComponentOptions,
+  QueryShape,
+  QueryShapeFact,
+  QueryUpdateCoverageFact,
+  QueryUpdatePlanFact,
+  RenderEquivalenceCheck,
+} from './types.js';
 import { createJisoVitePlugin, type JisoVitePlugin } from './vite.js';
 
 export type { DiagnosticCode };
@@ -82,6 +82,18 @@ export type {
 } from './css.js';
 export { collectCssAssetManifest, dedupeCss, scopeComponentCss, selectCssAssets } from './css.js';
 export type { PackageComponentPrefixFact } from './validate/package-prefixes.js';
+export type {
+  CompileComponentOptions,
+  QueryDeriveFact,
+  QueryShape,
+  QueryShapeFact,
+  QueryShapeWrapper,
+  QueryStampFact,
+  QueryTemplateStampFact,
+  QueryUpdateCoverageFact,
+  QueryUpdatePlanFact,
+  RenderEquivalenceCheck,
+} from './types.js';
 
 export interface EmittedFile {
   fileName: string;
@@ -102,53 +114,6 @@ export interface CompileResult {
   viewTransitions: ViewTransitionStamp[];
 }
 
-export interface RenderEquivalenceCheck {
-  actual: string;
-  artifact: string;
-  expected: string;
-  ok: boolean;
-}
-
-export interface QueryUpdatePlanFact {
-  componentName: string;
-  derives?: readonly QueryDeriveFact[];
-  paths: readonly string[];
-  query: string;
-  stamps?: readonly QueryStampFact[];
-  templateStamps?: readonly QueryTemplateStampFact[];
-}
-
-export interface QueryDeriveFact {
-  expression: string;
-  exportName: string;
-  input: string;
-  name: string;
-  param: string;
-  selector: string;
-}
-
-export interface QueryStampFact {
-  attr: string;
-  derive: QueryDeriveFact;
-  selector: string;
-}
-
-export interface QueryTemplateStampFact {
-  itemBindings: readonly string[];
-  key: string;
-  list: string;
-  selector: string;
-  template: string;
-}
-
-export interface QueryUpdateCoverageFact {
-  componentName: string;
-  detail?: string;
-  position: string;
-  query: string;
-  status: 'UNHANDLED' | 'fragment' | 'isomorphic' | 'plan' | 'renderOnce';
-}
-
 export function createEmptyCompileResult(): CompileResult {
   return {
     componentGraphFacts: [],
@@ -162,38 +127,6 @@ export function createEmptyCompileResult(): CompileResult {
     updateCoverage: [],
     viewTransitions: [],
   };
-}
-
-export interface CompileComponentOptions {
-  fileName: string;
-  packageComponentPrefixes?: readonly PackageComponentPrefixFact[];
-  queryShapeFacts?: readonly QueryShapeFact[];
-  queryShapes?: Record<string, QueryShape>;
-  registryFacts?: RegistryFacts;
-  source: string;
-}
-
-export type QueryShape =
-  | 'array'
-  | 'boolean'
-  | 'number'
-  | 'object'
-  | 'string'
-  | QueryShapeWrapper
-  | readonly QueryShape[]
-  | {
-      readonly [key: string]: QueryShape;
-    };
-
-export interface QueryShapeWrapper {
-  kind: 'nullable' | 'optional';
-  shape: QueryShape;
-}
-
-export interface QueryShapeFact {
-  query: string;
-  shape: QueryShape;
-  source: string;
 }
 
 export interface ViewTransitionStamp {

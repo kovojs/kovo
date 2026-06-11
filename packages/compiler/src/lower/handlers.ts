@@ -4,7 +4,7 @@ import { diagnosticFor, type CompilerDiagnostic } from '../diagnostics.js';
 import { literalValue } from '../scan/object.js';
 import { identifierReferences, jsxElements, parseComponentModule } from '../scan/parse.js';
 import { replaceExtension } from '../shared.js';
-import type { CompileComponentOptions } from '../index.js';
+import type { CompileComponentOptions } from '../types.js';
 
 export interface HandlerLowering {
   exportName: string;
