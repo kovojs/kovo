@@ -120,6 +120,10 @@ Do this first or pay it on every commit.
       Partial evidence 2026-06-11: the P1 render-equivalence tranche now asserts the
       `ERROR RENDER_EQUIV` CLI contract by calling `fwCheck` with structured
       `renderEquivalenceChecks` instead of grepping CLI implementation symbols or CLI test names.
+      Partial evidence 2026-06-11: the P1 minifier-name tranche now imports the built compiler
+      API and asserts `compileComponentModule` handler exports, emitted handler bodies, and
+      `collectMinifierReservedNames` output instead of grepping compiler source or compiler test
+      names.
 - [x] **Make create-jiso templates real files** (`create-jiso/src/index.ts:63-473`, ~470 lines of
       escaped template literals including a CI workflow and double-escaped regexes inside
       `.mjs`-in-string). Move to a `templates/` directory copied at scaffold time with `{{name}}`

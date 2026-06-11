@@ -4,6 +4,10 @@ import { test } from 'node:test';
 
 import { missingBuildMessage } from '../scripts/fw-check.mjs';
 import { fwCheck, fwExplain } from '../dist/cli/src/index.mjs';
+import {
+  collectMinifierReservedNames,
+  compileComponentModule,
+} from '../dist/compiler/src/index.mjs';
 
 const responseMarker = '<<< RESPONSE';
 const requestMarker = '>>> REQUEST';
@@ -1949,21 +1953,62 @@ void test('D3 deferred stream responses are consumed by the runtime', async () =
 });
 
 void test('P1 minifier name preservation evidence remains represented', async () => {
-  const compilerClientEmitSource = await readProjectFile('packages/compiler/src/emit/client.ts');
-  const compilerSource = await readProjectFile('packages/compiler/src/index.ts');
-  const compilerHandlersSource = await readProjectFile('packages/compiler/src/lower/handlers.ts');
-  const compilerTests = await readProjectFile('packages/compiler/src/index.test.ts');
+  const cartBadge = compileComponentModule({
+    fileName: 'components/cart/cart-badge.tsx',
+    source: `
+import { component } from '@jiso/core';
 
-  assert.match(compilerSource, /collectMinifierReservedNames/);
-  assert.match(compilerSource, /handlerExports: readonly string\[\]/);
-  assert.match(compilerHandlersSource, /uniqueAnonymousHandlerName/);
-  assert.match(compilerClientEmitSource, /lowerHandlerExpression/);
-  assert.match(compilerTests, /collects emitted handler export names for minifier preservation/);
-  assert.match(compilerTests, /emits executable handler bodies with stable unique anonymous names/);
-  assert.match(compilerTests, /CartBadge\$button_click/);
-  assert.match(compilerTests, /CartActions\$button_click_2/);
-  assert.match(compilerTests, /return ctx\.state\.count \+= ctx\.params\.quantity/);
-  assert.match(compilerTests, /CartDrawer\$removeItem/);
+function removeItem() {}
+
+export const CartBadge = component('cart-badge', {
+  render: () => (
+    <div>
+      <button onClick={removeItem}>Remove</button>
+      <button onClick={() => state.count += params.quantity}>Add</button>
+      <button onClick={() => state.count = state.count - params.quantity}>Subtract</button>
+    </div>
+  ),
+});
+`,
+  });
+  const cartDrawer = compileComponentModule({
+    fileName: 'components/cart/cart-drawer.tsx',
+    source: `
+import { component } from '@jiso/core';
+
+function removeItem() {}
+
+export const CartDrawer = component('cart-drawer', {
+  render: () => <button onClick={removeItem}>Remove</button>,
+});
+`,
+  });
+  const cartBadgeClientSource = cartBadge.files.find(
+    (file) =>
+      file.source.includes("import { handler } from '@jiso/runtime'") &&
+      file.source.includes('CartBadge$removeItem'),
+  )?.source;
+  assert.ok(cartBadgeClientSource, 'compiled output includes the cart badge client module');
+
+  assert.deepEqual(cartBadge.handlerExports, [
+    'CartBadge$removeItem',
+    'CartBadge$button_click',
+    'CartBadge$button_click_2',
+  ]);
+  assert.match(cartBadgeClientSource, /export const CartBadge\$removeItem = handler/);
+  assert.match(cartBadgeClientSource, /export const CartBadge\$button_click = handler/);
+  assert.match(cartBadgeClientSource, /export const CartBadge\$button_click_2 = handler/);
+  assert.match(cartBadgeClientSource, /return ctx\.state\.count \+= ctx\.params\.quantity;/);
+  assert.match(
+    cartBadgeClientSource,
+    /return ctx\.state\.count = ctx\.state\.count - ctx\.params\.quantity;/,
+  );
+  assert.deepEqual(collectMinifierReservedNames([cartDrawer, cartBadge, cartBadge]), [
+    'CartBadge$button_click',
+    'CartBadge$button_click_2',
+    'CartBadge$removeItem',
+    'CartDrawer$removeItem',
+  ]);
 });
 
 void test('P1 typed data param coercion remains represented', async () => {
