@@ -48,8 +48,14 @@ export interface ComponentModel {
   explicitName?: string;
   localName?: string;
   options: readonly ComponentOptionEntry[];
+  renderHost?: RenderHostModel;
   renderInputs: readonly string[];
   stateReturnObject?: string;
+}
+
+export interface RenderHostModel {
+  end: number;
+  start: number;
 }
 
 export interface ComponentModuleModel {
@@ -133,6 +139,10 @@ export function componentRenderInputs(model: ComponentModuleModel): string[] {
   return [...(firstComponentModel(model)?.renderInputs ?? [])];
 }
 
+export function componentRenderHost(model: ComponentModuleModel): RenderHostModel | null {
+  return firstComponentModel(model)?.renderHost ?? null;
+}
+
 export function componentStateReturnObject(model: ComponentModuleModel): string | null {
   return firstComponentModel(model)?.stateReturnObject ?? null;
 }
@@ -195,6 +205,7 @@ function componentModelFromInitializer(
     ...(explicitName === undefined ? {} : { explicitName }),
     localName,
     options,
+    ...(render ? renderHostModel(sourceFile, render) : {}),
     renderInputs: render ? arrowObjectPatternKeys(render) : [],
     ...(stateReturnObject === null ? {} : { stateReturnObject }),
   };
@@ -357,6 +368,54 @@ function arrowObjectPatternKeys(expression: ts.Expression): string[] {
   return firstParam.name.elements.flatMap((element) =>
     ts.isIdentifier(element.name) ? [element.name.text] : [],
   );
+}
+
+function renderHostModel(
+  sourceFile: ts.SourceFile,
+  expression: ts.Expression,
+): { renderHost: RenderHostModel } | null {
+  if (!ts.isArrowFunction(expression)) return null;
+
+  const returned = renderReturnExpression(expression.body);
+  if (!returned) return null;
+
+  const host = unwrapParenthesizedExpression(returned);
+  if (ts.isJsxElement(host)) {
+    return {
+      renderHost: {
+        end: host.openingElement.getEnd(),
+        start: host.openingElement.getStart(sourceFile),
+      },
+    };
+  }
+
+  if (ts.isJsxSelfClosingElement(host)) {
+    return {
+      renderHost: {
+        end: host.getEnd(),
+        start: host.getStart(sourceFile),
+      },
+    };
+  }
+
+  return null;
+}
+
+function renderReturnExpression(body: ts.ConciseBody): ts.Expression | null {
+  if (ts.isBlock(body)) {
+    for (const statement of body.statements) {
+      if (ts.isReturnStatement(statement) && statement.expression) return statement.expression;
+    }
+    return null;
+  }
+
+  return body;
+}
+
+function unwrapParenthesizedExpression(expression: ts.Expression): ts.Expression {
+  let current = expression;
+  while (ts.isParenthesizedExpression(current)) current = current.expression;
+  return current;
 }
 
 function arrowReturnObjectSource(

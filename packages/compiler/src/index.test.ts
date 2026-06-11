@@ -1688,6 +1688,31 @@ export const CartBadge = component('cart-badge', {
     expect(result.diagnostics).toEqual([]);
   });
 
+  it('stamps the returned host instead of tag text inside render bodies', () => {
+    const result = compileComponentModule({
+      fileName: 'cart-badge.tsx',
+      source: `
+export const CartBadge = component('cart-badge', {
+  queries: { cart: cartQuery },
+  state: () => ({ open: true }),
+  render: ({ cart }) => {
+    const sample = '<not-the-host></not-the-host>';
+    // <also-not-the-host></also-not-the-host>
+    return <cart-badge>{renderOnce(cart.count)}</cart-badge>;
+  },
+});
+`,
+    });
+
+    const serverSource = result.files[0]?.source ?? '';
+    expect(serverSource).toContain(
+      '<cart-badge fw-deps="cart" fw-state="{&quot;open&quot;:true}">',
+    );
+    expect(serverSource).toContain("'<not-the-host></not-the-host>'");
+    expect(serverSource).not.toContain('<not-the-host fw-deps=');
+    expect(() => assertFixpoint(result)).not.toThrow();
+  });
+
   it('merges declared query dependencies into existing fw-deps stamps', () => {
     const result = compileComponentModule({
       fileName: 'recommendations.tsx',

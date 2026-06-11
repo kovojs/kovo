@@ -9,6 +9,7 @@ import {
   componentExplicitNames,
   componentFragmentTargetNames,
   componentOptionSource,
+  componentRenderHost,
   componentRenderInputs,
   componentStateReturnObject,
   firstComponentModel,
@@ -2071,70 +2072,33 @@ function replaceHandlerAttributes(source: string, handlers: readonly HandlerLowe
 }
 
 function stampDeclaredQueryDeps(source: string): string {
-  const queryObject = componentOptionSource(
-    parseComponentModuleModel('component.tsx', source),
-    'queries',
-  );
+  const model = parseComponentModuleModel('component.tsx', source);
+  const queryObject = componentOptionSource(model, 'queries');
   const deps = topLevelObjectKeys(queryObject ?? '{}');
   if (deps.length === 0) return source;
 
-  const tag = findFirstRenderedOpeningTag(source);
+  const tag = componentRenderHost(model);
   if (!tag) return source;
 
-  const tagSource = source.slice(tag.start, tag.end + 1);
+  const tagSource = source.slice(tag.start, tag.end);
   const stampedTag = stampOpeningTagDeps(tagSource, deps);
   if (stampedTag === tagSource) return source;
 
-  return `${source.slice(0, tag.start)}${stampedTag}${source.slice(tag.end + 1)}`;
+  return `${source.slice(0, tag.start)}${stampedTag}${source.slice(tag.end)}`;
 }
 
 function stampInitialState(source: string): string {
   const stateJson = staticStateJson(source);
   if (!stateJson) return source;
 
-  const tag = findFirstRenderedOpeningTag(source);
+  const tag = componentRenderHost(parseComponentModuleModel('component.tsx', source));
   if (!tag) return source;
 
-  const tagSource = source.slice(tag.start, tag.end + 1);
+  const tagSource = source.slice(tag.start, tag.end);
   const stampedTag = stampOpeningTagAttribute(tagSource, 'fw-state', stateJson);
   if (stampedTag === tagSource) return source;
 
-  return `${source.slice(0, tag.start)}${stampedTag}${source.slice(tag.end + 1)}`;
-}
-
-function findFirstRenderedOpeningTag(source: string): { end: number; start: number } | null {
-  const renderMatch = /\brender\s*:/.exec(source);
-  if (!renderMatch) return null;
-
-  const tagMatch = /<[A-Za-z][\w:-]*\b/.exec(source.slice(renderMatch.index));
-  if (!tagMatch) return null;
-
-  const tagStart = renderMatch.index + tagMatch.index;
-  const tagEnd = findOpeningTagEnd(source, tagStart);
-  if (tagEnd === -1) return null;
-
-  return { end: tagEnd, start: tagStart };
-}
-
-function findOpeningTagEnd(source: string, start: number): number {
-  for (let index = start; index < source.length; index += 1) {
-    const char = source[index];
-    if (char === '"' || char === "'" || char === '`') {
-      const end = findStringEnd(source, index, char);
-      index = end === -1 ? source.length : end;
-      continue;
-    }
-
-    if (char === '{') {
-      const end = findMatchingToken(source, index, '{', '}');
-      index = end === -1 ? source.length : end;
-      continue;
-    }
-
-    if (char === '>') return index;
-  }
-
-  return -1;
+  return `${source.slice(0, tag.start)}${stampedTag}${source.slice(tag.end)}`;
 }
 
 function stampOpeningTagDeps(tagSource: string, deps: readonly string[]): string {
