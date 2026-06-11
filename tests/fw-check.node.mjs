@@ -1299,7 +1299,9 @@ void test('P4 commerce touch graph is a committed generated artifact', async () 
   // because runtime verification checks observed effects against these facts.
   assert.equal(
     touchGraphSource,
-    `export const commerceTouchGraph = {
+    `import type { CartQueryResult, CommerceDb, ProductGridResult } from '../app.js';
+
+export const commerceTouchGraph = {
   'cart.addItem': {
     touches: [
       {
@@ -1326,6 +1328,28 @@ void test('P4 commerce touch graph is a committed generated artifact', async () 
     unresolved: [],
   },
 } as const;
+
+export const commerceInvalidationSets = {
+  'cart/add': [
+    { query: 'cart', domains: ['cart'], keys: null },
+    { query: 'orderHistory', domains: ['order'], keys: null },
+    { query: 'productGrid', domains: ['product'], keys: null },
+  ],
+} as const;
+
+export interface CommerceInvalidationSets {
+  'cart/add': 'cart' | 'orderHistory' | 'productGrid';
+}
+
+declare module '@jiso/core' {
+  interface QueryRegistry {
+    cart: CartQueryResult;
+    productGrid: ProductGridResult;
+    orderHistory: { items: CommerceDb['orders'] };
+  }
+
+  interface InvalidationSets extends CommerceInvalidationSets {}
+}
 `,
   );
 });

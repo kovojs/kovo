@@ -1,9 +1,23 @@
 import { readFileSync, writeFileSync } from 'node:fs';
+import { existsSync } from 'node:fs';
+import { registerHooks } from 'node:module';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import assert from 'node:assert/strict';
 
 import { deriveAppGraph } from '@jiso/compiler/graph';
+
+registerHooks({
+  resolve(specifier, context, nextResolve) {
+    if (specifier.startsWith('.') && specifier.endsWith('.js') && context.parentURL) {
+      const tsUrl = new URL(specifier.replace(/\.js$/, '.ts'), context.parentURL);
+      if (existsSync(tsUrl)) return nextResolve(tsUrl.href, context);
+    }
+    return nextResolve(specifier, context);
+  },
+});
+
+const { deriveInvalidationRegistry, serializeInvalidationRegistry } = await import('@jiso/drizzle');
 
 const scriptDir = dirname(fileURLToPath(import.meta.url));
 const commerceRoot = resolve(scriptDir, '..');
@@ -134,9 +148,23 @@ const { graph } = deriveAppGraph({
     touchGraph: commerceTouchGraph,
   },
 });
+const commerceInvalidationRegistry = deriveInvalidationRegistry({
+  mutations: [{ mutation: 'cart/add', touchGraphKey: 'cart.addItem' }],
+  queries: graphDeclarations.queries,
+  touchGraph: commerceTouchGraph,
+});
 
 const graphJson = `${formatJson(graph)}\n`;
-const touchGraphSource = `export const commerceTouchGraph = {
+const commerceInvalidationRegistrySource = serializeInvalidationRegistry(
+  commerceInvalidationRegistry,
+  {
+    constName: 'commerceInvalidationSets',
+    typeName: 'CommerceInvalidationSets',
+  },
+);
+const touchGraphSource = `import type { CartQueryResult, CommerceDb, ProductGridResult } from '../app.js';
+
+export const commerceTouchGraph = {
   'cart.addItem': {
     touches: [
       {
@@ -163,6 +191,17 @@ const touchGraphSource = `export const commerceTouchGraph = {
     unresolved: [],
   },
 } as const;
+
+${commerceInvalidationRegistrySource}
+declare module '@jiso/core' {
+  interface QueryRegistry {
+    cart: CartQueryResult;
+    productGrid: ProductGridResult;
+    orderHistory: { items: CommerceDb['orders'] };
+  }
+
+  interface InvalidationSets extends CommerceInvalidationSets {}
+}
 `;
 
 if (process.argv.includes('--check')) {

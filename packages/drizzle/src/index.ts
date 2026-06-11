@@ -222,18 +222,18 @@ export function serializeInvalidationRegistry(
   for (const [mutation, entries] of Object.entries(registry).sort(([left], [right]) =>
     left.localeCompare(right),
   )) {
-    lines.push(`  ${JSON.stringify(mutation)}: [`);
+    lines.push(`  ${tsStringLiteral(mutation)}: [`);
     for (const entry of entries) {
-      const domains = `[${entry.domains.map((domain) => JSON.stringify(domain)).join(', ')}]`;
+      const domains = `[${entry.domains.map((domain) => tsStringLiteral(domain)).join(', ')}]`;
       const keys =
         entry.keys === null
           ? 'null'
           : `{ ${Object.entries(entry.keys)
               .sort(([left], [right]) => left.localeCompare(right))
-              .map(([domain, key]) => `${JSON.stringify(domain)}: ${JSON.stringify(key)}`)
+              .map(([domain, key]) => `${tsStringLiteral(domain)}: ${tsStringLiteral(key)}`)
               .join(', ')} }`;
       lines.push(
-        `    { query: ${JSON.stringify(entry.query)}, domains: ${domains}, keys: ${keys} },`,
+        `    { query: ${tsStringLiteral(entry.query)}, domains: ${domains}, keys: ${keys} },`,
       );
     }
     lines.push('  ],');
@@ -250,13 +250,17 @@ export function serializeInvalidationRegistry(
         .map((entry) => entry.query)
         .filter((query, index, queries) => queries.indexOf(query) === index)
         .sort()
-        .map((query) => JSON.stringify(query).replaceAll('"', "'"))
+        .map((query) => tsStringLiteral(query))
         .join(' | ') || 'never';
-    lines.push(`  ${JSON.stringify(mutation).replaceAll('"', "'")}: ${queryUnion};`);
+    lines.push(`  ${tsStringLiteral(mutation)}: ${queryUnion};`);
   }
   lines.push('}');
 
   return `${lines.join('\n')}\n`;
+}
+
+function tsStringLiteral(value: string): string {
+  return `'${value.replaceAll('\\', '\\\\').replaceAll("'", "\\'")}'`;
 }
 
 function touchDomains(touches: readonly TouchSite[]): Map<string, readonly TouchSite[]> {

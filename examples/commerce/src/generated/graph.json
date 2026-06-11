@@ -85,20 +85,20 @@
         {
           "domain": "cart",
           "keys": null,
-          "site": "examples/commerce/src/app.ts:207",
+          "site": "examples/commerce/src/app.ts:197",
           "via": "cart_items"
         },
         {
           "domain": "order",
           "keys": null,
-          "site": "examples/commerce/src/app.ts:212",
+          "site": "examples/commerce/src/app.ts:202",
           "via": "orders"
         },
         {
           "domain": "product",
           "keys": "arg:productId",
           "predicate": "eq",
-          "site": "examples/commerce/src/app.ts:219",
+          "site": "examples/commerce/src/app.ts:209",
           "via": "products"
         }
       ],

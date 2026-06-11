@@ -1,5 +1,5 @@
-import { component } from '@jiso/core';
-import type { OptimisticPlan } from '@jiso/runtime';
+import { component, form } from '@jiso/core';
+import type { OptimisticFor } from '@jiso/runtime';
 import {
   domain,
   errorBoundary,
@@ -135,10 +135,12 @@ export interface ProductGridResult {
   nextCursor: string | null;
 }
 
-export interface AddToCartInput {
+export type AddToCartInput = {
   productId: string;
   quantity: number;
-}
+};
+
+export const addToCartForm = form<'cart/add', AddToCartInput>('cart/add');
 
 export interface UploadReceiptInput {
   orderId: string;
@@ -164,18 +166,6 @@ export const orderHistoryQuery = query('orderHistory', {
   load: (_input: unknown) => ({ items: [] as CommerceDb['orders'] }),
   reads: [order],
 });
-
-export const addToCartOptimistic = {
-  queue: 'cart',
-  transforms: {
-    cart(current: unknown, input: AddToCartInput) {
-      const cart = current as CartQueryResult | undefined;
-      return {
-        count: (cart?.count ?? 0) + input.quantity,
-      };
-    },
-  },
-} satisfies OptimisticPlan<AddToCartInput>;
 
 export const addToCart = mutation('cart/add', {
   csrf: commerceCsrf,
@@ -223,6 +213,19 @@ export const addToCart = mutation('cart/add', {
     return { productId: input.productId, quantity: input.quantity };
   },
 });
+
+export const addToCartOptimistic = {
+  queue: 'cart',
+  transforms: {
+    cart(current, input) {
+      return {
+        count: (current?.count ?? 0) + input.quantity,
+      };
+    },
+    orderHistory: 'await-fragment',
+    productGrid: 'await-fragment',
+  },
+} satisfies OptimisticFor<typeof addToCartForm>;
 
 export const uploadReceipt = mutation('order/receipt', {
   input: s.object({

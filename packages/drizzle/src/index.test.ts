@@ -262,10 +262,10 @@ export const tableDomains = {
         { constName: 'commerceInvalidationSets', typeName: 'CommerceInvalidationSets' },
       ),
     ).toBe(`export const commerceInvalidationSets = {
-  "cart/add": [
-    { query: "cart", domains: ["cart"], keys: null },
-    { query: "orderHistory", domains: ["order"], keys: null },
-    { query: "productGrid", domains: ["product"], keys: { "product": "arg:productId" } },
+  'cart/add': [
+    { query: 'cart', domains: ['cart'], keys: null },
+    { query: 'orderHistory', domains: ['order'], keys: null },
+    { query: 'productGrid', domains: ['product'], keys: { 'product': 'arg:productId' } },
   ],
 } as const;
 
