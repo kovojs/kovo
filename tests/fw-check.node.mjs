@@ -354,6 +354,21 @@ void test('P3 server renders initial query scripts for document-load hydration',
   assert.match(serverTests, /\\\\u003c\/script>/);
 });
 
+void test('P3 mutation lifecycle includes an explicit transaction boundary', async () => {
+  const serverSource = await readProjectFile('packages/server/src/index.ts');
+  const serverTests = await readProjectFile('packages/server/src/index.test.ts');
+
+  assert.match(serverSource, /transaction\?: <Result>/);
+  assert.match(serverSource, /definition\.transaction/);
+  assert.match(serverSource, /class MutationRollback extends Error/);
+  assert.match(serverTests, /runs guarded mutation handlers inside the configured transaction/);
+  assert.match(serverTests, /rolls back configured transactions for typed mutation failures/);
+  assert.match(
+    serverTests,
+    /renders mutation query chunks after the configured transaction commits/,
+  );
+});
+
 void test('P5 morph evidence includes structural and browser survival suites', async () => {
   const runtimeTests = await readProjectFile('packages/runtime/src/index.test.ts');
   const browserTests = await readProjectFile('packages/runtime/src/index.browser.test.ts');

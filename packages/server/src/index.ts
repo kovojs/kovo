@@ -603,6 +603,10 @@ export interface MutationDefinition<
   input: InputSchema;
   key: Key;
   registry?: MutationRegistry;
+  transaction?: <Result>(
+    request: Request,
+    run: (transactionRequest: unknown) => Promise<Result>,
+  ) => Promise<Result>;
 }
 
 export interface InvalidateOptions<Input = unknown> {
@@ -747,9 +751,29 @@ export async function runMutation<
       return record;
     },
   };
-  const value = await definition.handler(input, request, context);
+  const runHandler = async (handlerRequest: Request): Promise<Value> => {
+    const handlerValue = await definition.handler(input, handlerRequest, context);
 
-  if (isMutationFail(value)) return value;
+    if (isMutationFail(handlerValue)) {
+      throw new MutationRollback(handlerValue);
+    }
+
+    return handlerValue as Value;
+  };
+
+  let value: Value;
+
+  try {
+    value = definition.transaction
+      ? await definition.transaction(request, (transactionRequest) =>
+          runHandler(transactionRequest as Request),
+        )
+      : await runHandler(request);
+  } catch (error) {
+    if (error instanceof MutationRollback) return error.failure;
+    throw error;
+  }
+
   const changes = [...registryChangeRecords(definition.registry, input), ...manualInvalidations];
   const rerunQueryInstances = queriesToRerun(definition.registry?.queries ?? [], changes, input);
   return {
@@ -761,6 +785,16 @@ export async function runMutation<
     rerunQueries: [...new Set(rerunQueryInstances.map((query) => query.key))],
     value,
   };
+}
+
+class MutationRollback extends Error {
+  readonly failure: MutationFail;
+
+  constructor(failure: MutationFail) {
+    super(failure.error.code);
+    this.name = 'MutationRollback';
+    this.failure = failure;
+  }
 }
 
 export function invalidate<const DomainKey extends string, Input = unknown>(

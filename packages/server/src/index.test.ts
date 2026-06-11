@@ -780,6 +780,66 @@ describe('server mutation primitives', () => {
     expect(guardCalls).toBe(0);
   });
 
+  it('runs guarded mutation handlers inside the configured transaction', async () => {
+    const events: string[] = [];
+    const transactional = mutation('cart/add', {
+      guard() {
+        events.push('guard');
+        return true;
+      },
+      input: s.object({ productId: s.string() }),
+      async transaction(request: { tx?: boolean }, run) {
+        events.push('begin');
+        const value = await run({ ...request, tx: true });
+        events.push('commit');
+        return value;
+      },
+      handler(input, request: { tx?: boolean }) {
+        events.push(`handler:${request.tx === true ? 'tx' : 'plain'}`);
+        return input.productId;
+      },
+    });
+
+    await expect(runMutation(transactional, { productId: 'p1' }, {})).resolves.toMatchObject({
+      ok: true,
+      value: 'p1',
+    });
+    expect(events).toEqual(['guard', 'begin', 'handler:tx', 'commit']);
+  });
+
+  it('rolls back configured transactions for typed mutation failures', async () => {
+    const events: string[] = [];
+    const transactional = mutation('cart/add', {
+      errors: {
+        OUT_OF_STOCK: s.object({ availableQuantity: s.number().int().min(0) }),
+      },
+      input: s.object({ productId: s.string() }),
+      async transaction(request: {}, run) {
+        events.push('begin');
+        try {
+          return await run(request);
+        } catch (error) {
+          events.push('rollback');
+          throw error;
+        }
+      },
+      handler(_input, _request, context) {
+        events.push('handler');
+        return context.fail('OUT_OF_STOCK', { availableQuantity: 0 });
+      },
+    });
+
+    await expect(runMutation(transactional, { productId: 'p1' }, {})).resolves.toEqual({
+      error: {
+        code: 'OUT_OF_STOCK',
+        payload: { availableQuantity: 0 },
+      },
+      ok: false,
+      status: 422,
+    });
+    expect(events).toEqual(['begin', 'handler', 'rollback']);
+  });
+
   it('guards mutations by authenticated session user', async () => {
     const guarded = mutation('cart/add', {
       guard: guards.authed<{ session?: { user?: { id: string } | null } | null }>(),
@@ -899,6 +959,42 @@ describe('server mutation primitives', () => {
       ok: true,
       rerunQueries: ['cart'],
       value: 'p1',
+    });
+  });
+
+  it('renders mutation query chunks after the configured transaction commits', async () => {
+    const state = { committed: 0, pending: 0 };
+    const cart = domain('cart');
+    const cartQuery = query('cart', {
+      load: () => ({ count: state.committed }),
+      reads: [cart],
+    });
+    const addToCart = mutation('cart/add', {
+      input: s.object({ quantity: s.number().int().min(1) }),
+      registry: {
+        queries: [cartQuery],
+        touches: [cart],
+      },
+      async transaction(request: {}, run) {
+        const result = await run(request);
+        state.committed = state.pending;
+        return result;
+      },
+      handler(input) {
+        state.pending += input.quantity;
+        return input.quantity;
+      },
+    });
+
+    await expect(
+      renderMutationResponse(addToCart, {
+        fragment: true,
+        rawInput: { quantity: 2 },
+        request: {},
+      }),
+    ).resolves.toMatchObject({
+      body: '<fw-query name="cart">{"count":2}</fw-query>',
+      status: 200,
     });
   });
 
