@@ -413,6 +413,8 @@ void test('P3 typed routes validate navigation targets', async () => {
   const diagnosticsSource = await readProjectFile('packages/core/src/diagnostics.ts');
   const compilerSource = await readProjectFile('packages/compiler/src/index.ts');
   const compilerTests = await readProjectFile('packages/compiler/src/index.test.ts');
+  const serverSource = await readProjectFile('packages/server/src/index.ts');
+  const serverTests = await readProjectFile('packages/server/src/index.test.ts');
 
   assert.match(diagnosticsSource, /FW220/);
   assert.match(diagnosticsSource, /Literal href or form action matches no declared route/);
@@ -434,6 +436,12 @@ void test('P3 typed routes validate navigation targets', async () => {
     compilerTests,
     /reports FW220 for literal navigation targets outside the route table/,
   );
+  assert.match(serverSource, /export function route/);
+  assert.match(serverSource, /interface RouteDeclaration/);
+  assert.match(serverSource, /function parseRouteRequest/);
+  assert.match(serverSource, /export \{ Link, href, redirect \} from '@jiso\/core'/);
+  assert.match(serverTests, /declares route schemas, route-owned hints, and typed PRG redirects/);
+  assert.match(serverTests, /sku is not part of the generated route search schema/);
 });
 
 void test('P3 mutation lifecycle includes an explicit transaction boundary', async () => {

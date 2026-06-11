@@ -6,13 +6,16 @@ import {
   domain,
   errorBoundary,
   guards,
+  redirect,
   i18n,
   invalidate,
   meta,
   metaFromQuery,
   mutation,
+  parseRouteRequest,
   mutationWireRequestFromHeaders,
   query,
+  route,
   createMemoryMutationReplayStore,
   readMutationWireHeaders,
   renderDeferredStream,
@@ -31,6 +34,52 @@ import {
 } from './index.js';
 
 describe('server mutation primitives', () => {
+  it('declares route schemas, route-owned hints, and typed PRG redirects', async () => {
+    const productRoute = route('/products/:id', {
+      meta: meta({ title: 'Product detail' }),
+      page(context) {
+        const id: string = context.params.id;
+        const max: number = context.search.max;
+        return `${id}:${max}`;
+      },
+      params: s.object({ id: s.string() }),
+      prefetch: 'conservative',
+      prerenderUrls: ['/products/p1'],
+      search: s.object({ max: s.number().int().default(25), sort: s.string() }),
+    });
+
+    const request = parseRouteRequest(productRoute, {
+      params: { id: 'p1' },
+      search: { sort: 'price' },
+    });
+
+    expect(request).toEqual({
+      params: { id: 'p1' },
+      path: '/products/:id',
+      search: { max: 25, sort: 'price' },
+    });
+    expect(await productRoute.page?.(request, {})).toBe('p1:25');
+    expect(renderPageHints(productRoute)).toEqual({
+      earlyHints: {},
+      html: [
+        '<title>Product detail</title>',
+        '<script type="speculationrules">{"prerender":[{"eagerness":"conservative","urls":["/products/p1"]}]}</script>',
+      ].join(''),
+    });
+    expect(
+      redirect('/products/:id', { params: { id: 'p1' }, search: { max: 10, sort: 'price' } }),
+    ).toEqual({
+      location: '/products/p1?max=10&sort=price',
+      status: 303,
+    });
+
+    const assertBadRedirect = () => {
+      // @ts-expect-error sku is not part of the generated route search schema.
+      redirect('/products/:id', { params: { id: 'p1' }, search: { sku: 'sku-1' } });
+    };
+    expect(assertBadRedirect).toBeTypeOf('function');
+  });
+
   it('renders modulepreloads, opt-in speculation rules, and Early Hints headers', () => {
     expect(
       renderPageHints({

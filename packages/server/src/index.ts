@@ -1,10 +1,32 @@
-export type { DiagnosticCode, JsonValue } from '@jiso/core';
+import type { JsonValue } from '@jiso/core';
+
+export { Link, href, redirect } from '@jiso/core';
+export type { DiagnosticCode, JsonValue, LinkDescriptor, Redirect, Route } from '@jiso/core';
 
 export interface Schema<T> {
   parse(input: unknown): T;
 }
 
 export type InferSchema<T> = T extends Schema<infer Value> ? Value : never;
+
+type PathParamNames<Path extends string> = Path extends `${string}:${infer Rest}`
+  ? Rest extends `${infer Param}/${infer Tail}`
+    ? Param | PathParamNames<Tail>
+    : Rest extends `${infer Param}?${string}`
+      ? Param
+      : Rest
+  : never;
+
+type PathParams<Path extends string> =
+  PathParamNames<Path> extends never ? {} : Record<PathParamNames<Path>, string>;
+
+type MaybeSchema<Value> = Schema<Value> | undefined;
+
+type RouteParamsFor<Path extends string, ParamsSchema extends MaybeSchema<Record<string, string>>> =
+  ParamsSchema extends Schema<infer Params> ? Params : PathParams<Path>;
+
+type RouteSearchFor<SearchSchema extends MaybeSchema<Record<string, JsonValue>>> =
+  SearchSchema extends Schema<infer Search> ? Search : Record<string, JsonValue>;
 
 export interface ValidationIssue {
   message: string;
@@ -540,6 +562,46 @@ export interface RouteMetaFactory {
 
 export type RouteMetaSource = RouteMeta | RouteMetaFactory;
 
+export interface RouteRequest<
+  Path extends string,
+  ParamsSchema extends MaybeSchema<Record<string, string>> = undefined,
+  SearchSchema extends MaybeSchema<Record<string, JsonValue>> = undefined,
+> {
+  params: RouteParamsFor<Path, ParamsSchema>;
+  path: Path;
+  search: RouteSearchFor<SearchSchema>;
+}
+
+export interface RouteDefinition<
+  Path extends string,
+  ParamsSchema extends MaybeSchema<Record<string, string>> = undefined,
+  SearchSchema extends MaybeSchema<Record<string, JsonValue>> = undefined,
+  Request = unknown,
+  Page = unknown,
+> extends PageHintOptions {
+  page?: (
+    context: RouteRequest<Path, ParamsSchema, SearchSchema>,
+    request: Request,
+  ) => Page | Promise<Page>;
+  params?: ParamsSchema;
+  search?: SearchSchema;
+}
+
+export interface RouteDeclaration<
+  Path extends string,
+  ParamsSchema extends MaybeSchema<Record<string, string>> = undefined,
+  SearchSchema extends MaybeSchema<Record<string, JsonValue>> = undefined,
+  Request = unknown,
+  Page = unknown,
+> extends RouteDefinition<Path, ParamsSchema, SearchSchema, Request, Page> {
+  path: Path;
+}
+
+export interface RouteRequestInput {
+  params?: unknown;
+  search?: unknown;
+}
+
 export interface I18nCatalog<Messages extends Record<string, string> = Record<string, string>> {
   locale: string;
   messages: Messages;
@@ -667,6 +729,43 @@ export function mutation<
   >,
 ): MutationDefinition<Key, InputSchema, Errors, Request, Value, GuardedRequest> & { key: Key } {
   return { ...definition, key };
+}
+
+export function route<
+  const Path extends string,
+  const ParamsSchema extends MaybeSchema<Record<string, string>> = undefined,
+  const SearchSchema extends MaybeSchema<Record<string, JsonValue>> = undefined,
+  Request = unknown,
+  Page = unknown,
+>(
+  path: Path,
+  definition: RouteDefinition<Path, ParamsSchema, SearchSchema, Request, Page> = {},
+): RouteDeclaration<Path, ParamsSchema, SearchSchema, Request, Page> {
+  return { ...definition, path };
+}
+
+export function parseRouteRequest<
+  const Path extends string,
+  ParamsSchema extends MaybeSchema<Record<string, string>>,
+  SearchSchema extends MaybeSchema<Record<string, JsonValue>>,
+  Request,
+  Page,
+>(
+  definition: RouteDeclaration<Path, ParamsSchema, SearchSchema, Request, Page>,
+  input: RouteRequestInput = {},
+): RouteRequest<Path, ParamsSchema, SearchSchema> {
+  const params = definition.params
+    ? definition.params.parse(input.params ?? {})
+    : ((input.params ?? {}) as RouteParamsFor<Path, ParamsSchema>);
+  const search = definition.search
+    ? definition.search.parse(input.search ?? {})
+    : ((input.search ?? {}) as RouteSearchFor<SearchSchema>);
+
+  return {
+    params: params as RouteParamsFor<Path, ParamsSchema>,
+    path: definition.path,
+    search: search as RouteSearchFor<SearchSchema>,
+  };
 }
 
 export function meta<const Meta extends RouteMeta>(definition: Meta): Meta {
