@@ -452,6 +452,8 @@ void test('P10 starter wires graph assertions into CI', async () => {
   assert.match(starterSource, /OPTIMISTIC-SUMMARY \.\*UNHANDLED=0/);
   assert.doesNotMatch(starterSource, /src\/main\.ts/);
   assert.doesNotMatch(starterSource, /innerHTML = App\.definition\.render\(\)/);
+  assert.match(starterSource, /@source "\.\.\/index\.html";/);
+  assert.match(starterSource, /@source "\.\/\*\*\/\*\.\{ts,tsx,html\}";/);
   assert.match(starterSource, /<link rel="stylesheet" href="\/src\/styles\.css" \/>/);
   assert.match(starterTests, /vp run graph-assertions/);
   assert.match(starterTests, /create-jiso: wrote 13 files/);

@@ -313,6 +313,7 @@ The v1 implementation depends on these hard rules:
         path: 'src/styles.css',
         source: `@import "tailwindcss";
 
+@source "../index.html";
 @source "./**/*.{ts,tsx,html}";
 
 @theme {

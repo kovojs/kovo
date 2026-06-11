@@ -61,6 +61,9 @@ describe('create-jiso starter', () => {
     expect(project.files.find((file) => file.path === 'src/styles.css')?.source).toContain(
       '@source "./**/*.{ts,tsx,html}";',
     );
+    expect(project.files.find((file) => file.path === 'src/styles.css')?.source).toContain(
+      '@source "../index.html";',
+    );
     const readme = project.files.find((file) => file.path === 'README.md')?.source;
     expect(readme).toContain('vp check');
     expect(readme).toContain('vp test');
