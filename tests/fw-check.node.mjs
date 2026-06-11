@@ -626,9 +626,20 @@ void test('P9 verification layer evidence remains represented', async () => {
   assert.match(cliTests, /prints runtime verification diagnostics as fw check findings/);
   assert.match(cliTests, /ERROR FW408 product\.domain\.ts:9/);
   assert.match(runtimeSource, /export interface MutationChangeRecord/);
+  assert.match(runtimeSource, /export interface OptimisticChange/);
+  assert.match(runtimeSource, /change\?: OptimisticChange<Input>/);
+  assert.match(runtimeSource, /function resolveOptimisticKeys/);
   assert.match(runtimeSource, /readMutationChangeHeader\(response\)/);
   assert.match(runtimeSource, /publishSuccessfulMutation\(options, response, body, changes\)/);
   assert.match(runtimeTests, /submits enhanced mutations with optimistic transforms/);
+  assert.match(
+    runtimeTests,
+    /applies optimistic transforms from unified change records and derives query keys/,
+  );
+  assert.match(
+    runtimeTests,
+    /keys: \{ reviews: \(change\) => `product:\$\{change\.keys\?\.\[0\]\}` \}/,
+  );
   assert.match(runtimeTests, /expect\(result\.changes\)\.toEqual/);
   assert.match(
     runtimeTests,

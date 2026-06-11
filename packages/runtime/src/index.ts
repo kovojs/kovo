@@ -505,8 +505,17 @@ export type OptimisticTransform<Input = unknown, Value = unknown> = (
   input: Input,
 ) => Value;
 
+export interface OptimisticChange<Input = unknown> extends MutationChangeRecord {
+  input: Input;
+}
+
+export type OptimisticQueryKey<Input = unknown> =
+  | ((change: OptimisticChange<Input>) => string | undefined)
+  | string
+  | undefined;
+
 export interface OptimisticPlan<Input = unknown> {
-  keys?: Readonly<Record<string, string | undefined>>;
+  keys?: Readonly<Record<string, OptimisticQueryKey<Input>>>;
   queue?: string;
   transforms: Record<string, OptimisticTransform<Input>>;
 }
@@ -530,8 +539,8 @@ export interface PendingOptimism {
 }
 
 export interface PendingTransform<Input = unknown> {
+  change: OptimisticChange<Input>;
   id: string;
-  input: Input;
   transform: OptimisticTransform<Input>;
 }
 
@@ -577,17 +586,21 @@ export class OptimisticRebaser {
   }
 
   add<Input>(id: string, input: Input, plan: OptimisticPlan<Input>): void {
+    this.addChange(id, optimisticChangeFromInput(input), plan);
+  }
+
+  addChange<Input>(id: string, change: OptimisticChange<Input>, plan: OptimisticPlan<Input>): void {
     for (const [queryName, transform] of Object.entries(plan.transforms)) {
-      const key = plan.keys?.[queryName];
+      const key = optimisticQueryKey(plan, queryName, change);
       const storeKey = queryStoreKey(queryName, key);
       const pending = this.#pendingByQuery.get(storeKey) ?? [];
       if (pending.length === 0) {
         this.#serverTruthByQuery.set(storeKey, structuredClone(this.#store.get(queryName, key)));
       }
-      pending.push({ id, input, transform: transform as OptimisticTransform });
+      pending.push({ change, id, transform: transform as OptimisticTransform });
       this.#pendingByQuery.set(storeKey, pending);
 
-      this.#store.set(queryName, transform(this.#store.get(queryName, key), input), key);
+      this.#store.set(queryName, transform(this.#store.get(queryName, key), change.input), key);
     }
   }
 
@@ -615,7 +628,7 @@ export class OptimisticRebaser {
     }
 
     for (const pending of pendingTransforms) {
-      next = pending.transform(next, pending.input);
+      next = pending.transform(next, pending.change.input);
     }
 
     this.#store.set(queryName, next, key);
@@ -662,16 +675,18 @@ export function applyOptimisticTransforms<Input>(
   store: QueryStore,
   input: Input,
   plan: OptimisticPlan<Input>,
+  change: OptimisticChange<Input> = optimisticChangeFromInput(input),
 ): PendingOptimism {
   const queryNames = Object.keys(plan.transforms);
-  const snapshot = store.snapshot(queryNames, plan.keys);
+  const keys = resolveOptimisticKeys(plan, change);
+  const snapshot = store.snapshot(queryNames, keys);
 
   for (const queryName of queryNames) {
     const transform = plan.transforms[queryName];
     if (!transform) continue;
-    const key = plan.keys?.[queryName];
+    const key = keys[queryName];
 
-    store.set(queryName, transform(store.get(queryName, key), input), key);
+    store.set(queryName, transform(store.get(queryName, key), change.input), key);
   }
 
   return {
@@ -686,6 +701,34 @@ export function applyOptimisticTransforms<Input>(
     },
     snapshot,
   };
+}
+
+function optimisticChangeFromInput<Input>(
+  input: Input,
+  change?: OptimisticChange<Input>,
+): OptimisticChange<Input> {
+  return change ?? { domain: 'mutation', input };
+}
+
+function resolveOptimisticKeys<Input>(
+  plan: OptimisticPlan<Input>,
+  change: OptimisticChange<Input>,
+): Record<string, string | undefined> {
+  return Object.fromEntries(
+    Object.keys(plan.transforms).map((queryName) => [
+      queryName,
+      optimisticQueryKey(plan, queryName, change),
+    ]),
+  );
+}
+
+function optimisticQueryKey<Input>(
+  plan: OptimisticPlan<Input>,
+  queryName: string,
+  change: OptimisticChange<Input>,
+): string | undefined {
+  const key = plan.keys?.[queryName];
+  return typeof key === 'function' ? key(change) : key;
 }
 
 export function hydrateQueryScripts(
@@ -887,6 +930,7 @@ export interface EnhancedMutationSubmitOptions {
 export interface OptimisticEnhancedMutationSubmitOptions<
   Input,
 > extends EnhancedMutationSubmitOptions {
+  change?: OptimisticChange<Input>;
   input: Input;
   optimistic: OptimisticPlan<Input>;
   pendingRoot?: PendingRoot;
@@ -1297,10 +1341,12 @@ async function submitOptimisticEnhancedMutationDirect<Input>(
 > {
   const idem = options.idem ?? createIdem();
   const queryNames = Object.keys(options.optimistic.transforms);
+  const optimisticChange = optimisticChangeFromInput(options.input, options.change);
+  const optimisticKeys = resolveOptimisticKeys(options.optimistic, optimisticChange);
 
   // SPEC.md §10.4: predict against query data, mark dependent islands pending,
   // then reconcile the server fragment/query truth over remaining predictions.
-  options.rebaser.add(idem, options.input, options.optimistic);
+  options.rebaser.addChange(idem, optimisticChange, options.optimistic);
   if (options.pendingRoot) {
     stampPendingQueries(options.pendingRoot, queryNames, true);
   }
@@ -1309,7 +1355,7 @@ async function submitOptimisticEnhancedMutationDirect<Input>(
     const { body, changes, response, targets } = await fetchEnhancedMutation(options, idem);
 
     if (isFailedMutationResponse(response)) {
-      options.rebaser.discardPendingOptimism(queryNames, options.optimistic.keys);
+      options.rebaser.discardPendingOptimism(queryNames, optimisticKeys);
       if (options.pendingRoot) {
         stampPendingQueries(options.pendingRoot, queryNames, false);
       }
@@ -1342,8 +1388,7 @@ async function submitOptimisticEnhancedMutationDirect<Input>(
     };
     publishSuccessfulMutation(options, response, body, changes);
     const settledQueries = queryNames.filter(
-      (queryName) =>
-        options.rebaser.pendingCount(queryName, options.optimistic.keys?.[queryName]) === 0,
+      (queryName) => options.rebaser.pendingCount(queryName, optimisticKeys[queryName]) === 0,
     );
     if (options.pendingRoot && settledQueries.length > 0) {
       stampPendingQueries(options.pendingRoot, settledQueries, false);
@@ -1356,7 +1401,7 @@ async function submitOptimisticEnhancedMutationDirect<Input>(
       targets,
     };
   } catch (error) {
-    options.rebaser.discardPendingOptimism(queryNames, options.optimistic.keys);
+    options.rebaser.discardPendingOptimism(queryNames, optimisticKeys);
     if (options.pendingRoot) {
       stampPendingQueries(options.pendingRoot, queryNames, false);
     }

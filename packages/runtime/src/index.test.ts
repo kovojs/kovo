@@ -1415,6 +1415,48 @@ describe('query store', () => {
     expect(store.get('reviews', 'product:p1')).toEqual({ items: [{ id: 'r1' }] });
   });
 
+  it('applies optimistic transforms from unified change records and derives query keys', () => {
+    const store = createQueryStore();
+    const keyedPlan = vi.fn();
+    const unkeyedPlan = vi.fn();
+    store.set('reviews', { items: [{ id: 'r1' }] }, 'product:p1');
+    store.subscribe('reviews', keyedPlan, 'product:p1');
+    store.subscribe('reviews', unkeyedPlan);
+
+    const pending = applyOptimisticTransforms(
+      store,
+      { reviewId: 'ignored' },
+      {
+        keys: {
+          reviews: (change) => `product:${change.keys?.[0]}`,
+        },
+        transforms: {
+          reviews(current, input) {
+            const reviews = current as { items: { id: string }[] };
+            return { items: [...reviews.items, { id: input.reviewId }] };
+          },
+        },
+      },
+      {
+        domain: 'product',
+        input: { reviewId: 'draft-from-change' },
+        keys: ['p1'],
+      },
+    );
+
+    expect(store.get('reviews')).toBeUndefined();
+    expect(store.get('reviews', 'product:p1')).toEqual({
+      items: [{ id: 'r1' }, { id: 'draft-from-change' }],
+    });
+    expect(keyedPlan).toHaveBeenLastCalledWith({
+      items: [{ id: 'r1' }, { id: 'draft-from-change' }],
+    });
+    expect(unkeyedPlan).not.toHaveBeenCalled();
+
+    pending.restore();
+    expect(store.get('reviews', 'product:p1')).toEqual({ items: [{ id: 'r1' }] });
+  });
+
   it('types hand-written optimistic plans from mutation forms and query shapes', () => {
     const addToCart = form<'cart/add', { productId: string; quantity: number }>('cart/add');
     const optimistic = {
@@ -2142,10 +2184,15 @@ describe('query store', () => {
       fetch,
       form: { action: '/_m/reviews/add', method: 'post' },
       formData: new FormData(),
+      change: {
+        domain: 'product',
+        input: { reviewId: 'draft' },
+        keys: ['p1'],
+      },
       idem: 'idem_keyed_optimistic',
-      input: { reviewId: 'draft' },
+      input: { reviewId: 'ignored' },
       optimistic: {
-        keys: { reviews: 'product:p1' },
+        keys: { reviews: (change) => `product:${change.keys?.[0]}` },
         transforms: {
           reviews(current, input) {
             const reviews = current as { items: { id: string }[] };
