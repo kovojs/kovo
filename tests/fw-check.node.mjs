@@ -167,7 +167,7 @@ void test('Phase 0 wire fixture responses keep stable protocol metadata', async 
       {
         headers: {
           'content-type': 'text/vnd.jiso.fragment+html; charset=utf-8',
-          'fw-changes': '[{"domain":"cart","input":{"productId":"p1"}}]',
+          'fw-changes': '[{"domain":"cart"}]',
           'fw-idem': 'idem_01HX',
         },
         statusLine: 'HTTP/1.1 200 OK',
@@ -1064,10 +1064,7 @@ void test('P9 verification layer evidence remains represented', async () => {
     /keys: \{ reviews: \(change\) => `product:\$\{change\.keys\?\.\[0\]\}` \}/,
   );
   assert.match(runtimeTests, /expect\(result\.changes\)\.toEqual/);
-  assert.match(
-    runtimeTests,
-    /changes: \[\{ domain: 'cart', input: \{ productId: 'p1', quantity: 2 \} \}\]/,
-  );
+  assert.match(runtimeTests, /changes: \[\{ domain: 'cart' \}\]/);
 });
 
 void test('P8 component explain includes handler, derive, trigger, and merge facts', async () => {

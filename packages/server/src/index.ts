@@ -1392,7 +1392,7 @@ export async function renderMutationResponse<
     body: [...queryChunks, ...fragmentChunks].join('\n'),
     headers: {
       ...mutationWireResponseHeaders(wireRequest),
-      'FW-Changes': JSON.stringify(result.changes),
+      'FW-Changes': JSON.stringify(mutationWireChangeRecords(result.changes)),
     },
     status: 200,
   });
@@ -1676,6 +1676,15 @@ function registryChangeRecords<Input>(
     domain: touch.domain,
     input,
     ...touchKeyRecord(touch.keys, input),
+  }));
+}
+
+function mutationWireChangeRecords(
+  changes: readonly ChangeRecord[],
+): Pick<ChangeRecord, 'domain' | 'keys'>[] {
+  return changes.map((change) => ({
+    domain: change.domain,
+    ...(change.keys === undefined ? {} : { keys: change.keys }),
   }));
 }
 

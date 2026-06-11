@@ -1860,7 +1860,7 @@ describe('server mutation primitives', () => {
       ].join('\n'),
       headers: {
         'Content-Type': 'text/vnd.jiso.fragment+html; charset=utf-8',
-        'FW-Changes': '[{"domain":"cart","input":{"productId":"p1"}}]',
+        'FW-Changes': '[{"domain":"cart"}]',
       },
       status: 200,
     });
@@ -1946,7 +1946,7 @@ describe('server mutation primitives', () => {
         '<fw-fragment target="cart-badge"><cart-badge>number:2</cart-badge></fw-fragment>',
       ].join('\n'),
       headers: {
-        'FW-Changes': '[{"domain":"cart","input":{"productId":"p1","quantity":2}}]',
+        'FW-Changes': '[{"domain":"cart"}]',
       },
       status: 200,
     });
@@ -2032,7 +2032,7 @@ describe('server mutation primitives', () => {
       body: '<fw-query name="cart">{"count":1}</fw-query>',
       headers: {
         'Content-Type': 'text/vnd.jiso.fragment+html; charset=utf-8',
-        'FW-Changes': '[{"domain":"cart","input":{"productId":"p1"}}]',
+        'FW-Changes': '[{"domain":"cart"}]',
         'FW-Idem': 'idem_01',
       },
       status: 200,

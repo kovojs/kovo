@@ -1657,11 +1657,11 @@ describe('query store', () => {
 
     broadcast.publish('<fw-query name="cart">{"count":5}</fw-query>', [
       { domain: 'cart', input: { productId: 'p1' } },
-    ]);
+    ] as never);
     expect(channel.messages).toEqual([
       {
         body: '<fw-query name="cart">{"count":5}</fw-query>',
-        changes: [{ domain: 'cart', input: { productId: 'p1' } }],
+        changes: [{ domain: 'cart' }],
         type: 'jiso:mutation-response',
       },
     ]);
@@ -2528,7 +2528,7 @@ describe('query store', () => {
         { html: '<cart-badge>1</cart-badge>', target: 'cart-badge' },
         { html: '<section></section>', target: 'recommendations' },
       ],
-      changes: [{ domain: 'cart', input: { productId: 'p1', quantity: '1' } }],
+      changes: [{ domain: 'cart' }],
       idem: 'idem_01HX',
       queries: ['cart'],
       targets: ['cart-badge=cart', 'recommendations=product:p1'],
@@ -2540,7 +2540,7 @@ describe('query store', () => {
           '<fw-fragment target="cart-badge"><cart-badge>1</cart-badge></fw-fragment>',
           '<fw-fragment target="recommendations"><section></section></fw-fragment>',
         ].join('\n'),
-        changes: [{ domain: 'cart', input: { productId: 'p1', quantity: '1' } }],
+        changes: [{ domain: 'cart' }],
         type: 'jiso:mutation-response',
       },
     ]);
@@ -2641,14 +2641,14 @@ describe('query store', () => {
     });
 
     expect(result.queries).toEqual(['cart']);
-    expect(result.changes).toEqual([{ domain: 'cart', input: { productId: 'p1', quantity: 2 } }]);
+    expect(result.changes).toEqual([{ domain: 'cart' }]);
     expect(channel.messages).toEqual([
       {
         body: [
           '<fw-query name="cart">{"count":4}</fw-query>',
           '<fw-fragment target="cart-badge"><cart-badge>4</cart-badge></fw-fragment>',
         ].join('\n'),
-        changes: [{ domain: 'cart', input: { productId: 'p1', quantity: 2 } }],
+        changes: [{ domain: 'cart' }],
         type: 'jiso:mutation-response',
       },
     ]);

@@ -997,10 +997,7 @@ export interface AppliedDeferredStreamResponse extends AppliedMutationResponse {
 
 export interface MutationChangeRecord {
   domain: string;
-  input?: unknown;
   keys?: readonly string[];
-  manual?: true;
-  reason?: string;
 }
 
 export interface FragmentChunk {
@@ -1784,6 +1781,10 @@ export function installMutationBroadcast(options: {
 }): MutationBroadcast {
   options.channel.onmessage = (event) => {
     if (!isMutationBroadcastMessage(event.data)) return;
+    const changes = event.data.changes.flatMap((change) => {
+      const sanitized = sanitizeMutationChangeRecord(change);
+      return sanitized ? [sanitized] : [];
+    });
 
     if (options.root) {
       applyMutationResponseToDom({
@@ -1796,8 +1797,8 @@ export function installMutationBroadcast(options: {
     } else {
       applyMutationResponse(options.store, event.data.body);
     }
-    if (event.data.changes.length > 0) {
-      options.onChanges?.(event.data.changes);
+    if (changes.length > 0) {
+      options.onChanges?.(changes);
     }
   };
 
@@ -1809,7 +1810,10 @@ export function installMutationBroadcast(options: {
     publish(body: string, changes: readonly MutationChangeRecord[] = []) {
       options.channel.postMessage({
         body,
-        changes,
+        changes: changes.flatMap((change) => {
+          const sanitized = sanitizeMutationChangeRecord(change);
+          return sanitized ? [sanitized] : [];
+        }),
         type: 'jiso:mutation-response',
       });
     },
@@ -2136,7 +2140,10 @@ function readMutationChangeHeader(response: EnhancedMutationResponseLike): Mutat
   const parsed = JSON.parse(value) as unknown;
   if (!Array.isArray(parsed)) return [];
 
-  return parsed.filter(isMutationChangeRecord);
+  return parsed.flatMap((record) => {
+    const sanitized = sanitizeMutationChangeRecord(record);
+    return sanitized ? [sanitized] : [];
+  });
 }
 
 function unescapeHtml(value: string): string {
@@ -2166,13 +2173,22 @@ function isMutationBroadcastMessage(value: unknown): value is {
 }
 
 function isMutationChangeRecord(value: unknown): value is MutationChangeRecord {
-  if (typeof value !== 'object' || value === null) return false;
-  if (!('domain' in value) || typeof value.domain !== 'string') return false;
+  return sanitizeMutationChangeRecord(value) !== null;
+}
 
-  return (
-    (!('keys' in value) ||
-      (Array.isArray(value.keys) && value.keys.every((key) => typeof key === 'string'))) &&
-    (!('manual' in value) || value.manual === true) &&
-    (!('reason' in value) || typeof value.reason === 'string')
-  );
+function sanitizeMutationChangeRecord(value: unknown): MutationChangeRecord | null {
+  if (typeof value !== 'object' || value === null) return null;
+  if (!('domain' in value) || typeof value.domain !== 'string') return null;
+  const keys = 'keys' in value ? value.keys : undefined;
+  if (
+    keys !== undefined &&
+    !(Array.isArray(keys) && keys.every((key) => typeof key === 'string'))
+  ) {
+    return null;
+  }
+
+  return {
+    domain: value.domain,
+    ...(keys === undefined ? {} : { keys }),
+  };
 }
