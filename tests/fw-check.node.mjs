@@ -369,11 +369,15 @@ void test('P2 loader smoke evidence remains represented in runtime tests', async
   assert.match(runtimeSource, /export async function refetchQueries/);
   assert.match(runtimeSource, /`\/_q\/\$\{encodeURIComponent\(query\)\}`/);
   assert.match(runtimeSource, /Accept: 'text\/html'/);
+  assert.match(runtimeSource, /interface CompiledQueryTemplateStamp/);
+  assert.match(runtimeSource, /reconcileTemplateStamp\(items\)/);
+  assert.match(runtimeSource, /readTemplateStampKey/);
   assert.match(runtimeTests, /invokes chained handler refs left-to-right with one context/);
   assert.match(runtimeTests, /installs declared load, idle, and visible execution triggers/);
   assert.match(runtimeTests, /ships an inline enhanced form round trip in the bootstrap source/);
   assert.match(runtimeTests, /refetches typed read endpoints and applies returned query chunks/);
   assert.match(runtimeTests, /uses typed read refetching from focus listeners when configured/);
+  assert.match(runtimeTests, /reconciles compiled template stamps with keyed item descriptors/);
   assert.match(
     browserTests,
     /keeps the loader idle until the first delegated interaction/,

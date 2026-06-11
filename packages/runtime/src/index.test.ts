@@ -234,6 +234,17 @@ class FakeQueryPlanElement {
   }
 }
 
+class FakeTemplateStampHost extends FakeQueryPlanElement {
+  items: Array<{ html: string; index: number; key: string; value: unknown }> = [];
+
+  reconcileTemplateStamp(
+    items: readonly { html: string; index: number; key: string; value: unknown }[],
+  ): void {
+    this.items = items.map((item) => ({ ...item }));
+    this.textContent = items.map((item) => item.html).join('');
+  }
+}
+
 class FakeQueryBindingElement {
   textContent: string | null;
   value?: string;
@@ -1233,11 +1244,58 @@ describe('query store', () => {
       bindings: ['cart.count'],
       derives: ['summary'],
       stamps: ['data-cart-summary'],
+      templateStamps: [],
     });
     expect(observed).toEqual(['derive sees binding:2', 'stamp sees derive:2 items']);
     expect(count.textContent).toBe('2');
     expect(summary.textContent).toBe('2 items');
     expect(host.getAttribute('data-cart-summary')).toBe('2 items');
+  });
+
+  it('reconciles compiled template stamps with keyed item descriptors', () => {
+    const root = new FakeMorphRoot();
+    const list = new FakeTemplateStampHost({
+      'data-bind-list': 'cart.items',
+      'fw-key': 'productId',
+    });
+    root.planElements.push(list);
+
+    const applied = applyCompiledQueryUpdatePlan(
+      root,
+      'cart',
+      {
+        items: [
+          { name: 'Mug', productId: 'p1', qty: 2 },
+          { name: 'Beans', productId: 'p2', qty: 1 },
+        ],
+      },
+      {
+        bindings: false,
+        templateStamps: [
+          {
+            key: 'productId',
+            list: 'items',
+            render(item) {
+              const product = item as { name: string; qty: number };
+              return `<li><span data-bind=".qty">${product.qty}</span> x <span data-bind=".name">${product.name}</span></li>`;
+            },
+            selector: '[data-bind-list="cart.items"]',
+          },
+        ],
+      },
+    );
+
+    expect(applied).toEqual({
+      bindings: [],
+      derives: [],
+      stamps: [],
+      templateStamps: ['[data-bind-list="cart.items"]'],
+    });
+    expect(list.items.map((item) => item.key)).toEqual(['p1', 'p2']);
+    expect(list.items.map((item) => item.index)).toEqual([0, 1]);
+    expect(list.textContent).toBe(
+      '<li><span data-bind=".qty">2</span> x <span data-bind=".name">Mug</span></li><li><span data-bind=".qty">1</span> x <span data-bind=".name">Beans</span></li>',
+    );
   });
 
   it('applies mutation query chunks through compiled update plans before morphing', () => {

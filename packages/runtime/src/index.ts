@@ -974,6 +974,17 @@ export interface QueryBindingRoot {
   querySelectorAll(selector: string): Iterable<QueryBindingElement>;
 }
 
+export interface TemplateStampItem {
+  html: string;
+  index: number;
+  key: string;
+  value: unknown;
+}
+
+export interface TemplateStampHost extends QueryBindingElement {
+  reconcileTemplateStamp(items: readonly TemplateStampItem[]): void;
+}
+
 export interface CompiledQueryDerive {
   name: string;
   select(value: unknown, root: QueryBindingRoot): unknown;
@@ -986,16 +997,25 @@ export interface CompiledQueryStamp {
   selector: string;
 }
 
+export interface CompiledQueryTemplateStamp {
+  key: string | ((item: unknown, index: number) => string | number);
+  list: string;
+  render(item: unknown, index: number): string;
+  selector: string;
+}
+
 export interface CompiledQueryUpdatePlan {
   bindings?: boolean;
   derives?: readonly CompiledQueryDerive[];
   stamps?: readonly CompiledQueryStamp[];
+  templateStamps?: readonly CompiledQueryTemplateStamp[];
 }
 
 export interface AppliedCompiledQueryUpdatePlan {
   bindings: string[];
   derives: string[];
   stamps: string[];
+  templateStamps: string[];
 }
 
 export type CompiledQueryUpdatePlans = Readonly<
@@ -1397,6 +1417,7 @@ export function applyCompiledQueryUpdatePlan(
     bindings: plan.bindings === false ? [] : applyQueryBindings(root, queryName, value),
     derives: [],
     stamps: [],
+    templateStamps: [],
   };
 
   for (const derive of plan.derives ?? []) {
@@ -1418,7 +1439,44 @@ export function applyCompiledQueryUpdatePlan(
     }
   }
 
+  for (const stamp of plan.templateStamps ?? []) {
+    const list = valueAtPath(value, stamp.list);
+    if (!Array.isArray(list)) continue;
+
+    const items = list.map((item, index) => ({
+      html: stamp.render(item, index),
+      index,
+      key: String(readTemplateStampKey(stamp, item, index)),
+      value: item,
+    }));
+
+    for (const element of root.querySelectorAll(stamp.selector)) {
+      if (!isTemplateStampHost(element)) continue;
+      element.reconcileTemplateStamp(items);
+      applied.templateStamps.push(stamp.selector);
+    }
+  }
+
   return applied;
+}
+
+function isTemplateStampHost(element: QueryBindingElement): element is TemplateStampHost {
+  return (
+    'reconcileTemplateStamp' in element && typeof element.reconcileTemplateStamp === 'function'
+  );
+}
+
+function readTemplateStampKey(
+  stamp: CompiledQueryTemplateStamp,
+  item: unknown,
+  index: number,
+): string | number {
+  if (typeof stamp.key === 'function') return stamp.key(item, index);
+
+  const key = valueAtPath(item, stamp.key);
+  return typeof key === 'string' || typeof key === 'number' || typeof key === 'bigint'
+    ? key.toString()
+    : index;
 }
 
 export function applyDeferredStreamResponseToDom(options: {
