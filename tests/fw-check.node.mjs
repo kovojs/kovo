@@ -304,6 +304,9 @@ void test('S2 loader budget and L0 no-upgrade path are acceptance evidence', asy
   const loaderSource = loaderMatch.groups.source;
   assert.ok(gzipSync(loaderSource).byteLength <= 1024, 'loader remains inside the 1KB gzip budget');
   assert.match(loaderSource, /import\(r\.slice\(0,i\)\)/, 'handlers import only from event refs');
+  assert.match(loaderSource, /FW-Targets/, 'enhanced form submits send live targets');
+  assert.match(loaderSource, /keepalive:!0/, 'enhanced form submits use keepalive');
+  assert.match(loaderSource, /<fw-fragment/, 'loader parses fragment chunks');
   assert.doesNotMatch(
     loaderSource,
     /customElements|attachShadow|unload/,
@@ -325,6 +328,7 @@ void test('P2 loader smoke evidence remains represented in runtime tests', async
   );
   assert.match(runtimeTests, /expect\(importModule\)\.not\.toHaveBeenCalled\(\)/);
   assert.match(runtimeTests, /expect\(jisoLoaderSource\)\.not\.toContain\('customElements'\)/);
+  assert.match(runtimeTests, /ships an inline enhanced form round trip in the bootstrap source/);
   assert.match(
     browserTests,
     /keeps the loader idle until the first delegated interaction/,

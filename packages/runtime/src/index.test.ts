@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
+import { runInThisContext } from 'node:vm';
 import { gzipSync } from 'node:zlib';
 import { event, form } from '@jiso/core';
 
@@ -204,8 +205,119 @@ describe('runtime loader', () => {
   it('keeps the always-loaded bootstrap under the S2 gzip budget', () => {
     expect(gzipSync(jisoLoaderSource).byteLength).toBeLessThanOrEqual(1024);
     expect(jisoLoaderSource).toContain('import(r.slice(0,i))');
+    expect(jisoLoaderSource).toContain('FW-Targets');
     expect(jisoLoaderSource).not.toContain('customElements');
     expect(jisoLoaderSource).not.toContain('unload');
+  });
+
+  it('ships an inline enhanced form round trip in the bootstrap source', async () => {
+    const globalRecord = globalThis as unknown as Record<string, unknown>;
+    const originals = {
+      CustomEvent: globalRecord.CustomEvent,
+      FormData: globalRecord.FormData,
+      addEventListener: globalRecord.addEventListener,
+      dispatchEvent: globalRecord.dispatchEvent,
+      document: globalRecord.document,
+      fetch: globalRecord.fetch,
+    };
+    const listeners = new Map<string, (event: unknown) => void>();
+    const dispatched: unknown[] = [];
+    const fragmentTarget = { innerHTML: '' };
+    const formData = { kind: 'form-data' };
+    const form = {
+      action: '/_m/cart/add',
+      method: 'post',
+    };
+    const depElement = {
+      id: 'cart-badge',
+      getAttribute(name: string) {
+        if (name === 'fw-deps') return 'cart';
+        if (name === 'fw-fragment-target') return null;
+        return null;
+      },
+    };
+    const fetch = vi.fn(async () => ({
+      async text() {
+        return [
+          '<fw-query name="cart">{"count":1}</fw-query>',
+          '<fw-fragment target="cart-badge"><cart-badge>1</cart-badge></fw-fragment>',
+        ].join('\n');
+      },
+    }));
+
+    try {
+      globalRecord.CustomEvent = class CustomEvent {
+        constructor(
+          readonly type: string,
+          readonly init?: { detail?: unknown },
+        ) {}
+
+        get detail(): unknown {
+          return this.init?.detail;
+        }
+      };
+      globalRecord.FormData = function FormData() {
+        return formData;
+      };
+      globalRecord.addEventListener = (type: string, listener: (event: unknown) => void) => {
+        listeners.set(type, listener);
+      };
+      globalRecord.dispatchEvent = (event: unknown) => {
+        dispatched.push(event);
+        return true;
+      };
+      globalRecord.document = {
+        getElementById(id: string) {
+          return id === 'cart-badge' ? fragmentTarget : null;
+        },
+        querySelector() {
+          return null;
+        },
+        querySelectorAll(selector: string) {
+          return selector === '[fw-deps]' ? [depElement] : [];
+        },
+        visibilityState: 'visible',
+      };
+      globalRecord.fetch = fetch;
+
+      runInThisContext(jisoLoaderSource);
+      listeners.get('submit')?.({
+        preventDefault: vi.fn(),
+        target: {
+          closest(selector: string) {
+            return selector === 'form[enhance],form[data-enhance],form[data-mutation]'
+              ? form
+              : null;
+          },
+        },
+        type: 'submit',
+      });
+      await Promise.resolve();
+      await Promise.resolve();
+      await Promise.resolve();
+      await new Promise((resolve) => setTimeout(resolve, 0));
+
+      expect(fetch).toHaveBeenCalledWith('/_m/cart/add', {
+        body: formData,
+        headers: {
+          Accept: 'text/vnd.jiso.fragment+html',
+          'FW-Fragment': 'true',
+          'FW-Idem': expect.any(String),
+          'FW-Targets': 'cart-badge=cart',
+        },
+        keepalive: true,
+        method: 'POST',
+      });
+      expect(dispatched).toEqual([
+        expect.objectContaining({
+          detail: { body: '{"count":1}', name: 'cart' },
+          type: 'jiso:query',
+        }),
+      ]);
+      expect(fragmentTarget.innerHTML).toBe('<cart-badge>1</cart-badge>');
+    } finally {
+      Object.assign(globalRecord, originals);
+    }
   });
 
   it('registers delegated capture listeners without importing handler modules', () => {
