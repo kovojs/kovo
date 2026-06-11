@@ -516,10 +516,14 @@ export const CartDrawer = component('cart-drawer', {
       source: cartBadgeSource,
     });
 
-    expect(result.diagnostics).toMatchObject([
+    expect(result.diagnostics).toEqual([
       {
         code: 'FW210',
+        fileName: 'cart-badge.tsx',
+        length: 5,
+        message: 'Anonymous handler; name it for stable identity.',
         severity: 'lint',
+        start: { column: 13, line: 8 },
       },
     ]);
   });
