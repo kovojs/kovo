@@ -25,7 +25,14 @@ Scope: SPEC addition (proposed §9.5 "The request shell"), `@jiso/server` shell 
       404/500 documents. `packages/server/src/app.test.ts` covers the scaffold and confirms
       no `use` middleware surface. Mutation dispatch remains stored-only in this narrow R3
       scaffold and is tracked for the next request-handler slice.
-- [ ] R4 node:http adapter (incl. Early Hints); `tests/p10-perf.node.mjs` migrates onto it as the parity proof.
+- [x] R4 node:http adapter (incl. Early Hints); `tests/p10-perf.node.mjs` migrates onto it as the parity proof. Evidence
+      2026-06-11: `packages/server/src/node.ts` adds `toNodeHandler()` plus request/response
+      conversion helpers for Node `IncomingMessage`/`ServerResponse`, streams web response
+      bodies, suppresses HEAD bodies, and emits 103 Early Hints from the `Link` header when
+      Node supports `writeEarlyHints`. `packages/server/src/node.test.ts` covers loopback
+      request bodies, final headers, Early Hints, and HEAD semantics. `tests/p10-perf.node.mjs`
+      now serves the perf proof through `createApp()` -> `createRequestHandler()` ->
+      `toNodeHandler()`, including the versioned `/c/?v=` module registry path.
 - [ ] R5 Vite+ plugin: dev middleware over the same handler; build wiring (manifest → stylesheet hints, compiled client modules → versioned emit).
 - [ ] R6 static export: synthetic-request replay to `.html` files with the L0/L1-only constraint and teaching errors for non-exportable routes.
 - [ ] R7 adoption: starter becomes a routed app served by `vp dev`; commerce runs end-to-end over HTTP; a jiso docs site ships from `vp run export` as the first outside consumer.

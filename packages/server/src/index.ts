@@ -110,6 +110,8 @@ export type {
   ShellDispatchMatch,
   ShellDispatchPhase,
 } from './shell.js';
+export { nodeRequestToWebRequest, toNodeHandler, writeWebResponseToNode } from './node.js';
+export type { NodeHandlerOptions, NodeRequestHandler } from './node.js';
 export { runWebhook, webhook } from './webhook.js';
 export type {
   WebhookChangeOptions,
