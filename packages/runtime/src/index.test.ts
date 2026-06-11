@@ -2132,9 +2132,12 @@ describe('query store', () => {
   it('accepts escaped JSON from text/html-compatible fw-query chunks', () => {
     const store = createQueryStore();
 
-    applyMutationResponse(store, '<fw-query name="cart">{&quot;count&quot;:4}</fw-query>');
+    applyMutationResponse(
+      store,
+      '<fw-query name="cart">{&quot;count&quot;:4,&quot;label&quot;:&quot;Alice&#39;s &amp; Bob&apos;s&quot;}</fw-query>',
+    );
 
-    expect(store.get('cart')).toEqual({ count: 4 });
+    expect(store.get('cart')).toEqual({ count: 4, label: "Alice's & Bob's" });
   });
 
   it('accepts single-quoted chunk attributes', () => {

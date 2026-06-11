@@ -432,6 +432,12 @@ params, relational API, `execute(sql)`, right/full joins, a string column named 
       `unescapeHtml` missing `&#39;`/`&apos;` (wire-parser.ts:162-168) — pin the server↔runtime
       escaping contract with a shared fixture; `applyQueryBindings` full-document `*` scan per
       chunk (index.ts:1384); consolidate the six near-identical `*Like` element interfaces.
+      Partial evidence 2026-06-11: runtime `unescapeHtml` now decodes both apostrophe entity
+      spellings used by text/html-compatible wire chunks, and `wire-parser.test.ts` pins the
+      SPEC §2 Constitution #4 readable-wire contract for attribute parsing, `<fw-query>` JSON
+      bodies, and malformed-JSON reporting. `index.test.ts` also exercises the public mutation
+      apply path with `&#39;`/`&apos;` escaped query JSON. Same-session evidence:
+      `pnpm exec vitest --run packages/runtime/src`.
 
 Verification: runtime node + browser suites; gzip budget; the new parity suite is the gate for
 any future inline-loader edit. A `definedProps()` helper for the ~30 optional-spread sites is
