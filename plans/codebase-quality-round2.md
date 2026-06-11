@@ -105,10 +105,11 @@ Do this first or pay it on every commit.
       touch-graph literals, or property-case counts. The wider source-text ledger remains open.
       Partial evidence 2026-06-11: the `P10 starter wires graph assertions into CI` tranche now
       parses `packages/create-jiso/templates/package.json` and `graph.json`, asserts starter
-      graph structure, and exercises the real template graph through `fwCheck`/`fwExplain`.
-      Remaining checks in that tranche are limited to scaffold wiring that is still source-shaped:
-      Vite task commands/inputs, GitHub workflow steps, Tailwind source directives, generated
-      client bootstrap imports, and create-jiso's own scaffold-test coverage.
+      graph structure, exercises the real template graph through `fwCheck`/`fwExplain`, evaluates
+      the starter Vite task graph, parses CI run steps, CSS `@source` directives, HTML entrypoint
+      tags, and generated client bootstrap imports/object wiring, and executes
+      `pnpm exec vitest --run packages/create-jiso/src/index.test.ts` for scaffold file count,
+      Vite bin resolution, and generated CSS output coverage.
       Partial evidence 2026-06-11: the P8 component/endpoints/unguarded/unscoped tranche now uses
       a synthetic graph and direct `fwExplain` assertions for handler captures, derives,
       execution triggers, attribute merges, endpoint listing, unguarded access, and owner-domain

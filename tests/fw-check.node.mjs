@@ -1,6 +1,8 @@
 import assert from 'node:assert/strict';
-import { execFile } from 'node:child_process';
-import { readdir, readFile } from 'node:fs/promises';
+import { execFile, execFileSync } from 'node:child_process';
+import { chmod, mkdtemp, readdir, readFile, rm, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { test } from 'node:test';
 import { promisify } from 'node:util';
 import { gzipSync } from 'node:zlib';
@@ -129,6 +131,227 @@ const listProjectFiles = async (dir, predicate) => {
   }
 
   return files;
+};
+
+const parseTemplateViteTasks = (source) => {
+  const tasks = {};
+  let currentTask;
+  let currentArray;
+
+  for (const line of source.split('\n')) {
+    const indent = line.search(/\S|$/);
+    const trimmed = line.trim();
+
+    if (indent === 6) {
+      const taskMatch = /^'?([\w-]+)'?: \{$/.exec(trimmed);
+
+      if (taskMatch) {
+        currentTask = taskMatch[1];
+        currentArray = undefined;
+        tasks[currentTask] = {};
+        continue;
+      }
+    }
+
+    if (!currentTask) continue;
+
+    if (indent === 8 && trimmed === '},') {
+      currentTask = undefined;
+      currentArray = undefined;
+      continue;
+    }
+
+    const commandMatch = /^command: '([^']+)',?$/.exec(trimmed);
+    if (commandMatch) {
+      tasks[currentTask].command = commandMatch[1];
+      continue;
+    }
+
+    const outputMatch = /^output: \[(.*)\],?$/.exec(trimmed);
+    if (outputMatch) {
+      tasks[currentTask].output = [...outputMatch[1].matchAll(/'([^']+)'/g)].map(
+        (match) => match[1],
+      );
+      continue;
+    }
+
+    const arrayMatch = /^(input): \[$/.exec(trimmed);
+    if (arrayMatch) {
+      currentArray = arrayMatch[1];
+      tasks[currentTask][currentArray] = [];
+      continue;
+    }
+
+    if (currentArray && trimmed === '],') {
+      currentArray = undefined;
+      continue;
+    }
+
+    const inputMatch = /^\{ pattern: '([^']+)', base: '([^']+)' \},?$/.exec(trimmed);
+    if (currentArray && inputMatch) {
+      tasks[currentTask][currentArray].push({ pattern: inputMatch[1], base: inputMatch[2] });
+    }
+  }
+
+  return tasks;
+};
+
+const parseWorkflowSteps = (source) => {
+  const steps = [];
+
+  for (const line of source.split('\n')) {
+    const match = /^\s*-\s+(run|uses):\s*(.+?)\s*$/.exec(line);
+    if (match) {
+      steps.push({ [match[1]]: match[2] });
+    }
+  }
+
+  return steps;
+};
+
+const parseCssSourceDirectives = (source) =>
+  source
+    .split('\n')
+    .map((line) => line.trim())
+    .filter((line) => line.startsWith('@source '))
+    .map((line) => line.slice('@source '.length).replace(/;$/, ''));
+
+const parseHtmlElements = (source) => {
+  const elements = [];
+  const tagPattern = /<([a-zA-Z][\w:-]*)([^>]*)>/g;
+  const attributePattern = /([a-zA-Z_:][\w:.-]*)(?:=(?:"([^"]*)"|'([^']*)'|([^\s"'>]+)))?/g;
+
+  for (const tagMatch of source.matchAll(tagPattern)) {
+    const [, tagName, attributesSource] = tagMatch;
+    const attributes = {};
+
+    for (const attributeMatch of attributesSource.matchAll(attributePattern)) {
+      const [, name, doubleQuotedValue, singleQuotedValue, bareValue] = attributeMatch;
+      attributes[name] = doubleQuotedValue ?? singleQuotedValue ?? bareValue ?? true;
+    }
+
+    elements.push({ attributes, tagName });
+  }
+
+  return elements;
+};
+
+const balancedSnippetAfter = (source, marker, open, close) => {
+  const markerIndex = source.indexOf(marker);
+  assert.notEqual(markerIndex, -1, `source contains ${marker}`);
+  const openIndex = source.indexOf(open, markerIndex);
+  assert.notEqual(openIndex, -1, `source contains ${open} after ${marker}`);
+  let depth = 0;
+
+  for (let index = openIndex; index < source.length; index += 1) {
+    const char = source[index];
+
+    if (char === open) {
+      depth += 1;
+    } else if (char === close) {
+      depth -= 1;
+
+      if (depth === 0) {
+        return source.slice(openIndex, index + 1);
+      }
+    }
+  }
+
+  assert.fail(`source contains balanced ${open}${close} after ${marker}`);
+};
+
+const objectKeysFromSnippet = (snippet) => {
+  const keys = [];
+
+  for (const match of snippet.matchAll(/(?:^|[,{])\s*([A-Za-z_$][\w$]*)\s*:/g)) {
+    keys.push(match[1]);
+  }
+
+  return keys;
+};
+
+const objectEntriesFromSnippet = (snippet) => {
+  const keys = [];
+
+  for (const line of snippet.split('\n')) {
+    const match = /^\s*([A-Za-z_$][\w$]*)\s*(?::|,)/.exec(line);
+    if (match) {
+      keys.push(match[1]);
+    }
+  }
+
+  return keys;
+};
+
+const assignmentExpressionsFromSource = (source) =>
+  source
+    .split('\n')
+    .map((line) => {
+      const match = /^\s*([^=]+?)\s*=\s*(.+?);?\s*$/.exec(line);
+      return match ? { target: match[1].trim(), value: match[2].trim() } : undefined;
+    })
+    .filter(Boolean);
+
+const importedNamesFrom = (source, specifier) => {
+  const names = new Set();
+  const importPattern = /import\s+([\s\S]*?)\s+from\s+['"]([^'"]+)['"]/g;
+
+  for (const match of source.matchAll(importPattern)) {
+    const [, clause, importSpecifier] = match;
+    if (importSpecifier !== specifier) continue;
+
+    const namedImportSnippet = clause.match(/\{([\s\S]*?)\}/)?.[1] ?? '';
+    for (const item of namedImportSnippet.split(',')) {
+      const name = item
+        .trim()
+        .replace(/^type\s+/, '')
+        .split(/\s+as\s+/)[0]
+        ?.trim();
+      if (name) names.add(name);
+    }
+  }
+
+  return [...names].sort((left, right) => left.localeCompare(right));
+};
+
+const runGraphAssertionsTemplateScript = async () => {
+  const fakeBin = await mkdtemp(join(tmpdir(), 'jiso-fake-fw-'));
+  const fakeFw = join(fakeBin, 'fw');
+  const fakeFwSource = `#!/usr/bin/env node
+const outputs = new Map([
+  [
+    JSON.stringify(['explain', 'query', 'cart', 'graph.json']),
+    'fw-explain/v1\\nQUERY cart\\nreads: cart\\nconsumers: component:CartBadge,component:CartPanel,page:/cart\\ninvalidated-by: cart/add\\ndomain-writes: cart.addItem\\n',
+  ],
+  [
+    JSON.stringify(['explain', 'mutation', 'cart/add', '--optimistic', 'graph.json']),
+    'fw-explain/v1\\nMUTATION cart/add\\nguards: authed\\nsession: starterSession\\ninput-fields: productId,quantity\\nwrites: cart\\ninvalidates: cart\\nmanual-invalidates: -\\nupdates: cart->component:CartBadge,component:CartPanel,page:/cart\\nOPTIMISTIC cart await-fragment\\nOPTIMISTIC-SUMMARY total=1 hand-written=0 await-fragment=1 UNHANDLED=0\\n',
+  ],
+  [
+    JSON.stringify(['explain', 'page', '/cart', 'graph.json']),
+    'fw-explain/v1\\nPAGE /cart\\nprefetch: false\\nmeta: title=Jiso Starter Cart description=Starter cart backed by query data. image=-\\ni18n: en-US:cartTitle\\nmodulepreloads: -\\nstylesheets: /src/styles.css\\nqueries: cart\\nview-transitions: -\\n',
+  ],
+]);
+const output = outputs.get(JSON.stringify(process.argv.slice(2)));
+if (!output) {
+  process.stderr.write(\`unexpected fw args: \${JSON.stringify(process.argv.slice(2))}\\n\`);
+  process.exit(64);
+}
+process.stdout.write(output);
+`;
+
+  try {
+    await writeFile(fakeFw, fakeFwSource, 'utf8');
+    await chmod(fakeFw, 0o755);
+
+    return execFileSync('node', ['scripts/graph-assertions.mjs'], {
+      cwd: new URL('../packages/create-jiso/templates/', import.meta.url),
+      encoding: 'utf8',
+      env: { ...process.env, PATH: `${fakeBin}:${process.env.PATH ?? ''}` },
+    });
+  } finally {
+    await rm(fakeBin, { force: true, recursive: true });
+  }
 };
 
 void test('fw-check wrapper explains the production build prerequisite', () => {
@@ -2503,7 +2726,6 @@ void test('P10 starter wires graph assertions into CI', async () => {
     ciWorkflow,
     starterGraphSource,
     emitGraphSource,
-    graphAssertionsSource,
     clientSource,
     appFixpointTest,
     stylesSource,
@@ -2514,14 +2736,14 @@ void test('P10 starter wires graph assertions into CI', async () => {
     readProjectFile('packages/create-jiso/templates/.github/workflows/ci.yml'),
     readProjectFile('packages/create-jiso/templates/graph.json'),
     readProjectFile('packages/create-jiso/templates/scripts/emit-graph.mjs'),
-    readProjectFile('packages/create-jiso/templates/scripts/graph-assertions.mjs'),
     readProjectFile('packages/create-jiso/templates/src/client.ts'),
     readProjectFile('packages/create-jiso/templates/src/app.fixpoint.test.ts'),
     readProjectFile('packages/create-jiso/templates/src/styles.css'),
     readProjectFile('packages/create-jiso/templates/index.html'),
   ]);
-  const starterTests = await readProjectFile('packages/create-jiso/src/index.test.ts');
   const packageJson = JSON.parse(packageJsonSource);
+  const viteTasks = parseTemplateViteTasks(viteConfigSource);
+  const ciSteps = parseWorkflowSteps(ciWorkflow);
   const starterGraph = JSON.parse(starterGraphSource);
   const cartQueryExplain = fwExplain(starterGraph, { kind: 'query', target: 'cart' }).output;
   const cartAddExplain = fwExplain(starterGraph, {
@@ -2595,42 +2817,109 @@ void test('P10 starter wires graph assertions into CI', async () => {
   assert.equal(explainValue(cartPageExplain, 'queries: '), 'cart');
   assert.equal(explainValue(cartPageExplain, 'stylesheets: '), '/src/styles.css');
 
-  assert.match(
-    viteConfigSource,
-    /command: 'node scripts\/emit-graph\.mjs && fw check graph\.json'/,
+  assert.deepEqual(viteTasks['fw-check'], {
+    command: 'node scripts/emit-graph.mjs && fw check graph.json',
+    input: [
+      { pattern: 'scripts/emit-graph.mjs', base: 'workspace' },
+      { pattern: 'src/**/*', base: 'workspace' },
+    ],
+    output: ['graph.json'],
+  });
+  assert.deepEqual(viteTasks['graph-assertions'], {
+    command: 'node scripts/emit-graph.mjs && node scripts/graph-assertions.mjs',
+    input: [
+      { pattern: 'graph.json', base: 'workspace' },
+      { pattern: 'scripts/emit-graph.mjs', base: 'workspace' },
+      { pattern: 'scripts/graph-assertions.mjs', base: 'workspace' },
+      { pattern: 'src/**/*', base: 'workspace' },
+    ],
+  });
+  assert.deepEqual(
+    ciSteps.filter((step) => step.run).map((step) => step.run),
+    [
+      'vp install',
+      'vp check',
+      'vp test',
+      'vp run build',
+      'vp run fw-check',
+      'vp run graph-assertions',
+    ],
   );
-  assert.match(
-    viteConfigSource,
-    /command: 'node scripts\/emit-graph\.mjs && node scripts\/graph-assertions\.mjs'/,
+
+  assert.deepEqual(importedNamesFrom(emitGraphSource, '@jiso/compiler'), ['deriveAppGraph']);
+  assert.deepEqual(
+    [
+      ...new Set(
+        objectKeysFromSnippet(
+          balancedSnippetAfter(emitGraphSource, 'const graphDeclarations', '{', '}'),
+        ).filter((key) =>
+          ['components', 'mutations', 'optimistic', 'pages', 'queries', 'touchGraph'].includes(key),
+        ),
+      ),
+    ].sort((left, right) => left.localeCompare(right)),
+    ['components', 'mutations', 'optimistic', 'pages', 'queries', 'touchGraph'],
   );
-  assert.match(viteConfigSource, /'scripts\/emit-graph\.mjs'/);
-  assert.match(viteConfigSource, /'scripts\/graph-assertions\.mjs'/);
-  assert.match(ciWorkflow, /- run: vp run fw-check/);
-  assert.match(ciWorkflow, /- run: vp run graph-assertions/);
-  assert.match(emitGraphSource, /deriveAppGraph/);
-  assert.match(graphAssertionsSource, /fwExplain\(\['page', '\/cart'\]\)/);
-  assert.match(appFixpointTest, /assertRenderEquivalence/);
-  assert.match(clientSource, /installJisoLoader\(\{/);
-  assert.match(clientSource, /enhancedMutations: \{/);
-  assert.match(clientSource, /queryPlans,/);
-  assert.match(clientSource, /applyDeferredStreamResponseToDom/);
-  assert.match(clientSource, /applyJisoDeferredStreamResponse/);
-  assert.doesNotMatch(clientSource, /innerHTML = App\.definition\.render\(\)/);
-  assert.match(stylesSource, /@source "\.\.\/index\.html";/);
-  assert.match(stylesSource, /@source "\.\/\*\*\/\*\.\{ts,tsx,html\}";/);
-  assert.match(stylesSource, /@source inline\("bg-emerald-50 text-emerald-700/);
-  assert.match(indexHtml, /<link rel="stylesheet" href="\/src\/styles\.css" \/>/);
-  assert.match(indexHtml, /<script type="module" src="\/src\/client\.ts"><\/script>/);
-  assert.doesNotMatch(indexHtml, /src\/main\.ts/);
-  assert.match(starterTests, /vp run graph-assertions/);
-  assert.match(starterTests, /src\/app\.fixpoint\.test\.ts/);
-  assert.match(
-    starterTests,
-    /builds generated starter CSS with static and safelisted Tailwind utilities/,
+  assert.equal(await runGraphAssertionsTemplateScript(), 'graph-assertions/v1\nOK\n');
+
+  assert.deepEqual(importedNamesFrom(appFixpointTest, '@jiso/compiler'), [
+    'assertFixpoint',
+    'assertRenderEquivalence',
+    'compileComponentModule',
+  ]);
+
+  assert.deepEqual(importedNamesFrom(clientSource, '@jiso/runtime'), [
+    'applyDeferredStreamResponseToDom',
+    'createQueryStore',
+    'EnhancedMutationFetch',
+    'installJisoLoader',
+    'MorphRoot',
+    'TargetCollectorRoot',
+  ]);
+  assert.deepEqual(
+    objectKeysFromSnippet(
+      balancedSnippetAfter(clientSource, 'installJisoLoader({', '{', '}'),
+    ).filter((key) => ['enhancedMutations', 'importModule', 'queryStore', 'root'].includes(key)),
+    ['importModule', 'root', 'queryStore', 'enhancedMutations'],
   );
-  assert.match(starterTests, /resolveBin\('vite'\)/);
-  assert.match(starterTests, /\.bg-emerald-50/);
-  assert.match(starterTests, /create-jiso: wrote 15 files/);
+  assert.deepEqual(
+    objectEntriesFromSnippet(
+      balancedSnippetAfter(clientSource, 'enhancedMutations', '{', '}'),
+    ).filter((key) => ['fetch', 'queryPlans', 'root', 'store'].includes(key)),
+    ['fetch', 'queryPlans', 'root', 'store'],
+  );
+  assert.equal(
+    assignmentExpressionsFromSource(clientSource).some(
+      (assignment) =>
+        assignment.target.endsWith('innerHTML') &&
+        assignment.value.startsWith('App.definition.render'),
+    ),
+    false,
+  );
+
+  assert.deepEqual(parseCssSourceDirectives(stylesSource), [
+    '"../index.html"',
+    '"./**/*.{ts,tsx,html}"',
+    'inline("bg-emerald-50 text-emerald-700 border-emerald-200 bg-amber-50 text-amber-700 border-amber-200")',
+  ]);
+  const htmlElements = parseHtmlElements(indexHtml);
+  assert.deepEqual(
+    htmlElements
+      .filter((element) => element.tagName === 'link')
+      .map((element) => element.attributes),
+    [{ rel: 'stylesheet', href: '/src/styles.css' }],
+  );
+  assert.deepEqual(
+    htmlElements
+      .filter((element) => element.tagName === 'script')
+      .map((element) => element.attributes),
+    [{ type: 'module', src: '/src/client.ts' }],
+  );
+
+  execFileSync('pnpm', ['exec', 'vitest', '--run', 'packages/create-jiso/src/index.test.ts'], {
+    cwd: new URL('..', import.meta.url),
+    env: { ...process.env, CI: '1' },
+    stdio: 'pipe',
+  });
 });
 
 void test('P9 verification layer evidence remains represented', async () => {
