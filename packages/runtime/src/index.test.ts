@@ -837,20 +837,25 @@ describe('runtime loader', () => {
     const pendingForm = new FakePendingElement({ 'fw-deps': 'cart' });
     const pendingRoot = new FakePendingRoot([pendingForm]);
     const store = createQueryStore();
+    const loaderOnError = vi.fn();
     const preventDefault = vi.fn();
     const importModule = vi.fn();
     const onError = vi.fn();
+    const submit = vi.fn();
     const error = new Error('network down');
     const formData = new FormData();
-    const form = new FakeFormElement(
-      {
-        enhance: '',
-        'fw-deps': 'cart',
-      },
-      {
-        action: '/_m/cart/add',
-        method: 'post',
-      },
+    const form = Object.assign(
+      new FakeFormElement(
+        {
+          enhance: '',
+          'fw-deps': 'cart',
+        },
+        {
+          action: '/_m/cart/add',
+          method: 'post',
+        },
+      ),
+      { submit },
     );
     mutationRoot.deps = [{ deps: 'cart', id: 'cart-badge' }];
     const fetch = vi.fn(async () => {
@@ -871,6 +876,7 @@ describe('runtime loader', () => {
         store,
       },
       importModule,
+      onError: loaderOnError,
       root: loaderRoot,
     });
 
@@ -885,6 +891,8 @@ describe('runtime loader', () => {
     expect(preventDefault).toHaveBeenCalledTimes(1);
     expect(fetch).toHaveBeenCalledTimes(1);
     expect(onError).toHaveBeenCalledWith(error, form);
+    expect(loaderOnError).not.toHaveBeenCalled();
+    expect(submit).not.toHaveBeenCalled();
     expect(importModule).not.toHaveBeenCalled();
     expect(pendingForm.attributes).not.toHaveProperty('fw-pending');
     expect(pendingForm.attributes).not.toHaveProperty('aria-busy');

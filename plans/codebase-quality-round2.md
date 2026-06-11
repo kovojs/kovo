@@ -399,6 +399,12 @@ params, relational API, `execute(sql)`, right/full joins, a string column named 
       `submitEnhancedMutation` calls `onError` and rethrows (:1556-1558); `readFragmentChunks`
       silently truncates on unbalanced markup (wire-parser.ts:82) while the query path reports.
       Decide, document on the option type, align.
+      Partial evidence 2026-06-11: runtime form/mutation layer policy is documented on
+      `EnhancedMutationLoaderOptions.onError` and `EnhancedMutationSubmitOptions.onError`; the
+      doubled `if (!options.onError)` branch in `dispatchEnhancedFormSubmit` was collapsed into the
+      explicit form-layer handled/unhandled branch. `index.test.ts` now verifies that a form-layer
+      `onError` prevents loader-level `onError` and native-submit fallback. Same-session evidence:
+      `pnpm exec vitest --run packages/runtime/src`.
 - [ ] **MED — Split `index.ts` subtractively** along its existing seams: `inline-loader.ts`,
       `loader.ts`, `enhanced-mutation.ts`, `optimism.ts`, `query-bindings.ts`, `broadcast.ts`;
       index.ts a pure barrel. Remove the test-shaped production branch in `bindingAttributes`

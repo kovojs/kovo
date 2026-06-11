@@ -564,6 +564,13 @@ export interface EnhancedMutationLoaderOptions {
   formData?: (form: EnhancedFormElementLike) => unknown;
   idem?: () => string;
   morph?: MorphFragment;
+  /**
+   * Handles enhanced form submit failures after preventDefault. When present,
+   * the form layer owns the error and native submit fallback is skipped.
+   *
+   * SPEC.md section 9.2 keeps enhanced and no-JS form paths equivalent; this
+   * hook is the enhanced path's reporting seam for failed fragment submissions.
+   */
   onError?: (error: unknown, form: EnhancedFormElementLike) => void;
   onUploadProgress?: (progress: UploadProgress, form: EnhancedFormElementLike) => void;
   pendingRoot?: PendingRoot;
@@ -617,10 +624,10 @@ export async function dispatchEnhancedFormSubmit(
       ...(options.queryPlans ? { queryPlans: options.queryPlans } : {}),
     });
   } catch (error) {
-    if (!options.onError) {
-      fallbackEnhancedMutationSubmit(form);
-    }
-    if (!options.onError) throw error;
+    if (options.onError) return true;
+
+    fallbackEnhancedMutationSubmit(form);
+    throw error;
   }
   return true;
 }
@@ -1130,6 +1137,11 @@ export interface EnhancedMutationSubmitOptions {
   idem?: string;
   islandSignalScope?: IslandSignalScope;
   morph?: MorphFragment;
+  /**
+   * Reports mutation submit/apply failures. Direct submit callers still receive
+   * the thrown error; dispatchEnhancedFormSubmit decides whether a form-layer
+   * error has been handled.
+   */
   onError?: (error: unknown) => void;
   onUploadProgress?: (progress: UploadProgress) => void;
   pendingQueries?: readonly string[];
