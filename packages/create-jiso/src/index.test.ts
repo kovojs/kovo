@@ -206,11 +206,15 @@ describe('create-jiso starter', () => {
       '<main class="mx-auto grid min-h-dvh',
     );
     const clientSource = project.files.find((file) => file.path === 'src/client.ts')?.source;
-    expect(clientSource).toContain('import { createQueryStore, installJisoLoader }');
+    expect(clientSource).toContain('applyDeferredStreamResponseToDom');
+    expect(clientSource).toContain('createQueryStore');
+    expect(clientSource).toContain('installJisoLoader');
     expect(clientSource).toContain('const queryPlans = {};');
     expect(clientSource).toContain('installJisoLoader({');
     expect(clientSource).toContain('enhancedMutations: {');
     expect(clientSource).toContain('queryPlans,');
+    expect(clientSource).toContain('export function applyJisoDeferredStreamResponse');
+    expect(clientSource).toContain('return applyDeferredStreamResponseToDom({');
     expect(project.files.some((file) => file.path === 'src/main.ts')).toBe(false);
     expect(
       project.files.find((file) => file.path === '.github/workflows/ci.yml')?.source,

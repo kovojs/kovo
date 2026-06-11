@@ -551,7 +551,7 @@ export const CartBadge = component('cart-badge', {
 
     expect(bootstrap.fileName).toBe('generated/app.client.js');
     expect(bootstrap.source).toContain(
-      "import { createQueryStore, installJisoLoader } from '@jiso/runtime';",
+      "import { applyDeferredStreamResponseToDom, createQueryStore, installJisoLoader } from '@jiso/runtime';",
     );
     expect(bootstrap.source).toContain(
       'import { CartBadge$queryUpdatePlans } from "../components/cart/cart-badge.client.js";',
@@ -566,6 +566,10 @@ export const CartBadge = component('cart-badge', {
     expect(bootstrap.source).toContain('queryStore: store');
     expect(bootstrap.source).toContain('enhancedMutations: {');
     expect(bootstrap.source).toContain('queryPlans,');
+    expect(bootstrap.source).toContain('export function applyJisoDeferredStreamResponse');
+    expect(bootstrap.source).toContain('return applyDeferredStreamResponseToDom({');
+    expect(bootstrap.source).toContain('queryPlans,');
+    expect(bootstrap.source).toContain('store,');
   });
 
   it('stamps rendered component markup with declared query dependencies', () => {

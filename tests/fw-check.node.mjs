@@ -576,6 +576,8 @@ void test('P10 starter wires graph assertions into CI', async () => {
   assert.match(starterSource, /installJisoLoader\(\{/);
   assert.match(starterSource, /enhancedMutations: \{/);
   assert.match(starterSource, /queryPlans,/);
+  assert.match(starterSource, /applyDeferredStreamResponseToDom/);
+  assert.match(starterSource, /applyJisoDeferredStreamResponse/);
   assert.match(starterSource, /OPTIMISTIC-SUMMARY \.\*UNHANDLED=0/);
   assert.match(starterSource, /fwExplain\(\['page', '\/cart'\]\)/);
   assert.match(starterSource, /explainLine\(cartAdd, 'session: '\)/);
@@ -751,6 +753,8 @@ void test('D3 deferred stream responses are consumed by the runtime', async () =
   assert.match(compilerSource, /emitQueryPlanBootstrapModule/);
   assert.match(compilerSource, /installJisoLoader/);
   assert.match(compilerSource, /enhancedMutations: \{/);
+  assert.match(compilerSource, /applyDeferredStreamResponseToDom/);
+  assert.match(compilerSource, /applyJisoDeferredStreamResponse/);
   assert.match(compilerSource, /applyCompiledQueryUpdatePlan/);
   assert.match(compilerSource, /bindings: true, derives: \[\], stamps: \[\]/);
   assert.match(compilerTests, /emits per-query data-bind update plans for compiled components/);
@@ -759,6 +763,8 @@ void test('D3 deferred stream responses are consumed by the runtime', async () =
     /emits an app bootstrap that wires compiled query plans into the loader/,
   );
   assert.match(compilerTests, /\.\.\.CartBadge\$queryUpdatePlans/);
+  assert.match(compilerTests, /export function applyJisoDeferredStreamResponse/);
+  assert.match(compilerTests, /return applyDeferredStreamResponseToDom/);
   assert.match(runtimeSource, /applyDeferredStreamResponseToDom/);
   assert.match(runtimeSource, /export function applyCompiledQueryUpdatePlan/);
   assert.match(runtimeSource, /bindings[\s\S]*derives[\s\S]*stamps/);

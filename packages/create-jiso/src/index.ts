@@ -349,10 +349,20 @@ The v1 implementation depends on these hard rules:
       },
       {
         path: 'src/client.ts',
-        source: `import { createQueryStore, installJisoLoader } from '@jiso/runtime';
+        source: `import {
+  applyDeferredStreamResponseToDom,
+  createQueryStore,
+  installJisoLoader,
+} from '@jiso/runtime';
 
 const store = createQueryStore();
 const queryPlans = {};
+
+type DeferredStreamOptions = {
+  boundary?: string;
+  morph?: Parameters<typeof applyDeferredStreamResponseToDom>[0]['morph'];
+  root?: Parameters<typeof applyDeferredStreamResponseToDom>[0]['root'];
+};
 
 installJisoLoader({
   importModule: (specifier) => import(specifier),
@@ -365,6 +375,20 @@ installJisoLoader({
     store,
   },
 });
+
+export function applyJisoDeferredStreamResponse(
+  body: string,
+  options: DeferredStreamOptions = {},
+) {
+  return applyDeferredStreamResponseToDom({
+    body,
+    ...(options.boundary ? { boundary: options.boundary } : {}),
+    ...(options.morph ? { morph: options.morph } : {}),
+    queryPlans,
+    root: options.root ?? document,
+    store,
+  });
+}
 `,
       },
       {

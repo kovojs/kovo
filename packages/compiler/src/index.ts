@@ -272,7 +272,7 @@ export function emitQueryPlanBootstrapModule(
   return {
     fileName,
     source: `${irHeader}
-import { createQueryStore, installJisoLoader } from '@jiso/runtime';
+import { applyDeferredStreamResponseToDom, createQueryStore, installJisoLoader } from '@jiso/runtime';
 ${imports ? `${imports}\n` : ''}
 const store = createQueryStore();
 const queryPlans = {
@@ -290,6 +290,17 @@ installJisoLoader({
     store,
   },
 });
+
+export function applyJisoDeferredStreamResponse(body, options = {}) {
+  return applyDeferredStreamResponseToDom({
+    body,
+    ...(options.boundary ? { boundary: options.boundary } : {}),
+    ...(options.morph ? { morph: options.morph } : {}),
+    queryPlans,
+    root: options.root ?? document,
+    store,
+  });
+}
 `,
   };
 }
