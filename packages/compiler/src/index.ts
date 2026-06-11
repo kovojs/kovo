@@ -23,6 +23,7 @@ import {
   mutationHandlers,
   objectLiteralPropertyPaths,
   parseComponentModule as parseComponentModuleModel,
+  propertyAccessPaths,
 } from './scan/parse.js';
 import { escapeAttribute, indent, kebabCase } from './shared.js';
 import {
@@ -90,6 +91,7 @@ export interface QueryUpdatePlanFact {
   derives?: readonly QueryDeriveFact[];
   paths: readonly string[];
   query: string;
+  stamps?: readonly QueryStampFact[];
   templateStamps?: readonly QueryTemplateStampFact[];
 }
 
@@ -99,6 +101,12 @@ export interface QueryDeriveFact {
   input: string;
   name: string;
   param: string;
+  selector: string;
+}
+
+export interface QueryStampFact {
+  attr: string;
+  derive: QueryDeriveFact;
   selector: string;
 }
 
@@ -304,7 +312,12 @@ export function compileComponentModule(options: CompileComponentOptions): Compil
   const viewTransitionLowering = lowerViewTransitions(options.source);
   const platformLowering = lowerPlatformBehaviors(viewTransitionLowering.source);
   const navigationLowering = lowerNavigationSugar(platformLowering.source);
-  const source = navigationLowering.source;
+  const deriveLowering = lowerInlineAttributeDerives(
+    navigationLowering.source,
+    componentName,
+    options,
+  );
+  const source = deriveLowering.source;
   const model = parseComponentModuleModel(options.fileName, source);
   const handlers = lowerEventHandlers({ ...options, source }, componentName);
   const queryUpdatePlans = collectQueryUpdatePlans(source, model, componentName);
@@ -658,6 +671,121 @@ function lowerNavigationSugar(source: string): { source: string } {
   return {
     source: normalizeStaticHrefAttributes(lowerStaticHrefCalls(lowerStaticLinks(source))),
   };
+}
+
+function lowerInlineAttributeDerives(
+  source: string,
+  componentName: string,
+  options: CompileComponentOptions,
+): { source: string } {
+  const model = parseComponentModuleModel(options.fileName, source);
+  const knownQueries = new Set([
+    ...topLevelObjectKeys(componentOptionSource(model, 'queries') ?? '{}'),
+    ...Object.keys(options.registryFacts?.queries ?? {}),
+    ...Object.keys(options.queryShapes ?? {}),
+    ...(options.queryShapeFacts ?? []).map((fact) => fact.query),
+  ]);
+  if (knownQueries.size === 0) return { source };
+
+  const replacements: Array<{ end: number; start: number; value: string }> = [];
+  const deriveExports: string[] = [];
+  const nameCounts = new Map<string, number>();
+
+  for (const element of jsxElements(model)) {
+    if (
+      element.attributes.some((attribute) =>
+        ['data-derive', 'data-derive-attr'].includes(attribute.name),
+      )
+    ) {
+      continue;
+    }
+
+    const candidates = element.attributes
+      .map((attribute) => inlineAttributeDerive(attribute, element, componentName, knownQueries))
+      .filter((candidate): candidate is InlineAttributeDerive => candidate !== null);
+
+    const candidate = candidates[0];
+    if (!candidate || candidates.length !== 1) continue;
+    const count = nameCounts.get(candidate.baseName) ?? 0;
+    nameCounts.set(candidate.baseName, count + 1);
+    const exportName = count === 0 ? candidate.baseName : `${candidate.baseName}_${count + 1}`;
+    const stampName = `${candidate.query}.${exportName}`;
+
+    deriveExports.push(
+      `export const ${exportName} = derive([${JSON.stringify(candidate.query)}], (${candidate.query}) => ${candidate.expression});`,
+    );
+    replacements.push({
+      end: candidate.attribute.end,
+      start: candidate.attribute.start,
+      value: `data-derive="${escapeAttribute(stampName)}" data-derive-attr="${escapeAttribute(candidate.attribute.name)}"`,
+    });
+  }
+
+  if (replacements.length === 0) return { source };
+
+  const lowered = replacements
+    .sort((left, right) => right.start - left.start)
+    .reduce(
+      (output, replacement) =>
+        `${output.slice(0, replacement.start)}${replacement.value}${output.slice(replacement.end)}`,
+      source,
+    );
+
+  return { source: `${deriveExports.join('\n')}\n\n${lowered}` };
+}
+
+interface InlineAttributeDerive {
+  attribute: JsxAttributeModel;
+  baseName: string;
+  expression: string;
+  query: string;
+}
+
+function inlineAttributeDerive(
+  attribute: JsxAttributeModel,
+  element: JsxElementModel,
+  componentName: string,
+  knownQueries: ReadonlySet<string>,
+): InlineAttributeDerive | null {
+  if (attribute.expression === undefined) return null;
+  if (shouldSkipInlineAttributeDerive(attribute.name)) return null;
+
+  const paths = propertyAccessPaths('attribute-expression.tsx', attribute.expression);
+  const queryRoots = new Set(
+    paths
+      .map((path) => path.split('.', 1)[0])
+      .filter((query): query is string => query !== undefined && knownQueries.has(query)),
+  );
+  if (queryRoots.size !== 1) return null;
+
+  const query = [...queryRoots][0];
+  if (!query) return null;
+
+  return {
+    attribute,
+    baseName: `${sanitizeIdentifier(componentName)}$${sanitizeIdentifier(element.tag)}_${sanitizeIdentifier(attribute.name)}_derive`,
+    expression: attribute.expression.trim(),
+    query,
+  };
+}
+
+function shouldSkipInlineAttributeDerive(name: string): boolean {
+  return (
+    name === 'className' ||
+    name === 'data-derive' ||
+    name === 'data-derive-attr' ||
+    name === 'data-bind' ||
+    name.startsWith('data-bind:') ||
+    name.startsWith('data-p-') ||
+    name.startsWith('fw-') ||
+    name.startsWith('on') ||
+    name.startsWith('on:')
+  );
+}
+
+function sanitizeIdentifier(value: string): string {
+  const sanitized = value.replace(/[^A-Za-z0-9_$]/g, '_');
+  return /^[A-Za-z_$]/.test(sanitized) ? sanitized : `_${sanitized}`;
 }
 
 function lowerStaticLinks(source: string): string {
@@ -1953,7 +2081,11 @@ function emitClientModule(
 ): string {
   const imports = [
     ...(queryUpdatePlans.length > 0 ? ['applyCompiledQueryUpdatePlan'] : []),
-    ...(queryUpdatePlans.some((plan) => (plan.derives?.length ?? 0) > 0) ? ['derive'] : []),
+    ...(queryUpdatePlans.some(
+      (plan) => (plan.derives?.length ?? 0) > 0 || (plan.stamps?.length ?? 0) > 0,
+    )
+      ? ['derive']
+      : []),
     ...(handlers.length > 0 ? ['handler'] : []),
   ].sort();
   const importLine =
@@ -2023,8 +2155,14 @@ function emitQueryUpdatePlanExport(
 ): string {
   if (queryUpdatePlans.length === 0) return '';
 
-  const deriveExports = queryUpdatePlans
-    .flatMap((plan) => plan.derives ?? [])
+  const derives = dedupeBy(
+    queryUpdatePlans.flatMap((plan) => [
+      ...(plan.derives ?? []),
+      ...(plan.stamps ?? []).map((stamp) => stamp.derive),
+    ]),
+    (derive) => derive.exportName,
+  );
+  const deriveExports = derives
     .map(
       (derive) =>
         `export const ${derive.exportName} = derive([${JSON.stringify(derive.input)}], (${derive.param}) => ${derive.expression});`,
@@ -2033,7 +2171,7 @@ function emitQueryUpdatePlanExport(
   const entries = queryUpdatePlans
     .map(
       (plan) =>
-        `  ${JSON.stringify(plan.query)}(root, value) {\n    return applyCompiledQueryUpdatePlan(root, ${JSON.stringify(plan.query)}, value, { bindings: true, derives: [${plan.derives?.map(emitDerivePlan).join(', ') ?? ''}], stamps: [], templateStamps: [${plan.templateStamps?.map(emitTemplateStampPlan).join(', ') ?? ''}] });\n  },`,
+        `  ${JSON.stringify(plan.query)}(root, value) {\n    return applyCompiledQueryUpdatePlan(root, ${JSON.stringify(plan.query)}, value, { bindings: true, derives: [${plan.derives?.map(emitDerivePlan).join(', ') ?? ''}], stamps: [${plan.stamps?.map(emitStampPlan).join(', ') ?? ''}], templateStamps: [${plan.templateStamps?.map(emitTemplateStampPlan).join(', ') ?? ''}] });\n  },`,
     )
     .join('\n');
 
@@ -2042,6 +2180,10 @@ function emitQueryUpdatePlanExport(
 
 function emitDerivePlan(derive: QueryDeriveFact): string {
   return `{ name: ${JSON.stringify(derive.name)}, selector: ${JSON.stringify(derive.selector)}, select(value) { return ${derive.exportName}.run(value); } }`;
+}
+
+function emitStampPlan(stamp: QueryStampFact): string {
+  return `{ attr: ${JSON.stringify(stamp.attr)}, selector: ${JSON.stringify(stamp.selector)}, select(value) { return ${stamp.derive.exportName}.run(value); } }`;
 }
 
 function emitTemplateStampPlan(stamp: QueryTemplateStampFact): string {

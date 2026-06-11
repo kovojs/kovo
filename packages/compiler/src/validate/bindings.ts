@@ -16,6 +16,7 @@ import type {
   QueryShape,
   QueryShapeFact,
   QueryShapeWrapper,
+  QueryStampFact,
   QueryTemplateStampFact,
   QueryUpdateCoverageFact,
   QueryUpdatePlanFact,
@@ -105,6 +106,7 @@ export function collectQueryUpdatePlans(
 ): QueryUpdatePlanFact[] {
   const pathsByQuery = new Map<string, Set<string>>();
   const derivesByQuery = new Map<string, QueryDeriveFact[]>();
+  const stampsByQuery = new Map<string, QueryStampFact[]>();
   const listStampsByQuery = new Map<string, QueryTemplateStampFact[]>();
 
   for (const { path } of dataBindAttributes(model)) {
@@ -127,16 +129,25 @@ export function collectQueryUpdatePlans(
     listStampsByQuery.set(query, [...(listStampsByQuery.get(query) ?? []), stamp]);
   }
 
-  for (const derive of dataDeriveStamps(model, exportedDerives(source))) {
+  const deriveStamps = dataDeriveStamps(model, exportedDerives(source));
+
+  for (const derive of deriveStamps.derives) {
     const derives = derivesByQuery.get(derive.input) ?? [];
     derives.push(derive);
     derivesByQuery.set(derive.input, derives);
+  }
+
+  for (const stamp of deriveStamps.stamps) {
+    const stamps = stampsByQuery.get(stamp.derive.input) ?? [];
+    stamps.push(stamp);
+    stampsByQuery.set(stamp.derive.input, stamps);
   }
 
   const queries = new Set([
     ...pathsByQuery.keys(),
     ...listStampsByQuery.keys(),
     ...derivesByQuery.keys(),
+    ...stampsByQuery.keys(),
   ]);
 
   return [...queries]
@@ -152,6 +163,13 @@ export function collectQueryUpdatePlans(
         : {}),
       paths: [...(pathsByQuery.get(query) ?? [])].sort(),
       query,
+      ...(stampsByQuery.has(query)
+        ? {
+            stamps: [...(stampsByQuery.get(query) ?? [])].sort((left, right) =>
+              left.attr.localeCompare(right.attr),
+            ),
+          }
+        : {}),
       ...(listStampsByQuery.has(query)
         ? {
             templateStamps: [...(listStampsByQuery.get(query) ?? [])].sort((left, right) =>
@@ -186,23 +204,46 @@ function exportedDerives(source: string): Map<string, Omit<QueryDeriveFact, 'sel
 function dataDeriveStamps(
   model: ComponentModuleModel,
   derives: Map<string, Omit<QueryDeriveFact, 'selector'>>,
-): QueryDeriveFact[] {
-  return jsxAttributes(model)
-    .filter((attribute) => attribute.name === 'data-derive' && attribute.value)
-    .flatMap((attribute) => {
-      const [input, name] = (attribute.value ?? '').split('.');
-      if (!input || !name) return [];
+): { derives: QueryDeriveFact[]; stamps: QueryStampFact[] } {
+  const deriveFacts: QueryDeriveFact[] = [];
+  const stampFacts: QueryStampFact[] = [];
 
-      const derive = derives.get(name);
-      if (!derive || derive.input !== input) return [];
+  for (const element of jsxElements(model)) {
+    const deriveAttribute = element.attributes.find(
+      (attribute) => attribute.name === 'data-derive' && attribute.value,
+    );
+    if (!deriveAttribute?.value) continue;
 
-      return [
-        {
-          ...derive,
-          selector: `[data-derive="${input}.${name}"]`,
-        },
-      ];
-    });
+    const attr = element.attributes.find(
+      (attribute) => attribute.name === 'data-derive-attr' && attribute.value,
+    )?.value;
+
+    const [input, name] = deriveAttribute.value.split('.');
+    if (!input || !name) continue;
+
+    const derive = derives.get(name);
+    if (!derive || derive.input !== input) continue;
+
+    const deriveFact = {
+      ...derive,
+      selector: `[data-derive="${input}.${name}"]`,
+    };
+
+    if (attr) {
+      stampFacts.push({
+        attr,
+        derive: deriveFact,
+        selector: deriveFact.selector,
+      });
+    } else {
+      deriveFacts.push(deriveFact);
+    }
+  }
+
+  return {
+    derives: deriveFacts,
+    stamps: stampFacts,
+  };
 }
 
 export function collectQueryUpdateCoverage(

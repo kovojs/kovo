@@ -1927,6 +1927,66 @@ export const CartBadge = component('cart-badge', {
     expect(() => assertFixpoint(result)).not.toThrow();
   });
 
+  it('lowers inline attribute expressions into compiled query update stamps', () => {
+    const result = compileComponentModule({
+      fileName: 'cart-badge.tsx',
+      source: `
+export const CartBadge = component('cart-badge', {
+  queries: { cart: {} },
+  render: () => (
+    <cart-badge>
+      <button disabled={cart.count === 0}>Checkout</button>
+    </cart-badge>
+  ),
+});
+`,
+    });
+    const serverSource = result.files[0]?.source ?? '';
+    const clientSource = result.files[1]?.source ?? '';
+
+    expect(serverSource).toContain(
+      'export const CartBadge$button_disabled_derive = derive(["cart"], (cart) => cart.count === 0);',
+    );
+    expect(serverSource).toContain(
+      '<button data-derive="cart.CartBadge$button_disabled_derive" data-derive-attr="disabled">Checkout</button>',
+    );
+    expect(serverSource).not.toContain('disabled={cart.count === 0}');
+    expect(result.queryUpdatePlans).toEqual([
+      {
+        componentName: 'CartBadge',
+        paths: [],
+        query: 'cart',
+        stamps: [
+          {
+            attr: 'disabled',
+            derive: {
+              exportName: 'CartBadge$button_disabled_derive',
+              expression: 'cart.count === 0',
+              input: 'cart',
+              name: 'CartBadge$button_disabled_derive',
+              param: 'cart',
+              selector: '[data-derive="cart.CartBadge$button_disabled_derive"]',
+            },
+            selector: '[data-derive="cart.CartBadge$button_disabled_derive"]',
+          },
+        ],
+      },
+    ]);
+    expect(clientSource).toContain(
+      "import { applyCompiledQueryUpdatePlan, derive } from '@jiso/runtime';",
+    );
+    expect(clientSource).toContain(
+      'export const CartBadge$button_disabled_derive = derive(["cart"], (cart) => cart.count === 0);',
+    );
+    expect(clientSource).toContain(
+      'stamps: [{ attr: "disabled", selector: "[data-derive=\\"cart.CartBadge$button_disabled_derive\\"]", select(value) { return CartBadge$button_disabled_derive.run(value); } }]',
+    );
+    expect(result.updateCoverage).not.toContainEqual(
+      expect.objectContaining({ query: 'cart.count', status: 'UNHANDLED' }),
+    );
+    expect(() => assertFixpoint(result)).not.toThrow();
+  });
+
   it('classifies query-dependent render positions for FW311 coverage', () => {
     const result = compileComponentModule({
       fileName: 'cart-badge.tsx',
