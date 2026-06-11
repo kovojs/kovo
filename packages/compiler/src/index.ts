@@ -405,6 +405,15 @@ function removeJsxAttribute(attributes: string, start: number, end: number): str
   return `${attributes.slice(0, removeStart)}${attributes.slice(end)}`;
 }
 
+function removeJsxAttributes(
+  attributes: string,
+  ranges: readonly { end: number; start: number }[],
+): string {
+  return [...ranges]
+    .sort((left, right) => right.start - left.start)
+    .reduce((next, range) => removeJsxAttribute(next, range.start, range.end), attributes);
+}
+
 function appendViewTransitionStyle(attributes: string, name: string): string {
   const transition = `view-transition-name: ${escapeAttribute(name)}`;
   const selfClosing = /\s*\/\s*$/.test(attributes);
@@ -468,23 +477,38 @@ function lowerNavigationSugar(source: string): { source: string } {
 }
 
 function lowerStaticLinks(source: string): string {
-  return source.replace(
-    /<Link\b(?<attributes>[^>]*)>(?<children>[\s\S]*?)<\/Link>/g,
-    (match, attributes: string, children: string) => {
-      const target = readStringAttribute(attributes, 'to');
-      if (!target) return match;
+  let output = source;
 
-      const params = readLiteralObjectAttribute(attributes, 'params');
-      const search = readLiteralObjectAttribute(attributes, 'search');
-      if (params === null || search === null) return match;
+  for (const link of parsedJsxElements(source)
+    .filter((element) => element.tag === 'Link' && !element.selfClosing)
+    .sort((left, right) => right.start - left.start)) {
+    const target = jsxStaticAttributeValue(link, 'to');
+    if (!target) continue;
 
-      const href = buildStaticHref(target, params ?? {}, search ?? {});
-      const anchorAttributes = stripLinkNavigationAttributes(attributes);
-      const spacing = anchorAttributes.trim() === '' ? '' : anchorAttributes;
+    const params = navigationObjectAttributeValue(link, 'params');
+    const search = navigationObjectAttributeValue(link, 'search');
+    if (params === null || search === null) continue;
 
-      return `<a${spacing} href="${escapeAttribute(href)}">${children}</a>`;
-    },
-  );
+    const opening = output.slice(link.start, link.openingEnd);
+    const tagPrefix = '<Link';
+    const attributes = opening.slice(tagPrefix.length, -1);
+    const anchorAttributes = removeJsxAttributes(
+      attributes,
+      link.attributes
+        .filter((attribute) => ['params', 'search', 'to'].includes(attribute.name))
+        .map((attribute) => ({
+          end: attribute.end - link.start - tagPrefix.length,
+          start: attribute.start - link.start - tagPrefix.length,
+        })),
+    );
+    const spacing = anchorAttributes.trim() === '' ? '' : anchorAttributes;
+    const href = buildStaticHref(target, params ?? {}, search ?? {});
+    const children = output.slice(link.openingEnd, link.closingStart);
+
+    output = `${output.slice(0, link.start)}<a${spacing} href="${escapeAttribute(href)}">${children}</a>${output.slice(link.end)}`;
+  }
+
+  return output;
 }
 
 function lowerStaticHrefCalls(source: string): string {
@@ -532,18 +556,6 @@ function lowerStaticHrefCall(args: readonly string[]): string | null {
   return buildStaticHref(path, params ?? {}, search ?? {});
 }
 
-function stripLinkNavigationAttributes(attributes: string): string {
-  return attributes
-    .replace(/\s+to=(["'])[^"']+\1/g, '')
-    .replace(/\s+params=\{\{[\s\S]*?\}\}/g, '')
-    .replace(/\s+search=\{\{[\s\S]*?\}\}/g, '');
-}
-
-function readStringAttribute(attributes: string, name: string): string | null {
-  const match = new RegExp(`\\b${name}=(["'])(?<value>[^"']+)\\1`).exec(attributes);
-  return match?.groups?.value ?? null;
-}
-
 type StaticNavigationValue = string | number | boolean | null;
 type StaticNavigationObject = Record<string, StaticNavigationValue>;
 type StaticLiteralValue = StaticNavigationValue | StaticLiteralObject;
@@ -552,13 +564,13 @@ interface StaticLiteralObject {
   [key: string]: StaticLiteralValue;
 }
 
-function readLiteralObjectAttribute(
-  attributes: string,
+function navigationObjectAttributeValue(
+  element: JsxElementModel,
   name: string,
 ): StaticNavigationObject | null | undefined {
-  const match = new RegExp(`\\b${name}=\\{\\{(?<value>[\\s\\S]*?)\\}\\}`).exec(attributes);
-  if (!match?.groups) return undefined;
-  const value = parseLiteralObject(`{${match.groups.value}}`);
+  const expression = element.attributes.find((attribute) => attribute.name === name)?.expression;
+  if (expression === undefined) return undefined;
+  const value = parseLiteralObject(expression);
   return value ? navigationObjectValue(value) : null;
 }
 

@@ -1089,6 +1089,31 @@ export const ProductLinks = component('product-links', {
     expect(() => assertFixpoint(result)).not.toThrow();
   });
 
+  it('ignores Link navigation sugar text inside strings and comments', () => {
+    const result = compileComponentModule({
+      fileName: 'product-links.tsx',
+      registryFacts: {
+        routes: ['/products/:id'],
+      },
+      source: `
+export const ProductLinks = component('product-links', {
+  render: () => {
+    const sample = '<Link to="/missing">Missing</Link>';
+    // <Link to="/also-missing">Missing</Link>
+    return <Link to="/products/:id" params={{ id: 'p 1' }}>Product</Link>;
+  },
+});
+`,
+    });
+    const serverSource = result.files[0]?.source ?? '';
+
+    expect(result.diagnostics).toEqual([]);
+    expect(serverSource).toContain('const sample = \'<Link to="/missing">Missing</Link>\'');
+    expect(serverSource).toContain('<a href="/products/p%201">Product</a>');
+    expect(serverSource).not.toContain('<Link to="/products/:id"');
+    expect(() => assertFixpoint(result)).not.toThrow();
+  });
+
   it('lowers static href calls to literal anchor hrefs before FW220 validation', () => {
     const result = compileComponentModule({
       fileName: 'product-links.tsx',
