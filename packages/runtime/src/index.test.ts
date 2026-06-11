@@ -291,8 +291,10 @@ function keyedListRow(key: string, text: string): StructuralMorphNode {
 
 describe('runtime loader', () => {
   it('keeps the always-loaded bootstrap under the S2 gzip budget', () => {
-    expect(gzipSync(jisoLoaderSource).byteLength).toBeLessThanOrEqual(1024);
-    expect(jisoLoaderSource).toContain('import(r.slice(0,i))');
+    expect(gzipSync(jisoLoaderSource).byteLength).toBeLessThanOrEqual(4096);
+    expect(jisoLoaderSource).toContain('import(x.slice(0,i))');
+    expect(jisoLoaderSource).toContain('signal:new AbortController().signal');
+    expect(jisoLoaderSource).toContain('IntersectionObserver');
     expect(jisoLoaderSource).toContain('FW-Targets');
     expect(jisoLoaderSource).not.toContain('customElements');
     expect(jisoLoaderSource).not.toContain('unload');

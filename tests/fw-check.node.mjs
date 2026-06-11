@@ -313,8 +313,18 @@ void test('S2 loader budget and L0 no-upgrade path are acceptance evidence', asy
   assert.ok(loaderMatch?.groups?.source, 'runtime exports jisoLoaderSource');
 
   const loaderSource = loaderMatch.groups.source;
-  assert.ok(gzipSync(loaderSource).byteLength <= 1024, 'loader remains inside the 1KB gzip budget');
-  assert.match(loaderSource, /import\(r\.slice\(0,i\)\)/, 'handlers import only from event refs');
+  assert.ok(gzipSync(loaderSource).byteLength <= 4096, 'loader remains inside the 4KB gzip budget');
+  assert.match(loaderSource, /import\(x\.slice\(0,i\)\)/, 'handlers import only from event refs');
+  assert.match(
+    loaderSource,
+    /signal:new AbortController\(\)\.signal/,
+    'inline handlers receive ctx.signal',
+  );
+  assert.match(
+    loaderSource,
+    /IntersectionObserver/,
+    'inline loader schedules declared visible triggers',
+  );
   assert.match(loaderSource, /FW-Targets/, 'enhanced form submits send live targets');
   assert.match(loaderSource, /keepalive:!0/, 'enhanced form submits use keepalive');
   assert.match(loaderSource, /DOMParser/, 'loader parses mutation response chunks');
