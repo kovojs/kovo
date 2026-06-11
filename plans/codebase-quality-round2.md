@@ -281,6 +281,10 @@ tests/fw-check.node.mjs` passed.
       ESM issue, so the gate documents that failure and falls back to executable Vitest coverage
       for the same source tests rather than grepping package source or test text. Verification:
       `node --test --test-name-pattern "P3 Drizzle query facts" tests/fw-check.node.mjs`.
+      Partial evidence 2026-06-11: the P4 commerce touch-graph tranche now asserts the
+      app-facing generated `graph.json` touch facts directly and keeps the generated
+      `touch-graph.ts` byte pin, instead of grepping commerce source for generated-artifact import
+      strings or extractor absence.
       Partial evidence 2026-06-11: the P1 fragment-target registry tranche now imports built
       core/compiler APIs and asserts `fragmentTarget()` descriptor behavior plus compiler-emitted
       component graph fragments and `FragmentTargets` registry prop types instead of grepping

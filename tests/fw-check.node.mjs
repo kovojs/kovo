@@ -4406,6 +4406,9 @@ export const CartRow = component('cart-row', {
 
 void test('P4 commerce touch graph is a committed generated artifact', async () => {
   const commerceSource = await readProjectFile('examples/commerce/src/app.ts');
+  const commerceGraph = JSON.parse(
+    await readProjectFile('examples/commerce/src/generated/graph.json'),
+  );
   const touchGraphSource = await readProjectFile('examples/commerce/src/generated/touch-graph.ts');
   const cartItemsLine = lineNumberFor(commerceSource, "request.db.write('cart_items'");
   const ordersLine = lineNumberFor(commerceSource, "request.db.write('orders'");
@@ -4413,8 +4416,59 @@ void test('P4 commerce touch graph is a committed generated artifact', async () 
   const attachmentsLine = lineNumberFor(commerceSource, "request.db.write('attachments'");
   const webhookOrdersLine = lineNumberFor(commerceSource, "tx.write('orders'");
 
-  assert.match(commerceSource, /from '\.\/generated\/touch-graph\.js'/);
-  assert.doesNotMatch(commerceSource, /extractTouchGraphFromSource/);
+  assert.deepEqual(commerceGraph.touchGraph, {
+    'cart.addItem': {
+      reads: [],
+      touches: [
+        {
+          domain: 'cart',
+          keys: null,
+          site: `examples/commerce/src/app.ts:${cartItemsLine}`,
+          via: 'cart_items',
+        },
+        {
+          domain: 'order',
+          keys: null,
+          site: `examples/commerce/src/app.ts:${ordersLine}`,
+          via: 'orders',
+        },
+        {
+          domain: 'product',
+          keys: 'arg:productId',
+          predicate: 'eq',
+          site: `examples/commerce/src/app.ts:${productsLine}`,
+          via: 'products',
+        },
+      ],
+      unresolved: [],
+    },
+    'order.receipt': {
+      reads: [],
+      touches: [
+        {
+          domain: 'attachment',
+          keys: 'arg:orderId',
+          predicate: 'eq',
+          site: `examples/commerce/src/app.ts:${attachmentsLine}`,
+          via: 'attachments',
+        },
+      ],
+      unresolved: [],
+    },
+    'payment.webhook': {
+      reads: [],
+      touches: [
+        {
+          domain: 'order',
+          keys: 'arg:data.object.id',
+          predicate: 'eq',
+          site: `examples/commerce/src/app.ts:${webhookOrdersLine}`,
+          via: 'orders',
+        },
+      ],
+      unresolved: [],
+    },
+  });
   // SPEC §11.1/§11.2: the committed static graph must stay source-derived
   // because runtime verification checks observed effects against these facts.
   assert.equal(
