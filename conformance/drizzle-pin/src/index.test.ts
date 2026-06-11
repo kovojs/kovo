@@ -244,7 +244,7 @@ describe('Drizzle pinned subset conformance', () => {
           {
             code: 'FW410',
             message:
-              'Query result shape failed declared output schema. cart/count.count requires a declared output schema for opaque sql/raw projection.',
+              'Opaque query projection requires a declared output schema. cart/count.count uses sql/raw projection without output.',
             severity: 'error',
             site: 'conformance/drizzle-pin/src/cart.queries.ts:11',
           },
@@ -261,7 +261,7 @@ describe('Drizzle pinned subset conformance', () => {
       {
         code: 'FW410',
         message:
-          'Query result shape failed declared output schema. cart/count.count requires a declared output schema for opaque sql/raw projection.',
+          'Opaque query projection requires a declared output schema. cart/count.count uses sql/raw projection without output.',
         severity: 'error',
         site: 'conformance/drizzle-pin/src/cart.queries.ts:11',
       },

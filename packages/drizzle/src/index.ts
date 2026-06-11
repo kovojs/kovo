@@ -975,7 +975,6 @@ function directSummaryForFunction(
           call.statement,
           call.tableExpression,
           table.annotation,
-          tables,
         );
         writes.push({
           operation: call.operation,
@@ -993,7 +992,6 @@ function directSummaryForFunction(
               call.statement,
               readSource.tableExpression,
               readTable.annotation,
-              tables,
             );
             reads.push({
               operation: readSource.operation,
@@ -1595,12 +1593,9 @@ function extractPredicateSummary(
   statement: string,
   tableIdentifier: string,
   table: JisoTableAnnotation,
-  tables: ReadonlyMap<string, readonly ExtractedTable[]>,
 ): ExtractedPredicateSummary {
   const predicate = wherePredicate(statement);
-  const key = predicate
-    ? extractParameterizedKey(predicate, tableIdentifier, table, tables)
-    : undefined;
+  const key = predicate ? extractParameterizedKey(predicate, tableIdentifier, table) : undefined;
   if (key) return { key };
 
   return hasNonEqPredicate(predicate, tableIdentifier, table) ? { predicate: 'non-eq' } : {};
@@ -1621,7 +1616,6 @@ function extractParameterizedKey(
   predicate: string,
   tableIdentifier: string,
   table: JisoTableAnnotation,
-  tables: ReadonlyMap<string, readonly ExtractedTable[]>,
 ): string | undefined {
   if (!table.key) return undefined;
 
@@ -1630,8 +1624,8 @@ function extractParameterizedKey(
   const right = match?.groups?.right?.trim();
   if (!left || !right) return undefined;
 
-  if (left === `${tableIdentifier}.${table.key}`) return argumentKey(right, tables);
-  if (right === `${tableIdentifier}.${table.key}`) return argumentKey(left, tables);
+  if (left === `${tableIdentifier}.${table.key}`) return argumentKey(right);
+  if (right === `${tableIdentifier}.${table.key}`) return argumentKey(left);
   return undefined;
 }
 
@@ -1647,13 +1641,10 @@ function hasNonEqPredicate(
   return true;
 }
 
-function argumentKey(
-  expression: string,
-  tables: ReadonlyMap<string, readonly ExtractedTable[]>,
-): string | undefined {
+function argumentKey(expression: string): string | undefined {
   const member = /^(?<base>[A-Za-z_$][\w$]*)\.(?<property>[A-Za-z_$][\w$]*)$/.exec(expression);
   if (member?.groups) {
-    if ((tables.get(member.groups.base ?? '')?.length ?? 0) > 0) return undefined;
+    if (member.groups.base !== 'input') return undefined;
     return member.groups.property ? `arg:${member.groups.property}` : undefined;
   }
 

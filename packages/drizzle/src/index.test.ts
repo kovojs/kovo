@@ -902,10 +902,12 @@ export const tableDomains = {
         source: `
           export const products = pgTable("products", {}, jiso({ domain: "product", key: "id" }));
           export const prices = pgTable("prices", {}, jiso({ domain: "price", key: "productId" }));
+          export const auditLog = pgTable("audit_log", {});
 
           export async function syncProduct(db, productId) {
             await db.update(products).set({ reserved: true }).where(eq(products.sku, productId));
             await db.update(products).set({ price: prices.amount }).from(prices).where(eq(products.id, prices.productId));
+            await db.update(products).set({ audited: true }).where(eq(products.id, auditLog.id));
           }
         `,
       },
@@ -917,14 +919,15 @@ export const tableDomains = {
           {
             domain: 'price',
             keys: null,
-            site: 'product.domain.ts:7',
+            site: 'product.domain.ts:8',
             source: 'update-from',
             via: 'prices',
           },
         ],
         touches: [
-          { domain: 'product', keys: null, site: 'product.domain.ts:6', via: 'products' },
           { domain: 'product', keys: null, site: 'product.domain.ts:7', via: 'products' },
+          { domain: 'product', keys: null, site: 'product.domain.ts:8', via: 'products' },
+          { domain: 'product', keys: null, site: 'product.domain.ts:9', via: 'products' },
         ],
         unresolved: [],
       },
