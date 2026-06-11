@@ -689,9 +689,14 @@ void test('Drizzle pinned conformance suite is an explicit gate', async () => {
 });
 
 void test('D3 deferred stream responses are consumed by the runtime', async () => {
+  const compilerSource = await readProjectFile('packages/compiler/src/index.ts');
+  const compilerTests = await readProjectFile('packages/compiler/src/index.test.ts');
   const runtimeSource = await readProjectFile('packages/runtime/src/index.ts');
   const runtimeTests = await readProjectFile('packages/runtime/src/index.test.ts');
 
+  assert.match(compilerSource, /collectQueryUpdatePlans/);
+  assert.match(compilerSource, /\$queryUpdatePlans/);
+  assert.match(compilerTests, /emits per-query data-bind update plans for compiled components/);
   assert.match(runtimeSource, /applyDeferredStreamResponseToDom/);
   assert.match(runtimeSource, /export function applyQueryBindings/);
   assert.match(runtimeSource, /deferredStreamChunks/);

@@ -20,6 +20,7 @@ export interface CompileResult {
   diagnostics: CompilerDiagnostic[];
   files: EmittedFile[];
   platformSubstitutions: PlatformSubstitution[];
+  queryUpdatePlans: readonly QueryUpdatePlanFact[];
   viewTransitions: ViewTransitionStamp[];
 }
 
@@ -32,6 +33,12 @@ export interface CssAsset {
 export interface ComponentCssAsset extends CssAsset {
   componentName: string;
   fragmentTargets: readonly string[];
+}
+
+export interface QueryUpdatePlanFact {
+  componentName: string;
+  paths: readonly string[];
+  query: string;
 }
 
 export interface CssAssetManifest {
@@ -50,6 +57,7 @@ export function createEmptyCompileResult(): CompileResult {
     diagnostics: [],
     files: [],
     platformSubstitutions: [],
+    queryUpdatePlans: [],
     viewTransitions: [],
   };
 }
@@ -126,6 +134,7 @@ export function compileComponentModule(options: CompileComponentOptions): Compil
       diagnostics: [],
       files: [{ fileName: options.fileName, source: options.source }],
       platformSubstitutions: [],
+      queryUpdatePlans: [],
       viewTransitions: [],
     };
   }
@@ -138,6 +147,7 @@ export function compileComponentModule(options: CompileComponentOptions): Compil
   const serverFactStateDiagnostics = validateServerFactsInLocalState(source, options.fileName);
   const fragmentInputDiagnostics = validateFragmentTargetInputs(source, options.fileName);
   const dataBindDiagnostics = validateDataBindings(source, options);
+  const queryUpdatePlans = collectQueryUpdatePlans(source, componentName);
   const eventPayloadDiagnostics = validateEventPayloads(source, options);
   const directDbDiagnostics = validateDirectDbAccess(source, options.fileName);
   const clientFileName = replaceExtension(options.fileName, '.client.js');
@@ -145,7 +155,7 @@ export function compileComponentModule(options: CompileComponentOptions): Compil
   const serverFileName = replaceExtension(options.fileName, '.server.js');
   const registryFileName = 'generated/registries.d.ts';
 
-  const clientSource = emitClientModule(handlers);
+  const clientSource = emitClientModule(handlers, queryUpdatePlans, componentName);
   const cssSource = emitCssModule(source, componentName);
   const fragmentTargetFacts = findFragmentTargetFacts(source, componentName);
   const fragmentTargets = fragmentTargetFacts.map((fact) => fact.target);
@@ -160,6 +170,7 @@ export function compileComponentModule(options: CompileComponentOptions): Compil
     fragmentTargetFacts,
     handlers,
     platformSubstitutions: platformLowering.substitutions,
+    queryUpdatePlans,
     ...(options.registryFacts ? { registryFacts: options.registryFacts } : {}),
     viewTransitions: viewTransitionLowering.stamps,
   });
@@ -181,6 +192,7 @@ export function compileComponentModule(options: CompileComponentOptions): Compil
     ],
     cssAssets,
     platformSubstitutions: platformLowering.substitutions,
+    queryUpdatePlans,
     viewTransitions: viewTransitionLowering.stamps,
   };
 }
@@ -594,14 +606,39 @@ function validateDataBindings(
 ): CompilerDiagnostic[] {
   if (!options.queryShapes) return [];
 
-  return [...source.matchAll(/\bdata-bind=(["'])(?<path>[^"']+)\1/g)]
-    .map((match) => match.groups?.path ?? '')
-    .filter(Boolean)
+  return dataBindPaths(source)
     .filter((path) => !pathExistsInQueryShapes(path, options.queryShapes ?? {}))
     .map((path) => ({
       ...diagnosticFor(options.fileName, 'FW302'),
       message: `${diagnosticDefinitions.FW302.message} ${path}`,
     }));
+}
+
+function collectQueryUpdatePlans(source: string, componentName: string): QueryUpdatePlanFact[] {
+  const pathsByQuery = new Map<string, Set<string>>();
+
+  for (const path of dataBindPaths(source)) {
+    const [query] = path.split('.');
+    if (!query) continue;
+
+    const paths = pathsByQuery.get(query) ?? new Set<string>();
+    paths.add(path);
+    pathsByQuery.set(query, paths);
+  }
+
+  return [...pathsByQuery.entries()]
+    .sort(([left], [right]) => left.localeCompare(right))
+    .map(([query, paths]) => ({
+      componentName,
+      paths: [...paths].sort(),
+      query,
+    }));
+}
+
+function dataBindPaths(source: string): string[] {
+  return [...source.matchAll(/\bdata-bind=(["'])(?<path>[^"']+)\1/g)]
+    .map((match) => match.groups?.path ?? '')
+    .filter(Boolean);
 }
 
 // SPEC 5.2: query data is shared/server-owned; island-local state is private/client-owned.
@@ -1111,18 +1148,44 @@ function isArrayShape(shape: QueryShape): shape is readonly QueryShape[] {
   return Array.isArray(shape);
 }
 
-function emitClientModule(handlers: HandlerLowering[]): string {
-  const exports = handlers.length
+function emitClientModule(
+  handlers: HandlerLowering[],
+  queryUpdatePlans: readonly QueryUpdatePlanFact[],
+  componentName: string,
+): string {
+  const imports = [
+    ...(queryUpdatePlans.length > 0 ? ['applyQueryBindings'] : []),
+    ...(handlers.length > 0 ? ['handler'] : []),
+  ].sort();
+  const importLine =
+    imports.length > 0 ? `import { ${imports.join(', ')} } from '@jiso/runtime';\n\n` : '';
+  const handlerExports = handlers.length
     ? handlers
         .map((handler) => `export const ${handler.exportName} = handler((_event, _ctx) => {});`)
         .join('\n')
-    : '// no client handlers emitted';
+    : '';
+  const queryPlanExport = emitQueryUpdatePlanExport(componentName, queryUpdatePlans);
+  const exports = [handlerExports, queryPlanExport].filter(Boolean).join('\n\n');
 
   return `${irHeader}
-import { handler } from '@jiso/runtime';
-
-${exports}
+${importLine}${exports || '// no client handlers emitted'}
 `;
+}
+
+function emitQueryUpdatePlanExport(
+  componentName: string,
+  queryUpdatePlans: readonly QueryUpdatePlanFact[],
+): string {
+  if (queryUpdatePlans.length === 0) return '';
+
+  const entries = queryUpdatePlans
+    .map(
+      (plan) =>
+        `  ${JSON.stringify(plan.query)}(root, value) {\n    return applyQueryBindings(root, ${JSON.stringify(plan.query)}, value);\n  },`,
+    )
+    .join('\n');
+
+  return `export const ${componentName}$queryUpdatePlans = {\n${entries}\n};`;
 }
 
 function emitServerModule(
@@ -1374,6 +1437,7 @@ function emitRegistryModule(options: {
   fragmentTargetFacts: readonly FragmentTargetFact[];
   handlers: HandlerLowering[];
   platformSubstitutions: PlatformSubstitution[];
+  queryUpdatePlans: readonly QueryUpdatePlanFact[];
   registryFacts?: RegistryFacts;
   viewTransitions: ViewTransitionStamp[];
 }): string {
@@ -1391,6 +1455,12 @@ function emitRegistryModule(options: {
     .join('\n');
   const viewTransitionLines = options.viewTransitions
     .map((stamp) => `  '${stamp.name}': unknown;`)
+    .join('\n');
+  const queryUpdatePlanLines = options.queryUpdatePlans
+    .map(
+      (plan) =>
+        `  '${plan.componentName}:${plan.query}': readonly [${plan.paths.map((path) => `'${path}'`).join(', ')}];`,
+    )
     .join('\n');
   const stylesheetLines = options.cssAssets.map(componentStylesheetLine).join('\n');
   const queryRegistryLines = registryTypeFactLines(options.registryFacts?.queries);
@@ -1412,6 +1482,10 @@ ${platformSubstitutionLines}
 
 export interface ViewTransitions {
 ${viewTransitionLines}
+}
+
+export interface QueryUpdatePlans {
+${queryUpdatePlanLines}
 }
 
 export interface ComponentStylesheets {

@@ -37,6 +37,8 @@ describe('compileComponentModule', () => {
       'generated/registries.d.ts',
     ]);
     expect(result.files[1]?.source).toContain('export const CartBadge$button_click');
+    expect(result.files[1]?.source).toContain('import { applyQueryBindings, handler }');
+    expect(result.files[1]?.source).toContain('export const CartBadge$queryUpdatePlans');
     expect(result.files[0]?.source).toContain(
       'on:click="/c/components/cart/cart-badge.client.js#CartBadge$button_click"',
     );
@@ -45,6 +47,7 @@ describe('compileComponentModule', () => {
       "'#cart-badge': typeof import('../components/cart/cart-badge.client.js');",
     );
     expect(result.files[2]?.source).toContain("'cart-badge': {};");
+    expect(result.files[2]?.source).toContain("'CartBadge:cart': readonly ['cart.count'];");
   });
 
   it('emits provided query, mutation, and domain key registry facts', () => {
@@ -485,6 +488,48 @@ export const CartBadge = component('cart-badge', {
     });
 
     expect(result.diagnostics).toEqual([]);
+  });
+
+  it('emits per-query data-bind update plans for compiled components', () => {
+    const result = compileComponentModule({
+      fileName: 'cart-badge.tsx',
+      source: `
+export const CartBadge = component('cart-badge', {
+  render: () => (
+    <cart-badge>
+      <span data-bind="cart.count">2</span>
+      <span data-bind="cart.total">2998</span>
+      <span data-bind="product.name">Coffee</span>
+      <span data-bind="cart.count">2</span>
+    </cart-badge>
+  ),
+});
+`,
+    });
+    const clientSource = result.files[1]?.source ?? '';
+    const registrySource = result.files[2]?.source ?? '';
+
+    expect(result.queryUpdatePlans).toEqual([
+      {
+        componentName: 'CartBadge',
+        paths: ['cart.count', 'cart.total'],
+        query: 'cart',
+      },
+      {
+        componentName: 'CartBadge',
+        paths: ['product.name'],
+        query: 'product',
+      },
+    ]);
+    expect(clientSource).toContain("import { applyQueryBindings } from '@jiso/runtime';");
+    expect(clientSource).toContain('export const CartBadge$queryUpdatePlans = {');
+    expect(clientSource).toContain('return applyQueryBindings(root, "cart", value);');
+    expect(clientSource).toContain('return applyQueryBindings(root, "product", value);');
+    expect(registrySource).toContain(`export interface QueryUpdatePlans {
+  'CartBadge:cart': readonly ['cart.count', 'cart.total'];
+  'CartBadge:product': readonly ['product.name'];
+}`);
+    expect(() => assertFixpoint(result)).not.toThrow();
   });
 
   it('stamps rendered component markup with declared query dependencies', () => {
