@@ -1,0 +1,36 @@
+import tailwindcss from '@tailwindcss/vite';
+import { defineConfig } from 'vite-plus';
+
+export default defineConfig({
+  build: {
+    outDir: 'dist-css',
+    rollupOptions: {
+      input: {
+        site: 'src/styles.css',
+      },
+      output: {
+        assetFileNames: 'assets/[name][extname]',
+      },
+    },
+  },
+  plugins: [tailwindcss()],
+  run: {
+    tasks: {
+      'build-site': {
+        command: 'vite build && node scripts/build.mjs',
+        input: [
+          { pattern: 'content/**/*', base: 'workspace' },
+          { pattern: 'public/**/*', base: 'workspace' },
+          { pattern: 'scripts/**/*', base: 'workspace' },
+          { pattern: 'src/**/*', base: 'workspace' },
+          { pattern: 'tutorial/**/*', base: 'workspace' },
+        ],
+        output: ['dist/**'],
+      },
+      'check-links': {
+        command: 'node scripts/check-links.mjs',
+        input: [{ pattern: 'dist/**', base: 'workspace' }],
+      },
+    },
+  },
+});

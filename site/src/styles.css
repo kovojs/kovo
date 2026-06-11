@@ -1,0 +1,282 @@
+@import 'tailwindcss';
+
+@source '../scripts/**/*.mjs';
+@source '../public/**/*.js';
+
+@theme {
+  --color-jiso-ink: #17202a;
+  --color-jiso-accent: #0f8b8d;
+  --color-jiso-accent-dark: #0b6e70;
+  --color-jiso-accent-soft: #e6f4f4;
+  --color-jiso-terminal: #0d1722;
+  --color-jiso-terminal-edge: #1d2c3c;
+  --font-sans:
+    'Inter', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue',
+    sans-serif;
+  --font-mono:
+    'Berkeley Mono', ui-monospace, 'SFMono-Regular', Menlo, Consolas, 'Liberation Mono', monospace;
+}
+
+/* Markdown body. The content pipeline emits plain semantic HTML; these rules
+   style it without per-element utility classes so .md mirrors stay clean. */
+.prose {
+  color: var(--color-jiso-ink);
+  font-size: 1rem;
+  line-height: 1.75;
+  max-width: 48rem;
+}
+
+.prose h1 {
+  font-size: 2rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  line-height: 1.2;
+  margin-bottom: 1rem;
+}
+
+.prose h2 {
+  border-top: 1px solid #e2e8f0;
+  font-size: 1.4rem;
+  font-weight: 650;
+  letter-spacing: -0.01em;
+  margin-top: 2.5rem;
+  margin-bottom: 0.75rem;
+  padding-top: 2rem;
+}
+
+.prose h3 {
+  font-size: 1.15rem;
+  font-weight: 650;
+  margin-top: 2rem;
+  margin-bottom: 0.5rem;
+}
+
+.prose h2:first-child,
+.prose h3:first-child {
+  border-top: none;
+  margin-top: 0;
+  padding-top: 0;
+}
+
+.prose p,
+.prose ul,
+.prose ol {
+  margin-bottom: 1rem;
+}
+
+.prose ul {
+  list-style: disc;
+  padding-left: 1.5rem;
+}
+
+.prose ol {
+  list-style: decimal;
+  padding-left: 1.5rem;
+}
+
+.prose li {
+  margin-bottom: 0.35rem;
+}
+
+.prose a {
+  color: var(--color-jiso-accent-dark);
+  text-decoration: underline;
+  text-decoration-color: color-mix(in srgb, var(--color-jiso-accent) 45%, transparent);
+  text-underline-offset: 3px;
+}
+
+.prose a:hover {
+  text-decoration-color: var(--color-jiso-accent);
+}
+
+.prose code {
+  background: #f1f5f9;
+  border-radius: 0.3rem;
+  font-family: var(--font-mono);
+  font-size: 0.86em;
+  padding: 0.12rem 0.35rem;
+}
+
+.prose pre {
+  background: var(--color-jiso-terminal);
+  border: 1px solid var(--color-jiso-terminal-edge);
+  border-radius: 0.75rem;
+  font-size: 0.85rem;
+  line-height: 1.65;
+  margin: 1.25rem 0;
+  overflow-x: auto;
+  padding: 1rem 1.25rem;
+}
+
+.prose pre code {
+  background: transparent;
+  border-radius: 0;
+  font-size: inherit;
+  padding: 0;
+}
+
+.prose pre.shiki {
+  background-color: var(--color-jiso-terminal) !important;
+}
+
+.prose table {
+  border-collapse: collapse;
+  display: block;
+  font-size: 0.9rem;
+  margin: 1.25rem 0;
+  overflow-x: auto;
+  width: 100%;
+}
+
+.prose th {
+  border-bottom: 2px solid #cbd5e1;
+  font-weight: 650;
+  padding: 0.5rem 0.9rem 0.5rem 0;
+  text-align: left;
+}
+
+.prose td {
+  border-bottom: 1px solid #e2e8f0;
+  padding: 0.5rem 0.9rem 0.5rem 0;
+  vertical-align: top;
+}
+
+.prose blockquote {
+  border-left: 3px solid var(--color-jiso-accent);
+  color: #475569;
+  font-style: italic;
+  margin: 1.25rem 0;
+  padding-left: 1rem;
+}
+
+.prose hr {
+  border: none;
+  border-top: 1px solid #e2e8f0;
+  margin: 2.5rem 0;
+}
+
+.prose .heading-anchor {
+  color: #94a3b8;
+  margin-left: 0.4rem;
+  opacity: 0;
+  text-decoration: none;
+}
+
+.prose h2:hover .heading-anchor,
+.prose h3:hover .heading-anchor,
+.prose h4:hover .heading-anchor {
+  opacity: 1;
+}
+
+/* Captured-artifact frames (W3): terminal and network-panel chrome. */
+.artifact {
+  background: var(--color-jiso-terminal);
+  border: 1px solid var(--color-jiso-terminal-edge);
+  border-radius: 0.9rem;
+  box-shadow: 0 18px 40px -24px rgb(13 23 34 / 0.55);
+  color: #d7e2ee;
+  font-family: var(--font-mono);
+  font-size: 0.8rem;
+  line-height: 1.6;
+  overflow: hidden;
+}
+
+.artifact-title {
+  align-items: center;
+  border-bottom: 1px solid var(--color-jiso-terminal-edge);
+  color: #8aa0b8;
+  display: flex;
+  font-size: 0.72rem;
+  gap: 0.5rem;
+  padding: 0.55rem 1rem;
+}
+
+.artifact-title::before {
+  content: '';
+  background: #2c3e50;
+  border-radius: 9999px;
+  box-shadow:
+    1.1rem 0 0 #2c3e50,
+    2.2rem 0 0 #2c3e50;
+  display: inline-block;
+  height: 0.55rem;
+  margin-right: 2.6rem;
+  width: 0.55rem;
+}
+
+.artifact-body {
+  margin: 0;
+  overflow-x: auto;
+  padding: 1rem 1.25rem;
+  white-space: pre;
+}
+
+.artifact .tok-error {
+  color: #ff8a8a;
+  font-weight: 600;
+}
+
+.artifact .tok-code {
+  color: #7dd3c0;
+  font-weight: 600;
+}
+
+.artifact .tok-dim {
+  color: #7690a8;
+}
+
+.artifact .tok-header {
+  color: #9ecbff;
+}
+
+/* Search dialog (W8) — styled here so the island module stays logic-only. */
+dialog.search-dialog {
+  background: white;
+  border: 1px solid #e2e8f0;
+  border-radius: 1rem;
+  box-shadow: 0 24px 60px -12px rgb(13 23 34 / 0.35);
+  margin-top: 10vh;
+  max-height: 70vh;
+  padding: 0;
+  width: min(40rem, 92vw);
+}
+
+dialog.search-dialog::backdrop {
+  backdrop-filter: blur(2px);
+  background: rgb(13 23 34 / 0.45);
+}
+
+.search-input {
+  border: none;
+  border-bottom: 1px solid #e2e8f0;
+  font-size: 1rem;
+  outline: none;
+  padding: 1rem 1.25rem;
+  width: 100%;
+}
+
+.search-results {
+  list-style: none;
+  margin: 0;
+  max-height: 50vh;
+  overflow-y: auto;
+  padding: 0.5rem;
+}
+
+.search-results a {
+  border-radius: 0.5rem;
+  color: var(--color-jiso-ink);
+  display: block;
+  padding: 0.6rem 0.75rem;
+  text-decoration: none;
+}
+
+.search-results a:hover,
+.search-results li.active a {
+  background: var(--color-jiso-accent-soft);
+}
+
+.search-results .result-section {
+  color: #64748b;
+  font-size: 0.75rem;
+}

@@ -1,0 +1,27 @@
+{
+  "name": "@jiso/site",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "vite build && node scripts/build.mjs",
+    "build:css": "vite build",
+    "build:pages": "node scripts/build.mjs",
+    "check:links": "node scripts/check-links.mjs",
+    "test": "vitest --run"
+  },
+  "dependencies": {
+    "@jiso/core": "workspace:*",
+    "@jiso/runtime": "workspace:*",
+    "@jiso/server": "workspace:*"
+  },
+  "devDependencies": {
+    "@jiso/compiler": "workspace:*",
+    "@tailwindcss/vite": "^4.3.0",
+    "marked": "^16.0.0",
+    "shiki": "^3.0.0",
+    "tailwindcss": "^4.3.0",
+    "vite-plus": "^0.1.24",
+    "vitest": "4.1.8"
+  }
+}

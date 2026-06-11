@@ -5,7 +5,8 @@
   "workspaces": [
     "packages/*",
     "examples/*",
-    "conformance/*"
+    "conformance/*",
+    "site"
   ],
   "type": "module",
   "scripts": {
