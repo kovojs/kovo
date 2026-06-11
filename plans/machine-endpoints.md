@@ -10,7 +10,11 @@ Scope: SPEC additions (`webhook()`, route response outcomes, storage capability,
 - [x] E1 `endpoint()` floor implementation (shared with D5 A4), with this plan's refinements: pre-parse raw-body access, prefix mounts, no ambient session.
 - [ ] E2 `webhook()` shaped primitive: verifier slot, loose input schema, idempotency, Tx lifecycle, domain writes, change record.
 - [ ] E3 verifier kit: generic `hmacSignature()` + `stripeSignature` + `standardWebhooks` presets, custom `verify` escape, provider test vectors in CI.
-- [ ] E4 `respond.file()`/`respond.stream()` route outcomes (ETag/304; exports and downloads become ordinary guarded routes).
+- [x] E4 `respond.file()`/`respond.stream()` route outcomes (ETag/304; exports and downloads become ordinary guarded routes).
+      Evidence 2026-06-11: `@jiso/server` exports a branded `respond` helper with
+      `file()` and `stream()` route outcomes; `renderRoutePageResponse` emits declared
+      `Content-Type`/`Content-Disposition`, honors `ETag` with `If-None-Match` -> 304, and skips
+      HTML rendering for these outcomes. Covered in `packages/server/src/index.test.ts`.
 - [ ] E5 storage capability interface + filesystem and S3-compatible adapters; retrofit D4 `s.file()` uploads onto it.
 - [x] E6 `fw explain --endpoints` audit surface (snapshot-locked like the rest of P8 output).
       Evidence 2026-06-11: `packages/cli/src/index.ts` prints a stable `ENDPOINTS`
