@@ -787,7 +787,7 @@ describe('fw explain', () => {
     `);
   });
 
-  it('explains query read sets and the writes that invalidate them', () => {
+  it('explains query read sets with mutation invalidators separated per SPEC.md section 5.3', () => {
     expect(
       fwExplain(
         {
@@ -819,7 +819,7 @@ describe('fw explain', () => {
     ).toEqual({
       exitCode: 0,
       output:
-        'fw-explain/v1\nQUERY cart\nreads: cart\nconsumers: component:CartBadge,page:/cart,page:/checkout\ninvalidated-by: cart.addItem\n',
+        'fw-explain/v1\nQUERY cart\nreads: cart\nconsumers: component:CartBadge,page:/cart,page:/checkout\ninvalidated-by: -\ndomain-writes: cart.addItem\n',
     });
   });
 
@@ -839,7 +839,7 @@ describe('fw explain', () => {
     ).toEqual({
       exitCode: 0,
       output:
-        'fw-explain/v1\nQUERY cart\nreads: cart\nconsumers: component:CartBadge\ninvalidated-by: cart/add,cart/remove\n',
+        'fw-explain/v1\nQUERY cart\nreads: cart\nconsumers: component:CartBadge\ninvalidated-by: cart/add,cart/remove\ndomain-writes: -\n',
     });
   });
 

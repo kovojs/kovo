@@ -275,6 +275,7 @@ export function fwExplain(input: FwExplainInput, options: FwExplainOptions): FwC
     lines.push(`reads: ${list(query.domains)}`);
     lines.push(`consumers: ${list(queryConsumers(query.query, input))}`);
     lines.push(`invalidated-by: ${list(invalidatedBy(query, input))}`);
+    lines.push(`domain-writes: ${list(domainWritesFor(query, input))}`);
     return ok(lines);
   }
 
@@ -419,12 +420,6 @@ function isExplainKind(value: string | undefined): value is ExplainKind {
 function invalidatedBy(query: QueryReadSet, input: FwExplainInput): string[] {
   const invalidators = new Set<string>();
 
-  for (const [writeName, entry] of Object.entries(input.touchGraph ?? {})) {
-    if (entry.touches.some((touch) => query.domains.some((domain) => domain === touch.domain))) {
-      invalidators.add(writeName);
-    }
-  }
-
   for (const mutation of input.mutations ?? []) {
     const domains = mutationAffectedDomains(mutation);
 
@@ -434,6 +429,18 @@ function invalidatedBy(query: QueryReadSet, input: FwExplainInput): string[] {
   }
 
   return [...invalidators].sort();
+}
+
+function domainWritesFor(query: QueryReadSet, input: FwExplainInput): string[] {
+  const writes = new Set<string>();
+
+  for (const [writeName, entry] of Object.entries(input.touchGraph ?? {})) {
+    if (entry.touches.some((touch) => query.domains.some((domain) => domain === touch.domain))) {
+      writes.add(writeName);
+    }
+  }
+
+  return [...writes].sort();
 }
 
 function queryConsumers(queryName: string, input: FwExplainInput): string[] {

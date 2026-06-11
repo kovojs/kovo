@@ -91,7 +91,7 @@ describe('create-jiso starter', () => {
     expect(fwExplain(graph, { kind: 'query', target: 'cart' })).toEqual({
       exitCode: 0,
       output:
-        'fw-explain/v1\nQUERY cart\nreads: cart\nconsumers: component:CartBadge,component:CartPanel,page:/cart\ninvalidated-by: cart.addItem,cart/add\n',
+        'fw-explain/v1\nQUERY cart\nreads: cart\nconsumers: component:CartBadge,component:CartPanel,page:/cart\ninvalidated-by: cart/add\ndomain-writes: cart.addItem\n',
     });
     expect(fwExplain(graph, { kind: 'mutation', optimistic: true, target: 'cart/add' })).toEqual({
       exitCode: 0,
@@ -140,7 +140,8 @@ describe('create-jiso starter', () => {
     expect(graphAssertions).toContain('scripts/graph-assertions.mjs');
     expect(graphAssertions).toContain('fw explain query cart graph.json > .jiso/cart.query.txt');
     expect(graphAssertions).toContain('diff -u .jiso/cart.expected-consumers.txt');
-    expect(graphAssertions).toContain("grep '^invalidated-by: .*cart.addItem'");
+    expect(graphAssertions).toContain("grep '^invalidated-by: .*cart/add'");
+    expect(graphAssertions).toContain("grep '^domain-writes: .*cart.addItem'");
     expect(graphAssertions).toContain("grep '^OPTIMISTIC cart await-fragment'");
     const deploymentDoc = project.files.find((file) => file.path === 'docs/deployment.md')?.source;
     expect(deploymentDoc).toContain('stateless');

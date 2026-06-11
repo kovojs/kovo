@@ -200,7 +200,8 @@ const cartConsumers = explainList(explainLine(cartQuery, 'consumers: ')).filter(
 );
 
 assert.deepEqual(cartConsumers.sort(), ['component:CartBadge', 'component:CartPanel']);
-assert.match(explainLine(cartQuery, 'invalidated-by: '), /(^|,)cart\\.addItem(,|$)/);
+assert.match(explainLine(cartQuery, 'invalidated-by: '), /(^|,)cart\\/add(,|$)/);
+assert.match(explainLine(cartQuery, 'domain-writes: '), /(^|,)cart\\.addItem(,|$)/);
 
 const cartAdd = fwExplain(['mutation', 'cart/add', '--optimistic']);
 assert.match(cartAdd, /^updates: cart->component:CartBadge,component:CartPanel,page:\\/cart$/m);
@@ -250,7 +251,8 @@ diff -u .jiso/cart.expected-consumers.txt .jiso/cart.consumers.txt
 Assert that \`cart/add\` refreshes those consumers by invalidating the cart query:
 
 \`\`\`sh
-grep '^invalidated-by: .*cart.addItem' .jiso/cart.query.txt
+grep '^invalidated-by: .*cart/add' .jiso/cart.query.txt
+grep '^domain-writes: .*cart.addItem' .jiso/cart.query.txt
 fw explain mutation cart/add --optimistic graph.json | grep '^OPTIMISTIC cart await-fragment'
 \`\`\`
 
