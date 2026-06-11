@@ -1,6 +1,5 @@
-import { topLevelObjectKeys } from '../scan/object.js';
 import {
-  componentOptionSource,
+  componentOptionObjectKeys,
   jsxElements,
   jsxExpressions,
   parseComponentModule as parseComponentModuleModel,
@@ -34,7 +33,7 @@ export function lowerInlineAttributeDerives(
 ): { source: string } {
   const model = parseComponentModuleModel(options.fileName, source);
   const knownQueries = new Set([
-    ...topLevelObjectKeys(componentOptionSource(model, 'queries') ?? '{}'),
+    ...componentOptionObjectKeys(model, 'queries'),
     ...Object.keys(options.registryFacts?.queries ?? {}),
     ...Object.keys(options.queryShapes ?? {}),
     ...(options.queryShapeFacts ?? []).map((fact) => fact.query),

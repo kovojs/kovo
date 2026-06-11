@@ -2,13 +2,14 @@ import { diagnosticDefinitions } from '@jiso/core';
 
 import { diagnosticFor, type CompilerDiagnostic } from '../diagnostics.js';
 import { capturesUnserializableValue } from '../lower/handlers.js';
-import { topLevelObjectKeys } from '../scan/object.js';
 import {
   callExpressions,
   componentFragmentTargetNames,
+  componentOptionObjectKeys,
   componentOptionSource,
   componentRenderInputModels,
   componentStateReturnObjectModel,
+  componentStateReturnObjectKeys,
   mutationHandlers,
   objectLiteralPropertyPaths,
   type ComponentModuleModel,
@@ -74,8 +75,8 @@ export function validateServerFactsInLocalState(
   const stateObject = componentStateReturnObjectModel(model);
   if (!queryObject || !stateObject) return [];
 
-  const queryNames = topLevelObjectKeys(queryObject);
-  const stateKeys = topLevelObjectKeys(stateObject.source);
+  const queryNames = componentOptionObjectKeys(model, 'queries');
+  const stateKeys = componentStateReturnObjectKeys(model);
   if (queryNames.length === 0 || stateKeys.length === 0) return [];
 
   const storesServerFact = stateKeys.some((stateKey) =>
@@ -102,11 +103,9 @@ export function validateFragmentTargetInputs(
 ): CompilerDiagnostic[] {
   if (componentFragmentTargetNames(model).length === 0) return [];
 
-  const queryObject = componentOptionSource(model, 'queries');
-  const propsObject = componentOptionSource(model, 'props');
   const allowedInputs = new Set([
-    ...topLevelObjectKeys(queryObject ?? '{}'),
-    ...topLevelObjectKeys(propsObject ?? '{}'),
+    ...componentOptionObjectKeys(model, 'queries'),
+    ...componentOptionObjectKeys(model, 'props'),
   ]);
   const renderInputs = componentRenderInputModels(model);
   if (renderInputs.length === 0) return [];

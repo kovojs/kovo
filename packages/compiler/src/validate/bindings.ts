@@ -2,9 +2,9 @@ import { diagnosticDefinitions } from '@jiso/core';
 
 import { diagnosticFor, type CompilerDiagnostic } from '../diagnostics.js';
 import { dedupeBy } from '../shared.js';
-import { topLevelObjectKeys } from '../scan/object.js';
 import {
   callExpressions,
+  componentOptionObjectKeys,
   componentOptionSource,
   jsxElements,
   jsxExpressions,
@@ -428,7 +428,7 @@ function knownQueryNames(
 }
 
 function componentQueryNames(model: ComponentModuleModel): string[] {
-  return topLevelObjectKeys(componentOptionSource(model, 'queries') ?? '{}');
+  return componentOptionObjectKeys(model, 'queries');
 }
 
 function queryNameFromPath(path: string): string | null {

@@ -2,7 +2,13 @@ import ts from 'typescript';
 
 export interface ComponentOptionEntry {
   key: string;
+  objectEntries?: readonly ObjectLiteralEntry[];
   value: string;
+}
+
+export interface ObjectLiteralEntry {
+  key: string;
+  value?: string;
 }
 
 export interface MutationHandlerModel {
@@ -80,6 +86,7 @@ export interface RenderInputModel {
 
 export interface StateReturnObjectModel {
   end: number;
+  entries: readonly ObjectLiteralEntry[];
   source: string;
   start: number;
 }
@@ -166,6 +173,23 @@ export function componentOptionSource(
   );
 }
 
+export function componentOptionObjectEntries(
+  model: ComponentModuleModel,
+  propertyName: string,
+): ObjectLiteralEntry[] {
+  return [
+    ...(firstComponentModel(model)?.options.find((option) => option.key === propertyName)
+      ?.objectEntries ?? []),
+  ];
+}
+
+export function componentOptionObjectKeys(
+  model: ComponentModuleModel,
+  propertyName: string,
+): string[] {
+  return componentOptionObjectEntries(model, propertyName).map((entry) => entry.key);
+}
+
 export function componentRenderInputs(model: ComponentModuleModel): string[] {
   return componentRenderInputModels(model).map((input) => input.name);
 }
@@ -186,6 +210,10 @@ export function componentStateReturnObjectModel(
   model: ComponentModuleModel,
 ): StateReturnObjectModel | null {
   return firstComponentModel(model)?.stateReturnObject ?? null;
+}
+
+export function componentStateReturnObjectKeys(model: ComponentModuleModel): string[] {
+  return [...(componentStateReturnObjectModel(model)?.entries.map((entry) => entry.key) ?? [])];
 }
 
 export function componentExplicitNames(model: ComponentModuleModel): string[] {
@@ -417,6 +445,9 @@ function componentOptions(
     return [
       {
         key,
+        ...(ts.isObjectLiteralExpression(property.initializer)
+          ? { objectEntries: objectLiteralEntries(sourceFile, source, property.initializer) }
+          : {}),
         value: source.slice(
           property.initializer.getStart(sourceFile),
           property.initializer.getEnd(),
@@ -484,6 +515,40 @@ function propertyNameText(name: ts.PropertyName): string | null {
   }
 
   return null;
+}
+
+function objectLiteralEntries(
+  sourceFile: ts.SourceFile,
+  source: string,
+  expression: ts.ObjectLiteralExpression,
+): ObjectLiteralEntry[] {
+  return expression.properties.flatMap((property) => {
+    if (ts.isPropertyAssignment(property)) {
+      const key = propertyNameText(property.name);
+      if (!key) return [];
+
+      return [
+        {
+          key,
+          value: source.slice(
+            property.initializer.getStart(sourceFile),
+            property.initializer.getEnd(),
+          ),
+        },
+      ];
+    }
+
+    if (ts.isShorthandPropertyAssignment(property)) {
+      return [{ key: property.name.text, value: property.name.text }];
+    }
+
+    if (ts.isMethodDeclaration(property)) {
+      const key = propertyNameText(property.name);
+      return key ? [{ key }] : [];
+    }
+
+    return [];
+  });
 }
 
 function jsxElementModel(
@@ -679,6 +744,7 @@ function arrowReturnObjectSource(
   const end = body.getEnd();
   return {
     end,
+    entries: objectLiteralEntries(sourceFile, source, body),
     source: source.slice(start, end),
     start,
   };

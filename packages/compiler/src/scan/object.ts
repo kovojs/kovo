@@ -45,38 +45,7 @@ export function literalStringValue(value: string): string | null {
   return trimmed.slice(1, -1);
 }
 
-export function topLevelObjectKeys(objectSource: string): string[] {
-  const keys: string[] = [];
-  let index = 1;
-
-  while (index < objectSource.length - 1) {
-    index = skipWhitespaceAndComments(objectSource, index);
-    if (objectSource[index] === ',') {
-      index += 1;
-      continue;
-    }
-
-    const key = readObjectKey(objectSource, index);
-    if (!key) {
-      index = skipObjectValue(objectSource, index);
-      continue;
-    }
-
-    const afterKey = skipWhitespaceAndComments(objectSource, key.end);
-    if (objectSource[afterKey] === ':') {
-      keys.push(key.name);
-      index = skipObjectValue(objectSource, afterKey + 1);
-      continue;
-    }
-
-    keys.push(key.name);
-    index = skipObjectValue(objectSource, afterKey);
-  }
-
-  return keys;
-}
-
-export function topLevelObjectEntries(objectSource: string): { key: string; value: string }[] {
+function topLevelObjectEntries(objectSource: string): { key: string; value: string }[] {
   const entries: { key: string; value: string }[] = [];
   let index = 1;
 

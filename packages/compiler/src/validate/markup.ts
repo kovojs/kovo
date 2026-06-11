@@ -4,7 +4,7 @@ import { diagnosticFor, type CompilerDiagnostic } from '../diagnostics.js';
 import type { RegistryFacts } from '../graph.js';
 import {
   componentExplicitNames,
-  componentOptionSource,
+  componentOptionObjectKeys,
   jsxElements,
   parseComponentModule as parseComponentModuleModel,
   type ComponentModuleModel,
@@ -12,7 +12,6 @@ import {
   type JsxElementModel,
 } from '../scan/parse.js';
 import { dedupeBy, kebabCase, splitDepValue } from '../shared.js';
-import { topLevelObjectKeys } from '../scan/object.js';
 import { dataBindListTemplateBodies } from './bindings.js';
 
 interface IdrefValue {
@@ -287,7 +286,7 @@ function htmlContentModelDiagnostic(
 }
 
 function componentQueryNames(model: ComponentModuleModel): string[] {
-  return topLevelObjectKeys(componentOptionSource(model, 'queries') ?? '{}');
+  return componentOptionObjectKeys(model, 'queries');
 }
 
 function countValues(values: readonly string[]): Map<string, number> {

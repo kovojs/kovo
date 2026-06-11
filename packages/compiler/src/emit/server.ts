@@ -1,7 +1,7 @@
 import { emitElementParamTypes, type HandlerLowering } from '../lower/handlers.js';
-import { parseLiteralObject, topLevelObjectKeys } from '../scan/object.js';
+import { parseLiteralObject } from '../scan/object.js';
 import {
-  componentOptionSource,
+  componentOptionObjectKeys,
   componentRenderHost,
   componentStateReturnObject,
   parseComponentModule,
@@ -94,8 +94,7 @@ function replaceHandlerAttributes(source: string, handlers: readonly HandlerLowe
 
 function stampDeclaredQueryDeps(source: string): string {
   const model = parseComponentModule('component.tsx', source);
-  const queryObject = componentOptionSource(model, 'queries');
-  const deps = topLevelObjectKeys(queryObject ?? '{}');
+  const deps = componentOptionObjectKeys(model, 'queries');
   if (deps.length === 0) return source;
 
   const tag = componentRenderHost(model);

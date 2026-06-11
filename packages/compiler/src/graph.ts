@@ -1,6 +1,7 @@
 import { kebabCase } from './shared.ts';
-import { topLevelObjectEntries, topLevelObjectKeys } from './scan/object.js';
 import {
+  componentOptionObjectEntries,
+  componentOptionObjectKeys,
   componentOptionSource,
   firstComponentModel,
   parseComponentModule as parseComponentModuleModel,
@@ -144,20 +145,16 @@ function deriveComponentFactsFromGraph(graph: RegistryGraphInput): string[] {
 }
 
 function componentQueryNames(model: ComponentModuleModel): string[] {
-  return topLevelObjectKeys(componentOptionSource(model, 'queries') ?? '{}');
+  return componentOptionObjectKeys(model, 'queries');
 }
 
 function fragmentTargetPropsType(source: string): string {
-  const propsObject = componentOptionSource(
-    parseComponentModuleModel('component.tsx', source),
-    'props',
-  );
-  if (!propsObject) return '{}';
+  const model = parseComponentModuleModel('component.tsx', source);
 
-  const props = topLevelObjectEntries(propsObject)
+  const props = componentOptionObjectEntries(model, 'props')
     .map((entry) => ({
       key: entry.key,
-      type: propConstructorType(entry.value),
+      type: entry.value ? propConstructorType(entry.value) : undefined,
     }))
     .filter((entry): entry is { key: string; type: string } => entry.type !== undefined);
 

@@ -25,13 +25,18 @@ Scope: `packages/compiler/src/` only (plus `tests/fw-check.node.mjs` where gate 
 - [x] Fixed known Phase 0 miscompiles that are directly covered by regression tests: self-closing same-name JSX, nested handler braces/span rewrites, exact handler attribute replacement, static state string JSON, handler parameter substring collisions, and conditional at-rule CSS fallback scoping.
 - [x] Migrated large parts of Phase 3 onto the parser model: component/options extraction, JSX element/attribute validators, mutation handler extraction, query binding/stamp collection, update coverage, event trigger justification, and identifier-reference analysis for FW201.
 - [x] Finish the Phase 2 module split: `packages/compiler/src/index.ts` is now a public barrel/orchestrator with public types, compile orchestration, Vite factory wrapper, fixpoint helpers, and name inference; validators, lowerers, emitters, graph derivation, CSS, diagnostics, and scanners live in dedicated modules.
-- [ ] Finish the Phase 3 parser migration; the `findMatchingClosingTag` scanner path is gone, but broader dead scanner cleanup remains under audit.
-      Evidence 2026-06-11: `rg` confirms `findMatchingClosingTag` is absent. The remaining
-      top-level object scanner is live in `src/scan/object.ts` and is used by component
-      query/props/state extraction, static navigation lowering, binding validation, handler
-      parameter literal filtering, and server `fw-deps`/`fw-state` stamping; the previous
-      duplicated scanner copies in `index.ts`, `lower/navigation.ts`, and
-      `validate/bindings.ts` were removed.
+- [x] Finish the Phase 3 parser migration audit and dead scanner cleanup.
+      Evidence 2026-06-11: `rg` confirms `findMatchingClosingTag` is absent. Component
+      option/state object facts now come from the TS parser model (`componentOptionObjectKeys`,
+      `componentOptionObjectEntries`, and `componentStateReturnObjectKeys`), so compiler
+      query/props/state extraction, binding validation, fragment-target validation, residual
+      stamp validation, graph facts, and server `fw-deps` stamping no longer call the text
+      object scanner. The dead exported `topLevelObjectKeys` helper was deleted, and
+      `topLevelObjectEntries` is now private to `parseLiteralObject`. `src/scan/object.ts`
+      remains live only for parser-spanned static literal serialization: handler parameter
+      literal filtering, static navigation lowering, and SPEC §5.2 static `fw-state` stamping.
+      `src/scan/text.ts` remains live for CSS fallback block balancing and for that private
+      static literal scanner.
 - [x] Move remaining local compiler help strings onto the shared diagnostic definition model where appropriate.
       Evidence 2026-06-11: FW201's conservative free-identifier denylist and the static
       FW201/FW230 detail labels now live on shared `diagnosticDefinitions`. Compiler-local
