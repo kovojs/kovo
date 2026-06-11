@@ -16,7 +16,9 @@ import {
   renderDocumentQueryScript,
   renderPageHints,
   renderQueryScript,
+  route as serverRoute,
 } from '../dist/server/src/index.mjs';
+import { href, Link, redirect, route } from '../dist/core/src/index.mjs';
 
 const responseMarker = '<<< RESPONSE';
 const requestMarker = '>>> REQUEST';
@@ -1223,55 +1225,92 @@ export const CartTable = component('cart-table', {
 });
 
 void test('P3 typed routes validate navigation targets', async () => {
-  const coreSource = await readProjectFile('packages/core/src/index.ts');
-  const coreTests = await readProjectFile('packages/core/src/index.test.ts');
-  const diagnosticsSource = await readProjectFile('packages/core/src/diagnostics.ts');
-  const compilerGraphSource = await readProjectFile('packages/compiler/src/graph.ts');
-  const compilerRegistrySource = await readProjectFile('packages/compiler/src/emit/registry.ts');
-  const compilerNavigationLoweringSource = await readProjectFile(
-    'packages/compiler/src/lower/navigation.ts',
+  assert.equal(
+    diagnosticDefinitions.FW220.message,
+    'Literal href or form action matches no declared route.',
   );
-  const compilerNavigationSource = await readProjectFile(
-    'packages/compiler/src/validate/navigation.ts',
+  assert.equal(
+    href('/products/:id', { params: { id: 'p 1' }, search: { max: 10 } }),
+    '/products/p%201?max=10',
   );
-  const compilerTests = await readProjectFile('packages/compiler/src/index.test.ts');
-  const serverSource = await readProjectFile('packages/server/src/index.ts');
-  const serverTests = await readProjectFile('packages/server/src/index.test.ts');
+  assert.deepEqual(redirect('/products/:id', { params: { id: 'p1' } }), {
+    location: '/products/p1',
+    status: 303,
+  });
+  assert.deepEqual(route('/products/:id'), { path: '/products/:id' });
+  assert.deepEqual(Link('/products/:id', { params: { id: 'p1' } }), { href: '/products/p1' });
+  const declaredRoute = serverRoute('/products/:id', { load: () => 'ok' });
+  assert.equal(declaredRoute.path, '/products/:id');
+  assert.equal(typeof declaredRoute.load, 'function');
 
-  assert.match(diagnosticsSource, /FW220/);
-  assert.match(diagnosticsSource, /Literal href or form action matches no declared route/);
-  assert.match(coreSource, /interface RouteRegistry/);
-  assert.match(coreSource, /function route/);
-  assert.match(coreSource, /function href/);
-  assert.match(coreSource, /function Link/);
-  assert.match(coreSource, /function redirect/);
-  assert.match(coreSource, /GetForm</);
-  assert.match(coreSource, /get: getRouteForm/);
-  assert.match(coreTests, /builds typed route hrefs, links, and redirects/);
-  assert.match(coreTests, /types GET form fields against route search schemas/);
-  assert.match(coreTests, /productFilter\.input\('max'\)/);
-  assert.match(coreTests, /productFilter\.input\('sku'\)/);
-  assert.match(compilerGraphSource, /routes\?: readonly string\[\]/);
-  assert.match(compilerNavigationLoweringSource, /lowerNavigationSugar/);
-  assert.match(compilerNavigationLoweringSource, /lowerStaticLinks/);
-  assert.match(compilerNavigationLoweringSource, /lowerStaticHrefCalls/);
-  assert.match(compilerNavigationSource, /validateLiteralHrefs/);
-  assert.match(compilerRegistrySource, /routeRegistryFactLines/);
+  const lowered = compileComponentModule({
+    fileName: 'components/product-links.tsx',
+    registryFacts: {
+      routes: ['/cart', '/products/:id'],
+    },
+    source: `
+import { component, href, Link } from '@jiso/core';
+
+export const ProductLinks = component('product-links', {
+  render: () => (
+    <nav>
+      <Link to="/products/:id" params={{ id: 'p 1' }} search={{ max: 500 }}>Product</Link>
+      <a href={href('/cart')}>Cart</a>
+    </nav>
+  ),
+});
+`,
+  });
+  const serverSource = lowered.files.find((file) => file.kind === 'server')?.source ?? '';
+  const registrySource = lowered.files.find((file) => file.kind === 'registry')?.source ?? '';
+  assert.deepEqual(lowered.diagnostics, []);
+  assert.match(serverSource, /<a href="\/products\/p%201\?max=500">Product<\/a>/);
+  assert.match(serverSource, /<a href="\/cart">Cart<\/a>/);
+  assert.doesNotMatch(serverSource, /<Link|href\('/);
+  assert.match(registrySource, /'\/cart': import\('@jiso\/core'\)\.Route<'\/cart'>;/);
   assert.match(
-    compilerTests,
-    /reports FW220 for literal navigation targets outside the route table/,
+    registrySource,
+    /'\/products\/:id': import\('@jiso\/core'\)\.Route<'\/products\/:id'>;/,
   );
-  assert.match(compilerTests, /lowers static Link navigation sugar to plain anchors/);
-  assert.match(
-    compilerTests,
-    /lowers static href calls to literal anchor hrefs before FW220 validation/,
+
+  assert.deepEqual(
+    compileComponentModule({
+      fileName: 'components/product-links.tsx',
+      registryFacts: {
+        routes: ['/cart', '/products/:id'],
+      },
+      source: `
+import { component } from '@jiso/core';
+
+export const ProductLinks = component('product-links', {
+  render: () => (
+    <nav>
+      <a href="/product/p1">Bad</a>
+      <form method="get" action="/checkout"></form>
+    </nav>
+  ),
+});
+`,
+    }).diagnostics,
+    [
+      {
+        code: 'FW220',
+        fileName: 'components/product-links.tsx',
+        length: 18,
+        message: `${diagnosticDefinitions.FW220.message} /product/p1`,
+        severity: 'error',
+        start: { column: 10, line: 7 },
+      },
+      {
+        code: 'FW220',
+        fileName: 'components/product-links.tsx',
+        length: 18,
+        message: `${diagnosticDefinitions.FW220.message} /checkout`,
+        severity: 'error',
+        start: { column: 26, line: 8 },
+      },
+    ],
   );
-  assert.match(serverSource, /export function route/);
-  assert.match(serverSource, /interface RouteDeclaration/);
-  assert.match(serverSource, /function parseRouteRequest/);
-  assert.match(serverSource, /export \{ Link, href, redirect \} from '@jiso\/core'/);
-  assert.match(serverTests, /declares route schemas, route-owned hints, and typed PRG redirects/);
-  assert.match(serverTests, /sku is not part of the generated route search schema/);
 });
 
 void test('P3 mutation lifecycle includes an explicit transaction boundary', async () => {

@@ -179,6 +179,10 @@ Do this first or pay it on every commit.
       core/compiler APIs and asserts `diagnosticDefinitions.FW311`,
       `compileComponentModule.updateCoverage`, compiler FW311 diagnostics, and the `fwCheck`
       coverage warning output instead of grepping core, compiler, or CLI source/test names.
+      Partial evidence 2026-06-11: the P3 typed-routes tranche now imports built
+      core/server/compiler APIs and asserts `href`/`Link`/`redirect`/`route`, static
+      `Link`/`href` lowering, FW220 diagnostics, and route registry emission instead of grepping
+      core, compiler, server, or test source names.
 - [x] **Make create-jiso templates real files** (`create-jiso/src/index.ts:63-473`, ~470 lines of
       escaped template literals including a CI workflow and double-escaped regexes inside
       `.mjs`-in-string). Move to a `templates/` directory copied at scaffold time with `{{name}}`
