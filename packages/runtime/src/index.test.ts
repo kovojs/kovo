@@ -522,6 +522,7 @@ describe('runtime loader', () => {
     const root = new FakeRoot();
     const store = createQueryStore();
     const importModule = vi.fn();
+    const onError = vi.fn();
     root.scripts = [
       {
         getAttribute: (name) => (name === 'fw-query' ? 'cart' : null),
@@ -533,11 +534,12 @@ describe('runtime loader', () => {
       },
     ];
 
-    installJisoLoader({ importModule, queryStore: store, root });
+    installJisoLoader({ importModule, onError, queryStore: store, root });
 
     expect(store.get('cart')).toBeUndefined();
     expect(store.get('inventory')).toEqual({ available: true });
     expect([...root.listeners.keys()]).toEqual(['click', 'submit', 'input', 'change']);
+    expect(onError).toHaveBeenCalledWith(expect.any(Error), { phase: 'query-hydration' });
   });
 
   it('intercepts enhanced form submits through the loader bridge', async () => {
@@ -1765,6 +1767,30 @@ describe('query store', () => {
       fragments: [{ html: '<cart-badge>Ready</cart-badge>', target: 'cart-badge' }],
       queries: ['inventory'],
     });
+  });
+
+  it('reports malformed mutation query chunks while applying valid DOM updates', () => {
+    const store = createQueryStore();
+    const root = new FakeMorphRoot();
+    const onError = vi.fn();
+    root.targets.set('cart-badge', new FakeMorphTarget());
+
+    const applied = applyMutationResponseToDom({
+      body: [
+        '<fw-query name="cart">{</fw-query>',
+        '<fw-query name="inventory">{"available":true}</fw-query>',
+        '<fw-fragment target="cart-badge"><cart-badge>Ready</cart-badge></fw-fragment>',
+      ].join('\n'),
+      onError,
+      root,
+      store,
+    });
+
+    expect(store.get('cart')).toBeUndefined();
+    expect(store.get('inventory')).toEqual({ available: true });
+    expect(root.targets.get('cart-badge')?.html).toBe('<cart-badge>Ready</cart-badge>');
+    expect(applied.queries).toEqual(['inventory']);
+    expect(onError).toHaveBeenCalledWith(expect.any(Error));
   });
 
   it('applies query update bindings from mutation chunks without requiring a fragment', () => {
@@ -3119,6 +3145,41 @@ describe('query store', () => {
         type: 'jiso:mutation-response',
       },
     ]);
+  });
+
+  it('reports malformed FW-Changes headers while applying successful mutation bodies', async () => {
+    const store = createQueryStore();
+    const root = new FakeMorphRoot();
+    const onError = vi.fn();
+    root.deps = [{ deps: 'cart', id: 'cart-badge' }];
+    root.targets.set('cart-badge', new FakeMorphTarget());
+    const fetch = vi.fn(async () => ({
+      headers: {
+        get(name: string) {
+          return name === 'FW-Changes' ? '[' : null;
+        },
+      },
+      async text() {
+        return [
+          '<fw-query name="cart">{"count":2}</fw-query>',
+          '<fw-fragment target="cart-badge"><cart-badge>2</cart-badge></fw-fragment>',
+        ].join('\n');
+      },
+    }));
+
+    const result = await submitEnhancedMutation({
+      fetch,
+      form: { action: '/_m/cart/add', method: 'post' },
+      formData: new FormData(),
+      onError,
+      root,
+      store,
+    });
+
+    expect(result.changes).toEqual([]);
+    expect(store.get('cart')).toEqual({ count: 2 });
+    expect(root.targets.get('cart-badge')?.html).toBe('<cart-badge>2</cart-badge>');
+    expect(onError).toHaveBeenCalledWith(expect.any(Error));
   });
 
   it('reports direct enhanced mutation fetch failures and clears pending state', async () => {

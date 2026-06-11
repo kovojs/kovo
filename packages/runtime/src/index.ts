@@ -65,7 +65,12 @@ export interface EventBusOptions {
 
 export interface RuntimeErrorContext {
   event?: DelegatedEvent | TypedEvent<string, unknown>;
-  phase: 'delegated-event' | 'event-listener' | 'execution-trigger' | 'enhanced-mutation';
+  phase:
+    | 'delegated-event'
+    | 'event-listener'
+    | 'execution-trigger'
+    | 'enhanced-mutation'
+    | 'query-hydration';
 }
 
 export function createEventBus<
@@ -262,6 +267,11 @@ export function installJisoLoader(options: JisoLoaderOptions): JisoLoader {
     hydratedQueries = hydrateQueryScripts(
       options.queryStore,
       options.root.querySelectorAll('script[fw-query]') as Iterable<QueryScriptLike>,
+      {
+        onError(error) {
+          options.onError?.(error, { phase: 'query-hydration' });
+        },
+      },
     );
   }
 
@@ -1106,12 +1116,20 @@ function optimisticQueryKey<Input>(
 export function hydrateQueryScripts(
   store: QueryStore,
   scripts: Iterable<QueryScriptLike>,
+  options: { onError?: (error: unknown) => void } = {},
 ): readonly string[] {
   const hydrated: string[] = [];
 
   for (const script of scripts) {
     const name = script.getAttribute('fw-query');
-    store.hydrate(script);
+    if (name) {
+      const parsed = parseJsonValue(script.textContent ?? 'null');
+      if (parsed.ok) {
+        store.set(name, parsed.value, script.getAttribute('key') ?? undefined);
+      } else {
+        options.onError?.(malformedJsonError('fw-query hydration', parsed.error));
+      }
+    }
     if (name) {
       hydrated.push(name);
     }
@@ -1492,12 +1510,19 @@ function parseJsonOrUnknown(raw: string): JsonValue {
   return { body: raw, code: 'unknown' };
 }
 
-function parseJsonValue(raw: string): { ok: true; value: JsonValue } | { ok: false } {
+function parseJsonValue(
+  raw: string,
+): { ok: true; value: JsonValue } | { error: unknown; ok: false } {
   try {
     return { ok: true, value: JSON.parse(raw) as JsonValue };
-  } catch {
-    return { ok: false };
+  } catch (error) {
+    return { error, ok: false };
   }
+}
+
+function malformedJsonError(context: string, cause: unknown): Error {
+  const message = cause instanceof Error ? cause.message : String(cause);
+  return new Error(`Malformed JSON in ${context}: ${message}`, { cause });
 }
 
 function parseDeclaredFailureOutput(body: string): JsonValue | null {
@@ -1573,14 +1598,24 @@ export function applyFragments(
 export function applyMutationResponseToDom(options: {
   body: string;
   morph?: MorphFragment;
+  onError?: (error: unknown) => void;
   queryPlans?: CompiledQueryUpdatePlans;
   root: MorphRoot;
   store: QueryStore;
 }): AppliedMutationResponse & { appliedFragments: string[] } {
-  const applied = applyFragmentQueryBody(options.body, (name, value, key) => {
-    options.store.set(name, value, key);
-    applyCompiledQueryUpdatePlanIfSupported(options.root, name, value, options.queryPlans?.[name]);
-  });
+  const applied = applyFragmentQueryBody(
+    options.body,
+    (name, value, key) => {
+      options.store.set(name, value, key);
+      applyCompiledQueryUpdatePlanIfSupported(
+        options.root,
+        name,
+        value,
+        options.queryPlans?.[name],
+      );
+    },
+    options.onError,
+  );
 
   return {
     ...applied,
@@ -1591,14 +1626,24 @@ export function applyMutationResponseToDom(options: {
 export function applyDeferredChunkToDom(options: {
   body: string;
   morph?: MorphFragment;
+  onError?: (error: unknown) => void;
   queryPlans?: CompiledQueryUpdatePlans;
   root: MorphRoot;
   store: QueryStore;
 }): AppliedMutationResponse & { appliedFragments: string[] } {
-  const applied = applyFragmentQueryBody(options.body, (name, value, key) => {
-    options.store.set(name, value, key);
-    applyCompiledQueryUpdatePlanIfSupported(options.root, name, value, options.queryPlans?.[name]);
-  });
+  const applied = applyFragmentQueryBody(
+    options.body,
+    (name, value, key) => {
+      options.store.set(name, value, key);
+      applyCompiledQueryUpdatePlanIfSupported(
+        options.root,
+        name,
+        value,
+        options.queryPlans?.[name],
+      );
+    },
+    options.onError,
+  );
 
   return {
     ...applied,
@@ -1707,6 +1752,7 @@ export function applyDeferredStreamResponseToDom(options: {
   body: string;
   boundary?: string;
   morph?: MorphFragment;
+  onError?: (error: unknown) => void;
   queryPlans?: CompiledQueryUpdatePlans;
   root: MorphRoot;
   store: QueryStore;
@@ -1716,6 +1762,7 @@ export function applyDeferredStreamResponseToDom(options: {
       applyDeferredChunkToDom({
         body,
         ...(options.queryPlans ? { queryPlans: options.queryPlans } : {}),
+        ...(options.onError ? { onError: options.onError } : {}),
         root: options.root,
         store: options.store,
         ...(options.morph ? { morph: options.morph } : {}),
@@ -1759,6 +1806,13 @@ export async function submitEnhancedMutation(options: EnhancedMutationSubmitOpti
       root: options.root,
       store: options.store,
       ...(options.morph ? { morph: options.morph } : {}),
+      ...(options.onError
+        ? {
+            onError(error) {
+              options.onError?.(error);
+            },
+          }
+        : {}),
     });
     publishSuccessfulMutation(options, response, body, changes);
 
@@ -1993,8 +2047,9 @@ export function installMutationBroadcast(options: {
 function applyFragmentQueryBody(
   body: string,
   applyQuery: (name: string, value: unknown, key: string | undefined) => void,
+  onError?: (error: unknown) => void,
 ): AppliedMutationResponse {
-  const queryChunks = readQueryChunks(body);
+  const queryChunks = readQueryChunks(body, onError);
 
   for (const query of queryChunks) {
     applyQuery(query.name, query.value, query.key);
@@ -2054,10 +2109,12 @@ async function fetchEnhancedMutation(
     method: (options.form.method ?? 'post').toUpperCase(),
     ...(options.onUploadProgress ? { onUploadProgress: options.onUploadProgress } : {}),
   });
+  const changes = readMutationChangeHeader(response);
+  reportMalformedMutationChangeHeader(response, options.onError);
 
   return {
     body: await response.text(),
-    changes: readMutationChangeHeader(response),
+    changes,
     idem,
     response,
     targets,
@@ -2113,7 +2170,7 @@ interface QueryChunk {
   value: unknown;
 }
 
-function readQueryChunks(body: string): QueryChunk[] {
+function readQueryChunks(body: string, onError?: (error: unknown) => void): QueryChunk[] {
   const queries: QueryChunk[] = [];
 
   for (const match of body.matchAll(/<fw-query\b(?<attrs>[^>]*)>(?<json>[\s\S]*?)<\/fw-query>/g)) {
@@ -2123,7 +2180,10 @@ function readQueryChunks(body: string): QueryChunk[] {
     const key = readAttribute(attrs, 'key') ?? undefined;
 
     const parsed = parseJsonValue(unescapeHtml(match.groups?.json ?? 'null'));
-    if (!parsed.ok) continue;
+    if (!parsed.ok) {
+      onError?.(malformedJsonError(`fw-query ${name}`, parsed.error));
+      continue;
+    }
 
     queries.push({
       ...(key === undefined ? {} : { key }),
@@ -2322,6 +2382,19 @@ function readMutationChangeHeader(response: EnhancedMutationResponseLike): Mutat
     const sanitized = sanitizeMutationChangeRecord(record);
     return sanitized ? [sanitized] : [];
   });
+}
+
+function reportMalformedMutationChangeHeader(
+  response: EnhancedMutationResponseLike,
+  onError?: (error: unknown) => void,
+): void {
+  const value = response.headers?.get('FW-Changes') ?? response.headers?.get('fw-changes');
+  if (!value) return;
+
+  const parsed = parseJsonValue(value);
+  if (!parsed.ok) {
+    onError?.(malformedJsonError('FW-Changes header', parsed.error));
+  }
 }
 
 function unescapeHtml(value: string): string {
