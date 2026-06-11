@@ -1,7 +1,5 @@
-import { diagnosticDefinitions } from '@jiso/core';
 export type { DiagnosticCode } from '@jiso/core';
 import type {
-  EventDefinition,
   Form,
   FormFailure,
   FormInput,
@@ -9,6 +7,13 @@ import type {
   JsonValue,
   QueryRegistry,
 } from '@jiso/core';
+import { malformedJsonError, parseJsonValue } from './json.js';
+import { hydrateQueryScripts, queryIdentityFromStoreKey, queryStoreKey } from './query-store.js';
+import type { QueryScriptLike, QuerySnapshot, QueryStore } from './query-store.js';
+import type { DelegatedEvent, EventElementLike, RuntimeErrorContext } from './events.js';
+export * from './events.js';
+export { createQueryStore, hydrateQueryScripts } from './query-store.js';
+export type { QueryScriptLike, QuerySnapshot, QueryStore, QueryUpdatePlan } from './query-store.js';
 
 export type ImportHandlerModule = (url: string) => Promise<Record<string, unknown>>;
 
@@ -43,120 +48,6 @@ export function derive<const Inputs extends readonly string[], Value>(
   return { inputs, run: fn };
 }
 
-export type EventPayloadMap<Definitions extends readonly EventDefinition<string, JsonValue>[]> = {
-  [Definition in Definitions[number] as Definition['name']]: Definition extends EventDefinition<
-    string,
-    infer Payload
-  >
-    ? Payload
-    : never;
-};
-
-export interface TypedEvent<Name extends string = string, Payload = unknown> {
-  name: Name;
-  payload: Payload;
-}
-
-export type EventListener<Payload> = (event: TypedEvent<string, Payload>) => void | Promise<void>;
-
-export interface EventSubscription {
-  off(): void;
-}
-
-export interface TypedEventBus<EventMap extends Record<string, unknown>> {
-  emit<Name extends Extract<keyof EventMap, string>>(name: Name, payload: EventMap[Name]): void;
-  events: readonly Extract<keyof EventMap, string>[];
-  on<Name extends Extract<keyof EventMap, string>>(
-    name: Name,
-    listener: EventListener<EventMap[Name]>,
-  ): EventSubscription;
-}
-
-export interface EventBusOptions {
-  onError?: (error: unknown, context: RuntimeErrorContext) => void;
-  queryDataKeys?: readonly string[];
-}
-
-export interface RuntimeErrorContext {
-  event?: DelegatedEvent | TypedEvent<string, unknown>;
-  phase:
-    | 'delegated-event'
-    | 'event-listener'
-    | 'execution-trigger'
-    | 'enhanced-mutation'
-    | 'query-hydration';
-}
-
-export function createEventBus<
-  const Definitions extends readonly EventDefinition<string, JsonValue>[],
->(
-  definitions: Definitions,
-  options: EventBusOptions = {},
-): TypedEventBus<EventPayloadMap<Definitions>> {
-  const events = definitions.map((definition) => definition.name) as Extract<
-    keyof EventPayloadMap<Definitions>,
-    string
-  >[];
-  const allowed = new Set<string>(events);
-  const queryDataKeys = new Set(options.queryDataKeys ?? []);
-  const eventServerFactKeys = new Map(
-    definitions.map((definition) => [definition.name, definition.serverFactKeys ?? []] as const),
-  );
-  const listeners = new Map<string, Set<EventListener<unknown>>>();
-
-  return {
-    emit(name, payload) {
-      assertKnownEvent(allowed, name);
-      assertPayloadDoesNotCarryQueryData(name, payload, eventServerFactKeys, queryDataKeys);
-
-      const event = { name, payload };
-      for (const listener of listeners.get(name) ?? []) {
-        void Promise.resolve(listener(event)).catch((error) => {
-          options.onError?.(error, { event, phase: 'event-listener' });
-        });
-      }
-    },
-    events,
-    on(name, listener) {
-      assertKnownEvent(allowed, name);
-
-      const existing = listeners.get(name) ?? new Set<EventListener<unknown>>();
-      existing.add(listener as EventListener<unknown>);
-      listeners.set(name, existing);
-
-      return {
-        off() {
-          existing.delete(listener as EventListener<unknown>);
-        },
-      };
-    },
-  };
-}
-
-function assertKnownEvent(allowed: ReadonlySet<string>, name: string): void {
-  if (!allowed.has(name)) {
-    throw new Error(`Event is not declared in the registry: ${name}`);
-  }
-}
-
-function assertPayloadDoesNotCarryQueryData(
-  name: string,
-  payload: unknown,
-  eventServerFactKeys: ReadonlyMap<string, readonly string[]>,
-  queryDataKeys: ReadonlySet<string>,
-): void {
-  if (queryDataKeys.size === 0) return;
-
-  const declaredKeys = eventServerFactKeys.get(name) ?? [];
-  const payloadKeys = typeof payload === 'object' && payload !== null ? Object.keys(payload) : [];
-  const overlap = [...new Set([...declaredKeys, ...payloadKeys])].find((key) =>
-    queryDataKeys.has(key),
-  );
-  if (!overlap) return;
-
-  throw new Error(`${diagnosticDefinitions.FW320.message} event ${name} carries ${overlap}.`);
-}
-
 export interface LoaderRoot {
   addEventListener(
     type: string,
@@ -185,24 +76,6 @@ export interface LoaderLifecycleTarget {
   ) => void;
 }
 
-export interface DelegatedEvent {
-  preventDefault?: () => void;
-  type: string;
-  target: EventTargetLike | null;
-}
-
-export interface EventTargetLike {
-  closest?: (selector: string) => EventElementLike | null;
-}
-
-export interface EventElementLike {
-  closest?: (selector: string) => EventElementLike | null;
-  getAttribute(name: string): string | null;
-  querySelectorAll?: (selector: string) => Iterable<UploadProgressElementLike>;
-  setAttribute?: (name: string, value: string) => void;
-  attributes?: Iterable<{ name: string; value: string }>;
-}
-
 export interface VisibleObserver {
   observe(element: EventElementLike): void;
   unobserve(element: EventElementLike): void;
@@ -215,11 +88,6 @@ export type VisibleObserverFactory = (
 export interface VisibleObserverEntry {
   isIntersecting: boolean;
   target: EventElementLike;
-}
-
-export interface UploadProgressElementLike {
-  removeAttribute?: (name: string) => void;
-  setAttribute(name: string, value: string): void;
 }
 
 export interface JisoLoaderOptions {
@@ -1050,99 +918,6 @@ function camelCase(value: string): string {
   return value.replace(/-([a-z0-9])/g, (_, char: string) => char.toUpperCase());
 }
 
-export type QueryUpdatePlan<Value = unknown> = (value: Value) => void;
-
-export interface QueryStore {
-  get<Value = unknown>(name: string, key?: string): Value | undefined;
-  hydrate(script: QueryScriptLike): void;
-  snapshot(
-    names: readonly string[],
-    keys?: Readonly<Record<string, string | undefined>>,
-  ): QuerySnapshot;
-  set<Value = unknown>(name: string, value: Value, key?: string): void;
-  subscribe<Value = unknown>(name: string, plan: QueryUpdatePlan<Value>, key?: string): () => void;
-}
-
-export type QuerySnapshot = Map<string, unknown>;
-
-export interface QueryScriptLike {
-  getAttribute(name: string): string | null;
-  textContent: string | null;
-}
-
-export function createQueryStore(): QueryStore {
-  const values = new Map<string, unknown>();
-  const plans = new Map<string, Set<QueryUpdatePlan>>();
-
-  return {
-    get<Value = unknown>(name: string, key?: string): Value | undefined {
-      return values.get(queryStoreKey(name, key)) as Value | undefined;
-    },
-    hydrate(script: QueryScriptLike): void {
-      const name = script.getAttribute('fw-query');
-      if (!name) return;
-
-      const parsed = parseJsonValue(script.textContent ?? 'null');
-      if (!parsed.ok) return;
-
-      this.set(name, parsed.value, script.getAttribute('key') ?? undefined);
-    },
-    snapshot(
-      names: readonly string[],
-      keys: Readonly<Record<string, string | undefined>> = {},
-    ): QuerySnapshot {
-      const snapshot = new Map<string, unknown>();
-
-      for (const name of names) {
-        const storeKey = queryStoreKey(name, keys[name]);
-        snapshot.set(storeKey, structuredClone(values.get(storeKey)));
-      }
-
-      return snapshot;
-    },
-    set<Value = unknown>(name: string, value: Value, key?: string): void {
-      const storeKey = queryStoreKey(name, key);
-      values.set(storeKey, value);
-
-      for (const plan of plans.get(storeKey) ?? []) {
-        plan(value);
-      }
-    },
-    subscribe<Value = unknown>(
-      name: string,
-      plan: QueryUpdatePlan<Value>,
-      key?: string,
-    ): () => void {
-      const storeKey = queryStoreKey(name, key);
-      const existing = plans.get(storeKey) ?? new Set<QueryUpdatePlan>();
-      existing.add(plan as QueryUpdatePlan);
-      plans.set(storeKey, existing);
-
-      if (values.has(storeKey)) {
-        plan(values.get(storeKey) as Value);
-      }
-
-      return () => {
-        existing.delete(plan as QueryUpdatePlan);
-      };
-    },
-  };
-}
-
-function queryStoreKey(name: string, key: string | undefined): string {
-  return key === undefined ? name : `${name}\0${key}`;
-}
-
-function queryIdentityFromStoreKey(storeKey: string): { key?: string; name: string } {
-  const separator = storeKey.indexOf('\0');
-  if (separator === -1) return { name: storeKey };
-
-  return {
-    key: storeKey.slice(separator + 1),
-    name: storeKey.slice(0, separator),
-  };
-}
-
 export type OptimisticTransform<Input = unknown, Value = unknown> = (
   current: Value,
   input: Input,
@@ -1416,31 +1191,6 @@ function optimisticQueryKey<Input>(
 ): string | undefined {
   const key = plan.keys?.[queryName];
   return typeof key === 'function' ? key(change) : key;
-}
-
-export function hydrateQueryScripts(
-  store: QueryStore,
-  scripts: Iterable<QueryScriptLike>,
-  options: { onError?: (error: unknown) => void } = {},
-): readonly string[] {
-  const hydrated: string[] = [];
-
-  for (const script of scripts) {
-    const name = script.getAttribute('fw-query');
-    if (name) {
-      const parsed = parseJsonValue(script.textContent ?? 'null');
-      if (parsed.ok) {
-        store.set(name, parsed.value, script.getAttribute('key') ?? undefined);
-      } else {
-        options.onError?.(malformedJsonError('fw-query hydration', parsed.error));
-      }
-    }
-    if (name) {
-      hydrated.push(name);
-    }
-  }
-
-  return hydrated;
 }
 
 export async function refetchQueries(
@@ -1814,21 +1564,6 @@ function parseJsonOrUnknown(raw: string): JsonValue {
   if (parsed.ok) return parsed.value;
 
   return { body: raw, code: 'unknown' };
-}
-
-function parseJsonValue(
-  raw: string,
-): { ok: true; value: JsonValue } | { error: unknown; ok: false } {
-  try {
-    return { ok: true, value: JSON.parse(raw) as JsonValue };
-  } catch (error) {
-    return { error, ok: false };
-  }
-}
-
-function malformedJsonError(context: string, cause: unknown): Error {
-  const message = cause instanceof Error ? cause.message : String(cause);
-  return new Error(`Malformed JSON in ${context}: ${message}`, { cause });
 }
 
 function parseDeclaredFailureOutput(body: string): JsonValue | null {

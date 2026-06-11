@@ -307,6 +307,10 @@ area, keeping `src/index.ts` barrels and API surface verbatim (mirrors compiler 
   `broadcast.ts` (seams verified clean — almost nothing crosses them). Also stop exporting
   internals (`stampPendingQueries`, `abortRemovedIslandSignals`, `hydrateQueryScripts`, …)
   that blur the public contract.
+  Evidence: typed event bus/delegated event shapes now live in `packages/runtime/src/events.ts`,
+  query store and `fw-query` hydration now live in `packages/runtime/src/query-store.ts`, and
+  guarded JSON parsing now lives in `packages/runtime/src/json.ts`; `src/index.ts` preserves the
+  public barrel exports.
 - **drizzle** → `extract/` (AST), `graph.ts`, `serialize.ts` (falls out of Phase 3 item 2).
   Evidence: v1 invalidation registry derivation and serialization now live in
   `@jiso/drizzle`, with unit coverage for touch graph × query read-set matching and generated
