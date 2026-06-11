@@ -162,7 +162,8 @@ export function compileComponentModule(options: CompileComponentOptions): Compil
   const componentName = inferComponentName(options);
   const viewTransitionLowering = lowerViewTransitions(options.source);
   const platformLowering = lowerPlatformBehaviors(viewTransitionLowering.source);
-  const source = platformLowering.source;
+  const navigationLowering = lowerNavigationSugar(platformLowering.source);
+  const source = navigationLowering.source;
   const handlers = lowerEventHandlers({ ...options, source }, componentName);
   const serverFactStateDiagnostics = validateServerFactsInLocalState(source, options.fileName);
   const fragmentInputDiagnostics = validateFragmentTargetInputs(source, options.fileName);
@@ -171,7 +172,7 @@ export function compileComponentModule(options: CompileComponentOptions): Compil
   const eventPayloadDiagnostics = validateEventPayloads(source, options);
   const directDbDiagnostics = validateDirectDbAccess(source, options.fileName);
   const idrefDiagnostics = validateIdrefs(options.source, options.fileName);
-  const literalHrefDiagnostics = validateLiteralHrefs(options.source, options);
+  const literalHrefDiagnostics = validateLiteralHrefs(source, options);
   const clientFileName = replaceExtension(options.fileName, '.client.js');
   const cssFileName = replaceExtension(options.fileName, '.css');
   const serverFileName = replaceExtension(options.fileName, '.server.js');
@@ -551,6 +552,175 @@ function lowerPlatformBehaviors(source: string): {
     source: nextSource,
     substitutions,
   };
+}
+
+function lowerNavigationSugar(source: string): { source: string } {
+  return {
+    source: normalizeStaticHrefAttributes(lowerStaticHrefCalls(lowerStaticLinks(source))),
+  };
+}
+
+function lowerStaticLinks(source: string): string {
+  return source.replace(
+    /<Link\b(?<attributes>[^>]*)>(?<children>[\s\S]*?)<\/Link>/g,
+    (match, attributes: string, children: string) => {
+      const target = readStringAttribute(attributes, 'to');
+      if (!target) return match;
+
+      const params = readLiteralObjectAttribute(attributes, 'params');
+      const search = readLiteralObjectAttribute(attributes, 'search');
+      if (params === null || search === null) return match;
+
+      const href = buildStaticHref(target, params ?? {}, search ?? {});
+      const anchorAttributes = stripLinkNavigationAttributes(attributes);
+      const spacing = anchorAttributes.trim() === '' ? '' : anchorAttributes;
+
+      return `<a${spacing} href="${escapeAttribute(href)}">${children}</a>`;
+    },
+  );
+}
+
+function lowerStaticHrefCalls(source: string): string {
+  let output = '';
+  let cursor = 0;
+
+  for (const match of source.matchAll(/\bhref\s*\(/g)) {
+    const callStart = match.index;
+    if (callStart < cursor) continue;
+
+    const argsStart = callStart + match[0].length - 1;
+    const callEnd = findMatchingToken(source, argsStart, '(', ')');
+    if (callEnd === -1) continue;
+
+    const lowered = lowerStaticHrefCall(source.slice(argsStart + 1, callEnd));
+    if (!lowered) continue;
+
+    output += source.slice(cursor, callStart) + JSON.stringify(lowered);
+    cursor = callEnd + 1;
+  }
+
+  return cursor === 0 ? source : output + source.slice(cursor);
+}
+
+function normalizeStaticHrefAttributes(source: string): string {
+  return source.replace(
+    /\bhref=\{\s*(["'])(?<target>[^"']+)\1\s*\}/g,
+    (_match, _quote, target) => `href="${escapeAttribute(target)}"`,
+  );
+}
+
+function lowerStaticHrefCall(argsSource: string): string | null {
+  const [pathArg, optionsArg] = splitArguments(argsSource).map((arg) => arg.trim());
+  const path = literalStringValue(pathArg ?? '');
+  if (!path) return null;
+
+  const options = parseLiteralObject(optionsArg ?? '{}');
+  if (options === null) return null;
+
+  const params = objectRecordValue(options.params);
+  const search = objectRecordValue(options.search);
+  if (params === null || search === null) return null;
+
+  return buildStaticHref(path, params ?? {}, search ?? {});
+}
+
+function stripLinkNavigationAttributes(attributes: string): string {
+  return attributes
+    .replace(/\s+to=(["'])[^"']+\1/g, '')
+    .replace(/\s+params=\{\{[\s\S]*?\}\}/g, '')
+    .replace(/\s+search=\{\{[\s\S]*?\}\}/g, '');
+}
+
+function readStringAttribute(attributes: string, name: string): string | null {
+  const match = new RegExp(`\\b${name}=(["'])(?<value>[^"']+)\\1`).exec(attributes);
+  return match?.groups?.value ?? null;
+}
+
+type StaticNavigationValue = string | number | boolean | null;
+type StaticNavigationObject = Record<string, StaticNavigationValue>;
+type StaticLiteralValue = StaticNavigationValue | StaticLiteralObject;
+
+interface StaticLiteralObject {
+  [key: string]: StaticLiteralValue;
+}
+
+function readLiteralObjectAttribute(
+  attributes: string,
+  name: string,
+): StaticNavigationObject | null | undefined {
+  const match = new RegExp(`\\b${name}=\\{\\{(?<value>[\\s\\S]*?)\\}\\}`).exec(attributes);
+  if (!match?.groups) return undefined;
+  const value = parseLiteralObject(`{${match.groups.value}}`);
+  return value ? navigationObjectValue(value) : null;
+}
+
+function parseLiteralObject(source: string): StaticLiteralObject | null {
+  const trimmed = source.trim();
+  if (!trimmed.startsWith('{') || !trimmed.endsWith('}')) return null;
+
+  const entries: Record<string, StaticLiteralValue> = {};
+  for (const entry of topLevelObjectEntries(trimmed)) {
+    const value = literalValue(entry.value);
+    if (value === undefined) return null;
+    entries[entry.key] = value;
+  }
+
+  return entries;
+}
+
+function objectRecordValue(
+  value: StaticLiteralValue | undefined,
+): StaticNavigationObject | null | undefined {
+  if (value === undefined) return undefined;
+  return navigationObjectValue(value);
+}
+
+function navigationObjectValue(value: StaticLiteralValue | null): StaticNavigationObject | null {
+  if (typeof value !== 'object' || value === null) return null;
+  return Object.values(value).every((entry) => typeof entry !== 'object' || entry === null)
+    ? (value as StaticNavigationObject)
+    : null;
+}
+
+function literalValue(value: string): StaticLiteralValue | undefined {
+  const trimmed = value.trim().replace(/,$/, '').trim();
+  if (trimmed.startsWith('{') && trimmed.endsWith('}')) {
+    return parseLiteralObject(trimmed) ?? undefined;
+  }
+
+  const stringValue = literalStringValue(trimmed);
+  if (stringValue !== null) return stringValue;
+  if (/^-?\d+(?:\.\d+)?$/.test(trimmed)) return Number(trimmed);
+  if (trimmed === 'true') return true;
+  if (trimmed === 'false') return false;
+  if (trimmed === 'null') return null;
+  return undefined;
+}
+
+function literalStringValue(value: string): string | null {
+  const trimmed = value.trim();
+  const quote = trimmed[0];
+  if ((quote !== '"' && quote !== "'") || trimmed.at(-1) !== quote) return null;
+  return trimmed.slice(1, -1);
+}
+
+function buildStaticHref(
+  path: string,
+  params: Record<string, string | number | boolean | null>,
+  searchValues: Record<string, string | number | boolean | null>,
+): string {
+  const pathname = path.replace(/:([A-Za-z_$][\w$]*)/g, (_match, key: string) =>
+    encodeURIComponent(String(params[key] ?? '')),
+  );
+  const search = new URLSearchParams();
+
+  for (const [key, value] of Object.entries(searchValues)) {
+    if (value === null || value === undefined) continue;
+    search.set(key, String(value));
+  }
+
+  const query = search.toString();
+  return query ? `${pathname}?${query}` : pathname;
 }
 
 function platformSubstitutionFor(

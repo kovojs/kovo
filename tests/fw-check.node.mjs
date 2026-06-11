@@ -430,11 +430,19 @@ void test('P3 typed routes validate navigation targets', async () => {
   assert.match(coreTests, /productFilter\.input\('max'\)/);
   assert.match(coreTests, /productFilter\.input\('sku'\)/);
   assert.match(compilerSource, /routes\?: readonly string\[\]/);
+  assert.match(compilerSource, /lowerNavigationSugar/);
+  assert.match(compilerSource, /lowerStaticLinks/);
+  assert.match(compilerSource, /lowerStaticHrefCalls/);
   assert.match(compilerSource, /validateLiteralHrefs/);
   assert.match(compilerSource, /routeRegistryFactLines/);
   assert.match(
     compilerTests,
     /reports FW220 for literal navigation targets outside the route table/,
+  );
+  assert.match(compilerTests, /lowers static Link navigation sugar to plain anchors/);
+  assert.match(
+    compilerTests,
+    /lowers static href calls to literal anchor hrefs before FW220 validation/,
   );
   assert.match(serverSource, /export function route/);
   assert.match(serverSource, /interface RouteDeclaration/);

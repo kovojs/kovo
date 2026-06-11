@@ -561,6 +561,58 @@ export const ProductLinks = component('product-links', {
     expect(result.diagnostics).toEqual([]);
   });
 
+  it('lowers static Link navigation sugar to plain anchors', () => {
+    const result = compileComponentModule({
+      fileName: 'product-links.tsx',
+      registryFacts: {
+        routes: ['/cart', '/products/:id'],
+      },
+      source: `
+export const ProductLinks = component('product-links', {
+  render: () => (
+    <nav>
+      <Link className="product-link" to="/products/:id" params={{ id: 'p 1' }} search={{ max: 500, sort: 'price' }}>
+        Product
+      </Link>
+    </nav>
+  ),
+});
+`,
+    });
+
+    expect(result.diagnostics).toEqual([]);
+    expect(result.files[0]?.source).toContain(
+      '<a className="product-link" href="/products/p%201?max=500&amp;sort=price">',
+    );
+    expect(result.files[0]?.source).not.toContain('<Link');
+    expect(() => assertFixpoint(result)).not.toThrow();
+  });
+
+  it('lowers static href calls to literal anchor hrefs before FW220 validation', () => {
+    const result = compileComponentModule({
+      fileName: 'product-links.tsx',
+      registryFacts: {
+        routes: ['/cart', '/products/:id'],
+      },
+      source: `
+export const ProductLinks = component('product-links', {
+  render: () => (
+    <nav>
+      <a href={href('/products/:id', { params: { id: 'p1' }, search: { max: 500, sort: 'price' } })}>
+        Product
+      </a>
+    </nav>
+  ),
+});
+`,
+    });
+
+    expect(result.diagnostics).toEqual([]);
+    expect(result.files[0]?.source).toContain('href="/products/p1?max=500&amp;sort=price"');
+    expect(result.files[0]?.source).not.toContain("href('/products/:id'");
+    expect(() => assertFixpoint(result)).not.toThrow();
+  });
+
   it('reports FW220 for literal navigation targets outside the route table', () => {
     const result = compileComponentModule({
       fileName: 'product-links.tsx',
