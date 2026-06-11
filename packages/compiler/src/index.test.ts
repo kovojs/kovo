@@ -643,6 +643,36 @@ export const FilterButton = component('filter-button', {
     expect(result.files[1]?.source).toContain('// no client handlers emitted');
   });
 
+  it('ignores platform behavior text inside strings and comments', () => {
+    const result = compileComponentModule({
+      fileName: 'cart-button.tsx',
+      source: `
+export const CartButton = component('cart-button', {
+  render: () => {
+    const sample = "<button onClick={() => document.getElementById('missing')!.showModal()} />";
+    // <button onClick={() => document.getElementById('also-missing')!.showModal()} />
+    return <button onClick={() => document.getElementById('cart-drawer')!.showModal()}>Open</button>;
+  },
+});
+`,
+    });
+    const serverSource = result.files[0]?.source ?? '';
+
+    expect(result.platformSubstitutions).toEqual([
+      {
+        action: 'show-modal',
+        event: 'click',
+        kind: 'dialog',
+        tag: 'button',
+        target: 'cart-drawer',
+      },
+    ]);
+    expect(serverSource).toContain("document.getElementById('missing')!.showModal()");
+    expect(serverSource).toContain('commandfor="cart-drawer" command="show-modal"');
+    expect(serverSource).not.toContain("document.getElementById('cart-drawer')!.showModal()");
+    expect(() => assertFixpoint(result)).not.toThrow();
+  });
+
   it('lowers provable details summary toggles by dropping redundant JavaScript', () => {
     const result = compileComponentModule({
       fileName: 'shipping-details.tsx',

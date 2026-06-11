@@ -439,35 +439,76 @@ function lowerPlatformBehaviors(source: string): {
   source: string;
   substitutions: PlatformSubstitution[];
 } {
-  const substitutions: PlatformSubstitution[] = [];
-  const detailsLowered = source.replace(
-    /<summary\b(?<before>[^>]*)\sonClick=\{\(\)\s*=>\s*document\.getElementById\(['"](?<target>[^'"]+)['"]\)!?\.open\s*=\s*!\s*document\.getElementById\(['"]\k<target>['"]\)!?\.open\s*\}/g,
-    (_match, before: string, target: string) => {
-      substitutions.push({
-        action: 'toggle',
-        event: 'click',
-        kind: 'details',
-        tag: 'summary',
-        target,
-      });
-      return `<summary${before}`;
-    },
-  );
-  const nextSource = detailsLowered.replace(
-    /<(?<tag>[A-Za-z][A-Za-z0-9-]*)\b(?<before>[^>]*)\sonClick=\{\(\)\s*=>\s*document\.getElementById\(['"](?<target>[^'"]+)['"]\)!?\.(?<method>showModal|close|requestClose|showPopover|hidePopover|togglePopover)\(\)\s*\}/g,
-    (match, tag: string, before: string, target: string, method: string) => {
-      const substitution = platformSubstitutionFor(tag, target, method);
-      if (!substitution) return match;
+  const matches = parsedJsxElements(source).flatMap((element) => {
+    const onClick = element.attributes.find((attribute) => attribute.name === 'onClick');
+    const substitution = onClick?.expression
+      ? platformSubstitutionFromClickExpression(element.tag, onClick.expression)
+      : null;
+    return onClick && substitution ? [{ attribute: onClick, substitution }] : [];
+  });
+  let nextSource = source;
 
-      substitutions.push(substitution);
-      return `<${tag}${before} ${platformAttributes(substitution)}`;
-    },
-  );
+  for (const match of [...matches].sort(
+    (left, right) => right.attribute.start - left.attribute.start,
+  )) {
+    const attributes = platformAttributes(match.substitution);
+    nextSource =
+      attributes === ''
+        ? removeSourceRangeWithLeadingWhitespace(
+            nextSource,
+            match.attribute.start,
+            match.attribute.end,
+          )
+        : `${nextSource.slice(0, match.attribute.start)}${attributes}${nextSource.slice(match.attribute.end)}`;
+  }
 
   return {
     source: nextSource,
-    substitutions,
+    substitutions: matches.map((match) => match.substitution),
   };
+}
+
+function platformSubstitutionFromClickExpression(
+  tag: string,
+  expression: string,
+): PlatformSubstitution | null {
+  const detailsToggle =
+    /^\(\)\s*=>\s*document\.getElementById\(['"](?<target>[^'"]+)['"]\)!?\.open\s*=\s*!\s*document\.getElementById\(['"]\k<target>['"]\)!?\.open$/.exec(
+      expression,
+    );
+  const detailsTarget = detailsToggle?.groups?.target;
+  if (detailsTarget && tag === 'summary') {
+    return {
+      action: 'toggle',
+      event: 'click',
+      kind: 'details',
+      tag,
+      target: detailsTarget,
+    };
+  }
+
+  const methodCall =
+    /^\(\)\s*=>\s*document\.getElementById\(['"](?<target>[^'"]+)['"]\)!?\.(?<method>showModal|close|requestClose|showPopover|hidePopover|togglePopover)\(\)\s*$/.exec(
+      expression,
+    );
+  const method = methodCall?.groups?.method;
+  const target = methodCall?.groups?.target;
+  if (!method || !target) return null;
+
+  return platformSubstitutionFor(tag, target, method);
+}
+
+function removeSourceRangeWithLeadingWhitespace(
+  source: string,
+  start: number,
+  end: number,
+): string {
+  let removeStart = start;
+  while (removeStart > 0 && /\s/.test(source[removeStart - 1] ?? '')) {
+    removeStart -= 1;
+  }
+
+  return `${source.slice(0, removeStart)}${source.slice(end)}`;
 }
 
 function lowerNavigationSugar(source: string): { source: string } {
