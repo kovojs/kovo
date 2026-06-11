@@ -49,6 +49,8 @@ export interface QueryRegistry {}
 
 export interface MutationRegistry {}
 
+export interface FragmentTargets {}
+
 type RegistryKey<Registry> = keyof Registry extends never
   ? string
   : Extract<keyof Registry, string>;
@@ -104,6 +106,21 @@ export function formFields<
   const Fields extends readonly FormFieldName<Definition>[],
 >(_form: Definition, fields: CompleteFormFields<Definition, Fields>): Fields {
   return fields as Fields;
+}
+
+export interface FragmentTargetPatch<Target extends string, Props> {
+  props: Props;
+  target: Target;
+}
+
+export function fragmentTarget<const Target extends RegistryKey<FragmentTargets>>(
+  target: Target,
+  props: Target extends keyof FragmentTargets ? FragmentTargets[Target] : Record<string, never>,
+): FragmentTargetPatch<
+  Target,
+  Target extends keyof FragmentTargets ? FragmentTargets[Target] : Record<string, never>
+> {
+  return { props, target };
 }
 
 export interface EventDefinition<Name extends string, Payload extends JsonValue = JsonValue> {

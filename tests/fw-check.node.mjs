@@ -584,6 +584,21 @@ void test('P8 component explain includes handler capture channels', async () => 
   assert.match(cliTests, /captures=ctx,element-params params=itemId/);
 });
 
+void test('P1 fragment targets emit typed registry facts', async () => {
+  const coreSource = await readProjectFile('packages/core/src/index.ts');
+  const coreTests = await readProjectFile('packages/core/src/index.test.ts');
+  const compilerSource = await readProjectFile('packages/compiler/src/index.ts');
+  const compilerTests = await readProjectFile('packages/compiler/src/index.test.ts');
+
+  assert.match(coreSource, /interface FragmentTargets/);
+  assert.match(coreSource, /function fragmentTarget/);
+  assert.match(coreTests, /fragment target names and props from generated registry facts/);
+  assert.match(compilerSource, /fragmentTargetPropsType/);
+  assert.match(compilerSource, /interface FragmentTargets \{/);
+  assert.match(compilerTests, /'cart-row': \{ rowId: string \};/);
+  assert.doesNotMatch(compilerTests, /'cart-row': unknown;/);
+});
+
 void test('Drizzle pinned conformance suite is an explicit gate', async () => {
   const packageJson = JSON.parse(await readProjectFile('package.json'));
   const viteConfig = await readProjectFile('vite.config.ts');

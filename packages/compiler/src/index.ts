@@ -147,7 +147,8 @@ export function compileComponentModule(options: CompileComponentOptions): Compil
 
   const clientSource = emitClientModule(handlers);
   const cssSource = emitCssModule(source, componentName);
-  const fragmentTargets = findFragmentTargets(source, componentName);
+  const fragmentTargetFacts = findFragmentTargetFacts(source, componentName);
+  const fragmentTargets = fragmentTargetFacts.map((fact) => fact.target);
   const cssAssets = cssSource
     ? [componentCssAssetForFile(cssFileName, componentName, fragmentTargets)]
     : [];
@@ -156,7 +157,7 @@ export function compileComponentModule(options: CompileComponentOptions): Compil
     clientFileName,
     cssAssets,
     componentName,
-    fragmentTargets,
+    fragmentTargetFacts,
     handlers,
     platformSubstitutions: platformLowering.substitutions,
     ...(options.registryFacts ? { registryFacts: options.registryFacts } : {}),
@@ -899,6 +900,38 @@ function topLevelObjectKeys(objectSource: string): string[] {
   return keys;
 }
 
+function topLevelObjectEntries(objectSource: string): { key: string; value: string }[] {
+  const entries: { key: string; value: string }[] = [];
+  let index = 1;
+
+  while (index < objectSource.length - 1) {
+    index = skipWhitespaceAndComments(objectSource, index);
+    if (objectSource[index] === ',') {
+      index += 1;
+      continue;
+    }
+
+    const key = readObjectKey(objectSource, index);
+    if (!key) {
+      index = skipObjectValue(objectSource, index);
+      continue;
+    }
+
+    const afterKey = skipWhitespaceAndComments(objectSource, key.end);
+    if (objectSource[afterKey] !== ':') {
+      index = skipObjectValue(objectSource, afterKey);
+      continue;
+    }
+
+    const valueStart = skipWhitespaceAndComments(objectSource, afterKey + 1);
+    const valueEnd = skipObjectValue(objectSource, valueStart);
+    entries.push({ key: key.name, value: objectSource.slice(valueStart, valueEnd).trim() });
+    index = valueEnd;
+  }
+
+  return entries;
+}
+
 function readObjectKey(source: string, start: number): { name: string; end: number } | null {
   const char = source[start];
   if (char === '"' || char === "'") {
@@ -1286,11 +1319,45 @@ function escapeAttribute(value: string): string {
   return value.replaceAll('&', '&amp;').replaceAll('"', '&quot;');
 }
 
-function findFragmentTargets(source: string, componentName: string): string[] {
+interface FragmentTargetFact {
+  propsType: string;
+  target: string;
+}
+
+function findFragmentTargetFacts(source: string, componentName: string): FragmentTargetFact[] {
   if (!/fragmentTarget\s*:\s*true/.test(source)) return [];
 
   const explicitName = /component\(\s*['"]([^'"]+)['"]/.exec(source)?.[1];
-  return [explicitName ?? kebabCase(componentName)];
+  return [
+    {
+      propsType: fragmentTargetPropsType(source),
+      target: explicitName ?? kebabCase(componentName),
+    },
+  ];
+}
+
+function fragmentTargetPropsType(source: string): string {
+  const propsObject = extractObjectLiteralAfterProperty(source, 'props');
+  if (!propsObject) return '{}';
+
+  const props = topLevelObjectEntries(propsObject)
+    .map((entry) => ({
+      key: entry.key,
+      type: propConstructorType(entry.value),
+    }))
+    .filter((entry): entry is { key: string; type: string } => entry.type !== undefined);
+
+  if (props.length === 0) return '{}';
+
+  return `{ ${props.map((prop) => `${prop.key}: ${prop.type}`).join('; ')} }`;
+}
+
+function propConstructorType(value: string): string | undefined {
+  const trimmed = value.trim();
+  if (trimmed === 'String') return 'string';
+  if (trimmed === 'Number') return 'number';
+  if (trimmed === 'Boolean') return 'boolean';
+  return undefined;
 }
 
 function kebabCase(value: string): string {
@@ -1304,7 +1371,7 @@ function emitRegistryModule(options: {
   clientFileName: string;
   cssAssets: readonly ComponentCssAsset[];
   componentName: string;
-  fragmentTargets: string[];
+  fragmentTargetFacts: readonly FragmentTargetFact[];
   handlers: HandlerLowering[];
   platformSubstitutions: PlatformSubstitution[];
   registryFacts?: RegistryFacts;
@@ -1313,8 +1380,8 @@ function emitRegistryModule(options: {
   const handlerModuleLine = options.handlers.length
     ? `  '#${kebabCase(options.componentName)}': typeof import('../${options.clientFileName}');`
     : '';
-  const fragmentTargetLines = options.fragmentTargets
-    .map((target) => `  '${target}': unknown;`)
+  const fragmentTargetLines = options.fragmentTargetFacts
+    .map((fact) => `  '${fact.target}': ${fact.propsType};`)
     .join('\n');
   const platformSubstitutionLines = options.platformSubstitutions
     .map(
@@ -1360,6 +1427,10 @@ ${mutationRegistryLines}
 }
 
 declare module '@jiso/core' {
+  interface FragmentTargets {
+${fragmentTargetLines}
+  }
+
   interface QueryRegistry {
 ${queryRegistryLines}
   }

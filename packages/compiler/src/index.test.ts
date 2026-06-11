@@ -44,7 +44,7 @@ describe('compileComponentModule', () => {
     expect(result.files[2]?.source).toContain(
       "'#cart-badge': typeof import('../components/cart/cart-badge.client.js');",
     );
-    expect(result.files[2]?.source).toContain("'cart-badge': unknown;");
+    expect(result.files[2]?.source).toContain("'cart-badge': {};");
   });
 
   it('emits provided query, mutation, and domain key registry facts', () => {
@@ -68,7 +68,10 @@ describe('compileComponentModule', () => {
     expect(registry).toContain(
       "'#cart-badge': typeof import('../components/cart/cart-badge.client.js');",
     );
-    expect(registry).toContain("'cart-badge': unknown;");
+    expect(registry).toContain("'cart-badge': {};");
+    expect(registry).toContain(`interface FragmentTargets {
+  'cart-badge': {};
+  }`);
     expect(registry).toContain(`export interface QueryRegistry {
   'cart': typeof cartQuery;
   'productGrid': typeof productGridQuery;
@@ -78,6 +81,10 @@ describe('compileComponentModule', () => {
   'cart/remove': typeof removeFromCart;
 }`);
     expect(registry).toContain(`declare module '@jiso/core' {
+  interface FragmentTargets {
+  'cart-badge': {};
+  }
+
   interface QueryRegistry {
   'cart': typeof cartQuery;
   'productGrid': typeof productGridQuery;
@@ -139,7 +146,7 @@ export const CartBadge = component('cart-badge', {
     ]);
     expect(result.files[0]?.source).toContain('export function renderSource()');
     expect(result.files[1]?.source).toContain('// no client handlers emitted');
-    expect(result.files[3]?.source).toContain("'cart-badge': unknown;");
+    expect(result.files[3]?.source).toContain("'cart-badge': {};");
     expect(result.files[3]?.source).toContain(
       "'CartBadge': { href: '/assets/components/cart/cart-badge.css'; sourceFileName: 'components/cart/cart-badge.css'; fragmentTargets: readonly ['cart-badge']; };",
     );
@@ -180,6 +187,10 @@ export const CartRow = component('cart-row', {
     expect(registry).toMatch(/export interface QueryRegistry \{\n\n\}/);
     expect(registry).toMatch(/export interface MutationRegistry \{\n\n\}/);
     expect(registry).toContain(`declare module '@jiso/core' {
+  interface FragmentTargets {
+  'cart-badge': {};
+  }
+
   interface QueryRegistry {
 
   }
@@ -685,7 +696,10 @@ export const CartRow = component('cart-row', {
     });
 
     expect(result.diagnostics).toEqual([]);
-    expect(result.files[2]?.source).toContain("'cart-row': unknown;");
+    expect(result.files[2]?.source).toContain("'cart-row': { rowId: string };");
+    expect(result.files[2]?.source).toContain(`interface FragmentTargets {
+  'cart-row': { rowId: string };
+  }`);
   });
 
   it('reports FW303 when fragment target render inputs cannot be rerendered from queries or stamped props', () => {

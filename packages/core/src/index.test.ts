@@ -5,6 +5,7 @@ import {
   event,
   form,
   formFields,
+  fragmentTarget,
   query,
   type EventPayload,
   type FormFailure,
@@ -20,6 +21,10 @@ declare module './index.js' {
 
   interface MutationRegistry {
     'cart/add': unknown;
+  }
+
+  interface FragmentTargets {
+    'cart-row': { rowId: string };
   }
 }
 
@@ -115,6 +120,30 @@ describe('core authoring APIs', () => {
     };
     expect(assertMissingField).toBeTypeOf('function');
     expect(assertUnknownField).toBeTypeOf('function');
+  });
+
+  it('checks fragment target names and props from generated registry facts', () => {
+    expect(fragmentTarget('cart-row', { rowId: 'row-1' })).toEqual({
+      props: { rowId: 'row-1' },
+      target: 'cart-row',
+    });
+
+    const assertUnknownTarget = () => {
+      // @ts-expect-error fragment target names are checked against generated FragmentTargets facts.
+      fragmentTarget('missing-target', {});
+    };
+    const assertMissingProp = () => {
+      // @ts-expect-error rowId is required by the generated fragment target props.
+      fragmentTarget('cart-row', {});
+    };
+    const assertUnknownProp = () => {
+      // @ts-expect-error sku is not part of the generated fragment target props.
+      fragmentTarget('cart-row', { rowId: 'row-1', sku: 'sku-1' });
+    };
+
+    expect(assertUnknownTarget).toBeTypeOf('function');
+    expect(assertMissingProp).toBeTypeOf('function');
+    expect(assertUnknownProp).toBeTypeOf('function');
   });
 
   it('preserves typed event names as registry facts', () => {
