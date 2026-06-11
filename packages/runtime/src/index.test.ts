@@ -602,6 +602,65 @@ describe('runtime loader', () => {
     expect(pendingForm.attributes).not.toHaveProperty('aria-busy');
   });
 
+  it('reports enhanced loader submit failures after preventing native submit', async () => {
+    const loaderRoot = new FakeRoot();
+    const mutationRoot = new FakeMorphRoot();
+    const pendingForm = new FakePendingElement({ 'fw-deps': 'cart' });
+    const pendingRoot = new FakePendingRoot([pendingForm]);
+    const store = createQueryStore();
+    const preventDefault = vi.fn();
+    const importModule = vi.fn();
+    const onError = vi.fn();
+    const error = new Error('network down');
+    const formData = new FormData();
+    const form = new FakeFormElement(
+      {
+        enhance: '',
+        'fw-deps': 'cart',
+      },
+      {
+        action: '/_m/cart/add',
+        method: 'post',
+      },
+    );
+    mutationRoot.deps = [{ deps: 'cart', id: 'cart-badge' }];
+    const fetch = vi.fn(async () => {
+      expect(pendingForm.attributes).toMatchObject({
+        'aria-busy': 'true',
+        'fw-pending': '',
+      });
+      throw error;
+    });
+
+    installJisoLoader({
+      enhancedMutations: {
+        fetch,
+        formData: () => formData,
+        onError,
+        pendingRoot,
+        root: mutationRoot,
+        store,
+      },
+      importModule,
+      root: loaderRoot,
+    });
+
+    await expect(
+      loaderRoot.listeners.get('submit')?.({
+        preventDefault,
+        target: form,
+        type: 'submit',
+      }),
+    ).resolves.toBeUndefined();
+
+    expect(preventDefault).toHaveBeenCalledTimes(1);
+    expect(fetch).toHaveBeenCalledTimes(1);
+    expect(onError).toHaveBeenCalledWith(error, form);
+    expect(importModule).not.toHaveBeenCalled();
+    expect(pendingForm.attributes).not.toHaveProperty('fw-pending');
+    expect(pendingForm.attributes).not.toHaveProperty('aria-busy');
+  });
+
   it('auto-wires enhanced mutation broadcasts through the loader bridge', async () => {
     const globalRecord = globalThis as unknown as Record<string, unknown>;
     const originalBroadcastChannel = globalRecord.BroadcastChannel;
@@ -2654,6 +2713,40 @@ describe('query store', () => {
         type: 'jiso:mutation-response',
       },
     ]);
+  });
+
+  it('reports direct enhanced mutation fetch failures and clears pending state', async () => {
+    const store = createQueryStore();
+    const root = new FakeMorphRoot();
+    const pendingRoot = new FakePendingRoot([new FakePendingElement({ 'fw-deps': 'cart' })]);
+    const onError = vi.fn();
+    const error = new Error('network down');
+    const fetch = vi.fn(async () => {
+      const pending = [...pendingRoot.querySelectorAll('[fw-deps]')][0];
+      expect(pending?.attributes).toMatchObject({
+        'aria-busy': 'true',
+        'fw-pending': '',
+      });
+      throw error;
+    });
+
+    await expect(
+      submitEnhancedMutation({
+        fetch,
+        form: { action: '/_m/cart/add', method: 'post' },
+        formData: new FormData(),
+        onError,
+        pendingQueries: ['cart'],
+        pendingRoot,
+        root,
+        store,
+      }),
+    ).rejects.toBe(error);
+
+    const pending = [...pendingRoot.querySelectorAll('[fw-deps]')][0];
+    expect(onError).toHaveBeenCalledWith(error);
+    expect(pending?.attributes).not.toHaveProperty('fw-pending');
+    expect(pending?.attributes).not.toHaveProperty('aria-busy');
   });
 
   it('does not rebroadcast failed enhanced mutation responses', async () => {

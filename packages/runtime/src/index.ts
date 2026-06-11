@@ -368,6 +368,7 @@ export interface EnhancedMutationLoaderOptions {
   formData?: (form: EnhancedFormElementLike) => unknown;
   idem?: () => string;
   morph?: MorphFragment;
+  onError?: (error: unknown, form: EnhancedFormElementLike) => void;
   onUploadProgress?: (progress: UploadProgress, form: EnhancedFormElementLike) => void;
   pendingRoot?: PendingRoot;
   queryPlans?: CompiledQueryUpdatePlans;
@@ -390,23 +391,34 @@ export async function dispatchEnhancedFormSubmit(
   if (!form || !isEnhancedForm(form)) return false;
 
   event.preventDefault?.();
-  await submitEnhancedMutation({
-    fetch: options.fetch,
-    form,
-    formData: options.formData ? options.formData(form) : new FormData(form as HTMLFormElement),
-    onUploadProgress: (progress) => {
-      updateUploadProgressElements(form, progress);
-      options.onUploadProgress?.(progress, form);
-    },
-    ...(options.pendingRoot ? { pendingQueries: readDeps(form.getAttribute('fw-deps')) } : {}),
-    ...(options.pendingRoot ? { pendingRoot: options.pendingRoot } : {}),
-    root: options.root,
-    store: options.store,
-    ...(options.broadcast ? { broadcast: options.broadcast } : {}),
-    ...(options.idem ? { idem: options.idem() } : {}),
-    ...(options.morph ? { morph: options.morph } : {}),
-    ...(options.queryPlans ? { queryPlans: options.queryPlans } : {}),
-  });
+  try {
+    await submitEnhancedMutation({
+      fetch: options.fetch,
+      form,
+      formData: options.formData ? options.formData(form) : new FormData(form as HTMLFormElement),
+      ...(options.onError
+        ? {
+            onError(error) {
+              options.onError?.(error, form);
+            },
+          }
+        : {}),
+      onUploadProgress: (progress) => {
+        updateUploadProgressElements(form, progress);
+        options.onUploadProgress?.(progress, form);
+      },
+      ...(options.pendingRoot ? { pendingQueries: readDeps(form.getAttribute('fw-deps')) } : {}),
+      ...(options.pendingRoot ? { pendingRoot: options.pendingRoot } : {}),
+      root: options.root,
+      store: options.store,
+      ...(options.broadcast ? { broadcast: options.broadcast } : {}),
+      ...(options.idem ? { idem: options.idem() } : {}),
+      ...(options.morph ? { morph: options.morph } : {}),
+      ...(options.queryPlans ? { queryPlans: options.queryPlans } : {}),
+    });
+  } catch (error) {
+    if (!options.onError) throw error;
+  }
   return true;
 }
 
@@ -1173,6 +1185,7 @@ export interface EnhancedMutationSubmitOptions {
   formData: unknown;
   idem?: string;
   morph?: MorphFragment;
+  onError?: (error: unknown) => void;
   onUploadProgress?: (progress: UploadProgress) => void;
   pendingQueries?: readonly string[];
   pendingRoot?: PendingRoot;
@@ -1601,6 +1614,9 @@ export async function submitEnhancedMutation(options: EnhancedMutationSubmitOpti
       idem,
       targets,
     };
+  } catch (error) {
+    options.onError?.(error);
+    throw error;
   } finally {
     stampEnhancedMutationPending(options, false);
   }
