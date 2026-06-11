@@ -199,6 +199,10 @@ Do this first or pay it on every commit.
       APIs and asserts pagehide-only optimism cleanup registration/disposal, pending-stamp
       clearing, keepalive enhanced submit headers, optimistic rollback on pagehide, and later
       server-truth reconciliation instead of grepping runtime source or test names.
+      Partial evidence 2026-06-11: the S2 loader-budget tranche now imports the built runtime
+      `jisoLoaderSource` artifact and asserts the 4KB gzip budget, dynamic import wrapper,
+      declared trigger support, enhanced mutation wire features, fragment parsing, and no-upgrade/
+      no-unload constraints instead of grepping runtime source or test names.
 - [x] **Make create-jiso templates real files** (`create-jiso/src/index.ts:63-473`, ~470 lines of
       escaped template literals including a CI workflow and double-escaped regexes inside
       `.mjs`-in-string). Move to a `templates/` directory copied at scaffold time with `{{name}}`

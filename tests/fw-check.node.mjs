@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { readdir, readFile } from 'node:fs/promises';
 import { test } from 'node:test';
+import { gzipSync } from 'node:zlib';
 
 import { missingBuildMessage } from '../scripts/fw-check.mjs';
 import { fwCheck, fwExplain } from '../dist/cli/src/index.mjs';
@@ -14,6 +15,7 @@ import {
   applyMutationResponseToDom,
   createQueryStore,
   installPagehideOptimismCleanup,
+  jisoLoaderSource,
   morphStructuralTree,
   OptimisticRebaser,
   readElementParams,
@@ -393,53 +395,30 @@ void test('pre-launch checklist is tracked explicitly', async () => {
 });
 
 void test('S2 loader budget and L0 no-upgrade path are acceptance evidence', async () => {
-  const runtimeSource = await readProjectFile('packages/runtime/src/index.ts');
-  const runtimeTests = await readProjectFile('packages/runtime/src/index.test.ts');
-  const inlineLoaderStart = runtimeSource.indexOf('const inlineJisoLoaderInstallerSource');
-  const inlineLoaderEnd = runtimeSource.indexOf('export const jisoLoaderSource');
-  assert.notEqual(inlineLoaderStart, -1, 'runtime has a pinned inline loader source');
-  assert.notEqual(inlineLoaderEnd, -1, 'runtime exports generated inline loader source');
-  const inlineLoaderSource = runtimeSource.slice(inlineLoaderStart, inlineLoaderEnd);
-
-  assert.match(runtimeSource, /export function installInlineJisoLoader/);
-  assert.match(runtimeSource, /inlineJisoLoaderInstallerSource/);
-  assert.match(
-    runtimeSource,
-    /export const jisoLoaderSource = `\(\$\{inlineJisoLoaderInstallerSource\}\)\(\(url\)=>import\(url\)\);`/,
+  assert.ok(jisoLoaderSource.startsWith('(function installInlineJisoLoader(importModule)'));
+  assert.ok(jisoLoaderSource.endsWith(')((url)=>import(url));'));
+  assert.ok(
+    gzipSync(jisoLoaderSource).byteLength <= 4096,
+    `inline loader gzip size ${gzipSync(jisoLoaderSource).byteLength} exceeds 4096 bytes`,
   );
+  assert.match(jisoLoaderSource, /signal:\s*new AbortController\(\)\.signal/);
+  assert.match(jisoLoaderSource, /IntersectionObserver/);
+  assert.match(jisoLoaderSource, /FW-Targets/);
+  assert.match(jisoLoaderSource, /keepalive:\s*true/);
+  assert.match(jisoLoaderSource, /DOMParser/);
+  assert.match(jisoLoaderSource, /fw-fragment/);
+  assert.match(jisoLoaderSource, /on\\\\:load/);
+  assert.match(jisoLoaderSource, /on\\\\:idle/);
   assert.doesNotMatch(
-    runtimeSource,
-    /installInlineJisoLoader\.toString\(\)|Function\.prototype\.toString|minifyInlineLoaderSource/,
-    'inline loader source is pinned instead of regex-minified from function source',
-  );
-  assert.match(runtimeSource, /\(\(url\)=>import\(url\)\)/, 'handlers import only from event refs');
-  assert.match(
-    inlineLoaderSource,
-    /signal: new AbortController\(\)\.signal/,
-    'inline handlers receive ctx.signal',
-  );
-  assert.match(
-    inlineLoaderSource,
-    /IntersectionObserver/,
-    'inline loader schedules declared visible triggers',
-  );
-  assert.match(inlineLoaderSource, /FW-Targets/, 'enhanced form submits send live targets');
-  assert.match(inlineLoaderSource, /keepalive: true/, 'enhanced form submits use keepalive');
-  assert.match(inlineLoaderSource, /DOMParser/, 'loader parses mutation response chunks');
-  assert.match(inlineLoaderSource, /fw-fragment/, 'loader applies fragment chunks');
-  assert.match(inlineLoaderSource, /on\\\\:load/, 'inline loader schedules declared load triggers');
-  assert.match(inlineLoaderSource, /on\\\\:idle/, 'inline loader schedules declared idle triggers');
-  assert.doesNotMatch(
-    inlineLoaderSource,
+    jisoLoaderSource,
     /\bcustomElements\.define\b|attachShadow|\bunload\b/,
     'loader has no upgrade/unload path',
   );
-  assert.match(runtimeTests, /gzipSync\(jisoLoaderSource\)\.byteLength/);
-  assert.match(runtimeTests, /toBeLessThanOrEqual\(4096\)/);
-  assert.match(runtimeTests, /generated bootstrap source/);
-  assert.match(runtimeTests, /shared inline loader source/);
-  assert.match(runtimeTests, /FW-Targets': 'cart-badge=cart; inventory=inventory stock'/);
-  assert.match(runtimeTests, /key: 'cart:c1'/);
+  assert.doesNotMatch(
+    jisoLoaderSource,
+    /installInlineJisoLoader\.toString\(\)|Function\.prototype\.toString|minifyInlineLoaderSource/,
+    'inline loader source is a shipped artifact, not function-source regex minification',
+  );
 });
 
 void test('P2 loader smoke evidence remains represented in runtime tests', async () => {
