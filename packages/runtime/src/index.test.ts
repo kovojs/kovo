@@ -552,6 +552,61 @@ describe('runtime loader', () => {
     }
   });
 
+  it('throws from the inline loader when a handler export is missing', async () => {
+    const globalRecord = globalThis as unknown as Record<string, unknown>;
+    const originals = {
+      __inlineImport: globalRecord.__inlineImport,
+      addEventListener: globalRecord.addEventListener,
+      document: globalRecord.document,
+    };
+    const listeners = new Map<string, (event: unknown) => Promise<void>>();
+    const handlerUrl = `data:text/javascript,${encodeURIComponent('export const present = true;')}#missing`;
+    const attributes = new Map<string, string>([['on:click', handlerUrl]]);
+    const element = {
+      attributes: [],
+      getAttribute(name: string) {
+        return attributes.get(name) ?? null;
+      },
+      setAttribute(name: string, value: string) {
+        attributes.set(name, value);
+      },
+      closest(selector: string) {
+        return selector === '[on\\:click]' ? this : null;
+      },
+    };
+
+    try {
+      globalRecord.addEventListener = (
+        type: string,
+        listener: (event: unknown) => Promise<void>,
+      ) => {
+        listeners.set(type, listener);
+      };
+      globalRecord.document = {
+        querySelectorAll() {
+          return [];
+        },
+      };
+      globalRecord.__inlineImport = vi.fn(async () => ({}));
+
+      const loaderSource = jisoLoaderSource.replace(
+        'await import(x.slice(0,i))',
+        'await globalThis.__inlineImport(x.slice(0,i))',
+      );
+      expect(loaderSource).not.toBe(jisoLoaderSource);
+      runInThisContext(loaderSource);
+
+      await expect(
+        listeners.get('click')?.({
+          target: element,
+          type: 'click',
+        }),
+      ).rejects.toThrow(`Handler export not found: ${handlerUrl}`);
+    } finally {
+      Object.assign(globalRecord, originals);
+    }
+  });
+
   it('keeps inline loader idempotency keys on crypto randomUUID', () => {
     expect(jisoLoaderSource).toContain('crypto.randomUUID');
     expect(jisoLoaderSource).not.toContain('Math.random');
