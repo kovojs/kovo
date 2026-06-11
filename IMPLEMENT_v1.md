@@ -49,7 +49,7 @@ Audited against the repository on 2026-06-11. Checkmarks mean the behavior, API,
 - [x] D3 deferred streaming has fixtures, stylesheet hints, and priority/query ordering coverage.
 - [x] D4 has initial adopted features: route meta, file uploads, i18n catalogs, rate-limit guard, and typed sessions.
 - [ ] D5 auth (agnostic core seams + blessed `@jiso/better-auth` adapter) is planned in `plans/auth.md`; not started.
-- [ ] P10 v1 acceptance ledger is wired; docs freeze, outside legibility study, prelaunch checklist, and remaining pending acceptance rows remain open.
+- [ ] P10 v1 acceptance ledger is wired with concrete dated doc ledgers for the outside legibility study and prelaunch checks; docs freeze, actual outside study results, external launch evidence, and final clean-checkout acceptance run remain open.
 
 ## Decisions adopted by this plan
 
