@@ -571,6 +571,11 @@ void test('P10 starter wires graph assertions into CI', async () => {
   assert.match(starterSource, /command: 'node scripts\/graph-assertions\.mjs'/);
   assert.match(starterSource, /- run: vp run graph-assertions/);
   assert.match(starterSource, /path: 'scripts\/graph-assertions\.mjs'/);
+  assert.match(starterSource, /path: 'src\/client\.ts'/);
+  assert.match(starterSource, /'@jiso\/runtime': 'workspace:\*'/);
+  assert.match(starterSource, /installJisoLoader\(\{/);
+  assert.match(starterSource, /enhancedMutations: \{/);
+  assert.match(starterSource, /queryPlans,/);
   assert.match(starterSource, /OPTIMISTIC-SUMMARY \.\*UNHANDLED=0/);
   assert.match(starterSource, /fwExplain\(\['page', '\/cart'\]\)/);
   assert.match(starterSource, /explainLine\(cartAdd, 'session: '\)/);
@@ -588,9 +593,10 @@ void test('P10 starter wires graph assertions into CI', async () => {
   assert.match(starterSource, /tailwindcss: '\^4\.1\.0'/);
   assert.match(starterSource, /@source inline\("\.\.\."\)/);
   assert.match(starterSource, /<link rel="stylesheet" href="\/src\/styles\.css" \/>/);
+  assert.match(starterSource, /<script type="module" src="\/src\/client\.ts"><\/script>/);
   assert.match(starterTests, /vp run graph-assertions/);
   assert.match(starterTests, /@source inline\("bg-emerald-50 text-emerald-700/);
-  assert.match(starterTests, /create-jiso: wrote 13 files/);
+  assert.match(starterTests, /create-jiso: wrote 14 files/);
 });
 
 void test('P9 verification layer evidence remains represented', async () => {
@@ -742,9 +748,17 @@ void test('D3 deferred stream responses are consumed by the runtime', async () =
 
   assert.match(compilerSource, /collectQueryUpdatePlans/);
   assert.match(compilerSource, /\$queryUpdatePlans/);
+  assert.match(compilerSource, /emitQueryPlanBootstrapModule/);
+  assert.match(compilerSource, /installJisoLoader/);
+  assert.match(compilerSource, /enhancedMutations: \{/);
   assert.match(compilerSource, /applyCompiledQueryUpdatePlan/);
   assert.match(compilerSource, /bindings: true, derives: \[\], stamps: \[\]/);
   assert.match(compilerTests, /emits per-query data-bind update plans for compiled components/);
+  assert.match(
+    compilerTests,
+    /emits an app bootstrap that wires compiled query plans into the loader/,
+  );
+  assert.match(compilerTests, /\.\.\.CartBadge\$queryUpdatePlans/);
   assert.match(runtimeSource, /applyDeferredStreamResponseToDom/);
   assert.match(runtimeSource, /export function applyCompiledQueryUpdatePlan/);
   assert.match(runtimeSource, /bindings[\s\S]*derives[\s\S]*stamps/);
@@ -752,10 +766,16 @@ void test('D3 deferred stream responses are consumed by the runtime', async () =
   assert.match(runtimeSource, /deferredStreamChunks/);
   assert.match(runtimeSource, /--\$\{boundary\}/);
   assert.match(serverSource, /mode\?: 'append' \| 'replace'/);
+  assert.match(serverSource, /bootstrapScript\?: string/);
+  assert.match(
+    serverSource,
+    /<script type="module" src="\$\{escapeAttribute\(options\.bootstrapScript\)\}"><\/script>/,
+  );
   assert.match(
     serverTests,
     /renders deferred append fragment mode for streamed pagination fragments/,
   );
+  assert.match(serverTests, /renders and preloads the generated app bootstrap script/);
   assert.match(
     runtimeTests,
     /applies query update bindings from mutation chunks without requiring a fragment/,

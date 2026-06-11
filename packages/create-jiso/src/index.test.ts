@@ -30,12 +30,16 @@ describe('create-jiso starter', () => {
       'docs/deployment.md',
       'docs/framework-rules.md',
       'src/styles.css',
+      'src/client.ts',
       'index.html',
       'src/app.tsx',
       'src/app.fixpoint.test.ts',
     ]);
     expect(project.files.find((file) => file.path === 'package.json')?.source).toContain(
       '"@jiso/compiler": "workspace:*"',
+    );
+    expect(project.files.find((file) => file.path === 'package.json')?.source).toContain(
+      '"@jiso/runtime": "workspace:*"',
     );
     expect(project.files.find((file) => file.path === 'package.json')?.source).toContain(
       '"fw": "workspace:*"',
@@ -196,8 +200,17 @@ describe('create-jiso starter', () => {
       '<link rel="stylesheet" href="/src/styles.css" />',
     );
     expect(project.files.find((file) => file.path === 'index.html')?.source).toContain(
+      '<script type="module" src="/src/client.ts"></script>',
+    );
+    expect(project.files.find((file) => file.path === 'index.html')?.source).toContain(
       '<main class="mx-auto grid min-h-dvh',
     );
+    const clientSource = project.files.find((file) => file.path === 'src/client.ts')?.source;
+    expect(clientSource).toContain('import { createQueryStore, installJisoLoader }');
+    expect(clientSource).toContain('const queryPlans = {};');
+    expect(clientSource).toContain('installJisoLoader({');
+    expect(clientSource).toContain('enhancedMutations: {');
+    expect(clientSource).toContain('queryPlans,');
     expect(project.files.some((file) => file.path === 'src/main.ts')).toBe(false);
     expect(
       project.files.find((file) => file.path === '.github/workflows/ci.yml')?.source,
@@ -272,7 +285,7 @@ describe('create-jiso starter', () => {
 
     try {
       expect(main([root])).toBe(0);
-      expect(stdout).toHaveBeenCalledWith(`create-jiso: wrote 13 files to ${root}\n`);
+      expect(stdout).toHaveBeenCalledWith(`create-jiso: wrote 14 files to ${root}\n`);
       expect(JSON.parse(readFileSync(join(root, 'package.json'), 'utf8'))).toMatchObject({
         name: 'hello-cli',
       });

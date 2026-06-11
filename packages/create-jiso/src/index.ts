@@ -71,6 +71,7 @@ export function createJisoProject(options: CreateJisoOptions): CreateJisoProject
             name: packageName,
             dependencies: {
               '@jiso/core': 'workspace:*',
+              '@jiso/runtime': 'workspace:*',
             },
             devDependencies: {
               '@jiso/compiler': 'workspace:*',
@@ -347,6 +348,26 @@ The v1 implementation depends on these hard rules:
 `,
       },
       {
+        path: 'src/client.ts',
+        source: `import { createQueryStore, installJisoLoader } from '@jiso/runtime';
+
+const store = createQueryStore();
+const queryPlans = {};
+
+installJisoLoader({
+  importModule: (specifier) => import(specifier),
+  root: document,
+  queryStore: store,
+  enhancedMutations: {
+    fetch: (url, options) => fetch(url, options),
+    queryPlans,
+    root: document,
+    store,
+  },
+});
+`,
+      },
+      {
         path: 'index.html',
         source: `<!doctype html>
 <html lang="en">
@@ -354,6 +375,7 @@ The v1 implementation depends on these hard rules:
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <link rel="stylesheet" href="/src/styles.css" />
+    <script type="module" src="/src/client.ts"></script>
     <title>Jiso Starter</title>
   </head>
   <body>

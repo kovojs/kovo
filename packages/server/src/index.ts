@@ -545,6 +545,7 @@ export interface StylesheetManifestEntry extends StylesheetAsset {
 }
 
 export interface PageHintOptions {
+  bootstrapScript?: string;
   i18n?: I18nCatalog | readonly I18nCatalog[];
   meta?: RouteMetaSource | readonly RouteMetaSource[];
   modulepreloads?: readonly string[];
@@ -719,13 +720,19 @@ export function renderPageHints(
   options: PageHintOptions,
   context: PageHintRenderContext = {},
 ): PageHints {
-  const modulepreloads = dedupe(options.modulepreloads ?? []);
+  const modulepreloads = dedupe([
+    ...(options.modulepreloads ?? []),
+    ...(options.bootstrapScript ? [options.bootstrapScript] : []),
+  ]);
   const stylesheets = dedupeStylesheets(options.stylesheets ?? []);
   const html = [
     ...renderRouteMeta(options.meta, context),
     ...renderI18nCatalogs(options.i18n),
     ...stylesheets.map((asset) => `<link rel="stylesheet" href="${escapeAttribute(asset.href)}">`),
     ...modulepreloads.map((href) => `<link rel="modulepreload" href="${escapeAttribute(href)}">`),
+    options.bootstrapScript
+      ? `<script type="module" src="${escapeAttribute(options.bootstrapScript)}"></script>`
+      : '',
     renderSpeculationRules(options.prefetch ?? false, options.prerenderUrls ?? []),
   ]
     .filter(Boolean)

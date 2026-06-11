@@ -51,6 +51,15 @@ export interface CssAssetManifestOptions {
   preload?: boolean;
 }
 
+export interface QueryPlanBootstrapInput {
+  exportName: string;
+  importPath: string;
+}
+
+export interface QueryPlanBootstrapOptions {
+  fileName?: string;
+}
+
 export function createEmptyCompileResult(): CompileResult {
   return {
     cssAssets: [],
@@ -244,6 +253,44 @@ export function jisoVitePlugin(): JisoVitePlugin {
         map: null,
       };
     },
+  };
+}
+
+export function emitQueryPlanBootstrapModule(
+  inputs: readonly QueryPlanBootstrapInput[],
+  options: QueryPlanBootstrapOptions = {},
+): EmittedFile {
+  const fileName = options.fileName ?? 'generated/app.client.js';
+  const imports = inputs
+    .map((input) => `import { ${input.exportName} } from ${JSON.stringify(input.importPath)};`)
+    .join('\n');
+  const spreads =
+    inputs.length > 0
+      ? inputs.map((input) => `  ...${input.exportName},`).join('\n')
+      : '  // no compiled query update plans';
+
+  return {
+    fileName,
+    source: `${irHeader}
+import { createQueryStore, installJisoLoader } from '@jiso/runtime';
+${imports ? `${imports}\n` : ''}
+const store = createQueryStore();
+const queryPlans = {
+${spreads}
+};
+
+installJisoLoader({
+  importModule: (specifier) => import(specifier),
+  root: document,
+  queryStore: store,
+  enhancedMutations: {
+    fetch: (url, options) => fetch(url, options),
+    queryPlans,
+    root: document,
+    store,
+  },
+});
+`,
   };
 }
 

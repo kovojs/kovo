@@ -50,6 +50,24 @@ describe('server mutation primitives', () => {
     });
   });
 
+  it('renders and preloads the generated app bootstrap script', () => {
+    expect(
+      renderPageHints({
+        bootstrapScript: '/c/generated/app.client.js',
+        modulepreloads: ['/c/cart.client.js', '/c/generated/app.client.js'],
+      }),
+    ).toEqual({
+      earlyHints: {
+        Link: '</c/cart.client.js>; rel=modulepreload, </c/generated/app.client.js>; rel=modulepreload',
+      },
+      html: [
+        '<link rel="modulepreload" href="/c/cart.client.js">',
+        '<link rel="modulepreload" href="/c/generated/app.client.js">',
+        '<script type="module" src="/c/generated/app.client.js"></script>',
+      ].join(''),
+    });
+  });
+
   it('reads enhanced mutation wire headers case-insensitively', () => {
     expect(
       readMutationWireHeaders({

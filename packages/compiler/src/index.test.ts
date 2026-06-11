@@ -6,6 +6,7 @@ import {
   collectMinifierReservedNames,
   compileComponentModule,
   dedupeCss,
+  emitQueryPlanBootstrapModule,
   jisoVitePlugin,
   scopeComponentCss,
   selectCssAssets,
@@ -534,6 +535,37 @@ export const CartBadge = component('cart-badge', {
   'CartBadge:product': readonly ['product.name'];
 }`);
     expect(() => assertFixpoint(result)).not.toThrow();
+  });
+
+  it('emits an app bootstrap that wires compiled query plans into the loader', () => {
+    const bootstrap = emitQueryPlanBootstrapModule([
+      {
+        exportName: 'CartBadge$queryUpdatePlans',
+        importPath: '../components/cart/cart-badge.client.js',
+      },
+      {
+        exportName: 'CartPanel$queryUpdatePlans',
+        importPath: '../components/cart/cart-panel.client.js',
+      },
+    ]);
+
+    expect(bootstrap.fileName).toBe('generated/app.client.js');
+    expect(bootstrap.source).toContain(
+      "import { createQueryStore, installJisoLoader } from '@jiso/runtime';",
+    );
+    expect(bootstrap.source).toContain(
+      'import { CartBadge$queryUpdatePlans } from "../components/cart/cart-badge.client.js";',
+    );
+    expect(bootstrap.source).toContain(
+      'import { CartPanel$queryUpdatePlans } from "../components/cart/cart-panel.client.js";',
+    );
+    expect(bootstrap.source).toContain('const queryPlans = {');
+    expect(bootstrap.source).toContain('...CartBadge$queryUpdatePlans,');
+    expect(bootstrap.source).toContain('...CartPanel$queryUpdatePlans,');
+    expect(bootstrap.source).toContain('installJisoLoader({');
+    expect(bootstrap.source).toContain('queryStore: store');
+    expect(bootstrap.source).toContain('enhancedMutations: {');
+    expect(bootstrap.source).toContain('queryPlans,');
   });
 
   it('stamps rendered component markup with declared query dependencies', () => {
