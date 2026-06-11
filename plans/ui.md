@@ -1,11 +1,11 @@
 # UI libraries — `@jiso/headless-ui` + vendored `@jiso/ui` + gallery (D7)
 
-Status: design agreed 2026-06-11; not started
+Status: design agreed 2026-06-11; F1 SPEC text landed; implementation tracks not started
 Scope: a behavior-layer package (`packages/headless-ui`, published `@jiso/headless-ui`), a vendored styled layer (`@jiso/ui`, distributed as source via `fw add`), a gallery app in this workspace (`examples/gallery`) that is also the conformance/a11y/visual test surface, and the small framework seams they require (package prefix registration, behavior-attribute namespace, primitive-author lint). Referenced from `IMPLEMENT_v1.md` as workstream **D7**.
 
 ## Progress checklist
 
-- [ ] F1 SPEC text: package prefix registration (manifest field, app-wide uniqueness, alias escape, `jiso-` reserved for `@jiso/*`), FW234 teaching error.
+- [x] F1 SPEC text: package prefix registration (manifest field, app-wide uniqueness, alias escape, `jiso-` reserved for `@jiso/*`), behavior-attribute namespace implications, FW234 teaching error. Evidence: SPEC §6.1.1 defines the manifest field, effective-prefix uniqueness, alias escape, `jiso-*` reservation, `fw-c`/CSS/behavior-attribute implications, and FW234 example; SPEC §4.6 now uses `jiso-tooltip`; SPEC §11.3 lists FW234.
 - [ ] F2 compiler: prefix enforcement + FW234; `fw explain component <prefixed>` prints the owning package.
 - [ ] F3 behavior-attribute namespace: `fw-*` stays framework-reserved; package behaviors ride the package prefix (`jiso-tooltip="id"`), wired through FW221 IDREF validation.
 - [ ] F4 primitive-author lint: chained handlers contractually no-op on `event.defaultPrevented` (lives in `@jiso/headless-ui` tooling, not the loader).
@@ -50,7 +50,7 @@ Behavior contracts (state attributes, ARIA, keyboard maps, change reasons) are p
 
 ## F-track — framework seams (spec first, then compiler/runtime)
 
-- **F1 — prefix registration SPEC text.** Manifest field, uniqueness semantics, alias mechanism, `jiso-` reservation, registry/`fw-c`/CSS-scope/behavior-attribute implications. One section in the §6 registry family.
+- **F1 — prefix registration SPEC text.** Landed in SPEC §6.1.1, with FW234 listed in SPEC §11.3 and the §4.6 behavior-attribute example moved to the package prefix.
 - **F2 — enforcement.** Compile-time prefix collision → FW234 (show both packages, the alias fix); provenance in `fw explain component`.
 - **F3 — behavior-attribute namespace.** Package behaviors are compiler-known attributes validated like `commandfor` (FW221 machinery); document the `fw-*` reservation.
 - **F4 — primitive-author lint.** The §4.6 chain contract ("no-op on `defaultPrevented`") checked over `@jiso/headless-ui` handler sources; keeps the loader dumb.

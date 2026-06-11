@@ -212,7 +212,7 @@ Headless primitives decorate author-owned elements through three spellings of on
 
 **`asChild` (sugar lowering to the attrs-function form):** requires a single, statically-known element child; the compiler merges and emits. Dynamic or multiple children → teaching error pointing at the attrs-function form to write instead.
 
-**Behavior attributes (trigger-shaped cases):** annotate instead of wrap — `<a href="/pricing" fw-tooltip="pricing-tip">` — the invoker-commands idiom (`commandfor`/`command`) extended upward from L0; the IDREF is validated by FW221. This is also the only spelling that works on markup Jiso didn't render (CMS content, markdown).
+**Behavior attributes (trigger-shaped cases):** annotate instead of wrap — `<a href="/pricing" jiso-tooltip="pricing-tip">` — the invoker-commands idiom (`commandfor`/`command`) extended upward from L0; the package prefix comes from §6.1.1 and the IDREF is validated by FW221. This is also the only spelling that works on markup Jiso didn't render (CMS content, markdown).
 
 **Rejected:** a polymorphic `as` prop — it composes only with intrinsic tags, and polymorphic typing is the heaviest TS pattern known (§15 type-perf risk) for the weakest payoff.
 
@@ -393,6 +393,58 @@ interface InvalidationSets {
   'cart/add': 'cart' | 'product'; // emitted from the touch graph (§11.1) so OptimisticFor
   // can demand a transform (or 'await-fragment') per invalidated query in tsc (§10.6)
 }
+interface ComponentPackagePrefixes {
+  '@jiso/headless-ui': 'jiso-';
+  '@acme/primitives': 'acme-';
+}
+interface ComponentPackageRegistry {
+  'jiso-dialog': { package: '@jiso/headless-ui'; export: 'Dialog' };
+  'jiso-tooltip': { package: '@jiso/headless-ui'; export: 'Tooltip' };
+}
+```
+
+### 6.1.1 Package component prefixes
+
+Component packages declare their HTML namespace once in their package manifest:
+
+```json
+{
+  "name": "@acme/primitives",
+  "jiso": {
+    "prefix": "acme-"
+  }
+}
+```
+
+The field is required for any dependency that exports Jiso components intended to render as package components. A package prefix is lowercase ASCII, dash-terminated, and becomes part of the package's public wire vocabulary: rendered dashed hosts, residual `fw-c` values, compiler-scoped CSS hosts (§13.1), `fw explain component <name>` provenance, and package behavior attributes all use the package's **effective** prefix. App-local components may remain bare-named; vendored source such as `@jiso/ui` installed by `fw add` is app source, not a component package, so its names are the app's names.
+
+Prefix uniqueness is app-wide. During registry generation the compiler collects every imported component package, applies app aliases, and requires that no two packages have the same effective prefix. The alias escape hatch is app-side and explicit:
+
+```ts
+// jiso.config.ts
+export default {
+  packagePrefixes: {
+    '@acme/primitives': 'acme-primitives-',
+  },
+};
+```
+
+Aliases affect only the consuming app's effective prefix and all emitted surfaces derived from it; they do not rewrite the package manifest or the package's documentation. They are for collision repair, not style preferences, because changing prefixes changes the HTML vocabulary an app serves.
+
+The `jiso-` prefix family is reserved for first-party packages. Only packages whose manifest `name` is in the `@jiso/*` scope may declare or be aliased to a prefix beginning with `jiso-`; `@jiso/headless-ui` declares `jiso-`. This is a reservation check inside the same general prefix-registration rule, not a separate first-party naming mechanism.
+
+Package behavior attributes ride the effective package prefix: `jiso-tooltip="pricing-tip"`, `acme-menu="account-menu"`, and so on. The `fw-*` attribute namespace is reserved for framework-owned attributes and future loader/compiler growth. Package behavior attributes are compiler-known attributes supplied by the owning package; when a behavior value is an IDREF, it participates in the same page/component id registry as `commandfor`, `popovertarget`, `for`, and `aria-*` and is validated by FW221.
+
+A duplicate prefix, invalid prefix, missing prefix on an imported component package, or non-`@jiso/*` attempt to use `jiso-*` is **FW234**. The teaching error names both packages when there is a collision, shows the effective prefix that would have been emitted into `fw-c`/CSS/behavior attributes, and prints the alias fix:
+
+```text
+ERROR FW234 package component prefix conflict.
+  prefix: acme-
+  packages:
+    @acme/primitives (package.json jiso.prefix)
+    @other/acme-widgets (package.json jiso.prefix)
+  emitted names would collide: acme-tooltip, [fw-c="acme-tooltip"], acme-tooltip="..."
+  fix: add an app alias, for example packagePrefixes["@other/acme-widgets"] = "other-acme-"
 ```
 
 ### 6.2 Typed surfaces (summary table)
@@ -893,6 +945,7 @@ Dev server and the test harness wrap `db`; every executed statement is parsed (`
 | FW231 | error      | Unmergeable attribute conflict in primitive composition (shows both sources + the §4.6 rule)                  |
 | FW232 | lint       | Author override of a primitive-owned ARIA/state attribute                                                     |
 | FW233 | error      | Two writers for one binding target                                                                            |
+| FW234 | error      | Package component prefix registration conflict or reservation violation (§6.1.1)                              |
 | FW301 | lint       | Server fact in island-local state                                                                             |
 | FW302 | lint       | Isomorphic island — justification comment required (the sanctioned SPA-creep escape, §4.8)                    |
 | FW310 | warn       | Invalidated query lacks optimistic transform (write/defer; v2 adds derive)                                    |
