@@ -933,6 +933,39 @@ describe('query store', () => {
     expect(pending.snapshot.size).toBe(0);
   });
 
+  it('applies hand-written optimistic transforms to keyed query instances', () => {
+    const store = createQueryStore();
+    const p1Plan = vi.fn();
+    const unkeyedPlan = vi.fn();
+    store.set('reviews', { items: [{ id: 'r1' }] }, 'product:p1');
+    store.subscribe('reviews', p1Plan, 'product:p1');
+    store.subscribe('reviews', unkeyedPlan);
+
+    const pending = applyOptimisticTransforms(
+      store,
+      { reviewId: 'draft' },
+      {
+        keys: { reviews: 'product:p1' },
+        transforms: {
+          reviews(current, input) {
+            const reviews = current as { items: { id: string }[] };
+            return { items: [...reviews.items, { id: input.reviewId }] };
+          },
+        },
+      },
+    );
+
+    expect(store.get('reviews')).toBeUndefined();
+    expect(store.get('reviews', 'product:p1')).toEqual({
+      items: [{ id: 'r1' }, { id: 'draft' }],
+    });
+    expect(p1Plan).toHaveBeenLastCalledWith({ items: [{ id: 'r1' }, { id: 'draft' }] });
+    expect(unkeyedPlan).not.toHaveBeenCalled();
+
+    pending.restore();
+    expect(store.get('reviews', 'product:p1')).toEqual({ items: [{ id: 'r1' }] });
+  });
+
   it('types hand-written optimistic plans from mutation forms and query shapes', () => {
     const addToCart = form<'cart/add', { productId: string; quantity: number }>('cart/add');
     const optimistic = {
@@ -1062,6 +1095,53 @@ describe('query store', () => {
 
     expect(store.get('cart')).toEqual({ count: 13 });
     expect(rebaser.pendingCount('cart')).toBe(1);
+  });
+
+  it('rebases pending optimistic transforms over keyed server truth', () => {
+    const store = createQueryStore();
+    const rebaser = new OptimisticRebaser(store);
+    store.set('reviews', { items: [{ id: 'r1' }] }, 'product:p1');
+    const transform = (current: unknown, input: { reviewId: string }) => {
+      const reviews = current as { items: { id: string }[] };
+      return { items: [...reviews.items, { id: input.reviewId }] };
+    };
+
+    rebaser.add(
+      'm1',
+      { reviewId: 'draft-1' },
+      {
+        keys: { reviews: 'product:p1' },
+        transforms: { reviews: transform },
+      },
+    );
+    rebaser.add(
+      'm2',
+      { reviewId: 'draft-2' },
+      {
+        keys: { reviews: 'product:p1' },
+        transforms: { reviews: transform },
+      },
+    );
+
+    expect(store.get('reviews')).toBeUndefined();
+    expect(store.get('reviews', 'product:p1')).toEqual({
+      items: [{ id: 'r1' }, { id: 'draft-1' }, { id: 'draft-2' }],
+    });
+    expect(rebaser.pendingCount('reviews', 'product:p1')).toBe(2);
+
+    rebaser.applyServerTruth('reviews', { items: [{ id: 'r1' }, { id: 'server' }] }, 'product:p1');
+
+    expect(store.get('reviews', 'product:p1')).toEqual({
+      items: [{ id: 'r1' }, { id: 'server' }, { id: 'draft-1' }, { id: 'draft-2' }],
+    });
+
+    rebaser.settle('m1');
+    rebaser.applyServerTruth('reviews', { items: [{ id: 'r1' }, { id: 'server' }] }, 'product:p1');
+
+    expect(store.get('reviews', 'product:p1')).toEqual({
+      items: [{ id: 'r1' }, { id: 'server' }, { id: 'draft-2' }],
+    });
+    expect(rebaser.pendingCount('reviews', 'product:p1')).toBe(1);
   });
 
   it('discards pending optimistic transforms back to server truth on pagehide', () => {
@@ -1576,6 +1656,58 @@ describe('query store', () => {
     expect(cartBadge.attributes).not.toHaveProperty('fw-pending');
     expect(cartBadge.attributes).not.toHaveProperty('aria-busy');
     expect(root.targets.get('cart-badge')?.html).toBe('<cart-badge>4</cart-badge>');
+  });
+
+  it('reconciles keyed optimistic enhanced submits with keyed query chunks', async () => {
+    const store = createQueryStore();
+    const rebaser = new OptimisticRebaser(store);
+    const root = new FakeMorphRoot();
+    root.targets.set('reviews:p1', new FakeMorphTarget());
+    store.set('reviews', { items: [{ id: 'r1' }] }, 'product:p1');
+
+    const fetch = vi.fn(async () => {
+      expect(store.get('reviews')).toBeUndefined();
+      expect(store.get('reviews', 'product:p1')).toEqual({
+        items: [{ id: 'r1' }, { id: 'draft' }],
+      });
+
+      return {
+        async text() {
+          return [
+            '<fw-query name="reviews" key="product:p1">{"items":[{"id":"r1"},{"id":"server"}]}</fw-query>',
+            '<fw-fragment target="reviews:p1"><section>Reviews ready</section></fw-fragment>',
+          ].join('\n');
+        },
+      };
+    });
+
+    const result = await submitOptimisticEnhancedMutation({
+      fetch,
+      form: { action: '/_m/reviews/add', method: 'post' },
+      formData: new FormData(),
+      idem: 'idem_keyed_optimistic',
+      input: { reviewId: 'draft' },
+      optimistic: {
+        keys: { reviews: 'product:p1' },
+        transforms: {
+          reviews(current, input) {
+            const reviews = current as { items: { id: string }[] };
+            return { items: [...reviews.items, { id: input.reviewId }] };
+          },
+        },
+      },
+      rebaser,
+      root,
+      store,
+    });
+
+    expect(result.queries).toEqual(['reviews']);
+    expect(store.get('reviews')).toBeUndefined();
+    expect(store.get('reviews', 'product:p1')).toEqual({
+      items: [{ id: 'r1' }, { id: 'server' }],
+    });
+    expect(rebaser.pendingCount('reviews', 'product:p1')).toBe(0);
+    expect(root.targets.get('reviews:p1')?.html).toBe('<section>Reviews ready</section>');
   });
 
   it('runs optimistic enhanced submits with the same named queue sequentially', async () => {

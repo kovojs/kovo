@@ -360,7 +360,10 @@ export type QueryUpdatePlan<Value = unknown> = (value: Value) => void;
 export interface QueryStore {
   get<Value = unknown>(name: string, key?: string): Value | undefined;
   hydrate(script: QueryScriptLike): void;
-  snapshot(names: readonly string[]): QuerySnapshot;
+  snapshot(
+    names: readonly string[],
+    keys?: Readonly<Record<string, string | undefined>>,
+  ): QuerySnapshot;
   set<Value = unknown>(name: string, value: Value, key?: string): void;
   subscribe<Value = unknown>(name: string, plan: QueryUpdatePlan<Value>, key?: string): () => void;
 }
@@ -390,11 +393,15 @@ export function createQueryStore(): QueryStore {
         script.getAttribute('key') ?? undefined,
       );
     },
-    snapshot(names: readonly string[]): QuerySnapshot {
+    snapshot(
+      names: readonly string[],
+      keys: Readonly<Record<string, string | undefined>> = {},
+    ): QuerySnapshot {
       const snapshot = new Map<string, unknown>();
 
       for (const name of names) {
-        snapshot.set(name, structuredClone(values.get(name)));
+        const storeKey = queryStoreKey(name, keys[name]);
+        snapshot.set(storeKey, structuredClone(values.get(storeKey)));
       }
 
       return snapshot;
@@ -432,12 +439,23 @@ function queryStoreKey(name: string, key: string | undefined): string {
   return key === undefined ? name : `${name}\0${key}`;
 }
 
+function queryIdentityFromStoreKey(storeKey: string): { key?: string; name: string } {
+  const separator = storeKey.indexOf('\0');
+  if (separator === -1) return { name: storeKey };
+
+  return {
+    key: storeKey.slice(separator + 1),
+    name: storeKey.slice(0, separator),
+  };
+}
+
 export type OptimisticTransform<Input = unknown, Value = unknown> = (
   current: Value,
   input: Input,
 ) => Value;
 
 export interface OptimisticPlan<Input = unknown> {
+  keys?: Readonly<Record<string, string | undefined>>;
   queue?: string;
   transforms: Record<string, OptimisticTransform<Input>>;
 }
@@ -509,14 +527,16 @@ export class OptimisticRebaser {
 
   add<Input>(id: string, input: Input, plan: OptimisticPlan<Input>): void {
     for (const [queryName, transform] of Object.entries(plan.transforms)) {
-      const pending = this.#pendingByQuery.get(queryName) ?? [];
+      const key = plan.keys?.[queryName];
+      const storeKey = queryStoreKey(queryName, key);
+      const pending = this.#pendingByQuery.get(storeKey) ?? [];
       if (pending.length === 0) {
-        this.#serverTruthByQuery.set(queryName, structuredClone(this.#store.get(queryName)));
+        this.#serverTruthByQuery.set(storeKey, structuredClone(this.#store.get(queryName, key)));
       }
       pending.push({ id, input, transform: transform as OptimisticTransform });
-      this.#pendingByQuery.set(queryName, pending);
+      this.#pendingByQuery.set(storeKey, pending);
 
-      this.#store.set(queryName, transform(this.#store.get(queryName), input));
+      this.#store.set(queryName, transform(this.#store.get(queryName, key), input), key);
     }
   }
 
@@ -532,40 +552,51 @@ export class OptimisticRebaser {
     }
   }
 
-  applyServerTruth<Value>(queryName: string, value: Value): void {
+  applyServerTruth<Value>(queryName: string, value: Value, key?: string): void {
+    const storeKey = queryStoreKey(queryName, key);
     let next: unknown = value;
-    const pendingTransforms = this.#pendingByQuery.get(queryName) ?? [];
+    const pendingTransforms = this.#pendingByQuery.get(storeKey) ?? [];
 
     if (pendingTransforms.length > 0) {
-      this.#serverTruthByQuery.set(queryName, structuredClone(value));
+      this.#serverTruthByQuery.set(storeKey, structuredClone(value));
     } else {
-      this.#serverTruthByQuery.delete(queryName);
+      this.#serverTruthByQuery.delete(storeKey);
     }
 
     for (const pending of pendingTransforms) {
       next = pending.transform(next, pending.input);
     }
 
-    this.#store.set(queryName, next);
+    this.#store.set(queryName, next, key);
   }
 
-  discardPendingOptimism(queryNames?: readonly string[]): string[] {
+  discardPendingOptimism(
+    queryNames?: readonly string[],
+    keys: Readonly<Record<string, string | undefined>> = {},
+  ): string[] {
     const discarded: string[] = [];
 
-    for (const queryName of queryNames ?? [...this.#pendingByQuery.keys()]) {
-      if (!this.#pendingByQuery.has(queryName)) continue;
+    for (const storeKey of queryNames?.map((queryName) =>
+      queryStoreKey(queryName, keys[queryName]),
+    ) ?? [...this.#pendingByQuery.keys()]) {
+      if (!this.#pendingByQuery.has(storeKey)) continue;
 
-      this.#store.set(queryName, structuredClone(this.#serverTruthByQuery.get(queryName)));
-      this.#pendingByQuery.delete(queryName);
-      this.#serverTruthByQuery.delete(queryName);
-      discarded.push(queryName);
+      const identity = queryIdentityFromStoreKey(storeKey);
+      this.#store.set(
+        identity.name,
+        structuredClone(this.#serverTruthByQuery.get(storeKey)),
+        identity.key,
+      );
+      this.#pendingByQuery.delete(storeKey);
+      this.#serverTruthByQuery.delete(storeKey);
+      discarded.push(identity.name);
     }
 
     return discarded;
   }
 
-  pendingCount(queryName: string): number {
-    return this.#pendingByQuery.get(queryName)?.length ?? 0;
+  pendingCount(queryName: string, key?: string): number {
+    return this.#pendingByQuery.get(queryStoreKey(queryName, key))?.length ?? 0;
   }
 }
 
@@ -582,13 +613,14 @@ export function applyOptimisticTransforms<Input>(
   plan: OptimisticPlan<Input>,
 ): PendingOptimism {
   const queryNames = Object.keys(plan.transforms);
-  const snapshot = store.snapshot(queryNames);
+  const snapshot = store.snapshot(queryNames, plan.keys);
 
   for (const queryName of queryNames) {
     const transform = plan.transforms[queryName];
     if (!transform) continue;
+    const key = plan.keys?.[queryName];
 
-    store.set(queryName, transform(store.get(queryName), input));
+    store.set(queryName, transform(store.get(queryName, key), input), key);
   }
 
   return {
@@ -596,8 +628,9 @@ export function applyOptimisticTransforms<Input>(
       snapshot.clear();
     },
     restore() {
-      for (const [queryName, value] of snapshot) {
-        store.set(queryName, value);
+      for (const [storeKey, value] of snapshot) {
+        const identity = queryIdentityFromStoreKey(storeKey);
+        store.set(identity.name, value, identity.key);
       }
     },
     snapshot,
@@ -1092,7 +1125,7 @@ async function submitOptimisticEnhancedMutationDirect<Input>(
     const { body, changes, response, targets } = await fetchEnhancedMutation(options, idem);
 
     if (isFailedMutationResponse(response)) {
-      options.rebaser.discardPendingOptimism(queryNames);
+      options.rebaser.discardPendingOptimism(queryNames, options.optimistic.keys);
       if (options.pendingRoot) {
         stampPendingQueries(options.pendingRoot, queryNames, false);
       }
@@ -1116,7 +1149,7 @@ async function submitOptimisticEnhancedMutationDirect<Input>(
     const fragments = readFragmentChunks(body);
     options.rebaser.settle(idem);
     for (const query of queryChunks) {
-      options.rebaser.applyServerTruth(query.name, query.value);
+      options.rebaser.applyServerTruth(query.name, query.value, query.key);
     }
     const applied = {
       appliedFragments: applyFragments(options.root, fragments, options.morph),
@@ -1125,7 +1158,8 @@ async function submitOptimisticEnhancedMutationDirect<Input>(
     };
     publishSuccessfulMutation(options, response, body, changes);
     const settledQueries = queryNames.filter(
-      (queryName) => options.rebaser.pendingCount(queryName) === 0,
+      (queryName) =>
+        options.rebaser.pendingCount(queryName, options.optimistic.keys?.[queryName]) === 0,
     );
     if (options.pendingRoot && settledQueries.length > 0) {
       stampPendingQueries(options.pendingRoot, settledQueries, false);
@@ -1138,7 +1172,7 @@ async function submitOptimisticEnhancedMutationDirect<Input>(
       targets,
     };
   } catch (error) {
-    options.rebaser.discardPendingOptimism(queryNames);
+    options.rebaser.discardPendingOptimism(queryNames, options.optimistic.keys);
     if (options.pendingRoot) {
       stampPendingQueries(options.pendingRoot, queryNames, false);
     }

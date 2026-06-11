@@ -381,6 +381,12 @@ void test('D2 commerce validates keyed append and optimistic reorder', async () 
   );
   assert.match(runtimeTests, /keeps keyed query chunks isolated by instance key/);
   assert.match(runtimeTests, /rebroadcasts keyed query chunks to the matching keyed store entry/);
+  assert.match(runtimeTests, /applies hand-written optimistic transforms to keyed query instances/);
+  assert.match(runtimeTests, /rebases pending optimistic transforms over keyed server truth/);
+  assert.match(
+    runtimeTests,
+    /reconciles keyed optimistic enhanced submits with keyed query chunks/,
+  );
 });
 
 void test('D4 commerce adopt-dont-invent features stay represented', async () => {
