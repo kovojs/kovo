@@ -764,22 +764,69 @@ export const CartShell = component('cart-shell', {
 });
 
 void test('P1 compiler validates declared execution trigger names', async () => {
-  const coreSource = await readProjectFile('packages/core/src/diagnostics.ts');
-  const compilerEventTriggerSource = await readProjectFile(
-    'packages/compiler/src/validate/event-triggers.ts',
+  assert.equal(
+    diagnosticDefinitions.FW211.message,
+    'on:load eager trigger requires a justification comment.',
   );
-  const compilerSource = await readProjectFile('packages/compiler/src/index.ts');
-  const compilerTests = await readProjectFile('packages/compiler/src/index.test.ts');
+  assert.equal(
+    diagnosticDefinitions.FW212.message,
+    'Unknown on:* event or execution trigger name.',
+  );
+  assert.deepEqual(
+    compileComponentModule({
+      fileName: 'components/execution-triggers.tsx',
+      source: `
+import { component } from '@jiso/core';
 
-  assert.match(coreSource, /FW211/);
-  assert.match(coreSource, /FW212/);
-  assert.match(compilerSource, /validateEventTriggerNames/);
-  assert.match(compilerEventTriggerSource, /declaredExecutionTriggers/);
-  assert.match(compilerEventTriggerSource, /hasFw211Justification/);
-  assert.match(compilerTests, /accepts known delegated events and declared execution triggers/);
-  assert.match(
-    compilerTests,
-    /reports FW211 and FW212 for unjustified eager execution and unknown triggers/,
+export const ExecutionTriggers = component('execution-triggers', {
+  render: () => (
+    <section>
+      <button on:click="/c/cart.client.js#Cart$add">Add</button>
+      <search-index on:idle="/c/search.client.js#Search$warm"></search-index>
+      <sales-chart on:visible="/c/chart.client.js#SalesChart$mount"></sales-chart>
+      {/* FW211: stock ticker intentionally starts at parse for market-open pages. */}
+      <stock-ticker on:load="/c/ticker.client.js#Ticker$start"></stock-ticker>
+    </section>
+  ),
+});
+`,
+    }).diagnostics,
+    [],
+  );
+  assert.deepEqual(
+    compileComponentModule({
+      fileName: 'components/execution-triggers.tsx',
+      source: `
+import { component } from '@jiso/core';
+
+export const ExecutionTriggers = component('execution-triggers', {
+  render: () => (
+    <section>
+      <stock-ticker on:load="/c/ticker.client.js#Ticker$start"></stock-ticker>
+      <video-player on:media="/c/video.client.js#Video$mount"></video-player>
+    </section>
+  ),
+});
+`,
+    }).diagnostics,
+    [
+      {
+        code: 'FW211',
+        fileName: 'components/execution-triggers.tsx',
+        length: 7,
+        message: `${diagnosticDefinitions.FW211.message} on:load`,
+        severity: 'lint',
+        start: { column: 21, line: 7 },
+      },
+      {
+        code: 'FW212',
+        fileName: 'components/execution-triggers.tsx',
+        length: 8,
+        message: `${diagnosticDefinitions.FW212.message} on:media`,
+        severity: 'lint',
+        start: { column: 21, line: 8 },
+      },
+    ],
   );
 });
 

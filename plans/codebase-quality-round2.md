@@ -152,6 +152,11 @@ Do this first or pay it on every commit.
       core/compiler APIs and asserts `diagnosticDefinitions.FW225` plus `compileComponentModule`
       accept/fail diagnostics for valid table rows, paragraph block reparenting, and detached
       table rows instead of grepping core or compiler source/test names.
+      Partial evidence 2026-06-11: the P1 execution-trigger tranche now imports built
+      core/compiler APIs and asserts `diagnosticDefinitions.FW211`/`FW212` plus
+      `compileComponentModule` accept/fail diagnostics for delegated events, declared execution
+      triggers, justified `on:load`, unjustified eager load, and unknown triggers instead of
+      grepping core or compiler source/test names.
 - [x] **Make create-jiso templates real files** (`create-jiso/src/index.ts:63-473`, ~470 lines of
       escaped template literals including a CI workflow and double-escaped regexes inside
       `.mjs`-in-string). Move to a `templates/` directory copied at scaffold time with `{{name}}`
