@@ -314,7 +314,9 @@ export function main(args: readonly string[] = process.argv.slice(2)): number {
 }
 
 interface InputReadError {
-  kind: 'invalid-json' | 'invalid-shape' | 'not-found' | 'read-error';
+  expected?: 'array' | 'object';
+  field?: string;
+  kind: 'invalid-field-shape' | 'invalid-json' | 'invalid-shape' | 'not-found' | 'read-error';
   path: string;
 }
 
@@ -344,11 +346,15 @@ function readGraphInput(path: string | undefined): InputReadResult {
     return { error: { kind: 'invalid-shape', path }, ok: false };
   }
 
+  const shapeError = graphInputShapeError(parsed as Record<string, unknown>, path);
+  if (shapeError) return { error: shapeError, ok: false };
+
   return { ok: true, value: parsed as FwExplainInput };
 }
 
 function writeInputError(error: InputReadError): 1 {
   const messages: Record<InputReadError['kind'], string> = {
+    'invalid-field-shape': `fw: input JSON field ${error.field ?? '-'} must be an ${error.expected ?? 'object'}: ${error.path}`,
     'invalid-json': `fw: input file is not valid JSON: ${error.path}`,
     'invalid-shape': `fw: input JSON must be an object: ${error.path}`,
     'not-found': `fw: input file not found: ${error.path}`,
@@ -356,6 +362,42 @@ function writeInputError(error: InputReadError): 1 {
   };
   process.stderr.write(`${messages[error.kind]}\n`);
   return 1;
+}
+
+function graphInputShapeError(input: Record<string, unknown>, path: string): InputReadError | null {
+  const arrayFields = [
+    'components',
+    'diagnostics',
+    'eventPayloads',
+    'fixpointChecks',
+    'lints',
+    'mutations',
+    'optimistic',
+    'ownerDomains',
+    'pages',
+    'queryData',
+    'queries',
+    'scopeAudits',
+    'updateCoverage',
+    'verificationDiagnostics',
+  ];
+
+  for (const field of arrayFields) {
+    if (input[field] !== undefined && !Array.isArray(input[field])) {
+      return { expected: 'array', field, kind: 'invalid-field-shape', path };
+    }
+  }
+
+  if (
+    input.touchGraph !== undefined &&
+    (typeof input.touchGraph !== 'object' ||
+      input.touchGraph === null ||
+      Array.isArray(input.touchGraph))
+  ) {
+    return { expected: 'object', field: 'touchGraph', kind: 'invalid-field-shape', path };
+  }
+
+  return null;
 }
 
 function isNodeErrorCode(error: unknown, code: string): boolean {
