@@ -879,21 +879,45 @@ export const CartDrawer = component('cart-drawer', {
 
     expect(result.diagnostics).toMatchObject([
       {
+        code: 'FW210',
+        severity: 'lint',
+      },
+      {
         code: 'FW201',
         severity: 'error',
       },
     ]);
-    expect(result.diagnostics[0]?.help).toMatch(
+    const fw201 = result.diagnostics.find((diagnostic) => diagnostic.code === 'FW201');
+    expect(fw201?.help).toMatch(
       /Would lower to: on:click="\/c\/cart-badge\.client\.js\?v=[0-9a-f]{8}#CartBadge\$button_click"/,
     );
-    expect(result.diagnostics[0]?.help).toContain('Blocked expression: () => window.alert("x")');
-    expect(result.diagnostics[0]?.help).toContain(
+    expect(fw201?.help).toContain('Blocked expression: () => window.alert("x")');
+    expect(fw201?.help).toContain(
       'Fixes: move the value into component/query state via ctx; pass serializable element params with data-p-*; or keep shared constants in module scope.',
     );
-    expect(result.diagnostics[0]?.help).toContain(
+    expect(fw201?.help).toContain(
       'The compiler conservatively blocks free identifier references named window, document, db, request, response, Date, Map, or Set.',
     );
-    expect(result.diagnostics[0]?.start).toEqual({ column: 9, line: 1 });
+    expect(fw201?.start).toEqual({ column: 9, line: 1 });
+  });
+
+  it('reports stable-name and serializability diagnostics for anonymous browser handlers', () => {
+    const result = compileComponentModule({
+      fileName: 'cart-badge.tsx',
+      source: '<button onClick={() => window.alert("x")}>x</button>',
+    });
+
+    expect(result.diagnostics.map((diagnostic) => diagnostic.code)).toEqual(['FW210', 'FW201']);
+    expect(result.diagnostics[0]).toMatchObject({
+      code: 'FW210',
+      severity: 'lint',
+      start: { column: 9, line: 1 },
+    });
+    expect(result.diagnostics[1]).toMatchObject({
+      code: 'FW201',
+      severity: 'error',
+      start: { column: 9, line: 1 },
+    });
   });
 
   it('does not report FW201 for local variables named like non-serializable captures', () => {
@@ -3610,6 +3634,46 @@ export const addToCart = mutation('cart/add', {
         severity: 'lint',
         start: { column: 26, line: 4 },
         length: 2,
+      },
+    ]);
+  });
+
+  it('reports FW330 for every mutation handler with direct db access', () => {
+    const result = compileComponentModule({
+      fileName: 'cart.mutation.ts',
+      source: `
+export const addToCart = mutation('cart/add', {
+  input: addToCartInput,
+  handler(input, request) {
+    request.db.insert(cartItems).values(input);
+  },
+});
+
+export const clearCart = mutation('cart/clear', {
+  input: clearCartInput,
+  handler(input, db) {
+    db.delete(cartItems);
+  },
+});
+`,
+    });
+
+    expect(result.diagnostics).toEqual([
+      {
+        code: 'FW330',
+        fileName: 'cart.mutation.ts',
+        length: 10,
+        message: 'Direct db access in a mutation handler; route through domain.',
+        severity: 'lint',
+        start: { column: 5, line: 5 },
+      },
+      {
+        code: 'FW330',
+        fileName: 'cart.mutation.ts',
+        length: 2,
+        message: 'Direct db access in a mutation handler; route through domain.',
+        severity: 'lint',
+        start: { column: 18, line: 11 },
       },
     ]);
   });

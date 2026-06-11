@@ -424,6 +424,10 @@ pipeline throws the tree away and communicates via mutated source text.
       anonymous and unserializable (lower/handlers.ts:44-62); `graph.ts:1` imports `'./shared.ts'`
       while everything else uses `.js`; `inferComponentName` hides a re-parse in a default
       parameter (index.ts:376).
+      Evidence 2026-06-11: compiler diagnostics now preserve both FW210 and FW201 for anonymous
+      browser-capturing handlers, and `validateDirectDbAccess` reports FW330 for every mutation
+      handler in a file instead of returning after the first offender. Focused adversarial tests
+      live in `packages/compiler/src/index.test.ts`.
 
 Verification: compiler vitest + fixpoint + the new adversarial corpus; `fw explain` snapshots
 re-pinned only where positions legitimately improve (drift fixes change line numbers — explain

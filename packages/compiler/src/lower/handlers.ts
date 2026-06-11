@@ -15,6 +15,7 @@ export interface HandlerLowering {
   expression: string;
   params: ElementParam[];
   diagnostic?: CompilerDiagnostic;
+  diagnostics?: readonly CompilerDiagnostic[];
 }
 
 export interface ElementParam {
@@ -41,32 +42,31 @@ export function lowerEventHandlers(
       ? `${componentName}$${expression}`
       : uniqueAnonymousHandlerName(componentName, tag, eventName, anonymousNameCounts);
 
-    let diagnostic: CompilerDiagnostic | undefined;
+    const diagnostics: CompilerDiagnostic[] = [];
     if (!namedHandler) {
-      diagnostic = diagnosticFor(
-        options.fileName,
-        'FW210',
-        options.source,
-        attributeStart,
-        event.length,
+      diagnostics.push(
+        diagnosticFor(options.fileName, 'FW210', options.source, attributeStart, event.length),
       );
     }
 
     if (capturesUnserializableValue(expression)) {
-      diagnostic = fw201Diagnostic(options.fileName, options.source, attributeStart, {
-        attributeName: `on:${eventName}`,
-        exportName,
-        expression,
-        params,
-      });
+      diagnostics.push(
+        fw201Diagnostic(options.fileName, options.source, attributeStart, {
+          attributeName: `on:${eventName}`,
+          exportName,
+          expression,
+          params,
+        }),
+      );
     }
 
+    const primaryDiagnostic = diagnostics[diagnostics.length - 1];
     handlers.push({
       attributeName: `on:${eventName}`,
       attributeEnd,
       attributeStart,
       attributeValue: `${clientModuleUrl(options.fileName)}#${exportName}`,
-      ...(diagnostic ? { diagnostic } : {}),
+      ...(primaryDiagnostic ? { diagnostic: primaryDiagnostic, diagnostics } : {}),
       expression,
       exportName,
       params,
@@ -86,6 +86,18 @@ export function versionHandlerLowering(
   return {
     ...handler,
     attributeValue: versionedAttributeValue,
+    ...(handler.diagnostics
+      ? {
+          diagnostics: handler.diagnostics.map((diagnostic) =>
+            diagnostic.help
+              ? {
+                  ...diagnostic,
+                  help: diagnostic.help.replaceAll(`${unversionedHref}#`, `${clientHref}#`),
+                }
+              : diagnostic,
+          ),
+        }
+      : {}),
     ...(handler.diagnostic
       ? {
           diagnostic: {
