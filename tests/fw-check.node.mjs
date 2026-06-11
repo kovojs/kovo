@@ -381,6 +381,7 @@ void test('S2 loader budget and L0 no-upgrade path are acceptance evidence', asy
 
 void test('P2 loader smoke evidence remains represented in runtime tests', async () => {
   const runtimeSource = await readProjectFile('packages/runtime/src/index.ts');
+  const runtimeHandlersSource = await readProjectFile('packages/runtime/src/handlers.ts');
   const runtimeTests = await readProjectFile('packages/runtime/src/index.test.ts');
   const browserTests = await readProjectFile('packages/runtime/src/index.browser.test.ts');
 
@@ -395,11 +396,11 @@ void test('P2 loader smoke evidence remains represented in runtime tests', async
   assert.match(runtimeTests, /expect\(importModule\)\.not\.toHaveBeenCalled\(\)/);
   assert.match(runtimeSource, /export function installInlineJisoLoader/);
   assert.match(runtimeSource, /insertAdjacentHTML\(['"]beforeend['"]/);
-  assert.match(runtimeSource, /signal: createHandlerSignal\(element\)/);
-  assert.match(runtimeSource, /islandSignalControllers/);
+  assert.match(runtimeHandlersSource, /signal: createHandlerSignal\(element\)/);
+  assert.match(runtimeHandlersSource, /islandSignalControllers/);
   assert.match(
     runtimeSource,
-    /abortRemovedIslandSignals\(target\.readHtml\?\.\(\) \?\? '', fragment\.html\)/,
+    /abortRemovedIslandSignals\(target\.readHtml\?\.\(\) \?\? '', fragment\.html, islandSignalScope\)/,
   );
   assert.match(runtimeSource, /visibleObserver\?: VisibleObserverFactory/);
   assert.match(runtimeSource, /export async function refetchQueries/);
@@ -1628,15 +1629,15 @@ void test('P1 minifier name preservation evidence remains represented', async ()
 void test('P1 typed data param coercion remains represented', async () => {
   const compilerHandlersSource = await readProjectFile('packages/compiler/src/lower/handlers.ts');
   const compilerTests = await readProjectFile('packages/compiler/src/index.test.ts');
-  const runtimeSource = await readProjectFile('packages/runtime/src/index.ts');
+  const runtimeHandlersSource = await readProjectFile('packages/runtime/src/handlers.ts');
   const runtimeTests = await readProjectFile('packages/runtime/src/index.test.ts');
 
   assert.match(compilerHandlersSource, /fw-param-types/);
   assert.match(compilerHandlersSource, /inferElementParamType/);
   assert.match(compilerTests, /fw-param-types="quantity:number"/);
   assert.match(compilerTests, /fw-param-types="selected:boolean"/);
-  assert.match(runtimeSource, /readElementParamTypes/);
-  assert.match(runtimeSource, /coerceElementParam/);
+  assert.match(runtimeHandlersSource, /readElementParamTypes/);
+  assert.match(runtimeHandlersSource, /coerceElementParam/);
   assert.match(runtimeTests, /quantity:number featured:boolean/);
 });
 

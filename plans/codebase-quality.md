@@ -312,6 +312,9 @@ area, keeping `src/index.ts` barrels and API surface verbatim (mirrors compiler 
   query store and `fw-query` hydration now live in `packages/runtime/src/query-store.ts`, and
   guarded JSON parsing now lives in `packages/runtime/src/json.ts`; `src/index.ts` preserves the
   public barrel exports.
+  Evidence: delegated handler references, parameter/state hydration, serialized state writes, and
+  island signal lifetime cleanup now live in `packages/runtime/src/handlers.ts`; `src/index.ts`
+  preserves the public handler exports and loader/morph integration points for SPEC §4.5–§4.7.
 - **drizzle** → `extract/` (AST), `graph.ts`, `serialize.ts` (falls out of Phase 3 item 2).
   Evidence: v1 invalidation registry derivation and serialization now live in
   `@jiso/drizzle`, with unit coverage for touch graph × query read-set matching and generated
