@@ -1235,6 +1235,88 @@ describe('@jiso/test harness', () => {
     expect(verifier.observed).toEqual([]);
   });
 
+  it('passes non-string exec and sql arguments through before SQL verification', () => {
+    const verifier = createDbVerifier({}, { domainByTable: { cart_items: 'cart' } });
+    const calls: Array<[string, unknown]> = [];
+    const db = verifier.wrap({
+      exec(statement: unknown) {
+        calls.push(['exec', statement]);
+        return ['exec-ok'];
+      },
+      sql(statement: unknown) {
+        calls.push(['sql', statement]);
+        return ['sql-ok'];
+      },
+    });
+    const execObject = { text: 'create table cart_items (id text)' };
+    const sqlObject = { text: 'select * from cart_items' };
+
+    expect(db.exec(execObject)).toEqual(['exec-ok']);
+    expect(db.sql(sqlObject)).toEqual(['sql-ok']);
+    expect(calls).toEqual([
+      ['exec', execObject],
+      ['sql', sqlObject],
+    ]);
+    expect(verifier.observed).toEqual([]);
+  });
+
+  it('lets unparseable SQL reach wrapped methods before SQL verification', () => {
+    const verifier = createDbVerifier({}, { domainByTable: { cart_items: 'cart' } });
+    const calls: Array<[string, unknown]> = [];
+    const db = verifier.wrap({
+      exec(statement: unknown) {
+        calls.push(['exec', statement]);
+        return ['exec-ok'];
+      },
+      query(statement: unknown) {
+        calls.push(['query', statement]);
+        return ['query-ok'];
+      },
+      sql(statement: unknown) {
+        calls.push(['sql', statement]);
+        return ['sql-ok'];
+      },
+    });
+    const statement = 'not valid sql for the parser';
+
+    expect(db.exec(statement)).toEqual(['exec-ok']);
+    expect(db.query(statement)).toEqual(['query-ok']);
+    expect(db.sql(statement)).toEqual(['sql-ok']);
+    expect(calls).toEqual([
+      ['exec', statement],
+      ['query', statement],
+      ['sql', statement],
+    ]);
+    expect(verifier.observed).toEqual([]);
+  });
+
+  it('passes non-string nested pglite query and exec arguments through before SQL verification', () => {
+    const verifier = createDbVerifier({}, { domainByTable: { cart_items: 'cart' } });
+    const calls: Array<[string, unknown]> = [];
+    const db = verifier.wrap({
+      pglite: {
+        exec(statement: unknown) {
+          calls.push(['exec', statement]);
+          return ['exec-ok'];
+        },
+        query(statement: unknown) {
+          calls.push(['query', statement]);
+          return ['query-ok'];
+        },
+      },
+    });
+    const execObject = { text: 'create table cart_items (id text)' };
+    const queryObject = { text: 'select * from cart_items' };
+
+    expect(db.pglite.exec(execObject)).toEqual(['exec-ok']);
+    expect(db.pglite.query(queryObject)).toEqual(['query-ok']);
+    expect(calls).toEqual([
+      ['exec', execObject],
+      ['query', queryObject],
+    ]);
+    expect(verifier.observed).toEqual([]);
+  });
+
   it('executes query loaders and verifies reads against declared domains', async () => {
     const cart = domain('cart');
     const db = createFakeDb();

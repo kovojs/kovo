@@ -370,7 +370,12 @@ function observeSqlIfString(
   observed: ObservedDbOperation[],
 ): void {
   if (typeof statement !== 'string') return;
-  observeSql(statement, config, observed);
+  try {
+    observeSql(statement, config, observed);
+  } catch {
+    // SPEC 11.2: instrumentation verifies observed SQL, but must not prevent
+    // the user's database method from receiving adapter-specific statements.
+  }
 }
 
 export async function createPgliteTestDb(options: PGliteOptions = {}): Promise<PgliteTestDb> {
