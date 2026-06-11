@@ -987,6 +987,38 @@ export const tableDomains = {
     });
   });
 
+  it('does not borrow predicates from following semicolonless write statements', () => {
+    const graph = extractTouchGraphFromSource([
+      {
+        fileName: 'product.domain.ts',
+        source: `
+          export const products = pgTable("products", {}, jiso({ domain: "product", key: "id" }));
+
+          export async function syncProducts(db, productId) {
+            await db.update(products).set({ reserved: true })
+            await db.update(products).set({ synced: true }).where(eq(products.id, productId))
+          }
+        `,
+      },
+    ]);
+
+    expect(graph).toEqual({
+      syncProducts: {
+        reads: [],
+        touches: [
+          { domain: 'product', keys: null, site: 'product.domain.ts:5', via: 'products' },
+          {
+            domain: 'product',
+            keys: 'arg:productId',
+            site: 'product.domain.ts:6',
+            via: 'products',
+          },
+        ],
+        unresolved: [],
+      },
+    });
+  });
+
   it('keeps non-key and table-column predicates at table-level', () => {
     const graph = extractTouchGraphFromSource([
       {

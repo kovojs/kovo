@@ -1624,8 +1624,41 @@ function extractReadSources(source: string, operation: string): ExtractedReadSou
 }
 
 function statementEnd(source: string, start: number): number {
-  const end = source.indexOf(';', start);
-  return end === -1 ? source.length : end;
+  let depth = 0;
+
+  for (let index = start; index < source.length; index += 1) {
+    const char = source[index];
+
+    if (char === '"' || char === "'" || char === '`') {
+      const stringEnd = findStringEnd(source, index, char);
+      index = stringEnd === -1 ? source.length : stringEnd;
+      continue;
+    }
+    if (source.startsWith('//', index)) {
+      const commentEnd = source.indexOf('\n', index + 2);
+      index = commentEnd === -1 ? source.length : commentEnd;
+      continue;
+    }
+    if (source.startsWith('/*', index)) {
+      const commentEnd = source.indexOf('*/', index + 2);
+      index = commentEnd === -1 ? source.length : commentEnd + 1;
+      continue;
+    }
+
+    if (char === '(' || char === '{' || char === '[') depth += 1;
+    if (char === ')' || char === '}' || char === ']') depth -= 1;
+    if (depth !== 0) continue;
+
+    if (char === ';') return index;
+    if (char === '\n' && isStatementBoundary(source, index + 1)) return index;
+  }
+
+  return source.length;
+}
+
+function isStatementBoundary(source: string, start: number): boolean {
+  const next = source.slice(skipTrivia(source, start));
+  return next.length === 0 || !next.startsWith('.');
 }
 
 function extractPredicateSummary(
