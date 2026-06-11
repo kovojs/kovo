@@ -14,6 +14,51 @@ export interface MorphRoot {
 
 export type MorphFragment = (target: MorphTarget, html: string) => void;
 
+export class DomMorphTarget implements MorphTarget {
+  constructor(public element: Element) {}
+
+  readHtml(): string {
+    return this.element.innerHTML;
+  }
+
+  appendHtml(html: string): void {
+    const template = document.createElement('template');
+    template.innerHTML = html.trim();
+    this.element.append(...Array.from(template.content.childNodes));
+  }
+
+  replaceWithHtml(html: string): void {
+    const template = document.createElement('template');
+    template.innerHTML = html.trim();
+    const next = template.content.firstElementChild;
+    const activeState = captureActiveDomState(this.element);
+    const scrollStates = captureDomScrollStates(this.element);
+
+    if (!next) {
+      this.element.replaceChildren();
+      return;
+    }
+
+    morphDomElement(this.element, next);
+    restoreActiveDomState(activeState);
+    restoreDomScrollStates(scrollStates);
+  }
+}
+
+export class DomMorphRoot implements MorphRoot {
+  constructor(private readonly root: ParentNode) {}
+
+  findFragmentTarget(target: string): MorphTarget | null {
+    const element = this.root.querySelector(`[fw-c="${escapeCssIdentifier(target)}"]`);
+
+    return element ? new DomMorphTarget(element) : null;
+  }
+}
+
+export const keyedDomMorph: MorphFragment = (target, html) => {
+  target.replaceWithHtml(html);
+};
+
 export type StructuralMorphKey = string | number;
 
 export interface StructuralMorphBrowserState {
@@ -75,6 +120,21 @@ export function morphStructuralTree(
   }
 
   current.children = morphStructuralChildren(current.children ?? [], next.children);
+  return current;
+}
+
+export function morphDomElement(current: Element, next: Element): Element {
+  if (!canReuseDomElement(current, next)) {
+    current.replaceWith(next);
+    return next;
+  }
+
+  syncDomAttributes(current, next);
+  if (isActiveDomFormControl(current)) {
+    return current;
+  }
+
+  morphDomChildren(current, next);
   return current;
 }
 
@@ -200,4 +260,120 @@ function cloneBrowserState(state: StructuralMorphBrowserState): StructuralMorphB
     ...(state.scroll === undefined ? {} : { scroll: { ...state.scroll } }),
     ...(state.selection === undefined ? {} : { selection: { ...state.selection } }),
   };
+}
+
+function canReuseDomElement(current: Element, next: Element): boolean {
+  const currentKey = domMorphKey(current);
+  const nextKey = domMorphKey(next);
+
+  return current.tagName === next.tagName && currentKey === nextKey;
+}
+
+function domMorphKey(element: Element): string | null {
+  return element.getAttribute('fw-key') ?? element.getAttribute('data-key');
+}
+
+function syncDomAttributes(current: Element, next: Element): void {
+  for (const name of Array.from(current.attributes, (attribute) => attribute.name)) {
+    if (!next.hasAttribute(name)) current.removeAttribute(name);
+  }
+
+  for (const attribute of next.attributes) {
+    current.setAttribute(attribute.name, attribute.value);
+  }
+}
+
+function isActiveDomFormControl(element: Element): boolean {
+  return (
+    document.activeElement === element &&
+    (element instanceof HTMLInputElement || element instanceof HTMLTextAreaElement)
+  );
+}
+
+function captureActiveDomState(root: Element) {
+  const element = document.activeElement;
+
+  if (
+    !(element instanceof HTMLInputElement || element instanceof HTMLTextAreaElement) ||
+    !root.contains(element)
+  ) {
+    return null;
+  }
+
+  return {
+    element,
+    selectionDirection: element.selectionDirection,
+    selectionEnd: element.selectionEnd,
+    selectionStart: element.selectionStart,
+    scrollLeft: element.scrollLeft,
+    scrollTop: element.scrollTop,
+  };
+}
+
+function restoreActiveDomState(state: ReturnType<typeof captureActiveDomState>): void {
+  if (!state || !state.element.isConnected) return;
+
+  state.element.focus();
+  if (state.selectionStart !== null && state.selectionEnd !== null) {
+    state.element.setSelectionRange(
+      state.selectionStart,
+      state.selectionEnd,
+      state.selectionDirection ?? 'none',
+    );
+  }
+  state.element.scrollLeft = state.scrollLeft;
+  state.element.scrollTop = state.scrollTop;
+}
+
+function captureDomScrollStates(root: Element) {
+  return [...root.querySelectorAll<HTMLElement>('[fw-key], [data-key]')]
+    .filter((element) => element.scrollLeft !== 0 || element.scrollTop !== 0)
+    .map((element) => ({
+      element,
+      scrollLeft: element.scrollLeft,
+      scrollTop: element.scrollTop,
+    }));
+}
+
+function restoreDomScrollStates(states: ReturnType<typeof captureDomScrollStates>): void {
+  for (const state of states) {
+    if (!state.element.isConnected) continue;
+
+    state.element.scrollLeft = state.scrollLeft;
+    state.element.scrollTop = state.scrollTop;
+  }
+}
+
+function morphDomChildren(current: Element, next: Element): void {
+  const currentByKey = new Map(
+    [...current.children]
+      .map((child) => [domMorphKey(child), child] as const)
+      .filter((entry): entry is [string, Element] => entry[0] !== null),
+  );
+  const nextChildren = [...next.childNodes];
+  const desiredNodes: ChildNode[] = [];
+
+  for (const [index, nextChild] of nextChildren.entries()) {
+    let desiredNode: ChildNode;
+    if (!(nextChild instanceof Element)) {
+      desiredNode = nextChild.cloneNode(true) as ChildNode;
+    } else {
+      const key = domMorphKey(nextChild);
+      const existing = key ? currentByKey.get(key) : undefined;
+      desiredNode = existing
+        ? morphDomElement(existing, nextChild)
+        : (nextChild.cloneNode(true) as ChildNode);
+    }
+
+    desiredNodes.push(desiredNode);
+    current.insertBefore(desiredNode, current.childNodes[index] ?? null);
+  }
+
+  for (const child of Array.from(current.childNodes)) {
+    if (!desiredNodes.includes(child)) child.remove();
+  }
+}
+
+function escapeCssIdentifier(value: string): string {
+  return globalThis.CSS?.escape(value) ?? value.replace(/["\\]/g, '\\$&');
 }

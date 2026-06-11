@@ -3,183 +3,10 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   applyMutationResponseToDom,
   createQueryStore,
+  DomMorphRoot,
   installJisoLoader,
-  type MorphFragment,
-  type MorphRoot,
-  type MorphTarget,
+  keyedDomMorph,
 } from './index.js';
-
-class DomFragmentTarget implements MorphTarget {
-  constructor(public element: Element) {}
-
-  readHtml(): string {
-    return this.element.innerHTML;
-  }
-
-  appendHtml(html: string): void {
-    const template = document.createElement('template');
-    template.innerHTML = html.trim();
-    this.element.append(...Array.from(template.content.childNodes));
-  }
-
-  replaceWithHtml(html: string): void {
-    const template = document.createElement('template');
-    template.innerHTML = html.trim();
-    const next = template.content.firstElementChild;
-    const activeState = captureActiveState(this.element);
-    const scrollStates = captureScrollStates(this.element);
-
-    if (!next) {
-      this.element.replaceChildren();
-      return;
-    }
-
-    morphElement(this.element, next);
-    restoreActiveState(activeState);
-    restoreScrollStates(scrollStates);
-  }
-}
-
-class DomFragmentRoot implements MorphRoot {
-  constructor(private readonly root: ParentNode) {}
-
-  findFragmentTarget(target: string): MorphTarget | null {
-    const element = this.root.querySelector(`[fw-c="${CSS.escape(target)}"]`);
-
-    return element ? new DomFragmentTarget(element) : null;
-  }
-}
-
-const keyedDomMorph: MorphFragment = (target, html) => {
-  target.replaceWithHtml(html);
-};
-
-function morphElement(current: Element, next: Element): Element {
-  if (!canReuse(current, next)) {
-    current.replaceWith(next);
-    return next;
-  }
-
-  syncAttributes(current, next);
-  if (isActiveFormControl(current)) {
-    return current;
-  }
-
-  morphChildren(current, next);
-  return current;
-}
-
-function canReuse(current: Element, next: Element): boolean {
-  const currentKey = morphKey(current);
-  const nextKey = morphKey(next);
-
-  return current.tagName === next.tagName && currentKey === nextKey;
-}
-
-function morphKey(element: Element): string | null {
-  return element.getAttribute('fw-key') ?? element.getAttribute('data-key');
-}
-
-function syncAttributes(current: Element, next: Element): void {
-  for (const name of Array.from(current.attributes, (attribute) => attribute.name)) {
-    if (!next.hasAttribute(name)) current.removeAttribute(name);
-  }
-
-  for (const attribute of next.attributes) {
-    current.setAttribute(attribute.name, attribute.value);
-  }
-}
-
-function isActiveFormControl(element: Element): boolean {
-  return (
-    document.activeElement === element &&
-    (element instanceof HTMLInputElement || element instanceof HTMLTextAreaElement)
-  );
-}
-
-function captureActiveState(root: Element) {
-  const element = document.activeElement;
-
-  if (
-    !(element instanceof HTMLInputElement || element instanceof HTMLTextAreaElement) ||
-    !root.contains(element)
-  ) {
-    return null;
-  }
-
-  return {
-    element,
-    selectionDirection: element.selectionDirection,
-    selectionEnd: element.selectionEnd,
-    selectionStart: element.selectionStart,
-    scrollLeft: element.scrollLeft,
-    scrollTop: element.scrollTop,
-  };
-}
-
-function restoreActiveState(state: ReturnType<typeof captureActiveState>): void {
-  if (!state || !state.element.isConnected) return;
-
-  state.element.focus();
-  if (state.selectionStart !== null && state.selectionEnd !== null) {
-    state.element.setSelectionRange(
-      state.selectionStart,
-      state.selectionEnd,
-      state.selectionDirection ?? 'none',
-    );
-  }
-  state.element.scrollLeft = state.scrollLeft;
-  state.element.scrollTop = state.scrollTop;
-}
-
-function captureScrollStates(root: Element) {
-  return [...root.querySelectorAll<HTMLElement>('[fw-key], [data-key]')]
-    .filter((element) => element.scrollLeft !== 0 || element.scrollTop !== 0)
-    .map((element) => ({
-      element,
-      scrollLeft: element.scrollLeft,
-      scrollTop: element.scrollTop,
-    }));
-}
-
-function restoreScrollStates(states: ReturnType<typeof captureScrollStates>): void {
-  for (const state of states) {
-    if (!state.element.isConnected) continue;
-
-    state.element.scrollLeft = state.scrollLeft;
-    state.element.scrollTop = state.scrollTop;
-  }
-}
-
-function morphChildren(current: Element, next: Element): void {
-  const currentByKey = new Map(
-    [...current.children]
-      .map((child) => [morphKey(child), child] as const)
-      .filter((entry): entry is [string, Element] => entry[0] !== null),
-  );
-  const nextChildren = [...next.childNodes];
-  const desiredNodes: ChildNode[] = [];
-
-  for (const [index, nextChild] of nextChildren.entries()) {
-    let desiredNode: ChildNode;
-    if (!(nextChild instanceof Element)) {
-      desiredNode = nextChild.cloneNode(true) as ChildNode;
-    } else {
-      const key = morphKey(nextChild);
-      const existing = key ? currentByKey.get(key) : undefined;
-      desiredNode = existing
-        ? morphElement(existing, nextChild)
-        : (nextChild.cloneNode(true) as ChildNode);
-    }
-
-    desiredNodes.push(desiredNode);
-    current.insertBefore(desiredNode, current.childNodes[index] ?? null);
-  }
-
-  for (const child of Array.from(current.childNodes)) {
-    if (!desiredNodes.includes(child)) child.remove();
-  }
-}
 
 afterEach(() => {
   document.body.replaceChildren();
@@ -476,7 +303,7 @@ describe('runtime browser suite', () => {
         '</fw-fragment>',
       ].join(''),
       morph: keyedDomMorph,
-      root: new DomFragmentRoot(root),
+      root: new DomMorphRoot(root),
       store: createQueryStore(),
     });
     const nextTextarea = root.querySelector('textarea');
@@ -518,7 +345,7 @@ describe('runtime browser suite', () => {
         '</fw-fragment>',
       ].join(''),
       morph: keyedDomMorph,
-      root: new DomFragmentRoot(root),
+      root: new DomMorphRoot(root),
       store: createQueryStore(),
     });
 
@@ -546,7 +373,7 @@ describe('runtime browser suite', () => {
         '</fw-fragment>',
       ].join(''),
       morph: keyedDomMorph,
-      root: new DomFragmentRoot(root),
+      root: new DomMorphRoot(root),
       store: createQueryStore(),
     });
 

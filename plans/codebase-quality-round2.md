@@ -294,10 +294,16 @@ params, relational API, `execute(sql)`, right/full joins, a string column named 
       `installInlineJisoLoader`, pinning multi-target `FW-Targets` separator parity,
       nullish-only fragment-target fallback, and keyed `fw-query` event detail. Same-session
       evidence: `pnpm exec vitest --run packages/runtime/src/index.test.ts`.
-- [ ] **HIGH — Ship the DOM morph.** The only real keyed DOM morph (focus/selection/scroll
+- [x] **HIGH — Ship the DOM morph.** The only real keyed DOM morph (focus/selection/scroll
       capture-restore) lives in index.browser.test.ts:12-182; every consumer must rewrite it, and
       the flagship browser test substantially tests its own test code. Promote to a
-      `dom-morph.ts` export; the browser test consumes the export.
+      `dom-morph.ts` export; the browser test consumes the export. Evidence 2026-06-11:
+      `packages/runtime/src/morph.ts` now exports `DomMorphRoot`, `DomMorphTarget`,
+      `keyedDomMorph`, and `morphDomElement` with keyed DOM reuse plus focus, selection, and
+      scroll capture/restore. `packages/runtime/src/index.browser.test.ts` imports those
+      production exports instead of carrying local test-only morph code. Same-session evidence:
+      `pnpm exec vitest --config vitest.browser.config.ts --run packages/runtime/src/index.browser.test.ts`
+      and `pnpm exec vitest --run packages/runtime/src/index.test.ts -t "morph"`.
 - [ ] **MED — Unify the apply path.** `submitOptimisticEnhancedMutationDirect`
       (index.ts:1584-1675) re-rolls `applyMutationResponseToDom` inline because the rebaser needs
       an interposition seam the shared function lacks. Add the query-interposition hook; delete

@@ -46,7 +46,14 @@ export type {
   ImportHandlerModule,
   IslandSignalScope,
 } from './handlers.js';
-export { applyFragments, morphStructuralTree } from './morph.js';
+export {
+  applyFragments,
+  DomMorphRoot,
+  DomMorphTarget,
+  keyedDomMorph,
+  morphDomElement,
+  morphStructuralTree,
+} from './morph.js';
 export type {
   MorphFragment,
   MorphRoot,
