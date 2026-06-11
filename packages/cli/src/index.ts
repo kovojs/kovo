@@ -254,15 +254,22 @@ export function main(args: readonly string[] = process.argv.slice(2)): number {
     const optimistic = args.includes('--optimistic');
     const unscoped = args.includes('--unscoped');
     const unguarded = args.includes('--unguarded');
+    const failOnFindings = args.includes('--fail-on-findings');
     const positional = args
       .slice(1)
-      .filter((arg) => arg !== '--optimistic' && arg !== '--unguarded' && arg !== '--unscoped');
+      .filter(
+        (arg) =>
+          arg !== '--fail-on-findings' &&
+          arg !== '--optimistic' &&
+          arg !== '--unguarded' &&
+          arg !== '--unscoped',
+      );
 
     if (unscoped) {
       const [inputPath] = positional;
       const input = readGraphInput(inputPath);
       if (!input.ok) return writeInputError(input.error);
-      const result = fwExplain(input.value, { unscoped: true });
+      const result = fwExplain(input.value, { failOnFindings, unscoped: true });
       const stream = result.exitCode === 0 ? process.stdout : process.stderr;
       stream.write(result.output);
       return result.exitCode;
@@ -272,7 +279,7 @@ export function main(args: readonly string[] = process.argv.slice(2)): number {
       const [inputPath] = positional;
       const input = readGraphInput(inputPath);
       if (!input.ok) return writeInputError(input.error);
-      const result = fwExplain(input.value, { unguarded: true });
+      const result = fwExplain(input.value, { failOnFindings, unguarded: true });
       const stream = result.exitCode === 0 ? process.stdout : process.stderr;
       stream.write(result.output);
       return result.exitCode;
@@ -282,7 +289,7 @@ export function main(args: readonly string[] = process.argv.slice(2)): number {
 
     if (!isExplainKind(kind) || !target) {
       process.stderr.write(
-        'fw: usage: fw explain component|mutation|query|page <target> [graph.json] | fw explain --unguarded [graph.json] | fw explain --unscoped [graph.json]\n',
+        'fw: usage: fw explain component|mutation|query|page <target> [graph.json] | fw explain --unguarded [--fail-on-findings] [graph.json] | fw explain --unscoped [--fail-on-findings] [graph.json]\n',
       );
       return 1;
     }
@@ -367,10 +374,12 @@ export interface FwTargetExplainOptions {
 }
 
 export interface FwUnguardedExplainOptions {
+  failOnFindings?: boolean;
   unguarded: true;
 }
 
 export interface FwUnscopedExplainOptions {
+  failOnFindings?: boolean;
   unscoped: true;
 }
 
@@ -386,7 +395,7 @@ export function fwExplain(input: FwExplainInput, options: FwExplainOptions): FwC
     }
 
     lines.push(`SUMMARY total=${findings.length}`);
-    return ok(lines);
+    return explainAuditResult(lines, findings.length, options.failOnFindings);
   }
 
   if ('unguarded' in options) {
@@ -398,7 +407,7 @@ export function fwExplain(input: FwExplainInput, options: FwExplainOptions): FwC
     }
 
     lines.push(`SUMMARY total=${accesses.length}`);
-    return ok(lines);
+    return explainAuditResult(lines, accesses.length, options.failOnFindings);
   }
 
   if (options.kind === 'component') {
@@ -672,6 +681,17 @@ function checkFamilyArg(value: string | undefined): FwCheckFamily {
 function ok(lines: string[]): FwCheckResult {
   return {
     exitCode: 0,
+    output: `${lines.join('\n')}\n`,
+  };
+}
+
+function explainAuditResult(
+  lines: string[],
+  findingCount: number,
+  failOnFindings = false,
+): FwCheckResult {
+  return {
+    exitCode: failOnFindings && findingCount > 0 ? 1 : 0,
     output: `${lines.join('\n')}\n`,
   };
 }

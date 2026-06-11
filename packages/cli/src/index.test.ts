@@ -1158,6 +1158,38 @@ describe('fw explain', () => {
     `);
   });
 
+  it('fails fw explain --unguarded when requested and findings exist', () => {
+    const tempDir = mkdtempSync(join(tmpdir(), 'jiso-cli-'));
+    const graphPath = join(tempDir, 'graph.json');
+    let output = '';
+    const stderrWrite = vi.spyOn(process.stderr, 'write').mockImplementation(((chunk) => {
+      output += chunk.toString();
+      return true;
+    }) as typeof process.stderr.write);
+
+    try {
+      writeFileSync(
+        graphPath,
+        JSON.stringify({
+          mutations: [{ guards: ['rateLimit:session'], key: 'cart/add', writes: ['cart'] }],
+        }),
+      );
+
+      expect(main(['explain', '--unguarded', '--fail-on-findings', graphPath])).toBe(1);
+    } finally {
+      stderrWrite.mockRestore();
+      rmSync(tempDir, { force: true, recursive: true });
+    }
+
+    expect(output).toMatchInlineSnapshot(`
+      "fw-explain/v1
+      UNGUARDED
+      MUTATION cart/add guards=rateLimit:session writes=cart invalidates=- manual-invalidates=-
+      SUMMARY total=1
+      "
+    `);
+  });
+
   it('audits owner-scoped queries and writes with stable explain output', () => {
     const result = fwExplain(
       {
@@ -1237,6 +1269,47 @@ describe('fw explain', () => {
       expect(main(['explain', '--unscoped', graphPath])).toBe(0);
     } finally {
       stdoutWrite.mockRestore();
+      rmSync(tempDir, { force: true, recursive: true });
+    }
+
+    expect(output).toMatchInlineSnapshot(`
+      "fw-explain/v1
+      UNSCOPED
+      UNSCOPED QUERY cartById domain=cart scope=args site=cart.queries.ts:21
+      SUMMARY total=1
+      "
+    `);
+  });
+
+  it('fails fw explain --unscoped when requested and findings exist', () => {
+    const tempDir = mkdtempSync(join(tmpdir(), 'jiso-cli-'));
+    const graphPath = join(tempDir, 'graph.json');
+    let output = '';
+    const stderrWrite = vi.spyOn(process.stderr, 'write').mockImplementation(((chunk) => {
+      output += chunk.toString();
+      return true;
+    }) as typeof process.stderr.write);
+
+    try {
+      writeFileSync(
+        graphPath,
+        JSON.stringify({
+          ownerDomains: [{ domain: 'cart', owner: 'userId' }],
+          scopeAudits: [
+            {
+              domain: 'cart',
+              kind: 'query',
+              name: 'cartById',
+              scope: 'args',
+              site: 'cart.queries.ts:21',
+            },
+          ],
+        }),
+      );
+
+      expect(main(['explain', '--unscoped', '--fail-on-findings', graphPath])).toBe(1);
+    } finally {
+      stderrWrite.mockRestore();
       rmSync(tempDir, { force: true, recursive: true });
     }
 
