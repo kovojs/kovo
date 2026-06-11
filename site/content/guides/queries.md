@@ -39,19 +39,29 @@ The `reads` list names the domains this query depends on. Any committed write th
 value back in the same mutation response (SPEC §10.3). Components consume queries by declaring
 them:
 
-```ts
+```tsx
 import { component } from '@jiso/core';
 
 export const CartBadge = component('cart-badge', {
   fragmentTarget: true,
   queries: { cart: cartQuery },
   state: () => ({}),
-  render: () =>
-    `<cart-badge fw-deps="cart">Cart <span data-bind="cart.count">1</span></cart-badge>`,
+  render: () => (
+    <button class="badge">
+      Cart <span>{cart.count}</span>
+    </button>
+  ),
 });
 ```
 
-Two attributes carry the whole dependency story into the HTML itself:
+You write the JSX; the compiler derives the wiring and stamps it into the rendered HTML
+(SPEC §4.8):
+
+```html
+<button class="badge" fw-deps="cart">Cart <span data-bind="cart.count">2</span></button>
+```
+
+Two derived attributes carry the whole dependency story into the HTML itself:
 
 - **`fw-deps="cart"`** — this island depends on the `cart` query. Mutations read these stamps off
   the live DOM to decide which fragments to ask for (SPEC §9.1).

@@ -49,33 +49,33 @@ All three reference the *same single generated stylesheet*. If a class only ever
 fragment the server renders after a mutation — say, an error state — and Tailwind never saw it,
 the fragment arrives unstyled in production with no build error. So the rule is (SPEC §13.1):
 
-**Keep utility classes as literal strings in templates.** The commerce app writes exactly this:
+**Keep utility classes as literal strings in your JSX.**
 
-```ts
-function renderProductCard(item: { id: string; stock: number }): string {
-  return [
-    `<article fw-key="${item.id}" class="rounded border border-slate-200 bg-white p-4">`,
-    `<h2 class="font-semibold">${item.id}</h2>`,
-    `<p data-bind="productGrid.items.stock">${item.stock} in stock</p>`,
-    '</article>',
-  ].join('');
+```tsx
+function ProductCard({ item }: { item: { id: string; stock: number } }) {
+  return (
+    <article fw-key={item.id} class="rounded border border-slate-200 bg-white p-4">
+      <h2 class="font-semibold">{item.id}</h2>
+      <p>{item.stock} in stock</p>
+    </article>
+  );
 }
 ```
 
 **Never compute class names.** This class never appears in any source Tailwind scans:
 
-```ts
+```tsx
 // ✗ undiscoverable — produces "text-red-700" only at runtime
 const tone = severity === 'error' ? 'red' : 'amber';
-return `<output class="text-${tone}-700">…</output>`;
+return <output class={`text-${tone}-700`}>…</output>;
 ```
 
 Write the full literals and pick between them instead:
 
-```ts
+```tsx
 // ✓ both classes are statically visible
 const toneClass = severity === 'error' ? 'text-red-700' : 'text-amber-700';
-return `<output class="${toneClass}">…</output>`;
+return <output class={toneClass}>…</output>;
 ```
 
 **Safelist what you genuinely cannot make literal.** When a fragment must emit a class that no
