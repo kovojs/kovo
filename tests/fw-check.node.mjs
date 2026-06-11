@@ -693,8 +693,13 @@ void test('D3 deferred stream responses are consumed by the runtime', async () =
   const runtimeTests = await readProjectFile('packages/runtime/src/index.test.ts');
 
   assert.match(runtimeSource, /applyDeferredStreamResponseToDom/);
+  assert.match(runtimeSource, /export function applyQueryBindings/);
   assert.match(runtimeSource, /deferredStreamChunks/);
   assert.match(runtimeSource, /--\$\{boundary\}/);
+  assert.match(
+    runtimeTests,
+    /applies query update bindings from mutation chunks without requiring a fragment/,
+  );
   assert.match(runtimeTests, /applies full deferred stream responses in boundary order/);
   assert.match(await readProjectFile('fixtures/wire/defer-stream.http'), /priority="5"/);
   assert.match(runtimeTests, /--jiso-boundary--/);

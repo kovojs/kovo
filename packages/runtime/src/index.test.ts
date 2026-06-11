@@ -11,6 +11,7 @@ import {
   applyOptimisticTransforms,
   applyMutationResponseToDom,
   applyMutationResponse,
+  applyQueryBindings,
   createEventBus,
   createQueryStore,
   createSubmitContext,
@@ -147,6 +148,7 @@ class FakeMorphTarget {
 }
 
 class FakeMorphRoot {
+  bindings: FakeQueryBindingElement[] = [];
   deps: { deps?: string; id?: string; target?: string }[] = [];
   targets = new Map<string, FakeMorphTarget>();
 
@@ -154,10 +156,15 @@ class FakeMorphRoot {
     return this.targets.get(target) ?? null;
   }
 
-  querySelectorAll(_selector: string): Iterable<{
-    getAttribute(name: string): string | null;
-    id?: string;
-  }> {
+  querySelectorAll(_selector: string): Iterable<
+    | FakeQueryBindingElement
+    | {
+        getAttribute(name: string): string | null;
+        id?: string;
+      }
+  > {
+    if (_selector === '[data-bind]') return this.bindings;
+
     return this.deps.map((dep) => ({
       getAttribute: (name) => {
         if (name === 'fw-fragment-target') return dep.target ?? null;
@@ -166,6 +173,25 @@ class FakeMorphRoot {
       },
       ...(dep.id ? { id: dep.id } : {}),
     }));
+  }
+}
+
+class FakeQueryBindingElement {
+  textContent: string | null;
+  value?: string;
+
+  constructor(
+    private readonly path: string,
+    options: { textContent?: string | null; value?: string } = {},
+  ) {
+    this.textContent = options.textContent ?? null;
+    if (options.value !== undefined) {
+      this.value = options.value;
+    }
+  }
+
+  getAttribute(name: string): string | null {
+    return name === 'data-bind' ? this.path : null;
   }
 }
 
@@ -843,6 +869,68 @@ describe('query store', () => {
     applyMutationResponse(store, '<fw-query name="cart">{&quot;count&quot;:4}</fw-query>');
 
     expect(store.get('cart')).toEqual({ count: 4 });
+  });
+
+  it('applies query update bindings from mutation chunks without requiring a fragment', () => {
+    const root = new FakeMorphRoot();
+    const store = createQueryStore();
+    const count = new FakeQueryBindingElement('cart.count', { textContent: '1' });
+    const total = new FakeQueryBindingElement('cart.total', { value: '1499' });
+    const product = new FakeQueryBindingElement('product.name', { textContent: 'Coffee' });
+    root.bindings.push(count, total, product);
+
+    const result = applyMutationResponseToDom({
+      body: '<fw-query name="cart">{"count":2,"total":2998}</fw-query>',
+      root,
+      store,
+    });
+
+    expect(result).toEqual({
+      appliedFragments: [],
+      fragments: [],
+      queries: ['cart'],
+    });
+    expect(count.textContent).toBe('2');
+    expect(total.value).toBe('2998');
+    expect(product.textContent).toBe('Coffee');
+  });
+
+  it('applies query update bindings from deferred chunks before morphing', () => {
+    const root = new FakeMorphRoot();
+    const store = createQueryStore();
+    const count = new FakeQueryBindingElement('cart.count', { textContent: '1' });
+    const observed: string[] = [];
+    root.bindings.push(count);
+    root.targets.set('cart-badge', new FakeMorphTarget());
+
+    applyDeferredChunkToDom({
+      body: [
+        '<fw-query name="cart">{"count":4}</fw-query>',
+        '<fw-fragment target="cart-badge"><cart-badge>Ready</cart-badge></fw-fragment>',
+      ].join('\n'),
+      morph(target, html) {
+        observed.push(`binding:${count.textContent}`);
+        target.replaceWithHtml(html);
+      },
+      root,
+      store,
+    });
+
+    expect(observed).toEqual(['binding:4']);
+  });
+
+  it('exposes a DOM-light data-bind update plan helper', () => {
+    const root = new FakeMorphRoot();
+    const count = new FakeQueryBindingElement('cart.count', { textContent: '1' });
+    const items = new FakeQueryBindingElement('cart.items', { textContent: '' });
+    root.bindings.push(count, items);
+
+    expect(applyQueryBindings(root, 'cart', { count: 3, items: [{ id: 'p1' }] })).toEqual([
+      'cart.count',
+      'cart.items',
+    ]);
+    expect(count.textContent).toBe('3');
+    expect(items.textContent).toBe('[{"id":"p1"}]');
   });
 
   it('applies deferred stream chunks through the same query and fragment parser', () => {

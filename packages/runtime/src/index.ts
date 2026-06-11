@@ -741,6 +741,16 @@ export interface MorphRoot {
 
 export type MorphFragment = (target: MorphTarget, html: string) => void;
 
+export interface QueryBindingElement {
+  getAttribute(name: string): string | null;
+  textContent?: string | null;
+  value?: string;
+}
+
+export interface QueryBindingRoot {
+  querySelectorAll(selector: string): Iterable<QueryBindingElement>;
+}
+
 export type StructuralMorphKey = string | number;
 
 export interface StructuralMorphBrowserState {
@@ -1069,6 +1079,7 @@ export function applyMutationResponseToDom(options: {
 }): AppliedMutationResponse & { appliedFragments: string[] } {
   const applied = applyFragmentQueryBody(options.body, (name, value, key) => {
     options.store.set(name, value, key);
+    applyQueryBindingsIfSupported(options.root, name, value);
   });
 
   return {
@@ -1083,12 +1094,40 @@ export function applyDeferredChunkToDom(options: {
   root: MorphRoot;
   store: QueryStore;
 }): AppliedMutationResponse & { appliedFragments: string[] } {
-  const applied = applyDeferredChunk(options.store, options.body);
+  const applied = applyFragmentQueryBody(options.body, (name, value, key) => {
+    options.store.set(name, value, key);
+    applyQueryBindingsIfSupported(options.root, name, value);
+  });
 
   return {
     ...applied,
     appliedFragments: applyFragments(options.root, applied.fragments, options.morph),
   };
+}
+
+export function applyQueryBindings(
+  root: QueryBindingRoot,
+  queryName: string,
+  value: unknown,
+): string[] {
+  const applied: string[] = [];
+
+  for (const element of root.querySelectorAll('[data-bind]')) {
+    const path = element.getAttribute('data-bind');
+    if (!path?.startsWith(`${queryName}.`)) continue;
+
+    const boundValue = valueAtPath(value, path.slice(queryName.length + 1));
+    const rendered = formatBoundValue(boundValue);
+
+    if (element.value !== undefined) {
+      element.value = rendered;
+    } else {
+      element.textContent = rendered;
+    }
+    applied.push(path);
+  }
+
+  return applied;
 }
 
 export function applyDeferredStreamResponseToDom(options: {
@@ -1431,6 +1470,32 @@ async function fetchEnhancedMutation(
 
 function isFailedMutationResponse(response: EnhancedMutationResponseLike): boolean {
   return response.ok === false || (response.status !== undefined && response.status >= 400);
+}
+
+function applyQueryBindingsIfSupported(root: MorphRoot, queryName: string, value: unknown): void {
+  if (!supportsQueryBindings(root)) return;
+  applyQueryBindings(root, queryName, value);
+}
+
+function supportsQueryBindings(root: MorphRoot): root is MorphRoot & QueryBindingRoot {
+  return typeof (root as Partial<QueryBindingRoot>).querySelectorAll === 'function';
+}
+
+function valueAtPath(value: unknown, path: string): unknown {
+  return path.split('.').reduce<unknown>((current, segment) => {
+    if (typeof current !== 'object' || current === null) return undefined;
+    return (current as Record<string, unknown>)[segment];
+  }, value);
+}
+
+function formatBoundValue(value: unknown): string {
+  if (value === undefined || value === null) return '';
+  if (typeof value === 'string') return value;
+  if (typeof value === 'number' || typeof value === 'boolean' || typeof value === 'bigint') {
+    return value.toString();
+  }
+  if (typeof value === 'object') return JSON.stringify(value);
+  return '';
 }
 
 interface QueryChunk {
