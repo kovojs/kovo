@@ -22,15 +22,17 @@ Scope: SPEC additions (`webhook()`, route response outcomes, storage capability,
       `file()` and `stream()` route outcomes; `renderRoutePageResponse` emits declared
       `Content-Type`/`Content-Disposition`, honors `ETag` with `If-None-Match` -> 304, and skips
       HTML rendering for these outcomes. Covered in `packages/server/src/index.test.ts`.
-- [ ] E5 storage capability interface + filesystem and S3-compatible adapters; retrofit D4 `s.file()` uploads onto it.
+- [x] E5 storage capability interface + filesystem and S3-compatible adapters; retrofit D4 `s.file()` uploads onto it.
       Evidence 2026-06-11: bounded `@jiso/core` increment landed in
       `packages/core/src/storage.ts`. The portable `StorageCapability` exposes
       `put/get/stat/stream` with content type, metadata, size, last-modified, and ETag passthrough;
       adapters cover in-memory test storage, filesystem storage rooted under a guarded directory,
       and an injected S3-compatible object client with no live network dependency. Covered by
       `packages/core/src/storage.test.ts` shared conformance tests for in-memory/filesystem/mocked
-      S3-compatible behavior plus explicit caller/S3 ETag passthrough. Remaining for a server-owned
-      slice: retrofit D4 `s.file()` uploads onto this capability.
+      S3-compatible behavior plus explicit caller/S3 ETag passthrough. `@jiso/server` now lets
+      `s.file()` opt into storage-backed multipart uploads via `.store({ storage, key, metadata })`;
+      mutation input parsing awaits async schemas before the handler runs and focused server tests
+      cover successful in-memory storage plus validation-before-storage failure.
 - [x] E6 `fw explain --endpoints` audit surface (snapshot-locked like the rest of P8 output).
       Evidence 2026-06-11: `packages/cli/src/index.ts` prints a stable `ENDPOINTS`
       inventory with method/path/mount/auth/CSRF/write-domain fields, and

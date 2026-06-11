@@ -7,6 +7,8 @@ import type {
   EndpointMount,
   JsonValue,
   Redirect as CoreRedirect,
+  StorageCapability,
+  StorageObjectInfo,
 } from '@jiso/core';
 import { escapeAttribute, escapeHtml, escapeScriptJson } from './html.js';
 import { renderStylesheetLinks } from './hints.js';
@@ -71,6 +73,10 @@ export interface Schema<T> {
 }
 
 export type InferSchema<T> = T extends Schema<infer Value> ? Value : never;
+
+interface AsyncSchema<T> extends Schema<T> {
+  parseAsync(input: unknown): Promise<T>;
+}
 
 type PathParamNames<Path extends string> = Path extends `${string}:${infer Rest}`
   ? Rest extends `${infer Param}/${infer Tail}`
@@ -161,7 +167,7 @@ export const s = {
   object<const Shape extends Record<string, Schema<unknown>>>(
     shape: Shape,
   ): Schema<{ [Key in keyof Shape]: InferSchema<Shape[Key]> }> {
-    return {
+    const schema: AsyncSchema<{ [Key in keyof Shape]: InferSchema<Shape[Key]> }> = {
       parse(input: unknown): { [Key in keyof Shape]: InferSchema<Shape[Key]> } {
         const record = formLikeToRecord(input);
         const output: Partial<{ [Key in keyof Shape]: InferSchema<Shape[Key]> }> = {};
@@ -176,7 +182,24 @@ export const s = {
 
         return output as { [Key in keyof Shape]: InferSchema<Shape[Key]> };
       },
+      async parseAsync(input: unknown): Promise<{ [Key in keyof Shape]: InferSchema<Shape[Key]> }> {
+        const record = formLikeToRecord(input);
+        const output: Partial<{ [Key in keyof Shape]: InferSchema<Shape[Key]> }> = {};
+
+        for (const [key, schema] of Object.entries(shape) as [keyof Shape, Shape[keyof Shape]][]) {
+          try {
+            output[key] = (await parseSchemaAsync(schema, record[String(key)])) as InferSchema<
+              Shape[keyof Shape]
+            >;
+          } catch (error) {
+            throw validationErrorFrom(error, [String(key)]);
+          }
+        }
+
+        return output as { [Key in keyof Shape]: InferSchema<Shape[Key]> };
+      },
     };
+    return schema;
   },
 };
 
@@ -190,11 +213,26 @@ export interface FileLike {
 export interface FileSchema extends Schema<FileLike> {
   maxBytes(value: number): FileSchema;
   mime(types: readonly string[]): FileSchema;
+  store(options: StoredFileSchemaOptions): StoredFileSchema;
 }
 
 export interface FileSchemaOptions {
   maxBytes?: number;
   mime?: readonly string[];
+}
+
+export interface StoredFileUpload {
+  file: FileLike;
+  key: string;
+  storage: StorageObjectInfo;
+}
+
+export interface StoredFileSchema extends AsyncSchema<StoredFileUpload> {}
+
+export interface StoredFileSchemaOptions {
+  key: string | ((file: FileLike) => MaybePromise<string>);
+  metadata?: (file: FileLike) => Readonly<Record<string, string>>;
+  storage: StorageCapability;
 }
 
 export interface NumberSchema extends Schema<number> {
@@ -283,16 +321,85 @@ class FileSchemaImpl implements FileSchema {
   }
 
   parse(input: unknown): FileLike {
-    if (!isFileLike(input)) throw validationError('Expected file');
-    if (this.#maxBytes !== undefined && input.size > this.#maxBytes) {
-      throw validationError(`Expected file <= ${this.#maxBytes} bytes`);
-    }
-    if (this.#mime && !this.#mime.includes(input.type)) {
-      throw validationError(`Expected file type ${this.#mime.join(', ')}`);
+    return parseFileLike(input, createFileOptions(this.#maxBytes, this.#mime));
+  }
+
+  store(options: StoredFileSchemaOptions): StoredFileSchema {
+    return new StoredFileSchemaImpl(createFileOptions(this.#maxBytes, this.#mime), options);
+  }
+}
+
+class StoredFileSchemaImpl implements StoredFileSchema {
+  readonly #fileOptions: FileSchemaOptions;
+  readonly #storageOptions: StoredFileSchemaOptions;
+
+  constructor(fileOptions: FileSchemaOptions, storageOptions: StoredFileSchemaOptions) {
+    this.#fileOptions = fileOptions;
+    this.#storageOptions = storageOptions;
+  }
+
+  parse(input: unknown): StoredFileUpload {
+    const file = parseFileLike(input, this.#fileOptions);
+    const key =
+      typeof this.#storageOptions.key === 'string'
+        ? this.#storageOptions.key
+        : this.#storageOptions.key(file);
+    if (typeof key !== 'string') {
+      throw validationError('Expected synchronous storage key');
     }
 
-    return input;
+    return {
+      file,
+      key,
+      storage: {
+        ...(file.type === '' ? {} : { contentType: file.type }),
+        key,
+        ...(this.#storageOptions.metadata === undefined
+          ? {}
+          : { metadata: this.#storageOptions.metadata(file) }),
+        size: file.size,
+      },
+    };
   }
+
+  async parseAsync(input: unknown): Promise<StoredFileUpload> {
+    const file = parseFileLike(input, this.#fileOptions);
+    const key =
+      typeof this.#storageOptions.key === 'string'
+        ? this.#storageOptions.key
+        : await this.#storageOptions.key(file);
+    const storage = await this.#storageOptions.storage.put(key, await file.arrayBuffer(), {
+      ...(file.type === '' ? {} : { contentType: file.type }),
+      metadata: {
+        filename: file.name,
+        ...this.#storageOptions.metadata?.(file),
+      },
+    });
+
+    return { file, key, storage };
+  }
+}
+
+function createFileOptions(
+  maxBytes: number | undefined,
+  mime: readonly string[] | undefined,
+): FileSchemaOptions {
+  return {
+    ...(maxBytes === undefined ? {} : { maxBytes }),
+    ...(mime === undefined ? {} : { mime }),
+  };
+}
+
+function parseFileLike(input: unknown, options: FileSchemaOptions): FileLike {
+  if (!isFileLike(input)) throw validationError('Expected file');
+  if (options.maxBytes !== undefined && input.size > options.maxBytes) {
+    throw validationError(`Expected file <= ${options.maxBytes} bytes`);
+  }
+  if (options.mime && !options.mime.includes(input.type)) {
+    throw validationError(`Expected file type ${options.mime.join(', ')}`);
+  }
+
+  return input;
 }
 
 export interface GuardFailure {
@@ -1578,7 +1685,7 @@ export async function runMutation<
     };
   }
 
-  const inputResult = parseMutationInput(definition.input, rawInput);
+  const inputResult = await parseMutationInput(definition.input, rawInput);
   if (!inputResult.ok) return inputResult.failure;
 
   const input = inputResult.value as InferSchema<InputSchema>;
@@ -2352,14 +2459,18 @@ function validationErrorFrom(error: unknown, pathPrefix: readonly string[]): Sch
   return validationError(error instanceof Error ? error.message : String(error), pathPrefix);
 }
 
-function parseMutationInput<InputSchema extends Schema<unknown>>(
+async function parseMutationInput<InputSchema extends Schema<unknown>>(
   schema: InputSchema,
   rawInput: unknown,
-):
+): Promise<
   | { ok: true; value: InferSchema<InputSchema> }
-  | { failure: MutationFail<'VALIDATION', ValidationFailurePayload>; ok: false } {
+  | { failure: MutationFail<'VALIDATION', ValidationFailurePayload>; ok: false }
+> {
   try {
-    return { ok: true, value: schema.parse(rawInput) as InferSchema<InputSchema> };
+    return {
+      ok: true,
+      value: (await parseSchemaAsync(schema, rawInput)) as InferSchema<InputSchema>,
+    };
   } catch (error) {
     if (!(error instanceof SchemaValidationError)) throw error;
 
@@ -2375,6 +2486,14 @@ function parseMutationInput<InputSchema extends Schema<unknown>>(
       ok: false,
     };
   }
+}
+
+function isAsyncSchema<T>(schema: Schema<T>): schema is AsyncSchema<T> {
+  return typeof (schema as Partial<AsyncSchema<T>>).parseAsync === 'function';
+}
+
+async function parseSchemaAsync<T>(schema: Schema<T>, input: unknown): Promise<T> {
+  return isAsyncSchema(schema) ? schema.parseAsync(input) : schema.parse(input);
 }
 
 function parseQueryInput<const Key extends string, Value, Input, Request>(

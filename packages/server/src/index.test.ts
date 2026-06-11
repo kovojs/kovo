@@ -3,6 +3,7 @@ import { File } from 'node:buffer';
 import { readFile } from 'node:fs/promises';
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
 import { validateHeaderValue } from 'node:http';
+import { createMemoryStorage, storageBodyToBytes } from '@jiso/core';
 
 import {
   domain,
@@ -1566,6 +1567,75 @@ describe('server mutation primitives', () => {
         type: 'image/png',
       },
     });
+  });
+
+  it('stores multipart file fields through storage-backed s.file()', async () => {
+    const storage = createMemoryStorage({ now: () => new Date('2026-06-11T12:00:00.000Z') });
+    const uploadAvatar = mutation('profile/avatar', {
+      input: s.object({
+        avatar: s.file({ maxBytes: 16, mime: ['image/png'] }).store({
+          key: (file) => `avatars/${file.name}`,
+          storage,
+        }),
+      }),
+      handler(input) {
+        return {
+          contentType: input.avatar.storage.contentType,
+          key: input.avatar.key,
+          name: input.avatar.file.name,
+          size: input.avatar.storage.size,
+        };
+      },
+    });
+    const form = new FormData();
+    form.set('avatar', formDataFile(['avatar'], 'avatar.png', 'image/png'));
+
+    await expect(runMutation(uploadAvatar, form, {})).resolves.toEqual({
+      changes: [],
+      ok: true,
+      rerunQueries: [],
+      value: {
+        contentType: 'image/png',
+        key: 'avatars/avatar.png',
+        name: 'avatar.png',
+        size: 6,
+      },
+    });
+    await expect(storage.get('avatars/avatar.png')).resolves.toMatchObject({
+      contentType: 'image/png',
+      key: 'avatars/avatar.png',
+      metadata: { filename: 'avatar.png' },
+      size: 6,
+    });
+    const stored = await storage.get('avatars/avatar.png');
+    expect(new TextDecoder().decode(await storageBodyToBytes(stored?.body ?? ''))).toBe('avatar');
+  });
+
+  it('does not store invalid multipart file fields', async () => {
+    const storage = createMemoryStorage();
+    const uploadAvatar = mutation('profile/avatar', {
+      input: s.object({
+        avatar: s.file().maxBytes(4).store({
+          key: 'avatars/avatar.png',
+          storage,
+        }),
+      }),
+      handler(input) {
+        return input.avatar.key;
+      },
+    });
+    const form = new FormData();
+    form.set('avatar', formDataFile(['large'], 'avatar.png', 'image/png'));
+
+    await expect(runMutation(uploadAvatar, form, {})).resolves.toEqual({
+      error: {
+        code: 'VALIDATION',
+        payload: { issues: [{ message: 'Expected file <= 4 bytes', path: ['avatar'] }] },
+      },
+      ok: false,
+      status: 422,
+    });
+    await expect(storage.get('avatars/avatar.png')).resolves.toBeUndefined();
   });
 
   it('returns validation failures with field paths for schema errors', async () => {
