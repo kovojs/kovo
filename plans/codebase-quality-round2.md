@@ -116,7 +116,13 @@ Do this first or pay it on every commit.
       Partial evidence 2026-06-11: the P9 static/runtime diagnostic tranche now calls `fwCheck`
       with structured `diagnostics` and `verificationDiagnostics` facts for FW302/FW402/FW403/
       FW404/FW405/FW407/FW408/FW410/FW411 instead of grepping CLI implementation symbols or CLI
-      test names. The `@jiso/test` harness checks in that tranche remain source-shaped.
+      test names.
+      Partial evidence 2026-06-11: the P9 `@jiso/test` harness tranche now imports the built
+      harness APIs and exercises mutation execution/CSRF, write/read verification, PGlite raw
+      handle and transaction proxying, exempt table behavior, nested SQL read/write extraction,
+      row-key predicate checks, FW402/FW404/FW407/FW408/FW410/FW411 messages, and query output
+      schema validation instead of grepping `packages/test` source or test names. Verification:
+      `node --test tests/fw-check.node.mjs` and `pnpm run check` passed.
       Partial evidence 2026-06-11: the P1 render-equivalence tranche now imports the built
       compiler API, asserts `compileComponentModule` render-equivalence checks and
       `assertRenderEquivalence` failure behavior, then asserts the `ERROR RENDER_EQUIV` CLI
@@ -220,6 +226,11 @@ Do this first or pay it on every commit.
       APIs and asserts page critical-CSS/style hint rendering, target-filtered stylesheet
       manifests, deferred fragment stylesheet links, and enhanced mutation failure-fragment
       stylesheet links instead of grepping commerce, compiler, or server source/test names.
+      Partial evidence 2026-06-11: the D4 commerce adopt-dont-invent tranche now parses the
+      committed commerce graph for page/mutation metadata and exercises built server/runtime APIs
+      for query-derived meta, i18n hints, session parsing, auth/rate-limit guards, storage-backed
+      file uploads, enhanced mutation progress/pending stamps, and fragment error boundaries
+      instead of grepping commerce, server, or runtime source/test names.
       Partial evidence 2026-06-11: the P5 data-bind query-shape tranche now imports built
       compiler/core APIs and asserts `queryShapesFromFacts`,
       `compileComponentModule` data-bind success/failure diagnostics, ejected list

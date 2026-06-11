@@ -25,12 +25,18 @@ import {
   readElementParams,
   refetchQueries,
   stampPendingQueries,
+  submitEnhancedMutation,
   submitOptimisticEnhancedMutation,
 } from '../dist/runtime/src/index.mjs';
+import { createDbVerifier, createJisoTestHarness } from '../dist/test/src/index.mjs';
 import {
   csrfField,
   csrfToken,
   domain,
+  errorBoundary,
+  guards,
+  i18n,
+  metaFromQuery,
   mutation,
   notFound,
   query,
@@ -48,8 +54,10 @@ import {
   runRoutePage,
   renderRoutePageResponse,
   route as serverRoute,
+  session,
   s,
   stylesheetsForTargets,
+  t,
 } from '../dist/server/src/index.mjs';
 import { href, Link, redirect, route } from '../dist/core/src/index.mjs';
 
@@ -2127,64 +2135,273 @@ void test('D1 commerce enhanced fragments carry Tailwind stylesheet hints', asyn
 });
 
 void test('D4 commerce adopt-dont-invent features stay represented', async () => {
-  const commerceSource = await readProjectFile('examples/commerce/src/app.ts');
-  const commerceTests = await readProjectFile('examples/commerce/src/app.test.ts');
-  const runtimeSource = await readProjectFile('packages/runtime/src/index.ts');
-  const runtimeTests = await readProjectFile('packages/runtime/src/index.test.ts');
-  const serverHintsSource = await readProjectFile('packages/server/src/hints.ts');
-  const serverSource = await readProjectFile('packages/server/src/index.ts');
-  const serverTests = await readProjectFile('packages/server/src/index.test.ts');
+  const element = (initialAttributes) => {
+    const attributes = { ...initialAttributes };
 
-  assert.match(commerceSource, /meta\(\{/);
-  assert.match(commerceSource, /metaFromQuery\(cartQuery, \(cart\)/);
-  assert.match(commerceSource, /renderCommercePageHints\(loadCartQuery\(db\)\)/);
-  assert.match(commerceSource, /queries: \{ cart \}/);
-  assert.match(serverSource, /function metaFromQuery/);
-  assert.match(serverHintsSource, /Missing query data for route meta/);
-  assert.match(serverSource, /interface Guard<Request, RefinedRequest extends Request = Request>/);
-  assert.match(serverSource, /AuthenticatedRequest<Request extends SessionRequestLike>/);
-  assert.match(serverSource, /guard\?: Guard<Request, GuardedRequest>/);
-  assert.match(serverSource, /lifecycleRequest as GuardedRequest/);
-  assert.match(serverTests, /resolves app session providers before route and query guards/);
-  assert.match(
-    serverTests,
-    /maps route and query guard failures to login redirects and 403 shells/,
+    return {
+      getAttribute(name) {
+        return attributes[name] ?? null;
+      },
+      removeAttribute(name) {
+        delete attributes[name];
+      },
+      setAttribute(name, value) {
+        attributes[name] = value;
+      },
+    };
+  };
+  const commerceGraph = JSON.parse(
+    await readProjectFile('examples/commerce/src/generated/graph.json'),
   );
-  assert.match(serverTests, /derives typed route meta from query results/);
-  assert.match(serverTests, /refines typed session users inside authed mutation handlers/);
-  assert.match(commerceTests, /resolves commerce route meta from loaded cart query data/);
-  assert.match(commerceSource, /i18n\('en-US'/);
-  assert.match(commerceSource, /s\.file\(\{ maxBytes: 64 \* 1024/);
-  assert.match(commerceSource, /fw-upload-progress/);
-  assert.match(commerceSource, /errorBoundary\(/);
-  assert.match(commerceSource, /commerceSession = session\(/);
-  assert.match(commerceSource, /guards\.rateLimit<CommerceRequest>/);
-  assert.match(commerceSource, /inputFields: \['orderId', 'receipt'\]/);
-  assert.match(commerceSource, /fileFields: \['receipt'\]/);
-  assert.match(commerceSource, /i18n: \['en-US:cartLabel,productStock'\]/);
-  assert.match(
-    commerceTests,
-    /coerces commerce receipt uploads through storage-backed s\.file\(\)/,
+  const cartPage = commerceGraph.pages.find((page) => page.route === '/cart');
+  const receiptMutation = commerceGraph.mutations.find((item) => item.key === 'order/receipt');
+
+  assert.deepEqual(cartPage, {
+    i18n: ['en-US:cartLabel,productStock'],
+    meta: {
+      description: 'Browse products and checkout with 1 verifiable cart item.',
+      title: 'Jiso Commerce (1)',
+    },
+    modulepreloads: [],
+    prefetch: false,
+    queries: ['cart', 'productGrid', 'orderHistory'],
+    route: '/cart',
+    stylesheets: ['/assets/tailwind.css'],
+  });
+  assert.deepEqual(receiptMutation, {
+    enctype: 'multipart/form-data',
+    fileFields: ['receipt'],
+    guards: ['authed', 'rateLimit:session'],
+    inputFields: ['orderId', 'receipt'],
+    key: 'order/receipt',
+    session: 'commerceSession',
+    writes: ['attachment'],
+  });
+
+  const cartQuery = query('cart', {
+    load: () => ({ count: 1 }),
+    reads: [domain('cart')],
+  });
+  const cartMeta = metaFromQuery(cartQuery, (cart) => ({
+    description: `Browse products and checkout with ${cart.count} verifiable cart item.`,
+    title: `Jiso Commerce (${cart.count})`,
+  }));
+  const messages = i18n('en-US', {
+    cartLabel: 'Cart ({count})',
+    productStock: '{stock} in stock',
+  });
+
+  assert.equal(t(messages, 'cartLabel', { count: 1 }), 'Cart (1)');
+  assert.deepEqual(
+    renderPageHints({ i18n: messages, meta: cartMeta }, { queries: { cart: { count: 1 } } }),
+    {
+      earlyHints: {},
+      html: [
+        '<title>Jiso Commerce (1)</title>',
+        '<meta name="description" content="Browse products and checkout with 1 verifiable cart item.">',
+        '<meta property="og:description" content="Browse products and checkout with 1 verifiable cart item.">',
+        '<script type="application/json" fw-i18n locale="en-US">{"cartLabel":"Cart ({count})","productStock":"{stock} in stock"}</script>',
+      ].join(''),
+    },
   );
-  assert.match(commerceTests, /fw-upload-progress value="0" max="100"/);
-  assert.match(commerceTests, /session: commerceSession/);
-  assert.match(commerceTests, /file-fields: receipt/);
-  assert.match(commerceTests, /meta: title=Jiso Commerce/);
-  assert.match(commerceTests, /Jiso Commerce \(1\)/);
-  assert.match(runtimeTests, /FormFailure<typeof addToCart>/);
-  assert.match(runtimeTests, /failure\.code === 'VALIDATION'/);
-  assert.match(runtimeSource, /onUploadProgress\?: \(progress: UploadProgress/);
-  assert.match(runtimeSource, /updateUploadProgressElements\(form, progress\)/);
-  assert.match(runtimeSource, /stampEnhancedMutationPending\(options, true\)/);
-  assert.match(runtimeTests, /onUploadProgress: uploadProgress/);
-  assert.match(runtimeTests, /progressElement\.getAttribute\('value'\)/);
-  assert.match(runtimeTests, /'fw-deps': 'order'/);
-  assert.match(
-    commerceTests,
-    /contains product-grid fragment failures with a per-island error boundary/,
+  assert.throws(
+    () => renderPageHints({ meta: cartMeta }),
+    /Missing query data for route meta: cart/,
   );
-  assert.match(commerceTests, /uses the typed commerce session schema in authenticated mutations/);
-  assert.match(commerceTests, /fw-i18n locale="en-US"/);
+
+  const commerceSession = session(
+    s.object({
+      id: s.string(),
+      user: s.object({ id: s.string() }),
+    }),
+  );
+  const authenticatedRequest = { session: { id: 's1', user: { id: 'u1' } } };
+  const guarded = guards.all(guards.authed(), guards.rateLimit({ max: 1, per: 'session' }));
+
+  assert.deepEqual(commerceSession.parse(authenticatedRequest), {
+    id: 's1',
+    user: { id: 'u1' },
+  });
+  assert.equal(await guarded(authenticatedRequest), true);
+  assert.equal((await guarded(authenticatedRequest)).code, 'RATE_LIMITED');
+  assert.deepEqual(await guards.authed()({ session: null }), {
+    auth: 'unauthenticated',
+    code: 'UNAUTHORIZED',
+    payload: {},
+    status: 422,
+  });
+
+  const storedObjects = new Map();
+  const storage = {
+    async get(key) {
+      return storedObjects.get(key);
+    },
+    async put(key, body, options = {}) {
+      const bytes =
+        body instanceof ArrayBuffer
+          ? new Uint8Array(body)
+          : ArrayBuffer.isView(body)
+            ? new Uint8Array(body.buffer, body.byteOffset, body.byteLength)
+            : new TextEncoder().encode(String(body));
+      const stored = {
+        body: bytes,
+        contentType: options.contentType,
+        key,
+        metadata: options.metadata,
+        size: bytes.byteLength,
+      };
+      storedObjects.set(key, stored);
+      return stored;
+    },
+    async stat(key) {
+      return storedObjects.get(key);
+    },
+    async stream(key) {
+      const stored = storedObjects.get(key);
+      return stored ? { ...stored, body: new Blob([stored.body]).stream() } : undefined;
+    },
+  };
+  const uploadReceipt = mutation('order/receipt', {
+    csrf: false,
+    input: s.object({
+      orderId: s.string(),
+      receipt: s.file({ maxBytes: 64 * 1024, mime: ['application/pdf', 'image/png'] }).store({
+        key: (file) => `receipts/${file.name}`,
+        storage,
+      }),
+    }),
+    handler(input, request) {
+      return {
+        orderId: input.orderId,
+        session: commerceSession.parse(request).user.id,
+        storageKey: input.receipt.storage.key,
+      };
+    },
+    registry: { touches: [domain('attachment')] },
+  });
+  const receiptForm = new FormData();
+  receiptForm.set('orderId', 'o1');
+  receiptForm.set('receipt', new Blob(['receipt'], { type: 'application/pdf' }), 'receipt.pdf');
+
+  const receiptResult = await runMutation(uploadReceipt, receiptForm, authenticatedRequest);
+  assert.deepEqual(receiptResult, {
+    changes: [
+      {
+        domain: 'attachment',
+        input: {
+          orderId: 'o1',
+          receipt: {
+            file: receiptForm.get('receipt'),
+            key: 'receipts/receipt.pdf',
+            storage: {
+              body: new TextEncoder().encode('receipt'),
+              contentType: 'application/pdf',
+              key: 'receipts/receipt.pdf',
+              metadata: { filename: 'receipt.pdf' },
+              size: 7,
+            },
+          },
+        },
+      },
+    ],
+    ok: true,
+    rerunQueries: [],
+    value: {
+      orderId: 'o1',
+      session: 'u1',
+      storageKey: 'receipts/receipt.pdf',
+    },
+  });
+  assert.deepEqual(await storage.stat('receipts/receipt.pdf'), {
+    body: new TextEncoder().encode('receipt'),
+    contentType: 'application/pdf',
+    key: 'receipts/receipt.pdf',
+    metadata: { filename: 'receipt.pdf' },
+    size: 7,
+  });
+
+  const progressElement = element({ 'fw-upload-progress': '', max: '100', value: '0' });
+  const pendingElement = element({ 'fw-deps': 'order' });
+  const form = {
+    ...element({ 'data-mutation': 'order/receipt', enhance: '', 'fw-deps': 'order' }),
+    action: '/_m/order/receipt',
+    method: 'post',
+    querySelectorAll(selector) {
+      return selector === '[fw-upload-progress]' ? [progressElement] : [];
+    },
+  };
+  const mutationRoot = {
+    findFragmentTarget() {
+      return null;
+    },
+    querySelectorAll(selector) {
+      return selector === '[fw-deps]' ? [pendingElement] : [];
+    },
+  };
+
+  await submitEnhancedMutation({
+    fetch: async (_url, options) => ({
+      headers: { get: () => null },
+      async text() {
+        options.onUploadProgress?.({ loaded: 32, total: 64 });
+        assert.equal(pendingElement.getAttribute('fw-pending'), '');
+        return '<fw-query name="receipt">{"ok":true}</fw-query>';
+      },
+    }),
+    form,
+    formData: receiptForm,
+    onUploadProgress(progress) {
+      const total = progress.total ?? 0;
+      progressElement.setAttribute('max', '100');
+      progressElement.setAttribute('value', String(Math.round((progress.loaded / total) * 100)));
+    },
+    pendingQueries: ['order'],
+    pendingRoot: mutationRoot,
+    root: mutationRoot,
+    store: createQueryStore(),
+  });
+  assert.equal(progressElement.getAttribute('value'), '50');
+  assert.equal(progressElement.getAttribute('max'), '100');
+  assert.equal(pendingElement.getAttribute('fw-pending'), null);
+
+  const fragmentFailure = mutation('product-grid/reload', {
+    csrf: false,
+    input: s.object({ productId: s.string() }),
+    handler(input) {
+      return input;
+    },
+  });
+  const failureResponse = await renderMutationEndpointResponse(fragmentFailure, {
+    fragmentRenderers: [
+      errorBoundary(
+        {
+          render() {
+            throw new Error('fragment failed');
+          },
+          stylesheets: ['/assets/tailwind.css'],
+          target: 'product-grid',
+        },
+        {
+          render(error) {
+            return `<section role="alert">${error.message}</section>`;
+          },
+          target: 'product-grid-error',
+        },
+      ),
+    ],
+    headers: { 'FW-Fragment': 'true', 'FW-Targets': 'product-grid' },
+    rawInput: { productId: 'p1' },
+    request: {},
+  });
+
+  assert.deepEqual(failureResponse, {
+    body: '<fw-fragment target="product-grid-error" error-boundary="product-grid"><link rel="stylesheet" href="/assets/tailwind.css"><section role="alert">fragment failed</section></fw-fragment>',
+    headers: {
+      'Content-Type': 'text/vnd.jiso.fragment+html; charset=utf-8',
+      'FW-Changes': '[]',
+    },
+    status: 200,
+  });
 });
 
 void test('P10 commerce graph assertions answer behavior mechanically', async () => {
@@ -2416,63 +2633,346 @@ void test('P10 starter wires graph assertions into CI', async () => {
 void test('P9 verification layer evidence remains represented', async () => {
   const runtimeSource = await readProjectFile('packages/runtime/src/index.ts');
   const runtimeTests = await readProjectFile('packages/runtime/src/index.test.ts');
-  const testHarnessSource = await readProjectFile('packages/test/src/index.ts');
-  const testHarnessTests = await readProjectFile('packages/test/src/index.test.ts');
+  const createFakeDb = () => {
+    const tables = new Map();
+    return {
+      read(table, options) {
+        void options;
+        return tables.get(table) ?? [];
+      },
+      sql() {
+        return [];
+      },
+      write(table, value, options) {
+        void options;
+        tables.set(table, [...(tables.get(table) ?? []), value]);
+      },
+    };
+  };
+  const assertThrowsMessage = (callback, expected) => {
+    assert.throws(callback, (error) => error instanceof Error && error.message === expected);
+  };
+  const assertRejectsMessage = (promise, expected) =>
+    assert.rejects(promise, (error) => error instanceof Error && error.message === expected);
 
-  assert.match(testHarnessSource, /observeSql\(statement, config, observed\)/);
-  assert.match(testHarnessSource, /csrf\?: CsrfValidationOptions<Request>/);
-  assert.match(testHarnessSource, /const result = await runMutation\(/);
-  assert.match(
-    testHarnessSource,
-    /execOptions\?\.csrf === undefined \? \{\} : \{ csrf: execOptions\.csrf \}/,
+  for (const code of ['FW402', 'FW404', 'FW407', 'FW408', 'FW410', 'FW411']) {
+    assert.equal(typeof diagnosticDefinitions[code].message, 'string');
+  }
+
+  const csrfRequest = { session: { id: 's1' } };
+  const csrf = {
+    field: 'csrf',
+    secret: 'test-secret',
+    sessionId(request) {
+      return request.session.id;
+    },
+  };
+  let csrfMutationExecutions = 0;
+  const csrfMutation = mutation('cart/add', {
+    csrf,
+    input: s.object({ csrf: s.string(), productId: s.string() }),
+    handler(input) {
+      csrfMutationExecutions += 1;
+      return input.productId;
+    },
+  });
+  const csrfHarness = createJisoTestHarness({
+    db: {},
+    request: csrfRequest,
+  });
+  const token = csrfToken(csrfRequest, csrf);
+  assert.equal(csrfField(csrfRequest, csrf), `<input type="hidden" name="csrf" value="${token}">`);
+  assert.deepEqual(await csrfHarness.exec(csrfMutation, { csrf: token, productId: 'p1' }), {
+    changes: [],
+    ok: true,
+    rerunQueries: [],
+    value: 'p1',
+  });
+  assert.equal(csrfMutationExecutions, 1);
+  assert.deepEqual(await csrfHarness.exec(csrfMutation, { csrf: 'wrong', productId: 'p2' }), {
+    error: { code: 'CSRF', payload: {} },
+    ok: false,
+    status: 422,
+  });
+  assert.equal(csrfMutationExecutions, 1);
+
+  const writeMutation = mutation('cart/add', {
+    csrf: false,
+    input: s.object({ productId: s.string() }),
+    handler(input, request) {
+      request.db.write('cart_items', input.productId);
+      return input.productId;
+    },
+  });
+  const writeHarness = createJisoTestHarness({
+    db: createFakeDb(),
+    touchGraph: {
+      'cart.add': {
+        touches: [{ domain: 'cart', keys: null, site: 'cart.domain.ts:1', via: 'cart_items' }],
+        unresolved: [],
+      },
+    },
+    verification: { domainByTable: { audit_log: 'audit', cart_items: 'cart' } },
+  });
+  assert.deepEqual(
+    await writeHarness.exec(writeMutation, { productId: 'p1' }, { touchGraphKey: 'cart.add' }),
+    {
+      changes: [],
+      ok: true,
+      rerunQueries: [],
+      value: 'p1',
+    },
   );
-  assert.match(testHarnessSource, /prop === 'pglite'/);
-  assert.match(testHarnessSource, /prop === 'transaction'/);
-  assert.match(
-    testHarnessTests,
-    /verifies observed writes against the static touch graph after exec/,
+
+  const writeOutsideGraph = mutation('cart/add', {
+    csrf: false,
+    input: s.object({ productId: s.string() }),
+    handler(input, request) {
+      request.db.write('audit_log', input.productId);
+      return input.productId;
+    },
+  });
+  await assertRejectsMessage(
+    writeHarness.exec(writeOutsideGraph, { productId: 'p1' }, { touchGraphKey: 'cart.add' }),
+    'FW402 Write touched an undeclared domain: audit',
   );
-  assert.match(testHarnessTests, /verifies raw pglite handle calls against the static touch graph/);
-  assert.match(
-    testHarnessTests,
-    /verifies raw pglite transaction handle calls against the static touch graph/,
+
+  const unmappedVerifier = createDbVerifier(
+    { write: { touches: [], unresolved: [] } },
+    { domainByTable: {} },
   );
-  assert.match(
-    testHarnessTests,
-    /fails query-loader verification for reads outside declared domains/,
+  const unmappedDb = unmappedVerifier.wrap(createFakeDb());
+  unmappedDb.write('unknown_table', 'p1');
+  assertThrowsMessage(
+    () => unmappedVerifier.assertCovered('write'),
+    'FW404 Write to unmapped table: unknown_table',
   );
-  assert.match(testHarnessSource, /exemptTables\?: readonly string\[\]/);
-  assert.match(testHarnessSource, /assertNoExemptReads/);
-  assert.match(testHarnessTests, /fails read-side verification for exempt table reads/);
-  assert.match(
-    testHarnessTests,
-    /fails query-loader verification for raw SQL reads of exempt tables/,
+
+  const exemptWriteVerifier = createDbVerifier(
+    {},
+    { domainByTable: {}, exemptTables: ['audit_log'] },
   );
-  assert.match(testHarnessTests, /allows observed writes to exempt tables/);
-  assert.match(testHarnessTests, /verifies update-from SQL as a target write plus source reads/);
-  assert.match(testHarnessSource, /operationsForNestedStatements/);
-  assert.match(testHarnessTests, /verifies update expression subqueries as mutation reads/);
-  assert.match(testHarnessTests, /verifies select expression subqueries as query reads/);
-  assert.match(
-    testHarnessTests,
-    /accepts raw SQL compound predicates when one observed row key matches/,
+  const exemptWriteDb = exemptWriteVerifier.wrap(createFakeDb());
+  exemptWriteDb.write('audit_log', { event: 'restock' });
+  assert.doesNotThrow(() => exemptWriteVerifier.assertCovered());
+
+  const exemptReadVerifier = createDbVerifier(
+    {},
+    { domainByTable: { cart_items: 'cart' }, exemptTables: ['audit_log'] },
   );
-  assert.match(testHarnessTests, /checks row keys parsed from raw SQL query predicates/);
-  assert.match(testHarnessTests, /FW408 Declared row key differs from observed row predicate/);
-  assert.match(testHarnessSource, /diagnosticMessage\('FW402'/);
-  assert.match(testHarnessSource, /diagnosticMessage\('FW404'/);
-  assert.match(testHarnessSource, /diagnosticMessage\('FW407'/);
-  assert.match(testHarnessSource, /diagnosticMessage\('FW408'/);
-  assert.match(testHarnessSource, /diagnosticMessage\(\s*'FW410'/);
-  assert.match(testHarnessSource, /FW411_MESSAGE = 'Query read set includes an exempt table'/);
-  assert.match(testHarnessSource, /FW411 \$\{FW411_MESSAGE\}/);
-  assert.match(testHarnessTests, /validates query loader results against declared output schemas/);
-  assert.match(
-    testHarnessTests,
-    /fails query output verification when observed result shape violates the schema/,
+  const exemptReadDb = exemptReadVerifier.wrap(createFakeDb());
+  exemptReadDb.read('audit_log');
+  assertThrowsMessage(
+    () => exemptReadVerifier.assertReadsCovered(['cart']),
+    'FW411 Query read set includes an exempt table: audit_log',
   );
-  assert.match(testHarnessTests, /reports FW410 for nested query output shape mismatches/);
-  assert.match(testHarnessSource, /diagnosticDefinitions\[code\]\.message/);
+
+  const cart = domain('cart');
+  const product = domain('product');
+  const queryHarness = createJisoTestHarness({
+    db: createFakeDb(),
+    touchGraph: {},
+    verification: {
+      domainByTable: { audit_log: 'audit', cart_items: 'cart', products: 'product' },
+    },
+  });
+  const undeclaredReadQuery = query('cart', {
+    load() {
+      queryHarness.db.read('products');
+      return queryHarness.db.read('cart_items');
+    },
+    reads: [cart],
+  });
+  await assertRejectsMessage(
+    queryHarness.query(undeclaredReadQuery),
+    'FW407 Query read from undeclared domain: product',
+  );
+  const validOutputQuery = query('cart/count', {
+    load() {
+      queryHarness.db.read('cart_items');
+      return { count: 2 };
+    },
+    output: s.object({ count: s.number().int().min(0) }),
+    reads: [cart],
+  });
+  assert.deepEqual(await queryHarness.query(validOutputQuery), { count: 2 });
+  const invalidOutputQuery = query('product/list', {
+    load() {
+      queryHarness.db.read('products');
+      return { items: [{ id: 7 }] };
+    },
+    output: s.object({ items: s.array(s.object({ id: s.string() })) }),
+    reads: [product],
+  });
+  await assertRejectsMessage(
+    queryHarness.query(invalidOutputQuery),
+    'FW410 Query result shape failed declared output schema: product/list Expected string',
+  );
+  const exemptRawSqlQuery = query('cart/audit', {
+    load() {
+      exemptRawSqlHarness.db.sql('select * from audit_log');
+      return [];
+    },
+    reads: [cart],
+  });
+  const exemptRawSqlHarness = createJisoTestHarness({
+    db: createFakeDb(),
+    touchGraph: {},
+    verification: { domainByTable: { cart_items: 'cart' }, exemptTables: ['audit_log'] },
+  });
+  await assertRejectsMessage(
+    exemptRawSqlHarness.query(exemptRawSqlQuery),
+    'FW411 Query read set includes an exempt table: audit_log',
+  );
+
+  const nestedVerifier = createDbVerifier(
+    {
+      'product.syncPrice': {
+        reads: [
+          {
+            domain: 'price',
+            keys: null,
+            site: 'product.ts:2',
+            source: 'update-from',
+            via: 'prices',
+          },
+        ],
+        touches: [{ domain: 'product', keys: null, site: 'product.ts:1', via: 'products' }],
+        unresolved: [],
+      },
+    },
+    { domainByTable: { prices: 'price', products: 'product' } },
+  );
+  const nestedDb = nestedVerifier.wrap(createFakeDb());
+  nestedDb.sql(
+    'update products set price = prices.amount from prices where prices.product_id = products.id',
+  );
+  assert.doesNotThrow(() => nestedVerifier.assertCovered('product.syncPrice'));
+  assert.doesNotThrow(() => nestedVerifier.assertReadsCovered(['price']));
+
+  const missingNestedReadVerifier = createDbVerifier(
+    {
+      'product.syncPrice': {
+        touches: [{ domain: 'product', keys: null, site: 'product.ts:1', via: 'products' }],
+        unresolved: [],
+      },
+    },
+    { domainByTable: { prices: 'price', products: 'product' } },
+  );
+  const missingNestedReadDb = missingNestedReadVerifier.wrap(createFakeDb());
+  missingNestedReadDb.sql(
+    [
+      'update products set unit_price = (select max(amount) from prices)',
+      'where id in (select product_id from prices)',
+    ].join(' '),
+  );
+  assertThrowsMessage(
+    () => missingNestedReadVerifier.assertCovered('product.syncPrice'),
+    'FW407 Query read from undeclared domain: price, price',
+  );
+
+  const selectSubqueryVerifier = createDbVerifier(
+    {},
+    { domainByTable: { prices: 'price', products: 'product' } },
+  );
+  const selectSubqueryDb = selectSubqueryVerifier.wrap(createFakeDb());
+  selectSubqueryDb.sql('select * from products where id in (select product_id from prices)');
+  assertThrowsMessage(
+    () => selectSubqueryVerifier.assertReadsCovered(['product']),
+    'FW407 Query read from undeclared domain: price',
+  );
+  assert.doesNotThrow(() => selectSubqueryVerifier.assertReadsCovered(['product', 'price']));
+
+  const rowKeyVerifier = createDbVerifier(
+    {
+      'product.reserve': {
+        touches: [
+          { domain: 'product', keys: 'arg:productId', site: 'product.ts:1', via: 'products' },
+        ],
+        unresolved: [],
+      },
+    },
+    { domainByTable: { products: 'product' }, keyByTable: { products: 'id' } },
+  );
+  const rowKeyDb = rowKeyVerifier.wrap(createFakeDb());
+  rowKeyDb.sql("update products set reserved = true where sku = 'sku-1'");
+  assertThrowsMessage(
+    () => rowKeyVerifier.assertCovered('product.reserve'),
+    'FW408 Declared row key differs from observed row predicate: products expected id observed sku',
+  );
+
+  const compoundRowKeyVerifier = createDbVerifier(
+    {
+      'product.reserve': {
+        touches: [
+          { domain: 'product', keys: 'arg:productId', site: 'product.ts:1', via: 'products' },
+        ],
+        unresolved: [],
+      },
+    },
+    { domainByTable: { products: 'product' }, keyByTable: { products: 'id' } },
+  );
+  const compoundRowKeyDb = compoundRowKeyVerifier.wrap(createFakeDb());
+  compoundRowKeyDb.sql("update products set reserved = true where sku = 'sku-1' and id = 'p1'");
+  assert.doesNotThrow(() => compoundRowKeyVerifier.assertCovered('product.reserve'));
+
+  const pgliteHandle = {
+    exec() {
+      return [];
+    },
+    query() {
+      return [];
+    },
+    transaction(callback) {
+      return callback({
+        exec() {
+          return [];
+        },
+        query() {
+          return [];
+        },
+      });
+    },
+  };
+  const pgliteHarness = createJisoTestHarness({
+    db: { pglite: pgliteHandle },
+    touchGraph: {
+      'cart.add': {
+        touches: [{ domain: 'cart', keys: null, site: 'cart.domain.ts:1', via: 'cart_items' }],
+        unresolved: [],
+      },
+    },
+    verification: { domainByTable: { audit_log: 'audit', cart_items: 'cart' } },
+  });
+  const rawPgliteMutation = mutation('cart/add', {
+    csrf: false,
+    input: s.object({ productId: s.string() }),
+    async handler(input, request) {
+      await request.db.pglite.query('insert into audit_log (product_id) values ($1)', [
+        input.productId,
+      ]);
+      return input.productId;
+    },
+  });
+  await assertRejectsMessage(
+    pgliteHarness.exec(rawPgliteMutation, { productId: 'p1' }, { touchGraphKey: 'cart.add' }),
+    'FW402 Write touched an undeclared domain: audit',
+  );
+  const transactionMutation = mutation('cart/add-transaction', {
+    csrf: false,
+    input: s.object({ productId: s.string() }),
+    async handler(input, request) {
+      await request.db.pglite.transaction(async (tx) => {
+        await tx.query('insert into audit_log (product_id) values ($1)', [input.productId]);
+      });
+      return input.productId;
+    },
+  });
+  await assertRejectsMessage(
+    pgliteHarness.exec(transactionMutation, { productId: 'p2' }, { touchGraphKey: 'cart.add' }),
+    'FW402 Write touched an undeclared domain: audit',
+  );
+
   assert.equal(
     fwCheck({
       diagnostics: [
