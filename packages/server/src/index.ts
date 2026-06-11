@@ -1821,7 +1821,7 @@ function routeOutcomeHeaders(outcome: RouteResponseOutcome): Record<string, stri
     'Content-Disposition': outcome.contentDisposition,
     'Content-Type': outcome.contentType,
     ...(outcome.etag === undefined ? {} : { ETag: outcome.etag }),
-    ...(outcome.headers ?? {}),
+    ...outcome.headers,
   };
 }
 

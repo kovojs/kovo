@@ -15,6 +15,7 @@ Scope: `packages/compiler/src/` only (plus `tests/fw-check.node.mjs` where gate 
 - [x] Extracted handler lowering/FW201-FW210 event attribute analysis into `src/lower/handlers.ts`, preserving versioned `on:*` refs and element param derivation.
 - [x] Extracted server IR emission/render-equivalence source stamping into `src/emit/server.ts`, preserving handler attribute replacement plus SPEC §5.2 `fw-deps`/`fw-state` stamps.
 - [x] Consolidated object-literal scanner helpers into `src/scan/object.ts`; callers in `index.ts`, `lower/navigation.ts`, and `validate/bindings.ts` now share one implementation.
+- [x] Extracted markup validators into `src/validate/markup.ts`: FW221 IDREFs, FW224 static ids, FW225 content model, FW226 residual stamps, and FW231/FW232/FW233 primitive merge conflicts.
 - [x] Fixed known Phase 0 miscompiles that are directly covered by regression tests: self-closing same-name JSX, nested handler braces/span rewrites, exact handler attribute replacement, static state string JSON, handler parameter substring collisions, and conditional at-rule CSS fallback scoping.
 - [x] Migrated large parts of Phase 3 onto the parser model: component/options extraction, JSX element/attribute validators, mutation handler extraction, query binding/stamp collection, update coverage, event trigger justification, and identifier-reference analysis for FW201.
 - [ ] Finish the Phase 2 module split: most orchestration and several validators/lowerers/emitters still live in `packages/compiler/src/index.ts`.

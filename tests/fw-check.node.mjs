@@ -501,14 +501,15 @@ void test('P1 compiler validates component-scoped IDREFs', async () => {
   const coreSource = await readProjectFile('packages/core/src/diagnostics.ts');
   const coreTests = await readProjectFile('packages/core/src/diagnostics.test.ts');
   const compilerSource = await readProjectFile('packages/compiler/src/index.ts');
+  const compilerMarkupSource = await readProjectFile('packages/compiler/src/validate/markup.ts');
   const compilerTests = await readProjectFile('packages/compiler/src/index.test.ts');
 
   assert.match(coreSource, /FW221/);
   assert.match(coreSource, /IDREF references an id not present in component scope/);
   assert.match(coreTests, /"FW221"/);
   assert.match(compilerSource, /validateIdrefs/);
-  assert.match(compilerSource, /aria-describedby/);
-  assert.match(compilerSource, /diagnosticDefinitions\.FW221\.message/);
+  assert.match(compilerMarkupSource, /aria-describedby/);
+  assert.match(compilerMarkupSource, /diagnosticDefinitions\.FW221\.message/);
   assert.match(compilerTests, /accepts literal IDREFs that reference ids in component scope/);
   assert.match(compilerTests, /reports FW221 for literal IDREFs that miss component scope ids/);
 });
@@ -516,13 +517,14 @@ void test('P1 compiler validates component-scoped IDREFs', async () => {
 void test('P1 compiler validates static id uniqueness', async () => {
   const coreSource = await readProjectFile('packages/core/src/diagnostics.ts');
   const compilerSource = await readProjectFile('packages/compiler/src/index.ts');
+  const compilerMarkupSource = await readProjectFile('packages/compiler/src/validate/markup.ts');
   const compilerTests = await readProjectFile('packages/compiler/src/index.test.ts');
 
   assert.match(coreSource, /FW224/);
   assert.match(coreSource, /Static id appears in a repeatable component/);
   assert.match(compilerSource, /validateStaticIds/);
-  assert.match(compilerSource, /repeatableLiteralIds/);
-  assert.match(compilerSource, /fw224Diagnostic/);
+  assert.match(compilerMarkupSource, /repeatableLiteralIds/);
+  assert.match(compilerMarkupSource, /fw224Diagnostic/);
   assert.match(compilerTests, /reports FW224 for duplicate literal ids in component scope/);
   assert.match(compilerTests, /reports FW224 for static ids inside repeatable list stamps/);
   assert.match(compilerTests, /duplicate id="cart-title"/);
@@ -532,13 +534,14 @@ void test('P1 compiler validates static id uniqueness', async () => {
 void test('P1 compiler validates HTML content-model parser stability', async () => {
   const coreSource = await readProjectFile('packages/core/src/diagnostics.ts');
   const compilerSource = await readProjectFile('packages/compiler/src/index.ts');
+  const compilerMarkupSource = await readProjectFile('packages/compiler/src/validate/markup.ts');
   const compilerTests = await readProjectFile('packages/compiler/src/index.test.ts');
 
   assert.match(coreSource, /FW225/);
   assert.match(coreSource, /JSX nesting violates the HTML content model/);
   assert.match(compilerSource, /validateHtmlContentModel/);
-  assert.match(compilerSource, /blockTagsThatCloseParagraph/);
-  assert.match(compilerSource, /diagnosticDefinitions\.FW225\.message/);
+  assert.match(compilerMarkupSource, /blockTagsThatCloseParagraph/);
+  assert.match(compilerMarkupSource, /diagnosticDefinitions\.FW225\.message/);
   assert.match(
     compilerTests,
     /accepts native table rows when the parser keeps the authored tree shape/,
@@ -569,12 +572,13 @@ void test('P1 compiler validates declared execution trigger names', async () => 
 void test('P1 compiler validates residual fw-c and fw-deps stamps', async () => {
   const coreSource = await readProjectFile('packages/core/src/diagnostics.ts');
   const compilerSource = await readProjectFile('packages/compiler/src/index.ts');
+  const compilerMarkupSource = await readProjectFile('packages/compiler/src/validate/markup.ts');
   const compilerTests = await readProjectFile('packages/compiler/src/index.test.ts');
 
   assert.match(coreSource, /FW226/);
   assert.match(coreSource, /fw-deps or fw-c names an unknown query instance or component/);
   assert.match(compilerSource, /validateResidualStamps/);
-  assert.match(compilerSource, /fw226Diagnostic/);
+  assert.match(compilerMarkupSource, /fw226Diagnostic/);
   assert.match(
     compilerTests,
     /validates residual fw-c and fw-deps stamps against known component and query facts/,
@@ -639,6 +643,7 @@ void test('P1 compiler validates binding stamp expression drift', async () => {
 void test('P1 compiler validates primitive composition attribute merges', async () => {
   const coreSource = await readProjectFile('packages/core/src/diagnostics.ts');
   const compilerSource = await readProjectFile('packages/compiler/src/index.ts');
+  const compilerMarkupSource = await readProjectFile('packages/compiler/src/validate/markup.ts');
   const compilerTests = await readProjectFile('packages/compiler/src/index.test.ts');
 
   assert.match(coreSource, /FW231/);
@@ -651,9 +656,9 @@ void test('P1 compiler validates primitive composition attribute merges', async 
   assert.match(compilerSource, /validateAttributeMergeConflicts/);
   assert.match(compilerParseSource, /interface JsxAttributeModel/);
   assert.match(compilerParseSource, /function jsxElements/);
-  assert.match(compilerSource, /ambiguousRelationshipAttributes/);
-  assert.match(compilerSource, /primitiveOwnedOverrideAttributes/);
-  assert.match(compilerSource, /attributeMergeDiagnostic/);
+  assert.match(compilerMarkupSource, /ambiguousRelationshipAttributes/);
+  assert.match(compilerMarkupSource, /primitiveOwnedOverrideAttributes/);
+  assert.match(compilerMarkupSource, /attributeMergeDiagnostic/);
   assert.match(
     compilerTests,
     /reports FW231, FW232, and FW233 for residual attribute merge conflicts/,
