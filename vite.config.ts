@@ -48,7 +48,7 @@ export default defineConfig({
         ],
       },
       'fw-check': {
-        command: 'node --test tests/fw-check.node.mjs',
+        command: 'node scripts/fw-check.mjs',
         input: [
           { auto: true },
           { pattern: 'SPEC.md', base: 'workspace' },
@@ -57,9 +57,11 @@ export default defineConfig({
           { pattern: '.github/workflows/ci.yml', base: 'workspace' },
           { pattern: 'docs/**', base: 'workspace' },
           { pattern: 'examples/commerce/src/**', base: 'workspace' },
+          { pattern: 'examples/commerce/src/generated/graph.json', base: 'workspace' },
           { pattern: 'fixtures/wire/**', base: 'workspace' },
           { pattern: 'package.json', base: 'workspace' },
           { pattern: 'packages/**/src/**', base: 'workspace' },
+          { pattern: 'scripts/fw-check.mjs', base: 'workspace' },
           { pattern: 'tests/fw-check.node.mjs', base: 'workspace' },
           { pattern: 'tests/p10-perf.node.mjs', base: 'workspace' },
           { pattern: 'vite.config.ts', base: 'workspace' },

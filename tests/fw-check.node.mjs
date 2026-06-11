@@ -554,6 +554,9 @@ void test('D4 commerce adopt-dont-invent features stay represented', async () =>
 void test('P10 commerce graph assertions answer behavior mechanically', async () => {
   const commerceTests = await readProjectFile('examples/commerce/src/app.test.ts');
   const cliTests = await readProjectFile('packages/cli/src/index.test.ts');
+  const fwCheckRunner = await readProjectFile('scripts/fw-check.mjs');
+  const graphArtifact = await readProjectFile('examples/commerce/src/generated/graph.json');
+  const viteConfig = await readProjectFile('vite.config.ts');
 
   assert.match(
     commerceTests,
@@ -574,6 +577,15 @@ void test('P10 commerce graph assertions answer behavior mechanically', async ()
   assert.match(commerceTests, /shapeCommerceCartQuery/);
   assert.match(commerceTests, /commerceAddToCartPropertyCases/);
   assert.match(commerceTests, /cases: 18/);
+  assert.match(commerceTests, /generated\/graph\.json/);
+  assert.match(commerceTests, /fwCheck\(graphArtifact\)/);
+  assert.match(fwCheckRunner, /tests\/fw-check\.node\.mjs/);
+  assert.match(fwCheckRunner, /dist\/cli\/src\/index\.mjs/);
+  assert.match(fwCheckRunner, /examples\/commerce\/src\/generated\/graph\.json/);
+  assert.match(viteConfig, /command: 'node scripts\/fw-check\.mjs'/);
+  assert.match(viteConfig, /examples\/commerce\/src\/generated\/graph\.json/);
+  assert.match(graphArtifact, /"touchGraph"/);
+  assert.match(graphArtifact, /"cart\.addItem"/);
 });
 
 void test('P10 starter wires graph assertions into CI', async () => {

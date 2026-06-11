@@ -1,0 +1,109 @@
+{
+  "components": [
+    {
+      "fragments": ["cart-badge"],
+      "name": "CartBadge",
+      "queries": ["cart"]
+    },
+    {
+      "fragments": ["product-grid"],
+      "name": "ProductGrid",
+      "queries": ["productGrid"]
+    },
+    {
+      "fragments": ["order-history"],
+      "name": "OrderHistory",
+      "queries": ["orderHistory"]
+    }
+  ],
+  "mutations": [
+    {
+      "guards": ["authed", "rateLimit:session"],
+      "invalidates": ["cart", "product", "order"],
+      "inputFields": ["productId", "quantity"],
+      "key": "cart/add",
+      "session": "commerceSession",
+      "writes": ["cart", "product", "order"]
+    },
+    {
+      "enctype": "multipart/form-data",
+      "fileFields": ["receipt"],
+      "guards": ["authed", "rateLimit:session"],
+      "inputFields": ["orderId", "receipt"],
+      "key": "order/receipt",
+      "session": "commerceSession"
+    }
+  ],
+  "optimistic": [
+    {
+      "mutation": "cart/add",
+      "query": "cart",
+      "status": "hand-written"
+    },
+    {
+      "mutation": "cart/add",
+      "query": "productGrid",
+      "status": "await-fragment"
+    },
+    {
+      "mutation": "cart/add",
+      "query": "orderHistory",
+      "status": "await-fragment"
+    }
+  ],
+  "pages": [
+    {
+      "i18n": ["en-US:cartLabel,productStock"],
+      "meta": {
+        "description": "Browse products and checkout with 1 verifiable cart item.",
+        "title": "Jiso Commerce (1)"
+      },
+      "modulepreloads": [],
+      "prefetch": false,
+      "queries": ["cart", "productGrid", "orderHistory"],
+      "route": "/cart",
+      "stylesheets": ["/assets/tailwind.css"]
+    }
+  ],
+  "queries": [
+    {
+      "domains": ["cart"],
+      "query": "cart"
+    },
+    {
+      "domains": ["product"],
+      "query": "productGrid"
+    },
+    {
+      "domains": ["order"],
+      "query": "orderHistory"
+    }
+  ],
+  "touchGraph": {
+    "cart.addItem": {
+      "touches": [
+        {
+          "domain": "cart",
+          "keys": null,
+          "site": "examples/commerce/src/app.ts:196",
+          "via": "cart_items"
+        },
+        {
+          "domain": "order",
+          "keys": null,
+          "site": "examples/commerce/src/app.ts:201",
+          "via": "orders"
+        },
+        {
+          "domain": "product",
+          "keys": "arg:productId",
+          "predicate": "eq",
+          "site": "examples/commerce/src/app.ts:208",
+          "via": "products"
+        }
+      ],
+      "reads": [],
+      "unresolved": []
+    }
+  }
+}

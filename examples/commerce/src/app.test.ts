@@ -631,6 +631,12 @@ describe('commerce example', () => {
   });
 
   it('ships graph facts for fw check and explain acceptance', () => {
+    const graphArtifact = JSON.parse(
+      readFileSync(new URL('./generated/graph.json', import.meta.url), 'utf8'),
+    );
+
+    expect(graphArtifact).toEqual(commerceGraph);
+    expect(fwCheck(graphArtifact).output).toBe('fw-check/v1\nOK\n');
     expect(addToCart.registry?.touches).toBeUndefined();
     expect(addToCart.registry?.inferredTouches).toEqual(commerceTouchGraph['cart.addItem'].touches);
     expect(commerceTouchGraph).toEqual({
