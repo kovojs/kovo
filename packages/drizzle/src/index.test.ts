@@ -373,6 +373,31 @@ export interface CommerceInvalidationSets {
     });
   });
 
+  it('omits write-side-only exempt table writes from the touch graph', () => {
+    const graph = extractTouchGraphFromSource([
+      {
+        fileName: 'product.domain.ts',
+        source: `
+          export const auditLog = pgTable("audit_log", {}, jiso({ exempt: true }));
+          export const products = pgTable("products", {}, jiso({ domain: "product", key: "id" }));
+
+          export async function restockProduct(db) {
+            await db.insert(auditLog).values({ event: "restock" });
+            await db.update(products).set({ stock: 10 });
+          }
+        `,
+      },
+    ]);
+
+    expect(graph).toEqual({
+      restockProduct: {
+        reads: [],
+        touches: [{ domain: 'product', keys: null, site: 'product.domain.ts:7', via: 'products' }],
+        unresolved: [],
+      },
+    });
+  });
+
   it('extracts writes from exported variable-assigned mutation handlers', () => {
     const graph = extractTouchGraphFromSource([
       {
@@ -610,6 +635,55 @@ export interface CommerceInvalidationSets {
           productId: 'string',
         },
         site: 'cart.queries.ts:5',
+      },
+    ]);
+  });
+
+  it('reports FW411 when a query read set includes an exempt table', () => {
+    const facts = extractQueryFactsFromSource([
+      {
+        fileName: 'product.queries.ts',
+        source: `
+          export const auditLog = pgTable("audit_log", {}, jiso({ exempt: true }));
+          export const products = pgTable("products", {}, jiso({ domain: "product", key: "id" }));
+
+          export const productQuery = query("product", {
+            async load(_input, db) {
+              return db.select({
+                message: auditLog.message,
+                name: products.name,
+              }).from(products).leftJoin(auditLog, eq(auditLog.productId, products.id));
+            },
+          });
+        `,
+      },
+    ]);
+
+    expect(facts).toEqual([
+      {
+        diagnostics: [
+          {
+            code: 'FW411',
+            message: 'Query read set includes an exempt table. Tables: audit_log.',
+            severity: 'error',
+            site: 'product.queries.ts:5',
+          },
+        ],
+        query: 'product',
+        reads: ['product'],
+        shape: {
+          message: 'string',
+          name: 'string',
+        },
+        site: 'product.queries.ts:5',
+      },
+    ]);
+    expect(diagnosticsForQueryFacts(facts)).toEqual([
+      {
+        code: 'FW411',
+        message: 'Query read set includes an exempt table. Tables: audit_log.',
+        severity: 'error',
+        site: 'product.queries.ts:5',
       },
     ]);
   });

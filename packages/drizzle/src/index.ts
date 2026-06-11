@@ -55,13 +55,26 @@ const IGNORED_LOCAL_CALL_NAMES = new Set([
 ]);
 const EXPORTED_CONST_DECLARATION_SOURCE = String.raw`(?:export\s+)?const\s+`;
 const VARIABLE_DECLARATION_SOURCE = String.raw`(?:export\s+)?(?:const|let|var)\s+`;
+const FW411_MESSAGE = 'Query read set includes an exempt table';
 
-export interface JisoTableAnnotation {
+export type JisoTableAnnotation =
+  | {
+      domain: string;
+      key?: string;
+    }
+  | {
+      exempt: true;
+    };
+
+interface JisoDomainTableAnnotation {
   domain: string;
   key?: string;
 }
 
-export type JisoTableExtraConfig = JisoTableAnnotation & ((self: unknown) => []);
+export type JisoTableExtraConfig = JisoDomainTableAnnotation &
+  ((self: unknown) => []) & {
+    exempt?: true;
+  };
 
 export function jiso(annotation: JisoTableAnnotation): JisoTableExtraConfig {
   return Object.assign((() => []) as (self: unknown) => [], annotation) as JisoTableExtraConfig;
@@ -97,7 +110,7 @@ export interface QueryFact {
 }
 
 export interface DomainRegistryInput {
-  table: JisoTableAnnotation & { name: string };
+  table: JisoDomainTableAnnotation & { name: string };
 }
 
 export interface WriteSummaryInput {
@@ -105,7 +118,7 @@ export interface WriteSummaryInput {
   operation: string;
   predicate?: 'eq' | 'non-eq';
   site: string;
-  table: JisoTableAnnotation & { name: string };
+  table: JisoDomainTableAnnotation & { name: string };
   writeKey?: string;
 }
 
@@ -115,7 +128,7 @@ export interface ReadSummaryInput {
   predicate?: 'eq' | 'non-eq';
   readKey?: string;
   site: string;
-  table: JisoTableAnnotation & { name: string };
+  table: JisoDomainTableAnnotation & { name: string };
 }
 
 export interface UnresolvedSummaryInput {
@@ -276,13 +289,7 @@ function extractTouchGraphFromPreparedFiles(
 
   for (const file of files) {
     for (const table of extractTables(file.source)) {
-      appendTable(tables, table.identifier, {
-        annotation: {
-          domain: table.domain,
-          ...(table.key ? { key: table.key } : {}),
-          name: table.name,
-        },
-      });
+      appendTable(tables, table.identifier, { annotation: table });
     }
   }
   for (const file of files) {
@@ -574,13 +581,7 @@ export function extractQueryFactsFromSource(files: readonly SourceFileInput[]): 
 
   for (const file of files) {
     for (const table of extractTables(file.source)) {
-      appendTable(tables, table.identifier, {
-        annotation: {
-          domain: table.domain,
-          ...(table.key ? { key: table.key } : {}),
-          name: table.name,
-        },
-      });
+      appendTable(tables, table.identifier, { annotation: table });
     }
   }
   for (const file of files) {
@@ -602,7 +603,9 @@ export function extractQueryFactsFromSource(files: readonly SourceFileInput[]): 
         query.opaquePaths,
         site,
         hasDeclaredQueryOutputSchema(query.body),
-      ).concat(query.diagnostics?.map((diagnostic) => ({ ...diagnostic, site })) ?? []);
+      )
+        .concat(query.diagnostics?.map((diagnostic) => ({ ...diagnostic, site })) ?? [])
+        .concat(exemptQueryReadDiagnostics(query.body, tables, site));
       facts.push({
         ...(diagnostics.length > 0 ? { diagnostics } : {}),
         ...queryInstanceKey(query.body, tables),
@@ -906,12 +909,10 @@ function tableNameArgument(initializer: Node): string | undefined {
   return name.getLiteralText();
 }
 
-interface ExtractedTableDeclaration {
-  domain: string;
+type ExtractedTableDeclaration = JisoTableAnnotation & {
   identifier: string;
-  key?: string;
   name: string;
-}
+};
 
 interface ExtractedFunction {
   body: string;
@@ -1232,11 +1233,37 @@ function queryReadDomains(
 
   for (const tableExpression of queryTableExpressions(body)) {
     for (const table of tables.get(tableExpression) ?? []) {
+      if (!isDomainTableAnnotation(table.annotation)) continue;
       domains.add(table.annotation.domain);
     }
   }
 
   return [...domains].sort();
+}
+
+function exemptQueryReadDiagnostics(
+  body: string,
+  tables: ReadonlyMap<string, readonly ExtractedTable[]>,
+  site: string,
+): TouchGraphDiagnostic[] {
+  const exemptTables = new Set<string>();
+
+  for (const tableExpression of queryTableExpressions(body)) {
+    for (const table of tables.get(tableExpression) ?? []) {
+      if (isExemptTableAnnotation(table.annotation)) exemptTables.add(table.annotation.name);
+    }
+  }
+
+  if (exemptTables.size === 0) return [];
+
+  return [
+    {
+      code: 'FW411',
+      message: `${FW411_MESSAGE}. Tables: ${[...exemptTables].sort().join(', ')}.`,
+      severity: 'error',
+      site,
+    },
+  ];
 }
 
 function queryTableExpressions(body: string): string[] {
@@ -1289,7 +1316,7 @@ function tableKeyExpression(
   if (!tableName || !key) return null;
 
   for (const table of tables.get(tableName) ?? []) {
-    if (table.annotation.key === key) {
+    if (isDomainTableAnnotation(table.annotation) && table.annotation.key === key) {
       return { domain: table.annotation.domain };
     }
   }
@@ -1321,6 +1348,7 @@ function directSummaryForFunction(
 
     if (resolvedTables.length > 0) {
       for (const table of resolvedTables) {
+        if (isExemptTableAnnotation(table.annotation)) continue;
         const writePredicate = extractPredicateSummary(
           call.statement,
           call.tableExpression,
@@ -1338,6 +1366,7 @@ function directSummaryForFunction(
         const readTables = tables.get(readSource.tableExpression) ?? [];
         if (readTables.length > 0) {
           for (const readTable of readTables) {
+            if (isExemptTableAnnotation(readTable.annotation)) continue;
             const readPredicate = extractPredicateSummary(
               call.statement,
               readSource.tableExpression,
@@ -1451,16 +1480,12 @@ function extractTables(source: string): ExtractedTableDeclaration[] {
     if (!isAnnotatedTableInitializerNode(initializer)) continue;
 
     const annotation = tableAnnotation(initializer);
-    const domain = annotation?.domain;
-    if (!domain) continue;
-
-    const key = annotation.key;
+    if (!annotation) continue;
 
     const table = {
-      domain,
       identifier,
-      ...(key ? { key } : {}),
       name: tableNameArgument(initializer) ?? identifier,
+      ...annotation,
     };
     tables.push(table);
     appendTable(byIdentifier, identifier, table);
@@ -1472,10 +1497,9 @@ function extractTables(source: string): ExtractedTableDeclaration[] {
     for (const target of aliasTargets(declaration.initializer.getText())) {
       for (const table of byIdentifier.get(target) ?? []) {
         const alias = {
-          domain: table.domain,
           identifier: declaration.identifier,
-          ...(table.key ? { key: table.key } : {}),
           name: table.name,
+          ...copyTableAnnotation(table),
         };
         tables.push(alias);
         appendTable(byIdentifier, alias.identifier, alias);
@@ -1493,10 +1517,28 @@ function tableAnnotation(initializer: Node): JisoTableAnnotation | null {
   const annotationObject = annotationCall.getArguments()[0];
   if (!annotationObject || !Node.isObjectLiteralExpression(annotationObject)) return null;
 
+  if (booleanPropertyFromObject(annotationObject, 'exempt') === true) return { exempt: true };
   const domain = stringPropertyFromObject(annotationObject, 'domain');
   if (!domain) return null;
   const key = stringPropertyFromObject(annotationObject, 'key');
   return { domain, ...(key ? { key } : {}) };
+}
+
+function copyTableAnnotation(table: ExtractedTableDeclaration): JisoTableAnnotation {
+  if (isExemptTableAnnotation(table)) return { exempt: true };
+  return { domain: table.domain, ...(table.key ? { key: table.key } : {}) };
+}
+
+function isDomainTableAnnotation(
+  annotation: JisoTableAnnotation & { name?: string },
+): annotation is JisoDomainTableAnnotation & { name: string } {
+  return 'domain' in annotation;
+}
+
+function isExemptTableAnnotation(
+  annotation: JisoTableAnnotation & { name?: string },
+): annotation is { exempt: true; name: string } {
+  return 'exempt' in annotation && annotation.exempt === true;
 }
 
 function stringPropertyFromObject(object: Node, name: string): string | undefined {
@@ -1508,6 +1550,22 @@ function stringPropertyFromObject(object: Node, name: string): string | undefine
 
     const initializer = property.getInitializer();
     if (initializer && Node.isStringLiteral(initializer)) return initializer.getLiteralText();
+  }
+
+  return undefined;
+}
+
+function booleanPropertyFromObject(object: Node, name: string): boolean | undefined {
+  if (!Node.isObjectLiteralExpression(object)) return undefined;
+
+  for (const property of object.getProperties()) {
+    if (!Node.isPropertyAssignment(property)) continue;
+    if (propertyNameText(property.getNameNode()) !== name) continue;
+
+    const initializer = property.getInitializer();
+    if (!initializer) return undefined;
+    if (initializer.getKind() === SyntaxKind.TrueKeyword) return true;
+    if (initializer.getKind() === SyntaxKind.FalseKeyword) return false;
   }
 
   return undefined;
@@ -1997,7 +2055,7 @@ function isStatementBoundary(source: string, start: number): boolean {
 function extractPredicateSummary(
   statement: string,
   tableIdentifier: string,
-  table: JisoTableAnnotation,
+  table: JisoDomainTableAnnotation,
 ): ExtractedPredicateSummary {
   const predicate = wherePredicate(statement);
   const key = predicate ? extractParameterizedKey(predicate, tableIdentifier, table) : undefined;
@@ -2020,7 +2078,7 @@ function wherePredicate(statement: string): string | undefined {
 function extractParameterizedKey(
   predicate: string,
   tableIdentifier: string,
-  table: JisoTableAnnotation,
+  table: JisoDomainTableAnnotation,
 ): string | undefined {
   if (!table.key) return undefined;
 
@@ -2037,7 +2095,7 @@ function extractParameterizedKey(
 function hasNonEqPredicate(
   predicate: string | undefined,
   tableIdentifier: string,
-  table: JisoTableAnnotation,
+  table: JisoDomainTableAnnotation,
 ): boolean {
   if (!table.key) return false;
 

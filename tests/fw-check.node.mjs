@@ -296,7 +296,7 @@ void test('P10 legibility study packet is ready but not claimed complete', async
   const study = await readProjectFile('docs/legibility-study.md');
 
   assert.match(study, /SPEC\.md` section 16\.2 requires an actual usability study/);
-  assert.match(study, /Required participants: 5 outside developers/);
+  assert.match(study, /Required participants: five outside developers/);
   assert.match(study, /under 60 seconds/);
   assert.match(study, /Button behavior/);
   assert.match(study, /Island data/);
@@ -304,7 +304,7 @@ void test('P10 legibility study packet is ready but not claimed complete', async
   assert.match(study, /Optimism/);
   assert.match(study, /Failure path/);
   assert.match(study, /pending-5/);
-  assert.match(study, /Do not mark v1 legibility complete/);
+  assert.match(study, /Do not mark SPEC §16\.2 or P10 legibility complete/);
 });
 
 void test('P10 v1 acceptance ledger tracks every freeze criterion', async () => {
@@ -316,15 +316,15 @@ void test('P10 v1 acceptance ledger tracks every freeze criterion', async () => 
   assert.match(ledger, /Verifiability/);
   assert.match(ledger, /Constitution/);
   assert.match(ledger, /Coverage/);
+  assert.match(ledger, /Commerce matrix assertions in `examples\/commerce\/src\/app\.test\.ts`/);
+  assert.match(ledger, /Navigation typed/);
   assert.match(
     ledger,
-    /Commerce full mutation\/query matrix in `examples\/commerce\/src\/app\.test\.ts`/,
+    /Commerce route\/link\/redirect checks plus route-rename proof in `packages\/runtime\/src\/index\.test\.ts`/,
   );
-  assert.match(ledger, /Navigation typed/);
-  assert.match(ledger, /route-rename proof in `packages\/runtime\/src\/index\.test\.ts`/);
   assert.match(ledger, /Declared execution/);
   assert.match(ledger, /Update coverage/);
-  assert.match(ledger, /FW311\/update-coverage graph assertions and `fw check coverage` snapshots/);
+  assert.match(ledger, /FW311\/update-coverage graph assertions and `fw check coverage` output/);
   assert.match(ledger, /Pre-launch/);
   assert.match(ledger, /Do not mark `IMPLEMENT_v1\.md` P10 complete/);
 });
@@ -479,11 +479,11 @@ void test('P3 server renders initial query scripts for document-load hydration',
 });
 
 void test('P2 page hints keep speculation rules opt-in and non-empty', async () => {
-  const serverSource = await readProjectFile('packages/server/src/index.ts');
+  const serverHintsSource = await readProjectFile('packages/server/src/hints.ts');
   const serverTests = await readProjectFile('packages/server/src/index.test.ts');
 
-  assert.match(serverSource, /const prerenderUrls = dedupe\(urls\)/);
-  assert.match(serverSource, /prerenderUrls\.length === 0/);
+  assert.match(serverHintsSource, /const prerenderUrls = dedupe\(urls\)/);
+  assert.match(serverHintsSource, /prerenderUrls\.length === 0/);
   assert.match(serverTests, /prefetch: 'moderate', prerenderUrls: \['', ''\]/);
 });
 
@@ -689,7 +689,12 @@ void test('P3 typed routes validate navigation targets', async () => {
   const diagnosticsSource = await readProjectFile('packages/core/src/diagnostics.ts');
   const compilerGraphSource = await readProjectFile('packages/compiler/src/graph.ts');
   const compilerRegistrySource = await readProjectFile('packages/compiler/src/emit/registry.ts');
-  const compilerSource = await readProjectFile('packages/compiler/src/index.ts');
+  const compilerNavigationLoweringSource = await readProjectFile(
+    'packages/compiler/src/lower/navigation.ts',
+  );
+  const compilerNavigationSource = await readProjectFile(
+    'packages/compiler/src/validate/navigation.ts',
+  );
   const compilerTests = await readProjectFile('packages/compiler/src/index.test.ts');
   const serverSource = await readProjectFile('packages/server/src/index.ts');
   const serverTests = await readProjectFile('packages/server/src/index.test.ts');
@@ -708,10 +713,10 @@ void test('P3 typed routes validate navigation targets', async () => {
   assert.match(coreTests, /productFilter\.input\('max'\)/);
   assert.match(coreTests, /productFilter\.input\('sku'\)/);
   assert.match(compilerGraphSource, /routes\?: readonly string\[\]/);
-  assert.match(compilerSource, /lowerNavigationSugar/);
-  assert.match(compilerSource, /lowerStaticLinks/);
-  assert.match(compilerSource, /lowerStaticHrefCalls/);
-  assert.match(compilerSource, /validateLiteralHrefs/);
+  assert.match(compilerNavigationLoweringSource, /lowerNavigationSugar/);
+  assert.match(compilerNavigationLoweringSource, /lowerStaticLinks/);
+  assert.match(compilerNavigationLoweringSource, /lowerStaticHrefCalls/);
+  assert.match(compilerNavigationSource, /validateLiteralHrefs/);
   assert.match(compilerRegistrySource, /routeRegistryFactLines/);
   assert.match(
     compilerTests,
@@ -917,6 +922,7 @@ void test('D1 commerce enhanced fragments carry Tailwind stylesheet hints', asyn
   const compilerCssSource = await readProjectFile('packages/compiler/src/css.ts');
   const compilerSource = await readProjectFile('packages/compiler/src/index.ts');
   const compilerTests = await readProjectFile('packages/compiler/src/index.test.ts');
+  const serverHintsSource = await readProjectFile('packages/server/src/hints.ts');
   const serverSource = await readProjectFile('packages/server/src/index.ts');
   const serverTests = await readProjectFile('packages/server/src/index.test.ts');
 
@@ -943,9 +949,9 @@ void test('D1 commerce enhanced fragments carry Tailwind stylesheet hints', asyn
   assert.match(commerceTests, /<link rel="stylesheet" href="\/assets\/tailwind\.css">/);
   assert.match(commerceTests, /border-slate-200/);
   assert.match(serverSource, /failureStylesheets\?: readonly \(string \| StylesheetAsset\)\[\]/);
-  assert.match(serverSource, /criticalCss\?: string/);
-  assert.match(serverSource, /data-jiso-critical-href/);
-  assert.match(serverSource, /escapeStyleText/);
+  assert.match(serverHintsSource, /criticalCss\?: string/);
+  assert.match(serverHintsSource, /data-jiso-critical-href/);
+  assert.match(serverHintsSource, /escapeStyleText/);
   assert.match(compilerCssSource, /criticalCss\?: string/);
   assert.match(compilerCssSource, /cssAsset\.criticalCss/);
   assert.match(compilerSource, /from '\.\/css\.js'/);
@@ -962,6 +968,7 @@ void test('D4 commerce adopt-dont-invent features stay represented', async () =>
   const commerceTests = await readProjectFile('examples/commerce/src/app.test.ts');
   const runtimeSource = await readProjectFile('packages/runtime/src/index.ts');
   const runtimeTests = await readProjectFile('packages/runtime/src/index.test.ts');
+  const serverHintsSource = await readProjectFile('packages/server/src/hints.ts');
   const serverSource = await readProjectFile('packages/server/src/index.ts');
   const serverTests = await readProjectFile('packages/server/src/index.test.ts');
 
@@ -970,7 +977,7 @@ void test('D4 commerce adopt-dont-invent features stay represented', async () =>
   assert.match(commerceSource, /renderCommercePageHints\(loadCartQuery\(db\)\)/);
   assert.match(commerceSource, /queries: \{ cart \}/);
   assert.match(serverSource, /function metaFromQuery/);
-  assert.match(serverSource, /Missing query data for route meta/);
+  assert.match(serverHintsSource, /Missing query data for route meta/);
   assert.match(serverSource, /interface Guard<Request, RefinedRequest extends Request = Request>/);
   assert.match(serverSource, /AuthenticatedRequest<Request extends SessionRequestLike>/);
   assert.match(serverSource, /guard\?: Guard<Request, GuardedRequest>/);
@@ -1183,6 +1190,14 @@ void test('P9 verification layer evidence remains represented', async () => {
     testHarnessTests,
     /fails query-loader verification for reads outside declared domains/,
   );
+  assert.match(testHarnessSource, /exemptTables\?: readonly string\[\]/);
+  assert.match(testHarnessSource, /assertNoExemptReads/);
+  assert.match(testHarnessTests, /fails read-side verification for exempt table reads/);
+  assert.match(
+    testHarnessTests,
+    /fails query-loader verification for raw SQL reads of exempt tables/,
+  );
+  assert.match(testHarnessTests, /allows observed writes to exempt tables/);
   assert.match(testHarnessTests, /verifies update-from SQL as a target write plus source reads/);
   assert.match(testHarnessSource, /operationsForNestedStatements/);
   assert.match(testHarnessTests, /verifies update expression subqueries as mutation reads/);
@@ -1198,6 +1213,8 @@ void test('P9 verification layer evidence remains represented', async () => {
   assert.match(testHarnessSource, /diagnosticMessage\('FW407'/);
   assert.match(testHarnessSource, /diagnosticMessage\('FW408'/);
   assert.match(testHarnessSource, /diagnosticMessage\(\s*'FW410'/);
+  assert.match(testHarnessSource, /FW411_MESSAGE = 'Query read set includes an exempt table'/);
+  assert.match(testHarnessSource, /FW411 \$\{FW411_MESSAGE\}/);
   assert.match(testHarnessTests, /validates query loader results against declared output schemas/);
   assert.match(
     testHarnessTests,
@@ -1341,6 +1358,11 @@ void test('P3 Drizzle query facts include select shapes and instance keys', asyn
     drizzleTests,
     /reports FW410 for opaque query projections without declared output schemas/,
   );
+  assert.match(drizzleSource, /jiso\(annotation: JisoTableAnnotation\)/);
+  assert.match(drizzleSource, /exemptQueryReadDiagnostics/);
+  assert.match(drizzleTests, /reports FW411 when a query read set includes an exempt table/);
+  assert.match(drizzleTests, /Query read set includes an exempt table\. Tables: audit_log\./);
+  assert.match(drizzleTests, /omits write-side-only exempt table writes from the touch graph/);
   assert.match(
     drizzleTests,
     /omits instance keys when Drizzle query predicates do not target an annotated table key/,
@@ -1484,14 +1506,20 @@ void test('Drizzle pinned conformance suite is an explicit gate', async () => {
 
 void test('D3 deferred stream responses are consumed by the runtime', async () => {
   const compilerBootstrapSource = await readProjectFile('packages/compiler/src/emit/bootstrap.ts');
+  const compilerBindingValidationSource = await readProjectFile(
+    'packages/compiler/src/validate/bindings.ts',
+  );
   const compilerSource = await readProjectFile('packages/compiler/src/index.ts');
   const compilerTests = await readProjectFile('packages/compiler/src/index.test.ts');
-  const serverSource = await readProjectFile('packages/server/src/index.ts');
+  const serverDeferredStreamSource = await readProjectFile(
+    'packages/server/src/deferred-stream.ts',
+  );
+  const serverHintsSource = await readProjectFile('packages/server/src/hints.ts');
   const serverTests = await readProjectFile('packages/server/src/index.test.ts');
   const runtimeSource = await readProjectFile('packages/runtime/src/index.ts');
   const runtimeTests = await readProjectFile('packages/runtime/src/index.test.ts');
 
-  assert.match(compilerSource, /collectQueryUpdatePlans/);
+  assert.match(compilerBindingValidationSource, /collectQueryUpdatePlans/);
   assert.match(compilerSource, /\$queryUpdatePlans/);
   assert.match(compilerSource, /emitQueryPlanBootstrapModule/);
   assert.match(compilerBootstrapSource, /installJisoLoader/);
@@ -1523,10 +1551,10 @@ void test('D3 deferred stream responses are consumed by the runtime', async () =
   assert.match(runtimeSource, /export function applyQueryBindings/);
   assert.match(runtimeSource, /deferredStreamChunks/);
   assert.match(runtimeSource, /--\$\{boundary\}/);
-  assert.match(serverSource, /mode\?: 'append' \| 'replace'/);
-  assert.match(serverSource, /bootstrapScript\?: string/);
+  assert.match(serverDeferredStreamSource, /mode\?: 'append' \| 'replace'/);
+  assert.match(serverHintsSource, /bootstrapScript\?: string/);
   assert.match(
-    serverSource,
+    serverHintsSource,
     /<script type="module" src="\$\{escapeAttribute\(options\.bootstrapScript\)\}"><\/script>/,
   );
   assert.match(
@@ -1562,11 +1590,12 @@ void test('D3 deferred stream responses are consumed by the runtime', async () =
 
 void test('P1 minifier name preservation evidence remains represented', async () => {
   const compilerSource = await readProjectFile('packages/compiler/src/index.ts');
+  const compilerHandlersSource = await readProjectFile('packages/compiler/src/lower/handlers.ts');
   const compilerTests = await readProjectFile('packages/compiler/src/index.test.ts');
 
   assert.match(compilerSource, /collectMinifierReservedNames/);
   assert.match(compilerSource, /handlerExports: readonly string\[\]/);
-  assert.match(compilerSource, /uniqueAnonymousHandlerName/);
+  assert.match(compilerHandlersSource, /uniqueAnonymousHandlerName/);
   assert.match(compilerSource, /lowerHandlerExpression/);
   assert.match(compilerTests, /collects emitted handler export names for minifier preservation/);
   assert.match(compilerTests, /emits executable handler bodies with stable unique anonymous names/);
@@ -1577,13 +1606,13 @@ void test('P1 minifier name preservation evidence remains represented', async ()
 });
 
 void test('P1 typed data param coercion remains represented', async () => {
-  const compilerSource = await readProjectFile('packages/compiler/src/index.ts');
+  const compilerHandlersSource = await readProjectFile('packages/compiler/src/lower/handlers.ts');
   const compilerTests = await readProjectFile('packages/compiler/src/index.test.ts');
   const runtimeSource = await readProjectFile('packages/runtime/src/index.ts');
   const runtimeTests = await readProjectFile('packages/runtime/src/index.test.ts');
 
-  assert.match(compilerSource, /fw-param-types/);
-  assert.match(compilerSource, /inferElementParamType/);
+  assert.match(compilerHandlersSource, /fw-param-types/);
+  assert.match(compilerHandlersSource, /inferElementParamType/);
   assert.match(compilerTests, /fw-param-types="quantity:number"/);
   assert.match(compilerTests, /fw-param-types="selected:boolean"/);
   assert.match(runtimeSource, /readElementParamTypes/);
@@ -1592,6 +1621,7 @@ void test('P1 typed data param coercion remains represented', async () => {
 });
 
 void test('P1 render-equivalence gate remains represented', async () => {
+  const compilerServerEmitSource = await readProjectFile('packages/compiler/src/emit/server.ts');
   const compilerSource = await readProjectFile('packages/compiler/src/index.ts');
   const compilerTests = await readProjectFile('packages/compiler/src/index.test.ts');
   const cliSource = await readProjectFile('packages/cli/src/index.ts');
@@ -1599,7 +1629,7 @@ void test('P1 render-equivalence gate remains represented', async () => {
 
   assert.match(compilerSource, /assertRenderEquivalence/);
   assert.match(compilerSource, /renderEquivalenceChecks/);
-  assert.match(compilerSource, /emittedServerRenderSource/);
+  assert.match(compilerServerEmitSource, /emittedServerRenderSource/);
   assert.match(compilerTests, /reports render-equivalence failures/);
   assert.match(cliSource, /renderEquivalenceChecks/);
   assert.match(cliSource, /ERROR RENDER_EQUIV/);

@@ -1316,6 +1316,40 @@ describe('@jiso/test harness', () => {
     expect(() => verifier.assertReadsCovered(['cart'])).not.toThrow();
   });
 
+  it('fails read-side verification for exempt table reads', () => {
+    const verifier = createDbVerifier(
+      {},
+      {
+        domainByTable: {
+          cart_items: 'cart',
+        },
+        exemptTables: ['audit_log'],
+      },
+    );
+    const db = verifier.wrap(createFakeDb());
+
+    db.read('audit_log');
+
+    expect(() => verifier.assertReadsCovered(['cart'])).toThrow(
+      'FW411 Query read set includes an exempt table: audit_log',
+    );
+  });
+
+  it('allows observed writes to exempt tables without requiring touch graph domains', () => {
+    const verifier = createDbVerifier(
+      {},
+      {
+        domainByTable: {},
+        exemptTables: ['audit_log'],
+      },
+    );
+    const db = verifier.wrap(createFakeDb());
+
+    db.write('audit_log', { event: 'restock' });
+
+    expect(() => verifier.assertCovered()).not.toThrow();
+  });
+
   it('fails read-side verification for undeclared query domains', () => {
     const verifier = createDbVerifier(
       {},
@@ -1554,6 +1588,31 @@ describe('@jiso/test harness', () => {
 
     await expect(harness.query(cartQuery)).rejects.toThrow(
       'FW407 Query read from undeclared domain: product',
+    );
+  });
+
+  it('fails query-loader verification for raw SQL reads of exempt tables', async () => {
+    const cart = domain('cart');
+    const harness = createJisoTestHarness({
+      db: createFakeDb(),
+      touchGraph: {},
+      verification: {
+        domainByTable: {
+          cart_items: 'cart',
+        },
+        exemptTables: ['audit_log'],
+      },
+    });
+    const cartQuery = query('cart', {
+      load() {
+        harness.db.sql('select * from audit_log');
+        return harness.db.read('cart_items');
+      },
+      reads: [cart],
+    });
+
+    await expect(harness.query(cartQuery)).rejects.toThrow(
+      'FW411 Query read set includes an exempt table: audit_log',
     );
   });
 

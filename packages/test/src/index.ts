@@ -27,6 +27,8 @@ import {
   type WithStatementBinding,
 } from 'pgsql-ast-parser';
 
+const FW411_MESSAGE = 'Query read set includes an exempt table';
+
 export interface JisoTestContext<Db = unknown> {
   db: Db;
   dbHandle(): Db;
@@ -168,6 +170,7 @@ export function createJisoTestHarness<Db>(
 
 export interface DbVerificationConfig {
   domainByTable: Record<string, string>;
+  exemptTables?: readonly string[];
   keyByTable?: Record<string, string>;
 }
 
@@ -503,10 +506,14 @@ function assertObservedWritesCovered(
 
   assertRowKeys(observed, config);
   assertKeyedWritesObserved(observed, scopedTouchGraph, config);
-  assertMutationReadsCovered(observed, scopedTouchGraph);
+  assertMutationReadsCovered(observed, scopedTouchGraph, config);
 
+  const exemptTables = new Set(config.exemptTables ?? []);
   const unmappedWrites = observed.filter(
-    (operation) => operation.kind === 'write' && operation.domain === undefined,
+    (operation) =>
+      operation.kind === 'write' &&
+      operation.domain === undefined &&
+      !exemptTables.has(operation.table),
   );
 
   if (unmappedWrites.length > 0) {
@@ -1084,6 +1091,7 @@ function assertObservedReadsCovered(
   config: DbVerificationConfig,
 ): void {
   assertRowKeys(observed, config);
+  assertNoExemptReads(observed, config);
 
   const unmappedReads = observed.filter(
     (operation) => operation.kind === 'read' && operation.domain === undefined,
@@ -1111,7 +1119,10 @@ function assertObservedReadsCovered(
 function assertMutationReadsCovered(
   observed: readonly ObservedDbOperation[],
   touchGraph: TouchGraph,
+  config: DbVerificationConfig,
 ): void {
+  assertNoExemptReads(observed, config);
+
   const unmappedReads = observed.filter(
     (operation) =>
       operation.kind === 'read' &&
@@ -1146,7 +1157,24 @@ function assertMutationReadsCovered(
   }
 }
 
+function assertNoExemptReads(
+  observed: readonly ObservedDbOperation[],
+  config: DbVerificationConfig,
+): void {
+  const exemptTables = new Set(config.exemptTables ?? []);
+  if (exemptTables.size === 0) return;
+
+  const exemptReads = observed.filter(
+    (operation) => operation.kind === 'read' && exemptTables.has(operation.table),
+  );
+  if (exemptReads.length === 0) return;
+
+  const tables = [...new Set(exemptReads.map((operation) => operation.table))].sort().join(', ');
+  throw new Error(diagnosticMessage('FW411', tables));
+}
+
 function diagnosticMessage(code: DiagnosticCode, detail: string): string {
+  if (code === 'FW411') return `FW411 ${FW411_MESSAGE}: ${detail}`;
   return `${code} ${trimDiagnosticSentence(diagnosticDefinitions[code].message)}: ${detail}`;
 }
 

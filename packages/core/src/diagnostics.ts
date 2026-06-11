@@ -32,7 +32,8 @@ export type DiagnosticCode =
   | 'FW407'
   | 'FW408'
   | 'FW409'
-  | 'FW410';
+  | 'FW410'
+  | 'FW411';
 
 export interface DiagnosticDefinition {
   code: DiagnosticCode;
@@ -239,5 +240,10 @@ export const diagnosticDefinitions = {
     help: 'Opaque query projection requires a declared output schema.',
     severity: 'error',
     message: 'Query result shape failed declared output schema.',
+  },
+  FW411: {
+    code: 'FW411',
+    severity: 'error',
+    message: 'Query read set includes an exempt table.',
   },
 } as const satisfies Record<DiagnosticCode, DiagnosticDefinition>;

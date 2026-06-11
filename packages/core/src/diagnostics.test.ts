@@ -37,6 +37,7 @@ describe('diagnostic registry', () => {
       'FW408',
       'FW409',
       'FW410',
+      'FW411',
     ]);
   });
 
@@ -217,6 +218,11 @@ describe('diagnostic registry', () => {
           "code": "FW410",
           "help": "Opaque query projection requires a declared output schema.",
           "message": "Query result shape failed declared output schema.",
+          "severity": "error",
+        },
+        "FW411": {
+          "code": "FW411",
+          "message": "Query read set includes an exempt table.",
           "severity": "error",
         },
       }
