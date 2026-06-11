@@ -5,31 +5,17 @@ import net from 'node:net';
 import { Buffer } from 'node:buffer';
 
 import { afterEach, describe, expect, it } from 'vitest';
+import {
+  parseWireTranscript,
+  type WireTranscriptExchange,
+  type WireTranscriptRequest,
+} from '../../../tests/wire-transcript.mjs';
 
 const fixtureDirectory = new URL('../../../fixtures/wire/', import.meta.url);
-const requestMarker = '>>> REQUEST';
-const responseMarker = '<<< RESPONSE';
 const moduleBody = 'export function Cart$removeItem(event, ctx) { ctx.signal.throwIfAborted(); }\n';
 
-type FixtureExchange = {
-  request: FixtureRequest;
-  response: FixtureResponse;
-};
-
-type FixtureRequest = {
-  body: string;
-  headers: Array<readonly [string, string]>;
-  method: string;
-  path: string;
-};
-
-type FixtureResponse = {
-  body: string;
-  headers: Array<readonly [string, string]>;
-  status: number;
-  statusLine: string;
-  statusText: string;
-};
+type FixtureExchange = WireTranscriptExchange;
+type FixtureRequest = WireTranscriptRequest;
 
 type LiveResponse = {
   body: string;
@@ -443,103 +429,7 @@ function deferredFixtureChunks(body: string): [string, string] {
 
 async function readFixtureExchanges(fixtureName: string): Promise<FixtureExchange[]> {
   const fixture = await readFile(new URL(fixtureName, fixtureDirectory), 'utf8');
-  const exchanges: FixtureExchange[] = [];
-  let cursor = 0;
-
-  while (true) {
-    const requestStart = fixture.indexOf(requestMarker, cursor);
-    if (requestStart === -1) {
-      return exchanges;
-    }
-
-    const requestBodyStart = fixture.indexOf('\n', requestStart);
-    const responseStart = fixture.indexOf(responseMarker, requestBodyStart);
-    if (requestBodyStart === -1 || responseStart === -1) {
-      throw new Error(`${fixtureName} contains an incomplete request/response pair`);
-    }
-
-    const responseBodyStart = fixture.indexOf('\n', responseStart);
-    const nextRequestStart = fixture.indexOf(`\n${requestMarker}`, responseBodyStart);
-    if (responseBodyStart === -1) {
-      throw new Error(`${fixtureName} response marker is missing a status line`);
-    }
-
-    const requestBlock = fixture.slice(requestBodyStart + 1, responseStart).trimEnd();
-    const responseBlock =
-      nextRequestStart === -1
-        ? fixture.slice(responseBodyStart + 1)
-        : fixture.slice(responseBodyStart + 1, nextRequestStart);
-
-    exchanges.push({
-      request: parseFixtureRequest(requestBlock),
-      response: parseFixtureResponse(responseBlock),
-    });
-
-    cursor = nextRequestStart === -1 ? fixture.length : nextRequestStart + 1;
-  }
-}
-
-function parseFixtureRequest(block: string): FixtureRequest {
-  const separator = block.indexOf('\n\n');
-  const head = separator === -1 ? block : block.slice(0, separator);
-  const body = separator === -1 ? '' : block.slice(separator + 2);
-  const [requestLine, ...headerLines] = head.split('\n');
-  if (!requestLine) {
-    throw new Error('Fixture request is missing request line');
-  }
-
-  const [method, path] = requestLine.split(' ');
-  if (!method || !path) {
-    throw new Error(`Malformed fixture request line: ${requestLine}`);
-  }
-
-  return {
-    body,
-    headers: parseHeaderLines(headerLines),
-    method,
-    path,
-  };
-}
-
-function parseFixtureResponse(block: string): FixtureResponse {
-  const separator = block.indexOf('\n\n');
-  const head = separator === -1 ? block.trimEnd() : block.slice(0, separator);
-  const body = separator === -1 ? '' : block.slice(separator + 2);
-  const [statusLine, ...headerLines] = head.split('\n');
-  if (!statusLine) {
-    throw new Error('Fixture response is missing status line');
-  }
-
-  const statusMatch = /^HTTP\/1\.1 (?<status>\d{3}) (?<statusText>.+)$/.exec(statusLine);
-  if (!statusMatch?.groups) {
-    throw new Error(`Malformed fixture status line: ${statusLine}`);
-  }
-  const status = statusMatch.groups.status;
-  const statusText = statusMatch.groups.statusText;
-  if (!status || !statusText) {
-    throw new Error(`Malformed fixture status line: ${statusLine}`);
-  }
-
-  return {
-    body,
-    headers: parseHeaderLines(headerLines),
-    status: Number(status),
-    statusLine,
-    statusText,
-  };
-}
-
-function parseHeaderLines(lines: string[]): Array<readonly [string, string]> {
-  return lines
-    .filter((line) => line.length > 0)
-    .map((line) => {
-      const separator = line.indexOf(':');
-      if (separator === -1) {
-        throw new Error(`Malformed fixture header: ${line}`);
-      }
-
-      return [line.slice(0, separator), line.slice(separator + 1).trim()] as const;
-    });
+  return parseWireTranscript(fixture);
 }
 
 function dispatchKeyForFixture(request: FixtureRequest): string {

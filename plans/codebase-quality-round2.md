@@ -207,6 +207,11 @@ Do this first or pay it on every commit.
       and asserts delegated listener registration without eager imports, load/idle/visible
       trigger dispatch, typed refetch request/application, compiled template stamps, and
       listener disposal instead of grepping runtime/browser source or test names.
+      Partial evidence 2026-06-11: the D2 keyed-commerce tranche now parses the committed
+      commerce graph and asserts product/order fragment and optimism facts, then exercises built
+      runtime/server APIs for keyed morph identity, keyed query-instance reruns, keyed enhanced
+      mutation responses, and keyed optimistic rebase instead of grepping commerce, server, or
+      runtime test names.
 - [x] **Make create-jiso templates real files** (`create-jiso/src/index.ts:63-473`, ~470 lines of
       escaped template literals including a CI workflow and double-escaped regexes inside
       `.mjs`-in-string). Move to a `templates/` directory copied at scaffold time with `{{name}}`
@@ -572,7 +577,7 @@ index.test.ts:4227 while here — it weakens the byte-for-byte claim) + acceptan
       instead); deduplicate `renderProductGrid`/`renderProductGridWithFailure` (:286 vs :436)
       and the two hand-rolled escapers (:548-554 → server html.ts); replace the inline CSRF
       secret (:54) with an obvious `EXAMPLE_ONLY_` name.
-- [ ] **MED — Typecheck the example and spikes.** `examples/commerce` and three of four
+- [x] **MED — Typecheck the example and spikes.** `examples/commerce` and three of four
       conformance spikes sit outside every tsconfig (root includes only `packages/**`), so the
       registry-augmentation showcase (generated/touch-graph.ts:43-50) may never be
       project-typechecked. Add tsconfigs (or extend the root include) and wire them into
@@ -585,10 +590,14 @@ index.test.ts:4227 while here — it weakens the byte-for-byte claim) + acceptan
       `examples/commerce/src/app.test.ts`; `@jiso/example-commerce` now declares the `vite`
       binary used by its build test. Verified with `pnpm vp run typecheck-examples`,
       `pnpm exec vitest --run examples/commerce/src/app.test.ts`, `pnpm run check`,
-      `pnpm run check:build`, and `pnpm run check:fw`. Remaining: the wire-transcript fixture
-      parser is still duplicated between `tests/fw-check.node.mjs` and
-      `conformance/app-shell-spike/src/index.test.ts`; sharing it requires edits outside this
-      slice's allowed write scope.
+      `pnpm run check:build`, and `pnpm run check:fw`.
+      Evidence 2026-06-11: `tests/wire-transcript.mjs` now owns the shared `>>> REQUEST` /
+      `<<< RESPONSE` fixture parser, with `tests/wire-transcript.d.mts` typing the shared
+      exchange shape for the app-shell spike. `tests/fw-check.node.mjs` consumes
+      `parseWireResponses` for byte-for-byte response body checks and lower-case header metadata;
+      `conformance/app-shell-spike/src/index.test.ts` consumes `parseWireTranscript` for the real
+      HTTP fixture replay. Verified with `node --test tests/fw-check.node.mjs`,
+      `pnpm exec vitest --run conformance/app-shell-spike/src/index.test.ts`, and `pnpm run check`.
 - [x] **LOW** — better-auth guard-failure literals restate server shapes
       (better-auth/src/index.ts:126-142) — import the constants or keep the cross-package
       agreement test and note it; create-jiso error-path output to stdout while exiting 1;

@@ -4,6 +4,7 @@ import { test } from 'node:test';
 import { gzipSync } from 'node:zlib';
 
 import { missingBuildMessage } from '../scripts/fw-check.mjs';
+import { parseWireResponses } from './wire-transcript.mjs';
 import { fwCheck, fwExplain } from '../dist/cli/src/index.mjs';
 import {
   assertRenderEquivalence,
@@ -37,6 +38,7 @@ import {
   renderDocument,
   renderDocumentQueryScript,
   renderMutationResponse,
+  renderMutationEndpointResponse,
   renderPageHints,
   renderQueryScript,
   runMutation,
@@ -47,9 +49,6 @@ import {
   s,
 } from '../dist/server/src/index.mjs';
 import { href, Link, redirect, route } from '../dist/core/src/index.mjs';
-
-const responseMarker = '<<< RESPONSE';
-const requestMarker = '>>> REQUEST';
 
 const generatedWireBodies = {
   'defer-stream.http': [
@@ -82,50 +81,6 @@ const generatedWireBodies = {
     `<fw-fragment target="product-form:p1"><form fw-c="product-form" aria-invalid="true"><output role="alert" data-error-code="OUT_OF_STOCK">Only 5 left.</output><input name="productId" value="p1"><input name="quantity" value="99"></form></fw-fragment>
 `,
   ],
-};
-
-const parseWireResponses = (fixtureBody) => {
-  const responses = [];
-  let cursor = 0;
-
-  while (true) {
-    const markerStart = fixtureBody.indexOf(responseMarker, cursor);
-    if (markerStart === -1) {
-      return responses;
-    }
-
-    const responseStart = fixtureBody.indexOf('\n', markerStart);
-    assert.notEqual(responseStart, -1, 'response marker must be followed by a status line');
-
-    const nextRequestStart = fixtureBody.indexOf(`\n${requestMarker}`, responseStart + 1);
-    const responseBlock =
-      nextRequestStart === -1
-        ? fixtureBody.slice(responseStart + 1)
-        : fixtureBody.slice(responseStart + 1, nextRequestStart);
-
-    const headerEnd = responseBlock.indexOf('\n\n');
-    const headerText =
-      headerEnd === -1 ? responseBlock.trimEnd() : responseBlock.slice(0, headerEnd);
-    const responseBody = headerEnd === -1 ? '' : responseBlock.slice(headerEnd + 2);
-    const headerLines = headerText.split('\n');
-    const statusLine = headerLines.shift();
-    assert.match(statusLine, /^HTTP\/1\.1 \d{3} /, 'response includes an HTTP status line');
-
-    const headers = Object.fromEntries(
-      headerLines.map((line) => {
-        const separator = line.indexOf(':');
-        assert.notEqual(separator, -1, `malformed response header: ${line}`);
-        return [line.slice(0, separator).toLowerCase(), line.slice(separator + 1).trim()];
-      }),
-    );
-
-    responses.push({
-      body: responseBody,
-      headers,
-      statusLine,
-    });
-    cursor = nextRequestStart === -1 ? fixtureBody.length : nextRequestStart + 1;
-  }
 };
 
 const readWireFixture = async (name) =>
@@ -276,7 +231,7 @@ void test('Phase 0 wire fixture responses keep stable protocol metadata', async 
         `${name} response ${index + 1} status`,
       );
       assert.deepEqual(
-        responses[index].headers,
+        responses[index].headersByName,
         expected.headers,
         `${name} response ${index + 1} headers`,
       );
@@ -1738,33 +1693,164 @@ void test('P5 morph evidence preserves keyed identity and applies fragments', ()
 });
 
 void test('D2 commerce validates keyed append and optimistic reorder', async () => {
-  const commerceTests = await readProjectFile('examples/commerce/src/app.test.ts');
-  const runtimeTests = await readProjectFile('packages/runtime/src/index.test.ts');
-  const serverTests = await readProjectFile('packages/server/src/index.test.ts');
+  const commerceGraph = JSON.parse(
+    await readProjectFile('examples/commerce/src/generated/graph.json'),
+  );
+  assert.deepEqual(
+    commerceGraph.components.map((component) => [
+      component.name,
+      component.fragments,
+      component.queries,
+    ]),
+    [
+      ['CartBadge', ['cart-badge'], ['cart']],
+      ['ProductGrid', ['product-grid'], ['productGrid']],
+      ['OrderHistory', ['order-history'], ['orderHistory']],
+    ],
+  );
+  assert.deepEqual(commerceGraph.optimistic, [
+    { mutation: 'cart/add', query: 'cart', status: 'hand-written' },
+    { mutation: 'cart/add', query: 'productGrid', status: 'await-fragment' },
+    { mutation: 'cart/add', query: 'orderHistory', status: 'await-fragment' },
+  ]);
 
-  assert.match(
-    commerceTests,
-    /preserves commerce list identity through append and simultaneous optimistic reorder/,
+  const currentGrid = {
+    children: [
+      { browserState: { islandState: { pendingMutation: 'cart/add' } }, key: 'p1', type: 'card' },
+      { key: 'p2', type: 'card' },
+    ],
+    key: 'product-grid',
+    type: 'section',
+  };
+  const firstProduct = currentGrid.children[0];
+  const appendedGrid = morphStructuralTree(currentGrid, {
+    children: [
+      { key: 'p1', type: 'card' },
+      { key: 'p2', type: 'card' },
+      { key: 'p3', type: 'card' },
+    ],
+    key: 'product-grid',
+    type: 'section',
+  });
+  const reorderedGrid = morphStructuralTree(appendedGrid, {
+    children: [
+      { key: 'p3', type: 'card' },
+      { key: 'p1', type: 'card' },
+      { key: 'p2', type: 'card' },
+    ],
+    key: 'product-grid',
+    type: 'section',
+  });
+  assert.strictEqual(reorderedGrid.children[1], firstProduct);
+  assert.deepEqual(reorderedGrid.children[1].browserState, {
+    islandState: { pendingMutation: 'cart/add' },
+  });
+
+  const productDomain = domain('product');
+  const productP1 = query('productDetail', {
+    instanceKey: 'product:p1',
+    load: () => ({ id: 'p1', stock: 0 }),
+    reads: [productDomain],
+  });
+  const productP2 = query('productDetail', {
+    instanceKey: 'product:p2',
+    load: () => ({ id: 'p2', stock: 10 }),
+    reads: [productDomain],
+  });
+  const reserveProduct = mutation('product/reserve', {
+    csrf: false,
+    csrfJustification: 'fw-check synthetic keyed invalidation fixture',
+    handler(input) {
+      return input.productId;
+    },
+    input: s.object({ productId: s.string() }),
+    registry: {
+      inferredTouches: [{ domain: 'product', keys: 'arg:productId' }],
+      queries: [productP1, productP2],
+    },
+  });
+  assert.deepEqual(await runMutation(reserveProduct, { productId: 'p1' }, {}), {
+    changes: [{ domain: 'product', input: { productId: 'p1' }, keys: ['p1'] }],
+    ok: true,
+    rerunQueries: ['productDetail'],
+    rerunQueryInstances: [{ instanceKey: 'product:p1', key: 'productDetail' }],
+    value: 'p1',
+  });
+  assert.deepEqual(
+    await renderMutationEndpointResponse(reserveProduct, {
+      fragmentRenderers: [],
+      headers: { 'FW-Fragment': 'true' },
+      rawInput: { productId: 'p1' },
+      redirectTo: '/products/p1',
+      request: {},
+    }),
+    {
+      body: '<fw-query name="productDetail" key="product:p1">{"id":"p1","stock":0}</fw-query>',
+      headers: {
+        'Content-Type': 'text/vnd.jiso.fragment+html; charset=utf-8',
+        'FW-Changes': '[{"domain":"product","keys":["p1"]}]',
+      },
+      status: 200,
+    },
   );
-  assert.match(commerceTests, /renderProductGridPageFragment/);
-  assert.match(commerceTests, /fw-key="p1"/);
-  assert.match(commerceTests, /fw-key="order-1"/);
-  assert.match(commerceTests, /morphStructuralTree/);
-  assert.match(commerceTests, /pendingMutation: 'cart\/add'/);
-  assert.match(commerceTests, /order-history/);
-  assert.match(serverTests, /narrows post-commit rerun query instances by row keys/);
-  assert.match(
-    serverTests,
-    /rerenders only matching keyed query instances in enhanced mutation responses/,
-  );
-  assert.match(runtimeTests, /keeps keyed query chunks isolated by instance key/);
-  assert.match(runtimeTests, /rebroadcasts keyed query chunks to the matching keyed store entry/);
-  assert.match(runtimeTests, /applies hand-written optimistic transforms to keyed query instances/);
-  assert.match(runtimeTests, /rebases pending optimistic transforms over keyed server truth/);
-  assert.match(
-    runtimeTests,
-    /reconciles keyed optimistic enhanced submits with keyed query chunks/,
-  );
+
+  const store = createQueryStore();
+  const rebaser = new OptimisticRebaser(store);
+  const target = {
+    html: '',
+    replaceWithHtml(html) {
+      this.html = html;
+    },
+  };
+  store.set('reviews', { items: [{ id: 'r1' }] }, 'product:p1');
+  const result = await submitOptimisticEnhancedMutation({
+    fetch: async () => {
+      assert.deepEqual(store.get('reviews'), undefined);
+      assert.deepEqual(store.get('reviews', 'product:p1'), {
+        items: [{ id: 'r1' }, { id: 'draft' }],
+      });
+      return {
+        async text() {
+          return [
+            '<fw-query name="reviews" key="product:p1">{"items":[{"id":"r1"},{"id":"server"}]}</fw-query>',
+            '<fw-fragment target="reviews:p1"><section>Reviews ready</section></fw-fragment>',
+          ].join('\n');
+        },
+      };
+    },
+    form: { action: '/_m/reviews/add', method: 'post' },
+    formData: new FormData(),
+    change: { domain: 'product', input: { reviewId: 'draft' }, keys: ['p1'] },
+    idem: 'idem_keyed_optimistic',
+    input: { reviewId: 'ignored' },
+    optimistic: {
+      keys: { reviews: (change) => `product:${change.keys?.[0]}` },
+      transforms: {
+        reviews(current, input) {
+          const reviews = current;
+          return { items: [...reviews.items, { id: input.reviewId }] };
+        },
+      },
+    },
+    rebaser,
+    root: {
+      findFragmentTarget(fragmentTarget) {
+        return fragmentTarget === 'reviews:p1' ? target : null;
+      },
+      querySelectorAll() {
+        return [];
+      },
+    },
+    store,
+  });
+
+  assert.deepEqual(result.queries, ['reviews']);
+  assert.deepEqual(result.appliedFragments, ['reviews:p1']);
+  assert.deepEqual(store.get('reviews'), undefined);
+  assert.deepEqual(store.get('reviews', 'product:p1'), {
+    items: [{ id: 'r1' }, { id: 'server' }],
+  });
+  assert.equal(target.html, '<section>Reviews ready</section>');
 });
 
 void test('P6 navigation bfcache optimism cleanup acceptance is represented', async () => {
