@@ -212,6 +212,10 @@ Do this first or pay it on every commit.
       runtime/server APIs for keyed morph identity, keyed query-instance reruns, keyed enhanced
       mutation responses, and keyed optimistic rebase instead of grepping commerce, server, or
       runtime test names.
+      Partial evidence 2026-06-11: the P3 commerce transaction-lifecycle tranche now exercises a
+      commerce-shaped mutation through the built server APIs, proving the request-scoped
+      `transaction` hook commits successful draft writes and rolls back `context.fail()` paths
+      instead of grepping commerce source or test names.
 - [x] **Make create-jiso templates real files** (`create-jiso/src/index.ts:63-473`, ~470 lines of
       escaped template literals including a CI workflow and double-escaped regexes inside
       `.mjs`-in-string). Move to a `templates/` directory copied at scaffold time with `{{name}}`

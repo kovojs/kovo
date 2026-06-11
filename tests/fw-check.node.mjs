@@ -1978,14 +1978,68 @@ void test('P6 navigation bfcache optimism cleanup acceptance is represented', as
 });
 
 void test('P3 commerce mutation runs through the transaction lifecycle', async () => {
-  const commerceSource = await readProjectFile('examples/commerce/src/app.ts');
-  const commerceTests = await readProjectFile('examples/commerce/src/app.test.ts');
+  const createTransactionalDb = () => {
+    const db = {
+      commits: 0,
+      items: [],
+      rollbacks: 0,
+      async transaction(run) {
+        const draft = { items: this.items.map((item) => ({ ...item })) };
+        try {
+          const result = await run(draft);
+          this.items = draft.items;
+          this.commits += 1;
+          return result;
+        } catch (error) {
+          this.rollbacks += 1;
+          throw error;
+        }
+      },
+    };
+    return db;
+  };
 
-  assert.match(commerceSource, /transaction<Result>\(run: \(db: CommerceDb\)/);
-  assert.match(commerceSource, /cloneCommerceDb/);
-  assert.match(commerceSource, /request\.db\.transaction/);
-  assert.match(commerceTests, /commits and rolls back commerce database transactions/);
-  assert.match(commerceTests, /expect\(transactions\)\.toBe\(2\)/);
+  const addToCart = mutation('cart/add', {
+    csrf: false,
+    errors: {
+      OUT_OF_STOCK: s.object({ availableQuantity: s.number().int().min(0) }),
+    },
+    handler(input, request, context) {
+      if (input.quantity > 5) {
+        return context.fail('OUT_OF_STOCK', { availableQuantity: 5 });
+      }
+
+      request.db.items.push({ productId: input.productId, qty: input.quantity });
+      return { count: request.db.items.length };
+    },
+    input: s.object({
+      productId: s.string(),
+      quantity: s.number().int().min(1),
+    }),
+    transaction(request, run) {
+      return request.db.transaction((db) => run({ ...request, db }));
+    },
+  });
+
+  const db = createTransactionalDb();
+  assert.deepEqual(await runMutation(addToCart, { productId: 'p1', quantity: 2 }, { db }), {
+    changes: [],
+    ok: true,
+    rerunQueries: [],
+    value: { count: 1 },
+  });
+  assert.deepEqual(db.items, [{ productId: 'p1', qty: 2 }]);
+  assert.equal(db.commits, 1);
+  assert.equal(db.rollbacks, 0);
+
+  assert.deepEqual(await runMutation(addToCart, { productId: 'p2', quantity: 99 }, { db }), {
+    error: { code: 'OUT_OF_STOCK', payload: { availableQuantity: 5 } },
+    ok: false,
+    status: 422,
+  });
+  assert.deepEqual(db.items, [{ productId: 'p1', qty: 2 }]);
+  assert.equal(db.commits, 1);
+  assert.equal(db.rollbacks, 1);
 });
 
 void test('D1 commerce enhanced fragments carry Tailwind stylesheet hints', async () => {
