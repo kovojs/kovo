@@ -185,7 +185,10 @@ class FileSchemaImpl implements FileSchema {
   }
 }
 
-export type Guard<Request> = (request: Request) => boolean | Promise<boolean>;
+export interface Guard<Request, RefinedRequest extends Request = Request> {
+  (request: Request): boolean | Promise<boolean>;
+  readonly refines?: (request: Request) => request is RefinedRequest;
+}
 
 export interface SessionUserLike {
   id?: string;
@@ -198,6 +201,12 @@ export interface SessionRequestLike {
     user?: SessionUserLike | null;
   } | null;
 }
+
+export type AuthenticatedRequest<Request extends SessionRequestLike> = Request & {
+  session: NonNullable<Request['session']> & {
+    user: NonNullable<NonNullable<Request['session']>['user']>;
+  };
+};
 
 export interface SessionDefinition<Value> {
   parse(request: { session?: unknown }): Value;
@@ -212,7 +221,9 @@ export interface RateLimitOptions<Request> {
 }
 
 export const guards = {
-  all<Request>(...items: Guard<Request>[]): Guard<Request> {
+  all<Request, RefinedRequest extends Request = Request>(
+    ...items: Guard<Request, RefinedRequest>[]
+  ): Guard<Request, RefinedRequest> {
     return async (request: Request) => {
       for (const item of items) {
         if (!(await item(request))) return false;
@@ -221,7 +232,7 @@ export const guards = {
       return true;
     };
   },
-  authed<Request extends SessionRequestLike>(): Guard<Request> {
+  authed<Request extends SessionRequestLike>(): Guard<Request, AuthenticatedRequest<Request>> {
     return (request) => Boolean(request.session?.user);
   },
   rateLimit<Request extends SessionRequestLike>(
@@ -617,12 +628,13 @@ export interface MutationDefinition<
   Errors extends Record<string, Schema<unknown>> = Record<string, Schema<unknown>>,
   Request = unknown,
   Value = unknown,
+  GuardedRequest extends Request = Request,
 > {
   errors?: Errors;
-  guard?: Guard<Request>;
+  guard?: Guard<Request, GuardedRequest>;
   handler: (
     input: InferSchema<InputSchema>,
-    request: Request,
+    request: GuardedRequest,
     context: MutationContext<Errors>,
   ) => Promise<Value | MutationFail> | Value | MutationFail;
   input: InputSchema;
@@ -630,7 +642,7 @@ export interface MutationDefinition<
   registry?: MutationRegistry;
   transaction?: <Result>(
     request: Request,
-    run: (transactionRequest: Request) => Promise<Result>,
+    run: (transactionRequest: GuardedRequest) => Promise<Result>,
   ) => Promise<Result>;
 }
 
@@ -646,10 +658,14 @@ export function mutation<
   Errors extends Record<string, Schema<unknown>> = Record<string, Schema<unknown>>,
   Request = unknown,
   Value = unknown,
+  GuardedRequest extends Request = Request,
 >(
   key: Key,
-  definition: Omit<MutationDefinition<Key, InputSchema, Errors, Request, Value>, 'key'>,
-): MutationDefinition<Key, InputSchema, Errors, Request, Value> & { key: Key } {
+  definition: Omit<
+    MutationDefinition<Key, InputSchema, Errors, Request, Value, GuardedRequest>,
+    'key'
+  >,
+): MutationDefinition<Key, InputSchema, Errors, Request, Value, GuardedRequest> & { key: Key } {
   return { ...definition, key };
 }
 
@@ -787,8 +803,9 @@ export async function runMutation<
   Errors extends Record<string, Schema<unknown>>,
   Request,
   Value,
+  GuardedRequest extends Request = Request,
 >(
-  definition: MutationDefinition<Key, InputSchema, Errors, Request, Value>,
+  definition: MutationDefinition<Key, InputSchema, Errors, Request, Value, GuardedRequest>,
   rawInput: unknown,
   request: Request,
 ): Promise<MutationResult<Value>> {
@@ -820,7 +837,7 @@ export async function runMutation<
       return record;
     },
   };
-  const runHandler = async (handlerRequest: Request): Promise<Value> => {
+  const runHandler = async (handlerRequest: GuardedRequest): Promise<Value> => {
     const handlerValue = await definition.handler(input, handlerRequest, context);
 
     if (isMutationFail(handlerValue)) {
@@ -829,13 +846,14 @@ export async function runMutation<
 
     return handlerValue as Value;
   };
+  const guardedRequest = request as GuardedRequest;
 
   let value: Value;
 
   try {
     value = definition.transaction
       ? await definition.transaction(request, runHandler)
-      : await runHandler(request);
+      : await runHandler(guardedRequest);
   } catch (error) {
     if (error instanceof MutationRollback) return error.failure;
     throw error;
@@ -883,8 +901,9 @@ export async function renderMutationResponse<
   Errors extends Record<string, Schema<unknown>>,
   Request,
   Value,
+  GuardedRequest extends Request = Request,
 >(
-  definition: MutationDefinition<Key, InputSchema, Errors, Request, Value>,
+  definition: MutationDefinition<Key, InputSchema, Errors, Request, Value, GuardedRequest>,
   wireRequest: MutationWireRequest<Request>,
 ): Promise<MutationWireResponse> {
   const replayed = wireRequest.idem ? wireRequest.replayStore?.get(wireRequest.idem) : undefined;
@@ -928,8 +947,9 @@ export async function renderMutationEndpointResponse<
   Errors extends Record<string, Schema<unknown>>,
   Request,
   Value,
+  GuardedRequest extends Request = Request,
 >(
-  definition: MutationDefinition<Key, InputSchema, Errors, Request, Value>,
+  definition: MutationDefinition<Key, InputSchema, Errors, Request, Value, GuardedRequest>,
   endpointRequest: MutationEndpointRequest<Request, Value>,
 ): Promise<MutationEndpointResponse> {
   const wireRequest = mutationWireRequestFromHeaders(endpointRequest);
@@ -951,8 +971,9 @@ export async function renderNoJsMutationResponse<
   Errors extends Record<string, Schema<unknown>>,
   Request,
   Value,
+  GuardedRequest extends Request = Request,
 >(
-  definition: MutationDefinition<Key, InputSchema, Errors, Request, Value>,
+  definition: MutationDefinition<Key, InputSchema, Errors, Request, Value, GuardedRequest>,
   noJsRequest: NoJsMutationRequest<Request, Value>,
 ): Promise<NoJsMutationResponse> {
   const result = await runMutation(definition, noJsRequest.rawInput, noJsRequest.request);

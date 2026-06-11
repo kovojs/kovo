@@ -1046,6 +1046,37 @@ describe('server mutation primitives', () => {
     });
   });
 
+  it('refines typed session users inside authed mutation handlers', async () => {
+    interface OptionalSessionRequest {
+      session?: {
+        user?: { id: string; roles?: readonly string[] } | null;
+      } | null;
+    }
+
+    const guarded = mutation('cart/audit', {
+      guard: guards.authed<OptionalSessionRequest>(),
+      input: s.object({ productId: s.string() }),
+      handler(input, request) {
+        const userId: string = request.session.user.id;
+        const roles: readonly string[] | undefined = request.session.user.roles;
+        const assertUnrefinedRequest = (candidate: OptionalSessionRequest) => {
+          // @ts-expect-error optional sessions are not safe until the authed guard refines them.
+          return candidate.session.user.id;
+        };
+
+        expect(assertUnrefinedRequest).toBeTypeOf('function');
+        return `${userId}:${input.productId}:${roles?.join(',') ?? 'none'}`;
+      },
+    });
+
+    await expect(
+      runMutation(guarded, { productId: 'p1' }, { session: { user: { id: 'u1' } } }),
+    ).resolves.toMatchObject({
+      ok: true,
+      value: 'u1:p1:none',
+    });
+  });
+
   it('parses typed sessions through the declared schema', () => {
     const appSession = session(
       s.object({

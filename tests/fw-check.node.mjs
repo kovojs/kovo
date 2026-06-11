@@ -436,7 +436,7 @@ void test('P3 mutation lifecycle includes an explicit transaction boundary', asy
   const serverTests = await readProjectFile('packages/server/src/index.test.ts');
 
   assert.match(serverSource, /transaction\?: <Result>/);
-  assert.match(serverSource, /run: \(transactionRequest: Request\) => Promise<Result>/);
+  assert.match(serverSource, /run: \(transactionRequest: GuardedRequest\) => Promise<Result>/);
   assert.match(serverSource, /definition\.transaction/);
   assert.match(serverSource, /class MutationRollback extends Error/);
   assert.match(serverTests, /runs guarded mutation handlers inside the configured transaction/);
@@ -567,7 +567,12 @@ void test('D4 commerce adopt-dont-invent features stay represented', async () =>
   assert.match(commerceSource, /queries: \{ cart \}/);
   assert.match(serverSource, /function metaFromQuery/);
   assert.match(serverSource, /Missing query data for route meta/);
+  assert.match(serverSource, /interface Guard<Request, RefinedRequest extends Request = Request>/);
+  assert.match(serverSource, /AuthenticatedRequest<Request extends SessionRequestLike>/);
+  assert.match(serverSource, /guard\?: Guard<Request, GuardedRequest>/);
+  assert.match(serverSource, /request as GuardedRequest/);
   assert.match(serverTests, /derives typed route meta from query results/);
+  assert.match(serverTests, /refines typed session users inside authed mutation handlers/);
   assert.match(commerceTests, /resolves commerce route meta from loaded cart query data/);
   assert.match(commerceSource, /i18n\('en-US'/);
   assert.match(commerceSource, /s\.file\(\{ maxBytes: 64 \* 1024/);
