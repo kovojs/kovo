@@ -403,11 +403,13 @@ void test('P1 minifier name preservation evidence remains represented', async ()
 
 void test('framework-owned browser suite is wired into acceptance', async () => {
   const packageJson = JSON.parse(await readProjectFile('package.json'));
+  const ciWorkflow = await readProjectFile('.github/workflows/ci.yml');
   const viteConfig = await readProjectFile('vite.config.ts');
   const browserConfig = await readProjectFile('vitest.browser.config.ts');
 
   assert.match(packageJson.scripts.acceptance, /pnpm run test:browser/);
   assert.equal(packageJson.scripts['test:browser'], 'vp run browser');
+  assert.match(ciWorkflow, /vp run browser/);
   assert.match(viteConfig, /browser:\s*\{/);
   assert.match(viteConfig, /vitest --config vitest\.browser\.config\.ts --run/);
   assert.match(browserConfig, /@vitest\/browser-playwright/);
@@ -416,11 +418,13 @@ void test('framework-owned browser suite is wired into acceptance', async () => 
 
 void test('P10 perf acceptance is wired through Playwright and CDP', async () => {
   const packageJson = JSON.parse(await readProjectFile('package.json'));
+  const ciWorkflow = await readProjectFile('.github/workflows/ci.yml');
   const viteConfig = await readProjectFile('vite.config.ts');
   const perfScript = await readProjectFile('tests/p10-perf.node.mjs');
 
   assert.match(packageJson.scripts.acceptance, /pnpm run test:p10-perf/);
   assert.equal(packageJson.scripts['test:p10-perf'], 'vp run p10-perf');
+  assert.match(ciWorkflow, /vp run build[\s\S]*vp run p10-perf[\s\S]*vp run fw-check/);
   assert.match(viteConfig, /'p10-perf':\s*\{/);
   assert.match(perfScript, /first-contentful-paint/);
   assert.match(perfScript, /activationStart/);

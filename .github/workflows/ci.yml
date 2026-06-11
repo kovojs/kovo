@@ -17,5 +17,7 @@ jobs:
       - run: vp install
       - run: vp check
       - run: vp test
-      - run: vp run fw-check
+      - run: vp run browser
       - run: vp run build
+      - run: vp run p10-perf
+      - run: vp run fw-check
