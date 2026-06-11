@@ -195,6 +195,10 @@ Do this first or pay it on every commit.
       asserts `morphStructuralTree` keyed reorder identity, browser-state preservation, keyed
       query updates, append fragment application, and missing-target suppression instead of
       grepping runtime or browser test source names.
+      Partial evidence 2026-06-11: the P6 navigation/bfcache tranche now imports built runtime
+      APIs and asserts pagehide-only optimism cleanup registration/disposal, pending-stamp
+      clearing, keepalive enhanced submit headers, optimistic rollback on pagehide, and later
+      server-truth reconciliation instead of grepping runtime source or test names.
 - [x] **Make create-jiso templates real files** (`create-jiso/src/index.ts:63-473`, ~470 lines of
       escaped template literals including a CI workflow and double-escaped regexes inside
       `.mjs`-in-string). Move to a `templates/` directory copied at scaffold time with `{{name}}`
