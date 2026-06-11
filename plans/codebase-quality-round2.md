@@ -289,6 +289,12 @@ tests/fw-check.node.mjs` passed.
       core/compiler APIs and asserts `fragmentTarget()` descriptor behavior plus compiler-emitted
       component graph fragments and `FragmentTargets` registry prop types instead of grepping
       core/compiler source or test names.
+      Partial evidence 2026-06-11: the P10 doc/ledger/prelaunch tranche now parses markdown
+      headings, numbered rules, status fields, and evidence tables for the constitution,
+      compiler hard rules, legibility study, v1 acceptance ledger, and pre-launch checklist
+      instead of grepping broad doc prose. Verification: focused `node --test
+      --test-name-pattern "P10 normative docs|P10 legibility|P10 v1 acceptance|pre-launch
+      checklist" tests/fw-check.node.mjs` passed.
 - [x] **Make create-jiso templates real files** (`create-jiso/src/index.ts:63-473`, ~470 lines of
       escaped template literals including a CI workflow and double-escaped regexes inside
       `.mjs`-in-string). Move to a `templates/` directory copied at scaffold time with `{{name}}`

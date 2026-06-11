@@ -262,6 +262,94 @@ const parseHtmlElements = (source) => {
   return elements;
 };
 
+const normalizeMarkdownCell = (value) =>
+  value
+    .replace(/`([^`]+)`/g, '$1')
+    .replace(/\*\*([^*]+)\*\*/g, '$1')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+const markdownSection = (source, heading) => {
+  const lines = source.split('\n');
+  const headingLineIndex = lines.findIndex((line) => {
+    const match = /^(#{1,6})\s+(.+?)\s*$/.exec(line);
+    return match && normalizeMarkdownCell(match[2]) === heading;
+  });
+  assert.notEqual(headingLineIndex, -1, `markdown contains heading ${heading}`);
+  const level = /^(#{1,6})/.exec(lines[headingLineIndex])[1].length;
+  const endIndex = lines.findIndex((line, index) => {
+    if (index <= headingLineIndex) return false;
+    const match = /^(#{1,6})\s+/.exec(line);
+    return match && match[1].length <= level;
+  });
+
+  return lines.slice(headingLineIndex + 1, endIndex === -1 ? undefined : endIndex).join('\n');
+};
+
+const parseMarkdownNumberedList = (source) =>
+  source
+    .split('\n')
+    .map((line) => /^\s*\d+\.\s+(.+)$/.exec(line))
+    .filter(Boolean)
+    .map((match) => normalizeMarkdownCell(match[1]));
+
+const numberedListTitles = (source) =>
+  parseMarkdownNumberedList(source).map((item) => normalizeMarkdownCell(item.split('.')[0]));
+
+const parseMarkdownFields = (source) => {
+  const fields = new Map();
+  let currentField;
+
+  for (const line of source.split('\n')) {
+    const trimmed = line.trim();
+    const match = /^([A-Z][A-Za-z ]+):\s+(.+)$/.exec(trimmed);
+    if (match) {
+      currentField = match[1];
+      fields.set(currentField, normalizeMarkdownCell(match[2]));
+      continue;
+    }
+
+    if (
+      currentField &&
+      trimmed &&
+      !trimmed.startsWith('#') &&
+      !trimmed.startsWith('|') &&
+      !trimmed.startsWith('-') &&
+      !trimmed.startsWith('```')
+    ) {
+      fields.set(currentField, normalizeMarkdownCell(`${fields.get(currentField)} ${trimmed}`));
+      continue;
+    }
+
+    currentField = undefined;
+  }
+
+  return fields;
+};
+
+const parseMarkdownTable = (source) => {
+  const lines = source
+    .split('\n')
+    .map((line) => line.trim())
+    .filter((line) => line.startsWith('|') && line.endsWith('|'));
+  assert.ok(lines.length >= 2, 'markdown section contains a table');
+  const header = lines[0]
+    .slice(1, -1)
+    .split('|')
+    .map((cell) => normalizeMarkdownCell(cell));
+  const rows = [];
+
+  for (const line of lines.slice(2)) {
+    const values = line
+      .slice(1, -1)
+      .split('|')
+      .map((cell) => normalizeMarkdownCell(cell));
+    rows.push(Object.fromEntries(header.map((name, index) => [name, values[index] ?? ''])));
+  }
+
+  return rows;
+};
+
 const balancedSnippetAfter = (source, marker, open, close) => {
   const markerIndex = source.indexOf(marker);
   assert.notEqual(markerIndex, -1, `source contains ${marker}`);
@@ -688,73 +776,184 @@ void test('P10 normative docs cover the constitution and compiler hard rules', a
   const constitution = await readProjectFile('docs/constitution.md');
   const compilerRules = await readProjectFile('docs/compiler-hard-rules.md');
   const spec = await readProjectFile('SPEC.md');
+  const compilerRuleItems = parseMarkdownNumberedList(compilerRules);
+  const cssContract = spec
+    .split('\n')
+    .find((line) => normalizeMarkdownCell(line).startsWith('13.1 CSS.'));
 
-  assert.match(constitution, /`SPEC\.md` is the source of truth/);
-  assert.match(constitution, /Legibility is load-bearing/);
-  assert.match(constitution, /Sugar must lower to authorable IR/);
-  assert.match(constitution, /The wire is the documentation/);
-  assert.match(constitution, /Server truth always wins/);
-  assert.match(compilerRules, /Source-derived names/);
-  assert.match(compilerRules, /capture channels \(`ctx`, `element-params`, `module-scope`\)/);
-  assert.match(compilerRules, /One-to-one file mapping/);
-  assert.match(compilerRules, /Fixpoint invariant/);
-  assert.match(compilerRules, /render-equivalence gate/);
-  assert.match(compilerRules, /Platform behavior emission/);
-  assert.match(compilerRules, /Teaching errors/);
-  assert.match(spec, /\*\*13\.1 CSS\.\*\* Jiso v1 is Tailwind-first/);
-  assert.match(spec, /dynamic classes must be safelisted explicitly/);
-  assert.match(spec, /@source inline\("\.\.\."\)/);
-  assert.match(spec, /wraps them in `@scope` keyed to the host/);
-  assert.doesNotMatch(spec, /needs a design pass before v1 freeze/);
+  assert.ok(
+    normalizeMarkdownCell(markdownSection(constitution, 'Jiso Constitution')).includes(
+      'SPEC.md is the source of truth',
+    ),
+    'constitution names SPEC.md as the source of truth',
+  );
+  assert.deepEqual(numberedListTitles(constitution), [
+    'Legibility is load-bearing',
+    'Local code must not require global knowledge',
+    'Sugar must lower to authorable IR',
+    'The wire is the documentation',
+    'Server truth always wins',
+  ]);
+  assert.ok(
+    normalizeMarkdownCell(markdownSection(compilerRules, 'Compiler Hard Rules')).includes(
+      'SPEC.md section 5.2 is normative',
+    ),
+    'compiler hard rules cite the normative SPEC section',
+  );
+  assert.deepEqual(
+    compilerRuleItems.map((item) => normalizeMarkdownCell(item.split('.')[0])),
+    [
+      'Source-derived names',
+      'One-to-one file mapping',
+      'Fixpoint invariant',
+      'Platform behavior emission',
+      'Teaching errors',
+    ],
+  );
+  assert.ok(
+    compilerRuleItems
+      .find((item) => item.startsWith('Source-derived names.'))
+      .includes('capture channels (ctx, element-params, module-scope)'),
+    'source-derived rule keeps handler capture-channel coverage',
+  );
+  assert.ok(
+    compilerRuleItems
+      .find((item) => item.startsWith('Fixpoint invariant.'))
+      .includes('render-equivalence gate'),
+    'fixpoint rule keeps render-equivalence coverage',
+  );
+  assert.ok(cssContract, 'SPEC section 13.1 CSS contract exists');
+  assert.ok(cssContract.includes('Tailwind-first'), 'SPEC CSS contract keeps Tailwind v1 stance');
+  assert.ok(
+    cssContract.includes('dynamic classes must be safelisted explicitly'),
+    'SPEC CSS contract keeps dynamic-class safelisting',
+  );
+  assert.ok(cssContract.includes('@source inline("...")'), 'SPEC CSS contract cites safelists');
+  assert.ok(cssContract.includes('@scope'), 'SPEC CSS contract requires scoped component CSS');
+  assert.ok(
+    !cssContract.includes('needs a design pass before v1 freeze'),
+    'SPEC CSS contract is no longer a pre-freeze placeholder',
+  );
 });
 
 void test('P10 legibility study packet is ready but not claimed complete', async () => {
   const study = await readProjectFile('docs/legibility-study.md');
+  const fields = parseMarkdownFields(study);
+  const tasks = parseMarkdownTable(markdownSection(study, 'Tasks'));
+  const results = parseMarkdownTable(markdownSection(study, 'Results Ledger'));
+  const issues = parseMarkdownTable(markdownSection(study, 'Issues Ledger'));
+  const completionRule = normalizeMarkdownCell(markdownSection(study, 'Completion Rule'));
 
-  assert.match(study, /SPEC\.md` section 16\.2 requires an actual usability study/);
-  assert.match(study, /Required participants: five outside developers/);
-  assert.match(study, /under 60 seconds/);
-  assert.match(study, /Button behavior/);
-  assert.match(study, /Island data/);
-  assert.match(study, /Mutation effects/);
-  assert.match(study, /Optimism/);
-  assert.match(study, /Failure path/);
-  assert.match(study, /pending-5/);
-  assert.match(study, /Do not mark SPEC §16\.2 or P10 legibility complete/);
+  assert.equal(fields.get('Status'), 'protocol ready; recruitment, sessions, and results pending');
+  assert.equal(
+    fields.get('Required participants'),
+    'five outside developers who have not worked on Jiso',
+  );
+  assert.equal(
+    fields.get('Passing criterion'),
+    'each participant answers every task from browser devtools artifacts alone in under 60 seconds',
+  );
+  assert.deepEqual(
+    tasks.map((row) => row.Task),
+    ['Button behavior', 'Island data', 'Mutation effects', 'Optimism', 'Failure path'],
+  );
+  assert.deepEqual(
+    results.map((row) => row.Participant),
+    ['pending-1', 'pending-2', 'pending-3', 'pending-4', 'pending-5'],
+  );
+  for (const row of results) {
+    assert.equal(row.Date, 'TBD', `${row.Participant} is not dated as a completed study`);
+    assert.equal(row.Commit, 'TBD', `${row.Participant} has no freeze-run commit`);
+    assert.equal(row.Result, 'pending', `${row.Participant} remains pending`);
+  }
+  assert.equal(issues.length, 1);
+  assert.equal(issues[0].Status, 'pending');
+  assert.ok(completionRule.includes('SPEC §16.2'), 'completion rule names the SPEC criterion');
+  assert.ok(completionRule.includes('P10 legibility'), 'completion rule blocks P10 legibility');
+  assert.ok(completionRule.includes('five dated outside-developer result rows'));
 });
 
 void test('P10 v1 acceptance ledger tracks every freeze criterion', async () => {
   const ledger = await readProjectFile('docs/v1-acceptance.md');
+  const spec = await readProjectFile('SPEC.md');
+  const specCriteria = parseMarkdownNumberedList(
+    markdownSection(spec, '16. Success Criteria (v1)'),
+  ).map((item) => item.split(':')[0]);
+  const gateRows = parseMarkdownTable(markdownSection(ledger, 'Required Gates'));
+  const gatesByCriterion = new Map(gateRows.map((row) => [row['SPEC §16 criterion'], row]));
+  const freezeRule = normalizeMarkdownCell(markdownSection(ledger, 'Freeze Rule'));
 
-  assert.match(ledger, /`SPEC\.md` section 16 is the normative acceptance contract/);
-  assert.match(ledger, /Perf/);
-  assert.match(ledger, /Legibility/);
-  assert.match(ledger, /Verifiability/);
-  assert.match(ledger, /Constitution/);
-  assert.match(ledger, /Coverage/);
-  assert.match(ledger, /Commerce matrix assertions in `examples\/commerce\/src\/app\.test\.ts`/);
-  assert.match(ledger, /Navigation typed/);
-  assert.match(
-    ledger,
-    /Commerce route\/link\/redirect checks plus route-rename proof in `packages\/runtime\/src\/index\.test\.ts`/,
+  assert.ok(
+    normalizeMarkdownCell(markdownSection(ledger, 'v1 Acceptance Ledger')).includes(
+      'SPEC.md section 16 is the normative acceptance contract',
+    ),
+    'acceptance ledger cites the normative SPEC section',
   );
-  assert.match(ledger, /Declared execution/);
-  assert.match(ledger, /Update coverage/);
-  assert.match(ledger, /FW311\/update-coverage graph assertions and `fw check coverage` output/);
-  assert.match(ledger, /Pre-launch/);
-  assert.match(ledger, /Do not mark `IMPLEMENT_v1\.md` P10 complete/);
+  assert.deepEqual(
+    [...gatesByCriterion.keys()],
+    specCriteria
+      .map((criterion, index) => `16.${index + 1} ${criterion.replace(/ holds$/, '')}`)
+      .concat('Pre-launch'),
+  );
+  assert.equal(
+    gatesByCriterion.get('16.5 Coverage')['Current evidence artifact'],
+    'Commerce matrix assertions in examples/commerce/src/app.test.ts and fw check optimistic output.',
+  );
+  assert.equal(
+    gatesByCriterion.get('16.6 Navigation typed')['Current evidence artifact'],
+    'Commerce route/link/redirect checks plus route-rename proof in packages/runtime/src/index.test.ts.',
+  );
+  assert.equal(
+    gatesByCriterion.get('16.8 Update coverage')['Current evidence artifact'],
+    'FW311/update-coverage graph assertions and fw check coverage output.',
+  );
+  assert.equal(gatesByCriterion.get('16.2 Legibility').Status, 'pending external study');
+  assert.equal(gatesByCriterion.get('Pre-launch').Status, 'pending external checks');
+  assert.ok(freezeRule.includes('IMPLEMENT_v1.md P10'), 'freeze rule blocks P10 completion');
+  assert.ok(freezeRule.includes('docs/legibility-study.md'), 'freeze rule requires study evidence');
+  assert.ok(
+    freezeRule.includes('docs/prelaunch-checklist.md'),
+    'freeze rule requires pre-launch evidence',
+  );
 });
 
 void test('pre-launch checklist is tracked explicitly', async () => {
   const checklist = await readProjectFile('docs/prelaunch-checklist.md');
+  const requiredChecks = parseMarkdownTable(markdownSection(checklist, 'Required Checks'));
+  const completionRule = normalizeMarkdownCell(markdownSection(checklist, 'Completion Rule'));
 
-  assert.match(checklist, /launch-readiness checks/);
-  assert.match(checklist, /before v1 freeze/);
-  assert.match(checklist, /Trademark screen/);
-  assert.match(checklist, /jiso\.dev/);
-  assert.match(checklist, /`@jiso` npm/);
-  assert.match(checklist, /Linguistic screen/);
-  assert.match(checklist, /Do not mark v1 pre-launch complete/);
+  assert.ok(
+    normalizeMarkdownCell(markdownSection(checklist, 'Pre-launch Checklist')).includes(
+      'launch-readiness checks required before v1 freeze',
+    ),
+    'pre-launch checklist states the v1 freeze scope',
+  );
+  assert.deepEqual(
+    requiredChecks.map((row) => row.Check),
+    ['Trademark screen', 'Domain', 'npm scope', 'Linguistic screen'],
+  );
+  assert.deepEqual(
+    requiredChecks.map((row) => row['Where to record evidence']),
+    [
+      'Trademark Evidence Ledger below.',
+      'Domain Evidence Ledger below.',
+      'npm Scope Evidence Ledger below.',
+      'Linguistic Evidence Ledger below.',
+    ],
+  );
+  for (const row of requiredChecks) {
+    assert.equal(row.Status, 'pending', `${row.Check} remains pending`);
+  }
+  assert.equal(
+    parseMarkdownTable(markdownSection(checklist, 'Domain Evidence Ledger'))[0].Domain,
+    'jiso.dev',
+  );
+  assert.equal(
+    parseMarkdownTable(markdownSection(checklist, 'npm Scope Evidence Ledger'))[0].Scope,
+    '@jiso',
+  );
+  assert.ok(completionRule.includes('no ledger row remains pending'));
+  assert.ok(completionRule.includes('docs/v1-acceptance.md'));
 });
 
 void test('S2 loader budget and L0 no-upgrade path are acceptance evidence', async () => {
