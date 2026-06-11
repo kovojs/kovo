@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
+import { diagnosticDefinitions, type DiagnosticCode } from '@jiso/core';
 import { domain, mutation, query, s } from '@jiso/server';
 
 import {
@@ -47,6 +48,11 @@ function deferred<T = void>(): {
   });
 
   return { promise, reject, resolve };
+}
+
+function expectedDiagnostic(code: DiagnosticCode, detail: string): string {
+  const message = diagnosticDefinitions[code].message.replace(/\.$/, '');
+  return `${code} ${message}: ${detail}`;
 }
 
 describe('@jiso/test harness', () => {
@@ -1346,7 +1352,7 @@ describe('@jiso/test harness', () => {
     db.read('audit_log');
 
     expect(() => verifier.assertReadsCovered(['cart'])).toThrow(
-      'FW411 Query read set includes an exempt table: audit_log',
+      expectedDiagnostic('FW411', 'audit_log'),
     );
   });
 
@@ -1735,7 +1741,7 @@ describe('@jiso/test harness', () => {
     });
 
     await expect(harness.query(cartQuery)).rejects.toThrow(
-      'FW411 Query read set includes an exempt table: audit_log',
+      expectedDiagnostic('FW411', 'audit_log'),
     );
   });
 

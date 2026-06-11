@@ -28,8 +28,6 @@ import {
   type WithStatementBinding,
 } from 'pgsql-ast-parser';
 
-const FW411_MESSAGE = 'Query read set includes an exempt table';
-
 export interface JisoTestContext<Db = unknown> {
   db: Db;
   dbHandle(): Db;
@@ -1371,7 +1369,6 @@ function assertNoExemptReads(
 }
 
 function diagnosticMessage(code: DiagnosticCode, detail: string): string {
-  if (code === 'FW411') return `FW411 ${FW411_MESSAGE}: ${detail}`;
   return `${code} ${trimDiagnosticSentence(diagnosticDefinitions[code].message)}: ${detail}`;
 }
 
