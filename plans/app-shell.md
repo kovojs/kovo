@@ -8,7 +8,14 @@ Scope: SPEC addition (proposed §9.5 "The request shell"), `@jiso/server` shell 
 - [x] S8 spike: serve the pinned wire fixtures over real HTTP through a prototype dispatch path (enhanced mutation, no-JS PRG, 422 fragment, typed read, `<fw-defer>` stream, `/c/` module load) before freezing the `createApp()` shape (decision-gate writeup). Evidence: `conformance/app-shell-spike/src/index.test.ts` and `docs/app-shell-s8-spike.md` prove the pinned fixture bodies/headers over `node:http`, deferred chunk boundaries, and a versioned `/c/` module load; R3 can proceed with the closed `Request -> Response` handler shape.
 - [ ] SPEC PR: §9.5 request shell — dispatch table, document assembly contract, `createApp()` config surface (including the §6.5 `sessionProvider` home), error shells, export semantics, and the FW228/FW229 diagnostics.
 - [x] R1 route matcher + dispatch table (pure, no I/O). Evidence 2026-06-11: `packages/server/src/match.ts` and `packages/server/src/shell.ts` add no-I/O helpers for static-first route matching, raw params, trailing-slash 308 metadata, FW228-style ambiguity detection, and the printable reserved dispatch order; `packages/server/src/shell.test.ts` covers the slice.
-- [ ] R2 document assembly (`renderDocument`, deferred-stream variant, error shells).
+- [x] R2 document assembly (`renderDocument`, deferred-stream variant, error shells). Evidence
+      2026-06-11: `packages/server/src/document.ts` composes `renderPageHints`, initial
+      `fw-query` hydration scripts, and the runtime inline loader into deterministic
+      document shells, feeds the same assembled shell parts into deferred streams, supports
+      app-level templates over assembled parts, wraps successful HTML route responses while
+      preserving non-HTML route outcomes, and provides stable 403/404/500 error documents.
+      `packages/server/src/shell.test.ts` covers hints, loader/query ordering, deferred
+      chunk placement, template override, safe query JSON escaping, and error shells.
 - [ ] R3 `createApp()` aggregate + `createRequestHandler(app)` over web-standard `Request → Response`.
 - [ ] R4 node:http adapter (incl. Early Hints); `tests/p10-perf.node.mjs` migrates onto it as the parity proof.
 - [ ] R5 Vite+ plugin: dev middleware over the same handler; build wiring (manifest → stylesheet hints, compiled client modules → versioned emit).
