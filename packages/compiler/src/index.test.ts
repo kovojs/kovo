@@ -1987,6 +1987,48 @@ export const CartBadge = component('cart-badge', {
     expect(() => assertFixpoint(result)).not.toThrow();
   });
 
+  it('derives data-bind stamps for sole text-child query expressions', () => {
+    const result = compileComponentModule({
+      fileName: 'cart-badge.tsx',
+      queryShapes: { cart: { count: 'number' } },
+      source: `
+export const CartBadge = component('cart-badge', {
+  queries: { cart: {} },
+  render: () => (
+    <cart-badge>
+      <span>{cart.count}</span>
+    </cart-badge>
+  ),
+});
+`,
+    });
+    const serverSource = result.files[0]?.source ?? '';
+    const clientSource = result.files[1]?.source ?? '';
+
+    expect(serverSource).toContain('<span data-bind="cart.count">{cart.count}</span>');
+    expect(result.queryUpdatePlans).toEqual([
+      {
+        componentName: 'CartBadge',
+        paths: ['cart.count'],
+        query: 'cart',
+      },
+    ]);
+    expect(result.updateCoverage).toEqual([
+      {
+        componentName: 'CartBadge',
+        detail: 'data-bind',
+        position: 'binding',
+        query: 'cart.count',
+        status: 'plan',
+      },
+    ]);
+    expect(result.diagnostics).toEqual([]);
+    expect(clientSource).toContain(
+      'return applyCompiledQueryUpdatePlan(root, "cart", value, { bindings: true, derives: [], stamps: [], templateStamps: [] });',
+    );
+    expect(() => assertFixpoint(result)).not.toThrow();
+  });
+
   it('classifies query-dependent render positions for FW311 coverage', () => {
     const result = compileComponentModule({
       fileName: 'cart-badge.tsx',
@@ -1998,8 +2040,8 @@ export const CartBadge = component('cart-badge', {
       <span data-bind="cart.count">{cart.count}</span>
       <button data-bind:hidden="cart.empty">Checkout</button>
       <span>{renderOnce(cart.currency)}</span>
-      <strong>{cart.discount}</strong>
-      <em>{product.name}</em>
+      <strong>Discount {cart.discount}</strong>
+      <em>Product {product.name}</em>
     </cart-badge>
   ),
 });
@@ -2060,7 +2102,7 @@ export const CartBadge = component('cart-badge', {
         message:
           'Query-dependent DOM position has no update status. CartBadge cart.discount expression',
         severity: 'warn',
-        start: { column: 16, line: 9 },
+        start: { column: 25, line: 9 },
       },
       {
         code: 'FW311',
@@ -2069,7 +2111,7 @@ export const CartBadge = component('cart-badge', {
         message:
           'Query-dependent DOM position has no update status. CartBadge product.name expression',
         severity: 'warn',
-        start: { column: 12, line: 10 },
+        start: { column: 20, line: 10 },
       },
     ]);
   });

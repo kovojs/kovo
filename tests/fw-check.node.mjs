@@ -1332,6 +1332,7 @@ void test('D3 deferred stream responses are consumed by the runtime', async () =
     compilerTests,
     /lowers inline attribute expressions into compiled query update stamps/,
   );
+  assert.match(compilerTests, /derives data-bind stamps for sole text-child query expressions/);
   assert.match(
     compilerTests,
     /emits an app bootstrap that wires compiled query plans into the loader/,

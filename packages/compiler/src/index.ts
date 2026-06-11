@@ -276,7 +276,8 @@ const compilerValidators: readonly CompilerValidator[] = [
   ({ model, options, source }) => validateFragmentTargetInputs(source, model, options.fileName),
   ({ model, options, source }) => validateFragmentTargetChildren(source, model, options.fileName),
   ({ model, options, source }) => validateDataBindings(source, model, options),
-  ({ model, options, source }) => validateStampExpressionDrift(source, model, options),
+  ({ options, originalModel }) =>
+    validateStampExpressionDrift(options.source, originalModel, options),
   ({ model, options, source }) => validateEventPayloads(source, model, options),
   ({ model, options, source }) => validateDirectDbAccess(source, model, options.fileName),
   ({ options, originalModel }) => validateIdrefs(options.source, originalModel, options.fileName),
@@ -721,6 +722,17 @@ function lowerInlineAttributeDerives(
     });
   }
 
+  for (const element of jsxElements(model)) {
+    const binding = inlineTextBinding(element, source, knownQueries);
+    if (!binding) continue;
+
+    replacements.push({
+      end: element.openingEnd - 1,
+      start: element.openingEnd - 1,
+      value: ` data-bind="${escapeAttribute(binding)}"`,
+    });
+  }
+
   if (replacements.length === 0) return { source };
 
   const lowered = replacements
@@ -781,6 +793,28 @@ function shouldSkipInlineAttributeDerive(name: string): boolean {
     name.startsWith('on') ||
     name.startsWith('on:')
   );
+}
+
+function inlineTextBinding(
+  element: JsxElementModel,
+  source: string,
+  knownQueries: ReadonlySet<string>,
+): string | null {
+  if (element.selfClosing) return null;
+  if (element.attributes.some((attribute) => isBindingAttributeName(attribute.name))) return null;
+
+  const content = source.slice(element.openingEnd, element.closingStart);
+  const expression = /^\s*\{\s*(?<path>[A-Za-z_$][\w$]*(?:\.[A-Za-z_$][\w$]*)+)\s*\}\s*$/.exec(
+    content,
+  )?.groups?.path;
+  if (!expression) return null;
+
+  const query = expression.split('.', 1)[0];
+  return query && knownQueries.has(query) ? expression : null;
+}
+
+function isBindingAttributeName(name: string): boolean {
+  return name === 'data-bind' || name.startsWith('data-bind:') || name === 'data-bind-list';
 }
 
 function sanitizeIdentifier(value: string): string {
