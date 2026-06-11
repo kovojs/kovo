@@ -3,7 +3,7 @@ import { readdir, readFile } from 'node:fs/promises';
 import { test } from 'node:test';
 
 import { missingBuildMessage } from '../scripts/fw-check.mjs';
-import { fwCheck } from '../dist/cli/src/index.mjs';
+import { fwCheck, fwExplain } from '../dist/cli/src/index.mjs';
 
 const responseMarker = '<<< RESPONSE';
 const requestMarker = '>>> REQUEST';
@@ -94,6 +94,12 @@ const lineNumberFor = (source, needle) => {
   const index = source.indexOf(needle);
   assert.notEqual(index, -1, `source contains ${needle}`);
   return source.slice(0, index).split('\n').length;
+};
+
+const explainValue = (output, prefix) => {
+  const line = output.split('\n').find((item) => item.startsWith(prefix));
+  assert.ok(line, `explain output includes ${prefix}`);
+  return line.slice(prefix.length);
 };
 
 const listProjectFiles = async (dir, predicate) => {
@@ -1051,7 +1057,6 @@ void test('D4 commerce adopt-dont-invent features stay represented', async () =>
 });
 
 void test('P10 commerce graph assertions answer behavior mechanically', async () => {
-  const commerceTests = await readProjectFile('examples/commerce/src/app.test.ts');
   const cliSource = await readProjectFile('packages/cli/src/index.ts');
   const cliTests = await readProjectFile('packages/cli/src/index.test.ts');
   const compilerSource = await readProjectFile('packages/compiler/src/index.ts');
@@ -1062,34 +1067,39 @@ void test('P10 commerce graph assertions answer behavior mechanically', async ()
   const runtimeSource = await readProjectFile('packages/runtime/src/index.ts');
   const runtimeTests = await readProjectFile('packages/runtime/src/index.test.ts');
   const viteConfig = await readProjectFile('vite.config.ts');
+  const commerceGraph = JSON.parse(graphArtifact);
+  const cartQueryExplain = fwExplain(commerceGraph, { kind: 'query', target: 'cart' }).output;
+  const cartAddExplain = fwExplain(commerceGraph, {
+    kind: 'mutation',
+    optimistic: true,
+    target: 'cart/add',
+  }).output;
+  const uploadReceiptExplain = fwExplain(commerceGraph, {
+    kind: 'mutation',
+    optimistic: true,
+    target: 'order/receipt',
+  }).output;
 
+  assert.deepEqual(fwCheck(commerceGraph), { exitCode: 0, output: 'fw-check/v1\nOK\n' });
+  assert.equal(explainValue(cartQueryExplain, 'consumers: '), 'component:CartBadge,page:/cart');
+  assert.equal(explainValue(cartQueryExplain, 'invalidated-by: '), 'cart/add');
+  assert.equal(explainValue(cartQueryExplain, 'domain-writes: '), 'cart.addItem');
+  assert.equal(explainValue(cartAddExplain, 'session: '), 'commerceSession');
+  assert.equal(explainValue(cartAddExplain, 'input-fields: '), 'productId,quantity');
+  assert.equal(explainValue(cartAddExplain, 'writes: '), 'cart,product,order');
+  assert.equal(explainValue(cartAddExplain, 'invalidates: '), 'cart,product,order');
+  assert.match(explainValue(cartAddExplain, 'updates: '), /cart->component:CartBadge,page:\/cart/);
   assert.match(
-    commerceTests,
-    /answers cart\/add update intent mechanically from fw explain output/,
+    explainValue(cartAddExplain, 'updates: '),
+    /productGrid->component:ProductGrid,page:\/cart/,
   );
   assert.match(
-    commerceTests,
-    /answers the full commerce mutation-query matrix mechanically from fw explain output/,
+    explainValue(cartAddExplain, 'updates: '),
+    /orderHistory->component:OrderHistory,page:\/cart/,
   );
-  assert.match(
-    commerceTests,
-    /accepts the commerce mutation-query matrix through static graph, verifier, and enhanced wire/,
-  );
-  assert.match(commerceTests, /touchGraphKey: 'cart\.addItem'/);
-  assert.match(commerceTests, /touchGraphKey: 'order\.receipt'/);
-  assert.match(commerceTests, /queryChunkNames\(response\.body\)\.sort\(\)/);
-  assert.match(commerceTests, /mutationUpdateConsumers\(addToCartExplanation\.output\)/);
-  assert.match(commerceTests, /uploadReceiptAffectedQueries/);
-  assert.match(commerceTests, /no-invalidation/);
-  assert.match(
-    commerceTests,
-    /expect\(explainLine\(uploadReceiptExplanation\.output, 'invalidates: '\)\)\.toBe\('-'\)/,
-  );
-  assert.match(commerceTests, /harness\.verificationDiagnostics\(\)/);
-  assert.match(commerceTests, /receiptHarness\.verificationDiagnostics\(\)/);
-  assert.match(commerceTests, /const queryExplain = fwExplain\(commerceGraph, \{ kind: 'query'/);
-  assert.match(commerceTests, /expect\(updates\.get\(query\)\)\.toContain\('page:\/cart'\)/);
-  assert.match(commerceTests, /expect\(statuses\.get\(query\.query\)\)\.not\.toBe\('UNHANDLED'\)/);
+  assert.match(cartAddExplain, /^OPTIMISTIC-SUMMARY .*UNHANDLED=0$/m);
+  assert.equal(explainValue(uploadReceiptExplain, 'file-fields: '), 'receipt');
+  assert.equal(explainValue(uploadReceiptExplain, 'invalidates: '), '-');
   assert.match(cliTests, /hand-write in the mutation module, or declare 'await-fragment'/);
   assert.match(cliTests, /ignores unrelated statuses/);
   assert.match(cliSource, /diagnosticDefinitions\.FW310\.message/);
@@ -1122,20 +1132,17 @@ void test('P10 commerce graph assertions answer behavior mechanically', async ()
     /requires optimistic coverage from generated invalidation sets by default/,
   );
   assert.match(runtimeTests, /productGrid: 'await-fragment'/);
-  assert.match(commerceTests, /\.\.\.mutationUpdateConsumers\(explanation\.output\)\.keys\(\)/);
-  assert.match(commerceTests, /applyCommerceAddToCartEffect/);
-  assert.match(commerceTests, /shapeCommerceCartQuery/);
-  assert.match(commerceTests, /commerceAddToCartPropertyCases/);
-  assert.match(commerceTests, /cases: 18/);
-  assert.match(commerceTests, /generated\/graph\.json/);
-  assert.match(commerceTests, /fwCheck\(graphArtifact\)/);
   assert.match(fwCheckRunner, /tests\/fw-check\.node\.mjs/);
   assert.match(fwCheckRunner, /dist\/cli\/src\/index\.mjs/);
   assert.match(fwCheckRunner, /examples\/commerce\/src\/generated\/graph\.json/);
   assert.match(viteConfig, /command: 'node scripts\/fw-check\.mjs'/);
   assert.match(viteConfig, /examples\/commerce\/src\/generated\/graph\.json/);
-  assert.match(graphArtifact, /"touchGraph"/);
-  assert.match(graphArtifact, /"cart\.addItem"/);
+  assert.deepEqual(
+    Object.keys(commerceGraph.touchGraph)
+      .filter((key) => ['cart.addItem', 'order.receipt', 'payment.webhook'].includes(key))
+      .sort(),
+    ['cart.addItem', 'order.receipt', 'payment.webhook'],
+  );
 });
 
 void test('P10 starter wires graph assertions into CI', async () => {

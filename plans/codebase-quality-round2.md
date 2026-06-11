@@ -99,6 +99,10 @@ Do this first or pay it on every commit.
       version strings, and literals like `cases: 18` / `wrote 15 files`. Behavioral form: run
       `fwCheck`/`fwExplain` against fixture graphs and assert structured output; run the suite
       the assertion cares about instead of grepping for its name.
+      Partial evidence 2026-06-11: the commerce graph intent tranche in
+      `tests/fw-check.node.mjs` now parses `examples/commerce/src/generated/graph.json` and
+      asserts `fwCheck`/`fwExplain` behavior directly instead of grepping commerce test names,
+      touch-graph literals, or property-case counts. The wider source-text ledger remains open.
 - [ ] **Make create-jiso templates real files** (`create-jiso/src/index.ts:63-473`, ~470 lines of
       escaped template literals including a CI workflow and double-escaped regexes inside
       `.mjs`-in-string). Move to a `templates/` directory copied at scaffold time with `{{name}}`
