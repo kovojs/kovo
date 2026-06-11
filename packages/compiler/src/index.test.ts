@@ -869,6 +869,28 @@ export const CartShell = component('cart-shell', {
     ]);
   });
 
+  it('ignores HTML content-model text inside strings and comments', () => {
+    const result = compileComponentModule({
+      fileName: 'cart-shell.tsx',
+      source: `
+export const CartShell = component('cart-shell', {
+  render: () => {
+    const sample = '<p><div>Not JSX</div></p><tr><td>Detached</td></tr>';
+    // <p><section>Not JSX</section></p>
+    return (
+      <section>
+        <p>Cart intro</p>
+        <table><tbody><tr><td>Attached row</td></tr></tbody></table>
+      </section>
+    );
+  },
+});
+`,
+    });
+
+    expect(result.diagnostics).toEqual([]);
+  });
+
   it('accepts known delegated events and declared execution triggers', () => {
     const result = compileComponentModule({
       fileName: 'execution-triggers.tsx',

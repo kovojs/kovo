@@ -1328,59 +1328,27 @@ const blockTagsThatCloseParagraph = new Set([
   'ul',
 ]);
 
-const voidHtmlTags = new Set([
-  'area',
-  'base',
-  'br',
-  'col',
-  'embed',
-  'hr',
-  'img',
-  'input',
-  'link',
-  'meta',
-  'param',
-  'source',
-  'track',
-  'wbr',
-]);
-
 function validateHtmlContentModel(source: string, fileName: string): CompilerDiagnostic[] {
   const diagnostics: CompilerDiagnostic[] = [];
-  const stack: string[] = [];
-  const tagPattern = /<(?<closing>\/?)(?<tag>[A-Za-z][A-Za-z0-9-]*)(?<attrs>[^<>]*)>/g;
+  const elements = parsedJsxElements(source);
 
-  for (const match of source.matchAll(tagPattern)) {
-    const rawTag = match.groups?.tag ?? '';
-    if (!isNativeHtmlTag(rawTag)) continue;
+  for (const element of elements) {
+    const tag = element.tag.toLowerCase();
+    if (!isNativeHtmlTag(tag)) continue;
 
-    const tag = rawTag.toLowerCase();
-    const attrs = match.groups?.attrs ?? '';
-    const closing = match.groups?.closing === '/';
-
-    if (closing) {
-      const index = stack.lastIndexOf(tag);
-      if (index !== -1) stack.splice(index);
-      continue;
-    }
-
-    if (blockTagsThatCloseParagraph.has(tag) && stack.includes('p')) {
+    if (blockTagsThatCloseParagraph.has(tag) && hasJsxAncestor(element, 'p', elements)) {
       diagnostics.push(htmlContentModelDiagnostic(fileName, `<${tag}> cannot appear inside <p>`));
     }
 
     if (
       tag === 'tr' &&
-      !hasFwComponentStamp(attrs) &&
-      !hasAncestor(stack, ['table', 'tbody', 'thead', 'tfoot'])
+      !hasJsxAttribute(element, 'fw-c') &&
+      !hasAnyJsxAncestor(element, ['table', 'tbody', 'thead', 'tfoot'], elements)
     ) {
       diagnostics.push(
         htmlContentModelDiagnostic(fileName, '<tr> must be inside a table section or table'),
       );
     }
-
-    if (isSelfClosing(attrs) || voidHtmlTags.has(tag)) continue;
-
-    stack.push(tag);
   }
 
   return diagnostics;
@@ -1391,22 +1359,6 @@ function htmlContentModelDiagnostic(fileName: string, detail: string): CompilerD
     ...diagnosticFor(fileName, 'FW225'),
     message: `${diagnosticDefinitions.FW225.message} ${detail}`,
   };
-}
-
-function isNativeHtmlTag(tag: string): boolean {
-  return tag === tag.toLowerCase() && !tag.includes('-');
-}
-
-function hasAncestor(stack: readonly string[], tags: readonly string[]): boolean {
-  return stack.some((tag) => tags.includes(tag));
-}
-
-function isSelfClosing(attrs: string): boolean {
-  return /\/\s*$/.test(attrs);
-}
-
-function hasFwComponentStamp(attrs: string): boolean {
-  return /\bfw-c\s*=/.test(attrs);
 }
 
 function validateResidualStamps(
@@ -1656,6 +1608,31 @@ function jsxStaticAttributeValue(element: JsxElementModel, name: string): string
 
 function isWithinElement(candidate: JsxElementModel, container: JsxElementModel): boolean {
   return candidate.start > container.start && candidate.end < container.end;
+}
+
+function hasJsxAncestor(
+  element: JsxElementModel,
+  tag: string,
+  elements: readonly JsxElementModel[],
+): boolean {
+  return hasAnyJsxAncestor(element, [tag], elements);
+}
+
+function hasAnyJsxAncestor(
+  element: JsxElementModel,
+  tags: readonly string[],
+  elements: readonly JsxElementModel[],
+): boolean {
+  return elements.some(
+    (candidate) =>
+      candidate !== element &&
+      isWithinElement(element, candidate) &&
+      tags.includes(candidate.tag.toLowerCase()),
+  );
+}
+
+function isNativeHtmlTag(tag: string): boolean {
+  return tag === tag.toLowerCase() && !tag.includes('-');
 }
 
 function findHandlerBodies(source: string): { body: string; params: string[] }[] {
