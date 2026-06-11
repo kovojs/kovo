@@ -484,6 +484,67 @@ describe('runtime loader', () => {
     }
   });
 
+  it('stamps inline enhanced forms when fetch fails without native submit', async () => {
+    const globalRecord = globalThis as unknown as Record<string, unknown>;
+    const originals = {
+      FormData: globalRecord.FormData,
+      addEventListener: globalRecord.addEventListener,
+      document: globalRecord.document,
+      fetch: globalRecord.fetch,
+    };
+    const listeners = new Map<string, (event: unknown) => void>();
+    const attributes = new Map<string, string>();
+    const form = {
+      action: '/_m/cart/add',
+      method: 'post',
+      setAttribute(name: string, value: string) {
+        attributes.set(name, value);
+      },
+    };
+
+    try {
+      globalRecord.FormData = function FormData() {
+        return {};
+      };
+      globalRecord.addEventListener = (type: string, listener: (event: unknown) => void) => {
+        listeners.set(type, listener);
+      };
+      globalRecord.document = {
+        querySelectorAll(selector: string) {
+          return selector === '[fw-deps]' ? [] : [];
+        },
+      };
+      globalRecord.fetch = vi.fn(async () => {
+        throw new Error('network down');
+      });
+
+      runInThisContext(jisoLoaderSource);
+      listeners.get('submit')?.({
+        preventDefault: vi.fn(),
+        target: {
+          closest(selector: string) {
+            return selector === 'form[enhance],form[data-enhance],form[data-mutation]'
+              ? form
+              : null;
+          },
+        },
+        type: 'submit',
+      });
+      await Promise.resolve();
+      await Promise.resolve();
+      await new Promise((resolve) => setTimeout(resolve, 0));
+
+      expect(attributes).toEqual(
+        new Map([
+          ['data-error-code', 'NETWORK_ERROR'],
+          ['fw-error', ''],
+        ]),
+      );
+    } finally {
+      Object.assign(globalRecord, originals);
+    }
+  });
+
   it('keeps inline loader idempotency keys on crypto randomUUID', () => {
     expect(jisoLoaderSource).toContain('crypto.randomUUID');
     expect(jisoLoaderSource).not.toContain('Math.random');
@@ -781,6 +842,55 @@ describe('runtime loader', () => {
     ).resolves.toBeUndefined();
 
     expect(preventDefault).toHaveBeenCalledTimes(1);
+    expect(onError).toHaveBeenCalledWith(error, {
+      event: { preventDefault, target: form, type: 'submit' },
+      phase: 'enhanced-mutation',
+    });
+  });
+
+  it('falls back to native submit when unhandled enhanced submits fail', async () => {
+    const loaderRoot = new FakeRoot();
+    const mutationRoot = new FakeMorphRoot();
+    const store = createQueryStore();
+    const preventDefault = vi.fn();
+    const onError = vi.fn();
+    const submit = vi.fn();
+    const error = new Error('network down');
+    const form = Object.assign(
+      new FakeFormElement(
+        { enhance: '' },
+        {
+          action: '/_m/cart/add',
+          method: 'post',
+        },
+      ),
+      { submit },
+    );
+
+    installJisoLoader({
+      enhancedMutations: {
+        fetch: vi.fn(async () => {
+          throw error;
+        }),
+        formData: () => new FormData(),
+        root: mutationRoot,
+        store,
+      },
+      importModule: vi.fn(),
+      onError,
+      root: loaderRoot,
+    });
+
+    await expect(
+      loaderRoot.listeners.get('submit')?.({
+        preventDefault,
+        target: form,
+        type: 'submit',
+      }),
+    ).resolves.toBeUndefined();
+
+    expect(preventDefault).toHaveBeenCalledTimes(1);
+    expect(submit).toHaveBeenCalledTimes(1);
     expect(onError).toHaveBeenCalledWith(error, {
       event: { preventDefault, target: form, type: 'submit' },
       phase: 'enhanced-mutation',
