@@ -5,7 +5,7 @@ Scope: SPEC addition (proposed §9.5 "The request shell"), `@jiso/server` shell 
 
 ## Progress checklist
 
-- [ ] S8 spike: serve the pinned wire fixtures over real HTTP through a prototype dispatch path (enhanced mutation, no-JS PRG, 422 fragment, typed read, `<fw-defer>` stream, `/c/` module load) before freezing the `createApp()` shape (decision-gate writeup).
+- [x] S8 spike: serve the pinned wire fixtures over real HTTP through a prototype dispatch path (enhanced mutation, no-JS PRG, 422 fragment, typed read, `<fw-defer>` stream, `/c/` module load) before freezing the `createApp()` shape (decision-gate writeup). Evidence: `conformance/app-shell-spike/src/index.test.ts` and `docs/app-shell-s8-spike.md` prove the pinned fixture bodies/headers over `node:http`, deferred chunk boundaries, and a versioned `/c/` module load; R3 can proceed with the closed `Request -> Response` handler shape.
 - [ ] SPEC PR: §9.5 request shell — dispatch table, document assembly contract, `createApp()` config surface (including the §6.5 `sessionProvider` home), error shells, export semantics, and the FW228/FW229 diagnostics.
 - [x] R1 route matcher + dispatch table (pure, no I/O). Evidence 2026-06-11: `packages/server/src/match.ts` and `packages/server/src/shell.ts` add no-I/O helpers for static-first route matching, raw params, trailing-slash 308 metadata, FW228-style ambiguity detection, and the printable reserved dispatch order; `packages/server/src/shell.test.ts` covers the slice.
 - [ ] R2 document assembly (`renderDocument`, deferred-stream variant, error shells).
@@ -47,6 +47,8 @@ Constitution check: the shell introduces no new wire vocabulary and no new autho
 ## Spike S8 — wire parity over real HTTP
 
 Prove before freezing R3's shape: a prototype handler serving the pinned `fixtures/wire` set over node:http — enhanced mutation round-trip (FW-Idem replay, FW-Targets, FW-Changes), no-JS PRG, 422 fragment, typed read over `/_q/`, `<fw-defer>` stream chunk boundaries under real chunked transfer, and a `/c/` module import on first interaction — each byte-compared to the fixtures. Decision-gate writeup covers: where CSRF/session resolution sits relative to dispatch, whether `RoutePageResponse`→`Response` conversion loses anything the fixtures pin (header ordering, charset), and what HTTP/1.1 buffering does to deferred-stream placement guarantees (feeds §13.3).
+
+**S8 result (2026-06-11):** proceed with R3's `createRequestHandler(app): Request -> Response` shape. `conformance/app-shell-spike/src/index.test.ts` runs the pinned `fixtures/wire` transcripts over a real `node:http` loopback server and compares live status lines, fixture-declared headers, and decoded body bytes for enhanced mutation, no-JS PRG, 422 validation fragment, typed read, and deferred stream. The deferred case additionally asserts the raw HTTP/1.1 chunked transfer keeps the shell chunk before `--jiso-boundary` and the query/fragment payload after it. The same prototype dispatch path serves `/c/cart.client.js?v=s8`; the test fetches and imports the module to prove the first-interaction module-load path. `docs/app-shell-s8-spike.md` records the decision gate: session resolution belongs before route/query/mutation guards per SPEC §6.5; CSRF validation belongs before mutation parsing/replay/guards per SPEC §6.6; `Response` conversion preserves the fixture-pinned protocol fields, while raw Node-only headers remain adapter metadata.
 
 ## Out of scope
 

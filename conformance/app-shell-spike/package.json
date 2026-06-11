@@ -1,0 +1,13 @@
+{
+  "name": "@jiso/conformance-app-shell-spike",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "vitest --run src/index.test.ts"
+  },
+  "devDependencies": {
+    "@types/node": "25.9.2",
+    "vitest": "4.1.8"
+  }
+}
