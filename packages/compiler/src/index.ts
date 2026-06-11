@@ -503,10 +503,18 @@ function lowerStaticHrefCalls(source: string): string {
 }
 
 function normalizeStaticHrefAttributes(source: string): string {
-  return source.replace(
-    /\bhref=\{\s*(["'])(?<target>[^"']+)\1\s*\}/g,
-    (_match, _quote, target) => `href="${escapeAttribute(target)}"`,
-  );
+  let output = source;
+
+  for (const attribute of jsxAttributes(source)
+    .filter((item) => item.name === 'href' && item.expression !== undefined)
+    .sort((left, right) => right.start - left.start)) {
+    const target = literalStringValue(attribute.expression ?? '');
+    if (target === null) continue;
+
+    output = `${output.slice(0, attribute.start)}href="${escapeAttribute(target)}"${output.slice(attribute.end)}`;
+  }
+
+  return output;
 }
 
 function lowerStaticHrefCall(args: readonly string[]): string | null {

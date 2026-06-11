@@ -1196,6 +1196,31 @@ export const ProductLinks = component('product-links', {
     expect(result.diagnostics).toEqual([]);
   });
 
+  it('ignores expression href attribute text inside strings and comments', () => {
+    const result = compileComponentModule({
+      fileName: 'product-links.tsx',
+      registryFacts: {
+        routes: ['/products/:id'],
+      },
+      source: `
+export const ProductLinks = component('product-links', {
+  render: () => {
+    const sample = 'href={"/missing"}';
+    // href={"/also-missing"}
+    return <a href={"/products/p1"}>Product</a>;
+  },
+});
+`,
+    });
+    const serverSource = result.files[0]?.source ?? '';
+
+    expect(result.diagnostics).toEqual([]);
+    expect(serverSource).toContain('const sample = \'href={"/missing"}\'');
+    expect(serverSource).toContain('href="/products/p1"');
+    expect(serverSource).not.toContain('href={"/products/p1"}');
+    expect(() => assertFixpoint(result)).not.toThrow();
+  });
+
   it('keeps unsupported details JavaScript as a handler instead of inventing platform attributes', () => {
     const result = compileComponentModule({
       fileName: 'accordion-toggle.tsx',
