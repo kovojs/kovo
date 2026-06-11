@@ -234,8 +234,17 @@ class FileSchemaImpl implements FileSchema {
   }
 }
 
+export interface GuardFailure {
+  code: 'RATE_LIMITED' | 'UNAUTHORIZED';
+  payload?: Record<string, unknown>;
+  retryAfter?: number;
+  status: 422 | 429;
+}
+
+export type GuardResult = boolean | GuardFailure;
+
 export interface Guard<Request, RefinedRequest extends Request = Request> {
-  (request: Request): boolean | Promise<boolean>;
+  (request: Request): GuardResult | Promise<GuardResult>;
   readonly refines?: (request: Request) => request is RefinedRequest;
 }
 
@@ -265,9 +274,12 @@ export interface SessionDefinition<Value> {
 export interface RateLimitOptions<Request> {
   key?: (request: Request) => string;
   max: number;
+  maxKeys?: number;
   per?: 'global' | 'session';
   windowMs?: number;
 }
+
+const defaultRateLimitWindowMs = 60_000;
 
 export const guards = {
   all<Request, RefinedRequest extends Request = Request>(
@@ -275,7 +287,8 @@ export const guards = {
   ): Guard<Request, RefinedRequest> {
     return async (request: Request) => {
       for (const item of items) {
-        if (!(await item(request))) return false;
+        const result = await item(request);
+        if (result !== true) return guardFailureFromResult(result);
       }
 
       return true;
@@ -291,19 +304,30 @@ export const guards = {
 
     return (request) => {
       const now = Date.now();
+      evictExpiredRateLimits(counts, now);
+
+      const windowMs = options.windowMs ?? defaultRateLimitWindowMs;
+      if (options.max <= 0) return rateLimitFailure(now + windowMs, now);
+
       const key = rateLimitKey(request, options);
       const existing = counts.get(key);
 
-      if (existing && (options.windowMs === undefined || existing.resetAt > now)) {
-        if (existing.count >= options.max) return false;
+      if (existing && existing.resetAt > now) {
+        if (existing.count >= options.max) return rateLimitFailure(existing.resetAt, now);
 
         existing.count += 1;
         return true;
       }
 
+      while (options.maxKeys !== undefined && counts.size >= options.maxKeys) {
+        const oldest = counts.keys().next().value;
+        if (oldest === undefined) break;
+        counts.delete(oldest);
+      }
+
       counts.set(key, {
         count: 1,
-        resetAt: options.windowMs === undefined ? Number.POSITIVE_INFINITY : now + options.windowMs,
+        resetAt: now + windowMs,
       });
       return options.max > 0;
     };
@@ -312,6 +336,44 @@ export const guards = {
     return (request) => request.session?.user?.roles?.includes(role) ?? false;
   },
 };
+
+function guardFailureFromResult(result: GuardResult): GuardFailure {
+  if (typeof result === 'object') return result;
+
+  return {
+    code: 'UNAUTHORIZED',
+    payload: {},
+    status: 422,
+  };
+}
+
+async function runGuard<Request>(
+  guard: Guard<Request> | undefined,
+  request: Request,
+): Promise<GuardFailure | null> {
+  if (!guard) return null;
+
+  const result = await guard(request);
+  return result === true ? null : guardFailureFromResult(result);
+}
+
+function rateLimitFailure(resetAt: number, now: number): GuardFailure {
+  return {
+    code: 'RATE_LIMITED',
+    payload: {},
+    retryAfter: Math.max(1, Math.ceil((resetAt - now) / 1000)),
+    status: 429,
+  };
+}
+
+function evictExpiredRateLimits(
+  counts: Map<string, { count: number; resetAt: number }>,
+  now: number,
+): void {
+  for (const [key, record] of counts) {
+    if (record.resetAt <= now) counts.delete(key);
+  }
+}
 
 export function session<Value>(schema: Schema<Value>): SessionDefinition<Value> {
   return {
@@ -328,7 +390,8 @@ export interface MutationFail<Code extends string = string, Payload = unknown> {
     payload: Payload;
   };
   ok: false;
-  status: 422;
+  retryAfter?: number;
+  status: 422 | 429;
 }
 
 export interface MutationSuccess<Value> {
@@ -405,7 +468,7 @@ export type QuerySearchInput =
 export interface QueryEndpointResponse {
   body: string;
   headers: Record<string, string>;
-  status: 200 | 404 | 422;
+  status: 200 | 404 | 422 | 429;
 }
 
 export interface QueryEndpointRegistry<Request = unknown> {
@@ -429,7 +492,7 @@ export interface QueryDefinition<
 }
 
 type BivariantGuard<Request> = {
-  call(request: Request): boolean | Promise<boolean>;
+  call(request: Request): GuardResult | Promise<GuardResult>;
 }['call'];
 
 interface QueryArgsDeclarationDefinition<Key extends string, Value, Input, Request> {
@@ -444,7 +507,7 @@ interface QueryArgsDeclarationDefinition<Key extends string, Value, Input, Reque
 }
 
 type BivariantQueryGuard = {
-  call(request: unknown): boolean | Promise<boolean>;
+  call(request: unknown): GuardResult | Promise<GuardResult>;
 }['call'];
 
 type BivariantQueryLoad = {
@@ -496,11 +559,13 @@ export async function runQuery<const Key extends string, Value, Input, Request>(
   const argsResult = parseQueryInput(definition, rawInput);
   if (!argsResult.ok) return argsResult.failure;
 
-  if (definition.guard && !(await definition.guard(request))) {
+  const guardFailure = await runGuard(definition.guard, request);
+  if (guardFailure) {
     return {
-      error: { code: 'UNAUTHORIZED', payload: {} },
+      error: { code: guardFailure.code, payload: guardFailure.payload ?? {} },
       ok: false,
-      status: 422,
+      ...(guardFailure.retryAfter === undefined ? {} : { retryAfter: guardFailure.retryAfter }),
+      status: guardFailure.status,
     };
   }
 
@@ -521,11 +586,12 @@ export interface QueryEndpointSuccess<Value, Input = unknown> {
 
 export interface QueryEndpointFailure {
   error: {
-    code: 'UNAUTHORIZED' | 'VALIDATION';
+    code: 'RATE_LIMITED' | 'UNAUTHORIZED' | 'VALIDATION';
     payload: Record<string, unknown> | ValidationFailurePayload;
   };
   ok: false;
-  status: 422;
+  retryAfter?: number;
+  status: 422 | 429;
 }
 
 export async function renderQueryEndpointResponse<const Key extends string, Value, Input, Request>(
@@ -538,8 +604,11 @@ export async function renderQueryEndpointResponse<const Key extends string, Valu
   if (!result.ok) {
     return {
       body: JSON.stringify(result.error),
-      headers: { 'Content-Type': 'application/json; charset=utf-8' },
-      status: 422,
+      headers: {
+        'Content-Type': 'application/json; charset=utf-8',
+        ...retryAfterHeaders(result),
+      },
+      status: result.status,
     };
   }
 
@@ -645,7 +714,7 @@ export interface MutationWireRequestOptions<Request> {
 export interface MutationWireResponse {
   body: string;
   headers: Record<string, string>;
-  status: 200 | 422 | 500;
+  status: 200 | 422 | 429 | 500;
 }
 
 export interface MutationReplayStore {
@@ -741,7 +810,7 @@ export interface NoJsMutationRequest<Request, Value> {
 export interface NoJsMutationResponse {
   body: string;
   headers: Record<string, string>;
-  status: 303 | 422;
+  status: 303 | 422 | 429;
 }
 
 export interface MutationEndpointRequest<
@@ -815,7 +884,7 @@ export interface NotFound {
 export interface RoutePageResponse {
   body: string;
   headers: Record<string, string>;
-  status: 200 | 404 | 422;
+  status: 200 | 404 | 422 | 429;
 }
 
 export interface RouteRequestInput {
@@ -1032,11 +1101,13 @@ export async function runRoutePage<
 ): Promise<RoutePageResult<Page>> {
   const routeRequest = parseRouteRequest(definition, input);
 
-  if (definition.guard && !(await definition.guard(request))) {
+  const guardFailure = await runGuard(definition.guard, request);
+  if (guardFailure) {
     return {
-      error: { code: 'UNAUTHORIZED', payload: {} },
+      error: { code: guardFailure.code, payload: guardFailure.payload ?? {} },
       ok: false,
-      status: 422,
+      ...(guardFailure.retryAfter === undefined ? {} : { retryAfter: guardFailure.retryAfter }),
+      status: guardFailure.status,
     };
   }
 
@@ -1054,11 +1125,12 @@ export interface RoutePageSuccess<Page> {
 
 export interface RoutePageFailure {
   error?: {
-    code: 'UNAUTHORIZED';
+    code: 'RATE_LIMITED' | 'UNAUTHORIZED';
     payload: Record<string, unknown>;
   };
   ok: false;
-  status: 404 | 422;
+  retryAfter?: number;
+  status: 404 | 422 | 429;
 }
 
 export async function renderRoutePageResponse<
@@ -1078,8 +1150,16 @@ export async function renderRoutePageResponse<
 
   if (!result.ok) {
     return {
-      body: result.status === 404 ? 'Not Found' : 'Unauthorized',
-      headers: { 'Content-Type': 'text/html; charset=utf-8' },
+      body:
+        result.status === 404
+          ? 'Not Found'
+          : result.status === 429
+            ? 'Too Many Requests'
+            : 'Unauthorized',
+      headers: {
+        'Content-Type': 'text/html; charset=utf-8',
+        ...retryAfterHeaders(result),
+      },
       status: result.status,
     };
   }
@@ -1244,11 +1324,13 @@ export async function runMutation<
 
   const input = inputResult.value as InferSchema<InputSchema>;
 
-  if (definition.guard && !(await definition.guard(request))) {
+  const guardFailure = await runGuard(definition.guard, request);
+  if (guardFailure) {
     return {
-      error: { code: 'UNAUTHORIZED', payload: {} },
+      error: { code: guardFailure.code, payload: guardFailure.payload ?? {} },
       ok: false,
-      status: 422,
+      ...(guardFailure.retryAfter === undefined ? {} : { retryAfter: guardFailure.retryAfter }),
+      status: guardFailure.status,
     };
   }
 
@@ -1366,8 +1448,11 @@ export async function renderMutationResponse<
   if (!result.ok) {
     const response = {
       body: await renderFailureFragment(result, wireRequest),
-      headers: mutationWireResponseHeaders(wireRequest),
-      status: 422,
+      headers: {
+        ...mutationWireResponseHeaders(wireRequest),
+        ...retryAfterHeaders(result),
+      },
+      status: result.status,
     } satisfies MutationWireResponse;
 
     return result.error.code === 'VALIDATION'
@@ -1467,8 +1552,11 @@ export async function renderNoJsMutationResponse<
 
     return {
       body,
-      headers: { 'Content-Type': 'text/html; charset=utf-8' },
-      status: 422,
+      headers: {
+        'Content-Type': 'text/html; charset=utf-8',
+        ...retryAfterHeaders(result),
+      },
+      status: result.status,
     };
   }
 
@@ -1529,6 +1617,10 @@ function rateLimitKey<Request extends SessionRequestLike>(
   if (options.per === 'global') return 'global';
 
   return request.session?.id ?? request.session?.user?.id ?? 'anonymous';
+}
+
+function retryAfterHeaders(result: { retryAfter?: number }): Record<string, string> {
+  return result.retryAfter === undefined ? {} : { 'Retry-After': String(result.retryAfter) };
 }
 
 function formLikeToRecord(input: unknown): Record<string, unknown> {

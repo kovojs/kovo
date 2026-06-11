@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { File } from 'node:buffer';
 import { readFile } from 'node:fs/promises';
 
@@ -1416,15 +1416,165 @@ describe('server mutation primitives', () => {
     await expect(
       runMutation(guarded, { productId: 'p1' }, { session: { id: 's1' } }),
     ).resolves.toEqual({
-      error: { code: 'UNAUTHORIZED', payload: {} },
+      error: { code: 'RATE_LIMITED', payload: {} },
       ok: false,
-      status: 422,
+      retryAfter: 60,
+      status: 429,
     });
     await expect(
       runMutation(guarded, { productId: 'p1' }, { session: { id: 's2' } }),
     ).resolves.toMatchObject({
       ok: true,
       value: 'ok',
+    });
+  });
+
+  it('resets rate-limit buckets after the configured window', async () => {
+    const now = vi.spyOn(Date, 'now');
+    let currentTime = 1_000;
+    now.mockImplementation(() => currentTime);
+    const guarded = mutation('cart/add', {
+      guard: guards.rateLimit({ max: 1, per: 'session', windowMs: 50 }),
+      input: s.object({ productId: s.string() }),
+      handler() {
+        return 'ok';
+      },
+    });
+
+    try {
+      await expect(
+        runMutation(guarded, { productId: 'p1' }, { session: { id: 's1' } }),
+      ).resolves.toMatchObject({
+        ok: true,
+        value: 'ok',
+      });
+      await expect(
+        runMutation(guarded, { productId: 'p1' }, { session: { id: 's1' } }),
+      ).resolves.toMatchObject({
+        error: { code: 'RATE_LIMITED', payload: {} },
+        ok: false,
+        retryAfter: 1,
+        status: 429,
+      });
+
+      currentTime = 1_051;
+
+      await expect(
+        runMutation(guarded, { productId: 'p1' }, { session: { id: 's1' } }),
+      ).resolves.toMatchObject({
+        ok: true,
+        value: 'ok',
+      });
+    } finally {
+      now.mockRestore();
+    }
+  });
+
+  it('shares global rate limits across sessions and isolates custom keys', async () => {
+    interface TenantRequest {
+      session?: { id?: string };
+      tenant: string;
+    }
+
+    const globalGuarded = mutation('cart/global-add', {
+      guard: guards.rateLimit({ max: 1, per: 'global' }),
+      input: s.object({ productId: s.string() }),
+      handler() {
+        return 'ok';
+      },
+    });
+    const keyedGuarded = mutation('cart/keyed-add', {
+      guard: guards.rateLimit<TenantRequest>({
+        key: (request) => request.tenant,
+        max: 1,
+      }),
+      input: s.object({ productId: s.string() }),
+      handler() {
+        return 'ok';
+      },
+    });
+
+    await expect(
+      runMutation(globalGuarded, { productId: 'p1' }, { session: { id: 's1' } }),
+    ).resolves.toMatchObject({ ok: true });
+    await expect(
+      runMutation(globalGuarded, { productId: 'p1' }, { session: { id: 's2' } }),
+    ).resolves.toMatchObject({ error: { code: 'RATE_LIMITED' }, ok: false, status: 429 });
+
+    await expect(
+      runMutation(keyedGuarded, { productId: 'p1' }, { tenant: 'a' }),
+    ).resolves.toMatchObject({ ok: true });
+    await expect(
+      runMutation(keyedGuarded, { productId: 'p1' }, { tenant: 'b' }),
+    ).resolves.toMatchObject({ ok: true });
+    await expect(
+      runMutation(keyedGuarded, { productId: 'p1' }, { tenant: 'a' }),
+    ).resolves.toMatchObject({ error: { code: 'RATE_LIMITED' }, ok: false, status: 429 });
+  });
+
+  it('preserves rate-limit status and retry-after headers in mutation wire responses', async () => {
+    const guarded = mutation('cart/add', {
+      guard: guards.rateLimit({ max: 1, per: 'session', windowMs: 60_000 }),
+      input: s.object({ productId: s.string() }),
+      handler() {
+        return 'ok';
+      },
+    });
+    const request = { session: { id: 's1' } };
+
+    await expect(
+      renderMutationResponse(guarded, {
+        fragment: true,
+        rawInput: { productId: 'p1' },
+        request,
+      }),
+    ).resolves.toMatchObject({ status: 200 });
+    await expect(
+      renderMutationResponse(guarded, {
+        fragment: true,
+        rawInput: { productId: 'p1' },
+        request,
+      }),
+    ).resolves.toEqual({
+      body: '<fw-fragment target="error"><output role="alert" data-error-code="RATE_LIMITED">{}</output></fw-fragment>',
+      headers: {
+        'Content-Type': 'text/vnd.jiso.fragment+html; charset=utf-8',
+        'Retry-After': '60',
+      },
+      status: 429,
+    });
+  });
+
+  it('preserves rate-limit status and retry-after headers in no-JS mutation responses', async () => {
+    const guarded = mutation('cart/add', {
+      guard: guards.rateLimit({ max: 1, per: 'session', windowMs: 60_000 }),
+      input: s.object({ productId: s.string() }),
+      handler() {
+        return 'ok';
+      },
+    });
+    const request = { session: { id: 's1' } };
+
+    await expect(
+      renderNoJsMutationResponse(guarded, {
+        rawInput: { productId: 'p1' },
+        redirectTo: '/cart',
+        request,
+      }),
+    ).resolves.toMatchObject({ status: 303 });
+    await expect(
+      renderNoJsMutationResponse(guarded, {
+        rawInput: { productId: 'p1' },
+        redirectTo: '/cart',
+        request,
+      }),
+    ).resolves.toEqual({
+      body: '<!doctype html><html><body><output role="alert" data-error-code="RATE_LIMITED">{}</output></body></html>',
+      headers: {
+        'Content-Type': 'text/html; charset=utf-8',
+        'Retry-After': '60',
+      },
+      status: 429,
     });
   });
 
