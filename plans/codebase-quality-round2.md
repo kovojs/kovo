@@ -133,6 +133,9 @@ Do this first or pay it on every commit.
       server API and asserts `renderQueryScript`, `renderDocumentQueryScript`, and
       `renderDocument` output directly, including keyed query hydration and escaped
       `</script>` payloads, instead of grepping server source or server test names.
+      Partial evidence 2026-06-11: the P2 page-hints tranche now imports the built server API
+      and asserts `renderPageHints` suppresses empty speculation rules and de-dupes prerender
+      URLs instead of grepping server source or server test names.
 - [x] **Make create-jiso templates real files** (`create-jiso/src/index.ts:63-473`, ~470 lines of
       escaped template literals including a CI workflow and double-escaped regexes inside
       `.mjs`-in-string). Move to a `templates/` directory copied at scaffold time with `{{name}}`

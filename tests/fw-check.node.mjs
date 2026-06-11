@@ -13,6 +13,7 @@ import { readElementParams } from '../dist/runtime/src/index.mjs';
 import {
   renderDocument,
   renderDocumentQueryScript,
+  renderPageHints,
   renderQueryScript,
 } from '../dist/server/src/index.mjs';
 
@@ -526,12 +527,14 @@ void test('P3 server renders initial query scripts for document-load hydration',
 });
 
 void test('P2 page hints keep speculation rules opt-in and non-empty', async () => {
-  const serverHintsSource = await readProjectFile('packages/server/src/hints.ts');
-  const serverTests = await readProjectFile('packages/server/src/index.test.ts');
-
-  assert.match(serverHintsSource, /const prerenderUrls = dedupe\(urls\)/);
-  assert.match(serverHintsSource, /prerenderUrls\.length === 0/);
-  assert.match(serverTests, /prefetch: 'moderate', prerenderUrls: \['', ''\]/);
+  assert.equal(renderPageHints({ prefetch: 'moderate', prerenderUrls: ['', ''] }).html, '');
+  assert.equal(
+    renderPageHints({
+      prefetch: 'moderate',
+      prerenderUrls: ['', '/products', '/products', '/cart'],
+    }).html,
+    '<script type="speculationrules">{"prerender":[{"eagerness":"moderate","urls":["/products","/cart"]}]}</script>',
+  );
 });
 
 void test('P2 compiler merges view transition stamps into existing styles', async () => {
