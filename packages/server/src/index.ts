@@ -719,6 +719,11 @@ export async function runMutation<
   rawInput: unknown,
   request: Request,
 ): Promise<MutationResult<Value>> {
+  const inputResult = parseMutationInput(definition.input, rawInput);
+  if (!inputResult.ok) return inputResult.failure;
+
+  const input = inputResult.value as InferSchema<InputSchema>;
+
   if (definition.guard && !(await definition.guard(request))) {
     return {
       error: { code: 'UNAUTHORIZED', payload: {} },
@@ -727,10 +732,6 @@ export async function runMutation<
     };
   }
 
-  const inputResult = parseMutationInput(definition.input, rawInput);
-  if (!inputResult.ok) return inputResult.failure;
-
-  const input = inputResult.value as InferSchema<InputSchema>;
   const manualInvalidations: ChangeRecord[] = [];
   const context: MutationContext<Errors> = {
     fail(code, payload) {
@@ -1132,6 +1133,18 @@ function renderQueryChunk(
     version === undefined ? '' : ` version="${escapeAttribute(String(version))}"`;
 
   return `<fw-query name="${escapeAttribute(queryDefinition.key)}"${keyAttribute}${versionAttribute}>${escapeHtml(JSON.stringify(value))}</fw-query>`;
+}
+
+export interface QueryScriptRenderOptions {
+  key?: string;
+  name: string;
+  value: unknown;
+}
+
+export function renderQueryScript(options: QueryScriptRenderOptions): string {
+  const keyAttribute = options.key === undefined ? '' : ` key="${escapeAttribute(options.key)}"`;
+
+  return `<script type="application/json" fw-query="${escapeAttribute(options.name)}"${keyAttribute}>${escapeScriptJson(JSON.stringify(options.value))}</script>`;
 }
 
 function readQueryInstanceKey(

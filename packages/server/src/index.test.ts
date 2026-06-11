@@ -19,6 +19,7 @@ import {
   renderMutationEndpointResponse,
   renderMutationResponse,
   renderNoJsMutationResponse,
+  renderQueryScript,
   runMutation,
   s,
   session,
@@ -356,6 +357,21 @@ describe('server mutation primitives', () => {
       earlyHints: {},
       html: '<script type="application/json" fw-i18n locale="en-US">{"cartCount":"Cart has {count} items","unsafe":"Use \\u003cstrong>server text\\u003c/strong>"}</script>',
     });
+  });
+
+  it('renders initial query scripts for document-load hydration', () => {
+    expect(
+      renderQueryScript({
+        key: 'cart:c1',
+        name: 'cart',
+        value: {
+          html: '</script><script>alert(1)</script>',
+          items: [{ productId: 'p1', qty: 1 }],
+        },
+      }),
+    ).toBe(
+      '<script type="application/json" fw-query="cart" key="cart:c1">{"html":"\\u003c/script>\\u003cscript>alert(1)\\u003c/script>","items":[{"productId":"p1","qty":1}]}</script>',
+    );
   });
 
   it('keeps speculation rules default-off for ordinary page hints', () => {
@@ -738,6 +754,30 @@ describe('server mutation primitives', () => {
       ok: false,
       status: 422,
     });
+  });
+
+  it('parses mutation input before running guards', async () => {
+    let guardCalls = 0;
+    const guarded = mutation('cart/add', {
+      guard() {
+        guardCalls += 1;
+        return false;
+      },
+      input: s.object({ productId: s.string() }),
+      handler() {
+        return 'ok';
+      },
+    });
+
+    await expect(runMutation(guarded, {}, {})).resolves.toEqual({
+      error: {
+        code: 'VALIDATION',
+        payload: { issues: [{ message: 'Expected string', path: ['productId'] }] },
+      },
+      ok: false,
+      status: 422,
+    });
+    expect(guardCalls).toBe(0);
   });
 
   it('guards mutations by authenticated session user', async () => {

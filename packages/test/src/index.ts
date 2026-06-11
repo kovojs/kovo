@@ -454,7 +454,7 @@ function assertObservedWritesCovered(
 
   if (unmappedWrites.length > 0) {
     const tables = unmappedWrites.map((operation) => operation.table).join(', ');
-    throw new Error(`FW404 Write to unmapped table: ${tables}`);
+    throw new Error(diagnosticMessage('FW404', tables));
   }
 
   const entries = Object.values(scopedTouchGraph).filter((entry) => entry !== undefined);
@@ -475,7 +475,7 @@ function assertObservedWritesCovered(
 
   if (uncovered.length > 0) {
     const domains = uncovered.map((operation) => operation.domain).join(', ');
-    throw new Error(`FW402 Write touched an undeclared domain: ${domains}`);
+    throw new Error(diagnosticMessage('FW402', domains));
   }
 }
 
@@ -513,7 +513,7 @@ function assertKeyedWritesObserved(
         `${operation.table} expected ${config.keyByTable?.[operation.table]} observed <missing>`,
     )
     .join(', ');
-  throw new Error(`FW408 Declared row key differs from observed row predicate: ${details}`);
+  throw new Error(diagnosticMessage('FW408', details));
 }
 
 function selectTouchGraph(touchGraph: TouchGraph, touchGraphKey: string | undefined): TouchGraph {
@@ -844,7 +844,7 @@ function assertRowKeys(
         `${operation.table} expected ${config.keyByTable?.[operation.table]} observed ${operation.rowKey}`,
     )
     .join(', ');
-  throw new Error(`FW408 Declared row key differs from observed row predicate: ${details}`);
+  throw new Error(diagnosticMessage('FW408', details));
 }
 
 function observedRowKeys(operation: ObservedDbOperation): ReadonlySet<string> {
@@ -864,7 +864,7 @@ function assertObservedReadsCovered(
 
   if (unmappedReads.length > 0) {
     const tables = unmappedReads.map((operation) => operation.table).join(', ');
-    throw new Error(`FW407 Query read from undeclared domain: ${tables}`);
+    throw new Error(diagnosticMessage('FW407', tables));
   }
 
   const allowedReads = new Set(domains);
@@ -877,7 +877,7 @@ function assertObservedReadsCovered(
 
   if (uncovered.length > 0) {
     const readDomains = uncovered.map((operation) => operation.domain).join(', ');
-    throw new Error(`FW407 Query read from undeclared domain: ${readDomains}`);
+    throw new Error(diagnosticMessage('FW407', readDomains));
   }
 }
 
@@ -894,7 +894,7 @@ function assertMutationReadsCovered(
 
   if (unmappedReads.length > 0) {
     const tables = unmappedReads.map((operation) => operation.table).join(', ');
-    throw new Error(`FW407 Query read from undeclared domain: ${tables}`);
+    throw new Error(diagnosticMessage('FW407', tables));
   }
 
   const allowedReads = new Set(
@@ -915,8 +915,16 @@ function assertMutationReadsCovered(
 
   if (uncovered.length > 0) {
     const readDomains = uncovered.map((operation) => operation.domain).join(', ');
-    throw new Error(`FW407 Query read from undeclared domain: ${readDomains}`);
+    throw new Error(diagnosticMessage('FW407', readDomains));
   }
+}
+
+function diagnosticMessage(code: DiagnosticCode, detail: string): string {
+  return `${code} ${trimDiagnosticSentence(diagnosticDefinitions[code].message)}: ${detail}`;
+}
+
+function trimDiagnosticSentence(message: string): string {
+  return message.endsWith('.') ? message.slice(0, -1) : message;
 }
 
 function observationOptions(args: readonly unknown[]): DbObservationOptions | undefined {

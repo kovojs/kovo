@@ -342,6 +342,18 @@ void test('P2 loader smoke evidence remains represented in runtime tests', async
   assert.match(browserTests, /new FormData\(form\)\.get\('query'\)/);
 });
 
+void test('P3 server renders initial query scripts for document-load hydration', async () => {
+  const serverSource = await readProjectFile('packages/server/src/index.ts');
+  const serverTests = await readProjectFile('packages/server/src/index.test.ts');
+
+  assert.match(serverSource, /export function renderQueryScript/);
+  assert.match(serverSource, /fw-query="\$\{escapeAttribute\(options\.name\)\}"/);
+  assert.match(serverSource, /escapeScriptJson\(JSON\.stringify\(options\.value\)\)/);
+  assert.match(serverTests, /renders initial query scripts for document-load hydration/);
+  assert.match(serverTests, /key="cart:c1"/);
+  assert.match(serverTests, /\\\\u003c\/script>/);
+});
+
 void test('P5 morph evidence includes structural and browser survival suites', async () => {
   const runtimeTests = await readProjectFile('packages/runtime/src/index.test.ts');
   const browserTests = await readProjectFile('packages/runtime/src/index.browser.test.ts');
@@ -471,6 +483,11 @@ void test('P9 verification layer evidence remains represented', async () => {
     /accepts raw SQL compound predicates when one observed row key matches/,
   );
   assert.match(testHarnessTests, /FW408 Declared row key differs from observed row predicate/);
+  assert.match(testHarnessSource, /diagnosticMessage\('FW402'/);
+  assert.match(testHarnessSource, /diagnosticMessage\('FW404'/);
+  assert.match(testHarnessSource, /diagnosticMessage\('FW407'/);
+  assert.match(testHarnessSource, /diagnosticMessage\('FW408'/);
+  assert.match(testHarnessSource, /diagnosticDefinitions\[code\]\.message/);
 });
 
 void test('P8 component explain includes handler capture channels', async () => {
