@@ -747,6 +747,64 @@ describe('fw check', () => {
       'fw-check/v1\nWARN FW311 component=CartBadge query=cart.discount position="conditional <dot>" Query-dependent DOM position has no update status.\n',
     );
   });
+
+  it('reports a stable error for missing check input files', () => {
+    let output = '';
+    const stderrWrite = vi.spyOn(process.stderr, 'write').mockImplementation(((chunk) => {
+      output += chunk.toString();
+      return true;
+    }) as typeof process.stderr.write);
+
+    try {
+      expect(main(['check', join(tmpdir(), 'missing-jiso-graph.json')])).toBe(1);
+    } finally {
+      stderrWrite.mockRestore();
+    }
+
+    expect(output).toMatch(/^fw: input file not found: .*missing-jiso-graph\.json\n$/);
+  });
+
+  it('reports a stable error for malformed JSON input', () => {
+    const tempDir = mkdtempSync(join(tmpdir(), 'jiso-cli-malformed-'));
+    const graphPath = join(tempDir, 'graph.json');
+    let output = '';
+    const stderrWrite = vi.spyOn(process.stderr, 'write').mockImplementation(((chunk) => {
+      output += chunk.toString();
+      return true;
+    }) as typeof process.stderr.write);
+
+    try {
+      writeFileSync(graphPath, '{');
+
+      expect(main(['audit', graphPath])).toBe(1);
+    } finally {
+      stderrWrite.mockRestore();
+      rmSync(tempDir, { force: true, recursive: true });
+    }
+
+    expect(output).toBe(`fw: input file is not valid JSON: ${graphPath}\n`);
+  });
+
+  it('reports a stable error for non-object JSON input', () => {
+    const tempDir = mkdtempSync(join(tmpdir(), 'jiso-cli-shape-'));
+    const graphPath = join(tempDir, 'graph.json');
+    let output = '';
+    const stderrWrite = vi.spyOn(process.stderr, 'write').mockImplementation(((chunk) => {
+      output += chunk.toString();
+      return true;
+    }) as typeof process.stderr.write);
+
+    try {
+      writeFileSync(graphPath, '[]');
+
+      expect(main(['explain', '--unguarded', graphPath])).toBe(1);
+    } finally {
+      stderrWrite.mockRestore();
+      rmSync(tempDir, { force: true, recursive: true });
+    }
+
+    expect(output).toBe(`fw: input JSON must be an object: ${graphPath}\n`);
+  });
 });
 
 describe('fw audit', () => {

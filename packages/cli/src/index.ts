@@ -231,8 +231,9 @@ export function main(args: readonly string[] = process.argv.slice(2)): number {
   if (args[0] === 'check') {
     const family = checkFamilyArg(args[1]);
     const inputPath = family === 'all' ? args[1] : args[2];
-    const input = inputPath ? JSON.parse(readFileSync(inputPath, 'utf8')) : {};
-    const result = fwCheck(input, { family });
+    const input = readGraphInput(inputPath);
+    if (!input.ok) return writeInputError(input.error);
+    const result = fwCheck(input.value, { family });
     const stream = result.exitCode === 0 ? process.stdout : process.stderr;
     stream.write(result.output);
     return result.exitCode;
@@ -240,8 +241,9 @@ export function main(args: readonly string[] = process.argv.slice(2)): number {
 
   if (args[0] === 'audit') {
     const inputPath = args[1];
-    const input = inputPath ? JSON.parse(readFileSync(inputPath, 'utf8')) : {};
-    const result = fwAudit(input);
+    const input = readGraphInput(inputPath);
+    if (!input.ok) return writeInputError(input.error);
+    const result = fwAudit(input.value);
     const stream = result.exitCode === 0 ? process.stdout : process.stderr;
     stream.write(result.output);
     return result.exitCode;
@@ -257,8 +259,9 @@ export function main(args: readonly string[] = process.argv.slice(2)): number {
 
     if (unscoped) {
       const [inputPath] = positional;
-      const input = inputPath ? JSON.parse(readFileSync(inputPath, 'utf8')) : {};
-      const result = fwExplain(input, { unscoped: true });
+      const input = readGraphInput(inputPath);
+      if (!input.ok) return writeInputError(input.error);
+      const result = fwExplain(input.value, { unscoped: true });
       const stream = result.exitCode === 0 ? process.stdout : process.stderr;
       stream.write(result.output);
       return result.exitCode;
@@ -266,8 +269,9 @@ export function main(args: readonly string[] = process.argv.slice(2)): number {
 
     if (unguarded) {
       const [inputPath] = positional;
-      const input = inputPath ? JSON.parse(readFileSync(inputPath, 'utf8')) : {};
-      const result = fwExplain(input, { unguarded: true });
+      const input = readGraphInput(inputPath);
+      if (!input.ok) return writeInputError(input.error);
+      const result = fwExplain(input.value, { unguarded: true });
       const stream = result.exitCode === 0 ? process.stdout : process.stderr;
       stream.write(result.output);
       return result.exitCode;
@@ -282,8 +286,9 @@ export function main(args: readonly string[] = process.argv.slice(2)): number {
       return 1;
     }
 
-    const input = inputPath ? JSON.parse(readFileSync(inputPath, 'utf8')) : {};
-    const result = fwExplain(input, { kind, optimistic, target });
+    const input = readGraphInput(inputPath);
+    if (!input.ok) return writeInputError(input.error);
+    const result = fwExplain(input.value, { kind, optimistic, target });
     const stream = result.exitCode === 0 ? process.stdout : process.stderr;
     stream.write(result.output);
     return result.exitCode;
@@ -291,6 +296,60 @@ export function main(args: readonly string[] = process.argv.slice(2)): number {
 
   process.stderr.write(`fw: command not implemented yet: ${args.join(' ')}\n`);
   return 1;
+}
+
+interface InputReadError {
+  kind: 'invalid-json' | 'invalid-shape' | 'not-found' | 'read-error';
+  path: string;
+}
+
+type InputReadResult = { ok: true; value: FwExplainInput } | { error: InputReadError; ok: false };
+
+function readGraphInput(path: string | undefined): InputReadResult {
+  if (!path) return { ok: true, value: {} };
+
+  let source: string;
+  try {
+    source = readFileSync(path, 'utf8');
+  } catch (error) {
+    return {
+      error: { kind: isNodeErrorCode(error, 'ENOENT') ? 'not-found' : 'read-error', path },
+      ok: false,
+    };
+  }
+
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(source);
+  } catch {
+    return { error: { kind: 'invalid-json', path }, ok: false };
+  }
+
+  if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
+    return { error: { kind: 'invalid-shape', path }, ok: false };
+  }
+
+  return { ok: true, value: parsed as FwExplainInput };
+}
+
+function writeInputError(error: InputReadError): 1 {
+  const messages: Record<InputReadError['kind'], string> = {
+    'invalid-json': `fw: input file is not valid JSON: ${error.path}`,
+    'invalid-shape': `fw: input JSON must be an object: ${error.path}`,
+    'not-found': `fw: input file not found: ${error.path}`,
+    'read-error': `fw: unable to read input file: ${error.path}`,
+  };
+  process.stderr.write(`${messages[error.kind]}\n`);
+  return 1;
+}
+
+function isNodeErrorCode(error: unknown, code: string): boolean {
+  return (
+    typeof error === 'object' &&
+    error !== null &&
+    'code' in error &&
+    (error as { code?: unknown }).code === code
+  );
 }
 
 export type ExplainKind = 'component' | 'mutation' | 'page' | 'query';
