@@ -59,6 +59,11 @@ export interface QueryTemplateStampFact {
   template: string;
 }
 
+interface DataBindAttribute {
+  name: string;
+  path: string;
+}
+
 export interface QueryUpdateCoverageFact {
   componentName: string;
   detail?: string;
@@ -201,6 +206,8 @@ export interface QueryShapeFact {
 interface HandlerLowering {
   exportName: string;
   attributeName: string;
+  attributeEnd: number;
+  attributeStart: number;
   attributeValue: string;
   expression: string;
   params: ElementParam[];
@@ -548,16 +555,64 @@ function prefixCssSelectors(
 ): string {
   const nestedExclusion = selectorExclusion(nestedHostSelectors);
 
-  return css.replace(
-    /(^|})(?<selector>[^{}@][^{}]*)\{/g,
-    (_match, boundary: string, selector: string) => {
+  return prefixCssBlockSelectors(hostSelector, css, nestedExclusion);
+}
+
+function prefixCssBlockSelectors(
+  hostSelector: string,
+  css: string,
+  nestedExclusion: string,
+): string {
+  let output = '';
+  let index = 0;
+
+  while (index < css.length) {
+    const rule = nextCssRule(css, index);
+    if (!rule) {
+      output += css.slice(index);
+      break;
+    }
+
+    output += css.slice(index, rule.selectorStart);
+
+    const selector = css.slice(rule.selectorStart, rule.bodyStart).trim();
+    const body = css.slice(rule.bodyStart + 1, rule.bodyEnd);
+    if (selector.startsWith('@media') || selector.startsWith('@supports')) {
+      output += `${selector} {${prefixCssBlockSelectors(hostSelector, body, nestedExclusion)}}`;
+    } else if (selector.startsWith('@')) {
+      output += css.slice(rule.selectorStart, rule.bodyEnd + 1);
+    } else {
       const prefixed = selector
         .split(',')
         .map((part) => `${hostSelector} ${part.trim()}${nestedExclusion}`)
         .join(', ');
-      return `${boundary}${prefixed} {`;
-    },
-  );
+      output += `${prefixed} {${body}}`;
+    }
+
+    index = rule.bodyEnd + 1;
+  }
+
+  return output;
+}
+
+function nextCssRule(
+  source: string,
+  start: number,
+): { bodyEnd: number; bodyStart: number; selectorStart: number } | null {
+  const bodyStart = source.indexOf('{', start);
+  if (bodyStart === -1) return null;
+
+  const selectorStart = skipCssWhitespaceAfterBoundary(source, start);
+  const bodyEnd = findMatchingToken(source, bodyStart, '{', '}');
+  if (bodyEnd === -1) return null;
+
+  return { bodyEnd, bodyStart, selectorStart };
+}
+
+function skipCssWhitespaceAfterBoundary(source: string, start: number): number {
+  let index = start;
+  while (index < source.length && /\s/.test(source[index] ?? '')) index += 1;
+  return index;
 }
 
 function scopeLimitSelectors(nestedHostSelectors: readonly string[]): string {
@@ -884,13 +939,9 @@ function lowerEventHandlers(
 ): HandlerLowering[] {
   const handlers: HandlerLowering[] = [];
   const anonymousNameCounts = new Map<string, number>();
-  const eventAttributePattern =
-    /<(?<tag>[A-Za-z][A-Za-z0-9-]*)\b(?<before>[^>]*)\son(?<event>[A-Z][A-Za-z0-9]*)=\{(?<expression>[^}]*)\}/g;
 
-  for (const match of options.source.matchAll(eventAttributePattern)) {
-    const tag = match.groups?.tag ?? 'element';
-    const event = match.groups?.event ?? 'Event';
-    const expression = (match.groups?.expression ?? '').trim();
+  for (const eventAttribute of eventAttributes(options.source)) {
+    const { attributeEnd, attributeStart, event, expression, tag } = eventAttribute;
     const namedHandler = /^[A-Za-z_$][\w$]*$/.test(expression);
     const params = namedHandler ? [] : extractElementParams(expression);
     const eventName = event.toLowerCase();
@@ -914,6 +965,8 @@ function lowerEventHandlers(
 
     handlers.push({
       attributeName: `on:${eventName}`,
+      attributeEnd,
+      attributeStart,
       attributeValue: `${clientModuleUrl(options.fileName)}#${exportName}`,
       ...(diagnostic ? { diagnostic } : {}),
       expression,
@@ -923,6 +976,54 @@ function lowerEventHandlers(
   }
 
   return handlers;
+}
+
+function eventAttributes(source: string): Array<{
+  attributeEnd: number;
+  attributeStart: number;
+  event: string;
+  expression: string;
+  tag: string;
+}> {
+  const attributes: Array<{
+    attributeEnd: number;
+    attributeStart: number;
+    event: string;
+    expression: string;
+    tag: string;
+  }> = [];
+  const tagPattern = /<(?<tag>[A-Za-z][A-Za-z0-9-]*)\b/g;
+
+  for (const tagMatch of source.matchAll(tagPattern)) {
+    const tag = tagMatch.groups?.tag ?? 'element';
+    const tagStart = tagMatch.index ?? 0;
+    const tagEnd = findOpeningTagEnd(source, tagStart);
+    if (tagEnd === -1) continue;
+
+    const attrsStart = tagStart + tagMatch[0].length;
+    const attrs = source.slice(attrsStart, tagEnd);
+    const attrPattern = /\bon(?<event>[A-Z][A-Za-z0-9]*)\s*=\s*\{/g;
+
+    for (const attrMatch of attrs.matchAll(attrPattern)) {
+      const event = attrMatch.groups?.event;
+      if (!event) continue;
+
+      const attributeStart = attrsStart + (attrMatch.index ?? 0);
+      const braceStart = attributeStart + attrMatch[0].lastIndexOf('{');
+      const braceEnd = findMatchingToken(source, braceStart, '{', '}');
+      if (braceEnd === -1 || braceEnd > tagEnd) continue;
+
+      attributes.push({
+        attributeEnd: braceEnd + 1,
+        attributeStart,
+        event,
+        expression: source.slice(braceStart + 1, braceEnd).trim(),
+        tag,
+      });
+    }
+  }
+
+  return attributes;
 }
 
 function uniqueAnonymousHandlerName(
@@ -988,12 +1089,12 @@ function validateDataBindings(
 
   const listStamps = dataBindListStamps(source);
 
-  return dataBindPaths(source)
-    .filter((path) => !path.startsWith('.'))
-    .filter((path) => !pathExistsInQueryShapes(path, queryShapes))
-    .map((path) => ({
+  return dataBindAttributes(source)
+    .filter((binding) => !binding.path.startsWith('.'))
+    .filter((binding) => !pathExistsInQueryShapes(binding.path, queryShapes))
+    .map((binding) => ({
       ...diagnosticFor(options.fileName, 'FW302'),
-      message: `${diagnosticDefinitions.FW302.message} ${path}`,
+      message: `${diagnosticDefinitions.FW302.message} ${binding.path}`,
     }))
     .concat(
       listStamps
@@ -1057,7 +1158,7 @@ function collectQueryUpdatePlans(source: string, componentName: string): QueryUp
   const pathsByQuery = new Map<string, Set<string>>();
   const listStampsByQuery = new Map<string, QueryTemplateStampFact[]>();
 
-  for (const path of dataBindPaths(source)) {
+  for (const { path } of dataBindAttributes(source)) {
     if (path.startsWith('.')) continue;
     const [query] = path.split('.');
     if (!query) continue;
@@ -1104,14 +1205,15 @@ function collectQueryUpdateCoverage(
   const coveredPaths = new Set<string>();
   const knownQueries = knownQueryNames(source, options);
 
-  for (const path of dataBindPaths(source).filter((path) => !path.startsWith('.'))) {
+  for (const binding of dataBindAttributes(source).filter((item) => !item.path.startsWith('.'))) {
+    const path = binding.path;
     const query = queryNameFromPath(path);
     if (!query) continue;
 
     facts.push({
       componentName,
-      detail: 'data-bind',
-      position: 'binding',
+      detail: binding.name,
+      position: binding.name === 'data-bind' ? 'binding' : 'attribute',
       query: path,
       status: 'plan',
     });
@@ -1218,9 +1320,18 @@ function dedupeUpdateCoverage(
 }
 
 function dataBindPaths(source: string): string[] {
-  return [...source.matchAll(/\bdata-bind=(["'])(?<path>[^"']+)\1/g)]
-    .map((match) => match.groups?.path ?? '')
-    .filter(Boolean);
+  return dataBindAttributes(source).map((binding) => binding.path);
+}
+
+function dataBindAttributes(source: string): DataBindAttribute[] {
+  return [
+    ...source.matchAll(/\b(?<name>data-bind(?::[A-Za-z_$][\w$:-]*)?)=(["'])(?<path>[^"']+)\2/g),
+  ]
+    .map((match) => ({
+      name: match.groups?.name ?? '',
+      path: match.groups?.path ?? '',
+    }))
+    .filter((binding) => binding.name && binding.path);
 }
 
 function dataBindListStamps(source: string): QueryTemplateStampFact[] {
@@ -1278,6 +1389,10 @@ function findMatchingClosingTag(source: string, tag: string, start: number): num
     const close = closePattern.exec(source);
     if (!close) return -1;
     if (open && open.index < close.index) {
+      if (isSelfClosingOpeningTag(open[0])) {
+        closePattern.lastIndex = openPattern.lastIndex;
+        continue;
+      }
       depth += 1;
       closePattern.lastIndex = openPattern.lastIndex;
       continue;
@@ -1287,6 +1402,11 @@ function findMatchingClosingTag(source: string, tag: string, start: number): num
     if (depth <= 0) return close.index + close[0].length;
     openPattern.lastIndex = closePattern.lastIndex;
   }
+}
+
+function isSelfClosingOpeningTag(tagSource: string): boolean {
+  const attrs = tagSource.replace(/^<[A-Za-z][\w:-]*/, '').replace(/>$/, '');
+  return isSelfClosing(attrs);
 }
 
 function listStampExistsInQueryShapes(
@@ -2389,6 +2509,9 @@ function emitHandlerBody(handler: HandlerLowering): string {
 
   const arrowBody = arrowExpressionBody(handler.expression);
   if (!arrowBody) return '// unsupported handler expression was preserved as a diagnostic surface';
+  if (arrowBody.startsWith('{') && arrowBody.endsWith('}')) {
+    return lowerHandlerExpression(arrowBody.slice(1, -1).trim(), handler.params);
+  }
 
   return `return ${lowerHandlerExpression(arrowBody, handler.params)};`;
 }
@@ -2407,7 +2530,7 @@ function lowerHandlerExpression(expression: string, params: readonly ElementPara
     if (!sourceExpression) continue;
 
     lowered = lowered.replace(
-      new RegExp(escapeRegExp(sourceExpression), 'g'),
+      new RegExp(`(?<![\\w$])${escapeRegExp(sourceExpression)}(?![\\w$])`, 'g'),
       `ctx.params.${paramNameFromAttribute(param.attributeName)}`,
     );
   }
@@ -2467,21 +2590,7 @@ function emitServerModule(
   _clientFileName: string,
 ): string {
   const renderedSource = stampInitialState(
-    stampDeclaredQueryDeps(
-      handlers.reduce(
-        (next, handler) =>
-          next.replace(
-            /on[A-Z][A-Za-z0-9]*=\{[^}]*\}/,
-            [
-              `${handler.attributeName}="${handler.attributeValue}"`,
-              ...handler.params.map(
-                (param) => `${param.attributeName}="${escapeAttribute(param.value)}"`,
-              ),
-            ].join(' '),
-          ),
-        source,
-      ),
-    ),
+    stampDeclaredQueryDeps(replaceHandlerAttributes(source, handlers)),
   );
 
   return `${irHeader}
@@ -2489,6 +2598,21 @@ export function renderSource() {
   return ${templateLiteral(renderedSource)};
 }
 `;
+}
+
+function replaceHandlerAttributes(source: string, handlers: readonly HandlerLowering[]): string {
+  return [...handlers]
+    .sort((left, right) => right.attributeStart - left.attributeStart)
+    .reduce((next, handler) => {
+      const replacement = [
+        `${handler.attributeName}="${handler.attributeValue}"`,
+        ...handler.params.map(
+          (param) => `${param.attributeName}="${escapeAttribute(param.value)}"`,
+        ),
+      ].join(' ');
+
+      return `${next.slice(0, handler.attributeStart)}${replacement}${next.slice(handler.attributeEnd)}`;
+    }, source);
 }
 
 function stampDeclaredQueryDeps(source: string): string {
@@ -2543,6 +2667,12 @@ function findOpeningTagEnd(source: string, start: number): number {
       continue;
     }
 
+    if (char === '{') {
+      const end = findMatchingToken(source, index, '{', '}');
+      index = end === -1 ? source.length : end;
+      continue;
+    }
+
     if (char === '>') return index;
   }
 
@@ -2587,15 +2717,8 @@ function staticStateJson(source: string): string | null {
   const stateObject = extractStateReturnObject(source);
   if (!stateObject) return null;
 
-  const jsonCandidate = stateObject
-    .replace(/([{,]\s*)([A-Za-z_$][\w$]*)\s*:/g, '$1"$2":')
-    .replaceAll("'", '"');
-
-  try {
-    return JSON.stringify(JSON.parse(jsonCandidate) as unknown);
-  } catch {
-    return null;
-  }
+  const parsed = parseLiteralObject(stateObject);
+  return parsed ? JSON.stringify(parsed) : null;
 }
 
 function replaceExtension(fileName: string, extension: string): string {
@@ -2612,6 +2735,11 @@ function extractElementParams(expression: string): ElementParam[] {
     ? splitArguments(callMatch.groups.args)
         .map((arg) => arg.trim())
         .filter((arg) => arg.length > 0 && arg !== 'state')
+        .flatMap((arg) => {
+          if (literalValue(arg) !== undefined) return [];
+          const members = serializableMemberExpressions(arg);
+          return members.length > 0 ? members : [arg];
+        })
     : serializableMemberExpressions(expression);
 
   return dedupeStrings(expressions).map((arg) => ({

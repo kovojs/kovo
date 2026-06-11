@@ -96,6 +96,40 @@ export const CartActions = component('cart-actions', {
     );
   });
 
+  it('extracts and rewrites handlers with nested object and block expressions', () => {
+    const result = compileComponentModule({
+      fileName: 'components/cart/cart-actions.tsx',
+      source: `
+import { component } from '@jiso/core';
+
+export const CartActions = component('cart-actions', {
+  render: () => (
+    <div>
+      <button onClick={() => emit('cart:add', { id: item.id })}>Add</button>
+      <button onClick={() => { log(item.id); emit('cart:remove', { id: item.id }); }}>Remove</button>
+    </div>
+  ),
+});
+`,
+    });
+
+    const serverSource = result.files[0]?.source ?? '';
+    const clientSource = result.files[1]?.source ?? '';
+
+    expect(serverSource).toContain(
+      'on:click="/c/components/cart/cart-actions.client.js#CartActions$button_click"',
+    );
+    expect(serverSource).toContain(
+      'on:click="/c/components/cart/cart-actions.client.js#CartActions$button_click_2"',
+    );
+    expect(serverSource).toContain('data-p-id="{item.id}"');
+    expect(serverSource).not.toContain('onClick={');
+    expect(clientSource).toContain("return emit('cart:add', { id: ctx.params.id });");
+    expect(clientSource).toContain(
+      "log(ctx.params.id); emit('cart:remove', { id: ctx.params.id });",
+    );
+  });
+
   it('emits provided query, mutation, and domain key registry facts', () => {
     const result = compileComponentModule({
       fileName: 'components/cart/cart-badge.tsx',
@@ -1043,6 +1077,7 @@ export const ProductCard = component('product-card', {
       queryShapes: {
         cart: {
           count: 'number',
+          empty: 'boolean',
           items: [{ productId: 'string', qty: 'number' }],
         },
       },
@@ -1051,6 +1086,7 @@ export const CartBadge = component('cart-badge', {
   render: () => (
     <cart-badge>
       <span data-bind="cart.count">2</span>
+      <button data-bind:hidden="cart.empty">Checkout</button>
       <span data-bind="cart.items.productId">p1</span>
     </cart-badge>
   ),
@@ -1067,6 +1103,7 @@ export const CartBadge = component('cart-badge', {
         query: 'cart',
         shape: {
           count: 'number',
+          empty: 'boolean',
           items: [{ productId: 'string', qty: 'number' }],
         },
         source: 'generated/queries/cart.shape.ts',
@@ -1080,6 +1117,7 @@ export const CartBadge = component('cart-badge', {
   render: () => (
     <cart-badge>
       <span data-bind="cart.count">2</span>
+      <button data-bind:aria-label="cart.empty">Checkout</button>
       <span data-bind="cart.items.productId">p1</span>
     </cart-badge>
   ),
@@ -1090,6 +1128,7 @@ export const CartBadge = component('cart-badge', {
     expect(queryShapesFromFacts(queryShapeFacts)).toEqual({
       cart: {
         count: 'number',
+        empty: 'boolean',
         items: [{ productId: 'string', qty: 'number' }],
       },
     });
@@ -1184,6 +1223,7 @@ export const CartBadge = component('cart-badge', {
   render: () => (
     <cart-badge>
       <span data-bind="cart.count">2</span>
+      <button data-bind:hidden="cart.empty">Checkout</button>
       <span data-bind="cart.total">2998</span>
       <span data-bind="product.name">Coffee</span>
       <span data-bind="cart.count">2</span>
@@ -1205,7 +1245,7 @@ export const CartBadge = component('cart-badge', {
     expect(result.queryUpdatePlans).toEqual([
       {
         componentName: 'CartBadge',
-        paths: ['cart.count', 'cart.items', 'cart.total'],
+        paths: ['cart.count', 'cart.empty', 'cart.items', 'cart.total'],
         query: 'cart',
         templateStamps: [
           {
@@ -1235,7 +1275,7 @@ export const CartBadge = component('cart-badge', {
       'return applyCompiledQueryUpdatePlan(root, "product", value, { bindings: true, derives: [], stamps: [], templateStamps: [] });',
     );
     expect(registrySource).toContain(`export interface QueryUpdatePlans {
-  'CartBadge:cart': readonly ['cart.count', 'cart.items', 'cart.total'];
+  'CartBadge:cart': readonly ['cart.count', 'cart.empty', 'cart.items', 'cart.total'];
   'CartBadge:product': readonly ['product.name'];
 }`);
     expect(result.updateCoverage).toEqual([
@@ -1244,6 +1284,13 @@ export const CartBadge = component('cart-badge', {
         detail: 'data-bind',
         position: 'binding',
         query: 'cart.count',
+        status: 'plan',
+      },
+      {
+        componentName: 'CartBadge',
+        detail: 'data-bind:hidden',
+        position: 'attribute',
+        query: 'cart.empty',
         status: 'plan',
       },
       {
@@ -1280,6 +1327,7 @@ export const CartBadge = component('cart-badge', {
   render: () => (
     <cart-badge>
       <span data-bind="cart.count">{cart.count}</span>
+      <button data-bind:hidden="cart.empty">Checkout</button>
       <span>{renderOnce(cart.currency)}</span>
       <strong>{cart.discount}</strong>
       <em>{product.name}</em>
@@ -1295,6 +1343,13 @@ export const CartBadge = component('cart-badge', {
         detail: 'data-bind',
         position: 'binding',
         query: 'cart.count',
+        status: 'plan',
+      },
+      {
+        componentName: 'CartBadge',
+        detail: 'data-bind:hidden',
+        position: 'attribute',
+        query: 'cart.empty',
         status: 'plan',
       },
       {
@@ -1504,6 +1559,40 @@ export const CartBadge = component('cart-badge', {
     ]);
   });
 
+  it('does not let self-closing same-name children hide list stamp diagnostics', () => {
+    const result = compileComponentModule({
+      fileName: 'cart-badge.tsx',
+      queryShapes: {
+        cart: {
+          items: [{ productId: 'string' }],
+        },
+      },
+      source: `
+export const CartBadge = component('cart-badge', {
+  render: () => (
+    <ul data-bind-list="cart.items" fw-key="sku">
+      <ul />
+      <template fw-stamp>
+        <li><span data-bind=".missing">Item</span></li>
+      </template>
+    </ul>
+  ),
+});
+`,
+    });
+
+    expect(result.diagnostics).toEqual(
+      expect.arrayContaining([
+        {
+          code: 'FW302',
+          fileName: 'cart-badge.tsx',
+          message: 'data-bind path is not present in the declared query shape. cart.items',
+          severity: 'error',
+        },
+      ]),
+    );
+  });
+
   it('reports FW231, FW232, and FW233 for residual attribute merge conflicts', () => {
     const result = compileComponentModule({
       fileName: 'primitive-merge.tsx',
@@ -1633,6 +1722,22 @@ export const CartBadge = component('cart-badge', {
       'fw-state="{&quot;bouncing&quot;:false,&quot;count&quot;:2}"',
     );
     expect(() => assertFixpoint(result)).not.toThrow();
+  });
+
+  it('preserves apostrophes while stamping static island-local state', () => {
+    const result = compileComponentModule({
+      fileName: 'cart-badge.tsx',
+      source: `
+export const CartBadge = component('cart-badge', {
+  state: () => ({ label: "it's ready", open: false }),
+  render: () => <cart-badge>Ready</cart-badge>,
+});
+`,
+    });
+
+    expect(result.files[0]?.source).toContain(
+      'fw-state="{&quot;label&quot;:&quot;it\'s ready&quot;,&quot;open&quot;:false}"',
+    );
   });
 
   it('reports FW301 when island-local state stores an obvious query fact', () => {
@@ -1937,7 +2042,18 @@ describe('component CSS helpers', () => {
       '@scope ([fw-c="cart-badge"]) to (:scope [fw-c]) {\n  .count { color: red; }\n  button, a { color: blue; }\n}\n',
     );
     expect(result.fallback).toBe(
-      '[fw-c="cart-badge"] .count:not([fw-c]):not([fw-c] *) { color: red; }[fw-c="cart-badge"] button:not([fw-c]):not([fw-c] *), [fw-c="cart-badge"] a:not([fw-c]):not([fw-c] *) { color: blue; }',
+      '[fw-c="cart-badge"] .count:not([fw-c]):not([fw-c] *) { color: red; }\n[fw-c="cart-badge"] button:not([fw-c]):not([fw-c] *), [fw-c="cart-badge"] a:not([fw-c]):not([fw-c] *) { color: blue; }',
+    );
+  });
+
+  it('prefixes component CSS fallback selectors inside conditional at-rules', () => {
+    const result = scopeComponentCss(
+      '[fw-c="cart-badge"]',
+      '@media (min-width: 40rem) { .count { color: red; } button, a { color: blue; } }',
+    );
+
+    expect(result.fallback).toBe(
+      '@media (min-width: 40rem) { [fw-c="cart-badge"] .count:not([fw-c]):not([fw-c] *) { color: red; } [fw-c="cart-badge"] button:not([fw-c]):not([fw-c] *), [fw-c="cart-badge"] a:not([fw-c]):not([fw-c] *) { color: blue; } }',
     );
   });
 
