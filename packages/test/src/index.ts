@@ -1,7 +1,7 @@
 export type { DiagnosticCode } from '@jiso/core';
 import { diagnosticDefinitions, type DiagnosticCode, type DiagnosticSeverity } from '@jiso/core';
 import { PGlite, type PGliteOptions, type Results } from '@electric-sql/pglite';
-import { isDeepStrictEqual } from 'node:util';
+import { inspect, isDeepStrictEqual } from 'node:util';
 import type { TouchGraph, TouchSite } from '@jiso/core';
 import {
   type InferSchema,
@@ -655,7 +655,12 @@ function deepEqual(left: unknown, right: unknown): boolean {
 }
 
 function formatValue(value: unknown): string {
-  return JSON.stringify(value) ?? String(value);
+  return inspect(value, {
+    breakLength: Infinity,
+    compact: true,
+    depth: Infinity,
+    sorted: true,
+  });
 }
 
 function observe(

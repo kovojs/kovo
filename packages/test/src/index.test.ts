@@ -85,6 +85,7 @@ describe('@jiso/test harness', () => {
 
   it('executes mutations against the provided db context', async () => {
     const addToCart = mutation('cart/add', {
+      csrf: false,
       input: s.object({ productId: s.string() }),
       handler(input, request: { db: { cart: string[] } }) {
         request.db.cart.push(input.productId);
@@ -103,6 +104,7 @@ describe('@jiso/test harness', () => {
 
   it('merges request fixtures into mutation exec context', async () => {
     const guarded = mutation('cart/add', {
+      csrf: false,
       guard(request: { db: { cart: string[] }; session?: { user?: { id: string } | null } }) {
         return Boolean(request.session?.user);
       },
@@ -125,6 +127,7 @@ describe('@jiso/test harness', () => {
 
   it('lets exec override request fixtures per assertion while keeping harness db authoritative', async () => {
     const addToCart = mutation('cart/add', {
+      csrf: false,
       guard(request: { db: { cart: string[] }; session?: { user?: { id: string } | null } }) {
         return Boolean(request.session?.user);
       },
@@ -176,6 +179,7 @@ describe('@jiso/test harness', () => {
     harness.dbHandle().cart.push('direct');
 
     const addToCart = mutation('cart/add', {
+      csrf: false,
       input: s.object({ productId: s.string() }),
       handler(input, request: { db: { cart: string[] } }) {
         request.db.cart.push(input.productId);
@@ -218,6 +222,7 @@ describe('@jiso/test harness', () => {
 
   it('asserts typed mutation error paths without rendering a browser', async () => {
     const addToCart = mutation('cart/add', {
+      csrf: false,
       errors: {
         OUT_OF_STOCK: s.object({ availableQuantity: s.number().int().min(0) }),
       },
@@ -253,6 +258,7 @@ describe('@jiso/test harness', () => {
 
   it('reports mutation error-path assertion mismatches', async () => {
     const addToCart = mutation('cart/add', {
+      csrf: false,
       errors: {
         OUT_OF_STOCK: s.object({ availableQuantity: s.number().int().min(0) }),
         PRICE_CHANGED: s.object({ currentPrice: s.number().min(0) }),
@@ -279,7 +285,7 @@ describe('@jiso/test harness', () => {
         payload: { availableQuantity: 1 },
       }),
     ).toThrow(
-      'Expected cart/add error OUT_OF_STOCK payload {"availableQuantity":1}, got {"availableQuantity":0}.',
+      'Expected cart/add error OUT_OF_STOCK payload { availableQuantity: 1 }, got { availableQuantity: 0 }.',
     );
 
     const success = await successHarness.exec(addToCart, { quantity: 2 });
@@ -290,6 +296,7 @@ describe('@jiso/test harness', () => {
 
   it('compares mutation error payloads structurally without dropping undefined fields', async () => {
     const addToCart = mutation('cart/add', {
+      csrf: false,
       errors: {
         OUT_OF_STOCK: s.object({ availableQuantity: s.number().int().min(0) }),
       },
@@ -307,7 +314,7 @@ describe('@jiso/test harness', () => {
         payload: { availableQuantity: 0, reason: undefined } as { availableQuantity: number },
       }),
     ).toThrow(
-      'Expected cart/add error OUT_OF_STOCK payload {"availableQuantity":0}, got {"availableQuantity":0}.',
+      'Expected cart/add error OUT_OF_STOCK payload { availableQuantity: 0, reason: undefined }, got { availableQuantity: 0 }.',
     );
   });
 
@@ -419,6 +426,7 @@ describe('@jiso/test harness', () => {
 
   it('verifies observed writes against the static touch graph after exec', async () => {
     const cartMutation = mutation('cart/add', {
+      csrf: false,
       input: s.object({ productId: s.string() }),
       handler(input, request: { db: FakeDb }) {
         request.db.write('cart_items', input.productId);
@@ -448,6 +456,7 @@ describe('@jiso/test harness', () => {
 
   it('exposes verification diagnostics through the harness context', async () => {
     const cartMutation = mutation('cart/add', {
+      csrf: false,
       input: s.object({ productId: s.string() }),
       handler(input, request: { db: FakeDb }) {
         request.db.write('cart_items', input.productId, { branch: 'cart-line' });
@@ -512,6 +521,7 @@ describe('@jiso/test harness', () => {
       await db.exec('create table cart_items (product_id text primary key, qty integer not null)');
 
       const addToCart = mutation('cart/add', {
+        csrf: false,
         input: s.object({ productId: s.string(), quantity: s.number().int().min(1) }),
         async handler(input, request: { db: typeof db }) {
           await request.db.write('cart_items', {
@@ -549,6 +559,7 @@ describe('@jiso/test harness', () => {
 
   it('fails verification for writes to domains outside the static graph', async () => {
     const cartMutation = mutation('cart/add', {
+      csrf: false,
       input: s.object({ productId: s.string() }),
       handler(input, request: { db: FakeDb }) {
         request.db.write('audit_log', input.productId);
@@ -578,6 +589,7 @@ describe('@jiso/test harness', () => {
 
   it('scopes harness write verification to the executed mutation graph entry', async () => {
     const cartMutation = mutation('cart/add', {
+      csrf: false,
       input: s.object({ productId: s.string() }),
       handler(input, request: { db: FakeDb }) {
         request.db.write('products', input.productId);
@@ -613,6 +625,7 @@ describe('@jiso/test harness', () => {
 
   it('uses explicit harness touch graph keys when mutation keys differ from graph entries', async () => {
     const cartMutation = mutation('cart/add', {
+      csrf: false,
       input: s.object({ productId: s.string() }),
       handler(input, request: { db: FakeDb }) {
         request.db.write('cart_items', input.productId);
@@ -644,6 +657,7 @@ describe('@jiso/test harness', () => {
 
   it('keeps scoped FW406 coverage tied to the executed mutation graph entry', async () => {
     const cartMutation = mutation('cart/add', {
+      csrf: false,
       input: s.object({ productId: s.string() }),
       handler(input, request: { db: FakeDb }) {
         request.db.write('audit_log', input.productId);
@@ -684,6 +698,7 @@ describe('@jiso/test harness', () => {
 
   it('allows scoped writes covered by same-entry FW406 annotations', async () => {
     const cartMutation = mutation('cart/add', {
+      csrf: false,
       input: s.object({ productId: s.string() }),
       handler(input, request: { db: FakeDb }) {
         request.db.write('audit_log', input.productId);
@@ -722,6 +737,7 @@ describe('@jiso/test harness', () => {
 
   it('checks only writes observed during the current mutation exec', async () => {
     const cartMutation = mutation('cart/add', {
+      csrf: false,
       input: s.object({ productId: s.string() }),
       handler(input, request: { db: FakeDb }) {
         request.db.write('cart_items', input.productId);
@@ -756,6 +772,7 @@ describe('@jiso/test harness', () => {
 
   it('fails verification for writes to unmapped tables', async () => {
     const cartMutation = mutation('cart/add', {
+      csrf: false,
       input: s.object({ productId: s.string() }),
       handler(input, request: { db: FakeDb }) {
         request.db.write('unknown_table', input.productId);
@@ -784,6 +801,7 @@ describe('@jiso/test harness', () => {
 
   it('verifies raw SQL writes against the static touch graph', async () => {
     const cartMutation = mutation('cart/add', {
+      csrf: false,
       input: s.object({ productId: s.string() }),
       handler(input, request: { db: FakeDb }) {
         request.db.sql(`insert into cart_items (product_id) values ('${input.productId}')`);
@@ -814,6 +832,7 @@ describe('@jiso/test harness', () => {
 
   it('verifies direct db.query calls against the static touch graph', async () => {
     const cartMutation = mutation('cart/add', {
+      csrf: false,
       input: s.object({ productId: s.string() }),
       async handler(input, request: { db: Pick<PgliteTestDb, 'query'> }) {
         await request.db.query('insert into audit_log (product_id) values ($1)', [input.productId]);
@@ -850,6 +869,7 @@ describe('@jiso/test harness', () => {
 
   it('verifies direct db.exec calls against the static touch graph', async () => {
     const cartMutation = mutation('cart/add', {
+      csrf: false,
       input: s.object({ productId: s.string() }),
       async handler(input, request: { db: Pick<PgliteTestDb, 'exec'> }) {
         await request.db.exec(
@@ -888,6 +908,7 @@ describe('@jiso/test harness', () => {
 
   it('verifies raw pglite handle calls against the static touch graph', async () => {
     const cartMutation = mutation('cart/add', {
+      csrf: false,
       input: s.object({ productId: s.string() }),
       async handler(input, request: { db: Pick<PgliteTestDb, 'pglite'> }) {
         await request.db.pglite.query('insert into audit_log (product_id) values ($1)', [
@@ -926,6 +947,7 @@ describe('@jiso/test harness', () => {
 
   it('verifies raw pglite transaction handle calls against the static touch graph', async () => {
     const cartMutation = mutation('cart/add', {
+      csrf: false,
       input: s.object({ productId: s.string() }),
       async handler(input, request: { db: Pick<PgliteTestDb, 'pglite'> }) {
         await request.db.pglite.transaction(async (tx) => {
@@ -964,6 +986,7 @@ describe('@jiso/test harness', () => {
 
   it('fails verification when raw SQL writes outside FW406 coverage', async () => {
     const cartMutation = mutation('cart/add', {
+      csrf: false,
       input: s.object({ productId: s.string() }),
       handler(input, request: { db: FakeDb }) {
         request.db.sql(`update audit_log set product_id = '${input.productId}' where id = 'a1'`);
@@ -1454,6 +1477,7 @@ describe('@jiso/test harness', () => {
 
   it('verifies insert-select SQL as a target write plus source reads', async () => {
     const productImport = mutation('product/import', {
+      csrf: false,
       input: s.object({ productId: s.string() }),
       registry: {
         touches: [domain('product')],
@@ -1533,6 +1557,7 @@ describe('@jiso/test harness', () => {
 
   it('fails mutation exec when insert-select reads are missing from the touch graph', async () => {
     const productImport = mutation('product/import', {
+      csrf: false,
       input: s.object({ productId: s.string() }),
       registry: {
         touches: [domain('product')],
@@ -1584,6 +1609,7 @@ describe('@jiso/test harness', () => {
 
   it('does not let unscoped FW406 cover missing mutation read domains', async () => {
     const productImport = mutation('product/import', {
+      csrf: false,
       input: s.object({ productId: s.string() }),
       handler(_input, request: { db: FakeDb }) {
         request.db.sql(
@@ -1638,6 +1664,7 @@ describe('@jiso/test harness', () => {
 
   it('scopes mutation-read verification to the executed mutation graph entry', async () => {
     const productImport = mutation('product/import', {
+      csrf: false,
       input: s.object({ productId: s.string() }),
       handler(_input, request: { db: FakeDb }) {
         request.db.sql(
