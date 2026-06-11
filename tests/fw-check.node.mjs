@@ -1074,28 +1074,74 @@ export const PrimitiveMerge = component('primitive-merge', {
 });
 
 void test('P1 compiler validates fragment-target child hoisting failures', async () => {
-  const coreSource = await readProjectFile('packages/core/src/diagnostics.ts');
-  const compilerSource = await readProjectFile('packages/compiler/src/index.ts');
-  const componentContractsSource = await readProjectFile(
-    'packages/compiler/src/validate/component-contracts.ts',
+  assert.equal(
+    diagnosticDefinitions.FW230.message,
+    'Fragment-target children cannot lower to a component reference.',
   );
-  const compilerTests = await readProjectFile('packages/compiler/src/index.test.ts');
+  assert.deepEqual(
+    compileComponentModule({
+      fileName: 'components/cart/cart-row.tsx',
+      source: `
+import { component } from '@jiso/core';
 
-  assert.match(coreSource, /FW230/);
-  assert.match(coreSource, /Fragment-target children cannot lower to a component reference/);
-  assert.match(compilerSource, /validateFragmentTargetChildren/);
-  assert.match(componentContractsSource, /fragmentTargetUsageNames/);
-  assert.match(componentContractsSource, /fragmentTargetChildBodies/);
-  assert.match(componentContractsSource, /fw230Diagnostic/);
-  assert.match(
-    compilerTests,
-    /accepts fragment target children that can hoist through serializable props/,
+export const CartRow = component('cart-row', {
+  fragmentTarget: true,
+  props: { rowId: String },
+  render: ({ rowId }) => <tr fw-c="cart-row" data-row={rowId}></tr>,
+});
+
+export const CartTable = component('cart-table', {
+  render: ({ cart }) => (
+    <table>
+      <CartRow rowId={cart.rowId}>
+        <span>{cart.count}</span>
+      </CartRow>
+    </table>
+  ),
+});
+`,
+    }).diagnostics,
+    [],
   );
-  assert.match(
-    compilerTests,
-    /reports FW230 when fragment target children capture unserializable values/,
+  assert.deepEqual(
+    compileComponentModule({
+      fileName: 'components/cart/cart-row.tsx',
+      source: `
+import { component } from '@jiso/core';
+
+export const CartRow = component('cart-row', {
+  fragmentTarget: true,
+  props: { rowId: String },
+  render: ({ rowId }) => <tr fw-c="cart-row" data-row={rowId}></tr>,
+});
+
+export const CartTable = component('cart-table', {
+  render: ({ cart }) => (
+    <table>
+      <CartRow rowId={cart.rowId}>
+        <span>{window.location.href}</span>
+      </CartRow>
+    </table>
+  ),
+});
+`,
+    }).diagnostics,
+    [
+      {
+        code: 'FW230',
+        fileName: 'components/cart/cart-row.tsx',
+        help: [
+          'Would hoist children to: CartRow$slot_children',
+          'Blocked children: <span>{window.location.href}</span>',
+          'Fixes: pass serializable props, move browser/request/db values behind a server fragment, or render children inside the fragment target itself.',
+        ].join('\n'),
+        length: 35,
+        message: `${diagnosticDefinitions.FW230.message} CartRow`,
+        severity: 'error',
+        start: { column: 9, line: 14 },
+      },
+    ],
   );
-  assert.match(compilerTests, /Would hoist children to: CartRow\$slot_children/);
 });
 
 void test('P3 typed routes validate navigation targets', async () => {

@@ -170,6 +170,11 @@ Do this first or pay it on every commit.
       `compileComponentModule` diagnostics for duplicate unmergeable attributes,
       primitive-owned ARIA/state overrides, and duplicate binding slots instead of grepping core
       or compiler source/test names.
+      Partial evidence 2026-06-11: the P1 fragment-target child tranche now imports built
+      core/compiler APIs and asserts `diagnosticDefinitions.FW230` plus `compileComponentModule`
+      accept/fail diagnostics for serializable fragment-target children and browser-value child
+      captures, including the hoist help text, instead of grepping core or compiler source/test
+      names.
 - [x] **Make create-jiso templates real files** (`create-jiso/src/index.ts:63-473`, ~470 lines of
       escaped template literals including a CI workflow and double-escaped regexes inside
       `.mjs`-in-string). Move to a `templates/` directory copied at scaffold time with `{{name}}`
