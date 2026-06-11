@@ -103,6 +103,12 @@ Do this first or pay it on every commit.
       `tests/fw-check.node.mjs` now parses `examples/commerce/src/generated/graph.json` and
       asserts `fwCheck`/`fwExplain` behavior directly instead of grepping commerce test names,
       touch-graph literals, or property-case counts. The wider source-text ledger remains open.
+      Partial evidence 2026-06-11: the `P10 starter wires graph assertions into CI` tranche now
+      parses `packages/create-jiso/templates/package.json` and `graph.json`, asserts starter
+      graph structure, and exercises the real template graph through `fwCheck`/`fwExplain`.
+      Remaining checks in that tranche are limited to scaffold wiring that is still source-shaped:
+      Vite task commands/inputs, GitHub workflow steps, Tailwind source directives, generated
+      client bootstrap imports, and create-jiso's own scaffold-test coverage.
 - [x] **Make create-jiso templates real files** (`create-jiso/src/index.ts:63-473`, ~470 lines of
       escaped template literals including a CI workflow and double-escaped regexes inside
       `.mjs`-in-string). Move to a `templates/` directory copied at scaffold time with `{{name}}`

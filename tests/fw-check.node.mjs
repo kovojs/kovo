@@ -1146,68 +1146,133 @@ void test('P10 commerce graph assertions answer behavior mechanically', async ()
 });
 
 void test('P10 starter wires graph assertions into CI', async () => {
-  const starterSource = (
-    await Promise.all([
-      readProjectFile('packages/create-jiso/src/index.ts'),
-      readProjectFile('packages/create-jiso/templates/package.json'),
-      readProjectFile('packages/create-jiso/templates/vite.config.ts'),
-      readProjectFile('packages/create-jiso/templates/.github/workflows/ci.yml'),
-      readProjectFile('packages/create-jiso/templates/README.md'),
-      readProjectFile('packages/create-jiso/templates/graph.json'),
-      readProjectFile('packages/create-jiso/templates/scripts/emit-graph.mjs'),
-      readProjectFile('packages/create-jiso/templates/scripts/graph-assertions.mjs'),
-      readProjectFile('packages/create-jiso/templates/src/client.ts'),
-      readProjectFile('packages/create-jiso/templates/src/app.fixpoint.test.ts'),
-      readProjectFile('packages/create-jiso/templates/src/styles.css'),
-      readProjectFile('packages/create-jiso/templates/index.html'),
-    ])
-  ).join('\n');
+  const [
+    packageJsonSource,
+    viteConfigSource,
+    ciWorkflow,
+    starterGraphSource,
+    emitGraphSource,
+    graphAssertionsSource,
+    clientSource,
+    appFixpointTest,
+    stylesSource,
+    indexHtml,
+  ] = await Promise.all([
+    readProjectFile('packages/create-jiso/templates/package.json'),
+    readProjectFile('packages/create-jiso/templates/vite.config.ts'),
+    readProjectFile('packages/create-jiso/templates/.github/workflows/ci.yml'),
+    readProjectFile('packages/create-jiso/templates/graph.json'),
+    readProjectFile('packages/create-jiso/templates/scripts/emit-graph.mjs'),
+    readProjectFile('packages/create-jiso/templates/scripts/graph-assertions.mjs'),
+    readProjectFile('packages/create-jiso/templates/src/client.ts'),
+    readProjectFile('packages/create-jiso/templates/src/app.fixpoint.test.ts'),
+    readProjectFile('packages/create-jiso/templates/src/styles.css'),
+    readProjectFile('packages/create-jiso/templates/index.html'),
+  ]);
   const starterTests = await readProjectFile('packages/create-jiso/src/index.test.ts');
+  const packageJson = JSON.parse(packageJsonSource);
+  const starterGraph = JSON.parse(starterGraphSource);
+  const cartQueryExplain = fwExplain(starterGraph, { kind: 'query', target: 'cart' }).output;
+  const cartAddExplain = fwExplain(starterGraph, {
+    kind: 'mutation',
+    optimistic: true,
+    target: 'cart/add',
+  }).output;
+  const cartPageExplain = fwExplain(starterGraph, { kind: 'page', target: '/cart' }).output;
 
-  assert.match(starterSource, /"graph-assertions": "vp run graph-assertions"/);
-  assert.match(starterSource, /"emit-graph": "node scripts\/emit-graph\.mjs"/);
-  assert.match(starterSource, /"session": "starterSession"/);
-  assert.match(starterSource, /"inputFields": \["productId", "quantity"\]/);
-  assert.match(starterSource, /"i18n": \["en-US:cartTitle"\]/);
-  assert.match(starterSource, /"title": "Jiso Starter Cart"/);
-  assert.match(starterSource, /command: 'node scripts\/emit-graph\.mjs && fw check graph\.json'/);
+  assert.equal(packageJson.scripts['emit-graph'], 'node scripts/emit-graph.mjs');
+  assert.equal(packageJson.scripts['fw-check'], 'vp run fw-check');
+  assert.equal(packageJson.scripts['graph-assertions'], 'vp run graph-assertions');
+  assert.equal(packageJson.dependencies['@jiso/runtime'], 'workspace:*');
+  assert.equal(packageJson.devDependencies['@jiso/compiler'], 'workspace:*');
+  assert.equal(packageJson.devDependencies['@tailwindcss/vite'], '^4.1.0');
+  assert.equal(packageJson.devDependencies.tailwindcss, '^4.1.0');
+
+  assert.deepEqual(fwCheck(starterGraph), { exitCode: 0, output: 'fw-check/v1\nOK\n' });
+  assert.deepEqual(
+    starterGraph.components?.map((component) => component.name),
+    ['CartBadge', 'CartPanel'],
+  );
+  assert.deepEqual(starterGraph.mutations, [
+    {
+      guards: ['authed'],
+      invalidates: ['cart'],
+      inputFields: ['productId', 'quantity'],
+      key: 'cart/add',
+      session: 'starterSession',
+      writes: ['cart'],
+    },
+  ]);
+  assert.deepEqual(starterGraph.optimistic, [
+    { mutation: 'cart/add', query: 'cart', status: 'await-fragment' },
+  ]);
+  assert.deepEqual(starterGraph.pages, [
+    {
+      i18n: ['en-US:cartTitle'],
+      meta: {
+        description: 'Starter cart backed by query data.',
+        title: 'Jiso Starter Cart',
+      },
+      queries: ['cart'],
+      route: '/cart',
+      stylesheets: ['/src/styles.css'],
+    },
+  ]);
+  assert.deepEqual(starterGraph.queries, [{ domains: ['cart'], query: 'cart' }]);
+  assert.deepEqual(starterGraph.touchGraph?.['cart.addItem']?.touches, [
+    { domain: 'cart', keys: null, site: 'src/cart.ts:12', via: 'cart_items' },
+  ]);
+  assert.equal(
+    explainValue(cartQueryExplain, 'consumers: '),
+    'component:CartBadge,component:CartPanel,page:/cart',
+  );
+  assert.equal(explainValue(cartQueryExplain, 'invalidated-by: '), 'cart/add');
+  assert.equal(explainValue(cartQueryExplain, 'domain-writes: '), 'cart.addItem');
+  assert.equal(explainValue(cartAddExplain, 'session: '), 'starterSession');
+  assert.equal(explainValue(cartAddExplain, 'input-fields: '), 'productId,quantity');
+  assert.equal(
+    explainValue(cartAddExplain, 'updates: '),
+    'cart->component:CartBadge,component:CartPanel,page:/cart',
+  );
+  assert.match(cartAddExplain, /^OPTIMISTIC cart await-fragment$/m);
+  assert.match(cartAddExplain, /^OPTIMISTIC-SUMMARY .*UNHANDLED=0$/m);
+  assert.equal(
+    explainValue(cartPageExplain, 'meta: '),
+    'title=Jiso Starter Cart description=Starter cart backed by query data. image=-',
+  );
+  assert.equal(explainValue(cartPageExplain, 'i18n: '), 'en-US:cartTitle');
+  assert.equal(explainValue(cartPageExplain, 'queries: '), 'cart');
+  assert.equal(explainValue(cartPageExplain, 'stylesheets: '), '/src/styles.css');
+
   assert.match(
-    starterSource,
+    viteConfigSource,
+    /command: 'node scripts\/emit-graph\.mjs && fw check graph\.json'/,
+  );
+  assert.match(
+    viteConfigSource,
     /command: 'node scripts\/emit-graph\.mjs && node scripts\/graph-assertions\.mjs'/,
   );
-  assert.match(starterSource, /- run: vp run graph-assertions/);
-  assert.match(starterSource, /'scripts\/emit-graph\.mjs'/);
-  assert.match(starterSource, /'scripts\/graph-assertions\.mjs'/);
-  assert.match(starterSource, /deriveAppGraph/);
-  assert.match(starterSource, /assertRenderEquivalence/);
-  assert.match(starterSource, /'src\/client\.ts'/);
-  assert.match(starterSource, /"@jiso\/runtime": "workspace:\*"/);
-  assert.match(starterSource, /installJisoLoader\(\{/);
-  assert.match(starterSource, /enhancedMutations: \{/);
-  assert.match(starterSource, /queryPlans,/);
-  assert.match(starterSource, /applyDeferredStreamResponseToDom/);
-  assert.match(starterSource, /applyJisoDeferredStreamResponse/);
-  assert.match(starterSource, /OPTIMISTIC-SUMMARY \.\*UNHANDLED=0/);
-  assert.match(starterSource, /fwExplain\(\['page', '\/cart'\]\)/);
-  assert.match(starterSource, /explainLine\(cartAdd, 'session: '\)/);
-  assert.match(starterSource, /explainLine\(cartAdd, 'input-fields: '\)/);
-  assert.match(starterSource, /explainLine\(cartPage, 'meta: '\)/);
-  assert.match(starterSource, /explainLine\(cartPage, 'i18n: '\)/);
-  assert.match(starterSource, /explainLine\(cartPage, 'queries: '\)/);
-  assert.match(starterSource, /explainLine\(cartPage, 'stylesheets: '\)/);
-  assert.doesNotMatch(starterSource, /src\/main\.ts/);
-  assert.doesNotMatch(starterSource, /innerHTML = App\.definition\.render\(\)/);
-  assert.match(starterSource, /@source "\.\.\/index\.html";/);
-  assert.match(starterSource, /@source "\.\/\*\*\/\*\.\{ts,tsx,html\}";/);
-  assert.match(starterSource, /@source inline\("bg-emerald-50 text-emerald-700/);
-  assert.match(starterSource, /"@tailwindcss\/vite": "\^4\.1\.0"/);
-  assert.match(starterSource, /"tailwindcss": "\^4\.1\.0"/);
-  assert.match(starterSource, /@source inline\("\.\.\."\)/);
-  assert.match(starterSource, /<link rel="stylesheet" href="\/src\/styles\.css" \/>/);
-  assert.match(starterSource, /<script type="module" src="\/src\/client\.ts"><\/script>/);
+  assert.match(viteConfigSource, /'scripts\/emit-graph\.mjs'/);
+  assert.match(viteConfigSource, /'scripts\/graph-assertions\.mjs'/);
+  assert.match(ciWorkflow, /- run: vp run fw-check/);
+  assert.match(ciWorkflow, /- run: vp run graph-assertions/);
+  assert.match(emitGraphSource, /deriveAppGraph/);
+  assert.match(graphAssertionsSource, /fwExplain\(\['page', '\/cart'\]\)/);
+  assert.match(appFixpointTest, /assertRenderEquivalence/);
+  assert.match(clientSource, /installJisoLoader\(\{/);
+  assert.match(clientSource, /enhancedMutations: \{/);
+  assert.match(clientSource, /queryPlans,/);
+  assert.match(clientSource, /applyDeferredStreamResponseToDom/);
+  assert.match(clientSource, /applyJisoDeferredStreamResponse/);
+  assert.doesNotMatch(clientSource, /innerHTML = App\.definition\.render\(\)/);
+  assert.match(stylesSource, /@source "\.\.\/index\.html";/);
+  assert.match(stylesSource, /@source "\.\/\*\*\/\*\.\{ts,tsx,html\}";/);
+  assert.match(stylesSource, /@source inline\("bg-emerald-50 text-emerald-700/);
+  assert.match(indexHtml, /<link rel="stylesheet" href="\/src\/styles\.css" \/>/);
+  assert.match(indexHtml, /<script type="module" src="\/src\/client\.ts"><\/script>/);
+  assert.doesNotMatch(indexHtml, /src\/main\.ts/);
   assert.match(starterTests, /vp run graph-assertions/);
   assert.match(starterTests, /src\/app\.fixpoint\.test\.ts/);
-  assert.match(starterSource, /@source inline\("bg-emerald-50 text-emerald-700/);
   assert.match(
     starterTests,
     /builds generated starter CSS with static and safelisted Tailwind utilities/,
