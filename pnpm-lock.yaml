@@ -79,9 +79,6 @@ importers:
       '@jiso/core':
         specifier: workspace:*
         version: link:../core
-      '@jiso/drizzle':
-        specifier: workspace:*
-        version: link:../drizzle
     devDependencies:
       vitest:
         specifier: 4.1.8

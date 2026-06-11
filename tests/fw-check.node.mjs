@@ -295,10 +295,11 @@ void test('P10 legibility study packet is ready but not claimed complete', async
   assert.match(study, /Do not mark v1 legibility complete/);
 });
 
-void test('Appendix B pre-launch checklist is tracked explicitly', async () => {
+void test('pre-launch checklist is tracked explicitly', async () => {
   const checklist = await readProjectFile('docs/prelaunch-checklist.md');
 
-  assert.match(checklist, /SPEC\.md` Appendix B/);
+  assert.match(checklist, /launch-readiness checks/);
+  assert.match(checklist, /before v1 freeze/);
   assert.match(checklist, /Trademark screen/);
   assert.match(checklist, /jiso\.dev/);
   assert.match(checklist, /`@jiso` npm/);

@@ -9,8 +9,7 @@
     ".": "./src/index.ts"
   },
   "dependencies": {
-    "@jiso/core": "workspace:*",
-    "@jiso/drizzle": "workspace:*"
+    "@jiso/core": "workspace:*"
   },
   "devDependencies": {
     "vitest": "4.1.8"

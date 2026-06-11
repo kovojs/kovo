@@ -1,6 +1,8 @@
 # Pre-launch Checklist
 
-`SPEC.md` Appendix B requires these checks before v1 freeze. This file tracks the launch-readiness work; it does not claim completion.
+This file is the source of truth for the launch-readiness checks in `SPEC.md` Appendix B required before v1 freeze (the `IMPLEMENT_v1.md` exit gate). It tracks the work; it does not claim completion.
+
+Name decision, for the record: "Jiso" — short, pronounceable, no known collisions in the framework space.
 
 ## Required Checks
 

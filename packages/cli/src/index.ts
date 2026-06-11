@@ -3,7 +3,6 @@ export type { DiagnosticCode } from '@jiso/core';
 import { readFileSync } from 'node:fs';
 
 import { diagnosticDefinitions, type DiagnosticCode, type DiagnosticSeverity } from '@jiso/core';
-import { diagnosticsForTouchGraph, type TouchGraph } from '@jiso/drizzle';
 
 export interface FwCheckInput {
   eventPayloads?: readonly EventPayloadFact[];
@@ -13,7 +12,7 @@ export interface FwCheckInput {
   optimistic?: readonly OptimisticCoverage[];
   queryData?: readonly QueryDataFact[];
   queries?: readonly QueryReadSet[];
-  touchGraph?: TouchGraph;
+  touchGraph?: CliTouchGraph;
   updateCoverage?: readonly UpdateCoverageFact[];
   verificationDiagnostics?: readonly VerificationDiagnosticFact[];
 }
@@ -132,6 +131,34 @@ export interface VerificationDiagnosticFact {
   message?: string;
   severity?: DiagnosticSeverity;
   site?: string;
+}
+
+interface CliTouchGraphEntry {
+  reads?: readonly CliTouchGraphSite[];
+  touches: readonly CliTouchGraphSite[];
+  unresolved: readonly {
+    code: 'FW406';
+    message: string;
+    site: string;
+  }[];
+}
+
+interface CliTouchGraphSite {
+  domain: string;
+  keys?: null | string;
+  predicate?: 'eq' | 'non-eq';
+  site: string;
+  source?: string;
+  via?: string;
+}
+
+type CliTouchGraph = Readonly<Record<string, CliTouchGraphEntry>>;
+
+interface TouchGraphDiagnosticFact {
+  code: DiagnosticCode;
+  message: string;
+  severity: DiagnosticSeverity;
+  site: string;
 }
 
 export interface FwCheckResult {
@@ -462,6 +489,33 @@ function ok(lines: string[]): FwCheckResult {
   };
 }
 
+function diagnosticsForTouchGraph(graph: CliTouchGraph): TouchGraphDiagnosticFact[] {
+  return Object.values(graph).flatMap((entry) => [
+    ...entry.unresolved.map((unresolved) => ({
+      code: unresolved.code,
+      message: unresolved.message,
+      severity: diagnosticDefinitions[unresolved.code].severity,
+      site: unresolved.site,
+    })),
+    ...entry.touches
+      .filter((touch) => touch.predicate === 'non-eq')
+      .map((touch) => ({
+        code: 'FW409' as const,
+        message: diagnosticDefinitions.FW409.message,
+        severity: diagnosticDefinitions.FW409.severity,
+        site: touch.site,
+      })),
+    ...(entry.reads ?? [])
+      .filter((read) => read.predicate === 'non-eq')
+      .map((read) => ({
+        code: 'FW409' as const,
+        message: diagnosticDefinitions.FW409.message,
+        severity: diagnosticDefinitions.FW409.severity,
+        site: read.site,
+      })),
+  ]);
+}
+
 function verificationDiagnosticLine(diagnostic: VerificationDiagnosticFact): string {
   const definition = diagnosticDefinitions[diagnostic.code];
   const severity = diagnostic.severity ?? definition.severity;
@@ -735,7 +789,7 @@ function lintMessage(lint: SemanticLint): string {
 
 function missedQueryInvalidations(
   queries: readonly QueryReadSet[],
-  touchGraph: TouchGraph,
+  touchGraph: CliTouchGraph,
   mutations: readonly MutationExplain[],
 ): { domain: string; query: string }[] {
   const touchedDomains = new Set(

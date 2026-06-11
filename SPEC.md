@@ -73,18 +73,7 @@ Every feature proposal is evaluated against five tests. A feature failing any te
 └─────────────────────────────────────────────────────────────────────────────────────────┘
 ```
 
-### 3.1 Inherited from prior art
-
-| Kept from                  | What                                                                                                                                                                                                        |
-| -------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Qwik                       | Resumability, global event delegation, attribute-encoded handler refs, serialized state, execute-nothing-undeclared (§4.7 — interaction is the default trigger; every other trigger is a legible attribute) |
-| htmx / LiveView            | Server-rendered fragments as the mutation response; HTML over the wire                                                                                                                                      |
-| RTK Query / Next tags      | Keyed invalidation intersected with declared dependencies                                                                                                                                                   |
-| Replicache / Zero          | Snapshot → predict → rebase log → authoritative reconcile                                                                                                                                                   |
-| Rails (touch/Russian-doll) | Writes through the data layer drive derived-view freshness                                                                                                                                                  |
-| Convex / Noria             | The asymptote: inferred read/write sets — reached statically via Drizzle ASTs instead of at runtime                                                                                                         |
-
-### 3.2 Rejected from prior art
+### 3.1 Rejected from prior art
 
 Client router and SPA navigation; hydration; hash-named heuristic chunks; load-bearing semantic optimizer; single global state blob; **runtime signal graphs in the core client — proprietary or TC39** (the client dependency graph is compile-time-known, so the compiler emits a per-query update plan instead; a TC39 Signals interop adapter is v2); opaque closure capture (`useLexicalScope`); client-side cache with invalidation lifecycle; manual invalidation calls as the primary mechanism; **shadow DOM** (tree-scoped IDREFs, form participation, and ARIA all break at the boundary — fatal to L0 platform behaviors and the no-JS form contract; style scoping comes from the compiler instead, §13.1); **custom-element registration** (resumability comes from delegation + `import()`, never from `customElements.define`; component identity is the `fw-c` stamp, dashed tags survive as inert sugar, and native hosts like `<tr fw-c="cart-row">` end the table-nesting papercut); **load-bearing import maps** (the compiler and server emit full module URLs with cache-busting they control; import maps remain an optional deployment strategy); **portals and runtime context APIs** (composition is lexical at render time and the DOM tree is the runtime context, §4.5 — framework code never reparents islands, so `closest('[fw-c]')` resolution stays sound; native top-layer promotion (`<dialog>`, popover) does not reparent, which is exactly why no portal is needed).
 
@@ -137,7 +126,7 @@ export const CartBadge = component('cart-badge', {
 </script>
 ```
 
-Components render to **light DOM** as plain, never-registered elements — no shadow roots, no `customElements.define`, no upgrade step (§3.2). The load-bearing identity is the `fw-c` stamp; the compiler omits it when the host tag already spells the component name (`<cart-badge>` — dashed tags are inert sugar for Elements-panel readability) and emits it explicitly on native hosts (`<tr fw-c="cart-row">`, so content-model nesting like tables just works). Co-located CSS is compiler-scoped to the host (`@scope`, donut-scoped to exclude nested islands) and deduped into one per-page stylesheet (§13.1). Because there is no shadow boundary, IDREF wiring (`commandfor`, `for`, `aria-*`), native form participation, and find-in-page work document-wide — the L0 layer and the no-JS form fallback depend on exactly this. The compiler also validates JSX nesting against the HTML content model (**FW225**): markup the parser would re-parent (`<div>` in `<p>`, `<tr>` outside a table) makes the served HTML and the parsed DOM disagree, silently breaking morph identity and fragment targets — so it is a compile error, not a runtime surprise.
+Components render to **light DOM** as plain, never-registered elements — no shadow roots, no `customElements.define`, no upgrade step (§3.1). The load-bearing identity is the `fw-c` stamp; the compiler omits it when the host tag already spells the component name (`<cart-badge>` — dashed tags are inert sugar for Elements-panel readability) and emits it explicitly on native hosts (`<tr fw-c="cart-row">`, so content-model nesting like tables just works). Co-located CSS is compiler-scoped to the host (`@scope`, donut-scoped to exclude nested islands) and deduped into one per-page stylesheet (§13.1). Because there is no shadow boundary, IDREF wiring (`commandfor`, `for`, `aria-*`), native form participation, and find-in-page work document-wide — the L0 layer and the no-JS form fallback depend on exactly this. The compiler also validates JSX nesting against the HTML content model (**FW225**): markup the parser would re-parent (`<div>` in `<p>`, `<tr>` outside a table) makes the served HTML and the parsed DOM disagree, silently breaking morph identity and fragment targets — so it is a compile error, not a runtime surprise.
 
 Everything is inspectable in the Elements panel: dependencies (`fw-deps`), data (the JSON), behavior (`on:*` attributes), pending mutations (`fw-pending`, §10.3).
 
@@ -301,7 +290,7 @@ On change, the loader keys existing `[fw-key]` children against the new array: c
 
 ### 4.9 Update coverage (exhaustiveness)
 
-§10.6 proves every invalidated query has an optimistic story; this is the same theorem one hop further down the dataflow: **every query-dependent position in rendered output must have a declared update status**, or the page renders data it will never refresh — the silent-staleness bug §10.6 exists to kill, recurring on the client side of the wire. The framework rejected runtime dependency tracking (§3.2), and the thing removed was also the thing that guaranteed coverage in SPA frameworks; a static plan needs a static completeness proof.
+§10.6 proves every invalidated query has an optimistic story; this is the same theorem one hop further down the dataflow: **every query-dependent position in rendered output must have a declared update status**, or the page renders data it will never refresh — the silent-staleness bug §10.6 exists to kill, recurring on the client side of the wire. The framework rejected runtime dependency tracking (§3.1), and the thing removed was also the thing that guaranteed coverage in SPA frameworks; a static plan needs a static completeness proof.
 
 During lowering, the compiler classifies every render-output position that reads query data:
 
@@ -1035,7 +1024,3 @@ USER CLICKS (no JS):      form POSTs → redirect → fresh page. Same handler.
 TEAMMATE, NEXT MONTH:     ships <mini-cart> with queries:{cart} —
   it is optimistically updated by every cart mutation ever written. Nothing to remember.
 ```
-
-## Appendix B: Name
-
-"Jiso" — short, pronounceable, no known collisions in the framework space. Pre-launch: trademark screen, domain (jiso.dev), npm scope `@jiso`, and the usual Placek-style linguistic screen across major markets.
