@@ -2262,8 +2262,7 @@ async function fetchEnhancedMutation(
     method: (options.form.method ?? 'post').toUpperCase(),
     ...(options.onUploadProgress ? { onUploadProgress: options.onUploadProgress } : {}),
   });
-  const changes = readMutationChangeHeader(response);
-  reportMalformedMutationChangeHeader(response, options.onError);
+  const changes = readMutationChangeHeader(response, options.onError);
 
   return {
     body: await response.text(),
@@ -2524,30 +2523,24 @@ function createIdem(): string {
   );
 }
 
-function readMutationChangeHeader(response: EnhancedMutationResponseLike): MutationChangeRecord[] {
+function readMutationChangeHeader(
+  response: EnhancedMutationResponseLike,
+  onError?: (error: unknown) => void,
+): MutationChangeRecord[] {
   const value = response.headers?.get('FW-Changes') ?? response.headers?.get('fw-changes');
   if (!value) return [];
 
   const parsed = parseJsonValue(value);
-  if (!parsed.ok || !Array.isArray(parsed.value)) return [];
+  if (!parsed.ok) {
+    onError?.(malformedJsonError('FW-Changes header', parsed.error));
+    return [];
+  }
+  if (!Array.isArray(parsed.value)) return [];
 
   return parsed.value.flatMap((record) => {
     const sanitized = sanitizeMutationChangeRecord(record);
     return sanitized ? [sanitized] : [];
   });
-}
-
-function reportMalformedMutationChangeHeader(
-  response: EnhancedMutationResponseLike,
-  onError?: (error: unknown) => void,
-): void {
-  const value = response.headers?.get('FW-Changes') ?? response.headers?.get('fw-changes');
-  if (!value) return;
-
-  const parsed = parseJsonValue(value);
-  if (!parsed.ok) {
-    onError?.(malformedJsonError('FW-Changes header', parsed.error));
-  }
 }
 
 function unescapeHtml(value: string): string {

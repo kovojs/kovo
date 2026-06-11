@@ -1075,7 +1075,8 @@ void test('P9 verification layer evidence remains represented', async () => {
   assert.match(runtimeSource, /export interface OptimisticChange/);
   assert.match(runtimeSource, /change\?: OptimisticChange<Input>/);
   assert.match(runtimeSource, /function resolveOptimisticKeys/);
-  assert.match(runtimeSource, /readMutationChangeHeader\(response\)/);
+  assert.match(runtimeSource, /readMutationChangeHeader\(response, options\.onError\)/);
+  assert.doesNotMatch(runtimeSource, /function reportMalformedMutationChangeHeader/);
   assert.match(runtimeSource, /publishSuccessfulMutation\(options, response, body, changes\)/);
   assert.match(runtimeTests, /submits enhanced mutations with optimistic transforms/);
   assert.match(

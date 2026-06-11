@@ -3430,7 +3430,9 @@ describe('query store', () => {
     expect(result.changes).toEqual([]);
     expect(store.get('cart')).toEqual({ count: 2 });
     expect(root.targets.get('cart-badge')?.html).toBe('<cart-badge>2</cart-badge>');
+    expect(onError).toHaveBeenCalledTimes(1);
     expect(onError).toHaveBeenCalledWith(expect.any(Error));
+    expect(String(onError.mock.calls[0]?.[0])).toContain('Malformed JSON in FW-Changes header');
   });
 
   it('reports direct enhanced mutation fetch failures and clears pending state', async () => {
