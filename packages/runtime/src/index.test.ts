@@ -1178,6 +1178,7 @@ describe('runtime loader', () => {
 
     await firstRoot.listeners.get('click')?.({ target: firstElement, type: 'click' });
     await secondRoot.listeners.get('click')?.({ target: secondElement, type: 'click' });
+    const firstClickListener = firstRoot.listeners.get('click');
 
     expect(firstSignals).toHaveLength(1);
     expect(secondSignals).toHaveLength(1);
@@ -1187,6 +1188,12 @@ describe('runtime loader', () => {
 
     expect(firstSignals[0]?.aborted).toBe(true);
     expect(secondSignals[0]?.aborted).toBe(false);
+
+    // SPEC §4.7: ctx.signal is the island lifecycle primitive and must be fresh after teardown.
+    await firstClickListener?.({ target: firstElement, type: 'click' });
+    expect(firstSignals).toHaveLength(2);
+    expect(firstSignals[1]).not.toBe(firstSignals[0]);
+    expect(firstSignals[1]?.aborted).toBe(false);
 
     secondLoader.dispose();
   });

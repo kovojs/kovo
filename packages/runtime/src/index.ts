@@ -760,7 +760,7 @@ function createHandlerSignal(element: EventElementLike): AbortSignal {
   if (!key) return new AbortController().signal;
 
   const scope = activeIslandSignalScope ?? defaultIslandSignalScope;
-  const controllers = islandSignalControllersFor(activeIslandSignalScope ?? scope);
+  const controllers = islandSignalControllersFor(scope);
   const existing = controllers.get(key);
   if (existing && !existing.signal.aborted) return existing.signal;
 
