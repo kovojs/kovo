@@ -15,6 +15,7 @@ Scope: `packages/compiler/src/` only (plus `tests/fw-check.node.mjs` where gate 
 - [x] Extracted SPEC §6.4 literal navigation target validation (FW220 route-table checks for `href`/`action`) into `src/validate/navigation.ts`.
 - [x] Extracted SPEC §6.4 static navigation sugar lowering (`<Link>`, `href()`, and literal `href={...}` normalization) into `src/lower/navigation.ts`.
 - [x] Extracted handler lowering/FW201-FW210 event attribute analysis into `src/lower/handlers.ts`, preserving versioned `on:*` refs and element param derivation.
+- [x] Extracted inline derive/data-bind lowering into `src/lower/inline-derives.ts`, preserving generated derive exports, data-derive stamps, and text binding rewrites.
 - [x] Extracted view-transition lowering into `src/lower/view-transitions.ts`, preserving static stamp collection and style merging.
 - [x] Extracted server IR emission/render-equivalence source stamping into `src/emit/server.ts`, preserving handler attribute replacement plus SPEC §5.2 `fw-deps`/`fw-state` stamps.
 - [x] Extracted client IR emission into `src/emit/client.ts`, preserving handler exports and compiled query update plan serialization.
