@@ -230,8 +230,9 @@ export function main(args: readonly string[] = process.argv.slice(2)): number {
   }
 
   if (args[0] === 'check') {
-    const family = checkFamilyArg(args[1]);
-    const inputPath = family === 'all' ? args[1] : args[2];
+    const parsed = parseCheckArgs(args.slice(1));
+    if (!parsed.ok) return writeCheckUsageError(parsed);
+    const { family, inputPath } = parsed;
     const input = readGraphInput(inputPath);
     if (!input.ok) return writeInputError(input.error);
     const result = fwCheck(input.value, { family });
@@ -676,6 +677,29 @@ export function fwCheck(
 
 function checkFamilyArg(value: string | undefined): FwCheckFamily {
   return value === 'optimistic' || value === 'coverage' ? value : 'all';
+}
+
+type CheckArgParseResult =
+  | { family: FwCheckFamily; inputPath: string | undefined; ok: true }
+  | { family: string | undefined; kind: 'too-many-args' | 'unsupported-family'; ok: false };
+
+function parseCheckArgs(args: readonly string[]): CheckArgParseResult {
+  const family = checkFamilyArg(args[0]);
+  if (family !== 'all') {
+    if (args.length > 2) return { family: args[0], kind: 'too-many-args', ok: false };
+    return { family, inputPath: args[1], ok: true };
+  }
+  if (args.length > 1) return { family: args[0], kind: 'unsupported-family', ok: false };
+  return { family, inputPath: args[0], ok: true };
+}
+
+function writeCheckUsageError(error: Extract<CheckArgParseResult, { ok: false }>): number {
+  const message =
+    error.kind === 'unsupported-family'
+      ? `fw: unsupported check family ${stableValue(error.family)}. expected optimistic or coverage.\n`
+      : 'fw: usage: fw check [optimistic|coverage] [graph.json]\n';
+  process.stderr.write(message);
+  return 1;
 }
 
 function ok(lines: string[]): FwCheckResult {

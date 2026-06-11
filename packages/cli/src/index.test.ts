@@ -748,6 +748,40 @@ describe('fw check', () => {
     );
   });
 
+  it('rejects unsupported fw check families with a stable diagnostic', () => {
+    let output = '';
+    const stderrWrite = vi.spyOn(process.stderr, 'write').mockImplementation(((chunk) => {
+      output += chunk.toString();
+      return true;
+    }) as typeof process.stderr.write);
+
+    try {
+      expect(main(['check', 'optimstic', 'graph.json'])).toBe(1);
+    } finally {
+      stderrWrite.mockRestore();
+    }
+
+    expect(output).toBe(
+      'fw: unsupported check family "optimstic". expected optimistic or coverage.\n',
+    );
+  });
+
+  it('rejects extra args after supported fw check families', () => {
+    let output = '';
+    const stderrWrite = vi.spyOn(process.stderr, 'write').mockImplementation(((chunk) => {
+      output += chunk.toString();
+      return true;
+    }) as typeof process.stderr.write);
+
+    try {
+      expect(main(['check', 'coverage', 'graph.json', 'extra.json'])).toBe(1);
+    } finally {
+      stderrWrite.mockRestore();
+    }
+
+    expect(output).toBe('fw: usage: fw check [optimistic|coverage] [graph.json]\n');
+  });
+
   it('reports a stable error for missing check input files', () => {
     let output = '';
     const stderrWrite = vi.spyOn(process.stderr, 'write').mockImplementation(((chunk) => {
