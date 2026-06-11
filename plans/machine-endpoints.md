@@ -1,12 +1,17 @@
 # Machine endpoints — webhooks, exports, downloads (D6)
 
-Status: design agreed 2026-06-11; the `endpoint()` floor and `csrf: false` opt-out are already normative (SPEC §9.1, §6.6, landed with the D5 A-track); shaped primitives not started
+Status: design agreed 2026-06-11; the `endpoint()` floor and `csrf: false` opt-out are already normative (SPEC §9.1, §6.6, landed with the D5 A-track); D6 SPEC additions are now normative; `webhook()` implementation and reference-app adoption remain open
 Scope: SPEC additions (`webhook()`, route response outcomes, storage capability, `--endpoints` audit), `@jiso/server` + `@jiso/core` surfaces, a verifier kit with provider presets, storage adapters, and reference-app adoption. Referenced from `IMPLEMENT_v1.md` as workstream **D6**. Shares the `endpoint()` deliverable with `plans/auth.md` A4.
 
 ## Progress checklist
 
 - [ ] S7 spike: raw-body capture without double-buffering + the webhook verify→tx→change-record lifecycle, proven against a recorded Stripe fixture (decision-gate writeup).
-- [ ] SPEC PR: `webhook()` primitive, `respond.file()`/`respond.stream()` route outcomes, storage capability interface, `--endpoints` audit, and the stated JSON-API non-goal.
+- [x] SPEC PR: `webhook()` primitive, `respond.file()`/`respond.stream()` route outcomes, storage capability interface, `--endpoints` audit, and the stated JSON-API non-goal.
+      Evidence 2026-06-11: SPEC §1.3 states the JSON/REST API non-goal; SPEC §6.4
+      normatively defines route file/stream outcomes; SPEC §9.1 defines raw endpoints,
+      `webhook()`, verifier behavior, idempotency, transaction lifecycle, and domain-write
+      requirements; SPEC §11.4 defines `fw explain --endpoints`; SPEC §13.5 defines the
+      storage capability interface and blessed adapter floor.
 - [x] E1 `endpoint()` floor implementation (shared with D5 A4), with this plan's refinements: pre-parse raw-body access, prefix mounts, no ambient session.
 - [ ] E2 `webhook()` shaped primitive: verifier slot, loose input schema, idempotency, Tx lifecycle, domain writes, change record.
 - [x] E3 verifier kit: generic `hmacSignature()` + `stripeSignature` + `standardWebhooks` presets, custom `verify` escape, provider test vectors in CI.

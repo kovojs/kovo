@@ -63,7 +63,7 @@ Audited against the repository on 2026-06-11. Checkmarks mean the behavior, API,
 - [x] D3 deferred streaming has fixtures, stylesheet hints, and priority/query ordering coverage.
 - [x] D4 has initial adopted features: route meta, file uploads, i18n catalogs, rate-limit guard, and typed sessions.
 - [ ] D5 auth (agnostic core seams + blessed `@jiso/better-auth` adapter) is planned in `plans/auth.md`; the A-track core seams are implemented (session provider, guard-failure contract, mutation response headers, and endpoint floor), while the S6 better-auth spike and B-track adapter remain open.
-- [ ] D6 machine endpoints (`webhook()` primitive, route file/stream outcomes, storage capability, `--endpoints` audit) is planned in `plans/machine-endpoints.md`; the `endpoint()` floor, route file/stream outcomes, verifier kit, core storage capability/adapters, storage-backed `s.file()` uploads, and `fw explain --endpoints` audit are implemented; `webhook()` and reference-app adoption remain open.
+- [ ] D6 machine endpoints (`webhook()` primitive, route file/stream outcomes, storage capability, `--endpoints` audit) is planned in `plans/machine-endpoints.md`; the SPEC PR is landed, and the `endpoint()` floor, route file/stream outcomes, verifier kit, core storage capability/adapters, storage-backed `s.file()` uploads, and `fw explain --endpoints` audit are implemented; `webhook()` and reference-app adoption remain open.
 - [ ] P10 v1 acceptance ledger is wired with concrete dated doc ledgers for the outside legibility study and prelaunch checks; docs freeze, actual outside study results, external launch evidence, and final clean-checkout acceptance run remain open.
 
 ## Decisions adopted by this plan
