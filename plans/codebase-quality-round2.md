@@ -452,6 +452,13 @@ must be "FW406 unresolved," never "silently wrong."
       while `statementEnd` :1886 and `nextTopLevelEntry` :2056 do; `extractFunctions` regex
       :1571-1595 breaks on parenthesized params; `splitTopLevelArgs` :2010-2027 splits inside
       strings; `tableExpression: [^)]+?` :1774-1776 mangles `alias(products, "p")`).
+      Partial evidence 2026-06-11: project-mode domain write callbacks now use ts-morph AST
+      extraction for `domain(...).write(...)` callback bodies and typed receiver origins instead
+      of feeding callback text through the source-mode callback parser. `packages/drizzle/src`
+      covers callback-body extraction and typed receiver origins; `conformance/drizzle-pin`
+      covers the real Drizzle receiver/callback authoring surface. Same-session evidence:
+      `pnpm exec vitest --run packages/drizzle/src` and
+      `pnpm exec vitest --run conformance/drizzle-pin`.
 - [ ] **HIGH — Remove fact-fabricating heuristics; degrade to FW406.**
       Column type from projection-key name (`/(count|qty|...)$/i` → number, index.ts:993);
       receiver detection by parameter name (`/^(db|tx|...|client|...)$/`, :1856-1858);
