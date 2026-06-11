@@ -1405,6 +1405,76 @@ export const CartBadge = component('cart-badge', {
     ]);
   });
 
+  it('reports FW231, FW232, and FW233 for residual attribute merge conflicts', () => {
+    const result = compileComponentModule({
+      fileName: 'primitive-merge.tsx',
+      source: `
+export const PrimitiveMerge = component('primitive-merge', {
+  render: () => (
+    <primitive-merge>
+      <dialog id="drawer"></dialog>
+      <dialog id="confirm"></dialog>
+      <button commandfor="drawer" commandfor="confirm" data-p-id="one" data-p-id="two" fw-c="primitive-merge" fw-c="primitive-merge">Open</button>
+      <button aria-expanded="false" aria-expanded="true" role="button" role="link" data-state="closed" data-state="open">Toggle</button>
+      <span data-bind="cart.count" data-bind="cart.total" data-bind:hidden="cart.empty" data-bind:hidden="cart.loading">2</span>
+    </primitive-merge>
+  ),
+});
+`,
+    });
+
+    expect(result.diagnostics).toEqual([
+      {
+        code: 'FW231',
+        fileName: 'primitive-merge.tsx',
+        message: 'Unmergeable attribute conflict in primitive composition. commandfor',
+        severity: 'error',
+      },
+      {
+        code: 'FW231',
+        fileName: 'primitive-merge.tsx',
+        message: 'Unmergeable attribute conflict in primitive composition. data-p-id',
+        severity: 'error',
+      },
+      {
+        code: 'FW231',
+        fileName: 'primitive-merge.tsx',
+        message: 'Unmergeable attribute conflict in primitive composition. fw-c',
+        severity: 'error',
+      },
+      {
+        code: 'FW232',
+        fileName: 'primitive-merge.tsx',
+        message: 'Author overrides a primitive-owned ARIA or state attribute. aria-expanded',
+        severity: 'lint',
+      },
+      {
+        code: 'FW232',
+        fileName: 'primitive-merge.tsx',
+        message: 'Author overrides a primitive-owned ARIA or state attribute. role',
+        severity: 'lint',
+      },
+      {
+        code: 'FW232',
+        fileName: 'primitive-merge.tsx',
+        message: 'Author overrides a primitive-owned ARIA or state attribute. data-state',
+        severity: 'lint',
+      },
+      {
+        code: 'FW233',
+        fileName: 'primitive-merge.tsx',
+        message: 'Two writers target the same binding slot. data-bind',
+        severity: 'error',
+      },
+      {
+        code: 'FW233',
+        fileName: 'primitive-merge.tsx',
+        message: 'Two writers target the same binding slot. data-bind:hidden',
+        severity: 'error',
+      },
+    ]);
+  });
+
   it('reports FW226 for residual stamps naming unknown components or query instances', () => {
     const result = compileComponentModule({
       fileName: 'recommendations.tsx',

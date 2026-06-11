@@ -544,6 +544,28 @@ void test('P1 compiler validates binding stamp expression drift', async () => {
   assert.match(compilerTests, /data-bind="cart\.count" wraps \{cart\.total\}/);
 });
 
+void test('P1 compiler validates primitive composition attribute merges', async () => {
+  const coreSource = await readProjectFile('packages/core/src/diagnostics.ts');
+  const compilerSource = await readProjectFile('packages/compiler/src/index.ts');
+  const compilerTests = await readProjectFile('packages/compiler/src/index.test.ts');
+
+  assert.match(coreSource, /FW231/);
+  assert.match(coreSource, /FW232/);
+  assert.match(coreSource, /FW233/);
+  assert.match(coreSource, /Unmergeable attribute conflict/);
+  assert.match(coreSource, /Author overrides a primitive-owned ARIA or state attribute/);
+  assert.match(coreSource, /Two writers target the same binding slot/);
+  assert.match(compilerSource, /validateAttributeMergeConflicts/);
+  assert.match(compilerSource, /ambiguousRelationshipAttributes/);
+  assert.match(compilerSource, /primitiveOwnedOverrideAttributes/);
+  assert.match(compilerSource, /attributeMergeDiagnostic/);
+  assert.match(
+    compilerTests,
+    /reports FW231, FW232, and FW233 for residual attribute merge conflicts/,
+  );
+  assert.match(compilerTests, /data-bind:hidden/);
+});
+
 void test('P3 typed routes validate navigation targets', async () => {
   const coreSource = await readProjectFile('packages/core/src/index.ts');
   const coreTests = await readProjectFile('packages/core/src/index.test.ts');

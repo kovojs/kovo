@@ -271,6 +271,7 @@ export function compileComponentModule(options: CompileComponentOptions): Compil
   const htmlContentModelDiagnostics = validateHtmlContentModel(source, options.fileName);
   const eventTriggerDiagnostics = validateEventTriggerNames(source, options.fileName);
   const residualStampDiagnostics = validateResidualStamps(source, options, componentName);
+  const attributeMergeDiagnostics = validateAttributeMergeConflicts(source, options.fileName);
   const clientFileName = replaceExtension(options.fileName, '.client.js');
   const cssFileName = replaceExtension(options.fileName, '.css');
   const serverFileName = replaceExtension(options.fileName, '.server.js');
@@ -312,6 +313,7 @@ export function compileComponentModule(options: CompileComponentOptions): Compil
       ...htmlContentModelDiagnostics,
       ...eventTriggerDiagnostics,
       ...residualStampDiagnostics,
+      ...attributeMergeDiagnostics,
       ...updateCoverage
         .filter((fact) => fact.status === 'UNHANDLED')
         .map((fact) => fw311Diagnostic(options.fileName, fact)),
@@ -1621,6 +1623,86 @@ function validateResidualStamps(
   }
 
   return dedupeDiagnostics(diagnostics);
+}
+
+const ambiguousRelationshipAttributes = new Set([
+  'aria-activedescendant',
+  'aria-controls',
+  'aria-describedby',
+  'aria-labelledby',
+  'aria-owns',
+  'commandfor',
+  'for',
+  'htmlFor',
+  'popovertarget',
+]);
+
+const primitiveOwnedOverrideAttributes = new Set(['role', 'data-state']);
+
+function validateAttributeMergeConflicts(source: string, fileName: string): CompilerDiagnostic[] {
+  const diagnostics: CompilerDiagnostic[] = [];
+  const tagPattern = /<(?<tag>[A-Za-z][\w:-]*)\b(?<attrs>[^>]*)>/g;
+
+  for (const match of source.matchAll(tagPattern)) {
+    const attrs = attributeNames(match.groups?.attrs ?? '');
+    const counts = countValues(attrs);
+
+    for (const [name, count] of counts) {
+      if (count < 2) continue;
+
+      if (isBindingAttribute(name)) {
+        diagnostics.push(attributeMergeDiagnostic(fileName, 'FW233', name));
+        continue;
+      }
+
+      if (
+        ambiguousRelationshipAttributes.has(name) ||
+        name.startsWith('data-p-') ||
+        name === 'fw-c' ||
+        name === 'fw-state'
+      ) {
+        diagnostics.push(attributeMergeDiagnostic(fileName, 'FW231', name));
+        continue;
+      }
+
+      if (name.startsWith('aria-') || primitiveOwnedOverrideAttributes.has(name)) {
+        diagnostics.push(attributeMergeDiagnostic(fileName, 'FW232', name));
+      }
+    }
+  }
+
+  return dedupeDiagnostics(diagnostics);
+}
+
+function attributeNames(attrs: string): string[] {
+  return [...attrs.matchAll(/(?:^|\s)(?<name>[A-Za-z_:][\w:.-]*)\s*=/g)]
+    .map((match) => match.groups?.name ?? '')
+    .filter(Boolean);
+}
+
+function countValues(values: readonly string[]): Map<string, number> {
+  const counts = new Map<string, number>();
+
+  for (const value of values) {
+    counts.set(value, (counts.get(value) ?? 0) + 1);
+  }
+
+  return counts;
+}
+
+function isBindingAttribute(name: string): boolean {
+  return name === 'data-bind' || name.startsWith('data-bind:');
+}
+
+function attributeMergeDiagnostic(
+  fileName: string,
+  code: 'FW231' | 'FW232' | 'FW233',
+  detail: string,
+): CompilerDiagnostic {
+  return {
+    ...diagnosticFor(fileName, code),
+    message: `${diagnosticDefinitions[code].message} ${detail}`,
+  };
 }
 
 function fw226Diagnostic(fileName: string, detail: string): CompilerDiagnostic {
