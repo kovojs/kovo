@@ -301,6 +301,13 @@ must be "FW406 unresolved," never "silently wrong."
       `db.execute(sql``)` is skipped by `extractExternalDbArgumentCalls` (:1820). Either
       extract them or emit FW406 for any db-receiving expression the extractor cannot classify —
       the static set must not under-approximate silently.
+      Partial evidence 2026-06-11: `packages/drizzle/src/index.ts` now marks receiver-bound
+      `db.execute(...)` and relational `db.query.<table>.findMany/findFirst(...)` calls as
+      unresolved FW406 touch-graph sites instead of dropping them; relational query facts also
+      remain visible with read domains and an FW406 static-projection diagnostic, preserving the
+      SPEC §10-§11 "unknown is explicit" contract. `packages/drizzle/src/index.test.ts` covers
+      these surfaces. Same-session evidence: `pnpm exec vitest --run packages/drizzle/src`,
+      `pnpm run check`, `pnpm run check:build`, and `pnpm run check:fw`.
 - [ ] **MED — Make the drizzle-orm coupling real and tested.** The `>=0.45.2 <1` pin is
       decorative: drizzle-orm is never imported, absent from devDeps, and every project test
       fabricates a `declare module "drizzle-orm/pg-core"` shim (index.test.ts:1742, 1791, 1846).

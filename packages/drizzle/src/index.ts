@@ -847,15 +847,18 @@ function extractQueryDefinitions(
 
     const body = source.slice(objectStart, objectEnd + 1);
     const selection = selectShapeFromQueryBody(body, columnShapes);
-    if (!selection) continue;
+    const diagnostics = relationalQueryDiagnostics(body);
+    if (!selection && diagnostics.length === 0) continue;
 
     definitions.push({
       body,
-      ...(selection.diagnostics ? { diagnostics: selection.diagnostics } : {}),
+      ...(selection?.diagnostics || diagnostics.length > 0
+        ? { diagnostics: [...(selection?.diagnostics ?? []), ...diagnostics] }
+        : {}),
       index: match.index,
-      opaquePaths: selection.opaquePaths,
+      opaquePaths: selection?.opaquePaths ?? [],
       query,
-      shape: selection.shape,
+      shape: selection?.shape ?? {},
     });
   }
 
@@ -914,6 +917,19 @@ function selectShapeFromQueryBody(
 
 function returnedSelectCall(body: string): RegExpExecArray | null {
   return /\breturn\s+(?:await\s+)?[\s\S]*?\.select\s*\(/.exec(body);
+}
+
+function relationalQueryDiagnostics(body: string): TouchGraphDiagnostic[] {
+  if (!relationalQueryCallPattern().test(body)) return [];
+
+  return [
+    {
+      code: 'FW406',
+      message: `${diagnosticDefinitions.FW406.message} Query uses Drizzle relational query API without static projection.`,
+      severity: diagnosticDefinitions.FW406.severity,
+      site: '',
+    },
+  ];
 }
 
 function queryShapeFromObjectLiteral(
@@ -1140,7 +1156,15 @@ function queryTableExpressions(body: string): string[] {
     ...body.matchAll(
       /\.(?:from|innerJoin|leftJoin|rightJoin|fullJoin)\s*\(\s*(?<table>[A-Za-z_$][\w$]*(?:\.[A-Za-z_$][\w$]*)?)/g,
     ),
+    ...body.matchAll(relationalQueryCallPattern()),
   ].flatMap((match) => (match.groups?.table ? [match.groups.table] : []));
+}
+
+function relationalQueryCallPattern(): RegExp {
+  return new RegExp(
+    `\\b${IDENTIFIER_SOURCE}\\s*\\.\\s*query\\s*\\.\\s*(?<table>${IDENTIFIER_SOURCE})\\s*\\.\\s*(?:findMany|findFirst)\\s*\\(`,
+    'g',
+  );
 }
 
 function queryInstanceKey(
@@ -1279,6 +1303,12 @@ function directSummaryForFunction(
   }
 
   for (const call of extractExternalDbArgumentCalls(fn.body, receiverNames, localFunctionNames)) {
+    unresolved.push({
+      operation: call.name,
+      site: `${file.fileName}:${lineForIndex(file.source, fn.bodyStart + call.index)}`,
+    });
+  }
+  for (const call of extractUnclassifiedDrizzleReceiverCalls(fn.body, receiverNames)) {
     unresolved.push({
       operation: call.name,
       site: `${file.fileName}:${lineForIndex(file.source, fn.bodyStart + call.index)}`,
@@ -1822,6 +1852,58 @@ function extractExternalDbArgumentCalls(
 
     const passedReceivers = splitTopLevelArgs(args).some((arg) => receiverNames.has(arg.trim()));
     if (passedReceivers) calls.push({ index: match.index, name });
+  }
+
+  return calls;
+}
+
+function extractUnclassifiedDrizzleReceiverCalls(
+  source: string,
+  receiverNames: ReadonlySet<string>,
+): ExternalDbArgumentCall[] {
+  return [
+    ...extractReceiverExecuteCalls(source, receiverNames),
+    ...extractRelationalQueryCalls(source, receiverNames),
+  ];
+}
+
+function extractReceiverExecuteCalls(
+  source: string,
+  receiverNames: ReadonlySet<string>,
+): ExternalDbArgumentCall[] {
+  const calls: ExternalDbArgumentCall[] = [];
+  const pattern = new RegExp(
+    `\\b(?<receiver>${IDENTIFIER_SOURCE})\\s*\\.\\s*(?<name>execute)\\s*\\(`,
+    'g',
+  );
+
+  for (const match of source.matchAll(pattern)) {
+    const receiver = match.groups?.receiver;
+    const name = match.groups?.name;
+    if (!receiver || !receiverNames.has(receiver) || !name || match.index === undefined) continue;
+
+    calls.push({ index: match.index, name });
+  }
+
+  return calls;
+}
+
+function extractRelationalQueryCalls(
+  source: string,
+  receiverNames: ReadonlySet<string>,
+): ExternalDbArgumentCall[] {
+  const calls: ExternalDbArgumentCall[] = [];
+  const pattern = new RegExp(
+    `\\b(?<receiver>${IDENTIFIER_SOURCE})\\s*\\.\\s*query\\s*\\.\\s*${IDENTIFIER_SOURCE}\\s*\\.\\s*(?<method>findMany|findFirst)\\s*\\(`,
+    'g',
+  );
+
+  for (const match of source.matchAll(pattern)) {
+    const receiver = match.groups?.receiver;
+    const method = match.groups?.method;
+    if (!receiver || !receiverNames.has(receiver) || !method || match.index === undefined) continue;
+
+    calls.push({ index: match.index, name: `query.${method}` });
   }
 
   return calls;
