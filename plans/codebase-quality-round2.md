@@ -105,10 +105,13 @@ Do this first or pay it on every commit.
       substitution; templates are linted/typechecked as code. Replace the template-substring test
       with: scaffold into a temp dir, run `tsc --noEmit` (and the scaffold's own test script)
       on the result.
-- [ ] **Document the test topology** (root README or CONTRIBUTING): the five mechanisms (package
+- [x] **Document the test topology** (root README or CONTRIBUTING): the five mechanisms (package
       vitest, browser config, `tests/*.node.mjs`, conformance workspaces, acceptance chain), and
       make `scripts/fw-check.mjs` fail with a "run `vp run build` first" message instead of a raw
       import error when `dist/` is missing (tests/fw-check.node.mjs:5 hidden ordering dep).
+      Evidence 2026-06-11: `README.md` documents the five gate mechanisms and acceptance order;
+      `scripts/fw-check.mjs` preflights `dist/cli/src/index.mjs` and
+      `tests/fw-check.node.mjs` pins the friendly missing-build message.
 - [ ] **Give the graph schema one home.** Move `FwExplainInput` and friends from
       `cli/src/index.ts:14-241` to `@jiso/core`, with element-level validation (an unknown
       diagnostic code currently crashes `fw` with a raw TypeError —

@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { readdir, readFile } from 'node:fs/promises';
 import { test } from 'node:test';
 
+import { missingBuildMessage } from '../scripts/fw-check.mjs';
 import { fwCheck } from '../dist/cli/src/index.mjs';
 
 const responseMarker = '<<< RESPONSE';
@@ -111,6 +112,13 @@ const listProjectFiles = async (dir, predicate) => {
 
   return files;
 };
+
+void test('fw-check wrapper explains the production build prerequisite', () => {
+  assert.equal(
+    missingBuildMessage('dist/missing-cli.mjs'),
+    'fw-check requires dist/missing-cli.mjs. Run `vp run build` first.',
+  );
+});
 
 void test('Phase 0 wire fixtures are present and explicit', async () => {
   const fixtureNames = await readdir(new URL('../fixtures/wire/', import.meta.url));
