@@ -16,6 +16,7 @@ import {
   scopeComponentCss,
   selectCssAssets,
 } from './index.js';
+import { renderEquivalenceCheck } from './emit/server.js';
 
 const cartBadgeSource = `
 import { component } from '@jiso/core';
@@ -28,6 +29,14 @@ export const CartBadge = component('cart-badge', {
       <span data-bind="cart.count">2</span>
     </button>
   ),
+});
+`;
+
+const prefixFixtureSource = `
+import { component } from '@jiso/core';
+
+export const Shell = component('shell', {
+  render: () => <section></section>,
 });
 `;
 
@@ -246,6 +255,58 @@ export const CartActions = component('cart-actions', {
     expect(clientSource).not.toContain('id: ctx.params.idx');
   });
 
+  it('rewrites handler captures without touching strings or template literal text', () => {
+    const result = compileComponentModule({
+      fileName: 'components/cart/cart-actions.tsx',
+      source: `
+import { component } from '@jiso/core';
+
+export const CartActions = component('cart-actions', {
+  state: () => ({ count: 0 }),
+  render: () => (
+    <button onClick={() => {
+      log('state changed for item.id');
+      log(\`literal item.quantity stays text\`);
+      state.count += item.quantity;
+    }}>Add</button>
+  ),
+});
+`,
+    });
+
+    const clientSource = result.files[1]?.source ?? '';
+
+    expect(clientSource).toContain("log('state changed for item.id');");
+    expect(clientSource).toContain('log(`literal item.quantity stays text`);');
+    expect(clientSource).toContain('ctx.state.count += ctx.params.quantity;');
+    expect(clientSource).not.toContain('ctx.state changed');
+    expect(clientSource).not.toContain('literal ctx.params.quantity stays text');
+  });
+
+  it('extracts element params from wrapper calls with quoted commas', () => {
+    const result = compileComponentModule({
+      fileName: 'components/cart/cart-actions.tsx',
+      source: `
+import { component } from '@jiso/core';
+
+export const CartActions = component('cart-actions', {
+  render: () => (
+    <button onClick={() => track('cart,add', item.id, { qty: item.quantity })}>Add</button>
+  ),
+});
+`,
+    });
+
+    const serverSource = result.files[0]?.source ?? '';
+    const clientSource = result.files[1]?.source ?? '';
+
+    expect(serverSource).toContain('data-p-id="{item.id}"');
+    expect(serverSource).toContain('data-p-quantity="{item.quantity}"');
+    expect(clientSource).toContain(
+      "return track('cart,add', ctx.params.id, { qty: ctx.params.quantity });",
+    );
+  });
+
   it('ignores event handler text inside strings and comments', () => {
     const result = compileComponentModule({
       fileName: 'components/cart/cart-actions.tsx',
@@ -451,6 +512,122 @@ export const ProductGrid = component('product-grid', {
     });
   });
 
+  it('reports FW234 when component packages claim the same effective prefix', () => {
+    const result = compileComponentModule({
+      fileName: 'components/shell.tsx',
+      packageComponentPrefixes: [
+        { packageName: '@acme/primitives', prefix: 'acme-' },
+        { packageName: '@other/acme-widgets', prefix: 'acme-' },
+      ],
+      source: prefixFixtureSource,
+    });
+
+    expect(result.diagnostics).toEqual([
+      expect.objectContaining({
+        code: 'FW234',
+        fileName: 'components/shell.tsx',
+        help: expect.stringContaining(
+          'SPEC §6.1.1 keeps package prefixes app-wide unique because the effective prefix is emitted into rendered hosts, residual fw-c values, scoped CSS, and package behavior attributes.',
+        ),
+        message: expect.stringContaining(
+          'Effective package prefix "acme-" is claimed by @acme/primitives and @other/acme-widgets.',
+        ),
+        severity: 'error',
+      }),
+    ]);
+    expect(result.diagnostics[0]?.help).toContain('effectivePrefix: "other-acme-"');
+  });
+
+  it('accepts an explicit package prefix alias as the collision escape hatch', () => {
+    const result = compileComponentModule({
+      fileName: 'components/shell.tsx',
+      packageComponentPrefixes: [
+        { packageName: '@acme/primitives', prefix: 'acme-' },
+        {
+          effectivePrefix: 'other-acme-',
+          packageName: '@other/acme-widgets',
+          prefix: 'acme-',
+        },
+      ],
+      source: prefixFixtureSource,
+    });
+
+    expect(result.diagnostics).toEqual([]);
+  });
+
+  it('reports FW234 when non-jiso packages use the reserved jiso prefix family', () => {
+    const result = compileComponentModule({
+      fileName: 'components/shell.tsx',
+      packageComponentPrefixes: [
+        { packageName: '@jiso/headless-ui', prefix: 'jiso-' },
+        { packageName: '@acme/widgets', prefix: 'acme-', effectivePrefix: 'jiso-widgets-' },
+      ],
+      source: prefixFixtureSource,
+    });
+
+    expect(result.diagnostics).toEqual([
+      expect.objectContaining({
+        code: 'FW234',
+        fileName: 'components/shell.tsx',
+        help: expect.stringContaining(
+          'SPEC §6.1.1 reserves the jiso-* prefix family for packages whose manifest name is in the @jiso/* scope.',
+        ),
+        message: expect.stringContaining(
+          '@acme/widgets cannot use reserved jiso-* package prefix "jiso-widgets-".',
+        ),
+        severity: 'error',
+      }),
+    ]);
+  });
+
+  it('reports FW234 when packages try to claim the framework fw attribute namespace', () => {
+    const result = compileComponentModule({
+      fileName: 'components/shell.tsx',
+      packageComponentPrefixes: [{ packageName: '@acme/widgets', prefix: 'fw-' }],
+      source: prefixFixtureSource,
+    });
+
+    expect(result.diagnostics).toEqual([
+      expect.objectContaining({
+        code: 'FW234',
+        fileName: 'components/shell.tsx',
+        help: expect.stringContaining(
+          'SPEC §6.1.1 reserves the fw-* attribute namespace for framework-owned attributes and future loader/compiler growth.',
+        ),
+        message: expect.stringContaining(
+          '@acme/widgets cannot use reserved fw-* package prefix "fw-".',
+        ),
+        severity: 'error',
+      }),
+    ]);
+  });
+
+  it('reports FW234 for missing or invalid package prefix facts', () => {
+    const result = compileComponentModule({
+      fileName: 'components/shell.tsx',
+      packageComponentPrefixes: [
+        { packageName: '@missing/prefix' },
+        { packageName: '@bad/prefix', prefix: 'BadPrefix' },
+      ],
+      source: prefixFixtureSource,
+    });
+
+    expect(result.diagnostics).toEqual([
+      expect.objectContaining({
+        code: 'FW234',
+        message: expect.stringContaining(
+          '@missing/prefix is imported as a component package but does not declare package.json jiso.prefix.',
+        ),
+      }),
+      expect.objectContaining({
+        code: 'FW234',
+        message: expect.stringContaining(
+          '@bad/prefix declares invalid package.json jiso.prefix "BadPrefix".',
+        ),
+      }),
+    ]);
+  });
+
   it('emits scoped CSS artifacts for static co-located component CSS', () => {
     const result = compileComponentModule({
       fileName: 'components/cart/cart-badge.tsx',
@@ -529,6 +706,30 @@ export const CartBadge = component('cart-badge', {
     );
   });
 
+  it('executes emitted renderSource for render-equivalence checks', () => {
+    const expected = '<cart-badge>u0032</cart-badge>';
+    const serverSource = [
+      '// @jiso-ir',
+      'export function renderSource() {',
+      '  return `<cart-badge>\\u0032</cart-badge>`;',
+      '}',
+      '',
+    ].join('\n');
+
+    const check = renderEquivalenceCheck(
+      'components/cart/cart-badge.server.js',
+      expected,
+      serverSource,
+    );
+
+    expect(check).toEqual({
+      actual: '<cart-badge>2</cart-badge>',
+      artifact: 'components/cart/cart-badge.server.js',
+      expected,
+      ok: false,
+    });
+  });
+
   it('scopes native-host component CSS to the fw-c identity stamp', () => {
     const result = compileComponentModule({
       fileName: 'components/cart/cart-row.tsx',
@@ -550,6 +751,34 @@ export const CartRow = component('cart-row', {
     expect(result.files.find((file) => file.fileName.endsWith('.css'))?.source).toContain(
       '[fw-c="cart-row"] td:not([fw-c]):not([fw-c] *) { padding: 0.5rem; }',
     );
+    expect(() => assertFixpoint(result)).not.toThrow();
+  });
+
+  it('scopes CSS to the returned host instead of tag text inside render bodies', () => {
+    const result = compileComponentModule({
+      fileName: 'components/cart/cart-badge.tsx',
+      source: `
+import { component } from '@jiso/core';
+
+export const CartBadge = component('cart-badge', {
+  css: \`
+    button { color: teal; }
+  \`,
+  render: () => {
+    const sample = '<cart-badge></cart-badge>';
+    // <also-not-the-host></also-not-the-host>
+    return <section fw-c="cart-badge"><button>1</button></section>;
+  },
+});
+`,
+    });
+
+    const cssSource = result.files.find((file) => file.fileName.endsWith('.css'))?.source ?? '';
+    expect(cssSource).toContain('@scope ([fw-c="cart-badge"]) to (:scope [fw-c])');
+    expect(cssSource).toContain(
+      '[fw-c="cart-badge"] button:not([fw-c]):not([fw-c] *) { color: teal; }',
+    );
+    expect(cssSource).not.toContain('@scope (cart-badge)');
     expect(() => assertFixpoint(result)).not.toThrow();
   });
 
@@ -874,6 +1103,65 @@ export const CartShell = component('cart-shell', {
     });
 
     expect(result.diagnostics).toEqual([]);
+  });
+
+  it('accepts package-prefixed behavior IDREFs that reference ids in component scope', () => {
+    const result = compileComponentModule({
+      fileName: 'pricing-link.tsx',
+      packageComponentPrefixes: [
+        {
+          idrefBehaviorAttributes: ['tooltip'],
+          packageName: '@jiso/headless-ui',
+          prefix: 'jiso-',
+        },
+      ],
+      source: `
+export const PricingLink = component('pricing-link', {
+  render: () => (
+    <section>
+      <a href="/pricing" jiso-tooltip="pricing-tip">Pricing</a>
+      <p id="pricing-tip">Starts at $20.</p>
+    </section>
+  ),
+});
+`,
+    });
+
+    expect(result.diagnostics).toEqual([]);
+  });
+
+  it('reports FW221 for package-prefixed behavior IDREFs that miss component scope ids', () => {
+    const result = compileComponentModule({
+      fileName: 'pricing-link.tsx',
+      packageComponentPrefixes: [
+        {
+          effectivePrefix: 'acme-ui-',
+          idrefBehaviorAttributes: ['tooltip'],
+          packageName: '@acme/headless-ui',
+          prefix: 'acme-',
+        },
+      ],
+      source: `
+export const PricingLink = component('pricing-link', {
+  render: () => (
+    <section>
+      <a href="/pricing" acme-ui-tooltip="missing-tip" fw-tooltip="framework-owned">Pricing</a>
+    </section>
+  ),
+});
+`,
+    });
+
+    expect(result.diagnostics).toEqual([
+      {
+        code: 'FW221',
+        fileName: 'pricing-link.tsx',
+        length: 29,
+        message: 'IDREF references an id not present in component scope. missing-tip',
+        severity: 'error',
+        start: { column: 26, line: 5 },
+      },
+    ]);
   });
 
   it('reports FW221 for literal IDREFs that miss component scope ids', () => {
@@ -2024,6 +2312,45 @@ export const CartBadge = component('cart-badge', {
     expect(clientSource).toContain(
       'derives: [{ name: "CartBadge$isEmpty", selector: "[data-derive=\\"cart.CartBadge$isEmpty\\"]", select(value) { return CartBadge$isEmpty.run(value); } }]',
     );
+    expect(() => assertFixpoint(result)).not.toThrow();
+  });
+
+  it('keeps named derives whose expressions contain semicolons in strings', () => {
+    const result = compileComponentModule({
+      fileName: 'cart-badge.tsx',
+      source: `
+export const CartBadge$label = derive(
+  ['cart'],
+  (cart) => cart.count === 0 ? 'empty; cart' : \`items: \${cart.count}\`,
+);
+
+export const CartBadge = component('cart-badge', {
+  render: () => (
+    <cart-badge>
+      <output data-derive="cart.CartBadge$label">empty</output>
+    </cart-badge>
+  ),
+});
+`,
+    });
+
+    expect(result.queryUpdatePlans).toEqual([
+      {
+        componentName: 'CartBadge',
+        derives: [
+          {
+            exportName: 'CartBadge$label',
+            expression: "cart.count === 0 ? 'empty; cart' : `items: ${cart.count}`",
+            input: 'cart',
+            name: 'CartBadge$label',
+            param: 'cart',
+            selector: '[data-derive="cart.CartBadge$label"]',
+          },
+        ],
+        paths: [],
+        query: 'cart',
+      },
+    ]);
     expect(() => assertFixpoint(result)).not.toThrow();
   });
 

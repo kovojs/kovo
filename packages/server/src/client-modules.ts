@@ -1,3 +1,6 @@
+import { reportServerError, type ServerErrorHandler } from './diagnostics.js';
+import type { ServerResponseBase } from './response.js';
+
 export interface VersionedClientModuleInput {
   contentType?: string;
   path: string;
@@ -5,11 +8,11 @@ export interface VersionedClientModuleInput {
   version: string;
 }
 
-export interface VersionedClientModuleResponse {
-  body: string;
-  headers: Record<string, string>;
-  status: 200 | 404;
-}
+export interface VersionedClientModuleResponse extends ServerResponseBase<
+  string,
+  Record<string, string>,
+  200 | 404
+> {}
 
 export interface VersionedClientModuleRegistry {
   put(module: VersionedClientModuleInput): string;
@@ -17,6 +20,7 @@ export interface VersionedClientModuleRegistry {
 }
 
 export interface VersionedClientModuleRequest {
+  onError?: ServerErrorHandler;
   url?: string | null;
 }
 
@@ -79,7 +83,13 @@ export function renderVersionedClientModuleResponse(
   let url: URL;
   try {
     url = clientModuleUrl(href);
-  } catch {
+  } catch (error) {
+    if (typeof request !== 'string') {
+      reportServerError(request.onError, error, {
+        operation: 'client-module',
+        url: href ?? undefined,
+      });
+    }
     return missingClientModuleResponse();
   }
 

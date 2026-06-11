@@ -52,6 +52,7 @@ import {
   type OptimisticFor,
   type StructuralMorphNode,
 } from './index.js';
+import { abortIslandSignalScope, createIslandSignalScope } from './handlers.js';
 
 declare module '@jiso/core' {
   interface InvalidationSets {
@@ -367,18 +368,36 @@ describe('runtime loader', () => {
       action: '/_m/cart/add',
       method: 'post',
     };
-    const depElement = {
-      id: 'cart-badge',
-      getAttribute(name: string) {
-        if (name === 'fw-deps') return 'cart';
-        if (name === 'fw-fragment-target') return null;
-        return null;
+    const depElements = [
+      {
+        id: 'cart-badge',
+        getAttribute(name: string) {
+          if (name === 'fw-deps') return 'cart';
+          if (name === 'fw-fragment-target') return null;
+          return null;
+        },
       },
-    };
+      {
+        id: 'inventory-panel',
+        getAttribute(name: string) {
+          if (name === 'fw-deps') return 'inventory stock';
+          if (name === 'fw-fragment-target') return 'inventory';
+          return null;
+        },
+      },
+      {
+        id: 'empty-fragment-target-fallback',
+        getAttribute(name: string) {
+          if (name === 'fw-deps') return 'debug';
+          if (name === 'fw-fragment-target') return '';
+          return null;
+        },
+      },
+    ];
     const fetch = vi.fn(async () => ({
       async text() {
         return [
-          '<fw-query name="cart">{"count":1}</fw-query>',
+          '<fw-query name="cart" key="cart:c1">{"count":1}</fw-query>',
           '<fw-fragment target="cart-badge"><cart-badge>1</cart-badge></fw-fragment>',
           '<fw-fragment target="cart-list" mode="append"><li>2</li></fw-fragment>',
         ].join('\n');
@@ -406,9 +425,9 @@ describe('runtime loader', () => {
           const queryElement = queryMatch
             ? {
                 getAttribute(name: string) {
-                  return name === 'name'
-                    ? (/name="([^"]+)"/.exec(queryAttributes)?.[1] ?? null)
-                    : null;
+                  if (name === 'name') return /name="([^"]+)"/.exec(queryAttributes)?.[1] ?? null;
+                  if (name === 'key') return /key="([^"]+)"/.exec(queryAttributes)?.[1] ?? null;
+                  return null;
                 },
                 textContent: queryMatch[2],
               }
@@ -456,7 +475,7 @@ describe('runtime loader', () => {
           return selector === '[fw-fragment-target="cart-list"]' ? appendTarget : null;
         },
         querySelectorAll(selector: string) {
-          return selector === '[fw-deps]' ? [depElement] : [];
+          return selector === '[fw-deps]' ? depElements : [];
         },
         visibilityState: 'visible',
       };
@@ -487,14 +506,14 @@ describe('runtime loader', () => {
           'FW-Idem': expect.stringMatching(
             /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/,
           ),
-          'FW-Targets': 'cart-badge=cart',
+          'FW-Targets': 'cart-badge=cart; inventory=inventory stock',
         },
         keepalive: true,
         method: 'POST',
       });
       expect(dispatched).toEqual([
         expect.objectContaining({
-          detail: { body: '{"count":1}', name: 'cart' },
+          detail: { body: '{"count":1}', key: 'cart:c1', name: 'cart' },
           type: 'jiso:query',
         }),
       ]);
@@ -818,20 +837,25 @@ describe('runtime loader', () => {
     const pendingForm = new FakePendingElement({ 'fw-deps': 'cart' });
     const pendingRoot = new FakePendingRoot([pendingForm]);
     const store = createQueryStore();
+    const loaderOnError = vi.fn();
     const preventDefault = vi.fn();
     const importModule = vi.fn();
     const onError = vi.fn();
+    const submit = vi.fn();
     const error = new Error('network down');
     const formData = new FormData();
-    const form = new FakeFormElement(
-      {
-        enhance: '',
-        'fw-deps': 'cart',
-      },
-      {
-        action: '/_m/cart/add',
-        method: 'post',
-      },
+    const form = Object.assign(
+      new FakeFormElement(
+        {
+          enhance: '',
+          'fw-deps': 'cart',
+        },
+        {
+          action: '/_m/cart/add',
+          method: 'post',
+        },
+      ),
+      { submit },
     );
     mutationRoot.deps = [{ deps: 'cart', id: 'cart-badge' }];
     const fetch = vi.fn(async () => {
@@ -852,6 +876,7 @@ describe('runtime loader', () => {
         store,
       },
       importModule,
+      onError: loaderOnError,
       root: loaderRoot,
     });
 
@@ -866,6 +891,8 @@ describe('runtime loader', () => {
     expect(preventDefault).toHaveBeenCalledTimes(1);
     expect(fetch).toHaveBeenCalledTimes(1);
     expect(onError).toHaveBeenCalledWith(error, form);
+    expect(loaderOnError).not.toHaveBeenCalled();
+    expect(submit).not.toHaveBeenCalled();
     expect(importModule).not.toHaveBeenCalled();
     expect(pendingForm.attributes).not.toHaveProperty('fw-pending');
     expect(pendingForm.attributes).not.toHaveProperty('aria-busy');
@@ -1218,6 +1245,58 @@ describe('runtime loader', () => {
       ),
     ).toEqual(['cart-filter']);
     expect(signals[0]?.aborted).toBe(true);
+  });
+
+  it('honors explicit abort scopes while a delegated handler runs in another scope', async () => {
+    const activeScope = createIslandSignalScope();
+    const explicitScope = createIslandSignalScope();
+    const activeSignals: AbortSignal[] = [];
+    const explicitSignals: AbortSignal[] = [];
+    const explicitElement = new FakeElement({
+      'fw-c': 'cart-filter',
+      'on:visible': '/c/cart-filter.client.js#mount',
+    });
+    const activeElement = new FakeElement({
+      'fw-c': 'cart-filter',
+      'on:visible': '/c/cart-filter.client.js#mount',
+    });
+    const importModule = vi.fn(async () => ({
+      mount: (_event: Event, ctx: { signal: AbortSignal }) => {
+        explicitSignals.push(ctx.signal);
+      },
+    }));
+    const scopedImportModule = vi.fn(async () => ({
+      mount: (_event: Event, ctx: { signal: AbortSignal }) => {
+        activeSignals.push(ctx.signal);
+        abortRemovedIslandSignals(
+          '<section><cart-filter fw-c="cart-filter"></cart-filter></section>',
+          '<section></section>',
+          explicitScope,
+        );
+      },
+    }));
+
+    try {
+      await dispatchDelegatedEvent(
+        { target: explicitElement, type: 'visible' },
+        importModule,
+        explicitScope,
+      );
+      await dispatchDelegatedEvent(
+        { target: activeElement, type: 'visible' },
+        scopedImportModule,
+        activeScope,
+      );
+
+      expect(explicitSignals).toHaveLength(1);
+      expect(activeSignals).toHaveLength(1);
+      expect(explicitSignals[0]).not.toBe(activeSignals[0]);
+      expect(explicitSignals[0]?.aborted).toBe(true);
+      expect(activeSignals[0]?.aborted).toBe(false);
+    } finally {
+      abortIslandSignalScope(activeScope);
+      abortIslandSignalScope(explicitScope);
+    }
   });
 
   it('keeps island ctx.signals isolated per loader install and aborts on dispose', async () => {
@@ -2053,9 +2132,12 @@ describe('query store', () => {
   it('accepts escaped JSON from text/html-compatible fw-query chunks', () => {
     const store = createQueryStore();
 
-    applyMutationResponse(store, '<fw-query name="cart">{&quot;count&quot;:4}</fw-query>');
+    applyMutationResponse(
+      store,
+      '<fw-query name="cart">{&quot;count&quot;:4,&quot;label&quot;:&quot;Alice&#39;s &amp; Bob&apos;s&quot;}</fw-query>',
+    );
 
-    expect(store.get('cart')).toEqual({ count: 4 });
+    expect(store.get('cart')).toEqual({ count: 4, label: "Alice's & Bob's" });
   });
 
   it('accepts single-quoted chunk attributes', () => {
@@ -2405,6 +2487,31 @@ describe('query store', () => {
     });
 
     expect(observed).toEqual(['morph:5:5 items:5']);
+  });
+
+  it('lets mutation DOM apply interpose query writes before compiled plans run', () => {
+    const root = new FakeMorphRoot();
+    const store = createQueryStore();
+    const count = new FakeQueryBindingElement('cart.count', { textContent: '0' });
+    const observedQueries: string[] = [];
+    root.bindings.push(count);
+
+    const result = applyMutationResponseToDom({
+      applyQuery(query) {
+        observedQueries.push(`${query.name}:${query.key ?? ''}`);
+        store.set(query.name, { count: (query.value as { count: number }).count + 10 }, query.key);
+        return { value: store.get(query.name, query.key) };
+      },
+      body: '<fw-query name="cart">{"count":5}</fw-query>',
+      queryPlans: { cart: { bindings: true } },
+      root,
+      store,
+    });
+
+    expect(result.queries).toEqual(['cart']);
+    expect(observedQueries).toEqual(['cart:']);
+    expect(store.get('cart')).toEqual({ count: 15 });
+    expect(count.textContent).toBe('15');
   });
 
   it('applies deferred stream chunks through the same query and fragment parser', () => {
@@ -4021,6 +4128,8 @@ describe('query store', () => {
     const cartBadge = new FakePendingElement({ 'fw-deps': 'cart' });
     const pendingRoot = new FakePendingRoot([cartBadge]);
     root.deps = [{ id: 'cart-badge' }];
+    const count = new FakeQueryBindingElement('cart.count', { textContent: '0' });
+    root.bindings.push(count);
     store.set('cart', { count: 0 });
     const optimistic = {
       transforms: {
@@ -4049,12 +4158,14 @@ describe('query store', () => {
       input: { quantity: 2 },
       optimistic,
       pendingRoot,
+      queryPlans: { cart: { bindings: true } },
       rebaser,
       root,
       store,
     });
 
     expect(store.get('cart')).toEqual({ count: 7 });
+    expect(count.textContent).toBe('7');
     expect(rebaser.pendingCount('cart')).toBe(1);
     expect(cartBadge.attributes).toMatchObject({
       'aria-busy': 'true',

@@ -13,6 +13,7 @@ import {
 } from '../scan/parse.js';
 import { dedupeBy, kebabCase, splitDepValue } from '../shared.js';
 import { dataBindListTemplateBodies } from './bindings.js';
+import type { PackageComponentPrefixFact } from './package-prefixes.js';
 
 interface IdrefValue {
   index: number;
@@ -35,13 +36,18 @@ export function validateIdrefs(
   source: string,
   model: ComponentModuleModel,
   fileName: string,
+  packageComponentPrefixes?: readonly PackageComponentPrefixFact[],
 ): CompilerDiagnostic[] {
   const ids = new Set(literalIdValues(model).map((id) => id.value));
   if (ids.size === 0) {
-    return idrefValues(model).map((value) => fw221Diagnostic(fileName, source, value));
+    return idrefValues(model, packageComponentPrefixes).map((value) =>
+      fw221Diagnostic(fileName, source, value),
+    );
   }
 
-  const missing = idrefValues(model).filter((value) => !ids.has(value.value));
+  const missing = idrefValues(model, packageComponentPrefixes).filter(
+    (value) => !ids.has(value.value),
+  );
   return dedupeBy(missing, (value) => value.value).map((value) =>
     fw221Diagnostic(fileName, source, value),
   );
@@ -340,7 +346,10 @@ function fw221Diagnostic(fileName: string, source: string, value: IdrefValue): C
   };
 }
 
-function idrefValues(model: ComponentModuleModel): IdrefValue[] {
+function idrefValues(
+  model: ComponentModuleModel,
+  packageComponentPrefixes?: readonly PackageComponentPrefixFact[],
+): IdrefValue[] {
   const values: IdrefValue[] = [];
   const idrefAttributes = new Set([
     'aria-activedescendant',
@@ -353,9 +362,12 @@ function idrefValues(model: ComponentModuleModel): IdrefValue[] {
     'htmlFor',
     'popovertarget',
   ]);
+  const packageIdrefAttributes = packageBehaviorIdrefAttributeNames(packageComponentPrefixes);
 
   for (const attribute of jsxAttributes(model)) {
-    if (!idrefAttributes.has(attribute.name)) continue;
+    if (!idrefAttributes.has(attribute.name) && !packageIdrefAttributes.has(attribute.name)) {
+      continue;
+    }
     const rawValue = attribute.value;
     if (!rawValue) continue;
 
@@ -382,6 +394,24 @@ function idrefValues(model: ComponentModuleModel): IdrefValue[] {
   }
 
   return values;
+}
+
+function packageBehaviorIdrefAttributeNames(
+  facts: readonly PackageComponentPrefixFact[] | undefined,
+): Set<string> {
+  const names = new Set<string>();
+  if (!facts) return names;
+
+  for (const fact of facts) {
+    const prefix = fact.effectivePrefix ?? fact.prefix;
+    if (!prefix || prefix.startsWith('fw-')) continue;
+
+    for (const behaviorName of fact.idrefBehaviorAttributes ?? []) {
+      names.add(`${prefix}${behaviorName}`);
+    }
+  }
+
+  return names;
 }
 
 function jsxAttributes(model: ComponentModuleModel): JsxAttributeModel[] {

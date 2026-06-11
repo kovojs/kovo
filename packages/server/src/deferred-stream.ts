@@ -1,6 +1,8 @@
 import { renderStylesheetLinks } from './hints.js';
 import type { StylesheetAsset } from './hints.js';
-import { escapeAttribute, escapeHtml } from './html.js';
+import { escapeAttribute } from './html.js';
+import type { ServerResponseBase } from './response.js';
+import { renderQueryWireHtml } from './wire-html.js';
 
 export interface DeferredQueryChunk {
   key?: string;
@@ -31,11 +33,11 @@ export interface DeferredStreamChunk {
   queries?: readonly DeferredQueryChunk[];
 }
 
-export interface DeferredStreamResponse {
-  body: string;
-  headers: Record<string, string>;
-  status: 200;
-}
+export interface DeferredStreamResponse extends ServerResponseBase<
+  string,
+  Record<string, string>,
+  200
+> {}
 
 export function renderDeferredStream(options: DeferredStreamOptions): DeferredStreamResponse {
   const boundary = options.boundary ?? 'jiso-boundary';
@@ -51,7 +53,6 @@ export function renderDeferredStream(options: DeferredStreamOptions): DeferredSt
     body: [options.shell, ...chunks, `--${boundary}--`, options.closeHtml ?? ''].join('\n'),
     headers: {
       'Content-Type': 'text/html; charset=utf-8',
-      'Transfer-Encoding': 'chunked',
     },
     status: 200,
   };
@@ -69,10 +70,13 @@ function renderDeferredFragmentChunk(fragment: DeferredFragmentChunk): string {
 }
 
 function renderDeferredQueryChunks(queries: readonly DeferredQueryChunk[]): string[] {
-  return queries.map((queryChunk) => {
-    const key = queryChunk.key ? ` key="${escapeAttribute(queryChunk.key)}"` : '';
-    return `<fw-query name="${escapeAttribute(queryChunk.name)}"${key}>${escapeHtml(JSON.stringify(queryChunk.value))}</fw-query>`;
-  });
+  return queries.map((queryChunk) =>
+    renderQueryWireHtml({
+      key: queryChunk.key || undefined,
+      name: queryChunk.name,
+      value: queryChunk.value,
+    }),
+  );
 }
 
 function sortDeferredChunks(chunks: readonly DeferredStreamChunk[]): DeferredStreamChunk[] {

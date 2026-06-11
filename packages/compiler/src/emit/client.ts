@@ -1,35 +1,13 @@
+import ts from 'typescript';
+
 import type { ElementParam, HandlerLowering } from '../lower/handlers.js';
 import { dedupeBy, indent } from '../shared.js';
-
-interface QueryDeriveFact {
-  expression: string;
-  exportName: string;
-  input: string;
-  name: string;
-  param: string;
-  selector: string;
-}
-
-interface QueryStampFact {
-  attr: string;
-  derive: QueryDeriveFact;
-  selector: string;
-}
-
-interface QueryTemplateStampFact {
-  itemBindings: readonly string[];
-  key: string;
-  list: string;
-  selector: string;
-  template: string;
-}
-
-interface QueryUpdatePlanFact {
-  derives?: readonly QueryDeriveFact[];
-  query: string;
-  stamps?: readonly QueryStampFact[];
-  templateStamps?: readonly QueryTemplateStampFact[];
-}
+import type {
+  QueryDeriveFact,
+  QueryStampFact,
+  QueryTemplateStampFact,
+  QueryUpdatePlanFact,
+} from '../types.js';
 
 export function emitClientModule(
   handlers: HandlerLowering[],
@@ -86,19 +64,112 @@ function arrowExpressionBody(expression: string): string | null {
 }
 
 function lowerHandlerExpression(expression: string, params: readonly ElementParam[]): string {
-  let lowered = expression.replace(/\bstate\b/g, 'ctx.state');
+  const replacements: Array<{ end: number; start: number; value: string }> = [];
+  const sourceFile = ts.createSourceFile(
+    'handler-expression.ts',
+    `function __jiso_handler__() {\n${expression}\n}`,
+    ts.ScriptTarget.Latest,
+    true,
+    ts.ScriptKind.TS,
+  );
+  const offset = 'function __jiso_handler__() {\n'.length;
+  const paramReplacements = params
+    .map((param) => ({
+      param,
+      sourceExpression: param.value.slice(1, -1),
+    }))
+    .filter((entry) => entry.sourceExpression.length > 0)
+    .sort((left, right) => right.sourceExpression.length - left.sourceExpression.length);
 
-  for (const param of params) {
-    const sourceExpression = param.value.slice(1, -1);
-    if (!sourceExpression) continue;
+  const visit = (node: ts.Node): void => {
+    for (const { param, sourceExpression } of paramReplacements) {
+      if (
+        isSerializableExpressionNode(node) &&
+        node.getText(sourceFile) === sourceExpression &&
+        !hasReplacementAncestor(node, sourceFile, paramReplacements)
+      ) {
+        replacements.push({
+          end: node.getEnd() - offset,
+          start: node.getStart(sourceFile) - offset,
+          value: `ctx.params.${paramNameFromAttribute(param.attributeName)}`,
+        });
+        return;
+      }
+    }
 
-    lowered = lowered.replace(
-      new RegExp(`(?<![\\w$])${escapeRegExp(sourceExpression)}(?![\\w$])`, 'g'),
-      `ctx.params.${paramNameFromAttribute(param.attributeName)}`,
-    );
+    if (ts.isIdentifier(node) && node.text === 'state' && !isPropertyName(node)) {
+      replacements.push({
+        end: node.getEnd() - offset,
+        start: node.getStart(sourceFile) - offset,
+        value: 'ctx.state',
+      });
+      return;
+    }
+
+    ts.forEachChild(node, visit);
+  };
+
+  visit(sourceFile);
+
+  return applyReplacements(expression, replacements);
+}
+
+function isSerializableExpressionNode(node: ts.Node): boolean {
+  return (
+    ts.isIdentifier(node) ||
+    ts.isPropertyAccessExpression(node) ||
+    ts.isElementAccessExpression(node)
+  );
+}
+
+function isPropertyName(node: ts.Identifier): boolean {
+  const parent = node.parent;
+  return (
+    (ts.isPropertyAccessExpression(parent) && parent.name === node) ||
+    (ts.isPropertyAssignment(parent) && parent.name === node) ||
+    (ts.isShorthandPropertyAssignment(parent) && parent.name === node)
+  );
+}
+
+function hasReplacementAncestor(
+  node: ts.Node,
+  sourceFile: ts.SourceFile,
+  replacements: readonly { sourceExpression: string }[],
+): boolean {
+  let current = node.parent;
+
+  while (current) {
+    if (
+      isSerializableExpressionNode(current) &&
+      replacements.some(
+        (replacement) => current.getText(sourceFile) === replacement.sourceExpression,
+      )
+    ) {
+      return true;
+    }
+    current = current.parent;
   }
 
-  return lowered;
+  return false;
+}
+
+function applyReplacements(
+  source: string,
+  replacements: readonly { end: number; start: number; value: string }[],
+): string {
+  const filtered = replacements
+    .filter((replacement) => replacement.start >= 0 && replacement.end >= replacement.start)
+    .sort((left, right) => right.start - left.start || right.end - left.end);
+  let output = source;
+  let lastStart = Number.POSITIVE_INFINITY;
+
+  for (const replacement of filtered) {
+    if (replacement.end > lastStart) continue;
+    output = `${output.slice(0, replacement.start)}${replacement.value}${output.slice(replacement.end)}`;
+    lastStart = replacement.start;
+  }
+
+  return output;
 }
 
 function paramNameFromAttribute(attributeName: string): string {

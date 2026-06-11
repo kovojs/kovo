@@ -2,6 +2,7 @@ import { defineConfig } from 'vite-plus';
 
 export default defineConfig({
   lint: {
+    ignorePatterns: ['packages/create-jiso/templates/**'],
     options: {
       typeAware: true,
       typeCheck: true,
@@ -36,6 +37,7 @@ export default defineConfig({
         input: [
           { auto: true },
           { pattern: 'vitest.browser.config.ts', base: 'workspace' },
+          { pattern: 'tests/browser-acceptance.mjs', base: 'workspace' },
           { pattern: 'packages/runtime/src/**/*.browser.test.ts', base: 'workspace' },
         ],
       },
@@ -69,6 +71,23 @@ export default defineConfig({
           { pattern: 'packages/better-auth/src/**/*.ts', base: 'workspace' },
         ],
       },
+      'typecheck-examples': {
+        command:
+          'tsc -p examples/commerce/tsconfig.json --noEmit && tsc -p conformance/drizzle-pin/tsconfig.json --noEmit && tsc -p conformance/auth-spike/tsconfig.json --noEmit && tsc -p conformance/webhook-spike/tsconfig.json --noEmit && tsc -p conformance/app-shell-spike/tsconfig.json --noEmit',
+        input: [
+          { auto: true },
+          { pattern: 'examples/commerce/package.json', base: 'workspace' },
+          { pattern: 'examples/commerce/tsconfig.json', base: 'workspace' },
+          { pattern: 'examples/commerce/vite.config.ts', base: 'workspace' },
+          { pattern: 'examples/commerce/src/**/*.ts', base: 'workspace' },
+          { pattern: 'conformance/**/package.json', base: 'workspace' },
+          { pattern: 'conformance/**/tsconfig.json', base: 'workspace' },
+          { pattern: 'conformance/**/src/**/*.ts', base: 'workspace' },
+          { pattern: 'packages/*/package.json', base: 'workspace' },
+          { pattern: 'packages/**/src/**/*.ts', base: 'workspace' },
+          { pattern: 'tsconfig.json', base: 'workspace' },
+        ],
+      },
       'fw-check': {
         command: 'node scripts/fw-check.mjs',
         input: [
@@ -89,6 +108,7 @@ export default defineConfig({
           { pattern: 'pnpm-lock.yaml', base: 'workspace' },
           { pattern: 'scripts/fw-check.mjs', base: 'workspace' },
           { pattern: 'tests/fw-check.node.mjs', base: 'workspace' },
+          { pattern: 'tests/browser-acceptance.mjs', base: 'workspace' },
           { pattern: 'tests/p10-perf.node.mjs', base: 'workspace' },
           { pattern: 'vite.config.ts', base: 'workspace' },
           { pattern: 'vitest.browser.config.ts', base: 'workspace' },

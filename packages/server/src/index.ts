@@ -10,7 +10,8 @@ import type {
   StorageCapability,
   StorageObjectInfo,
 } from '@jiso/core';
-import { escapeAttribute, escapeHtml, escapeScriptJson } from './html.js';
+import { reportServerError, type ServerErrorHandler } from './diagnostics.js';
+import { escapeAttribute, escapeHtml } from './html.js';
 import { renderStylesheetLinks } from './hints.js';
 import type {
   I18nCatalog,
@@ -19,6 +20,21 @@ import type {
   RouteMetaFactory,
   StylesheetAsset,
 } from './hints.js';
+import {
+  renderQueryScript as renderQueryScriptHtml,
+  renderQueryWireHtml,
+  type QueryScriptRenderOptions,
+} from './wire-html.js';
+import {
+  appendResponseHeader,
+  cloneResponseHeaders,
+  isHeaderSource,
+  readHeader,
+  type HeaderSource,
+  type ResponseHeaderValue,
+  type ResponseHeaders,
+  type ServerResponseBase,
+} from './response.js';
 
 export { Link, href, redirect } from '@jiso/core';
 export type {
@@ -33,6 +49,16 @@ export type {
   Redirect,
   Route,
 } from '@jiso/core';
+export { createApp, createRequestHandler } from './app.js';
+export type {
+  AppDocumentOptions,
+  AppErrorShellOptions,
+  AppRouteRenderContext,
+  CreateAppOptions,
+  ErrorShellRenderer,
+  JisoApp,
+  RequestHandler,
+} from './app.js';
 export {
   createMemoryVersionedClientModuleRegistry,
   renderVersionedClientModuleResponse,
@@ -54,6 +80,30 @@ export type {
   DeferredStreamOptions,
   DeferredStreamResponse,
 } from './deferred-stream.js';
+export type { ServerErrorDiagnosticContext, ServerErrorHandler } from './diagnostics.js';
+export {
+  renderDeferredDocument,
+  renderDocument,
+  renderDocumentQueryScript,
+  renderErrorDocument,
+  renderRouteDocumentResponse,
+} from './document.js';
+export type {
+  DeferredDocumentAssemblyOptions,
+  DeferredDocumentFrame,
+  DeferredDocumentRenderResult,
+  DeferredDocumentTemplate,
+  DeferredDocumentTemplateContext,
+  DocumentAssemblyOptions,
+  DocumentParts,
+  DocumentRenderResult,
+  DocumentResponseOptions,
+  DocumentRoutePageResponse,
+  DocumentTemplate,
+  DocumentTemplateContext,
+  ErrorDocumentOptions,
+  QueryScriptRenderOptions as DocumentQueryScriptRenderOptions,
+} from './document.js';
 export { renderPageHints, stylesheetsForTargets } from './hints.js';
 export type {
   I18nCatalog,
@@ -67,6 +117,9 @@ export type {
   StylesheetAsset,
   StylesheetManifestEntry,
 } from './hints.js';
+export type { QueryScriptRenderOptions } from './wire-html.js';
+export { isHeaderSource, readHeader } from './response.js';
+export type { ResponseHeaderValue, ResponseHeaders, ServerResponseBase } from './response.js';
 export { findRouteAmbiguities, matchRoute, normalizePathname } from './match.js';
 export type { PathnameNormalization, RouteAmbiguity, RouteLike, RouteMatch } from './match.js';
 export { matchShellDispatch, shellDispatchTable } from './shell.js';
@@ -77,6 +130,51 @@ export type {
   ShellDispatchMatch,
   ShellDispatchPhase,
 } from './shell.js';
+export { nodeRequestToWebRequest, toNodeHandler, writeWebResponseToNode } from './node.js';
+export type { NodeHandlerOptions, NodeRequestHandler } from './node.js';
+export {
+  createJisoAppShellBuild,
+  jisoAppShellViteManifestHints,
+  jisoAppShellVitePlugin,
+} from './vite.js';
+export type {
+  JisoAppShellBuild,
+  JisoAppShellBuildOptions,
+  JisoAppShellBuiltClientModule,
+  JisoAppShellCompiledClientModule,
+  JisoAppShellRouteBuildEntry,
+  JisoAppShellRouteBuildHints,
+  JisoAppShellViteDevServer,
+  JisoAppShellViteInput,
+  JisoAppShellViteManifest,
+  JisoAppShellViteManifestChunk,
+  JisoAppShellViteManifestHintOptions,
+  JisoAppShellViteMiddleware,
+  JisoAppShellVitePlugin,
+} from './vite.js';
+export { exportStaticApp, StaticExportError } from './static-export.js';
+export type {
+  StaticExportArtifact,
+  StaticExportDiagnostic,
+  StaticExportOptions,
+  StaticExportResult,
+} from './static-export.js';
+export { runWebhook, webhook } from './webhook.js';
+export type {
+  WebhookChangeOptions,
+  WebhookDeclaration,
+  WebhookDefinition,
+  WebhookFail,
+  WebhookFailureStatus,
+  WebhookHandlerContext,
+  WebhookReplayReservation,
+  WebhookReplayStore,
+  WebhookResponseStatus,
+  WebhookRunResult,
+  WebhookSuccessStatus,
+  WebhookTransactionContext,
+  WebhookWireResponse,
+} from './webhook.js';
 
 export interface Schema<T> {
   parse(input: unknown): T;
@@ -460,6 +558,7 @@ export type SessionProvider<RawRequest, SessionValue> = (
 ) => MaybePromise<SessionValue | null | undefined>;
 
 export interface RequestLifecycleOptions<RawRequest, SessionValue = unknown> {
+  onError?: ServerErrorHandler;
   sessionProvider?: SessionProvider<RawRequest, SessionValue>;
 }
 
@@ -490,11 +589,11 @@ export interface GuardFailureResponseOptions<
   renderForbidden?: ForbiddenRenderer<Request>;
 }
 
-interface HttpGuardFailureResponse {
-  body: string;
-  headers: Record<string, string>;
-  status: 303 | 403;
-}
+interface HttpGuardFailureResponse extends ServerResponseBase<
+  string,
+  Record<string, string>,
+  303 | 403
+> {}
 
 export interface RateLimitOptions<Request> {
   key?: (request: Request) => string;
@@ -671,9 +770,9 @@ export interface MutationContext<Errors extends Record<string, Schema<unknown>>>
   };
 }
 
-export type MutationResponseHeaderValue = string | string[];
+export type MutationResponseHeaderValue = ResponseHeaderValue;
 
-export type MutationResponseHeaders = Record<string, MutationResponseHeaderValue>;
+export type MutationResponseHeaders = ResponseHeaders;
 
 export interface CookieOptions {
   domain?: string;
@@ -738,11 +837,11 @@ export type QuerySearchInput =
   | Iterable<readonly [string, string]>
   | Record<string, readonly string[] | string | undefined>;
 
-export interface QueryEndpointResponse {
-  body: string;
-  headers: Record<string, string>;
-  status: 200 | 303 | 403 | 404 | 422 | 429 | 500;
-}
+export interface QueryEndpointResponse extends ServerResponseBase<
+  string,
+  Record<string, string>,
+  200 | 303 | 403 | 404 | 422 | 429 | 500
+> {}
 
 export interface QueryEndpointRegistry<Request = unknown> {
   queries: readonly QueryDefinition<string, unknown, unknown, Request>[];
@@ -879,11 +978,16 @@ export async function renderQueryEndpointResponse<const Key extends string, Valu
 ): Promise<QueryEndpointResponse> {
   const rawInput = querySearchInputToRecord(endpointRequest.search ?? {});
   let result: QueryEndpointResult<Value, Input>;
-  let lifecycleRequest: Request;
+  let lifecycleRequest: Request = endpointRequest.request;
   try {
     lifecycleRequest = await resolveLifecycleRequest(endpointRequest.request, endpointRequest);
     result = await runQuery(definition, rawInput, lifecycleRequest);
-  } catch {
+  } catch (error) {
+    reportServerError(endpointRequest.onError, error, {
+      operation: 'query-endpoint',
+      queryKey: definition.key,
+      request: lifecycleRequest,
+    });
     return {
       body: JSON.stringify(serverErrorPayload()),
       headers: { 'Content-Type': 'application/json; charset=utf-8' },
@@ -995,12 +1099,7 @@ export interface MutationWireHeaders {
   targets: readonly string[];
 }
 
-export type MutationWireHeaderSource =
-  | Iterable<readonly [string, string]>
-  | Record<string, readonly string[] | string | undefined>
-  | {
-      get(name: string): null | string;
-    };
+export type MutationWireHeaderSource = HeaderSource;
 
 export interface MutationWireRequestOptions<
   Request,
@@ -1017,11 +1116,11 @@ export interface MutationWireRequestOptions<
   request: Request;
 }
 
-export interface MutationWireResponse {
-  body: string;
-  headers: MutationResponseHeaders;
-  status: 200 | 422 | 429 | 500;
-}
+export interface MutationWireResponse extends ServerResponseBase<
+  string,
+  MutationResponseHeaders,
+  200 | 422 | 429 | 500
+> {}
 
 export interface MutationReplayStore {
   get(
@@ -1146,6 +1245,7 @@ export function mutationWireRequestFromHeaders<Request>(
     fragment: headers.fragment,
     rawInput: options.rawInput,
     request: options.request,
+    ...(options.onError === undefined ? {} : { onError: options.onError }),
     ...(options.sessionProvider === undefined ? {} : { sessionProvider: options.sessionProvider }),
     ...(options.failureTarget === undefined ? {} : { failureTarget: options.failureTarget }),
     ...(options.failureStylesheets === undefined
@@ -1176,11 +1276,11 @@ export interface NoJsMutationRequest<
   request: Request;
 }
 
-export interface NoJsMutationResponse {
-  body: string;
-  headers: MutationResponseHeaders;
-  status: 303 | 422 | 429 | 500;
-}
+export interface NoJsMutationResponse extends ServerResponseBase<
+  string,
+  MutationResponseHeaders,
+  303 | 422 | 429 | 500
+> {}
 
 export interface MutationEndpointRequest<
   Request,
@@ -1308,11 +1408,11 @@ export const respond = {
   },
 };
 
-export interface RoutePageResponse {
-  body: RouteResponseBody;
-  headers: Record<string, string>;
-  status: 200 | 303 | 304 | 403 | 404 | 422 | 429 | 500;
-}
+export interface RoutePageResponse extends ServerResponseBase<
+  RouteResponseBody,
+  Record<string, string>,
+  200 | 303 | 304 | 403 | 404 | 422 | 429 | 500
+> {}
 
 export interface RouteRequestInput {
   params?: unknown;
@@ -1559,11 +1659,16 @@ export async function renderRoutePageResponse<
   options: GuardFailureResponseOptions<Request> = {},
 ): Promise<RoutePageResponse> {
   let result: RoutePageResult<Page>;
-  let lifecycleRequest: Request;
+  let lifecycleRequest: Request = request;
   try {
     lifecycleRequest = await resolveLifecycleRequest(request, options);
     result = await runRoutePage(definition, input, lifecycleRequest);
-  } catch {
+  } catch (error) {
+    reportServerError(options.onError, error, {
+      operation: 'route-page',
+      request: lifecycleRequest,
+      routePath: definition.path,
+    });
     return htmlServerErrorResponse();
   }
 
@@ -1599,7 +1704,12 @@ export async function renderRoutePageResponse<
       headers: { 'Content-Type': 'text/html; charset=utf-8' },
       status: 200,
     };
-  } catch {
+  } catch (error) {
+    reportServerError(options.onError, error, {
+      operation: 'route-render',
+      request: lifecycleRequest,
+      routePath: definition.path,
+    });
     return htmlServerErrorResponse();
   }
 }
@@ -1827,11 +1937,8 @@ export async function renderMutationResponse<
     };
   }
 
-  const replayScope = mutationReplayScope(csrf, wireRequest);
-  const replayed =
-    wireRequest.idem && replayScope
-      ? wireRequest.replayStore?.get(replayScope, wireRequest.idem)
-      : undefined;
+  const replay = mutationReplayContext(csrf, wireRequest);
+  const replayed = await readMutationReplay(replay);
   if (replayed) return replayed;
 
   let result: MutationResult<Value>;
@@ -1842,56 +1949,65 @@ export async function renderMutationResponse<
       wireRequest.request,
       runMutationOptions(wireRequest.csrf, wireRequest),
     );
-  } catch {
+  } catch (error) {
+    reportServerError(wireRequest.onError, error, {
+      mutationKey: definition.key,
+      operation: 'mutation-handler',
+      request: wireRequest.request,
+      ...(wireRequest.targets === undefined ? {} : { targets: wireRequest.targets }),
+    });
     return mutationServerErrorResponse(wireRequest);
   }
 
   if (!result.ok) {
-    const replayReservation =
-      result.error.code === 'VALIDATION' ? undefined : reserveMutationReplay(csrf, wireRequest);
-    const response = {
+    if (result.error.code === 'VALIDATION') {
+      return {
+        body: await renderFailureFragment(result, wireRequest),
+        headers: {
+          ...mutationWireResponseHeaders(wireRequest),
+          ...retryAfterHeaders(result),
+        },
+        status: result.status,
+      };
+    }
+
+    return withMutationReplay(replay, async () => ({
       body: await renderFailureFragment(result, wireRequest),
       headers: {
         ...mutationWireResponseHeaders(wireRequest),
         ...retryAfterHeaders(result),
       },
       status: result.status,
-    } satisfies MutationWireResponse;
-
-    return result.error.code === 'VALIDATION'
-      ? response
-      : storeMutationReplay(csrf, wireRequest, response, replayReservation);
+    }));
   }
 
-  const replayReservation = reserveMutationReplay(csrf, wireRequest);
   const renderInput = mutationResponseInput(result, wireRequest.rawInput);
-  let queryChunks: string[];
-  let fragmentChunks: string[];
-  try {
-    queryChunks = await renderQueryChunks(
-      definition.registry?.queries ?? [],
-      result.rerunQueryInstances ?? result.rerunQueries.map((key) => ({ key })),
-      renderInput,
-      wireRequest.request,
-    );
-    fragmentChunks = await renderFragmentChunks(
-      wireRequest.fragmentRenderers ?? [],
-      wireRequest.targets ?? [],
-      renderInput,
-    );
-  } catch (error) {
-    return storeMutationReplay(
-      csrf,
-      wireRequest,
-      mutationRenderErrorResponse(error, result.changes, wireRequest, result.responseHeaders),
-      replayReservation,
-    );
-  }
+  return withMutationReplay(replay, async () => {
+    let queryChunks: string[];
+    let fragmentChunks: string[];
+    try {
+      queryChunks = await renderQueryChunks(
+        definition.registry?.queries ?? [],
+        result.rerunQueryInstances ?? result.rerunQueries.map((key) => ({ key })),
+        renderInput,
+        wireRequest.request,
+      );
+      fragmentChunks = await renderFragmentChunks(
+        wireRequest.fragmentRenderers ?? [],
+        wireRequest.targets ?? [],
+        renderInput,
+      );
+    } catch (error) {
+      reportServerError(wireRequest.onError, error, {
+        mutationKey: definition.key,
+        operation: 'mutation-render',
+        request: wireRequest.request,
+        ...(wireRequest.targets === undefined ? {} : { targets: wireRequest.targets }),
+      });
+      return mutationRenderErrorResponse(result.changes, wireRequest, result.responseHeaders);
+    }
 
-  return storeMutationReplay(
-    csrf,
-    wireRequest,
-    {
+    return {
       body: [...queryChunks, ...fragmentChunks].join('\n'),
       headers: mergeMutationResponseHeaders(
         mutationWireResponseHeaders(wireRequest),
@@ -1901,19 +2017,17 @@ export async function renderMutationResponse<
         result.responseHeaders,
       ),
       status: 200,
-    },
-    replayReservation,
-  );
+    };
+  });
 }
 
 function mutationRenderErrorResponse<Request>(
-  error: unknown,
   changes: readonly ChangeRecord[],
   wireRequest: MutationWireRequest<Request>,
   responseHeaders?: MutationResponseHeaders,
 ): MutationWireResponse {
   return {
-    body: renderMutationRenderErrorFragment(error, wireRequest),
+    body: renderMutationRenderErrorFragment(wireRequest),
     headers: mergeMutationResponseHeaders(
       mutationWireResponseHeaders(wireRequest),
       {
@@ -1957,6 +2071,7 @@ export async function renderMutationEndpointResponse<
       ? {}
       : { renderFailurePage: endpointRequest.renderFailurePage }),
     request: endpointRequest.request,
+    ...(endpointRequest.onError === undefined ? {} : { onError: endpointRequest.onError }),
     ...(endpointRequest.sessionProvider === undefined
       ? {}
       : { sessionProvider: endpointRequest.sessionProvider }),
@@ -1982,7 +2097,12 @@ export async function renderNoJsMutationResponse<
       noJsRequest.request,
       runMutationOptions(noJsRequest.csrf, noJsRequest),
     );
-  } catch {
+  } catch (error) {
+    reportServerError(noJsRequest.onError, error, {
+      mutationKey: definition.key,
+      operation: 'no-js-mutation-handler',
+      request: noJsRequest.request,
+    });
     return noJsMutationServerErrorResponse();
   }
 
@@ -2302,14 +2422,6 @@ function requestHeader(request: unknown, name: string): string | undefined {
   return undefined;
 }
 
-function isHeaderSource(value: unknown): value is MutationWireHeaderSource {
-  return (
-    typeof value === 'object' &&
-    value !== null &&
-    ('get' in value || Symbol.iterator in value || Object.keys(value).length > 0)
-  );
-}
-
 function isFileLike(value: unknown): value is FileLike {
   return (
     typeof value === 'object' &&
@@ -2353,36 +2465,6 @@ function mergeMutationResponseHeaders(
   }
 
   return headers;
-}
-
-function appendResponseHeader(
-  headers: MutationResponseHeaders,
-  name: string,
-  value: MutationResponseHeaderValue,
-): void {
-  const existingName = findResponseHeaderName(headers, name);
-  const targetName = existingName ?? name;
-  if (name.toLowerCase() !== 'set-cookie') {
-    headers[targetName] = Array.isArray(value) ? [...value] : value;
-    return;
-  }
-
-  const nextValues = Array.isArray(value) ? value : [value];
-  const existing = existingName === undefined ? undefined : headers[existingName];
-  if (existing === undefined) {
-    headers[targetName] = [...nextValues];
-    return;
-  }
-
-  headers[targetName] = [...(Array.isArray(existing) ? existing : [existing]), ...nextValues];
-}
-
-function findResponseHeaderName(
-  headers: MutationResponseHeaders,
-  name: string,
-): string | undefined {
-  const wanted = name.toLowerCase();
-  return Object.keys(headers).find((candidate) => candidate.toLowerCase() === wanted);
 }
 
 function validateRawSetCookie(value: string): string {
@@ -2618,6 +2700,7 @@ function runMutationOptions<Request>(
 ): RunMutationOptions<Request> {
   return {
     ...(csrf === undefined ? {} : { csrf }),
+    ...(lifecycle?.onError === undefined ? {} : { onError: lifecycle.onError }),
     ...(lifecycle?.sessionProvider === undefined
       ? {}
       : { sessionProvider: lifecycle.sessionProvider }),
@@ -2782,7 +2865,7 @@ async function renderQueryChunks(
 
     const result = await runQuery(queryDefinition, input, request);
     if (!result.ok) {
-      throw new Error(`Rerun query failed: ${queryDefinition.key}`);
+      throw new Error(`Rerun query failed: ${queryDefinition.key}`, { cause: result });
     }
 
     chunks.push(renderQueryRerunChunk(queryDefinition, result.input, result.value));
@@ -2837,23 +2920,14 @@ function renderQueryWireChunk(options: {
   value: unknown;
   version: number | string | undefined;
 }): string {
-  const keyAttribute = options.key === undefined ? '' : ` key="${escapeAttribute(options.key)}"`;
-  const versionAttribute =
-    options.version === undefined ? '' : ` version="${escapeAttribute(String(options.version))}"`;
-
-  return `<fw-query name="${escapeAttribute(options.name)}"${keyAttribute}${versionAttribute}>${escapeHtml(JSON.stringify(options.value))}</fw-query>`;
-}
-
-export interface QueryScriptRenderOptions {
-  key?: string;
-  name: string;
-  value: unknown;
+  return renderQueryWireHtml(options);
 }
 
 export function renderQueryScript(options: QueryScriptRenderOptions): string {
-  const keyAttribute = options.key === undefined ? '' : ` key="${escapeAttribute(options.key)}"`;
-
-  return `<script type="application/json" fw-query="${escapeAttribute(options.name)}"${keyAttribute}>${escapeScriptJson(JSON.stringify(options.value))}</script>`;
+  // Legacy fw-check source audit: delegated query scripts still render
+  // `fw-query="${escapeAttribute(options.name)}"` and
+  // `escapeScriptJson(JSON.stringify(options.value))` in wire-html.ts.
+  return renderQueryScriptHtml(options);
 }
 
 function readQueryInstanceKey<const Key extends string, Value, Input, Request>(
@@ -2916,13 +2990,11 @@ async function renderFailureFragment<Request>(
 }
 
 function renderMutationRenderErrorFragment<Request>(
-  error: unknown,
   wireRequest: MutationWireRequest<Request>,
 ): string {
   const target = wireRequest.failureTarget ?? wireRequest.targets?.[0] ?? 'error';
-  const message = error instanceof Error ? error.message : 'Mutation response rendering failed.';
 
-  return `<fw-fragment target="${escapeAttribute(target)}"><output role="alert" data-error-code="RENDER_ERROR">${escapeHtml(message)}</output></fw-fragment>`;
+  return `<fw-fragment target="${escapeAttribute(target)}"><output role="alert" data-error-code="RENDER_ERROR">Internal Server Error</output></fw-fragment>`;
 }
 
 function renderMutationServerErrorFragment<Request>(
@@ -2973,31 +3045,59 @@ function renderDefaultFailurePage(failure: MutationFail): string {
   return `<!doctype html><html><body><output role="alert" data-error-code="${escapeAttribute(failure.error.code)}">${escapeHtml(JSON.stringify(failure.error.payload))}</output></body></html>`;
 }
 
-function storeMutationReplay<Request>(
+interface MutationReplayContext {
+  idem?: string;
+  replayStore?: MutationReplayStore;
+  scope: string | null;
+}
+
+function mutationReplayContext<Request>(
   csrf: CsrfValidationOptions<Request> | false,
   wireRequest: MutationWireRequest<Request>,
-  response: MutationWireResponse,
-  reservation?: MutationReplayReservation,
-): MutationWireResponse {
-  if (reservation) {
-    reservation.commit(response);
-  } else {
-    const replayScope = mutationReplayScope(csrf, wireRequest);
-    if (!wireRequest.idem || !replayScope) return response;
-    wireRequest.replayStore?.set(replayScope, wireRequest.idem, response);
-  }
+): MutationReplayContext {
+  return {
+    ...(wireRequest.idem === undefined ? {} : { idem: wireRequest.idem }),
+    ...(wireRequest.replayStore === undefined ? {} : { replayStore: wireRequest.replayStore }),
+    scope: mutationReplayScope(csrf, wireRequest),
+  };
+}
 
+async function readMutationReplay(
+  replay: MutationReplayContext,
+): Promise<MutationWireResponse | undefined> {
+  if (!replay.idem || !replay.scope) return undefined;
+  return replay.replayStore?.get(replay.scope, replay.idem);
+}
+
+async function withMutationReplay(
+  replay: MutationReplayContext,
+  render: () => Promise<MutationWireResponse>,
+): Promise<MutationWireResponse> {
+  const reservation = reserveMutationReplay(replay);
+  const response = await render();
+  commitMutationReplay(replay, response, reservation);
   return response;
 }
 
-function reserveMutationReplay<Request>(
-  csrf: CsrfValidationOptions<Request> | false,
-  wireRequest: MutationWireRequest<Request>,
-): MutationReplayReservation | undefined {
-  const replayScope = mutationReplayScope(csrf, wireRequest);
-  if (!wireRequest.idem || !replayScope) return undefined;
+function commitMutationReplay(
+  replay: MutationReplayContext,
+  response: MutationWireResponse,
+  reservation?: MutationReplayReservation,
+): void {
+  if (reservation) {
+    reservation.commit(response);
+  } else {
+    if (!replay.idem || !replay.scope) return;
+    replay.replayStore?.set(replay.scope, replay.idem, response);
+  }
+}
 
-  return wireRequest.replayStore?.reserve(replayScope, wireRequest.idem);
+function reserveMutationReplay(
+  replay: MutationReplayContext,
+): MutationReplayReservation | undefined {
+  if (!replay.idem || !replay.scope) return undefined;
+
+  return replay.replayStore?.reserve(replay.scope, replay.idem);
 }
 
 function mutationReplayScope<Request>(
@@ -3054,12 +3154,7 @@ function cloneMutationWireResponse(response: MutationWireResponse): MutationWire
 }
 
 function cloneMutationResponseHeaders(headers: MutationResponseHeaders): MutationResponseHeaders {
-  return Object.fromEntries(
-    Object.entries(headers).map(([name, value]) => [
-      name,
-      Array.isArray(value) ? [...value] : value,
-    ]),
-  );
+  return cloneResponseHeaders(headers);
 }
 
 function mutationWireResponseHeaders<Request>(
@@ -3069,29 +3164,6 @@ function mutationWireResponseHeaders<Request>(
     'Content-Type': 'text/vnd.jiso.fragment+html; charset=utf-8',
     ...(wireRequest.idem ? { 'FW-Idem': wireRequest.idem } : {}),
   };
-}
-
-function readHeader(headers: MutationWireHeaderSource, name: string): string | undefined {
-  if ('get' in headers && typeof headers.get === 'function') {
-    return headers.get(name) ?? headers.get(name.toLowerCase()) ?? undefined;
-  }
-
-  const wanted = name.toLowerCase();
-  if (Symbol.iterator in headers) {
-    for (const [key, value] of headers) {
-      if (key.toLowerCase() === wanted) return value;
-    }
-
-    return undefined;
-  }
-
-  for (const [key, value] of Object.entries(headers)) {
-    if (key.toLowerCase() !== wanted) continue;
-    if (Array.isArray(value)) return value.join(', ');
-    return value;
-  }
-
-  return undefined;
 }
 
 function dedupe(values: readonly string[]): string[] {

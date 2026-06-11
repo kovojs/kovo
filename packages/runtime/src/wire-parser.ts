@@ -161,6 +161,8 @@ export function readAttribute(attrs: string, name: string): string | null {
 
 export function unescapeHtml(value: string): string {
   return value
+    .replaceAll('&#39;', "'")
+    .replaceAll('&apos;', "'")
     .replaceAll('&quot;', '"')
     .replaceAll('&gt;', '>')
     .replaceAll('&lt;', '<')

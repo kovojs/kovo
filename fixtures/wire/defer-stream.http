@@ -7,7 +7,6 @@ Accept: text/html
 <<< RESPONSE
 HTTP/1.1 200 OK
 Content-Type: text/html; charset=utf-8
-Transfer-Encoding: chunked
 
 <!doctype html>
 <html><body><main><product-page fw-deps="product:p1"><fw-defer target="reviews:p1" state="pending"></fw-defer><fw-defer target="recommendations:p1" state="pending"></fw-defer></product-page></main>

@@ -29,7 +29,6 @@ export const defaultIslandSignalScope: IslandSignalScope = {};
 
 const islandSignalControllers = new WeakMap<IslandSignalScope, Map<string, AbortController>>();
 const delegatedStateQueues = new WeakMap<EventElementLike, Promise<void>>();
-let activeIslandSignalScope: IslandSignalScope | undefined;
 
 export function createIslandSignalScope(): IslandSignalScope {
   return {};
@@ -81,11 +80,11 @@ async function dispatchDelegatedEventForElement(
   islandSignalScope: IslandSignalScope,
 ): Promise<void> {
   const state = readElementState(element);
-  const context: HandlerContext = withIslandSignalScope(islandSignalScope, () => ({
+  const context: HandlerContext = {
     params: readElementParams(element),
-    signal: createHandlerSignal(element),
+    signal: createHandlerSignal(element, islandSignalScope),
     state,
-  }));
+  };
 
   try {
     for (const ref of parseHandlerReferences(element.getAttribute(`on:${event.type}`))) {
@@ -174,21 +173,10 @@ function findElementStateHost(element: EventElementLike): EventElementLike | nul
   );
 }
 
-function withIslandSignalScope<Value>(scope: IslandSignalScope, fn: () => Value): Value {
-  const previous = activeIslandSignalScope;
-  activeIslandSignalScope = scope;
-  try {
-    return fn();
-  } finally {
-    activeIslandSignalScope = previous;
-  }
-}
-
-function createHandlerSignal(element: EventElementLike): AbortSignal {
+function createHandlerSignal(element: EventElementLike, scope: IslandSignalScope): AbortSignal {
   const key = islandSignalKey(element);
   if (!key) return new AbortController().signal;
 
-  const scope = activeIslandSignalScope ?? defaultIslandSignalScope;
   const controllers = islandSignalControllersFor(scope);
   const existing = controllers.get(key);
   if (existing && !existing.signal.aborted) return existing.signal;
@@ -214,7 +202,7 @@ export function abortRemovedIslandSignals(
 ): string[] {
   const next = fwComponentIds(nextHtml);
   const removed = [...fwComponentIds(currentHtml)].filter((id) => !next.has(id));
-  const controllers = islandSignalControllersFor(activeIslandSignalScope ?? scope);
+  const controllers = islandSignalControllersFor(scope);
 
   for (const id of removed) {
     const controller = controllers.get(id);

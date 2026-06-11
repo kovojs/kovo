@@ -16,10 +16,50 @@ Scope: SPEC addition (proposed §9.5 "The request shell"), `@jiso/server` shell 
       preserving non-HTML route outcomes, and provides stable 403/404/500 error documents.
       `packages/server/src/shell.test.ts` covers hints, loader/query ordering, deferred
       chunk placement, template override, safe query JSON escaping, and error shells.
-- [ ] R3 `createApp()` aggregate + `createRequestHandler(app)` over web-standard `Request → Response`.
-- [ ] R4 node:http adapter (incl. Early Hints); `tests/p10-perf.node.mjs` migrates onto it as the parity proof.
+- [x] R3 `createApp()` aggregate + `createRequestHandler(app)` over web-standard `Request → Response`. Evidence
+      2026-06-11: `packages/server/src/app.ts` adds a closed app aggregate for routes,
+      endpoints, query/mutation registries, session provider, CSRF, error shells, document
+      options, client modules, and route rendering, plus a web-standard handler covering
+      trailing-slash 308s, `/c/` modules, `/_q/` queries, endpoint-before-route dispatch,
+      route GET/HEAD rendering through the existing route page renderer, 405s, and stable
+      404/500 documents. `packages/server/src/app.test.ts` covers the scaffold and confirms
+      no `use` middleware surface. Mutation dispatch remains stored-only in this narrow R3
+      scaffold and is tracked for the next request-handler slice.
+- [x] R4 node:http adapter (incl. Early Hints); `tests/p10-perf.node.mjs` migrates onto it as the parity proof. Evidence
+      2026-06-11: `packages/server/src/node.ts` adds `toNodeHandler()` plus request/response
+      conversion helpers for Node `IncomingMessage`/`ServerResponse`, streams web response
+      bodies, suppresses HEAD bodies, and emits 103 Early Hints from the `Link` header when
+      Node supports `writeEarlyHints`. `packages/server/src/node.test.ts` covers loopback
+      request bodies, final headers, Early Hints, and HEAD semantics. `tests/p10-perf.node.mjs`
+      now serves the perf proof through `createApp()` -> `createRequestHandler()` ->
+      `toNodeHandler()`, including the versioned `/c/?v=` module registry path.
 - [ ] R5 Vite+ plugin: dev middleware over the same handler; build wiring (manifest → stylesheet hints, compiled client modules → versioned emit).
+      Progress 2026-06-11: `packages/server/src/vite.ts` adds `jisoAppShellVitePlugin()`,
+      a Vite-shaped dev middleware that delegates to the same `createRequestHandler()` /
+      `toNodeHandler()` path used by R3/R4. `packages/server/src/vite.test.ts` proves a
+      route served through the plugin over `node:http`. Partial evidence 2026-06-11:
+      `createJisoAppShellBuild()` and `jisoAppShellViteManifestHints()` now compose explicit
+      route-to-manifest entries into deterministic stylesheet/modulepreload hints and register
+      compiled `/c/` module sources into the existing immutable versioned client-module registry
+      with stable content hashes; `packages/server/src/vite.test.ts` proves the hints on a real
+      `createRequestHandler()` response and module serving through the public server barrel,
+      with `packages/server/src/index.ts` exporting the helper as public server API.
+      Verification: `pnpm exec vitest --run packages/server/src/vite.test.ts`; `pnpm run check`.
+      Remaining R5 work: compiler/plugin build hooks must still supply the route-entry mapping,
+      compiled module sources, and dist-file emission/copying; this helper intentionally does
+      not infer those facts.
 - [ ] R6 static export: synthetic-request replay to `.html` files with the L0/L1-only constraint and teaching errors for non-exportable routes.
+      Progress 2026-06-11: `packages/server/src/static-export.ts` adds the production-shaped
+      `exportStaticApp()` foundation, replaying eligible static GET routes through
+      `createRequestHandler(app)` and returning deterministic `.html` artifacts with body,
+      status, and sorted response headers. The same module emits FW229 diagnostics for guarded
+      routes, apps with a session provider that cannot yet prove route independence, and param
+      routes without static-path metadata; `packages/server/src/static-export.test.ts` covers
+      handler/document parity, successful `.html` export, guard/session failures, and loud
+      param-route skip/error behavior, including explicit `onNonExportable: 'skip'` diagnostics.
+      Remaining R6 work: CLI/task wiring, output file writes,
+      `/c/` module and asset copying, and SPEC/compiler surfacing for the static-path
+      enumeration field and session-dependence metadata.
 - [ ] R7 adoption: starter becomes a routed app served by `vp dev`; commerce runs end-to-end over HTTP; a jiso docs site ships from `vp run export` as the first outside consumer.
 
 ## Background — the gap

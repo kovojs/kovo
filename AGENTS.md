@@ -16,3 +16,7 @@
 - Use the narrowest useful verification for the change just made, then broaden verification when touching shared behavior, package boundaries, or docs/runtime behavior.
 - If a check cannot be run, record why in the handoff/final response and do not imply the checkpoint is fully verified.
 - Keep commits scoped to coherent progress: scaffold, shared infrastructure, one primitive/component family, docs/demo updates, or test coverage.
+- Only mark plan or roadmap checkboxes complete when the same session verifies cited file, test,
+  command, or generated-artifact evidence for the exact claim. Evidence lines must name the
+  verifying test/command or the authoritative file/artifact inspected; if evidence is missing,
+  indirect, or weaker than the checkbox text, leave the item open and record the gap.

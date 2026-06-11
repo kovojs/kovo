@@ -929,6 +929,50 @@ export interface CommerceInvalidationSets {
     ]);
   });
 
+  it('keeps relational query API reads visible as FW406 query facts', () => {
+    const facts = extractQueryFactsFromSource([
+      {
+        fileName: 'user.queries.ts',
+        source: `
+          export const users = pgTable("users", {}, jiso({ domain: "user", key: "id" }));
+
+          export const usersQuery = query("users", {
+            load(_input, db) {
+              return db.query.users.findMany({ where: eq(users.active, true) });
+            },
+          });
+        `,
+      },
+    ]);
+
+    expect(facts).toEqual([
+      {
+        diagnostics: [
+          {
+            code: 'FW406',
+            message:
+              'Statically un-analyzable write site; manual touches required. Query uses Drizzle relational query API without static projection.',
+            severity: 'warn',
+            site: 'user.queries.ts:4',
+          },
+        ],
+        query: 'users',
+        reads: ['user'],
+        shape: {},
+        site: 'user.queries.ts:4',
+      },
+    ]);
+    expect(diagnosticsForQueryFacts(facts)).toEqual([
+      {
+        code: 'FW406',
+        message:
+          'Statically un-analyzable write site; manual touches required. Query uses Drizzle relational query API without static projection.',
+        severity: 'warn',
+        site: 'user.queries.ts:4',
+      },
+    ]);
+  });
+
   it('resolves imported table symbols in project query facts', () => {
     const facts = extractQueryFactsFromProject({
       files: [
@@ -1949,6 +1993,64 @@ export interface CommerceInvalidationSets {
             code: 'FW406',
             message: 'Statically un-analyzable write site; manual touches required.',
             site: 'cart.domain.ts:6',
+          },
+        ],
+      },
+    });
+  });
+
+  it('marks raw db.execute calls as FW406 instead of dropping the surface', () => {
+    const graph = extractTouchGraphFromSource([
+      {
+        fileName: 'cart.domain.ts',
+        source: `
+          export const cartItems = pgTable("cart_items", {}, jiso({ domain: "cart", key: "productId" }));
+
+          export async function reconcileCart(db, productId) {
+            await db.execute(sql\`update cart_items set synced = true where product_id = \${productId}\`);
+          }
+        `,
+      },
+    ]);
+
+    expect(graph).toEqual({
+      reconcileCart: {
+        reads: [],
+        touches: [],
+        unresolved: [
+          {
+            code: 'FW406',
+            message: 'Statically un-analyzable write site; manual touches required.',
+            site: 'cart.domain.ts:5',
+          },
+        ],
+      },
+    });
+  });
+
+  it('marks relational query API calls on Drizzle receivers as FW406', () => {
+    const graph = extractTouchGraphFromSource([
+      {
+        fileName: 'cart.domain.ts',
+        source: `
+          export const users = pgTable("users", {}, jiso({ domain: "user", key: "id" }));
+
+          export async function loadUsers(db) {
+            return db.query.users.findMany({ where: eq(users.active, true) });
+          }
+        `,
+      },
+    ]);
+
+    expect(graph).toEqual({
+      loadUsers: {
+        reads: [],
+        touches: [],
+        unresolved: [
+          {
+            code: 'FW406',
+            message: 'Statically un-analyzable write site; manual touches required.',
+            site: 'cart.domain.ts:5',
           },
         ],
       },

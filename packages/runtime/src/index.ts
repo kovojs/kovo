@@ -46,7 +46,14 @@ export type {
   ImportHandlerModule,
   IslandSignalScope,
 } from './handlers.js';
-export { applyFragments, morphStructuralTree } from './morph.js';
+export {
+  applyFragments,
+  DomMorphRoot,
+  DomMorphTarget,
+  keyedDomMorph,
+  morphDomElement,
+  morphStructuralTree,
+} from './morph.js';
 export type {
   MorphFragment,
   MorphRoot,
@@ -57,7 +64,7 @@ export type {
 } from './morph.js';
 export { createQueryStore, hydrateQueryScripts } from './query-store.js';
 export type { QueryScriptLike, QuerySnapshot, QueryStore, QueryUpdatePlan } from './query-store.js';
-export type { FragmentChunk } from './wire-parser.js';
+export type { FragmentChunk, QueryChunk } from './wire-parser.js';
 
 export interface DeriveDefinition<Inputs extends readonly string[], Value> {
   inputs: Inputs;
@@ -159,21 +166,21 @@ const defaultDelegatedEvents = ['click', 'submit', 'input', 'change'] as const;
 
 export type InlineImportHandlerModule = ImportHandlerModule;
 
-export function installInlineJisoLoader(importModule: InlineImportHandlerModule): void {
+const inlineJisoLoaderInstallerSource = String.raw`function installInlineJisoLoader(importModule) {
   const events = ['click', 'submit', 'input', 'change'];
   const doc = document;
   let idemCounter = 0;
   const createInlineIdem = () =>
-    crypto.randomUUID?.() ?? `idem_${Date.now().toString(36)}_${(idemCounter += 1).toString(36)}`;
-  const readStateHost = (element: Element) => element.closest?.('[fw-state]') ?? element;
-  const readState = (element: Element) => {
+    crypto.randomUUID?.() ?? 'idem_' + Date.now().toString(36) + '_' + (idemCounter += 1).toString(36);
+  const readStateHost = (element) => element.closest?.('[fw-state]') ?? element;
+  const readState = (element) => {
     try {
       return JSON.parse(readStateHost(element)?.getAttribute('fw-state') ?? '{}');
     } catch {
       return {};
     }
   };
-  const readDeps = (value: string | null) =>
+  const readDeps = (value) =>
     (value ?? '')
       .split(/[\s,]+/)
       .map((dep) => dep.trim())
@@ -182,13 +189,13 @@ export function installInlineJisoLoader(importModule: InlineImportHandlerModule)
     [...doc.querySelectorAll('[fw-deps]')]
       .map((element) => {
         const deps = readDeps(element.getAttribute('fw-deps'));
-        const target = element.getAttribute('fw-fragment-target') || element.id;
-        return target && (deps.length > 0 ? `${target}=${deps.join(' ')}` : target);
+        const target = element.getAttribute('fw-fragment-target') ?? element.id;
+        return target && (deps.length > 0 ? target + '=' + deps.join(' ') : target);
       })
       .filter(Boolean);
-  const findFragmentTarget = (target: string) =>
-    doc.getElementById(target) ?? doc.querySelector(`[fw-fragment-target="${target}"]`);
-  const applyFragment = (fragment: Element) => {
+  const findFragmentTarget = (target) =>
+    doc.getElementById(target) ?? doc.querySelector('[fw-fragment-target="' + target + '"]');
+  const applyFragment = (fragment) => {
     const target = fragment.getAttribute('target');
     const element = target && findFragmentTarget(target);
     if (!element) return;
@@ -198,18 +205,22 @@ export function installInlineJisoLoader(importModule: InlineImportHandlerModule)
       element.innerHTML = fragment.innerHTML;
     }
   };
-  const applyResponseBody = (body: string) => {
+  const applyResponseBody = (body) => {
     const parsed = new DOMParser().parseFromString(body, 'text/html');
     parsed.querySelectorAll('fw-query').forEach((query) => {
       dispatchEvent(
         new CustomEvent('jiso:query', {
-          detail: { body: query.textContent, name: query.getAttribute('name') },
+          detail: {
+            body: query.textContent,
+            key: query.getAttribute('key') ?? undefined,
+            name: query.getAttribute('name'),
+          },
         }),
       );
     });
     parsed.querySelectorAll('fw-fragment').forEach(applyFragment);
   };
-  const fallbackSubmit = (form: HTMLFormElement) => {
+  const fallbackSubmit = (form) => {
     if (typeof form.submit === 'function') {
       form.submit();
       return;
@@ -217,7 +228,7 @@ export function installInlineJisoLoader(importModule: InlineImportHandlerModule)
     form.setAttribute?.('data-error-code', 'NETWORK_ERROR');
     form.setAttribute?.('fw-error', '');
   };
-  const submitEnhancedForm = (event: Event, form: HTMLFormElement) => {
+  const submitEnhancedForm = (event, form) => {
     event.preventDefault();
     fetch(form.action, {
       body: new FormData(form),
@@ -234,29 +245,29 @@ export function installInlineJisoLoader(importModule: InlineImportHandlerModule)
       .then(applyResponseBody)
       .catch(() => fallbackSubmit(form));
   };
-  const readParamTypes = (element: Element) =>
+  const readParamTypes = (element) =>
     (element.getAttribute('fw-param-types') || '').split(/[\s,]+/).reduce(
       (types, entry) => {
         const [name, type] = entry.split(':');
         if (name) types[name] = type;
         return types;
       },
-      {} as Record<string, string | undefined>,
+      {},
     );
-  const dispatch = async (event: Event) => {
+  const dispatch = async (event) => {
     if (event.type === 'submit') {
-      const form = (event.target as Element | null)?.closest?.(
+      const form = event.target?.closest?.(
         'form[enhance],form[data-enhance],form[data-mutation]',
-      ) as HTMLFormElement | null | undefined;
+      );
       if (form) {
         submitEnhancedForm(event, form);
         return;
       }
     }
-    const element = (event.target as Element | null)?.closest?.(`[on\\:${event.type}]`);
-    const refs = element?.getAttribute(`on:${event.type}`);
+    const element = event.target?.closest?.('[on\\:' + event.type + ']');
+    const refs = element?.getAttribute('on:' + event.type);
     if (!element || !refs) return;
-    const params: Record<string, string | number | boolean> = {};
+    const params = {};
     const paramTypes = readParamTypes(element);
     const state = readState(element);
     const stateHost = readStateHost(element);
@@ -266,7 +277,7 @@ export function installInlineJisoLoader(importModule: InlineImportHandlerModule)
       if (!attribute.name.startsWith('data-p-')) continue;
       const name = attribute.name
         .slice('data-p-'.length)
-        .replace(/-([a-z0-9])/g, (_match, char: string) => char.toUpperCase());
+        .replace(/-([a-z0-9])/g, (_match, char) => char.toUpperCase());
       const type = paramTypes[name];
       const value = attribute.value;
       params[name] =
@@ -275,16 +286,16 @@ export function installInlineJisoLoader(importModule: InlineImportHandlerModule)
     for (const ref of refs.split(/\s+/).filter(Boolean)) {
       const hashIndex = ref.lastIndexOf('#');
       if (hashIndex <= 0 || hashIndex === ref.length - 1)
-        throw Error(`Invalid handler reference: ${ref}`);
+        throw Error('Invalid handler reference: ' + ref);
       const mod = await importModule(ref.slice(0, hashIndex));
       const fn = mod[ref.slice(hashIndex + 1)];
-      if (typeof fn !== 'function') throw Error(`Handler export not found: ${ref}`);
+      if (typeof fn !== 'function') throw Error('Handler export not found: ' + ref);
       await fn(event, context);
     }
     stateHost?.setAttribute?.('fw-state', JSON.stringify(state));
   };
-  const trigger = (type: string, target: Element) => {
-    void dispatch({ target, type } as unknown as Event);
+  const trigger = (type, target) => {
+    void dispatch({ target, type });
   };
 
   for (const event of events) addEventListener(event, dispatch, { capture: true });
@@ -304,20 +315,19 @@ export function installInlineJisoLoader(importModule: InlineImportHandlerModule)
     );
     doc.querySelectorAll('[on\\:visible]').forEach((element) => observer.observe(element));
   }
+}`;
+
+function readInlineJisoLoaderInstaller(): (importModule: InlineImportHandlerModule) => void {
+  return (0, eval)(`(${inlineJisoLoaderInstallerSource})`) as (
+    importModule: InlineImportHandlerModule,
+  ) => void;
 }
 
-function minifyInlineLoaderSource(source: string): string {
-  return source
-    .replace(/\/\/[^\n\r]*/g, '')
-    .replace(/\s+/g, ' ')
-    .replace(/\s*([{}()[\].,;:?+\-*/%=<>!|&])\s*/g, '$1')
-    .replace(/;}/g, '}')
-    .trim();
+export function installInlineJisoLoader(importModule: InlineImportHandlerModule): void {
+  readInlineJisoLoaderInstaller()(importModule);
 }
 
-export const jisoLoaderSource = minifyInlineLoaderSource(
-  `(${installInlineJisoLoader.toString()})((url)=>import(url));`,
-);
+export const jisoLoaderSource = `(${inlineJisoLoaderInstallerSource})((url)=>import(url));`;
 
 export function installJisoLoader(options: JisoLoaderOptions): JisoLoader {
   const events = options.events ?? defaultDelegatedEvents;
@@ -554,6 +564,13 @@ export interface EnhancedMutationLoaderOptions {
   formData?: (form: EnhancedFormElementLike) => unknown;
   idem?: () => string;
   morph?: MorphFragment;
+  /**
+   * Handles enhanced form submit failures after preventDefault. When present,
+   * the form layer owns the error and native submit fallback is skipped.
+   *
+   * SPEC.md section 9.2 keeps enhanced and no-JS form paths equivalent; this
+   * hook is the enhanced path's reporting seam for failed fragment submissions.
+   */
   onError?: (error: unknown, form: EnhancedFormElementLike) => void;
   onUploadProgress?: (progress: UploadProgress, form: EnhancedFormElementLike) => void;
   pendingRoot?: PendingRoot;
@@ -607,10 +624,10 @@ export async function dispatchEnhancedFormSubmit(
       ...(options.queryPlans ? { queryPlans: options.queryPlans } : {}),
     });
   } catch (error) {
-    if (!options.onError) {
-      fallbackEnhancedMutationSubmit(form);
-    }
-    if (!options.onError) throw error;
+    if (options.onError) return true;
+
+    fallbackEnhancedMutationSubmit(form);
+    throw error;
   }
   return true;
 }
@@ -1120,6 +1137,11 @@ export interface EnhancedMutationSubmitOptions {
   idem?: string;
   islandSignalScope?: IslandSignalScope;
   morph?: MorphFragment;
+  /**
+   * Reports mutation submit/apply failures. Direct submit callers still receive
+   * the thrown error; dispatchEnhancedFormSubmit decides whether a form-layer
+   * error has been handled.
+   */
   onError?: (error: unknown) => void;
   onUploadProgress?: (progress: UploadProgress) => void;
   pendingQueries?: readonly string[];
@@ -1317,6 +1339,8 @@ export function applyMutationResponse(store: QueryStore, body: string): AppliedM
 export const applyDeferredChunk: typeof applyMutationResponse = applyMutationResponse;
 
 export interface ApplyMutationResponseToDomOptions {
+  applyQuery?: (query: QueryChunk) => { value: unknown } | void;
+  beforeApplyQueries?: (queries: readonly QueryChunk[]) => void;
   body: string;
   islandSignalScope?: IslandSignalScope;
   morph?: MorphFragment;
@@ -1334,15 +1358,21 @@ export function applyMutationResponseToDom(
   const applied = applyFragmentQueryBody(
     options.body,
     (name, value, key) => {
-      options.store.set(name, value, key);
+      const query = { ...(key === undefined ? {} : { key }), name, value };
+      const queryResult = options.applyQuery?.(query);
+      const planValue = queryResult ? queryResult.value : value;
+      if (!queryResult) {
+        options.store.set(name, value, key);
+      }
       applyCompiledQueryUpdatePlanIfSupported(
         options.root,
         name,
-        value,
+        planValue,
         options.queryPlans?.[name],
       );
     },
     options.onError,
+    options.beforeApplyQueries,
   );
 
   return {
@@ -1619,6 +1649,7 @@ async function submitOptimisticEnhancedMutationDirect<Input>(
         root: options.root,
         store: options.store,
         ...(options.morph ? { morph: options.morph } : {}),
+        ...(options.islandSignalScope ? { islandSignalScope: options.islandSignalScope } : {}),
       });
 
       return {
@@ -1629,28 +1660,31 @@ async function submitOptimisticEnhancedMutationDirect<Input>(
       };
     }
 
-    const queryChunks = readQueryChunks(body, options.onError);
-    const fragments = readFragmentChunks(body);
-    const uncoveredQueries = uncoveredOptimisticQueries(queryChunks, queryNames, optimisticKeys);
-    for (const queryName of uncoveredQueries) {
-      options.rebaser.settleWithoutServerTruth(idem, queryName, optimisticKeys[queryName]);
-      options.onError?.(uncoveredOptimisticQueryError(queryName, optimisticKeys[queryName]));
-    }
-    options.rebaser.settle(idem);
-    for (const query of queryChunks) {
-      options.rebaser.applyServerTruth(query.name, query.value, query.key);
-      applyCompiledQueryUpdatePlanIfSupported(
-        options.root,
-        query.name,
-        query.value,
-        options.queryPlans?.[query.name],
-      );
-    }
-    const applied = {
-      appliedFragments: applyFragments(options.root, fragments, options.morph),
-      fragments,
-      queries: queryChunks.map((query) => query.name),
-    };
+    const applied = applyMutationResponseToDom({
+      applyQuery(query) {
+        options.rebaser.applyServerTruth(query.name, query.value, query.key);
+        return { value: options.store.get(query.name, query.key) };
+      },
+      beforeApplyQueries(queryChunks) {
+        const uncoveredQueries = uncoveredOptimisticQueries(
+          queryChunks,
+          queryNames,
+          optimisticKeys,
+        );
+        for (const queryName of uncoveredQueries) {
+          options.rebaser.settleWithoutServerTruth(idem, queryName, optimisticKeys[queryName]);
+          options.onError?.(uncoveredOptimisticQueryError(queryName, optimisticKeys[queryName]));
+        }
+        options.rebaser.settle(idem);
+      },
+      body,
+      ...(options.islandSignalScope ? { islandSignalScope: options.islandSignalScope } : {}),
+      ...(options.morph ? { morph: options.morph } : {}),
+      ...(options.onError ? { onError: options.onError } : {}),
+      ...(options.queryPlans ? { queryPlans: options.queryPlans } : {}),
+      root: options.root,
+      store: options.store,
+    });
     publishSuccessfulMutation(options, response, body, changes);
     const settledQueries = queryNames.filter(
       (queryName) => options.rebaser.pendingCount(queryName, optimisticKeys[queryName]) === 0,
@@ -1801,8 +1835,10 @@ function applyFragmentQueryBody(
   body: string,
   applyQuery: (name: string, value: unknown, key: string | undefined) => void,
   onError?: (error: unknown) => void,
+  beforeApplyQueries?: (queries: readonly QueryChunk[]) => void,
 ): AppliedMutationResponse {
   const queryChunks = readQueryChunks(body, onError);
+  beforeApplyQueries?.(queryChunks);
 
   for (const query of queryChunks) {
     applyQuery(query.name, query.value, query.key);

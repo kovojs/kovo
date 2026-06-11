@@ -60,6 +60,23 @@ pnpm run test         # vitest unit/integration suites
 pnpm run acceptance   # full gate: check, tests, browser suite, build, perf, conformance, fw-check
 ```
 
+### Test Topology
+
+The repo has five test mechanisms:
+
+- Package Vitest suites: `pnpm run test` runs `vitest --run` across package, example, and
+  conformance-facing unit/integration tests.
+- Browser suite: `pnpm run test:browser` runs `vp run browser`, which uses
+  `vitest.browser.config.ts` and Playwright for DOM/browser behavior.
+- Node harness scripts: `tests/*.node.mjs` cover repo-level gates that are easier to express with
+  Node's built-in test runner, including `fw-check` and the P10 performance gate.
+- Conformance workspaces: `pnpm run test:conformance` runs `vp run conformance` against the pinned
+  framework conformance packages under `conformance/`.
+- Acceptance chain: `pnpm run acceptance` runs the complete local gate in order:
+  `check`, `test`, `test:browser`, `check:build`, `test:p10-perf`, `test:conformance`, then
+  `check:fw`. `check:fw` imports the built CLI, so a fresh checkout must run `check:build` or
+  `vp run build` before invoking it directly.
+
 ## Name
 
 "Jiso" — short, pronounceable, no known collisions in the framework space. Launch-readiness checks (trademark, domain, npm scope) are tracked in [`docs/prelaunch-checklist.md`](docs/prelaunch-checklist.md).

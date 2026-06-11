@@ -1,13 +1,13 @@
 # UI libraries — `@jiso/headless-ui` + vendored `@jiso/ui` + gallery (D7)
 
-Status: design agreed 2026-06-11; F1 SPEC text landed; implementation tracks not started
+Status: design agreed 2026-06-11; F1 SPEC text landed; F2 compiler-side prefix fact enforcement started
 Scope: a behavior-layer package (`packages/headless-ui`, published `@jiso/headless-ui`), a vendored styled layer (`@jiso/ui`, distributed as source via `fw add`), a gallery app in this workspace (`examples/gallery`) that is also the conformance/a11y/visual test surface, and the small framework seams they require (package prefix registration, behavior-attribute namespace, primitive-author lint). Referenced from `IMPLEMENT_v1.md` as workstream **D7**.
 
 ## Progress checklist
 
 - [x] F1 SPEC text: package prefix registration (manifest field, app-wide uniqueness, alias escape, `jiso-` reserved for `@jiso/*`), behavior-attribute namespace implications, FW234 teaching error. Evidence: SPEC §6.1.1 defines the manifest field, effective-prefix uniqueness, alias escape, `jiso-*` reservation, `fw-c`/CSS/behavior-attribute implications, and FW234 example; SPEC §4.6 now uses `jiso-tooltip`; SPEC §11.3 lists FW234.
-- [ ] F2 compiler: prefix enforcement + FW234; `fw explain component <prefixed>` prints the owning package.
-- [ ] F3 behavior-attribute namespace: `fw-*` stays framework-reserved; package behaviors ride the package prefix (`jiso-tooltip="id"`), wired through FW221 IDREF validation.
+- [ ] F2 compiler: prefix enforcement + FW234; `fw explain component <prefixed>` prints the owning package. Evidence so far: compiler accepts explicit package prefix facts and emits FW234 for duplicate effective prefixes, malformed/missing prefixes, and non-`@jiso/*` `jiso-*` misuse; explicit effective-prefix aliases are covered as the collision escape hatch. Remaining: feed real package-discovery facts into app builds and add `fw explain component <prefixed>` provenance output.
+- [x] F3 behavior-attribute namespace: `fw-*` stays framework-reserved; package behaviors ride the package prefix (`jiso-tooltip="id"`), wired through FW221 IDREF validation. Evidence: `packages/compiler/src/validate/package-prefixes.ts` rejects package `fw-*` prefixes with FW234 per SPEC §6.1.1, `packages/compiler/src/validate/markup.ts` feeds package-declared IDREF behavior attributes through FW221, and `packages/compiler/src/index.test.ts` covers valid/missing package-prefixed behavior IDREFs plus `fw-*` reservation.
 - [ ] F4 primitive-author lint: chained handlers contractually no-op on `event.defaultPrevented` (lives in `@jiso/headless-ui` tooling, not the loader).
 - [ ] F5 platform audit: CSS anchor positioning + `@starting-style`/`transition-behavior: allow-discrete` coverage check; lazy-loaded floating fallback module decided.
 - [ ] H0 shared lib: state-attributes, keyboard/menu navigation maps, typeahead, change-details (reason + `defaultPrevented` contract), positioning fallback.
@@ -51,7 +51,7 @@ Behavior contracts (state attributes, ARIA, keyboard maps, change reasons) are p
 ## F-track — framework seams (spec first, then compiler/runtime)
 
 - **F1 — prefix registration SPEC text.** Landed in SPEC §6.1.1, with FW234 listed in SPEC §11.3 and the §4.6 behavior-attribute example moved to the package prefix.
-- **F2 — enforcement.** Compile-time prefix collision → FW234 (show both packages, the alias fix); provenance in `fw explain component`.
+- **F2 — enforcement.** Compile-time prefix collision → FW234 (show both packages, the alias fix); provenance in `fw explain component`. Current compiler slice validates explicit package prefix facts/config and keeps provenance output as remaining work because `fw explain` lives outside the compiler-owned surface for this pass.
 - **F3 — behavior-attribute namespace.** Package behaviors are compiler-known attributes validated like `commandfor` (FW221 machinery); document the `fw-*` reservation.
 - **F4 — primitive-author lint.** The §4.6 chain contract ("no-op on `defaultPrevented`") checked over `@jiso/headless-ui` handler sources; keeps the loader dumb.
 - **F5 — platform coverage audit.** Decide per concern: CSS anchor positioning (Chromium-led — degradation per §1.3) vs. the lazy floating fallback module (loaded on first trigger interaction, costing nothing until a menu opens); exit-animation coverage via `@starting-style` + `allow-discrete`, with the JS-coordinated escape documented.

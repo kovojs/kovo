@@ -231,6 +231,10 @@ function requestHeaders(cookie?: string): Headers {
   return headers;
 }
 
+function expectRedirect(result: Failure | Redirect): asserts result is Redirect {
+  expect(result.kind).toBe('redirect');
+}
+
 describe('wrapped Better Auth credential mutation spike', () => {
   it.each(['enhanced', 'no-js'] as const)(
     'forwards auth cookies through the normal redirect vocabulary for %s sign-in',
@@ -257,10 +261,7 @@ describe('wrapped Better Auth credential mutation spike', () => {
         kind: 'redirect',
         location: '/account',
       });
-      expect(result.kind).toBe('redirect');
-      if (result.kind !== 'redirect') {
-        throw new Error('Expected sign-in to redirect');
-      }
+      expectRedirect(result);
       expect(ctx.cookies).toEqual(result.headers);
 
       const session = await betterAuthSession(auth, requestHeaders('jiso_session=session-1'));

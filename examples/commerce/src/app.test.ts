@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import { execFileSync } from 'node:child_process';
+import { createHmac } from 'node:crypto';
 import { readFileSync, rmSync } from 'node:fs';
 
+import { storageBodyToBytes } from '@jiso/core';
 import { createJisoTestHarness, propertyTest } from '@jiso/test';
 import type { TouchGraph } from '@jiso/drizzle';
 import { morphStructuralTree, type StructuralMorphNode } from '@jiso/runtime';
@@ -10,18 +12,25 @@ import { fwCheck, fwExplain } from '../../../packages/cli/src/index.js';
 import {
   addToCart,
   addToCartOptimistic,
+  attachmentDownloadRoute,
+  commerceAttachmentStorage,
   commerceCsrf,
   commerceCsrfInput,
   commerceGraph,
   commercePageHints,
+  commercePaymentWebhookSecret,
   commerceSession,
   commerceTouchGraph,
   createCommerceDb,
   loadCartQuery,
   loadProductGrid,
+  orderCsvRoute,
+  paymentWebhook,
   renderCommercePageHints,
   renderAddToCartForm,
+  renderAttachmentDownloadRoute,
   renderOrderHistory,
+  renderOrderCsvRoute,
   renderCartPage,
   renderProductGrid,
   renderProductGridDeferredStream,
@@ -30,7 +39,10 @@ import {
   submitAddToCart,
   submitAddToCartNoJs,
   type AddToCartInput,
+  type ProductGridInput,
   uploadReceipt,
+  runPaymentWebhook,
+  type UploadReceiptInput,
 } from './app.js';
 
 function commerceFile(name: string, type: string, size: number) {
@@ -128,13 +140,17 @@ function mutationUpdateConsumers(output: string) {
     return new Map<string, string[]>();
   }
 
-  return new Map(
-    updates.split('; ').map((entry) => {
-      const [query, consumers = ''] = entry.split('->');
+  const result = new Map<string, string[]>();
+  for (const entry of updates.split('; ')) {
+    const [query, consumers = ''] = entry.split('->');
+    if (!query) {
+      throw new Error(`Malformed fw explain update entry: ${entry}`);
+    }
 
-      return [query, explainList(consumers)];
-    }),
-  );
+    result.set(query, explainList(consumers));
+  }
+
+  return result;
 }
 
 function optimisticStatuses(output: string) {
@@ -151,7 +167,33 @@ function optimisticStatuses(output: string) {
 }
 
 function queryChunkNames(html: string) {
-  return [...html.matchAll(/<fw-query name="([^"]+)">/g)].map((match) => match[1]);
+  return [...html.matchAll(/<fw-query name="([^"]+)">/g)].map((match) => {
+    const name = match[1];
+    if (!name) {
+      throw new Error(`Malformed fw-query chunk: ${match[0]}`);
+    }
+
+    return name;
+  });
+}
+
+function stripeHeader(body: string, secret: string, timestamp = Math.floor(Date.now() / 1000)) {
+  const signature = createHmac('sha256', secret).update(`${timestamp}.${body}`).digest('hex');
+  return `t=${timestamp},v1=${signature}`;
+}
+
+function requestWithDb(
+  body: string,
+  db = createCommerceDb(),
+  headers: Record<string, string> = {},
+) {
+  const request = new Request('https://commerce.test/webhooks/stripe', {
+    body,
+    headers,
+    method: 'POST',
+  }) as Request & { db: ReturnType<typeof createCommerceDb> };
+  request.db = db;
+  return request;
 }
 
 function fragmentTargetForQuery(query: string) {
@@ -182,13 +224,20 @@ function keyedListNode(
 ): StructuralMorphNode {
   return {
     children: keys.map((key) => ({
-      browserState: stateByKey[key],
+      ...(stateByKey[key] ? { browserState: stateByKey[key] } : {}),
       key,
       props: { 'fw-key': key },
       text: key,
       type: 'li',
     })),
     type,
+  };
+}
+
+function productGridInput(after: string | null, limit?: number): ProductGridInput {
+  return {
+    ...(after ? { after } : {}),
+    ...(limit === undefined ? {} : { limit }),
   };
 }
 
@@ -222,7 +271,7 @@ describe('commerce example', () => {
       request: {
         session: { id: 's1', user: { id: 'u1' } },
       },
-      touchGraph: commerceTouchGraph as unknown as TouchGraph,
+      touchGraph: { 'cart.addItem': commerceTouchGraph['cart.addItem'] } as unknown as TouchGraph,
       verification: {
         domainByTable: {
           cart_items: 'cart',
@@ -257,17 +306,17 @@ describe('commerce example', () => {
   it('renders cursor-paged product grid and order history with stable list keys', async () => {
     const db = createCommerceDb();
     const firstPage = loadProductGrid(db, { limit: 2 });
-    const secondPage = loadProductGrid(db, { after: firstPage.nextCursor ?? undefined, limit: 2 });
+    const secondPage = loadProductGrid(db, productGridInput(firstPage.nextCursor, 2));
 
     expect(renderProductGrid(firstPage)).toContain('fw-key="p1"');
     expect(renderProductGrid(firstPage)).toContain('fw-key="p2"');
     expect(renderProductGrid(firstPage)).toContain('href="/products?after=p2"');
     expect(renderProductGrid(secondPage)).toContain('fw-key="p3"');
 
-    const appendFragment = renderProductGridPageFragment(db, {
-      after: firstPage.nextCursor ?? undefined,
-      limit: 2,
-    });
+    const appendFragment = renderProductGridPageFragment(
+      db,
+      productGridInput(firstPage.nextCursor, 2),
+    );
 
     expect(appendFragment).toContain('<fw-fragment target="product-grid" mode="append">');
     expect(appendFragment).toContain('fw-key="p3"');
@@ -296,7 +345,7 @@ describe('commerce example', () => {
     const db = createCommerceDb();
     const firstPage = loadProductGrid(db, { limit: 2 });
     const firstPageKeys = firstPage.items.map((item) => item.id);
-    const secondPage = loadProductGrid(db, { after: firstPage.nextCursor ?? undefined, limit: 2 });
+    const secondPage = loadProductGrid(db, productGridInput(firstPage.nextCursor, 2));
     const currentGrid = keyedListNode('product-grid', firstPageKeys, {
       p1: { islandState: { pendingMutation: 'cart/add' } },
     });
@@ -309,9 +358,9 @@ describe('commerce example', () => {
     const thirdProduct = appendedGrid.children?.[2];
 
     expect(renderProductGrid(firstPage)).toContain('fw-key="p1"');
-    expect(
-      renderProductGridPageFragment(db, { after: firstPage.nextCursor ?? undefined }),
-    ).toContain('<fw-fragment target="product-grid" mode="append">');
+    expect(renderProductGridPageFragment(db, productGridInput(firstPage.nextCursor))).toContain(
+      '<fw-fragment target="product-grid" mode="append">',
+    );
     expect(appendedGrid.children?.[0]).toBe(firstProduct);
     expect(appendedGrid.children?.[1]).toBe(secondProduct);
     expect(thirdProduct).not.toBeUndefined();
@@ -365,7 +414,6 @@ describe('commerce example', () => {
     expect(response).toMatchObject({
       headers: {
         'Content-Type': 'text/html; charset=utf-8',
-        'Transfer-Encoding': 'chunked',
       },
       status: 200,
     });
@@ -446,13 +494,36 @@ describe('commerce example', () => {
     expect(html).toContain('data-mutation="order/receipt"');
   });
 
-  it('coerces commerce receipt uploads through s.file()', async () => {
+  it('coerces commerce receipt uploads through storage-backed s.file()', async () => {
+    const db = createCommerceDb();
     const receipt = commerceFile('receipt.pdf', 'application/pdf', 2048);
+    const storedReceipt = await (
+      uploadReceipt.input as typeof uploadReceipt.input & {
+        parseAsync(input: unknown): Promise<UploadReceiptInput>;
+      }
+    ).parseAsync({
+      orderId: 'order-1',
+      receipt,
+    });
+
+    expect(storedReceipt.receipt).toMatchObject({
+      file: receipt,
+      key: 'receipts/receipt.pdf',
+      storage: {
+        contentType: 'application/pdf',
+        key: 'receipts/receipt.pdf',
+        metadata: { filename: 'receipt.pdf' },
+        size: 2048,
+      },
+    });
+    const storedObject = await commerceAttachmentStorage.stream('receipts/receipt.pdf');
+    expect(storedObject).not.toBeUndefined();
+    expect(await storageBodyToBytes(storedObject!.body)).toHaveLength(2048);
 
     expect(
       uploadReceipt.handler(
-        { orderId: 'order-1', receipt },
-        { db: createCommerceDb(), session: { id: 's-upload', user: { id: 'u1' } } },
+        storedReceipt,
+        { db, session: { id: 's-upload', user: { id: 'u1' } } },
         {
           fail(code, payload) {
             return { error: { code, payload }, ok: false, status: 422 };
@@ -463,11 +534,23 @@ describe('commerce example', () => {
         },
       ),
     ).toEqual({
+      attachmentId: 'attachment-1',
       fileName: 'receipt.pdf',
       orderId: 'order-1',
       size: 2048,
       uploadedBy: 'u1',
     });
+    expect(db.attachments).toEqual([
+      {
+        contentType: 'application/pdf',
+        filename: 'receipt.pdf',
+        id: 'attachment-1',
+        orderId: 'order-1',
+        size: 2048,
+        storageKey: 'receipts/receipt.pdf',
+        userId: 'u1',
+      },
+    ]);
 
     expect(() =>
       uploadReceipt.input.parse({
@@ -475,6 +558,154 @@ describe('commerce example', () => {
         receipt: commerceFile('receipt.txt', 'text/plain', 12),
       }),
     ).toThrow('Expected file type application/pdf, image/png');
+  });
+
+  it('adopts the webhook primitive for signed payment order writes', async () => {
+    const db = createCommerceDb();
+    const body = JSON.stringify({
+      data: {
+        object: {
+          id: 'order-paid-1',
+          productId: 'p1',
+          quantity: 2,
+          total: 2998,
+          userId: 'u1',
+        },
+      },
+      id: 'evt_paid_1',
+      livemode: false,
+      type: 'checkout.session.completed',
+    });
+
+    expect(paymentWebhook.webhook).toBe(true);
+    expect(paymentWebhook.path).toBe('/webhooks/stripe');
+    expect(paymentWebhook.auth).toEqual({
+      kind: 'verifier',
+      name: 'stripe:v1:hmac-sha256',
+    });
+    expect(paymentWebhook.csrf).toEqual({
+      exempt: true,
+      justification: 'payment/stripe webhook verifier stripe:v1:hmac-sha256',
+    });
+
+    const first = await runPaymentWebhook(
+      requestWithDb(body, db, {
+        'stripe-signature': stripeHeader(body, commercePaymentWebhookSecret),
+      }),
+    );
+
+    expect(first.replayed).toBe(false);
+    expect(first.value).toEqual({ orderId: 'order-paid-1' });
+    expect(first.changes).toEqual([
+      {
+        domain: 'order',
+        input: { eventId: 'evt_paid_1', orderId: 'order-paid-1' },
+        keys: ['order-paid-1'],
+        reason: 'payment webhook',
+      },
+    ]);
+    expect(first.response.status).toBe(200);
+    expect(first.response.headers.get('FW-Changes')).toBe(
+      '[{"domain":"order","keys":["order-paid-1"]}]',
+    );
+    expect(db.orders).toEqual([
+      {
+        id: 'order-paid-1',
+        productId: 'p1',
+        qty: 2,
+        total: 2998,
+        userId: 'u1',
+      },
+    ]);
+
+    const replay = await runPaymentWebhook(
+      requestWithDb(body, db, {
+        'stripe-signature': stripeHeader(body, commercePaymentWebhookSecret),
+      }),
+    );
+    expect(replay.replayed).toBe(true);
+    expect(db.orders).toHaveLength(1);
+
+    const tampered = await runPaymentWebhook(
+      requestWithDb(body.replace('2998', '9999'), db, {
+        'stripe-signature': stripeHeader(body, commercePaymentWebhookSecret),
+      }),
+    );
+    expect(tampered.response.status).toBe(401);
+  });
+
+  it('uses route file and stream outcomes for order CSV export and attachment download', async () => {
+    const db = createCommerceDb();
+    db.write('orders', {
+      id: 'order-1',
+      productId: 'p1',
+      qty: 2,
+      total: 2998,
+      userId: 'u1',
+    });
+    db.write('orders', {
+      id: 'order-2',
+      productId: 'p2',
+      qty: 1,
+      total: 2599,
+      userId: 'u2',
+    });
+    const storedReceipt = await (
+      uploadReceipt.input as typeof uploadReceipt.input & {
+        parseAsync(input: unknown): Promise<UploadReceiptInput>;
+      }
+    ).parseAsync({
+      orderId: 'order-1',
+      receipt: commerceFile('download.pdf', 'application/pdf', 12),
+    });
+    await uploadReceipt.handler(
+      storedReceipt,
+      { db, session: { id: 's-upload', user: { id: 'u1' } } },
+      {
+        fail(code, payload) {
+          return { error: { code, payload }, ok: false, status: 422 };
+        },
+        invalidate(domain, options) {
+          return { domain: domain.key, ...options, manual: true };
+        },
+      },
+    );
+
+    expect(orderCsvRoute.path).toBe('/exports/orders.csv');
+    expect(attachmentDownloadRoute.path).toBe('/attachments/:id');
+
+    const csv = await renderOrderCsvRoute({ db, session: { id: 's-csv', user: { id: 'u1' } } });
+    expect(csv).toMatchObject({
+      headers: {
+        'Content-Disposition': 'attachment; filename="orders.csv"',
+        'Content-Type': 'text/csv; charset=utf-8',
+        ETag: '"orders-2"',
+      },
+      status: 200,
+    });
+    expect(await storageBodyToBytes(csv.body)).toEqual(
+      new TextEncoder().encode('id,productId,qty,total,userId\norder-1,p1,2,2998,u1\n'),
+    );
+
+    const download = await renderAttachmentDownloadRoute(db, 'attachment-1', {
+      db,
+      session: { id: 's-download', user: { id: 'u1' } },
+    });
+    expect(download).toMatchObject({
+      headers: {
+        'Content-Disposition': 'inline; filename="download.pdf"',
+        'Content-Type': 'application/pdf',
+      },
+      status: 200,
+    });
+    expect(await storageBodyToBytes(download.body)).toHaveLength(12);
+
+    await expect(
+      renderAttachmentDownloadRoute(db, 'attachment-1', {
+        db,
+        session: { id: 's-download-other', user: { id: 'u2' } },
+      }),
+    ).resolves.toMatchObject({ status: 404 });
   });
 
   it('handles no-JS addToCart success as POST-redirect-GET', async () => {
@@ -686,8 +917,10 @@ describe('commerce example', () => {
     const cartItemsLine = lineNumberFor(commerceSource, "request.db.write('cart_items'");
     const ordersLine = lineNumberFor(commerceSource, "request.db.write('orders'");
     const productsLine = lineNumberFor(commerceSource, "request.db.write('products'");
+    const attachmentsLine = lineNumberFor(commerceSource, "request.db.write('attachments'");
+    const paymentOrdersLine = lineNumberFor(commerceSource, "tx.write('orders'");
 
-    expect(emitGraphScript).toContain("import { deriveAppGraph } from '@jiso/compiler/graph';");
+    expect(emitGraphScript).toContain("await import('@jiso/compiler/graph');");
     expect(emitGraphScript).not.toContain('const deriveAppGraph = ({ graph }) => ({ graph })');
     expect(graphArtifact).toEqual(commerceGraph);
     expect(fwCheck(graphArtifact).output).toBe('fw-check/v1\nOK\n');
@@ -715,6 +948,32 @@ describe('commerce example', () => {
             predicate: 'eq',
             site: `examples/commerce/src/app.ts:${productsLine}`,
             via: 'products',
+          },
+        ],
+        unresolved: [],
+      },
+      'order.receipt': {
+        reads: [],
+        touches: [
+          {
+            domain: 'attachment',
+            keys: 'arg:orderId',
+            predicate: 'eq',
+            site: `examples/commerce/src/app.ts:${attachmentsLine}`,
+            via: 'attachments',
+          },
+        ],
+        unresolved: [],
+      },
+      'payment.webhook': {
+        reads: [],
+        touches: [
+          {
+            domain: 'order',
+            keys: 'arg:data.object.id',
+            predicate: 'eq',
+            site: `examples/commerce/src/app.ts:${paymentOrdersLine}`,
+            via: 'orders',
           },
         ],
         unresolved: [],
@@ -757,7 +1016,7 @@ describe('commerce example', () => {
         'enctype: multipart/form-data',
         'input-fields: orderId,receipt',
         'file-fields: receipt',
-        'writes: -',
+        'writes: attachment',
         'invalidates: -',
         'manual-invalidates: -',
         'updates: -',
@@ -776,7 +1035,7 @@ describe('commerce example', () => {
         'enctype: multipart/form-data',
         'input-fields: orderId,receipt',
         'file-fields: receipt',
-        'writes: -',
+        'writes: attachment',
         'invalidates: -',
         'manual-invalidates: -',
         'updates: -',
@@ -797,7 +1056,7 @@ describe('commerce example', () => {
     expect(fwExplain(commerceGraph, { kind: 'query', target: 'orderHistory' })).toEqual({
       exitCode: 0,
       output:
-        'fw-explain/v1\nQUERY orderHistory\nreads: order\nconsumers: component:OrderHistory,page:/cart\ninvalidated-by: cart/add\ndomain-writes: cart.addItem\n',
+        'fw-explain/v1\nQUERY orderHistory\nreads: order\nconsumers: component:OrderHistory,page:/cart\ninvalidated-by: cart/add\ndomain-writes: cart.addItem,payment.webhook\n',
     });
     expect(fwExplain(commerceGraph, { kind: 'page', target: '/cart' })).toEqual({
       exitCode: 0,
@@ -817,6 +1076,48 @@ describe('commerce example', () => {
     expect(fwExplain(commerceGraph, { unguarded: true })).toEqual({
       exitCode: 0,
       output: 'fw-explain/v1\nUNGUARDED\nSUMMARY total=0\n',
+    });
+    expect(fwExplain(commerceGraph, { endpoints: true })).toEqual({
+      exitCode: 0,
+      output: [
+        'fw-explain/v1',
+        'ENDPOINTS',
+        'ENDPOINT attachments/download method=GET path=/attachments/:id mount=exact auth=authed csrf=checked writes=-',
+        'ENDPOINT orders/export method=GET path=/exports/orders.csv mount=exact auth=authed csrf=checked writes=-',
+        'ENDPOINT payment/stripe method=POST path=/webhooks/stripe mount=exact auth=verifier:stripe:v1:hmac-sha256 csrf=exempt:payment/stripe webhook verifier stripe:v1:hmac-sha256 writes=order',
+        'SUMMARY total=3',
+        '',
+      ].join('\n'),
+    });
+    expect(fwExplain(commerceGraph, { unscoped: true })).toEqual({
+      exitCode: 0,
+      output: 'fw-explain/v1\nUNSCOPED\nSUMMARY total=0\n',
+    });
+    expect(
+      fwExplain(
+        {
+          ...commerceGraph,
+          scopeAudits: commerceGraph.scopeAudits.map((fact, index) =>
+            index === 0
+              ? {
+                  ...fact,
+                  scope: 'unscoped',
+                  site: 'examples/commerce/src/app.ts:deliberately-unscoped-download',
+                }
+              : fact,
+          ),
+        },
+        { unscoped: true },
+      ),
+    ).toEqual({
+      exitCode: 0,
+      output: [
+        'fw-explain/v1',
+        'UNSCOPED',
+        'UNSCOPED QUERY attachments/download domain=attachment scope=unscoped site=examples/commerce/src/app.ts:deliberately-unscoped-download attachment download filters id plus session user',
+        'SUMMARY total=1',
+        '',
+      ].join('\n'),
     });
   });
 
@@ -852,7 +1153,8 @@ describe('commerce example', () => {
       });
       const statuses = optimisticStatuses(explanation.output);
       const affectedQueries = [...mutationUpdateConsumers(explanation.output).keys()];
-      matrix[mutation.key] = {};
+      const mutationMatrix: Record<string, string> = {};
+      matrix[mutation.key] = mutationMatrix;
 
       for (const query of commerceGraph.queries) {
         const queryInvalidators = invalidatedBy.get(query.query) ?? [];
@@ -862,10 +1164,10 @@ describe('commerce example', () => {
         if (invalidated) {
           expect(statuses.get(query.query)).toBeDefined();
           expect(statuses.get(query.query)).not.toBe('UNHANDLED');
-          matrix[mutation.key][query.query] = statuses.get(query.query) ?? 'missing';
+          mutationMatrix[query.query] = statuses.get(query.query) ?? 'missing';
         } else {
           expect(statuses.get(query.query)).toBeUndefined();
-          matrix[mutation.key][query.query] = 'no-invalidation';
+          mutationMatrix[query.query] = 'no-invalidation';
         }
       }
       expect(explainLine(explanation.output, 'OPTIMISTIC-SUMMARY ')).toContain('UNHANDLED=0');
@@ -909,7 +1211,7 @@ describe('commerce example', () => {
       request: {
         session: { id: 's-commerce-acceptance', user: { id: 'u1' } },
       },
-      touchGraph: commerceTouchGraph as unknown as TouchGraph,
+      touchGraph: { 'cart.addItem': commerceTouchGraph['cart.addItem'] } as unknown as TouchGraph,
       verification: {
         domainByTable: {
           cart_items: 'cart',
@@ -920,14 +1222,15 @@ describe('commerce example', () => {
     });
     const verifiedDb = harness.dbHandle();
     verifiedDb.transaction = (run) => run(verifiedDb);
-    const noWriteHarness = createJisoTestHarness({
+    const receiptHarness = createJisoTestHarness({
       db: createCommerceDb(),
       request: {
         session: { id: 's-commerce-receipt', user: { id: 'u1' } },
       },
-      touchGraph: {},
+      touchGraph: { 'order.receipt': commerceTouchGraph['order.receipt'] } as unknown as TouchGraph,
       verification: {
         domainByTable: {
+          attachments: 'attachment',
           cart_items: 'cart',
           orders: 'order',
           products: 'product',
@@ -960,7 +1263,7 @@ describe('commerce example', () => {
     });
     expect(harness.verificationDiagnostics()).toEqual([]);
     await expect(
-      noWriteHarness.exec(
+      receiptHarness.exec(
         uploadReceipt,
         commerceCsrfInput(
           {
@@ -968,22 +1271,23 @@ describe('commerce example', () => {
             receipt: commerceFile('receipt.pdf', 'application/pdf', 2048),
           },
           {
-            db: noWriteHarness.dbHandle(),
+            db: receiptHarness.dbHandle(),
             session: { id: 's-commerce-receipt', user: { id: 'u1' } },
           },
         ),
-        { csrf: commerceCsrf, touchGraphKey: 'order/receipt' },
+        { csrf: commerceCsrf, touchGraphKey: 'order.receipt' },
       ),
     ).resolves.toMatchObject({
       ok: true,
       value: {
+        attachmentId: 'attachment-1',
         fileName: 'receipt.pdf',
         orderId: 'order-1',
         size: 2048,
         uploadedBy: 'u1',
       },
     });
-    expect(noWriteHarness.verificationDiagnostics()).toEqual([]);
+    expect(receiptHarness.verificationDiagnostics()).toEqual([]);
 
     const response = await submitAddToCart(
       { productId: 'p2', quantity: 1 },
@@ -1000,7 +1304,9 @@ describe('commerce example', () => {
       },
       status: 200,
     });
-    expect(queryChunkNames(response.body).sort()).toEqual([...affectedQueries].sort());
+    expect(queryChunkNames(response.body).sort((a, b) => a.localeCompare(b))).toEqual(
+      [...affectedQueries].sort((a, b) => a.localeCompare(b)),
+    );
     for (const query of affectedQueries) {
       expect(response.body).toContain(`<fw-fragment target="${fragmentTargetForQuery(query)}">`);
     }

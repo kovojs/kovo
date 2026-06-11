@@ -23,6 +23,7 @@ export interface CallExpressionModel {
   arguments: readonly string[];
   argumentSpans: readonly SourceSpan[];
   end: number;
+  exportedConstName?: string;
   name: string;
   start: number;
 }
@@ -605,9 +606,24 @@ function callExpressionModel(
       start: argument.getStart(sourceFile),
     })),
     end: node.getEnd(),
+    ...exportedConstInitializerName(node),
     name: node.expression.getText(sourceFile),
     start: node.getStart(sourceFile),
   };
+}
+
+function exportedConstInitializerName(node: ts.CallExpression): { exportedConstName: string } | {} {
+  const declaration = node.parent;
+  if (
+    !ts.isVariableDeclaration(declaration) ||
+    declaration.initializer !== node ||
+    !ts.isIdentifier(declaration.name) ||
+    !isExportedVariable(declaration)
+  ) {
+    return {};
+  }
+
+  return { exportedConstName: declaration.name.text };
 }
 
 function jsxExpressionModel(

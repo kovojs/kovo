@@ -14,8 +14,14 @@ covers source quality: security, correctness, architecture, drift, and test qual
 - [x] Phase 2 runtime resilience findings are implemented: fetch-rejection fallback/error sink, guarded JSON parsing, serialized island state writes, loader-scoped signal cleanup with `dispose`, visible-return refetch dedupe, omitted-optimistic-truth diagnostics, `crypto.randomUUID()` idempotency, and indeterminate upload progress.
 - [x] Phase 3 Drizzle integrity findings are implemented or materially addressed: arrow handlers, AST extraction, source-mode table recognition, query shape/nullability, projection-less select diagnostics, FW410 message/suppression hardening, and conformance peer/pin coverage.
 - [x] Phase 4 compiler work is underway with the companion plan now carrying detailed checked items.
-- [x] Phase 5 duplicate de-drift is implemented for the tracked items: inline loader generation, test-harness/runtime fragment semantics, TouchGraph type sharing, FW help-string unification, commerce generated artifacts, and runtime export aliases are done.
-- [x] Phase 6 API honesty/correctness items are mostly implemented: CLI check-family filtering, stable input errors, fail-on-findings, entry-point guards, structural test equality, pglite verifier passthrough, and `jisoTest` runner registration.
+- [ ] Phase 5 duplicate de-drift is partially implemented: test-harness/runtime fragment
+      semantics, TouchGraph type sharing, FW help-string unification, commerce generated
+      artifacts, and runtime export aliases are materially addressed, but inline loader
+      build-time generation and the commerce CLI deep-import cleanup remain open.
+- [ ] Phase 6 API honesty/correctness items are mostly implemented: CLI check-family filtering,
+      stable input errors, fail-on-findings, entry-point guards, structural test equality, and
+      `jisoTest` runner registration are done, but pglite verifier passthrough still swallows
+      unparseable string SQL instead of emitting an unresolved-site fact.
 - [x] Phase 6 remaining API work is closed for the tracked items: `form()` registry-value
       inference alignment is done, the broad dead/duplicate code sweep is complete, and remaining
       compiler cleanup is tracked in `plans/improve-compiler.md`.
@@ -209,12 +215,15 @@ Execute `plans/improve-compiler.md` (Phases 0-4 there). No duplication here; one
 Each item replaces a second implementation with a single source of truth. Independent slices;
 good sub-agent candidates with explicit file ownership.
 
-- [x] **Inline minified loader** (`runtime/src/index.ts:219`). A second hand-minified loader that
+- [ ] **Inline minified loader** (`runtime/src/index.ts:219`). A second hand-minified loader that
       has already diverged (silently skips missing handler exports where the runtime throws; raw
       `innerHTML` with no morph/store/broadcast). Generate the string at build time from real
       source (esbuild-minified entry sharing modules with the runtime), assert behavior parity in
       tests instead of `toContain` on minified substrings (index.test.ts:306-314), keep the ≤4KB
       budget assertion.
+      Reopened 2026-06-11: `packages/runtime/src/index.ts` still derives
+      `jisoLoaderSource` from `installInlineJisoLoader.toString()` at module load; this is tracked
+      by `plans/codebase-quality-round2.md` Phase 4.1.
 - [x] **Test-harness fragment resolution** (`test/src/index.ts:567-593`). Resolves targets by
       `fw-c`/tag where the runtime uses `getElementById`/`[fw-fragment-target]`, and truncates at
       the first nested same-tag close. Export the runtime's resolution/parsing for the harness to
@@ -227,7 +236,7 @@ good sub-agent candidates with explicit file ownership.
       diagnostic text flows from `diagnosticDefinitions` (SPEC §11.3 single source); add the
       missing `help` field to `core/diagnostics.ts` so callers stop ad-hoc appending (drizzle
       FW410, compiler help strings migrate onto it).
-- [x] **Commerce example's hand-written "generated" artifacts** (`examples/commerce/src/generated/`,
+- [ ] **Commerce example's hand-written "generated" artifacts** (`examples/commerce/src/generated/`,
       `app.ts:519`). The reference app (README: SPEC §16 acceptance target) never runs the
       compiler; its staleness test compares two hand-authored literals. Add real component source
   - an emit script so `graph.json`/`touch-graph.ts` are produced by `compileComponentModule` +
@@ -236,6 +245,10 @@ good sub-agent candidates with explicit file ownership.
     assertions in `app.test.ts` (compute like fw-check's `lineNumberFor`), and declare the `fw`
     dependency instead of the `../../../packages/cli/src` deep import. Depends on Phase 4 being
     far enough along that the compiler accepts the example's components.
+    Reopened 2026-06-11: `examples/commerce/src/app.ts` and
+    `examples/commerce/src/app.test.ts` still deep-import `../../../packages/cli/src/index.js`;
+    no `fw` dependency is declared in `examples/commerce/package.json`. The remaining cleanup is
+    tracked by `plans/codebase-quality-round2.md` Phase 1.4 and Phase 6.
 - [x] **Byte-identical runtime export pairs** (`runtime/src/index.ts:1374-1384, 1409-1443`).
       `applyMutationResponse`/`applyDeferredChunk` and their `*ToDom` twins: alias or delete one
       pair (public API — deprecate via alias first).
@@ -260,9 +273,12 @@ good sub-agent candidates with explicit file ownership.
 - [x] **`propertyTest`/`assertMutationError` equality is `JSON.stringify`**
       (`test/src/index.ts:607-609, 437`): key-order-sensitive and `undefined`-blind in a public
       testing API whose product is counterexamples. Structural deepEqual.
-- [x] **Verifier proxy assumes `query`/`exec`/`sql` take SQL strings** (`test/src/index.ts:313-325`):
+- [ ] **Verifier proxy assumes `query`/`exec`/`sql` take SQL strings** (`test/src/index.ts:313-325`):
       narrow on `typeof === 'string'` and degrade unparseable statements to an unresolved-site
       fact instead of throwing before the user's real method runs.
+      Reopened 2026-06-11: `packages/test/src/index.ts` now narrows to strings before observing,
+      but unparseable string SQL is still swallowed instead of degraded to an unresolved-site fact;
+      `packages/test/src/index.test.ts` asserts that no observed fact is emitted for malformed SQL.
 - [x] **`jisoTest(name, fn, options)` registers nothing** (`test/src/index.ts:448-454`): it
       ignores `name` and invokes `fn` immediately while reading as an `it()`-alike. Integrate
       with the runner or reduce the API to `createJisoTestHarness`.

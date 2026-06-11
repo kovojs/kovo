@@ -330,17 +330,25 @@ describe('server mutation primitives', () => {
   });
 
   it('renders query endpoint loader exceptions as stable 500 JSON', async () => {
+    const thrown = new Error('database password leaked in stack');
+    const onError = vi.fn();
+    const request = {};
     const productQuery = query('product', {
       load() {
-        throw new Error('database password leaked in stack');
+        throw thrown;
       },
       reads: [domain('product')],
     });
 
-    await expect(renderQueryEndpointResponse(productQuery, { request: {} })).resolves.toEqual({
+    await expect(renderQueryEndpointResponse(productQuery, { onError, request })).resolves.toEqual({
       body: '{"code":"SERVER_ERROR","payload":{}}',
       headers: { 'Content-Type': 'application/json; charset=utf-8' },
       status: 500,
+    });
+    expect(onError).toHaveBeenCalledWith(thrown, {
+      operation: 'query-endpoint',
+      queryKey: 'product',
+      request,
     });
   });
 
@@ -568,9 +576,13 @@ describe('server mutation primitives', () => {
   });
 
   it('renders route page and renderer exceptions as stable 500 HTML', async () => {
+    const loadError = new Error('private route load detail');
+    const renderError = new Error('private render detail');
+    const onError = vi.fn();
+    const request = {};
     const throwingPage = route('/products/:id', {
       page() {
-        throw new Error('private route load detail');
+        throw loadError;
       },
     });
     const throwingRenderer = route('/cart', {
@@ -585,13 +597,31 @@ describe('server mutation primitives', () => {
     };
 
     await expect(
-      renderRoutePageResponse(throwingPage, { params: { id: 'p1' } }, {}),
-    ).resolves.toEqual(serverErrorResponse);
-    await expect(
-      renderRoutePageResponse(throwingRenderer, {}, {}, () => {
-        throw new Error('private render detail');
+      renderRoutePageResponse(throwingPage, { params: { id: 'p1' } }, request, String, {
+        onError,
       }),
     ).resolves.toEqual(serverErrorResponse);
+    await expect(
+      renderRoutePageResponse(
+        throwingRenderer,
+        {},
+        request,
+        () => {
+          throw renderError;
+        },
+        { onError },
+      ),
+    ).resolves.toEqual(serverErrorResponse);
+    expect(onError).toHaveBeenCalledWith(loadError, {
+      operation: 'route-page',
+      request,
+      routePath: '/products/:id',
+    });
+    expect(onError).toHaveBeenCalledWith(renderError, {
+      operation: 'route-render',
+      request,
+      routePath: '/cart',
+    });
   });
 
   it('renders route file and stream outcomes without passing through the HTML renderer', async () => {
@@ -788,12 +818,22 @@ describe('server mutation primitives', () => {
       headers: { 'Content-Type': 'text/plain; charset=utf-8' },
       status: 404,
     });
+    const onError = vi.fn();
     expect(
-      renderVersionedClientModuleResponse(registry, { url: '/assets/cart.client.js' }),
+      renderVersionedClientModuleResponse(registry, {
+        onError,
+        url: '/assets/cart.client.js',
+      }),
     ).toEqual({
       body: 'Not Found',
       headers: { 'Content-Type': 'text/plain; charset=utf-8' },
       status: 404,
+    });
+    expect(onError).toHaveBeenCalledOnce();
+    expect(onError.mock.calls[0]?.[0]).toBeInstanceOf(Error);
+    expect(onError.mock.calls[0]?.[1]).toEqual({
+      operation: 'client-module',
+      url: '/assets/cart.client.js',
     });
   });
 
@@ -1286,7 +1326,6 @@ describe('server mutation primitives', () => {
       ].join('\n'),
       headers: {
         'Content-Type': 'text/html; charset=utf-8',
-        'Transfer-Encoding': 'chunked',
       },
       status: 200,
     });
@@ -1361,7 +1400,6 @@ describe('server mutation primitives', () => {
       ].join('\n'),
       headers: {
         'Content-Type': 'text/html; charset=utf-8',
-        'Transfer-Encoding': 'chunked',
       },
       status: 200,
     });
@@ -2852,20 +2890,38 @@ describe('server mutation primitives', () => {
         return input;
       },
     });
+    const onError = vi.fn();
+    const request = {};
 
     await expect(
       renderMutationResponse(addToCart, {
+        onError,
         rawInput: { productId: 'p1' },
-        request: {},
+        request,
         targets: ['cart-badge'],
       }),
     ).resolves.toEqual({
-      body: '<fw-fragment target="cart-badge"><output role="alert" data-error-code="RENDER_ERROR">Rerun query failed: cart</output></fw-fragment>',
+      body: '<fw-fragment target="cart-badge"><output role="alert" data-error-code="RENDER_ERROR">Internal Server Error</output></fw-fragment>',
       headers: {
         'Content-Type': 'text/vnd.jiso.fragment+html; charset=utf-8',
         'FW-Changes': '[{"domain":"cart"}]',
       },
       status: 500,
+    });
+    expect(onError).toHaveBeenCalledOnce();
+    const [error, context] = onError.mock.calls[0] ?? [];
+    expect(error).toBeInstanceOf(Error);
+    expect((error as Error).message).toBe('Rerun query failed: cart');
+    expect((error as Error).cause).toMatchObject({
+      error: { code: 'UNAUTHORIZED', payload: {} },
+      ok: false,
+      status: 422,
+    });
+    expect(context).toEqual({
+      mutationKey: 'cart/add',
+      operation: 'mutation-render',
+      request,
+      targets: ['cart-badge'],
     });
   });
 
@@ -3376,6 +3432,66 @@ describe('server mutation primitives', () => {
     expect(renders).toBe(1);
   });
 
+  it('replays duplicate mutation failures while the failure fragment is pending', async () => {
+    const replayStore = createMemoryMutationReplayStore();
+    const failureStarted = deferred();
+    const failureRelease = deferred();
+    let attempts = 0;
+    let renders = 0;
+    const addToCart = mutation('cart/add', {
+      errors: {
+        OUT_OF_STOCK: s.object({ availableQuantity: s.number().int().min(0) }),
+      },
+      input: s.object({ productId: s.string() }),
+      handler(_input, _request, context) {
+        attempts += 1;
+        return context.fail('OUT_OF_STOCK', { availableQuantity: 0 });
+      },
+    });
+    const request = {
+      idem: 'idem_pending_failure',
+      rawInput: { productId: 'p1' },
+      renderFailureFragment: async () => {
+        renders += 1;
+        failureStarted.resolve();
+        await failureRelease.promise;
+        return '<output role="alert">Sold out</output>';
+      },
+      replayStore,
+      request: { sessionId: 's1' },
+    };
+
+    const first = renderMutationResponse(addToCart, request);
+    await failureStarted.promise;
+    const second = renderMutationResponse(addToCart, request);
+    await Promise.resolve();
+
+    expect(attempts).toBe(1);
+    expect(renders).toBe(1);
+
+    failureRelease.resolve();
+    await expect(Promise.all([first, second])).resolves.toEqual([
+      {
+        body: '<fw-fragment target="error"><output role="alert">Sold out</output></fw-fragment>',
+        headers: {
+          'Content-Type': 'text/vnd.jiso.fragment+html; charset=utf-8',
+          'FW-Idem': 'idem_pending_failure',
+        },
+        status: 422,
+      },
+      {
+        body: '<fw-fragment target="error"><output role="alert">Sold out</output></fw-fragment>',
+        headers: {
+          'Content-Type': 'text/vnd.jiso.fragment+html; charset=utf-8',
+          'FW-Idem': 'idem_pending_failure',
+        },
+        status: 422,
+      },
+    ]);
+    expect(attempts).toBe(1);
+    expect(renders).toBe(1);
+  });
+
   it('replays enhanced mutation validation failures by FW-Idem', async () => {
     const replayStore = createMemoryMutationReplayStore();
     let attempts = 0;
@@ -3669,6 +3785,9 @@ describe('server mutation primitives', () => {
   });
 
   it('renders a defined error fragment when an island errors without a boundary', async () => {
+    const thrown = new Error('unhandled island error');
+    const onError = vi.fn();
+    const request = {};
     const addToCart = mutation('cart/add', {
       input: s.object({ productId: s.string() }),
       handler(input) {
@@ -3681,22 +3800,29 @@ describe('server mutation primitives', () => {
         fragmentRenderers: [
           {
             render() {
-              throw new Error('unhandled island error');
+              throw thrown;
             },
             target: 'recommendations',
           },
         ],
+        onError,
         rawInput: { productId: 'p1' },
-        request: {},
+        request,
         targets: ['recommendations'],
       }),
     ).resolves.toEqual({
-      body: '<fw-fragment target="recommendations"><output role="alert" data-error-code="RENDER_ERROR">unhandled island error</output></fw-fragment>',
+      body: '<fw-fragment target="recommendations"><output role="alert" data-error-code="RENDER_ERROR">Internal Server Error</output></fw-fragment>',
       headers: {
         'Content-Type': 'text/vnd.jiso.fragment+html; charset=utf-8',
         'FW-Changes': '[]',
       },
       status: 500,
+    });
+    expect(onError).toHaveBeenCalledWith(thrown, {
+      mutationKey: 'cart/add',
+      operation: 'mutation-render',
+      request,
+      targets: ['recommendations'],
     });
   });
 
@@ -3735,7 +3861,7 @@ describe('server mutation primitives', () => {
 
     expect(writes).toBe(1);
     expect(first).toEqual({
-      body: '<fw-fragment target="cart-badge"><output role="alert" data-error-code="RENDER_ERROR">post-commit render failed</output></fw-fragment>',
+      body: '<fw-fragment target="cart-badge"><output role="alert" data-error-code="RENDER_ERROR">Internal Server Error</output></fw-fragment>',
       headers: {
         'Content-Type': 'text/vnd.jiso.fragment+html; charset=utf-8',
         'FW-Changes': '[{"domain":"cart"}]',
@@ -3747,22 +3873,31 @@ describe('server mutation primitives', () => {
   });
 
   it('renders enhanced mutation handler exceptions as 500 fragments', async () => {
+    const thrown = new Error('handler unavailable');
+    const onError = vi.fn();
+    const request = {};
     const addToCart = mutation('cart/add', {
       input: s.object({ productId: s.string() }),
       handler() {
-        throw new Error('handler unavailable');
+        throw thrown;
       },
     });
 
     await expect(
       renderMutationResponse(addToCart, {
+        onError,
         rawInput: { productId: 'p1' },
-        request: {},
+        request,
       }),
     ).resolves.toEqual({
       body: '<fw-fragment target="error"><output role="alert" data-error-code="SERVER_ERROR">Internal Server Error</output></fw-fragment>',
       headers: { 'Content-Type': 'text/vnd.jiso.fragment+html; charset=utf-8' },
       status: 500,
+    });
+    expect(onError).toHaveBeenCalledWith(thrown, {
+      mutationKey: 'cart/add',
+      operation: 'mutation-handler',
+      request,
     });
   });
 
@@ -3996,23 +4131,32 @@ describe('server mutation primitives', () => {
   });
 
   it('renders no-JS mutation handler exceptions as an HTML 500 response', async () => {
+    const thrown = new Error('handler unavailable');
+    const onError = vi.fn();
+    const request = {};
     const addToCart = mutation('cart/add', {
       input: s.object({ productId: s.string() }),
       handler() {
-        throw new Error('handler unavailable');
+        throw thrown;
       },
     });
 
     await expect(
       renderNoJsMutationResponse(addToCart, {
+        onError,
         rawInput: { productId: 'p1' },
         redirectTo: '/cart',
-        request: {},
+        request,
       }),
     ).resolves.toEqual({
       body: 'Internal Server Error',
       headers: { 'Content-Type': 'text/html; charset=utf-8' },
       status: 500,
+    });
+    expect(onError).toHaveBeenCalledWith(thrown, {
+      mutationKey: 'cart/add',
+      operation: 'no-js-mutation-handler',
+      request,
     });
   });
 

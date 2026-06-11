@@ -4,7 +4,6 @@ export type QueryUpdatePlan<Value = unknown> = (value: Value) => void;
 
 export interface QueryStore {
   get<Value = unknown>(name: string, key?: string): Value | undefined;
-  hydrate(script: QueryScriptLike): void;
   snapshot(
     names: readonly string[],
     keys?: Readonly<Record<string, string | undefined>>,
@@ -27,15 +26,6 @@ export function createQueryStore(): QueryStore {
   return {
     get<Value = unknown>(name: string, key?: string): Value | undefined {
       return values.get(queryStoreKey(name, key)) as Value | undefined;
-    },
-    hydrate(script: QueryScriptLike): void {
-      const name = script.getAttribute('fw-query');
-      if (!name) return;
-
-      const parsed = parseJsonValue(script.textContent ?? 'null');
-      if (!parsed.ok) return;
-
-      this.set(name, parsed.value, script.getAttribute('key') ?? undefined);
     },
     snapshot(
       names: readonly string[],

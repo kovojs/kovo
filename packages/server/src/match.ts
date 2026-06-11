@@ -39,6 +39,13 @@ interface CompiledRoute<Route extends RouteLike = RouteLike> {
   segments: readonly RouteSegment[];
 }
 
+interface CachedRouteTable<Route extends RouteLike = RouteLike> {
+  compiled: readonly CompiledRoute<Route>[];
+  paths: readonly string[];
+}
+
+const routeTableCache = new WeakMap<readonly RouteLike[], CachedRouteTable>();
+
 export function normalizePathname(pathname: string): PathnameNormalization {
   const inputPathname = pathname;
   const withoutSearchOrHash = pathname.split(/[?#]/, 1)[0] ?? '';
@@ -72,8 +79,7 @@ export function matchRoute<Route extends RouteLike>(
 ): RouteMatch<Route> | undefined {
   const normalization = normalizePathname(pathname);
   const pathnameSegments = splitPathSegments(normalization.pathname);
-  const candidates = routes
-    .map((route, index) => compileRoute(route, index))
+  const candidates = compileRoutes(routes)
     .flatMap((route) => {
       const params = matchCompiledRoute(route, pathnameSegments);
       return params ? [{ params, route }] : [];
@@ -92,7 +98,7 @@ export function matchRoute<Route extends RouteLike>(
 }
 
 export function findRouteAmbiguities(routes: readonly RouteLike[]): readonly RouteAmbiguity[] {
-  const compiledRoutes = routes.map((route, index) => compileRoute(route, index));
+  const compiledRoutes = compileRoutes(routes);
   const ambiguities: RouteAmbiguity[] = [];
 
   for (let leftIndex = 0; leftIndex < compiledRoutes.length; leftIndex += 1) {
@@ -118,6 +124,20 @@ export function findRouteAmbiguities(routes: readonly RouteLike[]): readonly Rou
   return ambiguities;
 }
 
+function compileRoutes<Route extends RouteLike>(
+  routes: readonly Route[],
+): readonly CompiledRoute<Route>[] {
+  const cached = routeTableCache.get(routes);
+  const paths = routes.map((route) => route.path);
+  if (cached && pathsEqual(cached.paths, paths)) {
+    return cached.compiled as readonly CompiledRoute<Route>[];
+  }
+
+  const compiled = routes.map((route, index) => compileRoute(route, index));
+  routeTableCache.set(routes, { compiled, paths });
+  return compiled;
+}
+
 function compileRoute<Route extends RouteLike>(route: Route, index: number): CompiledRoute<Route> {
   const path = normalizePathname(route.path).pathname;
 
@@ -127,6 +147,10 @@ function compileRoute<Route extends RouteLike>(route: Route, index: number): Com
     route,
     segments: splitPathSegments(path).map(parseRouteSegment),
   };
+}
+
+function pathsEqual(left: readonly string[], right: readonly string[]): boolean {
+  return left.length === right.length && left.every((value, index) => value === right[index]);
 }
 
 function compareCompiledRouteSpecificity(left: CompiledRoute, right: CompiledRoute): number {

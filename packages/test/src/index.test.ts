@@ -34,6 +34,21 @@ function createFakeDb(): FakeDb {
   };
 }
 
+function deferred<T = void>(): {
+  promise: Promise<T>;
+  reject(reason?: unknown): void;
+  resolve(value: T | PromiseLike<T>): void;
+} {
+  let resolve!: (value: T | PromiseLike<T>) => void;
+  let reject!: (reason?: unknown) => void;
+  const promise = new Promise<T>((innerResolve, innerReject) => {
+    resolve = innerResolve;
+    reject = innerReject;
+  });
+
+  return { promise, reject, resolve };
+}
+
 describe('@jiso/test harness', () => {
   it('property-tests optimistic predictions against eventual query truth', () => {
     const result = propertyTest({
@@ -1348,6 +1363,114 @@ describe('@jiso/test harness', () => {
     db.write('audit_log', { event: 'restock' });
 
     expect(() => verifier.assertCovered()).not.toThrow();
+  });
+
+  it('returns stable proxies and method wrappers for repeated pglite access', () => {
+    const verifier = createDbVerifier({}, { domainByTable: { cart_items: 'cart' } });
+    const handle = {
+      exec() {
+        return ['exec-ok'];
+      },
+      query() {
+        return ['query-ok'];
+      },
+    };
+    const db = verifier.wrap({
+      pglite: handle,
+      write() {
+        return undefined;
+      },
+    });
+
+    expect(db.pglite).toBe(db.pglite);
+    expect(db.pglite).not.toBe(handle);
+    expect(Reflect.get(db.pglite, 'exec')).toBe(Reflect.get(db.pglite, 'exec'));
+    expect(Reflect.get(db.pglite, 'query')).toBe(Reflect.get(db.pglite, 'query'));
+    expect(Reflect.get(db, 'write')).toBe(Reflect.get(db, 'write'));
+  });
+
+  it('does not observe a root query method without a DB adapter seam', () => {
+    const verifier = createDbVerifier({}, { domainByTable: { cart_items: 'cart' } });
+    const calls: unknown[] = [];
+    const utility = verifier.wrap({
+      query(statement: unknown) {
+        calls.push(statement);
+        return ['ok'];
+      },
+    });
+
+    expect(utility.query('insert into cart_items default values')).toEqual(['ok']);
+    expect(calls).toEqual(['insert into cart_items default values']);
+    expect(verifier.observed).toEqual([]);
+  });
+
+  it('scopes observations to interleaved mutation exec calls', async () => {
+    const releaseHandlers = deferred();
+    const cartStarted = deferred();
+    const auditStarted = deferred();
+    const bothWritten = deferred();
+    let writeCount = 0;
+    const waitForBothWrites = async () => {
+      writeCount += 1;
+      if (writeCount === 2) bothWritten.resolve(undefined);
+      await bothWritten.promise;
+    };
+    const cartMutation = mutation('cart/add', {
+      csrf: false,
+      input: s.object({ productId: s.string() }),
+      async handler(input, request: { db: FakeDb }) {
+        cartStarted.resolve(undefined);
+        await releaseHandlers.promise;
+        request.db.write('cart_items', input.productId);
+        await waitForBothWrites();
+        return input.productId;
+      },
+    });
+    const auditMutation = mutation('audit/add', {
+      csrf: false,
+      input: s.object({ event: s.string() }),
+      async handler(input, request: { db: FakeDb }) {
+        auditStarted.resolve(undefined);
+        await releaseHandlers.promise;
+        request.db.write('audit_log', input.event);
+        await waitForBothWrites();
+        return input.event;
+      },
+    });
+    const harness = createJisoTestHarness({
+      db: createFakeDb(),
+      touchGraph: {
+        'audit.add': {
+          touches: [{ domain: 'audit', keys: null, site: 'audit.domain.ts:1', via: 'audit_log' }],
+          unresolved: [],
+        },
+        'cart.add': {
+          touches: [{ domain: 'cart', keys: null, site: 'cart.domain.ts:1', via: 'cart_items' }],
+          unresolved: [],
+        },
+      },
+      verification: {
+        domainByTable: {
+          audit_log: 'audit',
+          cart_items: 'cart',
+        },
+      },
+    });
+
+    const cartExec = harness.exec(cartMutation, { productId: 'p1' }, { touchGraphKey: 'cart.add' });
+    const auditExec = harness.exec(
+      auditMutation,
+      { event: 'cart-add' },
+      { touchGraphKey: 'audit.add' },
+    );
+    await Promise.all([cartStarted.promise, auditStarted.promise]);
+    releaseHandlers.resolve(undefined);
+
+    await expect(Promise.all([cartExec, auditExec])).resolves.toMatchObject([
+      { ok: true, value: 'p1' },
+      { ok: true, value: 'cart-add' },
+    ]);
+    expect(harness.verificationDiagnostics()).toEqual([]);
   });
 
   it('fails read-side verification for undeclared query domains', () => {
