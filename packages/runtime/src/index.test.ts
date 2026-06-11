@@ -1998,6 +1998,23 @@ describe('query store', () => {
     expect(store.get('cart')).toEqual({ count: 4 });
   });
 
+  it('accepts single-quoted chunk attributes', () => {
+    const store = createQueryStore();
+    const applied = applyMutationResponse(
+      store,
+      [
+        "<fw-query name='cart' key='cart:c1'>{\"count\":4}</fw-query>",
+        "<fw-fragment target='cart-list' mode='append'><li>p1</li></fw-fragment>",
+      ].join(''),
+    );
+
+    expect(store.get('cart', 'cart:c1')).toEqual({ count: 4 });
+    expect(applied).toEqual({
+      fragments: [{ html: '<li>p1</li>', mode: 'append', target: 'cart-list' }],
+      queries: ['cart'],
+    });
+  });
+
   it('skips malformed mutation query chunks and continues applying valid chunks', () => {
     const store = createQueryStore();
     const applied = applyMutationResponse(

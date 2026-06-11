@@ -844,18 +844,36 @@ function abortIslandSignalScope(scope: IslandSignalScope): void {
 }
 
 function fwComponentIds(html: string): Set<string> {
-  return new Set(
-    [...html.matchAll(/<[^>]*\bfw-c\s*=\s*(["'])(?<component>[^"']+)\1[^>]*>/g)].flatMap(
-      (match) => {
-        const tag = match[0];
-        const component = match.groups?.component ?? null;
-        const key = readAttribute(tag, 'fw-key');
-        const id = readAttribute(tag, 'id');
-        const identity = islandSignalIdentity(component, key, id);
-        return identity ? [identity] : [];
-      },
-    ),
-  );
+  const ids = new Set<string>();
+  let offset = 0;
+
+  while (offset < html.length) {
+    const start = html.indexOf('<', offset);
+    if (start === -1) break;
+    if (html[start + 1] === '/') {
+      offset = start + 2;
+      continue;
+    }
+
+    const tagName = /^<[a-z][a-z0-9-]*/i.exec(html.slice(start));
+    if (!tagName) {
+      offset = start + 1;
+      continue;
+    }
+
+    const close = tagClose(html, start + tagName[0].length);
+    if (close === undefined) break;
+    const tag = html.slice(start, close + 1);
+    const identity = islandSignalIdentity(
+      readAttribute(tag, 'fw-c'),
+      readAttribute(tag, 'fw-key'),
+      readAttribute(tag, 'id'),
+    );
+    if (identity) ids.add(identity);
+    offset = close + 1;
+  }
+
+  return ids;
 }
 
 function islandSignalIdentity(
@@ -2561,8 +2579,16 @@ function readDeps(value: string | null): string[] {
 }
 
 function readAttribute(attrs: string, name: string): string | null {
-  const pattern = new RegExp(`\\b${name}="([^"]*)"`);
-  return unescapeHtml(pattern.exec(attrs)?.[1] ?? '') || null;
+  const escapedName = name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const pattern = new RegExp(
+    `(?:^|\\s)${escapedName}(?=\\s|=|$|/)(?:\\s*=\\s*(?:"(?<double>[^"]*)"|'(?<single>[^']*)'|(?<bare>[^\\s"'=<>\`]+)))?(?=\\s|$|/|>)`,
+    'i',
+  );
+  const match = pattern.exec(attrs);
+  return (
+    unescapeHtml(match?.groups?.double ?? match?.groups?.single ?? match?.groups?.bare ?? '') ||
+    null
+  );
 }
 
 let generatedIdemCounter = 0;
