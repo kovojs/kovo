@@ -346,6 +346,7 @@ describe('runtime loader', () => {
     const listeners = new Map<string, (event: unknown) => void>();
     const dispatched: unknown[] = [];
     const fragmentTarget = { innerHTML: '' };
+    const appendTarget = { insertAdjacentHTML: vi.fn() };
     const formData = { kind: 'form-data' };
     const form = {
       action: '/_m/cart/add',
@@ -364,6 +365,7 @@ describe('runtime loader', () => {
         return [
           '<fw-query name="cart">{"count":1}</fw-query>',
           '<fw-fragment target="cart-badge"><cart-badge>1</cart-badge></fw-fragment>',
+          '<fw-fragment target="cart-list" mode="append"><li>2</li></fw-fragment>',
         ].join('\n');
       },
     }));
@@ -382,9 +384,10 @@ describe('runtime loader', () => {
       globalRecord.DOMParser = class DOMParser {
         parseFromString(body: string) {
           const queryMatch = /<fw-query\b([^>]*)>([\s\S]*?)<\/fw-query>/.exec(body);
-          const fragmentMatch = /<fw-fragment\b([^>]*)>([\s\S]*?)<\/fw-fragment>/.exec(body);
+          const fragmentMatches = [
+            ...body.matchAll(/<fw-fragment\b([^>]*)>([\s\S]*?)<\/fw-fragment>/g),
+          ];
           const queryAttributes = queryMatch?.[1] ?? '';
-          const fragmentAttributes = fragmentMatch?.[1] ?? '';
           const queryElement = queryMatch
             ? {
                 getAttribute(name: string) {
@@ -395,24 +398,26 @@ describe('runtime loader', () => {
                 textContent: queryMatch[2],
               }
             : null;
-          const fragmentElement = fragmentMatch
-            ? {
-                getAttribute(name: string) {
-                  return name === 'target'
-                    ? (/target="([^"]+)"/.exec(fragmentAttributes)?.[1] ?? null)
-                    : null;
-                },
-                hasAttribute(name: string) {
-                  return name === 'append' && fragmentAttributes.includes('append');
-                },
-                innerHTML: fragmentMatch[2],
-              }
-            : null;
+          const fragmentElements = fragmentMatches.map((fragmentMatch) => {
+            const fragmentAttributes = fragmentMatch[1] ?? '';
+            return {
+              getAttribute(name: string) {
+                if (name === 'target') {
+                  return /target="([^"]+)"/.exec(fragmentAttributes)?.[1] ?? null;
+                }
+                if (name === 'mode') {
+                  return /mode="([^"]+)"/.exec(fragmentAttributes)?.[1] ?? null;
+                }
+                return null;
+              },
+              innerHTML: fragmentMatch[2],
+            };
+          });
 
           return {
             querySelectorAll(selector: string) {
               if (selector === 'fw-query') return queryElement ? [queryElement] : [];
-              if (selector === 'fw-fragment') return fragmentElement ? [fragmentElement] : [];
+              if (selector === 'fw-fragment') return fragmentElements;
               return [];
             },
           };
@@ -432,8 +437,8 @@ describe('runtime loader', () => {
         getElementById(id: string) {
           return id === 'cart-badge' ? fragmentTarget : null;
         },
-        querySelector() {
-          return null;
+        querySelector(selector: string) {
+          return selector === '[fw-fragment-target="cart-list"]' ? appendTarget : null;
         },
         querySelectorAll(selector: string) {
           return selector === '[fw-deps]' ? [depElement] : [];
@@ -479,6 +484,7 @@ describe('runtime loader', () => {
         }),
       ]);
       expect(fragmentTarget.innerHTML).toBe('<cart-badge>1</cart-badge>');
+      expect(appendTarget.insertAdjacentHTML).toHaveBeenCalledWith('beforeend', '<li>2</li>');
     } finally {
       Object.assign(globalRecord, originals);
     }
