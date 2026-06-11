@@ -23,6 +23,10 @@ function annotatedTable(name: string, annotation: ReturnType<typeof jiso>) {
   };
 }
 
+function drizzleSymbol(name: string): symbol {
+  return Symbol.for(`drizzle:${name}`);
+}
+
 describe('Drizzle pinned subset conformance', () => {
   it('imports the pinned real Drizzle Postgres subset used by extraction examples', () => {
     const products = pgTable('products', {
@@ -140,7 +144,7 @@ describe('Drizzle pinned subset conformance', () => {
     ]);
   });
 
-  it('accepts jiso annotations as the real Drizzle pgTable extra config', () => {
+  it('pins pgTable(name, cols, jiso({...})) as the real Drizzle extra config integration point', () => {
     const cartItems = pgTable(
       'cart_items',
       {
@@ -151,6 +155,19 @@ describe('Drizzle pinned subset conformance', () => {
     );
 
     expect(cartItems.productId).toBeDefined();
+    const tableInternals = cartItems as unknown as Record<symbol, unknown>;
+    const extraConfigBuilder = tableInternals[drizzleSymbol('ExtraConfigBuilder')] as
+      | ((columns: unknown) => unknown)
+      | ReturnType<typeof jiso>
+      | undefined;
+    const extraConfigColumns = tableInternals[drizzleSymbol('ExtraConfigColumns')];
+
+    expect(extraConfigBuilder).toEqual(
+      expect.objectContaining({ domain: 'cart', key: 'productId' }),
+    );
+    expect(
+      typeof extraConfigBuilder === 'function' ? extraConfigBuilder(extraConfigColumns) : [],
+    ).toEqual([]);
   });
 
   it('recognizes real Drizzle receiver types in project extraction', () => {
