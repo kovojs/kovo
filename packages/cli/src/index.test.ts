@@ -66,6 +66,69 @@ describe('fw check', () => {
     });
   });
 
+  it('reports owner-domain accesses that are not session scoped', () => {
+    expect(
+      fwCheck({
+        ownerDomains: [{ domain: 'cart', owner: 'userId' }],
+        scopeAudits: [
+          {
+            domain: 'cart',
+            kind: 'query',
+            name: 'cart',
+            scope: 'session',
+            site: 'cart.queries.ts:8',
+          },
+          {
+            detail: 'where eq(carts.id, args.cartId)',
+            domain: 'cart',
+            kind: 'query',
+            name: 'cartById',
+            scope: 'args',
+            site: 'cart.queries.ts:21',
+          },
+          {
+            domain: 'product',
+            kind: 'query',
+            name: 'productGrid',
+            scope: 'args',
+            site: 'product.queries.ts:4',
+          },
+        ],
+      }).output,
+    ).toBe(
+      [
+        'fw-check/v1',
+        'WARN UNSCOPED QUERY cartById domain=cart scope=args site=cart.queries.ts:21 where eq(carts.id, args.cartId)',
+        '',
+      ].join('\n'),
+    );
+  });
+
+  it('reports unguarded queries and pages alongside mutations', () => {
+    expect(
+      fwCheck({
+        mutations: [{ guards: ['authed'], key: 'cart/add', writes: ['cart'] }],
+        optimistic: [{ mutation: 'cart/add', query: 'cart', status: 'hand-written' }],
+        pages: [
+          { guards: ['authed'], route: '/cart' },
+          { guards: [], queries: ['adminOrders'], route: '/admin' },
+        ],
+        queries: [
+          { domains: ['cart'], guards: ['authed'], query: 'cart' },
+          { domains: ['order'], guards: [], query: 'adminOrders' },
+        ],
+      }).output,
+    ).toBe(
+      [
+        'fw-check/v1',
+        'ERROR FW407 adminOrders reads order but no mutation touch graph writes that domain.',
+        'WARN UNGUARDED page /admin is reachable without an auth guard.',
+        'WARN UNGUARDED query adminOrders is reachable without an auth guard.',
+        '',
+      ].join('\n'),
+    );
+  });
+
   it('derives FW310 gaps from mutation invalidations and query read sets', () => {
     expect(
       fwCheck({
@@ -866,6 +929,37 @@ describe('fw explain', () => {
     `);
   });
 
+  it('audits unguarded queries and pages with stable explain output', () => {
+    const result = fwExplain(
+      {
+        mutations: [
+          { guards: ['authed'], key: 'cart/add' },
+          { guards: ['rateLimit:session'], key: 'inventory/sync', writes: ['product'] },
+        ],
+        pages: [
+          { guards: ['authed'], queries: ['cart'], route: '/cart' },
+          { guards: [], queries: ['adminOrders'], route: '/admin' },
+        ],
+        queries: [
+          { domains: ['cart'], guards: ['authed'], query: 'cart' },
+          { domains: ['order'], guards: [], query: 'adminOrders' },
+        ],
+      },
+      { unguarded: true },
+    );
+
+    expect(result.exitCode).toBe(0);
+    expect(result.output).toMatchInlineSnapshot(`
+      "fw-explain/v1
+      UNGUARDED
+      MUTATION inventory/sync guards=rateLimit:session writes=product invalidates=- manual-invalidates=-
+      PAGE /admin guards=- queries=adminOrders
+      QUERY adminOrders guards=- reads=order
+      SUMMARY total=3
+      "
+    `);
+  });
+
   it('accepts fw explain --unguarded as a CLI audit mode', () => {
     const tempDir = mkdtempSync(join(tmpdir(), 'jiso-cli-'));
     const graphPath = join(tempDir, 'graph.json');
@@ -896,6 +990,97 @@ describe('fw explain', () => {
       "fw-explain/v1
       UNGUARDED
       MUTATION cart/add guards=rateLimit:session writes=cart invalidates=- manual-invalidates=-
+      SUMMARY total=1
+      "
+    `);
+  });
+
+  it('audits owner-scoped queries and writes with stable explain output', () => {
+    const result = fwExplain(
+      {
+        ownerDomains: [{ domain: 'cart', owner: 'userId' }],
+        scopeAudits: [
+          {
+            domain: 'cart',
+            kind: 'write',
+            name: 'cart.merge',
+            scope: 'unknown',
+            site: 'cart.domain.ts:30',
+          },
+          {
+            detail: 'where eq(carts.id, args.cartId)',
+            domain: 'cart',
+            kind: 'query',
+            name: 'cartById',
+            scope: 'args',
+            site: 'cart.queries.ts:21',
+          },
+          {
+            domain: 'cart',
+            kind: 'query',
+            name: 'cart',
+            scope: 'session',
+            site: 'cart.queries.ts:8',
+          },
+          {
+            domain: 'product',
+            kind: 'query',
+            name: 'productGrid',
+            scope: 'unscoped',
+            site: 'product.queries.ts:4',
+          },
+        ],
+      },
+      { unscoped: true },
+    );
+
+    expect(result.exitCode).toBe(0);
+    expect(result.output).toMatchInlineSnapshot(`
+      "fw-explain/v1
+      UNSCOPED
+      UNSCOPED QUERY cartById domain=cart scope=args site=cart.queries.ts:21 where eq(carts.id, args.cartId)
+      UNSCOPED WRITE cart.merge domain=cart scope=unknown site=cart.domain.ts:30
+      SUMMARY total=2
+      "
+    `);
+  });
+
+  it('accepts fw explain --unscoped as a CLI audit mode', () => {
+    const tempDir = mkdtempSync(join(tmpdir(), 'jiso-cli-'));
+    const graphPath = join(tempDir, 'graph.json');
+    let output = '';
+    const stdoutWrite = vi.spyOn(process.stdout, 'write').mockImplementation(((chunk) => {
+      output += chunk.toString();
+      return true;
+    }) as typeof process.stdout.write);
+
+    try {
+      writeFileSync(
+        graphPath,
+        JSON.stringify({
+          ownerDomains: [{ domain: 'cart', owner: 'userId' }],
+          scopeAudits: [
+            {
+              domain: 'cart',
+              kind: 'query',
+              name: 'cartById',
+              scope: 'args',
+              site: 'cart.queries.ts:21',
+            },
+          ],
+        }),
+      );
+
+      expect(main(['explain', '--unscoped', graphPath])).toBe(0);
+    } finally {
+      stdoutWrite.mockRestore();
+      rmSync(tempDir, { force: true, recursive: true });
+    }
+
+    expect(output).toMatchInlineSnapshot(`
+      "fw-explain/v1
+      UNSCOPED
+      UNSCOPED QUERY cartById domain=cart scope=args site=cart.queries.ts:21
       SUMMARY total=1
       "
     `);

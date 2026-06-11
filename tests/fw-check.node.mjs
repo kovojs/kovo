@@ -833,6 +833,13 @@ void test('P8 component explain includes handler capture channels', async () => 
   assert.match(cliSource, /captures=\$\{list\(handler\.captures\)\}/);
   assert.match(cliTests, /captures: \['ctx', 'element-params'\]/);
   assert.match(cliTests, /captures=ctx,element-params params=itemId/);
+  assert.match(cliSource, /unscoped: true/);
+  assert.match(cliSource, /scopeAudits\?: readonly ScopeAuditFact\[\]/);
+  assert.match(cliSource, /function unscopedAccesses/);
+  assert.match(cliSource, /function unguardedAccesses/);
+  assert.match(cliTests, /accepts fw explain --unscoped as a CLI audit mode/);
+  assert.match(cliTests, /audits unguarded queries and pages with stable explain output/);
+  assert.match(cliTests, /UNSCOPED QUERY cartById/);
 });
 
 void test('P5 data-bind paths are checked against generated query shape facts', async () => {

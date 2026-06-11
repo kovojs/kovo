@@ -10,8 +10,11 @@ export interface FwCheckInput {
   lints?: readonly SemanticLint[];
   mutations?: readonly MutationExplain[];
   optimistic?: readonly OptimisticCoverage[];
+  ownerDomains?: readonly OwnerDomainFact[];
+  pages?: readonly PageExplain[];
   queryData?: readonly QueryDataFact[];
   queries?: readonly QueryReadSet[];
+  scopeAudits?: readonly ScopeAuditFact[];
   touchGraph?: CliTouchGraph;
   updateCoverage?: readonly UpdateCoverageFact[];
   verificationDiagnostics?: readonly VerificationDiagnosticFact[];
@@ -69,6 +72,7 @@ export interface PageMetaExplain {
 }
 
 export interface PageExplain {
+  guards?: readonly string[];
   i18n?: readonly string[];
   meta?: PageMetaExplain;
   modulepreloads?: readonly string[];
@@ -83,6 +87,20 @@ export interface OptimisticCoverage {
   mutation: string;
   query: string;
   status: 'UNHANDLED' | 'await-fragment' | 'hand-written';
+}
+
+export interface OwnerDomainFact {
+  domain: string;
+  owner: string;
+}
+
+export interface ScopeAuditFact {
+  detail?: string;
+  domain: string;
+  kind: 'query' | 'write';
+  name: string;
+  scope: 'args' | 'session' | 'unscoped' | 'unknown';
+  site: string;
 }
 
 export interface UpdateCoverageFact {
@@ -114,6 +132,7 @@ export interface QueryDataFact {
 
 export interface QueryReadSet {
   domains: readonly string[];
+  guards?: readonly string[];
   query: string;
 }
 
@@ -161,6 +180,12 @@ interface TouchGraphDiagnosticFact {
   site: string;
 }
 
+interface UnguardedAccessFact {
+  detail: string;
+  kind: 'mutation' | 'page' | 'query';
+  name: string;
+}
+
 export interface FwCheckResult {
   exitCode: 0 | 1;
   output: string;
@@ -196,10 +221,20 @@ export function main(args: readonly string[] = process.argv.slice(2)): number {
 
   if (args[0] === 'explain') {
     const optimistic = args.includes('--optimistic');
+    const unscoped = args.includes('--unscoped');
     const unguarded = args.includes('--unguarded');
     const positional = args
       .slice(1)
-      .filter((arg) => arg !== '--optimistic' && arg !== '--unguarded');
+      .filter((arg) => arg !== '--optimistic' && arg !== '--unguarded' && arg !== '--unscoped');
+
+    if (unscoped) {
+      const [inputPath] = positional;
+      const input = inputPath ? JSON.parse(readFileSync(inputPath, 'utf8')) : {};
+      const result = fwExplain(input, { unscoped: true });
+      const stream = result.exitCode === 0 ? process.stdout : process.stderr;
+      stream.write(result.output);
+      return result.exitCode;
+    }
 
     if (unguarded) {
       const [inputPath] = positional;
@@ -214,7 +249,7 @@ export function main(args: readonly string[] = process.argv.slice(2)): number {
 
     if (!isExplainKind(kind) || !target) {
       process.stderr.write(
-        'fw: usage: fw explain component|mutation|query|page <target> [graph.json] | fw explain --unguarded [graph.json]\n',
+        'fw: usage: fw explain component|mutation|query|page <target> [graph.json] | fw explain --unguarded [graph.json] | fw explain --unscoped [graph.json]\n',
       );
       return 1;
     }
@@ -232,7 +267,10 @@ export function main(args: readonly string[] = process.argv.slice(2)): number {
 
 export type ExplainKind = 'component' | 'mutation' | 'page' | 'query';
 
-export type FwExplainOptions = FwTargetExplainOptions | FwUnguardedExplainOptions;
+export type FwExplainOptions =
+  | FwTargetExplainOptions
+  | FwUnguardedExplainOptions
+  | FwUnscopedExplainOptions;
 
 export interface FwTargetExplainOptions {
   kind: ExplainKind;
@@ -244,26 +282,34 @@ export interface FwUnguardedExplainOptions {
   unguarded: true;
 }
 
+export interface FwUnscopedExplainOptions {
+  unscoped: true;
+}
+
 export function fwExplain(input: FwExplainInput, options: FwExplainOptions): FwCheckResult {
   const lines = [explainOutputVersion];
 
-  if ('unguarded' in options) {
-    const mutations = unguardedMutations(input.mutations ?? []);
-    lines.push('UNGUARDED');
+  if ('unscoped' in options) {
+    const findings = unscopedAccesses(input);
+    lines.push('UNSCOPED');
 
-    for (const mutation of mutations) {
-      lines.push(
-        [
-          `MUTATION ${mutation.key}`,
-          `guards=${list(mutation.guards)}`,
-          `writes=${list(mutation.writes)}`,
-          `invalidates=${list(mutation.invalidates)}`,
-          `manual-invalidates=${list(mutation.manualInvalidates)}`,
-        ].join(' '),
-      );
+    for (const finding of findings) {
+      lines.push(unscopedLine(finding));
     }
 
-    lines.push(`SUMMARY total=${mutations.length}`);
+    lines.push(`SUMMARY total=${findings.length}`);
+    return ok(lines);
+  }
+
+  if ('unguarded' in options) {
+    const accesses = unguardedAccesses(input);
+    lines.push('UNGUARDED');
+
+    for (const access of accesses) {
+      lines.push(unguardedLine(access));
+    }
+
+    lines.push(`SUMMARY total=${accesses.length}`);
     return ok(lines);
   }
 
@@ -370,7 +416,7 @@ export function fwExplain(input: FwExplainInput, options: FwExplainOptions): FwC
 }
 
 export function fwAudit(input: FwExplainInput): FwCheckResult {
-  const unguarded = unguardedMutations(input.mutations ?? []);
+  const unguarded = unguardedAccesses(input);
   const manualInvalidates = (input.mutations ?? []).filter(
     (mutation) => (mutation.manualInvalidates?.length ?? 0) > 0,
   );
@@ -379,16 +425,8 @@ export function fwAudit(input: FwExplainInput): FwCheckResult {
   if (unguarded.length > 0) {
     lines.push('UNGUARDED');
 
-    for (const mutation of unguarded) {
-      lines.push(
-        [
-          `MUTATION ${mutation.key}`,
-          `guards=${list(mutation.guards)}`,
-          `writes=${list(mutation.writes)}`,
-          `invalidates=${list(mutation.invalidates)}`,
-          `manual-invalidates=${list(mutation.manualInvalidates)}`,
-        ].join(' '),
-      );
+    for (const access of unguarded) {
+      lines.push(unguardedLine(access));
     }
   }
 
@@ -437,6 +475,10 @@ export function fwCheck(input: FwCheckInput): FwCheckResult {
     lines.push(line);
   }
 
+  for (const finding of unscopedAccesses(input)) {
+    lines.push(`WARN ${unscopedLine(finding)}`);
+  }
+
   for (const lint of input.lints ?? []) {
     lines.push(`LINT ${lint.code} ${lint.site} ${lintMessage(lint)}`);
   }
@@ -459,8 +501,8 @@ export function fwCheck(input: FwCheckInput): FwCheckResult {
     );
   }
 
-  for (const mutation of unguardedMutations(input.mutations ?? [])) {
-    lines.push(`WARN UNGUARDED ${mutation.key} mutation is reachable without an auth guard.`);
+  for (const access of unguardedAccesses(input)) {
+    lines.push(unguardedWarningLine(access));
   }
 
   for (const mutation of input.mutations ?? []) {
@@ -609,8 +651,51 @@ function listMutationUpdates(
   return updates.map((update) => `${update.query}->${list(update.consumers)}`).join('; ');
 }
 
-function unguardedMutations(mutations: readonly MutationExplain[]): MutationExplain[] {
-  return mutations.filter((mutation) => !hasAuthGuard(mutation.guards ?? []));
+function unguardedAccesses(input: FwExplainInput): UnguardedAccessFact[] {
+  return [
+    ...(input.mutations ?? [])
+      .filter((mutation) => !hasAuthGuard(mutation.guards ?? []))
+      .map((mutation) => ({
+        detail: [
+          `guards=${list(mutation.guards)}`,
+          `writes=${list(mutation.writes)}`,
+          `invalidates=${list(mutation.invalidates)}`,
+          `manual-invalidates=${list(mutation.manualInvalidates)}`,
+        ].join(' '),
+        kind: 'mutation' as const,
+        name: mutation.key,
+      })),
+    ...(input.queries ?? [])
+      .filter((query) => query.guards !== undefined && !hasAuthGuard(query.guards))
+      .map((query) => ({
+        detail: [`guards=${list(query.guards)}`, `reads=${list(query.domains)}`].join(' '),
+        kind: 'query' as const,
+        name: query.query,
+      })),
+    ...(input.pages ?? [])
+      .filter((page) => page.guards !== undefined && !hasAuthGuard(page.guards))
+      .map((page) => ({
+        detail: [`guards=${list(page.guards)}`, `queries=${list(page.queries)}`].join(' '),
+        kind: 'page' as const,
+        name: page.route,
+      })),
+  ].sort(compareUnguardedAccess);
+}
+
+function unguardedLine(access: UnguardedAccessFact): string {
+  return `${access.kind.toUpperCase()} ${access.name} ${access.detail}`;
+}
+
+function unguardedWarningLine(access: UnguardedAccessFact): string {
+  if (access.kind === 'mutation') {
+    return `WARN UNGUARDED ${access.name} mutation is reachable without an auth guard.`;
+  }
+
+  return `WARN UNGUARDED ${access.kind} ${access.name} is reachable without an auth guard.`;
+}
+
+function compareUnguardedAccess(left: UnguardedAccessFact, right: UnguardedAccessFact): number {
+  return left.kind.localeCompare(right.kind) || left.name.localeCompare(right.name);
 }
 
 function hasAuthGuard(guards: readonly string[]): boolean {
@@ -698,6 +783,39 @@ function updateCoverageLines(coverage: readonly UpdateCoverageFact[]): string[] 
             .filter(Boolean)
             .join(' '),
     );
+}
+
+function unscopedAccesses(input: FwCheckInput): ScopeAuditFact[] {
+  const ownerDomains = new Set((input.ownerDomains ?? []).map((owner) => owner.domain));
+
+  return (input.scopeAudits ?? [])
+    .filter((fact) => ownerDomains.has(fact.domain))
+    .filter((fact) => fact.scope !== 'session')
+    .sort(compareScopeAudit);
+}
+
+function unscopedLine(fact: ScopeAuditFact): string {
+  return [
+    'UNSCOPED',
+    fact.kind.toUpperCase(),
+    fact.name,
+    `domain=${fact.domain}`,
+    `scope=${fact.scope}`,
+    `site=${fact.site}`,
+    fact.detail ?? '',
+  ]
+    .filter(Boolean)
+    .join(' ');
+}
+
+function compareScopeAudit(left: ScopeAuditFact, right: ScopeAuditFact): number {
+  return (
+    left.kind.localeCompare(right.kind) ||
+    left.name.localeCompare(right.name) ||
+    left.domain.localeCompare(right.domain) ||
+    left.site.localeCompare(right.site) ||
+    left.scope.localeCompare(right.scope)
+  );
 }
 
 function compareUpdateCoverage(left: UpdateCoverageFact, right: UpdateCoverageFact): number {
