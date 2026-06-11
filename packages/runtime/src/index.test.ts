@@ -911,6 +911,104 @@ describe('runtime loader', () => {
     expect(element.getAttribute('fw-state')).toBe('{"count":3}');
   });
 
+  it('serializes overlapping delegated state writes for the same island', async () => {
+    let releaseFirst: (() => void) | undefined;
+    const firstCanFinish = new Promise<void>((resolve) => {
+      releaseFirst = resolve;
+    });
+    const calls: number[] = [];
+    const handler = vi.fn(async (_event, ctx: { state: { count: number } }) => {
+      calls.push(ctx.state.count);
+      if (calls.length === 1) {
+        await firstCanFinish;
+      }
+      ctx.state.count += 1;
+    });
+    const importModule = vi.fn(async () => ({ increment: handler }));
+    const element = new FakeElement({
+      'fw-state': '{"count":0}',
+      'on:click': '/c/counter.client.js#increment',
+    });
+
+    const first = dispatchDelegatedEvent({ target: element, type: 'click' }, importModule);
+    const second = dispatchDelegatedEvent({ target: element, type: 'click' }, importModule);
+    await vi.waitFor(() => expect(handler).toHaveBeenCalledTimes(1));
+
+    expect(handler).toHaveBeenCalledTimes(1);
+    releaseFirst?.();
+    await Promise.all([first, second]);
+
+    expect(calls).toEqual([0, 1]);
+    expect(element.getAttribute('fw-state')).toBe('{"count":2}');
+  });
+
+  it('does not serialize delegated state writes across different islands', async () => {
+    let releaseFirst: (() => void) | undefined;
+    const firstCanFinish = new Promise<void>((resolve) => {
+      releaseFirst = resolve;
+    });
+    const handler = vi.fn(async (_event, ctx: { state: { count: number } }) => {
+      if (ctx.state.count === 0) {
+        await firstCanFinish;
+      }
+      ctx.state.count += 1;
+    });
+    const importModule = vi.fn(async () => ({ increment: handler }));
+    const firstElement = new FakeElement({
+      'fw-state': '{"count":0}',
+      'on:click': '/c/counter.client.js#increment',
+    });
+    const secondElement = new FakeElement({
+      'fw-state': '{"count":10}',
+      'on:click': '/c/counter.client.js#increment',
+    });
+
+    const first = dispatchDelegatedEvent({ target: firstElement, type: 'click' }, importModule);
+    const second = dispatchDelegatedEvent({ target: secondElement, type: 'click' }, importModule);
+    await vi.waitFor(() => expect(handler).toHaveBeenCalledTimes(2));
+
+    expect(handler).toHaveBeenCalledTimes(2);
+    await second;
+    expect(secondElement.getAttribute('fw-state')).toBe('{"count":11}');
+
+    releaseFirst?.();
+    await first;
+    expect(firstElement.getAttribute('fw-state')).toBe('{"count":1}');
+  });
+
+  it('continues the delegated state queue after a handler rejects', async () => {
+    let releaseFirst: (() => void) | undefined;
+    const firstCanFinish = new Promise<void>((resolve) => {
+      releaseFirst = resolve;
+    });
+    const first = vi.fn(async (_event, ctx: { state: { count: number } }) => {
+      ctx.state.count += 1;
+      await firstCanFinish;
+      throw new Error('boom');
+    });
+    const second = vi.fn((_event, ctx: { state: { count: number } }) => {
+      ctx.state.count += 1;
+    });
+    const importModule = vi.fn(async (url: string) =>
+      url === '/c/fail.client.js' ? { first } : { second },
+    );
+    const element = new FakeElement({
+      'fw-state': '{"count":0}',
+      'on:click': '/c/fail.client.js#first',
+    });
+
+    const failed = dispatchDelegatedEvent({ target: element, type: 'click' }, importModule);
+    await vi.waitFor(() => expect(first).toHaveBeenCalledTimes(1));
+    element.setAttribute('on:click', '/c/pass.client.js#second');
+    const passed = dispatchDelegatedEvent({ target: element, type: 'click' }, importModule);
+
+    releaseFirst?.();
+    await expect(failed).rejects.toThrow('boom');
+    await passed;
+
+    expect(element.getAttribute('fw-state')).toBe('{"count":2}');
+  });
+
   it('scopes ctx.signal to the island and aborts when fragment morph removes it', async () => {
     const signals: AbortSignal[] = [];
     const handler = vi.fn((_event, ctx: { signal: AbortSignal }) => {

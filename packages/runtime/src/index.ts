@@ -591,7 +591,31 @@ export async function dispatchDelegatedEvent(
   const element = event.target?.closest?.(`[on\\:${event.type}]`);
   if (!element) return;
 
-  const stateHost = findElementStateHost(element);
+  const stateHost = findElementStateHost(element) ?? element;
+  const previous = delegatedStateQueues.get(stateHost) ?? Promise.resolve();
+  const dispatch = previous
+    .catch(() => undefined)
+    .then(() => dispatchDelegatedEventForElement(event, importModule, element, stateHost));
+  const queued = dispatch
+    .catch(() => undefined)
+    .finally(() => {
+      if (delegatedStateQueues.get(stateHost) === queued) {
+        delegatedStateQueues.delete(stateHost);
+      }
+    });
+  delegatedStateQueues.set(stateHost, queued);
+
+  await dispatch;
+}
+
+const delegatedStateQueues = new WeakMap<EventElementLike, Promise<void>>();
+
+async function dispatchDelegatedEventForElement(
+  event: DelegatedEvent,
+  importModule: ImportHandlerModule,
+  element: EventElementLike,
+  stateHost: EventElementLike,
+): Promise<void> {
   const state = readElementState(element);
   const context: HandlerContext = {
     params: readElementParams(element),
@@ -612,7 +636,7 @@ export async function dispatchDelegatedEvent(
       await (fn as ClientHandler)(event as Event, context);
     }
   } finally {
-    writeElementState(stateHost ?? element, state);
+    writeElementState(stateHost, state);
   }
 }
 
