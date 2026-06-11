@@ -143,8 +143,13 @@ export interface EventTargetLike {
 export interface EventElementLike {
   closest?: (selector: string) => EventElementLike | null;
   getAttribute(name: string): string | null;
+  querySelectorAll?: (selector: string) => Iterable<UploadProgressElementLike>;
   setAttribute?: (name: string, value: string) => void;
   attributes?: Iterable<{ name: string; value: string }>;
+}
+
+export interface UploadProgressElementLike {
+  setAttribute(name: string, value: string): void;
 }
 
 export interface JisoLoaderOptions {
@@ -267,9 +272,10 @@ export async function dispatchEnhancedFormSubmit(
     fetch: options.fetch,
     form,
     formData: options.formData ? options.formData(form) : new FormData(form as HTMLFormElement),
-    ...(options.onUploadProgress
-      ? { onUploadProgress: (progress) => options.onUploadProgress?.(progress, form) }
-      : {}),
+    onUploadProgress: (progress) => {
+      updateUploadProgressElements(form, progress);
+      options.onUploadProgress?.(progress, form);
+    },
     ...(options.pendingRoot ? { pendingQueries: readDeps(form.getAttribute('fw-deps')) } : {}),
     ...(options.pendingRoot ? { pendingRoot: options.pendingRoot } : {}),
     root: options.root,
@@ -287,6 +293,20 @@ function isEnhancedForm(form: EventElementLike): boolean {
     form.getAttribute('data-enhance') !== null ||
     form.getAttribute('data-mutation') !== null
   );
+}
+
+function updateUploadProgressElements(form: EventElementLike, progress: UploadProgress): void {
+  const progressElements = form.querySelectorAll?.('[fw-upload-progress]') ?? [];
+  const total = progress.total ?? 100;
+  const value =
+    progress.total && progress.total > 0
+      ? Math.min(100, Math.round((progress.loaded / progress.total) * 100))
+      : progress.loaded;
+
+  for (const element of progressElements) {
+    element.setAttribute('value', String(value));
+    element.setAttribute('max', progress.total ? '100' : String(total));
+  }
 }
 
 function filterRefetchEligibleQueries(

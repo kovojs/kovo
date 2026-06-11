@@ -84,11 +84,16 @@ class FakeElement implements EventElementLike {
 class FakeFormElement extends FakeElement {
   action: string;
   method: string | undefined;
+  progressElements: FakeElement[] = [];
 
   constructor(attributes: Record<string, string>, options: { action: string; method?: string }) {
     super(attributes);
     this.action = options.action;
     this.method = options.method;
+  }
+
+  querySelectorAll(selector: string): Iterable<FakeElement> {
+    return selector === '[fw-upload-progress]' ? this.progressElements : [];
   }
 }
 
@@ -370,6 +375,8 @@ describe('runtime loader', () => {
         method: 'post',
       },
     );
+    const progressElement = new FakeElement({ 'fw-upload-progress': '', max: '100', value: '0' });
+    form.progressElements = [progressElement];
     mutationRoot.deps = [{ deps: 'cart', id: 'cart-badge' }];
     mutationRoot.targets.set('cart-badge', new FakeMorphTarget());
     formData.set('productId', 'p1');
@@ -427,6 +434,8 @@ describe('runtime loader', () => {
       onUploadProgress: expect.any(Function),
     });
     expect(uploadProgress).toHaveBeenCalledWith({ loaded: 512, total: 1024 }, form);
+    expect(progressElement.getAttribute('value')).toBe('50');
+    expect(progressElement.getAttribute('max')).toBe('100');
     expect(store.get('cart')).toEqual({ count: 1 });
     expect(mutationRoot.targets.get('cart-badge')?.html).toBe('<cart-badge>1</cart-badge>');
     expect(pendingForm.attributes).not.toHaveProperty('fw-pending');

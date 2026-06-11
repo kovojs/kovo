@@ -494,8 +494,10 @@ void test('D4 commerce adopt-dont-invent features stay represented', async () =>
   assert.match(commerceTests, /coerces commerce receipt uploads through s\.file\(\)/);
   assert.match(commerceTests, /fw-upload-progress value="0" max="100"/);
   assert.match(runtimeSource, /onUploadProgress\?: \(progress: UploadProgress/);
+  assert.match(runtimeSource, /updateUploadProgressElements\(form, progress\)/);
   assert.match(runtimeSource, /stampEnhancedMutationPending\(options, true\)/);
   assert.match(runtimeTests, /onUploadProgress: uploadProgress/);
+  assert.match(runtimeTests, /progressElement\.getAttribute\('value'\)/);
   assert.match(runtimeTests, /'fw-deps': 'order'/);
   assert.match(
     commerceTests,
@@ -640,6 +642,11 @@ void test('Drizzle pinned conformance suite is an explicit gate', async () => {
   assert.match(conformanceTest, /pins local conditional table resolution/);
   assert.match(drizzleTests, /folds local helper writes and reads into caller summaries/);
   assert.match(drizzleTests, /dedupes recursive helper summaries at a fixed point/);
+  assert.match(drizzleTests, /resolves namespace-imported Drizzle schema identifiers/);
+  assert.match(drizzleTests, /resolves named import and re-export Drizzle schema aliases/);
+  assert.match(drizzleTests, /recognizes renamed Drizzle receiver parameters/);
+  assert.match(drizzleTests, /recognizes destructured Drizzle receiver aliases/);
+  assert.match(drizzleTests, /marks external helpers receiving a Drizzle receiver as FW406/);
   assert.equal(
     JSON.parse(await readProjectFile('conformance/drizzle-pin/package.json')).devDependencies[
       'drizzle-orm'

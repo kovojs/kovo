@@ -217,14 +217,21 @@ export function extractTouchGraphFromSource(files: readonly SourceFileInput[]): 
     }
   }
   for (const file of files) {
+    for (const alias of exportTableAliases(file.source)) {
+      appendTableEntries(tables, alias.local, tables.get(alias.imported) ?? []);
+    }
+  }
+  for (const file of files) {
     for (const identifier of extractUnresolvedConditionalIdentifiers(file.source, tables)) {
       unresolvedIdentifiers.add(identifier);
     }
   }
 
   for (const file of files) {
+    const fileTables = tablesForFile(file.source, tables);
     const functions = extractFunctions(file.source);
     const functionsByName = new Map(functions.map((fn) => [fn.name, fn]));
+    const localFunctionNames = new Set(functionsByName.keys());
     const callsByName = new Map(
       functions.map((fn) => [
         fn.name,
@@ -234,7 +241,7 @@ export function extractTouchGraphFromSource(files: readonly SourceFileInput[]): 
     const summaries = new Map(
       functions.map((fn) => [
         fn.name,
-        directSummaryForFunction(fn, file, tables, unresolvedIdentifiers),
+        directSummaryForFunction(fn, file, fileTables, unresolvedIdentifiers, localFunctionNames),
       ]),
     );
 
@@ -281,6 +288,7 @@ interface ExtractedFunction {
   body: string;
   bodyStart: number;
   name: string;
+  params: string;
 }
 
 interface ExtractedWriteCall {
@@ -312,12 +320,14 @@ function directSummaryForFunction(
   file: SourceFileInput,
   tables: ReadonlyMap<string, readonly ExtractedTable[]>,
   unresolvedIdentifiers: ReadonlySet<string>,
+  localFunctionNames: ReadonlySet<string>,
 ): FunctionTouchSummary {
   const reads: ReadSummaryInput[] = [];
   const writes: WriteSummaryInput[] = [];
   const unresolved: UnresolvedSummaryInput[] = [];
+  const receiverNames = drizzleReceiverNames(fn.params, fn.body);
 
-  for (const call of extractDrizzleWriteCalls(fn.body)) {
+  for (const call of extractDrizzleWriteCalls(fn.body, receiverNames)) {
     const site = `${file.fileName}:${lineForIndex(file.source, fn.bodyStart + call.index)}`;
     const resolvedTables = tables.get(call.tableExpression) ?? [];
 
@@ -381,6 +391,13 @@ function directSummaryForFunction(
     unresolved.push({
       operation: call.operation,
       site,
+    });
+  }
+
+  for (const call of extractExternalDbArgumentCalls(fn.body, receiverNames, localFunctionNames)) {
+    unresolved.push({
+      operation: call.name,
+      site: `${file.fileName}:${lineForIndex(file.source, fn.bodyStart + call.index)}`,
     });
   }
 
@@ -488,6 +505,79 @@ function extractTables(source: string): ExtractedTableDeclaration[] {
   return tables;
 }
 
+function tablesForFile(
+  source: string,
+  tables: ReadonlyMap<string, readonly ExtractedTable[]>,
+): Map<string, ExtractedTable[]> {
+  const scoped = new Map([...tables].map(([identifier, entries]) => [identifier, [...entries]]));
+
+  for (const namespace of namespaceImportAliases(source)) {
+    for (const [identifier, entries] of tables) {
+      appendTableEntries(scoped, `${namespace}.${identifier}`, entries);
+    }
+  }
+  for (const alias of importExportTableAliases(source)) {
+    appendTableEntries(scoped, alias.local, tables.get(alias.imported) ?? []);
+  }
+
+  return scoped;
+}
+
+function namespaceImportAliases(source: string): string[] {
+  const aliases: string[] = [];
+  const pattern = /import\s+\*\s+as\s+(?<alias>[A-Za-z_$][\w$]*)\s+from\s+["'][^"']+["']/g;
+
+  for (const match of source.matchAll(pattern)) {
+    const alias = match.groups?.alias;
+    if (alias) aliases.push(alias);
+  }
+
+  return aliases;
+}
+
+function importExportTableAliases(source: string): { imported: string; local: string }[] {
+  const aliases: { imported: string; local: string }[] = [];
+  const pattern =
+    /\b(?:import|export)\s*\{\s*(?<specifiers>[^}]+)\s*\}(?:\s*from\s*["'][^"']+["'])?/g;
+
+  for (const match of source.matchAll(pattern)) {
+    const specifiers = match.groups?.specifiers;
+    if (!specifiers) continue;
+
+    for (const specifier of specifiers.split(',')) {
+      const parts = /^(?<imported>[A-Za-z_$][\w$]*)(?:\s+as\s+(?<local>[A-Za-z_$][\w$]*))?$/.exec(
+        specifier.trim(),
+      )?.groups;
+      const imported = parts?.imported;
+      const local = parts?.local;
+      if (imported && local && imported !== local) aliases.push({ imported, local });
+    }
+  }
+
+  return aliases;
+}
+
+function exportTableAliases(source: string): { imported: string; local: string }[] {
+  const aliases: { imported: string; local: string }[] = [];
+  const pattern = /\bexport\s*\{\s*(?<specifiers>[^}]+)\s*\}(?:\s*from\s*["'][^"']+["'])?/g;
+
+  for (const match of source.matchAll(pattern)) {
+    const specifiers = match.groups?.specifiers;
+    if (!specifiers) continue;
+
+    for (const specifier of specifiers.split(',')) {
+      const parts = /^(?<imported>[A-Za-z_$][\w$]*)(?:\s+as\s+(?<local>[A-Za-z_$][\w$]*))?$/.exec(
+        specifier.trim(),
+      )?.groups;
+      const imported = parts?.imported;
+      const local = parts?.local;
+      if (imported && local && imported !== local) aliases.push({ imported, local });
+    }
+  }
+
+  return aliases;
+}
+
 function tableDeclarationFromMatch(
   match: RegExpMatchArray,
 ): { identifier: string; initializer: string } | undefined {
@@ -548,7 +638,7 @@ function conditionalBranches(initializer: string): string[] {
 function extractFunctions(source: string): ExtractedFunction[] {
   const functions: ExtractedFunction[] = [];
   const declarations =
-    /(?:export\s+)?(?:async\s+)?function\s+(?<name>[A-Za-z_$][\w$]*)\s*\([^)]*\)\s*\{/g;
+    /(?:export\s+)?(?:async\s+)?function\s+(?<name>[A-Za-z_$][\w$]*)\s*\((?<params>[^)]*)\)\s*\{/g;
 
   for (const match of source.matchAll(declarations)) {
     const groups = match.groups;
@@ -565,6 +655,7 @@ function extractFunctions(source: string): ExtractedFunction[] {
       body: source.slice(openBrace + 1, closeBrace),
       bodyStart: openBrace + 1,
       name,
+      params: groups.params ?? '',
     });
   }
 
@@ -603,18 +694,22 @@ function extractLocalFunctionCalls(source: string): string[] {
   return [...new Set(calls)];
 }
 
-function extractDrizzleWriteCalls(source: string): ExtractedWriteCall[] {
+function extractDrizzleWriteCalls(
+  source: string,
+  receiverNames: ReadonlySet<string> = new Set(['db', 'tx']),
+): ExtractedWriteCall[] {
   const calls: ExtractedWriteCall[] = [];
   const callPattern =
-    /\b(?:db|tx)\s*\.\s*(?<operation>insert|update|delete)\s*\(\s*(?<tableExpression>[^)]+?)\s*\)/g;
+    /(?<receiver>[A-Za-z_$][\w$]*)\s*\.\s*(?<operation>insert|update|delete)\s*\(\s*(?<tableExpression>[^)]+?)\s*\)/g;
 
   for (const match of source.matchAll(callPattern)) {
     const groups = match.groups;
     if (!groups || match.index === undefined) continue;
 
+    const receiver = groups.receiver;
     const operation = groups.operation;
     const tableExpression = groups.tableExpression;
-    if (!operation || !tableExpression) continue;
+    if (!receiver || !receiverNames.has(receiver) || !operation || !tableExpression) continue;
     const statement = source.slice(match.index, statementEnd(source, match.index));
 
     calls.push({
@@ -627,6 +722,77 @@ function extractDrizzleWriteCalls(source: string): ExtractedWriteCall[] {
   }
 
   return calls;
+}
+
+interface ExternalDbArgumentCall {
+  index: number;
+  name: string;
+}
+
+function extractExternalDbArgumentCalls(
+  source: string,
+  receiverNames: ReadonlySet<string>,
+  localFunctionNames: ReadonlySet<string>,
+): ExternalDbArgumentCall[] {
+  const calls: ExternalDbArgumentCall[] = [];
+  const ignored = new Set([
+    'delete',
+    'eq',
+    'for',
+    'function',
+    'if',
+    'insert',
+    'jiso',
+    'pgTable',
+    'return',
+    'select',
+    'switch',
+    'update',
+    'while',
+  ]);
+  const pattern = /\b(?<name>[A-Za-z_$][\w$]*)\s*\((?<args>[^)]*)\)/g;
+
+  for (const match of source.matchAll(pattern)) {
+    const name = match.groups?.name;
+    const args = match.groups?.args;
+    if (!name || !args || match.index === undefined) continue;
+    if (ignored.has(name) || localFunctionNames.has(name)) continue;
+
+    const previous = source.slice(0, match.index).trimEnd().at(-1);
+    if (previous === '.') continue;
+
+    const passedReceivers = splitTopLevelArgs(args).some((arg) => receiverNames.has(arg.trim()));
+    if (passedReceivers) calls.push({ index: match.index, name });
+  }
+
+  return calls;
+}
+
+function drizzleReceiverNames(params: string, body = ''): Set<string> {
+  const names = new Set(['db', 'tx']);
+
+  for (const param of splitTopLevelArgs(params)) {
+    const trimmed = param.trim();
+    const identifier = /^(?<name>[A-Za-z_$][\w$]*)\b/.exec(trimmed)?.groups?.name;
+    if (identifier && isLikelyDrizzleReceiver(identifier)) names.add(identifier);
+
+    for (const match of trimmed.matchAll(/\b(?<name>db|tx)\b/g)) {
+      const name = match.groups?.name;
+      if (name) names.add(name);
+    }
+  }
+  for (const match of body.matchAll(
+    /\b(?:const|let)\s*\{\s*(?:db|tx)\s*:\s*(?<alias>[A-Za-z_$][\w$]*)\s*\}/g,
+  )) {
+    const alias = match.groups?.alias;
+    if (alias) names.add(alias);
+  }
+
+  return names;
+}
+
+function isLikelyDrizzleReceiver(name: string): boolean {
+  return /^(db|tx|trx|database|client|conn|connection|writer|transaction)$/.test(name);
 }
 
 function extractReadSources(source: string, operation: string): ExtractedReadSource[] {
@@ -722,6 +888,45 @@ function argumentKey(
 
 function appendTable<Table>(tables: Map<string, Table[]>, identifier: string, table: Table): void {
   tables.set(identifier, [...(tables.get(identifier) ?? []), table]);
+}
+
+function appendTableEntries<Table>(
+  tables: Map<string, Table[]>,
+  identifier: string,
+  entries: readonly Table[],
+): void {
+  const current = tables.get(identifier) ?? [];
+  const next = [...current];
+  const keys = new Set(current.map((entry) => JSON.stringify(entry)));
+
+  for (const entry of entries) {
+    const key = JSON.stringify(entry);
+    if (keys.has(key)) continue;
+
+    keys.add(key);
+    next.push(entry);
+  }
+
+  tables.set(identifier, next);
+}
+
+function splitTopLevelArgs(source: string): string[] {
+  const args: string[] = [];
+  let depth = 0;
+  let start = 0;
+
+  for (let index = 0; index < source.length; index += 1) {
+    const char = source[index];
+    if (char === '(' || char === '{' || char === '[') depth += 1;
+    if (char === ')' || char === '}' || char === ']') depth -= 1;
+    if (char !== ',' || depth !== 0) continue;
+
+    args.push(source.slice(start, index));
+    start = index + 1;
+  }
+
+  args.push(source.slice(start));
+  return args.filter((arg) => arg.trim().length > 0);
 }
 
 function findMatchingBrace(source: string, openBrace: number): number {

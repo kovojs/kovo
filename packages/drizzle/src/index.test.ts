@@ -573,6 +573,190 @@ export const tableDomains = {
     ]);
   });
 
+  it('resolves namespace-imported Drizzle schema identifiers', () => {
+    const graph = extractTouchGraphFromSource([
+      {
+        fileName: 'schema.ts',
+        source: `
+          export const products = pgTable("products", {}, jiso({ domain: "product", key: "id" }));
+        `,
+      },
+      {
+        fileName: 'product.domain.ts',
+        source: `
+          import * as schema from "./schema";
+
+          export async function syncProduct(db, productId) {
+            await db.update(schema.products).set({ reserved: true }).where(eq(schema.products.id, productId));
+          }
+        `,
+      },
+    ]);
+
+    expect(graph).toEqual({
+      syncProduct: {
+        reads: [],
+        touches: [
+          {
+            domain: 'product',
+            keys: 'arg:productId',
+            site: 'product.domain.ts:5',
+            via: 'products',
+          },
+        ],
+        unresolved: [],
+      },
+    });
+  });
+
+  it('resolves named import and re-export Drizzle schema aliases', () => {
+    const graph = extractTouchGraphFromSource([
+      {
+        fileName: 'schema.ts',
+        source: `
+          export const products = pgTable("products", {}, jiso({ domain: "product", key: "id" }));
+        `,
+      },
+      {
+        fileName: 'tables.ts',
+        source: `
+          export { products as productTable } from "./schema";
+        `,
+      },
+      {
+        fileName: 'product.domain.ts',
+        source: `
+          import { products as importedProducts } from "./schema";
+          import { productTable } from "./tables";
+
+          export async function syncProduct(db, productId) {
+            await db.update(importedProducts).set({ reserved: true }).where(eq(importedProducts.id, productId));
+            await db.delete(productTable).where(eq(productTable.id, productId));
+          }
+        `,
+      },
+    ]);
+
+    expect(graph).toEqual({
+      syncProduct: {
+        reads: [],
+        touches: [
+          {
+            domain: 'product',
+            keys: 'arg:productId',
+            site: 'product.domain.ts:6',
+            via: 'products',
+          },
+          {
+            domain: 'product',
+            keys: 'arg:productId',
+            site: 'product.domain.ts:7',
+            via: 'products',
+          },
+        ],
+        unresolved: [],
+      },
+    });
+  });
+
+  it('recognizes renamed Drizzle receiver parameters', () => {
+    const graph = extractTouchGraphFromSource([
+      {
+        fileName: 'cart.domain.ts',
+        source: `
+          export const cartItems = pgTable("cart_items", {}, jiso({ domain: "cart", key: "productId" }));
+
+          export async function addItem(database, productId) {
+            await database.insert(cartItems).values({ productId });
+          }
+        `,
+      },
+    ]);
+
+    expect(graph).toEqual({
+      addItem: {
+        reads: [],
+        touches: [
+          {
+            domain: 'cart',
+            keys: null,
+            site: 'cart.domain.ts:5',
+            via: 'cart_items',
+          },
+        ],
+        unresolved: [],
+      },
+    });
+  });
+
+  it('recognizes destructured Drizzle receiver aliases', () => {
+    const graph = extractTouchGraphFromSource([
+      {
+        fileName: 'cart.domain.ts',
+        source: `
+          export const cartItems = pgTable("cart_items", {}, jiso({ domain: "cart", key: "productId" }));
+
+          export async function addItem(ctx, productId) {
+            const { db: database } = ctx;
+            await database.update(cartItems).set({ productId }).where(eq(cartItems.productId, productId));
+          }
+        `,
+      },
+    ]);
+
+    expect(graph).toEqual({
+      addItem: {
+        reads: [],
+        touches: [
+          {
+            domain: 'cart',
+            keys: 'arg:productId',
+            site: 'cart.domain.ts:6',
+            via: 'cart_items',
+          },
+        ],
+        unresolved: [],
+      },
+    });
+  });
+
+  it('marks external helpers receiving a Drizzle receiver as FW406', () => {
+    const graph = extractTouchGraphFromSource([
+      {
+        fileName: 'cart.domain.ts',
+        source: `
+          export const cartItems = pgTable("cart_items", {}, jiso({ domain: "cart", key: "productId" }));
+
+          export async function addItem(db, productId) {
+            await db.insert(cartItems).values({ productId });
+            await writeAudit(db, productId);
+          }
+        `,
+      },
+    ]);
+
+    expect(graph).toEqual({
+      addItem: {
+        reads: [],
+        touches: [
+          {
+            domain: 'cart',
+            keys: null,
+            site: 'cart.domain.ts:5',
+            via: 'cart_items',
+          },
+        ],
+        unresolved: [
+          {
+            code: 'FW406',
+            message: 'Statically un-analyzable write site; manual touches required.',
+            site: 'cart.domain.ts:6',
+          },
+        ],
+      },
+    });
+  });
+
   it('over-approximates local conditional table initializers', () => {
     const graph = extractTouchGraphFromSource([
       {
