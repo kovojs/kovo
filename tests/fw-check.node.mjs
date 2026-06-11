@@ -33,6 +33,7 @@ import {
   mutation,
   notFound,
   query,
+  renderDeferredStream,
   renderQueryEndpointResponse,
   renderQueryRegistryEndpointResponse,
   renderDocument,
@@ -47,6 +48,7 @@ import {
   renderRoutePageResponse,
   route as serverRoute,
   s,
+  stylesheetsForTargets,
 } from '../dist/server/src/index.mjs';
 import { href, Link, redirect, route } from '../dist/core/src/index.mjs';
 
@@ -2043,50 +2045,84 @@ void test('P3 commerce mutation runs through the transaction lifecycle', async (
 });
 
 void test('D1 commerce enhanced fragments carry Tailwind stylesheet hints', async () => {
-  const commerceSource = await readProjectFile('examples/commerce/src/app.ts');
-  const commerceTests = await readProjectFile('examples/commerce/src/app.test.ts');
-  const compilerCssSource = await readProjectFile('packages/compiler/src/css.ts');
-  const compilerSource = await readProjectFile('packages/compiler/src/index.ts');
-  const compilerTests = await readProjectFile('packages/compiler/src/index.test.ts');
-  const serverHintsSource = await readProjectFile('packages/server/src/hints.ts');
-  const serverSource = await readProjectFile('packages/server/src/index.ts');
-  const serverTests = await readProjectFile('packages/server/src/index.test.ts');
+  const stylesheetManifest = [
+    {
+      criticalCss: 'cart-badge { color: teal; }</style> cart-badge { display: block; }',
+      fragmentTargets: ['cart-badge'],
+      href: '/assets/tailwind.css',
+    },
+    {
+      fragmentTargets: ['recommendations'],
+      href: '/assets/recommendations.css',
+      preload: false,
+    },
+  ];
 
-  assert.match(commerceSource, /commerceStylesheets = \['\/assets\/tailwind\.css'\] as const/);
-  assert.match(commerceSource, /failureStylesheets: commerceStylesheets/);
-  assert.match(commerceSource, /stylesheets: commerceStylesheets/);
-  assert.match(commerceSource, /renderProductGridDeferredStream/);
-  assert.match(commerceSource, /renderDeferredStream/);
-  assert.match(commerceSource, /stylesheets: commerceStylesheets/);
-  assert.match(commerceSource, /renderFailureFragment: \(failure\) =>/);
-  assert.match(
-    commerceSource,
-    /renderAddToCartFailureFragment\(request\.db, rawInput, failure, request\)/,
+  assert.deepEqual(stylesheetsForTargets(stylesheetManifest, ['cart-badge']), [
+    {
+      criticalCss: 'cart-badge { color: teal; }</style> cart-badge { display: block; }',
+      fragmentTargets: ['cart-badge'],
+      href: '/assets/tailwind.css',
+    },
+  ]);
+
+  const pageHints = renderPageHints({
+    stylesheets: stylesheetsForTargets(stylesheetManifest),
+  });
+  assert.equal(
+    pageHints.html,
+    '<style data-jiso-critical-href="/assets/tailwind.css">cart-badge { color: teal; }<\\/style> cart-badge { display: block; }</style><link rel="stylesheet" href="/assets/tailwind.css"><link rel="stylesheet" href="/assets/recommendations.css">',
   );
-  assert.match(commerceSource, /return renderAddToCartForm\(product, failure, request\)/);
-  assert.match(commerceTests, /response\.body\.match/);
-  assert.match(commerceTests, /toHaveLength\(3\)/);
-  assert.match(commerceTests, /enhanced addToCart failures as a rerendered form fragment/);
+  assert.deepEqual(pageHints.earlyHints, {
+    Link: '</assets/tailwind.css>; rel=preload; as=style',
+  });
+
+  const deferred = renderDeferredStream({
+    chunks: [
+      {
+        fragments: [
+          {
+            html: '<section class="border-slate-200">Ready</section>',
+            stylesheets: stylesheetsForTargets(stylesheetManifest, ['recommendations']),
+            target: 'recommendations',
+          },
+        ],
+      },
+    ],
+    shell: '<!doctype html><main><fw-defer target="recommendations"></fw-defer></main>',
+  });
   assert.match(
-    commerceTests,
-    /streams deferred product grid fragments with Tailwind stylesheet hints/,
+    deferred.body,
+    /<fw-fragment target="recommendations"><link rel="stylesheet" href="\/assets\/recommendations\.css"><section class="border-slate-200">Ready<\/section><\/fw-fragment>/,
   );
-  assert.match(commerceTests, /fw-fragment-target="product-form:p2"/);
-  assert.match(commerceTests, /<link rel="stylesheet" href="\/assets\/tailwind\.css">/);
-  assert.match(commerceTests, /border-slate-200/);
-  assert.match(serverSource, /failureStylesheets\?: readonly \(string \| StylesheetAsset\)\[\]/);
-  assert.match(serverHintsSource, /criticalCss\?: string/);
-  assert.match(serverHintsSource, /data-jiso-critical-href/);
-  assert.match(serverHintsSource, /escapeStyleText/);
-  assert.match(compilerCssSource, /criticalCss\?: string/);
-  assert.match(compilerCssSource, /cssAsset\.criticalCss/);
-  assert.match(compilerSource, /from '\.\/css\.js'/);
-  assert.match(compilerTests, /criticalCss: expect\.stringContaining/);
-  assert.match(serverSource, /renderStylesheetLinks\(wireRequest\.failureStylesheets/);
-  assert.match(serverSource, /error-boundary=.*renderStylesheetLinks\(renderer\.stylesheets/);
-  assert.match(serverTests, /inlines critical component CSS without losing stylesheet identity/);
-  assert.match(serverTests, /delivers late stylesheets with enhanced mutation failure fragments/);
-  assert.match(serverTests, /recommendations\.css/);
+
+  const cart = domain('cart');
+  const addToCart = mutation('cart/add', {
+    csrf: false,
+    errors: {
+      OUT_OF_STOCK: s.object({ availableQuantity: s.number().int().min(0) }),
+    },
+    handler(_input, _request, context) {
+      return context.fail('OUT_OF_STOCK', { availableQuantity: 0 });
+    },
+    input: s.object({ productId: s.string() }),
+    registry: { touches: [cart] },
+  });
+  const failure = await renderMutationEndpointResponse(addToCart, {
+    failureStylesheets: ['/assets/tailwind.css'],
+    failureTarget: 'product-form:p2',
+    headers: { 'FW-Fragment': 'true' },
+    rawInput: { productId: 'p2' },
+    renderFailureFragment: () =>
+      '<form class="border-slate-200"><output role="alert">Only 0 left.</output></form>',
+    request: {},
+  });
+
+  assert.deepEqual(failure, {
+    body: '<fw-fragment target="product-form:p2"><link rel="stylesheet" href="/assets/tailwind.css"><form class="border-slate-200"><output role="alert">Only 0 left.</output></form></fw-fragment>',
+    headers: { 'Content-Type': 'text/vnd.jiso.fragment+html; charset=utf-8' },
+    status: 422,
+  });
 });
 
 void test('D4 commerce adopt-dont-invent features stay represented', async () => {
