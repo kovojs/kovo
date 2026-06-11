@@ -7,6 +7,9 @@ export interface ComponentOptionEntry {
 
 export interface JsxAttributeModel {
   end: number;
+  expression?: string;
+  expressionEnd?: number;
+  expressionStart?: number;
   name: string;
   start: number;
   value?: string;
@@ -57,7 +60,7 @@ export function parseComponentModule(fileName: string, source: string): Componen
       if (model) components.push(model);
     }
     if (ts.isJsxElement(node) || ts.isJsxSelfClosingElement(node)) {
-      jsxElements.push(jsxElementModel(sourceFile, node));
+      jsxElements.push(jsxElementModel(sourceFile, source, node));
     }
 
     ts.forEachChild(node, visit);
@@ -186,6 +189,7 @@ function propertyNameText(name: ts.PropertyName): string | null {
 
 function jsxElementModel(
   sourceFile: ts.SourceFile,
+  source: string,
   node: ts.JsxElement | ts.JsxSelfClosingElement,
 ): JsxElementModel {
   const openingElement = ts.isJsxElement(node) ? node.openingElement : node;
@@ -198,11 +202,13 @@ function jsxElementModel(
       if (!ts.isJsxAttribute(property)) return [];
 
       const value = staticJsxAttributeValue(property);
+      const expression = jsxAttributeExpression(sourceFile, source, property);
       return [
         {
           end: property.getEnd(),
           name: property.name.getText(sourceFile),
           start: property.getStart(sourceFile),
+          ...(expression === null ? {} : expression),
           ...(value === undefined ? {} : { value }),
         },
       ];
@@ -219,6 +225,23 @@ function jsxElementModel(
 function staticJsxAttributeValue(attribute: ts.JsxAttribute): string | undefined {
   const initializer = attribute.initializer;
   return initializer && ts.isStringLiteral(initializer) ? initializer.text : undefined;
+}
+
+function jsxAttributeExpression(
+  sourceFile: ts.SourceFile,
+  source: string,
+  attribute: ts.JsxAttribute,
+): { expression: string; expressionEnd: number; expressionStart: number } | null {
+  const initializer = attribute.initializer;
+  if (!initializer || !ts.isJsxExpression(initializer) || !initializer.expression) return null;
+
+  const expressionStart = initializer.expression.getStart(sourceFile);
+  const expressionEnd = initializer.expression.getEnd();
+  return {
+    expression: source.slice(expressionStart, expressionEnd).trim(),
+    expressionEnd,
+    expressionStart,
+  };
 }
 
 function arrowObjectPatternKeys(expression: ts.Expression): string[] {

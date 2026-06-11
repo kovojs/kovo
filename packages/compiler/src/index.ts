@@ -699,38 +699,27 @@ function eventAttributes(source: string): Array<{
     expression: string;
     tag: string;
   }> = [];
-  const tagPattern = /<(?<tag>[A-Za-z][A-Za-z0-9-]*)\b/g;
 
-  for (const tagMatch of source.matchAll(tagPattern)) {
-    const tag = tagMatch.groups?.tag ?? 'element';
-    const tagStart = tagMatch.index ?? 0;
-    const tagEnd = findOpeningTagEnd(source, tagStart);
-    if (tagEnd === -1) continue;
-
-    const attrsStart = tagStart + tagMatch[0].length;
-    const attrs = source.slice(attrsStart, tagEnd);
-    const attrPattern = /\bon(?<event>[A-Z][A-Za-z0-9]*)\s*=\s*\{/g;
-
-    for (const attrMatch of attrs.matchAll(attrPattern)) {
-      const event = attrMatch.groups?.event;
-      if (!event) continue;
-
-      const attributeStart = attrsStart + (attrMatch.index ?? 0);
-      const braceStart = attributeStart + attrMatch[0].lastIndexOf('{');
-      const braceEnd = findMatchingToken(source, braceStart, '{', '}');
-      if (braceEnd === -1 || braceEnd > tagEnd) continue;
-
+  for (const element of parsedJsxElements(source)) {
+    for (const attribute of element.attributes) {
+      const event = jsxEventAttributeName(attribute.name);
+      if (!event || attribute.expression === undefined) continue;
       attributes.push({
-        attributeEnd: braceEnd + 1,
-        attributeStart,
+        attributeEnd: attribute.end,
+        attributeStart: attribute.start,
         event,
-        expression: source.slice(braceStart + 1, braceEnd).trim(),
-        tag,
+        expression: attribute.expression,
+        tag: element.tag,
       });
     }
   }
 
   return attributes;
+}
+
+function jsxEventAttributeName(name: string): string | null {
+  if (!/^on[A-Z][A-Za-z0-9]*$/.test(name)) return null;
+  return name.slice(2);
 }
 
 function uniqueAnonymousHandlerName(

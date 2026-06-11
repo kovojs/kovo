@@ -130,6 +130,27 @@ export const CartActions = component('cart-actions', {
     );
   });
 
+  it('ignores event handler text inside strings and comments', () => {
+    const result = compileComponentModule({
+      fileName: 'components/cart/cart-actions.tsx',
+      source: `
+import { component } from '@jiso/core';
+
+export const CartActions = component('cart-actions', {
+  render: () => {
+    const sample = '<button onClick={() => window.alert("x")}>Add</button>';
+    // <button onClick={() => document.body.remove()}>Remove</button>
+    return <button>Static</button>;
+  },
+});
+`,
+    });
+
+    expect(result.diagnostics).toEqual([]);
+    expect(result.handlerExports).toEqual([]);
+    expect(result.files[1]?.source).toContain('// no client handlers emitted');
+  });
+
   it('emits provided query, mutation, and domain key registry facts', () => {
     const result = compileComponentModule({
       fileName: 'components/cart/cart-badge.tsx',
