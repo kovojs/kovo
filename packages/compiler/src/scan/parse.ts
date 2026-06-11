@@ -5,6 +5,20 @@ export interface ComponentOptionEntry {
   value: string;
 }
 
+export interface JsxAttributeModel {
+  end: number;
+  name: string;
+  start: number;
+}
+
+export interface JsxElementModel {
+  attributes: readonly JsxAttributeModel[];
+  end: number;
+  selfClosing: boolean;
+  start: number;
+  tag: string;
+}
+
 export interface ComponentModel {
   explicitName?: string;
   localName?: string;
@@ -15,6 +29,7 @@ export interface ComponentModel {
 
 export interface ComponentModuleModel {
   components: readonly ComponentModel[];
+  jsxElements: readonly JsxElementModel[];
 }
 
 export function parseComponentModule(fileName: string, source: string): ComponentModuleModel {
@@ -26,6 +41,7 @@ export function parseComponentModule(fileName: string, source: string): Componen
     ts.ScriptKind.TSX,
   );
   const components: ComponentModel[] = [];
+  const jsxElements: JsxElementModel[] = [];
 
   const visit = (node: ts.Node): void => {
     if (ts.isVariableDeclaration(node) && ts.isIdentifier(node.name) && isExportedVariable(node)) {
@@ -37,13 +53,16 @@ export function parseComponentModule(fileName: string, source: string): Componen
       );
       if (model) components.push(model);
     }
+    if (ts.isJsxOpeningElement(node) || ts.isJsxSelfClosingElement(node)) {
+      jsxElements.push(jsxElementModel(sourceFile, node));
+    }
 
     ts.forEachChild(node, visit);
   };
 
   visit(sourceFile);
 
-  return { components };
+  return { components, jsxElements };
 }
 
 function isExportedVariable(node: ts.VariableDeclaration): boolean {
@@ -82,6 +101,10 @@ export function componentExplicitNames(model: ComponentModuleModel): string[] {
   return model.components.flatMap((component) =>
     component.explicitName === undefined ? [] : [component.explicitName],
   );
+}
+
+export function jsxElements(model: ComponentModuleModel): JsxElementModel[] {
+  return [...model.jsxElements];
 }
 
 function componentModelFromInitializer(
@@ -156,6 +179,29 @@ function propertyNameText(name: ts.PropertyName): string | null {
   }
 
   return null;
+}
+
+function jsxElementModel(
+  sourceFile: ts.SourceFile,
+  node: ts.JsxOpeningElement | ts.JsxSelfClosingElement,
+): JsxElementModel {
+  return {
+    attributes: node.attributes.properties.flatMap((property) => {
+      if (!ts.isJsxAttribute(property)) return [];
+
+      return [
+        {
+          end: property.getEnd(),
+          name: property.name.getText(sourceFile),
+          start: property.getStart(sourceFile),
+        },
+      ];
+    }),
+    end: node.getEnd(),
+    selfClosing: ts.isJsxSelfClosingElement(node),
+    start: node.getStart(sourceFile),
+    tag: node.tagName.getText(sourceFile),
+  };
 }
 
 function arrowObjectPatternKeys(expression: ts.Expression): string[] {

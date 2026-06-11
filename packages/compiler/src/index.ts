@@ -11,6 +11,7 @@ import {
   componentRenderInputs,
   componentStateReturnObject,
   firstComponentModel,
+  jsxElements,
   parseComponentModule as parseComponentModuleModel,
 } from './scan/parse.js';
 import { escapeAttribute, indent, kebabCase } from './shared.js';
@@ -1446,8 +1447,8 @@ const primitiveOwnedOverrideAttributes = new Set(['role', 'data-state']);
 function validateAttributeMergeConflicts(source: string, fileName: string): CompilerDiagnostic[] {
   const diagnostics: CompilerDiagnostic[] = [];
 
-  for (const tag of scanOpeningTags(source)) {
-    const attrs = attributeNames(tag.attrs);
+  for (const element of jsxElements(parseComponentModuleModel(fileName, source))) {
+    const attrs = element.attributes.map((attribute) => attribute.name);
     const counts = countValues(attrs);
 
     for (const [name, count] of counts) {
@@ -1475,12 +1476,6 @@ function validateAttributeMergeConflicts(source: string, fileName: string): Comp
   }
 
   return dedupeDiagnostics(diagnostics);
-}
-
-function attributeNames(attrs: string): string[] {
-  return [...attrs.matchAll(/(?:^|\s)(?<name>[A-Za-z_:][\w:.-]*)\s*=/g)]
-    .map((match) => match.groups?.name ?? '')
-    .filter(Boolean);
 }
 
 function countValues(values: readonly string[]): Map<string, number> {

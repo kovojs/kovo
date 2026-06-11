@@ -577,7 +577,10 @@ void test('P1 compiler validates primitive composition attribute merges', async 
   assert.match(coreSource, /Unmergeable attribute conflict/);
   assert.match(coreSource, /Author overrides a primitive-owned ARIA or state attribute/);
   assert.match(coreSource, /Two writers target the same binding slot/);
+  const compilerParseSource = await readProjectFile('packages/compiler/src/scan/parse.ts');
   assert.match(compilerSource, /validateAttributeMergeConflicts/);
+  assert.match(compilerParseSource, /interface JsxAttributeModel/);
+  assert.match(compilerParseSource, /function jsxElements/);
   assert.match(compilerSource, /ambiguousRelationshipAttributes/);
   assert.match(compilerSource, /primitiveOwnedOverrideAttributes/);
   assert.match(compilerSource, /attributeMergeDiagnostic/);

@@ -1670,6 +1670,23 @@ export const PrimitiveMerge = component('primitive-merge', {
     ]);
   });
 
+  it('ignores attribute merge text inside strings and comments', () => {
+    const result = compileComponentModule({
+      fileName: 'primitive-merge.tsx',
+      source: `
+export const PrimitiveMerge = component('primitive-merge', {
+  render: () => {
+    const sample = '<button role="button" role="link"></button>';
+    // <button data-state="closed" data-state="open"></button>
+    return <button role="button">Open</button>;
+  },
+});
+`,
+    });
+
+    expect(result.diagnostics).toEqual([]);
+  });
+
   it('reports FW226 for residual stamps naming unknown components or query instances', () => {
     const result = compileComponentModule({
       fileName: 'recommendations.tsx',
