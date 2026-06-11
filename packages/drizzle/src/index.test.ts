@@ -436,7 +436,7 @@ export const tableDomains = {
           {
             code: 'FW410',
             message:
-              'Query result shape failed declared output schema. cart.count requires a declared output schema for opaque sql/raw projection.',
+              'Opaque query projection requires a declared output schema. cart.count uses sql/raw projection without output.',
             severity: 'error',
             site: 'cart.queries.ts:4',
           },
@@ -457,7 +457,7 @@ export const tableDomains = {
       {
         code: 'FW410',
         message:
-          'Query result shape failed declared output schema. cart.count requires a declared output schema for opaque sql/raw projection.',
+          'Opaque query projection requires a declared output schema. cart.count uses sql/raw projection without output.',
         severity: 'error',
         site: 'cart.queries.ts:4',
       },
@@ -488,7 +488,7 @@ export const tableDomains = {
       {
         code: 'FW410',
         message:
-          'Query result shape failed declared output schema. cart.count requires a declared output schema for opaque sql/raw projection.',
+          'Opaque query projection requires a declared output schema. cart.count uses sql/raw projection without output.',
         severity: 'error',
         site: 'cart.queries.ts:4',
       },

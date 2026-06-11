@@ -869,7 +869,7 @@ function opaqueProjectionDiagnostics(
 
   return opaquePaths.map((path) => ({
     code: 'FW410',
-    message: `${diagnosticDefinitions.FW410.message} ${query}.${path} requires a declared output schema for opaque sql/raw projection.`,
+    message: `Opaque query projection requires a declared output schema. ${query}.${path} uses sql/raw projection without output.`,
     severity: diagnosticDefinitions.FW410.severity,
     site: line,
   }));
