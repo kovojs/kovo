@@ -1347,7 +1347,7 @@ void test('P1 minifier name preservation evidence remains represented', async ()
   const compilerTests = await readProjectFile('packages/compiler/src/index.test.ts');
 
   assert.match(compilerSource, /collectMinifierReservedNames/);
-  assert.match(compilerSource, /handlerExportPattern/);
+  assert.match(compilerSource, /handlerExports: readonly string\[\]/);
   assert.match(compilerSource, /uniqueAnonymousHandlerName/);
   assert.match(compilerSource, /lowerHandlerExpression/);
   assert.match(compilerTests, /collects emitted handler export names for minifier preservation/);
