@@ -831,22 +831,58 @@ export const ExecutionTriggers = component('execution-triggers', {
 });
 
 void test('P1 compiler validates residual fw-c and fw-deps stamps', async () => {
-  const coreSource = await readProjectFile('packages/core/src/diagnostics.ts');
-  const compilerSource = await readProjectFile('packages/compiler/src/index.ts');
-  const compilerMarkupSource = await readProjectFile('packages/compiler/src/validate/markup.ts');
-  const compilerTests = await readProjectFile('packages/compiler/src/index.test.ts');
-
-  assert.match(coreSource, /FW226/);
-  assert.match(coreSource, /fw-deps or fw-c names an unknown query instance or component/);
-  assert.match(compilerSource, /validateResidualStamps/);
-  assert.match(compilerMarkupSource, /fw226Diagnostic/);
-  assert.match(
-    compilerTests,
-    /validates residual fw-c and fw-deps stamps against known component and query facts/,
+  assert.equal(
+    diagnosticDefinitions.FW226.message,
+    'fw-deps or fw-c names an unknown query instance or component.',
   );
-  assert.match(
-    compilerTests,
-    /reports FW226 for residual stamps naming unknown components or query instances/,
+  assert.deepEqual(
+    compileComponentModule({
+      fileName: 'components/recommendations.tsx',
+      source: `
+import { component } from '@jiso/core';
+
+export const Recommendations = component('recommendations', {
+  queries: { cart: cartQuery },
+  render: ({ cart }) => (
+    <section fw-c="recommendations" fw-deps="cart">{cart.count}</section>
+  ),
+});
+`,
+    }).diagnostics,
+    [],
+  );
+  assert.deepEqual(
+    compileComponentModule({
+      fileName: 'components/recommendations.tsx',
+      source: `
+import { component } from '@jiso/core';
+
+export const Recommendations = component('recommendations', {
+  queries: { cart: cartQuery },
+  render: ({ cart }) => (
+    <section fw-c="unknown-component" fw-deps="cart missingQuery:p1">{cart.count}</section>
+  ),
+});
+`,
+    }).diagnostics,
+    [
+      {
+        code: 'FW226',
+        fileName: 'components/recommendations.tsx',
+        length: 24,
+        message: `${diagnosticDefinitions.FW226.message} fw-c="unknown-component"`,
+        severity: 'error',
+        start: { column: 14, line: 9 },
+      },
+      {
+        code: 'FW226',
+        fileName: 'components/recommendations.tsx',
+        length: 30,
+        message: `${diagnosticDefinitions.FW226.message} fw-deps="missingQuery:p1"`,
+        severity: 'error',
+        start: { column: 39, line: 9 },
+      },
+    ],
   );
 });
 
