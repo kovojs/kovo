@@ -332,22 +332,29 @@ export const jisoLoaderSource = `(${inlineJisoLoaderInstallerSource})((url)=>imp
 export function installJisoLoader(options: JisoLoaderOptions): JisoLoader {
   const events = options.events ?? defaultDelegatedEvents;
   const islandSignalScope = createIslandSignalScope();
+  const disposers: Array<() => void> = [];
+  const hydratedQueries = new Set<string>();
+  const rememberHydratedQueries = (queries: readonly string[]) => {
+    for (const query of queries) {
+      hydratedQueries.add(query);
+    }
+  };
   const enhancedMutationSetup = options.enhancedMutations
     ? withDefaultMutationBroadcast(options.enhancedMutations)
     : undefined;
   const enhancedMutations = enhancedMutationSetup?.options;
-  const disposers: Array<() => void> = [];
-  let hydratedQueries: readonly string[] = [];
 
   if (options.queryStore && options.root.querySelectorAll) {
-    hydratedQueries = hydrateQueryScripts(
-      options.queryStore,
-      options.root.querySelectorAll('script[fw-query]') as Iterable<QueryScriptLike>,
-      {
-        onError(error) {
-          options.onError?.(error, { phase: 'query-hydration' });
+    rememberHydratedQueries(
+      hydrateQueryScripts(
+        options.queryStore,
+        options.root.querySelectorAll('script[fw-query]') as Iterable<QueryScriptLike>,
+        {
+          onError(error) {
+            options.onError?.(error, { phase: 'query-hydration' });
+          },
         },
-      },
+      ),
     );
   }
 
@@ -358,7 +365,13 @@ export function installJisoLoader(options: JisoLoaderOptions): JisoLoader {
       async (event) => {
         const enhancedSubmit = isEnhancedSubmitEvent(event, enhancedMutations);
         try {
-          if (await dispatchEnhancedFormSubmit(event, enhancedMutations, islandSignalScope)) return;
+          if (
+            await dispatchEnhancedFormSubmit(event, enhancedMutations, islandSignalScope, {
+              onAppliedQueries: rememberHydratedQueries,
+            })
+          ) {
+            return;
+          }
           await dispatchDelegatedEvent(event, options.importModule, islandSignalScope);
         } catch (error) {
           options.onError?.(error, {
@@ -374,17 +387,18 @@ export function installJisoLoader(options: JisoLoaderOptions): JisoLoader {
 
   if (options.refetchOnFocus || (options.queryRefetch && options.queryStore)) {
     const refetchEligibleQueries = () =>
-      filterRefetchEligibleQueries(hydratedQueries, options.refetchOnFocusOptOut ?? []);
+      filterRefetchEligibleQueries([...hydratedQueries], options.refetchOnFocusOptOut ?? []);
     let refetchInFlight: Promise<void> | undefined;
     const refetchOnFocus = async () => {
       const queries = refetchEligibleQueries();
       await options.refetchOnFocus?.(queries);
       if (options.queryRefetch && options.queryStore) {
-        await refetchQueries({
+        const applied = await refetchQueries({
           ...options.queryRefetch,
           queries,
           queryStore: options.queryStore,
         });
+        rememberHydratedQueries(applied.flatMap((chunk) => chunk.queries));
       }
     };
     const refetchOnce = () => {
@@ -583,10 +597,15 @@ export interface EnhancedFormElementLike extends EventElementLike, EnhancedFormL
   submit?: () => void;
 }
 
+interface EnhancedFormSubmitHooks {
+  onAppliedQueries?: (queries: readonly string[]) => void;
+}
+
 export async function dispatchEnhancedFormSubmit(
   event: DelegatedEvent,
   options: EnhancedMutationLoaderOptions | undefined,
   islandSignalScope: IslandSignalScope = defaultIslandSignalScope,
+  hooks: EnhancedFormSubmitHooks = {},
 ): Promise<boolean> {
   if (!options || event.type !== 'submit') return false;
 
@@ -598,7 +617,7 @@ export async function dispatchEnhancedFormSubmit(
 
   event.preventDefault?.();
   try {
-    await submitEnhancedMutation({
+    const applied = await submitEnhancedMutation({
       fetch: options.fetch,
       form,
       formData: options.formData ? options.formData(form) : new FormData(form as HTMLFormElement),
@@ -623,6 +642,7 @@ export async function dispatchEnhancedFormSubmit(
       ...(options.morph ? { morph: options.morph } : {}),
       ...(options.queryPlans ? { queryPlans: options.queryPlans } : {}),
     });
+    hooks.onAppliedQueries?.(applied.queries);
   } catch (error) {
     if (options.onError) return true;
 

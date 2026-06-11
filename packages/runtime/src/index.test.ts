@@ -1929,6 +1929,88 @@ describe('query store', () => {
     expect(refetchOnFocus).toHaveBeenCalledTimes(1);
   });
 
+  it('makes queries introduced by enhanced mutations eligible for visible-return refetch', async () => {
+    const loaderRoot = new FakeRoot();
+    const mutationRoot = new FakeMorphRoot();
+    const store = createQueryStore();
+    const refetchOnFocus = vi.fn();
+    const formData = new FormData();
+    const form = new FakeFormElement(
+      {
+        enhance: '',
+        'data-mutation': 'recommendations/refresh',
+      },
+      {
+        action: '/_m/recommendations/refresh',
+        method: 'post',
+      },
+    );
+    loaderRoot.scripts = [
+      {
+        getAttribute: (name) => (name === 'fw-query' ? 'cart' : null),
+        textContent: '{"count":1}',
+      },
+    ];
+    const mutationFetch = vi.fn(async () => ({
+      headers: {
+        get() {
+          return null;
+        },
+      },
+      async text() {
+        return '<fw-query name="recommendations">{"items":["p1"]}</fw-query>';
+      },
+    }));
+    const refetchFetch = vi.fn(async (url: string) => ({
+      status: 200,
+      text: async () =>
+        url === '/_q/cart'
+          ? '<fw-query name="cart">{"count":2}</fw-query>'
+          : '<fw-query name="recommendations">{"items":["p2"]}</fw-query>',
+    }));
+
+    installJisoLoader({
+      enhancedMutations: {
+        fetch: mutationFetch,
+        formData: () => formData,
+        root: mutationRoot,
+        store,
+      },
+      importModule: vi.fn(),
+      queryRefetch: { fetch: refetchFetch },
+      queryStore: store,
+      refetchOnFocus,
+      root: loaderRoot,
+    });
+
+    await loaderRoot.listeners.get('submit')?.({
+      preventDefault: vi.fn(),
+      target: form,
+      type: 'submit',
+    });
+
+    expect(store.get('cart')).toEqual({ count: 1 });
+    expect(store.get('recommendations')).toEqual({ items: ['p1'] });
+
+    loaderRoot.visibilityState = 'visible';
+    await loaderRoot.listeners.get('visibilitychange')?.({
+      target: null,
+      type: 'visibilitychange',
+    });
+
+    expect(refetchOnFocus).toHaveBeenCalledWith(['cart', 'recommendations']);
+    expect(refetchFetch).toHaveBeenNthCalledWith(1, '/_q/cart', {
+      headers: { Accept: 'text/html', 'FW-Fragment': 'true' },
+      method: 'GET',
+    });
+    expect(refetchFetch).toHaveBeenNthCalledWith(2, '/_q/recommendations', {
+      headers: { Accept: 'text/html', 'FW-Fragment': 'true' },
+      method: 'GET',
+    });
+    expect(store.get('cart')).toEqual({ count: 2 });
+    expect(store.get('recommendations')).toEqual({ items: ['p2'] });
+  });
+
   it('dedupes overlapping visible-return refetches', async () => {
     const root = new FakeRoot();
     const refetchOnFocus = vi.fn();
