@@ -458,11 +458,20 @@ land it first; don't fork it.
       structured failure on `error.cause`. Verified with
       `pnpm exec vitest --run packages/server/src`, `pnpm run check`, and `pnpm run check:fw`
       after `pnpm run check:build` produced the required `dist/` artifacts.
-- [ ] **MED — Extract the replay choreography.** The reserve/commit logic threaded through
+- [x] **MED — Extract the replay choreography.** The reserve/commit logic threaded through
       `renderMutationResponse`'s three exit paths (index.ts:1817-1924, :2993) is the subtlest
       concurrency code in the package, interleaved with rendering. Wrap as
       `withReplay(scope, idem, fn)`; `runMutation` (100 lines) and the response renderer shrink
       around it.
+      Evidence 2026-06-11: `packages/server/src/index.ts` now builds one replay context after
+      CSRF validation, reads replay records before parsing/handler execution per `SPEC.md` §8.1
+      and §9.1, and commits replayable success, typed failure, and post-commit render-error
+      responses through `withMutationReplay`; pure schema `VALIDATION` failures remain unstored.
+      `packages/server/src/index.test.ts` adds pending duplicate typed-failure replay coverage,
+      alongside the existing pending query, pending fragment, validation carveout, CSRF ordering,
+      scoped replay, and render-failure replay tests. Verified with
+      `pnpm exec vitest --run packages/server/src`, `pnpm run check`, and `pnpm run check:fw`
+      after `pnpm run check:build` produced the required `dist/` artifacts.
 - [ ] **MED — Unify the eight `{body, headers, status}` response types** behind one base; one
       case-insensitive header utility (today: `readHeader` index.ts:3091 fully case-insensitive
       vs document.ts:137 two-casings vs `findResponseHeaderName` index.ts:2397).

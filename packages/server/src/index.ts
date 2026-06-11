@@ -1910,11 +1910,8 @@ export async function renderMutationResponse<
     };
   }
 
-  const replayScope = mutationReplayScope(csrf, wireRequest);
-  const replayed =
-    wireRequest.idem && replayScope
-      ? wireRequest.replayStore?.get(replayScope, wireRequest.idem)
-      : undefined;
+  const replay = mutationReplayContext(csrf, wireRequest);
+  const replayed = await readMutationReplay(replay);
   if (replayed) return replayed;
 
   let result: MutationResult<Value>;
@@ -1936,57 +1933,54 @@ export async function renderMutationResponse<
   }
 
   if (!result.ok) {
-    const replayReservation =
-      result.error.code === 'VALIDATION' ? undefined : reserveMutationReplay(csrf, wireRequest);
-    const response = {
+    if (result.error.code === 'VALIDATION') {
+      return {
+        body: await renderFailureFragment(result, wireRequest),
+        headers: {
+          ...mutationWireResponseHeaders(wireRequest),
+          ...retryAfterHeaders(result),
+        },
+        status: result.status,
+      };
+    }
+
+    return withMutationReplay(replay, async () => ({
       body: await renderFailureFragment(result, wireRequest),
       headers: {
         ...mutationWireResponseHeaders(wireRequest),
         ...retryAfterHeaders(result),
       },
       status: result.status,
-    } satisfies MutationWireResponse;
-
-    return result.error.code === 'VALIDATION'
-      ? response
-      : storeMutationReplay(csrf, wireRequest, response, replayReservation);
+    }));
   }
 
-  const replayReservation = reserveMutationReplay(csrf, wireRequest);
   const renderInput = mutationResponseInput(result, wireRequest.rawInput);
-  let queryChunks: string[];
-  let fragmentChunks: string[];
-  try {
-    queryChunks = await renderQueryChunks(
-      definition.registry?.queries ?? [],
-      result.rerunQueryInstances ?? result.rerunQueries.map((key) => ({ key })),
-      renderInput,
-      wireRequest.request,
-    );
-    fragmentChunks = await renderFragmentChunks(
-      wireRequest.fragmentRenderers ?? [],
-      wireRequest.targets ?? [],
-      renderInput,
-    );
-  } catch (error) {
-    reportServerError(wireRequest.onError, error, {
-      mutationKey: definition.key,
-      operation: 'mutation-render',
-      request: wireRequest.request,
-      ...(wireRequest.targets === undefined ? {} : { targets: wireRequest.targets }),
-    });
-    return storeMutationReplay(
-      csrf,
-      wireRequest,
-      mutationRenderErrorResponse(result.changes, wireRequest, result.responseHeaders),
-      replayReservation,
-    );
-  }
+  return withMutationReplay(replay, async () => {
+    let queryChunks: string[];
+    let fragmentChunks: string[];
+    try {
+      queryChunks = await renderQueryChunks(
+        definition.registry?.queries ?? [],
+        result.rerunQueryInstances ?? result.rerunQueries.map((key) => ({ key })),
+        renderInput,
+        wireRequest.request,
+      );
+      fragmentChunks = await renderFragmentChunks(
+        wireRequest.fragmentRenderers ?? [],
+        wireRequest.targets ?? [],
+        renderInput,
+      );
+    } catch (error) {
+      reportServerError(wireRequest.onError, error, {
+        mutationKey: definition.key,
+        operation: 'mutation-render',
+        request: wireRequest.request,
+        ...(wireRequest.targets === undefined ? {} : { targets: wireRequest.targets }),
+      });
+      return mutationRenderErrorResponse(result.changes, wireRequest, result.responseHeaders);
+    }
 
-  return storeMutationReplay(
-    csrf,
-    wireRequest,
-    {
+    return {
       body: [...queryChunks, ...fragmentChunks].join('\n'),
       headers: mergeMutationResponseHeaders(
         mutationWireResponseHeaders(wireRequest),
@@ -1996,9 +1990,8 @@ export async function renderMutationResponse<
         result.responseHeaders,
       ),
       status: 200,
-    },
-    replayReservation,
-  );
+    };
+  });
 }
 
 function mutationRenderErrorResponse<Request>(
@@ -3063,31 +3056,59 @@ function renderDefaultFailurePage(failure: MutationFail): string {
   return `<!doctype html><html><body><output role="alert" data-error-code="${escapeAttribute(failure.error.code)}">${escapeHtml(JSON.stringify(failure.error.payload))}</output></body></html>`;
 }
 
-function storeMutationReplay<Request>(
+interface MutationReplayContext {
+  idem?: string;
+  replayStore?: MutationReplayStore;
+  scope: string | null;
+}
+
+function mutationReplayContext<Request>(
   csrf: CsrfValidationOptions<Request> | false,
   wireRequest: MutationWireRequest<Request>,
-  response: MutationWireResponse,
-  reservation?: MutationReplayReservation,
-): MutationWireResponse {
-  if (reservation) {
-    reservation.commit(response);
-  } else {
-    const replayScope = mutationReplayScope(csrf, wireRequest);
-    if (!wireRequest.idem || !replayScope) return response;
-    wireRequest.replayStore?.set(replayScope, wireRequest.idem, response);
-  }
+): MutationReplayContext {
+  return {
+    ...(wireRequest.idem === undefined ? {} : { idem: wireRequest.idem }),
+    ...(wireRequest.replayStore === undefined ? {} : { replayStore: wireRequest.replayStore }),
+    scope: mutationReplayScope(csrf, wireRequest),
+  };
+}
 
+async function readMutationReplay(
+  replay: MutationReplayContext,
+): Promise<MutationWireResponse | undefined> {
+  if (!replay.idem || !replay.scope) return undefined;
+  return replay.replayStore?.get(replay.scope, replay.idem);
+}
+
+async function withMutationReplay(
+  replay: MutationReplayContext,
+  render: () => Promise<MutationWireResponse>,
+): Promise<MutationWireResponse> {
+  const reservation = reserveMutationReplay(replay);
+  const response = await render();
+  commitMutationReplay(replay, response, reservation);
   return response;
 }
 
-function reserveMutationReplay<Request>(
-  csrf: CsrfValidationOptions<Request> | false,
-  wireRequest: MutationWireRequest<Request>,
-): MutationReplayReservation | undefined {
-  const replayScope = mutationReplayScope(csrf, wireRequest);
-  if (!wireRequest.idem || !replayScope) return undefined;
+function commitMutationReplay(
+  replay: MutationReplayContext,
+  response: MutationWireResponse,
+  reservation?: MutationReplayReservation,
+): void {
+  if (reservation) {
+    reservation.commit(response);
+  } else {
+    if (!replay.idem || !replay.scope) return;
+    replay.replayStore?.set(replay.scope, replay.idem, response);
+  }
+}
 
-  return wireRequest.replayStore?.reserve(replayScope, wireRequest.idem);
+function reserveMutationReplay(
+  replay: MutationReplayContext,
+): MutationReplayReservation | undefined {
+  if (!replay.idem || !replay.scope) return undefined;
+
+  return replay.replayStore?.reserve(replay.scope, replay.idem);
 }
 
 function mutationReplayScope<Request>(

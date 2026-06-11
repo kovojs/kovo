@@ -3434,6 +3434,66 @@ describe('server mutation primitives', () => {
     expect(renders).toBe(1);
   });
 
+  it('replays duplicate mutation failures while the failure fragment is pending', async () => {
+    const replayStore = createMemoryMutationReplayStore();
+    const failureStarted = deferred();
+    const failureRelease = deferred();
+    let attempts = 0;
+    let renders = 0;
+    const addToCart = mutation('cart/add', {
+      errors: {
+        OUT_OF_STOCK: s.object({ availableQuantity: s.number().int().min(0) }),
+      },
+      input: s.object({ productId: s.string() }),
+      handler(_input, _request, context) {
+        attempts += 1;
+        return context.fail('OUT_OF_STOCK', { availableQuantity: 0 });
+      },
+    });
+    const request = {
+      idem: 'idem_pending_failure',
+      rawInput: { productId: 'p1' },
+      renderFailureFragment: async () => {
+        renders += 1;
+        failureStarted.resolve();
+        await failureRelease.promise;
+        return '<output role="alert">Sold out</output>';
+      },
+      replayStore,
+      request: { sessionId: 's1' },
+    };
+
+    const first = renderMutationResponse(addToCart, request);
+    await failureStarted.promise;
+    const second = renderMutationResponse(addToCart, request);
+    await Promise.resolve();
+
+    expect(attempts).toBe(1);
+    expect(renders).toBe(1);
+
+    failureRelease.resolve();
+    await expect(Promise.all([first, second])).resolves.toEqual([
+      {
+        body: '<fw-fragment target="error"><output role="alert">Sold out</output></fw-fragment>',
+        headers: {
+          'Content-Type': 'text/vnd.jiso.fragment+html; charset=utf-8',
+          'FW-Idem': 'idem_pending_failure',
+        },
+        status: 422,
+      },
+      {
+        body: '<fw-fragment target="error"><output role="alert">Sold out</output></fw-fragment>',
+        headers: {
+          'Content-Type': 'text/vnd.jiso.fragment+html; charset=utf-8',
+          'FW-Idem': 'idem_pending_failure',
+        },
+        status: 422,
+      },
+    ]);
+    expect(attempts).toBe(1);
+    expect(renders).toBe(1);
+  });
+
   it('replays enhanced mutation validation failures by FW-Idem', async () => {
     const replayStore = createMemoryMutationReplayStore();
     let attempts = 0;
