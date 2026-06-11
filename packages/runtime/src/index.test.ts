@@ -1985,6 +1985,11 @@ describe('query store', () => {
     });
   });
 
+  it('exports deferred chunk helpers as aliases of the mutation response helpers', () => {
+    expect(applyDeferredChunk).toBe(applyMutationResponse);
+    expect(applyDeferredChunkToDom).toBe(applyMutationResponseToDom);
+  });
+
   it('accepts escaped JSON from text/html-compatible fw-query chunks', () => {
     const store = createQueryStore();
 
