@@ -1638,6 +1638,8 @@ export const CartBadge = component('cart-badge', {
         fileName: 'cart-badge.tsx',
         message: 'data-bind path is not present in the declared query shape. cart.items',
         severity: 'error',
+        start: { column: 9, line: 4 },
+        length: 27,
       },
     ]);
   });
@@ -2169,6 +2171,8 @@ export const CartBadge = component('cart-badge', {
           fileName: 'cart-badge.tsx',
           message: 'data-bind path is not present in the declared query shape. cart.items',
           severity: 'error',
+          start: { column: 9, line: 4 },
+          length: 27,
         },
       ]),
     );

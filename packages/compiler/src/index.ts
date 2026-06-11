@@ -900,6 +900,7 @@ function validateDataBindings(
   if (!queryShapes) return [];
 
   const listStamps = dataBindListStamps(source, model);
+  const listBindings = dataBindListAttributes(model);
 
   return dataBindAttributes(model)
     .filter((binding) => !binding.path.startsWith('.'))
@@ -911,10 +912,13 @@ function validateDataBindings(
     .concat(
       listStamps
         .filter((stamp) => !listStampExistsInQueryShapes(stamp, queryShapes))
-        .map((stamp) => ({
-          ...diagnosticFor(options.fileName, 'FW302'),
-          message: `${diagnosticDefinitions.FW302.message} ${stamp.list}`,
-        })),
+        .map((stamp) => {
+          const binding = listBindings.find((candidate) => candidate.path === stamp.list);
+          return {
+            ...diagnosticFor(options.fileName, 'FW302', source, binding?.index, binding?.length),
+            message: `${diagnosticDefinitions.FW302.message} ${stamp.list}`,
+          };
+        }),
     );
 }
 
@@ -1142,6 +1146,22 @@ function dataBindAttributes(model: ComponentModuleModel): DataBindAttribute[] {
     .filter(
       (attribute) =>
         isBindingAttribute(attribute.name) &&
+        attribute.value !== undefined &&
+        attribute.value !== '',
+    )
+    .map((attribute) => ({
+      index: attribute.start,
+      length: attribute.end - attribute.start,
+      name: attribute.name,
+      path: attribute.value ?? '',
+    }));
+}
+
+function dataBindListAttributes(model: ComponentModuleModel): DataBindAttribute[] {
+  return jsxAttributes(model)
+    .filter(
+      (attribute) =>
+        attribute.name === 'data-bind-list' &&
         attribute.value !== undefined &&
         attribute.value !== '',
     )
