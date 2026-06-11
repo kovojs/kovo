@@ -13,10 +13,10 @@ Audited against the repository on 2026-06-11. Checkmarks mean the behavior, API,
 - [x] P0 wire fixtures exist for enhanced mutation, no-JS PRG, 422 fragment, typed read, and `<fw-defer>` stream.
 - [x] Core diagnostics registry exists and is consumed by compiler/drizzle/cli/test surfaces.
 - [x] P1 compiler has component lowering, handler export facts, registry emit, typed routes/link validation, IDREF/id diagnostics, render-equivalence facts, update coverage, derived query stamps, and a TS parser-backed intermediate model in active use.
-- [ ] P1 compiler is not fully complete: the module split is partial, some compiler help text is still local, and the full parser migration/dead scanner deletion remains tracked in `plans/improve-compiler.md`.
-      Evidence 2026-06-11: FW201's conservative free-identifier denylist now lives in
-      shared `diagnosticDefinitions`; compiler-local FW201 help is limited to the dynamic
-      lowering details required by SPEC §4.3.
+- [ ] P1 compiler is not fully complete: the module split is partial, and the full parser migration/dead scanner deletion remains tracked in `plans/improve-compiler.md`.
+      Evidence 2026-06-11: FW201's conservative free-identifier denylist and the static
+      FW201/FW230 detail labels now live in shared `diagnosticDefinitions`; remaining
+      compiler-local help is dynamic lowering evidence required by SPEC §4.3 and §4.5.
 - [x] P2 runtime has delegated event loading, execution triggers, `ctx.signal`, query hydration/update plans, visible-return typed-read refetch, BroadcastChannel plumbing, bfcache-safe pagehide handling, immutable no-`customElements` loader constraints, and a 4KB inline loader budget.
 - [x] P2 exit demo/smoke is proven by a standalone browser L0+L1 smoke covering tabs, dialog, filter island, declared visible trigger, and zero handler imports before interaction/trigger.
 - [x] P3 server/core have `domain`, `query`, `mutation`, `route`, typed `href`/`Link`/`redirect`, typed sessions, CSRF issuance/validation, FormData coercion, guards/rate limits, mutation replay, query endpoints, rerun query fragments, and commerce app usage.

@@ -44,6 +44,11 @@ describe('diagnostic registry', () => {
       {
         "FW201": {
           "code": "FW201",
+          "detailLabels": {
+            "blockedExpression": "Blocked expression:",
+            "elementParams": "Element params:",
+            "handlerLowering": "Would lower to:",
+          },
           "help": "Fixes: move the value into component/query state via ctx; pass serializable element params with data-p-*; or keep shared constants in module scope.
       The compiler conservatively blocks free identifier references named window, document, db, request, response, Date, Map, or Set.",
           "message": "Closure captures unserializable value.",
@@ -101,6 +106,10 @@ describe('diagnostic registry', () => {
         },
         "FW230": {
           "code": "FW230",
+          "detailLabels": {
+            "blockedChildren": "Blocked children:",
+            "slotHoist": "Would hoist children to:",
+          },
           "help": "Fixes: pass serializable props, move browser/request/db values behind a server fragment, or render children inside the fragment target itself.",
           "message": "Fragment-target children cannot lower to a component reference.",
           "severity": "error",

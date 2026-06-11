@@ -1111,12 +1111,13 @@ function fw201Diagnostic(
   },
 ): CompilerDiagnostic {
   const definition = diagnosticDefinitions.FW201;
+  const labels = definition.detailLabels;
   return {
     ...diagnosticFor(fileName, 'FW201', source, offset, lowering.attributeName.length),
     help: [
-      `Would lower to: ${lowering.attributeName}="${clientModuleUrl(fileName)}#${lowering.exportName}"`,
-      `Blocked expression: ${lowering.expression}`,
-      `Element params: ${lowering.params.map((param) => param.attributeName).join(', ') || '-'}`,
+      `${labels.handlerLowering} ${lowering.attributeName}="${clientModuleUrl(fileName)}#${lowering.exportName}"`,
+      `${labels.blockedExpression} ${lowering.expression}`,
+      `${labels.elementParams} ${lowering.params.map((param) => param.attributeName).join(', ') || '-'}`,
       definition.help ?? '',
     ].join('\n'),
   };
@@ -1266,11 +1267,12 @@ function fw230Diagnostic(
   body: TemplateBody,
 ): CompilerDiagnostic {
   const definition = diagnosticDefinitions.FW230;
+  const labels = definition.detailLabels;
   return {
     ...diagnosticFor(fileName, 'FW230', source, body.offset, body.source.length),
     help: [
-      `Would hoist children to: ${target}$slot_children`,
-      `Blocked children: ${body.source}`,
+      `${labels.slotHoist} ${target}$slot_children`,
+      `${labels.blockedChildren} ${body.source}`,
       definition.help ?? '',
     ].join('\n'),
     message: `${diagnosticDefinitions.FW230.message} ${target}`,

@@ -14,10 +14,12 @@ Scope: `packages/compiler/src/` only (plus `tests/fw-check.node.mjs` where gate 
 - [x] Migrated large parts of Phase 3 onto the parser model: component/options extraction, JSX element/attribute validators, mutation handler extraction, query binding/stamp collection, update coverage, event trigger justification, and identifier-reference analysis for FW201.
 - [ ] Finish the Phase 2 module split: most orchestration and several validators/lowerers/emitters still live in `packages/compiler/src/index.ts`.
 - [ ] Finish the Phase 3 parser migration; the `findMatchingClosingTag` scanner path is gone, but broader dead scanner cleanup remains under audit.
-- [ ] Move remaining local compiler help strings onto the shared diagnostic definition model where appropriate.
-      Evidence 2026-06-11: FW201's conservative free-identifier denylist moved from the
-      compiler-local diagnostic builder onto shared `diagnosticDefinitions`, matching the
-      SPEC §4.3 requirement that FW201 help document the lowering and fixes.
+- [x] Move remaining local compiler help strings onto the shared diagnostic definition model where appropriate.
+      Evidence 2026-06-11: FW201's conservative free-identifier denylist and the static
+      FW201/FW230 detail labels now live on shared `diagnosticDefinitions`. Compiler-local
+      help is limited to dynamic lowering evidence required by SPEC §4.3 and §4.5:
+      generated module refs, element params, blocked expressions, hoisted slot names, and
+      blocked child source.
 - [x] Run and record the phase gates after the checklist conversion.
 
 ## Background
