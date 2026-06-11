@@ -250,12 +250,17 @@ export interface JisoLoader {
   events: readonly string[];
 }
 
+export type IslandSignalScope = object;
+
 const defaultDelegatedEvents = ['click', 'submit', 'input', 'change'] as const;
+const defaultIslandSignalScope: IslandSignalScope = {};
+const islandSignalControllers = new WeakMap<IslandSignalScope, Map<string, AbortController>>();
 
 export const jisoLoaderSource = `(()=>{const E=["click","submit","input","change"],d=document,H=t=>t.closest?.("[fw-state]")||t,S=t=>{try{return JSON.parse(H(t)?.getAttribute("fw-state")||"{}")}catch{return {}}};let n=0;const I=()=>crypto.randomUUID?.()||"idem_"+Date.now().toString(36)+"_"+n++,T=()=>[...d.querySelectorAll("[fw-deps]")].map(e=>{const a=(e.getAttribute("fw-deps")||"").trim().replace(/[\\\\s,]+/g," "),t=e.getAttribute("fw-fragment-target")||e.id;return t&&(a?t+"="+a:t)}).filter(Boolean),P=async e=>{if(e.type=="submit"){const f=e.target.closest("form[enhance],form[data-enhance],form[data-mutation]");if(f){e.preventDefault();fetch(f.action,{body:new FormData(f),headers:{Accept:"text/vnd.jiso.fragment+html","FW-Fragment":"true","FW-Idem":I(),"FW-Targets":T().join("; ")},keepalive:!0,method:(f.method||"post").toUpperCase()}).then(r=>r.text()).then(b=>{const p=new DOMParser().parseFromString(b,"text/html");p.querySelectorAll("fw-query").forEach(m=>dispatchEvent(new CustomEvent("jiso:query",{detail:{body:m.textContent,name:m.getAttribute("name")}})));p.querySelectorAll("fw-fragment").forEach(m=>{const t=m.getAttribute("target"),l=t&&(d.getElementById(t)||d.querySelector('[fw-fragment-target="'+t+'"]'));l&&(m.hasAttribute("append")?l.insertAdjacentHTML("beforeend",m.innerHTML):l.innerHTML=m.innerHTML)})});return}}const t=e.target.closest("[on\\\\:"+e.type+"]"),r=t?.getAttribute("on:"+e.type);if(!r)return;const p={},s=S(t),h=H(t),c={params:p,state:s,signal:new AbortController().signal};for(const a of t.attributes||[])a.name.startsWith("data-p-")&&(p[a.name.slice(7).replace(/-([a-z0-9])/g,(_,c)=>c.toUpperCase())]=a.value);for(const x of r.split(/\\s+/)){const i=x.lastIndexOf("#");if(i>0){const m=await import(x.slice(0,i));await m[x.slice(i+1)]?.(e,c)}}h?.setAttribute?.("fw-state",JSON.stringify(s))},D=(t,e)=>P({type:t,target:e});for(const e of E)addEventListener(e,P,{capture:!0});d.querySelectorAll("[on\\\\:load]").forEach(e=>D("load",e));d.querySelectorAll("[on\\\\:idle]").forEach(e=>(globalThis.requestIdleCallback||setTimeout)(()=>D("idle",e)));if(globalThis.IntersectionObserver){const o=new IntersectionObserver(a=>a.map(v=>v.isIntersecting&&(o.unobserve(v.target),D("visible",v.target))));d.querySelectorAll("[on\\\\:visible]").forEach(e=>o.observe(e))}})();`;
 
 export function installJisoLoader(options: JisoLoaderOptions): JisoLoader {
   const events = options.events ?? defaultDelegatedEvents;
+  const islandSignalScope = createIslandSignalScope();
   const enhancedMutationSetup = options.enhancedMutations
     ? withDefaultMutationBroadcast(options.enhancedMutations)
     : undefined;
@@ -282,8 +287,8 @@ export function installJisoLoader(options: JisoLoaderOptions): JisoLoader {
       async (event) => {
         const enhancedSubmit = isEnhancedSubmitEvent(event, enhancedMutations);
         try {
-          if (await dispatchEnhancedFormSubmit(event, enhancedMutations)) return;
-          await dispatchDelegatedEvent(event, options.importModule);
+          if (await dispatchEnhancedFormSubmit(event, enhancedMutations, islandSignalScope)) return;
+          await dispatchDelegatedEvent(event, options.importModule, islandSignalScope);
         } catch (error) {
           options.onError?.(error, {
             event,
@@ -339,10 +344,13 @@ export function installJisoLoader(options: JisoLoaderOptions): JisoLoader {
     );
   }
 
-  disposers.push(installExecutionTriggers(options));
+  disposers.push(installExecutionTriggers(options, islandSignalScope));
   if (enhancedMutationSetup?.dispose) {
     disposers.push(enhancedMutationSetup.dispose);
   }
+  disposers.push(() => {
+    abortIslandSignalScope(islandSignalScope);
+  });
 
   return {
     dispose() {
@@ -373,13 +381,16 @@ function focusTargetFor(options: JisoLoaderOptions): LoaderLifecycleTarget {
   return options.root;
 }
 
-function installExecutionTriggers(options: JisoLoaderOptions): () => void {
+function installExecutionTriggers(
+  options: JisoLoaderOptions,
+  islandSignalScope: IslandSignalScope,
+): () => void {
   if (!options.root.querySelectorAll) return () => undefined;
 
   for (const element of options.root.querySelectorAll(
     '[on\\:load]',
   ) as Iterable<EventElementLike>) {
-    dispatchExecutionTrigger({ target: element, type: 'load' }, options);
+    dispatchExecutionTrigger({ target: element, type: 'load' }, options, islandSignalScope);
   }
 
   const requestIdle =
@@ -396,7 +407,7 @@ function installExecutionTriggers(options: JisoLoaderOptions): () => void {
     '[on\\:idle]',
   ) as Iterable<EventElementLike>) {
     requestIdle(() => {
-      dispatchExecutionTrigger({ target: element, type: 'idle' }, options);
+      dispatchExecutionTrigger({ target: element, type: 'idle' }, options, islandSignalScope);
     });
   }
 
@@ -427,7 +438,11 @@ function installExecutionTriggers(options: JisoLoaderOptions): () => void {
 
       seen.add(entry.target);
       observer.unobserve(entry.target);
-      dispatchExecutionTrigger({ target: entry.target, type: 'visible' }, options);
+      dispatchExecutionTrigger(
+        { target: entry.target, type: 'visible' },
+        options,
+        islandSignalScope,
+      );
     }
   });
 
@@ -442,8 +457,12 @@ function installExecutionTriggers(options: JisoLoaderOptions): () => void {
   };
 }
 
-function dispatchExecutionTrigger(event: DelegatedEvent, options: JisoLoaderOptions): void {
-  void dispatchDelegatedEvent(event, options.importModule).catch((error) => {
+function dispatchExecutionTrigger(
+  event: DelegatedEvent,
+  options: JisoLoaderOptions,
+  islandSignalScope: IslandSignalScope,
+): void {
+  void dispatchDelegatedEvent(event, options.importModule, islandSignalScope).catch((error) => {
     options.onError?.(error, { event, phase: 'execution-trigger' });
   });
 }
@@ -496,6 +515,7 @@ export interface EnhancedFormElementLike extends EventElementLike, EnhancedFormL
 export async function dispatchEnhancedFormSubmit(
   event: DelegatedEvent,
   options: EnhancedMutationLoaderOptions | undefined,
+  islandSignalScope: IslandSignalScope = defaultIslandSignalScope,
 ): Promise<boolean> {
   if (!options || event.type !== 'submit') return false;
 
@@ -528,6 +548,7 @@ export async function dispatchEnhancedFormSubmit(
       store: options.store,
       ...(options.broadcast ? { broadcast: options.broadcast } : {}),
       ...(options.idem ? { idem: options.idem() } : {}),
+      islandSignalScope,
       ...(options.morph ? { morph: options.morph } : {}),
       ...(options.queryPlans ? { queryPlans: options.queryPlans } : {}),
     });
@@ -597,6 +618,7 @@ function filterRefetchEligibleQueries(
 export async function dispatchDelegatedEvent(
   event: DelegatedEvent,
   importModule: ImportHandlerModule,
+  islandSignalScope: IslandSignalScope = defaultIslandSignalScope,
 ): Promise<void> {
   const element = event.target?.closest?.(`[on\\:${event.type}]`);
   if (!element) return;
@@ -605,7 +627,9 @@ export async function dispatchDelegatedEvent(
   const previous = delegatedStateQueues.get(stateHost) ?? Promise.resolve();
   const dispatch = previous
     .catch(() => undefined)
-    .then(() => dispatchDelegatedEventForElement(event, importModule, element, stateHost));
+    .then(() =>
+      dispatchDelegatedEventForElement(event, importModule, element, stateHost, islandSignalScope),
+    );
   const queued = dispatch
     .catch(() => undefined)
     .finally(() => {
@@ -619,19 +643,21 @@ export async function dispatchDelegatedEvent(
 }
 
 const delegatedStateQueues = new WeakMap<EventElementLike, Promise<void>>();
+let activeIslandSignalScope: IslandSignalScope | undefined;
 
 async function dispatchDelegatedEventForElement(
   event: DelegatedEvent,
   importModule: ImportHandlerModule,
   element: EventElementLike,
   stateHost: EventElementLike,
+  islandSignalScope: IslandSignalScope,
 ): Promise<void> {
   const state = readElementState(element);
-  const context: HandlerContext = {
+  const context: HandlerContext = withIslandSignalScope(islandSignalScope, () => ({
     params: readElementParams(element),
     signal: createHandlerSignal(element),
     state,
-  };
+  }));
 
   try {
     for (const ref of parseHandlerReferences(element.getAttribute(`on:${event.type}`))) {
@@ -700,17 +726,31 @@ function findElementStateHost(element: EventElementLike): EventElementLike | nul
   );
 }
 
-const islandSignalControllers = new Map<string, AbortController>();
+function createIslandSignalScope(): IslandSignalScope {
+  return {};
+}
+
+function withIslandSignalScope<Value>(scope: IslandSignalScope, fn: () => Value): Value {
+  const previous = activeIslandSignalScope;
+  activeIslandSignalScope = scope;
+  try {
+    return fn();
+  } finally {
+    activeIslandSignalScope = previous;
+  }
+}
 
 function createHandlerSignal(element: EventElementLike): AbortSignal {
   const key = islandSignalKey(element);
   if (!key) return new AbortController().signal;
 
-  const existing = islandSignalControllers.get(key);
+  const scope = activeIslandSignalScope ?? defaultIslandSignalScope;
+  const controllers = islandSignalControllersFor(activeIslandSignalScope ?? scope);
+  const existing = controllers.get(key);
   if (existing && !existing.signal.aborted) return existing.signal;
 
   const controller = new AbortController();
-  islandSignalControllers.set(key, controller);
+  controllers.set(key, controller);
   return controller.signal;
 }
 
@@ -723,19 +763,44 @@ function islandSignalKey(element: EventElementLike): string | null {
   );
 }
 
-export function abortRemovedIslandSignals(currentHtml: string, nextHtml: string): string[] {
+export function abortRemovedIslandSignals(
+  currentHtml: string,
+  nextHtml: string,
+  scope: IslandSignalScope = defaultIslandSignalScope,
+): string[] {
   const next = fwComponentIds(nextHtml);
   const removed = [...fwComponentIds(currentHtml)].filter((id) => !next.has(id));
+  const controllers = islandSignalControllersFor(activeIslandSignalScope ?? scope);
 
   for (const id of removed) {
-    const controller = islandSignalControllers.get(id);
+    const controller = controllers.get(id);
     if (!controller) continue;
 
     controller.abort();
-    islandSignalControllers.delete(id);
+    controllers.delete(id);
   }
 
   return removed;
+}
+
+function islandSignalControllersFor(scope: IslandSignalScope): Map<string, AbortController> {
+  const existing = islandSignalControllers.get(scope);
+  if (existing) return existing;
+
+  const controllers = new Map<string, AbortController>();
+  islandSignalControllers.set(scope, controllers);
+  return controllers;
+}
+
+function abortIslandSignalScope(scope: IslandSignalScope): void {
+  const controllers = islandSignalControllers.get(scope);
+  if (!controllers) return;
+
+  for (const controller of controllers.values()) {
+    controller.abort();
+  }
+  controllers.clear();
+  islandSignalControllers.delete(scope);
 }
 
 function fwComponentIds(html: string): Set<string> {
@@ -1356,6 +1421,7 @@ export interface EnhancedMutationSubmitOptions {
   form: EnhancedFormLike;
   formData: unknown;
   idem?: string;
+  islandSignalScope?: IslandSignalScope;
   morph?: MorphFragment;
   onError?: (error: unknown) => void;
   onUploadProgress?: (progress: UploadProgress) => void;
@@ -1576,6 +1642,7 @@ export function applyFragments(
   root: MorphRoot,
   fragments: readonly FragmentChunk[],
   morph: MorphFragment = replaceFragment,
+  islandSignalScope: IslandSignalScope = defaultIslandSignalScope,
 ): string[] {
   const applied: string[] = [];
 
@@ -1586,7 +1653,9 @@ export function applyFragments(
     if (fragment.mode === 'append') {
       appendFragment(target, fragment.html, morph);
     } else {
-      abortRemovedIslandSignals(target.readHtml?.() ?? '', fragment.html);
+      withIslandSignalScope(islandSignalScope, () => {
+        abortRemovedIslandSignals(target.readHtml?.() ?? '', fragment.html);
+      });
       morph(target, fragment.html);
     }
     applied.push(fragment.target);
@@ -1597,6 +1666,7 @@ export function applyFragments(
 
 export function applyMutationResponseToDom(options: {
   body: string;
+  islandSignalScope?: IslandSignalScope;
   morph?: MorphFragment;
   onError?: (error: unknown) => void;
   queryPlans?: CompiledQueryUpdatePlans;
@@ -1619,12 +1689,18 @@ export function applyMutationResponseToDom(options: {
 
   return {
     ...applied,
-    appliedFragments: applyFragments(options.root, applied.fragments, options.morph),
+    appliedFragments: applyFragments(
+      options.root,
+      applied.fragments,
+      options.morph,
+      options.islandSignalScope,
+    ),
   };
 }
 
 export function applyDeferredChunkToDom(options: {
   body: string;
+  islandSignalScope?: IslandSignalScope;
   morph?: MorphFragment;
   onError?: (error: unknown) => void;
   queryPlans?: CompiledQueryUpdatePlans;
@@ -1647,7 +1723,12 @@ export function applyDeferredChunkToDom(options: {
 
   return {
     ...applied,
-    appliedFragments: applyFragments(options.root, applied.fragments, options.morph),
+    appliedFragments: applyFragments(
+      options.root,
+      applied.fragments,
+      options.morph,
+      options.islandSignalScope,
+    ),
   };
 }
 
@@ -1751,6 +1832,7 @@ function readTemplateStampKey(
 export function applyDeferredStreamResponseToDom(options: {
   body: string;
   boundary?: string;
+  islandSignalScope?: IslandSignalScope;
   morph?: MorphFragment;
   onError?: (error: unknown) => void;
   queryPlans?: CompiledQueryUpdatePlans;
@@ -1761,6 +1843,7 @@ export function applyDeferredStreamResponseToDom(options: {
     (body) =>
       applyDeferredChunkToDom({
         body,
+        ...(options.islandSignalScope ? { islandSignalScope: options.islandSignalScope } : {}),
         ...(options.queryPlans ? { queryPlans: options.queryPlans } : {}),
         ...(options.onError ? { onError: options.onError } : {}),
         root: options.root,
@@ -1806,6 +1889,7 @@ export async function submitEnhancedMutation(options: EnhancedMutationSubmitOpti
       root: options.root,
       store: options.store,
       ...(options.morph ? { morph: options.morph } : {}),
+      ...(options.islandSignalScope ? { islandSignalScope: options.islandSignalScope } : {}),
       ...(options.onError
         ? {
             onError(error) {

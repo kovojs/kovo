@@ -1038,6 +1038,106 @@ describe('runtime loader', () => {
     expect(signals[0]?.aborted).toBe(true);
   });
 
+  it('keeps island ctx.signals isolated per loader install and aborts on dispose', async () => {
+    const firstRoot = new FakeRoot();
+    const secondRoot = new FakeRoot();
+    const firstSignals: AbortSignal[] = [];
+    const secondSignals: AbortSignal[] = [];
+    const firstHandler = vi.fn((_event, ctx: { signal: AbortSignal }) => {
+      firstSignals.push(ctx.signal);
+    });
+    const secondHandler = vi.fn((_event, ctx: { signal: AbortSignal }) => {
+      secondSignals.push(ctx.signal);
+    });
+    const firstLoader = installJisoLoader({
+      importModule: vi.fn(async () => ({ mount: firstHandler })),
+      root: firstRoot,
+    });
+    const secondLoader = installJisoLoader({
+      importModule: vi.fn(async () => ({ mount: secondHandler })),
+      root: secondRoot,
+    });
+    const firstElement = new FakeElement({
+      'fw-c': 'cart-filter',
+      'on:click': '/c/cart-filter.client.js#mount',
+    });
+    const secondElement = new FakeElement({
+      'fw-c': 'cart-filter',
+      'on:click': '/c/cart-filter.client.js#mount',
+    });
+
+    await firstRoot.listeners.get('click')?.({ target: firstElement, type: 'click' });
+    await secondRoot.listeners.get('click')?.({ target: secondElement, type: 'click' });
+
+    expect(firstSignals).toHaveLength(1);
+    expect(secondSignals).toHaveLength(1);
+    expect(firstSignals[0]).not.toBe(secondSignals[0]);
+
+    firstLoader.dispose();
+
+    expect(firstSignals[0]?.aborted).toBe(true);
+    expect(secondSignals[0]?.aborted).toBe(false);
+
+    secondLoader.dispose();
+  });
+
+  it('aborts loader-scoped island signals when enhanced fragments remove the island', async () => {
+    let signal: AbortSignal | undefined;
+    const loaderRoot = new FakeRoot();
+    const mutationRoot = new FakeMorphRoot();
+    const store = createQueryStore();
+    const element = new FakeElement({
+      'fw-c': 'cart-filter',
+      'on:click': '/c/cart-filter.client.js#mount',
+    });
+    const form = new FakeFormElement(
+      { enhance: '' },
+      {
+        action: '/_m/cart/filter',
+        method: 'post',
+      },
+    );
+    mutationRoot.targets.set(
+      'cart-shell',
+      new FakeMorphTarget('<section><cart-filter fw-c="cart-filter"></cart-filter></section>'),
+    );
+    const loader = installJisoLoader({
+      enhancedMutations: {
+        fetch: vi.fn(async () => ({
+          headers: {
+            get() {
+              return null;
+            },
+          },
+          async text() {
+            return '<fw-fragment target="cart-shell"><section></section></fw-fragment>';
+          },
+        })),
+        formData: () => new FormData(),
+        root: mutationRoot,
+        store,
+      },
+      importModule: vi.fn(async () => ({
+        mount: vi.fn((_event, ctx: { signal: AbortSignal }) => {
+          signal = ctx.signal;
+        }),
+      })),
+      root: loaderRoot,
+    });
+
+    await loaderRoot.listeners.get('click')?.({ target: element, type: 'click' });
+    expect(signal?.aborted).toBe(false);
+
+    await loaderRoot.listeners.get('submit')?.({
+      preventDefault: vi.fn(),
+      target: form,
+      type: 'submit',
+    });
+
+    expect(signal?.aborted).toBe(true);
+    loader.dispose();
+  });
+
   it('keeps ctx.signal alive when fragment morph preserves the island identity', async () => {
     const signals: AbortSignal[] = [];
     const handler = vi.fn((_event, ctx: { signal: AbortSignal }) => {
