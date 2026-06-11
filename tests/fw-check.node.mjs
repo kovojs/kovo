@@ -423,7 +423,7 @@ void test('P2 loader smoke evidence remains represented in runtime tests', async
   assert.match(runtimeTests, /expect\(importModule\)\.not\.toHaveBeenCalled\(\)/);
   assert.match(runtimeSource, /export function installInlineJisoLoader/);
   assert.match(runtimeSource, /insertAdjacentHTML\(['"]beforeend['"]/);
-  assert.match(runtimeHandlersSource, /signal: createHandlerSignal\(element\)/);
+  assert.match(runtimeHandlersSource, /signal: createHandlerSignal\(element, islandSignalScope\)/);
   assert.match(runtimeHandlersSource, /islandSignalControllers/);
   assert.match(
     runtimeMorphSource,
@@ -1985,16 +1985,38 @@ void test('P1 render-equivalence gate remains represented', async () => {
   const compilerServerEmitSource = await readProjectFile('packages/compiler/src/emit/server.ts');
   const compilerSource = await readProjectFile('packages/compiler/src/index.ts');
   const compilerTests = await readProjectFile('packages/compiler/src/index.test.ts');
-  const cliSource = await readProjectFile('packages/cli/src/index.ts');
-  const cliTests = await readProjectFile('packages/cli/src/index.test.ts');
 
   assert.match(compilerSource, /assertRenderEquivalence/);
   assert.match(compilerSource, /renderEquivalenceChecks/);
   assert.match(compilerServerEmitSource, /emittedServerRenderSource/);
   assert.match(compilerTests, /reports render-equivalence failures/);
-  assert.match(cliSource, /renderEquivalenceChecks/);
-  assert.match(cliSource, /ERROR RENDER_EQUIV/);
-  assert.match(cliTests, /reports render-equivalence failures as stable ERROR diagnostics/);
+  assert.equal(
+    fwCheck({
+      renderEquivalenceChecks: [
+        {
+          actual: 'sha256:lowered',
+          artifact: 'components/z.server.js',
+          detail: 'render(src) differed from render(compile(src)).',
+          expected: 'sha256:authored',
+          ok: false,
+        },
+        {
+          artifact: 'components/ok.server.js',
+          ok: true,
+        },
+        {
+          artifact: 'components/a.server.js',
+          ok: false,
+        },
+      ],
+    }).output,
+    [
+      'fw-check/v1',
+      'ERROR RENDER_EQUIV components/a.server.js Authored and lowered render output must match byte-for-byte.',
+      'ERROR RENDER_EQUIV components/z.server.js render(src) differed from render(compile(src)). expected="sha256:authored" actual="sha256:lowered"',
+      '',
+    ].join('\n'),
+  );
 });
 
 void test('framework-owned browser suite is wired into acceptance', async () => {
