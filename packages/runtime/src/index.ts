@@ -31,6 +31,18 @@ export function handler<State = unknown, Params = Record<string, ElementParamVal
   return fn;
 }
 
+export interface DeriveDefinition<Inputs extends readonly string[], Value> {
+  inputs: Inputs;
+  run(...values: unknown[]): Value;
+}
+
+export function derive<const Inputs extends readonly string[], Value>(
+  inputs: Inputs,
+  fn: (...values: unknown[]) => Value,
+): DeriveDefinition<Inputs, Value> {
+  return { inputs, run: fn };
+}
+
 export type EventPayloadMap<Definitions extends readonly EventDefinition<string, JsonValue>[]> = {
   [Definition in Definitions[number] as Definition['name']]: Definition extends EventDefinition<
     string,

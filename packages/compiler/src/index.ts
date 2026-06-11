@@ -87,9 +87,19 @@ export interface RenderEquivalenceCheck {
 
 export interface QueryUpdatePlanFact {
   componentName: string;
+  derives?: readonly QueryDeriveFact[];
   paths: readonly string[];
   query: string;
   templateStamps?: readonly QueryTemplateStampFact[];
+}
+
+export interface QueryDeriveFact {
+  expression: string;
+  exportName: string;
+  input: string;
+  name: string;
+  param: string;
+  selector: string;
 }
 
 export interface QueryTemplateStampFact {
@@ -1943,6 +1953,7 @@ function emitClientModule(
 ): string {
   const imports = [
     ...(queryUpdatePlans.length > 0 ? ['applyCompiledQueryUpdatePlan'] : []),
+    ...(queryUpdatePlans.some((plan) => (plan.derives?.length ?? 0) > 0) ? ['derive'] : []),
     ...(handlers.length > 0 ? ['handler'] : []),
   ].sort();
   const importLine =
@@ -2012,14 +2023,25 @@ function emitQueryUpdatePlanExport(
 ): string {
   if (queryUpdatePlans.length === 0) return '';
 
+  const deriveExports = queryUpdatePlans
+    .flatMap((plan) => plan.derives ?? [])
+    .map(
+      (derive) =>
+        `export const ${derive.exportName} = derive([${JSON.stringify(derive.input)}], (${derive.param}) => ${derive.expression});`,
+    )
+    .join('\n');
   const entries = queryUpdatePlans
     .map(
       (plan) =>
-        `  ${JSON.stringify(plan.query)}(root, value) {\n    return applyCompiledQueryUpdatePlan(root, ${JSON.stringify(plan.query)}, value, { bindings: true, derives: [], stamps: [], templateStamps: [${plan.templateStamps?.map(emitTemplateStampPlan).join(', ') ?? ''}] });\n  },`,
+        `  ${JSON.stringify(plan.query)}(root, value) {\n    return applyCompiledQueryUpdatePlan(root, ${JSON.stringify(plan.query)}, value, { bindings: true, derives: [${plan.derives?.map(emitDerivePlan).join(', ') ?? ''}], stamps: [], templateStamps: [${plan.templateStamps?.map(emitTemplateStampPlan).join(', ') ?? ''}] });\n  },`,
     )
     .join('\n');
 
-  return `export const ${componentName}$queryUpdatePlans = {\n${entries}\n};`;
+  return `${deriveExports ? `${deriveExports}\n\n` : ''}export const ${componentName}$queryUpdatePlans = {\n${entries}\n};`;
+}
+
+function emitDerivePlan(derive: QueryDeriveFact): string {
+  return `{ name: ${JSON.stringify(derive.name)}, selector: ${JSON.stringify(derive.selector)}, select(value) { return ${derive.exportName}.run(value); } }`;
 }
 
 function emitTemplateStampPlan(stamp: QueryTemplateStampFact): string {

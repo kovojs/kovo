@@ -17,6 +17,7 @@ import {
   createEventBus,
   createQueryStore,
   createSubmitContext,
+  derive,
   dispatchDelegatedEvent,
   hydrateQueryScripts,
   installMutationBroadcast,
@@ -2146,6 +2147,14 @@ describe('query store', () => {
     expect(count.textContent).toBe('2');
     expect(summary.textContent).toBe('2 items');
     expect(host.getAttribute('data-cart-summary')).toBe('2 items');
+  });
+
+  it('declares named derive inputs beside the pure derive function', () => {
+    const isEmpty = derive(['cart'], (cart) => (cart as { count: number }).count === 0);
+
+    expect(isEmpty.inputs).toEqual(['cart']);
+    expect(isEmpty.run({ count: 0 })).toBe(true);
+    expect(isEmpty.run({ count: 2 })).toBe(false);
   });
 
   it('reconciles compiled template stamps with keyed item descriptors', () => {

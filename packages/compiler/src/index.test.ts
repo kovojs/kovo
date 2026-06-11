@@ -1881,6 +1881,52 @@ export const CartBadge = component('cart-badge', {
     expect(() => assertFixpoint(result)).not.toThrow();
   });
 
+  it('emits named derives into compiled query update plans', () => {
+    const result = compileComponentModule({
+      fileName: 'cart-badge.tsx',
+      source: `
+export const CartBadge$isEmpty = derive(['cart'], (cart) => cart.count === 0);
+
+export const CartBadge = component('cart-badge', {
+  render: () => (
+    <cart-badge>
+      <button data-derive="cart.CartBadge$isEmpty">Checkout</button>
+    </cart-badge>
+  ),
+});
+`,
+    });
+    const clientSource = result.files[1]?.source ?? '';
+
+    expect(result.queryUpdatePlans).toEqual([
+      {
+        componentName: 'CartBadge',
+        derives: [
+          {
+            exportName: 'CartBadge$isEmpty',
+            expression: 'cart.count === 0',
+            input: 'cart',
+            name: 'CartBadge$isEmpty',
+            param: 'cart',
+            selector: '[data-derive="cart.CartBadge$isEmpty"]',
+          },
+        ],
+        paths: [],
+        query: 'cart',
+      },
+    ]);
+    expect(clientSource).toContain(
+      "import { applyCompiledQueryUpdatePlan, derive } from '@jiso/runtime';",
+    );
+    expect(clientSource).toContain(
+      'export const CartBadge$isEmpty = derive(["cart"], (cart) => cart.count === 0);',
+    );
+    expect(clientSource).toContain(
+      'derives: [{ name: "CartBadge$isEmpty", selector: "[data-derive=\\"cart.CartBadge$isEmpty\\"]", select(value) { return CartBadge$isEmpty.run(value); } }]',
+    );
+    expect(() => assertFixpoint(result)).not.toThrow();
+  });
+
   it('classifies query-dependent render positions for FW311 coverage', () => {
     const result = compileComponentModule({
       fileName: 'cart-badge.tsx',

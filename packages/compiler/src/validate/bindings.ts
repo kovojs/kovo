@@ -12,6 +12,7 @@ import {
 } from '../scan/parse.js';
 import type {
   CompileComponentOptions,
+  QueryDeriveFact,
   QueryShape,
   QueryShapeFact,
   QueryShapeWrapper,
@@ -103,6 +104,7 @@ export function collectQueryUpdatePlans(
   componentName: string,
 ): QueryUpdatePlanFact[] {
   const pathsByQuery = new Map<string, Set<string>>();
+  const derivesByQuery = new Map<string, QueryDeriveFact[]>();
   const listStampsByQuery = new Map<string, QueryTemplateStampFact[]>();
 
   for (const { path } of dataBindAttributes(model)) {
@@ -125,12 +127,29 @@ export function collectQueryUpdatePlans(
     listStampsByQuery.set(query, [...(listStampsByQuery.get(query) ?? []), stamp]);
   }
 
-  const queries = new Set([...pathsByQuery.keys(), ...listStampsByQuery.keys()]);
+  for (const derive of dataDeriveStamps(model, exportedDerives(source))) {
+    const derives = derivesByQuery.get(derive.input) ?? [];
+    derives.push(derive);
+    derivesByQuery.set(derive.input, derives);
+  }
+
+  const queries = new Set([
+    ...pathsByQuery.keys(),
+    ...listStampsByQuery.keys(),
+    ...derivesByQuery.keys(),
+  ]);
 
   return [...queries]
     .sort((left, right) => left.localeCompare(right))
     .map((query) => ({
       componentName,
+      ...(derivesByQuery.has(query)
+        ? {
+            derives: [...(derivesByQuery.get(query) ?? [])].sort((left, right) =>
+              left.name.localeCompare(right.name),
+            ),
+          }
+        : {}),
       paths: [...(pathsByQuery.get(query) ?? [])].sort(),
       query,
       ...(listStampsByQuery.has(query)
@@ -141,6 +160,49 @@ export function collectQueryUpdatePlans(
           }
         : {}),
     }));
+}
+
+function exportedDerives(source: string): Map<string, Omit<QueryDeriveFact, 'selector'>> {
+  const derives = new Map<string, Omit<QueryDeriveFact, 'selector'>>();
+  const pattern =
+    /export\s+const\s+([A-Za-z_$][\w$]*)\s*=\s*derive\s*\(\s*\[\s*(['"])([A-Za-z_$][\w$]*)\2\s*\]\s*,\s*\(\s*([A-Za-z_$][\w$]*)\s*\)\s*=>\s*([^;]+?)\s*\)\s*;/g;
+
+  for (const match of source.matchAll(pattern)) {
+    const [, exportName, , input, param, expression] = match;
+    if (!exportName || !input || !param || !expression) continue;
+
+    derives.set(exportName, {
+      exportName,
+      expression: expression.trim(),
+      input,
+      name: exportName,
+      param,
+    });
+  }
+
+  return derives;
+}
+
+function dataDeriveStamps(
+  model: ComponentModuleModel,
+  derives: Map<string, Omit<QueryDeriveFact, 'selector'>>,
+): QueryDeriveFact[] {
+  return jsxAttributes(model)
+    .filter((attribute) => attribute.name === 'data-derive' && attribute.value)
+    .flatMap((attribute) => {
+      const [input, name] = (attribute.value ?? '').split('.');
+      if (!input || !name) return [];
+
+      const derive = derives.get(name);
+      if (!derive || derive.input !== input) return [];
+
+      return [
+        {
+          ...derive,
+          selector: `[data-derive="${input}.${name}"]`,
+        },
+      ];
+    });
 }
 
 export function collectQueryUpdateCoverage(

@@ -1322,8 +1322,10 @@ void test('D3 deferred stream responses are consumed by the runtime', async () =
   assert.match(compilerBootstrapSource, /applyDeferredStreamResponseToDom/);
   assert.match(compilerBootstrapSource, /applyJisoDeferredStreamResponse/);
   assert.match(compilerSource, /applyCompiledQueryUpdatePlan/);
-  assert.match(compilerSource, /bindings: true, derives: \[\], stamps: \[\]/);
+  assert.match(compilerSource, /emitDerivePlan/);
+  assert.match(compilerSource, /deriveExports/);
   assert.match(compilerTests, /emits per-query data-bind update plans for compiled components/);
+  assert.match(compilerTests, /emits named derives into compiled query update plans/);
   assert.match(
     compilerTests,
     /emits an app bootstrap that wires compiled query plans into the loader/,
