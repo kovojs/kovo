@@ -10,6 +10,7 @@ import { fwCheck, fwExplain } from '../../../packages/cli/src/index.js';
 import {
   addToCart,
   addToCartOptimistic,
+  commerceCsrf,
   commerceCsrfInput,
   commerceGraph,
   commercePageHints,
@@ -162,6 +163,16 @@ function fragmentTargetForQuery(query: string) {
   }
 
   return fragment;
+}
+
+function invalidatedByQueries() {
+  return new Map(
+    commerceGraph.queries.map((query) => {
+      const explanation = fwExplain(commerceGraph, { kind: 'query', target: query.query });
+
+      return [query.query, explainList(explainLine(explanation.output, 'invalidated-by: '))];
+    }),
+  );
 }
 
 function keyedListNode(
@@ -829,7 +840,10 @@ describe('commerce example', () => {
     }
   });
 
-  it('answers commerce optimistic coverage mechanically from fw explain output', () => {
+  it('answers the full commerce mutation-query matrix mechanically from fw explain output', () => {
+    const invalidatedBy = invalidatedByQueries();
+    const matrix: Record<string, Record<string, string>> = {};
+
     for (const mutation of commerceGraph.mutations) {
       const explanation = fwExplain(commerceGraph, {
         kind: 'mutation',
@@ -838,23 +852,57 @@ describe('commerce example', () => {
       });
       const statuses = optimisticStatuses(explanation.output);
       const affectedQueries = [...mutationUpdateConsumers(explanation.output).keys()];
+      matrix[mutation.key] = {};
 
-      for (const query of affectedQueries) {
-        expect(statuses.get(query)).toBeDefined();
-        expect(statuses.get(query)).not.toBe('UNHANDLED');
+      for (const query of commerceGraph.queries) {
+        const queryInvalidators = invalidatedBy.get(query.query) ?? [];
+        const invalidated = affectedQueries.includes(query.query);
+
+        expect(queryInvalidators.includes(mutation.key)).toBe(invalidated);
+        if (invalidated) {
+          expect(statuses.get(query.query)).toBeDefined();
+          expect(statuses.get(query.query)).not.toBe('UNHANDLED');
+          matrix[mutation.key][query.query] = statuses.get(query.query) ?? 'missing';
+        } else {
+          expect(statuses.get(query.query)).toBeUndefined();
+          matrix[mutation.key][query.query] = 'no-invalidation';
+        }
       }
       expect(explainLine(explanation.output, 'OPTIMISTIC-SUMMARY ')).toContain('UNHANDLED=0');
     }
+
+    // SPEC.md §10.4/§16.5: every mutation/query cell either has an explicit
+    // optimistic status or is proven not to be invalidated by that mutation.
+    expect(matrix).toEqual({
+      'cart/add': {
+        cart: 'hand-written',
+        orderHistory: 'await-fragment',
+        productGrid: 'await-fragment',
+      },
+      'order/receipt': {
+        cart: 'no-invalidation',
+        orderHistory: 'no-invalidation',
+        productGrid: 'no-invalidation',
+      },
+    });
   });
 
-  it('accepts cart/add mutation-query pairs through static graph, verifier, and enhanced wire', async () => {
-    const mutation = fwExplain(commerceGraph, {
+  it('accepts the commerce mutation-query matrix through static graph, verifier, and enhanced wire', async () => {
+    const addToCartExplanation = fwExplain(commerceGraph, {
       kind: 'mutation',
       optimistic: true,
       target: 'cart/add',
     });
-    const affectedQueries = [...mutationUpdateConsumers(mutation.output).keys()];
-    const statuses = optimisticStatuses(mutation.output);
+    const uploadReceiptExplanation = fwExplain(commerceGraph, {
+      kind: 'mutation',
+      optimistic: true,
+      target: 'order/receipt',
+    });
+    const affectedQueries = [...mutationUpdateConsumers(addToCartExplanation.output).keys()];
+    const uploadReceiptAffectedQueries = [
+      ...mutationUpdateConsumers(uploadReceiptExplanation.output).keys(),
+    ];
+    const statuses = optimisticStatuses(addToCartExplanation.output);
     const db = createCommerceDb();
     const harness = createJisoTestHarness({
       db,
@@ -872,6 +920,20 @@ describe('commerce example', () => {
     });
     const verifiedDb = harness.dbHandle();
     verifiedDb.transaction = (run) => run(verifiedDb);
+    const noWriteHarness = createJisoTestHarness({
+      db: createCommerceDb(),
+      request: {
+        session: { id: 's-commerce-receipt', user: { id: 'u1' } },
+      },
+      touchGraph: {},
+      verification: {
+        domainByTable: {
+          cart_items: 'cart',
+          orders: 'order',
+          products: 'product',
+        },
+      },
+    });
 
     // SPEC.md §10.4/§11.2: every invalidated query pair must have an explicit
     // optimistic status, and executed writes must stay within the static graph.
@@ -880,6 +942,9 @@ describe('commerce example', () => {
       orderHistory: 'await-fragment',
       productGrid: 'await-fragment',
     });
+    expect(uploadReceiptAffectedQueries).toEqual([]);
+    expect(explainLine(uploadReceiptExplanation.output, 'invalidates: ')).toBe('-');
+    expect(explainLine(uploadReceiptExplanation.output, 'updates: ')).toBe('-');
     await expect(
       harness.exec(
         addToCart,
@@ -894,6 +959,31 @@ describe('commerce example', () => {
       rerunQueries: expect.arrayContaining(affectedQueries),
     });
     expect(harness.verificationDiagnostics()).toEqual([]);
+    await expect(
+      noWriteHarness.exec(
+        uploadReceipt,
+        commerceCsrfInput(
+          {
+            orderId: 'order-1',
+            receipt: commerceFile('receipt.pdf', 'application/pdf', 2048),
+          },
+          {
+            db: noWriteHarness.dbHandle(),
+            session: { id: 's-commerce-receipt', user: { id: 'u1' } },
+          },
+        ),
+        { csrf: commerceCsrf, touchGraphKey: 'order/receipt' },
+      ),
+    ).resolves.toMatchObject({
+      ok: true,
+      value: {
+        fileName: 'receipt.pdf',
+        orderId: 'order-1',
+        size: 2048,
+        uploadedBy: 'u1',
+      },
+    });
+    expect(noWriteHarness.verificationDiagnostics()).toEqual([]);
 
     const response = await submitAddToCart(
       { productId: 'p2', quantity: 1 },

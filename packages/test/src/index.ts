@@ -4,6 +4,7 @@ import { PGlite, type PGliteOptions, type Results } from '@electric-sql/pglite';
 import { inspect, isDeepStrictEqual } from 'node:util';
 import type { TouchGraph, TouchSite } from '@jiso/core';
 import {
+  type CsrfValidationOptions,
   type InferSchema,
   type MutationDefinition,
   type MutationResult,
@@ -75,6 +76,7 @@ export interface PgliteTestDb {
 }
 
 export interface JisoTestExecOptions<Request> {
+  csrf?: CsrfValidationOptions<Request>;
   request?: Partial<Omit<Request, 'db'>>;
   touchGraphKey?: string;
 }
@@ -109,11 +111,17 @@ export function createJisoTestHarness<Db>(
       execOptions?: JisoTestExecOptions<Request>,
     ) {
       const start = verifier?.observed.length ?? 0;
-      const result = await runMutation(mutation, input, {
+      const request = {
         ...options.request,
         ...execOptions?.request,
         db,
-      } as unknown as Request);
+      } as unknown as Request;
+      const result = await runMutation(
+        mutation,
+        input,
+        request,
+        execOptions?.csrf === undefined ? {} : { csrf: execOptions.csrf },
+      );
       verifier?.assertCoveredSince(start, execOptions?.touchGraphKey);
       return result;
     },

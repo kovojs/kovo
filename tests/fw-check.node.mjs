@@ -1023,18 +1023,26 @@ void test('P10 commerce graph assertions answer behavior mechanically', async ()
   );
   assert.match(
     commerceTests,
-    /answers commerce optimistic coverage mechanically from fw explain output/,
+    /answers the full commerce mutation-query matrix mechanically from fw explain output/,
   );
   assert.match(
     commerceTests,
-    /accepts cart\/add mutation-query pairs through static graph, verifier, and enhanced wire/,
+    /accepts the commerce mutation-query matrix through static graph, verifier, and enhanced wire/,
   );
   assert.match(commerceTests, /touchGraphKey: 'cart\.addItem'/);
+  assert.match(commerceTests, /touchGraphKey: 'order\/receipt'/);
   assert.match(commerceTests, /queryChunkNames\(response\.body\)\.sort\(\)/);
-  assert.match(commerceTests, /mutationUpdateConsumers\(mutation\.output\)/);
+  assert.match(commerceTests, /mutationUpdateConsumers\(addToCartExplanation\.output\)/);
+  assert.match(commerceTests, /uploadReceiptAffectedQueries/);
+  assert.match(commerceTests, /no-invalidation/);
+  assert.match(
+    commerceTests,
+    /expect\(explainLine\(uploadReceiptExplanation\.output, 'invalidates: '\)\)\.toBe\('-'\)/,
+  );
+  assert.match(commerceTests, /noWriteHarness\.verificationDiagnostics\(\)/);
   assert.match(commerceTests, /const queryExplain = fwExplain\(commerceGraph, \{ kind: 'query'/);
   assert.match(commerceTests, /expect\(updates\.get\(query\)\)\.toContain\('page:\/cart'\)/);
-  assert.match(commerceTests, /expect\(statuses\.get\(query\)\)\.not\.toBe\('UNHANDLED'\)/);
+  assert.match(commerceTests, /expect\(statuses\.get\(query\.query\)\)\.not\.toBe\('UNHANDLED'\)/);
   assert.match(cliTests, /hand-write in the mutation module, or declare 'await-fragment'/);
   assert.match(cliTests, /ignores unrelated statuses/);
   assert.match(cliSource, /diagnosticDefinitions\.FW310\.message/);
@@ -1149,6 +1157,12 @@ void test('P9 verification layer evidence remains represented', async () => {
   const testHarnessTests = await readProjectFile('packages/test/src/index.test.ts');
 
   assert.match(testHarnessSource, /observeSql\(statement, config, observed\)/);
+  assert.match(testHarnessSource, /csrf\?: CsrfValidationOptions<Request>/);
+  assert.match(testHarnessSource, /const result = await runMutation\(/);
+  assert.match(
+    testHarnessSource,
+    /execOptions\?\.csrf === undefined \? \{\} : \{ csrf: execOptions\.csrf \}/,
+  );
   assert.match(testHarnessSource, /prop === 'pglite'/);
   assert.match(testHarnessSource, /prop === 'transaction'/);
   assert.match(
