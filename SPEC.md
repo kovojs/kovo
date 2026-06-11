@@ -571,11 +571,11 @@ productId=p1&quantity=2&fw-csrf=…
 
 ```http
 HTTP/1.1 200 OK
-Content-Type: text/html; charset=utf-8
+Content-Type: text/vnd.jiso.fragment+html; charset=utf-8
 FW-Changes: [{"domain":"cart","keys":["cart"]},{"domain":"product","keys":["p1"]}]
 
 <fw-query name="cart">{"count": 3, "items": […]}</fw-query>
-<fw-fragment target="recommendations" strategy="morph">
+<fw-fragment target="recommendations">
   <!-- server-rendered HTML, produced by Recommendations.render(…) — the SAME
        render function full page loads use; partials cannot drift from pages -->
 </fw-fragment>
@@ -584,7 +584,7 @@ FW-Changes: [{"domain":"cart","keys":["cart"]},{"domain":"product","keys":["p1"]
 - `FW-Targets` is read off the live DOM (`fw-deps` stamps), so islands patched in after page load participate. The server holds **no session of what's on screen** — it answers a stateless question.
 - `FW-Changes` is the sanitized wire summary of committed writes: each entry is `{domain, keys}`. It never includes mutation input, user-provided values, failure reasons, stack traces, or internal diagnostic detail; richer typed change records are internal compiler/runtime artifacts (§14).
 - `<fw-query>` replaces the client's query value and runs that query's update plan — bindings, named derives, stamps — across every dependent island. No runtime dependency tracking: the plan is the DOM itself — self-describing binding attributes typed at compile time (§4.8); there is no separate plan artifact.
-- `<fw-fragment>` is **DOM-morphed** (idiomorph-class algorithm): focus, scroll, selection, CSS transitions, and nested island state survive. Patched-in islands are inert-until-touched like everything else — _a fragment update is a tiny navigation, not a different programming model._
+- `<fw-fragment>` is **DOM-morphed** by default (idiomorph-class algorithm): focus, scroll, selection, CSS transitions, and nested island state survive. `mode="append"` is the explicit append vocabulary for pagination and streams. Patched-in islands are inert-until-touched like everything else — _a fragment update is a tiny navigation, not a different programming model._
 - **Without JS:** the same endpoint sees no `FW-Fragment` header and answers POST-redirect-GET with errors re-rendered into the full page. One handler, two response modes.
 
 ### 9.2 Errors
