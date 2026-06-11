@@ -1322,6 +1322,7 @@ void test('P5 data-bind paths are checked against generated query shape facts', 
     'packages/compiler/src/validate/bindings.ts',
   );
   const compilerTests = await readProjectFile('packages/compiler/src/index.test.ts');
+  const drizzlePinTests = await readProjectFile('conformance/drizzle-pin/src/index.test.ts');
 
   assert.match(compilerSource, /queryShapeFacts\?: readonly QueryShapeFact\[\]/);
   assert.match(compilerBindingsSource, /queryShapesFromFacts/);
@@ -1341,6 +1342,18 @@ void test('P5 data-bind paths are checked against generated query shape facts', 
     compilerTests,
     /data-bind path is not present in the declared query shape\. cart\.count/,
   );
+  assert.match(drizzlePinTests, /pins nullable project query shapes for real Drizzle left joins/);
+  assert.match(drizzlePinTests, /\.leftJoin\(reviews, eq\(reviews\.productId, products\.id\)\)/);
+  assert.match(
+    compilerTests,
+    /accepts optional binding path segments through nullable query shape metadata/,
+  );
+  assert.match(
+    compilerTests,
+    /reports FW227 when binding paths traverse nullable query shape metadata without optional segments/,
+  );
+  assert.match(compilerTests, /product\.details\?\.name/);
+  assert.match(compilerTests, /product\.details\.name \(segment: details\)/);
 });
 
 void test('S1 production build proves the compiler 1:1 emit contract', async () => {
