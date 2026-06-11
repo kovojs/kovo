@@ -10,6 +10,7 @@ Scope: `packages/compiler/src/` only (plus `tests/fw-check.node.mjs` where gate 
 - [x] Added `EmittedFile.kind`, readonly `CompileResult` arrays, and `handlerExports`; `collectMinifierReservedNames` reads compile facts instead of scraping output.
 - [x] Added a validator registry in `compileComponentModule`.
 - [x] Split out initial modules for diagnostics, CSS, graph derivation, bootstrap/registry emit, text scanning, TS parsing, and binding/event-trigger validation while preserving the public `src/index.ts` surface.
+- [x] Extracted Vite plugin wiring into `src/vite.ts`, keeping `jisoVitePlugin()` and its public types exported from `src/index.ts`.
 - [x] Extracted SPEC §6.4 literal navigation target validation (FW220 route-table checks for `href`/`action`) into `src/validate/navigation.ts`.
 - [x] Extracted SPEC §6.4 static navigation sugar lowering (`<Link>`, `href()`, and literal `href={...}` normalization) into `src/lower/navigation.ts`.
 - [x] Extracted handler lowering/FW201-FW210 event attribute analysis into `src/lower/handlers.ts`, preserving versioned `on:*` refs and element param derivation.
