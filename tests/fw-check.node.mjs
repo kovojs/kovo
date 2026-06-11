@@ -705,8 +705,12 @@ void test('D3 deferred stream responses are consumed by the runtime', async () =
 
   assert.match(compilerSource, /collectQueryUpdatePlans/);
   assert.match(compilerSource, /\$queryUpdatePlans/);
+  assert.match(compilerSource, /applyCompiledQueryUpdatePlan/);
+  assert.match(compilerSource, /bindings: true, derives: \[\], stamps: \[\]/);
   assert.match(compilerTests, /emits per-query data-bind update plans for compiled components/);
   assert.match(runtimeSource, /applyDeferredStreamResponseToDom/);
+  assert.match(runtimeSource, /export function applyCompiledQueryUpdatePlan/);
+  assert.match(runtimeSource, /bindings[\s\S]*derives[\s\S]*stamps/);
   assert.match(runtimeSource, /export function applyQueryBindings/);
   assert.match(runtimeSource, /deferredStreamChunks/);
   assert.match(runtimeSource, /--\$\{boundary\}/);
@@ -718,6 +722,10 @@ void test('D3 deferred stream responses are consumed by the runtime', async () =
   assert.match(
     runtimeTests,
     /applies query update bindings from mutation chunks without requiring a fragment/,
+  );
+  assert.match(
+    runtimeTests,
+    /runs compiled query update plans in bindings -> named derives -> stamps order/,
   );
   assert.match(runtimeTests, /applies full deferred stream responses in boundary order/);
   assert.match(await readProjectFile('fixtures/wire/defer-stream.http'), /priority="5"/);

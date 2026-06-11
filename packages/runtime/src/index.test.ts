@@ -8,6 +8,7 @@ import {
   applyDeferredChunkToDom,
   applyDeferredStreamResponseToDom,
   applyFragments,
+  applyCompiledQueryUpdatePlan,
   applyOptimisticTransforms,
   applyMutationResponseToDom,
   applyMutationResponse,
@@ -150,6 +151,7 @@ class FakeMorphTarget {
 class FakeMorphRoot {
   bindings: FakeQueryBindingElement[] = [];
   deps: { deps?: string; id?: string; target?: string }[] = [];
+  planElements: FakeQueryPlanElement[] = [];
   targets = new Map<string, FakeMorphTarget>();
 
   findFragmentTarget(target: string): FakeMorphTarget | null {
@@ -158,12 +160,15 @@ class FakeMorphRoot {
 
   querySelectorAll(_selector: string): Iterable<
     | FakeQueryBindingElement
+    | FakeQueryPlanElement
     | {
         getAttribute(name: string): string | null;
         id?: string;
       }
   > {
     if (_selector === '[data-bind]') return this.bindings;
+    const planElements = this.planElements.filter((element) => element.matches(_selector));
+    if (planElements.length > 0) return planElements;
 
     return this.deps.map((dep) => ({
       getAttribute: (name) => {
@@ -173,6 +178,45 @@ class FakeMorphRoot {
       },
       ...(dep.id ? { id: dep.id } : {}),
     }));
+  }
+}
+
+class FakeQueryPlanElement {
+  attributes: Record<string, string>;
+  textContent: string | null;
+  value?: string;
+
+  constructor(
+    attributes: Record<string, string>,
+    options: { textContent?: string | null; value?: string } = {},
+  ) {
+    this.attributes = { ...attributes };
+    this.textContent = options.textContent ?? null;
+    if (options.value !== undefined) {
+      this.value = options.value;
+    }
+  }
+
+  getAttribute(name: string): string | null {
+    return this.attributes[name] ?? null;
+  }
+
+  matches(selector: string): boolean {
+    const exactAttribute = /^\[([^=\]]+)="([^"]*)"\]$/.exec(selector);
+    if (exactAttribute) {
+      return this.attributes[exactAttribute[1] ?? ''] === exactAttribute[2];
+    }
+
+    const presentAttribute = /^\[([^=\]]+)\]$/.exec(selector);
+    return presentAttribute ? this.attributes[presentAttribute[1] ?? ''] !== undefined : false;
+  }
+
+  removeAttribute(name: string): void {
+    delete this.attributes[name];
+  }
+
+  setAttribute(name: string, value: string): void {
+    this.attributes[name] = value;
   }
 }
 
@@ -931,6 +975,102 @@ describe('query store', () => {
     ]);
     expect(count.textContent).toBe('3');
     expect(items.textContent).toBe('[{"id":"p1"}]');
+  });
+
+  it('runs compiled query update plans in bindings -> named derives -> stamps order', () => {
+    const root = new FakeMorphRoot();
+    const count = new FakeQueryBindingElement('cart.count', { textContent: '1' });
+    const summary = new FakeQueryPlanElement(
+      { 'data-derive': 'cart.summary' },
+      { textContent: '1 item' },
+    );
+    const host = new FakeQueryPlanElement({ 'data-plan': 'cart-host' });
+    const observed: string[] = [];
+    root.bindings.push(count);
+    root.planElements.push(summary, host);
+
+    const applied = applyCompiledQueryUpdatePlan(
+      root,
+      'cart',
+      { count: 2 },
+      {
+        derives: [
+          {
+            name: 'summary',
+            select(value) {
+              observed.push(`derive sees binding:${count.textContent}`);
+              return `${(value as { count: number }).count} items`;
+            },
+          },
+        ],
+        stamps: [
+          {
+            attr: 'data-cart-summary',
+            selector: '[data-plan="cart-host"]',
+            select() {
+              observed.push(`stamp sees derive:${summary.textContent}`);
+              return summary.textContent;
+            },
+          },
+        ],
+      },
+    );
+
+    expect(applied).toEqual({
+      bindings: ['cart.count'],
+      derives: ['summary'],
+      stamps: ['data-cart-summary'],
+    });
+    expect(observed).toEqual(['derive sees binding:2', 'stamp sees derive:2 items']);
+    expect(count.textContent).toBe('2');
+    expect(summary.textContent).toBe('2 items');
+    expect(host.getAttribute('data-cart-summary')).toBe('2 items');
+  });
+
+  it('applies mutation query chunks through compiled update plans before morphing', () => {
+    const root = new FakeMorphRoot();
+    const store = createQueryStore();
+    const count = new FakeQueryBindingElement('cart.count', { textContent: '1' });
+    const summary = new FakeQueryPlanElement({ 'data-derive': 'cart.summary' });
+    const host = new FakeQueryPlanElement({ 'data-plan': 'cart-host' });
+    const observed: string[] = [];
+    root.bindings.push(count);
+    root.planElements.push(summary, host);
+    root.targets.set('cart-badge', new FakeMorphTarget());
+
+    applyMutationResponseToDom({
+      body: [
+        '<fw-query name="cart">{"count":5}</fw-query>',
+        '<fw-fragment target="cart-badge"><cart-badge>Ready</cart-badge></fw-fragment>',
+      ].join('\n'),
+      morph(target, html) {
+        observed.push(
+          `morph:${count.textContent}:${summary.textContent}:${host.getAttribute('data-count')}`,
+        );
+        target.replaceWithHtml(html);
+      },
+      queryPlans: {
+        cart: {
+          derives: [
+            {
+              name: 'summary',
+              select: (value) => `${(value as { count: number }).count} items`,
+            },
+          ],
+          stamps: [
+            {
+              attr: 'data-count',
+              selector: '[data-plan="cart-host"]',
+              select: (value) => (value as { count: number }).count,
+            },
+          ],
+        },
+      },
+      root,
+      store,
+    });
+
+    expect(observed).toEqual(['morph:5:5 items:5']);
   });
 
   it('applies deferred stream chunks through the same query and fragment parser', () => {

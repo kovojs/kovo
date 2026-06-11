@@ -37,7 +37,7 @@ describe('compileComponentModule', () => {
       'generated/registries.d.ts',
     ]);
     expect(result.files[1]?.source).toContain('export const CartBadge$button_click');
-    expect(result.files[1]?.source).toContain('import { applyQueryBindings, handler }');
+    expect(result.files[1]?.source).toContain('import { applyCompiledQueryUpdatePlan, handler }');
     expect(result.files[1]?.source).toContain('export const CartBadge$queryUpdatePlans');
     expect(result.files[0]?.source).toContain(
       'on:click="/c/components/cart/cart-badge.client.js#CartBadge$button_click"',
@@ -521,10 +521,14 @@ export const CartBadge = component('cart-badge', {
         query: 'product',
       },
     ]);
-    expect(clientSource).toContain("import { applyQueryBindings } from '@jiso/runtime';");
+    expect(clientSource).toContain("import { applyCompiledQueryUpdatePlan } from '@jiso/runtime';");
     expect(clientSource).toContain('export const CartBadge$queryUpdatePlans = {');
-    expect(clientSource).toContain('return applyQueryBindings(root, "cart", value);');
-    expect(clientSource).toContain('return applyQueryBindings(root, "product", value);');
+    expect(clientSource).toContain(
+      'return applyCompiledQueryUpdatePlan(root, "cart", value, { bindings: true, derives: [], stamps: [] });',
+    );
+    expect(clientSource).toContain(
+      'return applyCompiledQueryUpdatePlan(root, "product", value, { bindings: true, derives: [], stamps: [] });',
+    );
     expect(registrySource).toContain(`export interface QueryUpdatePlans {
   'CartBadge:cart': readonly ['cart.count', 'cart.total'];
   'CartBadge:product': readonly ['product.name'];

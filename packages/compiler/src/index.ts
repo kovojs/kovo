@@ -1154,7 +1154,7 @@ function emitClientModule(
   componentName: string,
 ): string {
   const imports = [
-    ...(queryUpdatePlans.length > 0 ? ['applyQueryBindings'] : []),
+    ...(queryUpdatePlans.length > 0 ? ['applyCompiledQueryUpdatePlan'] : []),
     ...(handlers.length > 0 ? ['handler'] : []),
   ].sort();
   const importLine =
@@ -1181,7 +1181,7 @@ function emitQueryUpdatePlanExport(
   const entries = queryUpdatePlans
     .map(
       (plan) =>
-        `  ${JSON.stringify(plan.query)}(root, value) {\n    return applyQueryBindings(root, ${JSON.stringify(plan.query)}, value);\n  },`,
+        `  ${JSON.stringify(plan.query)}(root, value) {\n    return applyCompiledQueryUpdatePlan(root, ${JSON.stringify(plan.query)}, value, { bindings: true, derives: [], stamps: [] });\n  },`,
     )
     .join('\n');
 

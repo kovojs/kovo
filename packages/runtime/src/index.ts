@@ -743,6 +743,8 @@ export type MorphFragment = (target: MorphTarget, html: string) => void;
 
 export interface QueryBindingElement {
   getAttribute(name: string): string | null;
+  removeAttribute?: (name: string) => void;
+  setAttribute?: (name: string, value: string) => void;
   textContent?: string | null;
   value?: string;
 }
@@ -750,6 +752,34 @@ export interface QueryBindingElement {
 export interface QueryBindingRoot {
   querySelectorAll(selector: string): Iterable<QueryBindingElement>;
 }
+
+export interface CompiledQueryDerive {
+  name: string;
+  select(value: unknown, root: QueryBindingRoot): unknown;
+  selector?: string;
+}
+
+export interface CompiledQueryStamp {
+  attr: string;
+  select(value: unknown, root: QueryBindingRoot): unknown;
+  selector: string;
+}
+
+export interface CompiledQueryUpdatePlan {
+  bindings?: boolean;
+  derives?: readonly CompiledQueryDerive[];
+  stamps?: readonly CompiledQueryStamp[];
+}
+
+export interface AppliedCompiledQueryUpdatePlan {
+  bindings: string[];
+  derives: string[];
+  stamps: string[];
+}
+
+export type CompiledQueryUpdatePlans = Readonly<
+  Record<string, CompiledQueryUpdatePlan | undefined>
+>;
 
 export type StructuralMorphKey = string | number;
 
@@ -1074,12 +1104,13 @@ export function applyFragments(
 export function applyMutationResponseToDom(options: {
   body: string;
   morph?: MorphFragment;
+  queryPlans?: CompiledQueryUpdatePlans;
   root: MorphRoot;
   store: QueryStore;
 }): AppliedMutationResponse & { appliedFragments: string[] } {
   const applied = applyFragmentQueryBody(options.body, (name, value, key) => {
     options.store.set(name, value, key);
-    applyQueryBindingsIfSupported(options.root, name, value);
+    applyCompiledQueryUpdatePlanIfSupported(options.root, name, value, options.queryPlans?.[name]);
   });
 
   return {
@@ -1091,12 +1122,13 @@ export function applyMutationResponseToDom(options: {
 export function applyDeferredChunkToDom(options: {
   body: string;
   morph?: MorphFragment;
+  queryPlans?: CompiledQueryUpdatePlans;
   root: MorphRoot;
   store: QueryStore;
 }): AppliedMutationResponse & { appliedFragments: string[] } {
   const applied = applyFragmentQueryBody(options.body, (name, value, key) => {
     options.store.set(name, value, key);
-    applyQueryBindingsIfSupported(options.root, name, value);
+    applyCompiledQueryUpdatePlanIfSupported(options.root, name, value, options.queryPlans?.[name]);
   });
 
   return {
@@ -1130,10 +1162,45 @@ export function applyQueryBindings(
   return applied;
 }
 
+export function applyCompiledQueryUpdatePlan(
+  root: QueryBindingRoot,
+  queryName: string,
+  value: unknown,
+  plan: CompiledQueryUpdatePlan = {},
+): AppliedCompiledQueryUpdatePlan {
+  const applied: AppliedCompiledQueryUpdatePlan = {
+    bindings: plan.bindings === false ? [] : applyQueryBindings(root, queryName, value),
+    derives: [],
+    stamps: [],
+  };
+
+  for (const derive of plan.derives ?? []) {
+    const selector = derive.selector ?? `[data-derive="${queryName}.${derive.name}"]`;
+    const rendered = formatBoundValue(derive.select(value, root));
+
+    for (const element of root.querySelectorAll(selector)) {
+      writeQueryPlanElement(element, rendered);
+      applied.derives.push(derive.name);
+    }
+  }
+
+  for (const stamp of plan.stamps ?? []) {
+    const rendered = formatBoundValue(stamp.select(value, root));
+
+    for (const element of root.querySelectorAll(stamp.selector)) {
+      element.setAttribute?.(stamp.attr, rendered);
+      applied.stamps.push(stamp.attr);
+    }
+  }
+
+  return applied;
+}
+
 export function applyDeferredStreamResponseToDom(options: {
   body: string;
   boundary?: string;
   morph?: MorphFragment;
+  queryPlans?: CompiledQueryUpdatePlans;
   root: MorphRoot;
   store: QueryStore;
 }): AppliedDeferredStreamResponse {
@@ -1141,6 +1208,7 @@ export function applyDeferredStreamResponseToDom(options: {
     (body) =>
       applyDeferredChunkToDom({
         body,
+        ...(options.queryPlans ? { queryPlans: options.queryPlans } : {}),
         root: options.root,
         store: options.store,
         ...(options.morph ? { morph: options.morph } : {}),
@@ -1472,9 +1540,14 @@ function isFailedMutationResponse(response: EnhancedMutationResponseLike): boole
   return response.ok === false || (response.status !== undefined && response.status >= 400);
 }
 
-function applyQueryBindingsIfSupported(root: MorphRoot, queryName: string, value: unknown): void {
+function applyCompiledQueryUpdatePlanIfSupported(
+  root: MorphRoot,
+  queryName: string,
+  value: unknown,
+  plan: CompiledQueryUpdatePlan | undefined,
+): void {
   if (!supportsQueryBindings(root)) return;
-  applyQueryBindings(root, queryName, value);
+  applyCompiledQueryUpdatePlan(root, queryName, value, plan);
 }
 
 function supportsQueryBindings(root: MorphRoot): root is MorphRoot & QueryBindingRoot {
@@ -1486,6 +1559,14 @@ function valueAtPath(value: unknown, path: string): unknown {
     if (typeof current !== 'object' || current === null) return undefined;
     return (current as Record<string, unknown>)[segment];
   }, value);
+}
+
+function writeQueryPlanElement(element: QueryBindingElement, rendered: string): void {
+  if (element.value !== undefined) {
+    element.value = rendered;
+  } else {
+    element.textContent = rendered;
+  }
 }
 
 function formatBoundValue(value: unknown): string {
