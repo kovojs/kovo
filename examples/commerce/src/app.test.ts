@@ -22,6 +22,7 @@ import {
   renderOrderHistory,
   renderCartPage,
   renderProductGrid,
+  renderProductGridDeferredStream,
   renderProductGridPageFragment,
   renderReceiptUploadForm,
   submitAddToCart,
@@ -317,6 +318,25 @@ describe('commerce example', () => {
     });
   });
 
+  it('streams deferred product grid fragments with Tailwind stylesheet hints', () => {
+    const response = renderProductGridDeferredStream(createCommerceDb());
+
+    expect(response).toMatchObject({
+      headers: {
+        'Content-Type': 'text/html; charset=utf-8',
+        'Transfer-Encoding': 'chunked',
+      },
+      status: 200,
+    });
+    expect(response.body).toContain(
+      '<main class="min-h-dvh bg-slate-50 p-6"><fw-defer target="product-grid" state="pending"></fw-defer>',
+    );
+    expect(response.body).toContain('<fw-query name="productGrid">');
+    expect(response.body).toContain('<fw-fragment target="product-grid">');
+    expect(response.body).toContain('<link rel="stylesheet" href="/assets/tailwind.css">');
+    expect(response.body).toContain('class="rounded border border-slate-200 bg-white p-4"');
+  });
+
   it('uses the typed commerce session schema in authenticated mutations', async () => {
     const db = createCommerceDb();
     const request = { db, session: { id: 's1', user: { id: 'u1' } } };
@@ -607,6 +627,7 @@ describe('commerce example', () => {
     expect(css).toContain('.rounded');
     expect(css).toContain('.text-red-700');
     expect(css).toContain('.bg-teal-600');
+    expect(css).toContain('.border-slate-200');
   });
 
   it('ships graph facts for fw check and explain acceptance', () => {

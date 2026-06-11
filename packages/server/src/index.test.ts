@@ -519,6 +519,7 @@ describe('server mutation primitives', () => {
             {
               html: '<section fw-c="reviews" fw-deps="product:p1"><article data-key="r1">5</article></section>',
               priority: 5,
+              stylesheets: ['/assets/reviews.css'],
               target: 'reviews:p1',
             },
             {

@@ -14,7 +14,7 @@ const generatedWireBodies = {
 --jiso-boundary
 <fw-query name="reviews" key="product:p1">{"items":[{"id":"r1","rating":5}]}</fw-query>
 <fw-query name="recommendations" key="product:p1">{"items":[{"id":"rec-1"}]}</fw-query>
-<fw-fragment target="reviews:p1" priority="5"><section fw-c="reviews" fw-deps="product:p1"><article data-key="r1">5</article></section></fw-fragment>
+<fw-fragment target="reviews:p1" priority="5"><link rel="stylesheet" href="/assets/reviews.css"><section fw-c="reviews" fw-deps="product:p1"><article data-key="r1">5</article></section></fw-fragment>
 <fw-fragment target="recommendations:p1"><section fw-c="recommendations" fw-deps="product:p1"><article data-key="rec-1">Beans</article></section></fw-fragment>
 --jiso-boundary--
 </body></html>
@@ -472,14 +472,22 @@ void test('D1 commerce enhanced fragments carry Tailwind stylesheet hints', asyn
   assert.match(commerceSource, /commerceStylesheets = \['\/assets\/tailwind\.css'\] as const/);
   assert.match(commerceSource, /failureStylesheets: commerceStylesheets/);
   assert.match(commerceSource, /stylesheets: commerceStylesheets/);
+  assert.match(commerceSource, /renderProductGridDeferredStream/);
+  assert.match(commerceSource, /renderDeferredStream/);
+  assert.match(commerceSource, /stylesheets: commerceStylesheets/);
   assert.match(commerceSource, /renderFailureFragment: \(failure\) =>/);
   assert.match(commerceSource, /renderAddToCartFailureFragment\(request\.db, rawInput, failure\)/);
   assert.match(commerceSource, /return renderAddToCartForm\(product, failure\)/);
   assert.match(commerceTests, /response\.body\.match/);
   assert.match(commerceTests, /toHaveLength\(3\)/);
   assert.match(commerceTests, /enhanced addToCart failures as a rerendered form fragment/);
+  assert.match(
+    commerceTests,
+    /streams deferred product grid fragments with Tailwind stylesheet hints/,
+  );
   assert.match(commerceTests, /fw-fragment-target="product-form:p2"/);
   assert.match(commerceTests, /<link rel="stylesheet" href="\/assets\/tailwind\.css">/);
+  assert.match(commerceTests, /border-slate-200/);
   assert.match(serverSource, /failureStylesheets\?: readonly \(string \| StylesheetAsset\)\[\]/);
   assert.match(serverSource, /renderStylesheetLinks\(wireRequest\.failureStylesheets/);
   assert.match(serverSource, /error-boundary=.*renderStylesheetLinks\(renderer\.stylesheets/);
@@ -800,7 +808,9 @@ void test('D3 deferred stream responses are consumed by the runtime', async () =
   assert.match(runtimeTests, /morph:2:2 items/);
   assert.match(runtimeTests, /applies full deferred stream responses in boundary order/);
   assert.match(runtimeTests, /1 review:1/);
-  assert.match(await readProjectFile('fixtures/wire/defer-stream.http'), /priority="5"/);
+  const deferredFixture = await readProjectFile('fixtures/wire/defer-stream.http');
+  assert.match(deferredFixture, /priority="5"/);
+  assert.match(deferredFixture, /<link rel="stylesheet" href="\/assets\/reviews\.css">/);
   assert.match(runtimeTests, /--jiso-boundary--/);
   assert.match(runtimeTests, /reviews-plan/);
   assert.match(runtimeTests, /morph:<section>Reviews ready<\/section>/);

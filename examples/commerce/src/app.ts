@@ -10,6 +10,7 @@ import {
   metaFromQuery,
   mutation,
   query,
+  renderDeferredStream,
   renderMutationEndpointResponse,
   renderPageHints,
   s,
@@ -291,6 +292,28 @@ export function renderProductGridPageFragment(
   input: ProductGridInput = {},
 ): string {
   return `<fw-fragment target="product-grid" mode="append">${renderProductGridAppend(loadProductGrid(db, input))}</fw-fragment>`;
+}
+
+export function renderProductGridDeferredStream(db: CommerceDb, input: ProductGridInput = {}) {
+  const productGrid = loadProductGrid(db, input);
+
+  return renderDeferredStream({
+    closeHtml: '</main></body></html>',
+    chunks: [
+      {
+        fragments: [
+          {
+            html: renderProductGrid(productGrid),
+            stylesheets: commerceStylesheets,
+            target: 'product-grid',
+          },
+        ],
+        queries: [{ name: 'productGrid', value: productGrid }],
+      },
+    ],
+    shell:
+      '<!doctype html><html><body><main class="min-h-dvh bg-slate-50 p-6"><fw-defer target="product-grid" state="pending"></fw-defer>',
+  });
 }
 
 function renderProductCard(
