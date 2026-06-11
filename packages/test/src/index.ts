@@ -1,6 +1,7 @@
 export type { DiagnosticCode } from '@jiso/core';
 import { diagnosticDefinitions, type DiagnosticCode, type DiagnosticSeverity } from '@jiso/core';
 import { PGlite, type PGliteOptions, type Results } from '@electric-sql/pglite';
+import { AsyncLocalStorage } from 'node:async_hooks';
 import { inspect, isDeepStrictEqual } from 'node:util';
 import type { TouchGraph, TouchSite } from '@jiso/core';
 import {
@@ -112,19 +113,33 @@ export function createJisoTestHarness<Db>(
       input: unknown,
       execOptions?: JisoTestExecOptions<Request>,
     ) {
-      const start = verifier?.observed.length ?? 0;
       const request = {
         ...options.request,
         ...execOptions?.request,
         db,
       } as unknown as Request;
-      const result = await runMutation(
-        mutation,
-        input,
-        request,
-        execOptions?.csrf === undefined ? {} : { csrf: execOptions.csrf },
-      );
-      verifier?.assertCoveredSince(start, execOptions?.touchGraphKey);
+
+      if (!verifier) {
+        const result = await runMutation(
+          mutation,
+          input,
+          request,
+          execOptions?.csrf === undefined ? {} : { csrf: execOptions.csrf },
+        );
+        return result;
+      }
+
+      const captured = await verifier.capture(async () => {
+        const result = await runMutation(
+          mutation,
+          input,
+          request,
+          execOptions?.csrf === undefined ? {} : { csrf: execOptions.csrf },
+        );
+        return result;
+      });
+      verifier.assertCoveredOperations(captured.observed, execOptions?.touchGraphKey);
+      const result = captured.result;
       return result;
     },
     async page(path) {
@@ -137,17 +152,22 @@ export function createJisoTestHarness<Db>(
     async query(query, input) {
       if (!query.load) throw new Error(`Query fixture has no loader: ${query.key}`);
 
-      const start = verifier?.observed.length ?? 0;
-      const result = await query.load(input, {
-        request: {
-          ...options.request,
-          db,
-        },
-      });
-      verifier?.assertReadsCoveredSince(
-        start,
-        query.reads.map((domain) => domain.key),
-      );
+      const load = () =>
+        query.load?.(input, {
+          request: {
+            ...options.request,
+            db,
+          },
+        });
+      const result = verifier
+        ? await verifier.capture(load).then((captured) => {
+            verifier.assertReadsCoveredOperations(
+              captured.observed,
+              query.reads.map((domain) => domain.key),
+            );
+            return captured.result;
+          })
+        : await load();
       if (query.output) {
         try {
           query.output.parse(result);
@@ -200,9 +220,17 @@ export interface DbVerificationDiagnostic {
 
 export interface DbVerifier {
   assertCovered(touchGraphKey?: string): void;
+  assertCoveredOperations(observed: readonly ObservedDbOperation[], touchGraphKey?: string): void;
   assertCoveredSince(start: number, touchGraphKey?: string): void;
   assertReadsCovered(domains: readonly string[]): void;
+  assertReadsCoveredOperations(
+    observed: readonly ObservedDbOperation[],
+    domains: readonly string[],
+  ): void;
   assertReadsCoveredSince(start: number, domains: readonly string[]): void;
+  capture<T>(
+    callback: () => T | Promise<T>,
+  ): Promise<{ observed: readonly ObservedDbOperation[]; result: T }>;
   diagnostics(): DbVerificationDiagnostic[];
   observed: readonly ObservedDbOperation[];
   wrap<Db>(db: Db): Db;
@@ -235,24 +263,49 @@ export interface PropertyTestResult {
 }
 
 export function createDbVerifier(touchGraph: TouchGraph, config: DbVerificationConfig): DbVerifier {
-  const observed: ObservedDbOperation[] = [];
+  const recorder = createObservationRecorder();
+  const rootProxyCache = new WeakMap<object, object>();
+  const sqlHandleProxyCache = new WeakMap<object, object>();
+  const methodCache = new WeakMap<object, Map<PropertyKey, CachedMethod>>();
 
   return {
     assertCovered(touchGraphKey?: string): void {
+      assertObservedWritesCovered(recorder.observed, touchGraph, config, touchGraphKey);
+    },
+    assertCoveredOperations(
+      observed: readonly ObservedDbOperation[],
+      touchGraphKey?: string,
+    ): void {
       assertObservedWritesCovered(observed, touchGraph, config, touchGraphKey);
     },
     assertCoveredSince(start: number, touchGraphKey?: string): void {
-      assertObservedWritesCovered(observed.slice(start), touchGraph, config, touchGraphKey);
+      assertObservedWritesCovered(
+        recorder.observed.slice(start),
+        touchGraph,
+        config,
+        touchGraphKey,
+      );
     },
     assertReadsCovered(domains: readonly string[]): void {
+      assertObservedReadsCovered(recorder.observed, domains, config);
+    },
+    assertReadsCoveredOperations(
+      observed: readonly ObservedDbOperation[],
+      domains: readonly string[],
+    ): void {
       assertObservedReadsCovered(observed, domains, config);
     },
     assertReadsCoveredSince(start: number, domains: readonly string[]): void {
-      assertObservedReadsCovered(observed.slice(start), domains, config);
+      assertObservedReadsCovered(recorder.observed.slice(start), domains, config);
+    },
+    capture<T>(
+      callback: () => T | Promise<T>,
+    ): Promise<{ observed: readonly ObservedDbOperation[]; result: T }> {
+      return recorder.capture(callback);
     },
     diagnostics(): DbVerificationDiagnostic[] {
       const observedWrites = new Set(
-        observed
+        recorder.observed
           .filter(
             (operation): operation is ObservedDbOperation & { domain: string } =>
               operation.kind === 'write' && operation.domain !== undefined,
@@ -260,7 +313,7 @@ export function createDbVerifier(touchGraph: TouchGraph, config: DbVerificationC
           .map((operation) => operation.domain),
       );
       const observedBranches = new Set(
-        observed
+        recorder.observed
           .filter(
             (operation): operation is ObservedDbOperation & { branch: string } =>
               operation.kind === 'write' && operation.branch !== undefined,
@@ -295,51 +348,59 @@ export function createDbVerifier(touchGraph: TouchGraph, config: DbVerificationC
 
       return [...unobservedBranches, ...unobservedDomains];
     },
-    observed,
+    observed: recorder.observed,
     wrap<Db>(db: Db): Db {
       if (typeof db !== 'object' || db === null) return db;
+      const cached = rootProxyCache.get(db);
+      if (cached) return cached as Db;
 
+      // SPEC.md §11.4: verification observes calls that cross the harness
+      // DB seam. A raw handle captured before wrap() never reaches this proxy;
+      // tests must pass and use the wrapped harness DB handle instead.
       const proxy = new Proxy(db as Record<string, unknown>, {
         get(target, prop, receiver) {
-          if (prop === '__jisoObserved') return observed;
+          if (prop === '__jisoObserved') return recorder.observed;
           const value = Reflect.get(target, prop, receiver);
 
-          if (prop === 'pglite' && typeof value === 'object' && value !== null) {
-            return wrapSqlHandle(value, config, observed);
+          if (prop === 'pglite' && isSqlHandleLike(value)) {
+            return wrapSqlHandle(value, config, recorder, sqlHandleProxyCache, methodCache);
           }
 
           if (prop === 'read' && typeof value === 'function') {
-            return (table: string, ...args: unknown[]) => {
-              observe('read', table, args, config, observed);
-              return value.call(target, table, ...args);
-            };
+            return cachedMethod(target, prop, value, methodCache, () =>
+              observableTableMethod('read', target, value, config, recorder),
+            );
           }
 
           if (prop === 'write' && typeof value === 'function') {
-            return (table: string, ...args: unknown[]) => {
-              observe('write', table, args, config, observed);
-              return value.call(target, table, ...args);
-            };
+            return cachedMethod(target, prop, value, methodCache, () =>
+              observableTableMethod('write', target, value, config, recorder),
+            );
           }
 
-          if (prop === 'sql' && typeof value === 'function') {
-            return (statement: unknown, ...args: unknown[]) => {
-              observeSqlIfString(statement, config, observed);
-              return value.call(target, statement, ...args);
-            };
+          if (prop === 'sql' && typeof value === 'function' && isDbAdapterLike(target)) {
+            return cachedMethod(target, prop, value, methodCache, () =>
+              observableSqlMethod(target, value, config, recorder),
+            );
           }
 
-          if ((prop === 'query' || prop === 'exec') && typeof value === 'function') {
-            return (statement: unknown, ...args: unknown[]) => {
-              observeSqlIfString(statement, config, observed);
-              return value.call(target, statement, ...args);
-            };
+          if (
+            (prop === 'query' || prop === 'exec') &&
+            typeof value === 'function' &&
+            (isDbAdapterLike(target) || isSqlHandleLike(target))
+          ) {
+            return cachedMethod(target, prop, value, methodCache, () =>
+              observableSqlMethod(target, value, config, recorder),
+            );
           }
 
-          return value;
+          return typeof value === 'function'
+            ? cachedMethod(target, prop, value, methodCache, () => value.bind(target))
+            : value;
         },
       });
 
+      rootProxyCache.set(db, proxy);
       return proxy as Db;
     },
   };
@@ -348,37 +409,173 @@ export function createDbVerifier(touchGraph: TouchGraph, config: DbVerificationC
 function wrapSqlHandle<Handle extends object>(
   handle: Handle,
   config: DbVerificationConfig,
-  observed: ObservedDbOperation[],
+  recorder: ObservationRecorder,
+  proxyCache: WeakMap<object, object>,
+  methodCache: WeakMap<object, Map<PropertyKey, CachedMethod>>,
 ): Handle {
-  return new Proxy(handle as Record<PropertyKey, unknown>, {
+  const cached = proxyCache.get(handle);
+  if (cached) return cached as Handle;
+
+  const proxy = new Proxy(handle as Record<PropertyKey, unknown>, {
     get(target, prop, receiver) {
       const value = Reflect.get(target, prop, receiver);
 
       if (prop === 'transaction' && typeof value === 'function') {
-        return (callback: (tx: object) => Promise<unknown>, ...args: unknown[]) =>
-          value.call(
-            target,
-            (tx: object) => callback(wrapSqlHandle(tx, config, observed)),
-            ...args,
-          );
+        return cachedMethod(
+          target,
+          prop,
+          value,
+          methodCache,
+          () =>
+            (callback: (tx: object) => Promise<unknown>, ...args: unknown[]) =>
+              value.call(
+                target,
+                (tx: object) =>
+                  callback(wrapSqlHandle(tx, config, recorder, proxyCache, methodCache)),
+                ...args,
+              ),
+        );
       }
 
       if ((prop === 'query' || prop === 'exec') && typeof value === 'function') {
-        return (statement: unknown, ...args: unknown[]) => {
-          observeSqlIfString(statement, config, observed);
-          return value.call(target, statement, ...args);
-        };
+        return cachedMethod(target, prop, value, methodCache, () =>
+          observableSqlMethod(target, value, config, recorder),
+        );
       }
 
-      return typeof value === 'function' ? value.bind(target) : value;
+      return typeof value === 'function'
+        ? cachedMethod(target, prop, value, methodCache, () => value.bind(target))
+        : value;
     },
   }) as Handle;
+
+  proxyCache.set(handle, proxy);
+  return proxy;
+}
+
+interface ObservationRecorder {
+  observed: ObservedDbOperation[];
+  capture<T>(
+    callback: () => T | Promise<T>,
+  ): Promise<{ observed: readonly ObservedDbOperation[]; result: T }>;
+  record(operation: ObservedDbOperation): void;
+}
+
+interface ObservationScope {
+  observed: ObservedDbOperation[];
+}
+
+interface CachedMethod {
+  original: Function;
+  wrapped: unknown;
+}
+
+function createObservationRecorder(): ObservationRecorder {
+  const observed: ObservedDbOperation[] = [];
+  const storage = new AsyncLocalStorage<ObservationScope>();
+
+  return {
+    observed,
+    async capture<T>(
+      callback: () => T | Promise<T>,
+    ): Promise<{ observed: readonly ObservedDbOperation[]; result: T }> {
+      const scope: ObservationScope = { observed: [] };
+      const result = await storage.run(scope, callback);
+      return { observed: scope.observed, result };
+    },
+    record(operation: ObservedDbOperation): void {
+      observed.push(operation);
+      storage.getStore()?.observed.push(operation);
+    },
+  };
+}
+
+function cachedMethod(
+  target: object,
+  prop: PropertyKey,
+  original: Function,
+  methodCache: WeakMap<object, Map<PropertyKey, CachedMethod>>,
+  create: () => unknown,
+): unknown {
+  let cachedForTarget = methodCache.get(target);
+  if (!cachedForTarget) {
+    cachedForTarget = new Map();
+    methodCache.set(target, cachedForTarget);
+  }
+
+  const cached = cachedForTarget.get(prop);
+  if (cached?.original === original) return cached.wrapped;
+
+  const wrapped = create();
+  cachedForTarget.set(prop, { original, wrapped });
+  return wrapped;
+}
+
+function observableTableMethod(
+  kind: ObservedDbOperation['kind'],
+  target: object,
+  value: Function,
+  config: DbVerificationConfig,
+  recorder: ObservationRecorder,
+): (table: unknown, ...args: unknown[]) => unknown {
+  return (table: unknown, ...args: unknown[]) => {
+    observeTableIfString(kind, table, args, config, recorder);
+    return value.call(target, table, ...args);
+  };
+}
+
+function observableSqlMethod(
+  target: object,
+  value: Function,
+  config: DbVerificationConfig,
+  recorder: ObservationRecorder,
+): (statement: unknown, ...args: unknown[]) => unknown {
+  return (statement: unknown, ...args: unknown[]) => {
+    observeSqlIfString(statement, config, recorder);
+    return value.call(target, statement, ...args);
+  };
+}
+
+function isDbAdapterLike(value: unknown): value is Record<PropertyKey, unknown> {
+  if (typeof value !== 'object' || value === null) return false;
+  const record = value as Record<PropertyKey, unknown>;
+
+  return (
+    isSqlHandleLike(record.pglite) ||
+    typeof record.read === 'function' ||
+    typeof record.write === 'function' ||
+    typeof record.sql === 'function' ||
+    (typeof record.exec === 'function' && typeof record.query === 'function')
+  );
+}
+
+function isSqlHandleLike(value: unknown): value is object {
+  if (typeof value !== 'object' || value === null) return false;
+  const record = value as Record<PropertyKey, unknown>;
+  const handleMethodCount = [
+    typeof record.transaction === 'function',
+    typeof record.exec === 'function',
+    typeof record.query === 'function',
+  ].filter(Boolean).length;
+
+  return handleMethodCount >= 2;
+}
+
+function observeTableIfString(
+  kind: ObservedDbOperation['kind'],
+  table: unknown,
+  args: readonly unknown[],
+  config: DbVerificationConfig,
+  recorder: ObservationRecorder,
+): void {
+  if (typeof table !== 'string') return;
+  observe(kind, table, args, config, recorder);
 }
 
 function observeSqlIfString(
   statement: unknown,
   config: DbVerificationConfig,
-  observed: ObservedDbOperation[],
+  observed: ObservationRecorder,
 ): void {
   if (typeof statement !== 'string') return;
   try {
@@ -782,9 +979,9 @@ function observe(
   table: string,
   args: readonly unknown[],
   config: DbVerificationConfig,
-  observed: ObservedDbOperation[],
+  recorder: ObservationRecorder,
 ): void {
-  observed.push({
+  recorder.record({
     branch: observationOptions(args)?.branch,
     domain: config.domainByTable[table],
     kind,
@@ -798,10 +995,10 @@ function observe(
 function observeSql(
   statement: string,
   config: DbVerificationConfig,
-  observed: ObservedDbOperation[],
+  recorder: ObservationRecorder,
 ): void {
   for (const operation of parseSqlStatement(statement)) {
-    observed.push({
+    recorder.record({
       branch: undefined,
       domain: config.domainByTable[operation.table],
       kind: operation.kind,

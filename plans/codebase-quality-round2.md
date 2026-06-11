@@ -442,7 +442,7 @@ index.test.ts:4227 while here — it weakens the byte-for-byte claim) + acceptan
 
 ## Phase 6 — Verification harness soundness + example honesty
 
-- [ ] **HIGH — `@jiso/test` Proxy interception hazards.** Name-based duck typing intercepts any
+- [x] **HIGH — `@jiso/test` Proxy interception hazards.** Name-based duck typing intercepts any
       property named `read/write/sql/query/exec/pglite` (test/src/index.ts:299-344); each
       `db.pglite` access mints a new Proxy (`db.pglite !== db.pglite`, :307-309); per-get binding
       policy differs between `wrap` and `wrapSqlHandle` (:373); handles captured before `wrap()`
@@ -451,6 +451,13 @@ index.test.ts:4227 while here — it weakens the byte-for-byte claim) + acceptan
       adapter seam rather than property names where possible, serialize or scope observation per
       call, and detect/throw on the captured-handle bypass if detectable — otherwise document it
       as a hard usage rule with a lint-style runtime warning.
+      Evidence: `packages/test/src/index.ts` now caches root/pglite proxies and method wrappers,
+      scopes harness observations with `AsyncLocalStorage`, narrows root SQL interception to DB
+      adapter/SQL-handle seams where feasible, and documents the pre-wrap captured-handle bypass
+      at the SPEC §11.4 harness seam. `packages/test/src/index.test.ts` covers stable `pglite`
+      proxy/method identity, root `query` non-interception without a DB seam, and two interleaved
+      `exec` calls with domain-specific attribution. Verified with `pnpm exec vitest --run packages/test/src`,
+      `pnpm run check`, `pnpm run check:build`, and `pnpm run check:fw`.
 - [ ] **MED — Split `test/src/index.ts`** (harness / verifier / sql-observer / html-fragment
       modules); unify the two diagnostic channels (FW402/404/407/408 throw strings,
       FW403/405 return structured records); delete the dead FW411 special case
