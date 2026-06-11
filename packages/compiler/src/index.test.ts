@@ -1423,6 +1423,80 @@ export const CartBadge = component('cart-badge', {
     expect(result.diagnostics).toEqual([]);
   });
 
+  it('unwraps nullable and optional query shape metadata for data-bind validation', () => {
+    const result = compileComponentModule({
+      fileName: 'product-card.tsx',
+      queryShapeFacts: [
+        {
+          query: 'product',
+          shape: {
+            details: {
+              kind: 'nullable',
+              shape: {
+                name: 'string',
+              },
+            },
+            inventory: {
+              kind: 'optional',
+              shape: {
+                stock: 'number',
+              },
+            },
+          },
+          source: 'generated/queries/product.shape.ts',
+        },
+      ],
+      source: `
+export const ProductCard = component('product-card', {
+  render: () => (
+    <article>
+      <span data-bind="product.details.name">Coffee</span>
+      <span data-bind="product.inventory.stock">12</span>
+    </article>
+  ),
+});
+`,
+    });
+
+    expect(result.diagnostics).toEqual([]);
+  });
+
+  it('reports FW302 for absent paths under nullable query shape metadata', () => {
+    const result = compileComponentModule({
+      fileName: 'product-card.tsx',
+      queryShapeFacts: [
+        {
+          query: 'product',
+          shape: {
+            details: {
+              kind: 'nullable',
+              shape: {
+                name: 'string',
+              },
+            },
+          },
+          source: 'generated/queries/product.shape.ts',
+        },
+      ],
+      source: `
+export const ProductCard = component('product-card', {
+  render: () => <span data-bind="product.details.price">0</span>,
+});
+`,
+    });
+
+    expect(result.diagnostics).toEqual([
+      {
+        code: 'FW302',
+        fileName: 'product-card.tsx',
+        length: 33,
+        message: 'data-bind path is not present in the declared query shape. product.details.price',
+        severity: 'error',
+        start: { column: 23, line: 3 },
+      },
+    ]);
+  });
+
   it('reports FW302 when generated query shape facts no longer contain a binding path', () => {
     const result = compileComponentModule({
       fileName: 'cart-badge.tsx',

@@ -62,10 +62,16 @@ export type QueryShape =
   | 'number'
   | 'object'
   | 'string'
+  | QueryShapeWrapper
   | readonly QueryShape[]
   | {
       readonly [key: string]: QueryShape;
     };
+
+export interface QueryShapeWrapper {
+  kind: 'nullable' | 'optional';
+  shape: QueryShape;
+}
 
 export interface QueryFact {
   diagnostics?: readonly TouchGraphDiagnostic[];

@@ -126,10 +126,16 @@ export type QueryShape =
   | 'number'
   | 'object'
   | 'string'
+  | QueryShapeWrapper
   | readonly QueryShape[]
   | {
       readonly [key: string]: QueryShape;
     };
+
+export interface QueryShapeWrapper {
+  kind: 'nullable' | 'optional';
+  shape: QueryShape;
+}
 
 export interface QueryShapeFact {
   query: string;
@@ -1173,13 +1179,14 @@ function listStampExistsInQueryShapes(
 }
 
 function queryShapeAtPath(shape: QueryShape, segments: readonly string[]): QueryShape {
-  if (segments.length === 0) return shape;
-  if (isArrayShape(shape)) return queryShapeAtPath(shape[0] ?? 'object', segments);
-  if (typeof shape !== 'object' || shape === null) return 'object';
+  const current = unwrapQueryShape(shape);
+  if (segments.length === 0) return current;
+  if (isArrayShape(current)) return queryShapeAtPath(current[0] ?? 'object', segments);
+  if (!isQueryShapeObject(current)) return 'object';
 
   const [head, ...tail] = segments;
-  if (!head) return shape;
-  return queryShapeAtPath(shape[head] ?? 'object', tail);
+  if (!head) return current;
+  return queryShapeAtPath(current[head] ?? 'object', tail);
 }
 
 // SPEC 5.2: query data is shared/server-owned; island-local state is private/client-owned.
@@ -1735,14 +1742,15 @@ function queryShapePaths(queryShapes: Record<string, QueryShape>): string[] {
 }
 
 function queryShapeChildPaths(shape: QueryShape): string[] {
-  if (isArrayShape(shape)) {
-    const itemShape = shape[0];
+  const current = unwrapQueryShape(shape);
+  if (isArrayShape(current)) {
+    const itemShape = current[0];
     return itemShape === undefined ? [] : queryShapeChildPaths(itemShape);
   }
 
-  if (typeof shape !== 'object' || shape === null) return [];
+  if (!isQueryShapeObject(current)) return [];
 
-  return Object.entries(shape).flatMap(([key, child]) => [
+  return Object.entries(current).flatMap(([key, child]) => [
     key,
     ...queryShapeChildPaths(child ?? 'object').map((path) => `${key}.${path}`),
   ]);
@@ -1925,23 +1933,45 @@ function pathExistsInQueryShapes(path: string, queryShapes: Record<string, Query
 }
 
 function pathExistsInShape(shape: QueryShape, segments: readonly string[]): boolean {
+  const current = unwrapQueryShape(shape);
   if (segments.length === 0) return true;
 
-  if (isArrayShape(shape)) {
-    const itemShape = shape[0];
+  if (isArrayShape(current)) {
+    const itemShape = current[0];
     return itemShape !== undefined && pathExistsInShape(itemShape, segments);
   }
 
-  if (typeof shape !== 'object' || shape === null) return false;
+  if (!isQueryShapeObject(current)) return false;
 
   const [head, ...tail] = segments;
-  if (!head || !(head in shape)) return false;
+  if (!head || !(head in current)) return false;
 
-  return pathExistsInShape(shape[head] ?? 'object', tail);
+  return pathExistsInShape(current[head] ?? 'object', tail);
 }
 
 function isArrayShape(shape: QueryShape): shape is readonly QueryShape[] {
   return Array.isArray(shape);
+}
+
+function unwrapQueryShape(shape: QueryShape): QueryShape {
+  let current = shape;
+  while (isQueryShapeWrapper(current)) current = current.shape;
+  return current;
+}
+
+function isQueryShapeWrapper(shape: QueryShape): shape is QueryShapeWrapper {
+  if (typeof shape !== 'object' || shape === null || Array.isArray(shape)) return false;
+  const record = shape as Record<string, unknown>;
+  return (record.kind === 'nullable' || record.kind === 'optional') && 'shape' in shape;
+}
+
+function isQueryShapeObject(shape: QueryShape): shape is { readonly [key: string]: QueryShape } {
+  return (
+    typeof shape === 'object' &&
+    shape !== null &&
+    !Array.isArray(shape) &&
+    !isQueryShapeWrapper(shape)
+  );
 }
 
 function emitClientModule(
