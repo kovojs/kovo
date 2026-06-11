@@ -22,10 +22,7 @@ export interface ProductListRenderContext {
 export const ProductList = component('product-list', {
   fragmentTarget: true,
   queries: { products: productsQuery },
-  render: (
-    { products }: { products: ProductsResult },
-    context: ProductListRenderContext = {},
-  ) => (
+  render: ({ products }: { products: ProductsResult }, context: ProductListRenderContext = {}) => (
     <ul class="products" fw-c="product-list" fw-deps="products">
       {products.items.map((item) => (
         <li fw-key={item.id}>

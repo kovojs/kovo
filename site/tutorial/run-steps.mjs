@@ -121,7 +121,9 @@ let references = 0;
 if (existsSync(contentDir)) {
   for (const file of readdirSync(contentDir).sort()) {
     if (!file.endsWith('.md')) continue;
-    for (const reference of listSnippetReferences(readFileSync(path.join(contentDir, file), 'utf8'))) {
+    for (const reference of listSnippetReferences(
+      readFileSync(path.join(contentDir, file), 'utf8'),
+    )) {
       assert.ok(
         snippets.has(reference),
         `content/tutorial/${file} references unknown snippet "${reference}"`,

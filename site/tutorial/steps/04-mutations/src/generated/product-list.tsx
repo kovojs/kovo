@@ -5,7 +5,12 @@ import { csrfField } from '@jiso/server';
 
 import { formatPrice, type ShopProduct } from '../db.js';
 import { productsQuery, type ProductsResult } from '../queries.js';
-import { shopCsrf, type AddToCartFailure, type AddToCartFailureState, type ShopRequest } from '../app.js';
+import {
+  shopCsrf,
+  type AddToCartFailure,
+  type AddToCartFailureState,
+  type ShopRequest,
+} from '../app.js';
 
 // Tutorial step 04 (chapter 4): every product card carries a real form
 // posting to the mutation endpoint (SPEC.md section 6.3) — the no-JS
@@ -22,10 +27,7 @@ export interface ProductListRenderContext {
 export const ProductList = component('product-list', {
   fragmentTarget: true,
   queries: { products: productsQuery },
-  render: (
-    { products }: { products: ProductsResult },
-    context: ProductListRenderContext = {},
-  ) => (
+  render: ({ products }: { products: ProductsResult }, context: ProductListRenderContext = {}) => (
     <ul class="products" fw-c="product-list" fw-deps="products">
       {products.items.map((item) => (
         <li fw-key={item.id}>

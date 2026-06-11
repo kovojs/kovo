@@ -162,9 +162,9 @@ describe('tutorial step 07 — testing & verification', () => {
     // Observed writes ⊆ declared touches — the SPEC.md §11.2 invariant.
     expect(harness.verificationDiagnostics()).toEqual([]);
     await expect(
-      harness.page('/').then((page: { fragment(target: string): string }) =>
-        page.fragment('cart-badge'),
-      ),
+      harness
+        .page('/')
+        .then((page: { fragment(target: string): string }) => page.fragment('cart-badge')),
     ).resolves.toContain('data-bind="cart.count"');
   });
   // /snippet

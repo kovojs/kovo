@@ -1,6 +1,12 @@
 import { query, type QueryLoadContext } from '@jiso/server';
 
-import { createShopDb, type ShopDb, type ShopOrder, type ShopProduct, type ShopRequest } from './db.js';
+import {
+  createShopDb,
+  type ShopDb,
+  type ShopOrder,
+  type ShopProduct,
+  type ShopRequest,
+} from './db.js';
 import { cart, order, product } from './domains.js';
 
 // Tutorial step 07 (chapter 7), carried from step 06: the loaders now read the per-request database
@@ -44,8 +50,7 @@ export const cartQuery = query('cart', {
 });
 
 export const productsQuery = query('products', {
-  load: (_input: unknown, context?: QueryLoadContext<ShopRequest>) =>
-    loadProducts(dbFrom(context)),
+  load: (_input: unknown, context?: QueryLoadContext<ShopRequest>) => loadProducts(dbFrom(context)),
   reads: [product],
 });
 

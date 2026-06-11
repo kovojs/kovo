@@ -134,8 +134,7 @@ export function submitAddToCart(
     headers,
     rawInput,
     redirectTo: '/',
-    renderFailureFragment: (failure) =>
-      renderAddToCartFailureFragment(request, rawInput, failure),
+    renderFailureFragment: (failure) => renderAddToCartFailureFragment(request, rawInput, failure),
     renderFailurePage: (failure) => renderShopPage(request.db, { failure, productId }, request),
     request,
   });

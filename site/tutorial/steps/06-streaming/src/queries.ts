@@ -36,8 +36,7 @@ export const cartQuery = query('cart', {
 });
 
 export const productsQuery = query('products', {
-  load: (_input: unknown, context?: QueryLoadContext<ShopRequest>) =>
-    loadProducts(dbFrom(context)),
+  load: (_input: unknown, context?: QueryLoadContext<ShopRequest>) => loadProducts(dbFrom(context)),
   reads: [product],
 });
 // /snippet
