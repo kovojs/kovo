@@ -1,8 +1,7 @@
-import { component, createMemoryStorage, form, stripeSignature } from '@jiso/core';
+import { createMemoryStorage, form, stripeSignature } from '@jiso/core';
 import type { OptimisticFor } from '@jiso/runtime';
 import {
   createMemoryMutationReplayStore,
-  domain,
   errorBoundary,
   csrfField,
   csrfToken,
@@ -12,7 +11,6 @@ import {
   metaFromQuery,
   mutation,
   notFound,
-  query,
   renderDeferredStream,
   renderMutationEndpointResponse,
   renderPageHints,
@@ -22,14 +20,17 @@ import {
   runWebhook,
   s,
   session,
-  t,
   webhook,
   type MutationFail,
   type MutationWireHeaderSource,
   type StoredFileUpload,
 } from '@jiso/server';
 import type { FwExplainInput } from '@jiso/core';
+import { attachment, cart, order, product } from './domains.js';
+import { CartBadge } from './generated/cart-badge.js';
+import { OrderHistory } from './generated/order-history.js';
 import { commerceTouchGraph } from './generated/touch-graph.js';
+import { cartQuery, orderHistoryQuery, productGridQuery } from './queries.js';
 
 export { commerceTouchGraph } from './generated/touch-graph.js';
 
@@ -138,15 +139,7 @@ function cloneCommerceDb(source: CommerceDb): CommerceDb {
   return clone;
 }
 
-export const cart = domain('cart');
-export const attachment = domain('attachment');
-export const order = domain('order');
-export const product = domain('product');
-
-export const cartQuery = query('cart', {
-  load: (_input: unknown) => ({ count: 1 }),
-  reads: [cart],
-});
+export { attachment, cart, order, product, cartQuery, orderHistoryQuery, productGridQuery };
 
 export interface ProductGridInput {
   after?: string;
@@ -198,15 +191,22 @@ export interface AddToCartFailureState {
   productId?: string;
 }
 
-export const productGridQuery = query('productGrid', {
-  load: (input: unknown) => loadProductGrid(createCommerceDb(), input as ProductGridInput),
-  reads: [product],
-});
+export const commerceStylesheets = ['/assets/tailwind.css'] as const;
 
-export const orderHistoryQuery = query('orderHistory', {
-  load: (_input: unknown) => ({ items: [] as CommerceDb['orders'] }),
-  reads: [order],
-});
+export function loadProductGrid(db: CommerceDb, input: ProductGridInput = {}): ProductGridResult {
+  const limit = input.limit ?? 2;
+  const products = [...db.products.values()].sort((left, right) => left.id.localeCompare(right.id));
+  const start = input.after
+    ? Math.max(products.findIndex((item) => item.id === input.after) + 1, 0)
+    : 0;
+  const items = products.slice(start, start + limit);
+  const next = products[start + limit];
+
+  return {
+    items,
+    nextCursor: next ? (items.at(-1)?.id ?? null) : null,
+  };
+}
 
 export const addToCart = mutation('cart/add', {
   csrf: commerceCsrf,
@@ -409,29 +409,12 @@ export const commerceMessages = i18n('en-US', {
   productStock: '{count} in stock',
 });
 
-export const commerceStylesheets = ['/assets/tailwind.css'] as const;
-
 export const commerceMeta = metaFromQuery(cartQuery, (cart) =>
   meta({
     description: `Browse products and checkout with ${cart.count} verifiable cart item.`,
     title: `Jiso Commerce (${cart.count})`,
   }),
 );
-
-export function loadProductGrid(db: CommerceDb, input: ProductGridInput = {}): ProductGridResult {
-  const limit = input.limit ?? 2;
-  const products = [...db.products.values()].sort((left, right) => left.id.localeCompare(right.id));
-  const start = input.after
-    ? Math.max(products.findIndex((item) => item.id === input.after) + 1, 0)
-    : 0;
-  const items = products.slice(start, start + limit);
-  const next = products[start + limit];
-
-  return {
-    items,
-    nextCursor: next ? (items.at(-1)?.id ?? null) : null,
-  };
-}
 
 export function loadCartQuery(db: CommerceDb): CartQueryResult {
   return {
@@ -538,11 +521,9 @@ function renderAddToCartError(failure: AddToCartFailure): string {
 }
 
 export function renderOrderHistory(db: CommerceDb): string {
-  const items = db.orders
-    .map((item) => `<li fw-key="${item.id}">${item.productId} x ${item.qty} - ${item.total}</li>`)
-    .join('');
-
-  return `<ol fw-c="order-history" fw-deps="order">${items}</ol>`;
+  // SPEC.md section 4.2: the markup comes from the compiled TSX component
+  // (src/components/order-history.tsx); fw-c and fw-deps are compiler-derived.
+  return OrderHistory.definition.render({ orderHistory: { items: db.orders } });
 }
 
 export function renderReceiptUploadForm(orderId = 'order-1'): string {
@@ -584,13 +565,10 @@ function csvCell(value: string): string {
   return /[",\n\r]/.test(value) ? `"${value.replaceAll('"', '""')}"` : value;
 }
 
-export const CartBadge = component('cart-badge', {
-  fragmentTarget: true,
-  queries: { cart: cartQuery },
-  state: () => ({}),
-  render: () =>
-    `<cart-badge class="inline-flex items-center gap-2 rounded-md border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-900 shadow-sm" fw-deps="cart"><span>${t(commerceMessages, 'cartLabel')}</span><span class="rounded bg-teal-600 px-2 py-0.5 text-white" data-bind="cart.count">1</span></cart-badge>`,
-});
+// CartBadge and OrderHistory are authored as TSX components under
+// src/components/ and compiled through @jiso/compiler (SPEC.md sections 3,
+// 4.1, 5.2); the app imports their committed lowered IR from src/generated/.
+export { CartBadge, OrderHistory };
 
 export function renderCommercePageHints(cart: CartQueryResult = cartQuery.load({})) {
   return renderPageHints(
@@ -611,8 +589,9 @@ export function renderCartPage(
   request?: CommerceRequest,
 ): string {
   const pageHints = renderCommercePageHints(loadCartQuery(db));
+  const cartBadge = CartBadge.definition.render({ cart: loadCartQuery(db) });
   const productGrid = renderProductGridWithFailure(loadProductGrid(db), addToCartFailure, request);
-  return `<html><head>${pageHints.html}</head><body class="min-h-dvh bg-slate-50 p-6"><main class="mx-auto max-w-4xl"><fw-fragment target="cart-badge">${CartBadge.definition.render()}</fw-fragment><fw-fragment target="product-grid">${productGrid}</fw-fragment><fw-fragment target="order-history">${renderOrderHistory(db)}${renderReceiptUploadForm()}</fw-fragment></main></body></html>`;
+  return `<html><head>${pageHints.html}</head><body class="min-h-dvh bg-slate-50 p-6"><main class="mx-auto max-w-4xl"><fw-fragment target="cart-badge">${cartBadge}</fw-fragment><fw-fragment target="product-grid">${productGrid}</fw-fragment><fw-fragment target="order-history">${renderOrderHistory(db)}${renderReceiptUploadForm()}</fw-fragment></main></body></html>`;
 }
 
 function renderProductGridWithFailure(
@@ -655,7 +634,7 @@ export function submitAddToCart(
     failureStylesheets: commerceStylesheets,
     fragmentRenderers: [
       {
-        render: () => CartBadge.definition.render(),
+        render: () => CartBadge.definition.render({ cart: loadCartQuery(request.db) }),
         stylesheets: commerceStylesheets,
         target: 'cart-badge',
       },

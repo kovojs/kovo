@@ -884,6 +884,25 @@ describe('commerce example', () => {
     expect(css).toContain('.border-slate-200');
   });
 
+  it('compiles TSX-authored components to committed IR through the fixpoint gate', () => {
+    // SPEC.md section 5.2.3 / Constitution #3: emit-components.mjs asserts the
+    // fixpoint (compiling emitted IR is a no-op) and render equivalence for
+    // every authored component, and --check fails if committed IR is stale.
+    execFileSync('node', ['examples/commerce/scripts/emit-components.mjs', '--check'], {
+      stdio: 'pipe',
+    });
+
+    for (const name of ['cart-badge', 'order-history']) {
+      const authored = readFileSync(new URL(`./components/${name}.tsx`, import.meta.url), 'utf8');
+      const generated = readFileSync(new URL(`./generated/${name}.tsx`, import.meta.url), 'utf8');
+
+      // SPEC.md section 4.8: stamps are compiler-derived, never hand-written
+      // in authored sugar (FW222 drift / FW223 duplicates).
+      expect(authored).not.toMatch(/(?:data-bind|fw-deps|fw-c|fw-state|data-p-[\w-]+)=/);
+      expect(generated).toContain('// @jiso-ir');
+    }
+  });
+
   it('ships graph facts for fw check and explain acceptance', () => {
     execFileSync('node', ['examples/commerce/scripts/emit-graph.mjs', '--check'], {
       stdio: 'pipe',

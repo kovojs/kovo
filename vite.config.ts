@@ -9,7 +9,15 @@ export default defineConfig({
     },
   },
   fmt: {
-    ignorePatterns: ['dist/**', 'coverage/**', 'node_modules/**'],
+    // examples/commerce/src/generated holds compiler-emitted IR that must stay
+    // byte-identical to @jiso/compiler output (SPEC.md section 5.2.3 staleness
+    // and fixpoint pins), so the formatter must not rewrite it.
+    ignorePatterns: [
+      'dist/**',
+      'coverage/**',
+      'node_modules/**',
+      'examples/commerce/src/generated/**',
+    ],
     semi: true,
     singleQuote: true,
     sortPackageJson: true,
