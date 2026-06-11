@@ -1792,9 +1792,11 @@ export const CartBadge = component('cart-badge', {
       {
         code: 'FW223',
         fileName: 'cart-badge.tsx',
+        length: 22,
         message:
           'Redundant hand-written binding stamp in sugar; the compiler derives it. data-bind="cart.count" wraps {cart.count}',
         severity: 'lint',
+        start: { column: 13, line: 6 },
       },
       {
         code: 'FW311',
@@ -2019,9 +2021,11 @@ export const Recommendations = component('recommendations', {
       {
         code: 'FW223',
         fileName: 'recommendations.tsx',
+        length: 22,
         message:
           'Redundant hand-written binding stamp in sugar; the compiler derives it. data-bind="cart.count" wraps {cart.count}',
         severity: 'lint',
+        start: { column: 13, line: 6 },
       },
     ]);
   });
@@ -2050,18 +2054,22 @@ export const CartBadge = component('cart-badge', {
       {
         code: 'FW223',
         fileName: 'cart-badge.tsx',
+        length: 22,
         message:
           'Redundant hand-written binding stamp in sugar; the compiler derives it. data-bind="cart.count" wraps {cart.count}',
         severity: 'lint',
+        start: { column: 31, line: 4 },
       },
     ]);
     expect(drift.diagnostics).toEqual([
       {
         code: 'FW222',
         fileName: 'cart-badge.tsx',
+        length: 22,
         message:
           'Hand-written binding stamp disagrees with the typed expression it wraps. data-bind="cart.count" wraps {cart.total}',
         severity: 'error',
+        start: { column: 31, line: 4 },
       },
       {
         code: 'FW311',
@@ -2231,9 +2239,11 @@ export const Recommendations = component('recommendations', {
       {
         code: 'FW223',
         fileName: 'recommendations.tsx',
+        length: 22,
         message:
           'Redundant hand-written binding stamp in sugar; the compiler derives it. data-bind="cart.count" wraps {cart.count}',
         severity: 'lint',
+        start: { column: 13, line: 6 },
       },
       {
         code: 'FW226',

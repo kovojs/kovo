@@ -909,22 +909,27 @@ function validateStampExpressionDrift(
       const code = stamp.binding === stamp.expression ? 'FW223' : 'FW222';
 
       return {
-        ...diagnosticFor(options.fileName, code),
+        ...diagnosticFor(options.fileName, code, source, stamp.index, stamp.length),
         message: `${diagnosticDefinitions[code].message} data-bind="${stamp.binding}" wraps {${stamp.expression}}`,
       };
     });
 }
 
-function bindingExpressionStamps(source: string): Array<{ binding: string; expression: string }> {
+function bindingExpressionStamps(
+  source: string,
+): Array<{ binding: string; expression: string; index: number; length: number }> {
   return parsedJsxElements(source).flatMap((element) => {
-    const binding = jsxStaticAttributeValue(element, 'data-bind');
-    if (!binding) return [];
+    const attribute = element.attributes.find((item) => item.name === 'data-bind');
+    const binding = attribute?.value;
+    if (!attribute || !binding) return [];
     if (element.selfClosing) return [];
 
     const expression = soleWrappedQueryExpression(
       source.slice(element.openingEnd, element.closingStart),
     );
-    return expression ? [{ binding, expression }] : [];
+    return expression
+      ? [{ binding, expression, index: attribute.start, length: attribute.end - attribute.start }]
+      : [];
   });
 }
 
