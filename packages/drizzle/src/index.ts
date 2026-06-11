@@ -1,5 +1,20 @@
-export type { DiagnosticCode } from '@jiso/core';
-import { diagnosticDefinitions, type DiagnosticCode, type DiagnosticSeverity } from '@jiso/core';
+export type {
+  DiagnosticCode,
+  ReadSite,
+  TouchGraph,
+  TouchGraphEntry,
+  TouchSite,
+  UnresolvedWriteSite,
+} from '@jiso/core';
+import {
+  diagnosticDefinitions,
+  type DiagnosticCode,
+  type DiagnosticSeverity,
+  type ReadSite,
+  type TouchGraph,
+  type TouchGraphEntry,
+  type TouchSite,
+} from '@jiso/core';
 import {
   Node,
   Project,
@@ -21,40 +36,6 @@ export type JisoTableExtraConfig = JisoTableAnnotation & ((self: unknown) => [])
 export function jiso(annotation: JisoTableAnnotation): JisoTableExtraConfig {
   return Object.assign((() => []) as (self: unknown) => [], annotation) as JisoTableExtraConfig;
 }
-
-export interface TouchSite {
-  branch?: string;
-  domain: string;
-  keys: null | string;
-  predicate?: 'eq' | 'non-eq';
-  site: string;
-  via: string;
-}
-
-export interface ReadSite {
-  branch?: string;
-  domain: string;
-  keys: null | string;
-  predicate?: 'eq' | 'non-eq';
-  site: string;
-  source: string;
-  via: string;
-}
-
-export interface UnresolvedWriteSite {
-  code: 'FW406';
-  domain?: string;
-  message: string;
-  site: string;
-}
-
-export interface TouchGraphEntry {
-  reads?: readonly ReadSite[];
-  touches: readonly TouchSite[];
-  unresolved: readonly UnresolvedWriteSite[];
-}
-
-export type TouchGraph = Readonly<Record<string, TouchGraphEntry>>;
 
 export type QueryShape =
   | 'array'

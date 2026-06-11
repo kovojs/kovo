@@ -1,7 +1,7 @@
 export type { DiagnosticCode } from '@jiso/core';
 import { diagnosticDefinitions, type DiagnosticCode, type DiagnosticSeverity } from '@jiso/core';
 import { PGlite, type PGliteOptions, type Results } from '@electric-sql/pglite';
-import type { TouchGraph, TouchSite } from '@jiso/drizzle';
+import type { TouchGraph, TouchSite } from '@jiso/core';
 import {
   type InferSchema,
   type MutationDefinition,

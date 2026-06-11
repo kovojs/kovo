@@ -55,6 +55,40 @@ export interface RouteRegistry {}
 
 export interface InvalidationSets {}
 
+export interface TouchSite {
+  branch?: string;
+  domain: string;
+  keys: null | string;
+  predicate?: 'eq' | 'non-eq';
+  site: string;
+  via: string;
+}
+
+export interface ReadSite {
+  branch?: string;
+  domain: string;
+  keys: null | string;
+  predicate?: 'eq' | 'non-eq';
+  site: string;
+  source: string;
+  via: string;
+}
+
+export interface UnresolvedWriteSite {
+  code: 'FW406';
+  domain?: string;
+  message: string;
+  site: string;
+}
+
+export interface TouchGraphEntry {
+  reads?: readonly ReadSite[];
+  touches: readonly TouchSite[];
+  unresolved: readonly UnresolvedWriteSite[];
+}
+
+export type TouchGraph = Readonly<Record<string, TouchGraphEntry>>;
+
 type RegistryKey<Registry> = keyof Registry extends never
   ? string
   : Extract<keyof Registry, string>;

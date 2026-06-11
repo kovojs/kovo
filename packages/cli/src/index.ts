@@ -2,7 +2,12 @@
 export type { DiagnosticCode } from '@jiso/core';
 import { readFileSync } from 'node:fs';
 
-import { diagnosticDefinitions, type DiagnosticCode, type DiagnosticSeverity } from '@jiso/core';
+import {
+  diagnosticDefinitions,
+  type DiagnosticCode,
+  type DiagnosticSeverity,
+  type TouchGraph,
+} from '@jiso/core';
 
 export interface FwCheckInput {
   diagnostics?: readonly StaticDiagnosticFact[];
@@ -16,7 +21,7 @@ export interface FwCheckInput {
   queryData?: readonly QueryDataFact[];
   queries?: readonly QueryReadSet[];
   scopeAudits?: readonly ScopeAuditFact[];
-  touchGraph?: CliTouchGraph;
+  touchGraph?: TouchGraph;
   updateCoverage?: readonly UpdateCoverageFact[];
   verificationDiagnostics?: readonly VerificationDiagnosticFact[];
 }
@@ -192,27 +197,6 @@ export interface SourcePosition {
   column: number;
   line: number;
 }
-
-interface CliTouchGraphEntry {
-  reads?: readonly CliTouchGraphSite[];
-  touches: readonly CliTouchGraphSite[];
-  unresolved: readonly {
-    code: 'FW406';
-    message: string;
-    site: string;
-  }[];
-}
-
-interface CliTouchGraphSite {
-  domain: string;
-  keys?: null | string;
-  predicate?: 'eq' | 'non-eq';
-  site: string;
-  source?: string;
-  via?: string;
-}
-
-type CliTouchGraph = Readonly<Record<string, CliTouchGraphEntry>>;
 
 interface TouchGraphDiagnosticFact {
   code: DiagnosticCode;
@@ -632,7 +616,7 @@ function ok(lines: string[]): FwCheckResult {
   };
 }
 
-function diagnosticsForTouchGraph(graph: CliTouchGraph): TouchGraphDiagnosticFact[] {
+function diagnosticsForTouchGraph(graph: TouchGraph): TouchGraphDiagnosticFact[] {
   return Object.values(graph).flatMap((entry) => [
     ...entry.unresolved.map((unresolved) => ({
       code: unresolved.code,
@@ -1020,7 +1004,7 @@ function lintMessage(lint: SemanticLint): string {
 
 function missedQueryInvalidations(
   queries: readonly QueryReadSet[],
-  touchGraph: CliTouchGraph,
+  touchGraph: TouchGraph,
   mutations: readonly MutationExplain[],
 ): { domain: string; query: string }[] {
   const touchedDomains = new Set(
