@@ -916,11 +916,36 @@ describe('@jiso/test harness', () => {
     );
   });
 
-  it('allows observed writes when FW406 marks unresolved static analysis', () => {
+  it('rejects observed writes covered only by unscoped FW406 static analysis', () => {
     const verifier = createDbVerifier(
       {
         'cart.addItem': {
           touches: [],
+          unresolved: [
+            {
+              code: 'FW406',
+              message: 'Statically un-analyzable write site; manual touches required.',
+              site: 'cart.domain.ts:9',
+            },
+          ],
+        },
+      },
+      { domainByTable: { audit_log: 'audit' } },
+    );
+    const db = verifier.wrap(createFakeDb());
+
+    db.write('audit_log', 'p1');
+
+    expect(() => verifier.assertCovered()).toThrow(
+      'FW402 Write touched an undeclared domain: audit',
+    );
+  });
+
+  it('allows observed writes when unscoped FW406 is backed by declared touches', () => {
+    const verifier = createDbVerifier(
+      {
+        'cart.addItem': {
+          touches: [{ domain: 'audit', keys: null, site: 'cart.domain.ts:8', via: 'audit_log' }],
           unresolved: [
             {
               code: 'FW406',
@@ -1357,6 +1382,60 @@ describe('@jiso/test harness', () => {
             { domain: 'product', keys: null, site: 'product.ts:1', via: 'product_snapshots' },
           ],
           unresolved: [],
+        },
+      },
+      verification: {
+        domainByTable: {
+          product_snapshots: 'product',
+          products: 'product',
+          vendors: 'vendor',
+        },
+      },
+    });
+
+    await expect(harness.exec(productImport, { productId: 'p1' })).rejects.toThrow(
+      'FW407 Query read from undeclared domain: vendor',
+    );
+  });
+
+  it('does not let unscoped FW406 cover missing mutation read domains', async () => {
+    const productImport = mutation('product/import', {
+      input: s.object({ productId: s.string() }),
+      handler(_input, request: { db: FakeDb }) {
+        request.db.sql(
+          [
+            'insert into product_snapshots (product_id, name)',
+            'select products.id, vendors.name',
+            'from products',
+            'join vendors on vendors.id = products.vendor_id',
+          ].join(' '),
+        );
+        return 'ok';
+      },
+    });
+    const harness = createJisoTestHarness({
+      db: createFakeDb(),
+      touchGraph: {
+        'product.import': {
+          reads: [
+            {
+              domain: 'product',
+              keys: null,
+              site: 'product.ts:2',
+              source: 'insert-select',
+              via: 'products',
+            },
+          ],
+          touches: [
+            { domain: 'product', keys: null, site: 'product.ts:1', via: 'product_snapshots' },
+          ],
+          unresolved: [
+            {
+              code: 'FW406',
+              message: 'Statically un-analyzable write site; manual touches required.',
+              site: 'product.ts:9',
+            },
+          ],
         },
       },
       verification: {

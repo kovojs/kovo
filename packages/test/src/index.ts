@@ -465,13 +465,11 @@ function assertObservedWritesCovered(
   const unresolvedDomains = new Set(
     unresolvedWrites.flatMap((site) => (site.domain ? [site.domain] : [])),
   );
-  const hasUnscopedFw406 = unresolvedWrites.some((site) => site.domain === undefined);
   const uncovered = observed.filter(
     (operation) =>
       operation.kind === 'write' &&
       operation.domain !== undefined &&
       !allowedWrites.has(operation.domain) &&
-      !hasUnscopedFw406 &&
       !unresolvedDomains.has(operation.domain),
   );
 
@@ -491,8 +489,6 @@ function assertKeyedWritesObserved(
   const unresolvedDomains = new Set(
     unresolvedWrites.flatMap((site) => (site.domain ? [site.domain] : [])),
   );
-  const hasUnscopedFw406 = unresolvedWrites.some((site) => site.domain === undefined);
-  if (hasUnscopedFw406) return;
 
   const keyedTouchByTable = new Map(
     entries
@@ -908,14 +904,12 @@ function assertMutationReadsCovered(
   const unresolvedDomains = new Set(
     unresolvedWrites.flatMap((site) => (site.domain ? [site.domain] : [])),
   );
-  const hasUnscopedFw406 = unresolvedWrites.some((site) => site.domain === undefined);
   const uncovered = observed.filter(
     (operation) =>
       operation.kind === 'read' &&
       operation.mutationRead === true &&
       operation.domain !== undefined &&
       !allowedReads.has(operation.domain) &&
-      !hasUnscopedFw406 &&
       !unresolvedDomains.has(operation.domain),
   );
 
