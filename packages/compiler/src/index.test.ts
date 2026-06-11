@@ -1603,6 +1603,26 @@ export const CartBadge = component('cart-badge', {
     expect(() => assertFixpoint(result)).not.toThrow();
   });
 
+  it('does not stamp query or state declarations from strings and comments', () => {
+    const result = compileComponentModule({
+      fileName: 'cart-badge.tsx',
+      source: `
+export const CartBadge = component('cart-badge', {
+  render: () => {
+    const sample = 'queries: { cart: cartQuery }, state: () => ({ open: true })';
+    // queries: { product: productQuery }, state: () => ({ count: 1 })
+    return <cart-badge>Static</cart-badge>;
+  },
+});
+`,
+    });
+
+    const serverSource = result.files[0]?.source ?? '';
+    expect(serverSource).not.toContain('fw-deps=');
+    expect(serverSource).not.toContain('fw-state=');
+    expect(result.diagnostics).toEqual([]);
+  });
+
   it('merges declared query dependencies into existing fw-deps stamps', () => {
     const result = compileComponentModule({
       fileName: 'recommendations.tsx',

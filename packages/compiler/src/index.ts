@@ -1094,8 +1094,9 @@ function queryShapeAtPath(shape: QueryShape, segments: readonly string[]): Query
 
 // SPEC 5.2: query data is shared/server-owned; island-local state is private/client-owned.
 function validateServerFactsInLocalState(source: string, fileName: string): CompilerDiagnostic[] {
-  const queryObject = extractObjectLiteralAfterProperty(source, 'queries');
-  const stateObject = extractStateReturnObject(source);
+  const model = parseComponentModuleModel('component.tsx', source);
+  const queryObject = componentOptionSource(model, 'queries');
+  const stateObject = componentStateReturnObject(model);
   if (!queryObject || !stateObject) return [];
 
   const queryNames = topLevelObjectKeys(queryObject);
@@ -1110,10 +1111,11 @@ function validateServerFactsInLocalState(source: string, fileName: string): Comp
 }
 
 function validateFragmentTargetInputs(source: string, fileName: string): CompilerDiagnostic[] {
-  if (!/fragmentTarget\s*:\s*true/.test(source)) return [];
+  const model = parseComponentModuleModel('component.tsx', source);
+  if (componentFragmentTargetNames(model).length === 0) return [];
 
-  const queryObject = extractObjectLiteralAfterProperty(source, 'queries');
-  const propsObject = extractObjectLiteralAfterProperty(source, 'props');
+  const queryObject = componentOptionSource(model, 'queries');
+  const propsObject = componentOptionSource(model, 'props');
   const allowedInputs = new Set([
     ...topLevelObjectKeys(queryObject ?? '{}'),
     ...topLevelObjectKeys(propsObject ?? '{}'),
@@ -1647,48 +1649,7 @@ function escapeRegExp(value: string): string {
 }
 
 function extractFirstRenderObjectPattern(source: string): string[] {
-  const parsed = componentRenderInputs(parseComponentModuleModel('component.tsx', source));
-  if (parsed.length > 0) return parsed;
-
-  const match = /\brender\s*:\s*\(\s*\{/.exec(source);
-  if (!match) return [];
-
-  const objectStart = match.index + match[0].lastIndexOf('{');
-  const objectEnd = findMatchingToken(source, objectStart, '{', '}');
-  if (objectEnd === -1) return [];
-
-  return topLevelObjectKeys(source.slice(objectStart, objectEnd + 1));
-}
-
-function extractObjectLiteralAfterProperty(source: string, propertyName: string): string | null {
-  const parsed = componentOptionSource(
-    parseComponentModuleModel('component.tsx', source),
-    propertyName,
-  );
-  if (parsed?.startsWith('{')) return parsed;
-
-  const match = new RegExp(`\\b${propertyName}\\s*:\\s*\\{`).exec(source);
-  if (!match) return null;
-
-  const objectStart = match.index + match[0].lastIndexOf('{');
-  const objectEnd = findMatchingToken(source, objectStart, '{', '}');
-  if (objectEnd === -1) return null;
-
-  return source.slice(objectStart, objectEnd + 1);
-}
-
-function extractStateReturnObject(source: string): string | null {
-  const parsed = componentStateReturnObject(parseComponentModuleModel('component.tsx', source));
-  if (parsed) return parsed;
-
-  const match = /\bstate\s*:\s*\(\s*\)\s*=>\s*\(\s*\{/.exec(source);
-  if (!match) return null;
-
-  const objectStart = match.index + match[0].lastIndexOf('{');
-  const objectEnd = findMatchingToken(source, objectStart, '{', '}');
-  if (objectEnd === -1) return null;
-
-  return source.slice(objectStart, objectEnd + 1);
+  return componentRenderInputs(parseComponentModuleModel('component.tsx', source));
 }
 
 function eventPayloadPaths(source: string): string[] {
@@ -2108,7 +2069,10 @@ function replaceHandlerAttributes(source: string, handlers: readonly HandlerLowe
 }
 
 function stampDeclaredQueryDeps(source: string): string {
-  const queryObject = extractObjectLiteralAfterProperty(source, 'queries');
+  const queryObject = componentOptionSource(
+    parseComponentModuleModel('component.tsx', source),
+    'queries',
+  );
   const deps = topLevelObjectKeys(queryObject ?? '{}');
   if (deps.length === 0) return source;
 
@@ -2206,7 +2170,9 @@ function splitDepValue(value: string): string[] {
 }
 
 function staticStateJson(source: string): string | null {
-  const stateObject = extractStateReturnObject(source);
+  const stateObject = componentStateReturnObject(
+    parseComponentModuleModel('component.tsx', source),
+  );
   if (!stateObject) return null;
 
   const parsed = parseLiteralObject(stateObject);
@@ -2328,7 +2294,10 @@ function componentQueryNames(source: string): string[] {
 }
 
 function fragmentTargetPropsType(source: string): string {
-  const propsObject = extractObjectLiteralAfterProperty(source, 'props');
+  const propsObject = componentOptionSource(
+    parseComponentModuleModel('component.tsx', source),
+    'props',
+  );
   if (!propsObject) return '{}';
 
   const props = topLevelObjectEntries(propsObject)
