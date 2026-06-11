@@ -29,7 +29,7 @@ const clientSource = result.files.find((file) => file.kind === 'client')?.source
 
 assert.match(
   serverSource,
-  /on:click="\/c\/routes\/products\/product-card\.client\.js#ProductCard\$button_click"/,
+  /on:click="\/c\/routes\/products\/product-card\.client\.js\?v=[0-9a-f]{8}#ProductCard\$button_click"/,
 );
 assert.match(clientSource, /export const ProductCard\$button_click = handler/);
 

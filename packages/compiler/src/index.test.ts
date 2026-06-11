@@ -29,6 +29,16 @@ export const CartBadge = component('cart-badge', {
 });
 `;
 
+function expectHandlerRef(source: string, path: string, exportName: string): void {
+  expect(source).toMatch(
+    new RegExp(`${escapeRegExp(path)}\\?v=[0-9a-f]{8}#${escapeRegExp(exportName)}`),
+  );
+}
+
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
 describe('compileComponentModule', () => {
   it('emits one server file, one client file, and registry metadata', () => {
     const result = compileComponentModule({
@@ -45,8 +55,10 @@ describe('compileComponentModule', () => {
     expect(result.files[1]?.source).toContain('return removeItem(ctx.state, ctx.params.id);');
     expect(result.files[1]?.source).toContain('import { applyCompiledQueryUpdatePlan, handler }');
     expect(result.files[1]?.source).toContain('export const CartBadge$queryUpdatePlans');
-    expect(result.files[0]?.source).toContain(
-      'on:click="/c/components/cart/cart-badge.client.js#CartBadge$button_click"',
+    expectHandlerRef(
+      result.files[0]?.source ?? '',
+      '/c/components/cart/cart-badge.client.js',
+      'CartBadge$button_click',
     );
     expect(result.files[0]?.source).toContain('data-p-id="{item.id}"');
     expect(result.files[2]?.source).toContain(
@@ -54,6 +66,30 @@ describe('compileComponentModule', () => {
     );
     expect(result.files[2]?.source).toContain("'cart-badge': {};");
     expect(result.files[2]?.source).toContain("'CartBadge:cart': readonly ['cart.count'];");
+  });
+
+  it('versions handler URLs from the emitted client module source', () => {
+    const source = `
+import { component } from '@jiso/core';
+
+export const CartBadge = component('cart-badge', {
+  render: () => <button onClick={() => add(item.id)}>Add</button>,
+});
+`;
+    const first = compileComponentModule({ fileName: 'cart-badge.tsx', source });
+    const second = compileComponentModule({ fileName: 'cart-badge.tsx', source });
+    const changed = compileComponentModule({
+      fileName: 'cart-badge.tsx',
+      source: source.replace('add(item.id)', 'remove(item.id)'),
+    });
+
+    const firstVersion = first.files[0]?.source.match(/\.client\.js\?v=([0-9a-f]{8})#/)?.[1];
+    const secondVersion = second.files[0]?.source.match(/\.client\.js\?v=([0-9a-f]{8})#/)?.[1];
+    const changedVersion = changed.files[0]?.source.match(/\.client\.js\?v=([0-9a-f]{8})#/)?.[1];
+
+    expect(firstVersion).toBeDefined();
+    expect(secondVersion).toBe(firstVersion);
+    expect(changedVersion).not.toBe(firstVersion);
   });
 
   it('emits executable handler bodies with stable unique anonymous names', () => {
@@ -77,11 +113,15 @@ export const CartActions = component('cart-actions', {
     const serverSource = result.files[0]?.source ?? '';
     const clientSource = result.files[1]?.source ?? '';
 
-    expect(serverSource).toContain(
-      'on:click="/c/components/cart/cart-actions.client.js#CartActions$button_click"',
+    expectHandlerRef(
+      serverSource,
+      '/c/components/cart/cart-actions.client.js',
+      'CartActions$button_click',
     );
-    expect(serverSource).toContain(
-      'on:click="/c/components/cart/cart-actions.client.js#CartActions$button_click_2"',
+    expectHandlerRef(
+      serverSource,
+      '/c/components/cart/cart-actions.client.js',
+      'CartActions$button_click_2',
     );
     expect(serverSource).toContain('data-p-quantity="{item.quantity}"');
     expect(clientSource).toContain(
@@ -116,11 +156,15 @@ export const CartActions = component('cart-actions', {
     const serverSource = result.files[0]?.source ?? '';
     const clientSource = result.files[1]?.source ?? '';
 
-    expect(serverSource).toContain(
-      'on:click="/c/components/cart/cart-actions.client.js#CartActions$button_click"',
+    expectHandlerRef(
+      serverSource,
+      '/c/components/cart/cart-actions.client.js',
+      'CartActions$button_click',
     );
-    expect(serverSource).toContain(
-      'on:click="/c/components/cart/cart-actions.client.js#CartActions$button_click_2"',
+    expectHandlerRef(
+      serverSource,
+      '/c/components/cart/cart-actions.client.js',
+      'CartActions$button_click_2',
     );
     expect(serverSource).toContain('data-p-id="{item.id}"');
     expect(serverSource).not.toContain('onClick={');
@@ -540,8 +584,8 @@ export const CartDrawer = component('cart-drawer', {
         severity: 'error',
       },
     ]);
-    expect(result.diagnostics[0]?.help).toContain(
-      'Would lower to: on:click="/c/cart-badge.client.js#CartBadge$button_click"',
+    expect(result.diagnostics[0]?.help).toMatch(
+      /Would lower to: on:click="\/c\/cart-badge\.client\.js\?v=[0-9a-f]{8}#CartBadge\$button_click"/,
     );
     expect(result.diagnostics[0]?.help).toContain('Blocked expression: () => window.alert("x")');
     expect(result.diagnostics[0]?.help).toContain(
@@ -1342,8 +1386,10 @@ export const AccordionToggle = component('accordion-toggle', {
     // SPEC §5.2.4 names <details> as an L0 target, but this JS assignment has no
     // dialog-style commandfor equivalent in the current compiler model.
     expect(result.platformSubstitutions).toEqual([]);
-    expect(result.files[0]?.source).toContain(
-      'on:click="/c/accordion-toggle.client.js#AccordionToggle$button_click"',
+    expectHandlerRef(
+      result.files[0]?.source ?? '',
+      '/c/accordion-toggle.client.js',
+      'AccordionToggle$button_click',
     );
     expect(result.files[1]?.source).toContain('export const AccordionToggle$button_click');
   });

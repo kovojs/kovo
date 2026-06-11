@@ -287,6 +287,10 @@ export function compileComponentModule(options: CompileComponentOptions): Compil
   const registryFileName = 'generated/registries.d.ts';
 
   const clientSource = emitClientModule(handlers, queryUpdatePlans, componentName);
+  const clientHref = clientModuleUrl(options.fileName, clientModuleVersion(clientSource));
+  const versionedHandlers = handlers.map((handler) =>
+    versionHandlerLowering(handler, options.fileName, clientHref),
+  );
   const cssSource = emitCssModule(source, componentName);
   const fragmentTargetFacts = findFragmentTargetFacts(source, componentName);
   const fragmentTargets = fragmentTargetFacts.map((fact) => fact.target);
@@ -294,13 +298,13 @@ export function compileComponentModule(options: CompileComponentOptions): Compil
   const cssAssets = cssSource
     ? [componentCssAssetForFile(cssFileName, componentName, fragmentTargets, {}, cssSource)]
     : [];
-  const serverSource = emitServerModule(source, handlers, clientFileName);
+  const serverSource = emitServerModule(source, versionedHandlers, clientFileName);
   const registrySource = emitRegistryModule({
     clientFileName,
     cssAssets,
     componentName,
     fragmentTargetFacts,
-    handlers,
+    handlers: versionedHandlers,
     platformSubstitutions: platformLowering.substitutions,
     queryUpdatePlans,
     ...(options.registryFacts ? { registryFacts: options.registryFacts } : {}),
@@ -310,7 +314,7 @@ export function compileComponentModule(options: CompileComponentOptions): Compil
   return {
     componentGraphFacts,
     diagnostics: [
-      ...handlers.flatMap((handler) => (handler.diagnostic ? [handler.diagnostic] : [])),
+      ...versionedHandlers.flatMap((handler) => (handler.diagnostic ? [handler.diagnostic] : [])),
       ...validationDiagnostics,
     ],
     files: [
@@ -319,7 +323,7 @@ export function compileComponentModule(options: CompileComponentOptions): Compil
       ...(cssSource ? [{ fileName: cssFileName, kind: 'css' as const, source: cssSource }] : []),
       { fileName: registryFileName, kind: 'registry', source: registrySource },
     ],
-    handlerExports: handlers.map((handler) => handler.exportName),
+    handlerExports: versionedHandlers.map((handler) => handler.exportName),
     cssAssets,
     platformSubstitutions: platformLowering.substitutions,
     queryUpdatePlans,
@@ -906,8 +910,44 @@ function fw201Diagnostic(
   };
 }
 
-function clientModuleUrl(fileName: string): string {
-  return `/c/${replaceExtension(fileName, '.client.js').replace(/^\/+/, '')}`;
+function versionHandlerLowering(
+  handler: HandlerLowering,
+  fileName: string,
+  clientHref: string,
+): HandlerLowering {
+  const unversionedHref = clientModuleUrl(fileName);
+  const versionedAttributeValue = `${clientHref}#${handler.exportName}`;
+  return {
+    ...handler,
+    attributeValue: versionedAttributeValue,
+    ...(handler.diagnostic
+      ? {
+          diagnostic: {
+            ...handler.diagnostic,
+            ...(handler.diagnostic.help
+              ? {
+                  help: handler.diagnostic.help.replaceAll(`${unversionedHref}#`, `${clientHref}#`),
+                }
+              : {}),
+          },
+        }
+      : {}),
+  };
+}
+
+function clientModuleUrl(fileName: string, version?: string): string {
+  const href = `/c/${replaceExtension(fileName, '.client.js').replace(/^\/+/, '')}`;
+  return version ? `${href}?v=${version}` : href;
+}
+
+function clientModuleVersion(source: string): string {
+  let hash = 0x811c9dc5;
+  for (let index = 0; index < source.length; index += 1) {
+    hash ^= source.charCodeAt(index);
+    hash = Math.imul(hash, 0x01000193) >>> 0;
+  }
+
+  return hash.toString(16).padStart(8, '0');
 }
 
 function validateDataBindings(
