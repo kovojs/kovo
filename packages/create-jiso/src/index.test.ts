@@ -31,7 +31,6 @@ describe('create-jiso starter', () => {
       'docs/framework-rules.md',
       'src/styles.css',
       'index.html',
-      'src/main.ts',
       'src/app.tsx',
       'src/app.fixpoint.test.ts',
     ]);
@@ -162,11 +161,12 @@ describe('create-jiso starter', () => {
       'class="mx-auto grid min-h-dvh',
     );
     expect(project.files.find((file) => file.path === 'index.html')?.source).toContain(
-      'src="/src/main.ts"',
+      '<link rel="stylesheet" href="/src/styles.css" />',
     );
-    expect(project.files.find((file) => file.path === 'src/main.ts')?.source).toContain(
-      'target.innerHTML = App.definition.render()',
+    expect(project.files.find((file) => file.path === 'index.html')?.source).toContain(
+      '<main class="mx-auto grid min-h-dvh',
     );
+    expect(project.files.some((file) => file.path === 'src/main.ts')).toBe(false);
     expect(
       project.files.find((file) => file.path === '.github/workflows/ci.yml')?.source,
     ).toContain('voidzero-dev/setup-vp@v1');
@@ -231,7 +231,7 @@ describe('create-jiso starter', () => {
 
     try {
       expect(main([root])).toBe(0);
-      expect(stdout).toHaveBeenCalledWith(`create-jiso: wrote 14 files to ${root}\n`);
+      expect(stdout).toHaveBeenCalledWith(`create-jiso: wrote 13 files to ${root}\n`);
       expect(JSON.parse(readFileSync(join(root, 'package.json'), 'utf8'))).toMatchObject({
         name: 'hello-cli',
       });

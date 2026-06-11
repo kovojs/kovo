@@ -326,24 +326,15 @@ The v1 implementation depends on these hard rules:
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="stylesheet" href="/src/styles.css" />
     <title>Jiso Starter</title>
   </head>
   <body>
-    <div id="app"></div>
-    <script type="module" src="/src/main.ts"></script>
+    <main class="mx-auto grid min-h-dvh max-w-3xl place-items-center px-6 text-jiso-ink">
+      <h1 class="text-3xl font-semibold tracking-normal text-jiso-accent">Hello from Jiso</h1>
+    </main>
   </body>
 </html>
-`,
-      },
-      {
-        path: 'src/main.ts',
-        source: `import { App } from './app';
-
-const target = document.querySelector<HTMLDivElement>('#app');
-
-if (target) {
-  target.innerHTML = App.definition.render();
-}
 `,
       },
       {
