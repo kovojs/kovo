@@ -839,6 +839,8 @@ export const CartShell = component('cart-shell', {
         message:
           'Static id appears in a repeatable component or duplicate page composition. duplicate id="cart-title"',
         severity: 'error',
+        start: { column: 15, line: 6 },
+        length: 15,
       },
     ]);
   });
@@ -866,6 +868,8 @@ export const CartShell = component('cart-shell', {
         message:
           'Static id appears in a repeatable component or duplicate page composition. duplicate id="cart-drawer"',
         severity: 'error',
+        start: { column: 15, line: 7 },
+        length: 16,
       },
     ]);
   });
@@ -893,6 +897,8 @@ export const CartList = component('cart-list', {
         message:
           'Static id appears in a repeatable component or duplicate page composition. repeatable id="cart-row"',
         severity: 'error',
+        start: { column: 13, line: 6 },
+        length: 13,
       },
     ]);
   });

@@ -97,6 +97,17 @@ interface IdrefValue {
   value: string;
 }
 
+interface LiteralIdValue {
+  index: number;
+  length: number;
+  value: string;
+}
+
+interface TemplateBody {
+  offset: number;
+  source: string;
+}
+
 export interface QueryUpdateCoverageFact {
   componentName: string;
   detail?: string;
@@ -1182,15 +1193,29 @@ function templateStampContent(
   elements: readonly JsxElementModel[],
   container: JsxElementModel,
 ): string {
+  return templateStamp(source, elements, container)?.source ?? '';
+}
+
+function templateStamp(
+  source: string,
+  elements: readonly JsxElementModel[],
+  container: JsxElementModel,
+): TemplateBody | null {
   const template = elements.find(
     (element) =>
       element.tag === 'template' &&
       isWithinElement(element, container) &&
       hasJsxAttribute(element, 'fw-stamp'),
   );
-  if (!template || template.selfClosing) return '';
+  if (!template || template.selfClosing) return null;
 
-  return source.slice(template.openingEnd, template.closingStart).trim();
+  const raw = source.slice(template.openingEnd, template.closingStart);
+  const leadingWhitespace = /^\s*/.exec(raw)?.[0].length ?? 0;
+
+  return {
+    offset: template.openingEnd + leadingWhitespace,
+    source: raw.trim(),
+  };
 }
 
 function listStampExistsInQueryShapes(
@@ -1366,7 +1391,7 @@ function validateIdrefs(
   model: ComponentModuleModel,
   fileName: string,
 ): CompilerDiagnostic[] {
-  const ids = new Set(literalIds(model));
+  const ids = new Set(literalIdValues(model).map((id) => id.value));
   if (ids.size === 0) {
     return idrefValues(model).map((value) => fw221Diagnostic(fileName, source, value));
   }
@@ -1385,42 +1410,59 @@ function validateStaticIds(
   const diagnostics: CompilerDiagnostic[] = [];
   const seen = new Set<string>();
 
-  for (const id of literalIds(model)) {
-    if (seen.has(id)) diagnostics.push(fw224Diagnostic(fileName, `duplicate id="${id}"`));
-    seen.add(id);
+  for (const id of literalIdValues(model)) {
+    if (seen.has(id.value)) {
+      diagnostics.push(fw224Diagnostic(fileName, source, `duplicate id="${id.value}"`, id));
+    }
+    seen.add(id.value);
   }
 
   for (const id of repeatableLiteralIds(source, model)) {
-    diagnostics.push(fw224Diagnostic(fileName, `repeatable id="${id}"`));
+    diagnostics.push(fw224Diagnostic(fileName, source, `repeatable id="${id.value}"`, id));
   }
 
   return dedupeDiagnostics(diagnostics);
 }
 
-function literalIds(model: ComponentModuleModel): string[] {
-  return jsxAttributeValues(model, 'id');
-}
-
-function repeatableLiteralIds(source: string, model: ComponentModuleModel): string[] {
-  return dataBindListTemplateBodies(source, model).flatMap((body) =>
-    literalIds(parseComponentModuleModel('component.tsx', body)),
+function literalIdValues(model: ComponentModuleModel, offset = 0): LiteralIdValue[] {
+  return jsxAttributes(model).flatMap((attribute) =>
+    attribute.name === 'id' && attribute.value
+      ? [
+          {
+            index: offset + attribute.start,
+            length: attribute.end - attribute.start,
+            value: attribute.value,
+          },
+        ]
+      : [],
   );
 }
 
-function dataBindListTemplateBodies(source: string, model: ComponentModuleModel): string[] {
+function repeatableLiteralIds(source: string, model: ComponentModuleModel): LiteralIdValue[] {
+  return dataBindListTemplateBodies(source, model).flatMap((body) =>
+    literalIdValues(parseComponentModuleModel('component.tsx', body.source), body.offset),
+  );
+}
+
+function dataBindListTemplateBodies(source: string, model: ComponentModuleModel): TemplateBody[] {
   const elements = jsxElements(model);
 
   return elements.flatMap((element) => {
     if (jsxStaticAttributeValue(element, 'data-bind-list') === undefined) return [];
 
-    const template = templateStampContent(source, elements, element);
+    const template = templateStamp(source, elements, element);
     return template ? [template] : [];
   });
 }
 
-function fw224Diagnostic(fileName: string, detail: string): CompilerDiagnostic {
+function fw224Diagnostic(
+  fileName: string,
+  source: string,
+  detail: string,
+  id: LiteralIdValue,
+): CompilerDiagnostic {
   return {
-    ...diagnosticFor(fileName, 'FW224'),
+    ...diagnosticFor(fileName, 'FW224', source, id.index, id.length),
     message: `${diagnosticDefinitions.FW224.message} ${detail}`,
   };
 }
@@ -1746,12 +1788,6 @@ function idrefValues(model: ComponentModuleModel): IdrefValue[] {
   }
 
   return values;
-}
-
-function jsxAttributeValues(model: ComponentModuleModel, name: string): string[] {
-  return jsxAttributes(model).flatMap((attribute) =>
-    attribute.name === name && attribute.value ? [attribute.value] : [],
-  );
 }
 
 function jsxAttributes(model: ComponentModuleModel): JsxAttributeModel[] {
