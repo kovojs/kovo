@@ -26,6 +26,8 @@ import {
   type Symbol as MorphSymbol,
 } from 'ts-morph';
 
+let sourceExtractionFileId = 0;
+
 export interface JisoTableAnnotation {
   domain: string;
   key?: string;
@@ -411,16 +413,16 @@ function sourceColumnShapesForFiles(
   const shapes = new Map<string, Record<string, QueryShape>>();
 
   for (const file of files) {
-    const declarations = constDeclarations(file.source);
+    const declarations = variableDeclarationsFromSource(file.source);
     const localShapes = new Map<string, Record<string, QueryShape>>();
 
     for (const { identifier, initializer } of declarations) {
-      if (!isAnnotatedTableInitializer(initializer)) continue;
+      if (!isAnnotatedTableInitializerNode(initializer)) continue;
 
-      const columns = tableColumnShapesFromSource(initializer);
+      const columns = tableColumnShapes(initializer);
       if (Object.keys(columns).length === 0) continue;
 
-      const tableName = stringArgument(initializer) ?? identifier;
+      const tableName = tableNameArgument(initializer) ?? identifier;
       localShapes.set(identifier, columns);
       shapes.set(identifier, columns);
       shapes.set(tableName, columns);
@@ -429,7 +431,7 @@ function sourceColumnShapesForFiles(
     for (const declaration of declarations) {
       if (localShapes.has(declaration.identifier)) continue;
 
-      for (const target of aliasTargets(declaration.initializer)) {
+      for (const target of aliasTargets(declaration.initializer.getText())) {
         const columns = localShapes.get(target);
         if (!columns) continue;
 
@@ -543,7 +545,7 @@ function projectTableNamesBySymbol(
   for (const sourceFile of sourceFiles) {
     for (const declaration of sourceFile.getVariableDeclarations()) {
       const initializer = declaration.getInitializer();
-      if (!initializer || !isAnnotatedTableInitializer(initializer.getText())) continue;
+      if (!initializer || !isAnnotatedTableInitializerNode(initializer)) continue;
 
       const symbolKey = resolvedSymbolKey(declaration.getNameNode().getSymbol());
       if (!symbolKey) continue;
@@ -565,7 +567,7 @@ function projectColumnShapesByTable(
   for (const sourceFile of sourceFiles) {
     for (const declaration of sourceFile.getVariableDeclarations()) {
       const initializer = declaration.getInitializer();
-      if (!initializer || !isAnnotatedTableInitializer(initializer.getText())) continue;
+      if (!initializer || !isAnnotatedTableInitializerNode(initializer)) continue;
 
       const tableName = tableNamesBySymbol.get(
         resolvedSymbolKey(declaration.getNameNode().getSymbol()) ?? '',
@@ -593,36 +595,6 @@ function tableColumnShapes(initializer: Node): Record<string, QueryShape> {
     if (!name) continue;
 
     shapes[name] = columnBuilderShape(property.getInitializer()?.getText() ?? '');
-  }
-
-  return shapes;
-}
-
-function tableColumnShapesFromSource(initializer: string): Record<string, QueryShape> {
-  const openParen = initializer.indexOf('(');
-  if (openParen === -1) return {};
-
-  const closeParen = findMatchingParen(initializer, openParen);
-  if (closeParen === -1) return {};
-
-  const columns = splitTopLevelArgs(initializer.slice(openParen + 1, closeParen))[1]?.trim();
-  if (!columns?.startsWith('{')) return {};
-
-  const objectEnd = findMatchingBrace(columns, 0);
-  if (objectEnd === -1) return {};
-
-  const shapes: Record<string, QueryShape> = {};
-  for (const entry of splitTopLevelArgs(columns.slice(1, objectEnd))) {
-    const separator = entry.indexOf(':');
-    if (separator === -1) continue;
-
-    const name = entry
-      .slice(0, separator)
-      .trim()
-      .replace(/^["']|["']$/g, '');
-    if (!name) continue;
-
-    shapes[name] = columnBuilderShape(entry.slice(separator + 1));
   }
 
   return shapes;
@@ -702,11 +674,26 @@ function resolvedSymbolKey(symbol: MorphSymbol | undefined): string | undefined 
   return `${declaration.getSourceFile().getFilePath()}:${declaration.getStart()}`;
 }
 
-function isAnnotatedTableInitializer(source: string): boolean {
-  const initializer = source.trim();
-  return (
-    /^(?:pgTable|sqliteTable|mysqlTable)\s*\(/.test(initializer) && /\bjiso\s*\(/.test(initializer)
-  );
+function isAnnotatedTableInitializerNode(initializer: Node): boolean {
+  if (!Node.isCallExpression(initializer)) return false;
+  const expression = initializer.getExpression();
+  if (!Node.isIdentifier(expression)) return false;
+  if (!['pgTable', 'sqliteTable', 'mysqlTable'].includes(expression.getText())) return false;
+
+  return initializer.getArguments().some(isJisoAnnotationCall);
+}
+
+function isJisoAnnotationCall(node: Node): boolean {
+  if (!Node.isCallExpression(node)) return false;
+  const expression = node.getExpression();
+  return Node.isIdentifier(expression) && expression.getText() === 'jiso';
+}
+
+function tableNameArgument(initializer: Node): string | undefined {
+  if (!Node.isCallExpression(initializer)) return undefined;
+  const name = initializer.getArguments()[0];
+  if (!name || !Node.isStringLiteral(name)) return undefined;
+  return name.getLiteralText();
 }
 
 interface ExtractedTableDeclaration {
@@ -1215,21 +1202,22 @@ function writeSummaryKey(write: WriteSummaryInput): string {
 function extractTables(source: string): ExtractedTableDeclaration[] {
   const tables: ExtractedTableDeclaration[] = [];
   const byIdentifier = new Map<string, ExtractedTableDeclaration[]>();
-  const declarations = constDeclarations(source);
+  const declarations = variableDeclarationsFromSource(source);
 
   for (const { identifier, initializer } of declarations) {
-    if (!isAnnotatedTableInitializer(initializer)) continue;
+    if (!isAnnotatedTableInitializerNode(initializer)) continue;
 
-    const domain = stringProperty(initializer, 'domain');
+    const annotation = tableAnnotation(initializer);
+    const domain = annotation?.domain;
     if (!domain) continue;
 
-    const key = stringProperty(initializer, 'key');
+    const key = annotation.key;
 
     const table = {
       domain,
       identifier,
       ...(key ? { key } : {}),
-      name: stringArgument(initializer) ?? identifier,
+      name: tableNameArgument(initializer) ?? identifier,
     };
     tables.push(table);
     appendTable(byIdentifier, identifier, table);
@@ -1238,7 +1226,7 @@ function extractTables(source: string): ExtractedTableDeclaration[] {
   for (const declaration of declarations) {
     if ((byIdentifier.get(declaration.identifier)?.length ?? 0) > 0) continue;
 
-    for (const target of aliasTargets(declaration.initializer)) {
+    for (const target of aliasTargets(declaration.initializer.getText())) {
       for (const table of byIdentifier.get(target) ?? []) {
         const alias = {
           domain: table.domain,
@@ -1253,6 +1241,64 @@ function extractTables(source: string): ExtractedTableDeclaration[] {
   }
 
   return tables;
+}
+
+function tableAnnotation(initializer: Node): JisoTableAnnotation | null {
+  if (!Node.isCallExpression(initializer)) return null;
+  const annotationCall = initializer.getArguments().find(isJisoAnnotationCall);
+  if (!annotationCall || !Node.isCallExpression(annotationCall)) return null;
+  const annotationObject = annotationCall.getArguments()[0];
+  if (!annotationObject || !Node.isObjectLiteralExpression(annotationObject)) return null;
+
+  const domain = stringPropertyFromObject(annotationObject, 'domain');
+  if (!domain) return null;
+  const key = stringPropertyFromObject(annotationObject, 'key');
+  return { domain, ...(key ? { key } : {}) };
+}
+
+function stringPropertyFromObject(object: Node, name: string): string | undefined {
+  if (!Node.isObjectLiteralExpression(object)) return undefined;
+
+  for (const property of object.getProperties()) {
+    if (!Node.isPropertyAssignment(property)) continue;
+    if (propertyNameText(property.getNameNode()) !== name) continue;
+
+    const initializer = property.getInitializer();
+    if (initializer && Node.isStringLiteral(initializer)) return initializer.getLiteralText();
+  }
+
+  return undefined;
+}
+
+function variableDeclarationsFromSource(
+  source: string,
+): { identifier: string; initializer: Node }[] {
+  return parseSourceFile(source)
+    .getVariableDeclarations()
+    .flatMap((declaration) => {
+      const name = declaration.getNameNode();
+      const initializer = declaration.getInitializer();
+      if (!initializer || !Node.isIdentifier(name)) return [];
+
+      return [{ identifier: name.getText(), initializer }];
+    });
+}
+
+function parseSourceFile(source: string): SourceFile {
+  const project = new Project({
+    compilerOptions: {
+      allowJs: false,
+      moduleResolution: ts.ModuleResolutionKind.Bundler,
+      noEmit: true,
+      skipLibCheck: true,
+      strict: true,
+      target: ts.ScriptTarget.ESNext,
+    },
+    skipAddingFilesFromTsConfig: true,
+  });
+
+  sourceExtractionFileId += 1;
+  return project.createSourceFile(`__jiso_source_${sourceExtractionFileId}.ts`, source);
 }
 
 function tablesForFile(
@@ -1307,64 +1353,6 @@ function importExportTableAliases(source: string): { imported: string; local: st
   return aliases;
 }
 
-function constDeclarations(source: string): { identifier: string; initializer: string }[] {
-  const declarations: { identifier: string; initializer: string }[] = [];
-  const pattern = /(?:export\s+)?const\s+(?<identifier>[A-Za-z_$][\w$]*)\s*=\s*/g;
-
-  for (const match of source.matchAll(pattern)) {
-    const identifier = match.groups?.identifier;
-    if (!identifier || match.index === undefined) continue;
-
-    const initializerStart = match.index + match[0].length;
-    const initializerEnd = constInitializerEnd(source, initializerStart);
-    declarations.push({
-      identifier,
-      initializer: source.slice(initializerStart, initializerEnd).trim(),
-    });
-  }
-
-  return declarations;
-}
-
-function constInitializerEnd(source: string, start: number): number {
-  let depth = 0;
-
-  for (let index = start; index < source.length; index += 1) {
-    const char = source[index];
-    if (char === '"' || char === "'" || char === '`') {
-      const stringEnd = findStringEnd(source, index, char);
-      index = stringEnd === -1 ? source.length : stringEnd;
-      continue;
-    }
-    if (source.startsWith('//', index)) {
-      const commentEnd = source.indexOf('\n', index + 2);
-      index = commentEnd === -1 ? source.length : commentEnd;
-      continue;
-    }
-    if (source.startsWith('/*', index)) {
-      const commentEnd = source.indexOf('*/', index + 2);
-      index = commentEnd === -1 ? source.length : commentEnd + 1;
-      continue;
-    }
-
-    if (char === '(' || char === '{' || char === '[') depth += 1;
-    if (char === ')' || char === '}' || char === ']') depth -= 1;
-    if (depth !== 0) continue;
-
-    if (char === ';') return index;
-    if (char === '\n' && isDeclarationBoundary(source, index + 1)) return index;
-  }
-
-  return source.length;
-}
-
-function isDeclarationBoundary(source: string, start: number): boolean {
-  const next = source.slice(skipTrivia(source, start));
-  return (
-    next.length === 0 || /^(?:export\s+)?(?:const|let|var|async\s+function|function)\b/.test(next)
-  );
-}
-
 function aliasTargets(initializer: string): string[] {
   const trimmed = initializer.trim();
   const direct = /^(?<identifier>[A-Za-z_$][\w$]*)$/.exec(trimmed)?.groups?.identifier;
@@ -1383,8 +1371,8 @@ function extractUnresolvedConditionalIdentifiers(
 ): string[] {
   const unresolved: string[] = [];
 
-  for (const declaration of constDeclarations(source)) {
-    const targets = conditionalBranches(declaration.initializer);
+  for (const declaration of variableDeclarationsFromSource(source)) {
+    const targets = conditionalBranches(declaration.initializer.getText());
     if (targets.length === 0) continue;
 
     const resolvedCount = targets.filter((target) => (tables.get(target)?.length ?? 0) > 0).length;
@@ -1977,15 +1965,6 @@ function findMatchingParen(source: string, openParen: number): number {
 
 function lineForIndex(source: string, index: number): number {
   return source.slice(0, index).split('\n').length;
-}
-
-function stringArgument(source: string): string | undefined {
-  return /\(\s*["'](?<value>[^"']+)["']/.exec(source)?.groups?.value;
-}
-
-function stringProperty(source: string, name: string): string | undefined {
-  const pattern = new RegExp(`\\b${name}\\s*:\\s*["'](?<value>[^"']+)["']`);
-  return pattern.exec(source)?.groups?.value;
 }
 
 function compareTouchSites(left: TouchSite, right: TouchSite): number {

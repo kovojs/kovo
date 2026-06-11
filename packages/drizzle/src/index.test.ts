@@ -427,6 +427,42 @@ export const tableDomains = {
     });
   });
 
+  it('ignores source-mode table declarations inside comments and strings', () => {
+    const graph = extractTouchGraphFromSource([
+      {
+        fileName: 'cart.domain.ts',
+        source: `
+          const fixture = "export const ghost = pgTable(\\"ghost\\", {}, jiso({ domain: \\"ghost\\", key: \\"id\\" }))";
+          // export const commented = pgTable("commented", {}, jiso({ domain: "commented", key: "id" }));
+
+          export async function addItem(db) {
+            await db.insert(ghost).values({ id: "g1" });
+            await db.insert(commented).values({ id: "c1" });
+          }
+        `,
+      },
+    ]);
+
+    expect(graph).toEqual({
+      addItem: {
+        reads: [],
+        touches: [],
+        unresolved: [
+          {
+            code: 'FW406',
+            message: 'Statically un-analyzable write site; manual touches required.',
+            site: 'cart.domain.ts:6',
+          },
+          {
+            code: 'FW406',
+            message: 'Statically un-analyzable write site; manual touches required.',
+            site: 'cart.domain.ts:7',
+          },
+        ],
+      },
+    });
+  });
+
   it('recognizes semicolonless source-mode table and alias declarations', () => {
     const graph = extractTouchGraphFromSource([
       {
