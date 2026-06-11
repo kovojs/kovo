@@ -273,9 +273,32 @@ describe('server mutation primitives', () => {
     });
   });
 
+  it('inlines critical component CSS without losing stylesheet identity', () => {
+    expect(
+      renderPageHints({
+        stylesheets: [
+          '/assets/components/cart/cart-badge.css',
+          {
+            criticalCss: 'cart-badge { color: teal; }</style> cart-badge { display: block; }',
+            href: '/assets/components/cart/cart-badge.css',
+          },
+        ],
+      }),
+    ).toEqual({
+      earlyHints: {
+        Link: '</assets/components/cart/cart-badge.css>; rel=preload; as=style',
+      },
+      html: [
+        '<style data-jiso-critical-href="/assets/components/cart/cart-badge.css">cart-badge { color: teal; }<\\/style> cart-badge { display: block; }</style>',
+        '<link rel="stylesheet" href="/assets/components/cart/cart-badge.css">',
+      ].join(''),
+    });
+  });
+
   it('selects manifest stylesheets for pages and late fragments', () => {
     const manifest = [
       {
+        criticalCss: 'cart-badge { color: teal; }',
         fragmentTargets: ['cart-badge'],
         href: '/assets/components/cart/cart-badge.css',
         sourceFileName: 'components/cart/cart-badge.css',
@@ -297,6 +320,7 @@ describe('server mutation primitives', () => {
         Link: '</assets/components/cart/cart-badge.css>; rel=preload; as=style, </assets/components/cart/cart-drawer.css>; rel=preload; as=style',
       },
       html: [
+        '<style data-jiso-critical-href="/assets/components/cart/cart-badge.css">cart-badge { color: teal; }</style>',
         '<link rel="stylesheet" href="/assets/components/cart/cart-badge.css">',
         '<link rel="stylesheet" href="/assets/components/cart/cart-drawer.css">',
       ].join(''),

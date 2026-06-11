@@ -185,6 +185,7 @@ export const CartBadge = component('cart-badge', {
     expect(result.cssAssets).toEqual([
       {
         componentName: 'CartBadge',
+        criticalCss: expect.stringContaining('@scope (cart-badge) to (:scope [fw-c])'),
         fragmentTargets: ['cart-badge'],
         href: '/assets/components/cart/cart-badge.css',
         sourceFileName: 'components/cart/cart-badge.css',
@@ -1036,12 +1037,14 @@ export const CartDrawer = component('cart-drawer', {
     expect(manifest.stylesheets).toEqual([
       {
         componentName: 'CartBadge',
+        criticalCss: expect.stringContaining('@scope (cart-badge) to (:scope [fw-c])'),
         fragmentTargets: [],
         href: '/_jiso/components/cart/cart-badge.css',
         sourceFileName: 'components/cart/cart-badge.css',
       },
       {
         componentName: 'CartDrawer',
+        criticalCss: expect.stringContaining('@scope ([fw-c="cart-drawer"]) to (:scope [fw-c])'),
         fragmentTargets: [],
         href: '/_jiso/components/cart/cart-drawer.css',
         sourceFileName: 'components/cart/cart-drawer.css',
@@ -1050,6 +1053,7 @@ export const CartDrawer = component('cart-drawer', {
     expect(selectCssAssets(manifest, ['components/cart/cart-drawer.css'])).toEqual([
       {
         componentName: 'CartDrawer',
+        criticalCss: expect.stringContaining('@scope ([fw-c="cart-drawer"]) to (:scope [fw-c])'),
         fragmentTargets: [],
         href: '/_jiso/components/cart/cart-drawer.css',
         sourceFileName: 'components/cart/cart-drawer.css',
@@ -1076,6 +1080,7 @@ export const CartBadge = component('cart-badge', {
     expect(collectCssAssetManifest(cartBadge).stylesheets).toEqual([
       {
         componentName: 'CartBadge',
+        criticalCss: expect.stringContaining('@scope (cart-badge) to (:scope [fw-c])'),
         fragmentTargets: ['cart-badge'],
         href: '/assets/components/cart/cart-badge.css',
         sourceFileName: 'components/cart/cart-badge.css',
@@ -1099,6 +1104,7 @@ export const Reviews = component('reviews', {
     expect(collectCssAssetManifest(result, { preload: false }).stylesheets).toEqual([
       {
         componentName: 'Reviews',
+        criticalCss: expect.stringContaining('@scope ([fw-c="reviews"]) to (:scope [fw-c])'),
         fragmentTargets: [],
         href: '/assets/components/reviews.css',
         preload: false,

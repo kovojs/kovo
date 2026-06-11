@@ -25,6 +25,7 @@ export interface CompileResult {
 }
 
 export interface CssAsset {
+  criticalCss?: string;
   href: string;
   preload?: boolean;
   sourceFileName: string;
@@ -177,7 +178,7 @@ export function compileComponentModule(options: CompileComponentOptions): Compil
   const fragmentTargetFacts = findFragmentTargetFacts(source, componentName);
   const fragmentTargets = fragmentTargetFacts.map((fact) => fact.target);
   const cssAssets = cssSource
-    ? [componentCssAssetForFile(cssFileName, componentName, fragmentTargets)]
+    ? [componentCssAssetForFile(cssFileName, componentName, fragmentTargets, {}, cssSource)]
     : [];
   const serverSource = emitServerModule(source, handlers, clientFileName);
   const registrySource = emitRegistryModule({
@@ -361,6 +362,7 @@ export function collectCssAssetManifest(
         cssAsset.componentName,
         cssAsset.fragmentTargets,
         options,
+        cssAsset.criticalCss,
       );
       byFileName[cssAsset.sourceFileName] = asset;
       stylesheets.push(asset);
@@ -389,9 +391,11 @@ function componentCssAssetForFile(
   componentName: string,
   fragmentTargets: readonly string[],
   options: CssAssetManifestOptions = {},
+  criticalCss?: string,
 ): ComponentCssAsset {
   return {
     componentName,
+    ...(criticalCss ? { criticalCss } : {}),
     fragmentTargets,
     href: `${options.baseHref ?? '/assets/'}${normalizeAssetPath(fileName)}`,
     ...(options.preload === undefined ? {} : { preload: options.preload }),

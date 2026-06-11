@@ -535,6 +535,7 @@ export interface I18nCatalog<Messages extends Record<string, string> = Record<st
 }
 
 export interface StylesheetAsset {
+  criticalCss?: string;
   href: string;
   preload?: boolean;
 }
@@ -728,7 +729,7 @@ export function renderPageHints(
   const html = [
     ...renderRouteMeta(options.meta, context),
     ...renderI18nCatalogs(options.i18n),
-    ...stylesheets.map((asset) => `<link rel="stylesheet" href="${escapeAttribute(asset.href)}">`),
+    ...stylesheets.map(renderPageStylesheetHint),
     ...modulepreloads.map((href) => `<link rel="modulepreload" href="${escapeAttribute(href)}">`),
     options.bootstrapScript
       ? `<script type="module" src="${escapeAttribute(options.bootstrapScript)}"></script>`
@@ -1402,18 +1403,34 @@ function dedupe(values: readonly string[]): string[] {
 }
 
 function dedupeStylesheets(values: readonly (string | StylesheetAsset)[]): StylesheetAsset[] {
-  const seen = new Set<string>();
+  const seen = new Map<string, number>();
   const assets: StylesheetAsset[] = [];
 
   for (const value of values) {
     const asset = typeof value === 'string' ? { href: value, preload: true } : value;
-    if (!asset.href || seen.has(asset.href)) continue;
+    if (!asset.href) continue;
 
-    seen.add(asset.href);
+    const existingIndex = seen.get(asset.href);
+    if (existingIndex !== undefined) {
+      const existing = assets[existingIndex];
+      if (existing && !existing.criticalCss && asset.criticalCss) {
+        assets[existingIndex] = { ...existing, criticalCss: asset.criticalCss };
+      }
+      continue;
+    }
+
+    seen.set(asset.href, assets.length);
     assets.push(asset);
   }
 
   return assets;
+}
+
+function renderPageStylesheetHint(asset: StylesheetAsset): string {
+  const link = `<link rel="stylesheet" href="${escapeAttribute(asset.href)}">`;
+  if (!asset.criticalCss) return link;
+
+  return `<style data-jiso-critical-href="${escapeAttribute(asset.href)}">${escapeStyleText(asset.criticalCss)}</style>${link}`;
 }
 
 function renderEarlyHints(
@@ -1564,4 +1581,8 @@ function escapeAttribute(value: string): string {
 
 function escapeScriptJson(value: string): string {
   return value.replaceAll('<', '\\u003c');
+}
+
+function escapeStyleText(value: string): string {
+  return value.replace(/<\/style/gi, '<\\/style');
 }
