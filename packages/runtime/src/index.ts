@@ -12,18 +12,20 @@ import type {
 
 export type ImportHandlerModule = (url: string) => Promise<Record<string, unknown>>;
 
-export interface HandlerContext<State = unknown, Params = Record<string, string>> {
+export type ElementParamValue = string | number | boolean;
+
+export interface HandlerContext<State = unknown, Params = Record<string, ElementParamValue>> {
   params: Params;
   signal: AbortSignal;
   state: State;
 }
 
-export type ClientHandler<State = unknown, Params = Record<string, string>> = (
+export type ClientHandler<State = unknown, Params = Record<string, ElementParamValue>> = (
   event: Event,
   ctx: HandlerContext<State, Params>,
 ) => void | Promise<void>;
 
-export function handler<State = unknown, Params = Record<string, string>>(
+export function handler<State = unknown, Params = Record<string, ElementParamValue>>(
   fn: ClientHandler<State, Params>,
 ): ClientHandler<State, Params> {
   return fn;
@@ -256,7 +258,7 @@ const defaultDelegatedEvents = ['click', 'submit', 'input', 'change'] as const;
 const defaultIslandSignalScope: IslandSignalScope = {};
 const islandSignalControllers = new WeakMap<IslandSignalScope, Map<string, AbortController>>();
 
-export const jisoLoaderSource = `(()=>{const E=["click","submit","input","change"],d=document,H=t=>t.closest?.("[fw-state]")||t,S=t=>{try{return JSON.parse(H(t)?.getAttribute("fw-state")||"{}")}catch{return {}}};let n=0;const I=()=>crypto.randomUUID?.()||"idem_"+Date.now().toString(36)+"_"+n++,T=()=>[...d.querySelectorAll("[fw-deps]")].map(e=>{const a=(e.getAttribute("fw-deps")||"").trim().replace(/[\\\\s,]+/g," "),t=e.getAttribute("fw-fragment-target")||e.id;return t&&(a?t+"="+a:t)}).filter(Boolean),P=async e=>{if(e.type=="submit"){const f=e.target.closest("form[enhance],form[data-enhance],form[data-mutation]");if(f){e.preventDefault();fetch(f.action,{body:new FormData(f),headers:{Accept:"text/vnd.jiso.fragment+html","FW-Fragment":"true","FW-Idem":I(),"FW-Targets":T().join("; ")},keepalive:!0,method:(f.method||"post").toUpperCase()}).then(r=>r.text()).then(b=>{const p=new DOMParser().parseFromString(b,"text/html");p.querySelectorAll("fw-query").forEach(m=>dispatchEvent(new CustomEvent("jiso:query",{detail:{body:m.textContent,name:m.getAttribute("name")}})));p.querySelectorAll("fw-fragment").forEach(m=>{const t=m.getAttribute("target"),l=t&&(d.getElementById(t)||d.querySelector('[fw-fragment-target="'+t+'"]'));l&&(m.getAttribute("mode")=="append"?l.insertAdjacentHTML("beforeend",m.innerHTML):l.innerHTML=m.innerHTML)})}).catch(()=>f.submit?f.submit():(f.setAttribute?.("data-error-code","NETWORK_ERROR"),f.setAttribute?.("fw-error","")));return}}const t=e.target.closest("[on\\\\:"+e.type+"]"),r=t?.getAttribute("on:"+e.type);if(!r)return;const p={},s=S(t),h=H(t),c={params:p,state:s,signal:new AbortController().signal};for(const a of t.attributes||[])a.name.startsWith("data-p-")&&(p[a.name.slice(7).replace(/-([a-z0-9])/g,(_,c)=>c.toUpperCase())]=a.value);for(const x of r.split(/\\s+/)){const i=x.lastIndexOf("#");if(i>0){const m=await import(x.slice(0,i));await m[x.slice(i+1)]?.(e,c)}}h?.setAttribute?.("fw-state",JSON.stringify(s))},D=(t,e)=>P({type:t,target:e});for(const e of E)addEventListener(e,P,{capture:!0});d.querySelectorAll("[on\\\\:load]").forEach(e=>D("load",e));d.querySelectorAll("[on\\\\:idle]").forEach(e=>(globalThis.requestIdleCallback||setTimeout)(()=>D("idle",e)));if(globalThis.IntersectionObserver){const o=new IntersectionObserver(a=>a.map(v=>v.isIntersecting&&(o.unobserve(v.target),D("visible",v.target))));d.querySelectorAll("[on\\\\:visible]").forEach(e=>o.observe(e))}})();`;
+export const jisoLoaderSource = `(()=>{const E=["click","submit","input","change"],d=document,H=t=>t.closest?.("[fw-state]")||t,S=t=>{try{return JSON.parse(H(t)?.getAttribute("fw-state")||"{}")}catch{return {}}};let n=0;const I=()=>crypto.randomUUID?.()||"idem_"+Date.now().toString(36)+"_"+n++,T=()=>[...d.querySelectorAll("[fw-deps]")].map(e=>{const a=(e.getAttribute("fw-deps")||"").trim().replace(/[\\\\s,]+/g," "),t=e.getAttribute("fw-fragment-target")||e.id;return t&&(a?t+"="+a:t)}).filter(Boolean),P=async e=>{if(e.type=="submit"){const f=e.target.closest("form[enhance],form[data-enhance],form[data-mutation]");if(f){e.preventDefault();fetch(f.action,{body:new FormData(f),headers:{Accept:"text/vnd.jiso.fragment+html","FW-Fragment":"true","FW-Idem":I(),"FW-Targets":T().join("; ")},keepalive:!0,method:(f.method||"post").toUpperCase()}).then(r=>r.text()).then(b=>{const p=new DOMParser().parseFromString(b,"text/html");p.querySelectorAll("fw-query").forEach(m=>dispatchEvent(new CustomEvent("jiso:query",{detail:{body:m.textContent,name:m.getAttribute("name")}})));p.querySelectorAll("fw-fragment").forEach(m=>{const t=m.getAttribute("target"),l=t&&(d.getElementById(t)||d.querySelector('[fw-fragment-target="'+t+'"]'));l&&(m.getAttribute("mode")=="append"?l.insertAdjacentHTML("beforeend",m.innerHTML):l.innerHTML=m.innerHTML)})}).catch(()=>f.submit?f.submit():(f.setAttribute?.("data-error-code","NETWORK_ERROR"),f.setAttribute?.("fw-error","")));return}}const t=e.target.closest("[on\\\\:"+e.type+"]"),r=t?.getAttribute("on:"+e.type);if(!r)return;const p={},y=(t.getAttribute("fw-param-types")||"").split(/[\\\\s,]+/).reduce((o,v)=>{const[k,q]=v.split(":");return k&&(o[k]=q),o},{}),s=S(t),h=H(t),c={params:p,state:s,signal:new AbortController().signal};for(const a of t.attributes||[])if(a.name.startsWith("data-p-")){const k=a.name.slice(7).replace(/-([a-z0-9])/g,(_,c)=>c.toUpperCase()),q=y[k],v=a.value;p[k]=q=="number"?+v:q=="boolean"?v=="true":v}for(const x of r.split(/\\s+/)){const i=x.lastIndexOf("#");if(i>0){const m=await import(x.slice(0,i));await m[x.slice(i+1)]?.(e,c)}}h?.setAttribute?.("fw-state",JSON.stringify(s))},D=(t,e)=>P({type:t,target:e});for(const e of E)addEventListener(e,P,{capture:!0});d.querySelectorAll("[on\\\\:load]").forEach(e=>D("load",e));d.querySelectorAll("[on\\\\:idle]").forEach(e=>(globalThis.requestIdleCallback||setTimeout)(()=>D("idle",e)));if(globalThis.IntersectionObserver){const o=new IntersectionObserver(a=>a.map(v=>v.isIntersecting&&(o.unobserve(v.target),D("visible",v.target))));d.querySelectorAll("[on\\\\:visible]").forEach(e=>o.observe(e))}})();`;
 
 export function installJisoLoader(options: JisoLoaderOptions): JisoLoader {
   const events = options.events ?? defaultDelegatedEvents;
@@ -707,16 +709,36 @@ export function parseHandlerReference(ref: string): { exportName: string; url: s
   };
 }
 
-export function readElementParams(element: EventElementLike): Record<string, string> {
-  const params: Record<string, string> = {};
+export function readElementParams(element: EventElementLike): Record<string, ElementParamValue> {
+  const paramTypes = readElementParamTypes(element.getAttribute?.('fw-param-types'));
+  const params: Record<string, ElementParamValue> = {};
 
   for (const attribute of element.attributes ?? []) {
     if (!attribute.name.startsWith('data-p-')) continue;
 
-    params[camelCase(attribute.name.slice('data-p-'.length))] = attribute.value;
+    const name = camelCase(attribute.name.slice('data-p-'.length));
+    params[name] = coerceElementParam(attribute.value, paramTypes[name]);
   }
 
   return params;
+}
+
+function readElementParamTypes(value: string | null | undefined): Record<string, string> {
+  const types: Record<string, string> = {};
+
+  for (const entry of value?.split(/[\s,]+/) ?? []) {
+    const [name, type] = entry.split(':');
+    if (name && type) types[name] = type;
+  }
+
+  return types;
+}
+
+function coerceElementParam(value: string, type: string | undefined): ElementParamValue {
+  if (type === 'number') return Number(value);
+  if (type === 'boolean') return value === 'true';
+
+  return value;
 }
 
 export function readElementState(element: EventElementLike): JsonValue {

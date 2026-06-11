@@ -180,8 +180,11 @@ interface HandlerLowering {
 
 interface ElementParam {
   attributeName: string;
+  type: ElementParamType;
   value: string;
 }
+
+type ElementParamType = 'boolean' | 'number' | 'string';
 
 export interface PlatformSubstitution {
   action: string;
@@ -1977,10 +1980,13 @@ function replaceHandlerAttributes(source: string, handlers: readonly HandlerLowe
     .reduce((next, handler) => {
       const replacement = [
         `${handler.attributeName}="${handler.attributeValue}"`,
+        emitElementParamTypes(handler.params),
         ...handler.params.map(
           (param) => `${param.attributeName}="${escapeAttribute(param.value)}"`,
         ),
-      ].join(' ');
+      ]
+        .filter(Boolean)
+        .join(' ');
 
       return `${next.slice(0, handler.attributeStart)}${replacement}${next.slice(handler.attributeEnd)}`;
     }, source);
@@ -2083,8 +2089,50 @@ function extractElementParams(expression: string): ElementParam[] {
 
   return dedupeStrings(expressions).map((arg) => ({
     attributeName: `data-p-${paramNameForExpression(arg)}`,
+    type: inferElementParamType(expression, arg),
     value: `{${arg}}`,
   }));
+}
+
+function emitElementParamTypes(params: readonly ElementParam[]): string {
+  const typedParams = params.filter((param) => param.type !== 'string');
+  if (typedParams.length === 0) return '';
+
+  const entries = typedParams
+    .map((param) => `${paramNameFromAttribute(param.attributeName)}:${param.type}`)
+    .join(',');
+  return `fw-param-types="${entries}"`;
+}
+
+function inferElementParamType(expression: string, sourceExpression: string): ElementParamType {
+  const ref = sourceExpressionRef(sourceExpression);
+  if (usedAsBoolean(expression, ref)) return 'boolean';
+  if (usedAsNumber(expression, ref)) return 'number';
+
+  return 'string';
+}
+
+function sourceExpressionRef(sourceExpression: string): string {
+  return `(?<![\\w$])${escapeRegExp(sourceExpression)}(?![\\w$])`;
+}
+
+function usedAsBoolean(expression: string, ref: string): boolean {
+  return (
+    new RegExp(`!\\s*${ref}`).test(expression) ||
+    new RegExp(`${ref}\\s*(?:\\?|&&|\\|\\|)`).test(expression) ||
+    new RegExp(`(?:&&|\\|\\|)\\s*${ref}`).test(expression) ||
+    new RegExp(`${ref}\\s*(?:===|!==|==|!=)\\s*(?:true|false)\\b`).test(expression) ||
+    new RegExp(`(?:true|false)\\s*(?:===|!==|==|!=)\\s*${ref}`).test(expression)
+  );
+}
+
+function usedAsNumber(expression: string, ref: string): boolean {
+  return (
+    new RegExp(`(?:[+\\-*/%]=|[-*/%])\\s*${ref}`).test(expression) ||
+    new RegExp(`${ref}\\s*(?:[-*/%]|[+\\-*/%]=)`).test(expression) ||
+    new RegExp(`${ref}\\s*(?:===|!==|==|!=|[<>]=?)\\s*-?\\d`).test(expression) ||
+    new RegExp(`-?\\d(?:\\.\\d+)?\\s*(?:===|!==|==|!=|[<>]=?)\\s*${ref}`).test(expression)
+  );
 }
 
 function serializableMemberExpressions(expression: string): string[] {

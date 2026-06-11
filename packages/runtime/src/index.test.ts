@@ -993,6 +993,8 @@ describe('runtime loader', () => {
     const importModule = vi.fn(async () => ({ CartBadge$button_click: handler }));
     const element = new FakeElement({
       'data-p-item-id': 'i_42',
+      'data-p-quantity': '2',
+      'fw-param-types': 'quantity:number',
       'on:click': '/c/cart-badge.client.js#CartBadge$button_click',
     });
 
@@ -1001,7 +1003,10 @@ describe('runtime loader', () => {
     expect(importModule).toHaveBeenCalledWith('/c/cart-badge.client.js');
     expect(handler).toHaveBeenCalledWith(
       expect.objectContaining({ type: 'click' }),
-      expect.objectContaining({ params: { itemId: 'i_42' }, signal: expect.any(AbortSignal) }),
+      expect.objectContaining({
+        params: { itemId: 'i_42', quantity: 2 },
+        signal: expect.any(AbortSignal),
+      }),
     );
   });
 
@@ -1446,6 +1451,20 @@ describe('runtime loader', () => {
     ]);
     expect(readElementParams(new FakeElement({ 'data-p-product-id': 'p1' }))).toEqual({
       productId: 'p1',
+    });
+    expect(
+      readElementParams(
+        new FakeElement({
+          'data-p-featured': 'false',
+          'data-p-product-id': 'p1',
+          'data-p-quantity': '2',
+          'fw-param-types': 'quantity:number featured:boolean',
+        }),
+      ),
+    ).toEqual({
+      featured: false,
+      productId: 'p1',
+      quantity: 2,
     });
   });
 

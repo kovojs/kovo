@@ -1381,6 +1381,21 @@ void test('P1 minifier name preservation evidence remains represented', async ()
   assert.match(compilerTests, /CartDrawer\$removeItem/);
 });
 
+void test('P1 typed data param coercion remains represented', async () => {
+  const compilerSource = await readProjectFile('packages/compiler/src/index.ts');
+  const compilerTests = await readProjectFile('packages/compiler/src/index.test.ts');
+  const runtimeSource = await readProjectFile('packages/runtime/src/index.ts');
+  const runtimeTests = await readProjectFile('packages/runtime/src/index.test.ts');
+
+  assert.match(compilerSource, /fw-param-types/);
+  assert.match(compilerSource, /inferElementParamType/);
+  assert.match(compilerTests, /fw-param-types="quantity:number"/);
+  assert.match(compilerTests, /fw-param-types="selected:boolean"/);
+  assert.match(runtimeSource, /readElementParamTypes/);
+  assert.match(runtimeSource, /coerceElementParam/);
+  assert.match(runtimeTests, /quantity:number featured:boolean/);
+});
+
 void test('framework-owned browser suite is wired into acceptance', async () => {
   const packageJson = JSON.parse(await readProjectFile('package.json'));
   const ciWorkflow = await readProjectFile('.github/workflows/ci.yml');

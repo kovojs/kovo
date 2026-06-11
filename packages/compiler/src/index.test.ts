@@ -124,6 +124,7 @@ export const CartActions = component('cart-actions', {
       'CartActions$button_click_2',
     );
     expect(serverSource).toContain('data-p-quantity="{item.quantity}"');
+    expect(serverSource).toContain('fw-param-types="quantity:number"');
     expect(clientSource).toContain(
       'export const CartActions$button_click = handler((event, ctx) => {',
     );
@@ -133,6 +134,31 @@ export const CartActions = component('cart-actions', {
     );
     expect(clientSource).toContain(
       'return ctx.state.count = ctx.state.count - ctx.params.quantity;',
+    );
+  });
+
+  it('declares boolean coercion for boolean-ish captured handler params', () => {
+    const result = compileComponentModule({
+      fileName: 'components/cart/cart-actions.tsx',
+      source: `
+import { component } from '@jiso/core';
+
+export const CartActions = component('cart-actions', {
+  render: () => (
+    <button onClick={() => item.selected ? select(item.id) : deselect(item.id)}>Toggle</button>
+  ),
+});
+`,
+    });
+
+    const serverSource = result.files[0]?.source ?? '';
+    const clientSource = result.files[1]?.source ?? '';
+
+    expect(serverSource).toContain('fw-param-types="selected:boolean"');
+    expect(serverSource).toContain('data-p-selected="{item.selected}"');
+    expect(serverSource).toContain('data-p-id="{item.id}"');
+    expect(clientSource).toContain(
+      'return ctx.params.selected ? select(ctx.params.id) : deselect(ctx.params.id);',
     );
   });
 
