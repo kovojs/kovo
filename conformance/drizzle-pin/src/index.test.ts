@@ -6,6 +6,7 @@ import { alias, boolean, integer, pgTable, text, timestamp } from 'drizzle-orm/p
 import {
   createTouchGraphEntry,
   diagnosticsForTouchGraph,
+  extractTouchGraphFromProject,
   extractTouchGraphFromSource,
   jiso,
   serializeDomainRegistry,
@@ -33,6 +34,40 @@ describe('Drizzle pinned subset conformance', () => {
     expect(eq(products.id, 'p1')).toBeDefined();
     expect(gt(products.stock, 0)).toBeDefined();
     expect(inArray(cartItems.cartId, ['c1', 'c2'])).toBeDefined();
+  });
+
+  it('recognizes real Drizzle receiver types in project extraction', () => {
+    const graph = extractTouchGraphFromProject({
+      files: [
+        {
+          fileName: 'conformance/drizzle-pin/src/cart.domain.ts',
+          source: `
+            import type { PgDatabase } from 'drizzle-orm/pg-core';
+
+            export const cartItems = pgTable('cart_items', {}, jiso({ domain: 'cart', key: 'productId' }));
+
+            export async function addItem(writer: PgDatabase<any, any, any>, productId: string) {
+              await writer.insert(cartItems).values({ productId });
+            }
+          `,
+        },
+      ],
+    });
+
+    expect(graph).toEqual({
+      addItem: {
+        reads: [],
+        touches: [
+          {
+            domain: 'cart',
+            keys: null,
+            site: 'conformance/drizzle-pin/src/cart.domain.ts:7',
+            via: 'cart_items',
+          },
+        ],
+        unresolved: [],
+      },
+    });
   });
 
   it('pins table annotations as the domain registry source', () => {

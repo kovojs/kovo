@@ -932,22 +932,32 @@ void test('Drizzle pinned conformance suite is an explicit gate', async () => {
   const viteConfig = await readProjectFile('vite.config.ts');
   const ciWorkflow = await readProjectFile('.github/workflows/ci.yml');
   const conformanceTest = await readProjectFile('conformance/drizzle-pin/src/index.test.ts');
+  const drizzlePackageJson = JSON.parse(await readProjectFile('packages/drizzle/package.json'));
+  const drizzleSource = await readProjectFile('packages/drizzle/src/index.ts');
   const drizzleTests = await readProjectFile('packages/drizzle/src/index.test.ts');
 
   assert.match(packageJson.scripts.acceptance, /pnpm run test:conformance/);
   assert.equal(packageJson.scripts['test:conformance'], 'vp run conformance-drizzle');
+  assert.equal(drizzlePackageJson.dependencies['ts-morph'], '^28.0.0');
+  assert.match(drizzleSource, /function extractTouchGraphFromProject/);
+  assert.match(drizzleSource, /function isDrizzleReceiver/);
   assert.match(viteConfig, /'conformance-drizzle':\s*\{/);
   assert.match(ciWorkflow, /vp run conformance-drizzle/);
   assert.match(conformanceTest, /Drizzle pinned subset conformance/);
   assert.match(conformanceTest, /from 'drizzle-orm'/);
   assert.match(conformanceTest, /from 'drizzle-orm\/pg-core'/);
   assert.match(conformanceTest, /imports the pinned real Drizzle Postgres subset/);
+  assert.match(conformanceTest, /recognizes real Drizzle receiver types in project extraction/);
   assert.match(conformanceTest, /pins direct table source extraction/);
   assert.match(conformanceTest, /pins local conditional table resolution/);
   assert.match(drizzleTests, /folds local helper writes and reads into caller summaries/);
   assert.match(drizzleTests, /dedupes recursive helper summaries at a fixed point/);
   assert.match(drizzleTests, /resolves namespace-imported Drizzle schema identifiers/);
   assert.match(drizzleTests, /resolves named import and re-export Drizzle schema aliases/);
+  assert.match(
+    drizzleTests,
+    /uses typed receiver origins instead of likely receiver names in project extraction/,
+  );
   assert.match(drizzleTests, /recognizes renamed Drizzle receiver parameters/);
   assert.match(drizzleTests, /recognizes destructured Drizzle receiver aliases/);
   assert.match(drizzleTests, /marks external helpers receiving a Drizzle receiver as FW406/);

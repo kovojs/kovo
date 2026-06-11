@@ -6,7 +6,8 @@
     ".": "./src/index.ts"
   },
   "dependencies": {
-    "@jiso/core": "workspace:*"
+    "@jiso/core": "workspace:*",
+    "ts-morph": "^28.0.0"
   },
   "devDependencies": {
     "vitest": "4.1.8"

@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import {
   createTouchGraphEntry,
   diagnosticsForTouchGraph,
+  extractTouchGraphFromProject,
   extractTouchGraphFromSource,
   extractQueryFactsFromSource,
   jiso,
@@ -753,6 +754,55 @@ export const tableDomains = {
             domain: 'cart',
             keys: null,
             site: 'cart.domain.ts:5',
+            via: 'cart_items',
+          },
+        ],
+        unresolved: [],
+      },
+    });
+  });
+
+  it('uses typed receiver origins instead of likely receiver names in project extraction', () => {
+    const graph = extractTouchGraphFromProject({
+      files: [
+        {
+          fileName: 'drizzle-types.d.ts',
+          source: `
+            declare module "drizzle-orm/pg-core" {
+              export class PgDatabase<TQueryResultHKT = unknown, TFullSchema = unknown, TSchema = unknown> {
+                insert(table: unknown): { values(value: unknown): Promise<void> };
+              }
+            }
+          `,
+        },
+        {
+          fileName: 'cart.domain.ts',
+          source: `
+            import type { PgDatabase } from "drizzle-orm/pg-core";
+
+            export const cartItems = pgTable("cart_items", {}, jiso({ domain: "cart", key: "productId" }));
+
+            interface FakeDb {
+              insert(table: unknown): { values(value: unknown): Promise<void> };
+            }
+
+            export async function addItem(writer: PgDatabase, db: FakeDb, productId: string) {
+              await writer.insert(cartItems).values({ productId });
+              await db.insert(cartItems).values({ productId });
+            }
+          `,
+        },
+      ],
+    });
+
+    expect(graph).toEqual({
+      addItem: {
+        reads: [],
+        touches: [
+          {
+            domain: 'cart',
+            keys: null,
+            site: 'cart.domain.ts:11',
             via: 'cart_items',
           },
         ],

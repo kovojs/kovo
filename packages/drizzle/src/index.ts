@@ -1,5 +1,14 @@
 export type { DiagnosticCode } from '@jiso/core';
 import { diagnosticDefinitions, type DiagnosticCode, type DiagnosticSeverity } from '@jiso/core';
+import {
+  Node,
+  Project,
+  SyntaxKind,
+  ts,
+  type CallExpression,
+  type CompilerOptions,
+  type SourceFile,
+} from 'ts-morph';
 
 export interface JisoTableAnnotation {
   domain: string;
@@ -104,6 +113,11 @@ export interface TouchGraphDiagnostic {
 export interface SourceFileInput {
   fileName: string;
   source: string;
+}
+
+export interface TouchGraphProjectOptions {
+  compilerOptions?: CompilerOptions;
+  files: readonly SourceFileInput[];
 }
 
 interface ExtractedTable {
@@ -299,6 +313,35 @@ export function extractTouchGraphFromSource(files: readonly SourceFileInput[]): 
   return graph;
 }
 
+export function extractTouchGraphFromProject(options: TouchGraphProjectOptions): TouchGraph {
+  const project = new Project({
+    compilerOptions: {
+      allowJs: false,
+      moduleResolution: ts.ModuleResolutionKind.Bundler,
+      noEmit: true,
+      skipLibCheck: true,
+      strict: true,
+      target: ts.ScriptTarget.ESNext,
+      ...options.compilerOptions,
+    },
+    skipAddingFilesFromTsConfig: true,
+  });
+  const sourceFiles = options.files.map((file) =>
+    project.createSourceFile(file.fileName, file.source, { overwrite: true }),
+  );
+  const files = options.files.map((file, index) => {
+    const sourceFile = sourceFiles[index];
+    if (!sourceFile) throw new Error(`Missing source file for ${file.fileName}`);
+
+    return {
+      fileName: file.fileName,
+      source: sourceWithUntypedWriteReceiversRemoved(file.source, sourceFile),
+    };
+  });
+
+  return extractTouchGraphFromSource(files);
+}
+
 export function extractQueryFactsFromSource(files: readonly SourceFileInput[]): QueryFact[] {
   const tables = new Map<string, ExtractedTable[]>();
   const facts: QueryFact[] = [];
@@ -334,6 +377,54 @@ export function extractQueryFactsFromSource(files: readonly SourceFileInput[]): 
   }
 
   return facts.sort((left, right) => left.query.localeCompare(right.query));
+}
+
+function sourceWithUntypedWriteReceiversRemoved(source: string, sourceFile: SourceFile): string {
+  const replacements: { end: number; start: number }[] = [];
+
+  for (const call of sourceFile.getDescendantsOfKind(SyntaxKind.CallExpression)) {
+    if (!isDrizzleWriteCall(call)) continue;
+    const expression = call.getExpression();
+    if (!Node.isPropertyAccessExpression(expression)) continue;
+    if (isDrizzleReceiver(expression.getExpression())) continue;
+
+    const name = expression.getNameNode();
+    replacements.push({ end: name.getEnd(), start: name.getStart() });
+  }
+
+  return replacements
+    .sort((left, right) => right.start - left.start)
+    .reduce(
+      (next, range) => `${next.slice(0, range.start)}__jisoIgnoredWrite${next.slice(range.end)}`,
+      source,
+    );
+}
+
+function isDrizzleWriteCall(call: CallExpression): boolean {
+  const expression = call.getExpression();
+  if (!Node.isPropertyAccessExpression(expression)) return false;
+
+  return ['delete', 'insert', 'update'].includes(expression.getName());
+}
+
+function isDrizzleReceiver(receiver: Node): boolean {
+  const type = receiver.getType();
+  const typeText = type.getText(receiver);
+  if (
+    /\b(?:PgDatabase|NodePgDatabase|PostgresJsDatabase|PgliteDatabase|Neon.*Database|BaseSQLiteDatabase|MySql2Database|MySqlDatabase)\b/.test(
+      typeText,
+    )
+  ) {
+    return true;
+  }
+
+  return (
+    type
+      .getSymbol()
+      ?.getDeclarations()
+      .some((declaration) => declaration.getSourceFile().getFilePath().includes('drizzle-orm')) ??
+    false
+  );
 }
 
 interface ExtractedTableDeclaration {
