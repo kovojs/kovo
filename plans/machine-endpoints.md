@@ -5,7 +5,15 @@ Scope: SPEC additions (`webhook()`, route response outcomes, storage capability,
 
 ## Progress checklist
 
-- [ ] S7 spike: raw-body capture without double-buffering + the webhook verify→tx→change-record lifecycle, proven against a recorded Stripe fixture (decision-gate writeup).
+- [x] S7 spike: raw-body capture without double-buffering + the webhook verify→tx→change-record lifecycle, proven against a recorded Stripe fixture (decision-gate writeup).
+      Evidence 2026-06-11: `conformance/webhook-spike/src/index.test.ts` models the
+      SPEC §9.1 lifecycle against a pinned Stripe-format fixture using the shipped
+      `stripeSignature()` verifier and `createMemoryMutationReplayStore()`. It asserts one
+      raw-body read reused for verification and loose parsing, rejects byte-tampered JSON and
+      stale timestamps, accepts rotated-secret multi-signature headers, commits the tx before
+      publishing `{domain, keys, input}`, and replays redelivered `event.id` responses without
+      re-running the handler. `conformance/webhook-spike/docs/S7-decision-gate.md` records the
+      server-shell raw-body and provider-event replay decisions plus the remaining non-goals.
 - [x] SPEC PR: `webhook()` primitive, `respond.file()`/`respond.stream()` route outcomes, storage capability interface, `--endpoints` audit, and the stated JSON-API non-goal.
       Evidence 2026-06-11: SPEC §1.3 states the JSON/REST API non-goal; SPEC §6.4
       normatively defines route file/stream outcomes; SPEC §9.1 defines raw endpoints,
@@ -71,6 +79,11 @@ Every mutation is a CSRF-protected, session-bound form POST (SPEC §6.6, §9.1);
 ## Spike S7 — raw bytes and the webhook lifecycle
 
 Prove before building E2/E3: capture raw body bytes for verification without double-buffering large payloads, then run verify → loose-parse → tx → domain write → change record → 200 against a recorded Stripe fixture, including: tampered body rejected, stale timestamp rejected, rotated-secret multi-signature accepted, redelivered event id answered from replay without re-executing the handler. Decision-gate writeup covers where raw-body capture lives in the server shell and what the FW-Idem storage for provider event ids looks like.
+
+Evidence landed in `conformance/webhook-spike/` on 2026-06-11. The spike is intentionally
+bounded: it proves the lifecycle composition with existing verifier/replay primitives, but does
+not implement the `webhook()` API, compiler extraction, audit output, durable provider-event
+storage, or static domain-write enforcement.
 
 ## Out of scope
 
