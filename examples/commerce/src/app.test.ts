@@ -649,6 +649,10 @@ describe('commerce example', () => {
     execFileSync('node', ['examples/commerce/scripts/emit-graph.mjs', '--check'], {
       stdio: 'pipe',
     });
+    const emitGraphScript = readFileSync(
+      new URL('../scripts/emit-graph.mjs', import.meta.url),
+      'utf8',
+    );
     const graphArtifact = JSON.parse(
       readFileSync(new URL('./generated/graph.json', import.meta.url), 'utf8'),
     );
@@ -657,6 +661,8 @@ describe('commerce example', () => {
     const ordersLine = lineNumberFor(commerceSource, "request.db.write('orders'");
     const productsLine = lineNumberFor(commerceSource, "request.db.write('products'");
 
+    expect(emitGraphScript).toContain("import { deriveAppGraph } from '@jiso/compiler/graph';");
+    expect(emitGraphScript).not.toContain('const deriveAppGraph = ({ graph }) => ({ graph })');
     expect(graphArtifact).toEqual(commerceGraph);
     expect(fwCheck(graphArtifact).output).toBe('fw-check/v1\nOK\n');
     expect(addToCart.registry?.touches).toBeUndefined();

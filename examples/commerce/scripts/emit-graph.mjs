@@ -3,6 +3,8 @@ import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import assert from 'node:assert/strict';
 
+import { deriveAppGraph } from '@jiso/compiler/graph';
+
 const scriptDir = dirname(fileURLToPath(import.meta.url));
 const commerceRoot = resolve(scriptDir, '..');
 const sourcePath = resolve(commerceRoot, 'src/app.ts');
@@ -125,8 +127,6 @@ const graphDeclarations = {
     { domains: ['order'], query: 'orderHistory' },
   ],
 };
-
-const deriveAppGraph = ({ graph }) => ({ graph });
 
 const { graph } = deriveAppGraph({
   graph: {

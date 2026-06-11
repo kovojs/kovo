@@ -1,4 +1,4 @@
-import { kebabCase } from './shared.js';
+import { kebabCase } from './shared.ts';
 
 export interface ComponentGraphFact {
   fragments?: readonly string[];
