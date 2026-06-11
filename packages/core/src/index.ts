@@ -51,9 +51,125 @@ export interface MutationRegistry {}
 
 export interface FragmentTargets {}
 
+export interface RouteRegistry {}
+
 type RegistryKey<Registry> = keyof Registry extends never
   ? string
   : Extract<keyof Registry, string>;
+
+type PathParamNames<Path extends string> = Path extends `${string}:${infer Rest}`
+  ? Rest extends `${infer Param}/${infer Tail}`
+    ? Param | PathParamNames<Tail>
+    : Rest extends `${infer Param}?${string}`
+      ? Param
+      : Rest
+  : never;
+
+type PathParams<Path extends string> =
+  PathParamNames<Path> extends never ? {} : Record<PathParamNames<Path>, string>;
+
+export interface Route<
+  Path extends string,
+  Params extends Record<string, string> = PathParams<Path>,
+  Search extends Record<string, JsonValue> = Record<string, JsonValue>,
+> {
+  path: Path;
+  params?: Params;
+  prefetch?: 'conservative' | 'moderate' | false;
+  search?: Search;
+}
+
+export interface RouteOptions<
+  Params extends Record<string, string> = Record<string, never>,
+  Search extends Record<string, JsonValue> = Record<string, JsonValue>,
+> {
+  params?: Params;
+  prefetch?: 'conservative' | 'moderate' | false;
+  search?: Search;
+}
+
+type RouteFor<Path extends string> = Path extends keyof RouteRegistry
+  ? RouteRegistry[Path] extends Route<Path, infer Params, infer Search>
+    ? Route<Path, Params, Search>
+    : Route<Path>
+  : Route<Path>;
+
+type RouteParams<Definition> =
+  Definition extends Route<string, infer Params, Record<string, JsonValue>> ? Params : never;
+
+type RouteSearch<Definition> =
+  Definition extends Route<string, Record<string, string>, infer Search> ? Search : never;
+
+type RouteHrefOptions<Definition> = keyof RouteParams<Definition> extends never
+  ? { params?: RouteParams<Definition>; search?: Partial<RouteSearch<Definition>> }
+  : { params: RouteParams<Definition>; search?: Partial<RouteSearch<Definition>> };
+
+export function route<
+  const Path extends string,
+  Params extends Record<string, string> = PathParams<Path>,
+  Search extends Record<string, JsonValue> = Record<string, JsonValue>,
+>(path: Path, options: RouteOptions<Params, Search> = {}): Route<Path, Params, Search> {
+  return { ...options, path };
+}
+
+export function href<const Path extends RegistryKey<RouteRegistry>>(
+  path: Path,
+  options: RouteHrefOptions<RouteFor<Path>>,
+): string {
+  return buildHref(
+    path,
+    options as { params?: Record<string, string>; search?: Record<string, JsonValue> },
+  );
+}
+
+export interface LinkDescriptor {
+  href: string;
+}
+
+export function Link<const Path extends RegistryKey<RouteRegistry>>(
+  path: Path,
+  options: RouteHrefOptions<RouteFor<Path>>,
+): LinkDescriptor {
+  return { href: href(path, options) };
+}
+
+export interface Redirect {
+  location: string;
+  status: 303;
+}
+
+export function redirect<const Path extends RegistryKey<RouteRegistry>>(
+  path: Path,
+  options: RouteHrefOptions<RouteFor<Path>>,
+): Redirect {
+  return {
+    location: href(path, options),
+    status: 303,
+  };
+}
+
+function buildHref(
+  path: string,
+  options: { params?: Record<string, string>; search?: Record<string, JsonValue> },
+): string {
+  const params = options.params ?? {};
+  const pathname = path.replace(/:([A-Za-z_$][\w$]*)/g, (_match, key: string) =>
+    encodeURIComponent(params[key] ?? ''),
+  );
+  const search = new URLSearchParams();
+
+  for (const [key, value] of Object.entries(options.search ?? {})) {
+    if (value === null || value === undefined) continue;
+    search.set(key, searchValueToString(value));
+  }
+
+  const query = search.toString();
+  return query ? `${pathname}?${query}` : pathname;
+}
+
+function searchValueToString(value: JsonValue): string {
+  return typeof value === 'object' ? JSON.stringify(value) : String(value);
+}
 
 export function query<
   const Key extends RegistryKey<QueryRegistry>,

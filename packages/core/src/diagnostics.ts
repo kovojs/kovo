@@ -3,6 +3,7 @@ export type DiagnosticSeverity = 'error' | 'warn' | 'lint' | 'notice';
 export type DiagnosticCode =
   | 'FW201'
   | 'FW210'
+  | 'FW220'
   | 'FW221'
   | 'FW301'
   | 'FW302'
@@ -35,6 +36,11 @@ export const diagnosticDefinitions = {
     code: 'FW210',
     severity: 'lint',
     message: 'Anonymous handler; name it for stable identity.',
+  },
+  FW220: {
+    code: 'FW220',
+    severity: 'error',
+    message: 'Literal href or form action matches no declared route.',
   },
   FW221: {
     code: 'FW221',

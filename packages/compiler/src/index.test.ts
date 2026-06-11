@@ -106,6 +106,7 @@ export const CartActions = component('cart-actions', {
           cart: 'typeof cartQuery',
           productGrid: 'typeof productGridQuery',
         },
+        routes: ['/cart', '/products/:id'],
       },
       source: cartBadgeSource,
     });
@@ -139,6 +140,11 @@ export const CartActions = component('cart-actions', {
   interface MutationRegistry {
   'cart/add': typeof addToCart;
   'cart/remove': typeof removeFromCart;
+  }
+
+  interface RouteRegistry {
+  '/cart': import('@jiso/core').Route<'/cart'>;
+  '/products/:id': import('@jiso/core').Route<'/products/:id'>;
   }
 }`);
     expect(registry).toContain('export type DomainKey = "cart" | "product";');
@@ -233,6 +239,7 @@ export const CartRow = component('cart-row', {
     const registry = result.files[2]?.source ?? '';
     expect(registry).toMatch(/export interface QueryRegistry \{\n\n\}/);
     expect(registry).toMatch(/export interface MutationRegistry \{\n\n\}/);
+    expect(registry).toMatch(/export interface RouteRegistry \{\n\n\}/);
     expect(registry).toContain(`declare module '@jiso/core' {
   interface FragmentTargets {
   'cart-badge': {};
@@ -243,6 +250,10 @@ export const CartRow = component('cart-row', {
   }
 
   interface MutationRegistry {
+
+  }
+
+  interface RouteRegistry {
 
   }
 }`);
@@ -507,6 +518,63 @@ export const CartShell = component('cart-shell', {
         code: 'FW221',
         fileName: 'cart-shell.tsx',
         message: 'IDREF references an id not present in component scope. filters',
+        severity: 'error',
+      },
+    ]);
+  });
+
+  it('accepts literal navigation targets that match declared routes', () => {
+    const result = compileComponentModule({
+      fileName: 'product-links.tsx',
+      registryFacts: {
+        routes: ['/cart', '/products/:id'],
+      },
+      source: `
+export const ProductLinks = component('product-links', {
+  render: () => (
+    <nav>
+      <a href="/products/p1?max=500">Product</a>
+      <form method="get" action="/cart"></form>
+      <a href="https://example.com/products/p1">External</a>
+      <a href="#details">Skip link</a>
+    </nav>
+  ),
+});
+`,
+    });
+
+    expect(result.diagnostics).toEqual([]);
+  });
+
+  it('reports FW220 for literal navigation targets outside the route table', () => {
+    const result = compileComponentModule({
+      fileName: 'product-links.tsx',
+      registryFacts: {
+        routes: ['/cart', '/products/:id'],
+      },
+      source: `
+export const ProductLinks = component('product-links', {
+  render: () => (
+    <nav>
+      <a href="/product/p1">Product</a>
+      <form method="get" action="/checkout"></form>
+    </nav>
+  ),
+});
+`,
+    });
+
+    expect(result.diagnostics).toEqual([
+      {
+        code: 'FW220',
+        fileName: 'product-links.tsx',
+        message: 'Literal href or form action matches no declared route. /product/p1',
+        severity: 'error',
+      },
+      {
+        code: 'FW220',
+        fileName: 'product-links.tsx',
+        message: 'Literal href or form action matches no declared route. /checkout',
         severity: 'error',
       },
     ]);

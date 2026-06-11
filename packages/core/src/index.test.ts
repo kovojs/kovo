@@ -6,7 +6,11 @@ import {
   form,
   formFields,
   fragmentTarget,
+  href,
+  Link,
   query,
+  redirect,
+  route,
   type EventPayload,
   type FormFailure,
   type FormFieldName,
@@ -25,6 +29,13 @@ declare module './index.js' {
 
   interface FragmentTargets {
     'cart-row': { rowId: string };
+  }
+
+  interface RouteRegistry {
+    '/cart': ReturnType<typeof route<'/cart'>>;
+    '/products/:id': ReturnType<
+      typeof route<'/products/:id', { id: string }, { max: number; sort: string }>
+    >;
   }
 }
 
@@ -149,6 +160,44 @@ describe('core authoring APIs', () => {
     expect(assertUnknownTarget).toBeTypeOf('function');
     expect(assertMissingProp).toBeTypeOf('function');
     expect(assertUnknownProp).toBeTypeOf('function');
+  });
+
+  it('builds typed route hrefs, links, and redirects from generated registry facts', () => {
+    const productRoute = route<'/products/:id', { id: string }, { max: number; sort: string }>(
+      '/products/:id',
+      {
+        prefetch: 'conservative',
+      },
+    );
+
+    expect(productRoute.path).toBe('/products/:id');
+    expect(href('/products/:id', { params: { id: 'p 1' }, search: { max: 500 } })).toBe(
+      '/products/p%201?max=500',
+    );
+    expect(Link('/products/:id', { params: { id: 'p1' }, search: { sort: 'price' } })).toEqual({
+      href: '/products/p1?sort=price',
+    });
+    expect(redirect('/cart', {})).toEqual({ location: '/cart', status: 303 });
+
+    const assertMissingParam = () => {
+      // @ts-expect-error id is required by the route path.
+      href('/products/:id', { search: { max: 500 } });
+    };
+    const assertUnknownRoute = () => {
+      // @ts-expect-error route hrefs are checked against generated RouteRegistry facts.
+      href('/missing', {});
+    };
+    const assertUnknownSearch = () => {
+      href('/products/:id', {
+        params: { id: 'p1' },
+        // @ts-expect-error sku is not part of the route search schema.
+        search: { sku: 'sku-1' },
+      });
+    };
+
+    expect(assertMissingParam).toBeTypeOf('function');
+    expect(assertUnknownRoute).toBeTypeOf('function');
+    expect(assertUnknownSearch).toBeTypeOf('function');
   });
 
   it('preserves typed event names as registry facts', () => {

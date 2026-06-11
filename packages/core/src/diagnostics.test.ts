@@ -7,6 +7,7 @@ describe('diagnostic registry', () => {
     expect(Object.keys(diagnosticDefinitions)).toEqual([
       'FW201',
       'FW210',
+      'FW220',
       'FW221',
       'FW301',
       'FW302',
@@ -37,6 +38,11 @@ describe('diagnostic registry', () => {
           "code": "FW210",
           "message": "Anonymous handler; name it for stable identity.",
           "severity": "lint",
+        },
+        "FW220": {
+          "code": "FW220",
+          "message": "Literal href or form action matches no declared route.",
+          "severity": "error",
         },
         "FW221": {
           "code": "FW221",

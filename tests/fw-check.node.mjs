@@ -407,6 +407,30 @@ void test('P1 compiler validates component-scoped IDREFs', async () => {
   assert.match(compilerTests, /reports FW221 for literal IDREFs that miss component scope ids/);
 });
 
+void test('P3 typed routes validate navigation targets', async () => {
+  const coreSource = await readProjectFile('packages/core/src/index.ts');
+  const coreTests = await readProjectFile('packages/core/src/index.test.ts');
+  const diagnosticsSource = await readProjectFile('packages/core/src/diagnostics.ts');
+  const compilerSource = await readProjectFile('packages/compiler/src/index.ts');
+  const compilerTests = await readProjectFile('packages/compiler/src/index.test.ts');
+
+  assert.match(diagnosticsSource, /FW220/);
+  assert.match(diagnosticsSource, /Literal href or form action matches no declared route/);
+  assert.match(coreSource, /interface RouteRegistry/);
+  assert.match(coreSource, /function route/);
+  assert.match(coreSource, /function href/);
+  assert.match(coreSource, /function Link/);
+  assert.match(coreSource, /function redirect/);
+  assert.match(coreTests, /builds typed route hrefs, links, and redirects/);
+  assert.match(compilerSource, /routes\?: readonly string\[\]/);
+  assert.match(compilerSource, /validateLiteralHrefs/);
+  assert.match(compilerSource, /routeRegistryFactLines/);
+  assert.match(
+    compilerTests,
+    /reports FW220 for literal navigation targets outside the route table/,
+  );
+});
+
 void test('P3 mutation lifecycle includes an explicit transaction boundary', async () => {
   const serverSource = await readProjectFile('packages/server/src/index.ts');
   const serverTests = await readProjectFile('packages/server/src/index.test.ts');

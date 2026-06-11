@@ -84,6 +84,7 @@ export interface RegistryFacts {
   domainKeys?: readonly string[];
   mutations?: RegistryTypeFacts;
   queries?: RegistryTypeFacts;
+  routes?: readonly string[];
 }
 
 export type RegistryTypeFacts = Readonly<Record<string, string>>;
@@ -169,6 +170,7 @@ export function compileComponentModule(options: CompileComponentOptions): Compil
   const eventPayloadDiagnostics = validateEventPayloads(source, options);
   const directDbDiagnostics = validateDirectDbAccess(source, options.fileName);
   const idrefDiagnostics = validateIdrefs(options.source, options.fileName);
+  const literalHrefDiagnostics = validateLiteralHrefs(options.source, options);
   const clientFileName = replaceExtension(options.fileName, '.client.js');
   const cssFileName = replaceExtension(options.fileName, '.css');
   const serverFileName = replaceExtension(options.fileName, '.server.js');
@@ -203,6 +205,7 @@ export function compileComponentModule(options: CompileComponentOptions): Compil
       ...eventPayloadDiagnostics,
       ...directDbDiagnostics,
       ...idrefDiagnostics,
+      ...literalHrefDiagnostics,
     ],
     files: [
       { fileName: serverFileName, source: serverSource },
@@ -825,6 +828,49 @@ function validateIdrefs(source: string, fileName: string): CompilerDiagnostic[] 
 
   const missing = idrefValues(source).filter((value) => !ids.has(value));
   return [...new Set(missing)].map((value) => fw221Diagnostic(fileName, value));
+}
+
+function validateLiteralHrefs(
+  source: string,
+  options: CompileComponentOptions,
+): CompilerDiagnostic[] {
+  const routes = options.registryFacts?.routes;
+  if (!routes) return [];
+
+  const missing = literalNavigationTargets(source).filter((target) => {
+    if (isExternalNavigationTarget(target)) return false;
+    return !routes.some((routePath) => routePathMatchesUrl(routePath, target));
+  });
+
+  return [...new Set(missing)].map((target) => ({
+    ...diagnosticFor(options.fileName, 'FW220'),
+    message: `${diagnosticDefinitions.FW220.message} ${target}`,
+  }));
+}
+
+function literalNavigationTargets(source: string): string[] {
+  return [...source.matchAll(/\b(?:href|action)\s*=\s*(["'])(?<target>[^"']+)\1/g)].flatMap(
+    (match) => (match.groups?.target ? [match.groups.target] : []),
+  );
+}
+
+function isExternalNavigationTarget(target: string): boolean {
+  return (
+    target.startsWith('#') ||
+    target.startsWith('mailto:') ||
+    target.startsWith('tel:') ||
+    /^[a-z][a-z0-9+.-]*:\/\//i.test(target)
+  );
+}
+
+function routePathMatchesUrl(routePath: string, target: string): boolean {
+  const pathname = target.split(/[?#]/, 1)[0] ?? '';
+  const pattern = `^${routePath
+    .split('/')
+    .map((part) => (part.startsWith(':') ? '[^/]+' : part.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')))
+    .join('/')}$`;
+
+  return new RegExp(pattern).test(pathname);
 }
 
 function fw221Diagnostic(fileName: string, value: string): CompilerDiagnostic {
@@ -1661,6 +1707,7 @@ function emitRegistryModule(options: {
   const stylesheetLines = options.cssAssets.map(componentStylesheetLine).join('\n');
   const queryRegistryLines = registryTypeFactLines(options.registryFacts?.queries);
   const mutationRegistryLines = registryTypeFactLines(options.registryFacts?.mutations);
+  const routeRegistryLines = routeRegistryFactLines(options.registryFacts?.routes);
   const domainKey = registryDomainKey(options.registryFacts?.domainKeys);
 
   return `${irHeader}
@@ -1696,6 +1743,10 @@ export interface MutationRegistry {
 ${mutationRegistryLines}
 }
 
+export interface RouteRegistry {
+${routeRegistryLines}
+}
+
 declare module '@jiso/core' {
   interface FragmentTargets {
 ${fragmentTargetLines}
@@ -1707,6 +1758,10 @@ ${queryRegistryLines}
 
   interface MutationRegistry {
 ${mutationRegistryLines}
+  }
+
+  interface RouteRegistry {
+${routeRegistryLines}
   }
 }
 
@@ -1726,6 +1781,13 @@ function registryTypeFactLines(facts: RegistryTypeFacts | undefined): string {
   return Object.entries(facts ?? {})
     .sort(([left], [right]) => left.localeCompare(right))
     .map(([key, typeExpression]) => `  '${key}': ${typeExpression};`)
+    .join('\n');
+}
+
+function routeRegistryFactLines(routes: readonly string[] | undefined): string {
+  return [...new Set(routes ?? [])]
+    .sort((left, right) => left.localeCompare(right))
+    .map((routePath) => `  '${routePath}': import('@jiso/core').Route<'${routePath}'>;`)
     .join('\n');
 }
 
