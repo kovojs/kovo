@@ -1655,6 +1655,24 @@ export const CartBadge = component('cart-badge', {
     ]);
   });
 
+  it('ignores binding stamp text inside strings and comments', () => {
+    const result = compileComponentModule({
+      fileName: 'cart-badge.tsx',
+      source: `
+export const CartBadge = component('cart-badge', {
+  queries: { cart: cartQuery },
+  render: ({ cart }) => {
+    const sample = '<span data-bind="cart.count">{cart.count}</span>';
+    // <span data-bind="cart.total">{cart.count}</span>
+    return <span>{renderOnce(cart.count)}</span>;
+  },
+});
+`,
+    });
+
+    expect(result.diagnostics).toEqual([]);
+  });
+
   it('does not let self-closing same-name children hide list stamp diagnostics', () => {
     const result = compileComponentModule({
       fileName: 'cart-badge.tsx',

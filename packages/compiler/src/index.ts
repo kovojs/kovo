@@ -3,7 +3,7 @@ import { diagnosticDefinitions, type DiagnosticCode } from '@jiso/core';
 import { componentCssAssetForFile, emitCssModule, type ComponentCssAsset } from './css.js';
 import { diagnosticFor, type CompilerDiagnostic } from './diagnostics.js';
 import type { ComponentGraphFact, RegistryFacts, RegistryTypeFacts } from './graph.js';
-import { findMatchingClosingTag, readStaticAttribute, scanOpeningTags } from './scan/tags.js';
+import { findMatchingClosingTag, scanOpeningTags } from './scan/tags.js';
 import { findMatchingToken, findStringEnd } from './scan/text.js';
 import {
   componentExplicitNames,
@@ -829,19 +829,14 @@ function validateStampExpressionDrift(
 }
 
 function bindingExpressionStamps(source: string): Array<{ binding: string; expression: string }> {
-  return scanOpeningTags(source).flatMap((tag) => {
-    const binding = readStaticAttribute(tag.attrs, 'data-bind');
+  return parsedJsxElements(source).flatMap((element) => {
+    const binding = jsxStaticAttributeValue(element, 'data-bind');
     if (!binding) return [];
+    if (element.selfClosing) return [];
 
-    const end = findMatchingClosingTag(source, tag.name, tag.start);
-    if (end === -1) return [];
-
-    const openEnd = findOpeningTagEnd(source, tag.start);
-    if (openEnd === -1) return [];
-
-    const closeTag = `</${tag.name}>`;
-    const closeStart = end - closeTag.length;
-    const expression = soleWrappedQueryExpression(source.slice(openEnd + 1, closeStart));
+    const expression = soleWrappedQueryExpression(
+      source.slice(element.openingEnd, element.closingStart),
+    );
     return expression ? [{ binding, expression }] : [];
   });
 }
