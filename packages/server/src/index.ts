@@ -132,10 +132,23 @@ export type {
 } from './shell.js';
 export { nodeRequestToWebRequest, toNodeHandler, writeWebResponseToNode } from './node.js';
 export type { NodeHandlerOptions, NodeRequestHandler } from './node.js';
-export { jisoAppShellVitePlugin } from './vite.js';
+export {
+  createJisoAppShellBuild,
+  jisoAppShellViteManifestHints,
+  jisoAppShellVitePlugin,
+} from './vite.js';
 export type {
+  JisoAppShellBuild,
+  JisoAppShellBuildOptions,
+  JisoAppShellBuiltClientModule,
+  JisoAppShellCompiledClientModule,
+  JisoAppShellRouteBuildEntry,
+  JisoAppShellRouteBuildHints,
   JisoAppShellViteDevServer,
   JisoAppShellViteInput,
+  JisoAppShellViteManifest,
+  JisoAppShellViteManifestChunk,
+  JisoAppShellViteManifestHintOptions,
   JisoAppShellViteMiddleware,
   JisoAppShellVitePlugin,
 } from './vite.js';

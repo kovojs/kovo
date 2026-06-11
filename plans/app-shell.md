@@ -37,8 +37,17 @@ Scope: SPEC addition (proposed §9.5 "The request shell"), `@jiso/server` shell 
       Progress 2026-06-11: `packages/server/src/vite.ts` adds `jisoAppShellVitePlugin()`,
       a Vite-shaped dev middleware that delegates to the same `createRequestHandler()` /
       `toNodeHandler()` path used by R3/R4. `packages/server/src/vite.test.ts` proves a
-      route served through the plugin over `node:http`. Remaining R5 work: build manifest
-      wiring for stylesheet hints and compiled client-module versioned emit.
+      route served through the plugin over `node:http`. Partial evidence 2026-06-11:
+      `createJisoAppShellBuild()` and `jisoAppShellViteManifestHints()` now compose explicit
+      route-to-manifest entries into deterministic stylesheet/modulepreload hints and register
+      compiled `/c/` module sources into the existing immutable versioned client-module registry
+      with stable content hashes; `packages/server/src/vite.test.ts` proves the hints on a real
+      `createRequestHandler()` response and module serving through the public server barrel,
+      with `packages/server/src/index.ts` exporting the helper as public server API.
+      Verification: `pnpm exec vitest --run packages/server/src/vite.test.ts`; `pnpm run check`.
+      Remaining R5 work: compiler/plugin build hooks must still supply the route-entry mapping,
+      compiled module sources, and dist-file emission/copying; this helper intentionally does
+      not infer those facts.
 - [ ] R6 static export: synthetic-request replay to `.html` files with the L0/L1-only constraint and teaching errors for non-exportable routes.
       Progress 2026-06-11: `packages/server/src/static-export.ts` adds the production-shaped
       `exportStaticApp()` foundation, replaying eligible static GET routes through
