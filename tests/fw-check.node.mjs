@@ -828,8 +828,13 @@ void test('P1 minifier name preservation evidence remains represented', async ()
 
   assert.match(compilerSource, /collectMinifierReservedNames/);
   assert.match(compilerSource, /handlerExportPattern/);
+  assert.match(compilerSource, /uniqueAnonymousHandlerName/);
+  assert.match(compilerSource, /lowerHandlerExpression/);
   assert.match(compilerTests, /collects emitted handler export names for minifier preservation/);
+  assert.match(compilerTests, /emits executable handler bodies with stable unique anonymous names/);
   assert.match(compilerTests, /CartBadge\$button_click/);
+  assert.match(compilerTests, /CartActions\$button_click_2/);
+  assert.match(compilerTests, /return ctx\.state\.count \+= ctx\.params\.quantity/);
   assert.match(compilerTests, /CartDrawer\$removeItem/);
 });
 

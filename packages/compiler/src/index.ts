@@ -101,6 +101,7 @@ interface HandlerLowering {
   exportName: string;
   attributeName: string;
   attributeValue: string;
+  expression: string;
   params: ElementParam[];
   diagnostic?: CompilerDiagnostic;
 }
@@ -577,6 +578,7 @@ function lowerEventHandlers(
   componentName: string,
 ): HandlerLowering[] {
   const handlers: HandlerLowering[] = [];
+  const anonymousNameCounts = new Map<string, number>();
   const eventAttributePattern =
     /<(?<tag>[A-Za-z][A-Za-z0-9-]*)\b(?<before>[^>]*)\son(?<event>[A-Z][A-Za-z0-9]*)=\{(?<expression>[^}]*)\}/g;
 
@@ -589,7 +591,7 @@ function lowerEventHandlers(
     const eventName = event.toLowerCase();
     const exportName = namedHandler
       ? `${componentName}$${expression}`
-      : `${componentName}$${tag}_${eventName}`;
+      : uniqueAnonymousHandlerName(componentName, tag, eventName, anonymousNameCounts);
 
     let diagnostic: CompilerDiagnostic | undefined;
     if (!namedHandler) {
@@ -609,12 +611,26 @@ function lowerEventHandlers(
       attributeName: `on:${eventName}`,
       attributeValue: `${clientModuleUrl(options.fileName)}#${exportName}`,
       ...(diagnostic ? { diagnostic } : {}),
+      expression,
       exportName,
       params,
     });
   }
 
   return handlers;
+}
+
+function uniqueAnonymousHandlerName(
+  componentName: string,
+  tag: string,
+  eventName: string,
+  counts: Map<string, number>,
+): string {
+  const base = `${componentName}$${tag}_${eventName}`;
+  const count = (counts.get(base) ?? 0) + 1;
+  counts.set(base, count);
+
+  return count === 1 ? base : `${base}_${count}`;
 }
 
 function capturesUnserializableValue(expression: string): boolean {
@@ -1219,7 +1235,10 @@ function emitClientModule(
     imports.length > 0 ? `import { ${imports.join(', ')} } from '@jiso/runtime';\n\n` : '';
   const handlerExports = handlers.length
     ? handlers
-        .map((handler) => `export const ${handler.exportName} = handler((_event, _ctx) => {});`)
+        .map(
+          (handler) =>
+            `export const ${handler.exportName} = handler((event, ctx) => {\n${indent(emitHandlerBody(handler))}\n});`,
+        )
         .join('\n')
     : '';
   const queryPlanExport = emitQueryUpdatePlanExport(componentName, queryUpdatePlans);
@@ -1228,6 +1247,46 @@ function emitClientModule(
   return `${irHeader}
 ${importLine}${exports || '// no client handlers emitted'}
 `;
+}
+
+function emitHandlerBody(handler: HandlerLowering): string {
+  const namedHandler = /^[A-Za-z_$][\w$]*$/.test(handler.expression);
+  if (namedHandler) {
+    return `return ${handler.expression}(event, ctx);`;
+  }
+
+  const arrowBody = arrowExpressionBody(handler.expression);
+  if (!arrowBody) return '// unsupported handler expression was preserved as a diagnostic surface';
+
+  return `return ${lowerHandlerExpression(arrowBody, handler.params)};`;
+}
+
+function arrowExpressionBody(expression: string): string | null {
+  const arrow = /^\(\)\s*=>\s*(?<body>[\s\S]+)$/.exec(expression);
+  const body = arrow?.groups?.body;
+  return body ? body.trim() : null;
+}
+
+function lowerHandlerExpression(expression: string, params: readonly ElementParam[]): string {
+  let lowered = expression.replace(/\bstate\b/g, 'ctx.state');
+
+  for (const param of params) {
+    const sourceExpression = param.value.slice(1, -1);
+    if (!sourceExpression) continue;
+
+    lowered = lowered.replace(
+      new RegExp(escapeRegExp(sourceExpression), 'g'),
+      `ctx.params.${paramNameFromAttribute(param.attributeName)}`,
+    );
+  }
+
+  return lowered;
+}
+
+function paramNameFromAttribute(attributeName: string): string {
+  return attributeName
+    .replace(/^data-p-/, '')
+    .replace(/-([a-z0-9])/g, (_, char: string) => char.toUpperCase());
 }
 
 function emitQueryUpdatePlanExport(
@@ -1393,15 +1452,32 @@ function templateLiteral(value: string): string {
 
 function extractElementParams(expression: string): ElementParam[] {
   const callMatch = /^\(\)\s*=>\s*[A-Za-z_$][\w$]*\((?<args>.*)\)$/.exec(expression);
-  if (!callMatch?.groups?.args) return [];
+  const expressions = callMatch?.groups?.args
+    ? splitArguments(callMatch.groups.args)
+        .map((arg) => arg.trim())
+        .filter((arg) => arg.length > 0 && arg !== 'state')
+    : serializableMemberExpressions(expression);
 
-  return splitArguments(callMatch.groups.args)
-    .map((arg) => arg.trim())
-    .filter((arg) => arg.length > 0 && arg !== 'state')
-    .map((arg) => ({
-      attributeName: `data-p-${paramNameForExpression(arg)}`,
-      value: `{${arg}}`,
-    }));
+  return dedupeStrings(expressions).map((arg) => ({
+    attributeName: `data-p-${paramNameForExpression(arg)}`,
+    value: `{${arg}}`,
+  }));
+}
+
+function serializableMemberExpressions(expression: string): string[] {
+  const members = expression.match(/\b[A-Za-z_$][\w$]*(?:\.[A-Za-z_$][\w$]*)+/g) ?? [];
+
+  return members.filter(
+    (member) =>
+      !member.startsWith('state.') &&
+      !member.startsWith('ctx.') &&
+      !member.startsWith('document.') &&
+      !member.startsWith('window.'),
+  );
+}
+
+function dedupeStrings(values: readonly string[]): string[] {
+  return [...new Set(values)];
 }
 
 function splitArguments(args: string): string[] {

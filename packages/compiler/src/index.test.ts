@@ -38,6 +38,7 @@ describe('compileComponentModule', () => {
       'generated/registries.d.ts',
     ]);
     expect(result.files[1]?.source).toContain('export const CartBadge$button_click');
+    expect(result.files[1]?.source).toContain('return removeItem(ctx.state, ctx.params.id);');
     expect(result.files[1]?.source).toContain('import { applyCompiledQueryUpdatePlan, handler }');
     expect(result.files[1]?.source).toContain('export const CartBadge$queryUpdatePlans');
     expect(result.files[0]?.source).toContain(
@@ -49,6 +50,46 @@ describe('compileComponentModule', () => {
     );
     expect(result.files[2]?.source).toContain("'cart-badge': {};");
     expect(result.files[2]?.source).toContain("'CartBadge:cart': readonly ['cart.count'];");
+  });
+
+  it('emits executable handler bodies with stable unique anonymous names', () => {
+    const result = compileComponentModule({
+      fileName: 'components/cart/cart-actions.tsx',
+      source: `
+import { component } from '@jiso/core';
+
+export const CartActions = component('cart-actions', {
+  state: () => ({ count: 0 }),
+  render: () => (
+    <div>
+      <button onClick={() => state.count += item.quantity}>Add one</button>
+      <button onClick={() => state.count = state.count - item.quantity}>Remove one</button>
+    </div>
+  ),
+});
+`,
+    });
+
+    const serverSource = result.files[0]?.source ?? '';
+    const clientSource = result.files[1]?.source ?? '';
+
+    expect(serverSource).toContain(
+      'on:click="/c/components/cart/cart-actions.client.js#CartActions$button_click"',
+    );
+    expect(serverSource).toContain(
+      'on:click="/c/components/cart/cart-actions.client.js#CartActions$button_click_2"',
+    );
+    expect(serverSource).toContain('data-p-quantity="{item.quantity}"');
+    expect(clientSource).toContain(
+      'export const CartActions$button_click = handler((event, ctx) => {',
+    );
+    expect(clientSource).toContain('return ctx.state.count += ctx.params.quantity;');
+    expect(clientSource).toContain(
+      'export const CartActions$button_click_2 = handler((event, ctx) => {',
+    );
+    expect(clientSource).toContain(
+      'return ctx.state.count = ctx.state.count - ctx.params.quantity;',
+    );
   });
 
   it('emits provided query, mutation, and domain key registry facts', () => {
