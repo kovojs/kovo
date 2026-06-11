@@ -103,12 +103,18 @@ Do this first or pay it on every commit.
       `tests/fw-check.node.mjs` now parses `examples/commerce/src/generated/graph.json` and
       asserts `fwCheck`/`fwExplain` behavior directly instead of grepping commerce test names,
       touch-graph literals, or property-case counts. The wider source-text ledger remains open.
-- [ ] **Make create-jiso templates real files** (`create-jiso/src/index.ts:63-473`, ~470 lines of
+- [x] **Make create-jiso templates real files** (`create-jiso/src/index.ts:63-473`, ~470 lines of
       escaped template literals including a CI workflow and double-escaped regexes inside
       `.mjs`-in-string). Move to a `templates/` directory copied at scaffold time with `{{name}}`
       substitution; templates are linted/typechecked as code. Replace the template-substring test
       with: scaffold into a temp dir, run `tsc --noEmit` (and the scaffold's own test script)
       on the result.
+      Evidence: `packages/create-jiso/templates/**` contains the scaffold sources and
+      `packages/create-jiso/src/index.ts` renders them with `{{name}}` substitution;
+      `pnpm exec vitest --run packages/create-jiso/src/index.test.ts` scaffolds to temp and passed
+      6 tests; `pnpm run check` formatted/linted/typechecked 144/93 files; a temp scaffold generated
+      by `node packages/create-jiso/src/index.ts` passed `tsc --noEmit` over generated TS files
+      and `vitest --run --root <temp> src/app.fixpoint.test.ts`.
 - [x] **Document the test topology** (root README or CONTRIBUTING): the five mechanisms (package
       vitest, browser config, `tests/*.node.mjs`, conformance workspaces, acceptance chain), and
       make `scripts/fw-check.mjs` fail with a "run `vp run build` first" message instead of a raw
