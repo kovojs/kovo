@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 export type { DiagnosticCode } from '@jiso/core';
 import { readFileSync } from 'node:fs';
+import { pathToFileURL } from 'node:url';
 
 import {
   diagnosticDefinitions,
@@ -1123,6 +1124,6 @@ function normalizePath(path: string): string {
     .join('.');
 }
 
-if (import.meta.url === `file://${process.argv[1]}`) {
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   process.exitCode = main();
 }

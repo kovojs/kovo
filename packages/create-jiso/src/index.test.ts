@@ -352,6 +352,30 @@ describe('create-jiso starter', () => {
     }
   });
 
+  it('runs as a CLI entrypoint when the script path contains spaces', () => {
+    const parent = mkdtempSync(join(tmpdir(), 'create-jiso-entry-'));
+    const spacedDir = join(parent, 'entry path with spaces');
+    const entryPath = join(spacedDir, 'create-jiso.ts');
+
+    try {
+      mkdirSync(spacedDir, { recursive: true });
+      symlinkSync(new URL('./index.ts', import.meta.url), entryPath);
+
+      const output = execFileSync(
+        process.execPath,
+        ['--preserve-symlinks-main', entryPath, '--help'],
+        {
+          encoding: 'utf8',
+          stdio: ['ignore', 'pipe', 'pipe'],
+        },
+      );
+
+      expect(output).toBe('usage: create-jiso <target-directory> [--name <package-name>]\n');
+    } finally {
+      rmSync(parent, { force: true, recursive: true });
+    }
+  });
+
   it('refuses to write into a non-empty target directory', () => {
     const root = mkdtempSync(join(tmpdir(), 'create-jiso-collision-'));
     const existingPath = join(root, 'README.md');

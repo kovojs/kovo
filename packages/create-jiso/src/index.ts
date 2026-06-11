@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import { existsSync, mkdirSync, readdirSync, statSync, writeFileSync } from 'node:fs';
 import { basename, dirname, isAbsolute, relative, resolve } from 'node:path';
+import { pathToFileURL } from 'node:url';
 
 export interface CreateJisoOptions {
   name: string;
@@ -573,6 +574,6 @@ function readNameOption(args: readonly string[]): string | undefined {
   return name;
 }
 
-if (import.meta.url === `file://${process.argv[1]}`) {
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   process.exitCode = main();
 }
