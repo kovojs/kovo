@@ -319,6 +319,19 @@ void test('P5 morph evidence includes structural and browser survival suites', a
   assert.match(browserTests, /scrollTop/);
 });
 
+void test('D2 commerce validates keyed append and optimistic reorder', async () => {
+  const commerceTests = await readProjectFile('examples/commerce/src/app.test.ts');
+
+  assert.match(
+    commerceTests,
+    /preserves commerce list identity through append and simultaneous optimistic reorder/,
+  );
+  assert.match(commerceTests, /renderProductGridPageFragment/);
+  assert.match(commerceTests, /morphStructuralTree/);
+  assert.match(commerceTests, /pendingMutation: 'cart\/add'/);
+  assert.match(commerceTests, /order-history/);
+});
+
 void test('D3 deferred stream responses are consumed by the runtime', async () => {
   const runtimeSource = await readProjectFile('packages/runtime/src/index.ts');
   const runtimeTests = await readProjectFile('packages/runtime/src/index.test.ts');

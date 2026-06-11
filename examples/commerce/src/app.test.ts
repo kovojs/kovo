@@ -4,6 +4,7 @@ import { readFileSync, rmSync } from 'node:fs';
 
 import { createJisoTestHarness, propertyTest } from '@jiso/test';
 import type { TouchGraph } from '@jiso/drizzle';
+import { morphStructuralTree, type StructuralMorphNode } from '@jiso/runtime';
 import { fwCheck, fwExplain } from '../../../packages/cli/src/index.js';
 
 import {
@@ -81,6 +82,23 @@ function optimisticStatuses(output: string) {
   );
 }
 
+function keyedListNode(
+  type: string,
+  keys: readonly string[],
+  stateByKey: Record<string, StructuralMorphNode['browserState']> = {},
+): StructuralMorphNode {
+  return {
+    children: keys.map((key) => ({
+      browserState: stateByKey[key],
+      key,
+      props: { 'data-key': key },
+      text: key,
+      type: 'li',
+    })),
+    type,
+  };
+}
+
 describe('commerce example', () => {
   it('executes addToCart and verifies rendered cart badge without a browser', async () => {
     const harness = createJisoTestHarness({
@@ -151,6 +169,73 @@ describe('commerce example', () => {
 
     expect(renderOrderHistory(db)).toContain('data-key="order-1"');
     expect(renderOrderHistory(db)).toContain('p1 x 2 - 2998');
+  });
+
+  it('preserves commerce list identity through append and simultaneous optimistic reorder', async () => {
+    const db = createCommerceDb();
+    const firstPage = loadProductGrid(db, { limit: 2 });
+    const firstPageKeys = firstPage.items.map((item) => item.id);
+    const secondPage = loadProductGrid(db, { after: firstPage.nextCursor ?? undefined, limit: 2 });
+    const currentGrid = keyedListNode('product-grid', firstPageKeys, {
+      p1: { islandState: { pendingMutation: 'cart/add' } },
+    });
+    const firstProduct = currentGrid.children?.[0];
+    const secondProduct = currentGrid.children?.[1];
+    const appendedGrid = morphStructuralTree(
+      currentGrid,
+      keyedListNode('product-grid', [...firstPageKeys, ...secondPage.items.map((item) => item.id)]),
+    );
+    const thirdProduct = appendedGrid.children?.[2];
+
+    expect(renderProductGrid(firstPage)).toContain('data-key="p1"');
+    expect(
+      renderProductGridPageFragment(db, { after: firstPage.nextCursor ?? undefined }),
+    ).toContain('<fw-fragment target="product-grid" mode="append">');
+    expect(appendedGrid.children?.[0]).toBe(firstProduct);
+    expect(appendedGrid.children?.[1]).toBe(secondProduct);
+    expect(thirdProduct).not.toBeUndefined();
+
+    const reorderedGrid = morphStructuralTree(
+      appendedGrid,
+      keyedListNode('product-grid', ['p2', 'p3', 'p1']),
+    );
+
+    expect(reorderedGrid.children?.map((item) => item.key)).toEqual(['p2', 'p3', 'p1']);
+    expect(reorderedGrid.children?.[0]).toBe(secondProduct);
+    expect(reorderedGrid.children?.[1]).toBe(thirdProduct);
+    expect(reorderedGrid.children?.[2]).toBe(firstProduct);
+    expect(reorderedGrid.children?.[2]?.browserState).toEqual({
+      islandState: { pendingMutation: 'cart/add' },
+    });
+
+    await addToCart.handler(
+      { productId: 'p1', quantity: 1 },
+      { db, session: { id: 's-direct', user: { id: 'u-direct' } } },
+      {
+        fail(code, payload) {
+          return { error: { code, payload }, ok: false, status: 422 };
+        },
+        invalidate(domain, options) {
+          return { domain: domain.key, ...options, manual: true };
+        },
+      },
+    );
+
+    const currentHistory = keyedListNode('order-history', ['order-draft'], {
+      'order-draft': { islandState: { pendingMutation: 'cart/add' } },
+    });
+    const optimisticOrder = currentHistory.children?.[0];
+    const reconciledHistory = morphStructuralTree(
+      currentHistory,
+      keyedListNode('order-history', ['order-1', 'order-draft']),
+    );
+
+    expect(renderOrderHistory(db)).toContain('data-key="order-1"');
+    expect(reconciledHistory.children?.[0]?.key).toBe('order-1');
+    expect(reconciledHistory.children?.[1]).toBe(optimisticOrder);
+    expect(reconciledHistory.children?.[1]?.browserState).toEqual({
+      islandState: { pendingMutation: 'cart/add' },
+    });
   });
 
   it('uses the typed commerce session schema in authenticated mutations', async () => {
