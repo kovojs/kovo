@@ -109,6 +109,10 @@ Do this first or pay it on every commit.
       Remaining checks in that tranche are limited to scaffold wiring that is still source-shaped:
       Vite task commands/inputs, GitHub workflow steps, Tailwind source directives, generated
       client bootstrap imports, and create-jiso's own scaffold-test coverage.
+      Partial evidence 2026-06-11: the P8 component/endpoints/unguarded/unscoped tranche now uses
+      a synthetic graph and direct `fwExplain` assertions for handler captures, derives,
+      execution triggers, attribute merges, endpoint listing, unguarded access, and owner-domain
+      scope audits instead of grepping CLI implementation symbols or CLI test names.
 - [x] **Make create-jiso templates real files** (`create-jiso/src/index.ts:63-473`, ~470 lines of
       escaped template literals including a CI workflow and double-escaped regexes inside
       `.mjs`-in-string). Move to a `templates/` directory copied at scaffold time with `{{name}}`

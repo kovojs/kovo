@@ -358,32 +358,42 @@ void test('pre-launch checklist is tracked explicitly', async () => {
 void test('S2 loader budget and L0 no-upgrade path are acceptance evidence', async () => {
   const runtimeSource = await readProjectFile('packages/runtime/src/index.ts');
   const runtimeTests = await readProjectFile('packages/runtime/src/index.test.ts');
+  const inlineLoaderStart = runtimeSource.indexOf('const inlineJisoLoaderInstallerSource');
+  const inlineLoaderEnd = runtimeSource.indexOf('export const jisoLoaderSource');
+  assert.notEqual(inlineLoaderStart, -1, 'runtime has a pinned inline loader source');
+  assert.notEqual(inlineLoaderEnd, -1, 'runtime exports generated inline loader source');
+  const inlineLoaderSource = runtimeSource.slice(inlineLoaderStart, inlineLoaderEnd);
 
   assert.match(runtimeSource, /export function installInlineJisoLoader/);
-  assert.match(runtimeSource, /export const jisoLoaderSource = minifyInlineLoaderSource/);
-  assert.match(runtimeSource, /installInlineJisoLoader\.toString\(\)/);
-  assert.match(runtimeSource, /\(\(url\)=>import\(url\)\)/, 'handlers import only from event refs');
+  assert.match(runtimeSource, /inlineJisoLoaderInstallerSource/);
   assert.match(
     runtimeSource,
+    /export const jisoLoaderSource = `\(\$\{inlineJisoLoaderInstallerSource\}\)\(\(url\)=>import\(url\)\);`/,
+  );
+  assert.doesNotMatch(
+    runtimeSource,
+    /installInlineJisoLoader\.toString\(\)|Function\.prototype\.toString|minifyInlineLoaderSource/,
+    'inline loader source is pinned instead of regex-minified from function source',
+  );
+  assert.match(runtimeSource, /\(\(url\)=>import\(url\)\)/, 'handlers import only from event refs');
+  assert.match(
+    inlineLoaderSource,
     /signal: new AbortController\(\)\.signal/,
     'inline handlers receive ctx.signal',
   );
   assert.match(
-    runtimeSource,
+    inlineLoaderSource,
     /IntersectionObserver/,
     'inline loader schedules declared visible triggers',
   );
-  assert.match(runtimeSource, /FW-Targets/, 'enhanced form submits send live targets');
-  assert.match(runtimeSource, /keepalive: true/, 'enhanced form submits use keepalive');
-  assert.match(runtimeSource, /DOMParser/, 'loader parses mutation response chunks');
-  assert.match(runtimeSource, /fw-fragment/, 'loader applies fragment chunks');
-  assert.match(runtimeSource, /on\\\\:load/, 'inline loader schedules declared load triggers');
-  assert.match(runtimeSource, /on\\\\:idle/, 'inline loader schedules declared idle triggers');
+  assert.match(inlineLoaderSource, /FW-Targets/, 'enhanced form submits send live targets');
+  assert.match(inlineLoaderSource, /keepalive: true/, 'enhanced form submits use keepalive');
+  assert.match(inlineLoaderSource, /DOMParser/, 'loader parses mutation response chunks');
+  assert.match(inlineLoaderSource, /fw-fragment/, 'loader applies fragment chunks');
+  assert.match(inlineLoaderSource, /on\\\\:load/, 'inline loader schedules declared load triggers');
+  assert.match(inlineLoaderSource, /on\\\\:idle/, 'inline loader schedules declared idle triggers');
   assert.doesNotMatch(
-    runtimeSource.slice(
-      runtimeSource.indexOf('export function installInlineJisoLoader'),
-      runtimeSource.indexOf('function minifyInlineLoaderSource'),
-    ),
+    inlineLoaderSource,
     /\bcustomElements\.define\b|attachShadow|\bunload\b/,
     'loader has no upgrade/unload path',
   );
@@ -391,6 +401,8 @@ void test('S2 loader budget and L0 no-upgrade path are acceptance evidence', asy
   assert.match(runtimeTests, /toBeLessThanOrEqual\(4096\)/);
   assert.match(runtimeTests, /generated bootstrap source/);
   assert.match(runtimeTests, /shared inline loader source/);
+  assert.match(runtimeTests, /FW-Targets': 'cart-badge=cart; inventory=inventory stock'/);
+  assert.match(runtimeTests, /key: 'cart:c1'/);
 });
 
 void test('P2 loader smoke evidence remains represented in runtime tests', async () => {
@@ -1382,39 +1394,135 @@ void test('P9 verification layer evidence remains represented', async () => {
 });
 
 void test('P8 component explain includes handler, derive, trigger, and merge facts', async () => {
-  const cliSource = await readProjectFile('packages/cli/src/index.ts');
-  const cliTests = await readProjectFile('packages/cli/src/index.test.ts');
-  const graphSource = await readProjectFile('packages/core/src/graph.ts');
+  const graph = {
+    components: [
+      {
+        attributeMerges: [
+          {
+            attr: 'aria-expanded',
+            decision: 'primitive',
+            element: 'button',
+            rule: 'primitive-owned',
+          },
+          {
+            attr: 'data-bind:hidden',
+            decision: 'diagnostic',
+            diagnostics: ['FW233'],
+            element: 'button',
+            rule: 'single-binding-writer',
+          },
+        ],
+        derives: [
+          {
+            inputs: ['cart'],
+            name: 'CartBadge$isEmpty',
+            ref: '/components/cart-badge.js#CartBadge$isEmpty',
+            target: 'data-bind:hidden',
+          },
+        ],
+        handlers: [
+          {
+            captures: ['ctx', 'element-params'],
+            event: 'click',
+            exportName: 'CartBadge$button_click',
+            params: ['itemId'],
+            ref: '/components/cart-badge.js#CartBadge$button_click',
+          },
+        ],
+        name: 'CartBadge',
+        queries: ['cart'],
+        triggers: [
+          {
+            deps: ['cart'],
+            exportName: 'CartBadge$mountChart',
+            justification: 'charts are below the fold',
+            ref: '/components/cart-badge.js#CartBadge$mountChart',
+            trigger: 'visible',
+          },
+        ],
+      },
+    ],
+    endpoints: [
+      {
+        auth: 'verifier:stripe-signature',
+        csrf: 'exempt',
+        csrfJustification: 'stripe-signature',
+        method: 'POST',
+        name: 'stripe/webhook',
+        path: '/webhooks/stripe',
+        writes: ['payment'],
+      },
+      {
+        method: 'GET',
+        name: 'health',
+        path: '/health',
+      },
+    ],
+    mutations: [{ key: 'cart/add', writes: ['cart'] }],
+    ownerDomains: [{ domain: 'cart', owner: 'userId' }],
+    pages: [{ guards: [], queries: ['cart'], route: '/cart' }],
+    queries: [{ domains: ['cart'], guards: [], query: 'cart' }],
+    scopeAudits: [
+      {
+        detail: 'where eq(carts.id, args.cartId)',
+        domain: 'cart',
+        kind: 'query',
+        name: 'cartById',
+        scope: 'args',
+        site: 'cart.queries.ts:21',
+      },
+    ],
+  };
 
-  assert.match(
-    graphSource,
-    /export type CaptureChannel = 'ctx' \| 'element-params' \| 'module-scope'/,
+  assert.equal(
+    fwExplain(graph, { kind: 'component', target: 'CartBadge' }).output,
+    [
+      'fw-explain/v1',
+      'COMPONENT CartBadge',
+      'queries: cart',
+      'fragments: -',
+      'HANDLER click export=CartBadge$button_click ref=/components/cart-badge.js#CartBadge$button_click captures=ctx,element-params params=itemId substitution=-',
+      'DERIVE CartBadge$isEmpty inputs=cart ref=/components/cart-badge.js#CartBadge$isEmpty target=data-bind:hidden',
+      'TRIGGER visible export=CartBadge$mountChart ref=/components/cart-badge.js#CartBadge$mountChart deps=cart justification=charts are below the fold',
+      'MERGE button attr=aria-expanded rule=primitive-owned decision=primitive diagnostics=-',
+      'MERGE button attr=data-bind:hidden rule=single-binding-writer decision=diagnostic diagnostics=FW233',
+      '',
+    ].join('\n'),
   );
-  assert.match(cliSource, /captures=\$\{list\(handler\.captures\)\}/);
-  assert.match(graphSource, /interface DeriveExplain/);
-  assert.match(graphSource, /interface TriggerExplain/);
-  assert.match(graphSource, /interface AttributeMergeExplain/);
-  assert.match(cliSource, /DERIVE \$\{derive\.name\}/);
-  assert.match(cliSource, /TRIGGER \$\{trigger\.trigger\}/);
-  assert.match(cliSource, /MERGE \$\{merge\.element\}/);
-  assert.match(cliTests, /captures: \['ctx', 'element-params'\]/);
-  assert.match(cliTests, /captures=ctx,element-params params=itemId/);
-  assert.match(cliTests, /DERIVE CartBadge\$isEmpty inputs=cart/);
-  assert.match(cliTests, /TRIGGER visible export=CartBadge\$mountChart/);
-  assert.match(cliTests, /MERGE button attr=aria-expanded/);
-  assert.match(cliTests, /MERGE button attr=data-bind:hidden/);
-  assert.match(cliSource, /unscoped: true/);
-  assert.match(graphSource, /scopeAudits\?: readonly ScopeAuditFact\[\]/);
-  assert.match(cliSource, /function unscopedAccesses/);
-  assert.match(cliSource, /function unguardedAccesses/);
-  assert.match(cliSource, /endpoints: true/);
-  assert.match(cliSource, /ENDPOINTS/);
-  assert.match(cliSource, /writes=\$\{list\(endpoint\.writes\)\}/);
-  assert.match(cliTests, /accepts fw explain --unscoped as a CLI audit mode/);
-  assert.match(cliTests, /accepts fw explain --endpoints as a CLI audit mode/);
-  assert.match(cliTests, /prints all endpoints with stable explain output/);
-  assert.match(cliTests, /audits unguarded queries and pages with stable explain output/);
-  assert.match(cliTests, /UNSCOPED QUERY cartById/);
+  assert.equal(
+    fwExplain(graph, { endpoints: true }).output,
+    [
+      'fw-explain/v1',
+      'ENDPOINTS',
+      'ENDPOINT health method=GET path=/health mount=exact auth=- csrf=checked writes=-',
+      'ENDPOINT stripe/webhook method=POST path=/webhooks/stripe mount=exact auth=verifier:stripe-signature csrf=exempt:stripe-signature writes=payment',
+      'SUMMARY total=2',
+      '',
+    ].join('\n'),
+  );
+  assert.equal(
+    fwExplain(graph, { unguarded: true }).output,
+    [
+      'fw-explain/v1',
+      'UNGUARDED',
+      'ENDPOINT health method=GET path=/health mount=exact auth=- csrf=checked',
+      'MUTATION cart/add guards=- writes=cart invalidates=- manual-invalidates=-',
+      'PAGE /cart guards=- queries=cart',
+      'QUERY cart guards=- reads=cart',
+      'SUMMARY total=4',
+      '',
+    ].join('\n'),
+  );
+  assert.equal(
+    fwExplain(graph, { unscoped: true }).output,
+    [
+      'fw-explain/v1',
+      'UNSCOPED',
+      'UNSCOPED QUERY cartById domain=cart scope=args site=cart.queries.ts:21 where eq(carts.id, args.cartId)',
+      'SUMMARY total=1',
+      '',
+    ].join('\n'),
+  );
 });
 
 void test('P5 data-bind paths are checked against generated query shape facts', async () => {
