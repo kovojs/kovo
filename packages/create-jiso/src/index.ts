@@ -87,6 +87,7 @@ export function createJisoProject(options: CreateJisoOptions): CreateJisoProject
             scripts: {
               check: 'vp check',
               dev: 'vp dev',
+              'emit-graph': 'node scripts/emit-graph.mjs',
               test: 'vp test',
               'fw-check': 'vp run fw-check',
               'graph-assertions': 'vp run graph-assertions',
@@ -127,14 +128,20 @@ export default defineConfig({
         output: ['dist/**'],
       },
       'fw-check': {
-        command: 'fw check graph.json',
-        input: [{ pattern: 'graph.json', base: 'workspace' }],
+        command: 'node scripts/emit-graph.mjs && fw check graph.json',
+        input: [
+          { pattern: 'scripts/emit-graph.mjs', base: 'workspace' },
+          { pattern: 'src/**/*', base: 'workspace' },
+        ],
+        output: ['graph.json'],
       },
       'graph-assertions': {
-        command: 'node scripts/graph-assertions.mjs',
+        command: 'node scripts/emit-graph.mjs && node scripts/graph-assertions.mjs',
         input: [
           { pattern: 'graph.json', base: 'workspace' },
+          { pattern: 'scripts/emit-graph.mjs', base: 'workspace' },
           { pattern: 'scripts/graph-assertions.mjs', base: 'workspace' },
+          { pattern: 'src/**/*', base: 'workspace' },
         ],
       },
     },
@@ -178,6 +185,7 @@ This starter uses Vite+ as the single project entrypoint:
 vp check
 vp test
 vp run build
+vp run emit-graph
 vp run fw-check
 vp run graph-assertions
 \`\`\`
@@ -188,6 +196,18 @@ Tailwind is the default app styling path. Keep class names in templates as stati
       {
         path: 'graph.json',
         source: `${JSON.stringify(starterGraph, null, 2)}\n`,
+      },
+      {
+        path: 'scripts/emit-graph.mjs',
+        source: `import { writeFileSync } from 'node:fs';
+import { deriveAppGraph } from '@jiso/compiler';
+
+const graphDeclarations = ${JSON.stringify(starterGraph, null, 2)};
+
+const { graph } = deriveAppGraph({ graph: graphDeclarations });
+writeFileSync(new URL('../graph.json', import.meta.url), \`\${JSON.stringify(graph, null, 2)}\\n\`);
+process.stdout.write('emit-graph/v1\\nOK\\n');
+`,
       },
       {
         path: 'scripts/graph-assertions.mjs',
@@ -242,6 +262,7 @@ process.stdout.write('graph-assertions/v1\\nOK\\n');
 Jiso keeps application wiring auditable through the generated graph file consumed by the CLI:
 
 \`\`\`sh
+vp run emit-graph
 vp run fw-check
 vp run graph-assertions
 fw explain component CartBadge graph.json
@@ -260,7 +281,7 @@ When debugging enhanced mutations, keep the wire contract from SPEC.md section 9
 SPEC.md section 11.4.3 treats behavior checks as graph queries over stable \`fw explain\` output. Keep these assertions in CI beside ordinary tests when a product rule matters more than one rendered page snapshot.
 This starter wires the minimal cart assertions into \`vp run graph-assertions\` and GitHub Actions; extend \`scripts/graph-assertions.mjs\` as product rules become important.
 
-This starter's \`graph.json\` is a tiny runnable example. Replace it with the compiler-emitted app graph as your app grows.
+This starter's \`scripts/emit-graph.mjs\` is the tiny runnable graph-emission path. Keep app facts flowing through \`deriveAppGraph\`; as your app grows, replace the inline declarations with compiler-emitted component/query/route facts before writing \`graph.json\`.
 
 Assert that every component displaying cart data is registered as a cart consumer:
 

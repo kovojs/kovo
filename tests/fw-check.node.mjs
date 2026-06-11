@@ -695,13 +695,20 @@ void test('P10 starter wires graph assertions into CI', async () => {
   const starterTests = await readProjectFile('packages/create-jiso/src/index.test.ts');
 
   assert.match(starterSource, /'graph-assertions': 'vp run graph-assertions'/);
+  assert.match(starterSource, /'emit-graph': 'node scripts\/emit-graph\.mjs'/);
   assert.match(starterSource, /session: 'starterSession'/);
   assert.match(starterSource, /inputFields: \['productId', 'quantity'\]/);
   assert.match(starterSource, /i18n: \['en-US:cartTitle'\]/);
   assert.match(starterSource, /title: 'Jiso Starter Cart'/);
-  assert.match(starterSource, /command: 'node scripts\/graph-assertions\.mjs'/);
+  assert.match(starterSource, /command: 'node scripts\/emit-graph\.mjs && fw check graph\.json'/);
+  assert.match(
+    starterSource,
+    /command: 'node scripts\/emit-graph\.mjs && node scripts\/graph-assertions\.mjs'/,
+  );
   assert.match(starterSource, /- run: vp run graph-assertions/);
+  assert.match(starterSource, /path: 'scripts\/emit-graph\.mjs'/);
   assert.match(starterSource, /path: 'scripts\/graph-assertions\.mjs'/);
+  assert.match(starterSource, /deriveAppGraph/);
   assert.match(starterSource, /path: 'src\/client\.ts'/);
   assert.match(starterSource, /'@jiso\/runtime': 'workspace:\*'/);
   assert.match(starterSource, /installJisoLoader\(\{/);
@@ -735,7 +742,7 @@ void test('P10 starter wires graph assertions into CI', async () => {
   );
   assert.match(starterTests, /node_modules\/\.bin\/vite/);
   assert.match(starterTests, /\.bg-emerald-50/);
-  assert.match(starterTests, /create-jiso: wrote 14 files/);
+  assert.match(starterTests, /create-jiso: wrote 15 files/);
 });
 
 void test('P9 verification layer evidence remains represented', async () => {

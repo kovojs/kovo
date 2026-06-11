@@ -35,6 +35,7 @@ describe('create-jiso starter', () => {
       '.github/workflows/ci.yml',
       'README.md',
       'graph.json',
+      'scripts/emit-graph.mjs',
       'scripts/graph-assertions.mjs',
       'docs/graph-assertions.md',
       'docs/deployment.md',
@@ -55,16 +56,19 @@ describe('create-jiso starter', () => {
       '"fw": "workspace:*"',
     );
     expect(project.files.find((file) => file.path === 'package.json')?.source).toContain(
+      '"emit-graph": "node scripts/emit-graph.mjs"',
+    );
+    expect(project.files.find((file) => file.path === 'package.json')?.source).toContain(
       '"@tailwindcss/vite": "^4.1.0"',
     );
     expect(project.files.find((file) => file.path === 'package.json')?.source).toContain(
       '"tailwindcss": "^4.1.0"',
     );
     expect(project.files.find((file) => file.path === 'vite.config.ts')?.source).toContain(
-      "command: 'fw check graph.json'",
+      "command: 'node scripts/emit-graph.mjs && fw check graph.json'",
     );
     expect(project.files.find((file) => file.path === 'vite.config.ts')?.source).toContain(
-      "command: 'node scripts/graph-assertions.mjs'",
+      "command: 'node scripts/emit-graph.mjs && node scripts/graph-assertions.mjs'",
     );
     expect(project.files.find((file) => file.path === 'vite.config.ts')?.source).toContain(
       "command: 'vp build'",
@@ -88,6 +92,7 @@ describe('create-jiso starter', () => {
     expect(readme).toContain('vp check');
     expect(readme).toContain('vp test');
     expect(readme).toContain('vp run build');
+    expect(readme).toContain('vp run emit-graph');
     expect(readme).toContain('vp run fw-check');
     expect(readme).toContain('vp run graph-assertions');
     expect(readme).toContain('@source inline("...")');
@@ -164,6 +169,10 @@ describe('create-jiso starter', () => {
         '',
       ].join('\n'),
     });
+    const emitGraph = project.files.find((file) => file.path === 'scripts/emit-graph.mjs')?.source;
+    expect(emitGraph).toContain("import { deriveAppGraph } from '@jiso/compiler';");
+    expect(emitGraph).toContain('const { graph } = deriveAppGraph({ graph: graphDeclarations });');
+    expect(emitGraph).toContain("writeFileSync(new URL('../graph.json', import.meta.url)");
     expect(
       project.files.find((file) => file.path === 'docs/graph-assertions.md')?.source,
     ).toContain('fw explain mutation cart/add --optimistic graph.json');
@@ -180,6 +189,9 @@ describe('create-jiso starter', () => {
       (file) => file.path === 'docs/graph-assertions.md',
     )?.source;
     expect(graphAssertions).toContain('SPEC.md section 11.4.3');
+    expect(graphAssertions).toContain('vp run emit-graph');
+    expect(graphAssertions).toContain('scripts/emit-graph.mjs');
+    expect(graphAssertions).toContain('deriveAppGraph');
     expect(graphAssertions).toContain('vp run graph-assertions');
     expect(graphAssertions).toContain('scripts/graph-assertions.mjs');
     expect(graphAssertions).toContain('fw explain query cart graph.json > .jiso/cart.query.txt');
@@ -329,7 +341,7 @@ describe('create-jiso starter', () => {
 
     try {
       expect(main([root])).toBe(0);
-      expect(stdout).toHaveBeenCalledWith(`create-jiso: wrote 14 files to ${root}\n`);
+      expect(stdout).toHaveBeenCalledWith(`create-jiso: wrote 15 files to ${root}\n`);
       expect(JSON.parse(readFileSync(join(root, 'package.json'), 'utf8'))).toMatchObject({
         name: 'hello-cli',
       });
