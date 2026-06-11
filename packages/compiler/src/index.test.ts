@@ -964,15 +964,19 @@ export const CartShell = component('cart-shell', {
       {
         code: 'FW225',
         fileName: 'cart-shell.tsx',
+        length: 5,
         message: 'JSX nesting violates the HTML content model. <div> cannot appear inside <p>',
         severity: 'error',
+        start: { column: 9, line: 7 },
       },
       {
         code: 'FW225',
         fileName: 'cart-shell.tsx',
+        length: 4,
         message:
           'JSX nesting violates the HTML content model. <tr> must be inside a table section or table',
         severity: 'error',
+        start: { column: 7, line: 9 },
       },
     ]);
   });

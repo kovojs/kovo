@@ -214,7 +214,7 @@ const compilerValidators: readonly CompilerValidator[] = [
   ({ options, originalModel }) => validateIdrefs(options.source, originalModel, options.fileName),
   ({ model, options, source }) => validateStaticIds(source, model, options.fileName),
   ({ options, source }) => validateLiteralHrefs(source, options),
-  ({ model, options }) => validateHtmlContentModel(model, options.fileName),
+  ({ model, options, source }) => validateHtmlContentModel(source, model, options.fileName),
   ({ model, options, source }) => validateEventTriggerNames(source, model, options.fileName),
   ({ componentName, model, options, source }) =>
     validateResidualStamps(source, model, options, componentName),
@@ -1454,6 +1454,7 @@ const blockTagsThatCloseParagraph = new Set([
 ]);
 
 function validateHtmlContentModel(
+  source: string,
   model: ComponentModuleModel,
   fileName: string,
 ): CompilerDiagnostic[] {
@@ -1465,7 +1466,9 @@ function validateHtmlContentModel(
     if (!isNativeHtmlTag(tag)) continue;
 
     if (blockTagsThatCloseParagraph.has(tag) && hasJsxAncestor(element, 'p', elements)) {
-      diagnostics.push(htmlContentModelDiagnostic(fileName, `<${tag}> cannot appear inside <p>`));
+      diagnostics.push(
+        htmlContentModelDiagnostic(source, fileName, element, `<${tag}> cannot appear inside <p>`),
+      );
     }
 
     if (
@@ -1474,7 +1477,12 @@ function validateHtmlContentModel(
       !hasAnyJsxAncestor(element, ['table', 'tbody', 'thead', 'tfoot'], elements)
     ) {
       diagnostics.push(
-        htmlContentModelDiagnostic(fileName, '<tr> must be inside a table section or table'),
+        htmlContentModelDiagnostic(
+          source,
+          fileName,
+          element,
+          '<tr> must be inside a table section or table',
+        ),
       );
     }
   }
@@ -1482,9 +1490,14 @@ function validateHtmlContentModel(
   return diagnostics;
 }
 
-function htmlContentModelDiagnostic(fileName: string, detail: string): CompilerDiagnostic {
+function htmlContentModelDiagnostic(
+  source: string,
+  fileName: string,
+  element: JsxElementModel,
+  detail: string,
+): CompilerDiagnostic {
   return {
-    ...diagnosticFor(fileName, 'FW225'),
+    ...diagnosticFor(fileName, 'FW225', source, element.start, element.openingEnd - element.start),
     message: `${diagnosticDefinitions.FW225.message} ${detail}`,
   };
 }
