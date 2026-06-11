@@ -5,6 +5,26 @@ export type {
   DiagnosticTextOptions,
 } from './diagnostics.js';
 export { diagnosticDefinitions, diagnosticDefinitionText } from './diagnostics.js';
+export type {
+  CustomWebhookVerifier,
+  HmacMultiSignature,
+  HmacSecret,
+  HmacSignatureEncoding,
+  HmacSignatureOptions,
+  HmacSignaturePayload,
+  HmacSignaturePayloadContext,
+  HmacSignatureTolerance,
+  HmacSignatureVerifier,
+  ResolvedHmacSignatureConfig,
+  StandardWebhooksOptions,
+  StripeSignatureOptions,
+  WebhookHeaders,
+  WebhookHeaderValue,
+  WebhookPayload,
+  WebhookVerificationRequest,
+  WebhookVerifier,
+} from './verifier.js';
+export { customVerifier, hmacSignature, standardWebhooks, stripeSignature } from './verifier.js';
 
 export type JsonValue =
   | null

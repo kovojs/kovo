@@ -9,7 +9,14 @@ Scope: SPEC additions (`webhook()`, route response outcomes, storage capability,
 - [ ] SPEC PR: `webhook()` primitive, `respond.file()`/`respond.stream()` route outcomes, storage capability interface, `--endpoints` audit, and the stated JSON-API non-goal.
 - [x] E1 `endpoint()` floor implementation (shared with D5 A4), with this plan's refinements: pre-parse raw-body access, prefix mounts, no ambient session.
 - [ ] E2 `webhook()` shaped primitive: verifier slot, loose input schema, idempotency, Tx lifecycle, domain writes, change record.
-- [ ] E3 verifier kit: generic `hmacSignature()` + `stripeSignature` + `standardWebhooks` presets, custom `verify` escape, provider test vectors in CI.
+- [x] E3 verifier kit: generic `hmacSignature()` + `stripeSignature` + `standardWebhooks` presets, custom `verify` escape, provider test vectors in CI.
+      Evidence 2026-06-11: `@jiso/core` exports the pure verifier kit from
+      `packages/core/src/verifier.ts`. `hmacSignature()` verifies raw payload bytes with
+      HMAC-SHA256, constant-time comparison, timestamp tolerance, multi-signature headers, and
+      rotated secret arrays; `stripeSignature()` and `standardWebhooks()` resolve to generic HMAC
+      configs with fixed 300s tolerances and provider header/payload/encoding rules. Covered by
+      `packages/core/src/verifier.test.ts` with pinned Stripe-format and Standard Webhooks-format
+      vectors, tamper/stale rejection, multi-signature rotation, and the custom verifier escape.
 - [x] E4 `respond.file()`/`respond.stream()` route outcomes (ETag/304; exports and downloads become ordinary guarded routes).
       Evidence 2026-06-11: `@jiso/server` exports a branded `respond` helper with
       `file()` and `stream()` route outcomes; `renderRoutePageResponse` emits declared
