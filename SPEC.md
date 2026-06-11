@@ -40,7 +40,7 @@ Every feature proposal is evaluated against five tests. A feature failing any te
 | --- | -------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------- |
 | 1   | **Legibility is load-bearing.** Names appear in HTML attributes and wire traffic, so they structurally cannot be mangled.                          | Minifiers cannot rename handler exports; debugging never requires decompiling the framework.  |
 | 2   | **No global knowledge at local sites.** Any API requiring the author to enumerate distant call sites from memory is a bug factory and is rejected. | Killed manual fragment targets, manual per-island optimism, query-side mutation registration. |
-| 3   | **Sugar must lower to authorable IR.** Every compiler feature emits valid Jiso source. Compiling the output is a no-op (CI-enforced fixpoint).     | Any component can be ejected. Source maps are a nicety, not life support.                     |
+| 3   | **Sugar must lower to authorable IR.** Every compiler feature emits valid Jiso source. Compiling the output is a no-op (CI-enforced fixpoint).     | Output is auditable in devtools and mechanically checked; app authors still write TSX.        |
 | 4   | **The wire is the documentation.** Named POSTs, schema-shaped JSON, readable HTML fragments.                                                       | An app's behavior surface is auditable from the Network panel or `tcpdump`.                   |
 | 5   | **Server truth always wins.** No client cache to invalidate; reconciliation is "morph the authority in."                                           | Optimistic predictions are throwaway sketches; there is no consistency protocol.              |
 
@@ -285,7 +285,7 @@ Declared inputs tell the loader which query changes re-run it — no dependency 
 
 On change, the loader keys existing `[fw-key]` children against the new array: clone the template for inserts, remove exits, reorder by key, then run item-relative bindings (`.qty`, typed against the array element type). **`fw-key` is the single keyed-identity contract** — written once (spike S3) and shared verbatim by stamps, morph, and optimistic reordering (§13.2).
 
-**Stamps are derived, never required in sugar.** `{cart.count}` and `data-bind="cart.count"` are one fact; the author writes the typed expression, the compiler emits the stamp. Classification: an expression that is an element's sole text child stamps that element; an expression in mixed content gets a synthesized `<span data-bind>` (reported in `fw explain component` — wrap it yourself if the extra element matters); an expression in attribute position lowers to a named derive (above). Hand-written stamps remain valid input — ejected IR is made of them (Constitution #3) — but in sugar they are redundant (lint **FW223**), and a stamp that disagrees with the expression it wraps is an error (**FW222**): server-renders-one-thing-loader-patches-another drift is unrepresentable. The general rule, normative framework-wide: **a residual string may be _required_ only in ejected IR; sugar never demands a string the compiler can derive from a typed expression.**
+**Stamps are derived, never required in TSX.** `{cart.count}` and `data-bind="cart.count"` are one fact; the author writes the typed expression, the compiler emits the stamp. Classification: an expression that is an element's sole text child stamps that element; an expression in mixed content gets a synthesized `<span data-bind>` (reported in `fw explain component` — wrap it yourself if the extra element matters); an expression in attribute position lowers to a named derive (above). Hand-written stamps remain valid compiler input so the fixpoint gate can recompile emitted IR (Constitution #3), but app-authored TSX must not carry derivable stamps: redundant stamps are lint **FW223**, and a stamp that disagrees with the expression it wraps is an error (**FW222**). A component module in app source that hand-authors the lowered string/template IR instead of TSX is **FW235**. The general rule, normative framework-wide: **a residual string may be _validated_ in emitted IR, but TSX never requires a string the compiler can derive from a typed expression.**
 
 **The ceiling is explicit, and the relief valve is defined.** Anything beyond paths, derives, and keyed lists flips to a server fragment — or to an **isomorphic island**: `isomorphic: true` on a component also emits its render function into the client module; on query/state change the island re-renders itself and self-morphs. It is the _same_ render function the server uses (partials cannot drift), and it is lint-gated (**FW302**: justification comment required) — this is the sanctioned SPA-creep escape named in §15.
 
@@ -341,6 +341,7 @@ cart.tsx ──parse──▶ analyze ──lower──▶ cart.server.js + cart
 4. **Platform-behavior emission.** Where the compiler proves a handler equivalent to a declarative platform feature (dialog open/close → invoker commands; popovers; `<details>`; pure-CSS state via `:has()`), it emits the attribute and drops the handler. `fw explain` reports each substitution.
 5. **Teaching errors.** Every diagnostic shows the lowering: what would have been generated, why it can't be, and the fix menu.
 6. **Registry atomicity.** Registry `.d.ts` emission is part of every compile; `vp dev` and `vp check` regenerate registries before type-checking runs. A stale registry is unrepresentable, not just unlikely — the typegen failure modes (fresh clone red until first generation, watch-mode races) are designed out.
+7. **TSX-only authoring.** TSX is the sole app-authoring surface. The lowered IR is an output format: valid Jiso source for fixpoint/render-equivalence gates and readable artifacts, but not something app code hand-authors or vendors. Hand-authored lowered IR in app source is **FW235** with a teaching message that shows the TSX equivalent. There is no suppression pragma or ejection workflow in v1; a front-end gap is fixed in the compiler or recorded as a SPEC conflict.
 
 ### 5.3 `fw explain`
 
@@ -358,7 +359,7 @@ fw explain page /products/:id    # emitted modulepreloads, per-route prefetch co
 
 ## 6. Type System
 
-One pattern, applied everywhere: **declare facts once → derive every surface → validate residual strings against generated registries.** The only codegen is trivial registry `.d.ts` files; all wiring checks are TypeScript static checks over code that runs as written. Residual strings are only ever **required** in ejected IR (§4.8) — sugar derives them from typed expressions; every load-bearing attribute the IR carries (`on:*`, `data-bind*`, `fw-deps`, `fw-c`, `fw-key`, `href`, IDREFs) has a named validator in §11.3, so "all residual strings are validated" is a checkable claim, not an aspiration.
+One pattern, applied everywhere: **declare facts once → derive every surface → validate residual strings against generated registries.** The only codegen is trivial registry `.d.ts` files; all wiring checks are TypeScript static checks over code that runs as written. Residual strings live in emitted IR and are derived from TSX authoring facts (§4.8); every load-bearing attribute the IR carries (`on:*`, `data-bind*`, `fw-deps`, `fw-c`, `fw-key`, `href`, IDREFs) has a named validator in §11.3, so "all residual strings are validated" is a checkable claim, not an aspiration.
 
 ### 6.1 The registries (generated)
 
@@ -939,13 +940,14 @@ Dev server and the test harness wrap `db`; every executed statement is parsed (`
 | FW223 | lint       | Redundant hand-written stamp in sugar — the compiler derives it (§4.8)                                        |
 | FW224 | error      | Static `id` in a repeatable component / duplicate id in a page composition (§4.5)                             |
 | FW225 | error      | JSX nesting violates the HTML content model — the parser would re-parent (§4.2)                               |
-| FW226 | error      | `fw-deps`/`fw-c` names an unknown query instance or component (ejected-IR validation)                         |
+| FW226 | internal   | `fw-deps`/`fw-c` names an unknown query instance or component in emitted IR fixpoint validation               |
 | FW227 | error      | Binding path traverses a nullable segment without `?.` or a null-handling derive (§4.8)                       |
 | FW230 | error      | Fragment-target children not lowerable to a component reference (shows the hoisting + fixes)                  |
 | FW231 | error      | Unmergeable attribute conflict in primitive composition (shows both sources + the §4.6 rule)                  |
 | FW232 | lint       | Author override of a primitive-owned ARIA/state attribute                                                     |
 | FW233 | error      | Two writers for one binding target                                                                            |
 | FW234 | error      | Package component prefix registration conflict or reservation violation (§6.1.1)                              |
+| FW235 | error      | App source hand-authors lowered IR/string-rendered components; write TSX and let the compiler emit IR (§5.2)  |
 | FW301 | lint       | Server fact in island-local state                                                                             |
 | FW302 | lint       | Isomorphic island — justification comment required (the sanctioned SPA-creep escape, §4.8)                    |
 | FW310 | warn       | Invalidated query lacks optimistic transform (write/defer; v2 adds derive)                                    |
