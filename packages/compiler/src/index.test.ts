@@ -912,6 +912,57 @@ export const CartBadge = component('cart-badge', {
     ]);
   });
 
+  it('validates ejected list stamps against array element query shapes', () => {
+    const valid = compileComponentModule({
+      fileName: 'cart-badge.tsx',
+      queryShapes: {
+        cart: {
+          items: [{ name: 'string', productId: 'string', qty: 'number' }],
+        },
+      },
+      source: `
+export const CartBadge = component('cart-badge', {
+  render: () => (
+    <ul data-bind-list="cart.items" fw-key="productId">
+      <template fw-stamp>
+        <li><span data-bind=".qty">0</span> × <span data-bind=".name">Item</span></li>
+      </template>
+    </ul>
+  ),
+});
+`,
+    });
+    const invalid = compileComponentModule({
+      fileName: 'cart-badge.tsx',
+      queryShapes: {
+        cart: {
+          items: [{ name: 'string', productId: 'string' }],
+        },
+      },
+      source: `
+export const CartBadge = component('cart-badge', {
+  render: () => (
+    <ul data-bind-list="cart.items" fw-key="sku">
+      <template fw-stamp>
+        <li><span data-bind=".missing">0</span></li>
+      </template>
+    </ul>
+  ),
+});
+`,
+    });
+
+    expect(valid.diagnostics).toEqual([]);
+    expect(invalid.diagnostics).toEqual([
+      {
+        code: 'FW302',
+        fileName: 'cart-badge.tsx',
+        message: 'data-bind path is not present in the declared query shape. cart.items',
+        severity: 'error',
+      },
+    ]);
+  });
+
   it('emits per-query data-bind update plans for compiled components', () => {
     const result = compileComponentModule({
       fileName: 'cart-badge.tsx',
@@ -923,6 +974,13 @@ export const CartBadge = component('cart-badge', {
       <span data-bind="cart.total">2998</span>
       <span data-bind="product.name">Coffee</span>
       <span data-bind="cart.count">2</span>
+      <ul data-bind-list="cart.items" fw-key="productId">
+        <template fw-stamp>
+          <li fw-key="">
+            <span data-bind=".qty">0</span> × <span data-bind=".name">Item</span>
+          </li>
+        </template>
+      </ul>
     </cart-badge>
   ),
 });
@@ -934,8 +992,18 @@ export const CartBadge = component('cart-badge', {
     expect(result.queryUpdatePlans).toEqual([
       {
         componentName: 'CartBadge',
-        paths: ['cart.count', 'cart.total'],
+        paths: ['cart.count', 'cart.items', 'cart.total'],
         query: 'cart',
+        templateStamps: [
+          {
+            itemBindings: ['.name', '.qty'],
+            key: 'productId',
+            list: 'cart.items',
+            selector: '[data-bind-list="cart.items"]',
+            template:
+              '<li fw-key="">\n            <span data-bind=".qty">0</span> × <span data-bind=".name">Item</span>\n          </li>',
+          },
+        ],
       },
       {
         componentName: 'CartBadge',
@@ -946,13 +1014,15 @@ export const CartBadge = component('cart-badge', {
     expect(clientSource).toContain("import { applyCompiledQueryUpdatePlan } from '@jiso/runtime';");
     expect(clientSource).toContain('export const CartBadge$queryUpdatePlans = {');
     expect(clientSource).toContain(
-      'return applyCompiledQueryUpdatePlan(root, "cart", value, { bindings: true, derives: [], stamps: [] });',
+      'return applyCompiledQueryUpdatePlan(root, "cart", value, { bindings: true, derives: [], stamps: [], templateStamps: [{ key: "productId", list: "items", selector: "[data-bind-list=\\"cart.items\\"]", render(item) {',
     );
+    expect(clientSource).toContain('html = html.replace("0", String(read("qty") ?? ""));');
+    expect(clientSource).toContain('html = html.replace("Item", String(read("name") ?? ""));');
     expect(clientSource).toContain(
-      'return applyCompiledQueryUpdatePlan(root, "product", value, { bindings: true, derives: [], stamps: [] });',
+      'return applyCompiledQueryUpdatePlan(root, "product", value, { bindings: true, derives: [], stamps: [], templateStamps: [] });',
     );
     expect(registrySource).toContain(`export interface QueryUpdatePlans {
-  'CartBadge:cart': readonly ['cart.count', 'cart.total'];
+  'CartBadge:cart': readonly ['cart.count', 'cart.items', 'cart.total'];
   'CartBadge:product': readonly ['product.name'];
 }`);
     expect(() => assertFixpoint(result)).not.toThrow();

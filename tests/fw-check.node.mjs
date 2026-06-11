@@ -911,11 +911,17 @@ void test('P5 data-bind paths are checked against generated query shape facts', 
 
   assert.match(compilerSource, /queryShapeFacts\?: readonly QueryShapeFact\[\]/);
   assert.match(compilerSource, /queryShapesFromFacts/);
+  assert.match(compilerSource, /function dataBindListStamps/);
+  assert.match(compilerSource, /interface QueryTemplateStampFact/);
+  assert.match(compilerSource, /templateStamps/);
   assert.match(compilerTests, /validates data-bind paths against generated query shape facts/);
   assert.match(
     compilerTests,
     /reports FW302 when generated query shape facts no longer contain a binding path/,
   );
+  assert.match(compilerTests, /validates ejected list stamps against array element query shapes/);
+  assert.match(compilerTests, /data-bind-list="cart\.items"/);
+  assert.match(compilerTests, /templateStamps: \[/);
   assert.match(compilerTests, /generated\/queries\/cart\.shape\.ts/);
   assert.match(
     compilerTests,

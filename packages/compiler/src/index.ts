@@ -47,6 +47,15 @@ export interface QueryUpdatePlanFact {
   componentName: string;
   paths: readonly string[];
   query: string;
+  templateStamps?: readonly QueryTemplateStampFact[];
+}
+
+export interface QueryTemplateStampFact {
+  itemBindings: readonly string[];
+  key: string;
+  list: string;
+  selector: string;
+  template: string;
 }
 
 export interface CssAssetManifest {
@@ -943,18 +952,31 @@ function validateDataBindings(
   const queryShapes = componentQueryShapes(options);
   if (!queryShapes) return [];
 
+  const listStamps = dataBindListStamps(source);
+
   return dataBindPaths(source)
+    .filter((path) => !path.startsWith('.'))
     .filter((path) => !pathExistsInQueryShapes(path, queryShapes))
     .map((path) => ({
       ...diagnosticFor(options.fileName, 'FW302'),
       message: `${diagnosticDefinitions.FW302.message} ${path}`,
-    }));
+    }))
+    .concat(
+      listStamps
+        .filter((stamp) => !listStampExistsInQueryShapes(stamp, queryShapes))
+        .map((stamp) => ({
+          ...diagnosticFor(options.fileName, 'FW302'),
+          message: `${diagnosticDefinitions.FW302.message} ${stamp.list}`,
+        })),
+    );
 }
 
 function collectQueryUpdatePlans(source: string, componentName: string): QueryUpdatePlanFact[] {
   const pathsByQuery = new Map<string, Set<string>>();
+  const listStampsByQuery = new Map<string, QueryTemplateStampFact[]>();
 
   for (const path of dataBindPaths(source)) {
+    if (path.startsWith('.')) continue;
     const [query] = path.split('.');
     if (!query) continue;
 
@@ -963,12 +985,31 @@ function collectQueryUpdatePlans(source: string, componentName: string): QueryUp
     pathsByQuery.set(query, paths);
   }
 
-  return [...pathsByQuery.entries()]
-    .sort(([left], [right]) => left.localeCompare(right))
-    .map(([query, paths]) => ({
+  for (const stamp of dataBindListStamps(source)) {
+    const [query] = stamp.list.split('.');
+    if (!query) continue;
+
+    const paths = pathsByQuery.get(query) ?? new Set<string>();
+    paths.add(stamp.list);
+    pathsByQuery.set(query, paths);
+    listStampsByQuery.set(query, [...(listStampsByQuery.get(query) ?? []), stamp]);
+  }
+
+  const queries = new Set([...pathsByQuery.keys(), ...listStampsByQuery.keys()]);
+
+  return [...queries]
+    .sort((left, right) => left.localeCompare(right))
+    .map((query) => ({
       componentName,
-      paths: [...paths].sort(),
+      paths: [...(pathsByQuery.get(query) ?? [])].sort(),
       query,
+      ...(listStampsByQuery.has(query)
+        ? {
+            templateStamps: [...(listStampsByQuery.get(query) ?? [])].sort((left, right) =>
+              left.list.localeCompare(right.list),
+            ),
+          }
+        : {}),
     }));
 }
 
@@ -976,6 +1017,102 @@ function dataBindPaths(source: string): string[] {
   return [...source.matchAll(/\bdata-bind=(["'])(?<path>[^"']+)\1/g)]
     .map((match) => match.groups?.path ?? '')
     .filter(Boolean);
+}
+
+function dataBindListStamps(source: string): QueryTemplateStampFact[] {
+  return [...source.matchAll(/<(?<tag>[A-Za-z][\w:-]*)\b(?<attrs>[^>]*)>/g)]
+    .flatMap((match) => {
+      const attrs = match.groups?.attrs ?? '';
+      const list = readStaticAttribute(attrs, 'data-bind-list');
+      const key = readStaticAttribute(attrs, 'fw-key');
+      if (!list || !key) return [];
+
+      const start = match.index ?? 0;
+      const end = findMatchingClosingTag(source, match.groups?.tag ?? '', start);
+      const body = end === -1 ? '' : source.slice(start, end);
+
+      return [
+        {
+          itemBindings: dataBindPaths(body)
+            .filter((path) => path.startsWith('.'))
+            .sort(),
+          key,
+          list,
+          selector: `[data-bind-list="${list}"]`,
+          template: templateStampContent(body),
+        },
+      ];
+    })
+    .filter((stamp) => stamp.itemBindings.length > 0);
+}
+
+function templateStampContent(source: string): string {
+  const open = /<template\b(?=[^>]*\bfw-stamp\b)(?<attrs>[^>]*)>/i.exec(source);
+  if (!open) return '';
+
+  const start = (open.index ?? 0) + open[0].length;
+  const end = source.indexOf('</template>', start);
+  return end === -1 ? '' : source.slice(start, end).trim();
+}
+
+function readStaticAttribute(attrs: string, name: string): string | undefined {
+  const match = new RegExp(`\\b${escapeRegExp(name)}=(["'])(?<value>[^"']+)\\1`).exec(attrs);
+  return match?.groups?.value;
+}
+
+function findMatchingClosingTag(source: string, tag: string, start: number): number {
+  if (!tag) return -1;
+
+  const openPattern = new RegExp(`<${escapeRegExp(tag)}\\b[^>]*>`, 'g');
+  const closePattern = new RegExp(`</${escapeRegExp(tag)}>`, 'g');
+  openPattern.lastIndex = start;
+  closePattern.lastIndex = start;
+  let depth = 0;
+
+  while (true) {
+    const open = openPattern.exec(source);
+    const close = closePattern.exec(source);
+    if (!close) return -1;
+    if (open && open.index < close.index) {
+      depth += 1;
+      closePattern.lastIndex = openPattern.lastIndex;
+      continue;
+    }
+
+    depth -= 1;
+    if (depth <= 0) return close.index + close[0].length;
+    openPattern.lastIndex = closePattern.lastIndex;
+  }
+}
+
+function listStampExistsInQueryShapes(
+  stamp: QueryTemplateStampFact,
+  queryShapes: Record<string, QueryShape>,
+): boolean {
+  const [queryName, ...segments] = stamp.list.split('.');
+  if (!queryName || segments.length === 0) return false;
+
+  const listShape = queryShapes[queryName];
+  if (!listShape) return false;
+
+  const shapeAtList = queryShapeAtPath(listShape, segments);
+  if (!isArrayShape(shapeAtList)) return false;
+
+  const itemShape = shapeAtList[0];
+  if (itemShape === undefined) return false;
+  if (!pathExistsInShape(itemShape, [stamp.key])) return false;
+
+  return stamp.itemBindings.every((path) => pathExistsInShape(itemShape, path.slice(1).split('.')));
+}
+
+function queryShapeAtPath(shape: QueryShape, segments: readonly string[]): QueryShape {
+  if (segments.length === 0) return shape;
+  if (isArrayShape(shape)) return queryShapeAtPath(shape[0] ?? 'object', segments);
+  if (typeof shape !== 'object' || shape === null) return 'object';
+
+  const [head, ...tail] = segments;
+  if (!head) return shape;
+  return queryShapeAtPath(shape[head] ?? 'object', tail);
 }
 
 // SPEC 5.2: query data is shared/server-owned; island-local state is private/client-owned.
@@ -1648,11 +1785,35 @@ function emitQueryUpdatePlanExport(
   const entries = queryUpdatePlans
     .map(
       (plan) =>
-        `  ${JSON.stringify(plan.query)}(root, value) {\n    return applyCompiledQueryUpdatePlan(root, ${JSON.stringify(plan.query)}, value, { bindings: true, derives: [], stamps: [] });\n  },`,
+        `  ${JSON.stringify(plan.query)}(root, value) {\n    return applyCompiledQueryUpdatePlan(root, ${JSON.stringify(plan.query)}, value, { bindings: true, derives: [], stamps: [], templateStamps: [${plan.templateStamps?.map(emitTemplateStampPlan).join(', ') ?? ''}] });\n  },`,
     )
     .join('\n');
 
   return `export const ${componentName}$queryUpdatePlans = {\n${entries}\n};`;
+}
+
+function emitTemplateStampPlan(stamp: QueryTemplateStampFact): string {
+  return `{ key: ${JSON.stringify(stamp.key)}, list: ${JSON.stringify(
+    stamp.list.split('.').slice(1).join('.'),
+  )}, selector: ${JSON.stringify(stamp.selector)}, render(item) {
+      const record = item && typeof item === "object" ? item : {};
+      const read = (path) => path.split(".").reduce((value, part) => value && typeof value === "object" ? value[part] : undefined, record);
+      let html = ${JSON.stringify(stamp.template)};
+${stamp.itemBindings
+  .map(
+    (binding) =>
+      `      html = html.replace(${JSON.stringify(bindingValuePlaceholder(stamp.template, binding))}, String(read(${JSON.stringify(binding.slice(1))}) ?? ""));`,
+  )
+  .join('\n')}
+      return html;
+    } }`;
+}
+
+function bindingValuePlaceholder(template: string, binding: string): string {
+  const match = new RegExp(
+    `(<[^>]+\\bdata-bind=(["'])${escapeRegExp(binding)}\\2[^>]*>)(?<value>[\\s\\S]*?)(</[^>]+>)`,
+  ).exec(template);
+  return match?.groups?.value ?? '';
 }
 
 function emitServerModule(
