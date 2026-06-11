@@ -87,6 +87,12 @@ const readWireFixture = async (name) =>
 
 const readProjectFile = async (path) => readFile(new URL(`../${path}`, import.meta.url), 'utf8');
 
+const lineNumberFor = (source, needle) => {
+  const index = source.indexOf(needle);
+  assert.notEqual(index, -1, `source contains ${needle}`);
+  return source.slice(0, index).split('\n').length;
+};
+
 const listProjectFiles = async (dir, predicate) => {
   const entries = await readdir(new URL(`../${dir}`, import.meta.url), { withFileTypes: true });
   const files = [];
@@ -714,15 +720,45 @@ void test('P1 fragment targets emit typed registry facts', async () => {
 void test('P4 commerce touch graph is a committed generated artifact', async () => {
   const commerceSource = await readProjectFile('examples/commerce/src/app.ts');
   const touchGraphSource = await readProjectFile('examples/commerce/src/generated/touch-graph.ts');
+  const cartItemsLine = lineNumberFor(commerceSource, "request.db.write('cart_items'");
+  const ordersLine = lineNumberFor(commerceSource, "request.db.write('orders'");
+  const productsLine = lineNumberFor(commerceSource, "request.db.write('products'");
 
   assert.match(commerceSource, /from '\.\/generated\/touch-graph\.js'/);
   assert.doesNotMatch(commerceSource, /extractTouchGraphFromSource/);
-  assert.match(touchGraphSource, /export const commerceTouchGraph = \{/);
-  assert.match(touchGraphSource, /'cart\.addItem'/);
-  assert.match(touchGraphSource, /domain: 'cart'/);
-  assert.match(touchGraphSource, /domain: 'order'/);
-  assert.match(touchGraphSource, /domain: 'product'/);
-  assert.match(touchGraphSource, /keys: 'arg:productId'/);
+  // SPEC §11.1/§11.2: the committed static graph must stay source-derived
+  // because runtime verification checks observed effects against these facts.
+  assert.equal(
+    touchGraphSource,
+    `export const commerceTouchGraph = {
+  'cart.addItem': {
+    touches: [
+      {
+        domain: 'cart',
+        keys: null,
+        site: 'examples/commerce/src/app.ts:${cartItemsLine}',
+        via: 'cart_items',
+      },
+      {
+        domain: 'order',
+        keys: null,
+        site: 'examples/commerce/src/app.ts:${ordersLine}',
+        via: 'orders',
+      },
+      {
+        domain: 'product',
+        keys: 'arg:productId',
+        predicate: 'eq',
+        site: 'examples/commerce/src/app.ts:${productsLine}',
+        via: 'products',
+      },
+    ],
+    reads: [],
+    unresolved: [],
+  },
+} as const;
+`,
+  );
 });
 
 void test('Drizzle pinned conformance suite is an explicit gate', async () => {
