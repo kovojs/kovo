@@ -1772,6 +1772,36 @@ describe('server mutation primitives', () => {
     });
   });
 
+  it('delivers late stylesheets with enhanced mutation failure fragments', async () => {
+    const addToCart = mutation('cart/add', {
+      errors: {
+        OUT_OF_STOCK: s.object({ availableQuantity: s.number().int().min(0) }),
+      },
+      input: s.object({ productId: s.string() }),
+      handler(_input, _request, context) {
+        return context.fail('OUT_OF_STOCK', { availableQuantity: 0 });
+      },
+    });
+
+    await expect(
+      renderMutationResponse(addToCart, {
+        failureStylesheets: [
+          '/assets/product-form.css',
+          '/assets/product-form.css',
+          { href: '/assets/theme.css', preload: false },
+        ],
+        failureTarget: 'product-form:p1',
+        rawInput: { productId: 'p1' },
+        renderFailureFragment: () => '<form>Out of stock</form>',
+        request: {},
+      }),
+    ).resolves.toEqual({
+      body: '<fw-fragment target="product-form:p1"><link rel="stylesheet" href="/assets/product-form.css"><link rel="stylesheet" href="/assets/theme.css"><form>Out of stock</form></fw-fragment>',
+      headers: { 'Content-Type': 'text/vnd.jiso.fragment+html; charset=utf-8' },
+      status: 422,
+    });
+  });
+
   it('lets enhanced forms override validation failure fragments', async () => {
     const addToCart = mutation('cart/add', {
       input: s.object({

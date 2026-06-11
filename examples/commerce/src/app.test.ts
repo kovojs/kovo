@@ -550,6 +550,7 @@ describe('commerce example', () => {
       status: 422,
     });
     expect(response.body).toContain('<fw-fragment target="product-form:p2">');
+    expect(response.body).toContain('<link rel="stylesheet" href="/assets/tailwind.css">');
     expect(response.body).toContain('<form method="post" action="/_m/cart/add" enhance');
     expect(response.body).toContain('fw-fragment-target="product-form:p2"');
     expect(response.body).toContain('name="productId" value="p2"');

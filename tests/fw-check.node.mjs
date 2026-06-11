@@ -469,6 +469,7 @@ void test('D1 commerce enhanced fragments carry Tailwind stylesheet hints', asyn
   const serverTests = await readProjectFile('packages/server/src/index.test.ts');
 
   assert.match(commerceSource, /commerceStylesheets = \['\/assets\/tailwind\.css'\] as const/);
+  assert.match(commerceSource, /failureStylesheets: commerceStylesheets/);
   assert.match(commerceSource, /stylesheets: commerceStylesheets/);
   assert.match(commerceSource, /renderFailureFragment: \(failure\) =>/);
   assert.match(commerceSource, /renderAddToCartFailureFragment\(request\.db, rawInput, failure\)/);
@@ -478,7 +479,10 @@ void test('D1 commerce enhanced fragments carry Tailwind stylesheet hints', asyn
   assert.match(commerceTests, /enhanced addToCart failures as a rerendered form fragment/);
   assert.match(commerceTests, /fw-fragment-target="product-form:p2"/);
   assert.match(commerceTests, /<link rel="stylesheet" href="\/assets\/tailwind\.css">/);
+  assert.match(serverSource, /failureStylesheets\?: readonly \(string \| StylesheetAsset\)\[\]/);
+  assert.match(serverSource, /renderStylesheetLinks\(wireRequest\.failureStylesheets/);
   assert.match(serverSource, /error-boundary=.*renderStylesheetLinks\(renderer\.stylesheets/);
+  assert.match(serverTests, /delivers late stylesheets with enhanced mutation failure fragments/);
   assert.match(serverTests, /recommendations\.css/);
 });
 

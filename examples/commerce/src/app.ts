@@ -421,6 +421,7 @@ export function submitAddToCart(
   const productId = productIdFromRawInput(rawInput);
   return renderMutationEndpointResponse(addToCart, {
     failureTarget: productId ? productFormTarget(productId) : 'product-form',
+    failureStylesheets: commerceStylesheets,
     fragmentRenderers: [
       {
         render: () => CartBadge.definition.render(),

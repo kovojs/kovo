@@ -388,6 +388,7 @@ export interface ErrorBoundaryRenderer {
 
 export interface MutationWireRequest<Request> {
   failureTarget?: string;
+  failureStylesheets?: readonly (string | StylesheetAsset)[];
   fragment?: boolean;
   fragmentRenderers?: readonly FragmentRenderer[];
   idem?: string;
@@ -413,6 +414,7 @@ export type MutationWireHeaderSource =
 
 export interface MutationWireRequestOptions<Request> {
   failureTarget?: string;
+  failureStylesheets?: readonly (string | StylesheetAsset)[];
   fragmentRenderers?: readonly FragmentRenderer[];
   headers: MutationWireHeaderSource;
   rawInput: unknown;
@@ -474,6 +476,9 @@ export function mutationWireRequestFromHeaders<Request>(
     rawInput: options.rawInput,
     request: options.request,
     ...(options.failureTarget === undefined ? {} : { failureTarget: options.failureTarget }),
+    ...(options.failureStylesheets === undefined
+      ? {}
+      : { failureStylesheets: options.failureStylesheets }),
     ...(options.fragmentRenderers === undefined
       ? {}
       : { fragmentRenderers: options.fragmentRenderers }),
@@ -1293,7 +1298,7 @@ async function renderFailureFragment<Request>(
     ? await wireRequest.renderFailureFragment(failure, wireRequest.rawInput)
     : renderDefaultFailureFragmentContent(failure);
 
-  return `<fw-fragment target="${escapeAttribute(target)}">${html}</fw-fragment>`;
+  return `<fw-fragment target="${escapeAttribute(target)}">${renderStylesheetLinks(wireRequest.failureStylesheets ?? [])}${html}</fw-fragment>`;
 }
 
 function renderDefaultFailureFragmentContent(failure: MutationFail): string {
