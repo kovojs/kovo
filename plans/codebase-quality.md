@@ -315,6 +315,9 @@ area, keeping `src/index.ts` barrels and API surface verbatim (mirrors compiler 
   Evidence: delegated handler references, parameter/state hydration, serialized state writes, and
   island signal lifetime cleanup now live in `packages/runtime/src/handlers.ts`; `src/index.ts`
   preserves the public handler exports and loader/morph integration points for SPEC §4.5–§4.7.
+  Evidence: fragment application and the browser-free structural morph contract now live in
+  `packages/runtime/src/morph.ts`; `src/index.ts` preserves the public morph exports and the
+  enhanced mutation DOM integration points for SPEC §11.4/§13.2.
 - **drizzle** → `extract/` (AST), `graph.ts`, `serialize.ts` (falls out of Phase 3 item 2).
   Evidence: v1 invalidation registry derivation and serialization now live in
   `@jiso/drizzle`, with unit coverage for touch graph × query read-set matching and generated
