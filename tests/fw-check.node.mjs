@@ -1525,6 +1525,7 @@ void test('D3 deferred stream responses are consumed by the runtime', async () =
   const compilerBindingValidationSource = await readProjectFile(
     'packages/compiler/src/validate/bindings.ts',
   );
+  const compilerClientEmitSource = await readProjectFile('packages/compiler/src/emit/client.ts');
   const compilerSource = await readProjectFile('packages/compiler/src/index.ts');
   const compilerTests = await readProjectFile('packages/compiler/src/index.test.ts');
   const serverDeferredStreamSource = await readProjectFile(
@@ -1537,16 +1538,16 @@ void test('D3 deferred stream responses are consumed by the runtime', async () =
   const runtimeTests = await readProjectFile('packages/runtime/src/index.test.ts');
 
   assert.match(compilerBindingValidationSource, /collectQueryUpdatePlans/);
-  assert.match(compilerSource, /\$queryUpdatePlans/);
+  assert.match(compilerClientEmitSource, /\$queryUpdatePlans/);
   assert.match(compilerSource, /emitQueryPlanBootstrapModule/);
   assert.match(compilerBootstrapSource, /installJisoLoader/);
   assert.match(compilerBootstrapSource, /enhancedMutations: \{/);
   assert.match(compilerBootstrapSource, /applyDeferredStreamResponseToDom/);
   assert.match(compilerBootstrapSource, /applyJisoDeferredStreamResponse/);
-  assert.match(compilerSource, /applyCompiledQueryUpdatePlan/);
-  assert.match(compilerSource, /emitDerivePlan/);
-  assert.match(compilerSource, /emitStampPlan/);
-  assert.match(compilerSource, /deriveExports/);
+  assert.match(compilerClientEmitSource, /applyCompiledQueryUpdatePlan/);
+  assert.match(compilerClientEmitSource, /emitDerivePlan/);
+  assert.match(compilerClientEmitSource, /emitStampPlan/);
+  assert.match(compilerClientEmitSource, /deriveExports/);
   assert.match(compilerTests, /emits per-query data-bind update plans for compiled components/);
   assert.match(compilerTests, /emits named derives into compiled query update plans/);
   assert.match(
@@ -1607,6 +1608,7 @@ void test('D3 deferred stream responses are consumed by the runtime', async () =
 });
 
 void test('P1 minifier name preservation evidence remains represented', async () => {
+  const compilerClientEmitSource = await readProjectFile('packages/compiler/src/emit/client.ts');
   const compilerSource = await readProjectFile('packages/compiler/src/index.ts');
   const compilerHandlersSource = await readProjectFile('packages/compiler/src/lower/handlers.ts');
   const compilerTests = await readProjectFile('packages/compiler/src/index.test.ts');
@@ -1614,7 +1616,7 @@ void test('P1 minifier name preservation evidence remains represented', async ()
   assert.match(compilerSource, /collectMinifierReservedNames/);
   assert.match(compilerSource, /handlerExports: readonly string\[\]/);
   assert.match(compilerHandlersSource, /uniqueAnonymousHandlerName/);
-  assert.match(compilerSource, /lowerHandlerExpression/);
+  assert.match(compilerClientEmitSource, /lowerHandlerExpression/);
   assert.match(compilerTests, /collects emitted handler export names for minifier preservation/);
   assert.match(compilerTests, /emits executable handler bodies with stable unique anonymous names/);
   assert.match(compilerTests, /CartBadge\$button_click/);
