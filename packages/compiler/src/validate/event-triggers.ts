@@ -4,7 +4,7 @@ import { diagnosticFor, type CompilerDiagnostic } from '../diagnostics.js';
 import {
   jsxComments,
   jsxElements,
-  parseComponentModule,
+  type ComponentModuleModel,
   type JsxCommentModel,
 } from '../scan/parse.js';
 
@@ -37,13 +37,17 @@ const delegatedDomEvents = new Set([
   'toggle',
 ]);
 
-export function validateEventTriggerNames(source: string, fileName: string): CompilerDiagnostic[] {
-  return eventTriggerAttributes(source).flatMap((attribute) => {
+export function validateEventTriggerNames(
+  source: string,
+  model: ComponentModuleModel,
+  fileName: string,
+): CompilerDiagnostic[] {
+  return eventTriggerAttributes(model).flatMap((attribute) => {
     if (!isKnownEventOrTrigger(attribute.name)) {
       return [eventTriggerDiagnostic(fileName, source, 'FW212', attribute)];
     }
 
-    if (attribute.name === 'load' && !hasFw211Justification(source, attribute.index)) {
+    if (attribute.name === 'load' && !hasFw211Justification(source, model, attribute.index)) {
       return [eventTriggerDiagnostic(fileName, source, 'FW211', attribute)];
     }
 
@@ -51,8 +55,10 @@ export function validateEventTriggerNames(source: string, fileName: string): Com
   });
 }
 
-function eventTriggerAttributes(source: string): Array<{ index: number; name: string }> {
-  return jsxElements(parseComponentModule('component.tsx', source)).flatMap((element) =>
+function eventTriggerAttributes(
+  model: ComponentModuleModel,
+): Array<{ index: number; name: string }> {
+  return jsxElements(model).flatMap((element) =>
     element.attributes.flatMap((attribute) => {
       const name = eventTriggerName(attribute.name);
       return name === null ? [] : [{ index: attribute.start, name }];
@@ -69,8 +75,12 @@ function isKnownEventOrTrigger(name: string): boolean {
   return declaredExecutionTriggers.has(name) || delegatedDomEvents.has(name);
 }
 
-function hasFw211Justification(source: string, index: number): boolean {
-  const comments = jsxComments(parseComponentModule('component.tsx', source))
+function hasFw211Justification(
+  source: string,
+  model: ComponentModuleModel,
+  index: number,
+): boolean {
+  const comments = jsxComments(model)
     .filter((comment) => comment.end <= index && comment.text.includes('FW211'))
     .sort((left, right) => right.end - left.end);
   const nearest = comments[0];

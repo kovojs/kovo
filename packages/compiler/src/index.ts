@@ -14,6 +14,7 @@ import {
   componentStateReturnObject,
   firstComponentModel,
   identifierReferences,
+  type ComponentModuleModel,
   type JsxAttributeModel,
   type JsxElementModel,
   jsxElements,
@@ -184,7 +185,9 @@ export interface JisoVitePlugin {
 
 interface ValidatorContext {
   componentName: string;
+  model: ComponentModuleModel;
   options: CompileComponentOptions;
+  originalModel: ComponentModuleModel;
   source: string;
   updateCoverage: readonly QueryUpdateCoverageFact[];
 }
@@ -195,20 +198,21 @@ const irHeader = '// @jiso-ir';
 const cssIrHeader = '/* @jiso-ir */';
 
 const compilerValidators: readonly CompilerValidator[] = [
-  ({ options, source }) => validateServerFactsInLocalState(source, options.fileName),
-  ({ options, source }) => validateFragmentTargetInputs(source, options.fileName),
-  ({ options, source }) => validateFragmentTargetChildren(source, options.fileName),
-  ({ options, source }) => validateDataBindings(source, options),
-  ({ options, source }) => validateStampExpressionDrift(source, options),
+  ({ model, options }) => validateServerFactsInLocalState(model, options.fileName),
+  ({ model, options, source }) => validateFragmentTargetInputs(source, model, options.fileName),
+  ({ model, options, source }) => validateFragmentTargetChildren(source, model, options.fileName),
+  ({ model, options, source }) => validateDataBindings(source, model, options),
+  ({ model, options, source }) => validateStampExpressionDrift(source, model, options),
   ({ options, source }) => validateEventPayloads(source, options),
   ({ options, source }) => validateDirectDbAccess(source, options.fileName),
-  ({ options }) => validateIdrefs(options.source, options.fileName),
-  ({ options, source }) => validateStaticIds(source, options.fileName),
+  ({ options, originalModel }) => validateIdrefs(originalModel, options.fileName),
+  ({ model, options, source }) => validateStaticIds(source, model, options.fileName),
   ({ options, source }) => validateLiteralHrefs(source, options),
-  ({ options, source }) => validateHtmlContentModel(source, options.fileName),
-  ({ options, source }) => validateEventTriggerNames(source, options.fileName),
-  ({ componentName, options, source }) => validateResidualStamps(source, options, componentName),
-  ({ options, source }) => validateAttributeMergeConflicts(source, options.fileName),
+  ({ model, options }) => validateHtmlContentModel(model, options.fileName),
+  ({ model, options, source }) => validateEventTriggerNames(source, model, options.fileName),
+  ({ componentName, model, options, source }) =>
+    validateResidualStamps(source, model, options, componentName),
+  ({ model, options }) => validateAttributeMergeConflicts(model, options.fileName),
   ({ options, updateCoverage }) =>
     updateCoverage
       .filter((fact) => fact.status === 'UNHANDLED')
@@ -229,16 +233,18 @@ export function compileComponentModule(options: CompileComponentOptions): Compil
     };
   }
 
-  const componentName = inferComponentName(options);
+  const originalModel = parseComponentModuleModel(options.fileName, options.source);
+  const componentName = inferComponentName(options, originalModel);
   const viewTransitionLowering = lowerViewTransitions(options.source);
   const platformLowering = lowerPlatformBehaviors(viewTransitionLowering.source);
   const navigationLowering = lowerNavigationSugar(platformLowering.source);
   const source = navigationLowering.source;
+  const model = parseComponentModuleModel(options.fileName, source);
   const handlers = lowerEventHandlers({ ...options, source }, componentName);
-  const queryUpdatePlans = collectQueryUpdatePlans(source, componentName);
-  const updateCoverage = collectQueryUpdateCoverage(source, options, componentName);
+  const queryUpdatePlans = collectQueryUpdatePlans(source, model, componentName);
+  const updateCoverage = collectQueryUpdateCoverage(source, model, options, componentName);
   const validationDiagnostics = compilerValidators.flatMap((validator) =>
-    validator({ componentName, options, source, updateCoverage }),
+    validator({ componentName, model, options, originalModel, source, updateCoverage }),
   );
   const clientFileName = replaceExtension(options.fileName, '.client.js');
   const cssFileName = replaceExtension(options.fileName, '.css');
@@ -249,7 +255,7 @@ export function compileComponentModule(options: CompileComponentOptions): Compil
   const cssSource = emitCssModule(source, componentName);
   const fragmentTargetFacts = findFragmentTargetFacts(source, componentName);
   const fragmentTargets = fragmentTargetFacts.map((fact) => fact.target);
-  const componentGraphFacts = [componentGraphFact(componentName, source, fragmentTargets)];
+  const componentGraphFacts = [componentGraphFact(componentName, model, fragmentTargets)];
   const cssAssets = cssSource
     ? [componentCssAssetForFile(cssFileName, componentName, fragmentTargets, {}, cssSource)]
     : [];
@@ -345,10 +351,11 @@ function isIr(source: string): boolean {
   return source.startsWith(irHeader) || source.startsWith(cssIrHeader);
 }
 
-function inferComponentName(options: CompileComponentOptions): string {
-  const component = firstComponentModel(
-    parseComponentModuleModel(options.fileName, options.source),
-  );
+function inferComponentName(
+  options: CompileComponentOptions,
+  model = parseComponentModuleModel(options.fileName, options.source),
+): string {
+  const component = firstComponentModel(model);
   if (component?.localName) return component.localName;
 
   const baseName =
@@ -578,7 +585,7 @@ function lowerStaticHrefCalls(source: string): string {
 function normalizeStaticHrefAttributes(source: string): string {
   let output = source;
 
-  for (const attribute of jsxAttributes(source)
+  for (const attribute of jsxAttributes(parseComponentModuleModel('component.tsx', source))
     .filter((item) => item.name === 'href' && item.expression !== undefined)
     .sort((left, right) => right.start - left.start)) {
     const target = literalStringValue(attribute.expression ?? '');
@@ -869,14 +876,15 @@ function clientModuleUrl(fileName: string): string {
 
 function validateDataBindings(
   source: string,
+  model: ComponentModuleModel,
   options: CompileComponentOptions,
 ): CompilerDiagnostic[] {
   const queryShapes = componentQueryShapes(options);
   if (!queryShapes) return [];
 
-  const listStamps = dataBindListStamps(source);
+  const listStamps = dataBindListStamps(source, model);
 
-  return dataBindAttributes(source)
+  return dataBindAttributes(model)
     .filter((binding) => !binding.path.startsWith('.'))
     .filter((binding) => !pathExistsInQueryShapes(binding.path, queryShapes))
     .map((binding) => ({
@@ -895,11 +903,12 @@ function validateDataBindings(
 
 function validateStampExpressionDrift(
   source: string,
+  model: ComponentModuleModel,
   options: CompileComponentOptions,
 ): CompilerDiagnostic[] {
-  const knownQueries = knownQueryNames(source, options);
+  const knownQueries = knownQueryNames(model, options);
 
-  return bindingExpressionStamps(source)
+  return bindingExpressionStamps(source, model)
     .filter(
       (stamp) =>
         queryPathUsesKnownQuery(stamp.binding, knownQueries) &&
@@ -917,8 +926,9 @@ function validateStampExpressionDrift(
 
 function bindingExpressionStamps(
   source: string,
+  model: ComponentModuleModel,
 ): Array<{ binding: string; expression: string; index: number; length: number }> {
-  return parsedJsxElements(source).flatMap((element) => {
+  return jsxElements(model).flatMap((element) => {
     const attribute = element.attributes.find((item) => item.name === 'data-bind');
     const binding = attribute?.value;
     if (!attribute || !binding) return [];
@@ -938,11 +948,15 @@ function soleWrappedQueryExpression(source: string): string | null {
   return match?.groups?.path ?? null;
 }
 
-function collectQueryUpdatePlans(source: string, componentName: string): QueryUpdatePlanFact[] {
+function collectQueryUpdatePlans(
+  source: string,
+  model: ComponentModuleModel,
+  componentName: string,
+): QueryUpdatePlanFact[] {
   const pathsByQuery = new Map<string, Set<string>>();
   const listStampsByQuery = new Map<string, QueryTemplateStampFact[]>();
 
-  for (const { path } of dataBindAttributes(source)) {
+  for (const { path } of dataBindAttributes(model)) {
     if (path.startsWith('.')) continue;
     const [query] = path.split('.');
     if (!query) continue;
@@ -952,7 +966,7 @@ function collectQueryUpdatePlans(source: string, componentName: string): QueryUp
     pathsByQuery.set(query, paths);
   }
 
-  for (const stamp of dataBindListStamps(source)) {
+  for (const stamp of dataBindListStamps(source, model)) {
     const [query] = stamp.list.split('.');
     if (!query) continue;
 
@@ -982,14 +996,15 @@ function collectQueryUpdatePlans(source: string, componentName: string): QueryUp
 
 function collectQueryUpdateCoverage(
   source: string,
+  model: ComponentModuleModel,
   options: CompileComponentOptions,
   componentName: string,
 ): QueryUpdateCoverageFact[] {
   const facts: QueryUpdateCoverageFact[] = [];
   const coveredPaths = new Set<string>();
-  const knownQueries = knownQueryNames(source, options);
+  const knownQueries = knownQueryNames(model, options);
 
-  for (const binding of dataBindAttributes(source).filter((item) => !item.path.startsWith('.'))) {
+  for (const binding of dataBindAttributes(model).filter((item) => !item.path.startsWith('.'))) {
     const path = binding.path;
     const query = queryNameFromPath(path);
     if (!query) continue;
@@ -1004,7 +1019,7 @@ function collectQueryUpdateCoverage(
     coveredPaths.add(path);
   }
 
-  for (const stamp of dataBindListStamps(source)) {
+  for (const stamp of dataBindListStamps(source, model)) {
     facts.push({
       componentName,
       detail: 'data-bind-list',
@@ -1015,7 +1030,7 @@ function collectQueryUpdateCoverage(
     coveredPaths.add(stamp.list);
   }
 
-  for (const path of renderOnceQueryPaths(source, knownQueries)) {
+  for (const path of renderOnceQueryPaths(model, knownQueries)) {
     facts.push({
       componentName,
       detail: 'declared renderOnce',
@@ -1026,7 +1041,7 @@ function collectQueryUpdateCoverage(
     coveredPaths.add(path);
   }
 
-  for (const path of jsxQueryExpressionPaths(source, knownQueries)) {
+  for (const path of jsxQueryExpressionPaths(model, knownQueries)) {
     if (coveredPaths.has(path)) continue;
 
     facts.push({
@@ -1042,9 +1057,12 @@ function collectQueryUpdateCoverage(
   return dedupeUpdateCoverage(facts);
 }
 
-function knownQueryNames(source: string, options: CompileComponentOptions): Set<string> {
+function knownQueryNames(
+  model: ComponentModuleModel,
+  options: CompileComponentOptions,
+): Set<string> {
   return new Set([
-    ...componentQueryNames(source),
+    ...componentQueryNames(model),
     ...Object.keys(options.registryFacts?.queries ?? {}),
     ...Object.keys(componentQueryShapes(options) ?? {}),
   ]);
@@ -1054,18 +1072,24 @@ function queryNameFromPath(path: string): string | null {
   return path.split('.', 1)[0] ?? null;
 }
 
-function renderOnceQueryPaths(source: string, knownQueries: ReadonlySet<string>): string[] {
+function renderOnceQueryPaths(
+  model: ComponentModuleModel,
+  knownQueries: ReadonlySet<string>,
+): string[] {
   const paths: string[] = [];
 
-  for (const call of parsedCallExpressions(source).filter((item) => item.name === 'renderOnce')) {
+  for (const call of callExpressions(model).filter((item) => item.name === 'renderOnce')) {
     paths.push(...queryPathsInExpression(call.arguments.join(', '), knownQueries));
   }
 
   return [...new Set(paths)];
 }
 
-function jsxQueryExpressionPaths(source: string, knownQueries: ReadonlySet<string>): string[] {
-  return jsxExpressions(parseComponentModuleModel('component.tsx', source))
+function jsxQueryExpressionPaths(
+  model: ComponentModuleModel,
+  knownQueries: ReadonlySet<string>,
+): string[] {
+  return jsxExpressions(model)
     .map((expression) => soleQueryPathExpression(expression.expression))
     .filter((path): path is string => path !== null)
     .filter((path) => queryPathUsesKnownQuery(path, knownQueries));
@@ -1096,8 +1120,8 @@ function dedupeUpdateCoverage(
   );
 }
 
-function dataBindAttributes(source: string): DataBindAttribute[] {
-  return jsxAttributes(source)
+function dataBindAttributes(model: ComponentModuleModel): DataBindAttribute[] {
+  return jsxAttributes(model)
     .filter(
       (attribute) =>
         isBindingAttribute(attribute.name) &&
@@ -1112,8 +1136,8 @@ function dataBindAttributes(source: string): DataBindAttribute[] {
     }));
 }
 
-function dataBindListStamps(source: string): QueryTemplateStampFact[] {
-  const elements = parsedJsxElements(source);
+function dataBindListStamps(source: string, model: ComponentModuleModel): QueryTemplateStampFact[] {
+  const elements = jsxElements(model);
 
   return elements
     .flatMap((element) => {
@@ -1195,8 +1219,10 @@ function queryShapeAtPath(shape: QueryShape, segments: readonly string[]): Query
 }
 
 // SPEC 5.2: query data is shared/server-owned; island-local state is private/client-owned.
-function validateServerFactsInLocalState(source: string, fileName: string): CompilerDiagnostic[] {
-  const model = parseComponentModuleModel('component.tsx', source);
+function validateServerFactsInLocalState(
+  model: ComponentModuleModel,
+  fileName: string,
+): CompilerDiagnostic[] {
   const queryObject = componentOptionSource(model, 'queries');
   const stateObject = componentStateReturnObject(model);
   if (!queryObject || !stateObject) return [];
@@ -1212,8 +1238,11 @@ function validateServerFactsInLocalState(source: string, fileName: string): Comp
   return storesServerFact ? [diagnosticFor(fileName, 'FW301')] : [];
 }
 
-function validateFragmentTargetInputs(source: string, fileName: string): CompilerDiagnostic[] {
-  const model = parseComponentModuleModel('component.tsx', source);
+function validateFragmentTargetInputs(
+  source: string,
+  model: ComponentModuleModel,
+  fileName: string,
+): CompilerDiagnostic[] {
   if (componentFragmentTargetNames(model).length === 0) return [];
 
   const queryObject = componentOptionSource(model, 'queries');
@@ -1232,27 +1261,33 @@ function validateFragmentTargetInputs(source: string, fileName: string): Compile
   }));
 }
 
-function validateFragmentTargetChildren(source: string, fileName: string): CompilerDiagnostic[] {
-  const targetNames = fragmentTargetUsageNames(source);
+function validateFragmentTargetChildren(
+  source: string,
+  model: ComponentModuleModel,
+  fileName: string,
+): CompilerDiagnostic[] {
+  const targetNames = fragmentTargetUsageNames(model);
   if (targetNames.length === 0) return [];
 
   return targetNames.flatMap((name) =>
-    fragmentTargetChildBodies(source, name)
+    fragmentTargetChildBodies(source, model, name)
       .filter((body) => capturesUnserializableValue(body))
       .map((body) => fw230Diagnostic(fileName, name, body)),
   );
 }
 
-function fragmentTargetUsageNames(source: string): string[] {
-  return [
-    ...new Set(componentFragmentTargetNames(parseComponentModuleModel('component.tsx', source))),
-  ];
+function fragmentTargetUsageNames(model: ComponentModuleModel): string[] {
+  return [...new Set(componentFragmentTargetNames(model))];
 }
 
-function fragmentTargetChildBodies(source: string, name: string): string[] {
+function fragmentTargetChildBodies(
+  source: string,
+  model: ComponentModuleModel,
+  name: string,
+): string[] {
   const bodies: string[] = [];
 
-  for (const element of parsedJsxElements(source).filter((item) => item.tag === name)) {
+  for (const element of jsxElements(model).filter((item) => item.tag === name)) {
     if (element.selfClosing) continue;
 
     const body = source.slice(element.openingEnd, element.closingStart).trim();
@@ -1320,40 +1355,46 @@ function validateDirectDbAccess(source: string, fileName: string): CompilerDiagn
   return [];
 }
 
-function validateIdrefs(source: string, fileName: string): CompilerDiagnostic[] {
-  const ids = new Set(literalIds(source));
-  if (ids.size === 0) return idrefValues(source).map((value) => fw221Diagnostic(fileName, value));
+function validateIdrefs(model: ComponentModuleModel, fileName: string): CompilerDiagnostic[] {
+  const ids = new Set(literalIds(model));
+  if (ids.size === 0) return idrefValues(model).map((value) => fw221Diagnostic(fileName, value));
 
-  const missing = idrefValues(source).filter((value) => !ids.has(value));
+  const missing = idrefValues(model).filter((value) => !ids.has(value));
   return [...new Set(missing)].map((value) => fw221Diagnostic(fileName, value));
 }
 
-function validateStaticIds(source: string, fileName: string): CompilerDiagnostic[] {
+function validateStaticIds(
+  source: string,
+  model: ComponentModuleModel,
+  fileName: string,
+): CompilerDiagnostic[] {
   const diagnostics: CompilerDiagnostic[] = [];
   const seen = new Set<string>();
 
-  for (const id of literalIds(source)) {
+  for (const id of literalIds(model)) {
     if (seen.has(id)) diagnostics.push(fw224Diagnostic(fileName, `duplicate id="${id}"`));
     seen.add(id);
   }
 
-  for (const id of repeatableLiteralIds(source)) {
+  for (const id of repeatableLiteralIds(source, model)) {
     diagnostics.push(fw224Diagnostic(fileName, `repeatable id="${id}"`));
   }
 
   return dedupeDiagnostics(diagnostics);
 }
 
-function literalIds(source: string): string[] {
-  return jsxAttributeValues(source, 'id');
+function literalIds(model: ComponentModuleModel): string[] {
+  return jsxAttributeValues(model, 'id');
 }
 
-function repeatableLiteralIds(source: string): string[] {
-  return dataBindListTemplateBodies(source).flatMap(literalIds);
+function repeatableLiteralIds(source: string, model: ComponentModuleModel): string[] {
+  return dataBindListTemplateBodies(source, model).flatMap((body) =>
+    literalIds(parseComponentModuleModel('component.tsx', body)),
+  );
 }
 
-function dataBindListTemplateBodies(source: string): string[] {
-  const elements = parsedJsxElements(source);
+function dataBindListTemplateBodies(source: string, model: ComponentModuleModel): string[] {
+  const elements = jsxElements(model);
 
   return elements.flatMap((element) => {
     if (jsxStaticAttributeValue(element, 'data-bind-list') === undefined) return [];
@@ -1398,9 +1439,12 @@ const blockTagsThatCloseParagraph = new Set([
   'ul',
 ]);
 
-function validateHtmlContentModel(source: string, fileName: string): CompilerDiagnostic[] {
+function validateHtmlContentModel(
+  model: ComponentModuleModel,
+  fileName: string,
+): CompilerDiagnostic[] {
   const diagnostics: CompilerDiagnostic[] = [];
-  const elements = parsedJsxElements(source);
+  const elements = jsxElements(model);
 
   for (const element of elements) {
     const tag = element.tag.toLowerCase();
@@ -1433,20 +1477,21 @@ function htmlContentModelDiagnostic(fileName: string, detail: string): CompilerD
 
 function validateResidualStamps(
   source: string,
+  model: ComponentModuleModel,
   options: CompileComponentOptions,
   componentName: string,
 ): CompilerDiagnostic[] {
   const diagnostics: CompilerDiagnostic[] = [];
   const knownQueries = new Set([
     ...Object.keys(options.registryFacts?.queries ?? {}),
-    ...componentQueryNames(source),
+    ...componentQueryNames(model),
   ]);
   const knownComponents = new Set([
     kebabCase(componentName),
-    ...explicitComponentNames(source),
+    ...explicitComponentNames(model),
     ...(options.registryFacts?.components ?? []),
   ]);
-  for (const attribute of jsxAttributes(source)) {
+  for (const attribute of jsxAttributes(model)) {
     if (attribute.name === 'fw-c') {
       const component = attribute.value;
       if (component && !knownComponents.has(component)) {
@@ -1481,10 +1526,13 @@ const ambiguousRelationshipAttributes = new Set([
 
 const primitiveOwnedOverrideAttributes = new Set(['role', 'data-state']);
 
-function validateAttributeMergeConflicts(source: string, fileName: string): CompilerDiagnostic[] {
+function validateAttributeMergeConflicts(
+  model: ComponentModuleModel,
+  fileName: string,
+): CompilerDiagnostic[] {
   const diagnostics: CompilerDiagnostic[] = [];
 
-  for (const element of jsxElements(parseComponentModuleModel(fileName, source))) {
+  for (const element of jsxElements(model)) {
     const attrs = element.attributes.map((attribute) => attribute.name);
     const counts = countValues(attrs);
 
@@ -1554,8 +1602,8 @@ function fw311Diagnostic(fileName: string, fact: QueryUpdateCoverageFact): Compi
   };
 }
 
-function explicitComponentNames(source: string): string[] {
-  return componentExplicitNames(parseComponentModuleModel('component.tsx', source));
+function explicitComponentNames(model: ComponentModuleModel): string[] {
+  return componentExplicitNames(model);
 }
 
 function dedupeDiagnostics(diagnostics: readonly CompilerDiagnostic[]): CompilerDiagnostic[] {
@@ -1591,7 +1639,7 @@ function validateLiteralHrefs(
 }
 
 function literalNavigationTargets(source: string): string[] {
-  return jsxAttributes(source).flatMap((attribute) =>
+  return jsxAttributes(parseComponentModuleModel('component.tsx', source)).flatMap((attribute) =>
     (attribute.name === 'href' || attribute.name === 'action') && attribute.value
       ? [attribute.value]
       : [],
@@ -1624,7 +1672,7 @@ function fw221Diagnostic(fileName: string, value: string): CompilerDiagnostic {
   };
 }
 
-function idrefValues(source: string): string[] {
+function idrefValues(model: ComponentModuleModel): string[] {
   const values: string[] = [];
   const idrefAttributes = new Set([
     'aria-activedescendant',
@@ -1638,7 +1686,7 @@ function idrefValues(source: string): string[] {
     'popovertarget',
   ]);
 
-  for (const attribute of jsxAttributes(source)) {
+  for (const attribute of jsxAttributes(model)) {
     if (!idrefAttributes.has(attribute.name)) continue;
     const rawValue = attribute.value;
     if (!rawValue) continue;
@@ -1651,14 +1699,14 @@ function idrefValues(source: string): string[] {
   return values;
 }
 
-function jsxAttributeValues(source: string, name: string): string[] {
-  return jsxAttributes(source).flatMap((attribute) =>
+function jsxAttributeValues(model: ComponentModuleModel, name: string): string[] {
+  return jsxAttributes(model).flatMap((attribute) =>
     attribute.name === name && attribute.value ? [attribute.value] : [],
   );
 }
 
-function jsxAttributes(source: string): JsxAttributeModel[] {
-  return parsedJsxElements(source).flatMap((element) => [...element.attributes]);
+function jsxAttributes(model: ComponentModuleModel): JsxAttributeModel[] {
+  return jsxElements(model).flatMap((element) => [...element.attributes]);
 }
 
 function parsedJsxElements(source: string): JsxElementModel[] {
@@ -2290,10 +2338,10 @@ function findFragmentTargetFacts(source: string, componentName: string): Fragmen
 
 function componentGraphFact(
   componentName: string,
-  source: string,
+  model: ComponentModuleModel,
   fragmentTargets: readonly string[],
 ): ComponentGraphFact {
-  const queries = componentQueryNames(source);
+  const queries = componentQueryNames(model);
 
   return {
     ...(fragmentTargets.length === 0 ? {} : { fragments: fragmentTargets }),
@@ -2302,10 +2350,8 @@ function componentGraphFact(
   };
 }
 
-function componentQueryNames(source: string): string[] {
-  return topLevelObjectKeys(
-    componentOptionSource(parseComponentModuleModel('component.tsx', source), 'queries') ?? '{}',
-  );
+function componentQueryNames(model: ComponentModuleModel): string[] {
+  return topLevelObjectKeys(componentOptionSource(model, 'queries') ?? '{}');
 }
 
 function fragmentTargetPropsType(source: string): string {
