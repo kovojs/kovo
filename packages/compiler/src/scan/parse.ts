@@ -9,6 +9,8 @@ export interface ComponentModel {
   explicitName?: string;
   localName?: string;
   options: readonly ComponentOptionEntry[];
+  renderInputs: readonly string[];
+  stateReturnObject?: string;
 }
 
 export interface ComponentModuleModel {
@@ -57,6 +59,14 @@ export function componentOptionSource(
   );
 }
 
+export function componentRenderInputs(model: ComponentModuleModel): string[] {
+  return [...(firstComponentModel(model)?.renderInputs ?? [])];
+}
+
+export function componentStateReturnObject(model: ComponentModuleModel): string | null {
+  return firstComponentModel(model)?.stateReturnObject ?? null;
+}
+
 function componentModelFromInitializer(
   sourceFile: ts.SourceFile,
   source: string,
@@ -73,12 +83,31 @@ function componentModelFromInitializer(
     optionsArg && ts.isObjectLiteralExpression(optionsArg)
       ? componentOptions(sourceFile, source, optionsArg)
       : [];
+  const render = componentPropertyInitializer(optionsArg, 'render');
+  const state = componentPropertyInitializer(optionsArg, 'state');
+  const stateReturnObject = state ? arrowReturnObjectSource(sourceFile, source, state) : null;
 
   return {
     ...(explicitName === undefined ? {} : { explicitName }),
     localName,
     options,
+    renderInputs: render ? arrowObjectPatternKeys(render) : [],
+    ...(stateReturnObject === null ? {} : { stateReturnObject }),
   };
+}
+
+function componentPropertyInitializer(
+  optionsObject: ts.Expression | undefined,
+  propertyName: string,
+): ts.Expression | null {
+  if (!optionsObject || !ts.isObjectLiteralExpression(optionsObject)) return null;
+
+  for (const property of optionsObject.properties) {
+    if (!ts.isPropertyAssignment(property)) continue;
+    if (propertyNameText(property.name) === propertyName) return property.initializer;
+  }
+
+  return null;
 }
 
 function componentOptions(
@@ -110,4 +139,30 @@ function propertyNameText(name: ts.PropertyName): string | null {
   }
 
   return null;
+}
+
+function arrowObjectPatternKeys(expression: ts.Expression): string[] {
+  if (!ts.isArrowFunction(expression)) return [];
+
+  const firstParam = expression.parameters[0];
+  if (!firstParam || !ts.isObjectBindingPattern(firstParam.name)) return [];
+
+  return firstParam.name.elements.flatMap((element) =>
+    ts.isIdentifier(element.name) ? [element.name.text] : [],
+  );
+}
+
+function arrowReturnObjectSource(
+  sourceFile: ts.SourceFile,
+  source: string,
+  expression: ts.Expression,
+): string | null {
+  if (!ts.isArrowFunction(expression)) return null;
+
+  const body = ts.isParenthesizedExpression(expression.body)
+    ? expression.body.expression
+    : expression.body;
+  if (!ts.isObjectLiteralExpression(body)) return null;
+
+  return source.slice(body.getStart(sourceFile), body.getEnd());
 }

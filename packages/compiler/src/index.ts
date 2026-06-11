@@ -7,6 +7,8 @@ import { findMatchingClosingTag, readStaticAttribute, scanOpeningTags } from './
 import { findMatchingToken, findStringEnd } from './scan/text.js';
 import {
   componentOptionSource,
+  componentRenderInputs,
+  componentStateReturnObject,
   firstComponentModel,
   parseComponentModule as parseComponentModuleModel,
 } from './scan/parse.js';
@@ -1643,6 +1645,9 @@ function escapeRegExp(value: string): string {
 }
 
 function extractFirstRenderObjectPattern(source: string): string[] {
+  const parsed = componentRenderInputs(parseComponentModuleModel('component.tsx', source));
+  if (parsed.length > 0) return parsed;
+
   const match = /\brender\s*:\s*\(\s*\{/.exec(source);
   if (!match) return [];
 
@@ -1671,6 +1676,9 @@ function extractObjectLiteralAfterProperty(source: string, propertyName: string)
 }
 
 function extractStateReturnObject(source: string): string | null {
+  const parsed = componentStateReturnObject(parseComponentModuleModel('component.tsx', source));
+  if (parsed) return parsed;
+
   const match = /\bstate\s*:\s*\(\s*\)\s*=>\s*\(\s*\{/.exec(source);
   if (!match) return null;
 
