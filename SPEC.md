@@ -256,7 +256,7 @@ The set is closed — `on:media` is CSS's job; timers belong inside handlers. Is
 
 **The DOM is the plan.** There is no separate compiled-plan artifact: binding attributes are self-describing, the loader executes them by walking the tree under `fw-deps` islands, and compile-time knowledge is used for _typing_ only. When a query value — or island-local state; same machinery, two data sources — changes, the loader runs, in order:
 
-**1. Bindings — path writes.** `data-bind="cart.count"` sets text content; `data-bind:<attr>` sets attributes (`data-bind:value`, `data-bind:hidden`). Grammar: dot paths only — no expressions, no indexing (arrays are stamps' job). Paths type-check against the query's inferred shape (§6.2).
+**1. Bindings — path writes.** `data-bind="cart.count"` sets text content; `data-bind:<attr>` sets attributes (`data-bind:value`, `data-bind:hidden`). Grammar: dot paths plus optional segments (`deal.contact?.name`) — no expressions, no indexing (arrays are stamps' job). Paths type-check against the query's inferred shape (§6.2), and the check is **null-aware**: a path traversing a nullable or optional segment — the routine shape of leftJoin projections — must mark the traversal `?.`, or it is compile error **FW227**; rendering `undefined` is unrepresentable, not a runtime surprise. `?.` has defined empty semantics shared by the server renderer and the loader (the two must not disagree — the FW222 drift rule applied to nullability): a text binding renders the empty string; an attribute binding removes the attribute. Sugar lowers `{deal.contact?.name}` to exactly this form; item-relative stamp paths (`.contact?.name`) and `data-bind-list` paths follow the same rule. When empty-on-null is the wrong rendering, the FW227 fix menu is the usual ladder: extract a named derive that handles `null` explicitly, or make the projection non-null in the query itself (`coalesce`), keeping the binding total.
 
 **2. Named derives — the expression layer.** A derive is a named, exported, pure function with declared inputs — exactly parallel to handlers:
 
@@ -401,7 +401,7 @@ interface InvalidationSets {
 | Handler refs          | client module exports               | `cart.remove` exists; params required & typed; typo = error                                                                          |
 | Form fields           | mutation input schema               | names ∈ schema; types match; **completeness** (missing required field = error); coercion declared once                               |
 | Fragment targets      | component registry                  | target exists; patched with the right component's props                                                                              |
-| Query data / bindings | Drizzle select shape (`$infer`)     | `data-bind` paths exist; column rename propagates to every template                                                                  |
+| Query data / bindings | Drizzle select shape (`$infer`)     | `data-bind` paths exist; column rename propagates to every template; nullable traversal requires `?.` or a derive (FW227, §4.8)      |
 | Invalidations         | domain layer / touch graph          | invalidated keys exist; optimistic exhaustiveness in `tsc` via emitted invalidation sets (§10.6)                                     |
 | Errors                | declared error codes                | `onError` receives exhaustive discriminated union                                                                                    |
 | Guards                | guard combinators                   | `req.session.user` non-null under `authed`; static audit of unguarded mutations, routes, and queries                                 |
@@ -656,6 +656,8 @@ export const products = pgTable(
 
 Tables default to a same-named domain; annotations group tables into logical domains and declare key granularity. The reverse index (table → domain), the `DomainKey` type, and key extractors are all generated from this single file. An optional `owner:` annotation (`jiso({ domain: 'cart', owner: (t) => t.userId })`) names the column tying a table's rows to a principal — it powers the `--unscoped` audit (§10.3).
 
+A table may opt out of domain mapping with `jiso({ exempt: true })` (silencing FW404 for writes — append-only logs, outbox tables), but **exemption is write-side only**. An exempt table has no domain, so no write can ever invalidate a query reading it; a query whose read set includes an exempt table is therefore error **FW411** — the silent-staleness bug §10.6 exists to kill, reintroduced through the exemption. The teaching error's fix is to map the table after all: for an append-only log this costs nothing — inserts then invalidate exactly the timelines reading it. `exempt` is reserved for tables nothing queries.
+
 ### 10.2 Queries
 
 ```ts
@@ -862,7 +864,7 @@ export const touchGraph = {
 
 ### 11.2 Runtime verification (belt and suspenders)
 
-Dev server and the test harness wrap `db`; every executed statement is parsed (`pgsql-ast-parser`) and checked. Static over-approximates (all branches); runtime under-approximates (executed branches). **Invariant: `observed ⊆ static ∪ FW406-annotated`** — violation means analyzer bug or smuggled SQL; either is a CI failure. Read-side gets identical treatment (query loaders' SELECT/JOIN tables vs. derived read sets, **and observed result shapes vs. declared/inferred types — the runtime half of FW410**, so an opaque projection's schema claim is tested against what the database actually returns).
+Dev server and the test harness wrap `db`; every executed statement is parsed (`pgsql-ast-parser`) and checked. Static over-approximates (all branches); runtime under-approximates (executed branches). **Invariant: `observed ⊆ static ∪ FW406-annotated`** — violation means analyzer bug or smuggled SQL; either is a CI failure. Read-side gets identical treatment (query loaders' SELECT/JOIN tables vs. derived read sets, **and observed result shapes vs. declared/inferred types — the runtime half of FW410**, so an opaque projection's schema claim is tested against what the database actually returns). An observed read of an `exempt` table is the runtime half of **FW411** (§10.1) — the same CI failure whether the exempt read was statically visible or smuggled through raw SQL.
 
 ### 11.3 Diagnostic codes (registry)
 
@@ -879,6 +881,7 @@ Dev server and the test harness wrap `db`; every executed statement is parsed (`
 | FW224 | error      | Static `id` in a repeatable component / duplicate id in a page composition (§4.5)                             |
 | FW225 | error      | JSX nesting violates the HTML content model — the parser would re-parent (§4.2)                               |
 | FW226 | error      | `fw-deps`/`fw-c` names an unknown query instance or component (ejected-IR validation)                         |
+| FW227 | error      | Binding path traverses a nullable segment without `?.` or a null-handling derive (§4.8)                       |
 | FW230 | error      | Fragment-target children not lowerable to a component reference (shows the hoisting + fixes)                  |
 | FW231 | error      | Unmergeable attribute conflict in primitive composition (shows both sources + the §4.6 rule)                  |
 | FW232 | lint       | Author override of a primitive-owned ARIA/state attribute                                                     |
@@ -891,13 +894,14 @@ Dev server and the test harness wrap `db`; every executed statement is parsed (`
 | FW330 | lint       | Direct db access in a mutation handler — route through domain                                                 |
 | FW402 | error      | Write touched an undeclared domain (silent stale UI)                                                          |
 | FW403 | warn       | Declared domain never observed written (stale claim / untested branch)                                        |
-| FW404 | error      | Write to unmapped table (map it or mark `exempt`, e.g. append-only logs)                                      |
+| FW404 | error      | Write to unmapped table (map it or mark `exempt`, e.g. append-only logs — write-side only, §10.1)             |
 | FW405 | warn       | Conditional writes on branches never executed under instrumentation                                           |
 | FW406 | warn/error | Statically un-analyzable write site — manual `touches` required, runtime-verified                             |
 | FW407 | error      | Query read from undeclared domain (missed invalidations)                                                      |
 | FW408 | error      | Declared row key ≠ observed row predicate                                                                     |
 | FW409 | notice     | Non-eq predicate — degraded to table-level invalidation                                                       |
 | FW410 | error      | Opaque query projection (`sql<T>`, raw SQL) — declared output schema required, shape runtime-verified (§10.2) |
+| FW411 | error      | Query read set includes an `exempt` table — exemption is write-side only (§10.1), runtime-verified (§11.2)    |
 
 ### 11.4 The verification surface (the Keppo contract)
 
