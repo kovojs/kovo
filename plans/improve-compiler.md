@@ -12,10 +12,19 @@ Scope: `packages/compiler/src/` only (plus `tests/fw-check.node.mjs` where gate 
 - [x] Split out initial modules for diagnostics, CSS, graph derivation, bootstrap/registry emit, text scanning, TS parsing, and binding/event-trigger validation while preserving the public `src/index.ts` surface.
 - [x] Extracted SPEC §6.4 literal navigation target validation (FW220 route-table checks for `href`/`action`) into `src/validate/navigation.ts`.
 - [x] Extracted SPEC §6.4 static navigation sugar lowering (`<Link>`, `href()`, and literal `href={...}` normalization) into `src/lower/navigation.ts`.
+- [x] Extracted handler lowering/FW201-FW210 event attribute analysis into `src/lower/handlers.ts`, preserving versioned `on:*` refs and element param derivation.
+- [x] Extracted server IR emission/render-equivalence source stamping into `src/emit/server.ts`, preserving handler attribute replacement plus SPEC §5.2 `fw-deps`/`fw-state` stamps.
+- [x] Consolidated object-literal scanner helpers into `src/scan/object.ts`; callers in `index.ts`, `lower/navigation.ts`, and `validate/bindings.ts` now share one implementation.
 - [x] Fixed known Phase 0 miscompiles that are directly covered by regression tests: self-closing same-name JSX, nested handler braces/span rewrites, exact handler attribute replacement, static state string JSON, handler parameter substring collisions, and conditional at-rule CSS fallback scoping.
 - [x] Migrated large parts of Phase 3 onto the parser model: component/options extraction, JSX element/attribute validators, mutation handler extraction, query binding/stamp collection, update coverage, event trigger justification, and identifier-reference analysis for FW201.
 - [ ] Finish the Phase 2 module split: most orchestration and several validators/lowerers/emitters still live in `packages/compiler/src/index.ts`.
 - [ ] Finish the Phase 3 parser migration; the `findMatchingClosingTag` scanner path is gone, but broader dead scanner cleanup remains under audit.
+      Evidence 2026-06-11: `rg` confirms `findMatchingClosingTag` is absent. The remaining
+      top-level object scanner is live in `src/scan/object.ts` and is used by component
+      query/props/state extraction, static navigation lowering, binding validation, handler
+      parameter literal filtering, and server `fw-deps`/`fw-state` stamping; the previous
+      duplicated scanner copies in `index.ts`, `lower/navigation.ts`, and
+      `validate/bindings.ts` were removed.
 - [x] Move remaining local compiler help strings onto the shared diagnostic definition model where appropriate.
       Evidence 2026-06-11: FW201's conservative free-identifier denylist and the static
       FW201/FW230 detail labels now live on shared `diagnosticDefinitions`. Compiler-local

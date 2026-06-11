@@ -28,3 +28,14 @@ export function kebabCase(value: string): string {
     .replace(/_/g, '-')
     .toLowerCase();
 }
+
+export function replaceExtension(fileName: string, extension: string): string {
+  return fileName.replace(/\.[^.]+$/, extension);
+}
+
+export function splitDepValue(value: string): string[] {
+  return value
+    .split(/[\s,]+/)
+    .map((dep) => dep.trim())
+    .filter(Boolean);
+}

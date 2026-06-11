@@ -25,6 +25,11 @@ Audited against the repository on 2026-06-11. Checkmarks mean the behavior, API,
       (`<Link>`, `href()`, and literal `href={...}` normalization) now lives in
       `packages/compiler/src/lower/navigation.ts`, continuing the Phase 2 module split
       without changing emitted IR.
+      Additional evidence 2026-06-11: handler lowering/FW201-FW210 event attribute analysis
+      now lives in `packages/compiler/src/lower/handlers.ts`, server IR emission and
+      render-equivalence stamping now live in `packages/compiler/src/emit/server.ts`, and
+      duplicate top-level object scanner helpers were consolidated into
+      `packages/compiler/src/scan/object.ts`.
 - [x] P2 runtime has delegated event loading, execution triggers, `ctx.signal`, query hydration/update plans, visible-return typed-read refetch, BroadcastChannel plumbing, bfcache-safe pagehide handling, immutable no-`customElements` loader constraints, and a 4KB inline loader budget.
 - [x] P2 exit demo/smoke is proven by a standalone browser L0+L1 smoke covering tabs, dialog, filter island, declared visible trigger, and zero handler imports before interaction/trigger.
 - [x] P3 server/core have `domain`, `query`, `mutation`, `route`, typed `href`/`Link`/`redirect`, typed sessions, CSRF issuance/validation, FormData coercion, guards/rate limits, mutation replay, query endpoints, rerun query fragments, and commerce app usage.

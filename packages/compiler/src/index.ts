@@ -4,21 +4,28 @@ import { isAbsolute, relative } from 'node:path';
 import { componentCssAssetForFile, emitCssModule, type ComponentCssAsset } from './css.js';
 import { diagnosticFor, type CompilerDiagnostic } from './diagnostics.js';
 import { emitRegistryModule } from './emit/registry.js';
+import { emitServerModule, renderEquivalenceCheck, serverRenderSource } from './emit/server.js';
 import type { ComponentGraphFact, RegistryFacts } from './graph.js';
+import {
+  clientModuleUrl,
+  clientModuleVersion,
+  capturesUnserializableValue,
+  lowerEventHandlers,
+  versionHandlerLowering,
+  type ElementParam,
+  type HandlerLowering,
+} from './lower/handlers.js';
 import { lowerNavigationSugar } from './lower/navigation.js';
 import { lowerPlatformBehaviors, type PlatformSubstitution } from './lower/platform.js';
-import { findStringEnd } from './scan/text.js';
+import { topLevelObjectEntries, topLevelObjectKeys } from './scan/object.js';
 import {
   callExpressions,
   componentExplicitNames,
   componentFragmentTargetNames,
   componentOptionSource,
   componentRenderInputModels,
-  componentRenderHost,
   componentStateReturnObjectModel,
-  componentStateReturnObject,
   firstComponentModel,
-  identifierReferences,
   type ComponentModuleModel,
   type JsxAttributeModel,
   type JsxElementModel,
@@ -29,7 +36,14 @@ import {
   parseComponentModule as parseComponentModuleModel,
   propertyAccessPaths,
 } from './scan/parse.js';
-import { dedupeBy, escapeAttribute, indent, kebabCase } from './shared.js';
+import {
+  dedupeBy,
+  escapeAttribute,
+  indent,
+  kebabCase,
+  replaceExtension,
+  splitDepValue,
+} from './shared.js';
 import {
   collectQueryUpdateCoverage,
   collectQueryUpdatePlans,
@@ -195,25 +209,6 @@ export interface QueryShapeFact {
   source: string;
 }
 
-interface HandlerLowering {
-  exportName: string;
-  attributeName: string;
-  attributeEnd: number;
-  attributeStart: number;
-  attributeValue: string;
-  expression: string;
-  params: ElementParam[];
-  diagnostic?: CompilerDiagnostic;
-}
-
-interface ElementParam {
-  attributeName: string;
-  type: ElementParamType;
-  value: string;
-}
-
-type ElementParamType = 'boolean' | 'number' | 'string';
-
 export interface ViewTransitionStamp {
   name: string;
 }
@@ -335,7 +330,7 @@ export function compileComponentModule(options: CompileComponentOptions): Compil
   const cssAssets = cssSource
     ? [componentCssAssetForFile(cssFileName, componentName, fragmentTargets, {}, cssSource)]
     : [];
-  const serverSource = emitServerModule(source, versionedHandlers, clientFileName);
+  const serverSource = emitServerModule(source, versionedHandlers);
   const serverRenderedSource = serverRenderSource(source, versionedHandlers);
   const registrySource = emitRegistryModule({
     clientFileName,
@@ -803,221 +798,6 @@ function isBindingAttributeName(name: string): boolean {
 function sanitizeIdentifier(value: string): string {
   const sanitized = value.replace(/[^A-Za-z0-9_$]/g, '_');
   return /^[A-Za-z_$]/.test(sanitized) ? sanitized : `_${sanitized}`;
-}
-
-type StaticNavigationValue = string | number | boolean | null;
-type StaticLiteralValue = StaticNavigationValue | StaticLiteralObject;
-
-interface StaticLiteralObject {
-  [key: string]: StaticLiteralValue;
-}
-
-function parseLiteralObject(source: string): StaticLiteralObject | null {
-  const trimmed = source.trim();
-  if (!trimmed.startsWith('{') || !trimmed.endsWith('}')) return null;
-
-  const entries: Record<string, StaticLiteralValue> = {};
-  for (const entry of topLevelObjectEntries(trimmed)) {
-    const value = literalValue(entry.value);
-    if (value === undefined) return null;
-    entries[entry.key] = value;
-  }
-
-  return entries;
-}
-
-function literalValue(value: string): StaticLiteralValue | undefined {
-  const trimmed = value.trim().replace(/,$/, '').trim();
-  if (trimmed.startsWith('{') && trimmed.endsWith('}')) {
-    return parseLiteralObject(trimmed) ?? undefined;
-  }
-
-  const stringValue = literalStringValue(trimmed);
-  if (stringValue !== null) return stringValue;
-  if (/^-?\d+(?:\.\d+)?$/.test(trimmed)) return Number(trimmed);
-  if (trimmed === 'true') return true;
-  if (trimmed === 'false') return false;
-  if (trimmed === 'null') return null;
-  return undefined;
-}
-
-function literalStringValue(value: string): string | null {
-  const trimmed = value.trim();
-  const quote = trimmed[0];
-  if ((quote !== '"' && quote !== "'") || trimmed.at(-1) !== quote) return null;
-  return trimmed.slice(1, -1);
-}
-
-function lowerEventHandlers(
-  options: CompileComponentOptions,
-  componentName: string,
-): HandlerLowering[] {
-  const handlers: HandlerLowering[] = [];
-  const anonymousNameCounts = new Map<string, number>();
-
-  for (const eventAttribute of eventAttributes(options.source)) {
-    const { attributeEnd, attributeStart, event, expression, tag } = eventAttribute;
-    const namedHandler = /^[A-Za-z_$][\w$]*$/.test(expression);
-    const params = namedHandler ? [] : extractElementParams(expression);
-    const eventName = event.toLowerCase();
-    const exportName = namedHandler
-      ? `${componentName}$${expression}`
-      : uniqueAnonymousHandlerName(componentName, tag, eventName, anonymousNameCounts);
-
-    let diagnostic: CompilerDiagnostic | undefined;
-    if (!namedHandler) {
-      diagnostic = diagnosticFor(
-        options.fileName,
-        'FW210',
-        options.source,
-        attributeStart,
-        event.length,
-      );
-    }
-
-    if (capturesUnserializableValue(expression)) {
-      diagnostic = fw201Diagnostic(options.fileName, options.source, attributeStart, {
-        attributeName: `on:${eventName}`,
-        exportName,
-        expression,
-        params,
-      });
-    }
-
-    handlers.push({
-      attributeName: `on:${eventName}`,
-      attributeEnd,
-      attributeStart,
-      attributeValue: `${clientModuleUrl(options.fileName)}#${exportName}`,
-      ...(diagnostic ? { diagnostic } : {}),
-      expression,
-      exportName,
-      params,
-    });
-  }
-
-  return handlers;
-}
-
-function eventAttributes(source: string): Array<{
-  attributeEnd: number;
-  attributeStart: number;
-  event: string;
-  expression: string;
-  tag: string;
-}> {
-  const attributes: Array<{
-    attributeEnd: number;
-    attributeStart: number;
-    event: string;
-    expression: string;
-    tag: string;
-  }> = [];
-
-  for (const element of parsedJsxElements(source)) {
-    for (const attribute of element.attributes) {
-      const event = jsxEventAttributeName(attribute.name);
-      if (!event || attribute.expression === undefined) continue;
-      attributes.push({
-        attributeEnd: attribute.end,
-        attributeStart: attribute.start,
-        event,
-        expression: attribute.expression,
-        tag: element.tag,
-      });
-    }
-  }
-
-  return attributes;
-}
-
-function jsxEventAttributeName(name: string): string | null {
-  if (!/^on[A-Z][A-Za-z0-9]*$/.test(name)) return null;
-  return name.slice(2);
-}
-
-function uniqueAnonymousHandlerName(
-  componentName: string,
-  tag: string,
-  eventName: string,
-  counts: Map<string, number>,
-): string {
-  const base = `${componentName}$${tag}_${eventName}`;
-  const count = (counts.get(base) ?? 0) + 1;
-  counts.set(base, count);
-
-  return count === 1 ? base : `${base}_${count}`;
-}
-
-function capturesUnserializableValue(expression: string): boolean {
-  const references = new Set(identifierReferences('expression.tsx', expression));
-  return ['window', 'document', 'db', 'request', 'response', 'Date', 'Map', 'Set'].some((name) =>
-    references.has(name),
-  );
-}
-
-function fw201Diagnostic(
-  fileName: string,
-  source: string,
-  offset: number,
-  lowering: {
-    attributeName: string;
-    exportName: string;
-    expression: string;
-    params: readonly ElementParam[];
-  },
-): CompilerDiagnostic {
-  const definition = diagnosticDefinitions.FW201;
-  const labels = definition.detailLabels;
-  return {
-    ...diagnosticFor(fileName, 'FW201', source, offset, lowering.attributeName.length),
-    help: [
-      `${labels.handlerLowering} ${lowering.attributeName}="${clientModuleUrl(fileName)}#${lowering.exportName}"`,
-      `${labels.blockedExpression} ${lowering.expression}`,
-      `${labels.elementParams} ${lowering.params.map((param) => param.attributeName).join(', ') || '-'}`,
-      definition.help ?? '',
-    ].join('\n'),
-  };
-}
-
-function versionHandlerLowering(
-  handler: HandlerLowering,
-  fileName: string,
-  clientHref: string,
-): HandlerLowering {
-  const unversionedHref = clientModuleUrl(fileName);
-  const versionedAttributeValue = `${clientHref}#${handler.exportName}`;
-  return {
-    ...handler,
-    attributeValue: versionedAttributeValue,
-    ...(handler.diagnostic
-      ? {
-          diagnostic: {
-            ...handler.diagnostic,
-            ...(handler.diagnostic.help
-              ? {
-                  help: handler.diagnostic.help.replaceAll(`${unversionedHref}#`, `${clientHref}#`),
-                }
-              : {}),
-          },
-        }
-      : {}),
-  };
-}
-
-function clientModuleUrl(fileName: string, version?: string): string {
-  const href = `/c/${replaceExtension(fileName, '.client.js').replace(/^\/+/, '')}`;
-  return version ? `${href}?v=${version}` : href;
-}
-
-function clientModuleVersion(source: string): string {
-  let hash = 0x811c9dc5;
-  for (let index = 0; index < source.length; index += 1) {
-    hash ^= source.charCodeAt(index);
-    hash = Math.imul(hash, 0x01000193) >>> 0;
-  }
-
-  return hash.toString(16).padStart(8, '0');
 }
 
 // SPEC 5.2: query data is shared/server-owned; island-local state is private/client-owned.
@@ -1668,164 +1448,6 @@ function queryShapeChildPaths(shape: QueryShape): string[] {
   ]);
 }
 
-function topLevelObjectKeys(objectSource: string): string[] {
-  const keys: string[] = [];
-  let index = 1;
-
-  while (index < objectSource.length - 1) {
-    index = skipWhitespaceAndComments(objectSource, index);
-    if (objectSource[index] === ',') {
-      index += 1;
-      continue;
-    }
-
-    const key = readObjectKey(objectSource, index);
-    if (!key) {
-      index = skipObjectValue(objectSource, index);
-      continue;
-    }
-
-    const afterKey = skipWhitespaceAndComments(objectSource, key.end);
-    if (objectSource[afterKey] === ':') {
-      keys.push(key.name);
-      index = skipObjectValue(objectSource, afterKey + 1);
-      continue;
-    }
-
-    keys.push(key.name);
-    index = skipObjectValue(objectSource, afterKey);
-  }
-
-  return keys;
-}
-
-function topLevelObjectEntries(objectSource: string): { key: string; value: string }[] {
-  const entries: { key: string; value: string }[] = [];
-  let index = 1;
-
-  while (index < objectSource.length - 1) {
-    index = skipWhitespaceAndComments(objectSource, index);
-    if (objectSource[index] === ',') {
-      index += 1;
-      continue;
-    }
-
-    const key = readObjectKey(objectSource, index);
-    if (!key) {
-      index = skipObjectValue(objectSource, index);
-      continue;
-    }
-
-    const afterKey = skipWhitespaceAndComments(objectSource, key.end);
-    if (objectSource[afterKey] !== ':') {
-      index = skipObjectValue(objectSource, afterKey);
-      continue;
-    }
-
-    const valueStart = skipWhitespaceAndComments(objectSource, afterKey + 1);
-    const valueEnd = skipObjectValue(objectSource, valueStart);
-    entries.push({ key: key.name, value: objectSource.slice(valueStart, valueEnd).trim() });
-    index = valueEnd;
-  }
-
-  return entries;
-}
-
-function readObjectKey(source: string, start: number): { name: string; end: number } | null {
-  const char = source[start];
-  if (char === '"' || char === "'") {
-    const end = findStringEnd(source, start, char);
-    if (end === -1) return null;
-
-    return {
-      end: end + 1,
-      name: source.slice(start + 1, end),
-    };
-  }
-
-  const identifier = /^[A-Za-z_$][\w$]*/.exec(source.slice(start));
-  if (!identifier?.[0]) return null;
-
-  return {
-    end: start + identifier[0].length,
-    name: identifier[0],
-  };
-}
-
-function skipObjectValue(source: string, start: number): number {
-  let index = start;
-  let curlyDepth = 0;
-  let squareDepth = 0;
-  let parenDepth = 0;
-
-  while (index < source.length - 1) {
-    const char = source[index];
-    if (char === '"' || char === "'" || char === '`') {
-      const end = findStringEnd(source, index, char);
-      index = end === -1 ? source.length - 1 : end + 1;
-      continue;
-    }
-
-    if (char === '/' && source[index + 1] === '/') {
-      const nextLine = source.indexOf('\n', index + 2);
-      index = nextLine === -1 ? source.length - 1 : nextLine + 1;
-      continue;
-    }
-
-    if (char === '/' && source[index + 1] === '*') {
-      const commentEnd = source.indexOf('*/', index + 2);
-      index = commentEnd === -1 ? source.length - 1 : commentEnd + 2;
-      continue;
-    }
-
-    if (char === '{') curlyDepth += 1;
-    if (char === '}') {
-      if (curlyDepth === 0 && squareDepth === 0 && parenDepth === 0) return index;
-      curlyDepth -= 1;
-    }
-
-    if (char === '[') squareDepth += 1;
-    if (char === ']') squareDepth -= 1;
-    if (char === '(') parenDepth += 1;
-    if (char === ')') parenDepth -= 1;
-
-    if (char === ',' && curlyDepth === 0 && squareDepth === 0 && parenDepth === 0) {
-      return index + 1;
-    }
-
-    index += 1;
-  }
-
-  return index;
-}
-
-function skipWhitespaceAndComments(source: string, start: number): number {
-  let index = start;
-
-  while (index < source.length) {
-    if (/\s/.test(source[index] ?? '')) {
-      index += 1;
-      continue;
-    }
-
-    if (source[index] === '/' && source[index + 1] === '/') {
-      const nextLine = source.indexOf('\n', index + 2);
-      index = nextLine === -1 ? source.length : nextLine + 1;
-      continue;
-    }
-
-    if (source[index] === '/' && source[index + 1] === '*') {
-      const commentEnd = source.indexOf('*/', index + 2);
-      index = commentEnd === -1 ? source.length : commentEnd + 2;
-      continue;
-    }
-
-    return index;
-  }
-
-  return index;
-}
-
 function stateKeyHasQueryPrefix(stateKey: string, queryName: string): boolean {
   if (stateKey === queryName) return true;
   if (!stateKey.startsWith(queryName)) return false;
@@ -1993,282 +1615,6 @@ function bindingValuePlaceholder(template: string, binding: string): string {
     `(<[^>]+\\bdata-bind=(["'])${escapeRegExp(binding)}\\2[^>]*>)(?<value>[\\s\\S]*?)(</[^>]+>)`,
   ).exec(template);
   return match?.groups?.value ?? '';
-}
-
-function emitServerModule(
-  source: string,
-  handlers: HandlerLowering[],
-  _clientFileName: string,
-): string {
-  const renderedSource = serverRenderSource(source, handlers);
-
-  return `${irHeader}
-export function renderSource() {
-  return ${templateLiteral(renderedSource)};
-}
-`;
-}
-
-function serverRenderSource(source: string, handlers: readonly HandlerLowering[]): string {
-  return stampInitialState(stampDeclaredQueryDeps(replaceHandlerAttributes(source, handlers)));
-}
-
-function renderEquivalenceCheck(
-  artifact: string,
-  expected: string,
-  serverSource: string,
-): RenderEquivalenceCheck {
-  const actual = emittedServerRenderSource(serverSource);
-
-  return {
-    actual,
-    artifact,
-    expected,
-    ok: actual === expected,
-  };
-}
-
-function emittedServerRenderSource(serverSource: string): string {
-  const returnIndex = serverSource.indexOf('return `');
-  if (returnIndex < 0) return '';
-
-  const start = returnIndex + 'return `'.length;
-  let escaped = false;
-  let raw = '';
-
-  for (let index = start; index < serverSource.length; index += 1) {
-    const char = serverSource[index];
-    if (escaped) {
-      if (char === '$' && serverSource[index + 1] === '{') {
-        raw += '${';
-        index += 1;
-      } else {
-        raw += char;
-      }
-      escaped = false;
-      continue;
-    }
-
-    if (char === '\\') {
-      escaped = true;
-      continue;
-    }
-
-    if (char === '`') return raw;
-
-    raw += char;
-  }
-
-  return '';
-}
-
-function replaceHandlerAttributes(source: string, handlers: readonly HandlerLowering[]): string {
-  return [...handlers]
-    .sort((left, right) => right.attributeStart - left.attributeStart)
-    .reduce((next, handler) => {
-      const replacement = [
-        `${handler.attributeName}="${handler.attributeValue}"`,
-        emitElementParamTypes(handler.params),
-        ...handler.params.map(
-          (param) => `${param.attributeName}="${escapeAttribute(param.value)}"`,
-        ),
-      ]
-        .filter(Boolean)
-        .join(' ');
-
-      return `${next.slice(0, handler.attributeStart)}${replacement}${next.slice(handler.attributeEnd)}`;
-    }, source);
-}
-
-function stampDeclaredQueryDeps(source: string): string {
-  const model = parseComponentModuleModel('component.tsx', source);
-  const queryObject = componentOptionSource(model, 'queries');
-  const deps = topLevelObjectKeys(queryObject ?? '{}');
-  if (deps.length === 0) return source;
-
-  const tag = componentRenderHost(model);
-  if (!tag) return source;
-
-  const tagSource = source.slice(tag.start, tag.end);
-  const stampedTag = stampOpeningTagDeps(tagSource, deps);
-  if (stampedTag === tagSource) return source;
-
-  return `${source.slice(0, tag.start)}${stampedTag}${source.slice(tag.end)}`;
-}
-
-function stampInitialState(source: string): string {
-  const stateJson = staticStateJson(source);
-  if (!stateJson) return source;
-
-  const tag = componentRenderHost(parseComponentModuleModel('component.tsx', source));
-  if (!tag) return source;
-
-  const tagSource = source.slice(tag.start, tag.end);
-  const stampedTag = stampOpeningTagAttribute(tagSource, 'fw-state', stateJson);
-  if (stampedTag === tagSource) return source;
-
-  return `${source.slice(0, tag.start)}${stampedTag}${source.slice(tag.end)}`;
-}
-
-function stampOpeningTagDeps(tagSource: string, deps: readonly string[]): string {
-  const depValue = mergeDepValues(readFwDepsAttribute(tagSource), deps).join(' ');
-  const existing = /\bfw-deps=(["'])(?<deps>[^"']*)\1/.exec(tagSource);
-  if (existing?.groups) {
-    return `${tagSource.slice(0, existing.index)}fw-deps=${existing[1]}${depValue}${existing[1]}${tagSource.slice(existing.index + existing[0].length)}`;
-  }
-
-  return stampOpeningTagAttribute(tagSource, 'fw-deps', depValue);
-}
-
-function stampOpeningTagAttribute(tagSource: string, name: string, value: string): string {
-  return tagSource.replace(/\s*\/?>$/, (suffix) =>
-    suffix.includes('/')
-      ? ` ${name}="${escapeAttribute(value)}" />`
-      : ` ${name}="${escapeAttribute(value)}">`,
-  );
-}
-
-function readFwDepsAttribute(tagSource: string): string[] {
-  const match = /\bfw-deps=(["'])(?<deps>[^"']*)\1/.exec(tagSource);
-  return splitDepValue(match?.groups?.deps ?? '');
-}
-
-function mergeDepValues(existing: readonly string[], declared: readonly string[]): string[] {
-  return [...new Set([...existing, ...declared])];
-}
-
-function splitDepValue(value: string): string[] {
-  return value
-    .split(/[\s,]+/)
-    .map((dep) => dep.trim())
-    .filter(Boolean);
-}
-
-function staticStateJson(source: string): string | null {
-  const stateObject = componentStateReturnObject(
-    parseComponentModuleModel('component.tsx', source),
-  );
-  if (!stateObject) return null;
-
-  const parsed = parseLiteralObject(stateObject);
-  return parsed ? JSON.stringify(parsed) : null;
-}
-
-function replaceExtension(fileName: string, extension: string): string {
-  return fileName.replace(/\.[^.]+$/, extension);
-}
-
-function templateLiteral(value: string): string {
-  return `\`${value.replaceAll('\\', '\\\\').replaceAll('`', '\\`').replaceAll('${', '\\${')}\``;
-}
-
-function extractElementParams(expression: string): ElementParam[] {
-  const callMatch = /^\(\)\s*=>\s*[A-Za-z_$][\w$]*\((?<args>.*)\)$/.exec(expression);
-  const expressions = callMatch?.groups?.args
-    ? splitArguments(callMatch.groups.args)
-        .map((arg) => arg.trim())
-        .filter((arg) => arg.length > 0 && arg !== 'state')
-        .flatMap((arg) => {
-          if (literalValue(arg) !== undefined) return [];
-          const members = serializableMemberExpressions(arg);
-          return members.length > 0 ? members : [arg];
-        })
-    : serializableMemberExpressions(expression);
-
-  return dedupeStrings(expressions).map((arg) => ({
-    attributeName: `data-p-${paramNameForExpression(arg)}`,
-    type: inferElementParamType(expression, arg),
-    value: `{${arg}}`,
-  }));
-}
-
-function emitElementParamTypes(params: readonly ElementParam[]): string {
-  const typedParams = params.filter((param) => param.type !== 'string');
-  if (typedParams.length === 0) return '';
-
-  const entries = typedParams
-    .map((param) => `${paramNameFromAttribute(param.attributeName)}:${param.type}`)
-    .join(',');
-  return `fw-param-types="${entries}"`;
-}
-
-function inferElementParamType(expression: string, sourceExpression: string): ElementParamType {
-  const ref = sourceExpressionRef(sourceExpression);
-  if (usedAsBoolean(expression, ref)) return 'boolean';
-  if (usedAsNumber(expression, ref)) return 'number';
-
-  return 'string';
-}
-
-function sourceExpressionRef(sourceExpression: string): string {
-  return `(?<![\\w$])${escapeRegExp(sourceExpression)}(?![\\w$])`;
-}
-
-function usedAsBoolean(expression: string, ref: string): boolean {
-  return (
-    new RegExp(`!\\s*${ref}`).test(expression) ||
-    new RegExp(`${ref}\\s*(?:\\?|&&|\\|\\|)`).test(expression) ||
-    new RegExp(`(?:&&|\\|\\|)\\s*${ref}`).test(expression) ||
-    new RegExp(`${ref}\\s*(?:===|!==|==|!=)\\s*(?:true|false)\\b`).test(expression) ||
-    new RegExp(`(?:true|false)\\s*(?:===|!==|==|!=)\\s*${ref}`).test(expression)
-  );
-}
-
-function usedAsNumber(expression: string, ref: string): boolean {
-  return (
-    new RegExp(`(?:[+\\-*/%]=|[-*/%])\\s*${ref}`).test(expression) ||
-    new RegExp(`${ref}\\s*(?:[-*/%]|[+\\-*/%]=)`).test(expression) ||
-    new RegExp(`${ref}\\s*(?:===|!==|==|!=|[<>]=?)\\s*-?\\d`).test(expression) ||
-    new RegExp(`-?\\d(?:\\.\\d+)?\\s*(?:===|!==|==|!=|[<>]=?)\\s*${ref}`).test(expression)
-  );
-}
-
-function serializableMemberExpressions(expression: string): string[] {
-  const members = expression.match(/\b[A-Za-z_$][\w$]*(?:\.[A-Za-z_$][\w$]*)+/g) ?? [];
-
-  return members.filter(
-    (member) =>
-      !member.startsWith('state.') &&
-      !member.startsWith('ctx.') &&
-      !member.startsWith('document.') &&
-      !member.startsWith('window.'),
-  );
-}
-
-function dedupeStrings(values: readonly string[]): string[] {
-  return [...new Set(values)];
-}
-
-function splitArguments(args: string): string[] {
-  const parts: string[] = [];
-  let start = 0;
-  let depth = 0;
-
-  for (let index = 0; index < args.length; index += 1) {
-    const char = args[index];
-    if (char === '(' || char === '[' || char === '{') depth += 1;
-    if (char === ')' || char === ']' || char === '}') depth -= 1;
-    if (char === ',' && depth === 0) {
-      parts.push(args.slice(start, index));
-      start = index + 1;
-    }
-  }
-
-  parts.push(args.slice(start));
-  return parts;
-}
-
-function paramNameForExpression(expression: string): string {
-  const segments = expression
-    .replace(/\[['"]([^'"]+)['"]\]/g, '.$1')
-    .split('.')
-    .filter(Boolean);
-  const last = segments.at(-1) ?? expression;
-  return last
-    .replace(/([a-z0-9])([A-Z])/g, '$1-$2')
-    .replace(/[^A-Za-z0-9]+/g, '-')
-    .replace(/^-|-$/g, '')
-    .toLowerCase();
 }
 
 interface FragmentTargetFact {
