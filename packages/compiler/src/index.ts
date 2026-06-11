@@ -3,6 +3,7 @@ import { diagnosticDefinitions, type DiagnosticCode } from '@jiso/core';
 import { componentCssAssetForFile, emitCssModule, type ComponentCssAsset } from './css.js';
 import { diagnosticFor, type CompilerDiagnostic } from './diagnostics.js';
 import type { ComponentGraphFact, RegistryFacts, RegistryTypeFacts } from './graph.js';
+import { findMatchingClosingTag, readStaticAttribute, scanOpeningTags } from './scan/tags.js';
 import { findMatchingToken, findStringEnd } from './scan/text.js';
 import { escapeAttribute, indent, kebabCase } from './shared.js';
 import { validateEventTriggerNames } from './validate/event-triggers.js';
@@ -805,20 +806,17 @@ function validateStampExpressionDrift(
 }
 
 function bindingExpressionStamps(source: string): Array<{ binding: string; expression: string }> {
-  return [...source.matchAll(/<(?<tag>[A-Za-z][\w:-]*)\b(?<attrs>[^>]*)>/g)].flatMap((match) => {
-    const attrs = match.groups?.attrs ?? '';
-    const binding = readStaticAttribute(attrs, 'data-bind');
+  return scanOpeningTags(source).flatMap((tag) => {
+    const binding = readStaticAttribute(tag.attrs, 'data-bind');
     if (!binding) return [];
 
-    const tag = match.groups?.tag ?? '';
-    const start = match.index ?? 0;
-    const end = findMatchingClosingTag(source, tag, start);
+    const end = findMatchingClosingTag(source, tag.name, tag.start);
     if (end === -1) return [];
 
-    const openEnd = findOpeningTagEnd(source, start);
+    const openEnd = findOpeningTagEnd(source, tag.start);
     if (openEnd === -1) return [];
 
-    const closeTag = `</${tag}>`;
+    const closeTag = `</${tag.name}>`;
     const closeStart = end - closeTag.length;
     const expression = soleWrappedQueryExpression(source.slice(openEnd + 1, closeStart));
     return expression ? [{ binding, expression }] : [];
@@ -1003,16 +1001,14 @@ function dataBindAttributes(source: string): DataBindAttribute[] {
 }
 
 function dataBindListStamps(source: string): QueryTemplateStampFact[] {
-  return [...source.matchAll(/<(?<tag>[A-Za-z][\w:-]*)\b(?<attrs>[^>]*)>/g)]
+  return scanOpeningTags(source)
     .flatMap((match) => {
-      const attrs = match.groups?.attrs ?? '';
-      const list = readStaticAttribute(attrs, 'data-bind-list');
-      const key = readStaticAttribute(attrs, 'fw-key');
+      const list = readStaticAttribute(match.attrs, 'data-bind-list');
+      const key = readStaticAttribute(match.attrs, 'fw-key');
       if (!list || !key) return [];
 
-      const start = match.index ?? 0;
-      const end = findMatchingClosingTag(source, match.groups?.tag ?? '', start);
-      const body = end === -1 ? '' : source.slice(start, end);
+      const end = findMatchingClosingTag(source, match.name, match.start);
+      const body = end === -1 ? '' : source.slice(match.start, end);
 
       return [
         {
@@ -1036,45 +1032,6 @@ function templateStampContent(source: string): string {
   const start = (open.index ?? 0) + open[0].length;
   const end = source.indexOf('</template>', start);
   return end === -1 ? '' : source.slice(start, end).trim();
-}
-
-function readStaticAttribute(attrs: string, name: string): string | undefined {
-  const match = new RegExp(`\\b${escapeRegExp(name)}=(["'])(?<value>[^"']+)\\1`).exec(attrs);
-  return match?.groups?.value;
-}
-
-function findMatchingClosingTag(source: string, tag: string, start: number): number {
-  if (!tag) return -1;
-
-  const openPattern = new RegExp(`<${escapeRegExp(tag)}\\b[^>]*>`, 'g');
-  const closePattern = new RegExp(`</${escapeRegExp(tag)}>`, 'g');
-  openPattern.lastIndex = start;
-  closePattern.lastIndex = start;
-  let depth = 0;
-
-  while (true) {
-    const open = openPattern.exec(source);
-    const close = closePattern.exec(source);
-    if (!close) return -1;
-    if (open && open.index < close.index) {
-      if (isSelfClosingOpeningTag(open[0])) {
-        closePattern.lastIndex = openPattern.lastIndex;
-        continue;
-      }
-      depth += 1;
-      closePattern.lastIndex = openPattern.lastIndex;
-      continue;
-    }
-
-    depth -= 1;
-    if (depth <= 0) return close.index + close[0].length;
-    openPattern.lastIndex = closePattern.lastIndex;
-  }
-}
-
-function isSelfClosingOpeningTag(tagSource: string): boolean {
-  const attrs = tagSource.replace(/^<[A-Za-z][\w:-]*/, '').replace(/>$/, '');
-  return isSelfClosing(attrs);
 }
 
 function listStampExistsInQueryShapes(
@@ -1178,17 +1135,14 @@ function fragmentTargetUsageNames(source: string): string[] {
 
 function fragmentTargetChildBodies(source: string, name: string): string[] {
   const bodies: string[] = [];
-  const openPattern = new RegExp(`<${escapeRegExp(name)}\\b(?<attrs>[^>]*)>`, 'g');
 
-  for (const match of source.matchAll(openPattern)) {
-    const attrs = match.groups?.attrs ?? '';
-    if (isSelfClosing(attrs)) continue;
+  for (const tag of scanOpeningTags(source).filter((item) => item.name === name)) {
+    if (tag.selfClosing) continue;
 
-    const start = match.index ?? 0;
-    const end = findMatchingClosingTag(source, name, start);
+    const end = findMatchingClosingTag(source, name, tag.start);
     if (end === -1) continue;
 
-    const openEnd = findOpeningTagEnd(source, start);
+    const openEnd = findOpeningTagEnd(source, tag.start);
     if (openEnd === -1) continue;
 
     const closeTag = `</${name}>`;
@@ -1296,15 +1250,13 @@ function repeatableLiteralIds(source: string): string[] {
 }
 
 function dataBindListTemplateBodies(source: string): string[] {
-  return [...source.matchAll(/<(?<tag>[A-Za-z][\w:-]*)\b(?<attrs>[^>]*)>/g)].flatMap((match) => {
-    const attrs = match.groups?.attrs ?? '';
-    if (!readStaticAttribute(attrs, 'data-bind-list')) return [];
+  return scanOpeningTags(source).flatMap((tag) => {
+    if (!readStaticAttribute(tag.attrs, 'data-bind-list')) return [];
 
-    const start = match.index ?? 0;
-    const end = findMatchingClosingTag(source, match.groups?.tag ?? '', start);
+    const end = findMatchingClosingTag(source, tag.name, tag.start);
     if (end === -1) return [];
 
-    const template = templateStampContent(source.slice(start, end));
+    const template = templateStampContent(source.slice(tag.start, end));
     return template ? [template] : [];
   });
 }
@@ -1440,16 +1392,13 @@ function validateResidualStamps(
     ...explicitComponentNames(source),
     ...(options.registryFacts?.components ?? []),
   ]);
-  const tagPattern = /<(?<tag>[A-Za-z][\w:-]*)\b(?<attrs>[^>]*)>/g;
-
-  for (const match of source.matchAll(tagPattern)) {
-    const attrs = match.groups?.attrs ?? '';
-    const component = readStaticAttribute(attrs, 'fw-c');
+  for (const tag of scanOpeningTags(source)) {
+    const component = readStaticAttribute(tag.attrs, 'fw-c');
     if (component && !knownComponents.has(component)) {
       diagnostics.push(fw226Diagnostic(options.fileName, `fw-c="${component}"`));
     }
 
-    for (const dep of splitDepValue(readStaticAttribute(attrs, 'fw-deps') ?? '')) {
+    for (const dep of splitDepValue(readStaticAttribute(tag.attrs, 'fw-deps') ?? '')) {
       const query = dep.split(':', 1)[0] ?? dep;
       if (!knownQueries.has(query)) {
         diagnostics.push(fw226Diagnostic(options.fileName, `fw-deps="${dep}"`));
@@ -1476,10 +1425,9 @@ const primitiveOwnedOverrideAttributes = new Set(['role', 'data-state']);
 
 function validateAttributeMergeConflicts(source: string, fileName: string): CompilerDiagnostic[] {
   const diagnostics: CompilerDiagnostic[] = [];
-  const tagPattern = /<(?<tag>[A-Za-z][\w:-]*)\b(?<attrs>[^>]*)>/g;
 
-  for (const match of source.matchAll(tagPattern)) {
-    const attrs = attributeNames(match.groups?.attrs ?? '');
+  for (const tag of scanOpeningTags(source)) {
+    const attrs = attributeNames(tag.attrs);
     const counts = countValues(attrs);
 
     for (const [name, count] of counts) {
