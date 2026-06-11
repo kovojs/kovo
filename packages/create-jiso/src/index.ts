@@ -75,6 +75,7 @@ export function createJisoProject(options: CreateJisoOptions): CreateJisoProject
               dev: 'vp dev',
               test: 'vp test',
               'fw-check': 'vp run fw-check',
+              'graph-assertions': 'vp run graph-assertions',
             },
             type: 'module',
           },
@@ -115,6 +116,13 @@ export default defineConfig({
         command: 'fw check graph.json',
         input: [{ pattern: 'graph.json', base: 'workspace' }],
       },
+      'graph-assertions': {
+        command: 'node scripts/graph-assertions.mjs',
+        input: [
+          { pattern: 'graph.json', base: 'workspace' },
+          { pattern: 'scripts/graph-assertions.mjs', base: 'workspace' },
+        ],
+      },
     },
   },
 });
@@ -143,6 +151,7 @@ jobs:
       - run: vp test
       - run: vp run build
       - run: vp run fw-check
+      - run: vp run graph-assertions
 `,
       },
       {
@@ -156,6 +165,7 @@ vp check
 vp test
 vp run build
 vp run fw-check
+vp run graph-assertions
 \`\`\`
 
 Tailwind is the default app styling path. Keep class names in templates as static strings so the generated CSS contains every class that can appear in SSR pages, mutation fragments, and deferred streams. Safelist classes explicitly in \`src/styles.css\` when a fragment must emit a class that cannot be discovered statically.
@@ -166,6 +176,41 @@ Tailwind is the default app styling path. Keep class names in templates as stati
         source: `${JSON.stringify(starterGraph, null, 2)}\n`,
       },
       {
+        path: 'scripts/graph-assertions.mjs',
+        source: `import assert from 'node:assert/strict';
+import { execFileSync } from 'node:child_process';
+
+function fwExplain(args) {
+  return execFileSync('fw', ['explain', ...args, 'graph.json'], { encoding: 'utf8' });
+}
+
+function explainLine(output, prefix) {
+  const line = output.split('\\n').find((item) => item.startsWith(prefix));
+  assert.ok(line, \`Missing fw explain line: \${prefix}\`);
+  return line.slice(prefix.length);
+}
+
+function explainList(value) {
+  return value === '-' ? [] : value.split(',').filter(Boolean);
+}
+
+const cartQuery = fwExplain(['query', 'cart']);
+const cartConsumers = explainList(explainLine(cartQuery, 'consumers: ')).filter((consumer) =>
+  consumer.startsWith('component:'),
+);
+
+assert.deepEqual(cartConsumers.sort(), ['component:CartBadge', 'component:CartPanel']);
+assert.match(explainLine(cartQuery, 'invalidated-by: '), /(^|,)cart\\.addItem(,|$)/);
+
+const cartAdd = fwExplain(['mutation', 'cart/add', '--optimistic']);
+assert.match(cartAdd, /^updates: cart->component:CartBadge,component:CartPanel,page:\\/cart$/m);
+assert.match(cartAdd, /^OPTIMISTIC cart await-fragment$/m);
+assert.match(cartAdd, /^OPTIMISTIC-SUMMARY .*UNHANDLED=0$/m);
+
+process.stdout.write('graph-assertions/v1\\nOK\\n');
+`,
+      },
+      {
         path: 'docs/graph-assertions.md',
         source: `# Graph Assertion Recipes
 
@@ -173,6 +218,7 @@ Jiso keeps application wiring auditable through the generated graph file consume
 
 \`\`\`sh
 vp run fw-check
+vp run graph-assertions
 fw explain component CartBadge graph.json
 fw explain mutation cart/add --optimistic graph.json
 fw explain --unguarded graph.json
@@ -187,6 +233,7 @@ When debugging enhanced mutations, keep the wire contract from SPEC.md section 9
 ## Intent Assertions
 
 SPEC.md section 11.4.3 treats behavior checks as graph queries over stable \`fw explain\` output. Keep these assertions in CI beside ordinary tests when a product rule matters more than one rendered page snapshot.
+This starter wires the minimal cart assertions into \`vp run graph-assertions\` and GitHub Actions; extend \`scripts/graph-assertions.mjs\` as product rules become important.
 
 This starter's \`graph.json\` is a tiny runnable example. Replace it with the compiler-emitted app graph as your app grows.
 

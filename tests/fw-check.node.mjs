@@ -409,6 +409,19 @@ void test('P10 commerce graph assertions answer behavior mechanically', async ()
   assert.match(commerceTests, /expect\(statuses\.get\(query\)\)\.not\.toBe\('UNHANDLED'\)/);
 });
 
+void test('P10 starter wires graph assertions into CI', async () => {
+  const starterSource = await readProjectFile('packages/create-jiso/src/index.ts');
+  const starterTests = await readProjectFile('packages/create-jiso/src/index.test.ts');
+
+  assert.match(starterSource, /'graph-assertions': 'vp run graph-assertions'/);
+  assert.match(starterSource, /command: 'node scripts\/graph-assertions\.mjs'/);
+  assert.match(starterSource, /- run: vp run graph-assertions/);
+  assert.match(starterSource, /path: 'scripts\/graph-assertions\.mjs'/);
+  assert.match(starterSource, /OPTIMISTIC-SUMMARY \.\*UNHANDLED=0/);
+  assert.match(starterTests, /vp run graph-assertions/);
+  assert.match(starterTests, /create-jiso: wrote 14 files/);
+});
+
 void test('P9 verification layer evidence remains represented', async () => {
   const testHarnessSource = await readProjectFile('packages/test/src/index.ts');
   const testHarnessTests = await readProjectFile('packages/test/src/index.test.ts');

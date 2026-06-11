@@ -25,6 +25,7 @@ describe('create-jiso starter', () => {
       '.github/workflows/ci.yml',
       'README.md',
       'graph.json',
+      'scripts/graph-assertions.mjs',
       'docs/graph-assertions.md',
       'docs/deployment.md',
       'docs/framework-rules.md',
@@ -47,6 +48,9 @@ describe('create-jiso starter', () => {
       "command: 'fw check graph.json'",
     );
     expect(project.files.find((file) => file.path === 'vite.config.ts')?.source).toContain(
+      "command: 'node scripts/graph-assertions.mjs'",
+    );
+    expect(project.files.find((file) => file.path === 'vite.config.ts')?.source).toContain(
       "command: 'vp build'",
     );
     expect(project.files.find((file) => file.path === 'vite.config.ts')?.source).toContain(
@@ -63,6 +67,7 @@ describe('create-jiso starter', () => {
     expect(readme).toContain('vp test');
     expect(readme).toContain('vp run build');
     expect(readme).toContain('vp run fw-check');
+    expect(readme).toContain('vp run graph-assertions');
     const graph = JSON.parse(
       project.files.find((file) => file.path === 'graph.json')?.source ?? '{}',
     ) as FwExplainInput;
@@ -132,6 +137,8 @@ describe('create-jiso starter', () => {
       (file) => file.path === 'docs/graph-assertions.md',
     )?.source;
     expect(graphAssertions).toContain('SPEC.md section 11.4.3');
+    expect(graphAssertions).toContain('vp run graph-assertions');
+    expect(graphAssertions).toContain('scripts/graph-assertions.mjs');
     expect(graphAssertions).toContain('fw explain query cart graph.json > .jiso/cart.query.txt');
     expect(graphAssertions).toContain('diff -u .jiso/cart.expected-consumers.txt');
     expect(graphAssertions).toContain("grep '^invalidated-by: .*cart.addItem'");
@@ -169,6 +176,15 @@ describe('create-jiso starter', () => {
     expect(
       project.files.find((file) => file.path === '.github/workflows/ci.yml')?.source,
     ).toContain('vp run fw-check');
+    expect(
+      project.files.find((file) => file.path === '.github/workflows/ci.yml')?.source,
+    ).toContain('vp run graph-assertions');
+    const graphAssertionScript = project.files.find(
+      (file) => file.path === 'scripts/graph-assertions.mjs',
+    )?.source;
+    expect(graphAssertionScript).toContain("fwExplain(['query', 'cart'])");
+    expect(graphAssertionScript).toContain("['component:CartBadge', 'component:CartPanel']");
+    expect(graphAssertionScript).toContain('OPTIMISTIC-SUMMARY .*UNHANDLED=0');
     const fixpointTest = project.files.find(
       (file) => file.path === 'src/app.fixpoint.test.ts',
     )?.source;
@@ -215,7 +231,7 @@ describe('create-jiso starter', () => {
 
     try {
       expect(main([root])).toBe(0);
-      expect(stdout).toHaveBeenCalledWith(`create-jiso: wrote 13 files to ${root}\n`);
+      expect(stdout).toHaveBeenCalledWith(`create-jiso: wrote 14 files to ${root}\n`);
       expect(JSON.parse(readFileSync(join(root, 'package.json'), 'utf8'))).toMatchObject({
         name: 'hello-cli',
       });
