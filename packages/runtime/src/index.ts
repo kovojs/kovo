@@ -1057,6 +1057,28 @@ export class OptimisticRebaser {
     }
   }
 
+  settleWithoutServerTruth(id: string, queryName: string, key?: string): void {
+    const storeKey = queryStoreKey(queryName, key);
+    const pending = this.#pendingByQuery.get(storeKey);
+    if (!pending) return;
+
+    const nextPending = pending.filter((item) => item.id !== id);
+    let next = structuredClone(this.#serverTruthByQuery.get(storeKey));
+
+    for (const pendingTransform of nextPending) {
+      next = pendingTransform.transform(next, pendingTransform.change.input);
+    }
+
+    this.#store.set(queryName, next, key);
+
+    if (nextPending.length === 0) {
+      this.#pendingByQuery.delete(storeKey);
+      this.#serverTruthByQuery.delete(storeKey);
+    } else {
+      this.#pendingByQuery.set(storeKey, nextPending);
+    }
+  }
+
   applyServerTruth<Value>(queryName: string, value: Value, key?: string): void {
     const storeKey = queryStoreKey(queryName, key);
     let next: unknown = value;
@@ -1983,6 +2005,11 @@ async function submitOptimisticEnhancedMutationDirect<Input>(
 
     const queryChunks = readQueryChunks(body);
     const fragments = readFragmentChunks(body);
+    const uncoveredQueries = uncoveredOptimisticQueries(queryChunks, queryNames, optimisticKeys);
+    for (const queryName of uncoveredQueries) {
+      options.rebaser.settleWithoutServerTruth(idem, queryName, optimisticKeys[queryName]);
+      options.onError?.(uncoveredOptimisticQueryError(queryName, optimisticKeys[queryName]));
+    }
     options.rebaser.settle(idem);
     for (const query of queryChunks) {
       options.rebaser.applyServerTruth(query.name, query.value, query.key);
@@ -2019,6 +2046,22 @@ async function submitOptimisticEnhancedMutationDirect<Input>(
     }
     throw error;
   }
+}
+
+function uncoveredOptimisticQueries(
+  queryChunks: readonly QueryChunk[],
+  queryNames: readonly string[],
+  optimisticKeys: Readonly<Record<string, string | undefined>>,
+): string[] {
+  const covered = new Set(queryChunks.map((query) => queryStoreKey(query.name, query.key)));
+  return queryNames.filter(
+    (queryName) => !covered.has(queryStoreKey(queryName, optimisticKeys[queryName])),
+  );
+}
+
+function uncoveredOptimisticQueryError(queryName: string, key?: string): Error {
+  const identity = key ? `${queryName}:${key}` : queryName;
+  return new Error(`Optimistic transform for ${identity} was not covered by server query truth.`);
 }
 
 function publishSuccessfulMutation(

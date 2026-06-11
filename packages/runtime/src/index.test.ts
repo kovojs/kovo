@@ -3654,6 +3654,63 @@ describe('query store', () => {
     });
   });
 
+  it('reports omitted optimistic server truth and preserves other pending transforms', async () => {
+    const store = createQueryStore();
+    const rebaser = new OptimisticRebaser(store);
+    const root = new FakeMorphRoot();
+    const cartBadge = new FakePendingElement({ 'fw-deps': 'cart' });
+    const pendingRoot = new FakePendingRoot([cartBadge]);
+    const onError = vi.fn();
+    root.deps = [{ id: 'cart-badge' }];
+    root.targets.set('cart-badge', new FakeMorphTarget());
+    store.set('cart', { count: 0 });
+    const optimistic = {
+      transforms: {
+        cart(current: unknown, input: { quantity: number }) {
+          const cart = current as { count: number };
+          return { count: cart.count + input.quantity };
+        },
+      },
+    };
+    const fetch = vi.fn(async () => {
+      rebaser.add('idem_second', { quantity: 5 }, optimistic);
+      expect(store.get('cart')).toEqual({ count: 7 });
+
+      return {
+        async text() {
+          return '<fw-fragment target="cart-badge"><cart-badge>stale</cart-badge></fw-fragment>';
+        },
+      };
+    });
+
+    const result = await submitOptimisticEnhancedMutation({
+      fetch,
+      form: { action: '/_m/cart/add', method: 'post' },
+      formData: new FormData(),
+      idem: 'idem_first',
+      input: { quantity: 2 },
+      onError,
+      optimistic,
+      pendingRoot,
+      rebaser,
+      root,
+      store,
+    });
+
+    expect(result.queries).toEqual([]);
+    expect(onError).toHaveBeenCalledWith(
+      expect.objectContaining({
+        message: 'Optimistic transform for cart was not covered by server query truth.',
+      }),
+    );
+    expect(store.get('cart')).toEqual({ count: 5 });
+    expect(rebaser.pendingCount('cart')).toBe(1);
+    expect(cartBadge.attributes).toMatchObject({
+      'aria-busy': 'true',
+      'fw-pending': '',
+    });
+  });
+
   it('discards optimistic state on enhanced mutation errors and applies the error fragment', async () => {
     const store = createQueryStore();
     const rebaser = new OptimisticRebaser(store);
