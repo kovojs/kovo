@@ -8,6 +8,7 @@ import {
   dedupeCss,
   emitQueryPlanBootstrapModule,
   jisoVitePlugin,
+  queryShapesFromFacts,
   scopeComponentCss,
   selectCssAssets,
 } from './index.js';
@@ -530,6 +531,70 @@ export const CartBadge = component('cart-badge', {
     });
 
     expect(result.diagnostics).toEqual([]);
+  });
+
+  it('validates data-bind paths against generated query shape facts', () => {
+    const queryShapeFacts = [
+      {
+        query: 'cart',
+        shape: {
+          count: 'number',
+          items: [{ productId: 'string', qty: 'number' }],
+        },
+        source: 'generated/queries/cart.shape.ts',
+      },
+    ] as const;
+    const result = compileComponentModule({
+      fileName: 'cart-badge.tsx',
+      queryShapeFacts,
+      source: `
+export const CartBadge = component('cart-badge', {
+  render: () => (
+    <cart-badge>
+      <span data-bind="cart.count">2</span>
+      <span data-bind="cart.items.productId">p1</span>
+    </cart-badge>
+  ),
+});
+`,
+    });
+
+    expect(queryShapesFromFacts(queryShapeFacts)).toEqual({
+      cart: {
+        count: 'number',
+        items: [{ productId: 'string', qty: 'number' }],
+      },
+    });
+    expect(result.diagnostics).toEqual([]);
+  });
+
+  it('reports FW302 when generated query shape facts no longer contain a binding path', () => {
+    const result = compileComponentModule({
+      fileName: 'cart-badge.tsx',
+      queryShapeFacts: [
+        {
+          query: 'cart',
+          shape: {
+            itemCount: 'number',
+          },
+          source: 'generated/queries/cart.shape.ts',
+        },
+      ],
+      source: `
+export const CartBadge = component('cart-badge', {
+  render: () => <span data-bind="cart.count">2</span>,
+});
+`,
+    });
+
+    expect(result.diagnostics).toEqual([
+      {
+        code: 'FW302',
+        fileName: 'cart-badge.tsx',
+        message: 'data-bind path is not present in the declared query shape. cart.count',
+        severity: 'error',
+      },
+    ]);
   });
 
   it('emits per-query data-bind update plans for compiled components', () => {

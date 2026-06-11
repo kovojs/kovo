@@ -702,6 +702,24 @@ void test('P8 component explain includes handler capture channels', async () => 
   assert.match(cliTests, /captures=ctx,element-params params=itemId/);
 });
 
+void test('P5 data-bind paths are checked against generated query shape facts', async () => {
+  const compilerSource = await readProjectFile('packages/compiler/src/index.ts');
+  const compilerTests = await readProjectFile('packages/compiler/src/index.test.ts');
+
+  assert.match(compilerSource, /queryShapeFacts\?: readonly QueryShapeFact\[\]/);
+  assert.match(compilerSource, /queryShapesFromFacts/);
+  assert.match(compilerTests, /validates data-bind paths against generated query shape facts/);
+  assert.match(
+    compilerTests,
+    /reports FW302 when generated query shape facts no longer contain a binding path/,
+  );
+  assert.match(compilerTests, /generated\/queries\/cart\.shape\.ts/);
+  assert.match(
+    compilerTests,
+    /data-bind path is not present in the declared query shape\. cart\.count/,
+  );
+});
+
 void test('P1 fragment targets emit typed registry facts', async () => {
   const coreSource = await readProjectFile('packages/core/src/index.ts');
   const coreTests = await readProjectFile('packages/core/src/index.test.ts');

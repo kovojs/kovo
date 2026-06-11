@@ -73,6 +73,7 @@ export function createEmptyCompileResult(): CompileResult {
 
 export interface CompileComponentOptions {
   fileName: string;
+  queryShapeFacts?: readonly QueryShapeFact[];
   queryShapes?: Record<string, QueryShape>;
   registryFacts?: RegistryFacts;
   source: string;
@@ -96,6 +97,12 @@ export type QueryShape =
   | {
       readonly [key: string]: QueryShape;
     };
+
+export interface QueryShapeFact {
+  query: string;
+  shape: QueryShape;
+  source: string;
+}
 
 interface HandlerLowering {
   exportName: string;
@@ -219,6 +226,10 @@ export function assertFixpoint(result: CompileResult): void {
       throw new Error(`Fixpoint failed for ${file.fileName}`);
     }
   }
+}
+
+export function queryShapesFromFacts(facts: readonly QueryShapeFact[]): Record<string, QueryShape> {
+  return Object.fromEntries(facts.map((fact) => [fact.query, fact.shape]));
 }
 
 export function collectMinifierReservedNames(
@@ -678,10 +689,11 @@ function validateDataBindings(
   source: string,
   options: CompileComponentOptions,
 ): CompilerDiagnostic[] {
-  if (!options.queryShapes) return [];
+  const queryShapes = componentQueryShapes(options);
+  if (!queryShapes) return [];
 
   return dataBindPaths(source)
-    .filter((path) => !pathExistsInQueryShapes(path, options.queryShapes ?? {}))
+    .filter((path) => !pathExistsInQueryShapes(path, queryShapes))
     .map((path) => ({
       ...diagnosticFor(options.fileName, 'FW302'),
       message: `${diagnosticDefinitions.FW302.message} ${path}`,
@@ -755,9 +767,10 @@ function validateEventPayloads(
   source: string,
   options: CompileComponentOptions,
 ): CompilerDiagnostic[] {
-  if (!options.queryShapes) return [];
+  const queryShapes = componentQueryShapes(options);
+  if (!queryShapes) return [];
 
-  const queryPaths = new Set(queryShapePaths(options.queryShapes));
+  const queryPaths = new Set(queryShapePaths(queryShapes));
   const overlapping = eventPayloadPaths(source).filter((path) => queryPaths.has(path));
   if (overlapping.length === 0) return [];
 
@@ -765,6 +778,13 @@ function validateEventPayloads(
     ...diagnosticFor(options.fileName, 'FW320'),
     message: `${diagnosticDefinitions.FW320.message} ${path}`,
   }));
+}
+
+function componentQueryShapes(options: CompileComponentOptions): Record<string, QueryShape> | null {
+  return (
+    options.queryShapes ??
+    (options.queryShapeFacts ? queryShapesFromFacts(options.queryShapeFacts) : null)
+  );
 }
 
 function validateDirectDbAccess(source: string, fileName: string): CompilerDiagnostic[] {
