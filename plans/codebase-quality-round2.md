@@ -396,12 +396,20 @@ land it first; don't fork it.
       query-script serialization; `index.ts`, `document.ts`, and `deferred-stream.ts` route
       through it while preserving existing public exports. Verified with
       `pnpm exec vitest --run packages/server/src`, `pnpm run check`, and `pnpm run check:fw`.
-- [ ] **HIGH — One `onError` diagnostic seam.** Seven bare `catch {}` sites on 500 paths
+- [x] **HIGH — One `onError` diagnostic seam.** Seven bare `catch {}` sites on 500 paths
       (index.ts:903, :1583, :1619, :1862, :2002; client-modules.ts:82; app.ts:203) give operators
       zero signal. Thread `onError(error, context)` through all of them; add `{ cause }` to the
       rerun-query throw (index.ts:2802). Also stop leaking raw `error.message` in
       `renderMutationRenderErrorFragment` (index.ts:2935-2943) — every sibling path emits the
       constant body.
+      Evidence 2026-06-11: `packages/server/src/diagnostics.ts` defines the single
+      `onError(error, context)` seam; `packages/server/src/index.ts`,
+      `packages/server/src/app.ts`, and `packages/server/src/client-modules.ts` thread it through
+      query, route, mutation, app catch-all, and client-module 500/404 diagnostic paths. Mutation
+      render-error fragments now emit a constant body, and rerun-query failures preserve the
+      structured failure on `error.cause`. Verified with
+      `pnpm exec vitest --run packages/server/src`, `pnpm run check`, and `pnpm run check:fw`
+      after `pnpm run check:build` produced the required `dist/` artifacts.
 - [ ] **MED — Extract the replay choreography.** The reserve/commit logic threaded through
       `renderMutationResponse`'s three exit paths (index.ts:1817-1924, :2993) is the subtlest
       concurrency code in the package, interleaved with rendering. Wrap as

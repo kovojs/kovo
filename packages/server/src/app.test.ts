@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import { createApp, createRequestHandler } from './app.js';
 import {
@@ -98,6 +98,31 @@ describe('server createApp request shell', () => {
 
     expect(response.status).toBe(200);
     await expect(response.text()).resolves.toBe('endpoint');
+  });
+
+  it('reports app catch-all exceptions without leaking endpoint internals', async () => {
+    const thrown = new Error('private endpoint detail');
+    const onError = vi.fn();
+    const statusEndpoint = endpoint('/status', {
+      handler() {
+        throw thrown;
+      },
+      method: 'GET',
+    });
+    const handler = createRequestHandler(createApp({ endpoints: [statusEndpoint], onError }));
+    const request = new Request('https://example.test/status?check=true');
+
+    const response = await handler(request);
+
+    expect(response.status).toBe(500);
+    const body = await response.text();
+    expect(body).toContain('<h1>Server Error</h1>');
+    expect(body).not.toContain('private endpoint detail');
+    expect(onError).toHaveBeenCalledWith(thrown, {
+      operation: 'app-request',
+      request,
+      url: '/status?check=true',
+    });
   });
 
   it('resolves session once for a guarded route request', async () => {

@@ -10,6 +10,7 @@ import type {
   StorageCapability,
   StorageObjectInfo,
 } from '@jiso/core';
+import { reportServerError, type ServerErrorHandler } from './diagnostics.js';
 import { escapeAttribute, escapeHtml } from './html.js';
 import { renderStylesheetLinks } from './hints.js';
 import type {
@@ -69,6 +70,7 @@ export type {
   DeferredStreamOptions,
   DeferredStreamResponse,
 } from './deferred-stream.js';
+export type { ServerErrorDiagnosticContext, ServerErrorHandler } from './diagnostics.js';
 export {
   renderDeferredDocument,
   renderDocument,
@@ -524,6 +526,7 @@ export type SessionProvider<RawRequest, SessionValue> = (
 ) => MaybePromise<SessionValue | null | undefined>;
 
 export interface RequestLifecycleOptions<RawRequest, SessionValue = unknown> {
+  onError?: ServerErrorHandler;
   sessionProvider?: SessionProvider<RawRequest, SessionValue>;
 }
 
@@ -943,11 +946,16 @@ export async function renderQueryEndpointResponse<const Key extends string, Valu
 ): Promise<QueryEndpointResponse> {
   const rawInput = querySearchInputToRecord(endpointRequest.search ?? {});
   let result: QueryEndpointResult<Value, Input>;
-  let lifecycleRequest: Request;
+  let lifecycleRequest: Request = endpointRequest.request;
   try {
     lifecycleRequest = await resolveLifecycleRequest(endpointRequest.request, endpointRequest);
     result = await runQuery(definition, rawInput, lifecycleRequest);
-  } catch {
+  } catch (error) {
+    reportServerError(endpointRequest.onError, error, {
+      operation: 'query-endpoint',
+      queryKey: definition.key,
+      request: lifecycleRequest,
+    });
     return {
       body: JSON.stringify(serverErrorPayload()),
       headers: { 'Content-Type': 'application/json; charset=utf-8' },
@@ -1210,6 +1218,7 @@ export function mutationWireRequestFromHeaders<Request>(
     fragment: headers.fragment,
     rawInput: options.rawInput,
     request: options.request,
+    ...(options.onError === undefined ? {} : { onError: options.onError }),
     ...(options.sessionProvider === undefined ? {} : { sessionProvider: options.sessionProvider }),
     ...(options.failureTarget === undefined ? {} : { failureTarget: options.failureTarget }),
     ...(options.failureStylesheets === undefined
@@ -1623,11 +1632,16 @@ export async function renderRoutePageResponse<
   options: GuardFailureResponseOptions<Request> = {},
 ): Promise<RoutePageResponse> {
   let result: RoutePageResult<Page>;
-  let lifecycleRequest: Request;
+  let lifecycleRequest: Request = request;
   try {
     lifecycleRequest = await resolveLifecycleRequest(request, options);
     result = await runRoutePage(definition, input, lifecycleRequest);
-  } catch {
+  } catch (error) {
+    reportServerError(options.onError, error, {
+      operation: 'route-page',
+      request: lifecycleRequest,
+      routePath: definition.path,
+    });
     return htmlServerErrorResponse();
   }
 
@@ -1663,7 +1677,12 @@ export async function renderRoutePageResponse<
       headers: { 'Content-Type': 'text/html; charset=utf-8' },
       status: 200,
     };
-  } catch {
+  } catch (error) {
+    reportServerError(options.onError, error, {
+      operation: 'route-render',
+      request: lifecycleRequest,
+      routePath: definition.path,
+    });
     return htmlServerErrorResponse();
   }
 }
@@ -1906,7 +1925,13 @@ export async function renderMutationResponse<
       wireRequest.request,
       runMutationOptions(wireRequest.csrf, wireRequest),
     );
-  } catch {
+  } catch (error) {
+    reportServerError(wireRequest.onError, error, {
+      mutationKey: definition.key,
+      operation: 'mutation-handler',
+      request: wireRequest.request,
+      ...(wireRequest.targets === undefined ? {} : { targets: wireRequest.targets }),
+    });
     return mutationServerErrorResponse(wireRequest);
   }
 
@@ -1944,10 +1969,16 @@ export async function renderMutationResponse<
       renderInput,
     );
   } catch (error) {
+    reportServerError(wireRequest.onError, error, {
+      mutationKey: definition.key,
+      operation: 'mutation-render',
+      request: wireRequest.request,
+      ...(wireRequest.targets === undefined ? {} : { targets: wireRequest.targets }),
+    });
     return storeMutationReplay(
       csrf,
       wireRequest,
-      mutationRenderErrorResponse(error, result.changes, wireRequest, result.responseHeaders),
+      mutationRenderErrorResponse(result.changes, wireRequest, result.responseHeaders),
       replayReservation,
     );
   }
@@ -1971,13 +2002,12 @@ export async function renderMutationResponse<
 }
 
 function mutationRenderErrorResponse<Request>(
-  error: unknown,
   changes: readonly ChangeRecord[],
   wireRequest: MutationWireRequest<Request>,
   responseHeaders?: MutationResponseHeaders,
 ): MutationWireResponse {
   return {
-    body: renderMutationRenderErrorFragment(error, wireRequest),
+    body: renderMutationRenderErrorFragment(wireRequest),
     headers: mergeMutationResponseHeaders(
       mutationWireResponseHeaders(wireRequest),
       {
@@ -2021,6 +2051,7 @@ export async function renderMutationEndpointResponse<
       ? {}
       : { renderFailurePage: endpointRequest.renderFailurePage }),
     request: endpointRequest.request,
+    ...(endpointRequest.onError === undefined ? {} : { onError: endpointRequest.onError }),
     ...(endpointRequest.sessionProvider === undefined
       ? {}
       : { sessionProvider: endpointRequest.sessionProvider }),
@@ -2046,7 +2077,12 @@ export async function renderNoJsMutationResponse<
       noJsRequest.request,
       runMutationOptions(noJsRequest.csrf, noJsRequest),
     );
-  } catch {
+  } catch (error) {
+    reportServerError(noJsRequest.onError, error, {
+      mutationKey: definition.key,
+      operation: 'no-js-mutation-handler',
+      request: noJsRequest.request,
+    });
     return noJsMutationServerErrorResponse();
   }
 
@@ -2682,6 +2718,7 @@ function runMutationOptions<Request>(
 ): RunMutationOptions<Request> {
   return {
     ...(csrf === undefined ? {} : { csrf }),
+    ...(lifecycle?.onError === undefined ? {} : { onError: lifecycle.onError }),
     ...(lifecycle?.sessionProvider === undefined
       ? {}
       : { sessionProvider: lifecycle.sessionProvider }),
@@ -2846,7 +2883,7 @@ async function renderQueryChunks(
 
     const result = await runQuery(queryDefinition, input, request);
     if (!result.ok) {
-      throw new Error(`Rerun query failed: ${queryDefinition.key}`);
+      throw new Error(`Rerun query failed: ${queryDefinition.key}`, { cause: result });
     }
 
     chunks.push(renderQueryRerunChunk(queryDefinition, result.input, result.value));
@@ -2971,13 +3008,11 @@ async function renderFailureFragment<Request>(
 }
 
 function renderMutationRenderErrorFragment<Request>(
-  error: unknown,
   wireRequest: MutationWireRequest<Request>,
 ): string {
   const target = wireRequest.failureTarget ?? wireRequest.targets?.[0] ?? 'error';
-  const message = error instanceof Error ? error.message : 'Mutation response rendering failed.';
 
-  return `<fw-fragment target="${escapeAttribute(target)}"><output role="alert" data-error-code="RENDER_ERROR">${escapeHtml(message)}</output></fw-fragment>`;
+  return `<fw-fragment target="${escapeAttribute(target)}"><output role="alert" data-error-code="RENDER_ERROR">Internal Server Error</output></fw-fragment>`;
 }
 
 function renderMutationServerErrorFragment<Request>(

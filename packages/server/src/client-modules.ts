@@ -1,3 +1,5 @@
+import { reportServerError, type ServerErrorHandler } from './diagnostics.js';
+
 export interface VersionedClientModuleInput {
   contentType?: string;
   path: string;
@@ -17,6 +19,7 @@ export interface VersionedClientModuleRegistry {
 }
 
 export interface VersionedClientModuleRequest {
+  onError?: ServerErrorHandler;
   url?: string | null;
 }
 
@@ -79,7 +82,13 @@ export function renderVersionedClientModuleResponse(
   let url: URL;
   try {
     url = clientModuleUrl(href);
-  } catch {
+  } catch (error) {
+    if (typeof request !== 'string') {
+      reportServerError(request.onError, error, {
+        operation: 'client-module',
+        url: href ?? undefined,
+      });
+    }
     return missingClientModuleResponse();
   }
 

@@ -3,6 +3,7 @@ import {
   renderVersionedClientModuleResponse,
   type VersionedClientModuleRegistry,
 } from './client-modules.js';
+import { reportServerError, type ServerErrorHandler } from './diagnostics.js';
 import {
   renderErrorDocument,
   renderRouteDocumentResponse,
@@ -63,6 +64,7 @@ export interface CreateAppOptions<SessionValue = unknown> {
   errorShells?: AppErrorShellOptions;
   mutations?: readonly MutationDefinition[];
   mutationReplayStore?: MutationReplayStore;
+  onError?: ServerErrorHandler;
   queries?: readonly RegisteredQueryDefinition[];
   renderRoute?: (value: unknown, context: AppRouteRenderContext) => Promise<string> | string;
   routes?: readonly AnyRouteDeclaration[];
@@ -77,6 +79,7 @@ export interface JisoApp<SessionValue = unknown> {
   errorShells: AppErrorShellOptions;
   mutations: readonly MutationDefinition[];
   mutationReplayStore?: MutationReplayStore;
+  onError?: ServerErrorHandler;
   queries: readonly RegisteredQueryDefinition[];
   renderRoute?: (value: unknown, context: AppRouteRenderContext) => Promise<string> | string;
   routes: readonly AnyRouteDeclaration[];
@@ -100,6 +103,7 @@ export function createApp<SessionValue = unknown>(
     ...(options.mutationReplayStore === undefined
       ? {}
       : { mutationReplayStore: options.mutationReplayStore }),
+    ...(options.onError === undefined ? {} : { onError: options.onError }),
     ...(options.renderRoute === undefined ? {} : { renderRoute: options.renderRoute }),
     ...(options.sessionProvider === undefined ? {} : { sessionProvider: options.sessionProvider }),
   };
@@ -127,6 +131,7 @@ export function createRequestHandler(app: JisoApp): RequestHandler {
       if (match.kind === 'client-module') {
         return routeResponseToWebResponse(
           renderVersionedClientModuleResponse(app.clientModules, {
+            ...(app.onError === undefined ? {} : { onError: app.onError }),
             url: `${url.pathname}${url.search}${url.hash}`,
           }),
           request,
@@ -136,6 +141,7 @@ export function createRequestHandler(app: JisoApp): RequestHandler {
       if (match.kind === 'query') {
         const queryRequest: QueryEndpointRequest<Request> = {
           currentUrl: `${url.pathname}${url.search}${url.hash}`,
+          ...(app.onError === undefined ? {} : { onError: app.onError }),
           request,
           search: url.searchParams,
           ...(app.sessionProvider === undefined ? {} : { sessionProvider: app.sessionProvider }),
@@ -152,7 +158,7 @@ export function createRequestHandler(app: JisoApp): RequestHandler {
       }
 
       if (match.kind === 'endpoint') {
-        return runEndpoint(match.endpoint, request);
+        return await runEndpoint(match.endpoint, request);
       }
 
       if (match.kind === 'route') {
@@ -185,6 +191,7 @@ export function createRequestHandler(app: JisoApp): RequestHandler {
               : renderDefaultRouteValue(value),
           {
             currentUrl: `${url.pathname}${url.search}${url.hash}`,
+            ...(app.onError === undefined ? {} : { onError: app.onError }),
             ...(app.sessionProvider === undefined ? {} : { sessionProvider: app.sessionProvider }),
           },
         );
@@ -201,7 +208,12 @@ export function createRequestHandler(app: JisoApp): RequestHandler {
       }
 
       return routeResponseToWebResponse(await renderConfiguredError(app, request, 404), request);
-    } catch {
+    } catch (error) {
+      reportServerError(app.onError, error, {
+        operation: 'app-request',
+        request,
+        url: `${url.pathname}${url.search}${url.hash}`,
+      });
       return routeResponseToWebResponse(await renderConfiguredError(app, request, 500), request);
     }
   };
