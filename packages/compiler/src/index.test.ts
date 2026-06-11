@@ -2496,6 +2496,8 @@ export function notifyPrice(product, emit) {
         fileName: 'cart.events.tsx',
         message: 'Event payload overlaps query data; use a transform. product.unitPrice',
         severity: 'lint',
+        start: { column: 22, line: 3 },
+        length: 45,
       },
     ]);
   });
@@ -2750,6 +2752,8 @@ export const addToCart = mutation('cart/add', {
         fileName: 'cart.mutation.ts',
         message: 'Direct db access in a mutation handler; route through domain.',
         severity: 'lint',
+        start: { column: 5, line: 5 },
+        length: 10,
       },
     ]);
   });
@@ -2774,6 +2778,8 @@ export const addToCart = mutation('cart/add', {
         fileName: 'cart.mutation.ts',
         message: 'Direct db access in a mutation handler; route through domain.',
         severity: 'lint',
+        start: { column: 26, line: 4 },
+        length: 2,
       },
     ]);
   });

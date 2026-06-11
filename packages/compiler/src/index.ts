@@ -220,8 +220,8 @@ const compilerValidators: readonly CompilerValidator[] = [
   ({ model, options, source }) => validateFragmentTargetChildren(source, model, options.fileName),
   ({ model, options, source }) => validateDataBindings(source, model, options),
   ({ model, options, source }) => validateStampExpressionDrift(source, model, options),
-  ({ options, source }) => validateEventPayloads(source, options),
-  ({ options, source }) => validateDirectDbAccess(source, options.fileName),
+  ({ model, options, source }) => validateEventPayloads(source, model, options),
+  ({ model, options, source }) => validateDirectDbAccess(source, model, options.fileName),
   ({ options, originalModel }) => validateIdrefs(options.source, originalModel, options.fileName),
   ({ model, options, source }) => validateStaticIds(source, model, options.fileName),
   ({ options, source }) => validateLiteralHrefs(source, options),
@@ -1374,18 +1374,19 @@ function fw230Diagnostic(
 
 function validateEventPayloads(
   source: string,
+  model: ComponentModuleModel,
   options: CompileComponentOptions,
 ): CompilerDiagnostic[] {
   const queryShapes = componentQueryShapes(options);
   if (!queryShapes) return [];
 
   const queryPaths = new Set(queryShapePaths(queryShapes));
-  const overlapping = eventPayloadPaths(source).filter((path) => queryPaths.has(path));
+  const overlapping = eventPayloads(model).filter((payload) => queryPaths.has(payload.path));
   if (overlapping.length === 0) return [];
 
-  return [...new Set(overlapping)].map((path) => ({
-    ...diagnosticFor(options.fileName, 'FW320'),
-    message: `${diagnosticDefinitions.FW320.message} ${path}`,
+  return dedupeBy(overlapping, (payload) => payload.path).map((payload) => ({
+    ...diagnosticFor(options.fileName, 'FW320', source, payload.index, payload.length),
+    message: `${diagnosticDefinitions.FW320.message} ${payload.path}`,
   }));
 }
 
@@ -1396,22 +1397,43 @@ function componentQueryShapes(options: CompileComponentOptions): Record<string, 
   );
 }
 
-function validateDirectDbAccess(source: string, fileName: string): CompilerDiagnostic[] {
+function validateDirectDbAccess(
+  source: string,
+  model: ComponentModuleModel,
+  fileName: string,
+): CompilerDiagnostic[] {
   if (!/\bmutation\s*\(/.test(source)) return [];
 
-  for (const handler of findHandlerBodies(source)) {
+  for (const handler of mutationHandlers(model)) {
     const params = handler.params.map(readParameterName).filter(Boolean);
-    const receivesDb = params.includes('db');
+    const dbParamIndex = params.indexOf('db');
+    const receivesDb = dbParamIndex !== -1;
     const requestParam = params.find(
       (param) =>
         param === 'request' || /request$/i.test(param) || param === 'ctx' || param === 'context',
     );
+    const requestDb = requestParam
+      ? new RegExp(`\\b${escapeRegExp(requestParam)}\\.db\\b`).exec(handler.body)
+      : null;
     const readsRequestDb =
-      requestParam !== undefined &&
-      new RegExp(`\\b${escapeRegExp(requestParam)}\\.db\\b`).test(handler.body);
+      requestParam !== undefined && requestDb !== null && requestDb.index !== undefined;
 
-    if (receivesDb || readsRequestDb) {
-      return [diagnosticFor(fileName, 'FW330')];
+    if (receivesDb) {
+      const span = handler.paramSpans[dbParamIndex];
+      return [
+        diagnosticFor(
+          fileName,
+          'FW330',
+          source,
+          span?.start,
+          span ? span.end - span.start : undefined,
+        ),
+      ];
+    }
+
+    if (readsRequestDb) {
+      const index = handler.bodyStart + (requestDb?.index ?? 0);
+      return [diagnosticFor(fileName, 'FW330', source, index, requestDb?.[0].length)];
     }
   }
 
@@ -1893,13 +1915,6 @@ function isNativeHtmlTag(tag: string): boolean {
   return tag === tag.toLowerCase() && !tag.includes('-');
 }
 
-function findHandlerBodies(source: string): { body: string; params: string[] }[] {
-  return mutationHandlers(parseComponentModuleModel('component.tsx', source)).map((handler) => ({
-    body: handler.body,
-    params: [...handler.params],
-  }));
-}
-
 function readParameterName(param: string): string {
   const withoutType = param.split(':')[0]?.trim() ?? '';
   return withoutType.replace(/^[.{\s]+|[}\s]+$/g, '');
@@ -1909,17 +1924,31 @@ function escapeRegExp(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
-function eventPayloadPaths(source: string): string[] {
-  const paths: string[] = [];
+interface EventPayloadPath {
+  index: number;
+  length: number;
+  path: string;
+}
 
-  for (const call of parsedCallExpressions(source).filter((item) => item.name === 'emit')) {
+function eventPayloads(model: ComponentModuleModel): EventPayloadPath[] {
+  const payloads: EventPayloadPath[] = [];
+
+  for (const call of callExpressions(model).filter((item) => item.name === 'emit')) {
     const payload = call.arguments[1]?.trim();
     if (!payload?.startsWith('{')) continue;
+    const span = call.argumentSpans[1];
+    if (!span) continue;
 
-    paths.push(...objectLiteralPropertyPaths('payload.tsx', payload));
+    payloads.push(
+      ...objectLiteralPropertyPaths('payload.tsx', payload).map((path) => ({
+        index: span.start,
+        length: span.end - span.start,
+        path,
+      })),
+    );
   }
 
-  return paths;
+  return payloads;
 }
 
 function queryShapePaths(queryShapes: Record<string, QueryShape>): string[] {

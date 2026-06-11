@@ -7,13 +7,22 @@ export interface ComponentOptionEntry {
 
 export interface MutationHandlerModel {
   body: string;
+  bodyEnd: number;
+  bodyStart: number;
   params: readonly string[];
+  paramSpans: readonly SourceSpan[];
 }
 
 export interface CallExpressionModel {
   arguments: readonly string[];
+  argumentSpans: readonly SourceSpan[];
   end: number;
   name: string;
+  start: number;
+}
+
+export interface SourceSpan {
+  end: number;
   start: number;
 }
 
@@ -419,9 +428,15 @@ function mutationHandlerModels(
         ? [
             {
               body: source.slice(property.body.getStart(sourceFile), property.body.getEnd()),
+              bodyEnd: property.body.getEnd(),
+              bodyStart: property.body.getStart(sourceFile),
               params: property.parameters.map((param) =>
                 source.slice(param.getStart(sourceFile), param.getEnd()),
               ),
+              paramSpans: property.parameters.map((param) => ({
+                end: param.getEnd(),
+                start: param.getStart(sourceFile),
+              })),
             },
           ]
         : [];
@@ -437,9 +452,15 @@ function mutationHandlerModels(
     return [
       {
         body: source.slice(initializer.body.getStart(sourceFile), initializer.body.getEnd()),
+        bodyEnd: initializer.body.getEnd(),
+        bodyStart: initializer.body.getStart(sourceFile),
         params: initializer.parameters.map((param) =>
           source.slice(param.getStart(sourceFile), param.getEnd()),
         ),
+        paramSpans: initializer.parameters.map((param) => ({
+          end: param.getEnd(),
+          start: param.getStart(sourceFile),
+        })),
       },
     ];
   });
@@ -502,6 +523,10 @@ function callExpressionModel(
     arguments: node.arguments.map((argument) =>
       source.slice(argument.getStart(sourceFile), argument.getEnd()),
     ),
+    argumentSpans: node.arguments.map((argument) => ({
+      end: argument.getEnd(),
+      start: argument.getStart(sourceFile),
+    })),
     end: node.getEnd(),
     name: node.expression.getText(sourceFile),
     start: node.getStart(sourceFile),
