@@ -311,13 +311,19 @@ params, relational API, `execute(sql)`, right/full joins, a string column named 
       `<fw-error>`/`<output>` regexes — route through wire-parser; delete dead
       `QueryStore.hydrate` (query-store.ts:31-39, never called, divergent error policy vs
       `hydrateQueryScripts`).
-- [ ] **MED — Fix ambient-scope argument override in handlers.ts.**
+- [x] **MED — Fix ambient-scope argument override in handlers.ts.**
       `abortRemovedIslandSignals(currentHtml, nextHtml, scope)` ignores its explicit `scope`
       whenever the module-level `activeIslandSignalScope` is set
       (handlers.ts:217: `islandSignalControllersFor(activeIslandSignalScope ?? scope)`).
       Explicit argument wins; audit the other module-level registries (:28-32) for the same
       pattern, and add per-test scope isolation (the 4,435-line suite has zero
-      beforeEach/afterEach).
+      beforeEach/afterEach). Evidence 2026-06-11: `handlers.ts` no longer carries the ambient
+      `activeIslandSignalScope`; delegated handler signal creation receives the explicit loader
+      scope directly, and `abortRemovedIslandSignals` keys controllers only by its explicit
+      `scope` argument. The remaining module registries are WeakMaps keyed by explicit
+      scope/element objects. `index.test.ts` now proves that a handler running under one scope can
+      explicitly abort a different scope without aborting its own signal. Same-session evidence:
+      `pnpm exec vitest --run packages/runtime/src/index.test.ts -t "scope|signal|handler"`.
 - [ ] **MED — One error policy per layer.** `dispatchEnhancedFormSubmit` swallows when `onError`
       exists (index.ts:610-613, including a doubled `if (!options.onError)`) while
       `submitEnhancedMutation` calls `onError` and rethrows (:1556-1558); `readFragmentChunks`

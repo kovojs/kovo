@@ -52,6 +52,7 @@ import {
   type OptimisticFor,
   type StructuralMorphNode,
 } from './index.js';
+import { abortIslandSignalScope, createIslandSignalScope } from './handlers.js';
 
 declare module '@jiso/core' {
   interface InvalidationSets {
@@ -1236,6 +1237,58 @@ describe('runtime loader', () => {
       ),
     ).toEqual(['cart-filter']);
     expect(signals[0]?.aborted).toBe(true);
+  });
+
+  it('honors explicit abort scopes while a delegated handler runs in another scope', async () => {
+    const activeScope = createIslandSignalScope();
+    const explicitScope = createIslandSignalScope();
+    const activeSignals: AbortSignal[] = [];
+    const explicitSignals: AbortSignal[] = [];
+    const explicitElement = new FakeElement({
+      'fw-c': 'cart-filter',
+      'on:visible': '/c/cart-filter.client.js#mount',
+    });
+    const activeElement = new FakeElement({
+      'fw-c': 'cart-filter',
+      'on:visible': '/c/cart-filter.client.js#mount',
+    });
+    const importModule = vi.fn(async () => ({
+      mount: (_event: Event, ctx: { signal: AbortSignal }) => {
+        explicitSignals.push(ctx.signal);
+      },
+    }));
+    const scopedImportModule = vi.fn(async () => ({
+      mount: (_event: Event, ctx: { signal: AbortSignal }) => {
+        activeSignals.push(ctx.signal);
+        abortRemovedIslandSignals(
+          '<section><cart-filter fw-c="cart-filter"></cart-filter></section>',
+          '<section></section>',
+          explicitScope,
+        );
+      },
+    }));
+
+    try {
+      await dispatchDelegatedEvent(
+        { target: explicitElement, type: 'visible' },
+        importModule,
+        explicitScope,
+      );
+      await dispatchDelegatedEvent(
+        { target: activeElement, type: 'visible' },
+        scopedImportModule,
+        activeScope,
+      );
+
+      expect(explicitSignals).toHaveLength(1);
+      expect(activeSignals).toHaveLength(1);
+      expect(explicitSignals[0]).not.toBe(activeSignals[0]);
+      expect(explicitSignals[0]?.aborted).toBe(true);
+      expect(activeSignals[0]?.aborted).toBe(false);
+    } finally {
+      abortIslandSignalScope(activeScope);
+      abortIslandSignalScope(explicitScope);
+    }
   });
 
   it('keeps island ctx.signals isolated per loader install and aborts on dispose', async () => {
