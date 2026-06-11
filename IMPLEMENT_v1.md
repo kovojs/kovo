@@ -34,7 +34,7 @@ Audited against the repository on 2026-06-11. Checkmarks mean the behavior, API,
 - [x] D2 keyed append/reorder behavior has commerce/runtime tests.
 - [x] D3 deferred streaming has fixtures, stylesheet hints, and priority/query ordering coverage.
 - [x] D4 has initial adopted features: route meta, file uploads, i18n catalogs, rate-limit guard, and typed sessions.
-- [ ] P10 v1 acceptance, docs freeze, outside legibility study, and prelaunch checklist remain open.
+- [ ] P10 v1 acceptance ledger is wired; docs freeze, outside legibility study, prelaunch checklist, and remaining pending acceptance rows remain open.
 
 ## Decisions adopted by this plan
 

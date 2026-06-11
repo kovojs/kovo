@@ -305,6 +305,22 @@ void test('P10 legibility study packet is ready but not claimed complete', async
   assert.match(study, /Do not mark v1 legibility complete/);
 });
 
+void test('P10 v1 acceptance ledger tracks every freeze criterion', async () => {
+  const ledger = await readProjectFile('docs/v1-acceptance.md');
+
+  assert.match(ledger, /`SPEC\.md` section 16 is the normative acceptance contract/);
+  assert.match(ledger, /Perf/);
+  assert.match(ledger, /Legibility/);
+  assert.match(ledger, /Verifiability/);
+  assert.match(ledger, /Constitution/);
+  assert.match(ledger, /Coverage/);
+  assert.match(ledger, /Navigation typed/);
+  assert.match(ledger, /Declared execution/);
+  assert.match(ledger, /Update coverage/);
+  assert.match(ledger, /Pre-launch/);
+  assert.match(ledger, /Do not mark `IMPLEMENT_v1\.md` P10 complete/);
+});
+
 void test('pre-launch checklist is tracked explicitly', async () => {
   const checklist = await readProjectFile('docs/prelaunch-checklist.md');
 
