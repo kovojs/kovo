@@ -18,8 +18,9 @@ discipline at the right layer.
 
 ## Progress checklist
 
-- [ ] Phase 0 ledger honesty: false `[x]` items corrected in `plans/codebase-quality.md` and
-      `IMPLEMENT_v1.md`; checkbox-accuracy rule added to CLAUDE.md.
+- [x] Phase 0 ledger honesty: false `[x]` items corrected in `plans/codebase-quality.md` and
+      `IMPLEMENT_v1.md`; checkbox-accuracy rule added to CLAUDE.md/AGENTS.md; checked-item
+      re-audit recorded with dated current-state evidence.
 - [ ] Phase 1 gate de-tautologization: `tests/fw-check.node.mjs` source-text assertions replaced
       with behavioral checks; create-jiso templates are real files, scaffold is typechecked.
 - [ ] Phase 2 compiler IR: single parse, span-patch lowering with offset map, validators consume
@@ -58,7 +59,7 @@ discipline at the right layer.
 
 ## Phase 0 — Ledger honesty (do first; one sitting)
 
-- [ ] **Correct the false round-1 checkboxes.**
+- [x] **Correct the false round-1 checkboxes.**
   - `plans/codebase-quality.md:237` (Phase 5 commerce item) claims the CLI deep import was
     replaced with an `fw` dependency. Reality: `examples/commerce/src/app.ts:24` and
     `app.test.ts:8` still deep-import `../../../packages/cli/src/index.js`; no `fw` dependency
@@ -67,11 +68,22 @@ discipline at the right layer.
   - `plans/codebase-quality.md` Phase 5 "inline minified loader" claims build-time generation
     from real source (esbuild). Reality: `runtime/src/index.ts:309-316` regex-minifies
     `Function.prototype.toString()` output at module load. Re-open; executed by Phase 4.1.
-- [ ] **Re-audit every remaining `[x]`** in `plans/codebase-quality.md` and the IMPLEMENT_v1.md
+  - Evidence 2026-06-11: `plans/codebase-quality.md` reopens the Phase 5 aggregate,
+    `Inline minified loader`, and commerce-generated-artifacts/deep-import items with dated
+    current-state evidence from `packages/runtime/src/index.ts`,
+    `examples/commerce/src/app.ts`, `examples/commerce/src/app.test.ts`, and
+    `examples/commerce/package.json`.
+- [x] **Re-audit every remaining `[x]`** in `plans/codebase-quality.md` and the IMPLEMENT_v1.md
       progress checklist against code, spot-checking the cited evidence. Record corrections in
       the ledger itself with date.
-- [ ] **Add a rule to CLAUDE.md**: a checkbox may be checked only with cited file/test evidence
+      Evidence 2026-06-11: read-only sub-agent audits checked `IMPLEMENT_v1.md` and
+      `plans/codebase-quality.md`; this commit reopens or caveats the overclaimed P1 compiler
+      cleanup, P4 drizzle extraction, P7 Redis-negative-test, Phase 5 inline-loader, commerce
+      generated-artifact/deep-import, and verifier-proxy items with current file evidence.
+- [x] **Add a rule to CLAUDE.md**: a checkbox may be checked only with cited file/test evidence
       verified in the same session; evidence lines name the verifying test or command.
+      Evidence 2026-06-11: `CLAUDE.md` and `AGENTS.md` now require same-session evidence for
+      plan/roadmap checkbox completion and require leaving weaker or missing evidence open.
 
 Verification: none beyond review — this phase only edits markdown. Checkpoint commit.
 
