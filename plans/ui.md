@@ -672,6 +672,15 @@ jiso-dialog` resolves dashed wire names and prints provenance including package,
       overrides with FW232 diagnostics, and fallback scalar precedence per SPEC §4.6.
       Same-session evidence: `pnpm --filter @jiso/example-gallery test`. G5 remains open
       because this is still a bounded fixture subset.
+      Additional partial evidence 2026-06-12: the gallery G5 oracle now covers checkbox,
+      tabs, and package-prefixed tooltip behavior merge cases: checkbox native control
+      logical-OR attributes plus state/ARIA FW232 diagnostics, tab trigger/panel IDREF
+      rewrites when authored ids win, and FW231 for a conflicting `jiso-tooltip` behavior
+      IDREF per SPEC §4.6. Same-session evidence:
+      `pnpm --filter @jiso/example-gallery test`,
+      `pnpm exec vp check examples/gallery/src/merge-fixtures.test.tsx plans/ui.md`,
+      and `git diff --check`. G5 remains open because this is still a bounded fixture subset,
+      not every primitive attrs record or compiler/runtime diagnostic coverage.
 
 ## Background
 
