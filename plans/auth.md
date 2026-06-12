@@ -235,6 +235,15 @@ Scope: SPEC additions (session population, guard-failure contract, mutation resp
       `better-auth@1.6.17` table/field metadata, clean schema-bridge validation, and generated
       `schema.ts` annotations. Same-session evidence:
       `pnpm exec vitest --run conformance/better-auth-pin/src/index.test.ts --reporter=dot`.
+      Partial evidence 2026-06-12: the same real `genericOAuth()` metadata pin now covers the
+      remaining exported provider config helpers in the pinned dependency set:
+      `gumroad()`, `hubspot()`, `line()`, `microsoftEntraId()`, and `patreon()`. They continue
+      to produce only the existing core Better Auth tables, so SPEC §10.1 OAuth account rows stay
+      under the `account.userId` auth-domain bridge with no new plugin tables or FW406
+      degradations. Same-session evidence:
+      `pnpm exec vitest --run conformance/better-auth-pin/src/index.test.ts --reporter=dot`,
+      `pnpm exec tsc -p conformance/better-auth-pin/tsconfig.json --noEmit`, and
+      `pnpm exec vp check conformance/better-auth-pin/src/index.test.ts plans/auth.md`.
       Remaining gaps: plugin-generated tables outside the blessed organization/admin/two-factor/OIDC-provider/MCP/SIWE/JWT/device-authorization
       surface are still not mapped, the OAuth-provider successor package/table metadata is not
       installed or exportable from the pinned dependency set, and full app `schema.ts` generation

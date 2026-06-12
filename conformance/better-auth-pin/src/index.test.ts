@@ -15,14 +15,19 @@ import {
   deviceAuthorization,
   emailOTP,
   genericOAuth,
+  gumroad,
+  hubspot,
   jwt,
   keycloak,
   lastLoginMethod,
+  line,
   magicLink,
   mcp,
+  microsoftEntraId,
   oidcProvider,
   okta,
   organization,
+  patreon,
   phoneNumber,
   siwe,
   slack,
@@ -1003,6 +1008,27 @@ describe('Better Auth pinned conformance', () => {
               clientId: 'slack-client',
               clientSecret: 'slack-secret',
             }),
+            gumroad({
+              clientId: 'gumroad-client',
+              clientSecret: 'gumroad-secret',
+            }),
+            hubspot({
+              clientId: 'hubspot-client',
+              clientSecret: 'hubspot-secret',
+            }),
+            line({
+              clientId: 'line-client',
+              clientSecret: 'line-secret',
+            }),
+            microsoftEntraId({
+              clientId: 'microsoft-client',
+              clientSecret: 'microsoft-secret',
+              tenantId: 'common',
+            }),
+            patreon({
+              clientId: 'patreon-client',
+              clientSecret: 'patreon-secret',
+            }),
           ],
         }),
       ],
@@ -1028,8 +1054,8 @@ describe('Better Auth pinned conformance', () => {
       'updatedAt',
       'userId',
     ]);
-    // SPEC.md §10.1: OAuth provider account rows are app-owned auth-domain
-    // state through the existing account.userId bridge, not plugin-only tables.
+    // SPEC.md §10.1: OAuth provider account rows, including exported provider
+    // config helpers, stay app-owned auth-domain state through account.userId.
     expect(validateBetterAuthSchemaBridge(tables)).toEqual({
       declaredTouchMismatches: [],
       keyFieldMismatches: [],
