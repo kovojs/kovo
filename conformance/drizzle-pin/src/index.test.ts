@@ -491,6 +491,60 @@ describe('Drizzle pinned subset conformance', () => {
     ]);
   });
 
+  it('pins project query facts for real Drizzle distinct selects', () => {
+    const facts = extractQueryFactsFromProject({
+      files: [
+        {
+          fileName: 'conformance/drizzle-pin/src/product.schema.ts',
+          source: `
+            export const products = pgTable('products', {
+              id: text('id').primaryKey(),
+              name: text('name').notNull(),
+            }, jiso({ domain: 'product', key: 'id' }));
+          `,
+        },
+        {
+          fileName: 'conformance/drizzle-pin/src/product.queries.ts',
+          source: `
+            import { products } from './product.schema';
+
+            export const distinctProducts = query('products/distinct', {
+              load(_input, db) {
+                return db.selectDistinct({ name: products.name }).from(products);
+              },
+            });
+
+            export const firstProductNames = query('products/distinct-on', {
+              load(_input, db) {
+                return db.selectDistinctOn([products.id], { id: products.id, name: products.name }).from(products);
+              },
+            });
+          `,
+        },
+      ],
+    });
+
+    expect(facts).toEqual([
+      {
+        query: 'products/distinct',
+        reads: ['product'],
+        shape: {
+          name: 'string',
+        },
+        site: 'conformance/drizzle-pin/src/product.queries.ts:4',
+      },
+      {
+        query: 'products/distinct-on',
+        reads: ['product'],
+        shape: {
+          id: 'string',
+          name: 'string',
+        },
+        site: 'conformance/drizzle-pin/src/product.queries.ts:10',
+      },
+    ]);
+  });
+
   it('pins AST-backed column nullability against comment and string contents', () => {
     expect(text('note', { enum: ['.notNull('] })).toBeDefined();
 

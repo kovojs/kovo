@@ -891,6 +891,52 @@ export interface CommerceInvalidationSets {
     ]);
   });
 
+  it('extracts query facts from Drizzle distinct selects', () => {
+    const facts = extractQueryFactsFromSource([
+      {
+        fileName: 'product.queries.ts',
+        source: `
+          export const products = pgTable("products", {
+            id: text("id").primaryKey(),
+            name: text("name").notNull(),
+          }, jiso({ domain: "product", key: "id" }));
+
+          export const distinctProducts = query("products/distinct", {
+            load(_input, db) {
+              return db.selectDistinct({ name: products.name }).from(products);
+            },
+          });
+
+          export const firstProductNames = query("products/distinct-on", {
+            load(_input, db) {
+              return db.selectDistinctOn([products.id], { id: products.id, name: products.name }).from(products);
+            },
+          });
+        `,
+      },
+    ]);
+
+    expect(facts).toEqual([
+      {
+        query: 'products/distinct',
+        reads: ['product'],
+        shape: {
+          name: 'string',
+        },
+        site: 'product.queries.ts:7',
+      },
+      {
+        query: 'products/distinct-on',
+        reads: ['product'],
+        shape: {
+          id: 'string',
+          name: 'string',
+        },
+        site: 'product.queries.ts:13',
+      },
+    ]);
+  });
+
   it('extracts query instance keys from static element access predicates', () => {
     const facts = extractQueryFactsFromSource([
       {

@@ -99,6 +99,7 @@ const UNCLASSIFIED_DRIZZLE_RECEIVER_MUTATION_METHODS = new Set([
   'execute',
   'refreshMaterializedView',
 ]);
+const DRIZZLE_SELECT_QUERY_METHODS = new Set(['select', 'selectDistinct', 'selectDistinctOn']);
 
 export type QueryShape =
   | 'array'
@@ -996,13 +997,13 @@ function selectShapeFromQueryBody(
   const selectCall = selectCallFromQueryBody(body, receiverNames);
   if (!selectCall) return null;
 
-  const projection = selectCall.getArguments()[0];
+  const projection = selectProjectionArgument(selectCall);
   if (!projection) {
     return {
       diagnostics: [
         {
           code: 'FW406',
-          message: `${diagnosticDefinitions.FW406.message} Query uses db.select() without an explicit projection.`,
+          message: `${diagnosticDefinitions.FW406.message} Query uses ${selectCallDisplayName(selectCall)} without an explicit projection.`,
           severity: diagnosticDefinitions.FW406.severity,
           site: '',
         },
@@ -1023,6 +1024,15 @@ function selectShapeFromQueryBody(
   });
 }
 
+function selectProjectionArgument(call: CallExpression): Node | undefined {
+  const args = call.getArguments();
+  return staticAccessName(call.getExpression()) === 'selectDistinctOn' ? args[1] : args[0];
+}
+
+function selectCallDisplayName(call: CallExpression): string {
+  return `db.${staticAccessName(call.getExpression()) ?? 'select'}()`;
+}
+
 function selectCallFromQueryBody(
   body: ObjectLiteralExpression,
   receiverNames: ReadonlySet<string>,
@@ -1031,7 +1041,7 @@ function selectCallFromQueryBody(
     .getDescendantsOfKind(SyntaxKind.CallExpression)
     .filter(
       (call) =>
-        staticAccessName(call.getExpression()) === 'select' &&
+        isSelectQueryCallName(staticAccessName(call.getExpression())) &&
         isQueryCallOnReceiver(call, receiverNames),
     )
     .sort((left, right) => callSourceOrder(left) - callSourceOrder(right));
@@ -1040,6 +1050,10 @@ function selectCallFromQueryBody(
     selectCalls.find((call) => call.getFirstAncestorByKind(SyntaxKind.ReturnStatement)) ??
     selectCalls[0]
   );
+}
+
+function isSelectQueryCallName(name: string | undefined): boolean {
+  return name !== undefined && DRIZZLE_SELECT_QUERY_METHODS.has(name);
 }
 
 function queryCallbackReceiverNames(body: ObjectLiteralExpression): ReadonlySet<string> {
