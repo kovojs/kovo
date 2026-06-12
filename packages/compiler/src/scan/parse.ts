@@ -165,6 +165,22 @@ export function firstComponentModel(model: ComponentModuleModel): ComponentModel
   return model.components[0] ?? null;
 }
 
+export function inferComponentName(fileName: string, model: ComponentModuleModel): string {
+  const component = firstComponentModel(model);
+  if (component?.localName) return component.localName;
+
+  const baseName =
+    fileName
+      .replace(/\.[^.]+$/, '')
+      .split('/')
+      .at(-1) ?? 'Component';
+  return baseName
+    .split(/[-_]/)
+    .filter(Boolean)
+    .map((part) => `${part[0]?.toUpperCase() ?? ''}${part.slice(1)}`)
+    .join('');
+}
+
 export function componentOptionSource(
   model: ComponentModuleModel,
   propertyName: string,

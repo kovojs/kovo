@@ -17,16 +17,15 @@ import { lowerNavigationSugar } from './lower/navigation.js';
 import { lowerPlatformBehaviors } from './lower/platform.js';
 import { lowerViewTransitions } from './lower/view-transitions.js';
 import {
-  firstComponentModel,
-  type ComponentModuleModel,
+  inferComponentName,
   parseComponentModule as parseComponentModuleModel,
 } from './scan/parse.js';
 import { replaceExtension } from './shared.js';
 import { isCompilerIrArtifact, validateAuthoringSurface } from './validate/authoring-surface.js';
 import { validatePackageComponentPrefixes } from './validate/package-prefixes.js';
 import { collectCompilerDiagnostics } from './validate/pipeline.js';
-import type { CompileComponentOptions, CompileResult, EmittedFile } from './types.js';
-import { createEmptyCompileResult } from './types.js';
+import type { CompileComponentOptions, CompileResult } from './types.js';
+import { createEmptyCompileResult, emittedFileKind } from './types.js';
 import { createJisoVitePlugin, type JisoVitePlugin, type JisoVitePluginOptions } from './vite.js';
 
 export type { DiagnosticCode };
@@ -100,7 +99,7 @@ export function compileComponentModule(options: CompileComponentOptions): Compil
   }
 
   const originalModel = parseComponentModuleModel(options.fileName, options.source);
-  const componentName = inferComponentName(options, originalModel);
+  const componentName = inferComponentName(options.fileName, originalModel);
   const viewTransitionLowering = lowerViewTransitions(options.source, originalModel);
   const viewTransitionModel =
     viewTransitionLowering.source === options.source
@@ -240,27 +239,4 @@ export function collectMinifierReservedNames(
 
 export function jisoVitePlugin(options: JisoVitePluginOptions = {}): JisoVitePlugin {
   return createJisoVitePlugin(compileComponentModule, options);
-}
-
-function emittedFileKind(fileName: string): EmittedFile['kind'] {
-  if (fileName.endsWith('.client.js')) return 'client';
-  if (fileName.endsWith('.css')) return 'css';
-  if (fileName.endsWith('.server.js')) return 'server';
-  return 'registry';
-}
-
-function inferComponentName(options: CompileComponentOptions, model: ComponentModuleModel): string {
-  const component = firstComponentModel(model);
-  if (component?.localName) return component.localName;
-
-  const baseName =
-    options.fileName
-      .replace(/\.[^.]+$/, '')
-      .split('/')
-      .at(-1) ?? 'Component';
-  return baseName
-    .split(/[-_]/)
-    .filter(Boolean)
-    .map((part) => `${part[0]?.toUpperCase() ?? ''}${part.slice(1)}`)
-    .join('');
 }

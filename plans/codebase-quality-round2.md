@@ -548,6 +548,13 @@ pipeline throws the tree away and communicates via mutated source text.
       `pnpm exec vitest --run packages/compiler/src/index.test.ts -t "view transition|registry metadata|server file"`
       and
       `pnpm exec vp check packages/compiler/src/index.ts packages/compiler/src/types.ts packages/compiler/src/lower/view-transitions.ts plans/codebase-quality-round2.md`.
+      Additional evidence 2026-06-12: compiler-emitted file-kind classification now lives with
+      the canonical emitted-file type in `packages/compiler/src/types.ts`, and component-name
+      inference now lives with the parsed component model in `packages/compiler/src/scan/parse.ts`;
+      `index.ts` imports both instead of carrying local helpers. Same-session evidence:
+      `pnpm exec vitest --run packages/compiler/src/index.test.ts -t "server file|registry metadata|component facts"`
+      and
+      `pnpm exec vp check packages/compiler/src/index.ts packages/compiler/src/types.ts packages/compiler/src/scan/parse.ts plans/codebase-quality-round2.md`.
 - [x] **MED — Move analysis out of validate/.** `collectQueryUpdatePlans` and coverage
       classification feed emit, not validation; positions travel through a module-global
       `WeakMap` (`updateCoverageSpans`, bindings.ts:45-48) read back in component-contracts.ts:271.

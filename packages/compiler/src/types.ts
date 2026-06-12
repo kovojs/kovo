@@ -47,6 +47,13 @@ export function createEmptyCompileResult(): CompileResult {
   };
 }
 
+export function emittedFileKind(fileName: string): EmittedFile['kind'] {
+  if (fileName.endsWith('.client.js')) return 'client';
+  if (fileName.endsWith('.css')) return 'css';
+  if (fileName.endsWith('.server.js')) return 'server';
+  return 'registry';
+}
+
 export interface ViewTransitionStamp {
   name: string;
 }
