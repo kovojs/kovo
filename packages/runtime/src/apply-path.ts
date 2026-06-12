@@ -54,6 +54,11 @@ export function applyMutationResponseToStore(
   );
 }
 
+export const applyMutationResponse: typeof applyMutationResponseToStore =
+  applyMutationResponseToStore;
+
+export const applyDeferredChunk: typeof applyMutationResponse = applyMutationResponse;
+
 export interface ApplyMutationResponseToDomOptions {
   applyQuery?: ApplyQueryInterposition;
   beforeApplyQueries?: (queries: readonly QueryChunk[]) => void;

@@ -7,7 +7,13 @@ import {
   applyMutationResponseToDom,
   createQueryStore,
 } from './index.js';
-import { applyMutationResponseToRuntime } from './apply-path.js';
+import {
+  applyDeferredChunk as applyDeferredChunkFromApplyPath,
+  applyDeferredChunkToDom as applyDeferredChunkToDomFromApplyPath,
+  applyMutationResponse as applyMutationResponseFromApplyPath,
+  applyMutationResponseToRuntime,
+  applyMutationResponseToStore,
+} from './apply-path.js';
 import {
   isMutationBroadcastMessage,
   readMutationChangeHeader,
@@ -95,6 +101,10 @@ describe('mutation response wire chunks', () => {
   it('exports deferred chunk helpers as aliases of the mutation response helpers', () => {
     expect(applyDeferredChunk).toBe(applyMutationResponse);
     expect(applyDeferredChunkToDom).toBe(applyMutationResponseToDom);
+    expect(applyMutationResponse).toBe(applyMutationResponseFromApplyPath);
+    expect(applyMutationResponseFromApplyPath).toBe(applyMutationResponseToStore);
+    expect(applyDeferredChunk).toBe(applyDeferredChunkFromApplyPath);
+    expect(applyDeferredChunkToDom).toBe(applyDeferredChunkToDomFromApplyPath);
   });
 
   it('accepts escaped JSON from text/html-compatible fw-query chunks', () => {

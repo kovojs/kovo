@@ -1421,6 +1421,15 @@ params, relational API, `execute(sql)`, right/full joins, a string column named 
       `pnpm exec vitest --run packages/runtime/src/*.test.ts`,
       `pnpm exec vp check packages/runtime/src/apply-path.ts packages/runtime/src/mutation-response.test.ts plans/codebase-quality-round2.md`,
       and `git diff --check`.
+      Additional bounded evidence 2026-06-12: `packages/runtime/src/apply-path.ts` now owns
+      the public store-only `applyMutationResponse` and `applyDeferredChunk` aliases directly,
+      leaving `packages/runtime/src/index.ts` as a pure re-export for that apply surface instead
+      of a wrapper owner. `packages/runtime/src/mutation-response.test.ts` pins index exports to
+      the direct apply-path functions and the store helper. Same-session evidence:
+      `corepack pnpm exec vitest --run packages/runtime/src/mutation-response.test.ts packages/runtime/src/index.test.ts -t "mutation response|deferred chunk|apply"`,
+      `corepack pnpm exec vitest --run packages/runtime/src/mutation-response.test.ts`,
+      `corepack pnpm exec vp check packages/runtime/src/apply-path.ts packages/runtime/src/index.ts packages/runtime/src/mutation-response.test.ts plans/codebase-quality-round2.md`,
+      and `git diff --check`.
 - [x] **MED — Fix ambient-scope argument override in handlers.ts.**
       `abortRemovedIslandSignals(currentHtml, nextHtml, scope)` ignores its explicit `scope`
       whenever the module-level `activeIslandSignalScope` is set

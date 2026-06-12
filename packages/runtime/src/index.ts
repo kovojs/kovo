@@ -7,7 +7,6 @@ import {
   applyDeferredChunkToDom,
   applyMutationResponseToDom,
   applyMutationResponseToRuntime,
-  applyMutationResponseToStore,
 } from './apply-path.js';
 import type {
   AppliedMutationResponse,
@@ -59,7 +58,12 @@ export type {
   ImportHandlerModule,
   IslandSignalScope,
 } from './handlers.js';
-export { applyDeferredChunkToDom, applyMutationResponseToDom } from './apply-path.js';
+export {
+  applyDeferredChunk,
+  applyDeferredChunkToDom,
+  applyMutationResponse,
+  applyMutationResponseToDom,
+} from './apply-path.js';
 export type {
   AppliedMutationResponse,
   AppliedMutationResponseToDom,
@@ -897,12 +901,6 @@ function parseOutputPayload(content: string): JsonValue {
   const parsed = parseJsonValue(raw);
   return parsed.ok ? parsed.value : raw;
 }
-
-export function applyMutationResponse(store: QueryStore, body: string): AppliedMutationResponse {
-  return applyMutationResponseToStore(store, body);
-}
-
-export const applyDeferredChunk: typeof applyMutationResponse = applyMutationResponse;
 
 type MutationDomApplyHooks = Pick<
   ApplyMutationResponseToDomOptions,
