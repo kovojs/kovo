@@ -321,6 +321,26 @@ export type {
 } from './toggle-group.js';
 
 export {
+  toolbarButtonAttributes,
+  toolbarItemAttributes,
+  toolbarKeyDown,
+  toolbarMoveFocus,
+  toolbarRootAttributes,
+  toolbarRovingIndex,
+} from './toolbar.js';
+export type {
+  ToolbarButtonAttributeOptions,
+  ToolbarItem,
+  ToolbarItemAttributeOptions,
+  ToolbarKeyboardEvent,
+  ToolbarMoveResult,
+  ToolbarOrientation,
+  ToolbarPrimitiveAttributes,
+  ToolbarRootAttributeOptions,
+  ToolbarState,
+} from './toolbar.js';
+
+export {
   setTogglePressed,
   togglePressed,
   toggleRootAttributes,

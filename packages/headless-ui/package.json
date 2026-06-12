@@ -23,6 +23,7 @@
     "./primitives/separator": "./src/primitives/separator.ts",
     "./primitives/switch": "./src/primitives/switch.ts",
     "./primitives/tooltip": "./src/primitives/tooltip.ts",
+    "./primitives/toolbar": "./src/primitives/toolbar.ts",
     "./primitives/toggle": "./src/primitives/toggle.ts",
     "./primitives/toggle-group": "./src/primitives/toggle-group.ts",
     "./tooling": "./src/tooling/index.ts"
