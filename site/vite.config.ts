@@ -31,6 +31,18 @@ export default defineConfig({
         command: 'node scripts/check-links.mjs',
         input: [{ pattern: 'dist/**', base: 'workspace' }],
       },
+      export: {
+        command:
+          'pnpm --dir .. exec vp run build && vp build && node scripts/build.mjs && node ../dist/cli/src/index.mjs export ./scripts/app-shell.mjs --out dist',
+        input: [
+          { pattern: 'content/**/*', base: 'workspace' },
+          { pattern: 'public/**/*', base: 'workspace' },
+          { pattern: 'scripts/**/*', base: 'workspace' },
+          { pattern: 'src/**/*', base: 'workspace' },
+          { pattern: 'tutorial/**/*', base: 'workspace' },
+        ],
+        output: ['dist/**'],
+      },
       smoke: {
         command: 'node scripts/smoke.mjs',
         input: [

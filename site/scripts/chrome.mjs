@@ -185,7 +185,16 @@ export function renderDocument({ body, chromeless = false, description, path, ti
 
 /** Docs layout: sidebar + article + on-this-page rail, composed at render
  * time (§4.5). The mobile sidebar is an L0 disclosure — zero JavaScript. */
-export function renderDocsPage({ activePath, eyebrow, groups, headings, html, next, prev, prose = true }) {
+export function renderDocsPage({
+  activePath,
+  eyebrow,
+  groups,
+  headings,
+  html,
+  next,
+  prev,
+  prose = true,
+}) {
   const sidebar = DocsSidebar.definition.render({}, {}, { activePath, groups });
   return `<div class="mx-auto flex max-w-[80rem] gap-12 px-4 py-12 sm:px-6">
     <aside class="hidden lg:block">${sidebar}</aside>
@@ -205,8 +214,7 @@ export function renderDocsPage({ activePath, eyebrow, groups, headings, html, ne
 const SECTION_INTROS = {
   api: 'Generated reference for every public package — types, functions, and the contracts they keep.',
   docs: 'Install Jiso, absorb the mental model, and find your way around a project.',
-  guides:
-    'Task-focused deep dives into each part of the framework, from queries to deployment.',
+  guides: 'Task-focused deep dives into each part of the framework, from queries to deployment.',
   tutorial:
     'Build a real e-commerce app in eight chapters — catalog, cart, optimistic updates, streaming, and a behavior graph your CI can check.',
 };

@@ -160,8 +160,29 @@ Scope: SPEC addition (proposed §9.5 "The request shell"), `@jiso/server` shell 
       `pnpm exec vitest --run examples/commerce/src/app-shell.test.ts`,
       `pnpm exec vitest --run examples/commerce`, and
       `pnpm exec vp check packages/server/src/app.ts packages/server/src/index.ts packages/server/src/app.test.ts examples/commerce/src/app-shell.ts examples/commerce/src/app-shell.test.ts`.
-      Remaining R7 work: docs-site `vp run export` adoption remains open, so R7
-      is not complete.
+      Progress 2026-06-12: the docs site now has a site-owned app-shell export
+      adapter. `site/scripts/app-shell.mjs` synthesizes public routes from the
+      generated docs HTML, registers the existing `/c/code.js`, `/c/search.js`,
+      and `/c/theme.js` modules in the versioned client-module registry, returns
+      complete document bytes without double-wrapping, and escapes `/c/` strings
+      inside `<pre>` code samples so SPEC §9.5 static export only copies live
+      handler modules. `site/vite.config.ts` exposes `vp run export`, which runs
+      the root package build, the site CSS/docs build, and then the built CLI
+      export path (`node ../dist/cli/src/index.mjs export ./scripts/app-shell.mjs
+--out dist`). Evidence: `site/scripts/app-shell.test.mjs` proves
+      `exportStaticApp()` route replay, versioned `/c/` copy, and code-sample
+      `/c/` suppression; same-session verification ran
+      `pnpm exec vitest --run site/scripts/app-shell.test.mjs`,
+      `pnpm exec vp run export` from `site/` (31 HTML artifacts, 3 client
+      modules, 0 diagnostics), `node site/scripts/check-links.mjs`, and
+      `pnpm exec vp check site/scripts/app-shell.mjs site/scripts/app-shell.test.mjs site/package.json site/vite.config.ts plans/app-shell.md`.
+      Remaining integration notes: the task deliberately invokes the built CLI
+      because the workspace `fw` source bin is not plain-Node runnable in this
+      worktree, and the current server exporter writes normalized flat
+      `*.html` artifacts (`/docs.html`, `/docs/installation.html`) alongside
+      the existing pretty `*/index.html` site output. R7 remains open until the
+      main integration pass accepts that compatibility layer or lands server/CLI
+      seams for package-source execution and pretty URL output.
 
 ## Background — the gap
 
