@@ -4,7 +4,7 @@
 criterion to repo evidence or an external evidence ledger before v1 freeze; it
 does not claim that v1 is complete.
 
-Last ledger audit: 2026-06-11.
+Last ledger audit: 2026-06-12.
 
 ## Required Gates
 
@@ -19,6 +19,19 @@ Last ledger audit: 2026-06-11.
 | 16.7 Declared execution only | `on:load` sites are FW211-justified and isomorphic islands are FW302-justified.                                                                                               | `fw check` diagnostics plus acceptance grep outputs for `on:load`, `FW211`, `isomorphic: true`, and `FW302`.                                          | ready to run            |
 | 16.8 Update coverage         | Every query-dependent commerce DOM position has an explicit status and zero unhandled FW311s.                                                                                 | FW311/update-coverage graph assertions and `fw check coverage` output.                                                                                | ready to run            |
 | Pre-launch                   | Trademark, domain, npm-scope, and linguistic screens have dated evidence.                                                                                                     | Dated pending ledger in `docs/prelaunch-checklist.md`; no external completion evidence recorded yet.                                                  | pending external checks |
+
+## Dated Ledger Audit
+
+This audit records the state of the acceptance evidence packet on 2026-06-12.
+It keeps local runnability separate from the external evidence required by SPEC
+§16.2 and the Phase 10 pre-launch checklist.
+
+| Date       | Reviewer | Area                            | Evidence inspected                                                                                     | Result                                                                                   | Status                  |
+| ---------- | -------- | ------------------------------- | ------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------- | ----------------------- |
+| 2026-06-12 | TBD      | SPEC §16 acceptance map         | Required Gates table in this document against `SPEC.md` section 16.                                    | Every SPEC §16 criterion has a row and a named evidence source or ledger.                | ready to run            |
+| 2026-06-12 | TBD      | Outside legibility study        | `docs/legibility-study.md` protocol, pending result rows, dated readiness ledger, and completion rule. | Runnable study packet exists; five outside-developer sessions are not recorded.          | pending external study  |
+| 2026-06-12 | TBD      | Pre-launch external checks      | `docs/prelaunch-checklist.md` required checks and evidence ledgers.                                    | Trademark, domain, npm-scope, and linguistic evidence remain missing.                    | pending external checks |
+| 2026-06-12 | TBD      | Clean-checkout local acceptance | Repository `pnpm run acceptance` script and command expansion below.                                   | Full command set is documented for final clean checkout; no passing freeze run recorded. | pending local run       |
 
 ## Acceptance Command Set
 
@@ -46,7 +59,21 @@ audit has not run the full command set.
 
 | Date       | Commit            | Command               | Result  | Notes                                                |
 | ---------- | ----------------- | --------------------- | ------- | ---------------------------------------------------- |
-| 2026-06-11 | TBD at freeze run | `pnpm run acceptance` | pending | Full clean-checkout acceptance run not yet recorded. |
+| 2026-06-12 | TBD at freeze run | `pnpm run acceptance` | pending | Full clean-checkout acceptance run not yet recorded. |
+
+## Final Clean-Checkout Checklist
+
+Use this checklist for the final local acceptance run. Record the resulting
+command log path and commit SHA in the Acceptance Command Set table above.
+
+| Step | Command or check                                                         | Evidence required before freeze                                                          | Status  |
+| ---- | ------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------- | ------- |
+| 1    | Start from a clean worktree at the intended v1 commit.                   | `git status --short --branch` output showing no local changes.                           | pending |
+| 2    | `pnpm install --frozen-lockfile` if dependencies changed.                | Install log or note that lockfile/dependency graph was unchanged.                        | pending |
+| 3    | `pnpm run acceptance`                                                    | Passing log covering check, test, browser, build, perf, conformance, and fw-check gates. | pending |
+| 4    | `grep -r "invalidate(" examples/commerce packages/create-jiso/templates` | Only documented escape-hatch sites, or an explicit zero-result note.                     | pending |
+| 5    | `grep -r "on:load" examples/commerce packages/create-jiso/templates`     | Only FW211-justified sites, or an explicit zero-result note.                             | pending |
+| 6    | `git diff --check`                                                       | No whitespace errors after recording final docs evidence.                                | pending |
 
 ## Freeze Rule
 

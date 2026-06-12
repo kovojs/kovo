@@ -4,7 +4,7 @@
 document is the executable study packet and results ledger; it does not claim the
 study has been completed.
 
-Protocol version: 2026-06-11
+Protocol version: 2026-06-12
 Status: protocol ready; recruitment, sessions, and results pending
 Required participants: five outside developers who have not worked on Jiso
 Passing criterion: each participant answers every task from browser devtools
@@ -87,6 +87,31 @@ participant IDs and outcome summaries belong in this file.
 | pending-4   | TBD  | outside developer, unverified | TBD    | pending | pending     | pending          | pending  | pending      | pending |
 | pending-5   | TBD  | outside developer, unverified | TBD    | pending | pending     | pending          | pending  | pending      | pending |
 
+## Dated Study Readiness Ledger
+
+This ledger tracks whether SPEC §16.2 has runnable local materials and whether
+the required outside evidence exists. It is not a substitute for the five
+outside-developer result rows above.
+
+| Date       | Reviewer | Evidence checked                                                                 | Result                                                                 | Status  |
+| ---------- | -------- | -------------------------------------------------------------------------------- | ---------------------------------------------------------------------- | ------- |
+| 2026-06-12 | TBD      | Study packet, task table, evidence fields, and completion rule in this document. | Runnable packet exists; no outside participant sessions are recorded.  | pending |
+| 2026-06-12 | TBD      | Acceptance fixture command named by Fixture Setup: `pnpm run acceptance`.        | Command identified for clean fixture capture; not run for this ledger. | pending |
+
+## Local Session Checklist
+
+Run this checklist for each outside participant before adding a dated results
+row. If any item cannot be completed, keep the participant row pending and add an
+issue below.
+
+| Step | Local check                                                                 | Evidence to retain outside repo if private                     |
+| ---- | --------------------------------------------------------------------------- | -------------------------------------------------------------- |
+| 1    | Confirm participant has not worked on Jiso.                                 | Anonymized eligibility note.                                   |
+| 2    | Capture clean checkout commit after `pnpm run acceptance` passes.           | Commit SHA and command log path.                               |
+| 3    | Open commerce page plus Elements and Network panels for the same commit.    | Browser, version, OS, and cache-clear note.                    |
+| 4    | Time all five tasks with no source or test files visible.                   | Per-task time, pass/fail, and supporting devtools artifact.    |
+| 5    | Record only anonymized participant ID and summary outcome in this document. | Raw notes stay outside the repo if they include personal data. |
+
 ## Issues Ledger
 
 Record any failed task or recurring confusion here before freeze. Keep items open
@@ -94,7 +119,7 @@ until the confusing artifact is fixed or the task wording is corrected and rerun
 
 | Date       | Participant | Task | Issue                                    | Resolution                     | Status  |
 | ---------- | ----------- | ---- | ---------------------------------------- | ------------------------------ | ------- |
-| 2026-06-11 | pending     | all  | No outside study sessions have been run. | Recruit and run five sessions. | pending |
+| 2026-06-12 | pending     | all  | No outside study sessions have been run. | Recruit and run five sessions. | pending |
 
 ## Completion Rule
 
