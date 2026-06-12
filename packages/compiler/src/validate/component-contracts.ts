@@ -16,13 +16,13 @@ import {
   jsxElements,
 } from '../scan/parse.js';
 import { dedupeBy } from '../shared.js';
-import type {
-  QueryShape,
-  QueryShapeFact,
-  QueryShapeWrapper,
-  QueryUpdateCoverageFact,
+import type { QueryShape, QueryShapeFact, QueryUpdateCoverageFact } from '../types.js';
+import {
+  isArrayQueryShape,
+  isQueryShapeObject,
+  queryShapesFromFacts,
+  unwrapQueryShape,
 } from '../types.js';
-import { queryShapesFromFacts } from '../types.js';
 
 interface ComponentContractValidationOptions {
   fileName: string;
@@ -289,7 +289,7 @@ function queryShapePaths(queryShapes: Record<string, QueryShape>): string[] {
 
 function queryShapeChildPaths(shape: QueryShape): string[] {
   const current = unwrapQueryShape(shape);
-  if (isArrayShape(current)) {
+  if (isArrayQueryShape(current)) {
     const itemShape = current[0];
     return itemShape === undefined ? [] : queryShapeChildPaths(itemShape);
   }
@@ -308,29 +308,4 @@ function stateKeyHasQueryPrefix(stateKey: string, queryName: string): boolean {
 
   const nextChar = stateKey[queryName.length];
   return nextChar !== undefined && /[A-Z0-9_$]/.test(nextChar);
-}
-
-function isArrayShape(shape: QueryShape): shape is readonly QueryShape[] {
-  return Array.isArray(shape);
-}
-
-function unwrapQueryShape(shape: QueryShape): QueryShape {
-  let current = shape;
-  while (isQueryShapeWrapper(current)) current = current.shape;
-  return current;
-}
-
-function isQueryShapeWrapper(shape: QueryShape): shape is QueryShapeWrapper {
-  if (typeof shape !== 'object' || shape === null || Array.isArray(shape)) return false;
-  const record = shape as Record<string, unknown>;
-  return (record.kind === 'nullable' || record.kind === 'optional') && 'shape' in shape;
-}
-
-function isQueryShapeObject(shape: QueryShape): shape is { readonly [key: string]: QueryShape } {
-  return (
-    typeof shape === 'object' &&
-    shape !== null &&
-    !Array.isArray(shape) &&
-    !isQueryShapeWrapper(shape)
-  );
 }

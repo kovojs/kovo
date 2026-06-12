@@ -8,13 +8,14 @@ import {
   type ComponentModuleModel,
   type JsxElementModel,
 } from '../scan/parse.js';
-import type {
-  CompileComponentOptions,
-  QueryShape,
-  QueryShapeWrapper,
-  QueryTemplateStampFact,
+import type { CompileComponentOptions, QueryShape, QueryTemplateStampFact } from '../types.js';
+import {
+  isArrayQueryShape,
+  isQueryShapeObject,
+  isQueryShapeWrapper,
+  queryShapesFromFacts,
+  unwrapQueryShape,
 } from '../types.js';
-import { queryShapesFromFacts } from '../types.js';
 
 interface DataBindAttribute {
   index: number;
@@ -292,7 +293,7 @@ function validateListStampInQueryShapes(
   if (!listShape) return { exists: false };
 
   const shapeAtList = queryShapeAtPath(listShape, segments);
-  if (!isArrayShape(shapeAtList)) return { exists: false };
+  if (!isArrayQueryShape(shapeAtList)) return { exists: false };
 
   const itemShape = shapeAtList[0];
   if (itemShape === undefined) return { exists: false };
@@ -316,7 +317,7 @@ function validateListStampInQueryShapes(
 function queryShapeAtPath(shape: QueryShape, segments: readonly BindingPathSegment[]): QueryShape {
   const current = unwrapQueryShape(shape);
   if (segments.length === 0) return current;
-  if (isArrayShape(current)) return queryShapeAtPath(current[0] ?? 'object', segments);
+  if (isArrayQueryShape(current)) return queryShapeAtPath(current[0] ?? 'object', segments);
   if (!isQueryShapeObject(current)) return 'object';
 
   const [head, ...tail] = segments;
@@ -352,7 +353,7 @@ function validatePathInShape(
   const current = unwrapQueryShape(shape);
   if (segments.length === 0) return { exists: true };
 
-  if (isArrayShape(current)) {
+  if (isArrayQueryShape(current)) {
     const itemShape = current[0];
     return itemShape === undefined ? { exists: false } : validatePathInShape(itemShape, segments);
   }
@@ -411,7 +412,7 @@ function nullableItemBindingDiagnostics(
     if (!listShape) continue;
 
     const shapeAtList = queryShapeAtPath(listShape, segments);
-    if (!isArrayShape(shapeAtList)) continue;
+    if (!isArrayQueryShape(shapeAtList)) continue;
 
     const itemShape = shapeAtList[0];
     if (itemShape === undefined) continue;
@@ -460,31 +461,6 @@ function fw227Diagnostic(
     help: diagnosticDefinitions.FW227.help,
     message: `${diagnosticDefinitions.FW227.message} ${binding.path} (segment: ${traversal.segment})`,
   };
-}
-
-function isArrayShape(shape: QueryShape): shape is readonly QueryShape[] {
-  return Array.isArray(shape);
-}
-
-function unwrapQueryShape(shape: QueryShape): QueryShape {
-  let current = shape;
-  while (isQueryShapeWrapper(current)) current = current.shape;
-  return current;
-}
-
-function isQueryShapeWrapper(shape: QueryShape): shape is QueryShapeWrapper {
-  if (typeof shape !== 'object' || shape === null || Array.isArray(shape)) return false;
-  const record = shape as Record<string, unknown>;
-  return (record.kind === 'nullable' || record.kind === 'optional') && 'shape' in shape;
-}
-
-function isQueryShapeObject(shape: QueryShape): shape is { readonly [key: string]: QueryShape } {
-  return (
-    typeof shape === 'object' &&
-    shape !== null &&
-    !Array.isArray(shape) &&
-    !isQueryShapeWrapper(shape)
-  );
 }
 
 function jsxAttributes(model: ComponentModuleModel) {

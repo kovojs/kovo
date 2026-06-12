@@ -91,3 +91,30 @@ export interface QueryShapeFact {
 export function queryShapesFromFacts(facts: readonly QueryShapeFact[]): Record<string, QueryShape> {
   return Object.fromEntries(facts.map((fact) => [fact.query, fact.shape]));
 }
+
+export function isArrayQueryShape(shape: QueryShape): shape is readonly QueryShape[] {
+  return Array.isArray(shape);
+}
+
+export function unwrapQueryShape(shape: QueryShape): QueryShape {
+  let current = shape;
+  while (isQueryShapeWrapper(current)) current = current.shape;
+  return current;
+}
+
+export function isQueryShapeWrapper(shape: QueryShape): shape is QueryShapeWrapper {
+  if (typeof shape !== 'object' || shape === null || Array.isArray(shape)) return false;
+  const record = shape as Record<string, unknown>;
+  return (record.kind === 'nullable' || record.kind === 'optional') && 'shape' in shape;
+}
+
+export function isQueryShapeObject(
+  shape: QueryShape,
+): shape is { readonly [key: string]: QueryShape } {
+  return (
+    typeof shape === 'object' &&
+    shape !== null &&
+    !Array.isArray(shape) &&
+    !isQueryShapeWrapper(shape)
+  );
+}

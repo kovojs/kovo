@@ -489,6 +489,12 @@ pipeline throws the tree away and communicates via mutated source text.
       `CompileComponentOptions`, query/update/shape facts, and `RenderEquivalenceCheck`; the
       client emitter plus binding/navigation/component-contract validators import those types
       directly instead of depending on the index barrel or carrying private structural copies.
+      Additional evidence 2026-06-12: query-shape fact conversion and wrapper/object/array
+      helpers are now centralized in `packages/compiler/src/types.ts`; the binding and
+      component-contract validators import the shared helpers instead of carrying duplicate
+      implementations. Same-session evidence:
+      `pnpm exec vitest --run packages/compiler/src/index.test.ts -t "data-bind|FW227|FW311|query update"` and
+      `pnpm exec vp check packages/compiler/src/types.ts packages/compiler/src/validate/bindings.ts packages/compiler/src/validate/component-contracts.ts plans/codebase-quality-round2.md`.
 - [x] **MED — Move analysis out of validate/.** `collectQueryUpdatePlans` and coverage
       classification feed emit, not validation; positions travel through a module-global
       `WeakMap` (`updateCoverageSpans`, bindings.ts:45-48) read back in component-contracts.ts:271.
