@@ -2240,8 +2240,55 @@ function drizzleReceiverNames(params: string, body = ''): Set<string> {
   for (const alias of destructuredDrizzleReceiverAliases(body)) {
     names.add(alias);
   }
+  for (const alias of transactionDrizzleReceiverAliases(body, names)) {
+    names.add(alias);
+  }
 
   return names;
+}
+
+function transactionDrizzleReceiverAliases(
+  body: string,
+  receiverNames: ReadonlySet<string>,
+): string[] {
+  // SPEC §10-§11: transaction receiver aliases are real only when parsed from live code.
+  return withParsedFunctionBodySource(body, ({ sourceFile }) => {
+    const aliases = new Set<string>();
+    let changed = true;
+
+    while (changed) {
+      changed = false;
+      const knownReceivers = new Set([...receiverNames, ...aliases]);
+
+      for (const call of sourceFile.getDescendantsOfKind(SyntaxKind.CallExpression)) {
+        const expression = call.getExpression();
+        if (staticAccessName(expression) !== 'transaction') continue;
+
+        const receiver = staticAccessExpression(expression);
+        if (!Node.isIdentifier(receiver) || !knownReceivers.has(receiver.getText())) continue;
+
+        const callback = call
+          .getArguments()
+          .find(
+            (argument) => Node.isArrowFunction(argument) || Node.isFunctionExpression(argument),
+          );
+        if (
+          !callback ||
+          (!Node.isArrowFunction(callback) && !Node.isFunctionExpression(callback))
+        ) {
+          continue;
+        }
+
+        const txName = callback.getParameters()[0]?.getNameNode();
+        if (!Node.isIdentifier(txName) || aliases.has(txName.getText())) continue;
+
+        aliases.add(txName.getText());
+        changed = true;
+      }
+    }
+
+    return [...aliases];
+  });
 }
 
 function destructuredDrizzleReceiverAliases(body: string): string[] {

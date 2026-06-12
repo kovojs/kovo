@@ -516,6 +516,45 @@ export interface CommerceInvalidationSets {
     });
   });
 
+  it('extracts Drizzle writes through transaction callback receiver aliases', () => {
+    const graph = extractTouchGraphFromSource([
+      {
+        fileName: 'cart.domain.ts',
+        source: `
+          export const cartItems = pgTable("cart_items", {}, jiso({ domain: "cart", key: "productId" }));
+
+          export async function addItem(db, productId) {
+            await db.transaction(async (writer) => {
+              await writer.insert(cartItems).values({ productId });
+              await writeAudit(writer, productId);
+            });
+          }
+        `,
+      },
+    ]);
+
+    expect(graph).toEqual({
+      addItem: {
+        reads: [],
+        touches: [
+          {
+            domain: 'cart',
+            keys: null,
+            site: 'cart.domain.ts:6',
+            via: 'cart_items',
+          },
+        ],
+        unresolved: [
+          {
+            code: 'FW406',
+            message: 'Statically un-analyzable write site; manual touches required.',
+            site: 'cart.domain.ts:7',
+          },
+        ],
+      },
+    });
+  });
+
   it('extracts expression-bodied arrow write handlers', () => {
     const graph = extractTouchGraphFromSource([
       {
@@ -2910,6 +2949,23 @@ export interface CommerceInvalidationSets {
           '  const raw = "const { tx: writer } = ctx";',
           '  await database.execute(sql`delete from cart_items`);',
           '  await writer.query.cartItems.findMany();',
+          '}',
+        ].join('\n'),
+      },
+    ]);
+
+    expect(graph).toEqual({});
+  });
+
+  it('does not recognize transaction receiver aliases from comments and strings', () => {
+    const graph = extractTouchGraphFromSource([
+      {
+        fileName: 'cart.domain.ts',
+        source: [
+          'export async function addItem(db) {',
+          '  // await db.transaction(async (writer) => writer.insert(cartItems).values({}));',
+          '  const raw = "db.transaction(async (writer) => writer.update(cartItems).set({}))";',
+          '  await writer.execute(sql`delete from cart_items`);',
           '}',
         ].join('\n'),
       },
