@@ -15,9 +15,7 @@ import type { RenderEquivalenceCheck } from '../types.js';
 
 const irHeader = '// @jiso-ir';
 
-export function emitServerModule(source: string, handlers: HandlerLowering[]): string {
-  const renderedSource = serverRenderSource(source, handlers);
-
+export function emitServerModule(renderedSource: string): string {
   return `${irHeader}
 export function renderSource() {
   return ${templateLiteral(renderedSource)};
@@ -25,9 +23,13 @@ export function renderSource() {
 `;
 }
 
-export function serverRenderSource(source: string, handlers: readonly HandlerLowering[]): string {
+export function serverRenderSource(
+  source: string,
+  handlers: readonly HandlerLowering[],
+  fileName: string,
+): string {
   const loweredSource = replaceHandlerAttributes(source, handlers);
-  const model = parseComponentModule('component.tsx', loweredSource);
+  const model = parseComponentModule(fileName, loweredSource);
   return stampRenderHost(loweredSource, model);
 }
 

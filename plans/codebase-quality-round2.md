@@ -392,10 +392,12 @@ pipeline throws the tree away and communicates via mutated source text.
       `pnpm exec vitest --run packages/compiler/src/index.test.ts` and
       `pnpm exec vp check packages/compiler/src/index.ts packages/compiler/src/validate/navigation.ts`.
       Partial evidence 2026-06-11: `serverRenderSource` now parses once after handler lowering
-      and stamps component identity, declared query deps, and initial state onto the render host
-      through one in-memory tag update instead of reparsing for each stamp. Same-session
-      evidence: `pnpm exec vitest --run packages/compiler/src/index.test.ts` and
-      `pnpm exec vp check packages/compiler/src/emit/server.ts`.
+      with the author file name and stamps component identity, declared query deps, and initial
+      state onto the render host through one in-memory tag update instead of reparsing for each
+      stamp; `compileComponentModule` computes that rendered source once and passes it to
+      `emitServerModule` instead of calling `serverRenderSource` twice. Same-session evidence:
+      `pnpm exec vitest --run packages/compiler/src/index.test.ts` and
+      `pnpm exec vp check packages/compiler/src/index.ts packages/compiler/src/emit/server.ts`.
       Partial evidence 2026-06-11: `lowerViewTransitions` and `lowerPlatformBehaviors` now
       require explicit `ComponentModuleModel` inputs from `compileComponentModule`, removing
       their hidden fake-filename parses and making the post-view-transition parse use the real
