@@ -303,6 +303,33 @@ export const CartBadge = component('cart-badge', {
     ]);
   });
 
+  it('reports FW235 for app-authored renderSource modules from the parser model', () => {
+    const result = compileComponentModule({
+      fileName: 'cart-badge.server.ts',
+      source: `
+export function renderSource() {
+  return '<cart-badge><span>2</span></cart-badge>';
+}
+`,
+    });
+
+    expect(result.diagnostics).toEqual([
+      {
+        code: 'FW235',
+        fileName: 'cart-badge.server.ts',
+        help: [
+          'SPEC §5.2: TSX is the sole app-authoring surface. Write JSX with typed expressions and let the compiler emit renderSource(), fw-c, fw-deps, and data-bind.',
+          'TSX equivalent direction: render with JSX, for example `render: (...) => (<cart-badge>...</cart-badge>)`, and use typed expressions such as `{cart.count}` instead of data-bind strings.',
+        ].join('\n'),
+        length: 41,
+        message:
+          'App source hand-authors lowered IR/string-rendered components; write TSX and let the compiler emit IR.',
+        severity: 'error',
+        start: { column: 10, line: 3 },
+      },
+    ]);
+  });
+
   it('keeps compiler-emitted IR accepted through explicit fixpoint provenance', () => {
     const emitted = compileComponentModule({
       fileName: 'cart-badge.tsx',

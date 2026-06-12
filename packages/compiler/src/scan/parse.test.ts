@@ -91,6 +91,25 @@ export const CartBadge = component('cart-badge', {
     ]);
   });
 
+  it('records first HTML tag names for exported renderSource returns', () => {
+    const source = `
+export function renderSource() {
+  const sample = '<not-returned></not-returned>';
+  return \`<cart-badge><span>2</span></cart-badge>\`;
+}
+`;
+    const model = parseComponentModule('cart-badge.server.ts', source);
+
+    expect(model.renderSourceReturns).toEqual([
+      {
+        end: source.indexOf('`;') + 1,
+        firstHtmlTagName: 'cart-badge',
+        source: '`<cart-badge><span>2</span></cart-badge>`',
+        start: source.indexOf('`<cart-badge>'),
+      },
+    ]);
+  });
+
   it('extracts outer property access paths from function body source', () => {
     expect(
       functionBodyPropertyAccessPaths(

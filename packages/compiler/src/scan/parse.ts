@@ -142,6 +142,7 @@ export interface ComponentModuleModel {
   jsxExpressions: readonly JsxExpressionModel[];
   jsxElements: readonly JsxElementModel[];
   mutationHandlers: readonly MutationHandlerModel[];
+  renderSourceReturns: readonly StringRenderModel[];
 }
 
 export function parseComponentModule(fileName: string, source: string): ComponentModuleModel {
@@ -158,6 +159,7 @@ export function parseComponentModule(fileName: string, source: string): Componen
   const jsxExpressions: JsxExpressionModel[] = [];
   const jsxElements: JsxElementModel[] = [];
   const mutationHandlers: MutationHandlerModel[] = [];
+  const renderSourceReturns: StringRenderModel[] = [];
 
   const visit = (node: ts.Node): void => {
     if (ts.isVariableDeclaration(node) && ts.isIdentifier(node.name) && isExportedVariable(node)) {
@@ -184,13 +186,26 @@ export function parseComponentModule(fileName: string, source: string): Componen
         mutationHandlers.push(...mutationHandlerModels(sourceFile, source, node));
       }
     }
+    if (isExportedRenderSourceFunction(node)) {
+      renderSourceReturns.push(
+        ...stringRenderReturnsFromFunctionBody(sourceFile, source, node.body),
+      );
+    }
 
     ts.forEachChild(node, visit);
   };
 
   visit(sourceFile);
 
-  return { calls, components, jsxComments, jsxExpressions, jsxElements, mutationHandlers };
+  return {
+    calls,
+    components,
+    jsxComments,
+    jsxExpressions,
+    jsxElements,
+    mutationHandlers,
+    renderSourceReturns,
+  };
 }
 
 function isExportedVariable(node: ts.VariableDeclaration): boolean {
@@ -198,9 +213,15 @@ function isExportedVariable(node: ts.VariableDeclaration): boolean {
   return ts.isVariableStatement(statement) && hasExportModifier(statement);
 }
 
-function hasExportModifier(node: ts.VariableStatement): boolean {
+function hasExportModifier(node: ts.FunctionDeclaration | ts.VariableStatement): boolean {
   return Boolean(
     ts.getModifiers(node)?.some((modifier) => modifier.kind === ts.SyntaxKind.ExportKeyword),
+  );
+}
+
+function isExportedRenderSourceFunction(node: ts.Node): node is ts.FunctionDeclaration {
+  return (
+    ts.isFunctionDeclaration(node) && node.name?.text === 'renderSource' && hasExportModifier(node)
   );
 }
 
@@ -721,14 +742,24 @@ function stringRenderReturns(
   if (!ts.isArrowFunction(render) && !ts.isFunctionExpression(render)) return [];
 
   if (ts.isBlock(render.body)) {
-    return render.body.statements.flatMap((statement) =>
-      ts.isReturnStatement(statement) && statement.expression
-        ? stringRenderModel(sourceFile, source, statement.expression)
-        : [],
-    );
+    return stringRenderReturnsFromFunctionBody(sourceFile, source, render.body);
   }
 
   return stringRenderModel(sourceFile, source, render.body);
+}
+
+function stringRenderReturnsFromFunctionBody(
+  sourceFile: ts.SourceFile,
+  source: string,
+  body: ts.Block | undefined,
+): StringRenderModel[] {
+  if (!body) return [];
+
+  return body.statements.flatMap((statement) =>
+    ts.isReturnStatement(statement) && statement.expression
+      ? stringRenderModel(sourceFile, source, statement.expression)
+      : [],
+  );
 }
 
 function stringRenderModel(

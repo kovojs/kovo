@@ -34,12 +34,7 @@ export function validateAuthoringSurface(
   }
 
   const renders = model
-    ? [
-        ...stringRenderedComponentsFromModel(model),
-        ...(options.source.includes('renderSource')
-          ? stringRenderedRenderSourceFunctions(options.fileName, options.source)
-          : []),
-      ]
+    ? stringRendersFromModel(model)
     : stringRenderedComponents(options.fileName, options.source);
 
   return renders.map((render) =>
@@ -85,43 +80,22 @@ function stringRenderedComponents(fileName: string, source: string): StringRende
   return renders;
 }
 
-function stringRenderedComponentsFromModel(model: ComponentModuleModel): StringRender[] {
-  return model.components.flatMap((component) =>
-    (component.stringRenderReturns ?? []).flatMap((render) =>
-      render.firstHtmlTagName
-        ? [
-            {
-              firstHtmlTagName: render.firstHtmlTagName,
-              length: render.end - render.start,
-              source: render.source,
-              start: render.start,
-            },
-          ]
-        : [],
-    ),
+function stringRendersFromModel(model: ComponentModuleModel): StringRender[] {
+  return [
+    ...model.components.flatMap((component) => component.stringRenderReturns ?? []),
+    ...model.renderSourceReturns,
+  ].flatMap((render) =>
+    render.firstHtmlTagName
+      ? [
+          {
+            firstHtmlTagName: render.firstHtmlTagName,
+            length: render.end - render.start,
+            source: render.source,
+            start: render.start,
+          },
+        ]
+      : [],
   );
-}
-
-function stringRenderedRenderSourceFunctions(fileName: string, source: string): StringRender[] {
-  const sourceFile = ts.createSourceFile(
-    fileName,
-    source,
-    ts.ScriptTarget.Latest,
-    true,
-    ts.ScriptKind.TSX,
-  );
-  const renders: StringRender[] = [];
-
-  const visit = (node: ts.Node): void => {
-    if (ts.isFunctionDeclaration(node) && node.name?.text === 'renderSource' && isExported(node)) {
-      renders.push(...htmlStringReturns(sourceFile, source, node.body));
-    }
-
-    ts.forEachChild(node, visit);
-  };
-
-  visit(sourceFile);
-  return renders;
 }
 
 function componentStringRenderReturns(

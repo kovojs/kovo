@@ -980,6 +980,15 @@ pipeline throws the tree away and communicates via mutated source text.
       `pnpm exec vitest --run packages/compiler/src/scan/parse.test.ts packages/compiler/src/compile-component.test.ts -t "first HTML tag|FW235|string-rendered"`,
       `pnpm exec vitest --run packages/compiler/src`, and
       `pnpm exec vp check --fix packages/compiler/src/scan/parse.ts packages/compiler/src/scan/parse.test.ts packages/compiler/src/validate/authoring-surface.ts`.
+      Additional evidence 2026-06-12: exported app-authored `renderSource()` string-return
+      diagnostics now also consume the caller-owned parse. `scan/parse.ts` records
+      `renderSourceReturns` with literal spans and first tag metadata on `ComponentModuleModel`,
+      and `validate/authoring-surface.ts` consumes those facts when a model is available instead
+      of launching a second renderSource-specific AST walk. The standalone source parser remains
+      only for direct validator callers that do not provide a model. Same-session evidence:
+      `pnpm exec vitest --run packages/compiler/src/scan/parse.test.ts packages/compiler/src/compile-component.test.ts -t "renderSource|FW235|string-rendered|first HTML tag"`,
+      `pnpm exec vitest --run packages/compiler/src`, and
+      `pnpm exec vp check packages/compiler/src/scan/parse.ts packages/compiler/src/scan/parse.test.ts packages/compiler/src/validate/authoring-surface.ts packages/compiler/src/compile-component.test.ts`.
       `pnpm exec vp check packages/compiler/src/index.ts packages/compiler/src/ir.ts packages/compiler/src/css.ts packages/compiler/src/emit/client.ts packages/compiler/src/emit/server.ts packages/compiler/src/emit/registry.ts packages/compiler/src/emit/bootstrap.ts packages/compiler/src/validate/authoring-surface.ts plans/codebase-quality-round2.md`.
       Additional evidence 2026-06-12: `packages/compiler/src/emit/registry.ts` now consumes
       canonical `FragmentTargetFact`, `PlatformSubstitution`, `QueryUpdatePlanFact`,
