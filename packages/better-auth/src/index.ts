@@ -362,6 +362,43 @@ export interface BetterAuthSchemaSourceAnnotationResult {
   validation: BetterAuthSchemaBridgeValidation;
 }
 
+export type BetterAuthGeneratedSchemaTableDegradationReason =
+  | 'ambiguous-physical-table'
+  | 'schema-bridge-key-unavailable'
+  | 'table-field-metadata-unavailable'
+  | 'unsupported-field-type';
+
+export interface BetterAuthGeneratedSchemaTableDegradation {
+  diagnosticCode: 'FW406';
+  field?: string;
+  fields: string[] | null;
+  manualBridgeSteps: string[];
+  message: string;
+  physicalTable?: string;
+  reason: BetterAuthGeneratedSchemaTableDegradationReason;
+  table: string;
+}
+
+export interface BetterAuthGeneratedSchemaTable {
+  exportName: string;
+  physicalTable: string;
+  table: string;
+}
+
+export interface BetterAuthSchemaSourceGenerationOptions {
+  annotationCallee?: string;
+  schemaBridge?: BetterAuthSchemaBridgeExtensions;
+}
+
+export interface BetterAuthSchemaSourceGenerationResult {
+  generatedTables: BetterAuthGeneratedSchemaTable[];
+  requiredImports: string[];
+  skippedTables: BetterAuthGeneratedSchemaTableDegradation[];
+  source: string;
+  unsupportedPluginTables: BetterAuthPluginTableDegradation[];
+  validation: BetterAuthSchemaBridgeValidation;
+}
+
 export const betterAuthAuthDomain = domain('auth');
 export const betterAuthOrganizationDomain = domain('organization');
 export const betterAuthUserDomain = domain('user');
@@ -738,6 +775,120 @@ export function annotateBetterAuthSchemaSource(
     source: applyBetterAuthSchemaSourceReplacements(source, sourceReplacements),
     unsupportedSourceTables,
     unrecognizedSourceTables,
+    validation,
+  };
+}
+
+// plans/auth.md B1 / SPEC.md §10.1 and §11.2: generated app schema.ts is a
+// convenience over real Better Auth metadata, not an inferred plugin mapper.
+export function generateBetterAuthSchemaSource(
+  tables: Record<string, unknown>,
+  options: BetterAuthSchemaSourceGenerationOptions = {},
+): BetterAuthSchemaSourceGenerationResult {
+  const schemaBridge = createBetterAuthSchemaBridge(options.schemaBridge);
+  const validation = validateBetterAuthSchemaBridge(
+    tables,
+    options.schemaBridge === undefined ? {} : { schemaBridge: options.schemaBridge },
+  );
+  const annotationCallee = options.annotationCallee ?? 'jiso';
+  const collidingPhysicalTables = betterAuthCollidingPhysicalTableNames(tables, schemaBridge);
+  const generatedTables: BetterAuthGeneratedSchemaTable[] = [];
+  const skippedTables: BetterAuthGeneratedSchemaTableDegradation[] = [];
+  const declarations: string[] = [];
+  const requiredBuilders = new Set<string>(['pgTable']);
+  const exportNames = new Set<string>();
+
+  for (const table of orderedBetterAuthMetadataTables(tables, schemaBridge)) {
+    const annotation = betterAuthSchemaBridgeAnnotation(table, schemaBridge);
+    if (annotation === undefined) continue;
+
+    const metadata = tables[table];
+    const physicalTable = betterAuthPhysicalTableName(table, metadata);
+    const fieldNames = betterAuthTableFieldNames(metadata);
+
+    if (collidingPhysicalTables.has(physicalTable)) {
+      skippedTables.push(
+        generatedSchemaTableDegradation({
+          fields: fieldNames,
+          message: `${betterAuthTableLabel(
+            table,
+            physicalTable,
+          )} shares a physical table name with another Better Auth table; generate schema.ts manually after resolving the alias collision.`,
+          physicalTable,
+          reason: 'ambiguous-physical-table',
+          table,
+        }),
+      );
+      continue;
+    }
+
+    if (fieldNames === null) {
+      skippedTables.push(
+        generatedSchemaTableDegradation({
+          fields: null,
+          message: `${betterAuthTableLabel(
+            table,
+            physicalTable,
+          )} cannot be generated because Better Auth table field metadata is unavailable.`,
+          physicalTable,
+          reason: 'table-field-metadata-unavailable',
+          table,
+        }),
+      );
+      continue;
+    }
+
+    if ('domain' in annotation && annotation.key !== undefined && !fieldNames.has(annotation.key)) {
+      skippedTables.push(
+        generatedSchemaTableDegradation({
+          fields: fieldNames,
+          field: annotation.key,
+          message: `${betterAuthTableLabel(
+            table,
+            physicalTable,
+          )} cannot be generated because schema-bridge key ${annotation.key} is absent from Better Auth field metadata.`,
+          physicalTable,
+          reason: 'schema-bridge-key-unavailable',
+          table,
+        }),
+      );
+      continue;
+    }
+
+    const columns = betterAuthGeneratedSchemaColumns(table, metadata);
+    if ('degradation' in columns) {
+      skippedTables.push(columns.degradation);
+      continue;
+    }
+
+    for (const builder of columns.builders) requiredBuilders.add(builder);
+
+    const exportName = uniqueBetterAuthSchemaExportName(table, exportNames);
+    generatedTables.push({ exportName, physicalTable, table });
+    declarations.push(
+      [
+        `export const ${exportName} = pgTable(${quoteTsString(physicalTable)}, {`,
+        ...columns.lines.map((line) => `  ${line}`),
+        `}, ${betterAuthSchemaAnnotationCall(table, annotationCallee, schemaBridge)});`,
+      ].join('\n'),
+    );
+  }
+
+  const drizzleImport = `import { ${[...requiredBuilders]
+    .sort()
+    .join(', ')} } from 'drizzle-orm/pg-core';`;
+  const requiredImports = [betterAuthSchemaImportStatement(annotationCallee), drizzleImport];
+  const source =
+    declarations.length === 0
+      ? ''
+      : [...requiredImports, '', declarations.join('\n\n'), ''].join('\n');
+
+  return {
+    generatedTables,
+    requiredImports,
+    skippedTables: skippedTables.sort((left, right) => left.table.localeCompare(right.table)),
+    source,
+    unsupportedPluginTables: validation.pluginTableDegradations,
     validation,
   };
 }
@@ -1399,11 +1550,294 @@ function betterAuthPhysicalTableNameGroups(
   return physicalTables;
 }
 
+function orderedBetterAuthMetadataTables(
+  tables: Record<string, unknown>,
+  schemaBridge: BetterAuthSchemaBridgeExtensions = betterAuthSchemaBridge,
+): string[] {
+  return Object.keys(tables)
+    .filter((table) => isBetterAuthSchemaTable(table, schemaBridge))
+    .sort((left, right) => {
+      const leftOrder = betterAuthTableOrder(tables[left]);
+      const rightOrder = betterAuthTableOrder(tables[right]);
+
+      return leftOrder === rightOrder
+        ? betterAuthPhysicalTableName(left, tables[left]).localeCompare(
+            betterAuthPhysicalTableName(right, tables[right]),
+          )
+        : leftOrder - rightOrder;
+    });
+}
+
+function betterAuthTableOrder(metadata: unknown): number {
+  if (!metadata || typeof metadata !== 'object') return Number.POSITIVE_INFINITY;
+
+  const order = (metadata as { order?: unknown }).order;
+
+  return typeof order === 'number' ? order : Number.POSITIVE_INFINITY;
+}
+
 interface DrizzleTableCall {
   callee: string;
   closeParen: number;
   extraConfigText: null | string;
   tableName: string;
+}
+
+type BetterAuthGeneratedSchemaFieldBuilder = 'boolean' | 'integer' | 'text' | 'timestamp';
+
+interface BetterAuthGeneratedSchemaColumns {
+  builders: Set<BetterAuthGeneratedSchemaFieldBuilder>;
+  lines: string[];
+}
+
+function betterAuthGeneratedSchemaColumns(
+  table: string,
+  metadata: unknown,
+): BetterAuthGeneratedSchemaColumns | { degradation: BetterAuthGeneratedSchemaTableDegradation } {
+  const fields = betterAuthTableFields(metadata);
+  const physicalTable = betterAuthPhysicalTableName(table, metadata);
+
+  if (fields === null) {
+    return {
+      degradation: generatedSchemaTableDegradation({
+        fields: null,
+        message: `${betterAuthTableLabel(
+          table,
+          physicalTable,
+        )} cannot be generated because Better Auth table field metadata is unavailable.`,
+        physicalTable,
+        reason: 'table-field-metadata-unavailable',
+        table,
+      }),
+    };
+  }
+
+  const lines = [`id: text('id').primaryKey(),`];
+  const builders = new Set<BetterAuthGeneratedSchemaFieldBuilder>(['text']);
+
+  for (const [field, fieldMetadata] of Object.entries(fields)) {
+    if (field === 'id') continue;
+
+    const column = betterAuthGeneratedSchemaColumn(table, physicalTable, field, fieldMetadata);
+
+    if ('degradation' in column) return column;
+
+    builders.add(column.builder);
+    lines.push(`${betterAuthSchemaObjectPropertyName(field)}: ${column.expression},`);
+  }
+
+  return { builders, lines };
+}
+
+function betterAuthGeneratedSchemaColumn(
+  table: string,
+  physicalTable: string,
+  field: string,
+  metadata: unknown,
+):
+  | {
+      builder: BetterAuthGeneratedSchemaFieldBuilder;
+      expression: string;
+    }
+  | { degradation: BetterAuthGeneratedSchemaTableDegradation } {
+  const type = betterAuthFieldType(metadata);
+  const builder = betterAuthGeneratedSchemaFieldBuilder(type);
+  const fieldNames = betterAuthTableFieldNames({ fields: { [field]: metadata } });
+
+  if (builder === null) {
+    return {
+      degradation: generatedSchemaTableDegradation({
+        field,
+        fields: fieldNames,
+        message: `${betterAuthTableLabel(
+          table,
+          physicalTable,
+        )} cannot be generated because field ${field} has unsupported Better Auth type ${String(
+          type ?? 'unavailable',
+        )}.`,
+        physicalTable,
+        reason: 'unsupported-field-type',
+        table,
+      }),
+    };
+  }
+
+  const columnName = betterAuthFieldName(field, metadata);
+  const required = betterAuthFieldRequired(metadata);
+  const notNull = required ? '.notNull()' : '';
+
+  return {
+    builder,
+    expression: `${builder}(${quoteTsString(columnName)})${notNull}`,
+  };
+}
+
+function betterAuthTableFields(metadata: unknown): Record<string, unknown> | null {
+  if (!metadata || typeof metadata !== 'object') return null;
+
+  const fields = (metadata as { fields?: unknown }).fields;
+
+  if (!fields || typeof fields !== 'object' || Array.isArray(fields)) return null;
+
+  return fields as Record<string, unknown>;
+}
+
+function betterAuthFieldType(metadata: unknown): string | null {
+  if (!metadata || typeof metadata !== 'object') return null;
+
+  const type = (metadata as { type?: unknown }).type;
+
+  return typeof type === 'string' ? type : null;
+}
+
+function betterAuthGeneratedSchemaFieldBuilder(
+  type: string | null,
+): BetterAuthGeneratedSchemaFieldBuilder | null {
+  if (type === 'boolean') return 'boolean';
+  if (type === 'date') return 'timestamp';
+  if (type === 'number') return 'integer';
+  if (type === 'string') return 'text';
+
+  return null;
+}
+
+function betterAuthFieldName(field: string, metadata: unknown): string {
+  if (!metadata || typeof metadata !== 'object') return field;
+
+  const fieldName = (metadata as { fieldName?: unknown }).fieldName;
+
+  return typeof fieldName === 'string' && fieldName.length > 0 ? fieldName : field;
+}
+
+function betterAuthFieldRequired(metadata: unknown): boolean {
+  if (!metadata || typeof metadata !== 'object') return false;
+
+  return (metadata as { required?: unknown }).required === true;
+}
+
+function generatedSchemaTableDegradation(options: {
+  field?: string;
+  fields: Set<string> | null;
+  message: string;
+  physicalTable: string;
+  reason: BetterAuthGeneratedSchemaTableDegradationReason;
+  table: string;
+}): BetterAuthGeneratedSchemaTableDegradation {
+  return {
+    diagnosticCode: 'FW406',
+    ...(options.field === undefined ? {} : { field: options.field }),
+    fields: options.fields === null ? null : [...options.fields].sort(),
+    manualBridgeSteps: generatedSchemaTableManualBridgeSteps(
+      options.table,
+      options.physicalTable,
+      options.reason,
+      options.field,
+    ),
+    message: options.message,
+    ...(options.physicalTable === options.table ? {} : { physicalTable: options.physicalTable }),
+    reason: options.reason,
+    table: options.table,
+  };
+}
+
+function generatedSchemaTableManualBridgeSteps(
+  table: string,
+  physicalTable: string,
+  reason: BetterAuthGeneratedSchemaTableDegradationReason,
+  field: string | undefined,
+): string[] {
+  const label = betterAuthTableLabel(table, physicalTable);
+  const firstStep =
+    reason === 'ambiguous-physical-table'
+      ? `Resolve the Better Auth modelName collision for ${label} before generating schema.ts.`
+      : `Inspect Better Auth metadata for ${label} and write the Drizzle declaration manually.`;
+  const fieldStep =
+    field === undefined
+      ? 'Add the matching jiso({ domain, key }) or jiso({ exempt: true }) annotation once the table declaration is explicit.'
+      : `Verify field ${field} in Better Auth metadata before adding the matching Jiso annotation.`;
+
+  return [
+    firstStep,
+    fieldStep,
+    'Keep observed writes FW406 until schema.ts and declared Better Auth API touches both cover the table under SPEC.md §11.2.',
+  ];
+}
+
+function uniqueBetterAuthSchemaExportName(table: string, usedNames: Set<string>): string {
+  const baseName = betterAuthSchemaExportIdentifier(table);
+  let name = baseName;
+  let index = 2;
+
+  while (usedNames.has(name)) {
+    name = `${baseName}${index}`;
+    index += 1;
+  }
+
+  usedNames.add(name);
+
+  return name;
+}
+
+function betterAuthSchemaExportIdentifier(table: string): string {
+  if (isValidTypeScriptIdentifier(table) && !isReservedTypeScriptIdentifier(table)) return table;
+
+  const words = table.split(/[^0-9A-Za-z_$]+/).filter((word) => word.length > 0);
+  const suffix = words.map((word) => `${word[0]?.toUpperCase() ?? ''}${word.slice(1)}`).join('');
+
+  return suffix.length === 0 ? 'betterAuthTable' : `betterAuth${suffix}`;
+}
+
+function betterAuthSchemaObjectPropertyName(value: string): string {
+  return isValidTypeScriptIdentifier(value) && !isReservedTypeScriptIdentifier(value)
+    ? value
+    : quoteTsString(value);
+}
+
+function isValidTypeScriptIdentifier(value: string): boolean {
+  return /^[A-Za-z_$][0-9A-Za-z_$]*$/.test(value);
+}
+
+const reservedTypeScriptIdentifiers = new Set([
+  'break',
+  'case',
+  'catch',
+  'class',
+  'const',
+  'continue',
+  'debugger',
+  'default',
+  'delete',
+  'do',
+  'else',
+  'enum',
+  'export',
+  'extends',
+  'false',
+  'finally',
+  'for',
+  'function',
+  'if',
+  'import',
+  'in',
+  'instanceof',
+  'new',
+  'null',
+  'return',
+  'super',
+  'switch',
+  'this',
+  'throw',
+  'true',
+  'try',
+  'typeof',
+  'var',
+  'void',
+  'while',
+  'with',
+]);
+
+function isReservedTypeScriptIdentifier(value: string): boolean {
+  return reservedTypeScriptIdentifiers.has(value);
 }
 
 function isBetterAuthSchemaTable(

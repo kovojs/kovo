@@ -454,10 +454,26 @@ tables)` now emits both logical and physical table facts for runtime SQL verific
       `pnpm exec tsc -p conformance/better-auth-pin/tsconfig.json --noEmit`,
       `pnpm exec vp check packages/better-auth/src/index.ts packages/better-auth/src/index.test.ts conformance/better-auth-pin/src/index.test.ts plans/auth.md IMPLEMENT_v1.md`,
       and `git diff --check`.
+      Partial evidence 2026-06-12: `generateBetterAuthSchemaSource` now emits bounded
+      app `schema.ts` declarations directly from Better Auth table metadata, including
+      Drizzle imports, implicit `id` primary keys, pinned Better Auth field-type mappings
+      (`string`, `date`, `boolean`, `number`), physical `modelName` table aliases, and the
+      same `jiso({ domain, key })` / `jiso({ exempt: true })` annotations as the bridge.
+      The generator leaves unsupported plugin tables out of emitted source and returns the
+      existing `FW406` plugin-table degradation facts; bridged tables with unavailable field
+      metadata, ambiguous physical aliases, missing bridge keys, or unsupported field types
+      are skipped with structured `FW406` table-generation degradations rather than fabricated
+      mappings. `packages/better-auth/src/index.test.ts` covers local generation, unsupported
+      plugin degradation, unavailable metadata, and unsupported field-type fixtures.
+      `conformance/better-auth-pin/src/index.test.ts` pins generation against real
+      `better-auth@1.6.17` core/admin/organization metadata and plugin `modelName` aliases,
+      including `deviceAuthorization()`'s `number` field mapping to a Drizzle integer column.
+      Same-session evidence:
+      `pnpm exec vitest --run packages/better-auth/src/index.test.ts conformance/better-auth-pin/src/index.test.ts --reporter=dot`.
       Remaining gaps: plugin-generated tables outside the blessed organization/admin/two-factor/OIDC-provider/MCP/SIWE/JWT/device-authorization
       surface are still not mapped, the OAuth-provider successor package/table metadata is not
-      installed or exportable from the pinned dependency set, and full app `schema.ts` generation
-      remains bounded to recognized Drizzle table declarations.
+      installed or exportable from the pinned dependency set, and generated schema declarations
+      intentionally remain bounded to Better Auth field metadata types pinned by conformance.
 - [x] B2 typed session mapper (`betterAuthSession(auth, map)`). Evidence: `packages/better-auth/src/index.ts` exports a dependency-light Better Auth-like `auth.api.getSession({ headers })` provider adapter that returns `null` for anonymous sessions per SPEC §6.5 and maps the inferred Better Auth `session`/`user` payload through an app-owned total mapper; `packages/better-auth/src/index.test.ts` covers runtime mapping, anonymous requests, and a `@ts-expect-error` totality check that dropped declared session fields fail under `vp check`.
 - [x] B3 guard bindings: `authed` / `role()` / org-scoping over the mapped session. Evidence: `packages/better-auth/src/index.ts` exports `authed()`, typed `role<Request>()`, and `activeOrganization()` guards over the mapped session while preserving SPEC §10.3 unauthenticated vs unauthorized guard failures; focused tests cover success/failure behavior and stale role-name type failures without requiring live Better Auth services.
 - [x] B4 ejectable credential mutations (sign-in / sign-up / sign-out) wrapping `auth.api`.

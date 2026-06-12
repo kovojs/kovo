@@ -32,6 +32,7 @@ import {
   betterAuthSession,
   betterAuthTableDomain,
   betterAuthUnavailablePluginMetadataDegradation,
+  generateBetterAuthSchemaSource,
   getBetterAuthSetCookie,
   isBetterAuthCredentialFailureError,
   mount,
@@ -207,7 +208,7 @@ function responseWithCookies(cookies: readonly string[], status = 204): BetterAu
 
 function authTable(fields: readonly string[] = [], modelName?: string) {
   return {
-    fields: Object.fromEntries(fields.map((field) => [field, {}])),
+    fields: Object.fromEntries(fields.map((field) => [field, { type: 'string' }])),
     ...(modelName === undefined ? {} : { modelName }),
   };
 }
@@ -2052,6 +2053,167 @@ describe('credential mutation helpers', () => {
     expect(result.source).toContain(
       "export const verification = sqlite.sqliteTable('verification', {}, jiso({ exempt: true }));",
     );
+  });
+
+  it('generates bounded app schema.ts declarations from Better Auth metadata', () => {
+    const result = generateBetterAuthSchemaSource({
+      account: authTable(['userId']),
+      session: {
+        fields: {
+          expiresAt: { required: true, type: 'date' },
+          token: { required: true, type: 'string' },
+          userId: { fieldName: 'user_id', required: true, type: 'string' },
+        },
+      },
+      user: {
+        fields: {
+          'profile-url': { fieldName: 'profile_url', type: 'string' },
+          email: { required: true, type: 'string' },
+          emailVerified: { required: true, type: 'boolean' },
+          name: { required: true, type: 'string' },
+        },
+      },
+      verification: {
+        fields: {
+          expiresAt: { required: true, type: 'date' },
+          identifier: { required: true, type: 'string' },
+          value: { required: true, type: 'string' },
+        },
+      },
+    });
+
+    // SPEC.md §10.1 / §11.2: generated schema.ts is bounded to real
+    // Better Auth fields and explicit Jiso bridge annotations.
+    expect(result.validation.ok).toBe(true);
+    expect(result.generatedTables.map((table) => table.table)).toEqual([
+      'account',
+      'session',
+      'user',
+      'verification',
+    ]);
+    expect(result.skippedTables).toEqual([]);
+    expect(result.requiredImports).toEqual([
+      "import { jiso } from '@jiso/drizzle';",
+      "import { boolean, pgTable, text, timestamp } from 'drizzle-orm/pg-core';",
+    ]);
+    expect(result.source).toContain(
+      "export const user = pgTable('user', {\n" +
+        "  id: text('id').primaryKey(),\n" +
+        "  'profile-url': text('profile_url'),\n" +
+        "  email: text('email').notNull(),\n" +
+        "  emailVerified: boolean('emailVerified').notNull(),\n" +
+        "  name: text('name').notNull(),\n" +
+        "}, jiso({ domain: 'user', key: 'id' }));",
+    );
+    expect(result.source).toContain(
+      "export const session = pgTable('session', {\n" +
+        "  id: text('id').primaryKey(),\n" +
+        "  expiresAt: timestamp('expiresAt').notNull(),\n" +
+        "  token: text('token').notNull(),\n" +
+        "  userId: text('user_id').notNull(),\n" +
+        "}, jiso({ domain: 'auth', key: 'userId' }));",
+    );
+    expect(result.source).toContain(
+      "export const verification = pgTable('verification', {\n" +
+        "  id: text('id').primaryKey(),\n" +
+        "  expiresAt: timestamp('expiresAt').notNull(),\n" +
+        "  identifier: text('identifier').notNull(),\n" +
+        "  value: text('value').notNull(),\n" +
+        '}, jiso({ exempt: true }));',
+    );
+  });
+
+  it('keeps unsupported plugin tables out of generated schema.ts with FW406 facts', () => {
+    const result = generateBetterAuthSchemaSource({
+      account: authTable(['userId']),
+      session: authTable(['userId']),
+      user: authTable(),
+      verification: authTable(),
+      webauthnCredential: authTable(['credentialId', 'userId']),
+    });
+
+    expect(result.validation.ok).toBe(false);
+    expect(result.generatedTables.map((table) => table.table)).toEqual([
+      'account',
+      'session',
+      'user',
+      'verification',
+    ]);
+    expect(result.source).not.toContain('webauthnCredential');
+    expect(result.unsupportedPluginTables).toEqual([
+      {
+        diagnosticCode: 'FW406',
+        fields: ['credentialId', 'id', 'userId'],
+        manualBridgeSteps: [
+          'Inspect webauthnCredential fields (credentialId, id, userId) and decide whether the app reads this table.',
+          "Likely app-visible ownership is jiso({ domain: 'auth', key: 'userId' }); confirm before adding the bridge, otherwise use jiso({ exempt: true }) with a rationale.",
+          'Add declared Better Auth API touches for writes that can mutate webauthnCredential; SPEC.md §11.2 keeps observed writes FW406 until declared coverage exists.',
+        ],
+        message:
+          'webauthnCredential is outside the blessed Better Auth schema bridge; add a schema.ts domain/exempt annotation and declared touches before relying on runtime coverage.',
+        reason: 'unsupported-plugin-table',
+        suggestedAnnotation: { domain: 'auth', key: 'userId' },
+        table: 'webauthnCredential',
+      },
+    ]);
+  });
+
+  it('degrades generated schema.ts tables when field metadata is unavailable', () => {
+    const result = generateBetterAuthSchemaSource({
+      account: authTable(['userId']),
+      session: {},
+      user: authTable(),
+      verification: authTable(),
+    });
+
+    expect(result.generatedTables.map((table) => table.table)).toEqual([
+      'account',
+      'user',
+      'verification',
+    ]);
+    expect(result.source).not.toContain('export const session');
+    expect(result.skippedTables).toContainEqual({
+      diagnosticCode: 'FW406',
+      fields: null,
+      manualBridgeSteps: [
+        'Inspect Better Auth metadata for session and write the Drizzle declaration manually.',
+        'Add the matching jiso({ domain, key }) or jiso({ exempt: true }) annotation once the table declaration is explicit.',
+        'Keep observed writes FW406 until schema.ts and declared Better Auth API touches both cover the table under SPEC.md §11.2.',
+      ],
+      message:
+        'session cannot be generated because Better Auth table field metadata is unavailable.',
+      reason: 'table-field-metadata-unavailable',
+      table: 'session',
+    });
+  });
+
+  it('degrades generated schema.ts tables with unsupported Better Auth field types', () => {
+    const result = generateBetterAuthSchemaSource({
+      account: authTable(['userId']),
+      session: authTable(['userId']),
+      user: {
+        fields: {
+          metadata: { type: 'json' },
+        },
+      },
+      verification: authTable(),
+    });
+
+    expect(result.source).not.toContain('export const user');
+    expect(result.skippedTables).toContainEqual({
+      diagnosticCode: 'FW406',
+      field: 'metadata',
+      fields: ['id', 'metadata'],
+      manualBridgeSteps: [
+        'Inspect Better Auth metadata for user and write the Drizzle declaration manually.',
+        'Verify field metadata in Better Auth metadata before adding the matching Jiso annotation.',
+        'Keep observed writes FW406 until schema.ts and declared Better Auth API touches both cover the table under SPEC.md §11.2.',
+      ],
+      message:
+        'user cannot be generated because field metadata has unsupported Better Auth type json.',
+      reason: 'unsupported-field-type',
+      table: 'user',
+    });
   });
 
   it('wraps signInEmail as an ordinary mutation and forwards Better Auth cookies', async () => {

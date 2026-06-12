@@ -66,6 +66,7 @@ import {
   betterAuthSignUpEmailMutation,
   betterAuthSsoPluginMetadataImportPaths,
   betterAuthUnavailablePluginMetadataDegradation,
+  generateBetterAuthSchemaSource,
   mount,
   role,
   validateBetterAuthSchemaBridge,
@@ -366,6 +367,80 @@ describe('Better Auth pinned conformance', () => {
     );
   });
 
+  it('generates app schema.ts declarations from real Better Auth table metadata', () => {
+    const { auth } = createRealAuth({
+      plugins: [
+        admin(),
+        organization({
+          dynamicAccessControl: { enabled: true },
+          teams: { enabled: true },
+        }),
+      ],
+    });
+    const tables = getAuthTables(auth.options);
+    const result = generateBetterAuthSchemaSource(tables);
+
+    // SPEC.md §10.1 / §11.2: generated declarations are bounded to the real
+    // Better Auth metadata fields and explicit schema-bridge annotations.
+    expect(result.validation).toEqual({
+      declaredTouchMismatches: [],
+      keyFieldMismatches: [],
+      missingTables: [],
+      ok: true,
+      pluginTableDegradations: [],
+      unbridgedTables: [],
+    });
+    expect(result.generatedTables.map((table) => table.table)).toEqual([
+      'user',
+      'session',
+      'account',
+      'verification',
+      'invitation',
+      'member',
+      'organization',
+      'organizationRole',
+      'team',
+      'teamMember',
+    ]);
+    expect(result.skippedTables).toEqual([]);
+    expect(result.unsupportedPluginTables).toEqual([]);
+    expect(result.requiredImports).toEqual([
+      "import { jiso } from '@jiso/drizzle';",
+      "import { boolean, pgTable, text, timestamp } from 'drizzle-orm/pg-core';",
+    ]);
+    expect(result.source).toContain(
+      "export const user = pgTable('user', {\n" +
+        "  id: text('id').primaryKey(),\n" +
+        "  name: text('name').notNull(),\n" +
+        "  email: text('email').notNull(),\n" +
+        "  emailVerified: boolean('emailVerified').notNull(),",
+    );
+    expect(result.source).toContain(
+      "  banned: boolean('banned'),\n" +
+        "  banReason: text('banReason'),\n" +
+        "  banExpires: timestamp('banExpires'),",
+    );
+    expect(result.source).toContain(
+      "export const member = pgTable('member', {\n" +
+        "  id: text('id').primaryKey(),\n" +
+        "  organizationId: text('organizationId').notNull(),\n" +
+        "  userId: text('userId').notNull(),\n" +
+        "  role: text('role').notNull(),\n" +
+        "  createdAt: timestamp('createdAt').notNull(),\n" +
+        "}, jiso({ domain: 'organization', key: 'organizationId' }));",
+    );
+    expect(result.source).toContain(
+      "export const verification = pgTable('verification', {\n" +
+        "  id: text('id').primaryKey(),\n" +
+        "  identifier: text('identifier').notNull(),\n" +
+        "  value: text('value').notNull(),\n" +
+        "  expiresAt: timestamp('expiresAt').notNull(),\n" +
+        "  createdAt: timestamp('createdAt').notNull(),\n" +
+        "  updatedAt: timestamp('updatedAt').notNull(),\n" +
+        '}, jiso({ exempt: true }));',
+    );
+  });
+
   it('materializes real Better Auth metadata when schema.ts aliases Drizzle table factories', () => {
     const { auth } = createRealAuth({
       plugins: [
@@ -488,6 +563,7 @@ describe('Better Auth pinned conformance', () => {
       betterAuthSchemaSourceFixture(physicalTables),
       tables,
     );
+    const generated = generateBetterAuthSchemaSource(tables);
     const verifierConfig = createBetterAuthDbVerificationConfig({}, tables);
 
     expect(
@@ -533,6 +609,20 @@ describe('Better Auth pinned conformance', () => {
     );
     expect(result.source).toContain(
       "export const auth_verifications = pgTable('auth_verifications', {}, jiso({ exempt: true }));",
+    );
+    expect(generated.validation.ok).toBe(true);
+    expect(generated.skippedTables).toEqual([]);
+    expect(generated.source).toContain(
+      "export const user = pgTable('auth_users', {\n" +
+        "  id: text('id').primaryKey(),\n" +
+        "  name: text('name').notNull(),\n" +
+        "  email: text('email').notNull(),",
+    );
+    expect(generated.source).toContain(
+      "export const session = pgTable('auth_sessions', {\n" +
+        "  id: text('id').primaryKey(),\n" +
+        "  expiresAt: timestamp('expiresAt').notNull(),\n" +
+        "  token: text('token').notNull(),",
     );
     expect(verifierConfig.domainByTable).toMatchObject({
       auth_accounts: 'auth',
@@ -2091,6 +2181,7 @@ describe('Better Auth pinned conformance', () => {
       betterAuthSchemaSourceFixture(physicalTables),
       tables,
     );
+    const generated = generateBetterAuthSchemaSource(tables);
     const verifierConfig = createBetterAuthDbVerificationConfig({}, tables);
 
     expect(
@@ -2137,6 +2228,29 @@ describe('Better Auth pinned conformance', () => {
     );
     expect(result.source).toContain(
       "export const auth_device_codes = pgTable('auth_device_codes', {}, jiso({ exempt: true }));",
+    );
+    expect(generated.validation.ok).toBe(true);
+    expect(generated.skippedTables).toEqual([]);
+    expect(generated.requiredImports).toEqual([
+      "import { jiso } from '@jiso/drizzle';",
+      "import { boolean, integer, pgTable, text, timestamp } from 'drizzle-orm/pg-core';",
+    ]);
+    expect(generated.source).toContain(
+      "export const oauthApplication = pgTable('auth_oauth_apps', {\n" +
+        "  id: text('id').primaryKey(),\n" +
+        "  name: text('name'),\n" +
+        "  icon: text('icon'),",
+    );
+    expect(generated.source).toContain(
+      "export const deviceCode = pgTable('auth_device_codes', {\n" +
+        "  id: text('id').primaryKey(),\n" +
+        "  deviceCode: text('deviceCode').notNull(),\n" +
+        "  userCode: text('userCode').notNull(),\n" +
+        "  userId: text('userId'),\n" +
+        "  expiresAt: timestamp('expiresAt').notNull(),\n" +
+        "  status: text('status').notNull(),\n" +
+        "  lastPolledAt: timestamp('lastPolledAt'),\n" +
+        "  pollingInterval: integer('pollingInterval'),",
     );
     expect(verifierConfig.domainByTable).toMatchObject({
       auth_oauth_apps: 'auth',
