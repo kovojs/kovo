@@ -670,6 +670,14 @@ pipeline throws the tree away and communicates via mutated source text.
       `pnpm exec vitest --run packages/compiler/src/scan/parse.test.ts packages/compiler/src/handler-lowering.test.ts packages/compiler/src/index.test.ts packages/compiler/src/shared.test.ts`,
       `pnpm exec vp check packages/compiler/src/scan/parse.ts packages/compiler/src/scan/parse.test.ts packages/compiler/src/lower/handlers.ts plans/codebase-quality-round2.md`,
       and `git diff --check`.
+      Additional evidence 2026-06-12: handler element-param type inference now reuses the
+      TypeScript parser front-end's `expressionUsageType` classifier for the remaining fallback
+      path instead of duplicating boolean/number parent-context checks in `lower/handlers.ts`.
+      `scan/parse.test.ts` and `handler-lowering.test.ts` keep the string-literal immunity and
+      AST usage-context behavior pinned. Same-session evidence:
+      `pnpm exec vitest --run packages/compiler/src/scan/parse.test.ts packages/compiler/src/handler-lowering.test.ts -t "handler property access|element param types|AST usage contexts|string literal comparisons"`,
+      `pnpm exec vp check --fix packages/compiler/src/scan/parse.ts packages/compiler/src/lower/handlers.ts`,
+      and `git diff --check`.
 - [x] **HIGH — Kill the derive mega-regex.** validate/bindings.ts:215-216 silently drops any
       `derive()` export whose expression contains `;` in a string or unusual formatting — its
       stamps vanish from `collectQueryUpdatePlans` with no diagnostic. scan/parse.ts already

@@ -849,13 +849,22 @@ function propertyAccessInferredType(
   sourceFile: ts.SourceFile,
   node: ts.PropertyAccessExpression,
 ): { inferredType: 'boolean' | 'number' } | {} {
-  if (isBooleanUsage(node, sourceFile)) return { inferredType: 'boolean' };
-  if (isNumberUsage(node, sourceFile)) return { inferredType: 'number' };
+  const inferredType = expressionUsageType(sourceFile, node);
+  if (inferredType) return { inferredType };
 
   return {};
 }
 
-function isBooleanUsage(node: ts.Node, sourceFile: ts.SourceFile): boolean {
+export function expressionUsageType(
+  sourceFile: ts.SourceFile,
+  node: ts.Node,
+): 'boolean' | 'number' | undefined {
+  if (isBooleanUsage(sourceFile, node)) return 'boolean';
+  if (isNumberUsage(sourceFile, node)) return 'number';
+  return undefined;
+}
+
+function isBooleanUsage(sourceFile: ts.SourceFile, node: ts.Node): boolean {
   const parent = node.parent;
 
   if (ts.isPrefixUnaryExpression(parent) && parent.operator === ts.SyntaxKind.ExclamationToken) {
@@ -878,12 +887,12 @@ function isBooleanUsage(node: ts.Node, sourceFile: ts.SourceFile): boolean {
 
   return (
     isEqualityOperator(parent.operatorToken.kind) &&
-    ((parent.left === node && isBooleanLiteral(parent.right, sourceFile)) ||
-      (parent.right === node && isBooleanLiteral(parent.left, sourceFile)))
+    ((parent.left === node && isBooleanLiteral(sourceFile, parent.right)) ||
+      (parent.right === node && isBooleanLiteral(sourceFile, parent.left)))
   );
 }
 
-function isNumberUsage(node: ts.Node, sourceFile: ts.SourceFile): boolean {
+function isNumberUsage(sourceFile: ts.SourceFile, node: ts.Node): boolean {
   const parent = node.parent;
   if (!ts.isBinaryExpression(parent)) return false;
 
@@ -897,8 +906,8 @@ function isNumberUsage(node: ts.Node, sourceFile: ts.SourceFile): boolean {
   return (
     (isEqualityOperator(parent.operatorToken.kind) ||
       isOrderingOperator(parent.operatorToken.kind)) &&
-    ((parent.left === node && isNumericLiteral(parent.right, sourceFile)) ||
-      (parent.right === node && isNumericLiteral(parent.left, sourceFile)))
+    ((parent.left === node && isNumericLiteral(sourceFile, parent.right)) ||
+      (parent.right === node && isNumericLiteral(sourceFile, parent.left)))
   );
 }
 
@@ -939,12 +948,12 @@ function isArithmeticAssignmentOperator(kind: ts.SyntaxKind): boolean {
   );
 }
 
-function isBooleanLiteral(node: ts.Node, sourceFile: ts.SourceFile): boolean {
+function isBooleanLiteral(sourceFile: ts.SourceFile, node: ts.Node): boolean {
   const text = node.getText(sourceFile);
   return text === 'true' || text === 'false';
 }
 
-function isNumericLiteral(node: ts.Node, sourceFile: ts.SourceFile): boolean {
+function isNumericLiteral(sourceFile: ts.SourceFile, node: ts.Node): boolean {
   return /^-?\d(?:\d|\.)*$/.test(node.getText(sourceFile));
 }
 
