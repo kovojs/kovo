@@ -36,6 +36,75 @@ interface QueryScript {
   textContent: string | null;
 }
 
+class FakeFormElement {
+  attributes: { name: string; value: string }[];
+  action: string;
+  method: string | undefined;
+
+  constructor(attributes: Record<string, string>, options: { action: string; method?: string }) {
+    this.attributes = Object.entries(attributes).map(([name, value]) => ({ name, value }));
+    this.action = options.action;
+    this.method = options.method;
+  }
+
+  closest(_selector: string): FakeFormElement {
+    return this;
+  }
+
+  getAttribute(name: string): string | null {
+    return this.attributes.find((attribute) => attribute.name === name)?.value ?? null;
+  }
+}
+
+class FakeMorphTarget {
+  html = '';
+
+  replaceWithHtml(html: string): void {
+    this.html = html;
+  }
+}
+
+interface FakeTargetElement {
+  getAttribute(name: string): string | null;
+  id?: string;
+}
+
+class FakeMorphRoot {
+  deps: { deps?: string; id?: string; target?: string }[] = [];
+  targets = new Map<string, FakeMorphTarget>();
+
+  findFragmentTarget(target: string): FakeMorphTarget | null {
+    return this.targets.get(target) ?? null;
+  }
+
+  querySelectorAll(selector: string): Iterable<FakeTargetElement> {
+    return selector === '[fw-deps]'
+      ? this.deps.map((dep) => ({
+          getAttribute: (name) => {
+            if (name === 'fw-fragment-target') return dep.target ?? null;
+            if (name === 'fw-deps') return dep.deps ?? null;
+            return null;
+          },
+          ...(dep.id ? { id: dep.id } : {}),
+        }))
+      : [];
+  }
+}
+
+class FakeBroadcastChannel {
+  closed = false;
+  messages: unknown[] = [];
+  onmessage: ((event: { data: unknown }) => void) | null = null;
+
+  postMessage(message: unknown): void {
+    this.messages.push(message);
+  }
+
+  close(): void {
+    this.closed = true;
+  }
+}
+
 describe('query store hydration and refetch', () => {
   it('hydrates fw-query scripts and immediately runs subscribed update plans', () => {
     const store = createQueryStore();
@@ -459,6 +528,165 @@ describe('query store hydration and refetch', () => {
     });
     expect(store.get('cart')).toEqual({ count: 3 });
     expect(plan).toHaveBeenLastCalledWith({ count: 3 });
+  });
+
+  it('makes queries introduced by enhanced mutations eligible for visible-return refetch', async () => {
+    const loaderRoot = new FakeRoot();
+    const mutationRoot = new FakeMorphRoot();
+    const store = createQueryStore();
+    const refetchOnFocus = vi.fn();
+    const formData = new FormData();
+    const form = new FakeFormElement(
+      {
+        enhance: '',
+        'data-mutation': 'recommendations/refresh',
+      },
+      {
+        action: '/_m/recommendations/refresh',
+        method: 'post',
+      },
+    );
+    loaderRoot.scripts = [
+      {
+        getAttribute: (name) => (name === 'fw-query' ? 'cart' : null),
+        textContent: '{"count":1}',
+      },
+    ];
+    const mutationFetch = vi.fn(async () => ({
+      headers: {
+        get() {
+          return null;
+        },
+      },
+      async text() {
+        return '<fw-query name="recommendations">{"items":["p1"]}</fw-query>';
+      },
+    }));
+    const refetchFetch = vi.fn(async (url: string) => ({
+      status: 200,
+      text: async () =>
+        url === '/_q/cart'
+          ? '<fw-query name="cart">{"count":2}</fw-query>'
+          : '<fw-query name="recommendations">{"items":["p2"]}</fw-query>',
+    }));
+
+    installJisoLoader({
+      enhancedMutations: {
+        fetch: mutationFetch,
+        formData: () => formData,
+        root: mutationRoot,
+        store,
+      },
+      importModule: vi.fn(),
+      queryRefetch: { fetch: refetchFetch },
+      queryStore: store,
+      refetchOnFocus,
+      root: loaderRoot,
+    });
+
+    await loaderRoot.listeners.get('submit')?.({
+      preventDefault: vi.fn(),
+      target: form,
+      type: 'submit',
+    });
+
+    expect(store.get('cart')).toEqual({ count: 1 });
+    expect(store.get('recommendations')).toEqual({ items: ['p1'] });
+
+    loaderRoot.visibilityState = 'visible';
+    await loaderRoot.listeners.get('visibilitychange')?.({
+      target: null,
+      type: 'visibilitychange',
+    });
+
+    // SPEC.md §4.4: visible-return refetch follows query data introduced by
+    // later mutation query chunks, not just server-rendered hydration scripts.
+    expect(refetchOnFocus).toHaveBeenCalledWith(['cart', 'recommendations']);
+    expect(refetchFetch).toHaveBeenNthCalledWith(1, '/_q/cart', {
+      headers: { Accept: 'text/html', 'FW-Fragment': 'true' },
+      method: 'GET',
+    });
+    expect(refetchFetch).toHaveBeenNthCalledWith(2, '/_q/recommendations', {
+      headers: { Accept: 'text/html', 'FW-Fragment': 'true' },
+      method: 'GET',
+    });
+    expect(store.get('cart')).toEqual({ count: 2 });
+    expect(store.get('recommendations')).toEqual({ items: ['p2'] });
+  });
+
+  it('makes queries introduced by default broadcast replay eligible for visible-return refetch', async () => {
+    const globalRecord = globalThis as unknown as Record<string, unknown>;
+    const originalBroadcastChannel = globalRecord.BroadcastChannel;
+    const channels: FakeBroadcastChannel[] = [];
+    class TestBroadcastChannel extends FakeBroadcastChannel {
+      constructor() {
+        super();
+        channels.push(this);
+      }
+    }
+    globalRecord.BroadcastChannel = TestBroadcastChannel;
+
+    try {
+      const loaderRoot = new FakeRoot();
+      const mutationRoot = new FakeMorphRoot();
+      const store = createQueryStore();
+      const refetchOnFocus = vi.fn();
+      const fetch = vi.fn(async (url: string) => ({
+        status: 200,
+        text: async () =>
+          url === '/_q/cart'
+            ? '<fw-query name="cart">{"count":2}</fw-query>'
+            : '<fw-query name="reviews">{"items":["r2"]}</fw-query>',
+      }));
+      loaderRoot.scripts = [
+        {
+          getAttribute: (name) => (name === 'fw-query' ? 'cart' : null),
+          textContent: '{"count":1}',
+        },
+      ];
+
+      installJisoLoader({
+        enhancedMutations: {
+          fetch: vi.fn(),
+          root: mutationRoot,
+          store,
+        },
+        importModule: vi.fn(),
+        queryRefetch: { fetch },
+        queryStore: store,
+        refetchOnFocus,
+        root: loaderRoot,
+      });
+
+      channels[0]?.onmessage?.({
+        data: {
+          body: '<fw-query name="reviews">{"items":["r1"]}</fw-query>',
+          changes: [],
+          type: 'jiso:mutation-response',
+        },
+      });
+      loaderRoot.visibilityState = 'visible';
+      await loaderRoot.listeners.get('visibilitychange')?.({
+        target: null,
+        type: 'visibilitychange',
+      });
+
+      // SPEC.md §9.2: same-user tab sync consumes mutation wire bodies through
+      // the same query-store path as the submitting tab.
+      expect(refetchOnFocus).toHaveBeenCalledWith(['cart', 'reviews']);
+      expect(fetch).toHaveBeenNthCalledWith(1, '/_q/cart', {
+        headers: { Accept: 'text/html', 'FW-Fragment': 'true' },
+        method: 'GET',
+      });
+      expect(fetch).toHaveBeenNthCalledWith(2, '/_q/reviews', {
+        headers: { Accept: 'text/html', 'FW-Fragment': 'true' },
+        method: 'GET',
+      });
+      expect(store.get('cart')).toEqual({ count: 2 });
+      expect(store.get('reviews')).toEqual({ items: ['r2'] });
+    } finally {
+      globalRecord.BroadcastChannel = originalBroadcastChannel;
+    }
   });
 
   it('refetches keyed hydrated query instances by typed-read key on visible return', async () => {

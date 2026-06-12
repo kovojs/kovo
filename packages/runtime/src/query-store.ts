@@ -130,7 +130,7 @@ export function hydrateQueryScripts(
   scripts: Iterable<QueryScriptLike>,
   options: { onError?: RuntimeErrorReporter } = {},
 ): readonly string[] {
-  const hydrated: string[] = [];
+  const queries: QueryChunk[] = [];
 
   for (const script of scripts) {
     const name = script.getAttribute('fw-query');
@@ -140,12 +140,14 @@ export function hydrateQueryScripts(
       if (parsed.ok) {
         const query: QueryChunk =
           key === undefined ? { name, value: parsed.value } : { key, name, value: parsed.value };
-        hydrated.push(...applyQueryChunksToStore(store, [query]));
+        queries.push(query);
       } else {
         reportMalformedJson(options.onError, 'fw-query hydration', parsed.error);
       }
     }
   }
 
-  return hydrated;
+  // SPEC.md §9.1/§9.4: initial hydration uses the same batched query chunk
+  // application path as mutation responses, deferred streams, and typed reads.
+  return applyQueryChunksToStore(store, queries);
 }

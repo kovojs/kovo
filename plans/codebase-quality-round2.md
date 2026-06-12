@@ -2779,6 +2779,17 @@ params, relational API, `execute(sql)`, right/full joins, a string column named 
       `pnpm --filter @jiso/runtime run check:inline-loader`,
       `pnpm exec vp check packages/runtime/src/query-store.ts packages/runtime/src/query-store.test.ts packages/runtime/src/apply-path.ts plans/codebase-quality-round2.md`,
       and `git diff --check`.
+      Additional bounded evidence 2026-06-12: `hydrateQueryScripts` now collects every valid
+      initial `script[fw-query]` chunk and applies them through one `applyQueryChunksToStore`
+      batch after parsing, instead of invoking the shared helper once per script. The mutation-
+      and broadcast-introduced visible-return refetch coverage moved from
+      `packages/runtime/src/index.test.ts` into `packages/runtime/src/query-store.test.ts`, so the
+      query-store/refetch seam owns both server-rendered hydration and later shared-apply query
+      introductions under SPEC.md §9.1/§9.2/§9.4. Same-session evidence:
+      `pnpm exec vitest --run packages/runtime/src/query-store.test.ts packages/runtime/src/index.test.ts`,
+      `pnpm --filter @jiso/runtime run check:inline-loader`,
+      `pnpm exec vp check packages/runtime/src/query-store.ts packages/runtime/src/query-store.test.ts packages/runtime/src/index.test.ts plans/codebase-quality-round2.md`,
+      and `git diff --check`.
       Additional bounded evidence 2026-06-12: `packages/runtime/src/wire-parser.ts` now parses
       `<fw-query>` chunks through the same quote-aware tag scanner boundary used by fragments,
       instead of a `[^>]*` opening-tag regex, so quoted `>` characters in query attributes do not
@@ -3652,6 +3663,13 @@ As each phase splits a source module, split its tests in the same commit.
       Additional evidence 2026-06-12: query hydration and visible-return/refetch coverage moved
       from `packages/runtime/src/index.test.ts` to `packages/runtime/src/query-store.test.ts`
       with a focused local `FakeRoot`, leaving mutation DOM/query integration in the monolith.
+      Additional evidence 2026-06-12: the remaining mutation/broadcast query-introduction
+      refetch eligibility tests moved from the monolith's `query store` block into
+      `packages/runtime/src/query-store.test.ts`, pairing focused local form/morph/broadcast
+      fakes with the query-store hydration/refetch seam. Same-session evidence:
+      `pnpm exec vitest --run packages/runtime/src/query-store.test.ts packages/runtime/src/index.test.ts`,
+      `pnpm exec vp check packages/runtime/src/query-store.ts packages/runtime/src/query-store.test.ts packages/runtime/src/index.test.ts plans/codebase-quality-round2.md`,
+      and `git diff --check`.
       Additional evidence 2026-06-12: mutation response wire-chunk coverage moved from
       `packages/runtime/src/index.test.ts` to `packages/runtime/src/mutation-response.test.ts`,
       preserving the query/fragment chunk, malformed chunk, nested fragment, and deferred-helper
