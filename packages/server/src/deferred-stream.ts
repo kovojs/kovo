@@ -1,8 +1,7 @@
 import { renderStylesheetLinks } from './hints.js';
 import type { StylesheetAsset } from './hints.js';
-import { escapeAttribute } from './html.js';
 import type { ServerResponseBase } from './response.js';
-import { renderQueryWireHtml } from './wire-html.js';
+import { renderFragmentWireHtml, renderQueryWireHtml } from './wire-html.js';
 
 export interface DeferredQueryChunk {
   key?: string;
@@ -59,14 +58,14 @@ export function renderDeferredStream(options: DeferredStreamOptions): DeferredSt
 }
 
 function renderDeferredFragmentChunk(fragment: DeferredFragmentChunk): string {
-  const priority =
-    fragment.priority !== undefined
-      ? ` priority="${escapeAttribute(String(fragment.priority))}"`
-      : '';
-  const mode = fragment.mode === 'append' ? ' mode="append"' : '';
   const stylesheets = renderStylesheetLinks(fragment.stylesheets ?? []);
 
-  return `<fw-fragment target="${escapeAttribute(fragment.target)}"${mode}${priority}>${stylesheets}${fragment.html}</fw-fragment>`;
+  return renderFragmentWireHtml({
+    html: `${stylesheets}${fragment.html}`,
+    mode: fragment.mode,
+    priority: fragment.priority,
+    target: fragment.target,
+  });
 }
 
 function renderDeferredQueryChunks(queries: readonly DeferredQueryChunk[]): string[] {

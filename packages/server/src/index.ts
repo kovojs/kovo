@@ -22,6 +22,7 @@ import type {
   StylesheetAsset,
 } from './hints.js';
 import {
+  renderFragmentWireHtml,
   renderQueryScript as renderQueryScriptHtml,
   renderQueryWireHtml,
   type QueryScriptRenderOptions,
@@ -1691,11 +1692,6 @@ export function t<
   );
 }
 
-function renderFragmentOpen(target: string, mode?: 'append' | 'replace'): string {
-  const modeAttribute = mode === 'append' ? ' mode="append"' : '';
-  return `<fw-fragment target="${escapeAttribute(target)}"${modeAttribute}>`;
-}
-
 export async function runMutation<
   const Key extends string,
   InputSchema extends Schema<unknown>,
@@ -2817,14 +2813,22 @@ async function renderFragmentChunks(
 
     try {
       chunks.push(
-        `${renderFragmentOpen(renderer.target, renderer.mode)}${renderStylesheetLinks(renderer.stylesheets ?? [])}${await renderer.render(input)}</fw-fragment>`,
+        renderFragmentWireHtml({
+          html: `${renderStylesheetLinks(renderer.stylesheets ?? [])}${await renderer.render(input)}`,
+          mode: renderer.mode,
+          target: renderer.target,
+        }),
       );
     } catch (error) {
       if (!renderer.errorBoundary) throw error;
 
       const target = renderer.errorBoundary.target ?? renderer.target;
       chunks.push(
-        `<fw-fragment target="${escapeAttribute(target)}" error-boundary="${escapeAttribute(renderer.target)}">${renderStylesheetLinks(renderer.stylesheets ?? [])}${await renderer.errorBoundary.render(error, input)}</fw-fragment>`,
+        renderFragmentWireHtml({
+          errorBoundary: renderer.target,
+          html: `${renderStylesheetLinks(renderer.stylesheets ?? [])}${await renderer.errorBoundary.render(error, input)}`,
+          target,
+        }),
       );
     }
   }
@@ -2841,7 +2845,10 @@ async function renderFailureFragment<Request>(
     ? await wireRequest.renderFailureFragment(failure, wireRequest.rawInput)
     : renderDefaultFailureFragmentContent(failure);
 
-  return `<fw-fragment target="${escapeAttribute(target)}">${renderStylesheetLinks(wireRequest.failureStylesheets ?? [])}${html}</fw-fragment>`;
+  return renderFragmentWireHtml({
+    html: `${renderStylesheetLinks(wireRequest.failureStylesheets ?? [])}${html}`,
+    target,
+  });
 }
 
 function renderMutationRenderErrorFragment<Request>(
@@ -2849,7 +2856,10 @@ function renderMutationRenderErrorFragment<Request>(
 ): string {
   const target = wireRequest.failureTarget ?? wireRequest.targets?.[0] ?? 'error';
 
-  return `<fw-fragment target="${escapeAttribute(target)}"><output role="alert" data-error-code="RENDER_ERROR">Internal Server Error</output></fw-fragment>`;
+  return renderFragmentWireHtml({
+    html: '<output role="alert" data-error-code="RENDER_ERROR">Internal Server Error</output>',
+    target,
+  });
 }
 
 function renderMutationServerErrorFragment<Request>(
@@ -2857,7 +2867,10 @@ function renderMutationServerErrorFragment<Request>(
 ): string {
   const target = wireRequest.failureTarget ?? wireRequest.targets?.[0] ?? 'error';
 
-  return `<fw-fragment target="${escapeAttribute(target)}">${renderStylesheetLinks(wireRequest.failureStylesheets ?? [])}<output role="alert" data-error-code="SERVER_ERROR">Internal Server Error</output></fw-fragment>`;
+  return renderFragmentWireHtml({
+    html: `${renderStylesheetLinks(wireRequest.failureStylesheets ?? [])}<output role="alert" data-error-code="SERVER_ERROR">Internal Server Error</output>`,
+    target,
+  });
 }
 
 function renderDefaultFailureFragmentContent(failure: MutationFail): string {

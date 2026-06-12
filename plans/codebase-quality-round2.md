@@ -858,6 +858,13 @@ land it first; don't fork it.
       query-script serialization; `index.ts`, `document.ts`, and `deferred-stream.ts` route
       through it while preserving existing public exports. Verified with
       `pnpm exec vitest --run packages/server/src`, `pnpm run check`, and `pnpm run check:fw`.
+      Additional evidence 2026-06-12: `wire-html.ts` now also owns the shared
+      `<fw-fragment>` wrapper emitter; `deferred-stream.ts` and mutation fragment rendering in
+      `index.ts` delegate target/mode/priority/error-boundary attributes through it instead of
+      hand-building wrappers. `packages/server/src/wire-html.test.ts` covers attribute escaping
+      and default replace-mode omission. Same-session evidence:
+      `pnpm exec vitest --run packages/server/src` and
+      `pnpm exec vp check packages/server/src/wire-html.ts packages/server/src/wire-html.test.ts packages/server/src/deferred-stream.ts packages/server/src/index.ts plans/codebase-quality-round2.md`.
 - [x] **HIGH — One `onError` diagnostic seam.** Seven bare `catch {}` sites on 500 paths
       (index.ts:903, :1583, :1619, :1862, :2002; client-modules.ts:82; app.ts:203) give operators
       zero signal. Thread `onError(error, context)` through all of them; add `{ cause }` to the

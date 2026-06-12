@@ -13,6 +13,14 @@ export interface QueryScriptRenderOptions {
   value: unknown;
 }
 
+export interface FragmentWireRenderOptions {
+  errorBoundary?: string | undefined;
+  html: string;
+  mode?: 'append' | 'replace' | undefined;
+  priority?: number | string | undefined;
+  target: string;
+}
+
 export function renderQueryWireHtml(options: QueryWireRenderOptions): string {
   const keyAttribute = options.key === undefined ? '' : ` key="${escapeAttribute(options.key)}"`;
   const versionAttribute =
@@ -25,4 +33,18 @@ export function renderQueryScript(options: QueryScriptRenderOptions): string {
   const keyAttribute = options.key === undefined ? '' : ` key="${escapeAttribute(options.key)}"`;
 
   return `<script type="application/json" fw-query="${escapeAttribute(options.name)}"${keyAttribute}>${escapeScriptJson(JSON.stringify(options.value))}</script>`;
+}
+
+export function renderFragmentWireHtml(options: FragmentWireRenderOptions): string {
+  const modeAttribute = options.mode === 'append' ? ' mode="append"' : '';
+  const priorityAttribute =
+    options.priority === undefined
+      ? ''
+      : ` priority="${escapeAttribute(String(options.priority))}"`;
+  const errorBoundaryAttribute =
+    options.errorBoundary === undefined
+      ? ''
+      : ` error-boundary="${escapeAttribute(options.errorBoundary)}"`;
+
+  return `<fw-fragment target="${escapeAttribute(options.target)}"${modeAttribute}${priorityAttribute}${errorBoundaryAttribute}>${options.html}</fw-fragment>`;
 }
