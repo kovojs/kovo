@@ -379,6 +379,11 @@ pipeline throws the tree away and communicates via mutated source text.
       fragment-target graph facts no longer reparse lowered source with fake `component.tsx`
       coordinates. Same-session evidence: `pnpm exec vitest --run packages/compiler/src/index.test.ts`
       and `pnpm exec vp check packages/compiler/src/index.ts packages/compiler/src/graph.ts`.
+      Partial evidence 2026-06-11: `lowerNavigationSugar` now parses the input once for the
+      `<Link>` lowering pass, then parses the post-link source once and applies both static
+      `href()` calls and JSX `href={...}` normalizations through one descending replacement pass.
+      Same-session evidence: `pnpm exec vitest --run packages/compiler/src/index.test.ts` and
+      `pnpm exec vp check packages/compiler/src/lower/navigation.ts`.
 - [ ] **HIGH — Retire regex rewriting of handler bodies.** emit/client.ts:89
       (`/\bstate\b/g → ctx.state` corrupts `log('state changed')`), :96 (member-expression
       substitution inside string literals), lower/handlers.ts:262 (harvests params from string

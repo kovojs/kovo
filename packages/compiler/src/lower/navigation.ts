@@ -2,21 +2,26 @@ import {
   callExpressions,
   jsxElements,
   parseComponentModule,
+  type ComponentModuleModel,
   type JsxElementModel,
 } from '../scan/parse.js';
 import { literalStringValue, parseLiteralObject, type StaticLiteralValue } from '../scan/object.js';
 import { escapeAttribute } from '../shared.js';
 
 export function lowerNavigationSugar(source: string): { source: string } {
+  const model = parseComponentModule('component.tsx', source);
+  const linksLowered = lowerStaticLinks(source, model);
+  const linksLoweredModel = parseComponentModule('component.tsx', linksLowered);
+
   return {
-    source: normalizeStaticHrefAttributes(lowerStaticHrefCalls(lowerStaticLinks(source))),
+    source: lowerStaticHrefCallsAndAttributes(linksLowered, linksLoweredModel),
   };
 }
 
-function lowerStaticLinks(source: string): string {
+function lowerStaticLinks(source: string, model: ComponentModuleModel): string {
   let output = source;
 
-  for (const link of jsxElements(parseComponentModule('component.tsx', source))
+  for (const link of jsxElements(model)
     .filter((element) => element.tag === 'Link' && !element.selfClosing)
     .sort((left, right) => right.start - left.start)) {
     const target = jsxStaticAttributeValue(link, 'to');
@@ -48,35 +53,59 @@ function lowerStaticLinks(source: string): string {
   return output;
 }
 
-function lowerStaticHrefCalls(source: string): string {
-  let output = source;
+interface SourceReplacement {
+  end: number;
+  replacement: string;
+  start: number;
+}
 
-  for (const call of callExpressions(parseComponentModule('component.tsx', source))
+function lowerStaticHrefCallsAndAttributes(source: string, model: ComponentModuleModel): string {
+  const replacements: SourceReplacement[] = [];
+  const staticHrefCalls = callExpressions(model)
     .filter((item) => item.name === 'href')
-    .sort((left, right) => right.start - left.start)) {
-    const lowered = lowerStaticHrefCall(call.arguments);
-    if (!lowered) continue;
+    .map((call) => ({ call, lowered: lowerStaticHrefCall(call.arguments) }))
+    .filter(
+      (item): item is { call: (typeof item)['call']; lowered: string } => item.lowered !== null,
+    );
+  const wholeAttributeReplacements: SourceReplacement[] = [];
 
-    output = `${output.slice(0, call.start)}${JSON.stringify(lowered)}${output.slice(call.end)}`;
+  for (const attribute of jsxElements(model)
+    .flatMap((element) => [...element.attributes])
+    .filter((item) => item.name === 'href' && item.expression !== undefined)
+    .sort((left, right) => right.start - left.start)) {
+    const target =
+      literalStringValue(attribute.expression ?? '') ??
+      staticHrefCalls.find(
+        ({ call }) =>
+          call.start === attribute.expressionStart && call.end === attribute.expressionEnd,
+      )?.lowered;
+    if (target == null) continue;
+
+    wholeAttributeReplacements.push({
+      end: attribute.end,
+      replacement: `href="${escapeAttribute(target)}"`,
+      start: attribute.start,
+    });
+  }
+
+  replacements.push(...wholeAttributeReplacements);
+  for (const { call, lowered } of staticHrefCalls) {
+    if (wholeAttributeReplacements.some((replacement) => isWithinReplacement(call, replacement))) {
+      continue;
+    }
+    replacements.push({ end: call.end, replacement: JSON.stringify(lowered), start: call.start });
+  }
+
+  let output = source;
+  for (const replacement of replacements.sort((left, right) => right.start - left.start)) {
+    output = `${output.slice(0, replacement.start)}${replacement.replacement}${output.slice(replacement.end)}`;
   }
 
   return output;
 }
 
-function normalizeStaticHrefAttributes(source: string): string {
-  let output = source;
-
-  for (const attribute of jsxElements(parseComponentModule('component.tsx', source))
-    .flatMap((element) => [...element.attributes])
-    .filter((item) => item.name === 'href' && item.expression !== undefined)
-    .sort((left, right) => right.start - left.start)) {
-    const target = literalStringValue(attribute.expression ?? '');
-    if (target === null) continue;
-
-    output = `${output.slice(0, attribute.start)}href="${escapeAttribute(target)}"${output.slice(attribute.end)}`;
-  }
-
-  return output;
+function isWithinReplacement(call: { end: number; start: number }, replacement: SourceReplacement) {
+  return call.start >= replacement.start && call.end <= replacement.end;
 }
 
 function lowerStaticHrefCall(args: readonly string[]): string | null {
