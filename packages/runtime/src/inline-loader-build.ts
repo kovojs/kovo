@@ -171,12 +171,24 @@ function minifyInlineJavaScriptSource(source: string): string {
     }
 
     if (char === '/' && next === '/') {
-      index = skipLineComment(source, index + 2);
+      const end = skipLineComment(source, index + 2);
+      const nextToken = readNextTokenStart(source, end);
+      if (needsSeparator(previousToken, nextToken)) {
+        output += ' ';
+        previousToken = ' ';
+      }
+      index = end;
       continue;
     }
 
     if (char === '/' && next === '*') {
-      index = skipBlockComment(source, index + 2);
+      const end = skipBlockComment(source, index + 2);
+      const nextToken = readNextTokenStart(source, end);
+      if (needsSeparator(previousToken, nextToken)) {
+        output += ' ';
+        previousToken = ' ';
+      }
+      index = end;
       continue;
     }
 
@@ -316,7 +328,10 @@ function startsRegexLiteral(previousToken: string): boolean {
 }
 
 function needsSeparator(previousToken: string, nextToken: string): boolean {
-  return isIdentifierPart(previousToken) && isIdentifierPart(nextToken);
+  if (!previousToken || !nextToken) return false;
+  if (isIdentifierPart(previousToken) && isIdentifierPart(nextToken)) return true;
+  if ((previousToken === '+' || previousToken === '-') && previousToken === nextToken) return true;
+  return previousToken === '/' && nextToken === '/';
 }
 
 const regexPrefixKeywords = new Set([

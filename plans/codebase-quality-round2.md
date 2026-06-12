@@ -1260,6 +1260,15 @@ params, relational API, `execute(sql)`, right/full joins, a string column named 
       `pnpm exec vitest --run packages/runtime/src/inline-loader.test.ts packages/runtime/src/index.test.ts`,
       `pnpm exec vp check packages/runtime/src/inline-loader-build.ts packages/runtime/src/inline-loader.test.ts plans/codebase-quality-round2.md`,
       and `git diff --check`.
+      Additional bounded evidence 2026-06-12: `packages/runtime/src/inline-loader-build.ts`
+      now treats stripped line/block comments as token separators when needed and preserves
+      separators for `+ +`, `- -`, and `//` hazards, avoiding minification-created operators or
+      comments while preserving the checked-in shipped installer byte-for-byte.
+      `packages/runtime/src/inline-loader.test.ts` executes readable and minified custom inline
+      sources through comment-adjacent `return`, unary plus, and unary minus cases. Same-session
+      evidence: `pnpm exec vitest --run packages/runtime/src/inline-loader.test.ts`,
+      `pnpm exec vp check packages/runtime/src/inline-loader-build.ts packages/runtime/src/inline-loader.test.ts plans/codebase-quality-round2.md`,
+      and `git diff --check`.
 - [x] **HIGH — Ship the DOM morph.** The only real keyed DOM morph (focus/selection/scroll
       capture-restore) lives in index.browser.test.ts:12-182; every consumer must rewrite it, and
       the flagship browser test substantially tests its own test code. Promote to a

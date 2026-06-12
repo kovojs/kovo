@@ -96,6 +96,12 @@ describe('inline loader source', () => {
       "  const stringLiteral = 'keep // and /* comment markers */ and spaces';",
       '  const templateLiteral = `template // marker`;',
       "  const joined = ['left', 'right'].join('; ');",
+      '  const numeric = 2;',
+      '  const plusWhitespace = numeric + +1;',
+      '  const minusWhitespace = numeric - -1;',
+      '  const plusComment = numeric+/* plus gap */+1;',
+      '  const minusComment = numeric-/* minus gap */-1;',
+      '  const commentReturn = () => { return/* return gap */value; };',
       '  const commentRegex = /\\/\\/|\\/\\*/g;',
       '  const afterReturn = (candidate) => {',
       '    return /\\/\\/|\\/\\*/.test(candidate);',
@@ -105,7 +111,12 @@ describe('inline loader source', () => {
       '    afterArrow: afterArrow(joined),',
       '    afterReturn: afterReturn(value),',
       '    commentHits: value.match(commentRegex)?.length ?? 0,',
+      '    commentReturn: commentReturn(),',
       '    joined,',
+      '    minusComment,',
+      '    minusWhitespace,',
+      '    plusComment,',
+      '    plusWhitespace,',
       '    stringLiteral,',
       '    templateLiteral,',
       '  };',
@@ -119,6 +130,9 @@ describe('inline loader source', () => {
     expect(minifiedSource).toBe(minifiedSource.trim());
     expect(minifiedSource).not.toMatch(/\n|\s{2,}/);
     expect(minifiedSource).toContain("'keep // and /* comment markers */ and spaces'");
+    expect(minifiedSource).toContain('numeric+ +1');
+    expect(minifiedSource).toContain('numeric- -1');
+    expect(minifiedSource).toContain('return value');
     expect(minifiedSource).toContain("join('; ')");
     expect(minified(input)).toEqual(readable(input));
   });
