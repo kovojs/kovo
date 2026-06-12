@@ -3,6 +3,8 @@ import type { QuerySelectorAllRootLike, TargetElementLike } from './dom-like.js'
 
 export interface TargetCollectorRoot extends QuerySelectorAllRootLike<TargetElementLike> {}
 
+export const liveTargetHeaderSeparator = '; ';
+
 export function readLiveTargets(root: TargetCollectorRoot): string[] {
   const targets = new Set<string>();
 
@@ -15,4 +17,12 @@ export function readLiveTargets(root: TargetCollectorRoot): string[] {
   }
 
   return [...targets];
+}
+
+export function serializeLiveTargets(root: TargetCollectorRoot): string {
+  return serializeLiveTargetEntries(readLiveTargets(root));
+}
+
+export function serializeLiveTargetEntries(targets: readonly string[]): string {
+  return targets.join(liveTargetHeaderSeparator);
 }

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { readLiveTargets } from './mutation-targets.js';
+import { readLiveTargets, serializeLiveTargets } from './mutation-targets.js';
 
 class FakeTargetRoot {
   constructor(private readonly elements: FakeTargetElement[]) {}
@@ -56,5 +56,8 @@ describe('mutation targets', () => {
       'inventory=inventory stock',
       'empty-deps',
     ]);
+    expect(serializeLiveTargets(root)).toBe(
+      'cart-badge=cart; inventory=inventory stock; empty-deps',
+    );
   });
 });

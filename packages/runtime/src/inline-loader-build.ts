@@ -50,12 +50,20 @@ function installInlineJisoLoader(importModule) {
   const applyResponseBody = (body) => {
     const parsed = new DOMParser().parseFromString(body, 'text/html');
     parsed.querySelectorAll('fw-query').forEach((query) => {
+      const name = query.getAttribute('name');
+      const queryBody = query.textContent ?? 'null';
+      if (!name) return;
+      try {
+        JSON.parse(queryBody);
+      } catch {
+        return;
+      }
       dispatchEvent(
         new CustomEvent('jiso:query', {
           detail: {
-            body: query.textContent,
+            body: queryBody,
             key: query.getAttribute('key') ?? undefined,
-            name: query.getAttribute('name'),
+            name,
           },
         }),
       );

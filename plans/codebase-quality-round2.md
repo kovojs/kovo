@@ -2093,6 +2093,22 @@ params, relational API, `execute(sql)`, right/full joins, a string column named 
       `pnpm exec vitest --config vitest.browser.config.ts --run packages/runtime/src/index.browser.test.ts`,
       `pnpm exec vp check packages/runtime/src/inline-loader-build.ts packages/runtime/src/inline-loader.test.ts plans/codebase-quality-round2.md`,
       and `git diff --check`.
+      Additional bounded evidence 2026-06-12: `packages/runtime/src/mutation-targets.ts` now owns
+      the live `FW-Targets` header separator/serialization used by
+      `packages/runtime/src/mutation-submit.ts`, so the enhanced mutation request header and
+      returned target list are derived from one live target snapshot under SPEC §9.1. The readable
+      inline bootstrap now validates `fw-query` chunks with `JSON.parse` and skips malformed or
+      unnamed query chunks before dispatching `jiso:query`, matching the modular runtime's
+      valid-named-query-only response application while still applying fragments under SPEC §4.4.
+      The generated `packages/runtime/src/inline-loader.ts` was rebuilt from that source.
+      Same-session evidence:
+      `pnpm --filter @jiso/runtime run build:inline-loader`,
+      `pnpm --filter @jiso/runtime run check:inline-loader`,
+      `pnpm exec vitest --run packages/runtime/src/inline-loader.test.ts packages/runtime/src/mutation-targets.test.ts packages/runtime/src/mutation-response.test.ts`,
+      `pnpm exec vitest --run packages/runtime/src`,
+      `pnpm exec vitest --config vitest.browser.config.ts --run packages/runtime/src/index.browser.test.ts`,
+      `pnpm exec vp check packages/runtime/src/inline-loader-build.ts packages/runtime/src/inline-loader.ts packages/runtime/src/inline-loader.test.ts packages/runtime/src/mutation-submit.ts packages/runtime/src/mutation-targets.ts packages/runtime/src/mutation-targets.test.ts plans/codebase-quality-round2.md`,
+      and `git diff --check`.
 - [x] **HIGH — Ship the DOM morph.** The only real keyed DOM morph (focus/selection/scroll
       capture-restore) lives in index.browser.test.ts:12-182; every consumer must rewrite it, and
       the flagship browser test substantially tests its own test code. Promote to a

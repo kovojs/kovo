@@ -15,7 +15,7 @@ import type { MorphFragment, MorphRoot } from './morph.js';
 import { MutationQueue } from './mutation-queue.js';
 import type { MutationBroadcast } from './broadcast.js';
 import { createMutationIdem, readMutationChangeHeader } from './mutation-response.js';
-import { readLiveTargets } from './mutation-targets.js';
+import { readLiveTargets, serializeLiveTargetEntries } from './mutation-targets.js';
 import type { TargetCollectorRoot } from './mutation-targets.js';
 import type { CompiledQueryUpdatePlans } from './query-bindings.js';
 import { queryStoreKey } from './query-store.js';
@@ -554,7 +554,7 @@ async function fetchEnhancedMutation(
       Accept: 'text/vnd.jiso.fragment+html',
       'FW-Fragment': 'true',
       'FW-Idem': idem,
-      'FW-Targets': targets.join('; '),
+      'FW-Targets': serializeLiveTargetEntries(targets),
     },
     keepalive: true,
     method: (options.form.method ?? 'post').toUpperCase(),
