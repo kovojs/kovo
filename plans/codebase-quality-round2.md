@@ -545,13 +545,23 @@ must be "FW406 unresolved," never "silently wrong."
       SPEC §10-§11 "unknown is explicit" contract. `packages/drizzle/src/index.test.ts` covers
       these surfaces. Same-session evidence: `pnpm exec vitest --run packages/drizzle/src`,
       `pnpm run check`, `pnpm run check:build`, and `pnpm run check:fw`.
-- [ ] **MED — Make the drizzle-orm coupling real and tested.** The `>=0.45.2 <1` pin is
+- [x] **MED — Make the drizzle-orm coupling real and tested.** The `>=0.45.2 <1` pin is
       decorative: drizzle-orm is never imported, absent from devDeps, and every project test
       fabricates a `declare module "drizzle-orm/pg-core"` shim (index.test.ts:1742, 1791, 1846).
       Add drizzle-orm to devDeps; one integration test using real `pgTable`/`select`/`update`
       against the pinned range; centralize every surface assumption (DB-class-name regex :605,
       table-factory names :763, `jiso()` extraConfig contract :95-97) in one `drizzle-surface.ts`
       so a version bump breaks one file and one test.
+      Evidence 2026-06-11: `packages/drizzle/package.json` now declares `drizzle-orm@0.45.2` as
+      a package dev dependency while retaining the `>=0.45.2 <1` peer range,
+      `packages/drizzle/src/drizzle-surface.ts` centralizes table factory names, DB type
+      detection, and the `jiso()` extra-config annotation contract, and
+      `packages/drizzle/src/index.test.ts` imports real `drizzle-orm` / `drizzle-orm/pg-core`
+      `pgTable`, `eq`, `sql`, `select`, and `update` surfaces to cover extraction assumptions.
+      Same-session evidence: `pnpm exec vitest --run packages/drizzle/src/index.test.ts`,
+      `pnpm --filter @jiso/conformance-drizzle-pin test`,
+      `pnpm exec vp check packages/drizzle/src/index.ts packages/drizzle/src/index.test.ts packages/drizzle/src/drizzle-surface.ts packages/drizzle/package.json pnpm-lock.yaml`,
+      and `pnpm run check`.
 - [ ] **MED — Split the build-time/runtime seam.** ts-morph is a runtime dependency of the
       package exporting the `jiso()` table annotation (drizzle/package.json:10) — apps importing
       the annotation drag the TS compiler into their production graph. Separate entrypoints:
