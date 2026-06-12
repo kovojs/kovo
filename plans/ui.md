@@ -396,6 +396,21 @@ jiso-dialog` resolves dashed wire names and prints provenance including package,
       navigation-menu, slider, toast, command, and full gates. Caveat: grouped changed-file
       `vp check` formatted all six files but the Vite+/typescript-go linter crashed before
       completing lint analysis; the source and export checks above passed when split.
+      Additional partial evidence 2026-06-12:
+      `packages/headless-ui/src/primitives/dropdown-menu.ts` adds the H3 dropdown-menu
+      primitive as a DOM-free menu helper: root/trigger/content/item/group/separator
+      attribute builders, menu/menuitem/group/separator ARIA wiring, open/closed,
+      highlighted, active/inactive, and disabled data attrs, disabled-item protection,
+      cancelable open and select transitions, shared vertical menu keyboard movement,
+      shared typeahead matching, and guarded trigger/item/keyboard handlers following the
+      SPEC §4.6 primitive handler no-op contract. It is exported through
+      `@jiso/headless-ui`, `@jiso/headless-ui/primitives`, and
+      `@jiso/headless-ui/primitives/dropdown-menu`. Same-session evidence:
+      `pnpm exec vitest --run packages/headless-ui/src/primitives/dropdown-menu.test.ts packages/headless-ui/src/lib/typeahead.test.ts packages/headless-ui/src/lib/change-details.test.ts`,
+      `pnpm --filter @jiso/headless-ui run lint:primitives`,
+      `pnpm exec vp check packages/headless-ui/package.json packages/headless-ui/src/index.ts packages/headless-ui/src/primitives/index.ts packages/headless-ui/src/primitives/dropdown-menu.ts packages/headless-ui/src/primitives/dropdown-menu.test.ts plans/ui.md`,
+      and `git diff --check`. H3 remains open for context-menu, menubar, navigation-menu,
+      slider, toast, command, and full gates.
 - [x] U1 token sheet + `cn()` + statically-analyzable variant helper (Tailwind-first, §13.1 discoverability rules).
       Evidence 2026-06-12: `packages/headless-ui/src/lib/class-names.ts`
       provides the dependency-free `cn()` helper, `packages/headless-ui/src/lib/variants.ts`

@@ -269,6 +269,48 @@ export type {
 } from './dialog.js';
 
 export {
+  dropdownMenuContentAttributes,
+  dropdownMenuGroupAttributes,
+  dropdownMenuItemAttributes,
+  dropdownMenuItemClick,
+  dropdownMenuItemHighlighted,
+  dropdownMenuKeyDown,
+  dropdownMenuMove,
+  dropdownMenuRootAttributes,
+  dropdownMenuSeparatorAttributes,
+  dropdownMenuTriggerAttributes,
+  dropdownMenuTriggerClick,
+  dropdownMenuTypeahead,
+  selectDropdownMenuItem,
+  setDropdownMenuOpen,
+  toggleDropdownMenu,
+} from './dropdown-menu.js';
+export type {
+  DropdownMenuChangeOptions,
+  DropdownMenuContentAttributeOptions,
+  DropdownMenuGroupAttributeOptions,
+  DropdownMenuItem,
+  DropdownMenuItemAttributeOptions,
+  DropdownMenuItemEvent,
+  DropdownMenuKeyboardEvent,
+  DropdownMenuMoveResult,
+  DropdownMenuOpenChangeDetail,
+  DropdownMenuOpenChangeReason,
+  DropdownMenuOpenChangeResult,
+  DropdownMenuPrimitiveAttributes,
+  DropdownMenuRootAttributeOptions,
+  DropdownMenuSelectDetail,
+  DropdownMenuSelectReason,
+  DropdownMenuSelectResult,
+  DropdownMenuSeparatorAttributeOptions,
+  DropdownMenuState,
+  DropdownMenuTriggerAttributeOptions,
+  DropdownMenuTriggerEvent,
+  DropdownMenuTypeaheadOptions,
+  DropdownMenuTypeaheadResult,
+} from './dropdown-menu.js';
+
+export {
   disclosureContentAttributes,
   disclosureRootAttributes,
   disclosureTriggerAttributes,
