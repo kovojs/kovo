@@ -43,6 +43,13 @@ export function findStringEnd(source: string, start: number, quote: string): num
       continue;
     }
 
+    if (quote === '`' && source[index] === '$' && source[index + 1] === '{') {
+      const expressionEnd = findMatchingToken(source, index + 1, '{', '}');
+      if (expressionEnd === -1) return -1;
+      index = expressionEnd;
+      continue;
+    }
+
     if (source[index] === quote) return index;
   }
 

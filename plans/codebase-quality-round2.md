@@ -802,6 +802,13 @@ pipeline throws the tree away and communicates via mutated source text.
       artifact. Same-session evidence:
       `pnpm exec vitest --run packages/compiler/src/index.test.ts -t "CSS|css-looking"` and
       `pnpm exec vp check packages/compiler/src/css.ts packages/compiler/src/index.test.ts`.
+      Additional evidence 2026-06-12: `packages/compiler/src/scan/text.ts` now skips template
+      interpolation bodies by recursively matching `${...}` tokens, so the remaining scanner
+      utility used by CSS literal balancing no longer treats interpolation braces as inert string
+      text. `packages/compiler/src/scan/text.test.ts` pins nested template interpolation and
+      token balancing around interpolated template literals. Same-session evidence:
+      `pnpm exec vitest --run packages/compiler/src/scan/text.test.ts packages/compiler/src/index.test.ts -t "CSS|css-looking"` and
+      `pnpm exec vp check packages/compiler/src/scan/text.ts packages/compiler/src/scan/text.test.ts plans/codebase-quality-round2.md`.
 - [x] **MED — Make the render-equivalence gate real.** emit/server.ts:28-41 compares
       `serverRenderSource(...)` against itself round-tripped through its own escaper — it can
       only fail if the escape pair disagrees. Execute the emitted server module's render against
