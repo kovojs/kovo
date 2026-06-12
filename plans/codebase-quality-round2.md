@@ -693,6 +693,12 @@ must be "FW406 unresolved," never "silently wrong."
       text, so comments, strings, and templates containing `writeAudit(db)` no longer fabricate
       unresolved touch-graph sites. Same-session evidence:
       `pnpm exec vitest --run packages/drizzle/src/index.test.ts -t "external helper"`.
+      Additional evidence 2026-06-12: write predicate extraction now walks ts-morph
+      `CallExpression` nodes for real `.where(...)` calls instead of regex-scanning write
+      statement text, so `.where(eq(...))` text inside comments and strings no longer fabricates
+      row-key touch facts. Same-session evidence:
+      `pnpm exec vitest --run packages/drizzle/src/index.test.ts -t "predicate text inside comments and strings|direct parameterized keys|borrow predicates"` and
+      `pnpm exec vitest --run packages/drizzle/src/index.test.ts`.
 - [ ] **HIGH — Remove fact-fabricating heuristics; degrade to FW406.**
       Column type from projection-key name (`/(count|qty|...)$/i` → number, index.ts:993);
       receiver detection by parameter name (`/^(db|tx|...|client|...)$/`, :1856-1858);

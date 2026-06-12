@@ -1707,6 +1707,27 @@ export interface CommerceInvalidationSets {
     });
   });
 
+  it('does not infer parameterized keys from predicate text inside comments and strings', () => {
+    const graph = extractTouchGraphFromSource([
+      {
+        fileName: 'product.domain.ts',
+        source: `
+          export const products = pgTable("products", {}, jiso({ domain: "product", key: "id" }));
+
+          export async function scrubPredicates(db, id) {
+            await db.update(products).set({ note: ".where(eq(products.id, id))" });
+            await db.update(products).set({ /* .where(eq(products.id, id)) */ reserved: true });
+          }
+        `,
+      },
+    ]);
+
+    expect(graph.scrubPredicates?.touches).toEqual([
+      { domain: 'product', keys: null, site: 'product.domain.ts:5', via: 'products' },
+      { domain: 'product', keys: null, site: 'product.domain.ts:6', via: 'products' },
+    ]);
+  });
+
   it('does not borrow predicates from following semicolonless write statements', () => {
     const graph = extractTouchGraphFromSource([
       {

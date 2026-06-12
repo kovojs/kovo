@@ -2172,14 +2172,13 @@ function extractPredicateSummary(
 }
 
 function wherePredicate(statement: string): string | undefined {
-  const where = /\.where\s*\(/.exec(statement);
-  if (!where || where.index === undefined) return undefined;
+  // SPEC §10-§11: predicate text inside strings/comments must not fabricate row-key facts.
+  const sourceFile = parseSourceFile(`${statement};`);
+  const whereCall = sourceFile
+    .getDescendantsOfKind(SyntaxKind.CallExpression)
+    .find((call) => propertyAccessCallName(call) === 'where');
 
-  const openParen = where.index + where[0].length - 1;
-  const closeParen = findMatchingParen(statement, openParen);
-  if (closeParen === -1) return undefined;
-
-  return statement.slice(openParen + 1, closeParen).trim();
+  return whereCall?.getArguments()[0]?.getText().trim();
 }
 
 function extractParameterizedKey(
