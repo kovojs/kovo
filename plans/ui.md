@@ -681,6 +681,15 @@ jiso-dialog` resolves dashed wire names and prints provenance including package,
       `pnpm exec vp check examples/gallery/src/merge-fixtures.test.tsx plans/ui.md`,
       and `git diff --check`. G5 remains open because this is still a bounded fixture subset,
       not every primitive attrs record or compiler/runtime diagnostic coverage.
+      Additional partial evidence 2026-06-12: the gallery G5 oracle adds progress,
+      separator, switch, and radio-group merge goldens. These cover numeric scalar author
+      precedence with primitive-owned `data-state`, ARIA/role FW232 diagnostics, native
+      logical-OR attributes, and label/control IDREF rewrites when an authored radio id wins,
+      all against the existing SPEC §4.6 oracle. Same-session evidence:
+      `pnpm --filter @jiso/example-gallery test`,
+      `pnpm exec vp check examples/gallery/src/merge-fixtures.test.tsx plans/ui.md`,
+      and `git diff --check`. G5 remains open because this is still a bounded fixture subset,
+      not every primitive attrs record or compiler/runtime diagnostic coverage.
 
 ## Background
 

@@ -7,6 +7,11 @@ import {
   checkboxRootAttributes,
   dialogContentAttributes,
   dialogTriggerAttributes,
+  progressRootAttributes,
+  radioGroupLabelAttributes,
+  radioGroupRadioAttributes,
+  separatorRootAttributes,
+  switchRootAttributes,
   tabsPanelAttributes,
   tabsTriggerAttributes,
   tooltipTriggerAttributes,
@@ -187,6 +192,109 @@ describe('gallery G5 primitive merge fixtures', () => {
     );
   });
 
+  it('renders a golden progress merge with scalar author values and primitive-owned state', () => {
+    const merged = mergePrimitiveAttrs(
+      {
+        ...progressRootAttributes({
+          max: 100,
+          value: 42,
+          valueText: '42 of 100 tasks complete',
+        }),
+        class: 'progress-root',
+      },
+      {
+        'aria-valuetext': 'Author progress label',
+        class: 'progress-root h-2',
+        'data-state': 'author-loading',
+        max: 80,
+        value: 50,
+      },
+    );
+
+    expect(merged.diagnostics).toEqual([
+      {
+        attr: 'data-state',
+        code: 'FW232',
+        message: 'Author override of primitive-owned state attribute per SPEC.md section 4.6',
+      },
+      {
+        attr: 'aria-valuetext',
+        code: 'FW232',
+        message: 'Author override of primitive ARIA/role attribute per SPEC.md section 4.6',
+      },
+    ]);
+    expect(<progress {...merged.attrs}>50%</progress>).toBe(
+      '<progress data-max="100" data-state="loading" max="80" data-value="42" value="50" aria-valuetext="Author progress label" class="progress-root h-2">50%</progress>',
+    );
+  });
+
+  it('renders a golden separator merge with orientation and semantic overrides', () => {
+    const merged = mergePrimitiveAttrs(
+      {
+        ...separatorRootAttributes({ decorative: false, orientation: 'vertical' }),
+        class: 'separator-root',
+      },
+      {
+        'aria-orientation': 'horizontal',
+        class: 'separator-root my-2',
+        role: 'presentation',
+      },
+    );
+
+    expect(merged.diagnostics).toEqual([
+      {
+        attr: 'aria-orientation',
+        code: 'FW232',
+        message: 'Author override of primitive ARIA/role attribute per SPEC.md section 4.6',
+      },
+      {
+        attr: 'role',
+        code: 'FW232',
+        message: 'Author override of primitive ARIA/role attribute per SPEC.md section 4.6',
+      },
+    ]);
+    expect(<div {...merged.attrs} />).toBe(
+      '<div data-orientation="vertical" aria-orientation="horizontal" role="presentation" class="separator-root my-2"></div>',
+    );
+  });
+
+  it('renders a golden switch merge with native logical-OR attributes', () => {
+    const merged = mergePrimitiveAttrs(
+      {
+        ...switchRootAttributes({
+          checked: true,
+          name: 'gallery-notifications',
+          required: true,
+          value: 'enabled',
+        }),
+        class: 'switch-control',
+      },
+      {
+        'aria-checked': 'false',
+        class: 'switch-control rounded-full',
+        'data-state': 'author-checked',
+        disabled: true,
+        required: false,
+      },
+    );
+
+    expect(merged.diagnostics).toEqual([
+      {
+        attr: 'data-state',
+        code: 'FW232',
+        message: 'Author override of primitive-owned state attribute per SPEC.md section 4.6',
+      },
+      {
+        attr: 'aria-checked',
+        code: 'FW232',
+        message: 'Author override of primitive ARIA/role attribute per SPEC.md section 4.6',
+      },
+    ]);
+    expect(<input {...merged.attrs} />).toBe(
+      '<input data-state="checked" aria-checked="false" checked disabled name="gallery-notifications" role="switch" required type="checkbox" value="enabled" class="switch-control rounded-full">',
+    );
+  });
+
   it('rewires dialog trigger IDREFs when an authored dialog content id wins', () => {
     const idRewrites = new Map([['gallery-dialog-content', 'authored-dialog-content']]);
     const trigger = mergePrimitiveAttrs(
@@ -258,6 +366,46 @@ describe('gallery G5 primitive merge fixtures', () => {
       </section>,
     ).toBe(
       '<section data-gallery-merge="tabs-idref"><button data-state="active" aria-selected="true" role="tab" tabIndex="0" type="button" value="overview" aria-controls="authored-tabs-overview-panel" id="authored-tabs-overview" class="tabs-trigger">Overview</button><div data-state="active" role="tabpanel" tabIndex="0" aria-labelledby="authored-tabs-overview" id="authored-tabs-overview-panel" class="tabs-panel">Panel</div></section>',
+    );
+  });
+
+  it('rewires radio label IDREFs when an authored native radio id wins', () => {
+    const idRewrites = new Map([['gallery-radio-express', 'authored-radio-express']]);
+    const state = {
+      items: [{ value: 'standard' }, { value: 'express' }],
+      name: 'gallery-shipping-speed',
+      required: true,
+      value: 'express',
+    };
+    const radio = mergePrimitiveAttrs(
+      radioGroupRadioAttributes({
+        ...state,
+        controlId: 'gallery-radio-express',
+        itemValue: 'express',
+      }),
+      { class: 'radio-input', id: 'authored-radio-express', required: false },
+    );
+    const label = mergePrimitiveAttrs(
+      rewriteIdrefs(
+        radioGroupLabelAttributes({
+          ...state,
+          controlId: 'gallery-radio-express',
+          itemValue: 'express',
+        }),
+        idRewrites,
+      ),
+      { class: 'radio-label' },
+    );
+
+    expect(radio.diagnostics).toEqual([]);
+    expect(label.diagnostics).toEqual([]);
+    expect(
+      <div data-gallery-merge="radio-idref">
+        <input {...radio.attrs} />
+        <label {...label.attrs}>Express</label>
+      </div>,
+    ).toBe(
+      '<div data-gallery-merge="radio-idref"><input data-state="checked" aria-checked="true" checked tabIndex="0" type="radio" value="express" id="authored-radio-express" name="gallery-shipping-speed" required class="radio-input"><label data-state="checked" for="authored-radio-express" class="radio-label">Express</label></div>',
     );
   });
 
