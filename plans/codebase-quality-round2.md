@@ -701,6 +701,11 @@ pipeline throws the tree away and communicates via mutated source text.
       module source just to recover the opening tag name. Same-session evidence:
       `pnpm exec vitest --run packages/compiler/src/css.test.ts packages/compiler/src/compile-component.test.ts`
       and `pnpm exec vp check packages/compiler/src/css.ts packages/compiler/src/compile.ts`.
+      Additional evidence 2026-06-12: `serverRenderLowering()` now consumes handler facts plus
+      the parsed model only; render-host stamping uses `JsxElementModel.openingSource` and no
+      longer accepts module source as a fallback for host tag recovery. Same-session evidence:
+      `pnpm exec vitest --run packages/compiler/src/compile-component.test.ts packages/compiler/src/model-pipeline.test.ts packages/compiler/src/stamps.test.ts`
+      and `pnpm exec vp check packages/compiler/src/emit/server.ts packages/compiler/src/compile.ts`.
       Partial evidence 2026-06-11: `serverRenderSource` now parses once after handler lowering
       with the author file name and stamps component identity, declared query deps, and initial
       state onto the render host through one in-memory tag update instead of reparsing for each

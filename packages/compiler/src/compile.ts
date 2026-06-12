@@ -129,7 +129,7 @@ export function compileComponentModule(options: CompileComponentOptions): Compil
   const cssAssets = cssSource
     ? [componentCssAssetForFile(fileNames.css, componentName, fragmentTargets, {}, cssSource)]
     : [];
-  const serverRender = serverRenderLowering(source, versionedHandlers, model);
+  const serverRender = serverRenderLowering(versionedHandlers, model);
   const serverRenderedSource = applySourceReplacements(source, serverRender.replacements);
   const serverSource = emitServerModule(serverRenderedSource);
   const registrySource = emitRegistryModule({

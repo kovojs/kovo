@@ -36,11 +36,10 @@ export function renderSource() {
 }
 
 export function serverRenderLowering(
-  source: string,
   handlers: readonly HandlerLowering[],
   model: ComponentModuleModel,
 ): ServerRenderLowering {
-  return { replacements: serverRenderPatches(source, handlers, model) };
+  return { replacements: serverRenderPatches(handlers, model) };
 }
 
 export function renderEquivalenceCheck(
@@ -87,7 +86,6 @@ function executableRenderSource(serverSource: string): string | null {
 }
 
 function serverRenderPatches(
-  source: string,
   handlers: readonly HandlerLowering[],
   model: ComponentModuleModel,
 ): SourceReplacement[] {
@@ -110,7 +108,9 @@ function serverRenderPatches(
 
   if (host) {
     const hostElement = componentRenderHostElement(model);
-    const tagSource = hostElement?.openingSource ?? source.slice(host.start, host.end);
+    if (!hostElement) return patches;
+
+    const tagSource = hostElement.openingSource;
     const tagWithHandlers = replaceTagHandlerAttributes(tagSource, host.start, hostHandlers);
     const stampedTag = stampRenderHostTag(tagWithHandlers, model, hostElement);
     if (stampedTag !== tagSource) {
