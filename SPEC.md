@@ -688,6 +688,20 @@ Content-Type: text/html; charset=utf-8
 
 Args arrive as search params through the query's `args` schema (§10.2) — the same `s.*` coercion machinery as forms. The query's `guard` (§10.2) is checked on **every** read, and reads are part of the unguarded audit. The instance key in the response (`product:p1`) is the §10.2 canonical encoding, so the client store, `fw-deps`, `FW-Targets`, optimistic keys, and (v2) live routing all speak one currency.
 
+### 9.5 Request shell
+
+The request shell is the server-owned composition point for routing, document assembly, dev serving, and export. Apps declare a closed `createApp()` aggregate: routes, mutations, queries, endpoints, the client-module registry, document options, error shells, CSRF config, and the §6.5 `sessionProvider`. The public handler currency is web-standard `Request -> Response`; adapters such as `node:http` convert at the edge.
+
+Dispatch order is normative and printable: `/_m/<mutation-key>` mutations, `/_q/<query-key>` typed reads, `/c/<module>?v=` immutable client modules, declared `endpoint()` exact/prefix mounts, route table, then the 404 shell. There is no user middleware chain in v1. Extension points that can affect control flow are declared surfaces — `sessionProvider`, guards, `endpoint()`, `webhook()` — so audits can print them and no request behavior is registered from a distance.
+
+Route matching is static-first at each path segment, and ambiguity is a compile error **FW228** rather than a runtime precedence footnote. Trailing slashes normalize to one canonical path with a 308 redirect before matching. Page routes answer GET and HEAD; other methods on a page path are 405 because mutations own POST via `/_m/`.
+
+The shell owns document assembly. The default document contains the doctype, `<html lang>`, route/query meta, page hints (stylesheet links, modulepreloads, optional speculation rules), initial `<fw-query>` scripts before consumers, the page body, and the inline loader. Apps may provide a document template, but the template receives assembled parts rather than a blank canvas, so it cannot silently drop loader or hydration contracts. Deferred streams use the same assembled shell parts; partials must not drift from full documents.
+
+Error shells are app config with safe defaults: 404, 403, and 500 documents may be supplied by the app, while unexpected failures still use the stable no-internals bodies from §9.2 when no shell is provided. The shell resolves `sessionProvider` once before route, query, or mutation guards; route/query guard failures use the §6.5 unauthenticated redirect and 403 contract.
+
+Static export replays synthetic GET `Request`s through the same handler. An exportable route writes `.html`, referenced immutable `/c/` modules, and static assets; there is no second render path. Export is L0/L1 only: a route with a guard, unproven session dependence, mutation-only interaction, or a param path without explicit static-path enumeration fails or skips loudly with **FW229** according to the configured export policy. Exported documents disable server refetch assumptions; the no-JS document is the artifact.
+
 ---
 
 ## 10. Data Plane
@@ -942,6 +956,8 @@ Dev server and the test harness wrap `db`; every executed statement is parsed (`
 | FW225 | error      | JSX nesting violates the HTML content model — the parser would re-parent (§4.2)                               |
 | FW226 | internal   | `fw-deps`/`fw-c` names an unknown query instance or component in emitted IR fixpoint validation               |
 | FW227 | error      | Binding path traverses a nullable segment without `?.` or a null-handling derive (§4.8)                       |
+| FW228 | error      | Ambiguous route table: two routes can match the same canonical request path (§9.5)                            |
+| FW229 | error      | Static export constraint violation: route/session/mutation/param usage cannot be exported as L0/L1 (§9.5)     |
 | FW230 | error      | Fragment-target children not lowerable to a component reference (shows the hoisting + fixes)                  |
 | FW231 | error      | Unmergeable attribute conflict in primitive composition (shows both sources + the §4.6 rule)                  |
 | FW232 | lint       | Author override of a primitive-owned ARIA/state attribute                                                     |
