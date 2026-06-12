@@ -720,6 +720,13 @@ params, relational API, `execute(sql)`, right/full joins, a string column named 
       fragments, and append fragments. Same-session evidence:
       `pnpm exec vitest --run packages/runtime/src/index.test.ts` and
       `pnpm exec vp check packages/runtime/src/index.ts packages/runtime/src/index.test.ts`.
+      Additional bounded evidence 2026-06-12: `packages/runtime/src/index.test.ts` now runs
+      generated bootstrap source and `installInlineJisoLoader` through the same delegated-handler
+      parity harness as the modular dispatcher, pinning param coercion, malformed param-type
+      entries that must remain strings, chained handler state persistence, and invalid/missing
+      handler error messages under the `SPEC.md` section 4.4 loader contract. Same-session
+      evidence: `pnpm exec vitest --run packages/runtime/src/index.test.ts`,
+      `pnpm exec vp check packages/runtime/src/index.test.ts`, and `git diff --check`.
 - [x] **HIGH — Ship the DOM morph.** The only real keyed DOM morph (focus/selection/scroll
       capture-restore) lives in index.browser.test.ts:12-182; every consumer must rewrite it, and
       the flagship browser test substantially tests its own test code. Promote to a
