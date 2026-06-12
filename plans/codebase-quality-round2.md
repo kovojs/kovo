@@ -2250,6 +2250,15 @@ As each phase splits a source module, split its tests in the same commit.
       evidence:
       `pnpm exec vitest --run packages/compiler/src/css.test.ts packages/compiler/src/index.test.ts -t "CSS|css|stylesheet|manifest"` and
       `pnpm exec vp check packages/compiler/src/css.test.ts packages/compiler/src/index.test.ts plans/codebase-quality-round2.md`.
+      Additional evidence 2026-06-12: fragment-target render-input, child-hoisting, FW230/FW303,
+      string/comment non-match, registry metadata, and graph-fact coverage moved from
+      `packages/compiler/src/index.test.ts` into `packages/compiler/src/fragment-targets.test.ts`,
+      with FW230/FW303 expected messages and severities keyed to `diagnosticDefinitions`. The
+      broad compiler split remains open. Same-session evidence:
+      `corepack pnpm exec vitest --run packages/compiler/src/fragment-targets.test.ts packages/compiler/src/index.test.ts -t "fragment target|FW230|FW303"` and
+      `corepack pnpm exec vitest --run packages/compiler/src/fragment-targets.test.ts packages/compiler/src/index.test.ts`,
+      `corepack pnpm exec vp check packages/compiler/src/fragment-targets.test.ts packages/compiler/src/index.test.ts plans/codebase-quality-round2.md`,
+      and `git diff --check`.
 - [ ] drizzle (one describe, 57 its, 68 inline pgTable fixtures, 3 module-shim copies) and
       test-package suites: same treatment; CLI tests get the temp-dir + stream-spy ritual
       (16 hand-copies) as one helper.
