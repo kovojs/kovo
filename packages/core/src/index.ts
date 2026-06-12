@@ -45,6 +45,8 @@ export type {
   VerificationDiagnosticFact,
 } from './graph.js';
 export { validateFwExplainInput } from './graph.js';
+export type { PackageComponentPrefixManifestOptions } from './package-prefix.js';
+export { packageComponentPrefixFactFromPackageManifest } from './package-prefix.js';
 export type {
   FileSystemStorageOptions,
   MemoryStorageOptions,
