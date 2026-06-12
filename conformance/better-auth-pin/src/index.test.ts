@@ -1913,6 +1913,47 @@ describe('Better Auth pinned conformance', () => {
     expect(harness.verificationDiagnostics()).toEqual([]);
   });
 
+  it('rejects bridge extension collisions against real Better Auth core tables', () => {
+    const { auth } = createRealAuth();
+    const tables = getAuthTables(auth.options);
+    const schemaBridge = {
+      user: {
+        exempt: true,
+        rationale: 'attempted downgrade',
+      },
+    } as const;
+    const result = annotateBetterAuthSchemaSource(
+      betterAuthSchemaSourceFixture(Object.keys(tables)),
+      tables,
+      { schemaBridge },
+    );
+    const verifierConfig = createBetterAuthDbVerificationConfig(schemaBridge, tables);
+
+    expect(validateBetterAuthSchemaBridge(tables, { schemaBridge })).toEqual({
+      declaredTouchMismatches: [],
+      keyFieldMismatches: [
+        'user is a blessed Better Auth schema-bridge table; extension entries may only add plugin tables outside the built-in bridge',
+      ],
+      missingTables: [],
+      ok: false,
+      pluginTableDegradations: [],
+      unbridgedTables: [],
+    });
+    expect(result.validation.ok).toBe(false);
+    expect(result.validation.keyFieldMismatches).toEqual([
+      'user is a blessed Better Auth schema-bridge table; extension entries may only add plugin tables outside the built-in bridge',
+    ]);
+    expect(result.source).toContain(
+      "export const user = pgTable('user', {}, jiso({ domain: 'user', key: 'id' }));",
+    );
+    expect(result.source).not.toContain(
+      "export const user = pgTable('user', {}, jiso({ exempt: true }));",
+    );
+    expect(verifierConfig.domainByTable.user).toBe('user');
+    expect(verifierConfig.exemptTables).not.toContain('user');
+    expect(verifierConfig.keyByTable.user).toBe('id');
+  });
+
   it('materializes schema.ts annotations and verifier facts from real plugin modelName aliases', () => {
     const { auth } = createRealAuth({
       plugins: [

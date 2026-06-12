@@ -535,7 +535,10 @@ export function validateBetterAuthSchemaBridge(
     ...options,
     schemaBridge,
   });
-  const keyFieldMismatches = schemaBridgeKeyFieldMismatches(tables, schemaBridge);
+  const keyFieldMismatches = [
+    ...schemaBridgeKeyFieldMismatches(tables, schemaBridge),
+    ...schemaBridgeExtensionCollisionMismatches(options.schemaBridge),
+  ].sort();
   const pluginTableDegradations = unbridgedTables.map((table) =>
     unsupportedPluginTableDegradation(table, tables[table]),
   );
@@ -562,7 +565,10 @@ export function annotateBetterAuthSchemaSource(
   options: BetterAuthSchemaSourceAnnotationOptions = {},
 ): BetterAuthSchemaSourceAnnotationResult {
   const schemaBridge = createBetterAuthSchemaBridge(options.schemaBridge);
-  const validation = validateBetterAuthSchemaBridge(tables, { schemaBridge });
+  const validation = validateBetterAuthSchemaBridge(
+    tables,
+    options.schemaBridge === undefined ? {} : { schemaBridge: options.schemaBridge },
+  );
   const metadataTables = new Set(
     Object.keys(tables).filter((table) => isBetterAuthSchemaTable(table, schemaBridge)),
   );
@@ -1210,9 +1216,23 @@ function createBetterAuthSchemaBridge(
   extensions: BetterAuthSchemaBridgeExtensions = {},
 ): BetterAuthSchemaBridgeExtensions {
   return {
-    ...betterAuthSchemaBridge,
     ...extensions,
+    ...betterAuthSchemaBridge,
   };
+}
+
+function schemaBridgeExtensionCollisionMismatches(
+  extensions: BetterAuthSchemaBridgeExtensions = {},
+): string[] {
+  const builtInTables = new Set(Object.keys(betterAuthSchemaBridge));
+
+  return Object.keys(extensions)
+    .filter((table) => builtInTables.has(table))
+    .sort()
+    .map(
+      (table) =>
+        `${table} is a blessed Better Auth schema-bridge table; extension entries may only add plugin tables outside the built-in bridge`,
+    );
 }
 
 function betterAuthPhysicalTableNames(table: string, tables: Record<string, unknown>): string[] {

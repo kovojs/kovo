@@ -374,6 +374,18 @@ tables)` now emits both logical and physical table facts for runtime SQL verific
       evidence:
       `pnpm exec vitest --run packages/better-auth/src/index.test.ts conformance/better-auth-pin/src/index.test.ts --reporter=dot`
       and `pnpm exec tsc -p conformance/better-auth-pin/tsconfig.json --noEmit`.
+      Partial evidence 2026-06-12: schema bridge extensions can no longer collide with or
+      downgrade blessed built-in Better Auth table mappings. Extension entries remain available
+      for plugin tables outside the fixed bridge, but attempts to remap or exempt built-in
+      tables such as `user` now make validation `ok: false` while generated app `schema.ts`
+      annotations and P9 verifier facts continue to use the adapter-owned built-in mapping.
+      `packages/better-auth/src/index.test.ts` covers the local validation/annotation/verifier
+      behavior, and `conformance/better-auth-pin/src/index.test.ts` verifies the same downgrade
+      attempt against real `better-auth@1.6.17` core table metadata. Same-session evidence:
+      `pnpm exec vitest --run packages/better-auth/src/index.test.ts conformance/better-auth-pin/src/index.test.ts --reporter=dot`,
+      `pnpm exec tsc -p conformance/better-auth-pin/tsconfig.json --noEmit`,
+      `pnpm exec vp check packages/better-auth/src/index.ts packages/better-auth/src/index.test.ts conformance/better-auth-pin/src/index.test.ts plans/auth.md IMPLEMENT_v1.md`,
+      and `git diff --check`.
       Remaining gaps: plugin-generated tables outside the blessed organization/admin/two-factor/OIDC-provider/MCP/SIWE/JWT/device-authorization
       surface are still not mapped, the OAuth-provider successor package/table metadata is not
       installed or exportable from the pinned dependency set, and full app `schema.ts` generation

@@ -793,6 +793,51 @@ describe('credential mutation helpers', () => {
     expect(betterAuthTableDomain('webauthnCredential', schemaBridge)).toBe('auth');
   });
 
+  it('rejects schema bridge extensions that collide with blessed built-in tables', () => {
+    const tables = {
+      account: authTable(['userId']),
+      session: authTable(['userId']),
+      user: authTable(),
+      verification: authTable(),
+    };
+    const schemaBridge = {
+      user: {
+        exempt: true,
+        rationale: 'attempted downgrade',
+      },
+    } as const;
+
+    expect(validateBetterAuthSchemaBridge(tables, { schemaBridge })).toEqual({
+      declaredTouchMismatches: [],
+      keyFieldMismatches: [
+        'user is a blessed Better Auth schema-bridge table; extension entries may only add plugin tables outside the built-in bridge',
+      ],
+      missingTables: [],
+      ok: false,
+      pluginTableDegradations: [],
+      unbridgedTables: [],
+    });
+    expect(betterAuthTableDomain('user', schemaBridge)).toBe('user');
+    expect(createBetterAuthDbVerificationConfig(schemaBridge).domainByTable.user).toBe('user');
+
+    const result = annotateBetterAuthSchemaSource(
+      [
+        "import { pgTable } from 'drizzle-orm/pg-core';",
+        "export const user = pgTable('user', {});",
+      ].join('\n'),
+      tables,
+      { schemaBridge },
+    );
+
+    expect(result.validation.ok).toBe(false);
+    expect(result.validation.keyFieldMismatches).toEqual([
+      'user is a blessed Better Auth schema-bridge table; extension entries may only add plugin tables outside the built-in bridge',
+    ]);
+    expect(result.source).toContain(
+      "export const user = pgTable('user', {}, jiso({ domain: 'user', key: 'id' }));",
+    );
+  });
+
   it('materializes explicit plugin-table extensions into P9 verifier facts', () => {
     const tables = {
       account: authTable(['userId']),
