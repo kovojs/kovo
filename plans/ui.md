@@ -579,7 +579,10 @@ jiso-dialog` resolves dashed wire names and prints provenance including package,
       browser-free styled drawer slice.
 - [ ] U4 styled components trailing H2.
 - [ ] U5 styled components trailing H3.
-- [ ] G1 `examples/gallery` app: one route per component; demos double as test fixtures.
+- [ ] G1 `examples/gallery` static fixture surface: one route per component; rendered
+      markup demos double as browser-free test fixtures. This gate does not prove
+      click/keyboard interactivity unless the cited evidence names compiled client modules
+      or browser events; static attribute output alone is contract evidence only.
       Partial evidence 2026-06-12: `examples/gallery` now exists as a TSX-authored,
       tooling-light workspace example with route-like fixtures for dialog, toggle, and
       progress demos. The demos import existing `@jiso/headless-ui` primitive attribute
@@ -864,6 +867,15 @@ jiso-dialog` resolves dashed wire names and prints provenance including package,
       `pnpm exec vp check examples/gallery/src/merge-fixtures.test.tsx plans/ui.md`,
       and `git diff --check`. G5 remains open because this still does not cover every exported
       primitive attrs record or compiler/runtime diagnostic coverage.
+- [ ] G6 compiled interactive gallery: stateful gallery demos are authored as app TSX,
+      compiled through Jiso, and served from the docs gallery with generated client
+      modules and explicit `on:*` behavior refs. Evidence must include browser-backed
+      click/keyboard assertions for each stateful primitive family proving visible DOM
+      state changes (`aria-expanded`, `hidden`, `aria-selected`, roving tabindex,
+      dialog open/close, tooltip show/hide, number/OTP input updates) plus static
+      inspection that docs output includes the generated handler module references.
+      This gate is separate from G1 because `renderGalleryRoute()` fixture HTML can
+      correctly expose primitive attributes while remaining non-interactive.
 
 ## Background
 
@@ -1004,7 +1016,17 @@ Behavior contracts (state attributes, ARIA, keyboard maps, change reasons) are p
 
 ## G-track — gallery (`examples/gallery`)
 
-Same workspace, same Vite+ config, alongside `examples/commerce`. One route per component: rendered demo, behavior-contract table (`data-state` values, keyboard map, change reasons), and the no-JS degradation statement per primitive. The demos are the fixtures G2–G5 run against — no separate test app.
+Same workspace, same Vite+ config, alongside `examples/commerce`. G1 is the static
+contract surface: one route per component, rendered demo, behavior-contract table
+(`data-state` values, keyboard map, change reasons), and the no-JS degradation
+statement per primitive. Those demos are fixtures G2–G5 run against — no separate
+test app for static contract checks.
+
+Interactive docs examples are a separate G6 deliverable. They must be authored as
+real Jiso app TSX with state and `on:*` behavior, compiled through the framework,
+and verified in the browser. Do not mark G6 complete from static fixture HTML,
+native form-control behavior alone, or a hand-written gallery shim that bypasses
+the compiler/runtime path.
 
 ## Quality gates (standing, added as each exists)
 
@@ -1013,11 +1035,17 @@ Same workspace, same Vite+ config, alongside `examples/commerce`. One route per 
 3. **Visual (`@jiso/ui` only):** shadcn-parity human review once, then self-baselined screenshot regression — never pixel-parity against React renders.
 4. **Merge goldens:** G5 fixtures pin the §4.6 table per primitive; FW231/FW232 diagnostics get real-world coverage.
 5. **Eager-JS budget:** `grep 'on:load'` and FW302 counts in headless-ui are reviewed per wave — every isomorphic island names its justification (SPEC §16.7 discipline applied to the library itself).
+6. **Compiled interactivity:** stateful gallery demos are compiled app source, not static
+   fixture strings; browser tests prove user events mutate the expected DOM state and
+   static output includes generated handler refs/modules.
 
 ## Exit criteria
 
 - F1–F4 landed (FW234 golden message; provenance in explain output).
 - H1+H2 primitives shipped with all five gates green; H3 shipped with FW302 justifications reviewed.
 - `fw add button card dialog` produces a working styled app surface in the starter; vendored TSX output passes the fixpoint gate.
-- Gallery deployed as the docs surface; the §16.2 legibility study can use gallery components as its material.
+- Static gallery fixtures deployed as the docs surface, and compiled interactive
+  gallery demos deployed for every stateful primitive covered by H1+H2; the §16.2
+  legibility study can use gallery components as its material without confusing
+  contract HTML for interactive behavior.
 - W4 (carousel/calendar/resizable) explicitly re-triaged after exit, not silently dropped.
