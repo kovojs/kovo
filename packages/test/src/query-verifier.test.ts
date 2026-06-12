@@ -1,15 +1,9 @@
 import { describe, expect, it } from 'vitest';
 
-import { diagnosticDefinitions, type DiagnosticCode } from '@jiso/core';
 import { domain, query, s } from '@jiso/server';
 
 import { createDbVerifier, createJisoTestHarness } from './index.js';
-import { createFakeDb, type FakeDb } from './test-fixtures.js';
-
-function expectedDiagnostic(code: DiagnosticCode, detail: string): string {
-  const message = diagnosticDefinitions[code].message.replace(/\.$/, '');
-  return `${code} ${message}: ${detail}`;
-}
+import { createFakeDb, expectedDiagnostic, type FakeDb } from './test-fixtures.js';
 
 describe('@jiso/test query verifier', () => {
   it('fails read-side verification for undeclared query domains', () => {
@@ -23,7 +17,7 @@ describe('@jiso/test query verifier', () => {
     db.read('products');
 
     expect(() => verifier.assertReadsCovered(['cart'])).toThrow(
-      'FW407 Query read from undeclared domain: product',
+      expectedDiagnostic('FW407', 'product'),
     );
   });
 
@@ -199,7 +193,7 @@ describe('@jiso/test query verifier', () => {
     });
 
     await expect(harness.query(cartQuery)).rejects.toThrow(
-      'FW410 Query result shape failed declared output schema: cart Expected number',
+      expectedDiagnostic('FW410', 'cart Expected number'),
     );
   });
 
@@ -224,7 +218,7 @@ describe('@jiso/test query verifier', () => {
     });
 
     await expect(harness.query(productQuery)).rejects.toThrow(
-      'FW410 Query result shape failed declared output schema: product/list Expected string',
+      expectedDiagnostic('FW410', 'product/list Expected string'),
     );
   });
 
@@ -248,9 +242,7 @@ describe('@jiso/test query verifier', () => {
       reads: [cart],
     });
 
-    await expect(harness.query(cartQuery)).rejects.toThrow(
-      'FW407 Query read from undeclared domain: product',
-    );
+    await expect(harness.query(cartQuery)).rejects.toThrow(expectedDiagnostic('FW407', 'product'));
   });
 
   it('fails query-loader verification for raw SQL reads of exempt tables', async () => {
@@ -316,7 +308,7 @@ describe('@jiso/test query verifier', () => {
     db.read('unmapped_table');
 
     expect(() => verifier.assertReadsCovered(['cart'])).toThrow(
-      'FW407 Query read from undeclared domain: unmapped_table',
+      expectedDiagnostic('FW407', 'unmapped_table'),
     );
   });
 
@@ -333,7 +325,7 @@ describe('@jiso/test query verifier', () => {
 
     expect(() => verifier.assertReadsCovered(['cart', 'product'])).not.toThrow();
     expect(() => verifier.assertReadsCovered(['cart'])).toThrow(
-      'FW407 Query read from undeclared domain: product',
+      expectedDiagnostic('FW407', 'product'),
     );
   });
 
@@ -350,7 +342,7 @@ describe('@jiso/test query verifier', () => {
 
     expect(() => verifier.assertReadsCovered(['cart', 'product'])).not.toThrow();
     expect(() => verifier.assertReadsCovered(['cart'])).toThrow(
-      'FW407 Query read from undeclared domain: product',
+      expectedDiagnostic('FW407', 'product'),
     );
   });
 
@@ -364,7 +356,7 @@ describe('@jiso/test query verifier', () => {
     db.sql("select * from products where sku = 'sku-1'");
 
     expect(() => verifier.assertReadsCovered(['product'])).toThrow(
-      'FW408 Declared row key differs from observed row predicate: products expected id observed sku',
+      expectedDiagnostic('FW408', 'products expected id observed sku'),
     );
   });
 
@@ -386,7 +378,7 @@ describe('@jiso/test query verifier', () => {
 
     expect(() => verifier.assertReadsCovered(['product', 'vendor'])).not.toThrow();
     expect(() => verifier.assertReadsCovered(['product'])).toThrow(
-      'FW407 Query read from undeclared domain: vendor',
+      expectedDiagnostic('FW407', 'vendor'),
     );
   });
 });

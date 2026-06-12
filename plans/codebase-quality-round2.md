@@ -2141,6 +2141,14 @@ index.test.ts:4227 while here — it weakens the byte-for-byte claim) + acceptan
       insert-select observation coverage, and CTE alias soundness at the observer seam while
       leaving `verifier-sql.test.ts` focused on verifier integration. Same-session evidence:
       `corepack pnpm exec vitest --run packages/test/src/sql-observer.test.ts packages/test/src/verifier-sql.test.ts`.
+      Additional evidence 2026-06-12: `packages/test/src/test-fixtures.ts` now owns shared
+      diagnostic expectation helpers backed by `diagnosticDefinitions`, and the split verifier
+      suites use them for thrown FW402/FW404/FW407/FW408/FW410/FW411 assertions, structured
+      FW403/FW405 warning records, and FW406 graph diagnostic fixture messages. Same-session
+      evidence:
+      `corepack pnpm exec vitest --run packages/test/src/verifier.test.ts packages/test/src/query-verifier.test.ts packages/test/src/verifier-sql.test.ts packages/test/src/mutation-verifier.test.ts packages/test/src/harness-verifier.test.ts packages/test/src/verifier-diagnostics.test.ts packages/test/src/pglite-harness.test.ts packages/test/src/sql-observer.test.ts`,
+      `corepack pnpm exec vp check packages/test/src/test-fixtures.ts packages/test/src/verifier.test.ts packages/test/src/query-verifier.test.ts packages/test/src/verifier-sql.test.ts packages/test/src/mutation-verifier.test.ts packages/test/src/harness-verifier.test.ts packages/test/src/verifier-diagnostics.test.ts packages/test/src/pglite-harness.test.ts packages/test/src/sql-observer.test.ts plans/codebase-quality-round2.md`,
+      and `git diff --check`.
 - [ ] **MED — Commerce example: one source of truth.** `cartQuery.load` returns a constant while
       `loadCartQuery(db)` does the real read (app.ts:123-126 vs :280-284);
       `productGridQuery.load` conjures a fresh `createCommerceDb()` (:161); the committed
@@ -2479,6 +2487,14 @@ As each phase splits a source module, split its tests in the same commit.
       SPEC §11.2 pass-through, insert-select read/write observation, and CTE alias soundness.
       Same-session evidence:
       `corepack pnpm exec vitest --run packages/test/src/sql-observer.test.ts packages/test/src/verifier-sql.test.ts`.
+      Additional evidence 2026-06-12: `@jiso/test` verifier seam tests now share the diagnostic
+      expectation helper in `packages/test/src/test-fixtures.ts`; the query, mutation, SQL,
+      PGlite, harness, and diagnostic seam tests key formatted and structured messages to
+      `diagnosticDefinitions` instead of copying canonical diagnostic sentence text locally.
+      Same-session evidence:
+      `corepack pnpm exec vitest --run packages/test/src/verifier.test.ts packages/test/src/query-verifier.test.ts packages/test/src/verifier-sql.test.ts packages/test/src/mutation-verifier.test.ts packages/test/src/harness-verifier.test.ts packages/test/src/verifier-diagnostics.test.ts packages/test/src/pglite-harness.test.ts packages/test/src/sql-observer.test.ts`,
+      `corepack pnpm exec vp check packages/test/src/test-fixtures.ts packages/test/src/verifier.test.ts packages/test/src/query-verifier.test.ts packages/test/src/verifier-sql.test.ts packages/test/src/mutation-verifier.test.ts packages/test/src/harness-verifier.test.ts packages/test/src/verifier-diagnostics.test.ts packages/test/src/pglite-harness.test.ts packages/test/src/sql-observer.test.ts plans/codebase-quality-round2.md`,
+      and `git diff --check`.
       Additional evidence 2026-06-12: Drizzle runtime/static package-surface coverage moved from
       `packages/drizzle/src/index.test.ts` into `packages/drizzle/src/runtime-surface.test.ts`,
       leaving static extraction coverage in the Drizzle monolith. Same-session evidence:

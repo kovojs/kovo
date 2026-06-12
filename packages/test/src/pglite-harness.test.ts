@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { mutation, s } from '@jiso/server';
 
 import { createJisoTestHarness, createPgliteTestDb, type PgliteTestDb } from './index.js';
+import { expectedDiagnostic } from './test-fixtures.js';
 
 describe('@jiso/test PGlite harness integration', () => {
   it('runs mutation suites against an in-memory pglite database', async () => {
@@ -78,7 +79,7 @@ describe('@jiso/test PGlite harness integration', () => {
       });
 
       await expect(harness.exec(cartMutation, { productId: 'p1' })).rejects.toThrow(
-        'FW402 Write touched an undeclared domain: audit',
+        expectedDiagnostic('FW402', 'audit'),
       );
     } finally {
       await db.close();
@@ -156,7 +157,7 @@ describe('@jiso/test PGlite harness integration', () => {
       });
 
       await expect(harness.exec(cartMutation, { productId: 'p1' })).rejects.toThrow(
-        'FW402 Write touched an undeclared domain: audit',
+        expectedDiagnostic('FW402', 'audit'),
       );
     } finally {
       await db.close();
@@ -195,7 +196,7 @@ describe('@jiso/test PGlite harness integration', () => {
       });
 
       await expect(harness.exec(cartMutation, { productId: 'p1' })).rejects.toThrow(
-        'FW402 Write touched an undeclared domain: audit',
+        expectedDiagnostic('FW402', 'audit'),
       );
     } finally {
       await db.close();

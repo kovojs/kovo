@@ -1,14 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
-import { diagnosticDefinitions, type DiagnosticCode } from '@jiso/core';
-
-import { createFakeDb } from './test-fixtures.js';
+import { createFakeDb, expectedDiagnostic, expectedDiagnosticMessage } from './test-fixtures.js';
 import { createDbVerifier } from './verifier.js';
-
-function expectedDiagnostic(code: DiagnosticCode, detail: string): string {
-  const message = diagnosticDefinitions[code].message.replace(/\.$/, '');
-  return `${code} ${message}: ${detail}`;
-}
 
 describe('@jiso/test DB verifier', () => {
   it('rejects observed writes covered only by unscoped FW406 static analysis', () => {
@@ -19,7 +12,7 @@ describe('@jiso/test DB verifier', () => {
           unresolved: [
             {
               code: 'FW406',
-              message: 'Statically un-analyzable write site; manual touches required.',
+              message: expectedDiagnosticMessage('FW406'),
               site: 'cart.domain.ts:9',
             },
           ],
@@ -31,9 +24,7 @@ describe('@jiso/test DB verifier', () => {
 
     db.write('audit_log', 'p1');
 
-    expect(() => verifier.assertCovered()).toThrow(
-      'FW402 Write touched an undeclared domain: audit',
-    );
+    expect(() => verifier.assertCovered()).toThrow(expectedDiagnostic('FW402', 'audit'));
   });
 
   it('allows observed writes when unscoped FW406 is backed by declared touches', () => {
@@ -44,7 +35,7 @@ describe('@jiso/test DB verifier', () => {
           unresolved: [
             {
               code: 'FW406',
-              message: 'Statically un-analyzable write site; manual touches required.',
+              message: expectedDiagnosticMessage('FW406'),
               site: 'cart.domain.ts:9',
             },
           ],
@@ -68,7 +59,7 @@ describe('@jiso/test DB verifier', () => {
             {
               code: 'FW406',
               domain: 'audit',
-              message: 'Statically un-analyzable write site; manual touches required.',
+              message: expectedDiagnosticMessage('FW406'),
               site: 'cart.domain.ts:9',
             },
           ],
@@ -81,9 +72,7 @@ describe('@jiso/test DB verifier', () => {
     db.write('audit_log', 'p1');
     db.write('products', 'p1');
 
-    expect(() => verifier.assertCovered()).toThrow(
-      'FW402 Write touched an undeclared domain: product',
-    );
+    expect(() => verifier.assertCovered()).toThrow(expectedDiagnostic('FW402', 'product'));
   });
 
   it('warns when a declared write domain is never observed', () => {
@@ -107,7 +96,7 @@ describe('@jiso/test DB verifier', () => {
       {
         code: 'FW403',
         domain: 'product',
-        message: 'Declared domain was never observed written.',
+        message: expectedDiagnosticMessage('FW403'),
         severity: 'warn',
       },
     ]);
@@ -154,14 +143,14 @@ describe('@jiso/test DB verifier', () => {
         branch: 'stock-reserve',
         code: 'FW405',
         domain: 'product',
-        message: 'Conditional write branch was never executed under instrumentation.',
+        message: expectedDiagnosticMessage('FW405'),
         severity: 'warn',
         site: 'cart.domain.ts:12',
       },
       {
         code: 'FW403',
         domain: 'product',
-        message: 'Declared domain was never observed written.',
+        message: expectedDiagnosticMessage('FW403'),
         severity: 'warn',
       },
     ]);

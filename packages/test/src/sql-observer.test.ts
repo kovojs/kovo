@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { createDbVerifier } from './index.js';
+import { expectedDiagnostic } from './test-fixtures.js';
 
 interface SqlDb {
   sql(statement: string): unknown[];
@@ -103,8 +104,6 @@ describe('@jiso/test SQL observer', () => {
       },
     ]);
     expect(() => verifier.assertReadsCovered(['product'])).not.toThrow();
-    expect(() => verifier.assertReadsCovered([])).toThrow(
-      'FW407 Query read from undeclared domain: product',
-    );
+    expect(() => verifier.assertReadsCovered([])).toThrow(expectedDiagnostic('FW407', 'product'));
   });
 });

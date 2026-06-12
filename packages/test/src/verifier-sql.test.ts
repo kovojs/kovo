@@ -3,7 +3,12 @@ import { describe, expect, it } from 'vitest';
 import { domain, mutation, s } from '@jiso/server';
 
 import { createDbVerifier, createJisoTestHarness } from './index.js';
-import { createFakeDb, type FakeDb } from './test-fixtures.js';
+import {
+  createFakeDb,
+  expectedDiagnostic,
+  expectedDiagnosticMessage,
+  type FakeDb,
+} from './test-fixtures.js';
 
 describe('@jiso/test SQL verifier integration', () => {
   it('verifies insert-select SQL as a target write plus source reads', async () => {
@@ -82,7 +87,7 @@ describe('@jiso/test SQL verifier integration', () => {
 
     expect(() => verifier.assertReadsCovered(['product', 'vendor'])).not.toThrow();
     expect(() => verifier.assertReadsCovered(['product'])).toThrow(
-      'FW407 Query read from undeclared domain: vendor',
+      expectedDiagnostic('FW407', 'vendor'),
     );
   });
 
@@ -134,7 +139,7 @@ describe('@jiso/test SQL verifier integration', () => {
     });
 
     await expect(harness.exec(productImport, { productId: 'p1' })).rejects.toThrow(
-      'FW407 Query read from undeclared domain: vendor',
+      expectedDiagnostic('FW407', 'vendor'),
     );
   });
 
@@ -173,7 +178,7 @@ describe('@jiso/test SQL verifier integration', () => {
           unresolved: [
             {
               code: 'FW406',
-              message: 'Statically un-analyzable write site; manual touches required.',
+              message: expectedDiagnosticMessage('FW406'),
               site: 'product.ts:9',
             },
           ],
@@ -189,7 +194,7 @@ describe('@jiso/test SQL verifier integration', () => {
     });
 
     await expect(harness.exec(productImport, { productId: 'p1' })).rejects.toThrow(
-      'FW407 Query read from undeclared domain: vendor',
+      expectedDiagnostic('FW407', 'vendor'),
     );
   });
 
@@ -252,7 +257,7 @@ describe('@jiso/test SQL verifier integration', () => {
 
     await expect(
       harness.exec(productImport, { productId: 'p1' }, { touchGraphKey: 'product/import' }),
-    ).rejects.toThrow('FW407 Query read from undeclared domain: vendor');
+    ).rejects.toThrow(expectedDiagnostic('FW407', 'vendor'));
   });
 
   it('verifies update-from SQL as a target write plus source reads', () => {
@@ -283,7 +288,7 @@ describe('@jiso/test SQL verifier integration', () => {
     expect(() => verifier.assertCovered()).not.toThrow();
     expect(() => verifier.assertReadsCovered(['price'])).not.toThrow();
     expect(() => verifier.assertReadsCovered(['product'])).toThrow(
-      'FW407 Query read from undeclared domain: price',
+      expectedDiagnostic('FW407', 'price'),
     );
   });
 
@@ -303,9 +308,7 @@ describe('@jiso/test SQL verifier integration', () => {
       'update products set unit_price = (select max(amount) from prices) where id in (select product_id from prices)',
     );
 
-    expect(() => verifier.assertCovered()).toThrow(
-      'FW407 Query read from undeclared domain: price',
-    );
+    expect(() => verifier.assertCovered()).toThrow(expectedDiagnostic('FW407', 'price'));
   });
 
   it('verifies select expression subqueries as query reads', () => {
@@ -332,7 +335,7 @@ describe('@jiso/test SQL verifier integration', () => {
     db.sql('select * from products where id in (select product_id from prices)');
 
     expect(() => verifier.assertReadsCovered(['product'])).toThrow(
-      'FW407 Query read from undeclared domain: price',
+      expectedDiagnostic('FW407', 'price'),
     );
     expect(() => verifier.assertReadsCovered(['product', 'price'])).not.toThrow();
   });
@@ -354,7 +357,7 @@ describe('@jiso/test SQL verifier integration', () => {
     db.sql("update products set reserved = true where sku = 'sku-1'");
 
     expect(() => verifier.assertCovered()).toThrow(
-      'FW408 Declared row key differs from observed row predicate: products expected id observed sku',
+      expectedDiagnostic('FW408', 'products expected id observed sku'),
     );
   });
 
@@ -394,7 +397,7 @@ describe('@jiso/test SQL verifier integration', () => {
     db.sql("update products set reserved = true where sku = 'sku-1' and slug = 'beans'");
 
     expect(() => verifier.assertCovered()).toThrow(
-      'FW408 Declared row key differs from observed row predicate: products expected id observed sku, slug',
+      expectedDiagnostic('FW408', 'products expected id observed sku, slug'),
     );
   });
 
@@ -415,7 +418,7 @@ describe('@jiso/test SQL verifier integration', () => {
     db.sql("delete from public.products where sku = 'sku-1'");
 
     expect(() => verifier.assertCovered()).toThrow(
-      'FW408 Declared row key differs from observed row predicate: products expected id observed sku',
+      expectedDiagnostic('FW408', 'products expected id observed sku'),
     );
   });
 
@@ -436,7 +439,7 @@ describe('@jiso/test SQL verifier integration', () => {
     db.write('products', { id: 'p1' }, { rowKey: 'sku' });
 
     expect(() => verifier.assertCovered()).toThrow(
-      'FW408 Declared row key differs from observed row predicate: products expected id observed sku',
+      expectedDiagnostic('FW408', 'products expected id observed sku'),
     );
   });
 
@@ -457,7 +460,7 @@ describe('@jiso/test SQL verifier integration', () => {
     db.write('products', { id: 'p1' });
 
     expect(() => verifier.assertCovered()).toThrow(
-      'FW408 Declared row key differs from observed row predicate: products expected id observed <missing>',
+      expectedDiagnostic('FW408', 'products expected id observed <missing>'),
     );
   });
 

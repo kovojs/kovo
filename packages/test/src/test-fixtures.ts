@@ -1,3 +1,5 @@
+import { diagnosticDefinitions, type DiagnosticCode } from '@jiso/core';
+
 export interface FakeDb {
   read(table: string, options?: { branch?: string; rowKey?: string }): unknown[];
   sql(statement: string): unknown[];
@@ -18,4 +20,12 @@ export function createFakeDb(): FakeDb {
       tables.set(table, [...(tables.get(table) ?? []), value]);
     },
   };
+}
+
+export function expectedDiagnostic(code: DiagnosticCode, detail: string): string {
+  return `${code} ${expectedDiagnosticMessage(code).replace(/\.$/, '')}: ${detail}`;
+}
+
+export function expectedDiagnosticMessage(code: DiagnosticCode): string {
+  return diagnosticDefinitions[code].message;
 }

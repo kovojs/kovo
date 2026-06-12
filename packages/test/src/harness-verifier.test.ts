@@ -3,7 +3,12 @@ import { describe, expect, it } from 'vitest';
 import { mutation, s } from '@jiso/server';
 
 import { createJisoTestHarness } from './index.js';
-import { createFakeDb, type FakeDb } from './test-fixtures.js';
+import {
+  createFakeDb,
+  expectedDiagnostic,
+  expectedDiagnosticMessage,
+  type FakeDb,
+} from './test-fixtures.js';
 
 function deferred<T = void>(): {
   promise: Promise<T>;
@@ -98,14 +103,14 @@ describe('@jiso/test harness verifier integration', () => {
         branch: 'stock-reserve',
         code: 'FW405',
         domain: 'product',
-        message: 'Conditional write branch was never executed under instrumentation.',
+        message: expectedDiagnosticMessage('FW405'),
         severity: 'warn',
         site: 'cart.domain.ts:2',
       },
       {
         code: 'FW403',
         domain: 'product',
-        message: 'Declared domain was never observed written.',
+        message: expectedDiagnosticMessage('FW403'),
         severity: 'warn',
       },
     ]);
@@ -168,7 +173,7 @@ describe('@jiso/test harness verifier integration', () => {
     });
 
     await expect(harness.exec(cartMutation, { productId: 'p1' })).rejects.toThrow(
-      'FW402 Write touched an undeclared domain: audit',
+      expectedDiagnostic('FW402', 'audit'),
     );
   });
 

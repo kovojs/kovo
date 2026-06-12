@@ -3,7 +3,12 @@ import { describe, expect, it } from 'vitest';
 import { mutation, s } from '@jiso/server';
 
 import { createJisoTestHarness } from './index.js';
-import { createFakeDb, type FakeDb } from './test-fixtures.js';
+import {
+  createFakeDb,
+  expectedDiagnostic,
+  expectedDiagnosticMessage,
+  type FakeDb,
+} from './test-fixtures.js';
 
 describe('@jiso/test mutation verifier', () => {
   it('fails verification for writes to domains outside the static graph', async () => {
@@ -32,7 +37,7 @@ describe('@jiso/test mutation verifier', () => {
     });
 
     await expect(harness.exec(cartMutation, { productId: 'p1' })).rejects.toThrow(
-      'FW402 Write touched an undeclared domain: audit',
+      expectedDiagnostic('FW402', 'audit'),
     );
   });
 
@@ -69,7 +74,7 @@ describe('@jiso/test mutation verifier', () => {
 
     await expect(
       harness.exec(cartMutation, { productId: 'p1' }, { touchGraphKey: 'cart/add' }),
-    ).rejects.toThrow('FW402 Write touched an undeclared domain: product');
+    ).rejects.toThrow(expectedDiagnostic('FW402', 'product'));
   });
 
   it('uses explicit harness touch graph keys when mutation keys differ from graph entries', async () => {
@@ -126,7 +131,7 @@ describe('@jiso/test mutation verifier', () => {
             {
               code: 'FW406',
               domain: 'audit',
-              message: 'Statically un-analyzable write site; manual touches required.',
+              message: expectedDiagnosticMessage('FW406'),
               site: 'audit.domain.ts:1',
             },
           ],
@@ -142,7 +147,7 @@ describe('@jiso/test mutation verifier', () => {
 
     await expect(
       harness.exec(cartMutation, { productId: 'p1' }, { touchGraphKey: 'cart/add' }),
-    ).rejects.toThrow('FW402 Write touched an undeclared domain: audit');
+    ).rejects.toThrow(expectedDiagnostic('FW402', 'audit'));
   });
 
   it('allows scoped writes covered by same-entry FW406 annotations', async () => {
@@ -163,7 +168,7 @@ describe('@jiso/test mutation verifier', () => {
             {
               code: 'FW406',
               domain: 'audit',
-              message: 'Statically un-analyzable write site; manual touches required.',
+              message: expectedDiagnosticMessage('FW406'),
               site: 'cart.domain.ts:9',
             },
           ],
@@ -244,7 +249,7 @@ describe('@jiso/test mutation verifier', () => {
     });
 
     await expect(harness.exec(cartMutation, { productId: 'p1' })).rejects.toThrow(
-      'FW404 Write to unmapped table: unknown_table',
+      expectedDiagnostic('FW404', 'unknown_table'),
     );
   });
 });

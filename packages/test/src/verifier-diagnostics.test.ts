@@ -1,4 +1,6 @@
 import { describe, expect, it } from 'vitest';
+
+import { expectedDiagnosticMessage } from './test-fixtures.js';
 import { diagnosticsForObservations } from './verifier-diagnostics.js';
 
 describe('@jiso/test verifier diagnostics', () => {
@@ -43,14 +45,14 @@ describe('@jiso/test verifier diagnostics', () => {
         branch: 'stock-reserve',
         code: 'FW405',
         domain: 'product',
-        message: 'Conditional write branch was never executed under instrumentation.',
+        message: expectedDiagnosticMessage('FW405'),
         severity: 'warn',
         site: 'cart.domain.ts:2',
       },
       {
         code: 'FW403',
         domain: 'product',
-        message: 'Declared domain was never observed written.',
+        message: expectedDiagnosticMessage('FW403'),
         severity: 'warn',
       },
     ]);
