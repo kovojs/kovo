@@ -43,7 +43,16 @@ jiso-dialog` resolves dashed wire names and prints provenance including package,
       `pnpm --filter @jiso/headless-ui exec vitest --run src/tooling/primitive-handler-lint.test.ts src/tooling/lint-primitives.test.ts`,
       `pnpm --filter @jiso/headless-ui run lint:primitives`, and
       `pnpm exec vp check packages/headless-ui/package.json packages/headless-ui/src/primitives/disclosure.ts packages/headless-ui/src/tooling/index.ts packages/headless-ui/src/tooling/lint-primitives.ts packages/headless-ui/src/tooling/lint-primitives.test.ts`.
-- [ ] F5 platform audit: CSS anchor positioning + `@starting-style`/`transition-behavior: allow-discrete` coverage check; lazy-loaded floating fallback module decided.
+- [x] F5 platform audit: CSS anchor positioning + `@starting-style`/`transition-behavior: allow-discrete` coverage check; lazy-loaded floating fallback module decided.
+      Evidence 2026-06-11: `packages/headless-ui/src/platform-audit.ts` exports an executable
+      H1 primitive audit matrix covering native dialog/popover/details/form-control/semantic
+      substitutions, `@starting-style` + `transition-behavior: allow-discrete` as progressive
+      exit-animation enhancement, and a lazy `floating-positioning` fallback loaded on first
+      trigger interaction only for hover-card/popover/tooltip. `platform-audit.test.ts` proves
+      H1 coverage, native mechanism decisions, and fallback boundaries. Same-session evidence:
+      `pnpm exec vitest --run packages/headless-ui/src/platform-audit.test.ts packages/headless-ui/src/tooling/primitive-handler-lint.test.ts packages/headless-ui/src/tooling/lint-primitives.test.ts`,
+      `pnpm --filter @jiso/headless-ui run lint:primitives`, and
+      `pnpm exec vp check packages/headless-ui/package.json packages/headless-ui/src/index.ts packages/headless-ui/src/platform-audit.ts packages/headless-ui/src/platform-audit.test.ts`.
 - [ ] H0 shared lib: state-attributes, keyboard/menu navigation maps, typeahead, change-details (reason + `defaultPrevented` contract), positioning fallback.
 - [ ] H1 wave 1 primitives (L0-heavy): dialog, alert-dialog, popover, tooltip, hover-card, collapsible, accordion, separator, progress, meter, avatar, toggle, switch, checkbox.
 - [ ] H2 wave 2 primitives (stateful L1 islands): tabs, radio-group, toggle-group, checkbox-group, toolbar, number-field, otp-field, scroll-area, field/fieldset as `form()` integration.
