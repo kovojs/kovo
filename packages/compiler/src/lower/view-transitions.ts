@@ -1,6 +1,6 @@
 import {
   jsxElements,
-  parseComponentModule,
+  type ComponentModuleModel,
   type JsxAttributeModel,
   type JsxElementModel,
 } from '../scan/parse.js';
@@ -10,11 +10,14 @@ interface ViewTransitionStamp {
   name: string;
 }
 
-export function lowerViewTransitions(source: string): {
+export function lowerViewTransitions(
+  source: string,
+  model: ComponentModuleModel,
+): {
   source: string;
   stamps: ViewTransitionStamp[];
 } {
-  const matches = jsxElements(parseComponentModule('component.tsx', source))
+  const matches = jsxElements(model)
     .map((item) => ({
       attribute: item.attributes.find(
         (attribute) => attribute.name === 'viewTransitionName' && attribute.value !== undefined,

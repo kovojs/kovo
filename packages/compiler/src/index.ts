@@ -189,8 +189,15 @@ export function compileComponentModule(options: CompileComponentOptions): Compil
 
   const originalModel = parseComponentModuleModel(options.fileName, options.source);
   const componentName = inferComponentName(options, originalModel);
-  const viewTransitionLowering = lowerViewTransitions(options.source);
-  const platformLowering = lowerPlatformBehaviors(viewTransitionLowering.source);
+  const viewTransitionLowering = lowerViewTransitions(options.source, originalModel);
+  const viewTransitionModel =
+    viewTransitionLowering.source === options.source
+      ? originalModel
+      : parseComponentModuleModel(options.fileName, viewTransitionLowering.source);
+  const platformLowering = lowerPlatformBehaviors(
+    viewTransitionLowering.source,
+    viewTransitionModel,
+  );
   const navigationLowering = lowerNavigationSugar(platformLowering.source);
   const deriveLowering = lowerInlineAttributeDerives(
     navigationLowering.source,

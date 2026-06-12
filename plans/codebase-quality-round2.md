@@ -389,6 +389,12 @@ pipeline throws the tree away and communicates via mutated source text.
       through one in-memory tag update instead of reparsing for each stamp. Same-session
       evidence: `pnpm exec vitest --run packages/compiler/src/index.test.ts` and
       `pnpm exec vp check packages/compiler/src/emit/server.ts`.
+      Partial evidence 2026-06-11: `lowerViewTransitions` and `lowerPlatformBehaviors` now
+      require explicit `ComponentModuleModel` inputs from `compileComponentModule`, removing
+      their hidden fake-filename parses and making the post-view-transition parse use the real
+      file name. Same-session evidence: `pnpm exec vitest --run packages/compiler/src/index.test.ts`
+      and
+      `pnpm exec vp check packages/compiler/src/index.ts packages/compiler/src/lower/view-transitions.ts packages/compiler/src/lower/platform.ts`.
 - [ ] **HIGH — Retire regex rewriting of handler bodies.** emit/client.ts:89
       (`/\bstate\b/g → ctx.state` corrupts `log('state changed')`), :96 (member-expression
       substitution inside string literals), lower/handlers.ts:262 (harvests params from string

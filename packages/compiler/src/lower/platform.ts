@@ -1,5 +1,5 @@
 import { escapeAttribute } from '../shared.js';
-import { jsxElements, parseComponentModule } from '../scan/parse.js';
+import { jsxElements, type ComponentModuleModel } from '../scan/parse.js';
 
 export interface PlatformSubstitution {
   action: string;
@@ -9,11 +9,14 @@ export interface PlatformSubstitution {
   target: string;
 }
 
-export function lowerPlatformBehaviors(source: string): {
+export function lowerPlatformBehaviors(
+  source: string,
+  model: ComponentModuleModel,
+): {
   source: string;
   substitutions: PlatformSubstitution[];
 } {
-  const matches = jsxElements(parseComponentModule('component.tsx', source)).flatMap((element) => {
+  const matches = jsxElements(model).flatMap((element) => {
     const onClick = element.attributes.find((attribute) => attribute.name === 'onClick');
     const substitution = onClick?.expression
       ? platformSubstitutionFromClickExpression(element.tag, onClick.expression)
