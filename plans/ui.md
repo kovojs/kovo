@@ -54,6 +54,13 @@ jiso-dialog` resolves dashed wire names and prints provenance including package,
       `pnpm --filter @jiso/headless-ui run lint:primitives`, and
       `pnpm exec vp check packages/headless-ui/package.json packages/headless-ui/src/index.ts packages/headless-ui/src/platform-audit.ts packages/headless-ui/src/platform-audit.test.ts`.
 - [ ] H0 shared lib: state-attributes, keyboard/menu navigation maps, typeahead, change-details (reason + `defaultPrevented` contract), positioning fallback.
+      Partial evidence 2026-06-12: `packages/headless-ui/src/lib/` now exposes
+      executable pure helpers for state/data attributes, cancelable change details,
+      APG-style collection keyboard movement, and typeahead matching through the
+      package root and `@jiso/headless-ui/lib`. Same-session evidence:
+      `pnpm exec vitest --run packages/headless-ui/src/lib/state-attributes.test.ts packages/headless-ui/src/lib/change-details.test.ts packages/headless-ui/src/lib/keyboard-navigation.test.ts packages/headless-ui/src/lib/typeahead.test.ts packages/headless-ui/src/platform-audit.test.ts packages/headless-ui/src/tooling/primitive-handler-lint.test.ts packages/headless-ui/src/tooling/lint-primitives.test.ts`
+      and `pnpm --filter @jiso/headless-ui run lint:primitives`. Remaining:
+      positioning fallback scaffolding and first primitive integration.
 - [ ] H1 wave 1 primitives (L0-heavy): dialog, alert-dialog, popover, tooltip, hover-card, collapsible, accordion, separator, progress, meter, avatar, toggle, switch, checkbox.
 - [ ] H2 wave 2 primitives (stateful L1 islands): tabs, radio-group, toggle-group, checkbox-group, toolbar, number-field, otp-field, scroll-area, field/fieldset as `form()` integration.
 - [ ] H3 wave 3 primitives (list-driven & isomorphic): select, combobox, autocomplete, dropdown-menu, context-menu, menubar, navigation-menu, slider, toast, command.
