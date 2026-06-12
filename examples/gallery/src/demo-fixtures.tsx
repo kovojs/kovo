@@ -5,6 +5,9 @@ import {
   accordionItemAttributes,
   accordionRootAttributes,
   accordionTriggerAttributes,
+  avatarFallbackAttributes,
+  avatarImageAttributes,
+  avatarRootAttributes,
   checkboxRootAttributes,
   dialogCloseAttributes,
   dialogContentAttributes,
@@ -44,6 +47,7 @@ import { Badge, Button, Card, Sheet } from '@jiso/ui';
 
 export type GalleryComponent =
   | 'accordion'
+  | 'avatar'
   | 'badge'
   | 'button'
   | 'card'
@@ -83,6 +87,12 @@ export const galleryRoutes: readonly GalleryRoute[] = Object.freeze([
     path: '/components/accordion',
     render: () => AccordionDemo(),
     title: 'Accordion',
+  },
+  {
+    component: 'avatar',
+    path: '/components/avatar',
+    render: () => AvatarDemo(),
+    title: 'Avatar',
   },
   {
     component: 'badge',
@@ -272,6 +282,55 @@ export function AccordionDemo(): string {
         changeReasons: 'trigger-click, programmatic',
         dataState: 'open, closed, disabled',
         keyboard: 'Native button activation opens an item; group keyboard maps are primitive-owned',
+      })}
+    </section>
+  );
+}
+
+export function AvatarDemo(): string {
+  const loading = {
+    src: '/avatars/ada.png',
+    status: 'loading' as const,
+  };
+  const loaded = {
+    src: '/avatars/grace.png',
+    status: 'loaded' as const,
+  };
+  const error = {
+    src: '/avatars/missing.png',
+    status: 'error' as const,
+  };
+
+  return (
+    <section data-gallery-demo="avatar">
+      <p data-demo-summary="no-js">
+        Avatar keeps native image loading visible and leaves initials fallback markup in the
+        document.
+      </p>
+      <div {...avatarRootAttributes({ ...loading, label: 'Ada Lovelace avatar' })}>
+        <img
+          {...avatarImageAttributes({
+            ...loading,
+            alt: 'Ada Lovelace',
+            loading: 'lazy',
+            sizes: '40px',
+            srcSet: '/avatars/ada@2x.png 2x',
+          })}
+        />
+        <span {...avatarFallbackAttributes({ ...loading, delayMs: 250 })}>AL</span>
+      </div>
+      <div {...avatarRootAttributes({ ...loaded, label: 'Grace Hopper avatar' })}>
+        <img {...avatarImageAttributes({ ...loaded, alt: 'Grace Hopper' })} />
+        <span {...avatarFallbackAttributes(loaded)}>GH</span>
+      </div>
+      <div {...avatarRootAttributes({ ...error, label: 'Fallback avatar' })}>
+        <img {...avatarImageAttributes({ ...error, alt: '' })} />
+        <span {...avatarFallbackAttributes(error)}>?</span>
+      </div>
+      {renderBehaviorContract({
+        changeReasons: 'image-load, image-error, programmatic',
+        dataState: 'loading, loaded, error',
+        keyboard: 'No custom keyboard handling',
       })}
     </section>
   );

@@ -14,6 +14,11 @@ const expectedBehaviorContracts = {
     dataState: 'open, closed, disabled',
     keyboard: 'Native button activation opens an item; group keyboard maps are primitive-owned',
   },
+  '/components/avatar': {
+    changeReasons: 'image-load, image-error, programmatic',
+    dataState: 'loading, loaded, error',
+    keyboard: 'No custom keyboard handling',
+  },
   '/components/badge': {
     changeReasons: 'not stateful',
     dataState: 'not emitted',
@@ -103,6 +108,15 @@ const expectedBehaviorSnippets: Partial<Record<GalleryRoute['path'], readonly st
     'aria-controls="gallery-accordion-shipping-panel"',
     'aria-labelledby="gallery-accordion-shipping-trigger"',
     'hidden id="gallery-accordion-billing-panel"',
+  ],
+  '/components/avatar': [
+    'role="img"',
+    'aria-label="Ada Lovelace avatar"',
+    '<img alt="Ada Lovelace"',
+    'decoding="async"',
+    'data-delay="250"',
+    'hidden>GH</span>',
+    'hidden src="/avatars/missing.png"',
   ],
   '/components/button': ['type="button"', 'disabled type="button"'],
   '/components/checkbox': [

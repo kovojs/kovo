@@ -569,6 +569,12 @@ jiso-dialog` resolves dashed wire names and prints provenance including package,
       tooltip behavior attributes, and styled wrapper output. Same-session evidence:
       `pnpm --filter @jiso/example-gallery test`. G1 remains open for the many primitives
       and styled components not yet represented as gallery routes, and G2/G3/G4/G5 remain open.
+      Additional partial evidence 2026-06-12: `examples/gallery` adds an avatar route
+      fixture that imports the current `@jiso/headless-ui` avatar attribute builders,
+      renders native image and initials fallback states as TSX-authored gallery source,
+      and pins loading/loaded/error route output in the fixture tests. Same-session
+      evidence: `pnpm --filter @jiso/example-gallery test`. G1 remains open for the
+      remaining unrepresented primitives and styled components.
 - [ ] G2 behavior-contract gates: keyboard/ARIA assertions per primitive (browser-free via `page()` + `fw explain` where possible; framework browser suite for focus/dismiss/top-layer).
       Partial evidence 2026-06-12: `examples/gallery/src/behavior-contracts.test.ts`
       adds a browser-free G2 fixture gate over the existing 17 rendered gallery routes. It
@@ -580,6 +586,11 @@ jiso-dialog` resolves dashed wire names and prints provenance including package,
       `pnpm --filter @jiso/example-gallery test`. G2 remains open for browser-backed
       focus/dismiss/top-layer behavior, `fw explain` coverage, and routes/primitives not yet
       represented in the gallery.
+      Additional partial evidence 2026-06-12: the browser-free G2 fixture gate now covers
+      the avatar route's native image semantics, root `role="img"`/`aria-label`, fallback
+      delay, hidden loaded fallback, and hidden errored image output. Same-session evidence:
+      `pnpm --filter @jiso/example-gallery test`. G2 remains open for browser-backed
+      checks, `fw explain` coverage, and unrepresented routes/primitives.
 - [ ] G3 axe checks per component state in the gallery.
 - [ ] G4 visual regression for `@jiso/ui`: shadcn-parity human review once, then self-baselined screenshots.
 - [ ] G5 merge fixtures: every primitive's attrs record × an author element → golden merged output (doubles as FW231/FW232 coverage).
@@ -591,6 +602,11 @@ jiso-dialog` resolves dashed wire names and prints provenance including package,
       for double-wired IDREF and primitive-owned state/ARIA overrides. Same-session evidence:
       `pnpm --filter @jiso/example-gallery test`. G5 remains open because this is a bounded
       subset, not every primitive attrs record and not full compiler/runtime diagnostic coverage.
+      Additional partial evidence 2026-06-12: the gallery G5 oracle adds an avatar merge
+      golden covering root class merge, primitive-owned `data-state`, authored ARIA/role
+      overrides with FW232 diagnostics, and fallback scalar precedence per SPEC §4.6.
+      Same-session evidence: `pnpm --filter @jiso/example-gallery test`. G5 remains open
+      because this is still a bounded fixture subset.
 
 ## Background
 

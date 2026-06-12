@@ -9,6 +9,7 @@ import {
 
 const expectedRoutes = [
   '/components/accordion',
+  '/components/avatar',
   '/components/badge',
   '/components/button',
   '/components/card',
@@ -70,6 +71,24 @@ describe('gallery demo fixtures', () => {
     expect(accordion.html).toContain('role="region"');
     expect(accordion.html).toContain('aria-labelledby="gallery-accordion-shipping-trigger"');
     expect(accordion.html).toContain('hidden id="gallery-accordion-billing-panel"');
+  });
+
+  it('renders avatar fixture with native image and fallback states', () => {
+    const avatar = findFixture('/components/avatar');
+
+    expect(avatar.html).toContain('data-state="loading"');
+    expect(avatar.html).toContain('role="img"');
+    expect(avatar.html).toContain('aria-label="Ada Lovelace avatar"');
+    expect(avatar.html).toContain('alt="Ada Lovelace"');
+    expect(avatar.html).toContain('decoding="async"');
+    expect(avatar.html).toContain('loading="lazy"');
+    expect(avatar.html).toContain('sizes="40px"');
+    expect(avatar.html).toContain('srcset="/avatars/ada@2x.png 2x"');
+    expect(avatar.html).toContain('data-delay="250"');
+    expect(avatar.html).toContain('data-state="loaded"');
+    expect(avatar.html).toContain('hidden>GH</span>');
+    expect(avatar.html).toContain('data-state="error"');
+    expect(avatar.html).toContain('hidden src="/avatars/missing.png"');
   });
 
   it('renders checkbox fixture with native form states', () => {

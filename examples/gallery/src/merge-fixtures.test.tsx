@@ -2,6 +2,8 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  avatarFallbackAttributes,
+  avatarRootAttributes,
   dialogContentAttributes,
   dialogTriggerAttributes,
   toggleRootAttributes,
@@ -35,6 +37,74 @@ const idrefAttributes = new Set([
 const logicalOrAttributes = new Set(['aria-disabled', 'disabled', 'readonly', 'required']);
 
 describe('gallery G5 primitive merge fixtures', () => {
+  it('renders a golden avatar merge with fallback scalar and semantic root overrides', () => {
+    const root = mergePrimitiveAttrs(
+      {
+        ...avatarRootAttributes({
+          label: 'Ada Lovelace avatar',
+          src: '/avatars/ada.png',
+          status: 'loading',
+        }),
+        class: 'avatar-root',
+      },
+      {
+        'aria-label': 'Author label',
+        class: 'avatar-root rounded-full',
+        'data-state': 'author-loading',
+        role: 'figure',
+      },
+    );
+    const fallback = mergePrimitiveAttrs(
+      {
+        ...avatarFallbackAttributes({
+          delayMs: 250,
+          src: '/avatars/ada.png',
+          status: 'loaded',
+        }),
+        class: 'avatar-fallback',
+      },
+      {
+        class: 'avatar-fallback text-xs',
+        'data-state': 'author-loaded',
+        hidden: false,
+      },
+    );
+
+    expect(root.diagnostics).toEqual([
+      {
+        attr: 'data-state',
+        code: 'FW232',
+        message: 'Author override of primitive-owned state attribute per SPEC.md section 4.6',
+      },
+      {
+        attr: 'aria-label',
+        code: 'FW232',
+        message: 'Author override of primitive ARIA/role attribute per SPEC.md section 4.6',
+      },
+      {
+        attr: 'role',
+        code: 'FW232',
+        message: 'Author override of primitive ARIA/role attribute per SPEC.md section 4.6',
+      },
+    ]);
+    expect(fallback.diagnostics).toEqual([
+      {
+        attr: 'data-state',
+        code: 'FW232',
+        message: 'Author override of primitive-owned state attribute per SPEC.md section 4.6',
+      },
+    ]);
+    expect(
+      <div data-gallery-merge="avatar">
+        <span {...root.attrs}>
+          <span {...fallback.attrs}>AL</span>
+        </span>
+      </div>,
+    ).toBe(
+      '<div data-gallery-merge="avatar"><span data-state="loading" aria-label="Author label" role="figure" class="avatar-root rounded-full"><span data-state="loaded" data-delay="250" class="avatar-fallback text-xs">AL</span></span></div>',
+    );
+  });
+
   it('renders a golden toggle merge with authored class, handlers, scalars, and state overrides', () => {
     const merged = mergePrimitiveAttrs(
       {
