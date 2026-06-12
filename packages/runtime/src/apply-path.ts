@@ -12,6 +12,8 @@ export interface AppliedMutationResponse {
   queries: string[];
 }
 
+export type ApplyQueryInterposition = (query: QueryChunk) => { value: unknown } | void;
+
 export function applyFragmentQueryBody(
   body: string,
   applyQuery: (query: QueryChunk) => void,
@@ -36,12 +38,12 @@ export function applyMutationResponseToStore(
   body: string,
 ): AppliedMutationResponse {
   return applyFragmentQueryBody(body, (query) => {
-    store.set(query.name, query.value, query.key);
+    applyQueryChunkToStore(store, query);
   });
 }
 
 export interface ApplyMutationResponseToDomOptions {
-  applyQuery?: (query: QueryChunk) => { value: unknown } | void;
+  applyQuery?: ApplyQueryInterposition;
   beforeApplyQueries?: (queries: readonly QueryChunk[]) => void;
   body: string;
   islandSignalScope?: IslandSignalScope;
@@ -62,11 +64,7 @@ export function applyMutationResponseToDom(
   const applied = applyFragmentQueryBody(
     options.body,
     (query) => {
-      const queryResult = options.applyQuery?.(query);
-      const planValue = queryResult ? queryResult.value : query.value;
-      if (!queryResult) {
-        options.store.set(query.name, query.value, query.key);
-      }
+      const planValue = applyQueryChunkToStore(options.store, query, options.applyQuery);
       applyCompiledQueryUpdatePlanIfSupported(
         options.root,
         query.name,
@@ -91,6 +89,18 @@ export function applyMutationResponseToDom(
 
 export const applyDeferredChunkToDom: typeof applyMutationResponseToDom =
   applyMutationResponseToDom;
+
+function applyQueryChunkToStore(
+  store: QueryStore,
+  query: QueryChunk,
+  interpose?: ApplyQueryInterposition,
+): unknown {
+  const interposed = interpose?.(query);
+  if (interposed) return interposed.value;
+
+  store.set(query.name, query.value, query.key);
+  return query.value;
+}
 
 function applyCompiledQueryUpdatePlanIfSupported(
   root: MorphRoot,
