@@ -1679,6 +1679,14 @@ As each phase splits a source module, split its tests in the same commit.
       `pnpm exec vitest --run packages/compiler/src/navigation-lowering.test.ts packages/compiler/src/index.test.ts -t "navigation|Link|href"`,
       `pnpm exec vp check packages/compiler/src/navigation-lowering.test.ts packages/compiler/src/index.test.ts plans/codebase-quality-round2.md`,
       and `git diff --check`.
+      Additional evidence 2026-06-12: dialog, popover, details-toggle, platform string/comment
+      non-match, and unsupported details fallback coverage moved from
+      `packages/compiler/src/index.test.ts` into
+      `packages/compiler/src/platform-lowering.test.ts`, preserving the broad compiler split as
+      open. Same-session evidence:
+      `pnpm exec vitest --run packages/compiler/src/platform-lowering.test.ts packages/compiler/src/index.test.ts -t "platform|dialog|popover|details"`,
+      `pnpm exec vp check packages/compiler/src/platform-lowering.test.ts packages/compiler/src/index.test.ts plans/codebase-quality-round2.md`,
+      and `git diff --check`.
 - [ ] drizzle (one describe, 57 its, 68 inline pgTable fixtures, 3 module-shim copies) and
       test-package suites: same treatment; CLI tests get the temp-dir + stream-spy ritual
       (16 hand-copies) as one helper.
