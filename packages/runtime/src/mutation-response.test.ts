@@ -1,8 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 
 import {
-  applyDeferredChunk,
-  applyDeferredChunkToDom,
   applyDeferredStreamResponseToDom,
   applyMutationResponse,
   applyMutationResponseToDom,
@@ -138,12 +136,9 @@ describe('mutation response wire chunks', () => {
     });
   });
 
-  it('exports deferred chunk helpers as aliases of the mutation response helpers', () => {
-    expect(applyDeferredChunk).toBe(applyMutationResponse);
-    expect(applyDeferredChunkToDom).toBe(applyMutationResponseToDom);
+  it('exports canonical mutation response helpers through the runtime barrel', () => {
     expect(applyMutationResponse).toBe(applyMutationResponseToStore);
-    expect(applyDeferredChunk).toBe(applyMutationResponseToStore);
-    expect(applyDeferredChunkToDom).toBe(applyMutationResponseToDomFromApplyPath);
+    expect(applyMutationResponseToDom).toBe(applyMutationResponseToDomFromApplyPath);
   });
 
   it('exports deferred stream response apply through the shared apply path', () => {

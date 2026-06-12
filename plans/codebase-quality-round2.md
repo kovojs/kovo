@@ -1968,6 +1968,21 @@ params, relational API, `execute(sql)`, right/full joins, a string column named 
       `pnpm --filter @jiso/runtime run check:inline-loader`,
       `pnpm exec vitest --run packages/runtime/src/inline-loader.test.ts`, and
       `pnpm exec vp check packages/runtime/package.json packages/runtime/src/inline-loader.test.ts plans/codebase-quality-round2.md`.
+      Additional bounded evidence 2026-06-12: `packages/runtime/src/inline-loader-build.ts`
+      now parses and prints the readable SPEC.md §4.4 bootstrap with TypeScript before
+      token-boundary compaction, deleting the generator's template-substitution token special case
+      and leaving comment removal/syntax normalization to the compiler front end. The regenerated
+      `packages/runtime/src/inline-loader.ts` is checked in from that build path, and
+      `packages/runtime/src/inline-loader.test.ts` keeps readable/minified/generated/extracted
+      trigger, response-application, enhanced-form, string/comment/regex, template-interpolation,
+      and gzip parity pinned. Same-session evidence:
+      `pnpm --filter @jiso/runtime run build:inline-loader`,
+      `pnpm --filter @jiso/runtime run check:inline-loader`,
+      `pnpm exec vitest --run packages/runtime/src/inline-loader.test.ts packages/runtime/src/mutation-response.test.ts`,
+      `pnpm exec vitest --run packages/runtime/src`,
+      `pnpm exec vitest --config vitest.browser.config.ts --run packages/runtime/src/index.browser.test.ts`,
+      `pnpm exec vp check packages/runtime/src/apply.ts packages/runtime/src/inline-loader-build.ts packages/runtime/src/inline-loader.ts packages/runtime/src/inline-loader.test.ts packages/runtime/src/index.test.ts packages/runtime/src/mutation-response.test.ts`,
+      and `git diff --check`.
 - [x] **HIGH — Ship the DOM morph.** The only real keyed DOM morph (focus/selection/scroll
       capture-restore) lives in index.browser.test.ts:12-182; every consumer must rewrite it, and
       the flagship browser test substantially tests its own test code. Promote to a
@@ -2166,7 +2181,7 @@ params, relational API, `execute(sql)`, right/full joins, a string column named 
       `corepack pnpm exec vitest --config vitest.browser.config.ts --run packages/runtime/src/index.browser.test.ts`,
       `corepack pnpm exec vp check packages/runtime/src/error-policy.ts packages/runtime/src/error-policy.test.ts packages/runtime/src/mutation-submit.ts packages/runtime/src/query-refetch.ts packages/runtime/src/query-refetch.test.ts packages/runtime/src/index.test.ts plans/codebase-quality-round2.md`,
       and `git diff --check`.
-- [ ] **MED — Split `index.ts` subtractively** along its existing seams: `inline-loader.ts`,
+- [x] **MED — Split `index.ts` subtractively** along its existing seams: `inline-loader.ts`,
       `loader.ts`, `enhanced-mutation.ts`, `optimism.ts`, `query-bindings.ts`, `broadcast.ts`;
       index.ts a pure barrel. Remove the test-shaped production branch in `bindingAttributes`
       (index.ts:1885-1910 — the `Object.entries` arm exists only for `FakeQueryPlanElement`;
@@ -2326,6 +2341,19 @@ params, relational API, `execute(sql)`, right/full joins, a string column named 
       `corepack pnpm exec vitest --run packages/runtime/src`,
       `corepack pnpm exec vitest --config vitest.browser.config.ts --run packages/runtime/src/index.browser.test.ts`,
       `corepack pnpm exec vp check packages/runtime/src/index.ts packages/runtime/src/apply.ts packages/runtime/src/inline.ts packages/runtime/src/loader-api.ts packages/runtime/src/morphing.ts packages/runtime/src/mutation.ts packages/runtime/src/query.ts packages/runtime/src/apply-path.ts packages/runtime/src/mutation-response.test.ts plans/codebase-quality-round2.md`,
+      and `git diff --check`.
+      Final evidence 2026-06-12: `packages/runtime/src/index.ts` is a pure package facade over
+      category barrels, and `packages/runtime/src/apply.ts` no longer exports the deferred chunk
+      compatibility aliases (`applyDeferredChunk`/`applyDeferredChunkToDom`); deferred response
+      tests now use canonical `applyMutationResponse`/`applyMutationResponseToDom` plus the
+      dedicated `applyDeferredStreamResponseToDom` stream helper. Same-session evidence:
+      `rg -n "applyDeferredChunk|applyDeferredChunkToDom" packages/runtime/src` returned no
+      matches,
+      `pnpm exec vitest --run packages/runtime/src/inline-loader.test.ts packages/runtime/src/mutation-response.test.ts`,
+      `pnpm exec vitest --run packages/runtime/src/index.test.ts -t "deferred|apply|mutation response|runtime loader"`,
+      `pnpm exec vitest --run packages/runtime/src`,
+      `pnpm exec vitest --config vitest.browser.config.ts --run packages/runtime/src/index.browser.test.ts`,
+      `pnpm exec vp check packages/runtime/src/apply.ts packages/runtime/src/inline-loader-build.ts packages/runtime/src/inline-loader.ts packages/runtime/src/inline-loader.test.ts packages/runtime/src/index.test.ts packages/runtime/src/mutation-response.test.ts plans/codebase-quality-round2.md`,
       and `git diff --check`.
 - [ ] **LOW** — `hydratedQueries` frozen at install (index.ts:330-342): queries introduced by
       later mutations never become refetch-eligible — fix or document as SPEC-intended;

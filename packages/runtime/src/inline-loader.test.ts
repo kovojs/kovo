@@ -201,6 +201,13 @@ describe('inline loader source', () => {
     ).toThrow('template interpolation');
   });
 
+  it('rejects invalid inline loader JavaScript at build time', () => {
+    // SPEC.md §4.4: generated bootstrap source must be syntax-checked before shipping.
+    expect(() => buildInlineJisoLoaderInstallerSource('function invalidInlineLoader(')).toThrow(
+      'invalid JavaScript',
+    );
+  });
+
   it('wraps the extracted installer source as the public bootstrap source', () => {
     // SPEC.md §4.4: the generated bootstrap is the always-loaded runtime path.
     expect(jisoLoaderSource).toBe(`(${inlineJisoLoaderInstallerSource})((url)=>import(url));`);

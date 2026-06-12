@@ -239,6 +239,38 @@ export function emitInlineJisoLoaderModule(
 }
 
 function minifyInlineJavaScriptSource(source: string): string {
+  const sourceFile = ts.createSourceFile(
+    'inline-jiso-loader.js',
+    source,
+    ts.ScriptTarget.Latest,
+    true,
+    ts.ScriptKind.JS,
+  );
+  const [diagnostic] =
+    (sourceFile as ts.SourceFile & { parseDiagnostics?: readonly ts.Diagnostic[] })
+      .parseDiagnostics ?? [];
+  if (diagnostic) {
+    const message = ts.flattenDiagnosticMessageText(diagnostic.messageText, '\n');
+    throw new Error(`Inline Jiso loader source is invalid JavaScript: ${message}`);
+  }
+  assertNoTemplateInterpolation(sourceFile);
+
+  return compactInlineJavaScriptSource(
+    ts.createPrinter({ removeComments: true }).printFile(sourceFile),
+  );
+}
+
+function assertNoTemplateInterpolation(node: ts.Node): void {
+  if (ts.isTemplateExpression(node)) {
+    throw new Error(
+      'Inline Jiso loader source cannot use template interpolation; keep the bootstrap literal-safe.',
+    );
+  }
+
+  ts.forEachChild(node, assertNoTemplateInterpolation);
+}
+
+function compactInlineJavaScriptSource(source: string): string {
   let output = '';
   let previousToken: MinifiedToken | undefined;
   const scanner = ts.createScanner(
@@ -250,11 +282,6 @@ function minifyInlineJavaScriptSource(source: string): string {
 
   for (let kind = scanner.scan(); kind !== ts.SyntaxKind.EndOfFileToken; kind = scanner.scan()) {
     const token = { kind, text: scanner.getTokenText() };
-    if (isTemplateSubstitutionToken(token.kind)) {
-      throw new Error(
-        'Inline Jiso loader source cannot use template interpolation; keep the bootstrap literal-safe.',
-      );
-    }
     if (previousToken && needsTokenSeparator(previousToken, token)) output += ' ';
     output += token.text;
     previousToken = token;
@@ -289,14 +316,6 @@ function isWordLikeToken(kind: ts.SyntaxKind): boolean {
     kind === ts.SyntaxKind.NumericLiteral ||
     kind === ts.SyntaxKind.BigIntLiteral ||
     (kind >= ts.SyntaxKind.FirstKeyword && kind <= ts.SyntaxKind.LastKeyword)
-  );
-}
-
-function isTemplateSubstitutionToken(kind: ts.SyntaxKind): boolean {
-  return (
-    kind === ts.SyntaxKind.TemplateHead ||
-    kind === ts.SyntaxKind.TemplateMiddle ||
-    kind === ts.SyntaxKind.TemplateTail
   );
 }
 

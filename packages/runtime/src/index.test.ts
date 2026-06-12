@@ -3,13 +3,12 @@ import { runInThisContext } from 'node:vm';
 import { form, type Route } from '@jiso/core';
 
 import {
-  applyDeferredChunk,
-  applyDeferredChunkToDom,
   applyDeferredStreamResponseToDom,
   applyFragments,
   applyCompiledQueryUpdatePlan,
   applyOptimisticTransforms,
   abortRemovedIslandSignals,
+  applyMutationResponse,
   applyMutationResponseToDom,
   applyQueryBindings,
   createInlineJisoLoaderSource,
@@ -1982,7 +1981,7 @@ describe('query store', () => {
     root.bindings.push(count);
     root.targets.set('cart-badge', new FakeMorphTarget());
 
-    applyDeferredChunkToDom({
+    applyMutationResponseToDom({
       body: [
         '<fw-query name="cart">{"count":4}</fw-query>',
         '<fw-fragment target="cart-badge"><cart-badge>Ready</cart-badge></fw-fragment>',
@@ -2247,7 +2246,7 @@ describe('query store', () => {
     const plan = vi.fn();
     store.subscribe('reviews', plan, 'product:p1');
 
-    const applied = applyDeferredChunk(
+    const applied = applyMutationResponse(
       store,
       [
         '<fw-query name="reviews" key="product:p1">{"items":[{"id":"r1","rating":5}]}</fw-query>',
@@ -2266,7 +2265,7 @@ describe('query store', () => {
 
   it('skips malformed deferred query chunks while applying valid fragments', () => {
     const store = createQueryStore();
-    const applied = applyDeferredChunk(
+    const applied = applyMutationResponse(
       store,
       [
         '<fw-query name="reviews">{</fw-query>',
@@ -2293,7 +2292,7 @@ describe('query store', () => {
     store.subscribe('reviews', p2Plan, 'product:p2');
     store.subscribe('reviews', unkeyedPlan);
 
-    applyDeferredChunk(
+    applyMutationResponse(
       store,
       [
         '<fw-query name="reviews" key="product:p1">{"items":[{"id":"r1"}]}</fw-query>',
@@ -2318,7 +2317,7 @@ describe('query store', () => {
       observed.push(`plan:${JSON.stringify(value)}`);
     });
 
-    const result = applyDeferredChunkToDom({
+    const result = applyMutationResponseToDom({
       body: [
         '<fw-query name="reviews">{"items":[{"id":"r1"}]}</fw-query>',
         '<fw-fragment target="reviews:p1"><link rel="stylesheet" href="/assets/reviews.css"><section>Ready</section></fw-fragment>',
