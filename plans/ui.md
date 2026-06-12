@@ -49,7 +49,7 @@ Behavior contracts (state attributes, ARIA, keyboard maps, change reasons) are p
 - **Naming/registration: package-declared prefixes, compiler-enforced.** Every component package declares a registry prefix (`jiso.prefix` in its package.json); the compiler enforces app-wide prefix uniqueness; conflict is teaching error **FW234** with an app-side alias as the escape hatch. `fw-c` values stay globally meaningful (CSS scoping, docs, debugging folklore transfer between codebases); `fw explain` prints provenance. `jiso-` is the prefix `@jiso/headless-ui` declares, reserved-checked for `@jiso/*` — first-party privilege falls out as a special case of the general rule.
   - Rejected: bare names (first collision converts into an ecosystem renaming scramble; provenance illegible in devtools); first-party-only reserved prefix (privilege, not policy); app-side naming/adoption (identical behavior renders different HTML per app — breaks knowledge portability, the thing Constitution #1 buys).
 - **Behavior attributes ride the package prefix** (`jiso-tooltip="pricing-tip"`); `fw-*` remains framework-reserved so loader growth never collides with package behaviors.
-- **Distribution split:** `@jiso/headless-ui` is a normal workspace/npm package (prefixed names). `@jiso/ui` is **vendored shadcn-style** via `fw add <component>` — its source lands in the app, so its components are bare-named app components and naming is the app's business; Constitution #3 (everything ejects) is the load-bearing guarantee that makes vendoring clean.
+- **Distribution split:** `@jiso/headless-ui` is a normal workspace/npm package (prefixed names). `@jiso/ui` is **vendored shadcn-style** via `fw add <component>` — its TSX source lands in the app, so its components are bare-named app components and naming is the app's business; SPEC §5.2's TSX-only authoring rule means the vendored layer must never ship lowered IR.
 - **One primitive = one island.** Compound APIs are render-time composition; runtime coordination is the DOM (`closest('[fw-c]')`, no-reparenting rule). No context API, no portals — native top-layer promotion is why none is needed.
 - **Forms defer to the framework.** No `Form` primitive: `field`/`fieldset` are label/description/error-wiring helpers around typed `form()` (§6.3); every form-control primitive renders a real named control so the no-JS POST path works natively.
 - **Toast is the typed-events test case:** a fixed-position viewport element in the app layout + `emit('toast:show', …)` over the §7 event channel; no reparenting, no portal.
@@ -75,7 +75,7 @@ Behavior contracts (state attributes, ARIA, keyboard maps, change reasons) are p
 ## U-track — `@jiso/ui`
 
 - **U1 — foundations.** Token sheet (CSS custom properties), `cn()`, variant helper with statically-discoverable class output (§13.1: no dynamic class strings; safelist rules documented).
-- **U2 — vendoring pipeline.** `fw add <component>` copies source + its headless-ui imports' styled wrappers into the app; idempotent re-add; the vendored source must be valid authorable Jiso (Constitution #3 makes this a non-event).
+- **U2 — vendoring pipeline.** `fw add <component>` copies TSX source + its headless-ui imports' styled wrappers into the app; idempotent re-add; the vendored source must pass the same TSX authoring checks as local app code.
 - **U3–U5 — components**, trailing each H-wave by one step; U3 also carries the pure-markup set that needs no behavior layer (button, badge, card, kbd, alert, table, breadcrumb, skeleton) and sheet/drawer as styled dialog variants.
 
 ## G-track — gallery (`examples/gallery`)
@@ -94,6 +94,6 @@ Same workspace, same Vite+ config, alongside `examples/commerce`. One route per 
 
 - F1–F4 landed (FW234 golden message; provenance in explain output).
 - H1+H2 primitives shipped with all five gates green; H3 shipped with FW302 justifications reviewed.
-- `fw add button card dialog` produces a working styled app surface in the starter; vendored output passes the fixpoint gate.
+- `fw add button card dialog` produces a working styled app surface in the starter; vendored TSX output passes the fixpoint gate.
 - Gallery deployed as the docs surface; the §16.2 legibility study can use gallery components as its material.
 - W4 (carousel/calendar/resizable) explicitly re-triaged after exit, not silently dropped.

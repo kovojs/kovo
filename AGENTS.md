@@ -5,6 +5,7 @@
 - Treat `SPEC.md` as the normative source of truth for how the Jiso framework should behave.
 - Use `IMPLEMENT_v1.md` as the implementation roadmap and sequencing plan. If it conflicts with `SPEC.md`, follow `SPEC.md` for behavior and update the implementation plan or ask before coding through the conflict.
 - When implementing or reviewing framework behavior, cite the relevant `SPEC.md` section in comments, tests, diagnostics, or handoff notes where that context would prevent ambiguity.
+- Emit app components as TSX/JSX source. Treat lowered IR, generated stamps, and emitted server/client modules as artifacts to inspect for verification, not as app-authored code to write by hand; `SPEC.md` §5.2 makes hand-authored lowered IR FW235.
 
 ## Progress Discipline
 

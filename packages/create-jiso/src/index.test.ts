@@ -163,6 +163,10 @@ describe('create-jiso starter', () => {
       expect(readFileSync(join(root, 'src/app.fixpoint.test.ts'), 'utf8')).toContain(
         'SPEC.md section 5.2',
       );
+      const appSource = readFileSync(join(root, 'src/app.tsx'), 'utf8');
+      expect(appSource).toContain('@jsxImportSource @jiso/server');
+      expect(appSource).toContain('<main class=');
+      expect(appSource).not.toMatch(/render:\s*\(\)\s*=>\s*['"`]</);
       expect(readFileSync(join(root, 'src/styles.css'), 'utf8')).toContain(
         '@source "./**/*.{ts,tsx,html}";',
       );

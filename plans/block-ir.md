@@ -28,7 +28,14 @@ Scope: commerce TSX migration (the gating completeness proof), a SPEC PR (Consti
       `pnpm exec vitest --run packages/core/src/diagnostics.test.ts packages/compiler/src/index.test.ts`,
       `pnpm run check`, `pnpm run check:build`, `node --test tests/fw-check.node.mjs`, and
       `pnpm run check:fw`.
-- [ ] B4 ecosystem constraints recorded and tested where surfaces exist: `fw add` vendoring emits TSX only (constraint registered in `plans/ui.md` D7); starter and docs are TSX-authored; agent guidance documents "emit TSX, read IR".
+- [x] B4 ecosystem constraints recorded and tested where surfaces exist: `fw add` vendoring emits TSX only (constraint registered in `plans/ui.md` D7); starter and docs are TSX-authored; agent guidance documents "emit TSX, read IR".
+      Evidence 2026-06-11: `plans/ui.md` records that `fw add` vendors TSX source and must not
+      ship lowered IR; `plans/docs-site.md` records that docs teach TSX as the only authoring
+      surface; `AGENTS.md` and `CLAUDE.md` tell agents to emit TSX/JSX and read IR only as
+      verification artifacts. `packages/create-jiso/templates/src/app.tsx` is JSX-authored with
+      `@jsxImportSource @jiso/server`, and `packages/create-jiso/src/index.test.ts` asserts the
+      starter contains JSX and no string-rendered component render. Same-session evidence:
+      `pnpm exec vitest --run packages/create-jiso/src/index.test.ts` and `pnpm run check`.
 
 ## Background — the gap
 
