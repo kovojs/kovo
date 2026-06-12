@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
   arrowFunctionParts,
+  documentElementActionFromZeroArgArrow,
   functionBodyPropertyAccessPaths,
   mutationHandlers,
   parseComponentModule,
@@ -92,5 +93,42 @@ export const save = mutation('cart/save', {
       param: 'cart',
     });
     expect(arrowFunctionParts('expression.tsx', 'cart => { return cart.count; }')).toBeNull();
+  });
+
+  it('extracts document element method actions from zero-argument arrows', () => {
+    expect(
+      documentElementActionFromZeroArgArrow(
+        'handler.tsx',
+        "() => (document.getElementById('cart-drawer') as HTMLDialogElement).requestClose()",
+      ),
+    ).toEqual({
+      action: 'method',
+      method: 'requestClose',
+      target: 'cart-drawer',
+    });
+    expect(
+      documentElementActionFromZeroArgArrow(
+        'handler.tsx',
+        '() => document.getElementById(dynamicId)!.showModal()',
+      ),
+    ).toBeNull();
+  });
+
+  it('extracts matching document element open toggles from zero-argument arrows', () => {
+    expect(
+      documentElementActionFromZeroArgArrow(
+        'handler.tsx',
+        "() => document.getElementById('shipping')!.open = !document.getElementById('shipping')!.open",
+      ),
+    ).toEqual({
+      action: 'toggle-open',
+      target: 'shipping',
+    });
+    expect(
+      documentElementActionFromZeroArgArrow(
+        'handler.tsx',
+        "() => document.getElementById('shipping')!.open = !document.getElementById('billing')!.open",
+      ),
+    ).toBeNull();
   });
 });

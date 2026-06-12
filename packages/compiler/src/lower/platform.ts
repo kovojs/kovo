@@ -1,4 +1,8 @@
-import { jsxElements, type ComponentModuleModel } from '../scan/parse.js';
+import {
+  documentElementActionFromZeroArgArrow,
+  jsxElements,
+  type ComponentModuleModel,
+} from '../scan/parse.js';
 import { applySourceReplacements, escapeAttribute, type SourceReplacement } from '../shared.js';
 
 export interface PlatformSubstitution {
@@ -42,30 +46,22 @@ function platformSubstitutionFromClickExpression(
   tag: string,
   expression: string,
 ): PlatformSubstitution | null {
-  const detailsToggle =
-    /^\(\)\s*=>\s*document\.getElementById\(['"](?<target>[^'"]+)['"]\)!?\.open\s*=\s*!\s*document\.getElementById\(['"]\k<target>['"]\)!?\.open$/.exec(
-      expression,
-    );
-  const detailsTarget = detailsToggle?.groups?.target;
-  if (detailsTarget && tag === 'summary') {
+  const action = documentElementActionFromZeroArgArrow('platform-handler.tsx', expression);
+  if (!action) return null;
+
+  if (action.action === 'toggle-open' && tag === 'summary') {
     return {
       action: 'toggle',
       event: 'click',
       kind: 'details',
       tag,
-      target: detailsTarget,
+      target: action.target,
     };
   }
 
-  const methodCall =
-    /^\(\)\s*=>\s*document\.getElementById\(['"](?<target>[^'"]+)['"]\)!?\.(?<method>showModal|close|requestClose|showPopover|hidePopover|togglePopover)\(\)\s*$/.exec(
-      expression,
-    );
-  const method = methodCall?.groups?.method;
-  const target = methodCall?.groups?.target;
-  if (!method || !target) return null;
+  if (action.action !== 'method' || !action.method) return null;
 
-  return platformSubstitutionFor(tag, target, method);
+  return platformSubstitutionFor(tag, action.target, action.method);
 }
 
 function sourceRangeWithLeadingWhitespace(

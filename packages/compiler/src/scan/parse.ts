@@ -27,6 +27,12 @@ export interface PropertyAccessPathModel {
   start: number;
 }
 
+export interface DocumentElementActionModel {
+  action: 'method' | 'toggle-open';
+  method?: string;
+  target: string;
+}
+
 export interface CallExpressionModel {
   arguments: readonly string[];
   argumentSpans: readonly SourceSpan[];
@@ -387,6 +393,24 @@ export function arrowFunctionParts(
   };
 }
 
+export function documentElementActionFromZeroArgArrow(
+  fileName: string,
+  source: string,
+): DocumentElementActionModel | null {
+  const sourceFile = parseExpressionSource(fileName, source);
+  const initializer = firstVariableInitializer(sourceFile);
+  if (!initializer || !ts.isArrowFunction(initializer) || initializer.parameters.length > 0) {
+    return null;
+  }
+  if (ts.isBlock(initializer.body)) return null;
+
+  const body = unwrapExpression(initializer.body);
+  const methodAction = documentElementMethodAction(sourceFile, body);
+  if (methodAction) return methodAction;
+
+  return documentElementToggleOpenAction(sourceFile, body);
+}
+
 export function objectLiteralPropertyPaths(fileName: string, source: string): string[] {
   const sourceFile = parseExpressionSource(fileName, source);
   const initializer = firstVariableInitializer(sourceFile);
@@ -457,6 +481,84 @@ function objectLiteralPaths(expression: ts.ObjectLiteralExpression, prefix = '')
 
 function pathWithPrefix(prefix: string, key: string): string {
   return prefix ? `${prefix}.${key}` : key;
+}
+
+function documentElementMethodAction(
+  sourceFile: ts.SourceFile,
+  expression: ts.Expression,
+): DocumentElementActionModel | null {
+  if (!ts.isCallExpression(expression) || expression.arguments.length > 0) return null;
+
+  const callee = unwrapExpression(expression.expression);
+  if (!ts.isPropertyAccessExpression(callee)) return null;
+
+  const target = documentGetElementByIdTarget(sourceFile, callee.expression);
+  return target ? { action: 'method', method: callee.name.text, target } : null;
+}
+
+function documentElementToggleOpenAction(
+  sourceFile: ts.SourceFile,
+  expression: ts.Expression,
+): DocumentElementActionModel | null {
+  if (
+    !ts.isBinaryExpression(expression) ||
+    expression.operatorToken.kind !== ts.SyntaxKind.EqualsToken
+  ) {
+    return null;
+  }
+
+  const leftTarget = documentElementOpenTarget(sourceFile, expression.left);
+  if (!leftTarget) return null;
+
+  const right = unwrapExpression(expression.right);
+  if (!ts.isPrefixUnaryExpression(right) || right.operator !== ts.SyntaxKind.ExclamationToken) {
+    return null;
+  }
+
+  const rightTarget = documentElementOpenTarget(sourceFile, right.operand);
+  return rightTarget === leftTarget ? { action: 'toggle-open', target: leftTarget } : null;
+}
+
+function documentElementOpenTarget(
+  sourceFile: ts.SourceFile,
+  expression: ts.Expression,
+): string | null {
+  const property = unwrapExpression(expression);
+  if (!ts.isPropertyAccessExpression(property) || property.name.text !== 'open') return null;
+  return documentGetElementByIdTarget(sourceFile, property.expression);
+}
+
+function documentGetElementByIdTarget(
+  sourceFile: ts.SourceFile,
+  expression: ts.Expression,
+): string | null {
+  const call = unwrapExpression(expression);
+  if (!ts.isCallExpression(call) || call.arguments.length !== 1) return null;
+
+  const callee = unwrapExpression(call.expression);
+  if (!ts.isPropertyAccessExpression(callee) || callee.name.text !== 'getElementById') {
+    return null;
+  }
+
+  const receiver = unwrapExpression(callee.expression);
+  if (!ts.isIdentifier(receiver) || receiver.text !== 'document') return null;
+
+  const target = call.arguments[0];
+  if (!target) return null;
+  return ts.isStringLiteralLike(target) ? target.text : null;
+}
+
+function unwrapExpression(expression: ts.Expression): ts.Expression {
+  let current = expression;
+  while (
+    ts.isParenthesizedExpression(current) ||
+    ts.isNonNullExpression(current) ||
+    ts.isAsExpression(current) ||
+    ts.isSatisfiesExpression(current)
+  ) {
+    current = current.expression;
+  }
+  return current;
 }
 
 function isDeclaredIdentifier(node: ts.Identifier): boolean {

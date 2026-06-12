@@ -75,6 +75,34 @@ export const CartCloseButton = component('cart-close-button', {
     );
   });
 
+  it('lowers typed document element actions through the parser model', () => {
+    const result = compileComponentModule({
+      fileName: 'cart-close-button.tsx',
+      source: `
+export const CartCloseButton = component('cart-close-button', {
+  render: () => (
+    <button onClick={() => (document.getElementById('cart-drawer') as HTMLDialogElement).requestClose()}>
+      Close cart
+    </button>
+  ),
+});
+`,
+    });
+
+    expect(result.diagnostics).toEqual([]);
+    expect(result.platformSubstitutions).toEqual([
+      {
+        action: 'request-close',
+        event: 'click',
+        kind: 'dialog',
+        tag: 'button',
+        target: 'cart-drawer',
+      },
+    ]);
+    expect(result.files[0]?.source).toContain('commandfor="cart-drawer" command="request-close"');
+    expect(result.files[1]?.source).toContain('// no client handlers emitted');
+  });
+
   it('lowers provable popover behavior to popover target attributes', () => {
     const result = compileComponentModule({
       fileName: 'filter-button.tsx',
