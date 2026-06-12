@@ -1059,6 +1059,14 @@ land it first; don't fork it.
       `pnpm exec vitest --run packages/server/src/index.test.ts packages/server/src/app.test.ts`,
       `pnpm exec vp check packages/server/src/index.ts packages/server/src/guards.ts plans/codebase-quality-round2.md`,
       and `git diff --check`.
+      Partial evidence 2026-06-12: SPEC §9.1 CSRF token rendering, token validation, and mutation CSRF
+      option fallback helpers moved from `packages/server/src/index.ts` into
+      `packages/server/src/csrf.ts`; `index.ts` imports those internals and re-exports
+      `csrfField`, `csrfToken`, `CsrfOptions`, and `CsrfValidationOptions` to preserve public
+      server exports. Same-session evidence:
+      `pnpm exec vitest --run packages/server/src/csrf.test.ts packages/server/src/index.test.ts`,
+      `pnpm exec vp check packages/server/src/index.ts packages/server/src/csrf.ts packages/server/src/csrf.test.ts plans/codebase-quality-round2.md`,
+      and `git diff --check`.
 - [ ] **LOW** — dead code (`matchShellDispatch` post-loop return shell.ts:161-166; rate-limit
       tail `return options.max > 0` index.ts:576); `matchRoute` recompiling all routes per call
       (match.ts:75-81 — cache `compileRoute`); `Transfer-Encoding: chunked` on a buffered string

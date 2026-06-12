@@ -1,5 +1,3 @@
-import { createHmac, timingSafeEqual } from 'node:crypto';
-
 import type {
   Endpoint as CoreEndpoint,
   EndpointAuthDeclaration,
@@ -8,6 +6,7 @@ import type {
   JsonValue,
 } from '@jiso/core';
 import { serializeCookie, validateRawSetCookie, type CookieOptions } from './cookies.js';
+import { mutationCsrfOptions, validateCsrfToken, type CsrfValidationOptions } from './csrf.js';
 import { reportServerError } from './diagnostics.js';
 import { escapeAttribute, escapeHtml } from './html.js';
 import {
@@ -54,7 +53,6 @@ import {
 } from './replay.js';
 import {
   entriesToRecord,
-  formLikeToRecord,
   parseSchemaAsync,
   SchemaValidationError,
   type InferSchema,
@@ -110,6 +108,8 @@ export type {
   DeferredStreamOptions,
   DeferredStreamResponse,
 } from './deferred-stream.js';
+export { csrfField, csrfToken } from './csrf.js';
+export type { CsrfOptions, CsrfValidationOptions } from './csrf.js';
 export type { ServerErrorDiagnosticContext, ServerErrorHandler } from './diagnostics.js';
 export { guards, session } from './guards.js';
 export type {
@@ -878,15 +878,6 @@ export interface MutationDefinition<
   ) => Promise<Result>;
 }
 
-export interface CsrfOptions<Request> {
-  secret: string;
-  sessionId: (request: Request) => string | undefined;
-}
-
-export interface CsrfValidationOptions<Request> extends CsrfOptions<Request> {
-  field?: string;
-}
-
 export interface InvalidateOptions<Input = unknown> {
   input?: Input;
   keys?: readonly string[];
@@ -976,20 +967,6 @@ export function endpointMatches(
   }
 
   return input.pathname === definition.path;
-}
-
-export function csrfToken<Request>(request: Request, options: CsrfOptions<Request>): string {
-  const sessionId = options.sessionId(request);
-  if (!sessionId) throw new Error('csrfToken requires a session id');
-
-  return createCsrfToken(sessionId, options.secret);
-}
-
-export function csrfField<Request>(
-  request: Request,
-  options: CsrfOptions<Request> & { field?: string },
-): string {
-  return `<input type="hidden" name="${escapeAttribute(options.field ?? 'fw-csrf')}" value="${escapeAttribute(csrfToken(request, options))}">`;
 }
 
 export function parseRouteRequest<
@@ -1825,28 +1802,6 @@ function querySearchInputEntries(search: QuerySearchInput): Iterable<readonly [s
   );
 }
 
-function validateCsrfToken<Request>(
-  rawInput: unknown,
-  request: Request,
-  options: CsrfValidationOptions<Request>,
-): boolean {
-  const sessionId = options.sessionId(request);
-  if (!sessionId) return false;
-
-  const submitted = formLikeToRecord(rawInput)[options.field ?? 'fw-csrf'];
-  if (typeof submitted !== 'string') return false;
-
-  return secureEqual(submitted, createCsrfToken(sessionId, options.secret));
-}
-
-function mutationCsrfOptions<Request>(
-  definition: { csrf?: CsrfValidationOptions<Request> | false },
-  defaultOptions?: CsrfValidationOptions<Request>,
-): CsrfValidationOptions<Request> | false | undefined {
-  if (definition.csrf === false) return false;
-  return definition.csrf ?? defaultOptions;
-}
-
 function endpointRequestWithoutSession(request: Request): EndpointRequest {
   if (!('session' in request)) return request as EndpointRequest;
 
@@ -1875,18 +1830,6 @@ function runMutationOptions<Request>(
       ? {}
       : { sessionProvider: lifecycle.sessionProvider }),
   };
-}
-
-function createCsrfToken(sessionId: string, secret: string): string {
-  return createHmac('sha256', secret).update(sessionId).digest('base64url');
-}
-
-function secureEqual(left: string, right: string): boolean {
-  const leftBuffer = Buffer.from(left);
-  const rightBuffer = Buffer.from(right);
-  if (leftBuffer.byteLength !== rightBuffer.byteLength) return false;
-
-  return timingSafeEqual(leftBuffer, rightBuffer);
 }
 
 function changeRecordsFor<Input>(
