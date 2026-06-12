@@ -38,11 +38,13 @@ import {
 } from './query.js';
 import {
   appendResponseHeader,
-  isHeaderSource,
-  readHeader,
+  htmlServerErrorResponse,
+  retryAfterHeaders,
+  routeOutcomeResponse,
   type MutationResponseHeaders,
+  type NotFound,
   type RoutePageResponse,
-  type RouteResponseBody,
+  type RouteResponseOutcome,
 } from './response.js';
 import {
   mutationWireRequestFromHeaders,
@@ -214,12 +216,17 @@ export {
 export type {
   MutationResponseHeaderValue,
   MutationResponseHeaders,
+  NotFound,
   ResponseHeaderValue,
   ResponseHeaders,
+  RouteFileOptions,
   RoutePageResponse,
   RouteResponseBody,
+  RouteResponseOutcome,
+  RouteStreamOptions,
   ServerResponseBase,
 } from './response.js';
+export { respond } from './response.js';
 export { createMemoryMutationReplayStore } from './replay.js';
 export type { MutationReplayReservation, MutationReplayStore } from './replay.js';
 export type { CookieOptions } from './cookies.js';
@@ -496,46 +503,6 @@ export interface EndpointDeclaration<
 > extends CoreEndpoint<Path, Method, Mount> {
   handler: EndpointHandler;
 }
-
-export interface NotFound {
-  notFound: true;
-  status: 404;
-}
-
-export interface RouteResponseOutcome {
-  body: RouteResponseBody;
-  contentDisposition: string;
-  contentType: string;
-  etag?: string;
-  headers?: Record<string, string>;
-  routeResponse: true;
-}
-
-export interface RouteFileOptions {
-  contentType: string;
-  etag?: string;
-  filename?: string;
-  headers?: Record<string, string>;
-}
-
-export interface RouteStreamOptions extends RouteFileOptions {
-  disposition?: 'attachment' | 'inline';
-}
-
-export const respond = {
-  file(body: Exclude<RouteResponseBody, ReadableStream<Uint8Array>>, options: RouteFileOptions) {
-    return routeResponseOutcome(body, {
-      ...options,
-      disposition: 'attachment',
-    });
-  },
-  stream(body: RouteResponseBody, options: RouteStreamOptions) {
-    return routeResponseOutcome(body, {
-      ...options,
-      disposition: options.disposition ?? 'attachment',
-    });
-  },
-};
 
 export interface RouteRequestInput {
   params?: unknown;
@@ -1298,31 +1265,6 @@ function noJsMutationServerErrorResponse(): NoJsMutationResponse {
   };
 }
 
-function routeOutcomeResponse(outcome: RouteResponseOutcome, request: unknown): RoutePageResponse {
-  const headers = routeOutcomeHeaders(outcome);
-  if (outcome.etag && requestHeader(request, 'if-none-match') === outcome.etag) {
-    return {
-      body: '',
-      headers: { ETag: outcome.etag },
-      status: 304,
-    };
-  }
-
-  return {
-    body: outcome.body,
-    headers,
-    status: 200,
-  };
-}
-
-function htmlServerErrorResponse(): RoutePageResponse {
-  return {
-    body: 'Internal Server Error',
-    headers: { 'Content-Type': 'text/html; charset=utf-8' },
-    status: 500,
-  };
-}
-
 function isNotFound(value: unknown): value is NotFound {
   return (
     typeof value === 'object' &&
@@ -1341,50 +1283,6 @@ function isRouteResponseOutcome(value: unknown): value is RouteResponseOutcome {
     'routeResponse' in value &&
     value.routeResponse === true
   );
-}
-
-function routeResponseOutcome(
-  body: RouteResponseBody,
-  options: RouteFileOptions & { disposition: 'attachment' | 'inline' },
-): RouteResponseOutcome {
-  const contentDisposition = options.filename
-    ? `${options.disposition}; filename="${escapeHeaderValue(options.filename)}"`
-    : options.disposition;
-  return {
-    body,
-    contentDisposition,
-    contentType: options.contentType,
-    ...(options.etag === undefined ? {} : { etag: options.etag }),
-    ...(options.headers === undefined ? {} : { headers: options.headers }),
-    routeResponse: true,
-  };
-}
-
-function routeOutcomeHeaders(outcome: RouteResponseOutcome): Record<string, string> {
-  return {
-    'Content-Disposition': outcome.contentDisposition,
-    'Content-Type': outcome.contentType,
-    ...(outcome.etag === undefined ? {} : { ETag: outcome.etag }),
-    ...outcome.headers,
-  };
-}
-
-function escapeHeaderValue(value: string): string {
-  return value.replaceAll('\\', '\\\\').replaceAll('"', '\\"');
-}
-
-function requestHeader(request: unknown, name: string): string | undefined {
-  if (request && typeof request === 'object' && 'headers' in request) {
-    const headers = (request as { headers?: unknown }).headers;
-    if (isHeaderSource(headers)) return readHeader(headers, name);
-  }
-
-  if (isHeaderSource(request)) return readHeader(request, name);
-  return undefined;
-}
-
-function retryAfterHeaders(result: { retryAfter?: number }): Record<string, string> {
-  return result.retryAfter === undefined ? {} : { 'Retry-After': String(result.retryAfter) };
 }
 
 function mergeMutationResponseHeaders(

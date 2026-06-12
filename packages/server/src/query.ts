@@ -10,7 +10,7 @@ import {
   type GuardResult,
   type RequestLifecycleOptions,
 } from './guards.js';
-import { type ServerResponseBase } from './response.js';
+import { retryAfterHeaders, type ServerResponseBase } from './response.js';
 import {
   entriesToRecord,
   SchemaValidationError,
@@ -349,8 +349,4 @@ function renderQueryEndpointChunk<const Key extends string, Value, Input, Reques
 
 function serverErrorPayload(): { code: 'SERVER_ERROR'; payload: Record<string, never> } {
   return { code: 'SERVER_ERROR', payload: {} };
-}
-
-function retryAfterHeaders(result: { retryAfter?: number }): Record<string, string> {
-  return result.retryAfter === undefined ? {} : { 'Retry-After': String(result.retryAfter) };
 }

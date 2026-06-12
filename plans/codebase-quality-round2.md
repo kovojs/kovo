@@ -1567,6 +1567,15 @@ land it first; don't fork it.
       `pnpm exec vitest --run packages/server/src/mutation-wire.test.ts packages/server/src/response.test.ts packages/server/src/index.test.ts`
       and
       `pnpm exec vp check packages/server/src/index.ts packages/server/src/mutation-wire.ts packages/server/src/mutation-wire.test.ts packages/server/src/response.ts plans/codebase-quality-round2.md`.
+      Additional evidence 2026-06-12: route response outcome contracts, the public `respond`
+      file/stream helper, route outcome-to-page response assembly, HTML server-error response
+      construction, and the shared `Retry-After` header helper moved from
+      `packages/server/src/index.ts` into `packages/server/src/response.ts`; `query.ts` now
+      reuses that response helper instead of carrying a duplicate. `index.ts` preserves the
+      public exports. Same-session evidence:
+      `pnpm exec vitest --run packages/server/src/route-response.test.ts packages/server/src/response.test.ts packages/server/src/query-endpoint.test.ts packages/server/src/index.test.ts`,
+      `pnpm exec vp check packages/server/src/index.ts packages/server/src/query.ts packages/server/src/response.ts`,
+      and `git diff --check`.
 - [ ] **LOW** — dead code (`matchShellDispatch` post-loop return shell.ts:161-166; rate-limit
       tail `return options.max > 0` index.ts:576); `matchRoute` recompiling all routes per call
       (match.ts:75-81 — cache `compileRoute`); `Transfer-Encoding: chunked` on a buffered string
