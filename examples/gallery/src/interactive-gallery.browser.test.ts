@@ -29,6 +29,9 @@ import { GalleryTabsDemo } from './generated/interactive/tabs-demo.js';
 // @ts-expect-error generated client modules are compiler artifacts without declarations.
 import * as toggleClient from './generated/interactive/toggle-demo.client.js';
 import { GalleryToggleDemo } from './generated/interactive/toggle-demo.js';
+// @ts-expect-error generated client modules are compiler artifacts without declarations.
+import * as tooltipClient from './generated/interactive/tooltip-demo.client.js';
+import { GalleryTooltipDemo } from './generated/interactive/tooltip-demo.js';
 
 interface InteractiveDemoComponent {
   definition: {
@@ -47,6 +50,7 @@ const generatedModules: Record<string, Record<string, unknown>> = {
   '/c/examples/gallery/src/generated/interactive/switch-demo.client.js': switchClient,
   '/c/examples/gallery/src/generated/interactive/tabs-demo.client.js': tabsClient,
   '/c/examples/gallery/src/generated/interactive/toggle-demo.client.js': toggleClient,
+  '/c/examples/gallery/src/generated/interactive/tooltip-demo.client.js': tooltipClient,
 };
 
 afterEach(() => {
@@ -308,6 +312,68 @@ describe('compiled interactive gallery demos in the browser', () => {
       expect(root.getAttribute('fw-state')).toBe('{"value":"details"}');
     });
   });
+
+  it('shows and hides a generated tooltip through browser-visible ARIA and popover state', async () => {
+    const root = mountInteractiveDemo(GalleryTooltipDemo);
+    const button = required(root.querySelector<HTMLButtonElement>('[jiso-tooltip]'));
+    const content = required(root.querySelector<HTMLElement>('#gallery-tooltip-content'));
+    const output = required(
+      root.querySelector<HTMLOutputElement>('[data-demo-state="tooltip-open"]'),
+    );
+    const { imports } = installGeneratedGalleryLoader(root, {
+      events: ['blur', 'focus', 'keydown', 'pointerenter', 'pointerleave'],
+    });
+
+    expect(root.getAttribute('fw-state')).toBe('{"open":false}');
+    expect(button.getAttribute('jiso-tooltip')).toBe('gallery-tooltip-content');
+    expect(button.getAttribute('aria-describedby')).toBeNull();
+    expect(content.getAttribute('role')).toBe('tooltip');
+    expect(content.getAttribute('popover')).toBe('manual');
+    expect(content.hidden).toBe(true);
+    expect(content.matches(':popover-open')).toBe(false);
+    expect(output.textContent).toBe('closed');
+
+    button.dispatchEvent(new Event('pointerenter', { bubbles: true }));
+
+    await vi.waitFor(() => {
+      expect(imports.at(-1)).toBe(
+        '/c/examples/gallery/src/generated/interactive/tooltip-demo.client.js',
+      );
+      expect(root.getAttribute('fw-state')).toBe('{"open":true}');
+      expect(button.getAttribute('aria-describedby')).toBe('gallery-tooltip-content');
+      expect(content.hidden).toBe(false);
+      expect(content.getAttribute('data-state')).toBe('open');
+      expect(content.matches(':popover-open')).toBe(true);
+      expect(output.textContent).toBe('open');
+    });
+
+    button.dispatchEvent(new Event('pointerleave', { bubbles: true }));
+
+    await vi.waitFor(() => {
+      expect(root.getAttribute('fw-state')).toBe('{"open":false}');
+      expect(button.getAttribute('aria-describedby')).toBeNull();
+      expect(content.hidden).toBe(true);
+      expect(content.matches(':popover-open')).toBe(false);
+      expect(output.textContent).toBe('closed');
+    });
+
+    button.focus();
+
+    await vi.waitFor(() => {
+      expect(root.getAttribute('fw-state')).toBe('{"open":true}');
+      expect(content.hidden).toBe(false);
+      expect(content.matches(':popover-open')).toBe(true);
+    });
+
+    await userEvent.keyboard('{Escape}');
+
+    await vi.waitFor(() => {
+      expect(root.getAttribute('fw-state')).toBe('{"open":false}');
+      expect(button.getAttribute('aria-describedby')).toBeNull();
+      expect(content.hidden).toBe(true);
+      expect(content.matches(':popover-open')).toBe(false);
+    });
+  });
 });
 
 function mountInteractiveDemo(component: InteractiveDemoComponent): HTMLElement {
@@ -318,7 +384,10 @@ function mountInteractiveDemo(component: InteractiveDemoComponent): HTMLElement 
   return required(host.firstElementChild as HTMLElement | null);
 }
 
-function installGeneratedGalleryLoader(root: HTMLElement): {
+function installGeneratedGalleryLoader(
+  root: HTMLElement,
+  options: { events?: readonly string[] } = {},
+): {
   imports: string[];
   loader: JisoLoader;
 } {
@@ -333,6 +402,7 @@ function installGeneratedGalleryLoader(root: HTMLElement): {
 
       return mod;
     },
+    ...(options.events ? { events: options.events } : {}),
     root,
   });
 

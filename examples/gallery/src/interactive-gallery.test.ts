@@ -32,6 +32,7 @@ describe('compiled interactive gallery demos', () => {
     const popover = readGenerated('popover-demo.tsx');
     const switchDemo = readGenerated('switch-demo.tsx');
     const tabs = readGenerated('tabs-demo.tsx');
+    const tooltip = readGenerated('tooltip-demo.tsx');
 
     expect(toggle).toContain('data-gallery-interactive="toggle"');
     expect(toggle).toContain('fw-state=\'{"pressed":false}\'');
@@ -97,6 +98,19 @@ describe('compiled interactive gallery demos', () => {
     expect(tabs).toMatch(
       /on:click="\/c\/examples\/gallery\/src\/generated\/interactive\/tabs-demo\.client\.js\?v=[0-9a-f]{8}#GalleryTabsDemo\$button_click_2"/,
     );
+
+    expect(tooltip).toContain('data-gallery-interactive="tooltip"');
+    expect(tooltip).toContain('fw-state=\'{"open":false}\'');
+    expect(tooltip).toContain('tooltipTriggerAttributes({ contentId, open: state.open })');
+    expect(tooltip).toMatch(
+      /on:focus="\/c\/examples\/gallery\/src\/generated\/interactive\/tooltip-demo\.client\.js\?v=[0-9a-f]{8}#GalleryTooltipDemo\$button_focus"/,
+    );
+    expect(tooltip).toMatch(
+      /on:pointerenter="\/c\/examples\/gallery\/src\/generated\/interactive\/tooltip-demo\.client\.js\?v=[0-9a-f]{8}#GalleryTooltipDemo\$button_pointerenter"/,
+    );
+    expect(tooltip).toMatch(
+      /on:keydown="\/c\/examples\/gallery\/src\/generated\/interactive\/tooltip-demo\.client\.js\?v=[0-9a-f]{8}#GalleryTooltipDemo\$button_keydown"/,
+    );
   });
 
   it('executes generated client behavior for the stateful demos', () => {
@@ -109,6 +123,7 @@ describe('compiled interactive gallery demos', () => {
     const popover = evaluateClientModule('popover-demo.client.js');
     const switchDemo = evaluateClientModule('switch-demo.client.js');
     const tabs = evaluateClientModule('tabs-demo.client.js');
+    const tooltip = evaluateClientModule('tooltip-demo.client.js');
     const signal = new AbortController().signal;
 
     const toggleState = { pressed: false };
@@ -200,6 +215,23 @@ describe('compiled interactive gallery demos', () => {
       state: tabsState,
     });
     expect(tabsState).toEqual({ value: 'overview' });
+
+    const tooltipState = { open: false };
+    clientHandler(tooltip, 'GalleryTooltipDemo$button_focus')(new Event('focus'), {
+      params: {},
+      signal,
+      state: tooltipState,
+    });
+    expect(tooltipState).toEqual({ open: true });
+    clientHandler(tooltip, 'GalleryTooltipDemo$button_keydown')(
+      Object.assign(new Event('keydown'), { key: 'Escape' }),
+      {
+        params: {},
+        signal,
+        state: tooltipState,
+      },
+    );
+    expect(tooltipState).toEqual({ open: false });
   });
 });
 

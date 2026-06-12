@@ -31,7 +31,8 @@
         "popover-demo",
         "switch-demo",
         "tabs-demo",
-        "toggle-demo"
+        "toggle-demo",
+        "tooltip-demo"
       ]
     }
   }

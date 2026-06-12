@@ -33,6 +33,7 @@ const demos = [
   'switch-demo',
   'tabs-demo',
   'toggle-demo',
+  'tooltip-demo',
 ];
 
 for (const name of demos) {
@@ -83,7 +84,7 @@ for (const name of demos) {
   for (const file of result.files) {
     if (file.kind !== 'client') continue;
     const artifactPath = resolve(repoRoot, file.fileName);
-    generated.set(artifactPath, file.source);
+    generated.set(artifactPath, formatGeneratedSource(artifactPath, file.source));
   }
 
   for (const [artifactPath, content] of generated) {
@@ -101,6 +102,10 @@ for (const name of demos) {
 }
 
 function formatGeneratedTsx(fileName, source) {
+  return formatGeneratedSource(fileName, source);
+}
+
+function formatGeneratedSource(fileName, source) {
   return execFileSync('pnpm', ['exec', 'vp', 'fmt', '--stdin-filepath', fileName], {
     cwd: repoRoot,
     encoding: 'utf8',

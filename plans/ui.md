@@ -976,6 +976,22 @@ jiso-dialog` resolves dashed wire names and prints provenance including package,
       and `pnpm --filter @jiso/headless-ui run lint:primitives`. G6 remains open for
       live ARIA/`hidden` rerender synchronization from spread-derived primitive attrs,
       tooltip behavior, remaining stateful-family coverage, and docs deployment wiring.
+      Additional partial evidence 2026-06-12: the compiled interactive gallery now adds an
+      app-authored tooltip demo, bringing the generated interactive set to ten demos.
+      `examples/gallery/src/interactive/tooltip-demo.tsx` stays TSX-authored per SPEC §5.2
+      while composing the H1 tooltip attrs builders and package behavior IDREF attribute
+      from SPEC §4.6. The emitter commits the lowered TSX plus generated client module with
+      versioned `on:focus`, `on:blur`, `on:keydown`, `on:pointerenter`, and
+      `on:pointerleave` refs. Static tests inspect the generated refs and execute the focus
+      plus Escape handlers; the Chromium browser test installs the real `@jiso/runtime`
+      loader with those delegated events and proves generated handlers mutate stamped
+      `fw-state` while browser-visible `aria-describedby`, `hidden`, `data-state`, output
+      text, and native `:popover-open` top-layer state show and hide. Same-session evidence:
+      `pnpm --filter @jiso/example-gallery run emit:interactive-gallery -- --check`,
+      `pnpm --filter @jiso/example-gallery exec vitest --run src/interactive-gallery.test.ts`,
+      and `pnpm --filter @jiso/example-gallery run test:browser`. G6 remains open for
+      every remaining stateful-family compiled demo, broader live rerender synchronization,
+      docs deployment wiring, and full gallery/conformance gates.
 
 ## Background
 
