@@ -953,6 +953,14 @@ params, relational API, `execute(sql)`, right/full joins, a string column named 
       evidence: `pnpm exec vitest --run packages/runtime/src/inline-loader.test.ts packages/runtime/src/index.test.ts`,
       `pnpm exec vp check packages/runtime/src/index.ts packages/runtime/src/inline-loader.ts packages/runtime/src/inline-loader.test.ts plans/codebase-quality-round2.md`,
       and `git diff --check`.
+      Additional bounded evidence 2026-06-12: `packages/runtime/src/inline-loader.test.ts`
+      now executes both the generated bootstrap source and extracted installer source through
+      the same fake DOM trigger harness, pinning load, idle, and visible trigger initialization
+      parity for the minified inline loader under the `SPEC.md` section 4.4 contract.
+      Same-session evidence:
+      `pnpm exec vitest --run packages/runtime/src/inline-loader.test.ts packages/runtime/src/index.test.ts`
+      and
+      `pnpm exec vp check packages/runtime/src/inline-loader.test.ts plans/codebase-quality-round2.md`.
 - [x] **HIGH — Ship the DOM morph.** The only real keyed DOM morph (focus/selection/scroll
       capture-restore) lives in index.browser.test.ts:12-182; every consumer must rewrite it, and
       the flagship browser test substantially tests its own test code. Promote to a
