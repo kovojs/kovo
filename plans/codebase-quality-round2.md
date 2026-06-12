@@ -2852,6 +2852,10 @@ land it first; don't fork it.
       conflict detection; `packages/server/src/static-export.ts` remains the stable coordinator
       and public API re-export. Same-session evidence:
       `corepack pnpm exec vitest --run packages/server/src/static-replay.test.ts packages/server/src/static-export.test.ts packages/server/src/vite-build.test.ts packages/server/src/vite.test.ts`.
+      Additional evidence 2026-06-12: the extracted static replay seam now also owns the
+      SPEC §9.5 referenced `/c/` module replay boundary, rejecting successful non-JavaScript
+      responses with FW229 before `exportStaticApp()` plans output writes. Same-session evidence:
+      `corepack pnpm exec vitest --run packages/server/src/static-replay.test.ts packages/server/src/static-export.test.ts`.
 - [x] **MED — Unify the eight `{body, headers, status}` response types** behind one base; one
       case-insensitive header utility (today: `readHeader` index.ts:3091 fully case-insensitive
       vs document.ts:137 two-casings vs `findResponseHeaderName` index.ts:2397).

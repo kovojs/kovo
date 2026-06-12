@@ -85,12 +85,13 @@ async function replayStaticExportClientModuleArtifact(
 ): Promise<StaticExportClientModuleArtifact> {
   const url = new URL(href, origin);
   const response = await handler(new Request(url, { method: 'GET' }));
+  const contentType = response.headers.get('content-type');
 
-  if (response.status !== 200) {
+  if (response.status !== 200 || !isJavaScriptClientModuleContentType(contentType)) {
     throw new StaticExportError([
       staticExportDiagnostic(
         url.pathname,
-        `FW229 static export cannot copy client module '${href}' because the app handler returned status ${response.status}. Ensure exported documents reference production versioned /c/ module URLs.`,
+        `FW229 static export cannot copy client module '${href}' because the app handler returned status ${response.status} with Content-Type '${contentType ?? 'none'}'. Ensure exported documents reference production versioned /c/ module URLs.`,
       ),
     ]);
   }
@@ -102,6 +103,12 @@ async function replayStaticExportClientModuleArtifact(
     path: url.pathname,
     status: response.status,
   };
+}
+
+function isJavaScriptClientModuleContentType(contentType: string | null): boolean {
+  if (contentType === null) return false;
+  const mime = contentType.split(';', 1)[0]?.trim().toLowerCase() ?? '';
+  return mime === 'text/javascript' || mime === 'application/javascript';
 }
 
 function collectClientModuleHrefs(

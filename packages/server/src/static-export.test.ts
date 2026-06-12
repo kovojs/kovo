@@ -482,6 +482,49 @@ describe('server static export', () => {
     }
   });
 
+  it('rejects referenced client modules that replay to non-JavaScript before writing files', async () => {
+    const outDir = await mkdtemp(path.join(os.tmpdir(), 'jiso-static-export-'));
+    try {
+      const app = createApp({
+        clientModules: {
+          put() {
+            throw new Error('unused');
+          },
+          resolve() {
+            return {
+              body: '<!doctype html><h1>Wrong handler</h1>',
+              headers: { 'Content-Type': 'text/html; charset=utf-8' },
+              status: 200,
+            };
+          },
+        },
+        routes: [
+          route('/', {
+            modulepreloads: ['/c/cart.client.js?v=cart-1'],
+            page: () => '<main>Home</main>',
+          }),
+        ],
+      });
+
+      await expect(exportStaticApp(app, { outDir })).rejects.toMatchObject({
+        code: 'FW229',
+        diagnostics: [
+          {
+            code: 'FW229',
+            message: expect.stringContaining(
+              "client module '/c/cart.client.js?v=cart-1' because the app handler returned status 200 with Content-Type 'text/html; charset=utf-8'",
+            ),
+            routePath: '/c/cart.client.js',
+          },
+        ],
+      });
+      await expect(readFile(path.join(outDir, 'index.html'))).rejects.toThrow();
+      await expect(readFile(path.join(outDir, 'c', 'cart.client.js'))).rejects.toThrow();
+    } finally {
+      await rm(outDir, { force: true, recursive: true });
+    }
+  });
+
   it('refuses unsafe client module output paths', async () => {
     const outDir = await mkdtemp(path.join(os.tmpdir(), 'jiso-static-export-'));
     try {

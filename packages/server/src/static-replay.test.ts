@@ -101,4 +101,38 @@ describe('server static export replay', () => {
     });
     expect(seen).toEqual(['/c/cart.js?v=one#Cart$add', '/c/cart.js?v=two#Cart$add']);
   });
+
+  it('raises FW229 when a referenced client module replays to non-JavaScript', async () => {
+    const handler: RequestHandler = async () =>
+      new Response('<!doctype html><h1>Not found</h1>', {
+        headers: { 'Content-Type': 'text/html; charset=utf-8' },
+        status: 200,
+      });
+
+    await expect(
+      replayStaticExportClientModuleArtifacts({
+        handler,
+        origin: 'https://jiso.local',
+        routeArtifacts: [
+          {
+            body: '<script type="module" src="/c/missing.client.js?v=build-1"></script>',
+            headers: {},
+            path: '/index.html',
+            status: 200,
+          },
+        ],
+      }),
+    ).rejects.toMatchObject({
+      code: 'FW229',
+      diagnostics: [
+        {
+          code: 'FW229',
+          message: expect.stringContaining(
+            "returned status 200 with Content-Type 'text/html; charset=utf-8'",
+          ),
+          routePath: '/c/missing.client.js',
+        },
+      ],
+    });
+  });
 });
