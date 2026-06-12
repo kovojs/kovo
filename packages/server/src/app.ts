@@ -17,6 +17,11 @@ import {
 } from './response.js';
 import {
   renderQueryRegistryEndpointResponse,
+  type QueryEndpointRequest,
+  type QueryEndpointRegistry,
+  type RegisteredQueryDefinition,
+} from './query.js';
+import {
   renderMutationEndpointResponse,
   renderRoutePageResponse,
   runEndpoint,
@@ -30,9 +35,6 @@ import {
   type MutationResponseHeaders,
   type MutationReplayStore,
   type MutationSuccess,
-  type QueryEndpointRequest,
-  type QueryEndpointRegistry,
-  type RegisteredQueryDefinition,
   type RouteDeclaration,
   type RouteRequestInput,
   type Schema,

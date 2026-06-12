@@ -1161,6 +1161,14 @@ land it first; don't fork it.
       `pnpm exec vitest --run packages/server/src/csrf.test.ts packages/server/src/index.test.ts`,
       `pnpm exec vp check packages/server/src/index.ts packages/server/src/csrf.ts packages/server/src/csrf.test.ts plans/codebase-quality-round2.md`,
       and `git diff --check`.
+      Additional evidence 2026-06-12: query endpoint contracts, `query()`/`runQuery`, query
+      registry endpoint rendering, and query instance/version helpers moved from
+      `packages/server/src/index.ts` into `packages/server/src/query.ts`; `domain()`/`tag()` moved
+      into `packages/server/src/domain.ts`, and `app.ts` dispatches query endpoints through the
+      extracted module while `index.ts` preserves the public exports. Same-session evidence:
+      `pnpm exec vitest --run packages/server/src/query-endpoint.test.ts packages/server/src/app.test.ts packages/server/src/index.test.ts`,
+      `pnpm exec vp check packages/server/src/index.ts packages/server/src/query.ts packages/server/src/domain.ts packages/server/src/app.ts`,
+      and `git diff --check`.
 - [ ] **LOW** — dead code (`matchShellDispatch` post-loop return shell.ts:161-166; rate-limit
       tail `return options.max > 0` index.ts:576); `matchRoute` recompiling all routes per call
       (match.ts:75-81 — cache `compileRoute`); `Transfer-Encoding: chunked` on a buffered string
