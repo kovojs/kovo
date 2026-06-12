@@ -399,6 +399,13 @@ pipeline throws the tree away and communicates via mutated source text.
       descending replacement pass. Same-session evidence:
       `pnpm exec vitest --run packages/compiler/src/index.test.ts` and
       `pnpm exec vp check packages/compiler/src/index.ts packages/compiler/src/lower/navigation.ts`.
+      Additional evidence 2026-06-12: `lowerNavigationSugar` now returns the
+      post-navigation `ComponentModuleModel` with its lowered source, so
+      `compileComponentModule` reuses the caller-owned model instead of reparsing after navigation
+      lowering. Same-session evidence:
+      `pnpm exec vitest --run packages/compiler/src/index.test.ts -t "navigation|Link|href"`
+      and
+      `pnpm exec vp check packages/compiler/src/index.ts packages/compiler/src/lower/navigation.ts plans/codebase-quality-round2.md`.
       Partial evidence 2026-06-11: `validateLiteralHrefs` now consumes the current
       `ComponentModuleModel` from the validator context instead of reparsing source with fake
       `component.tsx` coordinates. Same-session evidence:

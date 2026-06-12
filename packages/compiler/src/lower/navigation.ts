@@ -12,13 +12,16 @@ export function lowerNavigationSugar(
   source: string,
   model: ComponentModuleModel,
   fileName: string,
-): { source: string } {
+): { model: ComponentModuleModel; source: string } {
   const linksLowered = lowerStaticLinks(source, model);
   const linksLoweredModel =
     linksLowered === source ? model : parseComponentModuleModel(fileName, linksLowered);
+  const lowered = lowerStaticHrefCallsAndAttributes(linksLowered, linksLoweredModel);
 
   return {
-    source: lowerStaticHrefCallsAndAttributes(linksLowered, linksLoweredModel),
+    model:
+      lowered === linksLowered ? linksLoweredModel : parseComponentModuleModel(fileName, lowered),
+    source: lowered,
   };
 }
 

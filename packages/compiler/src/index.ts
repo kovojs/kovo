@@ -159,20 +159,16 @@ export function compileComponentModule(options: CompileComponentOptions): Compil
     platformModel,
     options.fileName,
   );
-  const navigationModel =
-    navigationLowering.source === platformLowering.source
-      ? platformModel
-      : parseComponentModuleModel(options.fileName, navigationLowering.source);
   const deriveLowering = lowerInlineAttributeDerives(
     navigationLowering.source,
-    navigationModel,
+    navigationLowering.model,
     componentName,
     options,
   );
   const source = deriveLowering.source;
   const model =
     source === navigationLowering.source
-      ? navigationModel
+      ? navigationLowering.model
       : parseComponentModuleModel(options.fileName, source);
   const handlers = lowerEventHandlers({ ...options, source }, componentName, model);
   const queryUpdatePlans = collectQueryUpdatePlans(source, model, componentName);
