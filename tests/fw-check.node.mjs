@@ -1174,8 +1174,9 @@ void test('P10 legibility study packet is ready but not claimed complete', async
   const fields = parseMarkdownFields(study);
   const tasks = parseMarkdownTable(markdownSection(study, 'Tasks'));
   const results = parseMarkdownTable(markdownSection(study, 'Results Ledger'));
+  const readinessRows = parseMarkdownTable(markdownSection(study, 'Dated Study Readiness Ledger'));
+  const localSessionChecks = parseMarkdownTable(markdownSection(study, 'Local Session Checklist'));
   const issues = parseMarkdownTable(markdownSection(study, 'Issues Ledger'));
-  const completionRule = normalizeMarkdownCell(markdownSection(study, 'Completion Rule'));
 
   assert.equal(fields.get('Status'), 'protocol ready; recruitment, sessions, and results pending');
   assert.equal(
@@ -1201,9 +1202,20 @@ void test('P10 legibility study packet is ready but not claimed complete', async
   }
   assert.equal(issues.length, 1);
   assert.equal(issues[0].Status, 'pending');
-  assert.ok(completionRule.includes('SPEC §16.2'), 'completion rule names the SPEC criterion');
-  assert.ok(completionRule.includes('P10 legibility'), 'completion rule blocks P10 legibility');
-  assert.ok(completionRule.includes('five dated outside-developer result rows'));
+  assert.deepEqual(
+    readinessRows.map((row) => row.Status),
+    ['pending', 'pending'],
+  );
+  assert.deepEqual(
+    localSessionChecks.map((row) => row.Step),
+    ['1', '2', '3', '4', '5'],
+  );
+  assert.equal(
+    localSessionChecks.every(
+      (row) => row['Local check'].length > 0 && row['Evidence to retain outside repo if private'],
+    ),
+    true,
+  );
 });
 
 void test('P10 v1 acceptance ledger tracks every freeze criterion', async () => {
@@ -1215,14 +1227,12 @@ void test('P10 v1 acceptance ledger tracks every freeze criterion', async () => 
   const gateRows = parseMarkdownTable(markdownSection(ledger, 'Required Gates'));
   const gatesByCriterion = new Map(gateRows.map((row) => [row['SPEC §16 criterion'], row]));
   const auditRows = parseMarkdownTable(markdownSection(ledger, 'Dated Ledger Audit'));
-  const freezeRule = normalizeMarkdownCell(markdownSection(ledger, 'Freeze Rule'));
-
-  assert.ok(
-    normalizeMarkdownCell(markdownSection(ledger, 'v1 Acceptance Ledger')).includes(
-      'SPEC.md section 16 is the normative acceptance contract',
-    ),
-    'acceptance ledger cites the normative SPEC section',
+  const acceptanceRunRows = parseMarkdownTable(markdownSection(ledger, 'Acceptance Command Set'));
+  const cleanCheckoutRows = parseMarkdownTable(
+    markdownSection(ledger, 'Final Clean-Checkout Checklist'),
   );
+  const auditStatuses = Object.fromEntries(auditRows.map((row) => [row.Area, row.Status]));
+
   assert.deepEqual(
     [...gatesByCriterion.keys()],
     specCriteria
@@ -1243,21 +1253,25 @@ void test('P10 v1 acceptance ledger tracks every freeze criterion', async () => 
   );
   assert.equal(gatesByCriterion.get('16.2 Legibility').Status, 'pending external study');
   assert.equal(gatesByCriterion.get('Pre-launch').Status, 'pending external checks');
-  assert.ok(freezeRule.includes('IMPLEMENT_v1.md P10'), 'freeze rule blocks P10 completion');
-  assert.ok(freezeRule.includes('docs/legibility-study.md'), 'freeze rule requires study evidence');
-  assert.ok(
-    freezeRule.includes('docs/prelaunch-checklist.md'),
-    'freeze rule requires pre-launch evidence',
+  assert.deepEqual(
+    {
+      legibility: auditStatuses['Outside legibility study'],
+      prelaunch: auditStatuses['Pre-launch external checks'],
+      prelaunchHonesty: auditStatuses['Pre-launch ledger honesty'],
+    },
+    {
+      legibility: 'pending external study',
+      prelaunch: 'pending external checks',
+      prelaunchHonesty: 'packet ready; external evidence pending',
+    },
   );
-  assert.ok(
-    auditRows.some(
-      (row) =>
-        row.Area === 'Pre-launch ledger honesty' &&
-        row['Evidence inspected'].includes('docs/prelaunch-checklist.md Dated Audit Ledger') &&
-        row.Result.includes('external launch evidence is still absent') &&
-        row.Status === 'packet ready; external evidence pending',
-    ),
-    'acceptance ledger records the pre-launch packet audit without claiming completion',
+  assert.deepEqual(
+    acceptanceRunRows.map((row) => row.Result),
+    ['passed', 'passed', 'pending'],
+  );
+  assert.deepEqual(
+    cleanCheckoutRows.map((row) => row.Status),
+    ['pending', 'pending', 'pending', 'pending', 'pending', 'pending'],
   );
 });
 
@@ -1265,20 +1279,15 @@ void test('pre-launch checklist is tracked explicitly', async () => {
   const checklist = await readProjectFile('docs/prelaunch-checklist.md');
   const requiredChecks = parseMarkdownTable(markdownSection(checklist, 'Required Checks'));
   const auditRows = parseMarkdownTable(markdownSection(checklist, 'Dated Audit Ledger'));
+  const runnableChecks = parseMarkdownTable(markdownSection(checklist, 'Runnable Local Checklist'));
   const evidenceLedgers = [
     parseMarkdownTable(markdownSection(checklist, 'Trademark Evidence Ledger'))[0],
     parseMarkdownTable(markdownSection(checklist, 'Domain Evidence Ledger'))[0],
     parseMarkdownTable(markdownSection(checklist, 'npm Scope Evidence Ledger'))[0],
     parseMarkdownTable(markdownSection(checklist, 'Linguistic Evidence Ledger'))[0],
   ];
-  const completionRule = normalizeMarkdownCell(markdownSection(checklist, 'Completion Rule'));
+  const auditStatuses = Object.fromEntries(auditRows.map((row) => [row.Reviewer, row.Status]));
 
-  assert.ok(
-    normalizeMarkdownCell(markdownSection(checklist, 'Pre-launch Checklist')).includes(
-      'launch-readiness checks required before v1 freeze',
-    ),
-    'pre-launch checklist states the v1 freeze scope',
-  );
   assert.deepEqual(
     requiredChecks.map((row) => row.Check),
     ['Trademark screen', 'Domain', 'npm scope', 'Linguistic screen'],
@@ -1303,16 +1312,10 @@ void test('pre-launch checklist is tracked explicitly', async () => {
     parseMarkdownTable(markdownSection(checklist, 'npm Scope Evidence Ledger'))[0].Scope,
     '@jiso',
   );
-  assert.ok(
-    auditRows.some(
-      (row) =>
-        row.Reviewer === 'Codex' &&
-        row['Scope checked'] ===
-          'Ledger honesty audit of every required pre-launch evidence section.' &&
-        row.Result.includes('absence of external evidence explicit') &&
-        row.Status === 'packet ready; external evidence pending',
-    ),
-    'pre-launch checklist has a dated packet audit that remains externally pending',
+  assert.equal(auditStatuses.Codex, 'packet ready; external evidence pending');
+  assert.deepEqual(
+    runnableChecks.map((row) => row.Status),
+    ['pending', 'pending', 'pending', 'pending'],
   );
   assert.deepEqual(
     evidenceLedgers.map((row) => row.Status),
@@ -1324,8 +1327,6 @@ void test('pre-launch checklist is tracked explicitly', async () => {
     ),
     'each external pre-launch ledger names its missing evidence instead of implying completion',
   );
-  assert.ok(completionRule.includes('no ledger row remains pending'));
-  assert.ok(completionRule.includes('docs/v1-acceptance.md'));
 });
 
 void test('S2 loader budget and inline enhanced form behavior are acceptance evidence', async () => {

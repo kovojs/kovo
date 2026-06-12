@@ -146,6 +146,11 @@ Do this first or pay it on every commit.
       Verification: `node --test --test-name-pattern "P10 constitution rejects forbidden browser architecture in framework code" tests/fw-check.node.mjs`,
       `pnpm exec vp check tests/fw-check.node.mjs plans/codebase-quality-round2.md`, and
       `git diff --check`.
+      Partial evidence 2026-06-12: the external-readiness documentation tranche now parses
+      `docs/legibility-study.md`, `docs/v1-acceptance.md`, and
+      `docs/prelaunch-checklist.md` tables/fields for pending study rows, acceptance audit
+      statuses, runnable checklist rows, and final clean-checkout gates instead of checking
+      completion-rule or section-intro prose substrings in `tests/fw-check.node.mjs`.
       Partial evidence 2026-06-11: the P8 component/endpoints/unguarded/unscoped tranche now uses
       a synthetic graph and direct `fwExplain` assertions for handler captures, derives,
       execution triggers, attribute merges, endpoint listing, unguarded access, and owner-domain
