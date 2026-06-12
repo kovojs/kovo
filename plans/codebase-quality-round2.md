@@ -479,6 +479,15 @@ must be "FW406 unresolved," never "silently wrong."
       `nullableJoinTables` only matching `.leftJoin` (:1010-1020 — right/full join nullability
       silently dropped). Real column types via the checker (project mode) or Drizzle column
       objects (pinned-runtime mode); unknown → FW406, never a guess.
+      Partial evidence 2026-06-11: `packages/drizzle/src/index.ts` no longer infers scalar
+      projection shapes from selected alias names such as `count`, `qty`, or `stock`; unresolved
+      non-opaque scalar projections are omitted from inferred `shape` and surfaced as FW406
+      diagnostics via `unresolvedProjectionDiagnostics`. `packages/drizzle/src/index.test.ts`
+      covers computed projection aliases that previously fabricated `string`/`number` facts,
+      while updated package and `conformance/drizzle-pin` fixtures use declared Drizzle columns
+      when real shape inference is expected. Same-session evidence:
+      `pnpm exec vitest --run packages/drizzle/src` and
+      `pnpm exec vitest --run conformance/drizzle-pin`.
 - [ ] **HIGH — Cover the invisible read/write surfaces or mark them.** Relational query API
       (`db.query.users.findMany()`) matches neither read (:1138) nor write (:598) extraction;
       `db.execute(sql``)` is skipped by `extractExternalDbArgumentCalls` (:1820). Either
