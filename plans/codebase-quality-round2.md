@@ -1768,6 +1768,14 @@ params, relational API, `execute(sql)`, right/full joins, a string column named 
       `pnpm exec vitest --run packages/runtime/src/query-refetch.test.ts packages/runtime/src/query-store.test.ts packages/runtime/src/index.test.ts -t "hydrate|visible-return|refetch"`,
       `pnpm exec vp check packages/runtime/src/index.ts packages/runtime/src/query-refetch.ts packages/runtime/src/query-refetch.test.ts plans/codebase-quality-round2.md`,
       and `git diff --check`.
+      Additional bounded evidence 2026-06-12: typed-read visible-return refetch now forwards
+      malformed `fw-query` chunks into the shared apply-path `onError` reporter instead of
+      silently dropping parse failures while applying later valid chunks. `packages/runtime/src/query-refetch.test.ts`
+      pins both direct `refetchQueries` and `installQueryVisibleReturnRefetch` behavior through
+      the extracted query-refetch seam. Same-session evidence:
+      `pnpm exec vitest --run packages/runtime/src/query-refetch.test.ts packages/runtime/src/query-store.test.ts`,
+      `pnpm exec vp check packages/runtime/src/query-refetch.ts packages/runtime/src/query-refetch.test.ts plans/codebase-quality-round2.md`,
+      and `git diff --check`.
 
 Verification: runtime node + browser suites; gzip budget; the new parity suite is the gate for
 any future inline-loader edit. Partial evidence 2026-06-12: `packages/runtime/src/index.ts` now

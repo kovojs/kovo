@@ -5,6 +5,7 @@ import type { QueryScriptLike, QueryStore } from './query-store.js';
 
 export interface QueryRefetchOptions {
   fetch: QueryRefetchFetch;
+  onError?: (error: unknown) => void;
   urlForQuery?: (query: string) => string | undefined;
 }
 
@@ -133,8 +134,10 @@ export function installQueryVisibleReturnRefetch(
     const queries = ledger.eligible(options.refetchOnFocusOptOut);
     await options.refetchOnFocus?.(queries);
     if (options.queryRefetch && options.queryStore) {
+      const onError = options.queryRefetch.onError ?? options.onError;
       const applied = await refetchQueries({
         ...options.queryRefetch,
+        ...(onError ? { onError } : {}),
         queries,
         queryStore: options.queryStore,
       });
@@ -188,7 +191,13 @@ export async function refetchQueries(
       continue;
     }
 
-    applied.push(applyMutationResponseToStore(options.queryStore, await response.text()));
+    applied.push(
+      applyMutationResponseToStore(
+        options.queryStore,
+        await response.text(),
+        options.onError ? { onError: options.onError } : undefined,
+      ),
+    );
   }
 
   return applied;
