@@ -25,16 +25,19 @@ describe('compiled interactive gallery demos', () => {
   it('compiles stateful gallery demos into server TSX and client handler modules', () => {
     const accordion = readGenerated('accordion-demo.tsx');
     const alertDialog = readGenerated('alert-dialog-demo.tsx');
+    const autocomplete = readGenerated('autocomplete-demo.tsx');
     const toggle = readGenerated('toggle-demo.tsx');
     const checkbox = readGenerated('checkbox-demo.tsx');
     const checkboxGroup = readGenerated('checkbox-group-demo.tsx');
     const collapsible = readGenerated('collapsible-demo.tsx');
+    const combobox = readGenerated('combobox-demo.tsx');
     const disclosure = readGenerated('disclosure-demo.tsx');
     const dialog = readGenerated('dialog-demo.tsx');
     const numberField = readGenerated('number-field-demo.tsx');
     const otpField = readGenerated('otp-field-demo.tsx');
     const popover = readGenerated('popover-demo.tsx');
     const radioGroup = readGenerated('radio-group-demo.tsx');
+    const select = readGenerated('select-demo.tsx');
     const slider = readGenerated('slider-demo.tsx');
     const switchDemo = readGenerated('switch-demo.tsx');
     const tabs = readGenerated('tabs-demo.tsx');
@@ -67,6 +70,19 @@ describe('compiled interactive gallery demos', () => {
       /on:click="\/c\/examples\/gallery\/src\/generated\/interactive\/alert-dialog-demo\.client\.js\?v=[0-9a-f]{8}#GalleryAlertDialogDemo\$button_click_3"/,
     );
 
+    expect(autocomplete).toContain('data-gallery-interactive="autocomplete"');
+    expect(autocomplete).toContain(
+      'fw-state=\'{"highlightedValue":"design","inputValue":"de","open":false,"value":"design"}\'',
+    );
+    expect(autocomplete).toContain('autocompleteInputAttributes({');
+    expect(autocomplete).toContain('autocompleteOptionAttributes({');
+    expect(autocomplete).toMatch(
+      /on:input="\/c\/examples\/gallery\/src\/generated\/interactive\/autocomplete-demo\.client\.js\?v=[0-9a-f]{8}#GalleryAutocompleteDemo\$input_input"/,
+    );
+    expect(autocomplete).toMatch(
+      /on:click="\/c\/examples\/gallery\/src\/generated\/interactive\/autocomplete-demo\.client\.js\?v=[0-9a-f]{8}#GalleryAutocompleteDemo\$option_click"/,
+    );
+
     expect(toggle).toContain('data-gallery-interactive="toggle"');
     expect(toggle).toContain('fw-state=\'{"pressed":false}\'');
     expect(toggle).toMatch(
@@ -87,6 +103,19 @@ describe('compiled interactive gallery demos', () => {
     );
     expect(checkboxGroup).toMatch(
       /on:click="\/c\/examples\/gallery\/src\/generated\/interactive\/checkbox-group-demo\.client\.js\?v=[0-9a-f]{8}#GalleryCheckboxGroupDemo\$input_click_2"/,
+    );
+
+    expect(combobox).toContain('data-gallery-interactive="combobox"');
+    expect(combobox).toContain(
+      'fw-state=\'{"highlightedValue":"austin","open":false,"value":"austin"}\'',
+    );
+    expect(combobox).toContain('comboboxInputAttributes({');
+    expect(combobox).toContain('comboboxListboxAttributes({');
+    expect(combobox).toMatch(
+      /on:input="\/c\/examples\/gallery\/src\/generated\/interactive\/combobox-demo\.client\.js\?v=[0-9a-f]{8}#GalleryComboboxDemo\$input_input"/,
+    );
+    expect(combobox).toMatch(
+      /on:click="\/c\/examples\/gallery\/src\/generated\/interactive\/combobox-demo\.client\.js\?v=[0-9a-f]{8}#GalleryComboboxDemo\$button_click"/,
     );
 
     expect(disclosure).toContain('data-gallery-interactive="disclosure"');
@@ -145,6 +174,14 @@ describe('compiled interactive gallery demos', () => {
     );
     expect(radioGroup).toMatch(
       /on:click="\/c\/examples\/gallery\/src\/generated\/interactive\/radio-group-demo\.client\.js\?v=[0-9a-f]{8}#GalleryRadioGroupDemo\$input_click_2"/,
+    );
+
+    expect(select).toContain('data-gallery-interactive="select"');
+    expect(select).toContain('fw-state=\'{"value":"standard"}\'');
+    expect(select).toContain('selectTriggerAttributes({');
+    expect(select).toContain('selectItemAttributes({');
+    expect(select).toMatch(
+      /on:change="\/c\/examples\/gallery\/src\/generated\/interactive\/select-demo\.client\.js\?v=[0-9a-f]{8}#GallerySelectDemo\$select_change"/,
     );
 
     expect(slider).toContain('data-gallery-interactive="slider"');
@@ -206,16 +243,19 @@ describe('compiled interactive gallery demos', () => {
   it('executes generated client behavior for the stateful demos', () => {
     const accordion = evaluateClientModule('accordion-demo.client.js');
     const alertDialog = evaluateClientModule('alert-dialog-demo.client.js');
+    const autocomplete = evaluateClientModule('autocomplete-demo.client.js');
     const toggle = evaluateClientModule('toggle-demo.client.js');
     const checkbox = evaluateClientModule('checkbox-demo.client.js');
     const checkboxGroup = evaluateClientModule('checkbox-group-demo.client.js');
     const collapsible = evaluateClientModule('collapsible-demo.client.js');
+    const combobox = evaluateClientModule('combobox-demo.client.js');
     const disclosure = evaluateClientModule('disclosure-demo.client.js');
     const dialog = evaluateClientModule('dialog-demo.client.js');
     const numberField = evaluateClientModule('number-field-demo.client.js');
     const otpField = evaluateClientModule('otp-field-demo.client.js');
     const popover = evaluateClientModule('popover-demo.client.js');
     const radioGroup = evaluateClientModule('radio-group-demo.client.js');
+    const select = evaluateClientModule('select-demo.client.js');
     const slider = evaluateClientModule('slider-demo.client.js');
     const switchDemo = evaluateClientModule('switch-demo.client.js');
     const tabs = evaluateClientModule('tabs-demo.client.js');
@@ -257,6 +297,35 @@ describe('compiled interactive gallery demos', () => {
     });
     expect(alertDialogState).toEqual({ open: false });
 
+    const autocompleteState = {
+      highlightedValue: 'design',
+      inputValue: 'de',
+      open: false,
+      value: 'design',
+    };
+    clientHandler(autocomplete, 'GalleryAutocompleteDemo$input_input')(new Event('input'), {
+      params: {},
+      signal,
+      state: autocompleteState,
+    });
+    expect(autocompleteState).toEqual({
+      highlightedValue: 'development',
+      inputValue: 'dev',
+      open: true,
+      value: 'design',
+    });
+    clientHandler(autocomplete, 'GalleryAutocompleteDemo$option_click')(new Event('click'), {
+      params: { value: 'development' },
+      signal,
+      state: autocompleteState,
+    });
+    expect(autocompleteState).toEqual({
+      highlightedValue: 'development',
+      inputValue: 'development',
+      open: false,
+      value: 'development',
+    });
+
     const toggleState = { pressed: false };
     clientHandler(toggle, 'GalleryToggleDemo$button_click')(new Event('click'), {
       params: {},
@@ -289,6 +358,20 @@ describe('compiled interactive gallery demos', () => {
       activeValue: 'billing',
       value: 'updates,billing',
     });
+
+    const comboboxState = { highlightedValue: 'austin', open: false, value: 'austin' };
+    clientHandler(combobox, 'GalleryComboboxDemo$input_input')(new Event('input'), {
+      params: {},
+      signal,
+      state: comboboxState,
+    });
+    expect(comboboxState).toEqual({ highlightedValue: 'chicago', open: true, value: 'chicago' });
+    clientHandler(combobox, 'GalleryComboboxDemo$button_click')(new Event('click'), {
+      params: { value: 'austin' },
+      signal,
+      state: comboboxState,
+    });
+    expect(comboboxState).toEqual({ highlightedValue: 'austin', open: false, value: 'austin' });
 
     const disclosureState = { open: false };
     clientHandler(disclosure, 'GalleryDisclosureDemo$button_click')(new Event('click'), {
@@ -375,6 +458,14 @@ describe('compiled interactive gallery demos', () => {
       state: radioGroupState,
     });
     expect(radioGroupState).toEqual({ value: 'email' });
+
+    const selectState = { value: 'standard' };
+    clientHandler(select, 'GallerySelectDemo$select_change')(new Event('change'), {
+      params: {},
+      signal,
+      state: selectState,
+    });
+    expect(selectState).toEqual({ value: 'express' });
 
     const sliderState = { value: 25 };
     clientHandler(slider, 'GallerySliderDemo$input_input')(new Event('input'), {

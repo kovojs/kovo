@@ -1045,6 +1045,23 @@ jiso-dialog` resolves dashed wire names and prints provenance including package,
       `pnpm exec vp check examples/gallery/package.json examples/gallery/scripts/emit-interactive-gallery.mjs examples/gallery/src/interactive/otp-field-demo.tsx examples/gallery/src/interactive/toolbar-demo.tsx examples/gallery/src/interactive-gallery.test.ts examples/gallery/src/interactive-gallery.browser.test.ts examples/gallery/src/generated/interactive/otp-field-demo.tsx examples/gallery/src/generated/interactive/otp-field-demo.client.js examples/gallery/src/generated/interactive/toolbar-demo.tsx examples/gallery/src/generated/interactive/toolbar-demo.client.js plans/ui.md IMPLEMENT_v1.md`,
       and `git diff --check`. G6 remains open for docs deployment wiring and full
       gallery/conformance gates.
+      Additional partial evidence 2026-06-12: the compiled interactive gallery now adds
+      app-authored TSX demos for select, combobox, and autocomplete. The emitter compiles all
+      three through `@jiso/compiler`, commits lowered TSX plus generated client modules with
+      versioned `on:change`/`on:input`/`on:click` refs, and the static test inspects those
+      artifacts while executing the generated handlers. The Chromium browser test mounts the
+      generated components through the real runtime loader and proves native select value/text,
+      combobox listbox `aria-expanded`/`aria-activedescendant`/selected-option state, and
+      autocomplete datalist/input/value synchronization. Same-session evidence:
+      `pnpm --filter @jiso/example-gallery run emit:interactive-gallery -- --check`,
+      `pnpm --filter @jiso/example-gallery exec vitest --run src/interactive-gallery.test.ts`,
+      `pnpm --filter @jiso/example-gallery test`,
+      `pnpm --filter @jiso/example-gallery run test:browser`,
+      `pnpm --filter @jiso/headless-ui exec vitest --run src/primitives/select.test.ts src/primitives/combobox.test.ts src/primitives/autocomplete.test.ts src/tooling/lint-primitives.test.ts src/tooling/primitive-handler-lint.test.ts`,
+      `pnpm --filter @jiso/headless-ui run lint:primitives`,
+      `pnpm exec vp check examples/gallery/package.json examples/gallery/scripts/emit-interactive-gallery.mjs examples/gallery/src/interactive/select-demo.tsx examples/gallery/src/interactive/combobox-demo.tsx examples/gallery/src/interactive/autocomplete-demo.tsx examples/gallery/src/interactive-gallery.test.ts examples/gallery/src/interactive-gallery.browser.test.ts examples/gallery/src/generated/interactive/select-demo.tsx examples/gallery/src/generated/interactive/select-demo.client.js examples/gallery/src/generated/interactive/combobox-demo.tsx examples/gallery/src/generated/interactive/combobox-demo.client.js examples/gallery/src/generated/interactive/autocomplete-demo.tsx examples/gallery/src/generated/interactive/autocomplete-demo.client.js plans/ui.md IMPLEMENT_v1.md`,
+      and `git diff --check`. G6 remains open for docs deployment wiring and full
+      gallery/conformance gates.
 
 ## Background
 

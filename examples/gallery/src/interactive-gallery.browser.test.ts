@@ -9,6 +9,9 @@ import { GalleryAccordionDemo } from './generated/interactive/accordion-demo.js'
 import * as alertDialogClient from './generated/interactive/alert-dialog-demo.client.js';
 import { GalleryAlertDialogDemo } from './generated/interactive/alert-dialog-demo.js';
 // @ts-expect-error generated client modules are compiler artifacts without declarations.
+import * as autocompleteClient from './generated/interactive/autocomplete-demo.client.js';
+import { GalleryAutocompleteDemo } from './generated/interactive/autocomplete-demo.js';
+// @ts-expect-error generated client modules are compiler artifacts without declarations.
 import * as checkboxClient from './generated/interactive/checkbox-demo.client.js';
 import { GalleryCheckboxDemo } from './generated/interactive/checkbox-demo.js';
 // @ts-expect-error generated client modules are compiler artifacts without declarations.
@@ -17,6 +20,9 @@ import { GalleryCheckboxGroupDemo } from './generated/interactive/checkbox-group
 // @ts-expect-error generated client modules are compiler artifacts without declarations.
 import * as collapsibleClient from './generated/interactive/collapsible-demo.client.js';
 import { GalleryCollapsibleDemo } from './generated/interactive/collapsible-demo.js';
+// @ts-expect-error generated client modules are compiler artifacts without declarations.
+import * as comboboxClient from './generated/interactive/combobox-demo.client.js';
+import { GalleryComboboxDemo } from './generated/interactive/combobox-demo.js';
 // @ts-expect-error generated client modules are compiler artifacts without declarations.
 import * as disclosureClient from './generated/interactive/disclosure-demo.client.js';
 import { GalleryDisclosureDemo } from './generated/interactive/disclosure-demo.js';
@@ -35,6 +41,9 @@ import { GalleryPopoverDemo } from './generated/interactive/popover-demo.js';
 // @ts-expect-error generated client modules are compiler artifacts without declarations.
 import * as radioGroupClient from './generated/interactive/radio-group-demo.client.js';
 import { GalleryRadioGroupDemo } from './generated/interactive/radio-group-demo.js';
+// @ts-expect-error generated client modules are compiler artifacts without declarations.
+import * as selectClient from './generated/interactive/select-demo.client.js';
+import { GallerySelectDemo } from './generated/interactive/select-demo.js';
 // @ts-expect-error generated client modules are compiler artifacts without declarations.
 import * as sliderClient from './generated/interactive/slider-demo.client.js';
 import { GallerySliderDemo } from './generated/interactive/slider-demo.js';
@@ -67,16 +76,19 @@ interface InteractiveDemoComponent {
 const generatedModules: Record<string, Record<string, unknown>> = {
   '/c/examples/gallery/src/generated/interactive/accordion-demo.client.js': accordionClient,
   '/c/examples/gallery/src/generated/interactive/alert-dialog-demo.client.js': alertDialogClient,
+  '/c/examples/gallery/src/generated/interactive/autocomplete-demo.client.js': autocompleteClient,
   '/c/examples/gallery/src/generated/interactive/checkbox-demo.client.js': checkboxClient,
   '/c/examples/gallery/src/generated/interactive/checkbox-group-demo.client.js':
     checkboxGroupClient,
   '/c/examples/gallery/src/generated/interactive/collapsible-demo.client.js': collapsibleClient,
+  '/c/examples/gallery/src/generated/interactive/combobox-demo.client.js': comboboxClient,
   '/c/examples/gallery/src/generated/interactive/disclosure-demo.client.js': disclosureClient,
   '/c/examples/gallery/src/generated/interactive/dialog-demo.client.js': dialogClient,
   '/c/examples/gallery/src/generated/interactive/number-field-demo.client.js': numberFieldClient,
   '/c/examples/gallery/src/generated/interactive/otp-field-demo.client.js': otpFieldClient,
   '/c/examples/gallery/src/generated/interactive/popover-demo.client.js': popoverClient,
   '/c/examples/gallery/src/generated/interactive/radio-group-demo.client.js': radioGroupClient,
+  '/c/examples/gallery/src/generated/interactive/select-demo.client.js': selectClient,
   '/c/examples/gallery/src/generated/interactive/slider-demo.client.js': sliderClient,
   '/c/examples/gallery/src/generated/interactive/switch-demo.client.js': switchClient,
   '/c/examples/gallery/src/generated/interactive/tabs-demo.client.js': tabsClient,
@@ -209,6 +221,179 @@ describe('compiled interactive gallery demos in the browser', () => {
     await vi.waitFor(() => {
       expect(root.getAttribute('fw-state')).toBe('{"open":false}');
       expect(dialog.open).toBe(false);
+    });
+  });
+
+  it('updates native select value and display text through a generated change handler', async () => {
+    const root = mountInteractiveDemo(GallerySelectDemo);
+    const select = required(root.querySelector<HTMLSelectElement>('#gallery-select-control'));
+    const output = required(
+      root.querySelector<HTMLOutputElement>('[data-demo-state="select-value"]'),
+    );
+    const disabled = required(select.querySelector<HTMLOptionElement>('option[value="drone"]'));
+    const { imports } = installGeneratedGalleryLoader(root, { events: ['change'] });
+
+    expect(root.getAttribute('fw-state')).toBe('{"value":"standard"}');
+    expect(select.name).toBe('gallery-shipping-speed');
+    expect(select.required).toBe(true);
+    expect(select.value).toBe('standard');
+    expect(select.getAttribute('aria-labelledby')).toBe('gallery-select-label');
+    expect(disabled.disabled).toBe(true);
+    expect(output.textContent).toBe('Standard');
+
+    select.value = 'express';
+    select.dispatchEvent(new Event('change', { bubbles: true }));
+
+    await vi.waitFor(() => {
+      const currentSelect = required(
+        root.querySelector<HTMLSelectElement>('#gallery-select-control'),
+      );
+      const currentOutput = required(
+        root.querySelector<HTMLOutputElement>('[data-demo-state="select-value"]'),
+      );
+
+      expect(imports).toEqual([
+        '/c/examples/gallery/src/generated/interactive/select-demo.client.js',
+      ]);
+      expect(root.getAttribute('fw-state')).toBe('{"value":"express"}');
+      expect(currentSelect.value).toBe('express');
+      expect(currentOutput.textContent).toBe('Express');
+    });
+  });
+
+  it('updates combobox listbox ARIA and selected value through generated handlers', async () => {
+    const root = mountInteractiveDemo(GalleryComboboxDemo);
+    const input = required(root.querySelector<HTMLInputElement>('#gallery-combobox-input'));
+    const listbox = required(root.querySelector<HTMLElement>('#gallery-combobox-listbox'));
+    const chicago = required(
+      root.querySelector<HTMLButtonElement>('#gallery-combobox-listbox-option-2'),
+    );
+    const output = required(
+      root.querySelector<HTMLOutputElement>('[data-demo-state="combobox-value"]'),
+    );
+    const { imports } = installGeneratedGalleryLoader(root, { events: ['click', 'input'] });
+
+    expect(root.getAttribute('fw-state')).toBe(
+      '{"highlightedValue":"austin","open":false,"value":"austin"}',
+    );
+    expect(input.getAttribute('role')).toBe('combobox');
+    expect(input.getAttribute('aria-expanded')).toBe('false');
+    expect(input.getAttribute('aria-controls')).toBe('gallery-combobox-listbox');
+    expect(input.name).toBe('gallery-city');
+    expect(input.value).toBe('austin');
+    expect(listbox.hidden).toBe(true);
+    expect(chicago.getAttribute('role')).toBe('option');
+    expect(output.textContent).toBe('Austin');
+
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+
+    await vi.waitFor(() => {
+      const currentInput = required(
+        root.querySelector<HTMLInputElement>('#gallery-combobox-input'),
+      );
+      const currentListbox = required(root.querySelector<HTMLElement>('#gallery-combobox-listbox'));
+      const currentChicago = required(
+        root.querySelector<HTMLButtonElement>('#gallery-combobox-listbox-option-2'),
+      );
+      const currentOutput = required(
+        root.querySelector<HTMLOutputElement>('[data-demo-state="combobox-value"]'),
+      );
+
+      expect(imports.at(-1)).toBe(
+        '/c/examples/gallery/src/generated/interactive/combobox-demo.client.js',
+      );
+      expect(root.getAttribute('fw-state')).toBe(
+        '{"highlightedValue":"chicago","open":true,"value":"chicago"}',
+      );
+      expect(currentInput.getAttribute('aria-expanded')).toBe('true');
+      expect(currentInput.getAttribute('aria-activedescendant')).toBe(
+        'gallery-combobox-listbox-option-2',
+      );
+      expect(currentInput.value).toBe('chicago');
+      expect(currentListbox.hidden).toBe(false);
+      expect(currentChicago.getAttribute('data-highlighted')).toBe('');
+      expect(currentChicago.getAttribute('aria-selected')).toBe('true');
+      expect(currentOutput.textContent).toBe('Chicago city');
+    });
+
+    required(root.querySelector<HTMLButtonElement>('#gallery-combobox-listbox-option-0')).click();
+
+    await vi.waitFor(() => {
+      const currentInput = required(
+        root.querySelector<HTMLInputElement>('#gallery-combobox-input'),
+      );
+      const currentListbox = required(root.querySelector<HTMLElement>('#gallery-combobox-listbox'));
+
+      expect(root.getAttribute('fw-state')).toBe(
+        '{"highlightedValue":"austin","open":false,"value":"austin"}',
+      );
+      expect(currentInput.value).toBe('austin');
+      expect(currentListbox.hidden).toBe(true);
+    });
+  });
+
+  it('updates autocomplete datalist suggestions and value through generated handlers', async () => {
+    const root = mountInteractiveDemo(GalleryAutocompleteDemo);
+    const input = required(root.querySelector<HTMLInputElement>('#gallery-autocomplete-input'));
+    const output = required(
+      root.querySelector<HTMLOutputElement>('[data-demo-state="autocomplete-value"]'),
+    );
+    const { imports } = installGeneratedGalleryLoader(root, {
+      events: ['click', 'input'],
+    });
+
+    expect(root.getAttribute('fw-state')).toBe(
+      '{"highlightedValue":"design","inputValue":"de","open":false,"value":"design"}',
+    );
+    expect(input.getAttribute('role')).toBe('combobox');
+    expect(input.getAttribute('aria-expanded')).toBe('false');
+    expect(input.getAttribute('aria-controls')).toBe('gallery-autocomplete-list');
+    expect(input.name).toBe('gallery-tag');
+    expect(input.value).toBe('de');
+    expect(output.textContent).toBe('Design');
+
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+
+    await vi.waitFor(() => {
+      const currentInput = required(
+        root.querySelector<HTMLInputElement>('#gallery-autocomplete-input'),
+      );
+      const currentDevelopment = required(
+        root.querySelector<HTMLOptionElement>('#gallery-autocomplete-list-option-0'),
+      );
+
+      expect(imports.at(-1)).toBe(
+        '/c/examples/gallery/src/generated/interactive/autocomplete-demo.client.js',
+      );
+      expect(root.getAttribute('fw-state')).toBe(
+        '{"highlightedValue":"development","inputValue":"dev","open":true,"value":"design"}',
+      );
+      expect(currentInput.getAttribute('aria-expanded')).toBe('true');
+      expect(currentInput.getAttribute('aria-activedescendant')).toBe(
+        'gallery-autocomplete-list-option-0',
+      );
+      expect(currentInput.value).toBe('dev');
+      expect(currentDevelopment.value).toBe('development');
+      expect(currentDevelopment.getAttribute('data-highlighted')).toBe('');
+    });
+
+    required(
+      root.querySelector<HTMLOptionElement>('#gallery-autocomplete-list-option-0'),
+    ).dispatchEvent(new MouseEvent('click', { bubbles: true }));
+
+    await vi.waitFor(() => {
+      const currentInput = required(
+        root.querySelector<HTMLInputElement>('#gallery-autocomplete-input'),
+      );
+      const currentOutput = required(
+        root.querySelector<HTMLOutputElement>('[data-demo-state="autocomplete-value"]'),
+      );
+
+      expect(root.getAttribute('fw-state')).toBe(
+        '{"highlightedValue":"development","inputValue":"development","open":false,"value":"development"}',
+      );
+      expect(currentInput.value).toBe('development');
+      expect(currentOutput.textContent).toBe('Development');
     });
   });
 
