@@ -4659,6 +4659,62 @@ describe('query store', () => {
     ]);
   });
 
+  it('parses fw-error mutation failures with shared tag-close attribute scanning', async () => {
+    const addToCart = form<
+      'cart/add',
+      { productId: string; quantity: number },
+      { code: 'OUT_OF_STOCK'; data: { availableQuantity: number } }
+    >('cart/add');
+    const store = createQueryStore();
+    const root = new FakeMorphRoot();
+    const onError = vi.fn();
+    const fetch = vi.fn(async () => ({
+      status: 422,
+      async text() {
+        return '<fw-error data-debug="quantity > stock">{"code":"OUT_OF_STOCK","data":{"availableQuantity":0}}</fw-error>';
+      },
+    }));
+    const ctx = createSubmitContext({ fetch, root, store });
+
+    await ctx.submit(addToCart, {
+      input: { productId: 'p1', quantity: 1 },
+      onError,
+    });
+
+    expect(onError).toHaveBeenCalledWith({
+      code: 'OUT_OF_STOCK',
+      data: { availableQuantity: 0 },
+    });
+  });
+
+  it('parses output mutation failures when attributes contain quoted tag closers', async () => {
+    const addToCart = form<
+      'cart/add',
+      { productId: string; quantity: number },
+      { code: 'OUT_OF_STOCK'; data: { availableQuantity: number } }
+    >('cart/add');
+    const store = createQueryStore();
+    const root = new FakeMorphRoot();
+    const onError = vi.fn();
+    const fetch = vi.fn(async () => ({
+      status: 422,
+      async text() {
+        return '<fw-fragment target="error"><output role="alert" data-debug="quantity > stock" data-error-code="OUT_OF_STOCK">{"availableQuantity":0}</output></fw-fragment>';
+      },
+    }));
+    const ctx = createSubmitContext({ fetch, root, store });
+
+    await ctx.submit(addToCart, {
+      input: { productId: 'p1', quantity: 1 },
+      onError,
+    });
+
+    expect(onError).toHaveBeenCalledWith({
+      code: 'OUT_OF_STOCK',
+      data: { availableQuantity: 0 },
+    });
+  });
+
   it('passes schema validation field failures from ctx.submit on server-shaped 422 fragments', async () => {
     const addToCart = form<
       'cart/add',
@@ -4672,6 +4728,34 @@ describe('query store', () => {
       status: 422,
       async text() {
         return '<fw-fragment target="product-form:p1"><output role="alert" data-error-path="quantity">Expected number &gt;= 1</output></fw-fragment>';
+      },
+    }));
+    const ctx = createSubmitContext({ fetch, root, store });
+
+    await ctx.submit(addToCart, {
+      input: { productId: 'p1', quantity: 0 },
+      onError,
+    });
+
+    expect(onError).toHaveBeenCalledWith({
+      code: 'VALIDATION',
+      fields: { quantity: 'Expected number >= 1' },
+    });
+  });
+
+  it('parses validation output paths when attributes contain quoted tag closers', async () => {
+    const addToCart = form<
+      'cart/add',
+      { productId: string; quantity: number },
+      { code: 'VALIDATION'; fields: { quantity: string } }
+    >('cart/add');
+    const store = createQueryStore();
+    const root = new FakeMorphRoot();
+    const onError = vi.fn();
+    const fetch = vi.fn(async () => ({
+      status: 422,
+      async text() {
+        return '<fw-fragment target="product-form:p1"><output role="alert" data-debug="quantity > min" data-error-path="quantity">Expected number &gt;= 1</output></fw-fragment>';
       },
     }));
     const ctx = createSubmitContext({ fetch, root, store });

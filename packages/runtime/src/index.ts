@@ -24,6 +24,7 @@ import {
   readAttribute,
   readFragmentChunks,
   readQueryChunks,
+  tagClose,
   unescapeHtml,
 } from './wire-parser.js';
 import type { FragmentChunk, QueryChunk } from './wire-parser.js';
@@ -1149,8 +1150,10 @@ function isValidationFailure(status: number | undefined, ok: boolean | undefined
 }
 
 function parseMutationFailure(body: string): JsonValue {
-  const errorMatch = /<fw-error\b[^>]*>(?<json>[\s\S]*?)<\/fw-error>/.exec(body);
-  if (errorMatch?.groups?.json) return parseJsonOrUnknown(unescapeHtml(errorMatch.groups.json));
+  // SPEC.md §9.2: enhanced form failures travel as mutation wire HTML, so
+  // quoted tag delimiters in attributes must follow the shared wire parser.
+  const errorChunk = readFirstElementChunk(body, 'fw-error');
+  if (errorChunk) return parseJsonOrUnknown(unescapeHtml(errorChunk.content));
 
   const declaredFailure = parseDeclaredFailureOutput(body);
   if (declaredFailure) return declaredFailure;
@@ -1169,13 +1172,13 @@ function parseJsonOrUnknown(raw: string): JsonValue {
 }
 
 function parseDeclaredFailureOutput(body: string): JsonValue | null {
-  for (const match of body.matchAll(/<output\b(?<attrs>[^>]*)>(?<content>[\s\S]*?)<\/output>/g)) {
-    const code = readAttribute(match.groups?.attrs ?? '', 'data-error-code');
+  for (const output of readElementChunks(body, 'output')) {
+    const code = readAttribute(output.attrs, 'data-error-code');
     if (!code) continue;
 
     return {
       code,
-      data: parseOutputPayload(match.groups?.content ?? ''),
+      data: parseOutputPayload(output.content),
     };
   }
 
@@ -1185,14 +1188,47 @@ function parseDeclaredFailureOutput(body: string): JsonValue | null {
 function parseValidationFailureOutput(body: string): JsonValue | null {
   const fields: Record<string, string> = {};
 
-  for (const match of body.matchAll(/<output\b(?<attrs>[^>]*)>(?<content>[\s\S]*?)<\/output>/g)) {
-    const path = readAttribute(match.groups?.attrs ?? '', 'data-error-path');
+  for (const output of readElementChunks(body, 'output')) {
+    const path = readAttribute(output.attrs, 'data-error-path');
     if (!path) continue;
 
-    fields[path] = unescapeHtml(match.groups?.content ?? '').trim();
+    fields[path] = unescapeHtml(output.content).trim();
   }
 
   return Object.keys(fields).length > 0 ? { code: 'VALIDATION', fields } : null;
+}
+
+function readFirstElementChunk(
+  body: string,
+  tagName: string,
+): { attrs: string; content: string } | null {
+  return readElementChunks(body, tagName)[0] ?? null;
+}
+
+function readElementChunks(
+  body: string,
+  tagName: string,
+): Array<{ attrs: string; content: string }> {
+  const chunks: Array<{ attrs: string; content: string }> = [];
+  const openingTag = new RegExp(`<${tagName}\\b`, 'gi');
+
+  for (let match = openingTag.exec(body); match; match = openingTag.exec(body)) {
+    const openingEnd = tagClose(body, match.index + match[0].length);
+    if (openingEnd === undefined) break;
+
+    const closingTag = new RegExp(`</${tagName}\\s*>`, 'gi');
+    closingTag.lastIndex = openingEnd + 1;
+    const close = closingTag.exec(body);
+    if (!close) break;
+
+    chunks.push({
+      attrs: body.slice(match.index + match[0].length, openingEnd),
+      content: body.slice(openingEnd + 1, close.index),
+    });
+    openingTag.lastIndex = closingTag.lastIndex;
+  }
+
+  return chunks;
 }
 
 function parseOutputPayload(content: string): JsonValue {
