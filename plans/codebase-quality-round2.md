@@ -768,6 +768,17 @@ index.test.ts:4227 while here — it weakens the byte-for-byte claim) + acceptan
       instead); deduplicate `renderProductGrid`/`renderProductGridWithFailure` (:286 vs :436)
       and the two hand-rolled escapers (:548-554 → server html.ts); replace the inline CSRF
       secret (:54) with an obvious `EXAMPLE_ONLY_` name.
+      Partial evidence 2026-06-11: commerce `cart`, `productGrid`, and `orderHistory` declared
+      query loaders now read from `context.request.db` instead of fixture/default data, and throw
+      when invoked without request DB context. Static page hints explicitly use
+      `loadCartQuery(createCommerceDb())`, so loaders are not silently called without a request.
+      `examples/commerce/src/generated/graph.json` and graph emission now record the starter DB
+      count as `Jiso Commerce (0)`, matching the real source of truth. `app.test.ts` proves query
+      loaders observe mutation effects from the request DB and the generated graph stays
+      consistent. Same-session evidence:
+      `corepack pnpm --filter @jiso/example-commerce run emit-graph`,
+      `corepack pnpm exec vitest --run examples/commerce/src/app.test.ts`, and
+      `corepack pnpm run check`.
 - [x] **MED — Typecheck the example and spikes.** `examples/commerce` and three of four
       conformance spikes sit outside every tsconfig (root includes only `packages/**`), so the
       registry-augmentation showcase (generated/touch-graph.ts:43-50) may never be
