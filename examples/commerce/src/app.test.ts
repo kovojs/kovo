@@ -384,6 +384,17 @@ describe('commerce example', () => {
     );
   });
 
+  it('does not fall back to starter commerce data when loading product queries', async () => {
+    const db = createCommerceDb();
+    db.products = new Map([['custom', { id: 'custom', stock: 42, unitPrice: 777 }]]);
+    const request = { db, session: { id: 's-custom-query', user: { id: 'u-custom-query' } } };
+
+    await expect(Promise.resolve(productGridQuery.load({}, { request }))).resolves.toEqual({
+      items: [{ id: 'custom', stock: 42, unitPrice: 777 }],
+      nextCursor: null,
+    });
+  });
+
   it('renders cursor-paged product grid and order history with stable list keys', async () => {
     const db = createCommerceDb();
     const firstPage = loadProductGrid(db, { limit: 2 });

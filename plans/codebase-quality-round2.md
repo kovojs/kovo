@@ -1285,6 +1285,12 @@ index.test.ts:4227 while here — it weakens the byte-for-byte claim) + acceptan
       `corepack pnpm --filter @jiso/example-commerce run emit-graph`,
       `corepack pnpm exec vitest --run examples/commerce/src/app.test.ts`, and
       `corepack pnpm run check`.
+      Additional evidence 2026-06-12: `app.test.ts` now proves `productGridQuery.load` reads a
+      request DB with a custom product set instead of falling back to the starter
+      `createCommerceDb()` fixture, and `app.ts` uses the shared server HTML escapers instead of
+      local copies for commerce form/error rendering. Same-session evidence:
+      `pnpm exec vitest --run examples/commerce/src/app.test.ts` and
+      `pnpm exec vp check examples/commerce/src/app.ts examples/commerce/src/app.test.ts examples/commerce/src/generated/graph.json examples/commerce/src/generated/touch-graph.ts plans/codebase-quality-round2.md`.
 - [x] **MED — Typecheck the example and spikes.** `examples/commerce` and three of four
       conformance spikes sit outside every tsconfig (root includes only `packages/**`), so the
       registry-augmentation showcase (generated/touch-graph.ts:43-50) may never be

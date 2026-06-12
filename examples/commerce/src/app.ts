@@ -5,6 +5,8 @@ import {
   errorBoundary,
   csrfField,
   csrfToken,
+  escapeAttribute,
+  escapeHtml,
   guards,
   i18n,
   meta,
@@ -907,14 +909,6 @@ function renderAddToCartFailureFragment(
   if (!product) return renderAddToCartError(failure);
 
   return renderAddToCartForm(product, failure, request);
-}
-
-function escapeAttribute(value: string): string {
-  return value.replaceAll('&', '&amp;').replaceAll('"', '&quot;').replaceAll('<', '&lt;');
-}
-
-function escapeHtml(value: string): string {
-  return value.replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;');
 }
 
 function productIdFromRawInput(rawInput: unknown): string | undefined {

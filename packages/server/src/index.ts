@@ -112,6 +112,7 @@ export { csrfField, csrfToken } from './csrf.js';
 export type { CsrfOptions, CsrfValidationOptions } from './csrf.js';
 export type { ServerErrorDiagnosticContext, ServerErrorHandler } from './diagnostics.js';
 export { guards, session } from './guards.js';
+export { escapeAttribute, escapeHtml } from './html.js';
 export type {
   AuthenticatedRequest,
   ForbiddenContext,
