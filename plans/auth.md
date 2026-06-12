@@ -117,6 +117,16 @@ Scope: SPEC additions (session population, guard-failure contract, mutation resp
       evidence: `pnpm exec vitest --run examples/commerce/src/app.test.ts examples/commerce/src/app-shell.test.ts`.
       Remaining gap unchanged: commerce still uses the deterministic Better Auth-like test surface
       rather than the pinned real Better Auth package, and B7 remains open.
+      Partial commerce shell evidence 2026-06-12: `examples/commerce/src/app.ts` now renders the
+      guarded adapter sign-out form from the `role('admin')` page after `commerceSession.parse`,
+      keeping the credential lifecycle on Jiso mutation forms per SPEC §6.5 and §10.3. The shell
+      HTTP test covers member sign-in followed by `/admin` returning the 403 role-failure path,
+      admin sign-in rendering the `/admin` page with `/_m/auth/sign-out`, and the existing guarded
+      sign-out POST clearing the session cookie. Same-session evidence:
+      `pnpm exec vitest --run examples/commerce/src/app.test.ts examples/commerce/src/app-shell.test.ts`.
+      Remaining gap unchanged: commerce still uses the deterministic Better Auth-like test surface
+      rather than the pinned real Better Auth package, there is still no separate `examples/reference`
+      app, and B7 remains open.
 
 ## Background — the gap
 

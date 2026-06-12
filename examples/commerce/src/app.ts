@@ -558,7 +558,7 @@ export const commerceAdminRoute = route('/admin', {
   guard: commerceAdminGuard,
   page(_context, request: CommerceAuthRequest) {
     const currentSession = commerceSession.parse(request);
-    return `admin:${currentSession.user.id}`;
+    return `admin:${currentSession.user.id}${renderCommerceLogoutForm(request)}`;
   },
 });
 

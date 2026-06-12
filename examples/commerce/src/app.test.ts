@@ -651,11 +651,15 @@ describe('commerce example', () => {
     );
     const adminCookie = cookiePair(setCookieHeaders(adminSignIn)[0] ?? '');
 
-    await expect(renderCommerceAdminRoute(commerceAuthRequest(adminCookie))).resolves.toEqual({
-      body: '<main>admin:u1</main>',
-      headers: { 'Content-Type': 'text/html; charset=utf-8' },
-      status: 200,
-    });
+    await expect(renderCommerceAdminRoute(commerceAuthRequest(adminCookie))).resolves.toMatchObject(
+      {
+        body: expect.stringContaining(
+          '<main>admin:u1<form method="post" action="/_m/auth/sign-out"',
+        ),
+        headers: { 'Content-Type': 'text/html; charset=utf-8' },
+        status: 200,
+      },
+    );
   });
 
   it('predicts cart count with the hand-written addToCart optimistic transform', () => {

@@ -161,6 +161,30 @@ describe('commerce app shell HTTP entry', () => {
     expect(failedBody).toContain('data-error-code="INVALID_CREDENTIALS"');
     expect(failedBody).toContain('name="next" value="/admin"');
 
+    const memberLoginForm = new URLSearchParams();
+    memberLoginForm.set('csrf', csrfToken(shellLoginCsrfRequest(shell.db), commerceAuthCsrf));
+    memberLoginForm.set('email', 'grace@example.com');
+    memberLoginForm.set('password', 'correct');
+    memberLoginForm.set('next', '/admin');
+    const memberLogin = await fetch(`${origin}/_m/auth/sign-in`, {
+      body: memberLoginForm,
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      method: 'POST',
+      redirect: 'manual',
+    });
+    const memberSessionCookie = cookiePair(memberLogin.headers.get('set-cookie') ?? '');
+
+    expect(memberLogin.status).toBe(303);
+    expect(memberLogin.headers.get('location')).toBe('/admin');
+    expect(memberSessionCookie).toBe('jiso_commerce_session=session-u2');
+
+    const memberAdmin = await fetch(`${origin}/admin`, {
+      headers: { cookie: memberSessionCookie },
+      redirect: 'manual',
+    });
+
+    expect(memberAdmin.status).toBe(403);
+
     const loginForm = new URLSearchParams();
     loginForm.set('csrf', csrfToken(shellLoginCsrfRequest(shell.db), commerceAuthCsrf));
     loginForm.set('email', 'ada@example.com');
@@ -185,7 +209,9 @@ describe('commerce app shell HTTP entry', () => {
     const adminBody = await admin.text();
 
     expect(admin.status, adminBody).toBe(200);
-    expect(adminBody).toContain('<main>admin:u1</main>');
+    expect(adminBody).toContain('<main>admin:u1');
+    expect(adminBody).toContain('action="/_m/auth/sign-out"');
+    expect(adminBody).toContain('data-mutation="auth/sign-out"');
 
     const logoutForm = new URLSearchParams();
     logoutForm.set(
