@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { createJisoTestHarness } from './index.js';
+import { createJisoTestHarness } from './harness.js';
 import { createPageAssertion } from './page.js';
 
 describe('@jiso/test page assertions', () => {

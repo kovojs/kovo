@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import { mutation, s } from '@jiso/server';
 
-import { createJisoTestHarness } from './index.js';
+import { createJisoTestHarness } from './harness.js';
 import { createFakeDb } from './test-fixtures.js';
 
 describe('@jiso/test harness context', () => {

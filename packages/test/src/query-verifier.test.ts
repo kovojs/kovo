@@ -2,7 +2,8 @@ import { describe, expect, it } from 'vitest';
 
 import { domain, query, s, type QueryLoadContext } from '@jiso/server';
 
-import { createDbVerifier, createJisoTestHarness } from './index.js';
+import { createJisoTestHarness } from './harness.js';
+import { createDbVerifier } from './verifier.js';
 import { createFakeDb, expectedDiagnostic, type FakeDb } from './test-fixtures.js';
 
 describe('@jiso/test query verifier', () => {

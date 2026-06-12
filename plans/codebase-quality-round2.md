@@ -4182,6 +4182,13 @@ As each phase splits a source module, split its tests in the same commit.
       `corepack pnpm exec vitest --run packages/test/src/package-exports.test.ts`,
       `corepack pnpm exec vp check examples/commerce/src/app.test.ts examples/commerce/src/source-truth.test.ts plans/codebase-quality-round2.md`,
       and `git diff --check`.
+      Additional evidence 2026-06-12: the `@jiso/test` package's own seam-named suites now
+      import helpers from their owning modules instead of the local root `./index.js` barrel:
+      harness tests use `harness.ts`, verifier/SQL observer tests use `verifier.ts`, PGlite tests
+      use `pglite.ts`, and runner tests use `test-case.ts`. `package-exports.test.ts` remains
+      the only root-barrel consumer so it can keep pinning public export parity. Same-session
+      evidence:
+      `pnpm exec vitest --run packages/test/src/*.test.ts examples/commerce/src/*.test.ts`.
       Additional evidence 2026-06-12: Drizzle runtime/static package-surface coverage moved from
       `packages/drizzle/src/index.test.ts` into `packages/drizzle/src/runtime-surface.test.ts`,
       leaving static extraction coverage in the Drizzle monolith. Same-session evidence:

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { jisoTest } from './index.js';
+import { jisoTest } from './test-case.js';
 
 describe('@jiso/test case wrapper', () => {
   it('runs a provided callback with a harness context', async () => {

@@ -2,7 +2,8 @@ import { describe, expect, it } from 'vitest';
 
 import { mutation, s } from '@jiso/server';
 
-import { createJisoTestHarness, createPgliteTestDb, type PgliteTestDb } from './index.js';
+import { createJisoTestHarness } from './harness.js';
+import { createPgliteTestDb, type PgliteTestDb } from './pglite.js';
 import { expectedDiagnostic } from './test-fixtures.js';
 
 describe('@jiso/test PGlite harness integration', () => {

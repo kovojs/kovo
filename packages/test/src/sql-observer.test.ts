@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { createDbVerifier } from './index.js';
+import { createDbVerifier } from './verifier.js';
 import { expectedDiagnostic } from './test-fixtures.js';
 
 interface SqlDb {
