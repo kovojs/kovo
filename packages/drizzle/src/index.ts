@@ -1440,11 +1440,35 @@ function queryInstanceKey(
   body: string,
   tables: ReadonlyMap<string, readonly ExtractedTable[]>,
 ): Pick<QueryFact, 'instanceKey'> | null {
-  const where = /\.where\s*\(\s*eq\s*\(\s*(?<left>[^,]+?)\s*,\s*(?<right>[^)]+?)\s*\)/.exec(body);
-  const left = where?.groups?.left;
-  const right = where?.groups?.right;
-  if (!left || !right) return null;
+  // SPEC §10-§11: query keys must come from real predicates, not comment/string text.
+  return (
+    queryBodyCallExpressions(body, (call) => {
+      if (propertyAccessCallName(call) !== 'where') return [];
 
+      const predicate = call.getArguments()[0];
+      if (!predicate || !Node.isCallExpression(predicate)) return [];
+
+      const expression = predicate.getExpression();
+      if (!Node.isIdentifier(expression) || expression.getText() !== 'eq') return [];
+
+      const [left, right] = predicate.getArguments();
+      if (!left || !right) return [];
+
+      const instanceKey = queryInstanceKeyFromEqArgs(
+        left.getText().trim(),
+        right.getText().trim(),
+        tables,
+      );
+      return instanceKey ? [instanceKey] : [];
+    })[0] ?? null
+  );
+}
+
+function queryInstanceKeyFromEqArgs(
+  left: string,
+  right: string,
+  tables: ReadonlyMap<string, readonly ExtractedTable[]>,
+): Pick<QueryFact, 'instanceKey'> | null {
   for (const side of [left, right]) {
     const tableKey = tableKeyExpression(side.trim(), tables);
     if (!tableKey) continue;

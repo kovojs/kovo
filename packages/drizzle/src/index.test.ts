@@ -1071,6 +1071,36 @@ export interface CommerceInvalidationSets {
     ]);
   });
 
+  it('does not infer query instance keys from comments and strings', () => {
+    const facts = extractQueryFactsFromSource([
+      {
+        fileName: 'product.queries.ts',
+        source: `
+          export const products = pgTable("products", { id: text("id").primaryKey(), name: text("name").notNull() }, jiso({ domain: "product", key: "id" }));
+
+          export const productQuery = query("product", {
+            load(input, db) {
+              const fixture = ".where(eq(products.id, input.id))";
+              // return db.select({ name: products.name }).from(products).where(eq(products.id, input.id));
+              return db.select({ name: products.name }).from(products);
+            },
+          });
+        `,
+      },
+    ]);
+
+    expect(facts).toEqual([
+      {
+        query: 'product',
+        reads: ['product'],
+        shape: {
+          name: 'string',
+        },
+        site: 'product.queries.ts:4',
+      },
+    ]);
+  });
+
   it('marks unresolved computed projections as FW406 instead of guessing from selected aliases', () => {
     const facts = extractQueryFactsFromSource([
       {
