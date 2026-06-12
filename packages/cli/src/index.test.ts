@@ -54,11 +54,17 @@ describe('fw add', () => {
     const manifest = JSON.parse(
       readFileSync(new URL('../../ui/package.json', import.meta.url), 'utf8'),
     ) as { exports: Record<string, string>; jiso: { vendoredSource: boolean }; name: string };
+    const cliManifest = JSON.parse(
+      readFileSync(new URL('../package.json', import.meta.url), 'utf8'),
+    ) as {
+      dependencies: Record<string, string>;
+    };
     const exportedComponents = Object.keys(manifest.exports)
       .filter((subpath) => subpath !== '.')
       .map((subpath) => subpath.slice(2))
       .sort();
 
+    expect(cliManifest.dependencies['@jiso/ui']).toBe('workspace:*');
     expect(manifest.name).toBe('@jiso/ui');
     expect(manifest.jiso.vendoredSource).toBe(true);
     expect(Object.keys(vendoredUiComponents).sort()).toEqual(exportedComponents);
@@ -86,17 +92,7 @@ describe('fw add', () => {
       expect(result.diagnostics, name).not.toContainEqual(
         expect.objectContaining({ code: 'FW235' }),
       );
-      if (name !== 'table') {
-        expect(result.diagnostics, name).toEqual([]);
-      } else {
-        expect(result.diagnostics, name).toEqual([
-          expect.objectContaining({
-            code: 'FW225',
-            message:
-              'JSX nesting violates the HTML content model. <tr> must be inside a table section or table',
-          }),
-        ]);
-      }
+      expect(result.diagnostics, name).toEqual([]);
     }
   });
 

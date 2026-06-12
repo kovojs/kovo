@@ -1,4 +1,5 @@
 import { existsSync, readFileSync, realpathSync } from 'node:fs';
+import { createRequire } from 'node:module';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -14,6 +15,7 @@ interface UiPackageManifest {
 }
 
 const catalogModuleDir = dirname(realpathSync(fileURLToPath(import.meta.url)));
+const catalogRequire = createRequire(import.meta.url);
 const uiPackageRoot = findUiPackageRoot(catalogModuleDir);
 const uiPackageManifestPath = join(uiPackageRoot, 'package.json');
 const uiPackageManifest = readUiPackageManifest();
@@ -52,6 +54,9 @@ function readUiPackageManifest(): UiPackageManifest {
 }
 
 function findUiPackageRoot(moduleDir: string): string {
+  const packageRoot = resolveInstalledUiPackageRoot();
+  if (packageRoot !== undefined) return packageRoot;
+
   for (const candidate of [
     join(moduleDir, '..', '..', 'ui'),
     join(moduleDir, '..', '..', '..', 'packages', 'ui'),
@@ -60,6 +65,25 @@ function findUiPackageRoot(moduleDir: string): string {
   }
 
   throw new Error(`@jiso/ui package source was not found from ${moduleDir}`);
+}
+
+function resolveInstalledUiPackageRoot(): string | undefined {
+  try {
+    return findPackageRoot(dirname(realpathSync(catalogRequire.resolve('@jiso/ui'))));
+  } catch {
+    return undefined;
+  }
+}
+
+function findPackageRoot(startDir: string): string {
+  let current = startDir;
+
+  while (true) {
+    if (existsSync(join(current, 'package.json'))) return current;
+    const parent = dirname(current);
+    if (parent === current) throw new Error(`package root was not found from ${startDir}`);
+    current = parent;
+  }
 }
 
 function uiPackageComponentEntries(manifest: UiPackageManifest): readonly [string, string][] {

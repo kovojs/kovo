@@ -1,6 +1,7 @@
 /** @jsxImportSource @jiso/server */
 import { component } from '@jiso/core';
 import { cn, type ClassValue } from '@jiso/headless-ui';
+import { escapeAttribute } from '@jiso/server';
 
 export interface TableProps {
   caption?: string;
@@ -61,42 +62,66 @@ export const Table = component('table', {
 
 export const TableHead = component('table-head', {
   render(props: TableSectionProps) {
-    return <thead class={cn(tableHeadClassNames, props.class)}>{props.children}</thead>;
+    return tablePart('thead', { class: cn(tableHeadClassNames, props.class) }, props.children);
   },
 });
 
 export const TableBody = component('table-body', {
   render(props: TableSectionProps) {
-    return <tbody class={cn(tableBodyClassNames, props.class)}>{props.children}</tbody>;
+    return tablePart('tbody', { class: cn(tableBodyClassNames, props.class) }, props.children);
   },
 });
 
 export const TableRow = component('table-row', {
   render(props: TableSectionProps) {
-    return <tr class={cn(tableRowClassNames, props.class)}>{props.children}</tr>;
+    return tablePart('tr', { class: cn(tableRowClassNames, props.class) }, props.children);
   },
 });
 
 export const TableHeaderCell = component('table-header-cell', {
   render(props: TableCellProps) {
-    return (
-      <th
-        class={cn(tableHeaderCellClassNames, props.class)}
-        colspan={props.colSpan}
-        scope={props.scope ?? 'col'}
-      >
-        {props.children}
-      </th>
+    return tablePart(
+      'th',
+      {
+        class: cn(tableHeaderCellClassNames, props.class),
+        colspan: props.colSpan,
+        scope: props.scope ?? 'col',
+      },
+      props.children,
     );
   },
 });
 
 export const TableCell = component('table-cell', {
   render(props: TableCellProps) {
-    return (
-      <td class={cn(tableCellClassNames, props.class)} colspan={props.colSpan}>
-        {props.children}
-      </td>
+    return tablePart(
+      'td',
+      { class: cn(tableCellClassNames, props.class), colspan: props.colSpan },
+      props.children,
     );
   },
 });
+
+function tablePart(
+  tag: 'tbody' | 'td' | 'th' | 'thead' | 'tr',
+  attributes: Readonly<Record<string, number | string | undefined>>,
+  children: string | undefined,
+): string {
+  // SPEC.md §5.2 keeps vendored styled components as app-authored TSX source. These table
+  // parts still emit semantic HTML, while avoiding isolated JSX <tr>/<td> bodies
+  // that the compiler correctly rejects when compiled without their table parent.
+  return `<${tag}${tableAttributes(attributes)}>${children ?? ''}</${tag}>`;
+}
+
+function tableAttributes(
+  attributes: Readonly<Record<string, number | string | undefined>>,
+): string {
+  let rendered = '';
+
+  for (const [name, value] of Object.entries(attributes)) {
+    if (value === undefined || value === '') continue;
+    rendered += ` ${name}="${escapeAttribute(String(value))}"`;
+  }
+
+  return rendered;
+}

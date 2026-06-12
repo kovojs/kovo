@@ -535,7 +535,7 @@ jiso-dialog` resolves dashed wire names and prints provenance including package,
       `pnpm --filter @jiso/headless-ui run lint:primitives`,
       `pnpm exec vp check packages/headless-ui/src/lib/token-sheet.ts packages/headless-ui/src/lib/token-sheet.test.ts packages/headless-ui/src/lib/class-names.ts packages/headless-ui/src/lib/class-names.test.ts packages/headless-ui/src/lib/variants.ts packages/headless-ui/src/lib/variants.test.ts packages/headless-ui/src/lib/foundation-exports.test.ts packages/headless-ui/src/lib/index.ts packages/headless-ui/src/index.ts plans/ui.md`,
       and `git diff --check`.
-- [ ] U2 `fw add <component>` vendoring pipeline (source copied into the app; components register under app-local bare names).
+- [x] U2 `fw add <component>` vendoring pipeline (source copied into the app; components register under app-local bare names).
       Partial package evidence 2026-06-12: `packages/ui/package.json` introduces the
       source-only `@jiso/ui` workspace package with TSX exports for button, badge, card,
       and sheet, plus package tests asserting the component sources contain TSX component
@@ -543,8 +543,20 @@ jiso-dialog` resolves dashed wire names and prints provenance including package,
       §5.2. Same-session evidence:
       `pnpm --filter @jiso/ui exec vitest --run`,
       `pnpm exec vp check packages/ui/package.json packages/ui/tsconfig.json packages/ui/src/index.tsx packages/ui/src/button.tsx packages/ui/src/badge.tsx packages/ui/src/card.tsx packages/ui/src/sheet.tsx packages/ui/src/index.test.tsx pnpm-lock.yaml plans/ui.md`,
-      and `git diff --check`. U2 remains open because `fw add` still needs to consume this
+      and `git diff --check`. At that point, `fw add` still needed to consume this
       package-shaped catalog and run vendored output through the FW235/TSX authoring gate.
+      Completion evidence 2026-06-12: `packages/cli/src/add-catalog.ts` resolves the
+      package-shaped `@jiso/ui` source catalog through the CLI's installed dependency before
+      falling back to the monorepo path, while `packages/cli/package.json` and `pnpm-lock.yaml`
+      wire `fw` to `@jiso/ui` for standalone distribution. `packages/ui/src/table.tsx`
+      now emits its table section/row/cell parts as semantic HTML helpers so the exact
+      package-sourced `table.tsx` compiles as app-authored TSX without FW225 or FW235, while
+      retaining the gallery-rendered semantic table output. Same-session evidence:
+      `pnpm exec vitest --run packages/cli/src/index.test.ts -t "fw add"`,
+      `pnpm --filter @jiso/ui exec vitest --run`,
+      `pnpm --filter @jiso/example-gallery test`,
+      `pnpm exec vp check packages/cli/package.json packages/cli/src/add-catalog.ts packages/cli/src/index.test.ts packages/ui/src/table.tsx packages/ui/src/index.test.tsx examples/gallery/src/demo-fixtures.tsx examples/gallery/src/demo-fixtures.test.ts examples/gallery/src/behavior-contracts.test.ts plans/ui.md IMPLEMENT_v1.md pnpm-lock.yaml`,
+      and `git diff --check`.
 - [ ] U3 styled components trailing H1 + pure-markup set (button, badge, card, kbd, alert, table, breadcrumb, skeleton, sheet/drawer over dialog).
       Partial package evidence 2026-06-12: `packages/ui/src/button.tsx`,
       `packages/ui/src/badge.tsx`, and `packages/ui/src/card.tsx` add the first pure-markup
@@ -983,14 +995,20 @@ Behavior contracts (state attributes, ARIA, keyboard maps, change reasons) are p
     `pnpm exec vitest --run packages/cli/src/index.test.ts -t "fw add"`,
     `pnpm --filter @jiso/ui exec vitest --run`,
     `pnpm exec vp check packages/cli/src/add-catalog.ts packages/cli/src/index.test.ts plans/ui.md`,
-    and `git diff --check`. U2 remains open because the exact package-sourced `table.tsx`
-    currently records a known FW225 content-model diagnostic for its isolated `TableRow`
-    component under the full TSX compile gate, and standalone CLI/package distribution wiring
-    still needs a final pass.
-  - Remaining before U2 can be checked complete: resolve the package-sourced `table.tsx`
-    FW225 app-source compile gap, decide the standalone distribution link between `fw` and
-    `@jiso/ui`, and keep the CLI vendored catalog synchronized with package source in that
-    final package asset shape.
+    and `git diff --check`.
+  - Completion evidence 2026-06-12: `packages/cli/package.json` now depends on the
+    source-only `@jiso/ui` package and `packages/cli/src/add-catalog.ts` resolves that
+    installed package before falling back to the monorepo path, so the standalone `fw`
+    package has a catalog source link. `packages/ui/src/table.tsx` now keeps semantic table
+    output while avoiding isolated JSX `<tr>`/cell render bodies, so every package-sourced
+    catalog entry compiles cleanly as app-authored TSX with no FW225 or FW235 diagnostics.
+    Same-session evidence:
+    `pnpm exec vitest --run packages/cli/src/index.test.ts -t "fw add"`,
+    `pnpm --filter @jiso/ui exec vitest --run`,
+    `pnpm --filter @jiso/example-gallery test`,
+    `pnpm exec vp check packages/cli/package.json packages/cli/src/add-catalog.ts packages/cli/src/index.test.ts packages/ui/src/table.tsx packages/ui/src/index.test.tsx examples/gallery/src/demo-fixtures.tsx examples/gallery/src/demo-fixtures.test.ts examples/gallery/src/behavior-contracts.test.ts plans/ui.md IMPLEMENT_v1.md pnpm-lock.yaml`,
+    and `git diff --check`. U2 is complete; U3 remains open for the remaining
+    gallery/conformance gates.
   - Remaining before U3 can be checked complete: verify the styled surface through the remaining
     gallery/conformance gates rather than only package, CLI copy, and browser-free fixture tests.
 - **U3–U5 — components**, trailing each H-wave by one step; U3 also carries the pure-markup set that needs no behavior layer (button, badge, card, kbd, alert, table, breadcrumb, skeleton) and sheet/drawer as styled dialog variants.
