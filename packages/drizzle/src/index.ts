@@ -21,6 +21,7 @@ import {
   type CallExpression,
   type CompilerOptions,
   type ObjectLiteralExpression,
+  type ParameterDeclaration,
   type SourceFile,
   type Symbol as MorphSymbol,
 } from 'ts-morph';
@@ -179,7 +180,9 @@ function extractTouchGraphFromPreparedFiles(
     const callsByName = new Map(
       functions.map((fn) => [
         fn.name,
-        extractLocalFunctionCalls(fn.body).filter((call) => functionsByName.has(call)),
+        (fn.localCalls ?? extractLocalFunctionCalls(fn.body)).filter((call) =>
+          functionsByName.has(call),
+        ),
       ]),
     );
     const summaries = new Map(
@@ -657,6 +660,13 @@ function bodySourceStart(body: Node): number {
   return Node.isBlock(body) ? body.getStart() + 1 : body.getStart();
 }
 
+function callExpressionsInNode(body: Node): CallExpression[] {
+  return [
+    ...(Node.isCallExpression(body) ? [body] : []),
+    ...body.getDescendantsOfKind(SyntaxKind.CallExpression),
+  ];
+}
+
 function isProjectDrizzleReceiverIdentifier(
   node: Node | undefined,
   receivers: { names: ReadonlySet<string>; symbolKeys: ReadonlySet<string> },
@@ -1089,11 +1099,17 @@ type ExtractedTableDeclaration = JisoTableAnnotation & {
 interface ExtractedFunction {
   body: string;
   bodyStart: number;
+  localCalls?: readonly string[];
   name: string;
   receiverNames?: readonly string[];
   unresolvedCalls?: readonly ExternalDbArgumentCall[];
   writeCalls?: readonly ExtractedWriteCall[];
 }
+
+type ParsedExtractedFunction = ExtractedFunction & {
+  bodyNode: Node;
+  callback: Node;
+};
 
 interface ExtractedQueryDefinition {
   diagnostics?: readonly TouchGraphDiagnostic[];
@@ -2460,15 +2476,34 @@ function unwrappedTsExpression(expression: ts.Expression): ts.Expression {
 }
 
 function extractFunctions(source: string): ExtractedFunction[] {
-  return withParsedSourceFile(source, (sourceFile) => [
-    ...extractFunctionDeclarations(sourceFile),
-    ...extractVariableAssignedFunctions(sourceFile),
-    ...extractDomainWriteCallbacks(sourceFile),
-  ]);
+  return withParsedSourceFile(source, (sourceFile) => {
+    const functions = [
+      ...extractFunctionDeclarations(sourceFile),
+      ...extractVariableAssignedFunctions(sourceFile),
+      ...extractDomainWriteCallbacks(sourceFile),
+    ];
+    const localFunctionNames = new Set(functions.map((fn) => fn.name));
+
+    return functions.map((fn): ExtractedFunction => {
+      const receiverNames = new Set(fn.receiverNames ?? sourceDrizzleReceiverNames(fn.callback));
+      const { bodyNode, callback: _callback, ...extracted } = fn;
+
+      return {
+        ...extracted,
+        localCalls: extractLocalFunctionCallsFromBody(bodyNode),
+        receiverNames: [...receiverNames],
+        unresolvedCalls: [
+          ...extractExternalDbArgumentCallsFromBody(bodyNode, receiverNames, localFunctionNames),
+          ...extractUnclassifiedDrizzleReceiverCallsFromBody(bodyNode, receiverNames),
+        ],
+        writeCalls: extractDrizzleWriteCallsFromBody(bodyNode, receiverNames),
+      };
+    });
+  });
 }
 
-function extractFunctionDeclarations(sourceFile: SourceFile): ExtractedFunction[] {
-  const functions: ExtractedFunction[] = [];
+function extractFunctionDeclarations(sourceFile: SourceFile): ParsedExtractedFunction[] {
+  const functions: ParsedExtractedFunction[] = [];
 
   for (const declaration of sourceFile.getDescendantsOfKind(SyntaxKind.FunctionDeclaration)) {
     const name = declaration.getName();
@@ -2480,8 +2515,8 @@ function extractFunctionDeclarations(sourceFile: SourceFile): ExtractedFunction[
   return functions;
 }
 
-function extractVariableAssignedFunctions(sourceFile: SourceFile): ExtractedFunction[] {
-  const functions: ExtractedFunction[] = [];
+function extractVariableAssignedFunctions(sourceFile: SourceFile): ParsedExtractedFunction[] {
+  const functions: ParsedExtractedFunction[] = [];
 
   for (const declaration of sourceFile.getVariableDeclarations()) {
     const name = declaration.getNameNode();
@@ -2497,8 +2532,8 @@ function extractVariableAssignedFunctions(sourceFile: SourceFile): ExtractedFunc
   return functions;
 }
 
-function extractDomainWriteCallbacks(sourceFile: SourceFile): ExtractedFunction[] {
-  const callbacks: ExtractedFunction[] = [];
+function extractDomainWriteCallbacks(sourceFile: SourceFile): ParsedExtractedFunction[] {
+  const callbacks: ParsedExtractedFunction[] = [];
 
   for (const declaration of sourceFile.getVariableDeclarations()) {
     const domainName = declaration.getNameNode();
@@ -2544,7 +2579,7 @@ function writeCallbackFunction(
   );
 }
 
-function extractedFunctionFromCallback(name: string, callback: Node): ExtractedFunction {
+function extractedFunctionFromCallback(name: string, callback: Node): ParsedExtractedFunction {
   const body = functionBody(callback);
   const bodyStart = Node.isBlock(body) ? body.getStart() + 1 : body.getStart();
   const bodyEnd = Node.isBlock(body) ? body.getEnd() - 1 : body.getEnd();
@@ -2552,9 +2587,11 @@ function extractedFunctionFromCallback(name: string, callback: Node): ExtractedF
 
   return {
     body: bodyText,
+    bodyNode: body,
     bodyStart,
+    callback,
     name,
-    receiverNames: sourceDrizzleReceiverNames(callback, bodyText),
+    receiverNames: sourceDrizzleReceiverNames(callback),
   };
 }
 
@@ -2574,20 +2611,24 @@ function functionBody(callback: Node): Node {
 function extractLocalFunctionCalls(source: string): string[] {
   // SPEC §10-§11: helper names in comments/strings must not fold unrelated touch facts.
   return withParsedFunctionBodySource(source, ({ sourceFile }) => {
-    const calls: string[] = [];
-
-    for (const call of sourceFile.getDescendantsOfKind(SyntaxKind.CallExpression)) {
-      const expression = call.getExpression();
-      if (!Node.isIdentifier(expression)) continue;
-
-      const name = expression.getText();
-      if (IGNORED_LOCAL_CALL_NAMES.has(name)) continue;
-
-      calls.push(name);
-    }
-
-    return [...new Set(calls)];
+    return extractLocalFunctionCallsFromBody(sourceFile);
   });
+}
+
+function extractLocalFunctionCallsFromBody(body: Node): string[] {
+  const calls: string[] = [];
+
+  for (const call of callExpressionsInNode(body)) {
+    const expression = call.getExpression();
+    if (!Node.isIdentifier(expression)) continue;
+
+    const name = expression.getText();
+    if (IGNORED_LOCAL_CALL_NAMES.has(name)) continue;
+
+    calls.push(name);
+  }
+
+  return [...new Set(calls)];
 }
 
 function extractDrizzleWriteCalls(
@@ -2596,35 +2637,43 @@ function extractDrizzleWriteCalls(
 ): ExtractedWriteCall[] {
   // SPEC §10-§11: source text in comments/strings must not fabricate touch-graph facts.
   return withParsedFunctionBodySource(source, ({ bodyOffset, sourceFile }) => {
-    const calls: ExtractedWriteCall[] = [];
-
-    for (const call of sourceFile.getDescendantsOfKind(SyntaxKind.CallExpression)) {
-      if (!isDrizzleWriteCall(call)) continue;
-
-      const expression = call.getExpression();
-      const operation = staticAccessName(expression);
-      const receiver = staticAccessExpression(expression);
-      if (!operation || !receiver) continue;
-      if (!isSourceDrizzleReceiverIdentifier(receiver, receiverNames)) continue;
-
-      const chain = drizzleWriteChainRoot(call);
-      const start = call.getStart() - bodyOffset;
-      const tableExpression = call.getArguments()[0]?.getText().trim();
-      if (start < 0 || !tableExpression) continue;
-
-      calls.push({
-        index: start,
-        operation,
-        predicateFacts: extractPredicateFactsFromWriteChain(chain),
-        readSources: extractReadSourcesFromWriteChain(chain, operation, (node) =>
-          node.getText().trim(),
-        ),
-        tableExpression,
-      });
-    }
-
-    return calls;
+    return extractDrizzleWriteCallsFromBody(sourceFile, receiverNames, bodyOffset);
   });
+}
+
+function extractDrizzleWriteCallsFromBody(
+  body: Node,
+  receiverNames: ReadonlySet<string>,
+  bodyOffset = bodySourceStart(body),
+): ExtractedWriteCall[] {
+  const calls: ExtractedWriteCall[] = [];
+
+  for (const call of callExpressionsInNode(body)) {
+    if (!isDrizzleWriteCall(call)) continue;
+
+    const expression = call.getExpression();
+    const operation = staticAccessName(expression);
+    const receiver = staticAccessExpression(expression);
+    if (!operation || !receiver) continue;
+    if (!isSourceDrizzleReceiverIdentifier(receiver, receiverNames)) continue;
+
+    const chain = drizzleWriteChainRoot(call);
+    const start = call.getStart() - bodyOffset;
+    const tableExpression = call.getArguments()[0]?.getText().trim();
+    if (start < 0 || !tableExpression) continue;
+
+    calls.push({
+      index: start,
+      operation,
+      predicateFacts: extractPredicateFactsFromWriteChain(chain),
+      readSources: extractReadSourcesFromWriteChain(chain, operation, (node) =>
+        node.getText().trim(),
+      ),
+      tableExpression,
+    });
+  }
+
+  return calls;
 }
 
 function withParsedFunctionBodySource<T>(
@@ -2649,27 +2698,39 @@ function extractExternalDbArgumentCalls(
 ): ExternalDbArgumentCall[] {
   // SPEC §10-§11: helper-call text in comments/strings/templates must not fabricate FW406 facts.
   return withParsedFunctionBodySource(source, ({ bodyOffset, sourceFile }) => {
-    const calls: ExternalDbArgumentCall[] = [];
+    return extractExternalDbArgumentCallsFromBody(
+      sourceFile,
+      receiverNames,
+      localFunctionNames,
+      bodyOffset,
+    );
+  });
+}
 
-    for (const call of sourceFile.getDescendantsOfKind(SyntaxKind.CallExpression)) {
-      const expression = call.getExpression();
-      if (!Node.isIdentifier(expression)) continue;
+function extractExternalDbArgumentCallsFromBody(
+  body: Node,
+  receiverNames: ReadonlySet<string>,
+  localFunctionNames: ReadonlySet<string>,
+  bodyOffset = bodySourceStart(body),
+): ExternalDbArgumentCall[] {
+  const calls: ExternalDbArgumentCall[] = [];
 
-      const name = expression.getText();
-      if (IGNORED_LOCAL_CALL_NAMES.has(name) || localFunctionNames.has(name)) continue;
+  for (const call of callExpressionsInNode(body)) {
+    const expression = call.getExpression();
+    if (!Node.isIdentifier(expression)) continue;
 
-      if (
-        !call.getArguments().some((arg) => isSourceDrizzleReceiverIdentifier(arg, receiverNames))
-      ) {
-        continue;
-      }
+    const name = expression.getText();
+    if (IGNORED_LOCAL_CALL_NAMES.has(name) || localFunctionNames.has(name)) continue;
 
-      const index = call.getStart() - bodyOffset;
-      if (index >= 0) calls.push({ index, name });
+    if (!call.getArguments().some((arg) => isSourceDrizzleReceiverIdentifier(arg, receiverNames))) {
+      continue;
     }
 
-    return calls;
-  });
+    const index = call.getStart() - bodyOffset;
+    if (index >= 0) calls.push({ index, name });
+  }
+
+  return calls;
 }
 
 function extractUnclassifiedDrizzleReceiverCalls(
@@ -2688,22 +2749,30 @@ function extractReceiverMutationCalls(
 ): ExternalDbArgumentCall[] {
   // SPEC §10-§11: string/template text cannot fabricate unresolved touch-graph surfaces.
   return withParsedFunctionBodySource(source, ({ bodyOffset, sourceFile }) => {
-    const calls: ExternalDbArgumentCall[] = [];
-
-    for (const call of sourceFile.getDescendantsOfKind(SyntaxKind.CallExpression)) {
-      const expression = call.getExpression();
-      const name = staticAccessName(expression);
-      if (!name || !UNCLASSIFIED_DRIZZLE_RECEIVER_MUTATION_METHODS.has(name)) continue;
-
-      const receiver = staticAccessExpression(expression);
-      if (!isSourceDrizzleReceiverIdentifier(receiver, receiverNames)) continue;
-
-      const index = call.getStart() - bodyOffset;
-      if (index >= 0) calls.push({ index, name });
-    }
-
-    return calls;
+    return extractReceiverMutationCallsFromBody(sourceFile, receiverNames, bodyOffset);
   });
+}
+
+function extractReceiverMutationCallsFromBody(
+  body: Node,
+  receiverNames: ReadonlySet<string>,
+  bodyOffset = bodySourceStart(body),
+): ExternalDbArgumentCall[] {
+  const calls: ExternalDbArgumentCall[] = [];
+
+  for (const call of callExpressionsInNode(body)) {
+    const expression = call.getExpression();
+    const name = staticAccessName(expression);
+    if (!name || !UNCLASSIFIED_DRIZZLE_RECEIVER_MUTATION_METHODS.has(name)) continue;
+
+    const receiver = staticAccessExpression(expression);
+    if (!isSourceDrizzleReceiverIdentifier(receiver, receiverNames)) continue;
+
+    const index = call.getStart() - bodyOffset;
+    if (index >= 0) calls.push({ index, name });
+  }
+
+  return calls;
 }
 
 function extractRelationalQueryCalls(
@@ -2712,26 +2781,44 @@ function extractRelationalQueryCalls(
 ): ExternalDbArgumentCall[] {
   // SPEC §10-§11: string/template text cannot fabricate unresolved touch-graph surfaces.
   return withParsedFunctionBodySource(source, ({ bodyOffset, sourceFile }) => {
-    const calls: ExternalDbArgumentCall[] = [];
-
-    for (const call of sourceFile.getDescendantsOfKind(SyntaxKind.CallExpression)) {
-      const expression = call.getExpression();
-      const method = staticAccessName(expression);
-      if (method !== 'findMany' && method !== 'findFirst') continue;
-
-      const tableAccess = staticAccessExpression(expression);
-      if (!tableAccess || !staticAccessName(tableAccess)) continue;
-      const queryAccess = staticAccessExpression(tableAccess);
-      if (!queryAccess || staticAccessName(queryAccess) !== 'query') continue;
-      const receiver = staticAccessExpression(queryAccess);
-      if (!isSourceDrizzleReceiverIdentifier(receiver, receiverNames)) continue;
-
-      const index = call.getStart() - bodyOffset;
-      if (index >= 0) calls.push({ index, name: `query.${method}` });
-    }
-
-    return calls;
+    return extractRelationalQueryCallsFromBody(sourceFile, receiverNames, bodyOffset);
   });
+}
+
+function extractUnclassifiedDrizzleReceiverCallsFromBody(
+  body: Node,
+  receiverNames: ReadonlySet<string>,
+): ExternalDbArgumentCall[] {
+  return [
+    ...extractReceiverMutationCallsFromBody(body, receiverNames),
+    ...extractRelationalQueryCallsFromBody(body, receiverNames),
+  ];
+}
+
+function extractRelationalQueryCallsFromBody(
+  body: Node,
+  receiverNames: ReadonlySet<string>,
+  bodyOffset = bodySourceStart(body),
+): ExternalDbArgumentCall[] {
+  const calls: ExternalDbArgumentCall[] = [];
+
+  for (const call of callExpressionsInNode(body)) {
+    const expression = call.getExpression();
+    const method = staticAccessName(expression);
+    if (method !== 'findMany' && method !== 'findFirst') continue;
+
+    const tableAccess = staticAccessExpression(expression);
+    if (!tableAccess || !staticAccessName(tableAccess)) continue;
+    const queryAccess = staticAccessExpression(tableAccess);
+    if (!queryAccess || staticAccessName(queryAccess) !== 'query') continue;
+    const receiver = staticAccessExpression(queryAccess);
+    if (!isSourceDrizzleReceiverIdentifier(receiver, receiverNames)) continue;
+
+    const index = call.getStart() - bodyOffset;
+    if (index >= 0) calls.push({ index, name: `query.${method}` });
+  }
+
+  return calls;
 }
 
 function drizzleReceiverNames(body = ''): Set<string> {
@@ -2741,7 +2828,7 @@ function drizzleReceiverNames(body = ''): Set<string> {
   return names;
 }
 
-function appendBodyReceiverAliases(body: string, names: Set<string>): void {
+function appendBodyReceiverAliases(body: string | Node, names: Set<string>): void {
   for (const alias of destructuredDrizzleReceiverAliases(body)) {
     names.add(alias);
   }
@@ -2759,6 +2846,10 @@ function isSourceDrizzleReceiverIdentifier(
   if (declarations.length === 0) return receiverNames.has(node.getText());
 
   if (declarations.some((declaration) => isSourceReceiverBindingDeclaration(declaration))) {
+    return receiverNames.has(node.getText());
+  }
+
+  if (declarations.some((declaration) => isSourceReceiverParameterDeclaration(declaration))) {
     return receiverNames.has(node.getText());
   }
 
@@ -2812,16 +2903,25 @@ function isSourceReceiverBindingDeclaration(declaration: Node): boolean {
   return propertyName === 'db' || propertyName === 'tx';
 }
 
-function receiverParameterDeclaration(declaration: Node) {
+function isSourceReceiverParameterDeclaration(declaration: Node): boolean {
+  const parameter = receiverParameterDeclaration(declaration);
+  if (!parameter) return false;
+
+  const name = parameter.getNameNode();
+  return Node.isIdentifier(name) && isLikelyDrizzleReceiver(name.getText());
+}
+
+function receiverParameterDeclaration(declaration: Node): ParameterDeclaration | null {
   if (Node.isParameterDeclaration(declaration)) return declaration;
-  if (Node.isIdentifier(declaration) && Node.isParameterDeclaration(declaration.getParent())) {
-    return declaration.getParent();
+  if (Node.isIdentifier(declaration)) {
+    const parent = declaration.getParent();
+    if (Node.isParameterDeclaration(parent)) return parent;
   }
 
   return null;
 }
 
-function sourceDrizzleReceiverNames(callback: Node, body: string): string[] {
+function sourceDrizzleReceiverNames(callback: Node): string[] {
   const names = new Set(DEFAULT_DRIZZLE_RECEIVER_NAMES);
   if (
     Node.isArrowFunction(callback) ||
@@ -2833,7 +2933,7 @@ function sourceDrizzleReceiverNames(callback: Node, body: string): string[] {
     }
   }
 
-  appendBodyReceiverAliases(body, names);
+  appendBodyReceiverAliases(functionBody(callback), names);
 
   return [...names];
 }
@@ -2860,26 +2960,32 @@ function appendSourceReceiverBindingNames(name: Node, names: Set<string>): void 
   }
 }
 
-function destructuredDrizzleReceiverAliases(body: string): string[] {
+function destructuredDrizzleReceiverAliases(body: string | Node): string[] {
+  if (typeof body !== 'string') return destructuredDrizzleReceiverAliasesFromBody(body);
+
   // SPEC §10-§11: receiver aliases in comments/strings must not fabricate FW406 surfaces.
   return withParsedFunctionBodySource(body, ({ sourceFile }) => {
-    const aliases: string[] = [];
-
-    for (const declaration of sourceFile.getDescendantsOfKind(SyntaxKind.VariableDeclaration)) {
-      const nameNode = declaration.getNameNode();
-      if (!Node.isObjectBindingPattern(nameNode)) continue;
-
-      for (const element of nameNode.getElements()) {
-        const propertyName = element.getPropertyNameNode()?.getText();
-        if (propertyName !== 'db' && propertyName !== 'tx') continue;
-
-        const alias = element.getNameNode();
-        if (Node.isIdentifier(alias)) aliases.push(alias.getText());
-      }
-    }
-
-    return aliases;
+    return destructuredDrizzleReceiverAliasesFromBody(sourceFile);
   });
+}
+
+function destructuredDrizzleReceiverAliasesFromBody(body: Node): string[] {
+  const aliases: string[] = [];
+
+  for (const declaration of body.getDescendantsOfKind(SyntaxKind.VariableDeclaration)) {
+    const nameNode = declaration.getNameNode();
+    if (!Node.isObjectBindingPattern(nameNode)) continue;
+
+    for (const element of nameNode.getElements()) {
+      const propertyName = element.getPropertyNameNode()?.getText();
+      if (propertyName !== 'db' && propertyName !== 'tx') continue;
+
+      const alias = element.getNameNode();
+      if (Node.isIdentifier(alias)) aliases.push(alias.getText());
+    }
+  }
+
+  return aliases;
 }
 
 function isLikelyDrizzleReceiver(name: string): boolean {

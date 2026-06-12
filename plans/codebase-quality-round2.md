@@ -1179,6 +1179,16 @@ must be "FW406 unresolved," never "silently wrong."
       `pnpm exec vitest --run packages/drizzle/src/index.test.ts -t "direct Drizzle write calls|expression-bodied arrow write handlers|comments and strings"`,
       `pnpm exec vitest --run packages/drizzle/src`,
       and `pnpm exec vitest --run conformance/drizzle-pin/src/index.test.ts`.
+      Additional evidence 2026-06-12: source-mode function discovery now computes write calls,
+      local helper calls, and FW406 unresolved receiver/helper surfaces from the live ts-morph
+      callback/body nodes before the temporary source file is forgotten, leaving serialized body
+      reparses only as compatibility fallbacks. Expression-bodied callback bodies include the
+      body call node itself, so `const addItem = (db) => writeAudit(db)` degrades to FW406
+      instead of disappearing under SPEC §10-§11. Same-session evidence:
+      `pnpm exec vitest --run packages/drizzle/src/index.test.ts`,
+      `pnpm exec vitest --run conformance/drizzle-pin/src/index.test.ts`,
+      `pnpm exec vp check packages/drizzle/src/index.ts packages/drizzle/src/index.test.ts conformance/drizzle-pin/src/index.test.ts plans/codebase-quality-round2.md`,
+      and `git diff --check`.
       Additional evidence 2026-06-12: project-mode Drizzle extraction now disposes each fresh
       ts-morph project after public extraction APIs finish, and source-mode helper parses keep
       source files inside callback-owned lifetimes instead of returning live ts-morph nodes from

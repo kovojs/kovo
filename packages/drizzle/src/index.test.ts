@@ -677,6 +677,31 @@ export interface CommerceInvalidationSets {
     });
   });
 
+  it('marks expression-bodied external helpers receiving a Drizzle receiver as FW406', () => {
+    const graph = extractTouchGraphFromSource([
+      {
+        fileName: 'cart.domain.ts',
+        source: `
+          export const addItem = (db) => writeAudit(db);
+        `,
+      },
+    ]);
+
+    expect(graph).toEqual({
+      addItem: {
+        reads: [],
+        touches: [],
+        unresolved: [
+          {
+            code: 'FW406',
+            message: 'Statically un-analyzable write site; manual touches required.',
+            site: 'cart.domain.ts:2',
+          },
+        ],
+      },
+    });
+  });
+
   it('does not fabricate source-mode writes from comments and strings', () => {
     const graph = extractTouchGraphFromSource([
       {

@@ -496,6 +496,29 @@ describe('Drizzle pinned subset conformance', () => {
     });
   });
 
+  it('pins source expression-bodied helper calls as FW406', () => {
+    const graph = extractTouchGraphFromSource([
+      {
+        fileName: 'conformance/drizzle-pin/src/cart.domain.ts',
+        source: ['export const addItem = (db) => writeAudit(db);', ''].join('\n'),
+      },
+    ]);
+
+    expect(graph).toEqual({
+      addItem: {
+        reads: [],
+        touches: [],
+        unresolved: [
+          {
+            code: 'FW406',
+            message: 'Statically un-analyzable write site; manual touches required.',
+            site: 'conformance/drizzle-pin/src/cart.domain.ts:1',
+          },
+        ],
+      },
+    });
+  });
+
   it('pins real Drizzle receiver types inside domain write callbacks', () => {
     const graph = extractTouchGraphFromProject({
       files: [
