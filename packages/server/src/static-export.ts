@@ -1,4 +1,4 @@
-import { mkdir, writeFile } from 'node:fs/promises';
+import { copyFile, mkdir, writeFile } from 'node:fs/promises';
 import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -20,6 +20,20 @@ export interface StaticExportClientModuleArtifact {
   status: number;
 }
 
+export interface StaticExportAssetInput {
+  contentType?: string;
+  headers?: HeadersInit;
+  path: string;
+  source: string | URL;
+}
+
+export interface StaticExportAssetArtifact {
+  headers: Record<string, string>;
+  path: string;
+  source: string;
+  status: number;
+}
+
 export interface StaticExportDiagnostic {
   code: 'FW229';
   message: string;
@@ -27,6 +41,7 @@ export interface StaticExportDiagnostic {
 }
 
 export interface StaticExportOptions {
+  assets?: readonly StaticExportAssetInput[];
   onNonExportable?: 'error' | 'skip';
   origin?: string;
   outDir?: string | URL;
@@ -34,6 +49,7 @@ export interface StaticExportOptions {
 
 export interface StaticExportResult {
   artifacts: readonly StaticExportArtifact[];
+  assets: readonly StaticExportAssetArtifact[];
   clientModules: readonly StaticExportClientModuleArtifact[];
   diagnostics: readonly StaticExportDiagnostic[];
 }
@@ -76,29 +92,95 @@ export async function exportStaticApp(
     options.outDir === undefined
       ? []
       : await exportClientModuleArtifacts(handler, artifacts, origin);
+  const assets =
+    options.outDir === undefined ? [] : staticExportAssetArtifacts(options.assets ?? []);
 
   if (options.outDir !== undefined) {
-    await writeStaticExportArtifacts(artifacts, options.outDir);
-    await writeStaticExportClientModules(clientModules, options.outDir);
+    await writeStaticExportOutput({ artifacts, assets, clientModules, outDir: options.outDir });
   }
 
-  return { artifacts, clientModules, diagnostics };
+  return { artifacts, assets, clientModules, diagnostics };
 }
 
-async function writeStaticExportArtifacts(
-  artifacts: readonly StaticExportArtifact[],
-  outDir: string | URL,
-): Promise<void> {
-  const root = path.resolve(outDir instanceof URL ? fileURLToPath(outDir) : outDir);
+interface StaticExportOutputPlan {
+  artifacts: readonly StaticExportArtifact[];
+  assets: readonly StaticExportAssetArtifact[];
+  clientModules: readonly StaticExportClientModuleArtifact[];
+  outDir: string | URL;
+}
 
-  await Promise.all(
-    artifacts.map(async (artifact) => {
-      const targetPath = staticExportArtifactTargetPath(root, artifact.path);
+async function writeStaticExportOutput(plan: StaticExportOutputPlan): Promise<void> {
+  const root = path.resolve(plan.outDir instanceof URL ? fileURLToPath(plan.outDir) : plan.outDir);
+  const writes: StaticExportPlannedWrite[] = [];
 
-      await mkdir(path.dirname(targetPath), { recursive: true });
-      await writeFile(targetPath, artifact.body, 'utf8');
-    }),
-  );
+  for (const artifact of plan.artifacts) {
+    const targetPath = staticExportArtifactTargetPath(root, artifact.path);
+    writes.push({
+      diagnosticPath: artifact.path,
+      kind: 'route document',
+      targetPath,
+      write: async () => writeTextStaticExportFile(artifact.body, targetPath),
+    });
+  }
+
+  for (const artifact of plan.clientModules) {
+    const targetPath = staticExportClientModuleTargetPath(root, artifact.path);
+    writes.push({
+      diagnosticPath: artifact.path,
+      kind: 'client module',
+      targetPath,
+      write: async () => writeTextStaticExportFile(artifact.body, targetPath),
+    });
+  }
+
+  for (const artifact of plan.assets) {
+    const targetPath = staticExportAssetTargetPath(root, artifact.path);
+    writes.push({
+      diagnosticPath: artifact.path,
+      kind: 'static asset',
+      targetPath,
+      write: async () => copyStaticExportAsset(artifact.source, targetPath),
+    });
+  }
+
+  assertNoStaticExportOutputConflicts(writes);
+
+  await Promise.all(writes.map((write) => write.write()));
+}
+
+async function writeTextStaticExportFile(body: string, targetPath: string): Promise<void> {
+  await mkdir(path.dirname(targetPath), { recursive: true });
+  await writeFile(targetPath, body, 'utf8');
+}
+
+async function copyStaticExportAsset(source: string, targetPath: string): Promise<void> {
+  await mkdir(path.dirname(targetPath), { recursive: true });
+  await copyFile(source, targetPath);
+}
+
+interface StaticExportPlannedWrite {
+  diagnosticPath: string;
+  kind: string;
+  targetPath: string;
+  write(): Promise<void>;
+}
+
+function assertNoStaticExportOutputConflicts(writes: readonly StaticExportPlannedWrite[]): void {
+  const seen = new Map<string, StaticExportPlannedWrite>();
+
+  for (const write of writes) {
+    const existing = seen.get(write.targetPath);
+    if (existing) {
+      throw new StaticExportError([
+        staticExportDiagnostic(
+          write.diagnosticPath,
+          `FW229 static export cannot write ${write.kind} '${write.diagnosticPath}' because it conflicts with ${existing.kind} '${existing.diagnosticPath}'.`,
+        ),
+      ]);
+    }
+
+    seen.set(write.targetPath, write);
+  }
 }
 
 function staticExportArtifactTargetPath(root: string, artifactPath: string): string {
@@ -111,22 +193,6 @@ function staticExportArtifactTargetPath(root: string, artifactPath: string): str
       `FW229 static export refused to write '${artifactPath}' outside the configured output directory.`,
     ),
   ]);
-}
-
-async function writeStaticExportClientModules(
-  artifacts: readonly StaticExportClientModuleArtifact[],
-  outDir: string | URL,
-): Promise<void> {
-  const root = path.resolve(outDir instanceof URL ? fileURLToPath(outDir) : outDir);
-
-  await Promise.all(
-    artifacts.map(async (artifact) => {
-      const targetPath = staticExportClientModuleTargetPath(root, artifact.path);
-
-      await mkdir(path.dirname(targetPath), { recursive: true });
-      await writeFile(targetPath, artifact.body, 'utf8');
-    }),
-  );
 }
 
 function staticExportClientModuleTargetPath(root: string, modulePath: string): string {
@@ -160,6 +226,74 @@ function decodeClientModulePathSegment(segment: string): string {
       staticExportDiagnostic(
         `/c/${segment}`,
         `FW229 static export refused unsafe client module path segment '${segment}'.`,
+      ),
+    ]);
+  }
+
+  return decoded;
+}
+
+function staticExportAssetArtifacts(
+  assets: readonly StaticExportAssetInput[],
+): StaticExportAssetArtifact[] {
+  return assets.map((asset) => ({
+    headers: sortedHeaders(staticExportAssetHeaders(asset)),
+    path: asset.path,
+    source: staticExportSourcePath(asset.source),
+    status: 200,
+  }));
+}
+
+function staticExportAssetHeaders(asset: StaticExportAssetInput): Headers {
+  const headers = new Headers(asset.headers);
+  if (asset.contentType !== undefined) headers.set('content-type', asset.contentType);
+  return headers;
+}
+
+function staticExportSourcePath(source: string | URL): string {
+  return source instanceof URL ? fileURLToPath(source) : source;
+}
+
+function staticExportAssetTargetPath(root: string, assetPath: string): string {
+  const segments = assetPath.split('/').filter(Boolean).map(decodeStaticExportAssetPathSegment);
+  if (segments.length === 0) {
+    throw new StaticExportError([
+      staticExportDiagnostic(
+        assetPath,
+        `FW229 static export refused static asset '${assetPath}' because it does not name an output file.`,
+      ),
+    ]);
+  }
+
+  const targetPath = path.resolve(root, ...segments);
+  if (targetPath === root || targetPath.startsWith(`${root}${path.sep}`)) return targetPath;
+
+  throw new StaticExportError([
+    staticExportDiagnostic(
+      assetPath,
+      `FW229 static export refused to write static asset '${assetPath}' outside the configured output directory.`,
+    ),
+  ]);
+}
+
+function decodeStaticExportAssetPathSegment(segment: string): string {
+  let decoded: string;
+  try {
+    decoded = decodeURIComponent(segment);
+  } catch {
+    throw new StaticExportError([
+      staticExportDiagnostic(
+        segment,
+        `FW229 static export cannot write static asset path segment '${segment}' because it is not valid URL encoding.`,
+      ),
+    ]);
+  }
+
+  if (decoded === '.' || decoded === '..' || decoded.includes('/') || decoded.includes('\\')) {
+    throw new StaticExportError([
+      staticExportDiagnostic(
+        segment,
+        `FW229 static export refused unsafe static asset path segment '${segment}'.`,
       ),
     ]);
   }

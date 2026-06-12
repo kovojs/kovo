@@ -1,4 +1,4 @@
-import { mkdtemp, readFile, rm } from 'node:fs/promises';
+import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { pathToFileURL } from 'node:url';
@@ -102,6 +102,171 @@ describe('server static export', () => {
       expect(result.artifacts[1]?.body).toContain('<main data-route="/docs/intro">intro</main>');
     } finally {
       await rm(outDir, { force: true, recursive: true });
+    }
+  });
+
+  it('copies configured static assets with exact bytes and represented headers', async () => {
+    const outDir = await mkdtemp(path.join(os.tmpdir(), 'jiso-static-export-'));
+    const sourceDir = await mkdtemp(path.join(os.tmpdir(), 'jiso-static-assets-'));
+    try {
+      const cssSource = path.join(sourceDir, 'app.css');
+      const iconSource = path.join(sourceDir, 'icon.bin');
+      const iconBytes = Buffer.from([0, 1, 2, 255]);
+      await writeFile(cssSource, 'body { color: rebeccapurple; }\n', 'utf8');
+      await writeFile(iconSource, iconBytes);
+      const app = createApp({
+        routes: [
+          route('/', {
+            stylesheets: ['/assets/app.css'],
+            page: () => '<main>Home</main>',
+          }),
+        ],
+      });
+
+      const result = await exportStaticApp(app, {
+        assets: [
+          {
+            contentType: 'text/css; charset=utf-8',
+            path: '/assets/app.css',
+            source: cssSource,
+          },
+          {
+            headers: { 'cache-control': 'public, max-age=31536000' },
+            path: '/assets/icons/icon.bin',
+            source: pathToFileURL(iconSource),
+          },
+        ],
+        outDir,
+      });
+
+      expect(result.assets).toEqual([
+        {
+          headers: { 'content-type': 'text/css; charset=utf-8' },
+          path: '/assets/app.css',
+          source: cssSource,
+          status: 200,
+        },
+        {
+          headers: { 'cache-control': 'public, max-age=31536000' },
+          path: '/assets/icons/icon.bin',
+          source: iconSource,
+          status: 200,
+        },
+      ]);
+      await expect(readFile(path.join(outDir, 'assets/app.css'), 'utf8')).resolves.toBe(
+        'body { color: rebeccapurple; }\n',
+      );
+      await expect(readFile(path.join(outDir, 'assets/icons/icon.bin'))).resolves.toEqual(
+        iconBytes,
+      );
+    } finally {
+      await rm(outDir, { force: true, recursive: true });
+      await rm(sourceDir, { force: true, recursive: true });
+    }
+  });
+
+  it('rejects unsafe static asset output paths before copying', async () => {
+    const outDir = await mkdtemp(path.join(os.tmpdir(), 'jiso-static-export-'));
+    const sourceDir = await mkdtemp(path.join(os.tmpdir(), 'jiso-static-assets-'));
+    try {
+      const source = path.join(sourceDir, 'app.css');
+      await writeFile(source, 'body {}\n', 'utf8');
+      const app = createApp({
+        routes: [route('/', { page: () => '<main>Home</main>' })],
+      });
+
+      await expect(
+        exportStaticApp(app, {
+          assets: [{ path: '/assets/%2e%2e/app.css', source }],
+          outDir,
+        }),
+      ).rejects.toMatchObject({
+        code: 'FW229',
+        diagnostics: [
+          {
+            code: 'FW229',
+            message: expect.stringContaining('unsafe static asset path segment'),
+            routePath: '%2e%2e',
+          },
+        ],
+      });
+      await expect(readFile(path.join(outDir, 'index.html'))).rejects.toThrow();
+    } finally {
+      await rm(outDir, { force: true, recursive: true });
+      await rm(sourceDir, { force: true, recursive: true });
+    }
+  });
+
+  it('rejects static asset output conflicts with generated export files', async () => {
+    const outDir = await mkdtemp(path.join(os.tmpdir(), 'jiso-static-export-'));
+    const sourceDir = await mkdtemp(path.join(os.tmpdir(), 'jiso-static-assets-'));
+    try {
+      const source = path.join(sourceDir, 'index.html');
+      await writeFile(source, '<p>asset</p>', 'utf8');
+      const app = createApp({
+        routes: [route('/', { page: () => '<main>Home</main>' })],
+      });
+
+      await expect(
+        exportStaticApp(app, {
+          assets: [{ path: '/index.html', source }],
+          outDir,
+        }),
+      ).rejects.toMatchObject({
+        code: 'FW229',
+        diagnostics: [
+          {
+            code: 'FW229',
+            message: expect.stringContaining(
+              "static asset '/index.html' because it conflicts with route document '/index.html'",
+            ),
+            routePath: '/index.html',
+          },
+        ],
+      });
+      await expect(readFile(path.join(outDir, 'index.html'))).rejects.toThrow();
+    } finally {
+      await rm(outDir, { force: true, recursive: true });
+      await rm(sourceDir, { force: true, recursive: true });
+    }
+  });
+
+  it('rejects duplicate static asset output paths', async () => {
+    const outDir = await mkdtemp(path.join(os.tmpdir(), 'jiso-static-export-'));
+    const sourceDir = await mkdtemp(path.join(os.tmpdir(), 'jiso-static-assets-'));
+    try {
+      const firstSource = path.join(sourceDir, 'first.css');
+      const secondSource = path.join(sourceDir, 'second.css');
+      await writeFile(firstSource, 'body { color: red; }\n', 'utf8');
+      await writeFile(secondSource, 'body { color: blue; }\n', 'utf8');
+      const app = createApp({
+        routes: [route('/', { page: () => '<main>Home</main>' })],
+      });
+
+      await expect(
+        exportStaticApp(app, {
+          assets: [
+            { path: '/assets/app.css', source: firstSource },
+            { path: '/assets/app.css', source: secondSource },
+          ],
+          outDir,
+        }),
+      ).rejects.toMatchObject({
+        code: 'FW229',
+        diagnostics: [
+          {
+            code: 'FW229',
+            message: expect.stringContaining(
+              "static asset '/assets/app.css' because it conflicts with static asset '/assets/app.css'",
+            ),
+            routePath: '/assets/app.css',
+          },
+        ],
+      });
+      await expect(readFile(path.join(outDir, 'assets/app.css'))).rejects.toThrow();
+    } finally {
+      await rm(outDir, { force: true, recursive: true });
+      await rm(sourceDir, { force: true, recursive: true });
     }
   });
 
@@ -254,6 +419,7 @@ describe('server static export', () => {
 
     await expect(exportStaticApp(app, { onNonExportable: 'skip' })).resolves.toEqual({
       artifacts: [],
+      assets: [],
       clientModules: [],
       diagnostics: [
         {
