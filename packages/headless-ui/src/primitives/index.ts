@@ -233,6 +233,35 @@ export type {
 } from './progress.js';
 
 export {
+  radioGroupItemAttributes,
+  radioGroupItemChecked,
+  radioGroupItemClick,
+  radioGroupKeyDown,
+  radioGroupLabelAttributes,
+  radioGroupMoveValue,
+  radioGroupRadioAttributes,
+  radioGroupRootAttributes,
+  radioGroupRovingIndex,
+  setRadioGroupValue,
+} from './radio-group.js';
+export type {
+  RadioGroupChangeDetail,
+  RadioGroupChangeOptions,
+  RadioGroupChangeReason,
+  RadioGroupChangeResult,
+  RadioGroupItem,
+  RadioGroupItemAttributeOptions,
+  RadioGroupItemEvent,
+  RadioGroupKeyboardEvent,
+  RadioGroupLabelAttributeOptions,
+  RadioGroupMoveResult,
+  RadioGroupPrimitiveAttributes,
+  RadioGroupRadioAttributeOptions,
+  RadioGroupRootAttributeOptions,
+  RadioGroupState,
+} from './radio-group.js';
+
+export {
   popoverBeforeToggle,
   popoverContentAttributes,
   popoverEscapeKeyDown,

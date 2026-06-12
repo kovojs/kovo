@@ -19,6 +19,7 @@
     "./primitives/meter": "./src/primitives/meter.ts",
     "./primitives/popover": "./src/primitives/popover.ts",
     "./primitives/progress": "./src/primitives/progress.ts",
+    "./primitives/radio-group": "./src/primitives/radio-group.ts",
     "./primitives/separator": "./src/primitives/separator.ts",
     "./primitives/switch": "./src/primitives/switch.ts",
     "./primitives/tooltip": "./src/primitives/tooltip.ts",
