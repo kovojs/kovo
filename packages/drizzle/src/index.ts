@@ -1829,37 +1829,42 @@ function tablesForFile(
 }
 
 function namespaceImportAliases(source: string): string[] {
-  const aliases: string[] = [];
-  const pattern = new RegExp(
-    `import\\s+\\*\\s+as\\s+(?<alias>${IDENTIFIER_SOURCE})\\s+from\\s+["'][^"']+["']`,
-    'g',
+  return withParsedSourceFile(source, (sourceFile) =>
+    sourceFile
+      .getImportDeclarations()
+      .flatMap((declaration) => declaration.getNamespaceImport()?.getText() ?? []),
   );
+}
 
-  for (const match of source.matchAll(pattern)) {
-    const alias = match.groups?.alias;
-    if (alias) aliases.push(alias);
+function importExportTableAliases(source: string): { imported: string; local: string }[] {
+  return withParsedSourceFile(source, (sourceFile) => [
+    ...importTableAliases(sourceFile),
+    ...exportTableAliases(sourceFile),
+  ]);
+}
+
+function importTableAliases(sourceFile: SourceFile): { imported: string; local: string }[] {
+  const aliases: { imported: string; local: string }[] = [];
+
+  for (const declaration of sourceFile.getImportDeclarations()) {
+    for (const specifier of declaration.getNamedImports()) {
+      const alias = specifier.getAliasNode()?.getText();
+      const imported = specifier.getNameNode().getText();
+      if (alias && alias !== imported) aliases.push({ imported, local: alias });
+    }
   }
 
   return aliases;
 }
 
-function importExportTableAliases(source: string): { imported: string; local: string }[] {
+function exportTableAliases(sourceFile: SourceFile): { imported: string; local: string }[] {
   const aliases: { imported: string; local: string }[] = [];
-  const pattern =
-    /\b(?:import|export)\s*\{\s*(?<specifiers>[^}]+)\s*\}(?:\s*from\s*["'][^"']+["'])?/g;
-  const specifierPattern = new RegExp(
-    `^(?<imported>${IDENTIFIER_SOURCE})(?:\\s+as\\s+(?<local>${IDENTIFIER_SOURCE}))?$`,
-  );
 
-  for (const match of source.matchAll(pattern)) {
-    const specifiers = match.groups?.specifiers;
-    if (!specifiers) continue;
-
-    for (const specifier of specifiers.split(',')) {
-      const parts = specifierPattern.exec(specifier.trim())?.groups;
-      const imported = parts?.imported;
-      const local = parts?.local;
-      if (imported && local && imported !== local) aliases.push({ imported, local });
+  for (const declaration of sourceFile.getExportDeclarations()) {
+    for (const specifier of declaration.getNamedExports()) {
+      const alias = specifier.getAliasNode()?.getText();
+      const imported = specifier.getNameNode().getText();
+      if (alias && alias !== imported) aliases.push({ imported, local: alias });
     }
   }
 

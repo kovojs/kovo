@@ -2394,6 +2394,50 @@ export interface CommerceInvalidationSets {
     });
   });
 
+  it('does not resolve Drizzle schema aliases from comments, strings, or templates', () => {
+    const graph = extractTouchGraphFromSource([
+      {
+        fileName: 'schema.ts',
+        source: `
+          export const products = pgTable("products", {}, jiso({ domain: "product", key: "id" }));
+        `,
+      },
+      {
+        fileName: 'product.domain.ts',
+        source: `
+          const quoted = "import { products as importedProducts } from './schema';";
+          // import * as schema from "./schema";
+
+          export async function syncProduct(db, productId) {
+            const templated = \`import * as schema from "./schema";\`;
+            await db.update(schema.products).set({ reserved: true }).where(eq(schema.products.id, productId));
+            await db.update(importedProducts).set({ reserved: false }).where(eq(importedProducts.id, productId));
+            return { quoted, templated };
+          }
+        `,
+      },
+    ]);
+
+    expect(graph).toEqual({
+      syncProduct: {
+        reads: [],
+        touches: [],
+        unresolved: [
+          {
+            code: 'FW406',
+            message: 'Statically un-analyzable write site; manual touches required.',
+            site: 'product.domain.ts:7',
+          },
+          {
+            code: 'FW406',
+            message: 'Statically un-analyzable write site; manual touches required.',
+            site: 'product.domain.ts:8',
+          },
+        ],
+      },
+    });
+  });
+
   it('does not infer renamed Drizzle receiver parameters from broad source-mode names', () => {
     const graph = extractTouchGraphFromSource([
       {
