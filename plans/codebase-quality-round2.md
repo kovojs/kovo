@@ -990,8 +990,13 @@ params, relational API, `execute(sql)`, right/full joins, a string column named 
       `pnpm exec vitest --run packages/runtime/src/index.test.ts -t "hydrate|visible-return|refetch"`.
 
 Verification: runtime node + browser suites; gzip budget; the new parity suite is the gate for
-any future inline-loader edit. A `definedProps()` helper for the ~30 optional-spread sites is
-optional sugar — take it only if it falls out of the split.
+any future inline-loader edit. Partial evidence 2026-06-12: `packages/runtime/src/index.ts` now
+uses an internal `definedProps()` helper for optional runtime wiring across default broadcast
+installation, enhanced submit, submit context, deferred chunks, broadcast replay, and the shared
+mutation DOM-apply bridge. The remaining optional-spread sites are lower-risk serialization/test
+objects or await later module splits. Same-session evidence:
+`pnpm exec vitest --run packages/runtime/src/index.test.ts -t "enhanced|deferred|broadcast|submit context"` and
+`pnpm exec vp check packages/runtime/src/index.ts plans/codebase-quality-round2.md`.
 
 ## Phase 5 — Server: finish the extraction subtractively
 

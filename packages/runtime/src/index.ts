@@ -84,6 +84,19 @@ export function derive<const Inputs extends readonly string[], Value>(
   return { inputs, run: fn };
 }
 
+type DefinedProps<Props extends object> = {
+  [Key in keyof Props]?: Exclude<Props[Key], undefined>;
+};
+
+function definedProps<Props extends object>(props: Props): DefinedProps<Props> {
+  return Object.fromEntries(
+    Object.entries(props).filter((entry) => {
+      const [, value] = entry;
+      return value !== undefined;
+    }),
+  ) as DefinedProps<Props>;
+}
+
 export interface LoaderRoot {
   addEventListener(
     type: string,
@@ -393,9 +406,8 @@ function withDefaultMutationBroadcast(options: EnhancedMutationLoaderOptions): {
 
   try {
     const broadcast = installMutationBroadcast({
-      ...(options.morph ? { morph: options.morph } : {}),
       channel: new globalThis.BroadcastChannel('jiso:mutation-response') as BroadcastLike,
-      ...(options.queryPlans ? { queryPlans: options.queryPlans } : {}),
+      ...definedProps({ morph: options.morph, queryPlans: options.queryPlans }),
       root: options.root,
       store: options.store,
     });
@@ -473,15 +485,17 @@ export async function dispatchEnhancedFormSubmit(
         updateUploadProgressElements(form, progress);
         options.onUploadProgress?.(progress, form);
       },
-      ...(options.pendingRoot ? { pendingQueries: readDeps(form.getAttribute('fw-deps')) } : {}),
-      ...(options.pendingRoot ? { pendingRoot: options.pendingRoot } : {}),
+      ...definedProps({
+        broadcast: options.broadcast,
+        idem: options.idem?.(),
+        morph: options.morph,
+        pendingQueries: options.pendingRoot ? readDeps(form.getAttribute('fw-deps')) : undefined,
+        pendingRoot: options.pendingRoot,
+        queryPlans: options.queryPlans,
+      }),
       root: options.root,
       store: options.store,
-      ...(options.broadcast ? { broadcast: options.broadcast } : {}),
-      ...(options.idem ? { idem: options.idem() } : {}),
       islandSignalScope,
-      ...(options.morph ? { morph: options.morph } : {}),
-      ...(options.queryPlans ? { queryPlans: options.queryPlans } : {}),
     });
     hooks.onAppliedQueries?.(applied.queries);
   } catch (error) {
@@ -1047,12 +1061,14 @@ export function createSubmitContext(options: SubmitContextOptions): SubmitContex
           submitOptions.method ?? options.method,
         ),
         formData: formDataFromInput(submitOptions.input),
+        ...definedProps({
+          broadcast: options.broadcast,
+          idem: submitOptions.idem,
+          morph: options.morph,
+          queryPlans: options.queryPlans,
+        }),
         root: options.root,
         store: options.store,
-        ...(options.broadcast ? { broadcast: options.broadcast } : {}),
-        ...(submitOptions.idem ? { idem: submitOptions.idem } : {}),
-        ...(options.morph ? { morph: options.morph } : {}),
-        ...(options.queryPlans ? { queryPlans: options.queryPlans } : {}),
       });
 
       if (submitOptions.onError && isValidationFailure(status, ok)) {
@@ -1261,13 +1277,15 @@ function applyEnhancedMutationResponseBodyToDom(
   hooks: MutationDomApplyHooks = {},
 ): AppliedMutationResponseToDom {
   return applyMutationResponseToDom({
-    ...(hooks.applyQuery ? { applyQuery: hooks.applyQuery } : {}),
-    ...(hooks.beforeApplyQueries ? { beforeApplyQueries: hooks.beforeApplyQueries } : {}),
     body,
-    ...(options.islandSignalScope ? { islandSignalScope: options.islandSignalScope } : {}),
-    ...(options.morph ? { morph: options.morph } : {}),
-    ...(options.onError ? { onError: options.onError } : {}),
-    ...(options.queryPlans ? { queryPlans: options.queryPlans } : {}),
+    ...definedProps({
+      applyQuery: hooks.applyQuery,
+      beforeApplyQueries: hooks.beforeApplyQueries,
+      islandSignalScope: options.islandSignalScope,
+      morph: options.morph,
+      onError: options.onError,
+      queryPlans: options.queryPlans,
+    }),
     root: options.root,
     store: options.store,
   });
@@ -1404,12 +1422,14 @@ export function applyDeferredStreamResponseToDom(options: {
     (body) =>
       applyDeferredChunkToDom({
         body,
-        ...(options.islandSignalScope ? { islandSignalScope: options.islandSignalScope } : {}),
-        ...(options.queryPlans ? { queryPlans: options.queryPlans } : {}),
-        ...(options.onError ? { onError: options.onError } : {}),
+        ...definedProps({
+          islandSignalScope: options.islandSignalScope,
+          morph: options.morph,
+          onError: options.onError,
+          queryPlans: options.queryPlans,
+        }),
         root: options.root,
         store: options.store,
-        ...(options.morph ? { morph: options.morph } : {}),
       }),
   );
 
@@ -1655,8 +1675,7 @@ export function installMutationBroadcast(options: {
     if (options.root) {
       applyMutationResponseToDom({
         body: event.data.body,
-        ...(options.morph ? { morph: options.morph } : {}),
-        ...(options.queryPlans ? { queryPlans: options.queryPlans } : {}),
+        ...definedProps({ morph: options.morph, queryPlans: options.queryPlans }),
         root: options.root,
         store: options.store,
       });
