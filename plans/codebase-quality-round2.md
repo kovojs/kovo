@@ -2076,6 +2076,12 @@ index.test.ts:4227 while here — it weakens the byte-for-byte claim) + acceptan
       `corepack pnpm exec vitest --run packages/test/src`,
       `corepack pnpm exec vp check packages/test/src/harness-verifier.test.ts plans/codebase-quality-round2.md`,
       and `git diff --check`.
+      Additional evidence 2026-06-12: SQL observer-focused coverage moved from
+      `packages/test/src/verifier-sql.test.ts` into `packages/test/src/sql-observer.test.ts`,
+      keeping SPEC §11.2 unparseable SQL pass-through/no-fabricated-observation coverage,
+      insert-select observation coverage, and CTE alias soundness at the observer seam while
+      leaving `verifier-sql.test.ts` focused on verifier integration. Same-session evidence:
+      `corepack pnpm exec vitest --run packages/test/src/sql-observer.test.ts packages/test/src/verifier-sql.test.ts`.
 - [ ] **MED — Commerce example: one source of truth.** `cartQuery.load` returns a constant while
       `loadCartQuery(db)` does the real read (app.ts:123-126 vs :280-284);
       `productGridQuery.load` conjures a fresh `createCommerceDb()` (:161); the committed
@@ -2408,6 +2414,12 @@ As each phase splits a source module, split its tests in the same commit.
       `corepack pnpm exec vitest --run packages/test/src`,
       `corepack pnpm exec vp check packages/test/src/harness-verifier.test.ts plans/codebase-quality-round2.md`,
       and `git diff --check`.
+      Additional evidence 2026-06-12: SQL observer seam tests moved from
+      `packages/test/src/verifier-sql.test.ts` into `packages/test/src/sql-observer.test.ts`,
+      further reducing the SQL verifier monolith while preserving observer behavior coverage for
+      SPEC §11.2 pass-through, insert-select read/write observation, and CTE alias soundness.
+      Same-session evidence:
+      `corepack pnpm exec vitest --run packages/test/src/sql-observer.test.ts packages/test/src/verifier-sql.test.ts`.
       Additional evidence 2026-06-12: Drizzle runtime/static package-surface coverage moved from
       `packages/drizzle/src/index.test.ts` into `packages/drizzle/src/runtime-surface.test.ts`,
       leaving static extraction coverage in the Drizzle monolith. Same-session evidence:
