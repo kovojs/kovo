@@ -15,6 +15,7 @@ import { matchShellDispatch } from './shell.js';
 import {
   routeResponseToDocumentResponse,
   routeResponseToWebResponse,
+  serverResponseToWebResponse,
   type RoutePageResponse,
 } from './response.js';
 import { renderRoutePageResponse, type RouteDeclaration, type RouteRequestInput } from './route.js';
@@ -33,7 +34,6 @@ import {
 } from './mutation.js';
 import type { FragmentRenderer } from './mutation-wire.js';
 import type { MutationReplayStore } from './replay.js';
-import type { MutationResponseHeaders } from './response.js';
 import type { Schema } from './schema.js';
 import type { SessionProvider } from './guards.js';
 
@@ -405,27 +405,4 @@ function defaultMutationRedirectTo(request: Request, currentUrl: string): string
   }
 
   return currentUrl.startsWith('/_m/') ? '/' : currentUrl;
-}
-
-function serverResponseToWebResponse(
-  response: {
-    body: BodyInit | null;
-    headers: MutationResponseHeaders | Record<string, string>;
-    status: number;
-  },
-  request: Pick<Request, 'method'>,
-): Response {
-  const headers = new Headers();
-  for (const [name, value] of Object.entries(response.headers)) {
-    if (Array.isArray(value)) {
-      for (const entry of value) headers.append(name, entry);
-    } else {
-      headers.set(name, value);
-    }
-  }
-
-  return new Response(request.method === 'HEAD' ? null : response.body, {
-    headers,
-    status: response.status,
-  });
 }

@@ -2472,6 +2472,14 @@ land it first; don't fork it.
       wrapping. Same-session evidence:
       `pnpm exec vitest --run packages/server/src/response.test.ts packages/server/src/app.test.ts packages/server/src/index.test.ts`
       and `pnpm exec vitest --run packages/server/src`.
+      Additional evidence 2026-06-12: the app-shell mutation response adapter and webhook wire
+      response adapter now use the shared `serverResponseToWebResponse` helper in
+      `packages/server/src/response.ts` instead of local/cast-based Web `Response` conversion.
+      `packages/server/src/response.test.ts` covers repeated `Set-Cookie` preservation and HEAD
+      body suppression through the shared adapter. Same-session evidence:
+      `corepack pnpm exec vitest --run packages/server/src/response.test.ts packages/server/src/app.test.ts packages/server/src/webhook.test.ts`,
+      `corepack pnpm exec vp check packages/server/src/app.ts packages/server/src/response.ts packages/server/src/response.test.ts packages/server/src/webhook.ts plans/codebase-quality-round2.md`,
+      and `git diff --check`.
 - [ ] **MED — Split `index.ts`** along the round-1 seam list (schema, guards/session,
       csrf/cookies, query, mutation+replay, route, header utils), index.ts a pure barrel. The
       absence of module-level mutable state makes this mechanical today. Name the stringly

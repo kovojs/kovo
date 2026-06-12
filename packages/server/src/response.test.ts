@@ -5,6 +5,7 @@ import {
   readHeader,
   routeResponseToDocumentResponse,
   routeResponseToWebResponse,
+  serverResponseToWebResponse,
   type RoutePageResponse,
 } from './response.js';
 
@@ -38,6 +39,41 @@ describe('server response adapters', () => {
     );
 
     await expect(response.text()).resolves.toBe('payload');
+  });
+
+  it('preserves repeated server response headers when adapting to web Responses', async () => {
+    const response = serverResponseToWebResponse(
+      {
+        body: 'created',
+        headers: {
+          'Content-Type': 'text/plain; charset=utf-8',
+          'Set-Cookie': ['session=s1; Path=/', 'csrf=c1; Path=/'],
+        },
+        status: 200,
+      },
+      { method: 'GET' },
+    );
+
+    expect(response.headers.get('content-type')).toBe('text/plain; charset=utf-8');
+    expect((response.headers as Headers & { getSetCookie(): string[] }).getSetCookie()).toEqual([
+      'session=s1; Path=/',
+      'csrf=c1; Path=/',
+    ]);
+    await expect(response.text()).resolves.toBe('created');
+  });
+
+  it('suppresses shared server response bodies for HEAD requests', async () => {
+    const response = serverResponseToWebResponse(
+      {
+        body: 'created',
+        headers: { 'Content-Type': 'text/plain; charset=utf-8' },
+        status: 200,
+      },
+      { method: 'HEAD' },
+    );
+
+    expect(response.status).toBe(200);
+    await expect(response.text()).resolves.toBe('');
   });
 
   it('normalizes ArrayBuffer bodies before document wrapping', () => {

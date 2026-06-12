@@ -11,7 +11,11 @@ import {
   type EndpointDeclaration,
   type EndpointRequest,
 } from './endpoint.js';
-import type { MutationResponseHeaders, ServerResponseBase } from './response.js';
+import {
+  serverResponseToWebResponse,
+  type MutationResponseHeaders,
+  type ServerResponseBase,
+} from './response.js';
 import type { InferSchema, MaybePromise, Schema } from './schema.js';
 
 export type WebhookFailureStatus = 400 | 401 | 422 | 429 | 500;
@@ -460,10 +464,7 @@ function storeWebhookReplay(
 }
 
 function responseFromWire(response: WebhookWireResponse): Response {
-  return new Response(response.body, {
-    headers: response.headers as Record<string, string>,
-    status: response.status,
-  });
+  return serverResponseToWebResponse(response, { method: 'GET' });
 }
 
 function webhookResponse(status: 400 | 401 | 500, body: string): Response {

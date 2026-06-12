@@ -18,6 +18,8 @@ export interface ServerResponseBase<
 
 export type RouteResponseBody = ArrayBuffer | ReadableStream<Uint8Array> | Uint8Array | string;
 
+export type WebResponseBody = RouteResponseBody | null;
+
 export type RouteResponseStatus = 200 | 303 | 304 | 403 | 404 | 422 | 429 | 500;
 
 export type DocumentRouteResponseBody = Exclude<RouteResponseBody, ArrayBuffer>;
@@ -176,13 +178,17 @@ export function routeResponseToWebResponse(
   response: ServerResponseBase<RouteResponseBody, Record<string, string>>,
   request: Pick<Request, 'method'>,
 ): Response {
-  return new Response(
-    request.method === 'HEAD' ? null : routeResponseBodyToBodyInit(response.body),
-    {
-      headers: response.headers,
-      status: response.status,
-    },
-  );
+  return serverResponseToWebResponse(response, request);
+}
+
+export function serverResponseToWebResponse(
+  response: ServerResponseBase<WebResponseBody, ResponseHeaders>,
+  request: Pick<Request, 'method'>,
+): Response {
+  return new Response(request.method === 'HEAD' ? null : webResponseBodyToBodyInit(response.body), {
+    headers: webResponseHeaders(response.headers),
+    status: response.status,
+  });
 }
 
 export function routeResponseToDocumentResponse(
@@ -234,7 +240,8 @@ function requestHeader(request: unknown, name: string): string | undefined {
   return undefined;
 }
 
-function routeResponseBodyToBodyInit(body: RouteResponseBody): BodyInit | null {
+function webResponseBodyToBodyInit(body: WebResponseBody): BodyInit | null {
+  if (body === null) return null;
   if (typeof body === 'string') return body;
   if (body instanceof ReadableStream) return body;
   if (body instanceof ArrayBuffer) return body;
@@ -246,6 +253,19 @@ function routeResponseBodyToBodyInit(body: RouteResponseBody): BodyInit | null {
   const copy = new Uint8Array(body.byteLength);
   copy.set(body);
   return copy.buffer;
+}
+
+function webResponseHeaders(headers: ResponseHeaders): Headers {
+  const webHeaders = new Headers();
+  for (const [name, value] of Object.entries(headers)) {
+    if (Array.isArray(value)) {
+      for (const entry of value) webHeaders.append(name, entry);
+    } else {
+      webHeaders.set(name, value);
+    }
+  }
+
+  return webHeaders;
 }
 
 function findHeaderName(headers: HeaderSource, name: string): string | undefined {
