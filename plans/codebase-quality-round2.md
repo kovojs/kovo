@@ -504,6 +504,15 @@ must be "FW406 unresolved," never "silently wrong."
       when real shape inference is expected. Same-session evidence:
       `pnpm exec vitest --run packages/drizzle/src` and
       `pnpm exec vitest --run conformance/drizzle-pin`.
+      Partial evidence 2026-06-11: `nullableJoinTables` now treats `.rightJoin(...)` as making
+      prior left-side relation tables nullable and `.fullJoin(...)` as making both prior relation
+      tables and the joined table nullable. `packages/drizzle/src/index.test.ts` covers
+      source-mode right joins and project-mode full joins; `conformance/drizzle-pin/src/index.test.ts`
+      pins the same behavior against real `drizzle-orm` imports. Same-session evidence:
+      `pnpm exec vitest --run packages/drizzle/src/index.test.ts -t "right-joined|full-joined|left-joined"`,
+      `pnpm exec vitest --run conformance/drizzle-pin/src/index.test.ts -t "right and full joins|left joins"`,
+      `pnpm exec vitest --run packages/drizzle/src/index.test.ts`, and
+      `pnpm exec vitest --run conformance/drizzle-pin/src/index.test.ts`.
 - [ ] **HIGH — Cover the invisible read/write surfaces or mark them.** Relational query API
       (`db.query.users.findMany()`) matches neither read (:1138) nor write (:598) extraction;
       `db.execute(sql``)` is skipped by `extractExternalDbArgumentCalls` (:1820). Either
