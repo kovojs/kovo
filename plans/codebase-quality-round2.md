@@ -272,6 +272,10 @@ Do this first or pay it on every commit.
       server API and asserts `renderQueryScript`, `renderDocumentQueryScript`, and
       `renderDocument` output directly, including keyed query hydration and escaped
       `</script>` payloads, instead of grepping server source or server test names.
+      Partial evidence 2026-06-12: the D1 deferred-fragment stylesheet tranche now parses
+      `renderDeferredStream` output into element/attribute facts for the `<fw-fragment>`,
+      stylesheet `<link>`, and Tailwind class-bearing fragment body, preserving the SPEC §13.1
+      stylesheet-hint contract without regex-matching the rendered HTML string.
       Partial evidence 2026-06-11: the P2 page-hints tranche now imports the built server API
       and asserts `renderPageHints` suppresses empty speculation rules and de-dupes prerender
       URLs instead of grepping server source or server test names.

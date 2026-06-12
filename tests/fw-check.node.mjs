@@ -3451,10 +3451,22 @@ void test('D1 commerce enhanced fragments carry Tailwind stylesheet hints', asyn
     ],
     shell: '<!doctype html><main><fw-defer target="recommendations"></fw-defer></main>',
   });
-  assert.match(
-    deferred.body,
-    /<fw-fragment target="recommendations"><link rel="stylesheet" href="\/assets\/recommendations\.css"><section class="border-slate-200">Ready<\/section><\/fw-fragment>/,
+  const deferredElements = parseHtmlElements(deferred.body);
+  assert.deepEqual(
+    deferredElements.map((element) => element.tagName),
+    ['main', 'fw-defer', 'fw-fragment', 'link', 'section'],
   );
+  assert.deepEqual(
+    deferredElements.find((element) => element.tagName === 'fw-fragment')?.attributes,
+    { target: 'recommendations' },
+  );
+  assert.deepEqual(deferredElements.find((element) => element.tagName === 'link')?.attributes, {
+    href: '/assets/recommendations.css',
+    rel: 'stylesheet',
+  });
+  assert.deepEqual(deferredElements.find((element) => element.tagName === 'section')?.attributes, {
+    class: 'border-slate-200',
+  });
 
   const cart = domain('cart');
   const addToCart = mutation('cart/add', {
