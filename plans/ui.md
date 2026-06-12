@@ -736,6 +736,21 @@ jiso-dialog` resolves dashed wire names and prints provenance including package,
       `pnpm exec vp check examples/gallery/src/demo-fixtures.tsx examples/gallery/src/demo-fixtures.test.ts examples/gallery/src/behavior-contracts.test.ts examples/gallery/src/index.ts plans/ui.md`,
       and `git diff --check`. G2 remains open for browser-backed checks, `fw explain`
       coverage, and unrepresented primitive routes.
+      Additional partial evidence 2026-06-12: `examples/gallery/src/interactive-gallery.test.ts`
+      now injects a fake document into the generated client-module VM and asserts
+      browser-observable DOM contracts for compiled interactive handlers across radio-group,
+      checkbox-group, dropdown-menu, menubar, navigation-menu, command, toolbar, toggle-group,
+      and toast. The gate verifies ARIA checked/expanded/pressed updates, roving `tabIndex`,
+      hidden/open state changes, output text updates, command dialog close calls, and navigation
+      link `preventDefault()` behavior from checked-in generated client artifacts. Same-session
+      evidence:
+      `pnpm exec vitest --run examples/gallery/src/interactive-gallery.test.ts`,
+      `pnpm --filter @jiso/example-gallery test`,
+      `pnpm --filter @jiso/headless-ui run lint:primitives`,
+      `pnpm exec vitest --run packages/ui/src/index.test.tsx`,
+      and `git diff --check`. G2 remains open for full browser-backed focus/dismiss/top-layer
+      behavior, `fw explain` coverage, and routes/primitives not yet represented in static
+      gallery fixtures.
 - [ ] G3 axe checks per component state in the gallery.
 - [ ] G4 visual regression for `@jiso/ui`: shadcn-parity human review once, then self-baselined screenshots.
 - [ ] G5 merge fixtures: every primitive's attrs record × an author element → golden merged output (doubles as FW231/FW232 coverage).

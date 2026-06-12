@@ -14,6 +14,25 @@ type ClientExports = Record<
   ) => void
 >;
 
+interface FakeElement {
+  checked?: boolean;
+  close?: () => void;
+  hidden?: boolean;
+  readonly setAttribute: (name: string, value: string) => void;
+  tabIndex?: number;
+  textContent?: string;
+  value?: string;
+  readonly attrs: Record<string, string>;
+  closeCalls: number;
+}
+
+interface FakeDocument {
+  readonly byId: Map<string, FakeElement>;
+  readonly bySelector: Map<string, FakeElement>;
+  readonly getElementById: (id: string) => FakeElement | undefined;
+  readonly querySelector: (selector: string) => FakeElement | undefined;
+}
+
 describe('compiled interactive gallery demos', () => {
   it('keeps generated interactive artifacts in sync with app-authored TSX', () => {
     execFileSync(process.execPath, ['scripts/emit-interactive-gallery.mjs', '--check'], {
@@ -741,13 +760,266 @@ describe('compiled interactive gallery demos', () => {
     });
     expect(toastState).toEqual({ open: false });
   });
+
+  it('updates browser-observable ARIA, focus, visibility, and output contracts', () => {
+    const previousDocument = Reflect.get(globalThis, 'document') as unknown;
+    const hadDocument = Reflect.has(globalThis, 'document');
+    const signal = new AbortController().signal;
+
+    try {
+      const document = fakeDocument({
+        ids: [
+          'gallery-radio-email',
+          'gallery-radio-sms',
+          'gallery-checkbox-group-updates',
+          'gallery-checkbox-group-billing',
+          'gallery-dropdown-menu-trigger',
+          'gallery-dropdown-menu-content',
+          'gallery-dropdown-menu-rename',
+          'gallery-menubar-file',
+          'gallery-menubar-edit',
+          'gallery-menubar-file-menu',
+          'gallery-navigation-products-trigger',
+          'gallery-navigation-docs-link',
+          'gallery-navigation-products-content',
+          'gallery-navigation-viewport',
+          'gallery-command-input',
+          'gallery-command-listbox-item-1',
+          'gallery-command-dialog',
+          'gallery-toolbar-bold',
+          'gallery-toolbar-link',
+          'gallery-toggle-group-bold',
+          'gallery-toggle-group-italic',
+          'gallery-toast',
+        ],
+        selectors: [
+          '[data-demo-state="radio-value"]',
+          '[data-demo-state="checkbox-group-value"]',
+          '[data-demo-state="dropdown-open"]',
+          '[data-demo-state="dropdown-value"]',
+          '[data-demo-state="menubar-active"]',
+          '[data-demo-state="menubar-open"]',
+          '[data-demo-state="navigation-open"]',
+          '[data-demo-state="navigation-value"]',
+          '[data-demo-state="command-input"]',
+          '[data-demo-state="command-value"]',
+          '[data-demo-state="toolbar-active"]',
+          '[data-demo-state="toolbar-pressed"]',
+          '[data-demo-state="toggle-group-value"]',
+          '[data-demo-state="toast-open"]',
+        ],
+      });
+      Object.defineProperty(globalThis, 'document', {
+        configurable: true,
+        value: document,
+      });
+
+      const radioGroup = evaluateClientModule('radio-group-demo.client.js', { document });
+      const radioState = { value: 'email' };
+      clientHandler(radioGroup, 'GalleryRadioGroupDemo$section_keydown')(new Event('keydown'), {
+        params: {},
+        signal,
+        state: radioState,
+      });
+      expect(radioState).toEqual({ value: 'sms' });
+      expect(element(document, 'gallery-radio-email')).toMatchObject({
+        checked: false,
+        tabIndex: -1,
+      });
+      expect(element(document, 'gallery-radio-email').attrs['aria-checked']).toBe('false');
+      expect(element(document, 'gallery-radio-sms')).toMatchObject({ checked: true, tabIndex: 0 });
+      expect(selector(document, '[data-demo-state="radio-value"]').textContent).toBe('sms');
+
+      const checkboxGroup = evaluateClientModule('checkbox-group-demo.client.js', { document });
+      const checkboxState = { activeValue: 'updates', value: 'updates' };
+      clientHandler(checkboxGroup, 'GalleryCheckboxGroupDemo$input_click_2')(new Event('click'), {
+        params: {},
+        signal,
+        state: checkboxState,
+      });
+      expect(checkboxState).toEqual({ activeValue: 'updates', value: 'updates,billing' });
+      expect(element(document, 'gallery-checkbox-group-billing')).toMatchObject({
+        checked: true,
+      });
+      expect(element(document, 'gallery-checkbox-group-billing').attrs).toMatchObject({
+        'aria-checked': 'true',
+        'data-state': 'checked',
+      });
+      expect(selector(document, '[data-demo-state="checkbox-group-value"]').textContent).toBe(
+        'updates,billing',
+      );
+
+      const dropdownMenu = evaluateClientModule('dropdown-menu-demo.client.js', { document });
+      const dropdownState = { highlightedValue: 'duplicate', open: false, value: 'duplicate' };
+      clientHandler(dropdownMenu, 'GalleryDropdownMenuDemo$button_click')(new Event('click'), {
+        params: {},
+        signal,
+        state: dropdownState,
+      });
+      expect(element(document, 'gallery-dropdown-menu-trigger').attrs['aria-expanded']).toBe(
+        'true',
+      );
+      expect(element(document, 'gallery-dropdown-menu-content').hidden).toBe(false);
+      expect(selector(document, '[data-demo-state="dropdown-open"]').textContent).toBe('open');
+      clientHandler(dropdownMenu, 'GalleryDropdownMenuDemo$button_click_3')(new Event('click'), {
+        params: {},
+        signal,
+        state: dropdownState,
+      });
+      expect(element(document, 'gallery-dropdown-menu-content').hidden).toBe(true);
+      expect(element(document, 'gallery-dropdown-menu-rename').attrs['data-highlighted']).toBe('');
+      expect(selector(document, '[data-demo-state="dropdown-value"]').textContent).toBe('rename');
+
+      const menubar = evaluateClientModule('menubar-demo.client.js', { document });
+      const menubarState = { activeValue: 'file', openValue: '', value: 'new' };
+      clientHandler(menubar, 'GalleryMenubarDemo$section_keydown')(new Event('keydown'), {
+        params: {},
+        signal,
+        state: menubarState,
+      });
+      expect(element(document, 'gallery-menubar-file').tabIndex).toBe(-1);
+      expect(element(document, 'gallery-menubar-edit').tabIndex).toBe(0);
+      expect(selector(document, '[data-demo-state="menubar-active"]').textContent).toBe('edit');
+      clientHandler(menubar, 'GalleryMenubarDemo$button_click')(new Event('click'), {
+        params: {},
+        signal,
+        state: menubarState,
+      });
+      expect(element(document, 'gallery-menubar-file').attrs['aria-expanded']).toBe('true');
+      expect(element(document, 'gallery-menubar-file-menu').hidden).toBe(false);
+      expect(selector(document, '[data-demo-state="menubar-open"]').textContent).toBe('file');
+
+      const navigationMenu = evaluateClientModule('navigation-menu-demo.client.js', { document });
+      const navigationState = { activeValue: 'products', openValue: '', value: 'none' };
+      clientHandler(navigationMenu, 'GalleryNavigationMenuDemo$section_keydown')(
+        new Event('keydown'),
+        { params: {}, signal, state: navigationState },
+      );
+      expect(element(document, 'gallery-navigation-products-trigger').tabIndex).toBe(-1);
+      expect(element(document, 'gallery-navigation-docs-link').tabIndex).toBe(0);
+      clientHandler(navigationMenu, 'GalleryNavigationMenuDemo$button_click')(new Event('click'), {
+        params: {},
+        signal,
+        state: navigationState,
+      });
+      expect(element(document, 'gallery-navigation-products-trigger').attrs['aria-expanded']).toBe(
+        'true',
+      );
+      expect(element(document, 'gallery-navigation-products-content').hidden).toBe(false);
+      expect(element(document, 'gallery-navigation-viewport').hidden).toBe(false);
+      expect(selector(document, '[data-demo-state="navigation-open"]').textContent).toBe(
+        'products',
+      );
+      const navClick = new Event('click', { cancelable: true });
+      clientHandler(navigationMenu, 'GalleryNavigationMenuDemo$a_click')(navClick, {
+        params: {},
+        signal,
+        state: navigationState,
+      });
+      expect(navClick.defaultPrevented).toBe(true);
+      expect(selector(document, '[data-demo-state="navigation-value"]').textContent).toBe('docs');
+
+      const command = evaluateClientModule('command-demo.client.js', { document });
+      const commandState = {
+        highlightedValue: 'dashboard',
+        inputValue: '',
+        open: false,
+        value: 'dashboard',
+      };
+      clientHandler(command, 'GalleryCommandDemo$input_input')(new Event('input'), {
+        params: {},
+        signal,
+        state: commandState,
+      });
+      expect(element(document, 'gallery-command-input')).toMatchObject({ value: 'invite' });
+      expect(element(document, 'gallery-command-input').attrs['aria-activedescendant']).toBe(
+        'gallery-command-listbox-item-1',
+      );
+      expect(element(document, 'gallery-command-listbox-item-1').attrs['aria-selected']).toBe(
+        'true',
+      );
+      expect(selector(document, '[data-demo-state="command-input"]').textContent).toBe('invite');
+      clientHandler(command, 'GalleryCommandDemo$button_click_2')(new Event('click'), {
+        params: {},
+        signal,
+        state: commandState,
+      });
+      expect(element(document, 'gallery-command-dialog').closeCalls).toBe(1);
+      expect(selector(document, '[data-demo-state="command-value"]').textContent).toBe(
+        'Invite teammate',
+      );
+
+      const toolbar = evaluateClientModule('toolbar-demo.client.js', { document });
+      const toolbarState = { activeValue: 'bold', pressedValue: 'bold' };
+      clientHandler(toolbar, 'GalleryToolbarDemo$section_keydown')(new Event('keydown'), {
+        params: {},
+        signal,
+        state: toolbarState,
+      });
+      expect(element(document, 'gallery-toolbar-bold').tabIndex).toBe(-1);
+      expect(element(document, 'gallery-toolbar-link').tabIndex).toBe(0);
+      expect(selector(document, '[data-demo-state="toolbar-active"]').textContent).toBe('link');
+      clientHandler(toolbar, 'GalleryToolbarDemo$button_click_2')(new Event('click'), {
+        params: {},
+        signal,
+        state: toolbarState,
+      });
+      expect(element(document, 'gallery-toolbar-link').attrs['aria-pressed']).toBe('true');
+      expect(selector(document, '[data-demo-state="toolbar-pressed"]').textContent).toBe('link');
+
+      const toggleGroup = evaluateClientModule('toggle-group-demo.client.js', { document });
+      const toggleGroupState = { activeValue: 'bold', value: 'bold' };
+      clientHandler(toggleGroup, 'GalleryToggleGroupDemo$button_click_2')(new Event('click'), {
+        params: {},
+        signal,
+        state: toggleGroupState,
+      });
+      expect(element(document, 'gallery-toggle-group-bold').attrs).toMatchObject({
+        'aria-pressed': 'true',
+        'data-state': 'on',
+      });
+      expect(element(document, 'gallery-toggle-group-italic').attrs).toMatchObject({
+        'aria-pressed': 'true',
+        'data-state': 'on',
+      });
+      expect(selector(document, '[data-demo-state="toggle-group-value"]').textContent).toBe(
+        'bold,italic',
+      );
+
+      const toast = evaluateClientModule('toast-demo.client.js', { document });
+      const toastState = { open: true };
+      clientHandler(toast, 'GalleryToastDemo$section_keydown')(
+        Object.assign(new Event('keydown'), { key: 'Enter' }),
+        { params: {}, signal, state: toastState },
+      );
+      expect(toastState).toEqual({ open: true });
+      clientHandler(toast, 'GalleryToastDemo$section_keydown')(
+        Object.assign(new Event('keydown'), { key: 'Escape' }),
+        { params: {}, signal, state: toastState },
+      );
+      expect(element(document, 'gallery-toast').hidden).toBe(true);
+      expect(selector(document, '[data-demo-state="toast-open"]').textContent).toBe('closed');
+    } finally {
+      if (hadDocument) {
+        Object.defineProperty(globalThis, 'document', {
+          configurable: true,
+          value: previousDocument,
+        });
+      } else {
+        Reflect.deleteProperty(globalThis, 'document');
+      }
+    }
+  });
 });
 
 function readGenerated(fileName: string): string {
   return readFileSync(resolve(galleryRoot, `src/generated/interactive/${fileName}`), 'utf8');
 }
 
-function evaluateClientModule(fileName: string): ClientExports {
+function evaluateClientModule(
+  fileName: string,
+  globals: Record<string, unknown> = {},
+): ClientExports {
   const source = readGenerated(fileName)
     .replace("import { handler } from '@jiso/runtime';\n\n", '')
     .replaceAll('export const ', 'exports.');
@@ -755,6 +1027,7 @@ function evaluateClientModule(fileName: string): ClientExports {
   vm.runInNewContext(source, {
     exports,
     handler: (fn: ClientExports[string]) => fn,
+    ...globals,
   });
 
   return exports;
@@ -765,4 +1038,48 @@ function clientHandler(exports: ClientExports, name: string): ClientExports[stri
   if (fn === undefined) throw new Error(`Missing generated handler export: ${name}`);
 
   return fn;
+}
+
+function fakeDocument(options: {
+  ids: readonly string[];
+  selectors: readonly string[];
+}): FakeDocument {
+  const byId = new Map(options.ids.map((id) => [id, fakeElement()]));
+  const bySelector = new Map(options.selectors.map((selector) => [selector, fakeElement()]));
+
+  return {
+    byId,
+    bySelector,
+    getElementById: (id) => byId.get(id),
+    querySelector: (selector) => bySelector.get(selector),
+  };
+}
+
+function fakeElement(): FakeElement {
+  const element: FakeElement = {
+    attrs: {},
+    closeCalls: 0,
+    setAttribute(name, value) {
+      this.attrs[name] = value;
+    },
+  };
+  element.close = () => {
+    element.closeCalls += 1;
+  };
+
+  return element;
+}
+
+function element(document: FakeDocument, id: string): FakeElement {
+  const value = document.byId.get(id);
+  if (value === undefined) throw new Error(`Missing fake element: ${id}`);
+
+  return value;
+}
+
+function selector(document: FakeDocument, query: string): FakeElement {
+  const value = document.bySelector.get(query);
+  if (value === undefined) throw new Error(`Missing fake selector: ${query}`);
+
+  return value;
 }
