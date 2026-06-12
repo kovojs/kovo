@@ -2613,6 +2613,13 @@ As each phase splits a source module, split its tests in the same commit.
       evidence:
       `pnpm exec vitest --run packages/compiler/src/state-events.test.ts packages/compiler/src/index.test.ts -t "state|FW301|FW320|event payload|FW302"` and
       `pnpm exec vp check packages/compiler/src/state-events.test.ts packages/compiler/src/index.test.ts plans/codebase-quality-round2.md`.
+      Additional evidence 2026-06-12: mutation direct-db FW330 coverage moved from
+      `packages/compiler/src/index.test.ts` into `packages/compiler/src/direct-db.test.ts`,
+      with expected FW330 message/severity keyed to `diagnosticDefinitions`. The broad compiler
+      split remains open for the remaining query-shape, stamp-drift, and merge groups.
+      Same-session evidence:
+      `pnpm exec vitest --run packages/compiler/src/direct-db.test.ts packages/compiler/src/index.test.ts -t "FW330|direct db|mutation handlers"`
+      and `pnpm exec vp check packages/compiler/src/direct-db.test.ts packages/compiler/src/index.test.ts plans/codebase-quality-round2.md`.
 - [ ] drizzle (one describe, 57 its, 68 inline pgTable fixtures, 3 module-shim copies) and
       test-package suites: same treatment; CLI tests get the temp-dir + stream-spy ritual
       (16 hand-copies) as one helper.
