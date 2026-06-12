@@ -314,6 +314,18 @@ Scope: SPEC additions (session population, guard-failure contract, mutation resp
       auth-owned, organization-owned, and metadata-unavailable cases, and the pinned
       `better-auth@1.6.17` conformance suite remains clean. Same-session evidence:
       `pnpm exec vitest --run packages/better-auth/src/index.test.ts conformance/better-auth-pin/src/index.test.ts --reporter=dot`.
+      Partial evidence 2026-06-12: the B1 bridge now has an explicit extension path for plugin
+      tables outside the blessed fixed set. `validateBetterAuthSchemaBridge` and
+      `annotateBetterAuthSchemaSource` accept caller-provided table annotations, so an unsupported
+      plugin table keeps degrading as `FW406` by default but can become a first-class
+      `schema.ts` `jiso({ domain, key })` or exempt annotation only when the app supplies the
+      bridge entry and declared Better Auth table touches remain domain-aligned.
+      `packages/better-auth/src/index.test.ts` covers the local `webauthnCredential` fixture in
+      both default-degraded and explicitly-bridged modes. Same-session evidence:
+      `pnpm exec vitest --run packages/better-auth/src/index.test.ts`,
+      `pnpm exec vitest --run conformance/better-auth-pin/src/index.test.ts`,
+      `pnpm exec tsc -p conformance/better-auth-pin/tsconfig.json --noEmit`, and
+      `pnpm exec vp check packages/better-auth/src/index.ts packages/better-auth/src/index.test.ts plans/auth.md`.
       Remaining gaps: plugin-generated tables outside the blessed organization/admin/two-factor/OIDC-provider/MCP/SIWE/JWT/device-authorization
       surface are still not mapped, the OAuth-provider successor package/table metadata is not
       installed or exportable from the pinned dependency set, and full app `schema.ts` generation

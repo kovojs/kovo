@@ -735,6 +735,40 @@ describe('credential mutation helpers', () => {
     });
   });
 
+  it('accepts explicit schema bridge extensions for unsupported plugin tables', () => {
+    const tables = {
+      account: authTable(['userId']),
+      session: authTable(['userId']),
+      user: authTable(),
+      verification: authTable(),
+      webauthnCredential: authTable(['credentialId', 'userId']),
+    };
+    const schemaBridge = {
+      webauthnCredential: { domain: 'auth', key: 'userId' },
+    } as const;
+
+    expect(
+      validateBetterAuthSchemaBridge(tables, {
+        credentialMutationDeclaredTableTouches: {
+          signInEmail: [
+            { domain: 'auth', table: 'session' },
+            { domain: 'auth', table: 'webauthnCredential' },
+          ],
+        },
+        schemaBridge,
+      }),
+    ).toEqual({
+      declaredTouchMismatches: [],
+      keyFieldMismatches: [],
+      missingTables: [],
+      ok: true,
+      pluginTableDegradations: [],
+      unbridgedTables: [],
+    });
+    expect(betterAuthTableDomain('webauthnCredential')).toBe(null);
+    expect(betterAuthTableDomain('webauthnCredential', schemaBridge)).toBe('auth');
+  });
+
   it('materializes Jiso annotations into an app schema.ts source fixture', () => {
     const source = [
       "import { jiso } from '@jiso/drizzle';",
@@ -800,6 +834,50 @@ describe('credential mutation helpers', () => {
         "  id: text('id').primaryKey(),\n" +
         "  identifier: text('identifier').notNull(),\n" +
         '}, jiso({ exempt: true }));',
+    );
+  });
+
+  it('materializes explicit plugin-table bridge extensions into app schema.ts source', () => {
+    const result = annotateBetterAuthSchemaSource(
+      [
+        "import { jiso } from '@jiso/drizzle';",
+        "import { pgTable, text } from 'drizzle-orm/pg-core';",
+        '',
+        "export const webauthnCredential = pgTable('webauthnCredential', {",
+        "  id: text('id').primaryKey(),",
+        "  credentialId: text('credential_id').notNull(),",
+        "  userId: text('user_id').notNull(),",
+        '});',
+        '',
+      ].join('\n'),
+      {
+        account: authTable(['userId']),
+        session: authTable(['userId']),
+        user: authTable(),
+        verification: authTable(),
+        webauthnCredential: authTable(['credentialId', 'userId']),
+      },
+      {
+        schemaBridge: {
+          webauthnCredential: { domain: 'auth', key: 'userId' },
+        },
+      },
+    );
+
+    expect(result.validation.ok).toBe(true);
+    expect(result.validation).toMatchObject({
+      keyFieldMismatches: [],
+      pluginTableDegradations: [],
+      unbridgedTables: [],
+    });
+    expect(result.annotatedTables).toEqual(['webauthnCredential']);
+    expect(result.missingSourceTables).toEqual(['account', 'session', 'user', 'verification']);
+    expect(result.source).toContain(
+      "export const webauthnCredential = pgTable('webauthnCredential', {\n" +
+        "  id: text('id').primaryKey(),\n" +
+        "  credentialId: text('credential_id').notNull(),\n" +
+        "  userId: text('user_id').notNull(),\n" +
+        "}, jiso({ domain: 'auth', key: 'userId' }));",
     );
   });
 

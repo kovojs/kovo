@@ -222,6 +222,7 @@ export type BetterAuthSchemaBridgeAnnotation =
     };
 
 export type BetterAuthSchemaBridge = Record<BetterAuthTable, BetterAuthSchemaBridgeAnnotation>;
+export type BetterAuthSchemaBridgeExtensions = Record<string, BetterAuthSchemaBridgeAnnotation>;
 
 export interface BetterAuthSchemaBridgeValidation {
   declaredTouchMismatches: string[];
@@ -237,6 +238,7 @@ export interface BetterAuthSchemaBridgeValidationOptions {
     Record<BetterAuthCredentialMutationApi, readonly BetterAuthDeclaredTableTouch[]>
   >;
   credentialMutationTouches?: Partial<Record<BetterAuthCredentialMutationApi, readonly Domain[]>>;
+  schemaBridge?: BetterAuthSchemaBridgeExtensions;
 }
 
 export interface BetterAuthPluginTableDegradation {
@@ -285,6 +287,7 @@ export interface BetterAuthDbVerificationConfig {
 
 export interface BetterAuthSchemaSourceAnnotationOptions {
   annotationCallee?: string;
+  schemaBridge?: BetterAuthSchemaBridgeExtensions;
   tableFactories?: readonly string[];
 }
 
@@ -297,11 +300,11 @@ export interface BetterAuthSchemaSourceImportNote {
 }
 
 export interface BetterAuthSchemaSourceAnnotationResult {
-  alreadyAnnotatedTables: BetterAuthTable[];
-  annotatedTables: BetterAuthTable[];
+  alreadyAnnotatedTables: string[];
+  annotatedTables: string[];
   existingExtraConfigTables: string[];
   importNote: BetterAuthSchemaSourceImportNote;
-  missingSourceTables: BetterAuthTable[];
+  missingSourceTables: string[];
   requiredImport: {
     module: '@jiso/drizzle';
     name: 'jiso';
@@ -359,8 +362,14 @@ const betterAuthRequiredCoreTables = [
   'verification',
 ] as const satisfies readonly BetterAuthCoreTable[];
 
-export function betterAuthTableDomain(table: string): BetterAuthTouchDomain | null {
-  const bridge = betterAuthSchemaBridgeAnnotation(table);
+export function betterAuthTableDomain(
+  table: string,
+  schemaBridge: BetterAuthSchemaBridgeExtensions = {},
+): BetterAuthTouchDomain | null {
+  const bridge = betterAuthSchemaBridgeAnnotation(
+    table,
+    createBetterAuthSchemaBridge(schemaBridge),
+  );
 
   if (bridge === undefined) return null;
 
@@ -485,13 +494,17 @@ export function validateBetterAuthSchemaBridge(
   tables: Record<string, unknown>,
   options: BetterAuthSchemaBridgeValidationOptions = {},
 ): BetterAuthSchemaBridgeValidation {
-  const bridgeTables = Object.keys(betterAuthSchemaBridge) as BetterAuthTable[];
+  const schemaBridge = createBetterAuthSchemaBridge(options.schemaBridge);
+  const bridgeTables = Object.keys(schemaBridge);
   const tableNames = new Set(Object.keys(tables));
   const bridgeTableNames = new Set<string>(bridgeTables);
   const missingTables = betterAuthRequiredCoreTables.filter((table) => !tableNames.has(table));
   const unbridgedTables = [...tableNames].filter((table) => !bridgeTableNames.has(table)).sort();
-  const declaredTouchMismatches = declaredTableTouchMismatches(tableNames, options);
-  const keyFieldMismatches = schemaBridgeKeyFieldMismatches(tables);
+  const declaredTouchMismatches = declaredTableTouchMismatches(tableNames, {
+    ...options,
+    schemaBridge,
+  });
+  const keyFieldMismatches = schemaBridgeKeyFieldMismatches(tables, schemaBridge);
   const pluginTableDegradations = unbridgedTables.map((table) =>
     unsupportedPluginTableDegradation(table, tables[table]),
   );
@@ -517,22 +530,30 @@ export function annotateBetterAuthSchemaSource(
   tables: Record<string, unknown>,
   options: BetterAuthSchemaSourceAnnotationOptions = {},
 ): BetterAuthSchemaSourceAnnotationResult {
-  const validation = validateBetterAuthSchemaBridge(tables);
+  const schemaBridge = createBetterAuthSchemaBridge(options.schemaBridge);
+  const validation = validateBetterAuthSchemaBridge(tables, { schemaBridge });
   const metadataTables = new Set(Object.keys(tables));
   const sourceTables = findDrizzleTableCalls(source, options.tableFactories);
   const replacements: { end: number; start: number; value: string }[] = [];
-  const annotatedTables: BetterAuthTable[] = [];
-  const alreadyAnnotatedTables: BetterAuthTable[] = [];
+  const annotatedTables: string[] = [];
+  const alreadyAnnotatedTables: string[] = [];
   const existingExtraConfigTables: string[] = [];
   const annotationCallee = options.annotationCallee ?? 'jiso';
   const hasRequiredImport = hasNamedImportLocal(source, '@jiso/drizzle', annotationCallee);
 
   for (const call of sourceTables) {
     const table = call.tableName;
-    if (!isBetterAuthTable(table) || !metadataTables.has(table)) continue;
+    if (!isBetterAuthSchemaTable(table, schemaBridge) || !metadataTables.has(table)) continue;
 
     if (call.extraConfigText !== null) {
-      if (isBetterAuthSchemaAnnotationText(call.extraConfigText, table, annotationCallee)) {
+      if (
+        isBetterAuthSchemaAnnotationText(
+          call.extraConfigText,
+          table,
+          annotationCallee,
+          schemaBridge,
+        )
+      ) {
         alreadyAnnotatedTables.push(table);
       } else {
         existingExtraConfigTables.push(table);
@@ -543,14 +564,14 @@ export function annotateBetterAuthSchemaSource(
     replacements.push({
       end: call.closeParen,
       start: call.closeParen,
-      value: `, ${betterAuthSchemaAnnotationCall(table, annotationCallee)}`,
+      value: `, ${betterAuthSchemaAnnotationCall(table, annotationCallee, schemaBridge)}`,
     });
     annotatedTables.push(table);
   }
 
   const sourceTableNames = new Set(sourceTables.map((call) => call.tableName));
   const missingSourceTables = [...metadataTables]
-    .filter((table): table is BetterAuthTable => isBetterAuthTable(table))
+    .filter((table) => isBetterAuthSchemaTable(table, schemaBridge))
     .filter((table) => !sourceTableNames.has(table))
     .sort();
   const insertedImport = annotatedTables.length > 0 && !hasRequiredImport;
@@ -933,6 +954,7 @@ function declaredTableTouchMismatches(
   tableNames: ReadonlySet<string>,
   options: BetterAuthSchemaBridgeValidationOptions = {},
 ): string[] {
+  const schemaBridge = createBetterAuthSchemaBridge(options.schemaBridge);
   const mismatches: string[] = [];
 
   for (const api of betterAuthCredentialMutationApis) {
@@ -952,7 +974,7 @@ function declaredTableTouchMismatches(
         continue;
       }
 
-      const bridge = betterAuthSchemaBridgeAnnotation(touch.table);
+      const bridge = betterAuthSchemaBridgeAnnotation(touch.table, schemaBridge);
 
       if (bridge === undefined) {
         mismatches.push(
@@ -1000,13 +1022,13 @@ function formatDomainList(values: readonly string[]): string {
   return uniqueValues.length === 0 ? '[]' : `[${uniqueValues.join(', ')}]`;
 }
 
-function schemaBridgeKeyFieldMismatches(tables: Record<string, unknown>): string[] {
+function schemaBridgeKeyFieldMismatches(
+  tables: Record<string, unknown>,
+  schemaBridge: BetterAuthSchemaBridgeExtensions = betterAuthSchemaBridge,
+): string[] {
   const mismatches: string[] = [];
 
-  for (const [table, annotation] of Object.entries(betterAuthSchemaBridge) as [
-    BetterAuthTable,
-    BetterAuthSchemaBridgeAnnotation,
-  ][]) {
+  for (const [table, annotation] of Object.entries(schemaBridge)) {
     if (!('domain' in annotation) || annotation.key === undefined) continue;
 
     const fieldNames = betterAuthTableFieldNames(tables[table]);
@@ -1094,16 +1116,22 @@ function formatBetterAuthSchemaDomainAnnotation(
   return `{ domain: '${annotation.domain}'${key} }`;
 }
 
-const betterAuthSchemaTableNames = new Set<string>(
-  Object.keys(betterAuthSchemaBridge) as BetterAuthTable[],
-);
+const betterAuthSchemaTableNames = new Set<string>(Object.keys(betterAuthSchemaBridge));
 
 function betterAuthSchemaBridgeAnnotation(
   table: string,
+  schemaBridge: BetterAuthSchemaBridgeExtensions = betterAuthSchemaBridge,
 ): BetterAuthSchemaBridgeAnnotation | undefined {
-  return (betterAuthSchemaBridge as Record<string, BetterAuthSchemaBridgeAnnotation | undefined>)[
-    table
-  ];
+  return schemaBridge[table];
+}
+
+function createBetterAuthSchemaBridge(
+  extensions: BetterAuthSchemaBridgeExtensions = {},
+): BetterAuthSchemaBridgeExtensions {
+  return {
+    ...betterAuthSchemaBridge,
+    ...extensions,
+  };
 }
 
 interface DrizzleTableCall {
@@ -1112,16 +1140,27 @@ interface DrizzleTableCall {
   tableName: string;
 }
 
-function isBetterAuthTable(table: string): table is BetterAuthTable {
-  return betterAuthSchemaTableNames.has(table);
+function isBetterAuthSchemaTable(
+  table: string,
+  schemaBridge: BetterAuthSchemaBridgeExtensions = betterAuthSchemaBridge,
+): boolean {
+  return betterAuthSchemaTableNames.has(table) || schemaBridge[table] !== undefined;
 }
 
-function sortedBetterAuthTables(tables: readonly BetterAuthTable[]): BetterAuthTable[] {
+function sortedBetterAuthTables(tables: readonly string[]): string[] {
   return [...new Set(tables)].sort();
 }
 
-function betterAuthSchemaAnnotationCall(table: BetterAuthTable, annotationCallee: string): string {
-  const annotation = betterAuthSchemaBridge[table];
+function betterAuthSchemaAnnotationCall(
+  table: string,
+  annotationCallee: string,
+  schemaBridge: BetterAuthSchemaBridgeExtensions = betterAuthSchemaBridge,
+): string {
+  const annotation = betterAuthSchemaBridgeAnnotation(table, schemaBridge);
+
+  if (annotation === undefined) {
+    throw new Error(`${table} is outside the Better Auth schema bridge`);
+  }
 
   if ('domain' in annotation) {
     const key = annotation.key === undefined ? '' : `, key: ${quoteTsString(annotation.key)}`;
@@ -1134,12 +1173,13 @@ function betterAuthSchemaAnnotationCall(table: BetterAuthTable, annotationCallee
 
 function isBetterAuthSchemaAnnotationText(
   text: string,
-  table: BetterAuthTable,
+  table: string,
   annotationCallee: string,
+  schemaBridge: BetterAuthSchemaBridgeExtensions = betterAuthSchemaBridge,
 ): boolean {
   return (
     compactSourceText(text) ===
-    compactSourceText(betterAuthSchemaAnnotationCall(table, annotationCallee))
+    compactSourceText(betterAuthSchemaAnnotationCall(table, annotationCallee, schemaBridge))
   );
 }
 
