@@ -1,12 +1,12 @@
 ---
 title: Project structure
-description: What's in a Jiso project and how the verification workflow fits your CI.
+description: Tour the files in a scaffolded project and see how the graph-verification workflow plugs into your CI.
 order: 3
 ---
 
 # Project structure
 
-A scaffolded Jiso project looks like this:
+A scaffolded Jiso project is small enough to hold in your head. Here is the whole thing:
 
 ```
 my-app/
@@ -23,11 +23,13 @@ my-app/
 └── .github/workflows/ci.yml
 ```
 
+Most of it is what you'd expect. The part that isn't is `graph.json`.
+
 ## The graph workflow
 
 Jiso keeps application wiring auditable through one generated artifact: `graph.json`. It records
-components, queries, mutations, pages, optimistic coverage, and the touch graph — the complete
-"what updates what" of your app.
+components, queries, mutations, pages, optimistic coverage, and the touch graph — the derived map
+of which writes refresh which queries, the complete "what updates what" of your app.
 
 ```sh
 vp run emit-graph          # regenerate graph.json from the app
@@ -37,22 +39,24 @@ fw explain mutation cart/add --optimistic graph.json
 fw explain --unguarded graph.json
 ```
 
-`fw explain` output is stable and diffable by design (SPEC §11.4): when a product rule matters —
-"every component that shows cart data must refresh when the cart changes" — you assert it in
-`scripts/graph-assertions.mjs` and CI enforces it forever. The [fw check & fw explain
-guide](/guides/fw-explain/) walks through the recipes.
+`fw explain` output is stable and diffable by design. When a product rule matters — "every
+component that shows cart data must refresh when the cart changes" — you assert it in
+`scripts/graph-assertions.mjs` and CI enforces it from then on. The [fw check & fw explain
+guide](/guides/fw-explain/) walks through the recipes. SPEC §11.4
 
 ## Styling
 
-Tailwind is the default styling path (SPEC §13.1). The rule that matters: **class names must be
+Tailwind is the default styling path. The one rule that matters: **class names must be
 statically discoverable**. Keep them as literal strings in your templates, and safelist anything
 dynamic with `@source inline("...")` in `styles.css` — server-rendered pages, mutation fragments,
-and deferred streams all need their CSS present in the single generated stylesheet.
+and deferred streams all need their CSS present in the single generated stylesheet. SPEC §13.1
 
 ## Deployment shape
 
-A Jiso app deploys as a stateless server (SPEC §9.3): mutation responses are ordinary HTML over
-the wire, the server retains no session of what's on screen, and liveness comes from
-BroadcastChannel tab sync plus refetch-on-focus — no Redis, no sticky sessions, no socket tier.
+A Jiso app deploys as a stateless server: mutation responses are ordinary HTML over the wire, the
+server keeps no record of what's on screen, and liveness comes from BroadcastChannel tab sync
+plus refetch-on-focus — no Redis, no sticky sessions, no socket tier. SPEC §9.3
+
 The [deployment guide](/guides/deployment/) covers the two real obligations: keeping versioned
-`/c/*` client modules published across deploys (SPEC §6.6) and the stateless-server guarantee.
+`/c/*` client modules published across deploys, and not breaking the stateless-server guarantee.
+SPEC §6.6

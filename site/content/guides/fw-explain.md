@@ -1,6 +1,6 @@
 ---
 title: Reading fw check & fw explain
-description: The graph workflow — stable output formats, CI graph assertions, the unguarded and unscoped audits, and debugging from the Network panel.
+description: Query the graph your build emits, turn product rules into CI assertions, and debug mutations straight from the Network panel.
 order: 7
 ---
 
@@ -8,13 +8,14 @@ order: 7
 
 `fw explain` prints the compiler's decision tree on demand; `fw check` turns the same derived
 facts into pass/fail gates. Both emit stable, diffable text — agents consume the same artifact
-humans read (SPEC §5.3, §11.4). This guide is the working vocabulary: what each command says, how
-to assert it in CI, and how the same facts appear in the Network panel.
+humans read. This guide is the working vocabulary: what each command says, how to assert it in
+CI, and how the same facts appear in the Network panel. SPEC §5.3, §11.4
 
 ## The graph workflow
 
 Everything runs off one generated artifact, `graph.json` — components, queries, mutations, pages,
-optimistic coverage, and the touch graph. The starter wires the loop:
+optimistic coverage, and the touch graph (the derived map of which writes refresh which queries).
+The starter wires the loop:
 
 ```sh
 vp run emit-graph                                 # regenerate graph.json from app facts
@@ -27,13 +28,13 @@ fw explain --unguarded graph.json
 ```
 
 `graph.json` is committed, so graph changes appear as reviewable diffs — adding a write to a
-mutation shows up as a changed invalidation set in the same PR (SPEC §11.1).
+mutation shows up as a changed invalidation set in the same PR. SPEC §11.1
 
 ## Reading the output
 
 All output below is generated from the commerce reference app's committed graph. Every format
 starts with a version line (`fw-explain/v1`); the formats are snapshot-locked so your scripts and
-CI assertions don't rot (SPEC §11.4).
+CI assertions don't rot. SPEC §11.4
 
 **A query** — what it reads, who consumes it, what refreshes it:
 
@@ -75,7 +76,7 @@ OPTIMISTIC-SUMMARY total=3 hand-written=1 await-fragment=2 UNHANDLED=0
 
 The `updates:` line is the answer to "what updates when this button is clicked" — mechanically,
 without reading a line of app code. That property is an acceptance criterion for the framework:
-an agent given only `fw explain` output answers it with 100% accuracy (SPEC §16).
+an agent given only `fw explain` output answers it with 100% accuracy. SPEC §16
 
 **A page** — what a route ships:
 
@@ -101,8 +102,8 @@ The grammar is consistent: `key: value` lines, `-` for empty, comma-separated se
 ## fw check: the gates
 
 `fw check graph.json` runs the semantic checks that don't belong in `vp check`: optimistic
-exhaustiveness (FW310, SPEC §10.6), update coverage (FW311, SPEC §4.9), touch-graph consistency,
-and the audits. Healthy output is short:
+exhaustiveness (FW310), update coverage (FW311), touch-graph consistency, and the audits.
+Healthy output is short: SPEC §10.6, §4.9
 
 ```txt
 fw-check/v1
@@ -118,13 +119,13 @@ WARN FW310 cart/add -> cart Invalidated query lacks optimistic transform.
 ```
 
 Coverage diagnostics are warnings with teeth: suppressible, but the suppression is recorded in
-source — never a silent inconsistency (SPEC §10.6).
+source — never a silent inconsistency. SPEC §10.6
 
 ## Graph assertions in CI
 
 When a product rule matters — "every component that shows cart data must refresh when the cart
-changes" — assert it as a set operation over the printed graph (SPEC §11.4). Shell version, the
-starter's recipe:
+changes" — assert it as a set operation over the printed graph. Shell version, the starter's
+recipe: SPEC §11.4
 
 ```sh
 fw explain query cart graph.json > .jiso/cart.query.txt
@@ -158,8 +159,8 @@ the consumer set correctly or turns CI red.
 
 ## The audits
 
-Three explain modes answer security review's first questions from the same artifact (SPEC §10.3,
-§11.4):
+Three explain modes answer security review's first questions from the same artifact. SPEC §10.3,
+§11.4
 
 ```sh
 fw explain --unguarded graph.json   # every mutation, route, and query reachable without authed
@@ -175,16 +176,20 @@ SUMMARY total=0
 
 The commerce app's audits are clean (`total=0`). A finding adds a line per item above its
 summary; in CI, run the audits with fail-on-findings so a guard removed in a refactor cannot land
-quietly. `--unscoped` is the IDOR audit: it lists queries and writes touching an `owner:`-annotated
-table (SPEC §10.1) whose key predicate the analyzer cannot trace to `req.session` (SPEC §10.3).
-`--endpoints` is the machine-ingress table — name, path, auth scheme, CSRF posture, and for
-webhooks the write→domain chain — so "what can reach this app and what can it touch?" is
-answerable without executing anything (SPEC §11.4).
+quietly.
+
+- `--unguarded` lists everything reachable without an `authed` guard — the first question of any
+  security review.
+- `--unscoped` is the IDOR audit: queries and writes touching an `owner:`-annotated table
+  (SPEC §10.1) whose key predicate the analyzer cannot trace back to `req.session` — in other
+  words, data that should be scoped to its owner but provably might not be.
+- `--endpoints` is the machine-ingress table — name, path, auth scheme, CSRF posture, and for
+  webhooks the write→domain chain — so "what can reach this app and what can it touch?" is
+  answerable without executing anything.
 
 ## Debugging from the Network panel
 
-The wire and the graph speak the same vocabulary, which makes a tight debugging loop (SPEC §9.1,
-Constitution #4 in SPEC §2):
+The wire and the graph speak the same vocabulary, which makes a tight debugging loop. SPEC §9.1
 
 1. **Click the thing.** In the Network panel you see `POST /_m/cart/add` — mutations are named
    POSTs, so you already know which mutation fired without source maps.
@@ -203,7 +208,7 @@ Constitution #4 in SPEC §2):
    (see [the 422 path](/guides/mutations/)).
 
 Debugging proceeds _down_ into plainer artifacts — graph text, HTTP, HTML — never up into
-framework internals (SPEC §1).
+framework internals. SPEC §1
 
 ## Next
 
