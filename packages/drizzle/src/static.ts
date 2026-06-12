@@ -181,33 +181,12 @@ function extractTouchGraphFromPreparedFiles(
   for (const file of files) {
     const fileTables = tablesForFile(file, sourceContext);
     const functions = functionsForFile(file);
-    const functionsByKey = new Map(functions.map((fn) => [fn.key, fn]));
-    const callsByKey = new Map(
-      functions.map((fn) => [fn.key, fn.localCalls.filter((call) => functionsByKey.has(call))]),
+    const summaries = functionTouchSummariesForFile(
+      file,
+      functions,
+      fileTables,
+      unresolvedIdentifiers,
     );
-    const summaries = new Map(
-      functions.map((fn) => [
-        fn.key,
-        directSummaryForFunction(fn, file, fileTables, unresolvedIdentifiers),
-      ]),
-    );
-
-    let changed = true;
-    while (changed) {
-      changed = false;
-
-      for (const fn of functions) {
-        const summary = summaries.get(fn.key);
-        if (!summary) continue;
-
-        for (const call of callsByKey.get(fn.key) ?? []) {
-          const calleeSummary = summaries.get(call);
-          if (!calleeSummary) continue;
-
-          if (mergeSummary(summary, calleeSummary)) changed = true;
-        }
-      }
-    }
 
     for (const fn of functions) {
       const { reads, unresolved, writes } = summaries.get(fn.key) ?? {
@@ -232,11 +211,7 @@ export function extractTouchGraphFromProject(options: TouchGraphProjectOptions):
 
     return extractTouchGraphFromPreparedFiles(
       extraction.files,
-      (file) =>
-        extractFunctions(file).map((fn) => {
-          const projectFunction = projectFunctionExtractions.get(file.fileName)?.get(fn.key);
-          return projectFunction ? { ...fn, ...projectFunction } : fn;
-        }),
+      (file) => projectFunctionsForFile(file, projectFunctionExtractions),
       sourceContext,
     );
   } finally {
@@ -249,6 +224,7 @@ export function extractQueryFactsFromProject(options: TouchGraphProjectOptions):
   try {
     const sourceContext = projectSourceModuleContext(extraction);
     const contextFiles = projectContextFiles(extraction);
+    const projectFunctionExtractions = projectFunctionExtractionsByFileName(extraction);
     return extractQueryFactsFromPreparedFiles(
       extraction.files,
       (file) => {
@@ -273,6 +249,7 @@ export function extractQueryFactsFromProject(options: TouchGraphProjectOptions):
       },
       contextFiles,
       sourceContext,
+      (file) => projectFunctionsForFile(file, projectFunctionExtractions),
     );
   } finally {
     extraction.dispose();
@@ -490,6 +467,16 @@ function projectFunctionExtractionsByFileName(
   });
 
   return extractionsByFile;
+}
+
+function projectFunctionsForFile(
+  file: SourceFileInput,
+  projectFunctionExtractions: ReadonlyMap<string, ReadonlyMap<string, ProjectFunctionExtraction>>,
+): ExtractedFunction[] {
+  return extractFunctions(file).map((fn) => {
+    const projectFunction = projectFunctionExtractions.get(file.fileName)?.get(fn.key);
+    return projectFunction ? { ...fn, ...projectFunction } : fn;
+  });
 }
 
 interface ProjectFunctionExtraction {
@@ -1024,20 +1011,33 @@ function extractQueryFactsFromPreparedFiles(
   queriesForFile: (file: SourceFileInput) => readonly ExtractedQueryDefinition[],
   contextFiles: readonly SourceFileInput[] = files,
   sourceContext: SourceModuleContext = sourceModuleContext(contextFiles),
+  functionsForFile: (file: SourceFileInput) => ExtractedFunction[] = extractFunctions,
 ): QueryFact[] {
   const facts: QueryFact[] = [];
+  const unresolvedIdentifiers = unresolvedConditionalIdentifiersForFiles(
+    contextFiles,
+    sourceContext,
+  );
 
   for (const [index, file] of files.entries()) {
     const contextFile = contextFiles[index] ?? file;
     const fileTables = tablesForFile(contextFile, sourceContext);
+    const helperSummaries = functionTouchSummariesForFile(
+      file,
+      functionsForFile(file),
+      fileTables,
+      unresolvedIdentifiers,
+    );
     const columnShapes = {
       ...sourceColumnShapesForTables(fileTables),
       ...contextFile.columnShapes,
       ...file.columnShapes,
     };
     for (const query of queriesForFile({ ...file, columnShapes })) {
-      const reads = queryReadDomains(query.tableExpressions, fileTables);
       const site = `${file.fileName}:${lineForIndex(file.source, query.index)}`;
+      const localHelperSummary = localQueryHelperSummary(query.localHelperCalls, helperSummaries);
+      const reads = queryReadDomains(query.tableExpressions, fileTables);
+      const helperReads = localHelperSummary.reads.map((read) => read.table.domain);
       const diagnostics = opaqueProjectionDiagnostics(
         query.query,
         query.opaquePaths,
@@ -1046,12 +1046,16 @@ function extractQueryFactsFromPreparedFiles(
       )
         .concat(unresolvedProjectionDiagnostics(query.query, query.unresolvedPaths, site))
         .concat(query.diagnostics?.map((diagnostic) => ({ ...diagnostic, site })) ?? [])
-        .concat(exemptQueryReadDiagnostics(query.tableExpressions, fileTables, site));
+        .concat(exemptQueryReadDiagnostics(query.tableExpressions, fileTables, site))
+        .concat(localQueryHelperDiagnostics(localHelperSummary));
+      const allReads = [...new Set([...reads, ...helperReads])].sort();
+      if (!query.hasSelection && allReads.length === 0 && diagnostics.length === 0) continue;
+
       facts.push({
         ...(diagnostics.length > 0 ? { diagnostics } : {}),
         ...queryInstanceKey(query.instanceKeyComparisons, fileTables),
         query: query.query,
-        reads,
+        reads: allReads,
         shape: query.shape,
         site,
       });
@@ -1059,6 +1063,60 @@ function extractQueryFactsFromPreparedFiles(
   }
 
   return facts.sort((left, right) => left.query.localeCompare(right.query));
+}
+
+function unresolvedConditionalIdentifiersForFiles(
+  files: readonly SourceFileInput[],
+  sourceContext: SourceModuleContext,
+): Set<string> {
+  const unresolvedIdentifiers = new Set<string>();
+
+  for (const file of files) {
+    const fileTables = tablesForFile(file, sourceContext);
+    for (const identifier of extractUnresolvedConditionalIdentifiers(file, fileTables)) {
+      unresolvedIdentifiers.add(identifier);
+    }
+  }
+
+  return unresolvedIdentifiers;
+}
+
+function localQueryHelperSummary(
+  helperCalls: readonly string[],
+  helperSummaries: ReadonlyMap<string, FunctionTouchSummary>,
+): FunctionTouchSummary {
+  const summary: FunctionTouchSummary = { reads: [], unresolved: [], writes: [] };
+
+  for (const call of helperCalls) {
+    const helperSummary = helperSummaries.get(call);
+    if (helperSummary) mergeSummary(summary, helperSummary);
+  }
+
+  return summary;
+}
+
+function localQueryHelperDiagnostics(summary: FunctionTouchSummary): TouchGraphDiagnostic[] {
+  const diagnostics: TouchGraphDiagnostic[] = [];
+
+  for (const write of summary.writes) {
+    diagnostics.push({
+      code: 'FW406',
+      message: `${diagnosticDefinitions.FW406.message} Query local helper touches Drizzle table via ${write.operation}().`,
+      severity: diagnosticDefinitions.FW406.severity,
+      site: write.site,
+    });
+  }
+
+  for (const unresolved of summary.unresolved) {
+    diagnostics.push({
+      code: 'FW406',
+      message: `${diagnosticDefinitions.FW406.message} Query local helper has unresolved Drizzle ${unresolved.operation}().`,
+      severity: diagnosticDefinitions.FW406.severity,
+      site: unresolved.site,
+    });
+  }
+
+  return diagnostics;
 }
 
 function sourceColumnShapesForTables(
@@ -1415,8 +1473,10 @@ type ParsedExtractedFunction = Omit<
 interface ExtractedQueryDefinition {
   diagnostics?: readonly TouchGraphDiagnostic[];
   hasOutputSchema: boolean;
+  hasSelection: boolean;
   index: number;
   instanceKeyComparisons: readonly QueryInstanceKeyComparison[];
+  localHelperCalls: readonly string[];
   opaquePaths: readonly string[];
   query: string;
   shape: QueryShape;
@@ -1517,6 +1577,7 @@ function extractQueryDefinitionsFromSourceFile(
   options: QueryDefinitionOptions = {},
 ): ExtractedQueryDefinition[] {
   const definitions: ExtractedQueryDefinition[] = [];
+  const localFunctionKeys = localFunctionKeysFromSourceFile(sourceFile);
 
   for (const declaration of sourceFile.getVariableDeclarations()) {
     const statement = declaration.getVariableStatement();
@@ -1543,22 +1604,25 @@ function extractQueryDefinitionsFromSourceFile(
     const diagnostics = [
       ...relationalQueryDiagnostics(bodyArgument, receiverNames),
       ...unclassifiedQueryReceiverDiagnostics(bodyArgument, receiverNames),
-      ...externalQueryHelperDiagnostics(bodyArgument, receiverNames),
+      ...externalQueryHelperDiagnostics(bodyArgument, receiverNames, localFunctionKeys),
       ...unresolvedQueryReadDiagnostics(bodyArgument, receiverNames, readResolutionOptions),
     ];
-    if (!selection && diagnostics.length === 0) continue;
+    const localHelperCalls = queryLocalHelperCalls(bodyArgument, receiverNames, localFunctionKeys);
+    if (!selection && diagnostics.length === 0 && localHelperCalls.length === 0) continue;
 
     definitions.push({
       ...(selection?.diagnostics || diagnostics.length > 0
         ? { diagnostics: [...(selection?.diagnostics ?? []), ...diagnostics] }
         : {}),
       hasOutputSchema: objectHasProperty(bodyArgument, 'output'),
+      hasSelection: selection !== null,
       index: declaration.getStart(),
       instanceKeyComparisons: queryInstanceKeyComparisons(
         bodyArgument,
         receiverNames,
         options.readTableIdentifier,
       ),
+      localHelperCalls,
       opaquePaths: selection?.opaquePaths ?? [],
       query,
       shape: selection?.shape ?? {},
@@ -1718,15 +1782,18 @@ function unclassifiedQueryReceiverDiagnostics(
 function externalQueryHelperDiagnostics(
   body: ObjectLiteralExpression,
   receiverNames: ReadonlySet<string>,
+  localFunctionKeys: ReadonlySet<string>,
 ): TouchGraphDiagnostic[] {
   // SPEC §11.1: helpers that receive the query loader's Drizzle receiver are an explicit FW406
   // boundary until their read/write summaries are proven interprocedurally.
-  return queryBodyCallExpressions(body, (call) => {
+  return queryExecutableCallExpressions(body).flatMap((call) => {
     const expression = call.getExpression();
     if (!Node.isIdentifier(expression)) return [];
 
     const name = expression.getText();
     if (IGNORED_LOCAL_CALL_NAMES.has(name)) return [];
+    if (localFunctionKeyForIdentifier(expression, localFunctionKeys)) return [];
+
     const receiverName = queryHelperReceiverArgumentName(call, receiverNames);
     if (!receiverName) return [];
 
@@ -1739,6 +1806,54 @@ function externalQueryHelperDiagnostics(
       },
     ];
   });
+}
+
+function queryLocalHelperCalls(
+  body: ObjectLiteralExpression,
+  receiverNames: ReadonlySet<string>,
+  localFunctionKeys: ReadonlySet<string>,
+): string[] {
+  const calls: string[] = [];
+
+  for (const call of queryExecutableCallExpressions(body)) {
+    const expression = call.getExpression();
+    if (!Node.isIdentifier(expression)) continue;
+    if (!queryHelperReceiverArgumentName(call, receiverNames)) continue;
+
+    const key = localFunctionKeyForIdentifier(expression, localFunctionKeys);
+    if (key) calls.push(key);
+  }
+
+  return [...new Set(calls)];
+}
+
+function queryExecutableCallExpressions(body: ObjectLiteralExpression): CallExpression[] {
+  return queryCallbackBodies(body)
+    .flatMap((callbackBody) => touchBodyCallExpressions(callbackBody))
+    .sort((left, right) => callSourceOrder(left) - callSourceOrder(right));
+}
+
+function queryCallbackBodies(body: ObjectLiteralExpression): Node[] {
+  const bodies: Node[] = [];
+
+  for (const property of body.getProperties()) {
+    const callback = queryCallbackFunction(property);
+    if (callback) bodies.push(functionBody(callback));
+  }
+
+  return bodies;
+}
+
+function queryCallbackFunction(node: Node): Node | undefined {
+  if (Node.isMethodDeclaration(node)) return node;
+  if (!Node.isPropertyAssignment(node)) return undefined;
+
+  const initializer = node.getInitializer();
+  if (!initializer) return undefined;
+  const expression = unwrappedStaticExpressionNode(initializer);
+  return Node.isArrowFunction(expression) || Node.isFunctionExpression(expression)
+    ? expression
+    : undefined;
 }
 
 function queryHelperReceiverArgumentName(
@@ -2504,6 +2619,43 @@ function directSummaryForFunction(
   return { reads, unresolved, writes };
 }
 
+function functionTouchSummariesForFile(
+  file: SourceFileInput,
+  functions: readonly ExtractedFunction[],
+  tables: ReadonlyMap<string, readonly ExtractedTable[]>,
+  unresolvedIdentifiers: ReadonlySet<string>,
+): Map<string, FunctionTouchSummary> {
+  const functionsByKey = new Map(functions.map((fn) => [fn.key, fn]));
+  const callsByKey = new Map(
+    functions.map((fn) => [fn.key, fn.localCalls.filter((call) => functionsByKey.has(call))]),
+  );
+  const summaries = new Map(
+    functions.map((fn) => [
+      fn.key,
+      directSummaryForFunction(fn, file, tables, unresolvedIdentifiers),
+    ]),
+  );
+
+  let changed = true;
+  while (changed) {
+    changed = false;
+
+    for (const fn of functions) {
+      const summary = summaries.get(fn.key);
+      if (!summary) continue;
+
+      for (const call of callsByKey.get(fn.key) ?? []) {
+        const calleeSummary = summaries.get(call);
+        if (!calleeSummary) continue;
+
+        if (mergeSummary(summary, calleeSummary)) changed = true;
+      }
+    }
+  }
+
+  return summaries;
+}
+
 function mergeSummary(target: FunctionTouchSummary, source: FunctionTouchSummary): boolean {
   let changed = false;
 
@@ -3238,12 +3390,20 @@ function extractFunctions(file: SourceFileInput): ExtractedFunction[] {
   });
 }
 
+function localFunctionKeysFromSourceFile(sourceFile: SourceFile): ReadonlySet<string> {
+  const functions = [
+    ...extractFunctionDeclarations(sourceFile),
+    ...extractVariableAssignedFunctions(sourceFile),
+  ];
+  return new Set(functions.map((fn) => fn.key));
+}
+
 function extractFunctionDeclarations(sourceFile: SourceFile): ParsedExtractedFunction[] {
   const functions: ParsedExtractedFunction[] = [];
 
   for (const declaration of sourceFile.getDescendantsOfKind(SyntaxKind.FunctionDeclaration)) {
     const name = declaration.getName();
-    if (!name) continue;
+    if (!name || !declaration.getBody()) continue;
 
     functions.push(extractedFunctionFromCallback(name, declaration, declaration.getNameNode()));
   }
@@ -3349,7 +3509,8 @@ function functionBody(callback: Node): Node {
   if (
     Node.isArrowFunction(callback) ||
     Node.isFunctionDeclaration(callback) ||
-    Node.isFunctionExpression(callback)
+    Node.isFunctionExpression(callback) ||
+    Node.isMethodDeclaration(callback)
   ) {
     const body = callback.getBody();
     if (body) return body;

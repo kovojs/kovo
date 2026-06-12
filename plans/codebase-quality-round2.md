@@ -1811,6 +1811,18 @@ must be "FW406 unresolved," never "silently wrong."
       `pnpm exec vitest --run conformance/drizzle-pin/src/index.test.ts`,
       `pnpm exec vp check packages/drizzle/src/static.ts packages/drizzle/src/index.test.ts conformance/drizzle-pin/src/index.test.ts plans/codebase-quality-round2.md`,
       and `git diff --check`.
+      Additional bounded evidence 2026-06-12: source/project query-loader helper calls now share
+      the touch-graph function-summary fixed point instead of treating every identifier helper
+      that receives `db` as an external FW406 boundary. Local helpers with proven Drizzle reads
+      contribute query read domains, while local helper writes/unresolved receiver work still
+      degrade to FW406 at the helper site under SPEC §10-§11; ambient/external helper handoffs
+      keep the previous FW406 behavior. Same-session evidence:
+      `pnpm exec vitest --run packages/drizzle/src/index.test.ts -t "query-loader helper"`,
+      `pnpm exec vitest --run conformance/drizzle-pin/src/index.test.ts -t "query-loader helper"`,
+      `pnpm exec vitest --run packages/drizzle/src`,
+      `pnpm exec vitest --run conformance/drizzle-pin`,
+      `pnpm exec vp check packages/drizzle/src/static.ts packages/drizzle/src/index.test.ts conformance/drizzle-pin/src/index.test.ts plans/codebase-quality-round2.md`,
+      and `git diff --check`.
 
 - [ ] **HIGH — Remove fact-fabricating heuristics; degrade to FW406.**
       Column type from projection-key name (`/(count|qty|...)$/i` → number, index.ts:993);

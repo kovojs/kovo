@@ -2307,6 +2307,90 @@ export interface CommerceInvalidationSets {
     ]);
   });
 
+  it('folds local query-loader helper reads into query facts', () => {
+    const facts = extractQueryFactsFromProject({
+      files: [
+        {
+          fileName: 'product.queries.ts',
+          source: [
+            'import type { PgDatabase } from "drizzle-orm/pg-core";',
+            '',
+            'export const products = pgTable("products", {',
+            '  id: text("id").primaryKey(),',
+            '  name: text("name").notNull(),',
+            '}, jiso({ domain: "product", key: "id" }));',
+            '',
+            'function loadProducts(db: PgDatabase<any, any, any>) {',
+            '  return db.select({ name: products.name }).from(products);',
+            '}',
+            '',
+            'export const productQuery = query("product/helper-local", {',
+            '  load(_input, db: PgDatabase<any, any, any>) {',
+            '    return loadProducts(db);',
+            '  },',
+            '});',
+          ].join('\n'),
+        },
+      ],
+    });
+
+    expect(facts).toEqual([
+      {
+        query: 'product/helper-local',
+        reads: ['product'],
+        shape: {},
+        site: 'product.queries.ts:12',
+      },
+    ]);
+    expect(diagnosticsForQueryFacts(facts)).toEqual([]);
+  });
+
+  it('marks local query-loader helper writes as FW406', () => {
+    const facts = extractQueryFactsFromProject({
+      files: [
+        {
+          fileName: 'product.queries.ts',
+          source: [
+            'import type { PgDatabase } from "drizzle-orm/pg-core";',
+            '',
+            'export const products = pgTable("products", {',
+            '  id: text("id").primaryKey(),',
+            '}, jiso({ domain: "product", key: "id" }));',
+            '',
+            'async function writeProducts(db: PgDatabase<any, any, any>) {',
+            '  await db.update(products).set({ id: "p1" });',
+            '}',
+            '',
+            'export const productQuery = query("product/helper-write", {',
+            '  async load(_input, db: PgDatabase<any, any, any>) {',
+            '    await writeProducts(db);',
+            '    return [];',
+            '  },',
+            '});',
+          ].join('\n'),
+        },
+      ],
+    });
+
+    expect(facts).toEqual([
+      {
+        diagnostics: [
+          {
+            code: 'FW406',
+            message:
+              'Statically un-analyzable write site; manual touches required. Query local helper touches Drizzle table via update().',
+            severity: 'warn',
+            site: 'product.queries.ts:8',
+          },
+        ],
+        query: 'product/helper-write',
+        reads: [],
+        shape: {},
+        site: 'product.queries.ts:11',
+      },
+    ]);
+  });
+
   it('does not fabricate query reads or relational diagnostics from comments and strings', () => {
     const facts = extractQueryFactsFromSource([
       {
