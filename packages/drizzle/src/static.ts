@@ -167,8 +167,8 @@ export function extractTouchGraphFromSource(files: readonly SourceFileInput[]): 
 function extractTouchGraphFromPreparedFiles(
   files: readonly SourceFileInput[],
   functionsForFile: (file: SourceFileInput) => ExtractedFunction[],
+  sourceContext: SourceModuleContext = sourceModuleContext(files),
 ): TouchGraph {
-  const sourceContext = sourceModuleContext(files);
   const unresolvedIdentifiers = new Set<string>();
   const graph: Record<string, TouchGraphEntry> = {};
 
@@ -228,14 +228,17 @@ function extractTouchGraphFromPreparedFiles(
 export function extractTouchGraphFromProject(options: TouchGraphProjectOptions): TouchGraph {
   const extraction = createProjectExtraction(options);
   try {
-    const files = sourceFilesWithProjectExtractionResolvedFromProject(extraction);
+    const sourceContext = projectSourceModuleContext(extraction);
     const projectFunctionExtractions = projectFunctionExtractionsByFileName(extraction);
 
-    return extractTouchGraphFromPreparedFiles(files, (file) =>
-      extractFunctions(file.source).map((fn) => {
-        const projectFunction = projectFunctionExtractions.get(file.fileName)?.get(fn.name);
-        return projectFunction ? { ...fn, ...projectFunction } : fn;
-      }),
+    return extractTouchGraphFromPreparedFiles(
+      extraction.files,
+      (file) =>
+        extractFunctions(file.source).map((fn) => {
+          const projectFunction = projectFunctionExtractions.get(file.fileName)?.get(fn.name);
+          return projectFunction ? { ...fn, ...projectFunction } : fn;
+        }),
+      sourceContext,
     );
   } finally {
     extraction.dispose();
@@ -245,7 +248,8 @@ export function extractTouchGraphFromProject(options: TouchGraphProjectOptions):
 export function extractQueryFactsFromProject(options: TouchGraphProjectOptions): QueryFact[] {
   const extraction = createProjectExtraction(options);
   try {
-    const contextFiles = sourceFilesWithProjectExtractionResolvedFromProject(extraction);
+    const sourceContext = projectSourceModuleContext(extraction);
+    const contextFiles = projectContextFiles(extraction);
     return extractQueryFactsFromPreparedFiles(
       extraction.files,
       (file) => {
@@ -269,6 +273,7 @@ export function extractQueryFactsFromProject(options: TouchGraphProjectOptions):
         });
       },
       contextFiles,
+      sourceContext,
     );
   } finally {
     extraction.dispose();
@@ -314,9 +319,7 @@ function createProjectExtraction(options: TouchGraphProjectOptions): ProjectExtr
   };
 }
 
-function sourceFilesWithProjectExtractionResolvedFromProject(
-  extraction: ProjectExtraction,
-): SourceFileInput[] {
+function projectContextFiles(extraction: ProjectExtraction): SourceFileInput[] {
   return extraction.files.map((file, index) => {
     const sourceFile = extraction.sourceFiles[index];
     if (!sourceFile) throw new Error(`Missing source file for ${file.fileName}`);
@@ -328,11 +331,7 @@ function sourceFilesWithProjectExtractionResolvedFromProject(
         extraction.columnShapesByTable,
       ),
       fileName: file.fileName,
-      source: sourceWithProjectExtractionResolved(
-        file.source,
-        sourceFile,
-        extraction.tableNamesBySymbol,
-      ),
+      source: file.source,
     };
   });
 }
@@ -826,8 +825,8 @@ function extractQueryFactsFromPreparedFiles(
   files: readonly SourceFileInput[],
   queriesForFile: (file: SourceFileInput) => readonly ExtractedQueryDefinition[],
   contextFiles: readonly SourceFileInput[] = files,
+  sourceContext: SourceModuleContext = sourceModuleContext(contextFiles),
 ): QueryFact[] {
-  const sourceContext = sourceModuleContext(contextFiles);
   const facts: QueryFact[] = [];
 
   for (const [index, file] of files.entries()) {
@@ -879,74 +878,6 @@ function sourceColumnShapesForTables(
   }
 
   return scoped;
-}
-
-function sourceWithProjectExtractionResolved(
-  source: string,
-  sourceFile: SourceFile,
-  tableNamesBySymbol: ReadonlyMap<string, string>,
-): string {
-  const replacements: { end: number; start: number; value: string }[] = [];
-  const tableNamesByIdentifier = projectTableNamesByIdentifier(sourceFile, tableNamesBySymbol);
-  const namespaceTableNames = projectNamespaceTableNamesByLocal(sourceFile, tableNamesBySymbol);
-
-  for (const call of sourceFile.getDescendantsOfKind(SyntaxKind.CallExpression)) {
-    if (!isDrizzleWriteCall(call)) continue;
-    const expression = call.getExpression();
-    if (!Node.isPropertyAccessExpression(expression)) continue;
-    if (isDrizzleReceiver(expression.getExpression())) continue;
-
-    const name = expression.getNameNode();
-    replacements.push({
-      end: name.getEnd(),
-      start: name.getStart(),
-      value: '__jisoIgnoredWrite',
-    });
-  }
-
-  for (const access of sourceFile.getDescendantsOfKind(SyntaxKind.ElementAccessExpression)) {
-    const argument = access.getArgumentExpression();
-    if (!Node.isStringLiteral(argument)) continue;
-
-    const tableName =
-      projectNamespaceAccessTableName(access, namespaceTableNames)?.split('.').at(-1) ??
-      tableNamesByIdentifier.get(argument.getLiteralText());
-    if (!tableName) continue;
-
-    replacements.push({
-      end: argument.getEnd(),
-      start: argument.getStart(),
-      value: JSON.stringify(tableName),
-    });
-  }
-
-  for (const identifier of sourceFile.getDescendantsOfKind(SyntaxKind.Identifier)) {
-    const tableName = tableNamesBySymbol.get(resolvedSymbolKey(identifier.getSymbol()) ?? '');
-    if (!tableName || identifier.getText() === tableName) continue;
-
-    replacements.push({
-      end: identifier.getEnd(),
-      start: identifier.getStart(),
-      value: tableName,
-    });
-  }
-
-  return applySourceReplacements(source, replacements);
-}
-
-function projectTableNamesByIdentifier(
-  sourceFile: SourceFile,
-  tableNamesBySymbol: ReadonlyMap<string, string>,
-): ReadonlyMap<string, string> {
-  const names = new Map<string, string>();
-
-  for (const declaration of sourceFile.getVariableDeclarations()) {
-    const name = declaration.getNameNode();
-    const tableName = tableNamesBySymbol.get(resolvedSymbolKey(name.getSymbol()) ?? '');
-    if (Node.isIdentifier(name) && tableName) names.set(name.getText(), tableName);
-  }
-
-  return names;
 }
 
 function projectTableNamesByIdentifierText(
@@ -1225,18 +1156,6 @@ function appendColumnShapesForTablePath(
   for (const [column, shape] of Object.entries(tableShapes)) {
     shapes[`${tablePath}.${column}`] = shape;
   }
-}
-
-function applySourceReplacements(
-  source: string,
-  replacements: readonly { end: number; start: number; value: string }[],
-): string {
-  return [...replacements]
-    .sort((left, right) => right.start - left.start)
-    .reduce(
-      (next, range) => `${next.slice(0, range.start)}${range.value}${next.slice(range.end)}`,
-      source,
-    );
 }
 
 function resolvedSymbolKey(symbol: MorphSymbol | undefined): string | undefined {
@@ -2559,6 +2478,118 @@ interface NamespaceImportAlias {
 
 interface ExportStarAlias {
   moduleSpecifier: string;
+}
+
+function projectSourceModuleContext(extraction: ProjectExtraction): SourceModuleContext {
+  // SPEC §10-§11: project-mode table facts come from resolved ts-morph symbols, not rewritten
+  // source text that is reparsed through source-mode table extraction.
+  const tablesBySyntheticName = projectTablesBySyntheticName(extraction);
+  const tablesByFileName = new Map<string, Map<string, ExtractedTable[]>>();
+
+  extraction.sourceFiles.forEach((sourceFile, index) => {
+    const file = extraction.files[index];
+    if (!file) return;
+
+    const tables = new Map<string, ExtractedTable[]>();
+    appendProjectDeclaredTables(tables, sourceFile, extraction, tablesBySyntheticName);
+    appendProjectReferencedTables(tables, sourceFile, extraction, tablesBySyntheticName);
+    tablesByFileName.set(file.fileName, tables);
+  });
+
+  return {
+    fileNames: new Set(extraction.files.map((file) => file.fileName)),
+    filesByName: new Map(extraction.files.map((file) => [file.fileName, file])),
+    tablesByFileName,
+  };
+}
+
+function projectTablesBySyntheticName(
+  extraction: ProjectExtraction,
+): ReadonlyMap<string, ExtractedTable> {
+  const tables = new Map<string, ExtractedTable>();
+
+  for (const sourceFile of extraction.sourceFiles) {
+    for (const declaration of sourceFile.getVariableDeclarations()) {
+      const name = declaration.getNameNode();
+      const initializer = declaration.getInitializer();
+      if (!initializer || !isAnnotatedTableInitializerNode(initializer)) continue;
+
+      const syntheticName = extraction.tableNamesBySymbol.get(
+        resolvedSymbolKey(name.getSymbol()) ?? '',
+      );
+      if (!syntheticName) continue;
+
+      const annotation = tableAnnotation(initializer);
+      if (!annotation) continue;
+
+      tables.set(syntheticName, {
+        annotation: {
+          ...annotation,
+          name: tableNameArgument(initializer) ?? syntheticName,
+        },
+        columns:
+          extraction.columnShapesByTable.get(syntheticName) ?? tableColumnShapes(initializer),
+        exported: variableDeclarationIsExported(declaration),
+      });
+    }
+  }
+
+  return tables;
+}
+
+function appendProjectDeclaredTables(
+  tables: Map<string, ExtractedTable[]>,
+  sourceFile: SourceFile,
+  extraction: ProjectExtraction,
+  tablesBySyntheticName: ReadonlyMap<string, ExtractedTable>,
+): void {
+  for (const declaration of sourceFile.getVariableDeclarations()) {
+    const syntheticName = extraction.tableNamesBySymbol.get(
+      resolvedSymbolKey(declaration.getNameNode().getSymbol()) ?? '',
+    );
+    const table = syntheticName ? tablesBySyntheticName.get(syntheticName) : undefined;
+    if (syntheticName && table) appendTableEntries(tables, syntheticName, [table]);
+  }
+}
+
+function appendProjectReferencedTables(
+  tables: Map<string, ExtractedTable[]>,
+  sourceFile: SourceFile,
+  extraction: ProjectExtraction,
+  tablesBySyntheticName: ReadonlyMap<string, ExtractedTable>,
+): void {
+  const namespaceTableNames = projectNamespaceTableNamesByLocal(
+    sourceFile,
+    extraction.tableNamesBySymbol,
+  );
+
+  for (const identifier of sourceFile.getDescendantsOfKind(SyntaxKind.Identifier)) {
+    const syntheticName = extraction.tableNamesBySymbol.get(
+      resolvedSymbolKey(identifier.getSymbol()) ?? '',
+    );
+    const table = syntheticName ? tablesBySyntheticName.get(syntheticName) : undefined;
+    if (syntheticName && table) appendTableEntries(tables, syntheticName, [table]);
+  }
+
+  for (const access of sourceFile.getDescendantsOfKind(SyntaxKind.PropertyAccessExpression)) {
+    appendProjectNamespaceTableAccess(tables, access, namespaceTableNames, tablesBySyntheticName);
+  }
+
+  for (const access of sourceFile.getDescendantsOfKind(SyntaxKind.ElementAccessExpression)) {
+    appendProjectNamespaceTableAccess(tables, access, namespaceTableNames, tablesBySyntheticName);
+  }
+}
+
+function appendProjectNamespaceTableAccess(
+  tables: Map<string, ExtractedTable[]>,
+  access: Node,
+  namespaceTableNames: ProjectNamespaceTableNames,
+  tablesBySyntheticName: ReadonlyMap<string, ExtractedTable>,
+): void {
+  const tablePath = projectNamespaceAccessTableName(access, namespaceTableNames);
+  const syntheticName = tablePath?.split('.').at(-1);
+  const table = syntheticName ? tablesBySyntheticName.get(syntheticName) : undefined;
+  if (tablePath && table) appendTableEntries(tables, tablePath, [table]);
 }
 
 function sourceModuleContext(files: readonly SourceFileInput[]): SourceModuleContext {

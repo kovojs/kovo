@@ -3986,7 +3986,7 @@ export interface CommerceInvalidationSets {
           {
             code: 'FW406',
             message: 'Statically un-analyzable write site; manual touches required.',
-            site: 'cart.domain.ts:19',
+            site: 'cart.domain.ts:20',
           },
         ],
       },

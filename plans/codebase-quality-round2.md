@@ -1587,14 +1587,26 @@ must be "FW406 unresolved," never "silently wrong."
       carries a ts-morph namespace export map into query and write extraction, so
       `schema.products` and static `schema["products"]` projections/read sources/write targets
       resolve from the referenced module's Drizzle table symbol while computed or unexported
-      access still degrades to FW406. The synthetic project context source rewrites only
-      statically proven namespace string keys to the same synthetic table identifiers used by
-      dot access, keeping table registry lookup aligned with authored source coordinates under
-      SPEC §10-§11. Same-session evidence:
+      access still degrades to FW406. This narrowed the remaining synthetic project context
+      source rewrite to statically proven namespace string keys while keeping table registry
+      lookup aligned with authored source coordinates under SPEC §10-§11. Same-session evidence:
       `corepack pnpm exec vitest --run packages/drizzle/src/index.test.ts -t "namespace.*project (query|write)|namespace static element-access"`,
       `corepack pnpm exec vitest --run conformance/drizzle-pin/src/index.test.ts -t "namespace.*project (query|write)|namespace static element-access"`,
       `corepack pnpm exec vitest --run packages/drizzle/src`,
       and `corepack pnpm exec vitest --run conformance/drizzle-pin/src/index.test.ts`.
+      Additional evidence 2026-06-12: project-mode table registry context no longer rewrites
+      source text at all before touch/query extraction. `packages/drizzle/src/static.ts` deleted
+      `sourceFilesWithProjectExtractionResolvedFromProject`, `sourceWithProjectExtractionResolved`,
+      `projectTableNamesByIdentifier`, and `applySourceReplacements`; project query context now
+      carries original source plus ts-morph-derived column shapes, and project touch/query table
+      lookup uses `projectSourceModuleContext(...)` entries built from resolved table symbols and
+      namespace accesses. This removes the stale synthetic-source line-coordinate path while
+      preserving SPEC §10-§11's explicit-table-fact/FW406 contract. Same-session evidence:
+      `pnpm exec vitest --run packages/drizzle/src/index.test.ts -t "imported table symbols|namespace-imported project|namespace static element-access project|project extraction state|project query"`,
+      `pnpm exec vitest --run packages/drizzle/src`,
+      `pnpm exec vitest --run conformance/drizzle-pin/src/index.test.ts`,
+      `pnpm exec vp check packages/drizzle/src/static.ts packages/drizzle/src/index.test.ts plans/codebase-quality-round2.md`,
+      and `git diff --check`.
       Additional bounded evidence 2026-06-12: query loaders now walk ts-morph helper
       `CallExpression` nodes and mark identifier helpers that receive the loader's Drizzle
       receiver as FW406 instead of dropping the whole query fact when no direct select/read is
