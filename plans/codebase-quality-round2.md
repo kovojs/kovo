@@ -739,6 +739,15 @@ pipeline throws the tree away and communicates via mutated source text.
       `pnpm exec vitest --run packages/compiler/src/scan/parse.test.ts packages/compiler/src/handler-lowering.test.ts packages/compiler/src/fragment-targets.test.ts`,
       `pnpm exec vp check packages/compiler/src/scan/parse.ts packages/compiler/src/lower/handlers.ts packages/compiler/src/validate/component-contracts.ts packages/compiler/src/scan/parse.test.ts packages/compiler/src/handler-lowering.test.ts packages/compiler/src/fragment-targets.test.ts`,
       and `git diff --check`.
+      Additional evidence 2026-06-12: `packages/compiler/src/model-pipeline.ts` no longer
+      exports the legacy source-to-source transition wrapper; production lowering state now
+      advances only through `lowerComponentPipelinePatches`, which applies checked replacement
+      spans, carries an offset map, and reparses only when the patched source differs. Same-session
+      evidence:
+      `pnpm exec vitest --run packages/compiler/src/model-pipeline.test.ts packages/compiler/src/compile-component.test.ts`,
+      `pnpm exec vitest --run packages/compiler/src`,
+      `pnpm exec vp check packages/compiler/src/model-pipeline.ts packages/compiler/src/model-pipeline.test.ts`,
+      and `git diff --check`.
       Additional evidence 2026-06-12: `emit/server.ts` now updates existing `fw-deps`
       attributes by `JsxAttributeModel` span relative to the parsed render host instead of
       regex-searching the opening tag slice. `stamps.test.ts` pins a single-quoted authored
