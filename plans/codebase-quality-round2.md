@@ -2671,6 +2671,13 @@ As each phase splits a source module, split its tests in the same commit.
       Same-session evidence:
       `pnpm exec vitest --run packages/compiler/src/query-bindings.test.ts packages/compiler/src/index.test.ts -t "data-bind|nullable|query shape|optional|list stamp|FW302|FW227"`
       and `pnpm exec vp check packages/compiler/src/query-bindings.test.ts packages/compiler/src/index.test.ts plans/codebase-quality-round2.md`.
+      Additional evidence 2026-06-12: query update plan emission for `data-bind`,
+      `data-bind-list`, and named derives moved from `packages/compiler/src/index.test.ts` into
+      `packages/compiler/src/query-update-plans.test.ts`. The broad compiler split remains open
+      for inline derive stamps, FW311 coverage, residual stamp drift, and merge groups.
+      Same-session evidence:
+      `pnpm exec vitest --run packages/compiler/src/query-update-plans.test.ts packages/compiler/src/index.test.ts -t "query update plans|named derives|semicolons"`
+      and `pnpm exec vp check packages/compiler/src/query-update-plans.test.ts packages/compiler/src/index.test.ts plans/codebase-quality-round2.md`.
 - [ ] drizzle (one describe, 57 its, 68 inline pgTable fixtures, 3 module-shim copies) and
       test-package suites: same treatment; CLI tests get the temp-dir + stream-spy ritual
       (16 hand-copies) as one helper.
