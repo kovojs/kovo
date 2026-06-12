@@ -226,6 +226,15 @@ Scope: SPEC additions (session population, guard-failure contract, mutation resp
       real `better-auth@1.6.17` table/field metadata, clean schema-bridge validation, and
       generated `schema.ts` annotations. Same-session evidence:
       `pnpm exec vitest --run conformance/better-auth-pin/src/index.test.ts --reporter=dot`.
+      Partial evidence 2026-06-12: real Better Auth `genericOAuth()` metadata, including the
+      exported `auth0()`, `keycloak()`, `okta()`, and `slack()` provider config helpers, is now
+      pinned as staying inside the existing core bridge (`account`, `session`, `user`, and
+      exempt `verification`). This keeps SPEC §10.1 OAuth provider account state under the
+      existing `account.userId` auth-domain annotation while making future provider-table drift
+      fail B1 validation. `conformance/better-auth-pin/src/index.test.ts` verifies the real
+      `better-auth@1.6.17` table/field metadata, clean schema-bridge validation, and generated
+      `schema.ts` annotations. Same-session evidence:
+      `pnpm exec vitest --run conformance/better-auth-pin/src/index.test.ts --reporter=dot`.
       Remaining gaps: plugin-generated tables outside the blessed organization/admin/two-factor/OIDC-provider/MCP/SIWE/JWT/device-authorization
       surface are still not mapped, the OAuth-provider successor package/table metadata is not
       installed or exportable from the pinned dependency set, and full app `schema.ts` generation

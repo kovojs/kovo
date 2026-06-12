@@ -11,16 +11,21 @@ import { memoryAdapter } from 'better-auth/adapters/memory';
 import {
   admin,
   anonymous,
+  auth0,
   deviceAuthorization,
   emailOTP,
+  genericOAuth,
   jwt,
+  keycloak,
   lastLoginMethod,
   magicLink,
   mcp,
   oidcProvider,
+  okta,
   organization,
   phoneNumber,
   siwe,
+  slack,
   twoFactor,
   username,
 } from 'better-auth/plugins';
@@ -962,6 +967,81 @@ describe('Better Auth pinned conformance', () => {
     expect(result.annotatedTables).toEqual(['account', 'session', 'user', 'verification']);
     expect(result.source).toContain(
       "export const verification = pgTable('verification', {}, jiso({ exempt: true }));",
+    );
+  });
+
+  it('pins generic OAuth provider metadata as covered by the core account bridge', () => {
+    const { auth } = createRealAuth({
+      plugins: [
+        genericOAuth({
+          config: [
+            {
+              authorizationUrl: 'https://oauth.example.test/authorize',
+              clientId: 'custom-client',
+              clientSecret: 'custom-secret',
+              providerId: 'custom',
+              scopes: ['openid', 'email'],
+              tokenUrl: 'https://oauth.example.test/token',
+              userInfoUrl: 'https://oauth.example.test/userinfo',
+            },
+            auth0({
+              clientId: 'auth0-client',
+              clientSecret: 'auth0-secret',
+              domain: 'auth0.example.test',
+            }),
+            keycloak({
+              clientId: 'keycloak-client',
+              clientSecret: 'keycloak-secret',
+              issuer: 'https://keycloak.example.test/realms/jiso',
+            }),
+            okta({
+              clientId: 'okta-client',
+              clientSecret: 'okta-secret',
+              issuer: 'https://okta.example.test/oauth2/default',
+            }),
+            slack({
+              clientId: 'slack-client',
+              clientSecret: 'slack-secret',
+            }),
+          ],
+        }),
+      ],
+    });
+    const tables = getAuthTables(auth.options);
+    const result = annotateBetterAuthSchemaSource(
+      betterAuthSchemaSourceFixture(Object.keys(tables)),
+      tables,
+    );
+
+    expect(Object.keys(tables).sort()).toEqual(['account', 'session', 'user', 'verification']);
+    expect(Object.keys(requireAuthTable(tables, 'account').fields).sort()).toEqual([
+      'accessToken',
+      'accessTokenExpiresAt',
+      'accountId',
+      'createdAt',
+      'idToken',
+      'password',
+      'providerId',
+      'refreshToken',
+      'refreshTokenExpiresAt',
+      'scope',
+      'updatedAt',
+      'userId',
+    ]);
+    // SPEC.md §10.1: OAuth provider account rows are app-owned auth-domain
+    // state through the existing account.userId bridge, not plugin-only tables.
+    expect(validateBetterAuthSchemaBridge(tables)).toEqual({
+      declaredTouchMismatches: [],
+      keyFieldMismatches: [],
+      missingTables: [],
+      ok: true,
+      pluginTableDegradations: [],
+      unbridgedTables: [],
+    });
+    expect(betterAuthSchemaBridge.account).toEqual({ domain: 'auth', key: 'userId' });
+    expect(result.annotatedTables).toEqual(['account', 'session', 'user', 'verification']);
+    expect(result.source).toContain(
+      "export const account = pgTable('account', {}, jiso({ domain: 'auth', key: 'userId' }));",
     );
   });
 
