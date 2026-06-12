@@ -358,6 +358,13 @@ tests/fw-check.node.mjs` passed.
       app-facing generated `graph.json` touch facts directly and keeps the generated
       `touch-graph.ts` byte pin, instead of grepping commerce source for generated-artifact import
       strings or extractor absence.
+      Partial evidence 2026-06-12: the same P4 commerce touch-graph tranche now transpiles and
+      executes the generated `examples/commerce/src/generated/touch-graph.ts` artifact, then
+      compares its exported `commerceTouchGraph` and invalidation-set data to structured graph
+      expectations instead of substring-scanning or whole-source comparing the generated module.
+      Same-session evidence: `node --test --test-name-pattern "P4 commerce touch graph is a
+      committed generated artifact" tests/fw-check.node.mjs` and `pnpm exec vp check
+      tests/fw-check.node.mjs plans/codebase-quality-round2.md`.
       Partial evidence 2026-06-11: the P1 fragment-target registry tranche now imports built
       core/compiler APIs and asserts `fragmentTarget()` descriptor behavior plus compiler-emitted
       component graph fragments and `FragmentTargets` registry prop types instead of grepping

@@ -638,6 +638,28 @@ const executeGeneratedServerRenderSource = (source) => {
   return exports.renderSource();
 };
 
+const executeTypeScriptModuleSource = async (source) => {
+  const ts = await import('typescript');
+  const module = { exports: {} };
+  const compiled = ts.transpileModule(source, {
+    compilerOptions: {
+      module: ts.ModuleKind.CommonJS,
+      target: ts.ScriptTarget.ES2022,
+    },
+  }).outputText;
+
+  runInNewContext(compiled, {
+    exports: module.exports,
+    module,
+    require(specifier) {
+      assert.fail(`unexpected generated TypeScript runtime import ${specifier}`);
+    },
+  });
+  return module.exports;
+};
+
+const jsonClone = (value) => JSON.parse(JSON.stringify(value));
+
 const executeGeneratedBootstrapModule = (source, planModules) => {
   const calls = [];
   const deferredApplications = [];
@@ -5484,6 +5506,7 @@ void test('P4 commerce touch graph is a committed generated artifact', async () 
     await readProjectFile('examples/commerce/src/generated/graph.json'),
   );
   const touchGraphSource = await readProjectFile('examples/commerce/src/generated/touch-graph.ts');
+  const generatedTouchGraphModule = await executeTypeScriptModuleSource(touchGraphSource);
   const touchSummary = Object.fromEntries(
     Object.entries(commerceGraph.touchGraph).map(([key, entry]) => [
       key,
@@ -5518,95 +5541,20 @@ void test('P4 commerce touch graph is a committed generated artifact', async () 
   assert.equal(generatedSites.length, 5);
   for (const site of generatedSites) {
     assert.match(site, /^examples\/commerce\/src\/app\.ts:\d+$/);
-    assert.ok(touchGraphSource.includes(`site: '${site}'`));
   }
   // SPEC §11.1/§11.2: the committed static graph must stay source-derived
   // because runtime verification checks observed effects against these facts.
-  const [cartItemsTouch, ordersTouch, productsTouch] =
-    commerceGraph.touchGraph['cart.addItem'].touches;
-  const [attachmentsTouch] = commerceGraph.touchGraph['order.receipt'].touches;
-  const [webhookOrdersTouch] = commerceGraph.touchGraph['payment.webhook'].touches;
-  assert.equal(
-    touchGraphSource,
-    `import type { CartQueryResult, CommerceDb, ProductGridResult } from '../app.js';
-
-export const commerceTouchGraph = {
-  'cart.addItem': {
-    touches: [
-      {
-        domain: 'cart',
-        keys: null,
-        site: '${cartItemsTouch.site}',
-        via: 'cart_items',
-      },
-      {
-        domain: 'order',
-        keys: null,
-        site: '${ordersTouch.site}',
-        via: 'orders',
-      },
-      {
-        domain: 'product',
-        keys: 'arg:productId',
-        predicate: 'eq',
-        site: '${productsTouch.site}',
-        via: 'products',
-      },
-    ],
-    reads: [],
-    unresolved: [],
-  },
-  'order.receipt': {
-    touches: [
-      {
-        domain: 'attachment',
-        keys: 'arg:orderId',
-        predicate: 'eq',
-        site: '${attachmentsTouch.site}',
-        via: 'attachments',
-      },
-    ],
-    reads: [],
-    unresolved: [],
-  },
-  'payment.webhook': {
-    touches: [
-      {
-        domain: 'order',
-        keys: 'arg:data.object.id',
-        predicate: 'eq',
-        site: '${webhookOrdersTouch.site}',
-        via: 'orders',
-      },
-    ],
-    reads: [],
-    unresolved: [],
-  },
-} as const;
-
-export const commerceInvalidationSets = {
-  'cart/add': [
-    { query: 'cart', domains: ['cart'], keys: null },
-    { query: 'orderHistory', domains: ['order'], keys: null },
-    { query: 'productGrid', domains: ['product'], keys: null },
-  ],
-} as const;
-
-export interface CommerceInvalidationSets {
-  'cart/add': 'cart' | 'orderHistory' | 'productGrid';
-}
-
-declare module '@jiso/core' {
-  interface QueryRegistry {
-    cart: CartQueryResult;
-    productGrid: ProductGridResult;
-    orderHistory: { items: CommerceDb['orders'] };
-  }
-
-  interface InvalidationSets extends CommerceInvalidationSets {}
-}
-`,
+  assert.deepEqual(
+    jsonClone(generatedTouchGraphModule.commerceTouchGraph),
+    commerceGraph.touchGraph,
   );
+  assert.deepEqual(jsonClone(generatedTouchGraphModule.commerceInvalidationSets), {
+    'cart/add': [
+      { domains: ['cart'], keys: null, query: 'cart' },
+      { domains: ['order'], keys: null, query: 'orderHistory' },
+      { domains: ['product'], keys: null, query: 'productGrid' },
+    ],
+  });
 });
 
 void test('Conformance suites are an explicit gate', async () => {
