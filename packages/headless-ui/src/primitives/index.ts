@@ -420,6 +420,48 @@ export type {
   HoverCardTriggerEvent,
 } from './hover-card.js';
 
+export {
+  menubarGroupAttributes,
+  menubarItemAttributes,
+  menubarItemClick,
+  menubarItemHighlighted,
+  menubarItemOpen,
+  menubarItemPointerEnter,
+  menubarKeyDown,
+  menubarMove,
+  menubarRootAttributes,
+  menubarSeparatorAttributes,
+  menubarSubmenuAttributes,
+  menubarSubmenuTriggerClick,
+  menubarTypeahead,
+  selectMenubarItem,
+  setMenubarOpenValue,
+  toggleMenubarOpenValue,
+} from './menubar.js';
+export type {
+  MenubarChangeOptions,
+  MenubarGroupAttributeOptions,
+  MenubarItem,
+  MenubarItemAttributeOptions,
+  MenubarItemEvent,
+  MenubarKeyboardEvent,
+  MenubarMoveOptions,
+  MenubarMoveResult,
+  MenubarOpenChangeDetail,
+  MenubarOpenChangeReason,
+  MenubarOpenChangeResult,
+  MenubarPrimitiveAttributes,
+  MenubarRootAttributeOptions,
+  MenubarSelectDetail,
+  MenubarSelectReason,
+  MenubarSelectResult,
+  MenubarSeparatorAttributeOptions,
+  MenubarState,
+  MenubarSubmenuAttributeOptions,
+  MenubarTypeaheadOptions,
+  MenubarTypeaheadResult,
+} from './menubar.js';
+
 export { meterRootAttributes, meterValueState } from './meter.js';
 export type {
   MeterAttributeOptions,

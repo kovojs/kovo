@@ -427,6 +427,23 @@ jiso-dialog` resolves dashed wire names and prints provenance including package,
       `pnpm exec vp check packages/headless-ui/package.json packages/headless-ui/src/index.ts packages/headless-ui/src/primitives/index.ts packages/headless-ui/src/primitives/context-menu.ts packages/headless-ui/src/primitives/context-menu.test.ts plans/ui.md`,
       and `git diff --check HEAD~1..HEAD`. H3 remains open for menubar, navigation-menu,
       slider, toast, command, and full gates.
+      Additional partial evidence 2026-06-12:
+      `packages/headless-ui/src/primitives/menubar.ts` adds the H3 menubar primitive
+      as a DOM-free composite menu helper: menubar/item/submenu/group/separator
+      attribute builders, menubar/menu/menuitem/group/separator ARIA wiring,
+      root open/closed and horizontal/vertical orientation data attrs, highlighted
+      active/inactive item attrs, submenu open state keyed by root item value,
+      disabled-item protection, cancelable open and select transitions, shared
+      horizontal root and vertical submenu keyboard movement, shared typeahead
+      matching, and guarded submenu-trigger/item/pointer/keyboard handlers following
+      the SPEC §4.6 primitive handler no-op contract. It is exported through
+      `@jiso/headless-ui`, `@jiso/headless-ui/primitives`, and
+      `@jiso/headless-ui/primitives/menubar`. Same-session evidence:
+      `pnpm exec vitest --run packages/headless-ui/src/primitives/menubar.test.ts packages/headless-ui/src/primitives/dropdown-menu.test.ts packages/headless-ui/src/primitives/context-menu.test.ts packages/headless-ui/src/lib/typeahead.test.ts packages/headless-ui/src/lib/change-details.test.ts`,
+      `pnpm --filter @jiso/headless-ui run lint:primitives`,
+      `pnpm exec vp check packages/headless-ui/package.json packages/headless-ui/src/index.ts packages/headless-ui/src/primitives/index.ts packages/headless-ui/src/primitives/menubar.ts packages/headless-ui/src/primitives/menubar.test.ts plans/ui.md`,
+      and `git diff --check HEAD~1..HEAD`. H3 remains open for navigation-menu,
+      slider, toast, command, and full gates.
 - [x] U1 token sheet + `cn()` + statically-analyzable variant helper (Tailwind-first, §13.1 discoverability rules).
       Evidence 2026-06-12: `packages/headless-ui/src/lib/class-names.ts`
       provides the dependency-free `cn()` helper, `packages/headless-ui/src/lib/variants.ts`
