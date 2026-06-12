@@ -145,7 +145,7 @@ error; `pnpm run check` + `pnpm run check:fw`. Commit per item.
 
 ## Phase E — Dev teaching-error documents (after V1; host is D8 R5 middleware)
 
-- [ ] **E1 — diagnostic document renderer.** `renderDiagnosticDocument(diagnostics, source?)` in
+- [x] **E1 — diagnostic document renderer.** `renderDiagnosticDocument(diagnostics, source?)` in
       `@jiso/server` (dev-only export): FW code, severity, message, help/fix menu, and a source
       frame from `line`/`column`. Reuses the existing document assembly; styling minimal and
       framework-owned (no Tailwind dependency in the error path).
