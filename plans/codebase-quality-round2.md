@@ -1900,6 +1900,15 @@ index.test.ts:4227 while here — it weakens the byte-for-byte claim) + acceptan
       `corepack pnpm exec vitest --run packages/test/src/verifier-sql.test.ts packages/test/src/index.test.ts`,
       `corepack pnpm exec vp check packages/test/src/index.test.ts packages/test/src/verifier-sql.test.ts plans/codebase-quality-round2.md`,
       and `git diff --check`.
+      Additional evidence 2026-06-12: SQL statement observation moved from
+      `packages/test/src/verifier-observation.ts` into
+      `packages/test/src/sql-observer.ts`, leaving verifier observation focused on proxy and
+      table-call recording while preserving the public `@jiso/test` barrel. The focused SQL
+      verifier test now covers unparseable adapter-specific SQL pass-through with no fabricated
+      observations, matching SPEC §11.2 instrumentation behavior. Same-session evidence:
+      `pnpm exec vitest --run packages/test/src/verifier-sql.test.ts`,
+      `pnpm exec vp check packages/test/src/sql-observer.ts packages/test/src/verifier-observation.ts packages/test/src/verifier-sql.test.ts plans/codebase-quality-round2.md`,
+      and `git diff --check`.
 - [ ] **MED — Commerce example: one source of truth.** `cartQuery.load` returns a constant while
       `loadCartQuery(db)` does the real read (app.ts:123-126 vs :280-284);
       `productGridQuery.load` conjures a fresh `createCommerceDb()` (:161); the committed

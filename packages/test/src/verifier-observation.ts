@@ -1,6 +1,6 @@
 import { AsyncLocalStorage } from 'node:async_hooks';
 
-import { parseSqlOperations } from './verifier-sql.js';
+import { observeSqlStatementIfString } from './sql-observer.js';
 
 export interface DbVerificationConfig {
   domainByTable: Record<string, string>;
@@ -101,7 +101,7 @@ export function observableSqlMethod(
   recorder: ObservationRecorder,
 ): (statement: unknown, ...args: unknown[]) => unknown {
   return (statement: unknown, ...args: unknown[]) => {
-    observeSqlIfString(statement, config, recorder);
+    observeSqlStatementIfString(statement, config, recorder);
     return value.call(target, statement, ...args);
   };
 }
@@ -115,20 +115,6 @@ function observeTableIfString(
 ): void {
   if (typeof table !== 'string') return;
   observe(kind, table, args, config, recorder);
-}
-
-function observeSqlIfString(
-  statement: unknown,
-  config: DbVerificationConfig,
-  observed: ObservationRecorder,
-): void {
-  if (typeof statement !== 'string') return;
-  try {
-    observeSql(statement, config, observed);
-  } catch {
-    // SPEC.md §11.2: instrumentation verifies observed SQL, but must not prevent
-    // the user's database method from receiving adapter-specific statements.
-  }
 }
 
 function observe(
@@ -147,24 +133,6 @@ function observe(
     sql: undefined,
     table,
   });
-}
-
-function observeSql(
-  statement: string,
-  config: DbVerificationConfig,
-  recorder: ObservationRecorder,
-): void {
-  for (const operation of parseSqlOperations(statement)) {
-    recorder.record({
-      branch: undefined,
-      domain: config.domainByTable[operation.table],
-      kind: operation.kind,
-      mutationRead: operation.mutationRead,
-      rowKey: operation.rowKey,
-      sql: statement,
-      table: operation.table,
-    });
-  }
 }
 
 function observationOptions(args: readonly unknown[]): DbObservationOptions | undefined {

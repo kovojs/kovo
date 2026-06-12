@@ -18,6 +18,22 @@ function createSqlDb(): SqlDb {
 }
 
 describe('@jiso/test SQL verifier observation', () => {
+  it('passes unparseable SQL through without fabricated observations', () => {
+    const calls: string[] = [];
+    const verifier = createDbVerifier({}, { domainByTable: { products: 'product' } });
+    const db = verifier.wrap({
+      sql(statement: string): string[] {
+        calls.push(statement);
+        return ['adapter-result'];
+      },
+    });
+
+    expect(db.sql('select * from')).toEqual(['adapter-result']);
+
+    expect(calls).toEqual(['select * from']);
+    expect(verifier.observed).toEqual([]);
+  });
+
   it('observes insert-select reads through the verifier wrapper', () => {
     const verifier = createDbVerifier(
       {
