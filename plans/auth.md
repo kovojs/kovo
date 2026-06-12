@@ -210,6 +210,14 @@ Scope: SPEC additions (session population, guard-failure contract, mutation resp
       the real `better-auth@1.6.17` table/field metadata, clean schema-bridge validation, and
       generated `schema.ts` annotations. Same-session evidence:
       `pnpm exec vitest --run conformance/better-auth-pin/src/index.test.ts --reporter=dot`.
+      Partial evidence 2026-06-12: real Better Auth `magicLink()` metadata is now pinned as
+      staying inside the existing core table bridge (`account`, `session`, `user`, and exempt
+      `verification`) rather than requiring a plugin-table bridge. This covers the B5 blessed
+      magic-link redirect surface while keeping SPEC §10.1 token protocol state out of app
+      query domains. `conformance/better-auth-pin/src/index.test.ts` verifies the real
+      `better-auth@1.6.17` table/field metadata, clean schema-bridge validation, and generated
+      `schema.ts` annotations. Same-session evidence:
+      `pnpm exec vitest --run conformance/better-auth-pin/src/index.test.ts --reporter=dot`.
       Remaining gaps: plugin-generated tables outside the blessed organization/admin/two-factor/OIDC-provider/SIWE/JWT/device-authorization
       surface are still not mapped, the OAuth-provider successor package/table metadata is not
       installed or exportable from the pinned dependency set, and full app `schema.ts` generation

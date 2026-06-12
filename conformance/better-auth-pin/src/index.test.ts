@@ -15,6 +15,7 @@ import {
   emailOTP,
   jwt,
   lastLoginMethod,
+  magicLink,
   oidcProvider,
   organization,
   phoneNumber,
@@ -826,6 +827,44 @@ describe('Better Auth pinned conformance', () => {
       'updatedAt',
       'value',
     ]);
+    expect(validateBetterAuthSchemaBridge(tables)).toEqual({
+      declaredTouchMismatches: [],
+      keyFieldMismatches: [],
+      missingTables: [],
+      ok: true,
+      pluginTableDegradations: [],
+      unbridgedTables: [],
+    });
+    expect(betterAuthSchemaBridge.verification).toEqual({
+      exempt: true,
+      rationale: 'Better Auth email/token verification bookkeeping is not an app read surface.',
+    });
+    expect(result.annotatedTables).toEqual(['account', 'session', 'user', 'verification']);
+    expect(result.source).toContain(
+      "export const verification = pgTable('verification', {}, jiso({ exempt: true }));",
+    );
+  });
+
+  it('pins magic-link metadata as covered by the core verification bridge', () => {
+    const { auth } = createRealAuth({
+      plugins: [magicLink({ sendMagicLink: async () => {} })],
+    });
+    const tables = getAuthTables(auth.options);
+    const result = annotateBetterAuthSchemaSource(
+      betterAuthSchemaSourceFixture(Object.keys(tables)),
+      tables,
+    );
+
+    expect(Object.keys(tables).sort()).toEqual(['account', 'session', 'user', 'verification']);
+    expect(Object.keys(requireAuthTable(tables, 'verification').fields).sort()).toEqual([
+      'createdAt',
+      'expiresAt',
+      'identifier',
+      'updatedAt',
+      'value',
+    ]);
+    // SPEC.md §10.1: magic-link verification tokens are Better Auth-owned
+    // protocol state, not an app query surface.
     expect(validateBetterAuthSchemaBridge(tables)).toEqual({
       declaredTouchMismatches: [],
       keyFieldMismatches: [],
