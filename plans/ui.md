@@ -520,6 +520,16 @@ jiso-dialog` resolves dashed wire names and prints provenance including package,
 - [ ] U4 styled components trailing H2.
 - [ ] U5 styled components trailing H3.
 - [ ] G1 `examples/gallery` app: one route per component; demos double as test fixtures.
+      Partial evidence 2026-06-12: `examples/gallery` now exists as a TSX-authored,
+      tooling-light workspace example with route-like fixtures for dialog, toggle, and
+      progress demos. The demos import existing `@jiso/headless-ui` primitive attribute
+      builders, render through the server JSX runtime, expose behavior-contract tables
+      plus no-JS degradation statements, and are imported directly by fixture tests.
+      Same-session evidence:
+      `pnpm --filter @jiso/example-gallery test`,
+      `pnpm exec vp check examples/gallery/package.json examples/gallery/tsconfig.json examples/gallery/src/demo-fixtures.tsx examples/gallery/src/demo-fixtures.test.ts examples/gallery/src/index.ts plans/ui.md pnpm-lock.yaml`,
+      and `git diff --check`. This is only a foundation slice; most component routes,
+      G2 behavior gates, G3 axe checks, G4 visual checks, and G5 merge fixtures remain open.
 - [ ] G2 behavior-contract gates: keyboard/ARIA assertions per primitive (browser-free via `page()` + `fw explain` where possible; framework browser suite for focus/dismiss/top-layer).
 - [ ] G3 axe checks per component state in the gallery.
 - [ ] G4 visual regression for `@jiso/ui`: shadcn-parity human review once, then self-baselined screenshots.
