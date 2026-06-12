@@ -691,7 +691,7 @@ function extractProjectUnclassifiedDrizzleReceiverCalls(
     const name = staticAccessName(expression);
     if (!name) continue;
 
-    const surface = projectUnclassifiedCallSurface(expression, name);
+    const surface = projectUnclassifiedCallSurface(call, name);
     if (!surface || !isProjectDrizzleReceiverIdentifier(surface.receiver, receivers)) continue;
 
     calls.push({ index: call.getStart() - bodyStart, name: surface.name });
@@ -701,15 +701,18 @@ function extractProjectUnclassifiedDrizzleReceiverCalls(
 }
 
 function projectUnclassifiedCallSurface(
-  expression: Node,
+  call: CallExpression,
   name: string,
 ): { name: string; receiver: Node } | undefined {
-  if (name === 'findMany' || name === 'findFirst') {
+  // SPEC §10-§11: only the relational query API (`db.query.<table>.find*`) is classified as a
+  // read surface. Other typed receiver `find*` calls remain visible as FW406.
+  if ((name === 'findMany' || name === 'findFirst') && relationalReadCall(call)) {
     return undefined;
   }
 
   if (!isUnclassifiedDirectDrizzleReceiverMethod(name)) return undefined;
 
+  const expression = call.getExpression();
   const receiver = staticAccessExpression(expression);
   return receiver ? { name, receiver } : undefined;
 }

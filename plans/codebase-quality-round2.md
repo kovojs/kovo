@@ -1904,6 +1904,16 @@ must be "FW406 unresolved," never "silently wrong."
       `PgDatabase` `$with` surface under SPEC §10-§11. Same-session evidence:
       `corepack pnpm exec vitest --run packages/drizzle/src/index.test.ts`,
       `corepack pnpm exec vitest --run conformance/drizzle-pin/src/index.test.ts`.
+      Additional evidence 2026-06-12: project-mode direct `findMany()`/`findFirst()` calls on a
+      typed Drizzle receiver are no longer swallowed by the relational-query exemption; only
+      real `db.query.<table>.findMany/findFirst(...)` chains remain classified as relational
+      reads, while direct typed `db.findMany()` / `db["findFirst"]()` degrade to FW406 and fake
+      lookalike receivers stay inert under SPEC §10-§11. Same-session evidence:
+      `pnpm exec vitest --run packages/drizzle/src/index.test.ts -t "project unknown direct receiver|relational query API|project relational"`,
+      `pnpm exec vitest --run packages/drizzle/src/index.test.ts`,
+      `pnpm exec vitest --run conformance/drizzle-pin/src/index.test.ts`,
+      `pnpm exec vp check packages/drizzle/src/static.ts packages/drizzle/src/index.test.ts plans/codebase-quality-round2.md`,
+      and `git diff --check`.
       Additional evidence 2026-06-12: project-mode relational query reads now require the
       relational table member to resolve through the project table-symbol map before contributing
       a read domain. Unknown members such as `db.query.archivedUsers.findMany(...)` remain
