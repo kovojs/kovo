@@ -446,6 +446,12 @@ pipeline throws the tree away and communicates via mutated source text.
       browser-capturing handlers, and `validateDirectDbAccess` reports FW330 for every mutation
       handler in a file instead of returning after the first offender. Focused adversarial tests
       live in `packages/compiler/src/index.test.ts`.
+      Additional evidence 2026-06-11: `packages/compiler/src/graph.ts` now uses the same `.js`
+      local import convention as the rest of the compiler package, and `inferComponentName`
+      requires the caller's already parsed `ComponentModuleModel` instead of hiding a default
+      `parseComponentModule` call. Same-session evidence:
+      `pnpm exec vitest --run packages/compiler/src/index.test.ts` and
+      `pnpm exec vp check packages/compiler/src/index.ts packages/compiler/src/graph.ts`.
 
 Verification: compiler vitest + fixpoint + the new adversarial corpus; `fw explain` snapshots
 re-pinned only where positions legitimately improve (drift fixes change line numbers — explain

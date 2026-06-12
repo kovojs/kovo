@@ -317,10 +317,7 @@ function emittedFileKind(fileName: string): EmittedFile['kind'] {
   return 'registry';
 }
 
-function inferComponentName(
-  options: CompileComponentOptions,
-  model = parseComponentModuleModel(options.fileName, options.source),
-): string {
+function inferComponentName(options: CompileComponentOptions, model: ComponentModuleModel): string {
   const component = firstComponentModel(model);
   if (component?.localName) return component.localName;
 

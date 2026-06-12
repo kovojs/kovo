@@ -1,6 +1,6 @@
 import type { ComponentExplain, FwExplainInput } from '@jiso/core';
 
-import { kebabCase } from './shared.ts';
+import { kebabCase } from './shared.js';
 import {
   componentOptionObjectEntries,
   componentOptionObjectKeys,
