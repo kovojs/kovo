@@ -12,11 +12,17 @@ import { GalleryCollapsibleDemo } from './generated/interactive/collapsible-demo
 import * as disclosureClient from './generated/interactive/disclosure-demo.client.js';
 import { GalleryDisclosureDemo } from './generated/interactive/disclosure-demo.js';
 // @ts-expect-error generated client modules are compiler artifacts without declarations.
+import * as numberFieldClient from './generated/interactive/number-field-demo.client.js';
+import { GalleryNumberFieldDemo } from './generated/interactive/number-field-demo.js';
+// @ts-expect-error generated client modules are compiler artifacts without declarations.
 import * as popoverClient from './generated/interactive/popover-demo.client.js';
 import { GalleryPopoverDemo } from './generated/interactive/popover-demo.js';
 // @ts-expect-error generated client modules are compiler artifacts without declarations.
 import * as switchClient from './generated/interactive/switch-demo.client.js';
 import { GallerySwitchDemo } from './generated/interactive/switch-demo.js';
+// @ts-expect-error generated client modules are compiler artifacts without declarations.
+import * as tabsClient from './generated/interactive/tabs-demo.client.js';
+import { GalleryTabsDemo } from './generated/interactive/tabs-demo.js';
 // @ts-expect-error generated client modules are compiler artifacts without declarations.
 import * as toggleClient from './generated/interactive/toggle-demo.client.js';
 import { GalleryToggleDemo } from './generated/interactive/toggle-demo.js';
@@ -32,8 +38,10 @@ const generatedModules: Record<string, Record<string, unknown>> = {
   '/c/examples/gallery/src/generated/interactive/checkbox-demo.client.js': checkboxClient,
   '/c/examples/gallery/src/generated/interactive/collapsible-demo.client.js': collapsibleClient,
   '/c/examples/gallery/src/generated/interactive/disclosure-demo.client.js': disclosureClient,
+  '/c/examples/gallery/src/generated/interactive/number-field-demo.client.js': numberFieldClient,
   '/c/examples/gallery/src/generated/interactive/popover-demo.client.js': popoverClient,
   '/c/examples/gallery/src/generated/interactive/switch-demo.client.js': switchClient,
+  '/c/examples/gallery/src/generated/interactive/tabs-demo.client.js': tabsClient,
   '/c/examples/gallery/src/generated/interactive/toggle-demo.client.js': toggleClient,
 };
 
@@ -122,6 +130,36 @@ describe('compiled interactive gallery demos in the browser', () => {
     });
   });
 
+  it('updates number-field stamped state through generated steppers', async () => {
+    const root = mountInteractiveDemo(GalleryNumberFieldDemo);
+    const input = required(root.querySelector<HTMLInputElement>('input'));
+    const increment = required(root.querySelector<HTMLButtonElement>('[data-action="increment"]'));
+    const output = required(root.querySelector<HTMLOutputElement>('[data-demo-state="value"]'));
+    const { imports } = installGeneratedGalleryLoader(root);
+
+    expect(root.getAttribute('fw-state')).toBe('{"value":2}');
+    expect(input.type).toBe('number');
+    expect(input.name).toBe('gallery-seat-count');
+    expect(input.required).toBe(true);
+    expect(input.value).toBe('2');
+    expect(output.textContent).toBe('2');
+
+    increment.click();
+
+    await vi.waitFor(() => {
+      expect(imports).toEqual([
+        '/c/examples/gallery/src/generated/interactive/number-field-demo.client.js',
+      ]);
+      expect(root.getAttribute('fw-state')).toBe('{"value":3}');
+    });
+
+    required(root.querySelector<HTMLButtonElement>('[data-action="decrement"]')).click();
+
+    await vi.waitFor(() => {
+      expect(root.getAttribute('fw-state')).toBe('{"value":2}');
+    });
+  });
+
   it('updates switch stamped state while native checked state moves in the browser', async () => {
     const root = mountInteractiveDemo(GallerySwitchDemo);
     const input = required(root.querySelector<HTMLInputElement>('input'));
@@ -194,6 +232,36 @@ describe('compiled interactive gallery demos in the browser', () => {
     await vi.waitFor(() => {
       expect(root.getAttribute('fw-state')).toBe('{"open":false}');
       expect(content.matches(':popover-open')).toBe(false);
+    });
+  });
+
+  it('updates tabs stamped state from generated click handlers', async () => {
+    const root = mountInteractiveDemo(GalleryTabsDemo);
+    const overview = required(
+      root.querySelector<HTMLButtonElement>('#gallery-tabs-overview-trigger'),
+    );
+    const details = required(
+      root.querySelector<HTMLButtonElement>('#gallery-tabs-details-trigger'),
+    );
+    const overviewPanel = required(root.querySelector<HTMLElement>('#gallery-tabs-overview-panel'));
+    const detailsPanel = required(root.querySelector<HTMLElement>('#gallery-tabs-details-panel'));
+    const { imports } = installGeneratedGalleryLoader(root);
+
+    expect(root.getAttribute('fw-state')).toBe('{"value":"overview"}');
+    expect(overview.getAttribute('aria-selected')).toBe('true');
+    expect(overview.tabIndex).toBe(0);
+    expect(details.getAttribute('aria-selected')).toBe('false');
+    expect(details.tabIndex).toBe(-1);
+    expect(overviewPanel.hidden).toBe(false);
+    expect(detailsPanel.hidden).toBe(true);
+
+    details.click();
+
+    await vi.waitFor(() => {
+      expect(imports).toEqual([
+        '/c/examples/gallery/src/generated/interactive/tabs-demo.client.js',
+      ]);
+      expect(root.getAttribute('fw-state')).toBe('{"value":"details"}');
     });
   });
 });

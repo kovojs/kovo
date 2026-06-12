@@ -938,6 +938,26 @@ jiso-dialog` resolves dashed wire names and prints provenance including package,
       and `pnpm --filter @jiso/example-gallery run test:browser`. G6 remains open for
       full stateful-family coverage plus ARIA/`hidden` rerender synchronization,
       dialog/tooltip focus and dismiss behavior, and docs deployment wiring.
+      Additional partial evidence 2026-06-12: the compiled interactive gallery now adds
+      app-authored tabs and number-field demos, bringing the generated interactive set to
+      eight demos. `examples/gallery/scripts/emit-interactive-gallery.mjs` compiles both
+      through `@jiso/compiler`, commits lowered TSX plus versioned client handler modules,
+      and `examples/gallery/src/interactive-gallery.test.ts` statically inspects the
+      generated `on:click`/`on:keydown` refs and executes the tabs keyboard/click and
+      number-field stepper client handlers. The Chromium browser test installs the real
+      `@jiso/runtime` loader and proves generated tabs click handlers plus number-field
+      stepper handlers import their generated modules and mutate stamped `fw-state`;
+      the tests also pin the initial tabs ARIA/hidden/roving-tabindex markup and native
+      number input form-control attributes. Same-session evidence:
+      `pnpm --filter @jiso/example-gallery run emit:interactive-gallery -- --check`,
+      `pnpm --filter @jiso/example-gallery exec vitest --run src/interactive-gallery.test.ts`,
+      `pnpm --filter @jiso/example-gallery test`,
+      `pnpm --filter @jiso/example-gallery run test:browser`,
+      `pnpm --filter @jiso/headless-ui exec vitest --run src/primitives/tabs.test.ts src/primitives/number-field.test.ts src/tooling/lint-primitives.test.ts src/tooling/primitive-handler-lint.test.ts`,
+      and `pnpm --filter @jiso/headless-ui run lint:primitives`. G6 remains open for
+      visible ARIA/`hidden` rerender synchronization after generated handler state changes,
+      broader keyboard delegation in the browser loader path, dialog/tooltip focus-dismiss
+      behavior, and docs deployment wiring.
 
 ## Background
 
