@@ -134,6 +134,12 @@ Do this first or pay it on every commit.
       structure instead of regex-matching the rendered `examples/commerce/src/app.ts:<line>`
       string. Same-session evidence:
       `node --test --test-name-pattern "P4 commerce touch graph is a committed generated artifact" tests/fw-check.node.mjs`.
+      Partial evidence 2026-06-12: the fragment-target registry tranche now compiles the
+      generated registry module plus a virtual `fragmentTarget` consumer through TypeScript,
+      asserting valid `rowId` props and `@ts-expect-error` failures for missing, mistyped, and
+      extra props instead of parsing the generated `FragmentTargets` interface source. Same-session
+      evidence:
+      `node --test --test-name-pattern "P1 fragment targets emit typed registry facts" tests/fw-check.node.mjs`.
       Partial evidence 2026-06-11: the `P10 starter wires graph assertions into CI` tranche now
       parses `packages/create-jiso/templates/package.json` and `graph.json`, asserts starter
       graph structure, exercises the real template graph through `fwCheck`/`fwExplain`, evaluates

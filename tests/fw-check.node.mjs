@@ -742,6 +742,68 @@ const executeTypeScriptModuleSource = async (source) => {
   return module.exports;
 };
 
+const assertTypeScriptProgramHasNoDiagnostics = async (files) => {
+  const ts = await import('typescript');
+  const workspaceRoot = fileURLToPath(new URL('../', import.meta.url));
+  const compilerOptions = {
+    allowImportingTsExtensions: true,
+    baseUrl: workspaceRoot,
+    exactOptionalPropertyTypes: true,
+    ignoreDeprecations: '6.0',
+    module: ts.ModuleKind.NodeNext,
+    moduleResolution: ts.ModuleResolutionKind.NodeNext,
+    noEmit: true,
+    paths: {
+      '@jiso/core': ['dist/core/src/index.d.mts'],
+    },
+    skipLibCheck: true,
+    strict: true,
+    target: ts.ScriptTarget.ES2024,
+    types: ['node'],
+  };
+  const defaultHost = ts.createCompilerHost(compilerOptions, true);
+  const virtualFiles = new Map(Object.entries(files));
+  const host = {
+    ...defaultHost,
+    fileExists(fileName) {
+      return virtualFiles.has(fileName) || defaultHost.fileExists(fileName);
+    },
+    getSourceFile(fileName, languageVersion, onError, shouldCreateNewSourceFile) {
+      const sourceText = virtualFiles.get(fileName);
+      if (sourceText !== undefined) {
+        return ts.createSourceFile(fileName, sourceText, languageVersion, true);
+      }
+      return defaultHost.getSourceFile(
+        fileName,
+        languageVersion,
+        onError,
+        shouldCreateNewSourceFile,
+      );
+    },
+    readFile(fileName) {
+      return virtualFiles.get(fileName) ?? defaultHost.readFile(fileName);
+    },
+  };
+  const program = ts.createProgram([...virtualFiles.keys()], compilerOptions, host);
+  const diagnostics = ts.getPreEmitDiagnostics(program);
+
+  assert.deepEqual(
+    diagnostics.map((diagnostic) => {
+      const position =
+        diagnostic.file && diagnostic.start !== undefined
+          ? diagnostic.file.getLineAndCharacterOfPosition(diagnostic.start)
+          : undefined;
+      const site = position
+        ? `${diagnostic.file.fileName}:${position.line + 1}:${position.character + 1}`
+        : diagnostic.file?.fileName;
+      return [diagnostic.code, site, ts.flattenDiagnosticMessageText(diagnostic.messageText, '\n')]
+        .filter(Boolean)
+        .join(' ');
+    }),
+    [],
+  );
+};
+
 const loadVitePlusConfig = async () => {
   const ts = await import('typescript');
   const module = { exports: {} };
@@ -5658,6 +5720,16 @@ export const CartRow = component('cart-row', {
 `,
   });
   const registrySource = result.files.find((file) => file.kind === 'registry')?.source ?? '';
+  const virtualRegistryFile = join(
+    fileURLToPath(new URL('../', import.meta.url)),
+    '.fw-check-virtual',
+    'generated-registry.ts',
+  );
+  const virtualConsumerFile = join(
+    fileURLToPath(new URL('../', import.meta.url)),
+    '.fw-check-virtual',
+    'fragment-target-consumer.ts',
+  );
 
   assert.deepEqual(result.componentGraphFacts, [
     {
@@ -5665,8 +5737,23 @@ export const CartRow = component('cart-row', {
       name: 'CartRow',
     },
   ]);
-  assert.deepEqual(interfaceMembersFromSource(registrySource, 'FragmentTargets'), {
-    'cart-row': '{ rowId: string }',
+  await assertTypeScriptProgramHasNoDiagnostics({
+    [virtualRegistryFile]: registrySource,
+    [virtualConsumerFile]: `
+import { fragmentTarget } from '@jiso/core';
+
+const cartRow = fragmentTarget('cart-row', { rowId: 'row-1' });
+cartRow.props.rowId.toUpperCase();
+
+// @ts-expect-error generated FragmentTargets require rowId.
+fragmentTarget('cart-row', {});
+
+// @ts-expect-error generated FragmentTargets keep rowId typed as string.
+fragmentTarget('cart-row', { rowId: 1 });
+
+// @ts-expect-error generated FragmentTargets reject undeclared props.
+fragmentTarget('cart-row', { rowId: 'row-1', sku: 'sku-1' });
+`,
   });
 });
 
