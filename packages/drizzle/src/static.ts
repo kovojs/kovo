@@ -879,6 +879,11 @@ function projectTableNameForNode(
   tableNamesBySymbol: ReadonlyMap<string, string>,
   namespaceTableNames: ProjectNamespaceTableNames = new Map(),
 ): string | undefined {
+  const expression = unwrappedStaticExpressionNode(node);
+  if (expression !== node) {
+    return projectTableNameForNode(expression, tableNamesBySymbol, namespaceTableNames);
+  }
+
   if (Node.isPropertyAccessExpression(node)) {
     const tableName = projectTableNameForSymbol(node.getNameNode(), tableNamesBySymbol);
     if (tableName) {
@@ -2186,6 +2191,9 @@ function staticExpressionPath(
   resolveIdentifier?: (node: Node) => string | undefined,
 ): string | undefined {
   if (!node) return undefined;
+  const expression = unwrappedStaticExpressionNode(node);
+  if (expression !== node) return staticExpressionPath(expression, resolveIdentifier);
+
   const resolved = resolveIdentifier?.(node);
   if (resolved) return resolved;
   if (Node.isIdentifier(node)) return resolveIdentifier?.(node) ?? node.getText();
@@ -2199,6 +2207,32 @@ function staticExpressionPath(
     return base && name ? `${base}.${name}` : undefined;
   }
   return undefined;
+}
+
+function staticTableExpressionPath(
+  node: Node | undefined,
+  resolveIdentifier?: (node: Node) => string | undefined,
+): string | undefined {
+  if (!node) return undefined;
+  // SPEC §10-§11: syntactic wrappers around a table are not new facts; unwrap them before
+  // deciding whether the read/write source is resolved or must degrade to FW406.
+  return staticExpressionPath(node, resolveIdentifier);
+}
+
+function unwrappedStaticExpressionNode(node: Node): Node {
+  let current = node;
+
+  while (
+    Node.isParenthesizedExpression(current) ||
+    Node.isAsExpression(current) ||
+    Node.isSatisfiesExpression(current) ||
+    Node.isTypeAssertion(current) ||
+    Node.isNonNullExpression(current)
+  ) {
+    current = current.getExpression();
+  }
+
+  return current;
 }
 
 function queryInstanceKey(
@@ -3295,15 +3329,19 @@ function extractDrizzleWriteCallsFromBody(
 
     const chain = drizzleWriteChainRoot(call);
     const start = call.getStart() - bodyOffset;
-    const tableExpression = call.getArguments()[0]?.getText().trim();
-    if (start < 0 || !tableExpression) continue;
+    const tableArgument = call.getArguments()[0];
+    if (start < 0 || !tableArgument) continue;
+    const tableExpression =
+      staticTableExpressionPath(tableArgument) ?? UNRESOLVED_READ_SOURCE_EXPRESSION;
 
     calls.push({
       index: start,
       operation,
       predicateFacts: extractPredicateFactsFromWriteChain(chain),
-      readSources: extractReadSourcesFromWriteChain(chain, operation, (node) =>
-        node.getText().trim(),
+      readSources: extractReadSourcesFromWriteChain(
+        chain,
+        operation,
+        (node) => staticTableExpressionPath(node) ?? UNRESOLVED_READ_SOURCE_EXPRESSION,
       ),
       tableExpression,
     });
@@ -3396,7 +3434,7 @@ function extractSelectReadCallsFromBody(
       calls.push({
         index,
         operation: 'select',
-        tableExpression: read.table.getText().trim() || UNRESOLVED_READ_SOURCE_EXPRESSION,
+        tableExpression: staticTableExpressionPath(read.table) ?? UNRESOLVED_READ_SOURCE_EXPRESSION,
       });
     }
   }

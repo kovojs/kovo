@@ -4822,6 +4822,48 @@ export interface CommerceInvalidationSets {
     });
   });
 
+  it('resolves wrapped source direct-select and write read-source tables', () => {
+    const graph = extractTouchGraphFromSource([
+      {
+        fileName: 'catalog.domain.ts',
+        source: [
+          'export const products = pgTable("products", {}, jiso({ domain: "product", key: "id" }));',
+          'export const vendors = pgTable("vendors", {}, jiso({ domain: "vendor", key: "id" }));',
+          'export const snapshots = pgTable("product_snapshots", {}, jiso({ domain: "snapshot", key: "productId" }));',
+          '',
+          'export async function syncCatalog(db) {',
+          '  await db.select().from((products as any)).leftJoin(vendors!, eq(vendors.id, products.vendorId));',
+          '  await db.insert(snapshots).select(db.select().from((products as any)));',
+          '  await db.update(snapshots).set({ refreshed: true }).from(vendors!);',
+          '}',
+          '',
+        ].join('\n'),
+      },
+    ]);
+
+    expect(serializeTouchGraph(graph)).toBe(
+      [
+        'export const touchGraph = {',
+        '  "syncCatalog": {',
+        '    touches: [',
+        '      { domain: "snapshot", via: "product_snapshots", site: "catalog.domain.ts:7", keys: null },',
+        '      { domain: "snapshot", via: "product_snapshots", site: "catalog.domain.ts:8", keys: null },',
+        '    ],',
+        '    reads: [',
+        '      { domain: "product", via: "products", site: "catalog.domain.ts:7", keys: null, source: "insert-select" },',
+        '      { domain: "product", via: "products", site: "catalog.domain.ts:6", keys: null, source: "select" },',
+        '      { domain: "vendor", via: "vendors", site: "catalog.domain.ts:6", keys: null, source: "select" },',
+        '      { domain: "vendor", via: "vendors", site: "catalog.domain.ts:8", keys: null, source: "update-from" },',
+        '    ],',
+        '    unresolved: [',
+        '    ],',
+        '  },',
+        '} as const;',
+        '',
+      ].join('\n'),
+    );
+  });
+
   it('marks standalone direct select chains with unresolved tables as FW406', () => {
     const graph = extractTouchGraphFromSource([
       {
@@ -4894,6 +4936,57 @@ export interface CommerceInvalidationSets {
         unresolved: [],
       },
     });
+  });
+
+  it('resolves wrapped project direct-select and write read-source tables', () => {
+    const graph = extractTouchGraphFromProject({
+      files: [
+        pgDatabaseTypes([
+          'insert(table: unknown): { select(value: unknown): Promise<void> };',
+          'select(value?: unknown): { from(table: unknown): { leftJoin(table: unknown, on: unknown): Promise<void> } };',
+          'update(table: unknown): { set(value: unknown): { from(table: unknown): Promise<void> } };',
+        ]),
+        {
+          fileName: 'catalog.domain.ts',
+          source: [
+            'import type { PgDatabase } from "drizzle-orm/pg-core";',
+            '',
+            'export const products = pgTable("products", {}, jiso({ domain: "product", key: "id" }));',
+            'export const vendors = pgTable("vendors", {}, jiso({ domain: "vendor", key: "id" }));',
+            'export const snapshots = pgTable("product_snapshots", {}, jiso({ domain: "snapshot", key: "productId" }));',
+            '',
+            'export async function syncCatalog(db: PgDatabase) {',
+            '  await db.select().from((products as any)).leftJoin(vendors!, eq(vendors.id, products.vendorId));',
+            '  await db.insert(snapshots).select(db.select().from((products as any)));',
+            '  await db.update(snapshots).set({ refreshed: true }).from(vendors!);',
+            '}',
+            '',
+          ].join('\n'),
+        },
+      ],
+    });
+
+    expect(serializeTouchGraph(graph)).toBe(
+      [
+        'export const touchGraph = {',
+        '  "syncCatalog": {',
+        '    touches: [',
+        '      { domain: "snapshot", via: "product_snapshots", site: "catalog.domain.ts:10", keys: null },',
+        '      { domain: "snapshot", via: "product_snapshots", site: "catalog.domain.ts:9", keys: null },',
+        '    ],',
+        '    reads: [',
+        '      { domain: "product", via: "products", site: "catalog.domain.ts:9", keys: null, source: "insert-select" },',
+        '      { domain: "product", via: "products", site: "catalog.domain.ts:8", keys: null, source: "select" },',
+        '      { domain: "vendor", via: "vendors", site: "catalog.domain.ts:8", keys: null, source: "select" },',
+        '      { domain: "vendor", via: "vendors", site: "catalog.domain.ts:10", keys: null, source: "update-from" },',
+        '    ],',
+        '    unresolved: [',
+        '    ],',
+        '  },',
+        '} as const;',
+        '',
+      ].join('\n'),
+    );
   });
 
   it('keeps insert-select nested reads classified as insert-select only', () => {

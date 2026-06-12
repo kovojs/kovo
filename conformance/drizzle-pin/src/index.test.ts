@@ -633,7 +633,7 @@ describe('Drizzle pinned subset conformance', () => {
             }, jiso({ domain: 'vendor', key: 'id' }));
 
             export async function loadCatalog(db: PgDatabase<any, any, any>) {
-              await db.select({ id: products.id }).from(products).leftJoin(vendors, eq(vendors.id, products.vendorId));
+              await db.select({ id: products.id }).from((products as any)).leftJoin(vendors!, eq(vendors.id, products.vendorId));
             }
           `,
         },
@@ -662,6 +662,48 @@ describe('Drizzle pinned subset conformance', () => {
         unresolved: [],
       },
     });
+  });
+
+  it('pins wrapped source direct-select and write read-source tables', () => {
+    const graph = extractTouchGraphFromSource([
+      {
+        fileName: 'conformance/drizzle-pin/src/catalog.domain.ts',
+        source: [
+          'export const products = pgTable("products", {}, jiso({ domain: "product", key: "id" }));',
+          'export const vendors = pgTable("vendors", {}, jiso({ domain: "vendor", key: "id" }));',
+          'export const snapshots = pgTable("product_snapshots", {}, jiso({ domain: "snapshot", key: "productId" }));',
+          '',
+          'export async function syncCatalog(db) {',
+          '  await db.select().from((products as any)).leftJoin(vendors!, eq(vendors.id, products.vendorId));',
+          '  await db.insert(snapshots).select(db.select().from((products as any)));',
+          '  await db.update(snapshots).set({ refreshed: true }).from(vendors!);',
+          '}',
+          '',
+        ].join('\n'),
+      },
+    ]);
+
+    expect(serializeTouchGraph(graph)).toBe(
+      [
+        'export const touchGraph = {',
+        '  "syncCatalog": {',
+        '    touches: [',
+        '      { domain: "snapshot", via: "product_snapshots", site: "conformance/drizzle-pin/src/catalog.domain.ts:7", keys: null },',
+        '      { domain: "snapshot", via: "product_snapshots", site: "conformance/drizzle-pin/src/catalog.domain.ts:8", keys: null },',
+        '    ],',
+        '    reads: [',
+        '      { domain: "product", via: "products", site: "conformance/drizzle-pin/src/catalog.domain.ts:7", keys: null, source: "insert-select" },',
+        '      { domain: "product", via: "products", site: "conformance/drizzle-pin/src/catalog.domain.ts:6", keys: null, source: "select" },',
+        '      { domain: "vendor", via: "vendors", site: "conformance/drizzle-pin/src/catalog.domain.ts:6", keys: null, source: "select" },',
+        '      { domain: "vendor", via: "vendors", site: "conformance/drizzle-pin/src/catalog.domain.ts:8", keys: null, source: "update-from" },',
+        '    ],',
+        '    unresolved: [',
+        '    ],',
+        '  },',
+        '} as const;',
+        '',
+      ].join('\n'),
+    );
   });
 
   it('pins unresolved standalone direct select tables as FW406', () => {
@@ -880,8 +922,8 @@ describe('Drizzle pinned subset conformance', () => {
             "export const snapshots = pgTable('product_snapshots', {}, jiso({ domain: 'snapshot', key: 'productId' }));",
             '',
             'export async function syncSnapshots(db: PgDatabase<any, any, any>, productId: string) {',
-            "  await db.insert(snapshots).select(db.select().from(products).where(gt(sql.raw('.from(prices)'), 0)));",
-            '  await db.update(products).set({ price: prices.productId }).from(prices).where(eq(products.id, productId));',
+            "  await db.insert(snapshots).select(db.select().from((products as any)).where(gt(sql.raw('.from(prices)'), 0)));",
+            '  await db.update(products).set({ price: prices.productId }).from(prices!).where(eq(products.id, productId));',
             '}',
             '',
           ].join('\n'),

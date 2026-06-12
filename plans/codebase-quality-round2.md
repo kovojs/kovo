@@ -1747,6 +1747,18 @@ must be "FW406 unresolved," never "silently wrong."
       `corepack pnpm exec vitest --run conformance/drizzle-pin`,
       `corepack pnpm exec vp check packages/drizzle/src/static.ts packages/drizzle/src/runtime-surface.test.ts plans/codebase-quality-round2.md`,
       and `git diff --check`.
+      Additional evidence 2026-06-12: source/project direct-select and insert-select/update-from
+      read-source table extraction now normalizes parsed syntactic wrappers around table
+      expressions (`(...)`, `as`, `satisfies`, type assertions, and non-null assertions) before
+      resolving static paths or project table symbols. This keeps harmless TS wrappers from
+      degrading real reads to FW406 while computed table expressions still remain unresolved
+      under SPEC §10-§11. Same-session evidence:
+      `pnpm exec vitest --run packages/drizzle/src/index.test.ts -t "wrapped .*direct-select|standalone direct select|insert-select source tables"`,
+      `pnpm exec vitest --run conformance/drizzle-pin/src/index.test.ts -t "wrapped source direct-select|standalone direct select|project read sources"`,
+      `pnpm exec vitest --run packages/drizzle/src`,
+      `pnpm exec vitest --run conformance/drizzle-pin/src/index.test.ts`,
+      `pnpm exec vp check packages/drizzle/src/static.ts packages/drizzle/src/index.test.ts conformance/drizzle-pin/src/index.test.ts plans/codebase-quality-round2.md`,
+      and `git diff --check`.
 
 - [ ] **HIGH — Remove fact-fabricating heuristics; degrade to FW406.**
       Column type from projection-key name (`/(count|qty|...)$/i` → number, index.ts:993);
