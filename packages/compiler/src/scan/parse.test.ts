@@ -241,7 +241,25 @@ export const CartActions = component('cart-actions', {
           start: source.indexOf('item.quantity'),
         },
       ],
+      bodyReferences: [
+        {
+          end: source.indexOf('log(') + 'log'.length,
+          name: 'log',
+          start: source.indexOf('log('),
+        },
+        {
+          end: source.indexOf('state.count') + 'state'.length,
+          name: 'state',
+          start: source.indexOf('state.count'),
+        },
+        {
+          end: source.indexOf('item.quantity') + 'item'.length,
+          name: 'item',
+          start: source.indexOf('item.quantity'),
+        },
+      ],
       bodyStart: source.indexOf(" log('item.id');"),
+      bodySourceStart: source.indexOf("log('item.id');"),
       references: ['log', 'state', 'item'],
     });
   });

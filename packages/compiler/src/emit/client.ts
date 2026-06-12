@@ -4,6 +4,7 @@ import { compilerIrHeader } from '../ir.js';
 import { applySourceReplacements, dedupeBy, indent, type SourceReplacement } from '../shared.js';
 import type {
   ElementParam,
+  HandlerArrowBody,
   HandlerLowering,
   QueryDeriveFact,
   QueryStampFact,
@@ -56,10 +57,10 @@ function emitHandlerBody(handler: HandlerLowering): string {
   const arrowBody = handler.arrowBody ?? arrowFunctionBody(handler.expression);
   if (!arrowBody) return '// unsupported handler expression was preserved as a diagnostic surface';
   if (arrowBody.kind === 'block') {
-    return lowerHandlerExpression(arrowBody.source, handler.params);
+    return lowerHandlerArrowBody(arrowBody, handler.params);
   }
 
-  return `return ${lowerHandlerExpression(arrowBody.source, handler.params)};`;
+  return `return ${lowerHandlerArrowBody(arrowBody, handler.params)};`;
 }
 
 function arrowFunctionBody(
@@ -105,6 +106,78 @@ function lowerHandlerExpression(expression: string, params: readonly ElementPara
   return applySourceReplacements(
     expression,
     handlerExpressionLowering(expression, params).replacements,
+  );
+}
+
+function lowerHandlerArrowBody(body: HandlerArrowBody, params: readonly ElementParam[]): string {
+  const parsedLowering = parsedHandlerExpressionLowering(body, params);
+  if (parsedLowering) {
+    return applySourceReplacements(body.source, parsedLowering.replacements);
+  }
+
+  return lowerHandlerExpression(body.source, params);
+}
+
+function parsedHandlerExpressionLowering(
+  body: HandlerArrowBody,
+  params: readonly ElementParam[],
+): HandlerExpressionLowering | null {
+  if (!body.propertyAccesses || body.sourceStart === undefined) return null;
+
+  const replacements: SourceReplacement[] = [];
+  const paramReplacements = params
+    .map((param) => ({
+      param,
+      sourceExpression: param.value.slice(1, -1),
+    }))
+    .filter((entry) => entry.sourceExpression.length > 0)
+    .sort((left, right) => right.sourceExpression.length - left.sourceExpression.length);
+
+  for (const access of body.propertyAccesses) {
+    const param = paramReplacements.find((entry) => entry.sourceExpression === access.path)?.param;
+    if (param) {
+      replacements.push({
+        end: access.end,
+        replacement: `ctx.params.${paramNameFromAttribute(param.attributeName)}`,
+        start: access.start,
+      });
+      continue;
+    }
+
+    if (access.path === 'state' || access.path.startsWith('state.')) {
+      replacements.push({
+        end: access.start + 'state'.length,
+        replacement: 'ctx.state',
+        start: access.start,
+      });
+    }
+  }
+
+  for (const reference of body.references ?? []) {
+    if (reference.name !== 'state') continue;
+    if (
+      replacements.some(
+        (replacement) => reference.start >= replacement.start && reference.end <= replacement.end,
+      )
+    ) {
+      continue;
+    }
+
+    replacements.push({
+      end: reference.end,
+      replacement: 'ctx.state',
+      start: reference.start,
+    });
+  }
+
+  return { replacements: dedupeHandlerReplacements(replacements) };
+}
+
+function dedupeHandlerReplacements(
+  replacements: readonly SourceReplacement[],
+): SourceReplacement[] {
+  return dedupeBy(replacements, (replacement) =>
+    [replacement.start, replacement.end, replacement.replacement].join(':'),
   );
 }
 

@@ -30,6 +30,12 @@ export interface PropertyAccessPathModel {
   start: number;
 }
 
+export interface IdentifierReferenceModel {
+  end: number;
+  name: string;
+  start: number;
+}
+
 export interface DocumentElementActionModel {
   action: 'method' | 'toggle-open';
   method?: string;
@@ -118,7 +124,9 @@ export interface ZeroArgArrowModel {
   callArgumentPropertyAccesses?: readonly (readonly PropertyAccessPathModel[])[];
   callArgumentStaticValues?: readonly (StaticLiteralValue | undefined)[];
   bodyPropertyAccesses: readonly PropertyAccessPathModel[];
+  bodyReferences: readonly IdentifierReferenceModel[];
   bodyStart: number;
+  bodySourceStart: number;
   callArguments?: readonly string[];
   documentElementAction?: DocumentElementActionModel;
   references: readonly string[];
@@ -1342,7 +1350,9 @@ function zeroArgArrowModel(
   const body = expression.body;
   const bodyStart = ts.isBlock(body) ? body.getStart(sourceFile) + 1 : body.getStart(sourceFile);
   const bodyEnd = ts.isBlock(body) ? body.getEnd() - 1 : body.getEnd();
-  const bodySource = source.slice(bodyStart, bodyEnd).trim();
+  const rawBodySource = source.slice(bodyStart, bodyEnd);
+  const bodySource = rawBodySource.trim();
+  const bodySourceStart = bodyStart + rawBodySource.length - rawBodySource.trimStart().length;
   const callArguments =
     !ts.isBlock(body) && ts.isCallExpression(body)
       ? body.arguments.map((argument) =>
@@ -1366,7 +1376,9 @@ function zeroArgArrowModel(
       ...(callArgumentPropertyAccesses === undefined ? {} : { callArgumentPropertyAccesses }),
       ...(callArgumentStaticValues === undefined ? {} : { callArgumentStaticValues }),
       bodyPropertyAccesses: propertyAccessPathModels(sourceFile, body),
+      bodyReferences: referenceIdentifierModels(sourceFile, body),
       bodyStart,
+      bodySourceStart,
       ...(callArguments === undefined ? {} : { callArguments }),
       ...documentElementActionModel(sourceFile, body),
       references: referenceIdentifiers(body),
@@ -1385,20 +1397,33 @@ function documentElementActionModel(
 }
 
 function referenceIdentifiers(root: ts.Node): string[] {
+  return referenceIdentifierModels(root.getSourceFile(), root).map((reference) => reference.name);
+}
+
+function referenceIdentifierModels(
+  sourceFile: ts.SourceFile,
+  root: ts.Node,
+): IdentifierReferenceModel[] {
   const declared = new Set<string>();
-  const referenced: string[] = [];
+  const referenced: IdentifierReferenceModel[] = [];
 
   const visit = (node: ts.Node): void => {
     if (ts.isIdentifier(node)) {
       if (isDeclaredIdentifier(node)) declared.add(node.text);
-      if (isReferenceIdentifier(node)) referenced.push(node.text);
+      if (isReferenceIdentifier(node)) {
+        referenced.push({
+          end: node.getEnd(),
+          name: node.text,
+          start: node.getStart(sourceFile),
+        });
+      }
     }
 
     ts.forEachChild(node, visit);
   };
 
   visit(root);
-  return referenced.filter((name) => !declared.has(name));
+  return referenced.filter((reference) => !declared.has(reference.name));
 }
 
 function arrowObjectPatternKeys(

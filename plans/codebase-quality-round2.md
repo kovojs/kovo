@@ -592,6 +592,14 @@ pipeline throws the tree away and communicates via mutated source text.
       `pnpm exec vitest --run packages/compiler/src/scan/parse.test.ts packages/compiler/src/handler-lowering.test.ts`,
       `pnpm exec vp check packages/compiler/src/scan/parse.ts packages/compiler/src/scan/parse.test.ts packages/compiler/src/lower/handlers.ts packages/compiler/src/emit/client.ts packages/compiler/src/types.ts`,
       and `git diff --check`.
+      Additional evidence 2026-06-12: zero-argument JSX handler body facts now include
+      parser-owned reference spans plus body-relative property access spans on
+      `HandlerArrowBody`, and `emit/client.ts` applies parameter/`state` rewrites from those
+      facts before falling back to the legacy handler-expression reparse path. Same-session
+      evidence:
+      `pnpm exec vitest --run packages/compiler/src/scan/parse.test.ts packages/compiler/src/handler-lowering.test.ts packages/compiler/src/compile-component.test.ts`,
+      `pnpm exec vp check packages/compiler/src/scan/parse.ts packages/compiler/src/scan/parse.test.ts packages/compiler/src/lower/handlers.ts packages/compiler/src/emit/client.ts packages/compiler/src/types.ts`,
+      and `git diff --check`.
       Additional partial evidence 2026-06-12: zero-argument JSX arrow body
       `PropertyAccessPathModel` facts now carry parser-derived boolean/number usage
       classifications, and `lower/handlers.ts` consumes those facts for `fw-param-types`

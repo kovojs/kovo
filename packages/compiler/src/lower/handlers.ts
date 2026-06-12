@@ -72,7 +72,18 @@ export function lowerEventHandlers(
         ? {
             arrowBody: {
               kind: eventAttribute.zeroArgArrow.bodyKind,
+              propertyAccesses: eventAttribute.zeroArgArrow.bodyPropertyAccesses.map((access) => ({
+                end: access.end - eventAttribute.zeroArgArrow!.bodySourceStart,
+                path: access.path,
+                start: access.start - eventAttribute.zeroArgArrow!.bodySourceStart,
+              })),
+              references: eventAttribute.zeroArgArrow.bodyReferences.map((reference) => ({
+                end: reference.end - eventAttribute.zeroArgArrow!.bodySourceStart,
+                name: reference.name,
+                start: reference.start - eventAttribute.zeroArgArrow!.bodySourceStart,
+              })),
               source: eventAttribute.zeroArgArrow.body,
+              sourceStart: eventAttribute.zeroArgArrow.bodySourceStart,
             },
           }
         : {}),

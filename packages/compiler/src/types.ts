@@ -97,7 +97,22 @@ export interface HandlerLowering {
 
 export interface HandlerArrowBody {
   kind: 'block' | 'expression';
+  propertyAccesses?: readonly HandlerArrowBodyPropertyAccess[];
+  references?: readonly HandlerArrowBodyReference[];
   source: string;
+  sourceStart?: number;
+}
+
+export interface HandlerArrowBodyPropertyAccess {
+  end: number;
+  path: string;
+  start: number;
+}
+
+export interface HandlerArrowBodyReference {
+  end: number;
+  name: string;
+  start: number;
 }
 
 export interface ElementParam {
