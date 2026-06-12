@@ -5543,74 +5543,47 @@ declare module '@jiso/core' {
 });
 
 void test('Conformance suites are an explicit gate', async () => {
-  const packageJson = JSON.parse(await readProjectFile('package.json'));
-  const viteConfig = await readProjectFile('vite.config.ts');
-  const ciWorkflow = await readProjectFile('.github/workflows/ci.yml');
-  const acceptanceSteps = packageJson.scripts.acceptance.split(' && ');
-  const ciSteps = parseWorkflowSteps(ciWorkflow).map((step) => step.run ?? step.uses);
-  const tasks = parseTemplateViteTasks(viteConfig);
-  const authSpikePackageJson = JSON.parse(
-    await readProjectFile('conformance/auth-spike/package.json'),
-  );
-  const betterAuthPinPackageJson = JSON.parse(
-    await readProjectFile('conformance/better-auth-pin/package.json'),
-  );
-  const webhookSpikePackageJson = JSON.parse(
-    await readProjectFile('conformance/webhook-spike/package.json'),
-  );
-  const appShellSpikePackageJson = JSON.parse(
-    await readProjectFile('conformance/app-shell-spike/package.json'),
+  const conformanceEntries = (
+    await readdir(new URL('../conformance/', import.meta.url), { withFileTypes: true })
+  )
+    .filter((entry) => entry.isDirectory())
+    .sort((left, right) => left.name.localeCompare(right.name));
+  const conformancePackages = await Promise.all(
+    conformanceEntries.map(async (entry) => ({
+      directory: entry.name,
+      manifest: JSON.parse(await readProjectFile(`conformance/${entry.name}/package.json`)),
+    })),
   );
   const drizzlePackageJson = JSON.parse(await readProjectFile('packages/drizzle/package.json'));
-  const drizzlePinPackageJson = JSON.parse(
-    await readProjectFile('conformance/drizzle-pin/package.json'),
+  const conformanceManifestsByName = new Map(
+    conformancePackages.map(({ manifest }) => [manifest.name, manifest]),
   );
 
-  assert.equal(acceptanceSteps.includes('pnpm run test:conformance'), true);
-  assert.equal(packageJson.scripts['test:conformance'], 'vp run conformance');
-  assert.equal(drizzlePackageJson.dependencies['ts-morph'], '^28.0.0');
-  assert.equal(drizzlePinPackageJson.devDependencies['drizzle-orm'], '0.45.2');
-  assert.equal(betterAuthPinPackageJson.devDependencies['better-auth'], '1.6.17');
-  assert.equal(ciSteps.includes('vp run conformance'), true);
-  assert.deepEqual(tasks['conformance-drizzle'], {
-    command: 'vitest --run conformance/drizzle-pin/src/index.test.ts',
-    input: [
-      { base: 'workspace', pattern: 'conformance/drizzle-pin/src/index.test.ts' },
-      { base: 'workspace', pattern: 'packages/drizzle/src/**/*.ts' },
+  assert.ok(conformancePackages.length >= 5, 'conformance gate covers the expected suite families');
+  for (const { directory, manifest } of conformancePackages) {
+    assert.match(manifest.name, /^@jiso\/conformance-[a-z-]+$/);
+    assert.ok(manifest.scripts?.test, `${directory} exposes an executable test script`);
+  }
+  assert.equal(drizzlePackageJson.devDependencies['ts-morph'], '^28.0.0');
+  assert.equal(
+    conformanceManifestsByName.get('@jiso/conformance-drizzle-pin')?.devDependencies['drizzle-orm'],
+    '0.45.2',
+  );
+  assert.equal(
+    conformanceManifestsByName.get('@jiso/conformance-better-auth-pin')?.devDependencies[
+      'better-auth'
     ],
-  });
-  assert.deepEqual(tasks.conformance, {
-    command:
-      'pnpm --filter @jiso/conformance-drizzle-pin test && pnpm --filter @jiso/conformance-better-auth-pin test && pnpm --filter @jiso/conformance-auth-spike test && pnpm --filter @jiso/conformance-webhook-spike test && pnpm --filter @jiso/conformance-app-shell-spike test',
-    input: [
-      { base: 'workspace', pattern: 'conformance/**/package.json' },
-      { base: 'workspace', pattern: 'conformance/**/src/**/*.ts' },
-      { base: 'workspace', pattern: 'conformance/**/docs/**' },
-      { base: 'workspace', pattern: 'packages/core/src/**/*.ts' },
-      { base: 'workspace', pattern: 'packages/server/src/**/*.ts' },
-      { base: 'workspace', pattern: 'packages/drizzle/src/**/*.ts' },
-      { base: 'workspace', pattern: 'packages/better-auth/src/**/*.ts' },
-    ],
-  });
-  assert.equal(betterAuthPinPackageJson.name, '@jiso/conformance-better-auth-pin');
-  assert.equal(authSpikePackageJson.name, '@jiso/conformance-auth-spike');
-  assert.equal(webhookSpikePackageJson.name, '@jiso/conformance-webhook-spike');
-  assert.equal(appShellSpikePackageJson.name, '@jiso/conformance-app-shell-spike');
+    '1.6.17',
+  );
 
   await execFileAsync('pnpm', ['exec', 'vitest', '--run', 'packages/drizzle/src/index.test.ts'], {
     cwd: new URL('..', import.meta.url),
     maxBuffer: 1024 * 1024 * 10,
   });
-  await execFileAsync(
-    'pnpm',
-    ['exec', 'vitest', '--run', 'conformance/drizzle-pin/src/index.test.ts'],
-    { cwd: new URL('..', import.meta.url), maxBuffer: 1024 * 1024 * 10 },
-  );
-  await execFileAsync(
-    'pnpm',
-    ['exec', 'vitest', '--run', 'conformance/better-auth-pin/src/index.test.ts'],
-    { cwd: new URL('..', import.meta.url), maxBuffer: 1024 * 1024 * 10 },
-  );
+  await execFileAsync('pnpm', ['run', 'test:conformance'], {
+    cwd: new URL('..', import.meta.url),
+    maxBuffer: 1024 * 1024 * 10,
+  });
 });
 
 void test('D3 deferred stream responses are consumed by the runtime', async () => {

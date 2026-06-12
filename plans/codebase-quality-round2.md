@@ -179,6 +179,13 @@ Do this first or pay it on every commit.
       run steps, and Vite task definitions structurally while keeping the Drizzle package and
       conformance suites executable, instead of grepping Vite/CI source text for conformance task
       names.
+      Partial evidence 2026-06-12: the conformance gate tranche now discovers
+      `conformance/*/package.json` manifests, keeps only the explicit Drizzle/better-auth version
+      pins, runs the Drizzle package test, and executes the real `pnpm run test:conformance` gate
+      from `tests/fw-check.node.mjs` instead of asserting Vite task command literals, CI step
+      strings, or individual conformance package names. Verification: `pnpm run check:build` and
+      focused `node --test --test-name-pattern "Conformance suites are an explicit gate"
+      tests/fw-check.node.mjs`.
       Partial evidence 2026-06-11: the P1 render-equivalence tranche now imports the built
       compiler API, asserts `compileComponentModule` render-equivalence checks and
       `assertRenderEquivalence` failure behavior, then asserts the `ERROR RENDER_EQUIV` CLI
