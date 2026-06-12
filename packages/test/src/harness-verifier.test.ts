@@ -20,7 +20,7 @@ function deferred<T = void>(): {
   return { promise, reject, resolve };
 }
 
-describe('@jiso/test harness', () => {
+describe('@jiso/test harness verifier integration', () => {
   it('verifies observed writes against the static touch graph after exec', async () => {
     const cartMutation = mutation('cart/add', {
       csrf: false,
