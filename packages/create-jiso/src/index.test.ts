@@ -218,7 +218,9 @@ describe('create-jiso starter', () => {
       const exportStaticScript = readFileSync(join(root, 'scripts/export-static.mjs'), 'utf8');
       expect(exportStaticScript).toContain("execFileSync('vp', ['build']");
       expect(exportStaticScript).toContain("ssrLoadModule('/src/app-shell.ts')");
-      expect(exportStaticScript).toContain('exportStaticApp(app, { outDir:');
+      expect(exportStaticScript).toContain(
+        'exportStaticApp(app, { assets: builtCssAssets, outDir:',
+      );
       expect(exportStaticScript).toContain('JISO_STARTER_STYLESHEET_HREF');
       expect(exportStaticScript).toContain('isStaticExportDiagnosticError');
       expect(exportStaticScript).toContain('starter-export/v1');
@@ -389,8 +391,9 @@ describe('create-jiso starter', () => {
       writeJisoProject(root, { name: 'Export Task Proof' });
       linkStarterBuildDependencies(root);
 
-      execFileSync(resolveBin('vp'), ['run', 'export'], {
+      const output = execFileSync(resolveBin('vp'), ['run', 'export'], {
         cwd: root,
+        encoding: 'utf8',
         env: withRepoBinOnPath(),
         stdio: 'pipe',
       });
@@ -399,6 +402,7 @@ describe('create-jiso starter', () => {
       const cssFile = readdirSync(join(root, 'dist/assets')).find((file) => file.endsWith('.css'));
 
       expect(cssFile).toBeTypeOf('string');
+      expect(output).toContain('starter-export/v1\nhtml=1\nclient-modules=1\nassets=1\n');
       expect(distIndex).toContain(`href="/assets/${cssFile}"`);
       expect(distIndex).not.toContain('/src/styles.css');
       expect(readFileSync(join(root, 'dist/assets', cssFile ?? ''), 'utf8')).toContain(
@@ -539,7 +543,7 @@ function linkStarterBuildDependencies(root: string): void {
   mkdirSync(join(nodeModules, '@types'), { recursive: true });
   mkdirSync(nodeModulesBin, { recursive: true });
 
-  symlinkSync(resolveBin('vp'), join(nodeModulesBin, 'vp'));
+  symlinkSync(join(resolveDependencyRoot('vite-plus'), 'bin/vp'), join(nodeModulesBin, 'vp'));
   symlinkSync(resolveDependencyRoot('@types/node'), join(nodeModules, '@types/node'));
   symlinkSync(resolveDependencyRoot('@tailwindcss/vite'), join(nodeModules, '@tailwindcss/vite'));
   symlinkSync(resolveDependencyRoot('@jiso/better-auth'), join(nodeModules, '@jiso/better-auth'));
@@ -687,12 +691,12 @@ function resolveDependencyRoot(packageName: string): string {
 function resolveBin(name: string): string {
   const linkedBin = join(process.cwd(), 'node_modules', '.bin', name);
   if (existsSync(linkedBin)) {
-    return linkedBin;
+    return realpathSync(linkedBin);
   }
 
   const pnpmBin = join(process.cwd(), 'node_modules', '.pnpm', 'node_modules', '.bin', name);
   if (existsSync(pnpmBin)) {
-    return pnpmBin;
+    return realpathSync(pnpmBin);
   }
 
   throw new Error(`Unable to resolve binary: ${name}`);

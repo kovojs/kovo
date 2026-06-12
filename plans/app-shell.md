@@ -233,6 +233,14 @@ Scope: SPEC addition (proposed §9.5 "The request shell"), `@jiso/server` shell 
       generated starter's user-facing dev command preserves the same SPEC §9.5
       request-shell path while leaving source assets to Vite. Same-session
       verification ran `pnpm exec vitest --run packages/create-jiso/src/index.test.ts`.
+      Additional evidence 2026-06-12: the create-jiso starter export task now
+      passes the emitted Vite CSS file into `exportStaticApp({ assets })` as an
+      explicit static asset, so generated starter exports prove the R6 asset-copy
+      path rather than relying only on preexisting Vite output. The generated
+      `starter-export/v1` summary reports `assets=1`, and the proof checks the
+      exported document href, copied CSS bytes, and copied `/c/` module. Same-session
+      verification ran `pnpm exec vitest --run packages/create-jiso/src/index.test.ts`
+      and `pnpm exec vp check packages/create-jiso/src/index.test.ts packages/create-jiso/templates/scripts/export-static.mjs packages/create-jiso/templates/README.md packages/create-jiso/templates/docs/deployment.md plans/app-shell.md`.
 
 ## Background — the gap
 

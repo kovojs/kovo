@@ -10,6 +10,11 @@ const assetsDir = join(process.cwd(), 'dist', 'assets');
 const cssAssets = readdirSync(assetsDir)
   .filter((file) => file.endsWith('.css'))
   .sort((left, right) => left.localeCompare(right));
+const builtCssAssets = cssAssets.map((file) => ({
+  contentType: 'text/css; charset=utf-8',
+  path: `/assets/${file}`,
+  source: join(assetsDir, file),
+}));
 
 if (cssAssets.length !== 1) {
   throw new Error(
@@ -42,7 +47,7 @@ try {
     throw new Error('@jiso/server must export exportStaticApp.');
   }
 
-  result = await exportStaticApp(app, { outDir: 'dist' });
+  result = await exportStaticApp(app, { assets: builtCssAssets, outDir: 'dist' });
 } catch (error) {
   if (!isStaticExportDiagnosticError(error)) {
     throw error;
@@ -69,7 +74,7 @@ if (result) {
       'starter-export/v1',
       `html=${result.artifacts.length}`,
       `client-modules=${result.clientModules.length}`,
-      `assets=${cssAssets.length}`,
+      `assets=${result.assets.length}`,
       `diagnostics=${result.diagnostics.length}`,
       '',
     ].join('\n'),
