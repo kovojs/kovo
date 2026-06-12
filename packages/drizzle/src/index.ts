@@ -2055,17 +2055,33 @@ function drizzleReceiverNames(params: string, body = ''): Set<string> {
       if (name) names.add(name);
     }
   }
-  for (const match of body.matchAll(
-    new RegExp(
-      `\\b(?:const|let)\\s*\\{\\s*(?:db|tx)\\s*:\\s*(?<alias>${IDENTIFIER_SOURCE})\\s*\\}`,
-      'g',
-    ),
-  )) {
-    const alias = match.groups?.alias;
-    if (alias) names.add(alias);
+
+  for (const alias of destructuredDrizzleReceiverAliases(body)) {
+    names.add(alias);
   }
 
   return names;
+}
+
+function destructuredDrizzleReceiverAliases(body: string): string[] {
+  const aliases: string[] = [];
+  // SPEC §10-§11: receiver aliases in comments/strings must not fabricate FW406 surfaces.
+  const { sourceFile } = parseFunctionBodySource(body);
+
+  for (const declaration of sourceFile.getDescendantsOfKind(SyntaxKind.VariableDeclaration)) {
+    const nameNode = declaration.getNameNode();
+    if (!Node.isObjectBindingPattern(nameNode)) continue;
+
+    for (const element of nameNode.getElements()) {
+      const propertyName = element.getPropertyNameNode()?.getText();
+      if (propertyName !== 'db' && propertyName !== 'tx') continue;
+
+      const alias = element.getNameNode();
+      if (Node.isIdentifier(alias)) aliases.push(alias.getText());
+    }
+  }
+
+  return aliases;
 }
 
 function isLikelyDrizzleReceiver(name: string): boolean {

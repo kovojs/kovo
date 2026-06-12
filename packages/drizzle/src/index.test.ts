@@ -2502,6 +2502,24 @@ export interface CommerceInvalidationSets {
     });
   });
 
+  it('does not recognize destructured Drizzle receiver aliases from comments and strings', () => {
+    const graph = extractTouchGraphFromSource([
+      {
+        fileName: 'cart.domain.ts',
+        source: [
+          'export async function addItem(ctx) {',
+          '  // const { db: database } = ctx;',
+          '  const raw = "const { tx: writer } = ctx";',
+          '  await database.execute(sql`delete from cart_items`);',
+          '  await writer.query.cartItems.findMany();',
+          '}',
+        ].join('\n'),
+      },
+    ]);
+
+    expect(graph).toEqual({});
+  });
+
   it('marks external helpers receiving a Drizzle receiver as FW406', () => {
     const graph = extractTouchGraphFromSource([
       {
