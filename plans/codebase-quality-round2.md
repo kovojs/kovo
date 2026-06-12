@@ -129,6 +129,11 @@ Do this first or pay it on every commit.
       longer scans `examples/commerce/src/app.ts` for write-call line numbers; it asserts the
       parsed `examples/commerce/src/generated/graph.json` touch facts and keeps the allowed
       generated `touch-graph.ts` byte pin tied to those parsed artifact facts.
+      Partial evidence 2026-06-12: the P4 commerce touch graph site tranche parses generated
+      `touch.site` values into `{ path, line }` facts and asserts source-path/positive-line
+      structure instead of regex-matching the rendered `examples/commerce/src/app.ts:<line>`
+      string. Same-session evidence:
+      `node --test --test-name-pattern "P4 commerce touch graph is a committed generated artifact" tests/fw-check.node.mjs`.
       Partial evidence 2026-06-11: the `P10 starter wires graph assertions into CI` tranche now
       parses `packages/create-jiso/templates/package.json` and `graph.json`, asserts starter
       graph structure, exercises the real template graph through `fwCheck`/`fwExplain`, evaluates

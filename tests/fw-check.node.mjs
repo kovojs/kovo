@@ -474,6 +474,14 @@ const assertHtmlMainMarker = (source, marker, message) => {
   );
 };
 
+const parseProjectSite = (site) => {
+  const separator = site.lastIndexOf(':');
+  assert.notEqual(separator, -1, `site includes a line number: ${site}`);
+  const line = Number(site.slice(separator + 1));
+  assert.equal(Number.isInteger(line) && line > 0, true, `site line is positive: ${site}`);
+  return { line, path: site.slice(0, separator) };
+};
+
 const normalizeMarkdownCell = (value) =>
   value
     .replace(/`([^`]+)`/g, '$1')
@@ -5732,9 +5740,16 @@ void test('P4 commerce touch graph is a committed generated artifact', async () 
     .flatMap((entry) => entry.touches)
     .map((touch) => touch.site);
   assert.equal(generatedSites.length, 5);
-  for (const site of generatedSites) {
-    assert.match(site, /^examples\/commerce\/src\/app\.ts:\d+$/);
-  }
+  const generatedSiteFacts = generatedSites.map(parseProjectSite);
+  assert.deepEqual(
+    [...new Set(generatedSiteFacts.map((site) => site.path))],
+    ['examples/commerce/src/app.ts'],
+  );
+  assert.equal(
+    generatedSiteFacts.every((site) => site.line > 0),
+    true,
+    'touch graph sites carry source line facts',
+  );
   // SPEC §11.1/§11.2: the committed static graph must stay source-derived
   // because runtime verification checks observed effects against these facts.
   assert.deepEqual(
