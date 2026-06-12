@@ -10,8 +10,10 @@
     "./html-fragment": "./src/html-fragment.ts",
     "./page": "./src/page.ts",
     "./pglite": "./src/pglite.ts",
+    "./sql-observer": "./src/sql-observer.ts",
     "./test-case": "./src/test-case.ts",
     "./verifier-diagnostics": "./src/verifier-diagnostics.ts",
+    "./verifier-sql": "./src/verifier-sql.ts",
     "./verifier": "./src/verifier.ts"
   },
   "dependencies": {

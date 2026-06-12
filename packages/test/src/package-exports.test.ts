@@ -31,6 +31,7 @@ import {
 import { fragmentHtml } from '@jiso/test/html-fragment';
 import { createPageAssertion, type PageAssertion } from '@jiso/test/page';
 import { createPgliteTestDb, type PgliteTestDb } from '@jiso/test/pglite';
+import { observeSqlStatementIfString } from '@jiso/test/sql-observer';
 import { jisoTest, type JisoTestCase, type JisoTestRunner } from '@jiso/test/test-case';
 import {
   createDbVerifier,
@@ -45,6 +46,7 @@ import {
   diagnosticsForObservations,
   type DbVerificationDiagnostic as DirectDbVerificationDiagnostic,
 } from '@jiso/test/verifier-diagnostics';
+import { parseSqlOperations, type ParsedSqlOperation } from '@jiso/test/verifier-sql';
 
 describe('@jiso/test package subpath exports', () => {
   it('resolves seam-specific public modules alongside the root barrel', () => {
@@ -68,6 +70,15 @@ describe('@jiso/test package subpath exports', () => {
     expect(executeHarnessMutation).toBeTypeOf('function');
     expect(executeHarnessQuery).toBeTypeOf('function');
     expect(loadHarnessPage).toBeTypeOf('function');
+    expect(observeSqlStatementIfString).toBeTypeOf('function');
+    expect(parseSqlOperations('select * from cart_items')).toEqual([
+      {
+        kind: 'read',
+        mutationRead: undefined,
+        rowKey: undefined,
+        table: 'cart_items',
+      },
+    ]);
   });
 });
 
@@ -85,6 +96,7 @@ type _PublicSubpathTypes = [
   JisoTestRunner,
   HarnessMutationOptions<JisoTestRequest<{ cart: string[] }>>,
   HarnessOperationVerifier,
+  ParsedSqlOperation,
   DbObservationOptions,
   DbVerificationConfig,
   DbVerificationDiagnostic,

@@ -4250,6 +4250,12 @@ As each phase splits a source module, split its tests in the same commit.
       `corepack pnpm exec vitest --run examples/commerce/src/app.test.ts examples/commerce/src/source-truth.test.ts`,
       `corepack pnpm exec vp check packages/test/package.json packages/test/src/package-exports.test.ts packages/test/src/html-fragment.test.ts packages/test/src/harness-operations.test.ts packages/test/src/verifier-diagnostics.test.ts plans/codebase-quality-round2.md`,
       and `git diff --check`.
+      Additional evidence 2026-06-12: the remaining split SQL harness seams now have package
+      subpaths: `@jiso/test/sql-observer` and `@jiso/test/verifier-sql` are exported from
+      `packages/test/package.json`, and `packages/test/src/package-exports.test.ts` imports the
+      observer/parser through those package paths while the focused seam suites keep pinning SQL
+      observation and parser behavior. Same-session evidence:
+      `corepack pnpm exec vitest --run packages/test/src/package-exports.test.ts packages/test/src/sql-observer.test.ts packages/test/src/verifier-sql.test.ts`.
       Additional evidence 2026-06-12: Drizzle runtime/static package-surface coverage moved from
       `packages/drizzle/src/index.test.ts` into `packages/drizzle/src/runtime-surface.test.ts`,
       leaving static extraction coverage in the Drizzle monolith. Same-session evidence:
