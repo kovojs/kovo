@@ -14,6 +14,12 @@ export interface AppliedMutationResponse {
 
 export type ApplyQueryInterposition = (query: QueryChunk) => { value: unknown } | void;
 
+export interface ApplyMutationResponseToStoreOptions {
+  applyQuery?: ApplyQueryInterposition;
+  beforeApplyQueries?: (queries: readonly QueryChunk[]) => void;
+  onError?: (error: unknown) => void;
+}
+
 export function applyFragmentQueryBody(
   body: string,
   applyQuery: (query: QueryChunk) => void,
@@ -36,10 +42,16 @@ export function applyFragmentQueryBody(
 export function applyMutationResponseToStore(
   store: QueryStore,
   body: string,
+  options: ApplyMutationResponseToStoreOptions = {},
 ): AppliedMutationResponse {
-  return applyFragmentQueryBody(body, (query) => {
-    applyQueryChunkToStore(store, query);
-  });
+  return applyFragmentQueryBody(
+    body,
+    (query) => {
+      applyQueryChunkToStore(store, query, options.applyQuery);
+    },
+    options.onError,
+    options.beforeApplyQueries,
+  );
 }
 
 export interface ApplyMutationResponseToDomOptions {
@@ -73,7 +85,7 @@ export function applyMutationResponseToRuntime(
   options: ApplyMutationResponseToRuntimeOptions,
 ): AppliedMutationResponseToRuntime {
   if (!options.root) {
-    return applyMutationResponseToStore(options.store, options.body);
+    return applyMutationResponseToStore(options.store, options.body, options);
   }
 
   return applyMutationResponseToDom({

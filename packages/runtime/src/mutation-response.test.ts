@@ -158,6 +158,58 @@ describe('mutation response wire chunks', () => {
     expect(plan).toHaveBeenCalledWith({ count: 6 });
   });
 
+  it('keeps runtime store-only apply on the hook-aware mutation response path', () => {
+    const store = createQueryStore();
+    const beforeApplyQueries = vi.fn();
+
+    // SPEC.md §9.1: fw-query chunks are the mutation response vocabulary on
+    // every runtime apply path, including store-only multi-tab sync.
+    const applied = applyMutationResponseToRuntime({
+      applyQuery(query) {
+        store.set(query.name, { count: (query.value as { count: number }).count + 10 }, query.key);
+        return { value: store.get(query.name, query.key) };
+      },
+      beforeApplyQueries,
+      body: '<fw-query name="cart" key="cart:c1">{"count":6}</fw-query>',
+      store,
+    });
+
+    expect(applied).toEqual({ fragments: [], queries: ['cart'] });
+    expect(store.get('cart', 'cart:c1')).toEqual({ count: 16 });
+    expect(beforeApplyQueries).toHaveBeenCalledWith([
+      { key: 'cart:c1', name: 'cart', value: { count: 6 } },
+    ]);
+  });
+
+  it('reports malformed chunks on the runtime store-only apply path', () => {
+    const store = createQueryStore();
+    const onError = vi.fn();
+
+    // SPEC.md §9.1 keeps query and fragment chunks in one response body; the
+    // store-only runtime path should still parse both through the shared reader.
+    const applied = applyMutationResponseToRuntime({
+      body: [
+        '<fw-query name="cart">{</fw-query>',
+        '<fw-query name="inventory">{"available":true}</fw-query>',
+        '<fw-fragment target="cart-badge"><cart-badge>Ready</cart-badge>',
+      ].join('\n'),
+      onError,
+      store,
+    });
+
+    expect(applied).toEqual({
+      fragments: [],
+      queries: ['inventory'],
+    });
+    expect(store.get('cart')).toBeUndefined();
+    expect(store.get('inventory')).toEqual({ available: true });
+    expect(onError).toHaveBeenCalledTimes(2);
+    expect(onError.mock.calls.map(([error]) => String(error.message))).toEqual([
+      expect.stringContaining('Malformed JSON in fw-query cart'),
+      expect.stringContaining('Malformed fw-fragment chunk'),
+    ]);
+  });
+
   it('routes runtime DOM apply through the shared mutation response helper', () => {
     const store = createQueryStore();
     const root = new FakeMorphRoot();

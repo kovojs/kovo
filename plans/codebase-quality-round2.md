@@ -1388,6 +1388,17 @@ params, relational API, `execute(sql)`, right/full joins, a string column named 
       `pnpm exec vitest --run packages/runtime/src/index.test.ts -t "BroadcastChannel|rebroadcast|syncs mutation responses"`,
       `pnpm exec vp check packages/runtime/src/apply-path.ts packages/runtime/src/index.ts packages/runtime/src/mutation-response.test.ts plans/codebase-quality-round2.md`,
       and `git diff --check`.
+      Additional bounded evidence 2026-06-12: `packages/runtime/src/apply-path.ts` now carries
+      `applyQuery`, `beforeApplyQueries`, and `onError` through the store-only
+      `applyMutationResponseToRuntime` branch, matching the DOM branch's shared
+      query/fragment reader instead of silently dropping hook options when `root` is absent.
+      `packages/runtime/src/mutation-response.test.ts` pins interposed keyed query values,
+      `beforeApplyQueries`, and malformed query/fragment error reporting on that store-only
+      path. Same-session evidence:
+      `pnpm exec vitest --run packages/runtime/src/mutation-response.test.ts`,
+      `pnpm exec vitest --run packages/runtime/src/*.test.ts`,
+      `pnpm exec vp check packages/runtime/src/apply-path.ts packages/runtime/src/mutation-response.test.ts plans/codebase-quality-round2.md`,
+      and `git diff --check`.
 - [x] **MED — Fix ambient-scope argument override in handlers.ts.**
       `abortRemovedIslandSignals(currentHtml, nextHtml, scope)` ignores its explicit `scope`
       whenever the module-level `activeIslandSignalScope` is set
