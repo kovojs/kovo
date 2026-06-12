@@ -429,7 +429,7 @@ pipeline throws the tree away and communicates via mutated source text.
       host stamps and versioned handler attributes. Same-session evidence:
       `pnpm exec vitest --run packages/compiler/src/index.test.ts` and
       `pnpm exec vp check packages/compiler/src/index.ts packages/compiler/src/emit/server.ts`.
-- [ ] **HIGH — Retire regex rewriting of handler bodies.** emit/client.ts:89
+- [x] **HIGH — Retire regex rewriting of handler bodies.** emit/client.ts:89
       (`/\bstate\b/g → ctx.state` corrupts `log('state changed')`), :96 (member-expression
       substitution inside string literals), lower/handlers.ts:262 (harvests params from string
       contents), :277-294 (`splitArguments` is quote-blind). All become AST-node operations on
@@ -475,6 +475,15 @@ pipeline throws the tree away and communicates via mutated source text.
       evidence: `pnpm exec vitest --run packages/compiler/src/index.test.ts -t "template stamp|data-bind update plans"`,
       `pnpm exec vitest --run packages/compiler/src/index.test.ts`, and
       `pnpm exec vp check packages/compiler/src/analyze/query-updates.ts packages/compiler/src/emit/client.ts packages/compiler/src/index.test.ts packages/compiler/src/types.ts`.
+      Completion audit 2026-06-12: `emit/client.ts` now uses `arrowFunctionBody` and
+      `lowerHandlerExpression` TypeScript AST spans for handler-body lowering, while
+      `lower/handlers.ts` uses `zeroArgArrowCallArguments` and `serializableMemberExpressions`
+      AST walks for element-param discovery. The old `splitArguments` helper and the original
+      whole-source body regexes are absent; remaining regexes in these modules are identifier
+      validation or attribute-name normalization, not handler-body rewriting. Same-session
+      evidence:
+      `pnpm exec vitest --run packages/compiler/src/index.test.ts -t "handler captures|quoted commas|element params|element param types|string literal|typed zero-argument"` and
+      `pnpm exec vp check packages/compiler/src/emit/client.ts packages/compiler/src/lower/handlers.ts plans/codebase-quality-round2.md`.
 - [x] **HIGH — Kill the derive mega-regex.** validate/bindings.ts:215-216 silently drops any
       `derive()` export whose expression contains `;` in a string or unusual formatting — its
       stamps vanish from `collectQueryUpdatePlans` with no diagnostic. scan/parse.ts already
