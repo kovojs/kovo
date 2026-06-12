@@ -67,3 +67,14 @@ export function sanitizeMutationChangeRecord(value: unknown): MutationChangeReco
     ...(keys === undefined ? {} : { keys }),
   };
 }
+
+let generatedMutationIdemCounter = 0;
+
+export function createMutationIdem(): string {
+  // SPEC.md §9.1: enhanced mutation requests carry stable FW-Idem metadata.
+  // Browser crypto is preferred; this fallback only needs per-tab uniqueness.
+  return (
+    globalThis.crypto?.randomUUID?.() ??
+    `idem_${Date.now().toString(36)}_${(generatedMutationIdemCounter += 1).toString(36)}`
+  );
+}

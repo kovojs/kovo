@@ -17,6 +17,7 @@ import {
   applyMutationResponseToStore,
 } from './apply-path.js';
 import {
+  createMutationIdem,
   isMutationBroadcastMessage,
   readMutationChangeHeader,
   sanitizeMutationChangeRecord,
@@ -446,6 +447,39 @@ describe('mutation response wire chunks', () => {
     expect(String(onError.mock.calls[0]?.[0].message)).toContain(
       'Malformed JSON in FW-Changes header',
     );
+  });
+
+  it('creates mutation idempotency keys from crypto or the local fallback', () => {
+    const cryptoDescriptor = Object.getOwnPropertyDescriptor(globalThis, 'crypto');
+    const now = vi.spyOn(Date, 'now').mockReturnValue(1_700_000_000_000);
+
+    try {
+      Object.defineProperty(globalThis, 'crypto', {
+        configurable: true,
+        value: { randomUUID: () => 'crypto-idem' },
+      });
+
+      expect(createMutationIdem()).toBe('crypto-idem');
+
+      Object.defineProperty(globalThis, 'crypto', {
+        configurable: true,
+        value: undefined,
+      });
+
+      // SPEC.md §9.1: generated enhanced mutation requests always carry FW-Idem.
+      const firstFallback = createMutationIdem();
+      const secondFallback = createMutationIdem();
+      expect(firstFallback).toMatch(/^idem_loyw3v28_[0-9a-z]+$/);
+      expect(secondFallback).toMatch(/^idem_loyw3v28_[0-9a-z]+$/);
+      expect(secondFallback).not.toBe(firstFallback);
+    } finally {
+      now.mockRestore();
+      if (cryptoDescriptor) {
+        Object.defineProperty(globalThis, 'crypto', cryptoDescriptor);
+      } else {
+        delete (globalThis as { crypto?: unknown }).crypto;
+      }
+    }
   });
 
   it('sanitizes mutation change records before broadcast publication and acceptance', () => {

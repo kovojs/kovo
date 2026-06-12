@@ -21,7 +21,7 @@ import type { MorphFragment, MorphRoot } from './morph.js';
 import { MutationQueue } from './mutation-queue.js';
 import { installMutationBroadcast } from './broadcast.js';
 import type { BroadcastLike, MutationBroadcast } from './broadcast.js';
-import { readMutationChangeHeader } from './mutation-response.js';
+import { createMutationIdem, readMutationChangeHeader } from './mutation-response.js';
 import { readLiveTargets } from './mutation-targets.js';
 import type { TargetCollectorRoot } from './mutation-targets.js';
 import type { CompiledQueryUpdatePlans } from './query-bindings.js';
@@ -723,7 +723,7 @@ async function submitOptimisticEnhancedMutationDirect<Input>(
     targets: string[];
   }
 > {
-  const idem = options.idem ?? createIdem();
+  const idem = options.idem ?? createMutationIdem();
   const queryNames = Object.keys(options.optimistic.transforms);
   const optimisticChange = optimisticChangeFromInput(options.input, options.change);
   const optimisticKeys = resolveOptimisticKeys(options.optimistic, optimisticChange);
@@ -835,7 +835,7 @@ function stampEnhancedMutationPending(
 
 async function fetchEnhancedMutation(
   options: EnhancedMutationSubmitOptions,
-  idem = options.idem ?? createIdem(),
+  idem = options.idem ?? createMutationIdem(),
 ): Promise<{
   body: string;
   changes: MutationChangeRecord[];
@@ -869,13 +869,4 @@ async function fetchEnhancedMutation(
 
 function isFailedMutationResponse(response: EnhancedMutationResponseLike): boolean {
   return response.ok === false || (response.status !== undefined && response.status >= 400);
-}
-
-let generatedIdemCounter = 0;
-
-function createIdem(): string {
-  return (
-    globalThis.crypto?.randomUUID?.() ??
-    `idem_${Date.now().toString(36)}_${(generatedIdemCounter += 1).toString(36)}`
-  );
 }

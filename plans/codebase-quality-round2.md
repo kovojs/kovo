@@ -1832,6 +1832,15 @@ params, relational API, `execute(sql)`, right/full joins, a string column named 
       `corepack pnpm exec vitest --run packages/runtime/src/broadcast.test.ts packages/runtime/src/index.test.ts -t "BroadcastChannel|rebroadcast|syncs mutation responses|mutation broadcast"`,
       `corepack pnpm exec vp check packages/runtime/src/index.ts packages/runtime/src/broadcast.ts packages/runtime/src/broadcast.test.ts plans/codebase-quality-round2.md`,
       and `git diff --check`.
+      Additional bounded evidence 2026-06-12: `packages/runtime/src/mutation-response.ts`
+      now owns fallback FW-Idem generation alongside mutation response metadata parsing, removing
+      that module-level idempotency state from `packages/runtime/src/index.ts` while preserving
+      enhanced mutation orchestration behavior. `packages/runtime/src/mutation-response.test.ts`
+      pins crypto-backed and fallback idempotency keys. Same-session evidence:
+      `corepack pnpm exec vitest --run packages/runtime/src/mutation-response.test.ts`,
+      `corepack pnpm exec vitest --run packages/runtime/src/index.test.ts -t "FW-Idem|optimistic|enhanced mutations"`,
+      `corepack pnpm exec vp check packages/runtime/src/index.ts packages/runtime/src/mutation-response.ts packages/runtime/src/mutation-response.test.ts plans/codebase-quality-round2.md`,
+      and `git diff --check`.
       Additional bounded evidence 2026-06-12: extracted
       `packages/runtime/src/loader-lifecycle.ts` as the subtractive loader listener and
       load/idle/visible execution-trigger seam; `packages/runtime/src/index.ts` now imports that
