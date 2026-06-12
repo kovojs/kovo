@@ -129,8 +129,8 @@ const explainValue = (output, prefix) => {
 const runCliCommand = async (args) => {
   let stdout = '';
   let stderr = '';
-  const originalStdoutWrite = process.stdout.write;
-  const originalStderrWrite = process.stderr.write;
+  const originalStdoutWrite = process.stdout.write.bind(process.stdout);
+  const originalStderrWrite = process.stderr.write.bind(process.stderr);
 
   process.stdout.write = function writeStdout(chunk) {
     stdout += String(chunk);
