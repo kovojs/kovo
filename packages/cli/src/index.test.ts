@@ -1678,6 +1678,7 @@ describe('fw check', () => {
       );
       writeFileSync(join(parent, 'package.json'), '{"type":"module"}\n', 'utf8');
       symlinkSync(new URL('./index.ts', import.meta.url), entryPath);
+      symlinkSync(new URL('./add-catalog.ts', import.meta.url), join(spacedDir, 'add-catalog.js'));
 
       const output = execFileSync(process.execPath, ['--preserve-symlinks-main', entryPath], {
         encoding: 'utf8',
