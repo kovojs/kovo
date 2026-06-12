@@ -748,6 +748,12 @@ pipeline throws the tree away and communicates via mutated source text.
       `pnpm exec vitest --run packages/compiler/src/view-transitions.test.ts`,
       `pnpm exec vitest --run packages/compiler/src`, and
       `pnpm exec vp check packages/compiler/src/lower/view-transitions.ts packages/compiler/src/view-transitions.test.ts`.
+      Additional evidence 2026-06-12: server render emission now appends generated host
+      attributes (`fw-c`, missing `fw-deps`, and `fw-state`) using the parsed render-host
+      self-closing fact instead of regex-matching the opening tag suffix. Same-session evidence:
+      `pnpm exec vitest --run packages/compiler/src/stamps.test.ts packages/compiler/src/view-transitions.test.ts`,
+      `pnpm exec vitest --run packages/compiler/src`, and
+      `pnpm exec vp check packages/compiler/src/emit/server.ts packages/compiler/src/stamps.test.ts packages/compiler/src/view-transitions.test.ts`.
       Additional evidence 2026-06-12: `scan/parse.ts` now records parser-owned
       property-access facts on JSX attribute expressions and JSX child expressions, and
       inline-derive lowering consumes those facts instead of reparsing attribute, sole-text, and

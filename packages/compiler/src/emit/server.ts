@@ -173,6 +173,7 @@ function stampRenderHostTag(
       hostElement,
     ),
     model,
+    hostElement,
   );
 }
 
@@ -193,7 +194,7 @@ function stampComponentIdentity(
   if (tagName === componentName || tagName.includes('-')) return tagSource;
   if (hostElement?.attributes.some((attribute) => attribute.name === 'fw-c')) return tagSource;
 
-  return stampOpeningTagAttribute(tagSource, 'fw-c', componentName);
+  return insertOpeningTagAttribute(tagSource, hostElement, 'fw-c', componentName);
 }
 
 function stampDeclaredQueryDeps(
@@ -207,9 +208,15 @@ function stampDeclaredQueryDeps(
   return stampOpeningTagDeps(tagSource, hostElement, deps);
 }
 
-function stampInitialState(tagSource: string, model: ComponentModuleModel): string {
+function stampInitialState(
+  tagSource: string,
+  model: ComponentModuleModel,
+  hostElement: JsxElementModel | null,
+): string {
   const stateJson = staticStateJson(model);
-  return stateJson ? stampOpeningTagAttribute(tagSource, 'fw-state', stateJson) : tagSource;
+  return stateJson
+    ? insertOpeningTagAttribute(tagSource, hostElement, 'fw-state', stateJson)
+    : tagSource;
 }
 
 function stampOpeningTagDeps(
@@ -224,7 +231,7 @@ function stampOpeningTagDeps(
     return replaceOpeningTagAttribute(tagSource, hostElement, existing, 'fw-deps', depValue);
   }
 
-  return stampOpeningTagAttribute(tagSource, 'fw-deps', depValue);
+  return insertOpeningTagAttribute(tagSource, hostElement, 'fw-deps', depValue);
 }
 
 function replaceOpeningTagAttribute(
@@ -239,12 +246,19 @@ function replaceOpeningTagAttribute(
   return `${tagSource.slice(0, start)}${name}="${escapeAttribute(value)}"${tagSource.slice(end)}`;
 }
 
-function stampOpeningTagAttribute(tagSource: string, name: string, value: string): string {
-  return tagSource.replace(/\s*\/?>$/, (suffix) =>
-    suffix.includes('/')
-      ? ` ${name}="${escapeAttribute(value)}" />`
-      : ` ${name}="${escapeAttribute(value)}">`,
-  );
+function insertOpeningTagAttribute(
+  tagSource: string,
+  hostElement: JsxElementModel | null,
+  name: string,
+  value: string,
+): string {
+  const escaped = escapeAttribute(value);
+  if (!hostElement) return `${tagSource.slice(0, -1).trimEnd()} ${name}="${escaped}">`;
+  if (hostElement.selfClosing) {
+    return `${tagSource.slice(0, -2).trimEnd()} ${name}="${escaped}" />`;
+  }
+
+  return `${tagSource.slice(0, -1).trimEnd()} ${name}="${escaped}">`;
 }
 
 function mergeDepValues(existing: readonly string[], declared: readonly string[]): string[] {
