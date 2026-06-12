@@ -3,6 +3,10 @@ import { gzipSync } from 'node:zlib';
 import { describe, expect, it, vi } from 'vitest';
 
 import {
+  buildInlineJisoLoaderInstallerSource,
+  inlineJisoLoaderInstallerReadableSource,
+} from './inline-loader-build.js';
+import {
   createInlineJisoLoaderSource,
   inlineJisoLoaderInstallerSource,
   installInlineJisoLoader,
@@ -50,6 +54,13 @@ class InlineTriggerElement {
 }
 
 describe('inline loader source', () => {
+  it('pins the shipped minified installer to the deterministic source helper', () => {
+    // SPEC.md §4.4: drift checks must compare the shipped bootstrap to readable source.
+    expect(inlineJisoLoaderInstallerReadableSource).toContain('\nfunction installInlineJisoLoader');
+    expect(inlineJisoLoaderInstallerReadableSource).toContain("join('; ')");
+    expect(buildInlineJisoLoaderInstallerSource()).toBe(inlineJisoLoaderInstallerSource);
+  });
+
   it('wraps the extracted installer source as the public bootstrap source', () => {
     // SPEC.md §4.4: the generated bootstrap is the always-loaded runtime path.
     expect(jisoLoaderSource).toBe(`(${inlineJisoLoaderInstallerSource})((url)=>import(url));`);

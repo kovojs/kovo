@@ -1093,6 +1093,15 @@ params, relational API, `execute(sql)`, right/full joins, a string column named 
       `pnpm exec vitest --run packages/runtime/src/inline-loader.test.ts packages/runtime/src/index.test.ts`
       and
       `pnpm exec vp check packages/runtime/src/inline-loader.ts packages/runtime/src/inline-loader.test.ts packages/runtime/src/index.test.ts plans/codebase-quality-round2.md`.
+      Additional bounded evidence 2026-06-12: `packages/runtime/src/inline-loader-build.ts`
+      now holds a readable `SPEC.md` section 4.4 inline-loader source plus deterministic
+      string/regex-aware minification helper, and `packages/runtime/src/inline-loader.test.ts`
+      fails if that helper no longer reproduces the checked-in shipped minified installer
+      byte-for-byte. This reduces drift while the package-level build emission step remains
+      open. Same-session evidence:
+      `pnpm exec vitest --run packages/runtime/src/inline-loader.test.ts packages/runtime/src/index.test.ts`
+      and
+      `pnpm exec vp check packages/runtime/src/inline-loader-build.ts packages/runtime/src/inline-loader.test.ts`.
 - [x] **HIGH — Ship the DOM morph.** The only real keyed DOM morph (focus/selection/scroll
       capture-restore) lives in index.browser.test.ts:12-182; every consumer must rewrite it, and
       the flagship browser test substantially tests its own test code. Promote to a
