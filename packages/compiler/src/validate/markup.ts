@@ -1,7 +1,6 @@
 import { diagnosticDefinitions } from '@jiso/core';
 
 import { diagnosticFor, type CompilerDiagnostic } from '../diagnostics.js';
-import type { RegistryFacts } from '../graph.js';
 import {
   componentExplicitNames,
   componentOptionObjectKeys,
@@ -11,7 +10,7 @@ import {
   type JsxElementModel,
 } from '../scan/parse.js';
 import { dedupeBy, kebabCase, splitDepValue } from '../shared.js';
-import type { PackageComponentPrefixFact } from '../types.js';
+import type { PackageComponentPrefixFact, RegistryFacts } from '../types.js';
 
 interface IdrefValue {
   index: number;

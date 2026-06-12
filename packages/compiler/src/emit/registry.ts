@@ -1,10 +1,15 @@
 import type { ComponentCssAsset } from '../css.js';
-import type { FragmentTargetFact, RegistryFacts, RegistryTypeFacts } from '../graph.js';
 import { compilerIrHeader } from '../ir.js';
 import type { HandlerLowering } from '../lower/handlers.js';
 import type { PlatformSubstitution } from '../lower/platform.js';
 import { kebabCase } from '../shared.js';
-import type { QueryUpdatePlanFact, ViewTransitionStamp } from '../types.js';
+import type {
+  FragmentTargetFact,
+  QueryUpdatePlanFact,
+  RegistryFacts,
+  RegistryTypeFacts,
+  ViewTransitionStamp,
+} from '../types.js';
 
 export interface EmitRegistryModuleOptions {
   clientFileName: string;

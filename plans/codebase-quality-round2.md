@@ -597,6 +597,14 @@ pipeline throws the tree away and communicates via mutated source text.
       `pnpm exec vitest --run packages/compiler/src/index.test.ts -t "registry metadata|query update|view transition|platform"`
       and
       `pnpm exec vp check packages/compiler/src/emit/registry.ts packages/compiler/src/index.ts plans/codebase-quality-round2.md`.
+      Additional evidence 2026-06-12: registry graph fact shapes (`ComponentGraphFact`,
+      `FragmentTargetFact`, `RegistryFacts`, `RegistryGraphInput`, and registry type options)
+      now live in `packages/compiler/src/types.ts`; graph derivation, markup validation, and
+      registry emission import them from the canonical type module instead of from the graph
+      phase. Same-session evidence:
+      `pnpm exec vitest --run packages/compiler/src/index.test.ts packages/compiler/src/package-prefixes.test.ts -t "registry metadata|component facts|package prefix|IDREF"`
+      and
+      `pnpm exec vp check packages/compiler/src/types.ts packages/compiler/src/graph.ts packages/compiler/src/emit/registry.ts packages/compiler/src/validate/markup.ts packages/compiler/src/index.ts plans/codebase-quality-round2.md`.
 - [x] **MED — Move analysis out of validate/.** `collectQueryUpdatePlans` and coverage
       classification feed emit, not validation; positions travel through a module-global
       `WeakMap` (`updateCoverageSpans`, bindings.ts:45-48) read back in component-contracts.ts:271.

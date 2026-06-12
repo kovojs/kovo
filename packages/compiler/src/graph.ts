@@ -1,5 +1,3 @@
-import type { ComponentExplain, FwExplainInput } from '@jiso/core';
-
 import { kebabCase } from './shared.js';
 import {
   componentOptionObjectEntries,
@@ -8,51 +6,15 @@ import {
   firstComponentModel,
   type ComponentModuleModel,
 } from './scan/parse.js';
-import type { PackageComponentPrefixFact } from './types.js';
-
-export type ComponentGraphFact = Pick<ComponentExplain, 'fragments' | 'name' | 'queries'>;
-
-export interface FragmentTargetFact {
-  propsType: string;
-  target: string;
-}
-
-export interface RegistryFacts {
-  components?: readonly string[];
-  domainKeys?: readonly string[];
-  invalidations?: Readonly<Record<string, readonly string[]>>;
-  mutations?: RegistryTypeFacts;
-  queries?: RegistryTypeFacts;
-  routes?: readonly string[];
-}
-
-export type RegistryTypeFacts = Readonly<Record<string, string>>;
-
-export type RegistryGraphInput = Pick<
-  FwExplainInput,
-  'components' | 'mutations' | 'packageComponentPrefixes' | 'pages' | 'queries'
->;
-
-interface CompileGraphComponentInput {
-  componentGraphFacts: readonly ComponentGraphFact[];
-}
-
-export interface RegistryTypeFactOptions {
-  mutations?: RegistryTypeFacts;
-  queries?: RegistryTypeFacts;
-}
-
-export interface CompileAppGraphOptions {
-  components?: readonly CompileGraphComponentInput[];
-  graph?: RegistryGraphInput;
-  packageComponentPrefixes?: readonly PackageComponentPrefixFact[];
-  registryTypes?: RegistryTypeFactOptions;
-}
-
-export interface CompileAppGraphResult {
-  graph: RegistryGraphInput;
-  registryFacts: RegistryFacts;
-}
+import type {
+  CompileAppGraphOptions,
+  CompileAppGraphResult,
+  ComponentGraphFact,
+  FragmentTargetFact,
+  RegistryFacts,
+  RegistryGraphInput,
+  RegistryTypeFactOptions,
+} from './types.js';
 
 export function deriveAppGraph(options: CompileAppGraphOptions): CompileAppGraphResult {
   const packageComponentPrefixes = [

@@ -41,15 +41,6 @@ export type {
   JisoVitePluginOptions,
 } from './vite.js';
 export type { PlatformSubstitution } from './lower/platform.js';
-export type {
-  CompileAppGraphOptions,
-  CompileAppGraphResult,
-  ComponentGraphFact,
-  RegistryFacts,
-  RegistryGraphInput,
-  RegistryTypeFactOptions,
-  RegistryTypeFacts,
-} from './graph.js';
 export { deriveAppGraph, deriveRegistryFactsFromGraph } from './graph.js';
 export type {
   ComponentCssAsset,
@@ -64,9 +55,15 @@ export type {
   CompileArtifactFileNames,
   CompileComponentOptions,
   CompileResult,
+  ComponentGraphFact,
   EmittedFile,
+  FragmentTargetFact,
   PackageComponentPrefixFact,
   QueryDeriveFact,
+  RegistryFacts,
+  RegistryGraphInput,
+  RegistryTypeFactOptions,
+  RegistryTypeFacts,
   QueryShape,
   QueryShapeFact,
   QueryShapeWrapper,

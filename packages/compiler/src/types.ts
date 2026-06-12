@@ -1,6 +1,7 @@
+import type { ComponentExplain, FwExplainInput } from '@jiso/core';
+
 import type { ComponentCssAsset } from './css.js';
 import type { CompilerDiagnostic } from './diagnostics.js';
-import type { ComponentGraphFact, RegistryFacts } from './graph.js';
 import type { PlatformSubstitution } from './lower/platform.js';
 import { replaceExtension } from './shared.js';
 
@@ -12,6 +13,46 @@ export interface CompileComponentOptions {
   registryFacts?: RegistryFacts;
   source: string;
   sourceProvenance?: 'app' | 'compiler-emitted';
+}
+
+export type ComponentGraphFact = Pick<ComponentExplain, 'fragments' | 'name' | 'queries'>;
+
+export interface FragmentTargetFact {
+  propsType: string;
+  target: string;
+}
+
+export interface RegistryFacts {
+  components?: readonly string[];
+  domainKeys?: readonly string[];
+  invalidations?: Readonly<Record<string, readonly string[]>>;
+  mutations?: RegistryTypeFacts;
+  queries?: RegistryTypeFacts;
+  routes?: readonly string[];
+}
+
+export type RegistryTypeFacts = Readonly<Record<string, string>>;
+
+export type RegistryGraphInput = Pick<
+  FwExplainInput,
+  'components' | 'mutations' | 'packageComponentPrefixes' | 'pages' | 'queries'
+>;
+
+export interface RegistryTypeFactOptions {
+  mutations?: RegistryTypeFacts;
+  queries?: RegistryTypeFacts;
+}
+
+export interface CompileAppGraphOptions {
+  components?: readonly { componentGraphFacts: readonly ComponentGraphFact[] }[];
+  graph?: RegistryGraphInput;
+  packageComponentPrefixes?: readonly PackageComponentPrefixFact[];
+  registryTypes?: RegistryTypeFactOptions;
+}
+
+export interface CompileAppGraphResult {
+  graph: RegistryGraphInput;
+  registryFacts: RegistryFacts;
 }
 
 export interface EmittedFile {
