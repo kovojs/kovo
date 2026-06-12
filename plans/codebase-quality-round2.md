@@ -2393,6 +2393,14 @@ As each phase splits a source module, split its tests in the same commit.
       `corepack pnpm exec vitest --run packages/server/src/mutation-no-js.test.ts packages/server/src/index.test.ts`,
       `corepack pnpm exec vp check packages/server/src/index.test.ts packages/server/src/mutation-no-js.test.ts plans/codebase-quality-round2.md`,
       and `git diff --check`.
+      Additional evidence 2026-06-12: mutation lifecycle coverage moved from
+      `packages/server/src/index.test.ts` into `packages/server/src/mutation.test.ts`, keeping
+      typed `ctx.fail`, guard/input ordering, transaction callbacks/rollback, committed
+      `Set-Cookie` forwarding, touch-derived reruns, inferred touch sites, row-key narrowing, and
+      flat tag invalidation with the mutation seam. Same-session evidence:
+      `corepack pnpm exec vitest --run packages/server/src/mutation.test.ts packages/server/src/index.test.ts`,
+      `corepack pnpm exec vp check packages/server/src/mutation.test.ts packages/server/src/index.test.ts plans/codebase-quality-round2.md`,
+      and `git diff --check`.
 - [ ] runtime/index.test.ts (4,435 lines, mutation tests under "query store") → per-module
       files; `Fake*` classes to a shared `test-fixtures.ts`; direct unit tests for wire-parser,
       handlers, morph; replace counted-microtask flushing with a single `flush()` helper.
