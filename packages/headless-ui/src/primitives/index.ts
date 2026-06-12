@@ -1,4 +1,20 @@
 export {
+  avatarFallbackAttributes,
+  avatarImageAttributes,
+  avatarImageState,
+  avatarRootAttributes,
+} from './avatar.js';
+export type {
+  AvatarComputedState,
+  AvatarFallbackAttributeOptions,
+  AvatarImageAttributeOptions,
+  AvatarImageStatus,
+  AvatarPrimitiveAttributes,
+  AvatarRootAttributeOptions,
+  AvatarState,
+} from './avatar.js';
+
+export {
   checkboxRootAttributes,
   checkboxTriggerClick,
   setCheckboxChecked,

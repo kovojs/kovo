@@ -83,6 +83,10 @@ export type {
 } from './lib/index.js';
 
 export {
+  avatarFallbackAttributes,
+  avatarImageAttributes,
+  avatarImageState,
+  avatarRootAttributes,
   checkboxRootAttributes,
   checkboxTriggerClick,
   collapsibleContentAttributes,
@@ -114,6 +118,13 @@ export {
   toggleTriggerClick,
 } from './primitives/index.js';
 export type {
+  AvatarComputedState,
+  AvatarFallbackAttributeOptions,
+  AvatarImageAttributeOptions,
+  AvatarImageStatus,
+  AvatarPrimitiveAttributes,
+  AvatarRootAttributeOptions,
+  AvatarState,
   CheckboxChangeDetail,
   CheckboxChangeOptions,
   CheckboxChangeReason,
