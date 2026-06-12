@@ -84,6 +84,69 @@ describe('route and query guard responses', () => {
     ]);
   });
 
+  it('exposes provider sessions through request proxy reflection', async () => {
+    type AppSession = { user: { id: string } };
+    type AppRequest = {
+      headers: Headers;
+      readCookie(): string | null;
+      session?: AppSession | null;
+    };
+    const appSession = session(
+      s.object({
+        user: s.object({
+          id: s.string(),
+        }),
+      }),
+    );
+    const sessionProvider = appSession.provider((_request: AppRequest) => ({
+      user: { id: 'u1' },
+    }));
+    const inspectedRoute = route('/inspect', {
+      page(_context, request: AppRequest) {
+        const descriptor = Object.getOwnPropertyDescriptor(request, 'session');
+        return {
+          cookie: request.readCookie(),
+          descriptor: descriptor && {
+            configurable: descriptor.configurable,
+            enumerable: descriptor.enumerable,
+            value: descriptor.value,
+            writable: descriptor.writable,
+          },
+          hasSession: 'session' in request,
+          keys: Object.keys(request),
+          spreadSession: { ...request }.session,
+          userId: request.session?.user.id,
+        };
+      },
+    });
+    const request = {
+      headers: new Headers({ cookie: 'jiso_session=s1' }),
+      readCookie() {
+        return this.headers.get('cookie');
+      },
+    };
+
+    await expect(
+      renderRoutePageResponse(inspectedRoute, {}, request, JSON.stringify, { sessionProvider }),
+    ).resolves.toEqual({
+      body: JSON.stringify({
+        cookie: 'jiso_session=s1',
+        descriptor: {
+          configurable: true,
+          enumerable: true,
+          value: { user: { id: 'u1' } },
+          writable: false,
+        },
+        hasSession: true,
+        keys: ['headers', 'readCookie', 'session'],
+        spreadSession: { user: { id: 'u1' } },
+        userId: 'u1',
+      }),
+      headers: { 'Content-Type': 'text/html; charset=utf-8' },
+      status: 200,
+    });
+  });
+
   it('maps route and query guard failures to login redirects and 403 shells', async () => {
     type AppRequest = { session?: { user?: { roles?: readonly string[] } | null } | null };
     const authedRoute = route('/account', {

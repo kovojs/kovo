@@ -2051,14 +2051,17 @@ land it first; don't fork it.
       `pnpm exec vitest --run packages/server/src/change-record.test.ts packages/server/src/index.test.ts`,
       `pnpm exec vp check packages/server/src/change-record.ts packages/server/src/change-record.test.ts packages/server/src/mutation.ts plans/codebase-quality-round2.md`,
       and `git diff --check`.
-- [ ] **LOW** — dead code (`matchShellDispatch` post-loop return shell.ts:161-166; rate-limit
+- [ ] **LOW — Close the server cleanup inventory with an acceptance sweep.** Historical audit
+      targets were dead code (`matchShellDispatch` post-loop return shell.ts:161-166; rate-limit
       tail `return options.max > 0` index.ts:576); `matchRoute` recompiling all routes per call
       (match.ts:75-81 — cache `compileRoute`); `Transfer-Encoding: chunked` on a buffered string
       body (deferred-stream.ts:54); double `<title>` in `renderErrorDocument` (document.ts:175);
       `isHeaderSource` false-positives on any non-empty object (index.ts:2322-2328); early-hints
       spread clobbering `Link` (document.ts:153-156); untested cookie-rejection branches
       (index.ts:2405-2461), `t()` throw (:1681), `metaFromQuery` error branches, session Proxy
-      traps (:2076-2095).
+      traps (:2076-2095). The implementation and focused coverage gaps now have evidence below;
+      keep this item open until the full server vitest and wire-fixture acceptance sweep is rerun
+      in the integration worktree.
       Partial evidence 2026-06-11: server LOW cleanup sub-slice removed the unreachable
       `matchShellDispatch` post-loop fallback, cached route table compilation in
       `packages/server/src/match.ts` with mutation invalidation coverage, removed buffered
@@ -2101,9 +2104,13 @@ land it first; don't fork it.
       direct renderer responses. Same-session evidence:
       `pnpm exec vitest --run packages/server/src/index.test.ts -t "byte-for-byte|P0 wire fixtures|POST redirect"`
       and `pnpm exec vitest --run packages/server/src/index.test.ts`.
+      Additional evidence 2026-06-12: `packages/server/src/meta.test.ts` now covers the missing
+      `t()` message error branch, and `packages/server/src/route-query-guards.test.ts` covers the
+      session-provider request proxy traps through public route rendering: `session in request`,
+      property descriptor, object keys/spread, and bound request methods. Same-session evidence:
+      `corepack pnpm exec vitest --run packages/server/src/meta.test.ts packages/server/src/route-query-guards.test.ts`.
 
-Verification: server vitest + wire fixtures byte-for-byte (remove the newline fudge at
-index.test.ts:4227 while here — it weakens the byte-for-byte claim) + acceptance.
+Verification: server vitest + wire fixtures byte-for-byte acceptance.
 
 ## Phase 6 — Verification harness soundness + example honesty
 
