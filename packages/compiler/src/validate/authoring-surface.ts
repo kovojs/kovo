@@ -27,7 +27,6 @@ export function validateAuthoringSurface(
         length: options.source.startsWith(compilerIrHeader)
           ? compilerIrHeader.length
           : cssIrHeader.length,
-        ...optionalTagName(firstHtmlTagName(options.source)),
       }),
     ];
   }
@@ -92,8 +91,4 @@ function fw235Diagnostic({
 
 function optionalTagName(tagName: string | null): { tagName: string } | {} {
   return tagName ? { tagName } : {};
-}
-
-function firstHtmlTagName(source: string): string | null {
-  return /<\s*([a-zA-Z][\w:-]*)(?:\s|>|\/)/.exec(source)?.[1] ?? null;
 }

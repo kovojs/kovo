@@ -333,6 +333,48 @@ export function renderSource() {
     ]);
   });
 
+  it('reports FW235 for app-authored compiler IR through the header fast path', () => {
+    const result = compileComponentModule({
+      fileName: 'cart-badge.server.js',
+      source: [
+        '// @jiso-ir',
+        'export function renderSource() {',
+        '  return `<cart-badge><span>2</span></cart-badge>`;',
+        '}',
+        '',
+      ].join('\n'),
+    });
+
+    expect(result.diagnostics).toEqual([
+      {
+        code: 'FW235',
+        fileName: 'cart-badge.server.js',
+        help: [
+          'SPEC §5.2: TSX is the sole app-authoring surface. Write JSX with typed expressions and let the compiler emit renderSource(), fw-c, fw-deps, and data-bind.',
+          'TSX equivalent direction: render with JSX and use typed expressions such as `{cart.count}` instead of data-bind strings.',
+        ].join('\n'),
+        length: 11,
+        message:
+          'App source hand-authors lowered IR/string-rendered components; write TSX and let the compiler emit IR.',
+        severity: 'error',
+        start: { column: 1, line: 1 },
+      },
+    ]);
+    expect(result.files).toEqual([
+      {
+        fileName: 'cart-badge.server.js',
+        kind: 'server',
+        source: [
+          '// @jiso-ir',
+          'export function renderSource() {',
+          '  return `<cart-badge><span>2</span></cart-badge>`;',
+          '}',
+          '',
+        ].join('\n'),
+      },
+    ]);
+  });
+
   it('keeps compiler-emitted IR accepted through explicit fixpoint provenance', () => {
     const emitted = compileComponentModule({
       fileName: 'cart-badge.tsx',

@@ -729,6 +729,14 @@ pipeline throws the tree away and communicates via mutated source text.
       `pnpm exec vitest --run packages/compiler/src/compile-component.test.ts -t "FW235|authoring"`
       and
       `pnpm exec vp check packages/compiler/src/validate/authoring-surface.ts packages/compiler/src/compile.ts plans/codebase-quality-round2.md`.
+      Additional evidence 2026-06-12: the header-only IR fast path in
+      `validateAuthoringSurface()` no longer regex-recovers an HTML tag name from compiler IR
+      source; tag-specific FW235 help remains available only through parser-owned
+      `StringRenderModel.firstHtmlTagName` facts for app-authored source, while app-authored IR
+      gets the generic TSX direction. Same-session evidence:
+      `pnpm exec vitest --run packages/compiler/src/compile-component.test.ts -t "FW235|authoring|compiler IR"`,
+      `pnpm exec vp check packages/compiler/src/validate/authoring-surface.ts packages/compiler/src/compile-component.test.ts`,
+      and `git diff --check`.
       Additional evidence 2026-06-12: static CSS scoping now derives the rendered host selector
       from `componentRenderHostElement(model).tag`, and `emitCssModule()` no longer accepts
       module source just to recover the opening tag name. Same-session evidence:
