@@ -2287,6 +2287,13 @@ land it first; don't fork it.
       session-provider request proxy traps through public route rendering: `session in request`,
       property descriptor, object keys/spread, and bound request methods. Same-session evidence:
       `corepack pnpm exec vitest --run packages/server/src/meta.test.ts packages/server/src/route-query-guards.test.ts`.
+      Additional evidence 2026-06-12: route matcher normalization, specificity, raw param,
+      cache-invalidation, and FW228 ambiguity coverage moved from app-shell tests into
+      `packages/server/src/match.test.ts`, keeping the cached `match.ts` cleanup pinned beside
+      its implementation. Same-session evidence:
+      `corepack pnpm exec vitest --run packages/server/src/match.test.ts packages/server/src/shell.test.ts`,
+      `corepack pnpm exec vp check packages/server/src/match.test.ts packages/server/src/shell.test.ts plans/codebase-quality-round2.md`,
+      and `git diff --check`.
 
 Verification: server vitest + wire fixtures byte-for-byte acceptance.
 
