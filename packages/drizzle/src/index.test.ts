@@ -3225,6 +3225,36 @@ export interface CommerceInvalidationSets {
     });
   });
 
+  it('keeps resolved conditional branches when opaque branch strings contain colons', () => {
+    const graph = extractTouchGraphFromSource([
+      {
+        fileName: 'product.domain.ts',
+        source: `
+          export const products = pgTable("products", {}, jiso({ domain: "product", key: "id" }));
+          const writeTarget = useDynamic ? tableFor("archive:products") : products;
+
+          export async function syncProduct(db) {
+            await db.update(writeTarget).set({ reserved: true });
+          }
+        `,
+      },
+    ]);
+
+    expect(graph).toEqual({
+      syncProduct: {
+        reads: [],
+        touches: [{ domain: 'product', keys: null, site: 'product.domain.ts:6', via: 'products' }],
+        unresolved: [
+          {
+            code: 'FW406',
+            message: 'Statically un-analyzable write site; manual touches required.',
+            site: 'product.domain.ts:6',
+          },
+        ],
+      },
+    });
+  });
+
   it('marks aliases with unresolved bases as FW406', () => {
     const graph = extractTouchGraphFromSource([
       {

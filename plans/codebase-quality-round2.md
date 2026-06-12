@@ -988,6 +988,15 @@ must be "FW406 unresolved," never "silently wrong."
       `pnpm exec vitest --run conformance/drizzle-pin/src/index.test.ts`,
       `pnpm exec vp check packages/drizzle/src/index.ts packages/drizzle/src/index.test.ts plans/codebase-quality-round2.md`,
       and `git diff --check`.
+      Additional evidence 2026-06-12: source-mode table alias and conditional-branch target
+      extraction now walks ts-morph initializer expressions instead of regex-splitting
+      initializer text, so unresolved conditional branches containing string punctuation keep
+      resolved branch facts while surfacing explicit FW406 under SPEC §10-§11. Same-session
+      evidence:
+      `pnpm exec vitest --run packages/drizzle/src/index.test.ts -t "opaque branch strings contain colons|another branch is unresolved|local conditional table initializers"`,
+      `pnpm exec vitest --run conformance/drizzle-pin/src/index.test.ts -t "conditional table FW406|local conditional table resolution"`,
+      `pnpm exec vp check packages/drizzle/src/index.ts packages/drizzle/src/index.test.ts conformance/drizzle-pin/src/index.test.ts plans/codebase-quality-round2.md`,
+      and `git diff --check HEAD~1..HEAD`.
 - [ ] **HIGH — Remove fact-fabricating heuristics; degrade to FW406.**
       Column type from projection-key name (`/(count|qty|...)$/i` → number, index.ts:993);
       receiver detection by parameter name (`/^(db|tx|...|client|...)$/`, :1856-1858);

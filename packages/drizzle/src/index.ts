@@ -577,7 +577,7 @@ function sourceColumnShapesForFiles(
     for (const declaration of declarations) {
       if (localShapes.has(declaration.identifier)) continue;
 
-      for (const target of aliasTargets(declaration.initializerText)) {
+      for (const target of declaration.aliasTargets) {
         const columns = localShapes.get(target);
         if (!columns) continue;
 
@@ -1713,7 +1713,7 @@ function extractTables(source: string): ExtractedTableDeclaration[] {
   for (const declaration of declarations) {
     if ((byIdentifier.get(declaration.identifier)?.length ?? 0) > 0) continue;
 
-    for (const target of aliasTargets(declaration.initializerText)) {
+    for (const target of declaration.aliasTargets) {
       for (const table of byIdentifier.get(target) ?? []) {
         const alias = {
           identifier: declaration.identifier,
@@ -1779,8 +1779,9 @@ function booleanPropertyFromObject(object: Node, name: string): boolean | undefi
 }
 
 interface SourceVariableDeclaration {
+  aliasTargets: readonly string[];
+  conditionalTargets: readonly (string | undefined)[];
   identifier: string;
-  initializerText: string;
   table?: {
     annotation: JisoTableAnnotation;
     columns: Record<string, QueryShape>;
@@ -1800,8 +1801,9 @@ function variableDeclarationsFromSource(source: string): SourceVariableDeclarati
         : null;
       return [
         {
+          aliasTargets: aliasTargetsFromInitializer(initializer),
+          conditionalTargets: conditionalTargetsFromInitializer(initializer),
           identifier: name.getText(),
-          initializerText: initializer.getText(),
           ...(annotation
             ? {
                 table: {
@@ -1899,18 +1901,6 @@ function exportTableAliases(sourceFile: SourceFile): { imported: string; local: 
   return aliases;
 }
 
-function aliasTargets(initializer: string): string[] {
-  const trimmed = initializer.trim();
-  const direct = /^(?<identifier>[A-Za-z_$][\w$]*)$/.exec(trimmed)?.groups?.identifier;
-  if (direct) return [direct];
-
-  const alias = /^alias\s*\(\s*(?<identifier>[A-Za-z_$][\w$]*)\s*,/.exec(trimmed)?.groups
-    ?.identifier;
-  if (alias) return [alias];
-
-  return conditionalBranches(trimmed).filter(Boolean);
-}
-
 function extractUnresolvedConditionalIdentifiers(
   source: string,
   tables: ReadonlyMap<string, readonly ExtractedTable[]>,
@@ -1918,10 +1908,12 @@ function extractUnresolvedConditionalIdentifiers(
   const unresolved: string[] = [];
 
   for (const declaration of variableDeclarationsFromSource(source)) {
-    const targets = conditionalBranches(declaration.initializerText);
+    const targets = declaration.conditionalTargets;
     if (targets.length === 0) continue;
 
-    const resolvedCount = targets.filter((target) => (tables.get(target)?.length ?? 0) > 0).length;
+    const resolvedCount = targets.filter(
+      (target) => target && (tables.get(target)?.length ?? 0) > 0,
+    ).length;
     if (resolvedCount > 0 && resolvedCount < targets.length)
       unresolved.push(declaration.identifier);
   }
@@ -1929,15 +1921,61 @@ function extractUnresolvedConditionalIdentifiers(
   return unresolved;
 }
 
-function conditionalBranches(initializer: string): string[] {
-  const groups = /^[\s\S]+?\?\s*(?<whenTrue>[^:]+?)\s*:\s*(?<whenFalse>[\s\S]+)$/.exec(
-    initializer.trim(),
-  )?.groups;
-  if (!groups) return [];
+function aliasTargetsFromInitializer(initializer: Node): string[] {
+  // SPEC §10-§11: alias facts must come from parsed initializer expressions, not string splits.
+  const sourceFile = initializer.getSourceFile();
+  const expression = unwrappedTsExpression(initializer.compilerNode as ts.Expression);
 
-  return [groups.whenTrue, groups.whenFalse]
-    .map((branch) => branch?.trim())
-    .flatMap((branch) => (/^[A-Za-z_$][\w$]*$/.test(branch ?? '') ? [branch as string] : ['']));
+  if (ts.isIdentifier(expression)) return [expression.text];
+
+  if (ts.isCallExpression(expression)) {
+    const callee = unwrappedTsExpression(expression.expression);
+    const target = expression.arguments[0];
+    if (ts.isIdentifier(callee) && callee.text === 'alias' && target) {
+      const targetExpression = unwrappedTsExpression(target as ts.Expression);
+      return ts.isIdentifier(targetExpression) ? [targetExpression.text] : [];
+    }
+  }
+
+  if (ts.isConditionalExpression(expression)) {
+    return conditionalTargetsFromExpression(expression, sourceFile).filter(
+      (target): target is string => target !== undefined,
+    );
+  }
+
+  return [];
+}
+
+function conditionalTargetsFromInitializer(initializer: Node): readonly (string | undefined)[] {
+  const expression = unwrappedTsExpression(initializer.compilerNode as ts.Expression);
+  if (!ts.isConditionalExpression(expression)) return [];
+
+  return conditionalTargetsFromExpression(expression, initializer.getSourceFile());
+}
+
+function conditionalTargetsFromExpression(
+  expression: ts.ConditionalExpression,
+  sourceFile: SourceFile,
+): readonly (string | undefined)[] {
+  return [
+    staticIdentifierExpression(expression.whenTrue, sourceFile),
+    staticIdentifierExpression(expression.whenFalse, sourceFile),
+  ];
+}
+
+function staticIdentifierExpression(
+  expression: ts.Expression,
+  sourceFile: SourceFile,
+): string | undefined {
+  const target = unwrappedTsExpression(expression);
+  return ts.isIdentifier(target) ? target.getText(sourceFile.compilerNode) : undefined;
+}
+
+function unwrappedTsExpression(expression: ts.Expression): ts.Expression {
+  if (ts.isParenthesizedExpression(expression)) return unwrappedTsExpression(expression.expression);
+  if (ts.isAsExpression(expression)) return unwrappedTsExpression(expression.expression);
+  if (ts.isSatisfiesExpression(expression)) return unwrappedTsExpression(expression.expression);
+  return expression;
 }
 
 function extractFunctions(source: string): ExtractedFunction[] {

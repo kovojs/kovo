@@ -710,6 +710,41 @@ describe('Drizzle pinned subset conformance', () => {
     );
   });
 
+  it('pins conditional table FW406 when the opaque branch contains string punctuation', () => {
+    const graph = extractTouchGraphFromSource([
+      {
+        fileName: 'product.domain.ts',
+        source: [
+          'export const products = pgTable("products", {}, jiso({ domain: "product", key: "id" }));',
+          'const writeTarget = useDynamic ? tableFor("archive:products") : products;',
+          '',
+          'export async function syncProduct(db) {',
+          '  await db.update(writeTarget).set({ reserved: true });',
+          '}',
+          '',
+        ].join('\n'),
+      },
+    ]);
+
+    expect(serializeTouchGraph(graph)).toBe(
+      [
+        'export const touchGraph = {',
+        '  "syncProduct": {',
+        '    touches: [',
+        '      { domain: "product", via: "products", site: "product.domain.ts:5", keys: null },',
+        '    ],',
+        '    reads: [',
+        '    ],',
+        '    unresolved: [',
+        '      { code: \'FW406\', site: "product.domain.ts:5", message: "Statically un-analyzable write site; manual touches required." },',
+        '    ],',
+        '  },',
+        '} as const;',
+        '',
+      ].join('\n'),
+    );
+  });
+
   it('pins domain write callback extraction for the Jiso authoring surface', () => {
     const graph = extractTouchGraphFromSource([
       {
