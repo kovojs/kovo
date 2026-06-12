@@ -238,6 +238,15 @@ Scope: SPEC addition (proposed §9.5 "The request shell"), `@jiso/server` shell 
       no longer pass `htmlPathStyle: 'directory'` to get pretty output. The
       explicit `htmlPathStyle: 'flat'` escape hatch remains covered as legacy
       behavior, but it is no longer the R6/R7 default path.
+      Additional evidence 2026-06-12: static-export synthetic replay moved from
+      the `exportStaticApp()` coordinator into `packages/server/src/static-replay.ts`.
+      The new seam owns normalized GET route replay, successful-HTML teaching
+      errors, `/c/` href discovery from exported documents/Link headers, and
+      query-version conflict detection while `exportStaticApp()` remains the
+      stable public API. `packages/server/src/static-replay.test.ts` proves the
+      direct replay boundary, and the existing static-export/Vite suites continue
+      to prove the integrated export path. Same-session verification ran
+      `corepack pnpm exec vitest --run packages/server/src/static-replay.test.ts packages/server/src/static-export.test.ts packages/server/src/vite-build.test.ts packages/server/src/vite.test.ts`.
 - [ ] R7 adoption: starter becomes a routed app served by `vp dev`; commerce runs end-to-end over HTTP; a jiso docs site ships from `vp run export` as the first outside consumer.
       Progress 2026-06-11: commerce is now TSX-authored ahead of the HTTP serve
       entry — `CartBadge`, `OrderHistory`, and `ProductGrid` are authored in

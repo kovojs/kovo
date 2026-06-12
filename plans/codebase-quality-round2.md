@@ -2737,6 +2737,13 @@ land it first; don't fork it.
       `pnpm exec vp check packages/server/src/index.ts packages/server/src/index.test.ts packages/server/src/replay.ts packages/server/src/replay.test.ts`,
       `pnpm exec vitest --run packages/server/src/replay.test.ts packages/server/src/index.test.ts`,
       and `pnpm exec vitest --run packages/server/src/*.test.ts`.
+      Additional evidence 2026-06-12: the static-export synthetic-request replay choreography
+      now lives in `packages/server/src/static-replay.ts` instead of being embedded in
+      `exportStaticApp()`. The extracted module owns normalized GET route replay, the
+      successful-HTML FW229 teaching boundary, `/c/` module href harvesting, and query-version
+      conflict detection; `packages/server/src/static-export.ts` remains the stable coordinator
+      and public API re-export. Same-session evidence:
+      `corepack pnpm exec vitest --run packages/server/src/static-replay.test.ts packages/server/src/static-export.test.ts packages/server/src/vite-build.test.ts packages/server/src/vite.test.ts`.
 - [x] **MED — Unify the eight `{body, headers, status}` response types** behind one base; one
       case-insensitive header utility (today: `readHeader` index.ts:3091 fully case-insensitive
       vs document.ts:137 two-casings vs `findResponseHeaderName` index.ts:2397).
