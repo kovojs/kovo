@@ -345,6 +345,15 @@ describe('runtime loader', () => {
     expect(gzipSync(jisoLoaderSource).byteLength).toBeLessThanOrEqual(4096);
   });
 
+  it('ships the inline loader as pre-minified bootstrap source', () => {
+    // SPEC.md §4.4: nothing outside the 4KB delegated loader belongs in the always-loaded path.
+    expect(jisoLoaderSource).toBe(jisoLoaderSource.trim());
+    expect(jisoLoaderSource).not.toMatch(/\n|\s{2,}/);
+    expect(jisoLoaderSource).toMatch(
+      /^\(function installInlineJisoLoader\(importModule\)\{.*\}\)\(\(url\)=>import\(url\)\);$/,
+    );
+  });
+
   it.each([
     ['generated bootstrap source', () => runInThisContext(jisoLoaderSource)],
     ['shared inline loader source', () => installInlineJisoLoader(vi.fn(async () => ({})))],
