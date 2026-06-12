@@ -1635,7 +1635,7 @@ describe('fw check', () => {
     }
 
     expect(output).toBe(
-      'fw: unknown command "compile". expected explain, check, audit, export, or mcp.\n',
+      'fw: unknown command "compile". expected add, explain, check, audit, export, or mcp.\n',
     );
   });
 
