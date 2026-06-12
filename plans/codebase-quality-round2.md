@@ -2303,6 +2303,18 @@ params, relational API, `execute(sql)`, right/full joins, a string column named 
       `corepack pnpm exec vitest --run packages/runtime/src/inline-loader.test.ts packages/runtime/src/index.test.ts`,
       `corepack pnpm exec vp check packages/runtime/src/inline-loader-build.ts packages/runtime/src/inline-loader.test.ts plans/codebase-quality-round2.md`,
       and `git diff --check`.
+      Additional bounded evidence 2026-06-12: the readable inline bootstrap in
+      `packages/runtime/src/inline-loader-build.ts` now applies the same enhanced-form attribute
+      gate as `packages/runtime/src/mutation-submit.ts` before preventing default or sending a
+      fragment request. The generated `packages/runtime/src/inline-loader.ts` was rebuilt from
+      that source, and `packages/runtime/src/inline-loader.test.ts` runs readable, freshly
+      minified, generated-bootstrap, and extracted-installer sources through a non-enhanced submit
+      candidate regression. Same-session evidence:
+      `pnpm --filter @jiso/runtime run build:inline-loader`,
+      `pnpm exec vitest --run packages/runtime/src/inline-loader.test.ts`,
+      `pnpm --filter @jiso/runtime run check:inline-loader`,
+      `pnpm exec vp check packages/runtime/src/inline-loader-build.ts packages/runtime/src/inline-loader.ts packages/runtime/src/inline-loader.test.ts plans/codebase-quality-round2.md`,
+      and `git diff --check`.
 - [x] **HIGH — Ship the DOM morph.** The only real keyed DOM morph (focus/selection/scroll
       capture-restore) lives in index.browser.test.ts:12-182; every consumer must rewrite it, and
       the flagship browser test substantially tests its own test code. Promote to a

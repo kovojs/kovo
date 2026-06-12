@@ -552,7 +552,13 @@ describe('inline loader source', () => {
           target: {
             closest(selector: string) {
               return selector === 'form[enhance],form[data-enhance],form[data-mutation]'
-                ? { action: '/_m/cart/add', method: 'post' }
+                ? {
+                    action: '/_m/cart/add',
+                    getAttribute(name: string) {
+                      return name === 'enhance' ? '' : null;
+                    },
+                    method: 'post',
+                  }
                 : null;
             },
           },
@@ -604,11 +610,83 @@ describe('inline loader source', () => {
   );
 
   it.each(inlineSourceInstallCases)(
+    'ignores non-enhanced submit candidates through %s',
+    async (_name, installSource) => {
+      // SPEC.md §4.4: the inline bootstrap follows the modular enhanced-form gate.
+      const globalRecord = globalThis as unknown as Record<string, unknown>;
+      const originals = {
+        addEventListener: globalRecord.addEventListener,
+        document: globalRecord.document,
+        fetch: globalRecord.fetch,
+        importModule: globalRecord.__jisoInlineImport,
+      };
+      const listeners = new Map<string, (event: unknown) => void>();
+      const preventDefault = vi.fn();
+      const fetch = vi.fn();
+
+      try {
+        globalRecord.addEventListener = (type: string, listener: (event: unknown) => void) => {
+          listeners.set(type, listener);
+        };
+        globalRecord.document = {
+          querySelectorAll() {
+            return [];
+          },
+        };
+        globalRecord.fetch = fetch;
+
+        installSource(
+          vi.fn(async () => ({})),
+          globalRecord,
+        );
+        listeners.get('submit')?.({
+          preventDefault,
+          target: {
+            closest(selector: string) {
+              return selector === 'form[enhance],form[data-enhance],form[data-mutation]'
+                ? {
+                    action: '/plain',
+                    getAttribute() {
+                      return null;
+                    },
+                    method: 'post',
+                  }
+                : null;
+            },
+          },
+          type: 'submit',
+        });
+        await Promise.resolve();
+
+        expect(preventDefault).not.toHaveBeenCalled();
+        expect(fetch).not.toHaveBeenCalled();
+      } finally {
+        Object.assign(globalRecord, {
+          addEventListener: originals.addEventListener,
+          document: originals.document,
+          fetch: originals.fetch,
+        });
+        if (originals.importModule === undefined) {
+          delete globalRecord.__jisoInlineImport;
+        } else {
+          globalRecord.__jisoInlineImport = originals.importModule;
+        }
+      }
+    },
+  );
+
+  it.each(inlineSourceInstallCases)(
     'keeps enhanced form request targets in parity with modular submit through %s',
     async (_name, installSource) => {
       // SPEC.md §4.4: enhanced form headers are part of the always-loaded loader contract.
       const formData = { kind: 'form-data' };
-      const form = { action: '/_m/cart/add', method: 'post' };
+      const form = {
+        action: '/_m/cart/add',
+        getAttribute(name: string) {
+          return name === 'enhance' ? '' : null;
+        },
+        method: 'post',
+      };
       const targetDeps = [
         { deps: 'cart', id: 'cart-badge' },
         { deps: 'cart', id: 'cart-badge' },

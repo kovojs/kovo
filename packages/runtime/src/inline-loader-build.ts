@@ -78,6 +78,11 @@ function installInlineJisoLoader(importModule) {
     form.setAttribute?.('data-error-code', 'NETWORK_ERROR');
     form.setAttribute?.('fw-error', '');
   };
+  const hasAttribute = (form, name) => form.getAttribute?.(name) != null;
+  const isEnhancedForm = (form) =>
+    hasAttribute(form, 'enhance') ||
+    hasAttribute(form, 'data-enhance') ||
+    hasAttribute(form, 'data-mutation');
   const submitEnhancedForm = (event, form) => {
     event.preventDefault();
     fetch(form.action, {
@@ -104,7 +109,7 @@ function installInlineJisoLoader(importModule) {
   const dispatch = async (event) => {
     if (event.type === 'submit') {
       const form = event.target?.closest?.('form[enhance],form[data-enhance],form[data-mutation]',);
-      if (form) {
+      if (form && isEnhancedForm(form)) {
         submitEnhancedForm(event, form);
         return;
       }
