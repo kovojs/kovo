@@ -740,6 +740,13 @@ index.test.ts:4227 while here — it weakens the byte-for-byte claim) + acceptan
       FW411 formatter special case or local FW411 message copy; `index.test.ts` derives FW411
       assertion text from `diagnosticDefinitions`. Same-session evidence:
       `pnpm exec vitest --run packages/test/src` and `pnpm run check`.
+      Partial evidence 2026-06-11: page/fragment assertion logic moved from
+      `packages/test/src/index.ts` into `packages/test/src/page.ts`, and fragment-focused tests
+      moved from `index.test.ts` into `page.test.ts`. The new page tests include adversarial
+      quoted-attribute coverage so same-name tag text inside attributes does not create false
+      nesting while SPEC §9.1 `id` / `fw-fragment-target` resolution still works. Same-session
+      evidence: `pnpm exec vitest --run packages/test/src/page.test.ts packages/test/src/index.test.ts`
+      and `pnpm exec vitest --run examples/commerce/src/app.test.ts`.
 - [ ] **MED — Commerce example: one source of truth.** `cartQuery.load` returns a constant while
       `loadCartQuery(db)` does the real read (app.ts:123-126 vs :280-284);
       `productGridQuery.load` conjures a fresh `createCommerceDb()` (:161); the committed
@@ -807,6 +814,10 @@ As each phase splits a source module, split its tests in the same commit.
 - [ ] drizzle (one describe, 57 its, 68 inline pgTable fixtures, 3 module-shim copies) and
       test-package suites: same treatment; CLI tests get the temp-dir + stream-spy ritual
       (16 hand-copies) as one helper.
+      Partial evidence 2026-06-11: the `@jiso/test` page/fragment assertion tranche now has
+      `packages/test/src/page.ts` plus `page.test.ts`, reducing the `index.ts` / `index.test.ts`
+      monolith while preserving the public `PageAssertion` export through the package barrel.
+      Same-session evidence: `pnpm exec vitest --run packages/test/src/page.test.ts packages/test/src/index.test.ts`.
 
 Verification: identical test counts ± intentional additions before/after each split; full
 acceptance at the end.
