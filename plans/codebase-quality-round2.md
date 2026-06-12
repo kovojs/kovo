@@ -1296,6 +1296,12 @@ index.test.ts:4227 while here — it weakens the byte-for-byte claim) + acceptan
       proxy/method identity, root `query` non-interception without a DB seam, and two interleaved
       `exec` calls with domain-specific attribution. Verified with `pnpm exec vitest --run packages/test/src`,
       `pnpm run check`, `pnpm run check:build`, and `pnpm run check:fw`.
+      Additional evidence 2026-06-12: `DbVerifier.capture()` now returns a frozen scoped
+      observation snapshot, so async work scheduled inside a completed capture cannot mutate the
+      evidence later used by harness assertions while still appearing in the verifier-wide
+      observation log. Same-session evidence:
+      `corepack pnpm exec vitest --run packages/test/src/verifier.test.ts` and
+      `corepack pnpm exec vp check packages/test/src/verifier.ts packages/test/src/verifier.test.ts`.
 - [ ] **MED — Split `test/src/index.ts`** (harness / verifier / sql-observer / html-fragment
       modules); unify the two diagnostic channels (FW402/404/407/408 throw strings,
       FW403/405 return structured records); delete the dead FW411 special case

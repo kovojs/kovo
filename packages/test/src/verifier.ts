@@ -227,7 +227,7 @@ function createObservationRecorder(): ObservationRecorder {
     ): Promise<{ observed: readonly ObservedDbOperation[]; result: T }> {
       const scope: ObservationScope = { observed: [] };
       const result = await storage.run(scope, callback);
-      return { observed: scope.observed, result };
+      return { observed: Object.freeze(scope.observed.slice()), result };
     },
     record(operation: ObservedDbOperation): void {
       observed.push(operation);

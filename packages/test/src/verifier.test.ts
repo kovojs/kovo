@@ -192,6 +192,40 @@ describe('@jiso/test DB verifier', () => {
     expect(verifier.diagnostics()).toEqual([]);
   });
 
+  it('returns scoped capture observations as a completed snapshot', async () => {
+    const verifier = createDbVerifier(
+      {},
+      { domainByTable: { audit_log: 'audit', cart_items: 'cart' } },
+    );
+    const db = verifier.wrap(createFakeDb());
+    let releaseLateWrite!: () => void;
+    let lateWrite!: Promise<void>;
+
+    const captured = await verifier.capture(async () => {
+      db.write('cart_items', 'p1');
+      lateWrite = new Promise<void>((resolve) => {
+        releaseLateWrite = resolve;
+      }).then(() => {
+        db.write('audit_log', 'late');
+      });
+
+      return 'ok';
+    });
+
+    expect(captured.result).toBe('ok');
+    expect(Object.isFrozen(captured.observed)).toBe(true);
+    expect(captured.observed.map((operation) => operation.table)).toEqual(['cart_items']);
+
+    releaseLateWrite();
+    await lateWrite;
+
+    expect(captured.observed.map((operation) => operation.table)).toEqual(['cart_items']);
+    expect(verifier.observed.map((operation) => operation.table)).toEqual([
+      'cart_items',
+      'audit_log',
+    ]);
+  });
+
   it('verifies observed query reads against declared domains', () => {
     const verifier = createDbVerifier({}, { domainByTable: { cart_items: 'cart' } });
     const db = verifier.wrap(createFakeDb());
