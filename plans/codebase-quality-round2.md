@@ -672,6 +672,15 @@ params, relational API, `execute(sql)`, right/full joins, a string column named 
       `pnpm exec vitest --run packages/runtime/src/index.test.ts packages/runtime/src/wire-parser.test.ts`
       and
       `pnpm exec vitest --config vitest.browser.config.ts --run packages/runtime/src/index.browser.test.ts`.
+      Additional bounded evidence 2026-06-12: `packages/runtime/src/index.ts` now routes
+      `jisoLoaderSource` through exported `createInlineJisoLoaderSource`, giving build tooling and
+      tests a single helper for bootstrap source wrapping while the broader esbuild-time
+      minification work remains open. `packages/runtime/src/index.test.ts` pins default and custom
+      generated bootstrap sources, and compares the minified inline loader's query/fragment
+      response effects against exported `applyMutationResponseToDom` for keyed `fw-query`, replace
+      fragments, and append fragments. Same-session evidence:
+      `pnpm exec vitest --run packages/runtime/src/index.test.ts` and
+      `pnpm exec vp check packages/runtime/src/index.ts packages/runtime/src/index.test.ts`.
 - [x] **HIGH — Ship the DOM morph.** The only real keyed DOM morph (focus/selection/scroll
       capture-restore) lives in index.browser.test.ts:12-182; every consumer must rewrite it, and
       the flagship browser test substantially tests its own test code. Promote to a

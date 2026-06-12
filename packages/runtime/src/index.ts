@@ -181,7 +181,18 @@ export function installInlineJisoLoader(importModule: InlineImportHandlerModule)
   readInlineJisoLoaderInstaller()(importModule);
 }
 
-export const jisoLoaderSource = `(${inlineJisoLoaderInstallerSource})((url)=>import(url));`;
+export function createInlineJisoLoaderSource(
+  importModuleExpression = '(url)=>import(url)',
+): string {
+  const expression = importModuleExpression.trim();
+  if (!expression) {
+    throw new Error('Inline Jiso loader import expression cannot be empty.');
+  }
+
+  return `(${inlineJisoLoaderInstallerSource})(${expression});`;
+}
+
+export const jisoLoaderSource = createInlineJisoLoaderSource();
 
 export function installJisoLoader(options: JisoLoaderOptions): JisoLoader {
   const events = options.events ?? defaultDelegatedEvents;
