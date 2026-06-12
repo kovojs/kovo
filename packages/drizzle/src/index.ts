@@ -1958,19 +1958,24 @@ function extractExternalDbArgumentCalls(
   localFunctionNames: ReadonlySet<string>,
 ): ExternalDbArgumentCall[] {
   const calls: ExternalDbArgumentCall[] = [];
-  const pattern = new RegExp(`\\b(?<name>${IDENTIFIER_SOURCE})\\s*\\((?<args>[^)]*)\\)`, 'g');
+  // SPEC §10-§11: helper-call text in comments/strings/templates must not fabricate FW406 facts.
+  const { bodyOffset, sourceFile } = parseFunctionBodySource(source);
 
-  for (const match of source.matchAll(pattern)) {
-    const name = match.groups?.name;
-    const args = match.groups?.args;
-    if (!name || !args || match.index === undefined) continue;
+  for (const call of sourceFile.getDescendantsOfKind(SyntaxKind.CallExpression)) {
+    const expression = call.getExpression();
+    if (!Node.isIdentifier(expression)) continue;
+
+    const name = expression.getText();
     if (IGNORED_LOCAL_CALL_NAMES.has(name) || localFunctionNames.has(name)) continue;
 
-    const previous = source.slice(0, match.index).trimEnd().at(-1);
-    if (previous === '.') continue;
+    if (
+      !call.getArguments().some((arg) => Node.isIdentifier(arg) && receiverNames.has(arg.getText()))
+    ) {
+      continue;
+    }
 
-    const passedReceivers = splitTopLevelArgs(args).some((arg) => receiverNames.has(arg.trim()));
-    if (passedReceivers) calls.push({ index: match.index, name });
+    const index = call.getStart() - bodyOffset;
+    if (index >= 0) calls.push({ index, name });
   }
 
   return calls;

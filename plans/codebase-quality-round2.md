@@ -674,6 +674,11 @@ must be "FW406 unresolved," never "silently wrong."
       strings, and templates containing those call spellings no longer fabricate unresolved
       touch-graph sites. Same-session evidence:
       `pnpm exec vitest --run packages/drizzle/src/index.test.ts`.
+      Additional evidence 2026-06-12: source-mode external-helper FW406 marking now walks
+      ts-morph `CallExpression` nodes and AST arguments instead of regex-scanning helper-call
+      text, so comments, strings, and templates containing `writeAudit(db)` no longer fabricate
+      unresolved touch-graph sites. Same-session evidence:
+      `pnpm exec vitest --run packages/drizzle/src/index.test.ts -t "external helper"`.
 - [ ] **HIGH — Remove fact-fabricating heuristics; degrade to FW406.**
       Column type from projection-key name (`/(count|qty|...)$/i` → number, index.ts:993);
       receiver detection by parameter name (`/^(db|tx|...|client|...)$/`, :1856-1858);

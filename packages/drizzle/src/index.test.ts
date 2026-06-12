@@ -2404,6 +2404,24 @@ export interface CommerceInvalidationSets {
     });
   });
 
+  it('does not mark external helper calls from comments and strings', () => {
+    const graph = extractTouchGraphFromSource([
+      {
+        fileName: 'cart.domain.ts',
+        source: [
+          'export async function addItem(db, productId) {',
+          '  // await writeAudit(db, productId);',
+          '  const raw = "writeAudit(db, productId)";',
+          '  const templated = `writeAudit(db, ${productId})`;',
+          '  return { raw, templated };',
+          '}',
+        ].join('\n'),
+      },
+    ]);
+
+    expect(graph).toEqual({});
+  });
+
   it('marks raw db.execute calls as FW406 instead of dropping the surface', () => {
     const graph = extractTouchGraphFromSource([
       {
