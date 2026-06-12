@@ -5561,14 +5561,31 @@ void test('Conformance suites are an explicit gate', async () => {
   );
   const packageJson = JSON.parse(await readProjectFile('package.json'));
   const viteConfig = await readProjectFile('vite.config.ts');
+  const viteTasks = parseTemplateViteTasks(viteConfig);
+  const conformanceTaskPackages = viteTasks.conformance.command
+    .split(' && ')
+    .map((command) => /^pnpm --filter ([^\s]+) test$/.exec(command))
+    .map((match) => match?.[1]);
+  assert.equal(
+    conformanceTaskPackages.every((packageName) => packageName),
+    true,
+    'conformance task runs package tests through pnpm filters',
+  );
   assert.equal(packageJson.scripts['test:conformance'], 'vp run conformance');
   assert.ok(packageJson.scripts.acceptance.split(' && ').includes('pnpm run test:conformance'));
-  for (const { manifest } of conformancePackages) {
-    assert.ok(
-      viteConfig.includes(`pnpm --filter ${manifest.name} test`),
-      `${manifest.name} participates in the vp conformance task`,
-    );
-  }
+  assert.deepEqual(
+    conformanceTaskPackages.toSorted((left, right) => left.localeCompare(right)),
+    [...conformanceManifestsByName.keys()].toSorted((left, right) => left.localeCompare(right)),
+  );
+  assert.deepEqual(viteTasks.conformance.input, [
+    { pattern: 'conformance/**/package.json', base: 'workspace' },
+    { pattern: 'conformance/**/src/**/*.ts', base: 'workspace' },
+    { pattern: 'conformance/**/docs/**', base: 'workspace' },
+    { pattern: 'packages/core/src/**/*.ts', base: 'workspace' },
+    { pattern: 'packages/server/src/**/*.ts', base: 'workspace' },
+    { pattern: 'packages/drizzle/src/**/*.ts', base: 'workspace' },
+    { pattern: 'packages/better-auth/src/**/*.ts', base: 'workspace' },
+  ]);
 
   await execFileAsync('pnpm', ['exec', 'vitest', '--run', 'packages/drizzle/src/index.test.ts'], {
     cwd: new URL('..', import.meta.url),

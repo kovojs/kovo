@@ -186,6 +186,13 @@ Do this first or pay it on every commit.
       strings, or individual conformance package names. Verification: `pnpm run check:build` and
       focused `node --test --test-name-pattern "Conformance suites are an explicit gate"
       tests/fw-check.node.mjs`.
+      Partial evidence 2026-06-12: the conformance gate Vite assertion now parses
+      `vite.config.ts` into task records, derives the `conformance` command's package filters,
+      and asserts them plus task inputs against discovered `conformance/*/package.json`
+      manifests instead of grepping Vite source with `includes`. Verification:
+      `pnpm run check:build`, `node --test --test-name-pattern "Conformance suites are an
+      explicit gate" tests/fw-check.node.mjs`, `pnpm exec vp check tests/fw-check.node.mjs
+      plans/codebase-quality-round2.md`, and `git diff --check`.
       Partial evidence 2026-06-11: the P1 render-equivalence tranche now imports the built
       compiler API, asserts `compileComponentModule` render-equivalence checks and
       `assertRenderEquivalence` failure behavior, then asserts the `ERROR RENDER_EQUIV` CLI
