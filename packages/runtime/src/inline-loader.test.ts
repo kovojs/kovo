@@ -549,7 +549,7 @@ describe('inline loader source', () => {
             { html: '<cart-badge>1</cart-badge>', target: 'cart-badge' },
             { html: '<li>p1</li>', mode: 'append', target: 'cart-list' },
           ],
-          queries: ['cart', 'productGrid'],
+          queries: ['cart:c1', 'productGrid'],
         });
       } finally {
         Object.assign(globalRecord, {

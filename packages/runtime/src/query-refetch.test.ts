@@ -283,6 +283,35 @@ describe('query refetch', () => {
     expect(reviewsPlan).toHaveBeenLastCalledWith({ total: 5 });
   });
 
+  it('applies keyed typed read chunks and reports canonical query keys', async () => {
+    const store = createQueryStore();
+    const plan = vi.fn();
+    const fetch = vi.fn(async () => ({
+      status: 200,
+      text: async () => '<fw-query name="product" key="p1">{"stock":6}</fw-query>',
+    }));
+
+    store.subscribe('product', plan, 'p1');
+
+    await expect(
+      refetchQueries({
+        fetch,
+        queries: ['product:p1'],
+        queryStore: store,
+      }),
+    ).resolves.toEqual([{ fragments: [], queries: ['product:p1'] }]);
+
+    // SPEC.md §9.4: typed reads, wire chunks, and the runtime query store share
+    // one canonical query instance key.
+    expect(fetch).toHaveBeenCalledWith('/_q/product%3Ap1', {
+      headers: { Accept: 'text/html', 'FW-Fragment': 'true' },
+      method: 'GET',
+    });
+    expect(store.get('product', 'p1')).toEqual({ stock: 6 });
+    expect(store.get('product')).toBeUndefined();
+    expect(plan).toHaveBeenCalledWith({ stock: 6 });
+  });
+
   it('does not apply failed or disabled typed read responses', async () => {
     const store = createQueryStore();
     const fetch = vi.fn(async () => ({

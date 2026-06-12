@@ -119,6 +119,27 @@ describe('mutation response wire chunks', () => {
     });
   });
 
+  it('reports keyed query chunks with their canonical typed-read key', () => {
+    const store = createQueryStore();
+    const plan = vi.fn();
+
+    store.subscribe('product', plan, 'p1');
+    const applied = applyMutationResponse(
+      store,
+      '<fw-query name="product" key="p1">{"stock":4}</fw-query>',
+    );
+
+    // SPEC.md §9.4: query instance keys are the shared currency for store, wire,
+    // optimistic transforms, and refetch-on-focus typed reads.
+    expect(store.get('product', 'p1')).toEqual({ stock: 4 });
+    expect(store.get('product')).toBeUndefined();
+    expect(plan).toHaveBeenCalledWith({ stock: 4 });
+    expect(applied).toEqual({
+      fragments: [],
+      queries: ['product:p1'],
+    });
+  });
+
   it('exports deferred chunk helpers as aliases of the mutation response helpers', () => {
     expect(applyDeferredChunk).toBe(applyMutationResponse);
     expect(applyDeferredChunkToDom).toBe(applyMutationResponseToDom);
@@ -187,7 +208,7 @@ describe('mutation response wire chunks', () => {
     expect(store.get('cart', 'cart:c1')).toEqual({ count: 4 });
     expect(applied).toEqual({
       fragments: [{ html: '<li>p1</li>', mode: 'append', target: 'cart-list' }],
-      queries: ['cart'],
+      queries: ['cart:c1'],
     });
   });
 
@@ -270,7 +291,7 @@ describe('mutation response wire chunks', () => {
       store,
     });
 
-    expect(applied).toEqual({ fragments: [], queries: ['cart'] });
+    expect(applied).toEqual({ fragments: [], queries: ['cart:c1'] });
     expect(store.get('cart', 'cart:c1')).toEqual({ count: 16 });
     expect(beforeApplyQueries).toHaveBeenCalledWith([
       { key: 'cart:c1', name: 'cart', value: { count: 6 } },

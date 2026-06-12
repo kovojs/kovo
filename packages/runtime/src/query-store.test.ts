@@ -49,6 +49,34 @@ describe('query store hydration and refetch', () => {
     expect(plan).toHaveBeenCalledWith({ count: 2 });
   });
 
+  it('hydrates keyed query instances with canonical typed-read keys', () => {
+    const store = createQueryStore();
+    const p1Plan = vi.fn();
+    const p2Plan = vi.fn();
+
+    store.subscribe('product', p1Plan, 'p1');
+    store.subscribe('product', p2Plan, 'p2');
+    const hydrated = hydrateQueryScripts(store, [
+      {
+        getAttribute: (name) => (name === 'fw-query' ? 'product' : name === 'key' ? 'p1' : null),
+        textContent: '{"stock":4}',
+      },
+      {
+        getAttribute: (name) => (name === 'fw-query' ? 'product' : name === 'key' ? 'p2' : null),
+        textContent: '{"stock":9}',
+      },
+    ]);
+
+    // SPEC.md §9.4: query instance keys use one canonical currency across
+    // hydration, the client store, and typed-read refetch.
+    expect(hydrated).toEqual(['product:p1', 'product:p2']);
+    expect(store.get('product', 'p1')).toEqual({ stock: 4 });
+    expect(store.get('product', 'p2')).toEqual({ stock: 9 });
+    expect(store.get('product')).toBeUndefined();
+    expect(p1Plan).toHaveBeenCalledWith({ stock: 4 });
+    expect(p2Plan).toHaveBeenCalledWith({ stock: 9 });
+  });
+
   it('returns only successfully hydrated fw-query scripts', () => {
     const store = createQueryStore();
     const onError = vi.fn();
@@ -349,6 +377,61 @@ describe('query store hydration and refetch', () => {
     });
     expect(store.get('cart')).toEqual({ count: 3 });
     expect(plan).toHaveBeenLastCalledWith({ count: 3 });
+  });
+
+  it('refetches keyed hydrated query instances by typed-read key on visible return', async () => {
+    const root = new FakeRoot();
+    const store = createQueryStore();
+    const p1Plan = vi.fn();
+    const p2Plan = vi.fn();
+    const refetchOnFocus = vi.fn();
+    const fetch = vi.fn(async (url: string) => ({
+      status: 200,
+      text: async () =>
+        url === '/_q/product%3Ap1'
+          ? '<fw-query name="product" key="p1">{"stock":5}</fw-query>'
+          : '<fw-query name="product" key="p2">{"stock":10}</fw-query>',
+    }));
+
+    root.scripts = [
+      {
+        getAttribute: (name) => (name === 'fw-query' ? 'product' : name === 'key' ? 'p1' : null),
+        textContent: '{"stock":4}',
+      },
+      {
+        getAttribute: (name) => (name === 'fw-query' ? 'product' : name === 'key' ? 'p2' : null),
+        textContent: '{"stock":9}',
+      },
+    ];
+    store.subscribe('product', p1Plan, 'p1');
+    store.subscribe('product', p2Plan, 'p2');
+
+    installJisoLoader({
+      importModule: vi.fn(),
+      queryRefetch: { fetch },
+      queryStore: store,
+      refetchOnFocus,
+      root,
+    });
+
+    root.visibilityState = 'visible';
+    await root.listeners.get('visibilitychange')?.({ target: null, type: 'visibilitychange' });
+
+    // SPEC.md §9.4: refetch-on-focus talks to the typed-read endpoint with the
+    // same query instance key that hydration and mutation chunks expose.
+    expect(refetchOnFocus).toHaveBeenCalledWith(['product:p1', 'product:p2']);
+    expect(fetch).toHaveBeenNthCalledWith(1, '/_q/product%3Ap1', {
+      headers: { Accept: 'text/html', 'FW-Fragment': 'true' },
+      method: 'GET',
+    });
+    expect(fetch).toHaveBeenNthCalledWith(2, '/_q/product%3Ap2', {
+      headers: { Accept: 'text/html', 'FW-Fragment': 'true' },
+      method: 'GET',
+    });
+    expect(store.get('product', 'p1')).toEqual({ stock: 5 });
+    expect(store.get('product', 'p2')).toEqual({ stock: 10 });
+    expect(p1Plan).toHaveBeenLastCalledWith({ stock: 5 });
+    expect(p2Plan).toHaveBeenLastCalledWith({ stock: 10 });
   });
 
   it('discovers fw-query scripts inserted after install before visible-return refetch', async () => {

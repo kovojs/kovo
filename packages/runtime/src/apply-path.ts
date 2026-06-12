@@ -1,4 +1,4 @@
-import type { QueryStore } from './query-store.js';
+import { queryWireKey, type QueryStore } from './query-store.js';
 import { definedProps } from './defined-props.js';
 import { applyFragments } from './morph.js';
 import type { MorphFragment, MorphRoot } from './morph.js';
@@ -50,7 +50,7 @@ export function applyFragmentQueryBody(
 
   return {
     fragments: readFragmentChunks(body, onError),
-    queries: queryChunks.map((query) => query.name),
+    queries: queryChunks.map((query) => queryWireKey(query.name, query.key)),
   };
 }
 

@@ -2368,6 +2368,21 @@ params, relational API, `execute(sql)`, right/full joins, a string column named 
       `pnpm exec vitest --config vitest.browser.config.ts --run packages/runtime/src/index.browser.test.ts`,
       `pnpm exec vp check packages/runtime/src/apply-path.ts packages/runtime/src/query-bindings.ts packages/runtime/src/query-bindings.test.ts packages/runtime/src/mutation-response.test.ts plans/codebase-quality-round2.md`,
       and `git diff --check`.
+      Additional bounded evidence 2026-06-12: `packages/runtime/src/query-store.ts` now
+      canonicalizes hydrated query instance keys through `queryWireKey`, so keyed
+      `script[fw-query]` data enters the visible-return ledger as the same typed-read key used by
+      `/_q/<query-key>` while still writing to the keyed `QueryStore` slot. `packages/runtime/src/apply-path.ts`
+      now reports keyed `<fw-query>` mutation/deferred chunks through the same canonical key, so
+      mutation-introduced query instances do not collapse to the bare query name before later
+      refetch. `packages/runtime/src/query-store.test.ts`, `query-refetch.test.ts`, and
+      `mutation-response.test.ts` pin keyed hydration, keyed visible-return typed-read URLs,
+      keyed store updates, and keyed response summaries under SPEC.md §9.4. Same-session
+      evidence:
+      `pnpm exec vitest --run packages/runtime/src/query-store.test.ts packages/runtime/src/query-refetch.test.ts packages/runtime/src/mutation-response.test.ts`,
+      `pnpm exec vitest --run packages/runtime/src`,
+      `pnpm exec vitest --config vitest.browser.config.ts --run packages/runtime/src/index.browser.test.ts`,
+      `pnpm exec vp check packages/runtime/src/query-store.ts packages/runtime/src/apply-path.ts packages/runtime/src/query-store.test.ts packages/runtime/src/query-refetch.test.ts packages/runtime/src/mutation-response.test.ts packages/runtime/src/index.test.ts packages/runtime/src/inline-loader.test.ts plans/codebase-quality-round2.md`,
+      and `git diff --check`.
 
 Verification: runtime node + browser suites; gzip budget; the new parity suite is the gate for
 any future inline-loader edit. Partial evidence 2026-06-12: `packages/runtime/src/index.ts` now

@@ -73,6 +73,12 @@ export function queryStoreKey(name: string, key: string | undefined): string {
   return key === undefined ? name : `${name}\0${key}`;
 }
 
+export function queryWireKey(name: string, key: string | undefined): string {
+  if (key === undefined) return name;
+
+  return key.startsWith(`${name}:`) ? key : `${name}:${key}`;
+}
+
 export function queryIdentityFromStoreKey(storeKey: string): { key?: string; name: string } {
   const separator = storeKey.indexOf('\0');
   if (separator === -1) return { name: storeKey };
@@ -93,10 +99,11 @@ export function hydrateQueryScripts(
   for (const script of scripts) {
     const name = script.getAttribute('fw-query');
     if (name) {
+      const key = script.getAttribute('key') ?? undefined;
       const parsed = parseJsonValue(script.textContent ?? 'null');
       if (parsed.ok) {
-        store.set(name, parsed.value, script.getAttribute('key') ?? undefined);
-        hydrated.push(name);
+        store.set(name, parsed.value, key);
+        hydrated.push(queryWireKey(name, key));
       } else {
         reportMalformedJson(options.onError, 'fw-query hydration', parsed.error);
       }

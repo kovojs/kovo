@@ -2260,7 +2260,7 @@ describe('query store', () => {
     expect(plan).toHaveBeenCalledWith({ items: [{ id: 'r1', rating: 5 }] });
     expect(applied).toEqual({
       fragments: [{ html: '<section fw-c="reviews">Ready</section>', target: 'reviews:p1' }],
-      queries: ['reviews'],
+      queries: ['reviews:product:p1'],
     });
   });
 
@@ -3708,7 +3708,7 @@ describe('query store', () => {
       store,
     });
 
-    expect(result.queries).toEqual(['reviews']);
+    expect(result.queries).toEqual(['reviews:product:p1']);
     expect(store.get('reviews')).toBeUndefined();
     expect(store.get('reviews', 'product:p1')).toEqual({
       items: [{ id: 'r1' }, { id: 'server' }],
