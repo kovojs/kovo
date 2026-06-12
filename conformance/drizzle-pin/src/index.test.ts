@@ -395,6 +395,62 @@ describe('Drizzle pinned subset conformance', () => {
     });
   });
 
+  it('pins namespace project writes through re-export barrels with real Drizzle tables', () => {
+    const graph = extractTouchGraphFromProject({
+      files: [
+        {
+          fileName: 'conformance/drizzle-pin/src/schema.ts',
+          source: `
+            import { pgTable, text } from 'drizzle-orm/pg-core';
+
+            export const cartItems = pgTable('cart_items', {
+              id: text('id').primaryKey(),
+            }, jiso({ domain: 'cart', key: 'id' }));
+          `,
+        },
+        {
+          fileName: 'conformance/drizzle-pin/src/tables.ts',
+          source: `
+            export { cartItems as cartLineItems } from './schema';
+          `,
+        },
+        {
+          fileName: 'conformance/drizzle-pin/src/index.ts',
+          source: `
+            export * from './tables';
+          `,
+        },
+        {
+          fileName: 'conformance/drizzle-pin/src/cart.domain.ts',
+          source: `
+            import { eq } from 'drizzle-orm';
+            import type { PgDatabase } from 'drizzle-orm/pg-core';
+            import * as schema from './index';
+
+            export async function addItem(db: PgDatabase<any, any, any>, id: string) {
+              await db.update(schema['cartLineItems']).set({ id }).where(eq(schema['cartLineItems'].id, id));
+            }
+          `,
+        },
+      ],
+    });
+
+    expect(graph).toEqual({
+      addItem: {
+        reads: [],
+        touches: [
+          {
+            domain: 'cart',
+            keys: 'arg:id',
+            site: 'conformance/drizzle-pin/src/cart.domain.ts:7',
+            via: 'cart_items',
+          },
+        ],
+        unresolved: [],
+      },
+    });
+  });
+
   it('pins project transaction aliases without leaking same-name callback receivers', () => {
     const graph = extractTouchGraphFromProject({
       files: [
@@ -921,6 +977,65 @@ describe('Drizzle pinned subset conformance', () => {
           id: 'string',
         },
         site: 'conformance/drizzle-pin/src/cart.queries.ts:4',
+      },
+    ]);
+  });
+
+  it('pins namespace project queries through re-export barrels with real Drizzle tables', () => {
+    const facts = extractQueryFactsFromProject({
+      files: [
+        {
+          fileName: 'conformance/drizzle-pin/src/cart.schema.ts',
+          source: `
+            import { pgTable, text } from 'drizzle-orm/pg-core';
+
+            export const products = pgTable('cart_products', {
+              id: text('id').primaryKey(),
+            }, jiso({ domain: 'cart', key: 'id' }));
+          `,
+        },
+        {
+          fileName: 'conformance/drizzle-pin/src/cart.tables.ts',
+          source: `
+            export { products as cartProducts } from './cart.schema';
+          `,
+        },
+        {
+          fileName: 'conformance/drizzle-pin/src/schema.ts',
+          source: `
+            export * from './cart.tables';
+          `,
+        },
+        {
+          fileName: 'conformance/drizzle-pin/src/cart.queries.ts',
+          source: `
+            import { eq } from 'drizzle-orm';
+            import * as schema from './schema';
+
+            export const cartProductQuery = query('cart/product', {
+              load(input, db) {
+                return db.select({
+                  id: schema['cartProducts'].id,
+                }).from(schema.cartProducts).where(eq(schema.cartProducts.id, input.id));
+              },
+            });
+          `,
+        },
+      ],
+    });
+
+    expect(facts).toEqual([
+      {
+        instanceKey: {
+          domain: 'cart',
+          key: 'arg:id',
+        },
+        query: 'cart/product',
+        reads: ['cart'],
+        shape: {
+          id: 'string',
+        },
+        site: 'conformance/drizzle-pin/src/cart.queries.ts:5',
       },
     ]);
   });

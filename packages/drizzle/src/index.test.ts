@@ -1253,6 +1253,62 @@ export interface CommerceInvalidationSets {
     ]);
   });
 
+  it('resolves namespace-imported project query tables through re-export barrels', () => {
+    const facts = extractQueryFactsFromProject({
+      files: [
+        {
+          fileName: 'cart.schema.ts',
+          source: `
+            export const products = pgTable("cart_products", {
+              id: text("id").primaryKey(),
+            }, jiso({ domain: "cart", key: "id" }));
+          `,
+        },
+        {
+          fileName: 'cart.tables.ts',
+          source: `
+            export { products as cartProducts } from "./cart.schema";
+          `,
+        },
+        {
+          fileName: 'schema.ts',
+          source: `
+            export * from "./cart.tables";
+          `,
+        },
+        {
+          fileName: 'cart.queries.ts',
+          source: `
+            import * as schema from "./schema";
+
+            export const cartProductQuery = query("cart/product", {
+              load(input, db) {
+                return db.select({
+                  id: schema["cartProducts"].id,
+                }).from(schema.cartProducts).where(eq(schema.cartProducts.id, input.id));
+              },
+            });
+          `,
+        },
+      ],
+    });
+
+    expect(facts).toEqual([
+      {
+        instanceKey: {
+          domain: 'cart',
+          key: 'arg:id',
+        },
+        query: 'cart/product',
+        reads: ['cart'],
+        shape: {
+          id: 'string',
+        },
+        site: 'cart.queries.ts:4',
+      },
+    ]);
+  });
+
   it('reports FW411 when a query read set includes an exempt table', () => {
     const facts = extractQueryFactsFromSource([
       {
@@ -4128,6 +4184,67 @@ export interface CommerceInvalidationSets {
 
             export async function addItem(db: PgDatabase, id: string) {
               await db.update(cartSchema["items"]).set({ id }).where(eq(cartSchema["items"].id, id));
+            }
+          `,
+        },
+      ],
+    });
+
+    expect(graph).toEqual({
+      addItem: {
+        reads: [],
+        touches: [
+          {
+            domain: 'cart',
+            keys: 'arg:id',
+            site: 'cart.domain.ts:6',
+            via: 'cart_items',
+          },
+        ],
+        unresolved: [],
+      },
+    });
+  });
+
+  it('resolves namespace static element-access project write targets through re-export barrels', () => {
+    const graph = extractTouchGraphFromProject({
+      files: [
+        {
+          fileName: 'drizzle-types.d.ts',
+          source: `
+            declare module "drizzle-orm/pg-core" {
+              export class PgDatabase<TQueryResultHKT = unknown, TFullSchema = unknown, TSchema = unknown> {
+                update(table: unknown): { set(value: unknown): { where(value: unknown): Promise<void> } };
+              }
+            }
+          `,
+        },
+        {
+          fileName: 'cart.schema.ts',
+          source: `
+            export const items = pgTable("cart_items", {}, jiso({ domain: "cart", key: "id" }));
+          `,
+        },
+        {
+          fileName: 'cart.tables.ts',
+          source: `
+            export { items as cartItems } from "./cart.schema";
+          `,
+        },
+        {
+          fileName: 'schema.ts',
+          source: `
+            export * from "./cart.tables";
+          `,
+        },
+        {
+          fileName: 'cart.domain.ts',
+          source: `
+            import type { PgDatabase } from "drizzle-orm/pg-core";
+            import * as schema from "./schema";
+
+            export async function addItem(db: PgDatabase, id: string) {
+              await db.update(schema["cartItems"]).set({ id }).where(eq(schema["cartItems"].id, id));
             }
           `,
         },

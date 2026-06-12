@@ -738,15 +738,18 @@ function projectTableNameForNode(
       const basePath = staticExpressionPath(node.getExpression());
       return basePath ? `${basePath}.${tableName}` : tableName;
     }
+    const namespaceTableName = projectNamespaceAccessTableName(node, namespaceTableNames);
+    if (namespaceTableName) return namespaceTableName;
   }
   if (Node.isElementAccessExpression(node)) {
+    const namespaceTableName = projectNamespaceAccessTableName(node, namespaceTableNames);
+    if (namespaceTableName) return namespaceTableName;
+
     const tableName = projectTableNameForSymbol(node, tableNamesBySymbol);
     if (tableName) {
       const basePath = staticExpressionPath(node.getExpression());
       return basePath ? `${basePath}.${tableName}` : tableName;
     }
-    const namespaceTableName = projectNamespaceElementAccessTableName(node, namespaceTableNames);
-    if (namespaceTableName) return namespaceTableName;
   }
 
   return projectTableNameForSymbol(node, tableNamesBySymbol);
@@ -774,26 +777,34 @@ function projectNamespaceTableNamesByLocal(
     const moduleSourceFile = declaration.getModuleSpecifierSourceFile();
     if (!local || !moduleSourceFile) continue;
 
-    const exportedTables = new Map<string, string>();
-    for (const variable of moduleSourceFile.getVariableDeclarations()) {
-      if (!variableDeclarationIsExported(variable)) continue;
-      const name = variable.getNameNode();
-      if (!Node.isIdentifier(name)) continue;
-
-      const tableName = tableNamesBySymbol.get(resolvedSymbolKey(name.getSymbol()) ?? '');
-      if (tableName) exportedTables.set(name.getText(), tableName);
-    }
+    const exportedTables = projectExportedTableNamesByName(moduleSourceFile, tableNamesBySymbol);
     if (exportedTables.size > 0) namespaces.set(local, exportedTables);
   }
 
   return namespaces;
 }
 
-function projectNamespaceElementAccessTableName(
+function projectExportedTableNamesByName(
+  sourceFile: SourceFile,
+  tableNamesBySymbol: ReadonlyMap<string, string>,
+): Map<string, string> {
+  const tables = new Map<string, string>();
+
+  for (const symbol of sourceFile.getExportSymbols()) {
+    const tableName = tableNamesBySymbol.get(resolvedSymbolKey(symbol) ?? '');
+    if (tableName) tables.set(symbol.getName(), tableName);
+  }
+
+  return tables;
+}
+
+function projectNamespaceAccessTableName(
   access: Node,
   namespaceTableNames: ProjectNamespaceTableNames,
 ): string | undefined {
-  if (!Node.isElementAccessExpression(access)) return undefined;
+  if (!Node.isElementAccessExpression(access) && !Node.isPropertyAccessExpression(access)) {
+    return undefined;
+  }
 
   const base = access.getExpression();
   if (!Node.isIdentifier(base)) return undefined;
@@ -898,7 +909,7 @@ function sourceWithProjectExtractionResolved(
     if (!Node.isStringLiteral(argument)) continue;
 
     const tableName =
-      projectNamespaceElementAccessTableName(access, namespaceTableNames)?.split('.').at(-1) ??
+      projectNamespaceAccessTableName(access, namespaceTableNames)?.split('.').at(-1) ??
       tableNamesByIdentifier.get(argument.getLiteralText());
     if (!tableName) continue;
 
@@ -1194,7 +1205,7 @@ function projectTableNameForColumnShapeAccess(
   tableNamesBySymbol: ReadonlyMap<string, string>,
   namespaceTableNames: ProjectNamespaceTableNames,
 ): string | undefined {
-  const namespaceTableName = projectNamespaceElementAccessTableName(node, namespaceTableNames)
+  const namespaceTableName = projectNamespaceAccessTableName(node, namespaceTableNames)
     ?.split('.')
     .at(-1);
   return (
@@ -2472,6 +2483,10 @@ interface NamespaceImportAlias {
   moduleSpecifier: string;
 }
 
+interface ExportStarAlias {
+  moduleSpecifier: string;
+}
+
 function sourceModuleContext(files: readonly SourceFileInput[]): SourceModuleContext {
   const tablesByFileName = new Map<string, Map<string, ExtractedTable[]>>();
 
@@ -2576,6 +2591,18 @@ function exportedTablesForFile(
       tableEntriesForExport(moduleFileName, alias.imported, context, seen),
     );
   }
+  for (const alias of exportStarAliasesForSource(file.source)) {
+    const moduleFileName = resolveRelativeModuleFileName(
+      fileName,
+      alias.moduleSpecifier,
+      context.fileNames,
+    );
+    if (!moduleFileName) continue;
+
+    for (const [identifier, entries] of exportedTablesForFile(moduleFileName, context, seen)) {
+      appendTableEntries(exported, identifier, entries);
+    }
+  }
 
   return exported;
 }
@@ -2605,6 +2632,17 @@ function tableEntriesForExport(
     if (!moduleFileName) continue;
 
     const entries = tableEntriesForExport(moduleFileName, alias.imported, context, seen);
+    if (entries.length > 0) return entries;
+  }
+  for (const alias of exportStarAliasesForSource(file.source)) {
+    const moduleFileName = resolveRelativeModuleFileName(
+      fileName,
+      alias.moduleSpecifier,
+      context.fileNames,
+    );
+    if (!moduleFileName) continue;
+
+    const entries = tableEntriesForExport(moduleFileName, exportedName, context, seen);
     if (entries.length > 0) return entries;
   }
 
@@ -2670,6 +2708,10 @@ function exportTableAliasesForSource(source: string): TableAlias[] {
   return withParsedSourceFile(source, exportTableAliases);
 }
 
+function exportStarAliasesForSource(source: string): ExportStarAlias[] {
+  return withParsedSourceFile(source, exportStarAliases);
+}
+
 function importTableAliases(sourceFile: SourceFile): TableAlias[] {
   const aliases: TableAlias[] = [];
 
@@ -2705,6 +2747,19 @@ function exportTableAliases(sourceFile: SourceFile): TableAlias[] {
         moduleSpecifier,
       });
     }
+  }
+
+  return aliases;
+}
+
+function exportStarAliases(sourceFile: SourceFile): ExportStarAlias[] {
+  const aliases: ExportStarAlias[] = [];
+
+  for (const declaration of sourceFile.getExportDeclarations()) {
+    const moduleSpecifier = declaration.getModuleSpecifierValue();
+    if (!moduleSpecifier || declaration.getNamedExports().length > 0) continue;
+
+    aliases.push({ moduleSpecifier });
   }
 
   return aliases;

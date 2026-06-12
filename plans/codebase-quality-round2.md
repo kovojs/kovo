@@ -1767,6 +1767,21 @@ must be "FW406 unresolved," never "silently wrong."
       `corepack pnpm exec vitest --run conformance/drizzle-pin`,
       `corepack pnpm exec vp check packages/drizzle/src/index.ts packages/drizzle/src/index.test.ts conformance/drizzle-pin/src/index.test.ts plans/codebase-quality-round2.md`,
       and `git diff --check`.
+      Additional evidence 2026-06-12: project namespace table resolution now derives namespace
+      tables from checker-visible module export symbols and the prepared source context follows
+      `export *` barrels, so namespace imports from modules that re-export Drizzle table
+      declarations resolve for query reads/projection shapes and write targets without weakening
+      computed-access FW406 fallbacks under SPEC §10-§11. Package and real pinned `drizzle-orm`
+      coverage exercise named re-export aliases chained through export-star barrels. Same-session
+      evidence:
+      `corepack pnpm exec vitest --run packages/drizzle/src/index.test.ts -t "re-export barrels"`,
+      `corepack pnpm exec vitest --run conformance/drizzle-pin/src/index.test.ts -t "re-export barrels"`,
+      `corepack pnpm exec vitest --run packages/drizzle/src/index.test.ts`,
+      `corepack pnpm exec vitest --run conformance/drizzle-pin/src/index.test.ts`,
+      `corepack pnpm exec vitest --run packages/drizzle/src`,
+      `corepack pnpm run test:conformance`,
+      `corepack pnpm exec vp check packages/drizzle/src/static.ts packages/drizzle/src/index.test.ts conformance/drizzle-pin/src/index.test.ts plans/codebase-quality-round2.md`,
+      and `git diff --check`.
 - [x] **MED — Make the drizzle-orm coupling real and tested.** The `>=0.45.2 <1` pin is
       decorative: drizzle-orm is never imported, absent from devDeps, and every project test
       fabricates a `declare module "drizzle-orm/pg-core"` shim (index.test.ts:1742, 1791, 1846).
