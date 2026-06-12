@@ -2730,6 +2730,18 @@ params, relational API, `execute(sql)`, right/full joins, a string column named 
       `pnpm exec vitest --config vitest.browser.config.ts --run packages/runtime/src/index.browser.test.ts`,
       `pnpm exec vp check packages/runtime/src/query-store.ts packages/runtime/src/apply-path.ts packages/runtime/src/query-store.test.ts packages/runtime/src/query-refetch.test.ts packages/runtime/src/mutation-response.test.ts packages/runtime/src/index.test.ts packages/runtime/src/inline-loader.test.ts plans/codebase-quality-round2.md`,
       and `git diff --check`.
+      Additional bounded evidence 2026-06-12: `packages/runtime/src/query-store.ts` now owns
+      batched query chunk application through `applyQueryChunksToStore`, including canonical
+      query-key reporting, interposed apply values, and after-apply hooks. `packages/runtime/src/apply-path.ts`
+      routes store-only and DOM mutation response query application through that helper, while
+      hydrated `script[fw-query]` writes also reuse it instead of duplicating the canonical
+      apply/key collection behavior. `packages/runtime/src/query-store.test.ts` pins keyed
+      batched apply with interposed values and after-apply hook values under SPEC.md §9.1/§9.4.
+      Same-session evidence:
+      `pnpm exec vitest --run packages/runtime/src/query-store.test.ts packages/runtime/src/mutation-response.test.ts packages/runtime/src/query-refetch.test.ts`,
+      `pnpm --filter @jiso/runtime run check:inline-loader`,
+      `pnpm exec vp check packages/runtime/src/query-store.ts packages/runtime/src/query-store.test.ts packages/runtime/src/apply-path.ts plans/codebase-quality-round2.md`,
+      and `git diff --check`.
       Additional bounded evidence 2026-06-12: `packages/runtime/src/wire-parser.ts` now parses
       `<fw-query>` chunks through the same quote-aware tag scanner boundary used by fragments,
       instead of a `[^>]*` opening-tag regex, so quoted `>` characters in query attributes do not

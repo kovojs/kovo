@@ -1,6 +1,5 @@
 import {
-  applyQueryChunkToStore,
-  queryWireKey,
+  applyQueryChunksToStore,
   type QueryApplyInterposition,
   type QueryStore,
 } from './query-store.js';
@@ -42,20 +41,16 @@ export interface ApplyMutationResponseToStoreOptions {
 
 export function applyFragmentQueryBody(
   body: string,
-  applyQuery: (query: QueryChunk) => void,
+  applyQueries: (queries: readonly QueryChunk[]) => readonly string[],
   onError?: (error: unknown) => void,
   beforeApplyQueries?: (queries: readonly QueryChunk[]) => void,
 ): AppliedMutationResponse {
   const queryChunks = readQueryChunks(body, onError);
   beforeApplyQueries?.(queryChunks);
 
-  for (const query of queryChunks) {
-    applyQuery(query);
-  }
-
   return {
     fragments: readFragmentChunks(body, onError),
-    queries: queryChunks.map((query) => queryWireKey(query.name, query.key)),
+    queries: [...applyQueries(queryChunks)],
   };
 }
 
@@ -66,9 +61,8 @@ export function applyMutationResponse(
 ): AppliedMutationResponse {
   return applyFragmentQueryBody(
     body,
-    (query) => {
-      applyQueryChunkToStore(store, query, options.applyQuery);
-    },
+    (queries) =>
+      applyQueryChunksToStore(store, queries, definedProps({ applyQuery: options.applyQuery })),
     options.onError,
     options.beforeApplyQueries,
   );
@@ -127,16 +121,19 @@ export function applyMutationResponseToDom(
 
   const applied = applyFragmentQueryBody(
     options.body,
-    (query) => {
-      const planValue = applyQueryChunkToStore(options.store, query, options.applyQuery);
-      applyCompiledQueryUpdatePlanIfSupported(
-        options.root,
-        query.name,
-        planValue,
-        options.queryPlans?.[query.name],
-        readBindingIndex,
-      );
-    },
+    (queries) =>
+      applyQueryChunksToStore(options.store, queries, {
+        afterApplyQuery(query, planValue) {
+          applyCompiledQueryUpdatePlanIfSupported(
+            options.root,
+            query.name,
+            planValue,
+            options.queryPlans?.[query.name],
+            readBindingIndex,
+          );
+        },
+        ...definedProps({ applyQuery: options.applyQuery }),
+      }),
     options.onError,
     options.beforeApplyQueries,
   );

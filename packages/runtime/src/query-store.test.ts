@@ -1,7 +1,12 @@
 import { describe, expect, it, vi } from 'vitest';
 
 import { installJisoLoader, refetchQueries, type DelegatedEvent } from './index.js';
-import { applyQueryChunkToStore, createQueryStore, hydrateQueryScripts } from './query-store.js';
+import {
+  applyQueryChunksToStore,
+  applyQueryChunkToStore,
+  createQueryStore,
+  hydrateQueryScripts,
+} from './query-store.js';
 
 class FakeRoot {
   listeners = new Map<string, (event: DelegatedEvent) => void | Promise<void>>();
@@ -107,6 +112,51 @@ describe('query store hydration and refetch', () => {
     expect(appliedStore.get('product')).toBeUndefined();
     expect(hydratedPlan).toHaveBeenCalledWith({ stock: 4 });
     expect(appliedPlan).toHaveBeenCalledWith({ stock: 4 });
+  });
+
+  it('applies query chunks in one canonical batch with interposed values', () => {
+    const store = createQueryStore();
+    const cartPlan = vi.fn();
+    const productPlan = vi.fn();
+    const afterApplyQuery = vi.fn();
+
+    store.subscribe('cart', cartPlan);
+    store.subscribe('product', productPlan, 'p1');
+
+    const applied = applyQueryChunksToStore(
+      store,
+      [
+        { name: 'cart', value: { count: 1 } },
+        { key: 'p1', name: 'product', value: { stock: 4 } },
+      ],
+      {
+        afterApplyQuery,
+        applyQuery(query) {
+          if (query.name !== 'cart') return;
+
+          store.set(query.name, { count: 2 }, query.key);
+          return { value: store.get(query.name, query.key) };
+        },
+      },
+    );
+
+    // SPEC.md §9.1/§9.4: mutation, deferred, hydration, and typed-read paths
+    // share canonical query instance keys while allowing runtime apply hooks.
+    expect(applied).toEqual(['cart', 'product:p1']);
+    expect(store.get('cart')).toEqual({ count: 2 });
+    expect(store.get('product', 'p1')).toEqual({ stock: 4 });
+    expect(cartPlan).toHaveBeenCalledWith({ count: 2 });
+    expect(productPlan).toHaveBeenCalledWith({ stock: 4 });
+    expect(afterApplyQuery).toHaveBeenCalledWith(
+      { name: 'cart', value: { count: 1 } },
+      {
+        count: 2,
+      },
+    );
+    expect(afterApplyQuery).toHaveBeenCalledWith(
+      { key: 'p1', name: 'product', value: { stock: 4 } },
+      { stock: 4 },
+    );
   });
 
   it('returns only successfully hydrated fw-query scripts', () => {

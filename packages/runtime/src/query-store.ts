@@ -22,6 +22,11 @@ export interface QueryScriptLike extends TextContentElementLike {}
 
 export type QueryApplyInterposition = (query: QueryChunk) => { value: unknown } | void;
 
+export interface ApplyQueryChunksToStoreOptions {
+  afterApplyQuery?: (query: QueryChunk, value: unknown) => void;
+  applyQuery?: QueryApplyInterposition;
+}
+
 export function createQueryStore(): QueryStore {
   const values = new Map<string, unknown>();
   const plans = new Map<string, Set<QueryUpdatePlan>>();
@@ -94,6 +99,22 @@ export function applyQueryChunkToStore(
   return query.value;
 }
 
+export function applyQueryChunksToStore(
+  store: QueryStore,
+  queries: readonly QueryChunk[],
+  options: ApplyQueryChunksToStoreOptions = {},
+): readonly string[] {
+  const applied: string[] = [];
+
+  for (const query of queries) {
+    const value = applyQueryChunkToStore(store, query, options.applyQuery);
+    options.afterApplyQuery?.(query, value);
+    applied.push(queryWireKey(query.name, query.key));
+  }
+
+  return applied;
+}
+
 export function queryIdentityFromStoreKey(storeKey: string): { key?: string; name: string } {
   const separator = storeKey.indexOf('\0');
   if (separator === -1) return { name: storeKey };
@@ -119,8 +140,7 @@ export function hydrateQueryScripts(
       if (parsed.ok) {
         const query: QueryChunk =
           key === undefined ? { name, value: parsed.value } : { key, name, value: parsed.value };
-        applyQueryChunkToStore(store, query);
-        hydrated.push(queryWireKey(query.name, query.key));
+        hydrated.push(...applyQueryChunksToStore(store, [query]));
       } else {
         reportMalformedJson(options.onError, 'fw-query hydration', parsed.error);
       }
