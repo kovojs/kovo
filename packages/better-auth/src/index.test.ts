@@ -202,9 +202,10 @@ function responseWithCookies(cookies: readonly string[], status = 204): BetterAu
   return { headers, status };
 }
 
-function authTable(fields: readonly string[] = []) {
+function authTable(fields: readonly string[] = [], modelName?: string) {
   return {
     fields: Object.fromEntries(fields.map((field) => [field, {}])),
+    ...(modelName === undefined ? {} : { modelName }),
   };
 }
 
@@ -847,6 +848,103 @@ describe('credential mutation helpers', () => {
         webauthnCredential: 'userId',
       },
     });
+  });
+
+  it('uses Better Auth modelName aliases for schema.ts and P9 verifier table facts', () => {
+    const tables = {
+      account: authTable(['userId'], 'auth_accounts'),
+      invitation: authTable(['organizationId'], 'auth_invitations'),
+      member: authTable(['organizationId'], 'auth_members'),
+      organization: authTable([], 'auth_organizations'),
+      session: authTable(['userId'], 'auth_sessions'),
+      user: authTable([], 'auth_users'),
+      verification: authTable([], 'auth_verifications'),
+    };
+    const result = annotateBetterAuthSchemaSource(
+      [
+        "import { jiso } from '@jiso/drizzle';",
+        "import { pgTable } from 'drizzle-orm/pg-core';",
+        '',
+        "export const authUsers = pgTable('auth_users', {});",
+        "export const authSessions = pgTable('auth_sessions', {});",
+        "export const authAccounts = pgTable('auth_accounts', {});",
+        "export const authVerifications = pgTable('auth_verifications', {});",
+        "export const authOrganizations = pgTable('auth_organizations', {});",
+        "export const authMembers = pgTable('auth_members', {});",
+        "export const authInvitations = pgTable('auth_invitations', {});",
+      ].join('\n'),
+      tables,
+    );
+
+    // SPEC.md §10.1 / §11.2: Better Auth declared touches stay on logical
+    // tables, while app schema and runtime SQL verification use modelName.
+    expect(result.validation).toEqual({
+      declaredTouchMismatches: [],
+      keyFieldMismatches: [],
+      missingTables: [],
+      ok: true,
+      pluginTableDegradations: [],
+      unbridgedTables: [],
+    });
+    expect(result.annotatedTables).toEqual([
+      'auth_accounts',
+      'auth_invitations',
+      'auth_members',
+      'auth_organizations',
+      'auth_sessions',
+      'auth_users',
+      'auth_verifications',
+    ]);
+    expect(result.missingSourceTables).toEqual([]);
+    expect(result.source).toContain(
+      "export const authUsers = pgTable('auth_users', {}, jiso({ domain: 'user', key: 'id' }));",
+    );
+    expect(result.source).toContain(
+      "export const authSessions = pgTable('auth_sessions', {}, jiso({ domain: 'auth', key: 'userId' }));",
+    );
+    expect(result.source).toContain(
+      "export const authOrganizations = pgTable('auth_organizations', {}, jiso({ domain: 'organization', key: 'id' }));",
+    );
+    expect(result.source).toContain(
+      "export const authVerifications = pgTable('auth_verifications', {}, jiso({ exempt: true }));",
+    );
+    expect(createBetterAuthDbVerificationConfig({}, tables)).toEqual({
+      domainByTable: expect.objectContaining({
+        account: 'auth',
+        auth_accounts: 'auth',
+        auth_invitations: 'organization',
+        auth_members: 'organization',
+        auth_organizations: 'organization',
+        auth_sessions: 'auth',
+        auth_users: 'user',
+        invitation: 'organization',
+        member: 'organization',
+        organization: 'organization',
+        session: 'auth',
+        user: 'user',
+      }),
+      exemptTables: expect.arrayContaining(['auth_verifications', 'verification']),
+      keyByTable: expect.objectContaining({
+        auth_accounts: 'userId',
+        auth_invitations: 'organizationId',
+        auth_members: 'organizationId',
+        auth_organizations: 'id',
+        auth_sessions: 'userId',
+        auth_users: 'id',
+      }),
+    });
+
+    const staleLogicalSource = annotateBetterAuthSchemaSource(
+      [
+        "import { jiso } from '@jiso/drizzle';",
+        "import { pgTable } from 'drizzle-orm/pg-core';",
+        "export const user = pgTable('user', {});",
+      ].join('\n'),
+      { user: authTable([], 'auth_users') },
+    );
+
+    expect(staleLogicalSource.annotatedTables).toEqual([]);
+    expect(staleLogicalSource.missingSourceTables).toEqual(['auth_users']);
   });
 
   it('materializes Jiso annotations into an app schema.ts source fixture', () => {

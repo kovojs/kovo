@@ -421,6 +421,97 @@ describe('Better Auth pinned conformance', () => {
     );
   });
 
+  it('materializes schema.ts annotations and verifier facts from real Better Auth modelName aliases', () => {
+    const { auth } = createRealAuth({
+      account: { modelName: 'auth_accounts' },
+      plugins: [
+        organization({
+          schema: {
+            invitation: { modelName: 'auth_invitations' },
+            member: { modelName: 'auth_members' },
+            organization: { modelName: 'auth_organizations' },
+          },
+        }),
+      ],
+      session: { modelName: 'auth_sessions' },
+      user: { modelName: 'auth_users' },
+      verification: { modelName: 'auth_verifications' },
+    });
+    const tables = getAuthTables(auth.options);
+    const physicalTables = Object.keys(tables)
+      .map((table) => requireAuthTable(tables, table).modelName)
+      .sort();
+    const result = annotateBetterAuthSchemaSource(
+      betterAuthSchemaSourceFixture(physicalTables),
+      tables,
+    );
+    const verifierConfig = createBetterAuthDbVerificationConfig({}, tables);
+
+    expect(
+      Object.fromEntries(
+        Object.entries(tables).map(([table, metadata]) => [table, metadata.modelName]),
+      ),
+    ).toEqual({
+      account: 'auth_accounts',
+      invitation: 'auth_invitations',
+      member: 'auth_members',
+      organization: 'auth_organizations',
+      session: 'auth_sessions',
+      user: 'auth_users',
+      verification: 'auth_verifications',
+    });
+    expect(validateBetterAuthSchemaBridge(tables)).toEqual({
+      declaredTouchMismatches: [],
+      keyFieldMismatches: [],
+      missingTables: [],
+      ok: true,
+      pluginTableDegradations: [],
+      unbridgedTables: [],
+    });
+    expect(result.validation.ok).toBe(true);
+    expect(result.annotatedTables).toEqual([
+      'auth_accounts',
+      'auth_invitations',
+      'auth_members',
+      'auth_organizations',
+      'auth_sessions',
+      'auth_users',
+      'auth_verifications',
+    ]);
+    expect(result.missingSourceTables).toEqual([]);
+    expect(result.source).toContain(
+      "export const auth_users = pgTable('auth_users', {}, jiso({ domain: 'user', key: 'id' }));",
+    );
+    expect(result.source).toContain(
+      "export const auth_sessions = pgTable('auth_sessions', {}, jiso({ domain: 'auth', key: 'userId' }));",
+    );
+    expect(result.source).toContain(
+      "export const auth_organizations = pgTable('auth_organizations', {}, jiso({ domain: 'organization', key: 'id' }));",
+    );
+    expect(result.source).toContain(
+      "export const auth_verifications = pgTable('auth_verifications', {}, jiso({ exempt: true }));",
+    );
+    expect(verifierConfig.domainByTable).toMatchObject({
+      auth_accounts: 'auth',
+      auth_invitations: 'organization',
+      auth_members: 'organization',
+      auth_organizations: 'organization',
+      auth_sessions: 'auth',
+      auth_users: 'user',
+    });
+    expect(verifierConfig.exemptTables).toEqual(
+      expect.arrayContaining(['auth_verifications', 'verification']),
+    );
+    expect(verifierConfig.keyByTable).toMatchObject({
+      auth_accounts: 'userId',
+      auth_invitations: 'organizationId',
+      auth_members: 'organizationId',
+      auth_organizations: 'id',
+      auth_sessions: 'userId',
+      auth_users: 'id',
+    });
+  });
+
   it('pins two-factor plugin table metadata used by the schema bridge', () => {
     const { auth } = createRealAuth({
       plugins: [twoFactor()],
@@ -1808,8 +1899,12 @@ describe('Better Auth pinned conformance', () => {
 
 function createRealAuth(
   options: {
+    account?: Parameters<typeof betterAuth>[0]['account'];
     plugins?: Parameters<typeof betterAuth>[0]['plugins'];
     rateLimit?: Parameters<typeof betterAuth>[0]['rateLimit'];
+    session?: Parameters<typeof betterAuth>[0]['session'];
+    user?: Parameters<typeof betterAuth>[0]['user'];
+    verification?: Parameters<typeof betterAuth>[0]['verification'];
   } = {},
 ) {
   const db: AuthDatabase = {
@@ -1827,9 +1922,13 @@ function createRealAuth(
     emailAndPassword: {
       enabled: true,
     },
+    ...(options.account === undefined ? {} : { account: options.account }),
     ...(options.plugins === undefined ? {} : { plugins: options.plugins }),
     ...(options.rateLimit === undefined ? {} : { rateLimit: options.rateLimit }),
+    ...(options.session === undefined ? {} : { session: options.session }),
     secret: authSecret,
+    ...(options.user === undefined ? {} : { user: options.user }),
+    ...(options.verification === undefined ? {} : { verification: options.verification }),
   });
 
   return { auth, db };

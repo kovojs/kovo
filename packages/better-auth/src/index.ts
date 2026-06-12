@@ -491,23 +491,28 @@ export function createBetterAuthCredentialMutationTouchGraph(
 
 export function createBetterAuthDbVerificationConfig(
   schemaBridge: BetterAuthSchemaBridgeExtensions = {},
+  tables: Record<string, unknown> = {},
 ): BetterAuthDbVerificationConfig {
   const domainByTable: Record<string, BetterAuthTouchDomain> = {};
   const exemptTables: string[] = [];
   const keyByTable: Record<string, string> = {};
 
   for (const [table, annotation] of Object.entries(createBetterAuthSchemaBridge(schemaBridge))) {
+    const physicalTables = betterAuthPhysicalTableNames(table, tables);
+
     if ('domain' in annotation) {
-      domainByTable[table] = annotation.domain;
-      if (annotation.key !== undefined) keyByTable[table] = annotation.key;
+      for (const physicalTable of physicalTables) {
+        domainByTable[physicalTable] = annotation.domain;
+        if (annotation.key !== undefined) keyByTable[physicalTable] = annotation.key;
+      }
     } else {
-      exemptTables.push(table);
+      exemptTables.push(...physicalTables);
     }
   }
 
   return {
     domainByTable,
-    exemptTables,
+    exemptTables: [...new Set(exemptTables)],
     keyByTable,
   };
 }
@@ -554,7 +559,10 @@ export function annotateBetterAuthSchemaSource(
 ): BetterAuthSchemaSourceAnnotationResult {
   const schemaBridge = createBetterAuthSchemaBridge(options.schemaBridge);
   const validation = validateBetterAuthSchemaBridge(tables, { schemaBridge });
-  const metadataTables = new Set(Object.keys(tables));
+  const metadataTables = new Set(
+    Object.keys(tables).filter((table) => isBetterAuthSchemaTable(table, schemaBridge)),
+  );
+  const metadataTableByPhysicalName = betterAuthMetadataTableByPhysicalName(tables, schemaBridge);
   const sourceTables = findDrizzleTableCalls(source, options.tableFactories);
   const replacements: { end: number; start: number; value: string }[] = [];
   const annotatedTables: string[] = [];
@@ -564,8 +572,8 @@ export function annotateBetterAuthSchemaSource(
   const hasRequiredImport = hasNamedImportLocal(source, '@jiso/drizzle', annotationCallee);
 
   for (const call of sourceTables) {
-    const table = call.tableName;
-    if (!isBetterAuthSchemaTable(table, schemaBridge) || !metadataTables.has(table)) continue;
+    const table = metadataTableByPhysicalName.get(call.tableName);
+    if (table === undefined || !metadataTables.has(table)) continue;
 
     if (call.extraConfigText !== null) {
       if (
@@ -576,9 +584,9 @@ export function annotateBetterAuthSchemaSource(
           schemaBridge,
         )
       ) {
-        alreadyAnnotatedTables.push(table);
+        alreadyAnnotatedTables.push(call.tableName);
       } else {
-        existingExtraConfigTables.push(table);
+        existingExtraConfigTables.push(call.tableName);
       }
       continue;
     }
@@ -588,12 +596,12 @@ export function annotateBetterAuthSchemaSource(
       start: call.closeParen,
       value: `, ${betterAuthSchemaAnnotationCall(table, annotationCallee, schemaBridge)}`,
     });
-    annotatedTables.push(table);
+    annotatedTables.push(call.tableName);
   }
 
   const sourceTableNames = new Set(sourceTables.map((call) => call.tableName));
   const missingSourceTables = [...metadataTables]
-    .filter((table) => isBetterAuthSchemaTable(table, schemaBridge))
+    .map((table) => betterAuthPhysicalTableName(table, tables[table]))
     .filter((table) => !sourceTableNames.has(table))
     .sort();
   const insertedImport = annotatedTables.length > 0 && !hasRequiredImport;
@@ -1162,6 +1170,35 @@ function createBetterAuthSchemaBridge(
     ...betterAuthSchemaBridge,
     ...extensions,
   };
+}
+
+function betterAuthPhysicalTableNames(table: string, tables: Record<string, unknown>): string[] {
+  const physicalName = betterAuthPhysicalTableName(table, tables[table]);
+
+  return physicalName === table ? [table] : [table, physicalName];
+}
+
+function betterAuthPhysicalTableName(table: string, metadata: unknown): string {
+  if (!metadata || typeof metadata !== 'object') return table;
+
+  const modelName = (metadata as { modelName?: unknown }).modelName;
+
+  return typeof modelName === 'string' && modelName.length > 0 ? modelName : table;
+}
+
+function betterAuthMetadataTableByPhysicalName(
+  tables: Record<string, unknown>,
+  schemaBridge: BetterAuthSchemaBridgeExtensions = betterAuthSchemaBridge,
+): Map<string, string> {
+  const tableByPhysicalName = new Map<string, string>();
+
+  for (const table of Object.keys(tables)) {
+    if (!isBetterAuthSchemaTable(table, schemaBridge)) continue;
+
+    tableByPhysicalName.set(betterAuthPhysicalTableName(table, tables[table]), table);
+  }
+
+  return tableByPhysicalName;
 }
 
 interface DrizzleTableCall {
