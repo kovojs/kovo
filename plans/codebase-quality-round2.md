@@ -537,6 +537,13 @@ pipeline throws the tree away and communicates via mutated source text.
       `pnpm exec vitest --run packages/compiler/src/shared.test.ts`,
       `pnpm exec vp check packages/compiler/src/shared.ts packages/compiler/src/shared.test.ts`,
       and `git diff --check`.
+      Additional evidence 2026-06-12: `packages/compiler/src/lower/navigation.ts` no longer
+      imports `parseComponentModule`; it exposes separate static `<Link>` and static `href`
+      lowering passes, and `packages/compiler/src/compile.ts` owns the post-link and post-href
+      `modelForSourceChange` decisions with the author file name. Same-session evidence:
+      `pnpm exec vitest --run packages/compiler/src/index.test.ts packages/compiler/src/navigation-lowering.test.ts -t "navigation|Link|href"`,
+      `pnpm exec vp check packages/compiler/src/compile.ts packages/compiler/src/lower/navigation.ts plans/codebase-quality-round2.md`,
+      and `rg -n "parseComponentModule as parseComponentModuleModel|parseComponentModule\\(" packages/compiler/src/lower packages/compiler/src/compile.ts`.
 - [x] **HIGH — Retire regex rewriting of handler bodies.** emit/client.ts:89
       (`/\bstate\b/g → ctx.state` corrupts `log('state changed')`), :96 (member-expression
       substitution inside string literals), lower/handlers.ts:262 (harvests params from string

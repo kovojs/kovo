@@ -11,7 +11,7 @@ import {
   versionHandlerLowering,
 } from './lower/handlers.js';
 import { lowerInlineAttributeDerives } from './lower/inline-derives.js';
-import { lowerNavigationSugar } from './lower/navigation.js';
+import { lowerNavigationHrefs, lowerNavigationLinks } from './lower/navigation.js';
 import { lowerPlatformBehaviors } from './lower/platform.js';
 import { lowerViewTransitions } from './lower/view-transitions.js';
 import {
@@ -70,25 +70,29 @@ export function compileComponentModule(options: CompileComponentOptions): Compil
     viewTransitionModel,
     platformLowering.source,
   );
-  const navigationLowering = lowerNavigationSugar(
+  const linksLoweredSource = lowerNavigationLinks(platformLowering.source, platformModel);
+  const linksLoweredModel = modelForSourceChange(
+    options.fileName,
     platformLowering.source,
     platformModel,
+    linksLoweredSource,
+  );
+  const navigationSource = lowerNavigationHrefs(linksLoweredSource, linksLoweredModel);
+  const navigationModel = modelForSourceChange(
     options.fileName,
+    linksLoweredSource,
+    linksLoweredModel,
+    navigationSource,
   );
   const deriveLowering = lowerInlineAttributeDerives(
-    navigationLowering.source,
-    navigationLowering.model,
+    navigationSource,
+    navigationModel,
     componentName,
     compileOptions,
   );
   const source = deriveLowering.source;
   const diagnosticSource = deriveLowering.diagnosticSource;
-  const model = modelForSourceChange(
-    options.fileName,
-    navigationLowering.source,
-    navigationLowering.model,
-    source,
-  );
+  const model = modelForSourceChange(options.fileName, navigationSource, navigationModel, source);
   const handlers = lowerEventHandlers({ ...compileOptions, source }, componentName, model);
   const queryUpdatePlans = collectQueryUpdatePlans(source, model, componentName);
   const updateCoverage = collectQueryUpdateCoverage(source, model, compileOptions, componentName);

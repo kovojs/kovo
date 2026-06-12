@@ -1,7 +1,6 @@
 import {
   callExpressions,
   jsxElements,
-  parseComponentModule as parseComponentModuleModel,
   type ComponentModuleModel,
   type JsxElementModel,
 } from '../scan/parse.js';
@@ -13,24 +12,11 @@ import {
   type SourceReplacement,
 } from '../shared.js';
 
-export function lowerNavigationSugar(
-  source: string,
-  model: ComponentModuleModel,
-  fileName: string,
-): { model: ComponentModuleModel; source: string } {
-  const linksLowered = lowerStaticLinks(source, model);
-  const linksLoweredModel =
-    linksLowered === source ? model : parseComponentModuleModel(fileName, linksLowered);
-  const lowered = lowerStaticHrefCallsAndAttributes(linksLowered, linksLoweredModel);
-
-  return {
-    model:
-      lowered === linksLowered ? linksLoweredModel : parseComponentModuleModel(fileName, lowered),
-    source: lowered,
-  };
+export function lowerNavigationHrefs(source: string, model: ComponentModuleModel): string {
+  return lowerStaticHrefCallsAndAttributes(source, model);
 }
 
-function lowerStaticLinks(source: string, model: ComponentModuleModel): string {
+export function lowerNavigationLinks(source: string, model: ComponentModuleModel): string {
   const replacements: SourceReplacement[] = [];
 
   for (const link of jsxElements(model).filter(
