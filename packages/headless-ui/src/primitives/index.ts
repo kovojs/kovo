@@ -58,3 +58,19 @@ export type {
   SeparatorOrientation,
   SeparatorPrimitiveAttributes,
 } from './separator.js';
+
+export {
+  setTogglePressed,
+  togglePressed,
+  toggleRootAttributes,
+  toggleTriggerClick,
+} from './toggle.js';
+export type {
+  ToggleChangeDetail,
+  ToggleChangeOptions,
+  ToggleChangeReason,
+  ToggleChangeResult,
+  TogglePrimitiveAttributes,
+  ToggleState,
+  ToggleTriggerEvent,
+} from './toggle.js';

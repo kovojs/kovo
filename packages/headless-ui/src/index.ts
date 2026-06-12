@@ -98,8 +98,12 @@ export {
   separatorRootAttributes,
   setCollapsibleOpen,
   setDisclosureOpen,
+  setTogglePressed,
   toggleCollapsible,
   toggleDisclosure,
+  togglePressed,
+  toggleRootAttributes,
+  toggleTriggerClick,
 } from './primitives/index.js';
 export type {
   CollapsibleAttributeOptions,
@@ -129,4 +133,11 @@ export type {
   SeparatorAttributeOptions,
   SeparatorOrientation,
   SeparatorPrimitiveAttributes,
+  ToggleChangeDetail,
+  ToggleChangeOptions,
+  ToggleChangeReason,
+  ToggleChangeResult,
+  TogglePrimitiveAttributes,
+  ToggleState,
+  ToggleTriggerEvent,
 } from './primitives/index.js';
