@@ -22,7 +22,7 @@ import {
   jiso,
   serializeDomainRegistry,
   serializeTouchGraph,
-} from '@jiso/drizzle/static';
+} from '../../../packages/drizzle/src/static.js';
 
 function annotatedTable(name: string, annotation: ReturnType<typeof jiso>) {
   return {
@@ -303,10 +303,7 @@ describe('Drizzle pinned subset conformance', () => {
 
     expect(cartItems.productId).toBeDefined();
     const tableInternals = cartItems as unknown as Record<symbol, unknown>;
-    const extraConfigBuilder = tableInternals[drizzleSymbol('ExtraConfigBuilder')] as
-      | ((columns: unknown) => unknown)
-      | ReturnType<typeof jiso>
-      | undefined;
+    const extraConfigBuilder = tableInternals[drizzleSymbol('ExtraConfigBuilder')];
     const extraConfigColumns = tableInternals[drizzleSymbol('ExtraConfigColumns')];
 
     expect(extraConfigBuilder).toEqual(
