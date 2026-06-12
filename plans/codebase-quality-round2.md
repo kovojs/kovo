@@ -1508,6 +1508,18 @@ must be "FW406 unresolved," never "silently wrong."
       `pnpm exec vitest --run conformance/drizzle-pin/src/index.test.ts`,
       `pnpm exec vp check packages/drizzle/src/index.ts packages/drizzle/src/index.test.ts plans/codebase-quality-round2.md`,
       and `git diff --check`.
+      Additional evidence 2026-06-12: project-mode local-helper overlays now key extracted
+      Drizzle facts by the same symbol/fallback function key used by source extraction instead
+      of broad function names, and project unresolved-helper suppression resolves local callees
+      through declaration keys before emitting FW406. This keeps nested same-name closure helpers
+      isolated under SPEC §10-§11 instead of folding another closure's writes or reporting the
+      local call as unresolved. Same-session evidence:
+      `pnpm exec vitest --run packages/drizzle/src/index.test.ts -t "project closure-local helper summaries"`,
+      `pnpm exec vitest --run conformance/drizzle-pin/src/index.test.ts -t "project closure-local helper summaries"`,
+      `pnpm exec vitest --run packages/drizzle/src`,
+      `pnpm exec vitest --run conformance/drizzle-pin`,
+      `pnpm exec vp check packages/drizzle/src/static.ts packages/drizzle/src/index.test.ts conformance/drizzle-pin/src/index.test.ts plans/codebase-quality-round2.md`,
+      and `git diff --check`.
       Additional evidence 2026-06-12: query instance-key extraction now walks ts-morph
       `.where(eq(...))` call nodes instead of regex-scanning the entire query object body, so
       comment/string text containing `where(eq(table.key, input.key))` no longer fabricates

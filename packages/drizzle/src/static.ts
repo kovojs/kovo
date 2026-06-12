@@ -234,7 +234,7 @@ export function extractTouchGraphFromProject(options: TouchGraphProjectOptions):
       extraction.files,
       (file) =>
         extractFunctions(file).map((fn) => {
-          const projectFunction = projectFunctionExtractions.get(file.fileName)?.get(fn.name);
+          const projectFunction = projectFunctionExtractions.get(file.fileName)?.get(fn.key);
           return projectFunction ? { ...fn, ...projectFunction } : fn;
         }),
       sourceContext,
@@ -354,13 +354,14 @@ function projectFunctionExtractionsByFileName(
       extraction.tableNamesBySymbol,
     );
 
-    for (const fn of sourceFile.getFunctions()) {
+    for (const fn of sourceFile.getDescendantsOfKind(SyntaxKind.FunctionDeclaration)) {
       const name = fn.getName();
+      const nameNode = fn.getNameNode();
       const body = fn.getBody();
-      if (!name || !body) continue;
+      if (!name || !nameNode || !body) continue;
 
       const receivers = projectDrizzleReceivers(fn);
-      extractionsByFunction.set(name, {
+      extractionsByFunction.set(extractedFunctionKey(name, fn, nameNode), {
         readCalls: [
           ...extractProjectSelectReadCalls(
             body,
@@ -391,7 +392,7 @@ function projectFunctionExtractionsByFileName(
 
       const body = initializer.getBody();
       const receivers = projectDrizzleReceivers(initializer);
-      extractionsByFunction.set(name.getText(), {
+      extractionsByFunction.set(extractedFunctionKey(name.getText(), initializer, name), {
         readCalls: [
           ...extractProjectSelectReadCalls(
             body,
@@ -414,9 +415,9 @@ function projectFunctionExtractionsByFileName(
       });
     }
 
-    for (const [name, callback] of projectDomainWriteCallbacks(sourceFile)) {
+    for (const callback of projectDomainWriteCallbacks(sourceFile).values()) {
       const receivers = projectDrizzleReceivers(callback.fn);
-      extractionsByFunction.set(name, {
+      extractionsByFunction.set(callback.key, {
         readCalls: [
           ...extractProjectSelectReadCalls(
             callback.body,
@@ -445,10 +446,14 @@ function projectFunctionExtractionsByFileName(
     }
 
     const localFunctionNames = new Set(extractionsByFunction.keys());
-    for (const fn of sourceFile.getFunctions()) {
+    for (const fn of sourceFile.getDescendantsOfKind(SyntaxKind.FunctionDeclaration)) {
       const name = fn.getName();
+      const nameNode = fn.getNameNode();
       const body = fn.getBody();
-      const extraction = name ? extractionsByFunction.get(name) : undefined;
+      const extraction =
+        name && nameNode
+          ? extractionsByFunction.get(extractedFunctionKey(name, fn, nameNode))
+          : undefined;
       if (!body || !extraction) continue;
       extraction.unresolvedCalls = extractProjectUnresolvedCalls(
         body,
@@ -461,7 +466,9 @@ function projectFunctionExtractionsByFileName(
       const initializer = declaration.getInitializer();
       if (!Node.isIdentifier(name) || !initializer) continue;
       if (!Node.isArrowFunction(initializer) && !Node.isFunctionExpression(initializer)) continue;
-      const extraction = extractionsByFunction.get(name.getText());
+      const extraction = extractionsByFunction.get(
+        extractedFunctionKey(name.getText(), initializer, name),
+      );
       if (!extraction) continue;
       extraction.unresolvedCalls = extractProjectUnresolvedCalls(
         initializer.getBody(),
@@ -469,8 +476,8 @@ function projectFunctionExtractionsByFileName(
         localFunctionNames,
       );
     }
-    for (const [name, callback] of projectDomainWriteCallbacks(sourceFile)) {
-      const extraction = extractionsByFunction.get(name);
+    for (const callback of projectDomainWriteCallbacks(sourceFile).values()) {
+      const extraction = extractionsByFunction.get(callback.key);
       if (!extraction) continue;
       extraction.unresolvedCalls = extractProjectUnresolvedCalls(
         callback.body,
@@ -499,8 +506,8 @@ interface ProjectDrizzleReceivers {
 
 function projectDomainWriteCallbacks(
   sourceFile: SourceFile,
-): Map<string, { body: Node; fn: Node }> {
-  const callbacks = new Map<string, { body: Node; fn: Node }>();
+): Map<string, { body: Node; fn: Node; key: string }> {
+  const callbacks = new Map<string, { body: Node; fn: Node; key: string }>();
 
   for (const declaration of sourceFile.getVariableDeclarations()) {
     const domainName = declaration.getNameNode();
@@ -524,6 +531,11 @@ function projectDomainWriteCallbacks(
       callbacks.set(`${domainName.getText()}.${memberName}`, {
         body: functionBody(callback),
         fn: callback,
+        key: extractedFunctionKey(
+          `${domainName.getText()}.${memberName}`,
+          callback,
+          property.getNameNode(),
+        ),
       });
     }
   }
@@ -723,6 +735,7 @@ function extractProjectExternalDbArgumentCalls(
 
     const name = expression.getText();
     if (IGNORED_LOCAL_CALL_NAMES.has(name) || localFunctionNames.has(name)) continue;
+    if (localFunctionKeyForIdentifier(expression, localFunctionNames)) continue;
     if (!call.getArguments().some((arg) => isProjectDrizzleReceiverIdentifier(arg, receivers))) {
       continue;
     }
@@ -3313,9 +3326,7 @@ function extractedFunctionFromCallback(
 ): ParsedExtractedFunction {
   const body = functionBody(callback);
   const bodyStart = Node.isBlock(body) ? body.getStart() + 1 : body.getStart();
-  const key =
-    resolvedSymbolKey(keyNode.getSymbol()) ??
-    `${callback.getSourceFile().getFilePath()}:${callback.getStart()}:${name}`;
+  const key = extractedFunctionKey(name, callback, keyNode);
 
   return {
     bodyNode: body,
@@ -3325,6 +3336,13 @@ function extractedFunctionFromCallback(
     name,
     receiverNames: sourceDrizzleReceiverNames(callback),
   };
+}
+
+function extractedFunctionKey(name: string, callback: Node, keyNode: Node = callback): string {
+  return (
+    resolvedSymbolKey(keyNode.getSymbol()) ??
+    `${callback.getSourceFile().getFilePath()}:${callback.getStart()}:${name}`
+  );
 }
 
 function functionBody(callback: Node): Node {
@@ -3353,7 +3371,7 @@ function extractLocalFunctionCallsFromBody(
     const name = expression.getText();
     if (IGNORED_LOCAL_CALL_NAMES.has(name)) continue;
 
-    const key = resolvedSymbolKey(expression.getSymbol());
+    const key = localFunctionKeyForIdentifier(expression, localFunctionKeys);
     if (key && localFunctionKeys.has(key)) calls.push(key);
   }
 
@@ -3418,7 +3436,7 @@ function extractExternalDbArgumentCallsFromBody(
 
     const name = expression.getText();
     if (IGNORED_LOCAL_CALL_NAMES.has(name)) continue;
-    const key = resolvedSymbolKey(expression.getSymbol());
+    const key = localFunctionKeyForIdentifier(expression, localFunctionKeys);
     if (key && localFunctionKeys.has(key)) continue;
 
     if (!call.getArguments().some((arg) => isSourceDrizzleReceiverIdentifier(arg, receiverNames))) {
@@ -3430,6 +3448,51 @@ function extractExternalDbArgumentCallsFromBody(
   }
 
   return calls;
+}
+
+function localFunctionKeyForIdentifier(
+  identifier: Node,
+  localFunctionKeys: ReadonlySet<string>,
+): string | undefined {
+  if (!Node.isIdentifier(identifier)) return undefined;
+
+  const symbolKey = resolvedSymbolKey(identifier.getSymbol());
+  if (symbolKey && localFunctionKeys.has(symbolKey)) return symbolKey;
+
+  const symbol = identifier.getSymbol()?.getAliasedSymbol() ?? identifier.getSymbol();
+  for (const declaration of symbol?.getDeclarations() ?? []) {
+    const key = localFunctionKeyForDeclaration(declaration);
+    if (key && localFunctionKeys.has(key)) return key;
+  }
+
+  return undefined;
+}
+
+function localFunctionKeyForDeclaration(declaration: Node): string | undefined {
+  if (Node.isFunctionDeclaration(declaration)) {
+    const name = declaration.getName();
+    const nameNode = declaration.getNameNode();
+    return name && nameNode ? extractedFunctionKey(name, declaration, nameNode) : undefined;
+  }
+
+  if (Node.isIdentifier(declaration)) {
+    const parent = declaration.getParent();
+    if (Node.isFunctionDeclaration(parent)) {
+      const name = parent.getName();
+      return name ? extractedFunctionKey(name, parent, declaration) : undefined;
+    }
+    if (Node.isVariableDeclaration(parent)) {
+      const initializer = parent.getInitializer();
+      if (
+        initializer &&
+        (Node.isArrowFunction(initializer) || Node.isFunctionExpression(initializer))
+      ) {
+        return extractedFunctionKey(declaration.getText(), initializer, declaration);
+      }
+    }
+  }
+
+  return undefined;
 }
 
 function extractReceiverMutationCallsFromBody(

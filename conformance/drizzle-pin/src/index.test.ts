@@ -878,6 +878,62 @@ describe('Drizzle pinned subset conformance', () => {
     });
   });
 
+  it('pins project closure-local helper summaries by symbol instead of helper name', () => {
+    const graph = extractTouchGraphFromProject({
+      files: [
+        {
+          fileName: 'conformance/drizzle-pin/src/cart.domain.ts',
+          source: [
+            "import type { PgDatabase } from 'drizzle-orm/pg-core';",
+            '',
+            "export const cartItems = pgTable('cart_items', {}, jiso({ domain: 'cart', key: 'productId' }));",
+            "export const auditLog = pgTable('audit_log', {}, jiso({ domain: 'audit', key: 'productId' }));",
+            '',
+            'export async function addItem(db: PgDatabase<any, any, any>, productId: string) {',
+            '  async function apply(writer: PgDatabase<any, any, any>) {',
+            '    await writer.insert(cartItems).values({ productId });',
+            '  }',
+            '  await apply(db);',
+            '}',
+            '',
+            'export async function auditItem(db: PgDatabase<any, any, any>, productId: string) {',
+            '  async function apply(writer: PgDatabase<any, any, any>) {',
+            '    await writer.insert(auditLog).values({ productId });',
+            '  }',
+            '  await apply(db);',
+            '}',
+            '',
+          ].join('\n'),
+        },
+      ],
+    });
+
+    expect(graph.addItem).toEqual({
+      reads: [],
+      touches: [
+        {
+          domain: 'cart',
+          keys: null,
+          site: 'conformance/drizzle-pin/src/cart.domain.ts:8',
+          via: 'cart_items',
+        },
+      ],
+      unresolved: [],
+    });
+    expect(graph.auditItem).toEqual({
+      reads: [],
+      touches: [
+        {
+          domain: 'audit',
+          keys: null,
+          site: 'conformance/drizzle-pin/src/cart.domain.ts:15',
+          via: 'audit_log',
+        },
+      ],
+      unresolved: [],
+    });
+  });
+
   it('pins uncalled closure-local helpers as isolated summaries', () => {
     const graph = extractTouchGraphFromSource([
       {
