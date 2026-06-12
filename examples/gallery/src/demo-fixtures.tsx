@@ -25,6 +25,9 @@ import {
   numberFieldIncrementAttributes,
   numberFieldInputAttributes,
   numberFieldRootAttributes,
+  otpFieldHiddenInputAttributes,
+  otpFieldInputAttributes,
+  otpFieldRootAttributes,
   progressRootAttributes,
   radioGroupItemAttributes,
   radioGroupLabelAttributes,
@@ -60,6 +63,7 @@ export type GalleryComponent =
   | 'field'
   | 'meter'
   | 'number-field'
+  | 'otp-field'
   | 'progress'
   | 'radio-group'
   | 'select'
@@ -146,6 +150,12 @@ export const galleryRoutes: readonly GalleryRoute[] = Object.freeze([
     path: '/components/number-field',
     render: () => NumberFieldDemo(),
     title: 'Number Field',
+  },
+  {
+    component: 'otp-field',
+    path: '/components/otp-field',
+    render: () => OtpFieldDemo(),
+    title: 'OTP Field',
   },
   {
     component: 'progress',
@@ -635,6 +645,72 @@ export function NumberFieldDemo(): string {
         changeReasons: 'input, increment, decrement, programmatic',
         dataState: 'invalid, required, disabled',
         keyboard: 'Native number input keyboard plus primitive step buttons',
+      })}
+    </section>
+  );
+}
+
+export function OtpFieldDemo(): string {
+  const state = {
+    descriptionId: 'gallery-otp-description',
+    errorId: 'gallery-otp-error',
+    invalid: true,
+    labelledBy: 'gallery-otp-label',
+    length: 6,
+    name: 'gallery-otp-code',
+    pattern: '[0-9]*',
+    required: true,
+    value: '1234',
+  };
+  const completeDisabledState = {
+    disabled: true,
+    length: 4,
+    value: '9876',
+  };
+
+  return (
+    <section
+      {...otpFieldRootAttributes({ ...state, id: 'gallery-otp-field' })}
+      data-gallery-demo="otp-field"
+    >
+      <p data-demo-summary="no-js">
+        OTP field submits one aggregate native input while visible slots keep per-character editing
+        semantics.
+      </p>
+      <label id="gallery-otp-label" for="gallery-otp-code">
+        One-time code
+      </label>
+      <input {...otpFieldHiddenInputAttributes({ ...state, id: 'gallery-otp-code' })} />
+      <div aria-label="One-time code slots">
+        {Array.from({ length: state.length }, (_, slotIndex) => (
+          <input
+            {...otpFieldInputAttributes({
+              ...state,
+              id: `gallery-otp-slot-${slotIndex + 1}`,
+              label: `One-time code digit ${slotIndex + 1}`,
+              slotIndex,
+            })}
+          />
+        ))}
+      </div>
+      <p id="gallery-otp-description">Enter the six digit verification code.</p>
+      <p id="gallery-otp-error">The code is incomplete.</p>
+      <div
+        {...otpFieldRootAttributes(completeDisabledState)}
+        data-fixture-state="disabled-complete"
+      >
+        <input
+          {...otpFieldHiddenInputAttributes({
+            ...completeDisabledState,
+            id: 'gallery-otp-disabled-code',
+            name: 'gallery-disabled-otp-code',
+          })}
+        />
+      </div>
+      {renderBehaviorContract({
+        changeReasons: 'input, delete, paste, programmatic',
+        dataState: 'invalid, required, complete, disabled',
+        keyboard: 'Arrow keys, Home, and End move between visible slots',
       })}
     </section>
   );

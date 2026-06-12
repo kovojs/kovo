@@ -18,6 +18,7 @@ const expectedRoutes = [
   '/components/field',
   '/components/meter',
   '/components/number-field',
+  '/components/otp-field',
   '/components/progress',
   '/components/radio-group',
   '/components/select',
@@ -165,6 +166,36 @@ describe('gallery demo fixtures', () => {
     expect(numberField.html).toContain('data-fixture-state="disabled-boundary"');
     expect(numberField.html).toContain('data-disabled');
     expect(numberField.html).toContain('disabled type="button"');
+  });
+
+  it('renders otp-field fixture with aggregate native input and slot wiring', () => {
+    const otpField = findFixture('/components/otp-field');
+
+    expect(otpField.html).toContain('data-gallery-demo="otp-field"');
+    expect(otpField.html).toContain('id="gallery-otp-field"');
+    expect(otpField.html).toContain('role="group"');
+    expect(otpField.html).toContain('aria-labelledby="gallery-otp-label"');
+    expect(otpField.html).toContain('aria-describedby="gallery-otp-description gallery-otp-error"');
+    expect(otpField.html).toContain('aria-invalid="true"');
+    expect(otpField.html).toContain('aria-required="true"');
+    expect(otpField.html).toContain('for="gallery-otp-code"');
+    expect(otpField.html).toContain('data-slot="hidden-input"');
+    expect(otpField.html).toContain('autoComplete="one-time-code"');
+    expect(otpField.html).toContain('name="gallery-otp-code"');
+    expect(otpField.html).toContain('readOnly');
+    expect(otpField.html).toContain('tabIndex="-1"');
+    expect(otpField.html).toContain('value="1234"');
+    expect(otpField.html).toContain('data-slot="0"');
+    expect(otpField.html).toContain('id="gallery-otp-slot-1"');
+    expect(otpField.html).toContain('aria-label="One-time code digit 1"');
+    expect(otpField.html).toContain('maxLength="1"');
+    expect(otpField.html).toContain('data-filled');
+    expect(otpField.html).toContain('data-slot="5"');
+    expect(otpField.html).toContain('id="gallery-otp-slot-6"');
+    expect(otpField.html).toContain('data-fixture-state="disabled-complete"');
+    expect(otpField.html).toContain('data-complete');
+    expect(otpField.html).toContain('data-disabled');
+    expect(otpField.html).toContain('name="gallery-disabled-otp-code"');
   });
 
   it('renders toggle fixture states through headless-ui attributes', () => {

@@ -592,6 +592,13 @@ jiso-dialog` resolves dashed wire names and prints provenance including package,
       boundary output in fixture tests. Same-session evidence:
       `pnpm --filter @jiso/example-gallery test`. G1 remains open for the remaining
       unrepresented primitives and styled components.
+      Additional partial evidence 2026-06-12: `examples/gallery` adds an otp-field route
+      fixture that imports the current `@jiso/headless-ui` otp-field attribute builders,
+      renders TSX-authored aggregate native input plus visible one-character slots, and pins
+      route/nav coverage, no-JS summary, native one-time-code autocomplete, invalid/required
+      ARIA wiring, filled slot state, and disabled complete state in fixture tests.
+      Same-session evidence: `pnpm --filter @jiso/example-gallery test`. G1 remains open
+      for the remaining unrepresented primitives and styled components.
 - [ ] G2 behavior-contract gates: keyboard/ARIA assertions per primitive (browser-free via `page()` + `fw explain` where possible; framework browser suite for focus/dismiss/top-layer).
       Partial evidence 2026-06-12: `examples/gallery/src/behavior-contracts.test.ts`
       adds a browser-free G2 fixture gate over the existing 17 rendered gallery routes. It
@@ -615,6 +622,12 @@ jiso-dialog` resolves dashed wire names and prints provenance including package,
       boundary button output. Same-session evidence:
       `pnpm --filter @jiso/example-gallery test`. G2 remains open for browser-backed checks,
       `fw explain` coverage, and unrepresented routes/primitives.
+      Additional partial evidence 2026-06-12: the browser-free G2 fixture gate now covers
+      the otp-field route's exact behavior-contract rows (`input`, `delete`, `paste`,
+      `programmatic` reasons), group/description/error ARIA, aggregate hidden native input,
+      one-time-code autocomplete wiring, per-slot max-length/fill state, and disabled complete
+      output. Same-session evidence: `pnpm --filter @jiso/example-gallery test`. G2 remains
+      open for browser-backed checks, `fw explain` coverage, and unrepresented routes/primitives.
 - [ ] G3 axe checks per component state in the gallery.
 - [ ] G4 visual regression for `@jiso/ui`: shadcn-parity human review once, then self-baselined screenshots.
 - [ ] G5 merge fixtures: every primitive's attrs record × an author element → golden merged output (doubles as FW231/FW232 coverage).
