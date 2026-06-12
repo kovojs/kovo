@@ -121,6 +121,47 @@ export type {
 } from './checkbox-group.js';
 
 export {
+  comboboxInput,
+  comboboxInputAttributes,
+  comboboxKeyDown,
+  comboboxListboxAttributes,
+  comboboxOptionAttributes,
+  comboboxOptionClick,
+  comboboxOptionHighlighted,
+  comboboxOptionSelected,
+  comboboxRootAttributes,
+  comboboxTypeahead,
+  comboboxValueAttributes,
+  comboboxValueText,
+  selectComboboxOption,
+  setComboboxOpen,
+  setComboboxValue,
+} from './combobox.js';
+export type {
+  ComboboxChangeOptions,
+  ComboboxInputAttributeOptions,
+  ComboboxInputEvent,
+  ComboboxItem,
+  ComboboxKeyboardEvent,
+  ComboboxListboxAttributeOptions,
+  ComboboxOpenChangeDetail,
+  ComboboxOpenChangeReason,
+  ComboboxOpenChangeResult,
+  ComboboxOptionAttributeOptions,
+  ComboboxOptionEvent,
+  ComboboxOptionSelectResult,
+  ComboboxPrimitiveAttributes,
+  ComboboxRootAttributeOptions,
+  ComboboxState,
+  ComboboxTypeaheadOptions,
+  ComboboxTypeaheadResult,
+  ComboboxValueAttributeOptions,
+  ComboboxValueChangeDetail,
+  ComboboxValueChangeReason,
+  ComboboxValueChangeResult,
+} from './combobox.js';
+
+export {
   setSwitchChecked,
   switchRootAttributes,
   switchTriggerClick,
