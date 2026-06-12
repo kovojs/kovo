@@ -947,6 +947,44 @@ describe('credential mutation helpers', () => {
     expect(staleLogicalSource.missingSourceTables).toEqual(['auth_users']);
   });
 
+  it('rejects Better Auth modelName aliases that collide across logical tables', () => {
+    const tables = {
+      account: authTable(['userId']),
+      session: authTable(['userId'], 'auth_session_state'),
+      twoFactor: authTable(['userId'], 'auth_session_state'),
+      user: authTable(),
+      verification: authTable(),
+    };
+    const result = annotateBetterAuthSchemaSource(
+      [
+        "import { jiso } from '@jiso/drizzle';",
+        "import { pgTable } from 'drizzle-orm/pg-core';",
+        "export const authSessionState = pgTable('auth_session_state', {});",
+      ].join('\n'),
+      tables,
+    );
+    const verifierConfig = createBetterAuthDbVerificationConfig({}, tables);
+
+    // SPEC.md §10.1 / §11.2: physical table aliases feed both schema.ts
+    // annotations and P9 verification, so one physical name cannot carry two
+    // Better Auth logical tables.
+    expect(validateBetterAuthSchemaBridge(tables)).toEqual({
+      declaredTouchMismatches: [],
+      keyFieldMismatches: [
+        'Better Auth tables session, twoFactor resolve to the same physical table auth_session_state; modelName aliases must be unique for schema.ts annotations and P9 verification',
+      ],
+      missingTables: [],
+      ok: false,
+      pluginTableDegradations: [],
+      unbridgedTables: [],
+    });
+    expect(result.validation.ok).toBe(false);
+    expect(result.annotatedTables).toEqual([]);
+    expect(result.source).toContain("pgTable('auth_session_state', {})");
+    expect(verifierConfig.domainByTable).not.toHaveProperty('auth_session_state');
+    expect(verifierConfig.keyByTable).not.toHaveProperty('auth_session_state');
+  });
+
   it('materializes Jiso annotations into an app schema.ts source fixture', () => {
     const source = [
       "import { jiso } from '@jiso/drizzle';",

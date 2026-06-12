@@ -512,6 +512,51 @@ describe('Better Auth pinned conformance', () => {
     });
   });
 
+  it('rejects real Better Auth modelName aliases that collide across bridged tables', () => {
+    const { auth } = createRealAuth({
+      session: { modelName: 'auth_users' },
+      user: { modelName: 'auth_users' },
+    });
+    const tables = getAuthTables(auth.options);
+    const result = annotateBetterAuthSchemaSource(
+      betterAuthSchemaSourceFixture(['account', 'auth_users', 'verification']),
+      tables,
+    );
+    const verifierConfig = createBetterAuthDbVerificationConfig({}, tables);
+
+    expect(
+      Object.fromEntries(
+        Object.entries(tables).map(([table, metadata]) => [table, metadata.modelName]),
+      ),
+    ).toEqual({
+      account: 'account',
+      session: 'auth_users',
+      user: 'auth_users',
+      verification: 'verification',
+    });
+    // SPEC.md §10.1 / §11.2: one physical Drizzle table cannot hide two
+    // logical Better Auth tables; P9 table facts would be ambiguous even
+    // though both logical tables are otherwise bridged.
+    expect(validateBetterAuthSchemaBridge(tables)).toEqual({
+      declaredTouchMismatches: [],
+      keyFieldMismatches: [
+        'Better Auth tables session, user resolve to the same physical table auth_users; modelName aliases must be unique for schema.ts annotations and P9 verification',
+      ],
+      missingTables: [],
+      ok: false,
+      pluginTableDegradations: [],
+      unbridgedTables: [],
+    });
+    expect(result.validation.ok).toBe(false);
+    expect(result.annotatedTables).toEqual(['account', 'verification']);
+    expect(result.source).toContain("export const auth_users = pgTable('auth_users', {});");
+    expect(result.source).not.toContain(
+      "export const auth_users = pgTable('auth_users', {}, jiso({ domain: 'user', key: 'id' }));",
+    );
+    expect(verifierConfig.domainByTable).not.toHaveProperty('auth_users');
+    expect(verifierConfig.keyByTable).not.toHaveProperty('auth_users');
+  });
+
   it('pins two-factor plugin table metadata used by the schema bridge', () => {
     const { auth } = createRealAuth({
       plugins: [twoFactor()],

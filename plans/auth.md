@@ -354,6 +354,16 @@ tables)` now emits both logical and physical table facts for runtime SQL verific
       `pnpm exec vitest --run packages/better-auth/src/index.test.ts conformance/better-auth-pin/src/index.test.ts --reporter=dot`,
       `pnpm exec tsc -p conformance/better-auth-pin/tsconfig.json --noEmit`, and
       `git diff --check`.
+      Partial evidence 2026-06-12: `validateBetterAuthSchemaBridge` now rejects Better Auth
+      `modelName` collisions where two logical tables resolve to the same physical Drizzle table,
+      and `annotateBetterAuthSchemaSource` no longer annotates an ambiguous physical table when
+      such a collision is present. `createBetterAuthDbVerificationConfig` also omits the colliding
+      physical table fact instead of letting P9 runtime table facts hide one Better Auth table
+      behind another.
+      `packages/better-auth/src/index.test.ts` covers a local `session`/`twoFactor` physical
+      collision fixture, and `conformance/better-auth-pin/src/index.test.ts` pins a real
+      `better-auth@1.6.17` core `user`/`session` `modelName` collision. Same-session evidence:
+      `pnpm exec vitest --run packages/better-auth/src/index.test.ts conformance/better-auth-pin/src/index.test.ts --reporter=dot`.
       Remaining gaps: plugin-generated tables outside the blessed organization/admin/two-factor/OIDC-provider/MCP/SIWE/JWT/device-authorization
       surface are still not mapped, the OAuth-provider successor package/table metadata is not
       installed or exportable from the pinned dependency set, and full app `schema.ts` generation

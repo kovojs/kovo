@@ -493,12 +493,16 @@ export function createBetterAuthDbVerificationConfig(
   schemaBridge: BetterAuthSchemaBridgeExtensions = {},
   tables: Record<string, unknown> = {},
 ): BetterAuthDbVerificationConfig {
+  const bridge = createBetterAuthSchemaBridge(schemaBridge);
+  const collidingPhysicalTables = betterAuthCollidingPhysicalTableNames(tables, bridge);
   const domainByTable: Record<string, BetterAuthTouchDomain> = {};
   const exemptTables: string[] = [];
   const keyByTable: Record<string, string> = {};
 
-  for (const [table, annotation] of Object.entries(createBetterAuthSchemaBridge(schemaBridge))) {
-    const physicalTables = betterAuthPhysicalTableNames(table, tables);
+  for (const [table, annotation] of Object.entries(bridge)) {
+    const physicalTables = betterAuthPhysicalTableNames(table, tables).filter(
+      (physicalTable) => !collidingPhysicalTables.has(physicalTable),
+    );
 
     if ('domain' in annotation) {
       for (const physicalTable of physicalTables) {
@@ -1064,7 +1068,7 @@ function schemaBridgeKeyFieldMismatches(
   tables: Record<string, unknown>,
   schemaBridge: BetterAuthSchemaBridgeExtensions = betterAuthSchemaBridge,
 ): string[] {
-  const mismatches: string[] = [];
+  const mismatches = betterAuthPhysicalTableNameCollisionMismatches(tables, schemaBridge);
 
   for (const [table, annotation] of Object.entries(schemaBridge)) {
     if (!('domain' in annotation) || annotation.key === undefined) continue;
@@ -1080,6 +1084,37 @@ function schemaBridgeKeyFieldMismatches(
   }
 
   return mismatches.sort();
+}
+
+function betterAuthPhysicalTableNameCollisionMismatches(
+  tables: Record<string, unknown>,
+  schemaBridge: BetterAuthSchemaBridgeExtensions = betterAuthSchemaBridge,
+): string[] {
+  const physicalTables = betterAuthPhysicalTableNameGroups(tables, schemaBridge);
+  const mismatches: string[] = [];
+
+  for (const [physicalTable, logicalTables] of physicalTables) {
+    if (logicalTables.length < 2) continue;
+
+    mismatches.push(
+      `Better Auth tables ${logicalTables.join(
+        ', ',
+      )} resolve to the same physical table ${physicalTable}; modelName aliases must be unique for schema.ts annotations and P9 verification`,
+    );
+  }
+
+  return mismatches;
+}
+
+function betterAuthCollidingPhysicalTableNames(
+  tables: Record<string, unknown>,
+  schemaBridge: BetterAuthSchemaBridgeExtensions = betterAuthSchemaBridge,
+): Set<string> {
+  return new Set(
+    [...betterAuthPhysicalTableNameGroups(tables, schemaBridge)]
+      .filter(([, logicalTables]) => logicalTables.length > 1)
+      .map(([physicalTable]) => physicalTable),
+  );
 }
 
 function betterAuthTableFieldNames(table: unknown): Set<string> | null {
@@ -1191,14 +1226,33 @@ function betterAuthMetadataTableByPhysicalName(
   schemaBridge: BetterAuthSchemaBridgeExtensions = betterAuthSchemaBridge,
 ): Map<string, string> {
   const tableByPhysicalName = new Map<string, string>();
+  const physicalTableGroups = betterAuthPhysicalTableNameGroups(tables, schemaBridge);
+
+  for (const [physicalTable, logicalTables] of physicalTableGroups) {
+    if (logicalTables.length !== 1) continue;
+
+    tableByPhysicalName.set(physicalTable, logicalTables[0] ?? physicalTable);
+  }
+
+  return tableByPhysicalName;
+}
+
+function betterAuthPhysicalTableNameGroups(
+  tables: Record<string, unknown>,
+  schemaBridge: BetterAuthSchemaBridgeExtensions = betterAuthSchemaBridge,
+): Map<string, string[]> {
+  const physicalTables = new Map<string, string[]>();
 
   for (const table of Object.keys(tables)) {
     if (!isBetterAuthSchemaTable(table, schemaBridge)) continue;
 
-    tableByPhysicalName.set(betterAuthPhysicalTableName(table, tables[table]), table);
+    const physicalTable = betterAuthPhysicalTableName(table, tables[table]);
+    const logicalTables = physicalTables.get(physicalTable) ?? [];
+    logicalTables.push(table);
+    physicalTables.set(physicalTable, logicalTables.sort());
   }
 
-  return tableByPhysicalName;
+  return physicalTables;
 }
 
 interface DrizzleTableCall {
