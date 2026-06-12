@@ -1290,6 +1290,12 @@ As each phase splits a source module, split its tests in the same commit.
       the server monolith while preserving public exports through `index.ts`. Same-session
       evidence:
       `pnpm exec vitest --run packages/server/src/replay.test.ts packages/server/src/index.test.ts`
+      Additional evidence 2026-06-12: route meta and i18n page-hint coverage moved from
+      `packages/server/src/index.test.ts` into `packages/server/src/meta.test.ts`, including
+      query-derived meta happy paths, declaration failure branches, and i18n catalog rendering.
+      Same-session evidence:
+      `pnpm exec vitest --run packages/server/src/meta.test.ts packages/server/src/index.test.ts -t "route meta|query-derived meta|i18n|document-load hydration"` and
+      `pnpm exec vp check packages/server/src/index.test.ts packages/server/src/meta.test.ts plans/codebase-quality-round2.md`.
       and `pnpm exec vitest --run packages/server/src/*.test.ts`.
 - [ ] runtime/index.test.ts (4,435 lines, mutation tests under "query store") → per-module
       files; `Fake*` classes to a shared `test-fixtures.ts`; direct unit tests for wire-parser,
