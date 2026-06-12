@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 export type { DiagnosticCode } from '@jiso/core';
-import { readFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
@@ -63,6 +63,7 @@ const outputVersion = 'fw-check/v1';
 const explainOutputVersion = 'fw-explain/v1';
 const auditOutputVersion = 'fw-audit/v1';
 const compileOutputVersion = 'compile/v1';
+const addOutputVersion = 'fw-add/v1';
 const mcpOutputVersion = 'fw-mcp/v1';
 
 export function main(args: readonly string[] = process.argv.slice(2)): number {
@@ -80,6 +81,12 @@ export function main(args: readonly string[] = process.argv.slice(2)): number {
     if (!parsed.ok) return writeCheckUsageError(parsed);
     const { family, inputPath } = parsed;
     return writeCommandResult(runGraphCommand(inputPath, (input) => fwCheck(input, { family })));
+  }
+
+  if (args[0] === 'add') {
+    const parsed = parseAddArgs(args.slice(1));
+    if (!parsed.ok) return writeUsageError(parsed.message);
+    return writeCommandResult(runAddCommand(parsed.options));
   }
 
   if (args[0] === 'audit') {
@@ -101,7 +108,7 @@ export function main(args: readonly string[] = process.argv.slice(2)): number {
   }
 
   process.stderr.write(
-    `fw: unknown command ${stableValue(args[0])}. expected explain, check, audit, export, or mcp.\n`,
+    `fw: unknown command ${stableValue(args[0])}. expected add, explain, check, audit, export, or mcp.\n`,
   );
   return 1;
 }
@@ -655,6 +662,167 @@ interface FwExportOptions {
 }
 
 type ExportArgParseResult = { ok: true; options: FwExportOptions } | { message: string; ok: false };
+
+interface AddComponentOptions {
+  components: readonly AddComponentName[];
+  outDir: string;
+}
+
+type AddComponentName = keyof typeof vendoredUiComponents;
+
+type AddArgParseResult =
+  | { ok: true; options: AddComponentOptions }
+  | { message: string; ok: false };
+
+const vendoredUiComponents = {
+  button: {
+    fileName: 'button.tsx',
+    source: [
+      "import { component } from '@jiso/core';",
+      '',
+      'export interface ButtonProps {',
+      '  children?: string;',
+      "  type?: 'button' | 'submit' | 'reset';",
+      '  disabled?: boolean;',
+      '}',
+      '',
+      "export const Button = component('button', {",
+      '  render(props: ButtonProps) {',
+      '    const type = props.type ?? "button";',
+      '    return (',
+      '      <button',
+      '        class="inline-flex h-9 items-center justify-center rounded-md border border-neutral-300 bg-white px-3 text-sm font-medium text-neutral-950 shadow-sm transition-colors hover:bg-neutral-50 disabled:pointer-events-none disabled:opacity-50"',
+      '        disabled={props.disabled}',
+      '        type={type}',
+      '      >',
+      '        {props.children}',
+      '      </button>',
+      '    );',
+      '  },',
+      '});',
+      '',
+    ].join('\n'),
+  },
+  card: {
+    fileName: 'card.tsx',
+    source: [
+      "import { component } from '@jiso/core';",
+      '',
+      'export interface CardProps {',
+      '  children?: string;',
+      '}',
+      '',
+      "export const Card = component('card', {",
+      '  render(props: CardProps) {',
+      '    return (',
+      '      <section class="rounded-lg border border-neutral-200 bg-white p-4 shadow-sm">',
+      '        {props.children}',
+      '      </section>',
+      '    );',
+      '  },',
+      '});',
+      '',
+    ].join('\n'),
+  },
+} as const;
+
+function parseAddArgs(args: readonly string[]): AddArgParseResult {
+  let outDir = 'src/components/ui';
+  const components: AddComponentName[] = [];
+
+  for (let index = 0; index < args.length; index += 1) {
+    const arg = args[index];
+    if (!arg) continue;
+
+    if (arg === '--help' || arg === '-h') {
+      return { message: addUsage(), ok: false };
+    }
+
+    if (arg === '--out') {
+      const value = args[index + 1];
+      if (!value) return { message: 'fw: add --out requires a directory.\n', ok: false };
+      outDir = value;
+      index += 1;
+      continue;
+    }
+
+    if (arg.startsWith('--out=')) {
+      outDir = arg.slice('--out='.length);
+      if (!outDir) return { message: 'fw: add --out requires a directory.\n', ok: false };
+      continue;
+    }
+
+    if (arg.startsWith('-')) {
+      return {
+        message: `fw: unknown add option ${stableValue(arg)}.\n${addUsage()}`,
+        ok: false,
+      };
+    }
+
+    if (!isAddComponentName(arg)) {
+      return {
+        message: `fw: unknown component ${stableValue(arg)}. available: ${availableAddComponents()}.`,
+        ok: false,
+      };
+    }
+
+    if (!components.includes(arg)) components.push(arg);
+  }
+
+  if (components.length === 0) {
+    return { message: `fw: add requires at least one component.\n${addUsage()}`, ok: false };
+  }
+
+  return { ok: true, options: { components, outDir } };
+}
+
+function addUsage(): string {
+  return [
+    `usage: fw add <component...> [--out <dir>]`,
+    `available: ${availableAddComponents()}`,
+    '',
+  ].join('\n');
+}
+
+function isAddComponentName(value: string): value is AddComponentName {
+  return Object.hasOwn(vendoredUiComponents, value);
+}
+
+function availableAddComponents(): string {
+  return Object.keys(vendoredUiComponents).sort().join(', ');
+}
+
+function runAddCommand(options: AddComponentOptions): CliCommandResult {
+  const lines = [addOutputVersion];
+  mkdirSync(options.outDir, { recursive: true });
+
+  for (const component of options.components) {
+    const entry = vendoredUiComponents[component];
+    const target = resolve(options.outDir, entry.fileName);
+
+    // SPEC.md §5.2 requires vendored UI to land as TSX app source, not lowered IR.
+    if (existsSync(target)) {
+      const current = readFileSync(target, 'utf8');
+      if (current === entry.source) {
+        lines.push(`SKIP ${component} path=${JSON.stringify(target)} reason=already-current`);
+        continue;
+      }
+
+      return {
+        error: `${addOutputVersion}\nERROR ${component} path=${JSON.stringify(target)} reason=would-overwrite`,
+        exitCode: 1,
+      };
+    }
+
+    writeFileSync(target, entry.source, 'utf8');
+    lines.push(`ADD ${component} path=${JSON.stringify(target)} source=tsx`);
+  }
+
+  lines.push(
+    `SUMMARY total=${options.components.length} outDir=${JSON.stringify(resolve(options.outDir))}`,
+  );
+  return { exitCode: 0, output: `${lines.join('\n')}\n` };
+}
 
 function parseExportArgs(args: readonly string[]): ExportArgParseResult {
   let appModulePath: string | undefined;

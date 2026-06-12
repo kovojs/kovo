@@ -43,6 +43,108 @@ class MemoryMcpTransport implements Transport {
   }
 }
 
+describe('fw add', () => {
+  it('vendors button and card as TSX app source', () => {
+    const root = mkdtempSync(join(tmpdir(), 'fw-add-cli-'));
+    const outDir = join(root, 'src/components/ui');
+    const stdout = vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
+    const stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+
+    try {
+      expect(main(['add', 'button', 'card', '--out', outDir])).toBe(0);
+
+      expect(stderr).not.toHaveBeenCalled();
+      const output = stdout.mock.calls.map(([chunk]) => String(chunk)).join('');
+      expect(output).toContain('fw-add/v1\n');
+      expect(output).toContain(
+        `ADD button path=${JSON.stringify(join(outDir, 'button.tsx'))} source=tsx`,
+      );
+      expect(output).toContain(
+        `ADD card path=${JSON.stringify(join(outDir, 'card.tsx'))} source=tsx`,
+      );
+
+      const button = readFileSync(join(outDir, 'button.tsx'), 'utf8');
+      const card = readFileSync(join(outDir, 'card.tsx'), 'utf8');
+      expect(button).toContain("import { component } from '@jiso/core';");
+      expect(button).toContain("export const Button = component('button'");
+      expect(button).toContain('<button');
+      expect(card).toContain("export const Card = component('card'");
+      expect(card).toContain('<section');
+      expect(`${button}\n${card}`).not.toContain('fw-c=');
+      expect(`${button}\n${card}`).not.toContain('data-bind=');
+    } finally {
+      stdout.mockRestore();
+      stderr.mockRestore();
+      rmSync(root, { force: true, recursive: true });
+    }
+  });
+
+  it('is idempotent when the vendored component is already current', () => {
+    const root = mkdtempSync(join(tmpdir(), 'fw-add-cli-'));
+    const outDir = join(root, 'ui');
+    const stdout = vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
+    const stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+
+    try {
+      expect(main(['add', 'button', '--out', outDir])).toBe(0);
+      stdout.mockClear();
+
+      expect(main(['add', 'button', '--out', outDir])).toBe(0);
+
+      expect(stderr).not.toHaveBeenCalled();
+      expect(stdout.mock.calls.map(([chunk]) => String(chunk)).join('')).toContain(
+        `SKIP button path=${JSON.stringify(join(outDir, 'button.tsx'))} reason=already-current`,
+      );
+    } finally {
+      stdout.mockRestore();
+      stderr.mockRestore();
+      rmSync(root, { force: true, recursive: true });
+    }
+  });
+
+  it('refuses unknown components with stable output', () => {
+    const stdout = vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
+    const stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+
+    try {
+      expect(main(['add', 'dialog'])).toBe(1);
+
+      expect(stdout).not.toHaveBeenCalled();
+      expect(stderr.mock.calls.map(([chunk]) => String(chunk)).join('')).toBe(
+        'fw: unknown component "dialog". available: button, card.\n',
+      );
+    } finally {
+      stdout.mockRestore();
+      stderr.mockRestore();
+    }
+  });
+
+  it('refuses to overwrite app-owned component files', () => {
+    const root = mkdtempSync(join(tmpdir(), 'fw-add-cli-'));
+    const outDir = join(root, 'ui');
+    mkdirSync(outDir, { recursive: true });
+    writeFileSync(join(outDir, 'button.tsx'), 'export const Button = "local";\n', 'utf8');
+    const stdout = vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
+    const stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+
+    try {
+      expect(main(['add', 'button', '--out', outDir])).toBe(1);
+
+      expect(stdout).not.toHaveBeenCalled();
+      expect(stderr.mock.calls.map(([chunk]) => String(chunk)).join('')).toBe(
+        `fw-add/v1\nERROR button path=${JSON.stringify(join(outDir, 'button.tsx'))} reason=would-overwrite\n`,
+      );
+      expect(readFileSync(join(outDir, 'button.tsx'), 'utf8')).toBe(
+        'export const Button = "local";\n',
+      );
+    } finally {
+      stdout.mockRestore();
+      stderr.mockRestore();
+      rmSync(root, { force: true, recursive: true });
+    }
+  });
+});
+
 async function waitForMcpMessage(
   transport: MemoryMcpTransport,
   predicate: (message: JSONRPCMessage) => boolean,
