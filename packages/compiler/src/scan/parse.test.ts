@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
   arrowFunctionParts,
+  componentRenderHostElement,
   documentElementActionFromZeroArgArrow,
   functionBodyPropertyAccessPaths,
   jsxElementChildBody,
@@ -54,6 +55,21 @@ export const ChildSlot = component('child-slot', {
     expect(soleWrappedPropertyAccessPath('expression.tsx', ' { cart.count } ')).toBe('cart.count');
     expect(soleWrappedPropertyAccessPath('expression.tsx', 'cart.count')).toBeNull();
     expect(soleWrappedPropertyAccessPath('expression.tsx', '{cart.count + 1}')).toBeNull();
+  });
+
+  it('returns the parsed component render host element', () => {
+    const source = `
+export const Recommendations = component('recommendations', {
+  queries: { cart: cartQuery },
+  render: () => <section fw-deps="product:p1 cart">Recommended</section>,
+});
+`;
+    const host = componentRenderHostElement(parseComponentModule('recommendations.tsx', source));
+
+    expect(host?.tag).toBe('section');
+    expect(host?.attributes.find((attribute) => attribute.name === 'fw-deps')?.value).toBe(
+      'product:p1 cart',
+    );
   });
 
   it('extracts outer property access paths from function body source', () => {

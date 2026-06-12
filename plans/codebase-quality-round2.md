@@ -607,6 +607,14 @@ pipeline throws the tree away and communicates via mutated source text.
       `pnpm exec vitest --run packages/compiler/src/index.test.ts packages/compiler/src/navigation-lowering.test.ts -t "navigation|Link|href"`,
       `pnpm exec vp check packages/compiler/src/compile.ts packages/compiler/src/lower/navigation.ts plans/codebase-quality-round2.md`,
       and `rg -n "parseComponentModule as parseComponentModuleModel|parseComponentModule\\(" packages/compiler/src/lower packages/compiler/src/compile.ts`.
+      Additional evidence 2026-06-12: `scan/parse.ts` now exposes the parsed
+      `componentRenderHostElement`; `emit/server.ts` uses that model to read existing `fw-deps`
+      when merging declared query deps instead of regex-reading the rendered opening tag. The
+      server emitter still uses a narrow replacement to update an existing attribute, but the
+      dependency facts now come from the caller-owned JSX model. Same-session evidence:
+      `pnpm exec vitest --run packages/compiler/src/scan/parse.test.ts packages/compiler/src/index.test.ts -t "render host|fw-deps|query dependencies|parsed component render host"`,
+      `pnpm exec vp check --fix packages/compiler/src/scan/parse.ts packages/compiler/src/scan/parse.test.ts packages/compiler/src/emit/server.ts`,
+      and `git diff --check`.
 - [x] **HIGH — Retire regex rewriting of handler bodies.** emit/client.ts:89
       (`/\bstate\b/g → ctx.state` corrupts `log('state changed')`), :96 (member-expression
       substitution inside string literals), lower/handlers.ts:262 (harvests params from string

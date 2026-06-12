@@ -5,9 +5,11 @@ import { parseLiteralObject } from '../scan/object.js';
 import {
   componentOptionObjectKeys,
   componentRenderHost,
+  componentRenderHostElement,
   componentStateReturnObject,
   firstComponentModel,
   type ComponentModuleModel,
+  type JsxElementModel,
 } from '../scan/parse.js';
 import {
   applySourceReplacements,
@@ -105,7 +107,11 @@ function applyServerRenderPatches(
   if (host) {
     const tagSource = source.slice(host.start, host.end);
     const tagWithHandlers = replaceTagHandlerAttributes(tagSource, host.start, hostHandlers);
-    const stampedTag = stampRenderHostTag(tagWithHandlers, model);
+    const stampedTag = stampRenderHostTag(
+      tagWithHandlers,
+      model,
+      componentRenderHostElement(model),
+    );
     if (stampedTag !== tagSource) {
       patches.push({ end: host.end, replacement: stampedTag, start: host.start });
     }
@@ -139,9 +145,13 @@ function handlerAttributeReplacement(handler: HandlerLowering): string {
     .join(' ');
 }
 
-function stampRenderHostTag(tagSource: string, model: ComponentModuleModel): string {
+function stampRenderHostTag(
+  tagSource: string,
+  model: ComponentModuleModel,
+  hostElement: JsxElementModel | null,
+): string {
   return stampInitialState(
-    stampDeclaredQueryDeps(stampComponentIdentity(tagSource, model), model),
+    stampDeclaredQueryDeps(stampComponentIdentity(tagSource, model), model, hostElement),
     model,
   );
 }
@@ -161,11 +171,15 @@ function stampComponentIdentity(tagSource: string, model: ComponentModuleModel):
   return stampOpeningTagAttribute(tagSource, 'fw-c', componentName);
 }
 
-function stampDeclaredQueryDeps(tagSource: string, model: ComponentModuleModel): string {
+function stampDeclaredQueryDeps(
+  tagSource: string,
+  model: ComponentModuleModel,
+  hostElement: JsxElementModel | null,
+): string {
   const deps = componentOptionObjectKeys(model, 'queries');
   if (deps.length === 0) return tagSource;
 
-  return stampOpeningTagDeps(tagSource, deps);
+  return stampOpeningTagDeps(tagSource, hostElement, deps);
 }
 
 function stampInitialState(tagSource: string, model: ComponentModuleModel): string {
@@ -173,8 +187,15 @@ function stampInitialState(tagSource: string, model: ComponentModuleModel): stri
   return stateJson ? stampOpeningTagAttribute(tagSource, 'fw-state', stateJson) : tagSource;
 }
 
-function stampOpeningTagDeps(tagSource: string, deps: readonly string[]): string {
-  const depValue = mergeDepValues(readFwDepsAttribute(tagSource), deps).join(' ');
+function stampOpeningTagDeps(
+  tagSource: string,
+  hostElement: JsxElementModel | null,
+  deps: readonly string[],
+): string {
+  const existingDeps = splitDepValue(
+    hostElement?.attributes.find((attribute) => attribute.name === 'fw-deps')?.value ?? '',
+  );
+  const depValue = mergeDepValues(existingDeps, deps).join(' ');
   const existing = /\bfw-deps=(["'])(?<deps>[^"']*)\1/.exec(tagSource);
   if (existing?.groups) {
     return `${tagSource.slice(0, existing.index)}fw-deps=${existing[1]}${depValue}${existing[1]}${tagSource.slice(existing.index + existing[0].length)}`;
@@ -189,11 +210,6 @@ function stampOpeningTagAttribute(tagSource: string, name: string, value: string
       ? ` ${name}="${escapeAttribute(value)}" />`
       : ` ${name}="${escapeAttribute(value)}">`,
   );
-}
-
-function readFwDepsAttribute(tagSource: string): string[] {
-  const match = /\bfw-deps=(["'])(?<deps>[^"']*)\1/.exec(tagSource);
-  return splitDepValue(match?.groups?.deps ?? '');
 }
 
 function mergeDepValues(existing: readonly string[], declared: readonly string[]): string[] {

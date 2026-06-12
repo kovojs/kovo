@@ -257,6 +257,17 @@ export function componentRenderHost(model: ComponentModuleModel): RenderHostMode
   return firstComponentModel(model)?.renderHost ?? null;
 }
 
+export function componentRenderHostElement(model: ComponentModuleModel): JsxElementModel | null {
+  const host = componentRenderHost(model);
+  if (!host) return null;
+
+  return (
+    model.jsxElements.find(
+      (element) => element.start === host.start && element.openingEnd === host.end,
+    ) ?? null
+  );
+}
+
 export function componentStateReturnObject(model: ComponentModuleModel): string | null {
   return componentStateReturnObjectModel(model)?.source ?? null;
 }
