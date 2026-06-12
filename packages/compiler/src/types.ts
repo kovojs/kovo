@@ -37,10 +37,16 @@ export interface QueryStampFact {
 
 export interface QueryTemplateStampFact {
   itemBindings: readonly string[];
+  itemBindingPlaceholders?: readonly QueryTemplateStampBindingPlaceholder[];
   key: string;
   list: string;
   selector: string;
   template: string;
+}
+
+export interface QueryTemplateStampBindingPlaceholder {
+  path: string;
+  value: string;
 }
 
 export interface QueryUpdateCoverageFact {

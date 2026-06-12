@@ -445,6 +445,14 @@ pipeline throws the tree away and communicates via mutated source text.
       `pnpm exec vitest --run packages/compiler/src/index.test.ts -t "element param types|element params|handler captures|quoted commas|string literal"`,
       `pnpm exec vitest --run packages/compiler/src/index.test.ts`, and
       `pnpm exec vp check packages/compiler/src/lower/handlers.ts packages/compiler/src/index.test.ts`.
+      Additional evidence 2026-06-11: template-stamp client emission no longer regex-parses
+      rendered template HTML to find `data-bind` placeholder text. `collectQueryUpdatePlans`
+      records item-binding placeholder text from JSX element spans in `QueryTemplateStampFact`,
+      and `emit/client.ts` consumes that model fact directly. `packages/compiler/src/index.test.ts`
+      covers a bound element whose text contains another `data-bind` host-looking string. Same-session
+      evidence: `pnpm exec vitest --run packages/compiler/src/index.test.ts -t "template stamp|data-bind update plans"`,
+      `pnpm exec vitest --run packages/compiler/src/index.test.ts`, and
+      `pnpm exec vp check packages/compiler/src/analyze/query-updates.ts packages/compiler/src/emit/client.ts packages/compiler/src/index.test.ts packages/compiler/src/types.ts`.
 - [ ] **HIGH — Kill the derive mega-regex.** validate/bindings.ts:215-216 silently drops any
       `derive()` export whose expression contains `;` in a string or unusual formatting — its
       stamps vanish from `collectQueryUpdatePlans` with no diagnostic. scan/parse.ts already

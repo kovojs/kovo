@@ -2363,6 +2363,10 @@ export const CartBadge = component('cart-badge', {
         query: 'cart',
         templateStamps: [
           {
+            itemBindingPlaceholders: [
+              { path: '.name', value: 'Item' },
+              { path: '.qty', value: '0' },
+            ],
             itemBindings: ['.name', '.qty'],
             key: 'productId',
             list: 'cart.items',
@@ -2744,6 +2748,35 @@ export const CartBadge = component('cart-badge', {
         start: { column: 22, line: 10 },
       },
     ]);
+  });
+
+  it('uses JSX element spans for template stamp placeholders instead of HTML regexes', () => {
+    const result = compileComponentModule({
+      fileName: 'cart-badge.tsx',
+      source: `
+export const CartBadge = component('cart-badge', {
+  render: () => (
+    <ul data-bind-list="cart.items" fw-key="productId">
+      <template fw-stamp>
+        <li>
+          <span data-bind=".qty">{'<span data-bind=".qty">wrong</span>'}</span>
+          <span data-bind=".name">Item</span>
+        </li>
+      </template>
+    </ul>
+  ),
+});
+`,
+    });
+    const clientSource = result.files[1]?.source ?? '';
+
+    expect(result.queryUpdatePlans[0]?.templateStamps?.[0]?.itemBindingPlaceholders).toEqual([
+      { path: '.name', value: 'Item' },
+      { path: '.qty', value: `{'<span data-bind=".qty">wrong</span>'}` },
+    ]);
+    expect(clientSource).toContain(
+      `html = html.replace("{'<span data-bind=\\".qty\\">wrong</span>'}", String(read("qty") ?? ""));`,
+    );
   });
 
   it('classifies query-dependent render positions as isomorphic when declared', () => {

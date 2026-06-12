@@ -14,6 +14,7 @@ import type {
   QueryDeriveFact,
   QueryShape,
   QueryShapeFact,
+  QueryTemplateStampBindingPlaceholder,
   QueryStampFact,
   QueryTemplateStampFact,
   QueryUpdateCoverageFact,
@@ -385,21 +386,12 @@ function dataBindListStamps(source: string, model: ComponentModuleModel): QueryT
       if (!list || !key) return [];
 
       const template = templateStampContent(source, elements, element);
+      const itemBindingPlaceholders = templateItemBindingPlaceholders(source, elements, element);
 
       return [
         {
-          itemBindings: elements
-            .filter((candidate) => isWithinElement(candidate, element))
-            .flatMap((candidate) => candidate.attributes)
-            .filter(
-              (attribute) =>
-                isBindingAttribute(attribute.name) &&
-                attribute.value !== undefined &&
-                attribute.value !== '',
-            )
-            .map((attribute) => attribute.value ?? '')
-            .filter((path) => path.startsWith('.'))
-            .sort(),
+          itemBindingPlaceholders,
+          itemBindings: itemBindingPlaceholders.map((placeholder) => placeholder.path),
           key,
           list,
           selector: `[data-bind-list="${list}"]`,
@@ -408,6 +400,32 @@ function dataBindListStamps(source: string, model: ComponentModuleModel): QueryT
       ];
     })
     .filter((stamp) => stamp.itemBindings.length > 0);
+}
+
+function templateItemBindingPlaceholders(
+  source: string,
+  elements: readonly JsxElementModel[],
+  container: JsxElementModel,
+): QueryTemplateStampBindingPlaceholder[] {
+  return elements
+    .filter((candidate) => isWithinElement(candidate, container))
+    .flatMap((candidate) =>
+      candidate.attributes
+        .filter(
+          (attribute) =>
+            isBindingAttribute(attribute.name) &&
+            attribute.value !== undefined &&
+            attribute.value !== '' &&
+            attribute.value.startsWith('.'),
+        )
+        .map((attribute) => ({
+          path: attribute.value ?? '',
+          value: candidate.selfClosing
+            ? ''
+            : source.slice(candidate.openingEnd, candidate.closingStart).trim(),
+        })),
+    )
+    .sort((left, right) => left.path.localeCompare(right.path));
 }
 
 function templateStampContent(

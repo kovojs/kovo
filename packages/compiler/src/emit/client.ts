@@ -216,6 +216,11 @@ function emitStampPlan(stamp: QueryStampFact): string {
 }
 
 function emitTemplateStampPlan(stamp: QueryTemplateStampFact): string {
+  const placeholders = new Map(
+    stamp.itemBindingPlaceholders?.map((placeholder) => [placeholder.path, placeholder.value]) ??
+      [],
+  );
+
   return `{ key: ${JSON.stringify(stamp.key)}, list: ${JSON.stringify(
     stamp.list.split('.').slice(1).join('.'),
   )}, selector: ${JSON.stringify(stamp.selector)}, render(item) {
@@ -228,20 +233,9 @@ function emitTemplateStampPlan(stamp: QueryTemplateStampFact): string {
 ${stamp.itemBindings
   .map(
     (binding) =>
-      `      html = html.replace(${JSON.stringify(bindingValuePlaceholder(stamp.template, binding))}, String(read(${JSON.stringify(binding.slice(1))}) ?? ""));`,
+      `      html = html.replace(${JSON.stringify(placeholders.get(binding) ?? '')}, String(read(${JSON.stringify(binding.slice(1))}) ?? ""));`,
   )
   .join('\n')}
       return html;
     } }`;
-}
-
-function bindingValuePlaceholder(template: string, binding: string): string {
-  const match = new RegExp(
-    `(<[^>]+\\bdata-bind=(["'])${escapeRegExp(binding)}\\2[^>]*>)(?<value>[\\s\\S]*?)(</[^>]+>)`,
-  ).exec(template);
-  return match?.groups?.value ?? '';
-}
-
-function escapeRegExp(value: string): string {
-  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
