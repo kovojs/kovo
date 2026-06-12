@@ -44,23 +44,37 @@ class FakeMorphTarget {
 }
 
 class FakeQueryBindingElement {
+  attributes: { name: string; value: string }[];
   textContent: string | null;
 
-  constructor(
-    private readonly attrs: Record<string, string>,
-    textContent = '',
-  ) {
+  constructor(attrs: Record<string, string>, textContent = '') {
+    this.attributes = Object.entries(attrs).map(([name, value]) => ({ name, value }));
     this.textContent = textContent;
   }
 
   getAttribute(name: string): string | null {
-    return this.attrs[name] ?? null;
+    return this.attributes.find((attribute) => attribute.name === name)?.value ?? null;
+  }
+
+  removeAttribute(name: string): void {
+    this.attributes = this.attributes.filter((attribute) => attribute.name !== name);
+  }
+
+  setAttribute(name: string, value: string): void {
+    const existing = this.attributes.find((attribute) => attribute.name === name);
+    if (existing) {
+      existing.value = value;
+      return;
+    }
+
+    this.attributes.push({ name, value });
   }
 }
 
 class FakeMorphRoot {
   bindings: FakeQueryBindingElement[] = [];
   targets = new Map<string, FakeMorphTarget>();
+  wildcardSelectorCalls = 0;
 
   findFragmentTarget(target: string): FakeMorphTarget | null {
     return this.targets.get(target) ?? null;
@@ -69,6 +83,10 @@ class FakeMorphRoot {
   querySelectorAll(selector: string): FakeQueryBindingElement[] {
     if (selector === '[data-bind]') {
       return this.bindings.filter((element) => element.getAttribute('data-bind'));
+    }
+    if (selector === '*') {
+      this.wildcardSelectorCalls += 1;
+      return this.bindings;
     }
     if (selector.startsWith('[data-derive="')) {
       const value = selector.slice('[data-derive="'.length, -2);
@@ -189,6 +207,36 @@ describe('mutation response wire chunks', () => {
     expect(domStore.get('cart', 'cart:c1')).toEqual(storeOnly.get('cart', 'cart:c1'));
     expect(domApplied.queries).toEqual(storeOnlyApplied.queries);
     expect(domApplied.fragments).toEqual(storeOnlyApplied.fragments);
+  });
+
+  it('reuses one attribute binding scan across multi-query DOM apply', () => {
+    const store = createQueryStore();
+    const root = new FakeMorphRoot();
+    const cartLabel = new FakeQueryBindingElement({
+      'aria-label': 'old cart',
+      'data-bind:aria-label': 'cart.label',
+    });
+    const productLabel = new FakeQueryBindingElement({
+      'aria-label': 'old product',
+      'data-bind:aria-label': 'product.label',
+    });
+    root.bindings.push(cartLabel, productLabel);
+
+    // SPEC.md §9.1 mutation bodies may carry multiple query chunks before any
+    // fragment morphing; those chunks should share one §4.8 binding index.
+    const applied = applyMutationResponseToDom({
+      body: [
+        '<fw-query name="cart">{"label":"Cart ready"}</fw-query>',
+        '<fw-query name="product">{"label":"Product ready"}</fw-query>',
+      ].join('\n'),
+      root,
+      store,
+    });
+
+    expect(applied.queries).toEqual(['cart', 'product']);
+    expect(root.wildcardSelectorCalls).toBe(1);
+    expect(cartLabel.getAttribute('aria-label')).toBe('Cart ready');
+    expect(productLabel.getAttribute('aria-label')).toBe('Product ready');
   });
 
   it('routes runtime store-only apply through the shared mutation response helper', () => {

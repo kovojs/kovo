@@ -2309,6 +2309,18 @@ params, relational API, `execute(sql)`, right/full joins, a string column named 
       `corepack pnpm exec vitest --config vitest.browser.config.ts --run packages/runtime/src/index.browser.test.ts`,
       and
       `corepack pnpm exec vp check packages/runtime/src/dom-like.ts packages/runtime/src/dom-like.test.ts packages/runtime/src/events.ts packages/runtime/src/handlers.ts packages/runtime/src/query-bindings.ts packages/runtime/src/query-store.ts packages/runtime/src/pending.ts packages/runtime/src/mutation-targets.ts packages/runtime/src/loader-lifecycle.ts packages/runtime/src/query-refetch.ts packages/runtime/src/index.ts`.
+      Additional bounded evidence 2026-06-12: `packages/runtime/src/query-bindings.ts`
+      now exposes a per-apply `QueryBindingIndex` for `data-bind:*` candidate elements, and
+      `packages/runtime/src/apply-path.ts` creates that index lazily once per DOM mutation/deferred
+      response body so multiple query chunks share one attribute-binding scan before fragment
+      morphing. `packages/runtime/src/query-bindings.test.ts` pins explicit index reuse across
+      compiled plans, and `packages/runtime/src/mutation-response.test.ts` pins shared apply-path
+      reuse for a two-query mutation body under SPEC.md §9.1/§4.8. Same-session evidence:
+      `pnpm exec vitest --run packages/runtime/src/query-bindings.test.ts packages/runtime/src/mutation-response.test.ts`,
+      `pnpm exec vitest --run packages/runtime/src`,
+      `pnpm exec vitest --config vitest.browser.config.ts --run packages/runtime/src/index.browser.test.ts`,
+      `pnpm exec vp check packages/runtime/src/apply-path.ts packages/runtime/src/query-bindings.ts packages/runtime/src/query-bindings.test.ts packages/runtime/src/mutation-response.test.ts plans/codebase-quality-round2.md`,
+      and `git diff --check`.
 
 Verification: runtime node + browser suites; gzip budget; the new parity suite is the gate for
 any future inline-loader edit. Partial evidence 2026-06-12: `packages/runtime/src/index.ts` now

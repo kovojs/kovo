@@ -2,8 +2,17 @@ import type { QueryStore } from './query-store.js';
 import { definedProps } from './defined-props.js';
 import { applyFragments } from './morph.js';
 import type { MorphFragment, MorphRoot } from './morph.js';
-import { applyCompiledQueryUpdatePlan, supportsQueryBindings } from './query-bindings.js';
-import type { CompiledQueryUpdatePlans } from './query-bindings.js';
+import {
+  applyCompiledQueryUpdatePlan,
+  createQueryBindingIndex,
+  supportsQueryBindings,
+} from './query-bindings.js';
+import type {
+  CompiledQueryUpdatePlan,
+  CompiledQueryUpdatePlans,
+  QueryBindingIndex,
+  QueryBindingRoot,
+} from './query-bindings.js';
 import { deferredStreamChunks, readFragmentChunks, readQueryChunks } from './wire-parser.js';
 import type { FragmentChunk, QueryChunk } from './wire-parser.js';
 import type { IslandSignalScope } from './handlers.js';
@@ -108,6 +117,12 @@ export function applyMutationResponseToRuntime(
 export function applyMutationResponseToDom(
   options: ApplyMutationResponseToDomOptions,
 ): AppliedMutationResponseToDom {
+  let bindingIndex: QueryBindingIndex | undefined;
+  const readBindingIndex = (root: QueryBindingRoot) => {
+    bindingIndex ??= createQueryBindingIndex(root);
+    return bindingIndex;
+  };
+
   const applied = applyFragmentQueryBody(
     options.body,
     (query) => {
@@ -117,6 +132,7 @@ export function applyMutationResponseToDom(
         query.name,
         planValue,
         options.queryPlans?.[query.name],
+        readBindingIndex,
       );
     },
     options.onError,
@@ -186,9 +202,12 @@ function applyCompiledQueryUpdatePlanIfSupported(
   root: MorphRoot,
   queryName: string,
   value: unknown,
-  plan = {},
+  plan: CompiledQueryUpdatePlan = {},
+  readBindingIndex?: (root: QueryBindingRoot) => QueryBindingIndex,
 ): void {
   if (!supportsQueryBindings(root)) return;
 
-  applyCompiledQueryUpdatePlan(root, queryName, value, plan);
+  const options =
+    plan.bindings === false || !readBindingIndex ? {} : { bindingIndex: readBindingIndex(root) };
+  applyCompiledQueryUpdatePlan(root, queryName, value, plan, options);
 }

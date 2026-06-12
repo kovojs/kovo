@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import {
   applyCompiledQueryUpdatePlan,
   applyQueryBindings,
+  createQueryBindingIndex,
   supportsQueryBindings,
   type QueryBindingElement,
 } from './query-bindings.js';
@@ -10,10 +11,14 @@ import {
 class FakeQueryRoot {
   bindings: FakeQueryBindingElement[] = [];
   elements: FakeQueryPlanElement[] = [];
+  wildcardSelectorCalls = 0;
 
   querySelectorAll(selector: string): Iterable<QueryBindingElement> {
     if (selector === '[data-bind]') return this.bindings;
-    if (selector === '*') return [...this.bindings, ...this.elements];
+    if (selector === '*') {
+      this.wildcardSelectorCalls += 1;
+      return [...this.bindings, ...this.elements];
+    }
     return this.elements.filter((element) => element.matches(selector));
   }
 }
@@ -109,6 +114,51 @@ describe('query binding helpers', () => {
 
     applyQueryBindings(root, 'cart', { count: 4, label: 'Cart ready', total: 1999 });
     expect(label.getAttribute('aria-label')).toBe('Cart ready');
+  });
+
+  it('reuses indexed attribute binding candidates across compiled query plans', () => {
+    const root = new FakeQueryRoot();
+    const cartLabel = new FakeQueryPlanElement({
+      'aria-label': 'old cart',
+      'data-bind:aria-label': 'cart.label',
+    });
+    const productLabel = new FakeQueryPlanElement({
+      'aria-label': 'old product',
+      'data-bind:aria-label': 'product.label',
+    });
+    root.elements.push(cartLabel, productLabel);
+
+    const bindingIndex = createQueryBindingIndex(root);
+
+    // SPEC.md §4.8: compiled query plans update every matching data-bind slot.
+    // The response apply path reuses this index for all query chunks in one body
+    // instead of full-document '*' scanning once per query chunk.
+    expect(
+      applyCompiledQueryUpdatePlan(root, 'cart', { label: 'Cart ready' }, {}, { bindingIndex }),
+    ).toEqual({
+      bindings: ['cart.label'],
+      derives: [],
+      stamps: [],
+      templateStamps: [],
+    });
+    expect(
+      applyCompiledQueryUpdatePlan(
+        root,
+        'product',
+        { label: 'Product ready' },
+        {},
+        { bindingIndex },
+      ),
+    ).toEqual({
+      bindings: ['product.label'],
+      derives: [],
+      stamps: [],
+      templateStamps: [],
+    });
+
+    expect(root.wildcardSelectorCalls).toBe(1);
+    expect(cartLabel.getAttribute('aria-label')).toBe('Cart ready');
+    expect(productLabel.getAttribute('aria-label')).toBe('Product ready');
   });
 
   it('runs compiled plans after bindings and reconciles template stamps', () => {

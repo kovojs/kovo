@@ -56,10 +56,27 @@ export type CompiledQueryUpdatePlans = Readonly<
   Record<string, CompiledQueryUpdatePlan | undefined>
 >;
 
+export interface QueryBindingIndex {
+  attributeBindingElements: readonly QueryBindingElement[];
+}
+
+export interface ApplyQueryBindingsOptions {
+  bindingIndex?: QueryBindingIndex;
+}
+
+export interface ApplyCompiledQueryUpdatePlanOptions extends ApplyQueryBindingsOptions {}
+
+export function createQueryBindingIndex(root: QueryBindingRoot): QueryBindingIndex {
+  return {
+    attributeBindingElements: queryAttributeBindingElements(root),
+  };
+}
+
 export function applyQueryBindings(
   root: QueryBindingRoot,
   queryName: string,
   value: unknown,
+  options: ApplyQueryBindingsOptions = {},
 ): string[] {
   const applied: string[] = [];
 
@@ -78,7 +95,8 @@ export function applyQueryBindings(
     applied.push(path);
   }
 
-  for (const element of queryAllElements(root)) {
+  for (const element of options.bindingIndex?.attributeBindingElements ??
+    queryAttributeBindingElements(root)) {
     for (const attribute of bindingAttributes(element)) {
       const boundAttribute = attribute.name.slice('data-bind:'.length);
       const path = attribute.value;
@@ -102,9 +120,12 @@ export function applyCompiledQueryUpdatePlan(
   queryName: string,
   value: unknown,
   plan: CompiledQueryUpdatePlan = {},
+  options: ApplyCompiledQueryUpdatePlanOptions = {},
 ): AppliedCompiledQueryUpdatePlan {
+  const bindingOptions = options.bindingIndex ? { bindingIndex: options.bindingIndex } : {};
   const applied: AppliedCompiledQueryUpdatePlan = {
-    bindings: plan.bindings === false ? [] : applyQueryBindings(root, queryName, value),
+    bindings:
+      plan.bindings === false ? [] : applyQueryBindings(root, queryName, value, bindingOptions),
     derives: [],
     stamps: [],
     templateStamps: [],
@@ -185,9 +206,11 @@ function valueAtPath(value: unknown, path: string): unknown {
   }, value);
 }
 
-function queryAllElements(root: QueryBindingRoot): QueryBindingElement[] {
+function queryAttributeBindingElements(root: QueryBindingRoot): QueryBindingElement[] {
   try {
-    return Array.from(root.querySelectorAll('*'));
+    return Array.from(root.querySelectorAll('*')).filter(
+      (element) => bindingAttributes(element).length > 0,
+    );
   } catch {
     return [];
   }
