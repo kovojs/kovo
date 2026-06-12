@@ -82,6 +82,10 @@ Audited against the repository on 2026-06-11. Checkmarks mean the behavior, API,
       checklist while all five outside participant rows remain pending, and
       `docs/prelaunch-checklist.md` has dated audit/local checklist rows while
       trademark, `jiso.dev`, `@jiso`, and linguistic evidence remain pending.
+      Evidence 2026-06-12: local round9 integration acceptance passed at
+      `f55b1a3` via `pnpm run acceptance` (check, test, browser, build, perf,
+      conformance, and fw-check). This is not the final freeze run because the
+      outside legibility study and external prelaunch evidence remain pending.
 - [x] §16 commerce reference app is TSX-authored: `CartBadge`, `OrderHistory`, and `ProductGrid` (cards, no-JS add-to-cart forms, failure output) live in per-component `examples/commerce/src/components/*.tsx` (SPEC §5.2 1:1 mapping); `examples/commerce/scripts/emit-components.mjs` compiles them through `@jiso/compiler` and commits the lowered IR to `src/generated/*.tsx` behind the §5.2.3 fixpoint and render-equivalence gates (Constitution #3), so served stamps (`fw-c`, `fw-deps`, `data-bind`) are compiler-derived (§4.2/§4.8) and zero string-template components remain. Enablers: server-side JSX runtime at `@jiso/server/jsx-runtime` (§3/§4.2) and compiler-derived `fw-c` identity stamps on native render hosts (§4.2). Evidence 2026-06-11: `npx vitest --run examples/commerce` (25/25 — includes the "compiles TSX-authored components to committed IR through the fixpoint gate" test running `emit-components.mjs --check`, and the graph-facts test proving `generated/touch-graph.ts` stayed byte-identical); `pnpm run check`; `pnpm run check:build`; `pnpm run check:fw`; `pnpm run test:conformance`.
       Open questions from this slice (SPEC silent/ambiguous — not coded through):
       (1) SPEC §4 does not define JSX text-child escaping. `@jiso/server/jsx-runtime`
