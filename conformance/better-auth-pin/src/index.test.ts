@@ -7,6 +7,7 @@ import {
 } from '@jiso/server';
 import { betterAuth, getAuthTables } from 'better-auth';
 import { memoryAdapter } from 'better-auth/adapters/memory';
+import { admin, organization } from 'better-auth/plugins';
 import { describe, expect, expectTypeOf, it } from 'vitest';
 
 import {
@@ -22,13 +23,14 @@ import {
   role,
   validateBetterAuthSchemaBridge,
   type BetterAuthLike,
+  type BetterAuthCoreTable,
   type BetterAuthSignInEmailLike,
   type BetterAuthSignOutLike,
   type BetterAuthSignUpEmailLike,
   type BetterAuthTable,
 } from '../../../packages/better-auth/src/index.js';
 
-type AuthDatabase = Record<BetterAuthTable, Record<string, unknown>[]>;
+type AuthDatabase = Record<BetterAuthCoreTable, Record<string, unknown>[]>;
 
 interface AppSession {
   email: string;
@@ -135,6 +137,112 @@ describe('Better Auth pinned conformance', () => {
     expect(betterAuthSchemaBridge.verification).toEqual({
       exempt: true,
       rationale: 'Better Auth email/token verification bookkeeping is not an app read surface.',
+    });
+  });
+
+  it('pins blessed plugin table metadata used by the schema bridge', () => {
+    const { auth } = createRealAuth({
+      plugins: [
+        admin(),
+        organization({
+          dynamicAccessControl: { enabled: true },
+          teams: { enabled: true },
+        }),
+      ],
+    });
+    const tables = getAuthTables(auth.options);
+
+    expect(Object.keys(tables).sort()).toEqual([
+      'account',
+      'invitation',
+      'member',
+      'organization',
+      'organizationRole',
+      'session',
+      'team',
+      'teamMember',
+      'user',
+      'verification',
+    ]);
+    expect(Object.keys(requireAuthTable(tables, 'user').fields).sort()).toEqual([
+      'banExpires',
+      'banReason',
+      'banned',
+      'createdAt',
+      'email',
+      'emailVerified',
+      'image',
+      'name',
+      'role',
+      'updatedAt',
+    ]);
+    expect(Object.keys(requireAuthTable(tables, 'session').fields).sort()).toEqual([
+      'activeOrganizationId',
+      'activeTeamId',
+      'createdAt',
+      'expiresAt',
+      'impersonatedBy',
+      'ipAddress',
+      'token',
+      'updatedAt',
+      'userAgent',
+      'userId',
+    ]);
+    expect(Object.keys(requireAuthTable(tables, 'organization').fields).sort()).toEqual([
+      'createdAt',
+      'logo',
+      'metadata',
+      'name',
+      'slug',
+    ]);
+    expect(Object.keys(requireAuthTable(tables, 'member').fields).sort()).toEqual([
+      'createdAt',
+      'organizationId',
+      'role',
+      'userId',
+    ]);
+    expect(Object.keys(requireAuthTable(tables, 'invitation').fields).sort()).toEqual([
+      'createdAt',
+      'email',
+      'expiresAt',
+      'inviterId',
+      'organizationId',
+      'role',
+      'status',
+      'teamId',
+    ]);
+    expect(Object.keys(requireAuthTable(tables, 'team').fields).sort()).toEqual([
+      'createdAt',
+      'name',
+      'organizationId',
+      'updatedAt',
+    ]);
+    expect(Object.keys(requireAuthTable(tables, 'teamMember').fields).sort()).toEqual([
+      'createdAt',
+      'teamId',
+      'userId',
+    ]);
+    expect(Object.keys(requireAuthTable(tables, 'organizationRole').fields).sort()).toEqual([
+      'createdAt',
+      'organizationId',
+      'permission',
+      'role',
+      'updatedAt',
+    ]);
+    expect(validateBetterAuthSchemaBridge(tables)).toEqual({
+      declaredTouchMismatches: [],
+      missingTables: [],
+      ok: true,
+      unbridgedTables: [],
+    });
+    expect(betterAuthSchemaBridge.organization).toEqual({ domain: 'organization', key: 'id' });
+    expect(betterAuthSchemaBridge.member).toEqual({
+      domain: 'organization',
+      key: 'organizationId',
+    });
+    expect(betterAuthSchemaBridge.teamMember).toEqual({
+      domain: 'organization',
+      key: 'teamId',
     });
   });
 
@@ -474,7 +582,7 @@ describe('Better Auth pinned conformance', () => {
   });
 });
 
-function createRealAuth() {
+function createRealAuth(options: { plugins?: Parameters<typeof betterAuth>[0]['plugins'] } = {}) {
   const db: AuthDatabase = {
     account: [],
     session: [],
@@ -490,6 +598,7 @@ function createRealAuth() {
     emailAndPassword: {
       enabled: true,
     },
+    ...(options.plugins === undefined ? {} : { plugins: options.plugins }),
     secret: authSecret,
   });
 
@@ -541,7 +650,7 @@ async function expectObservedTables(
   ).toEqual(betterAuthCredentialMutationTouches[api].map((domain) => domain.key).sort());
 }
 
-function snapshotTables(db: AuthDatabase): Record<BetterAuthTable, string> {
+function snapshotTables(db: AuthDatabase): Record<BetterAuthCoreTable, string> {
   return {
     account: stableRows(db.account),
     session: stableRows(db.session),
@@ -551,10 +660,10 @@ function snapshotTables(db: AuthDatabase): Record<BetterAuthTable, string> {
 }
 
 function changedTables(
-  before: Record<BetterAuthTable, string>,
-  after: Record<BetterAuthTable, string>,
-): BetterAuthTable[] {
-  return (Object.keys(before) as BetterAuthTable[]).filter(
+  before: Record<BetterAuthCoreTable, string>,
+  after: Record<BetterAuthCoreTable, string>,
+): BetterAuthCoreTable[] {
+  return (Object.keys(before) as BetterAuthCoreTable[]).filter(
     (table) => before[table] !== after[table],
   );
 }

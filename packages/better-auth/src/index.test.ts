@@ -13,6 +13,7 @@ import {
   authed,
   betterAuthCredentialMutationDeclaredTableTouches,
   betterAuthCredentialMutationTouches,
+  betterAuthOrganizationDomain,
   betterAuthSchemaBridge,
   betterAuthSignInEmailMutation,
   betterAuthSignOutMutation,
@@ -314,19 +315,46 @@ describe('credential mutation helpers', () => {
   it('exposes schema bridge annotations and keeps declared touches domain-aligned', () => {
     expect(betterAuthSchemaBridge).toEqual({
       account: { domain: 'auth', key: 'userId' },
+      invitation: { domain: 'organization', key: 'organizationId' },
+      member: { domain: 'organization', key: 'organizationId' },
+      organization: { domain: 'organization', key: 'id' },
+      organizationRole: { domain: 'organization', key: 'organizationId' },
       session: { domain: 'auth', key: 'userId' },
+      team: { domain: 'organization', key: 'organizationId' },
+      teamMember: { domain: 'organization', key: 'teamId' },
       user: { domain: 'user', key: 'id' },
       verification: {
         exempt: true,
         rationale: 'Better Auth email/token verification bookkeeping is not an app read surface.',
       },
     });
+    expect(betterAuthOrganizationDomain.key).toBe('organization');
     expect(betterAuthTableDomain('user')).toBe('user');
+    expect(betterAuthTableDomain('organization')).toBe('organization');
     expect(betterAuthTableDomain('verification')).toBe(null);
     expect(
       validateBetterAuthSchemaBridge({
         account: {},
         session: {},
+        user: {},
+        verification: {},
+      }),
+    ).toEqual({
+      declaredTouchMismatches: [],
+      missingTables: [],
+      ok: true,
+      unbridgedTables: [],
+    });
+    expect(
+      validateBetterAuthSchemaBridge({
+        account: {},
+        invitation: {},
+        member: {},
+        organization: {},
+        organizationRole: {},
+        session: {},
+        team: {},
+        teamMember: {},
         user: {},
         verification: {},
       }),

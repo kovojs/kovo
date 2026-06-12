@@ -172,9 +172,17 @@ export const betterAuthCredentialMutationErrors = {
 
 export type BetterAuthCredentialMutationApi = 'signInEmail' | 'signOut' | 'signUpEmail';
 
-export type BetterAuthTable = 'account' | 'session' | 'user' | 'verification';
+export type BetterAuthCoreTable = 'account' | 'session' | 'user' | 'verification';
+export type BetterAuthOrganizationTable =
+  | 'invitation'
+  | 'member'
+  | 'organization'
+  | 'organizationRole'
+  | 'team'
+  | 'teamMember';
+export type BetterAuthTable = BetterAuthCoreTable | BetterAuthOrganizationTable;
 
-export type BetterAuthTouchDomain = 'auth' | 'user';
+export type BetterAuthTouchDomain = 'auth' | 'organization' | 'user';
 
 export interface BetterAuthDeclaredTableTouch {
   domain: BetterAuthTouchDomain;
@@ -195,25 +203,39 @@ export type BetterAuthSchemaBridge = Record<BetterAuthTable, BetterAuthSchemaBri
 
 export interface BetterAuthSchemaBridgeValidation {
   declaredTouchMismatches: string[];
-  missingTables: BetterAuthTable[];
+  missingTables: BetterAuthCoreTable[];
   ok: boolean;
   unbridgedTables: string[];
 }
 
 export const betterAuthAuthDomain = domain('auth');
+export const betterAuthOrganizationDomain = domain('organization');
 export const betterAuthUserDomain = domain('user');
 
 // plans/auth.md B1: app-owned schema.ts tables stay visible to the touch graph.
 // User rows are intentionally not exempt; app queries commonly render names/avatars.
 export const betterAuthSchemaBridge = {
   account: { domain: 'auth', key: 'userId' },
+  invitation: { domain: 'organization', key: 'organizationId' },
+  member: { domain: 'organization', key: 'organizationId' },
+  organization: { domain: 'organization', key: 'id' },
+  organizationRole: { domain: 'organization', key: 'organizationId' },
   session: { domain: 'auth', key: 'userId' },
+  team: { domain: 'organization', key: 'organizationId' },
+  teamMember: { domain: 'organization', key: 'teamId' },
   user: { domain: 'user', key: 'id' },
   verification: {
     exempt: true,
     rationale: 'Better Auth email/token verification bookkeeping is not an app read surface.',
   },
 } as const satisfies BetterAuthSchemaBridge;
+
+const betterAuthRequiredCoreTables = [
+  'account',
+  'session',
+  'user',
+  'verification',
+] as const satisfies readonly BetterAuthCoreTable[];
 
 export function betterAuthTableDomain(table: BetterAuthTable): BetterAuthTouchDomain | null {
   const bridge = betterAuthSchemaBridge[table];
@@ -249,7 +271,7 @@ export function validateBetterAuthSchemaBridge(
   const bridgeTables = Object.keys(betterAuthSchemaBridge) as BetterAuthTable[];
   const tableNames = new Set(Object.keys(tables));
   const bridgeTableNames = new Set<string>(bridgeTables);
-  const missingTables = bridgeTables.filter((table) => !tableNames.has(table));
+  const missingTables = betterAuthRequiredCoreTables.filter((table) => !tableNames.has(table));
   const unbridgedTables = [...tableNames].filter((table) => !bridgeTableNames.has(table)).sort();
   const declaredTouchMismatches = declaredTableTouchMismatches();
 
