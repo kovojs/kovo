@@ -27,7 +27,6 @@ import {
 } from './wire-html.js';
 import {
   appendResponseHeader,
-  cloneResponseHeaders,
   isHeaderSource,
   readHeader,
   type HeaderSource,
@@ -37,6 +36,12 @@ import {
   type RouteResponseBody,
   type ServerResponseBase,
 } from './response.js';
+import {
+  mutationReplayContext,
+  readMutationReplay,
+  withMutationReplay,
+  type MutationReplayStore,
+} from './replay.js';
 
 export { Link, href, redirect } from '@jiso/core';
 export type {
@@ -128,6 +133,8 @@ export type {
   RouteResponseBody,
   ServerResponseBase,
 } from './response.js';
+export { createMemoryMutationReplayStore } from './replay.js';
+export type { MutationReplayReservation, MutationReplayStore } from './replay.js';
 export { findRouteAmbiguities, matchRoute, normalizePathname } from './match.js';
 export type { PathnameNormalization, RouteAmbiguity, RouteLike, RouteMatch } from './match.js';
 export { matchShellDispatch, shellDispatchTable } from './shell.js';
@@ -1101,7 +1108,7 @@ export interface MutationWireRequest<
   fragmentRenderers?: readonly FragmentRenderer[];
   idem?: string;
   renderFailureFragment?: (failure: MutationFail, rawInput: unknown) => string | Promise<string>;
-  replayStore?: MutationReplayStore;
+  replayStore?: MutationReplayStore<MutationWireResponse>;
   rawInput: unknown;
   request: Request;
   targets?: readonly string[];
@@ -1126,7 +1133,7 @@ export interface MutationWireRequestOptions<
   headers: MutationWireHeaderSource;
   rawInput: unknown;
   renderFailureFragment?: (failure: MutationFail, rawInput: unknown) => string | Promise<string>;
-  replayStore?: MutationReplayStore;
+  replayStore?: MutationReplayStore<MutationWireResponse>;
   request: Request;
 }
 
@@ -1135,102 +1142,6 @@ export interface MutationWireResponse extends ServerResponseBase<
   MutationResponseHeaders,
   200 | 422 | 429 | 500
 > {}
-
-export interface MutationReplayStore {
-  get(
-    scope: string,
-    idem: string,
-  ): MutationWireResponse | Promise<MutationWireResponse> | undefined;
-  reserve(scope: string, idem: string): MutationReplayReservation | undefined;
-  set(scope: string, idem: string, response: MutationWireResponse): void;
-}
-
-export interface MutationReplayReservation {
-  commit(response: MutationWireResponse): void;
-}
-
-export function createMemoryMutationReplayStore(
-  options: { maxEntries?: number; ttlMs?: number } = {},
-): MutationReplayStore {
-  const maxEntries = options.maxEntries ?? 1_000;
-  const ttlMs = options.ttlMs ?? 5 * 60_000;
-  const responses = new Map<string, MutationReplayRecord>();
-
-  return {
-    get(scope, idem) {
-      const key = mutationReplayKey(scope, idem);
-      const record = responses.get(key);
-      if (!record) return undefined;
-      if (record.expiresAt <= Date.now()) {
-        responses.delete(key);
-        return undefined;
-      }
-
-      if ('pending' in record) {
-        return record.pending.then(cloneMutationWireResponse);
-      }
-
-      return cloneMutationWireResponse(record.response);
-    },
-    reserve(scope, idem) {
-      evictExpiredMutationReplays(responses);
-      const key = mutationReplayKey(scope, idem);
-      if (responses.has(key)) return undefined;
-
-      while (responses.size >= maxEntries) {
-        const oldest = responses.keys().next().value;
-        if (oldest === undefined) break;
-        responses.delete(oldest);
-      }
-
-      let resolvePending: (response: MutationWireResponse) => void = () => undefined;
-      const pending = new Promise<MutationWireResponse>((resolve) => {
-        resolvePending = resolve;
-      });
-      responses.set(key, {
-        expiresAt: Date.now() + ttlMs,
-        pending,
-        resolve: resolvePending,
-      });
-
-      return {
-        commit(response) {
-          const cloned = cloneMutationWireResponse(response);
-          responses.set(key, {
-            expiresAt: Date.now() + ttlMs,
-            response: cloned,
-          });
-          resolvePending(cloned);
-        },
-      };
-    },
-    set(scope, idem, response) {
-      evictExpiredMutationReplays(responses);
-      const key = mutationReplayKey(scope, idem);
-      const existing = responses.get(key);
-      while (!existing && responses.size >= maxEntries) {
-        const oldest = responses.keys().next().value;
-        if (oldest === undefined) break;
-        responses.delete(oldest);
-      }
-
-      const cloned = cloneMutationWireResponse(response);
-      responses.set(key, {
-        expiresAt: Date.now() + ttlMs,
-        response: cloned,
-      });
-      if (existing && 'pending' in existing) existing.resolve(cloned);
-    },
-  };
-}
-
-type MutationReplayRecord =
-  | { expiresAt: number; response: MutationWireResponse }
-  | {
-      expiresAt: number;
-      pending: Promise<MutationWireResponse>;
-      resolve(response: MutationWireResponse): void;
-    };
 
 export function readMutationWireHeaders(headers: MutationWireHeaderSource): MutationWireHeaders {
   const fragment = readHeader(headers, 'FW-Fragment')?.toLowerCase() === 'true';
@@ -3049,118 +2960,6 @@ function renderDefaultFailurePage(failure: MutationFail): string {
   }
 
   return `<!doctype html><html><body><output role="alert" data-error-code="${escapeAttribute(failure.error.code)}">${escapeHtml(JSON.stringify(failure.error.payload))}</output></body></html>`;
-}
-
-interface MutationReplayContext {
-  idem?: string;
-  replayStore?: MutationReplayStore;
-  scope: string | null;
-}
-
-function mutationReplayContext<Request>(
-  csrf: CsrfValidationOptions<Request> | false,
-  wireRequest: MutationWireRequest<Request>,
-): MutationReplayContext {
-  return {
-    ...(wireRequest.idem === undefined ? {} : { idem: wireRequest.idem }),
-    ...(wireRequest.replayStore === undefined ? {} : { replayStore: wireRequest.replayStore }),
-    scope: mutationReplayScope(csrf, wireRequest),
-  };
-}
-
-async function readMutationReplay(
-  replay: MutationReplayContext,
-): Promise<MutationWireResponse | undefined> {
-  if (!replay.idem || !replay.scope) return undefined;
-  return replay.replayStore?.get(replay.scope, replay.idem);
-}
-
-async function withMutationReplay(
-  replay: MutationReplayContext,
-  render: () => Promise<MutationWireResponse>,
-): Promise<MutationWireResponse> {
-  const reservation = reserveMutationReplay(replay);
-  const response = await render();
-  commitMutationReplay(replay, response, reservation);
-  return response;
-}
-
-function commitMutationReplay(
-  replay: MutationReplayContext,
-  response: MutationWireResponse,
-  reservation?: MutationReplayReservation,
-): void {
-  if (reservation) {
-    reservation.commit(response);
-  } else {
-    if (!replay.idem || !replay.scope) return;
-    replay.replayStore?.set(replay.scope, replay.idem, response);
-  }
-}
-
-function reserveMutationReplay(
-  replay: MutationReplayContext,
-): MutationReplayReservation | undefined {
-  if (!replay.idem || !replay.scope) return undefined;
-
-  return replay.replayStore?.reserve(replay.scope, replay.idem);
-}
-
-function mutationReplayScope<Request>(
-  csrf: CsrfValidationOptions<Request> | false,
-  wireRequest: MutationWireRequest<Request>,
-): string | null {
-  const csrfSessionId = csrf === false ? undefined : csrf.sessionId(wireRequest.request);
-  if (csrfSessionId) return csrfSessionId;
-
-  const request = wireRequest.request;
-  if (
-    typeof request === 'object' &&
-    request !== null &&
-    'sessionId' in request &&
-    typeof request.sessionId === 'string' &&
-    request.sessionId !== ''
-  ) {
-    return request.sessionId;
-  }
-
-  if (
-    typeof request === 'object' &&
-    request !== null &&
-    'session' in request &&
-    typeof request.session === 'object' &&
-    request.session !== null &&
-    'id' in request.session &&
-    typeof request.session.id === 'string' &&
-    request.session.id !== ''
-  ) {
-    return request.session.id;
-  }
-
-  return null;
-}
-
-function mutationReplayKey(scope: string, idem: string): string {
-  return `${scope}\0${idem}`;
-}
-
-function evictExpiredMutationReplays(responses: Map<string, MutationReplayRecord>): void {
-  const now = Date.now();
-  for (const [key, record] of responses) {
-    if (record.expiresAt <= now) responses.delete(key);
-  }
-}
-
-function cloneMutationWireResponse(response: MutationWireResponse): MutationWireResponse {
-  return {
-    body: response.body,
-    headers: cloneMutationResponseHeaders(response.headers),
-    status: response.status,
-  };
-}
-
-function cloneMutationResponseHeaders(headers: MutationResponseHeaders): MutationResponseHeaders {
-  return cloneResponseHeaders(headers);
 }
 
 function mutationWireResponseHeaders<Request>(
