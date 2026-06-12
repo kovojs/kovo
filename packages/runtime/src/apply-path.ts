@@ -58,6 +58,30 @@ export type AppliedMutationResponseToDom = AppliedMutationResponse & {
   appliedFragments: string[];
 };
 
+export type AppliedMutationResponseToRuntime =
+  | AppliedMutationResponse
+  | AppliedMutationResponseToDom;
+
+export type ApplyMutationResponseToRuntimeOptions = Omit<
+  ApplyMutationResponseToDomOptions,
+  'root'
+> & {
+  root?: MorphRoot;
+};
+
+export function applyMutationResponseToRuntime(
+  options: ApplyMutationResponseToRuntimeOptions,
+): AppliedMutationResponseToRuntime {
+  if (!options.root) {
+    return applyMutationResponseToStore(options.store, options.body);
+  }
+
+  return applyMutationResponseToDom({
+    ...options,
+    root: options.root,
+  });
+}
+
 export function applyMutationResponseToDom(
   options: ApplyMutationResponseToDomOptions,
 ): AppliedMutationResponseToDom {

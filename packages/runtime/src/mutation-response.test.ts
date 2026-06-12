@@ -7,6 +7,7 @@ import {
   applyMutationResponseToDom,
   createQueryStore,
 } from './index.js';
+import { applyMutationResponseToRuntime } from './apply-path.js';
 import {
   isMutationBroadcastMessage,
   readMutationChangeHeader,
@@ -140,6 +141,47 @@ describe('mutation response wire chunks', () => {
     expect(domStore.get('cart', 'cart:c1')).toEqual(storeOnly.get('cart', 'cart:c1'));
     expect(domApplied.queries).toEqual(storeOnlyApplied.queries);
     expect(domApplied.fragments).toEqual(storeOnlyApplied.fragments);
+  });
+
+  it('routes runtime store-only apply through the shared mutation response helper', () => {
+    const store = createQueryStore();
+    const plan = vi.fn();
+
+    store.subscribe('cart', plan);
+    const applied = applyMutationResponseToRuntime({
+      body: '<fw-query name="cart">{"count":6}</fw-query>',
+      store,
+    });
+
+    expect(applied).toEqual({ fragments: [], queries: ['cart'] });
+    expect(store.get('cart')).toEqual({ count: 6 });
+    expect(plan).toHaveBeenCalledWith({ count: 6 });
+  });
+
+  it('routes runtime DOM apply through the shared mutation response helper', () => {
+    const store = createQueryStore();
+    const root = new FakeMorphRoot();
+    const count = new FakeQueryBindingElement({ 'data-bind': 'cart.count' }, '0');
+    root.bindings.push(count);
+    root.targets.set('cart-badge', new FakeMorphTarget());
+
+    const applied = applyMutationResponseToRuntime({
+      body: [
+        '<fw-query name="cart">{"count":7}</fw-query>',
+        '<fw-fragment target="cart-badge"><cart-badge>7</cart-badge></fw-fragment>',
+      ].join('\n'),
+      root,
+      store,
+    });
+
+    expect(applied).toEqual({
+      appliedFragments: ['cart-badge'],
+      fragments: [{ html: '<cart-badge>7</cart-badge>', target: 'cart-badge' }],
+      queries: ['cart'],
+    });
+    expect(store.get('cart')).toEqual({ count: 7 });
+    expect(count.textContent).toBe('7');
+    expect(root.targets.get('cart-badge')?.html).toBe('<cart-badge>7</cart-badge>');
   });
 
   it('skips malformed mutation query chunks and continues applying valid chunks', () => {

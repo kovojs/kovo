@@ -6,6 +6,7 @@ import type { QueryScriptLike, QueryStore } from './query-store.js';
 import {
   applyDeferredChunkToDom,
   applyMutationResponseToDom,
+  applyMutationResponseToRuntime,
   applyMutationResponseToStore,
 } from './apply-path.js';
 import type {
@@ -1176,16 +1177,15 @@ export function installMutationBroadcast(options: {
       return sanitized ? [sanitized] : [];
     });
 
-    if (options.root) {
-      applyMutationResponseToDom({
-        body: event.data.body,
-        ...definedProps({ morph: options.morph, queryPlans: options.queryPlans }),
+    applyMutationResponseToRuntime({
+      body: event.data.body,
+      ...definedProps({
+        morph: options.morph,
+        queryPlans: options.queryPlans,
         root: options.root,
-        store: options.store,
-      });
-    } else {
-      applyMutationResponse(options.store, event.data.body);
-    }
+      }),
+      store: options.store,
+    });
     if (changes.length > 0) {
       options.onChanges?.(changes);
     }

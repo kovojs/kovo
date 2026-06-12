@@ -1268,6 +1268,15 @@ params, relational API, `execute(sql)`, right/full joins, a string column named 
       `pnpm exec vitest --run packages/runtime/src/index.test.ts -t "optimistic|mutation query chunks|enhanced mutations|deferred|apply"`,
       `pnpm exec vp check packages/runtime/src/apply-path.ts packages/runtime/src/mutation-response.test.ts plans/codebase-quality-round2.md`,
       and `git diff --check`.
+      Additional bounded evidence 2026-06-12: `packages/runtime/src/apply-path.ts` now owns
+      the root-vs-store runtime mutation response application helper used by
+      `installMutationBroadcast`, so same-user tab sync no longer keeps a local DOM/store apply
+      branch in `packages/runtime/src/index.ts`. `packages/runtime/src/mutation-response.test.ts`
+      pins both store-only and DOM-backed helper paths. Same-session evidence:
+      `pnpm exec vitest --run packages/runtime/src/mutation-response.test.ts`,
+      `pnpm exec vitest --run packages/runtime/src/index.test.ts -t "BroadcastChannel|rebroadcast|syncs mutation responses"`,
+      `pnpm exec vp check packages/runtime/src/apply-path.ts packages/runtime/src/index.ts packages/runtime/src/mutation-response.test.ts plans/codebase-quality-round2.md`,
+      and `git diff --check`.
 - [x] **MED — Fix ambient-scope argument override in handlers.ts.**
       `abortRemovedIslandSignals(currentHtml, nextHtml, scope)` ignores its explicit `scope`
       whenever the module-level `activeIslandSignalScope` is set
