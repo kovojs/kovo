@@ -218,7 +218,15 @@ Scope: SPEC additions (session population, guard-failure contract, mutation resp
       `better-auth@1.6.17` table/field metadata, clean schema-bridge validation, and generated
       `schema.ts` annotations. Same-session evidence:
       `pnpm exec vitest --run conformance/better-auth-pin/src/index.test.ts --reporter=dot`.
-      Remaining gaps: plugin-generated tables outside the blessed organization/admin/two-factor/OIDC-provider/SIWE/JWT/device-authorization
+      Partial evidence 2026-06-12: real Better Auth `mcp()` metadata is now pinned as using
+      the already bridged OAuth table family (`oauthApplication`, `oauthAccessToken`, and
+      `oauthConsent`) with `userId` auth-domain ownership. This keeps SPEC §10.1 MCP
+      authorization state inside the existing B1 schema bridge rather than degrading as an
+      unsupported plugin table. `conformance/better-auth-pin/src/index.test.ts` verifies the
+      real `better-auth@1.6.17` table/field metadata, clean schema-bridge validation, and
+      generated `schema.ts` annotations. Same-session evidence:
+      `pnpm exec vitest --run conformance/better-auth-pin/src/index.test.ts --reporter=dot`.
+      Remaining gaps: plugin-generated tables outside the blessed organization/admin/two-factor/OIDC-provider/MCP/SIWE/JWT/device-authorization
       surface are still not mapped, the OAuth-provider successor package/table metadata is not
       installed or exportable from the pinned dependency set, and full app `schema.ts` generation
       remains bounded to recognized Drizzle table declarations.

@@ -16,6 +16,7 @@ import {
   jwt,
   lastLoginMethod,
   magicLink,
+  mcp,
   oidcProvider,
   organization,
   phoneNumber,
@@ -498,6 +499,87 @@ describe('Better Auth pinned conformance', () => {
     expect(betterAuthSchemaBridge.oauthApplication).toEqual({ domain: 'auth', key: 'userId' });
     expect(betterAuthSchemaBridge.oauthAccessToken).toEqual({ domain: 'auth', key: 'userId' });
     expect(betterAuthSchemaBridge.oauthConsent).toEqual({ domain: 'auth', key: 'userId' });
+    expect(result.annotatedTables).toEqual([
+      'account',
+      'oauthAccessToken',
+      'oauthApplication',
+      'oauthConsent',
+      'session',
+      'user',
+      'verification',
+    ]);
+    expect(result.source).toContain(
+      "export const oauthApplication = pgTable('oauthApplication', {}, jiso({ domain: 'auth', key: 'userId' }));",
+    );
+    expect(result.source).toContain(
+      "export const oauthAccessToken = pgTable('oauthAccessToken', {}, jiso({ domain: 'auth', key: 'userId' }));",
+    );
+    expect(result.source).toContain(
+      "export const oauthConsent = pgTable('oauthConsent', {}, jiso({ domain: 'auth', key: 'userId' }));",
+    );
+  });
+
+  it('pins MCP plugin OAuth table metadata as covered by the schema bridge', () => {
+    const { auth } = createRealAuth({
+      plugins: [mcp({ loginPage: '/login' })],
+    });
+    const tables = getAuthTables(auth.options);
+    const result = annotateBetterAuthSchemaSource(
+      betterAuthSchemaSourceFixture(Object.keys(tables)),
+      tables,
+    );
+
+    expect(Object.keys(tables).sort()).toEqual([
+      'account',
+      'oauthAccessToken',
+      'oauthApplication',
+      'oauthConsent',
+      'session',
+      'user',
+      'verification',
+    ]);
+    expect(Object.keys(requireAuthTable(tables, 'oauthApplication').fields).sort()).toEqual([
+      'clientId',
+      'clientSecret',
+      'createdAt',
+      'disabled',
+      'icon',
+      'metadata',
+      'name',
+      'redirectUrls',
+      'type',
+      'updatedAt',
+      'userId',
+    ]);
+    expect(Object.keys(requireAuthTable(tables, 'oauthAccessToken').fields).sort()).toEqual([
+      'accessToken',
+      'accessTokenExpiresAt',
+      'clientId',
+      'createdAt',
+      'refreshToken',
+      'refreshTokenExpiresAt',
+      'scopes',
+      'updatedAt',
+      'userId',
+    ]);
+    expect(Object.keys(requireAuthTable(tables, 'oauthConsent').fields).sort()).toEqual([
+      'clientId',
+      'consentGiven',
+      'createdAt',
+      'scopes',
+      'updatedAt',
+      'userId',
+    ]);
+    // SPEC.md §10.1: MCP authorization state is app-owned auth-domain data
+    // keyed by Better Auth's userId bridge, not an unsupported plugin table.
+    expect(validateBetterAuthSchemaBridge(tables)).toEqual({
+      declaredTouchMismatches: [],
+      keyFieldMismatches: [],
+      missingTables: [],
+      ok: true,
+      pluginTableDegradations: [],
+      unbridgedTables: [],
+    });
     expect(result.annotatedTables).toEqual([
       'account',
       'oauthAccessToken',
