@@ -1303,6 +1303,9 @@ As each phase splits a source module, split its tests in the same commit.
       Additional evidence 2026-06-12: versioned client-module registry and immutable response
       coverage moved from `packages/server/src/index.test.ts` into
       `packages/server/src/client-modules.test.ts`, aligned with `client-modules.ts`.
+      Additional evidence 2026-06-12: enhanced mutation wire header parsing and iterable
+      request-building coverage moved from `packages/server/src/index.test.ts` into
+      `packages/server/src/mutation-wire.test.ts`.
       and `pnpm exec vitest --run packages/server/src/*.test.ts`.
 - [ ] runtime/index.test.ts (4,435 lines, mutation tests under "query store") → per-module
       files; `Fake*` classes to a shared `test-fixtures.ts`; direct unit tests for wire-parser,

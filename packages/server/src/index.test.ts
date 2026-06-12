@@ -17,13 +17,11 @@ import {
   mutation as defineMutation,
   notFound,
   parseRouteRequest,
-  mutationWireRequestFromHeaders,
   query,
   route,
   createMemoryMutationReplayStore,
   csrfField,
   csrfToken,
-  readMutationWireHeaders,
   renderDeferredStream,
   renderPageHints,
   renderMutationEndpointResponse,
@@ -671,44 +669,6 @@ describe('server mutation primitives', () => {
       status: 200,
     });
     expect(streamResponse.body).toBeInstanceOf(ReadableStream);
-  });
-
-  it('reads enhanced mutation wire headers case-insensitively', () => {
-    expect(
-      readMutationWireHeaders({
-        'fw-fragment': 'true',
-        'FW-Idem': ' idem_01HX ',
-        'FW-Targets': 'cart-badge=cart; recommendations=product:p1, cart-badge=cart',
-      }),
-    ).toEqual({
-      fragment: true,
-      idem: 'idem_01HX',
-      targets: ['cart-badge', 'recommendations'],
-    });
-  });
-
-  it('builds mutation wire requests from iterable HTTP headers', () => {
-    const replayStore = createMemoryMutationReplayStore();
-
-    expect(
-      mutationWireRequestFromHeaders({
-        headers: new Map([
-          ['FW-Fragment', 'true'],
-          ['FW-Idem', 'idem_01HY'],
-          ['FW-Targets', 'product-form:p1'],
-        ]),
-        rawInput: { productId: 'p1', quantity: 99 },
-        replayStore,
-        request: { sessionId: 's1' },
-      }),
-    ).toEqual({
-      fragment: true,
-      idem: 'idem_01HY',
-      rawInput: { productId: 'p1', quantity: 99 },
-      replayStore,
-      request: { sessionId: 's1' },
-      targets: ['product-form:p1'],
-    });
   });
 
   it('routes mutation endpoints without FW-Fragment through the no-JS POST redirect', async () => {
