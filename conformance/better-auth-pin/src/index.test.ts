@@ -1,9 +1,16 @@
-import { endpointMatches, runEndpoint, runMutation } from '@jiso/server';
+import {
+  endpointMatches,
+  renderRoutePageResponse,
+  route,
+  runEndpoint,
+  runMutation,
+} from '@jiso/server';
 import { betterAuth, getAuthTables } from 'better-auth';
 import { memoryAdapter } from 'better-auth/adapters/memory';
 import { describe, expect, expectTypeOf, it } from 'vitest';
 
 import {
+  authed,
   betterAuthCredentialMutationDeclaredTableTouches,
   betterAuthCredentialMutationTouches,
   betterAuthSchemaBridge,
@@ -12,6 +19,7 @@ import {
   betterAuthSignOutMutation,
   betterAuthSignUpEmailMutation,
   mount,
+  role,
   validateBetterAuthSchemaBridge,
   type BetterAuthLike,
   type BetterAuthSignInEmailLike,
@@ -26,6 +34,21 @@ interface AppSession {
   email: string;
   sessionId: string;
   userId: string;
+}
+
+interface ReferenceSession {
+  id: string;
+  user: {
+    email: string;
+    id: string;
+    name: string;
+    roles: readonly ('admin' | 'member')[];
+  };
+}
+
+interface ReferenceRequest {
+  headers: Headers;
+  session?: ReferenceSession | null;
 }
 
 const authSecret = '0123456789abcdef0123456789abcdef';
@@ -241,6 +264,141 @@ describe('Better Auth pinned conformance', () => {
         redirectTo: '/login',
         status: 'signed-out',
       },
+    });
+  });
+
+  it('proves the starter/reference recipe can drive real Better Auth sessions through adapter route guards', async () => {
+    const { auth } = createRealAuth();
+    const sessionProvider = betterAuthSession(
+      auth,
+      ({ session, user }): ReferenceSession => ({
+        id: session.id,
+        user: {
+          email: user.email,
+          id: user.id,
+          name: user.name ?? user.email,
+          roles: user.email.startsWith('admin@') ? ['admin'] : ['member'],
+        },
+      }),
+    );
+    const signIn = betterAuthSignInEmailMutation<'auth/sign-in', ReferenceRequest>(auth, {
+      csrf: false,
+      defaultRedirectTo: '/account',
+    });
+
+    // SPEC.md §6.5/§10.3: route guards consume the typed session populated by
+    // the request lifecycle, and anonymous vs unauthorized failures are distinct.
+    const accountRoute = route('/account', {
+      guard: authed<ReferenceRequest>(),
+      page: (_context, request) => `account:${request.session.user.email}`,
+    });
+    const adminRoute = route('/admin', {
+      guard: role<ReferenceRequest>('admin'),
+      page: (_context, request) => `admin:${request.session?.user.email ?? 'missing'}`,
+    });
+
+    await auth.api.signUpEmail({
+      asResponse: true,
+      body: {
+        email: 'member@example.com',
+        name: 'Member User',
+        password,
+      },
+      headers: requestHeaders(),
+    });
+    await auth.api.signUpEmail({
+      asResponse: true,
+      body: {
+        email: 'admin@example.com',
+        name: 'Admin User',
+        password,
+      },
+      headers: requestHeaders(),
+    });
+
+    await expect(
+      renderRoutePageResponse(accountRoute, {}, { headers: requestHeaders() }, String, {
+        currentUrl: '/account',
+        sessionProvider,
+      }),
+    ).resolves.toEqual({
+      body: '',
+      headers: { Location: '/login?next=%2Faccount' },
+      status: 303,
+    });
+
+    const memberSignIn = await runMutation(
+      signIn,
+      {
+        email: 'member@example.com',
+        password,
+      },
+      { headers: requestHeaders() },
+    );
+
+    expect(memberSignIn).toMatchObject({
+      ok: true,
+      responseHeaders: {
+        'Set-Cookie': [expect.stringContaining('better-auth.session_token=')],
+      },
+      value: {
+        redirectTo: '/account',
+        status: 'signed-in',
+      },
+    });
+    if (!memberSignIn.ok) throw new Error('expected member sign-in to succeed');
+
+    const memberRequest = {
+      headers: requestHeaders(responseCookies(memberSignIn.responseHeaders?.['Set-Cookie'])),
+    };
+
+    await expect(
+      renderRoutePageResponse(accountRoute, {}, memberRequest, String, { sessionProvider }),
+    ).resolves.toEqual({
+      body: 'account:member@example.com',
+      headers: { 'Content-Type': 'text/html; charset=utf-8' },
+      status: 200,
+    });
+    await expect(
+      renderRoutePageResponse(adminRoute, {}, memberRequest, String, {
+        renderForbidden: () => '<main>Forbidden</main>',
+        sessionProvider,
+      }),
+    ).resolves.toEqual({
+      body: '<main>Forbidden</main>',
+      headers: { 'Content-Type': 'text/html; charset=utf-8' },
+      status: 403,
+    });
+
+    const adminSignIn = await runMutation(
+      signIn,
+      {
+        email: 'admin@example.com',
+        password,
+      },
+      { headers: requestHeaders() },
+    );
+
+    expect(adminSignIn).toMatchObject({
+      ok: true,
+      responseHeaders: {
+        'Set-Cookie': [expect.stringContaining('better-auth.session_token=')],
+      },
+    });
+    if (!adminSignIn.ok) throw new Error('expected admin sign-in to succeed');
+
+    await expect(
+      renderRoutePageResponse(
+        adminRoute,
+        {},
+        { headers: requestHeaders(responseCookies(adminSignIn.responseHeaders?.['Set-Cookie'])) },
+        String,
+        { sessionProvider },
+      ),
+    ).resolves.toEqual({
+      body: 'admin:admin@example.com',
+      headers: { 'Content-Type': 'text/html; charset=utf-8' },
+      status: 200,
     });
   });
 

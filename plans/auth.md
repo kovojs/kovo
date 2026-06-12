@@ -81,10 +81,20 @@ Scope: SPEC additions (session population, guard-failure contract, mutation resp
       typed invalid credentials, sign-out cookie clearing, session-provider mapping from cookies,
       and anonymous/member/admin outcomes for the admin route; `fwExplain(..., { unguarded: true })`
       and `fwExplain(..., { unscoped: true })` still report `SUMMARY total=0`. Same-session
-      evidence: `pnpm exec vitest --run examples/commerce/src/app.test.ts`. Remaining gap:
-      commerce uses a deterministic Better Auth-like test surface rather than the pinned real
-      Better Auth package, and the anonymous sign-in mutation is not represented in the current
-      mutation guard audit vocabulary, so B7 remains open.
+      evidence: `pnpm exec vitest --run examples/commerce/src/app.test.ts`.
+      Tightened pinned-package evidence 2026-06-12:
+      `conformance/better-auth-pin/src/index.test.ts` now proves a starter/reference-shaped
+      recipe against real `better-auth@1.6.17`: the adapter sign-in mutation forwards the real
+      session cookie, `betterAuthSession` maps that cookie-backed session into the app-declared
+      session shape (SPEC §6.5), an `authed()` route redirects anonymous requests with `next` and
+      renders for the real signed-in member session, and `role('admin')` returns the SPEC §10.3
+      403 path for a member session while rendering for a real signed-in admin-mapped session.
+      Same-session evidence:
+      `pnpm exec vitest --run packages/better-auth/src/index.test.ts conformance/better-auth-pin/src/index.test.ts packages/create-jiso/src/index.test.ts`.
+      Remaining gap: there is still no `examples/reference` app in this checkout, commerce's
+      app-level adoption uses a deterministic Better Auth-like test surface rather than the pinned
+      real Better Auth package, and the anonymous sign-in mutation is not represented in the
+      current mutation guard audit vocabulary, so B7 remains open.
 
 ## Background — the gap
 
