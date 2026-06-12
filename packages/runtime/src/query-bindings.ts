@@ -1,18 +1,10 @@
 import { domAttributes } from './dom-like.js';
-import type {
-  AttributeReaderLike,
-  AttributeWriterLike,
-  DomAttributeListLike,
-  QuerySelectorAllRootLike,
-} from './dom-like.js';
+import type { AttributeElementLike, QuerySelectorAllRootLike } from './dom-like.js';
 
-export interface QueryBindingElement {
-  attributes?: DomAttributeListLike;
+export interface QueryBindingElement extends AttributeElementLike {
   textContent?: string | null;
   value?: string;
 }
-
-export interface QueryBindingElement extends AttributeReaderLike, AttributeWriterLike {}
 
 export interface QueryBindingRoot extends QuerySelectorAllRootLike<QueryBindingElement> {}
 

@@ -1,9 +1,6 @@
-import type { AttributeReaderLike, QuerySelectorAllRootLike } from './dom-like.js';
+import type { AttributeMutatorLike, QuerySelectorAllRootLike } from './dom-like.js';
 
-export interface PendingElementLike extends AttributeReaderLike {
-  removeAttribute(name: string): void;
-  setAttribute(name: string, value: string): void;
-}
+export interface PendingElementLike extends AttributeMutatorLike {}
 
 export interface PendingRoot extends QuerySelectorAllRootLike<PendingElementLike> {}
 

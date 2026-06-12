@@ -1,10 +1,9 @@
 import { diagnosticDefinitions } from '@jiso/core';
 import type { EventDefinition, JsonValue } from '@jiso/core';
 import type {
-  AttributeReaderLike,
+  AttributeElementLike,
   AttributeWriterLike,
   ClosestElementLike,
-  DomAttributeListLike,
   OptionalQuerySelectorAllRootLike,
 } from './dom-like.js';
 import { reportRuntimeContextError } from './error-policy.js';
@@ -19,12 +18,9 @@ export interface EventTargetLike extends ClosestElementLike<EventElementLike> {}
 
 export interface EventElementLike
   extends
-    AttributeReaderLike,
-    AttributeWriterLike,
+    AttributeElementLike,
     ClosestElementLike<EventElementLike>,
-    OptionalQuerySelectorAllRootLike<UploadProgressElementLike> {
-  attributes?: DomAttributeListLike;
-}
+    OptionalQuerySelectorAllRootLike<UploadProgressElementLike> {}
 
 export interface UploadProgressElementLike extends AttributeWriterLike {
   setAttribute(name: string, value: string): void;

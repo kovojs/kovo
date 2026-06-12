@@ -2188,6 +2188,18 @@ params, relational API, `execute(sql)`, right/full joins, a string column named 
       `corepack pnpm exec vitest --run packages/runtime/src/broadcast.test.ts`,
       `corepack pnpm exec vp check packages/runtime/src/broadcast.ts packages/runtime/src/broadcast.test.ts packages/runtime/src/index.ts plans/codebase-quality-round2.md`,
       and `git diff --check`.
+      Additional bounded evidence 2026-06-12: extracted `packages/runtime/src/derive.ts`
+      as the owner for the public compiled-query derive helper and left
+      `packages/runtime/src/index.ts` as a re-export-only runtime barrel. The same slice added
+      shared `AttributeElementLike`/`AttributeMutatorLike` DOM-like shapes in
+      `packages/runtime/src/dom-like.ts` and routed `events.ts`, `pending.ts`, and
+      `query-bindings.ts` through them while preserving the existing public type names.
+      `packages/runtime/src/derive.test.ts` pins the barrel export to the extracted owner and
+      the source-level helper metadata shape. Same-session evidence:
+      `pnpm exec vitest --run packages/runtime/src/derive.test.ts packages/runtime/src/dom-like.test.ts packages/runtime/src/query-bindings.test.ts packages/runtime/src/pending.test.ts packages/runtime/src/events.test.ts`,
+      `pnpm exec vitest --run packages/runtime/src`,
+      `pnpm exec vp check packages/runtime/src/derive.ts packages/runtime/src/derive.test.ts packages/runtime/src/dom-like.ts packages/runtime/src/events.ts packages/runtime/src/pending.ts packages/runtime/src/query-bindings.ts packages/runtime/src/index.ts plans/codebase-quality-round2.md`,
+      and `git diff --check`.
 - [ ] **LOW** — `hydratedQueries` frozen at install (index.ts:330-342): queries introduced by
       later mutations never become refetch-eligible — fix or document as SPEC-intended;
       `unescapeHtml` missing `&#39;`/`&apos;` (wire-parser.ts:162-168) — pin the server↔runtime

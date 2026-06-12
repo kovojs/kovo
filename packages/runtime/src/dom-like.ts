@@ -14,6 +14,15 @@ export interface AttributeWriterLike {
   setAttribute?: (name: string, value: string) => void;
 }
 
+export interface AttributeMutatorLike extends AttributeReaderLike {
+  removeAttribute(name: string): void;
+  setAttribute(name: string, value: string): void;
+}
+
+export interface AttributeElementLike extends AttributeReaderLike, AttributeWriterLike {
+  attributes?: DomAttributeListLike;
+}
+
 export interface ClosestElementLike<Element> {
   closest?: (selector: string) => Element | null;
 }
