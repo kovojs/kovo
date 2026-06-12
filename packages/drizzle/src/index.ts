@@ -43,6 +43,21 @@ import {
   type WriteSummaryInput,
 } from './graph.js';
 export type {
+  JisoDomainTableAnnotation,
+  JisoTableAnnotation,
+  JisoTableExtraConfig,
+} from './drizzle-surface.js';
+export { jiso } from './drizzle-surface.js';
+import {
+  isDomainTableAnnotation,
+  isDrizzleDatabaseTypeText,
+  isDrizzleTableFactoryName,
+  isExemptTableAnnotation,
+  isJisoExtraConfigCallName,
+  type JisoDomainTableAnnotation,
+  type JisoTableAnnotation,
+} from './drizzle-surface.js';
+export type {
   InvalidationQueryInput,
   InvalidationRegistry,
   InvalidationRegistryEntry,
@@ -72,29 +87,6 @@ const IGNORED_LOCAL_CALL_NAMES = new Set([
 const EXPORTED_CONST_DECLARATION_SOURCE = String.raw`(?:export\s+)?const\s+`;
 const VARIABLE_DECLARATION_SOURCE = String.raw`(?:export\s+)?(?:const|let|var)\s+`;
 const FW411_MESSAGE = 'Query read set includes an exempt table';
-
-export type JisoTableAnnotation =
-  | {
-      domain: string;
-      key?: string;
-    }
-  | {
-      exempt: true;
-    };
-
-interface JisoDomainTableAnnotation {
-  domain: string;
-  key?: string;
-}
-
-export type JisoTableExtraConfig = JisoDomainTableAnnotation &
-  ((self: unknown) => []) & {
-    exempt?: true;
-  };
-
-export function jiso(annotation: JisoTableAnnotation): JisoTableExtraConfig {
-  return Object.assign((() => []) as (self: unknown) => [], annotation) as JisoTableExtraConfig;
-}
 
 export type QueryShape =
   | 'array'
@@ -638,11 +630,7 @@ function isDrizzleWriteCall(call: CallExpression): boolean {
 function isDrizzleReceiver(receiver: Node): boolean {
   const type = receiver.getType();
   const typeText = type.getText(receiver);
-  if (
-    /\b(?:PgDatabase|NodePgDatabase|PostgresJsDatabase|PgliteDatabase|Neon.*Database|BaseSQLiteDatabase|MySql2Database|MySqlDatabase)\b/.test(
-      typeText,
-    )
-  ) {
+  if (isDrizzleDatabaseTypeText(typeText)) {
     return true;
   }
 
@@ -797,7 +785,7 @@ function isAnnotatedTableInitializerNode(initializer: Node): boolean {
   if (!Node.isCallExpression(initializer)) return false;
   const expression = initializer.getExpression();
   if (!Node.isIdentifier(expression)) return false;
-  if (!['pgTable', 'sqliteTable', 'mysqlTable'].includes(expression.getText())) return false;
+  if (!isDrizzleTableFactoryName(expression.getText())) return false;
 
   return initializer.getArguments().some(isJisoAnnotationCall);
 }
@@ -805,7 +793,7 @@ function isAnnotatedTableInitializerNode(initializer: Node): boolean {
 function isJisoAnnotationCall(node: Node): boolean {
   if (!Node.isCallExpression(node)) return false;
   const expression = node.getExpression();
-  return Node.isIdentifier(expression) && expression.getText() === 'jiso';
+  return Node.isIdentifier(expression) && isJisoExtraConfigCallName(expression.getText());
 }
 
 function tableNameArgument(initializer: Node): string | undefined {
@@ -1517,18 +1505,6 @@ function tableAnnotation(initializer: Node): JisoTableAnnotation | null {
 function copyTableAnnotation(table: ExtractedTableDeclaration): JisoTableAnnotation {
   if (isExemptTableAnnotation(table)) return { exempt: true };
   return { domain: table.domain, ...(table.key ? { key: table.key } : {}) };
-}
-
-function isDomainTableAnnotation(
-  annotation: JisoTableAnnotation & { name?: string },
-): annotation is JisoDomainTableAnnotation & { name: string } {
-  return 'domain' in annotation;
-}
-
-function isExemptTableAnnotation(
-  annotation: JisoTableAnnotation & { name?: string },
-): annotation is { exempt: true; name: string } {
-  return 'exempt' in annotation && annotation.exempt === true;
 }
 
 function stringPropertyFromObject(object: Node, name: string): string | undefined {

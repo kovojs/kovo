@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest';
 
+import { eq, getTableName, sql } from 'drizzle-orm';
+import { boolean, integer, jsonb, pgTable, text, timestamp } from 'drizzle-orm/pg-core';
+
 import {
   createTouchGraphEntry,
   deriveInvalidationRegistry,
@@ -24,6 +27,83 @@ function annotatedTable(name: string, annotation: ReturnType<typeof jiso>) {
 }
 
 describe('@jiso/drizzle touch graph helpers', () => {
+  it('extracts writes and query facts through real drizzle-orm pgTable/select/update types', () => {
+    const products = pgTable(
+      'products',
+      {
+        archived: boolean('archived').notNull().default(false),
+        createdAt: timestamp('created_at').notNull(),
+        id: text('id').primaryKey(),
+        metadata: jsonb('metadata'),
+        stock: integer('stock').notNull(),
+      },
+      jiso({ domain: 'product', key: 'id' }),
+    );
+
+    expect(getTableName(products)).toBe('products');
+    expect(products.metadata).toBeDefined();
+    expect(eq(products.id, 'p1')).toBeDefined();
+    expect(sql<number>`count(*)`).toBeDefined();
+
+    const project = {
+      files: [
+        {
+          fileName: 'product.domain.ts',
+          source: [
+            'import { eq } from "drizzle-orm";',
+            'import { integer, pgTable, text, type PgDatabase } from "drizzle-orm/pg-core";',
+            '',
+            'export const products = pgTable("products", {',
+            '  id: text("id").primaryKey(),',
+            '  stock: integer("stock").notNull(),',
+            '}, jiso({ domain: "product", key: "id" }));',
+            '',
+            'export async function restock(db: PgDatabase<any, any, any>, productId: string) {',
+            '  await db.update(products).set({ stock: 1 }).where(eq(products.id, productId));',
+            '}',
+            '',
+            'export const productQuery = query("product", {',
+            '  load(input, db) {',
+            '    return db.select({ id: products.id, stock: products.stock }).from(products).where(eq(products.id, input.id));',
+            '  },',
+            '});',
+            '',
+          ].join('\n'),
+        },
+      ],
+    };
+
+    expect(extractTouchGraphFromProject(project)).toEqual({
+      restock: {
+        reads: [],
+        touches: [
+          {
+            domain: 'product',
+            keys: 'arg:productId',
+            site: 'product.domain.ts:10',
+            via: 'products',
+          },
+        ],
+        unresolved: [],
+      },
+    });
+    expect(extractQueryFactsFromProject(project)).toEqual([
+      {
+        instanceKey: {
+          domain: 'product',
+          key: 'arg:id',
+        },
+        query: 'product',
+        reads: ['product'],
+        shape: {
+          id: 'string',
+          stock: 'number',
+        },
+        site: 'product.domain.ts:13',
+      },
+    ]);
+  });
+
   it('creates deterministic touch graph entries from annotated tables and read domains', () => {
     const cartItems = annotatedTable('cart_items', jiso({ domain: 'cart', key: 'cartId' }));
     const products = annotatedTable('products', jiso({ domain: 'product', key: 'id' }));

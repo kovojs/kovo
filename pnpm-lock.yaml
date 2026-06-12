@@ -161,13 +161,13 @@ importers:
       '@jiso/core':
         specifier: workspace:*
         version: link:../core
-      drizzle-orm:
-        specifier: '>=0.45.2 <1'
-        version: 0.45.2(@electric-sql/pglite@0.5.1)
       ts-morph:
         specifier: ^28.0.0
         version: 28.0.0
     devDependencies:
+      drizzle-orm:
+        specifier: 0.45.2
+        version: 0.45.2(@electric-sql/pglite@0.5.1)
       vitest:
         specifier: 4.1.8
         version: 4.1.8(@types/node@25.9.2)(@vitest/browser-playwright@4.1.8)(vite@8.0.16(@types/node@25.9.2)(jiti@2.7.0))
