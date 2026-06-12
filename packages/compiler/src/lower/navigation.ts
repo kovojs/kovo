@@ -53,10 +53,7 @@ export function navigationLinkLowering(
   return { replacements };
 }
 
-export function navigationHrefLowering(
-  _source: string,
-  model: ComponentModuleModel,
-): NavigationLowering {
+export function navigationHrefLowering(model: ComponentModuleModel): NavigationLowering {
   const replacements: SourceReplacement[] = [];
   const staticHrefCalls = callExpressions(model)
     .filter((item) => item.name === 'href')

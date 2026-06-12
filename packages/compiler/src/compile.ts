@@ -77,7 +77,7 @@ export function compileComponentModule(options: CompileComponentOptions): Compil
     linkLowering.replacements,
     parseComponentModuleModel,
   ).state;
-  const hrefLowering = navigationHrefLowering(linksLoweredState.source, linksLoweredState.model);
+  const hrefLowering = navigationHrefLowering(linksLoweredState.model);
   const navigationState = lowerComponentPipelinePatches(
     linksLoweredState,
     hrefLowering.replacements,

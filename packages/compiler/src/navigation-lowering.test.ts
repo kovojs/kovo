@@ -33,10 +33,7 @@ export const ProductLinks = component('product-links', {
 `;
     const hrefStart = source.indexOf('href={href(');
     const hrefEnd = source.indexOf(')}>Product') + ')}'.length;
-    const lowering = navigationHrefLowering(
-      source,
-      parseComponentModule('product-links.tsx', source),
-    );
+    const lowering = navigationHrefLowering(parseComponentModule('product-links.tsx', source));
 
     expect(lowering.replacements).toEqual([
       {

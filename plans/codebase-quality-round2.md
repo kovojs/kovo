@@ -748,6 +748,13 @@ pipeline throws the tree away and communicates via mutated source text.
       `pnpm exec vitest --run packages/compiler/src`,
       `pnpm exec vp check packages/compiler/src/model-pipeline.ts packages/compiler/src/model-pipeline.test.ts`,
       and `git diff --check`.
+      Additional evidence 2026-06-12: static `href(...)` navigation lowering is now a
+      model-only pass; `navigationHrefLowering` no longer accepts source text, and `compile.ts`
+      passes the post-`<Link>` parsed model directly into the href patch producer. Same-session
+      evidence:
+      `pnpm exec vitest --run packages/compiler/src/navigation-lowering.test.ts packages/compiler/src/compile-component.test.ts`,
+      `pnpm exec vp check packages/compiler/src/compile.ts packages/compiler/src/lower/navigation.ts packages/compiler/src/navigation-lowering.test.ts`,
+      and `git diff --check`.
       Additional evidence 2026-06-12: `emit/server.ts` now updates existing `fw-deps`
       attributes by `JsxAttributeModel` span relative to the parsed render host instead of
       regex-searching the opening tag slice. `stamps.test.ts` pins a single-quoted authored
