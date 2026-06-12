@@ -655,6 +655,13 @@ pipeline throws the tree away and communicates via mutated source text.
       `pnpm exec vitest --run packages/compiler/src/index.test.ts packages/compiler/src/shared.test.ts packages/compiler/src/package-prefixes.test.ts packages/compiler/src/vite.test.ts`,
       `pnpm exec vp check packages/compiler/src/compile.ts packages/compiler/src/index.ts plans/codebase-quality-round2.md`,
       and `git diff --check`.
+      Additional evidence 2026-06-12: `packages/compiler/src/compile.ts` now centralizes the
+      lowering-pipeline model reuse rule in `modelForSourceChange`, so each lowering pass either
+      carries forward the caller-owned parsed model or reparses once with the author file name
+      only when that pass changed source. Same-session evidence:
+      `pnpm exec vitest --run packages/compiler/src/index.test.ts packages/compiler/src/shared.test.ts packages/compiler/src/navigation-lowering.test.ts packages/compiler/src/platform-lowering.test.ts`,
+      `pnpm exec vp check packages/compiler/src/compile.ts plans/codebase-quality-round2.md`,
+      and `git diff --check`.
       and
       `pnpm exec vp check packages/compiler/src/index.ts packages/compiler/src/ir.ts packages/compiler/src/css.ts packages/compiler/src/emit/client.ts packages/compiler/src/emit/server.ts packages/compiler/src/emit/registry.ts packages/compiler/src/emit/bootstrap.ts packages/compiler/src/validate/authoring-surface.ts plans/codebase-quality-round2.md`.
       Additional evidence 2026-06-12: `packages/compiler/src/emit/registry.ts` now consumes

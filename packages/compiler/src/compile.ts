@@ -15,6 +15,7 @@ import { lowerNavigationSugar } from './lower/navigation.js';
 import { lowerPlatformBehaviors } from './lower/platform.js';
 import { lowerViewTransitions } from './lower/view-transitions.js';
 import {
+  type ComponentModuleModel,
   inferComponentName,
   parseComponentModule as parseComponentModuleModel,
 } from './scan/parse.js';
@@ -53,18 +54,22 @@ export function compileComponentModule(options: CompileComponentOptions): Compil
   const originalModel = parseComponentModuleModel(options.fileName, options.source);
   const componentName = inferComponentName(options.fileName, originalModel);
   const viewTransitionLowering = lowerViewTransitions(options.source, originalModel);
-  const viewTransitionModel =
-    viewTransitionLowering.source === options.source
-      ? originalModel
-      : parseComponentModuleModel(options.fileName, viewTransitionLowering.source);
+  const viewTransitionModel = modelForSourceChange(
+    options.fileName,
+    options.source,
+    originalModel,
+    viewTransitionLowering.source,
+  );
   const platformLowering = lowerPlatformBehaviors(
     viewTransitionLowering.source,
     viewTransitionModel,
   );
-  const platformModel =
-    platformLowering.source === viewTransitionLowering.source
-      ? viewTransitionModel
-      : parseComponentModuleModel(options.fileName, platformLowering.source);
+  const platformModel = modelForSourceChange(
+    options.fileName,
+    viewTransitionLowering.source,
+    viewTransitionModel,
+    platformLowering.source,
+  );
   const navigationLowering = lowerNavigationSugar(
     platformLowering.source,
     platformModel,
@@ -78,10 +83,12 @@ export function compileComponentModule(options: CompileComponentOptions): Compil
   );
   const source = deriveLowering.source;
   const diagnosticSource = deriveLowering.diagnosticSource;
-  const model =
-    source === navigationLowering.source
-      ? navigationLowering.model
-      : parseComponentModuleModel(options.fileName, source);
+  const model = modelForSourceChange(
+    options.fileName,
+    navigationLowering.source,
+    navigationLowering.model,
+    source,
+  );
   const handlers = lowerEventHandlers({ ...compileOptions, source }, componentName, model);
   const queryUpdatePlans = collectQueryUpdatePlans(source, model, componentName);
   const updateCoverage = collectQueryUpdateCoverage(source, model, compileOptions, componentName);
@@ -151,6 +158,17 @@ export function compileComponentModule(options: CompileComponentOptions): Compil
     updateCoverage,
     viewTransitions: viewTransitionLowering.stamps,
   };
+}
+
+function modelForSourceChange(
+  fileName: string,
+  previousSource: string,
+  previousModel: ComponentModuleModel,
+  nextSource: string,
+): ComponentModuleModel {
+  return nextSource === previousSource
+    ? previousModel
+    : parseComponentModuleModel(fileName, nextSource);
 }
 
 export function assertFixpoint(result: CompileResult): void {
