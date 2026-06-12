@@ -2,6 +2,7 @@ import {
   createApp,
   createMemoryVersionedClientModuleRegistry,
   createRequestHandler,
+  errorBoundary,
   route,
   toNodeHandler,
   type RequestHandler,
@@ -9,6 +10,7 @@ import {
 } from '@jiso/server';
 
 import {
+  addToCart,
   attachmentDownloadRoute,
   cartQuery,
   commerceAdminRoute,
@@ -16,16 +18,26 @@ import {
   commerceSessionProvider,
   commerceStylesheets,
   createCommerceDb,
+  loadCartQuery,
+  loadProductGrid,
   orderCsvRoute,
   orderHistoryQuery,
   paymentWebhook,
+  productFormTarget,
   productGridQuery,
+  renderAddToCartError,
+  renderAddToCartForm,
+  renderCartPage,
   renderCartPageBody,
   renderCommerceLoginForm,
+  renderOrderHistory,
+  renderProductGrid,
   type CommerceAuthRequest,
   type CommerceDb,
+  type CommerceRequest,
   type CommerceSession,
 } from './app.js';
+import { CartBadge } from './generated/cart-badge.js';
 
 export type CommerceShellRequest = Request & CommerceAuthRequest;
 
@@ -79,6 +91,53 @@ export function createCommerceAppShell(options: CommerceAppShellOptions = {}) {
     clientModules,
     document: { lang: 'en-US' },
     endpoints: [paymentWebhook],
+    mutationResponse({ key, rawInput, request }) {
+      if (key !== addToCart.key) return undefined;
+
+      const commerceRequest = request as CommerceShellRequest;
+      const productId = productIdFromRawInput(rawInput);
+      return {
+        failureTarget: productId ? productFormTarget(productId) : 'product-form',
+        failureStylesheets: commerceStylesheets,
+        fragmentRenderers: [
+          {
+            render: () => CartBadge.definition.render({ cart: loadCartQuery(db) }),
+            stylesheets: commerceStylesheets,
+            target: 'cart-badge',
+          },
+          errorBoundary(
+            {
+              render: () => renderProductGrid(loadProductGrid(db), commerceRequest),
+              stylesheets: commerceStylesheets,
+              target: 'product-grid',
+            },
+            {
+              render(error) {
+                return `<section role="alert" class="rounded border border-red-200 bg-red-50 p-4 text-sm text-red-700">Product grid failed: ${escapeHtml((error as Error).message)}</section>`;
+              },
+            },
+          ),
+          {
+            render: () => renderOrderHistory(db),
+            stylesheets: commerceStylesheets,
+            target: 'order-history',
+          },
+        ],
+        redirectTo: '/cart',
+        renderFailureFragment: (failure) =>
+          renderAddToCartFailureFragment(db, rawInput, failure, commerceRequest),
+        renderFailurePage: (failure) =>
+          renderCartPage(
+            db,
+            {
+              failure,
+              ...(productId ? { productId } : {}),
+            },
+            commerceRequest,
+          ),
+      };
+    },
+    mutations: [addToCart],
     ...(options.onError === undefined ? {} : { onError: options.onError }),
     queries: [cartQuery, productGridQuery, orderHistoryQuery],
     renderRoute(value, context) {
@@ -127,6 +186,37 @@ function attachCommerceRequestContext(request: Request, db: CommerceDb): Commerc
   });
 
   return request as CommerceShellRequest;
+}
+
+function renderAddToCartFailureFragment(
+  db: CommerceDb,
+  rawInput: unknown,
+  failure: Parameters<typeof renderAddToCartError>[0],
+  request: CommerceRequest,
+): string {
+  const productId = productIdFromRawInput(rawInput);
+  const product = productId ? db.products.get(productId) : undefined;
+
+  if (!product) return renderAddToCartError(failure);
+  return renderAddToCartForm(product, failure, request);
+}
+
+function productIdFromRawInput(rawInput: unknown): string | undefined {
+  if (rawInput instanceof FormData) {
+    const productId = rawInput.get('productId');
+    return typeof productId === 'string' ? productId : undefined;
+  }
+
+  if (typeof rawInput !== 'object' || rawInput === null || !('productId' in rawInput)) {
+    return undefined;
+  }
+
+  const productId = rawInput.productId;
+  return typeof productId === 'string' ? productId : undefined;
+}
+
+function escapeHtml(value: string): string {
+  return value.replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;');
 }
 
 export const commerceAppShell = createCommerceAppShell();

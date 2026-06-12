@@ -3,7 +3,9 @@ import type { AddressInfo } from 'node:net';
 
 import { afterEach, describe, expect, it } from 'vitest';
 
-import { addToCart } from './app.js';
+import { csrfToken, runMutation } from '@jiso/server';
+
+import { addToCart, commerceAuthCsrf, commerceCsrf, commerceSignIn } from './app.js';
 import { commerceClientModuleHref, createCommerceAppShell } from './app-shell.js';
 
 let server: Server | undefined;
@@ -66,7 +68,96 @@ describe('commerce app shell HTTP entry', () => {
     expect(clientModule.headers.get('cache-control')).toBe('public, max-age=31536000, immutable');
     await expect(clientModule.text()).resolves.toContain('Commerce$markReady');
   });
+
+  it('dispatches enhanced and no-JS cart mutations through the shared app shell over HTTP', async () => {
+    const shell = createCommerceAppShell();
+    const sessionCookie = await signInCookie(shell.db);
+    const sessionRequest = {
+      db: shell.db,
+      headers: new Headers({ cookie: sessionCookie }),
+      session: { id: 'session-u1', user: { id: 'u1' } },
+    };
+
+    server = createServer(shell.nodeHandler);
+    await listen(server);
+    const origin = serverOrigin(server);
+
+    const enhancedForm = new URLSearchParams();
+    enhancedForm.set('productId', 'p1');
+    enhancedForm.set('quantity', '2');
+    enhancedForm.set('csrf', csrfToken(sessionRequest, commerceCsrf));
+    const enhanced = await fetch(`${origin}/_m/cart/add`, {
+      body: enhancedForm,
+      headers: {
+        cookie: sessionCookie,
+        'Content-Type': 'application/x-www-form-urlencoded',
+        'FW-Fragment': 'true',
+        'FW-Targets': 'cart-badge,product-grid,order-history',
+      },
+      method: 'POST',
+    });
+    const enhancedBody = await enhanced.text();
+
+    expect(enhanced.status, enhancedBody).toBe(200);
+    expect(enhanced.headers.get('content-type')).toBe('text/vnd.jiso.fragment+html; charset=utf-8');
+    expect(enhanced.headers.get('fw-changes')).toBe(
+      '[{"domain":"cart"},{"domain":"order"},{"domain":"product","keys":["p1"]}]',
+    );
+    expect(enhancedBody).toContain('<fw-query name="cart">{"count":2}</fw-query>');
+    expect(enhancedBody).toContain('<fw-fragment target="cart-badge">');
+    expect(enhancedBody).toContain('<fw-fragment target="product-grid">');
+    expect(enhancedBody).toContain('<fw-fragment target="order-history">');
+
+    const noJsForm = new URLSearchParams();
+    noJsForm.set('productId', 'p2');
+    noJsForm.set('quantity', '1');
+    noJsForm.set('csrf', csrfToken(sessionRequest, commerceCsrf));
+    const noJs = await fetch(`${origin}/_m/cart/add`, {
+      body: noJsForm,
+      headers: {
+        cookie: sessionCookie,
+        'Content-Type': 'application/x-www-form-urlencoded',
+      },
+      method: 'POST',
+      redirect: 'manual',
+    });
+
+    expect(noJs.status).toBe(303);
+    expect(noJs.headers.get('location')).toBe('/cart');
+    await expect(noJs.text()).resolves.toBe('');
+
+    const query = await fetch(`${origin}/_q/cart`, {
+      headers: { cookie: sessionCookie },
+    });
+    expect(query.status).toBe(200);
+    await expect(query.text()).resolves.toContain('<fw-query name="cart">{"count":3}</fw-query>');
+  });
 });
+
+async function signInCookie(db: ReturnType<typeof createCommerceAppShell>['db']): Promise<string> {
+  const request = {
+    authCsrfId: 'commerce-shell-login',
+    db,
+    headers: new Headers(),
+  };
+  const result = await runMutation(
+    commerceSignIn,
+    {
+      csrf: csrfToken(request, commerceAuthCsrf),
+      email: 'ada@example.com',
+      password: 'correct',
+    },
+    request,
+    { csrf: commerceAuthCsrf },
+  );
+  if (!result.ok) throw new Error(`commerce sign-in failed: ${result.error.code}`);
+
+  const setCookie = result.responseHeaders?.['Set-Cookie'];
+  const rawCookie = Array.isArray(setCookie) ? setCookie[0] : setCookie;
+  if (!rawCookie) throw new Error('commerce sign-in did not set a cookie');
+
+  return rawCookie.split(';')[0] ?? rawCookie;
+}
 
 function listen(target: Server): Promise<void> {
   return new Promise((resolve, reject) => {

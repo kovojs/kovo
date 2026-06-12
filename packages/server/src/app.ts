@@ -17,19 +17,25 @@ import {
 } from './response.js';
 import {
   renderQueryRegistryEndpointResponse,
+  renderMutationEndpointResponse,
   renderRoutePageResponse,
   runEndpoint,
   type CsrfValidationOptions,
   type EndpointDeclaration,
   type EndpointMethod,
   type EndpointMount,
+  type FragmentRenderer,
+  type MutationFail,
   type MutationDefinition,
+  type MutationResponseHeaders,
   type MutationReplayStore,
+  type MutationSuccess,
   type QueryEndpointRequest,
   type QueryEndpointRegistry,
   type RegisteredQueryDefinition,
   type RouteDeclaration,
   type RouteRequestInput,
+  type Schema,
   type SessionProvider,
 } from './index.js';
 
@@ -64,7 +70,8 @@ export interface CreateAppOptions<SessionValue = unknown> {
   document?: AppDocumentOptions;
   endpoints?: readonly EndpointDeclaration<string, EndpointMethod, EndpointMount>[];
   errorShells?: AppErrorShellOptions;
-  mutations?: readonly MutationDefinition[];
+  mutationResponse?: AppMutationResponseResolver;
+  mutations?: readonly AppMutationDeclaration[];
   mutationReplayStore?: MutationReplayStore;
   onError?: ServerErrorHandler;
   queries?: readonly RegisteredQueryDefinition[];
@@ -79,7 +86,8 @@ export interface JisoApp<SessionValue = unknown> {
   document: AppDocumentOptions;
   endpoints: readonly EndpointDeclaration<string, EndpointMethod, EndpointMount>[];
   errorShells: AppErrorShellOptions;
-  mutations: readonly MutationDefinition[];
+  mutationResponse?: AppMutationResponseResolver;
+  mutations: readonly AppMutationDeclaration[];
   mutationReplayStore?: MutationReplayStore;
   onError?: ServerErrorHandler;
   queries: readonly RegisteredQueryDefinition[];
@@ -89,6 +97,33 @@ export interface JisoApp<SessionValue = unknown> {
 }
 
 export type RequestHandler = (request: Request) => Promise<Response>;
+
+export interface AppMutationDeclaration {
+  key: string;
+}
+
+export interface AppMutationResponseContext {
+  currentUrl: string;
+  key: string;
+  mutation: AppMutationDeclaration;
+  rawInput: unknown;
+  request: Request;
+  url: URL;
+}
+
+export interface AppMutationResponseOptions {
+  csrf?: CsrfValidationOptions<Request>;
+  failureTarget?: string;
+  failureStylesheets?: readonly (string | import('./hints.js').StylesheetAsset)[];
+  fragmentRenderers?: readonly FragmentRenderer[];
+  redirectTo?: string | ((result: MutationSuccess<unknown>) => string);
+  renderFailureFragment?: (failure: MutationFail, rawInput: unknown) => string | Promise<string>;
+  renderFailurePage?: (failure: MutationFail) => string | Promise<string>;
+}
+
+export type AppMutationResponseResolver = (
+  context: AppMutationResponseContext,
+) => AppMutationResponseOptions | Promise<AppMutationResponseOptions | undefined> | undefined;
 
 export function createApp<SessionValue = unknown>(
   options: CreateAppOptions<SessionValue> = {},
@@ -105,6 +140,9 @@ export function createApp<SessionValue = unknown>(
     ...(options.mutationReplayStore === undefined
       ? {}
       : { mutationReplayStore: options.mutationReplayStore }),
+    ...(options.mutationResponse === undefined
+      ? {}
+      : { mutationResponse: options.mutationResponse }),
     ...(options.onError === undefined ? {} : { onError: options.onError }),
     ...(options.renderRoute === undefined ? {} : { renderRoute: options.renderRoute }),
     ...(options.sessionProvider === undefined ? {} : { sessionProvider: options.sessionProvider }),
@@ -157,6 +195,79 @@ export function createRequestHandler(app: JisoApp): RequestHandler {
           ),
           request,
         );
+      }
+
+      if (match.kind === 'mutation') {
+        if (request.method.toUpperCase() !== 'POST') {
+          return new Response(request.method === 'HEAD' ? null : 'Method Not Allowed', {
+            headers: {
+              Allow: 'POST',
+              'Content-Type': 'text/plain; charset=utf-8',
+            },
+            status: 405,
+          });
+        }
+
+        const mutation = app.mutations.find(
+          (candidate) => candidate.key === decodeURIComponent(match.key),
+        );
+        if (!mutation) {
+          return routeResponseToWebResponse(
+            await renderConfiguredError(app, request, 404),
+            request,
+          );
+        }
+
+        const mutationRequest = await requestWithResolvedSession(app, request);
+        const rawInput = await readMutationRequestBody(mutationRequest);
+        const currentUrl = `${url.pathname}${url.search}${url.hash}`;
+        const mutationResponseOptions = await app.mutationResponse?.({
+          currentUrl,
+          key: mutation.key,
+          mutation,
+          rawInput,
+          request: mutationRequest,
+          url: new URL(url),
+        });
+        const requestMutation = mutation as unknown as MutationDefinition<
+          string,
+          Schema<unknown>,
+          Record<string, Schema<unknown>>,
+          Request
+        >;
+        const mutationResponse = await renderMutationEndpointResponse(requestMutation, {
+          ...(app.csrf === undefined ? {} : { csrf: app.csrf }),
+          ...(app.mutationReplayStore === undefined
+            ? {}
+            : { replayStore: app.mutationReplayStore }),
+          ...(app.onError === undefined ? {} : { onError: app.onError }),
+          ...(mutationResponseOptions?.csrf === undefined
+            ? {}
+            : { csrf: mutationResponseOptions.csrf }),
+          ...(mutationResponseOptions?.failureTarget === undefined
+            ? {}
+            : { failureTarget: mutationResponseOptions.failureTarget }),
+          ...(mutationResponseOptions?.failureStylesheets === undefined
+            ? {}
+            : { failureStylesheets: mutationResponseOptions.failureStylesheets }),
+          ...(mutationResponseOptions?.fragmentRenderers === undefined
+            ? {}
+            : { fragmentRenderers: mutationResponseOptions.fragmentRenderers }),
+          headers: request.headers,
+          rawInput,
+          redirectTo:
+            mutationResponseOptions?.redirectTo ??
+            defaultMutationRedirectTo(mutationRequest, currentUrl),
+          ...(mutationResponseOptions?.renderFailureFragment === undefined
+            ? {}
+            : { renderFailureFragment: mutationResponseOptions.renderFailureFragment }),
+          ...(mutationResponseOptions?.renderFailurePage === undefined
+            ? {}
+            : { renderFailurePage: mutationResponseOptions.renderFailurePage }),
+          request: mutationRequest,
+        });
+
+        return serverResponseToWebResponse(mutationResponse, mutationRequest);
       }
 
       if (match.kind === 'endpoint') {
@@ -264,4 +375,59 @@ function searchParamsToRecord(searchParams: URLSearchParams): Record<string, str
   }
 
   return record;
+}
+
+async function readMutationRequestBody(request: Request): Promise<unknown> {
+  const contentType = request.headers.get('content-type')?.toLowerCase() ?? '';
+  if (contentType.includes('application/json')) return request.json();
+  return request.formData();
+}
+
+async function requestWithResolvedSession(app: JisoApp, request: Request): Promise<Request> {
+  if (!app.sessionProvider) return request;
+
+  const session = await app.sessionProvider(request);
+  Object.defineProperty(request, 'session', {
+    configurable: true,
+    enumerable: true,
+    value: session ?? null,
+  });
+  return request;
+}
+
+function defaultMutationRedirectTo(request: Request, currentUrl: string): string {
+  const referer = request.headers.get('referer');
+  if (referer) {
+    try {
+      const url = new URL(referer);
+      return `${url.pathname}${url.search}${url.hash}`;
+    } catch {
+      return referer;
+    }
+  }
+
+  return currentUrl.startsWith('/_m/') ? '/' : currentUrl;
+}
+
+function serverResponseToWebResponse(
+  response: {
+    body: BodyInit | null;
+    headers: MutationResponseHeaders | Record<string, string>;
+    status: number;
+  },
+  request: Pick<Request, 'method'>,
+): Response {
+  const headers = new Headers();
+  for (const [name, value] of Object.entries(response.headers)) {
+    if (Array.isArray(value)) {
+      for (const entry of value) headers.append(name, entry);
+    } else {
+      headers.set(name, value);
+    }
+  }
+
+  return new Response(request.method === 'HEAD' ? null : response.body, {
+    headers,
+    status: response.status,
+  });
 }

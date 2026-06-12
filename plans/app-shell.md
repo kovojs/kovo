@@ -143,10 +143,25 @@ Scope: SPEC addition (proposed §9.5 "The request shell"), `@jiso/server` shell 
       verification ran `pnpm exec vitest --run examples/commerce/src/app-shell.test.ts`,
       `pnpm exec vitest --run examples/commerce`, and
       `pnpm exec vp check examples/commerce/src/app.ts examples/commerce/src/app-shell.ts examples/commerce/src/app-shell.test.ts examples/commerce/vite.config.ts`.
-      Remaining R7 commerce work: the shared app shell still does not dispatch
-      `/_m/` mutations, so the enhanced/no-JS commerce mutation round-trip over the
-      `createApp()` handler remains open; docs-site `vp run export` adoption also
-      remains open.
+      Progress 2026-06-12: the shared app shell now dispatches `POST /_m/<key>`
+      before endpoints/routes and delegates to the existing mutation renderer
+      (SPEC §9.1, §9.5). `packages/server/src/app.ts` parses JSON/form bodies,
+      resolves `sessionProvider` onto the mutation request before CSRF/guards,
+      and supports app-supplied fragment/failure/PRG response options while
+      preserving the closed dispatch table. `examples/commerce/src/app-shell.ts`
+      registers `cart/add` in `createApp({ mutations })` and supplies the existing
+      cart badge/product grid/order history fragments and `/cart` PRG target.
+      Evidence: `packages/server/src/app.test.ts` proves generic `/_m/cart/add`
+      enhanced and no-JS dispatch; `examples/commerce/src/app-shell.test.ts`
+      signs in, posts enhanced and no-JS cart forms to `/_m/cart/add` over
+      `node:http`, verifies `FW-Changes`/fragment chunks, PRG 303, and the
+      subsequent `/_q/cart` count. Same-session verification ran
+      `pnpm exec vitest --run packages/server/src/app.test.ts`,
+      `pnpm exec vitest --run examples/commerce/src/app-shell.test.ts`,
+      `pnpm exec vitest --run examples/commerce`, and
+      `pnpm exec vp check packages/server/src/app.ts packages/server/src/index.ts packages/server/src/app.test.ts examples/commerce/src/app-shell.ts examples/commerce/src/app-shell.test.ts`.
+      Remaining R7 work: docs-site `vp run export` adoption remains open, so R7
+      is not complete.
 
 ## Background — the gap
 

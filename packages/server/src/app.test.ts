@@ -3,8 +3,10 @@ import { describe, expect, it, vi } from 'vitest';
 import { createApp, createRequestHandler } from './app.js';
 import {
   createMemoryVersionedClientModuleRegistry,
+  domain,
   endpoint,
   guards,
+  mutation,
   query,
   route,
   s,
@@ -182,5 +184,69 @@ describe('server createApp request shell', () => {
     expect(moduleResponse.status).toBe(200);
     expect(moduleResponse.headers.get('cache-control')).toBe('public, max-age=31536000, immutable');
     await expect(moduleResponse.text()).resolves.toBe('export const ok = true;');
+  });
+
+  it('dispatches mutation POSTs through the reserved app shell path', async () => {
+    const cart = domain('cart');
+    const cartQuery = query('cart', {
+      load: () => ({ count: 1 }),
+      reads: [cart],
+    });
+    const addToCart = mutation('cart/add', {
+      csrf: false,
+      input: s.object({ productId: s.string(), quantity: s.number().int().min(1).default(1) }),
+      registry: {
+        queries: [cartQuery],
+        touches: [cart],
+      },
+      handler(input) {
+        return input;
+      },
+    });
+    const handler = createRequestHandler(
+      createApp({
+        mutationResponse() {
+          return {
+            fragmentRenderers: [{ render: () => '<cart-badge>1</cart-badge>', target: 'cart' }],
+            redirectTo: '/cart',
+          };
+        },
+        mutations: [addToCart],
+      }),
+    );
+    const enhancedForm = new FormData();
+    enhancedForm.set('productId', 'p1');
+    enhancedForm.set('quantity', '1');
+
+    const enhanced = await handler(
+      new Request('https://example.test/_m/cart/add', {
+        body: enhancedForm,
+        headers: {
+          'FW-Fragment': 'true',
+          'FW-Targets': 'cart',
+        },
+        method: 'POST',
+      }),
+    );
+    expect(enhanced.status).toBe(200);
+    expect(enhanced.headers.get('content-type')).toBe('text/vnd.jiso.fragment+html; charset=utf-8');
+    await expect(enhanced.text()).resolves.toBe(
+      [
+        '<fw-query name="cart">{"count":1}</fw-query>',
+        '<fw-fragment target="cart"><cart-badge>1</cart-badge></fw-fragment>',
+      ].join('\n'),
+    );
+
+    const noJsForm = new FormData();
+    noJsForm.set('productId', 'p1');
+    const noJs = await handler(
+      new Request('https://example.test/_m/cart/add', {
+        body: noJsForm,
+        method: 'POST',
+      }),
+    );
+    expect(noJs.status).toBe(303);
+    expect(noJs.headers.get('location')).toBe('/cart');
+    await expect(noJs.text()).resolves.toBe('');
   });
 });
