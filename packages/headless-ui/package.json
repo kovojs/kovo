@@ -24,6 +24,7 @@
     "./primitives/progress": "./src/primitives/progress.ts",
     "./primitives/radio-group": "./src/primitives/radio-group.ts",
     "./primitives/scroll-area": "./src/primitives/scroll-area.ts",
+    "./primitives/select": "./src/primitives/select.ts",
     "./primitives/separator": "./src/primitives/separator.ts",
     "./primitives/switch": "./src/primitives/switch.ts",
     "./primitives/tabs": "./src/primitives/tabs.ts",

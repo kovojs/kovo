@@ -403,6 +403,33 @@ export type {
 } from './scroll-area.js';
 
 export {
+  selectContentAttributes,
+  selectItemAttributes,
+  selectItemSelected,
+  selectRootAttributes,
+  selectTriggerAttributes,
+  selectTriggerChange,
+  selectValueAttributes,
+  selectValueText,
+  setSelectValue,
+} from './select.js';
+export type {
+  SelectChangeDetail,
+  SelectChangeOptions,
+  SelectChangeReason,
+  SelectChangeResult,
+  SelectContentAttributeOptions,
+  SelectItem,
+  SelectItemAttributeOptions,
+  SelectPrimitiveAttributes,
+  SelectRootAttributeOptions,
+  SelectState,
+  SelectTriggerAttributeOptions,
+  SelectTriggerEvent,
+  SelectValueAttributeOptions,
+} from './select.js';
+
+export {
   setTabsValue,
   tabsItemSelected,
   tabsKeyDown,

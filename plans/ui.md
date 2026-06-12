@@ -351,6 +351,19 @@ jiso-dialog` resolves dashed wire names and prints provenance including package,
       `pnpm exec vp check packages/headless-ui/package.json packages/headless-ui/src/index.ts packages/headless-ui/src/lib/state-attributes.ts packages/headless-ui/src/primitives/index.ts packages/headless-ui/src/primitives/scroll-area.ts packages/headless-ui/src/primitives/scroll-area.test.ts plans/ui.md`,
       and `git diff --check`. H2 remains open for full gates.
 - [ ] H3 wave 3 primitives (list-driven & isomorphic): select, combobox, autocomplete, dropdown-menu, context-menu, menubar, navigation-menu, slider, toast, command.
+      Partial evidence 2026-06-12: `packages/headless-ui/src/primitives/select.ts`
+      adds the H3 select primitive as a native `<select>/<option>`-oriented helper:
+      root/trigger/content/item/value attribute builders, real `name`/`required`/`disabled`
+      select control attributes per SPEC §6.3, selected/placeholder/open/closed data attrs,
+      disabled-item protection, cancelable value transitions, selected value text resolution,
+      and a guarded change handler following the SPEC §4.6 primitive handler no-op contract.
+      It is exported through `@jiso/headless-ui`, `@jiso/headless-ui/primitives`, and
+      `@jiso/headless-ui/primitives/select`. Same-session evidence:
+      `pnpm --filter @jiso/headless-ui exec vitest --run src/primitives/select.test.ts`,
+      `pnpm --filter @jiso/headless-ui run lint:primitives`,
+      `pnpm exec vp check packages/headless-ui/package.json packages/headless-ui/src/index.ts packages/headless-ui/src/primitives/index.ts packages/headless-ui/src/primitives/select.ts packages/headless-ui/src/primitives/select.test.ts plans/ui.md`,
+      and `git diff --check`. H3 remains open for combobox, autocomplete, dropdown-menu,
+      context-menu, menubar, navigation-menu, slider, toast, command, and full gates.
 - [x] U1 token sheet + `cn()` + statically-analyzable variant helper (Tailwind-first, §13.1 discoverability rules).
       Evidence 2026-06-12: `packages/headless-ui/src/lib/class-names.ts`
       provides the dependency-free `cn()` helper, `packages/headless-ui/src/lib/variants.ts`
