@@ -99,6 +99,89 @@ describe('server app shell Vite diagnostics', () => {
       });
     }
   });
+
+  it('serves mutation diagnostics as fragment wire or document responses', async () => {
+    const diagnostics = createJisoAppShellDevDiagnosticLedger();
+    const plugin = jisoAppShellVitePlugin(
+      createApp({
+        mutations: [{ key: 'cart/add' }],
+      }),
+      { devDiagnostics: diagnostics },
+    );
+    const middlewares: JisoAppShellViteMiddleware[] = [];
+
+    plugin.configureServer({
+      middlewares: {
+        use(handler) {
+          middlewares.push(handler);
+        },
+      },
+    });
+
+    const server = createServer((request, response) => {
+      middlewares[0]?.(request, response, (error) => {
+        if (error) {
+          response.writeHead(500, { 'Content-Type': 'text/plain; charset=utf-8' });
+          response.end(error instanceof Error ? error.message : JSON.stringify(error));
+          return;
+        }
+
+        response.writeHead(418, { 'Content-Type': 'text/plain; charset=utf-8' });
+        response.end('next');
+      });
+    });
+    await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
+
+    try {
+      const port = (server.address() as AddressInfo).port;
+      diagnostics.recordModuleDiagnostics({
+        diagnostics: [
+          {
+            code: 'FW225',
+            fileName: 'src/mutations/cart.ts',
+            message: 'JSX nesting violates the HTML content model.',
+          },
+        ],
+        fileName: 'src/mutations/cart.ts',
+        moduleHrefs: ['/_m/cart/add'],
+      });
+
+      const fragmentResponse = await nodeFetch(`http://127.0.0.1:${port}/_m/cart/add`, {
+        headers: {
+          'FW-Fragment': 'true',
+          'FW-Targets': 'cart-errors',
+        },
+        method: 'POST',
+      });
+
+      expect(fragmentResponse).toMatchObject({
+        body: expect.stringContaining('<fw-fragment target="cart-errors">'),
+        headers: expect.objectContaining({
+          'content-type': 'text/vnd.jiso.fragment+html; charset=utf-8',
+        }),
+        status: 500,
+      });
+      expect(fragmentResponse.body).toContain('<p class="jiso-diagnostic-code">FW225</p>');
+      expect(fragmentResponse.body).not.toContain('next');
+
+      const documentResponse = await nodeFetch(`http://127.0.0.1:${port}/_m/cart/add`, {
+        method: 'POST',
+      });
+
+      expect(documentResponse).toMatchObject({
+        body: expect.stringContaining('<title>FW225 diagnostic</title>'),
+        headers: expect.objectContaining({
+          'content-type': 'text/html; charset=utf-8',
+        }),
+        status: 500,
+      });
+      expect(documentResponse.body).not.toContain('<fw-fragment');
+    } finally {
+      await new Promise<void>((resolve, reject) => {
+        server.close((error) => (error ? reject(error) : resolve()));
+      });
+    }
+  });
 });
 
 interface NodeResponse {
@@ -107,20 +190,32 @@ interface NodeResponse {
   status: number;
 }
 
-async function nodeFetch(url: string): Promise<NodeResponse> {
+interface NodeFetchOptions {
+  headers?: Record<string, string>;
+  method?: string;
+}
+
+async function nodeFetch(url: string, options: NodeFetchOptions = {}): Promise<NodeResponse> {
   return new Promise((resolve, reject) => {
-    const request = httpRequest(url, (response) => {
-      const chunks: Buffer[] = [];
-      response.on('data', (chunk: Buffer) => chunks.push(chunk));
-      response.on('error', reject);
-      response.on('end', () => {
-        resolve({
-          body: Buffer.concat(chunks).toString('utf8'),
-          headers: response.headers,
-          status: response.statusCode ?? 0,
+    const request = httpRequest(
+      url,
+      {
+        headers: options.headers,
+        method: options.method,
+      },
+      (response) => {
+        const chunks: Buffer[] = [];
+        response.on('data', (chunk: Buffer) => chunks.push(chunk));
+        response.on('error', reject);
+        response.on('end', () => {
+          resolve({
+            body: Buffer.concat(chunks).toString('utf8'),
+            headers: response.headers,
+            status: response.statusCode ?? 0,
+          });
         });
-      });
-    });
+      },
+    );
     request.on('error', reject);
     request.end();
   });

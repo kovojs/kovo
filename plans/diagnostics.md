@@ -27,7 +27,7 @@ content or severities (SPEC §11.3 owns those); `fw check`/`fw explain` semantic
       escaped message, fix menu, optional location, and optional source frame. Same-session
       evidence: `pnpm exec vitest --run packages/server/src/shell.test.ts` and
       `pnpm exec vp check packages/server/src/document.ts packages/server/src/index.ts packages/server/src/shell.test.ts plans/diagnostics.md`.
-- [ ] E2 dev middleware: page/fragment/mutation requests against a module with `error`
+- [x] E2 dev middleware: page/fragment/mutation requests against a module with `error`
       diagnostics answer with the diagnostic document (500), covering the requests a
       client-injected overlay cannot see (direct navigation, no-JS form posts, fragment fetches).
       Evidence 2026-06-12: page-route slice landed. `createJisoAppShellDevDiagnosticLedger()`
@@ -42,7 +42,13 @@ content or severities (SPEC §11.3 owns those); `fw check`/`fw explain` semantic
       `pnpm exec vitest --run packages/compiler/src/index.test.ts --testNamePattern "jisoVitePlugin"`,
       and
       `pnpm exec vp check packages/server/src/vite.ts packages/server/src/index.ts packages/server/src/vite.test.ts packages/compiler/src/vite.ts packages/compiler/src/index.ts packages/compiler/src/index.test.ts plans/diagnostics.md`.
-      Gap: fragment and mutation request dependency mapping is still open, so E2 remains open.
+      Additional evidence 2026-06-12: mutation request dependency mapping now uses the same
+      dev diagnostic ledger via explicit module hrefs such as `/_m/cart/add`; enhanced mutation
+      requests with `FW-Fragment: true` receive a `text/vnd.jiso.fragment+html` HTTP 500
+      `<fw-fragment>` carrying the diagnostic document, while no-JS mutation POSTs receive the
+      HTTP 500 diagnostic document before app mutation dispatch. Same-session evidence:
+      `pnpm exec vitest --run packages/server/src/vite-diagnostics.test.ts packages/server/src/vite.test.ts`
+      and `pnpm exec vp check packages/server/src/vite.ts packages/server/src/vite-diagnostics.test.ts`.
 - [x] M1a `fw mcp`: stdio-compatible JSON-RPC line server exposing compile/check/explain as
       structured tools wrapping the existing public APIs — no second diagnostic channel.
 - [x] M1b SDK-backed MCP adapter using `@modelcontextprotocol/sdk` over stdio once the dependency
@@ -63,7 +69,10 @@ content or severities (SPEC §11.3 owns those); `fw check`/`fw explain` semantic
       E1 diagnostic document with HTTP 500 for a matching page modulepreload, then a same-module
       FW210 lint diagnostic clears the ledger and the app route returns HTTP 200. Same-session
       evidence: `pnpm exec vitest --run packages/server/src/vite-diagnostics.test.ts`.
-      Gap: fragment/mutation seeded gates still wait on the E2 dependency mapping seam.
+      Additional evidence 2026-06-12: the same focused gate now seeds a mutation module href and
+      proves both the enhanced fragment response and no-JS POST response return diagnostic HTTP
+      500s before app dispatch. Same-session evidence:
+      `pnpm exec vitest --run packages/server/src/vite-diagnostics.test.ts packages/server/src/vite.test.ts`.
 
 ## Background
 

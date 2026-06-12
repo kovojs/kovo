@@ -6,8 +6,9 @@ import { createRequestHandler, type JisoApp, type RequestHandler } from './app.j
 import { renderDiagnosticDocument, type DiagnosticDocumentDiagnostic } from './document.js';
 import type { PageHintOptions } from './hints.js';
 import { toNodeHandler, writeWebResponseToNode } from './node.js';
-import { routeResponseToWebResponse } from './response.js';
+import { readHeader, routeResponseToWebResponse, type RoutePageResponse } from './response.js';
 import { matchShellDispatch } from './shell.js';
+import { renderFragmentWireHtml } from './wire-html.js';
 
 export interface JisoAppShellVitePlugin {
   configureServer(server: JisoAppShellViteDevServer): void;
@@ -154,7 +155,7 @@ export function jisoAppShellVitePlugin(
     configureServer(server) {
       server.middlewares.use((request, response, next) => {
         const diagnosticResponse = app
-          ? devPageDiagnosticResponse(app, request, options.devDiagnostics)
+          ? devDiagnosticResponse(app, request, options.devDiagnostics)
           : undefined;
         if (diagnosticResponse) {
           Promise.resolve(
@@ -174,11 +175,11 @@ export function jisoAppShellVitePlugin(
   };
 }
 
-function devPageDiagnosticResponse(
+function devDiagnosticResponse(
   app: JisoApp,
   request: IncomingMessage,
   diagnostics: JisoAppShellDevDiagnosticLedger | undefined,
-) {
+): RoutePageResponse | undefined {
   if (!diagnostics) return undefined;
 
   const url = new URL(request.url ?? '/', 'http://jiso.local');
@@ -188,6 +189,25 @@ function devPageDiagnosticResponse(
     pathname: url.pathname,
     routes: app.routes,
   });
+  if (match.kind === 'mutation') {
+    const record = diagnostics.diagnosticsForModuleHref(url.pathname);
+    if (!record) return undefined;
+
+    const document = renderDiagnosticDocumentForRecord(record);
+    if (readHeader(request.headers, 'FW-Fragment')?.toLowerCase() !== 'true') return document;
+
+    return {
+      body: renderFragmentWireHtml({
+        html: document.body,
+        target: firstMutationDiagnosticTarget(request.headers),
+      }),
+      headers: {
+        'Content-Type': 'text/vnd.jiso.fragment+html; charset=utf-8',
+      },
+      status: 500,
+    };
+  }
+
   if (match.kind !== 'route' || !match.methodAllowed) return undefined;
 
   for (const href of match.route.modulepreloads ?? []) {
@@ -196,15 +216,31 @@ function devPageDiagnosticResponse(
 
     // SPEC §11.3: dev page requests depending on a failed module answer with
     // the same server-rendered teaching diagnostic document, never a local policy.
-    return renderDiagnosticDocument({
-      diagnostics: record.diagnostics,
-      ...(record.source === undefined
-        ? {}
-        : { source: { fileName: record.fileName, source: record.source } }),
-    });
+    return renderDiagnosticDocumentForRecord(record);
   }
 
   return undefined;
+}
+
+function renderDiagnosticDocumentForRecord(
+  record: JisoAppShellDevDiagnosticRecord,
+): RoutePageResponse & { body: string } {
+  return renderDiagnosticDocument({
+    diagnostics: record.diagnostics,
+    ...(record.source === undefined
+      ? {}
+      : { source: { fileName: record.fileName, source: record.source } }),
+  }) as RoutePageResponse & { body: string };
+}
+
+function firstMutationDiagnosticTarget(headers: IncomingMessage['headers']): string {
+  return (
+    (readHeader(headers, 'FW-Targets') ?? '')
+      .split(/[;,]/)
+      .map((target) => target.trim())
+      .map((target) => target.split('=')[0]?.trim() ?? '')
+      .find(Boolean) ?? 'error'
+  );
 }
 
 function clearModuleRecord(
