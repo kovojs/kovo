@@ -13,6 +13,7 @@
     "./primitives/meter": "./src/primitives/meter.ts",
     "./primitives/progress": "./src/primitives/progress.ts",
     "./primitives/separator": "./src/primitives/separator.ts",
+    "./primitives/switch": "./src/primitives/switch.ts",
     "./primitives/toggle": "./src/primitives/toggle.ts",
     "./tooling": "./src/tooling/index.ts"
   },

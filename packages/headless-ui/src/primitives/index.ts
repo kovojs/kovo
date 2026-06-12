@@ -16,6 +16,22 @@ export type {
 } from './checkbox.js';
 
 export {
+  setSwitchChecked,
+  switchRootAttributes,
+  switchTriggerClick,
+  toggleSwitch,
+} from './switch.js';
+export type {
+  SwitchChangeDetail,
+  SwitchChangeOptions,
+  SwitchChangeReason,
+  SwitchChangeResult,
+  SwitchPrimitiveAttributes,
+  SwitchState,
+  SwitchTriggerEvent,
+} from './switch.js';
+
+export {
   collapsibleContentAttributes,
   collapsibleRootAttributes,
   collapsibleTriggerAttributes,
