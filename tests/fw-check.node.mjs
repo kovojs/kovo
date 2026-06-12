@@ -654,30 +654,6 @@ const parseMarkdownTable = (source) => {
   return rows;
 };
 
-const balancedSnippetAfter = (source, marker, open, close) => {
-  const markerIndex = source.indexOf(marker);
-  assert.notEqual(markerIndex, -1, `source contains ${marker}`);
-  const openIndex = source.indexOf(open, markerIndex);
-  assert.notEqual(openIndex, -1, `source contains ${open} after ${marker}`);
-  let depth = 0;
-
-  for (let index = openIndex; index < source.length; index += 1) {
-    const char = source[index];
-
-    if (char === open) {
-      depth += 1;
-    } else if (char === close) {
-      depth -= 1;
-
-      if (depth === 0) {
-        return source.slice(openIndex, index + 1);
-      }
-    }
-  }
-
-  assert.fail(`source contains balanced ${open}${close} after ${marker}`);
-};
-
 class GateMorphTarget {
   constructor(html = '') {
     this.html = html;
@@ -879,6 +855,53 @@ const assertTypeScriptProgramHasNoDiagnostics = async (files) => {
   );
 };
 
+const typeScriptInterfaceMemberTypes = async (fileName, source, interfaceName) => {
+  const ts = await import('typescript');
+  const compilerOptions = {
+    module: ts.ModuleKind.NodeNext,
+    moduleResolution: ts.ModuleResolutionKind.NodeNext,
+    noEmit: true,
+    skipLibCheck: true,
+    strict: true,
+    target: ts.ScriptTarget.ES2024,
+  };
+  const defaultHost = ts.createCompilerHost(compilerOptions, true);
+  const host = {
+    ...defaultHost,
+    fileExists(candidate) {
+      return candidate === fileName || defaultHost.fileExists(candidate);
+    },
+    getSourceFile(candidate, languageVersion) {
+      if (candidate === fileName) {
+        return ts.createSourceFile(candidate, source, languageVersion, true);
+      }
+      return defaultHost.getSourceFile(candidate, languageVersion);
+    },
+    readFile(candidate) {
+      return candidate === fileName ? source : defaultHost.readFile(candidate);
+    },
+  };
+  const program = ts.createProgram([fileName], compilerOptions, host);
+  const sourceFile = program.getSourceFile(fileName);
+  assert.ok(sourceFile, `TypeScript parsed ${fileName}`);
+  const interfaceNode = sourceFile.statements.find(
+    (statement) => ts.isInterfaceDeclaration(statement) && statement.name.text === interfaceName,
+  );
+  assert.ok(interfaceNode, `TypeScript registry exports interface ${interfaceName}`);
+  const checker = program.getTypeChecker();
+
+  return Object.fromEntries(
+    checker
+      .getTypeAtLocation(interfaceNode)
+      .getProperties()
+      .map((symbol) => [
+        symbol.name,
+        checker.typeToString(checker.getTypeOfSymbolAtLocation(symbol, interfaceNode)),
+      ])
+      .sort(([left], [right]) => left.localeCompare(right)),
+  );
+};
+
 const loadVitePlusConfig = async () => {
   const ts = await import('typescript');
   const module = { exports: {} };
@@ -1022,31 +1045,6 @@ const executeStarterClientTemplate = async (source) => {
     loaderInstalls,
     queryStore,
   };
-};
-
-const interfaceMembersFromSource = (source, interfaceName) => {
-  const snippet = balancedSnippetAfter(source, `interface ${interfaceName}`, '{', '}');
-  const members = {};
-  let statement = '';
-  let depth = 0;
-
-  for (const char of snippet.slice(1, -1)) {
-    if (char === '{' || char === '(' || char === '[') depth += 1;
-    if (char === '}' || char === ')' || char === ']') depth -= 1;
-
-    if (char === ';' && depth === 0) {
-      const match = /^(?:(['"])(.*?)\1|([A-Za-z_$][\w$-]*))\??\s*:\s*([\s\S]+)$/.exec(
-        statement.trim(),
-      );
-      if (match) members[match[2] ?? match[3]] = match[4].replace(/\s+/g, ' ').trim();
-      statement = '';
-      continue;
-    }
-
-    statement += char;
-  }
-
-  return members;
 };
 
 const runGraphAssertionsTemplateScript = async () => {
@@ -2049,9 +2047,14 @@ export const ProductCard = component('product-card', {
     1,
   );
   assert.equal(renderedImage?.attributes.viewTransitionName, undefined);
-  assert.deepEqual(interfaceMembersFromSource(registrySource, 'ViewTransitions'), {
-    'product-p1-image': 'unknown',
-  });
+  assert.deepEqual(
+    await typeScriptInterfaceMemberTypes(
+      'view-transition-registry.ts',
+      registrySource,
+      'ViewTransitions',
+    ),
+    { 'product-p1-image': 'unknown' },
+  );
 });
 
 void test('P1 compiler validates component-scoped IDREFs', async () => {
@@ -2763,9 +2766,39 @@ export const ProductLinks = component('product-links', {
     renderedLinks.map((element) => element.attributes.href),
     ['/products/p%201?max=500', '/cart'],
   );
-  assert.deepEqual(interfaceMembersFromSource(registrySource, 'RouteRegistry'), {
-    '/cart': "import('@jiso/core').Route<'/cart'>",
-    '/products/:id': "import('@jiso/core').Route<'/products/:id'>",
+
+  const virtualRegistryFile = join(
+    fileURLToPath(new URL('../', import.meta.url)),
+    '.fw-check-virtual',
+    'route-registry.ts',
+  );
+  const virtualConsumerFile = join(
+    fileURLToPath(new URL('../', import.meta.url)),
+    '.fw-check-virtual',
+    'route-consumer.ts',
+  );
+
+  await assertTypeScriptProgramHasNoDiagnostics({
+    [virtualRegistryFile]: registrySource,
+    [virtualConsumerFile]: `
+import { href, Link, redirect, route } from '@jiso/core';
+
+href('/cart', {});
+href('/products/:id', { params: { id: 'p 1' }, search: { max: 500 } });
+redirect('/products/:id', { params: { id: 'p1' } });
+route('/products/:id');
+Link('/cart', {});
+Link('/products/:id', { params: { id: 'p1' } });
+
+// @ts-expect-error generated RouteRegistry requires params for dynamic routes.
+href('/products/:id', {});
+
+// @ts-expect-error generated RouteRegistry keeps id params typed as string.
+href('/products/:id', { params: { id: 1 } });
+
+// @ts-expect-error generated RouteRegistry rejects undeclared routes.
+href('/checkout', {});
+`,
   });
 
   assert.deepEqual(

@@ -140,6 +140,12 @@ Do this first or pay it on every commit.
       extra props instead of parsing the generated `FragmentTargets` interface source. Same-session
       evidence:
       `node --test --test-name-pattern "P1 fragment targets emit typed registry facts" tests/fw-check.node.mjs`.
+      Partial evidence 2026-06-12: the view-transition and typed-route registry tranche now
+      checks generated `ViewTransitions` through the TypeScript compiler symbol table and
+      compiles a virtual `href`/`Link`/`redirect`/`route` consumer with positive calls plus
+      `@ts-expect-error` negative cases, deleting the remaining ad hoc generated-interface
+      source parser from `tests/fw-check.node.mjs`. Same-session evidence:
+      `node --test --test-name-pattern "P2 compiler merges view transition stamps into existing styles|P3 typed routes validate navigation targets" tests/fw-check.node.mjs`.
       Partial evidence 2026-06-11: the `P10 starter wires graph assertions into CI` tranche now
       parses `packages/create-jiso/templates/package.json` and `graph.json`, asserts starter
       graph structure, exercises the real template graph through `fwCheck`/`fwExplain`, evaluates
