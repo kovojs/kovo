@@ -175,7 +175,9 @@ export function applyMutationResponseToDom(
   return applyMutationResponseBody(options);
 }
 
-export function applyDeferredStreamResponseToDom(options: {
+export interface ApplyDeferredStreamResponseToDomOptions {
+  applyQuery?: ApplyQueryInterposition;
+  beforeApplyQueries?: (queries: readonly QueryChunk[]) => void;
   body: string;
   boundary?: string;
   islandSignalScope?: IslandSignalScope;
@@ -184,12 +186,18 @@ export function applyDeferredStreamResponseToDom(options: {
   queryPlans?: CompiledQueryUpdatePlans;
   root: MorphRoot;
   store: QueryStore;
-}): AppliedDeferredStreamResponse {
+}
+
+export function applyDeferredStreamResponseToDom(
+  options: ApplyDeferredStreamResponseToDomOptions,
+): AppliedDeferredStreamResponse {
   const chunks = deferredStreamChunks(options.body, options.boundary ?? 'jiso-boundary').map(
     (body) =>
       applyMutationResponseToDom({
         body,
         ...definedProps({
+          applyQuery: options.applyQuery,
+          beforeApplyQueries: options.beforeApplyQueries,
           islandSignalScope: options.islandSignalScope,
           morph: options.morph,
           onError: options.onError,

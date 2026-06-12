@@ -178,6 +178,52 @@ describe('mutation response wire chunks', () => {
     );
   });
 
+  it('keeps deferred stream chunks on the hook-aware mutation response path', () => {
+    const store = createQueryStore();
+    const root = new FakeMorphRoot();
+    const count = new FakeQueryBindingElement({ 'data-bind': 'cart.count' }, '0');
+    const observed: string[] = [];
+    const beforeApplyQueries = vi.fn();
+    root.bindings.push(count);
+    root.targets.set('cart-badge', new FakeMorphTarget());
+    root.targets.set('cart-total', new FakeMorphTarget());
+
+    // SPEC.md §9.1: deferred stream query chunks use the same mutation response
+    // vocabulary, so interposed store truth and compiled bindings stay shared.
+    const applied = applyDeferredStreamResponseToDom({
+      applyQuery(query) {
+        store.set(query.name, { count: (query.value as { count: number }).count + 10 }, query.key);
+        return { value: store.get(query.name, query.key) };
+      },
+      beforeApplyQueries,
+      body: [
+        '--jiso-boundary',
+        '<fw-query name="cart">{"count":1}</fw-query>',
+        '<fw-fragment target="cart-badge"><span>badge</span></fw-fragment>',
+        '--jiso-boundary',
+        '<fw-query name="cart" key="cart:primary">{"count":2}</fw-query>',
+        '<fw-fragment target="cart-total"><span>total</span></fw-fragment>',
+        '--jiso-boundary--',
+      ].join('\n'),
+      morph(target, html) {
+        observed.push(count.textContent ?? '');
+        target.replaceWithHtml(html);
+      },
+      root,
+      store,
+    });
+
+    expect(applied.queries).toEqual(['cart', 'cart:primary']);
+    expect(applied.appliedFragments).toEqual(['cart-badge', 'cart-total']);
+    expect(observed).toEqual(['11', '12']);
+    expect(store.get('cart')).toEqual({ count: 11 });
+    expect(store.get('cart', 'cart:primary')).toEqual({ count: 12 });
+    expect(beforeApplyQueries).toHaveBeenNthCalledWith(1, [{ name: 'cart', value: { count: 1 } }]);
+    expect(beforeApplyQueries).toHaveBeenNthCalledWith(2, [
+      { key: 'cart:primary', name: 'cart', value: { count: 2 } },
+    ]);
+  });
+
   it('accepts escaped JSON from text/html-compatible fw-query chunks', () => {
     const store = createQueryStore();
 

@@ -2333,6 +2333,17 @@ params, relational API, `execute(sql)`, right/full joins, a string column named 
       `pnpm exec vitest --config vitest.browser.config.ts --run packages/runtime/src/index.browser.test.ts`,
       `pnpm exec vp check packages/runtime/src/inline-loader-build.ts packages/runtime/src/inline-loader.ts packages/runtime/src/inline-loader.test.ts packages/runtime/src/mutation-submit.ts packages/runtime/src/mutation-targets.ts packages/runtime/src/mutation-targets.test.ts plans/codebase-quality-round2.md`,
       and `git diff --check`.
+      Additional bounded evidence 2026-06-12: `packages/runtime/src/apply-path.ts` now exposes
+      deferred stream DOM apply options for the same `applyQuery` and `beforeApplyQueries` hooks
+      used by mutation response DOM/store apply, so deferred chunks stay on the hook-aware apply
+      path for interposed store truth, compiled bindings, and fragment morphing. The runtime apply
+      barrel exports the new options type, and `packages/runtime/src/mutation-response.test.ts`
+      pins per-chunk hook execution for keyed and unkeyed deferred query chunks before morphing.
+      Same-session evidence:
+      `corepack pnpm exec vitest --run packages/runtime/src/mutation-response.test.ts`,
+      `corepack pnpm --filter @jiso/runtime run check:inline-loader`,
+      `corepack pnpm exec vp check packages/runtime/src/apply-path.ts packages/runtime/src/apply.ts packages/runtime/src/mutation-response.test.ts plans/codebase-quality-round2.md`,
+      and `git diff --check`.
       Additional bounded evidence 2026-06-12: `packages/runtime/src/inline-loader-build.ts`
       now compares compiler-printed and minified JavaScript token fingerprints before the AST
       parity check, and fails closed when parser regex literal spans are not consumed cleanly by

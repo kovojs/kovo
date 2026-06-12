@@ -10,6 +10,7 @@ export type {
   AppliedMutationResponse,
   AppliedMutationResponseToDom,
   AppliedMutationResponseToRuntime,
+  ApplyDeferredStreamResponseToDomOptions,
   ApplyMutationResponseToDomOptions,
   ApplyMutationResponseToRuntimeOptions,
   ApplyMutationResponseToRuntimeStoreOptions,
