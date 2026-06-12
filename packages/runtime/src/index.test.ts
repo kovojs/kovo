@@ -2165,15 +2165,41 @@ describe('query store', () => {
     const plan = vi.fn();
 
     store.subscribe('cart', plan);
-    hydrateQueryScripts(store, [
+    const hydrated = hydrateQueryScripts(store, [
       {
         getAttribute: (name) => (name === 'fw-query' ? 'cart' : null),
         textContent: '{"count":2}',
       },
     ]);
 
+    expect(hydrated).toEqual(['cart']);
     expect(store.get('cart')).toEqual({ count: 2 });
     expect(plan).toHaveBeenCalledWith({ count: 2 });
+  });
+
+  it('returns only successfully hydrated fw-query scripts', () => {
+    const store = createQueryStore();
+    const onError = vi.fn();
+
+    const hydrated = hydrateQueryScripts(
+      store,
+      [
+        {
+          getAttribute: (name) => (name === 'fw-query' ? 'cart' : null),
+          textContent: '{"count":1}',
+        },
+        {
+          getAttribute: (name) => (name === 'fw-query' ? 'inventory' : null),
+          textContent: '{',
+        },
+      ],
+      { onError },
+    );
+
+    expect(hydrated).toEqual(['cart']);
+    expect(store.get('cart')).toEqual({ count: 1 });
+    expect(store.get('inventory')).toBeUndefined();
+    expect(onError).toHaveBeenCalledTimes(1);
   });
 
   it('runs update plans whenever a query value changes', () => {
@@ -2259,6 +2285,38 @@ describe('query store', () => {
 
     expect(refetchOnFocus).toHaveBeenNthCalledWith(1, ['cart', 'inventory']);
     expect(refetchOnFocus).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not make malformed initial fw-query scripts eligible for visible-return refetch', async () => {
+    const root = new FakeRoot();
+    const store = createQueryStore();
+    const refetchOnFocus = vi.fn();
+    const onError = vi.fn();
+    root.scripts = [
+      {
+        getAttribute: (name) => (name === 'fw-query' ? 'cart' : null),
+        textContent: '{"count":1}',
+      },
+      {
+        getAttribute: (name) => (name === 'fw-query' ? 'inventory' : null),
+        textContent: '{',
+      },
+    ];
+
+    installJisoLoader({
+      importModule: vi.fn(),
+      onError,
+      queryStore: store,
+      refetchOnFocus,
+      root,
+    });
+
+    root.visibilityState = 'visible';
+    await root.listeners.get('visibilitychange')?.({ target: null, type: 'visibilitychange' });
+
+    // SPEC.md §4.4: focus refetch follows successfully hydrated query data.
+    expect(refetchOnFocus).toHaveBeenCalledWith(['cart']);
+    expect(onError).toHaveBeenCalledWith(expect.any(Error), { phase: 'query-hydration' });
   });
 
   it('makes queries introduced by enhanced mutations eligible for visible-return refetch', async () => {

@@ -951,6 +951,12 @@ params, relational API, `execute(sql)`, right/full joins, a string column named 
       mutation-added and refetch-added query names. Same-session evidence:
       `pnpm exec vitest --run packages/runtime/src/index.test.ts -t "refetch|visible-return"`,
       `pnpm exec vitest --run packages/runtime/src`, and `pnpm run check`.
+      Additional bounded evidence 2026-06-12: `hydrateQueryScripts` now returns only successfully
+      parsed initial query names, so malformed `fw-query` JSON reports `query-hydration` without
+      making that query eligible for later visible-return refetch. `index.test.ts` pins the helper
+      return value and the loader focus-refetch ledger under the SPEC §4.4 query hydration
+      contract. Same-session evidence:
+      `pnpm exec vitest --run packages/runtime/src/index.test.ts -t "hydrate|visible-return|refetch"`.
 
 Verification: runtime node + browser suites; gzip budget; the new parity suite is the gate for
 any future inline-loader edit. A `definedProps()` helper for the ~30 optional-spread sites is

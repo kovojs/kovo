@@ -96,12 +96,10 @@ export function hydrateQueryScripts(
       const parsed = parseJsonValue(script.textContent ?? 'null');
       if (parsed.ok) {
         store.set(name, parsed.value, script.getAttribute('key') ?? undefined);
+        hydrated.push(name);
       } else {
         options.onError?.(malformedJsonError('fw-query hydration', parsed.error));
       }
-    }
-    if (name) {
-      hydrated.push(name);
     }
   }
 
