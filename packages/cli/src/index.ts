@@ -752,6 +752,12 @@ function runAddCommand(options: AddComponentOptions): CliCommandResult {
 
   for (const component of options.components) {
     const entry = vendoredUiComponents[component];
+    if (!entry) {
+      return {
+        error: `${addOutputVersion}\nERROR ${component} reason=unknown-component`,
+        exitCode: 1,
+      };
+    }
     const target = resolve(options.outDir, entry.fileName);
 
     // SPEC.md §5.2 requires vendored UI to land as TSX app source, not lowered IR.
