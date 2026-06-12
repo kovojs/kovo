@@ -82,6 +82,17 @@ Scope: SPEC addition (proposed §9.5 "The request shell"), `@jiso/server` shell 
       paths, and conflicting query versions for one output path. Same-session evidence:
       `pnpm exec vitest --run packages/server/src/static-export.test.ts packages/server/src/app.test.ts`
       and `pnpm run check`. Remaining R6 work: CLI/task wiring and general static asset copying.
+      Additional evidence 2026-06-11: `packages/cli/src/index.ts` now exposes async
+      `fw export <app-module> [--out <dir>] [--origin <url>] [--skip-non-exportable]`, loads a
+      default or named `app`, calls `exportStaticApp()`, writes to `dist` by default, and emits
+      stable `fw-export/v1` output with HTML/client-module summaries plus FW229 diagnostics.
+      `packages/cli/src/index.test.ts` covers successful export bytes and non-exportable-route
+      diagnostics. Same-session evidence:
+      `pnpm exec vitest --run packages/cli/src/index.test.ts packages/server/src/static-export.test.ts`
+      and
+      `pnpm exec vp check packages/cli/src/index.ts packages/cli/src/index.test.ts packages/cli/package.json pnpm-lock.yaml`.
+      Remaining R6 work: Vite/task template wiring for real starter/docs apps and general static
+      asset copying.
 - [ ] R7 adoption: starter becomes a routed app served by `vp dev`; commerce runs end-to-end over HTTP; a jiso docs site ships from `vp run export` as the first outside consumer.
       Progress 2026-06-11: commerce is now TSX-authored ahead of the HTTP serve
       entry — `CartBadge`, `OrderHistory`, and `ProductGrid` are authored in
