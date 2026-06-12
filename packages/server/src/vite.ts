@@ -11,7 +11,12 @@ import type { PageHintOptions } from './hints.js';
 import { toNodeHandler, writeWebResponseToNode } from './node.js';
 import { readHeader, routeResponseToWebResponse, type RoutePageResponse } from './response.js';
 import { matchShellDispatch } from './shell.js';
-import type { StaticExportAssetInput } from './static-export.js';
+import {
+  exportStaticApp,
+  type StaticExportAssetInput,
+  type StaticExportOptions,
+  type StaticExportResult,
+} from './static-export.js';
 import { renderFragmentWireHtml } from './wire-html.js';
 
 export interface JisoAppShellVitePlugin {
@@ -184,6 +189,14 @@ export interface JisoAppShellViteBuildOutputOptions {
 export interface JisoAppShellViteBuildOutput {
   clientModules: readonly JisoAppShellBuiltClientModule[];
   staticExportAssets: readonly StaticExportAssetInput[];
+}
+
+export interface JisoAppShellViteBuildStaticExportOptions extends Omit<
+  StaticExportOptions,
+  'assets'
+> {
+  assets?: readonly StaticExportAssetInput[];
+  distDir: string | URL;
 }
 
 export function createJisoAppShellDevDiagnosticLedger(): JisoAppShellDevDiagnosticLedger {
@@ -522,6 +535,20 @@ export function jisoAppShellViteStaticExportAssets(
       path: asset.path,
       source: viteDistSourcePath(options.distDir, asset.file),
     };
+  });
+}
+
+export async function exportJisoAppShellViteBuild(
+  build: JisoAppShellBuild,
+  options: JisoAppShellViteBuildStaticExportOptions,
+): Promise<StaticExportResult> {
+  const { assets = [], distDir, ...exportOptions } = options;
+
+  return exportStaticApp(build.app, {
+    ...exportOptions,
+    // SPEC §9.5: static export replays the built app shell, then copies the
+    // immutable asset files referenced by the Vite manifest.
+    assets: [...jisoAppShellViteStaticExportAssets(build.assets, { distDir }), ...assets],
   });
 }
 

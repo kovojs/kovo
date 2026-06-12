@@ -105,6 +105,15 @@ Scope: SPEC addition (proposed §9.5 "The request shell"), `@jiso/server` shell 
       `pnpm exec vitest --run packages/server/src/vite.test.ts packages/server/src/static-export.test.ts`,
       `pnpm exec vp check packages/server/src/vite.ts packages/server/src/vite.test.ts plans/app-shell.md`,
       and `git diff --check`.
+      Additional evidence 2026-06-12: `exportJisoAppShellViteBuild()` now bridges the
+      Vite app-shell build object to `exportStaticApp()`, using the build's route-hinted app
+      and manifest-derived static asset copy inputs in one call. `packages/server/src/vite.test.ts`
+      proves a route-entry map produces stylesheet/modulepreload HTML during static export and
+      copies the referenced Vite dist CSS/JS bytes. Same-session verification ran
+      `pnpm exec vitest --run packages/server/src/vite.test.ts`,
+      `pnpm exec vitest --run packages/server/src/static-export.test.ts packages/server/src/vite.test.ts`,
+      `pnpm exec vp check packages/server/src/vite.ts packages/server/src/vite.test.ts packages/server/src/index.ts plans/app-shell.md`,
+      and `git diff --check`.
       Remaining R5 work: compiler/plugin build hooks must still supply real route-entry maps
       and compiled module sources from compiler facts, consume the asset/module plan in
       production package builds, and decide the final plugin hook ownership.
@@ -171,6 +180,15 @@ Scope: SPEC addition (proposed §9.5 "The request shell"), `@jiso/server` shell 
       and `pnpm exec vitest --run site/scripts/app-shell.test.mjs`, proving the
       server path-style guard and preserving the docs-site pretty-URL export
       consumer. R6/R7 remain open for broader adoption cleanup.
+      Additional evidence 2026-06-12: the Vite build-to-export bridge reuses
+      `exportStaticApp()` rather than introducing a second render path, and the
+      focused Vite test verifies the exported `/cart.html` document includes the
+      manifest-derived asset hints while the same export writes exact CSS/JS bytes
+      from the Vite dist directory. Same-session verification ran
+      `pnpm exec vitest --run packages/server/src/vite.test.ts`,
+      `pnpm exec vitest --run packages/server/src/static-export.test.ts packages/server/src/vite.test.ts`,
+      `pnpm exec vp check packages/server/src/vite.ts packages/server/src/vite.test.ts packages/server/src/index.ts plans/app-shell.md`,
+      and `git diff --check`.
 - [ ] R7 adoption: starter becomes a routed app served by `vp dev`; commerce runs end-to-end over HTTP; a jiso docs site ships from `vp run export` as the first outside consumer.
       Progress 2026-06-11: commerce is now TSX-authored ahead of the HTTP serve
       entry — `CartBadge`, `OrderHistory`, and `ProductGrid` are authored in
