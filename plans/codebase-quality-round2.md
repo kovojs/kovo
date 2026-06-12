@@ -1711,6 +1711,14 @@ index.test.ts:4227 while here — it weakens the byte-for-byte claim) + acceptan
       `corepack pnpm exec vitest --run packages/test/src/page.test.ts packages/test/src/index.test.ts`,
       `corepack pnpm exec vp check packages/test/src/html-fragment.ts packages/test/src/page.ts packages/test/src/page.test.ts plans/codebase-quality-round2.md`,
       and `git diff --check`.
+      Additional evidence 2026-06-12: SQL verifier integration coverage for insert-select
+      mutation reads, update-from source reads, raw SQL subquery reads, and raw SQL row-key
+      predicates moved from `packages/test/src/index.test.ts` into
+      `packages/test/src/verifier-sql.test.ts`, keeping `index.test.ts` focused on harness-level
+      integration. Same-session evidence:
+      `corepack pnpm exec vitest --run packages/test/src/verifier-sql.test.ts packages/test/src/index.test.ts`,
+      `corepack pnpm exec vp check packages/test/src/index.test.ts packages/test/src/verifier-sql.test.ts plans/codebase-quality-round2.md`,
+      and `git diff --check`.
 - [ ] **MED — Commerce example: one source of truth.** `cartQuery.load` returns a constant while
       `loadCartQuery(db)` does the real read (app.ts:123-126 vs :280-284);
       `productGridQuery.load` conjures a fresh `createCommerceDb()` (:161); the committed
@@ -2004,6 +2012,13 @@ As each phase splits a source module, split its tests in the same commit.
       tests through the package barrel. Same-session evidence:
       `corepack pnpm exec vitest --run packages/test/src/page.test.ts packages/test/src/index.test.ts`,
       `corepack pnpm exec vp check packages/test/src/html-fragment.ts packages/test/src/page.ts packages/test/src/page.test.ts plans/codebase-quality-round2.md`,
+      and `git diff --check`.
+      Additional evidence 2026-06-12: SQL verifier integration cases moved from
+      `packages/test/src/index.test.ts` into `packages/test/src/verifier-sql.test.ts`, covering
+      insert-select mutation-read verification, update-from reads, subquery reads, and raw SQL
+      row-key predicates outside the package index test. Same-session evidence:
+      `corepack pnpm exec vitest --run packages/test/src/verifier-sql.test.ts packages/test/src/index.test.ts`,
+      `corepack pnpm exec vp check packages/test/src/index.test.ts packages/test/src/verifier-sql.test.ts plans/codebase-quality-round2.md`,
       and `git diff --check`.
       Additional evidence 2026-06-12: Drizzle runtime/static package-surface coverage moved from
       `packages/drizzle/src/index.test.ts` into `packages/drizzle/src/runtime-surface.test.ts`,
