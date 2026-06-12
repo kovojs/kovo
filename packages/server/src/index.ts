@@ -665,7 +665,7 @@ export const guards = {
         count: 1,
         resetAt: now + windowMs,
       });
-      return options.max > 0;
+      return true;
     };
   },
   role<Request extends SessionRequestLike>(role: string): Guard<Request> {

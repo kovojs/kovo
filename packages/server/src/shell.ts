@@ -40,14 +40,25 @@ export type ShellDispatchEntry =
       phase: 'not-found';
     };
 
-export const shellDispatchTable = [
+type MatchingShellDispatchEntry = Exclude<ShellDispatchEntry, { kind: 'not-found' }>;
+
+const shellDispatchMatchingTable = [
   { kind: 'reserved', phase: 'mutation', prefix: '/_m/' },
   { kind: 'reserved', phase: 'query', prefix: '/_q/' },
   { kind: 'reserved', phase: 'client-module', prefix: '/c/' },
   { kind: 'endpoint', mount: 'exact', phase: 'endpoint-exact' },
   { kind: 'endpoint', mount: 'prefix', phase: 'endpoint-prefix' },
   { kind: 'route', phase: 'route' },
-  { kind: 'not-found', phase: 'not-found' },
+] as const satisfies readonly MatchingShellDispatchEntry[];
+
+const notFoundShellDispatchEntry = {
+  kind: 'not-found',
+  phase: 'not-found',
+} as const satisfies Extract<ShellDispatchEntry, { kind: 'not-found' }>;
+
+export const shellDispatchTable = [
+  ...shellDispatchMatchingTable,
+  notFoundShellDispatchEntry,
 ] as const satisfies readonly ShellDispatchEntry[];
 
 export interface ShellDispatchInput<
@@ -104,7 +115,7 @@ export function matchShellDispatch<
   const normalization = normalizePathname(input.pathname);
   const method = input.method?.toUpperCase();
 
-  for (const entry of shellDispatchTable) {
+  for (const entry of shellDispatchMatchingTable) {
     if (entry.kind === 'reserved') {
       if (!normalization.pathname.startsWith(entry.prefix)) continue;
       return {
@@ -149,16 +160,14 @@ export function matchShellDispatch<
         route: routeMatch.route,
       };
     }
-
-    return {
-      entry,
-      kind: 'not-found',
-      normalization,
-      pathname: normalization.pathname,
-    };
   }
 
-  throw new Error('Unreachable shell dispatch table exhausted');
+  return {
+    entry: notFoundShellDispatchEntry,
+    kind: 'not-found',
+    normalization,
+    pathname: normalization.pathname,
+  };
 }
 
 function endpointMethodMatches(endpoint: EndpointLike, method: string | undefined): boolean {
