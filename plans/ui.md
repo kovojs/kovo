@@ -566,6 +566,17 @@ jiso-dialog` resolves dashed wire names and prints provenance including package,
       `pnpm exec vp check packages/ui/package.json packages/ui/tsconfig.json packages/ui/src/index.tsx packages/ui/src/alert.tsx packages/ui/src/badge.tsx packages/ui/src/breadcrumb.tsx packages/ui/src/button.tsx packages/ui/src/card.tsx packages/ui/src/kbd.tsx packages/ui/src/sheet.tsx packages/ui/src/skeleton.tsx packages/ui/src/table.tsx packages/ui/src/index.test.tsx plans/ui.md`,
       and `git diff --check`. U3 remains open for drawer variants and gallery/conformance
       verification.
+      Additional partial evidence 2026-06-12: `packages/ui/src/sheet.tsx` now completes the
+      bounded styled dialog variant surface by extending `Sheet` to top/right/bottom/left
+      placement classes and exporting a first-class `Drawer` component that defaults to the
+      bottom sheet placement while preserving native dialog invoker/close wiring. `packages/ui/package.json`
+      exposes `./drawer` as source-only TSX alongside `./sheet`, and `packages/ui/src/index.test.tsx`
+      pins sheet side classes, drawer rendering, command wiring, and the SPEC §5.2 no-lowered-IR
+      source constraint. Same-session evidence:
+      `pnpm --filter @jiso/ui exec vitest --run`,
+      `pnpm exec vp check packages/ui/package.json packages/ui/src/index.tsx packages/ui/src/sheet.tsx packages/ui/src/index.test.tsx examples/gallery/src/demo-fixtures.tsx examples/gallery/src/demo-fixtures.test.ts examples/gallery/src/behavior-contracts.test.ts`,
+      and `git diff --check`. U3 remains open for full gallery/conformance gates beyond this
+      browser-free styled drawer slice.
 - [ ] U4 styled components trailing H2.
 - [ ] U5 styled components trailing H3.
 - [ ] G1 `examples/gallery` app: one route per component; demos double as test fixtures.
@@ -626,6 +637,14 @@ jiso-dialog` resolves dashed wire names and prints provenance including package,
       Same-session evidence:
       `pnpm --filter @jiso/example-gallery test`. G1 remains open for unrepresented
       headless primitives and full docs/gallery deployment gates.
+      Additional partial evidence 2026-06-12: `examples/gallery` adds a drawer route fixture
+      that renders the new `@jiso/ui` `Drawer` export through the server JSX runtime, includes
+      a no-JS summary and behavior-contract table, and pins route/nav coverage plus native
+      dialog command wiring and bottom drawer placement in fixture tests. Same-session evidence:
+      `pnpm --filter @jiso/example-gallery test`,
+      `pnpm exec vp check packages/ui/package.json packages/ui/src/index.tsx packages/ui/src/sheet.tsx packages/ui/src/index.test.tsx examples/gallery/src/demo-fixtures.tsx examples/gallery/src/demo-fixtures.test.ts examples/gallery/src/behavior-contracts.test.ts`,
+      and `git diff --check`. G1 remains open for unrepresented headless primitives and full
+      docs/gallery deployment gates.
 - [ ] G2 behavior-contract gates: keyboard/ARIA assertions per primitive (browser-free via `page()` + `fw explain` where possible; framework browser suite for focus/dismiss/top-layer).
       Partial evidence 2026-06-12: `examples/gallery/src/behavior-contracts.test.ts`
       adds a browser-free G2 fixture gate over the existing 17 rendered gallery routes. It
@@ -672,6 +691,15 @@ jiso-dialog` resolves dashed wire names and prints provenance including package,
       Same-session evidence:
       `pnpm --filter @jiso/example-gallery test`. G2 remains open for browser-backed
       checks, `fw explain` coverage, and unrepresented primitive routes.
+      Additional partial evidence 2026-06-12: the browser-free G2 fixture gate now covers
+      the drawer styled route with exact behavior-contract rows and native dialog snippets for
+      `command="show-modal"`, `commandfor`, content `aria-describedby`, open dialog output,
+      bottom placement classes, and `command="request-close"` close wiring. Same-session
+      evidence:
+      `pnpm --filter @jiso/example-gallery test`,
+      `pnpm exec vp check packages/ui/package.json packages/ui/src/index.tsx packages/ui/src/sheet.tsx packages/ui/src/index.test.tsx examples/gallery/src/demo-fixtures.tsx examples/gallery/src/demo-fixtures.test.ts examples/gallery/src/behavior-contracts.test.ts`,
+      and `git diff --check`. G2 remains open for browser-backed checks, `fw explain`
+      coverage, and unrepresented primitive routes.
 - [ ] G3 axe checks per component state in the gallery.
 - [ ] G4 visual regression for `@jiso/ui`: shadcn-parity human review once, then self-baselined screenshots.
 - [ ] G5 merge fixtures: every primitive's attrs record × an author element → golden merged output (doubles as FW231/FW232 coverage).
@@ -842,9 +870,8 @@ Behavior contracts (state attributes, ARIA, keyboard maps, change reasons) are p
     FW225 app-source compile gap, decide the standalone distribution link between `fw` and
     `@jiso/ui`, and keep the CLI vendored catalog synchronized with package source in that
     final package asset shape.
-  - Remaining before U3 can be checked complete: add sheet/drawer styled dialog variants and
-    verify the styled surface through the gallery/conformance gates rather than only package and
-    CLI copy tests.
+  - Remaining before U3 can be checked complete: verify the styled surface through the remaining
+    gallery/conformance gates rather than only package, CLI copy, and browser-free fixture tests.
 - **U3–U5 — components**, trailing each H-wave by one step; U3 also carries the pure-markup set that needs no behavior layer (button, badge, card, kbd, alert, table, breadcrumb, skeleton) and sheet/drawer as styled dialog variants.
   - Partial U3 package evidence 2026-06-12: `packages/ui/src/button.tsx`,
     `packages/ui/src/badge.tsx`, and `packages/ui/src/card.tsx` add the first pure-markup
@@ -866,6 +893,16 @@ Behavior contracts (state attributes, ARIA, keyboard maps, change reasons) are p
     `pnpm exec vp check packages/ui/package.json packages/ui/tsconfig.json packages/ui/src/index.tsx packages/ui/src/alert.tsx packages/ui/src/badge.tsx packages/ui/src/breadcrumb.tsx packages/ui/src/button.tsx packages/ui/src/card.tsx packages/ui/src/kbd.tsx packages/ui/src/sheet.tsx packages/ui/src/skeleton.tsx packages/ui/src/table.tsx packages/ui/src/index.test.tsx plans/ui.md`,
     and `git diff --check`. This does not complete U3; drawer variants and gallery/conformance
     coverage remain.
+  - Additional partial U3 package evidence 2026-06-12: `packages/ui/src/sheet.tsx` extends the
+    styled dialog wrapper to top/right/bottom/left sheet placements and exports `Drawer` as the
+    bottom-default styled dialog variant. `packages/ui/package.json` exposes `./drawer` as
+    source-only TSX, while `packages/ui/src/index.test.tsx` verifies the `Sheet`/`Drawer`
+    exports, placement classes, native command wiring, and SPEC §5.2 no-lowered-IR source
+    constraint. Same-session evidence:
+    `pnpm --filter @jiso/ui exec vitest --run`,
+    `pnpm exec vp check packages/ui/package.json packages/ui/src/index.tsx packages/ui/src/sheet.tsx packages/ui/src/index.test.tsx examples/gallery/src/demo-fixtures.tsx examples/gallery/src/demo-fixtures.test.ts examples/gallery/src/behavior-contracts.test.ts`,
+    and `git diff --check`. This does not complete U3; remaining gallery/conformance gates are
+    still open.
 
 ## G-track — gallery (`examples/gallery`)
 

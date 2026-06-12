@@ -54,6 +54,11 @@ const expectedBehaviorContracts = {
     dataState: 'open, closed',
     keyboard: 'Escape closes the native dialog',
   },
+  '/components/drawer': {
+    changeReasons: 'trigger-click, close-click, cancel-event, native-beforetoggle',
+    dataState: 'open, closed, disabled',
+    keyboard: 'Escape closes the native dialog',
+  },
   '/components/field': {
     changeReasons: 'native form control changes',
     dataState: 'invalid, required, disabled',
@@ -184,6 +189,13 @@ const expectedBehaviorSnippets: Partial<Record<GalleryRoute['path'], readonly st
     'aria-labelledby="gallery-dialog-title"',
     'aria-describedby="gallery-dialog-description"',
     'open',
+  ],
+  '/components/drawer': [
+    'command="show-modal" commandfor="gallery-drawer"',
+    '<dialog aria-describedby="gallery-drawer-description"',
+    'id="gallery-drawer" open>',
+    'bottom-0 max-h-[85vh] border-t',
+    'command="request-close" commandfor="gallery-drawer"',
   ],
   '/components/field': [
     'for="gallery-field-email"',

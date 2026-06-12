@@ -17,6 +17,7 @@ const expectedRoutes = [
   '/components/card',
   '/components/checkbox',
   '/components/dialog',
+  '/components/drawer',
   '/components/field',
   '/components/kbd',
   '/components/meter',
@@ -329,6 +330,7 @@ describe('gallery demo fixtures', () => {
     const badge = findFixture('/components/badge');
     const breadcrumb = findFixture('/components/breadcrumb');
     const card = findFixture('/components/card');
+    const drawer = findFixture('/components/drawer');
     const kbd = findFixture('/components/kbd');
     const sheet = findFixture('/components/sheet');
     const skeleton = findFixture('/components/skeleton');
@@ -358,6 +360,13 @@ describe('gallery demo fixtures', () => {
     expect(card.html).toContain('data-ui-demo="card"');
     expect(card.html).toContain('rounded-lg border border-neutral-200');
     expect(card.html).toContain('<h2>Release candidate</h2>');
+
+    expect(drawer.html).toContain('data-ui-demo="drawer"');
+    expect(drawer.html).toContain('command="show-modal" commandfor="gallery-drawer"');
+    expect(drawer.html).toContain('<dialog aria-describedby="gallery-drawer-description"');
+    expect(drawer.html).toContain('id="gallery-drawer" open>');
+    expect(drawer.html).toContain('bottom-0 max-h-[85vh] border-t');
+    expect(drawer.html).toContain('command="request-close" commandfor="gallery-drawer"');
 
     expect(kbd.html).toContain('data-ui-demo="kbd"');
     expect(kbd.html).toContain('<kbd class="inline-flex h-5 min-w-5');

@@ -9,6 +9,7 @@
     "./breadcrumb": "./src/breadcrumb.tsx",
     "./button": "./src/button.tsx",
     "./card": "./src/card.tsx",
+    "./drawer": "./src/sheet.tsx",
     "./kbd": "./src/kbd.tsx",
     "./sheet": "./src/sheet.tsx",
     "./skeleton": "./src/skeleton.tsx",

@@ -64,6 +64,7 @@ import {
   BreadcrumbSeparator,
   Button,
   Card,
+  Drawer,
   Kbd,
   Sheet,
   Skeleton,
@@ -85,6 +86,7 @@ export type GalleryComponent =
   | 'card'
   | 'checkbox'
   | 'dialog'
+  | 'drawer'
   | 'field'
   | 'kbd'
   | 'meter'
@@ -173,6 +175,12 @@ export const galleryRoutes: readonly GalleryRoute[] = Object.freeze([
     path: '/components/dialog',
     render: () => DialogDemo(),
     title: 'Dialog',
+  },
+  {
+    component: 'drawer',
+    path: '/components/drawer',
+    render: () => DrawerDemo(),
+    title: 'Drawer',
   },
   {
     component: 'field',
@@ -1117,6 +1125,31 @@ export function SheetDemo(): string {
           side: 'right',
           title: 'Account settings',
           trigger: 'Open settings',
+        })}
+      </div>
+      {renderBehaviorContract({
+        changeReasons: 'trigger-click, close-click, cancel-event, native-beforetoggle',
+        dataState: 'open, closed, disabled',
+        keyboard: 'Escape closes the native dialog',
+      })}
+    </section>
+  );
+}
+
+export function DrawerDemo(): string {
+  return (
+    <section data-gallery-demo="drawer">
+      <p data-demo-summary="no-js">
+        Drawer is a styled dialog variant with bottom sheet placement and native close wiring.
+      </p>
+      <div data-ui-demo="drawer">
+        {Drawer.definition.render({
+          children: 'Review mobile actions before continuing.',
+          contentId: 'gallery-drawer',
+          description: 'Mobile action drawer',
+          open: true,
+          title: 'Quick actions',
+          trigger: 'Open drawer',
         })}
       </div>
       {renderBehaviorContract({

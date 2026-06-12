@@ -22,8 +22,8 @@ export { Alert, alertClassNames, alertClasses } from './alert.js';
 export type { AlertProps, AlertVariant } from './alert.js';
 export { Kbd, kbdClassNames, kbdClasses } from './kbd.js';
 export type { KbdProps } from './kbd.js';
-export { Sheet, sheetContentClassNames, sheetContentClasses } from './sheet.js';
-export type { SheetProps, SheetSide } from './sheet.js';
+export { Drawer, Sheet, sheetContentClassNames, sheetContentClasses } from './sheet.js';
+export type { DrawerProps, DrawerSide, SheetProps, SheetSide } from './sheet.js';
 export { Skeleton, skeletonClassNames, skeletonClasses } from './skeleton.js';
 export type { SkeletonProps } from './skeleton.js';
 export {

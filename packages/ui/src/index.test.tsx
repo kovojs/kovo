@@ -13,6 +13,7 @@ import {
   BreadcrumbSeparator,
   Button,
   Card,
+  Drawer,
   Kbd,
   Sheet,
   Skeleton,
@@ -130,6 +131,9 @@ describe('@jiso/ui styled package foundation', () => {
   });
 
   it('wraps the headless dialog primitive for a bounded sheet component', () => {
+    expect(Sheet.name).toBe('sheet');
+    expect(Drawer.name).toBe('drawer');
+
     const rendered = Sheet.definition.render({
       children: 'Sheet body',
       contentId: 'account-sheet',
@@ -144,9 +148,31 @@ describe('@jiso/ui styled package foundation', () => {
     expect(rendered).toContain('command="show-modal" commandfor="account-sheet"');
     expect(rendered).toContain('<dialog aria-describedby="account-sheet-description"');
     expect(rendered).toContain('id="account-sheet" open>');
-    expect(rendered).toContain('left-0 border-r');
+    expect(rendered).toContain('inset-y-0 left-0 w-full max-w-sm border-r');
     expect(rendered).toContain('command="request-close" commandfor="account-sheet"');
-    expect(sheetContentClasses).toContain('right-0 border-l');
+
+    const topSheet = Sheet.definition.render({
+      contentId: 'top-sheet',
+      side: 'top',
+      title: 'Top sheet',
+    });
+    const drawer = Drawer.definition.render({
+      children: 'Drawer body',
+      contentId: 'account-drawer',
+      description: 'Mobile actions',
+      open: true,
+      title: 'Actions',
+      trigger: 'Open drawer',
+    });
+
+    expect(sheetContentClasses).toContain('inset-y-0 right-0 w-full max-w-sm border-l');
+    expect(sheetContentClasses).toContain('inset-x-0 bottom-0 max-h-[85vh] border-t');
+    expect(topSheet).toContain('top-0 max-h-[85vh] border-b');
+    expect(drawer).toContain('command="show-modal" commandfor="account-drawer"');
+    expect(drawer).toContain('<dialog aria-describedby="account-drawer-description"');
+    expect(drawer).toContain('id="account-drawer" open>');
+    expect(drawer).toContain('bottom-0 max-h-[85vh] border-t');
+    expect(drawer).toContain('command="request-close" commandfor="account-drawer"');
   });
 
   it('keeps vendorable component sources TSX-authored with no lowered IR stamps', () => {
