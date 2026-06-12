@@ -2360,6 +2360,18 @@ params, relational API, `execute(sql)`, right/full joins, a string column named 
       `pnpm exec vitest --run packages/runtime/src/index.test.ts`,
       `pnpm exec vp check packages/runtime/src/inline-js-minifier.ts packages/runtime/src/inline-js-minifier.test.ts packages/runtime/src/inline-loader-build.ts packages/runtime/src/inline-loader.test.ts packages/runtime/src/index.test.ts plans/codebase-quality-round2.md`,
       and `git diff --check`.
+      Additional bounded evidence 2026-06-12: `packages/runtime/src/apply-path.ts` now overloads
+      `applyMutationResponseToRuntime` and the internal body applicator so callers with a
+      concrete DOM root get `AppliedMutationResponseToDom`, while rootless broadcast/store replay
+      gets the store-only `AppliedMutationResponse` shape without the previous DOM cast;
+      `packages/runtime/src/apply.ts` re-exports the store-only runtime options type.
+      `packages/runtime/src/mutation-response.test.ts` pins that `root: undefined` stays
+      store-only even when DOM-only hooks are present. Same-session evidence:
+      `pnpm exec vitest --run packages/runtime/src/mutation-response.test.ts`,
+      `pnpm exec vitest --run packages/runtime/src`,
+      `pnpm --filter @jiso/runtime run check:inline-loader`,
+      `pnpm exec vp check packages/runtime/src/apply-path.ts packages/runtime/src/apply.ts packages/runtime/src/mutation-response.test.ts plans/codebase-quality-round2.md`,
+      and `git diff --check`.
 - [x] **HIGH — Ship the DOM morph.** The only real keyed DOM morph (focus/selection/scroll
       capture-restore) lives in index.browser.test.ts:12-182; every consumer must rewrite it, and
       the flagship browser test substantially tests its own test code. Promote to a

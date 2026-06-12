@@ -308,6 +308,36 @@ describe('mutation response wire chunks', () => {
     ]);
   });
 
+  it('keeps runtime rootless apply store-only when DOM hooks are present', () => {
+    const store = createQueryStore();
+    const morph = vi.fn();
+
+    // SPEC.md §9.1: mutation response bodies use one wire vocabulary, but
+    // fragment morphing only belongs to runtime callers with an actual root.
+    const applied = applyMutationResponseToRuntime({
+      body: [
+        '<fw-query name="cart">{"count":8}</fw-query>',
+        '<fw-fragment target="cart-badge"><cart-badge>8</cart-badge></fw-fragment>',
+      ].join('\n'),
+      morph,
+      queryPlans: {
+        cart: {
+          bindings: false,
+        },
+      },
+      root: undefined,
+      store,
+    });
+
+    expect(applied).toEqual({
+      fragments: [{ html: '<cart-badge>8</cart-badge>', target: 'cart-badge' }],
+      queries: ['cart'],
+    });
+    expect('appliedFragments' in applied).toBe(false);
+    expect(store.get('cart')).toEqual({ count: 8 });
+    expect(morph).not.toHaveBeenCalled();
+  });
+
   it('reports malformed chunks on the runtime store-only apply path', () => {
     const store = createQueryStore();
     const onError = vi.fn();

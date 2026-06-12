@@ -12,6 +12,7 @@ export type {
   AppliedMutationResponseToRuntime,
   ApplyMutationResponseToDomOptions,
   ApplyMutationResponseToRuntimeOptions,
+  ApplyMutationResponseToRuntimeStoreOptions,
   ApplyMutationResponseToStoreOptions,
   ApplyQueryInterposition,
 } from './apply-path.js';

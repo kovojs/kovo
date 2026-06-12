@@ -90,17 +90,28 @@ export type AppliedMutationResponseToRuntime =
   | AppliedMutationResponse
   | AppliedMutationResponseToDom;
 
-export type ApplyMutationResponseToRuntimeOptions = Omit<
-  ApplyMutationResponseToDomOptions,
-  'root'
-> & {
-  root?: MorphRoot;
+type ApplyMutationResponseToRuntimeBaseOptions = Omit<ApplyMutationResponseToDomOptions, 'root'>;
+
+export type ApplyMutationResponseToRuntimeStoreOptions =
+  ApplyMutationResponseToRuntimeBaseOptions & {
+    root?: undefined;
+  };
+
+export type ApplyMutationResponseToRuntimeOptions = ApplyMutationResponseToRuntimeBaseOptions & {
+  root?: MorphRoot | undefined;
 };
 
-interface ApplyMutationResponseBodyOptions extends ApplyMutationResponseToRuntimeOptions {}
-
 function applyMutationResponseBody(
-  options: ApplyMutationResponseBodyOptions,
+  options: ApplyMutationResponseToRuntimeOptions & { root: MorphRoot },
+): AppliedMutationResponseToDom;
+function applyMutationResponseBody(
+  options: ApplyMutationResponseToRuntimeOptions & { root?: undefined },
+): AppliedMutationResponse;
+function applyMutationResponseBody(
+  options: ApplyMutationResponseToRuntimeOptions,
+): AppliedMutationResponseToRuntime;
+function applyMutationResponseBody(
+  options: ApplyMutationResponseToRuntimeOptions,
 ): AppliedMutationResponseToRuntime {
   let bindingIndex: QueryBindingIndex | undefined;
   const readBindingIndex = (root: QueryBindingRoot) => {
@@ -142,6 +153,15 @@ function applyMutationResponseBody(
 }
 
 export function applyMutationResponseToRuntime(
+  options: ApplyMutationResponseToRuntimeOptions & { root: MorphRoot },
+): AppliedMutationResponseToDom;
+export function applyMutationResponseToRuntime(
+  options: ApplyMutationResponseToRuntimeOptions & { root?: undefined },
+): AppliedMutationResponse;
+export function applyMutationResponseToRuntime(
+  options: ApplyMutationResponseToRuntimeOptions,
+): AppliedMutationResponseToRuntime;
+export function applyMutationResponseToRuntime(
   options: ApplyMutationResponseToRuntimeOptions,
 ): AppliedMutationResponseToRuntime {
   return applyMutationResponseBody(options);
@@ -150,7 +170,7 @@ export function applyMutationResponseToRuntime(
 export function applyMutationResponseToDom(
   options: ApplyMutationResponseToDomOptions,
 ): AppliedMutationResponseToDom {
-  return applyMutationResponseBody(options) as AppliedMutationResponseToDom;
+  return applyMutationResponseBody(options);
 }
 
 export function applyDeferredStreamResponseToDom(options: {
