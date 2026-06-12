@@ -509,6 +509,7 @@ export function extractQueryFactsFromSource(files: readonly SourceFileInput[]): 
         site,
         hasDeclaredQueryOutputSchema(query.body),
       )
+        .concat(unresolvedProjectionDiagnostics(query.query, query.unresolvedPaths, site))
         .concat(query.diagnostics?.map((diagnostic) => ({ ...diagnostic, site })) ?? [])
         .concat(exemptQueryReadDiagnostics(query.body, tables, site));
       facts.push({
@@ -834,6 +835,7 @@ interface ExtractedQueryDefinition {
   opaquePaths: readonly string[];
   query: string;
   shape: QueryShape;
+  unresolvedPaths: readonly string[];
 }
 
 interface ExtractedWriteCall {
@@ -895,6 +897,7 @@ function extractQueryDefinitions(
       opaquePaths: selection?.opaquePaths ?? [],
       query,
       shape: selection?.shape ?? {},
+      unresolvedPaths: selection?.unresolvedPaths ?? [],
     });
   }
 
@@ -907,6 +910,7 @@ interface QueryShapeSelection {
   opaquePaths: readonly string[];
   shape: QueryShape;
   scalarTables: ReadonlySet<string>;
+  unresolvedPaths: readonly string[];
 }
 
 function selectShapeFromQueryBody(
@@ -935,6 +939,7 @@ function selectShapeFromQueryBody(
       opaquePaths: [],
       shape: {},
       scalarTables: new Set(),
+      unresolvedPaths: [],
     };
   }
 
@@ -978,6 +983,7 @@ function queryShapeFromObjectLiteral(
   let hasTablelessScalar = false;
   const opaquePaths: string[] = [];
   const scalarTables = new Set<string>();
+  const unresolvedPaths: string[] = [];
 
   for (const entry of splitTopLevelArgs(source)) {
     const separator = entry.indexOf(':');
@@ -1000,19 +1006,25 @@ function queryShapeFromObjectLiteral(
       );
       shape[key] = nullableNestedShape(nested, nullableTables) ?? nested.shape;
       opaquePaths.push(...nested.opaquePaths);
+      unresolvedPaths.push(...nested.unresolvedPaths);
     } else {
-      shape[key] = scalarQueryShape(key, value, columnShapes, nullableTables);
+      const scalarShape = scalarQueryShape(value, columnShapes, nullableTables);
+      if (scalarShape) {
+        shape[key] = scalarShape;
+      } else if (!isOpaqueProjection(value)) {
+        unresolvedPaths.push(path);
+      }
       if (isOpaqueProjection(value)) opaquePaths.push(path);
       const table = scalarProjectionTable(value);
       if (table) {
         scalarTables.add(table);
-      } else {
+      } else if (scalarShape) {
         hasTablelessScalar = true;
       }
     }
   }
 
-  return { hasTablelessScalar, opaquePaths, shape, scalarTables };
+  return { hasTablelessScalar, opaquePaths, shape, scalarTables, unresolvedPaths };
 }
 
 function nullableNestedShape(
@@ -1027,11 +1039,10 @@ function nullableNestedShape(
 }
 
 function scalarQueryShape(
-  key: string,
   expression: string,
   columnShapes: Readonly<Record<string, QueryShape>> = {},
   nullableTables: ReadonlySet<string> = new Set(),
-): QueryShape {
+): QueryShape | null {
   if (/sql\s*<\s*number\s*>/.test(expression)) return 'number';
   if (/sql\s*<\s*boolean\s*>/.test(expression)) return 'boolean';
   if (/sql\s*<\s*string\s*>/.test(expression)) return 'string';
@@ -1042,8 +1053,7 @@ function scalarQueryShape(
       ? nullableShape(columnShape)
       : columnShape;
   }
-  if (/(count|qty|quantity|total|price|stock|amount)$/i.test(key)) return 'number';
-  return 'string';
+  return null;
 }
 
 function nullableShape(shape: QueryShape): QueryShape {
@@ -1143,6 +1153,20 @@ function opaqueProjectionDiagnostics(
     message: `${message} ${query}.${path} uses sql/raw projection without output.`,
     severity: definition.severity,
     site: line,
+  }));
+}
+
+function unresolvedProjectionDiagnostics(
+  query: string,
+  unresolvedPaths: readonly string[],
+  site: string,
+): TouchGraphDiagnostic[] {
+  // SPEC §10.2/§11.1: unresolved static facts stay visible instead of guessed.
+  return unresolvedPaths.map((path) => ({
+    code: 'FW406',
+    message: `${diagnosticDefinitions.FW406.message} Query projection ${query}.${path} could not be resolved to a Drizzle column or typed sql<T> expression.`,
+    severity: diagnosticDefinitions.FW406.severity,
+    site,
   }));
 }
 

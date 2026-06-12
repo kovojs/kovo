@@ -264,7 +264,9 @@ describe('Drizzle pinned subset conformance', () => {
         {
           fileName: 'conformance/drizzle-pin/src/cart.schema.ts',
           source: `
-            export const items = pgTable('cart_items', {}, jiso({ domain: 'cart', key: 'id' }));
+            export const items = pgTable('cart_items', {
+              id: text('id').primaryKey(),
+            }, jiso({ domain: 'cart', key: 'id' }));
           `,
         },
         {

@@ -600,8 +600,8 @@ export interface CommerceInvalidationSets {
       {
         fileName: 'cart.queries.ts',
         source: `
-          export const cartItems = pgTable("cart_items", {}, jiso({ domain: "cart", key: "cartId" }));
-          export const products = pgTable("products", {}, jiso({ domain: "product", key: "id" }));
+          export const cartItems = pgTable("cart_items", { cartId: text("cart_id").notNull(), productId: text("product_id").notNull(), qty: integer("qty").notNull() }, jiso({ domain: "cart", key: "cartId" }));
+          export const products = pgTable("products", { id: text("id").primaryKey() }, jiso({ domain: "product", key: "id" }));
 
           export const cartQuery = query("cart", {
             output: s.object({ count: s.number() }),
@@ -644,8 +644,8 @@ export interface CommerceInvalidationSets {
       {
         fileName: 'product.queries.ts',
         source: `
-          export const auditLog = pgTable("audit_log", {}, jiso({ exempt: true }));
-          export const products = pgTable("products", {}, jiso({ domain: "product", key: "id" }));
+          export const auditLog = pgTable("audit_log", { message: text("message").notNull(), productId: text("product_id").notNull() }, jiso({ exempt: true }));
+          export const products = pgTable("products", { id: text("id").primaryKey(), name: text("name").notNull() }, jiso({ domain: "product", key: "id" }));
 
           export const productQuery = query("product", {
             async load(_input, db) {
@@ -672,7 +672,10 @@ export interface CommerceInvalidationSets {
         query: 'product',
         reads: ['product'],
         shape: {
-          message: 'string',
+          message: {
+            kind: 'nullable',
+            shape: 'string',
+          },
           name: 'string',
         },
         site: 'product.queries.ts:5',
@@ -862,7 +865,7 @@ export interface CommerceInvalidationSets {
       {
         fileName: 'product.queries.ts',
         source: `
-          export const products = pgTable("products", {}, jiso({ domain: "product", key: "id" }));
+          export const products = pgTable("products", { sku: text("sku").notNull() }, jiso({ domain: "product", key: "id" }));
 
           export const productQuery = query("product", {
             load(input, db) {
@@ -881,6 +884,57 @@ export interface CommerceInvalidationSets {
           sku: 'string',
         },
         site: 'product.queries.ts:4',
+      },
+    ]);
+  });
+
+  it('marks unresolved computed projections as FW406 instead of guessing from selected aliases', () => {
+    const facts = extractQueryFactsFromSource([
+      {
+        fileName: 'product.queries.ts',
+        source: `
+          export const products = pgTable("products", {
+            id: text("id").primaryKey(),
+            name: text("name").notNull(),
+          }, jiso({ domain: "product", key: "id" }));
+
+          export const productQuery = query("product", {
+            load(_input, db) {
+              return db.select({
+                displayName: formatName(products.name),
+                stock: computeStock(products.id),
+                id: products.id,
+              }).from(products);
+            },
+          });
+        `,
+      },
+    ]);
+
+    expect(facts).toEqual([
+      {
+        diagnostics: [
+          {
+            code: 'FW406',
+            message:
+              'Statically un-analyzable write site; manual touches required. Query projection product.displayName could not be resolved to a Drizzle column or typed sql<T> expression.',
+            severity: 'warn',
+            site: 'product.queries.ts:7',
+          },
+          {
+            code: 'FW406',
+            message:
+              'Statically un-analyzable write site; manual touches required. Query projection product.stock could not be resolved to a Drizzle column or typed sql<T> expression.',
+            severity: 'warn',
+            site: 'product.queries.ts:7',
+          },
+        ],
+        query: 'product',
+        reads: ['product'],
+        shape: {
+          id: 'string',
+        },
+        site: 'product.queries.ts:7',
       },
     ]);
   });
@@ -979,7 +1033,9 @@ export interface CommerceInvalidationSets {
         {
           fileName: 'cart.schema.ts',
           source: `
-            export const items = pgTable("cart_items", {}, jiso({ domain: "cart", key: "id" }));
+            export const items = pgTable("cart_items", {
+              id: text("id").primaryKey(),
+            }, jiso({ domain: "cart", key: "id" }));
           `,
         },
         {
