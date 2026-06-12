@@ -95,6 +95,7 @@ const NUMBER_COLUMN_BUILDERS = new Set([
   'smallserial',
 ]);
 const UNCLASSIFIED_DRIZZLE_RECEIVER_MUTATION_METHODS = new Set([
+  '$count',
   'execute',
   'refreshMaterializedView',
 ]);

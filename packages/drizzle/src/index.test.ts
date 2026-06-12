@@ -3652,6 +3652,35 @@ export interface CommerceInvalidationSets {
     });
   });
 
+  it('marks Drizzle count helper calls as FW406 instead of dropping the surface', () => {
+    const graph = extractTouchGraphFromSource([
+      {
+        fileName: 'cart.domain.ts',
+        source: `
+          export const users = pgTable("users", {}, jiso({ domain: "user", key: "id" }));
+
+          export async function countUsers(db) {
+            return db.$count(users, eq(users.active, true));
+          }
+        `,
+      },
+    ]);
+
+    expect(graph).toEqual({
+      countUsers: {
+        reads: [],
+        touches: [],
+        unresolved: [
+          {
+            code: 'FW406',
+            message: 'Statically un-analyzable write site; manual touches required.',
+            site: 'cart.domain.ts:5',
+          },
+        ],
+      },
+    });
+  });
+
   it('marks static element-access raw and relational receiver calls as FW406', () => {
     const graph = extractTouchGraphFromSource([
       {
@@ -3724,10 +3753,12 @@ export interface CommerceInvalidationSets {
           'export async function loadUsers(db) {',
           '  // db.execute(sql`delete from users`);',
           '  // db.refreshMaterializedView(usersView);',
+          '  // db.$count(users);',
           '  const raw = "db.execute(sql`delete from users`)";',
           '  const refresh = "db.refreshMaterializedView(usersView)";',
+          '  const count = "db.$count(users)";',
           '  const relational = `db.query.users.findMany()`;',
-          '  return { raw, refresh, relational };',
+          '  return { raw, refresh, count, relational };',
           '}',
         ].join('\n'),
       },

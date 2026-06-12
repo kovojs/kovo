@@ -745,6 +745,44 @@ describe('Drizzle pinned subset conformance', () => {
     });
   });
 
+  it('pins real Drizzle count helper as an explicit FW406 surface', () => {
+    const graph = extractTouchGraphFromProject({
+      files: [
+        {
+          fileName: 'conformance/drizzle-pin/src/users.domain.ts',
+          source: `
+            import { eq } from 'drizzle-orm';
+            import type { PgDatabase } from 'drizzle-orm/pg-core';
+            import { boolean, pgTable, text } from 'drizzle-orm/pg-core';
+
+            const users = pgTable('users', {
+              active: boolean('active').notNull(),
+              id: text('id').primaryKey(),
+            }, jiso({ domain: 'user', key: 'id' }));
+
+            export async function countActiveUsers(db: PgDatabase<any, any, any>) {
+              return db.$count(users, eq(users.active, true));
+            }
+          `,
+        },
+      ],
+    });
+
+    expect(graph).toEqual({
+      countActiveUsers: {
+        reads: [],
+        touches: [],
+        unresolved: [
+          {
+            code: 'FW406',
+            message: 'Statically un-analyzable write site; manual touches required.',
+            site: 'conformance/drizzle-pin/src/users.domain.ts:12',
+          },
+        ],
+      },
+    });
+  });
+
   it('pins table annotations as the domain registry source', () => {
     const cartItems = annotatedTable('cart_items', jiso({ domain: 'cart', key: 'cartId' }));
     const products = annotatedTable('products', jiso({ domain: 'product', key: 'id' }));
