@@ -34,7 +34,7 @@ export function renderLanding(captures) {
     <div class="relative mx-auto grid max-w-7xl items-center gap-16 px-4 pt-20 pb-24 sm:px-6 lg:grid-cols-[1.05fr_1fr]">
       <div>
         <p class="mb-6 flex items-center gap-2 text-sm text-slate-600 dark:text-slate-400">
-          <span class="rounded-full border border-jiso-600/30 bg-jiso-50 px-2.5 py-0.5 text-xs font-semibold text-jiso-700 dark:border-jiso-400/30 dark:bg-jiso-950 dark:text-jiso-300">Pre-v1</span>
+          <span class="rounded-full border border-jiso-600/30 bg-jiso-50 px-2.5 py-0.5 text-xs font-semibold whitespace-nowrap text-jiso-700 dark:border-jiso-400/30 dark:bg-jiso-950 dark:text-jiso-300">Pre-v1</span>
           Built in the open — every claim below is CI-checked.
         </p>
         <h1 class="text-4xl font-extrabold tracking-tight text-slate-900 sm:text-[3.4rem] sm:leading-[1.08] dark:text-white">
