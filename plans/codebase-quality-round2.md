@@ -1133,6 +1133,13 @@ As each phase splits a source module, split its tests in the same commit.
 - [ ] runtime/index.test.ts (4,435 lines, mutation tests under "query store") → per-module
       files; `Fake*` classes to a shared `test-fixtures.ts`; direct unit tests for wire-parser,
       handlers, morph; replace counted-microtask flushing with a single `flush()` helper.
+      Partial evidence 2026-06-12: typed event bus coverage moved from
+      `packages/runtime/src/index.test.ts` to `packages/runtime/src/events.test.ts`, importing
+      `createEventBus` directly from `events.ts` while keeping the same behavioral assertions.
+      Same-session evidence:
+      `pnpm exec vitest --run packages/runtime/src/events.test.ts packages/runtime/src/index.test.ts`,
+      `pnpm exec vp check packages/runtime/src/events.test.ts packages/runtime/src/index.test.ts plans/codebase-quality-round2.md`,
+      and `git diff --check`.
 - [ ] compiler/index.test.ts (3,580 lines, zero per-module tests) → per-phase files; a
       `compileFixture()` helper returning files by kind; diagnostic assertions reference
       `diagnosticDefinitions[code].message` instead of pasted strings (today a one-word rewording
