@@ -403,7 +403,7 @@ export const betterAuthAuthDomain = domain('auth');
 export const betterAuthOrganizationDomain = domain('organization');
 export const betterAuthUserDomain = domain('user');
 
-// plans/auth.md B1: app-owned schema.ts tables stay visible to the touch graph.
+// Archived D5 auth plan B1: app-owned schema.ts tables stay visible to the touch graph.
 // User rows are intentionally not exempt; app queries commonly render names/avatars.
 export const betterAuthSchemaBridge = {
   account: { domain: 'auth', key: 'userId' },
@@ -462,7 +462,7 @@ export function betterAuthTableDomain(
   return 'domain' in bridge ? bridge.domain : null;
 }
 
-// plans/auth.md B1/B6: better-auth writes are library-internal, so the blessed
+// Archived D5 auth plan B1/B6: better-auth writes are library-internal, so the blessed
 // wrappers carry declared table/domain touches until the P9 observed-write
 // harness can verify observed ⊆ declared at runtime.
 export const betterAuthCredentialMutationDeclaredTableTouches = {
@@ -490,7 +490,7 @@ export const betterAuthCredentialMutationDefaultKeys = {
   signUpEmail: 'auth/sign-up',
 } as const satisfies Record<BetterAuthCredentialMutationApi, string>;
 
-// plans/auth.md B1 / SPEC.md §11.2: declared Better Auth table touches are
+// Archived D5 auth plan B1 / SPEC.md §11.2: declared Better Auth table touches are
 // materialized as verifier facts so library-internal writes can be checked by
 // P9 observed-write instrumentation.
 export const betterAuthCredentialMutationTouchGraph =
@@ -674,7 +674,7 @@ export function validateBetterAuthSchemaBridge(
   };
 }
 
-// plans/auth.md B1 / SPEC.md §14: Better Auth owns the SQL/table metadata, while
+// Archived D5 auth plan B1 / SPEC.md §14: Better Auth owns the SQL/table metadata, while
 // the app-authored schema.ts must carry explicit Jiso domain/exempt annotations.
 export function annotateBetterAuthSchemaSource(
   source: string,
@@ -779,7 +779,7 @@ export function annotateBetterAuthSchemaSource(
   };
 }
 
-// plans/auth.md B1 / SPEC.md §10.1 and §11.2: generated app schema.ts is a
+// Archived D5 auth plan B1 / SPEC.md §10.1 and §11.2: generated app schema.ts is a
 // convenience over real Better Auth metadata, not an inferred plugin mapper.
 export function generateBetterAuthSchemaSource(
   tables: Record<string, unknown>,
@@ -1062,7 +1062,7 @@ export function betterAuthSignOutMutation<
   });
 }
 
-// SPEC.md §9.1 and plans/auth.md B4: credential mutations can only forward auth cookies
+// SPEC.md §9.1 and archived D5 auth plan B4: credential mutations can only forward auth cookies
 // through the current mutation response-header channel.
 export function forwardBetterAuthSetCookie(
   headers: Headers,
