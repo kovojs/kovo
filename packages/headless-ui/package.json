@@ -15,6 +15,7 @@
     "./primitives/checkbox-group": "./src/primitives/checkbox-group.ts",
     "./primitives/combobox": "./src/primitives/combobox.ts",
     "./primitives/collapsible": "./src/primitives/collapsible.ts",
+    "./primitives/context-menu": "./src/primitives/context-menu.ts",
     "./primitives/dialog": "./src/primitives/dialog.ts",
     "./primitives/disclosure": "./src/primitives/disclosure.ts",
     "./primitives/dropdown-menu": "./src/primitives/dropdown-menu.ts",
