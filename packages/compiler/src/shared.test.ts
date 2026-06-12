@@ -49,4 +49,26 @@ describe('compiler shared source replacements', () => {
       original.indexOf('cart.discount'),
     );
   });
+
+  it('does not map generated replacement boundary offsets onto the previous segment', () => {
+    const original = 'alpha beta gamma';
+    const replacement = 'BETA-BETA';
+    const map = sourceReplacementOffsetMap(original.length, [{ end: 10, replacement, start: 6 }]);
+    const generatedReplacementStart = original.indexOf('beta');
+    const generatedTailStart = generatedReplacementStart + replacement.length;
+
+    expect(generatedOffsetToOriginal(map, generatedReplacementStart)).toBeUndefined();
+    expect(generatedOffsetToOriginal(map, generatedTailStart - 1)).toBeUndefined();
+    expect(generatedOffsetToOriginal(map, generatedTailStart)).toBe(10);
+    expect(generatedOffsetToOriginal(map, generatedTailStart + 1)).toBe(original.indexOf('gamma'));
+  });
+
+  it('maps generated end-of-file to original end-of-file', () => {
+    const original = 'alpha beta';
+    const map = sourceReplacementOffsetMap(original.length, [
+      { end: original.length, replacement: 'omega', start: 6 },
+    ]);
+
+    expect(generatedOffsetToOriginal(map, map.generatedLength)).toBe(original.length);
+  });
 });

@@ -128,11 +128,12 @@ export function generatedOffsetToOriginal(
   generatedOffset: number | undefined,
 ): number | undefined {
   if (generatedOffset === undefined) return undefined;
+  if (generatedOffset === map.generatedLength) return map.originalLength;
 
   for (const segment of map.segments) {
     if (
       generatedOffset >= segment.generatedStart &&
-      generatedOffset <= segment.generatedStart + segment.length
+      generatedOffset < segment.generatedStart + segment.length
     ) {
       return segment.originalStart + generatedOffset - segment.generatedStart;
     }

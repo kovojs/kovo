@@ -500,6 +500,14 @@ pipeline throws the tree away and communicates via mutated source text.
       replacements still resolve to the pre-lowering JSX coordinates. `shared.test.ts` pins the
       generated-to-original unchanged-span mapping and `index.test.ts` pins a multi-line drift
       case after a long inline derive replacement.
+      Additional evidence 2026-06-12: `generatedOffsetToOriginal` now treats mapped segments as
+      half-open ranges while preserving the explicit generated-EOF to original-EOF mapping, so
+      offsets inside replacement text stay unmapped and the first offset after replacement text
+      maps to the following author span. `shared.test.ts` pins replacement-boundary and EOF
+      behavior. Same-session evidence:
+      `pnpm exec vitest --run packages/compiler/src/shared.test.ts`,
+      `pnpm exec vp check packages/compiler/src/shared.ts packages/compiler/src/shared.test.ts`,
+      and `git diff --check`.
 - [x] **HIGH — Retire regex rewriting of handler bodies.** emit/client.ts:89
       (`/\bstate\b/g → ctx.state` corrupts `log('state changed')`), :96 (member-expression
       substitution inside string literals), lower/handlers.ts:262 (harvests params from string
