@@ -26,8 +26,10 @@ jobs:
           node-version: 24
 
       - run: vp install
-      - run: pnpm --filter @jiso/site exec vp run export
-      - run: pnpm --filter @jiso/site run check:links
+      - run: vp run export
+        working-directory: site
+      - run: vp run check-links
+        working-directory: site
       - run: touch site/dist/.nojekyll
 
       - uses: actions/upload-pages-artifact@v3
