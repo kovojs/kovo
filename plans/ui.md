@@ -867,6 +867,17 @@ jiso-dialog` resolves dashed wire names and prints provenance including package,
       `pnpm exec vp check examples/gallery/src/merge-fixtures.test.tsx plans/ui.md`,
       and `git diff --check`. G5 remains open because this still does not cover every exported
       primitive attrs record or compiler/runtime diagnostic coverage.
+      Additional partial evidence 2026-06-12: the gallery G5 oracle now includes a
+      table-driven exported-builder inventory for all 134 lowercase `*Attributes` builders
+      exported from `@jiso/headless-ui/primitives`. The inventory fails when a new primitive
+      attrs builder lacks a merge sample, exercises each sample through the SPEC §4.6 oracle,
+      and stress-tests class merges, scalar precedence, logical-OR attrs, `data-state`
+      retention, IDREF conflicts, and ARIA/role diagnostics across the whole exported attrs
+      surface. Same-session evidence:
+      `pnpm --filter @jiso/example-gallery exec vitest --run src/merge-fixtures.test.tsx`.
+      G5 remains open for compiler/runtime diagnostic parity and richer per-primitive
+      rendered goldens, but the exported attrs surface is no longer missing an executable
+      coverage ledger.
 - [ ] G6 compiled interactive gallery: stateful gallery demos are authored as app TSX,
       compiled through Jiso, and served from the docs gallery with generated client
       modules and explicit `on:*` behavior refs. Evidence must include browser-backed
