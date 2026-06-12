@@ -15,6 +15,12 @@ describe('wire parser HTML entity handling', () => {
     expect(readAttribute("name='cart' key='cart&apos;c2'", 'key')).toBe("cart'c2");
   });
 
+  it('reads fw-query attributes with quoted tag closers', () => {
+    expect(
+      readQueryChunks('<fw-query name="cart" key="cart>a">{&quot;count&quot;:1}</fw-query>'),
+    ).toEqual([{ key: 'cart>a', name: 'cart', value: { count: 1 } }]);
+  });
+
   it('decodes apostrophe entities in fw-query JSON bodies', () => {
     expect(
       readQueryChunks(
@@ -34,6 +40,16 @@ describe('wire parser HTML entity handling', () => {
     ).toEqual([]);
     expect(onError).toHaveBeenCalledWith(expect.any(Error));
     expect(String(onError.mock.calls[0]?.[0].message)).toContain('Malformed JSON in fw-query cart');
+  });
+
+  it('reports malformed fw-query markup instead of silently truncating', () => {
+    const onError = vi.fn();
+
+    expect(readQueryChunks('<fw-query name="cart">{"count":1}', onError)).toEqual([]);
+    expect(onError).toHaveBeenCalledWith(expect.any(Error));
+    expect(String(onError.mock.calls[0]?.[0].message)).toContain(
+      'Malformed fw-query chunk: missing closing tag',
+    );
   });
 
   it('reports malformed fw-fragment markup instead of silently truncating', () => {

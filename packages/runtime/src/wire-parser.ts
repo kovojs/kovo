@@ -41,16 +41,41 @@ export function deferredStreamChunks(body: string, boundary: string): string[] {
 
 export function readQueryChunks(body: string, onError?: RuntimeErrorReporter): QueryChunk[] {
   const queries: QueryChunk[] = [];
+  const queryTag = /<\/?fw-query\b/gi;
+  let offset = 0;
 
-  for (const match of body.matchAll(/<fw-query\b(?<attrs>[^>]*)>(?<json>[\s\S]*?)<\/fw-query>/g)) {
-    const attrs = match.groups?.attrs ?? '';
+  while (offset < body.length) {
+    queryTag.lastIndex = offset;
+    const match = queryTag.exec(body);
+    if (!match) break;
+    if (match[0].startsWith('</')) {
+      offset = match.index + match[0].length;
+      continue;
+    }
+
+    const openingEnd = tagClose(body, match.index + match[0].length);
+    if (openingEnd === undefined) {
+      reportRuntimeError(onError, malformedQueryError('missing opening tag close'));
+      break;
+    }
+    const end = matchingQueryEnd(body, openingEnd + 1);
+    if (!end) {
+      reportRuntimeError(onError, malformedQueryError('missing closing tag'));
+      break;
+    }
+
+    const attrs = body.slice(match.index + match[0].length, openingEnd);
     const name = readAttribute(attrs, 'name');
-    if (!name) continue;
-    const key = readAttribute(attrs, 'key') ?? undefined;
+    if (!name) {
+      offset = end.end;
+      continue;
+    }
 
-    const parsed = parseJsonValue(unescapeHtml(match.groups?.json ?? 'null'));
+    const key = readAttribute(attrs, 'key') ?? undefined;
+    const parsed = parseJsonValue(unescapeHtml(body.slice(openingEnd + 1, end.closeStart)));
     if (!parsed.ok) {
       reportMalformedJson(onError, `fw-query ${name}`, parsed.error);
+      offset = end.end;
       continue;
     }
 
@@ -59,9 +84,21 @@ export function readQueryChunks(body: string, onError?: RuntimeErrorReporter): Q
       name,
       value: parsed.value,
     });
+    offset = end.end;
   }
 
   return queries;
+}
+
+function malformedQueryError(reason: string): Error {
+  return new Error(`Malformed fw-query chunk: ${reason}`);
+}
+
+function matchingQueryEnd(body: string, start: number): { closeStart: number; end: number } | null {
+  const closingTag = /<\/fw-query\s*>/gi;
+  closingTag.lastIndex = start;
+  const match = closingTag.exec(body);
+  return match ? { closeStart: match.index, end: match.index + match[0].length } : null;
 }
 
 export function readFragmentChunks(body: string, onError?: RuntimeErrorReporter): FragmentChunk[] {

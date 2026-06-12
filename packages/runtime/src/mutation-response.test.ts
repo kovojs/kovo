@@ -206,6 +206,22 @@ describe('mutation response wire chunks', () => {
     });
   });
 
+  it('keeps quoted query attribute tag closers on the store apply path', () => {
+    const store = createQueryStore();
+    const applied = applyMutationResponse(
+      store,
+      '<fw-query name="product" key="product>p1">{"stock":7}</fw-query>',
+    );
+
+    // SPEC.md §9.4: keyed query chunks must hydrate the same instance key that
+    // inline DOM parsing exposes from the wire attribute.
+    expect(store.get('product', 'product>p1')).toEqual({ stock: 7 });
+    expect(applied).toEqual({
+      fragments: [],
+      queries: ['product:product>p1'],
+    });
+  });
+
   it('keeps store-only and DOM apply on the same keyed query path', () => {
     const storeOnly = createQueryStore();
     const domStore = createQueryStore();
