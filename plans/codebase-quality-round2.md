@@ -1999,6 +1999,14 @@ index.test.ts:4227 while here — it weakens the byte-for-byte claim) + acceptan
       `pnpm exec vitest --run packages/test/src/verifier-sql.test.ts`,
       `pnpm exec vp check packages/test/src/sql-observer.ts packages/test/src/verifier-observation.ts packages/test/src/verifier-sql.test.ts plans/codebase-quality-round2.md`,
       and `git diff --check`.
+      Additional evidence 2026-06-12: SQL verifier CTE alias handling now adds non-recursive
+      CTE aliases in declaration order, so a later CTE alias cannot hide an earlier binding's
+      real table read. `packages/test/src/verifier-sql.test.ts` covers the public verifier path
+      for the false-negative case and verifies row-key/read-domain evidence is recorded. Same-session
+      evidence:
+      `corepack pnpm exec vitest --run packages/test/src/verifier-sql.test.ts packages/test/src/query-verifier.test.ts packages/test/src/mutation-verifier.test.ts`,
+      `corepack pnpm exec vp check packages/test/src/verifier-sql.ts packages/test/src/verifier-sql.test.ts`,
+      and `git diff --check`.
       Additional evidence 2026-06-12: the remaining public-harness verifier integration tests
       moved from `packages/test/src/index.test.ts` into
       `packages/test/src/harness-verifier.test.ts`, covering SPEC §11.4 mutation exec

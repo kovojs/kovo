@@ -124,14 +124,15 @@ function operationsForWith(
   statement: WithStatement,
   cteAliases: ReadonlySet<string>,
 ): ParsedSqlOperation[] {
-  const aliases = withAliases(
-    cteAliases,
-    statement.bind.map((binding) => binding.alias.name),
-  );
-  return [
-    ...statement.bind.flatMap((binding) => operationsForStatement(binding.statement, aliases)),
-    ...operationsForStatement(statement.in, aliases),
-  ];
+  let aliases = cteAliases;
+  const operations: ParsedSqlOperation[] = [];
+
+  for (const binding of statement.bind) {
+    operations.push(...operationsForStatement(binding.statement, aliases));
+    aliases = withAliases(aliases, [binding.alias.name]);
+  }
+
+  return [...operations, ...operationsForStatement(statement.in, aliases)];
 }
 
 function operationsForWithRecursive(

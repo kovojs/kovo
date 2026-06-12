@@ -79,6 +79,37 @@ describe('@jiso/test SQL verifier observation', () => {
     ]);
     expect(() => verifier.assertCovered()).not.toThrow();
   });
+
+  it('does not let later CTE aliases hide earlier body table reads', () => {
+    const verifier = createDbVerifier(
+      {},
+      { domainByTable: { products: 'product' }, keyByTable: { products: 'id' } },
+    );
+    const db = verifier.wrap(createSqlDb());
+    const statement = [
+      'with source as (select * from products where id = $1),',
+      'products as (select * from source)',
+      'select * from products',
+    ].join(' ');
+
+    db.sql(statement);
+
+    expect(verifier.observed).toEqual([
+      {
+        branch: undefined,
+        domain: 'product',
+        kind: 'read',
+        mutationRead: undefined,
+        rowKey: 'id',
+        sql: statement,
+        table: 'products',
+      },
+    ]);
+    expect(() => verifier.assertReadsCovered(['product'])).not.toThrow();
+    expect(() => verifier.assertReadsCovered([])).toThrow(
+      'FW407 Query read from undeclared domain: product',
+    );
+  });
 });
 
 describe('@jiso/test SQL verifier integration', () => {
