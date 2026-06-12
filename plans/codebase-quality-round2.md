@@ -1267,6 +1267,11 @@ As each phase splits a source module, split its tests in the same commit.
       from `packages/test/src/index.test.ts` to `packages/test/src/verifier.test.ts`, with the
       shared fake DB fixture factored into `packages/test/src/test-fixtures.ts`. Same-session
       evidence: `pnpm exec vitest --run packages/test/src`.
+      Additional evidence 2026-06-12: harness context and `jisoTest` runner coverage moved from
+      `packages/test/src/index.test.ts` to `packages/test/src/harness.test.ts`, leaving
+      `index.test.ts` focused on verifier integration while preserving public imports through
+      `packages/test/src/index.ts`. Same-session evidence:
+      `pnpm exec vitest --run packages/test/src/harness.test.ts packages/test/src/index.test.ts`.
 
 Verification: identical test counts ± intentional additions before/after each split; full
 acceptance at the end.
