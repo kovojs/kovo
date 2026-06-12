@@ -1,5 +1,8 @@
 import { isAbsolute, relative } from 'node:path';
 
+import { diagnosticDefinitions } from '@jiso/core';
+
+import type { CompilerDiagnostic } from './diagnostics.js';
 import { clientModuleUrl, clientModuleVersion } from './lower/handlers.js';
 
 export interface JisoVitePlugin {
@@ -12,6 +15,12 @@ export interface JisoVitePlugin {
     code: string;
     map: null;
   };
+}
+
+export type JisoViteDiagnosticReporter = (diagnostic: CompilerDiagnostic) => void;
+
+export interface JisoVitePluginOptions {
+  onDiagnostic?: JisoViteDiagnosticReporter;
 }
 
 export interface JisoViteDevServer {
@@ -39,6 +48,7 @@ interface ViteCompileOptions {
 }
 
 interface ViteCompileResult {
+  diagnostics?: readonly CompilerDiagnostic[];
   files: readonly {
     kind: string;
     source: string;
@@ -47,6 +57,7 @@ interface ViteCompileResult {
 
 export function createJisoVitePlugin(
   compileComponentModule: (options: ViteCompileOptions) => ViteCompileResult,
+  options: JisoVitePluginOptions = {},
 ): JisoVitePlugin {
   const clientModules = new Map<string, string>();
   let root = process.cwd();
@@ -73,6 +84,19 @@ export function createJisoVitePlugin(
 
       const fileName = viteComponentFileName(id, root);
       const result = compileComponentModule({ fileName, source });
+      const diagnostics = result.diagnostics ?? [];
+      const errorDiagnostics = diagnostics.filter(
+        (diagnostic) => diagnosticSeverity(diagnostic) === 'error',
+      );
+
+      for (const diagnostic of diagnostics) {
+        if (diagnosticSeverity(diagnostic) !== 'error') options.onDiagnostic?.(diagnostic);
+      }
+
+      if (errorDiagnostics.length > 0) {
+        throw new Error(viteDiagnosticErrorMessage(errorDiagnostics));
+      }
+
       for (const file of result.files) {
         if (file.kind === 'client') {
           clientModules.set(
@@ -88,6 +112,39 @@ export function createJisoVitePlugin(
       };
     },
   };
+}
+
+function diagnosticSeverity(diagnostic: CompilerDiagnostic): CompilerDiagnostic['severity'] {
+  return diagnosticDefinitions[diagnostic.code].severity;
+}
+
+function viteDiagnosticErrorMessage(diagnostics: readonly CompilerDiagnostic[]): string {
+  const plural = diagnostics.length === 1 ? '' : 's';
+
+  // SPEC §5.2 hard rule 5: diagnostics are teaching errors, so Vite surfaces the
+  // source site plus the compiler's lowering/fix help instead of a terse code.
+  return [
+    `Jiso Vite transform failed with ${diagnostics.length} error diagnostic${plural}.`,
+    diagnostics.map(formatCompilerDiagnostic).join('\n\n'),
+  ].join('\n\n');
+}
+
+function formatCompilerDiagnostic(diagnostic: CompilerDiagnostic): string {
+  const help = diagnostic.help?.trim();
+  if (!help) return `${diagnostic.code} ${diagnosticSite(diagnostic)} ${diagnostic.message}`;
+
+  return [
+    `${diagnostic.code} ${diagnosticSite(diagnostic)} ${diagnostic.message}`,
+    ...help.split('\n').map((line) => `  help: ${line}`),
+  ].join('\n');
+}
+
+function diagnosticSite(diagnostic: CompilerDiagnostic): string {
+  const line = diagnostic.start?.line;
+  const column = diagnostic.start?.column;
+  if (line === undefined || column === undefined) return diagnostic.fileName;
+
+  return `${diagnostic.fileName}:${line}:${column}`;
 }
 
 function viteComponentFileName(id: string, root: string): string {

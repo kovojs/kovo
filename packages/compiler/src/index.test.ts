@@ -17,6 +17,7 @@ import {
   selectCssAssets,
 } from './index.js';
 import { renderEquivalenceCheck } from './emit/server.js';
+import { createJisoVitePlugin } from './vite.js';
 
 const cartBadgeSource = `
 import { component } from '@jiso/core';
@@ -3793,6 +3794,94 @@ describe('jisoVitePlugin', () => {
       code: expect.stringContaining('export function renderSource()'),
       map: null,
     });
+  });
+
+  it('throws registry-error diagnostics from the Vite transform with teaching text', () => {
+    const plugin = createJisoVitePlugin(() => ({
+      diagnostics: [
+        {
+          code: 'FW201',
+          fileName: 'src/bad.tsx',
+          help: [
+            'Would lower to: on:click="/c/src/bad.client.js#Bad$button_click"',
+            'Fixes: move the value into component/query state via ctx.',
+          ].join('\n'),
+          message: 'Closure captures unserializable value.',
+          severity: 'lint',
+          start: { line: 3, column: 12 },
+        },
+      ],
+      files: [
+        { kind: 'server', source: 'export function renderSource() {}' },
+        { kind: 'client', source: 'export const Bad$button_click = () => null;' },
+      ],
+    }));
+
+    let thrown: unknown;
+    try {
+      plugin.transform('component(', 'src/bad.tsx');
+    } catch (error) {
+      thrown = error;
+    }
+
+    expect(thrown).toBeInstanceOf(Error);
+    expect((thrown as Error).message).toBe(
+      [
+        'Jiso Vite transform failed with 1 error diagnostic.',
+        [
+          'FW201 src/bad.tsx:3:12 Closure captures unserializable value.',
+          '  help: Would lower to: on:click="/c/src/bad.client.js#Bad$button_click"',
+          '  help: Fixes: move the value into component/query state via ctx.',
+        ].join('\n'),
+      ].join('\n\n'),
+    );
+  });
+
+  it('reports warn, lint, and notice diagnostics without blocking the Vite transform', () => {
+    const onDiagnostic = vi.fn();
+    const plugin = createJisoVitePlugin(
+      () => ({
+        diagnostics: [
+          {
+            code: 'FW311',
+            fileName: 'src/diagnostics.tsx',
+            message: 'Query-dependent DOM position has no update status.',
+            severity: 'error',
+            start: { line: 4, column: 9 },
+          },
+          {
+            code: 'FW210',
+            fileName: 'src/diagnostics.tsx',
+            message: 'Anonymous handler; name it for stable identity.',
+            severity: 'error',
+            start: { line: 5, column: 11 },
+          },
+          {
+            code: 'FW409',
+            fileName: 'src/diagnostics.tsx',
+            message: 'Non-eq predicate degraded to table-level invalidation.',
+            severity: 'error',
+            start: { line: 6, column: 13 },
+          },
+        ],
+        files: [
+          { kind: 'server', source: 'export function renderSource() {}' },
+          { kind: 'client', source: 'export const Diagnostics$button_click = () => null;' },
+        ],
+      }),
+      { onDiagnostic },
+    );
+
+    expect(plugin.transform('component(', 'src/diagnostics.tsx')).toEqual({
+      code: 'export function renderSource() {}',
+      map: null,
+    });
+    expect(onDiagnostic).toHaveBeenCalledTimes(3);
+    expect(onDiagnostic.mock.calls.map(([diagnostic]) => diagnostic.code)).toEqual([
+      'FW311',
+      'FW210',
+      'FW409',
+    ]);
   });
 
   it('serves emitted client modules from Vite dev middleware', () => {

@@ -51,13 +51,19 @@ import type {
   QueryUpdatePlanFact,
   RenderEquivalenceCheck,
 } from './types.js';
-import { createJisoVitePlugin, type JisoVitePlugin } from './vite.js';
+import { createJisoVitePlugin, type JisoVitePlugin, type JisoVitePluginOptions } from './vite.js';
 
 export type { DiagnosticCode };
 export type { CompilerDiagnostic, SourcePosition } from './diagnostics.js';
 export type { QueryPlanBootstrapInput, QueryPlanBootstrapOptions } from './emit/bootstrap.js';
 export { emitQueryPlanBootstrapModule } from './emit/bootstrap.js';
-export type { JisoViteDevServer, JisoViteMiddleware, JisoVitePlugin } from './vite.js';
+export type {
+  JisoViteDevServer,
+  JisoViteDiagnosticReporter,
+  JisoViteMiddleware,
+  JisoVitePlugin,
+  JisoVitePluginOptions,
+} from './vite.js';
 export type { PlatformSubstitution } from './lower/platform.js';
 export type {
   CompileAppGraphOptions,
@@ -326,8 +332,8 @@ export function collectMinifierReservedNames(
   return [...reserved].sort();
 }
 
-export function jisoVitePlugin(): JisoVitePlugin {
-  return createJisoVitePlugin(compileComponentModule);
+export function jisoVitePlugin(options: JisoVitePluginOptions = {}): JisoVitePlugin {
+  return createJisoVitePlugin(compileComponentModule, options);
 }
 
 function emittedFileKind(fileName: string): EmittedFile['kind'] {
