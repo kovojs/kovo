@@ -2732,6 +2732,13 @@ As each phase splits a source module, split its tests in the same commit.
       and remaining compile pipeline groups. Same-session evidence:
       `pnpm exec vitest --run packages/compiler/src/stamps.test.ts packages/compiler/src/index.test.ts -t "stamp|fw-c|fw-deps|FW222|FW223|self-closing|binding"`
       and `pnpm exec vp check packages/compiler/src/stamps.test.ts packages/compiler/src/index.test.ts plans/codebase-quality-round2.md`.
+      Additional evidence 2026-06-12: residual primitive composition merge diagnostics FW231,
+      FW232, and FW233 plus string/comment non-matches moved from
+      `packages/compiler/src/index.test.ts` into `packages/compiler/src/attribute-merge.test.ts`.
+      The broad compiler split remains open for residual FW226/FW302 checks, ID/content-model
+      diagnostics, and remaining compile pipeline groups. Same-session evidence:
+      `pnpm exec vitest --run packages/compiler/src/attribute-merge.test.ts packages/compiler/src/index.test.ts -t "FW231|FW232|FW233|attribute merge"`
+      and `pnpm exec vp check packages/compiler/src/attribute-merge.test.ts packages/compiler/src/index.test.ts plans/codebase-quality-round2.md`.
 - [ ] drizzle (one describe, 57 its, 68 inline pgTable fixtures, 3 module-shim copies) and
       test-package suites: same treatment; CLI tests get the temp-dir + stream-spy ritual
       (16 hand-copies) as one helper.
