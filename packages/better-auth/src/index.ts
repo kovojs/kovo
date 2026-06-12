@@ -485,7 +485,7 @@ export function validateBetterAuthSchemaBridge(
   const bridgeTableNames = new Set<string>(bridgeTables);
   const missingTables = betterAuthRequiredCoreTables.filter((table) => !tableNames.has(table));
   const unbridgedTables = [...tableNames].filter((table) => !bridgeTableNames.has(table)).sort();
-  const declaredTouchMismatches = declaredTableTouchMismatches(options);
+  const declaredTouchMismatches = declaredTableTouchMismatches(tableNames, options);
   const keyFieldMismatches = schemaBridgeKeyFieldMismatches(tables);
   const pluginTableDegradations = unbridgedTables.map((table) =>
     unsupportedPluginTableDegradation(table, tables[table]),
@@ -925,6 +925,7 @@ function mergeDomainTouches(
 }
 
 function declaredTableTouchMismatches(
+  tableNames: ReadonlySet<string>,
   options: BetterAuthSchemaBridgeValidationOptions = {},
 ): string[] {
   const mismatches: string[] = [];
@@ -939,6 +940,13 @@ function declaredTableTouchMismatches(
     const declaredTouchDomains = touches.map((touch) => touch.domain);
 
     for (const touch of touches) {
+      if (!tableNames.has(touch.table)) {
+        mismatches.push(
+          `${api}.${touch.table} is declared touched but Better Auth table metadata is missing that table`,
+        );
+        continue;
+      }
+
       const domainForTable = betterAuthTableDomain(touch.table);
 
       if (domainForTable === null) {

@@ -440,6 +440,23 @@ describe('Better Auth pinned conformance', () => {
       pluginTableDegradations: [],
       unbridgedTables: [],
     });
+    expect(
+      validateBetterAuthSchemaBridge(tables, {
+        credentialMutationDeclaredTableTouches: {
+          signInEmail: [
+            { domain: 'auth', table: 'session' },
+            { domain: 'auth', table: 'twoFactor' },
+          ],
+        },
+      }),
+    ).toEqual({
+      declaredTouchMismatches: [],
+      keyFieldMismatches: [],
+      missingTables: [],
+      ok: true,
+      pluginTableDegradations: [],
+      unbridgedTables: [],
+    });
     expect(betterAuthSchemaBridge.twoFactor).toEqual({ domain: 'auth', key: 'userId' });
     expect(result.annotatedTables).toEqual([
       'account',

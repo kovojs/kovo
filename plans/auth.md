@@ -275,6 +275,14 @@ Scope: SPEC additions (session population, guard-failure contract, mutation resp
       pinned conformance suite remains clean against the default declared touches. Same-session
       evidence:
       `pnpm exec vitest --run packages/better-auth/src/index.test.ts conformance/better-auth-pin/src/index.test.ts --reporter=dot`.
+      Partial evidence 2026-06-12: `validateBetterAuthSchemaBridge` now rejects declared
+      credential table touches whose Better Auth table metadata is absent, covering stale
+      plugin-generated table touch declarations before they can satisfy the domain-only registry
+      check. `packages/better-auth/src/index.test.ts` covers a local negative fixture where a
+      `twoFactor` touch is declared without the plugin table metadata, and
+      `conformance/better-auth-pin/src/index.test.ts` proves the same declared touch is clean
+      against real `better-auth@1.6.17` `twoFactor()` metadata. Same-session evidence:
+      `pnpm exec vitest --run packages/better-auth/src/index.test.ts conformance/better-auth-pin/src/index.test.ts --reporter=dot`.
       Remaining gaps: plugin-generated tables outside the blessed organization/admin/two-factor/OIDC-provider/MCP/SIWE/JWT/device-authorization
       surface are still not mapped, the OAuth-provider successor package/table metadata is not
       installed or exportable from the pinned dependency set, and full app `schema.ts` generation

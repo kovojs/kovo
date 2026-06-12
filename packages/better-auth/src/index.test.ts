@@ -616,6 +616,36 @@ describe('credential mutation helpers', () => {
     });
   });
 
+  it('reports declared plugin table touches when plugin metadata is absent', () => {
+    expect(
+      validateBetterAuthSchemaBridge(
+        {
+          account: authTable(['userId']),
+          session: authTable(['userId']),
+          user: authTable(),
+          verification: authTable(),
+        },
+        {
+          credentialMutationDeclaredTableTouches: {
+            signInEmail: [
+              { domain: 'auth', table: 'session' },
+              { domain: 'auth', table: 'twoFactor' },
+            ],
+          },
+        },
+      ),
+    ).toEqual({
+      declaredTouchMismatches: [
+        'signInEmail.twoFactor is declared touched but Better Auth table metadata is missing that table',
+      ],
+      keyFieldMismatches: [],
+      missingTables: [],
+      ok: false,
+      pluginTableDegradations: [],
+      unbridgedTables: [],
+    });
+  });
+
   it('materializes Jiso annotations into an app schema.ts source fixture', () => {
     const source = [
       "import { jiso } from '@jiso/drizzle';",
