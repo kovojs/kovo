@@ -134,11 +134,13 @@ export { nodeRequestToWebRequest, toNodeHandler, writeWebResponseToNode } from '
 export type { NodeHandlerOptions, NodeRequestHandler } from './node.js';
 export {
   createJisoAppShellBuild,
+  jisoAppShellViteManifestAssets,
   jisoAppShellViteManifestHints,
   jisoAppShellVitePlugin,
 } from './vite.js';
 export type {
   JisoAppShellBuild,
+  JisoAppShellBuildAsset,
   JisoAppShellBuildOptions,
   JisoAppShellBuiltClientModule,
   JisoAppShellCompiledClientModule,

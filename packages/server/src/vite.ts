@@ -52,15 +52,25 @@ export interface JisoAppShellCompiledClientModule extends Omit<
 
 export interface JisoAppShellBuildOptions {
   app: JisoApp;
+  base?: string;
   clientModules?: readonly JisoAppShellCompiledClientModule[];
   manifest?: JisoAppShellViteManifest;
   routeEntries?: readonly JisoAppShellRouteBuildEntry[];
 }
 
 export interface JisoAppShellBuiltClientModule {
+  contentType?: string;
+  file: string;
   href: string;
   path: string;
+  source: string;
   version: string;
+}
+
+export interface JisoAppShellBuildAsset {
+  file: string;
+  href: string;
+  path: string;
 }
 
 export interface JisoAppShellRouteBuildHints {
@@ -70,6 +80,7 @@ export interface JisoAppShellRouteBuildHints {
 
 export interface JisoAppShellBuild {
   app: JisoApp;
+  assets: readonly JisoAppShellBuildAsset[];
   clientModules: readonly JisoAppShellBuiltClientModule[];
   routeHints: readonly JisoAppShellRouteBuildHints[];
 }
@@ -108,7 +119,8 @@ export function jisoAppShellViteManifestHints(
 }
 
 export function createJisoAppShellBuild(options: JisoAppShellBuildOptions): JisoAppShellBuild {
-  const routeHints = buildRouteHints(options.manifest, options.routeEntries);
+  const manifestOptions = viteManifestOptions(options.base);
+  const routeHints = buildRouteHints(options.manifest, options.routeEntries, manifestOptions);
   const app =
     routeHints.length === 0
       ? options.app
@@ -120,18 +132,36 @@ export function createJisoAppShellBuild(options: JisoAppShellBuildOptions): Jiso
           }),
         };
   const clientModules = registerCompiledClientModules(options.app, options.clientModules ?? []);
+  const assets = options.manifest
+    ? jisoAppShellViteManifestAssets(options.manifest, manifestOptions)
+    : [];
 
-  return { app, clientModules, routeHints };
+  return { app, assets, clientModules, routeHints };
+}
+
+export function jisoAppShellViteManifestAssets(
+  manifest: JisoAppShellViteManifest,
+  options: JisoAppShellViteManifestHintOptions = {},
+): JisoAppShellBuildAsset[] {
+  const assets = new Map<string, JisoAppShellBuildAsset>();
+
+  for (const chunk of Object.values(manifest)) {
+    addManifestBuildAsset(assets, chunk.file, options);
+    for (const stylesheet of chunk.css ?? []) addManifestBuildAsset(assets, stylesheet, options);
+  }
+
+  return [...assets.values()].sort((left, right) => left.file.localeCompare(right.file));
 }
 
 function buildRouteHints(
   manifest: JisoAppShellViteManifest | undefined,
   routeEntries: readonly JisoAppShellRouteBuildEntry[] | undefined,
+  options: JisoAppShellViteManifestHintOptions,
 ): JisoAppShellRouteBuildHints[] {
   if (!manifest || !routeEntries || routeEntries.length === 0) return [];
 
   return routeEntries.map((entry) => ({
-    hints: jisoAppShellViteManifestHints(manifest, entry.entries),
+    hints: jisoAppShellViteManifestHints(manifest, entry.entries, options),
     routePath: entry.routePath,
   }));
 }
@@ -147,8 +177,42 @@ function registerCompiledClientModules(
       ...module,
       version,
     });
+    const url = new URL(href, 'https://jiso.local');
 
-    return { href, path: module.path, version };
+    const built: JisoAppShellBuiltClientModule = {
+      file: normalizedDistFile(url.pathname),
+      href,
+      path: url.pathname,
+      source: module.source,
+      version,
+    };
+    if (module.contentType !== undefined) return { ...built, contentType: module.contentType };
+
+    return built;
+  });
+}
+
+function viteManifestOptions(base: string | undefined): JisoAppShellViteManifestHintOptions {
+  return base === undefined ? {} : { base };
+}
+
+function addManifestBuildAsset(
+  assets: Map<string, JisoAppShellBuildAsset>,
+  file: string | undefined,
+  options: JisoAppShellViteManifestHintOptions,
+): void {
+  if (!file || isExternalAssetHref(file)) return;
+
+  const normalizedFile = normalizedDistFile(file);
+  if (assets.has(normalizedFile)) return;
+
+  const href = manifestAssetHref(normalizedFile, options.base);
+  const url = new URL(href, 'https://jiso.local');
+
+  assets.set(normalizedFile, {
+    file: normalizedFile,
+    href,
+    path: url.pathname,
   });
 }
 
@@ -189,11 +253,39 @@ function resolveManifestChunk(
 }
 
 function manifestAssetHref(file: string, base = '/'): string {
-  if (file.startsWith('/') || file.startsWith('//') || /^[a-z][a-z0-9+.-]*:/i.test(file)) {
+  if (isExternalAssetHref(file)) {
     return file;
   }
 
   return `${base.replace(/\/?$/, '/')}${file.replace(/^\/+/, '')}`;
+}
+
+function isExternalAssetHref(file: string): boolean {
+  return file.startsWith('//') || /^[a-z][a-z0-9+.-]*:/i.test(file);
+}
+
+function normalizedDistFile(file: string): string {
+  const pathname = file.replace(/[?#].*$/, '').replace(/^\/+/, '');
+  const segments = pathname.split('/');
+
+  if (segments.length === 0 || segments.some((segment) => !isSafeDistFileSegment(segment))) {
+    throw new Error(`App shell build asset must stay within the Vite output directory: ${file}`);
+  }
+
+  return segments.join('/');
+}
+
+function isSafeDistFileSegment(segment: string): boolean {
+  if (!segment) return false;
+
+  let decoded: string;
+  try {
+    decoded = decodeURIComponent(segment);
+  } catch {
+    return false;
+  }
+
+  return decoded !== '.' && decoded !== '..' && !decoded.includes('/') && !decoded.includes('\\');
 }
 
 function mergePageHints(base: PageHintOptions, extra: PageHintOptions): PageHintOptions {

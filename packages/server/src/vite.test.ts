@@ -8,6 +8,7 @@ import {
   createMemoryVersionedClientModuleRegistry,
   createRequestHandler,
   jisoAppShellVitePlugin,
+  jisoAppShellViteManifestAssets,
   jisoAppShellViteManifestHints,
   route,
   type JisoAppShellViteMiddleware,
@@ -39,6 +40,37 @@ describe('server app shell Vite plugin', () => {
       modulepreloads: ['/assets/cart.js', '/assets/shared.js', '/assets/recommendations.js'],
       stylesheets: ['/assets/cart.css', '/assets/theme.css', '/assets/recommendations.css'],
     });
+  });
+
+  it('plans deterministic Vite dist assets from the manifest', () => {
+    expect(
+      jisoAppShellViteManifestAssets(
+        {
+          'src/cart.client.ts': {
+            css: ['assets/cart.css', '/assets/theme.css'],
+            file: 'assets/cart.js',
+          },
+          'src/recommendations.client.ts': {
+            css: ['assets/cart.css', 'https://cdn.example.test/reset.css'],
+            file: 'assets/recommendations.js',
+          },
+        },
+        { base: '/static/' },
+      ),
+    ).toEqual([
+      { file: 'assets/cart.css', href: '/static/assets/cart.css', path: '/static/assets/cart.css' },
+      { file: 'assets/cart.js', href: '/static/assets/cart.js', path: '/static/assets/cart.js' },
+      {
+        file: 'assets/recommendations.js',
+        href: '/static/assets/recommendations.js',
+        path: '/static/assets/recommendations.js',
+      },
+      {
+        file: 'assets/theme.css',
+        href: '/static/assets/theme.css',
+        path: '/static/assets/theme.css',
+      },
+    ]);
   });
 
   it('wires build manifest hints and compiled client modules through the app shell', async () => {
@@ -74,9 +106,17 @@ describe('server app shell Vite plugin', () => {
     const module = build.clientModules[0];
     if (!module) throw new Error('expected a compiled client module');
     expect(module).toMatchObject({
+      file: 'c/cart.client.js',
       href: expect.stringMatching(/^\/c\/cart\.client\.js\?v=[a-f0-9]{12}$/),
       path: '/c/cart.client.js',
+      source: 'export const cart = 1;',
     });
+    expect(build.assets).toEqual([
+      { file: 'assets/cart.css', href: '/assets/cart.css', path: '/assets/cart.css' },
+      { file: 'assets/cart.js', href: '/assets/cart.js', path: '/assets/cart.js' },
+      { file: 'assets/shared.js', href: '/assets/shared.js', path: '/assets/shared.js' },
+      { file: 'assets/theme.css', href: '/assets/theme.css', path: '/assets/theme.css' },
+    ]);
     expect(build.routeHints).toEqual([
       {
         hints: {
@@ -109,6 +149,44 @@ describe('server app shell Vite plugin', () => {
     expect(moduleResponse.status).toBe(200);
     expect(moduleResponse.headers.get('cache-control')).toBe('public, max-age=31536000, immutable');
     await expect(moduleResponse.text()).resolves.toBe('export const cart = 1;');
+  });
+
+  it('applies Vite base paths to build route hints and asset planning', () => {
+    const build = createJisoAppShellBuild({
+      app: createApp({ routes: [route('/cart', {})] }),
+      base: '/shop/',
+      manifest: {
+        'src/cart.client.ts': {
+          css: ['assets/cart.css'],
+          file: 'assets/cart.js',
+        },
+      },
+      routeEntries: [{ entries: ['src/cart.client.ts'], routePath: '/cart' }],
+    });
+
+    expect(build.routeHints).toEqual([
+      {
+        hints: {
+          modulepreloads: ['/shop/assets/cart.js'],
+          stylesheets: ['/shop/assets/cart.css'],
+        },
+        routePath: '/cart',
+      },
+    ]);
+    expect(build.assets).toEqual([
+      { file: 'assets/cart.css', href: '/shop/assets/cart.css', path: '/shop/assets/cart.css' },
+      { file: 'assets/cart.js', href: '/shop/assets/cart.js', path: '/shop/assets/cart.js' },
+    ]);
+  });
+
+  it('rejects unsafe Vite output asset paths before they can be copied', () => {
+    expect(() =>
+      jisoAppShellViteManifestAssets({
+        'src/cart.client.ts': {
+          file: '../cart.js',
+        },
+      }),
+    ).toThrow('App shell build asset must stay within the Vite output directory');
   });
 
   it('registers dev middleware that serves through the app shell request handler', async () => {
