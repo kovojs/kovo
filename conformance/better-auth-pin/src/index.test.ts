@@ -7,7 +7,7 @@ import {
 } from '@jiso/server';
 import { betterAuth, getAuthTables } from 'better-auth';
 import { memoryAdapter } from 'better-auth/adapters/memory';
-import { admin, organization } from 'better-auth/plugins';
+import { admin, organization, twoFactor } from 'better-auth/plugins';
 import { describe, expect, expectTypeOf, it } from 'vitest';
 
 import {
@@ -132,6 +132,7 @@ describe('Better Auth pinned conformance', () => {
       keyFieldMismatches: [],
       missingTables: [],
       ok: true,
+      pluginTableDegradations: [],
       unbridgedTables: [],
     });
     expect(betterAuthSchemaBridge.user).toEqual({ domain: 'user', key: 'id' });
@@ -235,6 +236,7 @@ describe('Better Auth pinned conformance', () => {
       keyFieldMismatches: [],
       missingTables: [],
       ok: true,
+      pluginTableDegradations: [],
       unbridgedTables: [],
     });
     expect(betterAuthSchemaBridge.organization).toEqual({ domain: 'organization', key: 'id' });
@@ -245,6 +247,43 @@ describe('Better Auth pinned conformance', () => {
     expect(betterAuthSchemaBridge.teamMember).toEqual({
       domain: 'organization',
       key: 'teamId',
+    });
+  });
+
+  it('degrades non-blessed plugin table metadata with actionable bridge diagnostics', () => {
+    const { auth } = createRealAuth({
+      plugins: [twoFactor()],
+    });
+    const tables = getAuthTables(auth.options);
+
+    expect(Object.keys(tables).sort()).toEqual([
+      'account',
+      'session',
+      'twoFactor',
+      'user',
+      'verification',
+    ]);
+    expect(Object.keys(requireAuthTable(tables, 'twoFactor').fields).sort()).toEqual([
+      'backupCodes',
+      'secret',
+      'userId',
+      'verified',
+    ]);
+    expect(validateBetterAuthSchemaBridge(tables)).toEqual({
+      declaredTouchMismatches: [],
+      keyFieldMismatches: [],
+      missingTables: [],
+      ok: false,
+      pluginTableDegradations: [
+        {
+          fields: ['backupCodes', 'id', 'secret', 'userId', 'verified'],
+          message:
+            'twoFactor is outside the blessed Better Auth schema bridge; map it to an app domain before relying on declared touch coverage.',
+          reason: 'unsupported-plugin-table',
+          table: 'twoFactor',
+        },
+      ],
+      unbridgedTables: ['twoFactor'],
     });
   });
 
@@ -684,8 +723,8 @@ function stableRows(rows: readonly Record<string, unknown>[]): string {
 
 function requireAuthTable(
   tables: ReturnType<typeof getAuthTables>,
-  table: BetterAuthTable,
-): NonNullable<ReturnType<typeof getAuthTables>[BetterAuthTable]> {
+  table: string,
+): NonNullable<ReturnType<typeof getAuthTables>[string]> {
   const value = tables[table];
 
   if (!value) throw new Error(`better-auth table metadata missing: ${table}`);

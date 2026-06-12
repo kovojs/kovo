@@ -350,6 +350,7 @@ describe('credential mutation helpers', () => {
       keyFieldMismatches: [],
       missingTables: [],
       ok: true,
+      pluginTableDegradations: [],
       unbridgedTables: [],
     });
     expect(
@@ -370,6 +371,7 @@ describe('credential mutation helpers', () => {
       keyFieldMismatches: [],
       missingTables: [],
       ok: true,
+      pluginTableDegradations: [],
       unbridgedTables: [],
     });
 
@@ -392,13 +394,22 @@ describe('credential mutation helpers', () => {
         account: authTable(['userId']),
         session: authTable(['userId']),
         user: authTable(),
-        webauthnCredential: authTable(),
+        webauthnCredential: authTable(['credentialId', 'userId']),
       }),
     ).toEqual({
       declaredTouchMismatches: [],
       keyFieldMismatches: [],
       missingTables: ['verification'] satisfies BetterAuthTable[],
       ok: false,
+      pluginTableDegradations: [
+        {
+          fields: ['credentialId', 'id', 'userId'],
+          message:
+            'webauthnCredential is outside the blessed Better Auth schema bridge; map it to an app domain before relying on declared touch coverage.',
+          reason: 'unsupported-plugin-table',
+          table: 'webauthnCredential',
+        },
+      ],
       unbridgedTables: ['webauthnCredential'],
     });
   });
@@ -418,6 +429,7 @@ describe('credential mutation helpers', () => {
       ],
       missingTables: [],
       ok: false,
+      pluginTableDegradations: [],
       unbridgedTables: [],
     });
   });

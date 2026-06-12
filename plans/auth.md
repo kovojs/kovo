@@ -42,6 +42,16 @@ Scope: SPEC additions (session population, guard-failure contract, mutation resp
       no key-field drift. Same-session evidence:
       `pnpm exec vitest --run packages/better-auth/src/index.test.ts conformance/better-auth-pin/src/index.test.ts --reporter=dot`
       and `pnpm exec vp check packages/better-auth/src/index.ts packages/better-auth/src/index.test.ts conformance/better-auth-pin/src/index.test.ts plans/auth.md`.
+      Partial evidence 2026-06-12: `validateBetterAuthSchemaBridge` now reports
+      `pluginTableDegradations` for Better Auth table metadata outside the blessed bridge,
+      preserving `ok: false`/`unbridgedTables` while attaching the table fields and an actionable
+      §14 declared-touch coverage message. `packages/better-auth/src/index.test.ts` covers the
+      local degradation payload for an unmapped plugin table, and
+      `conformance/better-auth-pin/src/index.test.ts` pins real `better-auth@1.6.17`
+      `twoFactor()` metadata degrading as unsupported rather than being silently accepted. Same-session
+      evidence: `pnpm exec vitest --run packages/better-auth/src/index.test.ts conformance/better-auth-pin/src/index.test.ts --reporter=dot`,
+      `pnpm exec tsc -p conformance/better-auth-pin/tsconfig.json --noEmit`, and
+      `pnpm exec vp check packages/better-auth/src/index.ts packages/better-auth/src/index.test.ts conformance/better-auth-pin/src/index.test.ts plans/auth.md`.
       Remaining gaps: plugin-generated tables outside the blessed organization/admin surface are
       still not mapped, app `schema.ts` generation is not exercised, and the declared table touches
       are not yet wired through the P9 wrapper as a general observed-write verifier.

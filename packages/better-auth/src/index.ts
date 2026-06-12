@@ -206,7 +206,15 @@ export interface BetterAuthSchemaBridgeValidation {
   keyFieldMismatches: string[];
   missingTables: BetterAuthCoreTable[];
   ok: boolean;
+  pluginTableDegradations: BetterAuthPluginTableDegradation[];
   unbridgedTables: string[];
+}
+
+export interface BetterAuthPluginTableDegradation {
+  fields: string[] | null;
+  message: string;
+  reason: 'unsupported-plugin-table';
+  table: string;
 }
 
 export const betterAuthAuthDomain = domain('auth');
@@ -276,6 +284,9 @@ export function validateBetterAuthSchemaBridge(
   const unbridgedTables = [...tableNames].filter((table) => !bridgeTableNames.has(table)).sort();
   const declaredTouchMismatches = declaredTableTouchMismatches();
   const keyFieldMismatches = schemaBridgeKeyFieldMismatches(tables);
+  const pluginTableDegradations = unbridgedTables.map((table) =>
+    unsupportedPluginTableDegradation(table, tables[table]),
+  );
 
   return {
     declaredTouchMismatches,
@@ -286,6 +297,7 @@ export function validateBetterAuthSchemaBridge(
       unbridgedTables.length === 0 &&
       keyFieldMismatches.length === 0 &&
       declaredTouchMismatches.length === 0,
+    pluginTableDegradations,
     unbridgedTables,
   };
 }
@@ -693,4 +705,18 @@ function betterAuthTableFieldNames(table: unknown): Set<string> | null {
   if (!fields || typeof fields !== 'object' || Array.isArray(fields)) return null;
 
   return new Set(['id', ...Object.keys(fields)]);
+}
+
+function unsupportedPluginTableDegradation(
+  table: string,
+  metadata: unknown,
+): BetterAuthPluginTableDegradation {
+  const fieldNames = betterAuthTableFieldNames(metadata);
+
+  return {
+    fields: fieldNames === null ? null : [...fieldNames].sort(),
+    message: `${table} is outside the blessed Better Auth schema bridge; map it to an app domain before relying on declared touch coverage.`,
+    reason: 'unsupported-plugin-table',
+    table,
+  };
 }
