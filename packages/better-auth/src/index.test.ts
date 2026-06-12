@@ -327,6 +327,9 @@ describe('credential mutation helpers', () => {
       account: { domain: 'auth', key: 'userId' },
       invitation: { domain: 'organization', key: 'organizationId' },
       member: { domain: 'organization', key: 'organizationId' },
+      oauthAccessToken: { domain: 'auth', key: 'userId' },
+      oauthApplication: { domain: 'auth', key: 'userId' },
+      oauthConsent: { domain: 'auth', key: 'userId' },
       organization: { domain: 'organization', key: 'id' },
       organizationRole: { domain: 'organization', key: 'organizationId' },
       session: { domain: 'auth', key: 'userId' },
@@ -400,6 +403,9 @@ describe('credential mutation helpers', () => {
         account: 'auth',
         invitation: 'organization',
         member: 'organization',
+        oauthAccessToken: 'auth',
+        oauthApplication: 'auth',
+        oauthConsent: 'auth',
         organization: 'organization',
         organizationRole: 'organization',
         session: 'auth',
@@ -413,6 +419,9 @@ describe('credential mutation helpers', () => {
         account: 'userId',
         invitation: 'organizationId',
         member: 'organizationId',
+        oauthAccessToken: 'userId',
+        oauthApplication: 'userId',
+        oauthConsent: 'userId',
         organization: 'id',
         organizationRole: 'organizationId',
         session: 'userId',
@@ -442,6 +451,9 @@ describe('credential mutation helpers', () => {
         account: authTable(['userId']),
         invitation: authTable(['organizationId']),
         member: authTable(['organizationId']),
+        oauthAccessToken: authTable(['userId']),
+        oauthApplication: authTable(['userId']),
+        oauthConsent: authTable(['userId']),
         organization: authTable(),
         organizationRole: authTable(['organizationId']),
         session: authTable(['userId']),
@@ -622,6 +634,53 @@ describe('credential mutation helpers', () => {
         "  id: text('id').primaryKey(),\n" +
         "  userId: text('user_id').notNull(),\n" +
         "  secret: text('secret').notNull(),\n" +
+        "}, jiso({ domain: 'auth', key: 'userId' }));",
+    );
+  });
+
+  it('materializes bridged OIDC provider plugin tables into app schema.ts source fixtures', () => {
+    const result = annotateBetterAuthSchemaSource(
+      [
+        "import { jiso } from '@jiso/drizzle';",
+        "import { pgTable, text } from 'drizzle-orm/pg-core';",
+        '',
+        "export const oauthApplication = pgTable('oauthApplication', {",
+        "  id: text('id').primaryKey(),",
+        "  userId: text('user_id').notNull(),",
+        '});',
+        '',
+        "export const oauthAccessToken = pgTable('oauthAccessToken', {",
+        "  id: text('id').primaryKey(),",
+        "  userId: text('user_id').notNull(),",
+        '});',
+        '',
+        "export const oauthConsent = pgTable('oauthConsent', {",
+        "  id: text('id').primaryKey(),",
+        "  userId: text('user_id').notNull(),",
+        '});',
+        '',
+      ].join('\n'),
+      {
+        oauthAccessToken: authTable(['userId']),
+        oauthApplication: authTable(['userId']),
+        oauthConsent: authTable(['userId']),
+      },
+    );
+
+    expect(result.validation).toMatchObject({
+      keyFieldMismatches: [],
+      pluginTableDegradations: [],
+      unbridgedTables: [],
+    });
+    expect(result.annotatedTables).toEqual([
+      'oauthAccessToken',
+      'oauthApplication',
+      'oauthConsent',
+    ]);
+    expect(result.source).toContain(
+      "export const oauthApplication = pgTable('oauthApplication', {\n" +
+        "  id: text('id').primaryKey(),\n" +
+        "  userId: text('user_id').notNull(),\n" +
         "}, jiso({ domain: 'auth', key: 'userId' }));",
     );
   });

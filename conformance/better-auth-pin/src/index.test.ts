@@ -8,7 +8,7 @@ import {
 import { createJisoTestHarness } from '@jiso/test';
 import { betterAuth, getAuthTables } from 'better-auth';
 import { memoryAdapter } from 'better-auth/adapters/memory';
-import { admin, jwt, organization, twoFactor } from 'better-auth/plugins';
+import { admin, jwt, oidcProvider, organization, twoFactor } from 'better-auth/plugins';
 import { describe, expect, expectTypeOf, it } from 'vitest';
 
 import {
@@ -364,6 +364,88 @@ describe('Better Auth pinned conformance', () => {
     ]);
     expect(result.source).toContain(
       "export const twoFactor = pgTable('twoFactor', {}, jiso({ domain: 'auth', key: 'userId' }));",
+    );
+  });
+
+  it('pins OIDC provider plugin table metadata used by the schema bridge', () => {
+    const { auth } = createRealAuth({
+      plugins: [oidcProvider({ loginPage: '/login' })],
+    });
+    const tables = getAuthTables(auth.options);
+    const result = annotateBetterAuthSchemaSource(
+      betterAuthSchemaSourceFixture(Object.keys(tables)),
+      tables,
+    );
+
+    expect(Object.keys(tables).sort()).toEqual([
+      'account',
+      'oauthAccessToken',
+      'oauthApplication',
+      'oauthConsent',
+      'session',
+      'user',
+      'verification',
+    ]);
+    expect(Object.keys(requireAuthTable(tables, 'oauthApplication').fields).sort()).toEqual([
+      'clientId',
+      'clientSecret',
+      'createdAt',
+      'disabled',
+      'icon',
+      'metadata',
+      'name',
+      'redirectUrls',
+      'type',
+      'updatedAt',
+      'userId',
+    ]);
+    expect(Object.keys(requireAuthTable(tables, 'oauthAccessToken').fields).sort()).toEqual([
+      'accessToken',
+      'accessTokenExpiresAt',
+      'clientId',
+      'createdAt',
+      'refreshToken',
+      'refreshTokenExpiresAt',
+      'scopes',
+      'updatedAt',
+      'userId',
+    ]);
+    expect(Object.keys(requireAuthTable(tables, 'oauthConsent').fields).sort()).toEqual([
+      'clientId',
+      'consentGiven',
+      'createdAt',
+      'scopes',
+      'updatedAt',
+      'userId',
+    ]);
+    expect(validateBetterAuthSchemaBridge(tables)).toEqual({
+      declaredTouchMismatches: [],
+      keyFieldMismatches: [],
+      missingTables: [],
+      ok: true,
+      pluginTableDegradations: [],
+      unbridgedTables: [],
+    });
+    expect(betterAuthSchemaBridge.oauthApplication).toEqual({ domain: 'auth', key: 'userId' });
+    expect(betterAuthSchemaBridge.oauthAccessToken).toEqual({ domain: 'auth', key: 'userId' });
+    expect(betterAuthSchemaBridge.oauthConsent).toEqual({ domain: 'auth', key: 'userId' });
+    expect(result.annotatedTables).toEqual([
+      'account',
+      'oauthAccessToken',
+      'oauthApplication',
+      'oauthConsent',
+      'session',
+      'user',
+      'verification',
+    ]);
+    expect(result.source).toContain(
+      "export const oauthApplication = pgTable('oauthApplication', {}, jiso({ domain: 'auth', key: 'userId' }));",
+    );
+    expect(result.source).toContain(
+      "export const oauthAccessToken = pgTable('oauthAccessToken', {}, jiso({ domain: 'auth', key: 'userId' }));",
+    );
+    expect(result.source).toContain(
+      "export const oauthConsent = pgTable('oauthConsent', {}, jiso({ domain: 'auth', key: 'userId' }));",
     );
   });
 

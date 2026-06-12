@@ -180,9 +180,11 @@ export type BetterAuthOrganizationTable =
   | 'organizationRole'
   | 'team'
   | 'teamMember';
+export type BetterAuthOidcProviderTable = 'oauthAccessToken' | 'oauthApplication' | 'oauthConsent';
 export type BetterAuthTwoFactorTable = 'twoFactor';
 export type BetterAuthTable =
   | BetterAuthCoreTable
+  | BetterAuthOidcProviderTable
   | BetterAuthOrganizationTable
   | BetterAuthTwoFactorTable;
 
@@ -284,6 +286,9 @@ export const betterAuthSchemaBridge = {
   account: { domain: 'auth', key: 'userId' },
   invitation: { domain: 'organization', key: 'organizationId' },
   member: { domain: 'organization', key: 'organizationId' },
+  oauthAccessToken: { domain: 'auth', key: 'userId' },
+  oauthApplication: { domain: 'auth', key: 'userId' },
+  oauthConsent: { domain: 'auth', key: 'userId' },
   organization: { domain: 'organization', key: 'id' },
   organizationRole: { domain: 'organization', key: 'organizationId' },
   session: { domain: 'auth', key: 'userId' },
