@@ -1011,7 +1011,7 @@ function extractQueryDefinitions(
 
       const query = queryArgument.getLiteralText();
       const receiverNames = queryCallbackReceiverNames(bodyArgument);
-      const selection = selectShapeFromQueryBody(bodyArgument, columnShapes);
+      const selection = selectShapeFromQueryBody(bodyArgument, receiverNames, columnShapes);
       const diagnostics = relationalQueryDiagnostics(bodyArgument, receiverNames);
       if (!selection && diagnostics.length === 0) continue;
 
@@ -1021,7 +1021,7 @@ function extractQueryDefinitions(
           : {}),
         hasOutputSchema: objectHasProperty(bodyArgument, 'output'),
         index: declaration.getStart(),
-        instanceKeyComparisons: queryInstanceKeyComparisons(bodyArgument),
+        instanceKeyComparisons: queryInstanceKeyComparisons(bodyArgument, receiverNames),
         opaquePaths: selection?.opaquePaths ?? [],
         query,
         shape: selection?.shape ?? {},
@@ -1045,9 +1045,10 @@ interface QueryShapeSelection {
 
 function selectShapeFromQueryBody(
   body: ObjectLiteralExpression,
+  receiverNames: ReadonlySet<string>,
   columnShapes: Readonly<Record<string, QueryShape>> = {},
 ): QueryShapeSelection | null {
-  const selectCall = selectCallFromQueryBody(body);
+  const selectCall = selectCallFromQueryBody(body, receiverNames);
   if (!selectCall) return null;
 
   const projection = selectCall.getArguments()[0];
@@ -1073,14 +1074,21 @@ function selectShapeFromQueryBody(
 
   return queryShapeFromObjectLiteralNode(projection.compilerNode, {
     columnShapes,
-    nullableTables: nullableJoinTables(body),
+    nullableTables: nullableJoinTables(body, receiverNames),
   });
 }
 
-function selectCallFromQueryBody(body: ObjectLiteralExpression): CallExpression | undefined {
+function selectCallFromQueryBody(
+  body: ObjectLiteralExpression,
+  receiverNames: ReadonlySet<string>,
+): CallExpression | undefined {
   const selectCalls = body
     .getDescendantsOfKind(SyntaxKind.CallExpression)
-    .filter((call) => staticAccessName(call.getExpression()) === 'select')
+    .filter(
+      (call) =>
+        staticAccessName(call.getExpression()) === 'select' &&
+        isQueryCallOnReceiver(call, receiverNames),
+    )
     .sort((left, right) => callSourceOrder(left) - callSourceOrder(right));
 
   return (
@@ -1242,13 +1250,17 @@ function nullableShape(shape: QueryShape): QueryShape {
   return { kind: 'nullable', shape };
 }
 
-function nullableJoinTables(body: ObjectLiteralExpression): ReadonlySet<string> {
+function nullableJoinTables(
+  body: ObjectLiteralExpression,
+  receiverNames: ReadonlySet<string>,
+): ReadonlySet<string> {
   const tables = new Set<string>();
   const relationTables: string[] = [];
 
   for (const { operation, table } of queryBodyCallExpressions(body, (call) => {
     const operation = propertyAccessCallName(call);
     if (!operation || !isJoinReadCallName(operation)) return [];
+    if (!isQueryCallOnReceiver(call, receiverNames)) return [];
 
     const table = staticExpressionPath(call.getArguments()[0]);
     if (!table) return [];
@@ -1440,15 +1452,19 @@ function queryTableExpressions(
   receiverNames: ReadonlySet<string>,
 ): string[] {
   return [
-    ...queryJoinTableExpressions(body),
+    ...queryJoinTableExpressions(body, receiverNames),
     ...queryRelationalTableExpressions(body, receiverNames),
   ];
 }
 
-function queryJoinTableExpressions(body: ObjectLiteralExpression): string[] {
+function queryJoinTableExpressions(
+  body: ObjectLiteralExpression,
+  receiverNames: ReadonlySet<string>,
+): string[] {
   return queryBodyCallExpressions(body, (call) => {
     const name = propertyAccessCallName(call);
     if (!name || !isQueryReadCallName(name)) return [];
+    if (!isQueryCallOnReceiver(call, receiverNames)) return [];
 
     const table = staticExpressionPath(call.getArguments()[0]);
     return table ? [table] : [];
@@ -1487,6 +1503,22 @@ function queryBodyCallExpressions<T>(
     .getDescendantsOfKind(SyntaxKind.CallExpression)
     .sort((left, right) => callSourceOrder(left) - callSourceOrder(right))
     .flatMap(extract);
+}
+
+function isQueryCallOnReceiver(call: CallExpression, receiverNames: ReadonlySet<string>): boolean {
+  // SPEC §11.1: read facts must originate from the Drizzle receiver, not lookalike builders.
+  const receiver = queryCallChainReceiver(call);
+  return Node.isIdentifier(receiver) && receiverNames.has(receiver.getText());
+}
+
+function queryCallChainReceiver(call: CallExpression): Node | undefined {
+  let receiver = staticAccessExpression(call.getExpression());
+
+  while (receiver && Node.isCallExpression(receiver)) {
+    receiver = staticAccessExpression(receiver.getExpression());
+  }
+
+  return receiver;
 }
 
 function callSourceOrder(call: CallExpression): number {
@@ -1538,9 +1570,13 @@ function queryInstanceKey(
   return null;
 }
 
-function queryInstanceKeyComparisons(body: ObjectLiteralExpression): QueryInstanceKeyComparison[] {
+function queryInstanceKeyComparisons(
+  body: ObjectLiteralExpression,
+  receiverNames: ReadonlySet<string>,
+): QueryInstanceKeyComparison[] {
   return queryBodyCallExpressions(body, (call) => {
     if (propertyAccessCallName(call) !== 'where') return [];
+    if (!isQueryCallOnReceiver(call, receiverNames)) return [];
 
     const predicate = call.getArguments()[0];
     if (!predicate || !Node.isCallExpression(predicate)) return [];

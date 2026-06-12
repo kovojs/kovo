@@ -1761,6 +1761,50 @@ export interface CommerceInvalidationSets {
     expect(diagnosticsForQueryFacts(facts)).toEqual([]);
   });
 
+  it('does not fabricate select reads or instance keys from non-receiver builders', () => {
+    const facts = extractQueryFactsFromSource([
+      {
+        fileName: 'product.queries.ts',
+        source: `
+          export const auditLog = pgTable("audit_log", { productId: text("product_id").notNull() }, jiso({ exempt: true }));
+          export const products = pgTable("products", { id: text("id").primaryKey(), name: text("name").notNull() }, jiso({ domain: "product", key: "id" }));
+
+          export const productQuery = query("product", {
+            load(input, reader) {
+              const fixture = {
+                select() { return this; },
+                from() { return this; },
+                leftJoin() { return this; },
+                where() { return this; },
+              };
+              function unrelated() {
+                return fixture
+                  .select()
+                  .from(auditLog)
+                  .leftJoin(auditLog, eq(auditLog.productId, products.id))
+                  .where(eq(products.id, input.id));
+              }
+              unrelated();
+              return reader.select({ name: products.name }).from(products);
+            },
+          });
+        `,
+      },
+    ]);
+
+    expect(facts).toEqual([
+      {
+        query: 'product',
+        reads: ['product'],
+        shape: {
+          name: 'string',
+        },
+        site: 'product.queries.ts:5',
+      },
+    ]);
+    expect(diagnosticsForQueryFacts(facts)).toEqual([]);
+  });
+
   it('does not discover query definitions from comments strings or templates', () => {
     const facts = extractQueryFactsFromSource([
       {

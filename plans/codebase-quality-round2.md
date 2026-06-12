@@ -1203,6 +1203,17 @@ must be "FW406 unresolved," never "silently wrong."
       `pnpm exec vitest --run conformance/drizzle-pin/src/index.test.ts -t "non-receiver objects|element-access relational"`,
       `pnpm exec vitest --run packages/drizzle/src`,
       and `pnpm exec vitest --run conformance/drizzle-pin`.
+      Additional evidence 2026-06-12: source/project select-chain query extraction now gates
+      `select`/`from`/join/`where` facts on the parsed query callback receiver chain, so
+      live non-DB builders inside query bodies no longer fabricate read domains, FW406/FW411
+      diagnostics, nullable join facts, or instance keys under SPEC §11.1. Same-session
+      evidence:
+      `pnpm exec vitest --run packages/drizzle/src/index.test.ts -t "non-receiver builders|Drizzle selects|instance keys|query reads or relational diagnostics"`,
+      `pnpm exec vitest --run packages/drizzle/src/index.test.ts`,
+      `pnpm exec vitest --run conformance/drizzle-pin/src/index.test.ts`,
+      `pnpm exec vp check packages/drizzle/src/index.ts packages/drizzle/src/index.test.ts plans/codebase-quality-round2.md`,
+      and `git diff --check`.
+
 - [ ] **HIGH — Remove fact-fabricating heuristics; degrade to FW406.**
       Column type from projection-key name (`/(count|qty|...)$/i` → number, index.ts:993);
       receiver detection by parameter name (`/^(db|tx|...|client|...)$/`, :1856-1858);
