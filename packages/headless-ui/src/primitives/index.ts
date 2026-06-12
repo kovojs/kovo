@@ -322,6 +322,37 @@ export type {
 } from './separator.js';
 
 export {
+  setTabsValue,
+  tabsItemSelected,
+  tabsKeyDown,
+  tabsListAttributes,
+  tabsMoveFocus,
+  tabsPanelAttributes,
+  tabsRootAttributes,
+  tabsRovingIndex,
+  tabsTriggerAttributes,
+  tabsTriggerClick,
+} from './tabs.js';
+export type {
+  TabsActivationMode,
+  TabsChangeDetail,
+  TabsChangeOptions,
+  TabsChangeReason,
+  TabsChangeResult,
+  TabsItem,
+  TabsKeyboardEvent,
+  TabsKeyboardResult,
+  TabsListAttributeOptions,
+  TabsMoveResult,
+  TabsPanelAttributeOptions,
+  TabsPrimitiveAttributes,
+  TabsRootAttributeOptions,
+  TabsState,
+  TabsTriggerAttributeOptions,
+  TabsTriggerEvent,
+} from './tabs.js';
+
+export {
   setToggleGroupValue,
   toggleGroupButtonAttributes,
   toggleGroupItemAttributes,

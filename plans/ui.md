@@ -302,6 +302,19 @@ jiso-dialog` resolves dashed wire names and prints provenance including package,
       `pnpm exec vp check packages/headless-ui/package.json packages/headless-ui/src/index.ts packages/headless-ui/src/primitives/index.ts packages/headless-ui/src/primitives/checkbox-group.ts packages/headless-ui/src/primitives/checkbox-group.test.ts plans/ui.md`,
       and `git diff --check`. H2 remains open for tabs, number-field, otp-field, scroll-area,
       and full gates.
+      Additional partial evidence 2026-06-12: `packages/headless-ui/src/primitives/tabs.ts`
+      adds the H2 tabs primitive as a native `<button>`-oriented L1 helper: root/list/trigger/panel
+      attribute builders, tablist/tab/tabpanel ARIA wiring, active/inactive data-state tokens,
+      automatic and manual activation modes, roving focus over enabled tabs via shared keyboard
+      maps, disabled-item skipping, cancelable value transitions, and guarded click/keyboard
+      handlers following the SPEC §4.6 primitive handler no-op contract. It is exported through
+      `@jiso/headless-ui`, `@jiso/headless-ui/primitives`, and
+      `@jiso/headless-ui/primitives/tabs`. Same-session evidence:
+      `pnpm --filter @jiso/headless-ui exec vitest --run src/primitives/tabs.test.ts`,
+      `pnpm --filter @jiso/headless-ui run lint:primitives`,
+      `pnpm exec vp check packages/headless-ui/package.json packages/headless-ui/src/index.ts packages/headless-ui/src/lib/state-attributes.ts packages/headless-ui/src/primitives/index.ts packages/headless-ui/src/primitives/tabs.ts packages/headless-ui/src/primitives/tabs.test.ts plans/ui.md`,
+      and `git diff --check`. H2 remains open for number-field, otp-field, scroll-area,
+      and full gates.
 - [ ] H3 wave 3 primitives (list-driven & isomorphic): select, combobox, autocomplete, dropdown-menu, context-menu, menubar, navigation-menu, slider, toast, command.
 - [x] U1 token sheet + `cn()` + statically-analyzable variant helper (Tailwind-first, §13.1 discoverability rules).
       Evidence 2026-06-12: `packages/headless-ui/src/lib/class-names.ts`

@@ -23,6 +23,7 @@
     "./primitives/radio-group": "./src/primitives/radio-group.ts",
     "./primitives/separator": "./src/primitives/separator.ts",
     "./primitives/switch": "./src/primitives/switch.ts",
+    "./primitives/tabs": "./src/primitives/tabs.ts",
     "./primitives/tooltip": "./src/primitives/tooltip.ts",
     "./primitives/toolbar": "./src/primitives/toolbar.ts",
     "./primitives/toggle": "./src/primitives/toggle.ts",

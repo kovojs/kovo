@@ -1,8 +1,10 @@
 export type PrimitiveStateToken =
+  | 'active'
   | 'checked'
   | 'closed'
   | 'disabled'
   | 'indeterminate'
+  | 'inactive'
   | 'off'
   | 'on'
   | 'open'
