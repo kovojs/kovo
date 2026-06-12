@@ -2287,6 +2287,17 @@ params, relational API, `execute(sql)`, right/full joins, a string column named 
       `pnpm exec vitest --run packages/runtime/src`,
       `pnpm exec vp check packages/runtime/src/derive.ts packages/runtime/src/derive.test.ts packages/runtime/src/dom-like.ts packages/runtime/src/events.ts packages/runtime/src/pending.ts packages/runtime/src/query-bindings.ts packages/runtime/src/index.ts plans/codebase-quality-round2.md`,
       and `git diff --check`.
+      Additional bounded evidence 2026-06-12: split the public runtime barrel into category
+      barrels (`apply.ts`, `inline.ts`, `loader-api.ts`, `morphing.ts`, `mutation.ts`, and
+      `query.ts`), reducing `packages/runtime/src/index.ts` to the package facade while preserving
+      public exports. The apply/deferred compatibility aliases now live in `apply.ts`, and
+      `packages/runtime/src/apply-path.ts` owns only the canonical implementation functions.
+      Same-session evidence:
+      `corepack pnpm exec vitest --run packages/runtime/src/mutation-response.test.ts packages/runtime/src/index.test.ts -t "mutation response|deferred chunk|apply|runtime loader"`,
+      `corepack pnpm exec vitest --run packages/runtime/src`,
+      `corepack pnpm exec vitest --config vitest.browser.config.ts --run packages/runtime/src/index.browser.test.ts`,
+      `corepack pnpm exec vp check packages/runtime/src/index.ts packages/runtime/src/apply.ts packages/runtime/src/inline.ts packages/runtime/src/loader-api.ts packages/runtime/src/morphing.ts packages/runtime/src/mutation.ts packages/runtime/src/query.ts packages/runtime/src/apply-path.ts packages/runtime/src/mutation-response.test.ts plans/codebase-quality-round2.md`,
+      and `git diff --check`.
 - [ ] **LOW** — `hydratedQueries` frozen at install (index.ts:330-342): queries introduced by
       later mutations never become refetch-eligible — fix or document as SPEC-intended;
       `unescapeHtml` missing `&#39;`/`&apos;` (wire-parser.ts:162-168) — pin the server↔runtime

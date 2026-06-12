@@ -9,11 +9,9 @@ import {
   createQueryStore,
 } from './index.js';
 import {
-  applyDeferredChunk as applyDeferredChunkFromApplyPath,
-  applyDeferredChunkToDom as applyDeferredChunkToDomFromApplyPath,
   applyDeferredStreamResponseToDom as applyDeferredStreamResponseToDomFromApplyPath,
-  applyMutationResponse as applyMutationResponseFromApplyPath,
   applyMutationResponseToRuntime,
+  applyMutationResponseToDom as applyMutationResponseToDomFromApplyPath,
   applyMutationResponseToStore,
 } from './apply-path.js';
 import {
@@ -143,10 +141,9 @@ describe('mutation response wire chunks', () => {
   it('exports deferred chunk helpers as aliases of the mutation response helpers', () => {
     expect(applyDeferredChunk).toBe(applyMutationResponse);
     expect(applyDeferredChunkToDom).toBe(applyMutationResponseToDom);
-    expect(applyMutationResponse).toBe(applyMutationResponseFromApplyPath);
-    expect(applyMutationResponseFromApplyPath).toBe(applyMutationResponseToStore);
-    expect(applyDeferredChunk).toBe(applyDeferredChunkFromApplyPath);
-    expect(applyDeferredChunkToDom).toBe(applyDeferredChunkToDomFromApplyPath);
+    expect(applyMutationResponse).toBe(applyMutationResponseToStore);
+    expect(applyDeferredChunk).toBe(applyMutationResponseToStore);
+    expect(applyDeferredChunkToDom).toBe(applyMutationResponseToDomFromApplyPath);
   });
 
   it('exports deferred stream response apply through the shared apply path', () => {

@@ -69,11 +69,6 @@ export function applyMutationResponseToStore(
   );
 }
 
-export const applyMutationResponse: typeof applyMutationResponseToStore =
-  applyMutationResponseToStore;
-
-export const applyDeferredChunk: typeof applyMutationResponse = applyMutationResponse;
-
 export interface ApplyMutationResponseToDomOptions {
   applyQuery?: ApplyQueryInterposition;
   beforeApplyQueries?: (queries: readonly QueryChunk[]) => void;
@@ -150,9 +145,6 @@ export function applyMutationResponseToDom(
   };
 }
 
-export const applyDeferredChunkToDom: typeof applyMutationResponseToDom =
-  applyMutationResponseToDom;
-
 export function applyDeferredStreamResponseToDom(options: {
   body: string;
   boundary?: string;
@@ -165,7 +157,7 @@ export function applyDeferredStreamResponseToDom(options: {
 }): AppliedDeferredStreamResponse {
   const chunks = deferredStreamChunks(options.body, options.boundary ?? 'jiso-boundary').map(
     (body) =>
-      applyDeferredChunkToDom({
+      applyMutationResponseToDom({
         body,
         ...definedProps({
           islandSignalScope: options.islandSignalScope,
