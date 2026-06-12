@@ -832,13 +832,24 @@ describe('credential mutation helpers', () => {
         "  username: text('username'),",
         "  displayUsername: text('display_username'),",
         "  isAnonymous: boolean('is_anonymous'),",
+        "  lastLoginMethod: text('last_login_method'),",
+        "  phoneNumber: text('phone_number'),",
+        "  phoneNumberVerified: boolean('phone_number_verified'),",
         '});',
         '',
       ].join('\n'),
       {
         account: authTable(['userId']),
         session: authTable(['userId']),
-        user: authTable(['displayUsername', 'email', 'isAnonymous', 'username']),
+        user: authTable([
+          'displayUsername',
+          'email',
+          'isAnonymous',
+          'lastLoginMethod',
+          'phoneNumber',
+          'phoneNumberVerified',
+          'username',
+        ]),
         verification: authTable(),
       },
     );
@@ -859,6 +870,9 @@ describe('credential mutation helpers', () => {
         "  username: text('username'),\n" +
         "  displayUsername: text('display_username'),\n" +
         "  isAnonymous: boolean('is_anonymous'),\n" +
+        "  lastLoginMethod: text('last_login_method'),\n" +
+        "  phoneNumber: text('phone_number'),\n" +
+        "  phoneNumberVerified: boolean('phone_number_verified'),\n" +
         "}, jiso({ domain: 'user', key: 'id' }));",
     );
   });

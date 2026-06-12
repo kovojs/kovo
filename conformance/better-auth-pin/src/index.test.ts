@@ -10,10 +10,13 @@ import { betterAuth, getAuthTables } from 'better-auth';
 import { memoryAdapter } from 'better-auth/adapters/memory';
 import {
   admin,
+  anonymous,
   deviceAuthorization,
   jwt,
+  lastLoginMethod,
   oidcProvider,
   organization,
+  phoneNumber,
   siwe,
   twoFactor,
   username,
@@ -598,6 +601,76 @@ describe('Better Auth pinned conformance', () => {
     expect(result.source).toContain(
       "export const user = pgTable('user', {}, jiso({ domain: 'user', key: 'id' }));",
     );
+  });
+
+  it('pins additional user-field plugin metadata as covered by the user schema bridge', () => {
+    const cases = [
+      {
+        fields: [
+          'createdAt',
+          'email',
+          'emailVerified',
+          'image',
+          'isAnonymous',
+          'name',
+          'updatedAt',
+        ],
+        plugins: [anonymous()],
+      },
+      {
+        fields: [
+          'createdAt',
+          'email',
+          'emailVerified',
+          'image',
+          'lastLoginMethod',
+          'name',
+          'updatedAt',
+        ],
+        plugins: [lastLoginMethod({ storeInDatabase: true })],
+      },
+      {
+        fields: [
+          'createdAt',
+          'email',
+          'emailVerified',
+          'image',
+          'name',
+          'phoneNumber',
+          'phoneNumberVerified',
+          'updatedAt',
+        ],
+        plugins: [phoneNumber({ sendOTP: async () => {} })],
+      },
+    ];
+
+    for (const pluginCase of cases) {
+      const { auth } = createRealAuth({ plugins: pluginCase.plugins });
+      const tables = getAuthTables(auth.options);
+      const result = annotateBetterAuthSchemaSource(
+        betterAuthSchemaSourceFixture(Object.keys(tables)),
+        tables,
+      );
+
+      // SPEC.md §10.1: plugin fields on an app-visible bridged table inherit
+      // that table's domain annotation; they are not unsupported plugin tables.
+      expect(Object.keys(tables).sort()).toEqual(['account', 'session', 'user', 'verification']);
+      expect(Object.keys(requireAuthTable(tables, 'user').fields).sort()).toEqual(
+        pluginCase.fields,
+      );
+      expect(validateBetterAuthSchemaBridge(tables)).toEqual({
+        declaredTouchMismatches: [],
+        keyFieldMismatches: [],
+        missingTables: [],
+        ok: true,
+        pluginTableDegradations: [],
+        unbridgedTables: [],
+      });
+      expect(result.annotatedTables).toEqual(['account', 'session', 'user', 'verification']);
+      expect(result.source).toContain(
+        "export const user = pgTable('user', {}, jiso({ domain: 'user', key: 'id' }));",
+      );
+    }
   });
 
   it('pins OAuth-provider successor metadata absence as an FW406 bridge degradation', async () => {
