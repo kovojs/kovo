@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest';
+import { betterAuth } from 'better-auth';
+import { memoryAdapter } from 'better-auth/adapters/memory';
 
 import {
+  createReferenceAuth,
   referenceAuthRequest,
   referenceAuthToken,
   referenceSessionProvider,
@@ -168,4 +171,121 @@ describe('reference auth adoption', () => {
       status: 303,
     });
   });
+
+  it('drives the reference app bindings with real pinned Better Auth', async () => {
+    const realAuth = createRealReferenceAuth();
+    const auth = createReferenceAuth(realAuth);
+
+    await realAuth.api.signUpEmail({
+      asResponse: true,
+      body: {
+        email: 'member@example.com',
+        name: 'Member User',
+        password: 'correct horse battery staple',
+      },
+      headers: referenceAuthRequest().headers,
+    });
+    await realAuth.api.signUpEmail({
+      asResponse: true,
+      body: {
+        email: 'admin@example.com',
+        name: 'Admin User',
+        password: 'correct horse battery staple',
+      },
+      headers: referenceAuthRequest().headers,
+    });
+
+    const anonymous = referenceAuthRequest();
+    await expect(renderReferenceAccountRoute(anonymous, auth)).resolves.toEqual({
+      body: '',
+      headers: { Location: '/login?next=%2Faccount' },
+      status: 303,
+    });
+
+    const memberRequest = referenceAuthRequest();
+    const memberSignIn = await submitReferenceSignInNoJs(
+      {
+        csrf: referenceAuthToken(memberRequest),
+        email: 'member@example.com',
+        password: 'correct horse battery staple',
+      },
+      memberRequest,
+      auth,
+    );
+    const memberCookie = responseCookies(headerValues(memberSignIn.headers, 'Set-Cookie'));
+
+    await expect(
+      renderReferenceAccountRoute(referenceAuthRequest(memberCookie), auth),
+    ).resolves.toEqual({
+      body: expect.stringContaining('account:member@example.com'),
+      headers: { 'Content-Type': 'text/html; charset=utf-8' },
+      status: 200,
+    });
+    await expect(
+      renderReferenceAdminRoute(referenceAuthRequest(memberCookie), auth),
+    ).resolves.toEqual({
+      body: '<main>Forbidden</main>',
+      headers: { 'Content-Type': 'text/html; charset=utf-8' },
+      status: 403,
+    });
+
+    const adminRequest = referenceAuthRequest();
+    const adminSignIn = await submitReferenceSignInNoJs(
+      {
+        csrf: referenceAuthToken(adminRequest),
+        email: 'admin@example.com',
+        next: '/admin',
+        password: 'correct horse battery staple',
+      },
+      adminRequest,
+      auth,
+    );
+    const adminCookie = responseCookies(headerValues(adminSignIn.headers, 'Set-Cookie'));
+
+    await expect(
+      renderReferenceAdminRoute(referenceAuthRequest(adminCookie), auth),
+    ).resolves.toEqual({
+      body: expect.stringContaining('admin:'),
+      headers: { 'Content-Type': 'text/html; charset=utf-8' },
+      status: 200,
+    });
+    await expect(
+      submitReferenceSignOutNoJs(referenceAuthRequest(adminCookie), auth),
+    ).resolves.toMatchObject({
+      headers: {
+        Location: '/login',
+        'Set-Cookie': [
+          expect.stringContaining('better-auth.session_token=;'),
+          expect.stringContaining('better-auth.session_data=;'),
+          expect.stringContaining('better-auth.dont_remember=;'),
+        ],
+      },
+      status: 303,
+    });
+  });
 });
+
+function createRealReferenceAuth() {
+  const auth = betterAuth({
+    advanced: {
+      disableCSRFCheck: true,
+    },
+    baseURL: 'https://reference.test/api/auth',
+    database: memoryAdapter({
+      account: [],
+      session: [],
+      user: [],
+      verification: [],
+    }),
+    emailAndPassword: {
+      enabled: true,
+    },
+    secret: '0123456789abcdef0123456789abcdef',
+  });
+
+  return auth;
+}
+
+function responseCookies(cookies: readonly string[]): string {
+  return cookies.map(cookiePair).join('; ');
+}

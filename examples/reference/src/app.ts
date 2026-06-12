@@ -44,8 +44,8 @@ export interface ReferenceBetterAuthSession {
 export interface ReferenceBetterAuthUser {
   email: string;
   id: string;
-  name: string;
-  roles: readonly ReferenceRole[];
+  name?: string | null;
+  roles?: readonly ReferenceRole[] | null;
 }
 
 export type ReferenceBetterAuth = BetterAuthLike<
@@ -54,6 +54,8 @@ export type ReferenceBetterAuth = BetterAuthLike<
 > &
   BetterAuthSignInEmailLike &
   BetterAuthSignOutLike;
+
+export type ReferenceAuthBindings = ReturnType<typeof createReferenceAuth>;
 
 export const referenceSession = session(
   s.object({
@@ -119,8 +121,8 @@ export function createReferenceBetterAuth(): ReferenceBetterAuth {
           user: {
             email: user.email,
             id: user.id,
-            name: user.name,
-            roles: user.roles,
+            name: user.name ?? user.email,
+            roles: user.roles ?? defaultRolesForEmail(user.email),
           },
         };
       },
@@ -151,40 +153,48 @@ export function createReferenceBetterAuth(): ReferenceBetterAuth {
 
 export const referenceBetterAuth = createReferenceBetterAuth();
 
-export const referenceSessionProvider = referenceSession.provider(
-  betterAuthSession<
-    ReferenceBetterAuthSession,
-    ReferenceBetterAuthUser,
-    ReferenceSession,
-    ReferenceRequest
-  >(referenceBetterAuth, ({ session: authSession, user }) => ({
-    id: authSession.id,
-    user: {
-      email: user.email,
-      id: user.id,
-      name: user.name,
-      roles: [...user.roles],
-    },
-  })),
-);
-
-export const referenceSignIn = betterAuthSignInEmailMutation<'auth/sign-in', ReferenceRequest>(
-  referenceBetterAuth,
-  {
+export function createReferenceAuth(auth: ReferenceBetterAuth) {
+  const sessionProvider = referenceSession.provider(
+    betterAuthSession<
+      ReferenceBetterAuthSession,
+      ReferenceBetterAuthUser,
+      ReferenceSession,
+      ReferenceRequest
+    >(auth, ({ session: authSession, user }) => ({
+      id: authSession.id,
+      user: {
+        email: user.email,
+        id: user.id,
+        name: user.name ?? user.email,
+        roles: [...(user.roles ?? defaultRolesForEmail(user.email))],
+      },
+    })),
+  );
+  const signIn = betterAuthSignInEmailMutation<'auth/sign-in', ReferenceRequest>(auth, {
     csrf: referenceAuthCsrf,
     defaultRedirectTo: '/account',
-  },
-);
+  });
+  const signOut = betterAuthSignOutMutation<
+    'auth/sign-out',
+    ReferenceRequest,
+    ReferenceRequest & { session: ReferenceSession }
+  >(auth, {
+    csrf: referenceAuthCsrf,
+    defaultRedirectTo: '/login',
+    guard: authed<ReferenceRequest>(),
+  });
 
-export const referenceSignOut = betterAuthSignOutMutation<
-  'auth/sign-out',
-  ReferenceRequest,
-  ReferenceRequest & { session: ReferenceSession }
->(referenceBetterAuth, {
-  csrf: referenceAuthCsrf,
-  defaultRedirectTo: '/login',
-  guard: authed<ReferenceRequest>(),
-});
+  return {
+    sessionProvider,
+    signIn,
+    signOut,
+  };
+}
+
+export const referenceAuth = createReferenceAuth(referenceBetterAuth);
+export const referenceSessionProvider = referenceAuth.sessionProvider;
+export const referenceSignIn = referenceAuth.signIn;
+export const referenceSignOut = referenceAuth.signOut;
 
 export const accountRoute = route('/account', {
   guard: authed<ReferenceRequest>(),
@@ -222,30 +232,37 @@ export function renderReferenceLogoutForm(request: ReferenceRequest): string {
   )}<button type="submit">Sign out</button></form>`;
 }
 
-export async function renderReferenceAccountRoute(request: ReferenceRequest) {
+export async function renderReferenceAccountRoute(
+  request: ReferenceRequest,
+  auth: ReferenceAuthBindings = referenceAuth,
+) {
   return renderRoutePageResponse(accountRoute, {}, request, (value) => `<main>${value}</main>`, {
     onUnauthenticated({ next }) {
       return { location: `/login?next=${encodeURIComponent(next)}`, status: 303 };
     },
-    sessionProvider: referenceSessionProvider,
+    sessionProvider: auth.sessionProvider,
   });
 }
 
-export async function renderReferenceAdminRoute(request: ReferenceRequest) {
+export async function renderReferenceAdminRoute(
+  request: ReferenceRequest,
+  auth: ReferenceAuthBindings = referenceAuth,
+) {
   return renderRoutePageResponse(adminRoute, {}, request, (value) => `<main>${value}</main>`, {
     onUnauthenticated({ next }) {
       return { location: `/login?next=${encodeURIComponent(next)}`, status: 303 };
     },
     renderForbidden: () => '<main>Forbidden</main>',
-    sessionProvider: referenceSessionProvider,
+    sessionProvider: auth.sessionProvider,
   });
 }
 
 export async function submitReferenceSignInNoJs(
   input: { csrf: string; email: string; next?: string; password: string },
   request: ReferenceRequest,
+  auth: ReferenceAuthBindings = referenceAuth,
 ) {
-  const result = await runMutation(referenceSignIn, input, request, {
+  const result = await runMutation(auth.signIn, input, request, {
     csrf: referenceAuthCsrf,
   });
 
@@ -276,13 +293,16 @@ export async function submitReferenceSignInNoJs(
   };
 }
 
-export async function submitReferenceSignOutNoJs(request: ReferenceRequest) {
+export async function submitReferenceSignOutNoJs(
+  request: ReferenceRequest,
+  auth: ReferenceAuthBindings = referenceAuth,
+) {
   const result = await runMutation(
-    referenceSignOut,
+    auth.signOut,
     { csrf: csrfToken(request, referenceAuthCsrf) },
     request,
     {
-      sessionProvider: referenceSessionProvider,
+      sessionProvider: auth.sessionProvider,
     },
   );
 
@@ -306,7 +326,10 @@ export async function submitReferenceSignOutNoJs(request: ReferenceRequest) {
 }
 
 export function referenceAuthRequest(cookie?: string): ReferenceRequest {
-  const headers = new Headers({ 'user-agent': 'reference-auth-test' });
+  const headers = new Headers({
+    origin: 'https://reference.test',
+    'user-agent': 'reference-auth-test',
+  });
   if (cookie) headers.set('cookie', cookie);
 
   return {
@@ -339,6 +362,10 @@ function readCookie(headers: Headers, name: string): string | undefined {
   }
 
   return undefined;
+}
+
+function defaultRolesForEmail(email: string): readonly ReferenceRole[] {
+  return email.startsWith('admin@') ? ['admin'] : ['member'];
 }
 
 function escapeAttribute(value: string): string {

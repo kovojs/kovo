@@ -136,6 +136,9 @@ importers:
         specifier: workspace:*
         version: link:../../packages/server
     devDependencies:
+      better-auth:
+        specifier: 1.6.17
+        version: 1.6.17(drizzle-orm@0.45.2(@electric-sql/pglite@0.5.1)(kysely@0.29.2))(vitest@4.1.8)
       vitest:
         specifier: 4.1.8
         version: 4.1.8(@types/node@25.9.2)(@vitest/browser-playwright@4.1.8)(vite@8.0.16(@types/node@25.9.2)(jiti@2.7.0))

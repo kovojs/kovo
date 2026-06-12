@@ -8,6 +8,7 @@
     "@jiso/server": "workspace:*"
   },
   "devDependencies": {
+    "better-auth": "1.6.17",
     "vitest": "4.1.8"
   }
 }

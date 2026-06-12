@@ -142,10 +142,19 @@ Scope: SPEC additions (session population, guard-failure contract, mutation resp
       sign-out, and sign-out cookie clearing. `vite.config.ts` includes
       `examples/reference/tsconfig.json` in `vp run typecheck-examples` so the reference app stays
       typechecked with the rest of the standing gates.
-      Remaining gap: `examples/reference` still uses the deterministic Better Auth-like test
-      surface rather than the pinned real Better Auth package, and B7 remains open until the
-      reference app is backed by the real pinned package and passes the unguarded/unscoped audits
-      with authenticated flows.
+      Partial real-package evidence 2026-06-12: `examples/reference/src/app.ts` now exposes
+      injectable auth bindings while keeping the deterministic fake as the default app surface.
+      `examples/reference/src/app.test.ts` instantiates those same reference-app bindings with
+      real `better-auth@1.6.17` plus its memory adapter, signs up member/admin users through
+      `auth.api.signUpEmail`, then proves no-JS sign-in, cookie-backed `betterAuthSession`,
+      anonymous `/account` redirect, member `/admin` 403, admin `/admin` render, and guarded
+      sign-out cookie clearing. `examples/reference/package.json` pins the real package and
+      same-session evidence is:
+      `pnpm exec vitest --run examples/reference/src/app.test.ts`,
+      `pnpm exec tsc -p examples/reference/tsconfig.json --noEmit`, and
+      `pnpm exec vp check --fix examples/reference/src/app.ts examples/reference/src/app.test.ts examples/reference/package.json examples/reference/tsconfig.json plans/auth.md IMPLEMENT_v1.md pnpm-lock.yaml`.
+      Remaining gap: B7 remains open until the reference app is represented in the graph/audit
+      vocabulary and passes the unguarded/unscoped audits with authenticated flows.
 
 ## Background — the gap
 
