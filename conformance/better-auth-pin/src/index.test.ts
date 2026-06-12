@@ -12,10 +12,14 @@ import {
   admin,
   anonymous,
   auth0,
+  bearer,
   deviceAuthorization,
+  captcha,
+  customSession,
   emailOTP,
   genericOAuth,
   gumroad,
+  haveIBeenPwned,
   hubspot,
   jwt,
   keycloak,
@@ -24,9 +28,14 @@ import {
   magicLink,
   mcp,
   microsoftEntraId,
+  multiSession,
+  oauthPopup,
+  oAuthProxy,
   oidcProvider,
   okta,
   oneTimeToken,
+  oneTap,
+  openAPI,
   organization,
   patreon,
   phoneNumber,
@@ -1183,6 +1192,67 @@ describe('Better Auth pinned conformance', () => {
     expect(result.source).toContain(
       "export const account = pgTable('account', {}, jiso({ domain: 'auth', key: 'userId' }));",
     );
+  });
+
+  it('pins remaining tableless plugin metadata as covered by the core bridge', () => {
+    const pluginCases: {
+      name: string;
+      plugins: NonNullable<Parameters<typeof betterAuth>[0]['plugins']>;
+    }[] = [
+      { name: 'bearer', plugins: [bearer()] },
+      {
+        name: 'captcha',
+        plugins: [captcha({ provider: 'google-recaptcha', secretKey: 'captcha-secret' })],
+      },
+      {
+        name: 'customSession',
+        plugins: [
+          customSession(async ({ session, user }) => ({
+            session,
+            user,
+          })),
+        ],
+      },
+      { name: 'haveIBeenPwned', plugins: [haveIBeenPwned()] },
+      { name: 'multiSession', plugins: [multiSession()] },
+      { name: 'oauthPopup', plugins: [oauthPopup()] },
+      { name: 'oAuthProxy', plugins: [oAuthProxy()] },
+      { name: 'oneTap', plugins: [oneTap({ clientId: 'google-client' })] },
+      { name: 'openAPI', plugins: [openAPI()] },
+    ];
+
+    for (const pluginCase of pluginCases) {
+      const { auth } = createRealAuth({ plugins: pluginCase.plugins });
+      const tables = getAuthTables(auth.options);
+      const result = annotateBetterAuthSchemaSource(
+        betterAuthSchemaSourceFixture(Object.keys(tables)),
+        tables,
+      );
+
+      // SPEC.md §10.1: these Better Auth plugins do not add app-visible
+      // tables in 1.6.17, so B1 stays on the core account/session/user bridge.
+      expect(Object.keys(tables).sort(), pluginCase.name).toEqual([
+        'account',
+        'session',
+        'user',
+        'verification',
+      ]);
+      expect(validateBetterAuthSchemaBridge(tables), pluginCase.name).toEqual({
+        declaredTouchMismatches: [],
+        keyFieldMismatches: [],
+        missingTables: [],
+        ok: true,
+        pluginTableDegradations: [],
+        unbridgedTables: [],
+      });
+      expect(result.annotatedTables, pluginCase.name).toEqual([
+        'account',
+        'session',
+        'user',
+        'verification',
+      ]);
+      expect(result.validation.ok, pluginCase.name).toBe(true);
+    }
   });
 
   it('maps a real Better Auth session through the Jiso session provider seam', async () => {

@@ -206,7 +206,7 @@ export type BetterAuthTouchDomain = 'auth' | 'organization' | 'user';
 
 export interface BetterAuthDeclaredTableTouch {
   domain: BetterAuthTouchDomain;
-  table: BetterAuthTable;
+  table: string;
 }
 
 export type BetterAuthSchemaBridgeAnnotation =
@@ -262,7 +262,7 @@ export interface BetterAuthTouchGraphSite {
   keys: null | string;
   predicate?: 'eq' | 'non-eq';
   site: string;
-  via: BetterAuthTable;
+  via: string;
 }
 
 export interface BetterAuthTouchGraphEntry {
@@ -356,8 +356,10 @@ const betterAuthRequiredCoreTables = [
   'verification',
 ] as const satisfies readonly BetterAuthCoreTable[];
 
-export function betterAuthTableDomain(table: BetterAuthTable): BetterAuthTouchDomain | null {
-  const bridge = betterAuthSchemaBridge[table];
+export function betterAuthTableDomain(table: string): BetterAuthTouchDomain | null {
+  const bridge = betterAuthSchemaBridgeAnnotation(table);
+
+  if (bridge === undefined) return null;
 
   return 'domain' in bridge ? bridge.domain : null;
 }
@@ -947,16 +949,23 @@ function declaredTableTouchMismatches(
         continue;
       }
 
-      const domainForTable = betterAuthTableDomain(touch.table);
+      const bridge = betterAuthSchemaBridgeAnnotation(touch.table);
 
-      if (domainForTable === null) {
+      if (bridge === undefined) {
+        mismatches.push(
+          `${api}.${touch.table} is declared touched but outside the Better Auth schema bridge`,
+        );
+        continue;
+      }
+
+      if (!('domain' in bridge)) {
         mismatches.push(`${api}.${touch.table} is declared touched but schema-bridge exempt`);
         continue;
       }
 
-      if (domainForTable !== touch.domain) {
+      if (bridge.domain !== touch.domain) {
         mismatches.push(
-          `${api}.${touch.table} declares ${touch.domain} but schema bridge maps ${domainForTable}`,
+          `${api}.${touch.table} declares ${touch.domain} but schema bridge maps ${bridge.domain}`,
         );
       }
     }
@@ -1053,6 +1062,14 @@ function unsupportedPluginTableManualBridgeSteps(
 const betterAuthSchemaTableNames = new Set<string>(
   Object.keys(betterAuthSchemaBridge) as BetterAuthTable[],
 );
+
+function betterAuthSchemaBridgeAnnotation(
+  table: string,
+): BetterAuthSchemaBridgeAnnotation | undefined {
+  return (betterAuthSchemaBridge as Record<string, BetterAuthSchemaBridgeAnnotation | undefined>)[
+    table
+  ];
+}
 
 interface DrizzleTableCall {
   closeParen: number;

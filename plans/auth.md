@@ -283,6 +283,18 @@ Scope: SPEC additions (session population, guard-failure contract, mutation resp
       `conformance/better-auth-pin/src/index.test.ts` proves the same declared touch is clean
       against real `better-auth@1.6.17` `twoFactor()` metadata. Same-session evidence:
       `pnpm exec vitest --run packages/better-auth/src/index.test.ts conformance/better-auth-pin/src/index.test.ts --reporter=dot`.
+      Partial evidence 2026-06-12: declared Better Auth table-touch validation now reports a
+      stale/unbridged plugin table touch as a B1 mismatch instead of assuming every declared
+      touch already belongs to the fixed schema bridge. `packages/better-auth/src/index.test.ts`
+      covers a local `webauthnCredential` touch with present metadata but no bridge annotation,
+      producing both the FW406 plugin-table degradation and the declared-touch mismatch. The
+      pinned suite also verifies remaining real `better-auth@1.6.17` plugin exports
+      (`bearer`, `captcha`, `customSession`, `haveIBeenPwned`, `multiSession`, `oauthPopup`,
+      `oAuthProxy`, `oneTap`, and `openAPI`) add no plugin tables under minimal supported
+      options and remain covered by the core `account`/`session`/`user`/exempt `verification`
+      bridge. Same-session evidence:
+      `pnpm exec vitest --run packages/better-auth/src/index.test.ts conformance/better-auth-pin/src/index.test.ts --reporter=dot`
+      and `pnpm exec tsc -p conformance/better-auth-pin/tsconfig.json --noEmit`.
       Remaining gaps: plugin-generated tables outside the blessed organization/admin/two-factor/OIDC-provider/MCP/SIWE/JWT/device-authorization
       surface are still not mapped, the OAuth-provider successor package/table metadata is not
       installed or exportable from the pinned dependency set, and full app `schema.ts` generation

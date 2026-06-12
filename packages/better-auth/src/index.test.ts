@@ -646,6 +646,51 @@ describe('credential mutation helpers', () => {
     });
   });
 
+  it('reports declared plugin table touches that are outside the schema bridge', () => {
+    expect(
+      validateBetterAuthSchemaBridge(
+        {
+          account: authTable(['userId']),
+          session: authTable(['userId']),
+          user: authTable(),
+          verification: authTable(),
+          webauthnCredential: authTable(['credentialId', 'userId']),
+        },
+        {
+          credentialMutationDeclaredTableTouches: {
+            signInEmail: [
+              { domain: 'auth', table: 'session' },
+              { domain: 'auth', table: 'webauthnCredential' },
+            ],
+          },
+        },
+      ),
+    ).toEqual({
+      declaredTouchMismatches: [
+        'signInEmail.webauthnCredential is declared touched but outside the Better Auth schema bridge',
+      ],
+      keyFieldMismatches: [],
+      missingTables: [],
+      ok: false,
+      pluginTableDegradations: [
+        {
+          diagnosticCode: 'FW406',
+          fields: ['credentialId', 'id', 'userId'],
+          manualBridgeSteps: [
+            'Inspect webauthnCredential fields (credentialId, id, userId) and decide whether the app reads this table.',
+            'If it is app-visible, add a schema.ts jiso({ domain, key }) annotation; otherwise add jiso({ exempt: true }) with a rationale.',
+            'Add declared Better Auth API touches for writes that can mutate webauthnCredential; SPEC.md §11.2 keeps observed writes FW406 until declared coverage exists.',
+          ],
+          message:
+            'webauthnCredential is outside the blessed Better Auth schema bridge; add a schema.ts domain/exempt annotation and declared touches before relying on runtime coverage.',
+          reason: 'unsupported-plugin-table',
+          table: 'webauthnCredential',
+        },
+      ],
+      unbridgedTables: ['webauthnCredential'],
+    });
+  });
+
   it('materializes Jiso annotations into an app schema.ts source fixture', () => {
     const source = [
       "import { jiso } from '@jiso/drizzle';",
