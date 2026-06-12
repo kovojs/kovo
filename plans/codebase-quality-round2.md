@@ -460,7 +460,7 @@ pipeline throws the tree away and communicates via mutated source text.
       evidence: `pnpm exec vitest --run packages/compiler/src/index.test.ts -t "template stamp|data-bind update plans"`,
       `pnpm exec vitest --run packages/compiler/src/index.test.ts`, and
       `pnpm exec vp check packages/compiler/src/analyze/query-updates.ts packages/compiler/src/emit/client.ts packages/compiler/src/index.test.ts packages/compiler/src/types.ts`.
-- [ ] **HIGH — Kill the derive mega-regex.** validate/bindings.ts:215-216 silently drops any
+- [x] **HIGH — Kill the derive mega-regex.** validate/bindings.ts:215-216 silently drops any
       `derive()` export whose expression contains `;` in a string or unusual formatting — its
       stamps vanish from `collectQueryUpdatePlans` with no diagnostic. scan/parse.ts already
       walks every CallExpression; use it.
