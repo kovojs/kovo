@@ -8,6 +8,10 @@ import {
   alertDialogCancelAttributes,
   alertDialogContentAttributes,
   alertDialogTriggerAttributes,
+  autocompleteInputAttributes,
+  autocompleteListAttributes,
+  autocompleteOptionAttributes,
+  autocompleteValueAttributes,
   avatarFallbackAttributes,
   avatarRootAttributes,
   checkboxRootAttributes,
@@ -455,6 +459,131 @@ describe('gallery G5 primitive merge fixtures', () => {
       </section>,
     ).toBe(
       '<section data-gallery-merge="combobox"><input data-state="open" data-invalid="" data-required="" aria-autocomplete="list" aria-expanded="true" role="combobox" type="text" value="enterprise" aria-activedescendant="gallery-combobox-listbox-option-1" aria-controls="gallery-combobox-listbox" list="gallery-combobox-listbox" id="gallery-combobox-input" aria-labelledby="gallery-combobox-label" aria-describedby="author-combobox-description" aria-invalid="true" name="author-plan" placeholder="Choose a plan" required class="combobox-input rounded"><div data-state="open" data-invalid="" data-required="" role="menu" id="gallery-combobox-listbox" aria-labelledby="gallery-combobox-label" class="combobox-listbox shadow"><div data-state="checked" data-highlighted="" aria-selected="false" role="menuitem" id="gallery-combobox-option-1" label="Enterprise" value="enterprise" class="combobox-option font-medium">Enterprise</div></div></section>',
+    );
+  });
+
+  it('renders a golden autocomplete merge with native datalist attrs and value display', () => {
+    const state = {
+      highlightedValue: 'chicago',
+      inputValue: 'chi',
+      invalid: true,
+      items: [
+        { label: 'Austin', value: 'austin' },
+        { disabled: true, label: 'Boston', value: 'boston' },
+        { textValue: 'Chicago city', value: 'chicago' },
+      ],
+      listId: 'gallery-autocomplete-list',
+      name: 'gallery-city',
+      open: true,
+      required: true,
+      value: 'austin',
+    };
+    const input = mergePrimitiveAttrs(
+      {
+        ...autocompleteInputAttributes({
+          ...state,
+          descriptionId: 'gallery-autocomplete-description',
+          errorId: 'gallery-autocomplete-error',
+          id: 'gallery-autocomplete-input',
+          labelledBy: 'gallery-autocomplete-label',
+          placeholder: 'Choose a city',
+        }),
+        class: 'autocomplete-input',
+      },
+      {
+        'aria-describedby': 'author-autocomplete-help',
+        autocomplete: 'name',
+        class: 'autocomplete-input rounded',
+        'data-state': 'author-open',
+        name: 'author-city',
+        required: false,
+        role: 'searchbox',
+      },
+    );
+    const list = mergePrimitiveAttrs(
+      {
+        ...autocompleteListAttributes({
+          ...state,
+          id: 'gallery-autocomplete-list',
+          labelledBy: 'gallery-autocomplete-label',
+        }),
+        class: 'autocomplete-list',
+      },
+      {
+        class: 'autocomplete-list shadow',
+        id: 'author-autocomplete-list',
+      },
+    );
+    const option = mergePrimitiveAttrs(
+      {
+        ...autocompleteOptionAttributes({
+          ...state,
+          id: 'gallery-autocomplete-option-2',
+          itemLabel: 'Chicago',
+          itemValue: 'chicago',
+        }),
+        class: 'autocomplete-option',
+      },
+      {
+        class: 'autocomplete-option font-medium',
+        'data-state': 'author-selected',
+        disabled: true,
+        label: 'Author Chicago',
+        selected: true,
+      },
+    );
+    const value = mergePrimitiveAttrs(
+      {
+        ...autocompleteValueAttributes({
+          id: 'gallery-autocomplete-value',
+          placeholder: 'Choose a city',
+          value: '',
+        }),
+        class: 'autocomplete-value',
+      },
+      {
+        class: 'autocomplete-value text-muted',
+        'data-placeholder': 'author-placeholder',
+        id: 'author-autocomplete-value',
+      },
+    );
+
+    expect(input.diagnostics).toEqual([
+      {
+        attr: 'data-state',
+        code: 'FW232',
+        message: 'Author override of primitive-owned state attribute per SPEC.md section 4.6',
+      },
+      {
+        attr: 'role',
+        code: 'FW232',
+        message: 'Author override of primitive ARIA/role attribute per SPEC.md section 4.6',
+      },
+      {
+        attr: 'aria-describedby',
+        code: 'FW231',
+        message: 'Unmergeable primitive IDREF conflict per SPEC.md section 4.6',
+      },
+    ]);
+    expect(list.diagnostics).toEqual([]);
+    expect(option.diagnostics).toEqual([
+      {
+        attr: 'data-state',
+        code: 'FW232',
+        message: 'Author override of primitive-owned state attribute per SPEC.md section 4.6',
+      },
+    ]);
+    expect(value.diagnostics).toEqual([]);
+    expect(
+      <section data-gallery-merge="autocomplete">
+        <input {...input.attrs} />
+        <datalist {...list.attrs}>
+          <option {...option.attrs}>Chicago</option>
+        </datalist>
+        <span {...value.attrs}>Choose a city</span>
+      </section>,
+    ).toBe(
+      '<section data-gallery-merge="autocomplete"><input data-state="open" data-invalid="" data-required="" aria-autocomplete="list" aria-expanded="true" autocomplete="name" role="searchbox" type="text" value="chi" aria-activedescendant="gallery-autocomplete-list-option-2" aria-controls="gallery-autocomplete-list" list="gallery-autocomplete-list" id="gallery-autocomplete-input" aria-labelledby="gallery-autocomplete-label" aria-describedby="author-autocomplete-help" aria-invalid="true" name="author-city" placeholder="Choose a city" required class="autocomplete-input rounded"><datalist data-state="open" data-invalid="" data-required="" id="author-autocomplete-list" aria-labelledby="gallery-autocomplete-label" class="autocomplete-list shadow"><option data-state="unchecked" data-highlighted="" disabled selected value="chicago" id="gallery-autocomplete-option-2" label="Author Chicago" class="autocomplete-option font-medium">Chicago</option></datalist><span data-placeholder="author-placeholder" id="author-autocomplete-value" class="autocomplete-value text-muted">Choose a city</span></section>',
     );
   });
 
