@@ -10,6 +10,8 @@ import {
   jisoAppShellViteManifestFromBundle,
   jisoAppShellViteManifestFromFile,
   jisoAppShellViteManifestHints,
+  jisoAppShellViteManifestStylesheetHref,
+  jisoAppShellViteManifestStylesheetHrefFromFile,
   jisoAppShellViteManifestStylesheetHrefs,
   jisoAppShellViteManifestStylesheetHrefsFromFile,
   jisoAppShellViteRouteEntries,
@@ -159,6 +161,9 @@ describe('server app shell Vite manifest planning', () => {
       await expect(jisoAppShellViteManifestStylesheetHrefsFromFile(manifestFile)).resolves.toEqual([
         '/assets/cart.css',
       ]);
+      await expect(jisoAppShellViteManifestStylesheetHrefFromFile(manifestFile)).resolves.toBe(
+        '/assets/cart.css',
+      );
     } finally {
       await rm(distDir, { force: true, recursive: true });
     }
@@ -180,6 +185,41 @@ describe('server app shell Vite manifest planning', () => {
         { base: '/docs/' },
       ),
     ).toEqual(['/docs/assets/admin.css', '/docs/assets/cart.css', '/docs/assets/shared.css']);
+  });
+
+  it('resolves exactly one built stylesheet href for starter export tasks', () => {
+    expect(
+      jisoAppShellViteManifestStylesheetHref(
+        {
+          'src/app.ts': {
+            css: ['assets/app.css'],
+            file: 'assets/app.js',
+          },
+        },
+        { base: '/static/' },
+      ),
+    ).toBe('/static/assets/app.css');
+
+    expect(() =>
+      jisoAppShellViteManifestStylesheetHref({
+        'src/app.ts': {
+          file: 'assets/app.js',
+        },
+      }),
+    ).toThrow('App shell Vite build manifest must contain exactly one stylesheet asset; found 0.');
+
+    expect(() =>
+      jisoAppShellViteManifestStylesheetHref({
+        'src/admin.ts': {
+          css: ['assets/admin.css'],
+          file: 'assets/admin.js',
+        },
+        'src/cart.ts': {
+          css: ['assets/cart.css'],
+          file: 'assets/cart.js',
+        },
+      }),
+    ).toThrow('App shell Vite build manifest must contain exactly one stylesheet asset; found 2.');
   });
 
   it('rejects malformed Vite output bundle manifests before app-shell build wiring', () => {

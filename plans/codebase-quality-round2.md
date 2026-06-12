@@ -3090,6 +3090,11 @@ land it first; don't fork it.
       asset inputs, exported HTML, and copied Vite dist bytes while `packages/server/src/vite.test.ts`
       continues to cover the public `./vite.js` API path. Same-session evidence:
       `corepack pnpm exec vitest --run packages/server/src/vite-build.test.ts packages/server/src/vite.test.ts packages/server/src/vite-manifest.test.ts`.
+      Additional evidence 2026-06-12: the extracted Vite manifest seam now owns the
+      single-stylesheet export-task contract through `jisoAppShellViteManifestStylesheetHref()`
+      and `jisoAppShellViteManifestStylesheetHrefFromFile()`, while `vite.ts` and
+      `api/app.ts` preserve the public `@jiso/server` re-export path. Same-session evidence:
+      `corepack pnpm exec vitest --run packages/server/src/vite-manifest.test.ts packages/server/src/vite-build.test.ts packages/server/src/vite.test.ts`.
 - [ ] **LOW — Close the server cleanup inventory with an acceptance sweep.** Historical audit
       targets were dead code (`matchShellDispatch` post-loop return shell.ts:161-166; rate-limit
       tail `return options.max > 0` index.ts:576); `matchRoute` recompiling all routes per call

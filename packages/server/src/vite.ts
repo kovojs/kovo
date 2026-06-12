@@ -23,6 +23,8 @@ export {
   jisoAppShellViteManifestFromBundle,
   jisoAppShellViteManifestFromFile,
   jisoAppShellViteManifestHints,
+  jisoAppShellViteManifestStylesheetHref,
+  jisoAppShellViteManifestStylesheetHrefFromFile,
   jisoAppShellViteManifestStylesheetHrefs,
   jisoAppShellViteManifestStylesheetHrefsFromFile,
   jisoAppShellViteRouteEntries,

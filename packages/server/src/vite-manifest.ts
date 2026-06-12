@@ -168,11 +168,42 @@ export function jisoAppShellViteManifestStylesheetHrefs(
     .map((asset) => asset.href);
 }
 
+export function jisoAppShellViteManifestStylesheetHref(
+  manifest: JisoAppShellViteManifest,
+  options: JisoAppShellViteManifestHintOptions = {},
+): string {
+  const hrefs = jisoAppShellViteManifestStylesheetHrefs(manifest, options);
+  if (hrefs.length !== 1) {
+    throw new Error(
+      `App shell Vite build manifest must contain exactly one stylesheet asset; found ${hrefs.length}.`,
+    );
+  }
+
+  const href = hrefs[0];
+  if (href === undefined) {
+    throw new Error(
+      `App shell Vite build manifest must contain exactly one stylesheet asset; found ${hrefs.length}.`,
+    );
+  }
+
+  return href;
+}
+
 export async function jisoAppShellViteManifestStylesheetHrefsFromFile(
   manifestFile: string | URL,
   options: JisoAppShellViteManifestHintOptions = {},
 ): Promise<string[]> {
   return jisoAppShellViteManifestStylesheetHrefs(
+    await jisoAppShellViteManifestFromFile(manifestFile),
+    options,
+  );
+}
+
+export async function jisoAppShellViteManifestStylesheetHrefFromFile(
+  manifestFile: string | URL,
+  options: JisoAppShellViteManifestHintOptions = {},
+): Promise<string> {
+  return jisoAppShellViteManifestStylesheetHref(
     await jisoAppShellViteManifestFromFile(manifestFile),
     options,
   );

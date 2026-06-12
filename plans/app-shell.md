@@ -164,6 +164,15 @@ Scope: SPEC addition (proposed §9.5 "The request shell"), `@jiso/server` shell 
       `corepack pnpm exec vitest --run packages/server/src/vite-dev.test.ts packages/server/src/vite.test.ts packages/server/src/vite-diagnostics.test.ts`
       and
       `corepack pnpm exec vp check packages/server/src/vite.ts packages/server/src/vite-dev.ts packages/server/src/vite-dev.test.ts packages/server/src/vite-diagnostics.test.ts packages/server/src/vite.test.ts`.
+      Additional evidence 2026-06-12: the manifest seam now exposes
+      `jisoAppShellViteManifestStylesheetHref()` and
+      `jisoAppShellViteManifestStylesheetHrefFromFile()` so starter/docs export tasks can
+      consume the common "exactly one built stylesheet" contract through `@jiso/server`
+      instead of hand-rolled manifest count checks. `packages/server/src/vite-manifest.test.ts`
+      covers the success path plus zero/multiple stylesheet teaching errors, and the
+      public `./vite.js` API path remains covered by `packages/server/src/vite.test.ts`.
+      Same-session verification ran
+      `corepack pnpm exec vitest --run packages/server/src/vite-manifest.test.ts packages/server/src/vite-build.test.ts packages/server/src/vite.test.ts`.
       Remaining R5 work: compiler/plugin build hooks must still supply real route-entry maps
       and compiled module sources from compiler facts, consume the asset/module plan in
       production package builds, and decide the final plugin hook ownership.
