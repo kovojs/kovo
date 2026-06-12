@@ -45,6 +45,13 @@ describe('commerce app shell HTTP entry', () => {
       start: 'node scripts/serve.mjs',
       static: 'vp run export',
     });
+    const viteConfig = await readFile(path.join(commerceRoot, 'vite.config.ts'), 'utf8');
+    expect(viteConfig).toContain('commerceSharedAppShellDevPlugin()');
+    expect(viteConfig).toContain("server.ssrLoadModule('@jiso/server')");
+    expect(viteConfig).toContain('jisoAppShellViteSsrDevPlugin');
+    expect(viteConfig).toContain("name: 'jiso-commerce-app-shell-dev'");
+    expect(viteConfig).toContain("nodeHandlerExportName: 'commerceNodeHandler'");
+    expect(viteConfig).toContain("order: 'post'");
     expect(commerceServeCommands().map((command) => command.label)).toEqual([
       'node scripts/serve.mjs',
       'vp run serve',
@@ -187,6 +194,11 @@ describe('commerce app shell HTTP entry', () => {
       const sourceAssetBody = await sourceAsset.text();
       expect(sourceAsset.status, formatDevServerFailure(sourceAssetBody, devServerError)).toBe(200);
       expect(sourceAssetBody).toContain('tailwindcss v');
+
+      const missing = await fetch(`${origin}/not-a-commerce-shell-route`);
+      const missingBody = await missing.text();
+      expect(missing.status, formatDevServerFailure(missingBody, devServerError)).toBe(404);
+      expect(missingBody).not.toContain('data-commerce-shell="cart"');
     } finally {
       await vite.close();
     }
@@ -220,6 +232,11 @@ describe('commerce app shell HTTP entry', () => {
 
         const stylesheetBody = await fetchTextWhenReady(`${origin}/src/styles.css`, output);
         expect(stylesheetBody).toContain('tailwindcss v');
+
+        const missing = await fetch(`${origin}/not-a-commerce-shell-route`);
+        const missingBody = await missing.text();
+        expect(missing.status, `${missingBody}\n${output()}`).toBe(404);
+        expect(missingBody).not.toContain('data-commerce-shell="cart"');
       } finally {
         await stopProcess(serveProcess);
       }

@@ -4,7 +4,7 @@ import tailwindcss from '@tailwindcss/vite';
 import { defineConfig } from 'vite-plus';
 
 export default defineConfig({
-  plugins: [tailwindcss(), starterAppShellDevPlugin()],
+  plugins: [tailwindcss(), starterSharedAppShellDevPlugin()],
   build: {
     manifest: true,
   },
@@ -67,6 +67,8 @@ type DevMiddleware = (
   next: (error?: unknown) => void,
 ) => void;
 
+type DevPostHook = () => void | Promise<void>;
+
 interface StarterDevServer {
   middlewares: {
     use(handler: DevMiddleware): void;
@@ -75,52 +77,26 @@ interface StarterDevServer {
 }
 
 interface StarterDevPlugin {
-  configureServer(server: StarterDevServer): void;
+  configureServer(server: StarterDevServer): Promise<void | DevPostHook>;
   name: string;
 }
 
-function starterAppShellDevPlugin(): StarterDevPlugin {
+function starterSharedAppShellDevPlugin(): StarterDevPlugin {
   return {
-    configureServer(server) {
-      server.middlewares.use((request, response, next) => {
-        Promise.all([
-          server.ssrLoadModule('@jiso/server'),
-          server.ssrLoadModule('/src/app-shell.ts'),
-        ])
-          .then(([serverModule, appShellModule]) => {
-            if (!shouldHandleAppShellRequest(serverModule, appShellModule, request)) {
-              next();
-              return;
-            }
+    async configureServer(server) {
+      const serverModule = await server.ssrLoadModule('@jiso/server');
+      const sharedPluginFactory = serverModule.jisoAppShellViteSsrDevPlugin;
+      if (typeof sharedPluginFactory !== 'function') {
+        throw new Error('@jiso/server must export jisoAppShellViteSsrDevPlugin.');
+      }
 
-            return loadStarterNodeHandler(appShellModule)(request, response, next);
-          })
-          .catch(next);
-      });
+      const sharedPlugin = sharedPluginFactory({
+        name: 'jiso-starter-app-shell-dev',
+        nodeHandlerExportName: 'starterNodeHandler',
+      }) as { configureServer(server: StarterDevServer): void | DevPostHook };
+
+      return sharedPlugin.configureServer(server);
     },
-    name: 'jiso-starter-app-shell-dev',
+    name: 'jiso-starter-app-shell-dev-loader',
   };
-}
-
-function shouldHandleAppShellRequest(
-  serverModule: Record<string, unknown>,
-  appShellModule: Record<string, unknown>,
-  request: IncomingMessage,
-): boolean {
-  const shouldHandle = serverModule.shouldHandleJisoAppShellViteSsrRequest;
-  if (typeof shouldHandle !== 'function') {
-    throw new Error('@jiso/server must export shouldHandleJisoAppShellViteSsrRequest.');
-  }
-
-  return shouldHandle(request, appShellModule.default);
-}
-
-function loadStarterNodeHandler(module: Record<string, unknown>): DevMiddleware {
-  const starterNodeHandler = module.starterNodeHandler;
-
-  if (typeof starterNodeHandler !== 'function') {
-    throw new Error('src/app-shell.ts must export starterNodeHandler.');
-  }
-
-  return starterNodeHandler as DevMiddleware;
 }

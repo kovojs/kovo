@@ -406,6 +406,21 @@ Scope: SPEC addition (proposed §9.5 "The request shell"), `@jiso/server` shell 
       and verifies Vite still serves `/src/styles.css`.
       Same-session verification ran
       `pnpm exec vitest --run examples/commerce/src/app-shell.test.ts`.
+      Additional evidence 2026-06-12: the create-jiso starter template and
+      commerce Vite configs now late-load the shared
+      `jisoAppShellViteSsrDevPlugin()` through Vite SSR instead of duplicating
+      local dispatch predicates, preserving the SPEC §9.5 bounded request
+      shell while keeping config-load/build paths independent of unbuilt
+      workspace server sources. `examples/commerce/src/app-shell.test.ts`
+      proves the shared-plugin-backed commerce dev middleware and
+      `node scripts/serve.mjs` / `vp run serve` / `npm start` commands serve
+      `/cart`, versioned `/c/commerce.client.js`, and `/_q/cart`, pass
+      `/src/styles.css` to Vite, and leave an unknown non-shell route as a 404. `packages/create-jiso/src/index.test.ts` proves generated starter
+      build, app-shell request/export, `vp dev`, serve commands, export
+      commands, and FW229 export diagnostics still pass through the
+      shared-plugin-backed template. Same-session verification ran
+      `pnpm exec vitest --run examples/commerce/src/app-shell.test.ts` and
+      `pnpm exec vitest --run packages/create-jiso/src/index.test.ts`.
       Additional evidence 2026-06-12: the focused `examples/reference` auth
       app now has its own app-shell HTTP entry over the shared SPEC §9.5
       request handler. `examples/reference/src/app-shell.ts` builds a

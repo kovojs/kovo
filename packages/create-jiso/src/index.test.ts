@@ -220,10 +220,11 @@ describe('create-jiso starter', () => {
       expect(indexSource).not.toContain('/src/client.ts');
       expect(indexSource).not.toContain('Hello from Jiso');
       const viteConfig = readFileSync(join(root, 'vite.config.ts'), 'utf8');
-      expect(viteConfig).toContain('starterAppShellDevPlugin()');
+      expect(viteConfig).toContain('starterSharedAppShellDevPlugin()');
       expect(viteConfig).toContain("server.ssrLoadModule('@jiso/server')");
-      expect(viteConfig).toContain('shouldHandleJisoAppShellViteSsrRequest');
-      expect(viteConfig).toContain('loadStarterNodeHandler(appShellModule)');
+      expect(viteConfig).toContain('jisoAppShellViteSsrDevPlugin');
+      expect(viteConfig).toContain("name: 'jiso-starter-app-shell-dev'");
+      expect(viteConfig).toContain("nodeHandlerExportName: 'starterNodeHandler'");
       expect(viteConfig).toContain('manifest: true');
       expect(viteConfig).toContain('node scripts/export-static.mjs');
       expect(viteConfig).not.toContain("pathname === '/'");

@@ -15,7 +15,7 @@ export default defineConfig({
       },
     },
   },
-  plugins: [tailwindcss(), commerceAppShellDevPlugin()],
+  plugins: [tailwindcss(), commerceSharedAppShellDevPlugin()],
   run: {
     tasks: {
       export: {
@@ -47,6 +47,8 @@ type DevMiddleware = (
   next: (error?: unknown) => void,
 ) => void;
 
+type DevPostHook = () => void | Promise<void>;
+
 interface CommerceDevServer {
   middlewares: {
     use(handler: DevMiddleware): void;
@@ -55,54 +57,27 @@ interface CommerceDevServer {
 }
 
 interface CommerceDevPlugin {
-  configureServer(server: CommerceDevServer): () => void;
+  configureServer(server: CommerceDevServer): Promise<void | DevPostHook>;
   name: string;
 }
 
-function commerceAppShellDevPlugin(): CommerceDevPlugin {
+function commerceSharedAppShellDevPlugin(): CommerceDevPlugin {
   return {
-    configureServer(server) {
-      return () => {
-        server.middlewares.use((request, response, next) => {
-          Promise.all([
-            server.ssrLoadModule('@jiso/server'),
-            server.ssrLoadModule('/src/app-shell.ts'),
-          ])
-            .then(([serverModule, appShellModule]) => {
-              if (!shouldHandleAppShellRequest(serverModule, appShellModule, request)) {
-                next();
-                return;
-              }
+    async configureServer(server) {
+      const serverModule = await server.ssrLoadModule('@jiso/server');
+      const sharedPluginFactory = serverModule.jisoAppShellViteSsrDevPlugin;
+      if (typeof sharedPluginFactory !== 'function') {
+        throw new Error('@jiso/server must export jisoAppShellViteSsrDevPlugin.');
+      }
 
-              return loadCommerceNodeHandler(appShellModule)(request, response, next);
-            })
-            .catch(next);
-        });
-      };
+      const sharedPlugin = sharedPluginFactory({
+        name: 'jiso-commerce-app-shell-dev',
+        nodeHandlerExportName: 'commerceNodeHandler',
+        order: 'post',
+      }) as { configureServer(server: CommerceDevServer): void | DevPostHook };
+
+      return sharedPlugin.configureServer(server);
     },
-    name: 'jiso-commerce-app-shell-dev',
+    name: 'jiso-commerce-app-shell-dev-loader',
   };
-}
-
-function shouldHandleAppShellRequest(
-  serverModule: Record<string, unknown>,
-  appShellModule: Record<string, unknown>,
-  request: IncomingMessage,
-): boolean {
-  const shouldHandle = serverModule.shouldHandleJisoAppShellViteSsrRequest;
-  if (typeof shouldHandle !== 'function') {
-    throw new Error('@jiso/server must export shouldHandleJisoAppShellViteSsrRequest.');
-  }
-
-  return shouldHandle(request, appShellModule.default);
-}
-
-function loadCommerceNodeHandler(module: Record<string, unknown>): DevMiddleware {
-  const commerceNodeHandler = module.commerceNodeHandler;
-
-  if (typeof commerceNodeHandler !== 'function') {
-    throw new Error('src/app-shell.ts must export commerceNodeHandler.');
-  }
-
-  return commerceNodeHandler as DevMiddleware;
 }
