@@ -142,4 +142,48 @@ describe('compiler model pipeline', () => {
       'cart-badge.tsx:export const CartBadge = component({ render: () => <a href="/cart">Cart</a> });',
     ]);
   });
+
+  it('applies generated prefixes through the pipeline state and offset map', () => {
+    const state = componentPipelineState(
+      'cart-badge.tsx',
+      'export const CartBadge = component({ render: () => <button disabled={cart.empty}>Checkout</button> });',
+      { spans: ['button'] },
+    );
+    const prefix =
+      'export const CartBadge$button_disabled_derive = derive(["cart"], (cart) => cart.empty);\n\n';
+    const parses: string[] = [];
+    const attributeStart = state.source.indexOf('disabled={cart.empty}');
+    const lowered = lowerComponentPipelinePatches(
+      state,
+      [
+        {
+          end: attributeStart + 'disabled={cart.empty}'.length,
+          replacement:
+            'data-derive="cart.CartBadge$button_disabled_derive" data-derive-attr="disabled"',
+          start: attributeStart,
+        },
+      ],
+      (fileName, source) => {
+        parses.push(`${fileName}:${source}`);
+        return { spans: ['derived-button'] };
+      },
+      { prefix },
+    );
+
+    expect(lowered.state).toEqual({
+      fileName: 'cart-badge.tsx',
+      model: { spans: ['derived-button'] },
+      source:
+        'export const CartBadge$button_disabled_derive = derive(["cart"], (cart) => cart.empty);\n\n' +
+        'export const CartBadge = component({ render: () => <button data-derive="cart.CartBadge$button_disabled_derive" data-derive-attr="disabled">Checkout</button> });',
+    });
+    expect(lowered.sourceOffsetMap.originalLength).toBe(state.source.length);
+    expect(lowered.sourceOffsetMap.generatedLength).toBe(lowered.state.source.length);
+    expect(lowered.sourceOffsetMap.segments[0]).toEqual({
+      generatedStart: prefix.length,
+      length: attributeStart,
+      originalStart: 0,
+    });
+    expect(parses).toEqual([`cart-badge.tsx:${lowered.state.source}`]);
+  });
 });

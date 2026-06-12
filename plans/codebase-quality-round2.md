@@ -623,6 +623,16 @@ pipeline throws the tree away and communicates via mutated source text.
       `pnpm exec vitest --run packages/compiler/src/navigation-lowering.test.ts packages/compiler/src/model-pipeline.test.ts packages/compiler/src/compile-component.test.ts`
       and
       `pnpm exec vp check packages/compiler/src/compile.ts packages/compiler/src/lower/navigation.ts packages/compiler/src/navigation-lowering.test.ts plans/codebase-quality-round2.md`.
+      Additional evidence 2026-06-12: inline query derive lowering now returns its synthesized
+      export prefix and `SourceReplacement` list as patch data, and `compile.ts` applies it
+      through `lowerComponentPipelinePatches` with a prefix-aware generated-to-author offset map.
+      `lower/inline-derives.ts` no longer applies its own source rewrite or offset-map helper,
+      so synthesized derive exports, `data-derive`, and `data-bind` sugar now pass through the
+      same source/model transition seam as view-transition, platform, and navigation lowering.
+      Same-session evidence:
+      `pnpm exec vitest --run packages/compiler/src/model-pipeline.test.ts packages/compiler/src/query-coverage.test.ts`,
+      `pnpm exec vitest --run packages/compiler/src`, and
+      `pnpm exec vp check --fix packages/compiler/src/model-pipeline.ts packages/compiler/src/model-pipeline.test.ts packages/compiler/src/compile.ts packages/compiler/src/lower/inline-derives.ts`.
       Partial evidence 2026-06-11: `serverRenderSource` now parses once after handler lowering
       with the author file name and stamps component identity, declared query deps, and initial
       state onto the render host through one in-memory tag update instead of reparsing for each

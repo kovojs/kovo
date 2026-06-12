@@ -18,11 +18,7 @@ import {
   inferComponentName,
   parseComponentModule as parseComponentModuleModel,
 } from './scan/parse.js';
-import {
-  componentPipelineState,
-  lowerComponentPipelinePatches,
-  lowerComponentPipelineSource,
-} from './model-pipeline.js';
+import { componentPipelineState, lowerComponentPipelinePatches } from './model-pipeline.js';
 import {
   mergePackageComponentPrefixFacts,
   packageComponentPrefixesForModule,
@@ -92,13 +88,15 @@ export function compileComponentModule(options: CompileComponentOptions): Compil
     componentName,
     compileOptions,
   );
-  const source = deriveLowering.source;
-  const diagnosticSource = deriveLowering.diagnosticSource;
-  const model = lowerComponentPipelineSource(
+  const derivePatch = lowerComponentPipelinePatches(
     navigationState,
-    source,
+    deriveLowering.replacements,
     parseComponentModuleModel,
-  ).model;
+    { prefix: deriveLowering.prefix },
+  );
+  const source = derivePatch.state.source;
+  const diagnosticSource = deriveLowering.diagnosticSource;
+  const model = derivePatch.state.model;
   const handlers = lowerEventHandlers({ ...compileOptions, source }, componentName, model);
   const queryUpdatePlans = collectQueryUpdatePlans(source, model, componentName);
   const updateCoverage = collectQueryUpdateCoverage(source, model, compileOptions, componentName);
@@ -113,7 +111,7 @@ export function compileComponentModule(options: CompileComponentOptions): Compil
     originalModel,
     diagnosticSource,
     source,
-    sourceOffsetMap: deriveLowering.sourceOffsetMap,
+    sourceOffsetMap: derivePatch.sourceOffsetMap,
     updateCoverage,
   });
   const fileNames = compileArtifactFileNames(options.fileName);

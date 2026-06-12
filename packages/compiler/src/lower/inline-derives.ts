@@ -7,13 +7,7 @@ import {
   type JsxExpressionModel,
 } from '../scan/parse.js';
 import { knownQueryNames } from '../analyze/query-shapes.js';
-import {
-  applySourceReplacementsWithOffsetMap,
-  escapeAttribute,
-  identitySourceOffsetMap,
-  type SourceOffsetMap,
-  type SourceReplacement,
-} from '../shared.js';
+import { escapeAttribute, type SourceReplacement } from '../shared.js';
 import type { CompileComponentOptions } from '../types.js';
 
 type InlineDeriveLoweringOptions = Pick<
@@ -28,18 +22,24 @@ interface InlineAttributeDerive {
   query: string;
 }
 
+export interface InlineAttributeDeriveLowering {
+  diagnosticSource: string;
+  prefix: string;
+  replacements: SourceReplacement[];
+}
+
 export function lowerInlineAttributeDerives(
   source: string,
   model: ComponentModuleModel,
   componentName: string,
   options: InlineDeriveLoweringOptions,
-): { diagnosticSource: string; source: string; sourceOffsetMap: SourceOffsetMap } {
+): InlineAttributeDeriveLowering {
   const knownQueries = knownQueryNames(model, options);
   if (knownQueries.size === 0) {
     return {
       diagnosticSource: source,
-      source,
-      sourceOffsetMap: identitySourceOffsetMap(source.length),
+      prefix: '',
+      replacements: [],
     };
   }
 
@@ -102,18 +102,17 @@ export function lowerInlineAttributeDerives(
   if (replacements.length === 0) {
     return {
       diagnosticSource: source,
-      source,
-      sourceOffsetMap: identitySourceOffsetMap(source.length),
+      prefix: '',
+      replacements,
     };
   }
 
   const prefix = `${deriveExports.join('\n')}\n\n`;
-  const patch = applySourceReplacementsWithOffsetMap(source, replacements, prefix);
 
   return {
     diagnosticSource: source,
-    source: patch.source,
-    sourceOffsetMap: patch.sourceOffsetMap,
+    prefix,
+    replacements,
   };
 }
 
