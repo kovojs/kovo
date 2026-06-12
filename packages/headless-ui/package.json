@@ -12,6 +12,7 @@
     "./primitives/checkbox": "./src/primitives/checkbox.ts",
     "./primitives/collapsible": "./src/primitives/collapsible.ts",
     "./primitives/disclosure": "./src/primitives/disclosure.ts",
+    "./primitives/hover-card": "./src/primitives/hover-card.ts",
     "./primitives/meter": "./src/primitives/meter.ts",
     "./primitives/popover": "./src/primitives/popover.ts",
     "./primitives/progress": "./src/primitives/progress.ts",

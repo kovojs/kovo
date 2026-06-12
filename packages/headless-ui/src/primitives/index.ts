@@ -112,6 +112,34 @@ export type {
   DisclosureTriggerEvent,
 } from './disclosure.js';
 
+export {
+  hoverCardContentAttributes,
+  hoverCardContentBlur,
+  hoverCardContentFocus,
+  hoverCardContentPointerEnter,
+  hoverCardContentPointerLeave,
+  hoverCardEscapeKeyDown,
+  hoverCardRootAttributes,
+  hoverCardTriggerAttributes,
+  hoverCardTriggerBlur,
+  hoverCardTriggerFocus,
+  hoverCardTriggerPointerEnter,
+  hoverCardTriggerPointerLeave,
+  setHoverCardOpen,
+} from './hover-card.js';
+export type {
+  HoverCardAttributeOptions,
+  HoverCardChangeDetail,
+  HoverCardChangeOptions,
+  HoverCardChangeReason,
+  HoverCardChangeResult,
+  HoverCardContentEvent,
+  HoverCardEscapeEvent,
+  HoverCardPrimitiveAttributes,
+  HoverCardState,
+  HoverCardTriggerEvent,
+} from './hover-card.js';
+
 export { meterRootAttributes, meterValueState } from './meter.js';
 export type {
   MeterAttributeOptions,
