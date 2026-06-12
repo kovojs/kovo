@@ -292,6 +292,35 @@ export type {
 } from './separator.js';
 
 export {
+  setToggleGroupValue,
+  toggleGroupButtonAttributes,
+  toggleGroupItemAttributes,
+  toggleGroupItemClick,
+  toggleGroupItemPressed,
+  toggleGroupItemValue,
+  toggleGroupKeyDown,
+  toggleGroupMoveFocus,
+  toggleGroupRootAttributes,
+  toggleGroupRovingIndex,
+} from './toggle-group.js';
+export type {
+  ToggleGroupChangeDetail,
+  ToggleGroupChangeOptions,
+  ToggleGroupChangeReason,
+  ToggleGroupChangeResult,
+  ToggleGroupItem,
+  ToggleGroupItemAttributeOptions,
+  ToggleGroupItemEvent,
+  ToggleGroupKeyboardEvent,
+  ToggleGroupMoveResult,
+  ToggleGroupPrimitiveAttributes,
+  ToggleGroupRootAttributeOptions,
+  ToggleGroupState,
+  ToggleGroupType,
+  ToggleGroupValue,
+} from './toggle-group.js';
+
+export {
   setTogglePressed,
   togglePressed,
   toggleRootAttributes,

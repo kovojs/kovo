@@ -265,6 +265,17 @@ jiso-dialog` resolves dashed wire names and prints provenance including package,
       `pnpm --filter @jiso/headless-ui run lint:primitives`,
       `pnpm exec vp check packages/headless-ui/package.json packages/headless-ui/src/index.ts packages/headless-ui/src/primitives/index.ts packages/headless-ui/src/primitives/radio-group.ts packages/headless-ui/src/primitives/radio-group.test.ts plans/ui.md`,
       and `git diff --check`. H2 remains open for the other wave 2 primitives and full gates.
+      Additional partial evidence 2026-06-12: `packages/headless-ui/src/primitives/toggle-group.ts`
+      adds the H2 toggle-group primitive as a native `<button>`-oriented L1 helper:
+      group/item/button attribute builders, single and multiple pressed value transitions,
+      optional single-item collapse, roving focus over enabled items via shared keyboard maps,
+      and guarded click/keyboard handlers following the SPEC §4.6 primitive handler no-op
+      contract. It is exported through `@jiso/headless-ui`, `@jiso/headless-ui/primitives`,
+      and `@jiso/headless-ui/primitives/toggle-group`. Same-session evidence:
+      `pnpm --filter @jiso/headless-ui exec vitest --run src/primitives/toggle-group.test.ts`,
+      `pnpm --filter @jiso/headless-ui run lint:primitives`,
+      `pnpm exec vp check packages/headless-ui/package.json packages/headless-ui/src/index.ts packages/headless-ui/src/primitives/index.ts packages/headless-ui/src/primitives/toggle-group.ts packages/headless-ui/src/primitives/toggle-group.test.ts plans/ui.md`,
+      and `git diff --check`. H2 remains open for the other wave 2 primitives and full gates.
 - [ ] H3 wave 3 primitives (list-driven & isomorphic): select, combobox, autocomplete, dropdown-menu, context-menu, menubar, navigation-menu, slider, toast, command.
 - [x] U1 token sheet + `cn()` + statically-analyzable variant helper (Tailwind-first, §13.1 discoverability rules).
       Evidence 2026-06-12: `packages/headless-ui/src/lib/class-names.ts`

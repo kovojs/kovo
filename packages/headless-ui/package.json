@@ -24,6 +24,7 @@
     "./primitives/switch": "./src/primitives/switch.ts",
     "./primitives/tooltip": "./src/primitives/tooltip.ts",
     "./primitives/toggle": "./src/primitives/toggle.ts",
+    "./primitives/toggle-group": "./src/primitives/toggle-group.ts",
     "./tooling": "./src/tooling/index.ts"
   },
   "scripts": {
