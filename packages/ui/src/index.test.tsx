@@ -13,20 +13,26 @@ import {
   BreadcrumbSeparator,
   Button,
   Card,
+  Checkbox,
   Drawer,
   Kbd,
   Sheet,
   Skeleton,
+  Switch,
   Table,
   TableBody,
   TableCell,
   TableHead,
   TableHeaderCell,
   TableRow,
+  Toggle,
   breadcrumbClasses,
   buttonClasses,
+  checkboxClasses,
   sheetContentClasses,
+  switchClasses,
   tableClasses,
+  toggleClasses,
 } from './index.js';
 
 const sourceDir = dirname(fileURLToPath(import.meta.url));
@@ -40,9 +46,12 @@ describe('@jiso/ui styled package foundation', () => {
     expect(Button.name).toBe('button');
     expect(Badge.name).toBe('badge');
     expect(Card.name).toBe('card');
+    expect(Checkbox.name).toBe('checkbox');
     expect(Kbd.name).toBe('kbd');
     expect(Alert.name).toBe('alert');
     expect(Skeleton.name).toBe('skeleton');
+    expect(Switch.name).toBe('switch');
+    expect(Toggle.name).toBe('toggle');
 
     expect(
       Button.definition.render({
@@ -87,6 +96,41 @@ describe('@jiso/ui styled package foundation', () => {
       '<div aria-hidden="true" class="animate-pulse rounded-md bg-neutral-200 h-4 w-32"></div>',
     );
     expect(buttonClasses).toContain('h-9 gap-2 px-3');
+    expect(checkboxClasses.join(' ')).toContain('inline-flex items-center gap-2');
+    expect(switchClasses.join(' ')).toContain('inline-flex items-center gap-2');
+    expect(toggleClasses.join(' ')).toContain('data-[state=pressed]:bg-neutral-950');
+  });
+
+  it('wraps headless form-control primitives as styled native controls', () => {
+    const checkbox = Checkbox.definition.render({
+      checked: 'indeterminate',
+      children: 'Some permissions',
+      name: 'permissions',
+      required: true,
+      value: 'partial',
+    });
+    const switchControl = Switch.definition.render({
+      checked: true,
+      children: 'Notifications',
+      name: 'notifications',
+      value: 'enabled',
+    });
+    const toggle = Toggle.definition.render({
+      children: 'Bold',
+      pressed: true,
+      variant: 'subtle',
+    });
+
+    expect(checkbox).toContain('data-state="indeterminate"');
+    expect(checkbox).toContain('aria-checked="mixed"');
+    expect(checkbox).toContain('required type="checkbox" value="partial"');
+    expect(checkbox).toContain('Some permissions</label>');
+    expect(switchControl).toContain('data-state="checked"');
+    expect(switchControl).toContain('aria-checked="true" checked');
+    expect(switchControl).toContain('role="switch" type="checkbox" value="enabled"');
+    expect(toggle).toContain('data-state="pressed"');
+    expect(toggle).toContain('aria-pressed="true"');
+    expect(toggle).toContain('border-transparent bg-neutral-100');
   });
 
   it('exports table primitives as styled semantic markup', () => {
@@ -182,10 +226,13 @@ describe('@jiso/ui styled package foundation', () => {
       'breadcrumb.tsx',
       'button.tsx',
       'card.tsx',
+      'checkbox.tsx',
       'kbd.tsx',
       'sheet.tsx',
       'skeleton.tsx',
+      'switch.tsx',
       'table.tsx',
+      'toggle.tsx',
     ]
       .map(readSource)
       .join('\n');

@@ -589,6 +589,17 @@ jiso-dialog` resolves dashed wire names and prints provenance including package,
       `pnpm exec vp check packages/ui/package.json packages/ui/src/index.tsx packages/ui/src/sheet.tsx packages/ui/src/index.test.tsx examples/gallery/src/demo-fixtures.tsx examples/gallery/src/demo-fixtures.test.ts examples/gallery/src/behavior-contracts.test.ts`,
       and `git diff --check`. U3 remains open for full gallery/conformance gates beyond this
       browser-free styled drawer slice.
+      Additional partial evidence 2026-06-12: `packages/ui/src/checkbox.tsx`,
+      `packages/ui/src/switch.tsx`, and `packages/ui/src/toggle.tsx` add a bounded styled
+      form-control/action family over the current headless checkbox, switch, and toggle
+      attribute builders. The wrappers preserve native `<input type="checkbox">`,
+      `role="switch"`, and `<button aria-pressed>` semantics while exposing source-only TSX
+      subpath exports and static class inventories. Same-session evidence:
+      `pnpm --filter @jiso/ui exec vitest --run`,
+      `pnpm --filter @jiso/example-gallery test`,
+      `pnpm --filter @jiso/example-gallery run test:browser`,
+      `pnpm exec vp check packages/ui/package.json packages/ui/src/index.tsx packages/ui/src/checkbox.tsx packages/ui/src/switch.tsx packages/ui/src/toggle.tsx packages/ui/src/index.test.tsx examples/gallery/src/demo-fixtures.tsx examples/gallery/src/demo-fixtures.test.ts examples/gallery/src/behavior-contracts.test.ts plans/ui.md`,
+      and `git diff --check`. U3 remains open for full gallery/conformance gates.
 - [ ] U4 styled components trailing H2.
 - [ ] U5 styled components trailing H3.
 - [ ] G1 `examples/gallery` static fixture surface: one route per component; rendered
@@ -671,6 +682,16 @@ jiso-dialog` resolves dashed wire names and prints provenance including package,
       `pnpm exec vp check examples/gallery/src/demo-fixtures.tsx examples/gallery/src/demo-fixtures.test.ts examples/gallery/src/behavior-contracts.test.ts examples/gallery/src/index.ts plans/ui.md`,
       and `git diff --check`. G1 remains open for unrepresented headless primitives and full
       docs/gallery deployment gates.
+      Additional partial evidence 2026-06-12: the existing checkbox, switch, and toggle
+      static gallery routes now render through the new `@jiso/ui` styled wrappers while
+      preserving the rendered native checkbox/switch/button states, no-JS summaries, and
+      behavior-contract tables used as the browser-free fixture surface. Same-session evidence:
+      `pnpm --filter @jiso/example-gallery exec vitest --run src/demo-fixtures.test.ts src/behavior-contracts.test.ts`,
+      `pnpm --filter @jiso/example-gallery test`,
+      `pnpm --filter @jiso/example-gallery run test:browser`,
+      `pnpm exec vp check examples/gallery/src/demo-fixtures.tsx examples/gallery/src/demo-fixtures.test.ts examples/gallery/src/behavior-contracts.test.ts plans/ui.md`,
+      and `git diff --check`. G1 remains open for unrepresented headless primitives and full
+      docs/gallery deployment gates.
 - [ ] G2 behavior-contract gates: keyboard/ARIA assertions per primitive (browser-free via `page()` + `fw explain` where possible; framework browser suite for focus/dismiss/top-layer).
       Partial evidence 2026-06-12: `examples/gallery/src/behavior-contracts.test.ts`
       adds a browser-free G2 fixture gate over the existing 17 rendered gallery routes. It
@@ -736,6 +757,17 @@ jiso-dialog` resolves dashed wire names and prints provenance including package,
       `pnpm exec vp check examples/gallery/src/demo-fixtures.tsx examples/gallery/src/demo-fixtures.test.ts examples/gallery/src/behavior-contracts.test.ts examples/gallery/src/index.ts plans/ui.md`,
       and `git diff --check`. G2 remains open for browser-backed checks, `fw explain`
       coverage, and unrepresented primitive routes.
+      Additional partial evidence 2026-06-12: the browser-free G2 fixture gate continues to
+      cover checkbox, switch, and toggle after those routes moved to `@jiso/ui` wrappers,
+      pinning native input/button snippets, `aria-checked`/`aria-pressed`, disabled output,
+      and the exact SPEC §4.6-oriented behavior-contract rows from the rendered route HTML.
+      Same-session evidence:
+      `pnpm --filter @jiso/example-gallery exec vitest --run src/demo-fixtures.test.ts src/behavior-contracts.test.ts`,
+      `pnpm --filter @jiso/example-gallery test`,
+      `pnpm --filter @jiso/example-gallery run test:browser`,
+      `pnpm exec vp check examples/gallery/src/demo-fixtures.tsx examples/gallery/src/demo-fixtures.test.ts examples/gallery/src/behavior-contracts.test.ts plans/ui.md`,
+      and `git diff --check`. G2 remains open for `fw explain` coverage and full
+      gallery/conformance gates.
       Additional partial evidence 2026-06-12: `examples/gallery/src/interactive-gallery.test.ts`
       now injects a fake document into the generated client-module VM and asserts
       browser-observable DOM contracts for compiled interactive handlers across radio-group,

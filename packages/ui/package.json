@@ -9,11 +9,14 @@
     "./breadcrumb": "./src/breadcrumb.tsx",
     "./button": "./src/button.tsx",
     "./card": "./src/card.tsx",
+    "./checkbox": "./src/checkbox.tsx",
     "./drawer": "./src/drawer.tsx",
     "./kbd": "./src/kbd.tsx",
     "./sheet": "./src/sheet.tsx",
     "./skeleton": "./src/skeleton.tsx",
-    "./table": "./src/table.tsx"
+    "./switch": "./src/switch.tsx",
+    "./table": "./src/table.tsx",
+    "./toggle": "./src/toggle.tsx"
   },
   "dependencies": {
     "@jiso/core": "workspace:*",

@@ -18,6 +18,14 @@ export { Button, buttonClassNames, buttonClasses } from './button.js';
 export type { ButtonProps, ButtonSize, ButtonVariant } from './button.js';
 export { Card, cardClassNames, cardClasses } from './card.js';
 export type { CardProps } from './card.js';
+export {
+  Checkbox,
+  checkboxClassNames,
+  checkboxClasses,
+  checkboxInputClassNames,
+  checkboxInputClasses,
+} from './checkbox.js';
+export type { CheckboxProps } from './checkbox.js';
 export { Alert, alertClassNames, alertClasses } from './alert.js';
 export type { AlertProps, AlertVariant } from './alert.js';
 export { Kbd, kbdClassNames, kbdClasses } from './kbd.js';
@@ -26,6 +34,14 @@ export { Drawer, Sheet, sheetContentClassNames, sheetContentClasses } from './sh
 export type { DrawerProps, DrawerSide, SheetProps, SheetSide } from './sheet.js';
 export { Skeleton, skeletonClassNames, skeletonClasses } from './skeleton.js';
 export type { SkeletonProps } from './skeleton.js';
+export {
+  Switch,
+  switchClassNames,
+  switchClasses,
+  switchInputClassNames,
+  switchInputClasses,
+} from './switch.js';
+export type { SwitchProps } from './switch.js';
 export {
   Table,
   TableBody,
@@ -44,3 +60,5 @@ export {
   tableWrapperClassNames,
 } from './table.js';
 export type { TableCellProps, TableProps, TableSectionProps } from './table.js';
+export { Toggle, toggleClassNames, toggleClasses } from './toggle.js';
+export type { ToggleProps, ToggleVariant } from './toggle.js';

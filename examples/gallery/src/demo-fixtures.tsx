@@ -13,7 +13,6 @@ import {
   avatarFallbackAttributes,
   avatarImageAttributes,
   avatarRootAttributes,
-  checkboxRootAttributes,
   dialogCloseAttributes,
   dialogContentAttributes,
   dialogRootAttributes,
@@ -50,7 +49,6 @@ import {
   selectValueAttributes,
   selectValueText,
   separatorRootAttributes,
-  switchRootAttributes,
   tabsListAttributes,
   tabsPanelAttributes,
   tabsRootAttributes,
@@ -58,7 +56,6 @@ import {
   tooltipContentAttributes,
   tooltipRootAttributes,
   tooltipTriggerAttributes,
-  toggleRootAttributes,
 } from '@jiso/headless-ui/primitives';
 import {
   Alert,
@@ -69,16 +66,19 @@ import {
   BreadcrumbSeparator,
   Button,
   Card,
+  Checkbox,
   Drawer,
   Kbd,
   Sheet,
   Skeleton,
+  Switch,
   Table,
   TableBody,
   TableCell,
   TableHead,
   TableHeaderCell,
   TableRow,
+  Toggle,
 } from '@jiso/ui';
 
 export type GalleryComponent =
@@ -593,36 +593,37 @@ export function CardDemo(): string {
 }
 
 export function CheckboxDemo(): string {
-  const checked = checkboxRootAttributes({
-    checked: true,
-    name: 'gallery-consent',
-    required: true,
-    value: 'accepted',
-  });
-  const indeterminate = checkboxRootAttributes({
-    checked: 'indeterminate',
-    name: 'gallery-partial',
-    value: 'partial',
-  });
-  const disabled = checkboxRootAttributes({ checked: false, disabled: true });
-
   return (
     <section data-gallery-demo="checkbox">
       <p data-demo-summary="no-js">
         Checkbox preserves real checkbox controls for form submission and validation.
       </p>
-      <label>
-        <input {...checked} data-fixture-state="checked" />
-        Accept terms
-      </label>
-      <label>
-        <input {...indeterminate} data-fixture-state="indeterminate" />
-        Some permissions
-      </label>
-      <label>
-        <input {...disabled} data-fixture-state="disabled" />
-        Locked option
-      </label>
+      <div data-ui-demo="checkbox">
+        <span data-fixture-state="checked">
+          {Checkbox.definition.render({
+            checked: true,
+            children: 'Accept terms',
+            name: 'gallery-consent',
+            required: true,
+            value: 'accepted',
+          })}
+        </span>
+        <span data-fixture-state="indeterminate">
+          {Checkbox.definition.render({
+            checked: 'indeterminate',
+            children: 'Some permissions',
+            name: 'gallery-partial',
+            value: 'partial',
+          })}
+        </span>
+        <span data-fixture-state="disabled">
+          {Checkbox.definition.render({
+            checked: false,
+            children: 'Locked option',
+            disabled: true,
+          })}
+        </span>
+      </div>
       {renderBehaviorContract({
         changeReasons: 'trigger-click, programmatic',
         dataState: 'checked, unchecked, indeterminate, disabled',
@@ -915,25 +916,21 @@ export function OtpFieldDemo(): string {
 }
 
 export function ToggleDemo(): string {
-  const pressed = toggleRootAttributes({ pressed: true });
-  const idle = toggleRootAttributes({ pressed: false });
-  const disabled = toggleRootAttributes({ disabled: true, pressed: false });
-
   return (
     <section data-gallery-demo="toggle">
       <p data-demo-summary="no-js">
         Toggle renders a native button with aria-pressed, so the state is inspectable in HTML.
       </p>
-      <div role="group" aria-label="Toggle states">
-        <button {...pressed} data-fixture-state="pressed">
-          Saved
-        </button>
-        <button {...idle} data-fixture-state="idle">
-          Save view
-        </button>
-        <button {...disabled} data-fixture-state="disabled">
-          Disabled
-        </button>
+      <div aria-label="Toggle states" data-ui-demo="toggle" role="group">
+        <span data-fixture-state="pressed">
+          {Toggle.definition.render({ children: 'Saved', pressed: true })}
+        </span>
+        <span data-fixture-state="idle">
+          {Toggle.definition.render({ children: 'Save view', pressed: false, variant: 'subtle' })}
+        </span>
+        <span data-fixture-state="disabled">
+          {Toggle.definition.render({ children: 'Disabled', disabled: true })}
+        </span>
       </div>
       {renderBehaviorContract({
         changeReasons: 'trigger-click, programmatic',
@@ -1227,24 +1224,26 @@ export function SkeletonDemo(): string {
 }
 
 export function SwitchDemo(): string {
-  const enabled = switchRootAttributes({
-    checked: true,
-    name: 'gallery-notifications',
-    value: 'enabled',
-  });
-  const disabled = switchRootAttributes({ checked: false, disabled: true });
-
   return (
     <section data-gallery-demo="switch">
       <p data-demo-summary="no-js">Switch renders a native checkbox with switch semantics.</p>
-      <label>
-        <input {...enabled} data-fixture-state="checked" />
-        Notifications
-      </label>
-      <label>
-        <input {...disabled} data-fixture-state="disabled" />
-        Locked automation
-      </label>
+      <div data-ui-demo="switch">
+        <span data-fixture-state="checked">
+          {Switch.definition.render({
+            checked: true,
+            children: 'Notifications',
+            name: 'gallery-notifications',
+            value: 'enabled',
+          })}
+        </span>
+        <span data-fixture-state="disabled">
+          {Switch.definition.render({
+            checked: false,
+            children: 'Locked automation',
+            disabled: true,
+          })}
+        </span>
+      </div>
       {renderBehaviorContract({
         changeReasons: 'trigger-click, programmatic',
         dataState: 'checked, unchecked, disabled',
