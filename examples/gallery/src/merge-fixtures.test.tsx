@@ -24,6 +24,11 @@ import {
   comboboxInputAttributes,
   comboboxListboxAttributes,
   comboboxOptionAttributes,
+  contextMenuContentAttributes,
+  contextMenuGroupAttributes,
+  contextMenuItemAttributes,
+  contextMenuSeparatorAttributes,
+  contextMenuTriggerAttributes,
   dialogContentAttributes,
   dialogTriggerAttributes,
   dropdownMenuContentAttributes,
@@ -88,6 +93,7 @@ const idrefAttributes = new Set([
   'aria-owns',
   'commandfor',
   'for',
+  'jiso-context-menu',
   'jiso-hover-card',
   'jiso-tooltip',
   'popovertarget',
@@ -487,6 +493,164 @@ describe('gallery G5 primitive merge fixtures', () => {
       </section>,
     ).toBe(
       '<section data-gallery-merge="dropdown-menu"><button data-state="open" aria-expanded="false" aria-haspopup="menu" type="submit" aria-controls="author-dropdown-content" id="gallery-dropdown-trigger" class="dropdown-trigger px-2">Account</button><div data-state="open" role="listbox" tabIndex="-1" id="author-dropdown-content" aria-labelledby="gallery-dropdown-trigger" class="dropdown-content shadow"><div data-state="open" role="presentation" id="gallery-dropdown-group" aria-labelledby="author-dropdown-group-label" class="dropdown-group"><div data-state="active" data-highlighted="" role="option" tabIndex="5" id="gallery-dropdown-profile" label="Profile" value="author-profile" class="dropdown-item font-medium" aria-disabled="true">Profile</div></div><div role="none" id="gallery-dropdown-separator"></div></div></section>',
+    );
+  });
+
+  it('renders a golden context-menu merge with behavior IDREFs and anchor coordinates', () => {
+    const state = {
+      highlightedValue: 'paste',
+      items: [
+        { label: 'Copy', value: 'copy' },
+        { label: 'Paste', value: 'paste' },
+        { disabled: true, label: 'Delete', value: 'delete' },
+      ],
+      open: true,
+      point: { x: 32, y: 64 },
+    };
+    const trigger = mergePrimitiveAttrs(
+      {
+        ...contextMenuTriggerAttributes({
+          ...state,
+          contentId: 'gallery-context-content',
+          id: 'gallery-context-trigger',
+          labelledBy: 'gallery-context-label',
+        }),
+        class: 'context-trigger',
+      },
+      {
+        'aria-controls': 'author-context-content',
+        'aria-expanded': 'false',
+        class: 'context-trigger rounded',
+        'data-state': 'author-open',
+        'jiso-context-menu': 'author-context-content',
+      },
+    );
+    const content = mergePrimitiveAttrs(
+      {
+        ...contextMenuContentAttributes({
+          ...state,
+          id: 'gallery-context-content',
+          labelledBy: 'gallery-context-trigger',
+        }),
+        class: 'context-content',
+      },
+      {
+        'data-anchor-x': '128',
+        class: 'context-content shadow',
+        id: 'author-context-content',
+        role: 'listbox',
+      },
+    );
+    const group = mergePrimitiveAttrs(
+      {
+        ...contextMenuGroupAttributes({
+          ...state,
+          id: 'gallery-context-group',
+          labelledBy: 'gallery-context-group-label',
+        }),
+      },
+      {
+        'aria-labelledby': 'author-context-group-label',
+        class: 'context-group',
+        role: 'presentation',
+      },
+    );
+    const item = mergePrimitiveAttrs(
+      {
+        ...contextMenuItemAttributes({
+          ...state,
+          id: 'gallery-context-paste',
+          itemLabel: 'Paste',
+          itemValue: 'paste',
+        }),
+        class: 'context-item',
+      },
+      {
+        'aria-disabled': 'true',
+        class: 'context-item px-2',
+        'data-state': 'author-active',
+        role: 'option',
+        tabIndex: -1,
+        value: 'author-paste',
+      },
+    );
+    const separator = mergePrimitiveAttrs(
+      contextMenuSeparatorAttributes({ id: 'gallery-context-separator' }),
+      { role: 'none' },
+    );
+
+    expect(trigger.diagnostics).toEqual([
+      {
+        attr: 'data-state',
+        code: 'FW232',
+        message: 'Author override of primitive-owned state attribute per SPEC.md section 4.6',
+      },
+      {
+        attr: 'aria-expanded',
+        code: 'FW232',
+        message: 'Author override of primitive ARIA/role attribute per SPEC.md section 4.6',
+      },
+      {
+        attr: 'aria-controls',
+        code: 'FW231',
+        message: 'Unmergeable primitive IDREF conflict per SPEC.md section 4.6',
+      },
+      {
+        attr: 'jiso-context-menu',
+        code: 'FW231',
+        message: 'Unmergeable primitive IDREF conflict per SPEC.md section 4.6',
+      },
+    ]);
+    expect(content.diagnostics).toEqual([
+      {
+        attr: 'role',
+        code: 'FW232',
+        message: 'Author override of primitive ARIA/role attribute per SPEC.md section 4.6',
+      },
+    ]);
+    expect(group.diagnostics).toEqual([
+      {
+        attr: 'role',
+        code: 'FW232',
+        message: 'Author override of primitive ARIA/role attribute per SPEC.md section 4.6',
+      },
+      {
+        attr: 'aria-labelledby',
+        code: 'FW231',
+        message: 'Unmergeable primitive IDREF conflict per SPEC.md section 4.6',
+      },
+    ]);
+    expect(item.diagnostics).toEqual([
+      {
+        attr: 'data-state',
+        code: 'FW232',
+        message: 'Author override of primitive-owned state attribute per SPEC.md section 4.6',
+      },
+      {
+        attr: 'role',
+        code: 'FW232',
+        message: 'Author override of primitive ARIA/role attribute per SPEC.md section 4.6',
+      },
+    ]);
+    expect(separator.diagnostics).toEqual([
+      {
+        attr: 'role',
+        code: 'FW232',
+        message: 'Author override of primitive ARIA/role attribute per SPEC.md section 4.6',
+      },
+    ]);
+    expect(
+      <section data-gallery-merge="context-menu">
+        <div {...trigger.attrs}>Canvas</div>
+        <div {...content.attrs}>
+          <div {...group.attrs}>
+            <div {...item.attrs}>Paste</div>
+          </div>
+          <div {...separator.attrs}></div>
+        </div>
+      </section>,
+    ).toBe(
+      '<section data-gallery-merge="context-menu"><div data-state="open" aria-expanded="false" aria-haspopup="menu" aria-controls="author-context-content" jiso-context-menu="author-context-content" id="gallery-context-trigger" aria-labelledby="gallery-context-label" class="context-trigger rounded">Canvas</div><div data-state="open" role="listbox" tabIndex="-1" id="author-context-content" aria-labelledby="gallery-context-trigger" data-anchor-x="128" data-anchor-y="64" class="context-content shadow"><div data-state="open" role="presentation" id="gallery-context-group" aria-labelledby="author-context-group-label" class="context-group"><div data-state="active" data-highlighted="" role="option" tabIndex="-1" id="gallery-context-paste" label="Paste" value="author-paste" class="context-item px-2" aria-disabled="true">Paste</div></div><div role="none" id="gallery-context-separator"></div></div></section>',
     );
   });
 
