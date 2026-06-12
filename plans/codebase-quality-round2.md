@@ -1208,6 +1208,11 @@ As each phase splits a source module, split its tests in the same commit.
       `pnpm exec vitest --run packages/test/src/assertions.test.ts packages/test/src/index.test.ts packages/test/src/page.test.ts`,
       `pnpm exec vitest --run packages/test/src`, and
       `pnpm exec vp check packages/test/src/index.ts packages/test/src/harness.ts packages/test/src/assertions.ts packages/test/src/assertions.test.ts packages/test/src/index.test.ts`.
+      Additional evidence 2026-06-12: direct DB verifier coverage for FW406 fallback,
+      FW403/FW405 diagnostics, exempt tables, read-domain checks, and stable proxy identity moved
+      from `packages/test/src/index.test.ts` to `packages/test/src/verifier.test.ts`, with the
+      shared fake DB fixture factored into `packages/test/src/test-fixtures.ts`. Same-session
+      evidence: `pnpm exec vitest --run packages/test/src`.
 
 Verification: identical test counts ± intentional additions before/after each split; full
 acceptance at the end.
