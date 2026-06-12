@@ -1265,9 +1265,21 @@ void test('P10 v1 acceptance ledger tracks every freeze criterion', async () => 
       prelaunchHonesty: 'packet ready; external evidence pending',
     },
   );
-  assert.deepEqual(
-    acceptanceRunRows.map((row) => row.Result),
-    ['passed', 'passed', 'pending'],
+  assert.ok(acceptanceRunRows.length >= 4);
+  assert.equal(acceptanceRunRows.at(-1).Result, 'pending');
+  assert.equal(acceptanceRunRows.at(-1).Notes.includes('Final clean-checkout freeze run'), true);
+  assert.equal(
+    acceptanceRunRows.slice(0, -1).every((row) => row.Result === 'passed'),
+    true,
+  );
+  assert.equal(
+    acceptanceRunRows.some(
+      (row) =>
+        row.Commit === 'ec876f5' &&
+        row.Result === 'passed' &&
+        row.Notes.includes('This is not the final freeze run'),
+    ),
+    true,
   );
   assert.deepEqual(
     cleanCheckoutRows.map((row) => row.Status),
