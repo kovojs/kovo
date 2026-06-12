@@ -8,7 +8,7 @@ import {
 import { createJisoTestHarness } from '@jiso/test';
 import { betterAuth, getAuthTables } from 'better-auth';
 import { memoryAdapter } from 'better-auth/adapters/memory';
-import { admin, jwt, oidcProvider, organization, twoFactor } from 'better-auth/plugins';
+import { admin, jwt, oidcProvider, organization, siwe, twoFactor } from 'better-auth/plugins';
 import { describe, expect, expectTypeOf, it } from 'vitest';
 
 import {
@@ -448,6 +448,57 @@ describe('Better Auth pinned conformance', () => {
     );
     expect(result.source).toContain(
       "export const oauthConsent = pgTable('oauthConsent', {}, jiso({ domain: 'auth', key: 'userId' }));",
+    );
+  });
+
+  it('pins SIWE wallet table metadata used by the schema bridge', () => {
+    const { auth } = createRealAuth({
+      plugins: [
+        siwe({
+          domain: 'example.test',
+          getNonce: async () => 'nonce',
+          verifyMessage: async () => true,
+        }),
+      ],
+    });
+    const tables = getAuthTables(auth.options);
+    const result = annotateBetterAuthSchemaSource(
+      betterAuthSchemaSourceFixture(Object.keys(tables)),
+      tables,
+    );
+
+    expect(Object.keys(tables).sort()).toEqual([
+      'account',
+      'session',
+      'user',
+      'verification',
+      'walletAddress',
+    ]);
+    expect(Object.keys(requireAuthTable(tables, 'walletAddress').fields).sort()).toEqual([
+      'address',
+      'chainId',
+      'createdAt',
+      'isPrimary',
+      'userId',
+    ]);
+    expect(validateBetterAuthSchemaBridge(tables)).toEqual({
+      declaredTouchMismatches: [],
+      keyFieldMismatches: [],
+      missingTables: [],
+      ok: true,
+      pluginTableDegradations: [],
+      unbridgedTables: [],
+    });
+    expect(betterAuthSchemaBridge.walletAddress).toEqual({ domain: 'auth', key: 'userId' });
+    expect(result.annotatedTables).toEqual([
+      'account',
+      'session',
+      'user',
+      'verification',
+      'walletAddress',
+    ]);
+    expect(result.source).toContain(
+      "export const walletAddress = pgTable('walletAddress', {}, jiso({ domain: 'auth', key: 'userId' }));",
     );
   });
 

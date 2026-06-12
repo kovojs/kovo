@@ -181,11 +181,13 @@ export type BetterAuthOrganizationTable =
   | 'team'
   | 'teamMember';
 export type BetterAuthOidcProviderTable = 'oauthAccessToken' | 'oauthApplication' | 'oauthConsent';
+export type BetterAuthSiweTable = 'walletAddress';
 export type BetterAuthTwoFactorTable = 'twoFactor';
 export type BetterAuthTable =
   | BetterAuthCoreTable
   | BetterAuthOidcProviderTable
   | BetterAuthOrganizationTable
+  | BetterAuthSiweTable
   | BetterAuthTwoFactorTable;
 
 export type BetterAuthTouchDomain = 'auth' | 'organization' | 'user';
@@ -310,6 +312,7 @@ export const betterAuthSchemaBridge = {
     exempt: true,
     rationale: 'Better Auth email/token verification bookkeeping is not an app read surface.',
   },
+  walletAddress: { domain: 'auth', key: 'userId' },
 } as const satisfies BetterAuthSchemaBridge;
 
 const betterAuthRequiredCoreTables = [

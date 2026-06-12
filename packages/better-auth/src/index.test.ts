@@ -343,6 +343,7 @@ describe('credential mutation helpers', () => {
         exempt: true,
         rationale: 'Better Auth email/token verification bookkeeping is not an app read surface.',
       },
+      walletAddress: { domain: 'auth', key: 'userId' },
     });
     expect(betterAuthOrganizationDomain.key).toBe('organization');
     expect(betterAuthTableDomain('user')).toBe('user');
@@ -415,6 +416,7 @@ describe('credential mutation helpers', () => {
         teamMember: 'organization',
         twoFactor: 'auth',
         user: 'user',
+        walletAddress: 'auth',
       },
       exemptTables: ['verification'],
       keyByTable: {
@@ -431,6 +433,7 @@ describe('credential mutation helpers', () => {
         teamMember: 'teamId',
         twoFactor: 'userId',
         user: 'id',
+        walletAddress: 'userId',
       },
     });
     expect(
@@ -464,6 +467,7 @@ describe('credential mutation helpers', () => {
         twoFactor: authTable(['userId']),
         user: authTable(),
         verification: authTable(),
+        walletAddress: authTable(['userId']),
       }),
     ).toEqual({
       declaredTouchMismatches: [],
@@ -700,6 +704,39 @@ describe('credential mutation helpers', () => {
       "export const oauthApplication = pgTable('oauthApplication', {\n" +
         "  id: text('id').primaryKey(),\n" +
         "  userId: text('user_id').notNull(),\n" +
+        "}, jiso({ domain: 'auth', key: 'userId' }));",
+    );
+  });
+
+  it('materializes a bridged SIWE wallet table into an app schema.ts source fixture', () => {
+    const result = annotateBetterAuthSchemaSource(
+      [
+        "import { jiso } from '@jiso/drizzle';",
+        "import { pgTable, text } from 'drizzle-orm/pg-core';",
+        '',
+        "export const walletAddress = pgTable('walletAddress', {",
+        "  id: text('id').primaryKey(),",
+        "  userId: text('user_id').notNull(),",
+        "  address: text('address').notNull(),",
+        '});',
+        '',
+      ].join('\n'),
+      {
+        walletAddress: authTable(['userId', 'address']),
+      },
+    );
+
+    expect(result.validation).toMatchObject({
+      keyFieldMismatches: [],
+      pluginTableDegradations: [],
+      unbridgedTables: [],
+    });
+    expect(result.annotatedTables).toEqual(['walletAddress']);
+    expect(result.source).toContain(
+      "export const walletAddress = pgTable('walletAddress', {\n" +
+        "  id: text('id').primaryKey(),\n" +
+        "  userId: text('user_id').notNull(),\n" +
+        "  address: text('address').notNull(),\n" +
         "}, jiso({ domain: 'auth', key: 'userId' }));",
     );
   });
