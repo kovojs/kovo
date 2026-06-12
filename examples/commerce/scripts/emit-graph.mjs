@@ -177,8 +177,8 @@ const graphDeclarations = {
     {
       i18n: ['en-US:cartLabel,productStock'],
       meta: {
-        description: 'Browse products and checkout with 1 verifiable cart item.',
-        title: 'Jiso Commerce (1)',
+        description: 'Browse products and checkout with 0 verifiable cart item.',
+        title: 'Jiso Commerce (0)',
       },
       modulepreloads: [],
       prefetch: false,

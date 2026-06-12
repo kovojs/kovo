@@ -1,29 +1,40 @@
-import { query } from '@jiso/server';
+import { query, type QueryLoadContext } from '@jiso/server';
 
 import {
-  createCommerceDb,
+  loadCartQuery,
   loadProductGrid,
-  type CommerceDb,
+  type CommerceRequest,
   type ProductGridInput,
 } from './app.js';
 import { cart, order, product } from './domains.js';
 
 // SPEC.md section 10.2: typed reads declared once, consumed by components and
-// mutation registries. Queries live in a leaf module (the circular value
-// imports from app.ts are function declarations, referenced only inside the
-// lazy load closures) so TSX components can declare `queries:` dependencies
-// that the compiler lowers into fw-deps stamps (SPEC.md section 4.2).
+// mutation registries. Query loaders use the request DB passed through the
+// server query lifecycle instead of constructing fixture data, keeping the
+// declared dependency graph tied to the example's source of truth.
 export const cartQuery = query('cart', {
-  load: (_input: unknown) => ({ count: 1 }),
+  load: (_input: unknown, context?: QueryLoadContext<CommerceRequest>) =>
+    loadCartQuery(requireCommerceRequest(context).db),
   reads: [cart],
 });
 
 export const productGridQuery = query('productGrid', {
-  load: (input: unknown) => loadProductGrid(createCommerceDb(), input as ProductGridInput),
+  load: (input: unknown, context?: QueryLoadContext<CommerceRequest>) =>
+    loadProductGrid(requireCommerceRequest(context).db, input as ProductGridInput),
   reads: [product],
 });
 
 export const orderHistoryQuery = query('orderHistory', {
-  load: (_input: unknown) => ({ items: [] as CommerceDb['orders'] }),
+  load: (_input: unknown, context?: QueryLoadContext<CommerceRequest>) => ({
+    items: requireCommerceRequest(context).db.orders,
+  }),
   reads: [order],
 });
+
+function requireCommerceRequest(context?: QueryLoadContext<CommerceRequest>): CommerceRequest {
+  if (!context?.request?.db) {
+    throw new Error('commerce query loaders require request.db');
+  }
+
+  return context.request;
+}

@@ -22,10 +22,13 @@ import {
   commerceSession,
   commerceTouchGraph,
   createCommerceDb,
+  cartQuery,
   loadCartQuery,
   loadProductGrid,
+  orderHistoryQuery,
   orderCsvRoute,
   paymentWebhook,
+  productGridQuery,
   renderCommercePageHints,
   renderAddToCartForm,
   renderAttachmentDownloadRoute,
@@ -301,6 +304,43 @@ describe('commerce example', () => {
     await expect(
       harness.page('/cart').then((page) => page.fragment('cart-badge')),
     ).resolves.toContain('data-bind="cart.count"');
+  });
+
+  it('loads declared commerce queries from the request database', async () => {
+    const db = createCommerceDb();
+    const request = { db, session: { id: 's-query', user: { id: 'u-query' } } };
+
+    await addToCart.handler({ productId: 'p1', quantity: 2 }, request, {
+      fail(code, payload) {
+        return { error: { code, payload }, ok: false, status: 422 };
+      },
+      invalidate(domain, options) {
+        return { domain: domain.key, ...options, manual: true };
+      },
+    });
+
+    await expect(Promise.resolve(cartQuery.load({}, { request }))).resolves.toEqual({ count: 2 });
+    await expect(
+      Promise.resolve(productGridQuery.load({ limit: 1 }, { request })),
+    ).resolves.toEqual({
+      items: [{ id: 'p1', stock: 3, unitPrice: 1499 }],
+      nextCursor: 'p1',
+    });
+    await expect(Promise.resolve(orderHistoryQuery.load({}, { request }))).resolves.toEqual({
+      items: [
+        {
+          id: 'order-1',
+          productId: 'p1',
+          qty: 2,
+          total: 2998,
+          userId: 'u-query',
+        },
+      ],
+    });
+
+    expect(() => productGridQuery.load({ limit: 1 })).toThrow(
+      'commerce query loaders require request.db',
+    );
   });
 
   it('renders cursor-paged product grid and order history with stable list keys', async () => {
@@ -777,7 +817,12 @@ describe('commerce example', () => {
 
   it('contains product-grid fragment failures with a per-island error boundary', async () => {
     const db = createCommerceDb();
+    const values = db.products.values.bind(db.products);
+    let productGridReads = 0;
     db.products.values = (() => {
+      productGridReads += 1;
+      if (productGridReads === 1) return values();
+
       throw new Error('catalog unavailable');
     }) as typeof db.products.values;
 
@@ -862,7 +907,7 @@ describe('commerce example', () => {
       earlyHints: {
         Link: '</assets/tailwind.css>; rel=preload; as=style',
       },
-      html: '<title>Jiso Commerce (1)</title><meta name="description" content="Browse products and checkout with 1 verifiable cart item."><meta property="og:description" content="Browse products and checkout with 1 verifiable cart item."><script type="application/json" fw-i18n locale="en-US">{"cartLabel":"Cart","productStock":"{count} in stock"}</script><link rel="stylesheet" href="/assets/tailwind.css">',
+      html: '<title>Jiso Commerce (0)</title><meta name="description" content="Browse products and checkout with 0 verifiable cart item."><meta property="og:description" content="Browse products and checkout with 0 verifiable cart item."><script type="application/json" fw-i18n locale="en-US">{"cartLabel":"Cart","productStock":"{count} in stock"}</script><link rel="stylesheet" href="/assets/tailwind.css">',
     });
 
     expect(renderCartPage()).toContain('<link rel="stylesheet" href="/assets/tailwind.css">');
@@ -1083,7 +1128,7 @@ describe('commerce example', () => {
         'fw-explain/v1',
         'PAGE /cart',
         'prefetch: false',
-        'meta: title=Jiso Commerce (1) description=Browse products and checkout with 1 verifiable cart item. image=-',
+        'meta: title=Jiso Commerce (0) description=Browse products and checkout with 0 verifiable cart item. image=-',
         'i18n: en-US:cartLabel,productStock',
         'modulepreloads: -',
         'stylesheets: /assets/tailwind.css',

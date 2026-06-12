@@ -528,7 +528,7 @@ function csvCell(value: string): string {
 // 4.1, 5.2); the app imports their committed lowered IR from src/generated/.
 export { CartBadge, OrderHistory };
 
-export function renderCommercePageHints(cart: CartQueryResult = cartQuery.load({})) {
+export function renderCommercePageHints(cart: CartQueryResult = loadCartQuery(createCommerceDb())) {
   return renderPageHints(
     {
       i18n: commerceMessages,
@@ -736,8 +736,8 @@ export const commerceGraph = {
     {
       i18n: ['en-US:cartLabel,productStock'],
       meta: {
-        description: 'Browse products and checkout with 1 verifiable cart item.',
-        title: 'Jiso Commerce (1)',
+        description: 'Browse products and checkout with 0 verifiable cart item.',
+        title: 'Jiso Commerce (0)',
       },
       modulepreloads: [],
       prefetch: false,
