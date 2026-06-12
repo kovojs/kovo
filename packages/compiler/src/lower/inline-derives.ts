@@ -23,13 +23,11 @@ interface InlineAttributeDerive {
 }
 
 export interface InlineAttributeDeriveLowering {
-  diagnosticSource: string;
   prefix: string;
   replacements: SourceReplacement[];
 }
 
 export function lowerInlineAttributeDerives(
-  source: string,
   model: ComponentModuleModel,
   componentName: string,
   options: InlineDeriveLoweringOptions,
@@ -37,7 +35,6 @@ export function lowerInlineAttributeDerives(
   const knownQueries = knownQueryNames(model, options);
   if (knownQueries.size === 0) {
     return {
-      diagnosticSource: source,
       prefix: '',
       replacements: [],
     };
@@ -101,7 +98,6 @@ export function lowerInlineAttributeDerives(
 
   if (replacements.length === 0) {
     return {
-      diagnosticSource: source,
       prefix: '',
       replacements,
     };
@@ -110,7 +106,6 @@ export function lowerInlineAttributeDerives(
   const prefix = `${deriveExports.join('\n')}\n\n`;
 
   return {
-    diagnosticSource: source,
     prefix,
     replacements,
   };

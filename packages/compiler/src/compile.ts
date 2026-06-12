@@ -81,7 +81,6 @@ export function compileComponentModule(options: CompileComponentOptions): Compil
     parseComponentModuleModel,
   ).state;
   const deriveLowering = lowerInlineAttributeDerives(
-    navigationState.source,
     navigationState.model,
     componentName,
     compileOptions,
@@ -93,7 +92,7 @@ export function compileComponentModule(options: CompileComponentOptions): Compil
     { prefix: deriveLowering.prefix },
   );
   const source = derivePatch.state.source;
-  const diagnosticSource = deriveLowering.diagnosticSource;
+  const diagnosticSource = navigationState.source;
   const model = derivePatch.state.model;
   const handlers = lowerEventHandlers({ ...compileOptions, source }, componentName, model);
   const queryUpdatePlans = collectQueryUpdatePlans(model, componentName);
