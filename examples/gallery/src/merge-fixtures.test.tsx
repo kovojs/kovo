@@ -14,6 +14,12 @@ import {
   collapsibleContentAttributes,
   collapsibleRootAttributes,
   collapsibleTriggerAttributes,
+  commandInputAttributes,
+  commandItemAttributes,
+  commandListboxAttributes,
+  comboboxInputAttributes,
+  comboboxListboxAttributes,
+  comboboxOptionAttributes,
   dialogContentAttributes,
   dialogTriggerAttributes,
   fieldControlAttributes,
@@ -37,9 +43,16 @@ import {
   separatorRootAttributes,
   selectItemAttributes,
   selectTriggerAttributes,
+  sliderInputAttributes,
+  sliderThumbAttributes,
+  sliderTrackAttributes,
   switchRootAttributes,
   tabsPanelAttributes,
   tabsTriggerAttributes,
+  toastActionAttributes,
+  toastCloseAttributes,
+  toastRootAttributes,
+  toastViewportAttributes,
   tooltipTriggerAttributes,
   toggleRootAttributes,
 } from '@jiso/headless-ui/primitives';
@@ -209,6 +222,423 @@ describe('gallery G5 primitive merge fixtures', () => {
       </div>,
     ).toBe(
       '<div data-gallery-merge="avatar"><span data-state="loading" aria-label="Author label" role="figure" class="avatar-root rounded-full"><span data-state="loaded" data-delay="250" class="avatar-fallback text-xs">AL</span></span></div>',
+    );
+  });
+
+  it('renders a golden command merge with combobox IDREFs and option semantics', () => {
+    const state = {
+      highlightedValue: 'settings',
+      inputValue: 'se',
+      items: [
+        { label: 'Search docs', value: 'search' },
+        { label: 'Settings', value: 'settings' },
+      ],
+      open: true,
+      value: 'settings',
+    };
+    const input = mergePrimitiveAttrs(
+      {
+        ...commandInputAttributes({
+          ...state,
+          descriptionId: 'gallery-command-description',
+          id: 'gallery-command-input',
+          labelledBy: 'gallery-command-label',
+          listboxId: 'gallery-command-listbox',
+          placeholder: 'Run a command',
+        }),
+        class: 'command-input',
+      },
+      {
+        'aria-activedescendant': 'author-command-option',
+        class: 'command-input text-sm',
+        'data-state': 'author-open',
+        role: 'searchbox',
+        value: 'author query',
+      },
+    );
+    const listbox = mergePrimitiveAttrs(
+      {
+        ...commandListboxAttributes({
+          ...state,
+          id: 'gallery-command-listbox',
+          labelledBy: 'gallery-command-label',
+        }),
+        class: 'command-listbox',
+      },
+      {
+        class: 'command-listbox max-h-72',
+        hidden: false,
+        id: 'author-command-listbox',
+        role: 'menu',
+      },
+    );
+    const item = mergePrimitiveAttrs(
+      {
+        ...commandItemAttributes({
+          ...state,
+          id: 'gallery-command-option-1',
+          itemLabel: 'Settings',
+          itemValue: 'settings',
+        }),
+        class: 'command-item',
+      },
+      {
+        'aria-selected': 'false',
+        class: 'command-item px-2',
+        'data-state': 'author-checked',
+        role: 'menuitem',
+        tabIndex: -1,
+      },
+    );
+
+    expect(input.diagnostics).toEqual([
+      {
+        attr: 'data-state',
+        code: 'FW232',
+        message: 'Author override of primitive-owned state attribute per SPEC.md section 4.6',
+      },
+      {
+        attr: 'role',
+        code: 'FW232',
+        message: 'Author override of primitive ARIA/role attribute per SPEC.md section 4.6',
+      },
+      {
+        attr: 'aria-activedescendant',
+        code: 'FW231',
+        message: 'Unmergeable primitive IDREF conflict per SPEC.md section 4.6',
+      },
+    ]);
+    expect(listbox.diagnostics).toEqual([
+      {
+        attr: 'role',
+        code: 'FW232',
+        message: 'Author override of primitive ARIA/role attribute per SPEC.md section 4.6',
+      },
+    ]);
+    expect(item.diagnostics).toEqual([
+      {
+        attr: 'data-state',
+        code: 'FW232',
+        message: 'Author override of primitive-owned state attribute per SPEC.md section 4.6',
+      },
+      {
+        attr: 'aria-selected',
+        code: 'FW232',
+        message: 'Author override of primitive ARIA/role attribute per SPEC.md section 4.6',
+      },
+      {
+        attr: 'role',
+        code: 'FW232',
+        message: 'Author override of primitive ARIA/role attribute per SPEC.md section 4.6',
+      },
+    ]);
+    expect(
+      <section data-gallery-merge="command">
+        <input {...input.attrs} />
+        <div {...listbox.attrs}>
+          <div {...item.attrs}>Settings</div>
+        </div>
+      </section>,
+    ).toBe(
+      '<section data-gallery-merge="command"><input data-state="open" aria-autocomplete="list" aria-expanded="true" role="searchbox" type="text" value="author query" aria-activedescendant="author-command-option" aria-controls="gallery-command-listbox" aria-describedby="gallery-command-description" id="gallery-command-input" aria-labelledby="gallery-command-label" placeholder="Run a command" class="command-input text-sm"><div data-state="open" role="menu" id="author-command-listbox" aria-labelledby="gallery-command-label" class="command-listbox max-h-72"><div data-state="active" data-selected="" data-highlighted="" aria-selected="false" role="menuitem" tabIndex="-1" id="gallery-command-option-1" label="Settings" value="settings" class="command-item px-2">Settings</div></div></section>',
+    );
+  });
+
+  it('renders a golden combobox merge with active descendant and option conflicts', () => {
+    const state = {
+      highlightedValue: 'enterprise',
+      invalid: true,
+      items: [
+        { label: 'Starter', value: 'starter' },
+        { label: 'Enterprise', value: 'enterprise' },
+      ],
+      listboxId: 'gallery-combobox-listbox',
+      name: 'gallery-plan',
+      open: true,
+      required: true,
+      value: 'enterprise',
+    };
+    const input = mergePrimitiveAttrs(
+      {
+        ...comboboxInputAttributes({
+          ...state,
+          descriptionId: 'gallery-combobox-description',
+          errorId: 'gallery-combobox-error',
+          id: 'gallery-combobox-input',
+          labelledBy: 'gallery-combobox-label',
+          placeholder: 'Choose a plan',
+        }),
+        class: 'combobox-input',
+      },
+      {
+        'aria-describedby': 'author-combobox-description',
+        class: 'combobox-input rounded',
+        'data-state': 'author-open',
+        name: 'author-plan',
+        required: false,
+      },
+    );
+    const listbox = mergePrimitiveAttrs(
+      {
+        ...comboboxListboxAttributes({
+          ...state,
+          id: 'gallery-combobox-listbox',
+          labelledBy: 'gallery-combobox-label',
+        }),
+        class: 'combobox-listbox',
+      },
+      {
+        class: 'combobox-listbox shadow',
+        role: 'menu',
+      },
+    );
+    const option = mergePrimitiveAttrs(
+      {
+        ...comboboxOptionAttributes({
+          ...state,
+          id: 'gallery-combobox-option-1',
+          itemLabel: 'Enterprise',
+          itemValue: 'enterprise',
+        }),
+        class: 'combobox-option',
+      },
+      {
+        'aria-selected': 'false',
+        class: 'combobox-option font-medium',
+        'data-state': 'author-selected',
+        role: 'menuitem',
+      },
+    );
+
+    expect(input.diagnostics).toEqual([
+      {
+        attr: 'data-state',
+        code: 'FW232',
+        message: 'Author override of primitive-owned state attribute per SPEC.md section 4.6',
+      },
+      {
+        attr: 'aria-describedby',
+        code: 'FW231',
+        message: 'Unmergeable primitive IDREF conflict per SPEC.md section 4.6',
+      },
+    ]);
+    expect(listbox.diagnostics).toEqual([
+      {
+        attr: 'role',
+        code: 'FW232',
+        message: 'Author override of primitive ARIA/role attribute per SPEC.md section 4.6',
+      },
+    ]);
+    expect(option.diagnostics).toEqual([
+      {
+        attr: 'data-state',
+        code: 'FW232',
+        message: 'Author override of primitive-owned state attribute per SPEC.md section 4.6',
+      },
+      {
+        attr: 'aria-selected',
+        code: 'FW232',
+        message: 'Author override of primitive ARIA/role attribute per SPEC.md section 4.6',
+      },
+      {
+        attr: 'role',
+        code: 'FW232',
+        message: 'Author override of primitive ARIA/role attribute per SPEC.md section 4.6',
+      },
+    ]);
+    expect(
+      <section data-gallery-merge="combobox">
+        <input {...input.attrs} />
+        <div {...listbox.attrs}>
+          <div {...option.attrs}>Enterprise</div>
+        </div>
+      </section>,
+    ).toBe(
+      '<section data-gallery-merge="combobox"><input data-state="open" data-invalid="" data-required="" aria-autocomplete="list" aria-expanded="true" role="combobox" type="text" value="enterprise" aria-activedescendant="gallery-combobox-listbox-option-1" aria-controls="gallery-combobox-listbox" list="gallery-combobox-listbox" id="gallery-combobox-input" aria-labelledby="gallery-combobox-label" aria-describedby="author-combobox-description" aria-invalid="true" name="author-plan" placeholder="Choose a plan" required class="combobox-input rounded"><div data-state="open" data-invalid="" data-required="" role="menu" id="gallery-combobox-listbox" aria-labelledby="gallery-combobox-label" class="combobox-listbox shadow"><div data-state="checked" data-highlighted="" aria-selected="false" role="menuitem" id="gallery-combobox-option-1" label="Enterprise" value="enterprise" class="combobox-option font-medium">Enterprise</div></div></section>',
+    );
+  });
+
+  it('renders a golden slider merge with native range input and decorative parts', () => {
+    const state = {
+      invalid: true,
+      max: 10,
+      min: 0,
+      name: 'gallery-volume',
+      orientation: 'vertical' as const,
+      required: true,
+      step: 2,
+      value: 6,
+    };
+    const input = mergePrimitiveAttrs(
+      {
+        ...sliderInputAttributes({
+          ...state,
+          descriptionId: 'gallery-slider-description',
+          errorId: 'gallery-slider-error',
+          id: 'gallery-slider-input',
+          labelledBy: 'gallery-slider-label',
+          valueText: '60 percent',
+        }),
+        class: 'slider-input',
+      },
+      {
+        'aria-orientation': 'horizontal',
+        class: 'slider-input sr-only',
+        'data-value': 'author-value',
+        max: 12,
+        name: 'author-volume',
+        required: false,
+      },
+    );
+    const track = mergePrimitiveAttrs(
+      {
+        ...sliderTrackAttributes({ ...state, id: 'gallery-slider-track' }),
+        class: 'slider-track',
+      },
+      {
+        'aria-hidden': 'false',
+        class: 'slider-track h-24',
+        role: 'presentation',
+      },
+    );
+    const thumb = mergePrimitiveAttrs(
+      {
+        ...sliderThumbAttributes({ ...state, id: 'gallery-slider-thumb' }),
+        class: 'slider-thumb',
+      },
+      {
+        class: 'slider-thumb shadow',
+        'data-value-ratio': 'author-ratio',
+      },
+    );
+
+    expect(input.diagnostics).toEqual([
+      {
+        attr: 'aria-orientation',
+        code: 'FW232',
+        message: 'Author override of primitive ARIA/role attribute per SPEC.md section 4.6',
+      },
+    ]);
+    expect(track.diagnostics).toEqual([
+      {
+        attr: 'aria-hidden',
+        code: 'FW232',
+        message: 'Author override of primitive ARIA/role attribute per SPEC.md section 4.6',
+      },
+    ]);
+    expect(thumb.diagnostics).toEqual([]);
+    expect(
+      <section data-gallery-merge="slider">
+        <input {...input.attrs} />
+        <div {...track.attrs}>
+          <span {...thumb.attrs} />
+        </div>
+      </section>,
+    ).toBe(
+      '<section data-gallery-merge="slider"><input data-orientation="vertical" data-invalid="" data-required="" data-max="10" data-min="0" data-value="author-value" aria-describedby="gallery-slider-description gallery-slider-error" aria-invalid="true" aria-orientation="horizontal" aria-labelledby="gallery-slider-label" aria-valuetext="60 percent" id="gallery-slider-input" max="12" min="0" name="author-volume" required step="2" type="range" value="6" class="slider-input sr-only"><div data-orientation="vertical" data-invalid="" data-required="" data-max="10" data-min="0" data-value="6" aria-hidden="false" data-part="track" data-value-ratio="0.6" id="gallery-slider-track" class="slider-track h-24" role="presentation"><span data-orientation="vertical" data-invalid="" data-required="" data-max="10" data-min="0" data-value="6" aria-hidden="true" data-part="thumb" data-value-ratio="author-ratio" id="gallery-slider-thumb" class="slider-thumb shadow"></span></div></section>',
+    );
+  });
+
+  it('renders a golden toast merge with live-region roles and action buttons', () => {
+    const state = { id: 'gallery-toast', open: true };
+    const viewport = mergePrimitiveAttrs(
+      {
+        ...toastViewportAttributes({
+          id: 'gallery-toast-viewport',
+          label: 'Gallery notifications',
+          placement: 'top-end',
+        }),
+        class: 'toast-viewport',
+      },
+      {
+        'aria-label': 'Author notifications',
+        class: 'toast-viewport fixed',
+        role: 'log',
+        tabIndex: 0,
+      },
+    );
+    const root = mergePrimitiveAttrs(
+      {
+        ...toastRootAttributes({
+          ...state,
+          descriptionId: 'gallery-toast-description',
+          politeness: 'assertive',
+          titleId: 'gallery-toast-title',
+          variant: 'error',
+        }),
+        class: 'toast-root',
+      },
+      {
+        'aria-live': 'polite',
+        class: 'toast-root border',
+        'data-state': 'author-open',
+        role: 'status',
+      },
+    );
+    const action = mergePrimitiveAttrs(
+      {
+        ...toastActionAttributes({ ...state, actionValue: 'retry' }),
+        class: 'toast-action',
+      },
+      {
+        class: 'toast-action underline',
+        disabled: true,
+        type: 'submit',
+      },
+    );
+    const close = mergePrimitiveAttrs(
+      {
+        ...toastCloseAttributes(state),
+        class: 'toast-close',
+      },
+      {
+        class: 'toast-close absolute',
+        'data-dismiss': 'author-dismiss',
+      },
+    );
+
+    expect(viewport.diagnostics).toEqual([
+      {
+        attr: 'aria-label',
+        code: 'FW232',
+        message: 'Author override of primitive ARIA/role attribute per SPEC.md section 4.6',
+      },
+      {
+        attr: 'role',
+        code: 'FW232',
+        message: 'Author override of primitive ARIA/role attribute per SPEC.md section 4.6',
+      },
+    ]);
+    expect(root.diagnostics).toEqual([
+      {
+        attr: 'data-state',
+        code: 'FW232',
+        message: 'Author override of primitive-owned state attribute per SPEC.md section 4.6',
+      },
+      {
+        attr: 'aria-live',
+        code: 'FW232',
+        message: 'Author override of primitive ARIA/role attribute per SPEC.md section 4.6',
+      },
+      {
+        attr: 'role',
+        code: 'FW232',
+        message: 'Author override of primitive ARIA/role attribute per SPEC.md section 4.6',
+      },
+    ]);
+    expect(action.diagnostics).toEqual([]);
+    expect(close.diagnostics).toEqual([]);
+    expect(
+      <section data-gallery-merge="toast">
+        <div {...viewport.attrs}>
+          <article {...root.attrs}>
+            <button {...action.attrs}>Retry</button>
+            <button {...close.attrs}>Dismiss</button>
+          </article>
+        </div>
+      </section>,
+    ).toBe(
+      '<section data-gallery-merge="toast"><div data-placement="top-end" aria-label="Author notifications" role="log" tabIndex="0" id="gallery-toast-viewport" class="toast-viewport fixed"><article data-state="open" data-variant="error" aria-atomic="true" aria-live="polite" aria-describedby="gallery-toast-description" aria-labelledby="gallery-toast-title" id="gallery-toast" role="status" class="toast-root border"><button data-state="open" data-variant="default" data-action="" disabled type="submit" value="retry" class="toast-action underline">Retry</button><button data-state="open" data-variant="default" data-dismiss="author-dismiss" type="button" class="toast-close absolute">Dismiss</button></article></div></section>',
     );
   });
 

@@ -766,6 +766,18 @@ jiso-dialog` resolves dashed wire names and prints provenance including package,
       and `git diff --check`.
       G5 remains open because this is still a bounded fixture subset, not every exported
       primitive attrs record or compiler/runtime diagnostic coverage.
+      Additional partial evidence 2026-06-12: the gallery G5 oracle adds command,
+      combobox, slider, and toast merge goldens. These cover listbox/combobox active
+      descendant IDREF conflicts, option ARIA/role override diagnostics, native range input
+      scalar and logical-OR merges, decorative slider part overrides, toast live-region
+      role/ARIA diagnostics, and action/close button data-attribute precedence against
+      the SPEC §4.6 merge table. Same-session evidence:
+      `pnpm --filter @jiso/example-gallery exec vitest --run src/merge-fixtures.test.tsx`,
+      `pnpm --filter @jiso/example-gallery test`,
+      `pnpm exec vp check examples/gallery/src/merge-fixtures.test.tsx plans/ui.md`,
+      and `git diff --check`. G5 remains open because this is still a bounded fixture
+      subset, not every exported primitive attrs record or compiler/runtime diagnostic
+      coverage.
 
 ## Background
 
