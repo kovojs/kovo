@@ -91,6 +91,7 @@ export type {
 export type { ServerErrorDiagnosticContext, ServerErrorHandler } from './diagnostics.js';
 export {
   renderDeferredDocument,
+  renderDiagnosticDocument,
   renderDocument,
   renderDocumentQueryScript,
   renderErrorDocument,
@@ -102,6 +103,9 @@ export type {
   DeferredDocumentRenderResult,
   DeferredDocumentTemplate,
   DeferredDocumentTemplateContext,
+  DiagnosticDocumentDiagnostic,
+  DiagnosticDocumentOptions,
+  DiagnosticDocumentSource,
   DocumentAssemblyOptions,
   DocumentParts,
   DocumentRenderResult,

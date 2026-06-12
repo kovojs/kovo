@@ -9,6 +9,7 @@ import {
   normalizePathname,
   readHeader,
   renderDeferredDocument,
+  renderDiagnosticDocument,
   renderDocument,
   renderDocumentQueryScript,
   renderErrorDocument,
@@ -238,6 +239,76 @@ describe('server app shell document assembly', () => {
     expect(response.body).toContain('<title>Cart missing</title>');
     expect(response.body).toContain('<h1>Cart missing</h1>');
     expect(response.body).toContain('<p>Missing &lt;cart&gt;</p>');
+  });
+
+  it('renders dev diagnostic documents with code, severity, help, and source frame', () => {
+    const response = renderDiagnosticDocument(
+      [
+        {
+          code: 'FW201',
+          fileName: 'src/cart.tsx',
+          help: 'Fixes: move the value into ctx.\nUse data-p-* for serializable params.',
+          length: 6,
+          message: 'Closure captures <window>.',
+          start: { column: 17, line: 2 },
+        },
+      ],
+      [
+        'export function Cart() {',
+        '  const total = window.localStorage;',
+        '  return <p>{total}</p>;',
+        '}',
+      ].join('\n'),
+    );
+
+    expect(response).toMatchObject({
+      headers: expect.objectContaining({
+        'Content-Type': 'text/html; charset=utf-8',
+      }),
+      status: 500,
+    });
+    expect(response.body).toContain('<title>FW201 diagnostic</title>');
+    expect(response.body).toContain('<p class="jiso-diagnostic-code">FW201</p>');
+    expect(response.body).toContain('<p class="jiso-diagnostic-severity">error</p>');
+    expect(response.body).toContain('<h2>Closure captures &lt;window&gt;.</h2>');
+    expect(response.body).toContain('src/cart.tsx:2:17');
+    expect(response.body).toContain('<h3>Fix menu</h3>');
+    expect(response.body).toContain('<li>Fixes: move the value into ctx.</li>');
+    expect(response.body).toContain('<li>Use data-p-* for serializable params.</li>');
+    expect(response.body).toContain('1 | export function Cart() {');
+    expect(response.body).toContain('2 |   const total = window.localStorage;');
+    expect(response.body).toContain('  |                 ^^^^^^');
+    expect(response.body).toContain('3 |   return &lt;p&gt;{total}&lt;/p&gt;;');
+  });
+
+  it('renders multiple diagnostics without source when no matching source is available', () => {
+    const response = renderDiagnosticDocument({
+      diagnostics: [
+        {
+          code: 'FW210',
+          fileName: 'src/cart.tsx',
+          message: 'Anonymous handler; name it for stable identity.',
+          severity: 'lint',
+        },
+        {
+          code: 'FW225',
+          fileName: 'src/detail.tsx',
+          message: 'JSX nesting violates the HTML content model.',
+          severity: 'error',
+          start: { column: 3, line: 1 },
+        },
+      ],
+      source: {
+        fileName: 'src/cart.tsx',
+        source: '<button>Save</button>',
+      },
+    });
+
+    expect(response.status).toBe(500);
+    expect(response.body).toContain('<title>2 diagnostics</title>');
+    expect(response.body).toContain('<p class="jiso-diagnostic-severity">lint</p>');
+    expect(response.body).toContain('src/detail.tsx:1:3');
+    expect(response.body).not.toContain('<pre class="jiso-diagnostic-source"><code>');
   });
 
   it('renders one error document title while preserving other static meta hints', () => {

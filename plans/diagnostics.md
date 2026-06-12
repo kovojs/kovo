@@ -19,11 +19,20 @@ content or severities (SPEC §11.3 owns those); `fw check`/`fw explain` semantic
 - [x] V2 Vite dev: non-blocking channel for `warn`/`lint`/`notice` diagnostics.
 - [x] V3 build/static export: `error` diagnostics fail `vp build` and the D8 R6 static export
       unconditionally — no `ignoreBuildErrors`-style escape hatch.
-- [ ] E1 server: dev-only teaching-error document renderer (FW code, message, fix menu, source
+- [x] E1 server: dev-only teaching-error document renderer (FW code, message, fix menu, source
       frame) reusing the document assembly pipeline.
+      Evidence 2026-06-12: `packages/server/src/document.ts` exports
+      `renderDiagnosticDocument()` from `@jiso/server`, returning a deterministic HTTP 500 HTML
+      document assembled through `renderDocument()` with FW code, shared SPEC §11.3 severity,
+      escaped message, fix menu, optional location, and optional source frame. Same-session
+      evidence: `pnpm exec vitest --run packages/server/src/shell.test.ts` and
+      `pnpm exec vp check packages/server/src/document.ts packages/server/src/index.ts packages/server/src/shell.test.ts plans/diagnostics.md`.
 - [ ] E2 dev middleware: page/fragment/mutation requests against a module with `error`
       diagnostics answer with the diagnostic document (500), covering the requests a
       client-injected overlay cannot see (direct navigation, no-JS form posts, fragment fetches).
+      Gap 2026-06-12: current `jisoAppShellVitePlugin()` only delegates requests to the closed
+      app request handler and has no per-module compile diagnostic ledger or compiler-plugin hook
+      for failed app modules; leave E2 open until that ownership/API is designed.
 - [x] M1a `fw mcp`: stdio-compatible JSON-RPC line server exposing compile/check/explain as
       structured tools wrapping the existing public APIs — no second diagnostic channel.
 - [ ] M1b SDK-backed MCP adapter using `@modelcontextprotocol/sdk` over stdio once the dependency
