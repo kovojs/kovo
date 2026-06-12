@@ -1,8 +1,10 @@
+import { readFileSync } from 'node:fs';
 import { runInThisContext } from 'node:vm';
 import { gzipSync } from 'node:zlib';
 import { describe, expect, it, vi } from 'vitest';
 
 import {
+  buildInlineJisoLoaderModuleSource,
   buildInlineJisoLoaderInstallerSource,
   inlineJisoLoaderInstallerReadableSource,
 } from './inline-loader-build.js';
@@ -87,6 +89,13 @@ describe('inline loader source', () => {
     expect(inlineJisoLoaderInstallerReadableSource).toContain('\nfunction installInlineJisoLoader');
     expect(inlineJisoLoaderInstallerReadableSource).toContain("join('; ')");
     expect(buildInlineJisoLoaderInstallerSource()).toBe(inlineJisoLoaderInstallerSource);
+  });
+
+  it('emits the checked-in runtime module from the readable inline loader source', () => {
+    // SPEC.md §4.4: build-time emission must keep the shipped bootstrap tied to readable source.
+    expect(buildInlineJisoLoaderModuleSource()).toBe(
+      readFileSync(new URL('./inline-loader.ts', import.meta.url), 'utf8'),
+    );
   });
 
   it('keeps string, comment, and regex hazards in parity through the source helper', () => {

@@ -1285,6 +1285,16 @@ params, relational API, `execute(sql)`, right/full joins, a string column named 
       evidence: `pnpm exec vitest --run packages/runtime/src/inline-loader.test.ts`,
       `pnpm exec vp check packages/runtime/src/inline-loader-build.ts packages/runtime/src/inline-loader.test.ts plans/codebase-quality-round2.md`,
       and `git diff --check`.
+      Additional bounded evidence 2026-06-12: `packages/runtime/src/inline-loader-build.ts`
+      now emits the checked-in `packages/runtime/src/inline-loader.ts` module from the readable
+      inline loader source and exposes package-local `build:inline-loader`/`check:inline-loader`
+      scripts, making the package-owned build seam byte-checkable before a root build task is
+      wired. `packages/runtime/src/inline-loader.test.ts` pins the emitted module source
+      byte-for-byte against the checked-in runtime module. The broader root build integration and
+      real-tool minifier replacement remain open. Same-session evidence:
+      `pnpm --filter @jiso/runtime run check:inline-loader`,
+      `pnpm exec vitest --run packages/runtime/src/inline-loader.test.ts`, and
+      `pnpm exec vp check packages/runtime/src/inline-loader-build.ts packages/runtime/src/inline-loader.test.ts packages/runtime/package.json plans/codebase-quality-round2.md`.
 - [x] **HIGH — Ship the DOM morph.** The only real keyed DOM morph (focus/selection/scroll
       capture-restore) lives in index.browser.test.ts:12-182; every consumer must rewrite it, and
       the flagship browser test substantially tests its own test code. Promote to a

@@ -1,3 +1,6 @@
+import { existsSync, readFileSync, writeFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+
 export const inlineJisoLoaderInstallerReadableSource = String.raw`
 /* SPEC.md §4.4: this is the always-loaded bootstrap source. */
 function installInlineJisoLoader(importModule) {
@@ -149,6 +152,86 @@ export function buildInlineJisoLoaderInstallerSource(
   source = inlineJisoLoaderInstallerReadableSource,
 ): string {
   return minifyInlineJavaScriptSource(source);
+}
+
+export interface EmitInlineJisoLoaderModuleOptions {
+  check?: boolean;
+  source?: string;
+  targetPath?: string;
+}
+
+export interface EmitInlineJisoLoaderModuleResult {
+  changed: boolean;
+  source: string;
+  targetPath: string;
+}
+
+const inlineJisoLoaderModulePath = fileURLToPath(new URL('./inline-loader.ts', import.meta.url));
+
+export function buildInlineJisoLoaderModuleSource(
+  source = inlineJisoLoaderInstallerReadableSource,
+): string {
+  const installerSource = buildInlineJisoLoaderInstallerSource(source);
+
+  return `${[
+    "import type { ImportHandlerModule } from './handlers.js';",
+    '',
+    'export type InlineImportHandlerModule = ImportHandlerModule;',
+    '',
+    '// SPEC.md §4.4 keeps the always-loaded loader under a 4KB gzip budget; this',
+    '// literal is the pre-minified bootstrap shipped in document shells.',
+    `export const inlineJisoLoaderInstallerSource = ${inlineJavaScriptTemplateLiteral(
+      installerSource,
+    )};`,
+    '',
+    'function readInlineJisoLoaderInstaller(): (importModule: InlineImportHandlerModule) => void {',
+    '  return (0, eval)(`(${inlineJisoLoaderInstallerSource})`) as (',
+    '    importModule: InlineImportHandlerModule,',
+    '  ) => void;',
+    '}',
+    '',
+    'export function installInlineJisoLoader(importModule: InlineImportHandlerModule): void {',
+    '  readInlineJisoLoaderInstaller()(importModule);',
+    '}',
+    '',
+    'export function createInlineJisoLoaderSource(',
+    "  importModuleExpression = '(url)=>import(url)',",
+    '): string {',
+    '  const expression = importModuleExpression.trim();',
+    '  if (!expression) {',
+    "    throw new Error('Inline Jiso loader import expression cannot be empty.');",
+    '  }',
+    '',
+    '  return `(${inlineJisoLoaderInstallerSource})(${expression});`;',
+    '}',
+    '',
+    'export const jisoLoaderSource = createInlineJisoLoaderSource();',
+  ].join('\n')}\n`;
+}
+
+export function emitInlineJisoLoaderModule(
+  options: EmitInlineJisoLoaderModuleOptions = {},
+): EmitInlineJisoLoaderModuleResult {
+  const targetPath = options.targetPath ?? inlineJisoLoaderModulePath;
+  const source =
+    options.source === undefined
+      ? buildInlineJisoLoaderModuleSource()
+      : buildInlineJisoLoaderModuleSource(options.source);
+  const current = existsSync(targetPath) ? readFileSync(targetPath, 'utf8') : undefined;
+  const changed = current !== source;
+
+  if (options.check) {
+    if (changed) {
+      throw new Error(
+        `Inline Jiso loader module is stale: ${targetPath}. Run pnpm --filter @jiso/runtime run build:inline-loader.`,
+      );
+    }
+    return { changed, source, targetPath };
+  }
+
+  if (changed) writeFileSync(targetPath, source, 'utf8');
+
+  return { changed, source, targetPath };
 }
 
 function minifyInlineJavaScriptSource(source: string): string {
@@ -358,4 +441,18 @@ function isIdentifierPart(char: string): boolean {
 
 function isWhitespace(char: string): boolean {
   return /\s/.test(char);
+}
+
+function inlineJavaScriptTemplateLiteral(value: string): string {
+  return `\`${value.replaceAll('\\', '\\\\').replaceAll('`', '\\`').replaceAll('${', '\\${')}\``;
+}
+
+if (process.argv[1] === fileURLToPath(import.meta.url)) {
+  const result = emitInlineJisoLoaderModule({ check: process.argv.includes('--check') });
+
+  if (!process.argv.includes('--check')) {
+    console.log(
+      `${result.changed ? 'Wrote' : 'Unchanged'} ${result.targetPath} from inline-loader-build.ts.`,
+    );
+  }
 }

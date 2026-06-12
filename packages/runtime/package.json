@@ -5,6 +5,10 @@
   "exports": {
     ".": "./src/index.ts"
   },
+  "scripts": {
+    "build:inline-loader": "node --experimental-strip-types src/inline-loader-build.ts",
+    "check:inline-loader": "node --experimental-strip-types src/inline-loader-build.ts --check"
+  },
   "dependencies": {
     "@jiso/core": "workspace:*"
   },
