@@ -2,7 +2,7 @@ import { diagnosticDefinitions } from '@jiso/core';
 
 import { diagnosticFor, type CompilerDiagnostic } from '../diagnostics.js';
 import { componentQueryShapes, queryShapePaths } from '../analyze/query-shapes.js';
-import { capturesUnserializableValue } from '../lower/handlers.js';
+import { capturesUnserializableReferences } from '../lower/handlers.js';
 import {
   callExpressions,
   componentFragmentTargetNames,
@@ -11,6 +11,7 @@ import {
   componentRenderInputModels,
   componentStateReturnObjectModel,
   componentStateReturnObjectKeys,
+  jsxExpressions,
   jsxElementChildBody,
   mutationHandlers,
   type ComponentModuleModel,
@@ -94,7 +95,7 @@ export function validateFragmentTargetChildren(
 
   return targetNames.flatMap((name) =>
     fragmentTargetChildBodies(source, model, name)
-      .filter((body) => capturesUnserializableValue(body.source))
+      .filter((body) => fragmentTargetChildCapturesUnserializableValue(model, body))
       .map((body) => fw230Diagnostic(fileName, source, name, body)),
   );
 }
@@ -190,6 +191,18 @@ function fragmentTargetChildBodies(
     .filter((item) => item.tag === name)
     .map((element) => jsxElementChildBody(source, element))
     .filter((body): body is JsxElementChildBody => body !== null);
+}
+
+function fragmentTargetChildCapturesUnserializableValue(
+  model: ComponentModuleModel,
+  body: JsxElementChildBody,
+): boolean {
+  const bodyEnd = body.offset + body.source.length;
+  const references = jsxExpressions(model)
+    .filter((expression) => expression.start >= body.offset && expression.end <= bodyEnd)
+    .flatMap((expression) => expression.references);
+
+  return capturesUnserializableReferences(references);
 }
 
 function fw230Diagnostic(

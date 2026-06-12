@@ -64,6 +64,7 @@ export interface JsxExpressionModel {
   end: number;
   expression: string;
   propertyAccesses: readonly PropertyAccessPathModel[];
+  references: readonly string[];
   solePropertyAccessPath?: string;
   start: number;
 }
@@ -1221,6 +1222,7 @@ function jsxExpressionModel(
     end,
     expression: source.slice(start, end).trim(),
     propertyAccesses: propertyAccessPathModels(sourceFile, expression),
+    references: referenceIdentifiers(expression),
     ...(solePath ? { solePropertyAccessPath: solePath } : {}),
     start,
   };

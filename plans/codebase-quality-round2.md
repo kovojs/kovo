@@ -732,6 +732,13 @@ pipeline throws the tree away and communicates via mutated source text.
       `pnpm exec vitest --run packages/compiler/src/scan/parse.test.ts packages/compiler/src/index.test.ts -t "render host|fw-deps|query dependencies|parsed component render host"`,
       `pnpm exec vp check --fix packages/compiler/src/scan/parse.ts packages/compiler/src/scan/parse.test.ts packages/compiler/src/emit/server.ts`,
       and `git diff --check`.
+      Additional evidence 2026-06-12: JSX expression models now carry parser-derived free
+      identifier references, handler lowering consumes those references directly for FW201, and
+      fragment-target child validation consumes the same parsed JSX-expression references for
+      FW230 instead of reparsing child HTML/source text. Same-session evidence:
+      `pnpm exec vitest --run packages/compiler/src/scan/parse.test.ts packages/compiler/src/handler-lowering.test.ts packages/compiler/src/fragment-targets.test.ts`,
+      `pnpm exec vp check packages/compiler/src/scan/parse.ts packages/compiler/src/lower/handlers.ts packages/compiler/src/validate/component-contracts.ts packages/compiler/src/scan/parse.test.ts packages/compiler/src/handler-lowering.test.ts packages/compiler/src/fragment-targets.test.ts`,
+      and `git diff --check`.
       Additional evidence 2026-06-12: `emit/server.ts` now updates existing `fw-deps`
       attributes by `JsxAttributeModel` span relative to the parsed render host instead of
       regex-searching the opening tag slice. `stamps.test.ts` pins a single-quoted authored

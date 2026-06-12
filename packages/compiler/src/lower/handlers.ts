@@ -3,7 +3,6 @@ import ts from 'typescript';
 
 import { diagnosticFor, type CompilerDiagnostic } from '../diagnostics.js';
 import {
-  identifierReferences,
   jsxElements,
   expressionUsageType,
   type ComponentModuleModel,
@@ -49,9 +48,8 @@ export function lowerEventHandlers(
     }
 
     if (
-      capturesUnserializableValue(
-        expression,
-        eventAttribute.zeroArgArrow?.references ?? eventAttribute.expressionReferences,
+      capturesUnserializableReferences(
+        eventAttribute.zeroArgArrow?.references ?? eventAttribute.expressionReferences ?? [],
       )
     ) {
       diagnostics.push(
@@ -203,15 +201,10 @@ function uniqueAnonymousHandlerName(
   return count === 1 ? base : `${base}_${count}`;
 }
 
-export function capturesUnserializableValue(
-  expression: string,
-  parsedReferences?: readonly string[],
-): boolean {
-  const references = new Set(
-    parsedReferences ?? identifierReferences('expression.tsx', expression),
-  );
+export function capturesUnserializableReferences(references: readonly string[]): boolean {
+  const referenceSet = new Set(references);
   return ['window', 'document', 'db', 'request', 'response', 'Date', 'Map', 'Set'].some((name) =>
-    references.has(name),
+    referenceSet.has(name),
   );
 }
 
