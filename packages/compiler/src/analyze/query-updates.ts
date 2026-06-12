@@ -8,7 +8,6 @@ import {
   jsxElements,
   jsxExpressions,
   propertyAccessPaths,
-  solePropertyAccessPath,
   stringLiteralArrayValues,
   type ComponentModuleModel,
   type JsxElementModel,
@@ -298,7 +297,7 @@ function jsxQueryExpressionPaths(
 ): QueryPathExpressionFact[] {
   return jsxExpressions(model)
     .map((expression) => {
-      const path = soleQueryPathExpression(expression.expression);
+      const path = expression.solePropertyAccessPath ?? null;
       return path === null
         ? null
         : {
@@ -309,10 +308,6 @@ function jsxQueryExpressionPaths(
     })
     .filter((expression): expression is QueryPathExpressionFact => expression !== null)
     .filter((expression) => queryPathUsesKnownQuery(expression.path, knownQueries));
-}
-
-function soleQueryPathExpression(expression: string): string | null {
-  return solePropertyAccessPath('query-expression.tsx', expression);
 }
 
 function queryPathsInExpression(expression: string, knownQueries: ReadonlySet<string>): string[] {

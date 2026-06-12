@@ -6,9 +6,9 @@ import { dedupeBy } from '../shared.js';
 import {
   jsxElements,
   jsxElementChildBody,
-  soleWrappedPropertyAccessPath,
   type ComponentModuleModel,
   type JsxElementModel,
+  type JsxExpressionModel,
 } from '../scan/parse.js';
 import {
   componentQueryShapes,
@@ -141,14 +141,27 @@ function bindingExpressionStamps(
     if (!attribute || !binding) return [];
     if (element.selfClosing) return [];
 
-    const expression = soleWrappedPropertyAccessPath(
-      'binding-expression.tsx',
-      source.slice(element.openingEnd, element.closingStart),
-    );
+    const expression =
+      soleJsxExpressionForElement(source, element, model)?.solePropertyAccessPath ?? null;
     return expression
       ? [{ binding, expression, index: attribute.start, length: attribute.end - attribute.start }]
       : [];
   });
+}
+
+function soleJsxExpressionForElement(
+  source: string,
+  element: JsxElementModel,
+  model: ComponentModuleModel,
+): JsxExpressionModel | null {
+  const content = source.slice(element.openingEnd, element.closingStart).trim();
+  if (!content.trim().startsWith('{') || !content.trim().endsWith('}')) return null;
+
+  const expressions = model.jsxExpressions.filter(
+    (expression) =>
+      expression.start >= element.openingEnd && expression.end <= element.closingStart,
+  );
+  return expressions.length === 1 ? (expressions[0] ?? null) : null;
 }
 
 function dataBindAttributes(model: ComponentModuleModel): DataBindAttribute[] {

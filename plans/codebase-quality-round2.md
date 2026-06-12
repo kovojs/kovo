@@ -626,6 +626,13 @@ pipeline throws the tree away and communicates via mutated source text.
       `pnpm exec vitest --run packages/compiler/src/scan/parse.test.ts packages/compiler/src/index.test.ts -t "JSX attribute and child expression property access|does not derive query stamps|inline attribute expressions|sole text-child query expressions|mixed text query expressions"`,
       `pnpm exec vp check packages/compiler/src/scan/parse.ts packages/compiler/src/scan/parse.test.ts packages/compiler/src/lower/inline-derives.ts packages/compiler/src/index.test.ts`,
       and `git diff --check`.
+      Additional evidence 2026-06-12: query-update coverage and stamp-drift validation now
+      consume those parser-owned JSX expression facts as well, so FW311/FW222/FW223 no longer
+      reparse JSX child expression snippets to decide whether a rendered query expression is a
+      sole property path. Same-session evidence:
+      `pnpm exec vitest --run packages/compiler/src/scan/parse.test.ts packages/compiler/src/index.test.ts -t "JSX attribute and child expression property access|does not derive query stamps|query-dependent render positions|FW311 positions|Redundant hand-written binding stamp|Hand-written binding stamp|data-bind paths"`,
+      `pnpm exec vp check packages/compiler/src/scan/parse.ts packages/compiler/src/scan/parse.test.ts packages/compiler/src/lower/inline-derives.ts packages/compiler/src/analyze/query-updates.ts packages/compiler/src/validate/bindings.ts packages/compiler/src/index.test.ts`,
+      and `git diff --check`.
 - [x] **HIGH — Retire regex rewriting of handler bodies.** emit/client.ts:89
       (`/\bstate\b/g → ctx.state` corrupts `log('state changed')`), :96 (member-expression
       substitution inside string literals), lower/handlers.ts:262 (harvests params from string
