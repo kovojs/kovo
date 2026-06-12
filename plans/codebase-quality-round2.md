@@ -2756,6 +2756,13 @@ As each phase splits a source module, split its tests in the same commit.
       `corepack pnpm exec vitest --run packages/test/src`,
       `corepack pnpm exec vp check packages/test/src/index.ts packages/test/src/harness.ts packages/test/src/harness.test.ts packages/test/src/test-case.ts packages/test/src/test-case.test.ts plans/codebase-quality-round2.md`,
       and `git diff --check`.
+      Additional evidence 2026-06-12: direct HTML fragment parser seam coverage moved from
+      `packages/test/src/page.test.ts` into `packages/test/src/html-fragment.test.ts`, leaving
+      `page.test.ts` focused on harness-backed page assertions while preserving SPEC §9.1
+      id / `fw-fragment-target` target coverage at the parser seam. Same-session evidence:
+      `corepack pnpm exec vitest --run packages/test/src/html-fragment.test.ts packages/test/src/page.test.ts`,
+      `corepack pnpm exec vp check packages/test/src/html-fragment.test.ts packages/test/src/page.test.ts plans/codebase-quality-round2.md`,
+      and `git diff --check`.
       Additional evidence 2026-06-12: Drizzle runtime/static package-surface coverage moved from
       `packages/drizzle/src/index.test.ts` into `packages/drizzle/src/runtime-surface.test.ts`,
       leaving static extraction coverage in the Drizzle monolith. Same-session evidence:
