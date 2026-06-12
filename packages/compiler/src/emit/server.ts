@@ -10,7 +10,12 @@ import {
   firstComponentModel,
   type ComponentModuleModel,
 } from '../scan/parse.js';
-import { escapeAttribute, splitDepValue } from '../shared.js';
+import {
+  applySourceReplacements,
+  escapeAttribute,
+  splitDepValue,
+  type SourceReplacement,
+} from '../shared.js';
 import type { RenderEquivalenceCheck } from '../types.js';
 
 export function emitServerModule(renderedSource: string): string {
@@ -78,7 +83,7 @@ function applyServerRenderPatches(
   model: ComponentModuleModel,
 ): string {
   const host = componentRenderHost(model);
-  const patches: Array<{ start: number; end: number; replacement: string }> = [];
+  const patches: SourceReplacement[] = [];
   const hostHandlers = host
     ? handlers.filter(
         (handler) => handler.attributeStart >= host.start && handler.attributeEnd <= host.end,
@@ -103,12 +108,7 @@ function applyServerRenderPatches(
     }
   }
 
-  return patches
-    .sort((left, right) => right.start - left.start)
-    .reduce(
-      (next, patch) => `${next.slice(0, patch.start)}${patch.replacement}${next.slice(patch.end)}`,
-      source,
-    );
+  return applySourceReplacements(source, patches);
 }
 
 function replaceTagHandlerAttributes(

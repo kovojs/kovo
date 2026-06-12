@@ -1,5 +1,5 @@
-import { escapeAttribute } from '../shared.js';
 import { jsxElements, type ComponentModuleModel } from '../scan/parse.js';
+import { applySourceReplacements, escapeAttribute, type SourceReplacement } from '../shared.js';
 
 export interface PlatformSubstitution {
   action: string;
@@ -23,24 +23,17 @@ export function lowerPlatformBehaviors(
       : null;
     return onClick && substitution ? [{ attribute: onClick, substitution }] : [];
   });
-  let nextSource = source;
-
-  for (const match of [...matches].sort(
-    (left, right) => right.attribute.start - left.attribute.start,
-  )) {
+  const replacements: SourceReplacement[] = matches.map((match) => {
     const attributes = platformAttributes(match.substitution);
-    nextSource =
+    const span =
       attributes === ''
-        ? removeSourceRangeWithLeadingWhitespace(
-            nextSource,
-            match.attribute.start,
-            match.attribute.end,
-          )
-        : `${nextSource.slice(0, match.attribute.start)}${attributes}${nextSource.slice(match.attribute.end)}`;
-  }
+        ? sourceRangeWithLeadingWhitespace(source, match.attribute.start, match.attribute.end)
+        : { end: match.attribute.end, start: match.attribute.start };
+    return { ...span, replacement: attributes };
+  });
 
   return {
-    source: nextSource,
+    source: applySourceReplacements(source, replacements),
     substitutions: matches.map((match) => match.substitution),
   };
 }
@@ -75,17 +68,17 @@ function platformSubstitutionFromClickExpression(
   return platformSubstitutionFor(tag, target, method);
 }
 
-function removeSourceRangeWithLeadingWhitespace(
+function sourceRangeWithLeadingWhitespace(
   source: string,
   start: number,
   end: number,
-): string {
+): { end: number; start: number } {
   let removeStart = start;
   while (removeStart > 0 && /\s/.test(source[removeStart - 1] ?? '')) {
     removeStart -= 1;
   }
 
-  return `${source.slice(0, removeStart)}${source.slice(end)}`;
+  return { end, start: removeStart };
 }
 
 function platformSubstitutionFor(
