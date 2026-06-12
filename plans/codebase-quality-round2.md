@@ -3195,6 +3195,12 @@ land it first; don't fork it.
       exports. Same-session evidence:
       `corepack pnpm exec vitest --run packages/server/src/static-export.test.ts` and
       `corepack pnpm exec vitest --run packages/server/src/static-replay.test.ts packages/server/src/static-export.test.ts packages/server/src/vite-build.test.ts packages/server/src/vite.test.ts packages/server/src/api/app.test.ts`.
+      Additional evidence 2026-06-12: the static-export dry-run inventory is now a named public
+      helper and type (`staticExportInventory()` / `StaticExportInventoryItem`) exported through
+      the split app-shell static-export barrel and aggregate package subpath, so task wiring can
+      summarize planned route documents, `/c/` modules, and static assets without reaching into
+      replay internals or reconstructing writer order. Same-session evidence:
+      `corepack pnpm exec vitest --run packages/server/src/static-export.test.ts packages/server/src/api/app.test.ts`.
 - [ ] **LOW — Close the server cleanup inventory with an acceptance sweep.** Historical audit
       targets were dead code (`matchShellDispatch` post-loop return shell.ts:161-166; rate-limit
       tail `return options.max > 0` index.ts:576); `matchRoute` recompiling all routes per call

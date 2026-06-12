@@ -306,6 +306,13 @@ Scope: SPEC addition (proposed §9.5 "The request shell"), `@jiso/server` shell 
       Same-session verification ran
       `corepack pnpm exec vitest --run packages/server/src/static-export.test.ts` and
       `corepack pnpm exec vitest --run packages/server/src/static-replay.test.ts packages/server/src/static-export.test.ts packages/server/src/vite-build.test.ts packages/server/src/vite.test.ts packages/server/src/api/app.test.ts`.
+      Additional evidence 2026-06-12: the public static-export surface now includes
+      `staticExportInventory()` and `StaticExportInventoryItem` through
+      `@jiso/server/app-shell/static-export` and the aggregate app-shell barrel. The helper
+      projects `exportStaticApp()` dry-run results into the same route-document, `/c/`
+      client-module, then static-asset ordering used by the writer, including replayed headers
+      but without exposing replay internals. Same-session verification ran
+      `corepack pnpm exec vitest --run packages/server/src/static-export.test.ts packages/server/src/api/app.test.ts`.
 - [ ] R7 adoption: starter becomes a routed app served by `vp dev`; commerce runs end-to-end over HTTP; a jiso docs site ships from `vp run export` as the first outside consumer.
       Progress 2026-06-11: commerce is now TSX-authored ahead of the HTTP serve
       entry — `CartBadge`, `OrderHistory`, and `ProductGrid` are authored in

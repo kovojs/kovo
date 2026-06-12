@@ -1,4 +1,4 @@
-export { exportStaticApp, StaticExportError } from '../../static-export.js';
+export { exportStaticApp, staticExportInventory, StaticExportError } from '../../static-export.js';
 export type {
   StaticExportArtifact,
   StaticExportAssetArtifact,
@@ -7,6 +7,7 @@ export type {
   StaticExportCompileDiagnostic,
   StaticExportDiagnostic,
   StaticExportHtmlPathStyle,
+  StaticExportInventoryItem,
   StaticExportOptions,
   StaticExportResult,
 } from '../../static-export.js';

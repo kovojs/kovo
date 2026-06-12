@@ -29,6 +29,28 @@ export interface StaticExportAssetArtifact {
   status: number;
 }
 
+export type StaticExportInventoryItem =
+  | {
+      headers: Record<string, string>;
+      kind: 'route-document';
+      path: string;
+      status: number;
+    }
+  | {
+      headers: Record<string, string>;
+      href: string;
+      kind: 'client-module';
+      path: string;
+      status: number;
+    }
+  | {
+      headers: Record<string, string>;
+      kind: 'static-asset';
+      path: string;
+      source: string;
+      status: number;
+    };
+
 export interface StaticExportDiagnostic {
   code: DiagnosticCode | 'FW229';
   message: string;
@@ -63,6 +85,37 @@ export class StaticExportError extends Error {
 
 export function staticExportDiagnostic(routePath: string, message: string): StaticExportDiagnostic {
   return { code: 'FW229', message, routePath };
+}
+
+// SPEC §9.5: dry-run export task wiring inspects the same route/module/asset set
+// that a write export would publish, without reaching into replay internals.
+export function staticExportInventory(result: {
+  artifacts: readonly StaticExportArtifact[];
+  assets: readonly StaticExportAssetArtifact[];
+  clientModules: readonly StaticExportClientModuleArtifact[];
+}): StaticExportInventoryItem[] {
+  return [
+    ...result.artifacts.map((artifact) => ({
+      headers: artifact.headers,
+      kind: 'route-document' as const,
+      path: artifact.path,
+      status: artifact.status,
+    })),
+    ...result.clientModules.map((artifact) => ({
+      headers: artifact.headers,
+      href: artifact.href,
+      kind: 'client-module' as const,
+      path: artifact.path,
+      status: artifact.status,
+    })),
+    ...result.assets.map((artifact) => ({
+      headers: artifact.headers,
+      kind: 'static-asset' as const,
+      path: artifact.path,
+      source: artifact.source,
+      status: artifact.status,
+    })),
+  ];
 }
 
 export function sortedHeaders(headers: Headers): Record<string, string> {

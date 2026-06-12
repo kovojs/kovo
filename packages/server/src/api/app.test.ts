@@ -47,6 +47,7 @@ describe('server app-shell public API barrels', () => {
     );
 
     expect(appApi.exportStaticApp).toBe(staticExportApi.exportStaticApp);
+    expect(appApi.staticExportInventory).toBe(staticExportApi.staticExportInventory);
     expect(publicApi.StaticExportError).toBe(staticExportApi.StaticExportError);
 
     expect(appShellApi.createApp).toBe(coreApi.createApp);
@@ -55,6 +56,7 @@ describe('server app-shell public API barrels', () => {
     );
     expect(appShellApi.toNodeHandler).toBe(nodeApi.toNodeHandler);
     expect(appShellApi.exportStaticApp).toBe(staticExportApi.exportStaticApp);
+    expect(appShellApi.staticExportInventory).toBe(staticExportApi.staticExportInventory);
     expect(appShellApi.createJisoAppShellViteBuild).toBe(viteApi.createJisoAppShellViteBuild);
 
     type PublicAppShellTypesStayAssignable = [
@@ -83,6 +85,9 @@ describe('server app-shell public API barrels', () => {
     );
     expect(packageNodeApi.toNodeHandler).toBe(nodeApi.toNodeHandler);
     expect(packageStaticExportApi.exportStaticApp).toBe(staticExportApi.exportStaticApp);
+    expect(packageStaticExportApi.staticExportInventory).toBe(
+      staticExportApi.staticExportInventory,
+    );
     expect(packageViteApi.createJisoAppShellViteBuild).toBe(viteApi.createJisoAppShellViteBuild);
 
     expect(packageAppShellApi.createRequestHandler).toBe(coreApi.createRequestHandler);
@@ -91,6 +96,7 @@ describe('server app-shell public API barrels', () => {
     );
     expect(packageAppShellApi.writeWebResponseToNode).toBe(nodeApi.writeWebResponseToNode);
     expect(packageAppShellApi.StaticExportError).toBe(staticExportApi.StaticExportError);
+    expect(packageAppShellApi.staticExportInventory).toBe(staticExportApi.staticExportInventory);
     expect(packageAppShellApi.jisoAppShellVitePlugin).toBe(viteApi.jisoAppShellVitePlugin);
   });
 });

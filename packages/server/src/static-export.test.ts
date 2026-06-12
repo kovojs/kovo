@@ -10,7 +10,7 @@ import { createMemoryVersionedClientModuleRegistry } from './client-modules.js';
 import { guards } from './guards.js';
 import { respond } from './response.js';
 import { route } from './route.js';
-import { exportStaticApp, StaticExportError } from './static-export.js';
+import { exportStaticApp, staticExportInventory, StaticExportError } from './static-export.js';
 
 describe('server static export', () => {
   it('exports a simple route through the app request handler to an html artifact', async () => {
@@ -289,6 +289,63 @@ describe('server static export', () => {
         },
         href: `${cartHref}#Cart$add`,
         path: '/c/cart.client.js',
+        status: 200,
+      },
+    ]);
+  });
+
+  it('summarizes dry-run route, client module, and asset inventory in write order', async () => {
+    const registry = createMemoryVersionedClientModuleRegistry();
+    const cartHref = registry.put({
+      path: '/c/cart.client.js',
+      source: 'export const cart = "inventory";',
+      version: 'cart-inventory',
+    });
+    const app = createApp({
+      clientModules: registry,
+      routes: [
+        route('/', {
+          modulepreloads: [cartHref],
+          page: () => '<main>Home</main>',
+        }),
+      ],
+    });
+
+    const result = await exportStaticApp(app, {
+      assets: [
+        {
+          contentType: 'text/css; charset=utf-8',
+          path: '/assets/app.css',
+          source: '/workspace/dist/assets/app.css',
+        },
+      ],
+    });
+
+    expect(staticExportInventory(result)).toEqual([
+      {
+        headers: {
+          'content-type': 'text/html; charset=utf-8',
+          link: `<${cartHref}>; rel=modulepreload`,
+        },
+        kind: 'route-document',
+        path: '/index.html',
+        status: 200,
+      },
+      {
+        headers: {
+          'cache-control': 'public, max-age=31536000, immutable',
+          'content-type': 'text/javascript; charset=utf-8',
+        },
+        href: cartHref,
+        kind: 'client-module',
+        path: '/c/cart.client.js',
+        status: 200,
+      },
+      {
+        headers: { 'content-type': 'text/css; charset=utf-8' },
+        kind: 'static-asset',
+        path: '/assets/app.css',
+        source: '/workspace/dist/assets/app.css',
         status: 200,
       },
     ]);

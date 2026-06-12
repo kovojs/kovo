@@ -26,6 +26,7 @@ import {
 
 export {
   StaticExportError,
+  staticExportInventory,
   type StaticExportArtifact,
   type StaticExportAssetArtifact,
   type StaticExportAssetInput,
@@ -33,6 +34,7 @@ export {
   type StaticExportCompileDiagnostic,
   type StaticExportDiagnostic,
   type StaticExportHtmlPathStyle,
+  type StaticExportInventoryItem,
 } from './static-export-types.js';
 
 export interface StaticExportOptions {
