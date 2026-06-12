@@ -587,6 +587,31 @@ const importedNamesFrom = (source, specifier) => {
   return [...names].sort((left, right) => left.localeCompare(right));
 };
 
+const interfaceMembersFromSource = (source, interfaceName) => {
+  const snippet = balancedSnippetAfter(source, `interface ${interfaceName}`, '{', '}');
+  const members = {};
+  let statement = '';
+  let depth = 0;
+
+  for (const char of snippet.slice(1, -1)) {
+    if (char === '{' || char === '(' || char === '[') depth += 1;
+    if (char === '}' || char === ')' || char === ']') depth -= 1;
+
+    if (char === ';' && depth === 0) {
+      const match = /^(?:(['"])(.*?)\1|([A-Za-z_$][\w$-]*))\??\s*:\s*([\s\S]+)$/.exec(
+        statement.trim(),
+      );
+      if (match) members[match[2] ?? match[3]] = match[4].replace(/\s+/g, ' ').trim();
+      statement = '';
+      continue;
+    }
+
+    statement += char;
+  }
+
+  return members;
+};
+
 const runGraphAssertionsTemplateScript = async () => {
   const fakeBin = await mkdtemp(join(tmpdir(), 'jiso-fake-fw-'));
   const fakeFw = join(fakeBin, 'fw');
@@ -1389,7 +1414,9 @@ export const ProductCard = component('product-card', {
   );
   assert.equal(serverSource.match(/\sstyle=/g)?.length, 1);
   assert.doesNotMatch(serverSource, /viewTransitionName=/);
-  assert.match(registrySource, /'product-p1-image': unknown;/);
+  assert.deepEqual(interfaceMembersFromSource(registrySource, 'ViewTransitions'), {
+    'product-p1-image': 'unknown',
+  });
 });
 
 void test('P1 compiler validates component-scoped IDREFs', async () => {
@@ -2097,11 +2124,10 @@ export const ProductLinks = component('product-links', {
   assert.match(serverSource, /<a href="\/products\/p%201\?max=500">Product<\/a>/);
   assert.match(serverSource, /<a href="\/cart">Cart<\/a>/);
   assert.doesNotMatch(serverSource, /<Link|href\('/);
-  assert.match(registrySource, /'\/cart': import\('@jiso\/core'\)\.Route<'\/cart'>;/);
-  assert.match(
-    registrySource,
-    /'\/products\/:id': import\('@jiso\/core'\)\.Route<'\/products\/:id'>;/,
-  );
+  assert.deepEqual(interfaceMembersFromSource(registrySource, 'RouteRegistry'), {
+    '/cart': "import('@jiso/core').Route<'/cart'>",
+    '/products/:id': "import('@jiso/core').Route<'/products/:id'>",
+  });
 
   assert.deepEqual(
     compileComponentModule({
@@ -4775,11 +4801,9 @@ export const CartRow = component('cart-row', {
       name: 'CartRow',
     },
   ]);
-  assert.match(
-    registrySource,
-    /interface FragmentTargets \{\n  'cart-row': \{ rowId: string \};\n\}/,
-  );
-  assert.doesNotMatch(registrySource, /'cart-row': unknown;/);
+  assert.deepEqual(interfaceMembersFromSource(registrySource, 'FragmentTargets'), {
+    'cart-row': '{ rowId: string }',
+  });
 });
 
 void test('D9 FW235 fails fw-check for app-authored lowered IR component modules', async () => {
