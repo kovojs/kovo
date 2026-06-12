@@ -1,15 +1,15 @@
 ---
 title: Testing with @jiso/test
-description: The jisoTest harness, pglite-backed verification, observed ⊆ static ∪ declared, and the FW402–FW410 family.
+description: Test handler logic, rendered HTML, and the honesty of your invalidation graph — without starting a browser.
 order: 6
 ---
 
 # Testing with @jiso/test
 
 Most SPA testing exists to compensate for unverifiable wiring — does this button reach that
-handler, does that mutation refresh this view. Jiso moves those questions into the type system and
-the graph checks, so app tests concentrate on what's left: handler logic, error paths, rendered
-HTML, and the honesty of the invalidation graph itself (SPEC §11.4, §12).
+handler, does that mutation refresh this view. Jiso moves those questions into the type system
+and the graph checks, so your tests concentrate on what's left: handler logic, error paths,
+rendered HTML, and the honesty of the invalidation graph itself. SPEC §11.4, §12
 
 ## The harness
 
@@ -47,8 +47,8 @@ expect(page.fragment('cart-badge')).toContain('data-bind="cart.count"');
 ```
 
 This is the commerce reference app's own test shape. Note what `exec` returns beyond the
-handler's value: the **change records** (`{domain, keys, input}`, SPEC §14's unified record) and
-the **rerun query list** — the invalidation behavior is part of every mutation assertion, not a
+handler's value: the **change records** (`{domain, keys, input}` — SPEC §14's unified record) and
+the **rerun query list**. Invalidation behavior is part of every mutation assertion, not a
 separate integration suite. The `jisoTest` wrapper packages the same thing as named cases:
 
 ```ts
@@ -84,8 +84,8 @@ const payload = assertMutationError(addToCart, fail, {
 
 ## pglite: real Postgres semantics, in-memory
 
-HTTP-level and data-layer tests run against pglite — actual Postgres, in-process, no container
-(SPEC §11.4):
+HTTP-level and data-layer tests run against pglite — actual Postgres, in-process, no container.
+SPEC §11.4
 
 ```ts
 import { createPgliteTestDb } from '@jiso/test';
@@ -105,10 +105,11 @@ production — `onConflictDoUpdate`, CTEs, constraint behavior and all.
 
 ## The verifier: observed ⊆ static ∪ declared
 
-The static pass _over-approximates_ a write's touch set (it unions all branches); runtime
-execution _under-approximates_ (only executed branches). The verifier wraps `db`, parses every
-executed statement with a SQL AST parser, and enforces the invariant that makes the whole
-invalidation story honest (SPEC §11.2):
+The invalidation graph is derived from static analysis, so the obvious question is: what if the
+analysis is wrong? The verifier answers it at test time. The static pass _over-approximates_ a
+write's touch set (it unions all branches); runtime execution _under-approximates_ (only executed
+branches). The verifier wraps `db`, parses every executed statement with a SQL AST parser, and
+enforces the invariant that makes the whole invalidation story honest: SPEC §11.2
 
 > **observed ⊆ static ∪ FW406-declared.** A violation means an analyzer bug or smuggled SQL;
 > either is a CI failure.
@@ -123,12 +124,12 @@ expect(harness.verificationDiagnostics()).toEqual([]);
 
 Read-side gets identical treatment: the tables a query's SQL actually selects from are checked
 against its declared read set, and observed result shapes are checked against declared output
-schemas — the runtime half of FW410 (SPEC §11.2).
+schemas — the runtime half of FW410, which you'll meet in the table below. SPEC §11.2
 
 ## The FW402–FW410 family
 
-These are the diagnostics the verification layer produces (SPEC §11.3). The pattern: **4xx codes
-police the boundary between declared dataflow and actual dataflow**, from both sides.
+These are the diagnostic codes the verification layer produces. The pattern: **4xx codes police
+the boundary between declared dataflow and actual dataflow**, from both sides. SPEC §11.3
 
 | Code  | Severity   | What it catches                                                                                |
 | ----- | ---------- | ---------------------------------------------------------------------------------------------- |
@@ -143,7 +144,7 @@ police the boundary between declared dataflow and actual dataflow**, from both s
 | FW410 | error      | Opaque projection (`sql<T>`, raw SQL) without a declared output schema, shape runtime-verified |
 
 Adjacent and worth knowing: FW411 (a query reads an `exempt` table — caught statically _and_ by
-the verifier when raw SQL smuggles the read, SPEC §10.1, §11.2).
+the verifier when raw SQL smuggles the read, SPEC §10.1).
 
 The asymmetric severities are deliberate. Excess declaration (FW403, FW409) degrades to warnings
 and over-invalidation — wasteful but correct. Missing declaration (FW402, FW404, FW407) means a
@@ -153,7 +154,7 @@ to kill, so those are errors.
 ## Property-testing optimistic transforms
 
 For every hand-written transform, assert prediction ⊆ eventual truth over generated states — the
-commuting diagram as a test (SPEC §12, §10.5):
+commuting diagram as a test. SPEC §12
 
 ```ts
 import { propertyTest } from '@jiso/test';
@@ -176,9 +177,9 @@ inputs. See the [optimistic guide](/guides/optimistic/) for the transforms thems
 The framework's own suite owns the irreducibly browser-bound parts — morph's survival contract
 (focus, caret, scroll), L0 platform behaviors. Application wiring is proof-carrying: handler refs,
 form fields, binding paths, fragment targets, and coverage are checked by `vp check` and
-`fw check`, so apps need few or no browser tests of their own (SPEC §11.4). The reference
-commerce app's acceptance criterion is exactly that: full behavior surface, zero app-level
-browser tests (SPEC §16).
+`fw check`, so apps need few or no browser tests of their own. The reference commerce app's
+acceptance criterion is exactly that: full behavior surface, zero app-level browser tests.
+SPEC §11.4, §16
 
 A practical app suite is therefore:
 
