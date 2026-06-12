@@ -5,7 +5,7 @@ Scope: a `packages/react` package (published `@jiso/react`) that mounts real Rea
 
 ## Why
 
-The framework's ecosystem-zero problem (no charts, editors, date pickers, kanban libraries) is the single biggest adoption blocker for React-fluent teams. The trigger system already permits mounting anything inside an island; this plan makes that path *sanctioned, typed, budgeted, and torn down correctly* instead of hand-rolled. Framing: a **widget embassy with declared diplomatic channels** — React owns the inside of its host element and nothing else; everything crossing the boundary is serializable, declared, and visible in markup.
+The framework's ecosystem-zero problem (no charts, editors, date pickers, kanban libraries) is the single biggest adoption blocker for React-fluent teams. The trigger system already permits mounting anything inside an island; this plan makes that path _sanctioned, typed, budgeted, and torn down correctly_ instead of hand-rolled. Framing: a **widget embassy with declared diplomatic channels** — React owns the inside of its host element and nothing else; everything crossing the boundary is serializable, declared, and visible in markup.
 
 ## Design decisions (agreed 2026-06-12)
 
@@ -47,9 +47,13 @@ export default function KanbanBoard({ projectId }: { projectId: string }) {
 
 ```html
 <jiso-react-kanban
-  fw-c="react:kanban" fw-deps="board:proj_1"
-  on:visible="/c/kanban.client.js#Kanban$mount">
-  <script type="application/json" fw-props>{"projectId":"proj_1"}</script>
+  fw-c="react:kanban"
+  fw-deps="board:proj_1"
+  on:visible="/c/kanban.client.js#Kanban$mount"
+>
+  <script type="application/json" fw-props>
+    { "projectId": "proj_1" }
+  </script>
   <div class="board-skeleton"><!-- server-rendered fallback --></div>
 </jiso-react-kanban>
 ```
@@ -72,18 +76,18 @@ export const Kanban$mount = mountReact(() => import('./kanban-board.react.js'), 
 - **Mutation bridge.** `useJisoMutation` accepts the imported mutation value only (the `form(addToCart)` value-spelling rule — no string keys, since the registry types can't reach into `.react.tsx` reliably). Returns `{ submit, pending, error }`; `submit` runs the full §10.3 client path (CSRF token from the page, `FW-Idem`, snapshot/transform/rebase, `<fw-query>` reconcile). `fw-pending` + `aria-busy` are applied to the island host.
 - **Morph opacity.** After mount, the host's children are React-owned. The morph layer treats a mounted React island as a **leaf**: host attributes morph, children are never touched (extends the existing nested-island survival contract, §9.1). A `reactIsland` statically inside a `fragmentTarget` subtree is a compile error (FW342) — a server re-render would clobber React's DOM.
 - **Update-coverage status.** Query-dependent positions inside React are opaque to FW311; the island's declared queries get a new §4.9 status (`react` — instant, costs React runtime + render module; requires FW340 justification). Tier-1 islands (no `queries:`) are `renderOnce`-equivalent and ship no `fw-deps`.
-- **Non-goals (R1–R4):** SSR/hydration of React content; Jiso components rendered *inside* React trees; nested Jiso islands under a React host; React portals targeting nodes outside the host (documented hazard — see open questions); Preact aliasing; supporting multiple React majors simultaneously.
+- **Non-goals (R1–R4):** SSR/hydration of React content; Jiso components rendered _inside_ React trees; nested Jiso islands under a React host; React portals targeting nodes outside the host (documented hazard — see open questions); Preact aliasing; supporting multiple React majors simultaneously.
 
 ## Tentative diagnostic codes
 
 > The implementation's diagnostic registry already diverges from SPEC §11.3 (FW302 collision noted 2026-06-12); these numbers are placeholders to be assigned during registry reconciliation, not claims.
 
-| Code | Severity | Meaning |
-| --- | --- | --- |
-| FW340 | lint | React island — justification comment required (the React budget) |
-| FW341 | error | `useJisoQuery` reads a query not declared on the island (dev-runtime-asserted too) |
-| FW342 | error | React island inside a `fragmentTarget` subtree — server re-render would clobber React DOM |
-| FW343 | lint | Live-tier (`queries:` on a React island) — second justification (the SPA-creep gate for reads) |
+| Code  | Severity | Meaning                                                                                        |
+| ----- | -------- | ---------------------------------------------------------------------------------------------- |
+| FW340 | lint     | React island — justification comment required (the React budget)                               |
+| FW341 | error    | `useJisoQuery` reads a query not declared on the island (dev-runtime-asserted too)             |
+| FW342 | error    | React island inside a `fragmentTarget` subtree — server re-render would clobber React DOM      |
+| FW343 | lint     | Live-tier (`queries:` on a React island) — second justification (the SPA-creep gate for reads) |
 
 ## Progress checklist
 
