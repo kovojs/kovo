@@ -1987,6 +1987,16 @@ must be "FW406 unresolved," never "silently wrong."
       evidence:
       `corepack pnpm exec vitest --run packages/drizzle/src/index.test.ts -t "closure-local helper summaries|local helper summaries"`,
       `corepack pnpm exec vitest --run conformance/drizzle-pin/src/index.test.ts -t "closure-local helper summaries"`.
+      Additional evidence 2026-06-12: touch-graph function body walkers now ignore nested
+      closure-local helper bodies unless the enclosing function actually calls the resolved
+      helper symbol, while still treating inline `db.transaction(...)` callbacks as part of the
+      receiver-bearing touch surface. This prevents uncalled closure helpers from fabricating
+      parent writes under SPEC §10-§11. Package and pinned conformance tests cover isolated
+      uncalled helpers plus called helper folding. Same-session evidence:
+      `pnpm --filter @jiso/drizzle exec vitest --run src/index.test.ts --testNamePattern "closure-local|transaction callback receiver aliases"`,
+      `pnpm --filter @jiso/conformance-drizzle-pin exec vitest --run src/index.test.ts --testNamePattern "closure-local|uncalled closure-local|transaction aliases"`,
+      `pnpm --filter @jiso/drizzle exec vitest --run src/index.test.ts src/runtime-surface.test.ts`,
+      and `pnpm --filter @jiso/conformance-drizzle-pin test`.
       Additional evidence 2026-06-12: project-mode relational query reads now require the
       relational table member to resolve through the project table-symbol map before contributing
       a read domain. Unknown members such as `db.query.archivedUsers.findMany(...)` remain

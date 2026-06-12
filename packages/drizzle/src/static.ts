@@ -605,7 +605,7 @@ function extractProjectDrizzleWriteCalls(
 ): ExtractedWriteCall[] {
   const calls: ExtractedWriteCall[] = [];
 
-  for (const call of body.getDescendantsOfKind(SyntaxKind.CallExpression)) {
+  for (const call of touchBodyCallExpressions(body)) {
     if (!isDrizzleWriteCall(call)) continue;
 
     const expression = call.getExpression();
@@ -655,7 +655,7 @@ function extractProjectSelectReadCalls(
   const bodyStart = bodySourceStart(body);
   const calls: ExtractedReadCall[] = [];
 
-  for (const call of callExpressionsInNode(body)) {
+  for (const call of touchBodyCallExpressions(body)) {
     const read = selectReadCall(call);
     if (!read || !isProjectDrizzleReceiverIdentifier(read.receiver, receivers)) continue;
 
@@ -681,7 +681,7 @@ function extractProjectRelationalReadCalls(
   const bodyStart = bodySourceStart(body);
   const calls: ExtractedReadCall[] = [];
 
-  for (const call of callExpressionsInNode(body)) {
+  for (const call of touchBodyCallExpressions(body)) {
     const read = relationalReadCall(call);
     if (!read || !isProjectDrizzleReceiverIdentifier(read.receiver, receivers)) continue;
 
@@ -717,7 +717,7 @@ function extractProjectExternalDbArgumentCalls(
   const calls: ExternalDbArgumentCall[] = [];
   const bodyStart = bodySourceStart(body);
 
-  for (const call of body.getDescendantsOfKind(SyntaxKind.CallExpression)) {
+  for (const call of touchBodyCallExpressions(body)) {
     const expression = call.getExpression();
     if (!Node.isIdentifier(expression)) continue;
 
@@ -740,7 +740,7 @@ function extractProjectUnclassifiedDrizzleReceiverCalls(
   const calls: ExternalDbArgumentCall[] = [];
   const bodyStart = bodySourceStart(body);
 
-  for (const call of body.getDescendantsOfKind(SyntaxKind.CallExpression)) {
+  for (const call of touchBodyCallExpressions(body)) {
     const expression = call.getExpression();
     const name = staticAccessName(expression);
     if (!name) continue;
@@ -841,6 +841,38 @@ function callExpressionsInNode(body: Node): CallExpression[] {
     ...(Node.isCallExpression(body) ? [body] : []),
     ...body.getDescendantsOfKind(SyntaxKind.CallExpression),
   ];
+}
+
+function touchBodyCallExpressions(body: Node): CallExpression[] {
+  return callExpressionsInNode(body).filter((call) => isTouchBodyCallExpression(call, body));
+}
+
+function isTouchBodyCallExpression(call: CallExpression, body: Node): boolean {
+  if (call === body) return true;
+
+  for (const ancestor of call.getAncestors()) {
+    if (ancestor === body) return true;
+    if (!isFunctionLikeNode(ancestor)) continue;
+    if (!isInlineTransactionCallback(ancestor)) return false;
+  }
+
+  return true;
+}
+
+function isFunctionLikeNode(node: Node): boolean {
+  return (
+    Node.isArrowFunction(node) ||
+    Node.isFunctionDeclaration(node) ||
+    Node.isFunctionExpression(node)
+  );
+}
+
+function isInlineTransactionCallback(callback: Node): boolean {
+  const parent = callback.getParent();
+  if (!Node.isCallExpression(parent)) return false;
+  if (!parent.getArguments().includes(callback)) return false;
+
+  return staticAccessName(parent.getExpression()) === 'transaction';
 }
 
 function isProjectDrizzleReceiverIdentifier(
@@ -3314,7 +3346,7 @@ function extractLocalFunctionCallsFromBody(
 ): string[] {
   const calls: string[] = [];
 
-  for (const call of callExpressionsInNode(body)) {
+  for (const call of touchBodyCallExpressions(body)) {
     const expression = call.getExpression();
     if (!Node.isIdentifier(expression)) continue;
 
@@ -3335,7 +3367,7 @@ function extractDrizzleWriteCallsFromBody(
 ): ExtractedWriteCall[] {
   const calls: ExtractedWriteCall[] = [];
 
-  for (const call of callExpressionsInNode(body)) {
+  for (const call of touchBodyCallExpressions(body)) {
     if (!isDrizzleWriteCall(call)) continue;
 
     const expression = call.getExpression();
@@ -3380,7 +3412,7 @@ function extractExternalDbArgumentCallsFromBody(
 ): ExternalDbArgumentCall[] {
   const calls: ExternalDbArgumentCall[] = [];
 
-  for (const call of callExpressionsInNode(body)) {
+  for (const call of touchBodyCallExpressions(body)) {
     const expression = call.getExpression();
     if (!Node.isIdentifier(expression)) continue;
 
@@ -3407,7 +3439,7 @@ function extractReceiverMutationCallsFromBody(
 ): ExternalDbArgumentCall[] {
   const calls: ExternalDbArgumentCall[] = [];
 
-  for (const call of callExpressionsInNode(body)) {
+  for (const call of touchBodyCallExpressions(body)) {
     const expression = call.getExpression();
     const name = staticAccessName(expression);
     if (!name || !isUnclassifiedDirectDrizzleReceiverMethod(name)) continue;
@@ -3444,7 +3476,7 @@ function extractSelectReadCallsFromBody(
 ): ExtractedReadCall[] {
   const calls: ExtractedReadCall[] = [];
 
-  for (const call of callExpressionsInNode(body)) {
+  for (const call of touchBodyCallExpressions(body)) {
     const read = selectReadCall(call);
     if (!read || !isSourceDrizzleReceiverIdentifier(read.receiver, receiverNames)) continue;
 
@@ -3468,7 +3500,7 @@ function extractRelationalReadCallsFromBody(
 ): ExtractedReadCall[] {
   const calls: ExtractedReadCall[] = [];
 
-  for (const call of callExpressionsInNode(body)) {
+  for (const call of touchBodyCallExpressions(body)) {
     const read = relationalReadCall(call);
     if (!read || !isSourceDrizzleReceiverIdentifier(read.receiver, receiverNames)) continue;
 

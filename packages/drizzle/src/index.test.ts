@@ -3211,6 +3211,45 @@ export interface CommerceInvalidationSets {
     });
   });
 
+  it('does not fold uncalled closure-local helper bodies into parent summaries', () => {
+    const graph = extractTouchGraphFromSource([
+      {
+        fileName: 'cart.domain.ts',
+        source: [
+          'export const cartItems = pgTable("cart_items", {}, jiso({ domain: "cart", key: "productId" }));',
+          'export const auditLog = pgTable("audit_log", {}, jiso({ domain: "audit", key: "productId" }));',
+          '',
+          'export async function addItem(db, productId) {',
+          '  async function writeAudit(db) {',
+          '    await db.insert(auditLog).values({ productId });',
+          '  }',
+          '  return productId;',
+          '}',
+          '',
+          'export async function calledItem(db, productId) {',
+          '  async function writeCart(db) {',
+          '    await db.insert(cartItems).values({ productId });',
+          '  }',
+          '  await writeCart(db);',
+          '}',
+          '',
+        ].join('\n'),
+      },
+    ]);
+
+    expect(graph.addItem).toBeUndefined();
+    expect(graph.writeAudit).toEqual({
+      reads: [],
+      touches: [{ domain: 'audit', keys: null, site: 'cart.domain.ts:6', via: 'audit_log' }],
+      unresolved: [],
+    });
+    expect(graph.calledItem).toEqual({
+      reads: [],
+      touches: [{ domain: 'cart', keys: null, site: 'cart.domain.ts:13', via: 'cart_items' }],
+      unresolved: [],
+    });
+  });
+
   it('dedupes recursive helper summaries at a fixed point', () => {
     const graph = extractTouchGraphFromSource([
       {
