@@ -99,8 +99,8 @@ export function compileComponentModule(options: CompileComponentOptions): Compil
   const diagnosticSource = deriveLowering.diagnosticSource;
   const model = derivePatch.state.model;
   const handlers = lowerEventHandlers({ ...compileOptions, source }, componentName, model);
-  const queryUpdatePlans = collectQueryUpdatePlans(source, model, componentName);
-  const updateCoverage = collectQueryUpdateCoverage(source, model, compileOptions, componentName);
+  const queryUpdatePlans = collectQueryUpdatePlans(model, componentName);
+  const updateCoverage = collectQueryUpdateCoverage(model, compileOptions, componentName);
   const packagePrefixDiagnostics = validatePackageComponentPrefixes(
     compileOptions.packageComponentPrefixes,
     options.fileName,

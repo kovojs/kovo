@@ -351,13 +351,10 @@ export function jsxElements(model: ComponentModuleModel): JsxElementModel[] {
   return [...model.jsxElements];
 }
 
-export function jsxElementChildBody(
-  source: string,
-  element: JsxElementModel,
-): JsxElementChildBody | null {
+export function jsxElementChildBody(element: JsxElementModel): JsxElementChildBody | null {
   if (element.selfClosing) return null;
 
-  const raw = source.slice(element.openingEnd, element.closingStart);
+  const raw = element.childSource;
   const leadingWhitespace = /^\s*/.exec(raw)?.[0].length ?? 0;
   const body = raw.trim();
   if (!body) return null;

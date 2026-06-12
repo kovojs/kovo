@@ -43,7 +43,7 @@ export function validateDataBindings(
   const queryShapes = componentQueryShapes(options);
   if (!queryShapes) return [];
 
-  const listStamps = collectDataBindListStamps(source, model);
+  const listStamps = collectDataBindListStamps(model);
   const listBindings = dataBindListAttributes(model);
   const bindingAttributes = dataBindAttributes(model);
 
@@ -126,7 +126,7 @@ export function dataBindListTemplateBodies(
   return elements.flatMap((element) => {
     if (jsxStaticAttributeValue(element, 'data-bind-list') === undefined) return [];
 
-    const template = templateStamp(source, elements, element);
+    const template = templateStamp(elements, element);
     return template ? [template] : [];
   });
 }
@@ -194,7 +194,6 @@ function dataBindListAttributes(model: ComponentModuleModel): DataBindAttribute[
 }
 
 function templateStamp(
-  source: string,
   elements: readonly JsxElementModel[],
   container: JsxElementModel,
 ): TemplateBody | null {
@@ -204,7 +203,7 @@ function templateStamp(
       isWithinElement(element, container) &&
       hasJsxAttribute(element, 'fw-stamp'),
   );
-  return template ? jsxElementChildBody(source, template) : null;
+  return template ? jsxElementChildBody(template) : null;
 }
 
 interface NullableTraversal {

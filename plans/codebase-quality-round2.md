@@ -672,6 +672,14 @@ pipeline throws the tree away and communicates via mutated source text.
       element is available. Same-session evidence:
       `pnpm exec vitest --run packages/compiler/src/compile-component.test.ts packages/compiler/src/model-pipeline.test.ts packages/compiler/src/stamps.test.ts`
       and `pnpm exec vp check packages/compiler/src/emit/server.ts`.
+      Additional evidence 2026-06-12: `jsxElementChildBody()` now derives trimmed child bodies
+      from parser-owned `JsxElementModel.childSource`, and query-update plan collection no
+      longer accepts module source for data-bind-list/template extraction. Fragment-target child
+      validation and data-bind-list validation now consume the parsed child body helper directly.
+      Same-session evidence:
+      `pnpm exec vitest --run packages/compiler/src/scan/parse.test.ts packages/compiler/src/query-update-plans.test.ts packages/compiler/src/query-bindings.test.ts packages/compiler/src/fragment-targets.test.ts packages/compiler/src/query-coverage.test.ts`
+      and
+      `pnpm exec vp check packages/compiler/src/scan/parse.ts packages/compiler/src/scan/parse.test.ts packages/compiler/src/analyze/query-updates.ts packages/compiler/src/validate/bindings.ts packages/compiler/src/validate/component-contracts.ts packages/compiler/src/compile.ts`.
       Partial evidence 2026-06-11: `serverRenderSource` now parses once after handler lowering
       with the author file name and stamps component identity, declared query deps, and initial
       state onto the render host through one in-memory tag update instead of reparsing for each

@@ -94,7 +94,7 @@ export function validateFragmentTargetChildren(
   if (targetNames.length === 0) return [];
 
   return targetNames.flatMap((name) =>
-    fragmentTargetChildBodies(source, model, name)
+    fragmentTargetChildBodies(model, name)
       .filter((body) => fragmentTargetChildCapturesUnserializableValue(model, body))
       .map((body) => fw230Diagnostic(fileName, source, name, body)),
   );
@@ -183,13 +183,12 @@ function fragmentTargetUsageNames(model: ComponentModuleModel): string[] {
 }
 
 function fragmentTargetChildBodies(
-  source: string,
   model: ComponentModuleModel,
   name: string,
 ): JsxElementChildBody[] {
   return jsxElements(model)
     .filter((item) => item.tag === name)
-    .map((element) => jsxElementChildBody(source, element))
+    .map((element) => jsxElementChildBody(element))
     .filter((body): body is JsxElementChildBody => body !== null);
 }
 

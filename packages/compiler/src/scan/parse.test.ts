@@ -33,7 +33,7 @@ export const ChildSlot = component('child-slot', {
     expect(slot).toBeDefined();
     if (!slot) throw new Error('expected ChildSlot JSX element');
 
-    expect(jsxElementChildBody(source, slot)).toEqual({
+    expect(jsxElementChildBody(slot)).toEqual({
       offset: source.indexOf('<span>'),
       source: '<span>{cart.count}</span>',
     });

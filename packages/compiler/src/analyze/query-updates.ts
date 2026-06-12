@@ -31,7 +31,6 @@ interface QueryPathExpressionFact {
 }
 
 export function collectQueryUpdatePlans(
-  source: string,
   model: ComponentModuleModel,
   componentName: string,
 ): QueryUpdatePlanFact[] {
@@ -50,7 +49,7 @@ export function collectQueryUpdatePlans(
     pathsByQuery.set(query, paths);
   }
 
-  for (const stamp of collectDataBindListStamps(source, model)) {
+  for (const stamp of collectDataBindListStamps(model)) {
     const [query] = stamp.list.split('.');
     if (!query) continue;
 
@@ -112,7 +111,6 @@ export function collectQueryUpdatePlans(
 }
 
 export function collectQueryUpdateCoverage(
-  source: string,
   model: ComponentModuleModel,
   options: CompileComponentOptions,
   componentName: string,
@@ -136,7 +134,7 @@ export function collectQueryUpdateCoverage(
     coveredPaths.add(path);
   }
 
-  for (const stamp of collectDataBindListStamps(source, model)) {
+  for (const stamp of collectDataBindListStamps(model)) {
     facts.push({
       componentName,
       detail: 'data-bind-list',
@@ -322,10 +320,7 @@ function dataBindAttributes(model: ComponentModuleModel): DataBindAttribute[] {
     }));
 }
 
-export function collectDataBindListStamps(
-  source: string,
-  model: ComponentModuleModel,
-): QueryTemplateStampFact[] {
+export function collectDataBindListStamps(model: ComponentModuleModel): QueryTemplateStampFact[] {
   const elements = jsxElements(model);
 
   return elements
@@ -334,8 +329,8 @@ export function collectDataBindListStamps(
       const key = jsxStaticAttributeValue(element, 'fw-key');
       if (!list || !key) return [];
 
-      const template = templateStampContent(source, elements, element);
-      const itemBindingPlaceholders = templateItemBindingPlaceholders(source, elements, element);
+      const template = templateStampContent(elements, element);
+      const itemBindingPlaceholders = templateItemBindingPlaceholders(elements, element);
 
       return [
         {
@@ -352,7 +347,6 @@ export function collectDataBindListStamps(
 }
 
 function templateItemBindingPlaceholders(
-  source: string,
   elements: readonly JsxElementModel[],
   container: JsxElementModel,
 ): QueryTemplateStampBindingPlaceholder[] {
@@ -369,14 +363,13 @@ function templateItemBindingPlaceholders(
         )
         .map((attribute) => ({
           path: attribute.value ?? '',
-          value: jsxElementChildBody(source, candidate)?.source ?? '',
+          value: jsxElementChildBody(candidate)?.source ?? '',
         })),
     )
     .sort((left, right) => left.path.localeCompare(right.path));
 }
 
 function templateStampContent(
-  source: string,
   elements: readonly JsxElementModel[],
   container: JsxElementModel,
 ): string {
@@ -386,7 +379,7 @@ function templateStampContent(
       isWithinElement(element, container) &&
       hasJsxAttribute(element, 'fw-stamp'),
   );
-  return template ? (jsxElementChildBody(source, template)?.source ?? '') : '';
+  return template ? (jsxElementChildBody(template)?.source ?? '') : '';
 }
 
 function jsxAttributes(model: ComponentModuleModel) {
