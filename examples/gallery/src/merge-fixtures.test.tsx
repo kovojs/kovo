@@ -13,7 +13,12 @@ import {
   autocompleteOptionAttributes,
   autocompleteValueAttributes,
   avatarFallbackAttributes,
+  avatarImageAttributes,
   avatarRootAttributes,
+  checkboxGroupControlAttributes,
+  checkboxGroupItemAttributes,
+  checkboxGroupLabelAttributes,
+  checkboxGroupRootAttributes,
   checkboxRootAttributes,
   collapsibleContentAttributes,
   collapsibleRootAttributes,
@@ -29,6 +34,9 @@ import {
   contextMenuItemAttributes,
   contextMenuSeparatorAttributes,
   contextMenuTriggerAttributes,
+  disclosureContentAttributes,
+  disclosureRootAttributes,
+  disclosureTriggerAttributes,
   dialogContentAttributes,
   dialogTriggerAttributes,
   dropdownMenuContentAttributes,
@@ -41,6 +49,11 @@ import {
   fieldRootAttributes,
   hoverCardContentAttributes,
   hoverCardTriggerAttributes,
+  menubarGroupAttributes,
+  menubarItemAttributes,
+  menubarRootAttributes,
+  menubarSeparatorAttributes,
+  menubarSubmenuAttributes,
   numberFieldIncrementAttributes,
   numberFieldInputAttributes,
   meterRootAttributes,
@@ -71,10 +84,16 @@ import {
   switchRootAttributes,
   tabsPanelAttributes,
   tabsTriggerAttributes,
+  toolbarButtonAttributes,
+  toolbarItemAttributes,
+  toolbarRootAttributes,
   toastActionAttributes,
   toastCloseAttributes,
   toastRootAttributes,
   toastViewportAttributes,
+  toggleGroupButtonAttributes,
+  toggleGroupItemAttributes,
+  toggleGroupRootAttributes,
   tooltipTriggerAttributes,
   toggleRootAttributes,
 } from '@jiso/headless-ui/primitives';
@@ -2329,6 +2348,520 @@ describe('gallery G5 primitive merge fixtures', () => {
       </div>,
     ).toBe(
       '<div data-gallery-merge="radio-idref"><input data-state="checked" aria-checked="true" checked tabIndex="0" type="radio" value="express" id="authored-radio-express" name="gallery-shipping-speed" required class="radio-input"><label data-state="checked" for="authored-radio-express" class="radio-label">Express</label></div>',
+    );
+  });
+
+  it('renders a golden menubar merge with submenu, group, and separator attrs', () => {
+    const state = {
+      activeValue: 'file',
+      items: [
+        { hasPopup: true, label: 'File', value: 'file' },
+        { disabled: true, label: 'Edit', value: 'edit' },
+      ],
+      openValue: 'file',
+      orientation: 'horizontal' as const,
+    };
+    const root = mergePrimitiveAttrs(
+      {
+        ...menubarRootAttributes({
+          ...state,
+          descriptionId: 'gallery-menubar-help',
+          id: 'gallery-menubar',
+          label: 'Editor',
+        }),
+        class: 'menubar-root',
+      },
+      {
+        'aria-label': 'Author editor',
+        class: 'menubar-root border',
+        role: 'menu',
+      },
+    );
+    const item = mergePrimitiveAttrs(
+      {
+        ...menubarItemAttributes({
+          ...state,
+          contentId: 'gallery-file-menu',
+          id: 'gallery-file-item',
+          itemLabel: 'File',
+          itemValue: 'file',
+        }),
+        class: 'menubar-item',
+      },
+      {
+        'aria-controls': 'author-file-menu',
+        'aria-expanded': 'false',
+        class: 'menubar-item px-2',
+        role: 'option',
+        value: 'author-file',
+      },
+    );
+    const submenu = mergePrimitiveAttrs(
+      {
+        ...menubarSubmenuAttributes({
+          ...state,
+          id: 'gallery-file-menu',
+          labelledBy: 'gallery-file-item',
+          value: 'file',
+        }),
+        class: 'menubar-submenu',
+      },
+      {
+        class: 'menubar-submenu shadow',
+        id: 'author-file-menu',
+        role: 'listbox',
+      },
+    );
+    const group = mergePrimitiveAttrs(
+      {
+        ...menubarGroupAttributes({
+          ...state,
+          id: 'gallery-file-group',
+          labelledBy: 'gallery-file-group-label',
+        }),
+        class: 'menubar-group',
+      },
+      {
+        'aria-labelledby': 'author-file-group-label',
+        class: 'menubar-group py-1',
+        role: 'presentation',
+      },
+    );
+    const separator = mergePrimitiveAttrs(
+      menubarSeparatorAttributes({ id: 'gallery-file-separator' }),
+      { role: 'none' },
+    );
+
+    expect(root.diagnostics).toEqual([
+      {
+        attr: 'role',
+        code: 'FW232',
+        message: 'Author override of primitive ARIA/role attribute per SPEC.md section 4.6',
+      },
+      {
+        attr: 'aria-label',
+        code: 'FW232',
+        message: 'Author override of primitive ARIA/role attribute per SPEC.md section 4.6',
+      },
+    ]);
+    expect(item.diagnostics).toEqual([
+      {
+        attr: 'role',
+        code: 'FW232',
+        message: 'Author override of primitive ARIA/role attribute per SPEC.md section 4.6',
+      },
+      {
+        attr: 'aria-expanded',
+        code: 'FW232',
+        message: 'Author override of primitive ARIA/role attribute per SPEC.md section 4.6',
+      },
+      {
+        attr: 'aria-controls',
+        code: 'FW231',
+        message: 'Unmergeable primitive IDREF conflict per SPEC.md section 4.6',
+      },
+    ]);
+    expect(submenu.diagnostics).toEqual([
+      {
+        attr: 'role',
+        code: 'FW232',
+        message: 'Author override of primitive ARIA/role attribute per SPEC.md section 4.6',
+      },
+    ]);
+    expect(group.diagnostics).toEqual([
+      {
+        attr: 'role',
+        code: 'FW232',
+        message: 'Author override of primitive ARIA/role attribute per SPEC.md section 4.6',
+      },
+      {
+        attr: 'aria-labelledby',
+        code: 'FW231',
+        message: 'Unmergeable primitive IDREF conflict per SPEC.md section 4.6',
+      },
+    ]);
+    expect(separator.diagnostics).toEqual([
+      {
+        attr: 'role',
+        code: 'FW232',
+        message: 'Author override of primitive ARIA/role attribute per SPEC.md section 4.6',
+      },
+    ]);
+    expect(
+      <nav data-gallery-merge="menubar">
+        <div {...root.attrs}>
+          <button {...item.attrs}>File</button>
+          <div {...submenu.attrs}>
+            <div {...group.attrs}>Open</div>
+            <div {...separator.attrs}></div>
+          </div>
+        </div>
+      </nav>,
+    ).toBe(
+      '<nav data-gallery-merge="menubar"><div data-state="open" data-orientation="horizontal" role="menu" id="gallery-menubar" aria-label="Author editor" aria-describedby="gallery-menubar-help" class="menubar-root border"><button data-state="active" data-highlighted="" role="option" tabIndex="0" value="author-file" aria-haspopup="menu" aria-expanded="false" aria-controls="author-file-menu" id="gallery-file-item" label="File" class="menubar-item px-2">File</button><div data-state="open" role="listbox" tabIndex="-1" id="author-file-menu" aria-labelledby="gallery-file-item" class="menubar-submenu shadow"><div data-state="open" data-orientation="horizontal" role="presentation" id="gallery-file-group" aria-labelledby="author-file-group-label" class="menubar-group py-1">Open</div><div role="none" id="gallery-file-separator"></div></div></div></nav>',
+    );
+  });
+
+  it('renders golden checkbox-group merges across root, item, control, and label attrs', () => {
+    const state = {
+      activeValue: 'email',
+      descriptionId: 'gallery-notifications-help',
+      errorId: 'gallery-notifications-error',
+      invalid: true,
+      items: [{ value: 'email' }, { disabled: true, value: 'sms' }],
+      name: 'notifications',
+      orientation: 'vertical' as const,
+      required: true,
+      value: ['email'],
+    };
+    const root = mergePrimitiveAttrs(
+      {
+        ...checkboxGroupRootAttributes({
+          ...state,
+          id: 'gallery-notifications',
+          labelledBy: 'gallery-notifications-label',
+        }),
+        class: 'checkbox-group',
+      },
+      {
+        'aria-describedby': 'author-notifications-help',
+        class: 'checkbox-group gap-2',
+        role: 'radiogroup',
+      },
+    );
+    const item = mergePrimitiveAttrs(
+      {
+        ...checkboxGroupItemAttributes({
+          ...state,
+          id: 'gallery-notifications-email-item',
+          itemValue: 'email',
+        }),
+        class: 'checkbox-group-item',
+      },
+      {
+        class: 'checkbox-group-item flex',
+        'data-state': 'unchecked',
+        id: 'author-notifications-email-item',
+      },
+    );
+    const control = mergePrimitiveAttrs(
+      checkboxGroupControlAttributes({
+        ...state,
+        controlId: 'gallery-notifications-email',
+        itemValue: 'email',
+      }),
+      {
+        'aria-checked': 'false',
+        class: 'checkbox-group-control',
+        disabled: true,
+        id: 'author-notifications-email',
+        required: false,
+      },
+    );
+    const label = mergePrimitiveAttrs(
+      rewriteIdrefs(
+        checkboxGroupLabelAttributes({
+          ...state,
+          controlId: 'gallery-notifications-email',
+          id: 'gallery-notifications-email-label',
+          itemValue: 'email',
+        }),
+        new Map([['gallery-notifications-email', 'author-notifications-email']]),
+      ),
+      { class: 'checkbox-group-label' },
+    );
+
+    expect(root.diagnostics).toEqual([
+      {
+        attr: 'role',
+        code: 'FW232',
+        message: 'Author override of primitive ARIA/role attribute per SPEC.md section 4.6',
+      },
+      {
+        attr: 'aria-describedby',
+        code: 'FW231',
+        message: 'Unmergeable primitive IDREF conflict per SPEC.md section 4.6',
+      },
+    ]);
+    expect(item.diagnostics).toEqual([
+      {
+        attr: 'data-state',
+        code: 'FW232',
+        message: 'Author override of primitive-owned state attribute per SPEC.md section 4.6',
+      },
+    ]);
+    expect(control.diagnostics).toEqual([
+      {
+        attr: 'aria-checked',
+        code: 'FW232',
+        message: 'Author override of primitive ARIA/role attribute per SPEC.md section 4.6',
+      },
+    ]);
+    expect(label.diagnostics).toEqual([]);
+    expect(
+      <fieldset data-gallery-merge="checkbox-group">
+        <div {...root.attrs}>
+          <div {...item.attrs}>
+            <input {...control.attrs} />
+            <label {...label.attrs}>Email</label>
+          </div>
+        </div>
+      </fieldset>,
+    ).toBe(
+      '<fieldset data-gallery-merge="checkbox-group"><div data-orientation="vertical" data-invalid="" data-required="" role="radiogroup" id="gallery-notifications" aria-labelledby="gallery-notifications-label" aria-describedby="author-notifications-help" aria-invalid="true" aria-required="true" class="checkbox-group gap-2"><div data-state="checked" id="author-notifications-email-item" class="checkbox-group-item flex"><input data-state="checked" aria-checked="false" checked disabled tabIndex="0" type="checkbox" value="email" id="author-notifications-email" name="notifications" required class="checkbox-group-control"><label data-state="checked" for="author-notifications-email" id="gallery-notifications-email-label" class="checkbox-group-label">Email</label></div></div></fieldset>',
+    );
+  });
+
+  it('renders golden toggle-group and toolbar merges for roving button attrs', () => {
+    const toggleState = {
+      activeValue: 'bold',
+      items: [{ value: 'bold' }, { disabled: true, value: 'italic' }],
+      orientation: 'horizontal' as const,
+      type: 'multiple' as const,
+      value: ['bold'],
+    };
+    const toggleRoot = mergePrimitiveAttrs(
+      {
+        ...toggleGroupRootAttributes({
+          ...toggleState,
+          descriptionId: 'gallery-formatting-help',
+          id: 'gallery-formatting',
+          labelledBy: 'gallery-formatting-label',
+        }),
+        class: 'toggle-group',
+      },
+      {
+        'aria-labelledby': 'author-formatting-label',
+        class: 'toggle-group rounded',
+        role: 'toolbar',
+      },
+    );
+    const toggleItem = mergePrimitiveAttrs(
+      {
+        ...toggleGroupItemAttributes({
+          ...toggleState,
+          id: 'gallery-bold-item',
+          itemValue: 'bold',
+        }),
+        class: 'toggle-group-item',
+      },
+      { class: 'toggle-group-item selected', 'data-state': 'off' },
+    );
+    const toggleButton = mergePrimitiveAttrs(
+      toggleGroupButtonAttributes({
+        ...toggleState,
+        id: 'gallery-bold-button',
+        itemValue: 'bold',
+      }),
+      {
+        'aria-pressed': 'false',
+        class: 'toggle-group-button',
+        disabled: true,
+        value: 'author-bold',
+      },
+    );
+    const toolbarState = {
+      activeValue: 'align-left',
+      items: [{ value: 'align-left' }, { disabled: true, value: 'align-right' }],
+      orientation: 'vertical' as const,
+    };
+    const toolbar = mergePrimitiveAttrs(
+      {
+        ...toolbarRootAttributes({
+          ...toolbarState,
+          descriptionId: 'gallery-toolbar-help',
+          id: 'gallery-toolbar',
+          label: 'Editor toolbar',
+        }),
+        class: 'toolbar-root',
+      },
+      {
+        'aria-orientation': 'horizontal',
+        class: 'toolbar-root gap-1',
+        role: 'group',
+      },
+    );
+    const toolbarItem = mergePrimitiveAttrs(
+      {
+        ...toolbarItemAttributes({
+          ...toolbarState,
+          id: 'gallery-align-left-item',
+          itemValue: 'align-left',
+        }),
+        class: 'toolbar-item',
+      },
+      { class: 'toolbar-item shrink-0' },
+    );
+    const toolbarButton = mergePrimitiveAttrs(
+      toolbarButtonAttributes({
+        ...toolbarState,
+        id: 'gallery-align-left-button',
+        itemValue: 'align-left',
+        pressed: true,
+      }),
+      {
+        'aria-pressed': 'false',
+        class: 'toolbar-button',
+        disabled: true,
+        value: 'author-align-left',
+      },
+    );
+
+    expect(toggleRoot.diagnostics).toEqual([
+      {
+        attr: 'role',
+        code: 'FW232',
+        message: 'Author override of primitive ARIA/role attribute per SPEC.md section 4.6',
+      },
+      {
+        attr: 'aria-labelledby',
+        code: 'FW231',
+        message: 'Unmergeable primitive IDREF conflict per SPEC.md section 4.6',
+      },
+    ]);
+    expect(toggleItem.diagnostics).toEqual([
+      {
+        attr: 'data-state',
+        code: 'FW232',
+        message: 'Author override of primitive-owned state attribute per SPEC.md section 4.6',
+      },
+    ]);
+    expect(toggleButton.diagnostics).toEqual([
+      {
+        attr: 'aria-pressed',
+        code: 'FW232',
+        message: 'Author override of primitive ARIA/role attribute per SPEC.md section 4.6',
+      },
+    ]);
+    expect(toolbar.diagnostics).toEqual([
+      {
+        attr: 'role',
+        code: 'FW232',
+        message: 'Author override of primitive ARIA/role attribute per SPEC.md section 4.6',
+      },
+      {
+        attr: 'aria-orientation',
+        code: 'FW232',
+        message: 'Author override of primitive ARIA/role attribute per SPEC.md section 4.6',
+      },
+    ]);
+    expect(toolbarItem.diagnostics).toEqual([]);
+    expect(toolbarButton.diagnostics).toEqual([
+      {
+        attr: 'aria-pressed',
+        code: 'FW232',
+        message: 'Author override of primitive ARIA/role attribute per SPEC.md section 4.6',
+      },
+    ]);
+    expect(
+      <section data-gallery-merge="roving-groups">
+        <div {...toggleRoot.attrs}>
+          <span {...toggleItem.attrs}>
+            <button {...toggleButton.attrs}>Bold</button>
+          </span>
+        </div>
+        <div {...toolbar.attrs}>
+          <span {...toolbarItem.attrs}>
+            <button {...toolbarButton.attrs}>Left</button>
+          </span>
+        </div>
+      </section>,
+    ).toBe(
+      '<section data-gallery-merge="roving-groups"><div data-orientation="horizontal" role="toolbar" id="gallery-formatting" aria-labelledby="author-formatting-label" aria-describedby="gallery-formatting-help" class="toggle-group rounded"><span data-state="pressed" id="gallery-bold-item" class="toggle-group-item selected"><button data-state="pressed" aria-pressed="false" disabled tabIndex="0" type="button" value="author-bold" id="gallery-bold-button" class="toggle-group-button">Bold</button></span></div><div data-orientation="vertical" role="group" id="gallery-toolbar" aria-label="Editor toolbar" aria-describedby="gallery-toolbar-help" aria-orientation="horizontal" class="toolbar-root gap-1"><span id="gallery-align-left-item" class="toolbar-item shrink-0"><button disabled tabIndex="0" type="button" value="author-align-left" aria-pressed="false" id="gallery-align-left-button" class="toolbar-button">Left</button></span></div></section>',
+    );
+  });
+
+  it('renders golden disclosure and avatar image merges for remaining simple attrs records', () => {
+    const disclosure = { disabled: true, open: true };
+    const root = mergePrimitiveAttrs(
+      { ...disclosureRootAttributes(disclosure), class: 'disclosure-root' },
+      { class: 'disclosure-root rounded', 'data-state': 'closed' },
+    );
+    const trigger = mergePrimitiveAttrs(
+      {
+        ...disclosureTriggerAttributes({
+          ...disclosure,
+          contentId: 'gallery-disclosure-panel',
+        }),
+        class: 'disclosure-trigger',
+      },
+      {
+        'aria-controls': 'author-disclosure-panel',
+        'aria-expanded': 'false',
+        class: 'disclosure-trigger font-medium',
+        disabled: false,
+      },
+    );
+    const content = mergePrimitiveAttrs(
+      {
+        ...disclosureContentAttributes({
+          ...disclosure,
+          contentId: 'gallery-disclosure-panel',
+        }),
+        class: 'disclosure-panel',
+      },
+      {
+        class: 'disclosure-panel p-3',
+        hidden: true,
+        id: 'author-disclosure-panel',
+      },
+    );
+    const image = mergePrimitiveAttrs(
+      {
+        ...avatarImageAttributes({
+          alt: 'Ada Lovelace',
+          loading: 'lazy',
+          src: '/avatars/ada.png',
+          status: 'loaded',
+        }),
+        class: 'avatar-image',
+      },
+      {
+        alt: 'Author alt',
+        class: 'avatar-image object-cover',
+        'data-state': 'loading',
+        hidden: true,
+        src: '/avatars/author.png',
+      },
+    );
+
+    expect(root.diagnostics).toEqual([
+      {
+        attr: 'data-state',
+        code: 'FW232',
+        message: 'Author override of primitive-owned state attribute per SPEC.md section 4.6',
+      },
+    ]);
+    expect(trigger.diagnostics).toEqual([
+      {
+        attr: 'aria-expanded',
+        code: 'FW232',
+        message: 'Author override of primitive ARIA/role attribute per SPEC.md section 4.6',
+      },
+      {
+        attr: 'aria-controls',
+        code: 'FW231',
+        message: 'Unmergeable primitive IDREF conflict per SPEC.md section 4.6',
+      },
+    ]);
+    expect(content.diagnostics).toEqual([]);
+    expect(image.diagnostics).toEqual([
+      {
+        attr: 'data-state',
+        code: 'FW232',
+        message: 'Author override of primitive-owned state attribute per SPEC.md section 4.6',
+      },
+    ]);
+    expect(
+      <section data-gallery-merge="disclosure-avatar-image">
+        <div {...root.attrs}>
+          <button {...trigger.attrs}>Details</button>
+          <div {...content.attrs}>Panel</div>
+        </div>
+        <img {...image.attrs} />
+      </section>,
+    ).toBe(
+      '<section data-gallery-merge="disclosure-avatar-image"><div data-state="open" data-disabled="" class="disclosure-root rounded"><button data-state="open" data-disabled="" aria-expanded="false" disabled type="button" aria-controls="author-disclosure-panel" class="disclosure-trigger font-medium">Details</button><div data-state="open" hidden id="author-disclosure-panel" class="disclosure-panel p-3">Panel</div></div><img alt="Author alt" data-state="loaded" decoding="async" hidden loading="lazy" src="/avatars/author.png" class="avatar-image object-cover"></section>',
     );
   });
 

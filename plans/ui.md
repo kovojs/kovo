@@ -849,6 +849,21 @@ jiso-dialog` resolves dashed wire names and prints provenance including package,
       and `git diff --check`. G5 remains open because this is still a bounded fixture
       subset, not every exported primitive attrs record or compiler/runtime diagnostic
       coverage.
+      Additional partial evidence 2026-06-12: the gallery G5 oracle adds a larger
+      multi-primitive merge batch covering menubar root/item/submenu/group/separator attrs,
+      checkbox-group root/item/control/label attrs, toggle-group root/item/button attrs,
+      toolbar root/item/button attrs, disclosure root/trigger/content attrs, and avatar image
+      attrs. These goldens pin list/roving state vocabularies, group invalid/required data
+      attrs, native logical-OR `disabled`/`required`, authored boolean `hidden`, primitive-owned
+      `data-state` retention, scalar precedence, IDREF rewrites/conflicts, and FW231/FW232
+      diagnostics against the SPEC §4.6 merge table. Same-session evidence:
+      `pnpm --filter @jiso/example-gallery exec vitest --run src/merge-fixtures.test.tsx`,
+      `pnpm --filter @jiso/example-gallery test`,
+      `pnpm --filter @jiso/headless-ui exec vitest --run src/primitives/menubar.test.ts src/primitives/checkbox-group.test.ts src/primitives/toggle-group.test.ts src/primitives/toolbar.test.ts src/primitives/disclosure.test.ts src/primitives/avatar.test.ts src/tooling/lint-primitives.test.ts src/tooling/primitive-handler-lint.test.ts`,
+      `pnpm --filter @jiso/headless-ui run lint:primitives`,
+      `pnpm exec vp check examples/gallery/src/merge-fixtures.test.tsx plans/ui.md`,
+      and `git diff --check`. G5 remains open because this still does not cover every exported
+      primitive attrs record or compiler/runtime diagnostic coverage.
 
 ## Background
 
