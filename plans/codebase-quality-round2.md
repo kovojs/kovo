@@ -714,6 +714,12 @@ land it first; don't fork it.
       `pnpm run check:build`. `pnpm run check:fw` was run after the build and failed only because
       out-of-scope `tests/fw-check.node.mjs` still hardcodes `defer-stream.http` metadata with
       `transfer-encoding: chunked`; the fixture now reflects the buffered response contract.
+      Partial evidence 2026-06-11: `packages/server/src/document.ts` now merges generated early
+      hint `Link` values into existing response headers instead of clobbering existing `Link` /
+      `link` entries in route and deferred document assembly. `packages/server/src/shell.test.ts`
+      covers route document wrapping with a pre-existing lowercase `link` header. Same-session
+      evidence: `pnpm exec vitest --run packages/server/src/shell.test.ts` and
+      `pnpm exec vitest --run packages/server/src`.
 
 Verification: server vitest + wire fixtures byte-for-byte (remove the newline fudge at
 index.test.ts:4227 while here — it weakens the byte-for-byte claim) + acceptance.
