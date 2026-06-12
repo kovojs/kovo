@@ -339,6 +339,17 @@ jiso-dialog` resolves dashed wire names and prints provenance including package,
       `pnpm --filter @jiso/headless-ui run lint:primitives`,
       `pnpm exec vp check packages/headless-ui/package.json packages/headless-ui/src/index.ts packages/headless-ui/src/primitives/index.ts packages/headless-ui/src/primitives/otp-field.ts packages/headless-ui/src/primitives/otp-field.test.ts plans/ui.md`,
       and `git diff --check`. H2 remains open for scroll-area and full gates.
+      Additional partial evidence 2026-06-12: `packages/headless-ui/src/primitives/scroll-area.ts`
+      adds the H2 scroll-area primitive as a native-scroll-viewport L1 helper: root/viewport/
+      scrollbar/thumb/corner attribute builders, scrollbars mode attributes, visible/hidden
+      data-state tokens, vertical/horizontal data-orientation tokens, disabled-state propagation,
+      and decorative custom-scrollbar parts that leave scrolling semantics on the native viewport.
+      It is exported through `@jiso/headless-ui`, `@jiso/headless-ui/primitives`, and
+      `@jiso/headless-ui/primitives/scroll-area`. Same-session evidence:
+      `pnpm --filter @jiso/headless-ui exec vitest --run src/primitives/scroll-area.test.ts`,
+      `pnpm --filter @jiso/headless-ui run lint:primitives`,
+      `pnpm exec vp check packages/headless-ui/package.json packages/headless-ui/src/index.ts packages/headless-ui/src/lib/state-attributes.ts packages/headless-ui/src/primitives/index.ts packages/headless-ui/src/primitives/scroll-area.ts packages/headless-ui/src/primitives/scroll-area.test.ts plans/ui.md`,
+      and `git diff --check`. H2 remains open for full gates.
 - [ ] H3 wave 3 primitives (list-driven & isomorphic): select, combobox, autocomplete, dropdown-menu, context-menu, menubar, navigation-menu, slider, toast, command.
 - [x] U1 token sheet + `cn()` + statically-analyzable variant helper (Tailwind-first, §13.1 discoverability rules).
       Evidence 2026-06-12: `packages/headless-ui/src/lib/class-names.ts`

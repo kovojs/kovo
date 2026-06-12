@@ -3,13 +3,15 @@ export type PrimitiveStateToken =
   | 'checked'
   | 'closed'
   | 'disabled'
+  | 'hidden'
   | 'indeterminate'
   | 'inactive'
   | 'off'
   | 'on'
   | 'open'
   | 'pressed'
-  | 'unchecked';
+  | 'unchecked'
+  | 'visible';
 
 export type PrimitiveDataAttributes = Readonly<Record<`data-${string}`, string>>;
 

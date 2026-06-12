@@ -381,6 +381,28 @@ export type {
 } from './separator.js';
 
 export {
+  scrollAreaCornerAttributes,
+  scrollAreaCornerState,
+  scrollAreaRootAttributes,
+  scrollAreaScrollbarAttributes,
+  scrollAreaScrollbarState,
+  scrollAreaThumbAttributes,
+  scrollAreaViewportAttributes,
+} from './scroll-area.js';
+export type {
+  ScrollAreaCornerAttributeOptions,
+  ScrollAreaOrientation,
+  ScrollAreaPrimitiveAttributes,
+  ScrollAreaRootAttributeOptions,
+  ScrollAreaScrollbarAttributeOptions,
+  ScrollAreaScrollbars,
+  ScrollAreaState,
+  ScrollAreaThumbAttributeOptions,
+  ScrollAreaViewportAttributeOptions,
+  ScrollAreaVisibilityState,
+} from './scroll-area.js';
+
+export {
   setTabsValue,
   tabsItemSelected,
   tabsKeyDown,
