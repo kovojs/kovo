@@ -27,6 +27,9 @@ import {
   type WithStatement,
   type WithStatementBinding,
 } from 'pgsql-ast-parser';
+import { createPageAssertion, type PageAssertion } from './page.js';
+
+export type { PageAssertion } from './page.js';
 
 export interface JisoTestContext<Db = unknown> {
   db: Db;
@@ -80,11 +83,6 @@ export interface JisoTestExecOptions<Request> {
   csrf?: CsrfValidationOptions<Request>;
   request?: Partial<Omit<Request, 'db'>>;
   touchGraphKey?: string;
-}
-
-export interface PageAssertion {
-  fragment(target: string): string;
-  html: string;
 }
 
 export function createJisoTestHarness<Db>(
@@ -804,159 +802,6 @@ export function propertyTest<State, Input, ClientShape = State>(
   }
 
   return { cases: count };
-}
-
-function createPageAssertion(html: string): PageAssertion {
-  return {
-    fragment(target: string): string {
-      const explicitFragment = explicitFragmentHtml(html, target);
-      if (explicitFragment !== undefined) return explicitFragment;
-
-      const stampedElement = findFragmentTargetElement(html, target);
-      if (!stampedElement) return '';
-
-      const { index, tag } = stampedElement;
-      const end = matchingElementEnd(html, tag, index);
-      if (end === undefined) return '';
-
-      return html.slice(index, end);
-    },
-    html,
-  };
-}
-
-function explicitFragmentHtml(html: string, target: string): string | undefined {
-  const fragmentStart = findOpeningElement(
-    html,
-    (element) =>
-      element.tag === 'fw-fragment' && readHtmlAttribute(element.attrs, 'target') === target,
-  );
-  if (!fragmentStart) return undefined;
-
-  const start = fragmentStart.index;
-  const end = matchingElementEnd(html, 'fw-fragment', start);
-  if (end === undefined) return undefined;
-
-  return html.slice(fragmentStart.end, end - '</fw-fragment>'.length);
-}
-
-interface OpeningElement {
-  attrs: string;
-  end: number;
-  index: number;
-  tag: string;
-}
-
-function findFragmentTargetElement(html: string, target: string): OpeningElement | undefined {
-  return findOpeningElement(html, (element) => {
-    const fragmentTarget = readHtmlAttribute(element.attrs, 'fw-fragment-target');
-    const id = readHtmlAttribute(element.attrs, 'id');
-
-    // SPEC.md §9.1: fragment chunks address the runtime target by name; the
-    // browser runtime resolves that name with id / fw-fragment-target only.
-    return fragmentTarget === target || id === target;
-  });
-}
-
-function findOpeningElement(
-  html: string,
-  predicate: (element: OpeningElement) => boolean,
-): OpeningElement | undefined {
-  let offset = 0;
-
-  while (offset < html.length) {
-    const start = html.indexOf('<', offset);
-    if (start === -1) return undefined;
-
-    const element = readOpeningElement(html, start);
-    if (element) {
-      if (predicate(element)) return element;
-      offset = element.end;
-    } else {
-      offset = start + 1;
-    }
-  }
-
-  return undefined;
-}
-
-function readOpeningElement(html: string, start: number): OpeningElement | undefined {
-  const head = /^<(?<tag>[a-z][a-z0-9-]*)\b/i.exec(html.slice(start));
-  if (!head?.groups?.tag) return undefined;
-
-  const close = openingTagClose(html, start + head[0].length);
-  if (close === undefined) return undefined;
-
-  return {
-    attrs: html.slice(start + head[0].length, close),
-    end: close + 1,
-    index: start,
-    tag: head.groups.tag.toLowerCase(),
-  };
-}
-
-function openingTagClose(html: string, start: number): number | undefined {
-  let quote: '"' | "'" | undefined;
-
-  for (let index = start; index < html.length; index += 1) {
-    const char = html[index];
-
-    if (quote !== undefined) {
-      if (char === quote) quote = undefined;
-      continue;
-    }
-
-    if (char === '"' || char === "'") {
-      quote = char;
-      continue;
-    }
-
-    if (char === '>') return index;
-  }
-
-  return undefined;
-}
-
-function matchingElementEnd(html: string, tag: string, start: number): number | undefined {
-  const tagPattern = new RegExp(`<\\/?${escapeRegExp(tag)}\\b`, 'gi');
-  tagPattern.lastIndex = start;
-  let depth = 0;
-
-  for (const match of html.matchAll(tagPattern)) {
-    const close = openingTagClose(html, match.index + match[0].length);
-    if (close === undefined) return undefined;
-
-    const token = html.slice(match.index, close + 1);
-    if (token.startsWith('</')) {
-      depth -= 1;
-      if (depth === 0) return match.index + token.length;
-      continue;
-    }
-
-    if (/\/\s*>$/.test(token)) {
-      if (depth === 0) return match.index + token.length;
-      continue;
-    }
-
-    depth += 1;
-  }
-
-  return undefined;
-}
-
-function readHtmlAttribute(attrs: string, name: string): string | null {
-  const pattern = new RegExp(
-    `(?:^|\\s)${escapeRegExp(name)}(?:\\s*=\\s*(?:"(?<double>[^"]*)"|'(?<single>[^']*)'|(?<bare>[^\\s"'=<>\`]+)))?(?=\\s|$|/)`,
-    'i',
-  );
-  const match = pattern.exec(attrs);
-  if (!match) return null;
-
-  return match.groups?.double ?? match.groups?.single ?? match.groups?.bare ?? '';
-}
-
-function escapeRegExp(value: string): string {
-  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
 function deepEqual(left: unknown, right: unknown): boolean {
