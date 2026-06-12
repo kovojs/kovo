@@ -18,6 +18,7 @@ import {
   runMcpFallbackStdio,
   runMcpSdkServer,
 } from './index.js';
+import { availableAddComponents, vendoredUiComponents } from './add-catalog.js';
 
 class MemoryMcpTransport implements Transport {
   onclose?: () => void;
@@ -44,6 +45,18 @@ class MemoryMcpTransport implements Transport {
 }
 
 describe('fw add', () => {
+  it('keeps the vendored UI catalog as TSX source components', () => {
+    expect(availableAddComponents()).toBe('button, card');
+
+    for (const [name, entry] of Object.entries(vendoredUiComponents)) {
+      expect(entry.fileName).toBe(`${name}.tsx`);
+      expect(entry.source).toContain("import { component } from '@jiso/core';");
+      expect(entry.source).toContain(`component('${name}'`);
+      expect(entry.source).not.toContain('fw-c=');
+      expect(entry.source).not.toContain('data-bind=');
+    }
+  });
+
   it('vendors button and card as TSX app source', () => {
     const root = mkdtempSync(join(tmpdir(), 'fw-add-cli-'));
     const outDir = join(root, 'src/components/ui');

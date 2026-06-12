@@ -303,7 +303,16 @@ Behavior contracts (state attributes, ARIA, keyboard maps, change reasons) are p
 - **U1 — foundations.** Token sheet (CSS custom properties), `cn()`, variant helper with statically-discoverable class output (§13.1: no dynamic class strings; safelist rules documented).
 - **U2 — vendoring pipeline.** `fw add <component>` copies TSX source + its headless-ui imports' styled wrappers into the app; idempotent re-add; the vendored source must pass the same TSX authoring checks as local app code.
   - Partial CLI slice landed on branch `agent/d7-u2-fw-add-audit-20260612s`: `fw add button card [--out <dir>]` vendors app-local TSX source for the two pure-markup components, refuses unknown component names, skips already-current files, and refuses to overwrite app-owned divergent files. Evidence: `packages/cli/src/index.test.ts` asserts the copied sources contain TSX component definitions and no lowered `fw-c`/`data-bind` stamps per SPEC §5.2; same-session check `pnpm exec vitest --run packages/cli/src/index.test.ts -t "fw add|add component|unknown component"`.
-  - Remaining before U2 can be checked complete: extract the source catalog out of `packages/cli/src/index.ts` into a distributable catalog contract if package publishing needs file assets, add styled wrappers that import `@jiso/headless-ui`, and run the vendored output through the same TSX authoring/FW235 gate as local app code.
+  - Additional partial evidence 2026-06-12: `packages/cli/src/add-catalog.ts` extracts the
+    vendored source catalog out of the CLI command body while keeping `fw add` file output
+    idempotent and TSX-only per SPEC §5.2. Same-session evidence:
+    `pnpm exec vitest --run packages/cli/src/index.test.ts -t "fw add"`,
+    `pnpm exec vp check packages/cli/src/add-catalog.ts packages/cli/src/index.ts packages/cli/src/index.test.ts plans/ui.md`,
+    and `git diff --check`.
+  - Remaining before U2 can be checked complete: promote the extracted catalog into whatever
+    distributable contract/package asset shape `@jiso/ui` needs, add styled wrappers that import
+    `@jiso/headless-ui`, and run the vendored output through the same TSX authoring/FW235 gate as
+    local app code.
 - **U3–U5 — components**, trailing each H-wave by one step; U3 also carries the pure-markup set that needs no behavior layer (button, badge, card, kbd, alert, table, breadcrumb, skeleton) and sheet/drawer as styled dialog variants.
 
 ## G-track — gallery (`examples/gallery`)
