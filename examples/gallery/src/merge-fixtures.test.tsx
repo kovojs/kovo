@@ -4,20 +4,31 @@ import { describe, expect, it } from 'vitest';
 import {
   accordionContentAttributes,
   accordionTriggerAttributes,
+  alertDialogActionAttributes,
+  alertDialogCancelAttributes,
+  alertDialogContentAttributes,
+  alertDialogTriggerAttributes,
   avatarFallbackAttributes,
   avatarRootAttributes,
   checkboxRootAttributes,
+  collapsibleContentAttributes,
+  collapsibleRootAttributes,
+  collapsibleTriggerAttributes,
   dialogContentAttributes,
   dialogTriggerAttributes,
   fieldControlAttributes,
   fieldLabelAttributes,
   fieldRootAttributes,
+  hoverCardContentAttributes,
+  hoverCardTriggerAttributes,
   numberFieldIncrementAttributes,
   numberFieldInputAttributes,
   meterRootAttributes,
   otpFieldHiddenInputAttributes,
   otpFieldInputAttributes,
   otpFieldRootAttributes,
+  popoverContentAttributes,
+  popoverTriggerAttributes,
   progressRootAttributes,
   radioGroupLabelAttributes,
   radioGroupRadioAttributes,
@@ -55,6 +66,7 @@ const idrefAttributes = new Set([
   'aria-owns',
   'commandfor',
   'for',
+  'jiso-hover-card',
   'jiso-tooltip',
   'popovertarget',
 ]);
@@ -197,6 +209,329 @@ describe('gallery G5 primitive merge fixtures', () => {
       </div>,
     ).toBe(
       '<div data-gallery-merge="avatar"><span data-state="loading" aria-label="Author label" role="figure" class="avatar-root rounded-full"><span data-state="loaded" data-delay="250" class="avatar-fallback text-xs">AL</span></span></div>',
+    );
+  });
+
+  it('renders a golden alert-dialog merge with command wiring and action intents', () => {
+    const trigger = mergePrimitiveAttrs(
+      {
+        ...alertDialogTriggerAttributes({
+          contentId: 'gallery-delete-dialog',
+          open: true,
+        }),
+        class: 'alert-dialog-trigger',
+      },
+      {
+        'aria-expanded': 'false',
+        class: 'alert-dialog-trigger destructive',
+        commandfor: 'author-delete-dialog',
+        'data-state': 'author-open',
+      },
+    );
+    const content = mergePrimitiveAttrs(
+      {
+        ...alertDialogContentAttributes({
+          contentId: 'gallery-delete-dialog',
+          descriptionId: 'gallery-delete-description',
+          open: true,
+          titleId: 'gallery-delete-title',
+        }),
+        class: 'alert-dialog-panel',
+      },
+      {
+        'aria-describedby': 'author-delete-description',
+        class: 'alert-dialog-panel shadow-xl',
+        id: 'author-delete-dialog',
+        role: 'dialog',
+      },
+    );
+    const cancel = mergePrimitiveAttrs(
+      {
+        ...alertDialogCancelAttributes({
+          autoFocus: true,
+          contentId: 'gallery-delete-dialog',
+          open: true,
+        }),
+        class: 'alert-dialog-cancel',
+      },
+      {
+        autofocus: false,
+        class: 'alert-dialog-cancel muted',
+        commandfor: 'author-delete-dialog',
+        type: 'submit',
+      },
+    );
+    const action = mergePrimitiveAttrs(
+      {
+        ...alertDialogActionAttributes({
+          contentId: 'gallery-delete-dialog',
+          intent: 'destructive',
+          open: true,
+        }),
+        class: 'alert-dialog-action',
+      },
+      {
+        class: 'alert-dialog-action danger',
+        'data-intent': 'author-danger',
+        disabled: true,
+      },
+    );
+
+    expect(trigger.diagnostics).toEqual([
+      {
+        attr: 'data-state',
+        code: 'FW232',
+        message: 'Author override of primitive-owned state attribute per SPEC.md section 4.6',
+      },
+      {
+        attr: 'aria-expanded',
+        code: 'FW232',
+        message: 'Author override of primitive ARIA/role attribute per SPEC.md section 4.6',
+      },
+      {
+        attr: 'commandfor',
+        code: 'FW231',
+        message: 'Unmergeable primitive IDREF conflict per SPEC.md section 4.6',
+      },
+    ]);
+    expect(content.diagnostics).toEqual([
+      {
+        attr: 'role',
+        code: 'FW232',
+        message: 'Author override of primitive ARIA/role attribute per SPEC.md section 4.6',
+      },
+      {
+        attr: 'aria-describedby',
+        code: 'FW231',
+        message: 'Unmergeable primitive IDREF conflict per SPEC.md section 4.6',
+      },
+    ]);
+    expect(cancel.diagnostics).toEqual([
+      {
+        attr: 'commandfor',
+        code: 'FW231',
+        message: 'Unmergeable primitive IDREF conflict per SPEC.md section 4.6',
+      },
+    ]);
+    expect(action.diagnostics).toEqual([]);
+    expect(
+      <section data-gallery-merge="alert-dialog">
+        <button {...trigger.attrs}>Delete</button>
+        <dialog {...content.attrs}>
+          <button {...cancel.attrs}>Cancel</button>
+          <button {...action.attrs}>Confirm</button>
+        </dialog>
+      </section>,
+    ).toBe(
+      '<section data-gallery-merge="alert-dialog"><button data-state="open" aria-expanded="false" aria-haspopup="dialog" type="button" aria-controls="gallery-delete-dialog" command="show-modal" commandfor="author-delete-dialog" class="alert-dialog-trigger destructive">Delete</button><dialog data-state="open" aria-modal="true" open role="dialog" id="author-delete-dialog" aria-labelledby="gallery-delete-title" aria-describedby="author-delete-description" class="alert-dialog-panel shadow-xl"><button data-state="open" data-intent="cancel" type="submit" command="request-close" commandfor="author-delete-dialog" class="alert-dialog-cancel muted">Cancel</button><button data-state="open" data-intent="author-danger" disabled type="button" command="request-close" commandfor="gallery-delete-dialog" class="alert-dialog-action danger">Confirm</button></dialog></section>',
+    );
+  });
+
+  it('renders a golden popover merge with native popover target conflicts', () => {
+    const trigger = mergePrimitiveAttrs(
+      {
+        ...popoverTriggerAttributes({
+          contentId: 'gallery-account-popover',
+          open: false,
+        }),
+        class: 'popover-trigger',
+      },
+      {
+        'aria-controls': 'author-account-popover',
+        'aria-expanded': 'true',
+        class: 'popover-trigger compact',
+        'data-state': 'author-open',
+        popovertarget: 'author-account-popover',
+        type: 'submit',
+      },
+    );
+    const content = mergePrimitiveAttrs(
+      {
+        ...popoverContentAttributes({
+          contentId: 'gallery-account-popover',
+          open: false,
+        }),
+        class: 'popover-content',
+      },
+      {
+        class: 'popover-content min-w-48',
+        id: 'author-account-popover',
+        popover: 'manual',
+      },
+    );
+
+    expect(trigger.diagnostics).toEqual([
+      {
+        attr: 'data-state',
+        code: 'FW232',
+        message: 'Author override of primitive-owned state attribute per SPEC.md section 4.6',
+      },
+      {
+        attr: 'aria-expanded',
+        code: 'FW232',
+        message: 'Author override of primitive ARIA/role attribute per SPEC.md section 4.6',
+      },
+      {
+        attr: 'aria-controls',
+        code: 'FW231',
+        message: 'Unmergeable primitive IDREF conflict per SPEC.md section 4.6',
+      },
+      {
+        attr: 'popovertarget',
+        code: 'FW231',
+        message: 'Unmergeable primitive IDREF conflict per SPEC.md section 4.6',
+      },
+    ]);
+    expect(content.diagnostics).toEqual([]);
+    expect(
+      <section data-gallery-merge="popover">
+        <button {...trigger.attrs}>Account</button>
+        <div {...content.attrs}>Menu</div>
+      </section>,
+    ).toBe(
+      '<section data-gallery-merge="popover"><button data-state="closed" aria-expanded="true" type="submit" aria-controls="author-account-popover" popovertarget="author-account-popover" popovertargetaction="toggle" class="popover-trigger compact">Account</button><div data-state="closed" id="author-account-popover" popover="manual" class="popover-content min-w-48">Menu</div></section>',
+    );
+  });
+
+  it('renders a golden hover-card merge with package-prefixed behavior IDREFs', () => {
+    const trigger = mergePrimitiveAttrs(
+      {
+        ...hoverCardTriggerAttributes({
+          contentId: 'gallery-profile-card',
+          open: true,
+        }),
+        class: 'hover-card-trigger',
+      },
+      {
+        'aria-controls': 'author-profile-card',
+        'aria-expanded': 'false',
+        class: 'hover-card-trigger underline',
+        'data-state': 'author-open',
+        'jiso-hover-card': 'author-profile-card',
+      },
+    );
+    const content = mergePrimitiveAttrs(
+      {
+        ...hoverCardContentAttributes({
+          contentId: 'gallery-profile-card',
+          open: false,
+        }),
+        class: 'hover-card-content',
+      },
+      {
+        class: 'hover-card-content w-64',
+        hidden: false,
+        id: 'author-profile-card',
+        popover: 'auto',
+      },
+    );
+
+    expect(trigger.diagnostics).toEqual([
+      {
+        attr: 'data-state',
+        code: 'FW232',
+        message: 'Author override of primitive-owned state attribute per SPEC.md section 4.6',
+      },
+      {
+        attr: 'aria-expanded',
+        code: 'FW232',
+        message: 'Author override of primitive ARIA/role attribute per SPEC.md section 4.6',
+      },
+      {
+        attr: 'aria-controls',
+        code: 'FW231',
+        message: 'Unmergeable primitive IDREF conflict per SPEC.md section 4.6',
+      },
+      {
+        attr: 'jiso-hover-card',
+        code: 'FW231',
+        message: 'Unmergeable primitive IDREF conflict per SPEC.md section 4.6',
+      },
+    ]);
+    expect(content.diagnostics).toEqual([]);
+    expect(
+      <section data-gallery-merge="hover-card">
+        <a {...trigger.attrs}>Ada</a>
+        <aside {...content.attrs}>Profile</aside>
+      </section>,
+    ).toBe(
+      '<section data-gallery-merge="hover-card"><a data-state="open" aria-expanded="false" aria-controls="author-profile-card" jiso-hover-card="author-profile-card" class="hover-card-trigger underline">Ada</a><aside data-state="closed" id="author-profile-card" popover="auto" class="hover-card-content w-64">Profile</aside></section>',
+    );
+  });
+
+  it('renders a golden collapsible merge with details and summary attrs', () => {
+    const root = mergePrimitiveAttrs(
+      {
+        ...collapsibleRootAttributes({ disabled: true, open: false }),
+        class: 'collapsible-root',
+      },
+      {
+        class: 'collapsible-root border',
+        'data-state': 'author-open',
+        open: true,
+      },
+    );
+    const trigger = mergePrimitiveAttrs(
+      {
+        ...collapsibleTriggerAttributes({
+          contentId: 'gallery-filters-panel',
+          open: false,
+        }),
+        class: 'collapsible-trigger',
+      },
+      {
+        'aria-controls': 'author-filters-panel',
+        'aria-expanded': 'true',
+        class: 'collapsible-trigger font-medium',
+        'data-state': 'author-open',
+      },
+    );
+    const content = mergePrimitiveAttrs(
+      {
+        ...collapsibleContentAttributes({
+          contentId: 'gallery-filters-panel',
+          open: false,
+        }),
+        class: 'collapsible-content',
+      },
+      {
+        class: 'collapsible-content p-3',
+        id: 'author-filters-panel',
+      },
+    );
+
+    expect(root.diagnostics).toEqual([
+      {
+        attr: 'data-state',
+        code: 'FW232',
+        message: 'Author override of primitive-owned state attribute per SPEC.md section 4.6',
+      },
+    ]);
+    expect(trigger.diagnostics).toEqual([
+      {
+        attr: 'data-state',
+        code: 'FW232',
+        message: 'Author override of primitive-owned state attribute per SPEC.md section 4.6',
+      },
+      {
+        attr: 'aria-expanded',
+        code: 'FW232',
+        message: 'Author override of primitive ARIA/role attribute per SPEC.md section 4.6',
+      },
+      {
+        attr: 'aria-controls',
+        code: 'FW231',
+        message: 'Unmergeable primitive IDREF conflict per SPEC.md section 4.6',
+      },
+    ]);
+    expect(content.diagnostics).toEqual([]);
+    expect(
+      <details {...root.attrs}>
+        <summary {...trigger.attrs}>Filters</summary>
+        <div {...content.attrs}>Panel</div>
+      </details>,
+    ).toBe(
+      '<details data-state="closed" data-disabled="" open class="collapsible-root border"><summary data-state="closed" aria-expanded="true" aria-controls="author-filters-panel" class="collapsible-trigger font-medium">Filters</summary><div data-state="closed" id="author-filters-panel" class="collapsible-content p-3">Panel</div></details>',
     );
   });
 

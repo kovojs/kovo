@@ -710,6 +710,18 @@ jiso-dialog` resolves dashed wire names and prints provenance including package,
       `pnpm exec vp check examples/gallery/src/merge-fixtures.test.tsx plans/ui.md`,
       and `git diff --check`. G5 remains open because this is still a bounded fixture subset,
       not every primitive attrs record or compiler/runtime diagnostic coverage.
+      Additional partial evidence 2026-06-12: the gallery G5 oracle adds alert-dialog,
+      popover, hover-card, and collapsible merge goldens. These cover native dialog command
+      wiring, popover `popovertarget` IDREF conflicts, package-prefixed `jiso-hover-card`
+      behavior IDREF conflicts, details/summary open-state merging, primitive-owned
+      `data-state` retention, logical-OR disabled attrs, and ARIA/role FW231/FW232 diagnostics
+      against the SPEC §4.6 merge table. Same-session evidence:
+      `pnpm --filter @jiso/example-gallery exec vitest --run src/merge-fixtures.test.tsx`,
+      `pnpm --filter @jiso/example-gallery test`,
+      `pnpm exec vp check examples/gallery/src/merge-fixtures.test.tsx plans/ui.md`,
+      and `git diff --check`.
+      G5 remains open because this is still a bounded fixture subset, not every exported
+      primitive attrs record or compiler/runtime diagnostic coverage.
 
 ## Background
 
