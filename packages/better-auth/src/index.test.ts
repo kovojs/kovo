@@ -820,6 +820,49 @@ describe('credential mutation helpers', () => {
     );
   });
 
+  it('keeps plugin-added user fields under the bridged user domain', () => {
+    const result = annotateBetterAuthSchemaSource(
+      [
+        "import { jiso } from '@jiso/drizzle';",
+        "import { boolean, pgTable, text } from 'drizzle-orm/pg-core';",
+        '',
+        "export const user = pgTable('user', {",
+        "  id: text('id').primaryKey(),",
+        "  email: text('email').notNull(),",
+        "  username: text('username'),",
+        "  displayUsername: text('display_username'),",
+        "  isAnonymous: boolean('is_anonymous'),",
+        '});',
+        '',
+      ].join('\n'),
+      {
+        account: authTable(['userId']),
+        session: authTable(['userId']),
+        user: authTable(['displayUsername', 'email', 'isAnonymous', 'username']),
+        verification: authTable(),
+      },
+    );
+
+    // SPEC.md §10.1: field extensions on an app-visible bridged table inherit
+    // the table domain annotation; they are not unsupported plugin tables.
+    expect(result.validation).toMatchObject({
+      keyFieldMismatches: [],
+      pluginTableDegradations: [],
+      unbridgedTables: [],
+    });
+    expect(result.annotatedTables).toEqual(['user']);
+    expect(result.missingSourceTables).toEqual(['account', 'session', 'verification']);
+    expect(result.source).toContain(
+      "export const user = pgTable('user', {\n" +
+        "  id: text('id').primaryKey(),\n" +
+        "  email: text('email').notNull(),\n" +
+        "  username: text('username'),\n" +
+        "  displayUsername: text('display_username'),\n" +
+        "  isAnonymous: boolean('is_anonymous'),\n" +
+        "}, jiso({ domain: 'user', key: 'id' }));",
+    );
+  });
+
   it('materializes the JWT signing-key table as an exempt app schema.ts source fixture', () => {
     const result = annotateBetterAuthSchemaSource(
       [

@@ -16,6 +16,7 @@ import {
   organization,
   siwe,
   twoFactor,
+  username,
 } from 'better-auth/plugins';
 import { describe, expect, expectTypeOf, it } from 'vitest';
 
@@ -560,6 +561,42 @@ describe('Better Auth pinned conformance', () => {
     ]);
     expect(result.source).toContain(
       "export const walletAddress = pgTable('walletAddress', {}, jiso({ domain: 'auth', key: 'userId' }));",
+    );
+  });
+
+  it('pins username plugin user-field metadata as covered by the user schema bridge', () => {
+    const { auth } = createRealAuth({
+      plugins: [username()],
+    });
+    const tables = getAuthTables(auth.options);
+    const result = annotateBetterAuthSchemaSource(
+      betterAuthSchemaSourceFixture(Object.keys(tables)),
+      tables,
+    );
+
+    expect(Object.keys(tables).sort()).toEqual(['account', 'session', 'user', 'verification']);
+    expect(Object.keys(requireAuthTable(tables, 'user').fields).sort()).toEqual([
+      'createdAt',
+      'displayUsername',
+      'email',
+      'emailVerified',
+      'image',
+      'name',
+      'updatedAt',
+      'username',
+    ]);
+    expect(validateBetterAuthSchemaBridge(tables)).toEqual({
+      declaredTouchMismatches: [],
+      keyFieldMismatches: [],
+      missingTables: [],
+      ok: true,
+      pluginTableDegradations: [],
+      unbridgedTables: [],
+    });
+    expect(betterAuthSchemaBridge.user).toEqual({ domain: 'user', key: 'id' });
+    expect(result.annotatedTables).toEqual(['account', 'session', 'user', 'verification']);
+    expect(result.source).toContain(
+      "export const user = pgTable('user', {}, jiso({ domain: 'user', key: 'id' }));",
     );
   });
 

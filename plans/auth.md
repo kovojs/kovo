@@ -163,10 +163,24 @@ Scope: SPEC additions (session population, guard-failure contract, mutation resp
       `pnpm exec vitest --run packages/better-auth/src/index.test.ts conformance/better-auth-pin/src/index.test.ts --reporter=dot`,
       `pnpm exec tsc -p conformance/better-auth-pin/tsconfig.json --noEmit`, and
       `pnpm exec vp check packages/better-auth/src/index.ts packages/better-auth/src/index.test.ts conformance/better-auth-pin/src/index.test.ts plans/auth.md`.
+      Partial evidence 2026-06-12: the existing `user` table bridge is now pinned against the
+      real Better Auth `username()` plugin's user-field extension surface (`username` and
+      `displayUsername`) so plugin-added fields on an already bridged app-visible table stay
+      covered by `jiso({ domain: "user", key: "id" })` rather than degrading as unsupported
+      plugin metadata. `packages/better-auth/src/index.test.ts` covers local generated
+      `schema.ts` annotations for plugin-added user fields, and
+      `conformance/better-auth-pin/src/index.test.ts` pins real `better-auth@1.6.17`
+      username table/field metadata with clean validation plus generated annotations.
+      Same-session evidence:
+      `pnpm exec vitest --run packages/better-auth/src/index.test.ts conformance/better-auth-pin/src/index.test.ts --reporter=dot`,
+      `pnpm exec tsc -p conformance/better-auth-pin/tsconfig.json --noEmit`,
+      `pnpm exec vp check packages/better-auth/src/index.test.ts conformance/better-auth-pin/src/index.test.ts plans/auth.md`,
+      and `git diff --check`.
       Remaining gaps: plugin-generated tables outside the blessed organization/admin/two-factor/OIDC-provider/SIWE/JWT/device-authorization
-      surface are still not mapped, the OAuth-provider successor package/table metadata is not
-      installed or exportable from the pinned dependency set, and full app `schema.ts` generation remains
-      bounded to recognized Drizzle table declarations.
+      surface are still not mapped, user-table field-extension surfaces beyond the pinned
+      `username()` case are not explicitly enumerated, the OAuth-provider successor
+      package/table metadata is not installed or exportable from the pinned dependency set, and
+      full app `schema.ts` generation remains bounded to recognized Drizzle table declarations.
 - [x] B2 typed session mapper (`betterAuthSession(auth, map)`). Evidence: `packages/better-auth/src/index.ts` exports a dependency-light Better Auth-like `auth.api.getSession({ headers })` provider adapter that returns `null` for anonymous sessions per SPEC §6.5 and maps the inferred Better Auth `session`/`user` payload through an app-owned total mapper; `packages/better-auth/src/index.test.ts` covers runtime mapping, anonymous requests, and a `@ts-expect-error` totality check that dropped declared session fields fail under `vp check`.
 - [x] B3 guard bindings: `authed` / `role()` / org-scoping over the mapped session. Evidence: `packages/better-auth/src/index.ts` exports `authed()`, typed `role<Request>()`, and `activeOrganization()` guards over the mapped session while preserving SPEC §10.3 unauthenticated vs unauthorized guard failures; focused tests cover success/failure behavior and stale role-name type failures without requiring live Better Auth services.
 - [x] B4 ejectable credential mutations (sign-in / sign-up / sign-out) wrapping `auth.api`.
