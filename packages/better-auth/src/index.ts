@@ -217,6 +217,7 @@ export interface BetterAuthSchemaBridgeValidation {
 export interface BetterAuthPluginTableDegradation {
   diagnosticCode: 'FW406';
   fields: string[] | null;
+  manualBridgeSteps: string[];
   message: string;
   reason: 'unsupported-plugin-table';
   table: string;
@@ -251,10 +252,18 @@ export interface BetterAuthSchemaSourceAnnotationOptions {
   tableFactories?: readonly string[];
 }
 
+export interface BetterAuthSchemaSourceImportNote {
+  hasRequiredImport: boolean;
+  localName: string;
+  shouldAddRequiredImport: boolean;
+  suggestedImport: string;
+}
+
 export interface BetterAuthSchemaSourceAnnotationResult {
   alreadyAnnotatedTables: BetterAuthTable[];
   annotatedTables: BetterAuthTable[];
   existingExtraConfigTables: string[];
+  importNote: BetterAuthSchemaSourceImportNote;
   missingSourceTables: BetterAuthTable[];
   requiredImport: {
     module: '@jiso/drizzle';
@@ -429,6 +438,7 @@ export function annotateBetterAuthSchemaSource(
   const alreadyAnnotatedTables: BetterAuthTable[] = [];
   const existingExtraConfigTables: string[] = [];
   const annotationCallee = options.annotationCallee ?? 'jiso';
+  const hasRequiredImport = hasNamedImportLocal(source, '@jiso/drizzle', annotationCallee);
 
   for (const call of sourceTables) {
     const table = call.tableName;
@@ -461,6 +471,12 @@ export function annotateBetterAuthSchemaSource(
     alreadyAnnotatedTables: sortedBetterAuthTables(alreadyAnnotatedTables),
     annotatedTables: sortedBetterAuthTables(annotatedTables),
     existingExtraConfigTables: [...new Set(existingExtraConfigTables)].sort(),
+    importNote: {
+      hasRequiredImport,
+      localName: annotationCallee,
+      shouldAddRequiredImport: annotatedTables.length > 0 && !hasRequiredImport,
+      suggestedImport: betterAuthSchemaImportStatement(annotationCallee),
+    },
     missingSourceTables,
     requiredImport: {
       module: '@jiso/drizzle',
@@ -885,10 +901,25 @@ function unsupportedPluginTableDegradation(
   return {
     diagnosticCode: 'FW406',
     fields: fieldNames === null ? null : [...fieldNames].sort(),
+    manualBridgeSteps: unsupportedPluginTableManualBridgeSteps(table, fieldNames),
     message: `${table} is outside the blessed Better Auth schema bridge; add a schema.ts domain/exempt annotation and declared touches before relying on runtime coverage.`,
     reason: 'unsupported-plugin-table',
     table,
   };
+}
+
+function unsupportedPluginTableManualBridgeSteps(
+  table: string,
+  fields: Set<string> | null,
+): string[] {
+  const fieldList =
+    fields === null ? 'unavailable from Better Auth metadata' : [...fields].sort().join(', ');
+
+  return [
+    `Inspect ${table} fields (${fieldList}) and decide whether the app reads this table.`,
+    'If it is app-visible, add a schema.ts jiso({ domain, key }) annotation; otherwise add jiso({ exempt: true }) with a rationale.',
+    `Add declared Better Auth API touches for writes that can mutate ${table}; SPEC.md §11.2 keeps observed writes FW406 until declared coverage exists.`,
+  ];
 }
 
 const betterAuthSchemaTableNames = new Set<string>(
@@ -930,6 +961,35 @@ function isBetterAuthSchemaAnnotationText(
     compactSourceText(text) ===
     compactSourceText(betterAuthSchemaAnnotationCall(table, annotationCallee))
   );
+}
+
+function betterAuthSchemaImportStatement(localName: string): string {
+  const specifier = localName === 'jiso' ? 'jiso' : `jiso as ${localName}`;
+
+  return `import { ${specifier} } from '@jiso/drizzle';`;
+}
+
+function hasNamedImportLocal(source: string, moduleName: string, localName: string): boolean {
+  const importPattern = /import\s*\{(?<specifiers>[^}]+)\}\s*from\s*(?<module>['"][^'"]+['"])/g;
+
+  for (const match of source.matchAll(importPattern)) {
+    if (stringLiteralValue(match.groups?.module ?? '') !== moduleName) continue;
+
+    for (const specifier of (match.groups?.specifiers ?? '').split(',')) {
+      if (namedImportLocalName(specifier.trim()) === localName) return true;
+    }
+  }
+
+  return false;
+}
+
+function namedImportLocalName(specifier: string): string | null {
+  const match =
+    /^(?<imported>[A-Za-z_$][0-9A-Za-z_$]*)(?:\s+as\s+(?<local>[A-Za-z_$][0-9A-Za-z_$]*))?$/.exec(
+      specifier,
+    );
+
+  return match?.groups?.local ?? match?.groups?.imported ?? null;
 }
 
 function findDrizzleTableCalls(

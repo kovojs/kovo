@@ -490,6 +490,11 @@ describe('credential mutation helpers', () => {
         {
           diagnosticCode: 'FW406',
           fields: ['credentialId', 'id', 'userId'],
+          manualBridgeSteps: [
+            'Inspect webauthnCredential fields (credentialId, id, userId) and decide whether the app reads this table.',
+            'If it is app-visible, add a schema.ts jiso({ domain, key }) annotation; otherwise add jiso({ exempt: true }) with a rationale.',
+            'Add declared Better Auth API touches for writes that can mutate webauthnCredential; SPEC.md §11.2 keeps observed writes FW406 until declared coverage exists.',
+          ],
           message:
             'webauthnCredential is outside the blessed Better Auth schema bridge; add a schema.ts domain/exempt annotation and declared touches before relying on runtime coverage.',
           reason: 'unsupported-plugin-table',
@@ -555,6 +560,12 @@ describe('credential mutation helpers', () => {
     });
 
     expect(result.validation.ok).toBe(true);
+    expect(result.importNote).toEqual({
+      hasRequiredImport: true,
+      localName: 'jiso',
+      shouldAddRequiredImport: false,
+      suggestedImport: "import { jiso } from '@jiso/drizzle';",
+    });
     expect(result.requiredImport).toEqual({ module: '@jiso/drizzle', name: 'jiso' });
     expect(result.annotatedTables).toEqual(['account', 'session', 'user', 'verification']);
     expect(result.alreadyAnnotatedTables).toEqual([]);
@@ -639,6 +650,48 @@ describe('credential mutation helpers', () => {
       "export const account = pgTable('account', {}, jiso({ domain: 'auth', key: 'userId' }));",
     );
     expect(result.source).toContain("export const session = pgTable('session', {}, auditConfig);");
+  });
+
+  it('reports generated schema.ts import notes for default and aliased annotation callees', () => {
+    const metadata = {
+      account: authTable(['userId']),
+      session: authTable(['userId']),
+      user: authTable(),
+      verification: authTable(),
+    };
+    const result = annotateBetterAuthSchemaSource(
+      [
+        "import { pgTable } from 'drizzle-orm/pg-core';",
+        "export const account = pgTable('account', {});",
+      ].join('\n'),
+      metadata,
+    );
+
+    expect(result.importNote).toEqual({
+      hasRequiredImport: false,
+      localName: 'jiso',
+      shouldAddRequiredImport: true,
+      suggestedImport: "import { jiso } from '@jiso/drizzle';",
+    });
+
+    const aliased = annotateBetterAuthSchemaSource(
+      [
+        "import { jiso as markJiso } from '@jiso/drizzle';",
+        "export const account = pgTable('account', {});",
+      ].join('\n'),
+      metadata,
+      { annotationCallee: 'markJiso' },
+    );
+
+    expect(aliased.importNote).toEqual({
+      hasRequiredImport: true,
+      localName: 'markJiso',
+      shouldAddRequiredImport: false,
+      suggestedImport: "import { jiso as markJiso } from '@jiso/drizzle';",
+    });
+    expect(aliased.source).toContain(
+      "export const account = pgTable('account', {}, markJiso({ domain: 'auth', key: 'userId' }));",
+    );
   });
 
   it('wraps signInEmail as an ordinary mutation and forwards Better Auth cookies', async () => {

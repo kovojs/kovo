@@ -301,6 +301,12 @@ describe('Better Auth pinned conformance', () => {
       'user',
       'verification',
     ]);
+    expect(result.importNote).toEqual({
+      hasRequiredImport: true,
+      localName: 'jiso',
+      shouldAddRequiredImport: false,
+      suggestedImport: "import { jiso } from '@jiso/drizzle';",
+    });
     expect(result.missingSourceTables).toEqual([]);
     expect(result.source).toContain(
       "export const user = pgTable('user', {}, jiso({ domain: 'user', key: 'id' }));",
@@ -388,6 +394,11 @@ describe('Better Auth pinned conformance', () => {
         {
           diagnosticCode: 'FW406',
           fields: ['createdAt', 'expiresAt', 'id', 'privateKey', 'publicKey'],
+          manualBridgeSteps: [
+            'Inspect jwks fields (createdAt, expiresAt, id, privateKey, publicKey) and decide whether the app reads this table.',
+            'If it is app-visible, add a schema.ts jiso({ domain, key }) annotation; otherwise add jiso({ exempt: true }) with a rationale.',
+            'Add declared Better Auth API touches for writes that can mutate jwks; SPEC.md §11.2 keeps observed writes FW406 until declared coverage exists.',
+          ],
           message:
             'jwks is outside the blessed Better Auth schema bridge; add a schema.ts domain/exempt annotation and declared touches before relying on runtime coverage.',
           reason: 'unsupported-plugin-table',
