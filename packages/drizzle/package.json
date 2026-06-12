@@ -4,7 +4,7 @@
   "type": "module",
   "exports": {
     ".": "./src/runtime.ts",
-    "./static": "./src/index.ts"
+    "./static": "./src/static.ts"
   },
   "dependencies": {
     "@jiso/core": "workspace:*"

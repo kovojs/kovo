@@ -1766,6 +1766,17 @@ must be "FW406 unresolved," never "silently wrong."
       exposes extraction. Same-session evidence:
       `pnpm exec vitest --run packages/drizzle/src/runtime-surface.test.ts` and
       `pnpm exec vp check packages/drizzle/src/runtime-surface.test.ts plans/codebase-quality-round2.md`.
+      Additional bounded evidence 2026-06-12: the build-time extractor implementation moved from
+      `packages/drizzle/src/index.ts` to `packages/drizzle/src/static.ts`, and
+      `@jiso/drizzle/static` now targets that module directly while `src/index.ts` remains only a
+      compatibility re-export for deep-import verification. `runtime-surface.test.ts` pins the
+      dedicated static source as the only Drizzle module in this seam importing `ts-morph`, and
+      keeps the runtime source free of both the static implementation and compatibility barrel.
+      Same-session evidence:
+      `pnpm exec vitest --run packages/drizzle/src/runtime-surface.test.ts packages/drizzle/src/index.test.ts`,
+      `pnpm exec vitest --run conformance/drizzle-pin/src/index.test.ts`,
+      `pnpm exec vp check packages/drizzle/package.json packages/drizzle/src/runtime-surface.test.ts packages/drizzle/src/index.ts packages/drizzle/src/static.ts plans/codebase-quality-round2.md`,
+      and `git diff --check`.
 - [ ] **LOW** — module-global mutable `sourceExtractionFileId` (:53); fresh ts-morph `Project`
       per `parseSourceFile` call with files re-parsed 3+× per pass (:1457); `IGNORED_LOCAL_CALL_NAMES`
       mixing JS keywords with domain names (:57-71 — a user helper named `insert` is silently
