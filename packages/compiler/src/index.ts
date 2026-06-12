@@ -207,8 +207,13 @@ export function compileComponentModule(options: CompileComponentOptions): Compil
     platformModel,
     options.fileName,
   );
+  const navigationModel =
+    navigationLowering.source === platformLowering.source
+      ? platformModel
+      : parseComponentModuleModel(options.fileName, navigationLowering.source);
   const deriveLowering = lowerInlineAttributeDerives(
     navigationLowering.source,
+    navigationModel,
     componentName,
     options,
   );

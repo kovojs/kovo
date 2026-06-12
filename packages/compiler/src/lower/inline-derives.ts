@@ -2,7 +2,6 @@ import {
   componentOptionObjectKeys,
   jsxElements,
   jsxExpressions,
-  parseComponentModule as parseComponentModuleModel,
   propertyAccessPaths,
   type ComponentModuleModel,
   type JsxAttributeModel,
@@ -28,10 +27,10 @@ interface InlineAttributeDerive {
 
 export function lowerInlineAttributeDerives(
   source: string,
+  model: ComponentModuleModel,
   componentName: string,
   options: InlineDeriveLoweringOptions,
 ): { source: string } {
-  const model = parseComponentModuleModel(options.fileName, source);
   const knownQueries = new Set([
     ...componentOptionObjectKeys(model, 'queries'),
     ...Object.keys(options.registryFacts?.queries ?? {}),
