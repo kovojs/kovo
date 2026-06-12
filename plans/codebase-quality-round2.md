@@ -2704,6 +2704,14 @@ As each phase splits a source module, split its tests in the same commit.
       pipeline groups. Same-session evidence:
       `pnpm exec vitest --run packages/compiler/src/query-coverage.test.ts packages/compiler/src/index.test.ts -t "inline attribute|query-dependent|FW311|template stamp|renderOnce|bootstrap|isomorphic|string"`
       and `pnpm exec vp check packages/compiler/src/query-coverage.test.ts packages/compiler/src/index.test.ts plans/codebase-quality-round2.md`.
+      Additional evidence 2026-06-12: component identity/dependency stamps, residual `fw-c` /
+      `fw-deps` validation, FW222/FW223 binding-stamp drift, binding-stamp string/comment
+      non-matches, and the self-closing list-stamp diagnostic edge case moved from
+      `packages/compiler/src/index.test.ts` into `packages/compiler/src/stamps.test.ts`.
+      The broad compiler split remains open for attribute merge, ID/content-model diagnostics,
+      and remaining compile pipeline groups. Same-session evidence:
+      `pnpm exec vitest --run packages/compiler/src/stamps.test.ts packages/compiler/src/index.test.ts -t "stamp|fw-c|fw-deps|FW222|FW223|self-closing|binding"`
+      and `pnpm exec vp check packages/compiler/src/stamps.test.ts packages/compiler/src/index.test.ts plans/codebase-quality-round2.md`.
 - [ ] drizzle (one describe, 57 its, 68 inline pgTable fixtures, 3 module-shim copies) and
       test-package suites: same treatment; CLI tests get the temp-dir + stream-spy ritual
       (16 hand-copies) as one helper.
