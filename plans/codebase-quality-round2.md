@@ -773,6 +773,12 @@ pipeline throws the tree away and communicates via mutated source text.
       import it instead of carrying local copies. Same-session evidence:
       `pnpm exec vitest --run packages/compiler/src/index.test.ts -t "data-bind|FW311|query update"` and
       `pnpm exec vp check packages/compiler/src/types.ts packages/compiler/src/analyze/query-updates.ts packages/compiler/src/validate/bindings.ts packages/compiler/src/validate/component-contracts.ts packages/compiler/src/index.ts plans/codebase-quality-round2.md`.
+      Additional evidence 2026-06-12: data-bind-list stamp extraction now lives on the analyzer
+      path as `collectDataBindListStamps`; `validate/bindings.ts` consumes that shared fact
+      collector instead of maintaining a private duplicate that could drift from client query-plan
+      emission. Same-session evidence:
+      `pnpm exec vitest --run packages/compiler/src/index.test.ts -t "data-bind|FW227|FW302|template stamp|query update"` and
+      `pnpm exec vp check packages/compiler/src/analyze/query-updates.ts packages/compiler/src/validate/bindings.ts plans/codebase-quality-round2.md`.
 - [x] **MED — CSS host detection onto the model.** css.ts:211/:220/:238 grep the whole module
       with bare regexes (match inside comments/strings). The component option entries are already
       in the parsed model; `scan/text.ts:39`'s `findStringEnd` has no template-interpolation

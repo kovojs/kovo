@@ -53,7 +53,7 @@ export function collectQueryUpdatePlans(
     pathsByQuery.set(query, paths);
   }
 
-  for (const stamp of dataBindListStamps(source, model)) {
+  for (const stamp of collectDataBindListStamps(source, model)) {
     const [query] = stamp.list.split('.');
     if (!query) continue;
 
@@ -139,7 +139,7 @@ export function collectQueryUpdateCoverage(
     coveredPaths.add(path);
   }
 
-  for (const stamp of dataBindListStamps(source, model)) {
+  for (const stamp of collectDataBindListStamps(source, model)) {
     facts.push({
       componentName,
       detail: 'data-bind-list',
@@ -338,7 +338,10 @@ function dataBindAttributes(model: ComponentModuleModel): DataBindAttribute[] {
     }));
 }
 
-function dataBindListStamps(source: string, model: ComponentModuleModel): QueryTemplateStampFact[] {
+export function collectDataBindListStamps(
+  source: string,
+  model: ComponentModuleModel,
+): QueryTemplateStampFact[] {
   const elements = jsxElements(model);
 
   return elements

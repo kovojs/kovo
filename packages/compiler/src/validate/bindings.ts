@@ -1,5 +1,6 @@
 import { diagnosticDefinitions } from '@jiso/core';
 
+import { collectDataBindListStamps } from '../analyze/query-updates.js';
 import { diagnosticFor, type CompilerDiagnostic } from '../diagnostics.js';
 import { dedupeBy } from '../shared.js';
 import {
@@ -41,7 +42,7 @@ export function validateDataBindings(
   const queryShapes = componentQueryShapes(options);
   if (!queryShapes) return [];
 
-  const listStamps = dataBindListStamps(source, model);
+  const listStamps = collectDataBindListStamps(source, model);
   const listBindings = dataBindListAttributes(model);
   const bindingAttributes = dataBindAttributes(model);
 
@@ -185,49 +186,6 @@ function dataBindListAttributes(model: ComponentModuleModel): DataBindAttribute[
       name: attribute.name,
       path: attribute.value ?? '',
     }));
-}
-
-function dataBindListStamps(source: string, model: ComponentModuleModel): QueryTemplateStampFact[] {
-  const elements = jsxElements(model);
-
-  return elements
-    .flatMap((element) => {
-      const list = jsxStaticAttributeValue(element, 'data-bind-list');
-      const key = jsxStaticAttributeValue(element, 'fw-key');
-      if (!list || !key) return [];
-
-      const template = templateStampContent(source, elements, element);
-
-      return [
-        {
-          itemBindings: elements
-            .filter((candidate) => isWithinElement(candidate, element))
-            .flatMap((candidate) => candidate.attributes)
-            .filter(
-              (attribute) =>
-                isBindingAttribute(attribute.name) &&
-                attribute.value !== undefined &&
-                attribute.value !== '',
-            )
-            .map((attribute) => attribute.value ?? '')
-            .filter((path) => path.startsWith('.'))
-            .sort(),
-          key,
-          list,
-          selector: `[data-bind-list="${list}"]`,
-          template,
-        },
-      ];
-    })
-    .filter((stamp) => stamp.itemBindings.length > 0);
-}
-
-function templateStampContent(
-  source: string,
-  elements: readonly JsxElementModel[],
-  container: JsxElementModel,
-): string {
-  return templateStamp(source, elements, container)?.source ?? '';
 }
 
 function templateStamp(
