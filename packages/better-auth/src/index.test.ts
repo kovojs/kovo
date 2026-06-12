@@ -656,6 +656,61 @@ describe('credential mutation helpers', () => {
     );
   });
 
+  it('keeps token-only plugin metadata under the exempt verification bridge', () => {
+    const result = annotateBetterAuthSchemaSource(
+      [
+        "import { jiso } from '@jiso/drizzle';",
+        "import { pgTable, text, timestamp } from 'drizzle-orm/pg-core';",
+        '',
+        "export const account = pgTable('account', {",
+        "  id: text('id').primaryKey(),",
+        "  userId: text('user_id').notNull(),",
+        '});',
+        '',
+        "export const session = pgTable('session', {",
+        "  id: text('id').primaryKey(),",
+        "  userId: text('user_id').notNull(),",
+        '});',
+        '',
+        "export const user = pgTable('user', {",
+        "  id: text('id').primaryKey(),",
+        "  email: text('email').notNull(),",
+        '});',
+        '',
+        "export const verification = pgTable('verification', {",
+        "  id: text('id').primaryKey(),",
+        "  identifier: text('identifier').notNull(),",
+        "  value: text('value').notNull(),",
+        "  expiresAt: timestamp('expires_at').notNull(),",
+        '});',
+        '',
+      ].join('\n'),
+      {
+        account: authTable(['userId']),
+        session: authTable(['userId']),
+        user: authTable(['email']),
+        verification: authTable(['expiresAt', 'identifier', 'value']),
+      },
+    );
+
+    // SPEC.md §10.1: one-time verification tokens are Better Auth protocol
+    // state and must stay write-side-only through the exempt verification table.
+    expect(result.validation).toMatchObject({
+      keyFieldMismatches: [],
+      pluginTableDegradations: [],
+      unbridgedTables: [],
+    });
+    expect(result.annotatedTables).toEqual(['account', 'session', 'user', 'verification']);
+    expect(result.source).toContain(
+      "export const verification = pgTable('verification', {\n" +
+        "  id: text('id').primaryKey(),\n" +
+        "  identifier: text('identifier').notNull(),\n" +
+        "  value: text('value').notNull(),\n" +
+        "  expiresAt: timestamp('expires_at').notNull(),\n" +
+        '}, jiso({ exempt: true }));',
+    );
+  });
+
   it('materializes a bridged two-factor plugin table into an app schema.ts source fixture', () => {
     const result = annotateBetterAuthSchemaSource(
       [

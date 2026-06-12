@@ -218,6 +218,18 @@ Scope: SPEC additions (session population, guard-failure contract, mutation resp
       `better-auth@1.6.17` table/field metadata, clean schema-bridge validation, and generated
       `schema.ts` annotations. Same-session evidence:
       `pnpm exec vitest --run conformance/better-auth-pin/src/index.test.ts --reporter=dot`.
+      Partial evidence 2026-06-12: real Better Auth `oneTimeToken()` metadata is now pinned as
+      staying inside the existing core table bridge (`account`, `session`, `user`, and exempt
+      `verification`) rather than requiring a plugin-table bridge. This keeps SPEC §10.1
+      one-time verification protocol state out of app query domains while making future Better
+      Auth table drift fail B1 validation. `packages/better-auth/src/index.test.ts` covers the
+      local dependency-light token metadata fixture, and `conformance/better-auth-pin/src/index.test.ts`
+      verifies the real `better-auth@1.6.17` table/field metadata, clean schema-bridge
+      validation, and generated `schema.ts` annotations. Same-session evidence:
+      `pnpm exec vitest --run packages/better-auth/src/index.test.ts conformance/better-auth-pin/src/index.test.ts --reporter=dot`,
+      `pnpm exec tsc -p conformance/better-auth-pin/tsconfig.json --noEmit`,
+      `pnpm exec vp check packages/better-auth/src/index.test.ts conformance/better-auth-pin/src/index.test.ts plans/auth.md`,
+      and `git diff --check`.
       Partial evidence 2026-06-12: real Better Auth `mcp()` metadata is now pinned as using
       the already bridged OAuth table family (`oauthApplication`, `oauthAccessToken`, and
       `oauthConsent`) with `userId` auth-domain ownership. This keeps SPEC §10.1 MCP
