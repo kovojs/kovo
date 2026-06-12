@@ -1,3 +1,4 @@
+import { diagnosticDefinitions } from '@jiso/core';
 import { describe, expect, it, vi } from 'vitest';
 
 import {
@@ -32,6 +33,10 @@ export const CartBadge = component('cart-badge', {
   ),
 });
 `;
+
+const fw201 = diagnosticDefinitions.FW201;
+const fw210 = diagnosticDefinitions.FW210;
+const fw330 = diagnosticDefinitions.FW330;
 
 function createMiddlewareResponse(): {
   body: string;
@@ -848,7 +853,7 @@ export const CartDrawer = component('cart-drawer', {
         code: 'FW210',
         fileName: 'cart-badge.tsx',
         length: 5,
-        message: 'Anonymous handler; name it for stable identity.',
+        message: fw210.message,
         severity: 'lint',
         start: { column: 13, line: 8 },
       },
@@ -923,7 +928,7 @@ export const CartBadge = component('cart-badge', {
         code: 'FW210',
         fileName: 'cart-badge.tsx',
         length: 5,
-        message: 'Anonymous handler; name it for stable identity.',
+        message: fw210.message,
         severity: 'lint',
         start: { column: 13, line: 4 },
       },
@@ -3668,7 +3673,7 @@ export const addToCart = mutation('cart/add', {
       {
         code: 'FW330',
         fileName: 'cart.mutation.ts',
-        message: 'Direct db access in a mutation handler; route through domain.',
+        message: fw330.message,
         severity: 'lint',
         start: { column: 5, line: 5 },
         length: 10,
@@ -3694,7 +3699,7 @@ export const addToCart = mutation('cart/add', {
       {
         code: 'FW330',
         fileName: 'cart.mutation.ts',
-        message: 'Direct db access in a mutation handler; route through domain.',
+        message: fw330.message,
         severity: 'lint',
         start: { column: 26, line: 4 },
         length: 2,
@@ -3727,7 +3732,7 @@ export const clearCart = mutation('cart/clear', {
         code: 'FW330',
         fileName: 'cart.mutation.ts',
         length: 10,
-        message: 'Direct db access in a mutation handler; route through domain.',
+        message: fw330.message,
         severity: 'lint',
         start: { column: 5, line: 5 },
       },
@@ -3735,7 +3740,7 @@ export const clearCart = mutation('cart/clear', {
         code: 'FW330',
         fileName: 'cart.mutation.ts',
         length: 2,
-        message: 'Direct db access in a mutation handler; route through domain.',
+        message: fw330.message,
         severity: 'lint',
         start: { column: 18, line: 11 },
       },
@@ -3800,7 +3805,7 @@ describe('jisoVitePlugin', () => {
               'Would lower to: on:click="/c/src/bad.client.js#Bad$button_click"',
               'Fixes: move the value into component/query state via ctx.',
             ].join('\n'),
-            message: 'Closure captures unserializable value.',
+            message: fw201.message,
             severity: 'lint',
             start: { line: 3, column: 12 },
           },
@@ -3836,7 +3841,7 @@ describe('jisoVitePlugin', () => {
         expect.objectContaining({
           code: 'FW201',
           fileName: 'src/bad.tsx',
-          message: 'Closure captures unserializable value.',
+          message: fw201.message,
         }),
       ],
       fileName: 'src/bad.tsx',
@@ -3859,7 +3864,7 @@ describe('jisoVitePlugin', () => {
           {
             code: 'FW210',
             fileName: 'src/diagnostics.tsx',
-            message: 'Anonymous handler; name it for stable identity.',
+            message: fw210.message,
             severity: 'error',
             start: { line: 5, column: 11 },
           },

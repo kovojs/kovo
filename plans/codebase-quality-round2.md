@@ -1174,6 +1174,11 @@ As each phase splits a source module, split its tests in the same commit.
       `pnpm exec vitest --run packages/compiler/src/package-prefixes.test.ts packages/compiler/src/index.test.ts`,
       `pnpm exec vp check packages/compiler/src/package-prefixes.test.ts packages/compiler/src/index.test.ts plans/codebase-quality-round2.md`,
       and `git diff --check`.
+      Additional evidence 2026-06-12: the remaining compiler test assertions for FW201/FW210/FW330
+      diagnostic messages now key to `diagnosticDefinitions` instead of pasted message strings.
+      Same-session evidence:
+      `pnpm exec vitest --run packages/compiler/src/index.test.ts packages/compiler/src/package-prefixes.test.ts`
+      and `pnpm exec vp check packages/compiler/src/index.test.ts`.
 - [ ] drizzle (one describe, 57 its, 68 inline pgTable fixtures, 3 module-shim copies) and
       test-package suites: same treatment; CLI tests get the temp-dir + stream-spy ritual
       (16 hand-copies) as one helper.
