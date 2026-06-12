@@ -1981,59 +1981,6 @@ describe('runtime loader', () => {
     });
   });
 
-  it('installs declared load, idle, and visible execution triggers', async () => {
-    const root = new FakeRoot();
-    const loadElement = new FakeElement({ 'on:load': '/c/load.js#start' });
-    const idleElement = new FakeElement({ 'on:idle': '/c/idle.js#warm' });
-    const visibleElement = new FakeElement({ 'on:visible': '/c/chart.js#mount' });
-    const idleCallbacks: Array<() => void> = [];
-    let visibleCallback: (
-      entries: { isIntersecting: boolean; target: FakeElement }[],
-    ) => void = () => {};
-    const observer = {
-      observe: vi.fn(),
-      unobserve: vi.fn(),
-    };
-    const handlers = {
-      mount: vi.fn(),
-      start: vi.fn(),
-      warm: vi.fn(),
-    };
-    const importModule = vi.fn(async (url: string) => {
-      if (url === '/c/load.js') return { start: handlers.start };
-      if (url === '/c/idle.js') return { warm: handlers.warm };
-      return { mount: handlers.mount };
-    });
-
-    root.elements.set('[on\\:load]', [loadElement]);
-    root.elements.set('[on\\:idle]', [idleElement]);
-    root.elements.set('[on\\:visible]', [visibleElement]);
-
-    installJisoLoader({
-      importModule,
-      requestIdle: (callback) => {
-        idleCallbacks.push(callback);
-      },
-      root,
-      visibleObserver: (callback) => {
-        visibleCallback = callback as typeof visibleCallback;
-        return observer;
-      },
-    });
-
-    await vi.waitFor(() => expect(handlers.start).toHaveBeenCalledTimes(1));
-    expect(handlers.warm).not.toHaveBeenCalled();
-    idleCallbacks[0]?.();
-    await vi.waitFor(() => expect(handlers.warm).toHaveBeenCalledTimes(1));
-
-    expect(observer.observe).toHaveBeenCalledWith(visibleElement);
-    visibleCallback([{ isIntersecting: true, target: visibleElement }]);
-    await vi.waitFor(() => expect(handlers.mount).toHaveBeenCalledTimes(1));
-    visibleCallback([{ isIntersecting: true, target: visibleElement }]);
-    expect(observer.unobserve).toHaveBeenCalledWith(visibleElement);
-    expect(handlers.mount).toHaveBeenCalledTimes(1);
-  });
-
   it('disposes loader listeners, visible observers, and auto-created broadcasts', () => {
     const globalRecord = globalThis as unknown as Record<string, unknown>;
     const originalBroadcastChannel = globalRecord.BroadcastChannel;

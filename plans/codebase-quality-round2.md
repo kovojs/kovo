@@ -1780,6 +1780,15 @@ params, relational API, `execute(sql)`, right/full joins, a string column named 
       `corepack pnpm exec vitest --run packages/runtime/src/broadcast.test.ts packages/runtime/src/index.test.ts -t "BroadcastChannel|rebroadcast|syncs mutation responses|mutation broadcast"`,
       `corepack pnpm exec vp check packages/runtime/src/index.ts packages/runtime/src/broadcast.ts packages/runtime/src/broadcast.test.ts plans/codebase-quality-round2.md`,
       and `git diff --check`.
+      Additional bounded evidence 2026-06-12: extracted
+      `packages/runtime/src/loader-lifecycle.ts` as the subtractive loader listener and
+      load/idle/visible execution-trigger seam; `packages/runtime/src/index.ts` now imports that
+      implementation and preserves the public loader lifecycle type exports, while
+      `packages/runtime/src/loader-lifecycle.test.ts` owns the focused trigger/disposer coverage
+      moved out of `packages/runtime/src/index.test.ts`. Same-session evidence:
+      `corepack pnpm exec vitest --run packages/runtime/src/loader-lifecycle.test.ts packages/runtime/src/index.test.ts -t "loader lifecycle|delegated loader failures|disposes loader listeners|execution trigger"`,
+      `corepack pnpm exec vp check packages/runtime/src/index.ts packages/runtime/src/index.test.ts packages/runtime/src/loader-lifecycle.ts packages/runtime/src/loader-lifecycle.test.ts plans/codebase-quality-round2.md`,
+      and `git diff --check`.
 - [ ] **LOW** — `hydratedQueries` frozen at install (index.ts:330-342): queries introduced by
       later mutations never become refetch-eligible — fix or document as SPEC-intended;
       `unescapeHtml` missing `&#39;`/`&apos;` (wire-parser.ts:162-168) — pin the server↔runtime
