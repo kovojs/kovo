@@ -33,6 +33,11 @@ import {
   radioGroupLabelAttributes,
   radioGroupRadioAttributes,
   radioGroupRootAttributes,
+  scrollAreaCornerAttributes,
+  scrollAreaRootAttributes,
+  scrollAreaScrollbarAttributes,
+  scrollAreaThumbAttributes,
+  scrollAreaViewportAttributes,
   selectContentAttributes,
   selectItemAttributes,
   selectRootAttributes,
@@ -66,6 +71,7 @@ export type GalleryComponent =
   | 'otp-field'
   | 'progress'
   | 'radio-group'
+  | 'scroll-area'
   | 'select'
   | 'separator'
   | 'sheet'
@@ -168,6 +174,12 @@ export const galleryRoutes: readonly GalleryRoute[] = Object.freeze([
     path: '/components/radio-group',
     render: () => RadioGroupDemo(),
     title: 'Radio Group',
+  },
+  {
+    component: 'scroll-area',
+    path: '/components/scroll-area',
+    render: () => ScrollAreaDemo(),
+    title: 'Scroll Area',
   },
   {
     component: 'select',
@@ -793,6 +805,94 @@ export function RadioGroupDemo(): string {
         changeReasons: 'item-click, keyboard, programmatic',
         dataState: 'checked, unchecked, disabled',
         keyboard: 'Arrow keys move over enabled radio items',
+      })}
+    </section>
+  );
+}
+
+export function ScrollAreaDemo(): string {
+  const state = {
+    dir: 'ltr' as const,
+    scrollbars: 'both' as const,
+  };
+  const disabledState = {
+    disabled: true,
+    scrollbars: 'vertical' as const,
+  };
+
+  return (
+    <section
+      {...scrollAreaRootAttributes({ ...state, id: 'gallery-scroll-area' })}
+      data-gallery-demo="scroll-area"
+    >
+      <p data-demo-summary="no-js">
+        Scroll area leaves movement on a native focusable viewport while exposing decorative
+        scrollbar parts for styling.
+      </p>
+      <h2 id="gallery-scroll-area-title">Activity feed</h2>
+      <div
+        {...scrollAreaViewportAttributes({
+          ...state,
+          descriptionId: 'gallery-scroll-area-description',
+          id: 'gallery-scroll-area-viewport',
+          labelledBy: 'gallery-scroll-area-title',
+        })}
+      >
+        <ol>
+          <li>Design tokens published.</li>
+          <li>Headless primitive verified.</li>
+          <li>Gallery route added.</li>
+        </ol>
+      </div>
+      <p id="gallery-scroll-area-description">
+        The viewport remains tabbable without a client behavior island.
+      </p>
+      <div
+        {...scrollAreaScrollbarAttributes({
+          ...state,
+          id: 'gallery-scroll-area-scrollbar-y',
+          orientation: 'vertical',
+          visible: true,
+        })}
+      >
+        <div
+          {...scrollAreaThumbAttributes({
+            ...state,
+            id: 'gallery-scroll-area-thumb-y',
+            orientation: 'vertical',
+            visible: true,
+          })}
+        />
+      </div>
+      <div
+        {...scrollAreaScrollbarAttributes({
+          ...state,
+          forceMount: true,
+          id: 'gallery-scroll-area-scrollbar-x',
+          orientation: 'horizontal',
+          visible: false,
+        })}
+      >
+        <div
+          {...scrollAreaThumbAttributes({
+            ...state,
+            forceMount: true,
+            id: 'gallery-scroll-area-thumb-x',
+            orientation: 'horizontal',
+            visible: false,
+          })}
+        />
+      </div>
+      <div {...scrollAreaCornerAttributes({ ...state, id: 'gallery-scroll-area-corner' })} />
+      <div {...scrollAreaRootAttributes(disabledState)} data-fixture-state="disabled">
+        <div {...scrollAreaViewportAttributes({ ...disabledState, label: 'Archived feed' })}>
+          Archived feed
+        </div>
+      </div>
+      {renderBehaviorContract({
+        changeReasons: 'native scroll position changes',
+        dataState: 'visible, hidden, disabled',
+        keyboard: 'Native viewport scrolling and focus behavior',
       })}
     </section>
   );

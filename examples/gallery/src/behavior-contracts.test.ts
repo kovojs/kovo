@@ -74,6 +74,11 @@ const expectedBehaviorContracts = {
     dataState: 'checked, unchecked, disabled',
     keyboard: 'Arrow keys move over enabled radio items',
   },
+  '/components/scroll-area': {
+    changeReasons: 'native scroll position changes',
+    dataState: 'visible, hidden, disabled',
+    keyboard: 'Native viewport scrolling and focus behavior',
+  },
   '/components/select': {
     changeReasons: 'trigger-change, programmatic',
     dataState: 'open, closed, checked, unchecked, disabled',
@@ -194,6 +199,19 @@ const expectedBehaviorSnippets: Partial<Record<GalleryRoute['path'], readonly st
     'aria-checked="true"',
     'tabIndex="0"',
     'disabled tabIndex="-1"',
+  ],
+  '/components/scroll-area': [
+    'role="region"',
+    'aria-labelledby="gallery-scroll-area-title"',
+    'aria-describedby="gallery-scroll-area-description"',
+    'tabIndex="0"',
+    'aria-hidden="true"',
+    'data-orientation="vertical"',
+    'data-orientation="horizontal"',
+    'data-state="visible"',
+    'data-state="hidden"',
+    'aria-disabled="true"',
+    'tabIndex="-1"',
   ],
   '/components/select': [
     '<select',

@@ -21,6 +21,7 @@ const expectedRoutes = [
   '/components/otp-field',
   '/components/progress',
   '/components/radio-group',
+  '/components/scroll-area',
   '/components/select',
   '/components/separator',
   '/components/sheet',
@@ -221,6 +222,32 @@ describe('gallery demo fixtures', () => {
     expect(radioGroup.html).toContain('data-state="checked"');
     expect(radioGroup.html).toContain('value="freight"');
     expect(radioGroup.html).toContain('disabled tabIndex="-1"');
+  });
+
+  it('renders scroll-area fixture with native viewport and decorative scrollbar parts', () => {
+    const scrollArea = findFixture('/components/scroll-area');
+
+    expect(scrollArea.html).toContain('data-gallery-demo="scroll-area"');
+    expect(scrollArea.html).toContain('id="gallery-scroll-area"');
+    expect(scrollArea.html).toContain('data-scrollbars="both"');
+    expect(scrollArea.html).toContain('dir="ltr"');
+    expect(scrollArea.html).toContain('id="gallery-scroll-area-viewport"');
+    expect(scrollArea.html).toContain('role="region"');
+    expect(scrollArea.html).toContain('aria-labelledby="gallery-scroll-area-title"');
+    expect(scrollArea.html).toContain('aria-describedby="gallery-scroll-area-description"');
+    expect(scrollArea.html).toContain('tabIndex="0"');
+    expect(scrollArea.html).toContain('id="gallery-scroll-area-scrollbar-y"');
+    expect(scrollArea.html).toContain('data-orientation="vertical"');
+    expect(scrollArea.html).toContain('id="gallery-scroll-area-thumb-y"');
+    expect(scrollArea.html).toContain('data-state="visible"');
+    expect(scrollArea.html).toContain('id="gallery-scroll-area-scrollbar-x"');
+    expect(scrollArea.html).toContain('data-orientation="horizontal"');
+    expect(scrollArea.html).toContain('data-state="hidden"');
+    expect(scrollArea.html).toContain('id="gallery-scroll-area-corner"');
+    expect(scrollArea.html).toContain('data-fixture-state="disabled"');
+    expect(scrollArea.html).toContain('aria-disabled="true"');
+    expect(scrollArea.html).toContain('tabIndex="-1"');
+    expect(scrollArea.html).toContain('data-disabled');
   });
 
   it('renders select fixture with native select and option states', () => {

@@ -360,6 +360,16 @@ jiso-dialog` resolves dashed wire names and prints provenance including package,
       `pnpm --filter @jiso/headless-ui run lint:primitives`,
       `pnpm exec vp check packages/headless-ui/package.json packages/headless-ui/src/index.ts packages/headless-ui/src/lib/state-attributes.ts packages/headless-ui/src/primitives/index.ts packages/headless-ui/src/primitives/scroll-area.ts packages/headless-ui/src/primitives/scroll-area.test.ts plans/ui.md`,
       and `git diff --check`. H2 remains open for full gates.
+      Additional gallery evidence 2026-06-12: `examples/gallery` adds a scroll-area route
+      fixture that imports the current `@jiso/headless-ui` scroll-area attribute builders,
+      renders TSX-authored native focusable viewport markup plus decorative vertical,
+      horizontal, thumb, corner, and disabled-state parts, and pins the browser-free
+      behavior contract for native scrolling semantics. Same-session evidence:
+      `pnpm --filter @jiso/example-gallery test`,
+      `pnpm --filter @jiso/headless-ui exec vitest --run src/primitives/scroll-area.test.ts src/tooling/lint-primitives.test.ts src/tooling/primitive-handler-lint.test.ts`,
+      `pnpm --filter @jiso/headless-ui run lint:primitives`,
+      `pnpm exec vp check examples/gallery/src/demo-fixtures.tsx examples/gallery/src/demo-fixtures.test.ts examples/gallery/src/behavior-contracts.test.ts plans/ui.md`,
+      and `git diff --check`. H2 remains open for full gates.
 - [ ] H3 wave 3 primitives (list-driven & isomorphic): select, combobox, autocomplete, dropdown-menu, context-menu, menubar, navigation-menu, slider, toast, command.
       Partial evidence 2026-06-12: `packages/headless-ui/src/primitives/select.ts`
       adds the H3 select primitive as a native `<select>/<option>`-oriented helper:
@@ -599,6 +609,14 @@ jiso-dialog` resolves dashed wire names and prints provenance including package,
       ARIA wiring, filled slot state, and disabled complete state in fixture tests.
       Same-session evidence: `pnpm --filter @jiso/example-gallery test`. G1 remains open
       for the remaining unrepresented primitives and styled components.
+      Additional partial evidence 2026-06-12: `examples/gallery` adds a scroll-area route
+      fixture that imports current `@jiso/headless-ui` scroll-area builders and renders a
+      TSX-authored native viewport, decorative scrollbar/thumb/corner parts, visible/hidden
+      scrollbar states, and disabled viewport semantics. Same-session evidence:
+      `pnpm --filter @jiso/example-gallery test`,
+      `pnpm exec vp check examples/gallery/src/demo-fixtures.tsx examples/gallery/src/demo-fixtures.test.ts examples/gallery/src/behavior-contracts.test.ts plans/ui.md`,
+      and `git diff --check`. G1 remains open for the remaining unrepresented primitives and
+      styled components.
 - [ ] G2 behavior-contract gates: keyboard/ARIA assertions per primitive (browser-free via `page()` + `fw explain` where possible; framework browser suite for focus/dismiss/top-layer).
       Partial evidence 2026-06-12: `examples/gallery/src/behavior-contracts.test.ts`
       adds a browser-free G2 fixture gate over the existing 17 rendered gallery routes. It
@@ -628,6 +646,16 @@ jiso-dialog` resolves dashed wire names and prints provenance including package,
       one-time-code autocomplete wiring, per-slot max-length/fill state, and disabled complete
       output. Same-session evidence: `pnpm --filter @jiso/example-gallery test`. G2 remains
       open for browser-backed checks, `fw explain` coverage, and unrepresented routes/primitives.
+      Additional partial evidence 2026-06-12: the browser-free G2 fixture gate now covers
+      the scroll-area route's exact behavior-contract rows (`native scroll position changes`,
+      `visible, hidden, disabled`, native viewport scrolling/focus), viewport
+      `role="region"`/IDREF description wiring, decorative `aria-hidden` scrollbar parts,
+      vertical/horizontal orientation attrs, visible/hidden state attrs, and disabled viewport
+      output. Same-session evidence:
+      `pnpm --filter @jiso/example-gallery test`,
+      `pnpm exec vp check examples/gallery/src/demo-fixtures.tsx examples/gallery/src/demo-fixtures.test.ts examples/gallery/src/behavior-contracts.test.ts plans/ui.md`,
+      and `git diff --check`. G2 remains open for browser-backed checks, `fw explain`
+      coverage, and unrepresented routes/primitives.
 - [ ] G3 axe checks per component state in the gallery.
 - [ ] G4 visual regression for `@jiso/ui`: shadcn-parity human review once, then self-baselined screenshots.
 - [ ] G5 merge fixtures: every primitive's attrs record × an author element → golden merged output (doubles as FW231/FW232 coverage).
