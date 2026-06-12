@@ -1210,6 +1210,27 @@ describe('server mutation primitives', () => {
     );
   });
 
+  it('reports invalid query-derived meta declarations early', () => {
+    const productQuery = query('product', {
+      load: (_input: { id: string }) => ({ id: 'p1', name: 'Coffee' }),
+      reads: [domain('product')],
+    });
+    const anonymousQuery = { ...productQuery, key: undefined } as unknown as typeof productQuery;
+
+    expect(() =>
+      metaFromQuery(anonymousQuery, (product) => ({
+        title: product.name,
+      })),
+    ).toThrow('metaFromQuery requires a query key for deferred meta');
+    expect(() =>
+      metaFromQuery(
+        productQuery,
+        productQuery.load({ id: 'p1' }),
+        undefined as unknown as (product: { id: string; name: string }) => { title: string },
+      ),
+    ).toThrow('metaFromQuery requires a derive function');
+  });
+
   it('renders server-side i18n catalogs with page hints', () => {
     const en = i18n('en-US', {
       cartCount: 'Cart has {count} items',

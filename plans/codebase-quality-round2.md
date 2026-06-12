@@ -1142,6 +1142,12 @@ land it first; don't fork it.
       `pnpm exec vitest --run packages/server/src/cookies.test.ts packages/server/src/index.test.ts`
       and
       `pnpm exec vp check --fix packages/server/src/index.ts packages/server/src/cookies.ts packages/server/src/cookies.test.ts`.
+      Additional evidence 2026-06-12: `packages/server/src/index.test.ts` now covers
+      `metaFromQuery` declaration failures for deferred query meta without a stable query key and
+      eager query meta without a derive function, closing the previously untested meta error
+      branches. Same-session evidence:
+      `pnpm exec vitest --run packages/server/src/index.test.ts -t "query-derived meta"` and
+      `pnpm exec vp check packages/server/src/index.test.ts plans/codebase-quality-round2.md`.
 
 Verification: server vitest + wire fixtures byte-for-byte (remove the newline fudge at
 index.test.ts:4227 while here — it weakens the byte-for-byte claim) + acceptance.
