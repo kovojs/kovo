@@ -142,7 +142,7 @@ export interface JisoAppShellVitePluginBuildOptions extends Omit<
   JisoAppShellViteBundleBuildOptions,
   'app' | 'bundle' | 'manifest'
 > {
-  onBuild?(build: JisoAppShellBuild): void | Promise<void>;
+  onBuild?(build: JisoAppShellBuild, output: JisoAppShellViteBuildOutput): void | Promise<void>;
   outDir?: string | URL;
 }
 
@@ -183,6 +183,7 @@ export interface JisoAppShellViteBuildOutputOptions {
 
 export interface JisoAppShellViteBuildOutput {
   clientModules: readonly JisoAppShellBuiltClientModule[];
+  staticExportAssets: readonly StaticExportAssetInput[];
 }
 
 export function createJisoAppShellDevDiagnosticLedger(): JisoAppShellDevDiagnosticLedger {
@@ -258,10 +259,10 @@ export function jisoAppShellVitePlugin(
                 ? {}
                 : { routeEntryMap: options.build.routeEntryMap }),
             });
-            await writeJisoAppShellViteBuildOutput(build, {
+            const output = await writeJisoAppShellViteBuildOutput(build, {
               outDir: options.build?.outDir ?? viteOutputDir(outputOptions),
             });
-            await options.build?.onBuild?.(build);
+            await options.build?.onBuild?.(build, output);
           },
         }
       : {}),
@@ -525,7 +526,7 @@ export function jisoAppShellViteStaticExportAssets(
 }
 
 export async function writeJisoAppShellViteBuildOutput(
-  build: Pick<JisoAppShellBuild, 'clientModules'>,
+  build: Pick<JisoAppShellBuild, 'clientModules'> & Partial<Pick<JisoAppShellBuild, 'assets'>>,
   options: JisoAppShellViteBuildOutputOptions,
 ): Promise<JisoAppShellViteBuildOutput> {
   const root = resolvedFileSystemPath(options.outDir);
@@ -538,7 +539,10 @@ export async function writeJisoAppShellViteBuildOutput(
     await writeFile(targetPath, module.source, 'utf8');
   }
 
-  return { clientModules: build.clientModules };
+  return {
+    clientModules: build.clientModules,
+    staticExportAssets: jisoAppShellViteStaticExportAssets(build.assets ?? [], { distDir: root }),
+  };
 }
 
 export function jisoAppShellViteManifestAssets(

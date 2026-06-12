@@ -87,6 +87,14 @@ Scope: SPEC addition (proposed §9.5 "The request shell"), `@jiso/server` shell 
       `pnpm exec vitest --run packages/server/src/vite.test.ts`,
       `pnpm exec vp check packages/server/src/vite.ts packages/server/src/vite.test.ts packages/server/src/index.ts plans/app-shell.md`,
       and `git diff --check`.
+      Additional evidence 2026-06-12: `writeJisoAppShellViteBuildOutput()` now returns
+      `staticExportAssets` derived from the same Vite manifest asset plan used for route
+      hints, and `jisoAppShellVitePlugin({ build })` passes that output to `onBuild()` so
+      package export tasks can feed SPEC §9.5 static-export asset copying from the plugin
+      build handoff without re-deriving Vite dist paths. `packages/server/src/vite.test.ts`
+      proves the plugin `writeBundle` callback receives CSS/JS `StaticExportAssetInput`
+      values rooted in the Vite output directory alongside emitted `/c/` modules.
+      Same-session verification ran `pnpm exec vitest --run packages/server/src/vite.test.ts`.
       Remaining R5 work: compiler/plugin build hooks must still supply real route-entry maps
       and compiled module sources from compiler facts, consume the asset/module plan in
       production package builds, and decide the final plugin hook ownership.

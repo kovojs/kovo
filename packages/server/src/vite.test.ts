@@ -22,6 +22,7 @@ import {
   jisoAppShellViteStaticExportAssets,
   route,
   type JisoAppShellBuild,
+  type JisoAppShellViteBuildOutput,
   type JisoAppShellViteMiddleware,
   writeJisoAppShellViteBuildOutput,
 } from './index.js';
@@ -452,6 +453,7 @@ describe('server app shell Vite plugin', () => {
             version: 'cart-v1',
           },
         ],
+        staticExportAssets: [],
       });
       await expect(readFile(join(outDir, 'c/cart.client.js'), 'utf8')).resolves.toBe(
         'export const cart = true;',
@@ -464,6 +466,7 @@ describe('server app shell Vite plugin', () => {
   it('emits app-shell build output from the Vite plugin writeBundle hook', async () => {
     const outDir = await mkdtemp(join(tmpdir(), 'jiso-vite-plugin-build-'));
     const built: JisoAppShellBuild[] = [];
+    const outputs: JisoAppShellViteBuildOutput[] = [];
     const plugin = jisoAppShellVitePlugin(createApp({ routes: [route('/cart', {})] }), {
       build: {
         clientModules: [
@@ -473,8 +476,9 @@ describe('server app shell Vite plugin', () => {
             version: 'cart-v1',
           },
         ],
-        onBuild(build) {
+        onBuild(build, output) {
           built.push(build);
+          outputs.push(output);
         },
         routeEntryMap: {
           '/cart': 'src/cart.client.ts',
@@ -503,6 +507,31 @@ describe('server app shell Vite plugin', () => {
         'export const cart = true;',
       );
       expect(built).toHaveLength(1);
+      expect(outputs).toEqual([
+        {
+          clientModules: [
+            {
+              file: 'c/cart.client.js',
+              href: '/c/cart.client.js?v=cart-v1',
+              path: '/c/cart.client.js',
+              source: 'export const cart = true;',
+              version: 'cart-v1',
+            },
+          ],
+          staticExportAssets: [
+            {
+              contentType: 'text/css; charset=utf-8',
+              path: '/assets/cart.css',
+              source: join(outDir, 'assets/cart.css'),
+            },
+            {
+              contentType: 'text/javascript; charset=utf-8',
+              path: '/assets/cart.js',
+              source: join(outDir, 'assets/cart.js'),
+            },
+          ],
+        },
+      ]);
       expect(built[0]?.routeHints).toEqual([
         {
           hints: {
