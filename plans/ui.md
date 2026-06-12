@@ -905,6 +905,15 @@ jiso-dialog` resolves dashed wire names and prints provenance including package,
       G5 remains open for compiler/runtime diagnostic parity and richer per-primitive
       rendered goldens, but the exported attrs surface is no longer missing an executable
       coverage ledger.
+      Additional partial evidence 2026-06-12: the gallery G5 oracle adds richer rendered
+      family goldens for scroll-area root/viewport/thumb/corner, select root/trigger/content/
+      value/item, command root/trigger/dialog/close/empty, dialog root/close, fieldset
+      root/legend, and toast title/description attrs. These fixtures exercise SPEC §4.6 class,
+      scalar, logical-OR, primitive-owned `data-state`, IDREF conflict, and ARIA/role diagnostic
+      behavior across exported attrs that were previously covered only by the inventory sample.
+      Same-session evidence:
+      `pnpm exec vitest --run examples/gallery/src/merge-fixtures.test.tsx`.
+      G5 remains open for compiler/runtime diagnostic parity and full gallery/conformance gates.
 - [ ] G6 compiled interactive gallery: stateful gallery demos are authored as app TSX,
       compiled through Jiso, and served from the docs gallery with generated client
       modules and explicit `on:*` behavior refs. Evidence must include browser-backed

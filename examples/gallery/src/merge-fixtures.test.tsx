@@ -24,9 +24,14 @@ import {
   collapsibleContentAttributes,
   collapsibleRootAttributes,
   collapsibleTriggerAttributes,
+  commandCloseAttributes,
+  commandDialogAttributes,
+  commandEmptyAttributes,
   commandInputAttributes,
   commandItemAttributes,
   commandListboxAttributes,
+  commandRootAttributes,
+  commandTriggerAttributes,
   comboboxInputAttributes,
   comboboxListboxAttributes,
   comboboxOptionAttributes,
@@ -38,7 +43,9 @@ import {
   disclosureContentAttributes,
   disclosureRootAttributes,
   disclosureTriggerAttributes,
+  dialogCloseAttributes,
   dialogContentAttributes,
+  dialogRootAttributes,
   dialogTriggerAttributes,
   dropdownMenuContentAttributes,
   dropdownMenuGroupAttributes,
@@ -48,6 +55,8 @@ import {
   fieldControlAttributes,
   fieldLabelAttributes,
   fieldRootAttributes,
+  fieldsetLegendAttributes,
+  fieldsetRootAttributes,
   hoverCardContentAttributes,
   hoverCardTriggerAttributes,
   menubarGroupAttributes,
@@ -74,11 +83,17 @@ import {
   progressRootAttributes,
   radioGroupLabelAttributes,
   radioGroupRadioAttributes,
+  scrollAreaCornerAttributes,
+  scrollAreaRootAttributes,
   scrollAreaScrollbarAttributes,
+  scrollAreaThumbAttributes,
   scrollAreaViewportAttributes,
   separatorRootAttributes,
+  selectContentAttributes,
   selectItemAttributes,
+  selectRootAttributes,
   selectTriggerAttributes,
+  selectValueAttributes,
   sliderInputAttributes,
   sliderThumbAttributes,
   sliderTrackAttributes,
@@ -90,7 +105,9 @@ import {
   toolbarRootAttributes,
   toastActionAttributes,
   toastCloseAttributes,
+  toastDescriptionAttributes,
   toastRootAttributes,
+  toastTitleAttributes,
   toastViewportAttributes,
   toggleGroupButtonAttributes,
   toggleGroupItemAttributes,
@@ -3034,6 +3051,475 @@ describe('gallery G5 primitive merge fixtures', () => {
         message: 'Unmergeable primitive IDREF conflict per SPEC.md section 4.6',
       },
     ]);
+  });
+
+  it('renders golden scroll-area merges across root, viewport, scrollbar, thumb, and corner attrs', () => {
+    const root = mergePrimitiveAttrs(
+      {
+        ...scrollAreaRootAttributes({
+          dir: 'rtl',
+          disabled: true,
+          id: 'gallery-scroll-root',
+          scrollbars: 'both',
+        }),
+        class: 'scroll-root',
+      },
+      {
+        class: 'scroll-root rounded',
+        'data-scrollbars': 'author-scrollbars',
+        dir: 'ltr',
+        id: 'author-scroll-root',
+      },
+    );
+    const viewport = mergePrimitiveAttrs(
+      {
+        ...scrollAreaViewportAttributes({
+          descriptionId: 'gallery-scroll-description',
+          id: 'gallery-scroll-viewport',
+          label: 'Invoices',
+          scrollbars: 'both',
+        }),
+        class: 'scroll-viewport',
+      },
+      {
+        'aria-label': 'Author invoices',
+        class: 'scroll-viewport focus-ring',
+        role: 'feed',
+      },
+    );
+    const thumb = mergePrimitiveAttrs(
+      {
+        ...scrollAreaThumbAttributes({
+          forceMount: true,
+          id: 'gallery-scroll-thumb-y',
+          orientation: 'vertical',
+          scrollbars: 'both',
+          visible: true,
+        }),
+        class: 'scroll-thumb',
+      },
+      {
+        'aria-hidden': 'false',
+        class: 'scroll-thumb rounded-full',
+        'data-state': 'hidden',
+      },
+    );
+    const corner = mergePrimitiveAttrs(
+      {
+        ...scrollAreaCornerAttributes({
+          forceMount: true,
+          id: 'gallery-scroll-corner',
+          scrollbars: 'both',
+          visible: false,
+        }),
+        class: 'scroll-corner',
+      },
+      {
+        'aria-hidden': 'false',
+        class: 'scroll-corner bg-muted',
+        'data-state': 'visible',
+        hidden: false,
+      },
+    );
+
+    expect(root.diagnostics).toEqual([]);
+    expect(viewport.diagnostics).toEqual([
+      {
+        attr: 'role',
+        code: 'FW232',
+        message: 'Author override of primitive ARIA/role attribute per SPEC.md section 4.6',
+      },
+      {
+        attr: 'aria-label',
+        code: 'FW232',
+        message: 'Author override of primitive ARIA/role attribute per SPEC.md section 4.6',
+      },
+    ]);
+    expect(thumb.diagnostics).toEqual([
+      {
+        attr: 'data-state',
+        code: 'FW232',
+        message: 'Author override of primitive-owned state attribute per SPEC.md section 4.6',
+      },
+      {
+        attr: 'aria-hidden',
+        code: 'FW232',
+        message: 'Author override of primitive ARIA/role attribute per SPEC.md section 4.6',
+      },
+    ]);
+    expect(corner.diagnostics).toEqual([
+      {
+        attr: 'data-state',
+        code: 'FW232',
+        message: 'Author override of primitive-owned state attribute per SPEC.md section 4.6',
+      },
+      {
+        attr: 'aria-hidden',
+        code: 'FW232',
+        message: 'Author override of primitive ARIA/role attribute per SPEC.md section 4.6',
+      },
+    ]);
+    expect(
+      <section data-gallery-merge="scroll-area-family">
+        <div {...root.attrs}>
+          <div {...viewport.attrs}>Scrollable invoices</div>
+          <span {...thumb.attrs}></span>
+          <span {...corner.attrs}></span>
+        </div>
+      </section>,
+    ).toBe(
+      '<section data-gallery-merge="scroll-area-family"><div data-disabled="" data-scrollbars="author-scrollbars" dir="ltr" id="author-scroll-root" class="scroll-root rounded"><div data-scrollbars="both" tabIndex="0" aria-describedby="gallery-scroll-description" role="feed" aria-label="Author invoices" id="gallery-scroll-viewport" class="scroll-viewport focus-ring">Scrollable invoices</div><span data-scrollbars="both" data-orientation="vertical" data-state="visible" aria-hidden="false" id="gallery-scroll-thumb-y" class="scroll-thumb rounded-full"></span><span data-scrollbars="both" data-state="hidden" aria-hidden="false" id="gallery-scroll-corner" class="scroll-corner bg-muted"></span></div></section>',
+    );
+  });
+
+  it('renders golden select merges across root, trigger, content, value, and option attrs', () => {
+    const state = {
+      disabled: true,
+      invalid: true,
+      items: [
+        { label: 'Starter', value: 'starter' },
+        { disabled: true, label: 'Growth', value: 'growth' },
+      ],
+      name: 'gallery-plan',
+      open: false,
+      placeholder: 'Choose a plan',
+      required: true,
+      value: '',
+    };
+    const root = mergePrimitiveAttrs(
+      { ...selectRootAttributes({ ...state, id: 'gallery-select-root' }), class: 'select-root' },
+      {
+        class: 'select-root grid',
+        'data-placeholder': 'author-placeholder',
+        id: 'author-select-root',
+      },
+    );
+    const trigger = mergePrimitiveAttrs(
+      {
+        ...selectTriggerAttributes({
+          ...state,
+          descriptionId: 'gallery-select-description',
+          errorId: 'gallery-select-error',
+          id: 'gallery-select-trigger',
+          labelledBy: 'gallery-select-label',
+        }),
+        class: 'select-trigger',
+      },
+      {
+        'aria-describedby': 'author-select-description',
+        class: 'select-trigger w-44',
+        disabled: false,
+        name: 'author-plan',
+        required: false,
+      },
+    );
+    const content = mergePrimitiveAttrs(
+      {
+        ...selectContentAttributes({
+          ...state,
+          id: 'gallery-select-content',
+          labelledBy: 'gallery-select-label',
+        }),
+        class: 'select-content',
+      },
+      {
+        'aria-labelledby': 'author-select-label',
+        class: 'select-content shadow',
+      },
+    );
+    const value = mergePrimitiveAttrs(
+      {
+        ...selectValueAttributes({ ...state, id: 'gallery-select-value' }),
+        class: 'select-value',
+      },
+      {
+        class: 'select-value text-muted',
+        'data-placeholder': 'author-placeholder',
+        id: 'author-select-value',
+      },
+    );
+    const option = mergePrimitiveAttrs(
+      {
+        ...selectItemAttributes({
+          ...state,
+          itemLabel: 'Growth',
+          itemValue: 'growth',
+        }),
+        class: 'select-option',
+      },
+      {
+        class: 'select-option font-medium',
+        disabled: false,
+        selected: true,
+        value: 'author-growth',
+      },
+    );
+
+    expect(root.diagnostics).toEqual([]);
+    expect(trigger.diagnostics).toEqual([
+      {
+        attr: 'aria-describedby',
+        code: 'FW231',
+        message: 'Unmergeable primitive IDREF conflict per SPEC.md section 4.6',
+      },
+    ]);
+    expect(content.diagnostics).toEqual([
+      {
+        attr: 'aria-labelledby',
+        code: 'FW231',
+        message: 'Unmergeable primitive IDREF conflict per SPEC.md section 4.6',
+      },
+    ]);
+    expect(value.diagnostics).toEqual([]);
+    expect(option.diagnostics).toEqual([]);
+    expect(
+      <section data-gallery-merge="select-family">
+        <div {...root.attrs}>
+          <select {...trigger.attrs}>
+            <option {...option.attrs}>Growth</option>
+          </select>
+          <span {...content.attrs}>
+            <span {...value.attrs}>Choose a plan</span>
+          </span>
+        </div>
+      </section>,
+    ).toBe(
+      '<section data-gallery-merge="select-family"><div data-state="closed" data-disabled="" data-placeholder="author-placeholder" data-invalid="" data-required="" id="author-select-root" class="select-root grid"><select data-state="closed" data-disabled="" data-placeholder="" data-invalid="" data-required="" aria-expanded="false" disabled id="gallery-select-trigger" aria-labelledby="gallery-select-label" aria-describedby="author-select-description" aria-invalid="true" name="author-plan" required class="select-trigger w-44"><option data-state="unchecked" data-disabled="" disabled selected value="author-growth" label="Growth" class="select-option font-medium">Growth</option></select><span data-state="closed" data-disabled="" data-placeholder="" data-invalid="" data-required="" id="gallery-select-content" aria-labelledby="author-select-label" class="select-content shadow"><span data-placeholder="author-placeholder" id="author-select-value" class="select-value text-muted">Choose a plan</span></span></div></section>',
+    );
+  });
+
+  it('renders golden command shell merges across dialog, trigger, close, and empty attrs', () => {
+    const state = {
+      disabled: false,
+      inputValue: 'zz',
+      items: [{ label: 'Deploy', value: 'deploy' }],
+      open: true,
+      value: '',
+    };
+    const root = mergePrimitiveAttrs(
+      { ...commandRootAttributes({ ...state, id: 'gallery-command-root' }), class: 'command-root' },
+      { class: 'command-root border', 'data-state': 'author-open' },
+    );
+    const trigger = mergePrimitiveAttrs(
+      {
+        ...commandTriggerAttributes({
+          ...state,
+          contentId: 'gallery-command-dialog',
+          id: 'gallery-command-trigger',
+          labelledBy: 'gallery-command-label',
+        }),
+        class: 'command-trigger',
+      },
+      {
+        class: 'command-trigger px-2',
+        commandfor: 'author-command-dialog',
+        type: 'submit',
+      },
+    );
+    const dialog = mergePrimitiveAttrs(
+      {
+        ...commandDialogAttributes({
+          ...state,
+          contentId: 'gallery-command-dialog',
+          descriptionId: 'gallery-command-description',
+          titleId: 'gallery-command-title',
+        }),
+        class: 'command-dialog',
+      },
+      {
+        'aria-modal': 'false',
+        class: 'command-dialog shadow',
+        id: 'author-command-dialog',
+      },
+    );
+    const close = mergePrimitiveAttrs(
+      {
+        ...commandCloseAttributes({ ...state, contentId: 'gallery-command-dialog' }),
+        class: 'command-close',
+      },
+      {
+        class: 'command-close absolute',
+        commandfor: 'author-command-dialog',
+        disabled: true,
+      },
+    );
+    const empty = mergePrimitiveAttrs(
+      { ...commandEmptyAttributes({ ...state, id: 'gallery-command-empty' }), class: 'empty' },
+      { class: 'empty py-6', hidden: true },
+    );
+
+    expect(root.diagnostics).toEqual([
+      {
+        attr: 'data-state',
+        code: 'FW232',
+        message: 'Author override of primitive-owned state attribute per SPEC.md section 4.6',
+      },
+    ]);
+    expect(trigger.diagnostics).toEqual([
+      {
+        attr: 'commandfor',
+        code: 'FW231',
+        message: 'Unmergeable primitive IDREF conflict per SPEC.md section 4.6',
+      },
+    ]);
+    expect(dialog.diagnostics).toEqual([
+      {
+        attr: 'aria-modal',
+        code: 'FW232',
+        message: 'Author override of primitive ARIA/role attribute per SPEC.md section 4.6',
+      },
+    ]);
+    expect(close.diagnostics).toEqual([
+      {
+        attr: 'commandfor',
+        code: 'FW231',
+        message: 'Unmergeable primitive IDREF conflict per SPEC.md section 4.6',
+      },
+    ]);
+    expect(empty.diagnostics).toEqual([]);
+    expect(
+      <section data-gallery-merge="command-shell">
+        <div {...root.attrs}>
+          <button {...trigger.attrs}>Open command</button>
+          <dialog {...dialog.attrs}>
+            <p {...empty.attrs}>No commands</p>
+            <button {...close.attrs}>Close</button>
+          </dialog>
+        </div>
+      </section>,
+    ).toBe(
+      '<section data-gallery-merge="command-shell"><div data-state="open" id="gallery-command-root" class="command-root border"><button data-state="open" aria-expanded="true" aria-haspopup="dialog" type="submit" aria-controls="gallery-command-dialog" command="show-modal" commandfor="author-command-dialog" id="gallery-command-trigger" aria-labelledby="gallery-command-label" class="command-trigger px-2">Open command</button><dialog data-state="open" aria-modal="false" id="author-command-dialog" aria-describedby="gallery-command-description" aria-labelledby="gallery-command-title" open class="command-dialog shadow"><p data-empty="" id="gallery-command-empty" class="empty py-6" hidden>No commands</p><button data-state="open" disabled type="button" command="request-close" commandfor="author-command-dialog" class="command-close absolute">Close</button></dialog></div></section>',
+    );
+  });
+
+  it('renders golden dialog root and close merges with native command relationships', () => {
+    const state = {
+      contentId: 'gallery-profile-dialog',
+      descriptionId: 'gallery-profile-description',
+      open: true,
+      titleId: 'gallery-profile-title',
+    };
+    const root = mergePrimitiveAttrs(
+      { ...dialogRootAttributes(state), class: 'dialog-root' },
+      { class: 'dialog-root isolate', 'data-state': 'author-open', id: 'author-dialog-root' },
+    );
+    const close = mergePrimitiveAttrs(
+      { ...dialogCloseAttributes(state), class: 'dialog-close' },
+      {
+        class: 'dialog-close top-2',
+        commandfor: 'author-profile-dialog',
+        disabled: true,
+        type: 'submit',
+      },
+    );
+
+    expect(root.diagnostics).toEqual([
+      {
+        attr: 'data-state',
+        code: 'FW232',
+        message: 'Author override of primitive-owned state attribute per SPEC.md section 4.6',
+      },
+    ]);
+    expect(close.diagnostics).toEqual([
+      {
+        attr: 'commandfor',
+        code: 'FW231',
+        message: 'Unmergeable primitive IDREF conflict per SPEC.md section 4.6',
+      },
+    ]);
+    expect(
+      <section data-gallery-merge="dialog-close">
+        <div {...root.attrs}>
+          <button {...close.attrs}>Close</button>
+        </div>
+      </section>,
+    ).toBe(
+      '<section data-gallery-merge="dialog-close"><div data-state="open" class="dialog-root isolate" id="author-dialog-root"><button data-state="open" disabled type="submit" command="request-close" commandfor="author-profile-dialog" class="dialog-close top-2">Close</button></div></section>',
+    );
+  });
+
+  it('renders golden fieldset merges for grouped field semantics', () => {
+    const root = mergePrimitiveAttrs(
+      {
+        ...fieldsetRootAttributes({
+          descriptionId: 'gallery-fieldset-description',
+          disabled: true,
+          errorId: 'gallery-fieldset-error',
+          id: 'gallery-fieldset',
+          invalid: true,
+          required: true,
+        }),
+        class: 'fieldset-root',
+      },
+      {
+        'aria-describedby': 'author-fieldset-description',
+        class: 'fieldset-root gap-2',
+        disabled: false,
+      },
+    );
+    const legend = mergePrimitiveAttrs(
+      {
+        ...fieldsetLegendAttributes({
+          id: 'gallery-fieldset-legend',
+          invalid: true,
+          required: true,
+        }),
+        class: 'fieldset-legend',
+      },
+      {
+        class: 'fieldset-legend text-sm',
+        'data-invalid': 'author-invalid',
+      },
+    );
+
+    expect(root.diagnostics).toEqual([
+      {
+        attr: 'aria-describedby',
+        code: 'FW231',
+        message: 'Unmergeable primitive IDREF conflict per SPEC.md section 4.6',
+      },
+    ]);
+    expect(legend.diagnostics).toEqual([]);
+    expect(
+      <fieldset {...root.attrs}>
+        <legend {...legend.attrs}>Shipping speed</legend>
+      </fieldset>,
+    ).toBe(
+      '<fieldset data-disabled="" data-invalid="" data-required="" aria-describedby="author-fieldset-description" aria-invalid="true" disabled id="gallery-fieldset" class="fieldset-root gap-2"><legend data-invalid="author-invalid" data-required="" id="gallery-fieldset-legend" class="fieldset-legend text-sm">Shipping speed</legend></fieldset>',
+    );
+  });
+
+  it('renders golden toast title and description merges with part attrs', () => {
+    const title = mergePrimitiveAttrs(
+      { ...toastTitleAttributes({ id: 'gallery-toast-title' }), class: 'toast-title' },
+      {
+        class: 'toast-title font-medium',
+        'data-part': 'author-title',
+        id: 'author-toast-title',
+      },
+    );
+    const description = mergePrimitiveAttrs(
+      {
+        ...toastDescriptionAttributes({ id: 'gallery-toast-description' }),
+        class: 'toast-description',
+      },
+      {
+        class: 'toast-description text-sm',
+        'data-part': 'author-description',
+        id: 'author-toast-description',
+      },
+    );
+
+    expect(title.diagnostics).toEqual([]);
+    expect(description.diagnostics).toEqual([]);
+    expect(
+      <article data-gallery-merge="toast-parts">
+        <h2 {...title.attrs}>Synced</h2>
+        <p {...description.attrs}>Changes are available offline.</p>
+      </article>,
+    ).toBe(
+      '<article data-gallery-merge="toast-parts"><h2 data-part="author-title" id="author-toast-title" class="toast-title font-medium">Synced</h2><p data-part="author-description" id="author-toast-description" class="toast-description text-sm">Changes are available offline.</p></article>',
+    );
   });
 
   it('covers every exported primitive attrs builder with the merge oracle', () => {
