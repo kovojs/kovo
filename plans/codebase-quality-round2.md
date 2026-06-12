@@ -2836,6 +2836,13 @@ As each phase splits a source module, split its tests in the same commit.
       remaining compile pipeline and render-equivalence groups. Same-session evidence:
       `pnpm exec vitest --run packages/compiler/src/view-transitions.test.ts packages/compiler/src/index.test.ts -t "view transition"`
       and `pnpm exec vp check packages/compiler/src/view-transitions.test.ts packages/compiler/src/index.test.ts plans/codebase-quality-round2.md`.
+      Additional evidence 2026-06-12: minifier-name collection and browser-handler diagnostics
+      FW201/FW210 moved from `packages/compiler/src/index.test.ts` into
+      `packages/compiler/src/handler-lowering.test.ts`, with FW210 message/severity keyed to
+      `diagnosticDefinitions`. The broad compiler split remains open for remaining compile
+      pipeline and render-equivalence groups. Same-session evidence:
+      `pnpm exec vitest --run packages/compiler/src/handler-lowering.test.ts packages/compiler/src/index.test.ts -t "minifier|FW201|FW210|serializability|anonymous handlers"`
+      and `pnpm exec vp check packages/compiler/src/handler-lowering.test.ts packages/compiler/src/index.test.ts plans/codebase-quality-round2.md`.
 - [ ] drizzle (one describe, 57 its, 68 inline pgTable fixtures, 3 module-shim copies) and
       test-package suites: same treatment; CLI tests get the temp-dir + stream-spy ritual
       (16 hand-copies) as one helper.

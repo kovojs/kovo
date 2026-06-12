@@ -1,12 +1,6 @@
-import { diagnosticDefinitions } from '@jiso/core';
 import { describe, expect, it } from 'vitest';
 
-import {
-  assertFixpoint,
-  assertRenderEquivalence,
-  collectMinifierReservedNames,
-  compileComponentModule,
-} from './index.js';
+import { assertFixpoint, assertRenderEquivalence, compileComponentModule } from './index.js';
 import { renderEquivalenceCheck } from './emit/server.js';
 
 const cartBadgeSource = `
@@ -22,8 +16,6 @@ export const CartBadge = component('cart-badge', {
   ),
 });
 `;
-
-const fw210 = diagnosticDefinitions.FW210;
 
 function expectHandlerRef(source: string, path: string, exportName: string): void {
   expect(source).toMatch(
@@ -272,135 +264,6 @@ export const CartBadge = component('cart-badge', {
   }
 }`);
     expect(registry).toContain('export type DomainKey = never;');
-  });
-
-  it('collects emitted handler export names for minifier preservation', () => {
-    const cartBadge = compileComponentModule({
-      fileName: 'components/cart/cart-badge.tsx',
-      source: `
-import { component } from '@jiso/core';
-
-export const CartBadge = component('cart-badge', {
-  render: () => (
-    <div>
-      <button onClick={removeItem}>Remove</button>
-      <button onClick={() => clearCart(state.cartId)}>Clear</button>
-    </div>
-  ),
-});
-`,
-    });
-    const cartDrawer = compileComponentModule({
-      fileName: 'components/cart/cart-drawer.tsx',
-      source: `
-import { component } from '@jiso/core';
-
-export const CartDrawer = component('cart-drawer', {
-  render: () => (
-    <button onClick={removeItem}>Remove</button>
-  ),
-});
-`,
-    });
-
-    expect(collectMinifierReservedNames([cartDrawer, cartBadge, cartBadge])).toEqual([
-      'CartBadge$button_click',
-      'CartBadge$removeItem',
-      'CartDrawer$removeItem',
-    ]);
-  });
-
-  it('reports FW210 for anonymous handlers', () => {
-    const result = compileComponentModule({
-      fileName: 'cart-badge.tsx',
-      source: cartBadgeSource,
-    });
-
-    expect(result.diagnostics).toEqual([
-      {
-        code: 'FW210',
-        fileName: 'cart-badge.tsx',
-        length: 5,
-        message: fw210.message,
-        severity: 'lint',
-        start: { column: 13, line: 8 },
-      },
-    ]);
-  });
-
-  it('reports FW201 when a handler captures non-serializable browser objects', () => {
-    const result = compileComponentModule({
-      fileName: 'cart-badge.tsx',
-      source: '<button onClick={() => window.alert("x")}>x</button>',
-    });
-
-    expect(result.diagnostics).toMatchObject([
-      {
-        code: 'FW210',
-        severity: 'lint',
-      },
-      {
-        code: 'FW201',
-        severity: 'error',
-      },
-    ]);
-    const fw201 = result.diagnostics.find((diagnostic) => diagnostic.code === 'FW201');
-    expect(fw201?.help).toMatch(
-      /Would lower to: on:click="\/c\/cart-badge\.client\.js\?v=[0-9a-f]{8}#CartBadge\$button_click"/,
-    );
-    expect(fw201?.help).toContain('Blocked expression: () => window.alert("x")');
-    expect(fw201?.help).toContain(
-      'Fixes: move the value into component/query state via ctx; pass serializable element params with data-p-*; or keep shared constants in module scope.',
-    );
-    expect(fw201?.help).toContain(
-      'The compiler conservatively blocks free identifier references named window, document, db, request, response, Date, Map, or Set.',
-    );
-    expect(fw201?.start).toEqual({ column: 9, line: 1 });
-  });
-
-  it('reports stable-name and serializability diagnostics for anonymous browser handlers', () => {
-    const result = compileComponentModule({
-      fileName: 'cart-badge.tsx',
-      source: '<button onClick={() => window.alert("x")}>x</button>',
-    });
-
-    expect(result.diagnostics.map((diagnostic) => diagnostic.code)).toEqual(['FW210', 'FW201']);
-    expect(result.diagnostics[0]).toMatchObject({
-      code: 'FW210',
-      severity: 'lint',
-      start: { column: 9, line: 1 },
-    });
-    expect(result.diagnostics[1]).toMatchObject({
-      code: 'FW201',
-      severity: 'error',
-      start: { column: 9, line: 1 },
-    });
-  });
-
-  it('does not report FW201 for local variables named like non-serializable captures', () => {
-    const result = compileComponentModule({
-      fileName: 'cart-badge.tsx',
-      source: `
-export const CartBadge = component('cart-badge', {
-  render: () => (
-    <button onClick={() => { const response = { ok: true }; return response.ok; }}>
-      Check
-    </button>
-  ),
-});
-`,
-    });
-
-    expect(result.diagnostics).toEqual([
-      {
-        code: 'FW210',
-        fileName: 'cart-badge.tsx',
-        length: 5,
-        message: fw210.message,
-        severity: 'lint',
-        start: { column: 13, line: 4 },
-      },
-    ]);
   });
 
   it('preserves emitted IR on recompilation', () => {
