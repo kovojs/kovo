@@ -658,6 +658,30 @@ const executeTypeScriptModuleSource = async (source) => {
   return module.exports;
 };
 
+const loadVitePlusConfig = async () => {
+  const ts = await import('typescript');
+  const module = { exports: {} };
+  const compiled = ts.transpileModule(await readProjectFile('vite.config.ts'), {
+    compilerOptions: {
+      module: ts.ModuleKind.CommonJS,
+      target: ts.ScriptTarget.ES2022,
+    },
+  }).outputText;
+
+  runInNewContext(compiled, {
+    exports: module.exports,
+    module,
+    require(specifier) {
+      if (specifier === 'vite-plus') {
+        return { defineConfig: (config) => config };
+      }
+      assert.fail(`unexpected Vite+ config import ${specifier}`);
+    },
+  });
+
+  return jsonClone(module.exports.default);
+};
+
 const jsonClone = (value) => JSON.parse(JSON.stringify(value));
 
 const executeGeneratedBootstrapModule = (source, planModules) => {
@@ -6176,18 +6200,17 @@ export const CartTotal = component('cart-total', {
 void test('framework-owned browser suite is wired into acceptance', async () => {
   const packageJson = JSON.parse(await readProjectFile('package.json'));
   const ciWorkflow = await readProjectFile('.github/workflows/ci.yml');
-  const viteConfig = await readProjectFile('vite.config.ts');
   const acceptanceScripts = packageJson.scripts.acceptance.split(' && ').map(parsePnpmRunScript);
   const ciTaskNames = parseWorkflowSteps(ciWorkflow)
     .map((step) => parseVpRunCommand(step.run ?? ''))
     .filter(Boolean);
-  const tasks = parseTemplateViteTasks(viteConfig);
+  const tasks = (await loadVitePlusConfig()).run.tasks;
   const browserTaskName = parseRequiredVpTask('test:browser', packageJson);
   const browserTask = tasks[browserTaskName];
   assert.ok(browserTask, `${browserTaskName} task is defined`);
   const { configPath } = parseVitestTaskCommand(browserTask.command);
   const browserAcceptanceInput = browserTask.input.find((entry) =>
-    entry.pattern.endsWith('/browser-acceptance.mjs'),
+    entry.pattern?.endsWith('/browser-acceptance.mjs'),
   );
   assert.ok(browserAcceptanceInput, `${browserTaskName} task watches browser acceptance metadata`);
   const { browserSuiteAcceptance } = await import(
@@ -6197,6 +6220,7 @@ void test('framework-owned browser suite is wired into acceptance', async () => 
   assert.equal(acceptanceScripts.includes('test:browser'), true);
   assert.equal(ciTaskNames.includes(browserTaskName), true);
   assert.deepEqual(browserTask.input, [
+    { auto: true },
     { base: 'workspace', pattern: configPath },
     { base: 'workspace', pattern: browserAcceptanceInput.pattern },
     { base: 'workspace', pattern: browserSuiteAcceptance.include[0] },
@@ -6212,12 +6236,11 @@ void test('framework-owned browser suite is wired into acceptance', async () => 
 void test('P10 perf acceptance is wired through Playwright and CDP', async () => {
   const packageJson = JSON.parse(await readProjectFile('package.json'));
   const ciWorkflow = await readProjectFile('.github/workflows/ci.yml');
-  const viteConfig = await readProjectFile('vite.config.ts');
   const acceptanceScripts = packageJson.scripts.acceptance.split(' && ').map(parsePnpmRunScript);
   const ciTaskNames = parseWorkflowSteps(ciWorkflow)
     .map((step) => parseVpRunCommand(step.run ?? ''))
     .filter(Boolean);
-  const tasks = parseTemplateViteTasks(viteConfig);
+  const tasks = (await loadVitePlusConfig()).run.tasks;
   const perfTaskName = parseRequiredVpTask('test:p10-perf', packageJson);
   const perfTask = tasks[perfTaskName];
   assert.ok(perfTask, `${perfTaskName} task is defined`);
@@ -6233,6 +6256,7 @@ void test('P10 perf acceptance is wired through Playwright and CDP', async () =>
   assertOrderedIncludes(ciTaskNames, 'build', perfTaskName);
   assertOrderedIncludes(ciTaskNames, perfTaskName, 'fw-check');
   assert.deepEqual(perfTask.input, [
+    { auto: true },
     { base: 'workspace', pattern: modulePath },
     { base: 'workspace', pattern: 'dist/**' },
   ]);

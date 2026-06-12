@@ -311,9 +311,10 @@ tests/fw-check.node.mjs` passed.
       `node --test --test-name-pattern "framework-owned browser suite|P10 perf acceptance"
       tests/fw-check.node.mjs` passed.
       Partial evidence 2026-06-12: the browser/perf acceptance wiring tranche now derives Vite+
-      task names from `package.json`, parses CI task order, parses Vitest/Node task commands into
-      config/module facts, and imports the configured acceptance metadata/perf runner entrypoint
-      instead of asserting whole command literals. Verification:
+      task names from `package.json`, executes `vite.config.ts` through a `defineConfig` shim to
+      inspect the real Vite+ task graph, parses CI task order, parses Vitest/Node task commands
+      into config/module facts, and imports the configured acceptance metadata/perf runner
+      entrypoint instead of regex-parsing root Vite task source. Verification:
       `node --test --test-name-pattern "framework-owned browser suite|P10 perf acceptance"
       tests/fw-check.node.mjs`, `pnpm exec vp check tests/fw-check.node.mjs
       plans/codebase-quality-round2.md`, and `git diff --check`.
