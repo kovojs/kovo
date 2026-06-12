@@ -320,7 +320,8 @@ describe('gallery demo fixtures', () => {
     expect(tabs.html).toContain('aria-controls="gallery-tabs-overview-panel"');
     expect(tabs.html).toContain('role="tabpanel"');
     expect(tabs.html).toContain('aria-labelledby="gallery-tabs-overview"');
-    expect(tabs.html).toContain('disabled role="tab" tabIndex="-1"');
+    expect(tabs.html).toContain('data-disabled="" data-state="inactive" disabled');
+    expect(tabs.html).toContain('role="tab" tabIndex="-1" type="button" value="audit"');
   });
 
   it('renders progress fixture states through native progress attributes', () => {
@@ -354,6 +355,7 @@ describe('gallery demo fixtures', () => {
     const sheet = findFixture('/components/sheet');
     const skeleton = findFixture('/components/skeleton');
     const table = findFixture('/components/table');
+    const tabs = findFixture('/components/tabs');
 
     expect(alert.html).toContain('data-ui-demo="alert"');
     expect(alert.html).toContain('role="status"');
@@ -407,6 +409,11 @@ describe('gallery demo fixtures', () => {
     expect(table.html).toContain('<th class="h-10 px-3 text-left align-middle');
     expect(table.html).toContain('scope="row">INV-0042</th>');
     expect(table.html).toContain('colspan="3"');
+
+    expect(tabs.html).toContain('data-ui-demo="tabs"');
+    expect(tabs.html).toContain('rounded-md border border-neutral-200 bg-neutral-100');
+    expect(tabs.html).toContain('data-[state=active]:bg-white');
+    expect(tabs.html).toContain('overview content');
   });
 });
 

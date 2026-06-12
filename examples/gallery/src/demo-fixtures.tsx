@@ -49,10 +49,7 @@ import {
   selectValueAttributes,
   selectValueText,
   separatorRootAttributes,
-  tabsListAttributes,
-  tabsPanelAttributes,
   tabsRootAttributes,
-  tabsTriggerAttributes,
   tooltipContentAttributes,
   tooltipRootAttributes,
   tooltipTriggerAttributes,
@@ -78,6 +75,10 @@ import {
   TableHead,
   TableHeaderCell,
   TableRow,
+  Tabs,
+  TabsList,
+  TabsPanel,
+  TabsTrigger,
   Toggle,
 } from '@jiso/ui';
 
@@ -1318,32 +1319,36 @@ export function TabsDemo(): string {
       <p data-demo-summary="no-js">
         Tabs expose tablist, tab, and tabpanel roles with roving focus data.
       </p>
-      <div {...tabsListAttributes({ ...state, label: 'Gallery tabs' })}>
-        {items.map((item) => (
-          <button
-            {...tabsTriggerAttributes({
-              ...state,
-              id: `gallery-tabs-${item.value}`,
-              itemValue: item.value,
-              panelId: `gallery-tabs-${item.value}-panel`,
-            })}
-          >
-            {item.value}
-          </button>
-        ))}
-      </div>
-      {items.map((item) => (
-        <section
-          {...tabsPanelAttributes({
+      <div data-ui-demo="tabs">
+        {Tabs.definition.render({
+          ...state,
+          children: `${TabsList.definition.render({
             ...state,
-            id: `gallery-tabs-${item.value}-panel`,
-            itemValue: item.value,
-            triggerId: `gallery-tabs-${item.value}`,
-          })}
-        >
-          {item.value} content
-        </section>
-      ))}
+            children: items
+              .map((item) =>
+                TabsTrigger.definition.render({
+                  ...state,
+                  children: item.value,
+                  id: `gallery-tabs-${item.value}`,
+                  itemValue: item.value,
+                  panelId: `gallery-tabs-${item.value}-panel`,
+                }),
+              )
+              .join(''),
+            label: 'Gallery tabs',
+          })}${items
+            .map((item) =>
+              TabsPanel.definition.render({
+                ...state,
+                children: `${item.value} content`,
+                id: `gallery-tabs-${item.value}-panel`,
+                itemValue: item.value,
+                triggerId: `gallery-tabs-${item.value}`,
+              }),
+            )
+            .join('')}`,
+        })}
+      </div>
       {renderBehaviorContract({
         changeReasons: 'trigger-click, keyboard, programmatic',
         dataState: 'active, inactive, disabled',

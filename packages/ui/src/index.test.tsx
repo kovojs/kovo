@@ -25,10 +25,18 @@ import {
   TableHead,
   TableHeaderCell,
   TableRow,
+  Tabs,
+  TabsList,
+  TabsPanel,
+  TabsTrigger,
   Toggle,
   breadcrumbClasses,
   buttonClasses,
   checkboxClasses,
+  tabsClasses,
+  tabsListClasses,
+  tabsPanelClasses,
+  tabsTriggerClasses,
   sheetContentClasses,
   switchClasses,
   tableClasses,
@@ -51,6 +59,7 @@ describe('@jiso/ui styled package foundation', () => {
     expect(Alert.name).toBe('alert');
     expect(Skeleton.name).toBe('skeleton');
     expect(Switch.name).toBe('switch');
+    expect(Tabs.name).toBe('tabs');
     expect(Toggle.name).toBe('toggle');
 
     expect(
@@ -98,6 +107,7 @@ describe('@jiso/ui styled package foundation', () => {
     expect(buttonClasses).toContain('h-9 gap-2 px-3');
     expect(checkboxClasses.join(' ')).toContain('inline-flex items-center gap-2');
     expect(switchClasses.join(' ')).toContain('inline-flex items-center gap-2');
+    expect(tabsClasses.join(' ')).toContain('w-full text-neutral-950');
     expect(toggleClasses.join(' ')).toContain('data-[state=pressed]:bg-neutral-950');
   });
 
@@ -151,6 +161,74 @@ describe('@jiso/ui styled package foundation', () => {
       'colspan="2"',
     );
     expect(tableClasses).toContain('w-full overflow-x-auto');
+  });
+
+  it('wraps the headless tabs primitive as styled tablist parts', () => {
+    const items = [
+      { value: 'overview' },
+      { value: 'activity' },
+      { disabled: true, value: 'audit' },
+    ];
+    const state = {
+      activeValue: 'overview',
+      items,
+      orientation: 'horizontal' as const,
+      value: 'overview',
+    };
+
+    expect(TabsList.name).toBe('tabs-list');
+    expect(TabsTrigger.name).toBe('tabs-trigger');
+    expect(TabsPanel.name).toBe('tabs-panel');
+
+    expect(
+      Tabs.definition.render({
+        ...state,
+        children: 'tabs body',
+        id: 'account-tabs',
+      }),
+    ).toContain('data-orientation="horizontal" id="account-tabs">tabs body</div>');
+    expect(
+      TabsList.definition.render({
+        ...state,
+        children: 'triggers',
+        label: 'Account sections',
+      }),
+    ).toContain('aria-label="Account sections"');
+    expect(
+      TabsTrigger.definition.render({
+        ...state,
+        children: 'Overview',
+        id: 'overview-tab',
+        itemValue: 'overview',
+        panelId: 'overview-panel',
+      }),
+    ).toContain('aria-controls="overview-panel" aria-selected="true"');
+    expect(
+      TabsTrigger.definition.render({
+        ...state,
+        children: 'Audit',
+        itemValue: 'audit',
+      }),
+    ).toContain('data-disabled="" data-state="inactive" disabled role="tab" tabIndex="-1"');
+    expect(
+      TabsPanel.definition.render({
+        ...state,
+        children: 'Overview content',
+        id: 'overview-panel',
+        itemValue: 'overview',
+        triggerId: 'overview-tab',
+      }),
+    ).toContain('aria-labelledby="overview-tab"');
+    expect(
+      TabsPanel.definition.render({
+        ...state,
+        children: 'Activity content',
+        itemValue: 'activity',
+      }),
+    ).toContain('data-state="inactive" hidden role="tabpanel"');
+    expect(tabsListClasses.join(' ')).toContain('data-[orientation=vertical]:flex-col');
+    expect(tabsTriggerClasses.join(' ')).toContain('data-[state=active]:bg-white');
+    expect(tabsPanelClasses.join(' ')).toContain('rounded-md border border-neutral-200');
   });
 
   it('exports breadcrumb primitives with headless separator attributes', () => {
@@ -232,6 +310,7 @@ describe('@jiso/ui styled package foundation', () => {
       'skeleton.tsx',
       'switch.tsx',
       'table.tsx',
+      'tabs.tsx',
       'toggle.tsx',
     ]
       .map(readSource)

@@ -16,6 +16,7 @@
     "./skeleton": "./src/skeleton.tsx",
     "./switch": "./src/switch.tsx",
     "./table": "./src/table.tsx",
+    "./tabs": "./src/tabs.tsx",
     "./toggle": "./src/toggle.tsx"
   },
   "dependencies": {

@@ -60,5 +60,26 @@ export {
   tableWrapperClassNames,
 } from './table.js';
 export type { TableCellProps, TableProps, TableSectionProps } from './table.js';
+export {
+  Tabs,
+  TabsList,
+  TabsPanel,
+  TabsTrigger,
+  tabsClassNames,
+  tabsClasses,
+  tabsListClassNames,
+  tabsListClasses,
+  tabsPanelClassNames,
+  tabsPanelClasses,
+  tabsTriggerClassNames,
+  tabsTriggerClasses,
+} from './tabs.js';
+export type {
+  TabsListProps,
+  TabsPanelProps,
+  TabsProps,
+  TabsStateProps,
+  TabsTriggerProps,
+} from './tabs.js';
 export { Toggle, toggleClassNames, toggleClasses } from './toggle.js';
 export type { ToggleProps, ToggleVariant } from './toggle.js';

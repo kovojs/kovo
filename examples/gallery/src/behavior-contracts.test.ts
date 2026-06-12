@@ -312,7 +312,8 @@ const expectedBehaviorSnippets: Partial<Record<GalleryRoute['path'], readonly st
     'aria-selected="true"',
     'aria-controls="gallery-tabs-overview-panel"',
     'role="tabpanel"',
-    'disabled role="tab" tabIndex="-1"',
+    'data-disabled="" data-state="inactive" disabled',
+    'role="tab" tabIndex="-1" type="button" value="audit"',
   ],
   '/components/toggle': [
     'data-state="pressed"',
