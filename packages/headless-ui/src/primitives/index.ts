@@ -150,3 +150,26 @@ export type {
   ToggleState,
   ToggleTriggerEvent,
 } from './toggle.js';
+
+export {
+  setTooltipOpen,
+  tooltipContentAttributes,
+  tooltipEscapeKeyDown,
+  tooltipRootAttributes,
+  tooltipTriggerAttributes,
+  tooltipTriggerBlur,
+  tooltipTriggerFocus,
+  tooltipTriggerPointerEnter,
+  tooltipTriggerPointerLeave,
+} from './tooltip.js';
+export type {
+  TooltipAttributeOptions,
+  TooltipChangeDetail,
+  TooltipChangeOptions,
+  TooltipChangeReason,
+  TooltipChangeResult,
+  TooltipEscapeEvent,
+  TooltipPrimitiveAttributes,
+  TooltipState,
+  TooltipTriggerEvent,
+} from './tooltip.js';

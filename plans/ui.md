@@ -174,6 +174,18 @@ jiso-dialog` resolves dashed wire names and prints provenance including package,
       `pnpm --filter @jiso/headless-ui run lint:primitives`,
       `pnpm exec vp check packages/headless-ui/package.json packages/headless-ui/src/index.ts packages/headless-ui/src/primitives/index.ts packages/headless-ui/src/primitives/accordion.ts packages/headless-ui/src/primitives/accordion.test.ts plans/ui.md`,
       and `git diff --check`.
+      Additional partial evidence 2026-06-12: `packages/headless-ui/src/primitives/tooltip.ts`
+      adds the H1 tooltip primitive as a native-popover-oriented L0 helper: root/trigger/content
+      attribute builders, `jiso-tooltip` behavior IDREF attributes per SPEC §4.6, tooltip
+      `aria-describedby` wiring, manual popover content attributes, cancelable open-state
+      transitions, and guarded focus/pointer/Escape handlers following the SPEC §4.6 primitive
+      handler no-op contract. It is exported through `@jiso/headless-ui`,
+      `@jiso/headless-ui/primitives`, and `@jiso/headless-ui/primitives/tooltip`.
+      Same-session evidence:
+      `pnpm --filter @jiso/headless-ui exec vitest --run src/primitives/tooltip.test.ts`,
+      `pnpm --filter @jiso/headless-ui run lint:primitives`,
+      `pnpm exec vp check packages/headless-ui/package.json packages/headless-ui/src/index.ts packages/headless-ui/src/primitives/index.ts packages/headless-ui/src/primitives/tooltip.ts packages/headless-ui/src/primitives/tooltip.test.ts plans/ui.md`,
+      and `git diff --check`.
 - [ ] H2 wave 2 primitives (stateful L1 islands): tabs, radio-group, toggle-group, checkbox-group, toolbar, number-field, otp-field, scroll-area, field/fieldset as `form()` integration.
 - [ ] H3 wave 3 primitives (list-driven & isomorphic): select, combobox, autocomplete, dropdown-menu, context-menu, menubar, navigation-menu, slider, toast, command.
 - [x] U1 token sheet + `cn()` + statically-analyzable variant helper (Tailwind-first, §13.1 discoverability rules).
