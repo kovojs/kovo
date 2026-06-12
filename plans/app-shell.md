@@ -172,6 +172,15 @@ Scope: SPEC addition (proposed §9.5 "The request shell"), `@jiso/server` shell 
       type compatibility through both `api/app.ts` and `packages/server/src/index.ts`. Same-session
       verification ran
       `corepack pnpm exec vitest --run packages/server/src/api/app.test.ts packages/server/src/app.test.ts packages/server/src/vite-build.test.ts packages/server/src/vite-dev.test.ts packages/server/src/vite-manifest.test.ts`.
+      Additional evidence 2026-06-12: the split app-shell barrels are now consumable as package
+      subpaths through `@jiso/server/app-shell` and
+      `@jiso/server/app-shell/{core,client-modules,node,static-export,vite}` instead of requiring
+      consumers to import from the root barrel or source-relative paths. `packages/server/package.json`
+      exposes those subpaths, `packages/server/src/api/app-shell/index.ts` aggregates the SPEC §9.5
+      request-shell surface, and `packages/server/src/api/app.test.ts` proves each package subpath
+      resolves to the same core app/request, `/c/` module, node adapter, static export, and Vite
+      helper values. Same-session verification ran
+      `corepack pnpm exec vitest --run packages/server/src/api/app.test.ts`.
       Additional evidence 2026-06-12: the manifest seam now exposes
       `jisoAppShellViteManifestStylesheetHref()` and
       `jisoAppShellViteManifestStylesheetHrefFromFile()` so starter/docs export tasks can

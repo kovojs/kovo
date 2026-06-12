@@ -1,8 +1,15 @@
 import { describe, expect, it } from 'vitest';
 
+import * as packageAppShellApi from '@jiso/server/app-shell';
+import * as packageClientModulesApi from '@jiso/server/app-shell/client-modules';
+import * as packageCoreApi from '@jiso/server/app-shell/core';
+import * as packageNodeApi from '@jiso/server/app-shell/node';
+import * as packageStaticExportApi from '@jiso/server/app-shell/static-export';
+import * as packageViteApi from '@jiso/server/app-shell/vite';
 import * as publicApi from '../index.js';
 import * as clientModulesApi from './app-shell/client-modules.js';
 import * as coreApi from './app-shell/core.js';
+import * as appShellApi from './app-shell/index.js';
 import * as nodeApi from './app-shell/node.js';
 import * as staticExportApi from './app-shell/static-export.js';
 import * as viteApi from './app-shell/vite.js';
@@ -42,6 +49,14 @@ describe('server app-shell public API barrels', () => {
     expect(appApi.exportStaticApp).toBe(staticExportApi.exportStaticApp);
     expect(publicApi.StaticExportError).toBe(staticExportApi.StaticExportError);
 
+    expect(appShellApi.createApp).toBe(coreApi.createApp);
+    expect(appShellApi.createMemoryVersionedClientModuleRegistry).toBe(
+      clientModulesApi.createMemoryVersionedClientModuleRegistry,
+    );
+    expect(appShellApi.toNodeHandler).toBe(nodeApi.toNodeHandler);
+    expect(appShellApi.exportStaticApp).toBe(staticExportApi.exportStaticApp);
+    expect(appShellApi.createJisoAppShellViteBuild).toBe(viteApi.createJisoAppShellViteBuild);
+
     type PublicAppShellTypesStayAssignable = [
       PublicJisoApp extends CoreJisoApp ? true : false,
       PublicJisoAppShellBuild extends ViteJisoAppShellBuild ? true : false,
@@ -59,5 +74,23 @@ describe('server app-shell public API barrels', () => {
     ];
 
     expect(publicAppShellTypesStayAssignable).toEqual([true, true, true, true]);
+  });
+
+  it('exposes the split app-shell package subpaths for R5/R6/R7 consumers', () => {
+    expect(packageCoreApi.createApp).toBe(coreApi.createApp);
+    expect(packageClientModulesApi.versionedClientModuleHref).toBe(
+      clientModulesApi.versionedClientModuleHref,
+    );
+    expect(packageNodeApi.toNodeHandler).toBe(nodeApi.toNodeHandler);
+    expect(packageStaticExportApi.exportStaticApp).toBe(staticExportApi.exportStaticApp);
+    expect(packageViteApi.createJisoAppShellViteBuild).toBe(viteApi.createJisoAppShellViteBuild);
+
+    expect(packageAppShellApi.createRequestHandler).toBe(coreApi.createRequestHandler);
+    expect(packageAppShellApi.renderVersionedClientModuleResponse).toBe(
+      clientModulesApi.renderVersionedClientModuleResponse,
+    );
+    expect(packageAppShellApi.writeWebResponseToNode).toBe(nodeApi.writeWebResponseToNode);
+    expect(packageAppShellApi.StaticExportError).toBe(staticExportApi.StaticExportError);
+    expect(packageAppShellApi.jisoAppShellVitePlugin).toBe(viteApi.jisoAppShellVitePlugin);
   });
 });

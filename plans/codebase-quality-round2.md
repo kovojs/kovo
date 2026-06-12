@@ -3130,6 +3130,14 @@ land it first; don't fork it.
       same app-shell values and compatible types from the new ownership seams. Same-session
       evidence:
       `corepack pnpm exec vitest --run packages/server/src/api/app.test.ts packages/server/src/app.test.ts packages/server/src/vite-build.test.ts packages/server/src/vite-dev.test.ts packages/server/src/vite-manifest.test.ts`.
+      Additional evidence 2026-06-12: the app-shell child barrels gained package-level subpath
+      exports in `packages/server/package.json`, plus a small aggregate
+      `packages/server/src/api/app-shell/index.ts`, so R5/R6/R7 consumers can import the split
+      SPEC §9.5 request-shell surface through `@jiso/server/app-shell` and its named child
+      subpaths without deep source paths or root-barrel coupling. `packages/server/src/api/app.test.ts`
+      proves the package subpaths resolve to the same core, client-module, node, static-export,
+      and Vite values as the owning barrels. Same-session evidence:
+      `corepack pnpm exec vitest --run packages/server/src/api/app.test.ts`.
       Additional evidence 2026-06-12: app-shell Vite manifest parsing, route-entry validation,
       hint extraction, stylesheet href extraction, and manifest dist-asset planning moved from
       `packages/server/src/vite.ts` into `packages/server/src/vite-manifest.ts`; `vite.ts`
