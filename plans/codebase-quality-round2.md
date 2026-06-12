@@ -1453,6 +1453,13 @@ As each phase splits a source module, split its tests in the same commit.
       `packages/runtime/src/index.test.ts` to `packages/runtime/src/mutation-response.test.ts`,
       preserving the query/fragment chunk, malformed chunk, nested fragment, and deferred-helper
       assertions with local DOM fakes.
+      Additional evidence 2026-06-12: inline-loader bootstrap source-shape, gzip budget,
+      custom import expression, and `Math.random` exclusion checks moved from
+      `packages/runtime/src/index.test.ts` to `packages/runtime/src/inline-loader.test.ts`,
+      while the monolith keeps generated-source integration parity for form/query/fragment flows.
+      Same-session evidence:
+      `pnpm exec vitest --run packages/runtime/src/inline-loader.test.ts packages/runtime/src/index.test.ts`
+      and `git diff --check`.
 - [ ] compiler/index.test.ts (3,580 lines, zero per-module tests) → per-phase files; a
       `compileFixture()` helper returning files by kind; diagnostic assertions reference
       `diagnosticDefinitions[code].message` instead of pasted strings (today a one-word rewording

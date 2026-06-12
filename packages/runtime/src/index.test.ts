@@ -1,6 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
 import { runInThisContext } from 'node:vm';
-import { gzipSync } from 'node:zlib';
 import { form, formFields, href, Link, redirect, type FormFailure, type Route } from '@jiso/core';
 
 import {
@@ -393,58 +392,6 @@ async function dispatchInlineDelegatedClick(
 }
 
 describe('runtime loader', () => {
-  it('keeps the always-loaded bootstrap under the S2 gzip budget', () => {
-    expect(gzipSync(jisoLoaderSource).byteLength).toBeLessThanOrEqual(4096);
-  });
-
-  it('ships the inline loader as pre-minified bootstrap source', () => {
-    // SPEC.md §4.4: nothing outside the 4KB delegated loader belongs in the always-loaded path.
-    expect(jisoLoaderSource).toBe(createInlineJisoLoaderSource());
-    expect(jisoLoaderSource).toBe(jisoLoaderSource.trim());
-    expect(jisoLoaderSource).not.toMatch(/\n|\s{2,}/);
-    expect(jisoLoaderSource).toMatch(
-      /^\(function installInlineJisoLoader\(importModule\)\{.*\}\)\(\(url\)=>import\(url\)\);$/,
-    );
-  });
-
-  it('generates custom inline bootstrap sources from the shipped installer helper', () => {
-    const globalRecord = globalThis as unknown as Record<string, unknown>;
-    const originals = {
-      addEventListener: globalRecord.addEventListener,
-      document: globalRecord.document,
-      importModule: globalRecord.__jisoInlineImport,
-    };
-    const listeners = new Map<string, unknown>();
-    const importModule = vi.fn(async () => ({}));
-
-    try {
-      globalRecord.__jisoInlineImport = importModule;
-      globalRecord.addEventListener = (type: string, listener: unknown) => {
-        listeners.set(type, listener);
-      };
-      globalRecord.document = {
-        querySelectorAll() {
-          return [];
-        },
-      };
-
-      runInThisContext(createInlineJisoLoaderSource('globalThis.__jisoInlineImport'));
-
-      expect([...listeners.keys()]).toEqual(['click', 'submit', 'input', 'change']);
-      expect(importModule).not.toHaveBeenCalled();
-    } finally {
-      Object.assign(globalRecord, {
-        addEventListener: originals.addEventListener,
-        document: originals.document,
-      });
-      if (originals.importModule === undefined) {
-        delete globalRecord.__jisoInlineImport;
-      } else {
-        globalRecord.__jisoInlineImport = originals.importModule;
-      }
-    }
-  });
-
   it.each([
     ['generated bootstrap source', () => runInThisContext(jisoLoaderSource)],
     ['shared inline loader source', () => installInlineJisoLoader(vi.fn(async () => ({})))],
@@ -1041,10 +988,6 @@ describe('runtime loader', () => {
     } finally {
       Object.assign(globalRecord, originals);
     }
-  });
-
-  it('keeps inline loader idempotency keys on crypto randomUUID', () => {
-    expect(jisoLoaderSource).not.toContain('Math.random');
   });
 
   it('registers delegated capture listeners without importing handler modules', () => {

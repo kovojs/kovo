@@ -15,6 +15,11 @@ describe('inline loader source', () => {
     expect(jisoLoaderSource).toBe(`(${inlineJisoLoaderInstallerSource})((url)=>import(url));`);
     expect(createPublicInlineJisoLoaderSource()).toBe(jisoLoaderSource);
     expect(gzipSync(jisoLoaderSource).byteLength).toBeLessThanOrEqual(4096);
+    expect(jisoLoaderSource).toBe(jisoLoaderSource.trim());
+    expect(jisoLoaderSource).not.toMatch(/\n|\s{2,}/);
+    expect(jisoLoaderSource).toMatch(
+      /^\(function installInlineJisoLoader\(importModule\)\{.*\}\)\(\(url\)=>import\(url\)\);$/,
+    );
   });
 
   it('keeps minified wire-contract tokens pinned in the extracted installer', () => {
@@ -27,6 +32,7 @@ describe('inline loader source', () => {
       "element.getAttribute('fw-fragment-target')??element.id",
     );
     expect(inlineJisoLoaderInstallerSource).toContain("getAttribute('fw-param-types')");
+    expect(inlineJisoLoaderInstallerSource).not.toContain('Math.random');
   });
 
   it('installs from a generated custom import expression without importing handlers eagerly', () => {
