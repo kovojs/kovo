@@ -108,6 +108,10 @@ Do this first or pay it on every commit.
       `fwCheck`/`fwExplain` commerce behavior, FW310/FW311 warning rows, compiler-derived graph
       and registry facts, and generated invalidation facts directly instead of grepping CLI,
       compiler, core, runtime, Vite task, or wrapper source/test names.
+      Partial evidence 2026-06-12: the P10 commerce declarative invalidation tranche now reads
+      the committed commerce graph artifact and asserts `cart/add` mutation invalidation facts,
+      `fwExplain` `manual-invalidates: -`, and consumer update output instead of grepping
+      `examples/commerce/src/app.ts` for `invalidate(`.
       Partial evidence 2026-06-11: the `P10 starter wires graph assertions into CI` tranche now
       parses `packages/create-jiso/templates/package.json` and `graph.json`, asserts starter
       graph structure, exercises the real template graph through `fwCheck`/`fwExplain`, evaluates

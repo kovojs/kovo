@@ -804,14 +804,29 @@ void test('P10 constitution rejects forbidden browser architecture in framework 
   }
 });
 
-void test('P10 commerce keeps app invalidation declarative', async () => {
-  const source = await readProjectFile('examples/commerce/src/app.ts');
-
-  assert.doesNotMatch(
-    source,
-    /\binvalidate\s*\(/,
-    'commerce app should use inferred touch graph wiring instead of direct invalidate() calls',
+void test('P10 commerce invalidation is expressed through graph facts', async () => {
+  const commerceGraph = JSON.parse(
+    await readProjectFile('examples/commerce/src/generated/graph.json'),
   );
+  const cartAddExplain = fwExplain(commerceGraph, {
+    kind: 'mutation',
+    optimistic: true,
+    target: 'cart/add',
+  }).output;
+
+  assert.deepEqual(
+    commerceGraph.mutations.find((mutationFact) => mutationFact.key === 'cart/add'),
+    {
+      guards: ['authed', 'rateLimit:session'],
+      invalidates: ['cart', 'product', 'order'],
+      inputFields: ['productId', 'quantity'],
+      key: 'cart/add',
+      session: 'commerceSession',
+      writes: ['cart', 'product', 'order'],
+    },
+  );
+  assert.equal(explainValue(cartAddExplain, 'manual-invalidates: '), '-');
+  assert.match(explainValue(cartAddExplain, 'updates: '), /cart->component:CartBadge,page:\/cart/);
 });
 
 void test('P10 normative docs cover the constitution and compiler hard rules', async () => {
