@@ -1101,7 +1101,6 @@ type ExtractedTableDeclaration = JisoTableAnnotation & {
 };
 
 interface ExtractedFunction {
-  body: string;
   bodyStart: number;
   localCalls: readonly string[];
   name: string;
@@ -1131,8 +1130,16 @@ interface ExtractedQueryDefinition {
 }
 
 interface QueryInstanceKeyComparison {
-  left: string;
-  right: string;
+  left: QueryInstanceKeyOperand;
+  right: QueryInstanceKeyOperand;
+}
+
+interface QueryInstanceKeyOperand {
+  inputKey?: string;
+  tableKey?: {
+    key: string;
+    tableIdentifier: string;
+  };
 }
 
 interface ExtractedWriteCall {
@@ -1192,7 +1199,10 @@ function extractQueryDefinitions(
       const query = queryArgument.getLiteralText();
       const receiverNames = queryCallbackReceiverNames(bodyArgument);
       const selection = selectShapeFromQueryBody(bodyArgument, receiverNames, columnShapes);
-      const diagnostics = relationalQueryDiagnostics(bodyArgument, receiverNames);
+      const diagnostics = [
+        ...relationalQueryDiagnostics(bodyArgument, receiverNames),
+        ...unresolvedQueryReadDiagnostics(bodyArgument, receiverNames),
+      ];
       if (!selection && diagnostics.length === 0) continue;
 
       definitions.push({
@@ -1688,6 +1698,59 @@ function queryRelationalTableExpressions(
   });
 }
 
+function unresolvedQueryReadDiagnostics(
+  body: ObjectLiteralExpression,
+  receiverNames: ReadonlySet<string>,
+): TouchGraphDiagnostic[] {
+  const diagnostics: TouchGraphDiagnostic[] = queryBodyCallExpressions(body, (call) => {
+    const name = propertyAccessCallName(call);
+    if (!name || !isQueryReadCallName(name)) return [];
+    if (!isQueryCallOnReceiver(call, receiverNames)) return [];
+
+    const tableArgument = call.getArguments()[0];
+    if (staticExpressionPath(tableArgument)) return [];
+
+    return [
+      {
+        code: 'FW406' as const,
+        message: `${diagnosticDefinitions.FW406.message} Query read source for db.${name}() could not be resolved to a Drizzle table.`,
+        severity: diagnosticDefinitions.FW406.severity,
+        site: '',
+      },
+    ];
+  });
+
+  diagnostics.push(...unresolvedRelationalQueryReadDiagnostics(body, receiverNames));
+  return diagnostics;
+}
+
+function unresolvedRelationalQueryReadDiagnostics(
+  body: ObjectLiteralExpression,
+  receiverNames: ReadonlySet<string>,
+): TouchGraphDiagnostic[] {
+  return queryBodyCallExpressions(body, (call) => {
+    const expression = call.getExpression();
+    const method = staticAccessName(expression);
+    if (method !== 'findMany' && method !== 'findFirst') return [];
+
+    const tableAccess = staticAccessExpression(expression);
+    if (!tableAccess || staticAccessName(tableAccess)) return [];
+    const queryAccess = staticAccessExpression(tableAccess);
+    if (!queryAccess || staticAccessName(queryAccess) !== 'query') return [];
+    const receiver = staticAccessExpression(queryAccess);
+    if (!Node.isIdentifier(receiver) || !receiverNames.has(receiver.getText())) return [];
+
+    return [
+      {
+        code: 'FW406' as const,
+        message: `${diagnosticDefinitions.FW406.message} Query relational read source could not be resolved to a Drizzle table.`,
+        severity: diagnosticDefinitions.FW406.severity,
+        site: '',
+      },
+    ];
+  });
+}
+
 function queryBodyCallExpressions<T>(
   body: ObjectLiteralExpression,
   extract: (call: CallExpression) => readonly T[],
@@ -1759,7 +1822,7 @@ function queryInstanceKey(
 ): Pick<QueryFact, 'instanceKey'> | null {
   // SPEC §10-§11: query keys must come from real predicates, not comment/string text.
   for (const comparison of comparisons) {
-    const instanceKey = queryInstanceKeyFromEqArgs(comparison.left, comparison.right, tables);
+    const instanceKey = queryInstanceKeyFromEqOperands(comparison.left, comparison.right, tables);
     if (instanceKey) return instanceKey;
   }
 
@@ -1783,61 +1846,70 @@ function queryInstanceKeyComparisons(
     const [left, right] = predicate.getArguments();
     if (!left || !right) return [];
 
-    const leftPath = staticExpressionPath(left);
-    const rightPath = staticExpressionPath(right);
-    return leftPath && rightPath ? [{ left: leftPath, right: rightPath }] : [];
+    return [{ left: queryInstanceKeyOperand(left), right: queryInstanceKeyOperand(right) }];
   });
 }
 
-function queryInstanceKeyFromEqArgs(
-  left: string,
-  right: string,
+function queryInstanceKeyOperand(expression: Node): QueryInstanceKeyOperand {
+  return {
+    ...queryTableKeyOperand(expression),
+    ...queryInputKeyOperand(expression),
+  };
+}
+
+function queryTableKeyOperand(expression: Node): Pick<QueryInstanceKeyOperand, 'tableKey'> {
+  const key = staticAccessName(expression);
+  const tableIdentifier = staticExpressionPath(staticAccessExpression(expression));
+  if (!tableIdentifier || !key) return {};
+
+  return {
+    tableKey: {
+      key,
+      tableIdentifier,
+    },
+  };
+}
+
+function queryInputKeyOperand(expression: Node): Pick<QueryInstanceKeyOperand, 'inputKey'> {
+  const node = staticAccessExpression(expression);
+  if (!Node.isIdentifier(node) || node.getText() !== 'input') return {};
+
+  const key = staticAccessName(expression);
+  return key ? { inputKey: `arg:${key}` } : {};
+}
+
+function queryInstanceKeyFromEqOperands(
+  left: QueryInstanceKeyOperand,
+  right: QueryInstanceKeyOperand,
   tables: ReadonlyMap<string, readonly ExtractedTable[]>,
 ): Pick<QueryFact, 'instanceKey'> | null {
-  for (const side of [left, right]) {
-    const tableKey = tableKeyExpression(side.trim(), tables);
+  const candidates = [
+    { inputKey: right.inputKey, tableKey: left.tableKey },
+    { inputKey: left.inputKey, tableKey: right.tableKey },
+  ];
+
+  for (const candidate of candidates) {
+    if (!candidate.inputKey || !candidate.tableKey) continue;
+    const tableKey = resolvedQueryTableKey(candidate.tableKey, tables);
     if (!tableKey) continue;
 
-    const other = side === left ? right : left;
-    const inputKey = inputKeyExpression(other.trim());
-    if (!inputKey) continue;
-
-    return {
-      instanceKey: {
-        domain: tableKey.domain,
-        key: inputKey,
-      },
-    };
+    return { instanceKey: { domain: tableKey.domain, key: candidate.inputKey } };
   }
 
   return null;
 }
 
-function tableKeyExpression(
-  expression: string,
+function resolvedQueryTableKey(
+  key: { key: string; tableIdentifier: string },
   tables: ReadonlyMap<string, readonly ExtractedTable[]>,
 ): { domain: string } | null {
-  const match =
-    /^(?<table>[A-Za-z_$][\w$]*(?:\.[A-Za-z_$][\w$]*)?)\.(?<key>[A-Za-z_$][\w$]*)$/.exec(
-      expression,
-    );
-  if (!match?.groups) return null;
-  const tableName = match.groups.table;
-  const key = match.groups.key;
-  if (!tableName || !key) return null;
-
-  for (const table of tables.get(tableName) ?? []) {
-    if (isDomainTableAnnotation(table.annotation) && table.annotation.key === key) {
+  for (const table of tables.get(key.tableIdentifier) ?? []) {
+    if (isDomainTableAnnotation(table.annotation) && table.annotation.key === key.key) {
       return { domain: table.annotation.domain };
     }
   }
 
   return null;
-}
-
-function inputKeyExpression(expression: string): string | null {
-  const match = /^input\.(?<key>[A-Za-z_$][\w$]*)$/.exec(expression);
-  return match?.groups?.key ? `arg:${match.groups.key}` : null;
 }
 
 function directSummaryForFunction(
@@ -2582,11 +2654,8 @@ function writeCallbackFunction(
 function extractedFunctionFromCallback(name: string, callback: Node): ParsedExtractedFunction {
   const body = functionBody(callback);
   const bodyStart = Node.isBlock(body) ? body.getStart() + 1 : body.getStart();
-  const bodyEnd = Node.isBlock(body) ? body.getEnd() - 1 : body.getEnd();
-  const bodyText = body.getSourceFile().getFullText().slice(bodyStart, bodyEnd);
 
   return {
-    body: bodyText,
     bodyNode: body,
     bodyStart,
     callback,

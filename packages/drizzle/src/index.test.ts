@@ -1070,6 +1070,43 @@ export interface CommerceInvalidationSets {
     ]);
   });
 
+  it('marks computed query read sources as FW406 instead of dropping them', () => {
+    const facts = extractQueryFactsFromSource([
+      {
+        fileName: 'product.queries.ts',
+        source: `
+          export const products = pgTable("products", { id: text("id").primaryKey() }, jiso({ domain: "product", key: "id" }));
+
+          export const productQuery = query("product", {
+            load(_input, db) {
+              return db.select({ id: products.id }).from((() => products)());
+            },
+          });
+        `,
+      },
+    ]);
+
+    expect(facts).toEqual([
+      {
+        diagnostics: [
+          {
+            code: 'FW406',
+            message:
+              'Statically un-analyzable write site; manual touches required. Query read source for db.from() could not be resolved to a Drizzle table.',
+            severity: 'warn',
+            site: 'product.queries.ts:4',
+          },
+        ],
+        query: 'product',
+        reads: [],
+        shape: {
+          id: 'string',
+        },
+        site: 'product.queries.ts:4',
+      },
+    ]);
+  });
+
   it('scopes namespace-imported query tables to the referenced source module', () => {
     const facts = extractQueryFactsFromSource([
       {
@@ -2196,6 +2233,55 @@ export interface CommerceInvalidationSets {
           qty: 'string',
         },
         site: 'queries.ts:4',
+      },
+    ]);
+  });
+
+  it('marks project-mode computed query read sources as FW406', () => {
+    const facts = extractQueryFactsFromProject({
+      files: [
+        {
+          fileName: 'schema.ts',
+          source: `
+            export const items = pgTable("cart_items", {
+              id: text("id").primaryKey(),
+            }, jiso({ domain: "cart", key: "id" }));
+          `,
+        },
+        {
+          fileName: 'queries.ts',
+          source: `
+            import { items } from "./schema";
+
+            function tableFor<T>(table: T): T { return table; }
+
+            export const itemQuery = query("item", {
+              load(_input, db) {
+                return db.select({ id: items.id }).from(tableFor(items));
+              },
+            });
+          `,
+        },
+      ],
+    });
+
+    expect(facts).toEqual([
+      {
+        diagnostics: [
+          {
+            code: 'FW406',
+            message:
+              'Statically un-analyzable write site; manual touches required. Query read source for db.from() could not be resolved to a Drizzle table.',
+            severity: 'warn',
+            site: 'queries.ts:6',
+          },
+        ],
+        query: 'item',
+        reads: [],
+        shape: {
+          id: 'string',
+        },
+        site: 'queries.ts:6',
       },
     ]);
   });

@@ -1402,6 +1402,19 @@ must be "FW406 unresolved," never "silently wrong."
       `pnpm exec vitest --run conformance/drizzle-pin/src/index.test.ts`,
       `pnpm exec vp check packages/drizzle/src/index.ts packages/drizzle/src/index.test.ts conformance/drizzle-pin/src/index.test.ts plans/codebase-quality-round2.md`,
       and `git diff --check`.
+      Additional evidence 2026-06-12: source/project query read extraction now keeps
+      receiver-bound `.from(...)`/join calls visible when their table argument is a computed
+      expression: the read source is emitted as FW406 instead of disappearing or borrowing a
+      descendant table symbol. Query instance-key extraction now carries parsed operand facts
+      from ts-morph nodes instead of regex-parsing serialized `where(eq(...))` operand strings,
+      and source callback extraction no longer slices/stores callback body text just to feed
+      AST-backed extraction. Same-session evidence:
+      `corepack pnpm exec vitest --run packages/drizzle/src/index.test.ts -t "computed query read sources|static element access predicates|Drizzle selects"`,
+      `corepack pnpm exec vitest --run conformance/drizzle-pin/src/index.test.ts -t "computed real Drizzle read sources|real Drizzle Postgres subset"`,
+      `corepack pnpm exec vitest --run packages/drizzle/src`,
+      `corepack pnpm exec vitest --run conformance/drizzle-pin`,
+      `corepack pnpm exec vp check packages/drizzle/src/index.ts packages/drizzle/src/index.test.ts conformance/drizzle-pin/src/index.test.ts plans/codebase-quality-round2.md`,
+      and `git diff --check`.
 
 - [ ] **HIGH — Remove fact-fabricating heuristics; degrade to FW406.**
       Column type from projection-key name (`/(count|qty|...)$/i` → number, index.ts:993);

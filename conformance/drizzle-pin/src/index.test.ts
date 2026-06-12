@@ -941,6 +941,55 @@ describe('Drizzle pinned subset conformance', () => {
     expect(diagnosticsForQueryFacts(facts)).toEqual([]);
   });
 
+  it('pins computed real Drizzle read sources as FW406 instead of inferred reads', () => {
+    const facts = extractQueryFactsFromProject({
+      files: [
+        {
+          fileName: 'conformance/drizzle-pin/src/product.schema.ts',
+          source: `
+            export const products = pgTable('products', {
+              id: text('id').primaryKey(),
+            }, jiso({ domain: 'product', key: 'id' }));
+          `,
+        },
+        {
+          fileName: 'conformance/drizzle-pin/src/product.queries.ts',
+          source: `
+            import { products } from './product.schema';
+
+            function tableFor<T>(table: T): T { return table; }
+
+            export const productQuery = query('product', {
+              load(_input, db) {
+                return db.select({ id: products.id }).from(tableFor(products));
+              },
+            });
+          `,
+        },
+      ],
+    });
+
+    expect(facts).toEqual([
+      {
+        diagnostics: [
+          {
+            code: 'FW406',
+            message:
+              'Statically un-analyzable write site; manual touches required. Query read source for db.from() could not be resolved to a Drizzle table.',
+            severity: 'warn',
+            site: 'conformance/drizzle-pin/src/product.queries.ts:6',
+          },
+        ],
+        query: 'product',
+        reads: [],
+        shape: {
+          id: 'string',
+        },
+        site: 'conformance/drizzle-pin/src/product.queries.ts:6',
+      },
+    ]);
+  });
+
   it('pins static element-access relational reads as explicit FW406 facts', () => {
     const facts = extractQueryFactsFromProject({
       files: [
