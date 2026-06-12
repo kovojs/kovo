@@ -110,13 +110,14 @@ export function createJisoTestHarness<Db>(
     async query(query, input) {
       if (!query.load) throw new Error(`Query fixture has no loader: ${query.key}`);
 
-      const load = () =>
-        query.load?.(input, {
-          request: {
-            ...options.request,
-            db,
-          },
-        });
+      const request = {
+        ...options.request,
+        db,
+      };
+      // SPEC.md §11.4: harness query execution uses the same wrapped DB seam
+      // as mutation execution, so read verification observes loader data access.
+      const loadContext = { db, request };
+      const load = () => query.load?.(input, loadContext);
       const result = verifier
         ? await verifier.capture(load).then((captured) => {
             verifier.assertReadsCoveredOperations(

@@ -142,20 +142,20 @@
         {
           "domain": "cart",
           "keys": null,
-          "site": "examples/commerce/src/app.ts:410",
+          "site": "examples/commerce/src/app.ts:412",
           "via": "cart_items"
         },
         {
           "domain": "order",
           "keys": null,
-          "site": "examples/commerce/src/app.ts:415",
+          "site": "examples/commerce/src/app.ts:417",
           "via": "orders"
         },
         {
           "domain": "product",
           "keys": "arg:productId",
           "predicate": "eq",
-          "site": "examples/commerce/src/app.ts:422",
+          "site": "examples/commerce/src/app.ts:424",
           "via": "products"
         }
       ],
@@ -168,7 +168,7 @@
           "domain": "order",
           "keys": "arg:data.object.id",
           "predicate": "eq",
-          "site": "examples/commerce/src/app.ts:514",
+          "site": "examples/commerce/src/app.ts:516",
           "via": "orders"
         }
       ],
@@ -181,7 +181,7 @@
           "domain": "attachment",
           "keys": "arg:orderId",
           "predicate": "eq",
-          "site": "examples/commerce/src/app.ts:464",
+          "site": "examples/commerce/src/app.ts:466",
           "via": "attachments"
         }
       ],

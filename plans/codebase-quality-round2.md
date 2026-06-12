@@ -2780,6 +2780,15 @@ Verification: server vitest + wire fixtures byte-for-byte acceptance.
       wrapper and harness page path. Same-session evidence:
       `corepack pnpm exec vitest --run packages/test/src/html-fragment.test.ts packages/test/src/page.test.ts`
       and `corepack pnpm exec vitest --run packages/test/src`.
+      Additional evidence 2026-06-12: `createJisoTestHarness().query()` now passes the
+      verifier-wrapped DB as `context.db` alongside `context.request.db`, so SPEC §11.4 query
+      loader tests can use the same observable DB seam as mutation tests instead of closing over
+      `harness.db`. `packages/test/src/query-verifier.test.ts` asserts the context DB identity
+      and read-domain verification through the public harness. Same-session evidence:
+      `corepack pnpm exec vitest --run packages/test/src/query-verifier.test.ts packages/test/src/harness.test.ts packages/test/src/harness-verifier.test.ts`,
+      `corepack pnpm exec vitest --run packages/test/src`,
+      `corepack pnpm exec vp check packages/test/src/harness.ts packages/test/src/query-verifier.test.ts plans/codebase-quality-round2.md`,
+      and `git diff --check`.
 - [ ] **MED — Commerce example: one source of truth.** `cartQuery.load` returns a constant while
       `loadCartQuery(db)` does the real read (app.ts:123-126 vs :280-284);
       `productGridQuery.load` conjures a fresh `createCommerceDb()` (:161); the committed
@@ -2830,6 +2839,16 @@ Verification: server vitest + wire fixtures byte-for-byte acceptance.
       `corepack pnpm exec vitest --run examples/commerce/src/app.test.ts`,
       `corepack pnpm --filter @jiso/example-commerce run emit-graph -- --check`,
       `corepack pnpm exec vp check examples/commerce/src/app.ts examples/commerce/src/app.test.ts examples/commerce/src/generated/graph.json examples/commerce/src/generated/touch-graph.ts plans/codebase-quality-round2.md`,
+      and `git diff --check`.
+      Additional evidence 2026-06-12: declared commerce query loaders now take their data
+      through the DB `read()` seam (`cart_items`, `products`, `orders`) and accept the harness
+      query `context.db` source of truth while remaining compatible with the server query
+      lifecycle's `context.request.db`. `app.test.ts` now verifies all declared commerce queries
+      through `createJisoTestHarness()` with read-domain verification enabled, so direct fixture
+      field reads would fail the example. Same-session evidence:
+      `corepack pnpm --filter @jiso/example-commerce run emit-graph -- --check`,
+      `corepack pnpm exec vitest --run examples/commerce/src/app.test.ts`,
+      `corepack pnpm exec vp check examples/commerce/src/app.ts examples/commerce/src/app.test.ts examples/commerce/src/queries.ts examples/commerce/src/generated/graph.json examples/commerce/src/generated/touch-graph.ts plans/codebase-quality-round2.md`,
       and `git diff --check`.
 - [x] **MED — Typecheck the example and spikes.** `examples/commerce` and three of four
       conformance spikes sit outside every tsconfig (root includes only `packages/**`), so the

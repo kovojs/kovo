@@ -149,6 +149,33 @@ describe('@jiso/test query verifier', () => {
     await expect(harness.query(cartQuery)).resolves.toEqual({ cartId: 'c1', items: ['p1'] });
   });
 
+  it('passes the verifier-wrapped db as the query loader context db', async () => {
+    const cart = domain('cart');
+    const db = createFakeDb();
+    const harness = createJisoTestHarness({
+      db,
+      touchGraph: {},
+      verification: {
+        domainByTable: {
+          cart_items: 'cart',
+        },
+      },
+    });
+    const cartQuery = query('cart', {
+      load(_input, context?: { db: FakeDb; request: { db: FakeDb } }) {
+        expect(context?.db).toBe(context?.request.db);
+        expect(context?.db).toBe(harness.dbHandle());
+        return context?.db.read('cart_items');
+      },
+      reads: [cart],
+    });
+
+    db.write('cart_items', 'p1');
+
+    await expect(harness.query(cartQuery)).resolves.toEqual(['p1']);
+    expect(harness.verificationDiagnostics()).toEqual([]);
+  });
+
   it('validates query loader results against declared output schemas', async () => {
     const cart = domain('cart');
     const harness = createJisoTestHarness({

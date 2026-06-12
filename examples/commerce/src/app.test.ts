@@ -210,6 +210,13 @@ function requestWithDb(
   return request;
 }
 
+function queryContext(db = createCommerceDb()) {
+  return {
+    db,
+    request: { db, session: { id: 's-query', user: { id: 'u-query' } } },
+  };
+}
+
 function commerceAuthRequest(cookie?: string, db = createCommerceDb()) {
   const headers = new Headers({ 'user-agent': 'commerce-auth-test' });
   if (cookie) headers.set('cookie', cookie);
@@ -358,9 +365,9 @@ describe('commerce example', () => {
 
   it('loads declared commerce queries from the request database', async () => {
     const db = createCommerceDb();
-    const request = { db, session: { id: 's-query', user: { id: 'u-query' } } };
+    const context = queryContext(db);
 
-    await addToCart.handler({ productId: 'p1', quantity: 2 }, request, {
+    await addToCart.handler({ productId: 'p1', quantity: 2 }, context.request, {
       fail(code, payload) {
         return { error: { code, payload }, ok: false, status: 422 };
       },
@@ -369,14 +376,12 @@ describe('commerce example', () => {
       },
     });
 
-    await expect(Promise.resolve(cartQuery.load({}, { request }))).resolves.toEqual({ count: 2 });
-    await expect(
-      Promise.resolve(productGridQuery.load({ limit: 1 }, { request })),
-    ).resolves.toEqual({
+    await expect(Promise.resolve(cartQuery.load({}, context))).resolves.toEqual({ count: 2 });
+    await expect(Promise.resolve(productGridQuery.load({ limit: 1 }, context))).resolves.toEqual({
       items: [{ id: 'p1', stock: 3, unitPrice: 1499 }],
       nextCursor: 'p1',
     });
-    await expect(Promise.resolve(orderHistoryQuery.load({}, { request }))).resolves.toEqual({
+    await expect(Promise.resolve(orderHistoryQuery.load({}, context))).resolves.toEqual({
       items: [
         {
           id: 'order-1',
@@ -389,7 +394,7 @@ describe('commerce example', () => {
     });
 
     expect(() => productGridQuery.load({ limit: 1 })).toThrow(
-      'commerce query loaders require request.db',
+      'commerce query loaders require context.db or request.db',
     );
   });
 
@@ -409,16 +414,52 @@ describe('commerce example', () => {
         userId: 'u-custom-query',
       },
     ];
-    const request = { db, session: { id: 's-custom-query', user: { id: 'u-custom-query' } } };
+    const context = queryContext(db);
 
-    await expect(Promise.resolve(cartQuery.load({}, { request }))).resolves.toEqual({ count: 10 });
-    await expect(Promise.resolve(productGridQuery.load({}, { request }))).resolves.toEqual({
+    await expect(Promise.resolve(cartQuery.load({}, context))).resolves.toEqual({ count: 10 });
+    await expect(Promise.resolve(productGridQuery.load({}, context))).resolves.toEqual({
       items: [{ id: 'custom', stock: 42, unitPrice: 777 }],
       nextCursor: null,
     });
-    await expect(Promise.resolve(orderHistoryQuery.load({}, { request }))).resolves.toEqual({
+    await expect(Promise.resolve(orderHistoryQuery.load({}, context))).resolves.toEqual({
       items: db.orders,
     });
+  });
+
+  it('verifies every declared query through the harness db read seam', async () => {
+    const db = createCommerceDb();
+    db.products = new Map([['custom', { id: 'custom', stock: 42, unitPrice: 777 }]]);
+    db.cartItems = [{ productId: 'custom', qty: 3, unitPrice: 777 }];
+    db.orders = [
+      {
+        id: 'custom-order',
+        productId: 'custom',
+        qty: 3,
+        total: 2331,
+        userId: 'u-custom-query',
+      },
+    ];
+    const harness = createJisoTestHarness({
+      db,
+      touchGraph: {},
+      verification: {
+        domainByTable: {
+          cart_items: 'cart',
+          orders: 'order',
+          products: 'product',
+        },
+      },
+    });
+
+    await expect(harness.query(cartQuery)).resolves.toEqual({ count: 3 });
+    await expect(harness.query(productGridQuery)).resolves.toEqual({
+      items: [{ id: 'custom', stock: 42, unitPrice: 777 }],
+      nextCursor: null,
+    });
+    await expect(harness.query(orderHistoryQuery)).resolves.toEqual({
+      items: db.orders,
+    });
+    expect(harness.verificationDiagnostics()).toEqual([]);
   });
 
   it('renders cursor-paged product grid and order history with stable list keys', async () => {

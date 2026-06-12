@@ -367,7 +367,9 @@ export const commerceStylesheets = ['/assets/tailwind.css'] as const;
 
 export function loadProductGrid(db: CommerceDb, input: ProductGridInput = {}): ProductGridResult {
   const limit = input.limit ?? 2;
-  const products = [...db.products.values()].sort((left, right) => left.id.localeCompare(right.id));
+  const products = [...(db.read('products') as ProductGridResult['items'])].sort((left, right) =>
+    left.id.localeCompare(right.id),
+  );
   const start = input.after
     ? Math.max(products.findIndex((item) => item.id === input.after) + 1, 0)
     : 0;
@@ -611,8 +613,10 @@ export const commerceMeta = metaFromQuery(cartQuery, (cart) =>
 );
 
 export function loadCartQuery(db: CommerceDb): CartQueryResult {
+  const cartItems = db.read('cart_items') as CommerceDb['cartItems'];
+
   return {
-    count: db.cartItems.reduce((total, item) => total + item.qty, 0),
+    count: cartItems.reduce((total, item) => total + item.qty, 0),
   };
 }
 
