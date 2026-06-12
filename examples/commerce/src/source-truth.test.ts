@@ -15,6 +15,7 @@ import {
   commerceTouchGraph,
   createCommerceDb,
   loadCartQuery,
+  productGridQuery,
   renderCommercePageHints,
   submitAddToCart,
   uploadReceipt,
@@ -368,6 +369,35 @@ describe('commerce source-truth graph acceptance', () => {
       expect(consumers).toContain('page:/cart');
       expect(componentConsumers.length).toBeGreaterThan(0);
     }
+  });
+
+  it('loads paginated commerce query input through the public harness source of truth', async () => {
+    const db = createCommerceDb();
+    db.products = new Map([
+      ['custom-a', { id: 'custom-a', stock: 3, unitPrice: 100 }],
+      ['custom-b', { id: 'custom-b', stock: 4, unitPrice: 200 }],
+      ['custom-c', { id: 'custom-c', stock: 5, unitPrice: 300 }],
+    ]);
+    const harness = createJisoTestHarness({
+      db,
+      touchGraph: {},
+      verification: {
+        domainByTable: {
+          products: 'product',
+        },
+      },
+    });
+
+    await expect(harness.query(productGridQuery, { after: 'custom-a', limit: 2 })).resolves.toEqual(
+      {
+        items: [
+          { id: 'custom-b', stock: 4, unitPrice: 200 },
+          { id: 'custom-c', stock: 5, unitPrice: 300 },
+        ],
+        nextCursor: null,
+      },
+    );
+    expect(harness.verificationDiagnostics()).toEqual([]);
   });
 
   it('answers the full commerce mutation-query matrix mechanically from fw explain output', () => {

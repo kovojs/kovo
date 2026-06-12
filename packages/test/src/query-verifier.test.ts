@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { domain, query, s } from '@jiso/server';
+import { domain, query, s, type QueryLoadContext } from '@jiso/server';
 
 import { createDbVerifier, createJisoTestHarness } from './index.js';
 import { createFakeDb, expectedDiagnostic, type FakeDb } from './test-fixtures.js';
@@ -173,6 +173,35 @@ describe('@jiso/test query verifier', () => {
     db.write('cart_items', 'p1');
 
     await expect(harness.query(cartQuery)).resolves.toEqual(['p1']);
+    expect(harness.verificationDiagnostics()).toEqual([]);
+  });
+
+  it('passes query input through the public harness while keeping db verification scoped', async () => {
+    const product = domain('product');
+    const db = createFakeDb();
+    db.write('products', 'p1');
+    db.write('products', 'p2');
+    const harness = createJisoTestHarness({
+      db,
+      touchGraph: {},
+      verification: {
+        domainByTable: {
+          products: 'product',
+        },
+      },
+    });
+    const productQuery = query('product/page', {
+      load(input: unknown, context?: QueryLoadContext<{ db: FakeDb }> & { db: FakeDb }) {
+        const { after = null, limit = 2 } = input as { after?: string | null; limit?: number };
+        const products = context?.db.read('products') ?? [];
+        const start = after ? products.indexOf(after) + 1 : 0;
+
+        return products.slice(start, start + limit);
+      },
+      reads: [product],
+    });
+
+    await expect(harness.query(productQuery, { after: 'p1', limit: 1 })).resolves.toEqual(['p2']);
     expect(harness.verificationDiagnostics()).toEqual([]);
   });
 
