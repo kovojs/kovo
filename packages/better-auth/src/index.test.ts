@@ -193,6 +193,12 @@ function responseWithCookies(cookies: readonly string[], status = 204): BetterAu
   return { headers, status };
 }
 
+function authTable(fields: readonly string[] = []) {
+  return {
+    fields: Object.fromEntries(fields.map((field) => [field, {}])),
+  };
+}
+
 describe('betterAuthSession', () => {
   it('maps a Better Auth-like session into the app session provider seam', async () => {
     const auth = new FakeBetterAuth();
@@ -334,32 +340,34 @@ describe('credential mutation helpers', () => {
     expect(betterAuthTableDomain('verification')).toBe(null);
     expect(
       validateBetterAuthSchemaBridge({
-        account: {},
-        session: {},
-        user: {},
-        verification: {},
+        account: authTable(['userId']),
+        session: authTable(['userId']),
+        user: authTable(),
+        verification: authTable(),
       }),
     ).toEqual({
       declaredTouchMismatches: [],
+      keyFieldMismatches: [],
       missingTables: [],
       ok: true,
       unbridgedTables: [],
     });
     expect(
       validateBetterAuthSchemaBridge({
-        account: {},
-        invitation: {},
-        member: {},
-        organization: {},
-        organizationRole: {},
-        session: {},
-        team: {},
-        teamMember: {},
-        user: {},
-        verification: {},
+        account: authTable(['userId']),
+        invitation: authTable(['organizationId']),
+        member: authTable(['organizationId']),
+        organization: authTable(),
+        organizationRole: authTable(['organizationId']),
+        session: authTable(['userId']),
+        team: authTable(['organizationId']),
+        teamMember: authTable(['teamId']),
+        user: authTable(),
+        verification: authTable(),
       }),
     ).toEqual({
       declaredTouchMismatches: [],
+      keyFieldMismatches: [],
       missingTables: [],
       ok: true,
       unbridgedTables: [],
@@ -381,16 +389,36 @@ describe('credential mutation helpers', () => {
   it('reports Better Auth table metadata that is missing or outside the bridge', () => {
     expect(
       validateBetterAuthSchemaBridge({
-        account: {},
-        session: {},
-        user: {},
-        webauthnCredential: {},
+        account: authTable(['userId']),
+        session: authTable(['userId']),
+        user: authTable(),
+        webauthnCredential: authTable(),
       }),
     ).toEqual({
       declaredTouchMismatches: [],
+      keyFieldMismatches: [],
       missingTables: ['verification'] satisfies BetterAuthTable[],
       ok: false,
       unbridgedTables: ['webauthnCredential'],
+    });
+  });
+
+  it('reports bridged domain keys that drift from Better Auth table metadata', () => {
+    expect(
+      validateBetterAuthSchemaBridge({
+        account: authTable([]),
+        session: authTable(['userId']),
+        user: authTable(),
+        verification: authTable(),
+      }),
+    ).toEqual({
+      declaredTouchMismatches: [],
+      keyFieldMismatches: [
+        'account.userId is a schema-bridge key but Better Auth table metadata does not expose that field',
+      ],
+      missingTables: [],
+      ok: false,
+      unbridgedTables: [],
     });
   });
 

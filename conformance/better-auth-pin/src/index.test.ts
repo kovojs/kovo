@@ -129,6 +129,7 @@ describe('Better Auth pinned conformance', () => {
     ]);
     expect(validateBetterAuthSchemaBridge(tables)).toEqual({
       declaredTouchMismatches: [],
+      keyFieldMismatches: [],
       missingTables: [],
       ok: true,
       unbridgedTables: [],
@@ -231,6 +232,7 @@ describe('Better Auth pinned conformance', () => {
     ]);
     expect(validateBetterAuthSchemaBridge(tables)).toEqual({
       declaredTouchMismatches: [],
+      keyFieldMismatches: [],
       missingTables: [],
       ok: true,
       unbridgedTables: [],

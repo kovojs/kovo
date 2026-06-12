@@ -33,6 +33,15 @@ Scope: SPEC additions (session population, guard-failure contract, mutation resp
       unbridged. Same-session evidence:
       `pnpm exec vitest --run packages/better-auth/src/index.test.ts conformance/better-auth-pin/src/index.test.ts --reporter=dot`
       and `pnpm exec tsc -p conformance/better-auth-pin/tsconfig.json --noEmit`.
+      Partial evidence 2026-06-12: `validateBetterAuthSchemaBridge` now reports
+      `keyFieldMismatches`, verifying each bridged domain key against Better Auth table `fields`
+      metadata when the metadata is present, while treating Better Auth's implicit `id` key as
+      available. `packages/better-auth/src/index.test.ts` covers a negative drift case where a
+      declared `account.userId` bridge key is absent; `conformance/better-auth-pin/src/index.test.ts`
+      pins that real `better-auth@1.6.17` core and blessed organization/admin plugin metadata have
+      no key-field drift. Same-session evidence:
+      `pnpm exec vitest --run packages/better-auth/src/index.test.ts conformance/better-auth-pin/src/index.test.ts --reporter=dot`
+      and `pnpm exec vp check packages/better-auth/src/index.ts packages/better-auth/src/index.test.ts conformance/better-auth-pin/src/index.test.ts plans/auth.md`.
       Remaining gaps: plugin-generated tables outside the blessed organization/admin surface are
       still not mapped, app `schema.ts` generation is not exercised, and the declared table touches
       are not yet wired through the P9 wrapper as a general observed-write verifier.

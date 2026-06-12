@@ -203,6 +203,7 @@ export type BetterAuthSchemaBridge = Record<BetterAuthTable, BetterAuthSchemaBri
 
 export interface BetterAuthSchemaBridgeValidation {
   declaredTouchMismatches: string[];
+  keyFieldMismatches: string[];
   missingTables: BetterAuthCoreTable[];
   ok: boolean;
   unbridgedTables: string[];
@@ -274,13 +275,16 @@ export function validateBetterAuthSchemaBridge(
   const missingTables = betterAuthRequiredCoreTables.filter((table) => !tableNames.has(table));
   const unbridgedTables = [...tableNames].filter((table) => !bridgeTableNames.has(table)).sort();
   const declaredTouchMismatches = declaredTableTouchMismatches();
+  const keyFieldMismatches = schemaBridgeKeyFieldMismatches(tables);
 
   return {
     declaredTouchMismatches,
+    keyFieldMismatches,
     missingTables,
     ok:
       missingTables.length === 0 &&
       unbridgedTables.length === 0 &&
+      keyFieldMismatches.length === 0 &&
       declaredTouchMismatches.length === 0,
     unbridgedTables,
   };
@@ -657,4 +661,36 @@ function declaredTableTouchMismatches(): string[] {
   }
 
   return mismatches;
+}
+
+function schemaBridgeKeyFieldMismatches(tables: Record<string, unknown>): string[] {
+  const mismatches: string[] = [];
+
+  for (const [table, annotation] of Object.entries(betterAuthSchemaBridge) as [
+    BetterAuthTable,
+    BetterAuthSchemaBridgeAnnotation,
+  ][]) {
+    if (!('domain' in annotation) || annotation.key === undefined) continue;
+
+    const fieldNames = betterAuthTableFieldNames(tables[table]);
+
+    if (fieldNames === null) continue;
+    if (fieldNames.has(annotation.key)) continue;
+
+    mismatches.push(
+      `${table}.${annotation.key} is a schema-bridge key but Better Auth table metadata does not expose that field`,
+    );
+  }
+
+  return mismatches.sort();
+}
+
+function betterAuthTableFieldNames(table: unknown): Set<string> | null {
+  if (!table || typeof table !== 'object') return null;
+
+  const fields = (table as { fields?: unknown }).fields;
+
+  if (!fields || typeof fields !== 'object' || Array.isArray(fields)) return null;
+
+  return new Set(['id', ...Object.keys(fields)]);
 }
