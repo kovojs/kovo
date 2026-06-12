@@ -1941,6 +1941,43 @@ export interface CommerceInvalidationSets {
     });
   });
 
+  it('does not fold local helper summaries from comments and strings', () => {
+    const graph = extractTouchGraphFromSource([
+      {
+        fileName: 'cart.domain.ts',
+        source: `
+          export const auditLog = pgTable("audit_log", {}, jiso({ domain: "audit", key: "productId" }));
+
+          async function writeAudit(db, productId) {
+            await db.insert(auditLog).values({ productId });
+          }
+
+          export async function addItem(db, productId) {
+            // await writeAudit(db, productId);
+            const fixture = "writeAudit(db, productId)";
+            const templated = \`writeAudit(db, \${productId})\`;
+            return { fixture, templated };
+          }
+        `,
+      },
+    ]);
+
+    expect(graph).toEqual({
+      writeAudit: {
+        reads: [],
+        touches: [
+          {
+            domain: 'audit',
+            keys: null,
+            site: 'cart.domain.ts:5',
+            via: 'audit_log',
+          },
+        ],
+        unresolved: [],
+      },
+    });
+  });
+
   it('dedupes recursive helper summaries at a fixed point', () => {
     const graph = extractTouchGraphFromSource([
       {

@@ -2004,20 +2004,22 @@ function functionBody(callback: Node): Node {
 }
 
 function extractLocalFunctionCalls(source: string): string[] {
-  const calls: string[] = [];
-  const callPattern = new RegExp(`\\b(?<name>${IDENTIFIER_SOURCE})\\s*\\(`, 'g');
+  // SPEC §10-§11: helper names in comments/strings must not fold unrelated touch facts.
+  return withParsedFunctionBodySource(source, ({ sourceFile }) => {
+    const calls: string[] = [];
 
-  for (const match of source.matchAll(callPattern)) {
-    const name = match.groups?.name;
-    if (!name || IGNORED_LOCAL_CALL_NAMES.has(name)) continue;
+    for (const call of sourceFile.getDescendantsOfKind(SyntaxKind.CallExpression)) {
+      const expression = call.getExpression();
+      if (!Node.isIdentifier(expression)) continue;
 
-    const previous = source.slice(0, match.index).trimEnd().at(-1);
-    if (previous === '.') continue;
+      const name = expression.getText();
+      if (IGNORED_LOCAL_CALL_NAMES.has(name)) continue;
 
-    calls.push(name);
-  }
+      calls.push(name);
+    }
 
-  return [...new Set(calls)];
+    return [...new Set(calls)];
+  });
 }
 
 function extractDrizzleWriteCalls(

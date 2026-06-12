@@ -850,6 +850,16 @@ must be "FW406 unresolved," never "silently wrong."
       `pnpm exec vitest --run conformance/drizzle-pin/src/index.test.ts`,
       `pnpm exec vp check packages/drizzle/src/index.ts packages/drizzle/src/index.test.ts plans/codebase-quality-round2.md`,
       and `git diff --check`.
+      Additional evidence 2026-06-12: source-mode local-helper folding now walks ts-morph
+      `CallExpression` nodes instead of regex-scanning function body text, so helper names in
+      comments, strings, and templates no longer fold unrelated write/read summaries into a
+      caller. `packages/drizzle/src/index.test.ts` covers the degradation against SPEC §10-§11's
+      "unknown is explicit, never fabricated" touch-graph contract. Same-session evidence:
+      `pnpm exec vitest --run packages/drizzle/src/index.test.ts -t "local helper summaries"`,
+      `pnpm exec vitest --run packages/drizzle/src/index.test.ts`,
+      `pnpm exec vitest --run conformance/drizzle-pin/src/index.test.ts`,
+      `pnpm exec vp check packages/drizzle/src/index.ts packages/drizzle/src/index.test.ts plans/codebase-quality-round2.md`,
+      and `git diff --check`.
 - [ ] **HIGH — Remove fact-fabricating heuristics; degrade to FW406.**
       Column type from projection-key name (`/(count|qty|...)$/i` → number, index.ts:993);
       receiver detection by parameter name (`/^(db|tx|...|client|...)$/`, :1856-1858);
