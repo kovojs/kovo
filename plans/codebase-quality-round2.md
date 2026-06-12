@@ -721,6 +721,14 @@ pipeline throws the tree away and communicates via mutated source text.
       `pnpm exec vitest --run packages/compiler/src/scan/parse.test.ts packages/compiler/src/execution-triggers.test.ts packages/compiler/src/index.test.ts -t "attached|execution trigger|FW211|FW212"`
       and
       `pnpm exec vp check packages/compiler/src/scan/parse.ts packages/compiler/src/scan/parse.test.ts packages/compiler/src/validate/event-triggers.ts plans/codebase-quality-round2.md`.
+      Additional evidence 2026-06-12: `validateAuthoringSurface()` no longer reparses source
+      when no model is supplied; production string-render diagnostics consume only the
+      `ComponentModuleModel` facts from the single compiler parse, while compiler-emitted IR
+      detection remains a header-only fast path. This removes the validator-side TypeScript
+      fallback scanner and its source-slicing string-render extraction. Same-session evidence:
+      `pnpm exec vitest --run packages/compiler/src/compile-component.test.ts -t "FW235|authoring"`
+      and
+      `pnpm exec vp check packages/compiler/src/validate/authoring-surface.ts packages/compiler/src/compile.ts plans/codebase-quality-round2.md`.
       Additional evidence 2026-06-12: static CSS scoping now derives the rendered host selector
       from `componentRenderHostElement(model).tag`, and `emitCssModule()` no longer accepts
       module source just to recover the opening tag name. Same-session evidence:
