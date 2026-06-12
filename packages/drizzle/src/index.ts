@@ -332,9 +332,15 @@ function projectFunctionExtractionsByFileName(
       const body = fn.getBody();
       if (!name || !body) continue;
 
+      const receiverNames = projectDrizzleReceiverNames(fn);
       extractionsByFunction.set(name, {
-        receiverNames: projectDrizzleReceiverNames(fn),
-        writeCalls: extractProjectDrizzleWriteCalls(body, file, extraction.tableNamesBySymbol),
+        receiverNames,
+        writeCalls: extractProjectDrizzleWriteCalls(
+          body,
+          file,
+          extraction.tableNamesBySymbol,
+          new Set(receiverNames),
+        ),
       });
     }
 
@@ -345,19 +351,27 @@ function projectFunctionExtractionsByFileName(
       if (!Node.isArrowFunction(initializer) && !Node.isFunctionExpression(initializer)) continue;
 
       const body = initializer.getBody();
+      const receiverNames = projectDrizzleReceiverNames(initializer);
       extractionsByFunction.set(name.getText(), {
-        receiverNames: projectDrizzleReceiverNames(initializer),
-        writeCalls: extractProjectDrizzleWriteCalls(body, file, extraction.tableNamesBySymbol),
+        receiverNames,
+        writeCalls: extractProjectDrizzleWriteCalls(
+          body,
+          file,
+          extraction.tableNamesBySymbol,
+          new Set(receiverNames),
+        ),
       });
     }
 
     for (const [name, callback] of projectDomainWriteCallbacks(sourceFile)) {
+      const receiverNames = projectDrizzleReceiverNames(callback.fn);
       extractionsByFunction.set(name, {
-        receiverNames: projectDrizzleReceiverNames(callback.fn),
+        receiverNames,
         writeCalls: extractProjectDrizzleWriteCalls(
           callback.body,
           file,
           extraction.tableNamesBySymbol,
+          new Set(receiverNames),
         ),
       });
     }
@@ -416,18 +430,54 @@ function projectDrizzleReceiverNames(callback: Node): string[] {
     return [];
   }
 
-  const names: string[] = [];
+  const names = new Set<string>();
   for (const param of callback.getParameters()) {
     const name = param.getNameNode();
-    if (Node.isIdentifier(name) && isDrizzleReceiver(name)) names.push(name.getText());
+    if (Node.isIdentifier(name) && isDrizzleReceiver(name)) names.add(name.getText());
   }
-  return names;
+  appendProjectTransactionReceiverAliases(callback, names);
+  return [...names];
+}
+
+function appendProjectTransactionReceiverAliases(callback: Node, names: Set<string>): void {
+  // SPEC §10-§11: transaction callback aliases are proven from typed receiver call sites.
+  let changed = true;
+
+  while (changed) {
+    changed = false;
+
+    for (const call of callback.getDescendantsOfKind(SyntaxKind.CallExpression)) {
+      const expression = call.getExpression();
+      if (staticAccessName(expression) !== 'transaction') continue;
+
+      const receiver = staticAccessExpression(expression);
+      if (!Node.isIdentifier(receiver) || !names.has(receiver.getText())) continue;
+
+      const transactionCallback = call
+        .getArguments()
+        .find((argument) => Node.isArrowFunction(argument) || Node.isFunctionExpression(argument));
+      if (
+        !transactionCallback ||
+        (!Node.isArrowFunction(transactionCallback) &&
+          !Node.isFunctionExpression(transactionCallback))
+      ) {
+        continue;
+      }
+
+      const alias = transactionCallback.getParameters()[0]?.getNameNode();
+      if (!Node.isIdentifier(alias) || names.has(alias.getText())) continue;
+
+      names.add(alias.getText());
+      changed = true;
+    }
+  }
 }
 
 function extractProjectDrizzleWriteCalls(
   body: Node,
   file: SourceFileInput,
   tableNamesBySymbol: ReadonlyMap<string, string>,
+  receiverNames: ReadonlySet<string>,
 ): ExtractedWriteCall[] {
   const calls: ExtractedWriteCall[] = [];
 
@@ -436,7 +486,13 @@ function extractProjectDrizzleWriteCalls(
 
     const expression = call.getExpression();
     if (!Node.isPropertyAccessExpression(expression)) continue;
-    if (!isDrizzleReceiver(expression.getExpression())) continue;
+    const receiver = expression.getExpression();
+    if (
+      !isDrizzleReceiver(receiver) &&
+      !(Node.isIdentifier(receiver) && receiverNames.has(receiver.getText()))
+    ) {
+      continue;
+    }
 
     const operation = expression.getName();
     const tableArgument = call.getArguments()[0];

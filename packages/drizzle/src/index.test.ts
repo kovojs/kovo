@@ -3362,6 +3362,61 @@ export interface CommerceInvalidationSets {
     });
   });
 
+  it('uses project transaction callback receiver aliases from typed Drizzle origins', () => {
+    const graph = extractTouchGraphFromProject({
+      files: [
+        {
+          fileName: 'drizzle-types.d.ts',
+          source: `
+            declare module "drizzle-orm/pg-core" {
+              export class PgDatabase<TQueryResultHKT = unknown, TFullSchema = unknown, TSchema = unknown> {
+                insert(table: unknown): { values(value: unknown): Promise<void> };
+                transaction<T>(callback: (tx: PgDatabase<TQueryResultHKT, TFullSchema, TSchema>) => Promise<T>): Promise<T>;
+              }
+            }
+          `,
+        },
+        {
+          fileName: 'cart.domain.ts',
+          source: `
+            import type { PgDatabase } from "drizzle-orm/pg-core";
+
+            interface FakeDb {
+              insert(table: unknown): { values(value: unknown): Promise<void> };
+              transaction<T>(callback: (tx: FakeDb) => Promise<T>): Promise<T>;
+            }
+
+            export const cartItems = pgTable("cart_items", {}, jiso({ domain: "cart", key: "productId" }));
+
+            export async function addItem(db: PgDatabase, fake: FakeDb, productId: string) {
+              await db.transaction(async (writer) => {
+                await writer.insert(cartItems).values({ productId });
+              });
+              await fake.transaction(async (shadow) => {
+                await shadow.insert(cartItems).values({ productId });
+              });
+            }
+          `,
+        },
+      ],
+    });
+
+    expect(graph).toEqual({
+      addItem: {
+        reads: [],
+        touches: [
+          {
+            domain: 'cart',
+            keys: null,
+            site: 'cart.domain.ts:13',
+            via: 'cart_items',
+          },
+        ],
+        unresolved: [],
+      },
+    });
+  });
+
   it('uses typed receiver origins inside project domain write callbacks', () => {
     const graph = extractTouchGraphFromProject({
       files: [
