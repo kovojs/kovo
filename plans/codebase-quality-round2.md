@@ -696,6 +696,16 @@ must be "FW406 unresolved," never "silently wrong."
       the annotation drag the TS compiler into their production graph. Separate entrypoints:
       runtime (`jiso()`, types) and static (extraction, graph, invalidation). Delete the phantom
       `@jiso/drizzle` dep in test/package.json:11.
+      Partial evidence 2026-06-12: `packages/drizzle/package.json` now exposes
+      `@jiso/drizzle` as `src/runtime.ts` for the annotation/types entrypoint and
+      `@jiso/drizzle/static` as `src/index.ts` for SPEC §10-§11 extraction helpers.
+      `packages/drizzle/src/runtime.ts` exports `jiso()` plus type-only graph/annotation types
+      without importing `ts-morph`; `packages/drizzle/src/index.test.ts` asserts the root runtime
+      module lacks extractor values while the static subpath still exposes them, and
+      `conformance/drizzle-pin/src/index.test.ts` imports extraction through the static subpath.
+      The dependency-classification cleanup and `packages/test` phantom dependency remain open.
+      Same-session evidence: `pnpm exec vitest --run packages/drizzle/src/index.test.ts` and
+      `pnpm exec vitest --run conformance/drizzle-pin/src/index.test.ts`.
 - [ ] **LOW** — module-global mutable `sourceExtractionFileId` (:53); fresh ts-morph `Project`
       per `parseSourceFile` call with files re-parsed 3+× per pass (:1457); `IGNORED_LOCAL_CALL_NAMES`
       mixing JS keywords with domain names (:57-71 — a user helper named `insert` is silently

@@ -13,7 +13,7 @@ import {
   jiso,
   serializeDomainRegistry,
   serializeTouchGraph,
-} from '../../../packages/drizzle/src/index.js';
+} from '@jiso/drizzle/static';
 
 function annotatedTable(name: string, annotation: ReturnType<typeof jiso>) {
   return {

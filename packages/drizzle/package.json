@@ -3,7 +3,8 @@
   "version": "0.0.0",
   "type": "module",
   "exports": {
-    ".": "./src/index.ts"
+    ".": "./src/runtime.ts",
+    "./static": "./src/index.ts"
   },
   "dependencies": {
     "@jiso/core": "workspace:*",
