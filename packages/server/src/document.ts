@@ -7,7 +7,7 @@ import {
   type PageHints,
   type RouteMetaSource,
 } from './hints.js';
-import { readHeader, type ServerResponseBase } from './response.js';
+import { readHeader, type DocumentRouteResponseBase, type ServerResponseBase } from './response.js';
 import { renderQueryScript, type QueryScriptRenderOptions } from './wire-html.js';
 
 export interface DocumentParts {
@@ -44,11 +44,7 @@ export interface DocumentAssemblyOptions {
   template?: DocumentTemplate;
 }
 
-export interface DocumentRoutePageResponse extends ServerResponseBase<
-  ReadableStream<Uint8Array> | string | Uint8Array,
-  Record<string, string>,
-  200 | 303 | 304 | 403 | 404 | 422 | 429 | 500
-> {}
+export interface DocumentRoutePageResponse extends DocumentRouteResponseBase {}
 
 export interface DocumentResponseOptions extends Omit<DocumentAssemblyOptions, 'body'> {}
 

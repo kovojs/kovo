@@ -12,6 +12,24 @@ export interface ServerResponseBase<
   status: Status;
 }
 
+export type RouteResponseBody = ArrayBuffer | ReadableStream<Uint8Array> | Uint8Array | string;
+
+export type RouteResponseStatus = 200 | 303 | 304 | 403 | 404 | 422 | 429 | 500;
+
+export type DocumentRouteResponseBody = Exclude<RouteResponseBody, ArrayBuffer>;
+
+export interface RoutePageResponse extends ServerResponseBase<
+  RouteResponseBody,
+  Record<string, string>,
+  RouteResponseStatus
+> {}
+
+export interface DocumentRouteResponseBase extends ServerResponseBase<
+  DocumentRouteResponseBody,
+  Record<string, string>,
+  RouteResponseStatus
+> {}
+
 export type HeaderSource =
   | Iterable<readonly [string, string]>
   | Record<string, readonly string[] | string | undefined>
@@ -76,6 +94,42 @@ export function cloneResponseHeaders<Headers extends ResponseHeaders>(headers: H
       Array.isArray(value) ? [...value] : value,
     ]),
   ) as Headers;
+}
+
+export function routeResponseToWebResponse(
+  response: ServerResponseBase<RouteResponseBody, Record<string, string>>,
+  request: Pick<Request, 'method'>,
+): Response {
+  return new Response(
+    request.method === 'HEAD' ? null : routeResponseBodyToBodyInit(response.body),
+    {
+      headers: response.headers,
+      status: response.status,
+    },
+  );
+}
+
+export function routeResponseToDocumentResponse(
+  response: RoutePageResponse,
+): DocumentRouteResponseBase {
+  return {
+    ...response,
+    body: response.body instanceof ArrayBuffer ? new Uint8Array(response.body) : response.body,
+  };
+}
+
+function routeResponseBodyToBodyInit(body: RouteResponseBody): BodyInit | null {
+  if (typeof body === 'string') return body;
+  if (body instanceof ReadableStream) return body;
+  if (body instanceof ArrayBuffer) return body;
+
+  if (body.buffer instanceof ArrayBuffer) {
+    return body.buffer.slice(body.byteOffset, body.byteOffset + body.byteLength);
+  }
+
+  const copy = new Uint8Array(body.byteLength);
+  copy.set(body);
+  return copy.buffer;
 }
 
 function findHeaderName(headers: HeaderSource, name: string): string | undefined {

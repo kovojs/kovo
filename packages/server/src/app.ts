@@ -7,11 +7,14 @@ import { reportServerError, type ServerErrorHandler } from './diagnostics.js';
 import {
   renderErrorDocument,
   renderRouteDocumentResponse,
-  type DocumentRoutePageResponse,
   type DocumentTemplate,
 } from './document.js';
 import { matchShellDispatch } from './shell.js';
-import type { ServerResponseBase } from './response.js';
+import {
+  routeResponseToDocumentResponse,
+  routeResponseToWebResponse,
+  type RoutePageResponse,
+} from './response.js';
 import {
   renderQueryRegistryEndpointResponse,
   renderRoutePageResponse,
@@ -26,9 +29,7 @@ import {
   type QueryEndpointRegistry,
   type RegisteredQueryDefinition,
   type RouteDeclaration,
-  type RoutePageResponse,
   type RouteRequestInput,
-  type RouteResponseBody,
   type SessionProvider,
 } from './index.js';
 
@@ -197,7 +198,7 @@ export function createRequestHandler(app: JisoApp): RequestHandler {
           },
         );
         const documentResponse = renderRouteDocumentResponse(
-          toDocumentRouteResponse(routeResponse),
+          routeResponseToDocumentResponse(routeResponse),
           {
             hints: match.route,
             ...(app.document.lang === undefined ? {} : { lang: app.document.lang }),
@@ -239,37 +240,6 @@ async function renderConfiguredError(
     status,
     ...(app.document.template === undefined ? {} : { template: app.document.template }),
   });
-}
-
-function routeResponseToWebResponse(
-  response: ServerResponseBase<RouteResponseBody, Record<string, string>>,
-  request: Request,
-): Response {
-  return new Response(request.method === 'HEAD' ? null : webResponseBody(response.body), {
-    headers: response.headers,
-    status: response.status,
-  });
-}
-
-function webResponseBody(body: RouteResponseBody): BodyInit | null {
-  if (typeof body === 'string') return body;
-  if (body instanceof ReadableStream) return body;
-  if (body instanceof ArrayBuffer) return body;
-
-  if (body.buffer instanceof ArrayBuffer) {
-    return body.buffer.slice(body.byteOffset, body.byteOffset + body.byteLength);
-  }
-
-  const copy = new Uint8Array(body.byteLength);
-  copy.set(body);
-  return copy.buffer;
-}
-
-function toDocumentRouteResponse(response: RoutePageResponse): DocumentRoutePageResponse {
-  return {
-    ...response,
-    body: response.body instanceof ArrayBuffer ? new Uint8Array(response.body) : response.body,
-  };
 }
 
 function renderDefaultRouteValue(value: unknown): string {

@@ -33,6 +33,8 @@ import {
   type HeaderSource,
   type ResponseHeaderValue,
   type ResponseHeaders,
+  type RoutePageResponse,
+  type RouteResponseBody,
   type ServerResponseBase,
 } from './response.js';
 
@@ -119,7 +121,13 @@ export type {
 } from './hints.js';
 export type { QueryScriptRenderOptions } from './wire-html.js';
 export { isHeaderSource, readHeader } from './response.js';
-export type { ResponseHeaderValue, ResponseHeaders, ServerResponseBase } from './response.js';
+export type {
+  ResponseHeaderValue,
+  ResponseHeaders,
+  RoutePageResponse,
+  RouteResponseBody,
+  ServerResponseBase,
+} from './response.js';
 export { findRouteAmbiguities, matchRoute, normalizePathname } from './match.js';
 export type { PathnameNormalization, RouteAmbiguity, RouteLike, RouteMatch } from './match.js';
 export { matchShellDispatch, shellDispatchTable } from './shell.js';
@@ -1373,8 +1381,6 @@ export interface NotFound {
   status: 404;
 }
 
-export type RouteResponseBody = ArrayBuffer | ReadableStream<Uint8Array> | Uint8Array | string;
-
 export interface RouteResponseOutcome {
   body: RouteResponseBody;
   contentDisposition: string;
@@ -1409,12 +1415,6 @@ export const respond = {
     });
   },
 };
-
-export interface RoutePageResponse extends ServerResponseBase<
-  RouteResponseBody,
-  Record<string, string>,
-  200 | 303 | 304 | 403 | 404 | 422 | 429 | 500
-> {}
 
 export interface RouteRequestInput {
   params?: unknown;
