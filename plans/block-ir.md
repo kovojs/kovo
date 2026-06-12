@@ -18,7 +18,16 @@ Scope: commerce TSX migration (the gating completeness proof), a SPEC PR (Consti
       authors still write TSX, adds the §5.2 TSX-only authoring hard rule, names FW235 in the
       diagnostic table, and demotes FW226 to internal emitted-IR fixpoint validation. Verified
       with `pnpm exec vp fmt SPEC.md` and `pnpm run check`.
-- [ ] B3 FW235 implementation: error-severity detection of hand-authored lowered IR in app source, golden teaching message showing the TSX equivalent, provenance exemption for compiler-emitted artifacts proven by the fixpoint gate itself, wired into the `vp check`/`vp run fw-check` path.
+- [x] B3 FW235 implementation: error-severity detection of hand-authored lowered IR in app source, golden teaching message showing the TSX equivalent, provenance exemption for compiler-emitted artifacts proven by the fixpoint gate itself, wired into the `vp check`/`vp run fw-check` path.
+      Evidence 2026-06-11: `diagnosticDefinitions.FW235` is registered at error severity;
+      `packages/compiler/src/validate/authoring-surface.ts` reports app-authored lowered IR and
+      string-rendered component/renderSource modules, while
+      `sourceProvenance: 'compiler-emitted'` preserves emitted IR fixpoint recompilation.
+      `packages/compiler/src/index.test.ts` covers FW235 failure and emitted IR acceptance;
+      `tests/fw-check.node.mjs` covers the fw-check path. Same-session evidence:
+      `pnpm exec vitest --run packages/core/src/diagnostics.test.ts packages/compiler/src/index.test.ts`,
+      `pnpm run check`, `pnpm run check:build`, `node --test tests/fw-check.node.mjs`, and
+      `pnpm run check:fw`.
 - [ ] B4 ecosystem constraints recorded and tested where surfaces exist: `fw add` vendoring emits TSX only (constraint registered in `plans/ui.md` D7); starter and docs are TSX-authored; agent guidance documents "emit TSX, read IR".
 
 ## Background — the gap
