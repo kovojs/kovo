@@ -240,6 +240,35 @@ describe('mutation response wire chunks', () => {
     expect(domApplied.fragments).toEqual(storeOnlyApplied.fragments);
   });
 
+  it('keeps store-only apply on the hook-aware runtime apply path', () => {
+    const store = createQueryStore();
+    const beforeApplyQueries = vi.fn();
+
+    // SPEC.md §9.1: store-only mutation responses and runtime apply consume the
+    // same fw-query wire chunks, so interposed values must not drift by entrypoint.
+    const applied = applyMutationResponse(
+      store,
+      '<fw-query name="cart" key="cart:c1">{"count":6}</fw-query>',
+      {
+        applyQuery(query) {
+          store.set(
+            query.name,
+            { count: (query.value as { count: number }).count + 10 },
+            query.key,
+          );
+          return { value: store.get(query.name, query.key) };
+        },
+        beforeApplyQueries,
+      },
+    );
+
+    expect(applied).toEqual({ fragments: [], queries: ['cart:c1'] });
+    expect(store.get('cart', 'cart:c1')).toEqual({ count: 16 });
+    expect(beforeApplyQueries).toHaveBeenCalledWith([
+      { key: 'cart:c1', name: 'cart', value: { count: 6 } },
+    ]);
+  });
+
   it('reuses one attribute binding scan across multi-query DOM apply', () => {
     const store = createQueryStore();
     const root = new FakeMorphRoot();

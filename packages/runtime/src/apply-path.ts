@@ -59,13 +59,15 @@ export function applyMutationResponse(
   body: string,
   options: ApplyMutationResponseToStoreOptions = {},
 ): AppliedMutationResponse {
-  return applyFragmentQueryBody(
+  return applyMutationResponseBody({
     body,
-    (queries) =>
-      applyQueryChunksToStore(store, queries, definedProps({ applyQuery: options.applyQuery })),
-    options.onError,
-    options.beforeApplyQueries,
-  );
+    ...definedProps({
+      applyQuery: options.applyQuery,
+      beforeApplyQueries: options.beforeApplyQueries,
+      onError: options.onError,
+    }),
+    store,
+  });
 }
 
 export const applyMutationResponseToStore = applyMutationResponse;
