@@ -1979,6 +1979,14 @@ must be "FW406 unresolved," never "silently wrong."
       `pnpm exec vitest --run conformance/drizzle-pin/src/index.test.ts`,
       `pnpm exec vp check packages/drizzle/src/static.ts packages/drizzle/src/index.test.ts plans/codebase-quality-round2.md`,
       and `git diff --check`.
+      Additional evidence 2026-06-12: source-mode local helper folding now resolves helper
+      calls by ts-morph symbol keys rather than bare names, so same-name closure-local helpers
+      in different exported functions no longer leak Drizzle write/read summaries across
+      closures under SPEC §10-§11. Focused package and pinned conformance coverage exercise the
+      closure leak with same-name `apply()` helpers writing different tables. Same-session
+      evidence:
+      `corepack pnpm exec vitest --run packages/drizzle/src/index.test.ts -t "closure-local helper summaries|local helper summaries"`,
+      `corepack pnpm exec vitest --run conformance/drizzle-pin/src/index.test.ts -t "closure-local helper summaries"`.
       Additional evidence 2026-06-12: project-mode relational query reads now require the
       relational table member to resolve through the project table-symbol map before contributing
       a read domain. Unknown members such as `db.query.archivedUsers.findMany(...)` remain

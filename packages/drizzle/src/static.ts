@@ -181,13 +181,13 @@ function extractTouchGraphFromPreparedFiles(
   for (const file of files) {
     const fileTables = tablesForFile(file, sourceContext);
     const functions = functionsForFile(file);
-    const functionsByName = new Map(functions.map((fn) => [fn.name, fn]));
-    const callsByName = new Map(
-      functions.map((fn) => [fn.name, fn.localCalls.filter((call) => functionsByName.has(call))]),
+    const functionsByKey = new Map(functions.map((fn) => [fn.key, fn]));
+    const callsByKey = new Map(
+      functions.map((fn) => [fn.key, fn.localCalls.filter((call) => functionsByKey.has(call))]),
     );
     const summaries = new Map(
       functions.map((fn) => [
-        fn.name,
+        fn.key,
         directSummaryForFunction(fn, file, fileTables, unresolvedIdentifiers),
       ]),
     );
@@ -197,10 +197,10 @@ function extractTouchGraphFromPreparedFiles(
       changed = false;
 
       for (const fn of functions) {
-        const summary = summaries.get(fn.name);
+        const summary = summaries.get(fn.key);
         if (!summary) continue;
 
-        for (const call of callsByName.get(fn.name) ?? []) {
+        for (const call of callsByKey.get(fn.key) ?? []) {
           const calleeSummary = summaries.get(call);
           if (!calleeSummary) continue;
 
@@ -210,7 +210,7 @@ function extractTouchGraphFromPreparedFiles(
     }
 
     for (const fn of functions) {
-      const { reads, unresolved, writes } = summaries.get(fn.name) ?? {
+      const { reads, unresolved, writes } = summaries.get(fn.key) ?? {
         reads: [],
         unresolved: [],
         writes: [],
@@ -1350,6 +1350,7 @@ type ExtractedTableDeclaration = JisoTableAnnotation & {
 
 interface ExtractedFunction {
   bodyStart: number;
+  key: string;
   localCalls: readonly string[];
   name: string;
   readCalls: readonly ExtractedReadCall[];
@@ -3168,7 +3169,7 @@ function extractFunctions(file: SourceFileInput): ExtractedFunction[] {
       ...extractVariableAssignedFunctions(sourceFile),
       ...extractDomainWriteCallbacks(sourceFile),
     ];
-    const localFunctionNames = new Set(functions.map((fn) => fn.name));
+    const localFunctionKeys = new Set(functions.map((fn) => fn.key));
 
     return functions.map((fn): ExtractedFunction => {
       const receiverNames = new Set(fn.receiverNames ?? sourceDrizzleReceiverNames(fn.callback));
@@ -3176,14 +3177,14 @@ function extractFunctions(file: SourceFileInput): ExtractedFunction[] {
 
       return {
         ...extracted,
-        localCalls: extractLocalFunctionCallsFromBody(bodyNode),
+        localCalls: extractLocalFunctionCallsFromBody(bodyNode, localFunctionKeys),
         readCalls: [
           ...extractSelectReadCallsFromBody(bodyNode, receiverNames),
           ...extractRelationalReadCallsFromBody(bodyNode, receiverNames),
         ],
         receiverNames: [...receiverNames],
         unresolvedCalls: [
-          ...extractExternalDbArgumentCallsFromBody(bodyNode, receiverNames, localFunctionNames),
+          ...extractExternalDbArgumentCallsFromBody(bodyNode, receiverNames, localFunctionKeys),
           ...extractUnclassifiedDrizzleReceiverCallsFromBody(bodyNode, receiverNames),
         ],
         writeCalls: extractDrizzleWriteCallsFromBody(bodyNode, receiverNames),
@@ -3199,7 +3200,7 @@ function extractFunctionDeclarations(sourceFile: SourceFile): ParsedExtractedFun
     const name = declaration.getName();
     if (!name) continue;
 
-    functions.push(extractedFunctionFromCallback(name, declaration));
+    functions.push(extractedFunctionFromCallback(name, declaration, declaration.getNameNode()));
   }
 
   return functions;
@@ -3216,7 +3217,7 @@ function extractVariableAssignedFunctions(sourceFile: SourceFile): ParsedExtract
     if (!initializer) continue;
     if (!Node.isArrowFunction(initializer) && !Node.isFunctionExpression(initializer)) continue;
 
-    functions.push(extractedFunctionFromCallback(name.getText(), initializer));
+    functions.push(extractedFunctionFromCallback(name.getText(), initializer, name));
   }
 
   return functions;
@@ -3245,7 +3246,11 @@ function extractDomainWriteCallbacks(sourceFile: SourceFile): ParsedExtractedFun
       if (!callback) continue;
 
       callbacks.push(
-        extractedFunctionFromCallback(`${domainName.getText()}.${memberName}`, callback),
+        extractedFunctionFromCallback(
+          `${domainName.getText()}.${memberName}`,
+          callback,
+          property.getNameNode(),
+        ),
       );
     }
   }
@@ -3269,14 +3274,22 @@ function writeCallbackFunction(
   );
 }
 
-function extractedFunctionFromCallback(name: string, callback: Node): ParsedExtractedFunction {
+function extractedFunctionFromCallback(
+  name: string,
+  callback: Node,
+  keyNode: Node = callback,
+): ParsedExtractedFunction {
   const body = functionBody(callback);
   const bodyStart = Node.isBlock(body) ? body.getStart() + 1 : body.getStart();
+  const key =
+    resolvedSymbolKey(keyNode.getSymbol()) ??
+    `${callback.getSourceFile().getFilePath()}:${callback.getStart()}:${name}`;
 
   return {
     bodyNode: body,
     bodyStart,
     callback,
+    key,
     name,
     receiverNames: sourceDrizzleReceiverNames(callback),
   };
@@ -3295,7 +3308,10 @@ function functionBody(callback: Node): Node {
   throw new Error('Expected a write callback function');
 }
 
-function extractLocalFunctionCallsFromBody(body: Node): string[] {
+function extractLocalFunctionCallsFromBody(
+  body: Node,
+  localFunctionKeys: ReadonlySet<string>,
+): string[] {
   const calls: string[] = [];
 
   for (const call of callExpressionsInNode(body)) {
@@ -3305,7 +3321,8 @@ function extractLocalFunctionCallsFromBody(body: Node): string[] {
     const name = expression.getText();
     if (IGNORED_LOCAL_CALL_NAMES.has(name)) continue;
 
-    calls.push(name);
+    const key = resolvedSymbolKey(expression.getSymbol());
+    if (key && localFunctionKeys.has(key)) calls.push(key);
   }
 
   return [...new Set(calls)];
@@ -3358,7 +3375,7 @@ interface ExternalDbArgumentCall {
 function extractExternalDbArgumentCallsFromBody(
   body: Node,
   receiverNames: ReadonlySet<string>,
-  localFunctionNames: ReadonlySet<string>,
+  localFunctionKeys: ReadonlySet<string>,
   bodyOffset = bodySourceStart(body),
 ): ExternalDbArgumentCall[] {
   const calls: ExternalDbArgumentCall[] = [];
@@ -3368,7 +3385,9 @@ function extractExternalDbArgumentCallsFromBody(
     if (!Node.isIdentifier(expression)) continue;
 
     const name = expression.getText();
-    if (IGNORED_LOCAL_CALL_NAMES.has(name) || localFunctionNames.has(name)) continue;
+    if (IGNORED_LOCAL_CALL_NAMES.has(name)) continue;
+    const key = resolvedSymbolKey(expression.getSymbol());
+    if (key && localFunctionKeys.has(key)) continue;
 
     if (!call.getArguments().some((arg) => isSourceDrizzleReceiverIdentifier(arg, receiverNames))) {
       continue;

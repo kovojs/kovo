@@ -3172,6 +3172,45 @@ export interface CommerceInvalidationSets {
     ]);
   });
 
+  it('keeps closure-local helper summaries scoped by symbol instead of helper name', () => {
+    const graph = extractTouchGraphFromSource([
+      {
+        fileName: 'cart.domain.ts',
+        source: `
+          export const cartItems = pgTable("cart_items", {}, jiso({ domain: "cart", key: "productId" }));
+          export const auditLog = pgTable("audit_log", {}, jiso({ domain: "audit", key: "productId" }));
+
+          export async function addItem(db, productId) {
+            async function apply(db) {
+              await db.insert(cartItems).values({ productId });
+            }
+
+            await apply(db);
+          }
+
+          export async function auditItem(db, productId) {
+            async function apply(db) {
+              await db.insert(auditLog).values({ productId });
+            }
+
+            await apply(db);
+          }
+        `,
+      },
+    ]);
+
+    expect(graph.addItem).toEqual({
+      reads: [],
+      touches: [{ domain: 'cart', keys: null, site: 'cart.domain.ts:7', via: 'cart_items' }],
+      unresolved: [],
+    });
+    expect(graph.auditItem).toEqual({
+      reads: [],
+      touches: [{ domain: 'audit', keys: null, site: 'cart.domain.ts:15', via: 'audit_log' }],
+      unresolved: [],
+    });
+  });
+
   it('dedupes recursive helper summaries at a fixed point', () => {
     const graph = extractTouchGraphFromSource([
       {

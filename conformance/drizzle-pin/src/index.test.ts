@@ -826,6 +826,58 @@ describe('Drizzle pinned subset conformance', () => {
     });
   });
 
+  it('pins closure-local helper summaries by symbol instead of helper name', () => {
+    const graph = extractTouchGraphFromSource([
+      {
+        fileName: 'conformance/drizzle-pin/src/cart.domain.ts',
+        source: [
+          "export const cartItems = pgTable('cart_items', {}, jiso({ domain: 'cart', key: 'productId' }));",
+          "export const auditLog = pgTable('audit_log', {}, jiso({ domain: 'audit', key: 'productId' }));",
+          '',
+          'export async function addItem(db, productId) {',
+          '  async function apply(db) {',
+          '    await db.insert(cartItems).values({ productId });',
+          '  }',
+          '  await apply(db);',
+          '}',
+          '',
+          'export async function auditItem(db, productId) {',
+          '  async function apply(db) {',
+          '    await db.insert(auditLog).values({ productId });',
+          '  }',
+          '  await apply(db);',
+          '}',
+          '',
+        ].join('\n'),
+      },
+    ]);
+
+    expect(graph.addItem).toEqual({
+      reads: [],
+      touches: [
+        {
+          domain: 'cart',
+          keys: null,
+          site: 'conformance/drizzle-pin/src/cart.domain.ts:6',
+          via: 'cart_items',
+        },
+      ],
+      unresolved: [],
+    });
+    expect(graph.auditItem).toEqual({
+      reads: [],
+      touches: [
+        {
+          domain: 'audit',
+          keys: null,
+          site: 'conformance/drizzle-pin/src/cart.domain.ts:13',
+          via: 'audit_log',
+        },
+      ],
+      unresolved: [],
+    });
+  });
+
   it('pins real Drizzle receiver types inside domain write callbacks', () => {
     const graph = extractTouchGraphFromProject({
       files: [
