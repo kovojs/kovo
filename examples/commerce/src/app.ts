@@ -66,7 +66,21 @@ export interface CommerceDb {
   write(table: string, value: unknown): void;
 }
 
+export interface ProductGridInput {
+  after?: string;
+  limit?: number;
+}
+
+export interface ProductGridResult {
+  items: { id: string; stock: number; unitPrice: number }[];
+  nextCursor: string | null;
+}
+
 export type CommerceRole = 'admin' | 'member';
+
+export interface CommerceRenderFaults {
+  productGrid?: () => Error;
+}
 
 export interface CommerceSession {
   id: string;
@@ -78,6 +92,7 @@ export interface CommerceSession {
 
 export interface CommerceRequest {
   db: CommerceDb;
+  renderFaults?: CommerceRenderFaults;
   session?: CommerceSession | null;
 }
 
@@ -302,25 +317,11 @@ function cloneCommerceDb(source: CommerceDb): CommerceDb {
   clone.products = new Map(
     [...source.products.entries()].map(([key, value]) => [key, { ...value }]),
   );
-  if (Object.hasOwn(source.products, 'values')) {
-    const values = Reflect.get(source.products, 'values') as typeof source.products.values;
-    clone.products.values = values.bind(source.products) as typeof clone.products.values;
-  }
 
   return clone;
 }
 
 export { attachment, cart, order, product, cartQuery, orderHistoryQuery, productGridQuery };
-
-export interface ProductGridInput {
-  after?: string;
-  limit?: number;
-}
-
-export interface ProductGridResult {
-  items: { id: string; stock: number; unitPrice: number }[];
-  nextCursor: string | null;
-}
 
 export type AddToCartInput = {
   productId: string;
@@ -629,10 +630,18 @@ export const {
   renderProductGridItems,
 } = productGridComponent;
 
-export function renderProductGrid(result: ProductGridResult, request?: CommerceRequest): string {
+export function renderProductGrid(
+  result: ProductGridResult,
+  request?: CommerceRequest,
+  addToCartFailure?: AddToCartFailureState,
+): string {
   // SPEC.md section 4.2: the markup comes from the compiled TSX component;
-  // fw-c and fw-deps are compiler-derived (section 4.8).
-  return ProductGrid.definition.render({ productGrid: result }, { request });
+  // fw-c and fw-deps are compiler-derived (section 4.8). SPEC.md section
+  // 10.2 keeps query data separate from request-only form failure context.
+  return ProductGrid.definition.render(
+    { productGrid: result },
+    { failure: addToCartFailure, request },
+  );
 }
 
 export function renderProductGridAppend(
@@ -749,19 +758,12 @@ export function renderCartPageBody(
   request?: CommerceRequest,
 ): string {
   const cartBadge = CartBadge.definition.render({ cart: loadCartQuery(db) });
-  const productGrid = renderProductGridWithFailure(loadProductGrid(db), addToCartFailure, request);
-  return `<main class="mx-auto max-w-4xl"><fw-fragment target="cart-badge">${cartBadge}</fw-fragment><fw-fragment target="product-grid">${productGrid}</fw-fragment><fw-fragment target="order-history">${renderOrderHistory(db)}${renderReceiptUploadForm()}</fw-fragment></main>`;
-}
-
-function renderProductGridWithFailure(
-  result: ProductGridResult,
-  addToCartFailure?: AddToCartFailureState,
-  request?: CommerceRequest,
-): string {
-  return ProductGrid.definition.render(
-    { productGrid: result },
-    { failure: addToCartFailure, request },
+  const productGrid = renderProductGrid(
+    loadProductGridForRequest(db, undefined, request),
+    request,
+    addToCartFailure,
   );
+  return `<main class="mx-auto max-w-4xl"><fw-fragment target="cart-badge">${cartBadge}</fw-fragment><fw-fragment target="product-grid">${productGrid}</fw-fragment><fw-fragment target="order-history">${renderOrderHistory(db)}${renderReceiptUploadForm()}</fw-fragment></main>`;
 }
 
 export function submitAddToCartNoJs(rawInput: unknown, request: CommerceRequest) {
@@ -787,7 +789,8 @@ export function submitAddToCart(
       },
       errorBoundary(
         {
-          render: () => renderProductGrid(loadProductGrid(request.db), request),
+          render: () =>
+            renderProductGrid(loadProductGridForRequest(request.db, undefined, request), request),
           stylesheets: commerceStylesheets,
           target: 'product-grid',
         },
@@ -898,6 +901,17 @@ function appendCommerceCsrf(rawInput: unknown, request: CommerceRequest): unknow
     ...rawInput,
     csrf: csrfToken(request, commerceCsrf),
   };
+}
+
+function loadProductGridForRequest(
+  db: CommerceDb,
+  input?: ProductGridInput,
+  request?: CommerceRequest,
+): ProductGridResult {
+  const productGridError = request?.renderFaults?.productGrid?.();
+  if (productGridError) throw productGridError;
+
+  return loadProductGrid(db, input);
 }
 
 function renderAddToCartFailureFragment(

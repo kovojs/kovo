@@ -2673,6 +2673,17 @@ Verification: server vitest + wire fixtures byte-for-byte acceptance.
       `pnpm exec vitest --run examples/commerce/src/app.test.ts`,
       `pnpm exec vp check examples/commerce/src/app.test.ts plans/codebase-quality-round2.md`,
       and `git diff --check`.
+      Additional evidence 2026-06-12: commerce product-grid render failure injection now uses
+      the explicit `CommerceRequest.renderFaults.productGrid` seam instead of mutating
+      `db.products.values`, `cloneCommerceDb` no longer preserves custom `Map.values` test hooks,
+      and no-JS product-grid failure rendering routes through the same `renderProductGrid`
+      compiled-component path as normal rendering. Same-session evidence:
+      `corepack pnpm --filter @jiso/example-commerce run emit-graph`,
+      `corepack pnpm exec vitest --run examples/commerce/src/app.test.ts -t "product-grid fragment failures|no-JS addToCart failures|loads every declared query"`,
+      `corepack pnpm exec vitest --run examples/commerce/src/app.test.ts`,
+      `corepack pnpm --filter @jiso/example-commerce run emit-graph -- --check`,
+      `corepack pnpm exec vp check examples/commerce/src/app.ts examples/commerce/src/app.test.ts examples/commerce/src/generated/graph.json examples/commerce/src/generated/touch-graph.ts plans/codebase-quality-round2.md`,
+      and `git diff --check`.
 - [x] **MED — Typecheck the example and spikes.** `examples/commerce` and three of four
       conformance spikes sit outside every tsconfig (root includes only `packages/**`), so the
       registry-augmentation showcase (generated/touch-graph.ts:43-50) may never be

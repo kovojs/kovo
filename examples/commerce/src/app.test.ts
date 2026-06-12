@@ -1032,18 +1032,16 @@ describe('commerce example', () => {
 
   it('contains product-grid fragment failures with a per-island error boundary', async () => {
     const db = createCommerceDb();
-    const values = db.products.values.bind(db.products);
-    let productGridReads = 0;
-    db.products.values = (() => {
-      productGridReads += 1;
-      if (productGridReads === 1) return values();
-
-      throw new Error('catalog unavailable');
-    }) as typeof db.products.values;
 
     const response = await submitAddToCart(
       { productId: 'p1', quantity: 1 },
-      { db, session: { id: 's-enhanced-boundary', user: { id: 'u1' } } },
+      {
+        db,
+        renderFaults: {
+          productGrid: () => new Error('catalog unavailable'),
+        },
+        session: { id: 's-enhanced-boundary', user: { id: 'u1' } },
+      },
       {
         'FW-Fragment': 'true',
         'FW-Targets': 'cart-badge,product-grid,order-history',
