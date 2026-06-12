@@ -1113,6 +1113,16 @@ must be "FW406 unresolved," never "silently wrong."
       `pnpm exec vitest --run packages/drizzle/src/index.test.ts -t "projection facts|computed projections|typed sql projections|Drizzle selects"`;
       `pnpm exec vitest --run packages/drizzle/src`;
       `pnpm exec vitest --run conformance/drizzle-pin/src/index.test.ts`.
+      Additional evidence 2026-06-12: source-mode select projection discovery now walks
+      ts-morph `CallExpression` nodes and real `ReturnStatement` ancestors instead of
+      regex-scanning query object text and hand-matching select parentheses, so comments and
+      strings containing `return db.select(...)` no longer fabricate the inferred result shape.
+      Same-session evidence:
+      `pnpm exec vitest --run packages/drizzle/src/index.test.ts -t "returned select|comments or strings"`;
+      `pnpm exec vitest --run packages/drizzle/src`;
+      `pnpm exec vitest --run conformance/drizzle-pin/src/index.test.ts`;
+      `pnpm exec vp check packages/drizzle/src/index.ts packages/drizzle/src/index.test.ts plans/codebase-quality-round2.md`;
+      and `git diff --check`.
 - [ ] **HIGH — Cover the invisible read/write surfaces or mark them.** Relational query API
       (`db.query.users.findMany()`) matches neither read (:1138) nor write (:598) extraction;
       `db.execute(sql``)` is skipped by `extractExternalDbArgumentCalls` (:1820). Either

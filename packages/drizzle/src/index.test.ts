@@ -999,6 +999,44 @@ export interface CommerceInvalidationSets {
     ]);
   });
 
+  it('does not derive returned select shape from comments or strings', () => {
+    const facts = extractQueryFactsFromSource([
+      {
+        fileName: 'product.queries.ts',
+        source: `
+          export const auditLog = pgTable("audit_log", {
+            id: text("id").primaryKey(),
+            message: text("message").notNull(),
+          }, jiso({ domain: "audit", key: "id" }));
+          export const products = pgTable("products", {
+            id: text("id").primaryKey(),
+            name: text("name").notNull(),
+          }, jiso({ domain: "product", key: "id" }));
+
+          export const productQuery = query("product", {
+            async load(_input, db) {
+              const fixture = "return db.select({ message: auditLog.message }).from(auditLog)";
+              // return db.select({ message: auditLog.message }).from(auditLog);
+              await db.select({ message: auditLog.message }).from(auditLog);
+              return db.select({ name: products.name }).from(products);
+            },
+          });
+        `,
+      },
+    ]);
+
+    expect(facts).toEqual([
+      {
+        query: 'product',
+        reads: ['audit', 'product'],
+        shape: {
+          name: 'string',
+        },
+        site: 'product.queries.ts:11',
+      },
+    ]);
+  });
+
   it('reports FW410 for opaque query projections without declared output schemas', () => {
     const facts = extractQueryFactsFromSource([
       {

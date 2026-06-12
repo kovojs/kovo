@@ -19,6 +19,7 @@ import {
   ts,
   type CallExpression,
   type CompilerOptions,
+  type ObjectLiteralExpression,
   type SourceFile,
   type Symbol as MorphSymbol,
 } from 'ts-morph';
@@ -941,7 +942,7 @@ function extractQueryDefinitions(
 
       const query = queryArgument.getLiteralText();
       const body = bodyArgument.getText();
-      const selection = selectShapeFromQueryBody(body, columnShapes);
+      const selection = selectShapeFromQueryBody(bodyArgument, columnShapes);
       const diagnostics = relationalQueryDiagnostics(body);
       if (!selection && diagnostics.length === 0) continue;
 
@@ -972,18 +973,14 @@ interface QueryShapeSelection {
 }
 
 function selectShapeFromQueryBody(
-  body: string,
+  body: ObjectLiteralExpression,
   columnShapes: Readonly<Record<string, QueryShape>> = {},
 ): QueryShapeSelection | null {
-  const selectCall = returnedSelectCall(body) ?? /\.select\s*\(/.exec(body);
-  if (!selectCall || selectCall.index === undefined) return null;
+  const selectCall = selectCallFromQueryBody(body);
+  if (!selectCall) return null;
 
-  const openParen = selectCall.index + selectCall[0].length - 1;
-  const closeParen = findMatchingParen(body, openParen);
-  if (closeParen === -1) return null;
-
-  const projection = body.slice(openParen + 1, closeParen).trim();
-  if (projection.length === 0) {
+  const projection = selectCall.getArguments()[0];
+  if (!projection) {
     return {
       diagnostics: [
         {
@@ -1001,19 +998,24 @@ function selectShapeFromQueryBody(
     };
   }
 
-  if (!projection.startsWith('{')) return null;
+  if (!Node.isObjectLiteralExpression(projection)) return null;
 
-  const objectEnd = findMatchingBrace(projection, 0);
-  if (objectEnd === -1) return null;
-
-  return queryShapeFromObjectLiteral(projection.slice(0, objectEnd + 1), {
+  return queryShapeFromObjectLiteralNode(projection.compilerNode, {
     columnShapes,
-    nullableTables: nullableJoinTables(body),
+    nullableTables: nullableJoinTables(body.getText()),
   });
 }
 
-function returnedSelectCall(body: string): RegExpExecArray | null {
-  return /\breturn\s+(?:await\s+)?[\s\S]*?\.select\s*\(/.exec(body);
+function selectCallFromQueryBody(body: ObjectLiteralExpression): CallExpression | undefined {
+  const selectCalls = body
+    .getDescendantsOfKind(SyntaxKind.CallExpression)
+    .filter((call) => staticAccessName(call.getExpression()) === 'select')
+    .sort((left, right) => callSourceOrder(left) - callSourceOrder(right));
+
+  return (
+    selectCalls.find((call) => call.getFirstAncestorByKind(SyntaxKind.ReturnStatement)) ??
+    selectCalls[0]
+  );
 }
 
 function relationalQueryDiagnostics(body: string): TouchGraphDiagnostic[] {
@@ -1033,28 +1035,6 @@ interface QueryShapeContext {
   columnShapes: Readonly<Record<string, QueryShape>>;
   nullableTables: ReadonlySet<string>;
   prefix?: string;
-}
-
-function queryShapeFromObjectLiteral(
-  source: string,
-  context: QueryShapeContext,
-): QueryShapeSelection {
-  return (
-    projectionExpressionFact(source, (node) => {
-      if (!ts.isObjectLiteralExpression(node)) return null;
-      return queryShapeFromObjectLiteralNode(node, context);
-    }) ?? emptyQueryShapeSelection()
-  );
-}
-
-function emptyQueryShapeSelection(): QueryShapeSelection {
-  return {
-    hasTablelessScalar: false,
-    opaquePaths: [],
-    scalarTables: new Set(),
-    shape: {},
-    unresolvedPaths: [],
-  };
 }
 
 function queryShapeFromObjectLiteralNode(
@@ -2623,19 +2603,6 @@ function findMatchingBrace(source: string, openBrace: number): number {
     const char = source[index];
     if (char === '{') depth += 1;
     if (char === '}') depth -= 1;
-    if (depth === 0) return index;
-  }
-
-  return -1;
-}
-
-function findMatchingParen(source: string, openParen: number): number {
-  let depth = 0;
-
-  for (let index = openParen; index < source.length; index += 1) {
-    const char = source[index];
-    if (char === '(') depth += 1;
-    if (char === ')') depth -= 1;
     if (depth === 0) return index;
   }
 
