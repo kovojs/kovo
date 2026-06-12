@@ -133,6 +133,9 @@ Closed evidence so far:
 - Real Drizzle conformance covers receiver types, namespace imports, relational query API calls,
   standalone direct selects, closure-local helper summaries, materialized view refresh, count
   helper, unknown receiver methods, and query-loader helper handoffs.
+- Project touch/query helper summaries build function facts from ts-morph project nodes directly;
+  `pnpm exec vitest --run packages/drizzle/src` and
+  `pnpm exec vitest --run conformance/drizzle-pin` pass.
 
 Open:
 

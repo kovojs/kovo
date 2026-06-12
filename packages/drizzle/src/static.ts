@@ -314,14 +314,14 @@ function projectContextFiles(extraction: ProjectExtraction): SourceFileInput[] {
 
 function projectFunctionExtractionsByFileName(
   extraction: ProjectExtraction,
-): Map<string, Map<string, ProjectFunctionExtraction>> {
-  const extractionsByFile = new Map<string, Map<string, ProjectFunctionExtraction>>();
+): Map<string, Map<string, ExtractedFunction>> {
+  const extractionsByFile = new Map<string, Map<string, ExtractedFunction>>();
 
   extraction.sourceFiles.forEach((sourceFile, index) => {
     const file = extraction.files[index];
     if (!file) return;
 
-    const extractionsByFunction = new Map<string, ProjectFunctionExtraction>();
+    const extractionsByFunction = new Map<string, ExtractedFunction>();
     const namespaceTableNames = projectNamespaceTableNamesByLocal(
       sourceFile,
       extraction.tableNamesBySymbol,
@@ -338,7 +338,12 @@ function projectFunctionExtractionsByFileName(
       if (!name || !nameNode || !body) continue;
 
       const receivers = projectDrizzleReceivers(fn);
-      extractionsByFunction.set(extractedFunctionKey(name, fn, nameNode), {
+      const key = extractedFunctionKey(name, fn, nameNode);
+      extractionsByFunction.set(key, {
+        bodyStart: bodySourceStart(body),
+        key,
+        localCalls: [],
+        name,
         readCalls: [
           ...extractProjectSelectReadCalls(
             body,
@@ -369,7 +374,13 @@ function projectFunctionExtractionsByFileName(
 
       const body = initializer.getBody();
       const receivers = projectDrizzleReceivers(initializer);
-      extractionsByFunction.set(extractedFunctionKey(name.getText(), initializer, name), {
+      const functionName = name.getText();
+      const key = extractedFunctionKey(functionName, initializer, name);
+      extractionsByFunction.set(key, {
+        bodyStart: bodySourceStart(body),
+        key,
+        localCalls: [],
+        name: functionName,
         readCalls: [
           ...extractProjectSelectReadCalls(
             body,
@@ -395,6 +406,10 @@ function projectFunctionExtractionsByFileName(
     for (const callback of projectDomainWriteCallbacks(sourceFile).values()) {
       const receivers = projectDrizzleReceivers(callback.fn);
       extractionsByFunction.set(callback.key, {
+        bodyStart: bodySourceStart(callback.body),
+        key: callback.key,
+        localCalls: [],
+        name: callback.name,
         readCalls: [
           ...extractProjectSelectReadCalls(
             callback.body,
@@ -432,6 +447,7 @@ function projectFunctionExtractionsByFileName(
           ? extractionsByFunction.get(extractedFunctionKey(name, fn, nameNode))
           : undefined;
       if (!body || !extraction) continue;
+      extraction.localCalls = extractLocalFunctionCallsFromBody(body, localFunctionNames);
       extraction.unresolvedCalls = extractProjectUnresolvedCalls(
         body,
         projectDrizzleReceivers(fn),
@@ -447,6 +463,10 @@ function projectFunctionExtractionsByFileName(
         extractedFunctionKey(name.getText(), initializer, name),
       );
       if (!extraction) continue;
+      extraction.localCalls = extractLocalFunctionCallsFromBody(
+        initializer.getBody(),
+        localFunctionNames,
+      );
       extraction.unresolvedCalls = extractProjectUnresolvedCalls(
         initializer.getBody(),
         projectDrizzleReceivers(initializer),
@@ -456,6 +476,7 @@ function projectFunctionExtractionsByFileName(
     for (const callback of projectDomainWriteCallbacks(sourceFile).values()) {
       const extraction = extractionsByFunction.get(callback.key);
       if (!extraction) continue;
+      extraction.localCalls = extractLocalFunctionCallsFromBody(callback.body, localFunctionNames);
       extraction.unresolvedCalls = extractProjectUnresolvedCalls(
         callback.body,
         projectDrizzleReceivers(callback.fn),
@@ -471,19 +492,11 @@ function projectFunctionExtractionsByFileName(
 
 function projectFunctionsForFile(
   file: SourceFileInput,
-  projectFunctionExtractions: ReadonlyMap<string, ReadonlyMap<string, ProjectFunctionExtraction>>,
+  projectFunctionExtractions: ReadonlyMap<string, ReadonlyMap<string, ExtractedFunction>>,
 ): ExtractedFunction[] {
-  return extractFunctions(file).map((fn) => {
-    const projectFunction = projectFunctionExtractions.get(file.fileName)?.get(fn.key);
-    return projectFunction ? { ...fn, ...projectFunction } : fn;
-  });
-}
-
-interface ProjectFunctionExtraction {
-  readCalls: readonly ExtractedReadCall[];
-  unresolvedCalls: readonly ExternalDbArgumentCall[];
-  receiverNames: readonly string[];
-  writeCalls: readonly ExtractedWriteCall[];
+  // SPEC §10-§11: project-mode summaries are derived from ts-morph project symbols directly,
+  // without falling back to source-mode receiver-name heuristics.
+  return [...(projectFunctionExtractions.get(file.fileName)?.values() ?? [])];
 }
 
 interface ProjectDrizzleReceivers {
@@ -493,8 +506,8 @@ interface ProjectDrizzleReceivers {
 
 function projectDomainWriteCallbacks(
   sourceFile: SourceFile,
-): Map<string, { body: Node; fn: Node; key: string }> {
-  const callbacks = new Map<string, { body: Node; fn: Node; key: string }>();
+): Map<string, { body: Node; fn: Node; key: string; name: string }> {
+  const callbacks = new Map<string, { body: Node; fn: Node; key: string; name: string }>();
 
   for (const declaration of sourceFile.getVariableDeclarations()) {
     const domainName = declaration.getNameNode();
@@ -515,14 +528,12 @@ function projectDomainWriteCallbacks(
       const callback = writeCallbackFunction(property.getInitializer());
       if (!callback) continue;
 
-      callbacks.set(`${domainName.getText()}.${memberName}`, {
+      const name = `${domainName.getText()}.${memberName}`;
+      callbacks.set(name, {
         body: functionBody(callback),
         fn: callback,
-        key: extractedFunctionKey(
-          `${domainName.getText()}.${memberName}`,
-          callback,
-          property.getNameNode(),
-        ),
+        key: extractedFunctionKey(name, callback, property.getNameNode()),
+        name,
       });
     }
   }
