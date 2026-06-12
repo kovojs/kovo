@@ -426,6 +426,17 @@ Scope: SPEC addition (proposed §9.5 "The request shell"), `@jiso/server` shell 
       `pnpm exec vitest --run examples/commerce`,
       `pnpm exec vp check examples/commerce/src/app-shell.ts examples/commerce/src/app-shell.test.ts plans/app-shell.md`,
       and `git diff --check`.
+      Additional evidence 2026-06-12: the create-jiso starter source
+      `index.html` is now only a Vite asset-build entry, not a parallel flat
+      route document or direct `/src/client.ts` bootstrap. The scaffold
+      acceptance tests assert generated `index.html` contains the SPEC §9.5
+      build-entry note and no route body, the generated `vp dev` task serves `/`
+      from `src/app-shell.ts` while `/index.html` remains build-only, and
+      generated `vp run export` overwrites `dist/index.html` with the replayed
+      app-shell route document plus built stylesheet and `/c/` module. Same-session
+      verification ran `pnpm exec vitest --run packages/create-jiso/src/index.test.ts`
+      and
+      `pnpm exec vp check packages/create-jiso/src/index.test.ts packages/create-jiso/templates/index.html packages/create-jiso/templates/README.md plans/app-shell.md`.
 
 ## Background — the gap
 

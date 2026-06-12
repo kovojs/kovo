@@ -206,9 +206,12 @@ describe('create-jiso starter', () => {
       expect(readFileSync(join(root, 'src/styles.css'), 'utf8')).toContain(
         '@source "./**/*.{ts,tsx,html}";',
       );
-      expect(readFileSync(join(root, 'index.html'), 'utf8')).toContain(
-        '<script type="module" src="/src/client.ts"></script>',
-      );
+      const indexSource = readFileSync(join(root, 'index.html'), 'utf8');
+      expect(indexSource).toContain('/src/styles.css');
+      expect(indexSource).toContain('Build-only Vite asset entry');
+      expect(indexSource).toContain('SPEC.md section 9.5');
+      expect(indexSource).not.toContain('/src/client.ts');
+      expect(indexSource).not.toContain('Hello from Jiso');
       const viteConfig = readFileSync(join(root, 'vite.config.ts'), 'utf8');
       expect(viteConfig).toContain('starterAppShellDevPlugin()');
       expect(viteConfig).toContain('manifest: true');
@@ -380,6 +383,11 @@ describe('create-jiso starter', () => {
 
       const sourceCss = await fetchTextWhenReady(`${origin}/src/styles.css`, output);
       expect(sourceCss).toContain('tailwindcss v');
+
+      const sourceEntry = await fetchTextWhenReady(`${origin}/index.html`, output);
+      expect(sourceEntry).toContain('Build-only Vite asset entry');
+      expect(sourceEntry).not.toContain('Hello from Jiso');
+      expect(sourceEntry).not.toContain('/src/client.ts');
     } finally {
       await stopProcess(devServer);
       rmSync(root, { force: true, recursive: true });
@@ -408,7 +416,10 @@ describe('create-jiso starter', () => {
       expect(cssFile).toBeTypeOf('string');
       expect(output).toContain('starter-export/v1\nhtml=1\nclient-modules=1\nassets=1\n');
       expect(distIndex).toContain(`href="/assets/${cssFile}"`);
+      expect(distIndex).toContain('on:click="/c/starter.client.js?v=starter-r7#Starter$announce"');
       expect(distIndex).not.toContain('/src/styles.css');
+      expect(distIndex).not.toContain('/src/client.ts');
+      expect(distIndex).not.toContain('Build-only Vite asset entry');
       expect(readFileSync(join(root, 'dist/assets', cssFile ?? ''), 'utf8')).toContain(
         '.text-jiso-accent',
       );
