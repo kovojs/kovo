@@ -36,6 +36,7 @@ describe('create-jiso starter', () => {
       'src/client.ts',
       'index.html',
       'src/app.tsx',
+      'src/auth.tsx',
       'src/app.fixpoint.test.ts',
     ];
 
@@ -66,8 +67,10 @@ describe('create-jiso starter', () => {
       };
       expect(packageJson.name).toBe('my-app');
       expect(packageJson.dependencies).toMatchObject({
+        '@jiso/better-auth': 'workspace:*',
         '@jiso/core': 'workspace:*',
         '@jiso/runtime': 'workspace:*',
+        '@jiso/server': 'workspace:*',
       });
       expect(packageJson.devDependencies).toMatchObject({
         '@jiso/compiler': 'workspace:*',
@@ -167,6 +170,20 @@ describe('create-jiso starter', () => {
       expect(appSource).toContain('@jsxImportSource @jiso/server');
       expect(appSource).toContain('<main class=');
       expect(appSource).not.toMatch(/render:\s*\(\)\s*=>\s*['"`]</);
+      const authSource = readFileSync(join(root, 'src/auth.tsx'), 'utf8');
+      expect(authSource).toContain("from '@jiso/better-auth'");
+      expect(authSource).toContain('betterAuthSession');
+      expect(authSource).toContain('betterAuthSignInEmailMutation');
+      expect(authSource).toContain('betterAuthSignOutMutation');
+      expect(authSource).toContain("role<StarterAuthRequest>('admin')");
+      expect(authSource).toContain('method="post"');
+      expect(authSource).toContain('action="/_m/auth/sign-in"');
+      expect(authSource).toContain('data-mutation="auth/sign-in"');
+      expect(authSource).toContain('action="/_m/auth/sign-out"');
+      expect(authSource).toContain('data-mutation="auth/sign-out"');
+      expect(authSource).toContain('csrfField(options.request, starterAuthCsrf)');
+      expect(authSource).toContain('csrfField(request, starterAuthCsrf)');
+      expect(authSource).not.toContain('@better-auth/client');
       expect(readFileSync(join(root, 'src/styles.css'), 'utf8')).toContain(
         '@source "./**/*.{ts,tsx,html}";',
       );
@@ -237,7 +254,7 @@ describe('create-jiso starter', () => {
 
     try {
       expect(main([root])).toBe(0);
-      expect(stdout).toHaveBeenCalledWith(`create-jiso: wrote 15 files to ${root}\n`);
+      expect(stdout).toHaveBeenCalledWith(`create-jiso: wrote 16 files to ${root}\n`);
       expect(JSON.parse(readFileSync(join(root, 'package.json'), 'utf8'))).toMatchObject({
         name: 'hello-cli',
       });

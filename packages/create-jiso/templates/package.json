@@ -11,8 +11,10 @@
     "graph-assertions": "vp run graph-assertions"
   },
   "dependencies": {
+    "@jiso/better-auth": "workspace:*",
     "@jiso/core": "workspace:*",
-    "@jiso/runtime": "workspace:*"
+    "@jiso/runtime": "workspace:*",
+    "@jiso/server": "workspace:*"
   },
   "devDependencies": {
     "@jiso/compiler": "workspace:*",
