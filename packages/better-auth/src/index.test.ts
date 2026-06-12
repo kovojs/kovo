@@ -1,5 +1,12 @@
-import { guards as serverGuards, type Guard, type SessionProvider } from '@jiso/server';
-import { runMutation } from '@jiso/server';
+import {
+  endpointMatches,
+  guards as serverGuards,
+  runEndpoint,
+  runMutation,
+  type EndpointDeclaration,
+  type Guard,
+  type SessionProvider,
+} from '@jiso/server';
 import { describe, expect, expectTypeOf, it } from 'vitest';
 import {
   activeOrganization,
@@ -10,9 +17,11 @@ import {
   betterAuthSession,
   getBetterAuthSetCookie,
   isBetterAuthCredentialFailureError,
+  mount,
   role,
   type ActiveOrganizationRequest,
   type BetterAuthLike,
+  type BetterAuthMountLike,
   type BetterAuthResponseLike,
 } from './index.js';
 
@@ -132,6 +141,21 @@ class FakeCredentialAuth {
     | undefined;
 }
 
+class FakeMountedAuth implements BetterAuthMountLike {
+  lastRequest: Request | undefined;
+  sawSession = false;
+
+  readonly handler = async (request: Request): Promise<Response> => {
+    this.lastRequest = request;
+    this.sawSession = 'session' in request;
+
+    return new Response(new URL(request.url).pathname, {
+      headers: { location: '/login/complete' },
+      status: 302,
+    });
+  };
+}
+
 function mapSession(value: { session: AuthSession; user: AuthUser }): AppSession {
   return {
     activeOrganizationId: value.session.activeOrganizationId,
@@ -211,6 +235,72 @@ describe('betterAuthSession', () => {
       incompleteMapper,
     );
     expect(incompleteProvider).toBeTypeOf('function');
+  });
+});
+
+describe('browser redirect protocol mount', () => {
+  it('declares a prefix endpoint for Better Auth-owned redirect protocols', async () => {
+    const auth = new FakeMountedAuth();
+    const authEndpoint = mount('/auth', auth);
+
+    expect(authEndpoint.path).toBe('/auth');
+    expect(authEndpoint.mount).toBe('prefix');
+    expect(authEndpoint.method).toBeUndefined();
+    expect(authEndpoint.auth).toEqual({ kind: 'custom', name: 'better-auth' });
+    expect(authEndpoint.csrf).toEqual({
+      exempt: true,
+      justification: 'better-auth browser redirect protocol handler',
+    });
+    expect(
+      endpointMatches(authEndpoint, { method: 'GET', pathname: '/auth/callback/github' }),
+    ).toBe(true);
+    expect(endpointMatches(authEndpoint, { method: 'POST', pathname: '/auth/saml/acs' })).toBe(
+      true,
+    );
+    expect(endpointMatches(authEndpoint, { method: 'GET', pathname: '/authish/callback' })).toBe(
+      false,
+    );
+
+    const request = new Request('https://example.test/auth/callback/github');
+    Object.defineProperty(request, 'session', {
+      configurable: true,
+      value: { id: 's1' },
+    });
+    const response = await runEndpoint(authEndpoint, request);
+
+    await expect(response.text()).resolves.toBe('/auth/callback/github');
+    expect(response.status).toBe(302);
+    expect(auth.lastRequest).toBeDefined();
+    expect(auth.sawSession).toBe(false);
+  });
+
+  it('accepts a direct handler and explicit audit metadata', async () => {
+    const magicLink = mount('/auth/magic-link', (request) => new Response(request.method), {
+      auth: { justification: 'magic-link verification token', kind: 'none' },
+      csrfJustification: 'magic-link verification token',
+      method: 'GET',
+    });
+    const typedEndpoint: EndpointDeclaration<'/auth/magic-link', 'GET', 'prefix'> = magicLink;
+
+    expect(typedEndpoint.auth).toEqual({
+      justification: 'magic-link verification token',
+      kind: 'none',
+    });
+    expect(typedEndpoint.csrf).toEqual({
+      exempt: true,
+      justification: 'magic-link verification token',
+    });
+    expect(
+      endpointMatches(typedEndpoint, { method: 'GET', pathname: '/auth/magic-link/verify' }),
+    ).toBe(true);
+    expect(
+      endpointMatches(typedEndpoint, { method: 'POST', pathname: '/auth/magic-link/verify' }),
+    ).toBe(false);
+    await expect(
+      (
+        await runEndpoint(typedEndpoint, new Request('https://example.test/auth/magic-link'))
+      ).text(),
+    ).resolves.toBe('GET');
   });
 });
 

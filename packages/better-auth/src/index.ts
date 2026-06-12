@@ -1,7 +1,10 @@
-import { guards, mutation, s } from '@jiso/server';
+import { endpoint, guards, mutation, s } from '@jiso/server';
 import type {
   AuthenticatedRequest,
   CsrfValidationOptions,
+  EndpointAuthDeclaration,
+  EndpointDeclaration,
+  EndpointMethod,
   Guard,
   GuardFailure,
   MaybePromise,
@@ -35,6 +38,18 @@ export interface BetterAuthRequestLike {
   headers: Headers;
 }
 
+export type BetterAuthMountHandler = (request: Request) => MaybePromise<Response>;
+
+export interface BetterAuthMountLike {
+  handler: BetterAuthMountHandler;
+}
+
+export interface BetterAuthMountOptions<Method extends EndpointMethod = EndpointMethod> {
+  auth?: EndpointAuthDeclaration;
+  csrfJustification?: string;
+  method?: Method;
+}
+
 export type BetterAuthSessionMapper<AuthSession, AuthUser, SessionValue> = (
   value: BetterAuthSessionPayload<AuthSession, AuthUser>,
 ) => SessionValue;
@@ -55,6 +70,30 @@ export function betterAuthSession<
 
     return map(value);
   };
+}
+
+// SPEC.md §9.1: adapter-owned OAuth/SAML/magic-link callbacks live behind declared
+// prefix endpoints, while credential forms stay on typed mutations.
+export function mount<
+  const Path extends string,
+  const Method extends EndpointMethod = EndpointMethod,
+>(
+  path: Path,
+  auth: BetterAuthMountLike | BetterAuthMountHandler,
+  options: BetterAuthMountOptions<Method> = {},
+): EndpointDeclaration<Path, Method, 'prefix'> {
+  const handler = typeof auth === 'function' ? auth : auth.handler;
+
+  return endpoint(path, {
+    auth: options.auth ?? { kind: 'custom', name: 'better-auth' },
+    csrf: false,
+    csrfJustification: options.csrfJustification ?? 'better-auth browser redirect protocol handler',
+    handler(request) {
+      return handler(request);
+    },
+    ...(options.method === undefined ? {} : { method: options.method }),
+    mount: 'prefix',
+  });
 }
 
 export interface BetterAuthResponseLike {
