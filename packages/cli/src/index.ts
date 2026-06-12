@@ -5,6 +5,8 @@ import { resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
 import type { CompileComponentOptions, QueryShape, QueryShapeFact } from '@jiso/compiler';
+import type { Transport } from '@modelcontextprotocol/sdk/shared/transport.js';
+import type { CallToolResult, Tool } from '@modelcontextprotocol/sdk/types.js';
 import {
   diagnosticDefinitionText,
   diagnosticDefinitions,
@@ -277,7 +279,7 @@ async function runMcpCommand(args: readonly string[]): Promise<0 | 1> {
     return writeUsageError(message);
   }
 
-  await runMcpStdio(process.stdin, process.stdout);
+  await runMcpSdkServer();
   return 0;
 }
 
@@ -289,7 +291,7 @@ function mcpUsage(): string {
   ].join('\n');
 }
 
-async function runMcpStdio(
+export async function runMcpFallbackStdio(
   input: AsyncIterable<Buffer | string>,
   output: { write(chunk: string): unknown },
 ): Promise<void> {
@@ -323,6 +325,69 @@ async function writeMcpLine(
   }
 
   output.write(`${JSON.stringify(await handleFwMcpRequest(parsed))}\n`);
+}
+
+export async function runMcpSdkServer(transport?: Transport): Promise<void> {
+  const [{ StdioServerTransport }, server] = await Promise.all([
+    import('@modelcontextprotocol/sdk/server/stdio.js'),
+    createMcpSdkServer(),
+  ]);
+  await server.connect(transport ?? new StdioServerTransport());
+}
+
+async function createMcpSdkServer(): Promise<
+  InstanceType<typeof import('@modelcontextprotocol/sdk/server/index.js').Server>
+> {
+  const [{ Server: McpSdkServer }, { CallToolRequestSchema, ListToolsRequestSchema }] =
+    await Promise.all([
+      import('@modelcontextprotocol/sdk/server/index.js'),
+      import('@modelcontextprotocol/sdk/types.js'),
+    ]);
+  const server = new McpSdkServer(
+    { name: 'fw', version: mcpOutputVersion },
+    {
+      capabilities: { tools: {} },
+      instructions:
+        'Jiso diagnostics surface. Tools wrap existing compile/check/explain APIs; SPEC §11.3 keeps severity policy in @jiso/core.',
+    },
+  );
+
+  server.setRequestHandler(ListToolsRequestSchema, async () => ({
+    tools: listMcpTools().tools.map((tool) => ({ ...tool })) as Tool[],
+  }));
+
+  server.setRequestHandler(CallToolRequestSchema, async (request): Promise<CallToolResult> => {
+    try {
+      const structuredContent = asMcpStructuredContent(
+        await callMcpTool(request.params.name, request.params.arguments),
+      );
+      return mcpToolResult(structuredContent);
+    } catch (error) {
+      return {
+        content: [
+          {
+            text: error instanceof Error ? error.message : String(error),
+            type: 'text',
+          },
+        ],
+        isError: true,
+      };
+    }
+  });
+
+  return server;
+}
+
+function mcpToolResult(structuredContent: Record<string, unknown>): CallToolResult {
+  return {
+    content: [{ text: mcpContentText(structuredContent), type: 'text' }],
+    structuredContent,
+  };
+}
+
+function asMcpStructuredContent(value: unknown): Record<string, unknown> {
+  if (isRecord(value)) return value;
+  throw new Error('MCP tool returned non-object structured content');
 }
 
 function writeCommandResult(result: CliCommandResult): 0 | 1 {

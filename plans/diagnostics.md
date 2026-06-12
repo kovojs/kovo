@@ -35,8 +35,15 @@ content or severities (SPEC §11.3 owns those); `fw check`/`fw explain` semantic
       for failed app modules; leave E2 open until that ownership/API is designed.
 - [x] M1a `fw mcp`: stdio-compatible JSON-RPC line server exposing compile/check/explain as
       structured tools wrapping the existing public APIs — no second diagnostic channel.
-- [ ] M1b SDK-backed MCP adapter using `@modelcontextprotocol/sdk` over stdio once the dependency
+- [x] M1b SDK-backed MCP adapter using `@modelcontextprotocol/sdk` over stdio once the dependency
       and protocol lifecycle are accepted for `fw`.
+      Evidence 2026-06-12: `fw mcp` now lazy-loads `@modelcontextprotocol/sdk` and connects an
+      SDK `Server` to `StdioServerTransport`, with MCP `initialize`, advertised tools capability,
+      `tools/list`, and `tools/call` lifecycle covered by an in-memory SDK transport test.
+      Existing object-level JSON-RPC fallback tests still exercise the shared tool dispatch and
+      the newline-delimited fallback stdio seam remains covered. Same-session evidence:
+      `pnpm exec vitest --run packages/cli/src/index.test.ts` and
+      `pnpm exec vp check packages/cli/src/index.ts packages/cli/src/index.test.ts packages/cli/package.json plans/diagnostics.md pnpm-lock.yaml`.
 - [x] M2 in-memory compile tool contract documented and versioned (`compile/v1`), proving the
       generate→compile→repair loop works before a file touches disk.
 - [ ] Gate wiring: seeded-diagnostic fixtures prove each surface red/green behaviorally (per the
@@ -174,8 +181,17 @@ no-JS form post against a seeded failing module); existing dev-middleware tests 
       `fwCheck`, `fwExplain`, and `diagnosticDefinitions` directly. Same-session evidence:
       `pnpm exec vitest --run packages/cli/src/index.test.ts` and
       `pnpm exec vp check packages/cli/src/index.ts packages/cli/src/index.test.ts packages/cli/package.json plans/diagnostics.md pnpm-lock.yaml`.
-- [ ] **M1b — SDK-backed MCP adapter.** Replace or wrap the fallback server with
+- [x] **M1b — SDK-backed MCP adapter.** Replace or wrap the fallback server with
       `@modelcontextprotocol/sdk` over stdio, including MCP initialize/capability lifecycle tests.
+      Evidence 2026-06-12: `packages/cli/src/index.ts` adds a lazy SDK-backed `fw mcp` server
+      using `@modelcontextprotocol/sdk/server` and `StdioServerTransport`; SDK request handlers
+      share the same `compile_component`, `fw_check`, `fw_explain`, and `list_diagnostics`
+      dispatch as the fallback JSON-RPC handler. `packages/cli/src/index.test.ts` adds an
+      in-memory SDK transport test that performs `initialize`, `notifications/initialized`,
+      `tools/list`, and a diagnostic-producing `tools/call`, while the existing fallback JSON-RPC
+      object tests and newline stdio fallback test remain green. Same-session evidence:
+      `pnpm exec vitest --run packages/cli/src/index.test.ts` and
+      `pnpm exec vp check packages/cli/src/index.ts packages/cli/src/index.test.ts packages/cli/package.json plans/diagnostics.md pnpm-lock.yaml`.
 - [x] **M2 — versioned tool contract.** Document the `compile_component` result shape as
       `compile/v1` alongside `fw-check/v1`/`fw-explain/v1`; snapshot-test it (agents consume
       this format, so it freezes like the CLI output did in P8). Include one end-to-end test:

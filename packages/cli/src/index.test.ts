@@ -3,6 +3,8 @@ import { mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSyn
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
+import type { Transport } from '@modelcontextprotocol/sdk/shared/transport.js';
+import type { JSONRPCMessage } from '@modelcontextprotocol/sdk/types.js';
 import { describe, expect, it, vi } from 'vitest';
 
 import {
@@ -13,7 +15,49 @@ import {
   handleFwMcpRequest,
   main,
   mainAsync,
+  runMcpFallbackStdio,
+  runMcpSdkServer,
 } from './index.js';
+
+class MemoryMcpTransport implements Transport {
+  onclose?: () => void;
+  onerror?: (error: Error) => void;
+  onmessage?: (message: JSONRPCMessage) => void;
+  readonly sent: JSONRPCMessage[] = [];
+  started = false;
+
+  async close(): Promise<void> {
+    this.onclose?.();
+  }
+
+  receive(message: JSONRPCMessage): void {
+    this.onmessage?.(message);
+  }
+
+  async send(message: JSONRPCMessage): Promise<void> {
+    this.sent.push(message);
+  }
+
+  async start(): Promise<void> {
+    this.started = true;
+  }
+}
+
+async function waitForMcpMessage(
+  transport: MemoryMcpTransport,
+  predicate: (message: JSONRPCMessage) => boolean,
+): Promise<JSONRPCMessage> {
+  for (let attempt = 0; attempt < 50; attempt += 1) {
+    const message = transport.sent.find(predicate);
+    if (message) return message;
+    await new Promise((resolve) => setTimeout(resolve, 0));
+  }
+  throw new Error(`MCP message was not sent. Sent: ${JSON.stringify(transport.sent)}`);
+}
+
+async function* mcpInputChunks(...chunks: string[]): AsyncIterable<string> {
+  yield* chunks;
+}
 
 describe('fw export', () => {
   it('loads an app module and writes static HTML artifacts through the server exporter', async () => {
@@ -438,6 +482,116 @@ describe('compile/v1 and fw mcp', () => {
             }),
           ]),
           version: 'diagnostics/v1',
+        },
+      },
+    });
+  });
+
+  it('preserves the newline-delimited JSON-RPC fallback stdio seam', async () => {
+    const chunks: string[] = [];
+    await runMcpFallbackStdio(
+      mcpInputChunks(
+        `${JSON.stringify({
+          id: 'list-fallback',
+          jsonrpc: '2.0',
+          method: 'tools/list',
+        })}\n`,
+      ),
+      { write: (chunk) => chunks.push(chunk) },
+    );
+
+    expect(JSON.parse(chunks.join(''))).toMatchObject({
+      id: 'list-fallback',
+      jsonrpc: '2.0',
+      result: {
+        structuredContent: {
+          tools: expect.arrayContaining([expect.objectContaining({ name: 'compile_component' })]),
+          version: 'fw-mcp/v1',
+        },
+        version: 'fw-mcp/v1',
+      },
+    });
+  });
+
+  it('serves initialize, tool listing, and tool calls through the SDK MCP lifecycle', async () => {
+    const transport = new MemoryMcpTransport();
+    await runMcpSdkServer(transport);
+
+    expect(transport.started).toBe(true);
+
+    transport.receive({
+      id: 'init-1',
+      jsonrpc: '2.0',
+      method: 'initialize',
+      params: {
+        capabilities: {},
+        clientInfo: { name: 'fw-test-client', version: '0.0.0' },
+        protocolVersion: '2025-06-18',
+      },
+    });
+
+    const initialize = await waitForMcpMessage(
+      transport,
+      (message) => 'id' in message && message.id === 'init-1',
+    );
+    expect(initialize).toMatchObject({
+      id: 'init-1',
+      jsonrpc: '2.0',
+      result: {
+        capabilities: { tools: {} },
+        serverInfo: { name: 'fw', version: 'fw-mcp/v1' },
+      },
+    });
+
+    transport.receive({ jsonrpc: '2.0', method: 'notifications/initialized' });
+    transport.receive({ id: 'list-1', jsonrpc: '2.0', method: 'tools/list', params: {} });
+
+    const list = await waitForMcpMessage(
+      transport,
+      (message) => 'id' in message && message.id === 'list-1',
+    );
+    expect(list).toMatchObject({
+      id: 'list-1',
+      jsonrpc: '2.0',
+      result: {
+        tools: expect.arrayContaining([
+          expect.objectContaining({
+            inputSchema: expect.objectContaining({ type: 'object' }),
+            name: 'compile_component',
+          }),
+        ]),
+      },
+    });
+
+    transport.receive({
+      id: 'compile-1',
+      jsonrpc: '2.0',
+      method: 'tools/call',
+      params: {
+        arguments: {
+          fileName: 'cart-badge.tsx',
+          source: '<button onClick={() => window.alert("x")}>x</button>',
+        },
+        name: 'compile_component',
+      },
+    });
+
+    const compile = await waitForMcpMessage(
+      transport,
+      (message) => 'id' in message && message.id === 'compile-1',
+    );
+    expect(compile).toMatchObject({
+      id: 'compile-1',
+      jsonrpc: '2.0',
+      result: {
+        content: [{ type: 'text' }],
+        structuredContent: {
+          diagnostics: [
+            { code: 'FW210', severity: 'lint' },
+            { code: 'FW201', severity: 'error' },
+          ],
+          ok: false,
+          version: 'compile/v1',
         },
       },
     });
