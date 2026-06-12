@@ -36,6 +36,14 @@ export type {
   DisclosureTriggerEvent,
 } from './disclosure.js';
 
+export { progressRootAttributes, progressValueState } from './progress.js';
+export type {
+  ProgressAttributeOptions,
+  ProgressComputedState,
+  ProgressDataState,
+  ProgressPrimitiveAttributes,
+} from './progress.js';
+
 export { separatorRootAttributes } from './separator.js';
 export type {
   SeparatorAttributeOptions,
