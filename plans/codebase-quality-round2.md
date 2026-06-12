@@ -176,6 +176,15 @@ Do this first or pay it on every commit.
       Same-session evidence:
       `node --test --test-name-pattern "P10 starter wires graph assertions into CI" tests/fw-check.node.mjs`,
       `pnpm run check:build`, and `git diff --check`.
+      Partial evidence 2026-06-12: the P10 starter Vite task tranche now executes the parsed
+      `fw-check` and `graph-assertions` task commands inside an isolated copied template with a
+      compiler shim and validating `fw` binary, and the package dependency checks assert required
+      package roles instead of pinning dependency version strings in `tests/fw-check.node.mjs`.
+      Same-session evidence:
+      `pnpm run check:build`,
+      `node --test --test-name-pattern "P10 starter wires graph assertions into CI" tests/fw-check.node.mjs`,
+      `pnpm exec vp check tests/fw-check.node.mjs plans/codebase-quality-round2.md`, and
+      `git diff --check`.
       Partial evidence 2026-06-12: the P10 forbidden browser architecture tranche now parses
       framework package sources with the TypeScript AST and asserts forbidden call/JSX constructs
       from structured nodes instead of grepping source text with regular expressions.

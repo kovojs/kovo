@@ -1122,6 +1122,86 @@ const runEmitGraphTemplateScript = async () => {
   }
 };
 
+const runTemplateViteTaskCommand = async (command) => {
+  const projectRoot = fileURLToPath(new URL('..', import.meta.url));
+  const templateRoot = new URL('../packages/create-jiso/templates/', import.meta.url);
+  const fixtureRoot = await mkdtemp(join(tmpdir(), 'jiso-template-task-'));
+  const compilerShimRoot = join(fixtureRoot, 'node_modules/@jiso/compiler');
+  const fakeBin = join(fixtureRoot, '.fake-bin');
+  const fakeFw = join(fakeBin, 'fw');
+
+  try {
+    await cp(templateRoot, fixtureRoot, { recursive: true });
+    await mkdir(compilerShimRoot, { recursive: true });
+    await mkdir(fakeBin, { recursive: true });
+    await writeFile(
+      join(compilerShimRoot, 'package.json'),
+      JSON.stringify({ type: 'module', exports: './index.mjs' }),
+      'utf8',
+    );
+    await writeFile(
+      join(compilerShimRoot, 'index.mjs'),
+      `export * from ${JSON.stringify(
+        pathToFileURL(join(projectRoot, 'dist/compiler/src/index.mjs')).href,
+      )};\n`,
+      'utf8',
+    );
+    await writeFile(
+      fakeFw,
+      `#!/usr/bin/env node
+import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+
+const args = process.argv.slice(2);
+const graph = JSON.parse(readFileSync('graph.json', 'utf8'));
+
+if (JSON.stringify(args) === JSON.stringify(['check', 'graph.json'])) {
+  assert.deepEqual(graph.mutations.map((mutation) => mutation.key), ['cart/add']);
+  process.stdout.write('fw-check/v1\\nOK\\n');
+  process.exit(0);
+}
+
+const explainOutput = new Map([
+  [
+    JSON.stringify(['explain', 'query', 'cart', 'graph.json']),
+    'fw-explain/v1\\nQUERY cart\\nreads: cart\\nconsumers: component:CartBadge,component:CartPanel,page:/cart\\ninvalidated-by: cart/add\\ndomain-writes: cart.addItem\\n',
+  ],
+  [
+    JSON.stringify(['explain', 'mutation', 'cart/add', '--optimistic', 'graph.json']),
+    'fw-explain/v1\\nMUTATION cart/add\\nguards: authed\\nsession: starterSession\\ninput-fields: productId,quantity\\nwrites: cart\\ninvalidates: cart\\nmanual-invalidates: -\\nupdates: cart->component:CartBadge,component:CartPanel,page:/cart\\nOPTIMISTIC cart await-fragment\\nOPTIMISTIC-SUMMARY total=1 hand-written=0 await-fragment=1 UNHANDLED=0\\n',
+  ],
+  [
+    JSON.stringify(['explain', 'page', '/cart', 'graph.json']),
+    'fw-explain/v1\\nPAGE /cart\\nprefetch: false\\nmeta: title=Jiso Starter Cart description=Starter cart backed by query data. image=-\\ni18n: en-US:cartTitle\\nmodulepreloads: -\\nstylesheets: /src/styles.css\\nqueries: cart\\nview-transitions: -\\n',
+  ],
+]);
+
+const output = explainOutput.get(JSON.stringify(args));
+if (output) {
+  process.stdout.write(output);
+  process.exit(0);
+}
+
+process.stderr.write(\`unexpected fw args: \${JSON.stringify(args)}\\n\`);
+process.exit(64);
+`,
+      'utf8',
+    );
+    await chmod(fakeFw, 0o755);
+
+    const output = execFileSync('sh', ['-c', command], {
+      cwd: fixtureRoot,
+      encoding: 'utf8',
+      env: { ...process.env, CI: '1', PATH: `${fakeBin}:${process.env.PATH ?? ''}` },
+    });
+    const graph = JSON.parse(await readFile(join(fixtureRoot, 'graph.json'), 'utf8'));
+
+    return { graph, output };
+  } finally {
+    await rm(fixtureRoot, { force: true, recursive: true });
+  }
+};
+
 void test('fw-check wrapper explains the production build prerequisite', () => {
   assert.equal(
     missingBuildMessage('dist/missing-cli.mjs'),
@@ -4046,10 +4126,36 @@ void test('P10 starter wires graph assertions into CI', async () => {
   assert.equal(packageJson.scripts['emit-graph'], 'node scripts/emit-graph.mjs');
   assert.equal(packageJson.scripts['fw-check'], undefined);
   assert.equal(packageJson.scripts['graph-assertions'], undefined);
-  assert.equal(packageJson.dependencies['@jiso/runtime'], 'workspace:*');
-  assert.equal(packageJson.devDependencies['@jiso/compiler'], 'workspace:*');
-  assert.equal(packageJson.devDependencies['@tailwindcss/vite'], '^4.1.0');
-  assert.equal(packageJson.devDependencies.tailwindcss, '^4.1.0');
+  assert.deepEqual(Object.keys(packageJson.dependencies).sort(), [
+    '@jiso/better-auth',
+    '@jiso/core',
+    '@jiso/runtime',
+    '@jiso/server',
+  ]);
+  assert.deepEqual(
+    [
+      '@jiso/compiler',
+      '@tailwindcss/vite',
+      '@typescript/native-preview',
+      'fw',
+      'tailwindcss',
+      'typescript',
+      'vite',
+      'vite-plus',
+      'vitest',
+    ].filter((dependencyName) => dependencyName in packageJson.devDependencies),
+    [
+      '@jiso/compiler',
+      '@tailwindcss/vite',
+      '@typescript/native-preview',
+      'fw',
+      'tailwindcss',
+      'typescript',
+      'vite',
+      'vite-plus',
+      'vitest',
+    ],
+  );
 
   assert.deepEqual(fwCheck(starterGraph), { exitCode: 0, output: 'fw-check/v1\nOK\n' });
   assert.deepEqual(
@@ -4106,23 +4212,34 @@ void test('P10 starter wires graph assertions into CI', async () => {
   assert.equal(explainValue(cartPageExplain, 'queries: '), 'cart');
   assert.equal(explainValue(cartPageExplain, 'stylesheets: '), '/src/styles.css');
 
-  assert.deepEqual(viteTasks['fw-check'], {
-    command: 'node scripts/emit-graph.mjs && fw check graph.json',
-    input: [
-      { pattern: 'scripts/emit-graph.mjs', base: 'workspace' },
-      { pattern: 'src/**/*', base: 'workspace' },
-    ],
-    output: ['graph.json'],
-  });
-  assert.deepEqual(viteTasks['graph-assertions'], {
-    command: 'node scripts/emit-graph.mjs && node scripts/graph-assertions.mjs',
-    input: [
-      { pattern: 'graph.json', base: 'workspace' },
-      { pattern: 'scripts/emit-graph.mjs', base: 'workspace' },
-      { pattern: 'scripts/graph-assertions.mjs', base: 'workspace' },
-      { pattern: 'src/**/*', base: 'workspace' },
-    ],
-  });
+  assert.deepEqual(
+    {
+      input: viteTasks['fw-check']?.input,
+      output: viteTasks['fw-check']?.output,
+    },
+    {
+      input: [
+        { pattern: 'scripts/emit-graph.mjs', base: 'workspace' },
+        { pattern: 'src/**/*', base: 'workspace' },
+      ],
+      output: ['graph.json'],
+    },
+  );
+  assert.deepEqual(
+    {
+      input: viteTasks['graph-assertions']?.input,
+      output: viteTasks['graph-assertions']?.output,
+    },
+    {
+      input: [
+        { pattern: 'graph.json', base: 'workspace' },
+        { pattern: 'scripts/emit-graph.mjs', base: 'workspace' },
+        { pattern: 'scripts/graph-assertions.mjs', base: 'workspace' },
+        { pattern: 'src/**/*', base: 'workspace' },
+      ],
+      output: undefined,
+    },
+  );
   assert.deepEqual(
     ciSteps.filter((step) => step.run).map((step) => step.run),
     [
@@ -4133,6 +4250,19 @@ void test('P10 starter wires graph assertions into CI', async () => {
       'vp run fw-check',
       'vp run graph-assertions',
     ],
+  );
+
+  const taskOutputs = await Promise.all([
+    runTemplateViteTaskCommand(viteTasks['fw-check'].command),
+    runTemplateViteTaskCommand(viteTasks['graph-assertions'].command),
+  ]);
+  assert.deepEqual(
+    taskOutputs.map((taskOutput) => taskOutput.output),
+    ['emit-graph/v1\nOK\nfw-check/v1\nOK\n', 'emit-graph/v1\nOK\ngraph-assertions/v1\nOK\n'],
+  );
+  assert.deepEqual(
+    taskOutputs.map((taskOutput) => taskOutput.graph),
+    [starterGraph, starterGraph],
   );
 
   const emittedGraph = await runEmitGraphTemplateScript();
