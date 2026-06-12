@@ -31,11 +31,11 @@ export function lowerNavigationSugar(
 }
 
 function lowerStaticLinks(source: string, model: ComponentModuleModel): string {
-  let output = source;
+  const replacements: SourceReplacement[] = [];
 
-  for (const link of jsxElements(model)
-    .filter((element) => element.tag === 'Link' && !element.selfClosing)
-    .sort((left, right) => right.start - left.start)) {
+  for (const link of jsxElements(model).filter(
+    (element) => element.tag === 'Link' && !element.selfClosing,
+  )) {
     const target = jsxStaticAttributeValue(link, 'to');
     if (!target) continue;
 
@@ -43,7 +43,7 @@ function lowerStaticLinks(source: string, model: ComponentModuleModel): string {
     const search = navigationObjectAttributeValue(link, 'search');
     if (params === null || search === null) continue;
 
-    const opening = output.slice(link.start, link.openingEnd);
+    const opening = source.slice(link.start, link.openingEnd);
     const tagPrefix = '<Link';
     const attributes = opening.slice(tagPrefix.length, -1);
     const anchorAttributes = removeJsxAttributes(
@@ -57,12 +57,16 @@ function lowerStaticLinks(source: string, model: ComponentModuleModel): string {
     );
     const spacing = anchorAttributes.trim() === '' ? '' : anchorAttributes;
     const href = buildStaticHref(target, params ?? {}, search ?? {});
-    const children = output.slice(link.openingEnd, link.closingStart);
+    const children = source.slice(link.openingEnd, link.closingStart);
 
-    output = `${output.slice(0, link.start)}<a${spacing} href="${escapeAttribute(href)}">${children}</a>${output.slice(link.end)}`;
+    replacements.push({
+      end: link.end,
+      replacement: `<a${spacing} href="${escapeAttribute(href)}">${children}</a>`,
+      start: link.start,
+    });
   }
 
-  return output;
+  return applySourceReplacements(source, replacements);
 }
 
 function lowerStaticHrefCallsAndAttributes(source: string, model: ComponentModuleModel): string {
