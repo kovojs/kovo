@@ -14,6 +14,11 @@ const expectedBehaviorContracts = {
     dataState: 'open, closed, disabled',
     keyboard: 'Native button activation opens an item; group keyboard maps are primitive-owned',
   },
+  '/components/alert': {
+    changeReasons: 'not stateful',
+    dataState: 'not emitted',
+    keyboard: 'No custom keyboard handling',
+  },
   '/components/avatar': {
     changeReasons: 'image-load, image-error, programmatic',
     dataState: 'loading, loaded, error',
@@ -23,6 +28,11 @@ const expectedBehaviorContracts = {
     changeReasons: 'not stateful',
     dataState: 'not emitted',
     keyboard: 'No custom keyboard handling',
+  },
+  '/components/breadcrumb': {
+    changeReasons: 'native link navigation',
+    dataState: 'not emitted',
+    keyboard: 'Native link keyboard behavior',
   },
   '/components/button': {
     changeReasons: 'native click or form submit',
@@ -48,6 +58,11 @@ const expectedBehaviorContracts = {
     changeReasons: 'native form control changes',
     dataState: 'invalid, required, disabled',
     keyboard: 'Native field and fieldset semantics',
+  },
+  '/components/kbd': {
+    changeReasons: 'not stateful',
+    dataState: 'not emitted',
+    keyboard: 'No custom keyboard handling',
   },
   '/components/meter': {
     changeReasons: 'value comes from app state',
@@ -94,10 +109,20 @@ const expectedBehaviorContracts = {
     dataState: 'open, closed, disabled',
     keyboard: 'Escape closes the native dialog',
   },
+  '/components/skeleton': {
+    changeReasons: 'not stateful',
+    dataState: 'not emitted',
+    keyboard: 'No custom keyboard handling',
+  },
   '/components/switch': {
     changeReasons: 'trigger-click, programmatic',
     dataState: 'checked, unchecked, disabled',
     keyboard: 'Space toggles the native checkbox',
+  },
+  '/components/table': {
+    changeReasons: 'not stateful',
+    dataState: 'not emitted',
+    keyboard: 'Native table navigation semantics',
   },
   '/components/tabs': {
     changeReasons: 'trigger-click, keyboard, programmatic',
@@ -133,6 +158,18 @@ const expectedBehaviorSnippets: Partial<Record<GalleryRoute['path'], readonly st
     'hidden>GH</span>',
     'hidden src="/avatars/missing.png"',
   ],
+  '/components/alert': [
+    'role="status"',
+    'role="alert"',
+    'border-emerald-200 bg-emerald-50',
+    'border-red-200 bg-red-50',
+  ],
+  '/components/breadcrumb': [
+    'aria-label="Account path"',
+    'href="/account"',
+    'aria-current="page"',
+    'data-orientation="horizontal" role="none"',
+  ],
   '/components/button': ['type="button"', 'disabled type="button"'],
   '/components/checkbox': [
     'type="checkbox"',
@@ -154,6 +191,7 @@ const expectedBehaviorSnippets: Partial<Record<GalleryRoute['path'], readonly st
     'aria-invalid="true"',
     'role="alert"',
   ],
+  '/components/kbd': ['<kbd class="inline-flex h-5 min-w-5', 'uppercase">K</kbd>'],
   '/components/meter': [
     '<meter',
     'data-low="50"',
@@ -226,7 +264,18 @@ const expectedBehaviorSnippets: Partial<Record<GalleryRoute['path'], readonly st
     'id="gallery-sheet" open>',
     'command="request-close" commandfor="gallery-sheet"',
   ],
+  '/components/skeleton': [
+    'aria-hidden="true"',
+    'animate-pulse rounded-md bg-neutral-200 h-4 w-40',
+  ],
   '/components/switch': ['role="switch"', 'type="checkbox"', 'aria-checked="true"', 'disabled'],
+  '/components/table': [
+    '<table class="w-full caption-bottom border-collapse text-sm">',
+    '<caption class="mt-3 text-sm text-neutral-500">',
+    '<thead class="border-b border-neutral-200 bg-neutral-50">',
+    'scope="row">INV-0042</th>',
+    'colspan="3"',
+  ],
   '/components/tabs': [
     'role="tablist"',
     'role="tab"',

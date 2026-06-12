@@ -55,17 +55,38 @@ import {
   tooltipTriggerAttributes,
   toggleRootAttributes,
 } from '@jiso/headless-ui/primitives';
-import { Badge, Button, Card, Sheet } from '@jiso/ui';
+import {
+  Alert,
+  Badge,
+  Breadcrumb,
+  BreadcrumbItem,
+  BreadcrumbLink,
+  BreadcrumbSeparator,
+  Button,
+  Card,
+  Kbd,
+  Sheet,
+  Skeleton,
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeaderCell,
+  TableRow,
+} from '@jiso/ui';
 
 export type GalleryComponent =
   | 'accordion'
+  | 'alert'
   | 'avatar'
   | 'badge'
+  | 'breadcrumb'
   | 'button'
   | 'card'
   | 'checkbox'
   | 'dialog'
   | 'field'
+  | 'kbd'
   | 'meter'
   | 'number-field'
   | 'otp-field'
@@ -75,7 +96,9 @@ export type GalleryComponent =
   | 'select'
   | 'separator'
   | 'sheet'
+  | 'skeleton'
   | 'switch'
+  | 'table'
   | 'tabs'
   | 'toggle'
   | 'tooltip';
@@ -104,6 +127,12 @@ export const galleryRoutes: readonly GalleryRoute[] = Object.freeze([
     title: 'Accordion',
   },
   {
+    component: 'alert',
+    path: '/components/alert',
+    render: () => AlertDemo(),
+    title: 'Alert',
+  },
+  {
     component: 'avatar',
     path: '/components/avatar',
     render: () => AvatarDemo(),
@@ -114,6 +143,12 @@ export const galleryRoutes: readonly GalleryRoute[] = Object.freeze([
     path: '/components/badge',
     render: () => BadgeDemo(),
     title: 'Badge',
+  },
+  {
+    component: 'breadcrumb',
+    path: '/components/breadcrumb',
+    render: () => BreadcrumbDemo(),
+    title: 'Breadcrumb',
   },
   {
     component: 'button',
@@ -144,6 +179,12 @@ export const galleryRoutes: readonly GalleryRoute[] = Object.freeze([
     path: '/components/field',
     render: () => FieldDemo(),
     title: 'Field',
+  },
+  {
+    component: 'kbd',
+    path: '/components/kbd',
+    render: () => KbdDemo(),
+    title: 'Kbd',
   },
   {
     component: 'meter',
@@ -200,10 +241,22 @@ export const galleryRoutes: readonly GalleryRoute[] = Object.freeze([
     title: 'Sheet',
   },
   {
+    component: 'skeleton',
+    path: '/components/skeleton',
+    render: () => SkeletonDemo(),
+    title: 'Skeleton',
+  },
+  {
     component: 'switch',
     path: '/components/switch',
     render: () => SwitchDemo(),
     title: 'Switch',
+  },
+  {
+    component: 'table',
+    path: '/components/table',
+    render: () => TableDemo(),
+    title: 'Table',
   },
   {
     component: 'tabs',
@@ -369,6 +422,34 @@ export function AvatarDemo(): string {
   );
 }
 
+export function AlertDemo(): string {
+  return (
+    <section data-gallery-demo="alert">
+      <p data-demo-summary="no-js">
+        Alert keeps status and alert roles in source-authored markup with no client behavior.
+      </p>
+      <div data-ui-demo="alert">
+        {Alert.definition.render({
+          children: 'Imports completed successfully.',
+          title: 'Import complete',
+          variant: 'success',
+        })}
+        {Alert.definition.render({
+          children: 'Payment method must be updated before renewal.',
+          role: 'alert',
+          title: 'Billing issue',
+          variant: 'danger',
+        })}
+      </div>
+      {renderBehaviorContract({
+        changeReasons: 'not stateful',
+        dataState: 'not emitted',
+        keyboard: 'No custom keyboard handling',
+      })}
+    </section>
+  );
+}
+
 export function BadgeDemo(): string {
   return (
     <section data-gallery-demo="badge">
@@ -384,6 +465,38 @@ export function BadgeDemo(): string {
         changeReasons: 'not stateful',
         dataState: 'not emitted',
         keyboard: 'No custom keyboard handling',
+      })}
+    </section>
+  );
+}
+
+export function BreadcrumbDemo(): string {
+  const account = BreadcrumbItem.definition.render({
+    children: BreadcrumbLink.definition.render({ children: 'Account', href: '/account' }),
+  });
+  const separator = BreadcrumbSeparator.definition.render({});
+  const billing = BreadcrumbItem.definition.render({
+    children: BreadcrumbLink.definition.render({
+      children: 'Billing',
+      current: true,
+    }),
+  });
+
+  return (
+    <section data-gallery-demo="breadcrumb">
+      <p data-demo-summary="no-js">
+        Breadcrumb is a native navigation list with current-page and decorative separator semantics.
+      </p>
+      <div data-ui-demo="breadcrumb">
+        {Breadcrumb.definition.render({
+          children: `${account}${separator}${billing}`,
+          label: 'Account path',
+        })}
+      </div>
+      {renderBehaviorContract({
+        changeReasons: 'native link navigation',
+        dataState: 'not emitted',
+        keyboard: 'Native link keyboard behavior',
       })}
     </section>
   );
@@ -555,6 +668,25 @@ export function FieldDemo(): string {
         changeReasons: 'native form control changes',
         dataState: 'invalid, required, disabled',
         keyboard: 'Native field and fieldset semantics',
+      })}
+    </section>
+  );
+}
+
+export function KbdDemo(): string {
+  return (
+    <section data-gallery-demo="kbd">
+      <p data-demo-summary="no-js">
+        Keyboard hints remain semantic kbd elements and do not require behavior wiring.
+      </p>
+      <div data-ui-demo="kbd">
+        {Kbd.definition.render({ children: 'Ctrl' })}
+        {Kbd.definition.render({ children: 'K', class: 'uppercase' })}
+      </div>
+      {renderBehaviorContract({
+        changeReasons: 'not stateful',
+        dataState: 'not emitted',
+        keyboard: 'No custom keyboard handling',
       })}
     </section>
   );
@@ -996,6 +1128,25 @@ export function SheetDemo(): string {
   );
 }
 
+export function SkeletonDemo(): string {
+  return (
+    <section data-gallery-demo="skeleton">
+      <p data-demo-summary="no-js">
+        Skeleton is decorative loading markup hidden from assistive technology.
+      </p>
+      <div data-ui-demo="skeleton">
+        {Skeleton.definition.render({ class: 'h-4 w-40' })}
+        {Skeleton.definition.render({ class: 'h-20 w-full' })}
+      </div>
+      {renderBehaviorContract({
+        changeReasons: 'not stateful',
+        dataState: 'not emitted',
+        keyboard: 'No custom keyboard handling',
+      })}
+    </section>
+  );
+}
+
 export function SwitchDemo(): string {
   const enabled = switchRootAttributes({
     checked: true,
@@ -1019,6 +1170,57 @@ export function SwitchDemo(): string {
         changeReasons: 'trigger-click, programmatic',
         dataState: 'checked, unchecked, disabled',
         keyboard: 'Space toggles the native checkbox',
+      })}
+    </section>
+  );
+}
+
+export function TableDemo(): string {
+  const header = TableHead.definition.render({
+    children: TableRow.definition.render({
+      children: `${TableHeaderCell.definition.render({
+        children: 'Invoice',
+      })}${TableHeaderCell.definition.render({
+        children: 'Status',
+      })}${TableHeaderCell.definition.render({
+        children: 'Amount',
+      })}`,
+    }),
+  });
+  const body = TableBody.definition.render({
+    children: `${TableRow.definition.render({
+      children: `${TableHeaderCell.definition.render({
+        children: 'INV-0042',
+        scope: 'row',
+      })}${TableCell.definition.render({
+        children: 'Paid',
+      })}${TableCell.definition.render({
+        children: '$250.00',
+      })}`,
+    })}${TableRow.definition.render({
+      children: TableCell.definition.render({
+        children: 'Two pending invoices omitted',
+        colSpan: 3,
+      }),
+    })}`,
+  });
+
+  return (
+    <section data-gallery-demo="table">
+      <p data-demo-summary="no-js">
+        Table keeps semantic table sections, row headers, captions, and colspan output in authored
+        TSX.
+      </p>
+      <div data-ui-demo="table">
+        {Table.definition.render({
+          caption: 'Invoices for the current billing period',
+          children: `${header}${body}`,
+        })}
+      </div>
+      {renderBehaviorContract({
+        changeReasons: 'not stateful',
+        dataState: 'not emitted',
+        keyboard: 'Native table navigation semantics',
       })}
     </section>
   );

@@ -617,6 +617,15 @@ jiso-dialog` resolves dashed wire names and prints provenance including package,
       `pnpm exec vp check examples/gallery/src/demo-fixtures.tsx examples/gallery/src/demo-fixtures.test.ts examples/gallery/src/behavior-contracts.test.ts plans/ui.md`,
       and `git diff --check`. G1 remains open for the remaining unrepresented primitives and
       styled components.
+      Additional partial evidence 2026-06-12: `examples/gallery` adds pure-markup styled
+      routes for the existing `@jiso/ui` alert, breadcrumb, kbd, skeleton, and table
+      components. The route fixtures render through the current package exports, include
+      no-JS summaries and behavior-contract tables, and pin representative status/alert
+      roles, breadcrumb current-page/separator semantics, semantic `<kbd>`, decorative
+      skeleton `aria-hidden`, and table caption/section/row-header/colspan output.
+      Same-session evidence:
+      `pnpm --filter @jiso/example-gallery test`. G1 remains open for unrepresented
+      headless primitives and full docs/gallery deployment gates.
 - [ ] G2 behavior-contract gates: keyboard/ARIA assertions per primitive (browser-free via `page()` + `fw explain` where possible; framework browser suite for focus/dismiss/top-layer).
       Partial evidence 2026-06-12: `examples/gallery/src/behavior-contracts.test.ts`
       adds a browser-free G2 fixture gate over the existing 17 rendered gallery routes. It
@@ -656,6 +665,13 @@ jiso-dialog` resolves dashed wire names and prints provenance including package,
       `pnpm exec vp check examples/gallery/src/demo-fixtures.tsx examples/gallery/src/demo-fixtures.test.ts examples/gallery/src/behavior-contracts.test.ts plans/ui.md`,
       and `git diff --check`. G2 remains open for browser-backed checks, `fw explain`
       coverage, and unrepresented routes/primitives.
+      Additional partial evidence 2026-06-12: the browser-free G2 fixture gate now covers
+      alert, breadcrumb, kbd, skeleton, and table styled routes with exact behavior-contract
+      rows plus native/ARIA snippets for live-region roles, current-page links, decorative
+      separators, semantic keyboard hints, hidden loading placeholders, and table structure.
+      Same-session evidence:
+      `pnpm --filter @jiso/example-gallery test`. G2 remains open for browser-backed
+      checks, `fw explain` coverage, and unrepresented primitive routes.
 - [ ] G3 axe checks per component state in the gallery.
 - [ ] G4 visual regression for `@jiso/ui`: shadcn-parity human review once, then self-baselined screenshots.
 - [ ] G5 merge fixtures: every primitive's attrs record × an author element → golden merged output (doubles as FW231/FW232 coverage).

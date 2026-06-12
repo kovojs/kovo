@@ -9,13 +9,16 @@ import {
 
 const expectedRoutes = [
   '/components/accordion',
+  '/components/alert',
   '/components/avatar',
   '/components/badge',
+  '/components/breadcrumb',
   '/components/button',
   '/components/card',
   '/components/checkbox',
   '/components/dialog',
   '/components/field',
+  '/components/kbd',
   '/components/meter',
   '/components/number-field',
   '/components/otp-field',
@@ -25,7 +28,9 @@ const expectedRoutes = [
   '/components/select',
   '/components/separator',
   '/components/sheet',
+  '/components/skeleton',
   '/components/switch',
+  '/components/table',
   '/components/tabs',
   '/components/toggle',
   '/components/tooltip',
@@ -319,10 +324,21 @@ describe('gallery demo fixtures', () => {
   });
 
   it('renders @jiso/ui styled component fixtures from current package exports', () => {
+    const alert = findFixture('/components/alert');
     const button = findFixture('/components/button');
     const badge = findFixture('/components/badge');
+    const breadcrumb = findFixture('/components/breadcrumb');
     const card = findFixture('/components/card');
+    const kbd = findFixture('/components/kbd');
     const sheet = findFixture('/components/sheet');
+    const skeleton = findFixture('/components/skeleton');
+    const table = findFixture('/components/table');
+
+    expect(alert.html).toContain('data-ui-demo="alert"');
+    expect(alert.html).toContain('role="status"');
+    expect(alert.html).toContain('border-emerald-200 bg-emerald-50');
+    expect(alert.html).toContain('role="alert"');
+    expect(alert.html).toContain('border-red-200 bg-red-50');
 
     expect(button.html).toContain('data-ui-demo="button"');
     expect(button.html).toContain('rounded-md border text-sm font-medium');
@@ -333,15 +349,36 @@ describe('gallery demo fixtures', () => {
     expect(badge.html).toContain('bg-emerald-50');
     expect(badge.html).toContain('bg-amber-50');
 
+    expect(breadcrumb.html).toContain('data-ui-demo="breadcrumb"');
+    expect(breadcrumb.html).toContain('aria-label="Account path"');
+    expect(breadcrumb.html).toContain('href="/account"');
+    expect(breadcrumb.html).toContain('aria-current="page"');
+    expect(breadcrumb.html).toContain('data-orientation="horizontal" role="none"');
+
     expect(card.html).toContain('data-ui-demo="card"');
     expect(card.html).toContain('rounded-lg border border-neutral-200');
     expect(card.html).toContain('<h2>Release candidate</h2>');
+
+    expect(kbd.html).toContain('data-ui-demo="kbd"');
+    expect(kbd.html).toContain('<kbd class="inline-flex h-5 min-w-5');
+    expect(kbd.html).toContain('uppercase">K</kbd>');
 
     expect(sheet.html).toContain('data-ui-demo="sheet"');
     expect(sheet.html).toContain('command="show-modal" commandfor="gallery-sheet"');
     expect(sheet.html).toContain('<dialog aria-describedby="gallery-sheet-description"');
     expect(sheet.html).toContain('id="gallery-sheet" open>');
     expect(sheet.html).toContain('command="request-close" commandfor="gallery-sheet"');
+
+    expect(skeleton.html).toContain('data-ui-demo="skeleton"');
+    expect(skeleton.html).toContain('aria-hidden="true"');
+    expect(skeleton.html).toContain('animate-pulse rounded-md bg-neutral-200 h-4 w-40');
+
+    expect(table.html).toContain('data-ui-demo="table"');
+    expect(table.html).toContain('<caption class="mt-3 text-sm text-neutral-500">');
+    expect(table.html).toContain('<thead class="border-b border-neutral-200 bg-neutral-50">');
+    expect(table.html).toContain('<th class="h-10 px-3 text-left align-middle');
+    expect(table.html).toContain('scope="row">INV-0042</th>');
+    expect(table.html).toContain('colspan="3"');
   });
 });
 
