@@ -43,6 +43,7 @@ export interface CallExpressionModel {
   argumentPropertyAccesses: readonly (readonly PropertyAccessPathModel[])[];
   argumentSpans: readonly SourceSpan[];
   argumentStringLiteralArrayValues: readonly (readonly string[] | null)[];
+  argumentStaticValues: readonly (StaticLiteralValue | undefined)[];
   end: number;
   exportedConstName?: string;
   name: string;
@@ -79,6 +80,7 @@ export interface JsxAttributeModel {
   expressionEnd?: number;
   expressionPropertyAccesses?: readonly PropertyAccessPathModel[];
   expressionStart?: number;
+  expressionStaticValue?: StaticLiteralValue;
   name: string;
   start: number;
   value?: string;
@@ -1182,6 +1184,7 @@ function callExpressionModel(
     argumentStringLiteralArrayValues: node.arguments.map((argument) =>
       stringLiteralArrayValuesFromExpression(argument),
     ),
+    argumentStaticValues: node.arguments.map((argument) => staticLiteralValue(argument)),
     end: node.getEnd(),
     ...exportedConstInitializerName(node),
     name: node.expression.getText(sourceFile),
@@ -1258,8 +1261,16 @@ function jsxAttributeExpression(
     expressionEnd,
     expressionPropertyAccesses: propertyAccessPathModels(sourceFile, initializer.expression),
     expressionStart,
+    ...jsxAttributeExpressionStaticValue(initializer.expression),
     ...zeroArgArrowModel(sourceFile, source, initializer.expression),
   };
+}
+
+function jsxAttributeExpressionStaticValue(
+  expression: ts.Expression,
+): { expressionStaticValue: StaticLiteralValue } | {} {
+  const value = staticLiteralValue(expression);
+  return value === undefined ? {} : { expressionStaticValue: value };
 }
 
 function solePropertyAccessPathFromExpression(expression: ts.Expression): string | null {
@@ -1423,22 +1434,22 @@ function stateReturnStaticValue(
   expression: ts.ObjectLiteralExpression,
 ): { staticValue: Record<string, StaticLiteralValue> } | {} {
   const value = staticObjectLiteralValue(expression);
-  return value ? { staticValue: value } : {};
+  return value === undefined ? {} : { staticValue: value };
 }
 
 function staticObjectLiteralValue(
   expression: ts.ObjectLiteralExpression,
-): Record<string, StaticLiteralValue> | null {
+): Record<string, StaticLiteralValue> | undefined {
   const value: Record<string, StaticLiteralValue> = {};
 
   for (const property of expression.properties) {
-    if (!ts.isPropertyAssignment(property)) return null;
+    if (!ts.isPropertyAssignment(property)) return undefined;
 
     const key = propertyNameText(property.name);
-    if (!key) return null;
+    if (!key) return undefined;
 
     const literal = staticLiteralValue(property.initializer);
-    if (literal === undefined) return null;
+    if (literal === undefined) return undefined;
     value[key] = literal;
   }
 

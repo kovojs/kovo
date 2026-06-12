@@ -4,7 +4,7 @@ import {
   type ComponentModuleModel,
   type JsxElementModel,
 } from '../scan/parse.js';
-import { literalStringValue, parseLiteralObject, type StaticLiteralValue } from '../scan/object.js';
+import type { StaticLiteralValue } from '../scan/object.js';
 import { escapeAttribute, removeJsxAttributes, type SourceReplacement } from '../shared.js';
 
 export interface NavigationLowering {
@@ -60,7 +60,7 @@ export function navigationHrefLowering(
   const replacements: SourceReplacement[] = [];
   const staticHrefCalls = callExpressions(model)
     .filter((item) => item.name === 'href')
-    .map((call) => ({ call, lowered: lowerStaticHrefCall(call.arguments) }))
+    .map((call) => ({ call, lowered: lowerStaticHrefCall(call.argumentStaticValues) }))
     .filter(
       (item): item is { call: (typeof item)['call']; lowered: string } => item.lowered !== null,
     );
@@ -71,7 +71,7 @@ export function navigationHrefLowering(
     .filter((item) => item.name === 'href' && item.expression !== undefined)
     .sort((left, right) => right.start - left.start)) {
     const target =
-      literalStringValue(attribute.expression ?? '') ??
+      staticStringValue(attribute.expressionStaticValue) ??
       staticHrefCalls.find(
         ({ call }) =>
           call.start === attribute.expressionStart && call.end === attribute.expressionEnd,
@@ -100,12 +100,13 @@ function isWithinReplacement(call: { end: number; start: number }, replacement: 
   return call.start >= replacement.start && call.end <= replacement.end;
 }
 
-function lowerStaticHrefCall(args: readonly string[]): string | null {
-  const [pathArg, optionsArg] = args.map((arg) => arg.trim());
-  const path = literalStringValue(pathArg ?? '');
+function lowerStaticHrefCall(args: readonly (StaticLiteralValue | undefined)[]): string | null {
+  const [pathArg, optionsArg] = args;
+  const path = staticStringValue(pathArg);
   if (!path) return null;
 
-  const options = parseLiteralObject(optionsArg ?? '{}');
+  const options =
+    optionsArg === undefined ? {} : staticNavigationObjectValue(optionsArg, { nested: true });
   if (options === null) return null;
 
   const params = objectRecordValue(options.params);
@@ -122,10 +123,9 @@ function navigationObjectAttributeValue(
   element: JsxElementModel,
   name: string,
 ): StaticNavigationObject | null | undefined {
-  const expression = element.attributes.find((attribute) => attribute.name === name)?.expression;
-  if (expression === undefined) return undefined;
-  const value = parseLiteralObject(expression);
-  return value ? navigationObjectValue(value) : null;
+  const attribute = element.attributes.find((item) => item.name === name);
+  if (attribute?.expression === undefined) return undefined;
+  return staticNavigationObjectValue(attribute.expressionStaticValue, { nested: false });
 }
 
 function objectRecordValue(
@@ -136,10 +136,23 @@ function objectRecordValue(
 }
 
 function navigationObjectValue(value: StaticLiteralValue | null): StaticNavigationObject | null {
+  return staticNavigationObjectValue(value, { nested: false });
+}
+
+function staticNavigationObjectValue(
+  value: StaticLiteralValue | undefined | null,
+  options: { nested: boolean },
+): StaticNavigationObject | null {
   if (typeof value !== 'object' || value === null) return null;
-  return Object.values(value).every((entry) => typeof entry !== 'object' || entry === null)
+  return Object.values(value).every(
+    (entry) => options.nested || typeof entry !== 'object' || entry === null,
+  )
     ? (value as StaticNavigationObject)
     : null;
+}
+
+function staticStringValue(value: StaticLiteralValue | undefined): string | null {
+  return typeof value === 'string' ? value : null;
 }
 
 function buildStaticHref(

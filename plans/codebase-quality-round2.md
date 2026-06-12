@@ -811,6 +811,15 @@ pipeline throws the tree away and communicates via mutated source text.
       `pnpm exec vitest --run packages/compiler/src/scan/parse.test.ts packages/compiler/src/state-events.test.ts -t "static literal state|non-static state|stamps static island-local state|preserves apostrophes"`,
       `pnpm exec vitest --run packages/compiler/src`, and
       `pnpm exec vp check packages/compiler/src/scan/parse.ts packages/compiler/src/scan/parse.test.ts packages/compiler/src/emit/server.ts`.
+      Additional evidence 2026-06-12: `scan/parse.ts` now records parser-owned static literal
+      values for call arguments and JSX attribute expressions, and `lower/navigation.ts`
+      consumes those facts for static `href(...)` option objects plus `<Link params/search>`
+      attributes instead of reparsing object-literal snippets through `parseLiteralObject`.
+      Unsupported object literals now stay `undefined` rather than being conflated with a real
+      `null` literal. Same-session evidence:
+      `pnpm exec vitest --run packages/compiler/src/scan/parse.test.ts packages/compiler/src/navigation-lowering.test.ts`,
+      `pnpm exec vp check packages/compiler/src/scan/parse.ts packages/compiler/src/scan/parse.test.ts packages/compiler/src/lower/navigation.ts packages/compiler/src/navigation-lowering.test.ts`,
+      and `rg -n "parseLiteralObject|literalStringValue" packages/compiler/src/lower/navigation.ts packages/compiler/src/scan/parse.ts`.
       Additional evidence 2026-06-12: the legacy source-returning compatibility wrappers
       `lowerViewTransitions`, `lowerPlatformBehaviors`, `lowerNavigationLinks`,
       `lowerNavigationHrefs`, and `serverRenderSource` were removed from production compiler

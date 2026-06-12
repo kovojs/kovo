@@ -354,11 +354,44 @@ export const CartBadge$isEmpty = derive(["cart"], (cart: Cart) => cart.count ===
       [],
       ['product.unitPrice', 'clientOnly'],
     ]);
+    expect(renderOnce?.argumentStaticValues).toEqual([
+      undefined,
+      'cart.discount',
+      undefined,
+      undefined,
+    ]);
     expect(derive?.argumentStringLiteralArrayValues).toEqual([['cart'], null]);
+    expect(derive?.argumentStaticValues).toEqual([undefined, undefined]);
     expect(derive?.argumentArrowFunctionParts).toEqual([
       null,
       { expression: 'cart.count === 0', param: 'cart' },
     ]);
+  });
+
+  it('records static literal JSX attribute expression values', () => {
+    const source = `
+export const ProductLinks = component('product-links', {
+  render: () => (
+    <Link
+      to="/products/:id"
+      params={{ id: 'p1', featured: true, page: 2 }}
+      search={{ sort: 'price', discounted: false }}
+    >
+      Product
+    </Link>
+  ),
+});
+`;
+    const link = jsxElements(parseComponentModule('product-links.tsx', source)).find(
+      (element) => element.tag === 'Link',
+    );
+
+    expect(link?.attributes.find((attribute) => attribute.name === 'params')).toMatchObject({
+      expressionStaticValue: { featured: true, id: 'p1', page: 2 },
+    });
+    expect(link?.attributes.find((attribute) => attribute.name === 'search')).toMatchObject({
+      expressionStaticValue: { discounted: false, sort: 'price' },
+    });
   });
 
   it('extracts concise arrow function parts through the TypeScript parser', () => {
