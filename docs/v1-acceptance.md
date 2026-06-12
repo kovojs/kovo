@@ -33,6 +33,7 @@ It keeps local runnability separate from the external evidence required by SPEC
 | 2026-06-12 | TBD      | Pre-launch external checks   | `docs/prelaunch-checklist.md` required checks and evidence ledgers.                                    | Trademark, domain, npm-scope, and linguistic evidence remain missing.           | pending external checks                 |
 | 2026-06-12 | Codex    | Local integration acceptance | `pnpm run acceptance` at commit `5e693a7`.                                                             | check, test, browser, build, perf, conformance, and fw-check gates passed.      | passed local run                        |
 | 2026-06-12 | Codex    | Local integration acceptance | `pnpm run acceptance` at commit `036e494`.                                                             | check, test, browser, build, perf, conformance, and fw-check gates passed.      | passed local run                        |
+| 2026-06-12 | Codex    | Local integration acceptance | `pnpm run acceptance` at commit `ec876f5`.                                                             | check, test, browser, build, perf, conformance, and fw-check gates passed.      | passed local run                        |
 | 2026-06-12 | Codex    | Pre-launch ledger honesty    | `docs/prelaunch-checklist.md` Dated Audit Ledger plus the four required evidence ledger sections.      | Evidence packet is reviewable; external launch evidence is still absent.        | packet ready; external evidence pending |
 
 ## Acceptance Command Set
@@ -64,6 +65,7 @@ the intended v1 commit after external evidence is complete.
 | ---------- | ----------------- | --------------------- | ------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
 | 2026-06-12 | `5e693a7`         | `pnpm run acceptance` | passed  | Local round9 integration run passed in terminal output: check, test, browser, build, perf, conformance, fw-check.                                    |
 | 2026-06-12 | `036e494`         | `pnpm run acceptance` | passed  | Local round25 integration run passed in terminal output: check, test, browser, build, perf, conformance, fw-check. This is not the final freeze run. |
+| 2026-06-12 | `ec876f5`         | `pnpm run acceptance` | passed  | Local round28 integration run passed in terminal output: check, test, browser, build, perf, conformance, fw-check. This is not the final freeze run. |
 | TBD        | TBD at freeze run | `pnpm run acceptance` | pending | Final clean-checkout freeze run still required after external legibility and pre-launch evidence.                                                    |
 
 ## Final Clean-Checkout Checklist
