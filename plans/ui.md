@@ -242,6 +242,18 @@ jiso-dialog` resolves dashed wire names and prints provenance including package,
       and `git diff --check`. Caveat: this completes the DOM-light H1 helper slice; styled
       `@jiso/ui` wrappers and gallery conformance remain tracked by U3+ and the gallery gates.
 - [ ] H2 wave 2 primitives (stateful L1 islands): tabs, radio-group, toggle-group, checkbox-group, toolbar, number-field, otp-field, scroll-area, field/fieldset as `form()` integration.
+      Partial evidence 2026-06-12: `packages/headless-ui/src/primitives/field.ts`
+      adds the H2 field/fieldset form-integration primitive as DOM-light label/help/error
+      wiring around native typed `form()` controls per SPEC §6.3: field root/label/control,
+      description/error, fieldset root, and legend attribute builders preserve real `name`,
+      `required`, and `disabled` control attributes while deriving `aria-describedby`,
+      `aria-invalid`, `data-invalid`, and `data-required`. It is exported through
+      `@jiso/headless-ui`, `@jiso/headless-ui/primitives`, and
+      `@jiso/headless-ui/primitives/field`. Same-session evidence:
+      `pnpm --filter @jiso/headless-ui exec vitest --run src/primitives/field.test.ts`,
+      `pnpm --filter @jiso/headless-ui run lint:primitives`,
+      `pnpm exec vp check packages/headless-ui/package.json packages/headless-ui/src/index.ts packages/headless-ui/src/primitives/index.ts packages/headless-ui/src/primitives/field.ts packages/headless-ui/src/primitives/field.test.ts plans/ui.md`,
+      and `git diff --check`. H2 remains open for the other wave 2 primitives and full gates.
 - [ ] H3 wave 3 primitives (list-driven & isomorphic): select, combobox, autocomplete, dropdown-menu, context-menu, menubar, navigation-menu, slider, toast, command.
 - [x] U1 token sheet + `cn()` + statically-analyzable variant helper (Tailwind-first, §13.1 discoverability rules).
       Evidence 2026-06-12: `packages/headless-ui/src/lib/class-names.ts`

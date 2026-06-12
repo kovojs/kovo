@@ -171,6 +171,24 @@ export type {
 } from './disclosure.js';
 
 export {
+  fieldControlAttributes,
+  fieldDescriptionAttributes,
+  fieldErrorAttributes,
+  fieldLabelAttributes,
+  fieldRootAttributes,
+  fieldsetLegendAttributes,
+  fieldsetRootAttributes,
+} from './field.js';
+export type {
+  FieldAttributeOptions,
+  FieldControlAttributeOptions,
+  FieldLabelAttributeOptions,
+  FieldMessageAttributeOptions,
+  FieldPrimitiveAttributes,
+  FieldsetAttributeOptions,
+} from './field.js';
+
+export {
   hoverCardContentAttributes,
   hoverCardContentBlur,
   hoverCardContentFocus,

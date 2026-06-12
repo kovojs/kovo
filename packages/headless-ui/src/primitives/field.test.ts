@@ -1,0 +1,151 @@
+import { describe, expect, it } from 'vitest';
+
+import {
+  fieldControlAttributes as exportedFieldControlAttributes,
+  fieldDescriptionAttributes as exportedFieldDescriptionAttributes,
+  fieldErrorAttributes as exportedFieldErrorAttributes,
+  fieldLabelAttributes as exportedFieldLabelAttributes,
+  fieldRootAttributes as exportedFieldRootAttributes,
+  fieldsetLegendAttributes as exportedFieldsetLegendAttributes,
+  fieldsetRootAttributes as exportedFieldsetRootAttributes,
+} from '../index.js';
+import {
+  fieldControlAttributes,
+  fieldDescriptionAttributes,
+  fieldErrorAttributes,
+  fieldLabelAttributes,
+  fieldRootAttributes,
+  fieldsetLegendAttributes,
+  fieldsetRootAttributes,
+} from './field.js';
+
+describe('headless-ui field primitive', () => {
+  it('builds field root and label attributes from shared field state', () => {
+    expect(
+      fieldRootAttributes({
+        disabled: true,
+        id: 'email-field',
+        invalid: true,
+        required: true,
+      }),
+    ).toEqual({
+      'data-disabled': '',
+      'data-invalid': '',
+      'data-required': '',
+      id: 'email-field',
+    });
+
+    expect(
+      fieldLabelAttributes({
+        controlId: 'email',
+        disabled: true,
+        id: 'email-label',
+        required: true,
+      }),
+    ).toEqual({
+      'data-disabled': '',
+      'data-required': '',
+      for: 'email',
+      id: 'email-label',
+    });
+  });
+
+  it('wires a native named control for typed form integration', () => {
+    expect(
+      fieldControlAttributes({
+        descriptionId: 'email-help',
+        errorId: 'email-error',
+        id: 'email',
+        invalid: true,
+        name: 'email',
+        required: true,
+      }),
+    ).toEqual({
+      'aria-describedby': 'email-help email-error',
+      'aria-invalid': 'true',
+      'data-invalid': '',
+      'data-required': '',
+      disabled: false,
+      id: 'email',
+      name: 'email',
+      required: true,
+    });
+  });
+
+  it('omits the error IDREF while a field is valid', () => {
+    expect(
+      fieldControlAttributes({
+        descriptionId: 'email-help',
+        errorId: 'email-error',
+        id: 'email',
+        name: 'email',
+      }),
+    ).toEqual({
+      'aria-describedby': 'email-help',
+      disabled: false,
+      id: 'email',
+      name: 'email',
+    });
+
+    expect(fieldControlAttributes({ id: 'email' })).toEqual({
+      disabled: false,
+      id: 'email',
+    });
+  });
+
+  it('builds description and alert-backed error message attributes', () => {
+    expect(fieldDescriptionAttributes({ id: 'email-help' })).toEqual({
+      id: 'email-help',
+    });
+
+    expect(fieldErrorAttributes({ disabled: true, id: 'email-error', visible: false })).toEqual({
+      'data-disabled': '',
+      'data-invalid': '',
+      hidden: true,
+      id: 'email-error',
+      role: 'alert',
+    });
+  });
+
+  it('builds fieldset and legend attributes for grouped form controls', () => {
+    expect(
+      fieldsetRootAttributes({
+        descriptionId: 'shipping-help',
+        disabled: true,
+        errorId: 'shipping-error',
+        id: 'shipping',
+        invalid: true,
+        required: true,
+      }),
+    ).toEqual({
+      'aria-describedby': 'shipping-help shipping-error',
+      'aria-invalid': 'true',
+      'data-disabled': '',
+      'data-invalid': '',
+      'data-required': '',
+      disabled: true,
+      id: 'shipping',
+    });
+
+    expect(fieldsetLegendAttributes({ id: 'shipping-legend', required: true })).toEqual({
+      'data-required': '',
+      id: 'shipping-legend',
+    });
+  });
+
+  it('returns frozen attribute records', () => {
+    expect(Object.isFrozen(fieldRootAttributes())).toBe(true);
+    expect(Object.isFrozen(fieldControlAttributes())).toBe(true);
+    expect(Object.isFrozen(fieldsetRootAttributes())).toBe(true);
+  });
+
+  it('is exported through the package root', () => {
+    expect(exportedFieldRootAttributes).toBe(fieldRootAttributes);
+    expect(exportedFieldLabelAttributes).toBe(fieldLabelAttributes);
+    expect(exportedFieldControlAttributes).toBe(fieldControlAttributes);
+    expect(exportedFieldDescriptionAttributes).toBe(fieldDescriptionAttributes);
+    expect(exportedFieldErrorAttributes).toBe(fieldErrorAttributes);
+    expect(exportedFieldsetRootAttributes).toBe(fieldsetRootAttributes);
+    expect(exportedFieldsetLegendAttributes).toBe(fieldsetLegendAttributes);
+  });
+});

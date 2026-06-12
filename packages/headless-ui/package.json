@@ -14,6 +14,7 @@
     "./primitives/collapsible": "./src/primitives/collapsible.ts",
     "./primitives/dialog": "./src/primitives/dialog.ts",
     "./primitives/disclosure": "./src/primitives/disclosure.ts",
+    "./primitives/field": "./src/primitives/field.ts",
     "./primitives/hover-card": "./src/primitives/hover-card.ts",
     "./primitives/meter": "./src/primitives/meter.ts",
     "./primitives/popover": "./src/primitives/popover.ts",
