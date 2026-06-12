@@ -12,23 +12,6 @@ export interface ViewTransitionLowering {
   stamps: ViewTransitionStamp[];
 }
 
-export function lowerViewTransitions(
-  source: string,
-  model: ComponentModuleModel,
-): {
-  replacements: SourceReplacement[];
-  source: string;
-  stamps: ViewTransitionStamp[];
-} {
-  const lowering = viewTransitionLowering(source, model);
-
-  return {
-    replacements: lowering.replacements,
-    source: applySourceReplacements(source, lowering.replacements),
-    stamps: lowering.stamps,
-  };
-}
-
 export function viewTransitionLowering(
   source: string,
   model: ComponentModuleModel,

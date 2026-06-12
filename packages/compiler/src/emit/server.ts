@@ -35,17 +35,6 @@ export function renderSource() {
 `;
 }
 
-export function serverRenderSource(
-  source: string,
-  handlers: readonly HandlerLowering[],
-  model: ComponentModuleModel,
-): string {
-  return applySourceReplacements(
-    source,
-    serverRenderLowering(source, handlers, model).replacements,
-  );
-}
-
 export function serverRenderLowering(
   source: string,
   handlers: readonly HandlerLowering[],

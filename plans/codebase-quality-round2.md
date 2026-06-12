@@ -811,6 +811,15 @@ pipeline throws the tree away and communicates via mutated source text.
       `pnpm exec vitest --run packages/compiler/src/scan/parse.test.ts packages/compiler/src/state-events.test.ts -t "static literal state|non-static state|stamps static island-local state|preserves apostrophes"`,
       `pnpm exec vitest --run packages/compiler/src`, and
       `pnpm exec vp check packages/compiler/src/scan/parse.ts packages/compiler/src/scan/parse.test.ts packages/compiler/src/emit/server.ts`.
+      Additional evidence 2026-06-12: the legacy source-returning compatibility wrappers
+      `lowerViewTransitions`, `lowerPlatformBehaviors`, `lowerNavigationLinks`,
+      `lowerNavigationHrefs`, and `serverRenderSource` were removed from production compiler
+      modules. The remaining compile path consumes patch-producing lowering APIs directly, and
+      a source audit shows no compiler call sites for those removed wrappers. Same-session
+      evidence:
+      `pnpm exec vitest --run packages/compiler/src/model-pipeline.test.ts packages/compiler/src/navigation-lowering.test.ts packages/compiler/src/platform-lowering.test.ts packages/compiler/src/view-transitions.test.ts packages/compiler/src/compile-component.test.ts`,
+      `pnpm exec vp check packages/compiler/src/lower/navigation.ts packages/compiler/src/lower/platform.ts packages/compiler/src/lower/view-transitions.ts packages/compiler/src/emit/server.ts`,
+      and `rg -n "lowerNavigationHrefs|lowerNavigationLinks|lowerViewTransitions|lowerPlatformBehaviors|serverRenderSource" packages/compiler/src`.
 - [x] **HIGH — Retire regex rewriting of handler bodies.** emit/client.ts:89
       (`/\bstate\b/g → ctx.state` corrupts `log('state changed')`), :96 (member-expression
       substitution inside string literals), lower/handlers.ts:262 (harvests params from string

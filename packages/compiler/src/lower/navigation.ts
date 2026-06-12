@@ -5,20 +5,7 @@ import {
   type JsxElementModel,
 } from '../scan/parse.js';
 import { literalStringValue, parseLiteralObject, type StaticLiteralValue } from '../scan/object.js';
-import {
-  applySourceReplacements,
-  escapeAttribute,
-  removeJsxAttributes,
-  type SourceReplacement,
-} from '../shared.js';
-
-export function lowerNavigationHrefs(source: string, model: ComponentModuleModel): string {
-  return applySourceReplacements(source, navigationHrefLowering(source, model).replacements);
-}
-
-export function lowerNavigationLinks(source: string, model: ComponentModuleModel): string {
-  return applySourceReplacements(source, navigationLinkLowering(source, model).replacements);
-}
+import { escapeAttribute, removeJsxAttributes, type SourceReplacement } from '../shared.js';
 
 export interface NavigationLowering {
   replacements: SourceReplacement[];

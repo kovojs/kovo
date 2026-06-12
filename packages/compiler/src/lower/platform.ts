@@ -3,7 +3,7 @@ import {
   type ComponentModuleModel,
   type DocumentElementActionModel,
 } from '../scan/parse.js';
-import { applySourceReplacements, escapeAttribute, type SourceReplacement } from '../shared.js';
+import { escapeAttribute, type SourceReplacement } from '../shared.js';
 
 export interface PlatformSubstitution {
   action: string;
@@ -16,23 +16,6 @@ export interface PlatformSubstitution {
 export interface PlatformBehaviorLowering {
   replacements: SourceReplacement[];
   substitutions: PlatformSubstitution[];
-}
-
-export function lowerPlatformBehaviors(
-  source: string,
-  model: ComponentModuleModel,
-): {
-  replacements: SourceReplacement[];
-  source: string;
-  substitutions: PlatformSubstitution[];
-} {
-  const lowering = platformBehaviorLowering(source, model);
-
-  return {
-    replacements: lowering.replacements,
-    source: applySourceReplacements(source, lowering.replacements),
-    substitutions: lowering.substitutions,
-  };
 }
 
 export function platformBehaviorLowering(
