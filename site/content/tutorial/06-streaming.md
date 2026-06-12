@@ -15,27 +15,27 @@ Step state: `site/tutorial/steps/06-streaming/`.
 
 The key design fact: deferred content is not a new mechanism. The chunks that arrive after the
 shell are the same `<fw-query>` and `<fw-fragment>` elements the mutation wire used in chapters
-4 and 5 — the fragment protocol reused within first render (SPEC §8, §9.1). Nothing new ships in
-the loader; nothing new needs auditing on the wire.
+4 and 5 — the fragment protocol reused within first render (SPEC §8). Nothing new ships in the
+loader; nothing new needs auditing on the wire.
 
 {{snippet:06-streaming/src/app.ts#deferred-stream}}
 
 The shell carries the cart badge (cheap, rendered inline) and a `<fw-defer>` placeholder with
-declared fallback content. The stream then appends the products query value and the product-list
-fragment; the loader morphs the fragment over the placeholder exactly as it would morph a
-mutation response (SPEC §9.1).
+declared fallback content. The stream then appends the products query value and the
+product-list fragment; the loader morphs the fragment over the placeholder exactly as it would
+morph a mutation response (SPEC §9.1).
 
 ## Assert the stream as a string
 
-A streamed response is still just text in order, so the guarantees are string assertions. First:
-the shell precedes the fragment — that is the whole point, paint now, hydrate nothing, fill in
-later:
+A streamed response is still just text in order, so the guarantees are string assertions.
+First: the shell precedes the fragment — that is the whole point. Paint now, hydrate nothing,
+fill in later:
 
 {{snippet:06-streaming/src/app.test.ts#defer-test}}
 
 Second, the ordering guarantee that keeps the client coherent: deferred query JSON arrives
-**before or with** its consumers (SPEC §8). A fragment can never render against data the
-document does not hold yet:
+**before or with** its consumers, so a fragment can never render against data the document does
+not hold yet (SPEC §8):
 
 {{snippet:06-streaming/src/app.test.ts#query-order-test}}
 
@@ -48,5 +48,5 @@ first paint; skip it when the data is cheap, because a placeholder that flashes 
 worse than content. The [streaming guide](/guides/streaming/) covers priority and HTTP/1.1
 considerations (SPEC §13.3).
 
-The app now renders fast, updates instantly, and degrades gracefully. What remains is the
+The app now paints fast, updates instantly, and degrades gracefully. What remains is the
 framework's biggest claim: proving all of this behavior — mechanically, without a browser.
