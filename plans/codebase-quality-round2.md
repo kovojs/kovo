@@ -1564,6 +1564,15 @@ params, relational API, `execute(sql)`, right/full joins, a string column named 
       `pnpm exec vitest --run packages/runtime/src/query-refetch.test.ts packages/runtime/src/query-store.test.ts packages/runtime/src/index.test.ts -t "hydrate|visible-return|refetch"`,
       `pnpm exec vp check packages/runtime/src/index.ts packages/runtime/src/query-refetch.ts packages/runtime/src/query-refetch.test.ts plans/codebase-quality-round2.md`,
       and `git diff --check`.
+      Additional bounded evidence 2026-06-12: extracted `packages/runtime/src/pending.ts` as
+      the subtractive seam for `fw-deps` parsing and SPEC §10.4 pending-island stamping;
+      `packages/runtime/src/index.ts` imports and re-exports that surface while keeping enhanced
+      mutation orchestration. `packages/runtime/src/pending.test.ts` pins the runtime-barrel
+      export, comma/whitespace dependency parsing, and stamp/unstamp behavior. Same-session
+      evidence:
+      `corepack pnpm exec vitest --run packages/runtime/src/pending.test.ts packages/runtime/src/index.test.ts -t "pending|optimistic|enhanced mutations"`
+      and
+      `corepack pnpm exec vp check packages/runtime/src/index.ts packages/runtime/src/pending.ts packages/runtime/src/pending.test.ts plans/codebase-quality-round2.md`.
 - [ ] **LOW** — `hydratedQueries` frozen at install (index.ts:330-342): queries introduced by
       later mutations never become refetch-eligible — fix or document as SPEC-intended;
       `unescapeHtml` missing `&#39;`/`&apos;` (wire-parser.ts:162-168) — pin the server↔runtime

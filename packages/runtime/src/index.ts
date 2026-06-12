@@ -37,6 +37,8 @@ import {
   resolveOptimisticKeys,
 } from './optimism.js';
 import type { MutationChangeRecord, OptimisticChange, OptimisticPlan } from './optimism.js';
+import { readDeps, stampPendingQueries } from './pending.js';
+import type { PendingRoot } from './pending.js';
 import { deferredStreamChunks, readAttribute, tagClose, unescapeHtml } from './wire-parser.js';
 import type { QueryChunk } from './wire-parser.js';
 import type { DelegatedEvent, EventElementLike, RuntimeErrorContext } from './events.js';
@@ -136,6 +138,8 @@ export type {
   PendingOptimism,
   PendingTransform,
 } from './optimism.js';
+export { stampPendingQueries } from './pending.js';
+export type { PendingElementLike, PendingRoot } from './pending.js';
 
 export interface DeriveDefinition<Inputs extends readonly string[], Value> {
   inputs: Inputs;
@@ -582,16 +586,6 @@ export interface TargetCollectorRoot {
     getAttribute(name: string): string | null;
     id?: string;
   }>;
-}
-
-export interface PendingElementLike {
-  getAttribute(name: string): string | null;
-  removeAttribute(name: string): void;
-  setAttribute(name: string, value: string): void;
-}
-
-export interface PendingRoot {
-  querySelectorAll(selector: string): Iterable<PendingElementLike>;
 }
 
 export interface EnhancedMutationFetchOptions {
@@ -1086,31 +1080,6 @@ function publishSuccessfulMutation(
   options.broadcast?.publish(body, changes);
 }
 
-export function stampPendingQueries(
-  root: PendingRoot,
-  queryNames: readonly string[],
-  pending: boolean,
-): string[] {
-  const affected = new Set(queryNames);
-  const stamped: string[] = [];
-
-  for (const element of root.querySelectorAll('[fw-deps]')) {
-    const deps = readDeps(element.getAttribute('fw-deps'));
-    if (!deps.some((dep) => affected.has(dep))) continue;
-
-    if (pending) {
-      element.setAttribute('fw-pending', '');
-      element.setAttribute('aria-busy', 'true');
-    } else {
-      element.removeAttribute('fw-pending');
-      element.removeAttribute('aria-busy');
-    }
-    stamped.push(deps.join(','));
-  }
-
-  return stamped;
-}
-
 function stampEnhancedMutationPending(
   options: EnhancedMutationSubmitOptions,
   pending: boolean,
@@ -1228,13 +1197,6 @@ function readLiveTargets(root: TargetCollectorRoot): string[] {
   }
 
   return [...targets];
-}
-
-function readDeps(value: string | null): string[] {
-  return (value ?? '')
-    .split(/[\s,]+/)
-    .map((dep) => dep.trim())
-    .filter(Boolean);
 }
 
 let generatedIdemCounter = 0;
