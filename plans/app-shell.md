@@ -154,6 +154,16 @@ Scope: SPEC addition (proposed §9.5 "The request shell"), `@jiso/server` shell 
       static-export assets, and exported HTML/asset bytes; the existing Vite integration suite
       still proves the public `./vite.js` API path. Same-session verification ran
       `corepack pnpm exec vitest --run packages/server/src/vite-build.test.ts packages/server/src/vite.test.ts packages/server/src/vite-manifest.test.ts`.
+      Additional evidence 2026-06-12: Vite dev request ownership, SSR dev middleware loading,
+      and dev diagnostic interception moved out of the plugin/build coordinator into
+      `packages/server/src/vite-dev.ts`; `vite.ts` now keeps the public re-export path plus the
+      direct plugin hook wiring. `packages/server/src/vite-dev.test.ts` imports the seam directly
+      and proves dispatch-table ownership plus page/mutation diagnostic responses, while the
+      existing Vite suites continue to prove the public `./vite.js` API path. Same-session
+      verification ran
+      `corepack pnpm exec vitest --run packages/server/src/vite-dev.test.ts packages/server/src/vite.test.ts packages/server/src/vite-diagnostics.test.ts`
+      and
+      `corepack pnpm exec vp check packages/server/src/vite.ts packages/server/src/vite-dev.ts packages/server/src/vite-dev.test.ts packages/server/src/vite-diagnostics.test.ts packages/server/src/vite.test.ts`.
       Remaining R5 work: compiler/plugin build hooks must still supply real route-entry maps
       and compiled module sources from compiler facts, consume the asset/module plan in
       production package builds, and decide the final plugin hook ownership.

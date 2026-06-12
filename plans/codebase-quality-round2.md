@@ -3495,6 +3495,15 @@ As each phase splits a source module, split its tests in the same commit.
       `pnpm exec vitest --run packages/server/src/*.test.ts`,
       `pnpm exec vp check packages/server/src/document.ts packages/server/src/document-core.ts packages/server/src/document-diagnostics.ts packages/server/src/document.test.ts packages/server/src/shell.test.ts packages/server/src/response.test.ts plans/codebase-quality-round2.md`,
       and `git diff --check`.
+      Additional evidence 2026-06-12: Vite dev middleware ownership and diagnostic interception
+      moved out of `packages/server/src/vite.ts` into `packages/server/src/vite-dev.ts`,
+      leaving `vite.ts` as the public Vite API/re-export and plugin hook coordinator. The direct
+      seam test in `packages/server/src/vite-dev.test.ts` covers dispatch-table request
+      ownership plus page and mutation diagnostic response rendering; public API integration
+      remains covered by the existing Vite suites. Same-session evidence:
+      `corepack pnpm exec vitest --run packages/server/src/vite-dev.test.ts packages/server/src/vite.test.ts packages/server/src/vite-diagnostics.test.ts`,
+      `corepack pnpm exec vp check packages/server/src/vite.ts packages/server/src/vite-dev.ts packages/server/src/vite-dev.test.ts packages/server/src/vite-diagnostics.test.ts packages/server/src/vite.test.ts`,
+      and `git diff --check`.
 - [ ] runtime/index.test.ts (4,435 lines, mutation tests under "query store") → per-module
       files; `Fake*` classes to a shared `test-fixtures.ts`; direct unit tests for wire-parser,
       handlers, morph; replace counted-microtask flushing with a single `flush()` helper.
