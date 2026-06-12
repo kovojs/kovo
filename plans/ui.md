@@ -14,8 +14,27 @@ jiso-dialog` resolves dashed wire names and prints provenance including package,
       `packages/compiler/src/index.test.ts`, and `packages/cli/src/index.test.ts`. Same-session
       evidence: `pnpm exec vitest --run packages/core/src/graph.test.ts packages/compiler/src/index.test.ts packages/cli/src/index.test.ts`
       and `pnpm run check`. Remaining: feed real package-discovery facts into app builds.
+      Additional evidence 2026-06-11: `@jiso/core` now exports
+      `packageComponentPrefixFactFromPackageManifest()`, which derives package-prefix facts from
+      real `package.json` metadata including the new `packages/headless-ui/package.json`
+      `jiso.prefix: "jiso-"` manifest field and optional app-side effective-prefix aliases.
+      Same-session evidence:
+      `pnpm exec vitest --run packages/core/src/package-prefix.test.ts packages/headless-ui/src/tooling/primitive-handler-lint.test.ts`
+      and
+      `pnpm exec vp check packages/core/src/package-prefix.ts packages/core/src/package-prefix.test.ts packages/core/src/index.ts packages/headless-ui/src/index.ts packages/headless-ui/src/tooling/index.ts packages/headless-ui/src/tooling/primitive-handler-lint.ts packages/headless-ui/src/tooling/primitive-handler-lint.test.ts packages/headless-ui/package.json pnpm-lock.yaml`.
+      Remaining: feed those discovered facts into app/compiler/Vite build flow.
 - [x] F3 behavior-attribute namespace: `fw-*` stays framework-reserved; package behaviors ride the package prefix (`jiso-tooltip="id"`), wired through FW221 IDREF validation. Evidence: `packages/compiler/src/validate/package-prefixes.ts` rejects package `fw-*` prefixes with FW234 per SPEC §6.1.1, `packages/compiler/src/validate/markup.ts` feeds package-declared IDREF behavior attributes through FW221, and `packages/compiler/src/index.test.ts` covers valid/missing package-prefixed behavior IDREFs plus `fw-*` reservation.
 - [ ] F4 primitive-author lint: chained handlers contractually no-op on `event.defaultPrevented` (lives in `@jiso/headless-ui` tooling, not the loader).
+      Partial evidence 2026-06-11: `packages/headless-ui/src/tooling/primitive-handler-lint.ts`
+      provides a dependency-light tooling API that scans marked primitive handlers and reports
+      `JISO_HUI001` when they do not begin by no-oping on the first event parameter's
+      `defaultPrevented` state, with diagnostic text citing `SPEC.md` section 4.6. Focused tests
+      cover function and arrow handlers, accepted guards, missing guards, and wrong-event guards.
+      Same-session evidence:
+      `pnpm exec vitest --run packages/core/src/package-prefix.test.ts packages/headless-ui/src/tooling/primitive-handler-lint.test.ts`
+      and
+      `pnpm exec vp check packages/core/src/package-prefix.ts packages/core/src/package-prefix.test.ts packages/core/src/index.ts packages/headless-ui/src/index.ts packages/headless-ui/src/tooling/index.ts packages/headless-ui/src/tooling/primitive-handler-lint.ts packages/headless-ui/src/tooling/primitive-handler-lint.test.ts packages/headless-ui/package.json pnpm-lock.yaml`.
+      Remaining: wire the lint API as a package script/CLI gate over real primitive source.
 - [ ] F5 platform audit: CSS anchor positioning + `@starting-style`/`transition-behavior: allow-discrete` coverage check; lazy-loaded floating fallback module decided.
 - [ ] H0 shared lib: state-attributes, keyboard/menu navigation maps, typeahead, change-details (reason + `defaultPrevented` contract), positioning fallback.
 - [ ] H1 wave 1 primitives (L0-heavy): dialog, alert-dialog, popover, tooltip, hover-card, collapsible, accordion, separator, progress, meter, avatar, toggle, switch, checkbox.
