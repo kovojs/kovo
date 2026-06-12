@@ -2992,6 +2992,17 @@ Verification: server vitest + wire fixtures byte-for-byte acceptance.
       `corepack pnpm exec vitest --run examples/commerce/src/app.test.ts`,
       `corepack pnpm exec vp check examples/commerce/src/app.ts examples/commerce/src/app.test.ts examples/commerce/src/queries.ts examples/commerce/src/generated/graph.json examples/commerce/src/generated/touch-graph.ts plans/codebase-quality-round2.md`,
       and `git diff --check`.
+      Additional evidence 2026-06-12: commerce cart page metadata now flows through the shared
+      `commerceCartPageMeta(loadCartQuery(createCommerceDb()))` source-of-truth path for
+      `commerceGraph`, while `scripts/emit-graph.mjs` consumes the same metadata formatter without
+      importing runtime-heavy app modules. `app.test.ts` verifies the committed graph artifact plus
+      runtime `renderCommercePageHints()` output agree with the real loader result.
+      Same-session evidence:
+      `corepack pnpm --filter @jiso/example-commerce run emit-graph -- --check`,
+      `corepack pnpm exec vitest --run examples/commerce/src/app.test.ts -t "ships graph facts"`,
+      `corepack pnpm exec vitest --run examples/commerce/src/app.test.ts`,
+      `corepack pnpm exec vp check examples/commerce/src/app.ts examples/commerce/src/app.test.ts examples/commerce/src/page-meta.ts examples/commerce/scripts/emit-graph.mjs plans/codebase-quality-round2.md`,
+      and `git diff --check`.
 - [x] **MED — Typecheck the example and spikes.** `examples/commerce` and three of four
       conformance spikes sit outside every tsconfig (root includes only `packages/**`), so the
       registry-augmentation showcase (generated/touch-graph.ts:43-50) may never be
@@ -3513,6 +3524,12 @@ As each phase splits a source module, split its tests in the same commit.
       Same-session evidence:
       `corepack pnpm exec vitest --run packages/test/src/html-fragment.test.ts packages/test/src/page.test.ts`
       and `corepack pnpm exec vitest --run packages/test/src`.
+      Additional evidence 2026-06-12: `packages/test/src/index.ts` was re-inspected and is now a
+      29-line public export barrel only; no harness, verifier, SQL, PGlite, page, or assertion
+      behavior remains there to split. Same-session evidence:
+      `corepack pnpm exec vitest --run packages/test/src`,
+      `corepack pnpm exec vp check packages/test/src/index.ts plans/codebase-quality-round2.md`,
+      and `git diff --check`.
       Additional evidence 2026-06-12: Drizzle runtime/static package-surface coverage moved from
       `packages/drizzle/src/index.test.ts` into `packages/drizzle/src/runtime-surface.test.ts`,
       leaving static extraction coverage in the Drizzle monolith. Same-session evidence:

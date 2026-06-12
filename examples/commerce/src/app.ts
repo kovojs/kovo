@@ -9,7 +9,6 @@ import {
   escapeHtml,
   guards,
   i18n,
-  meta,
   metaFromQuery,
   mutation,
   notFound,
@@ -44,9 +43,11 @@ import { CartBadge } from './generated/cart-badge.js';
 import { OrderHistory } from './generated/order-history.js';
 import * as productGridComponent from './generated/product-grid.js';
 import { commerceTouchGraph } from './generated/touch-graph.js';
+import { commerceCartPageMeta } from './page-meta.js';
 import { cartQuery, orderHistoryQuery, productGridQuery } from './queries.js';
 
 export { commerceTouchGraph } from './generated/touch-graph.js';
+export { commerceCartPageMeta } from './page-meta.js';
 
 export interface CommerceDb {
   attachments: {
@@ -605,12 +606,7 @@ export const commerceMessages = i18n('en-US', {
   productStock: '{count} in stock',
 });
 
-export const commerceMeta = metaFromQuery(cartQuery, (cart) =>
-  meta({
-    description: `Browse products and checkout with ${cart.count} verifiable cart item.`,
-    title: `Jiso Commerce (${cart.count})`,
-  }),
-);
+export const commerceMeta = metaFromQuery(cartQuery, commerceCartPageMeta);
 
 export function loadCartQuery(db: CommerceDb): CartQueryResult {
   const cartItems = db.read('cart_items') as CommerceDb['cartItems'];
@@ -1056,10 +1052,7 @@ export const commerceGraph = {
     },
     {
       i18n: ['en-US:cartLabel,productStock'],
-      meta: {
-        description: 'Browse products and checkout with 0 verifiable cart item.',
-        title: 'Jiso Commerce (0)',
-      },
+      meta: commerceCartPageMeta(loadCartQuery(createCommerceDb())),
       modulepreloads: [],
       prefetch: false,
       queries: ['cart', 'productGrid', 'orderHistory'],

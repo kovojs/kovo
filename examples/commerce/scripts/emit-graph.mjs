@@ -18,6 +18,7 @@ registerHooks({
 const { deriveAppGraph } = await import('@jiso/compiler/graph');
 const { deriveInvalidationRegistry, serializeInvalidationRegistry } =
   await import('@jiso/drizzle/static');
+const { commerceCartPageMeta } = await import('../src/page-meta.js');
 
 const scriptDir = dirname(fileURLToPath(import.meta.url));
 const commerceRoot = resolve(scriptDir, '..');
@@ -25,6 +26,7 @@ const sourcePath = resolve(commerceRoot, 'src/app.ts');
 const graphPath = resolve(commerceRoot, 'src/generated/graph.json');
 const touchGraphPath = resolve(commerceRoot, 'src/generated/touch-graph.ts');
 const source = readFileSync(sourcePath, 'utf8');
+const starterCart = { count: 0 };
 
 const lineNumberFor = (needle) => {
   const index = source.indexOf(needle);
@@ -192,10 +194,7 @@ const graphDeclarations = {
     },
     {
       i18n: ['en-US:cartLabel,productStock'],
-      meta: {
-        description: 'Browse products and checkout with 0 verifiable cart item.',
-        title: 'Jiso Commerce (0)',
-      },
+      meta: commerceCartPageMeta(starterCart),
       modulepreloads: [],
       prefetch: false,
       queries: ['cart', 'productGrid', 'orderHistory'],

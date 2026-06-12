@@ -17,6 +17,7 @@ import {
   commerceAttachmentStorage,
   commerceCsrf,
   commerceCsrfInput,
+  commerceCartPageMeta,
   commerceGraph,
   commerceAuthCsrf,
   commercePageHints,
@@ -292,6 +293,12 @@ function productGridInput(after: string | null, limit?: number): ProductGridInpu
     ...(after ? { after } : {}),
     ...(limit === undefined ? {} : { limit }),
   };
+}
+
+function cartPageGraph(graph: { pages?: { route?: string; meta?: unknown }[] }) {
+  const page = graph.pages?.find((item) => item.route === '/cart');
+  if (!page) throw new Error('Missing /cart page graph fact');
+  return page;
 }
 
 describe('commerce example', () => {
@@ -1232,6 +1239,8 @@ describe('commerce example', () => {
       readFileSync(new URL('./generated/graph.json', import.meta.url), 'utf8'),
     );
     const commerceSource = readFileSync(new URL('./app.ts', import.meta.url), 'utf8');
+    const starterCart = loadCartQuery(createCommerceDb());
+    const cartMeta = commerceCartPageMeta(starterCart);
     const cartItemsLine = lineNumberFor(commerceSource, "request.db.write('cart_items'");
     const ordersLine = lineNumberFor(commerceSource, "request.db.write('orders'");
     const productsLine = lineNumberFor(commerceSource, "request.db.write('products'");
@@ -1241,6 +1250,12 @@ describe('commerce example', () => {
     expect(emitGraphScript).toContain("await import('@jiso/compiler/graph');");
     expect(emitGraphScript).not.toContain('const deriveAppGraph = ({ graph }) => ({ graph })');
     expect(graphArtifact).toEqual(commerceGraph);
+    expect(cartPageGraph(graphArtifact).meta).toEqual(cartMeta);
+    expect(cartPageGraph(commerceGraph).meta).toEqual(cartMeta);
+    expect(renderCommercePageHints(starterCart).html).toContain(`<title>${cartMeta.title}</title>`);
+    expect(renderCommercePageHints(starterCart).html).toContain(
+      `<meta name="description" content="${cartMeta.description}">`,
+    );
     expect(fwCheck(graphArtifact).output).toBe('fw-check/v1\nOK\n');
     expect(addToCart.registry?.touches).toBeUndefined();
     expect(addToCart.registry?.inferredTouches).toEqual(commerceTouchGraph['cart.addItem'].touches);
