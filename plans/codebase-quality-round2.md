@@ -616,7 +616,7 @@ pipeline throws the tree away and communicates via mutated source text.
       `pnpm exec vitest --run packages/compiler/src/scan/parse.test.ts packages/compiler/src/index.test.ts packages/compiler/src/shared.test.ts packages/compiler/src/navigation-lowering.test.ts packages/compiler/src/platform-lowering.test.ts`,
       `pnpm exec vp check packages/compiler/src/scan/parse.ts packages/compiler/src/scan/parse.test.ts packages/compiler/src/analyze/query-updates.ts`,
       and `git diff --check`.
-- [ ] **MED — Extract `src/types.ts`; break the layering inversion.** Canonical fact types live
+- [x] **MED — Extract `src/types.ts`; break the layering inversion.** Canonical fact types live
       in index.ts, which imports every phase; phases import back (bindings.ts:15-25, emit/server.ts:10,
       lower/handlers.ts:7), and three modules dodge the cycle with diverging private structural
       copies (emit/client.ts:4-32, emit/registry.ts:7-32, component-contracts.ts:21-55 — the
@@ -739,6 +739,16 @@ pipeline throws the tree away and communicates via mutated source text.
       `pnpm exec vitest --run packages/compiler/src/index.test.ts -t "handler captures|element params|registry metadata|server file"`
       and
       `pnpm exec vp check packages/compiler/src/types.ts packages/compiler/src/lower/handlers.ts packages/compiler/src/emit/client.ts packages/compiler/src/emit/server.ts packages/compiler/src/emit/registry.ts plans/codebase-quality-round2.md`.
+      Closing evidence 2026-06-12: `emitElementParamTypes` now lives beside the canonical
+      `ElementParam` fact in `packages/compiler/src/types.ts`, so `packages/compiler/src/emit/server.ts`
+      imports handler fact data and param-type attribute emission from the fact module instead of
+      depending on the handler-lowering phase. A current `rg` audit shows no compiler production
+      modules import public types back through `index.ts`, no duplicate `queryShapesFromFacts`,
+      shape-wrapper helpers, or `removeJsxAttribute(s)` implementations remain, and the former
+      `emit/server.ts -> lower/handlers.ts` dependency is gone. Same-session evidence:
+      `pnpm exec vitest --run packages/compiler/src/index.test.ts -t "handler captures|element params|registry metadata|server file"`,
+      `pnpm exec vp check packages/compiler/src/types.ts packages/compiler/src/lower/handlers.ts packages/compiler/src/emit/server.ts plans/codebase-quality-round2.md`,
+      and `git diff --check`.
 - [x] **MED — Move analysis out of validate/.** `collectQueryUpdatePlans` and coverage
       classification feed emit, not validation; positions travel through a module-global
       `WeakMap` (`updateCoverageSpans`, bindings.ts:45-48) read back in component-contracts.ts:271.

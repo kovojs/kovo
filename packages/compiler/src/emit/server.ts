@@ -1,7 +1,6 @@
 import { runInNewContext } from 'node:vm';
 
 import { compilerIrHeader } from '../ir.js';
-import { emitElementParamTypes } from '../lower/handlers.js';
 import { parseLiteralObject } from '../scan/object.js';
 import {
   componentOptionObjectKeys,
@@ -16,7 +15,11 @@ import {
   splitDepValue,
   type SourceReplacement,
 } from '../shared.js';
-import type { HandlerLowering, RenderEquivalenceCheck } from '../types.js';
+import {
+  emitElementParamTypes,
+  type HandlerLowering,
+  type RenderEquivalenceCheck,
+} from '../types.js';
 
 export function emitServerModule(renderedSource: string): string {
   return `${compilerIrHeader}

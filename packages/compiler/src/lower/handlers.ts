@@ -120,16 +120,6 @@ export function clientModuleVersion(source: string): string {
   return hash.toString(16).padStart(8, '0');
 }
 
-export function emitElementParamTypes(params: readonly ElementParam[]): string {
-  const typedParams = params.filter((param) => param.type !== 'string');
-  if (typedParams.length === 0) return '';
-
-  const entries = typedParams
-    .map((param) => `${paramNameFromAttribute(param.attributeName)}:${param.type}`)
-    .join(',');
-  return `fw-param-types="${entries}"`;
-}
-
 function eventAttributes(model: ComponentModuleModel): Array<{
   attributeEnd: number;
   attributeStart: number;
@@ -425,10 +415,4 @@ function paramNameForExpression(expression: string): string {
     .replace(/[^A-Za-z0-9]+/g, '-')
     .replace(/^-|-$/g, '')
     .toLowerCase();
-}
-
-function paramNameFromAttribute(attributeName: string): string {
-  return attributeName
-    .replace(/^data-p-/, '')
-    .replace(/-([a-z0-9])/g, (_, char: string) => char.toUpperCase());
 }

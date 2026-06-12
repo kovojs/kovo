@@ -102,6 +102,22 @@ export interface ElementParam {
 
 export type ElementParamType = 'boolean' | 'number' | 'string';
 
+export function emitElementParamTypes(params: readonly ElementParam[]): string {
+  const typedParams = params.filter((param) => param.type !== 'string');
+  if (typedParams.length === 0) return '';
+
+  const entries = typedParams
+    .map((param) => `${elementParamNameFromAttribute(param.attributeName)}:${param.type}`)
+    .join(',');
+  return `fw-param-types="${entries}"`;
+}
+
+function elementParamNameFromAttribute(attributeName: string): string {
+  return attributeName
+    .replace(/^data-p-/, '')
+    .replace(/-([a-z0-9])/g, (_, char: string) => char.toUpperCase());
+}
+
 export function createEmptyCompileResult(): CompileResult {
   return {
     componentGraphFacts: [],
