@@ -6,6 +6,9 @@
     ".": "./src/index.ts",
     "./tooling": "./src/tooling/index.ts"
   },
+  "scripts": {
+    "lint:primitives": "rm -rf .lint-primitives && tsc --ignoreConfig --module NodeNext --moduleResolution NodeNext --target ES2024 --types node --skipLibCheck --strict --outDir .lint-primitives --rootDir src src/tooling/lint-primitives.ts && node .lint-primitives/tooling/lint-primitives.js; status=$?; rm -rf .lint-primitives; exit $status"
+  },
   "dependencies": {
     "typescript": "^6.0.3"
   },
