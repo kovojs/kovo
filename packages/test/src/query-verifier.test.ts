@@ -38,7 +38,7 @@ describe('@jiso/test query verifier', () => {
     expect(verifier.observed).toEqual([]);
   });
 
-  it('passes non-string exec and sql arguments through before SQL verification', () => {
+  it('observes structured exec and sql statement objects without replacing adapter arguments', () => {
     const verifier = createDbVerifier({}, { domainByTable: { cart_items: 'cart' } });
     const calls: Array<[string, unknown]> = [];
     const db = verifier.wrap({
@@ -60,7 +60,17 @@ describe('@jiso/test query verifier', () => {
       ['exec', execObject],
       ['sql', sqlObject],
     ]);
-    expect(verifier.observed).toEqual([]);
+    expect(verifier.observed).toEqual([
+      {
+        branch: undefined,
+        domain: 'cart',
+        kind: 'read',
+        mutationRead: undefined,
+        rowKey: undefined,
+        sql: 'select * from cart_items',
+        table: 'cart_items',
+      },
+    ]);
   });
 
   it('lets unparseable SQL reach wrapped methods before SQL verification', () => {
@@ -93,7 +103,7 @@ describe('@jiso/test query verifier', () => {
     expect(verifier.observed).toEqual([]);
   });
 
-  it('passes non-string nested pglite query and exec arguments through before SQL verification', () => {
+  it('observes structured nested pglite query arguments without replacing adapter arguments', () => {
     const verifier = createDbVerifier({}, { domainByTable: { cart_items: 'cart' } });
     const calls: Array<[string, unknown]> = [];
     const db = verifier.wrap({
@@ -117,6 +127,39 @@ describe('@jiso/test query verifier', () => {
       ['exec', execObject],
       ['query', queryObject],
     ]);
+    expect(verifier.observed).toEqual([
+      {
+        branch: undefined,
+        domain: 'cart',
+        kind: 'read',
+        mutationRead: undefined,
+        rowKey: undefined,
+        sql: 'select * from cart_items',
+        table: 'cart_items',
+      },
+    ]);
+  });
+
+  it('leaves opaque adapter statement objects unobserved while passing them through', () => {
+    const verifier = createDbVerifier({}, { domainByTable: { cart_items: 'cart' } });
+    const calls: unknown[] = [];
+    const db = verifier.wrap({
+      exec(statement: unknown) {
+        calls.push(statement);
+        return ['exec-ok'];
+      },
+      query() {
+        return [];
+      },
+    });
+    const opaqueStatement = {
+      toString() {
+        return 'select * from cart_items';
+      },
+    };
+
+    expect(db.exec(opaqueStatement)).toEqual(['exec-ok']);
+    expect(calls).toEqual([opaqueStatement]);
     expect(verifier.observed).toEqual([]);
   });
 

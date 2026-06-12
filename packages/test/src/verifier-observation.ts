@@ -1,6 +1,6 @@
 import { AsyncLocalStorage } from 'node:async_hooks';
 
-import { observeSqlStatementIfString } from './sql-observer.js';
+import { observeSqlStatementArgument } from './sql-observer.js';
 
 export interface DbVerificationConfig {
   domainByTable: Record<string, string>;
@@ -101,7 +101,7 @@ export function observableSqlMethod(
   recorder: ObservationRecorder,
 ): (statement: unknown, ...args: unknown[]) => unknown {
   return (statement: unknown, ...args: unknown[]) => {
-    observeSqlStatementIfString(statement, config, recorder);
+    observeSqlStatementArgument(statement, config, recorder);
     return value.call(target, statement, ...args);
   };
 }

@@ -4668,6 +4668,32 @@ void test('P9 verification layer evidence remains represented', async () => {
     'FW411 Query read set includes an exempt table: audit_log',
   );
 
+  const structuredSqlVerifier = createDbVerifier({}, { domainByTable: { cart_items: 'cart' } });
+  const structuredStatementCalls = [];
+  const structuredSqlDb = structuredSqlVerifier.wrap({
+    exec(statement) {
+      structuredStatementCalls.push(statement);
+      return [];
+    },
+    query() {
+      return [];
+    },
+  });
+  const structuredStatement = { text: 'select * from cart_items', values: ['c1'] };
+  structuredSqlDb.exec(structuredStatement);
+  assert.deepEqual(structuredStatementCalls, [structuredStatement]);
+  assert.deepEqual(structuredSqlVerifier.observed, [
+    {
+      branch: undefined,
+      domain: 'cart',
+      kind: 'read',
+      mutationRead: undefined,
+      rowKey: undefined,
+      sql: 'select * from cart_items',
+      table: 'cart_items',
+    },
+  ]);
+
   const nestedVerifier = createDbVerifier(
     {
       'product.syncPrice': {

@@ -31,7 +31,11 @@ import {
 import { fragmentHtml } from '@jiso/test/html-fragment';
 import { createPageAssertion, type PageAssertion } from '@jiso/test/page';
 import { createPgliteTestDb, type PgliteTestDb } from '@jiso/test/pglite';
-import { observeSqlStatementIfString } from '@jiso/test/sql-observer';
+import {
+  observeSqlStatementArgument,
+  observeSqlStatementIfString,
+  sqlStatementText,
+} from '@jiso/test/sql-observer';
 import { jisoTest, type JisoTestCase, type JisoTestRunner } from '@jiso/test/test-case';
 import {
   createDbVerifier,
@@ -72,7 +76,9 @@ describe('@jiso/test package subpath exports', () => {
     expect(executeHarnessMutation).toBeTypeOf('function');
     expect(executeHarnessQuery).toBeTypeOf('function');
     expect(loadHarnessPage).toBeTypeOf('function');
+    expect(observeSqlStatementArgument).toBeTypeOf('function');
     expect(observeSqlStatementIfString).toBeTypeOf('function');
+    expect(sqlStatementText({ text: 'select * from cart_items' })).toBe('select * from cart_items');
     expect(parseSqlOperations('select * from cart_items')).toEqual([
       {
         kind: 'read',

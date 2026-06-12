@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import { createDbVerifier } from './verifier.js';
 import { expectedDiagnostic } from './test-fixtures.js';
+import { sqlStatementText } from './sql-observer.js';
 
 interface SqlDb {
   sql(statement: string): unknown[];
@@ -16,6 +17,18 @@ function createSqlDb(): SqlDb {
 }
 
 describe('@jiso/test SQL observer', () => {
+  it('extracts only supported SQL statement shapes', () => {
+    expect(sqlStatementText('select * from products')).toBe('select * from products');
+    expect(sqlStatementText({ text: 'select * from products', values: ['p1'] })).toBe(
+      'select * from products',
+    );
+    expect(sqlStatementText({ sql: 'select * from products', parameters: ['p1'] })).toBe(
+      'select * from products',
+    );
+    expect(sqlStatementText({ text: 7, sql: undefined })).toBeUndefined();
+    expect(sqlStatementText({ toString: () => 'select * from products' })).toBeUndefined();
+  });
+
   it('passes unparseable SQL through without fabricated observations', () => {
     const calls: string[] = [];
     const verifier = createDbVerifier({}, { domainByTable: { products: 'product' } });

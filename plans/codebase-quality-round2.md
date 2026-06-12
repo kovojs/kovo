@@ -35,8 +35,8 @@ These were the remaining open items in `plans/codebase-quality.md`; that plan is
 - Inline loader de-drift: finish Phase 4 runtime inline-loader build/minifier parity work.
 - Commerce generated-artifact/deep-import cleanup: close under Phase 1/6 by making generated
   artifacts honest and removing any local deep import dependency from the example workflow.
-- Verifier proxy SQL shape assumptions: close under Phase 6 by observing real supported SQL
-  surfaces instead of assuming `query`/`exec`/`sql` always receive SQL strings.
+- Verifier proxy SQL shape assumptions: closed under Phase 6 for string SQL plus structured
+  `{ text }`/`{ sql }` statement objects; opaque adapter objects still pass through unobserved.
 - Module splits: keep compiler/server/drizzle/runtime splits subtractive inside the phase that
   touches each package; do not grow root barrels except for intentional public API.
 
@@ -221,19 +221,23 @@ Closed evidence so far:
 - Harness internals import diagnostics/observations from owning seams rather than through root
   verifier barrels.
 - Commerce source-truth and generated graph checks are increasingly behavior/artifact based.
+- Verifier SQL observation now extracts supported statement text from strings and structured
+  statement objects while preserving the original adapter argument.
 
 Open:
 
-- Finish verifier proxy SQL shape cleanup from round 1.
 - Remove any remaining example deep-import workflow or document it as a deliberate local test
   fixture, not a user-facing dependency story.
 - Keep root `@jiso/test` compatibility but prefer subpath imports in tests and examples.
 
 Recent gates:
 
+- `pnpm exec vitest --run packages/test/src/sql-observer.test.ts packages/test/src/query-verifier.test.ts packages/test/src/package-exports.test.ts`
 - `pnpm exec vitest --run packages/test/src`
-- `pnpm exec tsc -p examples/commerce/tsconfig.json --noEmit`
-- `pnpm exec vp check packages/test/src/index.ts packages/test/src/harness.ts packages/test/src/harness-operations.ts packages/test/src/verifier-diagnostics.ts packages/test/src/package-exports.test.ts plans/codebase-quality-round2.md`
+- `pnpm exec tsc -p examples/commerce/tsconfig.json --noEmit --pretty false`
+- `pnpm exec vp run build`
+- `node --test --test-name-pattern "P9 verification layer evidence remains represented" tests/fw-check.node.mjs`
+- `pnpm exec vp check packages/test/src/sql-observer.ts packages/test/src/verifier-observation.ts packages/test/src/sql-observer.test.ts packages/test/src/query-verifier.test.ts packages/test/src/package-exports.test.ts tests/fw-check.node.mjs plans/codebase-quality-round2.md`
 
 ## Phase 7 - Test Restructuring
 
