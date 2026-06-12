@@ -3225,6 +3225,14 @@ land it first; don't fork it.
       summarize planned route documents, `/c/` modules, and static assets without reaching into
       replay internals or reconstructing writer order. Same-session evidence:
       `corepack pnpm exec vitest --run packages/server/src/static-export.test.ts packages/server/src/api/app.test.ts`.
+      Additional evidence 2026-06-12: the extracted Vite build seam now owns a public dry-run
+      inventory bridge, `staticExportInventoryForJisoAppShellViteBuild()`, exported through the
+      Vite app-shell subpath and aggregate barrels. The helper composes the same manifest-derived
+      static assets as `exportJisoAppShellViteBuild()` and replays the same app handler for route
+      documents and `/c/` modules, but deliberately avoids output writes so JS task authors do
+      not need to reach into replay helpers or static-export asset planning. Same-session
+      evidence: `corepack pnpm exec vitest --run packages/server/src/vite-build.test.ts packages/server/src/api/app.test.ts`
+      and `corepack pnpm exec tsc --noEmit --pretty false`.
 - [ ] **LOW — Close the server cleanup inventory with an acceptance sweep.** Historical audit
       targets were dead code (`matchShellDispatch` post-loop return shell.ts:161-166; rate-limit
       tail `return options.max > 0` index.ts:576); `matchRoute` recompiling all routes per call

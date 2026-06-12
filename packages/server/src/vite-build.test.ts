@@ -9,6 +9,7 @@ import { route } from './route.js';
 import {
   createJisoAppShellViteBuild,
   exportJisoAppShellViteBuild,
+  staticExportInventoryForJisoAppShellViteBuild,
   writeJisoAppShellViteBuildOutput,
 } from './vite-build.js';
 
@@ -93,6 +94,97 @@ describe('server app shell Vite build seam', () => {
       await expect(readFile(join(outDir, 'assets/cart.js'), 'utf8')).resolves.toBe(
         'export const cartAsset = true;',
       );
+    } finally {
+      await Promise.all([
+        rm(distDir, { force: true, recursive: true }),
+        rm(outDir, { force: true, recursive: true }),
+      ]);
+    }
+  });
+
+  it('returns Vite build-backed static export inventory without writing output', async () => {
+    const distDir = await mkdtemp(join(tmpdir(), 'jiso-vite-build-inventory-dist-'));
+    const outDir = await mkdtemp(join(tmpdir(), 'jiso-vite-build-inventory-export-'));
+
+    try {
+      await mkdir(join(distDir, 'assets'), { recursive: true });
+      await writeFile(join(distDir, 'assets/shop.css'), '.shop{color:green}');
+      await writeFile(join(distDir, 'assets/shop.js'), 'export const shopAsset = true;');
+
+      const build = createJisoAppShellViteBuild({
+        app: createApp({
+          routes: [
+            route('/shop', {
+              page() {
+                return [
+                  '<main class="shop">Shop',
+                  '<button on:click="/c/shop.client.js?v=shopclient#Shop$add">Add</button>',
+                  '</main>',
+                ].join('');
+              },
+            }),
+          ],
+        }),
+        clientModules: [
+          {
+            path: '/c/shop.client.js',
+            source: 'export const shopClient = true;',
+            version: 'shopclient',
+          },
+        ],
+        manifest: {
+          'src/shop.client.ts': {
+            css: ['assets/shop.css'],
+            file: 'assets/shop.js',
+          },
+        },
+        routeEntryMap: {
+          '/shop': 'src/shop.client.ts',
+        },
+      });
+
+      const inventory = await staticExportInventoryForJisoAppShellViteBuild(build, {
+        distDir,
+        outDir,
+      } as unknown as Parameters<typeof staticExportInventoryForJisoAppShellViteBuild>[1]);
+
+      expect(inventory).toEqual([
+        {
+          headers: {
+            'content-type': 'text/html; charset=utf-8',
+            link: '</assets/shop.css>; rel=preload; as=style, </assets/shop.js>; rel=modulepreload',
+          },
+          kind: 'route-document',
+          path: '/shop/index.html',
+          status: 200,
+        },
+        {
+          headers: {
+            'cache-control': 'public, max-age=31536000, immutable',
+            'content-type': 'text/javascript; charset=utf-8',
+          },
+          href: '/c/shop.client.js?v=shopclient#Shop$add',
+          kind: 'client-module',
+          path: '/c/shop.client.js',
+          status: 200,
+        },
+        {
+          headers: { 'content-type': 'text/css; charset=utf-8' },
+          kind: 'static-asset',
+          path: '/assets/shop.css',
+          source: join(distDir, 'assets/shop.css'),
+          status: 200,
+        },
+        {
+          headers: { 'content-type': 'text/javascript; charset=utf-8' },
+          kind: 'static-asset',
+          path: '/assets/shop.js',
+          source: join(distDir, 'assets/shop.js'),
+          status: 200,
+        },
+      ]);
+      await expect(readFile(join(outDir, 'shop/index.html'))).rejects.toThrow();
+      await expect(readFile(join(outDir, 'assets/shop.css'))).rejects.toThrow();
     } finally {
       await Promise.all([
         rm(distDir, { force: true, recursive: true }),

@@ -21,6 +21,7 @@ export {
   jisoAppShellViteStaticExportAssets,
   shouldHandleJisoAppShellViteRequest,
   shouldHandleJisoAppShellViteSsrRequest,
+  staticExportInventoryForJisoAppShellViteBuild,
   writeJisoAppShellViteBuildOutput,
 } from '../../vite.js';
 export type {
@@ -39,6 +40,7 @@ export type {
   JisoAppShellViteBundleBuildOptions,
   JisoAppShellViteBuildOutput,
   JisoAppShellViteBuildOutputOptions,
+  JisoAppShellViteBuildStaticExportInventoryOptions,
   JisoAppShellViteBuildStaticExportOptions,
   JisoAppShellViteDevServer,
   JisoAppShellViteInput,

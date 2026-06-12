@@ -7,7 +7,9 @@ import type { JisoApp } from './app.js';
 import type { PageHintOptions } from './hints.js';
 import {
   exportStaticApp,
+  staticExportInventory,
   type StaticExportAssetInput,
+  type StaticExportInventoryItem,
   type StaticExportOptions,
   type StaticExportResult,
 } from './static-export.js';
@@ -118,6 +120,13 @@ export interface JisoAppShellViteBuildStaticExportOptions extends Omit<
 > {
   assets?: readonly StaticExportAssetInput[];
   distDir: string | URL;
+}
+
+export interface JisoAppShellViteBuildStaticExportInventoryOptions extends Omit<
+  JisoAppShellViteBuildStaticExportOptions,
+  'outDir'
+> {
+  outDir?: never;
 }
 
 export interface JisoAppShellViteManifestFileBuildStaticExportOptions extends Omit<
@@ -246,6 +255,21 @@ export async function exportJisoAppShellViteBuild(
     // immutable asset files referenced by the Vite manifest.
     assets: [...jisoAppShellViteStaticExportAssets(build.assets, { distDir }), ...assets],
   });
+}
+
+export async function staticExportInventoryForJisoAppShellViteBuild(
+  build: JisoAppShellBuild,
+  options: JisoAppShellViteBuildStaticExportInventoryOptions,
+): Promise<StaticExportInventoryItem[]> {
+  const { assets = [], distDir, outDir: _outDir, ...exportOptions } = options;
+  const result = await exportStaticApp(build.app, {
+    ...exportOptions,
+    // SPEC §9.5: dry-run task wiring inspects the exact built app shell,
+    // manifest assets, and /c/ modules without selecting an output directory.
+    assets: [...jisoAppShellViteStaticExportAssets(build.assets, { distDir }), ...assets],
+  });
+
+  return staticExportInventory(result);
 }
 
 export async function writeJisoAppShellViteBuildOutput(
