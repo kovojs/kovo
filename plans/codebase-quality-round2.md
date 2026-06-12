@@ -1689,6 +1689,14 @@ As each phase splits a source module, split its tests in the same commit.
       Same-session evidence:
       `pnpm exec vitest --run packages/runtime/src/inline-loader.test.ts packages/runtime/src/index.test.ts`
       and `git diff --check`.
+      Additional evidence 2026-06-12: typed submit-context coverage moved from
+      `packages/runtime/src/index.test.ts` to `packages/runtime/src/submit-context.test.ts`,
+      preserving typed form submit, mutation/route rename type proofs, and 422 failure parsing
+      coverage for `<fw-error>` and server-shaped validation fragments.
+      Same-session evidence:
+      `corepack pnpm exec vitest --run packages/runtime/src/submit-context.test.ts packages/runtime/src/index.test.ts`,
+      `corepack pnpm exec vp check packages/runtime/src/submit-context.test.ts packages/runtime/src/index.test.ts plans/codebase-quality-round2.md`,
+      and `git diff --check`.
 - [ ] compiler/index.test.ts (3,580 lines, zero per-module tests) → per-phase files; a
       `compileFixture()` helper returning files by kind; diagnostic assertions reference
       `diagnosticDefinitions[code].message` instead of pasted strings (today a one-word rewording
