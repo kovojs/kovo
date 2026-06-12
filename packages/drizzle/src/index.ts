@@ -65,9 +65,8 @@ export type {
 } from './invalidation.js';
 export { deriveInvalidationRegistry, serializeInvalidationRegistry } from './invalidation.js';
 
-let sourceExtractionFileId = 0;
-
 const IDENTIFIER_SOURCE = String.raw`[A-Za-z_$][\w$]*`;
+const SOURCE_EXTRACTION_FILE_NAME = '__jiso_source.ts';
 const DEFAULT_DRIZZLE_RECEIVER_NAMES = new Set(['db', 'tx']);
 const IGNORED_LOCAL_CALL_NAMES = new Set([
   'delete',
@@ -1615,8 +1614,7 @@ function parseSourceFile(source: string): SourceFile {
     skipAddingFilesFromTsConfig: true,
   });
 
-  sourceExtractionFileId += 1;
-  return project.createSourceFile(`__jiso_source_${sourceExtractionFileId}.ts`, source);
+  return project.createSourceFile(SOURCE_EXTRACTION_FILE_NAME, source);
 }
 
 function tablesForFile(

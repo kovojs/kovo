@@ -433,6 +433,67 @@ export interface CommerceInvalidationSets {
     });
   });
 
+  it('does not leak source extraction state between repeated source calls', () => {
+    const first = extractTouchGraphFromSource([
+      {
+        fileName: 'cart.domain.ts',
+        source: `
+          export const items = pgTable("cart_items", {}, jiso({ domain: "cart", key: "id" }));
+
+          export function save(db) {
+            return db.insert(items).values({ id: "cart-1" });
+          }
+        `,
+      },
+    ]);
+    const second = extractTouchGraphFromSource([
+      {
+        fileName: 'order.domain.ts',
+        source: `
+          export const items = pgTable("order_items", {}, jiso({ domain: "order", key: "id" }));
+
+          export function save(db) {
+            return db.insert(items).values({ id: "order-1" });
+          }
+        `,
+      },
+    ]);
+    const third = extractTouchGraphFromSource([
+      {
+        fileName: 'cart.domain.ts',
+        source: `
+          export const items = pgTable("cart_items", {}, jiso({ domain: "cart", key: "id" }));
+
+          export function save(db) {
+            return db.insert(items).values({ id: "cart-2" });
+          }
+        `,
+      },
+    ]);
+
+    expect(first).toEqual({
+      save: {
+        reads: [],
+        touches: [{ domain: 'cart', keys: null, site: 'cart.domain.ts:5', via: 'cart_items' }],
+        unresolved: [],
+      },
+    });
+    expect(second).toEqual({
+      save: {
+        reads: [],
+        touches: [{ domain: 'order', keys: null, site: 'order.domain.ts:5', via: 'order_items' }],
+        unresolved: [],
+      },
+    });
+    expect(third).toEqual({
+      save: {
+        reads: [],
+        touches: [{ domain: 'cart', keys: null, site: 'cart.domain.ts:5', via: 'cart_items' }],
+        unresolved: [],
+      },
+    });
+  });
+
   it('extracts direct Drizzle write calls from exported arrow handlers', () => {
     const graph = extractTouchGraphFromSource([
       {
@@ -1269,6 +1330,88 @@ export interface CommerceInvalidationSets {
           id: 'string',
         },
         site: 'cart.queries.ts:4',
+      },
+    ]);
+  });
+
+  it('does not leak source extraction state between repeated project calls', () => {
+    const first = extractQueryFactsFromProject({
+      files: [
+        {
+          fileName: 'schema.ts',
+          source: `
+            export const items = pgTable("cart_items", {
+              id: text("id").primaryKey(),
+              qty: integer("qty").notNull(),
+            }, jiso({ domain: "cart", key: "id" }));
+          `,
+        },
+        {
+          fileName: 'queries.ts',
+          source: `
+            import { items } from "./schema";
+
+            export const itemQuery = query("item", {
+              load(input, db) {
+                return db.select({ qty: items.qty }).from(items).where(eq(items.id, input.id));
+              },
+            });
+          `,
+        },
+      ],
+    });
+    const second = extractQueryFactsFromProject({
+      files: [
+        {
+          fileName: 'schema.ts',
+          source: `
+            export const items = pgTable("order_items", {
+              id: text("id").primaryKey(),
+              qty: text("qty").notNull(),
+            }, jiso({ domain: "order", key: "id" }));
+          `,
+        },
+        {
+          fileName: 'queries.ts',
+          source: `
+            import { items } from "./schema";
+
+            export const itemQuery = query("item", {
+              load(input, db) {
+                return db.select({ qty: items.qty }).from(items).where(eq(items.id, input.id));
+              },
+            });
+          `,
+        },
+      ],
+    });
+
+    expect(first).toEqual([
+      {
+        instanceKey: {
+          domain: 'cart',
+          key: 'arg:id',
+        },
+        query: 'item',
+        reads: ['cart'],
+        shape: {
+          qty: 'number',
+        },
+        site: 'queries.ts:4',
+      },
+    ]);
+    expect(second).toEqual([
+      {
+        instanceKey: {
+          domain: 'order',
+          key: 'arg:id',
+        },
+        query: 'item',
+        reads: ['order'],
+        shape: {
+          qty: 'string',
+        },
+        site: 'queries.ts:4',
       },
     ]);
   });

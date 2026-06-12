@@ -793,6 +793,13 @@ must be "FW406 unresolved," never "silently wrong."
       mixing JS keywords with domain names (:57-71 — a user helper named `insert` is silently
       never folded); shorthand properties dropped by `queryShapeFromObjectLiteral` (:930);
       rename one of the two unrelated `graph.ts` files (compiler vs drizzle).
+      Partial evidence 2026-06-12: removed the module-global mutable `sourceExtractionFileId`
+      from `packages/drizzle/src/index.ts`; `parseSourceFile` now uses an isolated ts-morph
+      `Project` with a deterministic synthetic source file name, and
+      `packages/drizzle/src/index.test.ts` covers repeated source-mode and project-mode
+      extractions with conflicting same-name tables/shapes to prove no stale AST or file-id state
+      leaks between calls. Same-session evidence:
+      `pnpm exec vitest --run packages/drizzle/src/index.test.ts -t "does not leak source extraction state"`.
 
 Verification: drizzle vitest + conformance (`drizzle-pin` now exercising the real ORM); commerce
 touch-graph byte pin re-checked; adversarial corpus: braces/semicolons in strings, parenthesized
