@@ -2250,6 +2250,49 @@ export interface CommerceInvalidationSets {
     ]);
   });
 
+  it('marks query-loader helpers receiving db as FW406 instead of dropping the query fact', () => {
+    const facts = extractQueryFactsFromProject({
+      files: [
+        {
+          fileName: 'product.queries.ts',
+          source: `
+            export const products = pgTable("products", {
+              id: text("id").primaryKey(),
+            }, jiso({ domain: "product", key: "id" }));
+
+            declare function loadProducts(receiver: unknown): Promise<unknown[]>;
+            declare function readCache(client: unknown): Promise<unknown[]>;
+
+            export const productQuery = query("product/helper", {
+              async load(_input, db) {
+                await readCache(cache);
+                return loadProducts(db);
+              },
+            });
+          `,
+        },
+      ],
+    });
+
+    expect(facts).toEqual([
+      {
+        diagnostics: [
+          {
+            code: 'FW406',
+            message:
+              'Statically un-analyzable write site; manual touches required. Query passes Drizzle receiver db to helper loadProducts().',
+            severity: 'warn',
+            site: 'product.queries.ts:9',
+          },
+        ],
+        query: 'product/helper',
+        reads: [],
+        shape: {},
+        site: 'product.queries.ts:9',
+      },
+    ]);
+  });
+
   it('does not fabricate query reads or relational diagnostics from comments and strings', () => {
     const facts = extractQueryFactsFromSource([
       {

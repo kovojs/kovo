@@ -1588,6 +1588,16 @@ must be "FW406 unresolved," never "silently wrong."
       `corepack pnpm exec vitest --run conformance/drizzle-pin/src/index.test.ts -t "namespace.*project (query|write)|namespace static element-access"`,
       `corepack pnpm exec vitest --run packages/drizzle/src`,
       and `corepack pnpm exec vitest --run conformance/drizzle-pin/src/index.test.ts`.
+      Additional bounded evidence 2026-06-12: query loaders now walk ts-morph helper
+      `CallExpression` nodes and mark identifier helpers that receive the loader's Drizzle
+      receiver as FW406 instead of dropping the whole query fact when no direct select/read is
+      visible. `packages/drizzle/src/index.test.ts` covers the project-mode disappearing-query
+      case, and `conformance/drizzle-pin/src/index.test.ts` pins the same helper db handoff
+      against real `drizzle-orm` imports under SPEC §11.1. Same-session evidence:
+      `corepack pnpm exec vitest --run packages/drizzle/src/index.test.ts -t "query-loader helpers"`,
+      `corepack pnpm exec vitest --run conformance/drizzle-pin/src/index.test.ts -t "helper db handoff"`,
+      `corepack pnpm exec vp check packages/drizzle/src/static.ts packages/drizzle/src/index.test.ts conformance/drizzle-pin/src/index.test.ts plans/codebase-quality-round2.md`,
+      and `git diff --check`.
 
 - [ ] **HIGH — Remove fact-fabricating heuristics; degrade to FW406.**
       Column type from projection-key name (`/(count|qty|...)$/i` → number, index.ts:993);

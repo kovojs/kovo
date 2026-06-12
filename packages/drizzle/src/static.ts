@@ -1417,6 +1417,7 @@ function extractQueryDefinitionsFromSourceFile(
     const diagnostics = [
       ...relationalQueryDiagnostics(bodyArgument, receiverNames),
       ...unclassifiedQueryReceiverDiagnostics(bodyArgument, receiverNames),
+      ...externalQueryHelperDiagnostics(bodyArgument, receiverNames),
       ...unresolvedQueryReadDiagnostics(bodyArgument, receiverNames, readResolutionOptions),
     ];
     if (!selection && diagnostics.length === 0) continue;
@@ -1586,6 +1587,53 @@ function unclassifiedQueryReceiverDiagnostics(
       },
     ];
   });
+}
+
+function externalQueryHelperDiagnostics(
+  body: ObjectLiteralExpression,
+  receiverNames: ReadonlySet<string>,
+): TouchGraphDiagnostic[] {
+  // SPEC §11.1: helpers that receive the query loader's Drizzle receiver are an explicit FW406
+  // boundary until their read/write summaries are proven interprocedurally.
+  return queryBodyCallExpressions(body, (call) => {
+    const expression = call.getExpression();
+    if (!Node.isIdentifier(expression)) return [];
+
+    const name = expression.getText();
+    if (IGNORED_LOCAL_CALL_NAMES.has(name)) return [];
+    const receiverName = queryHelperReceiverArgumentName(call, receiverNames);
+    if (!receiverName) return [];
+
+    return [
+      {
+        code: 'FW406' as const,
+        message: `${diagnosticDefinitions.FW406.message} Query passes Drizzle receiver ${receiverName} to helper ${name}().`,
+        severity: diagnosticDefinitions.FW406.severity,
+        site: '',
+      },
+    ];
+  });
+}
+
+function queryHelperReceiverArgumentName(
+  call: CallExpression,
+  receiverNames: ReadonlySet<string>,
+): string | undefined {
+  for (const argument of call.getArguments()) {
+    const receiverName = queryHelperArgumentReceiverName(argument, receiverNames);
+    if (receiverName) return receiverName;
+  }
+
+  return undefined;
+}
+
+function queryHelperArgumentReceiverName(
+  argument: Node,
+  receiverNames: ReadonlySet<string>,
+): string | undefined {
+  if (!Node.isIdentifier(argument)) return undefined;
+  const name = argument.getText();
+  return receiverNames.has(name) ? name : undefined;
 }
 
 interface QueryShapeContext {
