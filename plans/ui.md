@@ -1062,6 +1062,25 @@ jiso-dialog` resolves dashed wire names and prints provenance including package,
       `pnpm exec vp check examples/gallery/package.json examples/gallery/scripts/emit-interactive-gallery.mjs examples/gallery/src/interactive/select-demo.tsx examples/gallery/src/interactive/combobox-demo.tsx examples/gallery/src/interactive/autocomplete-demo.tsx examples/gallery/src/interactive-gallery.test.ts examples/gallery/src/interactive-gallery.browser.test.ts examples/gallery/src/generated/interactive/select-demo.tsx examples/gallery/src/generated/interactive/select-demo.client.js examples/gallery/src/generated/interactive/combobox-demo.tsx examples/gallery/src/generated/interactive/combobox-demo.client.js examples/gallery/src/generated/interactive/autocomplete-demo.tsx examples/gallery/src/generated/interactive/autocomplete-demo.client.js plans/ui.md IMPLEMENT_v1.md`,
       and `git diff --check`. G6 remains open for docs deployment wiring and full
       gallery/conformance gates.
+      Additional partial evidence 2026-06-12: the compiled interactive gallery now adds
+      app-authored TSX demos for dropdown-menu, context-menu, menubar, navigation-menu,
+      command, and toast. The emitter compiles all six through `@jiso/compiler`, commits
+      lowered TSX plus generated client modules with versioned `on:click`/`on:keydown`/
+      `on:contextmenu`/`on:input` refs, and the static test inspects those artifacts while
+      executing generated handlers. The Chromium browser test mounts the generated components
+      through the real runtime loader and proves menu open/selection state, context-menu
+      trigger behavior, menubar/navigation roving tabindex and disclosure state, command
+      dialog input/listbox selection, and toast dismissal update browser-visible ARIA,
+      hidden/open state, live-region semantics, and `fw-state`. Same-session evidence:
+      `pnpm --filter @jiso/example-gallery run emit:interactive-gallery -- --check`,
+      `pnpm --filter @jiso/example-gallery exec vitest --run src/interactive-gallery.test.ts`,
+      `pnpm --filter @jiso/example-gallery run test:browser`,
+      `pnpm --filter @jiso/example-gallery test`,
+      `pnpm --filter @jiso/headless-ui exec vitest --run src/primitives/dropdown-menu.test.ts src/primitives/context-menu.test.ts src/primitives/menubar.test.ts src/primitives/navigation-menu.test.ts src/primitives/command.test.ts src/primitives/toast.test.ts src/tooling/lint-primitives.test.ts src/tooling/primitive-handler-lint.test.ts`,
+      `pnpm --filter @jiso/headless-ui run lint:primitives`,
+      `pnpm exec vp check examples/gallery/package.json examples/gallery/scripts/emit-interactive-gallery.mjs examples/gallery/src/interactive/dropdown-menu-demo.tsx examples/gallery/src/interactive/context-menu-demo.tsx examples/gallery/src/interactive/menubar-demo.tsx examples/gallery/src/interactive/navigation-menu-demo.tsx examples/gallery/src/interactive/command-demo.tsx examples/gallery/src/interactive/toast-demo.tsx examples/gallery/src/interactive-gallery.test.ts examples/gallery/src/interactive-gallery.browser.test.ts examples/gallery/src/generated/interactive/dropdown-menu-demo.tsx examples/gallery/src/generated/interactive/dropdown-menu-demo.client.js examples/gallery/src/generated/interactive/context-menu-demo.tsx examples/gallery/src/generated/interactive/context-menu-demo.client.js examples/gallery/src/generated/interactive/menubar-demo.tsx examples/gallery/src/generated/interactive/menubar-demo.client.js examples/gallery/src/generated/interactive/navigation-menu-demo.tsx examples/gallery/src/generated/interactive/navigation-menu-demo.client.js examples/gallery/src/generated/interactive/command-demo.tsx examples/gallery/src/generated/interactive/command-demo.client.js examples/gallery/src/generated/interactive/toast-demo.tsx examples/gallery/src/generated/interactive/toast-demo.client.js plans/ui.md IMPLEMENT_v1.md`,
+      and `git diff --check`. G6 remains open for docs deployment wiring and full
+      gallery/conformance gates.
 
 ## Background
 

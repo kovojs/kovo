@@ -31,8 +31,13 @@ describe('compiled interactive gallery demos', () => {
     const checkboxGroup = readGenerated('checkbox-group-demo.tsx');
     const collapsible = readGenerated('collapsible-demo.tsx');
     const combobox = readGenerated('combobox-demo.tsx');
+    const command = readGenerated('command-demo.tsx');
+    const contextMenu = readGenerated('context-menu-demo.tsx');
     const disclosure = readGenerated('disclosure-demo.tsx');
     const dialog = readGenerated('dialog-demo.tsx');
+    const dropdownMenu = readGenerated('dropdown-menu-demo.tsx');
+    const menubar = readGenerated('menubar-demo.tsx');
+    const navigationMenu = readGenerated('navigation-menu-demo.tsx');
     const numberField = readGenerated('number-field-demo.tsx');
     const otpField = readGenerated('otp-field-demo.tsx');
     const popover = readGenerated('popover-demo.tsx');
@@ -44,6 +49,7 @@ describe('compiled interactive gallery demos', () => {
     const toolbar = readGenerated('toolbar-demo.tsx');
     const tooltip = readGenerated('tooltip-demo.tsx');
     const toggleGroup = readGenerated('toggle-group-demo.tsx');
+    const toast = readGenerated('toast-demo.tsx');
 
     expect(accordion).toContain('data-gallery-interactive="accordion"');
     expect(accordion).toContain('fw-state=\'{"value":"shipping"}\'');
@@ -118,6 +124,30 @@ describe('compiled interactive gallery demos', () => {
       /on:click="\/c\/examples\/gallery\/src\/generated\/interactive\/combobox-demo\.client\.js\?v=[0-9a-f]{8}#GalleryComboboxDemo\$button_click"/,
     );
 
+    expect(command).toContain('data-gallery-interactive="command"');
+    expect(command).toContain(
+      'fw-state=\'{"highlightedValue":"dashboard","inputValue":"","open":false,"value":"dashboard"}\'',
+    );
+    expect(command).toContain('commandDialogAttributes({');
+    expect(command).toMatch(
+      /on:input="\/c\/examples\/gallery\/src\/generated\/interactive\/command-demo\.client\.js\?v=[0-9a-f]{8}#GalleryCommandDemo\$input_input"/,
+    );
+    expect(command).toMatch(
+      /on:click="\/c\/examples\/gallery\/src\/generated\/interactive\/command-demo\.client\.js\?v=[0-9a-f]{8}#GalleryCommandDemo\$button_click_2"/,
+    );
+
+    expect(contextMenu).toContain('data-gallery-interactive="context-menu"');
+    expect(contextMenu).toContain(
+      'fw-state=\'{"highlightedValue":"copy","open":false,"value":"copy"}\'',
+    );
+    expect(contextMenu).toContain('contextMenuTriggerAttributes({');
+    expect(contextMenu).toMatch(
+      /on:contextmenu="\/c\/examples\/gallery\/src\/generated\/interactive\/context-menu-demo\.client\.js\?v=[0-9a-f]{8}#GalleryContextMenuDemo\$div_contextmenu"/,
+    );
+    expect(contextMenu).toMatch(
+      /on:click="\/c\/examples\/gallery\/src\/generated\/interactive\/context-menu-demo\.client\.js\?v=[0-9a-f]{8}#GalleryContextMenuDemo\$button_click"/,
+    );
+
     expect(disclosure).toContain('data-gallery-interactive="disclosure"');
     expect(disclosure).toContain('fw-state=\'{"open":false}\'');
     expect(disclosure).toMatch(
@@ -133,6 +163,40 @@ describe('compiled interactive gallery demos', () => {
     );
     expect(dialog).toMatch(
       /on:click="\/c\/examples\/gallery\/src\/generated\/interactive\/dialog-demo\.client\.js\?v=[0-9a-f]{8}#GalleryDialogDemo\$button_click_2"/,
+    );
+
+    expect(dropdownMenu).toContain('data-gallery-interactive="dropdown-menu"');
+    expect(dropdownMenu).toContain(
+      'fw-state=\'{"highlightedValue":"duplicate","open":false,"value":"duplicate"}\'',
+    );
+    expect(dropdownMenu).toContain('dropdownMenuContentAttributes({');
+    expect(dropdownMenu).toMatch(
+      /on:click="\/c\/examples\/gallery\/src\/generated\/interactive\/dropdown-menu-demo\.client\.js\?v=[0-9a-f]{8}#GalleryDropdownMenuDemo\$button_click"/,
+    );
+    expect(dropdownMenu).toMatch(
+      /on:keydown="\/c\/examples\/gallery\/src\/generated\/interactive\/dropdown-menu-demo\.client\.js\?v=[0-9a-f]{8}#GalleryDropdownMenuDemo\$div_keydown"/,
+    );
+
+    expect(menubar).toContain('data-gallery-interactive="menubar"');
+    expect(menubar).toContain('fw-state=\'{"activeValue":"file","openValue":"","value":"new"}\'');
+    expect(menubar).toContain('menubarSubmenuAttributes({');
+    expect(menubar).toMatch(
+      /on:keydown="\/c\/examples\/gallery\/src\/generated\/interactive\/menubar-demo\.client\.js\?v=[0-9a-f]{8}#GalleryMenubarDemo\$section_keydown"/,
+    );
+    expect(menubar).toMatch(
+      /on:click="\/c\/examples\/gallery\/src\/generated\/interactive\/menubar-demo\.client\.js\?v=[0-9a-f]{8}#GalleryMenubarDemo\$button_click"/,
+    );
+
+    expect(navigationMenu).toContain('data-gallery-interactive="navigation-menu"');
+    expect(navigationMenu).toContain(
+      'fw-state=\'{"activeValue":"products","openValue":"","value":"none"}\'',
+    );
+    expect(navigationMenu).toContain('navigationMenuTriggerAttributes({');
+    expect(navigationMenu).toMatch(
+      /on:keydown="\/c\/examples\/gallery\/src\/generated\/interactive\/navigation-menu-demo\.client\.js\?v=[0-9a-f]{8}#GalleryNavigationMenuDemo\$section_keydown"/,
+    );
+    expect(navigationMenu).toMatch(
+      /on:click="\/c\/examples\/gallery\/src\/generated\/interactive\/navigation-menu-demo\.client\.js\?v=[0-9a-f]{8}#GalleryNavigationMenuDemo\$a_click"/,
     );
 
     expect(numberField).toContain('data-gallery-interactive="number-field"');
@@ -238,6 +302,16 @@ describe('compiled interactive gallery demos', () => {
     expect(toggleGroup).toMatch(
       /on:click="\/c\/examples\/gallery\/src\/generated\/interactive\/toggle-group-demo\.client\.js\?v=[0-9a-f]{8}#GalleryToggleGroupDemo\$button_click_2"/,
     );
+
+    expect(toast).toContain('data-gallery-interactive="toast"');
+    expect(toast).toContain('fw-state=\'{"open":true}\'');
+    expect(toast).toContain('toastRootAttributes(toastState)');
+    expect(toast).toMatch(
+      /on:keydown="\/c\/examples\/gallery\/src\/generated\/interactive\/toast-demo\.client\.js\?v=[0-9a-f]{8}#GalleryToastDemo\$section_keydown"/,
+    );
+    expect(toast).toMatch(
+      /on:click="\/c\/examples\/gallery\/src\/generated\/interactive\/toast-demo\.client\.js\?v=[0-9a-f]{8}#GalleryToastDemo\$button_click_2"/,
+    );
   });
 
   it('executes generated client behavior for the stateful demos', () => {
@@ -249,8 +323,13 @@ describe('compiled interactive gallery demos', () => {
     const checkboxGroup = evaluateClientModule('checkbox-group-demo.client.js');
     const collapsible = evaluateClientModule('collapsible-demo.client.js');
     const combobox = evaluateClientModule('combobox-demo.client.js');
+    const command = evaluateClientModule('command-demo.client.js');
+    const contextMenu = evaluateClientModule('context-menu-demo.client.js');
     const disclosure = evaluateClientModule('disclosure-demo.client.js');
     const dialog = evaluateClientModule('dialog-demo.client.js');
+    const dropdownMenu = evaluateClientModule('dropdown-menu-demo.client.js');
+    const menubar = evaluateClientModule('menubar-demo.client.js');
+    const navigationMenu = evaluateClientModule('navigation-menu-demo.client.js');
     const numberField = evaluateClientModule('number-field-demo.client.js');
     const otpField = evaluateClientModule('otp-field-demo.client.js');
     const popover = evaluateClientModule('popover-demo.client.js');
@@ -262,6 +341,7 @@ describe('compiled interactive gallery demos', () => {
     const toolbar = evaluateClientModule('toolbar-demo.client.js');
     const tooltip = evaluateClientModule('tooltip-demo.client.js');
     const toggleGroup = evaluateClientModule('toggle-group-demo.client.js');
+    const toast = evaluateClientModule('toast-demo.client.js');
     const signal = new AbortController().signal;
 
     const accordionState = { value: 'shipping' };
@@ -373,6 +453,64 @@ describe('compiled interactive gallery demos', () => {
     });
     expect(comboboxState).toEqual({ highlightedValue: 'austin', open: false, value: 'austin' });
 
+    const commandState = {
+      highlightedValue: 'dashboard',
+      inputValue: '',
+      open: false,
+      value: 'dashboard',
+    };
+    clientHandler(command, 'GalleryCommandDemo$button_click')(new Event('click'), {
+      params: {},
+      signal,
+      state: commandState,
+    });
+    expect(commandState).toEqual({
+      highlightedValue: 'dashboard',
+      inputValue: '',
+      open: true,
+      value: 'dashboard',
+    });
+    clientHandler(command, 'GalleryCommandDemo$input_input')(new Event('input'), {
+      params: {},
+      signal,
+      state: commandState,
+    });
+    expect(commandState).toEqual({
+      highlightedValue: 'invite',
+      inputValue: 'invite',
+      open: true,
+      value: 'dashboard',
+    });
+    clientHandler(command, 'GalleryCommandDemo$button_click_2')(new Event('click'), {
+      params: {},
+      signal,
+      state: commandState,
+    });
+    expect(commandState).toEqual({
+      highlightedValue: 'invite',
+      inputValue: 'invite',
+      open: false,
+      value: 'invite',
+    });
+
+    const contextMenuState = { highlightedValue: 'copy', open: false, value: 'copy' };
+    clientHandler(contextMenu, 'GalleryContextMenuDemo$div_contextmenu')(new Event('contextmenu'), {
+      params: {},
+      signal,
+      state: contextMenuState,
+    });
+    expect(contextMenuState).toEqual({ highlightedValue: 'copy', open: true, value: 'copy' });
+    clientHandler(contextMenu, 'GalleryContextMenuDemo$button_click')(new Event('click'), {
+      params: {},
+      signal,
+      state: contextMenuState,
+    });
+    expect(contextMenuState).toEqual({
+      highlightedValue: 'inspect',
+      open: false,
+      value: 'inspect',
+    });
+
     const disclosureState = { open: false };
     clientHandler(disclosure, 'GalleryDisclosureDemo$button_click')(new Event('click'), {
       params: {},
@@ -394,6 +532,59 @@ describe('compiled interactive gallery demos', () => {
       state: dialogState,
     });
     expect(dialogState).toEqual({ open: false });
+
+    const dropdownMenuState = { highlightedValue: 'duplicate', open: false, value: 'duplicate' };
+    clientHandler(dropdownMenu, 'GalleryDropdownMenuDemo$button_click')(new Event('click'), {
+      params: {},
+      signal,
+      state: dropdownMenuState,
+    });
+    expect(dropdownMenuState).toEqual({
+      highlightedValue: 'duplicate',
+      open: true,
+      value: 'duplicate',
+    });
+    clientHandler(dropdownMenu, 'GalleryDropdownMenuDemo$button_click_3')(new Event('click'), {
+      params: {},
+      signal,
+      state: dropdownMenuState,
+    });
+    expect(dropdownMenuState).toEqual({ highlightedValue: 'rename', open: false, value: 'rename' });
+
+    const menubarState = { activeValue: 'file', openValue: '', value: 'new' };
+    clientHandler(menubar, 'GalleryMenubarDemo$section_keydown')(new Event('keydown'), {
+      params: {},
+      signal,
+      state: menubarState,
+    });
+    expect(menubarState).toEqual({ activeValue: 'edit', openValue: '', value: 'new' });
+    clientHandler(menubar, 'GalleryMenubarDemo$button_click')(new Event('click'), {
+      params: {},
+      signal,
+      state: menubarState,
+    });
+    expect(menubarState).toEqual({ activeValue: 'file', openValue: 'file', value: 'new' });
+
+    const navigationMenuState = { activeValue: 'products', openValue: '', value: 'none' };
+    clientHandler(navigationMenu, 'GalleryNavigationMenuDemo$section_keydown')(
+      new Event('keydown'),
+      {
+        params: {},
+        signal,
+        state: navigationMenuState,
+      },
+    );
+    expect(navigationMenuState).toEqual({ activeValue: 'docs', openValue: '', value: 'none' });
+    clientHandler(navigationMenu, 'GalleryNavigationMenuDemo$button_click')(new Event('click'), {
+      params: {},
+      signal,
+      state: navigationMenuState,
+    });
+    expect(navigationMenuState).toEqual({
+      activeValue: 'docs',
+      openValue: 'products',
+      value: 'none',
+    });
 
     const numberFieldState = { value: 2 };
     clientHandler(numberField, 'GalleryNumberFieldDemo$button_click_2')(new Event('click'), {
@@ -541,6 +732,14 @@ describe('compiled interactive gallery demos', () => {
       state: toggleGroupState,
     });
     expect(toggleGroupState).toEqual({ activeValue: 'italic', value: 'bold,italic' });
+
+    const toastState = { open: true };
+    clientHandler(toast, 'GalleryToastDemo$button_click_2')(new Event('click'), {
+      params: {},
+      signal,
+      state: toastState,
+    });
+    expect(toastState).toEqual({ open: false });
   });
 });
 

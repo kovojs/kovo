@@ -31,8 +31,13 @@ const demos = [
   'checkbox-group-demo',
   'collapsible-demo',
   'combobox-demo',
+  'command-demo',
+  'context-menu-demo',
   'disclosure-demo',
   'dialog-demo',
+  'dropdown-menu-demo',
+  'menubar-demo',
+  'navigation-menu-demo',
   'number-field-demo',
   'otp-field-demo',
   'popover-demo',
@@ -44,6 +49,7 @@ const demos = [
   'toolbar-demo',
   'toggle-demo',
   'toggle-group-demo',
+  'toast-demo',
   'tooltip-demo',
 ];
 

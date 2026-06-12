@@ -24,11 +24,26 @@ import { GalleryCollapsibleDemo } from './generated/interactive/collapsible-demo
 import * as comboboxClient from './generated/interactive/combobox-demo.client.js';
 import { GalleryComboboxDemo } from './generated/interactive/combobox-demo.js';
 // @ts-expect-error generated client modules are compiler artifacts without declarations.
+import * as commandClient from './generated/interactive/command-demo.client.js';
+import { GalleryCommandDemo } from './generated/interactive/command-demo.js';
+// @ts-expect-error generated client modules are compiler artifacts without declarations.
+import * as contextMenuClient from './generated/interactive/context-menu-demo.client.js';
+import { GalleryContextMenuDemo } from './generated/interactive/context-menu-demo.js';
+// @ts-expect-error generated client modules are compiler artifacts without declarations.
 import * as disclosureClient from './generated/interactive/disclosure-demo.client.js';
 import { GalleryDisclosureDemo } from './generated/interactive/disclosure-demo.js';
 // @ts-expect-error generated client modules are compiler artifacts without declarations.
 import * as dialogClient from './generated/interactive/dialog-demo.client.js';
 import { GalleryDialogDemo } from './generated/interactive/dialog-demo.js';
+// @ts-expect-error generated client modules are compiler artifacts without declarations.
+import * as dropdownMenuClient from './generated/interactive/dropdown-menu-demo.client.js';
+import { GalleryDropdownMenuDemo } from './generated/interactive/dropdown-menu-demo.js';
+// @ts-expect-error generated client modules are compiler artifacts without declarations.
+import * as menubarClient from './generated/interactive/menubar-demo.client.js';
+import { GalleryMenubarDemo } from './generated/interactive/menubar-demo.js';
+// @ts-expect-error generated client modules are compiler artifacts without declarations.
+import * as navigationMenuClient from './generated/interactive/navigation-menu-demo.client.js';
+import { GalleryNavigationMenuDemo } from './generated/interactive/navigation-menu-demo.js';
 // @ts-expect-error generated client modules are compiler artifacts without declarations.
 import * as numberFieldClient from './generated/interactive/number-field-demo.client.js';
 import { GalleryNumberFieldDemo } from './generated/interactive/number-field-demo.js';
@@ -63,6 +78,9 @@ import { GalleryToggleDemo } from './generated/interactive/toggle-demo.js';
 import * as toggleGroupClient from './generated/interactive/toggle-group-demo.client.js';
 import { GalleryToggleGroupDemo } from './generated/interactive/toggle-group-demo.js';
 // @ts-expect-error generated client modules are compiler artifacts without declarations.
+import * as toastClient from './generated/interactive/toast-demo.client.js';
+import { GalleryToastDemo } from './generated/interactive/toast-demo.js';
+// @ts-expect-error generated client modules are compiler artifacts without declarations.
 import * as tooltipClient from './generated/interactive/tooltip-demo.client.js';
 import { GalleryTooltipDemo } from './generated/interactive/tooltip-demo.js';
 
@@ -82,8 +100,14 @@ const generatedModules: Record<string, Record<string, unknown>> = {
     checkboxGroupClient,
   '/c/examples/gallery/src/generated/interactive/collapsible-demo.client.js': collapsibleClient,
   '/c/examples/gallery/src/generated/interactive/combobox-demo.client.js': comboboxClient,
+  '/c/examples/gallery/src/generated/interactive/command-demo.client.js': commandClient,
+  '/c/examples/gallery/src/generated/interactive/context-menu-demo.client.js': contextMenuClient,
   '/c/examples/gallery/src/generated/interactive/disclosure-demo.client.js': disclosureClient,
   '/c/examples/gallery/src/generated/interactive/dialog-demo.client.js': dialogClient,
+  '/c/examples/gallery/src/generated/interactive/dropdown-menu-demo.client.js': dropdownMenuClient,
+  '/c/examples/gallery/src/generated/interactive/menubar-demo.client.js': menubarClient,
+  '/c/examples/gallery/src/generated/interactive/navigation-menu-demo.client.js':
+    navigationMenuClient,
   '/c/examples/gallery/src/generated/interactive/number-field-demo.client.js': numberFieldClient,
   '/c/examples/gallery/src/generated/interactive/otp-field-demo.client.js': otpFieldClient,
   '/c/examples/gallery/src/generated/interactive/popover-demo.client.js': popoverClient,
@@ -95,6 +119,7 @@ const generatedModules: Record<string, Record<string, unknown>> = {
   '/c/examples/gallery/src/generated/interactive/toolbar-demo.client.js': toolbarClient,
   '/c/examples/gallery/src/generated/interactive/toggle-demo.client.js': toggleClient,
   '/c/examples/gallery/src/generated/interactive/toggle-group-demo.client.js': toggleGroupClient,
+  '/c/examples/gallery/src/generated/interactive/toast-demo.client.js': toastClient,
   '/c/examples/gallery/src/generated/interactive/tooltip-demo.client.js': tooltipClient,
 };
 
@@ -941,6 +966,291 @@ describe('compiled interactive gallery demos in the browser', () => {
       expect(currentBold.getAttribute('aria-pressed')).toBe('true');
       expect(currentItalic.getAttribute('aria-pressed')).toBe('true');
       expect(currentOutput.textContent).toBe('bold,italic');
+    });
+  });
+
+  it('opens and selects from generated dropdown and context menu handlers', async () => {
+    const dropdownRoot = mountInteractiveDemo(GalleryDropdownMenuDemo);
+    const dropdownTrigger = required(
+      dropdownRoot.querySelector<HTMLButtonElement>('#gallery-dropdown-menu-trigger'),
+    );
+    const dropdownContent = required(
+      dropdownRoot.querySelector<HTMLElement>('#gallery-dropdown-menu-content'),
+    );
+    const rename = required(
+      dropdownRoot.querySelector<HTMLButtonElement>('#gallery-dropdown-menu-rename'),
+    );
+    const archive = required(
+      dropdownRoot.querySelector<HTMLButtonElement>('#gallery-dropdown-menu-archive'),
+    );
+    const dropdownValue = required(
+      dropdownRoot.querySelector<HTMLOutputElement>('[data-demo-state="dropdown-value"]'),
+    );
+    const dropdownLoader = installGeneratedGalleryLoader(dropdownRoot, {
+      events: ['click', 'keydown'],
+    });
+
+    expect(dropdownRoot.getAttribute('fw-state')).toBe(
+      '{"highlightedValue":"duplicate","open":false,"value":"duplicate"}',
+    );
+    expect(dropdownTrigger.getAttribute('aria-haspopup')).toBe('menu');
+    expect(dropdownTrigger.getAttribute('aria-expanded')).toBe('false');
+    expect(dropdownContent.getAttribute('role')).toBe('menu');
+    expect(dropdownContent.hidden).toBe(true);
+    expect(archive.getAttribute('aria-disabled')).toBe('true');
+
+    dropdownTrigger.click();
+
+    await vi.waitFor(() => {
+      expect(dropdownLoader.imports.at(-1)).toBe(
+        '/c/examples/gallery/src/generated/interactive/dropdown-menu-demo.client.js',
+      );
+      expect(dropdownRoot.getAttribute('fw-state')).toBe(
+        '{"highlightedValue":"duplicate","open":true,"value":"duplicate"}',
+      );
+      expect(dropdownTrigger.getAttribute('aria-expanded')).toBe('true');
+      expect(dropdownContent.hidden).toBe(false);
+    });
+
+    rename.click();
+
+    await vi.waitFor(() => {
+      expect(dropdownRoot.getAttribute('fw-state')).toBe(
+        '{"highlightedValue":"rename","open":false,"value":"rename"}',
+      );
+      expect(dropdownContent.hidden).toBe(true);
+      expect(rename.getAttribute('data-highlighted')).toBe('');
+      expect(dropdownValue.textContent).toBe('rename');
+    });
+
+    const contextRoot = mountInteractiveDemo(GalleryContextMenuDemo);
+    const trigger = required(
+      contextRoot.querySelector<HTMLElement>('#gallery-context-menu-trigger'),
+    );
+    const content = required(
+      contextRoot.querySelector<HTMLElement>('#gallery-context-menu-content'),
+    );
+    const inspect = required(
+      contextRoot.querySelector<HTMLButtonElement>('#gallery-context-menu-inspect'),
+    );
+    const contextValue = required(
+      contextRoot.querySelector<HTMLOutputElement>('[data-demo-state="context-value"]'),
+    );
+    const contextLoader = installGeneratedGalleryLoader(contextRoot, {
+      events: ['click', 'contextmenu', 'keydown'],
+    });
+
+    expect(trigger.getAttribute('jiso-context-menu')).toBe('gallery-context-menu-content');
+    expect(content.hidden).toBe(true);
+    expect(content.getAttribute('data-anchor-x')).toBe('24');
+    expect(content.getAttribute('data-anchor-y')).toBe('40');
+
+    trigger.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true }));
+
+    await vi.waitFor(() => {
+      expect(contextLoader.imports.at(-1)).toBe(
+        '/c/examples/gallery/src/generated/interactive/context-menu-demo.client.js',
+      );
+      expect(contextRoot.getAttribute('fw-state')).toBe(
+        '{"highlightedValue":"copy","open":true,"value":"copy"}',
+      );
+      expect(trigger.getAttribute('aria-expanded')).toBe('true');
+      expect(content.hidden).toBe(false);
+    });
+
+    inspect.click();
+
+    await vi.waitFor(() => {
+      expect(contextRoot.getAttribute('fw-state')).toBe(
+        '{"highlightedValue":"inspect","open":false,"value":"inspect"}',
+      );
+      expect(content.hidden).toBe(true);
+      expect(contextValue.textContent).toBe('inspect');
+    });
+  });
+
+  it('updates generated menubar and navigation-menu roving/open state', async () => {
+    const menubarRoot = mountInteractiveDemo(GalleryMenubarDemo);
+    const file = required(menubarRoot.querySelector<HTMLButtonElement>('#gallery-menubar-file'));
+    const edit = required(menubarRoot.querySelector<HTMLButtonElement>('#gallery-menubar-edit'));
+    const fileMenu = required(menubarRoot.querySelector<HTMLElement>('#gallery-menubar-file-menu'));
+    const openOutput = required(
+      menubarRoot.querySelector<HTMLOutputElement>('[data-demo-state="menubar-open"]'),
+    );
+    const menubarLoader = installGeneratedGalleryLoader(menubarRoot, {
+      events: ['click', 'keydown'],
+    });
+
+    expect(menubarRoot.getAttribute('role')).toBe('menubar');
+    expect(file.getAttribute('aria-haspopup')).toBe('menu');
+    expect(file.getAttribute('aria-expanded')).toBe('false');
+    expect(file.tabIndex).toBe(0);
+    expect(edit.tabIndex).toBe(-1);
+    expect(fileMenu.hidden).toBe(true);
+
+    menubarRoot.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, key: 'ArrowRight' }));
+
+    await vi.waitFor(() => {
+      expect(menubarLoader.imports.at(-1)).toBe(
+        '/c/examples/gallery/src/generated/interactive/menubar-demo.client.js',
+      );
+      expect(menubarRoot.getAttribute('fw-state')).toBe(
+        '{"activeValue":"edit","openValue":"","value":"new"}',
+      );
+      expect(file.tabIndex).toBe(-1);
+      expect(edit.tabIndex).toBe(0);
+    });
+
+    file.click();
+
+    await vi.waitFor(() => {
+      expect(menubarRoot.getAttribute('fw-state')).toBe(
+        '{"activeValue":"file","openValue":"file","value":"new"}',
+      );
+      expect(file.getAttribute('aria-expanded')).toBe('true');
+      expect(fileMenu.hidden).toBe(false);
+      expect(openOutput.textContent).toBe('file');
+    });
+
+    const navRoot = mountInteractiveDemo(GalleryNavigationMenuDemo);
+    const products = required(
+      navRoot.querySelector<HTMLButtonElement>('#gallery-navigation-products-trigger'),
+    );
+    const docs = required(
+      navRoot.querySelector<HTMLAnchorElement>('#gallery-navigation-docs-link'),
+    );
+    const productsContent = required(
+      navRoot.querySelector<HTMLElement>('#gallery-navigation-products-content'),
+    );
+    const viewport = required(navRoot.querySelector<HTMLElement>('#gallery-navigation-viewport'));
+    const navValue = required(
+      navRoot.querySelector<HTMLOutputElement>('[data-demo-state="navigation-value"]'),
+    );
+    installGeneratedGalleryLoader(navRoot, { events: ['click', 'keydown'] });
+
+    expect(navRoot.getAttribute('role')).toBe('navigation');
+    expect(products.getAttribute('aria-haspopup')).toBe('true');
+    expect(products.getAttribute('aria-expanded')).toBe('false');
+    expect(docs.getAttribute('href')).toBe('/docs');
+    expect(products.tabIndex).toBe(0);
+    expect(docs.tabIndex).toBe(-1);
+    expect(productsContent.hidden).toBe(true);
+    expect(viewport.hidden).toBe(true);
+
+    navRoot.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, key: 'ArrowRight' }));
+
+    await vi.waitFor(() => {
+      expect(navRoot.getAttribute('fw-state')).toBe(
+        '{"activeValue":"docs","openValue":"","value":"none"}',
+      );
+      expect(products.tabIndex).toBe(-1);
+      expect(docs.tabIndex).toBe(0);
+    });
+
+    products.click();
+
+    await vi.waitFor(() => {
+      expect(navRoot.getAttribute('fw-state')).toBe(
+        '{"activeValue":"docs","openValue":"products","value":"none"}',
+      );
+      expect(products.getAttribute('aria-expanded')).toBe('true');
+      expect(productsContent.hidden).toBe(false);
+      expect(viewport.hidden).toBe(false);
+    });
+
+    docs.removeAttribute('href');
+    docs.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
+
+    await vi.waitFor(() => {
+      expect(navRoot.getAttribute('fw-state')).toBe(
+        '{"activeValue":"docs","openValue":"","value":"docs"}',
+      );
+      expect(navValue.textContent).toBe('docs');
+    });
+  });
+
+  it('updates command dialog and toast visible state through generated handlers', async () => {
+    const commandRoot = mountInteractiveDemo(GalleryCommandDemo);
+    const trigger = required(
+      commandRoot.querySelector<HTMLButtonElement>('#gallery-command-trigger'),
+    );
+    const dialog = required(
+      commandRoot.querySelector<HTMLDialogElement>('#gallery-command-dialog'),
+    );
+    const input = required(commandRoot.querySelector<HTMLInputElement>('#gallery-command-input'));
+    const invite = required(
+      commandRoot.querySelector<HTMLButtonElement>('#gallery-command-listbox-item-1'),
+    );
+    const commandInput = required(
+      commandRoot.querySelector<HTMLOutputElement>('[data-demo-state="command-input"]'),
+    );
+    const commandValue = required(
+      commandRoot.querySelector<HTMLOutputElement>('[data-demo-state="command-value"]'),
+    );
+    const { imports } = installGeneratedGalleryLoader(commandRoot, {
+      events: ['click', 'input', 'keydown'],
+    });
+
+    expect(trigger.getAttribute('command')).toBe('show-modal');
+    expect(dialog.open).toBe(false);
+    expect(input.getAttribute('role')).toBe('combobox');
+    expect(input.getAttribute('aria-expanded')).toBe('false');
+    expect(commandInput.textContent).toBe('empty');
+
+    trigger.click();
+
+    await vi.waitFor(() => {
+      expect(imports.at(-1)).toBe(
+        '/c/examples/gallery/src/generated/interactive/command-demo.client.js',
+      );
+      expect(commandRoot.getAttribute('fw-state')).toBe(
+        '{"highlightedValue":"dashboard","inputValue":"","open":true,"value":"dashboard"}',
+      );
+      expect(dialog.open).toBe(true);
+    });
+
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+
+    await vi.waitFor(() => {
+      expect(commandRoot.getAttribute('fw-state')).toBe(
+        '{"highlightedValue":"invite","inputValue":"invite","open":true,"value":"dashboard"}',
+      );
+      expect(input.value).toBe('invite');
+      expect(input.getAttribute('aria-activedescendant')).toBe('gallery-command-listbox-item-1');
+      expect(invite.getAttribute('aria-selected')).toBe('true');
+      expect(commandInput.textContent).toBe('invite');
+    });
+
+    invite.click();
+
+    await vi.waitFor(() => {
+      expect(commandRoot.getAttribute('fw-state')).toBe(
+        '{"highlightedValue":"invite","inputValue":"invite","open":false,"value":"invite"}',
+      );
+      expect(dialog.open).toBe(false);
+      expect(commandValue.textContent).toBe('Invite teammate');
+    });
+
+    const toastRoot = mountInteractiveDemo(GalleryToastDemo);
+    const toast = required(toastRoot.querySelector<HTMLElement>('#gallery-toast'));
+    const dismiss = required(toastRoot.querySelector<HTMLButtonElement>('[data-dismiss]'));
+    const toastOutput = required(
+      toastRoot.querySelector<HTMLOutputElement>('[data-demo-state="toast-open"]'),
+    );
+    installGeneratedGalleryLoader(toastRoot, { events: ['click', 'keydown'] });
+
+    expect(toastRoot.getAttribute('role')).toBe('region');
+    expect(toast.getAttribute('role')).toBe('status');
+    expect(toast.getAttribute('aria-live')).toBe('polite');
+    expect(toast.hidden).toBe(false);
+    expect(toastOutput.textContent).toBe('open');
+
+    dismiss.click();
+
+    await vi.waitFor(() => {
+      expect(toastRoot.getAttribute('fw-state')).toBe('{"open":false}');
+      expect(toast.hidden).toBe(true);
+      expect(toastOutput.textContent).toBe('closed');
     });
   });
 
