@@ -19,6 +19,12 @@ const expectedBehaviorContracts = {
     dataState: 'not emitted',
     keyboard: 'No custom keyboard handling',
   },
+  '/components/alert-dialog': {
+    changeReasons:
+      'trigger-click, cancel-click, action-click, cancel-event, native-beforetoggle, programmatic',
+    dataState: 'open, closed, disabled',
+    keyboard: 'Escape cancels the native alert dialog',
+  },
   '/components/avatar': {
     changeReasons: 'image-load, image-error, programmatic',
     dataState: 'loading, loaded, error',
@@ -168,6 +174,18 @@ const expectedBehaviorSnippets: Partial<Record<GalleryRoute['path'], readonly st
     'role="alert"',
     'border-emerald-200 bg-emerald-50',
     'border-red-200 bg-red-50',
+  ],
+  '/components/alert-dialog': [
+    'command="show-modal"',
+    'commandfor="gallery-alert-dialog-content"',
+    'role="alertdialog"',
+    'aria-modal="true"',
+    'aria-labelledby="gallery-alert-dialog-title"',
+    'aria-describedby="gallery-alert-dialog-description"',
+    'autofocus',
+    'data-intent="cancel"',
+    'data-intent="destructive"',
+    'command="request-close"',
   ],
   '/components/breadcrumb': [
     'aria-label="Account path"',

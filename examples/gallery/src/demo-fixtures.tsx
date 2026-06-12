@@ -5,6 +5,11 @@ import {
   accordionItemAttributes,
   accordionRootAttributes,
   accordionTriggerAttributes,
+  alertDialogActionAttributes,
+  alertDialogCancelAttributes,
+  alertDialogContentAttributes,
+  alertDialogRootAttributes,
+  alertDialogTriggerAttributes,
   avatarFallbackAttributes,
   avatarImageAttributes,
   avatarRootAttributes,
@@ -79,6 +84,7 @@ import {
 export type GalleryComponent =
   | 'accordion'
   | 'alert'
+  | 'alert-dialog'
   | 'avatar'
   | 'badge'
   | 'breadcrumb'
@@ -133,6 +139,12 @@ export const galleryRoutes: readonly GalleryRoute[] = Object.freeze([
     path: '/components/alert',
     render: () => AlertDemo(),
     title: 'Alert',
+  },
+  {
+    component: 'alert-dialog',
+    path: '/components/alert-dialog',
+    render: () => AlertDialogDemo(),
+    title: 'Alert Dialog',
   },
   {
     component: 'avatar',
@@ -453,6 +465,40 @@ export function AlertDemo(): string {
         changeReasons: 'not stateful',
         dataState: 'not emitted',
         keyboard: 'No custom keyboard handling',
+      })}
+    </section>
+  );
+}
+
+export function AlertDialogDemo(): string {
+  const state = {
+    contentId: 'gallery-alert-dialog-content',
+    descriptionId: 'gallery-alert-dialog-description',
+    open: true,
+    titleId: 'gallery-alert-dialog-title',
+  };
+
+  return (
+    <section {...alertDialogRootAttributes(state)} data-gallery-demo="alert-dialog">
+      <p data-demo-summary="no-js">
+        Alert dialog keeps destructive confirmation controls wired to a native dialog element.
+      </p>
+      <button {...alertDialogTriggerAttributes({ ...state, open: false })}>Delete project</button>
+      <dialog {...alertDialogContentAttributes(state)}>
+        <h2 id="gallery-alert-dialog-title">Delete production project?</h2>
+        <p id="gallery-alert-dialog-description">
+          This action removes deploy tokens and cannot be undone.
+        </p>
+        <button {...alertDialogCancelAttributes({ ...state, autoFocus: true })}>Cancel</button>
+        <button {...alertDialogActionAttributes({ ...state, intent: 'destructive' })}>
+          Delete
+        </button>
+      </dialog>
+      {renderBehaviorContract({
+        changeReasons:
+          'trigger-click, cancel-click, action-click, cancel-event, native-beforetoggle, programmatic',
+        dataState: 'open, closed, disabled',
+        keyboard: 'Escape cancels the native alert dialog',
       })}
     </section>
   );

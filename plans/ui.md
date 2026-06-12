@@ -645,6 +645,17 @@ jiso-dialog` resolves dashed wire names and prints provenance including package,
       `pnpm exec vp check packages/ui/package.json packages/ui/src/index.tsx packages/ui/src/sheet.tsx packages/ui/src/index.test.tsx examples/gallery/src/demo-fixtures.tsx examples/gallery/src/demo-fixtures.test.ts examples/gallery/src/behavior-contracts.test.ts`,
       and `git diff --check`. G1 remains open for unrepresented headless primitives and full
       docs/gallery deployment gates.
+      Additional partial evidence 2026-06-12: `examples/gallery` adds an alert-dialog
+      route fixture that imports the current `@jiso/headless-ui` alert-dialog builders,
+      renders TSX-authored native `<dialog role="alertdialog">` markup with invoker-command
+      trigger, cancel, and destructive action controls, includes a no-JS summary and
+      behavior-contract table, and pins route/nav coverage in fixture tests. Same-session
+      evidence:
+      `pnpm --filter @jiso/example-gallery test`,
+      `pnpm --filter @jiso/headless-ui exec vitest --run src/primitives/alert-dialog.test.ts src/tooling/lint-primitives.test.ts src/tooling/primitive-handler-lint.test.ts`,
+      `pnpm exec vp check examples/gallery/src/demo-fixtures.tsx examples/gallery/src/demo-fixtures.test.ts examples/gallery/src/behavior-contracts.test.ts examples/gallery/src/index.ts plans/ui.md`,
+      and `git diff --check`. G1 remains open for unrepresented headless primitives and full
+      docs/gallery deployment gates.
 - [ ] G2 behavior-contract gates: keyboard/ARIA assertions per primitive (browser-free via `page()` + `fw explain` where possible; framework browser suite for focus/dismiss/top-layer).
       Partial evidence 2026-06-12: `examples/gallery/src/behavior-contracts.test.ts`
       adds a browser-free G2 fixture gate over the existing 17 rendered gallery routes. It
@@ -698,6 +709,16 @@ jiso-dialog` resolves dashed wire names and prints provenance including package,
       evidence:
       `pnpm --filter @jiso/example-gallery test`,
       `pnpm exec vp check packages/ui/package.json packages/ui/src/index.tsx packages/ui/src/sheet.tsx packages/ui/src/index.test.tsx examples/gallery/src/demo-fixtures.tsx examples/gallery/src/demo-fixtures.test.ts examples/gallery/src/behavior-contracts.test.ts`,
+      and `git diff --check`. G2 remains open for browser-backed checks, `fw explain`
+      coverage, and unrepresented primitive routes.
+      Additional partial evidence 2026-06-12: the browser-free G2 fixture gate now covers
+      the alert-dialog route with exact behavior-contract rows plus native alert dialog
+      snippets for `command="show-modal"`, `commandfor`, `role="alertdialog"`,
+      `aria-modal`, label/description IDREFs, autofocus cancel control, destructive action
+      intent, and request-close wiring. Same-session evidence:
+      `pnpm --filter @jiso/example-gallery test`,
+      `pnpm --filter @jiso/headless-ui exec vitest --run src/primitives/alert-dialog.test.ts src/tooling/lint-primitives.test.ts src/tooling/primitive-handler-lint.test.ts`,
+      `pnpm exec vp check examples/gallery/src/demo-fixtures.tsx examples/gallery/src/demo-fixtures.test.ts examples/gallery/src/behavior-contracts.test.ts examples/gallery/src/index.ts plans/ui.md`,
       and `git diff --check`. G2 remains open for browser-backed checks, `fw explain`
       coverage, and unrepresented primitive routes.
 - [ ] G3 axe checks per component state in the gallery.

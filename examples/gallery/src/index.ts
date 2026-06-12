@@ -1,5 +1,7 @@
 export {
   AccordionDemo,
+  AlertDialogDemo,
+  AlertDemo,
   BadgeDemo,
   ButtonDemo,
   CardDemo,

@@ -10,6 +10,7 @@ import {
 const expectedRoutes = [
   '/components/accordion',
   '/components/alert',
+  '/components/alert-dialog',
   '/components/avatar',
   '/components/badge',
   '/components/breadcrumb',
@@ -98,6 +99,24 @@ describe('gallery demo fixtures', () => {
     expect(avatar.html).toContain('hidden>GH</span>');
     expect(avatar.html).toContain('data-state="error"');
     expect(avatar.html).toContain('hidden src="/avatars/missing.png"');
+  });
+
+  it('renders alert-dialog fixture with native alertdialog and action wiring', () => {
+    const alertDialog = findFixture('/components/alert-dialog');
+
+    expect(alertDialog.html).toContain('data-gallery-demo="alert-dialog"');
+    expect(alertDialog.html).toContain('command="show-modal"');
+    expect(alertDialog.html).toContain('commandfor="gallery-alert-dialog-content"');
+    expect(alertDialog.html).toContain('aria-controls="gallery-alert-dialog-content"');
+    expect(alertDialog.html).toContain('role="alertdialog"');
+    expect(alertDialog.html).toContain('aria-modal="true"');
+    expect(alertDialog.html).toContain('id="gallery-alert-dialog-content"');
+    expect(alertDialog.html).toContain('aria-labelledby="gallery-alert-dialog-title"');
+    expect(alertDialog.html).toContain('aria-describedby="gallery-alert-dialog-description"');
+    expect(alertDialog.html).toContain('autofocus');
+    expect(alertDialog.html).toContain('data-intent="cancel"');
+    expect(alertDialog.html).toContain('data-intent="destructive"');
+    expect(alertDialog.html).toContain('command="request-close"');
   });
 
   it('renders checkbox fixture with native form states', () => {
