@@ -2,6 +2,10 @@ import { validateHeaderValue } from 'node:http';
 import { describe, expect, it } from 'vitest';
 
 import {
+  changeRecordTouchesQueryInstance,
+  mutationRegistryChangeRecords,
+} from './change-record.js';
+import {
   domain,
   invalidate,
   mutation as defineMutation,
@@ -16,6 +20,48 @@ const mutation = ((key: string, definition: Parameters<typeof defineMutation>[1]
   defineMutation(key, { csrf: false, ...definition })) as typeof defineMutation;
 
 describe('server change records', () => {
+  it('derives inferred mutation touch keys from arg:path sources', () => {
+    const input = {
+      item: {
+        id: 'p1',
+        variantIds: ['v1', 2, true, { ignored: true }],
+      },
+    };
+
+    expect(
+      mutationRegistryChangeRecords(
+        {
+          inferredTouches: [
+            { domain: 'product', keys: 'arg:item.id' },
+            { domain: 'product', keys: 'arg:item.id' },
+            { domain: 'variant', keys: 'arg:item.variantIds' },
+            { domain: 'cart', keys: null },
+            { domain: 'ignored', keys: 'literal' },
+          ],
+        },
+        input,
+      ),
+    ).toEqual([
+      { domain: 'product', input, keys: ['p1'] },
+      { domain: 'variant', input, keys: ['v1', '2', 'true'] },
+      { domain: 'cart', input },
+      { domain: 'ignored', input },
+    ]);
+  });
+
+  it('matches change records against domain-scoped query instance keys', () => {
+    expect(
+      changeRecordTouchesQueryInstance({ domain: 'product', keys: ['p1'] }, 'product:p1'),
+    ).toBe(true);
+    expect(
+      changeRecordTouchesQueryInstance({ domain: 'product', keys: ['p1'] }, 'product:p2'),
+    ).toBe(false);
+    expect(changeRecordTouchesQueryInstance({ domain: 'product', keys: ['p1'] }, 'cart:p1')).toBe(
+      false,
+    );
+    expect(changeRecordTouchesQueryInstance({ domain: 'product' }, 'product:p1')).toBe(true);
+  });
+
   it('emits manual invalidate escape-hatch records from mutation context', async () => {
     const cart = domain('cart');
     const product = domain('product');

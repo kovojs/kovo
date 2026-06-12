@@ -1908,6 +1908,15 @@ land it first; don't fork it.
       `pnpm exec vitest --run packages/server/src/index.test.ts packages/server/src/app.test.ts packages/server/src/replay.test.ts packages/server/src/mutation-wire.test.ts packages/server/src/csrf.test.ts packages/server/src/guards.test.ts packages/server/src/change-record.test.ts packages/server/src/wire-fixtures.test.ts`,
       `pnpm exec vp check packages/server/src/index.ts packages/server/src/mutation.ts packages/server/src/app.ts packages/server/src/mutation-wire.ts plans/codebase-quality-round2.md`,
       and `git diff --check`.
+      Additional evidence 2026-06-12: change-record typing, manual invalidation records, inferred
+      mutation touch expansion, the `arg:path` touch-key source convention, and domain-scoped query
+      instance key matching moved from `packages/server/src/mutation.ts` into
+      `packages/server/src/change-record.ts`; `mutation.ts` preserves the public
+      `invalidate`/change-record type re-exports while delegating registry change construction and
+      keyed query rerun matching to the extracted seam. Same-session evidence:
+      `pnpm exec vitest --run packages/server/src/change-record.test.ts packages/server/src/index.test.ts`,
+      `pnpm exec vp check packages/server/src/change-record.ts packages/server/src/change-record.test.ts packages/server/src/mutation.ts plans/codebase-quality-round2.md`,
+      and `git diff --check`.
 - [ ] **LOW** — dead code (`matchShellDispatch` post-loop return shell.ts:161-166; rate-limit
       tail `return options.max > 0` index.ts:576); `matchRoute` recompiling all routes per call
       (match.ts:75-81 — cache `compileRoute`); `Transfer-Encoding: chunked` on a buffered string
