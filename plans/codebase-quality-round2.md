@@ -590,6 +590,13 @@ pipeline throws the tree away and communicates via mutated source text.
       `pnpm exec vitest --run packages/compiler/src/index.test.ts -t "ir|FW235|server file|registry metadata|CSS"`
       and
       `pnpm exec vp check packages/compiler/src/index.ts packages/compiler/src/ir.ts packages/compiler/src/css.ts packages/compiler/src/emit/client.ts packages/compiler/src/emit/server.ts packages/compiler/src/emit/registry.ts packages/compiler/src/emit/bootstrap.ts packages/compiler/src/validate/authoring-surface.ts plans/codebase-quality-round2.md`.
+      Additional evidence 2026-06-12: `packages/compiler/src/emit/registry.ts` now consumes
+      canonical `FragmentTargetFact`, `PlatformSubstitution`, `QueryUpdatePlanFact`,
+      `ViewTransitionStamp`, and handler-lowering export-name types instead of private registry
+      structural copies. Same-session evidence:
+      `pnpm exec vitest --run packages/compiler/src/index.test.ts -t "registry metadata|query update|view transition|platform"`
+      and
+      `pnpm exec vp check packages/compiler/src/emit/registry.ts packages/compiler/src/index.ts plans/codebase-quality-round2.md`.
 - [x] **MED — Move analysis out of validate/.** `collectQueryUpdatePlans` and coverage
       classification feed emit, not validation; positions travel through a module-global
       `WeakMap` (`updateCoverageSpans`, bindings.ts:45-48) read back in component-contracts.ts:271.

@@ -1,45 +1,21 @@
 import type { ComponentCssAsset } from '../css.js';
-import type { RegistryFacts, RegistryTypeFacts } from '../graph.js';
+import type { FragmentTargetFact, RegistryFacts, RegistryTypeFacts } from '../graph.js';
 import { compilerIrHeader } from '../ir.js';
+import type { HandlerLowering } from '../lower/handlers.js';
+import type { PlatformSubstitution } from '../lower/platform.js';
 import { kebabCase } from '../shared.js';
-
-interface RegistryHandler {
-  exportName: string;
-}
-
-interface RegistryFragmentTarget {
-  propsType: string;
-  target: string;
-}
-
-interface RegistryPlatformSubstitution {
-  action: string;
-  event: string;
-  kind: 'details' | 'dialog' | 'popover';
-  tag: string;
-  target: string;
-}
-
-interface RegistryQueryUpdatePlan {
-  componentName: string;
-  paths: readonly string[];
-  query: string;
-}
-
-interface RegistryViewTransition {
-  name: string;
-}
+import type { QueryUpdatePlanFact, ViewTransitionStamp } from '../types.js';
 
 export interface EmitRegistryModuleOptions {
   clientFileName: string;
   cssAssets: readonly ComponentCssAsset[];
   componentName: string;
-  fragmentTargetFacts: readonly RegistryFragmentTarget[];
-  handlers: readonly RegistryHandler[];
-  platformSubstitutions: readonly RegistryPlatformSubstitution[];
-  queryUpdatePlans: readonly RegistryQueryUpdatePlan[];
+  fragmentTargetFacts: readonly FragmentTargetFact[];
+  handlers: readonly Pick<HandlerLowering, 'exportName'>[];
+  platformSubstitutions: readonly PlatformSubstitution[];
+  queryUpdatePlans: readonly QueryUpdatePlanFact[];
   registryFacts?: RegistryFacts;
-  viewTransitions: readonly RegistryViewTransition[];
+  viewTransitions: readonly ViewTransitionStamp[];
 }
 
 export function emitRegistryModule(options: EmitRegistryModuleOptions): string {
