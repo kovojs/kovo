@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  isHeaderSource,
+  readHeader,
   routeResponseToDocumentResponse,
   routeResponseToWebResponse,
   type RoutePageResponse,
@@ -50,5 +52,19 @@ describe('server response adapters', () => {
 
     expect(documentResponse.body).toBeInstanceOf(Uint8Array);
     expect(new TextDecoder().decode(documentResponse.body as Uint8Array)).toBe('page');
+  });
+
+  it('accepts concrete header sources without treating arbitrary objects as headers', () => {
+    expect(isHeaderSource(new Headers({ 'Content-Type': 'text/html' }))).toBe(true);
+    expect(isHeaderSource(new Map([['Content-Type', 'text/html']]))).toBe(true);
+    expect(isHeaderSource({ 'Content-Type': 'text/html', Vary: ['Accept'] })).toBe(true);
+
+    expect(isHeaderSource({ status: 200 })).toBe(false);
+    expect(isHeaderSource(['Content-Type', 'text/html'])).toBe(false);
+
+    const headers = { 'CONTENT-TYPE': 'text/html', Vary: ['Accept', 'Cookie'] };
+    expect(isHeaderSource(headers)).toBe(true);
+    expect(readHeader(headers, 'content-type')).toBe('text/html');
+    expect(readHeader(headers, 'vary')).toBe('Accept, Cookie');
   });
 });

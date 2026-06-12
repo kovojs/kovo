@@ -2512,6 +2512,16 @@ land it first; don't fork it.
       `corepack pnpm exec vitest --run packages/server/src/webhook.test.ts`,
       `corepack pnpm exec vp check packages/server/src/webhook.ts plans/codebase-quality-round2.md`,
       and `git diff --check`.
+      Additional evidence 2026-06-12: document assembly moved from the additive
+      `packages/server/src/document.ts` surface into `packages/server/src/document-core.ts`, and
+      diagnostic document rendering/source-frame logic moved into
+      `packages/server/src/document-diagnostics.ts`; `document.ts` now preserves the compatible
+      public facade for `app.ts`, `vite.ts`, and `index.ts` while the focused tests exercise the
+      extracted seams directly. Same-session evidence:
+      `pnpm exec vitest --run packages/server/src/document.test.ts packages/server/src/shell.test.ts packages/server/src/response.test.ts`,
+      `pnpm exec vitest --run packages/server/src/*.test.ts`,
+      `pnpm exec vp check packages/server/src/document.ts packages/server/src/document-core.ts packages/server/src/document-diagnostics.ts packages/server/src/document.test.ts packages/server/src/shell.test.ts packages/server/src/response.test.ts plans/codebase-quality-round2.md`,
+      and `git diff --check`.
 - [ ] **LOW — Close the server cleanup inventory with an acceptance sweep.** Historical audit
       targets were dead code (`matchShellDispatch` post-loop return shell.ts:161-166; rate-limit
       tail `return options.max > 0` index.ts:576); `matchRoute` recompiling all routes per call
@@ -2995,6 +3005,15 @@ As each phase splits a source module, split its tests in the same commit.
       `corepack pnpm exec vitest --run packages/server/src/mutation-response.test.ts packages/server/src/wire-fixtures.test.ts packages/server/src/change-record.test.ts packages/server/src/guards.test.ts packages/server/src/replay.test.ts packages/server/src/mutation.test.ts packages/server/src/mutation-endpoint.test.ts packages/server/src/mutation-no-js.test.ts packages/server/src/schema.test.ts`,
       `corepack pnpm exec vitest --run packages/server/src/*.test.ts`,
       `corepack pnpm exec vp check packages/server/src/test-fixtures.ts packages/server/src/change-record.test.ts packages/server/src/guards.test.ts packages/server/src/mutation-endpoint.test.ts packages/server/src/mutation-no-js.test.ts packages/server/src/mutation-response.test.ts packages/server/src/mutation.test.ts packages/server/src/replay.test.ts packages/server/src/schema.test.ts packages/server/src/wire-fixtures.test.ts`,
+      and `git diff --check`.
+      Additional evidence 2026-06-12: document assembly and diagnostic document coverage moved
+      out of `packages/server/src/shell.test.ts` into `packages/server/src/document.test.ts`,
+      importing `document-core.ts` and `document-diagnostics.ts` directly; the response header
+      utility assertion moved to `packages/server/src/response.test.ts`, leaving
+      `shell.test.ts` focused on shell dispatch. Same-session evidence:
+      `pnpm exec vitest --run packages/server/src/document.test.ts packages/server/src/shell.test.ts packages/server/src/response.test.ts`,
+      `pnpm exec vitest --run packages/server/src/*.test.ts`,
+      `pnpm exec vp check packages/server/src/document.ts packages/server/src/document-core.ts packages/server/src/document-diagnostics.ts packages/server/src/document.test.ts packages/server/src/shell.test.ts packages/server/src/response.test.ts plans/codebase-quality-round2.md`,
       and `git diff --check`.
 - [ ] runtime/index.test.ts (4,435 lines, mutation tests under "query store") → per-module
       files; `Fake*` classes to a shared `test-fixtures.ts`; direct unit tests for wire-parser,
