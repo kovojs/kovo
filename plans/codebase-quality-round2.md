@@ -680,6 +680,13 @@ pipeline throws the tree away and communicates via mutated source text.
       `pnpm exec vitest --run packages/compiler/src/scan/parse.test.ts packages/compiler/src/query-update-plans.test.ts packages/compiler/src/query-bindings.test.ts packages/compiler/src/fragment-targets.test.ts packages/compiler/src/query-coverage.test.ts`
       and
       `pnpm exec vp check packages/compiler/src/scan/parse.ts packages/compiler/src/scan/parse.test.ts packages/compiler/src/analyze/query-updates.ts packages/compiler/src/validate/bindings.ts packages/compiler/src/validate/component-contracts.ts packages/compiler/src/compile.ts`.
+      Additional evidence 2026-06-12: `JsxExpressionModel` now records parser-owned
+      JSX-expression container spans, and mixed-text inline `data-bind` lowering patches those
+      spans directly instead of searching module source for surrounding braces with `indexOf`.
+      Same-session evidence:
+      `pnpm exec vitest --run packages/compiler/src/scan/parse.test.ts packages/compiler/src/query-coverage.test.ts packages/compiler/src/query-update-plans.test.ts`
+      and
+      `pnpm exec vp check packages/compiler/src/scan/parse.ts packages/compiler/src/scan/parse.test.ts packages/compiler/src/lower/inline-derives.ts`.
       Partial evidence 2026-06-11: `serverRenderSource` now parses once after handler lowering
       with the author file name and stamps component identity, declared query deps, and initial
       state onto the render host through one in-memory tag update instead of reparsing for each

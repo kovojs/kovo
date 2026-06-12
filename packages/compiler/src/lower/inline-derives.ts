@@ -89,7 +89,7 @@ export function lowerInlineAttributeDerives(
   }
 
   for (const expression of jsxExpressions(model)) {
-    const binding = inlineMixedTextBinding(expression, model, source, knownQueries);
+    const binding = inlineMixedTextBinding(expression, model, knownQueries);
     if (!binding) continue;
 
     replacements.push({
@@ -178,7 +178,6 @@ function inlineTextBinding(
 function inlineMixedTextBinding(
   expression: JsxExpressionModel,
   model: ComponentModuleModel,
-  source: string,
   knownQueries: ReadonlySet<string>,
 ): { end: number; path: string; start: number } | null {
   const path = soleKnownQueryPath(expression, knownQueries);
@@ -190,13 +189,13 @@ function inlineMixedTextBinding(
   if (element.attributes.some((attribute) => isBindingAttributeName(attribute.name))) return null;
   if (inlineTextBinding(element, model, knownQueries) !== null) return null;
 
-  const start = source.lastIndexOf('{', expression.start);
-  const end = source.indexOf('}', expression.end);
+  const start = expression.containerStart;
+  const end = expression.containerEnd;
   if (start === -1 || end === -1 || start < element.openingEnd || end > element.closingStart) {
     return null;
   }
 
-  return { end: end + 1, path, start };
+  return { end, path, start };
 }
 
 function soleKnownQueryPath(

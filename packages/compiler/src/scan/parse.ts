@@ -61,6 +61,8 @@ export interface SourceSpan {
 }
 
 export interface JsxExpressionModel {
+  containerEnd: number;
+  containerStart: number;
   end: number;
   expression: string;
   propertyAccesses: readonly PropertyAccessPathModel[];
@@ -198,8 +200,7 @@ export function parseComponentModule(fileName: string, source: string): Componen
     if (ts.isJsxExpression(node)) {
       const comment = jsxCommentModel(sourceFile, source, node);
       if (comment) jsxComments.push(comment);
-      if (node.expression)
-        jsxExpressions.push(jsxExpressionModel(sourceFile, source, node.expression));
+      if (node.expression) jsxExpressions.push(jsxExpressionModel(sourceFile, source, node));
     }
     if (ts.isCallExpression(node) && ts.isIdentifier(node.expression)) {
       calls.push(callExpressionModel(sourceFile, source, node));
@@ -1214,12 +1215,16 @@ function exportedConstInitializerName(node: ts.CallExpression): { exportedConstN
 function jsxExpressionModel(
   sourceFile: ts.SourceFile,
   source: string,
-  expression: ts.Expression,
+  node: ts.JsxExpression,
 ): JsxExpressionModel {
+  const expression = node.expression;
+  if (!expression) throw new Error('jsxExpressionModel requires an expression');
   const start = expression.getStart(sourceFile);
   const end = expression.getEnd();
   const solePath = solePropertyAccessPathFromExpression(expression);
   return {
+    containerEnd: node.getEnd(),
+    containerStart: node.getStart(sourceFile),
     end,
     expression: source.slice(start, end).trim(),
     propertyAccesses: propertyAccessPathModels(sourceFile, expression),

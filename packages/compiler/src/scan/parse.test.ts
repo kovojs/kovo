@@ -8,6 +8,7 @@ import {
   functionBodyPropertyAccessPaths,
   jsxElementChildBody,
   jsxElements,
+  jsxExpressions,
   mutationHandlers,
   parseComponentModule,
   solePropertyAccessPath,
@@ -37,6 +38,26 @@ export const ChildSlot = component('child-slot', {
       offset: source.indexOf('<span>'),
       source: '<span>{cart.count}</span>',
     });
+  });
+
+  it('records JSX expression container spans for source patches', () => {
+    const source = `
+export const CartBadge = component('cart-badge', {
+  render: () => <cart-badge>Total: {cart.count} items</cart-badge>,
+});
+`;
+    const [expression] = jsxExpressions(parseComponentModule('cart-badge.tsx', source));
+
+    expect(expression).toEqual(
+      expect.objectContaining({
+        containerEnd: source.indexOf('{cart.count}') + '{cart.count}'.length,
+        containerStart: source.indexOf('{cart.count}'),
+        end: source.indexOf('cart.count') + 'cart.count'.length,
+        expression: 'cart.count',
+        solePropertyAccessPath: 'cart.count',
+        start: source.indexOf('cart.count'),
+      }),
+    );
   });
 
   it('extracts one property access expression with optional receiver segments', () => {
