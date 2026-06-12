@@ -669,12 +669,12 @@ Behavior contracts (state attributes, ARIA, keyboard maps, change reasons) are p
     `pnpm exec vp check packages/ui/package.json packages/ui/tsconfig.json packages/ui/src/index.tsx packages/ui/src/button.tsx packages/ui/src/badge.tsx packages/ui/src/card.tsx packages/ui/src/sheet.tsx packages/ui/src/index.test.tsx pnpm-lock.yaml plans/ui.md`,
     and `git diff --check`.
   - Remaining before U2 can be checked complete: promote the extracted catalog into whatever
-    distributable contract/package asset shape `@jiso/ui` needs, add styled wrappers that import
-    `@jiso/headless-ui`, and run the vendored output through the same TSX authoring/FW235 gate as
-    local app code.
-  - Remaining before U3 can be checked complete: add the rest of the pure-markup set
-    (`table`, `breadcrumb`) and sheet/drawer styled dialog variants, then
-    verify them through the gallery/conformance surface rather than only CLI copy tests.
+    distributable contract/package asset shape `@jiso/ui` needs and keep the CLI vendored
+    catalog synchronized with that package source instead of hand-maintaining duplicated TSX
+    strings.
+  - Remaining before U3 can be checked complete: add sheet/drawer styled dialog variants and
+    verify the styled surface through the gallery/conformance gates rather than only package and
+    CLI copy tests.
 - **U3–U5 — components**, trailing each H-wave by one step; U3 also carries the pure-markup set that needs no behavior layer (button, badge, card, kbd, alert, table, breadcrumb, skeleton) and sheet/drawer as styled dialog variants.
   - Partial U3 package evidence 2026-06-12: `packages/ui/src/button.tsx`,
     `packages/ui/src/badge.tsx`, and `packages/ui/src/card.tsx` add the first pure-markup
