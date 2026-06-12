@@ -2,7 +2,6 @@ import { diagnosticDefinitions } from '@jiso/core';
 import ts from 'typescript';
 
 import { diagnosticFor, type CompilerDiagnostic } from '../diagnostics.js';
-import { literalValue } from '../scan/object.js';
 import {
   functionBodyPropertyAccessPaths,
   identifierReferences,
@@ -225,14 +224,17 @@ function extractElementParams(
   expression: string,
   zeroArgArrow?: ZeroArgArrowModel,
 ): ElementParam[] {
-  const callArguments = zeroArgArrow?.callArguments ?? zeroArgArrowCallArguments(expression);
+  const callArguments = zeroArgArrow?.callArguments;
   const expressions = callArguments
     ? callArguments
         .map((arg) => arg.trim())
-        .filter((arg) => arg.length > 0 && arg !== 'state')
-        .flatMap((arg) => {
-          if (literalValue(arg) !== undefined) return [];
-          const members = serializableMemberExpressions(arg);
+        .flatMap((arg, index) => {
+          if (arg.length === 0 || arg === 'state') return [];
+          if (zeroArgArrow?.callArgumentStaticValues?.[index] !== undefined) return [];
+          const members =
+            zeroArgArrow?.callArgumentPropertyAccesses?.[index]
+              ?.map((access) => access.path)
+              .filter(serializableMemberExpression) ?? [];
           return members.length > 0 ? members : [arg];
         })
     : serializableMemberExpressions(expression, zeroArgArrow);
@@ -242,35 +244,6 @@ function extractElementParams(
     type: inferElementParamType(expression, arg, zeroArgArrow),
     value: `{${arg}}`,
   }));
-}
-
-function zeroArgArrowCallArguments(expression: string): string[] | null {
-  const sourceFile = ts.createSourceFile(
-    'handler-expression.ts',
-    `const __jiso_handler__ = ${expression};`,
-    ts.ScriptTarget.Latest,
-    true,
-    ts.ScriptKind.TS,
-  );
-  let callArguments: string[] | null = null;
-
-  const visit = (node: ts.Node): void => {
-    if (callArguments !== null) return;
-
-    if (
-      ts.isArrowFunction(node) &&
-      node.parameters.length === 0 &&
-      ts.isCallExpression(node.body)
-    ) {
-      callArguments = node.body.arguments.map((argument) => argument.getText(sourceFile));
-      return;
-    }
-
-    ts.forEachChild(node, visit);
-  };
-
-  visit(sourceFile);
-  return callArguments;
 }
 
 function inferElementParamType(
@@ -331,11 +304,16 @@ function serializableMemberExpressions(
   zeroArgArrow?: ZeroArgArrowModel,
 ): string[] {
   return collectSerializableMemberExpressions(expression, zeroArgArrow).filter(
-    (member) =>
-      !member.startsWith('state.') &&
-      !member.startsWith('ctx.') &&
-      !member.startsWith('document.') &&
-      !member.startsWith('window.'),
+    serializableMemberExpression,
+  );
+}
+
+function serializableMemberExpression(member: string): boolean {
+  return (
+    !member.startsWith('state.') &&
+    !member.startsWith('ctx.') &&
+    !member.startsWith('document.') &&
+    !member.startsWith('window.')
   );
 }
 

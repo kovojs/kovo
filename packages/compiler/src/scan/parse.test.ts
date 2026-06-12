@@ -406,6 +406,38 @@ export const ProductLinks = component('product-links', {
     expect(arrowFunctionParts('expression.tsx', 'cart => { return cart.count; }')).toBeNull();
   });
 
+  it('records call argument facts on zero-argument JSX arrow attributes', () => {
+    const source = `
+export const CartActions = component('cart-actions', {
+  render: () => (
+    <button onClick={() => saveItem('literal,item', item.id, { quantity: item.quantity }, state)}>
+      Save
+    </button>
+  ),
+});
+`;
+    const [button] = jsxElements(parseComponentModule('cart-actions.tsx', source));
+    const click = button?.attributes.find((attribute) => attribute.name === 'onClick');
+
+    expect(click?.zeroArgArrow?.callArguments).toEqual([
+      "'literal,item'",
+      'item.id',
+      '{ quantity: item.quantity }',
+      'state',
+    ]);
+    expect(click?.zeroArgArrow?.callArgumentStaticValues).toEqual([
+      'literal,item',
+      undefined,
+      undefined,
+      undefined,
+    ]);
+    expect(
+      click?.zeroArgArrow?.callArgumentPropertyAccesses?.map((paths) =>
+        paths.map((path) => path.path),
+      ),
+    ).toEqual([[], ['item.id'], ['item.quantity'], []]);
+  });
+
   it('extracts document element method actions from zero-argument arrows', () => {
     expect(
       documentElementActionFromZeroArgArrow(

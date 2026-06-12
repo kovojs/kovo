@@ -820,6 +820,15 @@ pipeline throws the tree away and communicates via mutated source text.
       `pnpm exec vitest --run packages/compiler/src/scan/parse.test.ts packages/compiler/src/navigation-lowering.test.ts`,
       `pnpm exec vp check packages/compiler/src/scan/parse.ts packages/compiler/src/scan/parse.test.ts packages/compiler/src/lower/navigation.ts packages/compiler/src/navigation-lowering.test.ts`,
       and `rg -n "parseLiteralObject|literalStringValue" packages/compiler/src/lower/navigation.ts packages/compiler/src/scan/parse.ts`.
+      Additional evidence 2026-06-12: `scan/parse.ts` now records static values and
+      property-access facts for each zero-argument JSX arrow call argument, and
+      `lower/handlers.ts` consumes those parsed facts for element-param extraction instead of
+      reparsing concise call arguments or filtering literals through `literalValue()`. The
+      parser test pins quoted commas, literal arguments, object arguments, and `state` arguments
+      through the model. Same-session evidence:
+      `pnpm exec vitest --run packages/compiler/src/scan/parse.test.ts packages/compiler/src/handler-lowering.test.ts`,
+      `pnpm exec vp check packages/compiler/src/scan/parse.ts packages/compiler/src/scan/parse.test.ts packages/compiler/src/lower/handlers.ts packages/compiler/src/handler-lowering.test.ts`,
+      and `rg -n "literalValue|zeroArgArrowCallArguments|parseLiteralObject|literalStringValue" packages/compiler/src/lower/handlers.ts packages/compiler/src/lower/navigation.ts`.
       Additional evidence 2026-06-12: the legacy source-returning compatibility wrappers
       `lowerViewTransitions`, `lowerPlatformBehaviors`, `lowerNavigationLinks`,
       `lowerNavigationHrefs`, and `serverRenderSource` were removed from production compiler
