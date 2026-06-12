@@ -14,6 +14,7 @@
     "check": "vp check && vp run typecheck-examples",
     "check:build": "vp run build",
     "check:fw": "vp run fw-check",
+    "docs:serve": "pnpm run check:build && pnpm --filter @jiso/site run build && HOST=0.0.0.0 node site/scripts/serve.mjs",
     "test": "vitest --run",
     "test:browser": "vp run browser",
     "test:conformance": "vp run conformance",

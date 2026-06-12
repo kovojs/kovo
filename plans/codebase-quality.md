@@ -1,7 +1,8 @@
 # Codebase Quality Remediation Plan
 
 Status: in progress; audited against the repository on 2026-06-11
-Companion: `plans/improve-compiler.md` (compiler-specific plan; referenced by Phase 4, not duplicated here).
+Companion: archived `plans/improve-compiler.md` entry in `plans/archive.md`
+(compiler-specific plan; referenced by Phase 4, not duplicated here).
 Source: whole-repo quality review (2026-06-11) — compiler deep-dive plus parallel package reviews of runtime, server, drizzle/core, cli/create-jiso/test, examples/conformance.
 
 Out of scope by decision: toolchain/gate/packaging hygiene (pre-release tooling, fresh-clone
@@ -24,7 +25,8 @@ covers source quality: security, correctness, architecture, drift, and test qual
       unparseable string SQL instead of emitting an unresolved-site fact.
 - [x] Phase 6 remaining API work is closed for the tracked items: `form()` registry-value
       inference alignment is done, the broad dead/duplicate code sweep is complete, and remaining
-      compiler cleanup is tracked in `plans/improve-compiler.md`.
+      compiler cleanup is tracked in `plans/archive.md` under the archived
+      `plans/improve-compiler.md` entry.
 - [ ] Module splits remain open: compiler/server/drizzle/runtime have initial extracted modules,
       while most server/drizzle/runtime responsibilities still live in package `src/index.ts`
       barrels. Runtime evidence 2026-06-11: fragment/query/deferred-stream wire parsing moved to
@@ -206,7 +208,7 @@ sub-agent slices (1 is regex-level and ships first; 2 subsumes it later).
 
 ## Phase 4 — Compiler
 
-Execute `plans/improve-compiler.md` (Phases 0-4 there). No duplication here; one note — the
+Execute the archived `plans/improve-compiler.md` work (Phases 0-4 there). No duplication here; one note — the
 `QueryShape` nullability extension (Phase 3 item 3 above) lands in `@jiso/compiler`'s
 `pathExistsInShape`/`queryShapeAtPath`, so sequence it with that plan's Phase 0/1 work.
 
@@ -297,7 +299,7 @@ good sub-agent candidates with explicit file ownership.
   shared; the subset `exportTableAliases` helper is gone and all alias propagation uses
   `importExportTableAliases`; the unused core diagnostic-definition export is gone; server record
   accumulation and query chunk rendering use shared helpers. Remaining compiler cleanup is tracked
-  by `plans/improve-compiler.md`.
+  by the archived `plans/improve-compiler.md` work.
 
 Verification: per-package vitest + root `pnpm run check`; CLI behavior changes (1-4) update
 `tests/fw-check.node.mjs` expectations where output text is pinned.
