@@ -491,7 +491,7 @@ pipeline throws the tree away and communicates via mutated source text.
       update-plan collection. Same-session evidence:
       `pnpm exec vitest --run packages/compiler/src/index.test.ts` and
       `pnpm exec vp check packages/compiler/src/analyze/query-updates.ts packages/compiler/src/index.test.ts packages/compiler/src/index.ts packages/compiler/src/types.ts packages/compiler/src/validate/bindings.ts packages/compiler/src/validate/component-contracts.ts`.
-- [ ] **MED — CSS host detection onto the model.** css.ts:211/:220/:238 grep the whole module
+- [x] **MED — CSS host detection onto the model.** css.ts:211/:220/:238 grep the whole module
       with bare regexes (match inside comments/strings). The component option entries are already
       in the parsed model; `scan/text.ts:39`'s `findStringEnd` has no template-interpolation
       handling — retire it where the model suffices, fix it where it must stay (CSS literal
