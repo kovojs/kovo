@@ -1182,6 +1182,14 @@ must be "FW406 unresolved," never "silently wrong."
       `pnpm exec vitest --run conformance/drizzle-pin/src/index.test.ts -t "column nullability"`,
       `pnpm exec vitest --run packages/drizzle/src`,
       and `pnpm exec vitest --run conformance/drizzle-pin/src/index.test.ts`.
+      Additional evidence 2026-06-12: source/project relational query extraction now gates
+      `*.query.<table>.findMany/findFirst(...)` table facts on parsed query callback receiver
+      parameters, so live non-DB objects inside query bodies no longer fabricate read domains or
+      FW406/FW411 diagnostics under SPEC §10-§11. Same-session evidence:
+      `pnpm exec vitest --run packages/drizzle/src/index.test.ts -t "non-receiver objects|relational query API reads|element-access relational"`,
+      `pnpm exec vitest --run conformance/drizzle-pin/src/index.test.ts -t "non-receiver objects|element-access relational"`,
+      `pnpm exec vitest --run packages/drizzle/src`,
+      and `pnpm exec vitest --run conformance/drizzle-pin`.
 - [ ] **HIGH — Remove fact-fabricating heuristics; degrade to FW406.**
       Column type from projection-key name (`/(count|qty|...)$/i` → number, index.ts:993);
       receiver detection by parameter name (`/^(db|tx|...|client|...)$/`, :1856-1858);

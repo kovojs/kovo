@@ -608,6 +608,43 @@ describe('Drizzle pinned subset conformance', () => {
     ]);
   });
 
+  it('does not pin relational reads from non-receiver objects', () => {
+    const facts = extractQueryFactsFromProject({
+      files: [
+        {
+          fileName: 'conformance/drizzle-pin/src/product.queries.ts',
+          source: `
+            export const auditLog = pgTable('audit_log', {}, jiso({ exempt: true }));
+            export const products = pgTable('products', {
+              id: text('id').primaryKey(),
+              name: text('name').notNull(),
+            }, jiso({ domain: 'product', key: 'id' }));
+
+            export const productQuery = query('product', {
+              load(_input, reader) {
+                const fixture = { query: { auditLog: { findMany() { return []; } } } };
+                fixture.query.auditLog.findMany();
+                return reader.select({ name: products.name }).from(products);
+              },
+            });
+          `,
+        },
+      ],
+    });
+
+    expect(facts).toEqual([
+      {
+        query: 'product',
+        reads: ['product'],
+        shape: {
+          name: 'string',
+        },
+        site: 'conformance/drizzle-pin/src/product.queries.ts:8',
+      },
+    ]);
+    expect(diagnosticsForQueryFacts(facts)).toEqual([]);
+  });
+
   it('pins real Drizzle materialized-view refresh as an explicit FW406 write surface', () => {
     const graph = extractTouchGraphFromProject({
       files: [

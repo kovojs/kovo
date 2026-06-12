@@ -1010,8 +1010,9 @@ function extractQueryDefinitions(
       }
 
       const query = queryArgument.getLiteralText();
+      const receiverNames = queryCallbackReceiverNames(bodyArgument);
       const selection = selectShapeFromQueryBody(bodyArgument, columnShapes);
-      const diagnostics = relationalQueryDiagnostics(bodyArgument);
+      const diagnostics = relationalQueryDiagnostics(bodyArgument, receiverNames);
       if (!selection && diagnostics.length === 0) continue;
 
       definitions.push({
@@ -1024,7 +1025,7 @@ function extractQueryDefinitions(
         opaquePaths: selection?.opaquePaths ?? [],
         query,
         shape: selection?.shape ?? {},
-        tableExpressions: queryTableExpressions(bodyArgument),
+        tableExpressions: queryTableExpressions(bodyArgument, receiverNames),
         unresolvedPaths: selection?.unresolvedPaths ?? [],
       });
     }
@@ -1088,8 +1089,39 @@ function selectCallFromQueryBody(body: ObjectLiteralExpression): CallExpression 
   );
 }
 
-function relationalQueryDiagnostics(body: ObjectLiteralExpression): TouchGraphDiagnostic[] {
-  if (queryRelationalTableExpressions(body).length === 0) return [];
+function queryCallbackReceiverNames(body: ObjectLiteralExpression): ReadonlySet<string> {
+  const names = new Set(DEFAULT_DRIZZLE_RECEIVER_NAMES);
+
+  for (const property of body.getProperties()) {
+    const parameters = queryCallbackParameters(property.compilerNode);
+    const receiver = bindingIdentifierText(parameters?.[1]?.name);
+    if (receiver) names.add(receiver);
+  }
+
+  return names;
+}
+
+function queryCallbackParameters(
+  property: ts.ObjectLiteralElementLike,
+): ts.NodeArray<ts.ParameterDeclaration> | undefined {
+  if (ts.isMethodDeclaration(property)) return property.parameters;
+  if (!ts.isPropertyAssignment(property)) return undefined;
+
+  const initializer = unwrappedTsExpression(property.initializer);
+  return ts.isArrowFunction(initializer) || ts.isFunctionExpression(initializer)
+    ? initializer.parameters
+    : undefined;
+}
+
+function bindingIdentifierText(name: ts.BindingName | undefined): string | undefined {
+  return name && ts.isIdentifier(name) ? name.text : undefined;
+}
+
+function relationalQueryDiagnostics(
+  body: ObjectLiteralExpression,
+  receiverNames: ReadonlySet<string>,
+): TouchGraphDiagnostic[] {
+  if (queryRelationalTableExpressions(body, receiverNames).length === 0) return [];
 
   return [
     {
@@ -1403,8 +1435,14 @@ function exemptQueryReadDiagnostics(
   ];
 }
 
-function queryTableExpressions(body: ObjectLiteralExpression): string[] {
-  return [...queryJoinTableExpressions(body), ...queryRelationalTableExpressions(body)];
+function queryTableExpressions(
+  body: ObjectLiteralExpression,
+  receiverNames: ReadonlySet<string>,
+): string[] {
+  return [
+    ...queryJoinTableExpressions(body),
+    ...queryRelationalTableExpressions(body, receiverNames),
+  ];
 }
 
 function queryJoinTableExpressions(body: ObjectLiteralExpression): string[] {
@@ -1417,7 +1455,10 @@ function queryJoinTableExpressions(body: ObjectLiteralExpression): string[] {
   });
 }
 
-function queryRelationalTableExpressions(body: ObjectLiteralExpression): string[] {
+function queryRelationalTableExpressions(
+  body: ObjectLiteralExpression,
+  receiverNames: ReadonlySet<string>,
+): string[] {
   return queryBodyCallExpressions(body, (call) => {
     const expression = call.getExpression();
     const method = staticAccessName(expression);
@@ -1430,6 +1471,9 @@ function queryRelationalTableExpressions(body: ObjectLiteralExpression): string[
 
     const queryAccess = staticAccessExpression(tableAccess);
     if (!queryAccess || staticAccessName(queryAccess) !== 'query') return [];
+    const receiver = staticAccessExpression(queryAccess);
+    // SPEC §10-§11: non-DB objects must not fabricate relational read/FW406 facts.
+    if (!Node.isIdentifier(receiver) || !receiverNames.has(receiver.getText())) return [];
 
     return [table];
   });
