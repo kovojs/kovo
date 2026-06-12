@@ -577,6 +577,15 @@ params, relational API, `execute(sql)`, right/full joins, a string column named 
       `installInlineJisoLoader`, pinning multi-target `FW-Targets` separator parity,
       nullish-only fragment-target fallback, and keyed `fw-query` event detail. Same-session
       evidence: `pnpm exec vitest --run packages/runtime/src/index.test.ts`.
+      Additional evidence 2026-06-11: `packages/runtime/src/index.ts` now ships a trimmed,
+      single-line pre-minified inline bootstrap literal under the `SPEC.md` section 4.4 loader
+      budget, and `packages/runtime/src/index.test.ts` pins the shipped source as trimmed,
+      single-line, minified, and wrapped as the generated bootstrap installer while still
+      executing both `jisoLoaderSource` and `installInlineJisoLoader` through the parity harness.
+      Same-session evidence:
+      `pnpm exec vitest --run packages/runtime/src/index.test.ts packages/runtime/src/wire-parser.test.ts`
+      and
+      `pnpm exec vitest --config vitest.browser.config.ts --run packages/runtime/src/index.browser.test.ts`.
 - [x] **HIGH — Ship the DOM morph.** The only real keyed DOM morph (focus/selection/scroll
       capture-restore) lives in index.browser.test.ts:12-182; every consumer must rewrite it, and
       the flagship browser test substantially tests its own test code. Promote to a
