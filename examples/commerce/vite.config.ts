@@ -41,7 +41,7 @@ function commerceAppShellDevPlugin(): CommerceDevPlugin {
     configureServer(server) {
       return () => {
         server.middlewares.use((request, response, next) => {
-          if (!isCommerceDocumentRequest(request)) {
+          if (!isCommerceShellRequest(request)) {
             next();
             return;
           }
@@ -67,10 +67,26 @@ async function loadCommerceNodeHandler(server: CommerceDevServer): Promise<DevMi
   return commerceNodeHandler as DevMiddleware;
 }
 
-function isCommerceDocumentRequest(request: IncomingMessage): boolean {
-  if (request.method !== 'GET' && request.method !== 'HEAD') return false;
+function isCommerceShellRequest(request: IncomingMessage): boolean {
   if (!request.url) return false;
 
   const pathname = new URL(request.url, 'http://jiso.local').pathname;
-  return pathname === '/cart' || pathname === '/login' || pathname === '/admin';
+
+  if (request.method === 'GET' || request.method === 'HEAD') {
+    return (
+      pathname === '/cart' ||
+      pathname === '/login' ||
+      pathname === '/admin' ||
+      pathname === '/exports/orders.csv' ||
+      pathname.startsWith('/attachments/') ||
+      pathname.startsWith('/_q/') ||
+      pathname.startsWith('/c/')
+    );
+  }
+
+  if (request.method === 'POST') {
+    return pathname.startsWith('/_m/') || pathname === '/webhooks/stripe';
+  }
+
+  return false;
 }

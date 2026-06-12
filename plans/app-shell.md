@@ -300,6 +300,17 @@ Scope: SPEC addition (proposed §9.5 "The request shell"), `@jiso/server` shell 
       `site/scripts/app-shell.test.mjs` proves the SSR module loads for
       `/scripts/app-shell.mjs` and `@jiso/server`, replay to
       `docs/installation/index.html`, and versioned `/c/` module copying.
+      Additional evidence 2026-06-12: the commerce Vite dev middleware now
+      claims the same bounded shell surface as the HTTP serve entry for R7
+      adoption: document routes, guarded file/download routes, versioned `/c/`
+      modules, `/_q/` queries, `/_m/` mutations, and the Stripe webhook endpoint
+      while continuing to pass source assets such as `/src/styles.css` to Vite.
+      `examples/commerce/src/app-shell.test.ts` starts the commerce Vite
+      middleware behind `node:http`, fetches `/cart`, `/c/commerce.client.js`,
+      and `/_q/cart`, signs in through `/_m/auth/sign-in`, posts an enhanced
+      `/_m/cart/add` mutation, and verifies Vite still serves `/src/styles.css`.
+      Same-session verification ran
+      `pnpm exec vitest --run examples/commerce/src/app-shell.test.ts`.
 
 ## Background — the gap
 

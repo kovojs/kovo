@@ -1,7 +1,9 @@
-import { createServer, type Server } from 'node:http';
+import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http';
 import type { AddressInfo } from 'node:net';
+import { fileURLToPath } from 'node:url';
 
 import { afterEach, describe, expect, it } from 'vitest';
+import { createServer as createViteServer } from 'vite';
 
 import { csrfToken, runMutation } from '@jiso/server';
 
@@ -19,6 +21,106 @@ afterEach(async () => {
 });
 
 describe('commerce app shell HTTP entry', () => {
+  it('serves shell routes, modules, queries, and mutations through the commerce Vite dev middleware', async () => {
+    const vite = await createViteServer({
+      appType: 'custom',
+      configFile: fileURLToPath(new URL('../vite.config.ts', import.meta.url)),
+      logLevel: 'error',
+      root: fileURLToPath(new URL('..', import.meta.url)),
+      server: { middlewareMode: true },
+    });
+    let devServerError: unknown;
+    vite.middlewares.use(
+      (
+        error: unknown,
+        _request: IncomingMessage,
+        _response: ServerResponse,
+        next: (error?: unknown) => void,
+      ) => {
+        devServerError = error;
+        next(error);
+      },
+    );
+    server = createServer(vite.middlewares);
+
+    try {
+      const viteShell = (await vite.ssrLoadModule('/src/app-shell.ts')) as {
+        commerceAppShell: ReturnType<typeof createCommerceAppShell>;
+      };
+      await listen(server);
+      const origin = serverOrigin(server);
+
+      const document = await fetch(`${origin}/cart`);
+      const documentBody = await document.text();
+      expect(document.status, formatDevServerFailure(documentBody, devServerError)).toBe(200);
+      expect(documentBody).toContain('data-commerce-shell="cart"');
+
+      const moduleResponse = await fetch(`${origin}${commerceClientModuleHref}`);
+      const moduleBody = await moduleResponse.text();
+      expect(moduleResponse.status, formatDevServerFailure(moduleBody, devServerError)).toBe(200);
+      expect(moduleBody).toContain('export function Commerce$markReady');
+
+      const query = await fetch(`${origin}/_q/cart`);
+      const queryBody = await query.text();
+      expect(query.status, formatDevServerFailure(queryBody, devServerError)).toBe(200);
+      expect(queryBody).toContain('<fw-query name="cart">{"count":0}</fw-query>');
+
+      const loginForm = new URLSearchParams();
+      loginForm.set(
+        'csrf',
+        csrfToken(shellLoginCsrfRequest(viteShell.commerceAppShell.db), commerceAuthCsrf),
+      );
+      loginForm.set('email', 'ada@example.com');
+      loginForm.set('password', 'correct');
+      loginForm.set('next', '/cart');
+      const login = await fetch(`${origin}/_m/auth/sign-in`, {
+        body: loginForm,
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        method: 'POST',
+        redirect: 'manual',
+      });
+      const loginBody = await login.text();
+      expect(login.status, formatDevServerFailure(loginBody, devServerError)).toBe(303);
+      const sessionCookie = cookiePair(login.headers.get('set-cookie') ?? '');
+
+      const mutationForm = new URLSearchParams();
+      mutationForm.set('productId', 'p1');
+      mutationForm.set('quantity', '1');
+      mutationForm.set(
+        'csrf',
+        csrfToken(
+          {
+            db: viteShell.commerceAppShell.db,
+            headers: new Headers({ cookie: sessionCookie }),
+            session: { id: 'session-u1', user: { id: 'u1' } },
+          },
+          commerceCsrf,
+        ),
+      );
+      const mutation = await fetch(`${origin}/_m/cart/add`, {
+        body: mutationForm,
+        headers: {
+          cookie: sessionCookie,
+          'Content-Type': 'application/x-www-form-urlencoded',
+          'FW-Fragment': 'true',
+          'FW-Targets': 'cart-badge',
+        },
+        method: 'POST',
+      });
+      const mutationBody = await mutation.text();
+
+      expect(mutation.status, formatDevServerFailure(mutationBody, devServerError)).toBe(200);
+      expect(mutationBody).toContain('<fw-fragment target="cart-badge">');
+
+      const sourceAsset = await fetch(`${origin}/src/styles.css`);
+      const sourceAssetBody = await sourceAsset.text();
+      expect(sourceAsset.status, formatDevServerFailure(sourceAssetBody, devServerError)).toBe(200);
+      expect(sourceAssetBody).toContain('tailwindcss v');
+    } finally {
+      await vite.close();
+    }
+  });
+
   it('serves the commerce cart document, query endpoint, and client module over node:http', async () => {
     const errors: unknown[] = [];
     const shell = createCommerceAppShell({
@@ -277,6 +379,14 @@ function shellLoginCsrfRequest(db: ReturnType<typeof createCommerceAppShell>['db
 
 function cookiePair(setCookie: string): string {
   return setCookie.split(';')[0] ?? setCookie;
+}
+
+function formatDevServerFailure(body: string, error: unknown): string {
+  if (error instanceof Error) {
+    return `${error.stack ?? error.message}\n\n${body}`;
+  }
+
+  return body;
 }
 
 function listen(target: Server): Promise<void> {
