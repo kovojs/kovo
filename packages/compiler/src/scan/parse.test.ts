@@ -73,6 +73,24 @@ export const Recommendations = component('recommendations', {
     );
   });
 
+  it('records first HTML tag names for string-rendered component returns', () => {
+    const source = `
+export const CartBadge = component('cart-badge', {
+  render: ({ cart }) => \`<cart-badge><span>\${cart.count}</span></cart-badge>\`,
+});
+`;
+    const [component] = parseComponentModule('cart-badge.tsx', source).components;
+
+    expect(component?.stringRenderReturns).toEqual([
+      {
+        end: source.indexOf('`,') + 1,
+        firstHtmlTagName: 'cart-badge',
+        source: '`<cart-badge><span>${cart.count}</span></cart-badge>`',
+        start: source.indexOf('`<cart-badge>'),
+      },
+    ]);
+  });
+
   it('extracts outer property access paths from function body source', () => {
     expect(
       functionBodyPropertyAccessPaths(

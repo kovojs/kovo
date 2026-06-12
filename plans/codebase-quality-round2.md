@@ -972,7 +972,14 @@ pipeline throws the tree away and communicates via mutated source text.
       `pnpm exec vitest --run packages/compiler/src/scan/parse.test.ts packages/compiler/src/index.test.ts -t "string-rendered|FW235|component model|compiler-emitted IR"`,
       `pnpm exec vp check packages/compiler/src/compile.ts packages/compiler/src/scan/parse.ts packages/compiler/src/validate/authoring-surface.ts`,
       and `git diff --check`.
-      and
+      Additional evidence 2026-06-12: `scan/parse.ts` now records the first rendered HTML tag
+      name on `StringRenderModel` facts, and `validate/authoring-surface.ts` consumes that
+      parser-owned tag metadata for FW235 TSX-direction help instead of regex-reading normal
+      component string-render text. The standalone `renderSource()` fallback path remains for
+      rare app-authored IR exports. Same-session evidence:
+      `pnpm exec vitest --run packages/compiler/src/scan/parse.test.ts packages/compiler/src/compile-component.test.ts -t "first HTML tag|FW235|string-rendered"`,
+      `pnpm exec vitest --run packages/compiler/src`, and
+      `pnpm exec vp check --fix packages/compiler/src/scan/parse.ts packages/compiler/src/scan/parse.test.ts packages/compiler/src/validate/authoring-surface.ts`.
       `pnpm exec vp check packages/compiler/src/index.ts packages/compiler/src/ir.ts packages/compiler/src/css.ts packages/compiler/src/emit/client.ts packages/compiler/src/emit/server.ts packages/compiler/src/emit/registry.ts packages/compiler/src/emit/bootstrap.ts packages/compiler/src/validate/authoring-surface.ts plans/codebase-quality-round2.md`.
       Additional evidence 2026-06-12: `packages/compiler/src/emit/registry.ts` now consumes
       canonical `FragmentTargetFact`, `PlatformSubstitution`, `QueryUpdatePlanFact`,

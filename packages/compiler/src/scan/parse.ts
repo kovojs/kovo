@@ -130,6 +130,7 @@ export interface StateReturnObjectModel {
 
 export interface StringRenderModel {
   end: number;
+  firstHtmlTagName?: string;
   source: string;
   start: number;
 }
@@ -747,10 +748,35 @@ function stringRenderModel(
   return [
     {
       end: unwrapped.getEnd(),
+      ...optionalFirstHtmlTagName(unwrapped),
       source: source.slice(unwrapped.getStart(sourceFile), unwrapped.getEnd()),
       start: unwrapped.getStart(sourceFile),
     },
   ];
+}
+
+function optionalFirstHtmlTagName(
+  expression: ts.StringLiteralLike | ts.NoSubstitutionTemplateLiteral | ts.TemplateExpression,
+): { firstHtmlTagName: string } | {} {
+  const tagName = firstHtmlTagNameFromLiteralText(stringRenderLiteralText(expression));
+  return tagName ? { firstHtmlTagName: tagName } : {};
+}
+
+function stringRenderLiteralText(
+  expression: ts.StringLiteralLike | ts.NoSubstitutionTemplateLiteral | ts.TemplateExpression,
+): string {
+  if (ts.isTemplateExpression(expression)) {
+    return [
+      expression.head.text,
+      ...expression.templateSpans.map((span) => span.literal.text),
+    ].join('{}');
+  }
+
+  return expression.text;
+}
+
+function firstHtmlTagNameFromLiteralText(source: string): string | null {
+  return /<\s*([A-Za-z][\w:-]*)(?:\s|>|\/)/.exec(source)?.[1] ?? null;
 }
 
 function unwrapParentheses(expression: ts.Expression): ts.Expression {

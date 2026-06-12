@@ -7,6 +7,7 @@ import type { ComponentModuleModel } from '../scan/parse.js';
 import type { CompileComponentOptions } from '../types.js';
 
 interface StringRender {
+  firstHtmlTagName?: string;
   length: number;
   source: string;
   start: number;
@@ -27,7 +28,7 @@ export function validateAuthoringSurface(
         length: options.source.startsWith(compilerIrHeader)
           ? compilerIrHeader.length
           : cssIrHeader.length,
-        stringSource: options.source,
+        ...optionalTagName(firstHtmlTagName(options.source)),
       }),
     ];
   }
@@ -47,7 +48,7 @@ export function validateAuthoringSurface(
       source: options.source,
       start: render.start,
       length: render.length,
-      stringSource: render.source,
+      ...optionalTagName(render.firstHtmlTagName ?? null),
     }),
   );
 }
@@ -87,9 +88,10 @@ function stringRenderedComponents(fileName: string, source: string): StringRende
 function stringRenderedComponentsFromModel(model: ComponentModuleModel): StringRender[] {
   return model.components.flatMap((component) =>
     (component.stringRenderReturns ?? []).flatMap((render) =>
-      containsHtmlTag(render.source)
+      render.firstHtmlTagName
         ? [
             {
+              firstHtmlTagName: render.firstHtmlTagName,
               length: render.end - render.start,
               source: render.source,
               start: render.start,
@@ -179,6 +181,7 @@ function htmlStringLiteral(
 
   return [
     {
+      ...optionalFirstHtmlTagName(firstHtmlTagName(renderSource)),
       length: unwrapped.getEnd() - unwrapped.getStart(sourceFile),
       source: renderSource,
       start: unwrapped.getStart(sourceFile),
@@ -191,23 +194,30 @@ function fw235Diagnostic({
   length,
   source,
   start,
-  stringSource,
+  tagName,
 }: {
   fileName: string;
   length: number;
   source: string;
   start: number;
-  stringSource: string;
+  tagName?: string;
 }): CompilerDiagnostic {
-  const tag = firstHtmlTagName(stringSource);
-  const tsxDirection = tag
-    ? `TSX equivalent direction: render with JSX, for example \`render: (...) => (<${tag}>...</${tag}>)\`, and use typed expressions such as \`{cart.count}\` instead of data-bind strings.`
+  const tsxDirection = tagName
+    ? `TSX equivalent direction: render with JSX, for example \`render: (...) => (<${tagName}>...</${tagName}>)\`, and use typed expressions such as \`{cart.count}\` instead of data-bind strings.`
     : 'TSX equivalent direction: render with JSX and use typed expressions such as `{cart.count}` instead of data-bind strings.';
 
   return {
     ...diagnosticFor(fileName, 'FW235', source, start, length),
     help: [diagnosticDefinitions.FW235.help, tsxDirection].join('\n'),
   };
+}
+
+function optionalTagName(tagName: string | null): { tagName: string } | {} {
+  return tagName ? { tagName } : {};
+}
+
+function optionalFirstHtmlTagName(tagName: string | null): { firstHtmlTagName: string } | {} {
+  return tagName ? { firstHtmlTagName: tagName } : {};
 }
 
 function containsHtmlTag(source: string): boolean {
