@@ -882,6 +882,15 @@ index.test.ts:4227 while here — it weakens the byte-for-byte claim) + acceptan
       nesting while SPEC §9.1 `id` / `fw-fragment-target` resolution still works. Same-session
       evidence: `pnpm exec vitest --run packages/test/src/page.test.ts packages/test/src/index.test.ts`
       and `pnpm exec vitest --run examples/commerce/src/app.test.ts`.
+      Additional evidence 2026-06-11: harness execution/context APIs now live in
+      `packages/test/src/harness.ts`, `propertyTest` and `assertMutationError` live in
+      `packages/test/src/assertions.ts`, and assertion/property tests moved from
+      `index.test.ts` to `assertions.test.ts`. The new assertion coverage proves lazy property
+      case iteration stops at the first counterexample. Same-session evidence:
+      `pnpm exec vitest --run packages/test/src/assertions.test.ts packages/test/src/index.test.ts packages/test/src/page.test.ts`,
+      `pnpm exec vitest --run packages/test/src`,
+      `pnpm exec vp check packages/test/src/index.ts packages/test/src/harness.ts packages/test/src/assertions.ts packages/test/src/assertions.test.ts packages/test/src/index.test.ts`,
+      and `git diff --check`.
       Partial evidence 2026-06-11: `packages/test/src/pglite.ts` now owns the PGlite test DB
       adapter, `packages/test/src/verifier.ts` owns DB verification/proxy/SQL observation, and
       `packages/test/src/index.ts` re-exports those public APIs while keeping the harness surface
@@ -977,6 +986,13 @@ As each phase splits a source module, split its tests in the same commit.
       `packages/test/src/page.ts` plus `page.test.ts`, reducing the `index.ts` / `index.test.ts`
       monolith while preserving the public `PageAssertion` export through the package barrel.
       Same-session evidence: `pnpm exec vitest --run packages/test/src/page.test.ts packages/test/src/index.test.ts`.
+      Additional evidence 2026-06-11: `packages/test/src/harness.ts` and
+      `packages/test/src/assertions.ts` now own the former package-barrel harness/assertion
+      helpers, and `assertions.test.ts` owns the property-test and mutation-error assertion
+      coverage formerly embedded in `index.test.ts`. Same-session evidence:
+      `pnpm exec vitest --run packages/test/src/assertions.test.ts packages/test/src/index.test.ts packages/test/src/page.test.ts`,
+      `pnpm exec vitest --run packages/test/src`, and
+      `pnpm exec vp check packages/test/src/index.ts packages/test/src/harness.ts packages/test/src/assertions.ts packages/test/src/assertions.test.ts packages/test/src/index.test.ts`.
 
 Verification: identical test counts ± intentional additions before/after each split; full
 acceptance at the end.
