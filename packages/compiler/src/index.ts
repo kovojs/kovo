@@ -160,7 +160,7 @@ const compilerValidators: readonly CompilerValidator[] = [
       options.packageComponentPrefixes,
     ),
   ({ model, options, source }) => validateStaticIds(source, model, options.fileName),
-  ({ options, source }) => validateLiteralHrefs(source, options),
+  ({ model, options, source }) => validateLiteralHrefs(source, model, options),
   ({ model, options, source }) => validateHtmlContentModel(source, model, options.fileName),
   ({ model, options, source }) => validateEventTriggerNames(source, model, options.fileName),
   ({ componentName, model, options, source }) =>

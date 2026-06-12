@@ -1,7 +1,7 @@
 import { diagnosticDefinitions } from '@jiso/core';
 
 import { diagnosticFor, type CompilerDiagnostic } from '../diagnostics.js';
-import { jsxElements, parseComponentModule } from '../scan/parse.js';
+import { jsxElements, type ComponentModuleModel } from '../scan/parse.js';
 import { dedupeBy } from '../shared.js';
 import type { CompileComponentOptions } from '../types.js';
 
@@ -13,12 +13,13 @@ interface LiteralNavigationTarget {
 
 export function validateLiteralHrefs(
   source: string,
+  model: ComponentModuleModel,
   options: CompileComponentOptions,
 ): CompilerDiagnostic[] {
   const routes = options.registryFacts?.routes;
   if (!routes) return [];
 
-  const missing = literalNavigationTargets(source).filter((target) => {
+  const missing = literalNavigationTargets(model).filter((target) => {
     if (isExternalNavigationTarget(target.value)) return false;
     return !routes.some((routePath) => routePathMatchesUrl(routePath, target.value));
   });
@@ -29,8 +30,8 @@ export function validateLiteralHrefs(
   }));
 }
 
-function literalNavigationTargets(source: string): LiteralNavigationTarget[] {
-  return jsxElements(parseComponentModule('component.tsx', source)).flatMap((element) =>
+function literalNavigationTargets(model: ComponentModuleModel): LiteralNavigationTarget[] {
+  return jsxElements(model).flatMap((element) =>
     element.attributes.flatMap((attribute) =>
       (attribute.name === 'href' || attribute.name === 'action') && attribute.value
         ? [
