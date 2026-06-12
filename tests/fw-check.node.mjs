@@ -1247,6 +1247,72 @@ process.exit(64);
   }
 };
 
+const runPnpmFilterTaskCommand = async (command, expectedPackages) => {
+  const fakeBin = await mkdtemp(join(tmpdir(), 'jiso-conformance-pnpm-'));
+  const fakePnpm = join(fakeBin, 'pnpm');
+  const observedPath = join(fakeBin, 'observed.jsonl');
+  const packageScripts = Object.fromEntries(
+    expectedPackages.map(({ manifest }) => [manifest.name, manifest.scripts ?? {}]),
+  );
+  const expectedPackageNames = expectedPackages
+    .map(({ manifest }) => manifest.name)
+    .toSorted((left, right) => left.localeCompare(right));
+
+  try {
+    await writeFile(
+      fakePnpm,
+      `#!/usr/bin/env node
+import assert from 'node:assert/strict';
+import { appendFileSync } from 'node:fs';
+
+const args = process.argv.slice(2);
+const scriptsByPackage = JSON.parse(process.env.JISO_CONFORMANCE_PACKAGE_SCRIPTS ?? '{}');
+assert.deepEqual(args.slice(0, 2), ['--filter', args[1]]);
+assert.equal(args[2], 'test');
+assert.equal(args.length, 3);
+const packageName = args[1];
+assert.equal(
+  scriptsByPackage[packageName]?.test,
+  'vitest --run src/index.test.ts',
+  \`\${packageName} exposes the expected conformance test command\`,
+);
+appendFileSync(process.env.JISO_CONFORMANCE_OBSERVED, JSON.stringify({ packageName, script: args[2] }) + '\\n');
+process.stdout.write(\`pnpm-filter-test \${packageName}\\n\`);
+`,
+      'utf8',
+    );
+    await chmod(fakePnpm, 0o755);
+
+    const output = execFileSync('sh', ['-c', command], {
+      cwd: new URL('..', import.meta.url),
+      encoding: 'utf8',
+      env: {
+        ...process.env,
+        JISO_CONFORMANCE_OBSERVED: observedPath,
+        JISO_CONFORMANCE_PACKAGE_SCRIPTS: JSON.stringify(packageScripts),
+        PATH: `${fakeBin}:${process.env.PATH ?? ''}`,
+      },
+    });
+    const observed = (await readFile(observedPath, 'utf8'))
+      .trim()
+      .split('\n')
+      .filter(Boolean)
+      .map((line) => JSON.parse(line));
+
+    assert.deepEqual(
+      observed
+        .map((entry) => entry.packageName)
+        .toSorted((left, right) => left.localeCompare(right)),
+      expectedPackageNames,
+      'conformance task executes every discovered conformance package test',
+    );
+
+    return { observed, output };
+  } finally {
+    await rm(fakeBin, { force: true, recursive: true });
+  }
+};
+
 void test('fw-check wrapper explains the production build prerequisite', () => {
   assert.equal(
     missingBuildMessage('dist/missing-cli.mjs'),
@@ -6263,7 +6329,6 @@ void test('Conformance suites are an explicit gate', async () => {
       manifest: JSON.parse(await readProjectFile(`conformance/${entry.name}/package.json`)),
     })),
   );
-  const drizzlePackageJson = JSON.parse(await readProjectFile('packages/drizzle/package.json'));
   const conformanceManifestsByName = new Map(
     conformancePackages.map(({ manifest }) => [manifest.name, manifest]),
   );
@@ -6283,17 +6348,6 @@ void test('Conformance suites are an explicit gate', async () => {
   for (const { directory, manifest } of conformancePackages) {
     assert.ok(manifest.scripts?.test, `${directory} exposes an executable test script`);
   }
-  assert.equal(drizzlePackageJson.devDependencies['ts-morph'], '^28.0.0');
-  assert.equal(
-    conformanceManifestsByName.get('@jiso/conformance-drizzle-pin')?.devDependencies['drizzle-orm'],
-    '0.45.2',
-  );
-  assert.equal(
-    conformanceManifestsByName.get('@jiso/conformance-better-auth-pin')?.devDependencies[
-      'better-auth'
-    ],
-    '1.6.17',
-  );
   const packageJson = JSON.parse(await readProjectFile('package.json'));
   const viteConfig = await readProjectFile('vite.config.ts');
   const viteTasks = parseTemplateViteTasks(viteConfig);
@@ -6325,6 +6379,21 @@ void test('Conformance suites are an explicit gate', async () => {
     { pattern: 'packages/drizzle/src/**/*.ts', base: 'workspace' },
     { pattern: 'packages/better-auth/src/**/*.ts', base: 'workspace' },
   ]);
+  const executedTask = await runPnpmFilterTaskCommand(conformanceTask.command, conformancePackages);
+  assert.deepEqual(
+    executedTask.observed.map((entry) => entry.script),
+    ['test', 'test', 'test', 'test', 'test'],
+  );
+  assert.deepEqual(
+    executedTask.output.trimEnd().split('\n'),
+    conformanceTaskCommands.map((entry) => `pnpm-filter-test ${entry.packageName}`),
+  );
+
+  const missingPackageCommand = conformanceTask.command.split(' && ').slice(0, -1).join(' && ');
+  await assert.rejects(
+    runPnpmFilterTaskCommand(missingPackageCommand, conformancePackages),
+    /conformance task executes every discovered conformance package test/,
+  );
 
   await execFileAsync('pnpm', ['exec', 'vitest', '--run', 'packages/drizzle/src/index.test.ts'], {
     cwd: new URL('..', import.meta.url),

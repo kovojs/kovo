@@ -302,6 +302,13 @@ Do this first or pay it on every commit.
       `node --test --test-name-pattern "Conformance suites are an explicit gate" tests/fw-check.node.mjs`,
       `pnpm exec vp check tests/fw-check.node.mjs plans/codebase-quality-round2.md`, and
       `git diff --check`.
+      Additional partial evidence 2026-06-12: the conformance gate now executes the parsed
+      `conformance` Vite+ command through a seeded fake `pnpm`, verifies every discovered
+      `conformance/*/package.json` package test is invoked, and includes a red missing-package
+      command case; exact Drizzle/better-auth dependency-version pins were removed from this
+      fw-check slice in favor of executable command coverage plus the existing Drizzle package
+      test. Same-session evidence:
+      `node --test --test-name-pattern "Conformance suites are an explicit gate" tests/fw-check.node.mjs`.
       Partial evidence 2026-06-11: the P1 render-equivalence tranche now imports the built
       compiler API, asserts `compileComponentModule` render-equivalence checks and
       `assertRenderEquivalence` failure behavior, then asserts the `ERROR RENDER_EQUIV` CLI
