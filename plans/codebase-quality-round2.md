@@ -485,6 +485,11 @@ pipeline throws the tree away and communicates via mutated source text.
       `pnpm exec vitest --run packages/compiler/src/index.test.ts -t "FW311 positions|inline derive|query-dependent render positions"`
       and
       `pnpm exec vp check packages/compiler/src/shared.ts packages/compiler/src/lower/inline-derives.ts packages/compiler/src/validate/pipeline.ts packages/compiler/src/validate/component-contracts.ts packages/compiler/src/index.ts packages/compiler/src/index.test.ts plans/codebase-quality-round2.md`.
+      Additional evidence 2026-06-12: inline-derive lowering now builds a replacement-aware
+      offset map, not just a prefix offset, so FW311 spans after length-changing inline attribute
+      replacements still resolve to the pre-lowering JSX coordinates. `shared.test.ts` pins the
+      generated-to-original unchanged-span mapping and `index.test.ts` pins a multi-line drift
+      case after a long inline derive replacement.
 - [x] **HIGH — Retire regex rewriting of handler bodies.** emit/client.ts:89
       (`/\bstate\b/g → ctx.state` corrupts `log('state changed')`), :96 (member-expression
       substitution inside string literals), lower/handlers.ts:262 (harvests params from string

@@ -70,6 +70,59 @@ export function prefixedSourceOffsetMap(
   };
 }
 
+export function sourceReplacementOffsetMap(
+  originalLength: number,
+  replacements: readonly SourceReplacement[],
+  prefixLength = 0,
+): SourceOffsetMap {
+  const segments: SourceOffsetSegment[] = [];
+  let generatedCursor = prefixLength;
+  let originalCursor = 0;
+
+  for (const replacement of [...replacements].sort((left, right) => left.start - right.start)) {
+    if (
+      replacement.start < 0 ||
+      replacement.end < replacement.start ||
+      replacement.end > originalLength
+    ) {
+      throw new Error(`Invalid source replacement span ${replacement.start}:${replacement.end}`);
+    }
+    if (replacement.start < originalCursor) {
+      throw new Error(
+        `Overlapping source replacement span ${replacement.start}:${replacement.end}`,
+      );
+    }
+
+    const unchangedLength = replacement.start - originalCursor;
+    if (unchangedLength > 0) {
+      segments.push({
+        generatedStart: generatedCursor,
+        length: unchangedLength,
+        originalStart: originalCursor,
+      });
+      generatedCursor += unchangedLength;
+    }
+
+    generatedCursor += replacement.replacement.length;
+    originalCursor = replacement.end;
+  }
+
+  const tailLength = originalLength - originalCursor;
+  if (tailLength > 0) {
+    segments.push({
+      generatedStart: generatedCursor,
+      length: tailLength,
+      originalStart: originalCursor,
+    });
+  }
+
+  return {
+    generatedLength: prefixLength + patchedSourceLength(originalLength, replacements),
+    originalLength,
+    segments,
+  };
+}
+
 export function generatedOffsetToOriginal(
   map: SourceOffsetMap,
   generatedOffset: number | undefined,
@@ -86,6 +139,17 @@ export function generatedOffsetToOriginal(
   }
 
   return undefined;
+}
+
+function patchedSourceLength(
+  originalLength: number,
+  replacements: readonly SourceReplacement[],
+): number {
+  return replacements.reduce(
+    (length, replacement) =>
+      length - (replacement.end - replacement.start) + replacement.replacement.length,
+    originalLength,
+  );
 }
 
 export function applySourceReplacements(

@@ -2106,7 +2106,9 @@ export const CartBadge = component('cart-badge', {
   queries: { cart: {} },
   render: () => (
     <cart-badge>
-      <button disabled={cart.count === 0}>Checkout</button>
+      <button title={cart.count === 0 ? 'enabled checkout' : 'disabled checkout'}>Checkout</button>
+
+
       <strong className={cart.discount}>Discount</strong>
     </cart-badge>
   ),
@@ -2121,7 +2123,7 @@ export const CartBadge = component('cart-badge', {
       message:
         'Query-dependent DOM position has no update status. CartBadge cart.discount expression',
       severity: 'warn',
-      start: { column: 26, line: 7 },
+      start: { column: 26, line: 9 },
     });
   });
 

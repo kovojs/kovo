@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest';
 
-import { applySourceReplacements } from './shared.js';
+import {
+  applySourceReplacements,
+  generatedOffsetToOriginal,
+  sourceReplacementOffsetMap,
+} from './shared.js';
 
 describe('compiler shared source replacements', () => {
   it('applies replacements by original source spans', () => {
@@ -24,6 +28,25 @@ describe('compiler shared source replacements', () => {
   it('rejects out-of-range source spans', () => {
     expect(() => applySourceReplacements('abc', [{ end: 4, replacement: 'x', start: 2 }])).toThrow(
       'Invalid source replacement span 2:4',
+    );
+  });
+
+  it('maps patched generated offsets back to original unchanged spans', () => {
+    const original =
+      '<button disabled={cart.count === 0}>Checkout</button> <strong>{cart.discount}</strong>';
+    const replacement =
+      'data-derive="cart.CartBadge$button_disabled_derive" data-derive-attr="disabled"';
+    const patched = applySourceReplacements(original, [{ end: 32, replacement, start: 8 }]);
+    const map = sourceReplacementOffsetMap(
+      original.length,
+      [{ end: 32, replacement, start: 8 }],
+      12,
+    );
+
+    const generatedDiscount = 12 + patched.indexOf('cart.discount');
+
+    expect(generatedOffsetToOriginal(map, generatedDiscount)).toBe(
+      original.indexOf('cart.discount'),
     );
   });
 });

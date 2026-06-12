@@ -11,7 +11,7 @@ import {
   applySourceReplacements,
   escapeAttribute,
   identitySourceOffsetMap,
-  prefixedSourceOffsetMap,
+  sourceReplacementOffsetMap,
   type SourceOffsetMap,
   type SourceReplacement,
 } from '../shared.js';
@@ -120,9 +120,9 @@ export function lowerInlineAttributeDerives(
   const prefix = `${deriveExports.join('\n')}\n\n`;
 
   return {
-    diagnosticSource: lowered,
+    diagnosticSource: source,
     source: `${prefix}${lowered}`,
-    sourceOffsetMap: prefixedSourceOffsetMap(prefix.length, lowered.length),
+    sourceOffsetMap: sourceReplacementOffsetMap(source.length, replacements, prefix.length),
   };
 }
 
