@@ -452,6 +452,58 @@ const parsePnpmFilterTestCommands = (command) => {
   });
 };
 
+const isLowerHex = (value) =>
+  value.length > 0 && [...value].every((char) => '0123456789abcdef'.includes(char));
+
+const parseFwExportOutput = (output) => {
+  const lines = output.trimEnd().split('\n');
+  assert.equal(lines[0], 'fw-export/v1');
+  const htmlLines = [];
+  const errorLines = [];
+  let summary;
+
+  for (const line of lines.slice(1)) {
+    if (line.startsWith('HTML ')) {
+      const [kind, path, statusEntry, bytesEntry] = line.split(' ');
+      const [statusKey, statusValue] = statusEntry?.split('=') ?? [];
+      const [bytesKey, bytesValue] = bytesEntry?.split('=') ?? [];
+      assert.equal(kind, 'HTML');
+      assert.equal(statusKey, 'status');
+      assert.equal(bytesKey, 'bytes');
+      htmlLines.push({ bytes: Number(bytesValue), path, status: Number(statusValue) });
+      continue;
+    }
+
+    if (line.startsWith('ERROR ')) {
+      const [, code, routeEntry, ...messageParts] = line.split(' ');
+      const [routeKey, route] = routeEntry?.split('=') ?? [];
+      assert.equal(routeKey, 'route');
+      errorLines.push({ code, message: messageParts.join(' '), route });
+      continue;
+    }
+
+    if (line.startsWith('SUMMARY ')) {
+      summary = Object.fromEntries(
+        line
+          .slice('SUMMARY '.length)
+          .split(' ')
+          .map((entry) => {
+            const [key, value] = entry.split('=');
+            assert.ok(key && value !== undefined, `fw export summary entry is key=value: ${entry}`);
+            return [key, value];
+          }),
+      );
+      continue;
+    }
+
+    if (errorLines.length > 0) {
+      errorLines[errorLines.length - 1].message += `\n${line}`;
+    }
+  }
+
+  return { errors: errorLines, html: htmlLines, summary, version: lines[0] };
+};
+
 const assertOrderedIncludes = (items, before, after) => {
   const beforeIndex = items.indexOf(before);
   const afterIndex = items.indexOf(after);
@@ -1935,15 +1987,26 @@ void test('P3 server renders initial query scripts for document-load hydration',
   };
   const queryScript =
     '<script type="application/json" fw-query="cart" key="cart:c1">{"html":"\\u003c/script>"}</script>';
+  const document = renderDocument({
+    body: '<main></main>',
+    queries: [query],
+  });
+  const documentElements = parseHtmlElements(document.html);
+  const queryScriptElement = documentElements.find(
+    (element) => element.tagName === 'script' && element.attributes['fw-query'] === 'cart',
+  );
 
   assert.equal(renderQueryScript(query), queryScript);
   assert.equal(renderDocumentQueryScript(query), queryScript);
-  assert.match(
-    renderDocument({
-      body: '<main></main>',
-      queries: [query],
-    }).html,
-    /<head>[\s\S]*<script type="application\/json" fw-query="cart" key="cart:c1">\{"html":"\\u003c\/script>"\}<\/script>[\s\S]*<\/head><body><main><\/main><\/body>/,
+  assert.equal(document.html.includes(`${queryScript}</head><body><main></main></body>`), true);
+  assert.deepEqual(queryScriptElement?.attributes, {
+    'fw-query': 'cart',
+    key: 'cart:c1',
+    type: 'application/json',
+  });
+  assert.equal(
+    documentElements.some((element) => element.tagName === 'main'),
+    true,
   );
 });
 
@@ -3548,11 +3611,10 @@ void test('D4 commerce adopt-dont-invent features stay represented', async () =>
   assert.deepEqual(cartPage.queries, ['cart', 'productGrid', 'orderHistory']);
   assert.equal(cartPage.route, '/cart');
   assert.deepEqual(cartPage.stylesheets, ['/assets/tailwind.css']);
-  assert.match(cartPage.meta.title, /^Jiso Commerce \(\d+\)$/);
-  assert.match(
-    cartPage.meta.description,
-    /^Browse products and checkout with \d+ verifiable cart item\.$/,
-  );
+  assert.deepEqual(cartPage.meta, {
+    description: 'Browse products and checkout with 0 verifiable cart item.',
+    title: 'Jiso Commerce (0)',
+  });
   assert.deepEqual(receiptMutation, {
     enctype: 'multipart/form-data',
     fileFields: ['receipt'],
@@ -4653,7 +4715,10 @@ void test('P9 verification layer evidence remains represented', async () => {
   });
   assert.deepEqual(malformedResult.changes, []);
   assert.equal(malformedHeaderErrors.length, 1);
-  assert.match(malformedHeaderErrors[0].message, /Malformed JSON in FW-Changes header/);
+  assert.equal(
+    malformedHeaderErrors[0].message.startsWith('Malformed JSON in FW-Changes header:'),
+    true,
+  );
 
   const optimisticStore = createQueryStore();
   optimisticStore.set('reviews', { items: [{ id: 'r1' }] }, 'product:p1');
@@ -5092,7 +5157,8 @@ export const ProductCard = component('product-card', {
   const handlerRef = buttons[0]?.attributes['on:click'] ?? '';
   const handlerUrl = new URL(handlerRef, 'http://jiso.test');
   assert.equal(handlerUrl.pathname, '/c/routes/products/product-card.client.js');
-  assert.match(handlerUrl.searchParams.get('v') ?? '', /^[0-9a-f]{8}$/);
+  assert.equal(handlerUrl.searchParams.get('v')?.length, 8);
+  assert.equal(isLowerHex(handlerUrl.searchParams.get('v') ?? ''), true);
 
   const version = handlerUrl.searchParams.get('v') ?? '';
   const headers = new Map();
@@ -5157,6 +5223,37 @@ export const DiagnosticCard = component('diagnostic-card', {
   render: () => <button onClick={() => { const response = { ok: true }; return response.ok; }}>Check</button>,
 });
 `;
+  const assertRedTransformMessage = (message) => {
+    const [summary, diagnosticBlock] = message.split('\n\n');
+    const diagnosticLines = diagnosticBlock?.split('\n') ?? [];
+    const loweringPrefix = '  help: Would lower to: on:click="';
+
+    assert.equal(summary, 'Jiso Vite transform failed with 1 error diagnostic.');
+    assert.equal(
+      diagnosticLines[0],
+      `FW201 ${fileName}:5:25 ${diagnosticDefinitions.FW201.message}`,
+    );
+    assert.equal(diagnosticLines[1]?.startsWith(loweringPrefix), true);
+    assert.equal(diagnosticLines[1]?.endsWith('"'), true);
+
+    const loweredHref = diagnosticLines[1]?.slice(loweringPrefix.length, -1) ?? '';
+    const loweredUrl = new URL(loweredHref, 'http://jiso.test');
+    assert.equal(loweredUrl.pathname, '/c/routes/diagnostic-card.client.js');
+    assert.equal(loweredUrl.searchParams.get('v')?.length, 8);
+    assert.equal(isLowerHex(loweredUrl.searchParams.get('v') ?? ''), true);
+    assert.equal(loweredUrl.hash, '#DiagnosticCard$button_click');
+    assert.deepEqual(diagnosticLines.slice(2, 6), [
+      "  help: Blocked expression: () => window.alert('x')",
+      '  help: Element params: -',
+      `  help: ${diagnosticDefinitions.FW201.help.split('\n')[0]}`,
+      `  help: ${diagnosticDefinitions.FW201.help.split('\n')[1]}`,
+    ]);
+  };
+  const expectedStaticExportError = [
+    `Static export refused error diagnostic FW201 at ${fileName}:5:25. ${diagnosticDefinitions.FW201.message}`,
+    diagnosticDefinitions.FW201.help,
+  ].join('\n');
+  const expectedStaticExportCliError = expectedStaticExportError.replaceAll('\n', ' ');
 
   const plugin = jisoVitePlugin();
   const greenTransform = plugin.transform(greenSource, componentId);
@@ -5169,11 +5266,7 @@ export const DiagnosticCard = component('diagnostic-card', {
   assert.throws(
     () => plugin.transform(redSource, componentId),
     (error) => {
-      const message = String(error?.message ?? error);
-      assert.match(message, /Jiso Vite transform failed with 1 error diagnostic\./);
-      assert.match(message, /FW201 routes\/diagnostic-card\.tsx:5:25/);
-      assert.match(message, /Closure captures unserializable value\./);
-      assert.match(message, /Fixes: move the value into component\/query state via ctx/);
+      assertRedTransformMessage(String(error?.message ?? error));
       return true;
     },
   );
@@ -5194,7 +5287,7 @@ export const DiagnosticCard = component('diagnostic-card', {
   assert.equal(lintHandlerUrl.pathname, '/c/routes/diagnostic-card.client.js');
   const lintVersion = lintHandlerUrl.searchParams.get('v') ?? '';
   assert.equal(lintVersion.length, 8);
-  assert.match(lintVersion, /^[\da-f]{8}$/);
+  assert.equal(isLowerHex(lintVersion), true);
   assert.equal(lintHandlerUrl.hash, '#DiagnosticCard$button_click');
   assert.deepEqual(
     lintDiagnostics.map((diagnostic) => ({
@@ -5252,18 +5345,23 @@ export default {
       }),
       (error) => {
         const output = `${error?.stdout ?? ''}\n${error?.stderr ?? ''}\n${error?.message ?? ''}`;
-        assert.match(output, /Jiso Vite transform failed with 1 error diagnostic\./);
-        assert.match(output, /FW201 routes\/diagnostic-card\.tsx:5:25/);
-        assert.match(output, /Closure captures unserializable value\./);
+        const diagnosticStart = output.indexOf('Jiso Vite transform failed');
+        assert.notEqual(diagnosticStart, -1, 'build output includes Vite diagnostic block');
+        assertRedTransformMessage(output.slice(diagnosticStart).trim());
         return true;
       },
     );
 
     await writeFile(buildFixtureSourcePath, greenSource, 'utf8');
-    const greenBuild = await execFileAsync(join(projectRoot, 'node_modules/.bin/vp'), ['build'], {
+    await execFileAsync(join(projectRoot, 'node_modules/.bin/vp'), ['build'], {
       cwd: buildFixtureRoot,
     });
-    assert.match(`${greenBuild.stdout}\n${greenBuild.stderr}`, /built in|✓ built/);
+    assert.deepEqual(
+      (await readdir(join(buildFixtureRoot, 'dist'))).toSorted((left, right) =>
+        left.localeCompare(right),
+      ),
+      ['assets', 'index.html'],
+    );
   } finally {
     await rm(buildFixtureRoot, { force: true, recursive: true });
   }
@@ -5300,10 +5398,7 @@ export default {
           error?.diagnostics?.map((diagnostic) => diagnostic.code),
           ['FW201'],
         );
-        assert.match(
-          String(error?.message ?? error),
-          /Static export refused error diagnostic FW201 at routes\/diagnostic-card\.tsx:5:25/,
-        );
+        assert.equal(String(error?.message ?? error), expectedStaticExportError);
         return true;
       },
     );
@@ -5345,20 +5440,40 @@ export default createApp({
     const redExport = await runCliCommand(['export', cliRedModule, '--out', cliRedOutDir]);
     assert.equal(redExport.exitCode, 1);
     assert.equal(redExport.stdout, '');
-    assert.match(redExport.stderr, /fw-export\/v1/);
-    assert.match(
-      redExport.stderr,
-      /ERROR FW201 route=routes\/diagnostic-card\.tsx Static export refused error diagnostic FW201 at routes\/diagnostic-card\.tsx:5:25/,
-    );
+    assert.deepEqual(parseFwExportOutput(redExport.stderr), {
+      errors: [
+        {
+          code: 'FW201',
+          message: expectedStaticExportCliError,
+          route: fileName,
+        },
+      ],
+      html: [],
+      summary: undefined,
+      version: 'fw-export/v1',
+    });
     await assert.rejects(readFile(join(cliRedOutDir, 'index.html'), 'utf8'));
 
     await writeFile(cliGreenModule, cliAppModuleSource([lintDiagnostic]), 'utf8');
     const greenExport = await runCliCommand(['export', cliGreenModule, '--out', cliGreenOutDir]);
     assert.equal(greenExport.exitCode, 0);
     assert.equal(greenExport.stderr, '');
-    assert.match(greenExport.stdout, /fw-export\/v1/);
-    assert.match(greenExport.stdout, /HTML \/index\.html status=200 bytes=/);
-    assert.match(greenExport.stdout, /SUMMARY html=1 clientModules=0 diagnostics=0/);
+    const greenExportOutput = parseFwExportOutput(greenExport.stdout);
+    assert.deepEqual(greenExportOutput.errors, []);
+    assert.deepEqual(
+      greenExportOutput.html.map(({ path, status }) => ({ path, status })),
+      [{ path: '/index.html', status: 200 }],
+    );
+    assert.equal(greenExportOutput.html[0].bytes > 0, true);
+    assert.deepEqual(
+      {
+        clientModules: greenExportOutput.summary?.clientModules,
+        diagnostics: greenExportOutput.summary?.diagnostics,
+        html: greenExportOutput.summary?.html,
+      },
+      { clientModules: '0', diagnostics: '0', html: '1' },
+    );
+    assert.equal(greenExportOutput.summary?.outDir, JSON.stringify(cliGreenOutDir));
     assertHtmlMainMarker(
       await readFile(join(cliGreenOutDir, 'index.html'), 'utf8'),
       'cli',
@@ -5453,9 +5568,9 @@ void test('P3 Drizzle query facts include select shapes and instance keys', asyn
   try {
     drizzle = await import('../dist/drizzle/src/index.mjs');
   } catch (error) {
-    assert.match(
-      String(error?.stack ?? error),
-      /__filename is not defined in ES module scope/,
+    assert.equal(
+      String(error?.stack ?? error).includes('__filename is not defined in ES module scope'),
+      true,
       'unexpected Drizzle bundle import failure',
     );
     await execFileAsync(
