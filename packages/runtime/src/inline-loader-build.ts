@@ -261,6 +261,17 @@ function minifyInlineJavaScriptSource(source: string): string {
     'Minified inline Jiso loader source',
   );
 
+  const printedTokenFingerprint = collectJavaScriptTokenFingerprint(printedSourceFile);
+  const minifiedTokenFingerprint = collectJavaScriptTokenFingerprint(minifiedSourceFile);
+  if (!sameStringList(printedTokenFingerprint, minifiedTokenFingerprint)) {
+    throw new Error(
+      `Inline Jiso loader minifier changed the compiler-printed JavaScript token stream.${formatSourceDifference(
+        printedTokenFingerprint.join('\n'),
+        minifiedTokenFingerprint.join('\n'),
+      )}`,
+    );
+  }
+
   const printedFingerprint = collectJavaScriptAstFingerprint(printedSourceFile);
   const minifiedFingerprint = collectJavaScriptAstFingerprint(minifiedSourceFile);
   if (!sameStringList(printedFingerprint, minifiedFingerprint)) {
@@ -292,6 +303,10 @@ function parseInlineJavaScriptSource(source: string, label: string): ts.SourceFi
   }
 
   return sourceFile;
+}
+
+function collectJavaScriptTokenFingerprint(sourceFile: ts.SourceFile): string[] {
+  return collectMinifiedTokens(sourceFile).map((token) => `${token.kind}:${token.text}`);
 }
 
 function collectJavaScriptAstFingerprint(sourceFile: ts.SourceFile): string[] {
@@ -341,6 +356,18 @@ function assertNoTemplateInterpolation(node: ts.Node): void {
 }
 
 function compactInlineJavaScriptSource(sourceFile: ts.SourceFile): string {
+  const tokens = collectMinifiedTokens(sourceFile);
+
+  return tokens
+    .map((token, index) => {
+      const previousToken = tokens[index - 1];
+      const separator = previousToken && needsTokenSeparator(previousToken, token) ? ' ' : '';
+      return `${separator}${token.text}`;
+    })
+    .join('');
+}
+
+function collectMinifiedTokens(sourceFile: ts.SourceFile): MinifiedToken[] {
   const source = sourceFile.text;
   const regexSpans = collectRegularExpressionLiteralSpans(sourceFile);
   let regexIndex = 0;
@@ -359,7 +386,19 @@ function compactInlineJavaScriptSource(sourceFile: ts.SourceFile): string {
       if (currentSpan === undefined || currentSpan.end > tokenStart) break;
       regexIndex += 1;
     }
+
     const regexSpan = regexSpans[regexIndex];
+    if (
+      regexSpan &&
+      regexSpan.start < scanner.getTextPos() &&
+      regexSpan.end > tokenStart &&
+      regexSpan.start !== tokenStart
+    ) {
+      throw new Error(
+        `Inline Jiso loader regex literal span overlaps scanner token at offset ${tokenStart}.`,
+      );
+    }
+
     const token =
       regexSpan?.start === tokenStart
         ? {
@@ -374,13 +413,11 @@ function compactInlineJavaScriptSource(sourceFile: ts.SourceFile): string {
     }
   }
 
-  return tokens
-    .map((token, index) => {
-      const previousToken = tokens[index - 1];
-      const separator = previousToken && needsTokenSeparator(previousToken, token) ? ' ' : '';
-      return `${separator}${token.text}`;
-    })
-    .join('');
+  if (regexIndex !== regexSpans.length) {
+    throw new Error('Inline Jiso loader regex literal span was not consumed by the scanner.');
+  }
+
+  return tokens;
 }
 
 interface SourceSpan {

@@ -2221,6 +2221,17 @@ params, relational API, `execute(sql)`, right/full joins, a string column named 
       `pnpm exec vitest --config vitest.browser.config.ts --run packages/runtime/src/index.browser.test.ts`,
       `pnpm exec vp check packages/runtime/src/inline-loader-build.ts packages/runtime/src/inline-loader.ts packages/runtime/src/inline-loader.test.ts packages/runtime/src/mutation-submit.ts packages/runtime/src/mutation-targets.ts packages/runtime/src/mutation-targets.test.ts plans/codebase-quality-round2.md`,
       and `git diff --check`.
+      Additional bounded evidence 2026-06-12: `packages/runtime/src/inline-loader-build.ts`
+      now compares compiler-printed and minified JavaScript token fingerprints before the AST
+      parity check, and fails closed when parser regex literal spans are not consumed cleanly by
+      the scanner-backed minifier boundary. `packages/runtime/src/inline-loader.test.ts` extends
+      the minifier parity harness with adjacent regex-plus-regex and regex-division-regex cases
+      while `check:inline-loader` keeps the shipped bootstrap byte-identical. Same-session
+      evidence:
+      `corepack pnpm --filter @jiso/runtime run check:inline-loader`,
+      `corepack pnpm exec vitest --run packages/runtime/src/inline-loader.test.ts packages/runtime/src/index.test.ts`,
+      `corepack pnpm exec vp check packages/runtime/src/inline-loader-build.ts packages/runtime/src/inline-loader.test.ts plans/codebase-quality-round2.md`,
+      and `git diff --check`.
 - [x] **HIGH — Ship the DOM morph.** The only real keyed DOM morph (focus/selection/scroll
       capture-restore) lives in index.browser.test.ts:12-182; every consumer must rewrite it, and
       the flagship browser test substantially tests its own test code. Promote to a
