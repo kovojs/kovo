@@ -749,7 +749,88 @@ describe('server static export', () => {
     });
   });
 
-  it('fails or skips loudly for param routes without static-path metadata', async () => {
+  it('exports param routes through explicit staticPaths metadata', async () => {
+    const outDir = await mkdtemp(path.join(os.tmpdir(), 'jiso-static-export-'));
+    try {
+      const app = createApp({
+        routes: [
+          route('/products/:id', {
+            page(context) {
+              const params = context.params as { id: string };
+              return `<main data-product="${params.id}">Product ${params.id}</main>`;
+            },
+            staticPaths: ['/products/p1', '/products/p2/'],
+          }),
+        ],
+      });
+
+      const result = await exportStaticApp(app, { outDir });
+
+      expect(result.diagnostics).toEqual([]);
+      expect(result.artifacts.map((artifact) => artifact.path)).toEqual([
+        '/products/p1/index.html',
+        '/products/p2/index.html',
+      ]);
+      await expect(
+        readFile(path.join(outDir, 'products', 'p1', 'index.html'), 'utf8'),
+      ).resolves.toContain('<main data-product="p1">Product p1</main>');
+      await expect(
+        readFile(path.join(outDir, 'products', 'p2', 'index.html'), 'utf8'),
+      ).resolves.toContain('<main data-product="p2">Product p2</main>');
+    } finally {
+      await rm(outDir, { force: true, recursive: true });
+    }
+  });
+
+  it('rejects invalid param route staticPaths before writing output', async () => {
+    const outDir = await mkdtemp(path.join(os.tmpdir(), 'jiso-static-export-'));
+    try {
+      const app = createApp({
+        routes: [
+          route('/products/:id', {
+            page: () => '<main>Product</main>',
+            staticPaths: [
+              'products/p1',
+              '/products/:id',
+              '/collections/c1',
+              '/products/p1?tab=details',
+            ],
+          }),
+        ],
+      });
+
+      await expect(exportStaticApp(app, { outDir })).rejects.toMatchObject({
+        code: 'FW229',
+        diagnostics: [
+          {
+            code: 'FW229',
+            routePath: '/products/:id',
+            message: expect.stringContaining('absolute pathname without search or hash'),
+          },
+          {
+            code: 'FW229',
+            routePath: '/products/:id',
+            message: expect.stringContaining('must be a concrete URL'),
+          },
+          {
+            code: 'FW229',
+            routePath: '/products/:id',
+            message: expect.stringContaining('does not match param route'),
+          },
+          {
+            code: 'FW229',
+            routePath: '/products/:id',
+            message: expect.stringContaining('absolute pathname without search or hash'),
+          },
+        ],
+      });
+      await expect(readFile(path.join(outDir, 'products', 'p1', 'index.html'))).rejects.toThrow();
+    } finally {
+      await rm(outDir, { force: true, recursive: true });
+    }
+  });
+
+  it('fails or skips loudly for param routes without staticPaths metadata', async () => {
     const app = createApp({
       routes: [
         route('/products/:id', {
@@ -764,7 +845,7 @@ describe('server static export', () => {
         {
           code: 'FW229',
           routePath: '/products/:id',
-          message: expect.stringContaining('static-path metadata'),
+          message: expect.stringContaining('staticPaths metadata'),
         },
       ],
     });
@@ -777,7 +858,7 @@ describe('server static export', () => {
         {
           code: 'FW229',
           routePath: '/products/:id',
-          message: expect.stringContaining('static-path metadata'),
+          message: expect.stringContaining('staticPaths metadata'),
         },
       ],
     });

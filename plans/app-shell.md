@@ -36,7 +36,8 @@ Implemented areas:
   validation, manifest-derived hints/assets, compiled `/c/` module emission, manifest-file
   export helpers, and build static-export asset planning.
 - `static-export.ts` performs static export with output target validation for write and dry-run
-  plans; duplicate asset paths fail with FW229.
+  plans; duplicate asset paths fail with FW229. Param routes export only through explicit
+  `staticPaths` concrete URL enumeration.
 
 Recent gates:
 
@@ -44,6 +45,13 @@ Recent gates:
 - `pnpm exec vitest --run packages/server/src/vite-build.test.ts packages/server/src/api/app.test.ts`
 - `pnpm exec tsc --noEmit --pretty false`
 - `pnpm exec vp check packages/server/src/static-export.ts packages/server/src/static-export.test.ts packages/server/src/vite-build.test.ts plans/app-shell.md`
+- `git diff --check`
+
+Round79 slice evidence:
+
+- `pnpm exec vitest --run packages/server/src/static-export.test.ts packages/server/src/vite-build.test.ts`
+- `pnpm exec tsc --noEmit --pretty false`
+- `pnpm exec vp check packages/server/src/route.ts packages/server/src/static-export.ts packages/server/src/static-export.test.ts packages/server/src/vite-build.test.ts plans/app-shell.md`
 - `git diff --check`
 
 ## Open Work

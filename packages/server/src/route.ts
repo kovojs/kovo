@@ -67,6 +67,7 @@ export interface RouteDefinition<
   ) => Page | NotFound | RouteResponseOutcome | Promise<Page | NotFound | RouteResponseOutcome>;
   params?: ParamsSchema;
   search?: SearchSchema;
+  staticPaths?: readonly string[];
 }
 
 export interface RouteDeclaration<

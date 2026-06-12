@@ -197,6 +197,62 @@ describe('server app shell Vite build seam', () => {
     }
   });
 
+  it('exports Vite build param routes from staticPaths with manifest assets', async () => {
+    const distDir = await mkdtemp(join(tmpdir(), 'jiso-vite-build-param-dist-'));
+    const outDir = await mkdtemp(join(tmpdir(), 'jiso-vite-build-param-export-'));
+
+    try {
+      await mkdir(join(distDir, 'assets'), { recursive: true });
+      await writeFile(join(distDir, 'assets/product.css'), '.product{color:green}');
+      await writeFile(join(distDir, 'assets/product.js'), 'export const productAsset = true;');
+
+      const build = createJisoAppShellViteBuild({
+        app: createApp({
+          routes: [
+            route('/products/:id', {
+              page(context) {
+                const params = context.params as { id: string };
+                return `<main class="product">Product ${params.id}</main>`;
+              },
+              staticPaths: ['/products/p1', '/products/p2'],
+            }),
+          ],
+        }),
+        manifest: {
+          'src/product.client.ts': {
+            css: ['assets/product.css'],
+            file: 'assets/product.js',
+          },
+        },
+        routeEntryMap: {
+          '/products/:id': 'src/product.client.ts',
+        },
+      });
+
+      const exported = await exportJisoAppShellViteBuild(build, { distDir, outDir });
+
+      expect(exported.artifacts.map((artifact) => artifact.path)).toEqual([
+        '/products/p1/index.html',
+        '/products/p2/index.html',
+      ]);
+      expect(exported.diagnostics).toEqual([]);
+      await expect(readFile(join(outDir, 'products/p1/index.html'), 'utf8')).resolves.toContain(
+        '<main class="product">Product p1</main>',
+      );
+      await expect(readFile(join(outDir, 'products/p2/index.html'), 'utf8')).resolves.toContain(
+        '<link rel="stylesheet" href="/assets/product.css">',
+      );
+      await expect(readFile(join(outDir, 'assets/product.css'), 'utf8')).resolves.toBe(
+        '.product{color:green}',
+      );
+    } finally {
+      await Promise.all([
+        rm(distDir, { force: true, recursive: true }),
+        rm(outDir, { force: true, recursive: true }),
+      ]);
+    }
+  });
+
   it('returns Vite build static export assets without exposing build internals', async () => {
     const distDir = await mkdtemp(join(tmpdir(), 'jiso-vite-build-assets-dist-'));
 

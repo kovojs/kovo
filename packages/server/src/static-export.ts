@@ -6,7 +6,7 @@ import { fileURLToPath } from 'node:url';
 import { diagnosticDefinitions } from '@jiso/core';
 
 import { createRequestHandler, type JisoApp } from './app.js';
-import { normalizePathname } from './match.js';
+import { matchRoute, normalizePathname } from './match.js';
 import {
   replayStaticExportClientModuleArtifacts,
   replayStaticExportRouteArtifact,
@@ -62,7 +62,8 @@ export async function exportStaticApp(
     throw new StaticExportError(blockingDiagnostics);
   }
 
-  const diagnostics = [...nonExportableRouteDiagnostics(app)];
+  const routePlan = staticExportRoutePlan(app);
+  const diagnostics = [...routePlan.diagnostics];
   if (diagnostics.length > 0 && options.onNonExportable !== 'skip') {
     throw new StaticExportError(diagnostics);
   }
@@ -72,8 +73,8 @@ export async function exportStaticApp(
   const htmlPathStyle = staticExportHtmlPathStyle(options.htmlPathStyle);
   const artifacts: StaticExportArtifact[] = [];
 
-  for (const route of app.routes) {
-    if (diagnostics.some((diagnostic) => diagnostic.routePath === route.path)) continue;
+  for (const routeTarget of routePlan.targets) {
+    if (diagnostics.some((diagnostic) => diagnostic.routePath === routeTarget.routePath)) continue;
 
     try {
       artifacts.push(
@@ -81,7 +82,7 @@ export async function exportStaticApp(
           handler,
           htmlPathStyle,
           origin,
-          routePath: route.path,
+          routePath: routeTarget.path,
         }),
       );
     } catch (error) {
@@ -367,8 +368,19 @@ function decodeStaticExportAssetPathSegment(segment: string): string {
   return decoded;
 }
 
-function nonExportableRouteDiagnostics(app: JisoApp): readonly StaticExportDiagnostic[] {
+interface StaticExportRouteTarget {
+  path: string;
+  routePath: string;
+}
+
+interface StaticExportRoutePlan {
+  diagnostics: readonly StaticExportDiagnostic[];
+  targets: readonly StaticExportRouteTarget[];
+}
+
+function staticExportRoutePlan(app: JisoApp): StaticExportRoutePlan {
   const diagnostics: StaticExportDiagnostic[] = [];
+  const targets: StaticExportRouteTarget[] = [];
 
   for (const route of app.routes) {
     if (app.sessionProvider) {
@@ -392,16 +404,83 @@ function nonExportableRouteDiagnostics(app: JisoApp): readonly StaticExportDiagn
     }
 
     if (routeHasParams(route.path)) {
+      const planned = staticExportParamRouteTargets(route);
+      diagnostics.push(...planned.diagnostics);
+      targets.push(...planned.targets);
+      continue;
+    }
+
+    targets.push({ path: normalizePathname(route.path).pathname, routePath: route.path });
+  }
+
+  return { diagnostics, targets };
+}
+
+function staticExportParamRouteTargets(route: JisoApp['routes'][number]): StaticExportRoutePlan {
+  const staticPaths = route.staticPaths;
+  if (!staticPaths) {
+    return {
+      diagnostics: [
+        staticExportDiagnostic(
+          route.path,
+          `FW229 static export cannot enumerate param route '${route.path}' without staticPaths metadata. Add explicit staticPaths for every exported concrete URL, or exclude the route from export.`,
+        ),
+      ],
+      targets: [],
+    };
+  }
+
+  if (staticPaths.length === 0) {
+    return {
+      diagnostics: [
+        staticExportDiagnostic(
+          route.path,
+          `FW229 static export cannot enumerate param route '${route.path}' because staticPaths is empty. Add at least one concrete exported URL, or exclude the route from export.`,
+        ),
+      ],
+      targets: [],
+    };
+  }
+
+  const diagnostics: StaticExportDiagnostic[] = [];
+  const targets: StaticExportRouteTarget[] = [];
+
+  for (const staticPath of staticPaths) {
+    const normalized = normalizePathname(staticPath);
+    if (!staticPath.startsWith('/') || staticPath.includes('?') || staticPath.includes('#')) {
       diagnostics.push(
         staticExportDiagnostic(
           route.path,
-          `FW229 static export cannot enumerate param route '${route.path}' without static-path metadata. Add the planned static-path enumeration once SPEC 9.5 names it, or exclude the route from export.`,
+          `FW229 static export staticPath '${staticPath}' for param route '${route.path}' must be an absolute pathname without search or hash.`,
         ),
       );
+      continue;
     }
+
+    if (routeHasParams(normalized.pathname)) {
+      diagnostics.push(
+        staticExportDiagnostic(
+          route.path,
+          `FW229 static export staticPath '${staticPath}' for param route '${route.path}' must be a concrete URL, not a route pattern.`,
+        ),
+      );
+      continue;
+    }
+
+    if (!matchRoute([route], normalized.pathname)) {
+      diagnostics.push(
+        staticExportDiagnostic(
+          route.path,
+          `FW229 static export staticPath '${staticPath}' does not match param route '${route.path}'.`,
+        ),
+      );
+      continue;
+    }
+
+    targets.push({ path: normalized.pathname, routePath: route.path });
   }
 
-  return diagnostics;
+  return { diagnostics, targets };
 }
 
 function staticExportHtmlPathStyle(
