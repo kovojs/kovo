@@ -116,6 +116,19 @@ Scope: SPEC addition (proposed §9.5 "The request shell"), `@jiso/server` shell 
       `pnpm run check`, `pnpm run check:fw` (generated/touch-graph.ts
       byte-identical), `pnpm run test:conformance`. The R7 `serve` entry itself
       remains open.
+      Progress 2026-06-12: the create-jiso starter now emits `src/app-shell.ts`
+      with a real `route('/')`, shared `createApp()`/`createRequestHandler()`
+      exports, a versioned `/c/starter.client.js?v=starter-r7` interaction
+      module, a starter-local Vite+ dev middleware that delegates document
+      requests to the app-shell handler while leaving source assets to Vite, and
+      a `vp run export` task backed by `fw export ./src/app-shell.ts --out dist`.
+      Evidence: `packages/create-jiso/templates/src/app-shell.test.ts` proves the
+      generated route document, `/c/` module response, and `exportStaticApp()`
+      replay/output path; same-session verification ran
+      `pnpm exec vitest --run packages/create-jiso/src/index.test.ts` and
+      `pnpm exec vp check packages/create-jiso/src/index.ts packages/create-jiso/src/index.test.ts packages/create-jiso/templates/README.md packages/create-jiso/templates/docs/deployment.md packages/create-jiso/templates/package.json packages/create-jiso/templates/src/app.tsx packages/create-jiso/templates/src/app-shell.ts packages/create-jiso/templates/src/app-shell.test.ts packages/create-jiso/templates/src/styles.css packages/create-jiso/templates/vite.config.ts`.
+      The broader R7 commerce HTTP serve entry and docs-site export consumer remain
+      open.
 
 ## Background — the gap
 

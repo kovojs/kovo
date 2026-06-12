@@ -6,10 +6,13 @@ This starter uses Vite+ as the single project entrypoint:
 vp check
 vp test
 vp run build
+vp run export
 vp run emit-graph
 vp run fw-check
 vp run graph-assertions
 ```
+
+`src/app-shell.ts` exports the Jiso app used by `vp dev` and `fw export`. The Vite+ dev server delegates document requests for `/` to the app-shell request handler, while Vite keeps serving source assets such as `/src/styles.css` and `/src/client.ts`.
 
 Tailwind is the default app styling path. Keep class names in templates as static strings so the generated CSS contains every class that can appear in SSR pages, mutation fragments, and deferred streams. Safelist classes explicitly with `@source inline("...")` in `src/styles.css` when a fragment must emit a class that cannot be discovered statically.
 

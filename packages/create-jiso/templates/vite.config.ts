@@ -1,8 +1,10 @@
+import type { IncomingMessage, ServerResponse } from 'node:http';
+
 import tailwindcss from '@tailwindcss/vite';
 import { defineConfig } from 'vite-plus';
 
 export default defineConfig({
-  plugins: [tailwindcss()],
+  plugins: [tailwindcss(), starterAppShellDevPlugin()],
   lint: {
     options: {
       typeAware: true,
@@ -20,6 +22,14 @@ export default defineConfig({
         command: 'vp build',
         input: [
           { pattern: 'index.html', base: 'workspace' },
+          { pattern: 'src/**/*', base: 'workspace' },
+          { pattern: 'vite.config.ts', base: 'workspace' },
+        ],
+        output: ['dist/**'],
+      },
+      export: {
+        command: 'fw export ./src/app-shell.ts --out dist',
+        input: [
           { pattern: 'src/**/*', base: 'workspace' },
           { pattern: 'vite.config.ts', base: 'workspace' },
         ],
@@ -45,3 +55,60 @@ export default defineConfig({
     },
   },
 });
+
+type DevMiddleware = (
+  request: IncomingMessage,
+  response: ServerResponse,
+  next: (error?: unknown) => void,
+) => void;
+
+interface StarterDevServer {
+  middlewares: {
+    use(handler: DevMiddleware): void;
+  };
+  ssrLoadModule(id: string): Promise<Record<string, unknown>>;
+}
+
+interface StarterDevPlugin {
+  configureServer(server: StarterDevServer): () => void;
+  name: string;
+}
+
+function starterAppShellDevPlugin(): StarterDevPlugin {
+  return {
+    configureServer(server) {
+      return () => {
+        server.middlewares.use((request, response, next) => {
+          if (!isStarterDocumentRequest(request)) {
+            next();
+            return;
+          }
+
+          Promise.resolve(loadStarterNodeHandler(server))
+            .then((starterNodeHandler) => starterNodeHandler(request, response, next))
+            .catch(next);
+        });
+      };
+    },
+    name: 'jiso-starter-app-shell-dev',
+  };
+}
+
+async function loadStarterNodeHandler(server: StarterDevServer): Promise<DevMiddleware> {
+  const module = await server.ssrLoadModule('/src/app-shell.ts');
+  const starterNodeHandler = module.starterNodeHandler;
+
+  if (typeof starterNodeHandler !== 'function') {
+    throw new Error('src/app-shell.ts must export starterNodeHandler.');
+  }
+
+  return starterNodeHandler as DevMiddleware;
+}
+
+function isStarterDocumentRequest(request: IncomingMessage): boolean {
+  if (request.method !== 'GET' && request.method !== 'HEAD') return false;
+  if (!request.url) return false;
+
+  const pathname = new URL(request.url, 'http://jiso.local').pathname;
+  return pathname === '/';
+}

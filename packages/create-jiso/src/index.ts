@@ -39,6 +39,8 @@ const templateFiles = [
   'src/client.ts',
   'index.html',
   'src/app.tsx',
+  'src/app-shell.ts',
+  'src/app-shell.test.ts',
   'src/auth.tsx',
   'src/app.fixpoint.test.ts',
 ] as const;

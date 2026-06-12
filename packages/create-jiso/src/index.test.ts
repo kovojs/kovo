@@ -36,6 +36,8 @@ describe('create-jiso starter', () => {
       'src/client.ts',
       'index.html',
       'src/app.tsx',
+      'src/app-shell.ts',
+      'src/app-shell.test.ts',
       'src/auth.tsx',
       'src/app.fixpoint.test.ts',
     ];
@@ -75,11 +77,13 @@ describe('create-jiso starter', () => {
       expect(packageJson.devDependencies).toMatchObject({
         '@jiso/compiler': 'workspace:*',
         '@tailwindcss/vite': '^4.1.0',
+        '@types/node': '^25.0.0',
         fw: 'workspace:*',
         tailwindcss: '^4.1.0',
       });
       expect(packageJson.scripts).toMatchObject({
         'emit-graph': 'node scripts/emit-graph.mjs',
+        export: 'vp run export',
         'fw-check': 'vp run fw-check',
         'graph-assertions': 'vp run graph-assertions',
       });
@@ -168,8 +172,18 @@ describe('create-jiso starter', () => {
       );
       const appSource = readFileSync(join(root, 'src/app.tsx'), 'utf8');
       expect(appSource).toContain('@jsxImportSource @jiso/server');
-      expect(appSource).toContain('<main class=');
+      expect(appSource).toContain('<main');
+      expect(appSource).toContain('on:click="/c/starter.client.js?v=starter-r7#Starter$announce"');
       expect(appSource).not.toMatch(/render:\s*\(\)\s*=>\s*['"`]</);
+      const appShellSource = readFileSync(join(root, 'src/app-shell.ts'), 'utf8');
+      expect(appShellSource).toContain("route('/',");
+      expect(appShellSource).toContain('createRequestHandler(app)');
+      expect(appShellSource).toContain('toNodeHandler(starterRequestHandler)');
+      expect(appShellSource).toContain("path: '/c/starter.client.js'");
+      expect(appShellSource).toContain("version: 'starter-r7'");
+      expect(readFileSync(join(root, 'src/app-shell.test.ts'), 'utf8')).toContain(
+        'SPEC.md section 9.5',
+      );
       const authSource = readFileSync(join(root, 'src/auth.tsx'), 'utf8');
       expect(authSource).toContain("from '@jiso/better-auth'");
       expect(authSource).toContain('betterAuthSession');
@@ -190,6 +204,11 @@ describe('create-jiso starter', () => {
       expect(readFileSync(join(root, 'index.html'), 'utf8')).toContain(
         '<script type="module" src="/src/client.ts"></script>',
       );
+      const viteConfig = readFileSync(join(root, 'vite.config.ts'), 'utf8');
+      expect(viteConfig).toContain('starterAppShellDevPlugin()');
+      expect(viteConfig).toContain("ssrLoadModule('/src/app-shell.ts')");
+      expect(viteConfig).toContain('fw export ./src/app-shell.ts --out dist');
+      expect(viteConfig).toContain("pathname === '/'");
     } finally {
       rmSync(root, { force: true, recursive: true });
     }
@@ -278,9 +297,29 @@ describe('create-jiso starter', () => {
           '--types',
           'node',
           'src/auth.tsx',
+          'src/app.tsx',
+          'src/app-shell.ts',
         ],
         { cwd: root, stdio: 'pipe' },
       );
+    } finally {
+      rmSync(root, { force: true, recursive: true });
+    }
+  });
+
+  it('runs the generated starter app-shell request and export proof', () => {
+    const tempParent = join(process.cwd(), 'node_modules/.tmp');
+    mkdirSync(tempParent, { recursive: true });
+    const root = mkdtempSync(join(tempParent, 'create-jiso-app-shell-'));
+
+    try {
+      writeJisoProject(root, { name: 'App Shell Proof' });
+      linkStarterBuildDependencies(root);
+
+      execFileSync(resolveBin('vitest'), ['--run', 'src/app-shell.test.ts'], {
+        cwd: root,
+        stdio: 'pipe',
+      });
     } finally {
       rmSync(root, { force: true, recursive: true });
     }
@@ -293,7 +332,7 @@ describe('create-jiso starter', () => {
 
     try {
       expect(main([root])).toBe(0);
-      expect(stdout).toHaveBeenCalledWith(`create-jiso: wrote 16 files to ${root}\n`);
+      expect(stdout).toHaveBeenCalledWith(`create-jiso: wrote 18 files to ${root}\n`);
       expect(JSON.parse(readFileSync(join(root, 'package.json'), 'utf8'))).toMatchObject({
         name: 'hello-cli',
       });
@@ -367,13 +406,17 @@ function linkStarterBuildDependencies(root: string): void {
   const nodeModules = join(root, 'node_modules');
   mkdirSync(join(nodeModules, '@jiso'), { recursive: true });
   mkdirSync(join(nodeModules, '@tailwindcss'), { recursive: true });
+  mkdirSync(join(nodeModules, '@types'), { recursive: true });
 
+  symlinkSync(resolveDependencyRoot('@types/node'), join(nodeModules, '@types/node'));
   symlinkSync(resolveDependencyRoot('@tailwindcss/vite'), join(nodeModules, '@tailwindcss/vite'));
   symlinkSync(resolveDependencyRoot('@jiso/better-auth'), join(nodeModules, '@jiso/better-auth'));
+  symlinkSync(resolveDependencyRoot('@jiso/compiler'), join(nodeModules, '@jiso/compiler'));
   symlinkSync(resolveDependencyRoot('@jiso/core'), join(nodeModules, '@jiso/core'));
   symlinkSync(resolveDependencyRoot('@jiso/runtime'), join(nodeModules, '@jiso/runtime'));
   symlinkSync(resolveDependencyRoot('@jiso/server'), join(nodeModules, '@jiso/server'));
   symlinkSync(resolveDependencyRoot('tailwindcss'), join(nodeModules, 'tailwindcss'));
+  symlinkSync(resolveDependencyRoot('vitest'), join(nodeModules, 'vitest'));
   symlinkSync(resolveDependencyRoot('vite-plus'), join(nodeModules, 'vite-plus'));
 }
 

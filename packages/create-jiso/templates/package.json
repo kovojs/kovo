@@ -6,6 +6,7 @@
     "check": "vp check",
     "dev": "vp dev",
     "emit-graph": "node scripts/emit-graph.mjs",
+    "export": "vp run export",
     "test": "vp test",
     "fw-check": "vp run fw-check",
     "graph-assertions": "vp run graph-assertions"
@@ -19,6 +20,7 @@
   "devDependencies": {
     "@jiso/compiler": "workspace:*",
     "@tailwindcss/vite": "^4.1.0",
+    "@types/node": "^25.0.0",
     "@typescript/native-preview": "^7.0.0-dev.20260610.1",
     "fw": "workspace:*",
     "tailwindcss": "^4.1.0",
