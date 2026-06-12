@@ -103,10 +103,7 @@ export function renderDeferredDocument(
 
   return {
     ...response,
-    headers: {
-      ...response.headers,
-      ...assembled.earlyHints,
-    },
+    headers: mergeDocumentHeaders(response.headers, assembled.earlyHints),
   };
 }
 
@@ -148,8 +145,7 @@ export function renderRouteDocumentResponse(
   return {
     body: document.html,
     headers: {
-      ...response.headers,
-      ...document.earlyHints,
+      ...mergeDocumentHeaders(response.headers, document.earlyHints),
       'Content-Type': 'text/html; charset=utf-8',
     },
     status: response.status,
@@ -244,4 +240,28 @@ function withoutStaticTitleMeta(metas: readonly RouteMetaSource[]): readonly Rou
     const { title: _title, ...rest } = meta;
     return rest;
   });
+}
+
+function mergeDocumentHeaders(
+  headers: Record<string, string>,
+  earlyHints: PageHints['earlyHints'],
+): Record<string, string> {
+  const merged = { ...headers };
+
+  for (const [name, value] of Object.entries(earlyHints)) {
+    const existingName = findHeaderRecordName(merged, name);
+    if (existingName === undefined) {
+      merged[name] = value;
+      continue;
+    }
+
+    merged[existingName] = `${merged[existingName]}, ${value}`;
+  }
+
+  return merged;
+}
+
+function findHeaderRecordName(headers: Record<string, string>, name: string): string | undefined {
+  const normalized = name.toLowerCase();
+  return Object.keys(headers).find((headerName) => headerName.toLowerCase() === normalized);
 }

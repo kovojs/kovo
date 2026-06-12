@@ -152,7 +152,10 @@ describe('server app shell document assembly', () => {
       renderRouteDocumentResponse(
         {
           body: '<main>Orders</main>',
-          headers: { 'Content-Type': 'text/html; charset=utf-8' },
+          headers: {
+            'Content-Type': 'text/html; charset=utf-8',
+            link: '</c/orders.client.js>; rel=modulepreload',
+          },
           status: 200,
         },
         { hints: { stylesheets: ['/orders.css'] } },
@@ -161,7 +164,7 @@ describe('server app shell document assembly', () => {
       body: expect.stringContaining('<main>Orders</main>'),
       headers: {
         'Content-Type': 'text/html; charset=utf-8',
-        Link: '</orders.css>; rel=preload; as=style',
+        link: '</c/orders.client.js>; rel=modulepreload, </orders.css>; rel=preload; as=style',
       },
       status: 200,
     });
