@@ -209,11 +209,13 @@ export interface BetterAuthDeclaredTableTouch {
   table: string;
 }
 
+export interface BetterAuthSchemaBridgeDomainAnnotation {
+  domain: BetterAuthTouchDomain;
+  key?: string;
+}
+
 export type BetterAuthSchemaBridgeAnnotation =
-  | {
-      domain: BetterAuthTouchDomain;
-      key?: string;
-    }
+  | BetterAuthSchemaBridgeDomainAnnotation
   | {
       exempt: true;
       rationale: string;
@@ -243,6 +245,7 @@ export interface BetterAuthPluginTableDegradation {
   manualBridgeSteps: string[];
   message: string;
   reason: 'unsupported-plugin-table';
+  suggestedAnnotation: BetterAuthSchemaBridgeDomainAnnotation | null;
   table: string;
 }
 
@@ -1034,13 +1037,19 @@ function unsupportedPluginTableDegradation(
   metadata: unknown,
 ): BetterAuthPluginTableDegradation {
   const fieldNames = betterAuthTableFieldNames(metadata);
+  const suggestedAnnotation = suggestedUnsupportedPluginTableAnnotation(fieldNames);
 
   return {
     diagnosticCode: 'FW406',
     fields: fieldNames === null ? null : [...fieldNames].sort(),
-    manualBridgeSteps: unsupportedPluginTableManualBridgeSteps(table, fieldNames),
+    manualBridgeSteps: unsupportedPluginTableManualBridgeSteps(
+      table,
+      fieldNames,
+      suggestedAnnotation,
+    ),
     message: `${table} is outside the blessed Better Auth schema bridge; add a schema.ts domain/exempt annotation and declared touches before relying on runtime coverage.`,
     reason: 'unsupported-plugin-table',
+    suggestedAnnotation,
     table,
   };
 }
@@ -1048,15 +1057,41 @@ function unsupportedPluginTableDegradation(
 function unsupportedPluginTableManualBridgeSteps(
   table: string,
   fields: Set<string> | null,
+  suggestedAnnotation: BetterAuthSchemaBridgeDomainAnnotation | null,
 ): string[] {
   const fieldList =
     fields === null ? 'unavailable from Better Auth metadata' : [...fields].sort().join(', ');
+  const annotationStep =
+    suggestedAnnotation === null
+      ? 'If it is app-visible, add a schema.ts jiso({ domain, key }) annotation; otherwise add jiso({ exempt: true }) with a rationale.'
+      : `Likely app-visible ownership is jiso(${formatBetterAuthSchemaDomainAnnotation(
+          suggestedAnnotation,
+        )}); confirm before adding the bridge, otherwise use jiso({ exempt: true }) with a rationale.`;
 
   return [
     `Inspect ${table} fields (${fieldList}) and decide whether the app reads this table.`,
-    'If it is app-visible, add a schema.ts jiso({ domain, key }) annotation; otherwise add jiso({ exempt: true }) with a rationale.',
+    annotationStep,
     `Add declared Better Auth API touches for writes that can mutate ${table}; SPEC.md §11.2 keeps observed writes FW406 until declared coverage exists.`,
   ];
+}
+
+function suggestedUnsupportedPluginTableAnnotation(
+  fields: Set<string> | null,
+): BetterAuthSchemaBridgeDomainAnnotation | null {
+  if (fields === null) return null;
+  if (fields.has('organizationId')) return { domain: 'organization', key: 'organizationId' };
+  if (fields.has('teamId')) return { domain: 'organization', key: 'teamId' };
+  if (fields.has('userId')) return { domain: 'auth', key: 'userId' };
+
+  return null;
+}
+
+function formatBetterAuthSchemaDomainAnnotation(
+  annotation: BetterAuthSchemaBridgeDomainAnnotation,
+): string {
+  const key = annotation.key === undefined ? '' : `, key: '${annotation.key}'`;
+
+  return `{ domain: '${annotation.domain}'${key} }`;
 }
 
 const betterAuthSchemaTableNames = new Set<string>(

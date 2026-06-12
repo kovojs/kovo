@@ -295,6 +295,13 @@ Scope: SPEC additions (session population, guard-failure contract, mutation resp
       bridge. Same-session evidence:
       `pnpm exec vitest --run packages/better-auth/src/index.test.ts conformance/better-auth-pin/src/index.test.ts --reporter=dot`
       and `pnpm exec tsc -p conformance/better-auth-pin/tsconfig.json --noEmit`.
+      Partial evidence 2026-06-12: unsupported plugin-table FW406 degradation diagnostics now
+      include a structured suggested `schema.ts` ownership annotation when Better Auth metadata
+      exposes a familiar ownership key (`userId`, `organizationId`, or `teamId`), while still
+      keeping validation `ok: false` until the bridge is explicitly updated. Local tests cover
+      auth-owned, organization-owned, and metadata-unavailable cases, and the pinned
+      `better-auth@1.6.17` conformance suite remains clean. Same-session evidence:
+      `pnpm exec vitest --run packages/better-auth/src/index.test.ts conformance/better-auth-pin/src/index.test.ts --reporter=dot`.
       Remaining gaps: plugin-generated tables outside the blessed organization/admin/two-factor/OIDC-provider/MCP/SIWE/JWT/device-authorization
       surface are still not mapped, the OAuth-provider successor package/table metadata is not
       installed or exportable from the pinned dependency set, and full app `schema.ts` generation

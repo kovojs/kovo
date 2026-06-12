@@ -539,17 +539,60 @@ describe('credential mutation helpers', () => {
           fields: ['credentialId', 'id', 'userId'],
           manualBridgeSteps: [
             'Inspect webauthnCredential fields (credentialId, id, userId) and decide whether the app reads this table.',
-            'If it is app-visible, add a schema.ts jiso({ domain, key }) annotation; otherwise add jiso({ exempt: true }) with a rationale.',
+            "Likely app-visible ownership is jiso({ domain: 'auth', key: 'userId' }); confirm before adding the bridge, otherwise use jiso({ exempt: true }) with a rationale.",
             'Add declared Better Auth API touches for writes that can mutate webauthnCredential; SPEC.md §11.2 keeps observed writes FW406 until declared coverage exists.',
           ],
           message:
             'webauthnCredential is outside the blessed Better Auth schema bridge; add a schema.ts domain/exempt annotation and declared touches before relying on runtime coverage.',
           reason: 'unsupported-plugin-table',
+          suggestedAnnotation: { domain: 'auth', key: 'userId' },
           table: 'webauthnCredential',
         },
       ],
       unbridgedTables: ['webauthnCredential'],
     });
+  });
+
+  it('suggests ownership annotations for unsupported plugin-table diagnostics', () => {
+    expect(
+      validateBetterAuthSchemaBridge({
+        account: authTable(['userId']),
+        auditLog: authTable(['organizationId', 'actorUserId']),
+        ephemeralChallenge: {},
+        session: authTable(['userId']),
+        user: authTable(),
+        verification: authTable(),
+      }).pluginTableDegradations,
+    ).toEqual([
+      {
+        diagnosticCode: 'FW406',
+        fields: ['actorUserId', 'id', 'organizationId'],
+        manualBridgeSteps: [
+          'Inspect auditLog fields (actorUserId, id, organizationId) and decide whether the app reads this table.',
+          "Likely app-visible ownership is jiso({ domain: 'organization', key: 'organizationId' }); confirm before adding the bridge, otherwise use jiso({ exempt: true }) with a rationale.",
+          'Add declared Better Auth API touches for writes that can mutate auditLog; SPEC.md §11.2 keeps observed writes FW406 until declared coverage exists.',
+        ],
+        message:
+          'auditLog is outside the blessed Better Auth schema bridge; add a schema.ts domain/exempt annotation and declared touches before relying on runtime coverage.',
+        reason: 'unsupported-plugin-table',
+        suggestedAnnotation: { domain: 'organization', key: 'organizationId' },
+        table: 'auditLog',
+      },
+      {
+        diagnosticCode: 'FW406',
+        fields: null,
+        manualBridgeSteps: [
+          'Inspect ephemeralChallenge fields (unavailable from Better Auth metadata) and decide whether the app reads this table.',
+          'If it is app-visible, add a schema.ts jiso({ domain, key }) annotation; otherwise add jiso({ exempt: true }) with a rationale.',
+          'Add declared Better Auth API touches for writes that can mutate ephemeralChallenge; SPEC.md §11.2 keeps observed writes FW406 until declared coverage exists.',
+        ],
+        message:
+          'ephemeralChallenge is outside the blessed Better Auth schema bridge; add a schema.ts domain/exempt annotation and declared touches before relying on runtime coverage.',
+        reason: 'unsupported-plugin-table',
+        suggestedAnnotation: null,
+        table: 'ephemeralChallenge',
+      },
+    ]);
   });
 
   it('reports absent successor OAuth-provider metadata as an FW406 degradation', () => {
@@ -678,12 +721,13 @@ describe('credential mutation helpers', () => {
           fields: ['credentialId', 'id', 'userId'],
           manualBridgeSteps: [
             'Inspect webauthnCredential fields (credentialId, id, userId) and decide whether the app reads this table.',
-            'If it is app-visible, add a schema.ts jiso({ domain, key }) annotation; otherwise add jiso({ exempt: true }) with a rationale.',
+            "Likely app-visible ownership is jiso({ domain: 'auth', key: 'userId' }); confirm before adding the bridge, otherwise use jiso({ exempt: true }) with a rationale.",
             'Add declared Better Auth API touches for writes that can mutate webauthnCredential; SPEC.md §11.2 keeps observed writes FW406 until declared coverage exists.',
           ],
           message:
             'webauthnCredential is outside the blessed Better Auth schema bridge; add a schema.ts domain/exempt annotation and declared touches before relying on runtime coverage.',
           reason: 'unsupported-plugin-table',
+          suggestedAnnotation: { domain: 'auth', key: 'userId' },
           table: 'webauthnCredential',
         },
       ],
