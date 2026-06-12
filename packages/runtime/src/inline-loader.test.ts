@@ -61,6 +61,40 @@ describe('inline loader source', () => {
     expect(buildInlineJisoLoaderInstallerSource()).toBe(inlineJisoLoaderInstallerSource);
   });
 
+  it('keeps string, comment, and regex hazards in parity through the source helper', () => {
+    // SPEC.md §4.4: build-time minification must not alter inline-loader wire strings.
+    const hazardSource = [
+      'function inlineMinifierHazards(value) {',
+      "  const stringLiteral = 'keep // and /* comment markers */ and spaces';",
+      '  const templateLiteral = `template // marker`;',
+      "  const joined = ['left', 'right'].join('; ');",
+      '  const commentRegex = /\\/\\/|\\/\\*/g;',
+      '  const afterReturn = (candidate) => {',
+      '    return /\\/\\/|\\/\\*/.test(candidate);',
+      '  };',
+      '  const afterArrow = (candidate) => /;\\s/.test(candidate);',
+      '  return {',
+      '    afterArrow: afterArrow(joined),',
+      '    afterReturn: afterReturn(value),',
+      '    commentHits: value.match(commentRegex)?.length ?? 0,',
+      '    joined,',
+      '    stringLiteral,',
+      '    templateLiteral,',
+      '  };',
+      '}',
+    ].join('\n');
+    const minifiedSource = buildInlineJisoLoaderInstallerSource(hazardSource);
+    const readable = runInThisContext(`(${hazardSource})`) as (value: string) => unknown;
+    const minified = runInThisContext(`(${minifiedSource})`) as (value: string) => unknown;
+    const input = 'path // query /* block marker */';
+
+    expect(minifiedSource).toBe(minifiedSource.trim());
+    expect(minifiedSource).not.toMatch(/\n|\s{2,}/);
+    expect(minifiedSource).toContain("'keep // and /* comment markers */ and spaces'");
+    expect(minifiedSource).toContain("join('; ')");
+    expect(minified(input)).toEqual(readable(input));
+  });
+
   it('wraps the extracted installer source as the public bootstrap source', () => {
     // SPEC.md §4.4: the generated bootstrap is the always-loaded runtime path.
     expect(jisoLoaderSource).toBe(`(${inlineJisoLoaderInstallerSource})((url)=>import(url));`);

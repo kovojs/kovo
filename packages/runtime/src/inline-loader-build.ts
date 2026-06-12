@@ -196,6 +196,14 @@ function minifyInlineJavaScriptSource(source: string): string {
       continue;
     }
 
+    if (isIdentifierStart(char)) {
+      const identifier = readIdentifier(source, index);
+      output += identifier.value;
+      previousToken = identifier.value;
+      index = identifier.end;
+      continue;
+    }
+
     output += char;
     previousToken = char;
     index += 1;
@@ -281,6 +289,14 @@ function readRegexLiteral(source: string, start: number): { value: string; end: 
   throw new Error('Unterminated inline loader regex literal.');
 }
 
+function readIdentifier(source: string, start: number): { value: string; end: number } {
+  let index = start + 1;
+
+  while (isIdentifierPart(source[index] ?? '')) index += 1;
+
+  return { value: source.slice(start, index), end: index };
+}
+
 function skipLineComment(source: string, start: number): number {
   const lineEnd = source.indexOf('\n', start);
   return lineEnd === -1 ? source.length : lineEnd + 1;
@@ -292,11 +308,33 @@ function skipBlockComment(source: string, start: number): number {
 }
 
 function startsRegexLiteral(previousToken: string): boolean {
-  return previousToken === '' || '([{=,:?!&|;'.includes(previousToken);
+  return (
+    previousToken === '' ||
+    '([{=,:?!&|;>'.includes(previousToken) ||
+    regexPrefixKeywords.has(previousToken)
+  );
 }
 
 function needsSeparator(previousToken: string, nextToken: string): boolean {
   return isIdentifierPart(previousToken) && isIdentifierPart(nextToken);
+}
+
+const regexPrefixKeywords = new Set([
+  'case',
+  'delete',
+  'else',
+  'in',
+  'instanceof',
+  'of',
+  'return',
+  'throw',
+  'typeof',
+  'void',
+  'yield',
+]);
+
+function isIdentifierStart(char: string): boolean {
+  return /[$A-Z_a-z]/.test(char);
 }
 
 function isIdentifierPart(char: string): boolean {
