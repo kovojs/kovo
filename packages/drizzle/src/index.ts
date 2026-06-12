@@ -176,19 +176,13 @@ function extractTouchGraphFromPreparedFiles(
     const fileTables = tablesForFile(file, sourceContext);
     const functions = functionsForFile(file);
     const functionsByName = new Map(functions.map((fn) => [fn.name, fn]));
-    const localFunctionNames = new Set(functionsByName.keys());
     const callsByName = new Map(
-      functions.map((fn) => [
-        fn.name,
-        (fn.localCalls ?? extractLocalFunctionCalls(fn.body)).filter((call) =>
-          functionsByName.has(call),
-        ),
-      ]),
+      functions.map((fn) => [fn.name, fn.localCalls.filter((call) => functionsByName.has(call))]),
     );
     const summaries = new Map(
       functions.map((fn) => [
         fn.name,
-        directSummaryForFunction(fn, file, fileTables, unresolvedIdentifiers, localFunctionNames),
+        directSummaryForFunction(fn, file, fileTables, unresolvedIdentifiers),
       ]),
     );
 
@@ -1099,14 +1093,17 @@ type ExtractedTableDeclaration = JisoTableAnnotation & {
 interface ExtractedFunction {
   body: string;
   bodyStart: number;
-  localCalls?: readonly string[];
+  localCalls: readonly string[];
   name: string;
-  receiverNames?: readonly string[];
-  unresolvedCalls?: readonly ExternalDbArgumentCall[];
-  writeCalls?: readonly ExtractedWriteCall[];
+  receiverNames: readonly string[];
+  unresolvedCalls: readonly ExternalDbArgumentCall[];
+  writeCalls: readonly ExtractedWriteCall[];
 }
 
-type ParsedExtractedFunction = ExtractedFunction & {
+type ParsedExtractedFunction = Omit<
+  ExtractedFunction,
+  'localCalls' | 'unresolvedCalls' | 'writeCalls'
+> & {
   bodyNode: Node;
   callback: Node;
 };
@@ -1838,15 +1835,12 @@ function directSummaryForFunction(
   file: SourceFileInput,
   tables: ReadonlyMap<string, readonly ExtractedTable[]>,
   unresolvedIdentifiers: ReadonlySet<string>,
-  localFunctionNames: ReadonlySet<string>,
 ): FunctionTouchSummary {
   const reads: ReadSummaryInput[] = [];
   const writes: WriteSummaryInput[] = [];
   const unresolved: UnresolvedSummaryInput[] = [];
-  const receiverNames =
-    fn.receiverNames === undefined ? drizzleReceiverNames(fn.body) : new Set(fn.receiverNames);
 
-  for (const call of fn.writeCalls ?? extractDrizzleWriteCalls(fn.body, receiverNames)) {
+  for (const call of fn.writeCalls) {
     const site =
       call.site ?? `${file.fileName}:${lineForIndex(file.source, fn.bodyStart + call.index)}`;
     const resolvedTables = tables.get(call.tableExpression) ?? [];
@@ -1914,11 +1908,7 @@ function directSummaryForFunction(
     });
   }
 
-  const unresolvedCalls = fn.unresolvedCalls ?? [
-    ...extractExternalDbArgumentCalls(fn.body, receiverNames, localFunctionNames),
-    ...extractUnclassifiedDrizzleReceiverCalls(fn.body, receiverNames),
-  ];
-  for (const call of unresolvedCalls) {
+  for (const call of fn.unresolvedCalls) {
     unresolved.push({
       operation: call.name,
       site: `${file.fileName}:${lineForIndex(file.source, fn.bodyStart + call.index)}`,
@@ -2608,13 +2598,6 @@ function functionBody(callback: Node): Node {
   throw new Error('Expected a write callback function');
 }
 
-function extractLocalFunctionCalls(source: string): string[] {
-  // SPEC §10-§11: helper names in comments/strings must not fold unrelated touch facts.
-  return withParsedFunctionBodySource(source, ({ sourceFile }) => {
-    return extractLocalFunctionCallsFromBody(sourceFile);
-  });
-}
-
 function extractLocalFunctionCallsFromBody(body: Node): string[] {
   const calls: string[] = [];
 
@@ -2629,16 +2612,6 @@ function extractLocalFunctionCallsFromBody(body: Node): string[] {
   }
 
   return [...new Set(calls)];
-}
-
-function extractDrizzleWriteCalls(
-  source: string,
-  receiverNames: ReadonlySet<string> = DEFAULT_DRIZZLE_RECEIVER_NAMES,
-): ExtractedWriteCall[] {
-  // SPEC §10-§11: source text in comments/strings must not fabricate touch-graph facts.
-  return withParsedFunctionBodySource(source, ({ bodyOffset, sourceFile }) => {
-    return extractDrizzleWriteCallsFromBody(sourceFile, receiverNames, bodyOffset);
-  });
 }
 
 function extractDrizzleWriteCallsFromBody(
@@ -2676,35 +2649,9 @@ function extractDrizzleWriteCallsFromBody(
   return calls;
 }
 
-function withParsedFunctionBodySource<T>(
-  source: string,
-  visit: (parsed: { bodyOffset: number; sourceFile: SourceFile }) => T,
-): T {
-  const prefix = 'async function __jisoExtractedBody() {\n';
-  return withParsedSourceFile(`${prefix}${source}\n}`, (sourceFile) =>
-    visit({ bodyOffset: prefix.length, sourceFile }),
-  );
-}
-
 interface ExternalDbArgumentCall {
   index: number;
   name: string;
-}
-
-function extractExternalDbArgumentCalls(
-  source: string,
-  receiverNames: ReadonlySet<string>,
-  localFunctionNames: ReadonlySet<string>,
-): ExternalDbArgumentCall[] {
-  // SPEC §10-§11: helper-call text in comments/strings/templates must not fabricate FW406 facts.
-  return withParsedFunctionBodySource(source, ({ bodyOffset, sourceFile }) => {
-    return extractExternalDbArgumentCallsFromBody(
-      sourceFile,
-      receiverNames,
-      localFunctionNames,
-      bodyOffset,
-    );
-  });
 }
 
 function extractExternalDbArgumentCallsFromBody(
@@ -2733,26 +2680,6 @@ function extractExternalDbArgumentCallsFromBody(
   return calls;
 }
 
-function extractUnclassifiedDrizzleReceiverCalls(
-  source: string,
-  receiverNames: ReadonlySet<string>,
-): ExternalDbArgumentCall[] {
-  return [
-    ...extractReceiverMutationCalls(source, receiverNames),
-    ...extractRelationalQueryCalls(source, receiverNames),
-  ];
-}
-
-function extractReceiverMutationCalls(
-  source: string,
-  receiverNames: ReadonlySet<string>,
-): ExternalDbArgumentCall[] {
-  // SPEC §10-§11: string/template text cannot fabricate unresolved touch-graph surfaces.
-  return withParsedFunctionBodySource(source, ({ bodyOffset, sourceFile }) => {
-    return extractReceiverMutationCallsFromBody(sourceFile, receiverNames, bodyOffset);
-  });
-}
-
 function extractReceiverMutationCallsFromBody(
   body: Node,
   receiverNames: ReadonlySet<string>,
@@ -2773,16 +2700,6 @@ function extractReceiverMutationCallsFromBody(
   }
 
   return calls;
-}
-
-function extractRelationalQueryCalls(
-  source: string,
-  receiverNames: ReadonlySet<string>,
-): ExternalDbArgumentCall[] {
-  // SPEC §10-§11: string/template text cannot fabricate unresolved touch-graph surfaces.
-  return withParsedFunctionBodySource(source, ({ bodyOffset, sourceFile }) => {
-    return extractRelationalQueryCallsFromBody(sourceFile, receiverNames, bodyOffset);
-  });
 }
 
 function extractUnclassifiedDrizzleReceiverCallsFromBody(
@@ -2819,19 +2736,6 @@ function extractRelationalQueryCallsFromBody(
   }
 
   return calls;
-}
-
-function drizzleReceiverNames(body = ''): Set<string> {
-  const names = new Set(DEFAULT_DRIZZLE_RECEIVER_NAMES);
-  appendBodyReceiverAliases(body, names);
-
-  return names;
-}
-
-function appendBodyReceiverAliases(body: string | Node, names: Set<string>): void {
-  for (const alias of destructuredDrizzleReceiverAliases(body)) {
-    names.add(alias);
-  }
 }
 
 function isSourceDrizzleReceiverIdentifier(
@@ -2933,7 +2837,9 @@ function sourceDrizzleReceiverNames(callback: Node): string[] {
     }
   }
 
-  appendBodyReceiverAliases(functionBody(callback), names);
+  for (const alias of destructuredDrizzleReceiverAliasesFromBody(functionBody(callback))) {
+    names.add(alias);
+  }
 
   return [...names];
 }
@@ -2958,15 +2864,6 @@ function appendSourceReceiverBindingNames(name: Node, names: Set<string>): void 
     if (propertyName !== 'db' && propertyName !== 'tx') continue;
     if (Node.isIdentifier(binding)) names.add(binding.getText());
   }
-}
-
-function destructuredDrizzleReceiverAliases(body: string | Node): string[] {
-  if (typeof body !== 'string') return destructuredDrizzleReceiverAliasesFromBody(body);
-
-  // SPEC §10-§11: receiver aliases in comments/strings must not fabricate FW406 surfaces.
-  return withParsedFunctionBodySource(body, ({ sourceFile }) => {
-    return destructuredDrizzleReceiverAliasesFromBody(sourceFile);
-  });
 }
 
 function destructuredDrizzleReceiverAliasesFromBody(body: Node): string[] {

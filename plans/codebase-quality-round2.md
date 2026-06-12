@@ -1209,6 +1209,20 @@ must be "FW406 unresolved," never "silently wrong."
       `pnpm exec vitest --run conformance/drizzle-pin/src/index.test.ts`,
       `pnpm exec vp check packages/drizzle/src/index.ts packages/drizzle/src/index.test.ts plans/codebase-quality-round2.md`,
       and `git diff --check`.
+      Additional bounded evidence 2026-06-12: direct touch-summary construction now requires
+      AST-derived function facts and no longer reparses serialized function-body strings as a
+      fallback for local helper calls, write calls, receiver aliases, external helper FW406s, or
+      raw/relational receiver FW406s. The slice deleted the string-body wrappers
+      `extractLocalFunctionCalls`, `extractDrizzleWriteCalls`, `extractExternalDbArgumentCalls`,
+      `extractUnclassifiedDrizzleReceiverCalls`, `extractReceiverMutationCalls`,
+      `extractRelationalQueryCalls`, `drizzleReceiverNames`, and
+      `destructuredDrizzleReceiverAliases`, preserving SPEC §10-§11's "facts from parsed code,
+      unknowns as FW406" contract. Same-session evidence:
+      `pnpm exec vitest --run packages/drizzle/src/index.test.ts -t "local helper summaries|unclassified Drizzle receiver calls|relational query API|raw db.execute|source extraction state"`,
+      `pnpm exec vitest --run packages/drizzle/src`,
+      `pnpm exec vitest --run conformance/drizzle-pin/src/index.test.ts`,
+      `pnpm exec vp check packages/drizzle/src/index.ts packages/drizzle/src/index.test.ts conformance/drizzle-pin/src/index.test.ts plans/codebase-quality-round2.md`,
+      and `git diff --check`.
       Additional evidence 2026-06-12: source-mode local-helper folding now walks ts-morph
       `CallExpression` nodes instead of regex-scanning function body text, so helper names in
       comments, strings, and templates no longer fold unrelated write/read summaries into a
