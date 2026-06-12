@@ -491,6 +491,18 @@ Scope: SPEC addition (proposed §9.5 "The request shell"), `@jiso/server` shell 
       `/c/commerce.client.js?v=commerce-r7`, `/_q/cart`, and `/src/styles.css`,
       and terminates the spawned process groups. Same-session verification ran
       `pnpm exec vitest --run examples/commerce/src/app-shell.test.ts`.
+      Additional evidence 2026-06-12: the create-jiso starter template now has
+      a consumer serve command for the same app-shell middleware used by
+      `vp dev`. `packages/create-jiso/templates/scripts/serve.mjs` starts Vite
+      in middleware mode from the generated `vite.config.ts`, exposes
+      `starter-serve/v1`, and serves routed `/` documents plus versioned `/c/`
+      modules through the SPEC §9.5 request shell while leaving source assets to
+      Vite. The generated `package.json` wires `vp run serve` and `npm start`
+      to that script, and `packages/create-jiso/src/index.test.ts` generates a
+      temp starter, runs the real `vp run serve` command, then fetches `/`,
+      `/c/starter.client.js?v=starter-r7`, and `/src/styles.css` over HTTP.
+      Same-session verification ran
+      `pnpm exec vitest --run packages/create-jiso/src/index.test.ts`.
 
 ## Background — the gap
 

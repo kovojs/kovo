@@ -6,6 +6,8 @@
     "check": "vp check",
     "dev": "vp dev",
     "emit-graph": "node scripts/emit-graph.mjs",
+    "serve": "node scripts/serve.mjs",
+    "start": "node scripts/serve.mjs",
     "test": "vp test"
   },
   "dependencies": {

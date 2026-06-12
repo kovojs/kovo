@@ -29,6 +29,7 @@ describe('create-jiso starter', () => {
       'README.md',
       'graph.json',
       'scripts/export-static.mjs',
+      'scripts/serve.mjs',
       'scripts/emit-graph.mjs',
       'scripts/graph-assertions.mjs',
       'docs/graph-assertions.md',
@@ -88,6 +89,8 @@ describe('create-jiso starter', () => {
         check: 'vp check',
         dev: 'vp dev',
         'emit-graph': 'node scripts/emit-graph.mjs',
+        serve: 'node scripts/serve.mjs',
+        start: 'node scripts/serve.mjs',
         test: 'vp test',
       });
 
@@ -231,6 +234,10 @@ describe('create-jiso starter', () => {
       expect(exportStaticScript).toContain('JISO_STARTER_STYLESHEET_HREF');
       expect(exportStaticScript).toContain('isStaticExportDiagnosticError');
       expect(exportStaticScript).toContain('starter-export/v1');
+      const serveScript = readFileSync(join(root, 'scripts/serve.mjs'), 'utf8');
+      expect(serveScript).toContain('createStarterServeServer');
+      expect(serveScript).toContain('configFile: fileURLToPath(new URL');
+      expect(serveScript).toContain('starter-serve/v1');
     } finally {
       rmSync(root, { force: true, recursive: true });
     }
@@ -394,6 +401,58 @@ describe('create-jiso starter', () => {
     }
   });
 
+  it('serves the generated starter app-shell through the vp run serve task', async () => {
+    const tempParent = tmpdir();
+    mkdirSync(tempParent, { recursive: true });
+    const root = mkdtempSync(join(tempParent, 'create-jiso-vp-serve-'));
+    const port = await reservePort();
+    let serveServer: ChildProcessWithoutNullStreams | undefined;
+
+    try {
+      writeJisoProject(root, { name: 'Serve Task Proof' });
+      linkStarterBuildDependencies(root);
+
+      serveServer = spawn(
+        vpCommand(),
+        [
+          'run',
+          '--no-cache',
+          'serve',
+          '--host',
+          '127.0.0.1',
+          '--port',
+          String(port),
+          '--strictPort',
+        ],
+        {
+          cwd: root,
+          detached: process.platform !== 'win32',
+          env: withGeneratedBinOnPath(root),
+        },
+      );
+      const output = collectOutput(serveServer);
+      const origin = `http://127.0.0.1:${port}`;
+
+      const documentBody = await fetchTextWhenReady(`${origin}/`, output);
+      expect(output()).toContain('starter-serve/v1');
+      expect(documentBody).toContain(
+        'on:click="/c/starter.client.js?v=starter-r7#Starter$announce"',
+      );
+
+      const moduleBody = await fetchTextWhenReady(
+        `${origin}/c/starter.client.js?v=starter-r7`,
+        output,
+      );
+      expect(moduleBody).toContain('export function Starter$announce');
+
+      const sourceCss = await fetchTextWhenReady(`${origin}/src/styles.css`, output);
+      expect(sourceCss).toContain('tailwindcss v');
+    } finally {
+      await stopProcess(serveServer);
+      rmSync(root, { force: true, recursive: true });
+    }
+  }, 30000);
+
   it('runs the generated vp export task with the built stylesheet href', () => {
     const tempParent = tmpdir();
     mkdirSync(tempParent, { recursive: true });
@@ -480,7 +539,7 @@ describe('create-jiso starter', () => {
 
     try {
       expect(main([root])).toBe(0);
-      expect(stdout).toHaveBeenCalledWith(`create-jiso: wrote 19 files to ${root}\n`);
+      expect(stdout).toHaveBeenCalledWith(`create-jiso: wrote 20 files to ${root}\n`);
       expect(JSON.parse(readFileSync(join(root, 'package.json'), 'utf8'))).toMatchObject({
         name: 'hello-cli',
       });
@@ -578,6 +637,17 @@ function withRepoBinOnPath(): NodeJS.ProcessEnv {
     ...process.env,
     PATH: [join(process.cwd(), 'node_modules/.bin'), process.env.PATH ?? ''].join(':'),
   };
+}
+
+function withGeneratedBinOnPath(root: string): NodeJS.ProcessEnv {
+  return {
+    ...process.env,
+    PATH: [join(root, 'node_modules/.bin'), process.env.PATH ?? ''].join(':'),
+  };
+}
+
+function vpCommand(): string {
+  return process.platform === 'win32' ? 'vp.cmd' : 'vp';
 }
 
 async function reservePort(): Promise<number> {
