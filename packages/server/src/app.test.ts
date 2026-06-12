@@ -3,15 +3,15 @@ import { describe, expect, it, vi } from 'vitest';
 import { createApp, createRequestHandler } from './app.js';
 import {
   createMemoryVersionedClientModuleRegistry,
-  domain,
-  endpoint,
-  guards,
-  mutation,
-  query,
-  route,
-  s,
   versionedClientModuleHref,
-} from './index.js';
+} from './client-modules.js';
+import { domain } from './domain.js';
+import { endpoint } from './endpoint.js';
+import { guards } from './guards.js';
+import { mutation } from './mutation.js';
+import { query } from './query.js';
+import { route } from './route.js';
+import { s } from './schema.js';
 
 describe('server createApp request shell', () => {
   it('stores the closed app registries and options without adding middleware', () => {

@@ -2686,6 +2686,14 @@ As each phase splits a source module, split its tests in the same commit.
       `corepack pnpm exec vitest --run packages/server/src/mutation-response.test.ts`,
       `corepack pnpm exec vp check packages/server/src/mutation-response.test.ts plans/codebase-quality-round2.md`,
       and `git diff --check`.
+      Additional evidence 2026-06-12: `packages/server/src/index.test.ts` is absent, and
+      `packages/server/src/app.test.ts` now imports the app-shell collaborators from their
+      extracted modules instead of `packages/server/src/index.ts`, keeping the request-shell
+      boundary test off the public package barrel. Same-session evidence:
+      `pnpm exec vitest --run packages/server/src/app.test.ts`,
+      `pnpm exec vp check packages/server/src/app.test.ts plans/codebase-quality-round2.md`,
+      and `git diff --check`. Remaining work in this item is the broader direct-import sweep for
+      the other server test files plus any shared fixture helpers that still reduce duplication.
 - [ ] runtime/index.test.ts (4,435 lines, mutation tests under "query store") → per-module
       files; `Fake*` classes to a shared `test-fixtures.ts`; direct unit tests for wire-parser,
       handlers, morph; replace counted-microtask flushing with a single `flush()` helper.
