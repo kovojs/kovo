@@ -170,7 +170,10 @@ export function compileComponentModule(options: CompileComponentOptions): Compil
     options,
   );
   const source = deriveLowering.source;
-  const model = parseComponentModuleModel(options.fileName, source);
+  const model =
+    source === navigationLowering.source
+      ? navigationModel
+      : parseComponentModuleModel(options.fileName, source);
   const handlers = lowerEventHandlers({ ...options, source }, componentName, model);
   const queryUpdatePlans = collectQueryUpdatePlans(source, model, componentName);
   const updateCoverage = collectQueryUpdateCoverage(source, model, options, componentName);

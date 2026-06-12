@@ -410,6 +410,12 @@ pipeline throws the tree away and communicates via mutated source text.
       actually changed source. Same-session evidence:
       `pnpm exec vitest --run packages/compiler/src/index.test.ts` and
       `pnpm exec vp check packages/compiler/src/index.ts packages/compiler/src/lower/inline-derives.ts`.
+      Additional evidence 2026-06-12: `compileComponentModule` now also reuses the navigation
+      model when inline derive lowering is a no-op, removing the last unconditional post-derive
+      reparse on files without synthesized derive exports. Same-session evidence:
+      `pnpm exec vitest --run packages/compiler/src/index.test.ts -t "derive|data-bind|query update"`
+      and
+      `pnpm exec vp check packages/compiler/src/index.ts packages/compiler/src/lower/inline-derives.ts plans/codebase-quality-round2.md`.
       Partial evidence 2026-06-11: `serverRenderSource` now parses once after handler lowering
       with the author file name and stamps component identity, declared query deps, and initial
       state onto the render host through one in-memory tag update instead of reparsing for each
