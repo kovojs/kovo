@@ -1712,7 +1712,7 @@ function applyFragmentQueryBody(
   }
 
   return {
-    fragments: readFragmentChunks(body),
+    fragments: readFragmentChunks(body, onError),
     queries: queryChunks.map((query) => query.name),
   };
 }

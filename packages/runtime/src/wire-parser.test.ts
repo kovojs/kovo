@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 
-import { readAttribute, readQueryChunks, unescapeHtml } from './wire-parser.js';
+import { readAttribute, readFragmentChunks, readQueryChunks, unescapeHtml } from './wire-parser.js';
 
 describe('wire parser HTML entity handling', () => {
   it('decodes the server-runtime HTML entity contract for wire text', () => {
@@ -34,5 +34,23 @@ describe('wire parser HTML entity handling', () => {
     ).toEqual([]);
     expect(onError).toHaveBeenCalledWith(expect.any(Error));
     expect(String(onError.mock.calls[0]?.[0].message)).toContain('Malformed JSON in fw-query cart');
+  });
+
+  it('reports malformed fw-fragment markup instead of silently truncating', () => {
+    const onError = vi.fn();
+
+    expect(
+      readFragmentChunks(
+        [
+          '<fw-fragment target="cart-badge"><cart-badge>3</cart-badge></fw-fragment>',
+          '<fw-fragment target="cart-list"><li>stale</li>',
+        ].join('\n'),
+        onError,
+      ),
+    ).toEqual([{ html: '<cart-badge>3</cart-badge>', target: 'cart-badge' }]);
+    expect(onError).toHaveBeenCalledWith(expect.any(Error));
+    expect(String(onError.mock.calls[0]?.[0].message)).toContain(
+      'Malformed fw-fragment chunk: missing closing tag',
+    );
   });
 });

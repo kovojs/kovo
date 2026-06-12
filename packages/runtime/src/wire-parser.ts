@@ -62,7 +62,10 @@ export function readQueryChunks(body: string, onError?: (error: unknown) => void
   return queries;
 }
 
-export function readFragmentChunks(body: string): FragmentChunk[] {
+export function readFragmentChunks(
+  body: string,
+  onError?: (error: unknown) => void,
+): FragmentChunk[] {
   const fragments: FragmentChunk[] = [];
   const fragmentTag = /<\/?fw-fragment\b/gi;
   let offset = 0;
@@ -77,9 +80,15 @@ export function readFragmentChunks(body: string): FragmentChunk[] {
     }
 
     const openingEnd = tagClose(body, match.index + match[0].length);
-    if (openingEnd === undefined) break;
+    if (openingEnd === undefined) {
+      onError?.(malformedFragmentError('missing opening tag close'));
+      break;
+    }
     const end = matchingFragmentEnd(body, match.index);
-    if (!end) break;
+    if (!end) {
+      onError?.(malformedFragmentError('missing closing tag'));
+      break;
+    }
 
     const attrs = body.slice(match.index + match[0].length, openingEnd);
     const target = readAttribute(attrs, 'target');
@@ -97,6 +106,10 @@ export function readFragmentChunks(body: string): FragmentChunk[] {
   }
 
   return fragments;
+}
+
+export function malformedFragmentError(reason: string): Error {
+  return new Error(`Malformed fw-fragment chunk: ${reason}`);
 }
 
 function matchingFragmentEnd(

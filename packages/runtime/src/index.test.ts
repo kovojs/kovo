@@ -2313,6 +2313,35 @@ describe('query store', () => {
     expect(onError).toHaveBeenCalledWith(expect.any(Error));
   });
 
+  it('reports malformed mutation fragment chunks through the DOM error hook', () => {
+    const store = createQueryStore();
+    const root = new FakeMorphRoot();
+    const onError = vi.fn();
+    root.targets.set('cart-badge', new FakeMorphTarget());
+
+    // SPEC section 9.1 defines fw-fragment as mutation response wire vocabulary.
+    const applied = applyMutationResponseToDom({
+      body: [
+        '<fw-query name="cart">{"count":3}</fw-query>',
+        '<fw-fragment target="cart-badge"><cart-badge>3</cart-badge></fw-fragment>',
+        '<fw-fragment target="cart-list"><li>stale</li>',
+      ].join('\n'),
+      onError,
+      root,
+      store,
+    });
+
+    expect(store.get('cart')).toEqual({ count: 3 });
+    expect(root.targets.get('cart-badge')?.html).toBe('<cart-badge>3</cart-badge>');
+    expect(applied).toEqual({
+      appliedFragments: ['cart-badge'],
+      fragments: [{ html: '<cart-badge>3</cart-badge>', target: 'cart-badge' }],
+      queries: ['cart'],
+    });
+    expect(onError).toHaveBeenCalledWith(expect.any(Error));
+    expect(String(onError.mock.calls[0]?.[0].message)).toContain('Malformed fw-fragment chunk');
+  });
+
   it('applies query update bindings from mutation chunks without requiring a fragment', () => {
     const root = new FakeMorphRoot();
     const store = createQueryStore();
