@@ -912,6 +912,19 @@ jiso-dialog` resolves dashed wire names and prints provenance including package,
       `pnpm --filter @jiso/example-gallery exec vitest --run src/interactive-gallery.test.ts`.
       G6 remains open because this is not browser-backed and does not cover every
       stateful primitive family or keyboard/top-layer behavior.
+      Additional partial evidence 2026-06-12: `examples/gallery` now has a
+      gallery-local Vitest browser config and `test:browser` script plus
+      `examples/gallery/src/interactive-gallery.browser.test.ts`, which renders the
+      compiler-generated toggle, checkbox, and disclosure demos in Chromium, installs the
+      real `@jiso/runtime` delegated loader, resolves the generated versioned client
+      modules, and asserts click plus keyboard activation mutates stamped `fw-state`
+      through the generated handlers; checkbox also proves native checked-state movement.
+      Same-session evidence:
+      `pnpm --filter @jiso/example-gallery run emit:interactive-gallery`,
+      `pnpm --filter @jiso/example-gallery exec vitest --run src/interactive-gallery.test.ts`,
+      and `pnpm --filter @jiso/example-gallery run test:browser`. G6 remains open for
+      browser-backed visible ARIA/`hidden` synchronization, top-layer/focus behavior, and
+      coverage of every stateful primitive family.
 
 ## Background
 
