@@ -226,6 +226,13 @@ Scope: SPEC addition (proposed §9.5 "The request shell"), `@jiso/server` shell 
       mutates a generated project route to guarded/non-exportable and verifies
       `vp run export` returns status 1 with `ERROR FW229 route=/`. Same-session
       verification ran `pnpm exec vitest --run packages/create-jiso/src/index.test.ts`.
+      Additional evidence 2026-06-12: `packages/create-jiso/src/index.test.ts`
+      now starts a generated project with the real `vp dev` task, fetches the
+      app-shell-routed `/` document, the versioned `/c/starter.client.js?v=starter-r7`
+      module, and the Vite-served `/src/styles.css` source asset, proving the
+      generated starter's user-facing dev command preserves the same SPEC §9.5
+      request-shell path while leaving source assets to Vite. Same-session
+      verification ran `pnpm exec vitest --run packages/create-jiso/src/index.test.ts`.
 
 ## Background — the gap
 

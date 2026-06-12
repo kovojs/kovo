@@ -1,4 +1,4 @@
-import { execFileSync } from 'node:child_process';
+import { execFileSync, spawn, type ChildProcessWithoutNullStreams } from 'node:child_process';
 import {
   existsSync,
   mkdirSync,
@@ -10,6 +10,7 @@ import {
   symlinkSync,
   writeFileSync,
 } from 'node:fs';
+import { createServer } from 'node:net';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 
@@ -337,6 +338,47 @@ describe('create-jiso starter', () => {
     }
   });
 
+  it('serves the generated starter app-shell through the vp dev task', async () => {
+    const tempParent = join(process.cwd(), 'node_modules/.tmp');
+    mkdirSync(tempParent, { recursive: true });
+    const root = mkdtempSync(join(tempParent, 'create-jiso-vp-dev-'));
+    const port = await reservePort();
+    let devServer: ChildProcessWithoutNullStreams | undefined;
+
+    try {
+      writeJisoProject(root, { name: 'Dev Task Proof' });
+      linkStarterBuildDependencies(root);
+
+      devServer = spawn(
+        resolveBin('vp'),
+        ['dev', '--host', '127.0.0.1', '--port', String(port), '--strictPort'],
+        {
+          cwd: root,
+          env: withRepoBinOnPath(),
+        },
+      );
+      const output = collectOutput(devServer);
+      const origin = `http://127.0.0.1:${port}`;
+
+      const documentBody = await fetchTextWhenReady(`${origin}/`, output);
+      expect(documentBody).toContain(
+        'on:click="/c/starter.client.js?v=starter-r7#Starter$announce"',
+      );
+
+      const moduleBody = await fetchTextWhenReady(
+        `${origin}/c/starter.client.js?v=starter-r7`,
+        output,
+      );
+      expect(moduleBody).toContain('export function Starter$announce');
+
+      const sourceCss = await fetchTextWhenReady(`${origin}/src/styles.css`, output);
+      expect(sourceCss).toContain('tailwindcss v');
+    } finally {
+      await stopProcess(devServer);
+      rmSync(root, { force: true, recursive: true });
+    }
+  });
+
   it('runs the generated vp export task with the built stylesheet href', () => {
     const tempParent = tmpdir();
     mkdirSync(tempParent, { recursive: true });
@@ -516,6 +558,71 @@ function withRepoBinOnPath(): NodeJS.ProcessEnv {
     ...process.env,
     PATH: [join(process.cwd(), 'node_modules/.bin'), process.env.PATH ?? ''].join(':'),
   };
+}
+
+async function reservePort(): Promise<number> {
+  const server = createServer();
+  await new Promise<void>((resolve, reject) => {
+    server.once('error', reject);
+    server.listen(0, '127.0.0.1', () => {
+      server.off('error', reject);
+      resolve();
+    });
+  });
+  const address = server.address();
+  await new Promise<void>((resolve, reject) => {
+    server.close((error) => (error ? reject(error) : resolve()));
+  });
+
+  if (typeof address !== 'object' || address === null) {
+    throw new Error('Unable to reserve a TCP port for generated vp dev proof.');
+  }
+
+  return address.port;
+}
+
+function collectOutput(process: ChildProcessWithoutNullStreams): () => string {
+  const chunks: Buffer[] = [];
+  process.stdout.on('data', (chunk: Buffer) => chunks.push(chunk));
+  process.stderr.on('data', (chunk: Buffer) => chunks.push(chunk));
+  return () => Buffer.concat(chunks).toString('utf8');
+}
+
+async function fetchTextWhenReady(url: string, output: () => string): Promise<string> {
+  const deadline = Date.now() + 15_000;
+  let lastError: unknown;
+
+  while (Date.now() < deadline) {
+    try {
+      const response = await fetch(url);
+      const body = await response.text();
+      if (response.ok) return body;
+      lastError = new Error(`HTTP ${response.status}: ${body}`);
+    } catch (error) {
+      lastError = error;
+    }
+
+    await new Promise((resolve) => setTimeout(resolve, 100));
+  }
+
+  const cause = lastError instanceof Error ? lastError.message : String(lastError);
+  throw new Error(`Timed out fetching ${url}: ${cause}\n${output()}`);
+}
+
+async function stopProcess(process: ChildProcessWithoutNullStreams | undefined): Promise<void> {
+  if (!process || process.exitCode !== null) return;
+
+  await new Promise<void>((resolve, reject) => {
+    const timer = setTimeout(() => {
+      process.kill('SIGKILL');
+      reject(new Error('Timed out stopping generated vp dev process.'));
+    }, 5_000);
+    process.once('exit', () => {
+      clearTimeout(timer);
+      resolve();
+    });
+    process.kill('SIGTERM');
+  });
 }
 
 function resolveDependencyRoot(packageName: string): string {
