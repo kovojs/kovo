@@ -2,8 +2,6 @@ import { diagnosticDefinitions } from '@jiso/core';
 import { describe, expect, it } from 'vitest';
 
 import { collectMinifierReservedNames, compileComponentModule } from './index.js';
-import { handlerExpressionLowering } from './emit/client.js';
-import { applySourceReplacements } from './shared.js';
 
 const fw210 = diagnosticDefinitions.FW210;
 
@@ -342,38 +340,6 @@ export const CartActions = component('cart-actions', {
     expect(clientSource).toContain('ctx.state.count += ctx.params.quantity;');
     expect(clientSource).not.toContain('ctx.state changed');
     expect(clientSource).not.toContain('literal ctx.params.quantity stays text');
-  });
-
-  it('exposes handler body rewrites as source patches', () => {
-    const expression = [
-      "log('state changed for item.quantity');",
-      'state.count += item.quantity;',
-    ].join('\n');
-    const lowering = handlerExpressionLowering(expression, [
-      {
-        attributeName: 'data-p-quantity',
-        type: 'number',
-        value: '{item.quantity}',
-      },
-    ]);
-
-    expect(lowering.replacements).toEqual([
-      {
-        end: expression.indexOf('state.count') + 'state'.length,
-        replacement: 'ctx.state',
-        start: expression.indexOf('state.count'),
-      },
-      {
-        end: expression.indexOf('item.quantity;') + 'item.quantity'.length,
-        replacement: 'ctx.params.quantity',
-        start: expression.indexOf('item.quantity;'),
-      },
-    ]);
-    expect(applySourceReplacements(expression, lowering.replacements)).toBe(
-      ["log('state changed for item.quantity');", 'ctx.state.count += ctx.params.quantity;'].join(
-        '\n',
-      ),
-    );
   });
 
   it('extracts element params from wrapper calls with quoted commas', () => {

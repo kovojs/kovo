@@ -1,5 +1,3 @@
-import ts from 'typescript';
-
 import { compilerIrHeader } from '../ir.js';
 import { applySourceReplacements, dedupeBy, indent, type SourceReplacement } from '../shared.js';
 import type {
@@ -63,28 +61,14 @@ function emitHandlerBody(handler: HandlerLowering): string {
   return `return ${lowerHandlerArrowBody(arrowBody, handler.params)};`;
 }
 
-function lowerHandlerExpression(expression: string, params: readonly ElementParam[]): string {
-  return applySourceReplacements(
-    expression,
-    handlerExpressionLowering(expression, params).replacements,
-  );
-}
-
 function lowerHandlerArrowBody(body: HandlerArrowBody, params: readonly ElementParam[]): string {
-  const parsedLowering = parsedHandlerExpressionLowering(body, params);
-  if (parsedLowering) {
-    return applySourceReplacements(body.source, parsedLowering.replacements);
-  }
-
-  return lowerHandlerExpression(body.source, params);
+  return applySourceReplacements(body.source, handlerArrowBodyLowering(body, params).replacements);
 }
 
-function parsedHandlerExpressionLowering(
+function handlerArrowBodyLowering(
   body: HandlerArrowBody,
   params: readonly ElementParam[],
-): HandlerExpressionLowering | null {
-  if (!body.propertyAccesses || body.sourceStart === undefined) return null;
-
+): HandlerExpressionLowering {
   const replacements: SourceReplacement[] = [];
   const paramReplacements = params
     .map((param) => ({
@@ -140,99 +124,6 @@ function dedupeHandlerReplacements(
   return dedupeBy(replacements, (replacement) =>
     [replacement.start, replacement.end, replacement.replacement].join(':'),
   );
-}
-
-export function handlerExpressionLowering(
-  expression: string,
-  params: readonly ElementParam[],
-): HandlerExpressionLowering {
-  const replacements: SourceReplacement[] = [];
-  const sourceFile = ts.createSourceFile(
-    'handler-expression.ts',
-    `function __jiso_handler__() {\n${expression}\n}`,
-    ts.ScriptTarget.Latest,
-    true,
-    ts.ScriptKind.TS,
-  );
-  const offset = 'function __jiso_handler__() {\n'.length;
-  const paramReplacements = params
-    .map((param) => ({
-      param,
-      sourceExpression: param.value.slice(1, -1),
-    }))
-    .filter((entry) => entry.sourceExpression.length > 0)
-    .sort((left, right) => right.sourceExpression.length - left.sourceExpression.length);
-
-  const visit = (node: ts.Node): void => {
-    for (const { param, sourceExpression } of paramReplacements) {
-      if (
-        isSerializableExpressionNode(node) &&
-        node.getText(sourceFile) === sourceExpression &&
-        !hasReplacementAncestor(node, sourceFile, paramReplacements)
-      ) {
-        replacements.push({
-          end: node.getEnd() - offset,
-          replacement: `ctx.params.${paramNameFromAttribute(param.attributeName)}`,
-          start: node.getStart(sourceFile) - offset,
-        });
-        return;
-      }
-    }
-
-    if (ts.isIdentifier(node) && node.text === 'state' && !isPropertyName(node)) {
-      replacements.push({
-        end: node.getEnd() - offset,
-        replacement: 'ctx.state',
-        start: node.getStart(sourceFile) - offset,
-      });
-      return;
-    }
-
-    ts.forEachChild(node, visit);
-  };
-
-  visit(sourceFile);
-
-  return { replacements };
-}
-
-function isSerializableExpressionNode(node: ts.Node): boolean {
-  return (
-    ts.isIdentifier(node) ||
-    ts.isPropertyAccessExpression(node) ||
-    ts.isElementAccessExpression(node)
-  );
-}
-
-function isPropertyName(node: ts.Identifier): boolean {
-  const parent = node.parent;
-  return (
-    (ts.isPropertyAccessExpression(parent) && parent.name === node) ||
-    (ts.isPropertyAssignment(parent) && parent.name === node) ||
-    (ts.isShorthandPropertyAssignment(parent) && parent.name === node)
-  );
-}
-
-function hasReplacementAncestor(
-  node: ts.Node,
-  sourceFile: ts.SourceFile,
-  replacements: readonly { sourceExpression: string }[],
-): boolean {
-  let current = node.parent;
-
-  while (current) {
-    if (
-      isSerializableExpressionNode(current) &&
-      replacements.some(
-        (replacement) => current.getText(sourceFile) === replacement.sourceExpression,
-      )
-    ) {
-      return true;
-    }
-    current = current.parent;
-  }
-
-  return false;
 }
 
 function paramNameFromAttribute(attributeName: string): string {

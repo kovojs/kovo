@@ -97,6 +97,9 @@ Closed evidence so far:
   expressions.
 - Client emission no longer reparses `handler.expression` to rediscover zero-arg arrow bodies;
   emitted handler bodies come from the parser-owned `HandlerArrowBody` payload.
+- Client handler body rewrites now use required parser-owned `HandlerArrowBody` spans only;
+  `emit/client.ts` no longer imports TypeScript or exposes a standalone expression-reparse
+  lowerer.
 - IR authoring-surface diagnostics use header detection only; tag-specific FW235 help comes from
   parser-owned string-render facts.
 
@@ -116,6 +119,7 @@ Recent gates:
 - `pnpm exec vitest --run packages/compiler/src/compile-component.test.ts -t "FW235|authoring|compiler IR"`
 - `pnpm exec vitest --run packages/compiler/src/handler-lowering.test.ts packages/compiler/src/compile-component.test.ts packages/compiler/src/vite.test.ts`
 - `pnpm exec vitest --run packages/compiler/src/scan/parse.test.ts packages/compiler/src/handler-lowering.test.ts packages/compiler/src/compile-component.test.ts`
+- `pnpm exec vitest --run packages/compiler/src/scan/parse.test.ts packages/compiler/src/handler-lowering.test.ts packages/compiler/src/compile-component.test.ts packages/compiler/src/vite.test.ts`
 - `pnpm exec vp check packages/compiler/src/scan/parse.ts packages/compiler/src/scan/parse.test.ts packages/compiler/src/lower/handlers.ts packages/compiler/src/emit/client.ts packages/compiler/src/types.ts plans/codebase-quality-round2.md`
 - `git diff --check`
 
