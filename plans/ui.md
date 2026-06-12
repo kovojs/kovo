@@ -583,6 +583,14 @@ jiso-dialog` resolves dashed wire names and prints provenance including package,
 - [ ] G3 axe checks per component state in the gallery.
 - [ ] G4 visual regression for `@jiso/ui`: shadcn-parity human review once, then self-baselined screenshots.
 - [ ] G5 merge fixtures: every primitive's attrs record × an author element → golden merged output (doubles as FW231/FW232 coverage).
+      Partial evidence 2026-06-12: `examples/gallery/src/merge-fixtures.test.tsx`
+      adds a browser-free golden merge fixture over existing gallery primitive attrs for toggle
+      and dialog. The fixture oracle cites SPEC §4.6, renders exact merged TSX/JSX source
+      output for class/style/on-ref/scalar/logical-OR/state/ARIA cases, verifies dialog IDREF
+      rewiring when an authored content id wins, and pins representative FW231/FW232 diagnostics
+      for double-wired IDREF and primitive-owned state/ARIA overrides. Same-session evidence:
+      `pnpm --filter @jiso/example-gallery test`. G5 remains open because this is a bounded
+      subset, not every primitive attrs record and not full compiler/runtime diagnostic coverage.
 
 ## Background
 
