@@ -615,6 +615,86 @@ describe('Drizzle pinned subset conformance', () => {
     });
   });
 
+  it('pins standalone direct select chains as real Drizzle touch-graph reads', () => {
+    const graph = extractTouchGraphFromProject({
+      files: [
+        {
+          fileName: 'conformance/drizzle-pin/src/catalog.domain.ts',
+          source: `
+            import { eq } from 'drizzle-orm';
+            import type { PgDatabase } from 'drizzle-orm/pg-core';
+
+            export const products = pgTable('products', {
+              id: text('id').primaryKey(),
+              vendorId: text('vendor_id'),
+            }, jiso({ domain: 'product', key: 'id' }));
+            export const vendors = pgTable('vendors', {
+              id: text('id').primaryKey(),
+            }, jiso({ domain: 'vendor', key: 'id' }));
+
+            export async function loadCatalog(db: PgDatabase<any, any, any>) {
+              await db.select({ id: products.id }).from(products).leftJoin(vendors, eq(vendors.id, products.vendorId));
+            }
+          `,
+        },
+      ],
+    });
+
+    expect(graph).toEqual({
+      loadCatalog: {
+        reads: [
+          {
+            domain: 'product',
+            keys: null,
+            site: 'conformance/drizzle-pin/src/catalog.domain.ts:14',
+            source: 'select',
+            via: 'products',
+          },
+          {
+            domain: 'vendor',
+            keys: null,
+            site: 'conformance/drizzle-pin/src/catalog.domain.ts:14',
+            source: 'select',
+            via: 'vendors',
+          },
+        ],
+        touches: [],
+        unresolved: [],
+      },
+    });
+  });
+
+  it('pins unresolved standalone direct select tables as FW406', () => {
+    const graph = extractTouchGraphFromProject({
+      files: [
+        {
+          fileName: 'conformance/drizzle-pin/src/catalog.domain.ts',
+          source: `
+            import type { PgDatabase } from 'drizzle-orm/pg-core';
+
+            export async function loadCatalog(db: PgDatabase<any, any, any>, tableName: string) {
+              await db.select().from(tableFor(tableName));
+            }
+          `,
+        },
+      ],
+    });
+
+    expect(graph).toEqual({
+      loadCatalog: {
+        reads: [],
+        touches: [],
+        unresolved: [
+          {
+            code: 'FW406',
+            message: 'Statically un-analyzable write site; manual touches required.',
+            site: 'conformance/drizzle-pin/src/catalog.domain.ts:5',
+          },
+        ],
+      },
+    });
+  });
+
   it('pins source destructured receiver parameters for write extraction', () => {
     const graph = extractTouchGraphFromSource([
       {

@@ -1908,6 +1908,17 @@ must be "FW406 unresolved," never "silently wrong."
       `pnpm exec vitest --run conformance/drizzle-pin/src/index.test.ts`,
       `pnpm exec vp check packages/drizzle/src/index.ts packages/drizzle/src/index.test.ts conformance/drizzle-pin/src/index.test.ts plans/codebase-quality-round2.md`,
       and `git diff --check`.
+      Additional evidence 2026-06-12: standalone direct `db.select*().from(...)` and join
+      chains inside touch-graph functions now emit read facts from the live ts-morph call chain,
+      while unresolved direct-select table expressions degrade to FW406 and nested insert-select
+      reads remain classified as `insert-select` instead of double-counting. This closes a
+      silent read-surface gap under SPEC §10-§11. Same-session evidence:
+      `corepack pnpm exec vitest --run packages/drizzle/src/index.test.ts -t "standalone direct select|insert-select nested reads|project standalone direct select"`,
+      `corepack pnpm exec vitest --run conformance/drizzle-pin/src/index.test.ts -t "standalone direct select|unresolved standalone direct select"`,
+      `corepack pnpm exec vitest --run packages/drizzle/src`,
+      `corepack pnpm exec vitest --run conformance/drizzle-pin`,
+      `corepack pnpm exec vp check packages/drizzle/src/static.ts packages/drizzle/src/index.test.ts conformance/drizzle-pin/src/index.test.ts plans/codebase-quality-round2.md`,
+      and `git diff --check`.
       Additional evidence 2026-06-12: project-mode extraction now carries typed
       `db.transaction(async (writer) => ...)` callback parameters into the Drizzle receiver set,
       so writes through the transaction alias are extracted while distinct fake transaction

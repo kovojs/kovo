@@ -4712,7 +4712,15 @@ export interface CommerceInvalidationSets {
 
     expect(graph).toEqual({
       syncUsers: {
-        reads: [],
+        reads: [
+          {
+            domain: 'user',
+            keys: null,
+            site: 'cart.domain.ts:5',
+            source: 'select',
+            via: 'users',
+          },
+        ],
         touches: [
           {
             domain: 'user',
@@ -4771,6 +4779,158 @@ export interface CommerceInvalidationSets {
             site: 'cart.domain.ts:5',
           },
         ],
+      },
+    });
+  });
+
+  it('extracts standalone direct select chains as touch-graph reads', () => {
+    const graph = extractTouchGraphFromSource([
+      {
+        fileName: 'catalog.domain.ts',
+        source: `
+          export const products = pgTable("products", {}, jiso({ domain: "product", key: "id" }));
+          export const vendors = pgTable("vendors", {}, jiso({ domain: "vendor", key: "id" }));
+
+          export async function loadCatalog(db) {
+            await db.select({ id: products.id }).from(products).leftJoin(vendors, eq(vendors.id, products.vendorId));
+          }
+        `,
+      },
+    ]);
+
+    expect(graph).toEqual({
+      loadCatalog: {
+        reads: [
+          {
+            domain: 'product',
+            keys: null,
+            site: 'catalog.domain.ts:6',
+            source: 'select',
+            via: 'products',
+          },
+          {
+            domain: 'vendor',
+            keys: null,
+            site: 'catalog.domain.ts:6',
+            source: 'select',
+            via: 'vendors',
+          },
+        ],
+        touches: [],
+        unresolved: [],
+      },
+    });
+  });
+
+  it('marks standalone direct select chains with unresolved tables as FW406', () => {
+    const graph = extractTouchGraphFromSource([
+      {
+        fileName: 'catalog.domain.ts',
+        source: `
+          export async function loadCatalog(db, tableName) {
+            await db.select().from(tableFor(tableName));
+          }
+        `,
+      },
+    ]);
+
+    expect(graph).toEqual({
+      loadCatalog: {
+        reads: [],
+        touches: [],
+        unresolved: [
+          {
+            code: 'FW406',
+            message: 'Statically un-analyzable write site; manual touches required.',
+            site: 'catalog.domain.ts:3',
+          },
+        ],
+      },
+    });
+  });
+
+  it('extracts project standalone direct select chains from typed receivers', () => {
+    const graph = extractTouchGraphFromProject({
+      files: [
+        pgDatabaseTypes([
+          'select(value?: unknown): { from(table: unknown): { leftJoin(table: unknown, on: unknown): Promise<void> } };',
+        ]),
+        {
+          fileName: 'catalog.domain.ts',
+          source: [
+            'import type { PgDatabase } from "drizzle-orm/pg-core";',
+            '',
+            'export const products = pgTable("products", {}, jiso({ domain: "product", key: "id" }));',
+            'export const vendors = pgTable("vendors", {}, jiso({ domain: "vendor", key: "id" }));',
+            '',
+            'export async function loadCatalog(reader: PgDatabase) {',
+            '  await reader.select({ id: products.id }).from(products).leftJoin(vendors, eq(vendors.id, products.vendorId));',
+            '}',
+            '',
+          ].join('\n'),
+        },
+      ],
+    });
+
+    expect(graph).toEqual({
+      loadCatalog: {
+        reads: [
+          {
+            domain: 'product',
+            keys: null,
+            site: 'catalog.domain.ts:7',
+            source: 'select',
+            via: 'products',
+          },
+          {
+            domain: 'vendor',
+            keys: null,
+            site: 'catalog.domain.ts:7',
+            source: 'select',
+            via: 'vendors',
+          },
+        ],
+        touches: [],
+        unresolved: [],
+      },
+    });
+  });
+
+  it('keeps insert-select nested reads classified as insert-select only', () => {
+    const graph = extractTouchGraphFromSource([
+      {
+        fileName: 'catalog.domain.ts',
+        source: `
+          export const products = pgTable("products", {}, jiso({ domain: "product", key: "id" }));
+          export const snapshots = pgTable("product_snapshots", {}, jiso({ domain: "snapshot", key: "productId" }));
+
+          export async function syncSnapshots(db) {
+            await db.insert(snapshots).select(db.select().from(products));
+          }
+        `,
+      },
+    ]);
+
+    expect(graph).toEqual({
+      syncSnapshots: {
+        reads: [
+          {
+            domain: 'product',
+            keys: null,
+            site: 'catalog.domain.ts:6',
+            source: 'insert-select',
+            via: 'products',
+          },
+        ],
+        touches: [
+          {
+            domain: 'snapshot',
+            keys: null,
+            site: 'catalog.domain.ts:6',
+            via: 'product_snapshots',
+          },
+        ],
+        unresolved: [],
       },
     });
   });
