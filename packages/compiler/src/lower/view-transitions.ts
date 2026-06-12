@@ -4,7 +4,7 @@ import {
   type JsxAttributeModel,
   type JsxElementModel,
 } from '../scan/parse.js';
-import { escapeAttribute, removeJsxAttribute } from '../shared.js';
+import { applySourceReplacements, escapeAttribute, removeJsxAttribute } from '../shared.js';
 import type { ViewTransitionStamp } from '../types.js';
 
 export function lowerViewTransitions(
@@ -30,10 +30,8 @@ export function lowerViewTransitions(
       } => item.attribute !== undefined,
     );
   const stamps = matches.map((item) => ({ name: item.attribute.value }));
-  let nextSource = source;
-
-  for (const match of matches.sort((left, right) => right.element.start - left.element.start)) {
-    const opening = nextSource.slice(match.element.start, match.element.openingEnd);
+  const replacements = matches.map((match) => {
+    const opening = source.slice(match.element.start, match.element.openingEnd);
     const tagPrefix = `<${match.element.tag}`;
     const attributes = opening.slice(tagPrefix.length, -1);
     const withoutViewTransition = removeJsxAttribute(
@@ -42,11 +40,11 @@ export function lowerViewTransitions(
       match.attribute.end - match.element.start - tagPrefix.length,
     );
     const replacement = `<${match.element.tag}${appendViewTransitionStyle(withoutViewTransition, match.attribute.value)}>`;
-    nextSource = `${nextSource.slice(0, match.element.start)}${replacement}${nextSource.slice(match.element.openingEnd)}`;
-  }
+    return { end: match.element.openingEnd, replacement, start: match.element.start };
+  });
 
   return {
-    source: nextSource,
+    source: applySourceReplacements(source, replacements),
     stamps,
   };
 }

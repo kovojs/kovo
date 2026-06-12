@@ -6,7 +6,12 @@ import {
   type JsxElementModel,
 } from '../scan/parse.js';
 import { literalStringValue, parseLiteralObject, type StaticLiteralValue } from '../scan/object.js';
-import { escapeAttribute, removeJsxAttributes } from '../shared.js';
+import {
+  applySourceReplacements,
+  escapeAttribute,
+  removeJsxAttributes,
+  type SourceReplacement,
+} from '../shared.js';
 
 export function lowerNavigationSugar(
   source: string,
@@ -60,12 +65,6 @@ function lowerStaticLinks(source: string, model: ComponentModuleModel): string {
   return output;
 }
 
-interface SourceReplacement {
-  end: number;
-  replacement: string;
-  start: number;
-}
-
 function lowerStaticHrefCallsAndAttributes(source: string, model: ComponentModuleModel): string {
   const replacements: SourceReplacement[] = [];
   const staticHrefCalls = callExpressions(model)
@@ -103,12 +102,7 @@ function lowerStaticHrefCallsAndAttributes(source: string, model: ComponentModul
     replacements.push({ end: call.end, replacement: JSON.stringify(lowered), start: call.start });
   }
 
-  let output = source;
-  for (const replacement of replacements.sort((left, right) => right.start - left.start)) {
-    output = `${output.slice(0, replacement.start)}${replacement.replacement}${output.slice(replacement.end)}`;
-  }
-
-  return output;
+  return applySourceReplacements(source, replacements);
 }
 
 function isWithinReplacement(call: { end: number; start: number }, replacement: SourceReplacement) {

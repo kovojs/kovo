@@ -7,7 +7,7 @@ import {
   type JsxAttributeModel,
   type JsxElementModel,
 } from '../scan/parse.js';
-import { escapeAttribute } from '../shared.js';
+import { applySourceReplacements, escapeAttribute, type SourceReplacement } from '../shared.js';
 
 interface InlineDeriveLoweringOptions {
   fileName: string;
@@ -39,7 +39,7 @@ export function lowerInlineAttributeDerives(
   ]);
   if (knownQueries.size === 0) return { source };
 
-  const replacements: Array<{ end: number; start: number; value: string }> = [];
+  const replacements: SourceReplacement[] = [];
   const deriveExports: string[] = [];
   const nameCounts = new Map<string, number>();
 
@@ -68,8 +68,8 @@ export function lowerInlineAttributeDerives(
     );
     replacements.push({
       end: candidate.attribute.end,
+      replacement: `data-derive="${escapeAttribute(stampName)}" data-derive-attr="${escapeAttribute(candidate.attribute.name)}"`,
       start: candidate.attribute.start,
-      value: `data-derive="${escapeAttribute(stampName)}" data-derive-attr="${escapeAttribute(candidate.attribute.name)}"`,
     });
   }
 
@@ -79,8 +79,8 @@ export function lowerInlineAttributeDerives(
 
     replacements.push({
       end: element.openingEnd - 1,
+      replacement: ` data-bind="${escapeAttribute(binding)}"`,
       start: element.openingEnd - 1,
-      value: ` data-bind="${escapeAttribute(binding)}"`,
     });
   }
 
@@ -90,20 +90,14 @@ export function lowerInlineAttributeDerives(
 
     replacements.push({
       end: binding.end,
+      replacement: `<span data-bind="${escapeAttribute(binding.path)}">{${binding.path}}</span>`,
       start: binding.start,
-      value: `<span data-bind="${escapeAttribute(binding.path)}">{${binding.path}}</span>`,
     });
   }
 
   if (replacements.length === 0) return { source };
 
-  const lowered = replacements
-    .sort((left, right) => right.start - left.start)
-    .reduce(
-      (output, replacement) =>
-        `${output.slice(0, replacement.start)}${replacement.value}${output.slice(replacement.end)}`,
-      source,
-    );
+  const lowered = applySourceReplacements(source, replacements);
 
   return { source: `${deriveExports.join('\n')}\n\n${lowered}` };
 }

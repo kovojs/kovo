@@ -33,6 +33,39 @@ export function replaceExtension(fileName: string, extension: string): string {
   return fileName.replace(/\.[^.]+$/, extension);
 }
 
+export interface SourceReplacement {
+  end: number;
+  replacement: string;
+  start: number;
+}
+
+export function applySourceReplacements(
+  source: string,
+  replacements: readonly SourceReplacement[],
+): string {
+  let previousStart = source.length;
+  let output = source;
+
+  for (const replacement of [...replacements].sort((left, right) => right.start - left.start)) {
+    if (
+      replacement.start < 0 ||
+      replacement.end < replacement.start ||
+      replacement.end > source.length
+    ) {
+      throw new Error(`Invalid source replacement span ${replacement.start}:${replacement.end}`);
+    }
+    if (replacement.end > previousStart) {
+      throw new Error(
+        `Overlapping source replacement span ${replacement.start}:${replacement.end}`,
+      );
+    }
+    output = `${output.slice(0, replacement.start)}${replacement.replacement}${output.slice(replacement.end)}`;
+    previousStart = replacement.start;
+  }
+
+  return output;
+}
+
 export function removeJsxAttribute(attributes: string, start: number, end: number): string {
   let removeStart = start;
   while (removeStart > 0 && /\s/.test(attributes[removeStart - 1] ?? '')) {

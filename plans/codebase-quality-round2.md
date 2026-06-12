@@ -442,6 +442,12 @@ pipeline throws the tree away and communicates via mutated source text.
       host stamps and versioned handler attributes. Same-session evidence:
       `pnpm exec vitest --run packages/compiler/src/index.test.ts` and
       `pnpm exec vp check packages/compiler/src/index.ts packages/compiler/src/emit/server.ts`.
+      Additional evidence 2026-06-12: `packages/compiler/src/shared.ts` now exposes a canonical
+      `SourceReplacement`/`applySourceReplacements` helper with ordering and overlap guards, and
+      navigation, inline-derive, and view-transition lowering consume it instead of carrying
+      local string-splice loops. Same-session evidence:
+      `pnpm exec vitest --run packages/compiler/src/shared.test.ts packages/compiler/src/index.test.ts -t "navigation|derive|view transition|Link|data-bind"` and
+      `pnpm exec vp check packages/compiler/src/shared.ts packages/compiler/src/shared.test.ts packages/compiler/src/lower/navigation.ts packages/compiler/src/lower/inline-derives.ts packages/compiler/src/lower/view-transitions.ts plans/codebase-quality-round2.md`.
 - [x] **HIGH — Retire regex rewriting of handler bodies.** emit/client.ts:89
       (`/\bstate\b/g → ctx.state` corrupts `log('state changed')`), :96 (member-expression
       substitution inside string literals), lower/handlers.ts:262 (harvests params from string
