@@ -196,6 +196,24 @@ export const CartActions = component('cart-actions', {
     });
   });
 
+  it('records document element actions on zero-argument JSX arrow attributes', () => {
+    const source = `
+export const CartActions = component('cart-actions', {
+  render: () => (
+    <button onClick={() => document.getElementById('cart-drawer')!.showModal()}>Open</button>
+  ),
+});
+`;
+    const [button] = jsxElements(parseComponentModule('cart-actions.tsx', source));
+    const click = button?.attributes.find((attribute) => attribute.name === 'onClick');
+
+    expect(click?.zeroArgArrow?.documentElementAction).toEqual({
+      action: 'method',
+      method: 'showModal',
+      target: 'cart-drawer',
+    });
+  });
+
   it('records handler property access boolean and number usage contexts', () => {
     const source = `
 export const CartActions = component('cart-actions', {

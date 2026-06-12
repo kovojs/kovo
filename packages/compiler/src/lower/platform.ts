@@ -1,7 +1,7 @@
 import {
-  documentElementActionFromZeroArgArrow,
   jsxElements,
   type ComponentModuleModel,
+  type DocumentElementActionModel,
 } from '../scan/parse.js';
 import { applySourceReplacements, escapeAttribute, type SourceReplacement } from '../shared.js';
 
@@ -41,8 +41,9 @@ export function platformBehaviorLowering(
 ): PlatformBehaviorLowering {
   const matches = jsxElements(model).flatMap((element) => {
     const onClick = element.attributes.find((attribute) => attribute.name === 'onClick');
-    const substitution = onClick?.expression
-      ? platformSubstitutionFromClickExpression(element.tag, onClick.expression)
+    const action = onClick?.zeroArgArrow?.documentElementAction;
+    const substitution = action
+      ? platformSubstitutionFromDocumentAction(element.tag, action)
       : null;
     return onClick && substitution ? [{ attribute: onClick, substitution }] : [];
   });
@@ -61,13 +62,10 @@ export function platformBehaviorLowering(
   };
 }
 
-function platformSubstitutionFromClickExpression(
+function platformSubstitutionFromDocumentAction(
   tag: string,
-  expression: string,
+  action: DocumentElementActionModel,
 ): PlatformSubstitution | null {
-  const action = documentElementActionFromZeroArgArrow('platform-handler.tsx', expression);
-  if (!action) return null;
-
   if (action.action === 'toggle-open' && tag === 'summary') {
     return {
       action: 'toggle',

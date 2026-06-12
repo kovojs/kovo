@@ -754,6 +754,13 @@ pipeline throws the tree away and communicates via mutated source text.
       `pnpm exec vitest --run packages/compiler/src/stamps.test.ts packages/compiler/src/view-transitions.test.ts`,
       `pnpm exec vitest --run packages/compiler/src`, and
       `pnpm exec vp check packages/compiler/src/emit/server.ts packages/compiler/src/stamps.test.ts packages/compiler/src/view-transitions.test.ts`.
+      Additional evidence 2026-06-12: `scan/parse.ts` now records document-element actions on
+      zero-argument JSX arrow attributes, and `lower/platform.ts` consumes that parser-owned
+      fact for dialog/popover/details platform substitutions instead of reparsing handler
+      expression text. Same-session evidence:
+      `pnpm exec vitest --run packages/compiler/src/scan/parse.test.ts packages/compiler/src/platform-lowering.test.ts -t "document element|platform|dialog|popover|details"`,
+      `pnpm exec vitest --run packages/compiler/src`, and
+      `pnpm exec vp check packages/compiler/src/scan/parse.ts packages/compiler/src/scan/parse.test.ts packages/compiler/src/lower/platform.ts packages/compiler/src/platform-lowering.test.ts`.
       Additional evidence 2026-06-12: `scan/parse.ts` now records parser-owned
       property-access facts on JSX attribute expressions and JSX child expressions, and
       inline-derive lowering consumes those facts instead of reparsing attribute, sole-text, and

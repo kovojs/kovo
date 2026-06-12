@@ -97,6 +97,7 @@ export interface ZeroArgArrowModel {
   bodyPropertyAccesses: readonly PropertyAccessPathModel[];
   bodyStart: number;
   callArguments?: readonly string[];
+  documentElementAction?: DocumentElementActionModel;
   references: readonly string[];
 }
 
@@ -482,7 +483,14 @@ export function documentElementActionFromZeroArgArrow(
   }
   if (ts.isBlock(initializer.body)) return null;
 
-  const body = unwrapExpression(initializer.body);
+  return documentElementActionFromExpression(sourceFile, initializer.body);
+}
+
+function documentElementActionFromExpression(
+  sourceFile: ts.SourceFile,
+  expression: ts.Expression,
+): DocumentElementActionModel | null {
+  const body = unwrapExpression(expression);
   const methodAction = documentElementMethodAction(sourceFile, body);
   if (methodAction) return methodAction;
 
@@ -1238,9 +1246,20 @@ function zeroArgArrowModel(
       bodyPropertyAccesses: propertyAccessPathModels(sourceFile, body),
       bodyStart,
       ...(callArguments === undefined ? {} : { callArguments }),
+      ...documentElementActionModel(sourceFile, body),
       references: referenceIdentifiers(body),
     },
   };
+}
+
+function documentElementActionModel(
+  sourceFile: ts.SourceFile,
+  body: ts.ConciseBody,
+): { documentElementAction: DocumentElementActionModel } | {} {
+  if (ts.isBlock(body)) return {};
+
+  const action = documentElementActionFromExpression(sourceFile, body);
+  return action ? { documentElementAction: action } : {};
 }
 
 function referenceIdentifiers(root: ts.Node): string[] {
