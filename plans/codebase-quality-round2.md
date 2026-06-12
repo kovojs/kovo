@@ -236,6 +236,11 @@ Do this first or pay it on every commit.
       `pnpm run check:build`, `node --test --test-name-pattern "Conformance suites are an
       explicit gate" tests/fw-check.node.mjs`, `pnpm exec vp check tests/fw-check.node.mjs
       plans/codebase-quality-round2.md`, and `git diff --check`.
+      Additional partial evidence 2026-06-12: the same conformance gate now pins the finite
+      directory-to-package-name mapping directly instead of accepting conformance package names
+      through a regex shape check. Same-session evidence:
+      `node --test --test-name-pattern "Conformance suites are an explicit gate" tests/fw-check.node.mjs`
+      and `pnpm exec vp check tests/fw-check.node.mjs plans/codebase-quality-round2.md`.
       Partial evidence 2026-06-11: the P1 render-equivalence tranche now imports the built
       compiler API, asserts `compileComponentModule` render-equivalence checks and
       `assertRenderEquivalence` failure behavior, then asserts the `ERROR RENDER_EQUIV` CLI

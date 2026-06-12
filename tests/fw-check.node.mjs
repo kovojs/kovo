@@ -5766,10 +5766,20 @@ void test('Conformance suites are an explicit gate', async () => {
   const conformanceManifestsByName = new Map(
     conformancePackages.map(({ manifest }) => [manifest.name, manifest]),
   );
+  const expectedConformancePackages = {
+    'app-shell-spike': '@jiso/conformance-app-shell-spike',
+    'auth-spike': '@jiso/conformance-auth-spike',
+    'better-auth-pin': '@jiso/conformance-better-auth-pin',
+    'drizzle-pin': '@jiso/conformance-drizzle-pin',
+    'webhook-spike': '@jiso/conformance-webhook-spike',
+  };
 
-  assert.ok(conformancePackages.length >= 5, 'conformance gate covers the expected suite families');
+  assert.deepEqual(
+    conformancePackages.map(({ directory, manifest }) => [directory, manifest.name]),
+    Object.entries(expectedConformancePackages),
+    'conformance gate covers the expected suite families',
+  );
   for (const { directory, manifest } of conformancePackages) {
-    assert.match(manifest.name, /^@jiso\/conformance-[a-z-]+$/);
     assert.ok(manifest.scripts?.test, `${directory} exposes an executable test script`);
   }
   assert.equal(drizzlePackageJson.devDependencies['ts-morph'], '^28.0.0');
