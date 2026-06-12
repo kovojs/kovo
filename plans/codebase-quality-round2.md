@@ -519,7 +519,7 @@ pipeline throws the tree away and communicates via mutated source text.
       have treated as equivalent while actual execution renders different HTML. Verified with
       `pnpm exec vitest --run packages/compiler/src/index.test.ts`, `pnpm run check`,
       `pnpm run check:build`, and `pnpm run check:fw`.
-- [ ] **LOW** — `validateDirectDbAccess` early-returns after the first offending handler per file
+- [x] **LOW** — `validateDirectDbAccess` early-returns after the first offending handler per file
       (component-contracts.ts:174-191); FW201 silently replaces FW210 for handlers that are both
       anonymous and unserializable (lower/handlers.ts:44-62); `graph.ts:1` imports `'./shared.ts'`
       while everything else uses `.js`; `inferComponentName` hides a re-parse in a default
