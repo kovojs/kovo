@@ -1,4 +1,31 @@
 export {
+  accordionContentAttributes,
+  accordionHeaderAttributes,
+  accordionItemAttributes,
+  accordionItemOpen,
+  accordionRootAttributes,
+  accordionTriggerAttributes,
+  accordionTriggerClick,
+  setAccordionValue,
+  toggleAccordionItem,
+} from './accordion.js';
+export type {
+  AccordionChangeDetail,
+  AccordionChangeOptions,
+  AccordionChangeReason,
+  AccordionChangeResult,
+  AccordionContentAttributeOptions,
+  AccordionHeaderAttributeOptions,
+  AccordionItemOptions,
+  AccordionPrimitiveAttributes,
+  AccordionState,
+  AccordionTriggerAttributeOptions,
+  AccordionTriggerEvent,
+  AccordionType,
+  AccordionValue,
+} from './accordion.js';
+
+export {
   avatarFallbackAttributes,
   avatarImageAttributes,
   avatarImageState,

@@ -7,6 +7,7 @@
     "./lib": "./src/lib/index.ts",
     "./platform-audit": "./src/platform-audit.ts",
     "./primitives": "./src/primitives/index.ts",
+    "./primitives/accordion": "./src/primitives/accordion.ts",
     "./primitives/avatar": "./src/primitives/avatar.ts",
     "./primitives/checkbox": "./src/primitives/checkbox.ts",
     "./primitives/collapsible": "./src/primitives/collapsible.ts",
