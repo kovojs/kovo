@@ -372,8 +372,11 @@ pipeline throws the tree away and communicates via mutated source text.
       exception.
       Partial evidence 2026-06-11: `compileComponentModule` now passes its already-parsed
       `ComponentModuleModel` into `lowerEventHandlers`, and `lower/handlers.ts` walks that model
-      instead of reparsing the lowered source with a fake filename for event-attribute discovery.
-      Same-session evidence: `pnpm exec vitest --run packages/compiler/src/index.test.ts`.
+      instead of reparsing the lowered source with a fake filename for event-attribute discovery;
+      the fallback parser path was removed, so handler lowering now requires its caller-owned
+      model explicitly. Same-session evidence:
+      `pnpm exec vitest --run packages/compiler/src/index.test.ts` and
+      `pnpm exec vp check packages/compiler/src/lower/handlers.ts packages/compiler/src/index.ts`.
       Partial evidence 2026-06-11: `findFragmentTargetFacts` now consumes the existing
       `ComponentModuleModel` from `compileComponentModule`, including props-type extraction, so
       fragment-target graph facts no longer reparse lowered source with fake `component.tsx`

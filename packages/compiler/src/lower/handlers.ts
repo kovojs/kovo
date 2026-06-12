@@ -2,12 +2,7 @@ import { diagnosticDefinitions } from '@jiso/core';
 
 import { diagnosticFor, type CompilerDiagnostic } from '../diagnostics.js';
 import { literalValue } from '../scan/object.js';
-import {
-  identifierReferences,
-  jsxElements,
-  parseComponentModule,
-  type ComponentModuleModel,
-} from '../scan/parse.js';
+import { identifierReferences, jsxElements, type ComponentModuleModel } from '../scan/parse.js';
 import { replaceExtension } from '../shared.js';
 import type { CompileComponentOptions } from '../types.js';
 
@@ -34,7 +29,7 @@ type ElementParamType = 'boolean' | 'number' | 'string';
 export function lowerEventHandlers(
   options: CompileComponentOptions,
   componentName: string,
-  model = parseComponentModule(options.fileName, options.source),
+  model: ComponentModuleModel,
 ): HandlerLowering[] {
   const handlers: HandlerLowering[] = [];
   const anonymousNameCounts = new Map<string, number>();
