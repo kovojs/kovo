@@ -17,6 +17,7 @@ import {
   Project,
   SyntaxKind,
   ts,
+  type BindingElement,
   type CallExpression,
   type CompilerOptions,
   type ObjectLiteralExpression,
@@ -2448,7 +2449,7 @@ function extractDrizzleWriteCalls(
       const expression = call.getExpression();
       if (!Node.isPropertyAccessExpression(expression)) continue;
       const receiver = expression.getExpression();
-      if (!Node.isIdentifier(receiver) || !receiverNames.has(receiver.getText())) continue;
+      if (!isSourceDrizzleReceiverIdentifier(receiver, receiverNames)) continue;
 
       const chain = drizzleWriteChainRoot(call);
       const operation = expression.getName();
@@ -2502,9 +2503,7 @@ function extractExternalDbArgumentCalls(
       if (IGNORED_LOCAL_CALL_NAMES.has(name) || localFunctionNames.has(name)) continue;
 
       if (
-        !call
-          .getArguments()
-          .some((arg) => Node.isIdentifier(arg) && receiverNames.has(arg.getText()))
+        !call.getArguments().some((arg) => isSourceDrizzleReceiverIdentifier(arg, receiverNames))
       ) {
         continue;
       }
@@ -2541,7 +2540,7 @@ function extractReceiverMutationCalls(
       if (!name || !UNCLASSIFIED_DRIZZLE_RECEIVER_MUTATION_METHODS.has(name)) continue;
 
       const receiver = staticAccessExpression(expression);
-      if (!Node.isIdentifier(receiver) || !receiverNames.has(receiver.getText())) continue;
+      if (!isSourceDrizzleReceiverIdentifier(receiver, receiverNames)) continue;
 
       const index = call.getStart() - bodyOffset;
       if (index >= 0) calls.push({ index, name });
@@ -2569,7 +2568,7 @@ function extractRelationalQueryCalls(
       const queryAccess = staticAccessExpression(tableAccess);
       if (!queryAccess || staticAccessName(queryAccess) !== 'query') continue;
       const receiver = staticAccessExpression(queryAccess);
-      if (!Node.isIdentifier(receiver) || !receiverNames.has(receiver.getText())) continue;
+      if (!isSourceDrizzleReceiverIdentifier(receiver, receiverNames)) continue;
 
       const index = call.getStart() - bodyOffset;
       if (index >= 0) calls.push({ index, name: `query.${method}` });
@@ -2590,9 +2589,80 @@ function appendBodyReceiverAliases(body: string, names: Set<string>): void {
   for (const alias of destructuredDrizzleReceiverAliases(body)) {
     names.add(alias);
   }
-  for (const alias of transactionDrizzleReceiverAliases(body, names)) {
-    names.add(alias);
+}
+
+function isSourceDrizzleReceiverIdentifier(
+  node: Node | undefined,
+  receiverNames: ReadonlySet<string>,
+  seen: Set<Node> = new Set(),
+): boolean {
+  if (!node || !Node.isIdentifier(node)) return false;
+
+  const symbol = node.getSymbol();
+  const declarations = symbol?.getDeclarations() ?? [];
+  if (declarations.length === 0) return receiverNames.has(node.getText());
+
+  if (declarations.some((declaration) => isSourceReceiverBindingDeclaration(declaration))) {
+    return receiverNames.has(node.getText());
   }
+
+  for (const declaration of declarations) {
+    const parameter = receiverParameterDeclaration(declaration);
+    if (!parameter || seen.has(parameter)) continue;
+    seen.add(parameter);
+
+    const callback = parameter.getParent();
+    if (
+      !Node.isArrowFunction(callback) &&
+      !Node.isFunctionExpression(callback) &&
+      !Node.isFunctionDeclaration(callback)
+    ) {
+      continue;
+    }
+    if (callback.getParameters()[0] !== parameter) continue;
+
+    const call = callback.getParent();
+    if (!Node.isCallExpression(call)) continue;
+
+    const expression = call.getExpression();
+    if (staticAccessName(expression) !== 'transaction') continue;
+
+    if (
+      isSourceDrizzleReceiverIdentifier(staticAccessExpression(expression), receiverNames, seen)
+    ) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
+function isSourceReceiverBindingDeclaration(declaration: Node): boolean {
+  let binding: BindingElement | null = null;
+  if (Node.isBindingElement(declaration)) {
+    binding = declaration;
+  } else if (Node.isIdentifier(declaration)) {
+    const parent = declaration.getParent();
+    if (Node.isBindingElement(parent)) binding = parent;
+  }
+  if (!binding) return false;
+
+  const bindingName = binding.getNameNode();
+  const propertyName = binding.getPropertyNameNode()?.getText();
+  if (!propertyName && Node.isIdentifier(bindingName)) {
+    return isLikelyDrizzleReceiver(bindingName.getText());
+  }
+
+  return propertyName === 'db' || propertyName === 'tx';
+}
+
+function receiverParameterDeclaration(declaration: Node) {
+  if (Node.isParameterDeclaration(declaration)) return declaration;
+  if (Node.isIdentifier(declaration) && Node.isParameterDeclaration(declaration.getParent())) {
+    return declaration.getParent();
+  }
+
+  return null;
 }
 
 function sourceDrizzleReceiverNames(callback: Node, body: string): string[] {
@@ -2632,50 +2702,6 @@ function appendSourceReceiverBindingNames(name: Node, names: Set<string>): void 
     if (propertyName !== 'db' && propertyName !== 'tx') continue;
     if (Node.isIdentifier(binding)) names.add(binding.getText());
   }
-}
-
-function transactionDrizzleReceiverAliases(
-  body: string,
-  receiverNames: ReadonlySet<string>,
-): string[] {
-  // SPEC §10-§11: transaction receiver aliases are real only when parsed from live code.
-  return withParsedFunctionBodySource(body, ({ sourceFile }) => {
-    const aliases = new Set<string>();
-    let changed = true;
-
-    while (changed) {
-      changed = false;
-      const knownReceivers = new Set([...receiverNames, ...aliases]);
-
-      for (const call of sourceFile.getDescendantsOfKind(SyntaxKind.CallExpression)) {
-        const expression = call.getExpression();
-        if (staticAccessName(expression) !== 'transaction') continue;
-
-        const receiver = staticAccessExpression(expression);
-        if (!Node.isIdentifier(receiver) || !knownReceivers.has(receiver.getText())) continue;
-
-        const callback = call
-          .getArguments()
-          .find(
-            (argument) => Node.isArrowFunction(argument) || Node.isFunctionExpression(argument),
-          );
-        if (
-          !callback ||
-          (!Node.isArrowFunction(callback) && !Node.isFunctionExpression(callback))
-        ) {
-          continue;
-        }
-
-        const txName = callback.getParameters()[0]?.getNameNode();
-        if (!Node.isIdentifier(txName) || aliases.has(txName.getText())) continue;
-
-        aliases.add(txName.getText());
-        changed = true;
-      }
-    }
-
-    return [...aliases];
-  });
 }
 
 function destructuredDrizzleReceiverAliases(body: string): string[] {

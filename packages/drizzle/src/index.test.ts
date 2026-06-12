@@ -585,6 +585,45 @@ export interface CommerceInvalidationSets {
     });
   });
 
+  it('does not leak transaction callback receiver aliases into unrelated or shadowed callbacks', () => {
+    const graph = extractTouchGraphFromSource([
+      {
+        fileName: 'cart.domain.ts',
+        source: [
+          'export const cartItems = pgTable("cart_items", {}, jiso({ domain: "cart", key: "productId" }));',
+          '',
+          'export async function addItem(db, productId, queue) {',
+          '  await db.transaction(async (writer) => {',
+          '    await writer.insert(cartItems).values({ productId });',
+          '    await queue.forEach(async (writer) => {',
+          '      await writer.update(cartItems).set({ productId });',
+          '      await writeAudit(writer, productId);',
+          '    });',
+          '  });',
+          '  await queue.forEach(async (writer) => {',
+          '    await writer.delete(cartItems).where(eq(cartItems.productId, productId));',
+          '  });',
+          '}',
+        ].join('\n'),
+      },
+    ]);
+
+    expect(graph).toEqual({
+      addItem: {
+        reads: [],
+        touches: [
+          {
+            domain: 'cart',
+            keys: null,
+            site: 'cart.domain.ts:5',
+            via: 'cart_items',
+          },
+        ],
+        unresolved: [],
+      },
+    });
+  });
+
   it('extracts expression-bodied arrow write handlers', () => {
     const graph = extractTouchGraphFromSource([
       {

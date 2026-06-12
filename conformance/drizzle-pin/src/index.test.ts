@@ -340,6 +340,46 @@ describe('Drizzle pinned subset conformance', () => {
     });
   });
 
+  it('pins source transaction aliases without leaking same-name callback receivers', () => {
+    const graph = extractTouchGraphFromSource([
+      {
+        fileName: 'conformance/drizzle-pin/src/cart.domain.ts',
+        source: [
+          "export const cartItems = pgTable('cart_items', {}, jiso({ domain: 'cart', key: 'productId' }));",
+          '',
+          'export async function addItem(db, productId, queue) {',
+          '  await db.transaction(async (writer) => {',
+          '    await writer.insert(cartItems).values({ productId });',
+          '    await queue.forEach(async (writer) => {',
+          '      await writer.update(cartItems).set({ productId });',
+          '      await writeAudit(writer, productId);',
+          '    });',
+          '  });',
+          '  await queue.forEach(async (writer) => {',
+          '    await writer.delete(cartItems).where(eq(cartItems.productId, productId));',
+          '  });',
+          '}',
+          '',
+        ].join('\n'),
+      },
+    ]);
+
+    expect(graph).toEqual({
+      addItem: {
+        reads: [],
+        touches: [
+          {
+            domain: 'cart',
+            keys: null,
+            site: 'conformance/drizzle-pin/src/cart.domain.ts:5',
+            via: 'cart_items',
+          },
+        ],
+        unresolved: [],
+      },
+    });
+  });
+
   it('pins source destructured receiver parameters for write extraction', () => {
     const graph = extractTouchGraphFromSource([
       {

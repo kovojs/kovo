@@ -1217,6 +1217,18 @@ must be "FW406 unresolved," never "silently wrong."
       `pnpm exec vitest --run conformance/drizzle-pin/src/index.test.ts`,
       `pnpm exec vp check packages/drizzle/src/index.ts packages/drizzle/src/index.test.ts conformance/drizzle-pin/src/index.test.ts plans/codebase-quality-round2.md`,
       and `git diff --check`.
+      Additional evidence 2026-06-12: source-mode transaction callback receiver aliases are no
+      longer added to the whole-function receiver name set; receiver uses now walk the ts-morph
+      identifier declaration back to a lexically enclosing `.transaction(...)` callback before
+      treating the parameter as a Drizzle receiver. This prevents same-name unrelated or shadowed
+      callback parameters from fabricating write touches or FW406 helper surfaces under SPEC
+      §10-§11. Same-session evidence:
+      `pnpm exec vitest --run packages/drizzle/src/index.test.ts -t "transaction callback receiver aliases|same-name callback receivers"`,
+      `pnpm exec vitest --run conformance/drizzle-pin/src/index.test.ts -t "transaction aliases|transaction callback receiver aliases"`,
+      `pnpm exec vitest --run packages/drizzle/src`,
+      `pnpm exec vitest --run conformance/drizzle-pin/src/index.test.ts`,
+      `pnpm exec vp check packages/drizzle/src/index.ts packages/drizzle/src/index.test.ts conformance/drizzle-pin/src/index.test.ts plans/codebase-quality-round2.md`,
+      and `git diff --check`.
       Additional evidence 2026-06-12: source/project column-builder shape extraction now walks
       ts-morph initializer call chains for builder names plus `.notNull()`/`.primaryKey()`
       methods instead of regex-searching serialized initializer text, so comments and strings
