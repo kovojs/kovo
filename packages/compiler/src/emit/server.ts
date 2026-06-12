@@ -166,7 +166,11 @@ function stampRenderHostTag(
   hostElement: JsxElementModel | null,
 ): string {
   return stampInitialState(
-    stampDeclaredQueryDeps(stampComponentIdentity(tagSource, model), model, hostElement),
+    stampDeclaredQueryDeps(
+      stampComponentIdentity(tagSource, model, hostElement),
+      model,
+      hostElement,
+    ),
     model,
   );
 }
@@ -175,13 +179,18 @@ function stampRenderHostTag(
 // when the host tag already spells the component name (dashed tags are inert
 // sugar) and emits it explicitly on native hosts (`<tr fw-c="cart-row">`), so
 // authored sugar never hand-writes the stamp (§4.8 residual-string rule).
-function stampComponentIdentity(tagSource: string, model: ComponentModuleModel): string {
+function stampComponentIdentity(
+  tagSource: string,
+  model: ComponentModuleModel,
+  hostElement: JsxElementModel | null,
+): string {
   const componentName = firstComponentModel(model)?.explicitName;
   if (!componentName) return tagSource;
 
-  const tagName = /^<([a-z][\w-]*)/.exec(tagSource)?.[1];
-  if (!tagName || tagName === componentName || tagName.includes('-')) return tagSource;
-  if (/\bfw-c=/.test(tagSource)) return tagSource;
+  const tagName = hostElement?.tag;
+  if (!tagName || tagName !== tagName.toLowerCase()) return tagSource;
+  if (tagName === componentName || tagName.includes('-')) return tagSource;
+  if (hostElement?.attributes.some((attribute) => attribute.name === 'fw-c')) return tagSource;
 
   return stampOpeningTagAttribute(tagSource, 'fw-c', componentName);
 }

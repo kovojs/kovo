@@ -43,6 +43,25 @@ export const OrderHistory = component('order-history', {
     expect(() => assertRenderEquivalence(result)).not.toThrow();
   });
 
+  it('stamps native host identity from the parsed render host, not tag text', () => {
+    const result = compileComponentModule({
+      fileName: 'order-history.tsx',
+      source: `
+export const OrderHistory = component('order-history', {
+  render: () => {
+    const sample = '<order-history></order-history>';
+    return <ol><li fw-key="order-1">Order</li></ol>;
+  },
+});
+`,
+    });
+
+    const serverSource = result.files[0]?.source ?? '';
+    expect(serverSource).toContain('<ol fw-c="order-history">');
+    expect(serverSource).toContain("'<order-history></order-history>'");
+    expect(() => assertFixpoint(result)).not.toThrow();
+  });
+
   it('keeps hand-written fw-c stamps on native hosts unchanged in ejected IR', () => {
     const result = compileComponentModule({
       fileName: 'order-history.tsx',

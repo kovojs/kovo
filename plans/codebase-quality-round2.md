@@ -989,6 +989,14 @@ pipeline throws the tree away and communicates via mutated source text.
       `pnpm exec vitest --run packages/compiler/src/scan/parse.test.ts packages/compiler/src/compile-component.test.ts -t "renderSource|FW235|string-rendered|first HTML tag"`,
       `pnpm exec vitest --run packages/compiler/src`, and
       `pnpm exec vp check packages/compiler/src/scan/parse.ts packages/compiler/src/scan/parse.test.ts packages/compiler/src/validate/authoring-surface.ts packages/compiler/src/compile-component.test.ts`.
+      Additional evidence 2026-06-12: server render emission now reads the parsed render host
+      element tag and `fw-c` attribute facts when deciding native-host component identity
+      stamping. `emit/server.ts` no longer regex-reads the opening tag name from the sliced
+      source for this path, and `stamps.test.ts` pins a native-host render whose preceding
+      string literal mentions the component tag. Same-session evidence:
+      `pnpm exec vitest --run packages/compiler/src/stamps.test.ts packages/compiler/src/compile-component.test.ts -t "fw-c|native host|returned host|fixpoint"`,
+      `pnpm exec vitest --run packages/compiler/src`, and
+      `pnpm exec vp check packages/compiler/src/emit/server.ts packages/compiler/src/stamps.test.ts plans/codebase-quality-round2.md`.
       `pnpm exec vp check packages/compiler/src/index.ts packages/compiler/src/ir.ts packages/compiler/src/css.ts packages/compiler/src/emit/client.ts packages/compiler/src/emit/server.ts packages/compiler/src/emit/registry.ts packages/compiler/src/emit/bootstrap.ts packages/compiler/src/validate/authoring-surface.ts plans/codebase-quality-round2.md`.
       Additional evidence 2026-06-12: `packages/compiler/src/emit/registry.ts` now consumes
       canonical `FragmentTargetFact`, `PlatformSubstitution`, `QueryUpdatePlanFact`,
