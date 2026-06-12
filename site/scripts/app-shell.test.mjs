@@ -9,7 +9,7 @@ import { createSiteDistApp } from './app-shell.mjs';
 import { exportSiteStaticApp } from './export-static.mjs';
 
 describe('site app-shell export adoption', () => {
-  it('replays generated docs HTML through static export and copies versioned /c/ modules', async () => {
+  it('serves generated docs HTML through the app shell before static export copies modules', async () => {
     const root = await mkdtemp(path.join(tmpdir(), 'jiso-site-export-'));
     const distDir = path.join(root, 'dist-source');
     const publicDir = path.join(root, 'public');
@@ -22,6 +22,8 @@ describe('site app-shell export adoption', () => {
       [
         '<!doctype html><html><body>',
         '<button on:click="/c/search.js#open">Search</button>',
+        '<button on:click="/c/theme.js#toggle">Theme</button>',
+        '<button class="code-copy" on:click="/c/code.js#copy">Copy</button>',
         '<pre><code>&#x3C;button on:click="/c/example-only.js#copy">Copy&#x3C;/button></code></pre>',
         '</body></html>',
       ].join(''),
@@ -34,8 +36,35 @@ describe('site app-shell export adoption', () => {
       path.join(publicDir, 'c', 'search.js'),
       'export function open() { document.body.dataset.search = "open"; }\n',
     );
+    await writeFile(
+      path.join(publicDir, 'c', 'theme.js'),
+      'export function toggle() { document.documentElement.dataset.theme = "dark"; }\n',
+    );
+    await writeFile(
+      path.join(publicDir, 'c', 'code.js'),
+      'export function copy() { document.body.dataset.copied = ""; }\n',
+    );
 
     const app = await createSiteDistApp({ distDir, publicDir, server });
+    const handler = server.createRequestHandler(app);
+    const shellResponse = await handler(new Request('https://jiso.test/'));
+    const shellHtml = await shellResponse.text();
+    const searchModuleHref = shellHtml.match(/\/c\/search\.js\?v=site-r7-[a-f0-9]+/)?.[0];
+    const themeModuleHref = shellHtml.match(/\/c\/theme\.js\?v=site-r7-[a-f0-9]+/)?.[0];
+    const codeModuleHref = shellHtml.match(/\/c\/code\.js\?v=site-r7-[a-f0-9]+/)?.[0];
+
+    expect(shellResponse.status).toBe(200);
+    expect(shellHtml).not.toContain('<!doctype html><html lang=');
+    expect(searchModuleHref).toBeTruthy();
+    expect(themeModuleHref).toBeTruthy();
+    expect(codeModuleHref).toBeTruthy();
+    expect(shellHtml).toContain('on:click="&#47;c/example-only.js#copy"');
+    await expect(
+      handler(new Request(`https://jiso.test${searchModuleHref}`)).then((response) =>
+        response.text(),
+      ),
+    ).resolves.toBe('export function open() { document.body.dataset.search = "open"; }\n');
+
     const result = await server.exportStaticApp(app, { htmlPathStyle: 'directory', outDir });
 
     const exportedIndex = await readFile(path.join(outDir, 'index.html'), 'utf8');
@@ -44,6 +73,8 @@ describe('site app-shell export adoption', () => {
       'utf8',
     );
     const exportedModule = await readFile(path.join(outDir, 'c', 'search.js'), 'utf8');
+    const exportedThemeModule = await readFile(path.join(outDir, 'c', 'theme.js'), 'utf8');
+    const exportedCodeModule = await readFile(path.join(outDir, 'c', 'code.js'), 'utf8');
 
     expect(result.artifacts.map((artifact) => artifact.path)).toEqual([
       '/docs/installation/index.html',
@@ -52,11 +83,23 @@ describe('site app-shell export adoption', () => {
     expect(exportedIndex).toContain('<!doctype html>');
     expect(exportedIndex).not.toContain('<!doctype html><html lang=');
     expect(exportedIndex).toContain('/c/search.js?v=site-r7-');
+    expect(exportedIndex).toContain('/c/theme.js?v=site-r7-');
+    expect(exportedIndex).toContain('/c/code.js?v=site-r7-');
     expect(exportedIndex).toContain('on:click="&#47;c/example-only.js#copy"');
     expect(exportedInstallation).toContain('<h1>Installation</h1>');
-    expect(result.clientModules).toHaveLength(1);
+    expect(result.clientModules.map((artifact) => artifact.path)).toEqual([
+      '/c/code.js',
+      '/c/search.js',
+      '/c/theme.js',
+    ]);
     expect(exportedModule).toBe(
       'export function open() { document.body.dataset.search = "open"; }\n',
+    );
+    expect(exportedThemeModule).toBe(
+      'export function toggle() { document.documentElement.dataset.theme = "dark"; }\n',
+    );
+    expect(exportedCodeModule).toBe(
+      'export function copy() { document.body.dataset.copied = ""; }\n',
     );
   });
 

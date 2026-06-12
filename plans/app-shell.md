@@ -317,6 +317,18 @@ Scope: SPEC addition (proposed §9.5 "The request shell"), `@jiso/server` shell 
       `site/scripts/app-shell.test.mjs` proves the SSR module loads for
       `/scripts/app-shell.mjs` and `@jiso/server`, replay to
       `docs/installation/index.html`, and versioned `/c/` module copying.
+      Additional evidence 2026-06-12: the docs-site app-shell test now proves
+      the generated docs document is served directly through
+      `createRequestHandler(app)` before static export, without double document
+      wrapping, and that all live public client modules referenced by the
+      document (`/c/code.js`, `/c/search.js`, `/c/theme.js`) are rewritten to
+      versioned `site-r7-*` hrefs, served through the app-shell `/c/` registry,
+      and copied by `exportStaticApp()` with exact source bytes while preserving
+      pretty `*/index.html` output and suppressing code-sample-only `/c/`
+      strings. Same-session verification ran
+      `pnpm exec vitest --run site/scripts/app-shell.test.mjs` and
+      `pnpm exec vp run export` from `site/` (`site-export/v1`, 31 HTML
+      artifacts, 3 client modules, 0 diagnostics).
       Additional evidence 2026-06-12: the commerce Vite dev middleware now
       claims the same bounded shell surface as the HTTP serve entry for R7
       adoption: document routes, guarded file/download routes, versioned `/c/`
