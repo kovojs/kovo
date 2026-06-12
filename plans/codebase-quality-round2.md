@@ -1298,6 +1298,14 @@ land it first; don't fork it.
       `pnpm exec vitest --run packages/server/src/query-endpoint.test.ts packages/server/src/app.test.ts packages/server/src/index.test.ts`,
       `pnpm exec vp check packages/server/src/index.ts packages/server/src/query.ts packages/server/src/domain.ts packages/server/src/app.ts`,
       and `git diff --check`.
+      Additional evidence 2026-06-12: enhanced mutation wire request types, header parsing, and
+      request construction moved from `packages/server/src/index.ts` into
+      `packages/server/src/mutation-wire.ts`; `index.ts` preserves the public re-exports, and
+      mutation response header aliases now live behind the shared response type module. Same-session
+      evidence:
+      `pnpm exec vitest --run packages/server/src/mutation-wire.test.ts packages/server/src/response.test.ts packages/server/src/index.test.ts`
+      and
+      `pnpm exec vp check packages/server/src/index.ts packages/server/src/mutation-wire.ts packages/server/src/mutation-wire.test.ts packages/server/src/response.ts plans/codebase-quality-round2.md`.
 - [ ] **LOW** — dead code (`matchShellDispatch` post-loop return shell.ts:161-166; rate-limit
       tail `return options.max > 0` index.ts:576); `matchRoute` recompiling all routes per call
       (match.ts:75-81 — cache `compileRoute`); `Transfer-Encoding: chunked` on a buffered string

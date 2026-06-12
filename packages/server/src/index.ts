@@ -21,13 +21,7 @@ import {
   type UnauthenticatedHandler,
 } from './guards.js';
 import { renderStylesheetLinks } from './hints.js';
-import type {
-  I18nCatalog,
-  PageHintOptions,
-  RouteMeta,
-  RouteMetaFactory,
-  StylesheetAsset,
-} from './hints.js';
+import type { I18nCatalog, PageHintOptions, RouteMeta, RouteMetaFactory } from './hints.js';
 import {
   renderFragmentWireHtml,
   renderQueryScript as renderQueryScriptHtml,
@@ -46,19 +40,22 @@ import {
   appendResponseHeader,
   isHeaderSource,
   readHeader,
-  type HeaderSource,
-  type ResponseHeaderValue,
-  type ResponseHeaders,
+  type MutationResponseHeaders,
   type RoutePageResponse,
   type RouteResponseBody,
-  type ServerResponseBase,
 } from './response.js';
 import {
-  mutationReplayContext,
-  readMutationReplay,
-  withMutationReplay,
-  type MutationReplayStore,
-} from './replay.js';
+  mutationWireRequestFromHeaders,
+  type ErrorBoundaryRenderer,
+  type FragmentRenderer,
+  type MutationEndpointRequest,
+  type MutationEndpointResponse,
+  type MutationWireRequest,
+  type MutationWireResponse,
+  type NoJsMutationRequest,
+  type NoJsMutationResponse,
+} from './mutation-wire.js';
+import { mutationReplayContext, readMutationReplay, withMutationReplay } from './replay.js';
 import {
   parseSchemaAsync,
   SchemaValidationError,
@@ -180,6 +177,20 @@ export type {
   StylesheetManifestEntry,
 } from './hints.js';
 export type { QueryScriptRenderOptions } from './wire-html.js';
+export { mutationWireRequestFromHeaders, readMutationWireHeaders } from './mutation-wire.js';
+export type {
+  ErrorBoundaryRenderer,
+  FragmentRenderer,
+  MutationEndpointRequest,
+  MutationEndpointResponse,
+  MutationWireHeaders,
+  MutationWireHeaderSource,
+  MutationWireRequest,
+  MutationWireRequestOptions,
+  MutationWireResponse,
+  NoJsMutationRequest,
+  NoJsMutationResponse,
+} from './mutation-wire.js';
 export { isHeaderSource, readHeader } from './response.js';
 export type {
   QueryDefinition,
@@ -201,6 +212,8 @@ export {
   runQuery,
 } from './query.js';
 export type {
+  MutationResponseHeaderValue,
+  MutationResponseHeaders,
   ResponseHeaderValue,
   ResponseHeaders,
   RoutePageResponse,
@@ -347,10 +360,6 @@ export interface MutationContext<Errors extends Record<string, Schema<unknown>>>
   };
 }
 
-export type MutationResponseHeaderValue = ResponseHeaderValue;
-
-export type MutationResponseHeaders = ResponseHeaders;
-
 export interface WriteDefinition<
   Key extends string,
   Touches extends readonly Domain[],
@@ -396,140 +405,6 @@ export interface MutationTouchSite {
   domain: string;
   keys: null | string;
 }
-
-export interface FragmentRenderer {
-  errorBoundary?: ErrorBoundaryRenderer;
-  mode?: 'append' | 'replace';
-  render(input: unknown): string | Promise<string>;
-  stylesheets?: readonly (string | StylesheetAsset)[];
-  target: string;
-}
-
-export interface ErrorBoundaryRenderer {
-  render(error: unknown, input: unknown): string | Promise<string>;
-  target?: string;
-}
-
-export interface MutationWireRequest<
-  Request,
-  SessionValue = unknown,
-> extends RequestLifecycleOptions<Request, SessionValue> {
-  csrf?: CsrfValidationOptions<Request>;
-  failureTarget?: string;
-  failureStylesheets?: readonly (string | StylesheetAsset)[];
-  fragment?: boolean;
-  fragmentRenderers?: readonly FragmentRenderer[];
-  idem?: string;
-  renderFailureFragment?: (failure: MutationFail, rawInput: unknown) => string | Promise<string>;
-  replayStore?: MutationReplayStore<MutationWireResponse>;
-  rawInput: unknown;
-  request: Request;
-  targets?: readonly string[];
-}
-
-export interface MutationWireHeaders {
-  fragment: boolean;
-  idem?: string;
-  targets: readonly string[];
-}
-
-export type MutationWireHeaderSource = HeaderSource;
-
-export interface MutationWireRequestOptions<
-  Request,
-  SessionValue = unknown,
-> extends RequestLifecycleOptions<Request, SessionValue> {
-  csrf?: CsrfValidationOptions<Request>;
-  failureTarget?: string;
-  failureStylesheets?: readonly (string | StylesheetAsset)[];
-  fragmentRenderers?: readonly FragmentRenderer[];
-  headers: MutationWireHeaderSource;
-  rawInput: unknown;
-  renderFailureFragment?: (failure: MutationFail, rawInput: unknown) => string | Promise<string>;
-  replayStore?: MutationReplayStore<MutationWireResponse>;
-  request: Request;
-}
-
-export interface MutationWireResponse extends ServerResponseBase<
-  string,
-  MutationResponseHeaders,
-  200 | 422 | 429 | 500
-> {}
-
-export function readMutationWireHeaders(headers: MutationWireHeaderSource): MutationWireHeaders {
-  const fragment = readHeader(headers, 'FW-Fragment')?.toLowerCase() === 'true';
-  const idem = readHeader(headers, 'FW-Idem')?.trim();
-  const targets = dedupe(
-    (readHeader(headers, 'FW-Targets') ?? '')
-      .split(/[;,]/)
-      .map((target) => target.trim())
-      .map((target) => target.split('=')[0]?.trim() ?? '')
-      .filter(Boolean),
-  );
-
-  return {
-    fragment,
-    ...(idem ? { idem } : {}),
-    targets,
-  };
-}
-
-export function mutationWireRequestFromHeaders<Request>(
-  options: MutationWireRequestOptions<Request>,
-): MutationWireRequest<Request> {
-  const headers = readMutationWireHeaders(options.headers);
-
-  return {
-    fragment: headers.fragment,
-    rawInput: options.rawInput,
-    request: options.request,
-    ...(options.onError === undefined ? {} : { onError: options.onError }),
-    ...(options.sessionProvider === undefined ? {} : { sessionProvider: options.sessionProvider }),
-    ...(options.failureTarget === undefined ? {} : { failureTarget: options.failureTarget }),
-    ...(options.failureStylesheets === undefined
-      ? {}
-      : { failureStylesheets: options.failureStylesheets }),
-    ...(options.fragmentRenderers === undefined
-      ? {}
-      : { fragmentRenderers: options.fragmentRenderers }),
-    ...(options.csrf === undefined ? {} : { csrf: options.csrf }),
-    ...(headers.idem === undefined ? {} : { idem: headers.idem }),
-    ...(options.renderFailureFragment === undefined
-      ? {}
-      : { renderFailureFragment: options.renderFailureFragment }),
-    ...(options.replayStore === undefined ? {} : { replayStore: options.replayStore }),
-    targets: headers.targets,
-  };
-}
-
-export interface NoJsMutationRequest<
-  Request,
-  Value,
-  SessionValue = unknown,
-> extends RequestLifecycleOptions<Request, SessionValue> {
-  csrf?: CsrfValidationOptions<Request>;
-  rawInput: unknown;
-  redirectTo: string | ((result: MutationSuccess<Value>) => string);
-  renderFailurePage?: (failure: MutationFail) => string | Promise<string>;
-  request: Request;
-}
-
-export interface NoJsMutationResponse extends ServerResponseBase<
-  string,
-  MutationResponseHeaders,
-  303 | 422 | 429 | 500
-> {}
-
-export interface MutationEndpointRequest<
-  Request,
-  Value,
-  SessionValue = unknown,
-> extends MutationWireRequestOptions<Request, SessionValue> {
-  redirectTo: string | ((result: MutationSuccess<Value>) => string);
-  renderFailurePage?: (failure: MutationFail) => string | Promise<string>;
-}
-
-export type MutationEndpointResponse = MutationWireResponse | NoJsMutationResponse;
 
 export interface RouteRequest<
   Path extends string,
@@ -1885,8 +1760,4 @@ function mutationWireResponseHeaders<Request>(
     'Content-Type': 'text/vnd.jiso.fragment+html; charset=utf-8',
     ...(wireRequest.idem ? { 'FW-Idem': wireRequest.idem } : {}),
   };
-}
-
-function dedupe(values: readonly string[]): string[] {
-  return [...new Set(values.filter(Boolean))];
 }

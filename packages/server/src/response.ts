@@ -2,6 +2,10 @@ export type ResponseHeaderValue = string | string[];
 
 export type ResponseHeaders = Record<string, ResponseHeaderValue>;
 
+export type MutationResponseHeaderValue = ResponseHeaderValue;
+
+export type MutationResponseHeaders = ResponseHeaders;
+
 export interface ServerResponseBase<
   Body,
   Headers extends ResponseHeaders = ResponseHeaders,
