@@ -478,7 +478,7 @@ class GateMorphRoot {
   }
 }
 
-const executeGeneratedClientModule = (source) => {
+const executeGeneratedClientModule = (source, context = {}) => {
   const exports = {};
   const moduleSource = source
     .replace(/import\s+\{([^}]+)\}\s+from\s+['"]@jiso\/runtime['"];\n?/g, (_match, names) => {
@@ -492,11 +492,28 @@ const executeGeneratedClientModule = (source) => {
     .replace(/export const ([A-Za-z_$][\w$]*)/g, 'const $1 = exports.$1');
 
   runInNewContext(moduleSource, {
+    ...context,
     exports,
-    runtime: { applyCompiledQueryUpdatePlan, derive },
+    runtime: {
+      applyCompiledQueryUpdatePlan,
+      derive,
+      handler: (callback) => (event, ctx) => callback(event, ctx),
+    },
   });
 
   return exports;
+};
+
+const executeGeneratedServerRenderSource = (source) => {
+  const exports = {};
+  const moduleSource = source.replace(
+    /export function ([A-Za-z_$][\w$]*)/g,
+    'exports.$1 = function $1',
+  );
+
+  runInNewContext(moduleSource, { exports });
+
+  return exports.renderSource();
 };
 
 const executeGeneratedBootstrapModule = (source, planModules) => {
@@ -5352,26 +5369,31 @@ export const CartDrawer = component('cart-drawer', {
 });
 `,
   });
-  const cartBadgeClientSource = cartBadge.files.find(
-    (file) =>
-      file.source.includes("import { handler } from '@jiso/runtime'") &&
-      file.source.includes('CartBadge$removeItem'),
-  )?.source;
-  assert.ok(cartBadgeClientSource, 'compiled output includes the cart badge client module');
+  const cartBadgeClientFile = cartBadge.files.find((file) => file.kind === 'client');
+  assert.ok(cartBadgeClientFile, 'compiled output includes the cart badge client module');
 
   assert.deepEqual(cartBadge.handlerExports, [
     'CartBadge$removeItem',
     'CartBadge$button_click',
     'CartBadge$button_click_2',
   ]);
-  assert.match(cartBadgeClientSource, /export const CartBadge\$removeItem = handler/);
-  assert.match(cartBadgeClientSource, /export const CartBadge\$button_click = handler/);
-  assert.match(cartBadgeClientSource, /export const CartBadge\$button_click_2 = handler/);
-  assert.match(cartBadgeClientSource, /return ctx\.state\.count \+= ctx\.params\.quantity;/);
-  assert.match(
-    cartBadgeClientSource,
-    /return ctx\.state\.count = ctx\.state\.count - ctx\.params\.quantity;/,
-  );
+  const removeItemCalls = [];
+  const cartBadgeClient = executeGeneratedClientModule(cartBadgeClientFile.source, {
+    removeItem(event, ctx) {
+      removeItemCalls.push({ ctx, event });
+      return 'removed';
+    },
+  });
+  assert.equal(typeof cartBadgeClient.CartBadge$removeItem, 'function');
+  assert.equal(typeof cartBadgeClient.CartBadge$button_click, 'function');
+  assert.equal(typeof cartBadgeClient.CartBadge$button_click_2, 'function');
+  const clickContext = { params: { quantity: 2 }, state: { count: 5 } };
+  assert.equal(cartBadgeClient.CartBadge$removeItem('click', clickContext), 'removed');
+  assert.deepEqual(removeItemCalls, [{ ctx: clickContext, event: 'click' }]);
+  assert.equal(cartBadgeClient.CartBadge$button_click('click', clickContext), 7);
+  assert.equal(clickContext.state.count, 7);
+  assert.equal(cartBadgeClient.CartBadge$button_click_2('click', clickContext), 5);
+  assert.equal(clickContext.state.count, 5);
   assert.deepEqual(collectMinifierReservedNames([cartDrawer, cartBadge, cartBadge]), [
     'CartBadge$button_click',
     'CartBadge$button_click_2',
@@ -5396,10 +5418,60 @@ export const CartActions = component('cart-actions', {
 });
 `,
   });
-  const serverSource = result.files.find((file) => file.source.includes('renderSource'))?.source;
-  assert.ok(serverSource, 'compiled output includes server render source');
-  assert.match(serverSource, /fw-param-types="quantity:number"/);
-  assert.match(serverSource, /fw-param-types="selected:boolean"/);
+  const serverFile = result.files.find((file) => file.kind === 'server');
+  const clientFile = result.files.find((file) => file.kind === 'client');
+  assert.ok(serverFile, 'compiled output includes server render source');
+  assert.ok(clientFile, 'compiled output includes client handler source');
+
+  const buttons = parseHtmlElements(executeGeneratedServerRenderSource(serverFile.source)).filter(
+    (element) => element.tagName === 'button',
+  );
+  assert.equal(buttons.length, 2);
+  assert.equal(buttons[0]?.attributes['fw-param-types'], 'quantity:number');
+  assert.equal(buttons[0]?.attributes['data-p-quantity'], '{item.quantity}');
+  assert.equal(buttons[1]?.attributes['fw-param-types'], 'selected:boolean');
+  assert.equal(buttons[1]?.attributes['data-p-selected'], '{item.selected}');
+  assert.equal(buttons[1]?.attributes['data-p-id'], '{item.id}');
+
+  const cartActions = executeGeneratedClientModule(clientFile.source, {
+    deselect: (id) => `deselect:${id}`,
+    select: (id) => `select:${id}`,
+  });
+  const addParams = readElementParams({
+    attributes: [{ name: 'data-p-quantity', value: '2' }],
+    getAttribute: (name) =>
+      name === 'fw-param-types' ? buttons[0]?.attributes['fw-param-types'] : null,
+  });
+  const selectParams = readElementParams({
+    attributes: [
+      { name: 'data-p-selected', value: 'true' },
+      { name: 'data-p-id', value: 'p1' },
+    ],
+    getAttribute: (name) =>
+      name === 'fw-param-types' ? buttons[1]?.attributes['fw-param-types'] : null,
+  });
+  const deselectParams = readElementParams({
+    attributes: [
+      { name: 'data-p-selected', value: 'false' },
+      { name: 'data-p-id', value: 'p2' },
+    ],
+    getAttribute: (name) =>
+      name === 'fw-param-types' ? buttons[1]?.attributes['fw-param-types'] : null,
+  });
+  const cartState = { count: 1 };
+  assert.equal(
+    cartActions.CartActions$button_click('click', { params: addParams, state: cartState }),
+    3,
+  );
+  assert.equal(cartState.count, 3);
+  assert.equal(
+    cartActions.CartActions$button_click_2('click', { params: selectParams, state: cartState }),
+    'select:p1',
+  );
+  assert.equal(
+    cartActions.CartActions$button_click_2('click', { params: deselectParams, state: cartState }),
+    'deselect:p2',
+  );
   assert.deepEqual(
     readElementParams({
       attributes: [
