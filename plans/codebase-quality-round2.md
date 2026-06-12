@@ -884,6 +884,14 @@ must be "FW406 unresolved," never "silently wrong."
       `pnpm exec vitest --run conformance/drizzle-pin/src/index.test.ts`;
       `pnpm exec vp check packages/drizzle/src/index.ts packages/drizzle/src/index.test.ts plans/codebase-quality-round2.md`;
       and `git diff --check`.
+      Additional evidence 2026-06-12: source-mode typed SQL projection shape extraction now
+      walks a parsed projection expression instead of regex-matching `sql<T>` text, so string
+      contents containing `sql<number>` degrade to FW406 unresolved projections rather than
+      fabricating numeric query-shape facts or FW410 opaque-SQL diagnostics. Same-session
+      evidence:
+      `pnpm exec vitest --run packages/drizzle/src/index.test.ts -t "typed sql projections|opaque query projections"`;
+      `pnpm exec vitest --run packages/drizzle/src/index.test.ts`;
+      `pnpm exec vitest --run conformance/drizzle-pin/src/index.test.ts`.
 - [ ] **HIGH — Cover the invisible read/write surfaces or mark them.** Relational query API
       (`db.query.users.findMany()`) matches neither read (:1138) nor write (:598) extraction;
       `db.execute(sql``)` is skipped by `extractExternalDbArgumentCalls` (:1820). Either

@@ -1107,9 +1107,8 @@ function scalarQueryShape(
   columnShapes: Readonly<Record<string, QueryShape>> = {},
   nullableTables: ReadonlySet<string> = new Set(),
 ): QueryShape | null {
-  if (/sql\s*<\s*number\s*>/.test(expression)) return 'number';
-  if (/sql\s*<\s*boolean\s*>/.test(expression)) return 'boolean';
-  if (/sql\s*<\s*string\s*>/.test(expression)) return 'string';
+  const sqlShape = typedSqlProjectionShape(expression);
+  if (sqlShape) return sqlShape;
   const trimmed = expression.trim();
   const columnShape = columnShapes[trimmed];
   if (columnShape) {
@@ -1188,7 +1187,65 @@ function scalarProjectionTable(expression: string): string | undefined {
 }
 
 function isOpaqueProjection(expression: string): boolean {
-  return /\bsql\s*(?:<|`|\(|\.)|\braw\s*\(/.test(expression);
+  return (
+    projectionExpressionFact(expression, (node) => {
+      if (ts.isTaggedTemplateExpression(node)) return expressionPathText(node.tag) === 'sql';
+      if (!ts.isCallExpression(node)) return false;
+
+      const callee = expressionPathText(node.expression);
+      return callee === 'sql' || callee === 'raw' || callee.startsWith('sql.');
+    }) ?? false
+  );
+}
+
+function typedSqlProjectionShape(expression: string): QueryShape | null {
+  return projectionExpressionFact(expression, (node, sourceFile) => {
+    const typeArguments = ts.isTaggedTemplateExpression(node)
+      ? node.typeArguments
+      : ts.isCallExpression(node)
+        ? node.typeArguments
+        : undefined;
+    const callee = ts.isTaggedTemplateExpression(node)
+      ? expressionPathText(node.tag)
+      : ts.isCallExpression(node)
+        ? expressionPathText(node.expression)
+        : undefined;
+    if (callee !== 'sql' || typeArguments?.length !== 1) return null;
+
+    const typeText = typeArguments[0]?.getText(sourceFile.compilerNode).trim();
+    if (typeText === 'number') return 'number';
+    if (typeText === 'boolean') return 'boolean';
+    if (typeText === 'string') return 'string';
+    return null;
+  });
+}
+
+function projectionExpressionFact<T>(
+  expression: string,
+  visit: (node: ts.Expression, sourceFile: SourceFile) => T,
+): T | null {
+  return withParsedSourceFile(`const __jisoProjection = (${expression});`, (sourceFile) => {
+    const declaration = sourceFile.getVariableDeclarations()[0];
+    const initializer = declaration?.getInitializer();
+    if (!initializer) return null;
+
+    return visit(unwrappedExpression(initializer.compilerNode), sourceFile);
+  });
+}
+
+function unwrappedExpression(expression: ts.Expression): ts.Expression {
+  return ts.isParenthesizedExpression(expression)
+    ? unwrappedExpression(expression.expression)
+    : expression;
+}
+
+function expressionPathText(expression: ts.Expression): string {
+  if (ts.isIdentifier(expression)) return expression.text;
+  if (ts.isPropertyAccessExpression(expression)) {
+    const base = expressionPathText(expression.expression);
+    return base ? `${base}.${expression.name.text}` : expression.name.text;
+  }
+  return '';
 }
 
 function hasDeclaredQueryOutputSchema(body: string): boolean {
