@@ -2594,6 +2594,18 @@ params, relational API, `execute(sql)`, right/full joins, a string column named 
       `pnpm --filter @jiso/runtime run check:inline-loader`,
       `pnpm exec vp check packages/runtime/src/apply-path.ts packages/runtime/src/mutation-response.test.ts plans/codebase-quality-round2.md`,
       and `git diff --check`.
+      Additional bounded evidence 2026-06-12: `packages/runtime/src/wire-parser.ts` now owns
+      the quote-aware mutation-wire element chunk scanner used by `readQueryChunks`,
+      `readFragmentChunks`, and `packages/runtime/src/mutation-failure.ts`, deleting the local
+      failure-parser scanner while preserving nested `fw-fragment` content and quoted tag-close
+      handling under SPEC.md §9.1/§9.2. `packages/runtime/src/wire-parser.test.ts` pins the
+      shared `readElementChunks` helper for quoted `output` payloads and nested fragment chunks.
+      Same-session evidence:
+      `pnpm exec vitest --run packages/runtime/src/wire-parser.test.ts packages/runtime/src/mutation-failure.test.ts packages/runtime/src/mutation-response.test.ts`,
+      `pnpm exec vitest --run packages/runtime/src`,
+      `pnpm --filter @jiso/runtime run check:inline-loader`,
+      `pnpm exec vp check packages/runtime/src/wire-parser.ts packages/runtime/src/wire-parser.test.ts packages/runtime/src/mutation-failure.ts plans/codebase-quality-round2.md`,
+      and `git diff --check`.
       Additional bounded evidence 2026-06-12: `packages/runtime/src/loader.ts` now owns
       `installJisoLoader`, loader options, default delegated events, query visible-return wiring,
       enhanced mutation broadcast setup, execution triggers, and disposal while

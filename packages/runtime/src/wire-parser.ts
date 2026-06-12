@@ -14,6 +14,18 @@ export interface QueryChunk {
   value: unknown;
 }
 
+export interface ElementChunk {
+  attrs: string;
+  content: string;
+  end: number;
+  start: number;
+}
+
+export interface ReadElementChunksOptions {
+  nested?: boolean;
+  onMalformed?: (reason: string) => void;
+}
+
 export function deferredStreamChunks(body: string, boundary: string): string[] {
   const marker = `--${boundary}`;
   const chunks: string[] = [];
@@ -41,41 +53,21 @@ export function deferredStreamChunks(body: string, boundary: string): string[] {
 
 export function readQueryChunks(body: string, onError?: RuntimeErrorReporter): QueryChunk[] {
   const queries: QueryChunk[] = [];
-  const queryTag = /<\/?fw-query\b/gi;
-  let offset = 0;
 
-  while (offset < body.length) {
-    queryTag.lastIndex = offset;
-    const match = queryTag.exec(body);
-    if (!match) break;
-    if (match[0].startsWith('</')) {
-      offset = match.index + match[0].length;
-      continue;
-    }
-
-    const openingEnd = tagClose(body, match.index + match[0].length);
-    if (openingEnd === undefined) {
-      reportRuntimeError(onError, malformedQueryError('missing opening tag close'));
-      break;
-    }
-    const end = matchingQueryEnd(body, openingEnd + 1);
-    if (!end) {
-      reportRuntimeError(onError, malformedQueryError('missing closing tag'));
-      break;
-    }
-
-    const attrs = body.slice(match.index + match[0].length, openingEnd);
-    const name = readAttribute(attrs, 'name');
+  for (const chunk of readElementChunks(body, 'fw-query', {
+    onMalformed(reason) {
+      reportRuntimeError(onError, malformedQueryError(reason));
+    },
+  })) {
+    const name = readAttribute(chunk.attrs, 'name');
     if (!name) {
-      offset = end.end;
       continue;
     }
 
-    const key = readAttribute(attrs, 'key') ?? undefined;
-    const parsed = parseJsonValue(unescapeHtml(body.slice(openingEnd + 1, end.closeStart)));
+    const key = readAttribute(chunk.attrs, 'key') ?? undefined;
+    const parsed = parseJsonValue(unescapeHtml(chunk.content));
     if (!parsed.ok) {
       reportMalformedJson(onError, `fw-query ${name}`, parsed.error);
-      offset = end.end;
       continue;
     }
 
@@ -84,7 +76,6 @@ export function readQueryChunks(body: string, onError?: RuntimeErrorReporter): Q
       name,
       value: parsed.value,
     });
-    offset = end.end;
   }
 
   return queries;
@@ -94,51 +85,25 @@ function malformedQueryError(reason: string): Error {
   return new Error(`Malformed fw-query chunk: ${reason}`);
 }
 
-function matchingQueryEnd(body: string, start: number): { closeStart: number; end: number } | null {
-  const closingTag = /<\/fw-query\s*>/gi;
-  closingTag.lastIndex = start;
-  const match = closingTag.exec(body);
-  return match ? { closeStart: match.index, end: match.index + match[0].length } : null;
-}
-
 export function readFragmentChunks(body: string, onError?: RuntimeErrorReporter): FragmentChunk[] {
   const fragments: FragmentChunk[] = [];
-  const fragmentTag = /<\/?fw-fragment\b/gi;
-  let offset = 0;
 
-  while (offset < body.length) {
-    fragmentTag.lastIndex = offset;
-    const match = fragmentTag.exec(body);
-    if (!match) break;
-    if (match[0].startsWith('</')) {
-      offset = match.index + match[0].length;
-      continue;
-    }
-
-    const openingEnd = tagClose(body, match.index + match[0].length);
-    if (openingEnd === undefined) {
-      reportRuntimeError(onError, malformedFragmentError('missing opening tag close'));
-      break;
-    }
-    const end = matchingFragmentEnd(body, match.index);
-    if (!end) {
-      reportRuntimeError(onError, malformedFragmentError('missing closing tag'));
-      break;
-    }
-
-    const attrs = body.slice(match.index + match[0].length, openingEnd);
-    const target = readAttribute(attrs, 'target');
+  for (const chunk of readElementChunks(body, 'fw-fragment', {
+    nested: true,
+    onMalformed(reason) {
+      reportRuntimeError(onError, malformedFragmentError(reason));
+    },
+  })) {
+    const target = readAttribute(chunk.attrs, 'target');
     if (!target) {
-      offset = end.end;
       continue;
     }
 
     fragments.push({
-      html: body.slice(openingEnd + 1, end.closeStart),
-      ...(readAttribute(attrs, 'mode') === 'append' ? { mode: 'append' } : {}),
+      html: chunk.content,
+      ...(readAttribute(chunk.attrs, 'mode') === 'append' ? { mode: 'append' } : {}),
       target,
     });
-    offset = end.end;
   }
 
   return fragments;
@@ -148,15 +113,67 @@ export function malformedFragmentError(reason: string): Error {
   return new Error(`Malformed fw-fragment chunk: ${reason}`);
 }
 
-function matchingFragmentEnd(
+export function readElementChunks(
   body: string,
+  tagName: string,
+  options: ReadElementChunksOptions = {},
+): ElementChunk[] {
+  const chunks: ElementChunk[] = [];
+  const tag = new RegExp(`</?${escapeRegExp(tagName)}\\b`, 'gi');
+  let offset = 0;
+
+  while (offset < body.length) {
+    tag.lastIndex = offset;
+    const match = tag.exec(body);
+    if (!match) break;
+    if (match[0].startsWith('</')) {
+      offset = match.index + match[0].length;
+      continue;
+    }
+
+    const openingEnd = tagClose(body, match.index + match[0].length);
+    if (openingEnd === undefined) {
+      options.onMalformed?.('missing opening tag close');
+      break;
+    }
+
+    const end = matchingElementEnd(body, tagName, match.index, openingEnd, options.nested ?? false);
+    if (!end) {
+      options.onMalformed?.('missing closing tag');
+      break;
+    }
+
+    chunks.push({
+      attrs: body.slice(match.index + match[0].length, openingEnd),
+      content: body.slice(openingEnd + 1, end.closeStart),
+      end: end.end,
+      start: match.index,
+    });
+    offset = end.end;
+  }
+
+  return chunks;
+}
+
+function matchingElementEnd(
+  body: string,
+  tagName: string,
   start: number,
+  openingEnd: number,
+  nested: boolean,
 ): { closeStart: number; end: number } | null {
-  const fragmentTag = /<\/?fw-fragment\b/gi;
-  fragmentTag.lastIndex = start;
+  if (!nested) {
+    const closingTag = new RegExp(`</${escapeRegExp(tagName)}\\s*>`, 'gi');
+    closingTag.lastIndex = openingEnd + 1;
+    const match = closingTag.exec(body);
+    return match ? { closeStart: match.index, end: match.index + match[0].length } : null;
+  }
+
+  const elementTag = new RegExp(`</?${escapeRegExp(tagName)}\\b`, 'gi');
+  elementTag.lastIndex = start;
   let depth = 0;
 
-  for (let match = fragmentTag.exec(body); match; match = fragmentTag.exec(body)) {
+  for (let match = elementTag.exec(body); match; match = elementTag.exec(body)) {
     const close = tagClose(body, match.index + match[0].length);
     if (close === undefined) return null;
 
@@ -167,10 +184,14 @@ function matchingFragmentEnd(
       depth += 1;
     }
 
-    fragmentTag.lastIndex = close + 1;
+    elementTag.lastIndex = close + 1;
   }
 
   return null;
+}
+
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
 export function tagClose(source: string, start: number): number | undefined {
