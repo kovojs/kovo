@@ -23,6 +23,7 @@
     "./primitives/hover-card": "./src/primitives/hover-card.ts",
     "./primitives/menubar": "./src/primitives/menubar.ts",
     "./primitives/meter": "./src/primitives/meter.ts",
+    "./primitives/navigation-menu": "./src/primitives/navigation-menu.ts",
     "./primitives/number-field": "./src/primitives/number-field.ts",
     "./primitives/otp-field": "./src/primitives/otp-field.ts",
     "./primitives/popover": "./src/primitives/popover.ts",

@@ -444,6 +444,23 @@ jiso-dialog` resolves dashed wire names and prints provenance including package,
       `pnpm exec vp check packages/headless-ui/package.json packages/headless-ui/src/index.ts packages/headless-ui/src/primitives/index.ts packages/headless-ui/src/primitives/menubar.ts packages/headless-ui/src/primitives/menubar.test.ts plans/ui.md`,
       and `git diff --check HEAD~1..HEAD`. H3 remains open for navigation-menu,
       slider, toast, command, and full gates.
+      Additional partial evidence 2026-06-12:
+      `packages/headless-ui/src/primitives/navigation-menu.ts` adds the H3
+      navigation-menu primitive as a DOM-free site navigation helper:
+      root/list/item/trigger/content/link/viewport/indicator attribute builders,
+      navigation/list/listitem/group ARIA wiring, root and trigger open/closed
+      state attrs, horizontal/vertical orientation attrs, highlighted active/
+      inactive item attrs, disabled-item protection, cancelable open and link
+      select transitions, shared roving keyboard movement, shared typeahead
+      matching, and guarded trigger/link/keyboard handlers following the SPEC
+      §4.6 primitive handler no-op contract. It is exported through
+      `@jiso/headless-ui`, `@jiso/headless-ui/primitives`, and
+      `@jiso/headless-ui/primitives/navigation-menu`. Same-session evidence:
+      `pnpm --filter @jiso/headless-ui exec vitest --run src/primitives/navigation-menu.test.ts src/primitives/menubar.test.ts src/primitives/dropdown-menu.test.ts src/primitives/context-menu.test.ts src/lib/typeahead.test.ts src/lib/change-details.test.ts src/lib/keyboard-navigation.test.ts`,
+      `pnpm --filter @jiso/headless-ui run lint:primitives`,
+      `pnpm exec vp check packages/headless-ui/package.json packages/headless-ui/src/index.ts packages/headless-ui/src/primitives/index.ts packages/headless-ui/src/primitives/navigation-menu.ts packages/headless-ui/src/primitives/navigation-menu.test.ts plans/ui.md`,
+      and `git diff --check HEAD~1..HEAD`. H3 remains open for slider, toast,
+      command, and full gates.
 - [x] U1 token sheet + `cn()` + statically-analyzable variant helper (Tailwind-first, §13.1 discoverability rules).
       Evidence 2026-06-12: `packages/headless-ui/src/lib/class-names.ts`
       provides the dependency-free `cn()` helper, `packages/headless-ui/src/lib/variants.ts`
