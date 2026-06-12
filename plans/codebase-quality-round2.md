@@ -610,6 +610,14 @@ must be "FW406 unresolved," never "silently wrong."
       `pnpm exec vitest --run packages/drizzle/src/index.test.ts`,
       `pnpm exec vitest --run conformance/drizzle-pin/src/index.test.ts`, and
       `pnpm exec vp check packages/drizzle/src/index.ts packages/drizzle/src/index.test.ts`.
+      Additional evidence 2026-06-12: shorthand select projections such as `db.select({ id })`
+      now surface as FW406 unresolved projection diagnostics instead of disappearing from the
+      inferred query fact. `packages/drizzle/src/index.test.ts` covers the degradation case.
+      Same-session evidence:
+      `pnpm exec vitest --run packages/drizzle/src/index.test.ts -t "shorthand projections"`;
+      `pnpm exec vitest --run packages/drizzle/src/index.test.ts`;
+      `pnpm exec vitest --run conformance/drizzle-pin/src/index.test.ts`;
+      `pnpm exec vp check packages/drizzle/src/index.ts packages/drizzle/src/index.test.ts plans/codebase-quality-round2.md`.
 - [ ] **HIGH — Cover the invisible read/write surfaces or mark them.** Relational query API
       (`db.query.users.findMany()`) matches neither read (:1138) nor write (:598) extraction;
       `db.execute(sql``)` is skipped by `extractExternalDbArgumentCalls` (:1820). Either

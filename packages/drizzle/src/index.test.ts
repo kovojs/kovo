@@ -1019,6 +1019,44 @@ export interface CommerceInvalidationSets {
     ]);
   });
 
+  it('marks shorthand projections as FW406 instead of dropping them', () => {
+    const facts = extractQueryFactsFromSource([
+      {
+        fileName: 'product.queries.ts',
+        source: `
+          export const products = pgTable("products", {
+            id: text("id").primaryKey(),
+          }, jiso({ domain: "product", key: "id" }));
+
+          export const productQuery = query("product", {
+            load(_input, db) {
+              const id = products.id;
+              return db.select({ id }).from(products);
+            },
+          });
+        `,
+      },
+    ]);
+
+    expect(facts).toEqual([
+      {
+        diagnostics: [
+          {
+            code: 'FW406',
+            message:
+              'Statically un-analyzable write site; manual touches required. Query projection product.id could not be resolved to a Drizzle column or typed sql<T> expression.',
+            severity: 'warn',
+            site: 'product.queries.ts:6',
+          },
+        ],
+        query: 'product',
+        reads: ['product'],
+        shape: {},
+        site: 'product.queries.ts:6',
+      },
+    ]);
+  });
+
   it('keeps projection-less selects visible as FW406 query facts', () => {
     const facts = extractQueryFactsFromSource([
       {

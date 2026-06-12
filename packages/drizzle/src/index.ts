@@ -969,7 +969,12 @@ function queryShapeFromObjectLiteral(
 
   for (const entry of splitTopLevelArgs(source)) {
     const separator = entry.indexOf(':');
-    if (separator === -1) continue;
+    if (separator === -1) {
+      // SPEC §10-§11: unsupported projection syntax stays visible instead of disappearing.
+      const shorthand = shorthandProjectionName(entry);
+      if (shorthand) unresolvedPaths.push(prefix ? `${prefix}.${shorthand}` : shorthand);
+      continue;
+    }
 
     const key = entry
       .slice(0, separator)
@@ -1007,6 +1012,10 @@ function queryShapeFromObjectLiteral(
   }
 
   return { hasTablelessScalar, opaquePaths, shape, scalarTables, unresolvedPaths };
+}
+
+function shorthandProjectionName(entry: string): string | undefined {
+  return /^(?<name>[A-Za-z_$][\w$]*)$/.exec(entry.trim())?.groups?.name;
 }
 
 function nullableNestedShape(
