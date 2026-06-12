@@ -892,6 +892,14 @@ params, relational API, `execute(sql)`, right/full joins, a string column named 
       evidence: `pnpm exec vitest --run packages/runtime/src/inline-loader.test.ts packages/runtime/src/index.test.ts`
       and
       `pnpm exec vp check packages/runtime/src/index.ts packages/runtime/src/inline-loader.ts packages/runtime/src/inline-loader.test.ts plans/codebase-quality-round2.md`.
+      Partial evidence 2026-06-12: extracted `packages/runtime/src/mutation-queue.ts` as a
+      subtractive seam for named enhanced mutation queue serialization, with the standalone queue
+      behavior moved from `packages/runtime/src/index.test.ts` to
+      `packages/runtime/src/mutation-queue.test.ts`; `index.ts` keeps the public re-export and
+      the monolith keeps only the enhanced-submit integration coverage. Same-session evidence:
+      `pnpm exec vitest --run packages/runtime/src/mutation-queue.test.ts packages/runtime/src/index.test.ts -t "mutation queue|optimistic enhanced submits with the same named queue|unqueued optimistic"`
+      and
+      `pnpm exec vp check packages/runtime/src/index.ts packages/runtime/src/index.test.ts packages/runtime/src/mutation-queue.ts packages/runtime/src/mutation-queue.test.ts`.
 - [ ] **LOW** — `hydratedQueries` frozen at install (index.ts:330-342): queries introduced by
       later mutations never become refetch-eligible — fix or document as SPEC-intended;
       `unescapeHtml` missing `&#39;`/`&apos;` (wire-parser.ts:162-168) — pin the server↔runtime
