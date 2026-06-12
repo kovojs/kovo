@@ -15,11 +15,16 @@ function drizzlePackageJson(): DrizzlePackageJson {
   ) as DrizzlePackageJson;
 }
 
+function drizzleRuntimeSource(): string {
+  return readFileSync(fileURLToPath(new URL('./runtime.ts', import.meta.url)), 'utf8');
+}
+
 describe('@jiso/drizzle runtime surface', () => {
   it('keeps the runtime annotation entrypoint separate from static extraction', async () => {
     const runtime = await import('@jiso/drizzle');
     const staticExtraction = await import('@jiso/drizzle/static');
     const packageJson = drizzlePackageJson();
+    const runtimeSource = drizzleRuntimeSource();
 
     expect(runtime.jiso({ domain: 'cart', key: 'id' }).domain).toBe('cart');
     expect('extractTouchGraphFromSource' in runtime).toBe(false);
@@ -30,5 +35,9 @@ describe('@jiso/drizzle runtime surface', () => {
     });
     expect(packageJson.dependencies?.['ts-morph']).toBeUndefined();
     expect(packageJson.devDependencies?.['ts-morph']).toBe('^28.0.0');
+    expect(runtimeSource).not.toContain('ts-morph');
+    expect(runtimeSource).not.toContain('./index.js');
+    expect(runtimeSource).not.toContain('./graph.js');
+    expect(runtimeSource).not.toContain('./invalidation.js');
   });
 });

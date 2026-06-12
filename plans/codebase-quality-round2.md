@@ -1245,6 +1245,12 @@ must be "FW406 unresolved," never "silently wrong."
       imports. Same-session evidence: `pnpm exec vitest --run packages/drizzle/src/index.test.ts`,
       `pnpm exec vitest --run conformance/drizzle-pin/src/index.test.ts`, and
       `pnpm exec vp check packages/drizzle/package.json packages/drizzle/src/index.test.ts packages/test/package.json pnpm-lock.yaml plans/codebase-quality-round2.md`.
+      Additional bounded evidence 2026-06-12: `packages/drizzle/src/runtime-surface.test.ts`
+      now pins the root runtime source against importing `ts-morph`, the static extractor barrel,
+      graph serialization, or invalidation helpers while still proving `@jiso/drizzle/static`
+      exposes extraction. Same-session evidence:
+      `pnpm exec vitest --run packages/drizzle/src/runtime-surface.test.ts` and
+      `pnpm exec vp check packages/drizzle/src/runtime-surface.test.ts plans/codebase-quality-round2.md`.
 - [ ] **LOW** — module-global mutable `sourceExtractionFileId` (:53); fresh ts-morph `Project`
       per `parseSourceFile` call with files re-parsed 3+× per pass (:1457); `IGNORED_LOCAL_CALL_NAMES`
       mixing JS keywords with domain names (:57-71 — a user helper named `insert` is silently
