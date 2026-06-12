@@ -319,6 +319,19 @@ Scope: SPEC addition (proposed §9.5 "The request shell"), `@jiso/server` shell 
       `/_m/cart/add` mutation, and verifies Vite still serves `/src/styles.css`.
       Same-session verification ran
       `pnpm exec vitest --run examples/commerce/src/app-shell.test.ts`.
+      Additional evidence 2026-06-12: the focused `examples/reference` auth
+      app now has its own app-shell HTTP entry over the shared SPEC §9.5
+      request handler. `examples/reference/src/app-shell.ts` builds a
+      `createApp()` aggregate for `/login`, guarded `/account` and `/admin`,
+      and the blessed Better Auth `auth/sign-in` and `auth/sign-out`
+      mutations; it attaches the reference auth CSRF context before delegating
+      to `createRequestHandler()` and exports `referenceNodeHandler` for
+      node/http adoption. `examples/reference/src/app-shell.test.ts` serves the
+      shell over `node:http`, verifies anonymous guard redirect, login
+      failure/success, authenticated account/admin documents, and logout cookie
+      clearing through `/_m/`. Same-session verification ran
+      `pnpm exec vitest --run examples/reference/src/app.test.ts examples/reference/src/app-shell.test.ts`
+      and `pnpm exec tsc -p examples/reference/tsconfig.json --noEmit`.
 
 ## Background — the gap
 
