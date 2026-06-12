@@ -364,6 +364,16 @@ tables)` now emits both logical and physical table facts for runtime SQL verific
       collision fixture, and `conformance/better-auth-pin/src/index.test.ts` pins a real
       `better-auth@1.6.17` core `user`/`session` `modelName` collision. Same-session evidence:
       `pnpm exec vitest --run packages/better-auth/src/index.test.ts conformance/better-auth-pin/src/index.test.ts --reporter=dot`.
+      Partial evidence 2026-06-12: schema-bridge key-field drift diagnostics now include
+      Better Auth's physical `modelName` table alias when one is configured, so app `schema.ts`
+      and P9 verifier failures identify the real SQL table as well as the logical Better Auth
+      table. `packages/better-auth/src/index.test.ts` covers local alias-aware key drift for
+      `oauthApplication.userId`, and `conformance/better-auth-pin/src/index.test.ts` pins real
+      `better-auth@1.6.17` plugin alias metadata for OIDC-provider tables, `twoFactor`, and
+      exempt `deviceCode` through generated annotations plus verifier facts. Same-session
+      evidence:
+      `pnpm exec vitest --run packages/better-auth/src/index.test.ts conformance/better-auth-pin/src/index.test.ts --reporter=dot`
+      and `pnpm exec tsc -p conformance/better-auth-pin/tsconfig.json --noEmit`.
       Remaining gaps: plugin-generated tables outside the blessed organization/admin/two-factor/OIDC-provider/MCP/SIWE/JWT/device-authorization
       surface are still not mapped, the OAuth-provider successor package/table metadata is not
       installed or exportable from the pinned dependency set, and full app `schema.ts` generation

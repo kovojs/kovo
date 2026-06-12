@@ -635,6 +635,27 @@ describe('credential mutation helpers', () => {
     });
   });
 
+  it('reports bridged domain-key drift with Better Auth modelName aliases', () => {
+    expect(
+      validateBetterAuthSchemaBridge({
+        account: authTable(['userId']),
+        oauthApplication: authTable([], 'auth_oauth_apps'),
+        session: authTable(['userId']),
+        user: authTable(),
+        verification: authTable(),
+      }),
+    ).toEqual({
+      declaredTouchMismatches: [],
+      keyFieldMismatches: [
+        'oauthApplication.userId (physical auth_oauth_apps.userId) is a schema-bridge key but Better Auth table metadata does not expose that field',
+      ],
+      missingTables: [],
+      ok: false,
+      pluginTableDegradations: [],
+      unbridgedTables: [],
+    });
+  });
+
   it('reports mutation registry touches that drift from declared table touches', () => {
     expect(
       validateBetterAuthSchemaBridge(

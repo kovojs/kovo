@@ -1913,6 +1913,97 @@ describe('Better Auth pinned conformance', () => {
     expect(harness.verificationDiagnostics()).toEqual([]);
   });
 
+  it('materializes schema.ts annotations and verifier facts from real plugin modelName aliases', () => {
+    const { auth } = createRealAuth({
+      plugins: [
+        oidcProvider({
+          loginPage: '/login',
+          schema: {
+            oauthAccessToken: { modelName: 'auth_oauth_tokens' },
+            oauthApplication: { modelName: 'auth_oauth_apps' },
+            oauthConsent: { modelName: 'auth_oauth_consents' },
+          },
+        }),
+        twoFactor({ twoFactorTable: 'auth_two_factors' }),
+        deviceAuthorization({
+          schema: {
+            deviceCode: { modelName: 'auth_device_codes' },
+          },
+        }),
+      ],
+    });
+    const tables = getAuthTables(auth.options);
+    const physicalTables = Object.keys(tables)
+      .map((table) => requireAuthTable(tables, table).modelName)
+      .sort();
+    const result = annotateBetterAuthSchemaSource(
+      betterAuthSchemaSourceFixture(physicalTables),
+      tables,
+    );
+    const verifierConfig = createBetterAuthDbVerificationConfig({}, tables);
+
+    expect(
+      Object.fromEntries(
+        Object.entries(tables).map(([table, metadata]) => [table, metadata.modelName]),
+      ),
+    ).toEqual({
+      account: 'account',
+      deviceCode: 'auth_device_codes',
+      oauthAccessToken: 'auth_oauth_tokens',
+      oauthApplication: 'auth_oauth_apps',
+      oauthConsent: 'auth_oauth_consents',
+      session: 'session',
+      twoFactor: 'auth_two_factors',
+      user: 'user',
+      verification: 'verification',
+    });
+    expect(validateBetterAuthSchemaBridge(tables)).toEqual({
+      declaredTouchMismatches: [],
+      keyFieldMismatches: [],
+      missingTables: [],
+      ok: true,
+      pluginTableDegradations: [],
+      unbridgedTables: [],
+    });
+    expect(result.validation.ok).toBe(true);
+    expect(result.annotatedTables).toEqual([
+      'account',
+      'auth_device_codes',
+      'auth_oauth_apps',
+      'auth_oauth_consents',
+      'auth_oauth_tokens',
+      'auth_two_factors',
+      'session',
+      'user',
+      'verification',
+    ]);
+    expect(result.missingSourceTables).toEqual([]);
+    expect(result.source).toContain(
+      "export const auth_oauth_apps = pgTable('auth_oauth_apps', {}, jiso({ domain: 'auth', key: 'userId' }));",
+    );
+    expect(result.source).toContain(
+      "export const auth_two_factors = pgTable('auth_two_factors', {}, jiso({ domain: 'auth', key: 'userId' }));",
+    );
+    expect(result.source).toContain(
+      "export const auth_device_codes = pgTable('auth_device_codes', {}, jiso({ exempt: true }));",
+    );
+    expect(verifierConfig.domainByTable).toMatchObject({
+      auth_oauth_apps: 'auth',
+      auth_oauth_consents: 'auth',
+      auth_oauth_tokens: 'auth',
+      auth_two_factors: 'auth',
+    });
+    expect(verifierConfig.exemptTables).toEqual(
+      expect.arrayContaining(['auth_device_codes', 'deviceCode', 'verification']),
+    );
+    expect(verifierConfig.keyByTable).toMatchObject({
+      auth_oauth_apps: 'userId',
+      auth_oauth_consents: 'userId',
+      auth_oauth_tokens: 'userId',
+      auth_two_factors: 'userId',
+    });
+  });
+
   it('mounts the real Better Auth handler as an audit-visible prefix endpoint', async () => {
     const { auth } = createRealAuth();
     const authEndpoint = mount('/api/auth', auth);

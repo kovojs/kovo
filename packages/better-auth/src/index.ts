@@ -1078,12 +1078,20 @@ function schemaBridgeKeyFieldMismatches(
     if (fieldNames === null) continue;
     if (fieldNames.has(annotation.key)) continue;
 
-    mismatches.push(
-      `${table}.${annotation.key} is a schema-bridge key but Better Auth table metadata does not expose that field`,
-    );
+    mismatches.push(schemaBridgeKeyFieldMismatch(table, annotation.key, tables[table]));
   }
 
   return mismatches.sort();
+}
+
+function schemaBridgeKeyFieldMismatch(table: string, key: string, metadata: unknown): string {
+  const physicalTable = betterAuthPhysicalTableName(table, metadata);
+  const tableField =
+    physicalTable === table
+      ? `${table}.${key}`
+      : `${table}.${key} (physical ${physicalTable}.${key})`;
+
+  return `${tableField} is a schema-bridge key but Better Auth table metadata does not expose that field`;
 }
 
 function betterAuthPhysicalTableNameCollisionMismatches(
