@@ -151,6 +151,10 @@ Do this first or pay it on every commit.
       `docs/prelaunch-checklist.md` tables/fields for pending study rows, acceptance audit
       statuses, runnable checklist rows, and final clean-checkout gates instead of checking
       completion-rule or section-intro prose substrings in `tests/fw-check.node.mjs`.
+      Partial evidence 2026-06-12: the v1 acceptance/pre-launch documentation tranche now
+      asserts parsed command rows, dated audit statuses, external-check evidence ledger ownership,
+      placeholder reviewers, and pending statuses instead of matching final-freeze or missing
+      evidence prose in `tests/fw-check.node.mjs`.
       Partial evidence 2026-06-12: the wire-SSE/docs-normative tranche now asserts fixture
       inventory/body structure, SPEC constitution table rows, SPEC §5.2 hard-rule alignment,
       compiler handler naming, render-equivalence behavior, and compiler CSS asset/scoping

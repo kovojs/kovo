@@ -1301,6 +1301,19 @@ void test('P10 v1 acceptance ledger tracks every freeze criterion', async () => 
   assert.equal(gatesByCriterion.get('16.2 Legibility').Status, 'pending external study');
   assert.equal(gatesByCriterion.get('Pre-launch').Status, 'pending external checks');
   assert.deepEqual(
+    acceptanceRunRows.map((row) => ({
+      command: row.Command,
+      commit: row.Commit,
+      result: row.Result,
+    })),
+    [
+      { command: 'pnpm run acceptance', commit: '5e693a7', result: 'passed' },
+      { command: 'pnpm run acceptance', commit: '036e494', result: 'passed' },
+      { command: 'pnpm run acceptance', commit: 'ec876f5', result: 'passed' },
+      { command: 'pnpm run acceptance', commit: 'TBD at freeze run', result: 'pending' },
+    ],
+  );
+  assert.deepEqual(
     {
       legibility: auditStatuses['Outside legibility study'],
       prelaunch: auditStatuses['Pre-launch external checks'],
@@ -1313,20 +1326,32 @@ void test('P10 v1 acceptance ledger tracks every freeze criterion', async () => 
     },
   );
   assert.ok(acceptanceRunRows.length >= 4);
-  assert.equal(acceptanceRunRows.at(-1).Result, 'pending');
-  assert.equal(acceptanceRunRows.at(-1).Notes.includes('Final clean-checkout freeze run'), true);
   assert.equal(
     acceptanceRunRows.slice(0, -1).every((row) => row.Result === 'passed'),
     true,
   );
   assert.equal(
-    acceptanceRunRows.some(
-      (row) =>
-        row.Commit === 'ec876f5' &&
-        row.Result === 'passed' &&
-        row.Notes.includes('This is not the final freeze run'),
+    acceptanceRunRows.filter(
+      (row) => row.Result === 'pending' && row.Commit === 'TBD at freeze run',
+    ).length,
+    1,
+  );
+  assert.equal(
+    auditRows.filter((row) => row.Status === 'passed local run').length,
+    acceptanceRunRows.filter((row) => row.Result === 'passed').length,
+    'each passed local acceptance row has a matching dated audit row',
+  );
+  assert.equal(
+    auditRows.filter((row) => row.Status.startsWith('pending')).length,
+    2,
+    'only the external-evidence blockers are pending audit rows',
+  );
+  assert.equal(
+    auditRows.some(
+      (row) => row.Area === 'Local integration acceptance' && row.Status === 'pending',
     ),
-    true,
+    false,
+    'the pending final clean-checkout run is not claimed as a dated audit row',
   );
   assert.deepEqual(
     cleanCheckoutRows.map((row) => row.Status),
@@ -1339,12 +1364,16 @@ void test('pre-launch checklist is tracked explicitly', async () => {
   const requiredChecks = parseMarkdownTable(markdownSection(checklist, 'Required Checks'));
   const auditRows = parseMarkdownTable(markdownSection(checklist, 'Dated Audit Ledger'));
   const runnableChecks = parseMarkdownTable(markdownSection(checklist, 'Runnable Local Checklist'));
-  const evidenceLedgers = [
-    parseMarkdownTable(markdownSection(checklist, 'Trademark Evidence Ledger'))[0],
-    parseMarkdownTable(markdownSection(checklist, 'Domain Evidence Ledger'))[0],
-    parseMarkdownTable(markdownSection(checklist, 'npm Scope Evidence Ledger'))[0],
-    parseMarkdownTable(markdownSection(checklist, 'Linguistic Evidence Ledger'))[0],
-  ];
+  const evidenceLedgers = {
+    Domain: parseMarkdownTable(markdownSection(checklist, 'Domain Evidence Ledger'))[0],
+    'Linguistic screen': parseMarkdownTable(
+      markdownSection(checklist, 'Linguistic Evidence Ledger'),
+    )[0],
+    'npm scope': parseMarkdownTable(markdownSection(checklist, 'npm Scope Evidence Ledger'))[0],
+    'Trademark screen': parseMarkdownTable(
+      markdownSection(checklist, 'Trademark Evidence Ledger'),
+    )[0],
+  };
   const auditStatuses = Object.fromEntries(auditRows.map((row) => [row.Reviewer, row.Status]));
 
   assert.deepEqual(
@@ -1352,24 +1381,42 @@ void test('pre-launch checklist is tracked explicitly', async () => {
     ['Trademark screen', 'Domain', 'npm scope', 'Linguistic screen'],
   );
   assert.deepEqual(
-    requiredChecks.map((row) => row['Where to record evidence']),
-    [
-      'Trademark Evidence Ledger below.',
-      'Domain Evidence Ledger below.',
-      'npm Scope Evidence Ledger below.',
-      'Linguistic Evidence Ledger below.',
-    ],
+    Object.keys(evidenceLedgers).toSorted((left, right) => left.localeCompare(right)),
+    requiredChecks.map((row) => row.Check).toSorted((left, right) => left.localeCompare(right)),
   );
   for (const row of requiredChecks) {
     assert.equal(row.Status, 'pending', `${row.Check} remains pending`);
+    assert.ok(evidenceLedgers[row.Check], `${row.Check} has a dedicated evidence ledger row`);
   }
-  assert.equal(
-    parseMarkdownTable(markdownSection(checklist, 'Domain Evidence Ledger'))[0].Domain,
-    'jiso.dev',
+  assert.equal(evidenceLedgers.Domain.Domain, 'jiso.dev');
+  assert.equal(evidenceLedgers['npm scope'].Scope, '@jiso');
+  assert.deepEqual(
+    Object.fromEntries(
+      Object.entries(evidenceLedgers).map(([check, row]) => [
+        check,
+        {
+          date: row.Date,
+          reviewer: row.Reviewer,
+          status: row.Status,
+        },
+      ]),
+    ),
+    {
+      Domain: { date: '2026-06-12', reviewer: 'TBD', status: 'pending' },
+      'Linguistic screen': { date: '2026-06-12', reviewer: 'TBD', status: 'pending' },
+      'Trademark screen': { date: '2026-06-12', reviewer: 'TBD', status: 'pending' },
+      'npm scope': { date: '2026-06-12', reviewer: 'TBD', status: 'pending' },
+    },
   );
-  assert.equal(
-    parseMarkdownTable(markdownSection(checklist, 'npm Scope Evidence Ledger'))[0].Scope,
-    '@jiso',
+  assert.deepEqual(
+    {
+      linguisticMarkets: evidenceLedgers['Linguistic screen']['Markets or languages'],
+      trademarkSources: evidenceLedgers['Trademark screen'].Sources,
+    },
+    {
+      linguisticMarkets: 'TBD',
+      trademarkSources: 'TBD',
+    },
   );
   assert.equal(auditStatuses.Codex, 'packet ready; external evidence pending');
   assert.deepEqual(
@@ -1377,14 +1424,13 @@ void test('pre-launch checklist is tracked explicitly', async () => {
     ['pending', 'pending', 'pending', 'pending'],
   );
   assert.deepEqual(
-    evidenceLedgers.map((row) => row.Status),
+    Object.values(evidenceLedgers).map((row) => row.Status),
     ['pending', 'pending', 'pending', 'pending'],
   );
-  assert.ok(
-    evidenceLedgers.every((row) =>
-      Object.values(row).some((value) => /No .* evidence recorded|No npm organization/.test(value)),
-    ),
-    'each external pre-launch ledger names its missing evidence instead of implying completion',
+  assert.equal(
+    auditRows.filter((row) => row.Status === 'packet ready; external evidence pending').length,
+    1,
+    'packet readiness is recorded separately from external completion',
   );
 });
 
