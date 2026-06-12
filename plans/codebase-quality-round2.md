@@ -1694,6 +1694,17 @@ params, relational API, `execute(sql)`, right/full joins, a string column named 
       `pnpm exec vitest --run packages/runtime/src/inline-loader.test.ts packages/runtime/src/index.test.ts`,
       `pnpm exec vp check packages/runtime/src/inline-loader-build.ts packages/runtime/src/inline-loader.test.ts plans/codebase-quality-round2.md`,
       and `git diff --check`.
+      Additional bounded evidence 2026-06-12: `packages/runtime/package.json` now makes
+      package-local `build` and `check` execute the inline-loader generation/check scripts, so the
+      runtime package fails before stale generated bootstrap source ships. `packages/runtime/src/inline-loader.test.ts`
+      also runs the same trigger, response-application, and enhanced-form parity matrix through
+      readable build source, freshly minified build source, checked-in generated bootstrap source,
+      and the extracted installer. Root build-task integration and a declared external minifier
+      dependency remain open. Same-session evidence:
+      `pnpm --filter @jiso/runtime run build`,
+      `pnpm --filter @jiso/runtime run check:inline-loader`,
+      `pnpm exec vitest --run packages/runtime/src/inline-loader.test.ts`, and
+      `pnpm exec vp check packages/runtime/package.json packages/runtime/src/inline-loader.test.ts plans/codebase-quality-round2.md`.
 - [x] **HIGH — Ship the DOM morph.** The only real keyed DOM morph (focus/selection/scroll
       capture-restore) lives in index.browser.test.ts:12-182; every consumer must rewrite it, and
       the flagship browser test substantially tests its own test code. Promote to a

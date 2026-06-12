@@ -6,7 +6,9 @@
     ".": "./src/index.ts"
   },
   "scripts": {
+    "build": "pnpm run build:inline-loader",
     "build:inline-loader": "node --experimental-strip-types src/inline-loader-build.ts",
+    "check": "pnpm run check:inline-loader",
     "check:inline-loader": "node --experimental-strip-types src/inline-loader-build.ts --check"
   },
   "dependencies": {
