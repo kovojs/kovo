@@ -2050,6 +2050,18 @@ must be "FW406 unresolved," never "silently wrong."
       `pnpm exec vitest --run conformance/drizzle-pin/src/index.test.ts`,
       `pnpm exec vp check packages/drizzle/package.json packages/drizzle/src/runtime-surface.test.ts packages/drizzle/src/index.ts packages/drizzle/src/static.ts plans/codebase-quality-round2.md`,
       and `git diff --check`.
+      Additional bounded evidence 2026-06-12: `packages/drizzle/src/index.ts` now mirrors the
+      runtime entrypoint instead of re-exporting the build-time extractor, so source-level or
+      deep import compatibility paths no longer drag `static.ts`, `graph.ts`, `invalidation.ts`,
+      or `ts-morph` across the runtime seam. `packages/drizzle/src/runtime-surface.test.ts`
+      imports the local barrel and the package root, asserts both expose `jiso()` but not
+      extraction APIs, and keeps `@jiso/drizzle/static` as the only tested extraction subpath
+      under SPEC §10-§11. Same-session evidence:
+      `pnpm exec vitest --run packages/drizzle/src/runtime-surface.test.ts`,
+      `pnpm exec vitest --run packages/drizzle/src`,
+      `pnpm exec vitest --run conformance/drizzle-pin/src/index.test.ts`,
+      `pnpm exec vp check packages/drizzle/src/index.ts packages/drizzle/src/runtime-surface.test.ts plans/codebase-quality-round2.md`,
+      and `git diff --check`.
 - [ ] **LOW** — module-global mutable `sourceExtractionFileId` (:53); fresh ts-morph `Project`
       per `parseSourceFile` call with files re-parsed 3+× per pass (:1457); `IGNORED_LOCAL_CALL_NAMES`
       mixing JS keywords with domain names (:57-71 — a user helper named `insert` is silently

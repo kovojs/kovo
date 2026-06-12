@@ -31,6 +31,7 @@ describe('@jiso/drizzle runtime surface', () => {
   it('keeps the runtime annotation entrypoint separate from static extraction', async () => {
     const runtime = await import('@jiso/drizzle');
     const staticExtraction = await import('@jiso/drizzle/static');
+    const compatibilityBarrel = await import('./index.js');
     const packageJson = drizzlePackageJson();
     const compatibilityBarrelSource = drizzleCompatibilityBarrelSource();
     const runtimeSource = drizzleRuntimeSource();
@@ -38,6 +39,8 @@ describe('@jiso/drizzle runtime surface', () => {
 
     expect(runtime.jiso({ domain: 'cart', key: 'id' }).domain).toBe('cart');
     expect('extractTouchGraphFromSource' in runtime).toBe(false);
+    expect(compatibilityBarrel.jiso({ domain: 'cart', key: 'id' }).domain).toBe('cart');
+    expect('extractTouchGraphFromSource' in compatibilityBarrel).toBe(false);
     expect(staticExtraction.extractTouchGraphFromSource).toBeTypeOf('function');
     expect(packageJson.exports).toEqual({
       '.': './src/runtime.ts',
@@ -55,6 +58,9 @@ describe('@jiso/drizzle runtime surface', () => {
     expect(staticSource).not.toContain('__jiso_source.ts');
     expect(staticSource).toContain('createSourceFile(file.fileName, file.source)');
     expect(compatibilityBarrelSource).not.toContain('ts-morph');
-    expect(compatibilityBarrelSource).toContain("from './static.js'");
+    expect(compatibilityBarrelSource).not.toContain('./static.js');
+    expect(compatibilityBarrelSource).not.toContain('./graph.js');
+    expect(compatibilityBarrelSource).not.toContain('./invalidation.js');
+    expect(compatibilityBarrelSource).toContain("from './runtime.js'");
   });
 });
