@@ -48,19 +48,52 @@ function emitHandlerBody(handler: HandlerLowering): string {
     return `return ${handler.expression}(event, ctx);`;
   }
 
-  const arrowBody = arrowExpressionBody(handler.expression);
+  const arrowBody = arrowFunctionBody(handler.expression);
   if (!arrowBody) return '// unsupported handler expression was preserved as a diagnostic surface';
-  if (arrowBody.startsWith('{') && arrowBody.endsWith('}')) {
-    return lowerHandlerExpression(arrowBody.slice(1, -1).trim(), handler.params);
+  if (arrowBody.kind === 'block') {
+    return lowerHandlerExpression(arrowBody.source, handler.params);
   }
 
-  return `return ${lowerHandlerExpression(arrowBody, handler.params)};`;
+  return `return ${lowerHandlerExpression(arrowBody.source, handler.params)};`;
 }
 
-function arrowExpressionBody(expression: string): string | null {
-  const arrow = /^\(\)\s*=>\s*(?<body>[\s\S]+)$/.exec(expression);
-  const body = arrow?.groups?.body;
-  return body ? body.trim() : null;
+function arrowFunctionBody(
+  expression: string,
+): { kind: 'block' | 'expression'; source: string } | null {
+  const sourceFile = ts.createSourceFile(
+    'handler-expression.ts',
+    `const __jiso_handler__ = ${expression};`,
+    ts.ScriptTarget.Latest,
+    true,
+    ts.ScriptKind.TS,
+  );
+  let body: { kind: 'block' | 'expression'; source: string } | null = null;
+
+  const visit = (node: ts.Node): void => {
+    if (body !== null) return;
+
+    if (ts.isArrowFunction(node) && node.parameters.length === 0) {
+      const expressionBody = node.body;
+      body = ts.isBlock(expressionBody)
+        ? {
+            kind: 'block',
+            source: expressionBody
+              .getSourceFile()
+              .text.slice(expressionBody.getStart(sourceFile) + 1, expressionBody.getEnd() - 1)
+              .trim(),
+          }
+        : {
+            kind: 'expression',
+            source: expressionBody.getText(sourceFile).trim(),
+          };
+      return;
+    }
+
+    ts.forEachChild(node, visit);
+  };
+
+  visit(sourceFile);
+  return body;
 }
 
 function lowerHandlerExpression(expression: string, params: readonly ElementParam[]): string {

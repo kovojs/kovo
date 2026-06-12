@@ -456,6 +456,12 @@ pipeline throws the tree away and communicates via mutated source text.
       string/template literal text. Same-session evidence:
       `pnpm exec vitest --run packages/compiler/src/index.test.ts -t "handler captures|quoted commas|element params|element param types|string literal"` and
       `pnpm exec vp check packages/compiler/src/lower/handlers.ts packages/compiler/src/index.test.ts`.
+      Additional evidence 2026-06-12: client handler emission now reads zero-arg arrow bodies
+      from the TypeScript AST instead of the `() => ...` regex in `emit/client.ts`, so typed
+      arrow handlers such as `(): void => track(item.id)` lower to the same client handler path.
+      Same-session evidence:
+      `pnpm exec vitest --run packages/compiler/src/index.test.ts -t "typed zero-argument|handler captures|quoted commas|element params"` and
+      `pnpm exec vp check packages/compiler/src/emit/client.ts packages/compiler/src/index.test.ts`.
       Additional evidence 2026-06-11: template-stamp client emission no longer regex-parses
       rendered template HTML to find `data-bind` placeholder text. `collectQueryUpdatePlans`
       records item-binding placeholder text from JSX element spans in `QueryTemplateStampFact`,

@@ -308,6 +308,28 @@ export const CartActions = component('cart-actions', {
     );
   });
 
+  it('emits typed zero-argument arrow handlers from the TypeScript AST', () => {
+    const result = compileComponentModule({
+      fileName: 'components/cart/cart-actions.tsx',
+      source: `
+import { component } from '@jiso/core';
+
+export const CartActions = component('cart-actions', {
+  render: () => (
+    <button onClick={(): void => track(item.id)}>Add</button>
+  ),
+});
+`,
+    });
+
+    const serverSource = result.files[0]?.source ?? '';
+    const clientSource = result.files[1]?.source ?? '';
+
+    expect(serverSource).toContain('data-p-id="{item.id}"');
+    expect(clientSource).toContain('return track(ctx.params.id);');
+    expect(clientSource).not.toContain('unsupported handler expression');
+  });
+
   it('does not extract element params from string literal text', () => {
     const result = compileComponentModule({
       fileName: 'components/cart/cart-actions.tsx',
