@@ -8,9 +8,10 @@ import {
   createJisoAppShellBuild,
   createMemoryVersionedClientModuleRegistry,
   createRequestHandler,
-  jisoAppShellVitePlugin,
   jisoAppShellViteManifestAssets,
   jisoAppShellViteManifestHints,
+  jisoAppShellVitePlugin,
+  jisoAppShellViteRouteEntries,
   route,
   type JisoAppShellViteMiddleware,
 } from './index.js';
@@ -41,6 +42,64 @@ describe('server app shell Vite plugin', () => {
       modulepreloads: ['/assets/cart.js', '/assets/shared.js', '/assets/recommendations.js'],
       stylesheets: ['/assets/cart.css', '/assets/theme.css', '/assets/recommendations.css'],
     });
+  });
+
+  it('normalizes route-to-Vite-entry build facts in app route order', () => {
+    const cartRoute = route('/cart', {});
+    const accountRoute = route('/account', {});
+    const entries = jisoAppShellViteRouteEntries(
+      {
+        '/account': 'src/account.client.ts',
+        '/cart': ['src/cart.client.ts', 'assets/cart.js', 'src/cart.client.ts'],
+      },
+      {
+        manifest: {
+          'src/account.client.ts': {
+            file: 'assets/account.js',
+          },
+          'src/cart.client.ts': {
+            file: 'assets/cart.js',
+          },
+        },
+        routes: [cartRoute, accountRoute],
+      },
+    );
+
+    expect(entries).toEqual([
+      { entries: ['src/cart.client.ts', 'assets/cart.js'], routePath: '/cart' },
+      { entries: ['src/account.client.ts'], routePath: '/account' },
+    ]);
+  });
+
+  it('rejects stale route-to-Vite-entry build facts before hint wiring', () => {
+    expect(() =>
+      jisoAppShellViteRouteEntries(
+        {
+          '/missing': 'src/missing.client.ts',
+        },
+        { routes: [route('/cart', {})] },
+      ),
+    ).toThrow('App shell route build entry does not match an app route: /missing');
+  });
+
+  it('rejects route-to-Vite-entry build facts missing from the manifest', () => {
+    expect(() =>
+      jisoAppShellViteRouteEntries(
+        {
+          '/cart': 'src/cart.client.ts',
+        },
+        {
+          manifest: {
+            'src/other.client.ts': {
+              file: 'assets/other.js',
+            },
+          },
+          routes: [route('/cart', {})],
+        },
+      ),
+    ).toThrow(
+      'App shell route build entry is missing from the Vite manifest: /cart -> src/cart.client.ts',
+    );
   });
 
   it('plans deterministic Vite dist assets from the manifest', () => {
@@ -102,7 +161,12 @@ describe('server app shell Vite plugin', () => {
           imports: ['_shared.js'],
         },
       },
-      routeEntries: [{ entries: ['src/cart.client.ts'], routePath: '/cart' }],
+      routeEntries: jisoAppShellViteRouteEntries(
+        {
+          '/cart': 'src/cart.client.ts',
+        },
+        { routes: [cartRoute] },
+      ),
     });
     const module = build.clientModules[0];
     if (!module) throw new Error('expected a compiled client module');

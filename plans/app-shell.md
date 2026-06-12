@@ -56,8 +56,18 @@ Scope: SPEC addition (proposed §9.5 "The request shell"), `@jiso/server` shell 
       covers manifest asset planning, unsafe dist paths, base-aware route hints/assets, and
       built client module metadata; `packages/server/src/index.ts` exports the helper and type.
       Verification: `pnpm exec vitest --run packages/server/src/vite.test.ts`; `pnpm exec vitest --run packages/server/src/vite.test.ts packages/server/src/app.test.ts packages/server/src/static-export.test.ts`; `pnpm run check`.
-      Remaining R5 work: compiler/plugin build hooks must still supply the route-entry mapping,
-      compiled module sources, consume the asset/module plan, and perform dist-file
+      Additional evidence 2026-06-12: `jisoAppShellViteRouteEntries()` now gives compiler/plugin
+      build adapters a shared route-to-Vite-entry mapping helper that normalizes deterministic
+      `routeEntries`, preserves app route order, deduplicates entries, rejects stale route paths,
+      and optionally validates each entry against the Vite manifest before route hints are wired.
+      `packages/server/src/vite.test.ts` proves successful mapping, stale route teaching errors,
+      missing-manifest teaching errors, and `createJisoAppShellBuild()` integration through the
+      helper. Same-session verification ran
+      `pnpm exec vitest --run packages/server/src/vite.test.ts`,
+      `pnpm exec vp check packages/server/src/vite.ts packages/server/src/vite.test.ts packages/server/src/index.ts plans/app-shell.md`,
+      and `git diff --check`.
+      Remaining R5 work: compiler/plugin build hooks must still call the route-entry mapping helper,
+      supply compiled module sources, consume the asset/module plan, and perform dist-file
       emission/copying; this helper intentionally does not infer those facts.
 - [ ] R6 static export: synthetic-request replay to `.html` files with the L0/L1-only constraint and teaching errors for non-exportable routes.
       Progress 2026-06-11: `packages/server/src/static-export.ts` adds the production-shaped

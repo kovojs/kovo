@@ -256,6 +256,7 @@ export {
   jisoAppShellViteManifestAssets,
   jisoAppShellViteManifestHints,
   jisoAppShellVitePlugin,
+  jisoAppShellViteRouteEntries,
 } from './vite.js';
 export type {
   JisoAppShellBuild,
@@ -267,6 +268,7 @@ export type {
   JisoAppShellDevDiagnosticRecord,
   JisoAppShellDevModuleDiagnostics,
   JisoAppShellRouteBuildEntry,
+  JisoAppShellRouteEntryMap,
   JisoAppShellRouteBuildHints,
   JisoAppShellViteDevServer,
   JisoAppShellViteInput,
@@ -276,6 +278,7 @@ export type {
   JisoAppShellViteMiddleware,
   JisoAppShellVitePlugin,
   JisoAppShellVitePluginOptions,
+  JisoAppShellViteRouteEntryOptions,
 } from './vite.js';
 export { exportStaticApp, StaticExportError } from './static-export.js';
 export type {

@@ -71,6 +71,13 @@ export interface JisoAppShellRouteBuildEntry {
   routePath: string;
 }
 
+export type JisoAppShellRouteEntryMap = Readonly<Record<string, string | readonly string[]>>;
+
+export interface JisoAppShellViteRouteEntryOptions {
+  manifest?: JisoAppShellViteManifest;
+  routes?: readonly { path: string }[];
+}
+
 export interface JisoAppShellCompiledClientModule extends Omit<
   VersionedClientModuleInput,
   'version'
@@ -300,6 +307,67 @@ export function jisoAppShellViteManifestHints(
   if (modulepreloads.length > 0) hints.modulepreloads = modulepreloads;
   if (stylesheets.length > 0) hints.stylesheets = stylesheets;
   return hints;
+}
+
+export function jisoAppShellViteRouteEntries(
+  routeEntryMap: JisoAppShellRouteEntryMap,
+  options: JisoAppShellViteRouteEntryOptions = {},
+): JisoAppShellRouteBuildEntry[] {
+  const knownRoutes = options.routes
+    ? new Set(options.routes.map((route) => route.path))
+    : undefined;
+  const mapped = new Map<string, string[]>();
+
+  for (const [routePath, rawEntries] of Object.entries(routeEntryMap)) {
+    if (!routePath.startsWith('/')) {
+      throw new Error(`App shell route build entry must use an absolute route path: ${routePath}`);
+    }
+    if (knownRoutes && !knownRoutes.has(routePath)) {
+      throw new Error(`App shell route build entry does not match an app route: ${routePath}`);
+    }
+
+    const entries = Array.isArray(rawEntries) ? rawEntries : [rawEntries];
+    if (entries.length === 0) {
+      throw new Error(
+        `App shell route build entry must include at least one Vite entry: ${routePath}`,
+      );
+    }
+
+    const normalizedEntries: string[] = [];
+    for (const entry of entries) {
+      const normalizedEntry = entry.trim();
+      if (normalizedEntry.length === 0) {
+        throw new Error(
+          `App shell route build entry must include a non-empty Vite entry: ${routePath}`,
+        );
+      }
+      if (options.manifest && !resolveManifestChunk(options.manifest, normalizedEntry)) {
+        throw new Error(
+          `App shell route build entry is missing from the Vite manifest: ${routePath} -> ${normalizedEntry}`,
+        );
+      }
+      addUnique(normalizedEntries, normalizedEntry);
+    }
+
+    mapped.set(routePath, normalizedEntries);
+  }
+
+  if (options.routes) {
+    const ordered: JisoAppShellRouteBuildEntry[] = [];
+    const seenRoutePaths = new Set<string>();
+    for (const route of options.routes) {
+      if (seenRoutePaths.has(route.path)) continue;
+      seenRoutePaths.add(route.path);
+
+      const entries = mapped.get(route.path);
+      if (entries) ordered.push({ entries, routePath: route.path });
+    }
+    return ordered;
+  }
+
+  return [...mapped.entries()]
+    .sort(([left], [right]) => left.localeCompare(right))
+    .map(([routePath, entries]) => ({ entries, routePath }));
 }
 
 export function createJisoAppShellBuild(options: JisoAppShellBuildOptions): JisoAppShellBuild {
