@@ -829,6 +829,12 @@ params, relational API, `execute(sql)`, right/full joins, a string column named 
       `pnpm exec vitest --run packages/runtime/src/index.test.ts -t "optimistic|mutation query chunks|enhanced mutations|deferred|apply"`
       and
       `pnpm exec vp check packages/runtime/src/index.ts packages/runtime/src/apply-path.ts plans/codebase-quality-round2.md`.
+      Additional evidence 2026-06-12: `bindingAttributes` no longer accepts plain object
+      attribute maps for test fakes; `FakeQueryPlanElement` now exposes ArrayLike DOM-shaped
+      attributes, removing the test-only production branch while preserving data-bind attribute
+      updates. Same-session evidence:
+      `pnpm exec vitest --run packages/runtime/src/index.test.ts -t "data-bind|compiled query update plans"` and
+      `pnpm exec vp check packages/runtime/src/index.ts packages/runtime/src/index.test.ts plans/codebase-quality-round2.md`.
 - [ ] **LOW** — `hydratedQueries` frozen at install (index.ts:330-342): queries introduced by
       later mutations never become refetch-eligible — fix or document as SPEC-intended;
       `unescapeHtml` missing `&#39;`/`&apos;` (wire-parser.ts:162-168) — pin the server↔runtime

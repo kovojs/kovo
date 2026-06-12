@@ -1819,12 +1819,6 @@ function bindingAttributes(element: QueryBindingElement): Array<{ name: string; 
       .filter((attribute) => attribute.name.startsWith('data-bind:') && attribute.value !== '');
   }
 
-  if (typeof attributes === 'object' && attributes !== null) {
-    return Object.entries(attributes)
-      .map(([name, value]) => ({ name, value: String(value) }))
-      .filter((attribute) => attribute.name.startsWith('data-bind:') && attribute.value !== '');
-  }
-
   return [];
 }
 

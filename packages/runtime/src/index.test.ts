@@ -236,7 +236,7 @@ class FakeMorphRoot {
 }
 
 class FakeQueryPlanElement {
-  attributes: Record<string, string>;
+  attributes: { name: string; value: string }[];
   textContent: string | null;
   value?: string;
 
@@ -244,7 +244,7 @@ class FakeQueryPlanElement {
     attributes: Record<string, string>,
     options: { textContent?: string | null; value?: string } = {},
   ) {
-    this.attributes = { ...attributes };
+    this.attributes = Object.entries(attributes).map(([name, value]) => ({ name, value }));
     this.textContent = options.textContent ?? null;
     if (options.value !== undefined) {
       this.value = options.value;
@@ -252,25 +252,31 @@ class FakeQueryPlanElement {
   }
 
   getAttribute(name: string): string | null {
-    return this.attributes[name] ?? null;
+    return this.attributes.find((attribute) => attribute.name === name)?.value ?? null;
   }
 
   matches(selector: string): boolean {
     const exactAttribute = /^\[([^=\]]+)="([^"]*)"\]$/.exec(selector);
     if (exactAttribute) {
-      return this.attributes[exactAttribute[1] ?? ''] === exactAttribute[2];
+      return this.getAttribute(exactAttribute[1] ?? '') === exactAttribute[2];
     }
 
     const presentAttribute = /^\[([^=\]]+)\]$/.exec(selector);
-    return presentAttribute ? this.attributes[presentAttribute[1] ?? ''] !== undefined : false;
+    return presentAttribute ? this.getAttribute(presentAttribute[1] ?? '') !== null : false;
   }
 
   removeAttribute(name: string): void {
-    delete this.attributes[name];
+    this.attributes = this.attributes.filter((attribute) => attribute.name !== name);
   }
 
   setAttribute(name: string, value: string): void {
-    this.attributes[name] = value;
+    const existing = this.attributes.find((attribute) => attribute.name === name);
+    if (existing) {
+      existing.value = value;
+      return;
+    }
+
+    this.attributes.push({ name, value });
   }
 }
 
