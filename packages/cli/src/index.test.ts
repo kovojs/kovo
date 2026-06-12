@@ -1366,6 +1366,39 @@ describe('fw explain', () => {
     });
   });
 
+  it('prints package prefix provenance for a prefixed component target', () => {
+    expect(
+      fwExplain(
+        {
+          components: [
+            {
+              fragments: ['jiso-dialog'],
+              name: 'JisoDialog',
+              queries: ['dialogState'],
+            },
+          ],
+          packageComponentPrefixes: [
+            {
+              packageName: '@jiso/headless-ui',
+              prefix: 'jiso-',
+            },
+          ],
+        },
+        { kind: 'component', target: 'jiso-dialog' },
+      ),
+    ).toEqual({
+      exitCode: 0,
+      output: [
+        'fw-explain/v1',
+        'COMPONENT JisoDialog',
+        'provenance: package=@jiso/headless-ui prefix=jiso- effective-prefix=jiso- source=package-prefix-fact',
+        'queries: dialogState',
+        'fragments: jiso-dialog',
+        '',
+      ].join('\n'),
+    });
+  });
+
   it('explains mutation guards, writes, invalidations, and optimistic coverage', () => {
     expect(
       fwExplain(

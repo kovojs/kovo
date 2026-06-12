@@ -33,4 +33,17 @@ describe('fw graph input validation', () => {
       },
     ]);
   });
+
+  it('requires package component prefix facts to be an array', () => {
+    expect(
+      validateFwExplainInput({
+        packageComponentPrefixes: { packageName: '@jiso/headless-ui', prefix: 'jiso-' },
+      }),
+    ).toEqual([
+      {
+        message: 'packageComponentPrefixes must be an array',
+        path: 'packageComponentPrefixes',
+      },
+    ]);
+  });
 });

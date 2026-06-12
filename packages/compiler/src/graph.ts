@@ -9,6 +9,7 @@ import {
   parseComponentModule as parseComponentModuleModel,
   type ComponentModuleModel,
 } from './scan/parse.js';
+import type { PackageComponentPrefixFact } from './validate/package-prefixes.js';
 
 export type ComponentGraphFact = Pick<ComponentExplain, 'fragments' | 'name' | 'queries'>;
 
@@ -30,7 +31,7 @@ export type RegistryTypeFacts = Readonly<Record<string, string>>;
 
 export type RegistryGraphInput = Pick<
   FwExplainInput,
-  'components' | 'mutations' | 'pages' | 'queries'
+  'components' | 'mutations' | 'packageComponentPrefixes' | 'pages' | 'queries'
 >;
 
 interface CompileGraphComponentInput {
@@ -45,6 +46,7 @@ export interface RegistryTypeFactOptions {
 export interface CompileAppGraphOptions {
   components?: readonly CompileGraphComponentInput[];
   graph?: RegistryGraphInput;
+  packageComponentPrefixes?: readonly PackageComponentPrefixFact[];
   registryTypes?: RegistryTypeFactOptions;
 }
 
@@ -54,12 +56,17 @@ export interface CompileAppGraphResult {
 }
 
 export function deriveAppGraph(options: CompileAppGraphOptions): CompileAppGraphResult {
+  const packageComponentPrefixes = [
+    ...(options.graph?.packageComponentPrefixes ?? []),
+    ...(options.packageComponentPrefixes ?? []),
+  ];
   const graph: RegistryGraphInput = {
     ...options.graph,
     components: [
       ...(options.graph?.components ?? []),
       ...(options.components ?? []).flatMap((component) => component.componentGraphFacts),
     ],
+    ...(packageComponentPrefixes.length > 0 ? { packageComponentPrefixes } : {}),
   };
 
   return {

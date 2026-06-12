@@ -56,7 +56,14 @@ export interface FwCheckInput {
 export interface FwExplainInput extends FwCheckInput {
   components?: readonly ComponentExplain[];
   mutations?: readonly MutationExplain[];
+  packageComponentPrefixes?: readonly PackageComponentPrefixExplain[];
   pages?: readonly PageExplain[];
+}
+
+export interface PackageComponentPrefixExplain {
+  effectivePrefix?: string;
+  packageName: string;
+  prefix?: string | null;
 }
 
 export interface ComponentExplain {
@@ -260,6 +267,7 @@ const arrayFields = [
   'mutations',
   'optimistic',
   'ownerDomains',
+  'packageComponentPrefixes',
   'pages',
   'queryData',
   'queries',

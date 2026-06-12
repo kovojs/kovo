@@ -23,6 +23,7 @@ export type {
   HandlerExplain,
   MutationExplain,
   OptimisticCoverage,
+  PackageComponentPrefixExplain,
   OwnerDomainFact,
   PageExplain,
   PageMetaExplain,

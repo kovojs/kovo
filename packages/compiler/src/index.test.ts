@@ -555,6 +555,30 @@ export const ProductGrid = component('product-grid', {
     expect(result.diagnostics).toEqual([]);
   });
 
+  it('carries explicit package prefix facts into the app explain graph', () => {
+    const derived = deriveAppGraph({
+      graph: {
+        components: [{ name: 'JisoDialog' }],
+      },
+      packageComponentPrefixes: [
+        {
+          packageName: '@jiso/headless-ui',
+          prefix: 'jiso-',
+        },
+      ],
+    });
+
+    expect(derived.graph).toEqual({
+      components: [{ name: 'JisoDialog' }],
+      packageComponentPrefixes: [
+        {
+          packageName: '@jiso/headless-ui',
+          prefix: 'jiso-',
+        },
+      ],
+    });
+  });
+
   it('reports FW234 when non-jiso packages use the reserved jiso prefix family', () => {
     const result = compileComponentModule({
       fileName: 'components/shell.tsx',

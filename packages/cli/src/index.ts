@@ -7,6 +7,7 @@ import {
   diagnosticDefinitionText,
   diagnosticDefinitions,
   validateFwExplainInput,
+  type ComponentExplain,
   type DiagnosticCode,
   type DiagnosticSeverity,
   type EndpointExplain,
@@ -17,6 +18,7 @@ import {
   type GraphInputValidationError,
   type MutationExplain,
   type OptimisticCoverage,
+  type PackageComponentPrefixExplain,
   type QueryReadSet,
   type QueryDataFact,
   type RenderEquivalenceCheck,
@@ -278,10 +280,12 @@ export function fwExplain(input: FwExplainInput, options: FwExplainOptions): FwC
   }
 
   if (options.kind === 'component') {
-    const component = input.components?.find((item) => item.name === options.target);
+    const component = findComponentExplain(input.components, options.target);
     if (!component) return notFound(options);
+    const provenance = componentPrefixProvenance(component, options.target, input);
 
     lines.push(`COMPONENT ${component.name}`);
+    if (provenance) lines.push(provenance);
     lines.push(`queries: ${list(component.queries)}`);
     lines.push(`fragments: ${list(component.fragments)}`);
 
@@ -795,6 +799,64 @@ function notFound(options: FwTargetExplainOptions): FwCheckResult {
 
 function list(values: readonly string[] | undefined): string {
   return values && values.length > 0 ? values.join(',') : '-';
+}
+
+function findComponentExplain(
+  components: readonly ComponentExplain[] | undefined,
+  target: string,
+): ComponentExplain | undefined {
+  return components?.find(
+    (component) => component.name === target || componentWireName(component.name) === target,
+  );
+}
+
+function componentPrefixProvenance(
+  component: ComponentExplain,
+  target: string,
+  input: FwExplainInput,
+): string | null {
+  const wireName = target.includes('-') ? target : componentWireName(component.name);
+  const owner = packagePrefixOwner(input.packageComponentPrefixes, wireName);
+  if (!owner) return null;
+
+  const effectivePrefix = owner.effectivePrefix ?? owner.prefix;
+  if (!effectivePrefix) return null;
+
+  return [
+    'provenance:',
+    `package=${owner.packageName}`,
+    `prefix=${owner.prefix ?? '-'}`,
+    `effective-prefix=${effectivePrefix}`,
+    'source=package-prefix-fact',
+  ].join(' ');
+}
+
+function packagePrefixOwner(
+  facts: readonly PackageComponentPrefixExplain[] | undefined,
+  wireName: string,
+): PackageComponentPrefixExplain | null {
+  const candidates = (facts ?? [])
+    .filter((fact) => {
+      const effectivePrefix = fact.effectivePrefix ?? fact.prefix;
+      return Boolean(effectivePrefix && wireName.startsWith(effectivePrefix));
+    })
+    .sort((left, right) => {
+      const leftPrefix = left.effectivePrefix ?? left.prefix ?? '';
+      const rightPrefix = right.effectivePrefix ?? right.prefix ?? '';
+      return (
+        rightPrefix.length - leftPrefix.length || left.packageName.localeCompare(right.packageName)
+      );
+    });
+
+  return candidates[0] ?? null;
+}
+
+function componentWireName(name: string): string {
+  return name
+    .replace(/([a-z0-9])([A-Z])/g, '$1-$2')
+    .replace(/([A-Z])([A-Z][a-z])/g, '$1-$2')
+    .replace(/[_\s]+/g, '-')
+    .toLowerCase();
 }
 
 function isExplainKind(value: string | undefined): value is ExplainKind {
