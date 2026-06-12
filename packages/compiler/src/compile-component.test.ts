@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import { assertFixpoint, assertRenderEquivalence, compileComponentModule } from './index.js';
 import { renderEquivalenceCheck } from './emit/server.js';
+import { compileFixture } from './test-support.js';
 
 const cartBadgeSource = `
 import { component } from '@jiso/core';
@@ -29,36 +30,37 @@ function escapeRegExp(value: string): string {
 
 describe('compileComponentModule', () => {
   it('emits one server file, one client file, and registry metadata', () => {
-    const result = compileComponentModule({
+    const result = compileFixture({
       fileName: 'components/cart/cart-badge.tsx',
       source: cartBadgeSource,
     });
+    const { client, registry, server } = result.filesByKind;
 
     expect(result.files.map((file) => file.fileName)).toEqual([
       'components/cart/cart-badge.server.js',
       'components/cart/cart-badge.client.js',
       'generated/registries.d.ts',
     ]);
-    expect(result.files[1]?.source).toContain('export const CartBadge$button_click');
-    expect(result.files[1]?.source).toContain('return removeItem(ctx.state, ctx.params.id);');
-    expect(result.files[1]?.source).toContain('import { applyCompiledQueryUpdatePlan, handler }');
-    expect(result.files[1]?.source).toContain('export const CartBadge$queryUpdatePlans');
+    expect(client?.source).toContain('export const CartBadge$button_click');
+    expect(client?.source).toContain('return removeItem(ctx.state, ctx.params.id);');
+    expect(client?.source).toContain('import { applyCompiledQueryUpdatePlan, handler }');
+    expect(client?.source).toContain('export const CartBadge$queryUpdatePlans');
     expectHandlerRef(
-      result.files[0]?.source ?? '',
+      server?.source ?? '',
       '/c/components/cart/cart-badge.client.js',
       'CartBadge$button_click',
     );
-    expect(result.files[0]?.source).toContain('data-p-id="{item.id}"');
-    expect(result.files[2]?.source).toContain(
+    expect(server?.source).toContain('data-p-id="{item.id}"');
+    expect(registry?.source).toContain(
       "'#cart-badge': typeof import('../components/cart/cart-badge.client.js');",
     );
-    expect(result.files[2]?.source).toContain("'cart-badge': {};");
-    expect(result.files[2]?.source).toContain("'CartBadge:cart': readonly ['cart.count'];");
+    expect(registry?.source).toContain("'cart-badge': {};");
+    expect(registry?.source).toContain("'CartBadge:cart': readonly ['cart.count'];");
     expect(() => assertRenderEquivalence(result)).not.toThrow();
   });
 
   it('emits scoped CSS artifacts for static co-located component CSS', () => {
-    const result = compileComponentModule({
+    const result = compileFixture({
       fileName: 'components/cart/cart-badge.tsx',
       source: `
 import { component } from '@jiso/core';
@@ -73,6 +75,7 @@ export const CartBadge = component('cart-badge', {
 });
 `,
     });
+    const { client, css, registry, server } = result.filesByKind;
 
     expect(result.files.map((file) => file.fileName)).toEqual([
       'components/cart/cart-badge.server.js',
@@ -80,7 +83,7 @@ export const CartBadge = component('cart-badge', {
       'components/cart/cart-badge.css',
       'generated/registries.d.ts',
     ]);
-    expect(result.files.find((file) => file.fileName.endsWith('.css'))?.source).toBe(
+    expect(css?.source).toBe(
       [
         '/* @jiso-ir */',
         '/* @jiso-scope-fallback */',
@@ -103,10 +106,10 @@ export const CartBadge = component('cart-badge', {
         sourceFileName: 'components/cart/cart-badge.css',
       },
     ]);
-    expect(result.files[0]?.source).toContain('export function renderSource()');
-    expect(result.files[1]?.source).toContain('// no client handlers emitted');
-    expect(result.files[3]?.source).toContain("'cart-badge': {};");
-    expect(result.files[3]?.source).toContain(
+    expect(server?.source).toContain('export function renderSource()');
+    expect(client?.source).toContain('// no client handlers emitted');
+    expect(registry?.source).toContain("'cart-badge': {};");
+    expect(registry?.source).toContain(
       "'CartBadge': { href: '/assets/components/cart/cart-badge.css'; sourceFileName: 'components/cart/cart-badge.css'; fragmentTargets: readonly ['cart-badge']; };",
     );
     expect(() => assertFixpoint(result)).not.toThrow();
@@ -160,7 +163,7 @@ export const CartBadge = component('cart-badge', {
   });
 
   it('scopes native-host component CSS to the fw-c identity stamp', () => {
-    const result = compileComponentModule({
+    const result = compileFixture({
       fileName: 'components/cart/cart-row.tsx',
       source: `
 import { component } from '@jiso/core';
@@ -174,17 +177,17 @@ export const CartRow = component('cart-row', {
 `,
     });
 
-    expect(result.files.find((file) => file.fileName.endsWith('.css'))?.source).toContain(
+    expect(result.filesByKind.css?.source).toContain(
       '@scope ([fw-c="cart-row"]) to (:scope [fw-c])',
     );
-    expect(result.files.find((file) => file.fileName.endsWith('.css'))?.source).toContain(
+    expect(result.filesByKind.css?.source).toContain(
       '[fw-c="cart-row"] td:not([fw-c]):not([fw-c] *) { padding: 0.5rem; }',
     );
     expect(() => assertFixpoint(result)).not.toThrow();
   });
 
   it('scopes CSS to the returned host instead of tag text inside render bodies', () => {
-    const result = compileComponentModule({
+    const result = compileFixture({
       fileName: 'components/cart/cart-badge.tsx',
       source: `
 import { component } from '@jiso/core';
@@ -202,7 +205,7 @@ export const CartBadge = component('cart-badge', {
 `,
     });
 
-    const cssSource = result.files.find((file) => file.fileName.endsWith('.css'))?.source ?? '';
+    const cssSource = result.filesByKind.css?.source ?? '';
     expect(cssSource).toContain('@scope ([fw-c="cart-badge"]) to (:scope [fw-c])');
     expect(cssSource).toContain(
       '[fw-c="cart-badge"] button:not([fw-c]):not([fw-c] *) { color: teal; }',
@@ -232,12 +235,12 @@ export const CartBadge = component('cart-badge', {
   });
 
   it('emits empty registry fact surfaces when no facts are provided', () => {
-    const result = compileComponentModule({
+    const result = compileFixture({
       fileName: 'components/cart/cart-badge.tsx',
       source: cartBadgeSource,
     });
 
-    const registry = result.files[2]?.source ?? '';
+    const registry = result.filesByKind.registry?.source ?? '';
     expect(registry).toMatch(/export interface QueryRegistry \{\n\n\}/);
     expect(registry).toMatch(/export interface MutationRegistry \{\n\n\}/);
     expect(registry).toMatch(/export interface RouteRegistry \{\n\n\}/);
