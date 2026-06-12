@@ -120,9 +120,17 @@ Do this first or pay it on every commit.
       parses `packages/create-jiso/templates/package.json` and `graph.json`, asserts starter
       graph structure, exercises the real template graph through `fwCheck`/`fwExplain`, evaluates
       the starter Vite task graph, parses CI run steps, CSS `@source` directives, HTML entrypoint
-      tags, and generated client bootstrap imports/object wiring, and executes
+      tags, executable generated client bootstrap wiring, and executes
       `pnpm exec vitest --run packages/create-jiso/src/index.test.ts` for scaffold file count,
-      Vite bin resolution, and generated CSS output coverage.
+      Vite bin resolution, generated CSS output coverage, and executable client bootstrap wiring.
+      Partial evidence 2026-06-12: the P10 starter client bootstrap tranche now transpiles and
+      executes `packages/create-jiso/templates/src/client.ts` with runtime/browser shims, then
+      asserts `installJisoLoader`, enhanced mutation fetch, fragment target collection, and
+      deferred stream wiring behavior directly instead of parsing runtime import names or object
+      keys from template source.
+      Verification: `node --test --test-name-pattern "P10 starter wires graph assertions into CI" tests/fw-check.node.mjs`,
+      `pnpm exec vp check tests/fw-check.node.mjs plans/codebase-quality-round2.md`, and
+      `git diff --check`.
       Partial evidence 2026-06-12: the P10 starter emit-graph tranche now runs
       `packages/create-jiso/templates/scripts/emit-graph.mjs` in an isolated temp template and
       asserts `emit-graph/v1` plus parsed graph equality instead of grepping the emitter import

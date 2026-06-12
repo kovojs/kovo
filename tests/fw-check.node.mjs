@@ -475,29 +475,6 @@ const balancedSnippetAfter = (source, marker, open, close) => {
   assert.fail(`source contains balanced ${open}${close} after ${marker}`);
 };
 
-const objectKeysFromSnippet = (snippet) => {
-  const keys = [];
-
-  for (const match of snippet.matchAll(/(?:^|[,{])\s*([A-Za-z_$][\w$]*)\s*:/g)) {
-    keys.push(match[1]);
-  }
-
-  return keys;
-};
-
-const objectEntriesFromSnippet = (snippet) => {
-  const keys = [];
-
-  for (const line of snippet.split('\n')) {
-    const match = /^\s*([A-Za-z_$][\w$]*)\s*(?::|,)/.exec(line);
-    if (match) {
-      keys.push(match[1]);
-    }
-  }
-
-  return keys;
-};
-
 class GateMorphTarget {
   constructor(html = '') {
     this.html = html;
@@ -657,14 +634,84 @@ const executeGeneratedBootstrapModule = (source, planModules) => {
   return { calls, deferredApplications, documentRoot, exports, store };
 };
 
-const assignmentExpressionsFromSource = (source) =>
-  source
-    .split('\n')
-    .map((line) => {
-      const match = /^\s*([^=]+?)\s*=\s*(.+?);?\s*$/.exec(line);
-      return match ? { target: match[1].trim(), value: match[2].trim() } : undefined;
-    })
-    .filter(Boolean);
+const executeStarterClientTemplate = async (source) => {
+  const ts = await import('typescript');
+  const appendCalls = [];
+  const deferredApplications = [];
+  const fetchCalls = [];
+  const loaderInstalls = [];
+  const queryStore = { kind: 'starter-query-store' };
+  const module = { exports: {} };
+  const fragmentById = {
+    'cart-badge': {
+      innerHTML: '<cart-badge>0</cart-badge>',
+      insertAdjacentHTML(position, html) {
+        appendCalls.push([position, html]);
+      },
+    },
+  };
+  const documentRoot = {
+    getElementById(id) {
+      return fragmentById[id] ?? null;
+    },
+    querySelector(selector) {
+      return selector === '[fw-fragment-target="cart-list"]'
+        ? {
+            innerHTML: '<ul></ul>',
+            insertAdjacentHTML(position, html) {
+              appendCalls.push([position, html]);
+            },
+          }
+        : null;
+    },
+    querySelectorAll() {
+      return [];
+    },
+  };
+  const runtime = {
+    applyDeferredStreamResponseToDom(options) {
+      deferredApplications.push(options);
+      return { applied: true };
+    },
+    createQueryStore() {
+      return queryStore;
+    },
+    installJisoLoader(options) {
+      loaderInstalls.push(options);
+    },
+  };
+  const compiled = ts.transpileModule(source, {
+    compilerOptions: {
+      module: ts.ModuleKind.CommonJS,
+      target: ts.ScriptTarget.ES2022,
+    },
+  }).outputText;
+
+  runInNewContext(compiled, {
+    CSS: { escape: (value) => value },
+    document: documentRoot,
+    exports: module.exports,
+    fetch(url, options) {
+      fetchCalls.push([url, options]);
+      return { ok: true };
+    },
+    module,
+    require(specifier) {
+      if (specifier === '@jiso/runtime') return runtime;
+      assert.fail(`unexpected starter client import ${specifier}`);
+    },
+  });
+
+  return {
+    appendCalls,
+    deferredApplications,
+    documentRoot,
+    exports: module.exports,
+    fetchCalls,
+    loaderInstalls,
+    queryStore,
+  };
+};
 
 const importedNamesFrom = (source, specifier) => {
   const names = new Set();
@@ -3616,34 +3663,71 @@ void test('P10 starter wires graph assertions into CI', async () => {
     'compileComponentModule',
   ]);
 
-  assert.deepEqual(importedNamesFrom(clientSource, '@jiso/runtime'), [
-    'applyDeferredStreamResponseToDom',
-    'createQueryStore',
-    'EnhancedMutationFetch',
-    'installJisoLoader',
-    'MorphRoot',
-    'TargetCollectorRoot',
-  ]);
-  assert.deepEqual(
-    objectKeysFromSnippet(
-      balancedSnippetAfter(clientSource, 'installJisoLoader({', '{', '}'),
-    ).filter((key) => ['enhancedMutations', 'importModule', 'queryStore', 'root'].includes(key)),
-    ['importModule', 'root', 'queryStore', 'enhancedMutations'],
+  const starterClient = await executeStarterClientTemplate(clientSource);
+  assert.equal(starterClient.loaderInstalls.length, 1);
+  const loaderOptions = starterClient.loaderInstalls[0];
+  assert.equal(typeof loaderOptions.importModule, 'function');
+  assert.equal(loaderOptions.root, starterClient.documentRoot);
+  assert.equal(loaderOptions.queryStore, starterClient.queryStore);
+  assert.equal(loaderOptions.enhancedMutations.store, starterClient.queryStore);
+  assert.equal(typeof loaderOptions.enhancedMutations.fetch, 'function');
+  assert.equal(typeof loaderOptions.enhancedMutations.queryPlans, 'object');
+  const fragmentTarget = loaderOptions.enhancedMutations.root.findFragmentTarget('cart-badge');
+  assert.equal(fragmentTarget.readHtml(), '<cart-badge>0</cart-badge>');
+  fragmentTarget.replaceWithHtml('<cart-badge>1</cart-badge>');
+  assert.equal(fragmentTarget.readHtml(), '<cart-badge>1</cart-badge>');
+  loaderOptions.enhancedMutations.root.findFragmentTarget('cart-list').appendHtml('<li>p1</li>');
+  assert.deepEqual(starterClient.appendCalls, [['beforeend', '<li>p1</li>']]);
+  assert.equal(
+    loaderOptions.enhancedMutations.fetch('/_m/cart/add', {
+      body: 'productId=p1',
+      headers: { Accept: 'text/vnd.jiso.fragment+html' },
+      keepalive: true,
+      method: 'POST',
+    }).ok,
+    true,
   );
+  assert.equal(starterClient.fetchCalls.length, 1);
+  const [[fetchUrl, fetchOptions]] = starterClient.fetchCalls;
+  assert.equal(fetchUrl, '/_m/cart/add');
   assert.deepEqual(
-    objectEntriesFromSnippet(
-      balancedSnippetAfter(clientSource, 'enhancedMutations', '{', '}'),
-    ).filter((key) => ['fetch', 'queryPlans', 'root', 'store'].includes(key)),
-    ['fetch', 'queryPlans', 'root', 'store'],
+    {
+      body: fetchOptions.body,
+      headers: { ...fetchOptions.headers },
+      keepalive: fetchOptions.keepalive,
+      method: fetchOptions.method,
+    },
+    {
+      body: 'productId=p1',
+      headers: { Accept: 'text/vnd.jiso.fragment+html' },
+      keepalive: true,
+      method: 'POST',
+    },
   );
   assert.equal(
-    assignmentExpressionsFromSource(clientSource).some(
-      (assignment) =>
-        assignment.target.endsWith('innerHTML') &&
-        assignment.value.startsWith('App.definition.render'),
-    ),
-    false,
+    starterClient.exports.applyJisoDeferredStreamResponse('<fw-fragment></fw-fragment>', {
+      boundary: 'starter-boundary',
+      morph: 'structural',
+    }).applied,
+    true,
   );
+  assert.equal(starterClient.deferredApplications.length, 1);
+  const [deferredApplication] = starterClient.deferredApplications;
+  assert.deepEqual(
+    {
+      body: deferredApplication.body,
+      boundary: deferredApplication.boundary,
+      morph: deferredApplication.morph,
+    },
+    {
+      body: '<fw-fragment></fw-fragment>',
+      boundary: 'starter-boundary',
+      morph: 'structural',
+    },
+  );
+  assert.equal(deferredApplication.queryPlans, loaderOptions.enhancedMutations.queryPlans);
+  assert.equal(deferredApplication.root, loaderOptions.enhancedMutations.root);
+  assert.equal(deferredApplication.store, starterClient.queryStore);
 
   assert.deepEqual(parseCssSourceDirectives(stylesSource), [
     '"../index.html"',
