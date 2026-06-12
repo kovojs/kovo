@@ -393,14 +393,31 @@ describe('commerce example', () => {
     );
   });
 
-  it('does not fall back to starter commerce data when loading product queries', async () => {
+  it('loads every declared query from a custom request database instead of starter data', async () => {
     const db = createCommerceDb();
     db.products = new Map([['custom', { id: 'custom', stock: 42, unitPrice: 777 }]]);
+    db.cartItems = [
+      { productId: 'custom', qty: 4, unitPrice: 777 },
+      { productId: 'custom', qty: 6, unitPrice: 777 },
+    ];
+    db.orders = [
+      {
+        id: 'custom-order',
+        productId: 'custom',
+        qty: 10,
+        total: 7770,
+        userId: 'u-custom-query',
+      },
+    ];
     const request = { db, session: { id: 's-custom-query', user: { id: 'u-custom-query' } } };
 
+    await expect(Promise.resolve(cartQuery.load({}, { request }))).resolves.toEqual({ count: 10 });
     await expect(Promise.resolve(productGridQuery.load({}, { request }))).resolves.toEqual({
       items: [{ id: 'custom', stock: 42, unitPrice: 777 }],
       nextCursor: null,
+    });
+    await expect(Promise.resolve(orderHistoryQuery.load({}, { request }))).resolves.toEqual({
+      items: db.orders,
     });
   });
 
