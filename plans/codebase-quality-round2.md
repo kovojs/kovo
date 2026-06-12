@@ -239,6 +239,16 @@ Do this first or pay it on every commit.
       adopt-dont-invent features|P9 verification layer evidence remains represented|S1 production
       build|D10 seeded diagnostics gate Vite, static export, and MCP red-green surfaces|P3 Drizzle
       query facts" tests/fw-check.node.mjs`.
+      Partial evidence 2026-06-12: generated/wire artifact closure now parses document
+      head/body regions, query script payloads, deferred fragment target blocks, wire response
+      content-type facts, commerce update targets, and derived registry facts instead of using
+      raw `.includes()` membership checks or SSE body/name regex filters in
+      `tests/fw-check.node.mjs`.
+      Same-session evidence:
+      `node --test --test-name-pattern "SSE remains a v2 backlog fixture|P10 commerce invalidation is expressed through graph facts|P10 commerce graph assertions answer behavior mechanically|P3 server renders initial query scripts" tests/fw-check.node.mjs`,
+      `node --test --test-name-pattern "D3 deferred stream responses are consumed by the runtime" tests/fw-check.node.mjs`,
+      `pnpm exec vp check tests/fw-check.node.mjs plans/codebase-quality-round2.md`,
+      and `git diff --check`.
       Partial evidence 2026-06-11: the P9 `@jiso/test` harness tranche now imports the built
       harness APIs and exercises mutation execution/CSRF, write/read verification, PGlite raw
       handle and transaction proxying, exempt table behavior, nested SQL read/write extraction,

@@ -539,6 +539,51 @@ const parseHtmlElements = (source) => {
   return elements;
 };
 
+const parseHtmlElementBlocks = (source, tagName) => {
+  const blocks = [];
+  const openNeedle = `<${tagName}`;
+  const closeNeedle = `</${tagName}>`;
+  let cursor = 0;
+
+  while (cursor < source.length) {
+    const openStart = source.indexOf(openNeedle, cursor);
+    if (openStart === -1) break;
+
+    const openEnd = source.indexOf('>', openStart);
+    assert.notEqual(openEnd, -1, `${tagName} opening tag is closed`);
+
+    const closeStart = source.indexOf(closeNeedle, openEnd + 1);
+    assert.notEqual(closeStart, -1, `${tagName} closing tag is present`);
+
+    const [element] = parseHtmlElements(source.slice(openStart, openEnd + 1));
+    assert.ok(element, `${tagName} opening tag parses as an HTML element`);
+    blocks.push({
+      attributes: element.attributes,
+      innerHTML: source.slice(openEnd + 1, closeStart),
+      tagName: element.tagName,
+    });
+    cursor = closeStart + closeNeedle.length;
+  }
+
+  return blocks;
+};
+
+const parseDocumentRegions = (source) => {
+  const htmlBlocks = parseHtmlElementBlocks(source, 'html');
+  const headBlocks = parseHtmlElementBlocks(source, 'head');
+  const bodyBlocks = parseHtmlElementBlocks(source, 'body');
+
+  assert.equal(htmlBlocks.length, 1, 'document has one html root');
+  assert.equal(headBlocks.length, 1, 'document has one head region');
+  assert.equal(bodyBlocks.length, 1, 'document has one body region');
+
+  return {
+    body: bodyBlocks[0].innerHTML,
+    head: headBlocks[0].innerHTML,
+    html: htmlBlocks[0].innerHTML,
+  };
+};
+
 const assertHtmlMainMarker = (source, marker, message) => {
   assert.equal(
     parseHtmlElements(source).find((element) => element.tagName === 'main')?.attributes[
@@ -1330,20 +1375,40 @@ void test('Phase 0 wire fixture responses keep stable protocol metadata', async 
 
 void test('SSE remains a v2 backlog fixture, not a v1 wire contract', async () => {
   const fixtureNames = await readdir(new URL('../fixtures/wire/', import.meta.url));
-  const fixtureBodies = await Promise.all(
+  const wireResponses = await Promise.all(
     fixtureNames
       .filter((name) => name.endsWith('.http'))
-      .map(async (name) => [name, await readWireFixture(name)]),
+      .map(async (name) => ({
+        name,
+        responses: parseWireResponses(await readWireFixture(name)),
+      })),
   );
 
   assert.deepEqual(
-    fixtureNames.filter((name) => name.endsWith('.http') && /sse|live|event/i.test(name)),
-    [],
+    wireResponses.map(({ name, responses }) => ({
+      contentTypes: responses.map((response) => response.headersByName['content-type'] ?? null),
+      name,
+    })),
+    [
+      { contentTypes: ['text/html; charset=utf-8'], name: 'defer-stream.http' },
+      {
+        contentTypes: ['text/vnd.jiso.fragment+html; charset=utf-8'],
+        name: 'enhanced-mutation.http',
+      },
+      { contentTypes: [null, 'text/html; charset=utf-8'], name: 'no-js-post-redirect-get.http' },
+      { contentTypes: ['text/html; charset=utf-8'], name: 'typed-read.http' },
+      {
+        contentTypes: ['text/vnd.jiso.fragment+html; charset=utf-8'],
+        name: 'validation-422-fragment.http',
+      },
+    ],
   );
   assert.deepEqual(
-    fixtureBodies
-      .filter(([, body]) => /text\/event-stream|event:/i.test(body))
-      .map(([name]) => name),
+    wireResponses.flatMap(({ name, responses }) =>
+      responses
+        .filter((response) => response.headersByName['content-type'] === 'text/event-stream')
+        .map(() => name),
+    ),
     [],
   );
 });
@@ -1386,7 +1451,11 @@ void test('P10 commerce invalidation is expressed through graph facts', async ()
     },
   );
   assert.equal(explainValue(cartAddExplain, 'manual-invalidates: '), '-');
-  assert.ok(explainUpdateTargets(cartAddExplain).includes('cart->component:CartBadge,page:/cart'));
+  assert.deepEqual(explainUpdateTargets(cartAddExplain), [
+    'cart->component:CartBadge,page:/cart',
+    'orderHistory->component:OrderHistory,page:/cart',
+    'productGrid->component:ProductGrid,page:/cart',
+  ]);
 });
 
 void test('P10 normative docs cover the constitution and compiler hard rules', async () => {
@@ -2069,14 +2138,35 @@ void test('P3 server renders initial query scripts for document-load hydration',
     body: '<main></main>',
     queries: [query],
   });
+  const documentRegions = parseDocumentRegions(document.html);
   const documentElements = parseHtmlElements(document.html);
+  const headQueryScripts = parseHtmlElementBlocks(documentRegions.head, 'script').filter(
+    (script) => script.attributes['fw-query'] === 'cart',
+  );
+  const bodyElements = parseHtmlElements(documentRegions.body);
   const queryScriptElement = documentElements.find(
     (element) => element.tagName === 'script' && element.attributes['fw-query'] === 'cart',
   );
 
   assert.equal(renderQueryScript(query), queryScript);
   assert.equal(renderDocumentQueryScript(query), queryScript);
-  assert.equal(document.html.includes(`${queryScript}</head><body><main></main></body>`), true);
+  assert.deepEqual(
+    headQueryScripts.map((script) => ({
+      attributes: script.attributes,
+      innerHTML: script.innerHTML,
+    })),
+    [
+      {
+        attributes: {
+          'fw-query': 'cart',
+          key: 'cart:c1',
+          type: 'application/json',
+        },
+        innerHTML: '{"html":"\\u003c/script>"}',
+      },
+    ],
+  );
+  assert.deepEqual(bodyElements, [{ attributes: {}, tagName: 'main' }]);
   assert.deepEqual(queryScriptElement?.attributes, {
     'fw-query': 'cart',
     key: 'cart:c1',
@@ -4044,18 +4134,14 @@ void test('P10 commerce graph assertions answer behavior mechanically', async ()
   );
   const registryFacts = deriveRegistryFactsFromGraph(commerceGraph);
   assert.deepEqual(registryFacts.components, ['cart-badge', 'order-history', 'product-grid']);
-  assert.ok(registryFacts.domainKeys.includes('auth'));
   assert.deepEqual(
-    ['attachment', 'cart', 'order', 'product'].filter((domainKey) =>
-      registryFacts.domainKeys.includes(domainKey),
-    ),
-    ['attachment', 'cart', 'order', 'product'],
+    registryFacts.domainKeys.toSorted((left, right) => left.localeCompare(right)),
+    ['attachment', 'auth', 'cart', 'order', 'product'],
   );
   assert.deepEqual(registryFacts.invalidations, {
     'cart/add': ['cart', 'orderHistory', 'productGrid'],
   });
-  assert.ok(registryFacts.routes.includes('/admin'));
-  assert.ok(registryFacts.routes.includes('/cart'));
+  assert.deepEqual(registryFacts.routes, ['/admin', '/cart']);
   const cartBadge = compileComponentModule({
     fileName: 'cart-badge.tsx',
     source: `
@@ -6554,6 +6640,10 @@ export const CartBadge = component('cart-badge', {
     store: fixtureStore,
   });
   assert.equal(fixtureApplied.chunks.length, 1);
+  const reviewsTargetBlocks = parseHtmlElementBlocks(
+    fixtureRoot.targets.get('reviews:p1').html,
+    'article',
+  );
   assert.deepEqual(
     fixtureApplied.chunks[0].fragments.map((fragment) => fragment.target),
     ['reviews:p1', 'recommendations:p1'],
@@ -6566,10 +6656,15 @@ export const CartBadge = component('cart-badge', {
   assert.deepEqual(fixtureStore.get('recommendations', 'product:p1'), {
     items: [{ id: 'rec-1' }],
   });
-  assert.ok(fixtureRoot.targets.get('reviews:p1').html.includes('/assets/reviews.css'));
-  assert.ok(
-    fixtureRoot.targets.get('reviews:p1').html.includes('<article fw-key="r1">5</article>'),
+  assert.deepEqual(
+    parseHtmlElements(fixtureRoot.targets.get('reviews:p1').html)
+      .filter((element) => element.tagName === 'link')
+      .map((element) => element.attributes),
+    [{ rel: 'stylesheet', href: '/assets/reviews.css' }],
   );
+  assert.deepEqual(reviewsTargetBlocks, [
+    { attributes: { 'fw-key': 'r1' }, innerHTML: '5', tagName: 'article' },
+  ]);
 });
 
 void test('P1 minifier name preservation evidence remains represented', async () => {
