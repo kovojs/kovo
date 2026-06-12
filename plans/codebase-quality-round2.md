@@ -1049,6 +1049,18 @@ params, relational API, `execute(sql)`, right/full joins, a string column named 
       `pnpm exec vitest --run packages/runtime/src/index.test.ts -t "inline response application|inline delegated"`
       and
       `pnpm exec vp check packages/runtime/src/index.test.ts plans/codebase-quality-round2.md`.
+      Additional bounded evidence 2026-06-12: `packages/runtime/src/inline-loader.ts`
+      now dedupes live `FW-Targets` in the shipped inline collector, matching the modular
+      `submitEnhancedMutation` target collection semantics while preserving order and the
+      nullish-only `fw-fragment-target` fallback. `packages/runtime/src/index.test.ts` compares
+      the actual fetch request tuple from modular submit against both generated bootstrap source
+      and the extracted inline installer for duplicate targets, alias targets, empty target
+      attributes, id fallback, `FW-Idem`, method, body, and headers. `packages/runtime/src/inline-loader.test.ts`
+      pins the minified Set-based collector token alongside the gzip budget. Same-session
+      evidence:
+      `pnpm exec vitest --run packages/runtime/src/inline-loader.test.ts packages/runtime/src/index.test.ts`
+      and
+      `pnpm exec vp check packages/runtime/src/inline-loader.ts packages/runtime/src/inline-loader.test.ts packages/runtime/src/index.test.ts plans/codebase-quality-round2.md`.
 - [x] **HIGH — Ship the DOM morph.** The only real keyed DOM morph (focus/selection/scroll
       capture-restore) lives in index.browser.test.ts:12-182; every consumer must rewrite it, and
       the flagship browser test substantially tests its own test code. Promote to a

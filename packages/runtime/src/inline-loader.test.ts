@@ -67,6 +67,7 @@ describe('inline loader source', () => {
     expect(inlineJisoLoaderInstallerSource).toBe(inlineJisoLoaderInstallerSource.trim());
     expect(inlineJisoLoaderInstallerSource).not.toMatch(/\n|\s{2,}/);
     expect(inlineJisoLoaderInstallerSource).toContain("join('; ')");
+    expect(inlineJisoLoaderInstallerSource).toContain('[...new Set(');
     expect(inlineJisoLoaderInstallerSource).toContain("key:query.getAttribute('key')??undefined");
     expect(inlineJisoLoaderInstallerSource).toContain(
       "element.getAttribute('fw-fragment-target')??element.id",
