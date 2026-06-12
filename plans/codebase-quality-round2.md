@@ -3528,6 +3528,16 @@ Verification: server vitest + wire fixtures byte-for-byte acceptance.
       `corepack pnpm exec vitest --run examples/commerce/src/app.test.ts examples/commerce/src/source-truth.test.ts`,
       `corepack pnpm exec vp check packages/test/package.json packages/test/src/package-exports.test.ts packages/test/src/html-fragment.test.ts packages/test/src/harness-operations.test.ts packages/test/src/verifier-diagnostics.test.ts plans/codebase-quality-round2.md`,
       and `git diff --check`.
+      Additional evidence 2026-06-12: harness exec options now alias the operation seam's
+      `HarnessMutationOptions` instead of carrying a duplicate shape in `harness.ts`, and the
+      Better Auth conformance harness pin imports `createJisoTestHarness` from
+      `@jiso/test/harness` instead of the root `@jiso/test` barrel. `package-exports.test.ts`
+      preserves the root compatibility check while type-pinning `JisoTestExecOptions` to the
+      operation-seam option type. Same-session evidence:
+      `corepack pnpm exec vitest --run packages/test/src/harness.test.ts packages/test/src/harness-operations.test.ts packages/test/src/package-exports.test.ts conformance/better-auth-pin/src/index.test.ts -t "harness|package subpath exports|observed-write harness|P9 harness"`,
+      `corepack pnpm exec vitest --run packages/test/src examples/commerce/src/source-truth.test.ts examples/commerce/src/app.test.ts -t "commerce source-truth graph acceptance|@jiso/test|commerce add-to-cart property"`,
+      `rg -n "from '@jiso/test'|from \"@jiso/test\"|import\\('@jiso/test'\\)" packages/test examples/commerce conformance/better-auth-pin` now reports only the
+      package export compatibility test, and `git diff --check`.
       Additional evidence 2026-06-12: SQL observer-focused coverage moved from
       `packages/test/src/verifier-sql.test.ts` into `packages/test/src/sql-observer.test.ts`,
       keeping SPEC §11.2 unparseable SQL pass-through/no-fabricated-observation coverage,
@@ -4300,6 +4310,16 @@ As each phase splits a source module, split its tests in the same commit.
       observer/parser through those package paths while the focused seam suites keep pinning SQL
       observation and parser behavior. Same-session evidence:
       `corepack pnpm exec vitest --run packages/test/src/package-exports.test.ts packages/test/src/sql-observer.test.ts packages/test/src/verifier-sql.test.ts`.
+      Additional evidence 2026-06-12: harness exec options now alias the operation seam's
+      `HarnessMutationOptions` instead of carrying a duplicate shape in `harness.ts`, and the
+      Better Auth conformance harness pin imports `createJisoTestHarness` from
+      `@jiso/test/harness` instead of the root `@jiso/test` barrel. `package-exports.test.ts`
+      keeps the root compatibility check while type-pinning `JisoTestExecOptions` to the
+      operation-seam option type. Same-session evidence:
+      `corepack pnpm exec vitest --run packages/test/src/harness.test.ts packages/test/src/harness-operations.test.ts packages/test/src/package-exports.test.ts conformance/better-auth-pin/src/index.test.ts -t "harness|package subpath exports|observed-write harness|P9 harness"`,
+      `corepack pnpm exec vitest --run packages/test/src examples/commerce/src/source-truth.test.ts examples/commerce/src/app.test.ts -t "commerce source-truth graph acceptance|@jiso/test|commerce add-to-cart property"`,
+      `rg -n "from '@jiso/test'|from \"@jiso/test\"|import\\('@jiso/test'\\)" packages/test examples/commerce conformance/better-auth-pin` now reports only the
+      package export compatibility test, and `git diff --check`.
       Additional evidence 2026-06-12: Drizzle runtime/static package-surface coverage moved from
       `packages/drizzle/src/index.test.ts` into `packages/drizzle/src/runtime-surface.test.ts`,
       leaving static extraction coverage in the Drizzle monolith. Same-session evidence:

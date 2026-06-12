@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, expectTypeOf, it } from 'vitest';
 import {
   assertMutationError as rootAssertMutationError,
   createDbVerifier as rootCreateDbVerifier,
@@ -79,6 +79,12 @@ describe('@jiso/test package subpath exports', () => {
         table: 'cart_items',
       },
     ]);
+  });
+
+  it('keeps harness exec options on the operation module surface', () => {
+    expectTypeOf<JisoTestExecOptions<JisoTestRequest<{ cart: string[] }>>>().toEqualTypeOf<
+      HarnessMutationOptions<JisoTestRequest<{ cart: string[] }>>
+    >();
   });
 });
 

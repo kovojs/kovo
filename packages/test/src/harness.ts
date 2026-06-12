@@ -1,14 +1,9 @@
 import type { TouchGraph } from '@jiso/core';
-import {
-  type CsrfValidationOptions,
-  type MutationDefinition,
-  type MutationResult,
-  type QueryDefinition,
-  type Schema,
-} from '@jiso/server';
+import type { MutationDefinition, MutationResult, QueryDefinition, Schema } from '@jiso/server';
 import {
   executeHarnessMutation,
   executeHarnessQuery,
+  type HarnessMutationOptions,
   loadHarnessPage,
 } from './harness-operations.js';
 import type { PageAssertion } from './page.js';
@@ -45,11 +40,7 @@ export interface JisoTestHarnessOptions<Db> {
   verification?: DbVerificationConfig;
 }
 
-export interface JisoTestExecOptions<Request> {
-  csrf?: CsrfValidationOptions<Request>;
-  request?: Partial<Omit<Request, 'db'>>;
-  touchGraphKey?: string;
-}
+export type JisoTestExecOptions<Request> = HarnessMutationOptions<Request>;
 
 export function createJisoTestHarness<Db>(
   options: JisoTestHarnessOptions<Db>,

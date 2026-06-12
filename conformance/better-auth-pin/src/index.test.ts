@@ -5,7 +5,7 @@ import {
   runEndpoint,
   runMutation,
 } from '@jiso/server';
-import { createJisoTestHarness } from '@jiso/test';
+import { createJisoTestHarness } from '@jiso/test/harness';
 import { betterAuth, getAuthTables, type BetterAuthPlugin } from 'better-auth';
 import { memoryAdapter } from 'better-auth/adapters/memory';
 import {
