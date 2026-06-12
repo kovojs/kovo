@@ -554,11 +554,6 @@ function extractProjectDrizzleWriteCalls(
     if (!tableArgument) continue;
 
     const chain = drizzleWriteChainRoot(call);
-    const statement = sourceWithProjectTableIdentifiersResolved(
-      chain,
-      file.source,
-      tableNamesBySymbol,
-    );
     const tableExpression =
       projectTableNameForNode(tableArgument, tableNamesBySymbol) ??
       sourceWithProjectTableIdentifiersResolved(tableArgument, file.source, tableNamesBySymbol);
@@ -566,6 +561,9 @@ function extractProjectDrizzleWriteCalls(
     calls.push({
       index: 0,
       operation,
+      predicateFacts: extractPredicateFactsFromWriteChain(chain, (node) =>
+        projectTableNameForNode(node, tableNamesBySymbol),
+      ),
       readSources: extractReadSourcesFromWriteChain(chain, operation, (node) =>
         (
           projectTableNameForNode(node, tableNamesBySymbol) ??
@@ -573,7 +571,6 @@ function extractProjectDrizzleWriteCalls(
         ).trim(),
       ),
       site: `${file.fileName}:${lineForIndex(file.source, call.getStart())}`,
-      statement,
       tableExpression: tableExpression.trim(),
     });
   }
@@ -1118,9 +1115,9 @@ interface QueryInstanceKeyComparison {
 interface ExtractedWriteCall {
   index: number;
   operation: string;
+  predicateFacts: readonly ExtractedPredicateFact[];
   readSources: ExtractedReadSource[];
   site?: string;
-  statement: string;
   tableExpression: string;
 }
 
@@ -1132,6 +1129,13 @@ interface ExtractedReadSource {
 interface ExtractedPredicateSummary {
   key?: string;
   predicate?: 'non-eq';
+}
+
+interface ExtractedPredicateFact {
+  argumentKey?: string;
+  key: string;
+  predicate?: 'non-eq';
+  tableIdentifier: string;
 }
 
 interface FunctionTouchSummary {
@@ -1708,15 +1712,18 @@ function isJoinReadCallName(name: string): boolean {
   return name === 'join' || isQueryReadCallName(name);
 }
 
-function staticExpressionPath(node: Node | undefined): string | undefined {
+function staticExpressionPath(
+  node: Node | undefined,
+  resolveIdentifier?: (node: Node) => string | undefined,
+): string | undefined {
   if (!node) return undefined;
-  if (Node.isIdentifier(node)) return node.getText();
+  if (Node.isIdentifier(node)) return resolveIdentifier?.(node) ?? node.getText();
   if (Node.isPropertyAccessExpression(node)) {
-    const base = staticExpressionPath(node.getExpression());
+    const base = staticExpressionPath(node.getExpression(), resolveIdentifier);
     return base ? `${base}.${node.getName()}` : undefined;
   }
   if (Node.isElementAccessExpression(node)) {
-    const base = staticExpressionPath(node.getExpression());
+    const base = staticExpressionPath(node.getExpression(), resolveIdentifier);
     const name = staticAccessName(node);
     return base && name ? `${base}.${name}` : undefined;
   }
@@ -1831,8 +1838,8 @@ function directSummaryForFunction(
     if (resolvedTables.length > 0) {
       for (const table of resolvedTables) {
         if (isExemptTableAnnotation(table.annotation)) continue;
-        const writePredicate = extractPredicateSummary(
-          call.statement,
+        const writePredicate = predicateSummaryFromFacts(
+          call.predicateFacts,
           call.tableExpression,
           table.annotation,
         );
@@ -1849,8 +1856,8 @@ function directSummaryForFunction(
         if (readTables.length > 0) {
           for (const readTable of readTables) {
             if (isExemptTableAnnotation(readTable.annotation)) continue;
-            const readPredicate = extractPredicateSummary(
-              call.statement,
+            const readPredicate = predicateSummaryFromFacts(
+              call.predicateFacts,
               readSource.tableExpression,
               readTable.annotation,
             );
@@ -2605,14 +2612,13 @@ function extractDrizzleWriteCalls(
       const tableExpression = call.getArguments()[0]?.getText().trim();
       if (start < 0 || !tableExpression) continue;
 
-      const statement = source.slice(chain.getStart() - bodyOffset, chain.getEnd() - bodyOffset);
       calls.push({
         index: start,
         operation,
+        predicateFacts: extractPredicateFactsFromWriteChain(chain),
         readSources: extractReadSourcesFromWriteChain(chain, operation, (node) =>
           node.getText().trim(),
         ),
-        statement,
         tableExpression,
       });
     }
@@ -2950,32 +2956,51 @@ function staticAccessExpression(node: Node): Node | undefined {
   return undefined;
 }
 
-function extractPredicateSummary(
-  statement: string,
+function predicateSummaryFromFacts(
+  facts: readonly ExtractedPredicateFact[],
   tableIdentifier: string,
   table: JisoDomainTableAnnotation,
 ): ExtractedPredicateSummary {
-  // SPEC §10-§11: predicate text inside strings/comments must not fabricate row-key facts.
-  return withParsedSourceFile(`${statement};`, (sourceFile) => {
-    const whereCall = sourceFile
-      .getDescendantsOfKind(SyntaxKind.CallExpression)
-      .find((call) => propertyAccessCallName(call) === 'where');
-    const predicate = whereCall?.getArguments()[0];
-    if (!predicate) return {};
+  if (!table.key) return {};
 
-    const key = extractParameterizedKey(predicate, tableIdentifier, table);
-    if (key) return { key };
+  const tableFacts = facts.filter(
+    (fact) => fact.tableIdentifier === tableIdentifier && fact.key === table.key,
+  );
+  const keyFact = tableFacts.find((fact) => fact.argumentKey);
+  if (keyFact?.argumentKey) return { key: keyFact.argumentKey };
 
-    return hasNonEqPredicate(predicate, tableIdentifier, table) ? { predicate: 'non-eq' } : {};
-  });
+  return tableFacts.some((fact) => fact.predicate === 'non-eq') ? { predicate: 'non-eq' } : {};
+}
+
+function extractPredicateFactsFromWriteChain(
+  chain: Node,
+  resolveIdentifier?: (node: Node) => string | undefined,
+): ExtractedPredicateFact[] {
+  const facts: ExtractedPredicateFact[] = [];
+  const calls = [
+    ...(Node.isCallExpression(chain) ? [chain] : []),
+    ...chain.getDescendantsOfKind(SyntaxKind.CallExpression),
+  ];
+  const whereCall = calls.find((call) => propertyAccessCallName(call) === 'where');
+  const predicate = whereCall?.getArguments()[0];
+  if (!predicate) return facts;
+
+  const parameterizedKey = extractParameterizedKey(predicate, resolveIdentifier);
+  if (parameterizedKey) facts.push(parameterizedKey);
+
+  if (!isEqCall(predicate)) {
+    for (const reference of tableKeyReferences(predicate, resolveIdentifier)) {
+      facts.push({ ...reference, predicate: 'non-eq' });
+    }
+  }
+
+  return dedupePredicateFacts(facts);
 }
 
 function extractParameterizedKey(
   predicate: Node,
-  tableIdentifier: string,
-  table: JisoDomainTableAnnotation,
-): string | undefined {
-  if (!table.key) return undefined;
+  resolveIdentifier?: (node: Node) => string | undefined,
+): ExtractedPredicateFact | undefined {
   if (!Node.isCallExpression(predicate)) return undefined;
 
   const expression = predicate.getExpression();
@@ -2984,19 +3009,15 @@ function extractParameterizedKey(
   const [left, right] = predicate.getArguments();
   if (!left || !right) return undefined;
 
-  if (isTableKeyReference(left, tableIdentifier, table)) return argumentKey(right);
-  if (isTableKeyReference(right, tableIdentifier, table)) return argumentKey(left);
+  const leftKey = tableKeyReference(left, resolveIdentifier);
+  const rightArgument = argumentKey(right);
+  if (leftKey && rightArgument) return { ...leftKey, argumentKey: rightArgument };
+
+  const rightKey = tableKeyReference(right, resolveIdentifier);
+  const leftArgument = argumentKey(left);
+  if (rightKey && leftArgument) return { ...rightKey, argumentKey: leftArgument };
+
   return undefined;
-}
-
-function hasNonEqPredicate(
-  predicate: Node,
-  tableIdentifier: string,
-  table: JisoDomainTableAnnotation,
-): boolean {
-  if (!table.key) return false;
-
-  return !isEqCall(predicate) && hasTableKeyReference(predicate, tableIdentifier, table);
 }
 
 function isEqCall(node: Node): boolean {
@@ -3006,24 +3027,52 @@ function isEqCall(node: Node): boolean {
   return Node.isIdentifier(expression) && expression.getText() === 'eq';
 }
 
-function hasTableKeyReference(
+function tableKeyReferences(
   node: Node,
-  tableIdentifier: string,
-  table: JisoDomainTableAnnotation,
-): boolean {
-  if (isTableKeyReference(node, tableIdentifier, table)) return true;
+  resolveIdentifier?: (node: Node) => string | undefined,
+): ExtractedPredicateFact[] {
+  const references: ExtractedPredicateFact[] = [];
+  const ownReference = tableKeyReference(node, resolveIdentifier);
+  if (ownReference) references.push(ownReference);
 
-  return node
-    .getDescendants()
-    .some((descendant) => isTableKeyReference(descendant, tableIdentifier, table));
+  for (const descendant of node.getDescendants()) {
+    const reference = tableKeyReference(descendant, resolveIdentifier);
+    if (reference) references.push(reference);
+  }
+
+  return dedupePredicateFacts(references);
 }
 
-function isTableKeyReference(
+function tableKeyReference(
   node: Node,
-  tableIdentifier: string,
-  table: JisoDomainTableAnnotation,
-): boolean {
-  return staticExpressionPath(node) === `${tableIdentifier}.${table.key}`;
+  resolveIdentifier?: (node: Node) => string | undefined,
+): ExtractedPredicateFact | undefined {
+  const path = staticExpressionPath(node, resolveIdentifier);
+  if (!path) return undefined;
+
+  const keyStart = path.lastIndexOf('.');
+  if (keyStart <= 0 || keyStart === path.length - 1) return undefined;
+
+  return {
+    key: path.slice(keyStart + 1),
+    tableIdentifier: path.slice(0, keyStart),
+  };
+}
+
+function dedupePredicateFacts(facts: readonly ExtractedPredicateFact[]): ExtractedPredicateFact[] {
+  const seen = new Set<string>();
+  const deduped: ExtractedPredicateFact[] = [];
+
+  for (const fact of facts) {
+    const key = [fact.tableIdentifier, fact.key, fact.argumentKey ?? '', fact.predicate ?? ''].join(
+      '\0',
+    );
+    if (seen.has(key)) continue;
+    seen.add(key);
+    deduped.push(fact);
+  }
+
+  return deduped;
 }
 
 function argumentKey(expression: Node): string | undefined {

@@ -1134,6 +1134,17 @@ must be "FW406 unresolved," never "silently wrong."
       row-key touch facts. Same-session evidence:
       `pnpm exec vitest --run packages/drizzle/src/index.test.ts -t "predicate text inside comments and strings|direct parameterized keys|borrow predicates"` and
       `pnpm exec vitest --run packages/drizzle/src/index.test.ts`.
+      Additional evidence 2026-06-12: write predicate summaries now consume
+      `ExtractedPredicateFact` records carried by `ExtractedWriteCall` from the original
+      ts-morph write-chain AST; the old `extractPredicateSummary(call.statement, ...)`
+      serialized-statement reparse path and `statement` payload were removed. Source and
+      project extraction now share the same parsed predicate facts for write keys,
+      update-from read keys, and non-eq degradation. Same-session evidence:
+      `pnpm exec vitest --run packages/drizzle/src/index.test.ts -t "predicate|parameterized keys|project insert-select and update-from read sources|project write predicates|static element-access write methods"`,
+      `pnpm exec vitest --run packages/drizzle/src/index.test.ts`,
+      `pnpm exec vitest --run conformance/drizzle-pin/src/index.test.ts`,
+      `pnpm exec vp check packages/drizzle/src/index.ts plans/codebase-quality-round2.md`,
+      and `git diff --check`.
       Additional evidence 2026-06-12: source-mode destructured Drizzle receiver aliases now walk
       ts-morph `VariableDeclaration` binding patterns instead of regex-scanning function body text,
       so commented/stringified `const { db: alias } = ...` snippets no longer fabricate FW406
