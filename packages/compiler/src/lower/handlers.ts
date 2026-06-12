@@ -3,11 +3,11 @@ import ts from 'typescript';
 
 import { diagnosticFor, type CompilerDiagnostic } from '../diagnostics.js';
 import {
-  functionBodyPropertyAccessPaths,
   identifierReferences,
   jsxElements,
   expressionUsageType,
   type ComponentModuleModel,
+  type PropertyAccessPathModel,
   type ZeroArgArrowModel,
 } from '../scan/parse.js';
 import { replaceExtension } from '../shared.js';
@@ -145,7 +145,7 @@ function eventAttributes(model: ComponentModuleModel): Array<{
   attributeStart: number;
   event: string;
   expression: string;
-  expressionPropertyAccesses?: readonly { path: string }[];
+  expressionPropertyAccesses?: readonly PropertyAccessPathModel[];
   expressionReferences?: readonly string[];
   tag: string;
   zeroArgArrow?: ZeroArgArrowModel;
@@ -155,7 +155,7 @@ function eventAttributes(model: ComponentModuleModel): Array<{
     attributeStart: number;
     event: string;
     expression: string;
-    expressionPropertyAccesses?: readonly { path: string }[];
+    expressionPropertyAccesses?: readonly PropertyAccessPathModel[];
     expressionReferences?: readonly string[];
     tag: string;
     zeroArgArrow?: ZeroArgArrowModel;
@@ -242,7 +242,7 @@ function fw201Diagnostic(
 function extractElementParams(
   expression: string,
   zeroArgArrow?: ZeroArgArrowModel,
-  parsedPropertyAccesses?: readonly { path: string }[],
+  parsedPropertyAccesses?: readonly PropertyAccessPathModel[],
 ): ElementParam[] {
   const callArguments = zeroArgArrow?.callArguments;
   const expressions = callArguments
@@ -257,11 +257,11 @@ function extractElementParams(
               .filter(serializableMemberExpression) ?? [];
           return members.length > 0 ? members : [arg];
         })
-    : serializableMemberExpressions(expression, zeroArgArrow, parsedPropertyAccesses);
+    : serializableMemberExpressions(zeroArgArrow, parsedPropertyAccesses);
 
   return dedupeStrings(expressions).map((arg) => ({
     attributeName: `data-p-${paramNameForExpression(arg)}`,
-    type: inferElementParamType(expression, arg, zeroArgArrow),
+    type: inferElementParamType(expression, arg, zeroArgArrow, parsedPropertyAccesses),
     value: `{${arg}}`,
   }));
 }
@@ -270,11 +270,14 @@ function inferElementParamType(
   expression: string,
   sourceExpression: string,
   zeroArgArrow?: ZeroArgArrowModel,
+  parsedPropertyAccesses?: readonly PropertyAccessPathModel[],
 ): ElementParamType {
-  const parsedType = zeroArgArrow?.bodyPropertyAccesses.find(
+  const propertyAccesses = zeroArgArrow?.bodyPropertyAccesses ?? parsedPropertyAccesses ?? [];
+  const parsedType = propertyAccesses.find(
     (access) => access.path === sourceExpression && access.inferredType !== undefined,
   )?.inferredType;
   if (parsedType) return parsedType;
+  if (parsedPropertyAccesses) return 'string';
   if (usedAsBoolean(expression, sourceExpression)) return 'boolean';
   if (usedAsNumber(expression, sourceExpression)) return 'number';
 
@@ -320,15 +323,12 @@ function expressionUsesParam(
 }
 
 function serializableMemberExpressions(
-  expression: string,
   zeroArgArrow?: ZeroArgArrowModel,
-  parsedPropertyAccesses?: readonly { path: string }[],
+  parsedPropertyAccesses?: readonly PropertyAccessPathModel[],
 ): string[] {
-  return collectSerializableMemberExpressions(
-    expression,
-    zeroArgArrow,
-    parsedPropertyAccesses,
-  ).filter(serializableMemberExpression);
+  return collectSerializableMemberExpressions(zeroArgArrow, parsedPropertyAccesses).filter(
+    serializableMemberExpression,
+  );
 }
 
 function serializableMemberExpression(member: string): boolean {
@@ -341,14 +341,13 @@ function serializableMemberExpression(member: string): boolean {
 }
 
 function collectSerializableMemberExpressions(
-  expression: string,
   zeroArgArrow?: ZeroArgArrowModel,
-  parsedPropertyAccesses?: readonly { path: string }[],
+  parsedPropertyAccesses?: readonly PropertyAccessPathModel[],
 ): string[] {
   if (zeroArgArrow) return zeroArgArrow.bodyPropertyAccesses.map((access) => access.path);
   if (parsedPropertyAccesses) return parsedPropertyAccesses.map((access) => access.path);
 
-  return functionBodyPropertyAccessPaths('handler-expression.ts', expression);
+  return [];
 }
 
 function handlerExpressionSourceFile(expression: string): ts.SourceFile {

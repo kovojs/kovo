@@ -837,6 +837,15 @@ pipeline throws the tree away and communicates via mutated source text.
       `pnpm exec vitest --run packages/compiler/src/scan/parse.test.ts packages/compiler/src/handler-lowering.test.ts`,
       `pnpm exec vp check packages/compiler/src/scan/parse.ts packages/compiler/src/lower/handlers.ts packages/compiler/src/scan/parse.test.ts packages/compiler/src/handler-lowering.test.ts`,
       and `git diff --check`.
+      Additional evidence 2026-06-12: `lower/handlers.ts` no longer imports or calls
+      `functionBodyPropertyAccessPaths` for event element-param extraction. Non-arrow event
+      expressions now receive parser-owned `PropertyAccessPathModel` facts from
+      `JsxAttributeModel`, preserving inferred boolean/number usage where available and
+      defaulting unresolved cases to string instead of reparsing body text. Same-session
+      evidence:
+      `pnpm exec vitest --run packages/compiler/src/handler-lowering.test.ts packages/compiler/src/scan/parse.test.ts`,
+      `pnpm exec vp check packages/compiler/src/lower/handlers.ts packages/compiler/src/handler-lowering.test.ts packages/compiler/src/scan/parse.ts packages/compiler/src/scan/parse.test.ts`,
+      and `rg -n "functionBodyPropertyAccessPaths|collectSerializableMemberExpressions\\(|serializableMemberExpressions\\(" packages/compiler/src/lower/handlers.ts`.
       Additional evidence 2026-06-12: the legacy source-returning compatibility wrappers
       `lowerViewTransitions`, `lowerPlatformBehaviors`, `lowerNavigationLinks`,
       `lowerNavigationHrefs`, and `serverRenderSource` were removed from production compiler
