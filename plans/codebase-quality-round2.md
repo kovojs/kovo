@@ -1296,6 +1296,10 @@ As each phase splits a source module, split its tests in the same commit.
       Same-session evidence:
       `pnpm exec vitest --run packages/server/src/meta.test.ts packages/server/src/index.test.ts -t "route meta|query-derived meta|i18n|document-load hydration"` and
       `pnpm exec vp check packages/server/src/index.test.ts packages/server/src/meta.test.ts plans/codebase-quality-round2.md`.
+      Additional evidence 2026-06-12: pure page-hint coverage moved from
+      `packages/server/src/index.test.ts` into `packages/server/src/hints.test.ts`, including
+      modulepreloads, generated bootstrap scripts, versioned module hrefs, stylesheet hints,
+      manifest stylesheet selection, Early Hints target encoding, and speculation rules.
       and `pnpm exec vitest --run packages/server/src/*.test.ts`.
 - [ ] runtime/index.test.ts (4,435 lines, mutation tests under "query store") → per-module
       files; `Fake*` classes to a shared `test-fixtures.ts`; direct unit tests for wire-parser,
