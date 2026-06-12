@@ -4998,6 +4998,9 @@ void test('Conformance suites are an explicit gate', async () => {
   const authSpikePackageJson = JSON.parse(
     await readProjectFile('conformance/auth-spike/package.json'),
   );
+  const betterAuthPinPackageJson = JSON.parse(
+    await readProjectFile('conformance/better-auth-pin/package.json'),
+  );
   const webhookSpikePackageJson = JSON.parse(
     await readProjectFile('conformance/webhook-spike/package.json'),
   );
@@ -5013,6 +5016,7 @@ void test('Conformance suites are an explicit gate', async () => {
   assert.equal(packageJson.scripts['test:conformance'], 'vp run conformance');
   assert.equal(drizzlePackageJson.dependencies['ts-morph'], '^28.0.0');
   assert.equal(drizzlePinPackageJson.devDependencies['drizzle-orm'], '0.45.2');
+  assert.equal(betterAuthPinPackageJson.devDependencies['better-auth'], '1.6.17');
   assert.equal(ciSteps.includes('vp run conformance'), true);
   assert.deepEqual(tasks['conformance-drizzle'], {
     command: 'vitest --run conformance/drizzle-pin/src/index.test.ts',
@@ -5023,7 +5027,7 @@ void test('Conformance suites are an explicit gate', async () => {
   });
   assert.deepEqual(tasks.conformance, {
     command:
-      'pnpm --filter @jiso/conformance-drizzle-pin test && pnpm --filter @jiso/conformance-auth-spike test && pnpm --filter @jiso/conformance-webhook-spike test && pnpm --filter @jiso/conformance-app-shell-spike test',
+      'pnpm --filter @jiso/conformance-drizzle-pin test && pnpm --filter @jiso/conformance-better-auth-pin test && pnpm --filter @jiso/conformance-auth-spike test && pnpm --filter @jiso/conformance-webhook-spike test && pnpm --filter @jiso/conformance-app-shell-spike test',
     input: [
       { base: 'workspace', pattern: 'conformance/**/package.json' },
       { base: 'workspace', pattern: 'conformance/**/src/**/*.ts' },
@@ -5034,6 +5038,7 @@ void test('Conformance suites are an explicit gate', async () => {
       { base: 'workspace', pattern: 'packages/better-auth/src/**/*.ts' },
     ],
   });
+  assert.equal(betterAuthPinPackageJson.name, '@jiso/conformance-better-auth-pin');
   assert.equal(authSpikePackageJson.name, '@jiso/conformance-auth-spike');
   assert.equal(webhookSpikePackageJson.name, '@jiso/conformance-webhook-spike');
   assert.equal(appShellSpikePackageJson.name, '@jiso/conformance-app-shell-spike');
@@ -5045,6 +5050,11 @@ void test('Conformance suites are an explicit gate', async () => {
   await execFileAsync(
     'pnpm',
     ['exec', 'vitest', '--run', 'conformance/drizzle-pin/src/index.test.ts'],
+    { cwd: new URL('..', import.meta.url), maxBuffer: 1024 * 1024 * 10 },
+  );
+  await execFileAsync(
+    'pnpm',
+    ['exec', 'vitest', '--run', 'conformance/better-auth-pin/src/index.test.ts'],
     { cwd: new URL('..', import.meta.url), maxBuffer: 1024 * 1024 * 10 },
   );
 });

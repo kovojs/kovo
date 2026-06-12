@@ -1,7 +1,8 @@
-import { endpoint, guards, mutation, s } from '@jiso/server';
+import { domain, endpoint, guards, mutation, s } from '@jiso/server';
 import type {
   AuthenticatedRequest,
   CsrfValidationOptions,
+  Domain,
   EndpointAuthDeclaration,
   EndpointDeclaration,
   EndpointMethod,
@@ -169,6 +170,42 @@ export const betterAuthCredentialMutationErrors = {
   INVALID_CREDENTIALS: s.object({}),
 };
 
+export type BetterAuthCredentialMutationApi = 'signInEmail' | 'signOut' | 'signUpEmail';
+
+export type BetterAuthTable = 'account' | 'session' | 'user' | 'verification';
+
+export type BetterAuthTouchDomain = 'auth' | 'user';
+
+export interface BetterAuthDeclaredTableTouch {
+  domain: BetterAuthTouchDomain;
+  table: BetterAuthTable;
+}
+
+export const betterAuthAuthDomain = domain('auth');
+export const betterAuthUserDomain = domain('user');
+
+// plans/auth.md B1/B6: better-auth writes are library-internal, so the blessed
+// wrappers carry declared table/domain touches until the P9 observed-write
+// harness can verify observed ⊆ declared at runtime.
+export const betterAuthCredentialMutationDeclaredTableTouches = {
+  signInEmail: [{ domain: 'auth', table: 'session' }],
+  signOut: [{ domain: 'auth', table: 'session' }],
+  signUpEmail: [
+    { domain: 'user', table: 'user' },
+    { domain: 'auth', table: 'account' },
+    { domain: 'auth', table: 'session' },
+  ],
+} as const satisfies Record<
+  BetterAuthCredentialMutationApi,
+  readonly BetterAuthDeclaredTableTouch[]
+>;
+
+export const betterAuthCredentialMutationTouches = {
+  signInEmail: [betterAuthAuthDomain],
+  signOut: [betterAuthAuthDomain],
+  signUpEmail: [betterAuthUserDomain, betterAuthAuthDomain],
+} as const satisfies Record<BetterAuthCredentialMutationApi, readonly Domain[]>;
+
 export interface BetterAuthCredentialMutationValue<Status extends string> {
   redirectTo: string;
   status: Status;
@@ -211,7 +248,10 @@ export function betterAuthSignInEmailMutation<
   GuardedRequest
 > & { key: Key } {
   return mutation(options.key ?? ('auth/sign-in' as Key), {
-    ...credentialMutationDefinitionOptions(options),
+    ...credentialMutationDefinitionOptions(
+      options,
+      betterAuthCredentialMutationTouches.signInEmail,
+    ),
     errors: betterAuthCredentialMutationErrors,
     input: betterAuthSignInEmailInput,
     async handler(input, request, context) {
@@ -262,7 +302,10 @@ export function betterAuthSignUpEmailMutation<
   GuardedRequest
 > & { key: Key } {
   return mutation(options.key ?? ('auth/sign-up' as Key), {
-    ...credentialMutationDefinitionOptions(options),
+    ...credentialMutationDefinitionOptions(
+      options,
+      betterAuthCredentialMutationTouches.signUpEmail,
+    ),
     errors: betterAuthCredentialMutationErrors,
     input: betterAuthSignUpEmailInput,
     async handler(input, request, context) {
@@ -314,7 +357,7 @@ export function betterAuthSignOutMutation<
   GuardedRequest
 > & { key: Key } {
   return mutation(options.key ?? ('auth/sign-out' as Key), {
-    ...credentialMutationDefinitionOptions(options),
+    ...credentialMutationDefinitionOptions(options, betterAuthCredentialMutationTouches.signOut),
     input: betterAuthSignOutInput,
     async handler(_input, request, context) {
       const response = await auth.api.signOut({
@@ -484,6 +527,7 @@ function credentialMutationDefinitionOptions<
   GuardedRequest extends Request,
 >(
   options: BetterAuthCredentialMutationOptions<Key, Request, GuardedRequest>,
+  touches: readonly Domain[],
 ): Pick<
   MutationDefinition<Key, never, never, Request, never, GuardedRequest>,
   'csrf' | 'guard' | 'registry' | 'transaction'
@@ -491,7 +535,23 @@ function credentialMutationDefinitionOptions<
   return {
     ...(options.csrf === undefined ? {} : { csrf: options.csrf }),
     ...(options.guard === undefined ? {} : { guard: options.guard }),
-    ...(options.registry === undefined ? {} : { registry: options.registry }),
+    registry: {
+      ...options.registry,
+      touches: mergeDomainTouches(touches, options.registry?.touches),
+    },
     ...(options.transaction === undefined ? {} : { transaction: options.transaction }),
   };
+}
+
+function mergeDomainTouches(
+  defaults: readonly Domain[],
+  overrides: readonly Domain[] | undefined,
+): Domain[] {
+  const merged = new Map(defaults.map((item) => [item.key, item]));
+
+  for (const item of overrides ?? []) {
+    merged.set(item.key, item);
+  }
+
+  return [...merged.values()];
 }

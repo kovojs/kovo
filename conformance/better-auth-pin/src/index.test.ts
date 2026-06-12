@@ -1,0 +1,412 @@
+import { endpointMatches, runEndpoint, runMutation } from '@jiso/server';
+import { betterAuth, getAuthTables } from 'better-auth';
+import { memoryAdapter } from 'better-auth/adapters/memory';
+import { describe, expect, expectTypeOf, it } from 'vitest';
+
+import {
+  betterAuthCredentialMutationDeclaredTableTouches,
+  betterAuthCredentialMutationTouches,
+  betterAuthSession,
+  betterAuthSignInEmailMutation,
+  betterAuthSignOutMutation,
+  betterAuthSignUpEmailMutation,
+  mount,
+  type BetterAuthLike,
+  type BetterAuthSignInEmailLike,
+  type BetterAuthSignOutLike,
+  type BetterAuthSignUpEmailLike,
+  type BetterAuthTable,
+} from '../../../packages/better-auth/src/index.js';
+
+type AuthDatabase = Record<BetterAuthTable, Record<string, unknown>[]>;
+
+interface AppSession {
+  email: string;
+  sessionId: string;
+  userId: string;
+}
+
+const authSecret = '0123456789abcdef0123456789abcdef';
+const baseURL = 'https://example.test/api/auth';
+const password = 'correct horse battery staple';
+
+describe('Better Auth pinned conformance', () => {
+  it('pins the real better-auth server API shape consumed by the adapter', () => {
+    const { auth } = createRealAuth();
+
+    expect(typeof auth.api.getSession).toBe('function');
+    expect(typeof auth.api.signInEmail).toBe('function');
+    expect(typeof auth.api.signOut).toBe('function');
+    expect(typeof auth.api.signUpEmail).toBe('function');
+    expect(typeof auth.handler).toBe('function');
+
+    expectTypeOf(auth).toMatchTypeOf<BetterAuthLike<unknown, unknown>>();
+    expectTypeOf(auth).toMatchTypeOf<BetterAuthSignInEmailLike>();
+    expectTypeOf(auth).toMatchTypeOf<BetterAuthSignOutLike>();
+    expectTypeOf(auth).toMatchTypeOf<BetterAuthSignUpEmailLike>();
+  });
+
+  it('pins Better Auth table metadata used by the schema bridge', () => {
+    const { auth } = createRealAuth();
+    const tables = getAuthTables(auth.options);
+    const userTable = requireAuthTable(tables, 'user');
+    const sessionTable = requireAuthTable(tables, 'session');
+    const accountTable = requireAuthTable(tables, 'account');
+    const verificationTable = requireAuthTable(tables, 'verification');
+
+    expect(
+      Object.fromEntries(Object.entries(tables).map(([name, table]) => [name, table.order])),
+    ).toEqual({
+      account: 3,
+      session: 2,
+      user: 1,
+      verification: 4,
+    });
+    expect(Object.keys(userTable.fields).sort()).toEqual([
+      'createdAt',
+      'email',
+      'emailVerified',
+      'image',
+      'name',
+      'updatedAt',
+    ]);
+    expect(Object.keys(sessionTable.fields).sort()).toEqual([
+      'createdAt',
+      'expiresAt',
+      'ipAddress',
+      'token',
+      'updatedAt',
+      'userAgent',
+      'userId',
+    ]);
+    expect(Object.keys(accountTable.fields).sort()).toEqual([
+      'accessToken',
+      'accessTokenExpiresAt',
+      'accountId',
+      'createdAt',
+      'idToken',
+      'password',
+      'providerId',
+      'refreshToken',
+      'refreshTokenExpiresAt',
+      'scope',
+      'updatedAt',
+      'userId',
+    ]);
+    expect(Object.keys(verificationTable.fields).sort()).toEqual([
+      'createdAt',
+      'expiresAt',
+      'identifier',
+      'updatedAt',
+      'value',
+    ]);
+  });
+
+  it('maps a real Better Auth session through the Jiso session provider seam', async () => {
+    const { auth } = createRealAuth();
+    const signUp = await auth.api.signUpEmail({
+      asResponse: true,
+      body: {
+        email: 'ada@example.com',
+        name: 'Ada Lovelace',
+        password,
+      },
+      headers: requestHeaders(),
+    });
+    const provider = betterAuthSession(auth, (value): AppSession => {
+      return {
+        email: value.user.email,
+        sessionId: value.session.id,
+        userId: value.user.id,
+      };
+    });
+
+    await expect(provider({ headers: requestHeaders(sessionCookie(signUp)) })).resolves.toEqual({
+      email: 'ada@example.com',
+      sessionId: expect.any(String),
+      userId: expect.any(String),
+    });
+    await expect(provider({ headers: requestHeaders() })).resolves.toBe(null);
+  });
+
+  it('wraps real sign-up, sign-in, and sign-out auth.api responses as Jiso mutations', async () => {
+    const { auth } = createRealAuth();
+    const signUp = betterAuthSignUpEmailMutation(auth, {
+      csrf: false,
+      defaultRedirectTo: '/welcome',
+    });
+    const signIn = betterAuthSignInEmailMutation(auth, {
+      csrf: false,
+      defaultRedirectTo: '/account',
+    });
+    const signOut = betterAuthSignOutMutation(auth, {
+      csrf: false,
+      defaultRedirectTo: '/login',
+    });
+
+    expect(signUp.registry?.touches?.map((item) => item.key)).toEqual(['user', 'auth']);
+    expect(signIn.registry?.touches?.map((item) => item.key)).toEqual(['auth']);
+    expect(signOut.registry?.touches?.map((item) => item.key)).toEqual(['auth']);
+
+    const signUpResult = await runMutation(
+      signUp,
+      {
+        email: 'grace@example.com',
+        name: 'Grace Hopper',
+        password,
+      },
+      { headers: requestHeaders() },
+    );
+
+    expect(signUpResult).toMatchObject({
+      ok: true,
+      responseHeaders: {
+        'Set-Cookie': [expect.stringContaining('better-auth.session_token=')],
+      },
+      value: {
+        redirectTo: '/welcome',
+        status: 'signed-up',
+      },
+    });
+
+    const invalidSignIn = await runMutation(
+      signIn,
+      {
+        email: 'grace@example.com',
+        password: 'wrong',
+      },
+      { headers: requestHeaders() },
+    );
+
+    expect(invalidSignIn).toEqual({
+      error: {
+        code: 'INVALID_CREDENTIALS',
+        payload: {},
+      },
+      ok: false,
+      status: 422,
+    });
+
+    const signInResult = await runMutation(
+      signIn,
+      {
+        email: 'grace@example.com',
+        password,
+      },
+      { headers: requestHeaders() },
+    );
+
+    expect(signInResult).toMatchObject({
+      ok: true,
+      responseHeaders: {
+        'Set-Cookie': [expect.stringContaining('better-auth.session_token=')],
+      },
+      value: {
+        redirectTo: '/account',
+        status: 'signed-in',
+      },
+    });
+
+    if (!signInResult.ok) throw new Error('expected sign-in to succeed');
+
+    const signOutResult = await runMutation(
+      signOut,
+      {},
+      { headers: requestHeaders(responseCookies(signInResult.responseHeaders?.['Set-Cookie'])) },
+    );
+
+    expect(signOutResult).toMatchObject({
+      ok: true,
+      responseHeaders: {
+        'Set-Cookie': [
+          expect.stringContaining('better-auth.session_token=;'),
+          expect.stringContaining('better-auth.session_data=;'),
+          expect.stringContaining('better-auth.dont_remember=;'),
+        ],
+      },
+      value: {
+        redirectTo: '/login',
+        status: 'signed-out',
+      },
+    });
+  });
+
+  it('pins declared table touches against real Better Auth memory-adapter writes', async () => {
+    const { auth, db } = createRealAuth();
+
+    await expectObservedTables('signUpEmail', db, async () => {
+      await auth.api.signUpEmail({
+        asResponse: true,
+        body: {
+          email: 'touches@example.com',
+          name: 'Touch Bridge',
+          password,
+        },
+        headers: requestHeaders(),
+      });
+    });
+
+    await expectObservedTables('signInEmail', db, async () => {
+      await auth.api.signInEmail({
+        asResponse: true,
+        body: {
+          email: 'touches@example.com',
+          password,
+        },
+        headers: requestHeaders(),
+      });
+    });
+
+    const signIn = await auth.api.signInEmail({
+      asResponse: true,
+      body: {
+        email: 'touches@example.com',
+        password,
+      },
+      headers: requestHeaders(),
+    });
+
+    await expectObservedTables('signOut', db, async () => {
+      await auth.api.signOut({
+        asResponse: true,
+        headers: requestHeaders(sessionCookie(signIn)),
+      });
+    });
+  });
+
+  it('mounts the real Better Auth handler as an audit-visible prefix endpoint', async () => {
+    const { auth } = createRealAuth();
+    const authEndpoint = mount('/api/auth', auth);
+
+    expect(authEndpoint.auth).toEqual({ kind: 'custom', name: 'better-auth' });
+    expect(authEndpoint.csrf).toEqual({
+      exempt: true,
+      justification: 'better-auth browser redirect protocol handler',
+    });
+    expect(
+      endpointMatches(authEndpoint, { method: 'GET', pathname: '/api/auth/get-session' }),
+    ).toBe(true);
+    expect(
+      endpointMatches(authEndpoint, { method: 'POST', pathname: '/api/auth/sign-in/email' }),
+    ).toBe(true);
+    expect(
+      endpointMatches(authEndpoint, { method: 'GET', pathname: '/api/authish/get-session' }),
+    ).toBe(false);
+
+    const response = await runEndpoint(
+      authEndpoint,
+      new Request('https://example.test/api/auth/get-session', { headers: requestHeaders() }),
+    );
+
+    expect(response.status).toBe(200);
+    await expect(response.text()).resolves.toBe('null');
+  });
+});
+
+function createRealAuth() {
+  const db: AuthDatabase = {
+    account: [],
+    session: [],
+    user: [],
+    verification: [],
+  };
+  const auth = betterAuth({
+    advanced: {
+      disableCSRFCheck: true,
+    },
+    baseURL,
+    database: memoryAdapter(db),
+    emailAndPassword: {
+      enabled: true,
+    },
+    secret: authSecret,
+  });
+
+  return { auth, db };
+}
+
+function requestHeaders(cookie?: string): Headers {
+  const headers = new Headers({
+    origin: 'https://example.test',
+    'user-agent': 'vitest',
+  });
+
+  if (cookie) headers.set('cookie', cookie);
+
+  return headers;
+}
+
+function responseCookies(cookies: string[] | string | undefined): string {
+  const values = typeof cookies === 'string' ? [cookies] : (cookies ?? []);
+
+  return values.map((cookie) => cookie.split(';', 1)[0]).join('; ');
+}
+
+function sessionCookie(response: { headers: Headers }): string {
+  return responseCookies(response.headers.getSetCookie());
+}
+
+async function expectObservedTables(
+  api: keyof typeof betterAuthCredentialMutationDeclaredTableTouches,
+  db: AuthDatabase,
+  run: () => Promise<void>,
+): Promise<void> {
+  const before = snapshotTables(db);
+
+  await run();
+
+  const observed = changedTables(before, snapshotTables(db));
+  const declaredTables: Set<BetterAuthTable> = new Set(
+    betterAuthCredentialMutationDeclaredTableTouches[api].map((touch) => touch.table),
+  );
+
+  expect(observed.filter((table) => !declaredTables.has(table))).toEqual([]);
+  expect(
+    [
+      ...new Set(
+        betterAuthCredentialMutationDeclaredTableTouches[api].map((touch) => touch.domain),
+      ),
+    ].sort(),
+  ).toEqual(betterAuthCredentialMutationTouches[api].map((domain) => domain.key).sort());
+}
+
+function snapshotTables(db: AuthDatabase): Record<BetterAuthTable, string> {
+  return {
+    account: stableRows(db.account),
+    session: stableRows(db.session),
+    user: stableRows(db.user),
+    verification: stableRows(db.verification),
+  };
+}
+
+function changedTables(
+  before: Record<BetterAuthTable, string>,
+  after: Record<BetterAuthTable, string>,
+): BetterAuthTable[] {
+  return (Object.keys(before) as BetterAuthTable[]).filter(
+    (table) => before[table] !== after[table],
+  );
+}
+
+function stableRows(rows: readonly Record<string, unknown>[]): string {
+  return JSON.stringify(
+    rows.map((row) =>
+      Object.fromEntries(
+        Object.entries(row)
+          .filter(([key]) => key !== 'id' && key !== 'token' && key !== 'password')
+          .sort(([left], [right]) => left.localeCompare(right)),
+      ),
+    ),
+  );
+}
+
+function requireAuthTable(
+  tables: ReturnType<typeof getAuthTables>,
+  table: BetterAuthTable,
+): NonNullable<ReturnType<typeof getAuthTables>[BetterAuthTable]> {
+  const value = tables[table];
+
+  if (!value) throw new Error(`better-auth table metadata missing: ${table}`);
+
+  return value;
+}

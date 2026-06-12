@@ -1,0 +1,17 @@
+{
+  "name": "@jiso/conformance-better-auth-pin",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "vitest --run src/index.test.ts"
+  },
+  "dependencies": {
+    "@jiso/better-auth": "workspace:*",
+    "@jiso/server": "workspace:*"
+  },
+  "devDependencies": {
+    "better-auth": "1.6.17",
+    "vitest": "4.1.8"
+  }
+}

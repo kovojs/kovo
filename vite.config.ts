@@ -71,7 +71,7 @@ export default defineConfig({
       },
       conformance: {
         command:
-          'pnpm --filter @jiso/conformance-drizzle-pin test && pnpm --filter @jiso/conformance-auth-spike test && pnpm --filter @jiso/conformance-webhook-spike test && pnpm --filter @jiso/conformance-app-shell-spike test',
+          'pnpm --filter @jiso/conformance-drizzle-pin test && pnpm --filter @jiso/conformance-better-auth-pin test && pnpm --filter @jiso/conformance-auth-spike test && pnpm --filter @jiso/conformance-webhook-spike test && pnpm --filter @jiso/conformance-app-shell-spike test',
         input: [
           { auto: true },
           { pattern: 'conformance/**/package.json', base: 'workspace' },
@@ -85,7 +85,7 @@ export default defineConfig({
       },
       'typecheck-examples': {
         command:
-          'tsc -p examples/commerce/tsconfig.json --noEmit && tsc -p conformance/drizzle-pin/tsconfig.json --noEmit && tsc -p conformance/auth-spike/tsconfig.json --noEmit && tsc -p conformance/webhook-spike/tsconfig.json --noEmit && tsc -p conformance/app-shell-spike/tsconfig.json --noEmit',
+          'tsc -p examples/commerce/tsconfig.json --noEmit && tsc -p conformance/drizzle-pin/tsconfig.json --noEmit && tsc -p conformance/better-auth-pin/tsconfig.json --noEmit && tsc -p conformance/auth-spike/tsconfig.json --noEmit && tsc -p conformance/webhook-spike/tsconfig.json --noEmit && tsc -p conformance/app-shell-spike/tsconfig.json --noEmit',
         input: [
           { auto: true },
           { pattern: 'examples/commerce/package.json', base: 'workspace' },
