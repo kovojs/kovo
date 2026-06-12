@@ -8,7 +8,15 @@ import {
 import { createJisoTestHarness } from '@jiso/test';
 import { betterAuth, getAuthTables } from 'better-auth';
 import { memoryAdapter } from 'better-auth/adapters/memory';
-import { admin, jwt, oidcProvider, organization, siwe, twoFactor } from 'better-auth/plugins';
+import {
+  admin,
+  deviceAuthorization,
+  jwt,
+  oidcProvider,
+  organization,
+  siwe,
+  twoFactor,
+} from 'better-auth/plugins';
 import { describe, expect, expectTypeOf, it } from 'vitest';
 
 import {
@@ -366,6 +374,59 @@ describe('Better Auth pinned conformance', () => {
     ]);
     expect(result.source).toContain(
       "export const twoFactor = pgTable('twoFactor', {}, jiso({ domain: 'auth', key: 'userId' }));",
+    );
+  });
+
+  it('pins device-authorization code metadata as an exempt schema bridge table', () => {
+    const { auth } = createRealAuth({
+      plugins: [deviceAuthorization({ schema: {} })],
+    });
+    const tables = getAuthTables(auth.options);
+    const result = annotateBetterAuthSchemaSource(
+      betterAuthSchemaSourceFixture(Object.keys(tables)),
+      tables,
+    );
+
+    expect(Object.keys(tables).sort()).toEqual([
+      'account',
+      'deviceCode',
+      'session',
+      'user',
+      'verification',
+    ]);
+    expect(Object.keys(requireAuthTable(tables, 'deviceCode').fields).sort()).toEqual([
+      'clientId',
+      'deviceCode',
+      'expiresAt',
+      'lastPolledAt',
+      'pollingInterval',
+      'scope',
+      'status',
+      'userCode',
+      'userId',
+    ]);
+    expect(validateBetterAuthSchemaBridge(tables)).toEqual({
+      declaredTouchMismatches: [],
+      keyFieldMismatches: [],
+      missingTables: [],
+      ok: true,
+      pluginTableDegradations: [],
+      unbridgedTables: [],
+    });
+    expect(betterAuthSchemaBridge.deviceCode).toEqual({
+      exempt: true,
+      rationale:
+        'Better Auth device-authorization codes are redirect/device-flow protocol state, not an app read surface under SPEC.md §10.1.',
+    });
+    expect(result.annotatedTables).toEqual([
+      'account',
+      'deviceCode',
+      'session',
+      'user',
+      'verification',
+    ]);
+    expect(result.source).toContain(
+      "export const deviceCode = pgTable('deviceCode', {}, jiso({ exempt: true }));",
     );
   });
 

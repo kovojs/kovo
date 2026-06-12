@@ -327,6 +327,11 @@ describe('credential mutation helpers', () => {
   it('exposes schema bridge annotations and keeps declared touches domain-aligned', () => {
     expect(betterAuthSchemaBridge).toEqual({
       account: { domain: 'auth', key: 'userId' },
+      deviceCode: {
+        exempt: true,
+        rationale:
+          'Better Auth device-authorization codes are redirect/device-flow protocol state, not an app read surface under SPEC.md §10.1.',
+      },
       invitation: { domain: 'organization', key: 'organizationId' },
       jwks: {
         exempt: true,
@@ -423,7 +428,7 @@ describe('credential mutation helpers', () => {
         user: 'user',
         walletAddress: 'auth',
       },
-      exemptTables: ['jwks', 'verification'],
+      exemptTables: ['deviceCode', 'jwks', 'verification'],
       keyByTable: {
         account: 'userId',
         invitation: 'organizationId',
@@ -459,6 +464,17 @@ describe('credential mutation helpers', () => {
     expect(
       validateBetterAuthSchemaBridge({
         account: authTable(['userId']),
+        deviceCode: authTable([
+          'clientId',
+          'deviceCode',
+          'expiresAt',
+          'lastPolledAt',
+          'pollingInterval',
+          'scope',
+          'status',
+          'userCode',
+          'userId',
+        ]),
         invitation: authTable(['organizationId']),
         jwks: authTable(['privateKey', 'publicKey']),
         member: authTable(['organizationId']),
@@ -664,6 +680,63 @@ describe('credential mutation helpers', () => {
         "  userId: text('user_id').notNull(),\n" +
         "  secret: text('secret').notNull(),\n" +
         "}, jiso({ domain: 'auth', key: 'userId' }));",
+    );
+  });
+
+  it('materializes the device-authorization code table as an exempt app schema.ts source fixture', () => {
+    const result = annotateBetterAuthSchemaSource(
+      [
+        "import { jiso } from '@jiso/drizzle';",
+        "import { integer, pgTable, text, timestamp } from 'drizzle-orm/pg-core';",
+        '',
+        "export const deviceCode = pgTable('deviceCode', {",
+        "  id: text('id').primaryKey(),",
+        "  deviceCode: text('device_code').notNull(),",
+        "  userCode: text('user_code').notNull(),",
+        "  userId: text('user_id'),",
+        "  expiresAt: timestamp('expires_at').notNull(),",
+        "  status: text('status').notNull(),",
+        "  lastPolledAt: timestamp('last_polled_at'),",
+        "  pollingInterval: integer('polling_interval'),",
+        "  clientId: text('client_id'),",
+        "  scope: text('scope'),",
+        '});',
+        '',
+      ].join('\n'),
+      {
+        deviceCode: authTable([
+          'clientId',
+          'deviceCode',
+          'expiresAt',
+          'lastPolledAt',
+          'pollingInterval',
+          'scope',
+          'status',
+          'userCode',
+          'userId',
+        ]),
+      },
+    );
+
+    expect(result.validation).toMatchObject({
+      keyFieldMismatches: [],
+      pluginTableDegradations: [],
+      unbridgedTables: [],
+    });
+    expect(result.annotatedTables).toEqual(['deviceCode']);
+    expect(result.source).toContain(
+      "export const deviceCode = pgTable('deviceCode', {\n" +
+        "  id: text('id').primaryKey(),\n" +
+        "  deviceCode: text('device_code').notNull(),\n" +
+        "  userCode: text('user_code').notNull(),\n" +
+        "  userId: text('user_id'),\n" +
+        "  expiresAt: timestamp('expires_at').notNull(),\n" +
+        "  status: text('status').notNull(),\n" +
+        "  lastPolledAt: timestamp('last_polled_at'),\n" +
+        "  pollingInterval: integer('polling_interval'),\n" +
+        "  clientId: text('client_id'),\n" +
+        "  scope: text('scope'),\n" +
+        '}, jiso({ exempt: true }));',
     );
   });
 

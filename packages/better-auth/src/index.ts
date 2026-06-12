@@ -173,6 +173,7 @@ export const betterAuthCredentialMutationErrors = {
 export type BetterAuthCredentialMutationApi = 'signInEmail' | 'signOut' | 'signUpEmail';
 
 export type BetterAuthCoreTable = 'account' | 'session' | 'user' | 'verification';
+export type BetterAuthDeviceAuthorizationTable = 'deviceCode';
 export type BetterAuthOrganizationTable =
   | 'invitation'
   | 'member'
@@ -186,6 +187,7 @@ export type BetterAuthSiweTable = 'walletAddress';
 export type BetterAuthTwoFactorTable = 'twoFactor';
 export type BetterAuthTable =
   | BetterAuthCoreTable
+  | BetterAuthDeviceAuthorizationTable
   | BetterAuthJwtTable
   | BetterAuthOidcProviderTable
   | BetterAuthOrganizationTable
@@ -298,6 +300,11 @@ export const betterAuthUserDomain = domain('user');
 // User rows are intentionally not exempt; app queries commonly render names/avatars.
 export const betterAuthSchemaBridge = {
   account: { domain: 'auth', key: 'userId' },
+  deviceCode: {
+    exempt: true,
+    rationale:
+      'Better Auth device-authorization codes are redirect/device-flow protocol state, not an app read surface under SPEC.md §10.1.',
+  },
   invitation: { domain: 'organization', key: 'organizationId' },
   jwks: {
     exempt: true,
