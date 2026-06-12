@@ -170,6 +170,10 @@ Do this first or pay it on every commit.
       `assertRenderEquivalence` failure behavior, then asserts the `ERROR RENDER_EQUIV` CLI
       contract by calling `fwCheck` with structured `renderEquivalenceChecks` instead of
       grepping compiler/CLI implementation symbols or test names.
+      Partial evidence 2026-06-12: the same P1 render-equivalence tranche now executes the
+      generated cart-total server render module and parses rendered HTML attributes instead of
+      regex-matching emitted render text. Verification: focused `node --test --test-name-pattern
+      "P1 render-equivalence gate remains represented" tests/fw-check.node.mjs`.
       Partial evidence 2026-06-11: the P1 minifier-name tranche now imports the built compiler
       API and asserts `compileComponentModule` handler exports, emitted handler bodies, and
       `collectMinifierReservedNames` output instead of grepping compiler source or compiler test

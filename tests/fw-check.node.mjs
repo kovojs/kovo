@@ -5941,10 +5941,17 @@ export const CartTotal = component('cart-total', {
 });
 `,
   });
+  const serverFile = result.files.find((file) => file.kind === 'server');
+  assert.ok(serverFile, 'compiled output includes server render source');
+  const renderedElements = parseHtmlElements(executeGeneratedServerRenderSource(serverFile.source));
+  const cartTotal = renderedElements.find((element) => element.tagName === 'cart-total');
+  const boundSpan = renderedElements.find((element) => element.tagName === 'span');
+
   assert.equal(result.renderEquivalenceChecks.length, 1);
   assert.equal(result.renderEquivalenceChecks[0]?.artifact, 'components/cart/cart-total.server.js');
   assert.equal(result.renderEquivalenceChecks[0]?.ok, true);
-  assert.match(result.renderEquivalenceChecks[0]?.actual ?? '', /component\('cart-total'/);
+  assert.deepEqual(cartTotal?.attributes, {});
+  assert.deepEqual(boundSpan?.attributes, { 'data-bind': 'cart.total' });
   assert.equal(
     result.renderEquivalenceChecks[0]?.actual,
     result.renderEquivalenceChecks[0]?.expected,
