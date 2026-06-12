@@ -52,7 +52,7 @@ describe('Drizzle pinned subset conformance', () => {
     expect(inArray(cartItems.cartId, ['c1', 'c2'])).toBeDefined();
   });
 
-  it('pins project query shapes for real Drizzle column builders', () => {
+  it('pins project query shapes for real Drizzle column builders and static element access', () => {
     const facts = extractQueryFactsFromProject({
       files: [
         {
@@ -70,12 +70,12 @@ describe('Drizzle pinned subset conformance', () => {
             export const productQuery = query('product', {
               load(_input, db) {
                 return db.select({
-                  archived: products.archived,
+                  archived: products['archived'],
                   createdAt: products.createdAt,
                   discount: products.name,
                   id: products.id,
                   metadata: products.metadata,
-                  stock: products.stock,
+                  stock: products['stock'],
                 }).from(products);
               },
             });

@@ -1459,6 +1459,41 @@ export interface CommerceInvalidationSets {
     ]);
   });
 
+  it('resolves static element-access projection columns from AST facts', () => {
+    const facts = extractQueryFactsFromSource([
+      {
+        fileName: 'product.queries.ts',
+        source: `
+          export const products = pgTable("products", {
+            id: text("id").primaryKey(),
+            name: text("name").notNull(),
+          }, jiso({ domain: "product", key: "id" }));
+
+          export const productQuery = query("product", {
+            load(_input, db) {
+              return db.select({
+                displayName: products["name"],
+                id: products["id"],
+              }).from(products);
+            },
+          });
+        `,
+      },
+    ]);
+
+    expect(facts).toEqual([
+      {
+        query: 'product',
+        reads: ['product'],
+        shape: {
+          displayName: 'string',
+          id: 'string',
+        },
+        site: 'product.queries.ts:7',
+      },
+    ]);
+  });
+
   it('does not infer typed sql projections from string contents', () => {
     const facts = extractQueryFactsFromSource([
       {

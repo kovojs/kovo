@@ -1132,7 +1132,6 @@ function queryShapeFromObjectLiteralNode(
     if (!key) continue;
 
     const valueNode = unwrappedExpression(property.initializer);
-    const value = valueNode.getText();
     const path = prefix ? `${prefix}.${key}` : key;
     if (ts.isObjectLiteralExpression(valueNode)) {
       const nested = queryShapeFromObjectLiteralNode(valueNode, {
@@ -1143,14 +1142,15 @@ function queryShapeFromObjectLiteralNode(
       opaquePaths.push(...nested.opaquePaths);
       unresolvedPaths.push(...nested.unresolvedPaths);
     } else {
-      const scalarShape = scalarQueryShape(value, context.columnShapes, context.nullableTables);
+      const scalarShape = scalarQueryShape(valueNode, context.columnShapes, context.nullableTables);
+      const opaqueProjection = isOpaqueProjection(valueNode);
       if (scalarShape) {
         shape[key] = scalarShape;
-      } else if (!isOpaqueProjection(value)) {
+      } else if (!opaqueProjection) {
         unresolvedPaths.push(path);
       }
-      if (isOpaqueProjection(value)) opaquePaths.push(path);
-      const table = scalarProjectionTable(value);
+      if (opaqueProjection) opaquePaths.push(path);
+      const table = scalarProjectionTable(valueNode);
       if (table) {
         scalarTables.add(table);
       } else if (scalarShape) {
@@ -1181,16 +1181,16 @@ function nullableNestedShape(
 }
 
 function scalarQueryShape(
-  expression: string,
+  expression: ts.Expression,
   columnShapes: Readonly<Record<string, QueryShape>> = {},
   nullableTables: ReadonlySet<string> = new Set(),
 ): QueryShape | null {
   const sqlShape = typedSqlProjectionShape(expression);
   if (sqlShape) return sqlShape;
-  const trimmed = expression.trim();
-  const columnShape = columnShapes[trimmed];
+  const columnPath = staticTsExpressionPath(expression);
+  const columnShape = columnPath ? columnShapes[columnPath] : undefined;
   if (columnShape) {
-    return nullableTables.has(tableExpressionBase(trimmed))
+    return nullableTables.has(tableExpressionBase(expression))
       ? nullableShape(columnShape)
       : columnShape;
   }
@@ -1252,63 +1252,47 @@ function nullableJoinTables(body: ObjectLiteralExpression): ReadonlySet<string> 
   return tables;
 }
 
-function tableExpressionBase(expression: string): string {
-  const match = /^(?<table>[A-Za-z_$][\w$]*(?:\.[A-Za-z_$][\w$]*)?)\.[A-Za-z_$][\w$]*$/.exec(
-    expression,
-  );
-  return match?.groups?.table ?? '';
+function tableExpressionBase(expression: ts.Expression): string {
+  const columnPath = staticTsExpressionPath(expression);
+  if (!columnPath) return '';
+
+  const columnStart = columnPath.lastIndexOf('.');
+  return columnStart > 0 ? columnPath.slice(0, columnStart) : '';
 }
 
-function scalarProjectionTable(expression: string): string | undefined {
-  const table = tableExpressionBase(expression.trim());
+function scalarProjectionTable(expression: ts.Expression): string | undefined {
+  const table = tableExpressionBase(expression);
   return table || undefined;
 }
 
-function isOpaqueProjection(expression: string): boolean {
-  return (
-    projectionExpressionFact(expression, (node) => {
-      if (ts.isTaggedTemplateExpression(node)) return expressionPathText(node.tag) === 'sql';
-      if (!ts.isCallExpression(node)) return false;
+function isOpaqueProjection(expression: ts.Expression): boolean {
+  const node = unwrappedExpression(expression);
+  if (ts.isTaggedTemplateExpression(node)) return staticTsExpressionPath(node.tag) === 'sql';
+  if (!ts.isCallExpression(node)) return false;
 
-      const callee = expressionPathText(node.expression);
-      return callee === 'sql' || callee === 'raw' || callee.startsWith('sql.');
-    }) ?? false
-  );
+  const callee = staticTsExpressionPath(node.expression);
+  return callee === 'sql' || callee === 'raw' || callee?.startsWith('sql.') === true;
 }
 
-function typedSqlProjectionShape(expression: string): QueryShape | null {
-  return projectionExpressionFact(expression, (node, sourceFile) => {
-    const typeArguments = ts.isTaggedTemplateExpression(node)
+function typedSqlProjectionShape(expression: ts.Expression): QueryShape | null {
+  const node = unwrappedExpression(expression);
+  const typeArguments = ts.isTaggedTemplateExpression(node)
+    ? node.typeArguments
+    : ts.isCallExpression(node)
       ? node.typeArguments
-      : ts.isCallExpression(node)
-        ? node.typeArguments
-        : undefined;
-    const callee = ts.isTaggedTemplateExpression(node)
-      ? expressionPathText(node.tag)
-      : ts.isCallExpression(node)
-        ? expressionPathText(node.expression)
-        : undefined;
-    if (callee !== 'sql' || typeArguments?.length !== 1) return null;
+      : undefined;
+  const callee = ts.isTaggedTemplateExpression(node)
+    ? staticTsExpressionPath(node.tag)
+    : ts.isCallExpression(node)
+      ? staticTsExpressionPath(node.expression)
+      : undefined;
+  if (callee !== 'sql' || typeArguments?.length !== 1) return null;
 
-    const typeText = typeArguments[0]?.getText(sourceFile.compilerNode).trim();
-    if (typeText === 'number') return 'number';
-    if (typeText === 'boolean') return 'boolean';
-    if (typeText === 'string') return 'string';
-    return null;
-  });
-}
-
-function projectionExpressionFact<T>(
-  expression: string,
-  visit: (node: ts.Expression, sourceFile: SourceFile) => T,
-): T | null {
-  return withParsedSourceFile(`const __jisoProjection = (${expression});`, (sourceFile) => {
-    const declaration = sourceFile.getVariableDeclarations()[0];
-    const initializer = declaration?.getInitializer();
-    if (!initializer) return null;
-
-    return visit(unwrappedExpression(initializer.compilerNode), sourceFile);
-  });
+  const typeText = typeArguments[0]?.getText(node.getSourceFile()).trim();
+  if (typeText === 'number') return 'number';
+  if (typeText === 'boolean') return 'boolean';
+  if (typeText === 'string') return 'string';
+  return null;
 }
 
 function unwrappedExpression(expression: ts.Expression): ts.Expression {
@@ -1317,13 +1301,33 @@ function unwrappedExpression(expression: ts.Expression): ts.Expression {
     : expression;
 }
 
-function expressionPathText(expression: ts.Expression): string {
-  if (ts.isIdentifier(expression)) return expression.text;
-  if (ts.isPropertyAccessExpression(expression)) {
-    const base = expressionPathText(expression.expression);
-    return base ? `${base}.${expression.name.text}` : expression.name.text;
+function staticTsExpressionPath(expression: ts.Expression): string | undefined {
+  const node = unwrappedExpression(expression);
+  if (ts.isIdentifier(node)) return node.text;
+  if (ts.isPropertyAccessExpression(node)) {
+    const base = staticTsExpressionPath(node.expression);
+    return base ? `${base}.${node.name.text}` : undefined;
   }
-  return '';
+  if (ts.isElementAccessExpression(node)) {
+    const base = staticTsExpressionPath(node.expression);
+    const name = staticTsElementAccessName(node.argumentExpression);
+    return base && name ? `${base}.${name}` : undefined;
+  }
+  return undefined;
+}
+
+function staticTsElementAccessName(expression: ts.Expression | undefined): string | undefined {
+  if (!expression) return undefined;
+
+  const node = unwrappedExpression(expression);
+  if (
+    ts.isStringLiteral(node) ||
+    ts.isNumericLiteral(node) ||
+    ts.isNoSubstitutionTemplateLiteral(node)
+  ) {
+    return node.text;
+  }
+  return undefined;
 }
 
 function opaqueProjectionDiagnostics(

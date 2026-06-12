@@ -1250,6 +1250,17 @@ must be "FW406 unresolved," never "silently wrong."
       `pnpm exec vitest --run packages/drizzle/src/index.test.ts -t "projection facts|computed projections|typed sql projections|Drizzle selects"`;
       `pnpm exec vitest --run packages/drizzle/src`;
       `pnpm exec vitest --run conformance/drizzle-pin/src/index.test.ts`.
+      Additional evidence 2026-06-12: scalar select projection classification now consumes the
+      parsed `ts.Expression` for column paths, typed `sql<T>` projections, opaque SQL detection,
+      and nullable-table attribution instead of serializing each expression and reparsing or
+      regex-matching it. Static element-access columns such as `products["name"]` now resolve
+      from AST facts under SPEC §10-§11 instead of degrading to fabricated unresolved projection
+      diagnostics. Same-session evidence:
+      `pnpm exec vitest --run packages/drizzle/src/index.test.ts conformance/drizzle-pin/src/index.test.ts -t "element-access projection|project query shapes"`,
+      `pnpm exec vitest --run packages/drizzle/src`,
+      `pnpm exec vitest --run conformance/drizzle-pin`,
+      `pnpm exec vp check packages/drizzle/src/index.ts packages/drizzle/src/index.test.ts conformance/drizzle-pin/src/index.test.ts plans/codebase-quality-round2.md`,
+      and `git diff --check`.
       Additional evidence 2026-06-12: source-mode select projection discovery now walks
       ts-morph `CallExpression` nodes and real `ReturnStatement` ancestors instead of
       regex-scanning query object text and hand-matching select parentheses, so comments and
