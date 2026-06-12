@@ -1,6 +1,7 @@
 import { reportMalformedJson } from './error-policy.js';
 import type { RuntimeErrorReporter } from './error-policy.js';
 import { parseJsonValue } from './json.js';
+import type { TextContentElementLike } from './dom-like.js';
 
 export type QueryUpdatePlan<Value = unknown> = (value: Value) => void;
 
@@ -16,10 +17,7 @@ export interface QueryStore {
 
 export type QuerySnapshot = Map<string, unknown>;
 
-export interface QueryScriptLike {
-  getAttribute(name: string): string | null;
-  textContent: string | null;
-}
+export interface QueryScriptLike extends TextContentElementLike {}
 
 export function createQueryStore(): QueryStore {
   const values = new Map<string, unknown>();

@@ -1,11 +1,7 @@
 import { readDeps } from './pending.js';
+import type { QuerySelectorAllRootLike, TargetElementLike } from './dom-like.js';
 
-export interface TargetCollectorRoot {
-  querySelectorAll(selector: string): Iterable<{
-    getAttribute(name: string): string | null;
-    id?: string;
-  }>;
-}
+export interface TargetCollectorRoot extends QuerySelectorAllRootLike<TargetElementLike> {}
 
 export function readLiveTargets(root: TargetCollectorRoot): string[] {
   const targets = new Set<string>();

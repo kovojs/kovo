@@ -1,26 +1,21 @@
+import type {
+  ListenerTargetLike,
+  OptionalQuerySelectorAllRootLike,
+  VisibilityStateLike,
+} from './dom-like.js';
 import { reportRuntimeContextError } from './error-policy.js';
 import type { DelegatedEvent, EventElementLike, RuntimeErrorContext } from './events.js';
 import { dispatchDelegatedEvent } from './handlers.js';
 import type { ImportHandlerModule, IslandSignalScope } from './handlers.js';
 import type { QueryScriptLike } from './query-store.js';
 
-export interface LoaderLifecycleTarget {
-  addEventListener(
-    type: string,
-    listener: (event: DelegatedEvent) => void | Promise<void>,
-    options?: { capture?: boolean },
-  ): void;
-  removeEventListener?: (
-    type: string,
-    listener: (event: DelegatedEvent) => void | Promise<void>,
-    options?: { capture?: boolean },
-  ) => void;
-}
+export interface LoaderLifecycleTarget extends ListenerTargetLike<DelegatedEvent> {}
 
-export interface LoaderRoot extends LoaderLifecycleTarget {
-  querySelectorAll?: (selector: string) => Iterable<EventElementLike | QueryScriptLike>;
-  visibilityState?: 'hidden' | 'visible';
-}
+export interface LoaderRoot
+  extends
+    LoaderLifecycleTarget,
+    OptionalQuerySelectorAllRootLike<EventElementLike | QueryScriptLike>,
+    VisibilityStateLike {}
 
 export interface VisibleObserver {
   observe(element: EventElementLike): void;

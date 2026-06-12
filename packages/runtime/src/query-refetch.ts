@@ -1,5 +1,6 @@
 import { applyMutationResponseToStore } from './apply-path.js';
 import type { AppliedMutationResponse } from './apply-path.js';
+import type { ListenerTargetLike, VisibilityStateLike } from './dom-like.js';
 import { reportRuntimeError } from './error-policy.js';
 import { hydrateQueryScripts } from './query-store.js';
 import type { QueryScriptLike, QueryStore } from './query-store.js';
@@ -36,19 +37,8 @@ export interface RefetchQueryLedger {
   remember(queries: readonly string[]): void;
 }
 
-export interface QueryVisibleReturnRefetchRoot {
-  addEventListener(
-    type: string,
-    listener: (event: unknown) => void | Promise<void>,
-    options?: { capture?: boolean },
-  ): void;
-  removeEventListener?: (
-    type: string,
-    listener: (event: unknown) => void | Promise<void>,
-    options?: { capture?: boolean },
-  ) => void;
-  visibilityState?: 'hidden' | 'visible';
-}
+export interface QueryVisibleReturnRefetchRoot
+  extends ListenerTargetLike<unknown>, VisibilityStateLike {}
 
 export interface QueryVisibleReturnRefetchOptions {
   onError?: (error: unknown) => void;

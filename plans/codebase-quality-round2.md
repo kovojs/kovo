@@ -2176,6 +2176,21 @@ params, relational API, `execute(sql)`, right/full joins, a string column named 
       `pnpm exec vitest --run packages/runtime/src/index.test.ts -t "hydrate|visible-return|refetch"`,
       `pnpm exec vp check packages/runtime/src/query-refetch.ts packages/runtime/src/query-refetch.test.ts plans/codebase-quality-round2.md`,
       and `git diff --check`.
+      Additional bounded evidence 2026-06-12: extracted `packages/runtime/src/dom-like.ts` as
+      the internal shared DOM-like type/helper seam for attribute readers/writers,
+      selector-capable roots, listener targets, visibility roots, target elements, and
+      text-content elements. `packages/runtime/src/events.ts`, `handlers.ts`,
+      `query-bindings.ts`, `query-store.ts`, `pending.ts`, `mutation-targets.ts`,
+      `loader-lifecycle.ts`, and `query-refetch.ts` now preserve their public exported type names
+      while delegating repeated DOM-shape definitions to the shared seam; handlers and query
+      bindings share `domAttributes()` for iterable and array-like attribute collections.
+      `packages/runtime/src/dom-like.test.ts` pins that normalizer directly. Same-session
+      evidence:
+      `corepack pnpm exec vitest --run packages/runtime/src/dom-like.test.ts packages/runtime/src/query-bindings.test.ts packages/runtime/src/loader-lifecycle.test.ts packages/runtime/src/query-refetch.test.ts packages/runtime/src/pending.test.ts packages/runtime/src/mutation-targets.test.ts packages/runtime/src/index.test.ts -t "DOM-like|data-bind|compiled query update plans|loader lifecycle|execution trigger|hydrate|visible-return|refetch|pending|mutation targets|FW-Targets"`,
+      `corepack pnpm exec vitest --run packages/runtime/src`,
+      `corepack pnpm exec vitest --config vitest.browser.config.ts --run packages/runtime/src/index.browser.test.ts`,
+      and
+      `corepack pnpm exec vp check packages/runtime/src/dom-like.ts packages/runtime/src/dom-like.test.ts packages/runtime/src/events.ts packages/runtime/src/handlers.ts packages/runtime/src/query-bindings.ts packages/runtime/src/query-store.ts packages/runtime/src/pending.ts packages/runtime/src/mutation-targets.ts packages/runtime/src/loader-lifecycle.ts packages/runtime/src/query-refetch.ts packages/runtime/src/index.ts`.
 
 Verification: runtime node + browser suites; gzip budget; the new parity suite is the gate for
 any future inline-loader edit. Partial evidence 2026-06-12: `packages/runtime/src/index.ts` now

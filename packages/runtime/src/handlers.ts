@@ -1,4 +1,5 @@
 import type { JsonValue } from '@jiso/core';
+import { domAttributes } from './dom-like.js';
 import type { DelegatedEvent, EventElementLike } from './events.js';
 import { readAttribute, tagClose } from './wire-parser.js';
 
@@ -123,7 +124,7 @@ export function readElementParams(element: EventElementLike): Record<string, Ele
   const paramTypes = readElementParamTypes(element.getAttribute?.('fw-param-types'));
   const params: Record<string, ElementParamValue> = {};
 
-  for (const attribute of element.attributes ?? []) {
+  for (const attribute of domAttributes(element.attributes)) {
     if (!attribute.name.startsWith('data-p-')) continue;
 
     const name = camelCase(attribute.name.slice('data-p-'.length));

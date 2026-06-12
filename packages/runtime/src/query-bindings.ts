@@ -1,15 +1,20 @@
+import { domAttributes } from './dom-like.js';
+import type {
+  AttributeReaderLike,
+  AttributeWriterLike,
+  DomAttributeListLike,
+  QuerySelectorAllRootLike,
+} from './dom-like.js';
+
 export interface QueryBindingElement {
-  attributes?: unknown;
-  getAttribute(name: string): string | null;
-  removeAttribute?: (name: string) => void;
-  setAttribute?: (name: string, value: string) => void;
+  attributes?: DomAttributeListLike;
   textContent?: string | null;
   value?: string;
 }
 
-export interface QueryBindingRoot {
-  querySelectorAll(selector: string): Iterable<QueryBindingElement>;
-}
+export interface QueryBindingElement extends AttributeReaderLike, AttributeWriterLike {}
+
+export interface QueryBindingRoot extends QuerySelectorAllRootLike<QueryBindingElement> {}
 
 export interface TemplateStampItem {
   html: string;
@@ -197,24 +202,9 @@ function queryAllElements(root: QueryBindingRoot): QueryBindingElement[] {
 }
 
 function bindingAttributes(element: QueryBindingElement): Array<{ name: string; value: string }> {
-  if (!element.attributes) return [];
-  const attributes = element.attributes;
-
-  if (
-    typeof attributes === 'object' &&
-    attributes !== null &&
-    'length' in attributes &&
-    typeof (attributes as { length: unknown }).length === 'number'
-  ) {
-    return Array.from(
-      { length: (attributes as { length: number }).length },
-      (_, index) => (attributes as ArrayLike<{ name: string; value: string }>)[index],
-    )
-      .filter((attribute): attribute is { name: string; value: string } => Boolean(attribute))
-      .filter((attribute) => attribute.name.startsWith('data-bind:') && attribute.value !== '');
-  }
-
-  return [];
+  return domAttributes(element.attributes).filter(
+    (attribute) => attribute.name.startsWith('data-bind:') && attribute.value !== '',
+  );
 }
 
 function writeQueryPlanElement(element: QueryBindingElement, rendered: string): void {

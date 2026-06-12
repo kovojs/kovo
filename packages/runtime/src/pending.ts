@@ -1,12 +1,11 @@
-export interface PendingElementLike {
-  getAttribute(name: string): string | null;
+import type { AttributeReaderLike, QuerySelectorAllRootLike } from './dom-like.js';
+
+export interface PendingElementLike extends AttributeReaderLike {
   removeAttribute(name: string): void;
   setAttribute(name: string, value: string): void;
 }
 
-export interface PendingRoot {
-  querySelectorAll(selector: string): Iterable<PendingElementLike>;
-}
+export interface PendingRoot extends QuerySelectorAllRootLike<PendingElementLike> {}
 
 export function stampPendingQueries(
   root: PendingRoot,

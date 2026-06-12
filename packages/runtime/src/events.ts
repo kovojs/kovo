@@ -1,5 +1,12 @@
 import { diagnosticDefinitions } from '@jiso/core';
 import type { EventDefinition, JsonValue } from '@jiso/core';
+import type {
+  AttributeReaderLike,
+  AttributeWriterLike,
+  ClosestElementLike,
+  DomAttributeListLike,
+  OptionalQuerySelectorAllRootLike,
+} from './dom-like.js';
 import { reportRuntimeContextError } from './error-policy.js';
 
 export interface DelegatedEvent {
@@ -8,20 +15,18 @@ export interface DelegatedEvent {
   target: EventTargetLike | null;
 }
 
-export interface EventTargetLike {
-  closest?: (selector: string) => EventElementLike | null;
+export interface EventTargetLike extends ClosestElementLike<EventElementLike> {}
+
+export interface EventElementLike
+  extends
+    AttributeReaderLike,
+    AttributeWriterLike,
+    ClosestElementLike<EventElementLike>,
+    OptionalQuerySelectorAllRootLike<UploadProgressElementLike> {
+  attributes?: DomAttributeListLike;
 }
 
-export interface EventElementLike {
-  closest?: (selector: string) => EventElementLike | null;
-  getAttribute(name: string): string | null;
-  querySelectorAll?: (selector: string) => Iterable<UploadProgressElementLike>;
-  setAttribute?: (name: string, value: string) => void;
-  attributes?: Iterable<{ name: string; value: string }>;
-}
-
-export interface UploadProgressElementLike {
-  removeAttribute?: (name: string) => void;
+export interface UploadProgressElementLike extends AttributeWriterLike {
   setAttribute(name: string, value: string): void;
 }
 
