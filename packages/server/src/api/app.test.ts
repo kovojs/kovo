@@ -51,6 +51,10 @@ describe('server app-shell public API barrels', () => {
     expect(publicApi.staticExportInventoryForJisoAppShellViteBuildFromManifestFile).toBe(
       viteApi.staticExportInventoryForJisoAppShellViteBuildFromManifestFile,
     );
+    expect(publicApi.jisoAppShellViteManifestFile).toBe(viteApi.jisoAppShellViteManifestFile);
+    expect(publicApi.jisoAppShellViteStaticExportAssetsFromManifestFile).toBe(
+      viteApi.jisoAppShellViteStaticExportAssetsFromManifestFile,
+    );
 
     expect(appApi.exportStaticApp).toBe(staticExportApi.exportStaticApp);
     expect(appApi.staticExportInventory).toBe(staticExportApi.staticExportInventory);
@@ -69,6 +73,10 @@ describe('server app-shell public API barrels', () => {
     );
     expect(appShellApi.staticExportInventoryForJisoAppShellViteBuildFromManifestFile).toBe(
       viteApi.staticExportInventoryForJisoAppShellViteBuildFromManifestFile,
+    );
+    expect(appShellApi.jisoAppShellViteManifestFile).toBe(viteApi.jisoAppShellViteManifestFile);
+    expect(appShellApi.jisoAppShellViteStaticExportAssetsFromManifestFile).toBe(
+      viteApi.jisoAppShellViteStaticExportAssetsFromManifestFile,
     );
 
     type PublicAppShellTypesStayAssignable = [
@@ -107,6 +115,10 @@ describe('server app-shell public API barrels', () => {
     expect(packageViteApi.staticExportInventoryForJisoAppShellViteBuildFromManifestFile).toBe(
       viteApi.staticExportInventoryForJisoAppShellViteBuildFromManifestFile,
     );
+    expect(packageViteApi.jisoAppShellViteManifestFile).toBe(viteApi.jisoAppShellViteManifestFile);
+    expect(packageViteApi.jisoAppShellViteStaticExportAssetsFromManifestFile).toBe(
+      viteApi.jisoAppShellViteStaticExportAssetsFromManifestFile,
+    );
 
     expect(packageAppShellApi.createRequestHandler).toBe(coreApi.createRequestHandler);
     expect(packageAppShellApi.renderVersionedClientModuleResponse).toBe(
@@ -121,6 +133,12 @@ describe('server app-shell public API barrels', () => {
     );
     expect(packageAppShellApi.staticExportInventoryForJisoAppShellViteBuildFromManifestFile).toBe(
       viteApi.staticExportInventoryForJisoAppShellViteBuildFromManifestFile,
+    );
+    expect(packageAppShellApi.jisoAppShellViteManifestFile).toBe(
+      viteApi.jisoAppShellViteManifestFile,
+    );
+    expect(packageAppShellApi.jisoAppShellViteStaticExportAssetsFromManifestFile).toBe(
+      viteApi.jisoAppShellViteStaticExportAssetsFromManifestFile,
     );
   });
 });

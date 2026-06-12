@@ -3083,6 +3083,18 @@ land it first; don't fork it.
       `corepack pnpm exec vitest --run packages/server/src/response.test.ts packages/server/src/app.test.ts packages/server/src/webhook.test.ts`,
       `corepack pnpm exec vp check packages/server/src/app.ts packages/server/src/response.ts packages/server/src/response.test.ts packages/server/src/webhook.ts plans/codebase-quality-round2.md`,
       and `git diff --check`.
+      Additional evidence 2026-06-12: the Vite/app-shell build seam now exposes
+      `jisoAppShellViteManifestFile()` plus
+      `jisoAppShellViteStaticExportAssetsFromManifestFile()` through the root server barrel,
+      aggregate app-shell barrel, and `@jiso/server/app-shell/vite`, so export-task consumers can
+      derive validated `StaticExportAssetInput` values from `distDir/.vite/manifest.json` without
+      reaching through manifest/build-asset internals. `packages/server/src/vite-build.test.ts`
+      proves base-aware asset paths and `distDir` source mapping without an output directory;
+      `packages/server/src/api/app.test.ts` proves the public API surface. Same-session evidence:
+      `corepack pnpm exec vitest --run packages/server/src/vite-build.test.ts packages/server/src/api/app.test.ts`,
+      `corepack pnpm exec tsc --noEmit --pretty false`,
+      `corepack pnpm exec vp check packages/server/src/vite-build.ts packages/server/src/vite.ts packages/server/src/api/app-shell/vite.ts packages/server/src/vite-build.test.ts packages/server/src/api/app.test.ts plans/app-shell.md plans/codebase-quality-round2.md`,
+      and `git diff --check`.
 - [ ] **MED — Split `index.ts`** along the round-1 seam list (schema, guards/session,
       csrf/cookies, query, mutation+replay, route, header utils), index.ts a pure barrel. The
       absence of module-level mutable state makes this mechanical today. Name the stringly

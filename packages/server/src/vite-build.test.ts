@@ -9,6 +9,8 @@ import { route } from './route.js';
 import {
   createJisoAppShellViteBuild,
   exportJisoAppShellViteBuild,
+  jisoAppShellViteManifestFile,
+  jisoAppShellViteStaticExportAssetsFromManifestFile,
   staticExportInventoryForJisoAppShellViteBuildFromManifestFile,
   staticExportInventoryForJisoAppShellViteBuild,
   writeJisoAppShellViteBuildOutput,
@@ -254,6 +256,51 @@ describe('server app shell Vite build seam', () => {
         },
       ]);
       await expect(readFile(join(outDir, 'catalog/index.html'))).rejects.toThrow();
+      await expect(readFile(join(outDir, 'assets/catalog.css'))).rejects.toThrow();
+    } finally {
+      await Promise.all([
+        rm(distDir, { force: true, recursive: true }),
+        rm(outDir, { force: true, recursive: true }),
+      ]);
+    }
+  });
+
+  it('returns manifest-file static export assets for task wiring', async () => {
+    const distDir = await mkdtemp(join(tmpdir(), 'jiso-vite-build-manifest-assets-dist-'));
+    const outDir = await mkdtemp(join(tmpdir(), 'jiso-vite-build-manifest-assets-export-'));
+
+    try {
+      await mkdir(join(distDir, '.vite'), { recursive: true });
+      await mkdir(join(distDir, 'assets'), { recursive: true });
+      await writeFile(join(distDir, 'assets/catalog.css'), '.catalog{color:blue}');
+      await writeFile(join(distDir, 'assets/catalog.js'), 'export const catalog = true;');
+      await writeFile(
+        jisoAppShellViteManifestFile(distDir),
+        JSON.stringify({
+          'src/catalog.client.ts': {
+            css: ['assets/catalog.css'],
+            file: 'assets/catalog.js',
+          },
+        }),
+      );
+
+      await expect(
+        jisoAppShellViteStaticExportAssetsFromManifestFile({
+          base: '/shop/',
+          distDir,
+        }),
+      ).resolves.toEqual([
+        {
+          contentType: 'text/css; charset=utf-8',
+          path: '/shop/assets/catalog.css',
+          source: join(distDir, 'assets/catalog.css'),
+        },
+        {
+          contentType: 'text/javascript; charset=utf-8',
+          path: '/shop/assets/catalog.js',
+          source: join(distDir, 'assets/catalog.js'),
+        },
+      ]);
       await expect(readFile(join(outDir, 'assets/catalog.css'))).rejects.toThrow();
     } finally {
       await Promise.all([

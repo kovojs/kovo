@@ -335,6 +335,19 @@ Scope: SPEC addition (proposed §9.5 "The request shell"), `@jiso/server` shell 
       `corepack pnpm exec vitest --run packages/server/src/vite-build.test.ts packages/server/src/api/app.test.ts`,
       `corepack pnpm exec vp check packages/server/src/vite-build.ts packages/server/src/vite.ts packages/server/src/api/app-shell/vite.ts packages/server/src/vite-build.test.ts packages/server/src/api/app.test.ts plans/app-shell.md plans/codebase-quality-round2.md`,
       `corepack pnpm exec tsc --noEmit --pretty false`, and `git diff --check`.
+      Additional evidence 2026-06-12: manifest-file task wiring can now ask the public Vite
+      app-shell API for `StaticExportAssetInput` values directly through
+      `jisoAppShellViteStaticExportAssetsFromManifestFile()`, with
+      `jisoAppShellViteManifestFile()` exposing the default `distDir/.vite/manifest.json`
+      path helper instead of forcing export tasks to reconstruct server internals. The helper
+      reads the validated manifest, honors the Vite base for public asset paths, maps sources
+      under `distDir`, and does not require an output directory. `packages/server/src/vite-build.test.ts`
+      proves the helper behavior, and `packages/server/src/api/app.test.ts` proves root,
+      aggregate app-shell, and `@jiso/server/app-shell/vite` exports. Same-session verification
+      ran `corepack pnpm exec vitest --run packages/server/src/vite-build.test.ts packages/server/src/api/app.test.ts`,
+      `corepack pnpm exec tsc --noEmit --pretty false`,
+      `corepack pnpm exec vp check packages/server/src/vite-build.ts packages/server/src/vite.ts packages/server/src/api/app-shell/vite.ts packages/server/src/vite-build.test.ts packages/server/src/api/app.test.ts plans/app-shell.md plans/codebase-quality-round2.md`,
+      and `git diff --check`.
 - [ ] R7 adoption: starter becomes a routed app served by `vp dev`; commerce runs end-to-end over HTTP; a jiso docs site ships from `vp run export` as the first outside consumer.
       Progress 2026-06-11: commerce is now TSX-authored ahead of the HTTP serve
       entry — `CartBadge`, `OrderHistory`, and `ProductGrid` are authored in

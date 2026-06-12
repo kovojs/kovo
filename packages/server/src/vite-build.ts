@@ -105,6 +105,11 @@ export interface JisoAppShellViteStaticExportAssetOptions {
   distDir: string | URL;
 }
 
+export interface JisoAppShellViteManifestFileStaticExportAssetOptions extends JisoAppShellViteStaticExportAssetOptions {
+  base?: string;
+  manifestFile?: string | URL;
+}
+
 export interface JisoAppShellViteBuildOutputOptions {
   outDir: string | URL;
 }
@@ -226,6 +231,20 @@ export function jisoAppShellViteStaticExportAssets(
       source: viteDistSourcePath(options.distDir, asset.file),
     };
   });
+}
+
+export async function jisoAppShellViteStaticExportAssetsFromManifestFile(
+  options: JisoAppShellViteManifestFileStaticExportAssetOptions,
+): Promise<StaticExportAssetInput[]> {
+  return jisoAppShellViteStaticExportAssets(
+    jisoAppShellViteManifestAssets(
+      await jisoAppShellViteManifestFromFile(
+        options.manifestFile ?? jisoAppShellViteManifestFile(options.distDir),
+      ),
+      viteManifestOptions(options.base),
+    ),
+    { distDir: options.distDir },
+  );
 }
 
 export async function exportJisoAppShellViteBuildFromManifestFile(
@@ -378,7 +397,7 @@ function viteDistSourcePath(distDir: string | URL, file: string): string {
   throw new Error(`App shell build asset must stay within the Vite output directory: ${file}`);
 }
 
-function jisoAppShellViteManifestFile(distDir: string | URL): string {
+export function jisoAppShellViteManifestFile(distDir: string | URL): string {
   return path.join(resolvedFileSystemPath(distDir), '.vite', 'manifest.json');
 }
 
