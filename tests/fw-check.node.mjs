@@ -1408,12 +1408,18 @@ export const ProductCard = component('product-card', {
 
   assert.deepEqual(result.viewTransitions, [{ name: 'product-p1-image' }]);
   // SPEC §4.2: identity is emitted explicitly on native hosts (fw-c).
-  assert.match(
-    serverSource,
-    /<img style="opacity: \.8; view-transition-name: product-p1-image" src="\/p1\.png" fw-c="product-card" \/>/,
+  const renderedElements = parseHtmlElements(executeGeneratedServerRenderSource(serverSource));
+  const renderedImage = renderedElements.find((element) => element.tagName === 'img');
+  assert.deepEqual(renderedImage?.attributes, {
+    'fw-c': 'product-card',
+    src: '/p1.png',
+    style: 'opacity: .8; view-transition-name: product-p1-image',
+  });
+  assert.equal(
+    renderedElements.filter((element) => Object.hasOwn(element.attributes, 'style')).length,
+    1,
   );
-  assert.equal(serverSource.match(/\sstyle=/g)?.length, 1);
-  assert.doesNotMatch(serverSource, /viewTransitionName=/);
+  assert.equal(renderedImage?.attributes.viewTransitionName, undefined);
   assert.deepEqual(interfaceMembersFromSource(registrySource, 'ViewTransitions'), {
     'product-p1-image': 'unknown',
   });
@@ -2121,9 +2127,13 @@ export const ProductLinks = component('product-links', {
   const serverSource = lowered.files.find((file) => file.kind === 'server')?.source ?? '';
   const registrySource = lowered.files.find((file) => file.kind === 'registry')?.source ?? '';
   assert.deepEqual(lowered.diagnostics, []);
-  assert.match(serverSource, /<a href="\/products\/p%201\?max=500">Product<\/a>/);
-  assert.match(serverSource, /<a href="\/cart">Cart<\/a>/);
-  assert.doesNotMatch(serverSource, /<Link|href\('/);
+  const renderedLinks = parseHtmlElements(executeGeneratedServerRenderSource(serverSource)).filter(
+    (element) => element.tagName === 'a',
+  );
+  assert.deepEqual(
+    renderedLinks.map((element) => element.attributes.href),
+    ['/products/p%201?max=500', '/cart'],
+  );
   assert.deepEqual(interfaceMembersFromSource(registrySource, 'RouteRegistry'), {
     '/cart': "import('@jiso/core').Route<'/cart'>",
     '/products/:id': "import('@jiso/core').Route<'/products/:id'>",
