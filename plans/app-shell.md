@@ -428,6 +428,19 @@ Scope: SPEC addition (proposed §9.5 "The request shell"), `@jiso/server` shell 
       `pnpm exec vitest --run examples/reference/src/app.test.ts examples/reference/src/app-shell.test.ts`,
       `pnpm exec vp check examples/reference/src/app-shell.ts examples/reference/src/app-shell.test.ts examples/reference/scripts/export-static.mjs examples/reference/vite.config.ts plans/app-shell.md`,
       and `git diff --check`.
+      Additional evidence 2026-06-12: the commerce app-shell adoption proof now
+      pins the user-facing command matrix in code: package scripts expose
+      `vp dev`, `node scripts/serve.mjs`/`npm start`, and `vp run export`/
+      `npm run static`, while `examples/commerce/src/app-shell.test.ts`
+      executes the serve/export helpers against the same labels and asserts the
+      static export writes pretty `cart/index.html` and `login/index.html`,
+      the versioned `/c/commerce.client.js` module, and the Vite manifest CSS
+      asset. Same-session verification ran
+      `pnpm exec vitest --run examples/commerce/src/app-shell.test.ts`,
+      `pnpm exec vitest --run packages/create-jiso/src/index.test.ts -t "runs the generated starter app-shell request and export proof"`,
+      `pnpm exec vitest --run site/scripts/app-shell.test.mjs`,
+      `pnpm exec vp check examples/commerce/src/app-shell.test.ts plans/app-shell.md`,
+      and `git diff --check`.
       Additional evidence 2026-06-12: commerce now has a positive
       static-export adoption proof for its explicitly public shell surface.
       `examples/commerce/src/app-shell.ts` exports

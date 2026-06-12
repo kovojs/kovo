@@ -36,6 +36,26 @@ afterEach(async () => {
 });
 
 describe('commerce app shell HTTP entry', () => {
+  it('documents the commerce app-shell dev, serve, and export command matrix', async () => {
+    const commerceRoot = fileURLToPath(new URL('..', import.meta.url));
+    const packageJson = JSON.parse(await readFile(path.join(commerceRoot, 'package.json'), 'utf8'));
+
+    expect(packageJson.scripts).toMatchObject({
+      dev: 'vp dev',
+      start: 'node scripts/serve.mjs',
+      static: 'vp run export',
+    });
+    expect(commerceServeCommands().map((command) => command.label)).toEqual([
+      'node scripts/serve.mjs',
+      'vp run serve',
+      'npm start',
+    ]);
+    expect(commerceExportCommands().map((command) => command.label)).toEqual([
+      'vp run export',
+      'npm run static',
+    ]);
+  });
+
   it('serves shell routes, modules, queries, and mutations through the commerce Vite dev middleware', async () => {
     const vite = await createViteServer({
       appType: 'custom',
