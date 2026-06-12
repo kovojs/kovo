@@ -1294,6 +1294,12 @@ As each phase splits a source module, split its tests in the same commit.
       Same-session evidence:
       `pnpm exec vitest --run packages/compiler/src/index.test.ts packages/compiler/src/package-prefixes.test.ts`
       and `pnpm exec vp check packages/compiler/src/index.test.ts`.
+      Additional evidence 2026-06-12: Vite plugin transform and dev-middleware coverage moved from
+      `packages/compiler/src/index.test.ts` to `packages/compiler/src/vite.test.ts`, leaving the
+      broad compiler monolith split item open for further per-phase extraction. Same-session
+      evidence: `pnpm exec vitest --run packages/compiler/src/vite.test.ts packages/compiler/src/index.test.ts`,
+      `pnpm exec vp check packages/compiler/src/vite.test.ts packages/compiler/src/index.test.ts plans/codebase-quality-round2.md`,
+      and `git diff --check`.
 - [ ] drizzle (one describe, 57 its, 68 inline pgTable fixtures, 3 module-shim copies) and
       test-package suites: same treatment; CLI tests get the temp-dir + stream-spy ritual
       (16 hand-copies) as one helper.
