@@ -159,6 +159,85 @@ describe('Drizzle pinned subset conformance', () => {
     ]);
   });
 
+  it('pins nullable project query shapes for real Drizzle right and full joins', () => {
+    const facts = extractQueryFactsFromProject({
+      files: [
+        {
+          fileName: 'conformance/drizzle-pin/src/product.queries.ts',
+          source: `
+            export const discounts = pgTable('discounts', {
+              percent: integer('percent').notNull(),
+              productId: text('product_id'),
+            }, jiso({ domain: 'discount', key: 'productId' }));
+            export const products = pgTable('products', {
+              id: text('id'),
+              name: text('name').notNull(),
+            }, jiso({ domain: 'product', key: 'id' }));
+            export const reviews = pgTable('reviews', {
+              productId: text('product_id'),
+              rating: integer('rating').notNull(),
+            }, jiso({ domain: 'review', key: 'productId' }));
+
+            export const discountQuery = query('discount/full', {
+              load(_input, db) {
+                return db.select({
+                  productName: products.name,
+                  discountPercent: discounts.percent,
+                }).from(products).fullJoin(discounts, eq(discounts.productId, products.id));
+              },
+            });
+
+            export const reviewQuery = query('review/right', {
+              load(_input, db) {
+                return db.select({
+                  product: { name: products.name },
+                  review: { rating: reviews.rating },
+                }).from(products).rightJoin(reviews, eq(reviews.productId, products.id));
+              },
+            });
+          `,
+        },
+      ],
+    });
+
+    expect(facts).toEqual([
+      {
+        query: 'discount/full',
+        reads: ['discount', 'product'],
+        shape: {
+          discountPercent: {
+            kind: 'nullable',
+            shape: 'number',
+          },
+          productName: {
+            kind: 'nullable',
+            shape: 'string',
+          },
+        },
+        site: 'conformance/drizzle-pin/src/product.queries.ts:15',
+      },
+      {
+        query: 'review/right',
+        reads: ['product', 'review'],
+        shape: {
+          product: {
+            kind: 'nullable',
+            shape: {
+              name: {
+                kind: 'nullable',
+                shape: 'string',
+              },
+            },
+          },
+          review: {
+            rating: 'number',
+          },
+        },
+        site: 'conformance/drizzle-pin/src/product.queries.ts:24',
+      },
+    ]);
+  });
+
   it('pins pgTable(name, cols, jiso({...})) as the real Drizzle extra config integration point', () => {
     const cartItems = pgTable(
       'cart_items',

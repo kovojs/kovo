@@ -1071,11 +1071,42 @@ function nullableShape(shape: QueryShape): QueryShape {
 
 function nullableJoinTables(body: string): ReadonlySet<string> {
   const tables = new Set<string>();
-  const joins = /\.leftJoin\s*\(\s*(?<table>[A-Za-z_$][\w$]*(?:\.[A-Za-z_$][\w$]*)?)/g;
+  const relationTables: string[] = [];
+  const tableExpression = `${IDENTIFIER_SOURCE}(?:\\.${IDENTIFIER_SOURCE})?`;
+  const calls = new RegExp(
+    `\\.(?<operation>from|join|innerJoin|leftJoin|rightJoin|fullJoin)\\s*\\(\\s*(?<table>${tableExpression})`,
+    'g',
+  );
 
-  for (const match of body.matchAll(joins)) {
+  for (const match of body.matchAll(calls)) {
+    const operation = match.groups?.operation;
     const table = match.groups?.table;
-    if (table) tables.add(table);
+    if (!operation || !table) continue;
+
+    if (operation === 'leftJoin') {
+      tables.add(table);
+      relationTables.push(table);
+      continue;
+    }
+
+    if (operation === 'rightJoin') {
+      for (const relationTable of relationTables) {
+        tables.add(relationTable);
+      }
+      relationTables.push(table);
+      continue;
+    }
+
+    if (operation === 'fullJoin') {
+      for (const relationTable of relationTables) {
+        tables.add(relationTable);
+      }
+      tables.add(table);
+      relationTables.push(table);
+      continue;
+    }
+
+    relationTables.push(table);
   }
 
   return tables;

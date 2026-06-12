@@ -1220,6 +1220,105 @@ export interface CommerceInvalidationSets {
     ]);
   });
 
+  it('wraps selected right-joined source table columns as nullable query shapes', () => {
+    const facts = extractQueryFactsFromSource([
+      {
+        fileName: 'product.queries.ts',
+        source: `
+          export const products = pgTable("products", {
+            id: text("id"),
+            name: text("name").notNull(),
+          }, jiso({ domain: "product", key: "id" }));
+          export const reviews = pgTable("reviews", {
+            productId: text("product_id"),
+            rating: integer("rating"),
+          }, jiso({ domain: "review", key: "productId" }));
+
+          export const reviewQuery = query("review", {
+            load(_input, db) {
+              return db.select({
+                product: { name: products.name },
+                review: { rating: reviews.rating },
+              }).from(products).rightJoin(reviews, eq(reviews.productId, products.id));
+            },
+          });
+        `,
+      },
+    ]);
+
+    expect(facts).toEqual([
+      {
+        query: 'review',
+        reads: ['product', 'review'],
+        shape: {
+          product: {
+            kind: 'nullable',
+            shape: {
+              name: {
+                kind: 'nullable',
+                shape: 'string',
+              },
+            },
+          },
+          review: {
+            rating: {
+              kind: 'nullable',
+              shape: 'number',
+            },
+          },
+        },
+        site: 'product.queries.ts:11',
+      },
+    ]);
+  });
+
+  it('wraps selected full-joined project columns on both sides as nullable query shapes', () => {
+    const facts = extractQueryFactsFromProject({
+      files: [
+        {
+          fileName: 'product.queries.ts',
+          source: `
+            export const products = pgTable("products", {
+              id: text("id"),
+              name: text("name").notNull(),
+            }, jiso({ domain: "product", key: "id" }));
+            export const reviews = pgTable("reviews", {
+              productId: text("product_id"),
+              rating: integer("rating").notNull(),
+            }, jiso({ domain: "review", key: "productId" }));
+
+            export const productReviewQuery = query("productReview", {
+              load(_input, db) {
+                return db.select({
+                  productName: products.name,
+                  reviewRating: reviews.rating,
+                }).from(products).fullJoin(reviews, eq(reviews.productId, products.id));
+              },
+            });
+          `,
+        },
+      ],
+    });
+
+    expect(facts).toEqual([
+      {
+        query: 'productReview',
+        reads: ['product', 'review'],
+        shape: {
+          productName: {
+            kind: 'nullable',
+            shape: 'string',
+          },
+          reviewRating: {
+            kind: 'nullable',
+            shape: 'number',
+          },
+        },
+        site: 'product.queries.ts:11',
+      },
+    ]);
+  });
+
   it('extracts direct insert-select and update-from read source tables', () => {
     const graph = extractTouchGraphFromSource([
       {
