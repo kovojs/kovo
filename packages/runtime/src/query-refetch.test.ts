@@ -1,7 +1,36 @@
 import { describe, expect, it, vi } from 'vitest';
 
 import { createQueryStore } from './query-store.js';
-import { createRefetchQueryLedger, refetchQueries } from './query-refetch.js';
+import {
+  createRefetchQueryLedger,
+  installQueryVisibleReturnRefetch,
+  refetchQueries,
+} from './query-refetch.js';
+
+class FakeVisibleReturnRoot {
+  listeners = new Map<string, (event: unknown) => void | Promise<void>>();
+  scripts: QueryScript[] = [];
+  visibilityState: 'hidden' | 'visible' = 'visible';
+
+  addEventListener(type: string, listener: (event: unknown) => void | Promise<void>): void {
+    this.listeners.set(type, listener);
+  }
+
+  removeEventListener(type: string, listener: (event: unknown) => void | Promise<void>): void {
+    if (this.listeners.get(type) === listener) {
+      this.listeners.delete(type);
+    }
+  }
+
+  querySelectorAll(selector: string): Iterable<QueryScript> {
+    return selector === 'script[fw-query]' ? this.scripts : [];
+  }
+}
+
+interface QueryScript {
+  getAttribute(name: string): string | null;
+  textContent: string | null;
+}
 
 describe('query refetch ledger', () => {
   it('dedupes hydrated and later-applied query names while preserving first-seen order', () => {
@@ -16,6 +45,57 @@ describe('query refetch ledger', () => {
 });
 
 describe('query refetch', () => {
+  it('hydrates new query scripts before visible-return refetch and dedupes in-flight work', async () => {
+    const root = new FakeVisibleReturnRoot();
+    const store = createQueryStore();
+    const refetchOnFocus = vi.fn();
+    let resolveFetchText: ((body: string) => void) | undefined;
+    const fetchText = new Promise<string>((resolve) => {
+      resolveFetchText = resolve;
+    });
+    const fetch = vi.fn(async () => ({
+      status: 200,
+      text: () => fetchText,
+    }));
+
+    root.scripts = [
+      {
+        getAttribute: (name) => (name === 'fw-query' ? 'cart' : null),
+        textContent: '{"count":1}',
+      },
+    ];
+
+    const refetch = installQueryVisibleReturnRefetch({
+      queryRefetch: { fetch },
+      queryScripts: () => root.querySelectorAll('script[fw-query]'),
+      queryStore: store,
+      refetchOnFocus,
+      root,
+    });
+
+    root.scripts.push({
+      getAttribute: (name) => (name === 'fw-query' ? 'reviews' : null),
+      textContent: '{"total":3}',
+    });
+
+    const first = root.listeners.get('visibilitychange')?.({});
+    const second = root.listeners.get('visibilitychange')?.({});
+    await Promise.resolve();
+
+    // SPEC.md section 4.4: visible-return refetch follows query data discovered after install.
+    expect(refetchOnFocus).toHaveBeenCalledWith(['cart', 'reviews']);
+    expect(fetch).toHaveBeenCalledTimes(1);
+
+    resolveFetchText?.('<fw-query name="cart">{"count":2}</fw-query>');
+    await Promise.all([first, second]);
+
+    expect(store.get('cart')).toEqual({ count: 2 });
+    expect(store.get('reviews')).toEqual({ total: 3 });
+
+    refetch.dispose();
+    expect(root.listeners.has('visibilitychange')).toBe(false);
+  });
+
   it('applies successful typed read chunks and reports names for the loader ledger', async () => {
     const store = createQueryStore();
     const cartPlan = vi.fn();

@@ -1544,6 +1544,14 @@ params, relational API, `execute(sql)`, right/full joins, a string column named 
       `pnpm exec vitest --run packages/runtime/src/index.test.ts -t "optimistic|pagehide|enhanced mutations"`,
       `pnpm exec vp check packages/runtime/src/index.ts packages/runtime/src/optimism.ts`, and
       `git diff --check`.
+      Additional bounded evidence 2026-06-12: `packages/runtime/src/query-refetch.ts` now owns
+      the visible-return query hydration/refetch installer, including new `script[fw-query]`
+      discovery, opt-out filtering, typed-read application, and in-flight refetch dedupe;
+      `packages/runtime/src/index.ts` delegates that loader slice while retaining public loader
+      orchestration. Same-session evidence:
+      `pnpm exec vitest --run packages/runtime/src/query-refetch.test.ts packages/runtime/src/query-store.test.ts packages/runtime/src/index.test.ts -t "hydrate|visible-return|refetch"`,
+      `pnpm exec vp check packages/runtime/src/index.ts packages/runtime/src/query-refetch.ts packages/runtime/src/query-refetch.test.ts plans/codebase-quality-round2.md`,
+      and `git diff --check`.
 - [ ] **LOW** — `hydratedQueries` frozen at install (index.ts:330-342): queries introduced by
       later mutations never become refetch-eligible — fix or document as SPEC-intended;
       `unescapeHtml` missing `&#39;`/`&apos;` (wire-parser.ts:162-168) — pin the server↔runtime
@@ -1583,6 +1591,14 @@ params, relational API, `execute(sql)`, right/full joins, a string column named 
       typed read response. Same-session evidence:
       `pnpm exec vitest --run packages/runtime/src/query-refetch.test.ts packages/runtime/src/query-store.test.ts packages/runtime/src/index.test.ts -t "hydrate|visible-return|refetch"`,
       `pnpm exec vp check packages/runtime/src/index.ts packages/runtime/src/query-store.test.ts plans/codebase-quality-round2.md`,
+      and `git diff --check`.
+      Additional bounded evidence 2026-06-12: `installQueryVisibleReturnRefetch` now carries the
+      visible-return re-scan and refetch listener that had lived in `installJisoLoader`, so the
+      hydrated-query ledger, newly inserted script discovery, typed-read application, and
+      overlapping visible-return dedupe are covered in `packages/runtime/src/query-refetch.test.ts`
+      without relying only on `index.test.ts`. Same-session evidence:
+      `pnpm exec vitest --run packages/runtime/src/query-refetch.test.ts packages/runtime/src/query-store.test.ts packages/runtime/src/index.test.ts -t "hydrate|visible-return|refetch"`,
+      `pnpm exec vp check packages/runtime/src/index.ts packages/runtime/src/query-refetch.ts packages/runtime/src/query-refetch.test.ts plans/codebase-quality-round2.md`,
       and `git diff --check`.
 
 Verification: runtime node + browser suites; gzip budget; the new parity suite is the gate for

@@ -1,6 +1,7 @@
 import { applyMutationResponseToStore } from './apply-path.js';
 import type { AppliedMutationResponse } from './apply-path.js';
-import type { QueryStore } from './query-store.js';
+import { hydrateQueryScripts } from './query-store.js';
+import type { QueryScriptLike, QueryStore } from './query-store.js';
 
 export interface QueryRefetchOptions {
   fetch: QueryRefetchFetch;
@@ -26,6 +27,35 @@ export interface QueryRefetchResponse {
 export interface RefetchQueryLedger {
   eligible(optOut?: readonly string[]): readonly string[];
   remember(queries: readonly string[]): void;
+}
+
+export interface QueryVisibleReturnRefetchRoot {
+  addEventListener(
+    type: string,
+    listener: (event: unknown) => void | Promise<void>,
+    options?: { capture?: boolean },
+  ): void;
+  removeEventListener?: (
+    type: string,
+    listener: (event: unknown) => void | Promise<void>,
+    options?: { capture?: boolean },
+  ) => void;
+  visibilityState?: 'hidden' | 'visible';
+}
+
+export interface QueryVisibleReturnRefetchOptions {
+  onError?: (error: unknown) => void;
+  queryScripts?: () => Iterable<QueryScriptLike>;
+  queryRefetch?: QueryRefetchOptions;
+  queryStore?: QueryStore;
+  refetchOnFocus?: (queries: readonly string[]) => void | Promise<void>;
+  refetchOnFocusOptOut?: readonly string[];
+  root: QueryVisibleReturnRefetchRoot;
+}
+
+export interface InstalledQueryVisibleReturnRefetch {
+  dispose(): void;
+  rememberAppliedQueries(queries: readonly string[]): void;
 }
 
 export function createRefetchQueryLedger(
@@ -55,6 +85,82 @@ export function createRefetchQueryLedger(
       return eligible;
     },
     remember,
+  };
+}
+
+export function installQueryVisibleReturnRefetch(
+  options: QueryVisibleReturnRefetchOptions,
+): InstalledQueryVisibleReturnRefetch {
+  const ledger = createRefetchQueryLedger();
+  const seenQueryScripts = new Set<QueryScriptLike>();
+
+  const hydrateNewQueryScripts = () => {
+    if (!options.queryStore || !options.queryScripts) return;
+
+    const scripts: QueryScriptLike[] = [];
+    for (const script of options.queryScripts()) {
+      if (seenQueryScripts.has(script)) continue;
+
+      seenQueryScripts.add(script);
+      scripts.push(script);
+    }
+
+    ledger.remember(
+      hydrateQueryScripts(options.queryStore, scripts, {
+        onError(error) {
+          options.onError?.(error);
+        },
+      }),
+    );
+  };
+
+  hydrateNewQueryScripts();
+
+  if (!options.refetchOnFocus && (!options.queryRefetch || !options.queryStore)) {
+    return {
+      dispose() {},
+      rememberAppliedQueries: (queries) => {
+        ledger.remember(queries);
+      },
+    };
+  }
+
+  let refetchInFlight: Promise<void> | undefined;
+  const refetchOnVisibleReturn = async () => {
+    // SPEC.md §4.4: visible-return refetch follows hydrated query data, including
+    // query scripts introduced by later fragment/stream DOM updates.
+    hydrateNewQueryScripts();
+    const queries = ledger.eligible(options.refetchOnFocusOptOut);
+    await options.refetchOnFocus?.(queries);
+    if (options.queryRefetch && options.queryStore) {
+      const applied = await refetchQueries({
+        ...options.queryRefetch,
+        queries,
+        queryStore: options.queryStore,
+      });
+      ledger.remember(applied.flatMap((chunk) => chunk.queries));
+    }
+  };
+  const refetchOnce = () => {
+    refetchInFlight ??= refetchOnVisibleReturn().finally(() => {
+      refetchInFlight = undefined;
+    });
+    return refetchInFlight;
+  };
+  const listener = async () => {
+    if (options.root.visibilityState === 'hidden') return;
+    await refetchOnce();
+  };
+
+  options.root.addEventListener('visibilitychange', listener);
+
+  return {
+    dispose() {
+      options.root.removeEventListener?.('visibilitychange', listener);
+    },
+    rememberAppliedQueries(queries) {
+      ledger.remember(queries);
+    },
   };
 }
 

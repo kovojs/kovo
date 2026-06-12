@@ -1,7 +1,7 @@
 export type { DiagnosticCode } from '@jiso/core';
 import type { Form, FormFailure, FormInput, JsonValue } from '@jiso/core';
 import { parseJsonValue } from './json.js';
-import { hydrateQueryScripts, queryStoreKey } from './query-store.js';
+import { queryStoreKey } from './query-store.js';
 import type { QueryScriptLike, QueryStore } from './query-store.js';
 import {
   applyDeferredChunkToDom,
@@ -28,7 +28,7 @@ import {
   sanitizeMutationChangeRecord,
 } from './mutation-response.js';
 import type { CompiledQueryUpdatePlans } from './query-bindings.js';
-import { createRefetchQueryLedger, refetchQueries } from './query-refetch.js';
+import { installQueryVisibleReturnRefetch } from './query-refetch.js';
 import type { QueryRefetchOptions } from './query-refetch.js';
 import {
   installPagehideOptimismCleanup,
@@ -231,36 +231,25 @@ export function installJisoLoader(options: JisoLoaderOptions): JisoLoader {
   const events = options.events ?? defaultDelegatedEvents;
   const islandSignalScope = createIslandSignalScope();
   const disposers: Array<() => void> = [];
-  const hydratedQueryLedger = createRefetchQueryLedger();
-  const seenQueryScripts = new Set<QueryScriptLike>();
   const enhancedMutationSetup = options.enhancedMutations
     ? withDefaultMutationBroadcast(options.enhancedMutations)
     : undefined;
   const enhancedMutations = enhancedMutationSetup?.options;
-
-  const hydrateNewQueryScripts = () => {
-    if (!options.queryStore || !options.root.querySelectorAll) return;
-
-    const scripts: QueryScriptLike[] = [];
-    for (const script of options.root.querySelectorAll(
-      'script[fw-query]',
-    ) as Iterable<QueryScriptLike>) {
-      if (seenQueryScripts.has(script)) continue;
-
-      seenQueryScripts.add(script);
-      scripts.push(script);
-    }
-
-    hydratedQueryLedger.remember(
-      hydrateQueryScripts(options.queryStore, scripts, {
-        onError(error) {
-          options.onError?.(error, { phase: 'query-hydration' });
-        },
-      }),
-    );
-  };
-
-  hydrateNewQueryScripts();
+  const queryVisibleReturn = installQueryVisibleReturnRefetch({
+    onError(error) {
+      options.onError?.(error, { phase: 'query-hydration' });
+    },
+    ...definedProps({
+      queryRefetch: options.queryRefetch,
+      queryScripts: options.root.querySelectorAll
+        ? () => options.root.querySelectorAll?.('script[fw-query]') as Iterable<QueryScriptLike>
+        : undefined,
+      queryStore: options.queryStore,
+      refetchOnFocus: options.refetchOnFocus,
+      refetchOnFocusOptOut: options.refetchOnFocusOptOut,
+    }),
+    root: options.root,
+  });
 
   for (const eventName of events) {
     addLoaderListener(
@@ -271,7 +260,9 @@ export function installJisoLoader(options: JisoLoaderOptions): JisoLoader {
         try {
           if (
             await dispatchEnhancedFormSubmit(event, enhancedMutations, islandSignalScope, {
-              onAppliedQueries: (queries) => hydratedQueryLedger.remember(queries),
+              onAppliedQueries: (queries) => {
+                queryVisibleReturn.rememberAppliedQueries(queries);
+              },
             })
           ) {
             return;
@@ -289,43 +280,9 @@ export function installJisoLoader(options: JisoLoaderOptions): JisoLoader {
     );
   }
 
-  if (options.refetchOnFocus || (options.queryRefetch && options.queryStore)) {
-    const refetchEligibleQueries = () => {
-      // SPEC.md §4.4: visible-return refetch follows hydrated query data, including
-      // query scripts introduced by later fragment/stream DOM updates.
-      hydrateNewQueryScripts();
-      return hydratedQueryLedger.eligible(options.refetchOnFocusOptOut);
-    };
-    let refetchInFlight: Promise<void> | undefined;
-    const refetchOnFocus = async () => {
-      const queries = refetchEligibleQueries();
-      await options.refetchOnFocus?.(queries);
-      if (options.queryRefetch && options.queryStore) {
-        const applied = await refetchQueries({
-          ...options.queryRefetch,
-          queries,
-          queryStore: options.queryStore,
-        });
-        hydratedQueryLedger.remember(applied.flatMap((chunk) => chunk.queries));
-      }
-    };
-    const refetchOnce = () => {
-      refetchInFlight ??= refetchOnFocus().finally(() => {
-        refetchInFlight = undefined;
-      });
-      return refetchInFlight;
-    };
-
-    addLoaderListener(
-      options.root,
-      'visibilitychange',
-      async () => {
-        if (options.root.visibilityState === 'hidden') return;
-        await refetchOnce();
-      },
-      disposers,
-    );
-  }
+  disposers.push(() => {
+    queryVisibleReturn.dispose();
+  });
 
   if (options.discardPendingOptimism) {
     disposers.push(
