@@ -470,6 +470,17 @@ tables)` now emits both logical and physical table facts for runtime SQL verific
       including `deviceAuthorization()`'s `number` field mapping to a Drizzle integer column.
       Same-session evidence:
       `pnpm exec vitest --run packages/better-auth/src/index.test.ts conformance/better-auth-pin/src/index.test.ts --reporter=dot`.
+      Partial evidence 2026-06-12: generated app `schema.ts` declarations now honor
+      Better Auth field alias metadata for both plain `fieldName: "..."` and nested
+      `fieldName: { fieldName: "..." }` metadata shapes, while retaining logical
+      `jiso({ domain, key })` bridge keys. Explicit `id` metadata is no longer
+      hardcoded away: supported id types/aliases generate the matching Drizzle primary-key
+      column, and unsupported id types degrade as FW406 instead of fabricating a declaration.
+      `packages/better-auth/src/index.test.ts` covers local string and nested field aliases
+      plus unsupported id metadata, and `conformance/better-auth-pin/src/index.test.ts`
+      pins real Better Auth `fieldName` metadata for `user.email` and `session.userId`.
+      Same-session evidence:
+      `pnpm exec vitest --run packages/better-auth/src/index.test.ts conformance/better-auth-pin/src/index.test.ts --reporter=dot`.
       Remaining gaps: plugin-generated tables outside the blessed organization/admin/two-factor/OIDC-provider/MCP/SIWE/JWT/device-authorization
       surface are still not mapped, the OAuth-provider successor package/table metadata is not
       installed or exportable from the pinned dependency set, and generated schema declarations

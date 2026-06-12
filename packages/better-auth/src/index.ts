@@ -1612,8 +1612,12 @@ function betterAuthGeneratedSchemaColumns(
     };
   }
 
-  const lines = [`id: text('id').primaryKey(),`];
-  const builders = new Set<BetterAuthGeneratedSchemaFieldBuilder>(['text']);
+  const idColumn = betterAuthGeneratedSchemaIdColumn(table, physicalTable, fields.id);
+
+  if ('degradation' in idColumn) return idColumn;
+
+  const lines = [`id: ${idColumn.expression},`];
+  const builders = new Set<BetterAuthGeneratedSchemaFieldBuilder>([idColumn.builder]);
 
   for (const [field, fieldMetadata] of Object.entries(fields)) {
     if (field === 'id') continue;
@@ -1627,6 +1631,53 @@ function betterAuthGeneratedSchemaColumns(
   }
 
   return { builders, lines };
+}
+
+function betterAuthGeneratedSchemaIdColumn(
+  table: string,
+  physicalTable: string,
+  metadata: unknown,
+):
+  | {
+      builder: BetterAuthGeneratedSchemaFieldBuilder;
+      expression: string;
+    }
+  | { degradation: BetterAuthGeneratedSchemaTableDegradation } {
+  if (metadata === undefined) {
+    return {
+      builder: 'text',
+      expression: "text('id').primaryKey()",
+    };
+  }
+
+  const type = betterAuthFieldType(metadata);
+  const builder = betterAuthGeneratedSchemaFieldBuilder(type);
+  const fieldNames = betterAuthTableFieldNames({ fields: { id: metadata } });
+
+  if (builder === null) {
+    return {
+      degradation: generatedSchemaTableDegradation({
+        field: 'id',
+        fields: fieldNames,
+        message: `${betterAuthTableLabel(
+          table,
+          physicalTable,
+        )} cannot be generated because field id has unsupported Better Auth type ${String(
+          type ?? 'unavailable',
+        )}.`,
+        physicalTable,
+        reason: 'unsupported-field-type',
+        table,
+      }),
+    };
+  }
+
+  const columnName = betterAuthFieldName('id', metadata);
+
+  return {
+    builder,
+    expression: `${builder}(${quoteTsString(columnName)}).primaryKey()`,
+  };
 }
 
 function betterAuthGeneratedSchemaColumn(
@@ -1706,7 +1757,17 @@ function betterAuthFieldName(field: string, metadata: unknown): string {
 
   const fieldName = (metadata as { fieldName?: unknown }).fieldName;
 
-  return typeof fieldName === 'string' && fieldName.length > 0 ? fieldName : field;
+  if (typeof fieldName === 'string' && fieldName.length > 0) return fieldName;
+
+  if (fieldName && typeof fieldName === 'object') {
+    const nestedFieldName = (fieldName as { fieldName?: unknown }).fieldName;
+
+    if (typeof nestedFieldName === 'string' && nestedFieldName.length > 0) {
+      return nestedFieldName;
+    }
+  }
+
+  return field;
 }
 
 function betterAuthFieldRequired(metadata: unknown): boolean {

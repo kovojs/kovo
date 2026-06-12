@@ -441,6 +441,49 @@ describe('Better Auth pinned conformance', () => {
     );
   });
 
+  it('generates real Better Auth fieldName aliases from table metadata', () => {
+    const { auth } = createRealAuth({
+      session: {
+        fields: {
+          userId: 'user_id',
+        },
+      },
+      user: {
+        fields: {
+          email: 'email_address',
+        },
+      },
+    });
+    const tables = getAuthTables(auth.options);
+    const sessionTable = requireAuthTable(tables, 'session');
+    const userTable = requireAuthTable(tables, 'user');
+    const result = generateBetterAuthSchemaSource(tables);
+
+    expect(sessionTable.fields.userId?.fieldName).toBe('user_id');
+    expect(userTable.fields.email?.fieldName).toBe('email_address');
+    // SPEC.md §10.1 / §11.2: generated schema.ts must use Better Auth's
+    // physical column metadata while retaining logical bridge keys.
+    expect(result.validation.ok).toBe(true);
+    expect(result.skippedTables).toEqual([]);
+    expect(result.source).toContain(
+      "export const user = pgTable('user', {\n" +
+        "  id: text('id').primaryKey(),\n" +
+        "  name: text('name').notNull(),\n" +
+        "  email: text('email_address').notNull(),",
+    );
+    expect(result.source).toContain(
+      "export const session = pgTable('session', {\n" +
+        "  id: text('id').primaryKey(),\n" +
+        "  expiresAt: timestamp('expiresAt').notNull(),\n" +
+        "  token: text('token').notNull(),\n" +
+        "  createdAt: timestamp('createdAt').notNull(),\n" +
+        "  updatedAt: timestamp('updatedAt').notNull(),\n" +
+        "  ipAddress: text('ipAddress'),\n" +
+        "  userAgent: text('userAgent'),\n" +
+        "  userId: text('user_id').notNull(),",
+    );
+  });
+
   it('materializes real Better Auth metadata when schema.ts aliases Drizzle table factories', () => {
     const { auth } = createRealAuth({
       plugins: [

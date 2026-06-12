@@ -2123,6 +2123,73 @@ describe('credential mutation helpers', () => {
     );
   });
 
+  it('generates explicit Better Auth id field aliases and types', () => {
+    const result = generateBetterAuthSchemaSource({
+      account: authTable(['userId']),
+      session: {
+        fields: {
+          userId: { fieldName: { fieldName: 'user_id' }, required: true, type: 'string' },
+        },
+      },
+      user: {
+        fields: {
+          email: { fieldName: { fieldName: 'email_address' }, required: true, type: 'string' },
+          id: { fieldName: 'auth_user_id', required: true, type: 'number' },
+        },
+      },
+      verification: authTable(),
+    });
+
+    // SPEC.md §10.1 / §11.2: generated schema.ts reflects physical Better
+    // Auth metadata, including explicit column aliases on bridge key fields.
+    expect(result.validation.ok).toBe(true);
+    expect(result.skippedTables).toEqual([]);
+    expect(result.requiredImports).toEqual([
+      "import { jiso } from '@jiso/drizzle';",
+      "import { integer, pgTable, text } from 'drizzle-orm/pg-core';",
+    ]);
+    expect(result.source).toContain(
+      "export const session = pgTable('session', {\n" +
+        "  id: text('id').primaryKey(),\n" +
+        "  userId: text('user_id').notNull(),\n" +
+        "}, jiso({ domain: 'auth', key: 'userId' }));",
+    );
+    expect(result.source).toContain(
+      "export const user = pgTable('user', {\n" +
+        "  id: integer('auth_user_id').primaryKey(),\n" +
+        "  email: text('email_address').notNull(),\n" +
+        "}, jiso({ domain: 'user', key: 'id' }));",
+    );
+  });
+
+  it('degrades generated schema.ts when explicit id metadata has an unsupported type', () => {
+    const result = generateBetterAuthSchemaSource({
+      account: authTable(['userId']),
+      session: authTable(['userId']),
+      user: {
+        fields: {
+          id: { fieldName: 'auth_user_id', type: 'json' },
+        },
+      },
+      verification: authTable(),
+    });
+
+    expect(result.source).not.toContain('export const user');
+    expect(result.skippedTables).toContainEqual({
+      diagnosticCode: 'FW406',
+      field: 'id',
+      fields: ['id'],
+      manualBridgeSteps: [
+        'Inspect Better Auth metadata for user and write the Drizzle declaration manually.',
+        'Verify field id in Better Auth metadata before adding the matching Jiso annotation.',
+        'Keep observed writes FW406 until schema.ts and declared Better Auth API touches both cover the table under SPEC.md §11.2.',
+      ],
+      message: 'user cannot be generated because field id has unsupported Better Auth type json.',
+      reason: 'unsupported-field-type',
+      table: 'user',
+    });
+  });
+
   it('keeps unsupported plugin tables out of generated schema.ts with FW406 facts', () => {
     const result = generateBetterAuthSchemaSource({
       account: authTable(['userId']),
