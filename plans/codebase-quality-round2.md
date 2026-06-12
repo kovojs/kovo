@@ -2326,6 +2326,20 @@ params, relational API, `execute(sql)`, right/full joins, a string column named 
       `pnpm --filter @jiso/runtime run check:inline-loader`,
       `pnpm exec vp check packages/runtime/src/inline-loader-build.ts packages/runtime/src/inline-loader.ts packages/runtime/src/inline-loader.test.ts plans/codebase-quality-round2.md`,
       and `git diff --check`.
+      Additional bounded evidence 2026-06-12: `packages/runtime/src/inline-js-minifier.ts`
+      now owns the TypeScript-scanner-backed inline JavaScript minifier and AST/token
+      fail-closed checks, leaving `packages/runtime/src/inline-loader-build.ts` focused on
+      readable SPEC.md §4.4 loader source and checked-in module emission. The detailed
+      string/comment/regex hazard coverage moved from the broad inline-loader parity suite into
+      `packages/runtime/src/inline-js-minifier.test.ts`, while `packages/runtime/src/inline-loader.test.ts`
+      still pins the generated loader module and runtime parity matrix. `packages/runtime/src/index.test.ts`
+      now keeps inline enhanced-submit fixtures aligned with the production `enhance` attribute
+      gate. Same-session evidence:
+      `pnpm --filter @jiso/runtime run check:inline-loader`,
+      `pnpm exec vitest --run packages/runtime/src/inline-js-minifier.test.ts packages/runtime/src/inline-loader.test.ts`,
+      `pnpm exec vitest --run packages/runtime/src/index.test.ts`,
+      `pnpm exec vp check packages/runtime/src/inline-js-minifier.ts packages/runtime/src/inline-js-minifier.test.ts packages/runtime/src/inline-loader-build.ts packages/runtime/src/inline-loader.test.ts packages/runtime/src/index.test.ts plans/codebase-quality-round2.md`,
+      and `git diff --check`.
 - [x] **HIGH — Ship the DOM morph.** The only real keyed DOM morph (focus/selection/scroll
       capture-restore) lives in index.browser.test.ts:12-182; every consumer must rewrite it, and
       the flagship browser test substantially tests its own test code. Promote to a
