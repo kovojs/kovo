@@ -38,21 +38,99 @@ function installInlineJisoLoader(importModule) {
   ];
   const findFragmentTarget = (target) =>
     doc.getElementById(target) ?? doc.querySelector('[fw-fragment-target="' + target + '"]');
+  const unescapeHtml = (value) =>
+    value
+      .replaceAll('&#39;', "'")
+      .replaceAll('&apos;', "'")
+      .replaceAll('&quot;', '"')
+      .replaceAll('&gt;', '>')
+      .replaceAll('&lt;', '<')
+      .replaceAll('&amp;', '&');
+  const tagClose = (source, start) => {
+    let quote;
+    for (let index = start; index < source.length; index += 1) {
+      const char = source[index];
+      if (quote) {
+        if (char === quote) quote = undefined;
+        continue;
+      }
+      if (char === '"' || char === "'") {
+        quote = char;
+        continue;
+      }
+      if (char === '>') return index;
+    }
+  };
+  const readAttribute = (attrs, name) => {
+    const match = new RegExp(
+      '(?:^|\\s)' +
+        name +
+        "(?=\\s|=|$|/)(?:\\s*=\\s*(?:\"([^\"]*)\"|'([^']*)'|([^\\s\"'=<>\\x60]+)))?(?=\\s|$|/|>)",
+      'i',
+    ).exec(attrs);
+    return unescapeHtml((match && (match[1] ?? match[2] ?? match[3])) || '') || null;
+  };
+  const matchingElementEnd = (body, tagName, start, openingEnd, nested) => {
+    if (!nested) {
+      const closingTag = new RegExp('</' + tagName + '\\s*>', 'gi');
+      closingTag.lastIndex = openingEnd + 1;
+      const match = closingTag.exec(body);
+      return match && { closeStart: match.index, end: match.index + match[0].length };
+    }
+    const elementTag = new RegExp('</?' + tagName + '\\b', 'gi');
+    elementTag.lastIndex = start;
+    let depth = 0;
+    for (let match = elementTag.exec(body); match; match = elementTag.exec(body)) {
+      const close = tagClose(body, match.index + match[0].length);
+      if (close === undefined) return null;
+      if (match[0].startsWith('</')) {
+        depth -= 1;
+        if (depth === 0) return { closeStart: match.index, end: close + 1 };
+      } else if (!/\/\s*>$/.test(body.slice(match.index, close + 1))) {
+        depth += 1;
+      }
+      elementTag.lastIndex = close + 1;
+    }
+    return null;
+  };
+  const readChunks = (body, tagName, nested) => {
+    const chunks = [];
+    const tag = new RegExp('</?' + tagName + '\\b', 'gi');
+    let offset = 0;
+    while (offset < body.length) {
+      tag.lastIndex = offset;
+      const match = tag.exec(body);
+      if (!match) break;
+      if (match[0].startsWith('</')) {
+        offset = match.index + match[0].length;
+        continue;
+      }
+      const openingEnd = tagClose(body, match.index + match[0].length);
+      if (openingEnd === undefined) break;
+      const end = matchingElementEnd(body, tagName, match.index, openingEnd, nested);
+      if (!end) break;
+      chunks.push({
+        attrs: body.slice(match.index + match[0].length, openingEnd),
+        content: body.slice(openingEnd + 1, end.closeStart),
+      });
+      offset = end.end;
+    }
+    return chunks;
+  };
   const applyFragment = (fragment) => {
-    const target = fragment.getAttribute('target');
+    const target = readAttribute(fragment.attrs, 'target');
     const element = target && findFragmentTarget(target);
     if (!element) return;
-    if (fragment.getAttribute('mode') === 'append') {
-      element.insertAdjacentHTML('beforeend', fragment.innerHTML);
+    if (readAttribute(fragment.attrs, 'mode') === 'append') {
+      element.insertAdjacentHTML('beforeend', fragment.content);
     } else {
-      element.innerHTML = fragment.innerHTML;
+      element.innerHTML = fragment.content;
     }
   };
   const applyResponseBody = (body) => {
-    const parsed = new DOMParser().parseFromString(body, 'text/html');
-    parsed.querySelectorAll('fw-query').forEach((query) => {
-      const name = query.getAttribute('name');
-      const queryBody = query.textContent ?? 'null';
+    readChunks(body, 'fw-query', false).forEach((query) => {
+      const name = readAttribute(query.attrs, 'name');
+      const queryBody = unescapeHtml(query.content || 'null');
       if (!name) return;
       try {
         JSON.parse(queryBody);
@@ -63,13 +141,13 @@ function installInlineJisoLoader(importModule) {
         new CustomEvent('jiso:query', {
           detail: {
             body: queryBody,
-            key: query.getAttribute('key') ?? undefined,
+            key: readAttribute(query.attrs, 'key') ?? undefined,
             name,
           },
         }),
       );
     });
-    parsed.querySelectorAll('fw-fragment').forEach(applyFragment);
+    readChunks(body, 'fw-fragment', true).forEach(applyFragment);
   };
   const fallbackSubmit = (form) => {
     if (typeof form.submit === 'function') {

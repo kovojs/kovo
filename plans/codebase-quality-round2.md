@@ -168,6 +168,9 @@ Closed evidence so far:
   and mutation failure parsing; duplicate mutation-failure scanner removed.
 - Inline-loader build/minifier has substantially more parity coverage and fails closed for
   unsupported template interpolation.
+- Inline enhanced-form response application now uses a quote-aware inline scanner instead of
+  `DOMParser`; parity tests cover escaped query JSON/keys and nested fragments across readable,
+  freshly minified, generated, and extracted installer sources.
 
 Open:
 
@@ -177,10 +180,9 @@ Open:
 
 Recent gates:
 
-- `pnpm exec vitest --run packages/runtime/src`
+- `pnpm exec vitest --run packages/runtime/src/inline-loader.test.ts packages/runtime/src/wire-parser.test.ts packages/runtime/src/mutation-response.test.ts packages/runtime/src/index.test.ts`
 - `pnpm --filter @jiso/runtime run check:inline-loader`
-- `pnpm exec vp check packages/runtime/src/wire-parser.ts packages/runtime/src/wire-parser.test.ts packages/runtime/src/mutation-failure.ts plans/codebase-quality-round2.md`
-- `pnpm run test:browser`
+- `pnpm exec vp check packages/runtime/src/inline-loader-build.ts packages/runtime/src/inline-loader.ts packages/runtime/src/inline-loader.test.ts plans/codebase-quality-round2.md`
 
 ## Phase 5 - Server
 

@@ -178,11 +178,16 @@ describe('inline loader source', () => {
     expect(inlineJisoLoaderInstallerSource).not.toMatch(/\n|\s{2,}/);
     expect(inlineJisoLoaderInstallerSource).toContain("join('; ')");
     expect(inlineJisoLoaderInstallerSource).toContain('[...new Set(');
-    expect(inlineJisoLoaderInstallerSource).toContain("key:query.getAttribute('key')??undefined");
+    expect(inlineJisoLoaderInstallerSource).toContain('const tagClose=');
+    expect(inlineJisoLoaderInstallerSource).toContain("readChunks(body,'fw-fragment',true)");
+    expect(inlineJisoLoaderInstallerSource).toContain(
+      "key:readAttribute(query.attrs,'key')??undefined",
+    );
     expect(inlineJisoLoaderInstallerSource).toContain(
       "element.getAttribute('fw-fragment-target')??element.id",
     );
     expect(inlineJisoLoaderInstallerSource).toContain("getAttribute('fw-param-types')");
+    expect(inlineJisoLoaderInstallerSource).not.toContain('DOMParser');
     expect(inlineJisoLoaderInstallerSource).not.toContain('Math.random');
   });
 
@@ -324,9 +329,10 @@ describe('inline loader source', () => {
       const body = [
         '<fw-query name="cart" key="cart:c1">{"count":1}</fw-query>',
         '<fw-query name="productGrid">{"products":[{"id":"p1"}]}</fw-query>',
+        '<fw-query name="product" key="product&gt;p1">{&quot;stock&quot;:7}</fw-query>',
         '<fw-query name="malformed">{</fw-query>',
         '<fw-query>{"ignored":true}</fw-query>',
-        '<fw-fragment target="cart-badge"><cart-badge>1</cart-badge></fw-fragment>',
+        '<fw-fragment target="cart-badge"><cart-badge>1<fw-fragment target="nested"><span>nested</span></fw-fragment></cart-badge></fw-fragment>',
         '<fw-fragment target="cart-list" mode="append"><li>p1</li></fw-fragment>',
       ].join('');
       const modularTargets = new Map([
@@ -407,41 +413,8 @@ describe('inline loader source', () => {
           }
         };
         globalRecord.DOMParser = class DOMParser {
-          parseFromString(source: string) {
-            const queryElements = [
-              ...source.matchAll(/<fw-query\b([^>]*)>([\s\S]*?)<\/fw-query>/g),
-            ].map((match) => {
-              const attributes = match[1] ?? '';
-              return {
-                getAttribute(name: string) {
-                  if (name === 'name') return /name="([^"]+)"/.exec(attributes)?.[1] ?? null;
-                  if (name === 'key') return /key="([^"]+)"/.exec(attributes)?.[1] ?? null;
-                  return null;
-                },
-                textContent: match[2],
-              };
-            });
-            const fragmentElements = [
-              ...source.matchAll(/<fw-fragment\b([^>]*)>([\s\S]*?)<\/fw-fragment>/g),
-            ].map((match) => {
-              const attributes = match[1] ?? '';
-              return {
-                getAttribute(name: string) {
-                  if (name === 'target') return /target="([^"]+)"/.exec(attributes)?.[1] ?? null;
-                  if (name === 'mode') return /mode="([^"]+)"/.exec(attributes)?.[1] ?? null;
-                  return null;
-                },
-                innerHTML: match[2],
-              };
-            });
-
-            return {
-              querySelectorAll(selector: string) {
-                if (selector === 'fw-query') return queryElements;
-                if (selector === 'fw-fragment') return fragmentElements;
-                return [];
-              },
-            };
+          parseFromString() {
+            throw new Error('inline mutation response parsing must not use DOMParser');
           }
         };
         globalRecord.FormData = function FormData() {
@@ -505,6 +478,7 @@ describe('inline loader source', () => {
         ).toEqual([
           { key: 'cart:c1', name: 'cart', value: store.get('cart', 'cart:c1') },
           { key: undefined, name: 'productGrid', value: store.get('productGrid') },
+          { key: 'product>p1', name: 'product', value: store.get('product', 'product>p1') },
         ]);
         expect(inlineTargets.get('cart-badge')?.innerHTML).toBe(
           modularTargets.get('cart-badge')?.html,
@@ -513,10 +487,13 @@ describe('inline loader source', () => {
         expect(modularResult).toEqual({
           appliedFragments: ['cart-badge', 'cart-list'],
           fragments: [
-            { html: '<cart-badge>1</cart-badge>', target: 'cart-badge' },
+            {
+              html: '<cart-badge>1<fw-fragment target="nested"><span>nested</span></fw-fragment></cart-badge>',
+              target: 'cart-badge',
+            },
             { html: '<li>p1</li>', mode: 'append', target: 'cart-list' },
           ],
-          queries: ['cart:c1', 'productGrid'],
+          queries: ['cart:c1', 'productGrid', 'product:product>p1'],
         });
       } finally {
         Object.assign(globalRecord, {
@@ -669,11 +646,7 @@ describe('inline loader source', () => {
         });
         globalRecord.DOMParser = class DOMParser {
           parseFromString() {
-            return {
-              querySelectorAll() {
-                return [];
-              },
-            };
+            throw new Error('inline mutation response parsing must not use DOMParser');
           }
         };
         globalRecord.FormData = function FormData() {
