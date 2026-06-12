@@ -16,7 +16,8 @@ registerHooks({
 });
 
 const { deriveAppGraph } = await import('@jiso/compiler/graph');
-const { deriveInvalidationRegistry, serializeInvalidationRegistry } = await import('@jiso/drizzle');
+const { deriveInvalidationRegistry, serializeInvalidationRegistry } =
+  await import('@jiso/drizzle/static');
 
 const scriptDir = dirname(fileURLToPath(import.meta.url));
 const commerceRoot = resolve(scriptDir, '..');
