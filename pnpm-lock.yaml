@@ -132,6 +132,9 @@ importers:
       '@jiso/better-auth':
         specifier: workspace:*
         version: link:../../packages/better-auth
+      '@jiso/core':
+        specifier: workspace:*
+        version: link:../../packages/core
       '@jiso/server':
         specifier: workspace:*
         version: link:../../packages/server

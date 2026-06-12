@@ -18,6 +18,7 @@ import {
   type BetterAuthSignInEmailLike,
   type BetterAuthSignOutLike,
 } from '@jiso/better-auth';
+import type { FwExplainInput } from '@jiso/core';
 
 export type ReferenceRole = 'admin' | 'member';
 
@@ -195,6 +196,50 @@ export const referenceAuth = createReferenceAuth(referenceBetterAuth);
 export const referenceSessionProvider = referenceAuth.sessionProvider;
 export const referenceSignIn = referenceAuth.signIn;
 export const referenceSignOut = referenceAuth.signOut;
+
+export const referenceGraph = {
+  mutations: [
+    {
+      guards: ['authed'],
+      invalidates: ['auth'],
+      inputFields: [],
+      key: 'auth/sign-out',
+      session: 'referenceSession',
+      writes: ['auth'],
+    },
+  ],
+  ownerDomains: [{ domain: 'user', owner: 'session.user.id' }],
+  pages: [
+    {
+      guards: ['authed'],
+      queries: [],
+      route: '/account',
+    },
+    {
+      guards: ['role:admin'],
+      queries: [],
+      route: '/admin',
+    },
+  ],
+  scopeAudits: [
+    {
+      detail: 'account page reads the active mapped session user',
+      domain: 'user',
+      kind: 'query',
+      name: '/account',
+      scope: 'session',
+      site: 'examples/reference/src/app.ts:accountRoute',
+    },
+    {
+      detail: 'admin page reads the active mapped session user after role guard',
+      domain: 'user',
+      kind: 'query',
+      name: '/admin',
+      scope: 'session',
+      site: 'examples/reference/src/app.ts:adminRoute',
+    },
+  ],
+} as const satisfies FwExplainInput;
 
 export const accountRoute = route('/account', {
   guard: authed<ReferenceRequest>(),

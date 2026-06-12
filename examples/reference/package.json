@@ -5,6 +5,7 @@
   "type": "module",
   "dependencies": {
     "@jiso/better-auth": "workspace:*",
+    "@jiso/core": "workspace:*",
     "@jiso/server": "workspace:*"
   },
   "devDependencies": {

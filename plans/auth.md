@@ -155,6 +155,19 @@ Scope: SPEC additions (session population, guard-failure contract, mutation resp
       `pnpm exec vp check --fix examples/reference/src/app.ts examples/reference/src/app.test.ts examples/reference/package.json examples/reference/tsconfig.json plans/auth.md IMPLEMENT_v1.md pnpm-lock.yaml`.
       Remaining gap: B7 remains open until the reference app is represented in the graph/audit
       vocabulary and passes the unguarded/unscoped audits with authenticated flows.
+      Partial graph/audit evidence 2026-06-12: `examples/reference/src/app.ts` now exports a
+      typed `referenceGraph` for the authenticated reference surfaces: guarded `/account`,
+      `role:admin` `/admin`, and guarded `auth/sign-out`, plus session-scoped `user` owner-domain
+      facts. `examples/reference/src/app.test.ts` proves `fwCheck(referenceGraph)` is clean,
+      `fwExplain(referenceGraph, { unguarded: true })` and `{ unscoped: true }` both return
+      `SUMMARY total=0`, and page/mutation explanations include the guarded authenticated
+      surfaces. Same-session evidence:
+      `pnpm exec vitest --run examples/reference/src/app.test.ts`,
+      `pnpm exec tsc -p examples/reference/tsconfig.json --noEmit`, and
+      `pnpm exec vp check --fix examples/reference/src/app.ts examples/reference/src/app.test.ts examples/reference/package.json examples/reference/tsconfig.json pnpm-lock.yaml`.
+      Remaining gap: the public credential sign-in mutation still has no first-class
+      audit vocabulary for intentionally anonymous auth entrypoints, so B7 stays open rather
+      than pretending the full credential flow is audit-represented.
 
 ## Background — the gap
 

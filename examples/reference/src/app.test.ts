@@ -2,8 +2,10 @@ import { describe, expect, it } from 'vitest';
 import { betterAuth } from 'better-auth';
 import { memoryAdapter } from 'better-auth/adapters/memory';
 
+import { fwCheck, fwExplain } from '../../../packages/cli/src/index.js';
 import {
   createReferenceAuth,
+  referenceGraph,
   referenceAuthRequest,
   referenceAuthToken,
   referenceSessionProvider,
@@ -27,6 +29,49 @@ function cookiePair(setCookie: string): string {
 }
 
 describe('reference auth adoption', () => {
+  it('represents authenticated reference flows in the graph audits', () => {
+    expect(fwCheck(referenceGraph)).toEqual({
+      exitCode: 0,
+      output: 'fw-check/v1\nOK\n',
+    });
+    expect(fwExplain(referenceGraph, { kind: 'page', target: '/account' })).toEqual({
+      exitCode: 0,
+      output: [
+        'fw-explain/v1',
+        'PAGE /account',
+        'prefetch: false',
+        'modulepreloads: -',
+        'stylesheets: -',
+        'queries: -',
+        'view-transitions: -',
+        '',
+      ].join('\n'),
+    });
+    expect(fwExplain(referenceGraph, { kind: 'mutation', target: 'auth/sign-out' })).toEqual({
+      exitCode: 0,
+      output: [
+        'fw-explain/v1',
+        'MUTATION auth/sign-out',
+        'guards: authed',
+        'session: referenceSession',
+        'input-fields: -',
+        'writes: auth',
+        'invalidates: auth',
+        'manual-invalidates: -',
+        'updates: -',
+        '',
+      ].join('\n'),
+    });
+    expect(fwExplain(referenceGraph, { unguarded: true })).toEqual({
+      exitCode: 0,
+      output: 'fw-explain/v1\nUNGUARDED\nSUMMARY total=0\n',
+    });
+    expect(fwExplain(referenceGraph, { unscoped: true })).toEqual({
+      exitCode: 0,
+      output: 'fw-explain/v1\nUNSCOPED\nSUMMARY total=0\n',
+    });
+  });
+
   it('ships no-JS login and logout forms backed by Jiso credential mutations', () => {
     const request = referenceAuthRequest();
 
