@@ -21,11 +21,21 @@ export default defineConfig({
       export: {
         command: 'node scripts/export-static.mjs',
         input: [
+          { pattern: 'package.json', base: 'workspace' },
           { pattern: 'scripts/export-static.mjs', base: 'workspace' },
           { pattern: 'src/**/*', base: 'workspace' },
           { pattern: 'vite.config.ts', base: 'workspace' },
         ],
         output: ['dist/**'],
+      },
+      serve: {
+        command: 'node scripts/serve.mjs',
+        input: [
+          { pattern: 'package.json', base: 'workspace' },
+          { pattern: 'scripts/serve.mjs', base: 'workspace' },
+          { pattern: 'src/**/*', base: 'workspace' },
+          { pattern: 'vite.config.ts', base: 'workspace' },
+        ],
       },
     },
   },

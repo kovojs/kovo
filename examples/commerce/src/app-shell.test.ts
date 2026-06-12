@@ -1,7 +1,7 @@
-import { execFile } from 'node:child_process';
+import { execFile, spawn, type ChildProcessWithoutNullStreams } from 'node:child_process';
 import { createHmac } from 'node:crypto';
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http';
-import type { AddressInfo } from 'node:net';
+import { createServer as createNetServer, type AddressInfo } from 'node:net';
 import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import * as os from 'node:os';
 import * as path from 'node:path';
@@ -169,6 +169,41 @@ describe('commerce app shell HTTP entry', () => {
       expect(sourceAssetBody).toContain('tailwindcss v');
     } finally {
       await vite.close();
+    }
+  });
+
+  it('serves the app-shell surface through the consumer commerce serve command', async () => {
+    const commerceRoot = fileURLToPath(new URL('..', import.meta.url));
+    const port = await reservePort();
+    let serveProcess: ChildProcessWithoutNullStreams | undefined;
+
+    try {
+      serveProcess = spawn(
+        process.execPath,
+        ['scripts/serve.mjs', '--host', '127.0.0.1', '--port', String(port), '--strictPort'],
+        {
+          cwd: commerceRoot,
+          env: { ...process.env, FORCE_COLOR: '0' },
+        },
+      );
+      const output = collectOutput(serveProcess);
+      const origin = `http://127.0.0.1:${port}`;
+
+      const documentBody = await fetchTextWhenReady(`${origin}/cart`, output);
+      expect(output()).toContain('commerce-serve/v1');
+      expect(documentBody).toContain('data-commerce-shell="cart"');
+      expect(documentBody).toContain('action="/_m/cart/add"');
+
+      const moduleBody = await fetchTextWhenReady(`${origin}${commerceClientModuleHref}`, output);
+      expect(moduleBody).toContain('export function Commerce$markReady');
+
+      const queryBody = await fetchTextWhenReady(`${origin}/_q/cart`, output);
+      expect(queryBody).toContain('<fw-query name="cart">{"count":0}</fw-query>');
+
+      const stylesheetBody = await fetchTextWhenReady(`${origin}/src/styles.css`, output);
+      expect(stylesheetBody).toContain('tailwindcss v');
+    } finally {
+      await stopProcess(serveProcess);
     }
   });
 
@@ -577,4 +612,76 @@ function execFileResult(
 
 function pnpmCommand(): string {
   return process.platform === 'win32' ? 'pnpm.cmd' : 'pnpm';
+}
+
+function collectOutput(child: ChildProcessWithoutNullStreams): () => string {
+  let output = '';
+  child.stdout.on('data', (chunk: Buffer) => {
+    output += chunk.toString('utf8');
+  });
+  child.stderr.on('data', (chunk: Buffer) => {
+    output += chunk.toString('utf8');
+  });
+  return () => output;
+}
+
+async function fetchTextWhenReady(url: string, output: () => string): Promise<string> {
+  let lastError: unknown;
+
+  for (let attempt = 0; attempt < 80; attempt += 1) {
+    try {
+      const response = await fetch(url);
+      const body = await response.text();
+      if (response.ok) return body;
+      lastError = new Error(`HTTP ${response.status} from ${url}\n${body}`);
+    } catch (error) {
+      lastError = error;
+    }
+
+    await delay(100);
+  }
+
+  throw new Error(`Timed out fetching ${url}\n${String(lastError)}\n${output()}`);
+}
+
+async function reservePort(): Promise<number> {
+  const probe = createNetServer();
+
+  await new Promise<void>((resolve, reject) => {
+    probe.once('error', reject);
+    probe.listen(0, '127.0.0.1', () => {
+      probe.off('error', reject);
+      resolve();
+    });
+  });
+
+  const address = probe.address() as AddressInfo;
+
+  await new Promise<void>((resolve, reject) => {
+    probe.close((error) => (error ? reject(error) : resolve()));
+  });
+
+  return address.port;
+}
+
+async function stopProcess(child: ChildProcessWithoutNullStreams | undefined): Promise<void> {
+  if (!child || child.exitCode !== null || child.killed) return;
+
+  const exited = new Promise<void>((resolve) => {
+    child.once('exit', () => resolve());
+  });
+  child.kill('SIGTERM');
+
+  await Promise.race([
+    exited,
+    delay(5_000).then(() => {
+      if (child.exitCode === null && !child.killed) child.kill('SIGKILL');
+    }),
+  ]);
+}
+
+function delay(ms: number): Promise<void> {
+  return new Promise((resolve) => {
+    setTimeout(resolve, ms);
+  });
 }

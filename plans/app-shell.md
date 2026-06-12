@@ -469,6 +469,19 @@ Scope: SPEC addition (proposed §9.5 "The request shell"), `@jiso/server` shell 
       `dist/login/index.html`, `dist/c/commerce.client.js`, and
       `dist/assets/tailwind.css`. Same-session verification ran
       `pnpm exec vitest --run examples/commerce/src/app-shell.test.ts`.
+      Additional evidence 2026-06-12: commerce now has a bounded consumer
+      serve command for the same app-shell adoption surface. `examples/commerce/scripts/serve.mjs`
+      starts a Vite-backed HTTP server from the package's public config so
+      `vp run serve`/`npm start` exercise the existing app-shell middleware
+      instead of a second dispatch path; `examples/commerce/vite.config.ts`
+      exposes that command as a Vite+ task without colliding with package
+      scripts, and `examples/commerce/package.json` keeps non-conflicting
+      consumer aliases for `vp dev`, static export, and the serve command.
+      `examples/commerce/src/app-shell.test.ts` spawns
+      `node scripts/serve.mjs`, fetches the app-shell `/cart` document,
+      `/c/commerce.client.js?v=commerce-r7`, `/_q/cart`, and Vite-served
+      `/src/styles.css` over real HTTP. Same-session verification ran
+      `pnpm exec vitest --run examples/commerce/src/app-shell.test.ts`.
 
 ## Background — the gap
 
