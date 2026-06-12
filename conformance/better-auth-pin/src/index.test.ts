@@ -18,6 +18,8 @@ import {
   betterAuthCredentialMutationTouchGraph,
   betterAuthCredentialMutationTouches,
   betterAuthDbVerificationConfig,
+  betterAuthOAuthProviderSuccessorImportPaths,
+  betterAuthOAuthProviderSuccessorMetadataDegradation,
   betterAuthSchemaBridge,
   betterAuthSession,
   betterAuthSignInEmailMutation,
@@ -447,6 +449,48 @@ describe('Better Auth pinned conformance', () => {
     expect(result.source).toContain(
       "export const oauthConsent = pgTable('oauthConsent', {}, jiso({ domain: 'auth', key: 'userId' }));",
     );
+  });
+
+  it('pins OAuth-provider successor metadata absence as an FW406 bridge degradation', async () => {
+    const dynamicImport = (specifier: string): Promise<unknown> => import(specifier);
+    const importResults = await Promise.allSettled(
+      betterAuthOAuthProviderSuccessorImportPaths.map(dynamicImport),
+    );
+
+    expect(importResults.map((result) => result.status)).toEqual([
+      'rejected',
+      'rejected',
+      'rejected',
+    ]);
+    const [packageImport, packageSubpathImport, pluginSubpathImport] = importResults;
+
+    if (!packageImport || !packageSubpathImport || !pluginSubpathImport) {
+      throw new Error('expected three OAuth-provider successor import results');
+    }
+
+    expect(importResultMessage(packageImport)).toContain(
+      "Cannot find package '@better-auth/oauth-provider'",
+    );
+    expect(importResultMessage(packageSubpathImport)).toContain(
+      '"./oauth-provider" is not exported',
+    );
+    expect(importResultMessage(pluginSubpathImport)).toContain(
+      '"./plugins/oauth-provider" is not exported',
+    );
+    expect(betterAuthOAuthProviderSuccessorMetadataDegradation()).toEqual({
+      attemptedImports: betterAuthOAuthProviderSuccessorImportPaths,
+      diagnosticCode: 'FW406',
+      legacyPlugin: 'oidcProvider',
+      manualBridgeSteps: [
+        'Install the Better Auth OAuth-provider successor package and inspect getAuthTables(auth.options) with that plugin enabled.',
+        'If the successor reuses oauthApplication/oauthAccessToken/oauthConsent with userId ownership, keep the existing auth-domain bridge and pin the package metadata in conformance.',
+        'If the successor adds or renames tables, add schema.ts jiso({ domain, key }) or jiso({ exempt: true }) annotations and declared Better Auth API touches before relying on runtime coverage.',
+      ],
+      message:
+        '@better-auth/oauth-provider metadata is not available from the pinned Better Auth dependency set; successor OAuth-provider writes remain FW406 until a real metadata path is pinned.',
+      packageName: '@better-auth/oauth-provider',
+      reason: 'oauth-provider-successor-metadata-unavailable',
+    });
   });
 
   it('degrades non-bridged real plugin table metadata with FW406 bridge diagnostics', () => {
@@ -1060,6 +1104,12 @@ function stableRows(rows: readonly Record<string, unknown>[]): string {
       ),
     ),
   );
+}
+
+function importResultMessage(result: PromiseSettledResult<unknown>): string {
+  if (result.status === 'fulfilled') return 'fulfilled';
+
+  return result.reason instanceof Error ? result.reason.message : String(result.reason);
 }
 
 function requireAuthTable(

@@ -225,6 +225,16 @@ export interface BetterAuthPluginTableDegradation {
   table: string;
 }
 
+export interface BetterAuthOAuthProviderSuccessorMetadataDegradation {
+  attemptedImports: readonly string[];
+  diagnosticCode: 'FW406';
+  legacyPlugin: 'oidcProvider';
+  manualBridgeSteps: string[];
+  message: string;
+  packageName: '@better-auth/oauth-provider';
+  reason: 'oauth-provider-successor-metadata-unavailable';
+}
+
 export interface BetterAuthTouchGraphSite {
   branch?: string;
   domain: BetterAuthTouchDomain;
@@ -350,6 +360,34 @@ export const betterAuthCredentialMutationTouchGraph =
   createBetterAuthCredentialMutationTouchGraph();
 
 export const betterAuthDbVerificationConfig = createBetterAuthDbVerificationConfig();
+
+export const betterAuthOAuthProviderSuccessorImportPaths = [
+  '@better-auth/oauth-provider',
+  'better-auth/oauth-provider',
+  'better-auth/plugins/oauth-provider',
+] as const;
+
+// Better Auth 1.6.17 deprecates `oidcProvider()` in favor of the successor
+// package. SPEC.md §11.2 keeps successor-owned writes FW406 until its real
+// table metadata and declared touches are pinned.
+export function betterAuthOAuthProviderSuccessorMetadataDegradation(
+  attemptedImports: readonly string[] = betterAuthOAuthProviderSuccessorImportPaths,
+): BetterAuthOAuthProviderSuccessorMetadataDegradation {
+  return {
+    attemptedImports,
+    diagnosticCode: 'FW406',
+    legacyPlugin: 'oidcProvider',
+    manualBridgeSteps: [
+      'Install the Better Auth OAuth-provider successor package and inspect getAuthTables(auth.options) with that plugin enabled.',
+      'If the successor reuses oauthApplication/oauthAccessToken/oauthConsent with userId ownership, keep the existing auth-domain bridge and pin the package metadata in conformance.',
+      'If the successor adds or renames tables, add schema.ts jiso({ domain, key }) or jiso({ exempt: true }) annotations and declared Better Auth API touches before relying on runtime coverage.',
+    ],
+    message:
+      '@better-auth/oauth-provider metadata is not available from the pinned Better Auth dependency set; successor OAuth-provider writes remain FW406 until a real metadata path is pinned.',
+    packageName: '@better-auth/oauth-provider',
+    reason: 'oauth-provider-successor-metadata-unavailable',
+  };
+}
 
 export function createBetterAuthCredentialMutationTouchGraph(
   keys: Partial<Record<BetterAuthCredentialMutationApi, string>> = {},

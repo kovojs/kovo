@@ -17,6 +17,8 @@ import {
   betterAuthCredentialMutationTouchGraph,
   betterAuthCredentialMutationTouches,
   betterAuthDbVerificationConfig,
+  betterAuthOAuthProviderSuccessorImportPaths,
+  betterAuthOAuthProviderSuccessorMetadataDegradation,
   betterAuthOrganizationDomain,
   betterAuthSchemaBridge,
   betterAuthSignInEmailMutation,
@@ -514,6 +516,23 @@ describe('credential mutation helpers', () => {
         },
       ],
       unbridgedTables: ['webauthnCredential'],
+    });
+  });
+
+  it('reports absent successor OAuth-provider metadata as an FW406 degradation', () => {
+    expect(betterAuthOAuthProviderSuccessorMetadataDegradation()).toEqual({
+      attemptedImports: betterAuthOAuthProviderSuccessorImportPaths,
+      diagnosticCode: 'FW406',
+      legacyPlugin: 'oidcProvider',
+      manualBridgeSteps: [
+        'Install the Better Auth OAuth-provider successor package and inspect getAuthTables(auth.options) with that plugin enabled.',
+        'If the successor reuses oauthApplication/oauthAccessToken/oauthConsent with userId ownership, keep the existing auth-domain bridge and pin the package metadata in conformance.',
+        'If the successor adds or renames tables, add schema.ts jiso({ domain, key }) or jiso({ exempt: true }) annotations and declared Better Auth API touches before relying on runtime coverage.',
+      ],
+      message:
+        '@better-auth/oauth-provider metadata is not available from the pinned Better Auth dependency set; successor OAuth-provider writes remain FW406 until a real metadata path is pinned.',
+      packageName: '@better-auth/oauth-provider',
+      reason: 'oauth-provider-successor-metadata-unavailable',
     });
   });
 
