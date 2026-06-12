@@ -1,7 +1,16 @@
 import { describe, expect, it } from 'vitest';
 
 import { eq, gt, inArray, sql } from 'drizzle-orm';
-import { alias, boolean, integer, jsonb, pgTable, text, timestamp } from 'drizzle-orm/pg-core';
+import {
+  alias,
+  boolean,
+  customType,
+  integer,
+  jsonb,
+  pgTable,
+  text,
+  timestamp,
+} from 'drizzle-orm/pg-core';
 
 import {
   createTouchGraphEntry,
@@ -530,6 +539,63 @@ describe('Drizzle pinned subset conformance', () => {
           },
         },
         site: 'conformance/drizzle-pin/src/product.queries.ts:4',
+      },
+    ]);
+  });
+
+  it('pins custom column builders as FW406 instead of fabricated string shapes', () => {
+    const point = customType<{ data: { x: number; y: number } }>({
+      dataType() {
+        return 'point';
+      },
+    });
+    expect(point('location')).toBeDefined();
+
+    const facts = extractQueryFactsFromProject({
+      files: [
+        {
+          fileName: 'conformance/drizzle-pin/src/product.queries.ts',
+          source: `
+            const point = customType<{ data: { x: number; y: number } }>({
+              dataType() {
+                return 'point';
+              },
+            });
+            export const products = pgTable('products', {
+              id: text('id').primaryKey(),
+              location: point('location'),
+            }, jiso({ domain: 'product', key: 'id' }));
+
+            export const productQuery = query('product', {
+              load(_input, db) {
+                return db.select({
+                  id: products.id,
+                  location: products.location,
+                }).from(products);
+              },
+            });
+          `,
+        },
+      ],
+    });
+
+    expect(facts).toEqual([
+      {
+        diagnostics: [
+          {
+            code: 'FW406',
+            message:
+              'Statically un-analyzable write site; manual touches required. Query projection product.location could not be resolved to a Drizzle column or typed sql<T> expression.',
+            severity: 'warn',
+            site: 'conformance/drizzle-pin/src/product.queries.ts:12',
+          },
+        ],
+        query: 'product',
+        reads: ['product'],
+        shape: {
+          id: 'string',
+        },
+        site: 'conformance/drizzle-pin/src/product.queries.ts:12',
       },
     ]);
   });

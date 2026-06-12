@@ -1122,6 +1122,59 @@ export interface CommerceInvalidationSets {
     }
   });
 
+  it('marks unknown column builder projections as FW406 instead of guessing string shape', () => {
+    const files = [
+      {
+        fileName: 'product.queries.ts',
+        source: `
+          const point = customType<{ data: { x: number; y: number } }>({
+            dataType() {
+              return 'point';
+            },
+          });
+          export const products = pgTable("products", {
+            id: text("id").primaryKey(),
+            location: point("location"),
+          }, jiso({ domain: "product", key: "id" }));
+
+          export const productQuery = query("product", {
+            load(_input, db) {
+              return db.select({
+                id: products.id,
+                location: products.location,
+              }).from(products);
+            },
+          });
+        `,
+      },
+    ];
+
+    for (const facts of [
+      extractQueryFactsFromSource(files),
+      extractQueryFactsFromProject({ files }),
+    ]) {
+      expect(facts).toEqual([
+        {
+          diagnostics: [
+            {
+              code: 'FW406',
+              message:
+                'Statically un-analyzable write site; manual touches required. Query projection product.location could not be resolved to a Drizzle column or typed sql<T> expression.',
+              severity: 'warn',
+              site: 'product.queries.ts:12',
+            },
+          ],
+          query: 'product',
+          reads: ['product'],
+          shape: {
+            id: 'string',
+          },
+          site: 'product.queries.ts:12',
+        },
+      ]);
+    }
+  });
+
   it('derives source query result shape from the returned select', () => {
     const facts = extractQueryFactsFromSource([
       {

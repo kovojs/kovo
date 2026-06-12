@@ -1245,6 +1245,17 @@ must be "FW406 unresolved," never "silently wrong."
       `nullableJoinTables` only matching `.leftJoin` (:1010-1020 — right/full join nullability
       silently dropped). Real column types via the checker (project mode) or Drizzle column
       objects (pinned-runtime mode); unknown → FW406, never a guess.
+      Additional evidence 2026-06-12: unknown column builders no longer fabricate string query
+      shapes; `tableColumnShapes` omits unrecognized builder calls so selected custom Drizzle
+      columns stay visible as FW406 unresolved projections under SPEC §10-§11. The package test
+      covers source/project extraction with a `customType`-style builder, and pinned conformance
+      imports real `drizzle-orm/pg-core` `customType`. Same-session evidence:
+      `pnpm exec vitest --run packages/drizzle/src/index.test.ts -t "unknown column builder"`,
+      `pnpm exec vitest --run conformance/drizzle-pin/src/index.test.ts -t "custom column builders"`,
+      `pnpm exec vitest --run packages/drizzle/src`,
+      `pnpm exec vitest --run conformance/drizzle-pin/src/index.test.ts`,
+      `pnpm exec vp check packages/drizzle/src/index.ts packages/drizzle/src/index.test.ts conformance/drizzle-pin/src/index.test.ts plans/codebase-quality-round2.md`,
+      and `git diff --check`.
       Partial evidence 2026-06-11: `packages/drizzle/src/index.ts` no longer infers scalar
       projection shapes from selected alias names such as `count`, `qty`, or `stock`; unresolved
       non-opaque scalar projections are omitted from inferred `shape` and surfaced as FW406

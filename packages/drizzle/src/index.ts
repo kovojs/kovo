@@ -711,7 +711,8 @@ function tableColumnShapes(initializer: Node): Record<string, QueryShape> {
     const name = propertyNameText(property.getNameNode());
     if (!name) continue;
 
-    shapes[name] = columnBuilderShape(property.getInitializer());
+    const shape = columnBuilderShape(property.getInitializer());
+    if (shape) shapes[name] = shape;
   }
 
   return shapes;
@@ -741,20 +742,29 @@ function objectHasProperty(object: Node, name: string): boolean {
   });
 }
 
-function columnBuilderShape(initializer: Node | undefined): QueryShape {
+function columnBuilderShape(initializer: Node | undefined): QueryShape | undefined {
   // SPEC §10-§11: column nullability is a parsed call-chain fact, not string contents.
   const builder = columnBuilderName(initializer);
-  if (!builder) return 'string';
+  if (!builder) return undefined;
 
   const baseShape = columnBuilderBaseShape(builder);
+  if (!baseShape) return undefined;
   return columnBuilderIsNonNull(initializer) ? baseShape : nullableShape(baseShape);
 }
 
-function columnBuilderBaseShape(builder: string): QueryShape {
+function columnBuilderBaseShape(builder: string): QueryShape | undefined {
   if (BOOLEAN_COLUMN_BUILDERS.has(builder)) return 'boolean';
   if (NUMBER_COLUMN_BUILDERS.has(builder)) return 'number';
   if (JSON_COLUMN_BUILDERS.has(builder)) return 'object';
-  return 'string';
+  if (
+    builder === 'text' ||
+    builder === 'varchar' ||
+    builder === 'uuid' ||
+    builder === 'timestamp'
+  ) {
+    return 'string';
+  }
+  return undefined;
 }
 
 function columnBuilderName(initializer: Node | undefined): string | undefined {
