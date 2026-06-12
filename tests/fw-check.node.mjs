@@ -167,6 +167,81 @@ const listProjectFiles = async (dir, predicate) => {
   return files;
 };
 
+const collectForbiddenBrowserArchitecture = (ts, fileName, source) => {
+  const sourceFile = ts.createSourceFile(
+    fileName,
+    source,
+    ts.ScriptTarget.Latest,
+    true,
+    ts.ScriptKind.TSX,
+  );
+  const violations = [];
+  const nodeName = (node) =>
+    ts.isIdentifier(node)
+      ? node.text
+      : ts.isPropertyAccessExpression(node)
+        ? node.name.text
+        : undefined;
+  const isStringValue = (node, value) =>
+    (ts.isStringLiteral(node) || ts.isNoSubstitutionTemplateLiteral(node)) && node.text === value;
+  const record = (node, label) => {
+    const { character, line } = sourceFile.getLineAndCharacterOfPosition(node.getStart(sourceFile));
+    violations.push(`${fileName}:${line + 1}:${character + 1} ${label}`);
+  };
+
+  const visit = (node) => {
+    if (ts.isCallExpression(node)) {
+      const callName = nodeName(node.expression);
+      if (
+        ts.isPropertyAccessExpression(node.expression) &&
+        callName === 'define' &&
+        nodeName(node.expression.expression) === 'customElements'
+      ) {
+        record(node, 'customElements.define');
+      }
+      if (callName === 'attachShadow') {
+        record(node, 'attachShadow');
+      }
+      if (callName === 'addEventListener' && isStringValue(node.arguments[0], 'unload')) {
+        record(node, 'addEventListener unload');
+      }
+      if (callName === 'createBrowserRouter' || callName === 'hydrateRoot') {
+        record(node, callName);
+      }
+    }
+
+    if (
+      (ts.isPropertyAccessExpression(node) && node.name.text === 'onunload') ||
+      (ts.isJsxAttribute(node) && node.name.text === 'onunload')
+    ) {
+      record(node, 'onunload');
+    }
+
+    if (
+      (ts.isJsxOpeningElement(node) || ts.isJsxSelfClosingElement(node)) &&
+      ts.isIdentifier(node.tagName) &&
+      node.tagName.text === 'script'
+    ) {
+      for (const property of node.attributes.properties) {
+        if (
+          ts.isJsxAttribute(property) &&
+          property.name.text === 'type' &&
+          property.initializer &&
+          ts.isStringLiteral(property.initializer) &&
+          property.initializer.text.toLowerCase() === 'importmap'
+        ) {
+          record(property, 'importmap script');
+        }
+      }
+    }
+
+    ts.forEachChild(node, visit);
+  };
+
+  visit(sourceFile);
+  return violations;
+};
+
 const parseTemplateViteTasks = (source) => {
   const tasks = {};
   let currentTask;
@@ -842,27 +917,19 @@ void test('SSE remains a v2 backlog fixture, not a v1 wire contract', async () =
 });
 
 void test('P10 constitution rejects forbidden browser architecture in framework code', async () => {
+  const ts = await import('typescript');
   const sourcePaths = await listProjectFiles(
     'packages',
     (path) => path.endsWith('.ts') && path.includes('/src/') && !path.endsWith('.test.ts'),
   );
-  const forbiddenPatterns = [
-    /\bcustomElements\.define\b/,
-    /\battachShadow\b/,
-    /\baddEventListener\(['"]unload['"]/,
-    /\bonunload\b/,
-    /<script\b[^>]*type=["']importmap["']/i,
-    /\bcreateBrowserRouter\b/,
-    /\bhydrateRoot\b/,
-  ];
+  const violations = [];
 
   for (const path of sourcePaths) {
     const source = await readProjectFile(path);
-
-    for (const pattern of forbiddenPatterns) {
-      assert.doesNotMatch(source, pattern, `${path} must not match ${pattern}`);
-    }
+    violations.push(...collectForbiddenBrowserArchitecture(ts, path, source));
   }
+
+  assert.deepEqual(violations, []);
 });
 
 void test('P10 commerce invalidation is expressed through graph facts', async () => {

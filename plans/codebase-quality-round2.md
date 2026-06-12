@@ -132,6 +132,12 @@ Do this first or pay it on every commit.
       Same-session evidence:
       `node --test --test-name-pattern "P10 starter wires graph assertions into CI" tests/fw-check.node.mjs`,
       `pnpm run check:build`, and `git diff --check`.
+      Partial evidence 2026-06-12: the P10 forbidden browser architecture tranche now parses
+      framework package sources with the TypeScript AST and asserts forbidden call/JSX constructs
+      from structured nodes instead of grepping source text with regular expressions.
+      Verification: `node --test --test-name-pattern "P10 constitution rejects forbidden browser architecture in framework code" tests/fw-check.node.mjs`,
+      `pnpm exec vp check tests/fw-check.node.mjs plans/codebase-quality-round2.md`, and
+      `git diff --check`.
       Partial evidence 2026-06-11: the P8 component/endpoints/unguarded/unscoped tranche now uses
       a synthetic graph and direct `fwExplain` assertions for handler captures, derives,
       execution triggers, attribute merges, endpoint listing, unguarded access, and owner-domain
