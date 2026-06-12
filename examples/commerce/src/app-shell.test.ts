@@ -132,6 +132,88 @@ describe('commerce app shell HTTP entry', () => {
     expect(query.status).toBe(200);
     await expect(query.text()).resolves.toContain('<fw-query name="cart">{"count":3}</fw-query>');
   });
+
+  it('dispatches shell login and logout mutations before guarded admin routes', async () => {
+    const shell = createCommerceAppShell();
+
+    server = createServer(shell.nodeHandler);
+    await listen(server);
+    const origin = serverOrigin(server);
+
+    const anonymousAdmin = await fetch(`${origin}/admin`, { redirect: 'manual' });
+    expect(anonymousAdmin.status).toBe(303);
+    expect(anonymousAdmin.headers.get('location')).toBe('/login?next=%2Fadmin');
+
+    const failedForm = new URLSearchParams();
+    failedForm.set('csrf', csrfToken(shellLoginCsrfRequest(shell.db), commerceAuthCsrf));
+    failedForm.set('email', 'ada@example.com');
+    failedForm.set('password', 'wrong');
+    failedForm.set('next', '/admin');
+    const failedLogin = await fetch(`${origin}/_m/auth/sign-in`, {
+      body: failedForm,
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      method: 'POST',
+      redirect: 'manual',
+    });
+    const failedBody = await failedLogin.text();
+
+    expect(failedLogin.status, failedBody).toBe(422);
+    expect(failedBody).toContain('data-error-code="INVALID_CREDENTIALS"');
+    expect(failedBody).toContain('name="next" value="/admin"');
+
+    const loginForm = new URLSearchParams();
+    loginForm.set('csrf', csrfToken(shellLoginCsrfRequest(shell.db), commerceAuthCsrf));
+    loginForm.set('email', 'ada@example.com');
+    loginForm.set('password', 'correct');
+    loginForm.set('next', '/admin');
+    const login = await fetch(`${origin}/_m/auth/sign-in`, {
+      body: loginForm,
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      method: 'POST',
+      redirect: 'manual',
+    });
+    const sessionCookie = cookiePair(login.headers.get('set-cookie') ?? '');
+
+    expect(login.status).toBe(303);
+    expect(login.headers.get('location')).toBe('/admin');
+    expect(sessionCookie).toBe('jiso_commerce_session=session-u1');
+
+    const admin = await fetch(`${origin}/admin`, {
+      headers: { cookie: sessionCookie },
+      redirect: 'manual',
+    });
+    const adminBody = await admin.text();
+
+    expect(admin.status, adminBody).toBe(200);
+    expect(adminBody).toContain('<main>admin:u1</main>');
+
+    const logoutForm = new URLSearchParams();
+    logoutForm.set(
+      'csrf',
+      csrfToken(
+        {
+          authCsrfId: 'commerce-shell-login',
+          db: shell.db,
+          headers: new Headers({ cookie: sessionCookie }),
+          session: { id: 'session-u1', user: { id: 'u1' } },
+        },
+        commerceAuthCsrf,
+      ),
+    );
+    const logout = await fetch(`${origin}/_m/auth/sign-out`, {
+      body: logoutForm,
+      headers: {
+        cookie: sessionCookie,
+        'Content-Type': 'application/x-www-form-urlencoded',
+      },
+      method: 'POST',
+      redirect: 'manual',
+    });
+
+    expect(logout.status).toBe(303);
+    expect(logout.headers.get('location')).toBe('/login');
+    expect(logout.headers.get('set-cookie')).toContain('Max-Age=0');
+  });
 });
 
 async function signInCookie(db: ReturnType<typeof createCommerceAppShell>['db']): Promise<string> {
@@ -157,6 +239,18 @@ async function signInCookie(db: ReturnType<typeof createCommerceAppShell>['db'])
   if (!rawCookie) throw new Error('commerce sign-in did not set a cookie');
 
   return rawCookie.split(';')[0] ?? rawCookie;
+}
+
+function shellLoginCsrfRequest(db: ReturnType<typeof createCommerceAppShell>['db']) {
+  return {
+    authCsrfId: 'commerce-shell-login',
+    db,
+    headers: new Headers(),
+  };
+}
+
+function cookiePair(setCookie: string): string {
+  return setCookie.split(';')[0] ?? setCookie;
 }
 
 function listen(target: Server): Promise<void> {

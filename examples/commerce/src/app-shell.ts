@@ -5,6 +5,7 @@ import {
   errorBoundary,
   route,
   toNodeHandler,
+  type CsrfValidationOptions,
   type RequestHandler,
   type ServerErrorHandler,
 } from '@jiso/server';
@@ -14,8 +15,11 @@ import {
   attachmentDownloadRoute,
   cartQuery,
   commerceAdminRoute,
+  commerceAuthCsrf,
   commerceMessages,
   commerceSessionProvider,
+  commerceSignIn,
+  commerceSignOut,
   commerceStylesheets,
   createCommerceDb,
   loadCartQuery,
@@ -47,6 +51,13 @@ export interface CommerceAppShellOptions {
 }
 
 const clientModules = createMemoryVersionedClientModuleRegistry();
+const shellCommerceAuthCsrf: CsrfValidationOptions<Request> = {
+  field: commerceAuthCsrf.field,
+  secret: commerceAuthCsrf.secret,
+  sessionId(request) {
+    return commerceAuthCsrf.sessionId(request as CommerceShellRequest);
+  },
+};
 
 export const commerceClientModuleHref = clientModules.put({
   path: '/c/commerce.client.js',
@@ -92,6 +103,30 @@ export function createCommerceAppShell(options: CommerceAppShellOptions = {}) {
     document: { lang: 'en-US' },
     endpoints: [paymentWebhook],
     mutationResponse({ key, rawInput, request }) {
+      if (key === commerceSignIn.key) {
+        return {
+          csrf: shellCommerceAuthCsrf,
+          redirectTo: (result) => authRedirectTo(result.value),
+          renderFailurePage: (failure) =>
+            `<!doctype html><html><body><main class="mx-auto max-w-md p-6">${renderCommerceLoginForm(
+              request as CommerceShellRequest,
+              {
+                ...(failure.error.code === 'INVALID_CREDENTIALS'
+                  ? { failure: { code: 'INVALID_CREDENTIALS' as const } }
+                  : {}),
+                next: nextFromRawInput(rawInput) ?? '/cart',
+              },
+            )}</main></body></html>`,
+        };
+      }
+
+      if (key === commerceSignOut.key) {
+        return {
+          csrf: shellCommerceAuthCsrf,
+          redirectTo: (result) => authRedirectTo(result.value),
+        };
+      }
+
       if (key !== addToCart.key) return undefined;
 
       const commerceRequest = request as CommerceShellRequest;
@@ -137,7 +172,7 @@ export function createCommerceAppShell(options: CommerceAppShellOptions = {}) {
           ),
       };
     },
-    mutations: [addToCart],
+    mutations: [addToCart, commerceSignIn, commerceSignOut],
     ...(options.onError === undefined ? {} : { onError: options.onError }),
     queries: [cartQuery, productGridQuery, orderHistoryQuery],
     renderRoute(value, context) {
@@ -213,6 +248,29 @@ function productIdFromRawInput(rawInput: unknown): string | undefined {
 
   const productId = rawInput.productId;
   return typeof productId === 'string' ? productId : undefined;
+}
+
+function nextFromRawInput(rawInput: unknown): string | undefined {
+  if (rawInput instanceof FormData) {
+    const value = rawInput.get('next');
+    return typeof value === 'string' ? value : undefined;
+  }
+
+  if (typeof rawInput !== 'object' || rawInput === null || !('next' in rawInput)) {
+    return undefined;
+  }
+
+  const value = rawInput.next;
+  return typeof value === 'string' ? value : undefined;
+}
+
+function authRedirectTo(value: unknown): string {
+  if (typeof value === 'object' && value !== null && 'redirectTo' in value) {
+    const redirectTo = value.redirectTo;
+    if (typeof redirectTo === 'string') return redirectTo;
+  }
+
+  return '/cart';
 }
 
 function escapeHtml(value: string): string {

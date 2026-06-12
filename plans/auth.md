@@ -106,6 +106,17 @@ Scope: SPEC additions (session population, guard-failure contract, mutation resp
       app-level adoption uses a deterministic Better Auth-like test surface rather than the pinned
       real Better Auth package, and the anonymous sign-in mutation is not represented in the
       current mutation guard audit vocabulary, so B7 remains open.
+      Partial reference-app shell evidence 2026-06-12: `examples/commerce/src/app-shell.ts`
+      registers `auth/sign-in` and guarded `auth/sign-out` beside the existing cart mutation in
+      the shared D8 app shell, preserving the no-JS credential mutation flow and routing the
+      issued Better Auth-like session cookie through `commerceSessionProvider` before the guarded
+      `/admin` role page renders. `examples/commerce/src/app-shell.test.ts` covers anonymous
+      `/admin` redirect to `/login?next=%2Fadmin`, invalid credential re-render with the preserved
+      `next` field, successful shell POST to `/_m/auth/sign-in`, authenticated admin render through
+      `role('admin')`, and shell POST to guarded `/_m/auth/sign-out` clearing the cookie. Same-session
+      evidence: `pnpm exec vitest --run examples/commerce/src/app.test.ts examples/commerce/src/app-shell.test.ts`.
+      Remaining gap unchanged: commerce still uses the deterministic Better Auth-like test surface
+      rather than the pinned real Better Auth package, and B7 remains open.
 
 ## Background — the gap
 
