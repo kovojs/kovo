@@ -351,6 +351,50 @@ describe('Drizzle pinned subset conformance', () => {
     });
   });
 
+  it('pins namespace static element-access project writes against real Drizzle tables', () => {
+    const graph = extractTouchGraphFromProject({
+      files: [
+        {
+          fileName: 'conformance/drizzle-pin/src/schema.ts',
+          source: `
+            import { pgTable, text } from 'drizzle-orm/pg-core';
+
+            export const cartItems = pgTable('cart_items', {
+              id: text('id').primaryKey(),
+            }, jiso({ domain: 'cart', key: 'id' }));
+          `,
+        },
+        {
+          fileName: 'conformance/drizzle-pin/src/cart.domain.ts',
+          source: `
+            import { eq } from 'drizzle-orm';
+            import type { PgDatabase } from 'drizzle-orm/pg-core';
+            import * as schema from './schema';
+
+            export async function addItem(db: PgDatabase<any, any, any>, id: string) {
+              await db.update(schema['cartItems']).set({ id }).where(eq(schema['cartItems'].id, id));
+            }
+          `,
+        },
+      ],
+    });
+
+    expect(graph).toEqual({
+      addItem: {
+        reads: [],
+        touches: [
+          {
+            domain: 'cart',
+            keys: 'arg:id',
+            site: 'conformance/drizzle-pin/src/cart.domain.ts:7',
+            via: 'cart_items',
+          },
+        ],
+        unresolved: [],
+      },
+    });
+  });
+
   it('pins project transaction aliases without leaking same-name callback receivers', () => {
     const graph = extractTouchGraphFromProject({
       files: [
@@ -781,6 +825,102 @@ describe('Drizzle pinned subset conformance', () => {
           'Opaque query projection requires a declared output schema. cart/count.count uses sql/raw projection without output.',
         severity: 'error',
         site: 'conformance/drizzle-pin/src/cart.queries.ts:11',
+      },
+    ]);
+  });
+
+  it('pins namespace-imported project query projections against real Drizzle tables', () => {
+    const facts = extractQueryFactsFromProject({
+      files: [
+        {
+          fileName: 'conformance/drizzle-pin/src/cart.schema.ts',
+          source: `
+            export const products = pgTable('cart_products', {
+              id: text('id').primaryKey(),
+            }, jiso({ domain: 'cart', key: 'id' }));
+          `,
+        },
+        {
+          fileName: 'conformance/drizzle-pin/src/order.schema.ts',
+          source: `
+            export const products = pgTable('order_products', {
+              id: integer('id').primaryKey(),
+            }, jiso({ domain: 'order', key: 'id' }));
+          `,
+        },
+        {
+          fileName: 'conformance/drizzle-pin/src/cart.queries.ts',
+          source: `
+            import * as cartSchema from './cart.schema';
+
+            export const cartProductQuery = query('cart/product', {
+              load(input, db) {
+                return db.select({
+                  id: cartSchema.products.id,
+                }).from(cartSchema.products).where(eq(cartSchema.products.id, input.id));
+              },
+            });
+          `,
+        },
+      ],
+    });
+
+    expect(facts).toEqual([
+      {
+        instanceKey: {
+          domain: 'cart',
+          key: 'arg:id',
+        },
+        query: 'cart/product',
+        reads: ['cart'],
+        shape: {
+          id: 'string',
+        },
+        site: 'conformance/drizzle-pin/src/cart.queries.ts:4',
+      },
+    ]);
+  });
+
+  it('pins namespace static element-access project query tables against real Drizzle tables', () => {
+    const facts = extractQueryFactsFromProject({
+      files: [
+        {
+          fileName: 'conformance/drizzle-pin/src/cart.schema.ts',
+          source: `
+            export const products = pgTable('cart_products', {
+              id: text('id').primaryKey(),
+            }, jiso({ domain: 'cart', key: 'id' }));
+          `,
+        },
+        {
+          fileName: 'conformance/drizzle-pin/src/cart.queries.ts',
+          source: `
+            import * as cartSchema from './cart.schema';
+
+            export const cartProductQuery = query('cart/product', {
+              load(input, db) {
+                return db.select({
+                  id: cartSchema['products'].id,
+                }).from(cartSchema['products']).where(eq(cartSchema['products'].id, input.id));
+              },
+            });
+          `,
+        },
+      ],
+    });
+
+    expect(facts).toEqual([
+      {
+        instanceKey: {
+          domain: 'cart',
+          key: 'arg:id',
+        },
+        query: 'cart/product',
+        reads: ['cart'],
+        shape: {
+          id: 'string',
+        },
+        site: 'conformance/drizzle-pin/src/cart.queries.ts:4',
       },
     ]);
   });

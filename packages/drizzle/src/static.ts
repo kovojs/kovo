@@ -257,6 +257,10 @@ export function extractQueryFactsFromProject(options: TouchGraphProjectOptions):
 
         return extractProjectQueryDefinitions(sourceFile, {
           ...(file.columnShapes ? { columnShapes: file.columnShapes } : {}),
+          namespaceTableNames: projectNamespaceTableNamesByLocal(
+            sourceFile,
+            extraction.tableNamesBySymbol,
+          ),
           tableNamesByIdentifier: projectTableNamesByIdentifierText(
             sourceFile,
             extraction.tableNamesBySymbol,
@@ -343,6 +347,10 @@ function projectFunctionExtractionsByFileName(
     if (!file) return;
 
     const extractionsByFunction = new Map<string, ProjectFunctionExtraction>();
+    const namespaceTableNames = projectNamespaceTableNamesByLocal(
+      sourceFile,
+      extraction.tableNamesBySymbol,
+    );
 
     for (const fn of sourceFile.getFunctions()) {
       const name = fn.getName();
@@ -357,6 +365,7 @@ function projectFunctionExtractionsByFileName(
           body,
           file,
           extraction.tableNamesBySymbol,
+          namespaceTableNames,
           receivers,
         ),
       });
@@ -377,6 +386,7 @@ function projectFunctionExtractionsByFileName(
           body,
           file,
           extraction.tableNamesBySymbol,
+          namespaceTableNames,
           receivers,
         ),
       });
@@ -391,6 +401,7 @@ function projectFunctionExtractionsByFileName(
           callback.body,
           file,
           extraction.tableNamesBySymbol,
+          namespaceTableNames,
           receivers,
         ),
       });
@@ -551,6 +562,7 @@ function extractProjectDrizzleWriteCalls(
   body: Node,
   file: SourceFileInput,
   tableNamesBySymbol: ReadonlyMap<string, string>,
+  namespaceTableNames: ProjectNamespaceTableNames,
   receivers: ProjectDrizzleReceivers,
 ): ExtractedWriteCall[] {
   const calls: ExtractedWriteCall[] = [];
@@ -571,20 +583,21 @@ function extractProjectDrizzleWriteCalls(
 
     const chain = drizzleWriteChainRoot(call);
     const tableExpression =
-      projectTableNameForNode(tableArgument, tableNamesBySymbol) ??
+      projectTableNameForNode(tableArgument, tableNamesBySymbol, namespaceTableNames) ??
       UNRESOLVED_READ_SOURCE_EXPRESSION;
 
     calls.push({
       index: 0,
       operation,
       predicateFacts: extractPredicateFactsFromWriteChain(chain, (node) =>
-        projectTableNameForNode(node, tableNamesBySymbol),
+        projectTableNameForNode(node, tableNamesBySymbol, namespaceTableNames),
       ),
       readSources: extractReadSourcesFromWriteChain(
         chain,
         operation,
         (node) =>
-          projectTableNameForNode(node, tableNamesBySymbol) ?? UNRESOLVED_READ_SOURCE_EXPRESSION,
+          projectTableNameForNode(node, tableNamesBySymbol, namespaceTableNames) ??
+          UNRESOLVED_READ_SOURCE_EXPRESSION,
       ),
       site: `${file.fileName}:${lineForIndex(file.source, call.getStart())}`,
       tableExpression: tableExpression.trim(),
@@ -717,6 +730,7 @@ function drizzleWriteChainRoot(call: CallExpression): Node {
 function projectTableNameForNode(
   node: Node,
   tableNamesBySymbol: ReadonlyMap<string, string>,
+  namespaceTableNames: ProjectNamespaceTableNames = new Map(),
 ): string | undefined {
   if (Node.isPropertyAccessExpression(node)) {
     const tableName = projectTableNameForSymbol(node.getNameNode(), tableNamesBySymbol);
@@ -724,6 +738,15 @@ function projectTableNameForNode(
       const basePath = staticExpressionPath(node.getExpression());
       return basePath ? `${basePath}.${tableName}` : tableName;
     }
+  }
+  if (Node.isElementAccessExpression(node)) {
+    const tableName = projectTableNameForSymbol(node, tableNamesBySymbol);
+    if (tableName) {
+      const basePath = staticExpressionPath(node.getExpression());
+      return basePath ? `${basePath}.${tableName}` : tableName;
+    }
+    const namespaceTableName = projectNamespaceElementAccessTableName(node, namespaceTableNames);
+    if (namespaceTableName) return namespaceTableName;
   }
 
   return projectTableNameForSymbol(node, tableNamesBySymbol);
@@ -736,6 +759,50 @@ function projectTableNameForSymbol(
   const symbolKey = resolvedSymbolKey(node.getSymbol());
   if (!symbolKey) return undefined;
   return tableNamesBySymbol.get(symbolKey);
+}
+
+type ProjectNamespaceTableNames = ReadonlyMap<string, ReadonlyMap<string, string>>;
+
+function projectNamespaceTableNamesByLocal(
+  sourceFile: SourceFile,
+  tableNamesBySymbol: ReadonlyMap<string, string>,
+): ProjectNamespaceTableNames {
+  const namespaces = new Map<string, Map<string, string>>();
+
+  for (const declaration of sourceFile.getImportDeclarations()) {
+    const local = declaration.getNamespaceImport()?.getText();
+    const moduleSourceFile = declaration.getModuleSpecifierSourceFile();
+    if (!local || !moduleSourceFile) continue;
+
+    const exportedTables = new Map<string, string>();
+    for (const variable of moduleSourceFile.getVariableDeclarations()) {
+      if (!variableDeclarationIsExported(variable)) continue;
+      const name = variable.getNameNode();
+      if (!Node.isIdentifier(name)) continue;
+
+      const tableName = tableNamesBySymbol.get(resolvedSymbolKey(name.getSymbol()) ?? '');
+      if (tableName) exportedTables.set(name.getText(), tableName);
+    }
+    if (exportedTables.size > 0) namespaces.set(local, exportedTables);
+  }
+
+  return namespaces;
+}
+
+function projectNamespaceElementAccessTableName(
+  access: Node,
+  namespaceTableNames: ProjectNamespaceTableNames,
+): string | undefined {
+  if (!Node.isElementAccessExpression(access)) return undefined;
+
+  const base = access.getExpression();
+  if (!Node.isIdentifier(base)) return undefined;
+
+  const table = staticAccessName(access);
+  if (!table) return undefined;
+
+  const tableName = namespaceTableNames.get(base.getText())?.get(table);
+  return tableName ? `${base.getText()}.${tableName}` : undefined;
 }
 
 export function extractQueryFactsFromSource(files: readonly SourceFileInput[]): QueryFact[] {
@@ -810,6 +877,7 @@ function sourceWithProjectExtractionResolved(
 ): string {
   const replacements: { end: number; start: number; value: string }[] = [];
   const tableNamesByIdentifier = projectTableNamesByIdentifier(sourceFile, tableNamesBySymbol);
+  const namespaceTableNames = projectNamespaceTableNamesByLocal(sourceFile, tableNamesBySymbol);
 
   for (const call of sourceFile.getDescendantsOfKind(SyntaxKind.CallExpression)) {
     if (!isDrizzleWriteCall(call)) continue;
@@ -829,7 +897,9 @@ function sourceWithProjectExtractionResolved(
     const argument = access.getArgumentExpression();
     if (!Node.isStringLiteral(argument)) continue;
 
-    const tableName = tableNamesByIdentifier.get(argument.getLiteralText());
+    const tableName =
+      projectNamespaceElementAccessTableName(access, namespaceTableNames)?.split('.').at(-1) ??
+      tableNamesByIdentifier.get(argument.getLiteralText());
     if (!tableName) continue;
 
     replacements.push({
@@ -1078,20 +1148,72 @@ function columnShapesForFile(
   columnShapesByTable: ReadonlyMap<string, Readonly<Record<string, QueryShape>>>,
 ): Readonly<Record<string, QueryShape>> {
   const shapes: Record<string, QueryShape> = {};
+  const namespaceTableNames = projectNamespaceTableNamesByLocal(sourceFile, tableNamesBySymbol);
 
   for (const identifier of sourceFile.getDescendantsOfKind(SyntaxKind.Identifier)) {
     const symbolKey = resolvedSymbolKey(identifier.getSymbol());
     const tableName = tableNamesBySymbol.get(symbolKey ?? '');
     const tableShapes = tableName ? columnShapesByTable.get(tableName) : undefined;
-    if (!tableShapes) continue;
+    if (!tableName || !tableShapes) continue;
 
-    for (const [column, shape] of Object.entries(tableShapes)) {
-      shapes[`${identifier.getText()}.${column}`] = shape;
-      shapes[`${tableName}.${column}`] = shape;
-    }
+    appendColumnShapesForTablePath(shapes, identifier.getText(), tableShapes);
+    appendColumnShapesForTablePath(shapes, tableName, tableShapes);
+  }
+
+  for (const access of sourceFile.getDescendantsOfKind(SyntaxKind.PropertyAccessExpression)) {
+    const tableName = projectTableNameForColumnShapeAccess(
+      access,
+      tableNamesBySymbol,
+      namespaceTableNames,
+    );
+    const tableShapes = tableName ? columnShapesByTable.get(tableName) : undefined;
+    const tablePath = staticExpressionPath(access);
+    if (!tableShapes || !tablePath) continue;
+
+    appendColumnShapesForTablePath(shapes, tablePath, tableShapes);
+  }
+
+  for (const access of sourceFile.getDescendantsOfKind(SyntaxKind.ElementAccessExpression)) {
+    const tableName = projectTableNameForColumnShapeAccess(
+      access,
+      tableNamesBySymbol,
+      namespaceTableNames,
+    );
+    const tableShapes = tableName ? columnShapesByTable.get(tableName) : undefined;
+    const tablePath = staticExpressionPath(access);
+    if (!tableShapes || !tablePath) continue;
+
+    appendColumnShapesForTablePath(shapes, tablePath, tableShapes);
   }
 
   return shapes;
+}
+
+function projectTableNameForColumnShapeAccess(
+  node: Node,
+  tableNamesBySymbol: ReadonlyMap<string, string>,
+  namespaceTableNames: ProjectNamespaceTableNames,
+): string | undefined {
+  const namespaceTableName = projectNamespaceElementAccessTableName(node, namespaceTableNames)
+    ?.split('.')
+    .at(-1);
+  return (
+    projectTableNameForSymbol(node, tableNamesBySymbol) ??
+    namespaceTableName ??
+    projectTableNameForNode(node, tableNamesBySymbol, namespaceTableNames)
+  );
+}
+
+function appendColumnShapesForTablePath(
+  shapes: Record<string, QueryShape>,
+  tablePath: string,
+  tableShapes: Readonly<Record<string, QueryShape>>,
+): void {
+  // SPEC §10-§11: project projection shapes follow the resolved Drizzle table symbol, including
+  // namespace/static-element paths, instead of guessing from selected aliases.
+  for (const [column, shape] of Object.entries(tableShapes)) {
+    shapes[`${tablePath}.${column}`] = shape;
+  }
 }
 
 function applySourceReplacements(
@@ -1228,6 +1350,7 @@ function extractQueryDefinitions(
 
 interface ProjectQueryDefinitionOptions {
   columnShapes?: Readonly<Record<string, QueryShape>>;
+  namespaceTableNames: ProjectNamespaceTableNames;
   tableNamesByIdentifier: ReadonlyMap<string, string>;
   tableNamesBySymbol: ReadonlyMap<string, string>;
 }
@@ -1237,7 +1360,7 @@ function extractProjectQueryDefinitions(
   options: ProjectQueryDefinitionOptions,
 ): ExtractedQueryDefinition[] {
   const resolveTableIdentifier = (node: Node) =>
-    projectTableNameForNode(node, options.tableNamesBySymbol);
+    projectTableNameForNode(node, options.tableNamesBySymbol, options.namespaceTableNames);
 
   return extractQueryDefinitionsFromSourceFile(sourceFile, {
     ...(options.columnShapes ? { columnShapes: options.columnShapes } : {}),

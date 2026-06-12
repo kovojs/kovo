@@ -1527,6 +1527,18 @@ must be "FW406 unresolved," never "silently wrong."
       `corepack pnpm exec vitest --run conformance/drizzle-pin/src/index.test.ts`;
       `corepack pnpm exec vp check packages/drizzle/src/index.ts packages/drizzle/src/index.test.ts conformance/drizzle-pin/src/index.test.ts plans/codebase-quality-round2.md`;
       and `git diff --check`.
+      Additional bounded evidence 2026-06-12: project-mode namespace-imported table access now
+      carries a ts-morph namespace export map into query and write extraction, so
+      `schema.products` and static `schema["products"]` projections/read sources/write targets
+      resolve from the referenced module's Drizzle table symbol while computed or unexported
+      access still degrades to FW406. The synthetic project context source rewrites only
+      statically proven namespace string keys to the same synthetic table identifiers used by
+      dot access, keeping table registry lookup aligned with authored source coordinates under
+      SPEC §10-§11. Same-session evidence:
+      `corepack pnpm exec vitest --run packages/drizzle/src/index.test.ts -t "namespace.*project (query|write)|namespace static element-access"`,
+      `corepack pnpm exec vitest --run conformance/drizzle-pin/src/index.test.ts -t "namespace.*project (query|write)|namespace static element-access"`,
+      `corepack pnpm exec vitest --run packages/drizzle/src`,
+      and `corepack pnpm exec vitest --run conformance/drizzle-pin/src/index.test.ts`.
 
 - [ ] **HIGH — Remove fact-fabricating heuristics; degrade to FW406.**
       Column type from projection-key name (`/(count|qty|...)$/i` → number, index.ts:993);

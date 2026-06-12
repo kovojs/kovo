@@ -1157,6 +1157,102 @@ export interface CommerceInvalidationSets {
     ]);
   });
 
+  it('resolves namespace-imported project query projection shapes from table symbols', () => {
+    const facts = extractQueryFactsFromProject({
+      files: [
+        {
+          fileName: 'cart.schema.ts',
+          source: `
+            export const products = pgTable("cart_products", {
+              id: text("id").primaryKey(),
+            }, jiso({ domain: "cart", key: "id" }));
+          `,
+        },
+        {
+          fileName: 'order.schema.ts',
+          source: `
+            export const products = pgTable("order_products", {
+              id: integer("id").primaryKey(),
+            }, jiso({ domain: "order", key: "id" }));
+          `,
+        },
+        {
+          fileName: 'cart.queries.ts',
+          source: `
+            import * as cartSchema from "./cart.schema";
+
+            export const cartProductQuery = query("cart/product", {
+              load(input, db) {
+                return db.select({
+                  id: cartSchema.products.id,
+                }).from(cartSchema.products).where(eq(cartSchema.products.id, input.id));
+              },
+            });
+          `,
+        },
+      ],
+    });
+
+    expect(facts).toEqual([
+      {
+        instanceKey: {
+          domain: 'cart',
+          key: 'arg:id',
+        },
+        query: 'cart/product',
+        reads: ['cart'],
+        shape: {
+          id: 'string',
+        },
+        site: 'cart.queries.ts:4',
+      },
+    ]);
+  });
+
+  it('resolves namespace static element-access project query tables from symbols', () => {
+    const facts = extractQueryFactsFromProject({
+      files: [
+        {
+          fileName: 'cart.schema.ts',
+          source: `
+            export const products = pgTable("cart_products", {
+              id: text("id").primaryKey(),
+            }, jiso({ domain: "cart", key: "id" }));
+          `,
+        },
+        {
+          fileName: 'cart.queries.ts',
+          source: `
+            import * as cartSchema from "./cart.schema";
+
+            export const cartProductQuery = query("cart/product", {
+              load(input, db) {
+                return db.select({
+                  id: cartSchema["products"].id,
+                }).from(cartSchema["products"]).where(eq(cartSchema["products"].id, input.id));
+              },
+            });
+          `,
+        },
+      ],
+    });
+
+    expect(facts).toEqual([
+      {
+        instanceKey: {
+          domain: 'cart',
+          key: 'arg:id',
+        },
+        query: 'cart/product',
+        reads: ['cart'],
+        shape: {
+          id: 'string',
+        },
+        site: 'cart.queries.ts:4',
+      },
+    ]);
+  });
+
   it('reports FW411 when a query read set includes an exempt table', () => {
     const facts = extractQueryFactsFromSource([
       {
@@ -3997,6 +4093,55 @@ export interface CommerceInvalidationSets {
             domain: 'cart',
             keys: 'arg:id',
             site: 'cart.domain.ts:7',
+            via: 'cart_items',
+          },
+        ],
+        unresolved: [],
+      },
+    });
+  });
+
+  it('resolves namespace static element-access project write targets from table symbols', () => {
+    const graph = extractTouchGraphFromProject({
+      files: [
+        {
+          fileName: 'drizzle-types.d.ts',
+          source: `
+            declare module "drizzle-orm/pg-core" {
+              export class PgDatabase<TQueryResultHKT = unknown, TFullSchema = unknown, TSchema = unknown> {
+                update(table: unknown): { set(value: unknown): { where(value: unknown): Promise<void> } };
+              }
+            }
+          `,
+        },
+        {
+          fileName: 'cart.schema.ts',
+          source: `
+            export const items = pgTable("cart_items", {}, jiso({ domain: "cart", key: "id" }));
+          `,
+        },
+        {
+          fileName: 'cart.domain.ts',
+          source: `
+            import type { PgDatabase } from "drizzle-orm/pg-core";
+            import * as cartSchema from "./cart.schema";
+
+            export async function addItem(db: PgDatabase, id: string) {
+              await db.update(cartSchema["items"]).set({ id }).where(eq(cartSchema["items"].id, id));
+            }
+          `,
+        },
+      ],
+    });
+
+    expect(graph).toEqual({
+      addItem: {
+        reads: [],
+        touches: [
+          {
+            domain: 'cart',
+            keys: 'arg:id',
+            site: 'cart.domain.ts:6',
             via: 'cart_items',
           },
         ],
