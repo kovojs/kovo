@@ -2052,6 +2052,41 @@ export interface CommerceInvalidationSets {
     ]);
   });
 
+  it('keeps raw query receiver calls visible as FW406 query facts', () => {
+    const facts = extractQueryFactsFromSource([
+      {
+        fileName: 'product.queries.ts',
+        source: `
+          export const products = pgTable("products", {}, jiso({ domain: "product", key: "id" }));
+
+          export const productQuery = query("product/raw", {
+            load(_input, db) {
+              return db.execute(sql\`select * from products\`);
+            },
+          });
+        `,
+      },
+    ]);
+
+    expect(facts).toEqual([
+      {
+        diagnostics: [
+          {
+            code: 'FW406',
+            message:
+              'Statically un-analyzable write site; manual touches required. Query uses unclassified Drizzle receiver call db.execute().',
+            severity: 'warn',
+            site: 'product.queries.ts:4',
+          },
+        ],
+        query: 'product/raw',
+        reads: [],
+        shape: {},
+        site: 'product.queries.ts:4',
+      },
+    ]);
+  });
+
   it('keeps relational query API reads visible as FW406 query facts', () => {
     const facts = extractQueryFactsFromSource([
       {
@@ -2171,6 +2206,46 @@ export interface CommerceInvalidationSets {
         reads: [],
         shape: {},
         site: 'user.queries.ts:4',
+      },
+    ]);
+  });
+
+  it('marks project query-loader writes as FW406 instead of dropping the query fact', () => {
+    const facts = extractQueryFactsFromProject({
+      files: [
+        {
+          fileName: 'product.queries.ts',
+          source: `
+            export const products = pgTable("products", {
+              id: text("id").primaryKey(),
+            }, jiso({ domain: "product", key: "id" }));
+
+            export const productQuery = query("product/write", {
+              async load(_input, db) {
+                await db.update(products).set({ id: "p1" });
+                return [];
+              },
+            });
+          `,
+        },
+      ],
+    });
+
+    expect(facts).toEqual([
+      {
+        diagnostics: [
+          {
+            code: 'FW406',
+            message:
+              'Statically un-analyzable write site; manual touches required. Query uses unclassified Drizzle receiver call db.update().',
+            severity: 'warn',
+            site: 'product.queries.ts:6',
+          },
+        ],
+        query: 'product/write',
+        reads: [],
+        shape: {},
+        site: 'product.queries.ts:6',
       },
     ]);
   });

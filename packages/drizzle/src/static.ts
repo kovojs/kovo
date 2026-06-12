@@ -1416,6 +1416,7 @@ function extractQueryDefinitionsFromSourceFile(
     };
     const diagnostics = [
       ...relationalQueryDiagnostics(bodyArgument, receiverNames),
+      ...unclassifiedQueryReceiverDiagnostics(bodyArgument, receiverNames),
       ...unresolvedQueryReadDiagnostics(bodyArgument, receiverNames, readResolutionOptions),
     ];
     if (!selection && diagnostics.length === 0) continue;
@@ -1560,6 +1561,31 @@ function relationalQueryDiagnostics(
       site: '',
     },
   ];
+}
+
+function unclassifiedQueryReceiverDiagnostics(
+  body: ObjectLiteralExpression,
+  receiverNames: ReadonlySet<string>,
+): TouchGraphDiagnostic[] {
+  // SPEC §10.2/§11.1: query loaders may not hide raw SQL, writes, transactions, or other
+  // unclassified Drizzle receiver work under an empty fact set.
+  return queryBodyCallExpressions(body, (call) => {
+    const expression = call.getExpression();
+    const name = staticAccessName(expression);
+    if (!name || isSelectQueryCallName(name)) return [];
+
+    const receiver = staticAccessExpression(expression);
+    if (!Node.isIdentifier(receiver) || !receiverNames.has(receiver.getText())) return [];
+
+    return [
+      {
+        code: 'FW406' as const,
+        message: `${diagnosticDefinitions.FW406.message} Query uses unclassified Drizzle receiver call db.${name}().`,
+        severity: diagnosticDefinitions.FW406.severity,
+        site: '',
+      },
+    ];
+  });
 }
 
 interface QueryShapeContext {

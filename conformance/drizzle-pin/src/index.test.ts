@@ -1289,6 +1289,47 @@ describe('Drizzle pinned subset conformance', () => {
     ]);
   });
 
+  it('pins real Drizzle raw query execute as an explicit FW406 read surface', () => {
+    expect(sql`select * from users`).toBeDefined();
+
+    const facts = extractQueryFactsFromProject({
+      files: [
+        {
+          fileName: 'conformance/drizzle-pin/src/user.queries.ts',
+          source: `
+            import { sql } from 'drizzle-orm';
+
+            export const users = pgTable('users', {}, jiso({ domain: 'user', key: 'id' }));
+
+            export const usersQuery = query('users/raw', {
+              load(_input, db) {
+                return db.execute(sql\`select * from users\`);
+              },
+            });
+          `,
+        },
+      ],
+    });
+
+    expect(facts).toEqual([
+      {
+        diagnostics: [
+          {
+            code: 'FW406',
+            message:
+              'Statically un-analyzable write site; manual touches required. Query uses unclassified Drizzle receiver call db.execute().',
+            severity: 'warn',
+            site: 'conformance/drizzle-pin/src/user.queries.ts:6',
+          },
+        ],
+        query: 'users/raw',
+        reads: [],
+        shape: {},
+        site: 'conformance/drizzle-pin/src/user.queries.ts:6',
+      },
+    ]);
+  });
+
   it('pins static element-access relational reads as explicit FW406 facts', () => {
     const facts = extractQueryFactsFromProject({
       files: [

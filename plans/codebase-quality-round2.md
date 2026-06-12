@@ -1791,6 +1791,16 @@ must be "FW406 unresolved," never "silently wrong."
       `corepack pnpm run test:conformance`,
       `corepack pnpm exec vp check packages/drizzle/src/static.ts packages/drizzle/src/index.test.ts conformance/drizzle-pin/src/index.test.ts plans/codebase-quality-round2.md`,
       and `git diff --check`.
+      Additional evidence 2026-06-12: query extraction now marks direct receiver calls inside
+      query loaders that are not the static select family as FW406 query facts instead of
+      omitting the query, so raw `db.execute(...)`, accidental `db.update(...)`, transactions,
+      `batch`, and other direct Drizzle receiver surfaces stay visible under SPEC §10.2/§11.1
+      even when no projection can be inferred. Package coverage pins source raw-query execution
+      and project query-loader writes; real pinned `drizzle-orm` conformance pins `sql`-backed
+      raw query execution. Focused same-session evidence:
+      `corepack pnpm exec vitest --run packages/drizzle/src/index.test.ts -t "raw query receiver|query-loader writes|projection-less|relational query API reads"`,
+      and
+      `corepack pnpm exec vitest --run conformance/drizzle-pin/src/index.test.ts -t "raw query execute|computed real Drizzle read sources|element-access relational"`.
 - [x] **MED — Make the drizzle-orm coupling real and tested.** The `>=0.45.2 <1` pin is
       decorative: drizzle-orm is never imported, absent from devDeps, and every project test
       fabricates a `declare module "drizzle-orm/pg-core"` shim (index.test.ts:1742, 1791, 1846).
