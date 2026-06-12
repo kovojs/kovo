@@ -1650,6 +1650,18 @@ must be "FW406 unresolved," never "silently wrong."
       `corepack pnpm exec vitest --run conformance/drizzle-pin/src/index.test.ts -t "helper db handoff"`,
       `corepack pnpm exec vp check packages/drizzle/src/static.ts packages/drizzle/src/index.test.ts conformance/drizzle-pin/src/index.test.ts plans/codebase-quality-round2.md`,
       and `git diff --check`.
+      Additional bounded evidence 2026-06-12: source-mode parse helpers now receive the
+      `SourceFileInput` under analysis and create temporary ts-morph source files with the
+      authored `fileName` instead of a module-global synthetic `__jiso_source.ts` name. This
+      localizes source extraction identity to each file/call while preserving SPEC §10-§11's
+      parsed-code fact contract and keeping `ts-morph` isolated to `@jiso/drizzle/static`;
+      `packages/drizzle/src/runtime-surface.test.ts` pins the runtime/static seam and the
+      absence of the synthetic source filename. Same-session evidence:
+      `corepack pnpm exec vitest --run packages/drizzle/src/runtime-surface.test.ts packages/drizzle/src/index.test.ts -t "runtime annotation|source extraction state|project extraction state"`,
+      `corepack pnpm exec vitest --run packages/drizzle/src`,
+      `corepack pnpm exec vitest --run conformance/drizzle-pin`,
+      `corepack pnpm exec vp check packages/drizzle/src/static.ts packages/drizzle/src/runtime-surface.test.ts plans/codebase-quality-round2.md`,
+      and `git diff --check`.
 
 - [ ] **HIGH — Remove fact-fabricating heuristics; degrade to FW406.**
       Column type from projection-key name (`/(count|qty|...)$/i` → number, index.ts:993);

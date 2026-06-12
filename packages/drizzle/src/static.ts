@@ -68,7 +68,6 @@ export type {
 } from './invalidation.js';
 export { deriveInvalidationRegistry, serializeInvalidationRegistry } from './invalidation.js';
 
-const SOURCE_EXTRACTION_FILE_NAME = '__jiso_source.ts';
 const DEFAULT_DRIZZLE_RECEIVER_NAMES = new Set(['db', 'tx']);
 const IGNORED_LOCAL_CALL_NAMES = new Set([
   'eq',
@@ -161,7 +160,7 @@ export function diagnosticsForQueryFacts(facts: readonly QueryFact[]): TouchGrap
 }
 
 export function extractTouchGraphFromSource(files: readonly SourceFileInput[]): TouchGraph {
-  return extractTouchGraphFromPreparedFiles(files, (file) => extractFunctions(file.source));
+  return extractTouchGraphFromPreparedFiles(files, extractFunctions);
 }
 
 function extractTouchGraphFromPreparedFiles(
@@ -174,7 +173,7 @@ function extractTouchGraphFromPreparedFiles(
 
   for (const file of files) {
     const fileTables = tablesForFile(file, sourceContext);
-    for (const identifier of extractUnresolvedConditionalIdentifiers(file.source, fileTables)) {
+    for (const identifier of extractUnresolvedConditionalIdentifiers(file, fileTables)) {
       unresolvedIdentifiers.add(identifier);
     }
   }
@@ -234,7 +233,7 @@ export function extractTouchGraphFromProject(options: TouchGraphProjectOptions):
     return extractTouchGraphFromPreparedFiles(
       extraction.files,
       (file) =>
-        extractFunctions(file.source).map((fn) => {
+        extractFunctions(file).map((fn) => {
           const projectFunction = projectFunctionExtractions.get(file.fileName)?.get(fn.name);
           return projectFunction ? { ...fn, ...projectFunction } : fn;
         }),
@@ -817,7 +816,7 @@ function projectNamespaceAccessTableName(
 
 export function extractQueryFactsFromSource(files: readonly SourceFileInput[]): QueryFact[] {
   return extractQueryFactsFromPreparedFiles(files, (file) =>
-    extractQueryDefinitions(file.source, file.columnShapes),
+    extractQueryDefinitions(file, file.columnShapes),
   );
 }
 
@@ -1270,10 +1269,10 @@ interface FunctionTouchSummary {
 }
 
 function extractQueryDefinitions(
-  source: string,
+  file: SourceFileInput,
   columnShapes: Readonly<Record<string, QueryShape>> = {},
 ): ExtractedQueryDefinition[] {
-  return withParsedSourceFile(source, (sourceFile) =>
+  return withParsedSourceFile(file, (sourceFile) =>
     extractQueryDefinitionsFromSourceFile(sourceFile, { columnShapes }),
   );
 }
@@ -2296,10 +2295,10 @@ function writeSummaryKey(write: WriteSummaryInput): string {
   ].join('\0');
 }
 
-function extractTables(source: string): ExtractedTableDeclaration[] {
+function extractTables(file: SourceFileInput): ExtractedTableDeclaration[] {
   const tables: ExtractedTableDeclaration[] = [];
   const byIdentifier = new Map<string, ExtractedTableDeclaration[]>();
-  const declarations = variableDeclarationsFromSource(source);
+  const declarations = variableDeclarationsFromSource(file);
 
   for (const { exported, identifier, table: extractedTable } of declarations) {
     if (!extractedTable) continue;
@@ -2396,8 +2395,8 @@ interface SourceVariableDeclaration {
   };
 }
 
-function variableDeclarationsFromSource(source: string): SourceVariableDeclaration[] {
-  return withParsedSourceFile(source, (sourceFile) =>
+function variableDeclarationsFromSource(file: SourceFileInput): SourceVariableDeclaration[] {
+  return withParsedSourceFile(file, (sourceFile) =>
     sourceFile.getVariableDeclarations().flatMap((declaration) => {
       const name = declaration.getNameNode();
       const initializer = declaration.getInitializer();
@@ -2438,7 +2437,7 @@ function variableDeclarationIsExported(
   );
 }
 
-function withParsedSourceFile<T>(source: string, visit: (sourceFile: SourceFile) => T): T {
+function withParsedSourceFile<T>(file: SourceFileInput, visit: (sourceFile: SourceFile) => T): T {
   const project = new Project({
     compilerOptions: {
       allowJs: false,
@@ -2450,7 +2449,7 @@ function withParsedSourceFile<T>(source: string, visit: (sourceFile: SourceFile)
     },
     skipAddingFilesFromTsConfig: true,
   });
-  const sourceFile = project.createSourceFile(SOURCE_EXTRACTION_FILE_NAME, source);
+  const sourceFile = project.createSourceFile(file.fileName, file.source);
 
   try {
     return visit(sourceFile);
@@ -2597,7 +2596,7 @@ function sourceModuleContext(files: readonly SourceFileInput[]): SourceModuleCon
 
   for (const file of files) {
     const tables = new Map<string, ExtractedTable[]>();
-    for (const table of extractTables(file.source)) {
+    for (const table of extractTables(file)) {
       appendTable(tables, table.identifier, {
         annotation: table,
         columns: table.columns,
@@ -2621,7 +2620,7 @@ function tablesForFile(
   // SPEC §10-§11: imported table facts are proven from the referenced source module.
   const scoped = cloneTableMap(context.tablesByFileName.get(file.fileName) ?? new Map());
 
-  for (const namespace of namespaceImportAliases(file.source)) {
+  for (const namespace of namespaceImportAliases(file)) {
     const moduleFileName = resolveRelativeModuleFileName(
       file.fileName,
       namespace.moduleSpecifier,
@@ -2633,7 +2632,7 @@ function tablesForFile(
       appendTableEntries(scoped, `${namespace.local}.${identifier}`, entries);
     }
   }
-  for (const alias of importTableAliasesForSource(file.source)) {
+  for (const alias of importTableAliasesForSource(file)) {
     const moduleFileName = resolveRelativeModuleFileName(
       file.fileName,
       alias.moduleSpecifier,
@@ -2682,7 +2681,7 @@ function exportedTablesForFile(
   const file = context.filesByName.get(fileName);
   if (!file) return exported;
 
-  for (const alias of exportTableAliasesForSource(file.source)) {
+  for (const alias of exportTableAliasesForSource(file)) {
     const moduleFileName = resolveRelativeModuleFileName(
       fileName,
       alias.moduleSpecifier,
@@ -2696,7 +2695,7 @@ function exportedTablesForFile(
       tableEntriesForExport(moduleFileName, alias.imported, context, seen),
     );
   }
-  for (const alias of exportStarAliasesForSource(file.source)) {
+  for (const alias of exportStarAliasesForSource(file)) {
     const moduleFileName = resolveRelativeModuleFileName(
       fileName,
       alias.moduleSpecifier,
@@ -2726,7 +2725,7 @@ function tableEntriesForExport(
   if (!file || seen.has(fileName)) return [];
   seen.add(fileName);
 
-  for (const alias of exportTableAliasesForSource(file.source)) {
+  for (const alias of exportTableAliasesForSource(file)) {
     if (alias.local !== exportedName) continue;
 
     const moduleFileName = resolveRelativeModuleFileName(
@@ -2739,7 +2738,7 @@ function tableEntriesForExport(
     const entries = tableEntriesForExport(moduleFileName, alias.imported, context, seen);
     if (entries.length > 0) return entries;
   }
-  for (const alias of exportStarAliasesForSource(file.source)) {
+  for (const alias of exportStarAliasesForSource(file)) {
     const moduleFileName = resolveRelativeModuleFileName(
       fileName,
       alias.moduleSpecifier,
@@ -2795,8 +2794,8 @@ function normalizeModulePath(path: string): string {
   return parts.join('/');
 }
 
-function namespaceImportAliases(source: string): NamespaceImportAlias[] {
-  return withParsedSourceFile(source, (sourceFile) =>
+function namespaceImportAliases(file: SourceFileInput): NamespaceImportAlias[] {
+  return withParsedSourceFile(file, (sourceFile) =>
     sourceFile.getImportDeclarations().flatMap((declaration) => {
       const local = declaration.getNamespaceImport()?.getText();
       const moduleSpecifier = declaration.getModuleSpecifierValue();
@@ -2805,16 +2804,16 @@ function namespaceImportAliases(source: string): NamespaceImportAlias[] {
   );
 }
 
-function importTableAliasesForSource(source: string): TableAlias[] {
-  return withParsedSourceFile(source, importTableAliases);
+function importTableAliasesForSource(file: SourceFileInput): TableAlias[] {
+  return withParsedSourceFile(file, importTableAliases);
 }
 
-function exportTableAliasesForSource(source: string): TableAlias[] {
-  return withParsedSourceFile(source, exportTableAliases);
+function exportTableAliasesForSource(file: SourceFileInput): TableAlias[] {
+  return withParsedSourceFile(file, exportTableAliases);
 }
 
-function exportStarAliasesForSource(source: string): ExportStarAlias[] {
-  return withParsedSourceFile(source, exportStarAliases);
+function exportStarAliasesForSource(file: SourceFileInput): ExportStarAlias[] {
+  return withParsedSourceFile(file, exportStarAliases);
 }
 
 function importTableAliases(sourceFile: SourceFile): TableAlias[] {
@@ -2871,12 +2870,12 @@ function exportStarAliases(sourceFile: SourceFile): ExportStarAlias[] {
 }
 
 function extractUnresolvedConditionalIdentifiers(
-  source: string,
+  file: SourceFileInput,
   tables: ReadonlyMap<string, readonly ExtractedTable[]>,
 ): string[] {
   const unresolved: string[] = [];
 
-  for (const declaration of variableDeclarationsFromSource(source)) {
+  for (const declaration of variableDeclarationsFromSource(file)) {
     const targets = declaration.conditionalTargets;
     if (targets.length === 0) continue;
 
@@ -2947,8 +2946,8 @@ function unwrappedTsExpression(expression: ts.Expression): ts.Expression {
   return expression;
 }
 
-function extractFunctions(source: string): ExtractedFunction[] {
-  return withParsedSourceFile(source, (sourceFile) => {
+function extractFunctions(file: SourceFileInput): ExtractedFunction[] {
+  return withParsedSourceFile(file, (sourceFile) => {
     const functions = [
       ...extractFunctionDeclarations(sourceFile),
       ...extractVariableAssignedFunctions(sourceFile),

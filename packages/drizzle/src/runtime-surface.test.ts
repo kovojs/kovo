@@ -51,6 +51,9 @@ describe('@jiso/drizzle runtime surface', () => {
     expect(runtimeSource).not.toContain('./graph.js');
     expect(runtimeSource).not.toContain('./invalidation.js');
     expect(staticSource).toContain("from 'ts-morph'");
+    expect(staticSource).not.toContain('SOURCE_EXTRACTION_FILE_NAME');
+    expect(staticSource).not.toContain('__jiso_source.ts');
+    expect(staticSource).toContain('createSourceFile(file.fileName, file.source)');
     expect(compatibilityBarrelSource).not.toContain('ts-morph');
     expect(compatibilityBarrelSource).toContain("from './static.js'");
   });
