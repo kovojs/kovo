@@ -845,6 +845,16 @@ must be "FW406 unresolved," never "silently wrong."
       `pnpm exec vitest --run packages/drizzle/src/index.test.ts`;
       `pnpm exec vitest --run conformance/drizzle-pin/src/index.test.ts`;
       `pnpm exec vp check packages/drizzle/src/index.ts packages/drizzle/src/index.test.ts plans/codebase-quality-round2.md`.
+      Additional evidence 2026-06-12: source-mode receiver-name detection now treats only the
+      canonical `db`/`tx` surface as proof, so broad parameter names such as `client`, `database`,
+      and `writer` no longer fabricate write facts. Project mode carries checker-proven
+      `PgDatabase` receiver names into unresolved-surface extraction, preserving typed raw
+      `execute` calls as FW406 while ignoring same-shaped fake receivers. Same-session evidence:
+      `pnpm exec vitest --run packages/drizzle/src/index.test.ts -t "renamed Drizzle receiver|project raw execute"`;
+      `pnpm exec vitest --run packages/drizzle/src`;
+      `pnpm exec vitest --run conformance/drizzle-pin/src/index.test.ts`;
+      `pnpm exec vp check packages/drizzle/src/index.ts packages/drizzle/src/index.test.ts plans/codebase-quality-round2.md`;
+      and `git diff --check`.
 - [ ] **HIGH — Cover the invisible read/write surfaces or mark them.** Relational query API
       (`db.query.users.findMany()`) matches neither read (:1138) nor write (:598) extraction;
       `db.execute(sql``)` is skipped by `extractExternalDbArgumentCalls` (:1820). Either

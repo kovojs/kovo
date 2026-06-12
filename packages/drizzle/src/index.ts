@@ -217,12 +217,12 @@ export function extractTouchGraphFromProject(options: TouchGraphProjectOptions):
   const extraction = createProjectExtraction(options);
   try {
     const files = sourceFilesWithProjectExtractionResolvedFromProject(extraction);
-    const projectWriteCalls = projectWriteCallsByFileName(extraction);
+    const projectFunctionExtractions = projectFunctionExtractionsByFileName(extraction);
 
     return extractTouchGraphFromPreparedFiles(files, (file) =>
       extractFunctions(file.source).map((fn) => {
-        const writeCalls = projectWriteCalls.get(file.fileName)?.get(fn.name);
-        return writeCalls ? { ...fn, writeCalls } : fn;
+        const projectFunction = projectFunctionExtractions.get(file.fileName)?.get(fn.name);
+        return projectFunction ? { ...fn, ...projectFunction } : fn;
       }),
     );
   } finally {
@@ -309,26 +309,26 @@ function sourceFilesWithProjectExtractionResolvedFromProject(
   });
 }
 
-function projectWriteCallsByFileName(
+function projectFunctionExtractionsByFileName(
   extraction: ProjectExtraction,
-): Map<string, Map<string, readonly ExtractedWriteCall[]>> {
-  const callsByFile = new Map<string, Map<string, readonly ExtractedWriteCall[]>>();
+): Map<string, Map<string, ProjectFunctionExtraction>> {
+  const extractionsByFile = new Map<string, Map<string, ProjectFunctionExtraction>>();
 
   extraction.sourceFiles.forEach((sourceFile, index) => {
     const file = extraction.files[index];
     if (!file) return;
 
-    const callsByFunction = new Map<string, readonly ExtractedWriteCall[]>();
+    const extractionsByFunction = new Map<string, ProjectFunctionExtraction>();
 
     for (const fn of sourceFile.getFunctions()) {
       const name = fn.getName();
       const body = fn.getBody();
       if (!name || !body) continue;
 
-      callsByFunction.set(
-        name,
-        extractProjectDrizzleWriteCalls(body, file, extraction.tableNamesBySymbol),
-      );
+      extractionsByFunction.set(name, {
+        receiverNames: projectDrizzleReceiverNames(fn),
+        writeCalls: extractProjectDrizzleWriteCalls(body, file, extraction.tableNamesBySymbol),
+      });
     }
 
     for (const declaration of sourceFile.getVariableDeclarations()) {
@@ -338,27 +338,38 @@ function projectWriteCallsByFileName(
       if (!Node.isArrowFunction(initializer) && !Node.isFunctionExpression(initializer)) continue;
 
       const body = initializer.getBody();
-      callsByFunction.set(
-        name.getText(),
-        extractProjectDrizzleWriteCalls(body, file, extraction.tableNamesBySymbol),
-      );
+      extractionsByFunction.set(name.getText(), {
+        receiverNames: projectDrizzleReceiverNames(initializer),
+        writeCalls: extractProjectDrizzleWriteCalls(body, file, extraction.tableNamesBySymbol),
+      });
     }
 
     for (const [name, callback] of projectDomainWriteCallbacks(sourceFile)) {
-      callsByFunction.set(
-        name,
-        extractProjectDrizzleWriteCalls(callback.body, file, extraction.tableNamesBySymbol),
-      );
+      extractionsByFunction.set(name, {
+        receiverNames: projectDrizzleReceiverNames(callback.fn),
+        writeCalls: extractProjectDrizzleWriteCalls(
+          callback.body,
+          file,
+          extraction.tableNamesBySymbol,
+        ),
+      });
     }
 
-    callsByFile.set(file.fileName, callsByFunction);
+    extractionsByFile.set(file.fileName, extractionsByFunction);
   });
 
-  return callsByFile;
+  return extractionsByFile;
 }
 
-function projectDomainWriteCallbacks(sourceFile: SourceFile): Map<string, { body: Node }> {
-  const callbacks = new Map<string, { body: Node }>();
+interface ProjectFunctionExtraction {
+  receiverNames: readonly string[];
+  writeCalls: readonly ExtractedWriteCall[];
+}
+
+function projectDomainWriteCallbacks(
+  sourceFile: SourceFile,
+): Map<string, { body: Node; fn: Node }> {
+  const callbacks = new Map<string, { body: Node; fn: Node }>();
 
   for (const declaration of sourceFile.getVariableDeclarations()) {
     const domainName = declaration.getNameNode();
@@ -379,11 +390,31 @@ function projectDomainWriteCallbacks(sourceFile: SourceFile): Map<string, { body
       const callback = writeCallbackFunction(property.getInitializer());
       if (!callback) continue;
 
-      callbacks.set(`${domainName.getText()}.${memberName}`, { body: functionBody(callback) });
+      callbacks.set(`${domainName.getText()}.${memberName}`, {
+        body: functionBody(callback),
+        fn: callback,
+      });
     }
   }
 
   return callbacks;
+}
+
+function projectDrizzleReceiverNames(callback: Node): string[] {
+  if (
+    !Node.isArrowFunction(callback) &&
+    !Node.isFunctionDeclaration(callback) &&
+    !Node.isFunctionExpression(callback)
+  ) {
+    return [];
+  }
+
+  const names: string[] = [];
+  for (const param of callback.getParameters()) {
+    const name = param.getNameNode();
+    if (Node.isIdentifier(name) && isDrizzleReceiver(name)) names.push(name.getText());
+  }
+  return names;
 }
 
 function extractProjectDrizzleWriteCalls(
@@ -818,6 +849,7 @@ interface ExtractedFunction {
   bodyStart: number;
   name: string;
   params: string;
+  receiverNames?: readonly string[];
   writeCalls?: readonly ExtractedWriteCall[];
 }
 
@@ -1381,7 +1413,10 @@ function directSummaryForFunction(
   const reads: ReadSummaryInput[] = [];
   const writes: WriteSummaryInput[] = [];
   const unresolved: UnresolvedSummaryInput[] = [];
-  const receiverNames = drizzleReceiverNames(fn.params, fn.body);
+  const receiverNames =
+    fn.receiverNames === undefined
+      ? drizzleReceiverNames(fn.params, fn.body)
+      : new Set(fn.receiverNames);
 
   for (const call of fn.writeCalls ?? extractDrizzleWriteCalls(fn.body, receiverNames)) {
     const site =
@@ -2089,7 +2124,8 @@ function destructuredDrizzleReceiverAliases(body: string): string[] {
 }
 
 function isLikelyDrizzleReceiver(name: string): boolean {
-  return /^(db|tx|trx|database|client|conn|connection|writer|transaction)$/.test(name);
+  // SPEC §10-§11: source-mode names beyond the canonical db/tx surface are not proof.
+  return /^(db|tx)$/.test(name);
 }
 
 function extractReadSources(source: string, operation: string): ExtractedReadSource[] {

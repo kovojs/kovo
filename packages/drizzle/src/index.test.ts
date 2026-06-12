@@ -2250,34 +2250,23 @@ export interface CommerceInvalidationSets {
     });
   });
 
-  it('recognizes renamed Drizzle receiver parameters', () => {
+  it('does not infer renamed Drizzle receiver parameters from broad source-mode names', () => {
     const graph = extractTouchGraphFromSource([
       {
         fileName: 'cart.domain.ts',
         source: `
           export const cartItems = pgTable("cart_items", {}, jiso({ domain: "cart", key: "productId" }));
 
-          export async function addItem(database, productId) {
+          export async function addItem(client, database, writer, productId) {
+            await client.insert(cartItems).values({ productId });
             await database.insert(cartItems).values({ productId });
+            await writer.insert(cartItems).values({ productId });
           }
         `,
       },
     ]);
 
-    expect(graph).toEqual({
-      addItem: {
-        reads: [],
-        touches: [
-          {
-            domain: 'cart',
-            keys: null,
-            site: 'cart.domain.ts:5',
-            via: 'cart_items',
-          },
-        ],
-        unresolved: [],
-      },
-    });
+    expect(graph).toEqual({});
   });
 
   it('extracts write callback bodies from domain authoring surfaces', () => {
@@ -2413,6 +2402,52 @@ export interface CommerceInvalidationSets {
           },
         ],
         unresolved: [],
+      },
+    });
+  });
+
+  it('marks project raw execute only for typed Drizzle receiver origins', () => {
+    const graph = extractTouchGraphFromProject({
+      files: [
+        {
+          fileName: 'drizzle-types.d.ts',
+          source: `
+            declare module "drizzle-orm/pg-core" {
+              export class PgDatabase<TQueryResultHKT = unknown, TFullSchema = unknown, TSchema = unknown> {
+                execute(query: unknown): Promise<void>;
+              }
+            }
+          `,
+        },
+        {
+          fileName: 'cart.domain.ts',
+          source: `
+            import type { PgDatabase } from "drizzle-orm/pg-core";
+
+            interface FakeDb {
+              execute(query: unknown): Promise<void>;
+            }
+
+            export async function reconcile(writer: PgDatabase, client: FakeDb) {
+              await writer.execute(sql\`update cart_items set synced = true\`);
+              await client.execute(sql\`update cart_items set synced = false\`);
+            }
+          `,
+        },
+      ],
+    });
+
+    expect(graph).toEqual({
+      reconcile: {
+        reads: [],
+        touches: [],
+        unresolved: [
+          {
+            code: 'FW406',
+            message: 'Statically un-analyzable write site; manual touches required.',
+            site: 'cart.domain.ts:9',
+          },
+        ],
       },
     });
   });
