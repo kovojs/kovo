@@ -501,7 +501,7 @@ function staticExportDiagnostic(routePath: string, message: string): StaticExpor
 function staticExportHtmlPathStyle(
   style: StaticExportHtmlPathStyle | undefined,
 ): StaticExportHtmlPathStyle {
-  if (style === undefined) return 'flat';
+  if (style === undefined) return 'directory';
   if (style === 'flat' || style === 'directory') return style;
 
   throw new StaticExportError([

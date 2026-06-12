@@ -38,7 +38,7 @@ describe('server static export', () => {
     expect(result.artifacts).toHaveLength(1);
     expect(result.artifacts[0]).toMatchObject({
       headers: { 'content-type': 'text/html; charset=utf-8' },
-      path: '/about.html',
+      path: '/about/index.html',
       status: 200,
     });
     expect(result.artifacts[0]?.body).toContain('<title>About</title>');
@@ -91,21 +91,21 @@ describe('server static export', () => {
       expect(result.diagnostics).toEqual([]);
       expect(result.artifacts.map((artifact) => artifact.path)).toEqual([
         '/index.html',
-        '/docs/intro.html',
+        '/docs/intro/index.html',
       ]);
       await expect(readFile(path.join(outDir, 'index.html'), 'utf8')).resolves.toBe(
         result.artifacts[0]?.body,
       );
-      await expect(readFile(path.join(outDir, 'docs/intro.html'), 'utf8')).resolves.toBe(
-        result.artifacts[1]?.body,
-      );
+      await expect(
+        readFile(path.join(outDir, 'docs', 'intro', 'index.html'), 'utf8'),
+      ).resolves.toBe(result.artifacts[1]?.body);
       expect(result.artifacts[1]?.body).toContain('<main data-route="/docs/intro">intro</main>');
     } finally {
       await rm(outDir, { force: true, recursive: true });
     }
   });
 
-  it('can export route documents as pretty directory index paths', async () => {
+  it('can explicitly export legacy flat route document paths', async () => {
     const outDir = await mkdtemp(path.join(os.tmpdir(), 'jiso-static-export-'));
     try {
       const app = createApp({
@@ -119,18 +119,18 @@ describe('server static export', () => {
         ],
       });
 
-      const result = await exportStaticApp(app, { htmlPathStyle: 'directory', outDir });
+      const result = await exportStaticApp(app, { htmlPathStyle: 'flat', outDir });
 
       expect(result.artifacts.map((artifact) => artifact.path)).toEqual([
         '/index.html',
-        '/docs/intro/index.html',
+        '/docs/intro.html',
       ]);
       await expect(readFile(path.join(outDir, 'index.html'), 'utf8')).resolves.toContain(
         '<main>Home</main>',
       );
-      await expect(
-        readFile(path.join(outDir, 'docs', 'intro', 'index.html'), 'utf8'),
-      ).resolves.toContain('<main>Intro</main>');
+      await expect(readFile(path.join(outDir, 'docs', 'intro.html'), 'utf8')).resolves.toContain(
+        '<main>Intro</main>',
+      );
     } finally {
       await rm(outDir, { force: true, recursive: true });
     }

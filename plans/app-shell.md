@@ -125,16 +125,16 @@ Scope: SPEC addition (proposed §9.5 "The request shell"), `@jiso/server` shell 
       Remaining R5 work: compiler/plugin build hooks must still supply real route-entry maps
       and compiled module sources from compiler facts, consume the asset/module plan in
       production package builds, and decide the final plugin hook ownership.
-- [ ] R6 static export: synthetic-request replay to `.html` files with the L0/L1-only constraint and teaching errors for non-exportable routes.
+- [ ] R6 static export: synthetic-request replay to directory-index HTML files with the L0/L1-only constraint and teaching errors for non-exportable routes.
       Progress 2026-06-11: `packages/server/src/static-export.ts` adds the production-shaped
       `exportStaticApp()` foundation, replaying eligible static GET routes through
-      `createRequestHandler(app)` and returning deterministic `.html` artifacts with body,
+      `createRequestHandler(app)` and returning deterministic HTML artifacts with body,
       status, and sorted response headers. The same module emits FW229 diagnostics for guarded
       routes, apps with a session provider that cannot yet prove route independence, and param
       routes without static-path metadata; `packages/server/src/static-export.test.ts` covers
-      handler/document parity, successful `.html` export, guard/session failures, and loud
+      handler/document parity, successful HTML export, guard/session failures, and loud
       param-route skip/error behavior, including explicit `onNonExportable: 'skip'` diagnostics.
-      Additional evidence 2026-06-11: `exportStaticApp(app, { outDir })` writes replayed `.html`
+      Additional evidence 2026-06-11: `exportStaticApp(app, { outDir })` writes replayed HTML
       artifacts to disk with nested parent-directory creation; `packages/server/src/static-export.test.ts`
       verifies the on-disk bytes match the returned handler-replayed artifacts, with
       `pnpm exec vitest --run packages/server/src/static-export.test.ts packages/server/src/app.test.ts`,
@@ -182,21 +182,30 @@ Scope: SPEC addition (proposed §9.5 "The request shell"), `@jiso/server` shell 
       Additional evidence 2026-06-12: `exportStaticApp()` now rejects unknown
       `htmlPathStyle` values with FW229 before replaying routes or writing files,
       making JS-authored export tasks fail loudly instead of silently falling
-      back to flat `.html` output. `packages/server/src/index.ts` exports the
+      back to a misspelled path style. `packages/server/src/index.ts` exports the
       `StaticExportHtmlPathStyle` public type for task authors. Same-session
       verification ran `pnpm exec vitest --run packages/server/src/static-export.test.ts`
       and `pnpm exec vitest --run site/scripts/app-shell.test.mjs`, proving the
-      server path-style guard and preserving the docs-site pretty-URL export
+      server path-style guard and preserving the docs-site directory-index export
       consumer. R6/R7 remain open for broader adoption cleanup.
       Additional evidence 2026-06-12: the Vite build-to-export bridge reuses
       `exportStaticApp()` rather than introducing a second render path, and the
-      focused Vite test verifies the exported `/cart.html` document includes the
+      focused Vite test verifies the exported `/cart/index.html` document includes the
       manifest-derived asset hints while the same export writes exact CSS/JS bytes
       from the Vite dist directory. Same-session verification ran
       `pnpm exec vitest --run packages/server/src/vite.test.ts`,
       `pnpm exec vitest --run packages/server/src/static-export.test.ts packages/server/src/vite.test.ts`,
       `pnpm exec vp check packages/server/src/vite.ts packages/server/src/vite.test.ts packages/server/src/index.ts plans/app-shell.md`,
       and `git diff --check`.
+      Additional evidence 2026-06-12: Round51 replaced the flat-HTML compatibility
+      default with directory-index output at the shared `exportStaticApp()`
+      boundary. `exportStaticApp(app)` now emits `/about/index.html` for nested
+      routes, `exportJisoAppShellViteBuild()` writes `/cart/index.html` without
+      a caller option, and `examples/commerce/scripts/export-static.mjs`,
+      `site/scripts/export-static.mjs`, and the generated starter export script
+      no longer pass `htmlPathStyle: 'directory'` to get pretty output. The
+      explicit `htmlPathStyle: 'flat'` escape hatch remains covered as legacy
+      behavior, but it is no longer the R6/R7 default path.
 - [ ] R7 adoption: starter becomes a routed app served by `vp dev`; commerce runs end-to-end over HTTP; a jiso docs site ships from `vp run export` as the first outside consumer.
       Progress 2026-06-11: commerce is now TSX-authored ahead of the HTTP serve
       entry — `CartBadge`, `OrderHistory`, and `ProductGrid` are authored in
@@ -277,11 +286,10 @@ Scope: SPEC addition (proposed §9.5 "The request shell"), `@jiso/server` shell 
       pretty `*/index.html` site output. Later evidence below resolves the
       pretty URL output and package-source export replay paths; the docs capture
       build still separately depends on root package artifacts.
-      Additional evidence 2026-06-12: `exportStaticApp()` now accepts
-      `htmlPathStyle: 'directory'`, and `fw export --pretty-urls` passes that
-      through so site export writes route documents as `*/index.html` instead of
-      parallel flat `*.html` files. `site/vite.config.ts` uses the flag for the
-      docs-site export task, and `site/scripts/app-shell.test.mjs` proves replay
+      Additional evidence 2026-06-12: `exportStaticApp()` gained the
+      directory-index path style, and the docs-site export task used it to write
+      route documents as `*/index.html` instead of parallel flat `*.html` files.
+      `site/scripts/app-shell.test.mjs` proves replay
       of `/docs/installation` to `docs/installation/index.html` plus versioned
       `/c/` module copying.
       Progress 2026-06-12: the create-jiso starter export task now builds Vite
@@ -357,9 +365,9 @@ Scope: SPEC addition (proposed §9.5 "The request shell"), `@jiso/server` shell 
       `site/scripts/export-static.mjs` instead of invoking the built
       `dist/cli` export command. The site-owned task still runs the root package
       build needed by docs capture generation, then loads `scripts/app-shell.mjs`
-      and `@jiso/server` through Vite SSR before calling `exportStaticApp()` with
-      `htmlPathStyle: 'directory'`, so SPEC §9.5 static replay exercises
-      package-source server execution while preserving pretty URL output.
+      and `@jiso/server` through Vite SSR before calling `exportStaticApp()`, so
+      SPEC §9.5 static replay exercises package-source server execution while
+      preserving directory-index output.
       `site/scripts/app-shell.test.mjs` proves the SSR module loads for
       `/scripts/app-shell.mjs` and `@jiso/server`, replay to
       `docs/installation/index.html`, and versioned `/c/` module copying.
@@ -437,7 +445,8 @@ Scope: SPEC addition (proposed §9.5 "The request shell"), `@jiso/server` shell 
       session-free `referencePublicAppShell` with a versioned
       `/c/reference.client.js?v=reference-r7` module, and
       `examples/reference/scripts/export-static.mjs --public` replays that app
-      with `htmlPathStyle: 'directory'` for `vp run export`.
+      through the shared directory-index `exportStaticApp()` default for
+      `vp run export`.
       `examples/reference/src/app-shell.test.ts` proves `vp run export` writes
       `dist/index.html` plus `dist/c/reference.client.js` with
       `reference-export/v1` reporting one HTML artifact, one client module, and
@@ -468,7 +477,7 @@ Scope: SPEC addition (proposed §9.5 "The request shell"), `@jiso/server` shell 
       unchanged. `examples/commerce/src/app-shell.test.ts` first proves
       `exportStaticApp(createCommerceAppShell().app)` still raises FW229 for
       the session-backed dynamic shell, then exports the public shell with
-      `htmlPathStyle: 'directory'`, verifies `cart/index.html` and
+      the shared directory-index default, verifies `cart/index.html` and
       `login/index.html`, and checks replayed copying of
       `/c/commerce.client.js?v=commerce-r7` to the export output's
       `c/commerce.client.js`.
@@ -491,7 +500,7 @@ Scope: SPEC addition (proposed §9.5 "The request shell"), `@jiso/server` shell 
       Additional evidence 2026-06-12: commerce now exposes a bounded
       `vp run export` task for its public app-shell export surface. The task
       builds Vite assets, loads `src/app-shell.ts` through Vite SSR, exports
-      `commerceStaticExportApp` with `htmlPathStyle: 'directory'`, and passes
+      `commerceStaticExportApp` through the shared directory-index default and passes
       the Vite-manifest CSS asset through `jisoAppShellViteStaticExportAssets()`
       so SPEC §9.5 static export owns the document, `/c/` module, and stylesheet
       writes. `examples/commerce/src/app-shell.test.ts` runs the real task and

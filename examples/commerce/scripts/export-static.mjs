@@ -61,7 +61,6 @@ export async function exportCommerceStaticApp({
     // the Vite asset bytes addressed by the same manifest hrefs in the document.
     return await exportStaticApp(app, {
       assets: jisoAppShellViteStaticExportAssets(cssAssets, { distDir: builtDistDir }),
-      htmlPathStyle: 'directory',
       outDir,
     });
   } finally {

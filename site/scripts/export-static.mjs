@@ -73,7 +73,6 @@ export async function exportSiteStaticApp({
     // replay route documents, copy versioned /c/ modules, and copy the Vite CSS.
     return await exportStaticApp(app, {
       assets: jisoAppShellViteStaticExportAssets(cssAssets, { distDir: cssDistDir }),
-      htmlPathStyle: 'directory',
       outDir,
     });
   } finally {

@@ -508,7 +508,7 @@ describe('server app shell Vite plugin', () => {
       const result = await exportJisoAppShellViteBuild(build, { distDir, outDir });
 
       expect(result.artifacts).toHaveLength(1);
-      expect(result.artifacts[0]?.path).toBe('/cart.html');
+      expect(result.artifacts[0]?.path).toBe('/cart/index.html');
       expect(result.artifacts[0]?.body).toContain(
         '<link rel="stylesheet" href="/assets/cart.css">',
       );
@@ -529,7 +529,7 @@ describe('server app shell Vite plugin', () => {
           status: 200,
         },
       ]);
-      await expect(readFile(join(outDir, 'cart.html'), 'utf8')).resolves.toContain(
+      await expect(readFile(join(outDir, 'cart', 'index.html'), 'utf8')).resolves.toContain(
         '<main class="cart">Cart</main>',
       );
       await expect(readFile(join(outDir, 'assets/cart.css'), 'utf8')).resolves.toBe(

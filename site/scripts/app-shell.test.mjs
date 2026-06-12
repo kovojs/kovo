@@ -71,7 +71,7 @@ describe('site app-shell export adoption', () => {
       ),
     ).resolves.toBe('export function open() { document.body.dataset.search = "open"; }\n');
 
-    const result = await server.exportStaticApp(app, { htmlPathStyle: 'directory', outDir });
+    const result = await server.exportStaticApp(app, { outDir });
 
     const exportedIndex = await readFile(path.join(outDir, 'index.html'), 'utf8');
     const exportedInstallation = await readFile(

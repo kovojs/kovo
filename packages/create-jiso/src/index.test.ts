@@ -240,6 +240,7 @@ describe('create-jiso starter', () => {
       expect(exportStaticScript).toContain('JISO_STARTER_STYLESHEET_HREF');
       expect(exportStaticScript).toContain('isStaticExportDiagnosticError');
       expect(exportStaticScript).toContain('starter-export/v1');
+      expect(exportStaticScript).not.toContain('htmlPathStyle');
       const serveScript = readFileSync(join(root, 'scripts/serve.mjs'), 'utf8');
       expect(serveScript).toContain('createStarterServeServer');
       expect(serveScript).toContain('configFile: fileURLToPath(new URL');

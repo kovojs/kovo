@@ -462,10 +462,7 @@ describe('commerce app shell HTTP entry', () => {
     const outDir = await mkdtemp(path.join(os.tmpdir(), 'jiso-commerce-export-'));
     try {
       const shell = createCommerceStaticExportShell();
-      const result = await exportStaticApp(shell.app, {
-        htmlPathStyle: 'directory',
-        outDir,
-      });
+      const result = await exportStaticApp(shell.app, { outDir });
 
       expect(result.diagnostics).toEqual([]);
       expect(result.artifacts.map((artifact) => artifact.path)).toEqual([
