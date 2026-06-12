@@ -1894,6 +1894,15 @@ params, relational API, `execute(sql)`, right/full joins, a string column named 
       `corepack pnpm exec vitest --run packages/runtime/src/mutation-failure.test.ts packages/runtime/src/submit-context.test.ts`,
       `corepack pnpm exec vp check packages/runtime/src/index.ts packages/runtime/src/mutation-failure.ts packages/runtime/src/mutation-failure.test.ts packages/runtime/src/submit-context.test.ts plans/codebase-quality-round2.md`,
       and `git diff --check`.
+      Additional bounded evidence 2026-06-12: extracted
+      `packages/runtime/src/mutation-submit.ts` as the subtractive enhanced-mutation submit,
+      optimistic submit, upload-progress, and typed submit-context seam. `packages/runtime/src/index.ts`
+      now imports that submit layer for loader orchestration and re-exports the public submit
+      surface instead of owning the implementation body. Same-session evidence:
+      `corepack pnpm exec vitest --run packages/runtime/src/submit-context.test.ts packages/runtime/src/index.test.ts -t "submit context|enhanced mutations|optimistic enhanced|mutation queue|upload progress"`,
+      `corepack pnpm exec vitest --run packages/runtime/src/submit-context.test.ts`,
+      `corepack pnpm exec vp check packages/runtime/src/index.ts packages/runtime/src/mutation-submit.ts plans/codebase-quality-round2.md`,
+      and `git diff --check`.
 - [ ] **LOW** — `hydratedQueries` frozen at install (index.ts:330-342): queries introduced by
       later mutations never become refetch-eligible — fix or document as SPEC-intended;
       `unescapeHtml` missing `&#39;`/`&apos;` (wire-parser.ts:162-168) — pin the server↔runtime
