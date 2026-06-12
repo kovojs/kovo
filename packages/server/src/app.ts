@@ -4,6 +4,7 @@ import {
   renderVersionedClientModuleResponse,
   type VersionedClientModuleRegistry,
 } from './client-modules.js';
+import type { CsrfValidationOptions } from './csrf.js';
 import { reportServerError, type ServerErrorHandler } from './diagnostics.js';
 import {
   renderErrorDocument,
@@ -26,16 +27,15 @@ import {
 import { runEndpoint, type EndpointDeclaration } from './endpoint.js';
 import {
   renderMutationEndpointResponse,
-  type CsrfValidationOptions,
-  type FragmentRenderer,
   type MutationFail,
   type MutationDefinition,
-  type MutationResponseHeaders,
-  type MutationReplayStore,
   type MutationSuccess,
-  type Schema,
-  type SessionProvider,
-} from './index.js';
+} from './mutation.js';
+import type { FragmentRenderer } from './mutation-wire.js';
+import type { MutationReplayStore } from './replay.js';
+import type { MutationResponseHeaders } from './response.js';
+import type { Schema } from './schema.js';
+import type { SessionProvider } from './guards.js';
 
 type AnyRouteDeclaration = RouteDeclaration<any, any, any, any, any, any>;
 

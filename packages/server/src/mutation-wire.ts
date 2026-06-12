@@ -1,7 +1,7 @@
 import type { CsrfValidationOptions } from './csrf.js';
 import type { RequestLifecycleOptions } from './guards.js';
 import type { StylesheetAsset } from './hints.js';
-import type { MutationFail, MutationSuccess } from './index.js';
+import type { MutationFail, MutationSuccess } from './mutation.js';
 import type { MutationReplayStore } from './replay.js';
 import {
   readHeader,

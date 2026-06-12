@@ -1844,6 +1844,15 @@ land it first; don't fork it.
       `corepack pnpm exec vitest --run packages/server/src/meta.test.ts packages/server/src/route.test.ts packages/server/src/index.test.ts`,
       `corepack pnpm exec vp check packages/server/src/index.ts packages/server/src/meta.ts packages/server/src/meta.test.ts plans/codebase-quality-round2.md`,
       and `git diff --check`.
+      Additional evidence 2026-06-12: mutation declarations, execution, response rendering,
+      replayed enhanced responses per `SPEC.md` §8.1 / §9.1, change-record headers, fragment
+      rerendering, and legacy `renderQueryScript` delegation moved from
+      `packages/server/src/index.ts` into `packages/server/src/mutation.ts`; `index.ts` is now a
+      re-exporting barrel for the mutation API, while `app.ts` dispatches app-shell mutations
+      through the extracted seam instead of importing the package barrel. Same-session evidence:
+      `pnpm exec vitest --run packages/server/src/index.test.ts packages/server/src/app.test.ts packages/server/src/replay.test.ts packages/server/src/mutation-wire.test.ts packages/server/src/csrf.test.ts packages/server/src/guards.test.ts packages/server/src/change-record.test.ts packages/server/src/wire-fixtures.test.ts`,
+      `pnpm exec vp check packages/server/src/index.ts packages/server/src/mutation.ts packages/server/src/app.ts packages/server/src/mutation-wire.ts plans/codebase-quality-round2.md`,
+      and `git diff --check`.
 - [ ] **LOW** — dead code (`matchShellDispatch` post-loop return shell.ts:161-166; rate-limit
       tail `return options.max > 0` index.ts:576); `matchRoute` recompiling all routes per call
       (match.ts:75-81 — cache `compileRoute`); `Transfer-Encoding: chunked` on a buffered string
