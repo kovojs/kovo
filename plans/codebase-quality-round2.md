@@ -1470,6 +1470,13 @@ must be "FW406 unresolved," never "silently wrong."
       while same-shaped fake receivers and a shadowed `db: FakeDb` helper remain inert under
       SPEC §10-§11. Same-session evidence:
       `pnpm exec vitest --run packages/drizzle/src/index.test.ts -t "project unresolved helper surfaces"`.
+      Additional evidence 2026-06-12: source/project write extraction now routes
+      `insert`/`update`/`delete` calls through the parsed static-member helper instead of
+      accepting only dot property access, so `db["insert"](...)` and `db["update"](...)`
+      write methods are extracted for real Drizzle receivers while fake project receivers stay
+      inert under SPEC §10-§11. Same-session evidence:
+      `pnpm exec vitest --run packages/drizzle/src/index.test.ts -t "static element-access write methods|project static element-access writes"`,
+      `pnpm exec vitest --run conformance/drizzle-pin/src/index.test.ts -t "static element-access write methods|real Drizzle receiver types with static element-access write methods"`.
 - [x] **MED — Make the drizzle-orm coupling real and tested.** The `>=0.45.2 <1` pin is
       decorative: drizzle-orm is never imported, absent from devDeps, and every project test
       fabricates a `declare module "drizzle-orm/pg-core"` shim (index.test.ts:1742, 1791, 1846).

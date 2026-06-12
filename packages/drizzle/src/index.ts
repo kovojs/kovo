@@ -543,13 +543,13 @@ function extractProjectDrizzleWriteCalls(
     if (!isDrizzleWriteCall(call)) continue;
 
     const expression = call.getExpression();
-    if (!Node.isPropertyAccessExpression(expression)) continue;
-    const receiver = expression.getExpression();
+    const operation = staticAccessName(expression);
+    const receiver = staticAccessExpression(expression);
+    if (!operation || !receiver) continue;
     if (!isDrizzleReceiver(receiver) && !isProjectDrizzleReceiverIdentifier(receiver, receivers)) {
       continue;
     }
 
-    const operation = expression.getName();
     const tableArgument = call.getArguments()[0];
     if (!tableArgument) continue;
 
@@ -836,9 +836,8 @@ function projectTableNamesByIdentifier(
 
 function isDrizzleWriteCall(call: CallExpression): boolean {
   const expression = call.getExpression();
-  if (!Node.isPropertyAccessExpression(expression)) return false;
-
-  return ['delete', 'insert', 'update'].includes(expression.getName());
+  const name = staticAccessName(expression);
+  return name === 'delete' || name === 'insert' || name === 'update';
 }
 
 function isDrizzleReceiver(receiver: Node): boolean {
@@ -2591,12 +2590,12 @@ function extractDrizzleWriteCalls(
       if (!isDrizzleWriteCall(call)) continue;
 
       const expression = call.getExpression();
-      if (!Node.isPropertyAccessExpression(expression)) continue;
-      const receiver = expression.getExpression();
+      const operation = staticAccessName(expression);
+      const receiver = staticAccessExpression(expression);
+      if (!operation || !receiver) continue;
       if (!isSourceDrizzleReceiverIdentifier(receiver, receiverNames)) continue;
 
       const chain = drizzleWriteChainRoot(call);
-      const operation = expression.getName();
       const start = call.getStart() - bodyOffset;
       const tableExpression = call.getArguments()[0]?.getText().trim();
       if (start < 0 || !tableExpression) continue;

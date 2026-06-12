@@ -458,6 +458,44 @@ describe('Drizzle pinned subset conformance', () => {
     });
   });
 
+  it('pins source static element-access write methods', () => {
+    const graph = extractTouchGraphFromSource([
+      {
+        fileName: 'conformance/drizzle-pin/src/cart.domain.ts',
+        source: [
+          "export const cartItems = pgTable('cart_items', {}, jiso({ domain: 'cart', key: 'productId' }));",
+          '',
+          'export async function addItem(db, productId) {',
+          '  await db["insert"](cartItems).values({ productId });',
+          '  await db["update"](cartItems).set({ productId }).where(eq(cartItems.productId, productId));',
+          '}',
+          '',
+        ].join('\n'),
+      },
+    ]);
+
+    expect(graph).toEqual({
+      addItem: {
+        reads: [],
+        touches: [
+          {
+            domain: 'cart',
+            keys: null,
+            site: 'conformance/drizzle-pin/src/cart.domain.ts:4',
+            via: 'cart_items',
+          },
+          {
+            domain: 'cart',
+            keys: 'arg:productId',
+            site: 'conformance/drizzle-pin/src/cart.domain.ts:5',
+            via: 'cart_items',
+          },
+        ],
+        unresolved: [],
+      },
+    });
+  });
+
   it('pins real Drizzle receiver types inside domain write callbacks', () => {
     const graph = extractTouchGraphFromProject({
       files: [
@@ -486,6 +524,48 @@ describe('Drizzle pinned subset conformance', () => {
           {
             domain: 'cart',
             keys: null,
+            site: 'conformance/drizzle-pin/src/cart.domain.ts:7',
+            via: 'cart_items',
+          },
+        ],
+        unresolved: [],
+      },
+    });
+  });
+
+  it('pins real Drizzle receiver types with static element-access write methods', () => {
+    const graph = extractTouchGraphFromProject({
+      files: [
+        {
+          fileName: 'conformance/drizzle-pin/src/cart.domain.ts',
+          source: [
+            "import type { PgDatabase } from 'drizzle-orm/pg-core';",
+            '',
+            "export const cartItems = pgTable('cart_items', {}, jiso({ domain: 'cart', key: 'productId' }));",
+            '',
+            'export async function addItem(db: PgDatabase<any, any, any>, productId: string) {',
+            '  await db["insert"](cartItems).values({ productId });',
+            '  await db["update"](cartItems).set({ productId }).where(eq(cartItems.productId, productId));',
+            '}',
+            '',
+          ].join('\n'),
+        },
+      ],
+    });
+
+    expect(graph).toEqual({
+      addItem: {
+        reads: [],
+        touches: [
+          {
+            domain: 'cart',
+            keys: null,
+            site: 'conformance/drizzle-pin/src/cart.domain.ts:6',
+            via: 'cart_items',
+          },
+          {
+            domain: 'cart',
+            keys: 'arg:productId',
             site: 'conformance/drizzle-pin/src/cart.domain.ts:7',
             via: 'cart_items',
           },

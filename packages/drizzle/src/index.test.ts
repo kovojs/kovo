@@ -546,6 +546,38 @@ export interface CommerceInvalidationSets {
     });
   });
 
+  it('extracts source writes through static element-access write methods', () => {
+    const graph = extractTouchGraphFromSource([
+      {
+        fileName: 'cart.domain.ts',
+        source: [
+          'export const cartItems = pgTable("cart_items", {}, jiso({ domain: "cart", key: "productId" }));',
+          '',
+          'export async function addItem(db, productId) {',
+          '  await db["insert"](cartItems).values({ productId });',
+          '  await db["update"](cartItems).set({ productId }).where(eq(cartItems.productId, productId));',
+          '}',
+        ].join('\n'),
+      },
+    ]);
+
+    expect(graph).toEqual({
+      addItem: {
+        reads: [],
+        touches: [
+          { domain: 'cart', keys: null, site: 'cart.domain.ts:4', via: 'cart_items' },
+          {
+            domain: 'cart',
+            keys: 'arg:productId',
+            site: 'cart.domain.ts:5',
+            via: 'cart_items',
+          },
+        ],
+        unresolved: [],
+      },
+    });
+  });
+
   it('extracts Drizzle writes through transaction callback receiver aliases', () => {
     const graph = extractTouchGraphFromSource([
       {
@@ -3642,6 +3674,60 @@ export interface CommerceInvalidationSets {
             domain: 'cart',
             keys: 'arg:id',
             site: 'cart.domain.ts:6',
+            via: 'cart_items',
+          },
+        ],
+        unresolved: [],
+      },
+    });
+  });
+
+  it('uses typed receiver origins for project static element-access writes', () => {
+    const graph = extractTouchGraphFromProject({
+      files: [
+        {
+          fileName: 'drizzle-types.d.ts',
+          source: `
+            declare module "drizzle-orm/pg-core" {
+              export class PgDatabase<TQueryResultHKT = unknown, TFullSchema = unknown, TSchema = unknown> {
+                insert(table: unknown): { values(value: unknown): Promise<void> };
+                update(table: unknown): { set(value: unknown): { where(value: unknown): Promise<void> } };
+              }
+            }
+          `,
+        },
+        {
+          fileName: 'cart.domain.ts',
+          source: [
+            'import type { PgDatabase } from "drizzle-orm/pg-core";',
+            '',
+            'interface FakeDb {',
+            '  insert(table: unknown): { values(value: unknown): Promise<void> };',
+            '  update(table: unknown): { set(value: unknown): { where(value: unknown): Promise<void> } };',
+            '}',
+            '',
+            'export const cartItems = pgTable("cart_items", {}, jiso({ domain: "cart", key: "productId" }));',
+            '',
+            'export async function addItem(db: PgDatabase, fake: FakeDb, productId: string) {',
+            '  await db["insert"](cartItems).values({ productId });',
+            '  await db["update"](cartItems).set({ productId }).where(eq(cartItems.productId, productId));',
+            '  await fake["insert"](cartItems).values({ productId });',
+            '}',
+            '',
+          ].join('\n'),
+        },
+      ],
+    });
+
+    expect(graph).toEqual({
+      addItem: {
+        reads: [],
+        touches: [
+          { domain: 'cart', keys: null, site: 'cart.domain.ts:11', via: 'cart_items' },
+          {
+            domain: 'cart',
+            keys: 'arg:productId',
+            site: 'cart.domain.ts:12',
             via: 'cart_items',
           },
         ],
