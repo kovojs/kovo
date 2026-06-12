@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 
-import { mutation as defineMutation, renderNoJsMutationResponse, s } from './index.js';
+import { mutation as defineMutation, renderNoJsMutationResponse } from './mutation.js';
+import { s } from './schema.js';
 
 const mutation = ((key: string, definition: Parameters<typeof defineMutation>[1]) =>
   defineMutation(key, { csrf: false, ...definition })) as typeof defineMutation;

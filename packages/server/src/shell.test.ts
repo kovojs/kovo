@@ -1,20 +1,18 @@
 import { describe, expect, it } from 'vitest';
 
 import {
-  endpoint,
-  isHeaderSource,
-  matchShellDispatch,
-  normalizePathname,
-  readHeader,
   renderDeferredDocument,
   renderDiagnosticDocument,
   renderDocument,
   renderDocumentQueryScript,
   renderErrorDocument,
   renderRouteDocumentResponse,
-  route,
-  shellDispatchTable,
-} from './index.js';
+} from './document.js';
+import { endpoint } from './endpoint.js';
+import { normalizePathname } from './match.js';
+import { isHeaderSource, readHeader } from './response.js';
+import { route } from './route.js';
+import { matchShellDispatch, shellDispatchTable } from './shell.js';
 
 describe('server app shell document assembly', () => {
   it('assembles deterministic documents with hints, loader, and query hydration before body', () => {

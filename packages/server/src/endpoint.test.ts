@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { endpoint, endpointMatches, runEndpoint, type EndpointRequest } from './index.js';
+import { endpoint, endpointMatches, runEndpoint, type EndpointRequest } from './endpoint.js';
 
 describe('server endpoints', () => {
   it('declares raw endpoints with named CSRF exemptions and auth metadata', () => {

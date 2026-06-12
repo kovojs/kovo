@@ -3,18 +3,14 @@ import { describe, expect, it } from 'vitest';
 
 import {
   changeRecordTouchesQueryInstance,
-  mutationRegistryChangeRecords,
-} from './change-record.js';
-import {
-  domain,
   invalidate,
-  mutation as defineMutation,
-  query,
-  renderMutationResponse,
-  runMutation,
-  s,
+  mutationRegistryChangeRecords,
   type ChangeRecord,
-} from './index.js';
+} from './change-record.js';
+import { domain } from './domain.js';
+import { mutation as defineMutation, renderMutationResponse, runMutation } from './mutation.js';
+import { query } from './query.js';
+import { s } from './schema.js';
 
 const mutation = ((key: string, definition: Parameters<typeof defineMutation>[1]) =>
   defineMutation(key, { csrf: false, ...definition })) as typeof defineMutation;

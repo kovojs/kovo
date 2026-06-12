@@ -1,13 +1,13 @@
 import { describe, expect, it, vi } from 'vitest';
 
+import { domain } from './domain.js';
 import {
-  domain,
   query,
   renderQueryEndpointResponse,
   renderQueryRegistryEndpointResponse,
   runQuery,
-  s,
-} from './index.js';
+} from './query.js';
+import { s } from './schema.js';
 
 describe('query endpoints', () => {
   it('runs query endpoints through args schemas, guards, and request context', async () => {

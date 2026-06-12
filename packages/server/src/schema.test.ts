@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { File } from 'node:buffer';
 import { createMemoryStorage, storageBodyToBytes } from '@jiso/core';
 
-import { mutation as defineMutation, runMutation } from './index.js';
+import { mutation as defineMutation, runMutation } from './mutation.js';
 import { s } from './schema.js';
 
 const mutation = ((key: string, definition: Parameters<typeof defineMutation>[1]) =>

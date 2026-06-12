@@ -6,7 +6,10 @@ import { pathToFileURL } from 'node:url';
 import { describe, expect, it } from 'vitest';
 
 import { createApp, createRequestHandler } from './app.js';
-import { createMemoryVersionedClientModuleRegistry, guards, respond, route } from './index.js';
+import { createMemoryVersionedClientModuleRegistry } from './client-modules.js';
+import { guards } from './guards.js';
+import { respond } from './response.js';
+import { route } from './route.js';
 import { exportStaticApp, StaticExportError } from './static-export.js';
 
 describe('server static export', () => {

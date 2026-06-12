@@ -1,15 +1,10 @@
 import { describe, expect, it } from 'vitest';
 
-import {
-  domain,
-  guards,
-  query,
-  route,
-  renderQueryEndpointResponse,
-  renderRoutePageResponse,
-  s,
-  session,
-} from './index.js';
+import { domain } from './domain.js';
+import { guards, session } from './guards.js';
+import { query, renderQueryEndpointResponse } from './query.js';
+import { renderRoutePageResponse, route } from './route.js';
+import { s } from './schema.js';
 
 describe('route and query guard responses', () => {
   it('resolves app session providers before route and query guards', async () => {

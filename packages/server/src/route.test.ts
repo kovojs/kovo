@@ -1,6 +1,8 @@
 import { describe, expect, it, vi } from 'vitest';
+import { redirect } from '@jiso/core';
 
-import { meta, redirect, renderPageHints, s } from './index.js';
+import { renderPageHints } from './hints.js';
+import { meta } from './meta.js';
 import {
   notFound,
   parseRouteRequest,
@@ -8,6 +10,7 @@ import {
   route,
   runRoutePage,
 } from './route.js';
+import { s } from './schema.js';
 
 describe('route primitives', () => {
   it('declares route schemas, route-owned hints, and typed PRG redirects', async () => {

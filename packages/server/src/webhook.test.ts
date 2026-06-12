@@ -2,15 +2,11 @@ import { createHmac } from 'node:crypto';
 import { hmacSignature } from '@jiso/core';
 import { describe, expect, it } from 'vitest';
 
-import {
-  createMemoryMutationReplayStore,
-  domain,
-  runEndpoint,
-  runWebhook,
-  s,
-  webhook,
-  type EndpointRequest,
-} from './index.js';
+import { domain } from './domain.js';
+import { runEndpoint, type EndpointRequest } from './endpoint.js';
+import { createMemoryMutationReplayStore } from './replay.js';
+import { s } from './schema.js';
+import { runWebhook, webhook } from './webhook.js';
 
 function signedRequest(body: string, signature: string): Request {
   return new Request('https://example.test/webhooks/stripe', {

@@ -1,15 +1,11 @@
 import { describe, expect, it, vi } from 'vitest';
 
-import {
-  csrfToken,
-  domain,
-  mutation as defineMutation,
-  query,
-  renderMutationResponse,
-  s,
-  type MutationReplayStore,
-} from './index.js';
-import { createMemoryMutationReplayStore } from './replay.js';
+import { csrfToken } from './csrf.js';
+import { domain } from './domain.js';
+import { mutation as defineMutation, renderMutationResponse } from './mutation.js';
+import { query } from './query.js';
+import { createMemoryMutationReplayStore, type MutationReplayStore } from './replay.js';
+import { s } from './schema.js';
 
 const mutation = ((key: string, definition: Parameters<typeof defineMutation>[1]) =>
   defineMutation(key, { csrf: false, ...definition })) as typeof defineMutation;

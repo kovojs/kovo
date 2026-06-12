@@ -3,7 +3,7 @@ import type { IncomingHttpHeaders, IncomingMessage, RequestListener } from 'node
 import type { AddressInfo } from 'node:net';
 import { describe, expect, it } from 'vitest';
 
-import { toNodeHandler } from './index.js';
+import { toNodeHandler } from './node.js';
 
 describe('server node adapter', () => {
   it('serves web-standard handlers through node:http with request bodies and early hints', async () => {

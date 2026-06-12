@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
-import { createMemoryMutationReplayStore } from './index.js';
 import { mutationWireRequestFromHeaders, readMutationWireHeaders } from './mutation-wire.js';
+import { createMemoryMutationReplayStore } from './replay.js';
 
 describe('mutation wire headers', () => {
   it('reads enhanced mutation wire headers case-insensitively', () => {

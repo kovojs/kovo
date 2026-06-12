@@ -1,13 +1,9 @@
 import { describe, expect, it } from 'vitest';
 
-import {
-  mutation as defineMutation,
-  renderMutationResponse,
-  runMutation,
-  s,
-  type MutationReplayStore,
-} from './index.js';
 import { csrfField, csrfToken, validateCsrfToken } from './csrf.js';
+import { mutation as defineMutation, renderMutationResponse, runMutation } from './mutation.js';
+import type { MutationReplayStore } from './replay.js';
+import { s } from './schema.js';
 
 describe('csrf helpers', () => {
   const request = { sessionId: 'session-1' };

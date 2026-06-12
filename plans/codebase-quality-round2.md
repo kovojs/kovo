@@ -2863,6 +2863,13 @@ As each phase splits a source module, split its tests in the same commit.
       `pnpm exec vp check packages/server/src/app.test.ts plans/codebase-quality-round2.md`,
       and `git diff --check`. Remaining work in this item is the broader direct-import sweep for
       the other server test files plus any shared fixture helpers that still reduce duplication.
+      Additional evidence 2026-06-12: the broader server direct-import sweep is complete for
+      `packages/server/src/*.test.ts`; every server test file now imports the owning server module
+      instead of `packages/server/src/index.ts`, leaving the package barrel as an external public
+      API surface. Same-session evidence: `rg -n "from './index\\.js'" packages/server/src` returned no matches, and
+      `pnpm exec vitest --run packages/server/src/*.test.ts` passed 32 files / 215 tests.
+      Remaining work in this item is any shared fixture helper extraction that still reduces
+      duplication.
 - [ ] runtime/index.test.ts (4,435 lines, mutation tests under "query store") → per-module
       files; `Fake*` classes to a shared `test-fixtures.ts`; direct unit tests for wire-parser,
       handlers, morph; replace counted-microtask flushing with a single `flush()` helper.

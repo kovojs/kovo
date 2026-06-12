@@ -1,11 +1,8 @@
 import { describe, expect, it } from 'vitest';
 
-import {
-  renderDeferredStream,
-  renderPageHints,
-  stylesheetsForTargets,
-  versionedClientModuleHref,
-} from './index.js';
+import { versionedClientModuleHref } from './client-modules.js';
+import { renderDeferredStream } from './deferred-stream.js';
+import { renderPageHints, stylesheetsForTargets } from './hints.js';
 
 describe('page hints', () => {
   it('renders modulepreloads, opt-in speculation rules, and Early Hints headers', () => {

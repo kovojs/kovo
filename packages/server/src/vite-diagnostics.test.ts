@@ -2,13 +2,13 @@ import { request as httpRequest, createServer } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { describe, expect, it } from 'vitest';
 
+import { createApp } from './app.js';
+import { route } from './route.js';
 import {
-  createApp,
   createJisoAppShellDevDiagnosticLedger,
   jisoAppShellVitePlugin,
-  route,
   type JisoAppShellViteMiddleware,
-} from './index.js';
+} from './vite.js';
 
 describe('server app shell Vite diagnostics', () => {
   it('gates page-route diagnostics red and green through the dev middleware ledger', async () => {

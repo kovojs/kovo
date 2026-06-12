@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from 'vitest';
 import {
   createMemoryVersionedClientModuleRegistry,
   renderVersionedClientModuleResponse,
-} from './index.js';
+} from './client-modules.js';
 
 describe('versioned client modules', () => {
   it('retains old versioned client module responses after newer deploys register', () => {

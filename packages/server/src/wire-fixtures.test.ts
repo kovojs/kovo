@@ -2,18 +2,17 @@ import { describe, expect, it } from 'vitest';
 import { readFile } from 'node:fs/promises';
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
 
+import { renderDeferredStream } from './deferred-stream.js';
+import { domain } from './domain.js';
 import {
-  domain,
   mutation as defineMutation,
-  query,
-  renderDeferredStream,
   renderMutationEndpointResponse,
   renderMutationResponse,
   renderNoJsMutationResponse,
-  renderQueryEndpointResponse,
-  s,
-  type MutationResponseHeaderValue,
-} from './index.js';
+} from './mutation.js';
+import { query, renderQueryEndpointResponse } from './query.js';
+import type { MutationResponseHeaderValue } from './response.js';
+import { s } from './schema.js';
 
 const mutation = ((key: string, definition: Parameters<typeof defineMutation>[1]) =>
   defineMutation(key, { csrf: false, ...definition })) as typeof defineMutation;

@@ -5,16 +5,16 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
+import { createApp, createRequestHandler } from './app.js';
+import { createMemoryVersionedClientModuleRegistry } from './client-modules.js';
+import { route } from './route.js';
+import { exportStaticApp } from './static-export.js';
 import {
-  createApp,
   createJisoAppShellDevDiagnosticLedger,
   createJisoAppShellBuild,
   createJisoAppShellViteBuild,
   createJisoAppShellViteBuildFromBundle,
-  createMemoryVersionedClientModuleRegistry,
-  createRequestHandler,
   exportJisoAppShellViteBuild,
-  exportStaticApp,
   jisoAppShellViteManifestAssets,
   jisoAppShellViteManifestFromBundle,
   jisoAppShellViteManifestHints,
@@ -22,12 +22,11 @@ import {
   jisoAppShellViteRouteEntries,
   jisoAppShellViteSsrDevPlugin,
   jisoAppShellViteStaticExportAssets,
-  route,
   type JisoAppShellBuild,
   type JisoAppShellViteBuildOutput,
   type JisoAppShellViteMiddleware,
   writeJisoAppShellViteBuildOutput,
-} from './index.js';
+} from './vite.js';
 
 describe('server app shell Vite plugin', () => {
   it('extracts deterministic stylesheet and modulepreload hints from a Vite manifest', () => {
