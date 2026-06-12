@@ -767,6 +767,15 @@ params, relational API, `execute(sql)`, right/full joins, a string column named 
       handler error messages under the `SPEC.md` section 4.4 loader contract. Same-session
       evidence: `pnpm exec vitest --run packages/runtime/src/index.test.ts`,
       `pnpm exec vp check packages/runtime/src/index.test.ts`, and `git diff --check`.
+      Additional bounded evidence 2026-06-12: extracted the shipped inline bootstrap literal,
+      installer, and source wrapper into `packages/runtime/src/inline-loader.ts`, while
+      `packages/runtime/src/index.ts` keeps the public re-export. `packages/runtime/src/inline-loader.test.ts`
+      pins the extracted installer source, public generated bootstrap source, 4KB gzip budget,
+      custom import expression install path, and wire-contract tokens for multi-target
+      separators, keyed queries, fragment-target fallback, and param types. Same-session
+      evidence: `pnpm exec vitest --run packages/runtime/src/inline-loader.test.ts packages/runtime/src/index.test.ts`,
+      `pnpm exec vp check packages/runtime/src/index.ts packages/runtime/src/inline-loader.ts packages/runtime/src/inline-loader.test.ts plans/codebase-quality-round2.md`,
+      and `git diff --check`.
 - [x] **HIGH — Ship the DOM morph.** The only real keyed DOM morph (focus/selection/scroll
       capture-restore) lives in index.browser.test.ts:12-182; every consumer must rewrite it, and
       the flagship browser test substantially tests its own test code. Promote to a
@@ -867,6 +876,12 @@ params, relational API, `execute(sql)`, right/full joins, a string column named 
       updates. Same-session evidence:
       `pnpm exec vitest --run packages/runtime/src/index.test.ts -t "data-bind|compiled query update plans"` and
       `pnpm exec vp check packages/runtime/src/index.ts packages/runtime/src/index.test.ts plans/codebase-quality-round2.md`.
+      Partial evidence 2026-06-12: extracted `packages/runtime/src/inline-loader.ts` as the
+      subtractive inline-loader seam for the shipped bootstrap literal, installer, and generated
+      source helper; `packages/runtime/src/index.ts` now re-exports that surface. Same-session
+      evidence: `pnpm exec vitest --run packages/runtime/src/inline-loader.test.ts packages/runtime/src/index.test.ts`
+      and
+      `pnpm exec vp check packages/runtime/src/index.ts packages/runtime/src/inline-loader.ts packages/runtime/src/inline-loader.test.ts plans/codebase-quality-round2.md`.
 - [ ] **LOW** — `hydratedQueries` frozen at install (index.ts:330-342): queries introduced by
       later mutations never become refetch-eligible — fix or document as SPEC-intended;
       `unescapeHtml` missing `&#39;`/`&apos;` (wire-parser.ts:162-168) — pin the server↔runtime
