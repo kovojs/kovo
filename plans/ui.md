@@ -378,6 +378,24 @@ jiso-dialog` resolves dashed wire names and prints provenance including package,
       `pnpm exec vp check packages/headless-ui/package.json packages/headless-ui/src/index.ts packages/headless-ui/src/primitives/index.ts packages/headless-ui/src/primitives/combobox.ts packages/headless-ui/src/primitives/combobox.test.ts plans/ui.md`,
       and `git diff --check`. H3 remains open for autocomplete, dropdown-menu, context-menu,
       menubar, navigation-menu, slider, toast, command, and full gates.
+      Additional partial evidence 2026-06-12:
+      `packages/headless-ui/src/primitives/autocomplete.ts` adds the H3 autocomplete
+      primitive as a native `<input type="text">` + `<datalist>`-oriented helper:
+      root/input/list/option/value attribute builders, real `name`/`required`/`disabled`
+      input attributes per SPEC §6.3, datalist and active-option ARIA wiring, selected/
+      highlighted/placeholder/open/closed data attrs, disabled-option protection, cancelable
+      input/value/open-state transitions, shared typeahead matching, suggestion filtering, and
+      guarded input/option/keyboard handlers following the SPEC §4.6 primitive handler no-op
+      contract. It is exported through `@jiso/headless-ui`, `@jiso/headless-ui/primitives`,
+      and `@jiso/headless-ui/primitives/autocomplete`. Same-session evidence:
+      `pnpm exec vitest --run packages/headless-ui/src/primitives/autocomplete.test.ts packages/headless-ui/src/primitives/combobox.test.ts packages/headless-ui/src/lib/typeahead.test.ts packages/headless-ui/src/lib/change-details.test.ts`,
+      `pnpm --filter @jiso/headless-ui run lint:primitives`,
+      `pnpm exec vp check packages/headless-ui/src/primitives/autocomplete.ts packages/headless-ui/src/primitives/autocomplete.test.ts`,
+      `pnpm exec vp check packages/headless-ui/package.json packages/headless-ui/src/index.ts packages/headless-ui/src/primitives/index.ts`,
+      and `git diff --check`. H3 remains open for dropdown-menu, context-menu, menubar,
+      navigation-menu, slider, toast, command, and full gates. Caveat: grouped changed-file
+      `vp check` formatted all six files but the Vite+/typescript-go linter crashed before
+      completing lint analysis; the source and export checks above passed when split.
 - [x] U1 token sheet + `cn()` + statically-analyzable variant helper (Tailwind-first, §13.1 discoverability rules).
       Evidence 2026-06-12: `packages/headless-ui/src/lib/class-names.ts`
       provides the dependency-free `cn()` helper, `packages/headless-ui/src/lib/variants.ts`
