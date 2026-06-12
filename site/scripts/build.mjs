@@ -209,10 +209,10 @@ async function main() {
     '/spec/',
     finishPage(
       renderDocument({
-        body: `<div class="mx-auto max-w-7xl px-4 py-12 sm:px-6">
-        <p class="mb-10 max-w-3xl rounded-xl border border-amber-300/60 bg-amber-50 px-4 py-3 text-sm text-amber-900 dark:border-amber-400/30 dark:bg-amber-400/10 dark:text-amber-200">
+        body: `<div class="mx-auto max-w-[80rem] px-4 py-12 sm:px-6">
+        <p class="note-banner">
           This is the normative specification, rendered verbatim from
-          <a class="underline" href="https://github.com/jiso-sh/jiso/blob/main/SPEC.md" rel="external">SPEC.md</a>
+          <a href="https://github.com/jiso-sh/jiso/blob/main/SPEC.md" rel="external">SPEC.md</a>
           at build time. The docs explain; the spec decides.
         </p>
         <article class="prose">${specHtml}</article>
@@ -280,12 +280,12 @@ async function main() {
     renderDocument({
       body: `<main class="mx-auto grid min-h-[60vh] max-w-3xl place-items-center px-6">
         <div class="text-center">
-          <p class="font-mono text-sm font-semibold text-jiso-600 dark:text-jiso-400">404</p>
-          <h1 class="mt-2 text-4xl font-extrabold tracking-tight text-slate-900 dark:text-white">Page not found</h1>
-          <p class="mt-4 text-slate-600 dark:text-slate-400">No route declares this path &mdash; in a Jiso app, <code class="font-mono text-sm">vp check</code> would have caught that link.</p>
-          <div class="mt-8 flex justify-center gap-4 text-sm font-semibold">
-            <a class="rounded-full bg-jiso-600 px-5 py-2.5 text-white transition hover:bg-jiso-500" href="/docs/installation/">Read the docs</a>
-            <a class="rounded-full border border-slate-300 px-5 py-2.5 text-slate-700 transition hover:border-slate-400 dark:border-slate-700 dark:text-slate-200 dark:hover:border-slate-500" href="/">Go home</a>
+          <p class="e404-code">404</p>
+          <h1 class="mt-3 text-4xl font-bold tracking-tight">Page not found</h1>
+          <p class="mt-4" style="color: var(--dim)">No route declares this path &mdash; in a Jiso app, <code class="font-mono text-sm">vp check</code> would have caught that link.</p>
+          <div class="mt-8 flex justify-center gap-4">
+            <a class="btn-solid" href="/docs/installation/">Read the docs</a>
+            <a class="btn-line" href="/">Go home</a>
           </div>
         </div>
       </main>`,

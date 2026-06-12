@@ -93,8 +93,7 @@ const specCitation = {
  * The copy button is a Jiso island — no JS loads until first click. */
 function codeWindow({ highlighted, language, title }) {
   const bar = [
-    '<span class="code-window-dots"><span></span><span></span><span></span></span>',
-    title ? `<span class="code-window-title">${escapeHtml(title)}</span>` : '',
+    `<span class="code-window-title">${title ? escapeHtml(title) : ''}</span>`,
     language === 'txt' ? '' : `<span class="code-window-lang">${language}</span>`,
     '<button type="button" class="code-copy" on:click="/c/code.js#copy">Copy</button>',
   ].join('');
