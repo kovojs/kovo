@@ -3403,6 +3403,57 @@ describe('query store', () => {
     expect(pending?.attributes).not.toHaveProperty('aria-busy');
   });
 
+  it('reports optimistic enhanced mutation fetch failures and clears pending state', async () => {
+    const store = createQueryStore();
+    const rebaser = new OptimisticRebaser(store);
+    const root = new FakeMorphRoot();
+    const pendingRoot = new FakePendingRoot([new FakePendingElement({ 'fw-deps': 'cart' })]);
+    const onError = vi.fn();
+    const error = new Error('network down');
+    store.set('cart', { count: 1 });
+    const fetch = vi.fn(async () => {
+      const pending = [...pendingRoot.querySelectorAll('[fw-deps]')][0];
+      expect(store.get('cart')).toEqual({ count: 3 });
+      expect(pending?.attributes).toMatchObject({
+        'aria-busy': 'true',
+        'fw-pending': '',
+      });
+      throw error;
+    });
+
+    await expect(
+      submitOptimisticEnhancedMutation({
+        fetch,
+        form: { action: '/_m/cart/add', method: 'post' },
+        formData: new FormData(),
+        idem: 'idem_failed_optimistic',
+        input: { quantity: 2 },
+        onError,
+        optimistic: {
+          transforms: {
+            cart(current, input) {
+              const cart = current as { count: number };
+              return { count: cart.count + input.quantity };
+            },
+          },
+        },
+        pendingRoot,
+        rebaser,
+        root,
+        store,
+      }),
+    ).rejects.toBe(error);
+
+    const pending = [...pendingRoot.querySelectorAll('[fw-deps]')][0];
+    // SPEC.md §10.4: optimistic mutations must discard failed predictions and
+    // report direct-submit failures through the mutation-layer error seam.
+    expect(onError).toHaveBeenCalledWith(error);
+    expect(store.get('cart')).toEqual({ count: 1 });
+    expect(rebaser.pendingCount('cart')).toBe(0);
+    expect(pending?.attributes).not.toHaveProperty('fw-pending');
+    expect(pending?.attributes).not.toHaveProperty('aria-busy');
+  });
+
   it('does not rebroadcast failed enhanced mutation responses', async () => {
     const store = createQueryStore();
     const channel = new FakeBroadcastChannel();

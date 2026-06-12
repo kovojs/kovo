@@ -4,6 +4,7 @@ import {
   reportMalformedJson,
   reportRuntimeContextError,
   reportRuntimeError,
+  reportRuntimeTargetError,
 } from './error-policy.js';
 
 describe('runtime error policy', () => {
@@ -32,5 +33,17 @@ describe('runtime error policy', () => {
     reportRuntimeContextError(onError, error, { event, phase: 'delegated-event' });
 
     expect(onError).toHaveBeenCalledWith(error, { event, phase: 'delegated-event' });
+  });
+
+  it('routes form-layer failures through one target-aware hook', () => {
+    const onError = vi.fn();
+    const error = new Error('submit failed');
+    const form = { action: '/_m/cart/add' };
+
+    // SPEC.md §9.2: enhanced form failures are handled by the form layer when a
+    // form-scoped reporter is present, not by the loader context fallback.
+    reportRuntimeTargetError(onError, error, form);
+
+    expect(onError).toHaveBeenCalledWith(error, form);
   });
 });

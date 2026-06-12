@@ -129,6 +129,43 @@ describe('query refetch', () => {
     expect(store.get('cart')).toEqual({ count: 1 });
   });
 
+  it('reports visible-return callback failures and still runs typed read refetch', async () => {
+    const root = new FakeVisibleReturnRoot();
+    const store = createQueryStore();
+    const callbackError = new Error('focus callback failed');
+    const onError = vi.fn();
+    const fetch = vi.fn(async () => ({
+      status: 200,
+      text: async () => '<fw-query name="cart">{"count":2}</fw-query>',
+    }));
+
+    root.scripts = [
+      {
+        getAttribute: (name) => (name === 'fw-query' ? 'cart' : null),
+        textContent: '{"count":1}',
+      },
+    ];
+
+    installQueryVisibleReturnRefetch({
+      onError,
+      queryRefetch: { fetch },
+      queryScripts: () => root.querySelectorAll('script[fw-query]'),
+      queryStore: store,
+      refetchOnFocus: async () => {
+        throw callbackError;
+      },
+      root,
+    });
+
+    await root.listeners.get('visibilitychange')?.({});
+
+    // SPEC.md §4.4: visible-return refetch is background loader work; callback
+    // failures report through the runtime error seam without blocking typed reads.
+    expect(onError).toHaveBeenCalledWith(callbackError);
+    expect(fetch).toHaveBeenCalledTimes(1);
+    expect(store.get('cart')).toEqual({ count: 2 });
+  });
+
   it('makes stale visible-return listeners inert after disposal', async () => {
     const root = new FakeVisibleReturnRoot();
     const store = createQueryStore();
@@ -297,5 +334,33 @@ describe('query refetch', () => {
     expect(store.get('reviews')).toEqual({ total: 2 });
     expect(onError).toHaveBeenCalledTimes(1);
     expect(String(onError.mock.calls[0]?.[0].message)).toContain('Malformed JSON in fw-query cart');
+  });
+
+  it('reports typed read transport failures and continues applying later queries', async () => {
+    const store = createQueryStore();
+    const onError = vi.fn();
+    const transportError = new Error('typed read failed');
+    const fetch = vi.fn(async (url: string) => {
+      if (url === '/_q/cart') throw transportError;
+
+      return {
+        status: 200,
+        text: async () => '<fw-query name="reviews">{"total":2}</fw-query>',
+      };
+    });
+
+    const applied = await refetchQueries({
+      fetch,
+      onError,
+      queries: ['cart', 'reviews'],
+      queryStore: store,
+    });
+
+    // SPEC.md §4.4: one failed visible-return typed read must not prevent
+    // later hydrated queries from receiving fresh server data.
+    expect(applied).toEqual([{ fragments: [], queries: ['reviews'] }]);
+    expect(onError).toHaveBeenCalledWith(transportError);
+    expect(store.get('cart')).toBeUndefined();
+    expect(store.get('reviews')).toEqual({ total: 2 });
   });
 });

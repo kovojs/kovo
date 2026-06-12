@@ -3,6 +3,7 @@ import type { RuntimeErrorContext } from './events.js';
 
 export type RuntimeErrorReporter = (error: unknown) => void;
 export type RuntimeContextErrorReporter = (error: unknown, context: RuntimeErrorContext) => void;
+export type RuntimeTargetErrorReporter<Target> = (error: unknown, target: Target) => void;
 
 export function reportRuntimeError(
   onError: RuntimeErrorReporter | undefined,
@@ -17,6 +18,14 @@ export function reportRuntimeContextError(
   context: RuntimeErrorContext,
 ): void {
   onError?.(error, context);
+}
+
+export function reportRuntimeTargetError<Target>(
+  onError: RuntimeTargetErrorReporter<Target> | undefined,
+  error: unknown,
+  target: Target,
+): void {
+  onError?.(error, target);
 }
 
 export function reportMalformedJson(

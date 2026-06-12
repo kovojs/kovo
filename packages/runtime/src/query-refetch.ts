@@ -1,10 +1,16 @@
 import { applyMutationResponseToStore } from './apply-path.js';
 import type { AppliedMutationResponse } from './apply-path.js';
+import { reportRuntimeError } from './error-policy.js';
 import { hydrateQueryScripts } from './query-store.js';
 import type { QueryScriptLike, QueryStore } from './query-store.js';
 
 export interface QueryRefetchOptions {
   fetch: QueryRefetchFetch;
+  /**
+   * Reports typed-read fetch, response-body, and wire-apply failures. Refetch is
+   * a visible-return background layer, so individual query failures are reported
+   * and skipped while later queries continue under SPEC.md §4.4 hydration.
+   */
   onError?: (error: unknown) => void;
   urlForQuery?: (query: string) => string | undefined;
 }
@@ -109,7 +115,7 @@ export function installQueryVisibleReturnRefetch(
     ledger.remember(
       hydrateQueryScripts(options.queryStore, scripts, {
         onError(error) {
-          options.onError?.(error);
+          reportRuntimeError(options.onError, error);
         },
       }),
     );
@@ -140,7 +146,11 @@ export function installQueryVisibleReturnRefetch(
     hydrateNewQueryScripts();
     if (disposed) return;
     const queries = ledger.eligible(options.refetchOnFocusOptOut);
-    await options.refetchOnFocus?.(queries);
+    try {
+      await options.refetchOnFocus?.(queries);
+    } catch (error) {
+      reportRuntimeError(options.onError, error);
+    }
     if (disposed) return;
     if (options.queryRefetch && options.queryStore) {
       const onError = options.queryRefetch.onError ?? options.onError;
@@ -191,25 +201,29 @@ export async function refetchQueries(
     const url = options.urlForQuery?.(query) ?? `/_q/${encodeURIComponent(query)}`;
     if (!url) continue;
 
-    const response = await options.fetch(url, {
-      headers: {
-        Accept: 'text/html',
-        'FW-Fragment': 'true',
-      },
-      method: 'GET',
-    });
+    try {
+      const response = await options.fetch(url, {
+        headers: {
+          Accept: 'text/html',
+          'FW-Fragment': 'true',
+        },
+        method: 'GET',
+      });
 
-    if (response.ok === false || (response.status !== undefined && response.status >= 400)) {
-      continue;
+      if (response.ok === false || (response.status !== undefined && response.status >= 400)) {
+        continue;
+      }
+
+      applied.push(
+        applyMutationResponseToStore(
+          options.queryStore,
+          await response.text(),
+          options.onError ? { onError: options.onError } : undefined,
+        ),
+      );
+    } catch (error) {
+      reportRuntimeError(options.onError, error);
     }
-
-    applied.push(
-      applyMutationResponseToStore(
-        options.queryStore,
-        await response.text(),
-        options.onError ? { onError: options.onError } : undefined,
-      ),
-    );
   }
 
   return applied;

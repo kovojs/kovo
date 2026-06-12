@@ -7,6 +7,7 @@ import type {
   ApplyMutationResponseToDomOptions,
 } from './apply-path.js';
 import type { DelegatedEvent, EventElementLike } from './events.js';
+import { reportRuntimeError, reportRuntimeTargetError } from './error-policy.js';
 import type { IslandSignalScope } from './handlers.js';
 import { defaultIslandSignalScope } from './handlers.js';
 import type { MorphFragment, MorphRoot } from './morph.js';
@@ -90,7 +91,7 @@ export async function dispatchEnhancedFormSubmit(
       ...(options.onError
         ? {
             onError(error) {
-              options.onError?.(error, form);
+              reportRuntimeTargetError(options.onError, error, form);
             },
           }
         : {}),
@@ -390,7 +391,7 @@ export async function submitEnhancedMutation(
     const fetched = await fetchEnhancedMutation(options);
     return applyFetchedEnhancedMutationResponseToDom(options, fetched);
   } catch (error) {
-    options.onError?.(error);
+    reportRuntimeError(options.onError, error);
     throw error;
   } finally {
     stampEnhancedMutationPending(options, false);
@@ -464,6 +465,7 @@ async function submitOptimisticEnhancedMutationDirect<Input>(
     if (options.pendingRoot) {
       stampPendingQueries(options.pendingRoot, queryNames, false);
     }
+    reportRuntimeError(options.onError, error);
     throw error;
   }
 }
@@ -483,7 +485,10 @@ function optimisticMutationDomApplyHooks<Input>(
       const uncoveredQueries = uncoveredOptimisticQueries(queryChunks, queryNames, optimisticKeys);
       for (const queryName of uncoveredQueries) {
         options.rebaser.settleWithoutServerTruth(idem, queryName, optimisticKeys[queryName]);
-        options.onError?.(uncoveredOptimisticQueryError(queryName, optimisticKeys[queryName]));
+        reportRuntimeError(
+          options.onError,
+          uncoveredOptimisticQueryError(queryName, optimisticKeys[queryName]),
+        );
       }
       options.rebaser.settle(idem);
     },

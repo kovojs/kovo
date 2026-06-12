@@ -1895,7 +1895,7 @@ params, relational API, `execute(sql)`, right/full joins, a string column named 
       scope/element objects. `index.test.ts` now proves that a handler running under one scope can
       explicitly abort a different scope without aborting its own signal. Same-session evidence:
       `pnpm exec vitest --run packages/runtime/src/index.test.ts -t "scope|signal|handler"`.
-- [ ] **MED — One error policy per layer.** `dispatchEnhancedFormSubmit` swallows when `onError`
+- [x] **MED — One error policy per layer.** `dispatchEnhancedFormSubmit` swallows when `onError`
       exists (index.ts:610-613, including a doubled `if (!options.onError)`) while
       `submitEnhancedMutation` calls `onError` and rethrows (:1556-1558); `readFragmentChunks`
       silently truncates on unbalanced markup (wire-parser.ts:82) while the query path reports.
@@ -1938,6 +1938,20 @@ params, relational API, `execute(sql)`, right/full joins, a string column named 
       Same-session evidence:
       `pnpm exec vitest --run packages/runtime/src/error-policy.test.ts packages/runtime/src/events.test.ts packages/runtime/src/index.test.ts -t "error hook|loader failures|execution trigger|query-hydration"`,
       `pnpm exec vp check packages/runtime/src/error-policy.ts packages/runtime/src/error-policy.test.ts packages/runtime/src/events.ts packages/runtime/src/index.ts plans/codebase-quality-round2.md`,
+      and `git diff --check`.
+      Final evidence 2026-06-12: `packages/runtime/src/error-policy.ts` now owns the
+      target-aware form-layer reporter alongside the lower runtime and contextual loader/event
+      reporters; `packages/runtime/src/mutation-submit.ts` routes enhanced form, direct submit,
+      and optimistic uncovered/failure reporting through that policy, while
+      `packages/runtime/src/query-refetch.ts` reports visible-return callback and typed-read
+      transport/body/apply failures through the lower runtime seam and continues later query
+      refetches. The remaining direct `submitOptions.onError` call is typed form validation
+      failure delivery, not a runtime error reporter. Same-session evidence:
+      `rg -n "onError\\?\\.\\(|options\\.onError\\?\\.\\(|submitOptions\\.onError\\(|reportRuntime" packages/runtime/src/*.ts`,
+      `corepack pnpm exec vitest --run packages/runtime/src/error-policy.test.ts packages/runtime/src/query-refetch.test.ts packages/runtime/src/index.test.ts -t "runtime error policy|visible-return|typed read|optimistic enhanced mutation fetch failures|direct enhanced mutation fetch failures|loader failures|query-hydration"`,
+      `corepack pnpm exec vitest --run packages/runtime/src`, and
+      `corepack pnpm exec vitest --config vitest.browser.config.ts --run packages/runtime/src/index.browser.test.ts`,
+      `corepack pnpm exec vp check packages/runtime/src/error-policy.ts packages/runtime/src/error-policy.test.ts packages/runtime/src/mutation-submit.ts packages/runtime/src/query-refetch.ts packages/runtime/src/query-refetch.test.ts packages/runtime/src/index.test.ts plans/codebase-quality-round2.md`,
       and `git diff --check`.
 - [ ] **MED — Split `index.ts` subtractively** along its existing seams: `inline-loader.ts`,
       `loader.ts`, `enhanced-mutation.ts`, `optimism.ts`, `query-bindings.ts`, `broadcast.ts`;
