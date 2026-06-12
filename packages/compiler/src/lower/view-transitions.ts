@@ -4,12 +4,7 @@ import {
   type JsxAttributeModel,
   type JsxElementModel,
 } from '../scan/parse.js';
-import {
-  applySourceReplacements,
-  escapeAttribute,
-  removeJsxAttribute,
-  type SourceReplacement,
-} from '../shared.js';
+import { applySourceReplacements, escapeAttribute, type SourceReplacement } from '../shared.js';
 import type { ViewTransitionStamp } from '../types.js';
 
 export interface ViewTransitionLowering {
@@ -56,14 +51,7 @@ export function viewTransitionLowering(
   const stamps = matches.map((item) => ({ name: item.attribute.value }));
   const replacements: SourceReplacement[] = matches.map((match) => {
     const opening = source.slice(match.element.start, match.element.openingEnd);
-    const tagPrefix = `<${match.element.tag}`;
-    const attributes = opening.slice(tagPrefix.length, -1);
-    const withoutViewTransition = removeJsxAttribute(
-      attributes,
-      match.attribute.start - match.element.start - tagPrefix.length,
-      match.attribute.end - match.element.start - tagPrefix.length,
-    );
-    const replacement = `<${match.element.tag}${appendViewTransitionStyle(withoutViewTransition, match.attribute.value)}>`;
+    const replacement = appendViewTransitionStyle(opening, match.element, match.attribute);
     return { end: match.element.openingEnd, replacement, start: match.element.start };
   });
 
@@ -73,23 +61,68 @@ export function viewTransitionLowering(
   };
 }
 
-function appendViewTransitionStyle(attributes: string, name: string): string {
-  const transition = `view-transition-name: ${escapeAttribute(name)}`;
-  const selfClosing = /\s*\/\s*$/.test(attributes);
-  const baseAttributes = selfClosing ? attributes.replace(/\s*\/\s*$/, '') : attributes;
-  const styleMatch = /(\sstyle=)(["'])(?<style>[^"']*)\2/.exec(baseAttributes);
-  const suffix = selfClosing ? ' /' : '';
+function appendViewTransitionStyle(
+  opening: string,
+  element: JsxElementModel,
+  transitionAttribute: JsxAttributeModel & { value: string },
+): string {
+  const tagPrefix = `<${element.tag}`;
+  const attributesEnd = opening.length - (element.selfClosing ? 2 : 1);
+  const attributes = opening.slice(tagPrefix.length, attributesEnd).trimEnd();
+  const styleAttribute = element.attributes.find(
+    (attribute): attribute is JsxAttributeModel & { value: string } =>
+      attribute.name === 'style' && attribute.value !== undefined,
+  );
+  const transition = `view-transition-name: ${escapeAttribute(transitionAttribute.value)}`;
+  const removeTransition = attributeRangeInOpeningTag(
+    element,
+    transitionAttribute,
+    tagPrefix.length,
+    attributes,
+  );
+  const replacements: SourceReplacement[] = [
+    {
+      end: removeTransition.end,
+      replacement: '',
+      start: removeTransition.start,
+    },
+  ];
 
-  if (!styleMatch?.groups) {
-    return `${baseAttributes} style="${transition}"${suffix}`;
+  if (styleAttribute) {
+    const style = mergedStyle(styleAttribute.value, transition);
+    replacements.push({
+      ...attributeRangeInOpeningTag(element, styleAttribute, tagPrefix.length, attributes),
+      replacement: ` style="${style}"`,
+    });
   }
 
-  const existing = (styleMatch.groups.style ?? '').trim();
-  const separator = existing === '' || existing.endsWith(';') ? '' : ';';
-  const style = existing === '' ? transition : `${existing}${separator} ${transition}`;
+  const nextAttributes = applySourceReplacements(attributes, replacements);
+  const suffix = element.selfClosing ? ' />' : '>';
 
-  return `${baseAttributes.replace(
-    styleMatch[0],
-    `${styleMatch[1]}${styleMatch[2]}${style}${styleMatch[2]}`,
-  )}${suffix}`;
+  if (!styleAttribute) {
+    return `${tagPrefix}${nextAttributes} style="${transition}"${suffix}`;
+  }
+
+  return `${tagPrefix}${nextAttributes}${suffix}`;
+}
+
+function mergedStyle(current: string, transition: string): string {
+  const existing = current.trim();
+  const separator = existing === '' || existing.endsWith(';') ? '' : ';';
+  return existing === '' ? transition : `${existing}${separator} ${transition}`;
+}
+
+function attributeRangeInOpeningTag(
+  element: JsxElementModel,
+  attribute: JsxAttributeModel,
+  tagPrefixLength: number,
+  attributes: string,
+): { end: number; start: number } {
+  let start = attribute.start - element.start - tagPrefixLength;
+  while (start > 0 && /\s/.test(attributes[start - 1] ?? '')) start -= 1;
+
+  return {
+    end: attribute.end - element.start - tagPrefixLength,
+    start,
+  };
 }

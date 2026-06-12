@@ -740,6 +740,14 @@ pipeline throws the tree away and communicates via mutated source text.
       `pnpm exec vitest --run packages/compiler/src/stamps.test.ts -t "fw-deps|parsed attribute spans|query dependencies|returned host"`,
       `pnpm exec vitest --run packages/compiler/src`, and
       `pnpm exec vp check packages/compiler/src/emit/server.ts packages/compiler/src/stamps.test.ts`.
+      Additional evidence 2026-06-12: `lower/view-transitions.ts` now rewrites
+      `viewTransitionName` and static `style` through parsed JSX attribute spans instead of
+      regex-scanning the opening tag text. `view-transitions.test.ts` pins a single-quoted
+      style attribute on a self-closing host, proving the merge preserves neighboring attributes
+      and removes only the parsed transition attribute. Same-session evidence:
+      `pnpm exec vitest --run packages/compiler/src/view-transitions.test.ts`,
+      `pnpm exec vitest --run packages/compiler/src`, and
+      `pnpm exec vp check packages/compiler/src/lower/view-transitions.ts packages/compiler/src/view-transitions.test.ts`.
       Additional evidence 2026-06-12: `scan/parse.ts` now records parser-owned
       property-access facts on JSX attribute expressions and JSX child expressions, and
       inline-derive lowering consumes those facts instead of reparsing attribute, sole-text, and

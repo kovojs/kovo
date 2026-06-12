@@ -41,6 +41,23 @@ export const ProductCard = component('product-card', {
     expect(serverSource).not.toContain('viewTransitionName=');
   });
 
+  it('merges view transition styles from parsed style attribute spans', () => {
+    const result = compileComponentModule({
+      fileName: 'product-card.tsx',
+      source: `
+export const ProductCard = component('product-card', {
+  render: () => <img alt="Product" style='opacity: .8;' viewTransitionName="product-p1-image" src="/p1.png" />,
+});
+`,
+    });
+    const serverSource = result.files[0]?.source ?? '';
+
+    expect(serverSource).toContain(
+      '<img alt="Product" style="opacity: .8; view-transition-name: product-p1-image" src="/p1.png" fw-c="product-card" />',
+    );
+    expect(serverSource).not.toContain('viewTransitionName=');
+  });
+
   it('ignores view transition attribute text inside strings and comments', () => {
     const result = compileComponentModule({
       fileName: 'product-card.tsx',
