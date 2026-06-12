@@ -8,7 +8,7 @@ export type JisoTestRunner = (name: string, run: () => Promise<void>) => unknown
 
 export interface JisoTestCase {
   name: string;
-  run(): Promise<void>;
+  run: () => Promise<void>;
 }
 
 export function jisoTest<Db>(

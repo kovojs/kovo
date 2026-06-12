@@ -2860,6 +2860,13 @@ As each phase splits a source module, split its tests in the same commit.
       `corepack pnpm exec vitest --run packages/test/src`,
       `corepack pnpm exec vp check packages/test/src/index.ts packages/test/src/harness.ts packages/test/src/harness.test.ts packages/test/src/test-case.ts packages/test/src/test-case.test.ts plans/codebase-quality-round2.md`,
       and `git diff --check`.
+      Additional evidence 2026-06-12: `packages/test/src/test-case.test.ts` now pins the
+      `jisoTest` runner seam by asserting the runner receives the same executable test-case
+      `run` function returned to direct callers, keeping direct and runner-driven execution from
+      drifting after the `test-case.ts` split. Same-session evidence:
+      `corepack pnpm exec vitest --run packages/test/src/test-case.test.ts`,
+      `corepack pnpm exec vp check packages/test/src/test-case.ts packages/test/src/test-case.test.ts plans/codebase-quality-round2.md`,
+      and `git diff --check`.
       Additional evidence 2026-06-12: direct HTML fragment parser seam coverage moved from
       `packages/test/src/page.test.ts` into `packages/test/src/html-fragment.test.ts`, leaving
       `page.test.ts` focused on harness-backed page assertions while preserving SPEC §9.1
