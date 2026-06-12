@@ -87,6 +87,11 @@ content or severities (SPEC §11.3 owns those); `fw check`/`fw explain` semantic
       message, then rewrites the component green and proves the build completes. Same-session
       evidence:
       `node --test --test-name-pattern "D10 seeded diagnostics gate" tests/fw-check.node.mjs`.
+      Additional evidence 2026-06-12: the same D10 tranche now runs the real `fw export`
+      command dispatcher against temporary app modules exporting seeded diagnostics: FW201 fails
+      with `fw-export/v1` error output before `/index.html` is written, while FW210 completes
+      with `fw-export/v1` summary output and writes `/index.html`. Same-session evidence:
+      `node --test --test-name-pattern "D10 seeded diagnostics gate" tests/fw-check.node.mjs`.
       Gap: this strengthens the full `vp build` fixture path for the Vite build surface, but the
       broader gate remains open until every required surface has red/green command-level coverage.
 

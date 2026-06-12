@@ -11,7 +11,7 @@ import { gzipSync } from 'node:zlib';
 
 import { missingBuildMessage } from '../scripts/fw-check.mjs';
 import { parseWireResponses } from './wire-transcript.mjs';
-import { fwCheck, fwExplain, handleFwMcpRequest } from '../dist/cli/src/index.mjs';
+import { fwCheck, fwExplain, handleFwMcpRequest, mainAsync } from '../dist/cli/src/index.mjs';
 import {
   assertRenderEquivalence,
   collectMinifierReservedNames,
@@ -124,6 +124,30 @@ const explainValue = (output, prefix) => {
   const line = output.split('\n').find((item) => item.startsWith(prefix));
   assert.ok(line, `explain output includes ${prefix}`);
   return line.slice(prefix.length);
+};
+
+const runCliCommand = async (args) => {
+  let stdout = '';
+  let stderr = '';
+  const originalStdoutWrite = process.stdout.write;
+  const originalStderrWrite = process.stderr.write;
+
+  process.stdout.write = function writeStdout(chunk) {
+    stdout += String(chunk);
+    return true;
+  };
+  process.stderr.write = function writeStderr(chunk) {
+    stderr += String(chunk);
+    return true;
+  };
+
+  try {
+    const exitCode = await mainAsync(args);
+    return { exitCode, stderr, stdout };
+  } finally {
+    process.stdout.write = originalStdoutWrite;
+    process.stderr.write = originalStderrWrite;
+  }
 };
 
 const listProjectFiles = async (dir, predicate) => {
@@ -4668,6 +4692,51 @@ export default {
     assert.match(await readFile(join(outDir, 'index.html'), 'utf8'), /D10 export green/);
   } finally {
     await rm(outDir, { force: true, recursive: true });
+  }
+
+  const cliFixtureRoot = await mkdtemp(join(tmpdir(), 'jiso-d10-fw-export-'));
+  const cliRedOutDir = join(cliFixtureRoot, 'red-out');
+  const cliGreenOutDir = join(cliFixtureRoot, 'green-out');
+  const cliRedModule = join(cliFixtureRoot, 'red-app.mjs');
+  const cliGreenModule = join(cliFixtureRoot, 'green-app.mjs');
+  const cliAppModuleSource = (diagnostics) => `
+import { createApp, route as serverRoute } from ${JSON.stringify(
+    pathToFileURL(join(projectRoot, 'dist/server/src/index.mjs')).href,
+  )};
+
+export const diagnostics = ${JSON.stringify(diagnostics, null, 2)};
+
+export default createApp({
+  routes: [
+    serverRoute('/', {
+      page: () => '<main>D10 fw export green</main>',
+    }),
+  ],
+});
+`;
+
+  try {
+    await writeFile(cliRedModule, cliAppModuleSource([errorDiagnostic]), 'utf8');
+    const redExport = await runCliCommand(['export', cliRedModule, '--out', cliRedOutDir]);
+    assert.equal(redExport.exitCode, 1);
+    assert.equal(redExport.stdout, '');
+    assert.match(redExport.stderr, /fw-export\/v1/);
+    assert.match(
+      redExport.stderr,
+      /ERROR FW201 route=routes\/diagnostic-card\.tsx Static export refused error diagnostic FW201 at routes\/diagnostic-card\.tsx:5:25/,
+    );
+    await assert.rejects(readFile(join(cliRedOutDir, 'index.html'), 'utf8'));
+
+    await writeFile(cliGreenModule, cliAppModuleSource([lintDiagnostic]), 'utf8');
+    const greenExport = await runCliCommand(['export', cliGreenModule, '--out', cliGreenOutDir]);
+    assert.equal(greenExport.exitCode, 0);
+    assert.equal(greenExport.stderr, '');
+    assert.match(greenExport.stdout, /fw-export\/v1/);
+    assert.match(greenExport.stdout, /HTML \/index\.html status=200 bytes=/);
+    assert.match(greenExport.stdout, /SUMMARY html=1 clientModules=0 diagnostics=0/);
+    assert.match(await readFile(join(cliGreenOutDir, 'index.html'), 'utf8'), /D10 fw export green/);
+  } finally {
+    await rm(cliFixtureRoot, { force: true, recursive: true });
   }
 
   const redMcp = await handleFwMcpRequest({
