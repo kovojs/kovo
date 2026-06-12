@@ -1444,6 +1444,13 @@ As each phase splits a source module, split its tests in the same commit.
       `index.test.ts` focused on verifier integration while preserving public imports through
       `packages/test/src/index.ts`. Same-session evidence:
       `pnpm exec vitest --run packages/test/src/harness.test.ts packages/test/src/index.test.ts`.
+      Additional evidence 2026-06-12: Drizzle runtime/static package-surface coverage moved from
+      `packages/drizzle/src/index.test.ts` into `packages/drizzle/src/runtime-surface.test.ts`,
+      leaving static extraction coverage in the Drizzle monolith. Same-session evidence:
+      `pnpm exec vitest --run packages/drizzle/src/runtime-surface.test.ts packages/drizzle/src/index.test.ts`,
+      `pnpm exec vitest --run packages/drizzle/src`,
+      `pnpm exec vp check packages/drizzle/src/runtime-surface.test.ts packages/drizzle/src/index.test.ts plans/codebase-quality-round2.md`,
+      and `git diff --check`.
 
 Verification: identical test counts ± intentional additions before/after each split; full
 acceptance at the end.

@@ -1,8 +1,5 @@
 import { describe, expect, it } from 'vitest';
 
-import { readFileSync } from 'node:fs';
-import { fileURLToPath } from 'node:url';
-
 import { eq, getTableName, sql } from 'drizzle-orm';
 import { boolean, integer, jsonb, pgTable, text, timestamp } from 'drizzle-orm/pg-core';
 
@@ -21,18 +18,6 @@ import {
   serializeTouchGraph,
 } from '@jiso/drizzle/static';
 
-interface DrizzlePackageJson {
-  dependencies?: Record<string, string>;
-  devDependencies?: Record<string, string>;
-  exports?: Record<string, string>;
-}
-
-function drizzlePackageJson(): DrizzlePackageJson {
-  return JSON.parse(
-    readFileSync(fileURLToPath(new URL('../package.json', import.meta.url)), 'utf8'),
-  ) as DrizzlePackageJson;
-}
-
 function annotatedTable(name: string, annotation: ReturnType<typeof jiso>) {
   return {
     domain: annotation.domain,
@@ -42,22 +27,6 @@ function annotatedTable(name: string, annotation: ReturnType<typeof jiso>) {
 }
 
 describe('@jiso/drizzle touch graph helpers', () => {
-  it('keeps the runtime annotation entrypoint separate from static extraction', async () => {
-    const runtime = await import('@jiso/drizzle');
-    const staticExtraction = await import('@jiso/drizzle/static');
-    const packageJson = drizzlePackageJson();
-
-    expect(runtime.jiso({ domain: 'cart', key: 'id' }).domain).toBe('cart');
-    expect('extractTouchGraphFromSource' in runtime).toBe(false);
-    expect(staticExtraction.extractTouchGraphFromSource).toBeTypeOf('function');
-    expect(packageJson.exports).toEqual({
-      '.': './src/runtime.ts',
-      './static': './src/index.ts',
-    });
-    expect(packageJson.dependencies?.['ts-morph']).toBeUndefined();
-    expect(packageJson.devDependencies?.['ts-morph']).toBe('^28.0.0');
-  });
-
   it('extracts writes and query facts through real drizzle-orm pgTable/select/update types', () => {
     const products = pgTable(
       'products',
