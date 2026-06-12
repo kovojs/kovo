@@ -690,6 +690,16 @@ jiso-dialog` resolves dashed wire names and prints provenance including package,
       `pnpm exec vp check examples/gallery/src/merge-fixtures.test.tsx plans/ui.md`,
       and `git diff --check`. G5 remains open because this is still a bounded fixture subset,
       not every primitive attrs record or compiler/runtime diagnostic coverage.
+      Additional partial evidence 2026-06-12: the gallery G5 oracle adds accordion,
+      number-field, scroll-area, and select merge goldens. These expand SPEC §4.6 coverage for
+      primitive-owned `data-state` retention, empty-string data attrs in exact TSX output,
+      native scalar precedence, logical-OR `required`/`disabled` behavior, ARIA/role FW232
+      diagnostics, IDREF FW231 diagnostics, and author `selected={false}` omission on options.
+      Same-session evidence:
+      `pnpm --filter @jiso/example-gallery test`,
+      `pnpm exec vp check examples/gallery/src/merge-fixtures.test.tsx plans/ui.md`,
+      and `git diff --check`. G5 remains open because this is still a bounded fixture subset,
+      not every primitive attrs record or compiler/runtime diagnostic coverage.
 
 ## Background
 

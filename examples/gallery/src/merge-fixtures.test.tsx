@@ -2,15 +2,23 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  accordionContentAttributes,
+  accordionTriggerAttributes,
   avatarFallbackAttributes,
   avatarRootAttributes,
   checkboxRootAttributes,
   dialogContentAttributes,
   dialogTriggerAttributes,
+  numberFieldIncrementAttributes,
+  numberFieldInputAttributes,
   progressRootAttributes,
   radioGroupLabelAttributes,
   radioGroupRadioAttributes,
+  scrollAreaScrollbarAttributes,
+  scrollAreaViewportAttributes,
   separatorRootAttributes,
+  selectItemAttributes,
+  selectTriggerAttributes,
   switchRootAttributes,
   tabsPanelAttributes,
   tabsTriggerAttributes,
@@ -47,6 +55,76 @@ const idrefAttributes = new Set([
 const logicalOrAttributes = new Set(['aria-disabled', 'disabled', 'readonly', 'required']);
 
 describe('gallery G5 primitive merge fixtures', () => {
+  it('renders a golden accordion merge with primitive-owned state and authored ARIA overrides', () => {
+    const state = {
+      orientation: 'vertical' as const,
+      type: 'multiple' as const,
+      value: ['shipping'],
+    };
+    const trigger = mergePrimitiveAttrs(
+      {
+        ...accordionTriggerAttributes({
+          ...state,
+          contentId: 'gallery-accordion-shipping-panel',
+          itemValue: 'shipping',
+          triggerId: 'gallery-accordion-shipping-trigger',
+        }),
+        class: 'accordion-trigger',
+      },
+      {
+        'aria-expanded': 'false',
+        class: 'accordion-trigger font-medium',
+        'data-state': 'author-open',
+        disabled: true,
+        id: 'author-accordion-trigger',
+      },
+    );
+    const content = mergePrimitiveAttrs(
+      {
+        ...accordionContentAttributes({
+          ...state,
+          contentId: 'gallery-accordion-shipping-panel',
+          itemValue: 'shipping',
+          triggerId: 'gallery-accordion-shipping-trigger',
+        }),
+        class: 'accordion-panel',
+      },
+      {
+        class: 'accordion-panel px-3',
+        id: 'author-accordion-panel',
+        role: 'group',
+      },
+    );
+
+    expect(trigger.diagnostics).toEqual([
+      {
+        attr: 'data-state',
+        code: 'FW232',
+        message: 'Author override of primitive-owned state attribute per SPEC.md section 4.6',
+      },
+      {
+        attr: 'aria-expanded',
+        code: 'FW232',
+        message: 'Author override of primitive ARIA/role attribute per SPEC.md section 4.6',
+      },
+    ]);
+    expect(content.diagnostics).toEqual([
+      {
+        attr: 'role',
+        code: 'FW232',
+        message: 'Author override of primitive ARIA/role attribute per SPEC.md section 4.6',
+      },
+    ]);
+    expect(
+      <section data-gallery-merge="accordion">
+        <button {...trigger.attrs}>Shipping</button>
+        <div {...content.attrs}>Ships soon.</div>
+      </section>,
+    ).toBe(
+      '<section data-gallery-merge="accordion"><button data-state="open" aria-expanded="false" disabled type="button" aria-controls="gallery-accordion-shipping-panel" id="author-accordion-trigger" class="accordion-trigger font-medium">Shipping</button><div data-state="open" id="author-accordion-panel" aria-labelledby="gallery-accordion-shipping-trigger" role="group" class="accordion-panel px-3">Ships soon.</div></section>',
+    );
+  });
+
   it('renders a golden avatar merge with fallback scalar and semantic root overrides', () => {
     const root = mergePrimitiveAttrs(
       {
@@ -228,6 +306,70 @@ describe('gallery G5 primitive merge fixtures', () => {
     );
   });
 
+  it('renders a golden number-field merge with native input scalars and step button wiring', () => {
+    const input = mergePrimitiveAttrs(
+      {
+        ...numberFieldInputAttributes({
+          descriptionId: 'gallery-number-description',
+          errorId: 'gallery-number-error',
+          id: 'gallery-number-input',
+          invalid: true,
+          labelledBy: 'gallery-number-label',
+          max: 10,
+          min: 0,
+          name: 'gallery-quantity',
+          required: true,
+          step: 2,
+          value: 4,
+        }),
+        class: 'number-input',
+      },
+      {
+        'aria-describedby': 'author-number-description',
+        class: 'number-input tabular-nums',
+        'data-invalid': 'author-invalid',
+        max: 8,
+        name: 'author-quantity',
+        required: false,
+        value: 6,
+      },
+    );
+    const increment = mergePrimitiveAttrs(
+      {
+        ...numberFieldIncrementAttributes({
+          id: 'gallery-number-increment',
+          inputId: 'gallery-number-input',
+          label: 'Increase quantity',
+          max: 10,
+          value: 4,
+        }),
+        class: 'number-step',
+      },
+      {
+        class: 'number-step rounded-r',
+        'data-action': 'author-increment',
+        type: 'submit',
+      },
+    );
+
+    expect(input.diagnostics).toEqual([
+      {
+        attr: 'aria-describedby',
+        code: 'FW231',
+        message: 'Unmergeable primitive IDREF conflict per SPEC.md section 4.6',
+      },
+    ]);
+    expect(increment.diagnostics).toEqual([]);
+    expect(
+      <div data-gallery-merge="number-field">
+        <input {...input.attrs} />
+        <button {...increment.attrs}>+</button>
+      </div>,
+    ).toBe(
+      '<div data-gallery-merge="number-field"><input data-invalid="author-invalid" data-required="" aria-describedby="author-number-description" aria-invalid="true" aria-labelledby="gallery-number-label" id="gallery-number-input" max="8" min="0" name="author-quantity" required step="2" type="number" value="6" class="number-input tabular-nums"><button data-action="author-increment" aria-label="Increase quantity" type="submit" id="gallery-number-increment" aria-controls="gallery-number-input" class="number-step rounded-r">+</button></div>',
+    );
+  });
+
   it('renders a golden separator merge with orientation and semantic overrides', () => {
     const merged = mergePrimitiveAttrs(
       {
@@ -255,6 +397,151 @@ describe('gallery G5 primitive merge fixtures', () => {
     ]);
     expect(<div {...merged.attrs} />).toBe(
       '<div data-orientation="vertical" aria-orientation="horizontal" role="presentation" class="separator-root my-2"></div>',
+    );
+  });
+
+  it('renders a golden scroll-area merge with viewport ARIA overrides and hidden parts', () => {
+    const viewport = mergePrimitiveAttrs(
+      {
+        ...scrollAreaViewportAttributes({
+          descriptionId: 'gallery-scroll-description',
+          id: 'gallery-scroll-viewport',
+          labelledBy: 'gallery-scroll-title',
+          scrollbars: 'both',
+        }),
+        class: 'scroll-viewport',
+      },
+      {
+        'aria-labelledby': 'author-scroll-title',
+        class: 'scroll-viewport overscroll-contain',
+        role: 'feed',
+        tabIndex: -1,
+      },
+    );
+    const scrollbar = mergePrimitiveAttrs(
+      {
+        ...scrollAreaScrollbarAttributes({
+          forceMount: true,
+          id: 'gallery-scrollbar-x',
+          orientation: 'horizontal',
+          scrollbars: 'both',
+          visible: false,
+        }),
+        class: 'scrollbar',
+      },
+      {
+        'aria-hidden': 'false',
+        class: 'scrollbar h-2',
+        'data-state': 'author-visible',
+        hidden: false,
+      },
+    );
+
+    expect(viewport.diagnostics).toEqual([
+      {
+        attr: 'role',
+        code: 'FW232',
+        message: 'Author override of primitive ARIA/role attribute per SPEC.md section 4.6',
+      },
+      {
+        attr: 'aria-labelledby',
+        code: 'FW231',
+        message: 'Unmergeable primitive IDREF conflict per SPEC.md section 4.6',
+      },
+    ]);
+    expect(scrollbar.diagnostics).toEqual([
+      {
+        attr: 'data-state',
+        code: 'FW232',
+        message: 'Author override of primitive-owned state attribute per SPEC.md section 4.6',
+      },
+      {
+        attr: 'aria-hidden',
+        code: 'FW232',
+        message: 'Author override of primitive ARIA/role attribute per SPEC.md section 4.6',
+      },
+    ]);
+    expect(
+      <div data-gallery-merge="scroll-area">
+        <div {...viewport.attrs}>Feed</div>
+        <div {...scrollbar.attrs} />
+      </div>,
+    ).toBe(
+      '<div data-gallery-merge="scroll-area"><div data-scrollbars="both" tabIndex="-1" aria-describedby="gallery-scroll-description" role="feed" aria-labelledby="author-scroll-title" id="gallery-scroll-viewport" class="scroll-viewport overscroll-contain">Feed</div><div data-scrollbars="both" data-orientation="horizontal" data-state="hidden" aria-hidden="false" id="gallery-scrollbar-x" class="scrollbar h-2"></div></div>',
+    );
+  });
+
+  it('renders a golden select merge with native trigger and option scalars', () => {
+    const state = {
+      items: [
+        { label: 'Starter', value: 'starter' },
+        { label: 'Growth', value: 'growth' },
+      ],
+      name: 'gallery-plan',
+      required: true,
+      value: 'growth',
+    };
+    const trigger = mergePrimitiveAttrs(
+      {
+        ...selectTriggerAttributes({
+          ...state,
+          id: 'gallery-select',
+          labelledBy: 'gallery-select-label',
+          open: true,
+        }),
+        class: 'select-trigger',
+      },
+      {
+        'aria-expanded': 'false',
+        class: 'select-trigger min-w-40',
+        'data-state': 'author-open',
+        name: 'author-plan',
+        required: false,
+      },
+    );
+    const option = mergePrimitiveAttrs(
+      {
+        ...selectItemAttributes({
+          ...state,
+          itemLabel: 'Growth',
+          itemValue: 'growth',
+        }),
+        class: 'select-option',
+      },
+      {
+        class: 'select-option font-medium',
+        'data-state': 'author-checked',
+        label: 'Author Growth',
+        selected: false,
+        value: 'author-growth',
+      },
+    );
+
+    expect(trigger.diagnostics).toEqual([
+      {
+        attr: 'data-state',
+        code: 'FW232',
+        message: 'Author override of primitive-owned state attribute per SPEC.md section 4.6',
+      },
+      {
+        attr: 'aria-expanded',
+        code: 'FW232',
+        message: 'Author override of primitive ARIA/role attribute per SPEC.md section 4.6',
+      },
+    ]);
+    expect(option.diagnostics).toEqual([
+      {
+        attr: 'data-state',
+        code: 'FW232',
+        message: 'Author override of primitive-owned state attribute per SPEC.md section 4.6',
+      },
+    ]);
+    expect(
+      <select {...trigger.attrs}>
+        <option {...option.attrs}>Growth</option>
+      </select>,
+    ).toBe(
+      '<select data-state="open" data-required="" aria-expanded="false" id="gallery-select" aria-labelledby="gallery-select-label" name="author-plan" required class="select-trigger min-w-40"><option data-state="checked" value="author-growth" label="Author Growth" class="select-option font-medium">Growth</option></select>',
     );
   });
 
