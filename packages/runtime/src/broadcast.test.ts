@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 
-import { installMutationBroadcast } from './broadcast.js';
+import { installMutationBroadcast, withDefaultMutationBroadcast } from './broadcast.js';
 import { createQueryStore } from './query-store.js';
 
 class FakeBroadcastChannel {
@@ -95,5 +95,46 @@ describe('mutation broadcast', () => {
 
     expect(channel.onmessage).toBeNull();
     expect(channel.closed).toBe(true);
+  });
+
+  it('owns default BroadcastChannel installation for enhanced mutation options', () => {
+    const originalBroadcastChannel = globalThis.BroadcastChannel;
+    const createdChannels: Array<FakeBroadcastChannel & { name: string }> = [];
+    const store = createQueryStore();
+    const root = new FakeMorphRoot();
+    class DefaultBroadcastChannel extends FakeBroadcastChannel {
+      name: string;
+
+      constructor(name: string) {
+        super();
+        this.name = name;
+        createdChannels.push(this);
+      }
+    }
+    globalThis.BroadcastChannel = DefaultBroadcastChannel as never;
+
+    try {
+      const setup = withDefaultMutationBroadcast({ root, store });
+
+      expect(createdChannels).toHaveLength(1);
+      const channel = createdChannels[0];
+      expect(channel).toBeDefined();
+      expect(channel?.name).toBe('jiso:mutation-response');
+      expect(setup.options.broadcast).toBeDefined();
+
+      setup.options.broadcast?.publish('<fw-query name="cart">{"count":1}</fw-query>');
+      expect(channel?.messages).toEqual([
+        {
+          body: '<fw-query name="cart">{"count":1}</fw-query>',
+          changes: [],
+          type: 'jiso:mutation-response',
+        },
+      ]);
+
+      setup.dispose?.();
+      expect(channel?.closed).toBe(true);
+    } finally {
+      globalThis.BroadcastChannel = originalBroadcastChannel;
+    }
   });
 });

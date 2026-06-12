@@ -7,8 +7,7 @@ import {
   dispatchDelegatedEvent,
 } from './handlers.js';
 import type { ImportHandlerModule } from './handlers.js';
-import { installMutationBroadcast } from './broadcast.js';
-import type { BroadcastLike } from './broadcast.js';
+import { withDefaultMutationBroadcast } from './broadcast.js';
 import { installQueryVisibleReturnRefetch } from './query-refetch.js';
 import type { QueryRefetchOptions } from './query-refetch.js';
 import { installPagehideOptimismCleanup } from './optimism.js';
@@ -286,32 +285,4 @@ export function installJisoLoader(options: JisoLoaderOptions): JisoLoader {
     },
     events,
   };
-}
-
-function withDefaultMutationBroadcast(options: EnhancedMutationLoaderOptions): {
-  dispose?: () => void;
-  options: EnhancedMutationLoaderOptions;
-} {
-  if (options.broadcast) return { options };
-  if (typeof globalThis.BroadcastChannel !== 'function') return { options };
-
-  try {
-    const broadcast = installMutationBroadcast({
-      channel: new globalThis.BroadcastChannel('jiso:mutation-response') as BroadcastLike,
-      ...definedProps({ morph: options.morph, queryPlans: options.queryPlans }),
-      root: options.root,
-      store: options.store,
-    });
-    return {
-      dispose: () => {
-        broadcast.close();
-      },
-      options: {
-        ...options,
-        broadcast,
-      },
-    };
-  } catch {
-    return { options };
-  }
 }

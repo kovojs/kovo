@@ -25,6 +25,45 @@ export interface InstallMutationBroadcastOptions {
   store: QueryStore;
 }
 
+export interface DefaultMutationBroadcastOptions {
+  broadcast?: MutationBroadcast;
+  morph?: MorphFragment;
+  queryPlans?: CompiledQueryUpdatePlans;
+  root: MorphRoot;
+  store: QueryStore;
+}
+
+export function withDefaultMutationBroadcast<Options extends DefaultMutationBroadcastOptions>(
+  options: Options,
+): {
+  dispose?: () => void;
+  options: Options & { broadcast?: MutationBroadcast };
+} {
+  if (options.broadcast) return { options };
+  if (typeof globalThis.BroadcastChannel !== 'function') return { options };
+
+  try {
+    const broadcast = installMutationBroadcast({
+      channel: new globalThis.BroadcastChannel('jiso:mutation-response') as BroadcastLike,
+      ...(options.morph ? { morph: options.morph } : {}),
+      ...(options.queryPlans ? { queryPlans: options.queryPlans } : {}),
+      root: options.root,
+      store: options.store,
+    });
+    return {
+      dispose: () => {
+        broadcast.close();
+      },
+      options: {
+        ...options,
+        broadcast,
+      },
+    };
+  } catch {
+    return { options };
+  }
+}
+
 export function installMutationBroadcast(
   options: InstallMutationBroadcastOptions,
 ): MutationBroadcast {

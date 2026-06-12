@@ -1903,6 +1903,15 @@ params, relational API, `execute(sql)`, right/full joins, a string column named 
       `corepack pnpm exec vitest --run packages/runtime/src/submit-context.test.ts`,
       `corepack pnpm exec vp check packages/runtime/src/index.ts packages/runtime/src/mutation-submit.ts plans/codebase-quality-round2.md`,
       and `git diff --check`.
+      Additional bounded evidence 2026-06-12: `packages/runtime/src/broadcast.ts` now owns
+      the default same-user `BroadcastChannel` setup used by `installJisoLoader`, leaving
+      `packages/runtime/src/index.ts` to delegate that enhanced-mutation broadcast branch through
+      the broadcast seam instead of carrying its own installer. `packages/runtime/src/broadcast.test.ts`
+      pins default channel creation, publication, and disposal. Same-session evidence:
+      `corepack pnpm exec vitest --run packages/runtime/src/broadcast.test.ts packages/runtime/src/index.test.ts -t "BroadcastChannel|rebroadcast|syncs mutation responses|mutation broadcast|enhanced mutations"`,
+      `corepack pnpm exec vitest --run packages/runtime/src/broadcast.test.ts`,
+      `corepack pnpm exec vp check packages/runtime/src/broadcast.ts packages/runtime/src/broadcast.test.ts packages/runtime/src/index.ts plans/codebase-quality-round2.md`,
+      and `git diff --check`.
 - [ ] **LOW** — `hydratedQueries` frozen at install (index.ts:330-342): queries introduced by
       later mutations never become refetch-eligible — fix or document as SPEC-intended;
       `unescapeHtml` missing `&#39;`/`&apos;` (wire-parser.ts:162-168) — pin the server↔runtime
