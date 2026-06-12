@@ -650,6 +650,15 @@ params, relational API, `execute(sql)`, right/full joins, a string column named 
       explicit form-layer handled/unhandled branch. `index.test.ts` now verifies that a form-layer
       `onError` prevents loader-level `onError` and native-submit fallback. Same-session evidence:
       `pnpm exec vitest --run packages/runtime/src`.
+      Additional evidence 2026-06-11: `readFragmentChunks` now reports malformed
+      `<fw-fragment>` chunks through the same runtime `onError` path used by query parsing instead
+      of silently truncating on missing tag closes or missing closing tags. `wire-parser.test.ts`
+      pins malformed fragment reporting, and `index.test.ts` proves mutation DOM application keeps
+      valid preceding query/fragment chunks while reporting the malformed fragment. Same-session
+      evidence: `pnpm exec vitest --run packages/runtime/src`,
+      `pnpm exec vitest --config vitest.browser.config.ts --run packages/runtime/src/index.browser.test.ts`,
+      and
+      `pnpm exec vp check packages/runtime/src/index.ts packages/runtime/src/wire-parser.ts packages/runtime/src/index.test.ts packages/runtime/src/wire-parser.test.ts`.
 - [ ] **MED — Split `index.ts` subtractively** along its existing seams: `inline-loader.ts`,
       `loader.ts`, `enhanced-mutation.ts`, `optimism.ts`, `query-bindings.ts`, `broadcast.ts`;
       index.ts a pure barrel. Remove the test-shaped production branch in `bindingAttributes`
