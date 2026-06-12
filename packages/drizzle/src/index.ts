@@ -84,7 +84,6 @@ const IGNORED_LOCAL_CALL_NAMES = new Set([
   'while',
 ]);
 const EXPORTED_CONST_DECLARATION_SOURCE = String.raw`(?:export\s+)?const\s+`;
-const VARIABLE_DECLARATION_SOURCE = String.raw`(?:export\s+)?(?:const|let|var)\s+`;
 const FW411_MESSAGE = 'Query read set includes an exempt table';
 const UNRESOLVED_READ_SOURCE_EXPRESSION = '__jisoUnresolvedReadSource';
 
@@ -1715,98 +1714,42 @@ function conditionalBranches(initializer: string): string[] {
 }
 
 function extractFunctions(source: string): ExtractedFunction[] {
-  const functions: ExtractedFunction[] = [];
-  const declarations = new RegExp(
-    `(?:export\\s+)?(?:async\\s+)?function\\s+(?<name>${IDENTIFIER_SOURCE})\\s*\\((?<params>[^)]*)\\)\\s*\\{`,
-    'g',
-  );
-
-  for (const match of source.matchAll(declarations)) {
-    const groups = match.groups;
-    if (!groups || match.index === undefined) continue;
-
-    const name = groups.name;
-    if (!name) continue;
-
-    const openBrace = match.index + match[0].length - 1;
-    const closeBrace = findMatchingBrace(source, openBrace);
-    if (closeBrace === -1) continue;
-
-    functions.push({
-      body: source.slice(openBrace + 1, closeBrace),
-      bodyStart: openBrace + 1,
-      name,
-      params: groups.params ?? '',
-    });
-  }
-
+  const sourceFile = parseSourceFile(source);
   return [
-    ...functions,
-    ...extractVariableAssignedFunctions(source),
+    ...extractFunctionDeclarations(sourceFile),
+    ...extractVariableAssignedFunctions(sourceFile),
     ...extractDomainWriteCallbacks(source),
   ];
 }
 
-function extractVariableAssignedFunctions(source: string): ExtractedFunction[] {
+function extractFunctionDeclarations(sourceFile: SourceFile): ExtractedFunction[] {
   const functions: ExtractedFunction[] = [];
-  const declarations = new RegExp(
-    `${VARIABLE_DECLARATION_SOURCE}(?<name>${IDENTIFIER_SOURCE})\\s*(?::[^=]+)?=\\s*`,
-    'g',
-  );
 
-  for (const match of source.matchAll(declarations)) {
-    const groups = match.groups;
-    if (!groups || match.index === undefined) continue;
-
-    const name = groups.name;
+  for (const declaration of sourceFile.getDescendantsOfKind(SyntaxKind.FunctionDeclaration)) {
+    const name = declaration.getName();
     if (!name) continue;
 
-    const initializerStart = match.index + match[0].length;
-    const assigned = variableAssignedFunction(source, initializerStart);
-    if (assigned) functions.push({ name, ...assigned });
+    functions.push(extractedFunctionFromCallback(name, declaration));
   }
 
   return functions;
 }
 
-function variableAssignedFunction(
-  source: string,
-  initializerStart: number,
-): Pick<ExtractedFunction, 'body' | 'bodyStart' | 'params'> | null {
-  const initializer = source.slice(initializerStart);
-  const functionExpression = new RegExp(
-    `^(?:async\\s*)?function(?:\\s+${IDENTIFIER_SOURCE})?\\s*\\((?<params>[^)]*)\\)\\s*\\{`,
-  ).exec(initializer);
+function extractVariableAssignedFunctions(sourceFile: SourceFile): ExtractedFunction[] {
+  const functions: ExtractedFunction[] = [];
 
-  if (functionExpression?.groups) {
-    const openBrace = initializerStart + functionExpression[0].length - 1;
-    const closeBrace = findMatchingBrace(source, openBrace);
-    if (closeBrace === -1) return null;
+  for (const declaration of sourceFile.getVariableDeclarations()) {
+    const name = declaration.getNameNode();
+    if (!Node.isIdentifier(name)) continue;
 
-    return {
-      body: source.slice(openBrace + 1, closeBrace),
-      bodyStart: openBrace + 1,
-      params: functionExpression.groups.params ?? '',
-    };
+    const initializer = declaration.getInitializer();
+    if (!initializer) continue;
+    if (!Node.isArrowFunction(initializer) && !Node.isFunctionExpression(initializer)) continue;
+
+    functions.push(extractedFunctionFromCallback(name.getText(), initializer));
   }
 
-  const arrowExpression = new RegExp(
-    `^(?:async\\s*)?(?<params>\\([^)]*\\)|${IDENTIFIER_SOURCE})\\s*=>\\s*`,
-  ).exec(initializer);
-  const params = arrowExpression?.groups?.params;
-  if (!arrowExpression || !params) return null;
-
-  const bodyStart = initializerStart + arrowExpression[0].length;
-  const openBrace = source[bodyStart] === '{' ? bodyStart : -1;
-  const bodyEnd =
-    openBrace === -1 ? statementEnd(source, bodyStart) : findMatchingBrace(source, openBrace);
-  if (bodyEnd === -1) return null;
-
-  return {
-    body: source.slice(openBrace === -1 ? bodyStart : openBrace + 1, bodyEnd),
-    bodyStart: openBrace === -1 ? bodyStart : openBrace + 1,
-    params: params.replace(/^\(|\)$/g, ''),
-  };
+  return functions;
 }
 
 function extractDomainWriteCallbacks(source: string): ExtractedFunction[] {
@@ -1859,7 +1802,9 @@ function writeCallbackFunction(
 
 function extractedFunctionFromCallback(name: string, callback: Node): ExtractedFunction {
   const params =
-    Node.isArrowFunction(callback) || Node.isFunctionExpression(callback)
+    Node.isArrowFunction(callback) ||
+    Node.isFunctionDeclaration(callback) ||
+    Node.isFunctionExpression(callback)
       ? callback
           .getParameters()
           .map((param) => param.getText())
@@ -1878,8 +1823,13 @@ function extractedFunctionFromCallback(name: string, callback: Node): ExtractedF
 }
 
 function functionBody(callback: Node): Node {
-  if (Node.isArrowFunction(callback) || Node.isFunctionExpression(callback)) {
-    return callback.getBody();
+  if (
+    Node.isArrowFunction(callback) ||
+    Node.isFunctionDeclaration(callback) ||
+    Node.isFunctionExpression(callback)
+  ) {
+    const body = callback.getBody();
+    if (body) return body;
   }
 
   throw new Error('Expected a write callback function');
@@ -2133,44 +2083,6 @@ function isReadSourceCall(call: CallExpression): boolean {
 function propertyAccessCallName(call: CallExpression): string | undefined {
   const expression = call.getExpression();
   return Node.isPropertyAccessExpression(expression) ? expression.getName() : undefined;
-}
-
-function statementEnd(source: string, start: number): number {
-  let depth = 0;
-
-  for (let index = start; index < source.length; index += 1) {
-    const char = source[index];
-
-    if (char === '"' || char === "'" || char === '`') {
-      const stringEnd = findStringEnd(source, index, char);
-      index = stringEnd === -1 ? source.length : stringEnd;
-      continue;
-    }
-    if (source.startsWith('//', index)) {
-      const commentEnd = source.indexOf('\n', index + 2);
-      index = commentEnd === -1 ? source.length : commentEnd;
-      continue;
-    }
-    if (source.startsWith('/*', index)) {
-      const commentEnd = source.indexOf('*/', index + 2);
-      index = commentEnd === -1 ? source.length : commentEnd + 1;
-      continue;
-    }
-
-    if (char === '(' || char === '{' || char === '[') depth += 1;
-    if (char === ')' || char === '}' || char === ']') depth -= 1;
-    if (depth !== 0) continue;
-
-    if (char === ';') return index;
-    if (char === '\n' && isStatementBoundary(source, index + 1)) return index;
-  }
-
-  return source.length;
-}
-
-function isStatementBoundary(source: string, start: number): boolean {
-  const next = source.slice(skipTrivia(source, start));
-  return next.length === 0 || !next.startsWith('.');
 }
 
 function extractPredicateSummary(

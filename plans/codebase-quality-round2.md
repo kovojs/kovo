@@ -764,6 +764,14 @@ must be "FW406 unresolved," never "silently wrong."
       `pnpm exec vitest --run packages/drizzle/src/index.test.ts -t "destructured Drizzle receiver aliases"`,
       `pnpm exec vitest --run packages/drizzle/src/index.test.ts packages/drizzle/src/runtime-surface.test.ts`,
       and `pnpm exec vitest --run conformance/drizzle-pin/src/index.test.ts`.
+      Additional evidence 2026-06-12: source-mode function discovery now walks ts-morph
+      `FunctionDeclaration`, `FunctionExpression`, and `ArrowFunction` nodes instead of
+      regex-scanning declarations and hand-matching function braces/statement ends, so function
+      parameters containing nested parentheses no longer hide real Drizzle write surfaces.
+      Same-session evidence:
+      `pnpm exec vitest --run packages/drizzle/src/index.test.ts -t "direct Drizzle write calls|expression-bodied arrow write handlers|comments and strings"`,
+      `pnpm exec vitest --run packages/drizzle/src`,
+      and `pnpm exec vitest --run conformance/drizzle-pin/src/index.test.ts`.
 - [ ] **HIGH — Remove fact-fabricating heuristics; degrade to FW406.**
       Column type from projection-key name (`/(count|qty|...)$/i` → number, index.ts:993);
       receiver detection by parameter name (`/^(db|tx|...|client|...)$/`, :1856-1858);

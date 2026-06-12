@@ -493,6 +493,29 @@ export interface CommerceInvalidationSets {
     });
   });
 
+  it('extracts direct Drizzle write calls from functions with parenthesized parameter initializers', () => {
+    const graph = extractTouchGraphFromSource([
+      {
+        fileName: 'cart.domain.ts',
+        source: `
+          export const cartItems = pgTable("cart_items", {}, jiso({ domain: "cart", key: "cartId" }));
+
+          export function addItem(db = makeDb()) {
+            return db.insert(cartItems).values({ productId: "p1" });
+          }
+        `,
+      },
+    ]);
+
+    expect(graph).toEqual({
+      addItem: {
+        reads: [],
+        touches: [{ domain: 'cart', keys: null, site: 'cart.domain.ts:5', via: 'cart_items' }],
+        unresolved: [],
+      },
+    });
+  });
+
   it('extracts expression-bodied arrow write handlers', () => {
     const graph = extractTouchGraphFromSource([
       {
