@@ -9,6 +9,7 @@
     "./primitives": "./src/primitives/index.ts",
     "./primitives/collapsible": "./src/primitives/collapsible.ts",
     "./primitives/disclosure": "./src/primitives/disclosure.ts",
+    "./primitives/meter": "./src/primitives/meter.ts",
     "./primitives/progress": "./src/primitives/progress.ts",
     "./primitives/separator": "./src/primitives/separator.ts",
     "./tooling": "./src/tooling/index.ts"

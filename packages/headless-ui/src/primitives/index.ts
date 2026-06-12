@@ -36,6 +36,14 @@ export type {
   DisclosureTriggerEvent,
 } from './disclosure.js';
 
+export { meterRootAttributes, meterValueState } from './meter.js';
+export type {
+  MeterAttributeOptions,
+  MeterComputedState,
+  MeterDataState,
+  MeterPrimitiveAttributes,
+} from './meter.js';
+
 export { progressRootAttributes, progressValueState } from './progress.js';
 export type {
   ProgressAttributeOptions,
