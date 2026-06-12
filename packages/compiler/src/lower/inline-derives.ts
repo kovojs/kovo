@@ -3,6 +3,7 @@ import {
   jsxExpressions,
   propertyAccessPaths,
   solePropertyAccessPath,
+  soleWrappedPropertyAccessPath,
   type ComponentModuleModel,
   type JsxAttributeModel,
   type JsxElementModel,
@@ -170,7 +171,7 @@ function inlineTextBinding(
   if (element.attributes.some((attribute) => isBindingAttributeName(attribute.name))) return null;
 
   const content = source.slice(element.openingEnd, element.closingStart);
-  const expression = soleWrappedExpression(content);
+  const expression = soleWrappedPropertyAccessPath('inline-text-expression.tsx', content);
   if (!expression) return null;
 
   const query = expression.split('.', 1)[0];
@@ -207,13 +208,6 @@ function soleKnownQueryPath(expression: string, knownQueries: ReadonlySet<string
 
   const query = path.split('.', 1)[0];
   return query && knownQueries.has(query) ? path : null;
-}
-
-function soleWrappedExpression(source: string): string | null {
-  const trimmed = source.trim();
-  if (!trimmed.startsWith('{') || !trimmed.endsWith('}')) return null;
-
-  return solePropertyAccessPath('inline-text-expression.tsx', trimmed.slice(1, -1).trim());
 }
 
 function isJsxAttributeExpression(

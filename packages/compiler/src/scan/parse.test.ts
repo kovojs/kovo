@@ -4,6 +4,7 @@ import {
   arrowFunctionParts,
   functionBodyPropertyAccessPaths,
   solePropertyAccessPath,
+  soleWrappedPropertyAccessPath,
   stringLiteralArrayValues,
 } from './parse.js';
 
@@ -19,6 +20,12 @@ describe('compiler scan parser helpers', () => {
   it('rejects non-sole property access expressions', () => {
     expect(solePropertyAccessPath('expression.tsx', 'cart.count + 1')).toBeNull();
     expect(solePropertyAccessPath('expression.tsx', 'count')).toBeNull();
+  });
+
+  it('extracts one property access from wrapped JSX expression text', () => {
+    expect(soleWrappedPropertyAccessPath('expression.tsx', ' { cart.count } ')).toBe('cart.count');
+    expect(soleWrappedPropertyAccessPath('expression.tsx', 'cart.count')).toBeNull();
+    expect(soleWrappedPropertyAccessPath('expression.tsx', '{cart.count + 1}')).toBeNull();
   });
 
   it('extracts outer property access paths from function body source', () => {

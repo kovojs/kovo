@@ -663,6 +663,12 @@ pipeline throws the tree away and communicates via mutated source text.
       `pnpm exec vitest --run packages/compiler/src/scan/parse.test.ts packages/compiler/src/index.test.ts packages/compiler/src/shared.test.ts packages/compiler/src/navigation-lowering.test.ts packages/compiler/src/platform-lowering.test.ts`,
       `pnpm exec vp check packages/compiler/src/scan/parse.ts packages/compiler/src/scan/parse.test.ts packages/compiler/src/analyze/query-updates.ts packages/compiler/src/lower/inline-derives.ts packages/compiler/src/validate/bindings.ts`,
       and `git diff --check`.
+      Additional evidence 2026-06-12: wrapped JSX expression path recognition now lives in the
+      TypeScript parser front-end as `soleWrappedPropertyAccessPath`; inline text binding
+      lowering and binding drift validation both consume that helper instead of carrying private
+      `{...}` wrappers around `solePropertyAccessPath`. Same-session evidence:
+      `pnpm exec vitest --run packages/compiler/src/scan/parse.test.ts packages/compiler/src/index.test.ts -t "wrapped JSX expression|inline derive|data-bind|FW222|FW223"` and
+      `pnpm exec vp check packages/compiler/src/scan/parse.ts packages/compiler/src/scan/parse.test.ts packages/compiler/src/lower/inline-derives.ts packages/compiler/src/validate/bindings.ts plans/codebase-quality-round2.md`.
       Additional evidence 2026-06-12: `removeJsxAttribute(s)` now live in
       `packages/compiler/src/shared.ts`; navigation and view-transition lowering import the
       shared helper instead of carrying duplicate local copies. Same-session evidence:

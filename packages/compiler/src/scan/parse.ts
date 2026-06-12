@@ -340,6 +340,13 @@ export function solePropertyAccessPath(fileName: string, source: string): string
   return propertyAccessPath(initializer);
 }
 
+export function soleWrappedPropertyAccessPath(fileName: string, source: string): string | null {
+  const trimmed = source.trim();
+  if (!trimmed.startsWith('{') || !trimmed.endsWith('}')) return null;
+
+  return solePropertyAccessPath(fileName, trimmed.slice(1, -1).trim());
+}
+
 export function stringLiteralArrayValues(fileName: string, source: string): string[] | null {
   const sourceFile = parseExpressionSource(fileName, source);
   const initializer = firstVariableInitializer(sourceFile);
