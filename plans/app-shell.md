@@ -76,6 +76,17 @@ Scope: SPEC addition (proposed §9.5 "The request shell"), `@jiso/server` shell 
       static-export asset byte copying, and compiled `/c/` file emission. Same-session
       verification ran `pnpm exec vitest --run packages/server/src/vite.test.ts` and
       `pnpm exec vitest --run packages/create-jiso/src/index.test.ts -t "scaffolds real template files|runs the generated vp export task"`.
+      Additional evidence 2026-06-12: `jisoAppShellViteManifestFromBundle()` and
+      `createJisoAppShellViteBuildFromBundle()` adapt Vite's emitted `.vite/manifest.json`
+      bundle asset into the existing route-entry-map, route-hint, asset-plan, and compiled
+      client-module build path; `jisoAppShellVitePlugin({ build })` now exposes a bounded
+      `writeBundle` hook that writes compiled `/c/` modules into the Vite output directory
+      and reports the resolved build to callers. `packages/server/src/vite.test.ts` proves
+      bundle-manifest route hint/asset wiring, missing-manifest rejection, and plugin
+      `writeBundle` file emission. Same-session verification ran
+      `pnpm exec vitest --run packages/server/src/vite.test.ts`,
+      `pnpm exec vp check packages/server/src/vite.ts packages/server/src/vite.test.ts packages/server/src/index.ts plans/app-shell.md`,
+      and `git diff --check`.
       Remaining R5 work: compiler/plugin build hooks must still supply real route-entry maps
       and compiled module sources from compiler facts, consume the asset/module plan in
       production package builds, and decide the final plugin hook ownership.

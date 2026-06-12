@@ -10,15 +10,18 @@ import {
   createJisoAppShellDevDiagnosticLedger,
   createJisoAppShellBuild,
   createJisoAppShellViteBuild,
+  createJisoAppShellViteBuildFromBundle,
   createMemoryVersionedClientModuleRegistry,
   createRequestHandler,
   exportStaticApp,
   jisoAppShellViteManifestAssets,
+  jisoAppShellViteManifestFromBundle,
   jisoAppShellViteManifestHints,
   jisoAppShellVitePlugin,
   jisoAppShellViteRouteEntries,
   jisoAppShellViteStaticExportAssets,
   route,
+  type JisoAppShellBuild,
   type JisoAppShellViteMiddleware,
   writeJisoAppShellViteBuildOutput,
 } from './index.js';
@@ -281,6 +284,47 @@ describe('server app shell Vite plugin', () => {
     ).toThrow('App shell route build entry does not match an app route: /account');
   });
 
+  it('creates a build from a Vite output bundle manifest', () => {
+    const build = createJisoAppShellViteBuildFromBundle({
+      app: createApp({ routes: [route('/cart', {})] }),
+      bundle: {
+        '.vite/manifest.json': {
+          fileName: '.vite/manifest.json',
+          source: JSON.stringify({
+            'src/cart.client.ts': {
+              css: ['assets/cart.css'],
+              file: 'assets/cart.js',
+            },
+          }),
+          type: 'asset',
+        },
+      },
+      routeEntryMap: {
+        '/cart': 'src/cart.client.ts',
+      },
+    });
+
+    expect(build.routeHints).toEqual([
+      {
+        hints: {
+          modulepreloads: ['/assets/cart.js'],
+          stylesheets: ['/assets/cart.css'],
+        },
+        routePath: '/cart',
+      },
+    ]);
+    expect(build.assets).toEqual([
+      { file: 'assets/cart.css', href: '/assets/cart.css', path: '/assets/cart.css' },
+      { file: 'assets/cart.js', href: '/assets/cart.js', path: '/assets/cart.js' },
+    ]);
+  });
+
+  it('rejects Vite output bundles without a manifest before app-shell build wiring', () => {
+    expect(() => jisoAppShellViteManifestFromBundle({})).toThrow(
+      'App shell Vite build requires .vite/manifest.json.',
+    );
+  });
+
   it('applies Vite base paths to build route hints and asset planning', () => {
     const build = createJisoAppShellBuild({
       app: createApp({ routes: [route('/cart', {})] }),
@@ -412,6 +456,62 @@ describe('server app shell Vite plugin', () => {
       await expect(readFile(join(outDir, 'c/cart.client.js'), 'utf8')).resolves.toBe(
         'export const cart = true;',
       );
+    } finally {
+      await rm(outDir, { force: true, recursive: true });
+    }
+  });
+
+  it('emits app-shell build output from the Vite plugin writeBundle hook', async () => {
+    const outDir = await mkdtemp(join(tmpdir(), 'jiso-vite-plugin-build-'));
+    const built: JisoAppShellBuild[] = [];
+    const plugin = jisoAppShellVitePlugin(createApp({ routes: [route('/cart', {})] }), {
+      build: {
+        clientModules: [
+          {
+            path: '/c/cart.client.js',
+            source: 'export const cart = true;',
+            version: 'cart-v1',
+          },
+        ],
+        onBuild(build) {
+          built.push(build);
+        },
+        routeEntryMap: {
+          '/cart': 'src/cart.client.ts',
+        },
+      },
+    });
+
+    try {
+      await plugin.writeBundle?.(
+        { dir: outDir },
+        {
+          '.vite/manifest.json': {
+            fileName: '.vite/manifest.json',
+            source: JSON.stringify({
+              'src/cart.client.ts': {
+                css: ['assets/cart.css'],
+                file: 'assets/cart.js',
+              },
+            }),
+            type: 'asset',
+          },
+        },
+      );
+
+      await expect(readFile(join(outDir, 'c/cart.client.js'), 'utf8')).resolves.toBe(
+        'export const cart = true;',
+      );
+      expect(built).toHaveLength(1);
+      expect(built[0]?.routeHints).toEqual([
+        {
+          hints: {
+            modulepreloads: ['/assets/cart.js'],
+            stylesheets: ['/assets/cart.css'],
+          },
+          routePath: '/cart',
+        },
+      ]);
     } finally {
       await rm(outDir, { force: true, recursive: true });
     }
