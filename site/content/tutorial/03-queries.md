@@ -6,21 +6,20 @@ order: 3
 
 # Queries & data binding
 
-The shop page needs real data: a product list and a cart badge. This chapter declares two
-queries and lets every downstream surface — dependency stamps, binding paths, the JSON the page
-ships — be derived from those declarations (SPEC §10.2). Step state:
-`site/tutorial/steps/03-queries/`.
+So far the catalog is hardcoded. Time for real data: a product list and a cart badge. You
+declare two queries; every downstream surface — dependency stamps, binding paths, the JSON the
+page ships — is derived from them (SPEC §10.2). Step state: `site/tutorial/steps/03-queries/`.
 
 ## Domains: the invalidation currency
 
-Before queries come domains — named groups of data that writes touch and reads depend on
-(SPEC §10.1). They are the currency the invalidation graph trades in:
+Before queries come domains — named groups of data that writes touch and reads depend on. They
+are the currency the invalidation graph trades in (SPEC §10.1):
 
 {{snippet:03-queries/src/domains.ts#domains}}
 
-In the blessed `@jiso/drizzle` path, domains come from schema annotations on real tables and the
-read sets below are extracted from the query ASTs — the JOIN is the declaration (SPEC §10.1,
-§10.2). The tutorial uses a plain in-memory store so every moving part stays visible:
+In the blessed `@jiso/drizzle` path, domains come from schema annotations on real tables, and
+the read sets below are extracted from the query ASTs — the JOIN is the declaration
+(SPEC §10.2). The tutorial uses a plain in-memory store so every moving part stays visible:
 
 {{snippet:03-queries/src/db.ts#db}}
 
@@ -35,35 +34,35 @@ registration — no query subscribes to mutations, no mutation enumerates querie
 {{snippet:03-queries/src/queries.ts#queries}}
 
 Forgetting a dependency — RTK Query's endemic bug — is unrepresentable here: a query's
-relationship to future writes is fixed by what it reads, not by anything you remember to wire up
-(SPEC §10.2). Chapter 5 cashes this in.
+relationship to future writes is fixed by what it reads, not by anything you remember to wire
+up. Chapter 5 cashes this in.
 
 ## Components declare queries; the compiler does the rest
 
-The cart badge consumes the cart query. The authored TSX says only that:
+The cart badge consumes the cart query. Your TSX says only that:
 
 {{snippet:03-queries/src/components/cart-badge.tsx#cart-badge}}
 
-The product list is a keyed list — `fw-key` is authored, because identity is an app-level fact
-the morph layer, template stamps, and optimistic reordering all share (SPEC §4.8, §13.2):
+The product list is keyed. You author `fw-key` yourself, because item identity is an app-level
+fact shared by the morph layer (the runtime's DOM patcher), template stamps, and optimistic
+reordering (SPEC §4.8, §13.2):
 
 {{snippet:03-queries/src/components/product-list.tsx#product-list}}
 
-From these declarations the compiler derives the runtime wiring (SPEC §4.8): the `queries:`
-declaration becomes an `fw-deps` stamp on each island, and the `{cart.count}` expression becomes
-a typed `data-bind` path. Binding paths type-check against the query's inferred shape — rename
-`count` and every template referencing it goes red; bind through a nullable segment without `?.`
-and you get teaching error FW227 (SPEC §4.8, §6.2). The step's test pins all of it from the
-rendered page:
+The compiler derives the runtime wiring from these declarations: `queries:` becomes an
+`fw-deps` stamp on each island, and `{cart.count}` becomes a typed `data-bind` path
+(SPEC §4.8). Binding paths type-check against the query's inferred shape — rename `count` and
+every referencing template goes red; bind through a nullable segment without `?.` and you get
+compile error FW227. The step's test pins all of it from the rendered page:
 
 {{snippet:03-queries/src/app.test.ts#stamps-test}}
 
 ## Data ships once, as shared truth
 
 Query values are server-owned and shared: the page ships each value exactly once as a JSON
-script, and every island that depends on it reads from that single copy (SPEC §4.2). There is no
-per-component fetch and no client cache with a lifecycle — when a value changes, the loader
-replaces it and walks the self-describing bindings under each dependent island (SPEC §4.8):
+script, and every island that depends on it reads from that single copy (SPEC §4.2). No
+per-component fetch, no client cache with a lifecycle — when a value changes, the loader
+replaces it and walks the self-describing bindings under each dependent island:
 
 {{snippet:03-queries/src/app.ts#shop-page}}
 
@@ -74,4 +73,5 @@ framework boot. The data is inspectable JSON, the dependencies are attributes, a
 plan _is_ the DOM (SPEC §4.8). The [queries guide](/guides/queries/) covers parameterized
 queries, instance keys, and the typed read endpoint when you need them.
 
-Next: writes — and the form-shaped contract they ride in on.
+Live data now flows, and every data-to-DOM dependency is an attribute you can read. Next:
+writes — and the form-shaped contract they ride in on.
