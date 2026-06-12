@@ -2098,6 +2098,33 @@ export const CartBadge = component('cart-badge', {
     ]);
   });
 
+  it('reports FW311 positions in author coordinates after inline derive prepends exports', () => {
+    const result = compileComponentModule({
+      fileName: 'cart-badge.tsx',
+      source: `
+export const CartBadge = component('cart-badge', {
+  queries: { cart: {} },
+  render: () => (
+    <cart-badge>
+      <button disabled={cart.count === 0}>Checkout</button>
+      <strong className={cart.discount}>Discount</strong>
+    </cart-badge>
+  ),
+});
+`,
+    });
+
+    expect(result.diagnostics).toContainEqual({
+      code: 'FW311',
+      fileName: 'cart-badge.tsx',
+      length: 13,
+      message:
+        'Query-dependent DOM position has no update status. CartBadge cart.discount expression',
+      severity: 'warn',
+      start: { column: 26, line: 7 },
+    });
+  });
+
   it('uses JSX element spans for template stamp placeholders instead of HTML regexes', () => {
     const result = compileComponentModule({
       fileName: 'cart-badge.tsx',

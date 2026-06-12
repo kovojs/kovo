@@ -15,7 +15,7 @@ import {
   type ComponentModuleModel,
   jsxElements,
 } from '../scan/parse.js';
-import { dedupeBy } from '../shared.js';
+import { dedupeBy, generatedOffsetToOriginal, type SourceOffsetMap } from '../shared.js';
 import type { QueryShape, QueryShapeFact, QueryUpdateCoverageFact } from '../types.js';
 import {
   isArrayQueryShape,
@@ -176,10 +176,11 @@ export function unhandledUpdateCoverageDiagnostics(
   source: string,
   fileName: string,
   updateCoverage: readonly QueryUpdateCoverageFact[],
+  sourceOffsetMap: SourceOffsetMap,
 ): CompilerDiagnostic[] {
   return updateCoverage
     .filter((fact) => fact.status === 'UNHANDLED')
-    .map((fact) => fw311Diagnostic(fileName, source, fact));
+    .map((fact) => fw311Diagnostic(fileName, source, fact, sourceOffsetMap));
 }
 
 function fragmentTargetUsageNames(model: ComponentModuleModel): string[] {
@@ -242,10 +243,12 @@ function fw311Diagnostic(
   fileName: string,
   source: string,
   fact: QueryUpdateCoverageFact,
+  sourceOffsetMap: SourceOffsetMap,
 ): CompilerDiagnostic {
   const span = fact.sourceSpan;
+  const start = generatedOffsetToOriginal(sourceOffsetMap, span?.start);
   return {
-    ...diagnosticFor(fileName, 'FW311', source, span?.start, span?.length),
+    ...diagnosticFor(fileName, 'FW311', source, start, span?.length),
     message: `${diagnosticDefinitions.FW311.message} ${fact.componentName} ${fact.query} ${fact.position}`,
   };
 }

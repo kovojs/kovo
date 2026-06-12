@@ -1,5 +1,6 @@
 import type { CompilerDiagnostic } from '../diagnostics.js';
 import type { ComponentModuleModel } from '../scan/parse.js';
+import type { SourceOffsetMap } from '../shared.js';
 import type { CompileComponentOptions, QueryUpdateCoverageFact } from '../types.js';
 import { validateDataBindings, validateStampExpressionDrift } from './bindings.js';
 import {
@@ -22,10 +23,12 @@ import { validateLiteralHrefs } from './navigation.js';
 
 interface ValidatorContext {
   componentName: string;
+  diagnosticSource: string;
   model: ComponentModuleModel;
   options: CompileComponentOptions;
   originalModel: ComponentModuleModel;
   source: string;
+  sourceOffsetMap: SourceOffsetMap;
   updateCoverage: readonly QueryUpdateCoverageFact[];
 }
 
@@ -54,8 +57,13 @@ const compilerValidators: readonly CompilerValidator[] = [
   ({ componentName, model, options, source }) =>
     validateResidualStamps(source, model, options, componentName),
   ({ model, options, source }) => validateAttributeMergeConflicts(source, model, options.fileName),
-  ({ options, source, updateCoverage }) =>
-    unhandledUpdateCoverageDiagnostics(source, options.fileName, updateCoverage),
+  ({ diagnosticSource, options, sourceOffsetMap, updateCoverage }) =>
+    unhandledUpdateCoverageDiagnostics(
+      diagnosticSource,
+      options.fileName,
+      updateCoverage,
+      sourceOffsetMap,
+    ),
 ];
 
 export function collectCompilerDiagnostics(context: ValidatorContext): CompilerDiagnostic[] {

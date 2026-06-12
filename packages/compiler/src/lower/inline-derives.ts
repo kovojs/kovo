@@ -7,7 +7,14 @@ import {
   type JsxAttributeModel,
   type JsxElementModel,
 } from '../scan/parse.js';
-import { applySourceReplacements, escapeAttribute, type SourceReplacement } from '../shared.js';
+import {
+  applySourceReplacements,
+  escapeAttribute,
+  identitySourceOffsetMap,
+  prefixedSourceOffsetMap,
+  type SourceOffsetMap,
+  type SourceReplacement,
+} from '../shared.js';
 
 interface InlineDeriveLoweringOptions {
   fileName: string;
@@ -30,14 +37,20 @@ export function lowerInlineAttributeDerives(
   model: ComponentModuleModel,
   componentName: string,
   options: InlineDeriveLoweringOptions,
-): { source: string } {
+): { diagnosticSource: string; source: string; sourceOffsetMap: SourceOffsetMap } {
   const knownQueries = new Set([
     ...componentOptionObjectKeys(model, 'queries'),
     ...Object.keys(options.registryFacts?.queries ?? {}),
     ...Object.keys(options.queryShapes ?? {}),
     ...(options.queryShapeFacts ?? []).map((fact) => fact.query),
   ]);
-  if (knownQueries.size === 0) return { source };
+  if (knownQueries.size === 0) {
+    return {
+      diagnosticSource: source,
+      source,
+      sourceOffsetMap: identitySourceOffsetMap(source.length),
+    };
+  }
 
   const replacements: SourceReplacement[] = [];
   const deriveExports: string[] = [];
@@ -95,11 +108,22 @@ export function lowerInlineAttributeDerives(
     });
   }
 
-  if (replacements.length === 0) return { source };
+  if (replacements.length === 0) {
+    return {
+      diagnosticSource: source,
+      source,
+      sourceOffsetMap: identitySourceOffsetMap(source.length),
+    };
+  }
 
   const lowered = applySourceReplacements(source, replacements);
+  const prefix = `${deriveExports.join('\n')}\n\n`;
 
-  return { source: `${deriveExports.join('\n')}\n\n${lowered}` };
+  return {
+    diagnosticSource: lowered,
+    source: `${prefix}${lowered}`,
+    sourceOffsetMap: prefixedSourceOffsetMap(prefix.length, lowered.length),
+  };
 }
 
 function inlineAttributeDerive(

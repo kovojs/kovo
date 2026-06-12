@@ -472,6 +472,14 @@ pipeline throws the tree away and communicates via mutated source text.
       Additional evidence 2026-06-12: render-host handler attribute rewriting in
       `packages/compiler/src/emit/server.ts` now applies relative `SourceReplacement` patches
       through the shared checked helper instead of carrying a private descending splice reducer.
+      Additional evidence 2026-06-12: inline-derive lowering now returns a generated-to-author
+      `SourceOffsetMap`; FW311 diagnostics translate unhandled query-expression spans back to
+      author coordinates when synthesized derive exports are prepended. `index.test.ts` pins an
+      inline-derive component whose later unhandled expression still reports the authored JSX
+      line. Same-session evidence:
+      `pnpm exec vitest --run packages/compiler/src/index.test.ts -t "FW311 positions|inline derive|query-dependent render positions"`
+      and
+      `pnpm exec vp check packages/compiler/src/shared.ts packages/compiler/src/lower/inline-derives.ts packages/compiler/src/validate/pipeline.ts packages/compiler/src/validate/component-contracts.ts packages/compiler/src/index.ts packages/compiler/src/index.test.ts plans/codebase-quality-round2.md`.
 - [x] **HIGH — Retire regex rewriting of handler bodies.** emit/client.ts:89
       (`/\bstate\b/g → ctx.state` corrupts `log('state changed')`), :96 (member-expression
       substitution inside string literals), lower/handlers.ts:262 (harvests params from string

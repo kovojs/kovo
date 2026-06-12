@@ -39,6 +39,55 @@ export interface SourceReplacement {
   start: number;
 }
 
+export interface SourceOffsetSegment {
+  generatedStart: number;
+  length: number;
+  originalStart: number;
+}
+
+export interface SourceOffsetMap {
+  generatedLength: number;
+  originalLength: number;
+  segments: readonly SourceOffsetSegment[];
+}
+
+export function identitySourceOffsetMap(length: number): SourceOffsetMap {
+  return {
+    generatedLength: length,
+    originalLength: length,
+    segments: [{ generatedStart: 0, length, originalStart: 0 }],
+  };
+}
+
+export function prefixedSourceOffsetMap(
+  prefixLength: number,
+  originalLength: number,
+): SourceOffsetMap {
+  return {
+    generatedLength: prefixLength + originalLength,
+    originalLength,
+    segments: [{ generatedStart: prefixLength, length: originalLength, originalStart: 0 }],
+  };
+}
+
+export function generatedOffsetToOriginal(
+  map: SourceOffsetMap,
+  generatedOffset: number | undefined,
+): number | undefined {
+  if (generatedOffset === undefined) return undefined;
+
+  for (const segment of map.segments) {
+    if (
+      generatedOffset >= segment.generatedStart &&
+      generatedOffset <= segment.generatedStart + segment.length
+    ) {
+      return segment.originalStart + generatedOffset - segment.generatedStart;
+    }
+  }
+
+  return undefined;
+}
+
 export function applySourceReplacements(
   source: string,
   replacements: readonly SourceReplacement[],

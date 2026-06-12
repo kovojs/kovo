@@ -120,6 +120,7 @@ export function compileComponentModule(options: CompileComponentOptions): Compil
     options,
   );
   const source = deriveLowering.source;
+  const diagnosticSource = deriveLowering.diagnosticSource;
   const model =
     source === navigationLowering.source
       ? navigationLowering.model
@@ -136,7 +137,9 @@ export function compileComponentModule(options: CompileComponentOptions): Compil
     model,
     options,
     originalModel,
+    diagnosticSource,
     source,
+    sourceOffsetMap: deriveLowering.sourceOffsetMap,
     updateCoverage,
   });
   const fileNames = compileArtifactFileNames(options.fileName);
