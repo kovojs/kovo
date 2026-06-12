@@ -1977,6 +1977,16 @@ params, relational API, `execute(sql)`, right/full joins, a string column named 
       `pnpm exec vitest --run packages/runtime/src/query-refetch.test.ts packages/runtime/src/query-store.test.ts`,
       `pnpm exec vp check packages/runtime/src/query-refetch.ts packages/runtime/src/query-refetch.test.ts plans/codebase-quality-round2.md`,
       and `git diff --check`.
+      Additional bounded evidence 2026-06-12: disposed visible-return query refetch installers
+      now make stale `visibilitychange` listeners and mid-flight typed-read work inert, so
+      roots that cannot actually unregister listeners do not keep observing hydrated query data
+      after teardown. `packages/runtime/src/query-refetch.test.ts` pins stale-listener and
+      mid-flight disposal behavior through the extracted query-refetch seam. Same-session
+      evidence:
+      `pnpm exec vitest --run packages/runtime/src/query-refetch.test.ts packages/runtime/src/query-store.test.ts`,
+      `pnpm exec vitest --run packages/runtime/src/index.test.ts -t "hydrate|visible-return|refetch"`,
+      `pnpm exec vp check packages/runtime/src/query-refetch.ts packages/runtime/src/query-refetch.test.ts plans/codebase-quality-round2.md`,
+      and `git diff --check`.
 
 Verification: runtime node + browser suites; gzip budget; the new parity suite is the gate for
 any future inline-loader edit. Partial evidence 2026-06-12: `packages/runtime/src/index.ts` now

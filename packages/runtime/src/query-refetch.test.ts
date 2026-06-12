@@ -129,6 +129,83 @@ describe('query refetch', () => {
     expect(store.get('cart')).toEqual({ count: 1 });
   });
 
+  it('makes stale visible-return listeners inert after disposal', async () => {
+    const root = new FakeVisibleReturnRoot();
+    const store = createQueryStore();
+    const refetchOnFocus = vi.fn();
+    const fetch = vi.fn(async () => ({
+      status: 200,
+      text: async () => '<fw-query name="cart">{"count":2}</fw-query>',
+    }));
+
+    root.scripts = [
+      {
+        getAttribute: (name) => (name === 'fw-query' ? 'cart' : null),
+        textContent: '{"count":1}',
+      },
+    ];
+
+    const refetch = installQueryVisibleReturnRefetch({
+      queryRefetch: { fetch },
+      queryScripts: () => root.querySelectorAll('script[fw-query]'),
+      queryStore: store,
+      refetchOnFocus,
+      root,
+    });
+    const staleListener = root.listeners.get('visibilitychange');
+
+    refetch.dispose();
+    await staleListener?.({});
+    refetch.rememberAppliedQueries(['reviews']);
+    await staleListener?.({});
+
+    // SPEC.md §4.4: disposed visible-return refetch must not keep observing query data.
+    expect(refetchOnFocus).not.toHaveBeenCalled();
+    expect(fetch).not.toHaveBeenCalled();
+    expect(store.get('cart')).toEqual({ count: 1 });
+    expect(root.listeners.has('visibilitychange')).toBe(false);
+  });
+
+  it('does not continue typed-read refetch work after disposal during visible-return', async () => {
+    const root = new FakeVisibleReturnRoot();
+    const store = createQueryStore();
+    let resolveFocus: (() => void) | undefined;
+    const focusDone = new Promise<void>((resolve) => {
+      resolveFocus = resolve;
+    });
+    const refetchOnFocus = vi.fn(() => focusDone);
+    const fetch = vi.fn(async () => ({
+      status: 200,
+      text: async () => '<fw-query name="cart">{"count":2}</fw-query>',
+    }));
+
+    root.scripts = [
+      {
+        getAttribute: (name) => (name === 'fw-query' ? 'cart' : null),
+        textContent: '{"count":1}',
+      },
+    ];
+
+    const refetch = installQueryVisibleReturnRefetch({
+      queryRefetch: { fetch },
+      queryScripts: () => root.querySelectorAll('script[fw-query]'),
+      queryStore: store,
+      refetchOnFocus,
+      root,
+    });
+    const visibleReturn = root.listeners.get('visibilitychange')?.({});
+
+    await Promise.resolve();
+    refetch.dispose();
+    resolveFocus?.();
+    await visibleReturn;
+
+    // SPEC.md §4.4: disposal stops the remaining typed-read leg of a visible-return pass.
+    expect(refetchOnFocus).toHaveBeenCalledWith(['cart']);
+    expect(fetch).not.toHaveBeenCalled();
+    expect(store.get('cart')).toEqual({ count: 1 });
+  });
+
   it('applies successful typed read chunks and reports names for the loader ledger', async () => {
     const store = createQueryStore();
     const cartPlan = vi.fn();

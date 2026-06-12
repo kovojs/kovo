@@ -118,21 +118,30 @@ export function installQueryVisibleReturnRefetch(
   hydrateNewQueryScripts();
 
   if (!options.refetchOnFocus && (!options.queryRefetch || !options.queryStore)) {
+    let disposed = false;
+
     return {
-      dispose() {},
+      dispose() {
+        disposed = true;
+      },
       rememberAppliedQueries: (queries) => {
+        if (disposed) return;
         ledger.remember(queries);
       },
     };
   }
 
+  let disposed = false;
   let refetchInFlight: Promise<void> | undefined;
   const refetchOnVisibleReturn = async () => {
+    if (disposed) return;
     // SPEC.md §4.4: visible-return refetch follows hydrated query data, including
     // query scripts introduced by later fragment/stream DOM updates.
     hydrateNewQueryScripts();
+    if (disposed) return;
     const queries = ledger.eligible(options.refetchOnFocusOptOut);
     await options.refetchOnFocus?.(queries);
+    if (disposed) return;
     if (options.queryRefetch && options.queryStore) {
       const onError = options.queryRefetch.onError ?? options.onError;
       const applied = await refetchQueries({
@@ -151,6 +160,7 @@ export function installQueryVisibleReturnRefetch(
     return refetchInFlight;
   };
   const listener = async () => {
+    if (disposed) return;
     if (options.root.visibilityState === 'hidden') return;
     await refetchOnce();
   };
@@ -159,9 +169,11 @@ export function installQueryVisibleReturnRefetch(
 
   return {
     dispose() {
+      disposed = true;
       options.root.removeEventListener?.('visibilitychange', listener);
     },
     rememberAppliedQueries(queries) {
+      if (disposed) return;
       ledger.remember(queries);
     },
   };
