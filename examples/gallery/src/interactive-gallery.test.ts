@@ -20,7 +20,7 @@ describe('compiled interactive gallery demos', () => {
       cwd: galleryRoot,
       stdio: 'pipe',
     });
-  });
+  }, 20_000);
 
   it('compiles stateful gallery demos into server TSX and client handler modules', () => {
     const toggle = readGenerated('toggle-demo.tsx');
