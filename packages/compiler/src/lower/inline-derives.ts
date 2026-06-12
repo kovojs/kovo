@@ -2,6 +2,7 @@ import {
   jsxElements,
   jsxExpressions,
   propertyAccessPaths,
+  solePropertyAccessPath,
   type ComponentModuleModel,
   type JsxAttributeModel,
   type JsxElementModel,
@@ -169,9 +170,7 @@ function inlineTextBinding(
   if (element.attributes.some((attribute) => isBindingAttributeName(attribute.name))) return null;
 
   const content = source.slice(element.openingEnd, element.closingStart);
-  const expression = /^\s*\{\s*(?<path>[A-Za-z_$][\w$]*(?:\??\.[A-Za-z_$][\w$]*)+)\s*\}\s*$/.exec(
-    content,
-  )?.groups?.path;
+  const expression = soleWrappedExpression(content);
   if (!expression) return null;
 
   const query = expression.split('.', 1)[0];
@@ -203,13 +202,18 @@ function inlineMixedTextBinding(
 }
 
 function soleKnownQueryPath(expression: string, knownQueries: ReadonlySet<string>): string | null {
-  const path =
-    /^(?<path>[A-Za-z_$][\w$]*(?:\??\.[A-Za-z_$][\w$]*)+)$/.exec(expression.trim())?.groups?.path ??
-    null;
+  const path = solePropertyAccessPath('inline-expression.tsx', expression);
   if (!path) return null;
 
   const query = path.split('.', 1)[0];
   return query && knownQueries.has(query) ? path : null;
+}
+
+function soleWrappedExpression(source: string): string | null {
+  const trimmed = source.trim();
+  if (!trimmed.startsWith('{') || !trimmed.endsWith('}')) return null;
+
+  return solePropertyAccessPath('inline-text-expression.tsx', trimmed.slice(1, -1).trim());
 }
 
 function isJsxAttributeExpression(

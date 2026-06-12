@@ -6,6 +6,7 @@ import {
   jsxElements,
   jsxExpressions,
   propertyAccessPaths,
+  solePropertyAccessPath,
   type ComponentModuleModel,
   type JsxElementModel,
 } from '../scan/parse.js';
@@ -310,9 +311,7 @@ function jsxQueryExpressionPaths(
 }
 
 function soleQueryPathExpression(expression: string): string | null {
-  return (
-    /^(?<path>[A-Za-z_$][\w$]*(?:\??\.[A-Za-z_$][\w$]*)+)$/.exec(expression)?.groups?.path ?? null
-  );
+  return solePropertyAccessPath('query-expression.tsx', expression);
 }
 
 function queryPathsInExpression(expression: string, knownQueries: ReadonlySet<string>): string[] {

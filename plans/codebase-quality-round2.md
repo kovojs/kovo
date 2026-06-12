@@ -625,6 +625,14 @@ pipeline throws the tree away and communicates via mutated source text.
       `pnpm exec vitest --run packages/compiler/src/index.test.ts packages/compiler/src/shared.test.ts packages/compiler/src/navigation-lowering.test.ts packages/compiler/src/platform-lowering.test.ts`,
       `pnpm exec vp check packages/compiler/src/analyze/query-shapes.ts packages/compiler/src/lower/inline-derives.ts packages/compiler/src/analyze/query-updates.ts packages/compiler/src/validate/bindings.ts packages/compiler/src/validate/component-contracts.ts`,
       and `git diff --check`.
+      Additional evidence 2026-06-12: single query-path expression recognition now lives in the
+      TypeScript parser front-end as `solePropertyAccessPath`, including optional-chain receiver
+      segment mapping (`cart.items?.name`). Inline text/mixed binding lowering, update coverage,
+      and binding drift validation consume that parser helper instead of carrying local
+      query-path regexes. Same-session evidence:
+      `pnpm exec vitest --run packages/compiler/src/scan/parse.test.ts packages/compiler/src/index.test.ts packages/compiler/src/shared.test.ts packages/compiler/src/navigation-lowering.test.ts packages/compiler/src/platform-lowering.test.ts`,
+      `pnpm exec vp check packages/compiler/src/scan/parse.ts packages/compiler/src/scan/parse.test.ts packages/compiler/src/analyze/query-updates.ts packages/compiler/src/lower/inline-derives.ts packages/compiler/src/validate/bindings.ts`,
+      and `git diff --check`.
       Additional evidence 2026-06-12: `removeJsxAttribute(s)` now live in
       `packages/compiler/src/shared.ts`; navigation and view-transition lowering import the
       shared helper instead of carrying duplicate local copies. Same-session evidence:

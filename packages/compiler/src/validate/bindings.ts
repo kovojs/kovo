@@ -2,7 +2,12 @@ import { diagnosticDefinitions } from '@jiso/core';
 
 import { diagnosticFor, type CompilerDiagnostic } from '../diagnostics.js';
 import { dedupeBy } from '../shared.js';
-import { jsxElements, type ComponentModuleModel, type JsxElementModel } from '../scan/parse.js';
+import {
+  jsxElements,
+  solePropertyAccessPath,
+  type ComponentModuleModel,
+  type JsxElementModel,
+} from '../scan/parse.js';
 import {
   componentQueryShapes,
   knownQueryNames,
@@ -144,10 +149,10 @@ function bindingExpressionStamps(
 }
 
 function soleWrappedQueryExpression(source: string): string | null {
-  const match = /^\s*\{\s*(?<path>[A-Za-z_$][\w$]*(?:\??\.[A-Za-z_$][\w$]*)+)\s*\}\s*$/.exec(
-    source,
-  );
-  return match?.groups?.path ?? null;
+  const trimmed = source.trim();
+  if (!trimmed.startsWith('{') || !trimmed.endsWith('}')) return null;
+
+  return solePropertyAccessPath('binding-expression.tsx', trimmed.slice(1, -1).trim());
 }
 
 function dataBindAttributes(model: ComponentModuleModel): DataBindAttribute[] {

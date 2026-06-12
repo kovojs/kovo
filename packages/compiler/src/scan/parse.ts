@@ -317,6 +317,14 @@ export function propertyAccessPaths(fileName: string, source: string): string[] 
   return paths;
 }
 
+export function solePropertyAccessPath(fileName: string, source: string): string | null {
+  const sourceFile = parseExpressionSource(fileName, source);
+  const initializer = firstVariableInitializer(sourceFile);
+  if (!initializer || !ts.isPropertyAccessExpression(initializer)) return null;
+
+  return propertyAccessPath(initializer);
+}
+
 export function objectLiteralPropertyPaths(fileName: string, source: string): string[] {
   const sourceFile = parseExpressionSource(fileName, source);
   const initializer = firstVariableInitializer(sourceFile);
@@ -344,18 +352,27 @@ function firstVariableInitializer(sourceFile: ts.SourceFile): ts.Expression | nu
 }
 
 function propertyAccessPath(expression: ts.PropertyAccessExpression): string | null {
-  const segments: string[] = [expression.name.text];
-  let current: ts.Expression = expression.expression;
+  const receiver = propertyAccessReceiverSegments(expression.expression);
+  if (!receiver) return null;
 
-  while (ts.isPropertyAccessExpression(current)) {
-    segments.unshift(current.name.text);
-    current = current.expression;
-  }
-
-  if (!ts.isIdentifier(current)) return null;
-
-  segments.unshift(current.text);
+  const segments = expression.questionDotToken ? markLastOptional(receiver) : receiver;
+  segments.push(expression.name.text);
   return segments.join('.');
+}
+
+function propertyAccessReceiverSegments(expression: ts.Expression): string[] | null {
+  if (ts.isIdentifier(expression)) return [expression.text];
+
+  if (!ts.isPropertyAccessExpression(expression)) return null;
+
+  return propertyAccessPath(expression)?.split('.') ?? null;
+}
+
+function markLastOptional(segments: readonly string[]): string[] {
+  const result = [...segments];
+  const last = result.at(-1);
+  if (last) result[result.length - 1] = last.endsWith('?') ? last : `${last}?`;
+  return result;
 }
 
 function objectLiteralPaths(expression: ts.ObjectLiteralExpression, prefix = ''): string[] {
