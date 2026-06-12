@@ -28,6 +28,8 @@ import {
   sanitizeMutationChangeRecord,
 } from './mutation-response.js';
 import type { CompiledQueryUpdatePlans } from './query-bindings.js';
+import { createRefetchQueryLedger, refetchQueries } from './query-refetch.js';
+import type { QueryRefetchOptions } from './query-refetch.js';
 import {
   installPagehideOptimismCleanup,
   optimisticChangeFromInput,
@@ -103,6 +105,12 @@ export {
 export type { InlineImportHandlerModule } from './inline-loader.js';
 export { createQueryStore, hydrateQueryScripts } from './query-store.js';
 export type { QueryScriptLike, QuerySnapshot, QueryStore, QueryUpdatePlan } from './query-store.js';
+export { refetchQueries } from './query-refetch.js';
+export type {
+  QueryRefetchFetch,
+  QueryRefetchOptions,
+  QueryRefetchResponse,
+} from './query-refetch.js';
 export type { FragmentChunk, QueryChunk } from './wire-parser.js';
 export { MutationQueue } from './mutation-queue.js';
 export type { MutationTask } from './mutation-queue.js';
@@ -207,27 +215,6 @@ export interface JisoLoaderOptions {
   root: LoaderRoot;
 }
 
-export interface QueryRefetchOptions {
-  fetch: QueryRefetchFetch;
-  urlForQuery?: (query: string) => string | undefined;
-}
-
-export interface QueryRefetchFetch {
-  (
-    url: string,
-    init: {
-      headers: Record<string, string>;
-      method: 'GET';
-    },
-  ): Promise<QueryRefetchResponse> | QueryRefetchResponse;
-}
-
-export interface QueryRefetchResponse {
-  ok?: boolean;
-  status?: number;
-  text(): Promise<string> | string;
-}
-
 export interface JisoLoader {
   dispose(): void;
   events: readonly string[];
@@ -239,19 +226,14 @@ export function installJisoLoader(options: JisoLoaderOptions): JisoLoader {
   const events = options.events ?? defaultDelegatedEvents;
   const islandSignalScope = createIslandSignalScope();
   const disposers: Array<() => void> = [];
-  const hydratedQueries = new Set<string>();
-  const rememberHydratedQueries = (queries: readonly string[]) => {
-    for (const query of queries) {
-      hydratedQueries.add(query);
-    }
-  };
+  const hydratedQueryLedger = createRefetchQueryLedger();
   const enhancedMutationSetup = options.enhancedMutations
     ? withDefaultMutationBroadcast(options.enhancedMutations)
     : undefined;
   const enhancedMutations = enhancedMutationSetup?.options;
 
   if (options.queryStore && options.root.querySelectorAll) {
-    rememberHydratedQueries(
+    hydratedQueryLedger.remember(
       hydrateQueryScripts(
         options.queryStore,
         options.root.querySelectorAll('script[fw-query]') as Iterable<QueryScriptLike>,
@@ -273,7 +255,7 @@ export function installJisoLoader(options: JisoLoaderOptions): JisoLoader {
         try {
           if (
             await dispatchEnhancedFormSubmit(event, enhancedMutations, islandSignalScope, {
-              onAppliedQueries: rememberHydratedQueries,
+              onAppliedQueries: (queries) => hydratedQueryLedger.remember(queries),
             })
           ) {
             return;
@@ -292,8 +274,7 @@ export function installJisoLoader(options: JisoLoaderOptions): JisoLoader {
   }
 
   if (options.refetchOnFocus || (options.queryRefetch && options.queryStore)) {
-    const refetchEligibleQueries = () =>
-      filterRefetchEligibleQueries([...hydratedQueries], options.refetchOnFocusOptOut ?? []);
+    const refetchEligibleQueries = () => hydratedQueryLedger.eligible(options.refetchOnFocusOptOut);
     let refetchInFlight: Promise<void> | undefined;
     const refetchOnFocus = async () => {
       const queries = refetchEligibleQueries();
@@ -304,7 +285,7 @@ export function installJisoLoader(options: JisoLoaderOptions): JisoLoader {
           queries,
           queryStore: options.queryStore,
         });
-        rememberHydratedQueries(applied.flatMap((chunk) => chunk.queries));
+        hydratedQueryLedger.remember(applied.flatMap((chunk) => chunk.queries));
       }
     };
     const refetchOnce = () => {
@@ -606,54 +587,6 @@ function updateUploadProgressElements(form: EventElementLike, progress: UploadPr
     }
     element.setAttribute('value', String(value));
   }
-}
-
-function filterRefetchEligibleQueries(
-  queries: readonly string[],
-  optOut: readonly string[],
-): readonly string[] {
-  const excluded = new Set(optOut);
-  const eligible: string[] = [];
-  const seen = new Set<string>();
-
-  for (const query of queries) {
-    if (excluded.has(query) || seen.has(query)) continue;
-
-    eligible.push(query);
-    seen.add(query);
-  }
-
-  return eligible;
-}
-
-export async function refetchQueries(
-  options: QueryRefetchOptions & {
-    queries: readonly string[];
-    queryStore: QueryStore;
-  },
-): Promise<AppliedMutationResponse[]> {
-  const applied: AppliedMutationResponse[] = [];
-
-  for (const query of options.queries) {
-    const url = options.urlForQuery?.(query) ?? `/_q/${encodeURIComponent(query)}`;
-    if (!url) continue;
-
-    const response = await options.fetch(url, {
-      headers: {
-        Accept: 'text/html',
-        'FW-Fragment': 'true',
-      },
-      method: 'GET',
-    });
-
-    if (response.ok === false || (response.status !== undefined && response.status >= 400)) {
-      continue;
-    }
-
-    applied.push(applyMutationResponse(options.queryStore, await response.text()));
-  }
-
-  return applied;
 }
 
 export interface AppliedDeferredStreamResponse extends AppliedMutationResponse {

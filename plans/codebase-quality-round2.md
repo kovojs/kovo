@@ -1203,6 +1203,14 @@ params, relational API, `execute(sql)`, right/full joins, a string column named 
       return value and the loader focus-refetch ledger under the SPEC §4.4 query hydration
       contract. Same-session evidence:
       `pnpm exec vitest --run packages/runtime/src/index.test.ts -t "hydrate|visible-return|refetch"`.
+      Additional bounded evidence 2026-06-12: extracted `packages/runtime/src/query-refetch.ts`
+      as the visible-return query ledger and typed read refetch seam; `packages/runtime/src/index.ts`
+      now delegates hydrated/applied query tracking and `refetchQueries` through that helper while
+      preserving the public export. `packages/runtime/src/query-refetch.test.ts` pins dedupe,
+      opt-out filtering, typed read application, and disabled/failed refetch handling for the
+      SPEC §4.4 hydration/refetch contract. Same-session evidence:
+      `pnpm exec vitest --run packages/runtime/src/query-refetch.test.ts packages/runtime/src/query-store.test.ts packages/runtime/src/index.test.ts -t "hydrate|visible-return|refetch"` and
+      `pnpm exec vp check packages/runtime/src/index.ts packages/runtime/src/query-refetch.ts packages/runtime/src/query-refetch.test.ts`.
 
 Verification: runtime node + browser suites; gzip budget; the new parity suite is the gate for
 any future inline-loader edit. Partial evidence 2026-06-12: `packages/runtime/src/index.ts` now
