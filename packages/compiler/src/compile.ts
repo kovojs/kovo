@@ -56,7 +56,7 @@ export function compileComponentModule(options: CompileComponentOptions): Compil
   const authoringSurfaceDiagnostics = validateAuthoringSurface(options, originalModel);
   const componentName = inferComponentName(options.fileName, originalModel);
   const originalState = componentPipelineState(options.fileName, options.source, originalModel);
-  const viewTransitions = viewTransitionLowering(originalState.source, originalState.model);
+  const viewTransitions = viewTransitionLowering(originalState.model);
   const viewTransitionState = lowerComponentPipelinePatches(
     originalState,
     viewTransitions.replacements,

@@ -325,6 +325,19 @@ export const CartShell = component('cart-shell', {
     expect(strong?.ancestorTags).toEqual(['span', 'p', 'section']);
   });
 
+  it('records JSX opening tag source for model-driven lowerers', () => {
+    const source = `
+export const ProductCard = component('product-card', {
+  render: () => <img alt="Product" viewTransitionName="product-p1-image" />,
+});
+`;
+    const [image] = jsxElements(parseComponentModule('product-card.tsx', source));
+
+    expect(image?.openingSource).toBe(
+      '<img alt="Product" viewTransitionName="product-p1-image" />',
+    );
+  });
+
   it('records call argument property access facts', () => {
     const source = `
 export const CartBadge = component('cart-badge', {

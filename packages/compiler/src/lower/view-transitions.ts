@@ -12,10 +12,7 @@ export interface ViewTransitionLowering {
   stamps: ViewTransitionStamp[];
 }
 
-export function viewTransitionLowering(
-  source: string,
-  model: ComponentModuleModel,
-): ViewTransitionLowering {
+export function viewTransitionLowering(model: ComponentModuleModel): ViewTransitionLowering {
   const matches = jsxElements(model)
     .map((item) => ({
       attribute: item.attributes.find(
@@ -33,8 +30,7 @@ export function viewTransitionLowering(
     );
   const stamps = matches.map((item) => ({ name: item.attribute.value }));
   const replacements: SourceReplacement[] = matches.map((match) => {
-    const opening = source.slice(match.element.start, match.element.openingEnd);
-    const replacement = appendViewTransitionStyle(opening, match.element, match.attribute);
+    const replacement = appendViewTransitionStyle(match.element, match.attribute);
     return { end: match.element.openingEnd, replacement, start: match.element.start };
   });
 
@@ -45,11 +41,11 @@ export function viewTransitionLowering(
 }
 
 function appendViewTransitionStyle(
-  opening: string,
   element: JsxElementModel,
   transitionAttribute: JsxAttributeModel & { value: string },
 ): string {
   const tagPrefix = `<${element.tag}`;
+  const opening = element.openingSource;
   const attributesEnd = opening.length - (element.selfClosing ? 2 : 1);
   const attributes = opening.slice(tagPrefix.length, attributesEnd).trimEnd();
   const styleAttribute = element.attributes.find(
