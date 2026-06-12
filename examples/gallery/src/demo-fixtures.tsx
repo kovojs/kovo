@@ -1,24 +1,77 @@
 /** @jsxImportSource @jiso/server */
 import {
+  accordionContentAttributes,
+  accordionHeaderAttributes,
+  accordionItemAttributes,
+  accordionRootAttributes,
+  accordionTriggerAttributes,
+  checkboxRootAttributes,
   dialogCloseAttributes,
   dialogContentAttributes,
   dialogRootAttributes,
   dialogTriggerAttributes,
+  fieldControlAttributes,
+  fieldDescriptionAttributes,
+  fieldErrorAttributes,
+  fieldLabelAttributes,
+  fieldRootAttributes,
+  fieldsetLegendAttributes,
+  fieldsetRootAttributes,
+  meterRootAttributes,
   progressRootAttributes,
+  radioGroupItemAttributes,
+  radioGroupLabelAttributes,
+  radioGroupRadioAttributes,
+  radioGroupRootAttributes,
+  selectContentAttributes,
+  selectItemAttributes,
+  selectRootAttributes,
+  selectTriggerAttributes,
+  selectValueAttributes,
+  selectValueText,
+  separatorRootAttributes,
+  switchRootAttributes,
+  tabsListAttributes,
+  tabsPanelAttributes,
+  tabsRootAttributes,
+  tabsTriggerAttributes,
+  tooltipContentAttributes,
+  tooltipRootAttributes,
+  tooltipTriggerAttributes,
   toggleRootAttributes,
 } from '@jiso/headless-ui/primitives';
+import { Badge, Button, Card, Sheet } from '@jiso/ui';
 
-export type GalleryPrimitive = 'dialog' | 'progress' | 'toggle';
+export type GalleryComponent =
+  | 'accordion'
+  | 'badge'
+  | 'button'
+  | 'card'
+  | 'checkbox'
+  | 'dialog'
+  | 'field'
+  | 'meter'
+  | 'progress'
+  | 'radio-group'
+  | 'select'
+  | 'separator'
+  | 'sheet'
+  | 'switch'
+  | 'tabs'
+  | 'toggle'
+  | 'tooltip';
+
+export type GalleryPrimitive = GalleryComponent;
 
 export interface GalleryRoute {
-  component: GalleryPrimitive;
-  path: `/components/${GalleryPrimitive}`;
+  component: GalleryComponent;
+  path: `/components/${GalleryComponent}`;
   render(): string;
   title: string;
 }
 
 export interface GalleryFixture {
-  component: GalleryPrimitive;
+  component: GalleryComponent;
   html: string;
   path: GalleryRoute['path'];
   title: string;
@@ -26,10 +79,94 @@ export interface GalleryFixture {
 
 export const galleryRoutes: readonly GalleryRoute[] = Object.freeze([
   {
+    component: 'accordion',
+    path: '/components/accordion',
+    render: () => AccordionDemo(),
+    title: 'Accordion',
+  },
+  {
+    component: 'badge',
+    path: '/components/badge',
+    render: () => BadgeDemo(),
+    title: 'Badge',
+  },
+  {
+    component: 'button',
+    path: '/components/button',
+    render: () => ButtonDemo(),
+    title: 'Button',
+  },
+  {
+    component: 'card',
+    path: '/components/card',
+    render: () => CardDemo(),
+    title: 'Card',
+  },
+  {
+    component: 'checkbox',
+    path: '/components/checkbox',
+    render: () => CheckboxDemo(),
+    title: 'Checkbox',
+  },
+  {
     component: 'dialog',
     path: '/components/dialog',
     render: () => DialogDemo(),
     title: 'Dialog',
+  },
+  {
+    component: 'field',
+    path: '/components/field',
+    render: () => FieldDemo(),
+    title: 'Field',
+  },
+  {
+    component: 'meter',
+    path: '/components/meter',
+    render: () => MeterDemo(),
+    title: 'Meter',
+  },
+  {
+    component: 'progress',
+    path: '/components/progress',
+    render: () => ProgressDemo(),
+    title: 'Progress',
+  },
+  {
+    component: 'radio-group',
+    path: '/components/radio-group',
+    render: () => RadioGroupDemo(),
+    title: 'Radio Group',
+  },
+  {
+    component: 'select',
+    path: '/components/select',
+    render: () => SelectDemo(),
+    title: 'Select',
+  },
+  {
+    component: 'separator',
+    path: '/components/separator',
+    render: () => SeparatorDemo(),
+    title: 'Separator',
+  },
+  {
+    component: 'sheet',
+    path: '/components/sheet',
+    render: () => SheetDemo(),
+    title: 'Sheet',
+  },
+  {
+    component: 'switch',
+    path: '/components/switch',
+    render: () => SwitchDemo(),
+    title: 'Switch',
+  },
+  {
+    component: 'tabs',
+    path: '/components/tabs',
+    render: () => TabsDemo(),
+    title: 'Tabs',
   },
   {
     component: 'toggle',
@@ -38,10 +175,10 @@ export const galleryRoutes: readonly GalleryRoute[] = Object.freeze([
     title: 'Toggle',
   },
   {
-    component: 'progress',
-    path: '/components/progress',
-    render: () => ProgressDemo(),
-    title: 'Progress',
+    component: 'tooltip',
+    path: '/components/tooltip',
+    render: () => TooltipDemo(),
+    title: 'Tooltip',
   },
 ]);
 
@@ -70,6 +207,169 @@ export function renderGalleryRoute(route: GalleryRoute): string {
       <h1>{route.title}</h1>
       {route.render()}
     </main>
+  );
+}
+
+export function AccordionDemo(): string {
+  const state = {
+    orientation: 'vertical' as const,
+    type: 'multiple' as const,
+    value: ['shipping'],
+  };
+  const shipping = { ...state, itemValue: 'shipping' };
+  const billing = { ...state, itemValue: 'billing' };
+
+  return (
+    <section {...accordionRootAttributes(state)} data-gallery-demo="accordion">
+      <p data-demo-summary="no-js">
+        Accordion keeps each item addressable with native-friendly open and hidden attributes.
+      </p>
+      <div {...accordionItemAttributes(shipping)}>
+        <h3 {...accordionHeaderAttributes({ ...shipping, level: 3 })}>
+          <button
+            {...accordionTriggerAttributes({
+              ...shipping,
+              contentId: 'gallery-accordion-shipping-panel',
+              triggerId: 'gallery-accordion-shipping-trigger',
+            })}
+          >
+            Shipping
+          </button>
+        </h3>
+        <div
+          {...accordionContentAttributes({
+            ...shipping,
+            contentId: 'gallery-accordion-shipping-panel',
+            triggerId: 'gallery-accordion-shipping-trigger',
+          })}
+        >
+          Ships from the nearest warehouse.
+        </div>
+      </div>
+      <div {...accordionItemAttributes(billing)}>
+        <h3 {...accordionHeaderAttributes({ ...billing, level: 3 })}>
+          <button
+            {...accordionTriggerAttributes({
+              ...billing,
+              contentId: 'gallery-accordion-billing-panel',
+              triggerId: 'gallery-accordion-billing-trigger',
+            })}
+          >
+            Billing
+          </button>
+        </h3>
+        <div
+          {...accordionContentAttributes({
+            ...billing,
+            contentId: 'gallery-accordion-billing-panel',
+            triggerId: 'gallery-accordion-billing-trigger',
+          })}
+        >
+          Invoices remain available after checkout.
+        </div>
+      </div>
+      {renderBehaviorContract({
+        changeReasons: 'trigger-click, programmatic',
+        dataState: 'open, closed, disabled',
+        keyboard: 'Native button activation opens an item; group keyboard maps are primitive-owned',
+      })}
+    </section>
+  );
+}
+
+export function BadgeDemo(): string {
+  return (
+    <section data-gallery-demo="badge">
+      <p data-demo-summary="no-js">
+        Badge is a pure styled source component with no behavior island.
+      </p>
+      <div data-ui-demo="badge">
+        {Badge.definition.render({ children: 'Draft', variant: 'neutral' })}
+        {Badge.definition.render({ children: 'Live', variant: 'success' })}
+        {Badge.definition.render({ children: 'Needs review', variant: 'warning' })}
+      </div>
+      {renderBehaviorContract({
+        changeReasons: 'not stateful',
+        dataState: 'not emitted',
+        keyboard: 'No custom keyboard handling',
+      })}
+    </section>
+  );
+}
+
+export function ButtonDemo(): string {
+  return (
+    <section data-gallery-demo="button">
+      <p data-demo-summary="no-js">
+        Button keeps the native button element and submit/reset behavior available without JS.
+      </p>
+      <div data-ui-demo="button">
+        {Button.definition.render({ children: 'Save changes' })}
+        {Button.definition.render({ children: 'Preview', variant: 'secondary' })}
+        {Button.definition.render({ children: 'Archived', disabled: true, variant: 'ghost' })}
+      </div>
+      {renderBehaviorContract({
+        changeReasons: 'native click or form submit',
+        dataState: 'disabled via native attribute',
+        keyboard: 'Space or Enter activates the native button',
+      })}
+    </section>
+  );
+}
+
+export function CardDemo(): string {
+  return (
+    <section data-gallery-demo="card">
+      <p data-demo-summary="no-js">Card is pure markup around authored TSX children.</p>
+      <div data-ui-demo="card">
+        {Card.definition.render({ children: '<h2>Release candidate</h2><p>Ready for audit.</p>' })}
+      </div>
+      {renderBehaviorContract({
+        changeReasons: 'not stateful',
+        dataState: 'not emitted',
+        keyboard: 'No custom keyboard handling',
+      })}
+    </section>
+  );
+}
+
+export function CheckboxDemo(): string {
+  const checked = checkboxRootAttributes({
+    checked: true,
+    name: 'gallery-consent',
+    required: true,
+    value: 'accepted',
+  });
+  const indeterminate = checkboxRootAttributes({
+    checked: 'indeterminate',
+    name: 'gallery-partial',
+    value: 'partial',
+  });
+  const disabled = checkboxRootAttributes({ checked: false, disabled: true });
+
+  return (
+    <section data-gallery-demo="checkbox">
+      <p data-demo-summary="no-js">
+        Checkbox preserves real checkbox controls for form submission and validation.
+      </p>
+      <label>
+        <input {...checked} data-fixture-state="checked" />
+        Accept terms
+      </label>
+      <label>
+        <input {...indeterminate} data-fixture-state="indeterminate" />
+        Some permissions
+      </label>
+      <label>
+        <input {...disabled} data-fixture-state="disabled" />
+        Locked option
+      </label>
+      {renderBehaviorContract({
+        changeReasons: 'trigger-click, programmatic',
+        dataState: 'checked, unchecked, indeterminate, disabled',
+        keyboard: 'Space toggles the native checkbox',
+      })}
+    </section>
   );
 }
 
@@ -112,6 +412,90 @@ export function DialogDemo(): string {
   );
 }
 
+export function FieldDemo(): string {
+  const fieldState = {
+    invalid: true,
+    required: true,
+  };
+  const fieldsetState = {
+    descriptionId: 'gallery-fieldset-description',
+    id: 'gallery-fieldset',
+    invalid: true,
+  };
+
+  return (
+    <section data-gallery-demo="field">
+      <p data-demo-summary="no-js">
+        Field helpers wire labels, descriptions, errors, and native controls without hidden inputs.
+      </p>
+      <div {...fieldRootAttributes({ ...fieldState, id: 'gallery-field' })}>
+        <label
+          {...fieldLabelAttributes({
+            ...fieldState,
+            controlId: 'gallery-field-email',
+            id: 'gallery-field-label',
+          })}
+        >
+          Email
+        </label>
+        <input
+          {...fieldControlAttributes({
+            ...fieldState,
+            descriptionId: 'gallery-field-description',
+            errorId: 'gallery-field-error',
+            id: 'gallery-field-email',
+            name: 'email',
+          })}
+          type="email"
+        />
+        <p {...fieldDescriptionAttributes({ id: 'gallery-field-description' })}>
+          Used for release notifications.
+        </p>
+        <p {...fieldErrorAttributes({ id: 'gallery-field-error' })}>Email is required.</p>
+      </div>
+      <fieldset {...fieldsetRootAttributes(fieldsetState)}>
+        <legend {...fieldsetLegendAttributes({ id: 'gallery-fieldset-legend' })}>Plan</legend>
+        <p {...fieldDescriptionAttributes({ id: 'gallery-fieldset-description' })}>
+          Fieldset preserves the native grouping element.
+        </p>
+      </fieldset>
+      {renderBehaviorContract({
+        changeReasons: 'native form control changes',
+        dataState: 'invalid, required, disabled',
+        keyboard: 'Native field and fieldset semantics',
+      })}
+    </section>
+  );
+}
+
+export function MeterDemo(): string {
+  const optimum = meterRootAttributes({
+    high: 90,
+    low: 50,
+    max: 100,
+    min: 0,
+    optimum: 80,
+    value: 84,
+    valueText: '84 percent quality score',
+  });
+  const suboptimum = meterRootAttributes({ high: 90, low: 50, max: 100, optimum: 80, value: 42 });
+
+  return (
+    <section data-gallery-demo="meter">
+      <p data-demo-summary="no-js">
+        Meter uses the native meter element and exposes threshold data for styling.
+      </p>
+      <meter {...optimum}>84%</meter>
+      <meter {...suboptimum}>42%</meter>
+      {renderBehaviorContract({
+        changeReasons: 'value comes from app state',
+        dataState: 'optimum, suboptimum, even-less-good',
+        keyboard: 'No custom keyboard handling',
+      })}
+    </section>
+  );
+}
+
 export function ToggleDemo(): string {
   const pressed = toggleRootAttributes({ pressed: true });
   const idle = toggleRootAttributes({ pressed: false });
@@ -142,6 +526,233 @@ export function ToggleDemo(): string {
   );
 }
 
+export function RadioGroupDemo(): string {
+  const items = [{ value: 'standard' }, { value: 'express' }, { disabled: true, value: 'freight' }];
+  const state = {
+    descriptionId: 'gallery-radio-description',
+    items,
+    name: 'gallery-shipping-speed',
+    required: true,
+    value: 'express',
+  };
+
+  return (
+    <section data-gallery-demo="radio-group">
+      <p data-demo-summary="no-js">
+        Radio group keeps native radio inputs while adding roving-focus attributes.
+      </p>
+      <div {...radioGroupRootAttributes(state)}>
+        <p id="gallery-radio-description">Choose a fulfillment speed.</p>
+        {items.map((item) => (
+          <div
+            {...radioGroupItemAttributes({
+              ...state,
+              itemValue: item.value,
+            })}
+          >
+            <input
+              {...radioGroupRadioAttributes({
+                ...state,
+                controlId: `gallery-radio-${item.value}`,
+                itemValue: item.value,
+              })}
+            />
+            <label
+              {...radioGroupLabelAttributes({
+                ...state,
+                controlId: `gallery-radio-${item.value}`,
+                itemValue: item.value,
+              })}
+            >
+              {item.value}
+            </label>
+          </div>
+        ))}
+      </div>
+      {renderBehaviorContract({
+        changeReasons: 'item-click, keyboard, programmatic',
+        dataState: 'checked, unchecked, disabled',
+        keyboard: 'Arrow keys move over enabled radio items',
+      })}
+    </section>
+  );
+}
+
+export function SelectDemo(): string {
+  const items = [
+    { label: 'Starter', value: 'starter' },
+    { label: 'Growth', value: 'growth' },
+    { disabled: true, label: 'Enterprise', value: 'enterprise' },
+  ];
+  const state = {
+    items,
+    name: 'gallery-plan',
+    required: true,
+    value: 'growth',
+  };
+
+  return (
+    <section {...selectRootAttributes(state)} data-gallery-demo="select">
+      <p data-demo-summary="no-js">
+        Select keeps a real select control and option list for no-JS form submission.
+      </p>
+      <label id="gallery-select-label" for="gallery-select">
+        Plan
+      </label>
+      <select
+        {...selectTriggerAttributes({
+          ...state,
+          id: 'gallery-select',
+          labelledBy: 'gallery-select-label',
+        })}
+      >
+        <optgroup {...selectContentAttributes({ ...state, labelledBy: 'gallery-select-label' })}>
+          {items.map((item) => (
+            <option
+              {...selectItemAttributes({
+                ...state,
+                itemLabel: item.label,
+                itemValue: item.value,
+              })}
+            >
+              {item.label}
+            </option>
+          ))}
+        </optgroup>
+      </select>
+      <span {...selectValueAttributes(state)}>{selectValueText(state)}</span>
+      {renderBehaviorContract({
+        changeReasons: 'trigger-change, programmatic',
+        dataState: 'open, closed, checked, unchecked, disabled',
+        keyboard: 'Native select keyboard behavior',
+      })}
+    </section>
+  );
+}
+
+export function SeparatorDemo(): string {
+  return (
+    <section data-gallery-demo="separator">
+      <p data-demo-summary="no-js">
+        Separator emits decorative and semantic separator variants with orientation data.
+      </p>
+      <hr {...separatorRootAttributes()} data-fixture-state="decorative" />
+      <div
+        {...separatorRootAttributes({ decorative: false, orientation: 'vertical' })}
+        data-fixture-state="semantic"
+      />
+      {renderBehaviorContract({
+        changeReasons: 'not stateful',
+        dataState: 'orientation only',
+        keyboard: 'No custom keyboard handling',
+      })}
+    </section>
+  );
+}
+
+export function SheetDemo(): string {
+  return (
+    <section data-gallery-demo="sheet">
+      <p data-demo-summary="no-js">
+        Sheet is a styled dialog wrapper that keeps native invoker commands and dialog content.
+      </p>
+      <div data-ui-demo="sheet">
+        {Sheet.definition.render({
+          children: 'Adjust notification and access settings.',
+          contentId: 'gallery-sheet',
+          description: 'Manage account preferences',
+          open: true,
+          side: 'right',
+          title: 'Account settings',
+          trigger: 'Open settings',
+        })}
+      </div>
+      {renderBehaviorContract({
+        changeReasons: 'trigger-click, close-click, cancel-event, native-beforetoggle',
+        dataState: 'open, closed, disabled',
+        keyboard: 'Escape closes the native dialog',
+      })}
+    </section>
+  );
+}
+
+export function SwitchDemo(): string {
+  const enabled = switchRootAttributes({
+    checked: true,
+    name: 'gallery-notifications',
+    value: 'enabled',
+  });
+  const disabled = switchRootAttributes({ checked: false, disabled: true });
+
+  return (
+    <section data-gallery-demo="switch">
+      <p data-demo-summary="no-js">Switch renders a native checkbox with switch semantics.</p>
+      <label>
+        <input {...enabled} data-fixture-state="checked" />
+        Notifications
+      </label>
+      <label>
+        <input {...disabled} data-fixture-state="disabled" />
+        Locked automation
+      </label>
+      {renderBehaviorContract({
+        changeReasons: 'trigger-click, programmatic',
+        dataState: 'checked, unchecked, disabled',
+        keyboard: 'Space toggles the native checkbox',
+      })}
+    </section>
+  );
+}
+
+export function TabsDemo(): string {
+  const items = [{ value: 'overview' }, { value: 'activity' }, { disabled: true, value: 'audit' }];
+  const state = {
+    activeValue: 'overview',
+    items,
+    orientation: 'horizontal' as const,
+    value: 'overview',
+  };
+
+  return (
+    <section {...tabsRootAttributes(state)} data-gallery-demo="tabs">
+      <p data-demo-summary="no-js">
+        Tabs expose tablist, tab, and tabpanel roles with roving focus data.
+      </p>
+      <div {...tabsListAttributes({ ...state, label: 'Gallery tabs' })}>
+        {items.map((item) => (
+          <button
+            {...tabsTriggerAttributes({
+              ...state,
+              id: `gallery-tabs-${item.value}`,
+              itemValue: item.value,
+              panelId: `gallery-tabs-${item.value}-panel`,
+            })}
+          >
+            {item.value}
+          </button>
+        ))}
+      </div>
+      {items.map((item) => (
+        <section
+          {...tabsPanelAttributes({
+            ...state,
+            id: `gallery-tabs-${item.value}-panel`,
+            itemValue: item.value,
+            triggerId: `gallery-tabs-${item.value}`,
+          })}
+        >
+          {item.value} content
+        </section>
+      ))}
+      {renderBehaviorContract({
+        changeReasons: 'trigger-click, keyboard, programmatic',
+        dataState: 'active, inactive, disabled',
+        keyboard: 'Arrow keys move focus; activation mode controls selection',
+      })}
+    </section>
+  );
+}
+
 export function ProgressDemo(): string {
   const loading = progressRootAttributes({
     max: 100,
@@ -163,6 +774,29 @@ export function ProgressDemo(): string {
         changeReasons: 'value comes from app state',
         dataState: 'loading, complete, indeterminate',
         keyboard: 'No custom keyboard handling',
+      })}
+    </section>
+  );
+}
+
+export function TooltipDemo(): string {
+  const state = {
+    contentId: 'gallery-tooltip-content',
+    open: true,
+  };
+
+  return (
+    <section {...tooltipRootAttributes(state)} data-gallery-demo="tooltip">
+      <p data-demo-summary="no-js">
+        Tooltip uses package-prefixed behavior attributes and a manual popover content node.
+      </p>
+      <button {...tooltipTriggerAttributes(state)}>Inspect status</button>
+      <div {...tooltipContentAttributes(state)}>Status updates every minute.</div>
+      {renderBehaviorContract({
+        changeReasons:
+          'trigger-pointer-enter, trigger-pointer-leave, trigger-focus, trigger-blur, escape-key, programmatic',
+        dataState: 'open, closed, disabled',
+        keyboard: 'Escape closes an open tooltip',
       })}
     </section>
   );

@@ -138,6 +138,9 @@ importers:
       '@jiso/server':
         specifier: workspace:*
         version: link:../../packages/server
+      '@jiso/ui':
+        specifier: workspace:*
+        version: link:../../packages/ui
     devDependencies:
       typescript:
         specifier: ^6.0.3

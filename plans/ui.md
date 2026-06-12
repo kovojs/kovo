@@ -559,6 +559,16 @@ jiso-dialog` resolves dashed wire names and prints provenance including package,
       `pnpm exec vp check examples/gallery/package.json examples/gallery/tsconfig.json examples/gallery/src/demo-fixtures.tsx examples/gallery/src/demo-fixtures.test.ts examples/gallery/src/index.ts plans/ui.md pnpm-lock.yaml`,
       and `git diff --check`. This is only a foundation slice; most component routes,
       G2 behavior gates, G3 axe checks, G4 visual checks, and G5 merge fixtures remain open.
+      Additional partial evidence 2026-06-12: `examples/gallery` now has browser-free
+      route fixtures for accordion, badge, button, card, checkbox, dialog, field, meter,
+      progress, radio-group, select, separator, sheet, switch, tabs, toggle, and tooltip.
+      The new fixtures import current `@jiso/headless-ui` primitive attribute builders and
+      current `@jiso/ui` styled component exports, render TSX-authored route HTML through
+      the server JSX runtime, and assert route uniqueness, nav coverage, no-JS summaries,
+      behavior-contract tables, native control attributes, ARIA/IDREF wiring, package-prefixed
+      tooltip behavior attributes, and styled wrapper output. Same-session evidence:
+      `pnpm --filter @jiso/example-gallery test`. G1 remains open for the many primitives
+      and styled components not yet represented as gallery routes, and G2/G3/G4/G5 remain open.
 - [ ] G2 behavior-contract gates: keyboard/ARIA assertions per primitive (browser-free via `page()` + `fw explain` where possible; framework browser suite for focus/dismiss/top-layer).
 - [ ] G3 axe checks per component state in the gallery.
 - [ ] G4 visual regression for `@jiso/ui`: shadcn-parity human review once, then self-baselined screenshots.

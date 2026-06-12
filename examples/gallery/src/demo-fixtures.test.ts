@@ -1,14 +1,39 @@
 import { describe, expect, it } from 'vitest';
 
-import { galleryFixtures, galleryRoutes } from './demo-fixtures.js';
+import {
+  galleryFixtures,
+  galleryRoutes,
+  renderGalleryRoute,
+  type GalleryRoute,
+} from './demo-fixtures.js';
+
+const expectedRoutes = [
+  '/components/accordion',
+  '/components/badge',
+  '/components/button',
+  '/components/card',
+  '/components/checkbox',
+  '/components/dialog',
+  '/components/field',
+  '/components/meter',
+  '/components/progress',
+  '/components/radio-group',
+  '/components/select',
+  '/components/separator',
+  '/components/sheet',
+  '/components/switch',
+  '/components/tabs',
+  '/components/toggle',
+  '/components/tooltip',
+] as const satisfies readonly GalleryRoute['path'][];
 
 describe('gallery demo fixtures', () => {
-  it('renders one route fixture for each foundation demo', () => {
-    expect(galleryRoutes.map((route) => route.path)).toEqual([
-      '/components/dialog',
-      '/components/toggle',
-      '/components/progress',
-    ]);
+  it('renders one route fixture for each covered demo component', () => {
+    expect(galleryRoutes.map((route) => route.path)).toEqual(expectedRoutes);
+    expect(new Set(galleryRoutes.map((route) => route.path)).size).toBe(galleryRoutes.length);
+    expect(galleryRoutes.map((route) => route.path)).toEqual(
+      galleryRoutes.map((route) => `/components/${route.component}`),
+    );
 
     expect(galleryFixtures()).toHaveLength(galleryRoutes.length);
   });
@@ -22,6 +47,44 @@ describe('gallery demo fixtures', () => {
     }
   });
 
+  it('renders route navigation links to every covered demo', () => {
+    const route = galleryRoutes[0];
+
+    if (!route) {
+      throw new Error('Expected at least one gallery route');
+    }
+
+    const html = renderGalleryRoute(route);
+    for (const path of expectedRoutes) {
+      expect(html).toContain(`href="${path}"`);
+    }
+    expect(html).toContain(`aria-current="page" href="${route.path}"`);
+  });
+
+  it('renders accordion fixture with item, trigger, and panel wiring', () => {
+    const accordion = findFixture('/components/accordion');
+
+    expect(accordion.html).toContain('data-orientation="vertical"');
+    expect(accordion.html).toContain('aria-expanded="true"');
+    expect(accordion.html).toContain('aria-controls="gallery-accordion-shipping-panel"');
+    expect(accordion.html).toContain('role="region"');
+    expect(accordion.html).toContain('aria-labelledby="gallery-accordion-shipping-trigger"');
+    expect(accordion.html).toContain('hidden id="gallery-accordion-billing-panel"');
+  });
+
+  it('renders checkbox fixture with native form states', () => {
+    const checkbox = findFixture('/components/checkbox');
+
+    expect(checkbox.html).toContain('type="checkbox"');
+    expect(checkbox.html).toContain('name="gallery-consent"');
+    expect(checkbox.html).toContain('required');
+    expect(checkbox.html).toContain('data-state="checked"');
+    expect(checkbox.html).toContain('aria-checked="mixed"');
+    expect(checkbox.html).toContain('data-state="indeterminate"');
+    expect(checkbox.html).toContain('data-fixture-state="disabled"');
+    expect(checkbox.html).toContain('disabled');
+  });
+
   it('renders dialog fixture with native invoker and IDREF wiring', () => {
     const dialog = findFixture('/components/dialog');
 
@@ -31,6 +94,32 @@ describe('gallery demo fixtures', () => {
     expect(dialog.html).toContain('aria-labelledby="gallery-dialog-title"');
     expect(dialog.html).toContain('aria-describedby="gallery-dialog-description"');
     expect(dialog.html).toContain('open');
+  });
+
+  it('renders field fixture with native label, message, and fieldset wiring', () => {
+    const field = findFixture('/components/field');
+
+    expect(field.html).toContain('for="gallery-field-email"');
+    expect(field.html).toContain('name="email"');
+    expect(field.html).toContain(
+      'aria-describedby="gallery-field-description gallery-field-error"',
+    );
+    expect(field.html).toContain('aria-invalid="true"');
+    expect(field.html).toContain('role="alert"');
+    expect(field.html).toContain('aria-describedby="gallery-fieldset-description"');
+    expect(field.html).toContain('id="gallery-fieldset"');
+  });
+
+  it('renders meter fixture with threshold data and native meter attributes', () => {
+    const meter = findFixture('/components/meter');
+
+    expect(meter.html).toContain('<meter');
+    expect(meter.html).toContain('data-low="50"');
+    expect(meter.html).toContain('data-high="90"');
+    expect(meter.html).toContain('data-optimum="80"');
+    expect(meter.html).toContain('data-state="optimum"');
+    expect(meter.html).toContain('data-state="suboptimum"');
+    expect(meter.html).toContain('aria-valuetext="84 percent quality score"');
   });
 
   it('renders toggle fixture states through headless-ui attributes', () => {
@@ -44,6 +133,68 @@ describe('gallery demo fixtures', () => {
     expect(toggle.html).toContain('disabled');
   });
 
+  it('renders radio-group fixture with native radio inputs and roving attributes', () => {
+    const radioGroup = findFixture('/components/radio-group');
+
+    expect(radioGroup.html).toContain('role="radiogroup"');
+    expect(radioGroup.html).toContain('aria-describedby="gallery-radio-description"');
+    expect(radioGroup.html).toContain('name="gallery-shipping-speed"');
+    expect(radioGroup.html).toContain('type="radio"');
+    expect(radioGroup.html).toContain('aria-checked="true"');
+    expect(radioGroup.html).toContain('tabIndex="0"');
+    expect(radioGroup.html).toContain('data-state="checked"');
+    expect(radioGroup.html).toContain('value="freight"');
+    expect(radioGroup.html).toContain('disabled tabIndex="-1"');
+  });
+
+  it('renders select fixture with native select and option states', () => {
+    const select = findFixture('/components/select');
+
+    expect(select.html).toContain('<select');
+    expect(select.html).toContain('id="gallery-select"');
+    expect(select.html).toContain('name="gallery-plan"');
+    expect(select.html).toContain('required');
+    expect(select.html).toContain('aria-labelledby="gallery-select-label"');
+    expect(select.html).toContain('value="growth"');
+    expect(select.html).toContain('selected');
+    expect(select.html).toContain('disabled');
+    expect(select.html).toContain('<span>Growth</span>');
+  });
+
+  it('renders separator fixture with decorative and semantic variants', () => {
+    const separator = findFixture('/components/separator');
+
+    expect(separator.html).toContain('data-fixture-state="decorative"');
+    expect(separator.html).toContain('role="none"');
+    expect(separator.html).toContain('data-fixture-state="semantic"');
+    expect(separator.html).toContain('role="separator"');
+    expect(separator.html).toContain('aria-orientation="vertical"');
+  });
+
+  it('renders switch fixture with native checkbox switch semantics', () => {
+    const switchFixture = findFixture('/components/switch');
+
+    expect(switchFixture.html).toContain('role="switch"');
+    expect(switchFixture.html).toContain('type="checkbox"');
+    expect(switchFixture.html).toContain('aria-checked="true"');
+    expect(switchFixture.html).toContain('name="gallery-notifications"');
+    expect(switchFixture.html).toContain('data-state="unchecked"');
+    expect(switchFixture.html).toContain('data-disabled');
+  });
+
+  it('renders tabs fixture with tablist, trigger, and panel wiring', () => {
+    const tabs = findFixture('/components/tabs');
+
+    expect(tabs.html).toContain('role="tablist"');
+    expect(tabs.html).toContain('aria-label="Gallery tabs"');
+    expect(tabs.html).toContain('role="tab"');
+    expect(tabs.html).toContain('aria-selected="true"');
+    expect(tabs.html).toContain('aria-controls="gallery-tabs-overview-panel"');
+    expect(tabs.html).toContain('role="tabpanel"');
+    expect(tabs.html).toContain('aria-labelledby="gallery-tabs-overview"');
+    expect(tabs.html).toContain('disabled role="tab" tabIndex="-1"');
+  });
+
   it('renders progress fixture states through native progress attributes', () => {
     const progress = findFixture('/components/progress');
 
@@ -52,6 +203,42 @@ describe('gallery demo fixtures', () => {
     expect(progress.html).toContain('aria-valuetext="42 of 100 tasks complete"');
     expect(progress.html).toContain('data-state="complete"');
     expect(progress.html).toContain('data-state="indeterminate"');
+  });
+
+  it('renders tooltip fixture with package-prefixed behavior and popover content', () => {
+    const tooltip = findFixture('/components/tooltip');
+
+    expect(tooltip.html).toContain('jiso-tooltip="gallery-tooltip-content"');
+    expect(tooltip.html).toContain('aria-describedby="gallery-tooltip-content"');
+    expect(tooltip.html).toContain('id="gallery-tooltip-content"');
+    expect(tooltip.html).toContain('popover="manual"');
+    expect(tooltip.html).toContain('role="tooltip"');
+  });
+
+  it('renders @jiso/ui styled component fixtures from current package exports', () => {
+    const button = findFixture('/components/button');
+    const badge = findFixture('/components/badge');
+    const card = findFixture('/components/card');
+    const sheet = findFixture('/components/sheet');
+
+    expect(button.html).toContain('data-ui-demo="button"');
+    expect(button.html).toContain('rounded-md border text-sm font-medium');
+    expect(button.html).toContain('type="button"');
+    expect(button.html).toContain('disabled type="button"');
+
+    expect(badge.html).toContain('data-ui-demo="badge"');
+    expect(badge.html).toContain('bg-emerald-50');
+    expect(badge.html).toContain('bg-amber-50');
+
+    expect(card.html).toContain('data-ui-demo="card"');
+    expect(card.html).toContain('rounded-lg border border-neutral-200');
+    expect(card.html).toContain('<h2>Release candidate</h2>');
+
+    expect(sheet.html).toContain('data-ui-demo="sheet"');
+    expect(sheet.html).toContain('command="show-modal" commandfor="gallery-sheet"');
+    expect(sheet.html).toContain('<dialog aria-describedby="gallery-sheet-description"');
+    expect(sheet.html).toContain('id="gallery-sheet" open>');
+    expect(sheet.html).toContain('command="request-close" commandfor="gallery-sheet"');
   });
 });
 
