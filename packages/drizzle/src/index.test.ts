@@ -3965,7 +3965,15 @@ export interface CommerceInvalidationSets {
 
     expect(graph).toEqual({
       reconcile: {
-        reads: [],
+        reads: [
+          {
+            domain: 'cart',
+            keys: null,
+            site: 'cart.domain.ts:20',
+            source: 'relational-query',
+            via: 'cart_items',
+          },
+        ],
         touches: [],
         unresolved: [
           {
@@ -3982,11 +3990,6 @@ export interface CommerceInvalidationSets {
             code: 'FW406',
             message: 'Statically un-analyzable write site; manual touches required.',
             site: 'cart.domain.ts:18',
-          },
-          {
-            code: 'FW406',
-            message: 'Statically un-analyzable write site; manual touches required.',
-            site: 'cart.domain.ts:20',
           },
         ],
       },
@@ -4828,7 +4831,15 @@ export interface CommerceInvalidationSets {
 
     expect(graph).toEqual({
       loadUsers: {
-        reads: [],
+        reads: [
+          {
+            domain: 'user',
+            keys: null,
+            site: 'cart.domain.ts:6',
+            source: 'relational-query',
+            via: 'users',
+          },
+        ],
         touches: [],
         unresolved: [
           {
@@ -4836,17 +4847,12 @@ export interface CommerceInvalidationSets {
             message: 'Statically un-analyzable write site; manual touches required.',
             site: 'cart.domain.ts:5',
           },
-          {
-            code: 'FW406',
-            message: 'Statically un-analyzable write site; manual touches required.',
-            site: 'cart.domain.ts:6',
-          },
         ],
       },
     });
   });
 
-  it('marks relational query API calls on Drizzle receivers as FW406', () => {
+  it('extracts relational query API calls on Drizzle receivers as reads', () => {
     const graph = extractTouchGraphFromSource([
       {
         fileName: 'cart.domain.ts',
@@ -4862,13 +4868,42 @@ export interface CommerceInvalidationSets {
 
     expect(graph).toEqual({
       loadUsers: {
+        reads: [
+          {
+            domain: 'user',
+            keys: null,
+            site: 'cart.domain.ts:5',
+            source: 'relational-query',
+            via: 'users',
+          },
+        ],
+        touches: [],
+        unresolved: [],
+      },
+    });
+  });
+
+  it('marks unresolved relational query API table names as FW406', () => {
+    const graph = extractTouchGraphFromSource([
+      {
+        fileName: 'cart.domain.ts',
+        source: `
+          export async function loadUsers(db, tableName) {
+            return db.query[tableName].findMany();
+          }
+        `,
+      },
+    ]);
+
+    expect(graph).toEqual({
+      loadUsers: {
         reads: [],
         touches: [],
         unresolved: [
           {
             code: 'FW406',
             message: 'Statically un-analyzable write site; manual touches required.',
-            site: 'cart.domain.ts:5',
+            site: 'cart.domain.ts:3',
           },
         ],
       },

@@ -349,6 +349,10 @@ function projectFunctionExtractionsByFileName(
       sourceFile,
       extraction.tableNamesBySymbol,
     );
+    const tableNamesByIdentifier = projectTableNamesByIdentifierText(
+      sourceFile,
+      extraction.tableNamesBySymbol,
+    );
 
     for (const fn of sourceFile.getFunctions()) {
       const name = fn.getName();
@@ -357,6 +361,7 @@ function projectFunctionExtractionsByFileName(
 
       const receivers = projectDrizzleReceivers(fn);
       extractionsByFunction.set(name, {
+        readCalls: extractProjectRelationalReadCalls(body, file, receivers, tableNamesByIdentifier),
         unresolvedCalls: [],
         receiverNames: [...receivers.names],
         writeCalls: extractProjectDrizzleWriteCalls(
@@ -378,6 +383,7 @@ function projectFunctionExtractionsByFileName(
       const body = initializer.getBody();
       const receivers = projectDrizzleReceivers(initializer);
       extractionsByFunction.set(name.getText(), {
+        readCalls: extractProjectRelationalReadCalls(body, file, receivers, tableNamesByIdentifier),
         unresolvedCalls: [],
         receiverNames: [...receivers.names],
         writeCalls: extractProjectDrizzleWriteCalls(
@@ -393,6 +399,12 @@ function projectFunctionExtractionsByFileName(
     for (const [name, callback] of projectDomainWriteCallbacks(sourceFile)) {
       const receivers = projectDrizzleReceivers(callback.fn);
       extractionsByFunction.set(name, {
+        readCalls: extractProjectRelationalReadCalls(
+          callback.body,
+          file,
+          receivers,
+          tableNamesByIdentifier,
+        ),
         unresolvedCalls: [],
         receiverNames: [...receivers.names],
         writeCalls: extractProjectDrizzleWriteCalls(
@@ -447,6 +459,7 @@ function projectFunctionExtractionsByFileName(
 }
 
 interface ProjectFunctionExtraction {
+  readCalls: readonly ExtractedReadCall[];
   unresolvedCalls: readonly ExternalDbArgumentCall[];
   receiverNames: readonly string[];
   writeCalls: readonly ExtractedWriteCall[];
@@ -605,6 +618,31 @@ function extractProjectDrizzleWriteCalls(
   return calls;
 }
 
+function extractProjectRelationalReadCalls(
+  body: Node,
+  file: SourceFileInput,
+  receivers: ProjectDrizzleReceivers,
+  tableNamesByIdentifier: ReadonlyMap<string, string>,
+): ExtractedReadCall[] {
+  const bodyStart = bodySourceStart(body);
+  const calls: ExtractedReadCall[] = [];
+
+  for (const call of callExpressionsInNode(body)) {
+    const read = relationalReadCall(call);
+    if (!read || !isProjectDrizzleReceiverIdentifier(read.receiver, receivers)) continue;
+
+    calls.push({
+      index: Math.max(0, call.getStart() - bodyStart),
+      operation: 'relational-query',
+      site: `${file.fileName}:${lineForIndex(file.source, call.getStart())}`,
+      tableExpression:
+        tableNamesByIdentifier.get(read.tableExpression) ?? UNRESOLVED_READ_SOURCE_EXPRESSION,
+    });
+  }
+
+  return calls;
+}
+
 function extractProjectUnresolvedCalls(
   body: Node,
   receivers: ProjectDrizzleReceivers,
@@ -667,20 +705,35 @@ function projectUnclassifiedCallSurface(
   name: string,
 ): { name: string; receiver: Node } | undefined {
   if (name === 'findMany' || name === 'findFirst') {
-    const tableAccess = staticAccessExpression(expression);
-    if (tableAccess && staticAccessName(tableAccess)) {
-      const queryAccess = staticAccessExpression(tableAccess);
-      if (queryAccess && staticAccessName(queryAccess) === 'query') {
-        const receiver = staticAccessExpression(queryAccess);
-        if (receiver) return { name: `query.${name}`, receiver };
-      }
-    }
+    return undefined;
   }
 
   if (!isUnclassifiedDirectDrizzleReceiverMethod(name)) return undefined;
 
   const receiver = staticAccessExpression(expression);
   return receiver ? { name, receiver } : undefined;
+}
+
+function relationalReadCall(
+  call: CallExpression,
+): { receiver: Node; tableExpression: string } | undefined {
+  const expression = call.getExpression();
+  const method = staticAccessName(expression);
+  if (method !== 'findMany' && method !== 'findFirst') return undefined;
+
+  const tableAccess = staticAccessExpression(expression);
+  if (!tableAccess) return undefined;
+
+  const queryAccess = staticAccessExpression(tableAccess);
+  if (!queryAccess || staticAccessName(queryAccess) !== 'query') return undefined;
+
+  const receiver = staticAccessExpression(queryAccess);
+  if (!receiver) return undefined;
+
+  return {
+    receiver,
+    tableExpression: staticAccessName(tableAccess) ?? UNRESOLVED_READ_SOURCE_EXPRESSION,
+  };
 }
 
 function bodySourceStart(body: Node): number {
@@ -1198,6 +1251,7 @@ interface ExtractedFunction {
   bodyStart: number;
   localCalls: readonly string[];
   name: string;
+  readCalls: readonly ExtractedReadCall[];
   receiverNames: readonly string[];
   unresolvedCalls: readonly ExternalDbArgumentCall[];
   writeCalls: readonly ExtractedWriteCall[];
@@ -1205,7 +1259,7 @@ interface ExtractedFunction {
 
 type ParsedExtractedFunction = Omit<
   ExtractedFunction,
-  'localCalls' | 'unresolvedCalls' | 'writeCalls'
+  'localCalls' | 'readCalls' | 'unresolvedCalls' | 'writeCalls'
 > & {
   bodyNode: Node;
   callback: Node;
@@ -1247,6 +1301,13 @@ interface ExtractedWriteCall {
 
 interface ExtractedReadSource {
   operation: 'insert-select' | 'update-from';
+  tableExpression: string;
+}
+
+interface ExtractedReadCall {
+  index: number;
+  operation: 'relational-query';
+  site?: string;
   tableExpression: string;
 }
 
@@ -2165,6 +2226,30 @@ function directSummaryForFunction(
   const writes: WriteSummaryInput[] = [];
   const unresolved: UnresolvedSummaryInput[] = [];
 
+  // SPEC §11.1: visible Drizzle read surfaces belong in the touch graph, not FW406.
+  for (const call of fn.readCalls) {
+    const site =
+      call.site ?? `${file.fileName}:${lineForIndex(file.source, fn.bodyStart + call.index)}`;
+    const resolvedTables = tables.get(call.tableExpression) ?? [];
+
+    if (resolvedTables.length > 0) {
+      for (const table of resolvedTables) {
+        if (isExemptTableAnnotation(table.annotation)) continue;
+        reads.push({
+          operation: call.operation,
+          site,
+          table: table.annotation,
+        });
+      }
+      continue;
+    }
+
+    unresolved.push({
+      operation: call.operation,
+      site,
+    });
+  }
+
   for (const call of fn.writeCalls) {
     const site =
       call.site ?? `${file.fileName}:${lineForIndex(file.source, fn.bodyStart + call.index)}`;
@@ -2962,6 +3047,7 @@ function extractFunctions(file: SourceFileInput): ExtractedFunction[] {
       return {
         ...extracted,
         localCalls: extractLocalFunctionCallsFromBody(bodyNode),
+        readCalls: extractRelationalReadCallsFromBody(bodyNode, receiverNames),
         receiverNames: [...receiverNames],
         unresolvedCalls: [
           ...extractExternalDbArgumentCallsFromBody(bodyNode, receiverNames, localFunctionNames),
@@ -3192,33 +3278,28 @@ function extractUnclassifiedDrizzleReceiverCallsFromBody(
   body: Node,
   receiverNames: ReadonlySet<string>,
 ): ExternalDbArgumentCall[] {
-  return [
-    ...extractReceiverMutationCallsFromBody(body, receiverNames),
-    ...extractRelationalQueryCallsFromBody(body, receiverNames),
-  ];
+  return extractReceiverMutationCallsFromBody(body, receiverNames);
 }
 
-function extractRelationalQueryCallsFromBody(
+function extractRelationalReadCallsFromBody(
   body: Node,
   receiverNames: ReadonlySet<string>,
   bodyOffset = bodySourceStart(body),
-): ExternalDbArgumentCall[] {
-  const calls: ExternalDbArgumentCall[] = [];
+): ExtractedReadCall[] {
+  const calls: ExtractedReadCall[] = [];
 
   for (const call of callExpressionsInNode(body)) {
-    const expression = call.getExpression();
-    const method = staticAccessName(expression);
-    if (method !== 'findMany' && method !== 'findFirst') continue;
-
-    const tableAccess = staticAccessExpression(expression);
-    if (!tableAccess || !staticAccessName(tableAccess)) continue;
-    const queryAccess = staticAccessExpression(tableAccess);
-    if (!queryAccess || staticAccessName(queryAccess) !== 'query') continue;
-    const receiver = staticAccessExpression(queryAccess);
-    if (!isSourceDrizzleReceiverIdentifier(receiver, receiverNames)) continue;
+    const read = relationalReadCall(call);
+    if (!read || !isSourceDrizzleReceiverIdentifier(read.receiver, receiverNames)) continue;
 
     const index = call.getStart() - bodyOffset;
-    if (index >= 0) calls.push({ index, name: `query.${method}` });
+    if (index >= 0) {
+      calls.push({
+        index,
+        operation: 'relational-query',
+        tableExpression: read.tableExpression,
+      });
+    }
   }
 
   return calls;

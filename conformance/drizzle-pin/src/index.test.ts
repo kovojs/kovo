@@ -846,6 +846,76 @@ describe('Drizzle pinned subset conformance', () => {
     });
   });
 
+  it('pins project relational query API calls as static read surfaces', () => {
+    const graph = extractTouchGraphFromProject({
+      files: [
+        {
+          fileName: 'conformance/drizzle-pin/src/users.domain.ts',
+          source: `
+            import type { PgDatabase } from 'drizzle-orm/pg-core';
+            import { boolean, pgTable, text } from 'drizzle-orm/pg-core';
+
+            export const users = pgTable('users', {
+              active: boolean('active').notNull(),
+              id: text('id').primaryKey(),
+            }, jiso({ domain: 'user', key: 'id' }));
+
+            export async function loadActiveUsers(db: PgDatabase<any, any, any>) {
+              return db.query.users.findMany({ where: eq(users.active, true) });
+            }
+          `,
+        },
+      ],
+    });
+
+    expect(graph).toEqual({
+      loadActiveUsers: {
+        reads: [
+          {
+            domain: 'user',
+            keys: null,
+            site: 'conformance/drizzle-pin/src/users.domain.ts:11',
+            source: 'relational-query',
+            via: 'users',
+          },
+        ],
+        touches: [],
+        unresolved: [],
+      },
+    });
+  });
+
+  it('pins unresolved project relational query table names as FW406', () => {
+    const graph = extractTouchGraphFromProject({
+      files: [
+        {
+          fileName: 'conformance/drizzle-pin/src/users.domain.ts',
+          source: `
+            import type { PgDatabase } from 'drizzle-orm/pg-core';
+
+            export async function loadActiveUsers(db: PgDatabase<any, any, any>, tableName: string) {
+              return db.query[tableName].findMany();
+            }
+          `,
+        },
+      ],
+    });
+
+    expect(graph).toEqual({
+      loadActiveUsers: {
+        reads: [],
+        touches: [],
+        unresolved: [
+          {
+            code: 'FW406',
+            message: 'Statically un-analyzable write site; manual touches required.',
+            site: 'conformance/drizzle-pin/src/users.domain.ts:5',
+          },
+        ],
+      },
+    });
+  });
+
   it('pins project query facts for the real Drizzle Postgres subset', () => {
     expect(sql<number>`count(*)`).toBeDefined();
 

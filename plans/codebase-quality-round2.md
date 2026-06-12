@@ -1492,6 +1492,16 @@ must be "FW406 unresolved," never "silently wrong."
       `pnpm exec vitest --run conformance/drizzle-pin/src/index.test.ts`,
       `pnpm exec vp check packages/drizzle/src/index.ts packages/drizzle/src/index.test.ts plans/codebase-quality-round2.md`,
       and `git diff --check`.
+      Additional evidence 2026-06-12: touch-graph extraction now records
+      `db.query.<table>.findMany/findFirst(...)` as static `relational-query` read facts when
+      the relational table property resolves to an annotated table, while computed relational
+      table names remain visible as FW406 under SPEC §10-§11. Same-session evidence:
+      `pnpm exec vitest --run packages/drizzle/src/index.test.ts -t "relational query API|static element-access raw and relational"`,
+      `pnpm exec vitest --run conformance/drizzle-pin/src/index.test.ts -t "relational query API|unresolved project relational"`,
+      `pnpm exec vitest --run packages/drizzle/src`,
+      `pnpm exec vitest --run conformance/drizzle-pin/src/index.test.ts`,
+      `pnpm exec vp check packages/drizzle/src/static.ts packages/drizzle/src/index.test.ts conformance/drizzle-pin/src/index.test.ts plans/codebase-quality-round2.md`,
+      and `git diff --check`.
       Additional evidence 2026-06-12: source-mode query read-domain, relational-diagnostic,
       join-nullability, and instance-key extraction now carries ts-morph query object facts
       through `ExtractedQueryDefinition` instead of serializing the query object and reparsing it
