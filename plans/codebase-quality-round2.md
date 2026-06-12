@@ -379,11 +379,13 @@ pipeline throws the tree away and communicates via mutated source text.
       fragment-target graph facts no longer reparse lowered source with fake `component.tsx`
       coordinates. Same-session evidence: `pnpm exec vitest --run packages/compiler/src/index.test.ts`
       and `pnpm exec vp check packages/compiler/src/index.ts packages/compiler/src/graph.ts`.
-      Partial evidence 2026-06-11: `lowerNavigationSugar` now parses the input once for the
-      `<Link>` lowering pass, then parses the post-link source once and applies both static
-      `href()` calls and JSX `href={...}` normalizations through one descending replacement pass.
-      Same-session evidence: `pnpm exec vitest --run packages/compiler/src/index.test.ts` and
-      `pnpm exec vp check packages/compiler/src/lower/navigation.ts`.
+      Partial evidence 2026-06-11: `lowerNavigationSugar` now consumes the current
+      `ComponentModuleModel` from `compileComponentModule` for the `<Link>` lowering pass instead
+      of hiding its own initial parse, then parses the post-link source with the author file name
+      and applies both static `href()` calls and JSX `href={...}` normalizations through one
+      descending replacement pass. Same-session evidence:
+      `pnpm exec vitest --run packages/compiler/src/index.test.ts` and
+      `pnpm exec vp check packages/compiler/src/index.ts packages/compiler/src/lower/navigation.ts`.
       Partial evidence 2026-06-11: `serverRenderSource` now parses once after handler lowering
       and stamps component identity, declared query deps, and initial state onto the render host
       through one in-memory tag update instead of reparsing for each stamp. Same-session

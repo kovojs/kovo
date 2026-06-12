@@ -1,17 +1,21 @@
 import {
   callExpressions,
   jsxElements,
-  parseComponentModule,
+  parseComponentModule as parseComponentModuleModel,
   type ComponentModuleModel,
   type JsxElementModel,
 } from '../scan/parse.js';
 import { literalStringValue, parseLiteralObject, type StaticLiteralValue } from '../scan/object.js';
 import { escapeAttribute } from '../shared.js';
 
-export function lowerNavigationSugar(source: string): { source: string } {
-  const model = parseComponentModule('component.tsx', source);
+export function lowerNavigationSugar(
+  source: string,
+  model: ComponentModuleModel,
+  fileName: string,
+): { source: string } {
   const linksLowered = lowerStaticLinks(source, model);
-  const linksLoweredModel = parseComponentModule('component.tsx', linksLowered);
+  const linksLoweredModel =
+    linksLowered === source ? model : parseComponentModuleModel(fileName, linksLowered);
 
   return {
     source: lowerStaticHrefCallsAndAttributes(linksLowered, linksLoweredModel),

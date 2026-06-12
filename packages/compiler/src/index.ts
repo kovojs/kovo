@@ -198,7 +198,15 @@ export function compileComponentModule(options: CompileComponentOptions): Compil
     viewTransitionLowering.source,
     viewTransitionModel,
   );
-  const navigationLowering = lowerNavigationSugar(platformLowering.source);
+  const platformModel =
+    platformLowering.source === viewTransitionLowering.source
+      ? viewTransitionModel
+      : parseComponentModuleModel(options.fileName, platformLowering.source);
+  const navigationLowering = lowerNavigationSugar(
+    platformLowering.source,
+    platformModel,
+    options.fileName,
+  );
   const deriveLowering = lowerInlineAttributeDerives(
     navigationLowering.source,
     componentName,
