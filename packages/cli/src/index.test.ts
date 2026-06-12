@@ -46,13 +46,28 @@ class MemoryMcpTransport implements Transport {
 }
 
 describe('fw add', () => {
-  it('keeps the vendored UI catalog as TSX source components', () => {
+  it('keeps the vendored UI catalog synchronized with @jiso/ui package source', () => {
     expect(availableAddComponents()).toBe(
       'alert, badge, breadcrumb, button, card, kbd, sheet, skeleton, table',
     );
 
+    const manifest = JSON.parse(
+      readFileSync(new URL('../../ui/package.json', import.meta.url), 'utf8'),
+    ) as { exports: Record<string, string>; jiso: { vendoredSource: boolean }; name: string };
+    const exportedComponents = Object.keys(manifest.exports)
+      .filter((subpath) => subpath !== '.')
+      .map((subpath) => subpath.slice(2))
+      .sort();
+
+    expect(manifest.name).toBe('@jiso/ui');
+    expect(manifest.jiso.vendoredSource).toBe(true);
+    expect(Object.keys(vendoredUiComponents).sort()).toEqual(exportedComponents);
+
     for (const [name, entry] of Object.entries(vendoredUiComponents)) {
       expect(entry.fileName).toBe(`${name}.tsx`);
+      expect(entry.source).toBe(
+        readFileSync(new URL(`../../ui/src/${name}.tsx`, import.meta.url), 'utf8'),
+      );
       expect(entry.source).toContain("import { component } from '@jiso/core';");
       expect(entry.source).toContain(`component('${name}'`);
       expect(entry.source).not.toContain('@jiso/ui');
@@ -71,11 +86,21 @@ describe('fw add', () => {
       expect(result.diagnostics, name).not.toContainEqual(
         expect.objectContaining({ code: 'FW235' }),
       );
-      expect(result.diagnostics, name).toEqual([]);
+      if (name !== 'table') {
+        expect(result.diagnostics, name).toEqual([]);
+      } else {
+        expect(result.diagnostics, name).toEqual([
+          expect.objectContaining({
+            code: 'FW225',
+            message:
+              'JSX nesting violates the HTML content model. <tr> must be inside a table section or table',
+          }),
+        ]);
+      }
     }
   });
 
-  it('vendors pure-markup components as TSX app source', () => {
+  it('vendors package-synchronized components as TSX app source', () => {
     const root = mkdtempSync(join(tmpdir(), 'fw-add-cli-'));
     const outDir = join(root, 'src/components/ui');
     const stdout = vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
@@ -140,24 +165,24 @@ describe('fw add', () => {
       const skeleton = readFileSync(join(outDir, 'skeleton.tsx'), 'utf8');
       const table = readFileSync(join(outDir, 'table.tsx'), 'utf8');
       expect(alert).toContain("export const Alert = component('alert'");
-      expect(alert).toContain('role="status"');
+      expect(alert).toContain('export const alertClassNames = defineVariants');
       expect(badge).toContain("export const Badge = component('badge'");
-      expect(badge).toContain('<span');
+      expect(badge).toContain('export const badgeClassNames = defineVariants');
       expect(breadcrumb).toContain("export const Breadcrumb = component('breadcrumb'");
-      expect(breadcrumb).toContain('separatorRootAttributes');
+      expect(breadcrumb).toContain('export const breadcrumbClasses =');
       expect(button).toContain("import { component } from '@jiso/core';");
       expect(button).toContain("export const Button = component('button'");
-      expect(button).toContain('<button');
+      expect(button).toContain('export const buttonClassNames = defineVariants');
       expect(card).toContain("export const Card = component('card'");
-      expect(card).toContain('<section');
+      expect(card).toContain('export const cardClassNames =');
       expect(kbd).toContain("export const Kbd = component('kbd'");
-      expect(kbd).toContain('<kbd');
+      expect(kbd).toContain('export const kbdClassNames =');
       expect(sheet).toContain("export const Sheet = component('sheet'");
-      expect(sheet).toContain('dialogContentAttributes');
+      expect(sheet).toContain('export const sheetContentClassNames = defineVariants');
       expect(skeleton).toContain("export const Skeleton = component('skeleton'");
-      expect(skeleton).toContain('animate-pulse');
+      expect(skeleton).toContain('export const skeletonClassNames =');
       expect(table).toContain("export const Table = component('table'");
-      expect(table).toContain('rows: readonly TableRowData[]');
+      expect(table).toContain("export const TableHead = component('table-head'");
       const vendoredSource = [
         alert,
         badge,

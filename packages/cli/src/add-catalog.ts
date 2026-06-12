@@ -1,362 +1,33 @@
+import { readFileSync, realpathSync } from 'node:fs';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
+
 export interface VendoredUiComponent {
   fileName: `${string}.tsx`;
   source: string;
 }
 
-export const vendoredUiComponents = {
-  alert: {
-    fileName: 'alert.tsx',
-    source: [
-      "import { component } from '@jiso/core';",
-      '',
-      'export interface AlertProps {',
-      '  children?: string;',
-      '}',
-      '',
-      "export const Alert = component('alert', {",
-      '  render(props: AlertProps) {',
-      '    return (',
-      '      <div class="rounded-lg border border-neutral-200 bg-white px-4 py-3 text-sm text-neutral-950 shadow-sm" role="status">',
-      '        {props.children}',
-      '      </div>',
-      '    );',
-      '  },',
-      '});',
-      '',
-    ].join('\n'),
-  },
-  badge: {
-    fileName: 'badge.tsx',
-    source: [
-      "import { component } from '@jiso/core';",
-      '',
-      'export interface BadgeProps {',
-      '  children?: string;',
-      '}',
-      '',
-      "export const Badge = component('badge', {",
-      '  render(props: BadgeProps) {',
-      '    return (',
-      '      <span class="inline-flex items-center rounded-md border border-neutral-200 bg-neutral-100 px-2 py-0.5 text-xs font-medium text-neutral-900">',
-      '        {props.children}',
-      '      </span>',
-      '    );',
-      '  },',
-      '});',
-      '',
-    ].join('\n'),
-  },
-  breadcrumb: {
-    fileName: 'breadcrumb.tsx',
-    source: [
-      '/** @jsxImportSource @jiso/server */',
-      "import { component } from '@jiso/core';",
-      "import { cn, separatorRootAttributes, type ClassValue } from '@jiso/headless-ui';",
-      '',
-      'export interface BreadcrumbProps {',
-      '  children?: string;',
-      '  class?: ClassValue;',
-      '  label?: string;',
-      '}',
-      '',
-      'export interface BreadcrumbPartProps {',
-      '  children?: string;',
-      '  class?: ClassValue;',
-      '}',
-      '',
-      'export interface BreadcrumbLinkProps extends BreadcrumbPartProps {',
-      '  current?: boolean;',
-      '  href?: string;',
-      '}',
-      '',
-      "export const Breadcrumb = component('breadcrumb', {",
-      '  render(props: BreadcrumbProps) {',
-      '    return (',
-      "      <nav aria-label={props.label ?? 'Breadcrumb'} class={cn('flex flex-wrap items-center gap-1.5 text-sm text-neutral-500', props.class)}>",
-      '        <ol class="flex flex-wrap items-center gap-1.5">{props.children}</ol>',
-      '      </nav>',
-      '    );',
-      '  },',
-      '});',
-      '',
-      "export const BreadcrumbItem = component('breadcrumb-item', {",
-      '  render(props: BreadcrumbPartProps) {',
-      "    return <li class={cn('inline-flex items-center gap-1.5', props.class)}>{props.children}</li>;",
-      '  },',
-      '});',
-      '',
-      "export const BreadcrumbLink = component('breadcrumb-link', {",
-      '  render(props: BreadcrumbLinkProps) {',
-      '    const current = props.current === true;',
-      '    return (',
-      '      <a',
-      "        aria-current={current ? 'page' : undefined}",
-      "        class={cn(current ? 'font-medium text-neutral-950' : 'font-medium text-neutral-600 transition-colors hover:text-neutral-950', props.class)}",
-      '        href={current ? undefined : props.href}',
-      '      >',
-      '        {props.children}',
-      '      </a>',
-      '    );',
-      '  },',
-      '});',
-      '',
-      "export const BreadcrumbSeparator = component('breadcrumb-separator', {",
-      '  render(props: BreadcrumbPartProps) {',
-      '    const attrs = separatorRootAttributes();',
-      '    return (',
-      '      <li',
-      '        aria-hidden="true"',
-      "        class={cn('text-neutral-400', props.class)}",
-      "        data-orientation={attrs['data-orientation']}",
-      '        role={attrs.role}',
-      '      >',
-      "        {props.children ?? '/'}",
-      '      </li>',
-      '    );',
-      '  },',
-      '});',
-      '',
-    ].join('\n'),
-  },
-  button: {
-    fileName: 'button.tsx',
-    source: [
-      "import { component } from '@jiso/core';",
-      '',
-      'export interface ButtonProps {',
-      '  children?: string;',
-      "  type?: 'button' | 'submit' | 'reset';",
-      '  disabled?: boolean;',
-      '}',
-      '',
-      "export const Button = component('button', {",
-      '  render(props: ButtonProps) {',
-      '    const type = props.type ?? "button";',
-      '    return (',
-      '      <button',
-      '        class="inline-flex h-9 items-center justify-center rounded-md border border-neutral-300 bg-white px-3 text-sm font-medium text-neutral-950 shadow-sm transition-colors hover:bg-neutral-50 disabled:pointer-events-none disabled:opacity-50"',
-      '        disabled={props.disabled}',
-      '        type={type}',
-      '      >',
-      '        {props.children}',
-      '      </button>',
-      '    );',
-      '  },',
-      '});',
-      '',
-    ].join('\n'),
-  },
-  card: {
-    fileName: 'card.tsx',
-    source: [
-      "import { component } from '@jiso/core';",
-      '',
-      'export interface CardProps {',
-      '  children?: string;',
-      '}',
-      '',
-      "export const Card = component('card', {",
-      '  render(props: CardProps) {',
-      '    return (',
-      '      <section class="rounded-lg border border-neutral-200 bg-white p-4 shadow-sm">',
-      '        {props.children}',
-      '      </section>',
-      '    );',
-      '  },',
-      '});',
-      '',
-    ].join('\n'),
-  },
-  kbd: {
-    fileName: 'kbd.tsx',
-    source: [
-      "import { component } from '@jiso/core';",
-      '',
-      'export interface KbdProps {',
-      '  children?: string;',
-      '}',
-      '',
-      "export const Kbd = component('kbd', {",
-      '  render(props: KbdProps) {',
-      '    return (',
-      '      <kbd class="inline-flex min-h-5 items-center rounded border border-neutral-300 bg-neutral-50 px-1.5 font-mono text-[0.75rem] font-medium text-neutral-900 shadow-sm">',
-      '        {props.children}',
-      '      </kbd>',
-      '    );',
-      '  },',
-      '});',
-      '',
-    ].join('\n'),
-  },
-  sheet: {
-    fileName: 'sheet.tsx',
-    source: [
-      '/** @jsxImportSource @jiso/server */',
-      "import { component } from '@jiso/core';",
-      'import {',
-      '  cn,',
-      '  dialogCloseAttributes,',
-      '  dialogContentAttributes,',
-      '  dialogRootAttributes,',
-      '  dialogTriggerAttributes,',
-      '  type ClassValue,',
-      "} from '@jiso/headless-ui';",
-      '',
-      "export type SheetSide = 'left' | 'right';",
-      '',
-      'export interface SheetProps {',
-      '  children?: string;',
-      '  class?: ClassValue;',
-      '  closeLabel?: string;',
-      '  contentClass?: ClassValue;',
-      '  contentId: string;',
-      '  description?: string;',
-      '  disabled?: boolean;',
-      '  open?: boolean;',
-      '  side?: SheetSide;',
-      '  title: string;',
-      '  trigger?: string;',
-      '  triggerClass?: ClassValue;',
-      '}',
-      '',
-      'const sheetBaseClassNames =',
-      "  'fixed inset-y-0 z-50 flex w-full max-w-sm flex-col gap-4 border-neutral-200 bg-white p-6 text-neutral-950 shadow-xl';",
-      '',
-      "export const Sheet = component('sheet', {",
-      '  render(props: SheetProps) {',
-      '    const open = props.open === true;',
-      "    const side = props.side ?? 'right';",
-      '    const titleId = `${props.contentId}-title`;',
-      '    const descriptionId = props.description === undefined ? undefined : `${props.contentId}-description`;',
-      '    const disabledState = props.disabled === undefined ? {} : { disabled: props.disabled };',
-      '    const rootAttrs = dialogRootAttributes({ ...disabledState, open });',
-      '    const triggerAttrs = dialogTriggerAttributes({ ...disabledState, contentId: props.contentId, open });',
-      '    const contentAttrs = dialogContentAttributes({',
-      '      ...(descriptionId === undefined ? {} : { descriptionId }),',
-      '      contentId: props.contentId,',
-      '      open,',
-      '      titleId,',
-      '    });',
-      '    const closeAttrs = dialogCloseAttributes({ ...disabledState, contentId: props.contentId, open });',
-      "    const sideClassNames = side === 'left' ? 'left-0 border-r' : 'right-0 border-l';",
-      '',
-      '    return (',
-      "      <div class={cn('contents', props.class)} data-disabled={rootAttrs['data-disabled']} data-state={rootAttrs['data-state']}>",
-      '        <button',
-      "          aria-controls={triggerAttrs['aria-controls']}",
-      "          aria-expanded={triggerAttrs['aria-expanded']}",
-      "          aria-haspopup={triggerAttrs['aria-haspopup']}",
-      "          class={cn('inline-flex h-9 items-center justify-center rounded-md border border-neutral-300 bg-white px-3 text-sm font-medium text-neutral-950 shadow-sm transition-colors hover:bg-neutral-50 disabled:pointer-events-none disabled:opacity-50', props.triggerClass)}",
-      '          command={triggerAttrs.command}',
-      '          commandfor={triggerAttrs.commandfor}',
-      "          data-disabled={triggerAttrs['data-disabled']}",
-      "          data-state={triggerAttrs['data-state']}",
-      '          disabled={triggerAttrs.disabled}',
-      '          type={triggerAttrs.type}',
-      '        >',
-      "          {props.trigger ?? 'Open'}",
-      '        </button>',
-      '        <dialog',
-      "          aria-describedby={contentAttrs['aria-describedby']}",
-      "          aria-labelledby={contentAttrs['aria-labelledby']}",
-      '          class={cn(sheetBaseClassNames, sideClassNames, props.contentClass)}',
-      "          data-state={contentAttrs['data-state']}",
-      '          id={contentAttrs.id}',
-      '          open={contentAttrs.open}',
-      '        >',
-      '          <header class="grid gap-1">',
-      '            <h2 class="text-base font-semibold" id={titleId}>{props.title}</h2>',
-      '            {descriptionId === undefined ? "" : <p class="text-sm text-neutral-600" id={descriptionId}>{props.description}</p>}',
-      '          </header>',
-      '          <div class="text-sm">{props.children}</div>',
-      '          <button',
-      "            class='inline-flex h-8 w-fit items-center justify-center rounded-md border border-neutral-300 bg-white px-2.5 text-sm font-medium text-neutral-950 shadow-sm transition-colors hover:bg-neutral-50 disabled:pointer-events-none disabled:opacity-50'",
-      '            command={closeAttrs.command}',
-      '            commandfor={closeAttrs.commandfor}',
-      "            data-disabled={closeAttrs['data-disabled']}",
-      "            data-state={closeAttrs['data-state']}",
-      '            disabled={closeAttrs.disabled}',
-      '            type={closeAttrs.type}',
-      '          >',
-      "            {props.closeLabel ?? 'Close'}",
-      '          </button>',
-      '        </dialog>',
-      '      </div>',
-      '    );',
-      '  },',
-      '});',
-      '',
-    ].join('\n'),
-  },
-  skeleton: {
-    fileName: 'skeleton.tsx',
-    source: [
-      "import { component } from '@jiso/core';",
-      '',
-      'export interface SkeletonProps {',
-      '  label?: string;',
-      '}',
-      '',
-      "export const Skeleton = component('skeleton', {",
-      '  render(props: SkeletonProps) {',
-      '    return (',
-      '      <div',
-      '        aria-label={props.label}',
-      '        aria-hidden={props.label ? undefined : "true"}',
-      '        class="h-4 w-full animate-pulse rounded-md bg-neutral-200"',
-      '      />',
-      '    );',
-      '  },',
-      '});',
-      '',
-    ].join('\n'),
-  },
-  table: {
-    fileName: 'table.tsx',
-    source: [
-      '/** @jsxImportSource @jiso/server */',
-      "import { component } from '@jiso/core';",
-      "import { cn, type ClassValue } from '@jiso/headless-ui';",
-      '',
-      'export interface TableRowData {',
-      '  cells: readonly string[];',
-      '  header?: boolean;',
-      '}',
-      '',
-      'export interface TableProps {',
-      '  caption?: string;',
-      '  class?: ClassValue;',
-      '  rows: readonly TableRowData[];',
-      '}',
-      '',
-      "export const Table = component('table', {",
-      '  render(props: TableProps) {',
-      '    return (',
-      "      <div class='w-full overflow-x-auto'>",
-      "        <table class={cn('w-full caption-bottom border-collapse text-sm', props.class)}>",
-      "          {props.caption === undefined ? '' : <caption class='mt-3 text-sm text-neutral-500'>{props.caption}</caption>}",
-      '          <tbody>',
-      '            {props.rows.map((row) => (',
-      "              <tr class='border-b border-neutral-200 transition-colors hover:bg-neutral-50'>",
-      '                {row.cells.map((cell) =>',
-      '                  row.header === true ? (',
-      "                    <th class='h-10 px-3 text-left align-middle font-medium text-neutral-700' scope='col'>{cell}</th>",
-      '                  ) : (',
-      "                    <td class='p-3 align-middle text-neutral-950'>{cell}</td>",
-      '                  ),',
-      '                )}',
-      '              </tr>',
-      '            ))}',
-      '          </tbody>',
-      '        </table>',
-      '      </div>',
-      '    );',
-      '  },',
-      '});',
-      '',
-    ].join('\n'),
-  },
-} as const satisfies Record<string, VendoredUiComponent>;
+interface UiPackageManifest {
+  exports?: Record<string, string>;
+  jiso?: { vendoredSource?: boolean };
+  name?: string;
+}
+
+const uiPackageRoot = join(dirname(realpathSync(fileURLToPath(import.meta.url))), '..', '..', 'ui');
+const uiPackageManifestPath = join(uiPackageRoot, 'package.json');
+const uiPackageManifest = readUiPackageManifest();
+
+export const vendoredUiComponents = Object.freeze(
+  Object.fromEntries(
+    uiPackageComponentEntries(uiPackageManifest).map(([name, sourcePath]) => [
+      name,
+      {
+        fileName: `${name}.tsx`,
+        source: readVendoredSource(sourcePath),
+      },
+    ]),
+  ),
+) as Readonly<Record<string, VendoredUiComponent>>;
 
 export type AddComponentName = keyof typeof vendoredUiComponents;
 
@@ -366,4 +37,63 @@ export function availableAddComponents(): string {
 
 export function isAddComponentName(value: string): value is AddComponentName {
   return Object.hasOwn(vendoredUiComponents, value);
+}
+
+function readUiPackageManifest(): UiPackageManifest {
+  const parsed = JSON.parse(readFileSync(uiPackageManifestPath, 'utf8')) as unknown;
+  if (!isUiPackageManifest(parsed)) {
+    throw new Error(`@jiso/ui vendored catalog manifest is invalid: ${uiPackageManifestPath}`);
+  }
+  if (parsed.name !== '@jiso/ui' || parsed.jiso?.vendoredSource !== true) {
+    throw new Error(`@jiso/ui package must declare jiso.vendoredSource: ${uiPackageManifestPath}`);
+  }
+  return parsed;
+}
+
+function uiPackageComponentEntries(manifest: UiPackageManifest): readonly [string, string][] {
+  return Object.entries(manifest.exports ?? {})
+    .flatMap(([subpath, target]): [string, string][] => {
+      if (subpath === '.' || !subpath.startsWith('./')) return [];
+      const name = subpath.slice(2);
+      if (!isAddComponentFileName(name) || target !== `./src/${name}.tsx`) {
+        throw new Error(`@jiso/ui export ${subpath} must point at ./src/${name}.tsx`);
+      }
+      return [[name, join(uiPackageRoot, target)]];
+    })
+    .sort(([left], [right]) => left.localeCompare(right));
+}
+
+function readVendoredSource(sourcePath: string): string {
+  const source = readFileSync(sourcePath, 'utf8');
+  if (source.includes('@jiso/ui')) {
+    throw new Error(`vendored @jiso/ui source must not import @jiso/ui: ${sourcePath}`);
+  }
+  // SPEC.md §5.2 requires fw add to vendor app-authored TSX source, not lowered IR artifacts.
+  if (source.includes('fw-c=') || source.includes('data-bind=') || source.includes('@jiso-ir')) {
+    throw new Error(`vendored @jiso/ui source must be TSX, not lowered IR: ${sourcePath}`);
+  }
+  return source.endsWith('\n') ? source : `${source}\n`;
+}
+
+function isUiPackageManifest(value: unknown): value is UiPackageManifest {
+  if (!isRecord(value)) return false;
+  const exportsValue = value.exports;
+  const jisoValue = value.jiso;
+  return (
+    typeof value.name === 'string' &&
+    (exportsValue === undefined ||
+      (isRecord(exportsValue) &&
+        Object.values(exportsValue).every((entry) => typeof entry === 'string'))) &&
+    (jisoValue === undefined ||
+      (isRecord(jisoValue) &&
+        (jisoValue.vendoredSource === undefined || typeof jisoValue.vendoredSource === 'boolean')))
+  );
+}
+
+function isAddComponentFileName(value: string): boolean {
+  return /^[a-z][a-z0-9-]*$/.test(value);
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
 }

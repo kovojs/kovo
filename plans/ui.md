@@ -676,10 +676,25 @@ Behavior contracts (state attributes, ARIA, keyboard maps, change reasons) are p
     `pnpm --filter @jiso/ui exec vitest --run`,
     `pnpm exec vp check packages/ui/package.json packages/ui/tsconfig.json packages/ui/src/index.tsx packages/ui/src/button.tsx packages/ui/src/badge.tsx packages/ui/src/card.tsx packages/ui/src/sheet.tsx packages/ui/src/index.test.tsx pnpm-lock.yaml plans/ui.md`,
     and `git diff --check`.
-  - Remaining before U2 can be checked complete: promote the extracted catalog into whatever
-    distributable contract/package asset shape `@jiso/ui` needs and keep the CLI vendored
-    catalog synchronized with that package source instead of hand-maintaining duplicated TSX
-    strings.
+  - Additional partial evidence 2026-06-12: `packages/cli/src/add-catalog.ts` now consumes
+    the `@jiso/ui` package manifest as the vendored catalog contract: it requires
+    `jiso.vendoredSource`, derives `fw add` component names from package subpath exports, and
+    copies the exact `packages/ui/src/*.tsx` source files instead of maintaining duplicated TSX
+    strings in the CLI. `packages/cli/src/index.test.ts` asserts the catalog matches
+    `@jiso/ui` exports byte-for-byte, `fw add` writes the package-synchronized source, no
+    vendored entry imports `@jiso/ui` or contains lowered IR markers per SPEC §5.2, and no
+    entry raises FW235 when compiled as app-authored TSX. Same-session evidence:
+    `pnpm exec vitest --run packages/cli/src/index.test.ts -t "fw add"`,
+    `pnpm --filter @jiso/ui exec vitest --run`,
+    `pnpm exec vp check packages/cli/src/add-catalog.ts packages/cli/src/index.test.ts plans/ui.md`,
+    and `git diff --check`. U2 remains open because the exact package-sourced `table.tsx`
+    currently records a known FW225 content-model diagnostic for its isolated `TableRow`
+    component under the full TSX compile gate, and standalone CLI/package distribution wiring
+    still needs a final pass.
+  - Remaining before U2 can be checked complete: resolve the package-sourced `table.tsx`
+    FW225 app-source compile gap, decide the standalone distribution link between `fw` and
+    `@jiso/ui`, and keep the CLI vendored catalog synchronized with package source in that
+    final package asset shape.
   - Remaining before U3 can be checked complete: add sheet/drawer styled dialog variants and
     verify the styled surface through the gallery/conformance gates rather than only package and
     CLI copy tests.
