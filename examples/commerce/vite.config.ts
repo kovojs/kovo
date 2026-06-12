@@ -64,13 +64,18 @@ function commerceAppShellDevPlugin(): CommerceDevPlugin {
     configureServer(server) {
       return () => {
         server.middlewares.use((request, response, next) => {
-          if (!isCommerceShellRequest(request)) {
-            next();
-            return;
-          }
+          Promise.all([
+            server.ssrLoadModule('@jiso/server'),
+            server.ssrLoadModule('/src/app-shell.ts'),
+          ])
+            .then(([serverModule, appShellModule]) => {
+              if (!shouldHandleAppShellRequest(serverModule, appShellModule, request)) {
+                next();
+                return;
+              }
 
-          Promise.resolve(loadCommerceNodeHandler(server))
-            .then((commerceNodeHandler) => commerceNodeHandler(request, response, next))
+              return loadCommerceNodeHandler(appShellModule)(request, response, next);
+            })
             .catch(next);
         });
       };
@@ -79,8 +84,20 @@ function commerceAppShellDevPlugin(): CommerceDevPlugin {
   };
 }
 
-async function loadCommerceNodeHandler(server: CommerceDevServer): Promise<DevMiddleware> {
-  const module = await server.ssrLoadModule('/src/app-shell.ts');
+function shouldHandleAppShellRequest(
+  serverModule: Record<string, unknown>,
+  appShellModule: Record<string, unknown>,
+  request: IncomingMessage,
+): boolean {
+  const shouldHandle = serverModule.shouldHandleJisoAppShellViteSsrRequest;
+  if (typeof shouldHandle !== 'function') {
+    throw new Error('@jiso/server must export shouldHandleJisoAppShellViteSsrRequest.');
+  }
+
+  return shouldHandle(request, appShellModule.default);
+}
+
+function loadCommerceNodeHandler(module: Record<string, unknown>): DevMiddleware {
   const commerceNodeHandler = module.commerceNodeHandler;
 
   if (typeof commerceNodeHandler !== 'function') {
@@ -88,28 +105,4 @@ async function loadCommerceNodeHandler(server: CommerceDevServer): Promise<DevMi
   }
 
   return commerceNodeHandler as DevMiddleware;
-}
-
-function isCommerceShellRequest(request: IncomingMessage): boolean {
-  if (!request.url) return false;
-
-  const pathname = new URL(request.url, 'http://jiso.local').pathname;
-
-  if (request.method === 'GET' || request.method === 'HEAD') {
-    return (
-      pathname === '/cart' ||
-      pathname === '/login' ||
-      pathname === '/admin' ||
-      pathname === '/exports/orders.csv' ||
-      pathname.startsWith('/attachments/') ||
-      pathname.startsWith('/_q/') ||
-      pathname.startsWith('/c/')
-    );
-  }
-
-  if (request.method === 'POST') {
-    return pathname.startsWith('/_m/') || pathname === '/webhooks/stripe';
-  }
-
-  return false;
 }

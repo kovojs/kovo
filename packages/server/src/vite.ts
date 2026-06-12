@@ -34,6 +34,10 @@ export interface JisoAppShellViteDevServer {
   };
 }
 
+export interface JisoAppShellViteSsrDevServer extends JisoAppShellViteDevServer {
+  ssrLoadModule(id: string): Promise<Record<string, unknown>>;
+}
+
 export type JisoAppShellViteMiddleware = (
   request: IncomingMessage,
   response: ServerResponse,
@@ -45,6 +49,20 @@ export type JisoAppShellViteInput = JisoApp | RequestHandler;
 export interface JisoAppShellVitePluginOptions {
   build?: JisoAppShellVitePluginBuildOptions;
   devDiagnostics?: JisoAppShellDevDiagnosticLedger;
+}
+
+export interface JisoAppShellViteSsrDevPlugin {
+  configureServer(server: JisoAppShellViteSsrDevServer): void | (() => void);
+  name: string;
+}
+
+export interface JisoAppShellViteSsrDevPluginOptions {
+  appExportName?: string;
+  moduleId?: string;
+  name?: string;
+  nodeHandlerExportName?: string;
+  order?: 'pre' | 'post';
+  shouldHandleRequest?: (request: IncomingMessage, app: JisoApp) => boolean;
 }
 
 export interface JisoAppShellDevModuleDiagnostics {
@@ -282,6 +300,65 @@ export function jisoAppShellVitePlugin(
   };
 }
 
+export function jisoAppShellViteSsrDevPlugin(
+  options: JisoAppShellViteSsrDevPluginOptions = {},
+): JisoAppShellViteSsrDevPlugin {
+  const moduleId = options.moduleId ?? '/src/app-shell.ts';
+  const appExportName = options.appExportName ?? 'default';
+  const nodeHandlerExportName = options.nodeHandlerExportName ?? 'nodeHandler';
+
+  const install = (server: JisoAppShellViteSsrDevServer) => {
+    server.middlewares.use((request, response, next) => {
+      Promise.resolve(server.ssrLoadModule(moduleId))
+        .then((module) => {
+          const app = readJisoAppShellViteSsrApp(module, appExportName, moduleId);
+          const shouldHandle =
+            options.shouldHandleRequest?.(request, app) ??
+            shouldHandleJisoAppShellViteSsrRequest(request, app);
+          if (!shouldHandle) {
+            next();
+            return;
+          }
+
+          return readJisoAppShellViteSsrNodeHandler(module, nodeHandlerExportName, moduleId)(
+            request,
+            response,
+            next,
+          );
+        })
+        .catch(next);
+    });
+  };
+
+  return {
+    configureServer(server) {
+      if (options.order === 'post') return () => install(server);
+      install(server);
+    },
+    name: options.name ?? 'jiso-app-shell-ssr-dev',
+  };
+}
+
+export function shouldHandleJisoAppShellViteSsrRequest(
+  request: IncomingMessage,
+  app: JisoApp,
+): boolean {
+  if (!request.url) return false;
+
+  const url = new URL(request.url, 'http://jiso.local');
+  const match = matchShellDispatch({
+    endpoints: app.endpoints,
+    ...(request.method === undefined ? {} : { method: request.method }),
+    pathname: url.pathname,
+    routes: app.routes,
+  });
+
+  if (match.kind === 'not-found') return false;
+  if (match.kind === 'route') return match.methodAllowed;
+
+  return true;
+}
+
 function devDiagnosticResponse(
   app: JisoApp,
   request: IncomingMessage,
@@ -384,6 +461,39 @@ function normalizedModuleHref(href: string): string {
 
 function isErrorDiagnostic(diagnostic: DiagnosticDocumentDiagnostic): boolean {
   return diagnosticDefinitions[diagnostic.code].severity === 'error';
+}
+
+function readJisoAppShellViteSsrApp(
+  module: Record<string, unknown>,
+  exportName: string,
+  moduleId: string,
+): JisoApp {
+  const app = module[exportName];
+  if (isJisoApp(app)) return app;
+
+  throw new Error(`${moduleId} must export ${exportName} as a Jiso app for Vite dev.`);
+}
+
+function readJisoAppShellViteSsrNodeHandler(
+  module: Record<string, unknown>,
+  exportName: string,
+  moduleId: string,
+): JisoAppShellViteMiddleware {
+  const handler = module[exportName];
+  if (typeof handler === 'function') return handler as JisoAppShellViteMiddleware;
+
+  throw new Error(`${moduleId} must export ${exportName} as a Node app-shell handler.`);
+}
+
+function isJisoApp(value: unknown): value is JisoApp {
+  return (
+    isRecord(value) &&
+    Array.isArray(value.endpoints) &&
+    Array.isArray(value.mutations) &&
+    Array.isArray(value.queries) &&
+    Array.isArray(value.routes) &&
+    isRecord(value.clientModules)
+  );
 }
 
 function slashPath(fileName: string): string {

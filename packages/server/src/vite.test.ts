@@ -20,6 +20,7 @@ import {
   jisoAppShellViteManifestHints,
   jisoAppShellVitePlugin,
   jisoAppShellViteRouteEntries,
+  jisoAppShellViteSsrDevPlugin,
   jisoAppShellViteStaticExportAssets,
   route,
   type JisoAppShellBuild,
@@ -717,6 +718,72 @@ describe('server app shell Vite plugin', () => {
         }),
         status: 200,
       });
+    } finally {
+      await new Promise<void>((resolve, reject) => {
+        server.close((error) => (error ? reject(error) : resolve()));
+      });
+    }
+  });
+
+  it('registers SSR dev middleware that loads the routed app shell through Vite', async () => {
+    const productRoute = route('/products/:id', {
+      page({ params }) {
+        return `<main>${params.id}</main>`;
+      },
+    });
+    const app = createApp({ routes: [productRoute] });
+    const plugin = jisoAppShellViteSsrDevPlugin({
+      nodeHandlerExportName: 'commerceNodeHandler',
+    });
+    const middlewares: JisoAppShellViteMiddleware[] = [];
+    let moduleLoads = 0;
+    let handled = 0;
+
+    plugin.configureServer({
+      middlewares: {
+        use(handler) {
+          middlewares.push(handler);
+        },
+      },
+      async ssrLoadModule(id) {
+        moduleLoads += 1;
+        expect(id).toBe('/src/app-shell.ts');
+        return {
+          commerceNodeHandler(_request: unknown, response: { end(body: string): void }) {
+            handled += 1;
+            response.end('handled by SSR app shell');
+          },
+          default: app,
+        };
+      },
+    });
+
+    const server = createServer((request, response) => {
+      middlewares[0]?.(request, response, (error) => {
+        if (error) {
+          response.writeHead(500, { 'Content-Type': 'text/plain; charset=utf-8' });
+          response.end(error instanceof Error ? error.message : JSON.stringify(error));
+          return;
+        }
+
+        response.writeHead(418, { 'Content-Type': 'text/plain; charset=utf-8' });
+        response.end('next');
+      });
+    });
+    await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
+
+    try {
+      const origin = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
+      await expect(nodeFetch(`${origin}/src/styles.css`)).resolves.toMatchObject({
+        body: 'next',
+        status: 418,
+      });
+      await expect(nodeFetch(`${origin}/products/p1`)).resolves.toMatchObject({
+        body: 'handled by SSR app shell',
+        status: 200,
+      });
+      expect(moduleLoads).toBe(2);
+      expect(handled).toBe(1);
     } finally {
       await new Promise<void>((resolve, reject) => {
         server.close((error) => (error ? reject(error) : resolve()));

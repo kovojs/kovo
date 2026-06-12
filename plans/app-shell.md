@@ -114,6 +114,14 @@ Scope: SPEC addition (proposed §9.5 "The request shell"), `@jiso/server` shell 
       `pnpm exec vitest --run packages/server/src/static-export.test.ts packages/server/src/vite.test.ts`,
       `pnpm exec vp check packages/server/src/vite.ts packages/server/src/vite.test.ts packages/server/src/index.ts plans/app-shell.md`,
       and `git diff --check`.
+      Additional evidence 2026-06-12: `packages/server/src/vite.ts` now exposes
+      `shouldHandleJisoAppShellViteSsrRequest()` and `jisoAppShellViteSsrDevPlugin()`
+      so Vite dev/serve adapters can derive request ownership from the same
+      `JisoApp` dispatch table used by `createRequestHandler()` instead of
+      duplicating route/query/mutation/client-module predicates. `packages/server/src/vite.test.ts`
+      proves the SSR dev helper loads `/src/app-shell.ts` through Vite,
+      passes non-shell source assets onward, and routes matching documents to
+      the exported Node handler.
       Remaining R5 work: compiler/plugin build hooks must still supply real route-entry maps
       and compiled module sources from compiler facts, consume the asset/module plan in
       production package builds, and decide the final plugin hook ownership.
@@ -519,6 +527,19 @@ Scope: SPEC addition (proposed §9.5 "The request shell"), `@jiso/server` shell 
       consumer script reaches the same Vite-backed SPEC §9.5 app-shell
       middleware over real HTTP for `/cart`, `/c/commerce.client.js?v=commerce-r7`,
       `/_q/cart`, and `/src/styles.css`.
+      Additional evidence 2026-06-12: the generated starter and commerce Vite
+      configs now load `@jiso/server` through Vite SSR and call
+      `shouldHandleJisoAppShellViteSsrRequest()` against the exported app shell
+      before invoking their exported Node handlers. This replaces the previous
+      consumer-local hard-coded request predicate lists while preserving Vite's
+      source-asset path. Same-session verification ran
+      `pnpm exec vitest --run packages/create-jiso/src/index.test.ts`,
+      `pnpm exec vitest --run examples/commerce/src/app-shell.test.ts -t "Vite dev middleware|node scripts/serve.mjs|npm start|node:http"`,
+      and `pnpm exec vitest --run packages/server/src/vite.test.ts`. The
+      commerce `vp run serve` variant was rerun separately and still fails before
+      the commerce task starts because the workspace task graph rejects
+      `@jiso/site#build-site`'s `../examples/gallery/src/**/*` input; this
+      worker did not edit `site/**`.
       Additional evidence 2026-06-12: the create-jiso starter template now has
       a consumer serve command for the same app-shell middleware used by
       `vp dev`. `packages/create-jiso/templates/scripts/serve.mjs` starts Vite

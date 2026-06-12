@@ -83,13 +83,18 @@ function starterAppShellDevPlugin(): StarterDevPlugin {
   return {
     configureServer(server) {
       server.middlewares.use((request, response, next) => {
-        if (!isStarterDocumentRequest(request)) {
-          next();
-          return;
-        }
+        Promise.all([
+          server.ssrLoadModule('@jiso/server'),
+          server.ssrLoadModule('/src/app-shell.ts'),
+        ])
+          .then(([serverModule, appShellModule]) => {
+            if (!shouldHandleAppShellRequest(serverModule, appShellModule, request)) {
+              next();
+              return;
+            }
 
-        Promise.resolve(loadStarterNodeHandler(server))
-          .then((starterNodeHandler) => starterNodeHandler(request, response, next))
+            return loadStarterNodeHandler(appShellModule)(request, response, next);
+          })
           .catch(next);
       });
     },
@@ -97,8 +102,20 @@ function starterAppShellDevPlugin(): StarterDevPlugin {
   };
 }
 
-async function loadStarterNodeHandler(server: StarterDevServer): Promise<DevMiddleware> {
-  const module = await server.ssrLoadModule('/src/app-shell.ts');
+function shouldHandleAppShellRequest(
+  serverModule: Record<string, unknown>,
+  appShellModule: Record<string, unknown>,
+  request: IncomingMessage,
+): boolean {
+  const shouldHandle = serverModule.shouldHandleJisoAppShellViteSsrRequest;
+  if (typeof shouldHandle !== 'function') {
+    throw new Error('@jiso/server must export shouldHandleJisoAppShellViteSsrRequest.');
+  }
+
+  return shouldHandle(request, appShellModule.default);
+}
+
+function loadStarterNodeHandler(module: Record<string, unknown>): DevMiddleware {
   const starterNodeHandler = module.starterNodeHandler;
 
   if (typeof starterNodeHandler !== 'function') {
@@ -106,12 +123,4 @@ async function loadStarterNodeHandler(server: StarterDevServer): Promise<DevMidd
   }
 
   return starterNodeHandler as DevMiddleware;
-}
-
-function isStarterDocumentRequest(request: IncomingMessage): boolean {
-  if (request.method !== 'GET' && request.method !== 'HEAD') return false;
-  if (!request.url) return false;
-
-  const pathname = new URL(request.url, 'http://jiso.local').pathname;
-  return pathname === '/' || pathname.startsWith('/c/');
 }
