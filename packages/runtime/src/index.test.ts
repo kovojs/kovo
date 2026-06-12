@@ -3984,6 +3984,8 @@ describe('query store', () => {
   it('discards optimistic state on enhanced mutation errors and applies the error fragment', async () => {
     const store = createQueryStore();
     const rebaser = new OptimisticRebaser(store);
+    const channel = new FakeBroadcastChannel();
+    const broadcast = installMutationBroadcast({ channel, store });
     const root = new FakeMorphRoot();
     const cartForm = new FakePendingElement({ 'fw-deps': 'cart' });
     const pendingRoot = new FakePendingRoot([cartForm]);
@@ -4002,6 +4004,7 @@ describe('query store', () => {
       fetch,
       form: { action: '/_m/cart/add', method: 'post' },
       formData: new FormData(),
+      broadcast,
       input: { quantity: 2 },
       optimistic: {
         transforms: {
@@ -4020,6 +4023,7 @@ describe('query store', () => {
     expect(result.appliedFragments).toEqual(['cart-form']);
     expect(store.get('cart')).toEqual({ count: 1 });
     expect(rebaser.pendingCount('cart')).toBe(0);
+    expect(channel.messages).toEqual([]);
     expect(cartForm.attributes).not.toHaveProperty('fw-pending');
     expect(cartForm.attributes).not.toHaveProperty('aria-busy');
     expect(root.targets.get('cart-form')?.html).toBe('<form>Out of stock</form>');

@@ -1832,6 +1832,17 @@ params, relational API, `execute(sql)`, right/full joins, a string column named 
       `corepack pnpm exec vitest --run packages/runtime/src/mutation-response.test.ts packages/runtime/src/index.test.ts -t "deferred|apply"`,
       `corepack pnpm exec vp check packages/runtime/src/index.ts packages/runtime/src/apply-path.ts packages/runtime/src/mutation-response.test.ts plans/codebase-quality-round2.md`,
       and `git diff --check`.
+      Additional bounded evidence 2026-06-12: `packages/runtime/src/mutation-submit.ts` now
+      applies direct enhanced mutation responses, successful optimistic responses, and failed
+      optimistic error-fragment responses through one fetched-response DOM apply helper. That
+      helper centralizes metadata return shaping and successful-response broadcast publication,
+      while preserving optimistic query interposition and the no-broadcast policy for failed
+      mutation bodies. `packages/runtime/src/index.test.ts` pins the failed optimistic error
+      fragment path with a broadcast installed. Same-session evidence:
+      `pnpm exec vitest --run packages/runtime/src/index.test.ts -t "enhanced mutation|optimistic"`,
+      `pnpm exec vitest --run packages/runtime/src`,
+      `pnpm exec vp check packages/runtime/src/mutation-submit.ts packages/runtime/src/index.test.ts plans/codebase-quality-round2.md`,
+      and `git diff --check`.
       Additional bounded evidence 2026-06-12: `packages/runtime/src/loader.ts` now owns
       `installJisoLoader`, loader options, default delegated events, query visible-return wiring,
       enhanced mutation broadcast setup, execution triggers, and disposal while

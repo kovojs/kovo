@@ -234,6 +234,13 @@ export interface OptimisticEnhancedMutationSubmitOptions<
   rebaser: OptimisticRebaser;
 }
 
+type EnhancedMutationAppliedResult = AppliedMutationResponse & {
+  appliedFragments: string[];
+  changes: MutationChangeRecord[];
+  idem: string;
+  targets: string[];
+};
+
 export type SubmitFormDefinition = Form<string, Record<string, JsonValue>, JsonValue>;
 
 export interface SubmitOptions<Input extends Record<string, JsonValue>, Failure> {
@@ -374,38 +381,14 @@ function applyEnhancedMutationResponseBodyToDom(
   });
 }
 
-export async function submitEnhancedMutation(options: EnhancedMutationSubmitOptions): Promise<
-  AppliedMutationResponse & {
-    appliedFragments: string[];
-    changes: MutationChangeRecord[];
-    idem: string;
-    targets: string[];
-  }
-> {
+export async function submitEnhancedMutation(
+  options: EnhancedMutationSubmitOptions,
+): Promise<EnhancedMutationAppliedResult> {
   stampEnhancedMutationPending(options, true);
-
-  let body = '';
-  let changes: MutationChangeRecord[] = [];
-  let idem = options.idem ?? '';
-  let response: EnhancedMutationResponseLike | undefined;
-  let targets: string[] = [];
 
   try {
     const fetched = await fetchEnhancedMutation(options);
-    body = fetched.body;
-    changes = fetched.changes;
-    idem = fetched.idem;
-    response = fetched.response;
-    targets = fetched.targets;
-    const applied = applyEnhancedMutationResponseBodyToDom(options, body);
-    publishSuccessfulMutation(options, response, body, changes);
-
-    return {
-      ...applied,
-      changes,
-      idem,
-      targets,
-    };
+    return applyFetchedEnhancedMutationResponseToDom(options, fetched);
   } catch (error) {
     options.onError?.(error);
     throw error;
@@ -436,14 +419,7 @@ export async function submitOptimisticEnhancedMutation<Input>(
 
 async function submitOptimisticEnhancedMutationDirect<Input>(
   options: OptimisticEnhancedMutationSubmitOptions<Input>,
-): Promise<
-  AppliedMutationResponse & {
-    appliedFragments: string[];
-    changes: MutationChangeRecord[];
-    idem: string;
-    targets: string[];
-  }
-> {
+): Promise<EnhancedMutationAppliedResult> {
   const idem = options.idem ?? createMutationIdem();
   const queryNames = Object.keys(options.optimistic.transforms);
   const optimisticChange = optimisticChangeFromInput(options.input, options.change);
@@ -457,43 +433,22 @@ async function submitOptimisticEnhancedMutationDirect<Input>(
   }
 
   try {
-    const { body, changes, response, targets } = await fetchEnhancedMutation(options, idem);
+    const fetched = await fetchEnhancedMutation(options, idem);
 
-    if (isFailedMutationResponse(response)) {
+    if (isFailedMutationResponse(fetched.response)) {
       options.rebaser.discardPendingOptimism(queryNames, optimisticKeys);
       if (options.pendingRoot) {
         stampPendingQueries(options.pendingRoot, queryNames, false);
       }
 
-      const applied = applyEnhancedMutationResponseBodyToDom(options, body);
-
-      return {
-        ...applied,
-        changes,
-        idem,
-        targets,
-      };
+      return applyFetchedEnhancedMutationResponseToDom(options, fetched);
     }
 
-    const applied = applyEnhancedMutationResponseBodyToDom(options, body, {
-      applyQuery(query) {
-        options.rebaser.applyServerTruth(query.name, query.value, query.key);
-        return { value: options.store.get(query.name, query.key) };
-      },
-      beforeApplyQueries(queryChunks) {
-        const uncoveredQueries = uncoveredOptimisticQueries(
-          queryChunks,
-          queryNames,
-          optimisticKeys,
-        );
-        for (const queryName of uncoveredQueries) {
-          options.rebaser.settleWithoutServerTruth(idem, queryName, optimisticKeys[queryName]);
-          options.onError?.(uncoveredOptimisticQueryError(queryName, optimisticKeys[queryName]));
-        }
-        options.rebaser.settle(idem);
-      },
-    });
-    publishSuccessfulMutation(options, response, body, changes);
+    const applied = applyFetchedEnhancedMutationResponseToDom(
+      options,
+      fetched,
+      optimisticMutationDomApplyHooks(options, idem, queryNames, optimisticKeys),
+    );
     const settledQueries = queryNames.filter(
       (queryName) => options.rebaser.pendingCount(queryName, optimisticKeys[queryName]) === 0,
     );
@@ -503,9 +458,6 @@ async function submitOptimisticEnhancedMutationDirect<Input>(
 
     return {
       ...applied,
-      changes,
-      idem,
-      targets,
     };
   } catch (error) {
     options.rebaser.discardPendingOptimism(queryNames, optimisticKeys);
@@ -514,6 +466,28 @@ async function submitOptimisticEnhancedMutationDirect<Input>(
     }
     throw error;
   }
+}
+
+function optimisticMutationDomApplyHooks<Input>(
+  options: OptimisticEnhancedMutationSubmitOptions<Input>,
+  idem: string,
+  queryNames: readonly string[],
+  optimisticKeys: Readonly<Record<string, string | undefined>>,
+): MutationDomApplyHooks {
+  return {
+    applyQuery(query) {
+      options.rebaser.applyServerTruth(query.name, query.value, query.key);
+      return { value: options.store.get(query.name, query.key) };
+    },
+    beforeApplyQueries(queryChunks) {
+      const uncoveredQueries = uncoveredOptimisticQueries(queryChunks, queryNames, optimisticKeys);
+      for (const queryName of uncoveredQueries) {
+        options.rebaser.settleWithoutServerTruth(idem, queryName, optimisticKeys[queryName]);
+        options.onError?.(uncoveredOptimisticQueryError(queryName, optimisticKeys[queryName]));
+      }
+      options.rebaser.settle(idem);
+    },
+  };
 }
 
 function uncoveredOptimisticQueries(
@@ -532,15 +506,29 @@ function uncoveredOptimisticQueryError(queryName: string, key?: string): Error {
   return new Error(`Optimistic transform for ${identity} was not covered by server query truth.`);
 }
 
+function applyFetchedEnhancedMutationResponseToDom(
+  options: EnhancedMutationSubmitOptions,
+  fetched: FetchedEnhancedMutation,
+  hooks: MutationDomApplyHooks = {},
+): EnhancedMutationAppliedResult {
+  const applied = applyEnhancedMutationResponseBodyToDom(options, fetched.body, hooks);
+  publishSuccessfulMutation(options, fetched);
+
+  return {
+    ...applied,
+    changes: fetched.changes,
+    idem: fetched.idem,
+    targets: fetched.targets,
+  };
+}
+
 function publishSuccessfulMutation(
   options: EnhancedMutationSubmitOptions,
-  response: EnhancedMutationResponseLike,
-  body: string,
-  changes: readonly MutationChangeRecord[],
+  fetched: FetchedEnhancedMutation,
 ): void {
-  if (isFailedMutationResponse(response)) return;
+  if (isFailedMutationResponse(fetched.response)) return;
 
-  options.broadcast?.publish(body, changes);
+  options.broadcast?.publish(fetched.body, fetched.changes);
 }
 
 function stampEnhancedMutationPending(
@@ -554,16 +542,18 @@ function stampEnhancedMutationPending(
   return stampPendingQueries(options.pendingRoot, options.pendingQueries, pending);
 }
 
-async function fetchEnhancedMutation(
-  options: EnhancedMutationSubmitOptions,
-  idem = options.idem ?? createMutationIdem(),
-): Promise<{
+interface FetchedEnhancedMutation {
   body: string;
   changes: MutationChangeRecord[];
   idem: string;
   response: EnhancedMutationResponseLike;
   targets: string[];
-}> {
+}
+
+async function fetchEnhancedMutation(
+  options: EnhancedMutationSubmitOptions,
+  idem = options.idem ?? createMutationIdem(),
+): Promise<FetchedEnhancedMutation> {
   const targets = readLiveTargets(options.root);
   const response = await options.fetch(options.form.action, {
     body: options.formData,
