@@ -6,8 +6,8 @@ order: 8
 
 # Wrap-up & deploy
 
-Seven steps ago this was an empty directory. Now it is a commerce app with an inventory of
-properties most apps assert in prose and this one proves in CI:
+Seven steps ago this was an empty directory. Now you have a commerce app with an inventory of
+properties most apps assert in prose — and yours proves in CI:
 
 - **Pages are complete documents** answered by typed routes; navigation is real navigation, and
   renaming a route path is a compile error at every consumer (SPEC §6.4, §8).
@@ -28,23 +28,23 @@ No browser test exists anywhere in the tutorial — that is SPEC §16.3, experie
 
 ## How this tutorial stays true
 
-Every step state lives in the repository under `site/tutorial/steps/`, and
+Remember the chapter 1 promise that these code blocks can't lie? Here is the machinery behind
+it. Every step state lives in the repository under `site/tutorial/steps/`, and
 `node site/tutorial/run-steps.mjs` gates all of them in CI: each step typechecks against the
 workspace packages, every component compiles through `@jiso/compiler` with zero errors plus the
 fixpoint and render-equivalence asserts (SPEC §5.2 rule 3 — compiling the output is a no-op),
-committed lowered IR is checked for staleness, and every step's tests run. The chapters you just
-read extracted all of their code from those states at build time. An API change that breaks a
-chapter turns this tutorial red in the same PR — the docs equivalent of Constitution #4: the
-artifact is the documentation.
+committed lowered IR is checked for staleness, and every step's tests run. An API change that
+breaks a chapter turns this tutorial red in the same PR — the docs equivalent of
+Constitution #4: the artifact is the documentation.
 
 ## Deploying a jiso app
 
 A Jiso app is a server-rendered MPA with a stateless v1 server (SPEC §9.3): any Node host that
 can run the request handler can run the app, and the emitted client modules under `/c/` are
 immutable, versioned static assets — old documents keep resolving their handler refs after a
-deploy, so a still-open tab never 404s on first interaction (SPEC §6.6). Static export for
-content-shaped sites (this documentation site is one — exported, no server) and the full hosting
-matrix live in the [deployment guide](/guides/deployment/).
+deploy, so a still-open tab never 404s on first interaction (SPEC §6.6). Static export covers
+content-shaped sites (this documentation site is one — exported, no server); the full hosting
+matrix lives in the [deployment guide](/guides/deployment/).
 
 ## Where to go next
 
