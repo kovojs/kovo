@@ -1,4 +1,6 @@
-import { malformedJsonError, parseJsonValue } from './json.js';
+import { reportMalformedJson, reportRuntimeError } from './error-policy.js';
+import type { RuntimeErrorReporter } from './error-policy.js';
+import { parseJsonValue } from './json.js';
 
 export interface FragmentChunk {
   html: string;
@@ -37,7 +39,7 @@ export function deferredStreamChunks(body: string, boundary: string): string[] {
   }
 }
 
-export function readQueryChunks(body: string, onError?: (error: unknown) => void): QueryChunk[] {
+export function readQueryChunks(body: string, onError?: RuntimeErrorReporter): QueryChunk[] {
   const queries: QueryChunk[] = [];
 
   for (const match of body.matchAll(/<fw-query\b(?<attrs>[^>]*)>(?<json>[\s\S]*?)<\/fw-query>/g)) {
@@ -48,7 +50,7 @@ export function readQueryChunks(body: string, onError?: (error: unknown) => void
 
     const parsed = parseJsonValue(unescapeHtml(match.groups?.json ?? 'null'));
     if (!parsed.ok) {
-      onError?.(malformedJsonError(`fw-query ${name}`, parsed.error));
+      reportMalformedJson(onError, `fw-query ${name}`, parsed.error);
       continue;
     }
 
@@ -62,10 +64,7 @@ export function readQueryChunks(body: string, onError?: (error: unknown) => void
   return queries;
 }
 
-export function readFragmentChunks(
-  body: string,
-  onError?: (error: unknown) => void,
-): FragmentChunk[] {
+export function readFragmentChunks(body: string, onError?: RuntimeErrorReporter): FragmentChunk[] {
   const fragments: FragmentChunk[] = [];
   const fragmentTag = /<\/?fw-fragment\b/gi;
   let offset = 0;
@@ -81,12 +80,12 @@ export function readFragmentChunks(
 
     const openingEnd = tagClose(body, match.index + match[0].length);
     if (openingEnd === undefined) {
-      onError?.(malformedFragmentError('missing opening tag close'));
+      reportRuntimeError(onError, malformedFragmentError('missing opening tag close'));
       break;
     }
     const end = matchingFragmentEnd(body, match.index);
     if (!end) {
-      onError?.(malformedFragmentError('missing closing tag'));
+      reportRuntimeError(onError, malformedFragmentError('missing closing tag'));
       break;
     }
 

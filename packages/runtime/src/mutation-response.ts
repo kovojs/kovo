@@ -1,4 +1,6 @@
-import { malformedJsonError, parseJsonValue } from './json.js';
+import { reportMalformedJson } from './error-policy.js';
+import type { RuntimeErrorReporter } from './error-policy.js';
+import { parseJsonValue } from './json.js';
 import type { MutationChangeRecord } from './optimism.js';
 
 export interface MutationResponseHeaderLike {
@@ -9,14 +11,14 @@ export interface MutationResponseHeaderLike {
 
 export function readMutationChangeHeader(
   response: MutationResponseHeaderLike,
-  onError?: (error: unknown) => void,
+  onError?: RuntimeErrorReporter,
 ): MutationChangeRecord[] {
   const value = response.headers?.get('FW-Changes') ?? response.headers?.get('fw-changes');
   if (!value) return [];
 
   const parsed = parseJsonValue(value);
   if (!parsed.ok) {
-    onError?.(malformedJsonError('FW-Changes header', parsed.error));
+    reportMalformedJson(onError, 'FW-Changes header', parsed.error);
     return [];
   }
   if (!Array.isArray(parsed.value)) return [];

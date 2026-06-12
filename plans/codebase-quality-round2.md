@@ -1259,6 +1259,14 @@ params, relational API, `execute(sql)`, right/full joins, a string column named 
       `pnpm exec vitest --run packages/runtime/src/index.test.ts -t "FW-Changes|rebroadcast|BroadcastChannel|syncs mutation responses"`,
       `pnpm exec vp check packages/runtime/src/index.ts packages/runtime/src/mutation-response.ts packages/runtime/src/mutation-response.test.ts plans/codebase-quality-round2.md`,
       and `git diff --check`.
+      Additional bounded evidence 2026-06-12: `packages/runtime/src/error-policy.ts`
+      now owns the shared malformed-runtime-data reporter seam used by `wire-parser.ts`,
+      `query-store.ts`, and `mutation-response.ts`; `error-policy.test.ts` pins optional
+      reporter delivery and malformed JSON error construction while affected parser/store/header
+      tests keep valid chunks applying after malformed wire data. Same-session evidence:
+      `pnpm exec vitest --run packages/runtime/src/error-policy.test.ts packages/runtime/src/wire-parser.test.ts packages/runtime/src/query-store.test.ts packages/runtime/src/mutation-response.test.ts`,
+      `pnpm exec vp check packages/runtime/src/error-policy.ts packages/runtime/src/error-policy.test.ts packages/runtime/src/wire-parser.ts packages/runtime/src/query-store.ts packages/runtime/src/mutation-response.ts plans/codebase-quality-round2.md`,
+      and `git diff --check`.
 - [ ] **MED — Split `index.ts` subtractively** along its existing seams: `inline-loader.ts`,
       `loader.ts`, `enhanced-mutation.ts`, `optimism.ts`, `query-bindings.ts`, `broadcast.ts`;
       index.ts a pure barrel. Remove the test-shaped production branch in `bindingAttributes`

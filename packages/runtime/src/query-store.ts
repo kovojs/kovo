@@ -1,4 +1,6 @@
-import { malformedJsonError, parseJsonValue } from './json.js';
+import { reportMalformedJson } from './error-policy.js';
+import type { RuntimeErrorReporter } from './error-policy.js';
+import { parseJsonValue } from './json.js';
 
 export type QueryUpdatePlan<Value = unknown> = (value: Value) => void;
 
@@ -86,7 +88,7 @@ export function queryIdentityFromStoreKey(storeKey: string): { key?: string; nam
 export function hydrateQueryScripts(
   store: QueryStore,
   scripts: Iterable<QueryScriptLike>,
-  options: { onError?: (error: unknown) => void } = {},
+  options: { onError?: RuntimeErrorReporter } = {},
 ): readonly string[] {
   const hydrated: string[] = [];
 
@@ -98,7 +100,7 @@ export function hydrateQueryScripts(
         store.set(name, parsed.value, script.getAttribute('key') ?? undefined);
         hydrated.push(name);
       } else {
-        options.onError?.(malformedJsonError('fw-query hydration', parsed.error));
+        reportMalformedJson(options.onError, 'fw-query hydration', parsed.error);
       }
     }
   }
