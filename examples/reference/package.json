@@ -1,0 +1,13 @@
+{
+  "name": "@jiso/example-reference",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "@jiso/better-auth": "workspace:*",
+    "@jiso/server": "workspace:*"
+  },
+  "devDependencies": {
+    "vitest": "4.1.8"
+  }
+}

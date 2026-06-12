@@ -133,9 +133,19 @@ Scope: SPEC additions (session population, guard-failure contract, mutation resp
       admin sign-in rendering the `/admin` page with `/_m/auth/sign-out`, and the existing guarded
       sign-out POST clearing the session cookie. Same-session evidence:
       `pnpm exec vitest --run examples/commerce/src/app.test.ts examples/commerce/src/app-shell.test.ts`.
-      Remaining gap unchanged: commerce still uses the deterministic Better Auth-like test surface
-      rather than the pinned real Better Auth package, there is still no separate `examples/reference`
-      app, and B7 remains open.
+      Partial reference-app evidence 2026-06-12: `examples/reference` now exists as a focused
+      starter/reference adoption app for the blessed adapter. It wires a Better Auth-like
+      implementation through `betterAuthSession`, `betterAuthSignInEmailMutation`,
+      `betterAuthSignOutMutation`, adapter `authed()`, and adapter `role('admin')`; its tests
+      prove no-JS credential forms, invalid-credential rendering, cookie-backed session mapping,
+      anonymous `/account` redirect, member `/admin` 403, admin `/admin` render with guarded
+      sign-out, and sign-out cookie clearing. `vite.config.ts` includes
+      `examples/reference/tsconfig.json` in `vp run typecheck-examples` so the reference app stays
+      typechecked with the rest of the standing gates.
+      Remaining gap: `examples/reference` still uses the deterministic Better Auth-like test
+      surface rather than the pinned real Better Auth package, and B7 remains open until the
+      reference app is backed by the real pinned package and passes the unguarded/unscoped audits
+      with authenticated flows.
 
 ## Background — the gap
 
