@@ -1441,6 +1441,14 @@ index.test.ts:4227 while here — it weakens the byte-for-byte claim) + acceptan
       `pnpm exec vitest --run packages/test/src`,
       `pnpm exec vp check packages/test/src/index.test.ts packages/test/src/mutation-verifier.test.ts plans/codebase-quality-round2.md`,
       and `git diff --check`.
+      Additional evidence 2026-06-12: verifier observation types, scoped recorder,
+      method-wrapper cache, table observation, and SQL statement observation moved from
+      `packages/test/src/verifier.ts` into `packages/test/src/verifier-observation.ts`.
+      `verifier.ts` preserves the existing public type re-exports while focusing on verifier
+      orchestration and DB/SQL-handle proxy seams. Same-session evidence:
+      `corepack pnpm exec vitest --run packages/test/src/verifier.test.ts packages/test/src/verifier-sql.test.ts packages/test/src/query-verifier.test.ts packages/test/src/mutation-verifier.test.ts packages/test/src/index.test.ts`
+      and
+      `corepack pnpm exec vp check packages/test/src/index.ts packages/test/src/verifier.ts packages/test/src/verifier-observation.ts packages/test/src/verifier-diagnostics.ts packages/test/src/verifier-sql.ts plans/codebase-quality-round2.md`.
 - [ ] **MED — Commerce example: one source of truth.** `cartQuery.load` returns a constant while
       `loadCartQuery(db)` does the real read (app.ts:123-126 vs :280-284);
       `productGridQuery.load` conjures a fresh `createCommerceDb()` (:161); the committed

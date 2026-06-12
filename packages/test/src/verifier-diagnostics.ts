@@ -5,7 +5,7 @@ import {
   type TouchGraph,
   type TouchSite,
 } from '@jiso/core';
-import type { DbVerificationConfig, ObservedDbOperation } from './verifier.js';
+import type { DbVerificationConfig, ObservedDbOperation } from './verifier-observation.js';
 
 export interface DbVerificationDiagnostic {
   branch?: string;

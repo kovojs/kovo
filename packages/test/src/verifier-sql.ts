@@ -13,7 +13,7 @@ import {
   type WithStatementBinding,
 } from 'pgsql-ast-parser';
 
-import type { ObservedDbOperation } from './verifier.js';
+import type { ObservedDbOperation } from './verifier-observation.js';
 
 export type ParsedSqlOperation = Pick<
   ObservedDbOperation,
