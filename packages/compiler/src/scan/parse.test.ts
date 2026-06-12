@@ -280,6 +280,22 @@ export const CartBadge = component('cart-badge', {
     ]);
   });
 
+  it('records JSX ancestor tags for element model consumers', () => {
+    const source = `
+export const CartShell = component('cart-shell', {
+  render: () => (
+    <section>
+      <p><span><strong>Cart</strong></span></p>
+    </section>
+  ),
+});
+`;
+    const elements = jsxElements(parseComponentModule('cart-shell.tsx', source));
+    const strong = elements.find((element) => element.tag === 'strong');
+
+    expect(strong?.ancestorTags).toEqual(['span', 'p', 'section']);
+  });
+
   it('records call argument property access facts', () => {
     const source = `
 export const CartBadge = component('cart-badge', {

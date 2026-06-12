@@ -761,6 +761,13 @@ pipeline throws the tree away and communicates via mutated source text.
       `pnpm exec vitest --run packages/compiler/src/scan/parse.test.ts packages/compiler/src/platform-lowering.test.ts -t "document element|platform|dialog|popover|details"`,
       `pnpm exec vitest --run packages/compiler/src`, and
       `pnpm exec vp check packages/compiler/src/scan/parse.ts packages/compiler/src/scan/parse.test.ts packages/compiler/src/lower/platform.ts packages/compiler/src/platform-lowering.test.ts`.
+      Additional evidence 2026-06-12: `scan/parse.ts` now records JSX ancestor tag facts on
+      each `JsxElementModel`, and `validate/markup.ts` consumes those parser-owned ancestry
+      facts for paragraph/content-model and table-row checks instead of recomputing ancestors
+      from element span containment inside the validator. Same-session evidence:
+      `pnpm exec vitest --run packages/compiler/src/scan/parse.test.ts packages/compiler/src/id-content-model.test.ts -t "ancestor|content-model|IDREF|duplicate literal ids|repeatable"`,
+      `pnpm exec vitest --run packages/compiler/src`, and
+      `pnpm exec vp check packages/compiler/src/scan/parse.ts packages/compiler/src/scan/parse.test.ts packages/compiler/src/validate/markup.ts`.
       Additional evidence 2026-06-12: `scan/parse.ts` now records parser-owned
       property-access facts on JSX attribute expressions and JSX child expressions, and
       inline-derive lowering consumes those facts instead of reparsing attribute, sole-text, and

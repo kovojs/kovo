@@ -112,7 +112,7 @@ export function validateHtmlContentModel(
     const tag = element.tag.toLowerCase();
     if (!isNativeHtmlTag(tag)) continue;
 
-    if (blockTagsThatCloseParagraph.has(tag) && hasJsxAncestor(element, 'p', elements)) {
+    if (blockTagsThatCloseParagraph.has(tag) && hasJsxAncestor(element, 'p')) {
       diagnostics.push(
         htmlContentModelDiagnostic(source, fileName, element, `<${tag}> cannot appear inside <p>`),
       );
@@ -121,7 +121,7 @@ export function validateHtmlContentModel(
     if (
       tag === 'tr' &&
       !hasJsxAttribute(element, 'fw-c') &&
-      !hasAnyJsxAncestor(element, ['table', 'tbody', 'thead', 'tfoot'], elements)
+      !hasAnyJsxAncestor(element, ['table', 'tbody', 'thead', 'tfoot'])
     ) {
       diagnostics.push(
         htmlContentModelDiagnostic(
@@ -442,25 +442,12 @@ function isWithinElement(candidate: JsxElementModel, container: JsxElementModel)
   return candidate.start > container.start && candidate.end < container.end;
 }
 
-function hasJsxAncestor(
-  element: JsxElementModel,
-  tag: string,
-  elements: readonly JsxElementModel[],
-): boolean {
-  return hasAnyJsxAncestor(element, [tag], elements);
+function hasJsxAncestor(element: JsxElementModel, tag: string): boolean {
+  return hasAnyJsxAncestor(element, [tag]);
 }
 
-function hasAnyJsxAncestor(
-  element: JsxElementModel,
-  tags: readonly string[],
-  elements: readonly JsxElementModel[],
-): boolean {
-  return elements.some(
-    (candidate) =>
-      candidate !== element &&
-      isWithinElement(element, candidate) &&
-      tags.includes(candidate.tag.toLowerCase()),
-  );
+function hasAnyJsxAncestor(element: JsxElementModel, tags: readonly string[]): boolean {
+  return element.ancestorTags.some((ancestor) => tags.includes(ancestor.toLowerCase()));
 }
 
 function isNativeHtmlTag(tag: string): boolean {

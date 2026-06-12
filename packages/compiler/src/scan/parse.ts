@@ -76,6 +76,7 @@ export interface JsxAttributeModel {
 }
 
 export interface JsxElementModel {
+  ancestorTags: readonly string[];
   attributes: readonly JsxAttributeModel[];
   closingStart: number;
   end: number;
@@ -1090,6 +1091,7 @@ function jsxElementModel(
     : node.getEnd();
 
   return {
+    ancestorTags: jsxAncestorTags(sourceFile, node),
     attributes: openingElement.attributes.properties.flatMap((property) => {
       if (!ts.isJsxAttribute(property)) return [];
 
@@ -1112,6 +1114,20 @@ function jsxElementModel(
     start: node.getStart(sourceFile),
     tag: openingElement.tagName.getText(sourceFile),
   };
+}
+
+function jsxAncestorTags(sourceFile: ts.SourceFile, node: ts.Node): string[] {
+  const tags: string[] = [];
+  let current = node.parent;
+
+  while (current) {
+    if (ts.isJsxElement(current)) {
+      tags.push(current.openingElement.tagName.getText(sourceFile));
+    }
+    current = current.parent;
+  }
+
+  return tags;
 }
 
 function staticJsxAttributeValue(attribute: ts.JsxAttribute): string | undefined {
