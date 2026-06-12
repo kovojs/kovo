@@ -641,6 +641,15 @@ Behavior contracts (state attributes, ARIA, keyboard maps, change reasons) are p
     `pnpm exec vitest --run packages/cli/src/index.test.ts -t "fw add"`,
     `pnpm exec vp check packages/cli/src/add-catalog.ts packages/cli/src/index.test.ts plans/ui.md`,
     and `git diff --check`.
+  - Additional partial evidence 2026-06-12: `packages/cli/src/add-catalog.ts` now covers the
+    rest of the current U3 package surface by adding `breadcrumb`, `sheet`, and `table` to
+    `fw add`. The vendored sheet and breadcrumb sources import `@jiso/headless-ui` behavior
+    helpers directly and never import `@jiso/ui`, while the table source was shaped as one valid
+    app-authored component so the compiler's FW225 content-model gate accepts it. `packages/cli/src/index.test.ts`
+    now compiles every vendored catalog entry through `compileComponentModule` as local app TSX
+    and asserts no FW235/lowered-IR diagnostics. Same-session evidence:
+    `pnpm exec vitest --run packages/cli/src/index.test.ts -t "fw add"` and
+    `pnpm exec vp check packages/cli/src/add-catalog.ts packages/cli/src/index.test.ts plans/ui.md`.
   - Additional partial evidence 2026-06-12: `packages/ui` now provides a package-shaped,
     source-only `@jiso/ui` foundation with TSX exports for `Button`, `Badge`, `Card`, and
     `Sheet`. The package manifest marks the source as vendored, depends only on workspace

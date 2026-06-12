@@ -5,6 +5,7 @@ import { join } from 'node:path';
 
 import type { Transport } from '@modelcontextprotocol/sdk/shared/transport.js';
 import type { JSONRPCMessage } from '@modelcontextprotocol/sdk/types.js';
+import { compileComponentModule } from '@jiso/compiler';
 import { describe, expect, it, vi } from 'vitest';
 
 import {
@@ -46,14 +47,31 @@ class MemoryMcpTransport implements Transport {
 
 describe('fw add', () => {
   it('keeps the vendored UI catalog as TSX source components', () => {
-    expect(availableAddComponents()).toBe('alert, badge, button, card, kbd, skeleton');
+    expect(availableAddComponents()).toBe(
+      'alert, badge, breadcrumb, button, card, kbd, sheet, skeleton, table',
+    );
 
     for (const [name, entry] of Object.entries(vendoredUiComponents)) {
       expect(entry.fileName).toBe(`${name}.tsx`);
       expect(entry.source).toContain("import { component } from '@jiso/core';");
       expect(entry.source).toContain(`component('${name}'`);
+      expect(entry.source).not.toContain('@jiso/ui');
       expect(entry.source).not.toContain('fw-c=');
       expect(entry.source).not.toContain('data-bind=');
+    }
+  });
+
+  it('compiles vendored catalog entries as app-authored TSX without FW235', () => {
+    for (const [name, entry] of Object.entries(vendoredUiComponents)) {
+      const result = compileComponentModule({
+        fileName: `src/components/ui/${entry.fileName}`,
+        source: entry.source,
+      });
+
+      expect(result.diagnostics, name).not.toContainEqual(
+        expect.objectContaining({ code: 'FW235' }),
+      );
+      expect(result.diagnostics, name).toEqual([]);
     }
   });
 
@@ -65,7 +83,20 @@ describe('fw add', () => {
 
     try {
       expect(
-        main(['add', 'alert', 'badge', 'button', 'card', 'kbd', 'skeleton', '--out', outDir]),
+        main([
+          'add',
+          'alert',
+          'badge',
+          'breadcrumb',
+          'button',
+          'card',
+          'kbd',
+          'sheet',
+          'skeleton',
+          'table',
+          '--out',
+          outDir,
+        ]),
       ).toBe(0);
 
       expect(stderr).not.toHaveBeenCalled();
@@ -78,6 +109,9 @@ describe('fw add', () => {
         `ADD badge path=${JSON.stringify(join(outDir, 'badge.tsx'))} source=tsx`,
       );
       expect(output).toContain(
+        `ADD breadcrumb path=${JSON.stringify(join(outDir, 'breadcrumb.tsx'))} source=tsx`,
+      );
+      expect(output).toContain(
         `ADD button path=${JSON.stringify(join(outDir, 'button.tsx'))} source=tsx`,
       );
       expect(output).toContain(
@@ -87,19 +121,30 @@ describe('fw add', () => {
         `ADD kbd path=${JSON.stringify(join(outDir, 'kbd.tsx'))} source=tsx`,
       );
       expect(output).toContain(
+        `ADD sheet path=${JSON.stringify(join(outDir, 'sheet.tsx'))} source=tsx`,
+      );
+      expect(output).toContain(
         `ADD skeleton path=${JSON.stringify(join(outDir, 'skeleton.tsx'))} source=tsx`,
+      );
+      expect(output).toContain(
+        `ADD table path=${JSON.stringify(join(outDir, 'table.tsx'))} source=tsx`,
       );
 
       const alert = readFileSync(join(outDir, 'alert.tsx'), 'utf8');
       const badge = readFileSync(join(outDir, 'badge.tsx'), 'utf8');
+      const breadcrumb = readFileSync(join(outDir, 'breadcrumb.tsx'), 'utf8');
       const button = readFileSync(join(outDir, 'button.tsx'), 'utf8');
       const card = readFileSync(join(outDir, 'card.tsx'), 'utf8');
       const kbd = readFileSync(join(outDir, 'kbd.tsx'), 'utf8');
+      const sheet = readFileSync(join(outDir, 'sheet.tsx'), 'utf8');
       const skeleton = readFileSync(join(outDir, 'skeleton.tsx'), 'utf8');
+      const table = readFileSync(join(outDir, 'table.tsx'), 'utf8');
       expect(alert).toContain("export const Alert = component('alert'");
       expect(alert).toContain('role="status"');
       expect(badge).toContain("export const Badge = component('badge'");
       expect(badge).toContain('<span');
+      expect(breadcrumb).toContain("export const Breadcrumb = component('breadcrumb'");
+      expect(breadcrumb).toContain('separatorRootAttributes');
       expect(button).toContain("import { component } from '@jiso/core';");
       expect(button).toContain("export const Button = component('button'");
       expect(button).toContain('<button');
@@ -107,12 +152,26 @@ describe('fw add', () => {
       expect(card).toContain('<section');
       expect(kbd).toContain("export const Kbd = component('kbd'");
       expect(kbd).toContain('<kbd');
+      expect(sheet).toContain("export const Sheet = component('sheet'");
+      expect(sheet).toContain('dialogContentAttributes');
       expect(skeleton).toContain("export const Skeleton = component('skeleton'");
       expect(skeleton).toContain('animate-pulse');
-      expect(`${alert}\n${badge}\n${button}\n${card}\n${kbd}\n${skeleton}`).not.toContain('fw-c=');
-      expect(`${alert}\n${badge}\n${button}\n${card}\n${kbd}\n${skeleton}`).not.toContain(
-        'data-bind=',
-      );
+      expect(table).toContain("export const Table = component('table'");
+      expect(table).toContain('rows: readonly TableRowData[]');
+      const vendoredSource = [
+        alert,
+        badge,
+        breadcrumb,
+        button,
+        card,
+        kbd,
+        sheet,
+        skeleton,
+        table,
+      ].join('\n');
+      expect(vendoredSource).not.toContain('@jiso/ui');
+      expect(vendoredSource).not.toContain('fw-c=');
+      expect(vendoredSource).not.toContain('data-bind=');
     } finally {
       stdout.mockRestore();
       stderr.mockRestore();
@@ -152,7 +211,7 @@ describe('fw add', () => {
 
       expect(stdout).not.toHaveBeenCalled();
       expect(stderr.mock.calls.map(([chunk]) => String(chunk)).join('')).toBe(
-        'fw: unknown component "dialog". available: alert, badge, button, card, kbd, skeleton.\n',
+        'fw: unknown component "dialog". available: alert, badge, breadcrumb, button, card, kbd, sheet, skeleton, table.\n',
       );
     } finally {
       stdout.mockRestore();
