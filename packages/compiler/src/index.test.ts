@@ -2092,6 +2092,38 @@ export const CartBadge = component('cart-badge', {
     ]);
   });
 
+  it('classifies renderOnce coverage from parsed call argument facts', () => {
+    const result = compileComponentModule({
+      fileName: 'cart-badge.tsx',
+      source: `
+export const CartBadge = component('cart-badge', {
+  queries: { cart: cartQuery, product: productQuery },
+  render: ({ cart, product }) => (
+    <span>{renderOnce(format(cart.count), "cart.discount", product.name)}</span>
+  ),
+});
+`,
+    });
+
+    expect(result.diagnostics).toEqual([]);
+    expect(result.updateCoverage).toEqual([
+      {
+        componentName: 'CartBadge',
+        detail: 'declared renderOnce',
+        position: 'expression',
+        query: 'cart.count',
+        status: 'renderOnce',
+      },
+      {
+        componentName: 'CartBadge',
+        detail: 'declared renderOnce',
+        position: 'expression',
+        query: 'product.name',
+        status: 'renderOnce',
+      },
+    ]);
+  });
+
   it('emits an app bootstrap that wires compiled query plans into the loader', () => {
     const bootstrap = emitQueryPlanBootstrapModule([
       {

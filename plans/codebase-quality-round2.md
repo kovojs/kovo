@@ -639,6 +639,15 @@ pipeline throws the tree away and communicates via mutated source text.
       `pnpm exec vitest --run packages/compiler/src/scan/parse.test.ts packages/compiler/src/index.test.ts -t "JSX attribute and child expression property access|does not derive query stamps|query-dependent render positions|FW311 positions|Redundant hand-written binding stamp|Hand-written binding stamp|data-bind paths"`,
       `pnpm exec vp check packages/compiler/src/scan/parse.ts packages/compiler/src/scan/parse.test.ts packages/compiler/src/lower/inline-derives.ts packages/compiler/src/analyze/query-updates.ts packages/compiler/src/validate/bindings.ts packages/compiler/src/index.test.ts`,
       and `git diff --check`.
+      Additional evidence 2026-06-12: `scan/parse.ts` now records property-access facts per
+      call argument, and query-update coverage consumes those facts for `renderOnce(...)` instead
+      of reparsing joined call-argument text. `scan/parse.test.ts` pins nested call arguments and
+      string-literal exclusions; `index.test.ts` proves a nested `renderOnce(...)` call with a
+      query-looking string argument records only real parsed query reads. Same-session evidence:
+      `pnpm exec vitest --run packages/compiler/src/scan/parse.test.ts packages/compiler/src/index.test.ts -t "call argument property access|renderOnce coverage|query-looking text inside renderOnce|string literals inside inline expressions"`,
+      `pnpm exec vitest --run packages/compiler/src/scan/parse.test.ts packages/compiler/src/index.test.ts packages/compiler/src/shared.test.ts packages/compiler/src/model-pipeline.test.ts packages/compiler/src/handler-lowering.test.ts packages/compiler/src/navigation-lowering.test.ts packages/compiler/src/platform-lowering.test.ts`,
+      `pnpm exec vp check packages/compiler/src/scan/parse.ts packages/compiler/src/scan/parse.test.ts packages/compiler/src/analyze/query-updates.ts packages/compiler/src/index.test.ts`,
+      and `git diff --check`.
 - [x] **HIGH — Retire regex rewriting of handler bodies.** emit/client.ts:89
       (`/\bstate\b/g → ctx.state` corrupts `log('state changed')`), :96 (member-expression
       substitution inside string literals), lower/handlers.ts:262 (harvests params from string

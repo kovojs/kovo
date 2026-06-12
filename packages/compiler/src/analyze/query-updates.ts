@@ -7,7 +7,6 @@ import {
   jsxElementChildBody,
   jsxElements,
   jsxExpressions,
-  propertyAccessPaths,
   stringLiteralArrayValues,
   type ComponentModuleModel,
   type JsxElementModel,
@@ -285,7 +284,12 @@ function renderOnceQueryPaths(
   const paths: string[] = [];
 
   for (const call of callExpressions(model).filter((item) => item.name === 'renderOnce')) {
-    paths.push(...queryPathsInExpression(call.arguments.join(', '), knownQueries));
+    paths.push(
+      ...call.argumentPropertyAccesses
+        .flat()
+        .map((access) => access.path)
+        .filter((path) => queryPathUsesKnownQuery(path, knownQueries)),
+    );
   }
 
   return [...new Set(paths)];
@@ -308,12 +312,6 @@ function jsxQueryExpressionPaths(
     })
     .filter((expression): expression is QueryPathExpressionFact => expression !== null)
     .filter((expression) => queryPathUsesKnownQuery(expression.path, knownQueries));
-}
-
-function queryPathsInExpression(expression: string, knownQueries: ReadonlySet<string>): string[] {
-  return propertyAccessPaths('expression.tsx', expression).filter((path) =>
-    queryPathUsesKnownQuery(path, knownQueries),
-  );
 }
 
 function updateCoverageKey(fact: QueryUpdateCoverageFact): string {

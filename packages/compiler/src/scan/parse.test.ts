@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
   arrowFunctionParts,
+  callExpressions,
   componentRenderHostElement,
   documentElementActionFromZeroArgArrow,
   functionBodyPropertyAccessPaths,
@@ -222,6 +223,26 @@ export const CartBadge = component('cart-badge', {
       null,
       null,
     ]);
+  });
+
+  it('records call argument property access facts', () => {
+    const source = `
+export const CartBadge = component('cart-badge', {
+  render: () => <span>{renderOnce(format(cart.count), "cart.discount", product.name)}</span>,
+});
+`;
+    const renderOnce = callExpressions(parseComponentModule('cart-badge.tsx', source)).find(
+      (call) => call.name === 'renderOnce',
+    );
+
+    expect(renderOnce?.arguments).toEqual([
+      'format(cart.count)',
+      '"cart.discount"',
+      'product.name',
+    ]);
+    expect(
+      renderOnce?.argumentPropertyAccesses.map((paths) => paths.map((path) => path.path)),
+    ).toEqual([['cart.count'], [], ['product.name']]);
   });
 
   it('extracts concise arrow function parts through the TypeScript parser', () => {
