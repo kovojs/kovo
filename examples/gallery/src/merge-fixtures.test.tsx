@@ -44,6 +44,14 @@ import {
   numberFieldIncrementAttributes,
   numberFieldInputAttributes,
   meterRootAttributes,
+  navigationMenuContentAttributes,
+  navigationMenuIndicatorAttributes,
+  navigationMenuItemAttributes,
+  navigationMenuLinkAttributes,
+  navigationMenuListAttributes,
+  navigationMenuRootAttributes,
+  navigationMenuTriggerAttributes,
+  navigationMenuViewportAttributes,
   otpFieldHiddenInputAttributes,
   otpFieldInputAttributes,
   otpFieldRootAttributes,
@@ -651,6 +659,219 @@ describe('gallery G5 primitive merge fixtures', () => {
       </section>,
     ).toBe(
       '<section data-gallery-merge="context-menu"><div data-state="open" aria-expanded="false" aria-haspopup="menu" aria-controls="author-context-content" jiso-context-menu="author-context-content" id="gallery-context-trigger" aria-labelledby="gallery-context-label" class="context-trigger rounded">Canvas</div><div data-state="open" role="listbox" tabIndex="-1" id="author-context-content" aria-labelledby="gallery-context-trigger" data-anchor-x="128" data-anchor-y="64" class="context-content shadow"><div data-state="open" role="presentation" id="gallery-context-group" aria-labelledby="author-context-group-label" class="context-group"><div data-state="active" data-highlighted="" role="option" tabIndex="-1" id="gallery-context-paste" label="Paste" value="author-paste" class="context-item px-2" aria-disabled="true">Paste</div></div><div role="none" id="gallery-context-separator"></div></div></section>',
+    );
+  });
+
+  it('renders a golden navigation-menu merge with list-driven content and viewport attrs', () => {
+    const state = {
+      activeValue: 'products',
+      items: [
+        { label: 'Products', value: 'products' },
+        { disabled: true, label: 'Solutions', value: 'solutions' },
+        { label: 'Company', value: 'company' },
+      ],
+      openValue: 'products',
+    };
+    const root = mergePrimitiveAttrs(
+      {
+        ...navigationMenuRootAttributes({
+          ...state,
+          descriptionId: 'gallery-nav-description',
+          id: 'gallery-nav-root',
+          label: 'Gallery navigation',
+        }),
+        class: 'navigation-root',
+      },
+      {
+        'aria-label': 'Author nav',
+        class: 'navigation-root border',
+        'data-state': 'author-open',
+        role: 'menubar',
+      },
+    );
+    const list = mergePrimitiveAttrs(
+      {
+        ...navigationMenuListAttributes({ ...state, id: 'gallery-nav-list' }),
+        class: 'navigation-list',
+      },
+      {
+        class: 'navigation-list gap-2',
+        role: 'menu',
+      },
+    );
+    const item = mergePrimitiveAttrs(
+      {
+        ...navigationMenuItemAttributes({
+          ...state,
+          id: 'gallery-nav-products-item',
+          itemValue: 'products',
+        }),
+        class: 'navigation-item',
+      },
+      {
+        class: 'navigation-item px-2',
+        'data-state': 'author-active',
+        role: 'presentation',
+      },
+    );
+    const trigger = mergePrimitiveAttrs(
+      {
+        ...navigationMenuTriggerAttributes({
+          ...state,
+          contentId: 'gallery-nav-products-panel',
+          id: 'gallery-nav-products-trigger',
+          itemLabel: 'Products',
+          itemValue: 'products',
+        }),
+        class: 'navigation-trigger',
+      },
+      {
+        'aria-controls': 'author-nav-products-panel',
+        'aria-expanded': 'false',
+        class: 'navigation-trigger font-medium',
+        disabled: true,
+        type: 'submit',
+      },
+    );
+    const content = mergePrimitiveAttrs(
+      {
+        ...navigationMenuContentAttributes({
+          id: 'gallery-nav-products-panel',
+          labelledBy: 'gallery-nav-products-trigger',
+          openValue: 'products',
+          value: 'products',
+        }),
+        class: 'navigation-content',
+      },
+      {
+        class: 'navigation-content shadow',
+        id: 'author-nav-products-panel',
+        role: 'region',
+      },
+    );
+    const link = mergePrimitiveAttrs(
+      {
+        ...navigationMenuLinkAttributes({
+          ...state,
+          href: '/company',
+          id: 'gallery-nav-company-link',
+          itemLabel: 'Company',
+          itemValue: 'company',
+        }),
+        class: 'navigation-link',
+      },
+      {
+        class: 'navigation-link underline',
+        href: '/author-company',
+        tabIndex: 3,
+        value: 'author-company',
+      },
+    );
+    const viewport = mergePrimitiveAttrs(
+      {
+        ...navigationMenuViewportAttributes({ id: 'gallery-nav-viewport', openValue: 'products' }),
+        class: 'navigation-viewport',
+      },
+      {
+        class: 'navigation-viewport rounded',
+        hidden: true,
+      },
+    );
+    const indicator = mergePrimitiveAttrs(
+      {
+        ...navigationMenuIndicatorAttributes({
+          id: 'gallery-nav-indicator',
+          openValue: 'products',
+        }),
+        class: 'navigation-indicator',
+      },
+      {
+        class: 'navigation-indicator accent',
+        'data-state': 'author-open',
+        hidden: true,
+      },
+    );
+
+    expect(root.diagnostics).toEqual([
+      {
+        attr: 'data-state',
+        code: 'FW232',
+        message: 'Author override of primitive-owned state attribute per SPEC.md section 4.6',
+      },
+      {
+        attr: 'role',
+        code: 'FW232',
+        message: 'Author override of primitive ARIA/role attribute per SPEC.md section 4.6',
+      },
+      {
+        attr: 'aria-label',
+        code: 'FW232',
+        message: 'Author override of primitive ARIA/role attribute per SPEC.md section 4.6',
+      },
+    ]);
+    expect(list.diagnostics).toEqual([
+      {
+        attr: 'role',
+        code: 'FW232',
+        message: 'Author override of primitive ARIA/role attribute per SPEC.md section 4.6',
+      },
+    ]);
+    expect(item.diagnostics).toEqual([
+      {
+        attr: 'data-state',
+        code: 'FW232',
+        message: 'Author override of primitive-owned state attribute per SPEC.md section 4.6',
+      },
+      {
+        attr: 'role',
+        code: 'FW232',
+        message: 'Author override of primitive ARIA/role attribute per SPEC.md section 4.6',
+      },
+    ]);
+    expect(trigger.diagnostics).toEqual([
+      {
+        attr: 'aria-expanded',
+        code: 'FW232',
+        message: 'Author override of primitive ARIA/role attribute per SPEC.md section 4.6',
+      },
+      {
+        attr: 'aria-controls',
+        code: 'FW231',
+        message: 'Unmergeable primitive IDREF conflict per SPEC.md section 4.6',
+      },
+    ]);
+    expect(content.diagnostics).toEqual([
+      {
+        attr: 'role',
+        code: 'FW232',
+        message: 'Author override of primitive ARIA/role attribute per SPEC.md section 4.6',
+      },
+    ]);
+    expect(link.diagnostics).toEqual([]);
+    expect(viewport.diagnostics).toEqual([]);
+    expect(indicator.diagnostics).toEqual([
+      {
+        attr: 'data-state',
+        code: 'FW232',
+        message: 'Author override of primitive-owned state attribute per SPEC.md section 4.6',
+      },
+    ]);
+    expect(
+      <section data-gallery-merge="navigation-menu">
+        <nav {...root.attrs}>
+          <div {...list.attrs}>
+            <div {...item.attrs}>
+              <button {...trigger.attrs}>Products</button>
+              <div {...content.attrs}>Product links</div>
+            </div>
+            <a {...link.attrs}>Company</a>
+          </div>
+          <div {...viewport.attrs}></div>
+          <span {...indicator.attrs}></span>
+        </nav>
+      </section>,
+    ).toBe(
+      '<section data-gallery-merge="navigation-menu"><nav data-state="open" data-orientation="horizontal" role="menubar" id="gallery-nav-root" aria-label="Author nav" aria-describedby="gallery-nav-description" class="navigation-root border"><div data-state="open" data-orientation="horizontal" role="menu" id="gallery-nav-list" class="navigation-list gap-2"><div data-state="active" data-highlighted="" role="presentation" id="gallery-nav-products-item" class="navigation-item px-2"><button data-state="open" data-highlighted="" aria-expanded="false" aria-haspopup="true" disabled tabIndex="0" type="submit" value="products" aria-controls="author-nav-products-panel" id="gallery-nav-products-trigger" label="Products" class="navigation-trigger font-medium">Products</button><div data-state="open" role="region" tabIndex="-1" id="author-nav-products-panel" aria-labelledby="gallery-nav-products-trigger" class="navigation-content shadow">Product links</div></div><a data-state="inactive" tabIndex="3" value="author-company" href="/author-company" id="gallery-nav-company-link" label="Company" class="navigation-link underline">Company</a></div><div data-state="open" id="gallery-nav-viewport" class="navigation-viewport rounded" hidden></div><span data-state="open" id="gallery-nav-indicator" class="navigation-indicator accent" hidden></span></nav></section>',
     );
   });
 

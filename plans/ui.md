@@ -836,6 +836,19 @@ jiso-dialog` resolves dashed wire names and prints provenance including package,
       and `git diff --check`. G5 remains open because this is still a bounded fixture
       subset, not every exported primitive attrs record or compiler/runtime diagnostic
       coverage.
+      Additional partial evidence 2026-06-12: the gallery G5 oracle adds a navigation-menu
+      merge golden covering root/list/item/trigger/content/link/viewport/indicator attrs,
+      list-driven state retention, trigger/content IDREF conflicts, ARIA/role override
+      diagnostics, logical disabled behavior, and scalar precedence against the SPEC §4.6
+      merge table. Same-session evidence:
+      `pnpm --filter @jiso/example-gallery exec vitest --run src/merge-fixtures.test.tsx`,
+      `pnpm --filter @jiso/example-gallery test`,
+      `pnpm --filter @jiso/headless-ui exec vitest --run src/primitives/navigation-menu.test.ts src/tooling/lint-primitives.test.ts src/tooling/primitive-handler-lint.test.ts`,
+      `pnpm --filter @jiso/headless-ui run lint:primitives`,
+      `pnpm exec vp check examples/gallery/src/merge-fixtures.test.tsx plans/ui.md`,
+      and `git diff --check`. G5 remains open because this is still a bounded fixture
+      subset, not every exported primitive attrs record or compiler/runtime diagnostic
+      coverage.
 
 ## Background
 
