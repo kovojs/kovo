@@ -344,8 +344,7 @@ function compactInlineJavaScriptSource(sourceFile: ts.SourceFile): string {
   const source = sourceFile.text;
   const regexSpans = collectRegularExpressionLiteralSpans(sourceFile);
   let regexIndex = 0;
-  let output = '';
-  let previousToken: MinifiedToken | undefined;
+  const tokens: MinifiedToken[] = [];
   const scanner = ts.createScanner(
     ts.ScriptTarget.Latest,
     true,
@@ -368,16 +367,20 @@ function compactInlineJavaScriptSource(sourceFile: ts.SourceFile): string {
             text: source.slice(regexSpan.start, regexSpan.end),
           }
         : { kind, text: scanner.getTokenText() };
-    if (previousToken && needsTokenSeparator(previousToken, token)) output += ' ';
-    output += token.text;
-    previousToken = token;
+    tokens.push(token);
     if (regexSpan?.start === tokenStart) {
       scanner.setTextPos(regexSpan.end);
       regexIndex += 1;
     }
   }
 
-  return output;
+  return tokens
+    .map((token, index) => {
+      const previousToken = tokens[index - 1];
+      const separator = previousToken && needsTokenSeparator(previousToken, token) ? ' ' : '';
+      return `${separator}${token.text}`;
+    })
+    .join('');
 }
 
 interface SourceSpan {
@@ -409,32 +412,58 @@ interface MinifiedToken {
 }
 
 function needsTokenSeparator(previousToken: MinifiedToken, nextToken: MinifiedToken): boolean {
-  if (isWordLikeToken(previousToken.kind) && isWordLikeToken(nextToken.kind)) return true;
-  if (
-    (previousToken.kind === ts.SyntaxKind.PlusToken ||
-      previousToken.kind === ts.SyntaxKind.MinusToken) &&
-    previousToken.kind === nextToken.kind
-  ) {
-    return true;
-  }
   if (
     previousToken.kind === ts.SyntaxKind.RegularExpressionLiteral &&
-    isWordLikeToken(nextToken.kind)
+    startsWithIdentifierPart(nextToken.text)
   ) {
     return true;
   }
-  return (
-    previousToken.kind === ts.SyntaxKind.SlashToken && nextToken.kind === ts.SyntaxKind.SlashToken
-  );
+  if (
+    previousToken.kind === ts.SyntaxKind.SlashToken &&
+    nextToken.kind === ts.SyntaxKind.RegularExpressionLiteral
+  ) {
+    return true;
+  }
+
+  return !tokensRemainSeparateWithoutWhitespace(previousToken, nextToken);
 }
 
-function isWordLikeToken(kind: ts.SyntaxKind): boolean {
+function tokensRemainSeparateWithoutWhitespace(
+  previousToken: MinifiedToken,
+  nextToken: MinifiedToken,
+): boolean {
+  if (
+    previousToken.kind === ts.SyntaxKind.RegularExpressionLiteral ||
+    nextToken.kind === ts.SyntaxKind.RegularExpressionLiteral
+  ) {
+    return true;
+  }
+
+  let scannerError = false;
+  const scanner = ts.createScanner(
+    ts.ScriptTarget.Latest,
+    false,
+    ts.LanguageVariant.Standard,
+    `${previousToken.text}${nextToken.text}`,
+    () => {
+      scannerError = true;
+    },
+  );
+
+  const remainsSeparate =
+    scanner.scan() === previousToken.kind &&
+    scanner.getTokenText() === previousToken.text &&
+    scanner.scan() === nextToken.kind &&
+    scanner.getTokenText() === nextToken.text &&
+    scanner.scan() === ts.SyntaxKind.EndOfFileToken;
+
+  return remainsSeparate && !scannerError;
+}
+
+function startsWithIdentifierPart(value: string): boolean {
+  const firstCodePoint = value.codePointAt(0);
   return (
-    kind === ts.SyntaxKind.Identifier ||
-    kind === ts.SyntaxKind.PrivateIdentifier ||
-    kind === ts.SyntaxKind.NumericLiteral ||
-    kind === ts.SyntaxKind.BigIntLiteral ||
-    (kind >= ts.SyntaxKind.FirstKeyword && kind <= ts.SyntaxKind.LastKeyword)
+    firstCodePoint !== undefined && ts.isIdentifierPart(firstCodePoint, ts.ScriptTarget.Latest)
   );
 }
 

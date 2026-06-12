@@ -157,6 +157,9 @@ describe('inline loader source', () => {
       '  const plusComment = numeric+/* plus gap */+1;',
       '  const minusComment = numeric-/* minus gap */-1;',
       '  const commentReturn = () => { return/* return gap */value; };',
+      '  const keywordBoundary = value instanceof String;',
+      '  const numericKeywordBoundary = 1 in { 1: true };',
+      '  const slashRegexBoundary = 4 / /2/.source.length;',
       '  const commentRegex = /\\/\\/|\\/\\*/g;',
       '  const spacedRegex = /left right\\/slash/g;',
       '  const classSpaceRegex = /[ /#]+/g;',
@@ -172,11 +175,14 @@ describe('inline loader source', () => {
       '    commentHits: value.match(commentRegex)?.length ?? 0,',
       '    commentReturn: commentReturn(),',
       '    joined,',
+      '    keywordBoundary,',
       '    minusComment,',
       '    minusWhitespace,',
+      '    numericKeywordBoundary,',
       '    plusComment,',
       '    plusWhitespace,',
       '    regexInstance,',
+      '    slashRegexBoundary,',
       "    spacedRegex: spacedRegex.test('left right/slash'),",
       '    stringLiteral,',
       '    templateLiteral,',
@@ -194,6 +200,9 @@ describe('inline loader source', () => {
     expect(minifiedSource).toContain('numeric+ +1');
     expect(minifiedSource).toContain('numeric- -1');
     expect(minifiedSource).toContain('return value');
+    expect(minifiedSource).toContain('value instanceof String');
+    expect(minifiedSource).toContain('1 in{1:true}');
+    expect(minifiedSource).toContain('4/ /2/.source.length');
     expect(minifiedSource).toContain('/left right\\/slash/g');
     expect(minifiedSource).toContain('/[ /#]+/g');
     expect(minifiedSource).toContain('/left right/ instanceof RegExp');

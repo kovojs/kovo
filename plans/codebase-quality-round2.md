@@ -2100,6 +2100,18 @@ params, relational API, `execute(sql)`, right/full joins, a string column named 
       `pnpm exec vitest --config vitest.browser.config.ts --run packages/runtime/src/index.browser.test.ts`,
       `pnpm exec vp check packages/runtime/src/inline-loader-build.ts packages/runtime/src/inline-loader.test.ts plans/codebase-quality-round2.md`,
       and `git diff --check`.
+      Additional bounded evidence 2026-06-12: `packages/runtime/src/inline-loader-build.ts`
+      now derives token-boundary separators by rescanning adjacent TypeScript tokens and honoring
+      scanner lexical errors, rather than carrying a word/operator separator table. The helper
+      still preserves parser-identified regex spans and keeps narrow regex-context guards for
+      regex flags and division-before-regex boundaries. `packages/runtime/src/inline-loader.test.ts`
+      pins `instanceof`, numeric-keyword, division/regex, regex-before-`instanceof`, string, and
+      comment-adjacent operator cases while `check:inline-loader` keeps the generated bootstrap
+      byte-identical. Same-session evidence:
+      `corepack pnpm --filter @jiso/runtime run check:inline-loader`,
+      `corepack pnpm exec vitest --run packages/runtime/src/inline-loader.test.ts`,
+      `corepack pnpm exec vp check packages/runtime/src/inline-loader-build.ts packages/runtime/src/inline-loader.test.ts plans/codebase-quality-round2.md`,
+      and `git diff --check`.
       Additional bounded evidence 2026-06-12: `packages/runtime/src/mutation-targets.ts` now owns
       the live `FW-Targets` header separator/serialization used by
       `packages/runtime/src/mutation-submit.ts`, so the enhanced mutation request header and
