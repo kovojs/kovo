@@ -180,7 +180,11 @@ export type BetterAuthOrganizationTable =
   | 'organizationRole'
   | 'team'
   | 'teamMember';
-export type BetterAuthTable = BetterAuthCoreTable | BetterAuthOrganizationTable;
+export type BetterAuthTwoFactorTable = 'twoFactor';
+export type BetterAuthTable =
+  | BetterAuthCoreTable
+  | BetterAuthOrganizationTable
+  | BetterAuthTwoFactorTable;
 
 export type BetterAuthTouchDomain = 'auth' | 'organization' | 'user';
 
@@ -211,6 +215,7 @@ export interface BetterAuthSchemaBridgeValidation {
 }
 
 export interface BetterAuthPluginTableDegradation {
+  diagnosticCode: 'FW406';
   fields: string[] | null;
   message: string;
   reason: 'unsupported-plugin-table';
@@ -274,6 +279,7 @@ export const betterAuthSchemaBridge = {
   session: { domain: 'auth', key: 'userId' },
   team: { domain: 'organization', key: 'organizationId' },
   teamMember: { domain: 'organization', key: 'teamId' },
+  twoFactor: { domain: 'auth', key: 'userId' },
   user: { domain: 'user', key: 'id' },
   verification: {
     exempt: true,
@@ -877,8 +883,9 @@ function unsupportedPluginTableDegradation(
   const fieldNames = betterAuthTableFieldNames(metadata);
 
   return {
+    diagnosticCode: 'FW406',
     fields: fieldNames === null ? null : [...fieldNames].sort(),
-    message: `${table} is outside the blessed Better Auth schema bridge; map it to an app domain before relying on declared touch coverage.`,
+    message: `${table} is outside the blessed Better Auth schema bridge; add a schema.ts domain/exempt annotation and declared touches before relying on runtime coverage.`,
     reason: 'unsupported-plugin-table',
     table,
   };

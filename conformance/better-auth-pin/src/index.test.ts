@@ -8,7 +8,7 @@ import {
 import { createJisoTestHarness } from '@jiso/test';
 import { betterAuth, getAuthTables } from 'better-auth';
 import { memoryAdapter } from 'better-auth/adapters/memory';
-import { admin, organization, twoFactor } from 'better-auth/plugins';
+import { admin, jwt, organization, twoFactor } from 'better-auth/plugins';
 import { describe, expect, expectTypeOf, it } from 'vitest';
 
 import {
@@ -316,11 +316,15 @@ describe('Better Auth pinned conformance', () => {
     );
   });
 
-  it('degrades non-blessed plugin table metadata with actionable bridge diagnostics', () => {
+  it('pins two-factor plugin table metadata used by the schema bridge', () => {
     const { auth } = createRealAuth({
       plugins: [twoFactor()],
     });
     const tables = getAuthTables(auth.options);
+    const result = annotateBetterAuthSchemaSource(
+      betterAuthSchemaSourceFixture(Object.keys(tables)),
+      tables,
+    );
 
     expect(Object.keys(tables).sort()).toEqual([
       'account',
@@ -339,17 +343,58 @@ describe('Better Auth pinned conformance', () => {
       declaredTouchMismatches: [],
       keyFieldMismatches: [],
       missingTables: [],
+      ok: true,
+      pluginTableDegradations: [],
+      unbridgedTables: [],
+    });
+    expect(betterAuthSchemaBridge.twoFactor).toEqual({ domain: 'auth', key: 'userId' });
+    expect(result.annotatedTables).toEqual([
+      'account',
+      'session',
+      'twoFactor',
+      'user',
+      'verification',
+    ]);
+    expect(result.source).toContain(
+      "export const twoFactor = pgTable('twoFactor', {}, jiso({ domain: 'auth', key: 'userId' }));",
+    );
+  });
+
+  it('degrades non-bridged real plugin table metadata with FW406 bridge diagnostics', () => {
+    const { auth } = createRealAuth({
+      plugins: [jwt()],
+    });
+    const tables = getAuthTables(auth.options);
+
+    expect(Object.keys(tables).sort()).toEqual([
+      'account',
+      'jwks',
+      'session',
+      'user',
+      'verification',
+    ]);
+    expect(Object.keys(requireAuthTable(tables, 'jwks').fields).sort()).toEqual([
+      'createdAt',
+      'expiresAt',
+      'privateKey',
+      'publicKey',
+    ]);
+    expect(validateBetterAuthSchemaBridge(tables)).toEqual({
+      declaredTouchMismatches: [],
+      keyFieldMismatches: [],
+      missingTables: [],
       ok: false,
       pluginTableDegradations: [
         {
-          fields: ['backupCodes', 'id', 'secret', 'userId', 'verified'],
+          diagnosticCode: 'FW406',
+          fields: ['createdAt', 'expiresAt', 'id', 'privateKey', 'publicKey'],
           message:
-            'twoFactor is outside the blessed Better Auth schema bridge; map it to an app domain before relying on declared touch coverage.',
+            'jwks is outside the blessed Better Auth schema bridge; add a schema.ts domain/exempt annotation and declared touches before relying on runtime coverage.',
           reason: 'unsupported-plugin-table',
-          table: 'twoFactor',
+          table: 'jwks',
         },
       ],
-      unbridgedTables: ['twoFactor'],
+      unbridgedTables: ['jwks'],
     });
   });
 

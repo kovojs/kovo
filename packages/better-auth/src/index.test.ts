@@ -332,6 +332,7 @@ describe('credential mutation helpers', () => {
       session: { domain: 'auth', key: 'userId' },
       team: { domain: 'organization', key: 'organizationId' },
       teamMember: { domain: 'organization', key: 'teamId' },
+      twoFactor: { domain: 'auth', key: 'userId' },
       user: { domain: 'user', key: 'id' },
       verification: {
         exempt: true,
@@ -404,6 +405,7 @@ describe('credential mutation helpers', () => {
         session: 'auth',
         team: 'organization',
         teamMember: 'organization',
+        twoFactor: 'auth',
         user: 'user',
       },
       exemptTables: ['verification'],
@@ -416,6 +418,7 @@ describe('credential mutation helpers', () => {
         session: 'userId',
         team: 'organizationId',
         teamMember: 'teamId',
+        twoFactor: 'userId',
         user: 'id',
       },
     });
@@ -444,6 +447,7 @@ describe('credential mutation helpers', () => {
         session: authTable(['userId']),
         team: authTable(['organizationId']),
         teamMember: authTable(['teamId']),
+        twoFactor: authTable(['userId']),
         user: authTable(),
         verification: authTable(),
       }),
@@ -484,9 +488,10 @@ describe('credential mutation helpers', () => {
       ok: false,
       pluginTableDegradations: [
         {
+          diagnosticCode: 'FW406',
           fields: ['credentialId', 'id', 'userId'],
           message:
-            'webauthnCredential is outside the blessed Better Auth schema bridge; map it to an app domain before relying on declared touch coverage.',
+            'webauthnCredential is outside the blessed Better Auth schema bridge; add a schema.ts domain/exempt annotation and declared touches before relying on runtime coverage.',
           reason: 'unsupported-plugin-table',
           table: 'webauthnCredential',
         },
@@ -573,6 +578,39 @@ describe('credential mutation helpers', () => {
         "  id: text('id').primaryKey(),\n" +
         "  identifier: text('identifier').notNull(),\n" +
         '}, jiso({ exempt: true }));',
+    );
+  });
+
+  it('materializes a bridged two-factor plugin table into an app schema.ts source fixture', () => {
+    const result = annotateBetterAuthSchemaSource(
+      [
+        "import { jiso } from '@jiso/drizzle';",
+        "import { pgTable, text } from 'drizzle-orm/pg-core';",
+        '',
+        "export const twoFactor = pgTable('twoFactor', {",
+        "  id: text('id').primaryKey(),",
+        "  userId: text('user_id').notNull(),",
+        "  secret: text('secret').notNull(),",
+        '});',
+        '',
+      ].join('\n'),
+      {
+        twoFactor: authTable(['userId', 'secret']),
+      },
+    );
+
+    expect(result.validation).toMatchObject({
+      keyFieldMismatches: [],
+      pluginTableDegradations: [],
+      unbridgedTables: [],
+    });
+    expect(result.annotatedTables).toEqual(['twoFactor']);
+    expect(result.source).toContain(
+      "export const twoFactor = pgTable('twoFactor', {\n" +
+        "  id: text('id').primaryKey(),\n" +
+        "  userId: text('user_id').notNull(),\n" +
+        "  secret: text('secret').notNull(),\n" +
+        "}, jiso({ domain: 'auth', key: 'userId' }));",
     );
   });
 
