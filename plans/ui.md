@@ -700,6 +700,16 @@ jiso-dialog` resolves dashed wire names and prints provenance including package,
       `pnpm exec vp check examples/gallery/src/merge-fixtures.test.tsx plans/ui.md`,
       and `git diff --check`. G5 remains open because this is still a bounded fixture subset,
       not every primitive attrs record or compiler/runtime diagnostic coverage.
+      Additional partial evidence 2026-06-12: the gallery G5 oracle adds field, meter, and
+      otp-field merge goldens. These cover native field label/control IDREF rewrites, field
+      invalid/required data attrs, meter threshold scalar precedence, OTP aggregate input and
+      visible slot attrs, logical-OR `required`/`disabled`, and ARIA/role FW231/FW232 diagnostics
+      against the SPEC §4.6 merge table. Same-session evidence:
+      `pnpm --filter @jiso/example-gallery exec vitest --run src/merge-fixtures.test.tsx`,
+      `pnpm --filter @jiso/example-gallery test`,
+      `pnpm exec vp check examples/gallery/src/merge-fixtures.test.tsx plans/ui.md`,
+      and `git diff --check`. G5 remains open because this is still a bounded fixture subset,
+      not every primitive attrs record or compiler/runtime diagnostic coverage.
 
 ## Background
 

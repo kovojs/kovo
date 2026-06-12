@@ -9,8 +9,15 @@ import {
   checkboxRootAttributes,
   dialogContentAttributes,
   dialogTriggerAttributes,
+  fieldControlAttributes,
+  fieldLabelAttributes,
+  fieldRootAttributes,
   numberFieldIncrementAttributes,
   numberFieldInputAttributes,
+  meterRootAttributes,
+  otpFieldHiddenInputAttributes,
+  otpFieldInputAttributes,
+  otpFieldRootAttributes,
   progressRootAttributes,
   radioGroupLabelAttributes,
   radioGroupRadioAttributes,
@@ -270,6 +277,117 @@ describe('gallery G5 primitive merge fixtures', () => {
     );
   });
 
+  it('renders a golden field merge with native label and control wiring', () => {
+    const root = mergePrimitiveAttrs(
+      {
+        ...fieldRootAttributes({ id: 'gallery-field', invalid: true, required: true }),
+        class: 'field-root',
+      },
+      {
+        class: 'field-root grid gap-1',
+        'data-invalid': 'author-invalid',
+        id: 'author-field',
+      },
+    );
+    const control = mergePrimitiveAttrs(
+      {
+        ...fieldControlAttributes({
+          descriptionId: 'gallery-field-description',
+          errorId: 'gallery-field-error',
+          id: 'gallery-field-email',
+          invalid: true,
+          name: 'email',
+          required: true,
+        }),
+        class: 'field-control',
+      },
+      {
+        'aria-describedby': 'author-field-description',
+        'aria-invalid': 'false',
+        class: 'field-control border',
+        name: 'author-email',
+        required: false,
+      },
+    );
+    const label = mergePrimitiveAttrs(
+      rewriteIdrefs(
+        fieldLabelAttributes({ controlId: 'gallery-field-email' }),
+        new Map([['gallery-field-email', 'author-field-email']]),
+      ),
+      {
+        class: 'field-label',
+        for: 'author-field-email',
+      },
+    );
+
+    expect(root.diagnostics).toEqual([]);
+    expect(control.diagnostics).toEqual([
+      {
+        attr: 'aria-describedby',
+        code: 'FW231',
+        message: 'Unmergeable primitive IDREF conflict per SPEC.md section 4.6',
+      },
+      {
+        attr: 'aria-invalid',
+        code: 'FW232',
+        message: 'Author override of primitive ARIA/role attribute per SPEC.md section 4.6',
+      },
+    ]);
+    expect(label.diagnostics).toEqual([]);
+    expect(
+      <div data-gallery-merge="field">
+        <div {...root.attrs}>
+          <label {...label.attrs}>Email</label>
+          <input {...control.attrs} />
+        </div>
+      </div>,
+    ).toBe(
+      '<div data-gallery-merge="field"><div data-invalid="author-invalid" data-required="" id="author-field" class="field-root grid gap-1"><label for="author-field-email" class="field-label">Email</label><input data-invalid="" data-required="" aria-describedby="author-field-description" aria-invalid="false" id="gallery-field-email" name="author-email" required class="field-control border"></div></div>',
+    );
+  });
+
+  it('renders a golden meter merge with threshold scalars and author value text', () => {
+    const merged = mergePrimitiveAttrs(
+      {
+        ...meterRootAttributes({
+          high: 90,
+          low: 50,
+          max: 100,
+          min: 0,
+          optimum: 80,
+          value: 42,
+          valueText: '42 percent quality score',
+        }),
+        class: 'meter-root',
+      },
+      {
+        'aria-valuetext': 'Author meter label',
+        class: 'meter-root h-2',
+        'data-state': 'author-suboptimum',
+        high: 95,
+        low: 40,
+        optimum: 75,
+        value: 64,
+      },
+    );
+
+    expect(merged.diagnostics).toEqual([
+      {
+        attr: 'data-state',
+        code: 'FW232',
+        message: 'Author override of primitive-owned state attribute per SPEC.md section 4.6',
+      },
+      {
+        attr: 'aria-valuetext',
+        code: 'FW232',
+        message: 'Author override of primitive ARIA/role attribute per SPEC.md section 4.6',
+      },
+    ]);
+    expect(<meter {...merged.attrs}>64%</meter>).toBe(
+      '<meter data-high="90" data-low="50" data-max="100" data-min="0" data-optimum="80" data-state="suboptimum" data-value="42" high="95" low="40" max="100" min="0" optimum="75" value="64" aria-valuetext="Author meter label" class="meter-root h-2">64%</meter>',
+    );
+  });
+
   it('renders a golden progress merge with scalar author values and primitive-owned state', () => {
     const merged = mergePrimitiveAttrs(
       {
@@ -303,6 +421,103 @@ describe('gallery G5 primitive merge fixtures', () => {
     ]);
     expect(<progress {...merged.attrs}>50%</progress>).toBe(
       '<progress data-max="100" data-state="loading" max="80" data-value="42" value="50" aria-valuetext="Author progress label" class="progress-root h-2">50%</progress>',
+    );
+  });
+
+  it('renders a golden otp-field merge with aggregate input and slot overrides', () => {
+    const root = mergePrimitiveAttrs(
+      {
+        ...otpFieldRootAttributes({
+          descriptionId: 'gallery-otp-description',
+          errorId: 'gallery-otp-error',
+          id: 'gallery-otp-field',
+          invalid: true,
+          labelledBy: 'gallery-otp-label',
+          required: true,
+          value: '1234',
+        }),
+        class: 'otp-root',
+      },
+      {
+        'aria-describedby': 'author-otp-description',
+        class: 'otp-root gap-2',
+        role: 'application',
+      },
+    );
+    const hiddenInput = mergePrimitiveAttrs(
+      {
+        ...otpFieldHiddenInputAttributes({
+          length: 6,
+          name: 'gallery-otp-code',
+          pattern: '[0-9]*',
+          required: true,
+          value: '1234',
+        }),
+        class: 'otp-hidden',
+      },
+      {
+        'aria-hidden': 'false',
+        class: 'otp-hidden sr-only',
+        disabled: true,
+        name: 'author-otp-code',
+        required: false,
+      },
+    );
+    const slot = mergePrimitiveAttrs(
+      {
+        ...otpFieldInputAttributes({
+          inputMode: 'numeric',
+          label: 'One-time code digit 1',
+          length: 6,
+          required: true,
+          slotIndex: 0,
+          value: '1234',
+        }),
+        class: 'otp-slot',
+      },
+      {
+        'aria-label': 'Author digit label',
+        class: 'otp-slot text-center',
+        maxLength: 2,
+        value: '9',
+      },
+    );
+
+    expect(root.diagnostics).toEqual([
+      {
+        attr: 'role',
+        code: 'FW232',
+        message: 'Author override of primitive ARIA/role attribute per SPEC.md section 4.6',
+      },
+      {
+        attr: 'aria-describedby',
+        code: 'FW231',
+        message: 'Unmergeable primitive IDREF conflict per SPEC.md section 4.6',
+      },
+    ]);
+    expect(hiddenInput.diagnostics).toEqual([
+      {
+        attr: 'aria-hidden',
+        code: 'FW232',
+        message: 'Author override of primitive ARIA/role attribute per SPEC.md section 4.6',
+      },
+    ]);
+    expect(slot.diagnostics).toEqual([
+      {
+        attr: 'aria-label',
+        code: 'FW232',
+        message: 'Author override of primitive ARIA/role attribute per SPEC.md section 4.6',
+      },
+    ]);
+    expect(
+      <div data-gallery-merge="otp-field">
+        <div {...root.attrs}>
+          <input {...hiddenInput.attrs} />
+          <input {...slot.attrs} />
+        </div>
+      </div>,
+    ).toBe(
+      '<div data-gallery-merge="otp-field"><div data-invalid="" data-required="" role="application" id="gallery-otp-field" aria-labelledby="gallery-otp-label" aria-describedby="author-otp-description" aria-invalid="true" aria-required="true" class="otp-root gap-2"><input data-required="" aria-hidden="false" data-slot="hidden-input" autoComplete="one-time-code" disabled inputMode="numeric" readOnly tabIndex="-1" type="text" value="1234" name="author-otp-code" pattern="[0-9]*" required class="otp-hidden sr-only"><input data-required="" data-filled="" aria-label="Author digit label" data-slot="0" autoComplete="one-time-code" inputMode="numeric" maxLength="2" type="text" value="9" required class="otp-slot text-center"></div></div>',
     );
   });
 
