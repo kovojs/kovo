@@ -114,6 +114,13 @@ Scope: SPEC addition (proposed §9.5 "The request shell"), `@jiso/server` shell 
       `pnpm exec vitest --run packages/server/src/static-export.test.ts packages/server/src/vite.test.ts`,
       `pnpm exec vp check packages/server/src/vite.ts packages/server/src/vite.test.ts packages/server/src/index.ts plans/app-shell.md`,
       and `git diff --check`.
+      Additional evidence 2026-06-12: `createJisoAppShellViteBuildFromManifestFile()` and
+      `exportJisoAppShellViteBuildFromManifestFile()` let Vite/package export tasks consume a
+      built `.vite/manifest.json` file directly through the shared manifest validator, route-entry
+      map helper, compiled `/c/` registry, and `exportStaticApp()` bridge. `packages/server/src/vite.test.ts`
+      proves manifest-file route hints/assets, default `distDir/.vite/manifest.json` discovery,
+      copied Vite CSS/JS bytes, and replayed versioned `/c/` module output through the server
+      shell. Same-session verification ran `pnpm exec vitest --run packages/server/src/vite.test.ts`.
       Additional evidence 2026-06-12: `packages/server/src/vite.ts` now exposes
       `shouldHandleJisoAppShellViteSsrRequest()` and `jisoAppShellViteSsrDevPlugin()`
       so Vite dev/serve adapters can derive request ownership from the same

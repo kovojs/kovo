@@ -14,7 +14,9 @@ import {
   createJisoAppShellBuild,
   createJisoAppShellViteBuild,
   createJisoAppShellViteBuildFromBundle,
+  createJisoAppShellViteBuildFromManifestFile,
   exportJisoAppShellViteBuild,
+  exportJisoAppShellViteBuildFromManifestFile,
   jisoAppShellViteManifestAssets,
   jisoAppShellViteManifestAssetsFromFile,
   jisoAppShellViteManifestFromBundle,
@@ -354,6 +356,47 @@ describe('server app shell Vite plugin', () => {
     }
   });
 
+  it('creates a Vite app-shell build directly from a manifest file', async () => {
+    const distDir = await mkdtemp(join(tmpdir(), 'jiso-vite-build-manifest-file-'));
+
+    try {
+      await mkdir(join(distDir, '.vite'), { recursive: true });
+      await writeFile(
+        join(distDir, '.vite/manifest.json'),
+        JSON.stringify({
+          'src/cart.client.ts': {
+            css: ['assets/cart.css'],
+            file: 'assets/cart.js',
+          },
+        }),
+      );
+
+      const build = await createJisoAppShellViteBuildFromManifestFile({
+        app: createApp({ routes: [route('/cart', {})] }),
+        manifestFile: join(distDir, '.vite/manifest.json'),
+        routeEntryMap: {
+          '/cart': 'src/cart.client.ts',
+        },
+      });
+
+      expect(build.routeHints).toEqual([
+        {
+          hints: {
+            modulepreloads: ['/assets/cart.js'],
+            stylesheets: ['/assets/cart.css'],
+          },
+          routePath: '/cart',
+        },
+      ]);
+      expect(build.assets).toEqual([
+        { file: 'assets/cart.css', href: '/assets/cart.css', path: '/assets/cart.css' },
+        { file: 'assets/cart.js', href: '/assets/cart.js', path: '/assets/cart.js' },
+      ]);
+    } finally {
+      await rm(distDir, { force: true, recursive: true });
+    }
+  });
+
   it('rejects Vite output bundles without a manifest before app-shell build wiring', () => {
     expect(() => jisoAppShellViteManifestFromBundle({})).toThrow(
       'App shell Vite build requires .vite/manifest.json.',
@@ -593,6 +636,106 @@ describe('server app shell Vite plugin', () => {
       );
       await expect(readFile(join(outDir, 'assets/cart.js'), 'utf8')).resolves.toBe(
         'export const cart = "manifest";',
+      );
+    } finally {
+      await Promise.all([
+        rm(distDir, { force: true, recursive: true }),
+        rm(outDir, { force: true, recursive: true }),
+      ]);
+    }
+  });
+
+  it('exports a Vite app-shell build directly from the dist manifest file', async () => {
+    const distDir = await mkdtemp(join(tmpdir(), 'jiso-vite-dist-manifest-export-'));
+    const outDir = await mkdtemp(join(tmpdir(), 'jiso-vite-manifest-export-'));
+
+    try {
+      await mkdir(join(distDir, '.vite'), { recursive: true });
+      await mkdir(join(distDir, 'assets'), { recursive: true });
+      await writeFile(join(distDir, 'assets/cart.css'), '.cart{display:flex}');
+      await writeFile(join(distDir, 'assets/cart.js'), 'export const cart = "dist";');
+      await writeFile(
+        join(distDir, '.vite/manifest.json'),
+        JSON.stringify({
+          'src/cart.client.ts': {
+            css: ['assets/cart.css'],
+            file: 'assets/cart.js',
+          },
+        }),
+      );
+
+      const result = await exportJisoAppShellViteBuildFromManifestFile({
+        app: createApp({
+          routes: [
+            route('/cart', {
+              modulepreloads: ['/c/cart.client.js?v=cart-v1'],
+              page() {
+                return '<main class="cart">Cart</main>';
+              },
+            }),
+          ],
+        }),
+        clientModules: [
+          {
+            path: '/c/cart.client.js',
+            source: 'export const client = "cart";',
+            version: 'cart-v1',
+          },
+        ],
+        distDir,
+        outDir,
+        routeEntryMap: {
+          '/cart': 'src/cart.client.ts',
+        },
+      });
+
+      expect(result.artifacts[0]?.path).toBe('/cart/index.html');
+      expect(result.artifacts[0]?.body).toContain(
+        '<link rel="stylesheet" href="/assets/cart.css">',
+      );
+      expect(result.artifacts[0]?.body).toContain(
+        '<link rel="modulepreload" href="/c/cart.client.js?v=cart-v1">',
+      );
+      expect(result.artifacts[0]?.body).toContain(
+        '<link rel="modulepreload" href="/assets/cart.js">',
+      );
+      expect(result.clientModules).toEqual([
+        {
+          body: 'export const client = "cart";',
+          headers: {
+            'cache-control': 'public, max-age=31536000, immutable',
+            'content-type': 'text/javascript; charset=utf-8',
+          },
+          href: '/c/cart.client.js?v=cart-v1',
+          path: '/c/cart.client.js',
+          status: 200,
+        },
+      ]);
+      expect(result.assets).toEqual([
+        {
+          headers: { 'content-type': 'text/css; charset=utf-8' },
+          path: '/assets/cart.css',
+          source: join(distDir, 'assets/cart.css'),
+          status: 200,
+        },
+        {
+          headers: { 'content-type': 'text/javascript; charset=utf-8' },
+          path: '/assets/cart.js',
+          source: join(distDir, 'assets/cart.js'),
+          status: 200,
+        },
+      ]);
+      await expect(readFile(join(outDir, 'cart', 'index.html'), 'utf8')).resolves.toContain(
+        '<main class="cart">Cart</main>',
+      );
+      await expect(readFile(join(outDir, 'c', 'cart.client.js'), 'utf8')).resolves.toBe(
+        'export const client = "cart";',
+      );
+      await expect(readFile(join(outDir, 'assets/cart.css'), 'utf8')).resolves.toBe(
+        '.cart{display:flex}',
+      );
+      await expect(readFile(join(outDir, 'assets/cart.js'), 'utf8')).resolves.toBe(
+        'export const cart = "dist";',
       );
     } finally {
       await Promise.all([

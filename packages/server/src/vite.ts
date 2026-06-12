@@ -161,6 +161,14 @@ export interface JisoAppShellViteBundleBuildOptions extends Omit<
   manifest?: never;
 }
 
+export interface JisoAppShellViteManifestFileBuildOptions extends Omit<
+  JisoAppShellViteBuildOptions,
+  'manifest'
+> {
+  manifest?: never;
+  manifestFile: string | URL;
+}
+
 export interface JisoAppShellVitePluginBuildOptions extends Omit<
   JisoAppShellViteBundleBuildOptions,
   'app' | 'bundle' | 'manifest'
@@ -215,6 +223,18 @@ export interface JisoAppShellViteBuildStaticExportOptions extends Omit<
 > {
   assets?: readonly StaticExportAssetInput[];
   distDir: string | URL;
+}
+
+export interface JisoAppShellViteManifestFileBuildStaticExportOptions extends Omit<
+  JisoAppShellViteBuildStaticExportOptions,
+  'distDir'
+> {
+  app: JisoApp;
+  base?: string;
+  clientModules?: readonly JisoAppShellCompiledClientModule[];
+  distDir: string | URL;
+  manifestFile?: string | URL;
+  routeEntryMap?: JisoAppShellRouteEntryMap;
 }
 
 export function createJisoAppShellDevDiagnosticLedger(): JisoAppShellDevDiagnosticLedger {
@@ -633,6 +653,18 @@ export function createJisoAppShellViteBuildFromBundle(
   });
 }
 
+export async function createJisoAppShellViteBuildFromManifestFile(
+  options: JisoAppShellViteManifestFileBuildOptions,
+): Promise<JisoAppShellBuild> {
+  return createJisoAppShellViteBuild({
+    app: options.app,
+    ...(options.base === undefined ? {} : { base: options.base }),
+    ...(options.clientModules === undefined ? {} : { clientModules: options.clientModules }),
+    manifest: await jisoAppShellViteManifestFromFile(options.manifestFile),
+    ...(options.routeEntryMap === undefined ? {} : { routeEntryMap: options.routeEntryMap }),
+  });
+}
+
 export function jisoAppShellViteStaticExportAssets(
   assets: readonly JisoAppShellBuildAsset[],
   options: JisoAppShellViteStaticExportAssetOptions,
@@ -645,6 +677,28 @@ export function jisoAppShellViteStaticExportAssets(
       path: asset.path,
       source: viteDistSourcePath(options.distDir, asset.file),
     };
+  });
+}
+
+export async function exportJisoAppShellViteBuildFromManifestFile(
+  options: JisoAppShellViteManifestFileBuildStaticExportOptions,
+): Promise<StaticExportResult> {
+  const build = await createJisoAppShellViteBuildFromManifestFile({
+    app: options.app,
+    ...(options.base === undefined ? {} : { base: options.base }),
+    ...(options.clientModules === undefined ? {} : { clientModules: options.clientModules }),
+    manifestFile: options.manifestFile ?? viteManifestFile(options.distDir),
+    ...(options.routeEntryMap === undefined ? {} : { routeEntryMap: options.routeEntryMap }),
+  });
+
+  return exportJisoAppShellViteBuild(build, {
+    ...(options.assets === undefined ? {} : { assets: options.assets }),
+    ...(options.diagnostics === undefined ? {} : { diagnostics: options.diagnostics }),
+    distDir: options.distDir,
+    ...(options.htmlPathStyle === undefined ? {} : { htmlPathStyle: options.htmlPathStyle }),
+    ...(options.onNonExportable === undefined ? {} : { onNonExportable: options.onNonExportable }),
+    ...(options.origin === undefined ? {} : { origin: options.origin }),
+    ...(options.outDir === undefined ? {} : { outDir: options.outDir }),
   });
 }
 
@@ -880,6 +934,10 @@ function viteOutputDir(options: JisoAppShellViteOutputOptions): string {
   if (options.file) return path.dirname(options.file);
 
   throw new Error('App shell Vite build output requires output.dir or output.file.');
+}
+
+function viteManifestFile(distDir: string | URL): string {
+  return path.join(resolvedFileSystemPath(distDir), '.vite', 'manifest.json');
 }
 
 function resolvedFileSystemPath(value: string | URL): string {
