@@ -1,7 +1,7 @@
 import { cp, mkdir, readdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 
 import { generateApiReference } from './api-ref.mjs';
 import { captureAll } from './capture.mjs';
@@ -18,6 +18,7 @@ import { loadTutorialSnippets, substituteSnippets } from '../tutorial/extract-sn
 
 const siteRoot = fileURLToPath(new URL('../', import.meta.url));
 const repoRoot = new URL('../../', import.meta.url);
+const repoRootPath = fileURLToPath(repoRoot);
 const outDir = path.join(siteRoot, 'dist');
 
 const SECTIONS = [
@@ -102,6 +103,88 @@ function resolveSpecAnchors(html, specIds) {
   });
 }
 
+function escapeHtml(value) {
+  return String(value)
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;');
+}
+
+async function loadGalleryRoutes() {
+  const viteModulePath = resolveViteModulePath();
+  const { createServer } = await import(pathToFileURL(viteModulePath).href);
+  const vite = await createServer({
+    appType: 'custom',
+    logLevel: 'error',
+    root: repoRootPath,
+    server: { middlewareMode: true },
+  });
+
+  try {
+    const gallery = await vite.ssrLoadModule('/examples/gallery/src/demo-fixtures.tsx');
+    return gallery.galleryRoutes;
+  } finally {
+    await vite.close();
+  }
+}
+
+function resolveViteModulePath() {
+  const candidates = [
+    path.join(siteRoot, 'node_modules/vite/dist/node/index.js'),
+    path.join(repoRootPath, 'node_modules/vite/dist/node/index.js'),
+    path.join(repoRootPath, 'node_modules/.pnpm/node_modules/vite/dist/node/index.js'),
+  ];
+
+  for (const candidate of candidates) {
+    if (existsSync(candidate)) return candidate;
+  }
+
+  throw new Error('build: Vite is required to render gallery TSX fixtures');
+}
+
+function galleryUrl(routePath) {
+  return `/gallery${routePath}/`;
+}
+
+function renderGalleryPage(route, routes) {
+  const nav = routes
+    .map(
+      (candidate) =>
+        `<a href="${galleryUrl(candidate.path)}"${
+          candidate.path === route.path ? ' aria-current="page"' : ''
+        }>${escapeHtml(candidate.title)}</a>`,
+    )
+    .join('');
+
+  const demo = route
+    .render()
+    .replace(
+      /\shref="\/(?!assets\/|c\/|docs\/|tutorial\/|guides\/|gallery\/|api\/|spec\/|fonts\/|llms\.txt|$)([^"]*)"/g,
+      (_match, href) => {
+        if (href.startsWith('components/')) return ` href="/gallery/${href}/"`;
+        return ` href="${galleryUrl(route.path)}"`;
+      },
+    );
+
+  return `<div class="gallery-page">
+    <header class="gallery-head">
+      <p class="eyebrow">Gallery</p>
+      <h1>${escapeHtml(route.title)}</h1>
+      <p>Static fixture output for the ${escapeHtml(route.title)} component contract.</p>
+    </header>
+    <nav class="gallery-nav" aria-label="Gallery components">${nav}</nav>
+    <div class="gallery-demo">${demo}</div>
+  </div>`;
+}
+
+function textFromHtml(html) {
+  return html
+    .replace(/<[^>]*>/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
 async function main() {
   await generateApiReference(); // W6: emit gen/api before sections load.
   await rm(outDir, { force: true, recursive: true });
@@ -135,8 +218,18 @@ async function main() {
 
   const sections = [];
   for (const section of SECTIONS) sections.push(await loadSection(section));
+  const galleryRoutes = await loadGalleryRoutes();
+  const gallerySection = {
+    key: 'gallery',
+    pages: galleryRoutes.map((route) => ({
+      title: route.title,
+      url: galleryUrl(route.path),
+    })),
+    title: 'Gallery',
+  };
   const groups = sections
     .filter((section) => section.pages.length > 0)
+    .concat(gallerySection)
     .map((section) => ({
       pages: section.pages.map((page) => ({ title: page.title, url: page.url })),
       title: section.title,
@@ -202,6 +295,56 @@ async function main() {
         url: page.url,
       });
     }
+  }
+
+  await writePage(
+    '/gallery/',
+    finishPage(
+      renderDocument({
+        body: renderDocsPage({
+          activePath: '/gallery/',
+          groups,
+          html: renderSectionIndex(gallerySection),
+          prose: false,
+        }),
+        description: 'Jiso component gallery — rendered headless and styled component fixtures.',
+        path: '/gallery/',
+        title: 'Gallery · Jiso',
+      }),
+    ),
+  );
+
+  for (const [position, route] of galleryRoutes.entries()) {
+    const prev = galleryRoutes[position - 1];
+    const next = galleryRoutes[position + 1];
+    const html = renderGalleryPage(route, galleryRoutes);
+    const url = galleryUrl(route.path);
+
+    await writePage(
+      url,
+      finishPage(
+        renderDocument({
+          body: renderDocsPage({
+            activePath: url,
+            groups,
+            html,
+            next: next && { title: next.title, url: galleryUrl(next.path) },
+            prev: prev && { title: prev.title, url: galleryUrl(prev.path) },
+            prose: false,
+          }),
+          description: `${route.title} component gallery fixture.`,
+          path: url,
+          title: `${route.title} · Gallery · Jiso`,
+        }),
+      ),
+    );
+
+    searchIndex.push({
+      section: 'Gallery',
+      text: textFromHtml(html).slice(0, 6000),
+      title: route.title,
+      url,
+    });
   }
 
   // /spec — SPEC.md verbatim, number-derived § anchors (plan exit criterion 6).
@@ -296,7 +439,8 @@ async function main() {
     'utf8',
   );
 
-  const pageCount = sections.reduce((total, section) => total + section.pages.length, 0);
+  const pageCount =
+    sections.reduce((total, section) => total + section.pages.length, 0) + galleryRoutes.length + 1;
   process.stdout.write(
     `site-build/v1\npages=${pageCount + sections.length + 2} sections=${sections.length} loader=${captures.loader.gzipBytes}B-gzip\nOK\n`,
   );

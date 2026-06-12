@@ -26,6 +26,7 @@ const NAV = [
   { href: '/docs/installation/', label: 'Docs' },
   { href: '/tutorial/', label: 'Tutorial' },
   { href: '/guides/', label: 'Guides' },
+  { href: '/gallery/', label: 'Gallery' },
   { href: '/api/', label: 'API' },
   { href: '/spec/', label: 'Spec' },
 ];
@@ -214,6 +215,8 @@ export function renderDocsPage({
 const SECTION_INTROS = {
   api: 'Generated reference for every public package — types, functions, and the contracts they keep.',
   docs: 'Install Jiso, absorb the mental model, and find your way around a project.',
+  gallery:
+    'Rendered component fixtures covering the headless primitive contracts and the styled UI package.',
   guides: 'Task-focused deep dives into each part of the framework, from queries to deployment.',
   tutorial:
     'Build a real e-commerce app in eight chapters — catalog, cart, optimistic updates, streaming, and a behavior graph your CI can check.',
