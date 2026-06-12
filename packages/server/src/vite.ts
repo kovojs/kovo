@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import { mkdir, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -696,6 +696,23 @@ export function jisoAppShellViteManifestAssets(
   return [...assets.values()].sort((left, right) => left.file.localeCompare(right.file));
 }
 
+export async function jisoAppShellViteManifestFromFile(
+  manifestFile: string | URL,
+): Promise<JisoAppShellViteManifest> {
+  const source = await readFile(manifestFile, 'utf8');
+  return jisoAppShellViteManifestFromSource(source);
+}
+
+export async function jisoAppShellViteManifestAssetsFromFile(
+  manifestFile: string | URL,
+  options: JisoAppShellViteManifestHintOptions = {},
+): Promise<JisoAppShellBuildAsset[]> {
+  return jisoAppShellViteManifestAssets(
+    await jisoAppShellViteManifestFromFile(manifestFile),
+    options,
+  );
+}
+
 export function jisoAppShellViteManifestFromBundle(
   bundle: JisoAppShellViteOutputBundle,
 ): JisoAppShellViteManifest {
@@ -710,6 +727,10 @@ export function jisoAppShellViteManifestFromBundle(
       ? manifestAsset.source
       : Buffer.from(manifestAsset.source).toString('utf8');
 
+  return jisoAppShellViteManifestFromSource(source);
+}
+
+function jisoAppShellViteManifestFromSource(source: string): JisoAppShellViteManifest {
   let parsed: unknown;
   try {
     parsed = JSON.parse(source);

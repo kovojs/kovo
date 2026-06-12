@@ -1,5 +1,4 @@
 import { execFileSync } from 'node:child_process';
-import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -26,7 +25,7 @@ export async function exportSiteStaticApp({
   outDir = defaultDistDir,
   publicDir = defaultPublicDir,
 } = {}) {
-  const manifest = JSON.parse(readFileSync(path.join(cssDistDir, '.vite/manifest.json'), 'utf8'));
+  const manifestFile = path.join(cssDistDir, '.vite/manifest.json');
   const viteServer = await createViteServer({
     appType: 'custom',
     logLevel: 'error',
@@ -42,8 +41,11 @@ export async function exportSiteStaticApp({
       viteServer.ssrLoadModule('@jiso/server'),
     ]);
     const { createSiteDistApp } = appShellModule;
-    const { exportStaticApp, jisoAppShellViteManifestAssets, jisoAppShellViteStaticExportAssets } =
-      serverModule;
+    const {
+      exportStaticApp,
+      jisoAppShellViteManifestAssetsFromFile,
+      jisoAppShellViteStaticExportAssets,
+    } = serverModule;
 
     if (typeof createSiteDistApp !== 'function') {
       throw new Error('scripts/app-shell.mjs must export createSiteDistApp.');
@@ -52,14 +54,14 @@ export async function exportSiteStaticApp({
     if (typeof exportStaticApp !== 'function') {
       throw new Error('@jiso/server must export exportStaticApp.');
     }
-    if (typeof jisoAppShellViteManifestAssets !== 'function') {
-      throw new Error('@jiso/server must export jisoAppShellViteManifestAssets.');
+    if (typeof jisoAppShellViteManifestAssetsFromFile !== 'function') {
+      throw new Error('@jiso/server must export jisoAppShellViteManifestAssetsFromFile.');
     }
     if (typeof jisoAppShellViteStaticExportAssets !== 'function') {
       throw new Error('@jiso/server must export jisoAppShellViteStaticExportAssets.');
     }
 
-    const manifestAssets = jisoAppShellViteManifestAssets(manifest);
+    const manifestAssets = await jisoAppShellViteManifestAssetsFromFile(manifestFile);
     const cssAssets = manifestAssets.filter((asset) => asset.file.endsWith('.css'));
 
     if (cssAssets.length !== 1) {

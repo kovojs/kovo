@@ -16,7 +16,9 @@ import {
   createJisoAppShellViteBuildFromBundle,
   exportJisoAppShellViteBuild,
   jisoAppShellViteManifestAssets,
+  jisoAppShellViteManifestAssetsFromFile,
   jisoAppShellViteManifestFromBundle,
+  jisoAppShellViteManifestFromFile,
   jisoAppShellViteManifestHints,
   jisoAppShellVitePlugin,
   jisoAppShellViteRouteEntries,
@@ -321,6 +323,37 @@ describe('server app shell Vite plugin', () => {
     ]);
   });
 
+  it('loads Vite manifest files through the shared app-shell validator', async () => {
+    const distDir = await mkdtemp(join(tmpdir(), 'jiso-vite-manifest-file-'));
+
+    try {
+      await mkdir(join(distDir, '.vite'), { recursive: true });
+      const manifestFile = join(distDir, '.vite/manifest.json');
+      await writeFile(
+        manifestFile,
+        JSON.stringify({
+          'src/cart.client.ts': {
+            css: ['assets/cart.css'],
+            file: 'assets/cart.js',
+          },
+        }),
+      );
+
+      await expect(jisoAppShellViteManifestFromFile(manifestFile)).resolves.toEqual({
+        'src/cart.client.ts': {
+          css: ['assets/cart.css'],
+          file: 'assets/cart.js',
+        },
+      });
+      await expect(jisoAppShellViteManifestAssetsFromFile(manifestFile)).resolves.toEqual([
+        { file: 'assets/cart.css', href: '/assets/cart.css', path: '/assets/cart.css' },
+        { file: 'assets/cart.js', href: '/assets/cart.js', path: '/assets/cart.js' },
+      ]);
+    } finally {
+      await rm(distDir, { force: true, recursive: true });
+    }
+  });
+
   it('rejects Vite output bundles without a manifest before app-shell build wiring', () => {
     expect(() => jisoAppShellViteManifestFromBundle({})).toThrow(
       'App shell Vite build requires .vite/manifest.json.',
@@ -370,6 +403,30 @@ describe('server app shell Vite plugin', () => {
     ).toThrow(
       "App shell Vite build manifest entry 'src/cart.client.ts' field 'css' must be an array of strings.",
     );
+  });
+
+  it('rejects malformed Vite manifest files before export asset wiring', async () => {
+    const distDir = await mkdtemp(join(tmpdir(), 'jiso-vite-bad-manifest-file-'));
+
+    try {
+      await mkdir(join(distDir, '.vite'), { recursive: true });
+      const manifestFile = join(distDir, '.vite/manifest.json');
+      await writeFile(
+        manifestFile,
+        JSON.stringify({
+          'src/cart.client.ts': {
+            css: ['assets/cart.css', 42],
+            file: 'assets/cart.js',
+          },
+        }),
+      );
+
+      await expect(jisoAppShellViteManifestAssetsFromFile(manifestFile)).rejects.toThrow(
+        "App shell Vite build manifest entry 'src/cart.client.ts' field 'css' must be an array of strings.",
+      );
+    } finally {
+      await rm(distDir, { force: true, recursive: true });
+    }
   });
 
   it('applies Vite base paths to build route hints and asset planning', () => {

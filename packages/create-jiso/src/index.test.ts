@@ -231,9 +231,7 @@ describe('create-jiso starter', () => {
       expect(viteConfig).not.toContain("pathname.startsWith('/c/')");
       const exportStaticScript = readFileSync(join(root, 'scripts/export-static.mjs'), 'utf8');
       expect(exportStaticScript).toContain("execFileSync('vp', ['build']");
-      expect(exportStaticScript).toContain(
-        "readFileSync(join(process.cwd(), 'dist/.vite/manifest.json')",
-      );
+      expect(exportStaticScript).toContain('jisoAppShellViteManifestAssetsFromFile(manifestFile)');
       expect(exportStaticScript).toContain("ssrLoadModule('/src/app-shell.ts')");
       expect(exportStaticScript).toContain(
         'jisoAppShellViteStaticExportAssets(cssAssets, { distDir:',

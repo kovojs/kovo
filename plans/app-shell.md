@@ -612,6 +612,19 @@ Scope: SPEC addition (proposed §9.5 "The request shell"), `@jiso/server` shell 
       fixture and verifies `exportSiteStaticApp()` reports `/assets/site.css`
       as a static-export asset and writes exact CSS bytes beside the pretty
       `*/index.html` documents and copied `/c/` module.
+      Additional evidence 2026-06-12: `@jiso/server` now owns Vite manifest
+      file parsing for export consumers through
+      `jisoAppShellViteManifestFromFile()` and
+      `jisoAppShellViteManifestAssetsFromFile()`, reusing the same validated
+      manifest path as bundle-based R5 builds before R6 asset copying. The
+      create-jiso starter, commerce, and docs-site export scripts now load
+      manifest asset plans through the SSR-loaded server helper instead of
+      hand-parsing `.vite/manifest.json`, so malformed manifest fields fail
+      through the shared app-shell build validator. Same-session verification
+      ran `pnpm exec vitest --run packages/server/src/vite.test.ts`,
+      `pnpm exec vitest --run packages/create-jiso/src/index.test.ts -t "scaffolds real template files|runs the generated starter app-shell request and export proof"`,
+      `pnpm exec vitest --run examples/commerce/src/app-shell.test.ts -t "public commerce shell static output|vp run export|documents the commerce app-shell"`,
+      and `pnpm exec vitest --run site/scripts/app-shell.test.mjs`.
 
 ## Background — the gap
 

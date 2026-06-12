@@ -1,12 +1,11 @@
 import { execFileSync } from 'node:child_process';
-import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 import { createServer } from 'vite';
 
 execFileSync('vp', ['build'], { stdio: 'inherit' });
 
-const manifest = JSON.parse(readFileSync(join(process.cwd(), 'dist/.vite/manifest.json'), 'utf8'));
+const manifestFile = join(process.cwd(), 'dist/.vite/manifest.json');
 
 let result;
 let cssAssets;
@@ -19,20 +18,23 @@ const server = await createServer({
 
 try {
   const serverModule = await server.ssrLoadModule('@jiso/server');
-  const { exportStaticApp, jisoAppShellViteManifestAssets, jisoAppShellViteStaticExportAssets } =
-    serverModule;
+  const {
+    exportStaticApp,
+    jisoAppShellViteManifestAssetsFromFile,
+    jisoAppShellViteStaticExportAssets,
+  } = serverModule;
 
   if (typeof exportStaticApp !== 'function') {
     throw new Error('@jiso/server must export exportStaticApp.');
   }
-  if (typeof jisoAppShellViteManifestAssets !== 'function') {
-    throw new Error('@jiso/server must export jisoAppShellViteManifestAssets.');
+  if (typeof jisoAppShellViteManifestAssetsFromFile !== 'function') {
+    throw new Error('@jiso/server must export jisoAppShellViteManifestAssetsFromFile.');
   }
   if (typeof jisoAppShellViteStaticExportAssets !== 'function') {
     throw new Error('@jiso/server must export jisoAppShellViteStaticExportAssets.');
   }
 
-  const manifestAssets = jisoAppShellViteManifestAssets(manifest);
+  const manifestAssets = await jisoAppShellViteManifestAssetsFromFile(manifestFile);
   cssAssets = manifestAssets.filter((asset) => asset.file.endsWith('.css'));
 
   if (cssAssets.length !== 1) {
