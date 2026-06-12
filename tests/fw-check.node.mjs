@@ -146,6 +146,11 @@ const explainSummary = (output, prefix) => {
   );
 };
 
+const explainUpdateTargets = (output) =>
+  explainValue(output, 'updates: ')
+    .split(/\s*;\s*/)
+    .filter(Boolean);
+
 const runCliCommand = async (args) => {
   let stdout = '';
   let stderr = '';
@@ -1122,7 +1127,7 @@ void test('P10 commerce invalidation is expressed through graph facts', async ()
     },
   );
   assert.equal(explainValue(cartAddExplain, 'manual-invalidates: '), '-');
-  assert.match(explainValue(cartAddExplain, 'updates: '), /cart->component:CartBadge,page:\/cart/);
+  assert.ok(explainUpdateTargets(cartAddExplain).includes('cart->component:CartBadge,page:/cart'));
 });
 
 void test('P10 normative docs cover the constitution and compiler hard rules', async () => {
@@ -3666,15 +3671,11 @@ void test('P10 commerce graph assertions answer behavior mechanically', async ()
   assert.equal(explainValue(cartAddExplain, 'input-fields: '), 'productId,quantity');
   assert.equal(explainValue(cartAddExplain, 'writes: '), 'cart,product,order');
   assert.equal(explainValue(cartAddExplain, 'invalidates: '), 'cart,product,order');
-  assert.match(explainValue(cartAddExplain, 'updates: '), /cart->component:CartBadge,page:\/cart/);
-  assert.match(
-    explainValue(cartAddExplain, 'updates: '),
-    /productGrid->component:ProductGrid,page:\/cart/,
-  );
-  assert.match(
-    explainValue(cartAddExplain, 'updates: '),
-    /orderHistory->component:OrderHistory,page:\/cart/,
-  );
+  assert.deepEqual(explainUpdateTargets(cartAddExplain), [
+    'cart->component:CartBadge,page:/cart',
+    'orderHistory->component:OrderHistory,page:/cart',
+    'productGrid->component:ProductGrid,page:/cart',
+  ]);
   assert.equal(explainSummary(cartAddExplain, 'OPTIMISTIC-SUMMARY ').UNHANDLED, '0');
   assert.equal(explainValue(uploadReceiptExplain, 'file-fields: '), 'receipt');
   assert.equal(explainValue(uploadReceiptExplain, 'invalidates: '), '-');
@@ -3856,10 +3857,9 @@ void test('P10 starter wires graph assertions into CI', async () => {
   assert.equal(explainValue(cartQueryExplain, 'domain-writes: '), 'cart.addItem');
   assert.equal(explainValue(cartAddExplain, 'session: '), 'starterSession');
   assert.equal(explainValue(cartAddExplain, 'input-fields: '), 'productId,quantity');
-  assert.equal(
-    explainValue(cartAddExplain, 'updates: '),
+  assert.deepEqual(explainUpdateTargets(cartAddExplain), [
     'cart->component:CartBadge,component:CartPanel,page:/cart',
-  );
+  ]);
   assert.deepEqual(explainLines(cartAddExplain, 'OPTIMISTIC '), ['cart await-fragment']);
   assert.equal(explainSummary(cartAddExplain, 'OPTIMISTIC-SUMMARY ').UNHANDLED, '0');
   assert.equal(
