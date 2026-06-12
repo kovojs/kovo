@@ -14,7 +14,16 @@ Scope: SPEC additions (session population, guard-failure contract, mutation resp
 - [ ] B1 schema bridge: better-auth tables into `schema.ts` domains with declared touches.
 - [x] B2 typed session mapper (`betterAuthSession(auth, map)`). Evidence: `packages/better-auth/src/index.ts` exports a dependency-light Better Auth-like `auth.api.getSession({ headers })` provider adapter that returns `null` for anonymous sessions per SPEC §6.5 and maps the inferred Better Auth `session`/`user` payload through an app-owned total mapper; `packages/better-auth/src/index.test.ts` covers runtime mapping, anonymous requests, and a `@ts-expect-error` totality check that dropped declared session fields fail under `vp check`.
 - [x] B3 guard bindings: `authed` / `role()` / org-scoping over the mapped session. Evidence: `packages/better-auth/src/index.ts` exports `authed()`, typed `role<Request>()`, and `activeOrganization()` guards over the mapped session while preserving SPEC §10.3 unauthenticated vs unauthorized guard failures; focused tests cover success/failure behavior and stale role-name type failures without requiring live Better Auth services.
-- [ ] B4 ejectable credential mutations (sign-in / sign-up / sign-out) wrapping `auth.api`.
+- [x] B4 ejectable credential mutations (sign-in / sign-up / sign-out) wrapping `auth.api`.
+      Evidence 2026-06-11: `packages/better-auth/src/index.ts` exports
+      `betterAuthSignInEmailMutation`, `betterAuthSignUpEmailMutation`, and
+      `betterAuthSignOutMutation` helpers with credential input/error schemas, `Set-Cookie`
+      forwarding through `ctx.setCookie`, same-origin `next` redirect guards, and typed
+      `INVALID_CREDENTIALS` failures for credential rejection. `packages/better-auth/src/index.test.ts`
+      covers sign-in, sign-up, sign-out, cookie forwarding, typed failures, and redirect guards.
+      Same-session evidence: `pnpm exec vitest run packages/better-auth/src/index.test.ts`,
+      `pnpm exec vp check packages/better-auth/src/index.ts packages/better-auth/src/index.test.ts`,
+      `pnpm exec tsc --noEmit`, and `pnpm run check`.
 - [ ] B5 `mount()` for browser-redirect protocols (OAuth callbacks, SAML ACS, magic links).
 - [ ] B6 pinned better-auth conformance suite in CI.
 - [ ] B7 starter login recipe + reference-app adoption behind real `authed`/`role()` guards.
