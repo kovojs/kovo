@@ -116,13 +116,14 @@ function replaceTagHandlerAttributes(
   tagStart: number,
   handlers: readonly HandlerLowering[],
 ): string {
-  return [...handlers]
-    .sort((left, right) => right.attributeStart - left.attributeStart)
-    .reduce((next, handler) => {
-      const start = handler.attributeStart - tagStart;
-      const end = handler.attributeEnd - tagStart;
-      return `${next.slice(0, start)}${handlerAttributeReplacement(handler)}${next.slice(end)}`;
-    }, tagSource);
+  return applySourceReplacements(
+    tagSource,
+    handlers.map((handler) => ({
+      end: handler.attributeEnd - tagStart,
+      replacement: handlerAttributeReplacement(handler),
+      start: handler.attributeStart - tagStart,
+    })),
+  );
 }
 
 function handlerAttributeReplacement(handler: HandlerLowering): string {

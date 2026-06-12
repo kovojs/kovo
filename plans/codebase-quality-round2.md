@@ -460,6 +460,9 @@ pipeline throws the tree away and communicates via mutated source text.
       `packages/compiler/src/emit/client.ts` now emits canonical `SourceReplacement` patches and
       applies them through the shared overlap/out-of-range checked helper instead of a local
       silent source-splice loop.
+      Additional evidence 2026-06-12: render-host handler attribute rewriting in
+      `packages/compiler/src/emit/server.ts` now applies relative `SourceReplacement` patches
+      through the shared checked helper instead of carrying a private descending splice reducer.
 - [x] **HIGH — Retire regex rewriting of handler bodies.** emit/client.ts:89
       (`/\bstate\b/g → ctx.state` corrupts `log('state changed')`), :96 (member-expression
       substitution inside string literals), lower/handlers.ts:262 (harvests params from string
