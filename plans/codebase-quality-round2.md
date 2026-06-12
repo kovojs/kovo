@@ -1457,6 +1457,14 @@ As each phase splits a source module, split its tests in the same commit.
       Additional evidence 2026-06-12: schema immutability coverage moved from
       `packages/server/src/index.test.ts` into `packages/server/src/schema.test.ts`, importing
       the schema module directly.
+      Additional evidence 2026-06-12: FormData coercion, repeated-field array normalization,
+      indexed array validation paths, and multipart `s.file()` storage/failure coverage moved
+      from `packages/server/src/index.test.ts` into `packages/server/src/schema.test.ts`,
+      keeping mutation execution behavior unchanged while grouping schema input tests together.
+      Same-session evidence:
+      `pnpm exec vitest --run packages/server/src/schema.test.ts packages/server/src/index.test.ts`
+      and
+      `pnpm exec vp check packages/server/src/index.test.ts packages/server/src/schema.test.ts plans/codebase-quality-round2.md`.
       Additional evidence 2026-06-12: pure deferred-stream rendering coverage moved from
       `packages/server/src/index.test.ts` into `packages/server/src/deferred-stream.test.ts`,
       while the wire-fixture/live-server deferred checks remain in the monolith until their
