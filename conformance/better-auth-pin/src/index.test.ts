@@ -12,6 +12,7 @@ import {
   admin,
   anonymous,
   deviceAuthorization,
+  emailOTP,
   jwt,
   lastLoginMethod,
   oidcProvider,
@@ -804,6 +805,42 @@ describe('Better Auth pinned conformance', () => {
     ]);
     expect(result.source).toContain(
       "export const rateLimit = pgTable('rateLimit', {}, jiso({ exempt: true }));",
+    );
+  });
+
+  it('pins email-OTP metadata as covered by the core verification bridge', () => {
+    const { auth } = createRealAuth({
+      plugins: [emailOTP({ sendVerificationOTP: async () => {} })],
+    });
+    const tables = getAuthTables(auth.options);
+    const result = annotateBetterAuthSchemaSource(
+      betterAuthSchemaSourceFixture(Object.keys(tables)),
+      tables,
+    );
+
+    expect(Object.keys(tables).sort()).toEqual(['account', 'session', 'user', 'verification']);
+    expect(Object.keys(requireAuthTable(tables, 'verification').fields).sort()).toEqual([
+      'createdAt',
+      'expiresAt',
+      'identifier',
+      'updatedAt',
+      'value',
+    ]);
+    expect(validateBetterAuthSchemaBridge(tables)).toEqual({
+      declaredTouchMismatches: [],
+      keyFieldMismatches: [],
+      missingTables: [],
+      ok: true,
+      pluginTableDegradations: [],
+      unbridgedTables: [],
+    });
+    expect(betterAuthSchemaBridge.verification).toEqual({
+      exempt: true,
+      rationale: 'Better Auth email/token verification bookkeeping is not an app read surface.',
+    });
+    expect(result.annotatedTables).toEqual(['account', 'session', 'user', 'verification']);
+    expect(result.source).toContain(
+      "export const verification = pgTable('verification', {}, jiso({ exempt: true }));",
     );
   });
 

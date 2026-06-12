@@ -202,6 +202,14 @@ Scope: SPEC additions (session population, guard-failure contract, mutation resp
       Same-session evidence:
       `pnpm exec vitest --run packages/better-auth/src/index.test.ts conformance/better-auth-pin/src/index.test.ts --reporter=dot`
       and `pnpm exec tsc -p conformance/better-auth-pin/tsconfig.json --noEmit`.
+      Partial evidence 2026-06-12: real Better Auth `emailOTP()` metadata is now pinned as
+      staying inside the existing core table bridge (`account`, `session`, `user`, and exempt
+      `verification`) rather than requiring a plugin-table bridge. This keeps SPEC §10.1
+      verification/OTP protocol state out of app query domains while making future Better Auth
+      table drift fail B1 validation. `conformance/better-auth-pin/src/index.test.ts` verifies
+      the real `better-auth@1.6.17` table/field metadata, clean schema-bridge validation, and
+      generated `schema.ts` annotations. Same-session evidence:
+      `pnpm exec vitest --run conformance/better-auth-pin/src/index.test.ts --reporter=dot`.
       Remaining gaps: plugin-generated tables outside the blessed organization/admin/two-factor/OIDC-provider/SIWE/JWT/device-authorization
       surface are still not mapped, the OAuth-provider successor package/table metadata is not
       installed or exportable from the pinned dependency set, and full app `schema.ts` generation
