@@ -2248,6 +2248,15 @@ index.test.ts:4227 while here — it weakens the byte-for-byte claim) + acceptan
       `corepack pnpm exec vitest --run packages/test/src/verifier.test.ts packages/test/src/query-verifier.test.ts packages/test/src/verifier-sql.test.ts packages/test/src/mutation-verifier.test.ts packages/test/src/harness-verifier.test.ts packages/test/src/verifier-diagnostics.test.ts packages/test/src/pglite-harness.test.ts packages/test/src/sql-observer.test.ts`,
       `corepack pnpm exec vp check packages/test/src/test-fixtures.ts packages/test/src/verifier.test.ts packages/test/src/query-verifier.test.ts packages/test/src/verifier-sql.test.ts packages/test/src/mutation-verifier.test.ts packages/test/src/harness-verifier.test.ts packages/test/src/verifier-diagnostics.test.ts packages/test/src/pglite-harness.test.ts packages/test/src/sql-observer.test.ts plans/codebase-quality-round2.md`,
       and `git diff --check`.
+      Additional evidence 2026-06-12: `jisoTest` case/runner construction moved from
+      `packages/test/src/harness.ts` into `packages/test/src/test-case.ts`, leaving
+      `harness.ts` focused on harness context creation while `packages/test/src/index.ts`
+      preserves the public `jisoTest`, `JisoTestCase`, and `JisoTestRunner` exports.
+      Same-session evidence:
+      `corepack pnpm exec vitest --run packages/test/src/harness.test.ts packages/test/src/test-case.test.ts`,
+      `corepack pnpm exec vitest --run packages/test/src`,
+      `corepack pnpm exec vp check packages/test/src/index.ts packages/test/src/harness.ts packages/test/src/harness.test.ts packages/test/src/test-case.ts packages/test/src/test-case.test.ts plans/codebase-quality-round2.md`,
+      and `git diff --check`.
 - [ ] **MED — Commerce example: one source of truth.** `cartQuery.load` returns a constant while
       `loadCartQuery(db)` does the real read (app.ts:123-126 vs :280-284);
       `productGridQuery.load` conjures a fresh `createCommerceDb()` (:161); the committed
@@ -2609,6 +2618,14 @@ As each phase splits a source module, split its tests in the same commit.
       Same-session evidence:
       `corepack pnpm exec vitest --run packages/test/src/verifier.test.ts packages/test/src/query-verifier.test.ts packages/test/src/verifier-sql.test.ts packages/test/src/mutation-verifier.test.ts packages/test/src/harness-verifier.test.ts packages/test/src/verifier-diagnostics.test.ts packages/test/src/pglite-harness.test.ts packages/test/src/sql-observer.test.ts`,
       `corepack pnpm exec vp check packages/test/src/test-fixtures.ts packages/test/src/verifier.test.ts packages/test/src/query-verifier.test.ts packages/test/src/verifier-sql.test.ts packages/test/src/mutation-verifier.test.ts packages/test/src/harness-verifier.test.ts packages/test/src/verifier-diagnostics.test.ts packages/test/src/pglite-harness.test.ts packages/test/src/sql-observer.test.ts plans/codebase-quality-round2.md`,
+      and `git diff --check`.
+      Additional evidence 2026-06-12: `jisoTest` runner/case coverage moved from
+      `packages/test/src/harness.test.ts` into `packages/test/src/test-case.test.ts`, matching
+      the new `packages/test/src/test-case.ts` seam while `harness.test.ts` stays focused on
+      harness context behavior. Same-session evidence:
+      `corepack pnpm exec vitest --run packages/test/src/harness.test.ts packages/test/src/test-case.test.ts`,
+      `corepack pnpm exec vitest --run packages/test/src`,
+      `corepack pnpm exec vp check packages/test/src/index.ts packages/test/src/harness.ts packages/test/src/harness.test.ts packages/test/src/test-case.ts packages/test/src/test-case.test.ts plans/codebase-quality-round2.md`,
       and `git diff --check`.
       Additional evidence 2026-06-12: Drizzle runtime/static package-surface coverage moved from
       `packages/drizzle/src/index.test.ts` into `packages/drizzle/src/runtime-surface.test.ts`,

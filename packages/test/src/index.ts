@@ -7,15 +7,15 @@ export type {
   PropertyTestOptions,
   PropertyTestResult,
 } from './assertions.js';
-export { createJisoTestHarness, jisoTest } from './harness.js';
+export { createJisoTestHarness } from './harness.js';
 export type {
-  JisoTestCase,
   JisoTestContext,
   JisoTestExecOptions,
   JisoTestHarnessOptions,
   JisoTestRequest,
-  JisoTestRunner,
 } from './harness.js';
+export { jisoTest } from './test-case.js';
+export type { JisoTestCase, JisoTestRunner } from './test-case.js';
 export { createPgliteTestDb } from './pglite.js';
 export type { PgliteTestDb } from './pglite.js';
 export type { PageAssertion } from './page.js';
