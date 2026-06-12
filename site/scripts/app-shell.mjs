@@ -120,7 +120,9 @@ function contentHash(source) {
 }
 
 export const app =
-  existsSync(defaultDistDir) && existsSync(defaultServerModulePath)
+  process.env.JISO_SITE_APP_SHELL_DEFAULT !== 'off' &&
+  existsSync(defaultDistDir) &&
+  existsSync(defaultServerModulePath)
     ? await createSiteDistApp()
     : undefined;
 

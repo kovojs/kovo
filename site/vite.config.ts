@@ -32,8 +32,7 @@ export default defineConfig({
         input: [{ pattern: 'dist/**', base: 'workspace' }],
       },
       export: {
-        command:
-          'pnpm --dir .. exec vp run build && vp build && node scripts/build.mjs && node ../dist/cli/src/index.mjs export ./scripts/app-shell.mjs --out dist --pretty-urls',
+        command: 'node scripts/export-static.mjs',
         input: [
           { pattern: 'content/**/*', base: 'workspace' },
           { pattern: 'public/**/*', base: 'workspace' },

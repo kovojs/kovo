@@ -176,13 +176,13 @@ Scope: SPEC addition (proposed §9.5 "The request shell"), `@jiso/server` shell 
       `pnpm exec vp run export` from `site/` (31 HTML artifacts, 3 client
       modules, 0 diagnostics), `node site/scripts/check-links.mjs`, and
       `pnpm exec vp check site/scripts/app-shell.mjs site/scripts/app-shell.test.mjs site/package.json site/vite.config.ts plans/app-shell.md`.
-      Remaining integration notes: the task deliberately invokes the built CLI
-      because the workspace `fw` source bin is not plain-Node runnable in this
-      worktree, and the current server exporter writes normalized flat
-      `*.html` artifacts (`/docs.html`, `/docs/installation.html`) alongside
-      the existing pretty `*/index.html` site output. R7 remains open until the
-      main integration pass accepts that compatibility layer or lands server/CLI
-      seams for package-source execution and pretty URL output.
+      Historical integration note: this first task deliberately invoked the
+      built CLI because the workspace `fw` source bin was not plain-Node runnable
+      in that worktree, and the server exporter wrote normalized flat `*.html`
+      artifacts (`/docs.html`, `/docs/installation.html`) alongside the existing
+      pretty `*/index.html` site output. Later evidence below resolves the
+      pretty URL output and package-source export replay paths; the docs capture
+      build still separately depends on root package artifacts.
       Additional evidence 2026-06-12: `exportStaticApp()` now accepts
       `htmlPathStyle: 'directory'`, and `fw export --pretty-urls` passes that
       through so site export writes route documents as `*/index.html` instead of
@@ -241,6 +241,16 @@ Scope: SPEC addition (proposed §9.5 "The request shell"), `@jiso/server` shell 
       exported document href, copied CSS bytes, and copied `/c/` module. Same-session
       verification ran `pnpm exec vitest --run packages/create-jiso/src/index.test.ts`
       and `pnpm exec vp check packages/create-jiso/src/index.test.ts packages/create-jiso/templates/scripts/export-static.mjs packages/create-jiso/templates/README.md packages/create-jiso/templates/docs/deployment.md plans/app-shell.md`.
+      Additional evidence 2026-06-12: the docs-site export task now uses
+      `site/scripts/export-static.mjs` instead of invoking the built
+      `dist/cli` export command. The site-owned task still runs the root package
+      build needed by docs capture generation, then loads `scripts/app-shell.mjs`
+      and `@jiso/server` through Vite SSR before calling `exportStaticApp()` with
+      `htmlPathStyle: 'directory'`, so SPEC §9.5 static replay exercises
+      package-source server execution while preserving pretty URL output.
+      `site/scripts/app-shell.test.mjs` proves the SSR module loads for
+      `/scripts/app-shell.mjs` and `@jiso/server`, replay to
+      `docs/installation/index.html`, and versioned `/c/` module copying.
 
 ## Background — the gap
 

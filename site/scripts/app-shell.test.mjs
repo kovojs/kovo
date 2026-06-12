@@ -6,6 +6,7 @@ import * as server from '@jiso/server';
 import { describe, expect, it } from 'vitest';
 
 import { createSiteDistApp } from './app-shell.mjs';
+import { exportSiteStaticApp } from './export-static.mjs';
 
 describe('site app-shell export adoption', () => {
   it('replays generated docs HTML through static export and copies versioned /c/ modules', async () => {
@@ -56,6 +57,53 @@ describe('site app-shell export adoption', () => {
     expect(result.clientModules).toHaveLength(1);
     expect(exportedModule).toBe(
       'export function open() { document.body.dataset.search = "open"; }\n',
+    );
+  });
+
+  it('loads the docs app shell and server package through Vite SSR for export', async () => {
+    const root = await mkdtemp(path.join(tmpdir(), 'jiso-site-export-source-'));
+    const distDir = path.join(root, 'dist-source');
+    const publicDir = path.join(root, 'public');
+    const outDir = path.join(root, 'dist-out');
+    const loadedModuleIds = [];
+
+    await mkdir(path.join(distDir, 'docs', 'installation'), { recursive: true });
+    await mkdir(path.join(publicDir, 'c'), { recursive: true });
+    await writeFile(
+      path.join(distDir, 'index.html'),
+      '<!doctype html><html><body><button on:click="/c/search.js#open">Search</button></body></html>',
+    );
+    await writeFile(
+      path.join(distDir, 'docs', 'installation', 'index.html'),
+      '<!doctype html><html><body><h1>Installation</h1></body></html>',
+    );
+    await writeFile(
+      path.join(publicDir, 'c', 'search.js'),
+      'export function open() { document.body.dataset.search = "open"; }\n',
+    );
+
+    const result = await exportSiteStaticApp({
+      createViteServer: async () => ({
+        async close() {},
+        async ssrLoadModule(id) {
+          loadedModuleIds.push(id);
+          if (id === '@jiso/server') return server;
+          if (id === '/scripts/app-shell.mjs') return { createSiteDistApp };
+          throw new Error(`unexpected SSR module ${id}`);
+        },
+      }),
+      distDir,
+      outDir,
+      publicDir,
+    });
+
+    expect(loadedModuleIds).toEqual(['/scripts/app-shell.mjs', '@jiso/server']);
+    expect(result.artifacts.map((artifact) => artifact.path)).toEqual([
+      '/docs/installation/index.html',
+      '/index.html',
+    ]);
+    await expect(readFile(path.join(outDir, 'index.html'), 'utf8')).resolves.toContain(
+      '/c/search.js?v=site-r7-',
     );
   });
 });
