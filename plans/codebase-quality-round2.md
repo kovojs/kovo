@@ -1308,6 +1308,9 @@ As each phase splits a source module, split its tests in the same commit.
       `packages/server/src/mutation-wire.test.ts`.
       Additional evidence 2026-06-12: route file/stream outcome coverage moved from
       `packages/server/src/index.test.ts` into `packages/server/src/route-response.test.ts`.
+      Additional evidence 2026-06-12: raw endpoint declaration/execution, ambient-session
+      stripping, and exact/prefix mount matching coverage moved from
+      `packages/server/src/index.test.ts` into `packages/server/src/endpoint.test.ts`.
       and `pnpm exec vitest --run packages/server/src/*.test.ts`.
 - [ ] runtime/index.test.ts (4,435 lines, mutation tests under "query store") → per-module
       files; `Fake*` classes to a shared `test-fixtures.ts`; direct unit tests for wire-parser,
