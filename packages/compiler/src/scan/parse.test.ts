@@ -4,6 +4,7 @@ import {
   arrowFunctionParts,
   documentElementActionFromZeroArgArrow,
   functionBodyPropertyAccessPaths,
+  jsxElementChildBody,
   jsxElements,
   mutationHandlers,
   parseComponentModule,
@@ -13,6 +14,29 @@ import {
 } from './parse.js';
 
 describe('compiler scan parser helpers', () => {
+  it('records trimmed JSX child bodies with original source offsets', () => {
+    const source = `
+export const ChildSlot = component('child-slot', {
+  fragmentTarget: true,
+  render: () => (
+    <ChildSlot>
+      <span>{cart.count}</span>
+    </ChildSlot>
+  ),
+});
+`;
+    const [slot] = jsxElements(parseComponentModule('child-slot.tsx', source)).filter(
+      (element) => element.tag === 'ChildSlot',
+    );
+    expect(slot).toBeDefined();
+    if (!slot) throw new Error('expected ChildSlot JSX element');
+
+    expect(jsxElementChildBody(source, slot)).toEqual({
+      offset: source.indexOf('<span>'),
+      source: '<span>{cart.count}</span>',
+    });
+  });
+
   it('extracts one property access expression with optional receiver segments', () => {
     expect(solePropertyAccessPath('expression.tsx', 'cart.count')).toBe('cart.count');
     expect(solePropertyAccessPath('expression.tsx', 'cart.items?.name')).toBe('cart.items?.name');

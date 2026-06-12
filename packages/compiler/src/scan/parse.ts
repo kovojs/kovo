@@ -81,6 +81,11 @@ export interface JsxElementModel {
   tag: string;
 }
 
+export interface JsxElementChildBody {
+  offset: number;
+  source: string;
+}
+
 export interface ZeroArgArrowModel {
   body: string;
   bodyEnd: number;
@@ -279,6 +284,23 @@ export function componentFragmentTargetNames(model: ComponentModuleModel): strin
 
 export function jsxElements(model: ComponentModuleModel): JsxElementModel[] {
   return [...model.jsxElements];
+}
+
+export function jsxElementChildBody(
+  source: string,
+  element: JsxElementModel,
+): JsxElementChildBody | null {
+  if (element.selfClosing) return null;
+
+  const raw = source.slice(element.openingEnd, element.closingStart);
+  const leadingWhitespace = /^\s*/.exec(raw)?.[0].length ?? 0;
+  const body = raw.trim();
+  if (!body) return null;
+
+  return {
+    offset: element.openingEnd + leadingWhitespace,
+    source: body,
+  };
 }
 
 export function callExpressions(model: ComponentModuleModel): CallExpressionModel[] {

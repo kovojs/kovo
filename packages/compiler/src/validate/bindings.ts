@@ -5,6 +5,7 @@ import { diagnosticFor, type CompilerDiagnostic } from '../diagnostics.js';
 import { dedupeBy } from '../shared.js';
 import {
   jsxElements,
+  jsxElementChildBody,
   soleWrappedPropertyAccessPath,
   type ComponentModuleModel,
   type JsxElementModel,
@@ -193,15 +194,7 @@ function templateStamp(
       isWithinElement(element, container) &&
       hasJsxAttribute(element, 'fw-stamp'),
   );
-  if (!template || template.selfClosing) return null;
-
-  const raw = source.slice(template.openingEnd, template.closingStart);
-  const leadingWhitespace = /^\s*/.exec(raw)?.[0].length ?? 0;
-
-  return {
-    offset: template.openingEnd + leadingWhitespace,
-    source: raw.trim(),
-  };
+  return template ? jsxElementChildBody(source, template) : null;
 }
 
 interface NullableTraversal {

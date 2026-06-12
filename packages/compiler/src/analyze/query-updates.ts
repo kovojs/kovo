@@ -4,6 +4,7 @@ import {
   arrowFunctionParts,
   callExpressions,
   componentOptionSource,
+  jsxElementChildBody,
   jsxElements,
   jsxExpressions,
   propertyAccessPaths,
@@ -385,9 +386,7 @@ function templateItemBindingPlaceholders(
         )
         .map((attribute) => ({
           path: attribute.value ?? '',
-          value: candidate.selfClosing
-            ? ''
-            : source.slice(candidate.openingEnd, candidate.closingStart).trim(),
+          value: jsxElementChildBody(source, candidate)?.source ?? '',
         })),
     )
     .sort((left, right) => left.path.localeCompare(right.path));
@@ -404,9 +403,7 @@ function templateStampContent(
       isWithinElement(element, container) &&
       hasJsxAttribute(element, 'fw-stamp'),
   );
-  if (!template || template.selfClosing) return '';
-
-  return source.slice(template.openingEnd, template.closingStart).trim();
+  return template ? (jsxElementChildBody(source, template)?.source ?? '') : '';
 }
 
 function jsxAttributes(model: ComponentModuleModel) {

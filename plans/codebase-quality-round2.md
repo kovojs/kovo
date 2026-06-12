@@ -722,6 +722,13 @@ pipeline throws the tree away and communicates via mutated source text.
       `{...}` wrappers around `solePropertyAccessPath`. Same-session evidence:
       `pnpm exec vitest --run packages/compiler/src/scan/parse.test.ts packages/compiler/src/index.test.ts -t "wrapped JSX expression|inline derive|data-bind|FW222|FW223"` and
       `pnpm exec vp check packages/compiler/src/scan/parse.ts packages/compiler/src/scan/parse.test.ts packages/compiler/src/lower/inline-derives.ts packages/compiler/src/validate/bindings.ts plans/codebase-quality-round2.md`.
+      Additional evidence 2026-06-12: trimmed JSX child-body extraction now lives in the
+      TypeScript parser front-end as `jsxElementChildBody`; query-update analysis plus binding
+      and fragment-target validators consume that shared model helper instead of each slicing and
+      trimming JSX children independently. Same-session evidence:
+      `pnpm exec vitest --run packages/compiler/src/scan/parse.test.ts packages/compiler/src/index.test.ts -t "JSX child bodies|fragment target|data-bind update plans|template stamp"`,
+      `pnpm exec vp check packages/compiler/src/scan/parse.ts packages/compiler/src/scan/parse.test.ts packages/compiler/src/analyze/query-updates.ts packages/compiler/src/validate/bindings.ts packages/compiler/src/validate/component-contracts.ts`,
+      and `git diff --check`.
       Additional evidence 2026-06-12: `removeJsxAttribute(s)` now live in
       `packages/compiler/src/shared.ts`; navigation and view-transition lowering import the
       shared helper instead of carrying duplicate local copies. Same-session evidence:

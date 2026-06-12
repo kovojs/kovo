@@ -11,9 +11,11 @@ import {
   componentRenderInputModels,
   componentStateReturnObjectModel,
   componentStateReturnObjectKeys,
+  jsxElementChildBody,
   mutationHandlers,
   objectLiteralPropertyPaths,
   type ComponentModuleModel,
+  type JsxElementChildBody,
   jsxElements,
 } from '../scan/parse.js';
 import { dedupeBy, generatedOffsetToOriginal, type SourceOffsetMap } from '../shared.js';
@@ -23,11 +25,6 @@ interface ComponentContractValidationOptions {
   fileName: string;
   queryShapeFacts?: readonly QueryShapeFact[];
   queryShapes?: Record<string, QueryShape>;
-}
-
-interface TemplateBody {
-  offset: number;
-  source: string;
 }
 
 interface EventPayloadPath {
@@ -189,31 +186,18 @@ function fragmentTargetChildBodies(
   source: string,
   model: ComponentModuleModel,
   name: string,
-): TemplateBody[] {
-  const bodies: TemplateBody[] = [];
-
-  for (const element of jsxElements(model).filter((item) => item.tag === name)) {
-    if (element.selfClosing) continue;
-
-    const raw = source.slice(element.openingEnd, element.closingStart);
-    const leadingWhitespace = /^\s*/.exec(raw)?.[0].length ?? 0;
-    const body = raw.trim();
-    if (body) {
-      bodies.push({
-        offset: element.openingEnd + leadingWhitespace,
-        source: body,
-      });
-    }
-  }
-
-  return bodies;
+): JsxElementChildBody[] {
+  return jsxElements(model)
+    .filter((item) => item.tag === name)
+    .map((element) => jsxElementChildBody(source, element))
+    .filter((body): body is JsxElementChildBody => body !== null);
 }
 
 function fw230Diagnostic(
   fileName: string,
   source: string,
   target: string,
-  body: TemplateBody,
+  body: JsxElementChildBody,
 ): CompilerDiagnostic {
   const definition = diagnosticDefinitions.FW230;
   const labels = definition.detailLabels;
