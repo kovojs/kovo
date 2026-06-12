@@ -164,6 +164,14 @@ Scope: SPEC addition (proposed §9.5 "The request shell"), `@jiso/server` shell 
       `corepack pnpm exec vitest --run packages/server/src/vite-dev.test.ts packages/server/src/vite.test.ts packages/server/src/vite-diagnostics.test.ts`
       and
       `corepack pnpm exec vp check packages/server/src/vite.ts packages/server/src/vite-dev.ts packages/server/src/vite-dev.test.ts packages/server/src/vite-diagnostics.test.ts packages/server/src/vite.test.ts`.
+      Additional evidence 2026-06-12: the public app-shell server API exports now route through
+      smaller child barrels in `packages/server/src/api/app-shell/` instead of one bulky
+      `packages/server/src/api/app.ts` group, preserving the external `@jiso/server` surface for
+      R5/R6/R7 consumers while naming the app/request, client module, node adapter, static export,
+      and Vite helper seams separately. `packages/server/src/api/app.test.ts` proves value and
+      type compatibility through both `api/app.ts` and `packages/server/src/index.ts`. Same-session
+      verification ran
+      `corepack pnpm exec vitest --run packages/server/src/api/app.test.ts packages/server/src/app.test.ts packages/server/src/vite-build.test.ts packages/server/src/vite-dev.test.ts packages/server/src/vite-manifest.test.ts`.
       Additional evidence 2026-06-12: the manifest seam now exposes
       `jisoAppShellViteManifestStylesheetHref()` and
       `jisoAppShellViteManifestStylesheetHrefFromFile()` so starter/docs export tasks can

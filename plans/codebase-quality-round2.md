@@ -3110,6 +3110,14 @@ land it first; don't fork it.
       `pnpm exec vitest --run packages/server/src/*.test.ts`,
       `pnpm exec vp check packages/server/src/index.ts packages/server/src/api/app.ts packages/server/src/api/data.ts packages/server/src/api/rendering.ts packages/server/src/api/routing.ts plans/codebase-quality-round2.md`,
       and `git diff --check`.
+      Additional evidence 2026-06-12: the app-shell public API group moved out of the bulky
+      `packages/server/src/api/app.ts` barrel into named child barrels under
+      `packages/server/src/api/app-shell/` for core app/request handling, client modules, node
+      adapters, static export, and Vite helpers. `packages/server/src/api/app.test.ts` proves the
+      public `@jiso/server` path and the intermediate `api/app.ts` barrel still re-export the
+      same app-shell values and compatible types from the new ownership seams. Same-session
+      evidence:
+      `corepack pnpm exec vitest --run packages/server/src/api/app.test.ts packages/server/src/app.test.ts packages/server/src/vite-build.test.ts packages/server/src/vite-dev.test.ts packages/server/src/vite-manifest.test.ts`.
       Additional evidence 2026-06-12: app-shell Vite manifest parsing, route-entry validation,
       hint extraction, stylesheet href extraction, and manifest dist-asset planning moved from
       `packages/server/src/vite.ts` into `packages/server/src/vite-manifest.ts`; `vite.ts`
