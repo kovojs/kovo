@@ -11,6 +11,7 @@
     "./primitives/alert-dialog": "./src/primitives/alert-dialog.ts",
     "./primitives/avatar": "./src/primitives/avatar.ts",
     "./primitives/checkbox": "./src/primitives/checkbox.ts",
+    "./primitives/checkbox-group": "./src/primitives/checkbox-group.ts",
     "./primitives/collapsible": "./src/primitives/collapsible.ts",
     "./primitives/dialog": "./src/primitives/dialog.ts",
     "./primitives/disclosure": "./src/primitives/disclosure.ts",

@@ -289,6 +289,19 @@ jiso-dialog` resolves dashed wire names and prints provenance including package,
       `pnpm exec vp check packages/headless-ui/package.json packages/headless-ui/src/index.ts packages/headless-ui/src/primitives/index.ts packages/headless-ui/src/primitives/toolbar.ts packages/headless-ui/src/primitives/toolbar.test.ts plans/ui.md`,
       and `git diff --check`. H2 remains open for tabs, checkbox-group, number-field,
       otp-field, scroll-area, and full gates.
+      Additional partial evidence 2026-06-12: `packages/headless-ui/src/primitives/checkbox-group.ts`
+      adds the H2 checkbox-group primitive as a native `<input type="checkbox">`-oriented
+      L1 helper: group/item/control/label attribute builders, shared-name native checkbox
+      controls, checked-value array transitions, roving focus over enabled items via shared
+      keyboard maps, disabled-item skipping, and guarded click/keyboard handlers following the
+      SPEC §4.6 primitive handler no-op contract. It is exported through `@jiso/headless-ui`,
+      `@jiso/headless-ui/primitives`, and `@jiso/headless-ui/primitives/checkbox-group`.
+      Same-session evidence:
+      `pnpm --filter @jiso/headless-ui exec vitest --run src/primitives/checkbox-group.test.ts`,
+      `pnpm --filter @jiso/headless-ui run lint:primitives`,
+      `pnpm exec vp check packages/headless-ui/package.json packages/headless-ui/src/index.ts packages/headless-ui/src/primitives/index.ts packages/headless-ui/src/primitives/checkbox-group.ts packages/headless-ui/src/primitives/checkbox-group.test.ts plans/ui.md`,
+      and `git diff --check`. H2 remains open for tabs, number-field, otp-field, scroll-area,
+      and full gates.
 - [ ] H3 wave 3 primitives (list-driven & isomorphic): select, combobox, autocomplete, dropdown-menu, context-menu, menubar, navigation-menu, slider, toast, command.
 - [x] U1 token sheet + `cn()` + statically-analyzable variant helper (Tailwind-first, §13.1 discoverability rules).
       Evidence 2026-06-12: `packages/headless-ui/src/lib/class-names.ts`

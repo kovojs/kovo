@@ -91,6 +91,36 @@ export type {
 } from './checkbox.js';
 
 export {
+  checkboxGroupControlAttributes,
+  checkboxGroupItemAttributes,
+  checkboxGroupItemChecked,
+  checkboxGroupItemClick,
+  checkboxGroupKeyDown,
+  checkboxGroupLabelAttributes,
+  checkboxGroupMoveFocus,
+  checkboxGroupRootAttributes,
+  checkboxGroupRovingIndex,
+  setCheckboxGroupValue,
+  toggleCheckboxGroupItem,
+} from './checkbox-group.js';
+export type {
+  CheckboxGroupChangeDetail,
+  CheckboxGroupChangeOptions,
+  CheckboxGroupChangeReason,
+  CheckboxGroupChangeResult,
+  CheckboxGroupControlAttributeOptions,
+  CheckboxGroupItem,
+  CheckboxGroupItemAttributeOptions,
+  CheckboxGroupItemEvent,
+  CheckboxGroupKeyboardEvent,
+  CheckboxGroupLabelAttributeOptions,
+  CheckboxGroupMoveResult,
+  CheckboxGroupPrimitiveAttributes,
+  CheckboxGroupRootAttributeOptions,
+  CheckboxGroupState,
+} from './checkbox-group.js';
+
+export {
   setSwitchChecked,
   switchRootAttributes,
   switchTriggerClick,
