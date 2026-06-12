@@ -79,6 +79,7 @@ export interface JsxAttributeModel {
   expression?: string;
   expressionEnd?: number;
   expressionPropertyAccesses?: readonly PropertyAccessPathModel[];
+  expressionReferences?: readonly string[];
   expressionStart?: number;
   expressionStaticValue?: StaticLiteralValue;
   name: string;
@@ -1250,7 +1251,9 @@ function jsxAttributeExpression(
   expression: string;
   expressionEnd: number;
   expressionPropertyAccesses: readonly PropertyAccessPathModel[];
+  expressionReferences: readonly string[];
   expressionStart: number;
+  expressionStaticValue?: StaticLiteralValue;
   zeroArgArrow?: ZeroArgArrowModel;
 } | null {
   const initializer = attribute.initializer;
@@ -1262,6 +1265,7 @@ function jsxAttributeExpression(
     expression: source.slice(expressionStart, expressionEnd).trim(),
     expressionEnd,
     expressionPropertyAccesses: propertyAccessPathModels(sourceFile, initializer.expression),
+    expressionReferences: referenceIdentifiers(initializer.expression),
     expressionStart,
     ...jsxAttributeExpressionStaticValue(initializer.expression),
     ...zeroArgArrowModel(sourceFile, source, initializer.expression),

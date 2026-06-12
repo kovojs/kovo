@@ -31,7 +31,11 @@ export function lowerEventHandlers(
     const namedHandler = /^[A-Za-z_$][\w$]*$/.test(expression);
     const params = namedHandler
       ? []
-      : extractElementParams(expression, eventAttribute.zeroArgArrow);
+      : extractElementParams(
+          expression,
+          eventAttribute.zeroArgArrow,
+          eventAttribute.expressionPropertyAccesses,
+        );
     const eventName = event.toLowerCase();
     const exportName = namedHandler
       ? `${componentName}$${expression}`
@@ -44,7 +48,12 @@ export function lowerEventHandlers(
       );
     }
 
-    if (capturesUnserializableValue(expression, eventAttribute.zeroArgArrow?.references)) {
+    if (
+      capturesUnserializableValue(
+        expression,
+        eventAttribute.zeroArgArrow?.references ?? eventAttribute.expressionReferences,
+      )
+    ) {
       diagnostics.push(
         fw201Diagnostic(options.fileName, options.source, attributeStart, {
           attributeName: `on:${eventName}`,
@@ -136,6 +145,8 @@ function eventAttributes(model: ComponentModuleModel): Array<{
   attributeStart: number;
   event: string;
   expression: string;
+  expressionPropertyAccesses?: readonly { path: string }[];
+  expressionReferences?: readonly string[];
   tag: string;
   zeroArgArrow?: ZeroArgArrowModel;
 }> {
@@ -144,6 +155,8 @@ function eventAttributes(model: ComponentModuleModel): Array<{
     attributeStart: number;
     event: string;
     expression: string;
+    expressionPropertyAccesses?: readonly { path: string }[];
+    expressionReferences?: readonly string[];
     tag: string;
     zeroArgArrow?: ZeroArgArrowModel;
   }> = [];
@@ -157,6 +170,12 @@ function eventAttributes(model: ComponentModuleModel): Array<{
         attributeStart: attribute.start,
         event,
         expression: attribute.expression,
+        ...(attribute.expressionPropertyAccesses
+          ? { expressionPropertyAccesses: attribute.expressionPropertyAccesses }
+          : {}),
+        ...(attribute.expressionReferences
+          ? { expressionReferences: attribute.expressionReferences }
+          : {}),
         tag: element.tag,
         ...(attribute.zeroArgArrow ? { zeroArgArrow: attribute.zeroArgArrow } : {}),
       });
@@ -223,6 +242,7 @@ function fw201Diagnostic(
 function extractElementParams(
   expression: string,
   zeroArgArrow?: ZeroArgArrowModel,
+  parsedPropertyAccesses?: readonly { path: string }[],
 ): ElementParam[] {
   const callArguments = zeroArgArrow?.callArguments;
   const expressions = callArguments
@@ -237,7 +257,7 @@ function extractElementParams(
               .filter(serializableMemberExpression) ?? [];
           return members.length > 0 ? members : [arg];
         })
-    : serializableMemberExpressions(expression, zeroArgArrow);
+    : serializableMemberExpressions(expression, zeroArgArrow, parsedPropertyAccesses);
 
   return dedupeStrings(expressions).map((arg) => ({
     attributeName: `data-p-${paramNameForExpression(arg)}`,
@@ -302,10 +322,13 @@ function expressionUsesParam(
 function serializableMemberExpressions(
   expression: string,
   zeroArgArrow?: ZeroArgArrowModel,
+  parsedPropertyAccesses?: readonly { path: string }[],
 ): string[] {
-  return collectSerializableMemberExpressions(expression, zeroArgArrow).filter(
-    serializableMemberExpression,
-  );
+  return collectSerializableMemberExpressions(
+    expression,
+    zeroArgArrow,
+    parsedPropertyAccesses,
+  ).filter(serializableMemberExpression);
 }
 
 function serializableMemberExpression(member: string): boolean {
@@ -320,8 +343,10 @@ function serializableMemberExpression(member: string): boolean {
 function collectSerializableMemberExpressions(
   expression: string,
   zeroArgArrow?: ZeroArgArrowModel,
+  parsedPropertyAccesses?: readonly { path: string }[],
 ): string[] {
   if (zeroArgArrow) return zeroArgArrow.bodyPropertyAccesses.map((access) => access.path);
+  if (parsedPropertyAccesses) return parsedPropertyAccesses.map((access) => access.path);
 
   return functionBodyPropertyAccessPaths('handler-expression.ts', expression);
 }

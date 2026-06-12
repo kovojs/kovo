@@ -394,6 +394,19 @@ export const ProductLinks = component('product-links', {
     });
   });
 
+  it('records references and property accesses on JSX attribute expressions', () => {
+    const source = `
+export const CartActions = component('cart-actions', {
+  render: () => <button onClick={track(item.id, "window.location")}>Save</button>,
+});
+`;
+    const [button] = jsxElements(parseComponentModule('cart-actions.tsx', source));
+    const click = button?.attributes.find((attribute) => attribute.name === 'onClick');
+
+    expect(click?.expressionReferences).toEqual(['track', 'item']);
+    expect(click?.expressionPropertyAccesses?.map((access) => access.path)).toEqual(['item.id']);
+  });
+
   it('extracts concise arrow function parts through the TypeScript parser', () => {
     expect(arrowFunctionParts('expression.tsx', '(cart: Cart) => cart.count + ";"')).toEqual({
       expression: 'cart.count + ";"',
