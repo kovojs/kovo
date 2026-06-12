@@ -27,6 +27,9 @@ import { GalleryDialogDemo } from './generated/interactive/dialog-demo.js';
 import * as numberFieldClient from './generated/interactive/number-field-demo.client.js';
 import { GalleryNumberFieldDemo } from './generated/interactive/number-field-demo.js';
 // @ts-expect-error generated client modules are compiler artifacts without declarations.
+import * as otpFieldClient from './generated/interactive/otp-field-demo.client.js';
+import { GalleryOtpFieldDemo } from './generated/interactive/otp-field-demo.js';
+// @ts-expect-error generated client modules are compiler artifacts without declarations.
 import * as popoverClient from './generated/interactive/popover-demo.client.js';
 import { GalleryPopoverDemo } from './generated/interactive/popover-demo.js';
 // @ts-expect-error generated client modules are compiler artifacts without declarations.
@@ -41,6 +44,9 @@ import { GallerySwitchDemo } from './generated/interactive/switch-demo.js';
 // @ts-expect-error generated client modules are compiler artifacts without declarations.
 import * as tabsClient from './generated/interactive/tabs-demo.client.js';
 import { GalleryTabsDemo } from './generated/interactive/tabs-demo.js';
+// @ts-expect-error generated client modules are compiler artifacts without declarations.
+import * as toolbarClient from './generated/interactive/toolbar-demo.client.js';
+import { GalleryToolbarDemo } from './generated/interactive/toolbar-demo.js';
 // @ts-expect-error generated client modules are compiler artifacts without declarations.
 import * as toggleClient from './generated/interactive/toggle-demo.client.js';
 import { GalleryToggleDemo } from './generated/interactive/toggle-demo.js';
@@ -68,11 +74,13 @@ const generatedModules: Record<string, Record<string, unknown>> = {
   '/c/examples/gallery/src/generated/interactive/disclosure-demo.client.js': disclosureClient,
   '/c/examples/gallery/src/generated/interactive/dialog-demo.client.js': dialogClient,
   '/c/examples/gallery/src/generated/interactive/number-field-demo.client.js': numberFieldClient,
+  '/c/examples/gallery/src/generated/interactive/otp-field-demo.client.js': otpFieldClient,
   '/c/examples/gallery/src/generated/interactive/popover-demo.client.js': popoverClient,
   '/c/examples/gallery/src/generated/interactive/radio-group-demo.client.js': radioGroupClient,
   '/c/examples/gallery/src/generated/interactive/slider-demo.client.js': sliderClient,
   '/c/examples/gallery/src/generated/interactive/switch-demo.client.js': switchClient,
   '/c/examples/gallery/src/generated/interactive/tabs-demo.client.js': tabsClient,
+  '/c/examples/gallery/src/generated/interactive/toolbar-demo.client.js': toolbarClient,
   '/c/examples/gallery/src/generated/interactive/toggle-demo.client.js': toggleClient,
   '/c/examples/gallery/src/generated/interactive/toggle-group-demo.client.js': toggleGroupClient,
   '/c/examples/gallery/src/generated/interactive/tooltip-demo.client.js': tooltipClient,
@@ -373,6 +381,58 @@ describe('compiled interactive gallery demos in the browser', () => {
     });
   });
 
+  it('updates OTP aggregate value, visible slots, and focus through generated handlers', async () => {
+    const root = mountInteractiveDemo(GalleryOtpFieldDemo);
+    const hidden = required(
+      root.querySelector<HTMLInputElement>('#gallery-interactive-otp-hidden'),
+    );
+    const first = required(root.querySelector<HTMLInputElement>('#gallery-interactive-otp-slot-0'));
+    const second = required(
+      root.querySelector<HTMLInputElement>('#gallery-interactive-otp-slot-1'),
+    );
+    const third = required(root.querySelector<HTMLInputElement>('#gallery-interactive-otp-slot-2'));
+    const fourth = required(
+      root.querySelector<HTMLInputElement>('#gallery-interactive-otp-slot-3'),
+    );
+    const output = required(root.querySelector<HTMLOutputElement>('[data-demo-state="otp-value"]'));
+    const { imports } = installGeneratedGalleryLoader(root, { events: ['input', 'keydown'] });
+
+    expect(root.getAttribute('fw-state')).toBe('{"activeSlot":2,"value":"12"}');
+    expect(root.getAttribute('role')).toBe('group');
+    expect(root.getAttribute('aria-labelledby')).toBe('gallery-interactive-otp-label');
+    expect(hidden.name).toBe('gallery-otp-code');
+    expect(hidden.value).toBe('12');
+    expect(first.value).toBe('1');
+    expect(second.value).toBe('2');
+    expect(third.value).toBe('');
+    expect(output.textContent).toBe('12');
+
+    third.dispatchEvent(new Event('input', { bubbles: true }));
+
+    await vi.waitFor(() => {
+      expect(imports.at(-1)).toBe(
+        '/c/examples/gallery/src/generated/interactive/otp-field-demo.client.js',
+      );
+      expect(root.getAttribute('fw-state')).toBe('{"activeSlot":3,"value":"123"}');
+      expect(hidden.value).toBe('123');
+      expect(third.value).toBe('3');
+      expect(third.getAttribute('data-filled')).toBe('');
+      expect(fourth.tabIndex).toBe(0);
+      expect(output.textContent).toBe('123');
+    });
+
+    fourth.dispatchEvent(new Event('input', { bubbles: true }));
+
+    await vi.waitFor(() => {
+      expect(root.getAttribute('fw-state')).toBe('{"activeSlot":3,"value":"1234"}');
+      expect(root.getAttribute('data-complete')).toBe('');
+      expect(hidden.value).toBe('1234');
+      expect(fourth.value).toBe('4');
+      expect(fourth.getAttribute('data-complete')).toBe('');
+      expect(output.textContent).toBe('1234');
+    });
+  });
+
   it('opens and closes a native dialog through generated handlers and invoker attributes', async () => {
     const root = mountInteractiveDemo(GalleryDialogDemo);
     const trigger = required(root.querySelector<HTMLButtonElement>('button[command="show-modal"]'));
@@ -601,6 +661,53 @@ describe('compiled interactive gallery demos in the browser', () => {
         '/c/examples/gallery/src/generated/interactive/tabs-demo.client.js',
       ]);
       expect(root.getAttribute('fw-state')).toBe('{"value":"details"}');
+    });
+  });
+
+  it('updates toolbar roving tabindex and pressed state through generated handlers', async () => {
+    const root = mountInteractiveDemo(GalleryToolbarDemo);
+    const bold = required(root.querySelector<HTMLButtonElement>('#gallery-toolbar-bold'));
+    const italic = required(root.querySelector<HTMLButtonElement>('#gallery-toolbar-italic'));
+    const link = required(root.querySelector<HTMLButtonElement>('#gallery-toolbar-link'));
+    const activeOutput = required(
+      root.querySelector<HTMLOutputElement>('[data-demo-state="toolbar-active"]'),
+    );
+    const pressedOutput = required(
+      root.querySelector<HTMLOutputElement>('[data-demo-state="toolbar-pressed"]'),
+    );
+    const { imports } = installGeneratedGalleryLoader(root, {
+      events: ['click', 'keydown'],
+    });
+
+    expect(root.getAttribute('role')).toBe('toolbar');
+    expect(root.getAttribute('aria-label')).toBe('Formatting toolbar');
+    expect(root.getAttribute('fw-state')).toBe('{"activeValue":"bold","pressedValue":"bold"}');
+    expect(bold.tabIndex).toBe(0);
+    expect(bold.getAttribute('aria-pressed')).toBe('true');
+    expect(italic.disabled).toBe(true);
+    expect(italic.tabIndex).toBe(-1);
+    expect(link.tabIndex).toBe(-1);
+    expect(activeOutput.textContent).toBe('bold');
+    expect(pressedOutput.textContent).toBe('bold');
+
+    root.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, key: 'ArrowRight' }));
+
+    await vi.waitFor(() => {
+      expect(imports.at(-1)).toBe(
+        '/c/examples/gallery/src/generated/interactive/toolbar-demo.client.js',
+      );
+      expect(root.getAttribute('fw-state')).toBe('{"activeValue":"link","pressedValue":"bold"}');
+      expect(bold.tabIndex).toBe(-1);
+      expect(link.tabIndex).toBe(0);
+      expect(activeOutput.textContent).toBe('link');
+    });
+
+    link.click();
+
+    await vi.waitFor(() => {
+      expect(root.getAttribute('fw-state')).toBe('{"activeValue":"link","pressedValue":"link"}');
+      expect(link.getAttribute('aria-pressed')).toBe('true');
+      expect(pressedOutput.textContent).toBe('link');
     });
   });
 

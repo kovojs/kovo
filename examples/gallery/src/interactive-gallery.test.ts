@@ -32,11 +32,13 @@ describe('compiled interactive gallery demos', () => {
     const disclosure = readGenerated('disclosure-demo.tsx');
     const dialog = readGenerated('dialog-demo.tsx');
     const numberField = readGenerated('number-field-demo.tsx');
+    const otpField = readGenerated('otp-field-demo.tsx');
     const popover = readGenerated('popover-demo.tsx');
     const radioGroup = readGenerated('radio-group-demo.tsx');
     const slider = readGenerated('slider-demo.tsx');
     const switchDemo = readGenerated('switch-demo.tsx');
     const tabs = readGenerated('tabs-demo.tsx');
+    const toolbar = readGenerated('toolbar-demo.tsx');
     const tooltip = readGenerated('tooltip-demo.tsx');
     const toggleGroup = readGenerated('toggle-group-demo.tsx');
 
@@ -113,6 +115,16 @@ describe('compiled interactive gallery demos', () => {
       /on:click="\/c\/examples\/gallery\/src\/generated\/interactive\/number-field-demo\.client\.js\?v=[0-9a-f]{8}#GalleryNumberFieldDemo\$button_click_2"/,
     );
 
+    expect(otpField).toContain('data-gallery-interactive="otp-field"');
+    expect(otpField).toContain('fw-state=\'{"activeSlot":2,"value":"12"}\'');
+    expect(otpField).toContain('otpFieldHiddenInputAttributes({');
+    expect(otpField).toMatch(
+      /on:input="\/c\/examples\/gallery\/src\/generated\/interactive\/otp-field-demo\.client\.js\?v=[0-9a-f]{8}#GalleryOtpFieldDemo\$input_input"/,
+    );
+    expect(otpField).toMatch(
+      /on:keydown="\/c\/examples\/gallery\/src\/generated\/interactive\/otp-field-demo\.client\.js\?v=[0-9a-f]{8}#GalleryOtpFieldDemo\$input_keydown_2"/,
+    );
+
     expect(collapsible).toContain('data-gallery-interactive="collapsible"');
     expect(collapsible).toContain('fw-state=\'{"open":false}\'');
     expect(collapsible).toMatch(
@@ -157,6 +169,16 @@ describe('compiled interactive gallery demos', () => {
       /on:click="\/c\/examples\/gallery\/src\/generated\/interactive\/tabs-demo\.client\.js\?v=[0-9a-f]{8}#GalleryTabsDemo\$button_click_2"/,
     );
 
+    expect(toolbar).toContain('data-gallery-interactive="toolbar"');
+    expect(toolbar).toContain('fw-state=\'{"activeValue":"bold","pressedValue":"bold"}\'');
+    expect(toolbar).toContain('toolbarButtonAttributes({');
+    expect(toolbar).toMatch(
+      /on:keydown="\/c\/examples\/gallery\/src\/generated\/interactive\/toolbar-demo\.client\.js\?v=[0-9a-f]{8}#GalleryToolbarDemo\$section_keydown"/,
+    );
+    expect(toolbar).toMatch(
+      /on:click="\/c\/examples\/gallery\/src\/generated\/interactive\/toolbar-demo\.client\.js\?v=[0-9a-f]{8}#GalleryToolbarDemo\$button_click_2"/,
+    );
+
     expect(tooltip).toContain('data-gallery-interactive="tooltip"');
     expect(tooltip).toContain('fw-state=\'{"open":false}\'');
     expect(tooltip).toContain('tooltipTriggerAttributes({ contentId, open: state.open })');
@@ -191,11 +213,13 @@ describe('compiled interactive gallery demos', () => {
     const disclosure = evaluateClientModule('disclosure-demo.client.js');
     const dialog = evaluateClientModule('dialog-demo.client.js');
     const numberField = evaluateClientModule('number-field-demo.client.js');
+    const otpField = evaluateClientModule('otp-field-demo.client.js');
     const popover = evaluateClientModule('popover-demo.client.js');
     const radioGroup = evaluateClientModule('radio-group-demo.client.js');
     const slider = evaluateClientModule('slider-demo.client.js');
     const switchDemo = evaluateClientModule('switch-demo.client.js');
     const tabs = evaluateClientModule('tabs-demo.client.js');
+    const toolbar = evaluateClientModule('toolbar-demo.client.js');
     const tooltip = evaluateClientModule('tooltip-demo.client.js');
     const toggleGroup = evaluateClientModule('toggle-group-demo.client.js');
     const signal = new AbortController().signal;
@@ -302,6 +326,26 @@ describe('compiled interactive gallery demos', () => {
     });
     expect(numberFieldState).toEqual({ value: 2 });
 
+    const otpFieldState = { activeSlot: 2, value: '12' };
+    clientHandler(otpField, 'GalleryOtpFieldDemo$input_input')(new Event('input'), {
+      params: {},
+      signal,
+      state: otpFieldState,
+    });
+    expect(otpFieldState).toEqual({ activeSlot: 3, value: '123' });
+    clientHandler(otpField, 'GalleryOtpFieldDemo$input_input_2')(new Event('input'), {
+      params: {},
+      signal,
+      state: otpFieldState,
+    });
+    expect(otpFieldState).toEqual({ activeSlot: 3, value: '1234' });
+    clientHandler(otpField, 'GalleryOtpFieldDemo$input_keydown_2')(new Event('keydown'), {
+      params: {},
+      signal,
+      state: otpFieldState,
+    });
+    expect(otpFieldState).toEqual({ activeSlot: 1, value: '1' });
+
     const collapsibleState = { open: false };
     clientHandler(collapsible, 'GalleryCollapsibleDemo$summary_click')(new Event('click'), {
       params: {},
@@ -361,6 +405,20 @@ describe('compiled interactive gallery demos', () => {
       state: tabsState,
     });
     expect(tabsState).toEqual({ value: 'overview' });
+
+    const toolbarState = { activeValue: 'bold', pressedValue: 'bold' };
+    clientHandler(toolbar, 'GalleryToolbarDemo$section_keydown')(new Event('keydown'), {
+      params: {},
+      signal,
+      state: toolbarState,
+    });
+    expect(toolbarState).toEqual({ activeValue: 'link', pressedValue: 'bold' });
+    clientHandler(toolbar, 'GalleryToolbarDemo$button_click_2')(new Event('click'), {
+      params: {},
+      signal,
+      state: toolbarState,
+    });
+    expect(toolbarState).toEqual({ activeValue: 'link', pressedValue: 'link' });
 
     const tooltipState = { open: false };
     clientHandler(tooltip, 'GalleryTooltipDemo$button_focus')(new Event('focus'), {

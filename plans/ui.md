@@ -1028,6 +1028,23 @@ jiso-dialog` resolves dashed wire names and prints provenance including package,
       `pnpm exec vp check examples/gallery/package.json examples/gallery/scripts/emit-interactive-gallery.mjs examples/gallery/src/interactive/accordion-demo.tsx examples/gallery/src/interactive/checkbox-group-demo.tsx examples/gallery/src/interactive/radio-group-demo.tsx examples/gallery/src/interactive/slider-demo.tsx examples/gallery/src/interactive/toggle-group-demo.tsx examples/gallery/src/interactive-gallery.test.ts examples/gallery/src/interactive-gallery.browser.test.ts examples/gallery/src/generated/interactive/accordion-demo.tsx examples/gallery/src/generated/interactive/accordion-demo.client.js examples/gallery/src/generated/interactive/checkbox-group-demo.tsx examples/gallery/src/generated/interactive/checkbox-group-demo.client.js examples/gallery/src/generated/interactive/radio-group-demo.tsx examples/gallery/src/generated/interactive/radio-group-demo.client.js examples/gallery/src/generated/interactive/slider-demo.tsx examples/gallery/src/generated/interactive/slider-demo.client.js examples/gallery/src/generated/interactive/toggle-group-demo.tsx examples/gallery/src/generated/interactive/toggle-group-demo.client.js plans/ui.md IMPLEMENT_v1.md`,
       and `git diff --check`. G6 remains open for remaining stateful-family compiled demos,
       docs deployment wiring, and full gallery/conformance gates.
+      Additional partial evidence 2026-06-12: the compiled interactive gallery now adds
+      app-authored TSX demos for otp-field and toolbar. The emitter compiles both through
+      `@jiso/compiler`, commits lowered TSX plus generated client modules, and the static
+      test inspects versioned `on:input`/`on:keydown`/`on:click` refs while executing
+      generated handlers. The Chromium browser test mounts the generated components through
+      the real runtime loader and proves OTP aggregate native input value, visible slot
+      fill/focus/completion state, and toolbar roving tabindex/pressed-state/output movement.
+      Same-session evidence:
+      `pnpm --filter @jiso/example-gallery run emit:interactive-gallery -- --check`,
+      `pnpm --filter @jiso/example-gallery exec vitest --run src/interactive-gallery.test.ts`,
+      `pnpm --filter @jiso/example-gallery test`,
+      `pnpm --filter @jiso/example-gallery run test:browser`,
+      `pnpm --filter @jiso/headless-ui exec vitest --run src/primitives/otp-field.test.ts src/primitives/toolbar.test.ts src/tooling/lint-primitives.test.ts src/tooling/primitive-handler-lint.test.ts`,
+      `pnpm --filter @jiso/headless-ui run lint:primitives`,
+      `pnpm exec vp check examples/gallery/package.json examples/gallery/scripts/emit-interactive-gallery.mjs examples/gallery/src/interactive/otp-field-demo.tsx examples/gallery/src/interactive/toolbar-demo.tsx examples/gallery/src/interactive-gallery.test.ts examples/gallery/src/interactive-gallery.browser.test.ts examples/gallery/src/generated/interactive/otp-field-demo.tsx examples/gallery/src/generated/interactive/otp-field-demo.client.js examples/gallery/src/generated/interactive/toolbar-demo.tsx examples/gallery/src/generated/interactive/toolbar-demo.client.js plans/ui.md IMPLEMENT_v1.md`,
+      and `git diff --check`. G6 remains open for docs deployment wiring and full
+      gallery/conformance gates.
 
 ## Background
 
