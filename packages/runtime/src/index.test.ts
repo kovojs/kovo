@@ -4211,7 +4211,11 @@ describe('query store', () => {
     const pendingRoot = new FakePendingRoot([cartBadge]);
     root.deps = [{ id: 'cart-badge' }];
     const count = new FakeQueryBindingElement('cart.count', { textContent: '0' });
+    const summary = new FakeQueryPlanElement({ 'data-derive': 'cart.summary' });
+    const observed: string[] = [];
     root.bindings.push(count);
+    root.planElements.push(summary);
+    root.targets.set('cart-badge', new FakeMorphTarget());
     store.set('cart', { count: 0 });
     const optimistic = {
       transforms: {
@@ -4227,7 +4231,10 @@ describe('query store', () => {
 
       return {
         async text() {
-          return '<fw-query name="cart">{"count":2}</fw-query>';
+          return [
+            '<fw-query name="cart">{"count":2}</fw-query>',
+            '<fw-fragment target="cart-badge"><cart-badge>server</cart-badge></fw-fragment>',
+          ].join('\n');
         },
       };
     });
@@ -4238,9 +4245,22 @@ describe('query store', () => {
       formData: new FormData(),
       idem: 'idem_first',
       input: { quantity: 2 },
+      morph(target, html) {
+        observed.push(`morph:${count.textContent}:${summary.textContent}:${html}`);
+        target.replaceWithHtml(html);
+      },
       optimistic,
       pendingRoot,
-      queryPlans: { cart: { bindings: true } },
+      queryPlans: {
+        cart: {
+          derives: [
+            {
+              name: 'summary',
+              select: (value) => `${(value as { count: number }).count} items`,
+            },
+          ],
+        },
+      },
       rebaser,
       root,
       store,
@@ -4248,6 +4268,9 @@ describe('query store', () => {
 
     expect(store.get('cart')).toEqual({ count: 7 });
     expect(count.textContent).toBe('7');
+    expect(summary.textContent).toBe('7 items');
+    expect(observed).toEqual(['morph:7:7 items:<cart-badge>server</cart-badge>']);
+    expect(root.targets.get('cart-badge')?.html).toBe('<cart-badge>server</cart-badge>');
     expect(rebaser.pendingCount('cart')).toBe(1);
     expect(cartBadge.attributes).toMatchObject({
       'aria-busy': 'true',

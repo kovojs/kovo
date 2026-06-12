@@ -1409,6 +1409,29 @@ export function applyMutationResponseToDom(
 export const applyDeferredChunkToDom: typeof applyMutationResponseToDom =
   applyMutationResponseToDom;
 
+type MutationDomApplyHooks = Pick<
+  ApplyMutationResponseToDomOptions,
+  'applyQuery' | 'beforeApplyQueries'
+>;
+
+function applyEnhancedMutationResponseBodyToDom(
+  options: EnhancedMutationSubmitOptions,
+  body: string,
+  hooks: MutationDomApplyHooks = {},
+): AppliedMutationResponseToDom {
+  return applyMutationResponseToDom({
+    ...(hooks.applyQuery ? { applyQuery: hooks.applyQuery } : {}),
+    ...(hooks.beforeApplyQueries ? { beforeApplyQueries: hooks.beforeApplyQueries } : {}),
+    body,
+    ...(options.islandSignalScope ? { islandSignalScope: options.islandSignalScope } : {}),
+    ...(options.morph ? { morph: options.morph } : {}),
+    ...(options.onError ? { onError: options.onError } : {}),
+    ...(options.queryPlans ? { queryPlans: options.queryPlans } : {}),
+    root: options.root,
+    store: options.store,
+  });
+}
+
 export function applyQueryBindings(
   root: QueryBindingRoot,
   queryName: string,
@@ -1580,21 +1603,7 @@ export async function submitEnhancedMutation(options: EnhancedMutationSubmitOpti
     idem = fetched.idem;
     response = fetched.response;
     targets = fetched.targets;
-    const applied = applyMutationResponseToDom({
-      body,
-      ...(options.queryPlans ? { queryPlans: options.queryPlans } : {}),
-      root: options.root,
-      store: options.store,
-      ...(options.morph ? { morph: options.morph } : {}),
-      ...(options.islandSignalScope ? { islandSignalScope: options.islandSignalScope } : {}),
-      ...(options.onError
-        ? {
-            onError(error) {
-              options.onError?.(error);
-            },
-          }
-        : {}),
-    });
+    const applied = applyEnhancedMutationResponseBodyToDom(options, body);
     publishSuccessfulMutation(options, response, body, changes);
 
     return {
@@ -1662,15 +1671,7 @@ async function submitOptimisticEnhancedMutationDirect<Input>(
         stampPendingQueries(options.pendingRoot, queryNames, false);
       }
 
-      const applied = applyMutationResponseToDom({
-        body,
-        ...(options.queryPlans ? { queryPlans: options.queryPlans } : {}),
-        ...(options.onError ? { onError: options.onError } : {}),
-        root: options.root,
-        store: options.store,
-        ...(options.morph ? { morph: options.morph } : {}),
-        ...(options.islandSignalScope ? { islandSignalScope: options.islandSignalScope } : {}),
-      });
+      const applied = applyEnhancedMutationResponseBodyToDom(options, body);
 
       return {
         ...applied,
@@ -1680,7 +1681,7 @@ async function submitOptimisticEnhancedMutationDirect<Input>(
       };
     }
 
-    const applied = applyMutationResponseToDom({
+    const applied = applyEnhancedMutationResponseBodyToDom(options, body, {
       applyQuery(query) {
         options.rebaser.applyServerTruth(query.name, query.value, query.key);
         return { value: options.store.get(query.name, query.key) };
@@ -1697,13 +1698,6 @@ async function submitOptimisticEnhancedMutationDirect<Input>(
         }
         options.rebaser.settle(idem);
       },
-      body,
-      ...(options.islandSignalScope ? { islandSignalScope: options.islandSignalScope } : {}),
-      ...(options.morph ? { morph: options.morph } : {}),
-      ...(options.onError ? { onError: options.onError } : {}),
-      ...(options.queryPlans ? { queryPlans: options.queryPlans } : {}),
-      root: options.root,
-      store: options.store,
     });
     publishSuccessfulMutation(options, response, body, changes);
     const settledQueries = queryNames.filter(
