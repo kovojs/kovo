@@ -71,7 +71,7 @@ export function compileComponentModule(options: CompileComponentOptions): Compil
     platformLowering.replacements,
     parseComponentModuleModel,
   ).state;
-  const linkLowering = navigationLinkLowering(platformState.source, platformState.model);
+  const linkLowering = navigationLinkLowering(platformState.model);
   const linksLoweredState = lowerComponentPipelinePatches(
     platformState,
     linkLowering.replacements,

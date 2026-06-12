@@ -325,17 +325,16 @@ export const CartShell = component('cart-shell', {
     expect(strong?.ancestorTags).toEqual(['span', 'p', 'section']);
   });
 
-  it('records JSX opening tag source for model-driven lowerers', () => {
+  it('records JSX opening tag and child source for model-driven lowerers', () => {
     const source = `
 export const ProductCard = component('product-card', {
-  render: () => <img alt="Product" viewTransitionName="product-p1-image" />,
+  render: () => <Link to="/products/:id" params={{ id: 'p1' }}>Product</Link>,
 });
 `;
-    const [image] = jsxElements(parseComponentModule('product-card.tsx', source));
+    const [link] = jsxElements(parseComponentModule('product-card.tsx', source));
 
-    expect(image?.openingSource).toBe(
-      '<img alt="Product" viewTransitionName="product-p1-image" />',
-    );
+    expect(link?.openingSource).toBe('<Link to="/products/:id" params={{ id: \'p1\' }}>');
+    expect(link?.childSource).toBe('Product');
   });
 
   it('records call argument property access facts', () => {

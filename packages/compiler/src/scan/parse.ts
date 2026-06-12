@@ -92,6 +92,7 @@ export interface JsxAttributeModel {
 export interface JsxElementModel {
   ancestorTags: readonly string[];
   attributes: readonly JsxAttributeModel[];
+  childSource: string;
   closingStart: number;
   end: number;
   openingEnd: number;
@@ -1136,6 +1137,7 @@ function jsxElementModel(
         },
       ];
     }),
+    childSource: ts.isJsxElement(node) ? source.slice(openingElement.getEnd(), closingStart) : '',
     closingStart,
     end: node.getEnd(),
     openingEnd: openingElement.getEnd(),

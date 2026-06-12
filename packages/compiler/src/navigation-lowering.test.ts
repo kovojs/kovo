@@ -11,10 +11,7 @@ export const ProductLinks = component('product-links', {
   render: () => <Link to="/products/:id" params={{ id: 'p 1' }}>Product</Link>,
 });
 `;
-    const lowering = navigationLinkLowering(
-      source,
-      parseComponentModule('product-links.tsx', source),
-    );
+    const lowering = navigationLinkLowering(parseComponentModule('product-links.tsx', source));
 
     expect(lowering.replacements).toEqual([
       {

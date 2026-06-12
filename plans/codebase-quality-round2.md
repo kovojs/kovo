@@ -762,6 +762,12 @@ pipeline throws the tree away and communicates via mutated source text.
       `pnpm exec vitest --run packages/compiler/src/scan/parse.test.ts packages/compiler/src/view-transitions.test.ts packages/compiler/src/compile-component.test.ts`,
       `pnpm exec vp check packages/compiler/src/compile.ts packages/compiler/src/lower/view-transitions.ts packages/compiler/src/scan/parse.ts packages/compiler/src/scan/parse.test.ts`,
       and `git diff --check`.
+      Additional evidence 2026-06-12: JSX element models also carry parser-owned child source,
+      and static `<Link>` navigation lowering is now a model-only patch producer that consumes
+      `openingSource`/`childSource` rather than accepting raw module source. Same-session evidence:
+      `pnpm exec vitest --run packages/compiler/src/scan/parse.test.ts packages/compiler/src/navigation-lowering.test.ts packages/compiler/src/compile-component.test.ts`,
+      `pnpm exec vp check packages/compiler/src/compile.ts packages/compiler/src/lower/navigation.ts packages/compiler/src/navigation-lowering.test.ts packages/compiler/src/scan/parse.ts packages/compiler/src/scan/parse.test.ts`,
+      and `git diff --check`.
       Additional evidence 2026-06-12: `emit/server.ts` now updates existing `fw-deps`
       attributes by `JsxAttributeModel` span relative to the parsed render host instead of
       regex-searching the opening tag slice. `stamps.test.ts` pins a single-quoted authored

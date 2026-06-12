@@ -11,10 +11,7 @@ export interface NavigationLowering {
   replacements: SourceReplacement[];
 }
 
-export function navigationLinkLowering(
-  source: string,
-  model: ComponentModuleModel,
-): NavigationLowering {
+export function navigationLinkLowering(model: ComponentModuleModel): NavigationLowering {
   const replacements: SourceReplacement[] = [];
 
   for (const link of jsxElements(model).filter(
@@ -27,7 +24,7 @@ export function navigationLinkLowering(
     const search = navigationObjectAttributeValue(link, 'search');
     if (params === null || search === null) continue;
 
-    const opening = source.slice(link.start, link.openingEnd);
+    const opening = link.openingSource;
     const tagPrefix = '<Link';
     const attributes = opening.slice(tagPrefix.length, -1);
     const anchorAttributes = removeJsxAttributes(
@@ -41,11 +38,10 @@ export function navigationLinkLowering(
     );
     const spacing = anchorAttributes.trim() === '' ? '' : anchorAttributes;
     const href = buildStaticHref(target, params ?? {}, search ?? {});
-    const children = source.slice(link.openingEnd, link.closingStart);
 
     replacements.push({
       end: link.end,
-      replacement: `<a${spacing} href="${escapeAttribute(href)}">${children}</a>`,
+      replacement: `<a${spacing} href="${escapeAttribute(href)}">${link.childSource}</a>`,
       start: link.start,
     });
   }
