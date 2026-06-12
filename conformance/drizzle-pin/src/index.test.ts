@@ -307,6 +307,50 @@ describe('Drizzle pinned subset conformance', () => {
     });
   });
 
+  it('pins namespace-imported project write targets with real Drizzle tables', () => {
+    const graph = extractTouchGraphFromProject({
+      files: [
+        {
+          fileName: 'conformance/drizzle-pin/src/schema.ts',
+          source: `
+            import { pgTable, text } from 'drizzle-orm/pg-core';
+
+            export const cartItems = pgTable('cart_items', {
+              id: text('id').primaryKey(),
+            }, jiso({ domain: 'cart', key: 'id' }));
+          `,
+        },
+        {
+          fileName: 'conformance/drizzle-pin/src/cart.domain.ts',
+          source: `
+            import { eq } from 'drizzle-orm';
+            import type { PgDatabase } from 'drizzle-orm/pg-core';
+            import * as schema from './schema';
+
+            export async function addItem(db: PgDatabase<any, any, any>, id: string) {
+              await db.update(schema.cartItems).set({ id }).where(eq(schema.cartItems.id, id));
+            }
+          `,
+        },
+      ],
+    });
+
+    expect(graph).toEqual({
+      addItem: {
+        reads: [],
+        touches: [
+          {
+            domain: 'cart',
+            keys: 'arg:id',
+            site: 'conformance/drizzle-pin/src/cart.domain.ts:7',
+            via: 'cart_items',
+          },
+        ],
+        unresolved: [],
+      },
+    });
+  });
+
   it('pins project transaction aliases without leaking same-name callback receivers', () => {
     const graph = extractTouchGraphFromProject({
       files: [

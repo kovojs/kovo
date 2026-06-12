@@ -1497,6 +1497,18 @@ must be "FW406 unresolved," never "silently wrong."
       `corepack pnpm exec vitest --run conformance/drizzle-pin`;
       `corepack pnpm exec vp check packages/drizzle/src/index.ts packages/drizzle/src/index.test.ts conformance/drizzle-pin/src/index.test.ts plans/codebase-quality-round2.md`;
       and `git diff --check`.
+      Additional bounded evidence 2026-06-12: project-mode write-target and
+      insert-select/update-from read-source table extraction now resolves table arguments
+      through ts-morph table symbols and static property paths instead of serializing the
+      argument node through `sourceWithProjectTableIdentifiersResolved(...)`. Namespace-imported
+      project writes and predicates such as `db.update(schema.cartItems).where(eq(schema.cartItems.id, id))`
+      now resolve from the real exported table property symbol while computed or unproven table
+      expressions still degrade to FW406 under SPEC §10-§11. Same-session evidence:
+      `corepack pnpm exec vitest --run packages/drizzle/src/index.test.ts conformance/drizzle-pin/src/index.test.ts -t "namespace-imported project write targets|imported table symbols|static element-access writes|recognizes real Drizzle receiver types"`;
+      `corepack pnpm exec vitest --run packages/drizzle/src`;
+      `corepack pnpm exec vitest --run conformance/drizzle-pin/src/index.test.ts`;
+      `corepack pnpm exec vp check packages/drizzle/src/index.ts packages/drizzle/src/index.test.ts conformance/drizzle-pin/src/index.test.ts plans/codebase-quality-round2.md`;
+      and `git diff --check`.
 
 - [ ] **HIGH — Remove fact-fabricating heuristics; degrade to FW406.**
       Column type from projection-key name (`/(count|qty|...)$/i` → number, index.ts:993);

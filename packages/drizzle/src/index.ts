@@ -572,7 +572,7 @@ function extractProjectDrizzleWriteCalls(
     const chain = drizzleWriteChainRoot(call);
     const tableExpression =
       projectTableNameForNode(tableArgument, tableNamesBySymbol) ??
-      sourceWithProjectTableIdentifiersResolved(tableArgument, file.source, tableNamesBySymbol);
+      UNRESOLVED_READ_SOURCE_EXPRESSION;
 
     calls.push({
       index: 0,
@@ -580,11 +580,11 @@ function extractProjectDrizzleWriteCalls(
       predicateFacts: extractPredicateFactsFromWriteChain(chain, (node) =>
         projectTableNameForNode(node, tableNamesBySymbol),
       ),
-      readSources: extractReadSourcesFromWriteChain(chain, operation, (node) =>
-        (
-          projectTableNameForNode(node, tableNamesBySymbol) ??
-          sourceWithProjectTableIdentifiersResolved(node, file.source, tableNamesBySymbol)
-        ).trim(),
+      readSources: extractReadSourcesFromWriteChain(
+        chain,
+        operation,
+        (node) =>
+          projectTableNameForNode(node, tableNamesBySymbol) ?? UNRESOLVED_READ_SOURCE_EXPRESSION,
       ),
       site: `${file.fileName}:${lineForIndex(file.source, call.getStart())}`,
       tableExpression: tableExpression.trim(),
@@ -714,34 +714,28 @@ function drizzleWriteChainRoot(call: CallExpression): Node {
   }
 }
 
-function sourceWithProjectTableIdentifiersResolved(
-  node: Node,
-  source: string,
-  tableNamesBySymbol: ReadonlyMap<string, string>,
-): string {
-  const start = node.getStart();
-  const replacements = node.getDescendantsOfKind(SyntaxKind.Identifier).flatMap((identifier) => {
-    const tableName = tableNamesBySymbol.get(resolvedSymbolKey(identifier.getSymbol()) ?? '');
-    if (!tableName || identifier.getText() === tableName) return [];
-
-    return [
-      {
-        end: identifier.getEnd() - start,
-        start: identifier.getStart() - start,
-        value: tableName,
-      },
-    ];
-  });
-
-  return applySourceReplacements(source.slice(start, node.getEnd()), replacements);
-}
-
 function projectTableNameForNode(
   node: Node,
   tableNamesBySymbol: ReadonlyMap<string, string>,
 ): string | undefined {
-  if (!Node.isIdentifier(node)) return undefined;
-  return tableNamesBySymbol.get(resolvedSymbolKey(node.getSymbol()) ?? '');
+  if (Node.isPropertyAccessExpression(node)) {
+    const tableName = projectTableNameForSymbol(node.getNameNode(), tableNamesBySymbol);
+    if (tableName) {
+      const basePath = staticExpressionPath(node.getExpression());
+      return basePath ? `${basePath}.${tableName}` : tableName;
+    }
+  }
+
+  return projectTableNameForSymbol(node, tableNamesBySymbol);
+}
+
+function projectTableNameForSymbol(
+  node: Node,
+  tableNamesBySymbol: ReadonlyMap<string, string>,
+): string | undefined {
+  const symbolKey = resolvedSymbolKey(node.getSymbol());
+  if (!symbolKey) return undefined;
+  return tableNamesBySymbol.get(symbolKey);
 }
 
 export function extractQueryFactsFromSource(files: readonly SourceFileInput[]): QueryFact[] {
@@ -1909,6 +1903,8 @@ function staticExpressionPath(
   resolveIdentifier?: (node: Node) => string | undefined,
 ): string | undefined {
   if (!node) return undefined;
+  const resolved = resolveIdentifier?.(node);
+  if (resolved) return resolved;
   if (Node.isIdentifier(node)) return resolveIdentifier?.(node) ?? node.getText();
   if (Node.isPropertyAccessExpression(node)) {
     const base = staticExpressionPath(node.getExpression(), resolveIdentifier);

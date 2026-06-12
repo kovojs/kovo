@@ -3549,7 +3549,7 @@ export interface CommerceInvalidationSets {
           source: `
             declare module "drizzle-orm/pg-core" {
               export class PgDatabase<TQueryResultHKT = unknown, TFullSchema = unknown, TSchema = unknown> {
-                insert(table: unknown): { values(value: unknown): Promise<void> };
+                update(table: unknown): { set(value: unknown): { where(value: unknown): Promise<void> } };
               }
             }
           `,
@@ -3939,6 +3939,64 @@ export interface CommerceInvalidationSets {
             domain: 'cart',
             keys: 'arg:id',
             site: 'cart.domain.ts:6',
+            via: 'cart_items',
+          },
+        ],
+        unresolved: [],
+      },
+    });
+  });
+
+  it('resolves namespace-imported project write targets from table symbols', () => {
+    const graph = extractTouchGraphFromProject({
+      files: [
+        {
+          fileName: 'drizzle-types.d.ts',
+          source: `
+            declare module "drizzle-orm/pg-core" {
+              export class PgDatabase<TQueryResultHKT = unknown, TFullSchema = unknown, TSchema = unknown> {
+                insert(table: unknown): { values(value: unknown): Promise<void> };
+              }
+            }
+          `,
+        },
+        {
+          fileName: 'cart.schema.ts',
+          source: `
+            export const items = pgTable("cart_items", {}, jiso({ domain: "cart", key: "id" }));
+          `,
+        },
+        {
+          fileName: 'order.schema.ts',
+          source: `
+            export const items = pgTable("order_items", {}, jiso({ domain: "order", key: "id" }));
+          `,
+        },
+        {
+          fileName: 'cart.domain.ts',
+          source: `
+            import type { PgDatabase } from "drizzle-orm/pg-core";
+            import * as cartSchema from "./cart.schema";
+            import * as orderSchema from "./order.schema";
+
+            export async function addItem(db: PgDatabase, id: string) {
+              await db.update(cartSchema.items).set({ id }).where(eq(cartSchema.items.id, id));
+              const ignored = "db.update(orderSchema.items).set({ id })";
+              return ignored;
+            }
+          `,
+        },
+      ],
+    });
+
+    expect(graph).toEqual({
+      addItem: {
+        reads: [],
+        touches: [
+          {
+            domain: 'cart',
+            keys: 'arg:id',
+            site: 'cart.domain.ts:7',
             via: 'cart_items',
           },
         ],
