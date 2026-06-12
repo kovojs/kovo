@@ -800,6 +800,13 @@ index.test.ts:4227 while here — it weakens the byte-for-byte claim) + acceptan
       nesting while SPEC §9.1 `id` / `fw-fragment-target` resolution still works. Same-session
       evidence: `pnpm exec vitest --run packages/test/src/page.test.ts packages/test/src/index.test.ts`
       and `pnpm exec vitest --run examples/commerce/src/app.test.ts`.
+      Partial evidence 2026-06-11: `packages/test/src/pglite.ts` now owns the PGlite test DB
+      adapter, `packages/test/src/verifier.ts` owns DB verification/proxy/SQL observation, and
+      `packages/test/src/index.ts` re-exports those public APIs while keeping the harness surface
+      intact. Same-session evidence:
+      `pnpm exec vitest --run packages/test/src/index.test.ts packages/test/src/page.test.ts`
+      and
+      `pnpm exec vp check packages/test/src/index.ts packages/test/src/pglite.ts packages/test/src/verifier.ts`.
 - [ ] **MED — Commerce example: one source of truth.** `cartQuery.load` returns a constant while
       `loadCartQuery(db)` does the real read (app.ts:123-126 vs :280-284);
       `productGridQuery.load` conjures a fresh `createCommerceDb()` (:161); the committed
