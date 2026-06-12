@@ -525,6 +525,14 @@ must be "FW406 unresolved," never "silently wrong."
       covers the real Drizzle receiver/callback authoring surface. Same-session evidence:
       `pnpm exec vitest --run packages/drizzle/src` and
       `pnpm exec vitest --run conformance/drizzle-pin`.
+      Additional evidence 2026-06-11: insert-select/update-from read-source extraction now walks
+      ts-morph call nodes for `.from(...)`/join calls instead of regex scanning statement text,
+      so `.from(products)` inside strings/templates no longer fabricates read facts; opaque
+      read-source expressions remain visible as FW406. Same-session evidence:
+      `pnpm exec vitest --run packages/drizzle/src/index.test.ts -t "computed table expressions|insert-select read tables from string contents|insert-select source tables|insert-select and update-from"`,
+      `pnpm exec vitest --run packages/drizzle/src/index.test.ts`,
+      `pnpm exec vitest --run conformance/drizzle-pin/src/index.test.ts`, and
+      `pnpm exec vp check packages/drizzle/src/index.ts packages/drizzle/src/index.test.ts`.
 - [ ] **HIGH — Remove fact-fabricating heuristics; degrade to FW406.**
       Column type from projection-key name (`/(count|qty|...)$/i` → number, index.ts:993);
       receiver detection by parameter name (`/^(db|tx|...|client|...)$/`, :1856-1858);
@@ -549,6 +557,13 @@ must be "FW406 unresolved," never "silently wrong."
       `pnpm exec vitest --run conformance/drizzle-pin/src/index.test.ts -t "right and full joins|left joins"`,
       `pnpm exec vitest --run packages/drizzle/src/index.test.ts`, and
       `pnpm exec vitest --run conformance/drizzle-pin/src/index.test.ts`.
+      Additional evidence 2026-06-11: project-mode write targets now resolve only direct table
+      identifiers, so computed expressions like `db.update(tableFor(products))` degrade to FW406
+      instead of resolving descendant symbols and fabricating touches. Same-session evidence:
+      `pnpm exec vitest --run packages/drizzle/src/index.test.ts -t "computed table expressions|insert-select read tables from string contents|insert-select source tables|insert-select and update-from"`,
+      `pnpm exec vitest --run packages/drizzle/src/index.test.ts`,
+      `pnpm exec vitest --run conformance/drizzle-pin/src/index.test.ts`, and
+      `pnpm exec vp check packages/drizzle/src/index.ts packages/drizzle/src/index.test.ts`.
 - [ ] **HIGH — Cover the invisible read/write surfaces or mark them.** Relational query API
       (`db.query.users.findMany()`) matches neither read (:1138) nor write (:598) extraction;
       `db.execute(sql``)` is skipped by `extractExternalDbArgumentCalls` (:1820). Either
