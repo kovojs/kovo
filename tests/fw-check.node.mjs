@@ -3949,8 +3949,10 @@ void test('P10 starter wires graph assertions into CI', async () => {
     htmlElements
       .filter((element) => element.tagName === 'script')
       .map((element) => element.attributes),
-    [{ type: 'module', src: '/src/client.ts' }],
+    [],
   );
+  assert.match(indexHtml, /Build-only Vite asset entry/);
+  assert.equal(indexHtml.includes('/src/client.ts'), false);
 
   execFileSync('pnpm', ['exec', 'vitest', '--run', 'packages/create-jiso/src/index.test.ts'], {
     cwd: new URL('..', import.meta.url),

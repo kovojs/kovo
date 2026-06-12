@@ -1,4 +1,4 @@
-import { readFileSync, realpathSync } from 'node:fs';
+import { existsSync, readFileSync, realpathSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -13,7 +13,8 @@ interface UiPackageManifest {
   name?: string;
 }
 
-const uiPackageRoot = join(dirname(realpathSync(fileURLToPath(import.meta.url))), '..', '..', 'ui');
+const catalogModuleDir = dirname(realpathSync(fileURLToPath(import.meta.url)));
+const uiPackageRoot = findUiPackageRoot(catalogModuleDir);
 const uiPackageManifestPath = join(uiPackageRoot, 'package.json');
 const uiPackageManifest = readUiPackageManifest();
 
@@ -48,6 +49,17 @@ function readUiPackageManifest(): UiPackageManifest {
     throw new Error(`@jiso/ui package must declare jiso.vendoredSource: ${uiPackageManifestPath}`);
   }
   return parsed;
+}
+
+function findUiPackageRoot(moduleDir: string): string {
+  for (const candidate of [
+    join(moduleDir, '..', '..', 'ui'),
+    join(moduleDir, '..', '..', '..', 'packages', 'ui'),
+  ]) {
+    if (existsSync(join(candidate, 'package.json'))) return candidate;
+  }
+
+  throw new Error(`@jiso/ui package source was not found from ${moduleDir}`);
 }
 
 function uiPackageComponentEntries(manifest: UiPackageManifest): readonly [string, string][] {
