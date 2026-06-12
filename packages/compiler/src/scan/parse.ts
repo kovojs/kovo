@@ -325,6 +325,38 @@ export function solePropertyAccessPath(fileName: string, source: string): string
   return propertyAccessPath(initializer);
 }
 
+export function stringLiteralArrayValues(fileName: string, source: string): string[] | null {
+  const sourceFile = parseExpressionSource(fileName, source);
+  const initializer = firstVariableInitializer(sourceFile);
+  if (!initializer || !ts.isArrayLiteralExpression(initializer)) return null;
+
+  const values: string[] = [];
+  for (const element of initializer.elements) {
+    if (!ts.isStringLiteralLike(element)) return null;
+    values.push(element.text);
+  }
+
+  return values;
+}
+
+export function arrowFunctionParts(
+  fileName: string,
+  source: string,
+): { expression: string; param: string } | null {
+  const sourceFile = parseExpressionSource(fileName, source);
+  const initializer = firstVariableInitializer(sourceFile);
+  if (!initializer || !ts.isArrowFunction(initializer)) return null;
+
+  const param = initializer.parameters[0];
+  if (!param || initializer.parameters.length !== 1 || !ts.isIdentifier(param.name)) return null;
+  if (ts.isBlock(initializer.body)) return null;
+
+  return {
+    expression: initializer.body.getText(sourceFile).trim(),
+    param: param.name.text,
+  };
+}
+
 export function objectLiteralPropertyPaths(fileName: string, source: string): string[] {
   const sourceFile = parseExpressionSource(fileName, source);
   const initializer = firstVariableInitializer(sourceFile);

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { solePropertyAccessPath } from './parse.js';
+import { arrowFunctionParts, solePropertyAccessPath, stringLiteralArrayValues } from './parse.js';
 
 describe('compiler scan parser helpers', () => {
   it('extracts one property access expression with optional receiver segments', () => {
@@ -14,5 +14,26 @@ describe('compiler scan parser helpers', () => {
   it('rejects non-sole property access expressions', () => {
     expect(solePropertyAccessPath('expression.tsx', 'cart.count + 1')).toBeNull();
     expect(solePropertyAccessPath('expression.tsx', 'count')).toBeNull();
+  });
+
+  it('extracts string literal array values from expression source', () => {
+    expect(stringLiteralArrayValues('expression.tsx', '["cart"]')).toEqual(['cart']);
+    expect(stringLiteralArrayValues('expression.tsx', "['cart', 'productGrid']")).toEqual([
+      'cart',
+      'productGrid',
+    ]);
+    expect(stringLiteralArrayValues('expression.tsx', '[cart]')).toBeNull();
+  });
+
+  it('extracts concise arrow function parts through the TypeScript parser', () => {
+    expect(arrowFunctionParts('expression.tsx', '(cart: Cart) => cart.count + ";"')).toEqual({
+      expression: 'cart.count + ";"',
+      param: 'cart',
+    });
+    expect(arrowFunctionParts('expression.tsx', 'cart => cart.count')).toEqual({
+      expression: 'cart.count',
+      param: 'cart',
+    });
+    expect(arrowFunctionParts('expression.tsx', 'cart => { return cart.count; }')).toBeNull();
   });
 });

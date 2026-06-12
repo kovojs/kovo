@@ -1,12 +1,14 @@
 import { dedupeBy } from '../shared.js';
 import { knownQueryNames, queryNameFromPath, queryPathUsesKnownQuery } from './query-shapes.js';
 import {
+  arrowFunctionParts,
   callExpressions,
   componentOptionSource,
   jsxElements,
   jsxExpressions,
   propertyAccessPaths,
   solePropertyAccessPath,
+  stringLiteralArrayValues,
   type ComponentModuleModel,
   type JsxElementModel,
 } from '../scan/parse.js';
@@ -220,17 +222,15 @@ function exportedDerives(
 }
 
 function deriveInputName(argument: string | undefined): string | null {
-  const match = /^\[\s*(['"])([A-Za-z_$][\w$]*)\1\s*\]$/.exec(argument?.trim() ?? '');
-  return match?.[2] ?? null;
+  const values = argument ? stringLiteralArrayValues('derive-input.tsx', argument) : null;
+  const [input] = values ?? [];
+  return values?.length === 1 && input ? input : null;
 }
 
 function deriveArrowParts(
   argument: string | undefined,
 ): { expression: string; param: string } | null {
-  const match = /^\(?\s*([A-Za-z_$][\w$]*)\s*\)?\s*=>\s*([\s\S]+)$/.exec(argument?.trim() ?? '');
-  if (!match?.[1] || !match[2]) return null;
-
-  return { expression: match[2].trim(), param: match[1] };
+  return argument ? arrowFunctionParts('derive-arrow.tsx', argument) : null;
 }
 
 function dataDeriveStamps(

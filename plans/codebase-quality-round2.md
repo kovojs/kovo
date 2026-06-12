@@ -600,6 +600,14 @@ pipeline throws the tree away and communicates via mutated source text.
       `collectQueryUpdatePlans` builds named `derive(...)` facts from the parsed call model
       instead of a whole-source regex. `packages/compiler/src/index.test.ts` covers a multiline
       named derive whose expression contains a semicolon inside a string literal.
+      Additional evidence 2026-06-12: `derive([query], param => expression)` argument parsing now
+      uses TypeScript parser helpers in `scan/parse.ts` (`stringLiteralArrayValues` and
+      `arrowFunctionParts`) instead of local text regexes in `analyze/query-updates.ts`, including
+      typed concise arrow parameters and string-literal semicolon expressions. Same-session
+      evidence:
+      `pnpm exec vitest --run packages/compiler/src/scan/parse.test.ts packages/compiler/src/index.test.ts packages/compiler/src/shared.test.ts packages/compiler/src/navigation-lowering.test.ts packages/compiler/src/platform-lowering.test.ts`,
+      `pnpm exec vp check packages/compiler/src/scan/parse.ts packages/compiler/src/scan/parse.test.ts packages/compiler/src/analyze/query-updates.ts`,
+      and `git diff --check`.
 - [ ] **MED — Extract `src/types.ts`; break the layering inversion.** Canonical fact types live
       in index.ts, which imports every phase; phases import back (bindings.ts:15-25, emit/server.ts:10,
       lower/handlers.ts:7), and three modules dodge the cycle with diverging private structural
