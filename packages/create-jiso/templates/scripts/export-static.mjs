@@ -8,7 +8,6 @@ execFileSync('vp', ['build'], { stdio: 'inherit' });
 const manifestFile = join(process.cwd(), 'dist/.vite/manifest.json');
 
 let result;
-let cssAssets;
 
 const server = await createServer({
   appType: 'custom',
@@ -19,31 +18,26 @@ const server = await createServer({
 try {
   const serverModule = await server.ssrLoadModule('@jiso/server');
   const {
-    exportStaticApp,
-    jisoAppShellViteManifestAssetsFromFile,
-    jisoAppShellViteStaticExportAssets,
+    exportJisoAppShellViteBuildFromManifestFile,
+    jisoAppShellViteManifestStylesheetHrefsFromFile,
   } = serverModule;
 
-  if (typeof exportStaticApp !== 'function') {
-    throw new Error('@jiso/server must export exportStaticApp.');
+  if (typeof exportJisoAppShellViteBuildFromManifestFile !== 'function') {
+    throw new Error('@jiso/server must export exportJisoAppShellViteBuildFromManifestFile.');
   }
-  if (typeof jisoAppShellViteManifestAssetsFromFile !== 'function') {
-    throw new Error('@jiso/server must export jisoAppShellViteManifestAssetsFromFile.');
-  }
-  if (typeof jisoAppShellViteStaticExportAssets !== 'function') {
-    throw new Error('@jiso/server must export jisoAppShellViteStaticExportAssets.');
+  if (typeof jisoAppShellViteManifestStylesheetHrefsFromFile !== 'function') {
+    throw new Error('@jiso/server must export jisoAppShellViteManifestStylesheetHrefsFromFile.');
   }
 
-  const manifestAssets = await jisoAppShellViteManifestAssetsFromFile(manifestFile);
-  cssAssets = manifestAssets.filter((asset) => asset.file.endsWith('.css'));
+  const stylesheetHrefs = await jisoAppShellViteManifestStylesheetHrefsFromFile(manifestFile);
 
-  if (cssAssets.length !== 1) {
+  if (stylesheetHrefs.length !== 1) {
     throw new Error(
-      `Expected exactly one built CSS asset in dist/.vite/manifest.json, found ${cssAssets.length}.`,
+      `Expected exactly one built CSS asset in dist/.vite/manifest.json, found ${stylesheetHrefs.length}.`,
     );
   }
 
-  process.env.JISO_STARTER_STYLESHEET_HREF = cssAssets[0].href;
+  process.env.JISO_STARTER_STYLESHEET_HREF = stylesheetHrefs[0];
 
   const appModule = await server.ssrLoadModule('/src/app-shell.ts');
   const app = appModule.default ?? appModule.app;
@@ -52,10 +46,12 @@ try {
     throw new Error('src/app-shell.ts must export a Jiso app as default or named app.');
   }
 
-  // SPEC.md section 9.5 static export copies the Vite build artifact represented
-  // by the same manifest href that the exported document links.
-  result = await exportStaticApp(app, {
-    assets: jisoAppShellViteStaticExportAssets(cssAssets, { distDir: 'dist' }),
+  // SPEC.md section 9.5 static export replays the app shell and copies the Vite
+  // manifest assets through the public app-shell export bridge.
+  result = await exportJisoAppShellViteBuildFromManifestFile({
+    app,
+    distDir: 'dist',
+    manifestFile,
     outDir: 'dist',
   });
 } catch (error) {

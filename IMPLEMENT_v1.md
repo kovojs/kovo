@@ -90,15 +90,23 @@ Audited against the repository on 2026-06-11. Checkmarks mean the behavior, API,
       serve/export flows and commerce dev/serve shell ownership plus Vite asset pass-through.
       Evidence 2026-06-12: `@jiso/server` now owns file-based Vite manifest parsing for
       app-shell export tasks through `jisoAppShellViteManifestFromFile()` and
-      `jisoAppShellViteManifestAssetsFromFile()`. The create-jiso starter, commerce, and docs-site
-      export scripts consume that SSR-loaded helper instead of hand-parsing `.vite/manifest.json`,
-      preserving shared validation before SPEC §9.5 static asset copying.
+      `jisoAppShellViteManifestAssetsFromFile()`, preserving shared validation before SPEC §9.5
+      static asset copying and removing consumer-local `.vite/manifest.json` parsing.
       Evidence 2026-06-12: `@jiso/server` now also exposes
       `createJisoAppShellViteBuildFromManifestFile()` and
       `exportJisoAppShellViteBuildFromManifestFile()`, so Vite package export tasks can feed a
       built manifest file into route hint wiring, compiled `/c/` module registration, Vite asset
       copying, and SPEC §9.5 static replay through one server-owned path. Focused verification:
       `pnpm exec vitest --run packages/server/src/vite.test.ts`.
+      Evidence 2026-06-12: the create-jiso starter, commerce, and docs-site export scripts now
+      use `exportJisoAppShellViteBuildFromManifestFile()` for manifest-backed static replay and
+      asset copying instead of composing manifest asset helpers and `exportStaticApp()` in each
+      consumer. `jisoAppShellViteManifestStylesheetHrefsFromFile()` supplies the starter's built
+      stylesheet href before Vite SSR loads `src/app-shell.ts`. Focused verification:
+      `pnpm exec vitest --run packages/server/src/vite.test.ts`,
+      `pnpm exec vitest --run packages/create-jiso/src/index.test.ts -t "runs the generated starter app-shell request and export proof|scaffolds real template files"`,
+      `pnpm exec vitest --run examples/commerce/src/app-shell.test.ts -t "public commerce shell static output|vp run export|documents the commerce app-shell"`,
+      and `pnpm exec vitest --run site/scripts/app-shell.test.mjs`.
 - [x] D9 TSX-only authoring (commerce TSX migration, FW235 error diagnostic, Constitution #3 payoff rewording, FW226 demotion) is archived in `plans/archive.md` under deleted `plans/block-ir.md`; commerce is TSX-authored, SPEC §5.2/FW235 text is landed, FW235 is implemented at error severity with compiler-emitted provenance exemption, and starter/docs/agent TSX-only constraints are recorded and tested.
 - [x] D10 diagnostics surfacing (blocking Vite dev transform, dev teaching-error documents, `fw mcp` agent surface) is planned in `plans/diagnostics.md`; design agreed 2026-06-11 (severity decided once on shared `diagnosticDefinitions`, surfaces only render; `error` blocks transform/build with no last-good serving; server-rendered dev error documents over the D8 R5 middleware; MCP wraps existing compile/check/explain APIs, stdio-first); SPEC §11.3 surfacing text, V1/V2 Vite transform diagnostics, V3 static-export refusal, E1 dev diagnostic document renderer, E2 page/enhanced-mutation/no-JS middleware failed-module integration, M1a stdio `fw mcp`, M1b SDK-backed MCP lifecycle, M2 `compile/v1` contract, and seeded red/green gate wiring are implemented. Evidence 2026-06-12: `node --test --test-name-pattern "D10 seeded diagnostics gate" tests/fw-check.node.mjs` covers Vite transform/lint callback, `vp build`, static export API, `fw export`, MCP object dispatch, and fallback MCP stdio; `pnpm exec vitest --run packages/server/src/vite-diagnostics.test.ts` covers dev page/enhanced-mutation/no-JS teaching documents.
 - [ ] P10 v1 acceptance ledger is wired with concrete dated doc ledgers for the outside legibility study and prelaunch checks; docs freeze, actual outside study results, external launch evidence, and final clean-checkout acceptance run remain open.

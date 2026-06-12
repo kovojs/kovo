@@ -623,13 +623,27 @@ Scope: SPEC addition (proposed §9.5 "The request shell"), `@jiso/server` shell 
       file parsing for export consumers through
       `jisoAppShellViteManifestFromFile()` and
       `jisoAppShellViteManifestAssetsFromFile()`, reusing the same validated
-      manifest path as bundle-based R5 builds before R6 asset copying. The
-      create-jiso starter, commerce, and docs-site export scripts now load
-      manifest asset plans through the SSR-loaded server helper instead of
-      hand-parsing `.vite/manifest.json`, so malformed manifest fields fail
-      through the shared app-shell build validator. Same-session verification
+      manifest path as bundle-based R5 builds before R6 asset copying, so
+      malformed manifest fields fail through the shared app-shell build
+      validator instead of consumer-local `.vite/manifest.json` parsing.
+      Same-session verification
       ran `pnpm exec vitest --run packages/server/src/vite.test.ts`,
       `pnpm exec vitest --run packages/create-jiso/src/index.test.ts -t "scaffolds real template files|runs the generated starter app-shell request and export proof"`,
+      `pnpm exec vitest --run examples/commerce/src/app-shell.test.ts -t "public commerce shell static output|vp run export|documents the commerce app-shell"`,
+      and `pnpm exec vitest --run site/scripts/app-shell.test.mjs`.
+      Additional evidence 2026-06-12: `@jiso/server` now exposes
+      `jisoAppShellViteManifestStylesheetHrefs()` and
+      `jisoAppShellViteManifestStylesheetHrefsFromFile()` for consumers that
+      need the built stylesheet href before SSR-loading an app shell, while the
+      create-jiso starter, commerce, and docs-site export scripts now delegate
+      manifest-backed static replay and asset copying to
+      `exportJisoAppShellViteBuildFromManifestFile()` instead of composing
+      manifest asset helpers with `exportStaticApp()` locally. The scripts still
+      verify their single built stylesheet, but SPEC §9.5 route replay, `/c/`
+      module copying, and Vite manifest asset copying now flow through the
+      public app-shell Vite export bridge. Same-session verification ran
+      `pnpm exec vitest --run packages/server/src/vite.test.ts`,
+      `pnpm exec vitest --run packages/create-jiso/src/index.test.ts -t "runs the generated starter app-shell request and export proof|scaffolds real template files"`,
       `pnpm exec vitest --run examples/commerce/src/app-shell.test.ts -t "public commerce shell static output|vp run export|documents the commerce app-shell"`,
       and `pnpm exec vitest --run site/scripts/app-shell.test.mjs`.
 

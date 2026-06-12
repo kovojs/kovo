@@ -28,19 +28,15 @@ export async function exportCommerceStaticApp({
       viteServer.ssrLoadModule('@jiso/server'),
     ]);
     const {
-      exportStaticApp,
-      jisoAppShellViteManifestAssetsFromFile,
-      jisoAppShellViteStaticExportAssets,
+      exportJisoAppShellViteBuildFromManifestFile,
+      jisoAppShellViteManifestStylesheetHrefsFromFile,
     } = serverModule;
 
-    if (typeof exportStaticApp !== 'function') {
-      throw new Error('@jiso/server must export exportStaticApp.');
+    if (typeof exportJisoAppShellViteBuildFromManifestFile !== 'function') {
+      throw new Error('@jiso/server must export exportJisoAppShellViteBuildFromManifestFile.');
     }
-    if (typeof jisoAppShellViteManifestAssetsFromFile !== 'function') {
-      throw new Error('@jiso/server must export jisoAppShellViteManifestAssetsFromFile.');
-    }
-    if (typeof jisoAppShellViteStaticExportAssets !== 'function') {
-      throw new Error('@jiso/server must export jisoAppShellViteStaticExportAssets.');
+    if (typeof jisoAppShellViteManifestStylesheetHrefsFromFile !== 'function') {
+      throw new Error('@jiso/server must export jisoAppShellViteManifestStylesheetHrefsFromFile.');
     }
 
     const app =
@@ -50,19 +46,20 @@ export async function exportCommerceStaticApp({
       throw new Error('src/app-shell.ts must export commerceStaticExportApp for public export.');
     }
 
-    const manifestAssets = await jisoAppShellViteManifestAssetsFromFile(manifestFile);
-    const cssAssets = manifestAssets.filter((asset) => asset.file.endsWith('.css'));
+    const stylesheetHrefs = await jisoAppShellViteManifestStylesheetHrefsFromFile(manifestFile);
 
-    if (cssAssets.length !== 1) {
+    if (stylesheetHrefs.length !== 1) {
       throw new Error(
-        `Expected exactly one built CSS asset in dist/.vite/manifest.json, found ${cssAssets.length}.`,
+        `Expected exactly one built CSS asset in dist/.vite/manifest.json, found ${stylesheetHrefs.length}.`,
       );
     }
 
     // SPEC.md section 9.5: static export replays the public app shell and copies
-    // the Vite asset bytes addressed by the same manifest hrefs in the document.
-    return await exportStaticApp(app, {
-      assets: jisoAppShellViteStaticExportAssets(cssAssets, { distDir: builtDistDir }),
+    // the Vite manifest bytes through the public app-shell export bridge.
+    return await exportJisoAppShellViteBuildFromManifestFile({
+      app,
+      distDir: builtDistDir,
+      manifestFile,
       outDir,
     });
   } finally {

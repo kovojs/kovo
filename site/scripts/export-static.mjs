@@ -42,39 +42,37 @@ export async function exportSiteStaticApp({
     ]);
     const { createSiteDistApp } = appShellModule;
     const {
-      exportStaticApp,
-      jisoAppShellViteManifestAssetsFromFile,
-      jisoAppShellViteStaticExportAssets,
+      exportJisoAppShellViteBuildFromManifestFile,
+      jisoAppShellViteManifestStylesheetHrefsFromFile,
     } = serverModule;
 
     if (typeof createSiteDistApp !== 'function') {
       throw new Error('scripts/app-shell.mjs must export createSiteDistApp.');
     }
 
-    if (typeof exportStaticApp !== 'function') {
-      throw new Error('@jiso/server must export exportStaticApp.');
+    if (typeof exportJisoAppShellViteBuildFromManifestFile !== 'function') {
+      throw new Error('@jiso/server must export exportJisoAppShellViteBuildFromManifestFile.');
     }
-    if (typeof jisoAppShellViteManifestAssetsFromFile !== 'function') {
-      throw new Error('@jiso/server must export jisoAppShellViteManifestAssetsFromFile.');
-    }
-    if (typeof jisoAppShellViteStaticExportAssets !== 'function') {
-      throw new Error('@jiso/server must export jisoAppShellViteStaticExportAssets.');
+    if (typeof jisoAppShellViteManifestStylesheetHrefsFromFile !== 'function') {
+      throw new Error('@jiso/server must export jisoAppShellViteManifestStylesheetHrefsFromFile.');
     }
 
-    const manifestAssets = await jisoAppShellViteManifestAssetsFromFile(manifestFile);
-    const cssAssets = manifestAssets.filter((asset) => asset.file.endsWith('.css'));
+    const stylesheetHrefs = await jisoAppShellViteManifestStylesheetHrefsFromFile(manifestFile);
 
-    if (cssAssets.length !== 1) {
+    if (stylesheetHrefs.length !== 1) {
       throw new Error(
-        `Expected exactly one built site CSS asset in dist-css/.vite/manifest.json, found ${cssAssets.length}.`,
+        `Expected exactly one built site CSS asset in dist-css/.vite/manifest.json, found ${stylesheetHrefs.length}.`,
       );
     }
 
     const app = await createSiteDistApp({ distDir, publicDir, server: serverModule });
     // SPEC.md section 9.5 static export owns the final static host bytes:
-    // replay route documents, copy versioned /c/ modules, and copy the Vite CSS.
-    return await exportStaticApp(app, {
-      assets: jisoAppShellViteStaticExportAssets(cssAssets, { distDir: cssDistDir }),
+    // replay route documents, copy versioned /c/ modules, and copy the Vite
+    // manifest assets through the public app-shell export bridge.
+    return await exportJisoAppShellViteBuildFromManifestFile({
+      app,
+      distDir: cssDistDir,
+      manifestFile,
       outDir,
     });
   } finally {

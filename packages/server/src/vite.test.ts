@@ -22,6 +22,8 @@ import {
   jisoAppShellViteManifestFromBundle,
   jisoAppShellViteManifestFromFile,
   jisoAppShellViteManifestHints,
+  jisoAppShellViteManifestStylesheetHrefs,
+  jisoAppShellViteManifestStylesheetHrefsFromFile,
   jisoAppShellVitePlugin,
   jisoAppShellViteRouteEntries,
   jisoAppShellViteSsrDevPlugin,
@@ -351,9 +353,30 @@ describe('server app shell Vite plugin', () => {
         { file: 'assets/cart.css', href: '/assets/cart.css', path: '/assets/cart.css' },
         { file: 'assets/cart.js', href: '/assets/cart.js', path: '/assets/cart.js' },
       ]);
+      await expect(jisoAppShellViteManifestStylesheetHrefsFromFile(manifestFile)).resolves.toEqual([
+        '/assets/cart.css',
+      ]);
     } finally {
       await rm(distDir, { force: true, recursive: true });
     }
+  });
+
+  it('extracts deterministic stylesheet hrefs from validated Vite manifests', () => {
+    expect(
+      jisoAppShellViteManifestStylesheetHrefs(
+        {
+          'src/admin.ts': {
+            css: ['assets/shared.css', 'assets/admin.css'],
+            file: 'assets/admin.js',
+          },
+          'src/cart.ts': {
+            css: ['assets/shared.css', 'assets/cart.css'],
+            file: 'assets/cart.js',
+          },
+        },
+        { base: '/docs/' },
+      ),
+    ).toEqual(['/docs/assets/admin.css', '/docs/assets/cart.css', '/docs/assets/shared.css']);
   });
 
   it('creates a Vite app-shell build directly from a manifest file', async () => {

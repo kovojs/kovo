@@ -231,11 +231,11 @@ describe('create-jiso starter', () => {
       expect(viteConfig).not.toContain("pathname.startsWith('/c/')");
       const exportStaticScript = readFileSync(join(root, 'scripts/export-static.mjs'), 'utf8');
       expect(exportStaticScript).toContain("execFileSync('vp', ['build']");
-      expect(exportStaticScript).toContain('jisoAppShellViteManifestAssetsFromFile(manifestFile)');
-      expect(exportStaticScript).toContain("ssrLoadModule('/src/app-shell.ts')");
       expect(exportStaticScript).toContain(
-        'jisoAppShellViteStaticExportAssets(cssAssets, { distDir:',
+        'jisoAppShellViteManifestStylesheetHrefsFromFile(manifestFile)',
       );
+      expect(exportStaticScript).toContain("ssrLoadModule('/src/app-shell.ts')");
+      expect(exportStaticScript).toContain('exportJisoAppShellViteBuildFromManifestFile');
       expect(exportStaticScript).toContain('JISO_STARTER_STYLESHEET_HREF');
       expect(exportStaticScript).toContain('isStaticExportDiagnosticError');
       expect(exportStaticScript).toContain('starter-export/v1');

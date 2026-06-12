@@ -767,6 +767,25 @@ export async function jisoAppShellViteManifestAssetsFromFile(
   );
 }
 
+export function jisoAppShellViteManifestStylesheetHrefs(
+  manifest: JisoAppShellViteManifest,
+  options: JisoAppShellViteManifestHintOptions = {},
+): string[] {
+  return jisoAppShellViteManifestAssets(manifest, options)
+    .filter((asset) => asset.file.endsWith('.css'))
+    .map((asset) => asset.href);
+}
+
+export async function jisoAppShellViteManifestStylesheetHrefsFromFile(
+  manifestFile: string | URL,
+  options: JisoAppShellViteManifestHintOptions = {},
+): Promise<string[]> {
+  return jisoAppShellViteManifestStylesheetHrefs(
+    await jisoAppShellViteManifestFromFile(manifestFile),
+    options,
+  );
+}
+
 export function jisoAppShellViteManifestFromBundle(
   bundle: JisoAppShellViteOutputBundle,
 ): JisoAppShellViteManifest {
