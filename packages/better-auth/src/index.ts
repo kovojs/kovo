@@ -310,6 +310,7 @@ export interface BetterAuthSchemaSourceImportNote {
 export interface BetterAuthSchemaSourceAnnotationResult {
   alreadyAnnotatedTables: string[];
   annotatedTables: string[];
+  duplicateSourceTables: string[];
   existingExtraConfigTables: string[];
   importNote: BetterAuthSchemaSourceImportNote;
   missingSourceTables: string[];
@@ -574,6 +575,11 @@ export function annotateBetterAuthSchemaSource(
   );
   const metadataTableByPhysicalName = betterAuthMetadataTableByPhysicalName(tables, schemaBridge);
   const sourceTables = findDrizzleTableCalls(source, options.tableFactories);
+  const duplicateSourceTables = duplicateBetterAuthSourceTableNames(
+    duplicateDrizzleTableNames(sourceTables),
+    metadataTables,
+    metadataTableByPhysicalName,
+  );
   const replacements: { end: number; start: number; value: string }[] = [];
   const annotatedTables: string[] = [];
   const alreadyAnnotatedTables: string[] = [];
@@ -584,6 +590,7 @@ export function annotateBetterAuthSchemaSource(
   for (const call of sourceTables) {
     const table = metadataTableByPhysicalName.get(call.tableName);
     if (table === undefined || !metadataTables.has(table)) continue;
+    if (duplicateSourceTables.has(call.tableName)) continue;
 
     if (call.extraConfigText !== null) {
       if (
@@ -622,6 +629,7 @@ export function annotateBetterAuthSchemaSource(
   return {
     alreadyAnnotatedTables: sortedBetterAuthTables(alreadyAnnotatedTables),
     annotatedTables: sortedBetterAuthTables(annotatedTables),
+    duplicateSourceTables: sortedBetterAuthTables([...duplicateSourceTables]),
     existingExtraConfigTables: [...new Set(existingExtraConfigTables)].sort(),
     importNote: {
       hasRequiredImport,
@@ -1298,6 +1306,30 @@ function isBetterAuthSchemaTable(
 
 function sortedBetterAuthTables(tables: readonly string[]): string[] {
   return [...new Set(tables)].sort();
+}
+
+function duplicateDrizzleTableNames(calls: readonly DrizzleTableCall[]): Set<string> {
+  const counts = new Map<string, number>();
+
+  for (const call of calls) {
+    counts.set(call.tableName, (counts.get(call.tableName) ?? 0) + 1);
+  }
+
+  return new Set([...counts].filter(([, count]) => count > 1).map(([tableName]) => tableName));
+}
+
+function duplicateBetterAuthSourceTableNames(
+  duplicateTableNames: ReadonlySet<string>,
+  metadataTables: ReadonlySet<string>,
+  metadataTableByPhysicalName: ReadonlyMap<string, string>,
+): Set<string> {
+  return new Set(
+    [...duplicateTableNames].filter((tableName) => {
+      const metadataTable = metadataTableByPhysicalName.get(tableName);
+
+      return metadataTable === undefined ? false : metadataTables.has(metadataTable);
+    }),
+  );
 }
 
 function betterAuthSchemaAnnotationCall(

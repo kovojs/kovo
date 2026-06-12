@@ -1534,12 +1534,49 @@ describe('credential mutation helpers', () => {
     expect(result.validation.ok).toBe(true);
     expect(result.annotatedTables).toEqual(['account']);
     expect(result.alreadyAnnotatedTables).toEqual(['user']);
+    expect(result.duplicateSourceTables).toEqual([]);
     expect(result.existingExtraConfigTables).toEqual(['session']);
     expect(result.missingSourceTables).toEqual(['verification']);
     expect(result.source).toContain(
       "export const account = pgTable('account', {}, jiso({ domain: 'auth', key: 'userId' }));",
     );
     expect(result.source).toContain("export const session = pgTable('session', {}, auditConfig);");
+  });
+
+  it('reports duplicate schema.ts table declarations without annotating ambiguous tables', () => {
+    const result = annotateBetterAuthSchemaSource(
+      [
+        "import { jiso } from '@jiso/drizzle';",
+        "import { pgTable } from 'drizzle-orm/pg-core';",
+        '',
+        "export const primaryUser = pgTable('user', {});",
+        "export const auditUser = pgTable('user', {});",
+        "export const account = pgTable('account', {});",
+        "export const product = pgTable('product', {});",
+        "export const productArchive = pgTable('product', {});",
+      ].join('\n'),
+      {
+        account: authTable(['userId']),
+        session: authTable(['userId']),
+        user: authTable(),
+        verification: authTable(),
+      },
+    );
+
+    // SPEC.md §10.1 / §11.2: generated schema annotations feed P9 table
+    // facts, so duplicate physical table declarations must stay manual.
+    expect(result.validation.ok).toBe(true);
+    expect(result.annotatedTables).toEqual(['account']);
+    expect(result.duplicateSourceTables).toEqual(['user']);
+    expect(result.missingSourceTables).toEqual(['session', 'verification']);
+    expect(result.source).toContain(
+      "export const account = pgTable('account', {}, jiso({ domain: 'auth', key: 'userId' }));",
+    );
+    expect(result.source).toContain("export const primaryUser = pgTable('user', {});");
+    expect(result.source).toContain("export const auditUser = pgTable('user', {});");
+    expect(result.source).not.toContain(
+      "export const primaryUser = pgTable('user', {}, jiso({ domain: 'user', key: 'id' }));",
+    );
   });
 
   it('reports generated schema.ts import notes for default and aliased annotation callees', () => {

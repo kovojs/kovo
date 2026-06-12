@@ -421,6 +421,46 @@ describe('Better Auth pinned conformance', () => {
     );
   });
 
+  it('reports duplicate real Better Auth schema.ts declarations without annotating them', () => {
+    const { auth } = createRealAuth();
+    const tables = getAuthTables(auth.options);
+    const result = annotateBetterAuthSchemaSource(
+      [
+        "import { jiso } from '@jiso/drizzle';",
+        "import { pgTable } from 'drizzle-orm/pg-core';",
+        '',
+        "export const user = pgTable('user', {});",
+        "export const userShadow = pgTable('user', {});",
+        "export const session = pgTable('session', {});",
+        "export const account = pgTable('account', {});",
+        "export const verification = pgTable('verification', {});",
+        '',
+      ].join('\n'),
+      tables,
+    );
+
+    expect(validateBetterAuthSchemaBridge(tables)).toEqual({
+      declaredTouchMismatches: [],
+      keyFieldMismatches: [],
+      missingTables: [],
+      ok: true,
+      pluginTableDegradations: [],
+      unbridgedTables: [],
+    });
+    expect(result.validation.ok).toBe(true);
+    expect(result.annotatedTables).toEqual(['account', 'session', 'verification']);
+    expect(result.duplicateSourceTables).toEqual(['user']);
+    expect(result.missingSourceTables).toEqual([]);
+    expect(result.source).toContain(
+      "export const account = pgTable('account', {}, jiso({ domain: 'auth', key: 'userId' }));",
+    );
+    expect(result.source).toContain("export const user = pgTable('user', {});");
+    expect(result.source).toContain("export const userShadow = pgTable('user', {});");
+    expect(result.source).not.toContain(
+      "export const user = pgTable('user', {}, jiso({ domain: 'user', key: 'id' }));",
+    );
+  });
+
   it('materializes schema.ts annotations and verifier facts from real Better Auth modelName aliases', () => {
     const { auth } = createRealAuth({
       account: { modelName: 'auth_accounts' },

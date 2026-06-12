@@ -386,6 +386,17 @@ tables)` now emits both logical and physical table facts for runtime SQL verific
       `pnpm exec tsc -p conformance/better-auth-pin/tsconfig.json --noEmit`,
       `pnpm exec vp check packages/better-auth/src/index.ts packages/better-auth/src/index.test.ts conformance/better-auth-pin/src/index.test.ts plans/auth.md IMPLEMENT_v1.md`,
       and `git diff --check`.
+      Partial evidence 2026-06-12: `annotateBetterAuthSchemaSource` now reports duplicate
+      app `schema.ts` physical table declarations as `duplicateSourceTables` and leaves those
+      ambiguous declarations unmodified instead of generating multiple `jiso(...)` annotations
+      for one Better Auth table. `packages/better-auth/src/index.test.ts` covers the local
+      duplicate `user` declaration fixture, and `conformance/better-auth-pin/src/index.test.ts`
+      pins the same bounded behavior against real `better-auth@1.6.17` core
+      `getAuthTables(auth.options)` metadata. Same-session evidence:
+      `pnpm exec vitest --run packages/better-auth/src/index.test.ts conformance/better-auth-pin/src/index.test.ts --reporter=dot`,
+      `pnpm exec tsc -p conformance/better-auth-pin/tsconfig.json --noEmit`,
+      `pnpm exec vp check packages/better-auth/src/index.ts packages/better-auth/src/index.test.ts conformance/better-auth-pin/src/index.test.ts plans/auth.md IMPLEMENT_v1.md`,
+      and `git diff --check`.
       Remaining gaps: plugin-generated tables outside the blessed organization/admin/two-factor/OIDC-provider/MCP/SIWE/JWT/device-authorization
       surface are still not mapped, the OAuth-provider successor package/table metadata is not
       installed or exportable from the pinned dependency set, and full app `schema.ts` generation
