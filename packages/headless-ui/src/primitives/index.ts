@@ -94,6 +94,32 @@ export type {
 } from './collapsible.js';
 
 export {
+  dialogBeforeToggle,
+  dialogCancel,
+  dialogCloseAttributes,
+  dialogCloseClick,
+  dialogContentAttributes,
+  dialogRootAttributes,
+  dialogTriggerAttributes,
+  dialogTriggerClick,
+  setDialogOpen,
+  toggleDialog,
+} from './dialog.js';
+export type {
+  DialogAttributeOptions,
+  DialogBeforeToggleEvent,
+  DialogCancelEvent,
+  DialogChangeDetail,
+  DialogChangeOptions,
+  DialogChangeReason,
+  DialogChangeResult,
+  DialogCloseEvent,
+  DialogPrimitiveAttributes,
+  DialogState,
+  DialogTriggerEvent,
+} from './dialog.js';
+
+export {
   disclosureContentAttributes,
   disclosureRootAttributes,
   disclosureTriggerAttributes,
