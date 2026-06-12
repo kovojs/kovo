@@ -554,6 +554,15 @@ params, relational API, `execute(sql)`, right/full joins, a string column named 
       plans receive rebased values from the hook, and the dead `QueryStore.hydrate` method was
       removed. Same-session evidence: focused runtime apply/rebase tests and the full
       `packages/runtime/src/index.test.ts` suite.
+      Additional evidence 2026-06-11: `packages/runtime/src/index.ts` now routes direct enhanced
+      mutation responses, failed optimistic responses, and successful optimistic responses
+      through the internal `applyEnhancedMutationResponseBodyToDom` helper. The optimistic
+      success test in `packages/runtime/src/index.test.ts` proves server truth is rebased through
+      the shared apply path, compiled query derives observe the rebased value, and fragment morph
+      runs after that rebased DOM state is visible. Same-session evidence:
+      `pnpm exec vitest --run packages/runtime/src/index.test.ts -t "optimistic|mutation query chunks|enhanced mutations"`,
+      `pnpm exec vitest --run packages/runtime/src/wire-parser.test.ts packages/runtime/src/index.test.ts`,
+      and `pnpm exec vitest --config vitest.browser.config.ts --run packages/runtime/src/index.browser.test.ts`.
 - [x] **MED — Fix ambient-scope argument override in handlers.ts.**
       `abortRemovedIslandSignals(currentHtml, nextHtml, scope)` ignores its explicit `scope`
       whenever the module-level `activeIslandSignalScope` is set
