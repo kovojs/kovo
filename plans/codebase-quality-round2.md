@@ -761,6 +761,13 @@ land it first; don't fork it.
       covers route document wrapping with a pre-existing lowercase `link` header. Same-session
       evidence: `pnpm exec vitest --run packages/server/src/shell.test.ts` and
       `pnpm exec vitest --run packages/server/src`.
+      Additional evidence 2026-06-11: `packages/server/src/shell.ts` now keeps the not-found
+      dispatch fallback outside the matching table loop, removing the unreachable post-loop
+      exhaustion throw while preserving the exported table, and `packages/server/src/index.ts`
+      simplifies the rate-limit tail after the `max <= 0` branch has already returned.
+      Same-session evidence:
+      `pnpm exec vitest --run packages/server/src/shell.test.ts packages/server/src/index.test.ts`
+      and `pnpm exec vp check packages/server/src/index.ts packages/server/src/shell.ts`.
 
 Verification: server vitest + wire fixtures byte-for-byte (remove the newline fudge at
 index.test.ts:4227 while here — it weakens the byte-for-byte claim) + acceptance.
