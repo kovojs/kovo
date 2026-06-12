@@ -97,6 +97,16 @@ jiso-dialog` resolves dashed wire names and prints provenance including package,
       `pnpm --filter @jiso/headless-ui run lint:primitives`,
       `pnpm exec vp check packages/headless-ui/package.json packages/headless-ui/src/index.ts packages/headless-ui/src/primitives/index.ts packages/headless-ui/src/primitives/collapsible.ts packages/headless-ui/src/primitives/collapsible.test.ts packages/headless-ui/src/tooling/lint-primitives.test.ts plans/ui.md`,
       and `git diff --check`.
+      Additional partial evidence 2026-06-12: `packages/headless-ui/src/primitives/separator.ts`
+      adds the H1 separator primitive as a semantic-only L0 helper: decorative separators default
+      to `role="none"` with `data-orientation`, and non-decorative separators emit explicit
+      `role="separator"` plus `aria-orientation`. It is exported through `@jiso/headless-ui`,
+      `@jiso/headless-ui/primitives`, and `@jiso/headless-ui/primitives/separator`.
+      Same-session evidence:
+      `pnpm --filter @jiso/headless-ui exec vitest --run src/primitives/separator.test.ts src/primitives/collapsible.test.ts src/primitives/disclosure.test.ts src/lib/state-attributes.test.ts src/tooling/lint-primitives.test.ts`,
+      `pnpm --filter @jiso/headless-ui run lint:primitives`,
+      `pnpm exec vp check packages/headless-ui/package.json packages/headless-ui/src/index.ts packages/headless-ui/src/primitives/index.ts packages/headless-ui/src/primitives/separator.ts packages/headless-ui/src/primitives/separator.test.ts plans/ui.md`,
+      and `git diff --check`.
 - [ ] H2 wave 2 primitives (stateful L1 islands): tabs, radio-group, toggle-group, checkbox-group, toolbar, number-field, otp-field, scroll-area, field/fieldset as `form()` integration.
 - [ ] H3 wave 3 primitives (list-driven & isomorphic): select, combobox, autocomplete, dropdown-menu, context-menu, menubar, navigation-menu, slider, toast, command.
 - [x] U1 token sheet + `cn()` + statically-analyzable variant helper (Tailwind-first, §13.1 discoverability rules).

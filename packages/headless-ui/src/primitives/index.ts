@@ -35,3 +35,10 @@ export type {
   DisclosureState,
   DisclosureTriggerEvent,
 } from './disclosure.js';
+
+export { separatorRootAttributes } from './separator.js';
+export type {
+  SeparatorAttributeOptions,
+  SeparatorOrientation,
+  SeparatorPrimitiveAttributes,
+} from './separator.js';

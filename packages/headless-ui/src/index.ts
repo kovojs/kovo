@@ -91,6 +91,7 @@ export {
   disclosureRootAttributes,
   disclosureTriggerAttributes,
   disclosureTriggerClick,
+  separatorRootAttributes,
   setCollapsibleOpen,
   setDisclosureOpen,
   toggleCollapsible,
@@ -113,4 +114,7 @@ export type {
   DisclosurePrimitiveAttributes,
   DisclosureState,
   DisclosureTriggerEvent,
+  SeparatorAttributeOptions,
+  SeparatorOrientation,
+  SeparatorPrimitiveAttributes,
 } from './primitives/index.js';
