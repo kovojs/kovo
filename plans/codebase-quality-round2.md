@@ -706,6 +706,13 @@ pipeline throws the tree away and communicates via mutated source text.
       longer accepts module source as a fallback for host tag recovery. Same-session evidence:
       `pnpm exec vitest --run packages/compiler/src/compile-component.test.ts packages/compiler/src/model-pipeline.test.ts packages/compiler/src/stamps.test.ts`
       and `pnpm exec vp check packages/compiler/src/emit/server.ts packages/compiler/src/compile.ts`.
+      Additional evidence 2026-06-12: `JsxAttributeModel` now carries parser-owned
+      `leadingStart` spans, and platform behavior lowering uses that model span when deleting
+      provable handler attributes. `platformBehaviorLowering()` no longer accepts module source.
+      Same-session evidence:
+      `pnpm exec vitest --run packages/compiler/src/scan/parse.test.ts packages/compiler/src/platform-lowering.test.ts packages/compiler/src/compile-component.test.ts`
+      and
+      `pnpm exec vp check packages/compiler/src/scan/parse.ts packages/compiler/src/scan/parse.test.ts packages/compiler/src/lower/platform.ts packages/compiler/src/compile.ts`.
       Partial evidence 2026-06-11: `serverRenderSource` now parses once after handler lowering
       with the author file name and stamps component identity, declared query deps, and initial
       state onto the render host through one in-memory tag update instead of reparsing for each

@@ -18,10 +18,7 @@ export interface PlatformBehaviorLowering {
   substitutions: PlatformSubstitution[];
 }
 
-export function platformBehaviorLowering(
-  source: string,
-  model: ComponentModuleModel,
-): PlatformBehaviorLowering {
+export function platformBehaviorLowering(model: ComponentModuleModel): PlatformBehaviorLowering {
   const matches = jsxElements(model).flatMap((element) => {
     const onClick = element.attributes.find((attribute) => attribute.name === 'onClick');
     const action = onClick?.zeroArgArrow?.documentElementAction;
@@ -34,7 +31,7 @@ export function platformBehaviorLowering(
     const attributes = platformAttributes(match.substitution);
     const span =
       attributes === ''
-        ? sourceRangeWithLeadingWhitespace(source, match.attribute.start, match.attribute.end)
+        ? { end: match.attribute.end, start: match.attribute.leadingStart }
         : { end: match.attribute.end, start: match.attribute.start };
     return { ...span, replacement: attributes };
   });
@@ -62,19 +59,6 @@ function platformSubstitutionFromDocumentAction(
   if (action.action !== 'method' || !action.method) return null;
 
   return platformSubstitutionFor(tag, action.target, action.method);
-}
-
-function sourceRangeWithLeadingWhitespace(
-  source: string,
-  start: number,
-  end: number,
-): { end: number; start: number } {
-  let removeStart = start;
-  while (removeStart > 0 && /\s/.test(source[removeStart - 1] ?? '')) {
-    removeStart -= 1;
-  }
-
-  return { end, start: removeStart };
 }
 
 function platformSubstitutionFor(

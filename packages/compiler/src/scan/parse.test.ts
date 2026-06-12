@@ -257,6 +257,7 @@ export const CartActions = component('cart-actions', {
     const [button] = jsxElements(parseComponentModule('cart-actions.tsx', source));
     const click = button?.attributes.find((attribute) => attribute.name === 'onClick');
 
+    expect(click?.leadingStart).toBe(source.indexOf(' onClick='));
     expect(click?.zeroArgArrow?.documentElementAction).toEqual({
       action: 'method',
       method: 'showModal',

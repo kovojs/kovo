@@ -62,10 +62,7 @@ export function compileComponentModule(options: CompileComponentOptions): Compil
     viewTransitions.replacements,
     parseComponentModuleModel,
   ).state;
-  const platformLowering = platformBehaviorLowering(
-    viewTransitionState.source,
-    viewTransitionState.model,
-  );
+  const platformLowering = platformBehaviorLowering(viewTransitionState.model);
   const platformState = lowerComponentPipelinePatches(
     viewTransitionState,
     platformLowering.replacements,

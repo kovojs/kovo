@@ -85,6 +85,7 @@ export interface JsxAttributeModel {
   expressionReferences?: readonly string[];
   expressionStart?: number;
   expressionStaticValue?: StaticLiteralValue;
+  leadingStart: number;
   name: string;
   start: number;
   value?: string;
@@ -1128,6 +1129,7 @@ function jsxElementModel(
       return [
         {
           end: property.getEnd(),
+          leadingStart: attributeLeadingStart(source, property.getStart(sourceFile)),
           name: property.name.getText(sourceFile),
           start: property.getStart(sourceFile),
           ...(expression === null ? {} : expression),
@@ -1144,6 +1146,14 @@ function jsxElementModel(
     start: node.getStart(sourceFile),
     tag: openingElement.tagName.getText(sourceFile),
   };
+}
+
+function attributeLeadingStart(source: string, start: number): number {
+  let leadingStart = start;
+  while (leadingStart > 0 && /\s/.test(source[leadingStart - 1] ?? '')) {
+    leadingStart -= 1;
+  }
+  return leadingStart;
 }
 
 function jsxAncestorTags(sourceFile: ts.SourceFile, node: ts.Node): string[] {
