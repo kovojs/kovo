@@ -613,6 +613,10 @@ function pnpmCommand(): string {
   return process.platform === 'win32' ? 'pnpm.cmd' : 'pnpm';
 }
 
+function npmCommand(): string {
+  return process.platform === 'win32' ? 'npm.cmd' : 'npm';
+}
+
 function commerceServeCommands(): Array<{
   args(port: number): string[];
   command: string;
@@ -636,6 +640,11 @@ function commerceServeCommands(): Array<{
       args: (port) => ['exec', 'vp', 'run', '--no-cache', 'serve', ...serveArgs(port)],
       command: pnpmCommand(),
       label: 'vp run serve',
+    },
+    {
+      args: (port) => ['start', '--', ...serveArgs(port)],
+      command: npmCommand(),
+      label: 'npm start',
     },
   ];
 }

@@ -491,6 +491,11 @@ Scope: SPEC addition (proposed §9.5 "The request shell"), `@jiso/server` shell 
       `/c/commerce.client.js?v=commerce-r7`, `/_q/cart`, and `/src/styles.css`,
       and terminates the spawned process groups. Same-session verification ran
       `pnpm exec vitest --run examples/commerce/src/app-shell.test.ts`.
+      Additional evidence 2026-06-12: the commerce serve command matrix now
+      also covers the package-level `npm start` alias, proving that the
+      consumer script reaches the same Vite-backed SPEC §9.5 app-shell
+      middleware over real HTTP for `/cart`, `/c/commerce.client.js?v=commerce-r7`,
+      `/_q/cart`, and `/src/styles.css`.
       Additional evidence 2026-06-12: the create-jiso starter template now has
       a consumer serve command for the same app-shell middleware used by
       `vp dev`. `packages/create-jiso/templates/scripts/serve.mjs` starts Vite
