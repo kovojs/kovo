@@ -457,6 +457,18 @@ Scope: SPEC addition (proposed §9.5 "The request shell"), `@jiso/server` shell 
       verification ran `pnpm exec vitest --run packages/create-jiso/src/index.test.ts`
       and
       `pnpm exec vp check packages/create-jiso/src/index.test.ts packages/create-jiso/templates/index.html packages/create-jiso/templates/README.md plans/app-shell.md`.
+      Additional evidence 2026-06-12: commerce now exposes a bounded
+      `vp run export` task for its public app-shell export surface. The task
+      builds Vite assets, loads `src/app-shell.ts` through Vite SSR, exports
+      `commerceStaticExportApp` with `htmlPathStyle: 'directory'`, and passes
+      the Vite-manifest CSS asset through `jisoAppShellViteStaticExportAssets()`
+      so SPEC §9.5 static export owns the document, `/c/` module, and stylesheet
+      writes. `examples/commerce/src/app-shell.test.ts` runs the real task and
+      checks `commerce-export/v1` reports `html=2`, `client-modules=1`,
+      `assets=1`, and `diagnostics=0`, then verifies `dist/cart/index.html`,
+      `dist/login/index.html`, `dist/c/commerce.client.js`, and
+      `dist/assets/tailwind.css`. Same-session verification ran
+      `pnpm exec vitest --run examples/commerce/src/app-shell.test.ts`.
 
 ## Background — the gap
 

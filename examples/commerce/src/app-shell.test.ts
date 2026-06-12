@@ -1,3 +1,4 @@
+import { execFile } from 'node:child_process';
 import { createHmac } from 'node:crypto';
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http';
 import type { AddressInfo } from 'node:net';
@@ -440,6 +441,45 @@ describe('commerce app shell HTTP entry', () => {
       await rm(outDir, { force: true, recursive: true });
     }
   });
+
+  it('wires vp run export to the public commerce shell static output', async () => {
+    const commerceRoot = fileURLToPath(new URL('..', import.meta.url));
+    const distDir = path.join(commerceRoot, 'dist');
+
+    await rm(distDir, { force: true, recursive: true });
+
+    try {
+      const result = await execFileResult(pnpmCommand(), ['exec', 'vp', 'run', 'export'], {
+        cwd: commerceRoot,
+        timeout: 60000,
+      });
+      const output = `${result.stdout}\n${result.stderr}`;
+
+      expect(result.status, output).toBe(0);
+      expect(output).toContain('commerce-export/v1');
+      expect(output).toContain('html=2');
+      expect(output).toContain('client-modules=1');
+      expect(output).toContain('assets=1');
+      expect(output).toContain('diagnostics=0');
+
+      const cartHtml = await readFile(path.join(distDir, 'cart', 'index.html'), 'utf8');
+      expect(cartHtml).toContain('data-commerce-shell="cart"');
+      expect(cartHtml).toContain('<link rel="stylesheet" href="/assets/tailwind.css">');
+      expect(cartHtml).toContain(`/c/commerce.client.js?v=commerce-r7`);
+
+      const loginHtml = await readFile(path.join(distDir, 'login', 'index.html'), 'utf8');
+      expect(loginHtml).toContain('<title>Jiso Commerce Sign In</title>');
+      expect(loginHtml).toContain('action="/_m/auth/sign-in"');
+
+      const clientModule = await readFile(path.join(distDir, 'c', 'commerce.client.js'), 'utf8');
+      expect(clientModule).toContain('Commerce$markReady');
+
+      const stylesheet = await readFile(path.join(distDir, 'assets', 'tailwind.css'), 'utf8');
+      expect(stylesheet).toContain('tailwindcss v');
+    } finally {
+      await rm(distDir, { force: true, recursive: true });
+    }
+  });
 });
 
 async function signInCookie(db: ReturnType<typeof createCommerceAppShell>['db']): Promise<string> {
@@ -505,4 +545,34 @@ function listen(target: Server): Promise<void> {
 function serverOrigin(target: Server): string {
   const address = target.address() as AddressInfo;
   return `http://127.0.0.1:${address.port}`;
+}
+
+function execFileResult(
+  command: string,
+  args: readonly string[],
+  options: { cwd: string; timeout: number },
+): Promise<{ status: number | null; stderr: string; stdout: string }> {
+  return new Promise((resolve, reject) => {
+    execFile(command, [...args], options, (error, stdout, stderr) => {
+      if (!error) {
+        resolve({ status: 0, stderr, stdout });
+        return;
+      }
+
+      if (typeof error === 'object' && error !== null && 'code' in error) {
+        resolve({
+          status: typeof error.code === 'number' ? error.code : null,
+          stderr,
+          stdout,
+        });
+        return;
+      }
+
+      reject(error);
+    });
+  });
+}
+
+function pnpmCommand(): string {
+  return process.platform === 'win32' ? 'pnpm.cmd' : 'pnpm';
 }

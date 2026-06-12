@@ -16,6 +16,19 @@ export default defineConfig({
     },
   },
   plugins: [tailwindcss(), commerceAppShellDevPlugin()],
+  run: {
+    tasks: {
+      export: {
+        command: 'node scripts/export-static.mjs',
+        input: [
+          { pattern: 'scripts/export-static.mjs', base: 'workspace' },
+          { pattern: 'src/**/*', base: 'workspace' },
+          { pattern: 'vite.config.ts', base: 'workspace' },
+        ],
+        output: ['dist/**'],
+      },
+    },
+  },
 });
 
 type DevMiddleware = (
