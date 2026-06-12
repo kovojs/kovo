@@ -20,9 +20,11 @@ content or severities (SPEC §11.3 owns those); `fw check`/`fw explain` semantic
 - [ ] E2 dev middleware: page/fragment/mutation requests against a module with `error`
       diagnostics answer with the diagnostic document (500), covering the requests a
       client-injected overlay cannot see (direct navigation, no-JS form posts, fragment fetches).
-- [ ] M1 `fw mcp`: stdio MCP server exposing compile/check/explain as structured tools wrapping
-      the existing public APIs — no second diagnostic channel.
-- [ ] M2 in-memory compile tool contract documented and versioned (`compile/v1`), proving the
+- [x] M1a `fw mcp`: stdio-compatible JSON-RPC line server exposing compile/check/explain as
+      structured tools wrapping the existing public APIs — no second diagnostic channel.
+- [ ] M1b SDK-backed MCP adapter using `@modelcontextprotocol/sdk` over stdio once the dependency
+      and protocol lifecycle are accepted for `fw`.
+- [x] M2 in-memory compile tool contract documented and versioned (`compile/v1`), proving the
       generate→compile→repair loop works before a file touches disk.
 - [ ] Gate wiring: seeded-diagnostic fixtures prove each surface red/green behaviorally (per the
       round-2 Phase 1 rule: behavior, never source-text grepping).
@@ -145,18 +147,36 @@ no-JS form post against a seeded failing module); existing dev-middleware tests 
 
 ## Phase M — MCP surface (after V1; independent of E)
 
-- [ ] **M1 — `fw mcp` subcommand** in `packages/cli` using `@modelcontextprotocol/sdk` over
-      stdio. Tools: `compile_component` (fileName + source + optional query-shape/route facts →
-      structured diagnostics, emitted file kinds, handler exports, update coverage),
-      `fw_check` and `fw_explain` (graph path or inline graph → existing structured output),
-      `list_diagnostics` (the `diagnosticDefinitions` registry — codes, severities, messages —
-      so agents can look up a code without a round trip). If the SDK dependency is unwanted in
-      `fw`, fall back to a separate `@jiso/mcp` package; record the choice here.
-- [ ] **M2 — versioned tool contract.** Document the `compile_component` result shape as
+- [x] **M1a — `fw mcp` stdio-compatible fallback.** `packages/cli` exposes a newline-delimited
+      JSON-RPC surface using MCP method names (`tools/list`, `tools/call`) without adding
+      `@modelcontextprotocol/sdk` yet. Tools: `compile_component` (fileName + source + optional
+      query-shape/registry/prefix facts → structured diagnostics, emitted file kinds,
+      handler exports, update coverage), `fw_check` and `fw_explain` (graph path or inline graph
+      → existing public API output), and `list_diagnostics` (the `diagnosticDefinitions` registry
+      — codes, severities, messages — so agents can look up a code without a round trip). This
+      records the dependency choice for this bounded slice: no SDK in `fw` until the full MCP
+      lifecycle is worth freezing.
+      Evidence 2026-06-12: `packages/cli/src/index.ts` adds `mainAsync(['mcp'])`, JSON-RPC line
+      handling, `tools/list`/`tools/call`, and tool dispatch that calls `compileComponentV1`,
+      `fwCheck`, `fwExplain`, and `diagnosticDefinitions` directly. Same-session evidence:
+      `pnpm exec vitest --run packages/cli/src/index.test.ts` and
+      `pnpm exec vp check packages/cli/src/index.ts packages/cli/src/index.test.ts packages/cli/package.json plans/diagnostics.md pnpm-lock.yaml`.
+- [ ] **M1b — SDK-backed MCP adapter.** Replace or wrap the fallback server with
+      `@modelcontextprotocol/sdk` over stdio, including MCP initialize/capability lifecycle tests.
+- [x] **M2 — versioned tool contract.** Document the `compile_component` result shape as
       `compile/v1` alongside `fw-check/v1`/`fw-explain/v1`; snapshot-test it (agents consume
       this format, so it freezes like the CLI output did in P8). Include one end-to-end test:
       adversarial source in → FW201 diagnostic out with fix menu → corrected source in → clean
       compile, proving the repair loop without filesystem writes.
+      Evidence 2026-06-12: `packages/cli/src/index.ts` exports `CompileComponentV1Input`,
+      `CompileComponentV1Result`, and `compileComponentV1()` with explicit `compile/v1` version
+      tagging, diagnostics copied from compiler facts and shared `diagnosticDefinitions` per
+      SPEC §11.3, emitted file kind/byte metadata, handler exports, update coverage,
+      query-update plans, render-equivalence summaries, and graph facts.
+      `packages/cli/src/index.test.ts` inline-snapshots a clean `compile/v1` result and proves
+      the in-memory repair loop with FW201 help text followed by a clean corrected source.
+      Same-session evidence:
+      `pnpm exec vitest --run packages/cli/src/index.test.ts`.
 
 Verification: cli vitest with an in-process MCP client; `pnpm run check:build` (new dependency
 and any new entry point); snapshot tests for `compile/v1`.

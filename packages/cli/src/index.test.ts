@@ -5,7 +5,15 @@ import { join } from 'node:path';
 
 import { describe, expect, it, vi } from 'vitest';
 
-import { fwAudit, fwCheck, fwExplain, main, mainAsync } from './index.js';
+import {
+  compileComponentV1,
+  fwAudit,
+  fwCheck,
+  fwExplain,
+  handleFwMcpRequest,
+  main,
+  mainAsync,
+} from './index.js';
 
 describe('fw export', () => {
   it('loads an app module and writes static HTML artifacts through the server exporter', async () => {
@@ -141,6 +149,298 @@ describe('fw export', () => {
       stderr.mockRestore();
       rmSync(root, { force: true, recursive: true });
     }
+  });
+});
+
+describe('compile/v1 and fw mcp', () => {
+  it('returns a snapshot-stable compile/v1 contract for in-memory component source', async () => {
+    await expect(
+      compileComponentV1({
+        fileName: 'cart-badge.tsx',
+        source: '<button>x</button>',
+      }),
+    ).resolves.toMatchInlineSnapshot(`
+      {
+        "componentGraphFacts": [
+          {
+            "name": "CartBadge",
+          },
+        ],
+        "diagnostics": [],
+        "emittedFiles": [
+          {
+            "byteLength": 78,
+            "fileName": "cart-badge.server.js",
+            "kind": "server",
+          },
+          {
+            "byteLength": 42,
+            "fileName": "cart-badge.client.js",
+            "kind": "client",
+          },
+          {
+            "byteLength": 652,
+            "fileName": "generated/registries.d.ts",
+            "kind": "registry",
+          },
+        ],
+        "handlerExports": [],
+        "ok": true,
+        "platformSubstitutions": [],
+        "queryUpdatePlans": [],
+        "renderEquivalenceChecks": [
+          {
+            "artifact": "cart-badge.server.js",
+            "ok": true,
+          },
+        ],
+        "updateCoverage": [],
+        "version": "compile/v1",
+        "viewTransitions": [],
+      }
+    `);
+  });
+
+  it('proves the in-memory repair loop with shared FW201 diagnostics', async () => {
+    const adversarial = await compileComponentV1({
+      fileName: 'cart-badge.tsx',
+      source: '<button onClick={() => window.alert("x")}>x</button>',
+    });
+
+    expect(adversarial.ok).toBe(false);
+    expect(adversarial.diagnostics.map((diagnostic) => diagnostic.code)).toEqual([
+      'FW210',
+      'FW201',
+    ]);
+    const fw201 = adversarial.diagnostics.find((diagnostic) => diagnostic.code === 'FW201');
+    expect(fw201).toMatchObject({
+      code: 'FW201',
+      fileName: 'cart-badge.tsx',
+      message: 'Closure captures unserializable value.',
+      severity: 'error',
+      start: { column: 9, line: 1 },
+    });
+    expect(fw201?.help).toContain(
+      'Fixes: move the value into component/query state via ctx; pass serializable element params with data-p-*; or keep shared constants in module scope.',
+    );
+
+    const corrected = await compileComponentV1({
+      fileName: 'cart-badge.tsx',
+      source: '<button>x</button>',
+    });
+
+    expect(corrected.ok).toBe(true);
+    expect(corrected.diagnostics).toEqual([]);
+  });
+
+  it('exposes MCP-style tool listing and structured compile results over JSON-RPC objects', async () => {
+    await expect(handleFwMcpRequest({ id: 1, jsonrpc: '2.0', method: 'tools/list' })).resolves
+      .toMatchInlineSnapshot(`
+      {
+        "id": 1,
+        "jsonrpc": "2.0",
+        "result": {
+          "content": [
+            {
+              "text": "fw-mcp/v1",
+              "type": "text",
+            },
+          ],
+          "structuredContent": {
+            "tools": [
+              {
+                "description": "Compile an in-memory TSX/JSX component module and return the stable compile/v1 contract.",
+                "inputSchema": {
+                  "additionalProperties": true,
+                  "properties": {
+                    "fileName": {
+                      "type": "string",
+                    },
+                    "packageComponentPrefixes": {
+                      "type": "array",
+                    },
+                    "queryShapeFacts": {
+                      "type": "array",
+                    },
+                    "queryShapes": {
+                      "type": "object",
+                    },
+                    "registryFacts": {
+                      "type": "object",
+                    },
+                    "source": {
+                      "type": "string",
+                    },
+                    "sourceProvenance": {
+                      "enum": [
+                        "app",
+                        "compiler-emitted",
+                      ],
+                    },
+                  },
+                  "required": [
+                    "fileName",
+                    "source",
+                  ],
+                  "type": "object",
+                },
+                "name": "compile_component",
+              },
+              {
+                "description": "Run fwCheck against an inline graph or graphPath.",
+                "inputSchema": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "family": {
+                      "enum": [
+                        "all",
+                        "coverage",
+                        "optimistic",
+                      ],
+                    },
+                    "graph": {
+                      "type": "object",
+                    },
+                    "graphPath": {
+                      "type": "string",
+                    },
+                  },
+                  "required": [],
+                  "type": "object",
+                },
+                "name": "fw_check",
+              },
+              {
+                "description": "Run fwExplain against an inline graph or graphPath.",
+                "inputSchema": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "graph": {
+                      "type": "object",
+                    },
+                    "graphPath": {
+                      "type": "string",
+                    },
+                    "options": {
+                      "type": "object",
+                    },
+                  },
+                  "required": [
+                    "options",
+                  ],
+                  "type": "object",
+                },
+                "name": "fw_explain",
+              },
+              {
+                "description": "List shared diagnostic definitions from the @jiso/core registry.",
+                "inputSchema": {
+                  "additionalProperties": false,
+                  "properties": {},
+                  "type": "object",
+                },
+                "name": "list_diagnostics",
+              },
+            ],
+            "version": "fw-mcp/v1",
+          },
+          "version": "fw-mcp/v1",
+        },
+      }
+    `);
+
+    const response = await handleFwMcpRequest({
+      id: 'compile-1',
+      jsonrpc: '2.0',
+      method: 'tools/call',
+      params: {
+        arguments: {
+          fileName: 'cart-badge.tsx',
+          source: '<button onClick={() => window.alert("x")}>x</button>',
+        },
+        name: 'compile_component',
+      },
+    });
+
+    expect(response).toMatchObject({
+      id: 'compile-1',
+      jsonrpc: '2.0',
+      result: {
+        structuredContent: {
+          diagnostics: [
+            { code: 'FW210', severity: 'lint' },
+            { code: 'FW201', severity: 'error' },
+          ],
+          ok: false,
+          version: 'compile/v1',
+        },
+        version: 'fw-mcp/v1',
+      },
+    });
+  });
+
+  it('wraps fw_check, fw_explain, and diagnostic definitions without a second policy', async () => {
+    await expect(
+      handleFwMcpRequest({
+        id: 'check-1',
+        jsonrpc: '2.0',
+        method: 'tools/call',
+        params: { arguments: { graph: {} }, name: 'fw_check' },
+      }),
+    ).resolves.toMatchObject({
+      result: {
+        structuredContent: {
+          exitCode: 0,
+          output: 'fw-check/v1\nOK\n',
+          version: 'fw-check/v1',
+        },
+      },
+    });
+
+    await expect(
+      handleFwMcpRequest({
+        id: 'explain-1',
+        jsonrpc: '2.0',
+        method: 'tools/call',
+        params: {
+          arguments: {
+            graph: { queries: [{ domains: ['cart'], query: 'cart' }] },
+            options: { kind: 'query', target: 'cart' },
+          },
+          name: 'fw_explain',
+        },
+      }),
+    ).resolves.toMatchObject({
+      result: {
+        structuredContent: {
+          exitCode: 0,
+          output:
+            'fw-explain/v1\nQUERY cart\nreads: cart\nconsumers: -\ninvalidated-by: -\ndomain-writes: -\n',
+          version: 'fw-explain/v1',
+        },
+      },
+    });
+
+    const diagnostics = await handleFwMcpRequest({
+      id: 'definitions-1',
+      jsonrpc: '2.0',
+      method: 'tools/call',
+      params: { arguments: {}, name: 'list_diagnostics' },
+    });
+    expect(diagnostics).toMatchObject({
+      result: {
+        structuredContent: {
+          diagnostics: expect.arrayContaining([
+            expect.objectContaining({
+              code: 'FW201',
+              message: 'Closure captures unserializable value.',
+              severity: 'error',
+            }),
+          ]),
+          version: 'diagnostics/v1',
+        },
+      },
+    });
   });
 });
 
@@ -1079,7 +1379,7 @@ describe('fw check', () => {
     }
 
     expect(output).toBe(
-      'fw: unknown command "compile". expected explain, check, audit, or export.\n',
+      'fw: unknown command "compile". expected explain, check, audit, export, or mcp.\n',
     );
   });
 
@@ -1115,7 +1415,7 @@ describe('fw check', () => {
         stdio: ['ignore', 'pipe', 'pipe'],
       });
 
-      expect(output).toBe('fw: explain, check, audit, export\n');
+      expect(output).toBe('fw: explain, check, audit, export, mcp\n');
     } finally {
       rmSync(parent, { force: true, recursive: true });
     }

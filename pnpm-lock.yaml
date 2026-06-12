@@ -136,6 +136,9 @@ importers:
 
   packages/cli:
     dependencies:
+      '@jiso/compiler':
+        specifier: workspace:*
+        version: link:../compiler
       '@jiso/core':
         specifier: workspace:*
         version: link:../core

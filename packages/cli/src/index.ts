@@ -4,6 +4,7 @@ import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
+import type { CompileComponentOptions, QueryShape, QueryShapeFact } from '@jiso/compiler';
 import {
   diagnosticDefinitionText,
   diagnosticDefinitions,
@@ -59,15 +60,17 @@ type CliCommandResult = FwCheckResult | { error: string; exitCode: 1 };
 const outputVersion = 'fw-check/v1';
 const explainOutputVersion = 'fw-explain/v1';
 const auditOutputVersion = 'fw-audit/v1';
+const compileOutputVersion = 'compile/v1';
+const mcpOutputVersion = 'fw-mcp/v1';
 
 export function main(args: readonly string[] = process.argv.slice(2)): number {
   if (args.length === 0) {
-    process.stdout.write('fw: explain, check, audit, export\n');
+    process.stdout.write('fw: explain, check, audit, export, mcp\n');
     return 0;
   }
 
-  if (args[0] === 'export') {
-    throw new Error('fw export is asynchronous; call mainAsync() instead.');
+  if (args[0] === 'export' || args[0] === 'mcp') {
+    throw new Error(`fw ${args[0]} is asynchronous; call mainAsync() instead.`);
   }
 
   if (args[0] === 'check') {
@@ -96,17 +99,163 @@ export function main(args: readonly string[] = process.argv.slice(2)): number {
   }
 
   process.stderr.write(
-    `fw: unknown command ${stableValue(args[0])}. expected explain, check, audit, or export.\n`,
+    `fw: unknown command ${stableValue(args[0])}. expected explain, check, audit, export, or mcp.\n`,
   );
   return 1;
 }
 
 export async function mainAsync(args: readonly string[] = process.argv.slice(2)): Promise<number> {
+  if (args[0] === 'mcp') return runMcpCommand(args.slice(1));
   if (args[0] !== 'export') return main(args);
 
   const parsed = parseExportArgs(args.slice(1));
   if (!parsed.ok) return writeUsageError(parsed.message);
   return writeCommandResult(await runExportCommand(parsed.options));
+}
+
+export interface CompileComponentV1Input {
+  fileName: string;
+  packageComponentPrefixes?: CompileComponentOptions['packageComponentPrefixes'];
+  queryShapeFacts?: readonly QueryShapeFact[];
+  queryShapes?: Record<string, QueryShape>;
+  registryFacts?: CompileComponentOptions['registryFacts'];
+  source: string;
+  sourceProvenance?: CompileComponentOptions['sourceProvenance'];
+}
+
+export interface CompileComponentV1Diagnostic {
+  code: DiagnosticCode;
+  fileName: string;
+  help?: string;
+  length?: number;
+  message: string;
+  severity: DiagnosticSeverity;
+  start?: { column: number; line: number };
+}
+
+export interface CompileComponentV1Result {
+  componentGraphFacts: readonly unknown[];
+  diagnostics: readonly CompileComponentV1Diagnostic[];
+  emittedFiles: readonly { byteLength: number; fileName: string; kind: string }[];
+  handlerExports: readonly string[];
+  ok: boolean;
+  platformSubstitutions: readonly unknown[];
+  queryUpdatePlans: readonly unknown[];
+  renderEquivalenceChecks: readonly { artifact: string; ok: boolean }[];
+  updateCoverage: readonly unknown[];
+  version: typeof compileOutputVersion;
+  viewTransitions: readonly unknown[];
+}
+
+export type FwMcpToolName = 'compile_component' | 'fw_check' | 'fw_explain' | 'list_diagnostics';
+
+export type FwMcpRequest =
+  | {
+      id?: string | number | null;
+      jsonrpc?: '2.0';
+      method: 'tools/list';
+    }
+  | {
+      id?: string | number | null;
+      jsonrpc?: '2.0';
+      method: 'tools/call';
+      params: { arguments?: unknown; name: string };
+    };
+
+export type FwMcpResponse =
+  | {
+      id: string | number | null;
+      jsonrpc: '2.0';
+      result: {
+        content: readonly { text: string; type: 'text' }[];
+        structuredContent: unknown;
+        version: typeof mcpOutputVersion;
+      };
+    }
+  | {
+      error: { code: number; message: string };
+      id: string | number | null;
+      jsonrpc: '2.0';
+    };
+
+export async function compileComponentV1(
+  input: CompileComponentV1Input,
+): Promise<CompileComponentV1Result> {
+  const { compileComponentModule } = await import('@jiso/compiler');
+  const result = compileComponentModule(compileComponentOptions(input));
+
+  return {
+    componentGraphFacts: [...result.componentGraphFacts],
+    // SPEC.md §11.3 owns code severity; this surface only copies the shared compiler facts.
+    diagnostics: result.diagnostics.map((diagnostic) => {
+      const value: CompileComponentV1Diagnostic = {
+        code: diagnostic.code,
+        fileName: diagnostic.fileName,
+        message: diagnostic.message,
+        severity: diagnostic.severity ?? diagnosticDefinitions[diagnostic.code].severity,
+        ...(diagnostic.help === undefined ? {} : { help: diagnostic.help }),
+        ...(diagnostic.length === undefined ? {} : { length: diagnostic.length }),
+        ...(diagnostic.start === undefined
+          ? {}
+          : { start: { column: diagnostic.start.column, line: diagnostic.start.line } }),
+      };
+      return value;
+    }),
+    emittedFiles: result.files.map((file) => ({
+      byteLength: byteLength(file.source),
+      fileName: file.fileName,
+      kind: file.kind,
+    })),
+    handlerExports: [...result.handlerExports],
+    ok: result.diagnostics.every(
+      (diagnostic) =>
+        (diagnostic.severity ?? diagnosticDefinitions[diagnostic.code].severity) !== 'error',
+    ),
+    platformSubstitutions: [...result.platformSubstitutions],
+    queryUpdatePlans: [...result.queryUpdatePlans],
+    renderEquivalenceChecks: result.renderEquivalenceChecks.map((check) => ({
+      artifact: check.artifact,
+      ok: check.ok,
+    })),
+    updateCoverage: [...result.updateCoverage],
+    version: compileOutputVersion,
+    viewTransitions: [...result.viewTransitions],
+  };
+}
+
+function compileComponentOptions(input: CompileComponentV1Input): CompileComponentOptions {
+  return {
+    fileName: input.fileName,
+    ...(input.packageComponentPrefixes === undefined
+      ? {}
+      : { packageComponentPrefixes: input.packageComponentPrefixes }),
+    ...(input.queryShapeFacts === undefined ? {} : { queryShapeFacts: input.queryShapeFacts }),
+    ...(input.queryShapes === undefined ? {} : { queryShapes: input.queryShapes }),
+    ...(input.registryFacts === undefined ? {} : { registryFacts: input.registryFacts }),
+    source: input.source,
+    ...(input.sourceProvenance === undefined ? {} : { sourceProvenance: input.sourceProvenance }),
+  };
+}
+
+export async function handleFwMcpRequest(request: unknown): Promise<FwMcpResponse> {
+  if (!isRecord(request)) return mcpError(null, -32600, 'request must be an object');
+  const id = mcpRequestId(request.id);
+  const method = request.method;
+
+  if (method === 'tools/list') return mcpResult(id, listMcpTools());
+  if (method !== 'tools/call') return mcpError(id, -32601, 'unknown method');
+
+  const params = request.params;
+  if (!isRecord(params) || typeof params.name !== 'string') {
+    return mcpError(id, -32602, 'tools/call requires params.name');
+  }
+
+  try {
+    const result = await callMcpTool(params.name, params.arguments);
+    return mcpResult(id, result);
+  } catch (error) {
+    return mcpError(id, -32000, error instanceof Error ? error.message : String(error));
+  }
 }
 
 function runGraphCommand(
@@ -118,6 +267,64 @@ function runGraphCommand(
   return run(input.value);
 }
 
+async function runMcpCommand(args: readonly string[]): Promise<0 | 1> {
+  if (args.length > 0) {
+    const [first] = args;
+    const message =
+      first === '--help' || first === '-h'
+        ? mcpUsage()
+        : `fw: unknown mcp option ${stableValue(first)}.\n${mcpUsage()}`;
+    return writeUsageError(message);
+  }
+
+  await runMcpStdio(process.stdin, process.stdout);
+  return 0;
+}
+
+function mcpUsage(): string {
+  return [
+    'usage: fw mcp',
+    'Reads newline-delimited JSON-RPC requests from stdin and writes newline-delimited responses.',
+    '',
+  ].join('\n');
+}
+
+async function runMcpStdio(
+  input: AsyncIterable<Buffer | string>,
+  output: { write(chunk: string): unknown },
+): Promise<void> {
+  let pending = '';
+
+  for await (const chunk of input) {
+    pending += typeof chunk === 'string' ? chunk : chunk.toString('utf8');
+    const lines = pending.split(/\r?\n/);
+    pending = lines.pop() ?? '';
+
+    for (const line of lines) {
+      await writeMcpLine(line, output);
+    }
+  }
+
+  if (pending.trim()) await writeMcpLine(pending, output);
+}
+
+async function writeMcpLine(
+  line: string,
+  output: { write(chunk: string): unknown },
+): Promise<void> {
+  if (!line.trim()) return;
+
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(line);
+  } catch {
+    output.write(`${JSON.stringify(mcpError(null, -32700, 'parse error'))}\n`);
+    return;
+  }
+
+  output.write(`${JSON.stringify(await handleFwMcpRequest(parsed))}\n`);
+}
+
 function writeCommandResult(result: CliCommandResult): 0 | 1 {
   if ('error' in result) {
     process.stderr.write(`${result.error}\n`);
@@ -127,6 +334,252 @@ function writeCommandResult(result: CliCommandResult): 0 | 1 {
   const stream = result.exitCode === 0 ? process.stdout : process.stderr;
   stream.write(result.output);
   return result.exitCode;
+}
+
+async function callMcpTool(name: string, args: unknown): Promise<unknown> {
+  if (name === 'compile_component') return compileComponentV1(assertCompileComponentV1Input(args));
+  if (name === 'fw_check') return runFwCheckTool(args);
+  if (name === 'fw_explain') return runFwExplainTool(args);
+  if (name === 'list_diagnostics') return listDiagnosticsV1();
+
+  throw new Error(`unknown tool ${stableValue(name)}`);
+}
+
+function listMcpTools(): {
+  tools: readonly {
+    description: string;
+    inputSchema: Record<string, unknown>;
+    name: FwMcpToolName;
+  }[];
+  version: typeof mcpOutputVersion;
+} {
+  return {
+    tools: [
+      {
+        description:
+          'Compile an in-memory TSX/JSX component module and return the stable compile/v1 contract.',
+        inputSchema: {
+          additionalProperties: true,
+          properties: {
+            fileName: { type: 'string' },
+            packageComponentPrefixes: { type: 'array' },
+            queryShapeFacts: { type: 'array' },
+            queryShapes: { type: 'object' },
+            registryFacts: { type: 'object' },
+            source: { type: 'string' },
+            sourceProvenance: { enum: ['app', 'compiler-emitted'] },
+          },
+          required: ['fileName', 'source'],
+          type: 'object',
+        },
+        name: 'compile_component',
+      },
+      {
+        description: 'Run fwCheck against an inline graph or graphPath.',
+        inputSchema: graphToolSchema({ family: { enum: ['all', 'coverage', 'optimistic'] } }),
+        name: 'fw_check',
+      },
+      {
+        description: 'Run fwExplain against an inline graph or graphPath.',
+        inputSchema: graphToolSchema({ options: { type: 'object' } }, ['options']),
+        name: 'fw_explain',
+      },
+      {
+        description: 'List shared diagnostic definitions from the @jiso/core registry.',
+        inputSchema: { additionalProperties: false, properties: {}, type: 'object' },
+        name: 'list_diagnostics',
+      },
+    ],
+    version: mcpOutputVersion,
+  };
+}
+
+function graphToolSchema(
+  properties: Record<string, unknown>,
+  required: string[] = [],
+): Record<string, unknown> {
+  return {
+    additionalProperties: false,
+    properties: {
+      graph: { type: 'object' },
+      graphPath: { type: 'string' },
+      ...properties,
+    },
+    required,
+    type: 'object',
+  };
+}
+
+function runFwCheckTool(args: unknown): FwCheckResult & { version: typeof outputVersion } {
+  const options = assertGraphToolArgs(args);
+  const graph = graphToolInput(options);
+  const family = typeof options.family === 'string' ? checkFamilyArg(options.family) : 'all';
+  const result = fwCheck(graph, { family });
+  return { ...result, version: outputVersion };
+}
+
+function runFwExplainTool(args: unknown): FwCheckResult & { version: typeof explainOutputVersion } {
+  const options = assertGraphToolArgs(args);
+  const explainOptions = assertFwExplainOptions(options.options);
+  const result = fwExplain(graphToolInput(options), explainOptions);
+  return { ...result, version: explainOutputVersion };
+}
+
+function graphToolInput(args: Record<string, unknown>): FwExplainInput {
+  if ('graph' in args && 'graphPath' in args) {
+    throw new Error('graph tools accept graph or graphPath, not both');
+  }
+
+  if ('graphPath' in args) {
+    if (typeof args.graphPath !== 'string') throw new Error('graphPath must be a string');
+    const read = readGraphInput(args.graphPath);
+    if (!read.ok) throw new Error(inputErrorMessage(read.error));
+    return read.value;
+  }
+
+  if ('graph' in args) {
+    if (!isRecord(args.graph)) throw new Error('graph must be an object');
+    const validationErrors = validateFwExplainInput(args.graph);
+    if (validationErrors.length > 0)
+      throw new Error(validationErrors[0]?.message ?? 'invalid graph');
+    return args.graph as FwExplainInput;
+  }
+
+  return {};
+}
+
+function assertGraphToolArgs(args: unknown): Record<string, unknown> {
+  if (args === undefined) return {};
+  if (!isRecord(args)) throw new Error('tool arguments must be an object');
+  return args;
+}
+
+function assertCompileComponentV1Input(args: unknown): CompileComponentV1Input {
+  if (!isRecord(args)) throw new Error('compile_component arguments must be an object');
+  if (typeof args.fileName !== 'string') {
+    throw new Error('compile_component fileName must be a string');
+  }
+  if (typeof args.source !== 'string') throw new Error('compile_component source must be a string');
+
+  const input: CompileComponentV1Input = {
+    fileName: args.fileName,
+    source: args.source,
+  };
+
+  if (Array.isArray(args.packageComponentPrefixes)) {
+    input.packageComponentPrefixes =
+      args.packageComponentPrefixes as CompileComponentV1Input['packageComponentPrefixes'];
+  }
+  if (Array.isArray(args.queryShapeFacts)) {
+    input.queryShapeFacts = args.queryShapeFacts as readonly QueryShapeFact[];
+  }
+  if (isRecord(args.queryShapes)) {
+    input.queryShapes = args.queryShapes as Record<string, QueryShape>;
+  }
+  if (isRecord(args.registryFacts)) {
+    input.registryFacts = args.registryFacts as CompileComponentV1Input['registryFacts'];
+  }
+  if (args.sourceProvenance === 'app' || args.sourceProvenance === 'compiler-emitted') {
+    input.sourceProvenance = args.sourceProvenance;
+  }
+
+  return input;
+}
+
+function assertFwExplainOptions(value: unknown): FwExplainOptions {
+  if (!isRecord(value)) throw new Error('fw_explain options must be an object');
+
+  if (value.endpoints === true) return { endpoints: true };
+  if (value.unguarded === true) {
+    return {
+      ...(value.failOnFindings === true ? { failOnFindings: true } : {}),
+      unguarded: true,
+    };
+  }
+  if (value.unscoped === true) {
+    return {
+      ...(value.failOnFindings === true ? { failOnFindings: true } : {}),
+      unscoped: true,
+    };
+  }
+
+  const kind = typeof value.kind === 'string' ? value.kind : undefined;
+  if (!isExplainKind(kind) || typeof value.target !== 'string') {
+    throw new Error('fw_explain options require kind and target, or a supported audit flag');
+  }
+
+  return {
+    kind,
+    ...(value.optimistic === true ? { optimistic: true } : {}),
+    target: value.target,
+  };
+}
+
+function listDiagnosticsV1(): {
+  diagnostics: readonly {
+    code: DiagnosticCode;
+    detailLabels?: Readonly<Record<string, string>>;
+    help?: string;
+    message: string;
+    severity: DiagnosticSeverity;
+  }[];
+  version: 'diagnostics/v1';
+} {
+  return {
+    diagnostics: Object.values(diagnosticDefinitions)
+      .map((definition) => {
+        const detailLabels = 'detailLabels' in definition ? definition.detailLabels : undefined;
+        const help = 'help' in definition ? definition.help : undefined;
+        return {
+          code: definition.code,
+          ...(detailLabels === undefined ? {} : { detailLabels }),
+          ...(help === undefined ? {} : { help }),
+          message: definition.message,
+          severity: definition.severity,
+        };
+      })
+      .sort((left, right) => left.code.localeCompare(right.code)),
+    version: 'diagnostics/v1',
+  };
+}
+
+function mcpResult(
+  id: string | number | null,
+  structuredContent: unknown,
+): Extract<FwMcpResponse, { result: unknown }> {
+  return {
+    id,
+    jsonrpc: '2.0',
+    result: {
+      content: [{ text: mcpContentText(structuredContent), type: 'text' }],
+      structuredContent,
+      version: mcpOutputVersion,
+    },
+  };
+}
+
+function mcpContentText(structuredContent: unknown): string {
+  if (isRecord(structuredContent) && typeof structuredContent.version === 'string') {
+    return structuredContent.version;
+  }
+
+  return mcpOutputVersion;
+}
+
+function mcpError(
+  id: string | number | null,
+  code: number,
+  message: string,
+): Extract<FwMcpResponse, { error: unknown }> {
+  return { error: { code, message }, id, jsonrpc: '2.0' };
+}
+
+function mcpRequestId(value: unknown): string | number | null {
+  return typeof value === 'string' || typeof value === 'number' ? value : null;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
 interface FwExportOptions {
