@@ -241,6 +241,24 @@ export interface BetterAuthDbVerificationConfig {
   keyByTable: Partial<Record<BetterAuthTable, string>>;
 }
 
+export interface BetterAuthSchemaSourceAnnotationOptions {
+  annotationCallee?: string;
+  tableFactories?: readonly string[];
+}
+
+export interface BetterAuthSchemaSourceAnnotationResult {
+  alreadyAnnotatedTables: BetterAuthTable[];
+  annotatedTables: BetterAuthTable[];
+  existingExtraConfigTables: string[];
+  missingSourceTables: BetterAuthTable[];
+  requiredImport: {
+    module: '@jiso/drizzle';
+    name: 'jiso';
+  };
+  source: string;
+  validation: BetterAuthSchemaBridgeValidation;
+}
+
 export const betterAuthAuthDomain = domain('auth');
 export const betterAuthOrganizationDomain = domain('organization');
 export const betterAuthUserDomain = domain('user');
@@ -387,6 +405,63 @@ export function validateBetterAuthSchemaBridge(
       declaredTouchMismatches.length === 0,
     pluginTableDegradations,
     unbridgedTables,
+  };
+}
+
+// plans/auth.md B1 / SPEC.md §14: Better Auth owns the SQL/table metadata, while
+// the app-authored schema.ts must carry explicit Jiso domain/exempt annotations.
+export function annotateBetterAuthSchemaSource(
+  source: string,
+  tables: Record<string, unknown>,
+  options: BetterAuthSchemaSourceAnnotationOptions = {},
+): BetterAuthSchemaSourceAnnotationResult {
+  const validation = validateBetterAuthSchemaBridge(tables);
+  const metadataTables = new Set(Object.keys(tables));
+  const sourceTables = findDrizzleTableCalls(source, options.tableFactories);
+  const replacements: { end: number; start: number; value: string }[] = [];
+  const annotatedTables: BetterAuthTable[] = [];
+  const alreadyAnnotatedTables: BetterAuthTable[] = [];
+  const existingExtraConfigTables: string[] = [];
+  const annotationCallee = options.annotationCallee ?? 'jiso';
+
+  for (const call of sourceTables) {
+    const table = call.tableName;
+    if (!isBetterAuthTable(table) || !metadataTables.has(table)) continue;
+
+    if (call.extraConfigText !== null) {
+      if (isBetterAuthSchemaAnnotationText(call.extraConfigText, table, annotationCallee)) {
+        alreadyAnnotatedTables.push(table);
+      } else {
+        existingExtraConfigTables.push(table);
+      }
+      continue;
+    }
+
+    replacements.push({
+      end: call.closeParen,
+      start: call.closeParen,
+      value: `, ${betterAuthSchemaAnnotationCall(table, annotationCallee)}`,
+    });
+    annotatedTables.push(table);
+  }
+
+  const sourceTableNames = new Set(sourceTables.map((call) => call.tableName));
+  const missingSourceTables = [...metadataTables]
+    .filter((table): table is BetterAuthTable => isBetterAuthTable(table))
+    .filter((table) => !sourceTableNames.has(table))
+    .sort();
+
+  return {
+    alreadyAnnotatedTables: sortedBetterAuthTables(alreadyAnnotatedTables),
+    annotatedTables: sortedBetterAuthTables(annotatedTables),
+    existingExtraConfigTables: [...new Set(existingExtraConfigTables)].sort(),
+    missingSourceTables,
+    requiredImport: {
+      module: '@jiso/drizzle',
+      name: 'jiso',
+    },
+    source: applyBetterAuthSchemaSourceReplacements(source, replacements),
+    validation,
   };
 }
 
@@ -807,4 +882,291 @@ function unsupportedPluginTableDegradation(
     reason: 'unsupported-plugin-table',
     table,
   };
+}
+
+const betterAuthSchemaTableNames = new Set<string>(
+  Object.keys(betterAuthSchemaBridge) as BetterAuthTable[],
+);
+
+interface DrizzleTableCall {
+  closeParen: number;
+  extraConfigText: null | string;
+  tableName: string;
+}
+
+function isBetterAuthTable(table: string): table is BetterAuthTable {
+  return betterAuthSchemaTableNames.has(table);
+}
+
+function sortedBetterAuthTables(tables: readonly BetterAuthTable[]): BetterAuthTable[] {
+  return [...new Set(tables)].sort();
+}
+
+function betterAuthSchemaAnnotationCall(table: BetterAuthTable, annotationCallee: string): string {
+  const annotation = betterAuthSchemaBridge[table];
+
+  if ('domain' in annotation) {
+    const key = annotation.key === undefined ? '' : `, key: ${quoteTsString(annotation.key)}`;
+
+    return `${annotationCallee}({ domain: ${quoteTsString(annotation.domain)}${key} })`;
+  }
+
+  return `${annotationCallee}({ exempt: true })`;
+}
+
+function isBetterAuthSchemaAnnotationText(
+  text: string,
+  table: BetterAuthTable,
+  annotationCallee: string,
+): boolean {
+  return (
+    compactSourceText(text) ===
+    compactSourceText(betterAuthSchemaAnnotationCall(table, annotationCallee))
+  );
+}
+
+function findDrizzleTableCalls(
+  source: string,
+  factories: readonly string[] = ['mysqlTable', 'pgTable', 'sqliteTable'],
+): DrizzleTableCall[] {
+  const calls: DrizzleTableCall[] = [];
+  const factoryNames = new Set(factories);
+
+  for (let index = 0; index < source.length; index += 1) {
+    if (
+      source[index] === '"' ||
+      source[index] === "'" ||
+      source[index] === '`' ||
+      (source[index] === '/' && (source[index + 1] === '/' || source[index + 1] === '*'))
+    ) {
+      index = skipSourceToken(source, index) - 1;
+      continue;
+    }
+
+    const identifier = readIdentifierAt(source, index);
+
+    if (identifier === null || !factoryNames.has(identifier.value)) continue;
+    if (isIdentifierCharacter(source[identifier.start - 1] ?? '')) continue;
+    if (source[identifier.start - 1] === '.') continue;
+
+    const openParen = skipWhitespace(source, identifier.end);
+    if (source[openParen] !== '(') continue;
+
+    const closeParen = findMatchingDelimiter(source, openParen, '(', ')');
+    if (closeParen === -1) continue;
+
+    const args = splitTopLevelArguments(source, openParen + 1, closeParen);
+    const tableName = stringLiteralValue(args[0]?.text.trim() ?? '');
+
+    if (tableName !== null) {
+      calls.push({
+        closeParen,
+        extraConfigText: args[2]?.text.trim() ?? null,
+        tableName,
+      });
+    }
+
+    index = closeParen;
+  }
+
+  return calls;
+}
+
+function readIdentifierAt(
+  source: string,
+  index: number,
+): { end: number; start: number; value: string } | null {
+  const first = source[index];
+  if (!isIdentifierStart(first)) return null;
+
+  let end = index + 1;
+  while (end < source.length && isIdentifierCharacter(source[end])) end += 1;
+
+  return {
+    end,
+    start: index,
+    value: source.slice(index, end),
+  };
+}
+
+function isIdentifierStart(char: string | undefined): boolean {
+  return char !== undefined && /[A-Za-z_$]/.test(char);
+}
+
+function isIdentifierCharacter(char: string | undefined): boolean {
+  return char !== undefined && /[0-9A-Za-z_$]/.test(char);
+}
+
+function skipWhitespace(source: string, index: number): number {
+  let next = index;
+
+  while (/\s/.test(source[next] ?? '')) next += 1;
+
+  return next;
+}
+
+function splitTopLevelArguments(
+  source: string,
+  start: number,
+  end: number,
+): { end: number; start: number; text: string }[] {
+  const args: { end: number; start: number; text: string }[] = [];
+  let argStart = start;
+  let index = start;
+
+  while (index < end) {
+    const char = source[index];
+
+    if (char === ',' && isTopLevelSeparator(source, start, index)) {
+      args.push({ end: index, start: argStart, text: source.slice(argStart, index) });
+      argStart = index + 1;
+    }
+
+    index = skipSourceToken(source, index);
+  }
+
+  args.push({ end, start: argStart, text: source.slice(argStart, end) });
+
+  return args;
+}
+
+function isTopLevelSeparator(source: string, start: number, index: number): boolean {
+  const stack: string[] = [];
+  let cursor = start;
+
+  while (cursor < index) {
+    const char = source[cursor] ?? '';
+    const matchingClose = closingDelimiterFor(char);
+
+    if (matchingClose) {
+      stack.push(matchingClose);
+      cursor += 1;
+      continue;
+    }
+
+    if (stack.length > 0 && char === stack[stack.length - 1]) {
+      stack.pop();
+      cursor += 1;
+      continue;
+    }
+
+    cursor = skipSourceToken(source, cursor);
+  }
+
+  return stack.length === 0;
+}
+
+function findMatchingDelimiter(
+  source: string,
+  openIndex: number,
+  open: string,
+  close: string,
+): number {
+  let depth = 1;
+  let index = openIndex + 1;
+
+  while (index < source.length) {
+    const char = source[index];
+
+    if (char === open) {
+      depth += 1;
+      index += 1;
+      continue;
+    }
+
+    if (char === close) {
+      depth -= 1;
+      if (depth === 0) return index;
+      index += 1;
+      continue;
+    }
+
+    index = skipSourceToken(source, index);
+  }
+
+  return -1;
+}
+
+function skipSourceToken(source: string, index: number): number {
+  const char = source[index];
+  const next = source[index + 1];
+
+  if (char === '"' || char === "'" || char === '`') return skipQuotedString(source, index, char);
+  if (char === '/' && next === '/') return skipLineComment(source, index);
+  if (char === '/' && next === '*') return skipBlockComment(source, index);
+
+  return index + 1;
+}
+
+function skipQuotedString(source: string, index: number, quote: string): number {
+  let next = index + 1;
+
+  while (next < source.length) {
+    if (source[next] === '\\') {
+      next += 2;
+      continue;
+    }
+
+    if (source[next] === quote) return next + 1;
+
+    next += 1;
+  }
+
+  return source.length;
+}
+
+function skipLineComment(source: string, index: number): number {
+  const newline = source.indexOf('\n', index + 2);
+
+  return newline === -1 ? source.length : newline + 1;
+}
+
+function skipBlockComment(source: string, index: number): number {
+  const close = source.indexOf('*/', index + 2);
+
+  return close === -1 ? source.length : close + 2;
+}
+
+function closingDelimiterFor(char: string): string | null {
+  if (char === '(') return ')';
+  if (char === '[') return ']';
+  if (char === '{') return '}';
+
+  return null;
+}
+
+function stringLiteralValue(text: string): string | null {
+  if (text.startsWith("'") || text.startsWith('"')) {
+    try {
+      return JSON.parse(text.replace(/^'/, '"').replace(/'$/, '"')) as string;
+    } catch {
+      return text.slice(1, -1);
+    }
+  }
+
+  if (text.startsWith('`') && text.endsWith('`') && !text.includes('${')) {
+    return text.slice(1, -1);
+  }
+
+  return null;
+}
+
+function quoteTsString(value: string): string {
+  return `'${value.replaceAll('\\', '\\\\').replaceAll("'", "\\'")}'`;
+}
+
+function compactSourceText(source: string): string {
+  return source.replace(/\s+/g, '');
+}
+
+function applyBetterAuthSchemaSourceReplacements(
+  source: string,
+  replacements: readonly { end: number; start: number; value: string }[],
+): string {
+  return [...replacements]
+    .sort((left, right) => right.start - left.start)
+    .reduce(
+      (next, range) => `${next.slice(0, range.start)}${range.value}${next.slice(range.end)}`,
+      source,
+    );
 }

@@ -12,6 +12,7 @@ import { admin, organization, twoFactor } from 'better-auth/plugins';
 import { describe, expect, expectTypeOf, it } from 'vitest';
 
 import {
+  annotateBetterAuthSchemaSource,
   authed,
   betterAuthCredentialMutationDeclaredTableTouches,
   betterAuthCredentialMutationTouchGraph,
@@ -262,6 +263,57 @@ describe('Better Auth pinned conformance', () => {
       domain: 'organization',
       key: 'teamId',
     });
+  });
+
+  it('materializes app schema.ts annotations from real Better Auth table metadata', () => {
+    const { auth } = createRealAuth({
+      plugins: [
+        admin(),
+        organization({
+          dynamicAccessControl: { enabled: true },
+          teams: { enabled: true },
+        }),
+      ],
+    });
+    const tables = getAuthTables(auth.options);
+    const result = annotateBetterAuthSchemaSource(
+      betterAuthSchemaSourceFixture(Object.keys(tables)),
+      tables,
+    );
+
+    expect(result.validation).toEqual({
+      declaredTouchMismatches: [],
+      keyFieldMismatches: [],
+      missingTables: [],
+      ok: true,
+      pluginTableDegradations: [],
+      unbridgedTables: [],
+    });
+    expect(result.annotatedTables).toEqual([
+      'account',
+      'invitation',
+      'member',
+      'organization',
+      'organizationRole',
+      'session',
+      'team',
+      'teamMember',
+      'user',
+      'verification',
+    ]);
+    expect(result.missingSourceTables).toEqual([]);
+    expect(result.source).toContain(
+      "export const user = pgTable('user', {}, jiso({ domain: 'user', key: 'id' }));",
+    );
+    expect(result.source).toContain(
+      "export const organization = pgTable('organization', {}, jiso({ domain: 'organization', key: 'id' }));",
+    );
+    expect(result.source).toContain(
+      "export const teamMember = pgTable('teamMember', {}, jiso({ domain: 'organization', key: 'teamId' }));",
+    );
+    expect(result.source).toContain(
+      "export const verification = pgTable('verification', {}, jiso({ exempt: true }));",
+    );
   });
 
   it('degrades non-blessed plugin table metadata with actionable bridge diagnostics', () => {
@@ -737,6 +789,16 @@ function createRealAuth(options: { plugins?: Parameters<typeof betterAuth>[0]['p
   });
 
   return { auth, db };
+}
+
+function betterAuthSchemaSourceFixture(tables: readonly string[]): string {
+  return [
+    "import { jiso } from '@jiso/drizzle';",
+    "import { pgTable } from 'drizzle-orm/pg-core';",
+    '',
+    ...[...tables].sort().map((table) => `export const ${table} = pgTable('${table}', {});`),
+    '',
+  ].join('\n');
 }
 
 class ObservedCredentialAuth

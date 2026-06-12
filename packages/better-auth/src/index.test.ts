@@ -10,6 +10,7 @@ import {
 import { describe, expect, expectTypeOf, it } from 'vitest';
 import {
   activeOrganization,
+  annotateBetterAuthSchemaSource,
   authed,
   betterAuthCredentialMutationDefaultKeys,
   betterAuthCredentialMutationDeclaredTableTouches,
@@ -512,6 +513,94 @@ describe('credential mutation helpers', () => {
       pluginTableDegradations: [],
       unbridgedTables: [],
     });
+  });
+
+  it('materializes Jiso annotations into an app schema.ts source fixture', () => {
+    const source = [
+      "import { jiso } from '@jiso/drizzle';",
+      "import { pgTable, text, timestamp } from 'drizzle-orm/pg-core';",
+      '',
+      "export const user = pgTable('user', {",
+      "  id: text('id').primaryKey(),",
+      "  email: text('email').notNull(),",
+      '});',
+      '',
+      "export const session = pgTable('session', {",
+      "  id: text('id').primaryKey(),",
+      "  userId: text('user_id').notNull(),",
+      "  expiresAt: timestamp('expires_at').notNull(),",
+      '});',
+      '',
+      "export const account = pgTable('account', {",
+      "  id: text('id').primaryKey(),",
+      "  userId: text('user_id').notNull(),",
+      '});',
+      '',
+      "export const verification = pgTable('verification', {",
+      "  id: text('id').primaryKey(),",
+      "  identifier: text('identifier').notNull(),",
+      '});',
+      '',
+    ].join('\n');
+    const result = annotateBetterAuthSchemaSource(source, {
+      account: authTable(['userId']),
+      session: authTable(['userId']),
+      user: authTable(),
+      verification: authTable(),
+    });
+
+    expect(result.validation.ok).toBe(true);
+    expect(result.requiredImport).toEqual({ module: '@jiso/drizzle', name: 'jiso' });
+    expect(result.annotatedTables).toEqual(['account', 'session', 'user', 'verification']);
+    expect(result.alreadyAnnotatedTables).toEqual([]);
+    expect(result.existingExtraConfigTables).toEqual([]);
+    expect(result.missingSourceTables).toEqual([]);
+    expect(result.source).toContain(
+      "export const user = pgTable('user', {\n" +
+        "  id: text('id').primaryKey(),\n" +
+        "  email: text('email').notNull(),\n" +
+        "}, jiso({ domain: 'user', key: 'id' }));",
+    );
+    expect(result.source).toContain(
+      "export const session = pgTable('session', {\n" +
+        "  id: text('id').primaryKey(),\n" +
+        "  userId: text('user_id').notNull(),\n" +
+        "  expiresAt: timestamp('expires_at').notNull(),\n" +
+        "}, jiso({ domain: 'auth', key: 'userId' }));",
+    );
+    expect(result.source).toContain(
+      "export const verification = pgTable('verification', {\n" +
+        "  id: text('id').primaryKey(),\n" +
+        "  identifier: text('identifier').notNull(),\n" +
+        '}, jiso({ exempt: true }));',
+    );
+  });
+
+  it('reports schema.ts tables it cannot safely annotate', () => {
+    const result = annotateBetterAuthSchemaSource(
+      [
+        'const auditConfig = () => [];',
+        "export const user = pgTable('user', {}, jiso({ domain: 'user', key: 'id' }));",
+        "export const session = pgTable('session', {}, auditConfig);",
+        "export const account = pgTable('account', {});",
+      ].join('\n'),
+      {
+        account: authTable(['userId']),
+        session: authTable(['userId']),
+        user: authTable(),
+        verification: authTable(),
+      },
+    );
+
+    expect(result.validation.ok).toBe(true);
+    expect(result.annotatedTables).toEqual(['account']);
+    expect(result.alreadyAnnotatedTables).toEqual(['user']);
+    expect(result.existingExtraConfigTables).toEqual(['session']);
+    expect(result.missingSourceTables).toEqual(['verification']);
+    expect(result.source).toContain(
+      "export const account = pgTable('account', {}, jiso({ domain: 'auth', key: 'userId' }));",
+    );
+    expect(result.source).toContain("export const session = pgTable('session', {}, auditConfig);");
   });
 
   it('wraps signInEmail as an ordinary mutation and forwards Better Auth cookies', async () => {
