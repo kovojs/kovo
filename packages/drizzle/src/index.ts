@@ -102,6 +102,13 @@ const UNCLASSIFIED_DRIZZLE_RECEIVER_MUTATION_METHODS = new Set([
   'refreshMaterializedView',
 ]);
 const DRIZZLE_SELECT_QUERY_METHODS = new Set(['select', 'selectDistinct', 'selectDistinctOn']);
+const CLASSIFIED_DRIZZLE_RECEIVER_METHODS = new Set([
+  ...DRIZZLE_SELECT_QUERY_METHODS,
+  'delete',
+  'insert',
+  'transaction',
+  'update',
+]);
 
 export type QueryShape =
   | 'array'
@@ -636,18 +643,21 @@ function projectUnclassifiedCallSurface(
   expression: Node,
   name: string,
 ): { name: string; receiver: Node } | undefined {
-  if (UNCLASSIFIED_DRIZZLE_RECEIVER_MUTATION_METHODS.has(name)) {
-    const receiver = staticAccessExpression(expression);
-    return receiver ? { name, receiver } : undefined;
+  if (name === 'findMany' || name === 'findFirst') {
+    const tableAccess = staticAccessExpression(expression);
+    if (tableAccess && staticAccessName(tableAccess)) {
+      const queryAccess = staticAccessExpression(tableAccess);
+      if (queryAccess && staticAccessName(queryAccess) === 'query') {
+        const receiver = staticAccessExpression(queryAccess);
+        if (receiver) return { name: `query.${name}`, receiver };
+      }
+    }
   }
-  if (name !== 'findMany' && name !== 'findFirst') return undefined;
 
-  const tableAccess = staticAccessExpression(expression);
-  if (!tableAccess || !staticAccessName(tableAccess)) return undefined;
-  const queryAccess = staticAccessExpression(tableAccess);
-  if (!queryAccess || staticAccessName(queryAccess) !== 'query') return undefined;
-  const receiver = staticAccessExpression(queryAccess);
-  return receiver ? { name: `query.${name}`, receiver } : undefined;
+  if (!isUnclassifiedDirectDrizzleReceiverMethod(name)) return undefined;
+
+  const receiver = staticAccessExpression(expression);
+  return receiver ? { name, receiver } : undefined;
 }
 
 function bodySourceStart(body: Node): number {
@@ -2690,7 +2700,7 @@ function extractReceiverMutationCallsFromBody(
   for (const call of callExpressionsInNode(body)) {
     const expression = call.getExpression();
     const name = staticAccessName(expression);
-    if (!name || !UNCLASSIFIED_DRIZZLE_RECEIVER_MUTATION_METHODS.has(name)) continue;
+    if (!name || !isUnclassifiedDirectDrizzleReceiverMethod(name)) continue;
 
     const receiver = staticAccessExpression(expression);
     if (!isSourceDrizzleReceiverIdentifier(receiver, receiverNames)) continue;
@@ -2700,6 +2710,14 @@ function extractReceiverMutationCallsFromBody(
   }
 
   return calls;
+}
+
+function isUnclassifiedDirectDrizzleReceiverMethod(name: string): boolean {
+  // SPEC §10-§11: direct receiver calls not statically classified are explicit FW406 surfaces.
+  return (
+    UNCLASSIFIED_DRIZZLE_RECEIVER_MUTATION_METHODS.has(name) ||
+    !CLASSIFIED_DRIZZLE_RECEIVER_METHODS.has(name)
+  );
 }
 
 function extractUnclassifiedDrizzleReceiverCallsFromBody(

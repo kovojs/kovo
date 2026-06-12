@@ -1576,6 +1576,14 @@ must be "FW406 unresolved," never "silently wrong."
       inert under SPEC §10-§11. Same-session evidence:
       `pnpm exec vitest --run packages/drizzle/src/index.test.ts -t "static element-access write methods|project static element-access writes"`,
       `pnpm exec vitest --run conformance/drizzle-pin/src/index.test.ts -t "static element-access write methods|real Drizzle receiver types with static element-access write methods"`.
+      Additional evidence 2026-06-12: source/project unresolved-surface extraction now treats
+      otherwise unclassified direct Drizzle receiver method calls as explicit FW406 surfaces
+      while preserving typed-symbol gating and already-classified write/query/transaction
+      behavior. Package coverage pins source-mode `db.batch(...)` / `db["$with"](...)`, project
+      typed `PgDatabase` receivers versus fake lookalikes, and the pinned real Drizzle
+      `PgDatabase` `$with` surface under SPEC §10-§11. Same-session evidence:
+      `corepack pnpm exec vitest --run packages/drizzle/src/index.test.ts`,
+      `corepack pnpm exec vitest --run conformance/drizzle-pin/src/index.test.ts`.
 - [x] **MED — Make the drizzle-orm coupling real and tested.** The `>=0.45.2 <1` pin is
       decorative: drizzle-orm is never imported, absent from devDeps, and every project test
       fabricates a `declare module "drizzle-orm/pg-core"` shim (index.test.ts:1742, 1791, 1846).

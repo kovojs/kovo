@@ -3593,6 +3593,61 @@ export interface CommerceInvalidationSets {
     });
   });
 
+  it('marks project unknown direct receiver methods only for typed Drizzle symbols', () => {
+    const graph = extractTouchGraphFromProject({
+      files: [
+        {
+          fileName: 'drizzle-types.d.ts',
+          source: [
+            'declare module "drizzle-orm/pg-core" {',
+            '  export class PgDatabase<TQueryResultHKT = unknown, TFullSchema = unknown, TSchema = unknown> {',
+            '    $with(name: string): unknown;',
+            '    batch(queries: unknown[]): Promise<unknown[]>;',
+            '  }',
+            '}',
+          ].join('\n'),
+        },
+        {
+          fileName: 'cart.domain.ts',
+          source: [
+            'import type { PgDatabase } from "drizzle-orm/pg-core";',
+            '',
+            'interface FakeDb {',
+            '  $with(name: string): unknown;',
+            '  batch(queries: unknown[]): Promise<unknown[]>;',
+            '}',
+            '',
+            'export async function sync(db: PgDatabase, fake: FakeDb) {',
+            '  await db.batch([]);',
+            '  db["$with"]("active_users");',
+            '  await fake.batch([]);',
+            '  fake["$with"]("active_users");',
+            '}',
+          ].join('\n'),
+        },
+      ],
+    });
+
+    expect(graph).toEqual({
+      sync: {
+        reads: [],
+        touches: [],
+        unresolved: [
+          {
+            code: 'FW406',
+            message: 'Statically un-analyzable write site; manual touches required.',
+            site: 'cart.domain.ts:9',
+          },
+          {
+            code: 'FW406',
+            message: 'Statically un-analyzable write site; manual touches required.',
+            site: 'cart.domain.ts:10',
+          },
+        ],
+      },
+    });
+  });
+
   it('uses project transaction callback receiver aliases from typed Drizzle origins', () => {
     const graph = extractTouchGraphFromProject({
       files: [
@@ -4139,6 +4194,49 @@ export interface CommerceInvalidationSets {
             code: 'FW406',
             message: 'Statically un-analyzable write site; manual touches required.',
             site: 'cart.domain.ts:5',
+          },
+        ],
+      },
+    });
+  });
+
+  it('marks unknown direct Drizzle receiver methods as FW406 instead of dropping them', () => {
+    const graph = extractTouchGraphFromSource([
+      {
+        fileName: 'cart.domain.ts',
+        source: `
+          export const users = pgTable("users", {}, jiso({ domain: "user", key: "id" }));
+
+          export async function syncUsers(db) {
+            await db.batch([db.select().from(users)]);
+            await db["$with"]("active_users");
+            await db.insert(users).values({});
+          }
+        `,
+      },
+    ]);
+
+    expect(graph).toEqual({
+      syncUsers: {
+        reads: [],
+        touches: [
+          {
+            domain: 'user',
+            keys: null,
+            site: 'cart.domain.ts:7',
+            via: 'users',
+          },
+        ],
+        unresolved: [
+          {
+            code: 'FW406',
+            message: 'Statically un-analyzable write site; manual touches required.',
+            site: 'cart.domain.ts:5',
+          },
+          {
+            code: 'FW406',
+            message: 'Statically un-analyzable write site; manual touches required.',
+            site: 'cart.domain.ts:6',
           },
         ],
       },
