@@ -16,6 +16,7 @@ import {
   serializeInvalidationRegistry,
   serializeDomainRegistry,
   serializeTouchGraph,
+  type SourceFileInput,
 } from '@jiso/drizzle/static';
 
 function annotatedTable(name: string, annotation: ReturnType<typeof jiso>) {
@@ -23,6 +24,19 @@ function annotatedTable(name: string, annotation: ReturnType<typeof jiso>) {
     domain: annotation.domain,
     ...(annotation.key ? { key: annotation.key } : {}),
     name,
+  };
+}
+
+function pgDatabaseTypes(methods: readonly string[]): SourceFileInput {
+  return {
+    fileName: 'drizzle-types.d.ts',
+    source: [
+      'declare module "drizzle-orm/pg-core" {',
+      '  export class PgDatabase<TQueryResultHKT = unknown, TFullSchema = unknown, TSchema = unknown> {',
+      ...methods.map((method) => `    ${method}`),
+      '  }',
+      '}',
+    ].join('\n'),
   };
 }
 
@@ -2603,16 +2617,9 @@ export interface CommerceInvalidationSets {
   it('does not leak project extraction state between repeated touch graph calls', () => {
     const first = extractTouchGraphFromProject({
       files: [
-        {
-          fileName: 'drizzle-types.d.ts',
-          source: `
-            declare module "drizzle-orm/pg-core" {
-              export class PgDatabase<TQueryResultHKT = unknown, TFullSchema = unknown, TSchema = unknown> {
-                update(table: unknown): { set(value: unknown): { where(value: unknown): Promise<void> } };
-              }
-            }
-          `,
-        },
+        pgDatabaseTypes([
+          'update(table: unknown): { set(value: unknown): { where(value: unknown): Promise<void> } };',
+        ]),
         {
           fileName: 'schema.ts',
           source: `
@@ -2634,16 +2641,9 @@ export interface CommerceInvalidationSets {
     });
     const second = extractTouchGraphFromProject({
       files: [
-        {
-          fileName: 'drizzle-types.d.ts',
-          source: `
-            declare module "drizzle-orm/pg-core" {
-              export class PgDatabase<TQueryResultHKT = unknown, TFullSchema = unknown, TSchema = unknown> {
-                update(table: unknown): { set(value: unknown): { where(value: unknown): Promise<void> } };
-              }
-            }
-          `,
-        },
+        pgDatabaseTypes([
+          'update(table: unknown): { set(value: unknown): { where(value: unknown): Promise<void> } };',
+        ]),
         {
           fileName: 'schema.ts',
           source: `
@@ -3814,16 +3814,9 @@ export interface CommerceInvalidationSets {
   it('uses typed receiver origins instead of likely receiver names in project extraction', () => {
     const graph = extractTouchGraphFromProject({
       files: [
-        {
-          fileName: 'drizzle-types.d.ts',
-          source: `
-            declare module "drizzle-orm/pg-core" {
-              export class PgDatabase<TQueryResultHKT = unknown, TFullSchema = unknown, TSchema = unknown> {
-                update(table: unknown): { set(value: unknown): { where(value: unknown): Promise<void> } };
-              }
-            }
-          `,
-        },
+        pgDatabaseTypes([
+          'update(table: unknown): { set(value: unknown): { where(value: unknown): Promise<void> } };',
+        ]),
         {
           fileName: 'cart.domain.ts',
           source: `
@@ -3863,16 +3856,7 @@ export interface CommerceInvalidationSets {
   it('marks project raw execute only for typed Drizzle receiver origins', () => {
     const graph = extractTouchGraphFromProject({
       files: [
-        {
-          fileName: 'drizzle-types.d.ts',
-          source: `
-            declare module "drizzle-orm/pg-core" {
-              export class PgDatabase<TQueryResultHKT = unknown, TFullSchema = unknown, TSchema = unknown> {
-                execute(query: unknown): Promise<void>;
-              }
-            }
-          `,
-        },
+        pgDatabaseTypes(['execute(query: unknown): Promise<void>;']),
         {
           fileName: 'cart.domain.ts',
           source: `
@@ -3916,18 +3900,11 @@ export interface CommerceInvalidationSets {
   it('marks project unresolved helper surfaces only for typed Drizzle receiver symbols', () => {
     const graph = extractTouchGraphFromProject({
       files: [
-        {
-          fileName: 'drizzle-types.d.ts',
-          source: [
-            'declare module "drizzle-orm/pg-core" {',
-            '  export class PgDatabase<TQueryResultHKT = unknown, TFullSchema = unknown, TSchema = unknown> {',
-            '    $count(table: unknown): Promise<number>;',
-            '    execute(query: unknown): Promise<void>;',
-            '    query: any;',
-            '  }',
-            '}',
-          ].join('\n'),
-        },
+        pgDatabaseTypes([
+          '$count(table: unknown): Promise<number>;',
+          'execute(query: unknown): Promise<void>;',
+          'query: any;',
+        ]),
         {
           fileName: 'cart.domain.ts',
           source: [
@@ -3999,19 +3976,12 @@ export interface CommerceInvalidationSets {
   it('marks project unknown direct receiver methods only for typed Drizzle symbols', () => {
     const graph = extractTouchGraphFromProject({
       files: [
-        {
-          fileName: 'drizzle-types.d.ts',
-          source: [
-            'declare module "drizzle-orm/pg-core" {',
-            '  export class PgDatabase<TQueryResultHKT = unknown, TFullSchema = unknown, TSchema = unknown> {',
-            '    $with(name: string): unknown;',
-            '    batch(queries: unknown[]): Promise<unknown[]>;',
-            '    findFirst(): Promise<unknown>;',
-            '    findMany(): Promise<unknown[]>;',
-            '  }',
-            '}',
-          ].join('\n'),
-        },
+        pgDatabaseTypes([
+          '$with(name: string): unknown;',
+          'batch(queries: unknown[]): Promise<unknown[]>;',
+          'findFirst(): Promise<unknown>;',
+          'findMany(): Promise<unknown[]>;',
+        ]),
         {
           fileName: 'cart.domain.ts',
           source: [
@@ -4072,17 +4042,10 @@ export interface CommerceInvalidationSets {
   it('uses project transaction callback receiver aliases from typed Drizzle origins', () => {
     const graph = extractTouchGraphFromProject({
       files: [
-        {
-          fileName: 'drizzle-types.d.ts',
-          source: `
-            declare module "drizzle-orm/pg-core" {
-              export class PgDatabase<TQueryResultHKT = unknown, TFullSchema = unknown, TSchema = unknown> {
-                insert(table: unknown): { values(value: unknown): Promise<void> };
-                transaction<T>(callback: (tx: PgDatabase<TQueryResultHKT, TFullSchema, TSchema>) => Promise<T>): Promise<T>;
-              }
-            }
-          `,
-        },
+        pgDatabaseTypes([
+          'insert(table: unknown): { values(value: unknown): Promise<void> };',
+          'transaction<T>(callback: (tx: PgDatabase<TQueryResultHKT, TFullSchema, TSchema>) => Promise<T>): Promise<T>;',
+        ]),
         {
           fileName: 'cart.domain.ts',
           source: `
@@ -4134,16 +4097,9 @@ export interface CommerceInvalidationSets {
   it('uses typed receiver origins inside project domain write callbacks', () => {
     const graph = extractTouchGraphFromProject({
       files: [
-        {
-          fileName: 'drizzle-types.d.ts',
-          source: `
-            declare module "drizzle-orm/pg-core" {
-              export class PgDatabase<TQueryResultHKT = unknown, TFullSchema = unknown, TSchema = unknown> {
-                update(table: unknown): { set(value: unknown): { where(value: unknown): Promise<void> } };
-              }
-            }
-          `,
-        },
+        pgDatabaseTypes([
+          'update(table: unknown): { set(value: unknown): { where(value: unknown): Promise<void> } };',
+        ]),
         {
           fileName: 'cart.domain.ts',
           source: [
@@ -4186,16 +4142,9 @@ export interface CommerceInvalidationSets {
   it('resolves imported table symbols instead of same-name tables from other modules', () => {
     const graph = extractTouchGraphFromProject({
       files: [
-        {
-          fileName: 'drizzle-types.d.ts',
-          source: `
-            declare module "drizzle-orm/pg-core" {
-              export class PgDatabase<TQueryResultHKT = unknown, TFullSchema = unknown, TSchema = unknown> {
-                update(table: unknown): { set(value: unknown): { where(value: unknown): Promise<void> } };
-              }
-            }
-          `,
-        },
+        pgDatabaseTypes([
+          'update(table: unknown): { set(value: unknown): { where(value: unknown): Promise<void> } };',
+        ]),
         {
           fileName: 'cart.schema.ts',
           source: `
@@ -4241,16 +4190,7 @@ export interface CommerceInvalidationSets {
   it('resolves namespace-imported project write targets from table symbols', () => {
     const graph = extractTouchGraphFromProject({
       files: [
-        {
-          fileName: 'drizzle-types.d.ts',
-          source: `
-            declare module "drizzle-orm/pg-core" {
-              export class PgDatabase<TQueryResultHKT = unknown, TFullSchema = unknown, TSchema = unknown> {
-                insert(table: unknown): { values(value: unknown): Promise<void> };
-              }
-            }
-          `,
-        },
+        pgDatabaseTypes(['insert(table: unknown): { values(value: unknown): Promise<void> };']),
         {
           fileName: 'cart.schema.ts',
           source: `
@@ -4299,16 +4239,9 @@ export interface CommerceInvalidationSets {
   it('resolves namespace static element-access project write targets from table symbols', () => {
     const graph = extractTouchGraphFromProject({
       files: [
-        {
-          fileName: 'drizzle-types.d.ts',
-          source: `
-            declare module "drizzle-orm/pg-core" {
-              export class PgDatabase<TQueryResultHKT = unknown, TFullSchema = unknown, TSchema = unknown> {
-                update(table: unknown): { set(value: unknown): { where(value: unknown): Promise<void> } };
-              }
-            }
-          `,
-        },
+        pgDatabaseTypes([
+          'update(table: unknown): { set(value: unknown): { where(value: unknown): Promise<void> } };',
+        ]),
         {
           fileName: 'cart.schema.ts',
           source: `
@@ -4348,16 +4281,9 @@ export interface CommerceInvalidationSets {
   it('resolves namespace static element-access project write targets through re-export barrels', () => {
     const graph = extractTouchGraphFromProject({
       files: [
-        {
-          fileName: 'drizzle-types.d.ts',
-          source: `
-            declare module "drizzle-orm/pg-core" {
-              export class PgDatabase<TQueryResultHKT = unknown, TFullSchema = unknown, TSchema = unknown> {
-                update(table: unknown): { set(value: unknown): { where(value: unknown): Promise<void> } };
-              }
-            }
-          `,
-        },
+        pgDatabaseTypes([
+          'update(table: unknown): { set(value: unknown): { where(value: unknown): Promise<void> } };',
+        ]),
         {
           fileName: 'cart.schema.ts',
           source: `
@@ -4409,17 +4335,10 @@ export interface CommerceInvalidationSets {
   it('uses typed receiver origins for project static element-access writes', () => {
     const graph = extractTouchGraphFromProject({
       files: [
-        {
-          fileName: 'drizzle-types.d.ts',
-          source: `
-            declare module "drizzle-orm/pg-core" {
-              export class PgDatabase<TQueryResultHKT = unknown, TFullSchema = unknown, TSchema = unknown> {
-                insert(table: unknown): { values(value: unknown): Promise<void> };
-                update(table: unknown): { set(value: unknown): { where(value: unknown): Promise<void> } };
-              }
-            }
-          `,
-        },
+        pgDatabaseTypes([
+          'insert(table: unknown): { values(value: unknown): Promise<void> };',
+          'update(table: unknown): { set(value: unknown): { where(value: unknown): Promise<void> } };',
+        ]),
         {
           fileName: 'cart.domain.ts',
           source: [
@@ -4463,18 +4382,11 @@ export interface CommerceInvalidationSets {
   it('resolves project insert-select and update-from read sources from write call AST', () => {
     const graph = extractTouchGraphFromProject({
       files: [
-        {
-          fileName: 'drizzle-types.d.ts',
-          source: `
-            declare module "drizzle-orm/pg-core" {
-              export class PgDatabase<TQueryResultHKT = unknown, TFullSchema = unknown, TSchema = unknown> {
-                insert(table: unknown): { select(value: unknown): Promise<void> };
-                select(): { from(table: unknown): { where(value: unknown): Promise<void> } };
-                update(table: unknown): { set(value: unknown): { from(table: unknown): { where(value: unknown): Promise<void> } } };
-              }
-            }
-          `,
-        },
+        pgDatabaseTypes([
+          'insert(table: unknown): { select(value: unknown): Promise<void> };',
+          'select(): { from(table: unknown): { where(value: unknown): Promise<void> } };',
+          'update(table: unknown): { set(value: unknown): { from(table: unknown): { where(value: unknown): Promise<void> } } };',
+        ]),
         {
           fileName: 'product.domain.ts',
           source: [
@@ -4534,16 +4446,9 @@ export interface CommerceInvalidationSets {
   it('does not borrow project write predicates from later writes in the same expression', () => {
     const graph = extractTouchGraphFromProject({
       files: [
-        {
-          fileName: 'drizzle-types.d.ts',
-          source: `
-            declare module "drizzle-orm/pg-core" {
-              export class PgDatabase<TQueryResultHKT = unknown, TFullSchema = unknown, TSchema = unknown> {
-                update(table: unknown): { set(value: unknown): { where(value: unknown): Promise<void> } };
-              }
-            }
-          `,
-        },
+        pgDatabaseTypes([
+          'update(table: unknown): { set(value: unknown): { where(value: unknown): Promise<void> } };',
+        ]),
         {
           fileName: 'product.domain.ts',
           source: `

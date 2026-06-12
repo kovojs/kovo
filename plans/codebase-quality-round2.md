@@ -1700,6 +1700,16 @@ must be "FW406 unresolved," never "silently wrong."
       `pnpm exec vitest --run conformance/drizzle-pin/src/index.test.ts`,
       `pnpm exec vp check packages/drizzle/src/static.ts packages/drizzle/src/index.test.ts plans/codebase-quality-round2.md`,
       and `git diff --check`.
+      Additional bounded evidence 2026-06-12: project-mode typed-receiver tests now share a
+      single exact `PgDatabase` ambient-module fixture builder instead of repeating bespoke
+      `drizzle-types.d.ts` module shims across each case. The helper keeps every test's receiver
+      surface explicit by accepting only the methods needed for that case, preserving SPEC
+      §10-§11's typed Drizzle receiver/FW406 boundaries while reducing fixture drift in the
+      closure tests. Same-session evidence:
+      `pnpm exec vitest --run packages/drizzle/src/index.test.ts -t "typed receiver origins|namespace static element-access|project insert-select and update-from|project write predicates|project extraction state"`,
+      `pnpm exec vitest --run conformance/drizzle-pin/src/index.test.ts`,
+      `pnpm exec vp check packages/drizzle/src/index.test.ts plans/codebase-quality-round2.md`,
+      and `git diff --check`.
       Additional bounded evidence 2026-06-12: query loaders now walk ts-morph helper
       `CallExpression` nodes and mark identifier helpers that receive the loader's Drizzle
       receiver as FW406 instead of dropping the whole query fact when no direct select/read is
