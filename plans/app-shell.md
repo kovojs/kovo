@@ -324,6 +324,17 @@ Scope: SPEC addition (proposed §9.5 "The request shell"), `@jiso/server` shell 
       Same-session verification ran
       `corepack pnpm exec vitest --run packages/server/src/vite-build.test.ts packages/server/src/api/app.test.ts`
       and `corepack pnpm exec tsc --noEmit --pretty false`.
+      Additional evidence 2026-06-12: manifest-file based task wiring now has the same public
+      dry-run bridge through
+      `staticExportInventoryForJisoAppShellViteBuildFromManifestFile()`, exported from
+      `@jiso/server/app-shell/vite`, the aggregate app-shell barrel, and the root server barrel.
+      `packages/server/src/vite-build.test.ts` proves the helper reads the default
+      `.vite/manifest.json`, reports the route document and manifest assets in writer order,
+      and does not require or touch an output directory; `packages/server/src/api/app.test.ts`
+      proves the public package subpath exports stay aligned. Same-session verification ran
+      `corepack pnpm exec vitest --run packages/server/src/vite-build.test.ts packages/server/src/api/app.test.ts`,
+      `corepack pnpm exec vp check packages/server/src/vite-build.ts packages/server/src/vite.ts packages/server/src/api/app-shell/vite.ts packages/server/src/vite-build.test.ts packages/server/src/api/app.test.ts plans/app-shell.md plans/codebase-quality-round2.md`,
+      `corepack pnpm exec tsc --noEmit --pretty false`, and `git diff --check`.
 - [ ] R7 adoption: starter becomes a routed app served by `vp dev`; commerce runs end-to-end over HTTP; a jiso docs site ships from `vp run export` as the first outside consumer.
       Progress 2026-06-11: commerce is now TSX-authored ahead of the HTTP serve
       entry — `CartBadge`, `OrderHistory`, and `ProductGrid` are authored in

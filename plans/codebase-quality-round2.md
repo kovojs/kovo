@@ -3253,6 +3253,18 @@ land it first; don't fork it.
       not need to reach into replay helpers or static-export asset planning. Same-session
       evidence: `corepack pnpm exec vitest --run packages/server/src/vite-build.test.ts packages/server/src/api/app.test.ts`
       and `corepack pnpm exec tsc --noEmit --pretty false`.
+      Additional evidence 2026-06-12: the public Vite build seam now also exposes the manifest-file
+      dry-run bridge, `staticExportInventoryForJisoAppShellViteBuildFromManifestFile()`, so
+      R5/R6 task wiring that starts from a built Vite dist directory can inventory the same
+      SPEC §9.5 route-document and manifest-asset output set without first constructing a
+      build object or selecting an `outDir`. `packages/server/src/vite-build.test.ts` proves
+      the helper reads the default `.vite/manifest.json`, reports route documents and Vite
+      assets in writer order, and performs no output writes; `packages/server/src/api/app.test.ts`
+      proves the root, aggregate app-shell, and `@jiso/server/app-shell/vite` public exports.
+      Same-session evidence:
+      `corepack pnpm exec vitest --run packages/server/src/vite-build.test.ts packages/server/src/api/app.test.ts`,
+      `corepack pnpm exec vp check packages/server/src/vite-build.ts packages/server/src/vite.ts packages/server/src/api/app-shell/vite.ts packages/server/src/vite-build.test.ts packages/server/src/api/app.test.ts plans/app-shell.md plans/codebase-quality-round2.md`,
+      `corepack pnpm exec tsc --noEmit --pretty false`, and `git diff --check`.
 - [ ] **LOW — Close the server cleanup inventory with an acceptance sweep.** Historical audit
       targets were dead code (`matchShellDispatch` post-loop return shell.ts:161-166; rate-limit
       tail `return options.max > 0` index.ts:576); `matchRoute` recompiling all routes per call

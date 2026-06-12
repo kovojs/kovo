@@ -141,6 +141,13 @@ export interface JisoAppShellViteManifestFileBuildStaticExportOptions extends Om
   routeEntryMap?: JisoAppShellRouteEntryMap;
 }
 
+export interface JisoAppShellViteManifestFileBuildStaticExportInventoryOptions extends Omit<
+  JisoAppShellViteManifestFileBuildStaticExportOptions,
+  'outDir'
+> {
+  outDir?: never;
+}
+
 export function createJisoAppShellBuild(options: JisoAppShellBuildOptions): JisoAppShellBuild {
   const manifestOptions = viteManifestOptions(options.base);
   const routeHints = buildRouteHints(options.manifest, options.routeEntries, manifestOptions);
@@ -240,6 +247,27 @@ export async function exportJisoAppShellViteBuildFromManifestFile(
     ...(options.onNonExportable === undefined ? {} : { onNonExportable: options.onNonExportable }),
     ...(options.origin === undefined ? {} : { origin: options.origin }),
     ...(options.outDir === undefined ? {} : { outDir: options.outDir }),
+  });
+}
+
+export async function staticExportInventoryForJisoAppShellViteBuildFromManifestFile(
+  options: JisoAppShellViteManifestFileBuildStaticExportInventoryOptions,
+): Promise<StaticExportInventoryItem[]> {
+  const build = await createJisoAppShellViteBuildFromManifestFile({
+    app: options.app,
+    ...(options.base === undefined ? {} : { base: options.base }),
+    ...(options.clientModules === undefined ? {} : { clientModules: options.clientModules }),
+    manifestFile: options.manifestFile ?? jisoAppShellViteManifestFile(options.distDir),
+    ...(options.routeEntryMap === undefined ? {} : { routeEntryMap: options.routeEntryMap }),
+  });
+
+  return staticExportInventoryForJisoAppShellViteBuild(build, {
+    ...(options.assets === undefined ? {} : { assets: options.assets }),
+    ...(options.diagnostics === undefined ? {} : { diagnostics: options.diagnostics }),
+    distDir: options.distDir,
+    ...(options.htmlPathStyle === undefined ? {} : { htmlPathStyle: options.htmlPathStyle }),
+    ...(options.onNonExportable === undefined ? {} : { onNonExportable: options.onNonExportable }),
+    ...(options.origin === undefined ? {} : { origin: options.origin }),
   });
 }
 

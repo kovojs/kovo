@@ -9,6 +9,7 @@ import { route } from './route.js';
 import {
   createJisoAppShellViteBuild,
   exportJisoAppShellViteBuild,
+  staticExportInventoryForJisoAppShellViteBuildFromManifestFile,
   staticExportInventoryForJisoAppShellViteBuild,
   writeJisoAppShellViteBuildOutput,
 } from './vite-build.js';
@@ -185,6 +186,75 @@ describe('server app shell Vite build seam', () => {
       ]);
       await expect(readFile(join(outDir, 'shop/index.html'))).rejects.toThrow();
       await expect(readFile(join(outDir, 'assets/shop.css'))).rejects.toThrow();
+    } finally {
+      await Promise.all([
+        rm(distDir, { force: true, recursive: true }),
+        rm(outDir, { force: true, recursive: true }),
+      ]);
+    }
+  });
+
+  it('returns manifest-file backed static export inventory without writing output', async () => {
+    const distDir = await mkdtemp(join(tmpdir(), 'jiso-vite-build-manifest-inventory-dist-'));
+    const outDir = await mkdtemp(join(tmpdir(), 'jiso-vite-build-manifest-inventory-export-'));
+
+    try {
+      await mkdir(join(distDir, '.vite'), { recursive: true });
+      await mkdir(join(distDir, 'assets'), { recursive: true });
+      await writeFile(join(distDir, 'assets/catalog.css'), '.catalog{display:block}');
+      await writeFile(
+        join(distDir, '.vite/manifest.json'),
+        JSON.stringify({
+          'src/catalog.client.ts': {
+            css: ['assets/catalog.css'],
+            file: 'assets/catalog.js',
+          },
+        }),
+      );
+
+      const inventory = await staticExportInventoryForJisoAppShellViteBuildFromManifestFile({
+        app: createApp({
+          routes: [
+            route('/catalog', {
+              page() {
+                return '<main class="catalog">Catalog</main>';
+              },
+            }),
+          ],
+        }),
+        distDir,
+        routeEntryMap: {
+          '/catalog': 'src/catalog.client.ts',
+        },
+      });
+
+      expect(inventory).toEqual([
+        {
+          headers: {
+            'content-type': 'text/html; charset=utf-8',
+            link: '</assets/catalog.css>; rel=preload; as=style, </assets/catalog.js>; rel=modulepreload',
+          },
+          kind: 'route-document',
+          path: '/catalog/index.html',
+          status: 200,
+        },
+        {
+          headers: { 'content-type': 'text/css; charset=utf-8' },
+          kind: 'static-asset',
+          path: '/assets/catalog.css',
+          source: join(distDir, 'assets/catalog.css'),
+          status: 200,
+        },
+        {
+          headers: { 'content-type': 'text/javascript; charset=utf-8' },
+          kind: 'static-asset',
+          path: '/assets/catalog.js',
+          source: join(distDir, 'assets/catalog.js'),
+          status: 200,
+        },
+      ]);
+      await expect(readFile(join(outDir, 'catalog/index.html'))).rejects.toThrow();
+      await expect(readFile(join(outDir, 'assets/catalog.css'))).rejects.toThrow();
     } finally {
       await Promise.all([
         rm(distDir, { force: true, recursive: true }),

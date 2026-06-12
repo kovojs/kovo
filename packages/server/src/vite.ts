@@ -49,6 +49,7 @@ export {
   exportJisoAppShellViteBuild,
   exportJisoAppShellViteBuildFromManifestFile,
   jisoAppShellViteStaticExportAssets,
+  staticExportInventoryForJisoAppShellViteBuildFromManifestFile,
   staticExportInventoryForJisoAppShellViteBuild,
   writeJisoAppShellViteBuildOutput,
 } from './vite-build.js';
@@ -65,6 +66,7 @@ export type {
   JisoAppShellViteBuildStaticExportInventoryOptions,
   JisoAppShellViteBuildStaticExportOptions,
   JisoAppShellViteManifestFileBuildOptions,
+  JisoAppShellViteManifestFileBuildStaticExportInventoryOptions,
   JisoAppShellViteManifestFileBuildStaticExportOptions,
   JisoAppShellViteOutputOptions,
   JisoAppShellVitePluginBuildOptions,
