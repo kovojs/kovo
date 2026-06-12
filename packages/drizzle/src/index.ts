@@ -243,17 +243,29 @@ export function extractTouchGraphFromProject(options: TouchGraphProjectOptions):
 }
 
 export function extractQueryFactsFromProject(options: TouchGraphProjectOptions): QueryFact[] {
-  const files = sourceFilesWithProjectExtractionResolved(options);
-
-  return extractQueryFactsFromSource(files);
-}
-
-function sourceFilesWithProjectExtractionResolved(
-  options: TouchGraphProjectOptions,
-): SourceFileInput[] {
   const extraction = createProjectExtraction(options);
   try {
-    return sourceFilesWithProjectExtractionResolvedFromProject(extraction);
+    const contextFiles = sourceFilesWithProjectExtractionResolvedFromProject(extraction);
+    return extractQueryFactsFromPreparedFiles(
+      extraction.files,
+      (file) => {
+        const index = extraction.files.findIndex(
+          (candidate) => candidate.fileName === file.fileName,
+        );
+        const sourceFile = extraction.sourceFiles[index];
+        if (!sourceFile) return [];
+
+        return extractProjectQueryDefinitions(sourceFile, {
+          ...(file.columnShapes ? { columnShapes: file.columnShapes } : {}),
+          tableNamesByIdentifier: projectTableNamesByIdentifierText(
+            sourceFile,
+            extraction.tableNamesBySymbol,
+          ),
+          tableNamesBySymbol: extraction.tableNamesBySymbol,
+        });
+      },
+      contextFiles,
+    );
   } finally {
     extraction.dispose();
   }
@@ -733,16 +745,28 @@ function projectTableNameForNode(
 }
 
 export function extractQueryFactsFromSource(files: readonly SourceFileInput[]): QueryFact[] {
-  const sourceContext = sourceModuleContext(files);
+  return extractQueryFactsFromPreparedFiles(files, (file) =>
+    extractQueryDefinitions(file.source, file.columnShapes),
+  );
+}
+
+function extractQueryFactsFromPreparedFiles(
+  files: readonly SourceFileInput[],
+  queriesForFile: (file: SourceFileInput) => readonly ExtractedQueryDefinition[],
+  contextFiles: readonly SourceFileInput[] = files,
+): QueryFact[] {
+  const sourceContext = sourceModuleContext(contextFiles);
   const facts: QueryFact[] = [];
 
-  for (const file of files) {
-    const fileTables = tablesForFile(file, sourceContext);
+  for (const [index, file] of files.entries()) {
+    const contextFile = contextFiles[index] ?? file;
+    const fileTables = tablesForFile(contextFile, sourceContext);
     const columnShapes = {
       ...sourceColumnShapesForTables(fileTables),
+      ...contextFile.columnShapes,
       ...file.columnShapes,
     };
-    for (const query of extractQueryDefinitions(file.source, columnShapes)) {
+    for (const query of queriesForFile({ ...file, columnShapes })) {
       const reads = queryReadDomains(query.tableExpressions, fileTables);
       const site = `${file.fileName}:${lineForIndex(file.source, query.index)}`;
       const diagnostics = opaqueProjectionDiagnostics(
@@ -847,6 +871,31 @@ function projectTableNamesByIdentifier(
     if (Node.isIdentifier(name) && tableName) names.set(name.getText(), tableName);
   }
 
+  return names;
+}
+
+function projectTableNamesByIdentifierText(
+  sourceFile: SourceFile,
+  tableNamesBySymbol: ReadonlyMap<string, string>,
+): ReadonlyMap<string, string> {
+  const names = new Map<string, string>();
+  const ambiguous = new Set<string>();
+
+  for (const identifier of sourceFile.getDescendantsOfKind(SyntaxKind.Identifier)) {
+    const tableName = tableNamesBySymbol.get(resolvedSymbolKey(identifier.getSymbol()) ?? '');
+    if (!tableName) continue;
+
+    const text = identifier.getText();
+    const existing = names.get(text);
+    if (existing && existing !== tableName) {
+      ambiguous.add(text);
+      continue;
+    }
+
+    names.set(text, tableName);
+  }
+
+  for (const text of ambiguous) names.delete(text);
   return names;
 }
 
@@ -1178,50 +1227,91 @@ function extractQueryDefinitions(
   source: string,
   columnShapes: Readonly<Record<string, QueryShape>> = {},
 ): ExtractedQueryDefinition[] {
-  return withParsedSourceFile(source, (sourceFile) => {
-    const definitions: ExtractedQueryDefinition[] = [];
+  return withParsedSourceFile(source, (sourceFile) =>
+    extractQueryDefinitionsFromSourceFile(sourceFile, { columnShapes }),
+  );
+}
 
-    for (const declaration of sourceFile.getVariableDeclarations()) {
-      const statement = declaration.getVariableStatement();
-      if (!statement || statement.getDeclarationKind() !== 'const') continue;
+interface ProjectQueryDefinitionOptions {
+  columnShapes?: Readonly<Record<string, QueryShape>>;
+  tableNamesByIdentifier: ReadonlyMap<string, string>;
+  tableNamesBySymbol: ReadonlyMap<string, string>;
+}
 
-      const initializer = declaration.getInitializer();
-      if (!initializer || !Node.isCallExpression(initializer)) continue;
+function extractProjectQueryDefinitions(
+  sourceFile: SourceFile,
+  options: ProjectQueryDefinitionOptions,
+): ExtractedQueryDefinition[] {
+  const resolveTableIdentifier = (node: Node) =>
+    projectTableNameForNode(node, options.tableNamesBySymbol);
 
-      const expression = initializer.getExpression();
-      if (!Node.isIdentifier(expression) || expression.getText() !== 'query') continue;
+  return extractQueryDefinitionsFromSourceFile(sourceFile, {
+    ...(options.columnShapes ? { columnShapes: options.columnShapes } : {}),
+    readTableIdentifier: resolveTableIdentifier,
+    relationalTableName: (name) => options.tableNamesByIdentifier.get(name),
+  });
+}
 
-      const [queryArgument, bodyArgument] = initializer.getArguments();
-      if (!Node.isStringLiteral(queryArgument) || !Node.isObjectLiteralExpression(bodyArgument)) {
-        continue;
-      }
+interface QueryDefinitionOptions {
+  columnShapes?: Readonly<Record<string, QueryShape>>;
+  readTableIdentifier?: (node: Node) => string | undefined;
+  relationalTableName?: (name: string) => string | undefined;
+}
 
-      const query = queryArgument.getLiteralText();
-      const receiverNames = queryCallbackReceiverNames(bodyArgument);
-      const selection = selectShapeFromQueryBody(bodyArgument, receiverNames, columnShapes);
-      const diagnostics = [
-        ...relationalQueryDiagnostics(bodyArgument, receiverNames),
-        ...unresolvedQueryReadDiagnostics(bodyArgument, receiverNames),
-      ];
-      if (!selection && diagnostics.length === 0) continue;
+function extractQueryDefinitionsFromSourceFile(
+  sourceFile: SourceFile,
+  options: QueryDefinitionOptions = {},
+): ExtractedQueryDefinition[] {
+  const definitions: ExtractedQueryDefinition[] = [];
 
-      definitions.push({
-        ...(selection?.diagnostics || diagnostics.length > 0
-          ? { diagnostics: [...(selection?.diagnostics ?? []), ...diagnostics] }
-          : {}),
-        hasOutputSchema: objectHasProperty(bodyArgument, 'output'),
-        index: declaration.getStart(),
-        instanceKeyComparisons: queryInstanceKeyComparisons(bodyArgument, receiverNames),
-        opaquePaths: selection?.opaquePaths ?? [],
-        query,
-        shape: selection?.shape ?? {},
-        tableExpressions: queryTableExpressions(bodyArgument, receiverNames),
-        unresolvedPaths: selection?.unresolvedPaths ?? [],
-      });
+  for (const declaration of sourceFile.getVariableDeclarations()) {
+    const statement = declaration.getVariableStatement();
+    if (!statement || statement.getDeclarationKind() !== 'const') continue;
+
+    const initializer = declaration.getInitializer();
+    if (!initializer || !Node.isCallExpression(initializer)) continue;
+
+    const expression = initializer.getExpression();
+    if (!Node.isIdentifier(expression) || expression.getText() !== 'query') continue;
+
+    const [queryArgument, bodyArgument] = initializer.getArguments();
+    if (!Node.isStringLiteral(queryArgument) || !Node.isObjectLiteralExpression(bodyArgument)) {
+      continue;
     }
 
-    return definitions;
-  });
+    const query = queryArgument.getLiteralText();
+    const receiverNames = queryCallbackReceiverNames(bodyArgument);
+    const selection = selectShapeFromQueryBody(bodyArgument, receiverNames, options.columnShapes);
+    const readResolutionOptions: QueryReadResolutionOptions = {
+      ...(options.readTableIdentifier ? { readTableIdentifier: options.readTableIdentifier } : {}),
+      ...(options.relationalTableName ? { relationalTableName: options.relationalTableName } : {}),
+    };
+    const diagnostics = [
+      ...relationalQueryDiagnostics(bodyArgument, receiverNames),
+      ...unresolvedQueryReadDiagnostics(bodyArgument, receiverNames, readResolutionOptions),
+    ];
+    if (!selection && diagnostics.length === 0) continue;
+
+    definitions.push({
+      ...(selection?.diagnostics || diagnostics.length > 0
+        ? { diagnostics: [...(selection?.diagnostics ?? []), ...diagnostics] }
+        : {}),
+      hasOutputSchema: objectHasProperty(bodyArgument, 'output'),
+      index: declaration.getStart(),
+      instanceKeyComparisons: queryInstanceKeyComparisons(
+        bodyArgument,
+        receiverNames,
+        options.readTableIdentifier,
+      ),
+      opaquePaths: selection?.opaquePaths ?? [],
+      query,
+      shape: selection?.shape ?? {},
+      tableExpressions: queryTableExpressions(bodyArgument, receiverNames, readResolutionOptions),
+      unresolvedPaths: selection?.unresolvedPaths ?? [],
+    });
+  }
+
+  return definitions;
 }
 
 interface QueryShapeSelection {
@@ -1653,23 +1743,30 @@ function exemptQueryReadDiagnostics(
 function queryTableExpressions(
   body: ObjectLiteralExpression,
   receiverNames: ReadonlySet<string>,
+  options: QueryReadResolutionOptions = {},
 ): string[] {
   return [
-    ...queryJoinTableExpressions(body, receiverNames),
-    ...queryRelationalTableExpressions(body, receiverNames),
+    ...queryJoinTableExpressions(body, receiverNames, options.readTableIdentifier),
+    ...queryRelationalTableExpressions(body, receiverNames, options.relationalTableName),
   ];
+}
+
+interface QueryReadResolutionOptions {
+  readTableIdentifier?: (node: Node) => string | undefined;
+  relationalTableName?: (name: string) => string | undefined;
 }
 
 function queryJoinTableExpressions(
   body: ObjectLiteralExpression,
   receiverNames: ReadonlySet<string>,
+  readTableIdentifier?: (node: Node) => string | undefined,
 ): string[] {
   return queryBodyCallExpressions(body, (call) => {
     const name = propertyAccessCallName(call);
     if (!name || !isQueryReadCallName(name)) return [];
     if (!isQueryCallOnReceiver(call, receiverNames)) return [];
 
-    const table = staticExpressionPath(call.getArguments()[0]);
+    const table = staticExpressionPath(call.getArguments()[0], readTableIdentifier);
     return table ? [table] : [];
   });
 }
@@ -1677,6 +1774,7 @@ function queryJoinTableExpressions(
 function queryRelationalTableExpressions(
   body: ObjectLiteralExpression,
   receiverNames: ReadonlySet<string>,
+  relationalTableName?: (name: string) => string | undefined,
 ): string[] {
   return queryBodyCallExpressions(body, (call) => {
     const expression = call.getExpression();
@@ -1694,13 +1792,15 @@ function queryRelationalTableExpressions(
     // SPEC §10-§11: non-DB objects must not fabricate relational read/FW406 facts.
     if (!Node.isIdentifier(receiver) || !receiverNames.has(receiver.getText())) return [];
 
-    return [table];
+    const resolvedTable = relationalTableName ? relationalTableName(table) : table;
+    return resolvedTable ? [resolvedTable] : [];
   });
 }
 
 function unresolvedQueryReadDiagnostics(
   body: ObjectLiteralExpression,
   receiverNames: ReadonlySet<string>,
+  options: QueryReadResolutionOptions = {},
 ): TouchGraphDiagnostic[] {
   const diagnostics: TouchGraphDiagnostic[] = queryBodyCallExpressions(body, (call) => {
     const name = propertyAccessCallName(call);
@@ -1708,7 +1808,7 @@ function unresolvedQueryReadDiagnostics(
     if (!isQueryCallOnReceiver(call, receiverNames)) return [];
 
     const tableArgument = call.getArguments()[0];
-    if (staticExpressionPath(tableArgument)) return [];
+    if (staticExpressionPath(tableArgument, options.readTableIdentifier)) return [];
 
     return [
       {
@@ -1720,13 +1820,16 @@ function unresolvedQueryReadDiagnostics(
     ];
   });
 
-  diagnostics.push(...unresolvedRelationalQueryReadDiagnostics(body, receiverNames));
+  diagnostics.push(
+    ...unresolvedRelationalQueryReadDiagnostics(body, receiverNames, options.relationalTableName),
+  );
   return diagnostics;
 }
 
 function unresolvedRelationalQueryReadDiagnostics(
   body: ObjectLiteralExpression,
   receiverNames: ReadonlySet<string>,
+  relationalTableName?: (name: string) => string | undefined,
 ): TouchGraphDiagnostic[] {
   return queryBodyCallExpressions(body, (call) => {
     const expression = call.getExpression();
@@ -1734,7 +1837,10 @@ function unresolvedRelationalQueryReadDiagnostics(
     if (method !== 'findMany' && method !== 'findFirst') return [];
 
     const tableAccess = staticAccessExpression(expression);
-    if (!tableAccess || staticAccessName(tableAccess)) return [];
+    const table = tableAccess ? staticAccessName(tableAccess) : undefined;
+    if (!tableAccess || (table && (!relationalTableName || relationalTableName(table)))) {
+      return [];
+    }
     const queryAccess = staticAccessExpression(tableAccess);
     if (!queryAccess || staticAccessName(queryAccess) !== 'query') return [];
     const receiver = staticAccessExpression(queryAccess);
@@ -1832,6 +1938,7 @@ function queryInstanceKey(
 function queryInstanceKeyComparisons(
   body: ObjectLiteralExpression,
   receiverNames: ReadonlySet<string>,
+  readTableIdentifier?: (node: Node) => string | undefined,
 ): QueryInstanceKeyComparison[] {
   return queryBodyCallExpressions(body, (call) => {
     if (propertyAccessCallName(call) !== 'where') return [];
@@ -1846,20 +1953,34 @@ function queryInstanceKeyComparisons(
     const [left, right] = predicate.getArguments();
     if (!left || !right) return [];
 
-    return [{ left: queryInstanceKeyOperand(left), right: queryInstanceKeyOperand(right) }];
+    return [
+      {
+        left: queryInstanceKeyOperand(left, readTableIdentifier),
+        right: queryInstanceKeyOperand(right, readTableIdentifier),
+      },
+    ];
   });
 }
 
-function queryInstanceKeyOperand(expression: Node): QueryInstanceKeyOperand {
+function queryInstanceKeyOperand(
+  expression: Node,
+  readTableIdentifier?: (node: Node) => string | undefined,
+): QueryInstanceKeyOperand {
   return {
-    ...queryTableKeyOperand(expression),
+    ...queryTableKeyOperand(expression, readTableIdentifier),
     ...queryInputKeyOperand(expression),
   };
 }
 
-function queryTableKeyOperand(expression: Node): Pick<QueryInstanceKeyOperand, 'tableKey'> {
+function queryTableKeyOperand(
+  expression: Node,
+  readTableIdentifier?: (node: Node) => string | undefined,
+): Pick<QueryInstanceKeyOperand, 'tableKey'> {
   const key = staticAccessName(expression);
-  const tableIdentifier = staticExpressionPath(staticAccessExpression(expression));
+  const tableIdentifier = staticExpressionPath(
+    staticAccessExpression(expression),
+    readTableIdentifier,
+  );
   if (!tableIdentifier || !key) return {};
 
   return {

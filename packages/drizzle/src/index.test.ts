@@ -1979,6 +1979,50 @@ export interface CommerceInvalidationSets {
     ]);
   });
 
+  it('marks project relational query read sources that cannot resolve to a table as FW406', () => {
+    const facts = extractQueryFactsFromProject({
+      files: [
+        {
+          fileName: 'user.queries.ts',
+          source: `
+            export const users = pgTable("users", {}, jiso({ domain: "user", key: "id" }));
+
+            export const usersQuery = query("users", {
+              load(_input, db) {
+                return db.query.archivedUsers.findMany({ where: eq(users.active, true) });
+              },
+            });
+          `,
+        },
+      ],
+    });
+
+    expect(facts).toEqual([
+      {
+        diagnostics: [
+          {
+            code: 'FW406',
+            message:
+              'Statically un-analyzable write site; manual touches required. Query uses Drizzle relational query API without static projection.',
+            severity: 'warn',
+            site: 'user.queries.ts:4',
+          },
+          {
+            code: 'FW406',
+            message:
+              'Statically un-analyzable write site; manual touches required. Query relational read source could not be resolved to a Drizzle table.',
+            severity: 'warn',
+            site: 'user.queries.ts:4',
+          },
+        ],
+        query: 'users',
+        reads: [],
+        shape: {},
+        site: 'user.queries.ts:4',
+      },
+    ]);
+  });
+
   it('does not fabricate query reads or relational diagnostics from comments and strings', () => {
     const facts = extractQueryFactsFromSource([
       {

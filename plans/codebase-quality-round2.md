@@ -1462,6 +1462,17 @@ must be "FW406 unresolved," never "silently wrong."
       `corepack pnpm exec vitest --run conformance/drizzle-pin`,
       `corepack pnpm exec vp check packages/drizzle/src/index.ts packages/drizzle/src/index.test.ts conformance/drizzle-pin/src/index.test.ts plans/codebase-quality-round2.md`,
       and `git diff --check`.
+      Additional evidence 2026-06-12: project-mode query fact extraction now walks the
+      original ts-morph `SourceFile` for query definitions, read-source table expressions, and
+      `where(eq(...))` instance-key operands instead of routing project query bodies back
+      through `sourceWithProjectExtractionResolved(...)` synthetic-source text. The rewritten
+      project source is still used only as table-registry context, while authored source remains
+      the site/diagnostic coordinate system under SPEC §10-§11. Same-session evidence:
+      `corepack pnpm exec vitest --run packages/drizzle/src/index.test.ts`;
+      `corepack pnpm exec vitest --run packages/drizzle/src`;
+      `corepack pnpm exec vitest --run conformance/drizzle-pin`;
+      `corepack pnpm exec vp check packages/drizzle/src/index.ts packages/drizzle/src/index.test.ts conformance/drizzle-pin/src/index.test.ts plans/codebase-quality-round2.md`;
+      and `git diff --check`.
 
 - [ ] **HIGH — Remove fact-fabricating heuristics; degrade to FW406.**
       Column type from projection-key name (`/(count|qty|...)$/i` → number, index.ts:993);
@@ -1661,6 +1672,18 @@ must be "FW406 unresolved," never "silently wrong."
       `PgDatabase` `$with` surface under SPEC §10-§11. Same-session evidence:
       `corepack pnpm exec vitest --run packages/drizzle/src/index.test.ts`,
       `corepack pnpm exec vitest --run conformance/drizzle-pin/src/index.test.ts`.
+      Additional evidence 2026-06-12: project-mode relational query reads now require the
+      relational table member to resolve through the project table-symbol map before contributing
+      a read domain. Unknown members such as `db.query.archivedUsers.findMany(...)` remain
+      visible as FW406 unresolved read-source diagnostics instead of silently producing an empty
+      read set; package and real `drizzle-orm` conformance tests pin the degradation under
+      SPEC §10-§11. Same-session evidence:
+      `corepack pnpm exec vitest --run packages/drizzle/src/index.test.ts -t "project relational query"`,
+      `corepack pnpm exec vitest --run conformance/drizzle-pin/src/index.test.ts -t "unresolved project relational"`,
+      `corepack pnpm exec vitest --run packages/drizzle/src`,
+      `corepack pnpm exec vitest --run conformance/drizzle-pin`,
+      `corepack pnpm exec vp check packages/drizzle/src/index.ts packages/drizzle/src/index.test.ts conformance/drizzle-pin/src/index.test.ts plans/codebase-quality-round2.md`,
+      and `git diff --check`.
 - [x] **MED — Make the drizzle-orm coupling real and tested.** The `>=0.45.2 <1` pin is
       decorative: drizzle-orm is never imported, absent from devDeps, and every project test
       fabricates a `declare module "drizzle-orm/pg-core"` shim (index.test.ts:1742, 1791, 1846).

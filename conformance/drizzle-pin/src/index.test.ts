@@ -1027,6 +1027,50 @@ describe('Drizzle pinned subset conformance', () => {
     ]);
   });
 
+  it('pins unresolved project relational read sources as explicit FW406 facts', () => {
+    const facts = extractQueryFactsFromProject({
+      files: [
+        {
+          fileName: 'conformance/drizzle-pin/src/user.queries.ts',
+          source: `
+            export const users = pgTable('users', {}, jiso({ domain: 'user', key: 'id' }));
+
+            export const usersQuery = query('users', {
+              load(_input, db) {
+                return db.query.archivedUsers.findMany({ where: eq(users.active, true) });
+              },
+            });
+          `,
+        },
+      ],
+    });
+
+    expect(facts).toEqual([
+      {
+        diagnostics: [
+          {
+            code: 'FW406',
+            message:
+              'Statically un-analyzable write site; manual touches required. Query uses Drizzle relational query API without static projection.',
+            severity: 'warn',
+            site: 'conformance/drizzle-pin/src/user.queries.ts:4',
+          },
+          {
+            code: 'FW406',
+            message:
+              'Statically un-analyzable write site; manual touches required. Query relational read source could not be resolved to a Drizzle table.',
+            severity: 'warn',
+            site: 'conformance/drizzle-pin/src/user.queries.ts:4',
+          },
+        ],
+        query: 'users',
+        reads: [],
+        shape: {},
+        site: 'conformance/drizzle-pin/src/user.queries.ts:4',
+      },
+    ]);
+  });
+
   it('does not pin relational reads from non-receiver objects', () => {
     const facts = extractQueryFactsFromProject({
       files: [
