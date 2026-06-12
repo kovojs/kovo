@@ -93,6 +93,55 @@ describe('fw export', () => {
       rmSync(root, { force: true, recursive: true });
     }
   });
+
+  it('prints compile diagnostics exported by app modules before writing static output', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'fw-export-cli-'));
+    const appPath = join(root, 'app.mjs');
+    const outDir = join(root, 'dist');
+    const stdout = vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
+    const stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+
+    try {
+      writeFileSync(
+        appPath,
+        [
+          'export const diagnostics = [{',
+          "  code: 'FW201',",
+          "  fileName: 'src/cart.tsx',",
+          "  message: 'Closure captures unserializable value.',",
+          "  help: 'Fixes: move the value into component/query state via ctx.',",
+          '  start: { line: 4, column: 12 },',
+          '}];',
+          'export const app = {',
+          '  clientModules: {',
+          "    put() { throw new Error('unused'); },",
+          "    resolve() { return { body: 'Not Found', headers: { 'Content-Type': 'text/plain; charset=utf-8' }, status: 404 }; },",
+          '  },',
+          '  document: {},',
+          '  endpoints: [],',
+          '  errorShells: {},',
+          '  mutations: [],',
+          '  queries: [],',
+          "  routes: [{ path: '/', page: () => '<main>Home</main>' }],",
+          '};',
+          '',
+        ].join('\n'),
+        'utf8',
+      );
+
+      await expect(mainAsync(['export', appPath, '--out', outDir])).resolves.toBe(1);
+
+      expect(stdout).not.toHaveBeenCalled();
+      const output = stderr.mock.calls.map(([chunk]) => String(chunk)).join('');
+      expect(output).toContain('fw-export/v1\nERROR FW201 route=src/cart.tsx');
+      expect(output).toContain('Static export refused error diagnostic FW201 at src/cart.tsx:4:12');
+      expect(() => readFileSync(join(outDir, 'index.html'), 'utf8')).toThrow();
+    } finally {
+      stdout.mockRestore();
+      stderr.mockRestore();
+      rmSync(root, { force: true, recursive: true });
+    }
+  });
 });
 
 describe('fw check', () => {

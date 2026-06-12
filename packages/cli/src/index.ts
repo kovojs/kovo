@@ -7,6 +7,7 @@ import { pathToFileURL } from 'node:url';
 import {
   diagnosticDefinitionText,
   diagnosticDefinitions,
+  isDiagnosticCode,
   validateFwExplainInput,
   type ComponentExplain,
   type DiagnosticCode,
@@ -30,7 +31,7 @@ import {
   type UpdateCoverageFact,
   type VerificationDiagnosticFact,
 } from '@jiso/core';
-import type { JisoApp } from '@jiso/server';
+import type { JisoApp, StaticExportCompileDiagnostic } from '@jiso/server';
 
 export type { FwCheckInput, FwExplainInput } from '@jiso/core';
 
@@ -230,6 +231,7 @@ async function runExportCommand(options: FwExportOptions): Promise<CliCommandRes
       ...(options.onNonExportable === undefined
         ? {}
         : { onNonExportable: options.onNonExportable }),
+      diagnostics: staticExportDiagnosticsFromModule(appModule),
       ...(options.origin === undefined ? {} : { origin: options.origin }),
       outDir: options.outDir,
     });
@@ -260,6 +262,25 @@ function isJisoApp(value: unknown): value is JisoApp {
     Array.isArray((value as { queries?: unknown }).queries) &&
     typeof (value as { clientModules?: { resolve?: unknown } }).clientModules?.resolve ===
       'function'
+  );
+}
+
+function staticExportDiagnosticsFromModule(module: unknown): StaticExportCompileDiagnostic[] {
+  if (typeof module !== 'object' || module === null) return [];
+  const diagnostics = (module as { diagnostics?: unknown }).diagnostics;
+  if (!Array.isArray(diagnostics)) return [];
+
+  return diagnostics.filter(isStaticExportCompileDiagnostic);
+}
+
+function isStaticExportCompileDiagnostic(value: unknown): value is StaticExportCompileDiagnostic {
+  if (typeof value !== 'object' || value === null) return false;
+  const diagnostic = value as Partial<StaticExportCompileDiagnostic>;
+
+  return (
+    isDiagnosticCode(diagnostic.code) &&
+    typeof diagnostic.fileName === 'string' &&
+    typeof diagnostic.message === 'string'
   );
 }
 
@@ -319,12 +340,11 @@ function exportErrorResult(error: unknown): CliCommandResult {
 }
 
 function isStaticExportDiagnosticError(error: unknown): error is {
-  diagnostics: readonly { code: 'FW229'; message: string; routePath: string }[];
+  diagnostics: readonly { code: DiagnosticCode; message: string; routePath: string }[];
 } {
   return (
     typeof error === 'object' &&
     error !== null &&
-    (error as { code?: unknown }).code === 'FW229' &&
     Array.isArray((error as { diagnostics?: unknown }).diagnostics)
   );
 }

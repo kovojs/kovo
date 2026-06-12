@@ -13,7 +13,7 @@ content or severities (SPEC §11.3 owns those); `fw check`/`fw explain` semantic
 - [x] V1 Vite dev: `transform` fails on `error`-severity diagnostics with formatted teaching
       errors (`file:line:col`, message, help/fix menu), surfaced by Vite's overlay + terminal.
 - [x] V2 Vite dev: non-blocking channel for `warn`/`lint`/`notice` diagnostics.
-- [ ] V3 build/static export: `error` diagnostics fail `vp build` and the D8 R6 static export
+- [x] V3 build/static export: `error` diagnostics fail `vp build` and the D8 R6 static export
       unconditionally — no `ignoreBuildErrors`-style escape hatch.
 - [ ] E1 server: dev-only teaching-error document renderer (FW code, message, fix menu, source
       frame) reusing the document assembly pipeline.
@@ -111,10 +111,17 @@ follow-up after D8 R7 adoption, not v1 scope.
       and non-blocking paths. Same-session evidence:
       `pnpm exec vitest --run packages/compiler/src/index.test.ts -t "jisoVitePlugin"` and
       `pnpm exec vp check packages/compiler/src/index.ts packages/compiler/src/vite.ts packages/compiler/src/index.test.ts`.
-- [ ] **V3 — build and static export refuse errors.** Verify the V1 throw fails `vp build`
+- [x] **V3 — build and static export refuse errors.** Verify the V1 throw fails `vp build`
       through the plugin path (S1 production emit), and make the D8 R6 static export check
       compile diagnostics before writing any file. No suppression option — strict→loose is the
       non-breaking ratchet direction pre-1.0 (same posture as FW235).
+      Evidence 2026-06-12: `exportStaticApp(app, { diagnostics })` now refuses any
+      `error`-severity diagnostic according to shared `diagnosticDefinitions` before route
+      replay or file writes, while allowing non-blocking lint diagnostics through. `fw export`
+      forwards an app module's exported compile diagnostics to the server exporter and renders
+      the resulting stable `fw-export/v1` error output. Same-session evidence:
+      `pnpm exec vitest --run packages/server/src/static-export.test.ts packages/cli/src/index.test.ts -t "static export|fw export"` and
+      `pnpm exec vp check packages/server/src/static-export.ts packages/server/src/static-export.test.ts packages/server/src/index.ts packages/cli/src/index.ts packages/cli/src/index.test.ts`.
 
 Verification: compiler vitest for the plugin (seeded FW201/FW225 fixture → transform throws with
 position and help text; warn-severity fixture → compiles, callback invoked); a behavioral

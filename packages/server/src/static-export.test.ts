@@ -270,6 +270,71 @@ describe('server static export', () => {
     }
   });
 
+  it('refuses error diagnostics before replaying or writing export files', async () => {
+    const outDir = await mkdtemp(path.join(os.tmpdir(), 'jiso-static-export-'));
+    try {
+      const app = createApp({
+        routes: [
+          route('/', {
+            page: () => '<main>Home</main>',
+          }),
+        ],
+      });
+
+      await expect(
+        exportStaticApp(app, {
+          diagnostics: [
+            {
+              code: 'FW201',
+              fileName: 'src/cart.tsx',
+              help: 'Fixes: move the value into component/query state via ctx.',
+              message: 'Closure captures unserializable value.',
+              start: { column: 12, line: 4 },
+            },
+          ],
+          outDir,
+        }),
+      ).rejects.toMatchObject({
+        code: 'FW201',
+        diagnostics: [
+          {
+            code: 'FW201',
+            routePath: 'src/cart.tsx',
+            message: expect.stringContaining('src/cart.tsx:4:12'),
+          },
+        ],
+      });
+      await expect(readFile(path.join(outDir, 'index.html'))).rejects.toThrow();
+    } finally {
+      await rm(outDir, { force: true, recursive: true });
+    }
+  });
+
+  it('does not block static export on lint diagnostics', async () => {
+    const app = createApp({
+      routes: [
+        route('/', {
+          page: () => '<main>Home</main>',
+        }),
+      ],
+    });
+
+    await expect(
+      exportStaticApp(app, {
+        diagnostics: [
+          {
+            code: 'FW210',
+            fileName: 'src/cart.tsx',
+            message: 'Anonymous handler; name it for stable identity.',
+          },
+        ],
+      }),
+    ).resolves.toMatchObject({
+      artifacts: [{ path: '/index.html' }],
+      diagnostics: [],
+    });
+  });
+
   it('copies referenced versioned client modules through the same handler bytes', async () => {
     const outDir = await mkdtemp(path.join(os.tmpdir(), 'jiso-static-export-'));
     try {

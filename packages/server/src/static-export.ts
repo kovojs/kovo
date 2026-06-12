@@ -2,6 +2,8 @@ import { copyFile, mkdir, writeFile } from 'node:fs/promises';
 import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+import { diagnosticDefinitions, type DiagnosticCode } from '@jiso/core';
+
 import { createRequestHandler, type JisoApp, type RequestHandler } from './app.js';
 import { normalizePathname } from './match.js';
 
@@ -35,13 +37,22 @@ export interface StaticExportAssetArtifact {
 }
 
 export interface StaticExportDiagnostic {
-  code: 'FW229';
+  code: DiagnosticCode | 'FW229';
   message: string;
   routePath: string;
 }
 
+export interface StaticExportCompileDiagnostic {
+  code: DiagnosticCode;
+  fileName: string;
+  help?: string;
+  message: string;
+  start?: { column: number; line: number };
+}
+
 export interface StaticExportOptions {
   assets?: readonly StaticExportAssetInput[];
+  diagnostics?: readonly StaticExportCompileDiagnostic[];
   onNonExportable?: 'error' | 'skip';
   origin?: string;
   outDir?: string | URL;
@@ -55,7 +66,7 @@ export interface StaticExportResult {
 }
 
 export class StaticExportError extends Error {
-  readonly code = 'FW229';
+  readonly code: DiagnosticCode | 'FW229';
   readonly diagnostics: readonly StaticExportDiagnostic[];
 
   constructor(diagnostics: readonly StaticExportDiagnostic[]) {
@@ -65,6 +76,7 @@ export class StaticExportError extends Error {
         : `FW229 static export found ${diagnostics.length} non-exportable routes.`,
     );
     this.name = 'StaticExportError';
+    this.code = diagnostics[0]?.code ?? 'FW229';
     this.diagnostics = diagnostics;
   }
 }
@@ -73,6 +85,11 @@ export async function exportStaticApp(
   app: JisoApp,
   options: StaticExportOptions = {},
 ): Promise<StaticExportResult> {
+  const blockingDiagnostics = blockingStaticExportDiagnostics(options.diagnostics ?? []);
+  if (blockingDiagnostics.length > 0) {
+    throw new StaticExportError(blockingDiagnostics);
+  }
+
   const diagnostics = nonExportableRouteDiagnostics(app);
   if (diagnostics.length > 0 && options.onNonExportable !== 'skip') {
     throw new StaticExportError(diagnostics);
@@ -466,6 +483,28 @@ function nonExportableRouteDiagnostics(app: JisoApp): readonly StaticExportDiagn
 
 function staticExportDiagnostic(routePath: string, message: string): StaticExportDiagnostic {
   return { code: 'FW229', message, routePath };
+}
+
+function blockingStaticExportDiagnostics(
+  diagnostics: readonly StaticExportCompileDiagnostic[],
+): StaticExportDiagnostic[] {
+  return diagnostics
+    .filter((diagnostic) => diagnosticDefinitions[diagnostic.code].severity === 'error')
+    .map((diagnostic) => ({
+      code: diagnostic.code,
+      message: staticExportCompileDiagnosticMessage(diagnostic),
+      routePath: diagnostic.fileName,
+    }));
+}
+
+function staticExportCompileDiagnosticMessage(diagnostic: StaticExportCompileDiagnostic): string {
+  const site = diagnostic.start
+    ? `${diagnostic.fileName}:${diagnostic.start.line}:${diagnostic.start.column}`
+    : diagnostic.fileName;
+  const help = diagnostic.help?.trim();
+  const message = `Static export refused error diagnostic ${diagnostic.code} at ${site}. ${diagnostic.message}`;
+
+  return help ? `${message}\n${help}` : message;
 }
 
 function routeHasParams(path: string): boolean {

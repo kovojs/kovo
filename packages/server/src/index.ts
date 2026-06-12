@@ -165,6 +165,10 @@ export type {
 export { exportStaticApp, StaticExportError } from './static-export.js';
 export type {
   StaticExportArtifact,
+  StaticExportAssetArtifact,
+  StaticExportAssetInput,
+  StaticExportClientModuleArtifact,
+  StaticExportCompileDiagnostic,
   StaticExportDiagnostic,
   StaticExportOptions,
   StaticExportResult,
