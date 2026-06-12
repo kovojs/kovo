@@ -346,7 +346,7 @@ Scope: SPEC additions (session population, guard-failure contract, mutation resp
       `annotateBetterAuthSchemaSource` maps real metadata `modelName` values to physical
       Drizzle table declarations and reports the physical table as missing when only a stale
       logical table declaration is present. `createBetterAuthDbVerificationConfig(schemaBridge,
-  tables)` now emits both logical and physical table facts for runtime SQL verification.
+tables)` now emits both logical and physical table facts for runtime SQL verification.
       `packages/better-auth/src/index.test.ts` covers local core/organization alias fixtures,
       and `conformance/better-auth-pin/src/index.test.ts` pins real `better-auth@1.6.17`
       core plus organization `modelName` metadata through generated annotations and verifier
