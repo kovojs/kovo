@@ -677,6 +677,14 @@ land it first; don't fork it.
       header helpers. `packages/server/src/shell.test.ts` covers uppercase `CONTENT-TYPE`
       document wrapping. Verified with `pnpm exec vitest --run packages/server/src`,
       `pnpm run check`, `pnpm run check:build`, and `pnpm run check:fw`.
+      Additional evidence 2026-06-11: route response body/status types and route-to-Web /
+      route-to-document response adapters now live in `packages/server/src/response.ts`; `app.ts`
+      consumes those shared adapters instead of carrying local conversion helpers, and `index.ts`
+      keeps the public type exports stable. `packages/server/src/response.test.ts` covers HEAD
+      body suppression, typed-array body slicing, and ArrayBuffer normalization for document
+      wrapping. Same-session evidence:
+      `pnpm exec vitest --run packages/server/src/response.test.ts packages/server/src/app.test.ts packages/server/src/index.test.ts`
+      and `pnpm exec vitest --run packages/server/src`.
 - [ ] **MED — Split `index.ts`** along the round-1 seam list (schema, guards/session,
       csrf/cookies, query, mutation+replay, route, header utils), index.ts a pure barrel. The
       absence of module-level mutable state makes this mechanical today. Name the stringly
