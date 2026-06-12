@@ -1656,6 +1656,17 @@ params, relational API, `execute(sql)`, right/full joins, a string column named 
       `corepack pnpm exec vitest --run packages/runtime/src/mutation-response.test.ts`,
       `corepack pnpm exec vp check packages/runtime/src/apply-path.ts packages/runtime/src/index.ts packages/runtime/src/mutation-response.test.ts plans/codebase-quality-round2.md`,
       and `git diff --check`.
+      Additional bounded evidence 2026-06-12: `packages/runtime/src/apply-path.ts` now owns
+      `applyDeferredStreamResponseToDom`, so deferred stream aggregation composes the shared
+      deferred chunk DOM apply path instead of living in `packages/runtime/src/index.ts`.
+      `packages/runtime/src/index.ts` preserves only the public re-export for this apply API, and
+      `packages/runtime/src/mutation-response.test.ts` pins the barrel export to the apply-path
+      implementation while covering multi-chunk query/fragment application under SPEC.md §9.1.
+      Same-session evidence:
+      `corepack pnpm exec vitest --run packages/runtime/src/mutation-response.test.ts`,
+      `corepack pnpm exec vitest --run packages/runtime/src/mutation-response.test.ts packages/runtime/src/index.test.ts -t "deferred|apply"`,
+      `corepack pnpm exec vp check packages/runtime/src/index.ts packages/runtime/src/apply-path.ts packages/runtime/src/mutation-response.test.ts plans/codebase-quality-round2.md`,
+      and `git diff --check`.
 - [x] **MED — Fix ambient-scope argument override in handlers.ts.**
       `abortRemovedIslandSignals(currentHtml, nextHtml, scope)` ignores its explicit `scope`
       whenever the module-level `activeIslandSignalScope` is set

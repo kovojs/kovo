@@ -3,13 +3,18 @@ import { applyFragments } from './morph.js';
 import type { MorphFragment, MorphRoot } from './morph.js';
 import { applyCompiledQueryUpdatePlan, supportsQueryBindings } from './query-bindings.js';
 import type { CompiledQueryUpdatePlans } from './query-bindings.js';
-import { readFragmentChunks, readQueryChunks } from './wire-parser.js';
+import { deferredStreamChunks, readFragmentChunks, readQueryChunks } from './wire-parser.js';
 import type { FragmentChunk, QueryChunk } from './wire-parser.js';
 import type { IslandSignalScope } from './handlers.js';
 
 export interface AppliedMutationResponse {
   fragments: FragmentChunk[];
   queries: string[];
+}
+
+export interface AppliedDeferredStreamResponse extends AppliedMutationResponse {
+  appliedFragments: string[];
+  chunks: AppliedMutationResponseToDom[];
 }
 
 export type ApplyQueryInterposition = (query: QueryChunk) => { value: unknown } | void;
@@ -130,6 +135,39 @@ export function applyMutationResponseToDom(
 
 export const applyDeferredChunkToDom: typeof applyMutationResponseToDom =
   applyMutationResponseToDom;
+
+export function applyDeferredStreamResponseToDom(options: {
+  body: string;
+  boundary?: string;
+  islandSignalScope?: IslandSignalScope;
+  morph?: MorphFragment;
+  onError?: (error: unknown) => void;
+  queryPlans?: CompiledQueryUpdatePlans;
+  root: MorphRoot;
+  store: QueryStore;
+}): AppliedDeferredStreamResponse {
+  const chunks = deferredStreamChunks(options.body, options.boundary ?? 'jiso-boundary').map(
+    (body) =>
+      applyDeferredChunkToDom({
+        body,
+        ...(options.islandSignalScope === undefined
+          ? {}
+          : { islandSignalScope: options.islandSignalScope }),
+        ...(options.morph === undefined ? {} : { morph: options.morph }),
+        ...(options.onError === undefined ? {} : { onError: options.onError }),
+        ...(options.queryPlans === undefined ? {} : { queryPlans: options.queryPlans }),
+        root: options.root,
+        store: options.store,
+      }),
+  );
+
+  return {
+    appliedFragments: chunks.flatMap((chunk) => chunk.appliedFragments),
+    chunks,
+    fragments: chunks.flatMap((chunk) => chunk.fragments),
+    queries: chunks.flatMap((chunk) => chunk.queries),
+  };
+}
 
 function applyQueryChunkToStore(
   store: QueryStore,

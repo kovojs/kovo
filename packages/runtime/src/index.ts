@@ -4,7 +4,7 @@ import { reportRuntimeContextError } from './error-policy.js';
 import { parseJsonValue } from './json.js';
 import { queryStoreKey } from './query-store.js';
 import type { QueryScriptLike, QueryStore } from './query-store.js';
-import { applyDeferredChunkToDom, applyMutationResponseToDom } from './apply-path.js';
+import { applyMutationResponseToDom } from './apply-path.js';
 import type {
   AppliedMutationResponse,
   AppliedMutationResponseToDom,
@@ -36,7 +36,7 @@ import {
 import type { MutationChangeRecord, OptimisticChange, OptimisticPlan } from './optimism.js';
 import { readDeps, stampPendingQueries } from './pending.js';
 import type { PendingRoot } from './pending.js';
-import { deferredStreamChunks, readAttribute, tagClose, unescapeHtml } from './wire-parser.js';
+import { readAttribute, tagClose, unescapeHtml } from './wire-parser.js';
 import type { QueryChunk } from './wire-parser.js';
 import type { DelegatedEvent, EventElementLike, RuntimeErrorContext } from './events.js';
 import { addLoaderListener, installExecutionTriggers } from './loader-lifecycle.js';
@@ -66,10 +66,12 @@ export type {
 export {
   applyDeferredChunk,
   applyDeferredChunkToDom,
+  applyDeferredStreamResponseToDom,
   applyMutationResponse,
   applyMutationResponseToDom,
 } from './apply-path.js';
 export type {
+  AppliedDeferredStreamResponse,
   AppliedMutationResponse,
   AppliedMutationResponseToDom,
   ApplyMutationResponseToDomOptions,
@@ -447,11 +449,6 @@ function updateUploadProgressElements(form: EventElementLike, progress: UploadPr
   }
 }
 
-export interface AppliedDeferredStreamResponse extends AppliedMutationResponse {
-  appliedFragments: string[];
-  chunks: Array<AppliedMutationResponse & { appliedFragments: string[] }>;
-}
-
 export interface EnhancedFormLike {
   action: string;
   method?: string;
@@ -745,39 +742,6 @@ function applyEnhancedMutationResponseBodyToDom(
     root: options.root,
     store: options.store,
   });
-}
-
-export function applyDeferredStreamResponseToDom(options: {
-  body: string;
-  boundary?: string;
-  islandSignalScope?: IslandSignalScope;
-  morph?: MorphFragment;
-  onError?: (error: unknown) => void;
-  queryPlans?: CompiledQueryUpdatePlans;
-  root: MorphRoot;
-  store: QueryStore;
-}): AppliedDeferredStreamResponse {
-  const chunks = deferredStreamChunks(options.body, options.boundary ?? 'jiso-boundary').map(
-    (body) =>
-      applyDeferredChunkToDom({
-        body,
-        ...definedProps({
-          islandSignalScope: options.islandSignalScope,
-          morph: options.morph,
-          onError: options.onError,
-          queryPlans: options.queryPlans,
-        }),
-        root: options.root,
-        store: options.store,
-      }),
-  );
-
-  return {
-    appliedFragments: chunks.flatMap((chunk) => chunk.appliedFragments),
-    chunks,
-    fragments: chunks.flatMap((chunk) => chunk.fragments),
-    queries: chunks.flatMap((chunk) => chunk.queries),
-  };
 }
 
 export async function submitEnhancedMutation(options: EnhancedMutationSubmitOptions): Promise<

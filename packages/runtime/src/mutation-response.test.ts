@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from 'vitest';
 import {
   applyDeferredChunk,
   applyDeferredChunkToDom,
+  applyDeferredStreamResponseToDom,
   applyMutationResponse,
   applyMutationResponseToDom,
   createQueryStore,
@@ -10,6 +11,7 @@ import {
 import {
   applyDeferredChunk as applyDeferredChunkFromApplyPath,
   applyDeferredChunkToDom as applyDeferredChunkToDomFromApplyPath,
+  applyDeferredStreamResponseToDom as applyDeferredStreamResponseToDomFromApplyPath,
   applyMutationResponse as applyMutationResponseFromApplyPath,
   applyMutationResponseToRuntime,
   applyMutationResponseToStore,
@@ -105,6 +107,41 @@ describe('mutation response wire chunks', () => {
     expect(applyMutationResponseFromApplyPath).toBe(applyMutationResponseToStore);
     expect(applyDeferredChunk).toBe(applyDeferredChunkFromApplyPath);
     expect(applyDeferredChunkToDom).toBe(applyDeferredChunkToDomFromApplyPath);
+  });
+
+  it('exports deferred stream response apply through the shared apply path', () => {
+    expect(applyDeferredStreamResponseToDom).toBe(applyDeferredStreamResponseToDomFromApplyPath);
+
+    const store = createQueryStore();
+    const root = new FakeMorphRoot();
+    root.targets.set('reviews:p1', new FakeMorphTarget());
+    root.targets.set('recommendations:p1', new FakeMorphTarget());
+
+    // SPEC.md §9.1: deferred stream responses reuse the mutation query/fragment
+    // wire vocabulary, so stream aggregation belongs on the shared apply path.
+    const applied = applyDeferredStreamResponseToDom({
+      body: [
+        '--jiso-boundary',
+        '<fw-query name="reviews">{"items":[{"id":"r1"}]}</fw-query>',
+        '<fw-fragment target="reviews:p1"><section>Reviews ready</section></fw-fragment>',
+        '--jiso-boundary',
+        '<fw-query name="recommendations">{"items":[{"id":"p2"}]}</fw-query>',
+        '<fw-fragment target="recommendations:p1"><section>Recommendations ready</section></fw-fragment>',
+        '--jiso-boundary--',
+      ].join('\n'),
+      root,
+      store,
+    });
+
+    expect(applied.queries).toEqual(['reviews', 'recommendations']);
+    expect(applied.appliedFragments).toEqual(['reviews:p1', 'recommendations:p1']);
+    expect(applied.chunks).toHaveLength(2);
+    expect(store.get('reviews')).toEqual({ items: [{ id: 'r1' }] });
+    expect(store.get('recommendations')).toEqual({ items: [{ id: 'p2' }] });
+    expect(root.targets.get('reviews:p1')?.html).toBe('<section>Reviews ready</section>');
+    expect(root.targets.get('recommendations:p1')?.html).toBe(
+      '<section>Recommendations ready</section>',
+    );
   });
 
   it('accepts escaped JSON from text/html-compatible fw-query chunks', () => {
