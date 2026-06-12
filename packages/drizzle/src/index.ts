@@ -627,6 +627,7 @@ function sourceWithProjectExtractionResolved(
   tableNamesBySymbol: ReadonlyMap<string, string>,
 ): string {
   const replacements: { end: number; start: number; value: string }[] = [];
+  const tableNamesByIdentifier = projectTableNamesByIdentifier(sourceFile, tableNamesBySymbol);
 
   for (const call of sourceFile.getDescendantsOfKind(SyntaxKind.CallExpression)) {
     if (!isDrizzleWriteCall(call)) continue;
@@ -642,6 +643,20 @@ function sourceWithProjectExtractionResolved(
     });
   }
 
+  for (const access of sourceFile.getDescendantsOfKind(SyntaxKind.ElementAccessExpression)) {
+    const argument = access.getArgumentExpression();
+    if (!Node.isStringLiteral(argument)) continue;
+
+    const tableName = tableNamesByIdentifier.get(argument.getLiteralText());
+    if (!tableName) continue;
+
+    replacements.push({
+      end: argument.getEnd(),
+      start: argument.getStart(),
+      value: JSON.stringify(tableName),
+    });
+  }
+
   for (const identifier of sourceFile.getDescendantsOfKind(SyntaxKind.Identifier)) {
     const tableName = tableNamesBySymbol.get(resolvedSymbolKey(identifier.getSymbol()) ?? '');
     if (!tableName || identifier.getText() === tableName) continue;
@@ -654,6 +669,21 @@ function sourceWithProjectExtractionResolved(
   }
 
   return applySourceReplacements(source, replacements);
+}
+
+function projectTableNamesByIdentifier(
+  sourceFile: SourceFile,
+  tableNamesBySymbol: ReadonlyMap<string, string>,
+): ReadonlyMap<string, string> {
+  const names = new Map<string, string>();
+
+  for (const declaration of sourceFile.getVariableDeclarations()) {
+    const name = declaration.getNameNode();
+    const tableName = tableNamesBySymbol.get(resolvedSymbolKey(name.getSymbol()) ?? '');
+    if (Node.isIdentifier(name) && tableName) names.set(name.getText(), tableName);
+  }
+
+  return names;
 }
 
 function isDrizzleWriteCall(call: CallExpression): boolean {
@@ -1292,17 +1322,18 @@ function queryJoinTableExpressions(body: string): string[] {
 function queryRelationalTableExpressions(body: string): string[] {
   return queryBodyCallExpressions(body, (call) => {
     const expression = call.getExpression();
-    if (!Node.isPropertyAccessExpression(expression)) return [];
-    if (expression.getName() !== 'findMany' && expression.getName() !== 'findFirst') return [];
+    const method = staticAccessName(expression);
+    if (method !== 'findMany' && method !== 'findFirst') return [];
 
-    const tableAccess = expression.getExpression();
-    if (!Node.isPropertyAccessExpression(tableAccess)) return [];
-    const queryAccess = tableAccess.getExpression();
-    if (!Node.isPropertyAccessExpression(queryAccess) || queryAccess.getName() !== 'query') {
-      return [];
-    }
+    const tableAccess = staticAccessExpression(expression);
+    if (!tableAccess) return [];
+    const table = staticAccessName(tableAccess);
+    if (!table) return [];
 
-    return [tableAccess.getName()];
+    const queryAccess = staticAccessExpression(tableAccess);
+    if (!queryAccess || staticAccessName(queryAccess) !== 'query') return [];
+
+    return [table];
   });
 }
 
@@ -2035,10 +2066,9 @@ function extractReceiverExecuteCalls(
 
     for (const call of sourceFile.getDescendantsOfKind(SyntaxKind.CallExpression)) {
       const expression = call.getExpression();
-      if (!Node.isPropertyAccessExpression(expression)) continue;
-      if (expression.getName() !== 'execute') continue;
+      if (staticAccessName(expression) !== 'execute') continue;
 
-      const receiver = expression.getExpression();
+      const receiver = staticAccessExpression(expression);
       if (!Node.isIdentifier(receiver) || !receiverNames.has(receiver.getText())) continue;
 
       const index = call.getStart() - bodyOffset;
@@ -2059,17 +2089,14 @@ function extractRelationalQueryCalls(
 
     for (const call of sourceFile.getDescendantsOfKind(SyntaxKind.CallExpression)) {
       const expression = call.getExpression();
-      if (!Node.isPropertyAccessExpression(expression)) continue;
-      const method = expression.getName();
+      const method = staticAccessName(expression);
       if (method !== 'findMany' && method !== 'findFirst') continue;
 
-      const tableAccess = expression.getExpression();
-      if (!Node.isPropertyAccessExpression(tableAccess)) continue;
-      const queryAccess = tableAccess.getExpression();
-      if (!Node.isPropertyAccessExpression(queryAccess) || queryAccess.getName() !== 'query') {
-        continue;
-      }
-      const receiver = queryAccess.getExpression();
+      const tableAccess = staticAccessExpression(expression);
+      if (!tableAccess || !staticAccessName(tableAccess)) continue;
+      const queryAccess = staticAccessExpression(tableAccess);
+      if (!queryAccess || staticAccessName(queryAccess) !== 'query') continue;
+      const receiver = staticAccessExpression(queryAccess);
       if (!Node.isIdentifier(receiver) || !receiverNames.has(receiver.getText())) continue;
 
       const index = call.getStart() - bodyOffset;
@@ -2173,7 +2200,22 @@ function isReadSourceCall(call: CallExpression): boolean {
 
 function propertyAccessCallName(call: CallExpression): string | undefined {
   const expression = call.getExpression();
-  return Node.isPropertyAccessExpression(expression) ? expression.getName() : undefined;
+  return staticAccessName(expression);
+}
+
+function staticAccessName(node: Node): string | undefined {
+  if (Node.isPropertyAccessExpression(node)) return node.getName();
+  if (!Node.isElementAccessExpression(node)) return undefined;
+
+  const argument = node.getArgumentExpression();
+  return Node.isStringLiteral(argument) ? argument.getLiteralText() : undefined;
+}
+
+function staticAccessExpression(node: Node): Node | undefined {
+  if (Node.isPropertyAccessExpression(node) || Node.isElementAccessExpression(node)) {
+    return node.getExpression();
+  }
+  return undefined;
 }
 
 function extractPredicateSummary(

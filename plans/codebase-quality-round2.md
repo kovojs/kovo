@@ -889,6 +889,18 @@ must be "FW406 unresolved," never "silently wrong."
       SPEC §10-§11 "unknown is explicit" contract. `packages/drizzle/src/index.test.ts` covers
       these surfaces. Same-session evidence: `pnpm exec vitest --run packages/drizzle/src`,
       `pnpm run check`, `pnpm run check:build`, and `pnpm run check:fw`.
+      Additional evidence 2026-06-12: static element-access raw/relational surfaces now share
+      the ts-morph static-member walker, so `db['execute'](...)` and
+      `db.query['users']['findMany'](...)` / `db.query['users']['findFirst'](...)` become explicit FW406 touch/query facts
+      instead of disappearing; project-mode source rewriting also maps bracket string table keys
+      that name real Drizzle table identifiers to synthetic project table facts. Same-session
+      evidence:
+      `pnpm exec vitest --run packages/drizzle/src/index.test.ts -t "element-access|project raw execute"`,
+      `pnpm exec vitest --run conformance/drizzle-pin/src/index.test.ts -t "element-access relational"`,
+      `pnpm exec vitest --run packages/drizzle/src/index.test.ts`,
+      `pnpm exec vitest --run conformance/drizzle-pin/src/index.test.ts`,
+      `pnpm exec vp check packages/drizzle/src/index.ts packages/drizzle/src/index.test.ts conformance/drizzle-pin/src/index.test.ts plans/codebase-quality-round2.md`,
+      and `git diff --check`.
 - [x] **MED — Make the drizzle-orm coupling real and tested.** The `>=0.45.2 <1` pin is
       decorative: drizzle-orm is never imported, absent from devDeps, and every project test
       fabricates a `declare module "drizzle-orm/pg-core"` shim (index.test.ts:1742, 1791, 1846).

@@ -1248,6 +1248,41 @@ export interface CommerceInvalidationSets {
     ]);
   });
 
+  it('keeps static element-access relational API reads visible as FW406 query facts', () => {
+    const facts = extractQueryFactsFromSource([
+      {
+        fileName: 'user.queries.ts',
+        source: `
+          export const users = pgTable("users", {}, jiso({ domain: "user", key: "id" }));
+
+          export const usersQuery = query("users", {
+            load(_input, db) {
+              return db.query['users']['findMany']({ where: eq(users.active, true) });
+            },
+          });
+        `,
+      },
+    ]);
+
+    expect(facts).toEqual([
+      {
+        diagnostics: [
+          {
+            code: 'FW406',
+            message:
+              'Statically un-analyzable write site; manual touches required. Query uses Drizzle relational query API without static projection.',
+            severity: 'warn',
+            site: 'user.queries.ts:4',
+          },
+        ],
+        query: 'users',
+        reads: ['user'],
+        shape: {},
+        site: 'user.queries.ts:4',
+      },
+    ]);
+  });
+
   it('does not fabricate query reads or relational diagnostics from comments and strings', () => {
     const facts = extractQueryFactsFromSource([
       {
@@ -2430,7 +2465,9 @@ export interface CommerceInvalidationSets {
 
             export async function reconcile(writer: PgDatabase, client: FakeDb) {
               await writer.execute(sql\`update cart_items set synced = true\`);
+              await writer['execute'](sql\`update cart_items set audited = true\`);
               await client.execute(sql\`update cart_items set synced = false\`);
+              await client['execute'](sql\`update cart_items set audited = false\`);
             }
           `,
         },
@@ -2446,6 +2483,11 @@ export interface CommerceInvalidationSets {
             code: 'FW406',
             message: 'Statically un-analyzable write site; manual touches required.',
             site: 'cart.domain.ts:9',
+          },
+          {
+            code: 'FW406',
+            message: 'Statically un-analyzable write site; manual touches required.',
+            site: 'cart.domain.ts:10',
           },
         ],
       },
@@ -2736,6 +2778,41 @@ export interface CommerceInvalidationSets {
             code: 'FW406',
             message: 'Statically un-analyzable write site; manual touches required.',
             site: 'cart.domain.ts:5',
+          },
+        ],
+      },
+    });
+  });
+
+  it('marks static element-access raw and relational receiver calls as FW406', () => {
+    const graph = extractTouchGraphFromSource([
+      {
+        fileName: 'cart.domain.ts',
+        source: `
+          export const users = pgTable("users", {}, jiso({ domain: "user", key: "id" }));
+
+          export async function loadUsers(db) {
+            await db['execute'](sql\`update users set active = true\`);
+            return db.query['users']['findFirst']({ where: eq(users.active, true) });
+          }
+        `,
+      },
+    ]);
+
+    expect(graph).toEqual({
+      loadUsers: {
+        reads: [],
+        touches: [],
+        unresolved: [
+          {
+            code: 'FW406',
+            message: 'Statically un-analyzable write site; manual touches required.',
+            site: 'cart.domain.ts:5',
+          },
+          {
+            code: 'FW406',
+            message: 'Statically un-analyzable write site; manual touches required.',
+            site: 'cart.domain.ts:6',
           },
         ],
       },
