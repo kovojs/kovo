@@ -1652,6 +1652,15 @@ params, relational API, `execute(sql)`, right/full joins, a string column named 
       `corepack pnpm exec vitest --run packages/runtime/src/pending.test.ts packages/runtime/src/index.test.ts -t "pending|optimistic|enhanced mutations"`
       and
       `corepack pnpm exec vp check packages/runtime/src/index.ts packages/runtime/src/pending.ts packages/runtime/src/pending.test.ts plans/codebase-quality-round2.md`.
+      Additional bounded evidence 2026-06-12: extracted
+      `packages/runtime/src/mutation-targets.ts` as the subtractive seam for SPEC.md §9.1
+      live-DOM `FW-Targets` collection; `packages/runtime/src/index.ts` now imports the helper
+      and preserves the public `TargetCollectorRoot` type re-export. `packages/runtime/src/mutation-targets.test.ts`
+      pins first-seen ordering, dedupe, nullish id fallback, empty-target suppression, and
+      dependency formatting. Same-session evidence:
+      `pnpm exec vitest --run packages/runtime/src/mutation-targets.test.ts packages/runtime/src/index.test.ts -t "mutation targets|FW-Targets|enhanced mutations"`,
+      `pnpm exec vp check packages/runtime/src/index.ts packages/runtime/src/mutation-targets.ts packages/runtime/src/mutation-targets.test.ts plans/codebase-quality-round2.md`,
+      and `git diff --check`.
 - [ ] **LOW** — `hydratedQueries` frozen at install (index.ts:330-342): queries introduced by
       later mutations never become refetch-eligible — fix or document as SPEC-intended;
       `unescapeHtml` missing `&#39;`/`&apos;` (wire-parser.ts:162-168) — pin the server↔runtime

@@ -27,6 +27,8 @@ import {
   readMutationChangeHeader,
   sanitizeMutationChangeRecord,
 } from './mutation-response.js';
+import { readLiveTargets } from './mutation-targets.js';
+import type { TargetCollectorRoot } from './mutation-targets.js';
 import type { CompiledQueryUpdatePlans } from './query-bindings.js';
 import { installQueryVisibleReturnRefetch } from './query-refetch.js';
 import type { QueryRefetchOptions } from './query-refetch.js';
@@ -119,6 +121,7 @@ export type {
   QueryRefetchResponse,
 } from './query-refetch.js';
 export type { FragmentChunk, QueryChunk } from './wire-parser.js';
+export type { TargetCollectorRoot } from './mutation-targets.js';
 export { MutationQueue } from './mutation-queue.js';
 export type { MutationTask } from './mutation-queue.js';
 export {
@@ -579,13 +582,6 @@ export interface AppliedDeferredStreamResponse extends AppliedMutationResponse {
 export interface EnhancedFormLike {
   action: string;
   method?: string;
-}
-
-export interface TargetCollectorRoot {
-  querySelectorAll(selector: string): Iterable<{
-    getAttribute(name: string): string | null;
-    id?: string;
-  }>;
 }
 
 export interface EnhancedMutationFetchOptions {
@@ -1185,18 +1181,6 @@ async function fetchEnhancedMutation(
 
 function isFailedMutationResponse(response: EnhancedMutationResponseLike): boolean {
   return response.ok === false || (response.status !== undefined && response.status >= 400);
-}
-
-function readLiveTargets(root: TargetCollectorRoot): string[] {
-  const targets = new Set<string>();
-
-  for (const element of root.querySelectorAll('[fw-deps]')) {
-    const target = element.getAttribute('fw-fragment-target') ?? element.id;
-    const deps = readDeps(element.getAttribute('fw-deps'));
-    if (target) targets.add(deps.length > 0 ? `${target}=${deps.join(' ')}` : target);
-  }
-
-  return [...targets];
 }
 
 let generatedIdemCounter = 0;
