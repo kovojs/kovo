@@ -732,6 +732,14 @@ pipeline throws the tree away and communicates via mutated source text.
       `pnpm exec vitest --run packages/compiler/src/scan/parse.test.ts packages/compiler/src/index.test.ts -t "render host|fw-deps|query dependencies|parsed component render host"`,
       `pnpm exec vp check --fix packages/compiler/src/scan/parse.ts packages/compiler/src/scan/parse.test.ts packages/compiler/src/emit/server.ts`,
       and `git diff --check`.
+      Additional evidence 2026-06-12: `emit/server.ts` now updates existing `fw-deps`
+      attributes by `JsxAttributeModel` span relative to the parsed render host instead of
+      regex-searching the opening tag slice. `stamps.test.ts` pins a single-quoted authored
+      `fw-deps` attribute that is replaced from the parsed span while preserving neighboring
+      attributes and native-host identity stamping. Same-session evidence:
+      `pnpm exec vitest --run packages/compiler/src/stamps.test.ts -t "fw-deps|parsed attribute spans|query dependencies|returned host"`,
+      `pnpm exec vitest --run packages/compiler/src`, and
+      `pnpm exec vp check packages/compiler/src/emit/server.ts packages/compiler/src/stamps.test.ts`.
       Additional evidence 2026-06-12: `scan/parse.ts` now records parser-owned
       property-access facts on JSX attribute expressions and JSX child expressions, and
       inline-derive lowering consumes those facts instead of reparsing attribute, sole-text, and

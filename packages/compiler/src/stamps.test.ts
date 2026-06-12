@@ -153,6 +153,27 @@ export const Recommendations = component('recommendations', {
     expect(() => assertFixpoint(result)).not.toThrow();
   });
 
+  it('updates existing fw-deps from parsed attribute spans', () => {
+    const result = compileComponentModule({
+      fileName: 'recommendations.tsx',
+      source: `
+export const Recommendations = component('recommendations', {
+  queries: { cart: cartQuery },
+  render: ({ cart }) => (
+    <section class="card" fw-deps='product:p1'>
+      {renderOnce(cart.count)}
+    </section>
+  ),
+});
+`,
+    });
+
+    expect(result.files[0]?.source).toContain(
+      '<section class="card" fw-deps="product:p1 cart" fw-c="recommendations">',
+    );
+    expect(() => assertFixpoint(result)).not.toThrow();
+  });
+
   it('validates residual fw-c and fw-deps stamps against known component and query facts', () => {
     const result = compileComponentModule({
       fileName: 'recommendations.tsx',

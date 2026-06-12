@@ -9,6 +9,7 @@ import {
   componentStateReturnObject,
   firstComponentModel,
   type ComponentModuleModel,
+  type JsxAttributeModel,
   type JsxElementModel,
 } from '../scan/parse.js';
 import {
@@ -216,16 +217,26 @@ function stampOpeningTagDeps(
   hostElement: JsxElementModel | null,
   deps: readonly string[],
 ): string {
-  const existingDeps = splitDepValue(
-    hostElement?.attributes.find((attribute) => attribute.name === 'fw-deps')?.value ?? '',
-  );
+  const existing = hostElement?.attributes.find((attribute) => attribute.name === 'fw-deps');
+  const existingDeps = splitDepValue(existing?.value ?? '');
   const depValue = mergeDepValues(existingDeps, deps).join(' ');
-  const existing = /\bfw-deps=(["'])(?<deps>[^"']*)\1/.exec(tagSource);
-  if (existing?.groups) {
-    return `${tagSource.slice(0, existing.index)}fw-deps=${existing[1]}${depValue}${existing[1]}${tagSource.slice(existing.index + existing[0].length)}`;
+  if (hostElement && existing) {
+    return replaceOpeningTagAttribute(tagSource, hostElement, existing, 'fw-deps', depValue);
   }
 
   return stampOpeningTagAttribute(tagSource, 'fw-deps', depValue);
+}
+
+function replaceOpeningTagAttribute(
+  tagSource: string,
+  hostElement: JsxElementModel,
+  attribute: JsxAttributeModel,
+  name: string,
+  value: string,
+): string {
+  const start = attribute.start - hostElement.start;
+  const end = attribute.end - hostElement.start;
+  return `${tagSource.slice(0, start)}${name}="${escapeAttribute(value)}"${tagSource.slice(end)}`;
 }
 
 function stampOpeningTagAttribute(tagSource: string, name: string, value: string): string {
