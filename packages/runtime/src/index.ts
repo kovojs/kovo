@@ -1,6 +1,6 @@
 export type { DiagnosticCode } from '@jiso/core';
 import type { Form, FormFailure, FormInput, JsonValue } from '@jiso/core';
-import { malformedJsonError, parseJsonValue } from './json.js';
+import { parseJsonValue } from './json.js';
 import { hydrateQueryScripts, queryStoreKey } from './query-store.js';
 import type { QueryScriptLike, QueryStore } from './query-store.js';
 import { applyFragmentQueryBody, applyMutationResponseToStore } from './apply-path.js';
@@ -15,6 +15,11 @@ import type { ImportHandlerModule, IslandSignalScope } from './handlers.js';
 import { applyFragments } from './morph.js';
 import type { MorphFragment, MorphRoot } from './morph.js';
 import { MutationQueue } from './mutation-queue.js';
+import {
+  isMutationBroadcastMessage,
+  readMutationChangeHeader,
+  sanitizeMutationChangeRecord,
+} from './mutation-response.js';
 import { applyCompiledQueryUpdatePlan, supportsQueryBindings } from './query-bindings.js';
 import type { CompiledQueryUpdatePlan, CompiledQueryUpdatePlans } from './query-bindings.js';
 import {
@@ -1384,63 +1389,4 @@ function createIdem(): string {
     globalThis.crypto?.randomUUID?.() ??
     `idem_${Date.now().toString(36)}_${(generatedIdemCounter += 1).toString(36)}`
   );
-}
-
-function readMutationChangeHeader(
-  response: EnhancedMutationResponseLike,
-  onError?: (error: unknown) => void,
-): MutationChangeRecord[] {
-  const value = response.headers?.get('FW-Changes') ?? response.headers?.get('fw-changes');
-  if (!value) return [];
-
-  const parsed = parseJsonValue(value);
-  if (!parsed.ok) {
-    onError?.(malformedJsonError('FW-Changes header', parsed.error));
-    return [];
-  }
-  if (!Array.isArray(parsed.value)) return [];
-
-  return parsed.value.flatMap((record) => {
-    const sanitized = sanitizeMutationChangeRecord(record);
-    return sanitized ? [sanitized] : [];
-  });
-}
-
-function isMutationBroadcastMessage(value: unknown): value is {
-  body: string;
-  changes: MutationChangeRecord[];
-  type: 'jiso:mutation-response';
-} {
-  return (
-    typeof value === 'object' &&
-    value !== null &&
-    'type' in value &&
-    value.type === 'jiso:mutation-response' &&
-    'body' in value &&
-    typeof value.body === 'string' &&
-    'changes' in value &&
-    Array.isArray(value.changes) &&
-    value.changes.every(isMutationChangeRecord)
-  );
-}
-
-function isMutationChangeRecord(value: unknown): value is MutationChangeRecord {
-  return sanitizeMutationChangeRecord(value) !== null;
-}
-
-function sanitizeMutationChangeRecord(value: unknown): MutationChangeRecord | null {
-  if (typeof value !== 'object' || value === null) return null;
-  if (!('domain' in value) || typeof value.domain !== 'string') return null;
-  const keys = 'keys' in value ? value.keys : undefined;
-  if (
-    keys !== undefined &&
-    !(Array.isArray(keys) && keys.every((key) => typeof key === 'string'))
-  ) {
-    return null;
-  }
-
-  return {
-    domain: value.domain,
-    ...(keys === undefined ? {} : { keys }),
-  };
 }

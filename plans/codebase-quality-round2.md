@@ -1056,6 +1056,13 @@ params, relational API, `execute(sql)`, right/full joins, a string column named 
       `pnpm exec vitest --config vitest.browser.config.ts --run packages/runtime/src/index.browser.test.ts`,
       and
       `pnpm exec vp check packages/runtime/src/index.ts packages/runtime/src/wire-parser.ts packages/runtime/src/index.test.ts packages/runtime/src/wire-parser.test.ts`.
+      Additional bounded evidence 2026-06-12: `packages/runtime/src/mutation-response.ts`
+      now owns `FW-Changes` parsing and malformed-header reporting; `mutation-response.test.ts`
+      pins the `onError` diagnostic and sanitized broadcast record acceptance. Same-session
+      evidence: `pnpm exec vitest --run packages/runtime/src/mutation-response.test.ts`,
+      `pnpm exec vitest --run packages/runtime/src/index.test.ts -t "FW-Changes|rebroadcast|BroadcastChannel|syncs mutation responses"`,
+      `pnpm exec vp check packages/runtime/src/index.ts packages/runtime/src/mutation-response.ts packages/runtime/src/mutation-response.test.ts plans/codebase-quality-round2.md`,
+      and `git diff --check`.
 - [ ] **MED — Split `index.ts` subtractively** along its existing seams: `inline-loader.ts`,
       `loader.ts`, `enhanced-mutation.ts`, `optimism.ts`, `query-bindings.ts`, `broadcast.ts`;
       index.ts a pure barrel. Remove the test-shaped production branch in `bindingAttributes`
@@ -1069,6 +1076,13 @@ params, relational API, `execute(sql)`, right/full joins, a string column named 
       `pnpm exec vitest --run packages/runtime/src/index.test.ts -t "optimistic|mutation query chunks|enhanced mutations|deferred|apply"`
       and
       `pnpm exec vp check packages/runtime/src/index.ts packages/runtime/src/apply-path.ts plans/codebase-quality-round2.md`.
+      Additional bounded evidence 2026-06-12: extracted `packages/runtime/src/mutation-response.ts`
+      for mutation change-header parsing, broadcast message validation, and change-record
+      sanitization; `index.ts` now imports those helpers while retaining the public orchestration
+      surface. Same-session evidence: `pnpm exec vitest --run packages/runtime/src/mutation-response.test.ts`,
+      `pnpm exec vitest --run packages/runtime/src/index.test.ts -t "FW-Changes|rebroadcast|BroadcastChannel|syncs mutation responses"`,
+      `pnpm exec vp check packages/runtime/src/index.ts packages/runtime/src/mutation-response.ts packages/runtime/src/mutation-response.test.ts plans/codebase-quality-round2.md`,
+      and `git diff --check`.
       Additional evidence 2026-06-12: `bindingAttributes` no longer accepts plain object
       attribute maps for test fakes; `FakeQueryPlanElement` now exposes ArrayLike DOM-shaped
       attributes, removing the test-only production branch while preserving data-bind attribute

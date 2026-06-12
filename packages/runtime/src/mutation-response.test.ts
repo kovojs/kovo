@@ -7,6 +7,11 @@ import {
   applyMutationResponseToDom,
   createQueryStore,
 } from './index.js';
+import {
+  isMutationBroadcastMessage,
+  readMutationChangeHeader,
+  sanitizeMutationChangeRecord,
+} from './mutation-response.js';
 
 class FakeMorphTarget {
   html: string;
@@ -183,5 +188,54 @@ describe('mutation response wire chunks', () => {
     });
     expect(onError).toHaveBeenCalledWith(expect.any(Error));
     expect(String(onError.mock.calls[0]?.[0].message)).toContain('Malformed fw-fragment chunk');
+  });
+
+  it('reports malformed FW-Changes headers through the mutation response error hook', () => {
+    const onError = vi.fn();
+
+    // SPEC.md §9.1: FW-Changes is sanitized mutation response wire metadata.
+    expect(
+      readMutationChangeHeader(
+        {
+          headers: {
+            get(name: string) {
+              return name === 'FW-Changes' ? '[' : null;
+            },
+          },
+        },
+        onError,
+      ),
+    ).toEqual([]);
+
+    expect(onError).toHaveBeenCalledWith(expect.any(Error));
+    expect(String(onError.mock.calls[0]?.[0].message)).toContain(
+      'Malformed JSON in FW-Changes header',
+    );
+  });
+
+  it('sanitizes mutation change records before broadcast publication and acceptance', () => {
+    expect(
+      sanitizeMutationChangeRecord({
+        domain: 'cart',
+        input: { productId: 'p1' },
+        keys: ['cart'],
+        stack: 'hidden',
+      }),
+    ).toEqual({ domain: 'cart', keys: ['cart'] });
+    expect(sanitizeMutationChangeRecord({ domain: 'cart', keys: [1] })).toBeNull();
+    expect(
+      isMutationBroadcastMessage({
+        body: '<fw-query name="cart">{"count":1}</fw-query>',
+        changes: [{ domain: 'cart', keys: ['cart'] }],
+        type: 'jiso:mutation-response',
+      }),
+    ).toBe(true);
+    expect(
+      isMutationBroadcastMessage({
+        body: '<fw-query name="cart">{"count":1}</fw-query>',
+        changes: [{ domain: 'cart', keys: [1] }],
+        type: 'jiso:mutation-response',
+      }),
+    ).toBe(false);
   });
 });
