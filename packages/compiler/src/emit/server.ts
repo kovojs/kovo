@@ -8,6 +8,7 @@ import {
   componentStateReturnObject,
   firstComponentModel,
   parseComponentModule,
+  type ComponentModuleModel,
 } from '../scan/parse.js';
 import { escapeAttribute, splitDepValue } from '../shared.js';
 import type { RenderEquivalenceCheck } from '../types.js';
@@ -25,9 +26,9 @@ export function renderSource() {
 }
 
 export function serverRenderSource(source: string, handlers: readonly HandlerLowering[]): string {
-  return stampInitialState(
-    stampDeclaredQueryDeps(stampComponentIdentity(replaceHandlerAttributes(source, handlers))),
-  );
+  const loweredSource = replaceHandlerAttributes(source, handlers);
+  const model = parseComponentModule('component.tsx', loweredSource);
+  return stampRenderHost(loweredSource, model);
 }
 
 export function renderEquivalenceCheck(
@@ -91,16 +92,15 @@ function replaceHandlerAttributes(source: string, handlers: readonly HandlerLowe
     }, source);
 }
 
-function stampDeclaredQueryDeps(source: string): string {
-  const model = parseComponentModule('component.tsx', source);
-  const deps = componentOptionObjectKeys(model, 'queries');
-  if (deps.length === 0) return source;
-
+function stampRenderHost(source: string, model: ComponentModuleModel): string {
   const tag = componentRenderHost(model);
   if (!tag) return source;
 
   const tagSource = source.slice(tag.start, tag.end);
-  const stampedTag = stampOpeningTagDeps(tagSource, deps);
+  const stampedTag = stampInitialState(
+    stampDeclaredQueryDeps(stampComponentIdentity(tagSource, model), model),
+    model,
+  );
   if (stampedTag === tagSource) return source;
 
   return `${source.slice(0, tag.start)}${stampedTag}${source.slice(tag.end)}`;
@@ -110,37 +110,27 @@ function stampDeclaredQueryDeps(source: string): string {
 // when the host tag already spells the component name (dashed tags are inert
 // sugar) and emits it explicitly on native hosts (`<tr fw-c="cart-row">`), so
 // authored sugar never hand-writes the stamp (§4.8 residual-string rule).
-function stampComponentIdentity(source: string): string {
-  const model = parseComponentModule('component.tsx', source);
+function stampComponentIdentity(tagSource: string, model: ComponentModuleModel): string {
   const componentName = firstComponentModel(model)?.explicitName;
-  if (!componentName) return source;
+  if (!componentName) return tagSource;
 
-  const tag = componentRenderHost(model);
-  if (!tag) return source;
-
-  const tagSource = source.slice(tag.start, tag.end);
   const tagName = /^<([a-z][\w-]*)/.exec(tagSource)?.[1];
-  if (!tagName || tagName === componentName || tagName.includes('-')) return source;
-  if (/\bfw-c=/.test(tagSource)) return source;
+  if (!tagName || tagName === componentName || tagName.includes('-')) return tagSource;
+  if (/\bfw-c=/.test(tagSource)) return tagSource;
 
-  const stampedTag = stampOpeningTagAttribute(tagSource, 'fw-c', componentName);
-  if (stampedTag === tagSource) return source;
-
-  return `${source.slice(0, tag.start)}${stampedTag}${source.slice(tag.end)}`;
+  return stampOpeningTagAttribute(tagSource, 'fw-c', componentName);
 }
 
-function stampInitialState(source: string): string {
-  const stateJson = staticStateJson(source);
-  if (!stateJson) return source;
+function stampDeclaredQueryDeps(tagSource: string, model: ComponentModuleModel): string {
+  const deps = componentOptionObjectKeys(model, 'queries');
+  if (deps.length === 0) return tagSource;
 
-  const tag = componentRenderHost(parseComponentModule('component.tsx', source));
-  if (!tag) return source;
+  return stampOpeningTagDeps(tagSource, deps);
+}
 
-  const tagSource = source.slice(tag.start, tag.end);
-  const stampedTag = stampOpeningTagAttribute(tagSource, 'fw-state', stateJson);
-  if (stampedTag === tagSource) return source;
-
-  return `${source.slice(0, tag.start)}${stampedTag}${source.slice(tag.end)}`;
+function stampInitialState(tagSource: string, model: ComponentModuleModel): string {
+  const stateJson = staticStateJson(model);
+  return stateJson ? stampOpeningTagAttribute(tagSource, 'fw-state', stateJson) : tagSource;
 }
 
 function stampOpeningTagDeps(tagSource: string, deps: readonly string[]): string {
@@ -170,8 +160,8 @@ function mergeDepValues(existing: readonly string[], declared: readonly string[]
   return [...new Set([...existing, ...declared])];
 }
 
-function staticStateJson(source: string): string | null {
-  const stateObject = componentStateReturnObject(parseComponentModule('component.tsx', source));
+function staticStateJson(model: ComponentModuleModel): string | null {
+  const stateObject = componentStateReturnObject(model);
   if (!stateObject) return null;
 
   const parsed = parseLiteralObject(stateObject);
