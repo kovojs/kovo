@@ -1620,6 +1620,15 @@ index.test.ts:4227 while here — it weakens the byte-for-byte claim) + acceptan
       `corepack pnpm exec vitest --run packages/test/src/verifier.test.ts packages/test/src/verifier-sql.test.ts packages/test/src/query-verifier.test.ts packages/test/src/mutation-verifier.test.ts packages/test/src/index.test.ts`
       and
       `corepack pnpm exec vp check packages/test/src/index.ts packages/test/src/verifier.ts packages/test/src/verifier-observation.ts packages/test/src/verifier-diagnostics.ts packages/test/src/verifier-sql.ts plans/codebase-quality-round2.md`.
+      Additional evidence 2026-06-12: the HTML fragment scanner moved from
+      `packages/test/src/page.ts` into `packages/test/src/html-fragment.ts`, leaving
+      `page.ts` as the page assertion wrapper while preserving the public package barrel.
+      `packages/test/src/page.test.ts` now imports the fragment helper directly for SPEC §9.1
+      id / `fw-fragment-target` resolution coverage and still exercises the harness page path.
+      Same-session evidence:
+      `corepack pnpm exec vitest --run packages/test/src/page.test.ts packages/test/src/index.test.ts`,
+      `corepack pnpm exec vp check packages/test/src/html-fragment.ts packages/test/src/page.ts packages/test/src/page.test.ts plans/codebase-quality-round2.md`,
+      and `git diff --check`.
 - [ ] **MED — Commerce example: one source of truth.** `cartQuery.load` returns a constant while
       `loadCartQuery(db)` does the real read (app.ts:123-126 vs :280-284);
       `productGridQuery.load` conjures a fresh `createCommerceDb()` (:161); the committed
@@ -1899,6 +1908,13 @@ As each phase splits a source module, split its tests in the same commit.
       `pnpm exec vitest --run packages/test/src/pglite-harness.test.ts packages/test/src/index.test.ts`,
       `pnpm exec vitest --run packages/test/src`,
       `pnpm exec vp check packages/test/src/index.test.ts packages/test/src/pglite-harness.test.ts plans/codebase-quality-round2.md`,
+      and `git diff --check`.
+      Additional evidence 2026-06-12: HTML fragment parsing moved from
+      `packages/test/src/page.ts` into `packages/test/src/html-fragment.ts`, with
+      `page.test.ts` adding direct seam coverage while retaining harness-driven page assertion
+      tests through the package barrel. Same-session evidence:
+      `corepack pnpm exec vitest --run packages/test/src/page.test.ts packages/test/src/index.test.ts`,
+      `corepack pnpm exec vp check packages/test/src/html-fragment.ts packages/test/src/page.ts packages/test/src/page.test.ts plans/codebase-quality-round2.md`,
       and `git diff --check`.
       Additional evidence 2026-06-12: Drizzle runtime/static package-surface coverage moved from
       `packages/drizzle/src/index.test.ts` into `packages/drizzle/src/runtime-surface.test.ts`,
