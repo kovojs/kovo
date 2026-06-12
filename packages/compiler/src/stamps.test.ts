@@ -167,6 +167,74 @@ export const Recommendations = component('recommendations', {
     ]);
   });
 
+  it('reports FW226 for residual stamps naming unknown components or query instances', () => {
+    const result = compileComponentModule({
+      fileName: 'recommendations.tsx',
+      source: `
+export const Recommendations = component('recommendations', {
+  queries: { cart: cartQuery },
+  render: ({ cart }) => (
+    <section fw-c="unknown-component" fw-deps="cart missingQuery:p1">
+      <span data-bind="cart.count">{cart.count}</span>
+    </section>
+  ),
+});
+`,
+    });
+
+    expect(result.diagnostics).toEqual([
+      {
+        code: 'FW223',
+        fileName: 'recommendations.tsx',
+        length: 22,
+        message:
+          'Redundant hand-written binding stamp in sugar; the compiler derives it. data-bind="cart.count" wraps {cart.count}',
+        severity: 'lint',
+        start: { column: 13, line: 6 },
+      },
+      {
+        code: 'FW226',
+        fileName: 'recommendations.tsx',
+        message:
+          'fw-deps or fw-c names an unknown query instance or component. fw-c="unknown-component"',
+        severity: 'error',
+        start: { column: 14, line: 5 },
+        length: 24,
+      },
+      {
+        code: 'FW226',
+        fileName: 'recommendations.tsx',
+        message:
+          'fw-deps or fw-c names an unknown query instance or component. fw-deps="missingQuery:p1"',
+        severity: 'error',
+        start: { column: 39, line: 5 },
+        length: 30,
+      },
+    ]);
+  });
+
+  it('ignores residual stamp text inside strings and comments', () => {
+    const result = compileComponentModule({
+      fileName: 'recommendations.tsx',
+      source: `
+export const Recommendations = component('recommendations', {
+  queries: { cart: cartQuery },
+  render: ({ cart }) => {
+    const sample = '<section fw-c="unknown-component" fw-deps="missingQuery:p1"></section>';
+    // <section fw-c="other-unknown" fw-deps="otherMissing:p1"></section>
+    return (
+      <section fw-c="recommendations" fw-deps="cart">
+        <span>{renderOnce(cart.count)}</span>
+      </section>
+    );
+  },
+});
+`,
+    });
+
+    expect(result.diagnostics).toEqual([]);
+  });
+
   it('reports FW222 and FW223 for hand-written stamps around typed expressions in sugar', () => {
     const redundant = compileComponentModule({
       fileName: 'cart-badge.tsx',

@@ -220,6 +220,33 @@ export const ProductCard = component('product-card', {
     ]);
   });
 
+  it('reports FW302 when data-bind paths are absent from declared query shapes', () => {
+    const result = compileComponentModule({
+      fileName: 'cart-badge.tsx',
+      queryShapes: {
+        cart: {
+          count: 'number',
+        },
+      },
+      source: `
+export const CartBadge = component('cart-badge', {
+  render: () => <span data-bind="cart.total">2</span>,
+});
+`,
+    });
+
+    expect(result.diagnostics).toEqual([
+      {
+        code: 'FW302',
+        fileName: 'cart-badge.tsx',
+        length: 22,
+        message: 'data-bind path is not present in the declared query shape. cart.total',
+        severity: 'error',
+        start: { column: 23, line: 3 },
+      },
+    ]);
+  });
+
   it('reports FW302 when generated query shape facts no longer contain a binding path', () => {
     const result = compileComponentModule({
       fileName: 'cart-badge.tsx',
