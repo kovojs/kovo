@@ -4082,6 +4082,17 @@ As each phase splits a source module, split its tests in the same commit.
       `corepack pnpm exec vitest --run packages/test/src`,
       `corepack pnpm exec vp check packages/test/src/index.ts plans/codebase-quality-round2.md`,
       and `git diff --check`.
+      Additional evidence 2026-06-12: `@jiso/test` now exposes seam-specific package subpaths
+      for assertions, harness, page, PGlite, test-case, and verifier modules, so consumers no
+      longer have to route every test helper import through the root `packages/test/src/index.ts`
+      barrel. `packages/test/src/package-exports.test.ts` pins those package exports against the
+      root barrel identities where applicable and imports the subpath-owned helper/type surface.
+      Same-session evidence:
+      `corepack pnpm exec vitest --run packages/test/src/package-exports.test.ts` and
+      `corepack pnpm exec vitest --run packages/test/src`,
+      `corepack pnpm exec vitest --run examples/commerce/src/source-truth.test.ts`,
+      `corepack pnpm exec vp check packages/test/package.json packages/test/src/package-exports.test.ts plans/codebase-quality-round2.md`,
+      and `git diff --check`.
       Additional evidence 2026-06-12: harness operation coverage split out to
       `packages/test/src/harness-operations.test.ts` alongside the new
       `packages/test/src/harness-operations.ts` seam, so `harness.test.ts` remains focused on

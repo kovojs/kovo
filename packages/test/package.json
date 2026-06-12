@@ -3,7 +3,13 @@
   "version": "0.0.0",
   "type": "module",
   "exports": {
-    ".": "./src/index.ts"
+    ".": "./src/index.ts",
+    "./assertions": "./src/assertions.ts",
+    "./harness": "./src/harness.ts",
+    "./page": "./src/page.ts",
+    "./pglite": "./src/pglite.ts",
+    "./test-case": "./src/test-case.ts",
+    "./verifier": "./src/verifier.ts"
   },
   "dependencies": {
     "@electric-sql/pglite": "^0.5.1",
