@@ -2694,6 +2694,16 @@ params, relational API, `execute(sql)`, right/full joins, a string column named 
       `pnpm --filter @jiso/runtime run check:inline-loader`,
       `pnpm exec vp check packages/runtime/src/wire-parser.ts packages/runtime/src/wire-parser.test.ts packages/runtime/src/mutation-response.test.ts plans/codebase-quality-round2.md`,
       and `git diff --check`.
+      Additional bounded evidence 2026-06-12: default same-user mutation broadcast replay now
+      reports applied `<fw-query>` chunks back into the installed loader's visible-return ledger,
+      so queries introduced by another tab after install become typed-read refetch eligible
+      through the same shared apply path as direct enhanced submits. `packages/runtime/src/broadcast.test.ts`
+      pins the broadcast `onAppliedQueries` seam, and `packages/runtime/src/index.test.ts`
+      verifies a default `BroadcastChannel` replay-added query is included in later
+      visible-return refetch. Same-session evidence:
+      `corepack pnpm exec vitest --run packages/runtime/src/broadcast.test.ts packages/runtime/src/index.test.ts -t "broadcast|visible-return refetch|introduced by default broadcast"`,
+      `corepack pnpm exec vp check packages/runtime/src/broadcast.ts packages/runtime/src/loader.ts packages/runtime/src/broadcast.test.ts packages/runtime/src/index.test.ts`,
+      and `git diff --check`.
 
 Verification: runtime node + browser suites; gzip budget; the new parity suite is the gate for
 any future inline-loader edit. Partial evidence 2026-06-12: `packages/runtime/src/index.ts` now

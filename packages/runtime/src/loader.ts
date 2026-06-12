@@ -48,10 +48,6 @@ export function installJisoLoader(options: JisoLoaderOptions): JisoLoader {
   const events = options.events ?? defaultDelegatedEvents;
   const islandSignalScope = createIslandSignalScope();
   const disposers: Array<() => void> = [];
-  const enhancedMutationSetup = options.enhancedMutations
-    ? withDefaultMutationBroadcast(options.enhancedMutations)
-    : undefined;
-  const enhancedMutations = enhancedMutationSetup?.options;
   const queryVisibleReturn = installQueryVisibleReturnRefetch({
     onError(error) {
       reportRuntimeContextError(options.onError, error, { phase: 'query-hydration' });
@@ -67,6 +63,15 @@ export function installJisoLoader(options: JisoLoaderOptions): JisoLoader {
     }),
     root: options.root,
   });
+  const enhancedMutationSetup = options.enhancedMutations
+    ? withDefaultMutationBroadcast({
+        ...options.enhancedMutations,
+        onAppliedQueries(queries) {
+          queryVisibleReturn.rememberAppliedQueries(queries);
+        },
+      })
+    : undefined;
+  const enhancedMutations = enhancedMutationSetup?.options;
 
   for (const eventName of events) {
     addLoaderListener(

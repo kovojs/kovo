@@ -21,6 +21,7 @@ export interface InstallMutationBroadcastOptions {
   channel: BroadcastLike;
   morph?: MorphFragment;
   onChanges?: (changes: readonly MutationChangeRecord[]) => void;
+  onAppliedQueries?: (queries: readonly string[]) => void;
   queryPlans?: CompiledQueryUpdatePlans;
   root?: MorphRoot;
   store: QueryStore;
@@ -29,6 +30,7 @@ export interface InstallMutationBroadcastOptions {
 export interface DefaultMutationBroadcastOptions {
   broadcast?: MutationBroadcast;
   morph?: MorphFragment;
+  onAppliedQueries?: (queries: readonly string[]) => void;
   queryPlans?: CompiledQueryUpdatePlans;
   root: MorphRoot;
   store: QueryStore;
@@ -48,6 +50,7 @@ export function withDefaultMutationBroadcast<Options extends DefaultMutationBroa
       channel: new globalThis.BroadcastChannel('jiso:mutation-response') as BroadcastLike,
       ...definedProps({
         morph: options.morph,
+        onAppliedQueries: options.onAppliedQueries,
         queryPlans: options.queryPlans,
       }),
       root: options.root,
@@ -79,7 +82,7 @@ export function installMutationBroadcast(
 
     // SPEC.md §9.2: same-user tab sync consumes the same mutation wire body
     // through the shared runtime apply path as the submitting tab.
-    applyMutationResponseToRuntime({
+    const applied = applyMutationResponseToRuntime({
       body: event.data.body,
       ...definedProps({
         morph: options.morph,
@@ -88,6 +91,7 @@ export function installMutationBroadcast(
       }),
       store: options.store,
     });
+    options.onAppliedQueries?.(applied.queries);
     if (changes.length > 0) {
       options.onChanges?.(changes);
     }

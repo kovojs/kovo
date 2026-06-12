@@ -43,8 +43,15 @@ describe('mutation broadcast', () => {
     const store = createQueryStore();
     const root = new FakeMorphRoot();
     const onChanges = vi.fn();
+    const onAppliedQueries = vi.fn();
 
-    const broadcast = installMutationBroadcast({ channel, onChanges, root, store });
+    const broadcast = installMutationBroadcast({
+      channel,
+      onAppliedQueries,
+      onChanges,
+      root,
+      store,
+    });
 
     broadcast.publish('<fw-query name="cart">{"count":1}</fw-query>', [
       { domain: 'cart', input: { productId: 'p1' } },
@@ -74,6 +81,7 @@ describe('mutation broadcast', () => {
     // direct enhanced submits, updating query data before fragment morphing.
     expect(store.get('cart')).toEqual({ count: 2 });
     expect(root.target.html).toBe('<cart-badge>2</cart-badge>');
+    expect(onAppliedQueries).toHaveBeenCalledWith(['cart']);
     expect(onChanges).toHaveBeenCalledWith([{ domain: 'cart', keys: ['cart:1'] }]);
   });
 

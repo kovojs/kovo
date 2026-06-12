@@ -1935,6 +1935,80 @@ describe('query store', () => {
     expect(store.get('recommendations')).toEqual({ items: ['p2'] });
   });
 
+  it('makes queries introduced by default broadcast replay eligible for visible-return refetch', async () => {
+    const globalRecord = globalThis as unknown as Record<string, unknown>;
+    const originalBroadcastChannel = globalRecord.BroadcastChannel;
+    const channels: FakeBroadcastChannel[] = [];
+    class TestBroadcastChannel extends FakeBroadcastChannel {
+      constructor() {
+        super();
+        channels.push(this);
+      }
+    }
+    globalRecord.BroadcastChannel = TestBroadcastChannel;
+
+    try {
+      const loaderRoot = new FakeRoot();
+      const mutationRoot = new FakeMorphRoot();
+      const store = createQueryStore();
+      const refetchOnFocus = vi.fn();
+      const fetch = vi.fn(async (url: string) => ({
+        status: 200,
+        text: async () =>
+          url === '/_q/cart'
+            ? '<fw-query name="cart">{"count":2}</fw-query>'
+            : '<fw-query name="reviews">{"items":["r2"]}</fw-query>',
+      }));
+      loaderRoot.scripts = [
+        {
+          getAttribute: (name) => (name === 'fw-query' ? 'cart' : null),
+          textContent: '{"count":1}',
+        },
+      ];
+
+      installJisoLoader({
+        enhancedMutations: {
+          fetch: vi.fn(),
+          root: mutationRoot,
+          store,
+        },
+        importModule: vi.fn(),
+        queryRefetch: { fetch },
+        queryStore: store,
+        refetchOnFocus,
+        root: loaderRoot,
+      });
+
+      channels[0]?.onmessage?.({
+        data: {
+          body: '<fw-query name="reviews">{"items":["r1"]}</fw-query>',
+          changes: [],
+          type: 'jiso:mutation-response',
+        },
+      });
+      loaderRoot.visibilityState = 'visible';
+      await loaderRoot.listeners.get('visibilitychange')?.({
+        target: null,
+        type: 'visibilitychange',
+      });
+
+      // SPEC.md §4.4: visible-return refetch follows query data introduced after loader install.
+      expect(refetchOnFocus).toHaveBeenCalledWith(['cart', 'reviews']);
+      expect(fetch).toHaveBeenNthCalledWith(1, '/_q/cart', {
+        headers: { Accept: 'text/html', 'FW-Fragment': 'true' },
+        method: 'GET',
+      });
+      expect(fetch).toHaveBeenNthCalledWith(2, '/_q/reviews', {
+        headers: { Accept: 'text/html', 'FW-Fragment': 'true' },
+        method: 'GET',
+      });
+      expect(store.get('cart')).toEqual({ count: 2 });
+      expect(store.get('reviews')).toEqual({ items: ['r2'] });
+    } finally {
+      globalRecord.BroadcastChannel = originalBroadcastChannel;
+    }
+  });
+
   it('registers pagehide optimism cleanup without unload handlers', () => {
     const root = new FakeRoot();
     const discardPendingOptimism = vi.fn();
