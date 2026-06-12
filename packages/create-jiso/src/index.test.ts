@@ -247,6 +247,45 @@ describe('create-jiso starter', () => {
     }
   });
 
+  it('typechecks the generated auth recipe with starter dependencies', () => {
+    const tempParent = join(process.cwd(), 'node_modules/.tmp');
+    mkdirSync(tempParent, { recursive: true });
+    const root = mkdtempSync(join(tempParent, 'create-jiso-auth-'));
+
+    try {
+      writeJisoProject(root, { name: 'Auth Proof' });
+      linkStarterBuildDependencies(root);
+
+      execFileSync(
+        resolveBin('tsc'),
+        [
+          '--ignoreConfig',
+          '--noEmit',
+          '--jsx',
+          'react-jsx',
+          '--jsxImportSource',
+          '@jiso/server',
+          '--module',
+          'NodeNext',
+          '--moduleResolution',
+          'NodeNext',
+          '--target',
+          'ES2024',
+          '--strict',
+          '--skipLibCheck',
+          '--exactOptionalPropertyTypes',
+          '--noUncheckedIndexedAccess',
+          '--types',
+          'node',
+          'src/auth.tsx',
+        ],
+        { cwd: root, stdio: 'pipe' },
+      );
+    } finally {
+      rmSync(root, { force: true, recursive: true });
+    }
+  });
+
   it('creates a new target directory from the CLI and derives the package name', () => {
     const parent = mkdtempSync(join(tmpdir(), 'create-jiso-cli-'));
     const root = join(parent, 'Hello CLI');
@@ -330,8 +369,10 @@ function linkStarterBuildDependencies(root: string): void {
   mkdirSync(join(nodeModules, '@tailwindcss'), { recursive: true });
 
   symlinkSync(resolveDependencyRoot('@tailwindcss/vite'), join(nodeModules, '@tailwindcss/vite'));
+  symlinkSync(resolveDependencyRoot('@jiso/better-auth'), join(nodeModules, '@jiso/better-auth'));
   symlinkSync(resolveDependencyRoot('@jiso/core'), join(nodeModules, '@jiso/core'));
   symlinkSync(resolveDependencyRoot('@jiso/runtime'), join(nodeModules, '@jiso/runtime'));
+  symlinkSync(resolveDependencyRoot('@jiso/server'), join(nodeModules, '@jiso/server'));
   symlinkSync(resolveDependencyRoot('tailwindcss'), join(nodeModules, 'tailwindcss'));
   symlinkSync(resolveDependencyRoot('vite-plus'), join(nodeModules, 'vite-plus'));
 }

@@ -47,6 +47,18 @@ Scope: SPEC additions (session population, guard-failure contract, mutation resp
       and
       `pnpm exec vp check packages/better-auth/src/index.ts conformance/better-auth-pin/src/index.test.ts conformance/better-auth-pin/package.json conformance/better-auth-pin/tsconfig.json vite.config.ts tests/fw-check.node.mjs pnpm-lock.yaml`.
 - [ ] B7 starter login recipe + reference-app adoption behind real `authed`/`role()` guards.
+      Partial evidence 2026-06-11: `packages/create-jiso/templates/src/auth.tsx` ships an
+      ejectable Better Auth starter recipe using `betterAuthSession`,
+      `betterAuthSignInEmailMutation`, `betterAuthSignOutMutation`, `authed`, and `role()`.
+      The generated login/logout forms post directly to `/_m/auth/sign-in` and
+      `/_m/auth/sign-out` with CSRF fields and only use `enhance` as a progressive upgrade; the
+      starter package template declares `@jiso/better-auth` and `@jiso/server` dependencies.
+      `packages/create-jiso/src/index.test.ts` now scaffolds `src/auth.tsx`, asserts the no-client
+      SDK form contract, and typechecks the generated auth recipe inside a scaffold with starter
+      dependencies linked. Same-session evidence:
+      `pnpm exec vitest --run packages/create-jiso/src/index.test.ts` and
+      `pnpm exec vp check packages/create-jiso/src/index.ts packages/create-jiso/src/index.test.ts packages/create-jiso/templates/src/auth.tsx packages/create-jiso/templates/package.json packages/create-jiso/templates/README.md`.
+      Reference-app adoption behind real `authed`/`role()` guards remains open.
 
 ## Background — the gap
 
