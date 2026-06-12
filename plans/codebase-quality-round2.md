@@ -805,6 +805,15 @@ pipeline throws the tree away and communicates via mutated source text.
       Same-session evidence:
       `pnpm exec vitest --run packages/compiler/src/model-pipeline.test.ts packages/compiler/src/index.test.ts packages/compiler/src/navigation-lowering.test.ts -t "compiler model pipeline|navigation|Link|href"` and
       `pnpm exec vp check packages/compiler/src/model-pipeline.ts packages/compiler/src/model-pipeline.test.ts packages/compiler/src/compile.ts`.
+      Additional evidence 2026-06-12: app-authored string-render diagnostics now consume
+      `ComponentModuleModel` facts from the caller-owned parse. `scan/parse.ts` records string
+      render return spans on component models, `validate/authoring-surface.ts` uses those facts
+      for normal app components, and `compile.ts` only keeps the standalone source parser for IR
+      artifacts and rare exported `renderSource` fallback checks. Same-session evidence:
+      `pnpm exec vitest --run packages/compiler/src/index.test.ts -t "FW235|compiler-emitted IR|fixpoint"`,
+      `pnpm exec vitest --run packages/compiler/src/scan/parse.test.ts packages/compiler/src/index.test.ts -t "string-rendered|FW235|component model|compiler-emitted IR"`,
+      `pnpm exec vp check packages/compiler/src/compile.ts packages/compiler/src/scan/parse.ts packages/compiler/src/validate/authoring-surface.ts`,
+      and `git diff --check`.
       and
       `pnpm exec vp check packages/compiler/src/index.ts packages/compiler/src/ir.ts packages/compiler/src/css.ts packages/compiler/src/emit/client.ts packages/compiler/src/emit/server.ts packages/compiler/src/emit/registry.ts packages/compiler/src/emit/bootstrap.ts packages/compiler/src/validate/authoring-surface.ts plans/codebase-quality-round2.md`.
       Additional evidence 2026-06-12: `packages/compiler/src/emit/registry.ts` now consumes

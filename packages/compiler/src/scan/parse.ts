@@ -103,6 +103,7 @@ export interface ComponentModel {
   renderHost?: RenderHostModel;
   renderInputs: readonly RenderInputModel[];
   stateReturnObject?: StateReturnObjectModel;
+  stringRenderReturns?: readonly StringRenderModel[];
 }
 
 export interface RenderHostModel {
@@ -119,6 +120,12 @@ export interface RenderInputModel {
 export interface StateReturnObjectModel {
   end: number;
   entries: readonly ObjectLiteralEntry[];
+  source: string;
+  start: number;
+}
+
+export interface StringRenderModel {
+  end: number;
   source: string;
   start: number;
 }
@@ -646,6 +653,7 @@ function componentModelFromInitializer(
     ...(render ? renderHostModel(sourceFile, render) : {}),
     renderInputs: render ? arrowObjectPatternKeys(sourceFile, render) : [],
     ...(stateReturnObject === null ? {} : { stateReturnObject }),
+    ...(render ? { stringRenderReturns: stringRenderReturns(sourceFile, source, render) } : {}),
   };
 }
 
@@ -687,6 +695,53 @@ function componentOptions(
       },
     ];
   });
+}
+
+function stringRenderReturns(
+  sourceFile: ts.SourceFile,
+  source: string,
+  render: ts.Expression,
+): StringRenderModel[] {
+  if (!ts.isArrowFunction(render) && !ts.isFunctionExpression(render)) return [];
+
+  if (ts.isBlock(render.body)) {
+    return render.body.statements.flatMap((statement) =>
+      ts.isReturnStatement(statement) && statement.expression
+        ? stringRenderModel(sourceFile, source, statement.expression)
+        : [],
+    );
+  }
+
+  return stringRenderModel(sourceFile, source, render.body);
+}
+
+function stringRenderModel(
+  sourceFile: ts.SourceFile,
+  source: string,
+  expression: ts.Expression,
+): StringRenderModel[] {
+  const unwrapped = unwrapParentheses(expression);
+  if (
+    !ts.isStringLiteralLike(unwrapped) &&
+    !ts.isNoSubstitutionTemplateLiteral(unwrapped) &&
+    !ts.isTemplateExpression(unwrapped)
+  ) {
+    return [];
+  }
+
+  return [
+    {
+      end: unwrapped.getEnd(),
+      source: source.slice(unwrapped.getStart(sourceFile), unwrapped.getEnd()),
+      start: unwrapped.getStart(sourceFile),
+    },
+  ];
+}
+
+function unwrapParentheses(expression: ts.Expression): ts.Expression {
+  let current = expression;
+  while (ts.isParenthesizedExpression(current)) current = current.expression;
+  return current;
 }
 
 function mutationHandlerModels(

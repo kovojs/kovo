@@ -36,9 +36,9 @@ export function compileComponentModule(options: CompileComponentOptions): Compil
     options.packageComponentPrefixes,
   );
   const compileOptions = { ...options, packageComponentPrefixes };
-  const authoringSurfaceDiagnostics = validateAuthoringSurface(options);
 
   if (isCompilerIrArtifact(options.source)) {
+    const authoringSurfaceDiagnostics = validateAuthoringSurface(options);
     return {
       ...createEmptyCompileResult(),
       diagnostics: authoringSurfaceDiagnostics,
@@ -53,6 +53,7 @@ export function compileComponentModule(options: CompileComponentOptions): Compil
   }
 
   const originalModel = parseComponentModuleModel(options.fileName, options.source);
+  const authoringSurfaceDiagnostics = validateAuthoringSurface(options, originalModel);
   const componentName = inferComponentName(options.fileName, originalModel);
   const viewTransitionLowering = lowerViewTransitions(options.source, originalModel);
   const viewTransitionModel = modelForComponentSourceChange(

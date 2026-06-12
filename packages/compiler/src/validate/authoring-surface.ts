@@ -3,6 +3,7 @@ import ts from 'typescript';
 
 import { diagnosticFor, type CompilerDiagnostic } from '../diagnostics.js';
 import { compilerIrHeader, cssIrHeader } from '../ir.js';
+import type { ComponentModuleModel } from '../scan/parse.js';
 import type { CompileComponentOptions } from '../types.js';
 
 interface StringRender {
@@ -11,7 +12,10 @@ interface StringRender {
   start: number;
 }
 
-export function validateAuthoringSurface(options: CompileComponentOptions): CompilerDiagnostic[] {
+export function validateAuthoringSurface(
+  options: CompileComponentOptions,
+  model?: ComponentModuleModel,
+): CompilerDiagnostic[] {
   if ((options.sourceProvenance ?? 'app') !== 'app') return [];
 
   if (isCompilerIrArtifact(options.source)) {
@@ -28,7 +32,16 @@ export function validateAuthoringSurface(options: CompileComponentOptions): Comp
     ];
   }
 
-  return stringRenderedComponents(options.fileName, options.source).map((render) =>
+  const renders = model
+    ? [
+        ...stringRenderedComponentsFromModel(model),
+        ...(options.source.includes('renderSource')
+          ? stringRenderedRenderSourceFunctions(options.fileName, options.source)
+          : []),
+      ]
+    : stringRenderedComponents(options.fileName, options.source);
+
+  return renders.map((render) =>
     fw235Diagnostic({
       fileName: options.fileName,
       source: options.source,
@@ -60,6 +73,44 @@ function stringRenderedComponents(fileName: string, source: string): StringRende
       }
     }
 
+    if (ts.isFunctionDeclaration(node) && node.name?.text === 'renderSource' && isExported(node)) {
+      renders.push(...htmlStringReturns(sourceFile, source, node.body));
+    }
+
+    ts.forEachChild(node, visit);
+  };
+
+  visit(sourceFile);
+  return renders;
+}
+
+function stringRenderedComponentsFromModel(model: ComponentModuleModel): StringRender[] {
+  return model.components.flatMap((component) =>
+    (component.stringRenderReturns ?? []).flatMap((render) =>
+      containsHtmlTag(render.source)
+        ? [
+            {
+              length: render.end - render.start,
+              source: render.source,
+              start: render.start,
+            },
+          ]
+        : [],
+    ),
+  );
+}
+
+function stringRenderedRenderSourceFunctions(fileName: string, source: string): StringRender[] {
+  const sourceFile = ts.createSourceFile(
+    fileName,
+    source,
+    ts.ScriptTarget.Latest,
+    true,
+    ts.ScriptKind.TSX,
+  );
+  const renders: StringRender[] = [];
+
+  const visit = (node: ts.Node): void => {
     if (ts.isFunctionDeclaration(node) && node.name?.text === 'renderSource' && isExported(node)) {
       renders.push(...htmlStringReturns(sourceFile, source, node.body));
     }
