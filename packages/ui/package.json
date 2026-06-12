@@ -4,10 +4,15 @@
   "type": "module",
   "exports": {
     ".": "./src/index.tsx",
+    "./alert": "./src/alert.tsx",
     "./badge": "./src/badge.tsx",
+    "./breadcrumb": "./src/breadcrumb.tsx",
     "./button": "./src/button.tsx",
     "./card": "./src/card.tsx",
-    "./sheet": "./src/sheet.tsx"
+    "./kbd": "./src/kbd.tsx",
+    "./sheet": "./src/sheet.tsx",
+    "./skeleton": "./src/skeleton.tsx",
+    "./table": "./src/table.tsx"
   },
   "dependencies": {
     "@jiso/core": "workspace:*",

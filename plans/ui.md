@@ -533,8 +533,19 @@ jiso-dialog` resolves dashed wire names and prints provenance including package,
       over the headless dialog attribute builders. Same-session evidence:
       `pnpm --filter @jiso/ui exec vitest --run`,
       `pnpm exec vp check packages/ui/package.json packages/ui/tsconfig.json packages/ui/src/index.tsx packages/ui/src/button.tsx packages/ui/src/badge.tsx packages/ui/src/card.tsx packages/ui/src/sheet.tsx packages/ui/src/index.test.tsx pnpm-lock.yaml plans/ui.md`,
-      and `git diff --check`. U3 remains open for kbd/alert/table/breadcrumb/skeleton,
+      and `git diff --check`. At that point U3 remained open for kbd/alert/table/breadcrumb/skeleton,
       drawer variants, and gallery/conformance verification.
+      Additional partial evidence 2026-06-12: `packages/ui/src/kbd.tsx`,
+      `packages/ui/src/alert.tsx`, `packages/ui/src/skeleton.tsx`,
+      `packages/ui/src/table.tsx`, and `packages/ui/src/breadcrumb.tsx` fill in the remaining
+      U3 pure-markup set as source-only TSX styled components. Breadcrumb separators compose
+      the existing `@jiso/headless-ui` separator attribute helper, and `packages/ui/src/index.test.tsx`
+      covers package exports, representative rendered markup, and the SPEC §5.2 no-lowered-IR
+      source constraint across the expanded package surface. Same-session evidence:
+      `pnpm --filter @jiso/ui exec vitest --run`,
+      `pnpm exec vp check packages/ui/package.json packages/ui/tsconfig.json packages/ui/src/index.tsx packages/ui/src/alert.tsx packages/ui/src/badge.tsx packages/ui/src/breadcrumb.tsx packages/ui/src/button.tsx packages/ui/src/card.tsx packages/ui/src/kbd.tsx packages/ui/src/sheet.tsx packages/ui/src/skeleton.tsx packages/ui/src/table.tsx packages/ui/src/index.test.tsx plans/ui.md`,
+      and `git diff --check`. U3 remains open for drawer variants and gallery/conformance
+      verification.
 - [ ] U4 styled components trailing H2.
 - [ ] U5 styled components trailing H3.
 - [ ] G1 `examples/gallery` app: one route per component; demos double as test fixtures.
@@ -643,8 +654,19 @@ Behavior contracts (state attributes, ARIA, keyboard maps, change reasons) are p
     Same-session evidence:
     `pnpm --filter @jiso/ui exec vitest --run`,
     `pnpm exec vp check packages/ui/package.json packages/ui/tsconfig.json packages/ui/src/index.tsx packages/ui/src/button.tsx packages/ui/src/badge.tsx packages/ui/src/card.tsx packages/ui/src/sheet.tsx packages/ui/src/index.test.tsx pnpm-lock.yaml plans/ui.md`,
-    and `git diff --check`. This does not complete U3; kbd/alert/table/breadcrumb/skeleton,
-    drawer variants, and gallery/conformance coverage remain.
+    and `git diff --check`. At that point U3 still needed kbd/alert/table/breadcrumb/skeleton,
+    drawer variants, and gallery/conformance coverage.
+  - Additional partial U3 package evidence 2026-06-12: `packages/ui/src/kbd.tsx`,
+    `packages/ui/src/alert.tsx`, `packages/ui/src/skeleton.tsx`, `packages/ui/src/table.tsx`,
+    and `packages/ui/src/breadcrumb.tsx` add the remaining pure-markup styled components,
+    with breadcrumb separators reusing the headless separator attributes. `packages/ui/package.json`
+    and `packages/ui/src/index.tsx` expose the new source subpaths, and `packages/ui/src/index.test.tsx`
+    asserts exports, rendered markup, and no lowered `fw-c`/`data-bind`/`@jiso-ir` artifacts
+    per SPEC §5.2. Same-session evidence:
+    `pnpm --filter @jiso/ui exec vitest --run`,
+    `pnpm exec vp check packages/ui/package.json packages/ui/tsconfig.json packages/ui/src/index.tsx packages/ui/src/alert.tsx packages/ui/src/badge.tsx packages/ui/src/breadcrumb.tsx packages/ui/src/button.tsx packages/ui/src/card.tsx packages/ui/src/kbd.tsx packages/ui/src/sheet.tsx packages/ui/src/skeleton.tsx packages/ui/src/table.tsx packages/ui/src/index.test.tsx plans/ui.md`,
+    and `git diff --check`. This does not complete U3; drawer variants and gallery/conformance
+    coverage remain.
 
 ## G-track — gallery (`examples/gallery`)
 
