@@ -992,6 +992,25 @@ jiso-dialog` resolves dashed wire names and prints provenance including package,
       and `pnpm --filter @jiso/example-gallery run test:browser`. G6 remains open for
       every remaining stateful-family compiled demo, broader live rerender synchronization,
       docs deployment wiring, and full gallery/conformance gates.
+      Additional partial evidence 2026-06-12: the compiled interactive gallery now adds an
+      app-authored alert-dialog demo, bringing the generated interactive set to eleven demos.
+      `examples/gallery/src/interactive/alert-dialog-demo.tsx` stays TSX-authored per
+      SPEC §5.2 while composing the H1 alert-dialog native `<dialog>`/invoker-command
+      attribute builders. The emitter commits the lowered TSX plus generated client module
+      with versioned trigger/cancel/action `on:click` refs. Static tests inspect those
+      generated refs and execute the open/cancel/action handlers; the Chromium browser test
+      installs the real `@jiso/runtime` loader and proves generated `fw-state` movement
+      alongside browser-visible `role="alertdialog"`, `aria-modal`, IDREF labelling,
+      autofocus/focus-inside behavior, native open/close top-layer state, and destructive
+      action wiring. Same-session evidence:
+      `pnpm --filter @jiso/example-gallery run emit:interactive-gallery -- --check`,
+      `pnpm --filter @jiso/example-gallery exec vitest --run src/interactive-gallery.test.ts`,
+      `pnpm --filter @jiso/example-gallery test`,
+      `pnpm --filter @jiso/example-gallery run test:browser`,
+      `pnpm exec vp check examples/gallery/scripts/emit-interactive-gallery.mjs examples/gallery/src/interactive/alert-dialog-demo.tsx examples/gallery/src/interactive-gallery.test.ts examples/gallery/src/interactive-gallery.browser.test.ts examples/gallery/src/generated/interactive/alert-dialog-demo.tsx examples/gallery/src/generated/interactive/alert-dialog-demo.client.js plans/ui.md IMPLEMENT_v1.md`,
+      and `git diff --check`. G6 remains open for every remaining stateful-family compiled
+      demo, broader live rerender synchronization, docs deployment wiring, and full
+      gallery/conformance gates.
 
 ## Background
 

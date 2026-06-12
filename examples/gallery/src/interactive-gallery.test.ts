@@ -23,6 +23,7 @@ describe('compiled interactive gallery demos', () => {
   }, 20_000);
 
   it('compiles stateful gallery demos into server TSX and client handler modules', () => {
+    const alertDialog = readGenerated('alert-dialog-demo.tsx');
     const toggle = readGenerated('toggle-demo.tsx');
     const checkbox = readGenerated('checkbox-demo.tsx');
     const collapsible = readGenerated('collapsible-demo.tsx');
@@ -33,6 +34,21 @@ describe('compiled interactive gallery demos', () => {
     const switchDemo = readGenerated('switch-demo.tsx');
     const tabs = readGenerated('tabs-demo.tsx');
     const tooltip = readGenerated('tooltip-demo.tsx');
+
+    expect(alertDialog).toContain('data-gallery-interactive="alert-dialog"');
+    expect(alertDialog).toContain('fw-state=\'{"open":false}\'');
+    expect(alertDialog).toContain('alertDialogTriggerAttributes({ contentId, open: state.open })');
+    expect(alertDialog).toContain('alertDialogCancelAttributes({');
+    expect(alertDialog).toContain("intent: 'destructive'");
+    expect(alertDialog).toMatch(
+      /on:click="\/c\/examples\/gallery\/src\/generated\/interactive\/alert-dialog-demo\.client\.js\?v=[0-9a-f]{8}#GalleryAlertDialogDemo\$button_click"/,
+    );
+    expect(alertDialog).toMatch(
+      /on:click="\/c\/examples\/gallery\/src\/generated\/interactive\/alert-dialog-demo\.client\.js\?v=[0-9a-f]{8}#GalleryAlertDialogDemo\$button_click_2"/,
+    );
+    expect(alertDialog).toMatch(
+      /on:click="\/c\/examples\/gallery\/src\/generated\/interactive\/alert-dialog-demo\.client\.js\?v=[0-9a-f]{8}#GalleryAlertDialogDemo\$button_click_3"/,
+    );
 
     expect(toggle).toContain('data-gallery-interactive="toggle"');
     expect(toggle).toContain('fw-state=\'{"pressed":false}\'');
@@ -114,6 +130,7 @@ describe('compiled interactive gallery demos', () => {
   });
 
   it('executes generated client behavior for the stateful demos', () => {
+    const alertDialog = evaluateClientModule('alert-dialog-demo.client.js');
     const toggle = evaluateClientModule('toggle-demo.client.js');
     const checkbox = evaluateClientModule('checkbox-demo.client.js');
     const collapsible = evaluateClientModule('collapsible-demo.client.js');
@@ -125,6 +142,31 @@ describe('compiled interactive gallery demos', () => {
     const tabs = evaluateClientModule('tabs-demo.client.js');
     const tooltip = evaluateClientModule('tooltip-demo.client.js');
     const signal = new AbortController().signal;
+
+    const alertDialogState = { open: false };
+    clientHandler(alertDialog, 'GalleryAlertDialogDemo$button_click')(new Event('click'), {
+      params: {},
+      signal,
+      state: alertDialogState,
+    });
+    expect(alertDialogState).toEqual({ open: true });
+    clientHandler(alertDialog, 'GalleryAlertDialogDemo$button_click_2')(new Event('click'), {
+      params: {},
+      signal,
+      state: alertDialogState,
+    });
+    expect(alertDialogState).toEqual({ open: false });
+    clientHandler(alertDialog, 'GalleryAlertDialogDemo$button_click')(new Event('click'), {
+      params: {},
+      signal,
+      state: alertDialogState,
+    });
+    clientHandler(alertDialog, 'GalleryAlertDialogDemo$button_click_3')(new Event('click'), {
+      params: {},
+      signal,
+      state: alertDialogState,
+    });
+    expect(alertDialogState).toEqual({ open: false });
 
     const toggleState = { pressed: false };
     clientHandler(toggle, 'GalleryToggleDemo$button_click')(new Event('click'), {

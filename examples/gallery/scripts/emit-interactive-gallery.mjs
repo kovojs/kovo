@@ -24,6 +24,7 @@ const repoRoot = resolve(galleryRoot, '../..');
 const checkOnly = process.argv.includes('--check');
 
 const demos = [
+  'alert-dialog-demo',
   'checkbox-demo',
   'collapsible-demo',
   'disclosure-demo',

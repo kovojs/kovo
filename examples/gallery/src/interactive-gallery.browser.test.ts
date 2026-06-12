@@ -3,6 +3,9 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { userEvent } from 'vitest/browser';
 
 // @ts-expect-error generated client modules are compiler artifacts without declarations.
+import * as alertDialogClient from './generated/interactive/alert-dialog-demo.client.js';
+import { GalleryAlertDialogDemo } from './generated/interactive/alert-dialog-demo.js';
+// @ts-expect-error generated client modules are compiler artifacts without declarations.
 import * as checkboxClient from './generated/interactive/checkbox-demo.client.js';
 import { GalleryCheckboxDemo } from './generated/interactive/checkbox-demo.js';
 // @ts-expect-error generated client modules are compiler artifacts without declarations.
@@ -41,6 +44,7 @@ interface InteractiveDemoComponent {
 }
 
 const generatedModules: Record<string, Record<string, unknown>> = {
+  '/c/examples/gallery/src/generated/interactive/alert-dialog-demo.client.js': alertDialogClient,
   '/c/examples/gallery/src/generated/interactive/checkbox-demo.client.js': checkboxClient,
   '/c/examples/gallery/src/generated/interactive/collapsible-demo.client.js': collapsibleClient,
   '/c/examples/gallery/src/generated/interactive/disclosure-demo.client.js': disclosureClient,
@@ -58,6 +62,70 @@ afterEach(() => {
 });
 
 describe('compiled interactive gallery demos in the browser', () => {
+  it('opens and resolves a native alert dialog through generated handlers', async () => {
+    const root = mountInteractiveDemo(GalleryAlertDialogDemo);
+    const trigger = required(root.querySelector<HTMLButtonElement>('button[command="show-modal"]'));
+    const dialog = required(
+      root.querySelector<HTMLDialogElement>('#gallery-interactive-alert-dialog-content'),
+    );
+    const cancel = required(dialog.querySelector<HTMLButtonElement>('[data-intent="cancel"]'));
+    const action = required(dialog.querySelector<HTMLButtonElement>('[data-intent="destructive"]'));
+    const output = required(
+      root.querySelector<HTMLOutputElement>('[data-demo-state="alert-dialog-open"]'),
+    );
+    const { imports } = installGeneratedGalleryLoader(root);
+
+    expect(root.getAttribute('fw-state')).toBe('{"open":false}');
+    expect(trigger.getAttribute('aria-haspopup')).toBe('dialog');
+    expect(trigger.getAttribute('aria-controls')).toBe('gallery-interactive-alert-dialog-content');
+    expect(dialog.open).toBe(false);
+    expect(dialog.getAttribute('role')).toBe('alertdialog');
+    expect(dialog.getAttribute('aria-modal')).toBe('true');
+    expect(dialog.getAttribute('aria-labelledby')).toBe('gallery-interactive-alert-dialog-title');
+    expect(dialog.getAttribute('aria-describedby')).toBe(
+      'gallery-interactive-alert-dialog-description',
+    );
+    expect(cancel.autofocus).toBe(true);
+    expect(action.getAttribute('command')).toBe('request-close');
+    expect(output.textContent).toBe('closed');
+
+    trigger.click();
+
+    await vi.waitFor(() => {
+      expect(imports).toEqual([
+        '/c/examples/gallery/src/generated/interactive/alert-dialog-demo.client.js',
+      ]);
+      expect(root.getAttribute('fw-state')).toBe('{"open":true}');
+      expect(dialog.open).toBe(true);
+    });
+
+    await vi.waitFor(() => {
+      expect(dialog.contains(document.activeElement)).toBe(true);
+    });
+
+    cancel.click();
+
+    await vi.waitFor(() => {
+      expect(root.getAttribute('fw-state')).toBe('{"open":false}');
+      expect(dialog.open).toBe(false);
+      expect(output.textContent).toBe('closed');
+    });
+
+    trigger.click();
+
+    await vi.waitFor(() => {
+      expect(root.getAttribute('fw-state')).toBe('{"open":true}');
+      expect(dialog.open).toBe(true);
+    });
+
+    action.click();
+
+    await vi.waitFor(() => {
+      expect(root.getAttribute('fw-state')).toBe('{"open":false}');
+      expect(dialog.open).toBe(false);
+    });
+  });
+
   it('updates toggle stamped state from generated click and keyboard handlers', async () => {
     const root = mountInteractiveDemo(GalleryToggleDemo);
     const { imports } = installGeneratedGalleryLoader(root);
