@@ -48,7 +48,7 @@ class MemoryMcpTransport implements Transport {
 describe('fw add', () => {
   it('keeps the vendored UI catalog synchronized with @jiso/ui package source', () => {
     expect(availableAddComponents()).toBe(
-      'alert, badge, breadcrumb, button, card, drawer, kbd, sheet, skeleton, table',
+      'alert, badge, breadcrumb, button, card, checkbox, drawer, kbd, sheet, skeleton, switch, table, toggle',
     );
 
     const manifest = JSON.parse(
@@ -111,10 +111,13 @@ describe('fw add', () => {
           'breadcrumb',
           'button',
           'card',
+          'checkbox',
           'kbd',
           'sheet',
           'skeleton',
+          'switch',
           'table',
+          'toggle',
           '--out',
           outDir,
         ]),
@@ -139,6 +142,9 @@ describe('fw add', () => {
         `ADD card path=${JSON.stringify(join(outDir, 'card.tsx'))} source=tsx`,
       );
       expect(output).toContain(
+        `ADD checkbox path=${JSON.stringify(join(outDir, 'checkbox.tsx'))} source=tsx`,
+      );
+      expect(output).toContain(
         `ADD kbd path=${JSON.stringify(join(outDir, 'kbd.tsx'))} source=tsx`,
       );
       expect(output).toContain(
@@ -148,7 +154,13 @@ describe('fw add', () => {
         `ADD skeleton path=${JSON.stringify(join(outDir, 'skeleton.tsx'))} source=tsx`,
       );
       expect(output).toContain(
+        `ADD switch path=${JSON.stringify(join(outDir, 'switch.tsx'))} source=tsx`,
+      );
+      expect(output).toContain(
         `ADD table path=${JSON.stringify(join(outDir, 'table.tsx'))} source=tsx`,
+      );
+      expect(output).toContain(
+        `ADD toggle path=${JSON.stringify(join(outDir, 'toggle.tsx'))} source=tsx`,
       );
 
       const alert = readFileSync(join(outDir, 'alert.tsx'), 'utf8');
@@ -156,10 +168,13 @@ describe('fw add', () => {
       const breadcrumb = readFileSync(join(outDir, 'breadcrumb.tsx'), 'utf8');
       const button = readFileSync(join(outDir, 'button.tsx'), 'utf8');
       const card = readFileSync(join(outDir, 'card.tsx'), 'utf8');
+      const checkbox = readFileSync(join(outDir, 'checkbox.tsx'), 'utf8');
       const kbd = readFileSync(join(outDir, 'kbd.tsx'), 'utf8');
       const sheet = readFileSync(join(outDir, 'sheet.tsx'), 'utf8');
       const skeleton = readFileSync(join(outDir, 'skeleton.tsx'), 'utf8');
+      const switchSource = readFileSync(join(outDir, 'switch.tsx'), 'utf8');
       const table = readFileSync(join(outDir, 'table.tsx'), 'utf8');
+      const toggle = readFileSync(join(outDir, 'toggle.tsx'), 'utf8');
       expect(alert).toContain("export const Alert = component('alert'");
       expect(alert).toContain('export const alertClassNames = defineVariants');
       expect(badge).toContain("export const Badge = component('badge'");
@@ -171,24 +186,33 @@ describe('fw add', () => {
       expect(button).toContain('export const buttonClassNames = defineVariants');
       expect(card).toContain("export const Card = component('card'");
       expect(card).toContain('export const cardClassNames =');
+      expect(checkbox).toContain("export const Checkbox = component('checkbox'");
+      expect(checkbox).toContain('export const checkboxClassNames = defineVariants');
       expect(kbd).toContain("export const Kbd = component('kbd'");
       expect(kbd).toContain('export const kbdClassNames =');
       expect(sheet).toContain("export const Sheet = component('sheet'");
       expect(sheet).toContain('export const sheetContentClassNames = defineVariants');
       expect(skeleton).toContain("export const Skeleton = component('skeleton'");
       expect(skeleton).toContain('export const skeletonClassNames =');
+      expect(switchSource).toContain("export const Switch = component('switch'");
+      expect(switchSource).toContain('export const switchClassNames = defineVariants');
       expect(table).toContain("export const Table = component('table'");
       expect(table).toContain("export const TableHead = component('table-head'");
+      expect(toggle).toContain("export const Toggle = component('toggle'");
+      expect(toggle).toContain('export const toggleClassNames = defineVariants');
       const vendoredSource = [
         alert,
         badge,
         breadcrumb,
         button,
         card,
+        checkbox,
         kbd,
         sheet,
         skeleton,
+        switchSource,
         table,
+        toggle,
       ].join('\n');
       expect(vendoredSource).not.toContain('@jiso/ui');
       expect(vendoredSource).not.toContain('fw-c=');
@@ -232,7 +256,7 @@ describe('fw add', () => {
 
       expect(stdout).not.toHaveBeenCalled();
       expect(stderr.mock.calls.map(([chunk]) => String(chunk)).join('')).toBe(
-        'fw: unknown component "dialog". available: alert, badge, breadcrumb, button, card, drawer, kbd, sheet, skeleton, table.\n',
+        'fw: unknown component "dialog". available: alert, badge, breadcrumb, button, card, checkbox, drawer, kbd, sheet, skeleton, switch, table, toggle.\n',
       );
     } finally {
       stdout.mockRestore();
