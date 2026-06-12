@@ -101,7 +101,7 @@ export function validateStampExpressionDrift(
 ): CompilerDiagnostic[] {
   const knownQueries = knownQueryNames(model, options);
 
-  return bindingExpressionStamps(source, model)
+  return bindingExpressionStamps(model)
     .filter(
       (stamp) =>
         queryPathUsesKnownQuery(stamp.binding, knownQueries) &&
@@ -132,7 +132,6 @@ export function dataBindListTemplateBodies(
 }
 
 function bindingExpressionStamps(
-  source: string,
   model: ComponentModuleModel,
 ): Array<{ binding: string; expression: string; index: number; length: number }> {
   return jsxElements(model).flatMap((element) => {
@@ -141,8 +140,7 @@ function bindingExpressionStamps(
     if (!attribute || !binding) return [];
     if (element.selfClosing) return [];
 
-    const expression =
-      soleJsxExpressionForElement(source, element, model)?.solePropertyAccessPath ?? null;
+    const expression = soleJsxExpressionForElement(element, model)?.solePropertyAccessPath ?? null;
     return expression
       ? [{ binding, expression, index: attribute.start, length: attribute.end - attribute.start }]
       : [];
@@ -150,11 +148,10 @@ function bindingExpressionStamps(
 }
 
 function soleJsxExpressionForElement(
-  source: string,
   element: JsxElementModel,
   model: ComponentModuleModel,
 ): JsxExpressionModel | null {
-  const content = source.slice(element.openingEnd, element.closingStart).trim();
+  const content = element.childSource.trim();
   if (!content.trim().startsWith('{') || !content.trim().endsWith('}')) return null;
 
   const expressions = model.jsxExpressions.filter(

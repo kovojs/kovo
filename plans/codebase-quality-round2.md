@@ -659,6 +659,13 @@ pipeline throws the tree away and communicates via mutated source text.
       `pnpm exec vitest --run packages/compiler/src/compile-component.test.ts packages/compiler/src/model-pipeline.test.ts`,
       `pnpm exec vitest --run packages/compiler/src`, and
       `pnpm exec vp check packages/compiler/src/compile.ts packages/compiler/src/emit/server.ts plans/codebase-quality-round2.md`.
+      Additional evidence 2026-06-12: inline text binding lowering and hand-written binding stamp
+      drift validation now use parser-owned `JsxElementModel.childSource` when deciding whether a
+      JSX element body is a sole expression, removing another validator/lowerer dependency on
+      ad-hoc module-source slicing for child content. Same-session evidence:
+      `pnpm exec vitest --run packages/compiler/src/query-coverage.test.ts packages/compiler/src/query-bindings.test.ts packages/compiler/src/stamps.test.ts`
+      and
+      `pnpm exec vp check packages/compiler/src/lower/inline-derives.ts packages/compiler/src/validate/bindings.ts`.
       Partial evidence 2026-06-11: `serverRenderSource` now parses once after handler lowering
       with the author file name and stamps component identity, declared query deps, and initial
       state onto the render host through one in-memory tag update instead of reparsing for each

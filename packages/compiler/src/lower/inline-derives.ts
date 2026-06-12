@@ -78,7 +78,7 @@ export function lowerInlineAttributeDerives(
   }
 
   for (const element of jsxElements(model)) {
-    const binding = inlineTextBinding(element, source, model, knownQueries);
+    const binding = inlineTextBinding(element, model, knownQueries);
     if (!binding) continue;
 
     replacements.push({
@@ -159,14 +159,13 @@ function shouldSkipInlineAttributeDerive(name: string): boolean {
 
 function inlineTextBinding(
   element: JsxElementModel,
-  source: string,
   model: ComponentModuleModel,
   knownQueries: ReadonlySet<string>,
 ): string | null {
   if (element.selfClosing) return null;
   if (element.attributes.some((attribute) => isBindingAttributeName(attribute.name))) return null;
 
-  const content = source.slice(element.openingEnd, element.closingStart).trim();
+  const content = element.childSource.trim();
   if (!content.startsWith('{') || !content.endsWith('}')) return null;
 
   const expression = soleJsxExpressionForElement(element, model)?.solePropertyAccessPath ?? null;
@@ -189,7 +188,7 @@ function inlineMixedTextBinding(
   const element = innermostContainingElement(expression, model);
   if (!element) return null;
   if (element.attributes.some((attribute) => isBindingAttributeName(attribute.name))) return null;
-  if (inlineTextBinding(element, source, model, knownQueries) !== null) return null;
+  if (inlineTextBinding(element, model, knownQueries) !== null) return null;
 
   const start = source.lastIndexOf('{', expression.start);
   const end = source.indexOf('}', expression.end);
