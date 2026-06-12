@@ -1427,6 +1427,15 @@ params, relational API, `execute(sql)`, right/full joins, a string column named 
       SPEC §4.4 hydration/refetch contract. Same-session evidence:
       `pnpm exec vitest --run packages/runtime/src/query-refetch.test.ts packages/runtime/src/query-store.test.ts packages/runtime/src/index.test.ts -t "hydrate|visible-return|refetch"` and
       `pnpm exec vp check packages/runtime/src/index.ts packages/runtime/src/query-refetch.ts packages/runtime/src/query-refetch.test.ts`.
+      Additional bounded evidence 2026-06-12: `installJisoLoader` now re-scans only newly
+      discovered `script[fw-query]` nodes before visible-return refetch, so query scripts inserted
+      after loader installation hydrate into the query store and enter the refetch ledger without
+      reprocessing previously seen scripts. `packages/runtime/src/query-store.test.ts` pins that a
+      post-install `reviews` script is hydrated, included in the refetch list, and updated by the
+      typed read response. Same-session evidence:
+      `pnpm exec vitest --run packages/runtime/src/query-refetch.test.ts packages/runtime/src/query-store.test.ts packages/runtime/src/index.test.ts -t "hydrate|visible-return|refetch"`,
+      `pnpm exec vp check packages/runtime/src/index.ts packages/runtime/src/query-store.test.ts plans/codebase-quality-round2.md`,
+      and `git diff --check`.
 
 Verification: runtime node + browser suites; gzip budget; the new parity suite is the gate for
 any future inline-loader edit. Partial evidence 2026-06-12: `packages/runtime/src/index.ts` now

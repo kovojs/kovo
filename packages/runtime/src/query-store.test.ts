@@ -350,4 +350,63 @@ describe('query store hydration and refetch', () => {
     expect(store.get('cart')).toEqual({ count: 3 });
     expect(plan).toHaveBeenLastCalledWith({ count: 3 });
   });
+
+  it('discovers fw-query scripts inserted after install before visible-return refetch', async () => {
+    const root = new FakeRoot();
+    const store = createQueryStore();
+    const cartPlan = vi.fn();
+    const reviewsPlan = vi.fn();
+    const refetchOnFocus = vi.fn();
+    const fetch = vi.fn(async (url: string) => ({
+      status: 200,
+      text: async () =>
+        url === '/_q/cart'
+          ? '<fw-query name="cart">{"count":2}</fw-query>'
+          : '<fw-query name="reviews">{"total":7}</fw-query>',
+    }));
+
+    root.scripts = [
+      {
+        getAttribute: (name) => (name === 'fw-query' ? 'cart' : null),
+        textContent: '{"count":1}',
+      },
+    ];
+    store.subscribe('cart', cartPlan);
+    store.subscribe('reviews', reviewsPlan);
+
+    installJisoLoader({
+      importModule: vi.fn(),
+      queryRefetch: { fetch },
+      queryStore: store,
+      refetchOnFocus,
+      root,
+    });
+
+    expect(store.get('cart')).toEqual({ count: 1 });
+    expect(store.get('reviews')).toBeUndefined();
+
+    root.scripts.push({
+      getAttribute: (name) => (name === 'fw-query' ? 'reviews' : null),
+      textContent: '{"total":5}',
+    });
+
+    root.visibilityState = 'visible';
+    await root.listeners.get('visibilitychange')?.({ target: null, type: 'visibilitychange' });
+
+    // SPEC.md §4.4: visible-return refetch tracks hydrated query data discovered after install.
+    expect(refetchOnFocus).toHaveBeenCalledWith(['cart', 'reviews']);
+    expect(fetch).toHaveBeenNthCalledWith(1, '/_q/cart', {
+      headers: { Accept: 'text/html', 'FW-Fragment': 'true' },
+      method: 'GET',
+    });
+    expect(fetch).toHaveBeenNthCalledWith(2, '/_q/reviews', {
+      headers: { Accept: 'text/html', 'FW-Fragment': 'true' },
+      method: 'GET',
+    });
+    expect(store.get('cart')).toEqual({ count: 2 });
+    expect(store.get('reviews')).toEqual({ total: 7 });
+    expect(cartPlan).toHaveBeenLastCalledWith({ count: 2 });
+    expect(reviewsPlan).toHaveBeenNthCalledWith(1, { total: 5 });
+    expect(reviewsPlan).toHaveBeenNthCalledWith(2, { total: 7 });
+  });
 });

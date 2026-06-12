@@ -228,24 +228,35 @@ export function installJisoLoader(options: JisoLoaderOptions): JisoLoader {
   const islandSignalScope = createIslandSignalScope();
   const disposers: Array<() => void> = [];
   const hydratedQueryLedger = createRefetchQueryLedger();
+  const seenQueryScripts = new Set<QueryScriptLike>();
   const enhancedMutationSetup = options.enhancedMutations
     ? withDefaultMutationBroadcast(options.enhancedMutations)
     : undefined;
   const enhancedMutations = enhancedMutationSetup?.options;
 
-  if (options.queryStore && options.root.querySelectorAll) {
+  const hydrateNewQueryScripts = () => {
+    if (!options.queryStore || !options.root.querySelectorAll) return;
+
+    const scripts: QueryScriptLike[] = [];
+    for (const script of options.root.querySelectorAll(
+      'script[fw-query]',
+    ) as Iterable<QueryScriptLike>) {
+      if (seenQueryScripts.has(script)) continue;
+
+      seenQueryScripts.add(script);
+      scripts.push(script);
+    }
+
     hydratedQueryLedger.remember(
-      hydrateQueryScripts(
-        options.queryStore,
-        options.root.querySelectorAll('script[fw-query]') as Iterable<QueryScriptLike>,
-        {
-          onError(error) {
-            options.onError?.(error, { phase: 'query-hydration' });
-          },
+      hydrateQueryScripts(options.queryStore, scripts, {
+        onError(error) {
+          options.onError?.(error, { phase: 'query-hydration' });
         },
-      ),
+      }),
     );
-  }
+  };
+
+  hydrateNewQueryScripts();
 
   for (const eventName of events) {
     addLoaderListener(
@@ -275,7 +286,12 @@ export function installJisoLoader(options: JisoLoaderOptions): JisoLoader {
   }
 
   if (options.refetchOnFocus || (options.queryRefetch && options.queryStore)) {
-    const refetchEligibleQueries = () => hydratedQueryLedger.eligible(options.refetchOnFocusOptOut);
+    const refetchEligibleQueries = () => {
+      // SPEC.md §4.4: visible-return refetch follows hydrated query data, including
+      // query scripts introduced by later fragment/stream DOM updates.
+      hydrateNewQueryScripts();
+      return hydratedQueryLedger.eligible(options.refetchOnFocusOptOut);
+    };
     let refetchInFlight: Promise<void> | undefined;
     const refetchOnFocus = async () => {
       const queries = refetchEligibleQueries();
