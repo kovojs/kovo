@@ -62,7 +62,7 @@ content or severities (SPEC §11.3 owns those); `fw check`/`fw explain` semantic
       `pnpm exec vp check packages/cli/src/index.ts packages/cli/src/index.test.ts packages/cli/package.json plans/diagnostics.md pnpm-lock.yaml`.
 - [x] M2 in-memory compile tool contract documented and versioned (`compile/v1`), proving the
       generate→compile→repair loop works before a file touches disk.
-- [ ] Gate wiring: seeded-diagnostic fixtures prove each surface red/green behaviorally (per the
+- [x] Gate wiring: seeded-diagnostic fixtures prove each surface red/green behaviorally (per the
       round-2 Phase 1 rule: behavior, never source-text grepping).
       Evidence 2026-06-12: page-route dev middleware gate now has a focused red/green test in
       `packages/server/src/vite-diagnostics.test.ts`: a seeded FW225 error diagnostic returns the
@@ -103,8 +103,12 @@ content or severities (SPEC §11.3 owns those); `fw check`/`fw explain` semantic
       transform result while `jisoVitePlugin({ onDiagnostic })` receives the structured lint
       diagnostic. Same-session evidence:
       `node --test --test-name-pattern "D10 seeded diagnostics gate" tests/fw-check.node.mjs`.
-      Gap: this strengthens the full `vp build` fixture path for the Vite build surface, but the
-      broader gate remains open until every required surface has red/green command-level coverage.
+      Audit evidence 2026-06-12: the required SPEC §11.3 surfaces are now behaviorally covered
+      red/green: Vite transform and lint callback, `vp build`, dev page/enhanced-mutation/no-JS
+      teaching documents, static export API, `fw export`, MCP object dispatch, and fallback MCP
+      stdio. Same-session evidence:
+      `node --test --test-name-pattern "D10 seeded diagnostics gate" tests/fw-check.node.mjs`
+      and `pnpm exec vitest --run packages/server/src/vite-diagnostics.test.ts`.
 
 ## Background
 
