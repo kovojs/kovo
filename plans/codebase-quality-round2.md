@@ -2838,6 +2838,18 @@ params, relational API, `execute(sql)`, right/full joins, a string column named 
       `corepack pnpm exec vitest --run packages/runtime/src/broadcast.test.ts packages/runtime/src/index.test.ts -t "broadcast|visible-return refetch|introduced by default broadcast"`,
       `corepack pnpm exec vp check packages/runtime/src/broadcast.ts packages/runtime/src/loader.ts packages/runtime/src/broadcast.test.ts packages/runtime/src/index.test.ts`,
       and `git diff --check`.
+      Additional bounded evidence 2026-06-12: typed-read query chunks returned during
+      visible-return refetch are now pinned directly in `packages/runtime/src/query-refetch.test.ts`
+      as additions to the same refetch ledger used by hydration, enhanced mutation, deferred, and
+      broadcast query application; the next visible return refetches both the original hydrated
+      query and the typed-read-introduced query. Redundant visible-return callback, opt-out,
+      malformed-hydration, dedupe, and direct `refetchQueries` coverage moved out of
+      `packages/runtime/src/query-store.test.ts`, leaving that suite focused on query-store
+      hydration plus mutation/broadcast introduction integration. Same-session evidence:
+      `pnpm exec vitest --run packages/runtime/src/query-refetch.test.ts packages/runtime/src/query-store.test.ts packages/runtime/src/index.test.ts -t "hydrate|visible-return|refetch|query chunks returned by typed reads|introduced by enhanced mutations|introduced by default broadcast"`,
+      `pnpm --filter @jiso/runtime run check:inline-loader`,
+      `pnpm exec vp check packages/runtime/src/query-refetch.test.ts packages/runtime/src/query-store.test.ts plans/codebase-quality-round2.md`,
+      and `git diff --check`.
 
 Verification: runtime node + browser suites; gzip budget; the new parity suite is the gate for
 any future inline-loader edit. Partial evidence 2026-06-12: `packages/runtime/src/index.ts` now
@@ -3735,6 +3747,16 @@ As each phase splits a source module, split its tests in the same commit.
       Same-session evidence:
       `pnpm exec vitest --run packages/runtime/src/inline-loader.test.ts packages/runtime/src/index.test.ts -t "inline response application|inline delegated|enhanced form request targets"`,
       `pnpm exec vp check packages/runtime/src/inline-loader.test.ts packages/runtime/src/index.test.ts plans/codebase-quality-round2.md`,
+      and `git diff --check`.
+      Additional evidence 2026-06-12: visible-return callback, opt-out, malformed-hydration,
+      in-flight dedupe, and direct typed-read refetch coverage was removed from
+      `packages/runtime/src/query-store.test.ts` after equivalent seam coverage landed in
+      `packages/runtime/src/query-refetch.test.ts`; the query-refetch suite now also pins
+      typed-read-returned query chunks entering the ledger for the next visible return, while
+      query-store keeps the mutation and broadcast query-introduction integration cases.
+      Same-session evidence:
+      `pnpm exec vitest --run packages/runtime/src/query-refetch.test.ts packages/runtime/src/query-store.test.ts packages/runtime/src/index.test.ts -t "hydrate|visible-return|refetch|query chunks returned by typed reads|introduced by enhanced mutations|introduced by default broadcast"`,
+      `pnpm exec vp check packages/runtime/src/query-refetch.test.ts packages/runtime/src/query-store.test.ts plans/codebase-quality-round2.md`,
       and `git diff --check`.
 - [x] compiler/index.test.ts (3,580 lines, zero per-module tests) → per-phase files; a
       `compileFixture()` helper returning files by kind; diagnostic assertions reference

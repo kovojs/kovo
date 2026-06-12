@@ -96,6 +96,62 @@ describe('query refetch', () => {
     expect(root.listeners.has('visibilitychange')).toBe(false);
   });
 
+  it('makes query chunks returned by typed reads eligible for the next visible-return refetch', async () => {
+    const root = new FakeVisibleReturnRoot();
+    const store = createQueryStore();
+    const refetchOnFocus = vi.fn();
+    const fetch = vi.fn(async (url: string) => ({
+      status: 200,
+      text: async () =>
+        url === '/_q/cart'
+          ? [
+              '<fw-query name="cart">{"count":2}</fw-query>',
+              '<fw-query name="recommendations">{"items":["p1"]}</fw-query>',
+            ].join('')
+          : '<fw-query name="recommendations">{"items":["p2"]}</fw-query>',
+    }));
+
+    root.scripts = [
+      {
+        getAttribute: (name) => (name === 'fw-query' ? 'cart' : null),
+        textContent: '{"count":1}',
+      },
+    ];
+
+    installQueryVisibleReturnRefetch({
+      queryRefetch: { fetch },
+      queryScripts: () => root.querySelectorAll('script[fw-query]'),
+      queryStore: store,
+      refetchOnFocus,
+      root,
+    });
+
+    await root.listeners.get('visibilitychange')?.({});
+
+    expect(refetchOnFocus).toHaveBeenNthCalledWith(1, ['cart']);
+    expect(fetch).toHaveBeenNthCalledWith(1, '/_q/cart', {
+      headers: { Accept: 'text/html', 'FW-Fragment': 'true' },
+      method: 'GET',
+    });
+    expect(store.get('cart')).toEqual({ count: 2 });
+    expect(store.get('recommendations')).toEqual({ items: ['p1'] });
+
+    await root.listeners.get('visibilitychange')?.({});
+
+    // SPEC.md §4.4: typed-read query chunks join the same visible-return
+    // ledger as server-rendered hydration and later mutation/deferred chunks.
+    expect(refetchOnFocus).toHaveBeenNthCalledWith(2, ['cart', 'recommendations']);
+    expect(fetch).toHaveBeenNthCalledWith(2, '/_q/cart', {
+      headers: { Accept: 'text/html', 'FW-Fragment': 'true' },
+      method: 'GET',
+    });
+    expect(fetch).toHaveBeenNthCalledWith(3, '/_q/recommendations', {
+      headers: { Accept: 'text/html', 'FW-Fragment': 'true' },
+      method: 'GET',
+    });
+    expect(store.get('recommendations')).toEqual({ items: ['p2'] });
+  });
+
   it('forwards visible-return typed read parse errors to the loader error seam', async () => {
     const root = new FakeVisibleReturnRoot();
     const store = createQueryStore();
