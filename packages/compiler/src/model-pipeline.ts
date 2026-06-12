@@ -1,3 +1,9 @@
+import {
+  applySourceReplacementsWithOffsetMap,
+  type SourceOffsetMap,
+  type SourceReplacement,
+} from './shared.js';
+
 export interface ModelForSourceChangeOptions<Model> {
   fileName: string;
   nextSource: string;
@@ -10,6 +16,11 @@ export interface ComponentPipelineState<Model> {
   fileName: string;
   model: Model;
   source: string;
+}
+
+export interface ComponentPipelinePatchResult<Model> {
+  sourceOffsetMap: SourceOffsetMap;
+  state: ComponentPipelineState<Model>;
 }
 
 export function modelForSourceChange<Model>(options: ModelForSourceChangeOptions<Model>): Model {
@@ -41,5 +52,17 @@ export function lowerComponentPipelineSource<Model>(
       previousSource: previous.source,
     }),
     source,
+  };
+}
+
+export function lowerComponentPipelinePatches<Model>(
+  previous: ComponentPipelineState<Model>,
+  replacements: readonly SourceReplacement[],
+  parse: (fileName: string, source: string) => Model,
+): ComponentPipelinePatchResult<Model> {
+  const patch = applySourceReplacementsWithOffsetMap(previous.source, replacements);
+  return {
+    sourceOffsetMap: patch.sourceOffsetMap,
+    state: lowerComponentPipelineSource(previous, patch.source, parse),
   };
 }

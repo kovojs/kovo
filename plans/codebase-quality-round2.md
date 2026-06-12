@@ -606,6 +606,15 @@ pipeline throws the tree away and communicates via mutated source text.
       `pnpm exec vitest --run packages/compiler/src/model-pipeline.test.ts packages/compiler/src/compile-component.test.ts`
       and
       `pnpm exec vp check packages/compiler/src/model-pipeline.ts packages/compiler/src/model-pipeline.test.ts packages/compiler/src/compile.ts`.
+      Additional evidence 2026-06-12: `model-pipeline.ts` now applies explicit
+      `SourceReplacement` patch lists through `lowerComponentPipelinePatches`, returning both
+      the next source/model state and a generated-to-author offset map. `compile.ts` consumes
+      view-transition and platform-behavior lowering as patch lists instead of asking those
+      passes to rewrite source internally, while the legacy source-returning wrappers remain for
+      direct lower-module callers. Same-session evidence:
+      `pnpm exec vitest --run packages/compiler/src/model-pipeline.test.ts packages/compiler/src/view-transitions.test.ts packages/compiler/src/platform-lowering.test.ts packages/compiler/src/compile-component.test.ts`
+      and
+      `pnpm exec vp check packages/compiler/src/model-pipeline.ts packages/compiler/src/model-pipeline.test.ts packages/compiler/src/compile.ts packages/compiler/src/lower/view-transitions.ts packages/compiler/src/lower/platform.ts`.
       Partial evidence 2026-06-11: `serverRenderSource` now parses once after handler lowering
       with the author file name and stamps component identity, declared query deps, and initial
       state onto the render host through one in-memory tag update instead of reparsing for each

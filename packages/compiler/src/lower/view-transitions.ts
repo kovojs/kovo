@@ -4,16 +4,40 @@ import {
   type JsxAttributeModel,
   type JsxElementModel,
 } from '../scan/parse.js';
-import { applySourceReplacements, escapeAttribute, removeJsxAttribute } from '../shared.js';
+import {
+  applySourceReplacements,
+  escapeAttribute,
+  removeJsxAttribute,
+  type SourceReplacement,
+} from '../shared.js';
 import type { ViewTransitionStamp } from '../types.js';
+
+export interface ViewTransitionLowering {
+  replacements: SourceReplacement[];
+  stamps: ViewTransitionStamp[];
+}
 
 export function lowerViewTransitions(
   source: string,
   model: ComponentModuleModel,
 ): {
+  replacements: SourceReplacement[];
   source: string;
   stamps: ViewTransitionStamp[];
 } {
+  const lowering = viewTransitionLowering(source, model);
+
+  return {
+    replacements: lowering.replacements,
+    source: applySourceReplacements(source, lowering.replacements),
+    stamps: lowering.stamps,
+  };
+}
+
+export function viewTransitionLowering(
+  source: string,
+  model: ComponentModuleModel,
+): ViewTransitionLowering {
   const matches = jsxElements(model)
     .map((item) => ({
       attribute: item.attributes.find(
@@ -30,7 +54,7 @@ export function lowerViewTransitions(
       } => item.attribute !== undefined,
     );
   const stamps = matches.map((item) => ({ name: item.attribute.value }));
-  const replacements = matches.map((match) => {
+  const replacements: SourceReplacement[] = matches.map((match) => {
     const opening = source.slice(match.element.start, match.element.openingEnd);
     const tagPrefix = `<${match.element.tag}`;
     const attributes = opening.slice(tagPrefix.length, -1);
@@ -44,7 +68,7 @@ export function lowerViewTransitions(
   });
 
   return {
-    source: applySourceReplacements(source, replacements),
+    replacements,
     stamps,
   };
 }

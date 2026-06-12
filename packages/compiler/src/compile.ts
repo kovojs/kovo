@@ -12,13 +12,17 @@ import {
 } from './lower/handlers.js';
 import { lowerInlineAttributeDerives } from './lower/inline-derives.js';
 import { lowerNavigationHrefs, lowerNavigationLinks } from './lower/navigation.js';
-import { lowerPlatformBehaviors } from './lower/platform.js';
-import { lowerViewTransitions } from './lower/view-transitions.js';
+import { platformBehaviorLowering } from './lower/platform.js';
+import { viewTransitionLowering } from './lower/view-transitions.js';
 import {
   inferComponentName,
   parseComponentModule as parseComponentModuleModel,
 } from './scan/parse.js';
-import { componentPipelineState, lowerComponentPipelineSource } from './model-pipeline.js';
+import {
+  componentPipelineState,
+  lowerComponentPipelinePatches,
+  lowerComponentPipelineSource,
+} from './model-pipeline.js';
 import {
   mergePackageComponentPrefixFacts,
   packageComponentPrefixesForModule,
@@ -55,21 +59,21 @@ export function compileComponentModule(options: CompileComponentOptions): Compil
   const authoringSurfaceDiagnostics = validateAuthoringSurface(options, originalModel);
   const componentName = inferComponentName(options.fileName, originalModel);
   const originalState = componentPipelineState(options.fileName, options.source, originalModel);
-  const viewTransitionLowering = lowerViewTransitions(originalState.source, originalState.model);
-  const viewTransitionState = lowerComponentPipelineSource(
+  const viewTransitions = viewTransitionLowering(originalState.source, originalState.model);
+  const viewTransitionState = lowerComponentPipelinePatches(
     originalState,
-    viewTransitionLowering.source,
+    viewTransitions.replacements,
     parseComponentModuleModel,
-  );
-  const platformLowering = lowerPlatformBehaviors(
+  ).state;
+  const platformLowering = platformBehaviorLowering(
     viewTransitionState.source,
     viewTransitionState.model,
   );
-  const platformState = lowerComponentPipelineSource(
+  const platformState = lowerComponentPipelinePatches(
     viewTransitionState,
-    platformLowering.source,
+    platformLowering.replacements,
     parseComponentModuleModel,
-  );
+  ).state;
   const linksLoweredState = lowerComponentPipelineSource(
     platformState,
     lowerNavigationLinks(platformState.source, platformState.model),
@@ -135,7 +139,7 @@ export function compileComponentModule(options: CompileComponentOptions): Compil
     platformSubstitutions: platformLowering.substitutions,
     queryUpdatePlans,
     ...(options.registryFacts ? { registryFacts: options.registryFacts } : {}),
-    viewTransitions: viewTransitionLowering.stamps,
+    viewTransitions: viewTransitions.stamps,
   });
 
   return {
@@ -160,7 +164,7 @@ export function compileComponentModule(options: CompileComponentOptions): Compil
       renderEquivalenceCheck(fileNames.server, serverRenderedSource, serverSource),
     ],
     updateCoverage,
-    viewTransitions: viewTransitionLowering.stamps,
+    viewTransitions: viewTransitions.stamps,
   };
 }
 

@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
   componentPipelineState,
+  lowerComponentPipelinePatches,
   lowerComponentPipelineSource,
   modelForSourceChange,
 } from './model-pipeline.js';
@@ -96,6 +97,49 @@ describe('compiler model pipeline', () => {
     });
     expect(parses).toEqual([
       'cart-badge.tsx:export const CartBadge = component({ render: () => <a href="/cart" /> });',
+    ]);
+  });
+
+  it('applies source patches through the pipeline state and keeps an offset map', () => {
+    const state = componentPipelineState(
+      'cart-badge.tsx',
+      'export const CartBadge = component({ render: () => <Link to="/cart">Cart</Link> });',
+      { spans: ['link'] },
+    );
+    const parses: string[] = [];
+
+    const lowered = lowerComponentPipelinePatches(
+      state,
+      [
+        {
+          end: state.source.indexOf('</Link>') + '</Link>'.length,
+          replacement: '<a href="/cart">Cart</a>',
+          start: state.source.indexOf('<Link'),
+        },
+      ],
+      (fileName, source) => {
+        parses.push(`${fileName}:${source}`);
+        return { spans: ['anchor'] };
+      },
+    );
+
+    expect(lowered.state).toEqual({
+      fileName: 'cart-badge.tsx',
+      model: { spans: ['anchor'] },
+      source: 'export const CartBadge = component({ render: () => <a href="/cart">Cart</a> });',
+    });
+    expect(lowered.sourceOffsetMap.originalLength).toBe(state.source.length);
+    expect(lowered.sourceOffsetMap.generatedLength).toBe(lowered.state.source.length);
+    expect(lowered.sourceOffsetMap.segments).toEqual([
+      { generatedStart: 0, length: state.source.indexOf('<Link'), originalStart: 0 },
+      {
+        generatedStart: state.source.indexOf('<Link') + '<a href="/cart">Cart</a>'.length,
+        length: ' });'.length,
+        originalStart: state.source.indexOf('</Link>') + '</Link>'.length,
+      },
+    ]);
+    expect(parses).toEqual([
+      'cart-badge.tsx:export const CartBadge = component({ render: () => <a href="/cart">Cart</a> });',
     ]);
   });
 });

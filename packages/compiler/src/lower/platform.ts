@@ -13,13 +13,32 @@ export interface PlatformSubstitution {
   target: string;
 }
 
+export interface PlatformBehaviorLowering {
+  replacements: SourceReplacement[];
+  substitutions: PlatformSubstitution[];
+}
+
 export function lowerPlatformBehaviors(
   source: string,
   model: ComponentModuleModel,
 ): {
+  replacements: SourceReplacement[];
   source: string;
   substitutions: PlatformSubstitution[];
 } {
+  const lowering = platformBehaviorLowering(source, model);
+
+  return {
+    replacements: lowering.replacements,
+    source: applySourceReplacements(source, lowering.replacements),
+    substitutions: lowering.substitutions,
+  };
+}
+
+export function platformBehaviorLowering(
+  source: string,
+  model: ComponentModuleModel,
+): PlatformBehaviorLowering {
   const matches = jsxElements(model).flatMap((element) => {
     const onClick = element.attributes.find((attribute) => attribute.name === 'onClick');
     const substitution = onClick?.expression
@@ -37,7 +56,7 @@ export function lowerPlatformBehaviors(
   });
 
   return {
-    source: applySourceReplacements(source, replacements),
+    replacements,
     substitutions: matches.map((match) => match.substitution),
   };
 }
