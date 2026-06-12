@@ -331,6 +331,37 @@ describe('Drizzle pinned subset conformance', () => {
     });
   });
 
+  it('pins source destructured receiver parameters for write extraction', () => {
+    const graph = extractTouchGraphFromSource([
+      {
+        fileName: 'conformance/drizzle-pin/src/cart.domain.ts',
+        source: [
+          "export const cartItems = pgTable('cart_items', {}, jiso({ domain: 'cart', key: 'productId' }));",
+          '',
+          'export async function addItem({ db: writer } = makeContext(), productId) {',
+          '  await writer.update(cartItems).set({ productId }).where(eq(cartItems.productId, productId));',
+          '}',
+          '',
+        ].join('\n'),
+      },
+    ]);
+
+    expect(graph).toEqual({
+      addItem: {
+        reads: [],
+        touches: [
+          {
+            domain: 'cart',
+            keys: 'arg:productId',
+            site: 'conformance/drizzle-pin/src/cart.domain.ts:4',
+            via: 'cart_items',
+          },
+        ],
+        unresolved: [],
+      },
+    });
+  });
+
   it('pins real Drizzle receiver types inside domain write callbacks', () => {
     const graph = extractTouchGraphFromProject({
       files: [

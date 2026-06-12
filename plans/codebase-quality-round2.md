@@ -1062,6 +1062,18 @@ must be "FW406 unresolved," never "silently wrong."
       `pnpm exec vitest --run conformance/drizzle-pin/src/index.test.ts -t "conditional table FW406|local conditional table resolution"`,
       `pnpm exec vp check packages/drizzle/src/index.ts packages/drizzle/src/index.test.ts conformance/drizzle-pin/src/index.test.ts plans/codebase-quality-round2.md`,
       and `git diff --check HEAD~1..HEAD`.
+      Additional evidence 2026-06-12: source-mode receiver discovery now carries receiver aliases
+      from ts-morph callback parameter binding nodes instead of string-splitting serialized
+      parameter text with `splitTopLevelArgs`; the helper was deleted, and destructured
+      `{ db: writer } = ...` parameters are extracted before body and transaction alias folding.
+      This keeps receiver facts tied to parsed live code under SPEC §10-§11. Same-session
+      evidence:
+      `pnpm exec vitest --run packages/drizzle/src/index.test.ts -t "destructured receiver parameters|parenthesized parameter initializers|transaction callback receiver aliases|destructured Drizzle receiver aliases"`,
+      `pnpm exec vitest --run conformance/drizzle-pin/src/index.test.ts -t "destructured receiver parameters|transaction callback receiver aliases"`,
+      `pnpm exec vitest --run packages/drizzle/src/index.test.ts`,
+      `pnpm exec vitest --run conformance/drizzle-pin/src/index.test.ts`,
+      `pnpm exec vp check packages/drizzle/src/index.ts packages/drizzle/src/index.test.ts conformance/drizzle-pin/src/index.test.ts plans/codebase-quality-round2.md`,
+      and `git diff --check`.
 - [ ] **HIGH — Remove fact-fabricating heuristics; degrade to FW406.**
       Column type from projection-key name (`/(count|qty|...)$/i` → number, index.ts:993);
       receiver detection by parameter name (`/^(db|tx|...|client|...)$/`, :1856-1858);

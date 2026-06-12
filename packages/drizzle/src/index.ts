@@ -66,7 +66,6 @@ export type {
 } from './invalidation.js';
 export { deriveInvalidationRegistry, serializeInvalidationRegistry } from './invalidation.js';
 
-const IDENTIFIER_SOURCE = String.raw`[A-Za-z_$][\w$]*`;
 const SOURCE_EXTRACTION_FILE_NAME = '__jiso_source.ts';
 const DEFAULT_DRIZZLE_RECEIVER_NAMES = new Set(['db', 'tx']);
 const IGNORED_LOCAL_CALL_NAMES = new Set([
@@ -895,7 +894,6 @@ interface ExtractedFunction {
   body: string;
   bodyStart: number;
   name: string;
-  params: string;
   receiverNames?: readonly string[];
   writeCalls?: readonly ExtractedWriteCall[];
 }
@@ -1512,9 +1510,7 @@ function directSummaryForFunction(
   const writes: WriteSummaryInput[] = [];
   const unresolved: UnresolvedSummaryInput[] = [];
   const receiverNames =
-    fn.receiverNames === undefined
-      ? drizzleReceiverNames(fn.params, fn.body)
-      : new Set(fn.receiverNames);
+    fn.receiverNames === undefined ? drizzleReceiverNames(fn.body) : new Set(fn.receiverNames);
 
   for (const call of fn.writeCalls ?? extractDrizzleWriteCalls(fn.body, receiverNames)) {
     const site =
@@ -2022,24 +2018,16 @@ function writeCallbackFunction(
 }
 
 function extractedFunctionFromCallback(name: string, callback: Node): ExtractedFunction {
-  const params =
-    Node.isArrowFunction(callback) ||
-    Node.isFunctionDeclaration(callback) ||
-    Node.isFunctionExpression(callback)
-      ? callback
-          .getParameters()
-          .map((param) => param.getText())
-          .join(', ')
-      : '';
   const body = functionBody(callback);
   const bodyStart = Node.isBlock(body) ? body.getStart() + 1 : body.getStart();
   const bodyEnd = Node.isBlock(body) ? body.getEnd() - 1 : body.getEnd();
+  const bodyText = body.getSourceFile().getFullText().slice(bodyStart, bodyEnd);
 
   return {
-    body: body.getSourceFile().getFullText().slice(bodyStart, bodyEnd),
+    body: bodyText,
     bodyStart,
     name,
-    params,
+    receiverNames: sourceDrizzleReceiverNames(callback, bodyText),
   };
 }
 
@@ -2219,28 +2207,59 @@ function extractRelationalQueryCalls(
   });
 }
 
-function drizzleReceiverNames(params: string, body = ''): Set<string> {
+function drizzleReceiverNames(body = ''): Set<string> {
   const names = new Set(DEFAULT_DRIZZLE_RECEIVER_NAMES);
+  appendBodyReceiverAliases(body, names);
 
-  for (const param of splitTopLevelArgs(params)) {
-    const trimmed = param.trim();
-    const identifier = new RegExp(`^(?<name>${IDENTIFIER_SOURCE})\\b`).exec(trimmed)?.groups?.name;
-    if (identifier && isLikelyDrizzleReceiver(identifier)) names.add(identifier);
+  return names;
+}
 
-    for (const match of trimmed.matchAll(/\b(?<name>db|tx)\b/g)) {
-      const name = match.groups?.name;
-      if (name) names.add(name);
-    }
-  }
-
+function appendBodyReceiverAliases(body: string, names: Set<string>): void {
   for (const alias of destructuredDrizzleReceiverAliases(body)) {
     names.add(alias);
   }
   for (const alias of transactionDrizzleReceiverAliases(body, names)) {
     names.add(alias);
   }
+}
 
-  return names;
+function sourceDrizzleReceiverNames(callback: Node, body: string): string[] {
+  const names = new Set(DEFAULT_DRIZZLE_RECEIVER_NAMES);
+  if (
+    Node.isArrowFunction(callback) ||
+    Node.isFunctionDeclaration(callback) ||
+    Node.isFunctionExpression(callback)
+  ) {
+    for (const param of callback.getParameters()) {
+      appendSourceReceiverBindingNames(param.getNameNode(), names);
+    }
+  }
+
+  appendBodyReceiverAliases(body, names);
+
+  return [...names];
+}
+
+function appendSourceReceiverBindingNames(name: Node, names: Set<string>): void {
+  if (Node.isIdentifier(name)) {
+    if (isLikelyDrizzleReceiver(name.getText())) names.add(name.getText());
+    return;
+  }
+
+  if (!Node.isObjectBindingPattern(name)) return;
+
+  for (const element of name.getElements()) {
+    const binding = element.getNameNode();
+    const propertyName = element.getPropertyNameNode()?.getText();
+
+    if (!propertyName && Node.isIdentifier(binding) && isLikelyDrizzleReceiver(binding.getText())) {
+      names.add(binding.getText());
+      continue;
+    }
+
+    if (propertyName !== 'db' && propertyName !== 'tx') continue;
+    if (Node.isIdentifier(binding)) names.add(binding.getText());
+  }
 }
 
 function transactionDrizzleReceiverAliases(
@@ -2485,25 +2504,6 @@ function appendTableEntries<Table>(
   }
 
   tables.set(identifier, next);
-}
-
-function splitTopLevelArgs(source: string): string[] {
-  const args: string[] = [];
-  let depth = 0;
-  let start = 0;
-
-  for (let index = 0; index < source.length; index += 1) {
-    const char = source[index];
-    if (char === '(' || char === '{' || char === '[') depth += 1;
-    if (char === ')' || char === '}' || char === ']') depth -= 1;
-    if (char !== ',' || depth !== 0) continue;
-
-    args.push(source.slice(start, index));
-    start = index + 1;
-  }
-
-  args.push(source.slice(start));
-  return args.filter((arg) => arg.trim().length > 0);
 }
 
 function lineForIndex(source: string, index: number): number {

@@ -516,6 +516,36 @@ export interface CommerceInvalidationSets {
     });
   });
 
+  it('extracts source writes through destructured receiver parameters', () => {
+    const graph = extractTouchGraphFromSource([
+      {
+        fileName: 'cart.domain.ts',
+        source: [
+          'export const cartItems = pgTable("cart_items", {}, jiso({ domain: "cart", key: "productId" }));',
+          '',
+          'export async function addItem({ db: writer } = makeContext(), productId) {',
+          '  await writer.update(cartItems).set({ productId }).where(eq(cartItems.productId, productId));',
+          '}',
+        ].join('\n'),
+      },
+    ]);
+
+    expect(graph).toEqual({
+      addItem: {
+        reads: [],
+        touches: [
+          {
+            domain: 'cart',
+            keys: 'arg:productId',
+            site: 'cart.domain.ts:4',
+            via: 'cart_items',
+          },
+        ],
+        unresolved: [],
+      },
+    });
+  });
+
   it('extracts Drizzle writes through transaction callback receiver aliases', () => {
     const graph = extractTouchGraphFromSource([
       {
