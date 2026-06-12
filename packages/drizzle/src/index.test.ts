@@ -1089,6 +1089,34 @@ export interface CommerceInvalidationSets {
     ]);
   });
 
+  it('recognizes static AST output schema properties for opaque projections', () => {
+    const facts = extractQueryFactsFromSource([
+      {
+        fileName: 'cart.queries.ts',
+        source: `
+          export const cartItems = pgTable("cart_items", {}, jiso({ domain: "cart", key: "cartId" }));
+
+          export const literalOutputQuery = query("cart/literal", {
+            "output": s.object({ count: s.number() }),
+            async load(_input, db) {
+              return db.select({ count: sql<number>\`count(*)\` }).from(cartItems);
+            },
+          });
+
+          export const computedOutputQuery = query("cart/computed", {
+            ["output"]: s.object({ count: s.number() }),
+            async load(_input, db) {
+              return db.select({ count: sql<number>\`count(*)\` }).from(cartItems);
+            },
+          });
+        `,
+      },
+    ]);
+
+    expect(diagnosticsForQueryFacts(facts)).toEqual([]);
+    expect(facts.map((fact) => fact.query)).toEqual(['cart/computed', 'cart/literal']);
+  });
+
   it('does not treat comments or strings as declared query output schemas', () => {
     const facts = extractQueryFactsFromSource([
       {
@@ -1116,6 +1144,54 @@ export interface CommerceInvalidationSets {
           'Opaque query projection requires a declared output schema. cart.count uses sql/raw projection without output.',
         severity: 'error',
         site: 'cart.queries.ts:4',
+      },
+    ]);
+  });
+
+  it('does not treat dynamic output keys or spread contents as declared query output schemas', () => {
+    const facts = extractQueryFactsFromSource([
+      {
+        fileName: 'cart.queries.ts',
+        source: `
+          const outputKey = "output";
+          const sharedQueryConfig = { output: s.object({ count: s.number() }) };
+          export const cartItems = pgTable("cart_items", {}, jiso({ domain: "cart", key: "cartId" }));
+
+          export const dynamicOutputQuery = query("cart/dynamic", {
+            [outputKey]: s.object({ count: s.number() }),
+            async load(_input, db) {
+              return db.select({ count: sql<number>\`count(*)\` }).from(cartItems);
+            },
+          });
+
+          export const spreadOutputQuery = query("cart/spread", {
+            ...sharedQueryConfig,
+            async load(_input, db) {
+              return db.select({ count: sql<number>\`count(*)\` }).from(cartItems);
+            },
+          });
+        `,
+      },
+    ]);
+
+    expect(
+      diagnosticsForQueryFacts(facts).map(({ code, message, severity }) => ({
+        code,
+        message,
+        severity,
+      })),
+    ).toEqual([
+      {
+        code: 'FW410',
+        message:
+          'Opaque query projection requires a declared output schema. cart/dynamic.count uses sql/raw projection without output.',
+        severity: 'error',
+      },
+      {
+        code: 'FW410',
+        message:
+          'Opaque query projection requires a declared output schema. cart/spread.count uses sql/raw projection without output.',
+        severity: 'error',
       },
     ]);
   });

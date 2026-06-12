@@ -535,7 +535,7 @@ export function extractQueryFactsFromSource(files: readonly SourceFileInput[]): 
         query.query,
         query.opaquePaths,
         site,
-        hasDeclaredQueryOutputSchema(query.body),
+        query.hasOutputSchema,
       )
         .concat(unresolvedProjectionDiagnostics(query.query, query.unresolvedPaths, site))
         .concat(query.diagnostics?.map((diagnostic) => ({ ...diagnostic, site })) ?? [])
@@ -777,7 +777,24 @@ function propertyNameText(name: Node): string | undefined {
   if (Node.isIdentifier(name) || Node.isStringLiteral(name) || Node.isNumericLiteral(name)) {
     return name.getText().replace(/^["']|["']$/g, '');
   }
+  const compilerNode = name.compilerNode;
+  if (ts.isComputedPropertyName(compilerNode)) {
+    const expression = compilerNode.expression;
+    if (ts.isStringLiteral(expression) || ts.isNoSubstitutionTemplateLiteral(expression)) {
+      return expression.text;
+    }
+    if (ts.isNumericLiteral(expression)) return expression.text;
+  }
   return undefined;
+}
+
+function objectHasProperty(object: Node, name: string): boolean {
+  if (!Node.isObjectLiteralExpression(object)) return false;
+
+  return object.getProperties().some((property) => {
+    if (!Node.isPropertyAssignment(property)) return false;
+    return propertyNameText(property.getNameNode()) === name;
+  });
 }
 
 function columnBuilderShape(source: string): QueryShape {
@@ -886,6 +903,7 @@ interface ExtractedFunction {
 interface ExtractedQueryDefinition {
   body: string;
   diagnostics?: readonly TouchGraphDiagnostic[];
+  hasOutputSchema: boolean;
   index: number;
   opaquePaths: readonly string[];
   query: string;
@@ -951,6 +969,7 @@ function extractQueryDefinitions(
         ...(selection?.diagnostics || diagnostics.length > 0
           ? { diagnostics: [...(selection?.diagnostics ?? []), ...diagnostics] }
           : {}),
+        hasOutputSchema: objectHasProperty(bodyArgument, 'output'),
         index: declaration.getStart(),
         opaquePaths: selection?.opaquePaths ?? [],
         query,
@@ -1254,47 +1273,6 @@ function expressionPathText(expression: ts.Expression): string {
     return base ? `${base}.${expression.name.text}` : expression.name.text;
   }
   return '';
-}
-
-function hasDeclaredQueryOutputSchema(body: string): boolean {
-  const objectStart = body.indexOf('{');
-  if (objectStart === -1) return false;
-
-  const objectEnd = findMatchingBrace(body, objectStart);
-  if (objectEnd === -1) return false;
-
-  let index = objectStart + 1;
-  while (index < objectEnd) {
-    index = skipTrivia(body, index);
-    if (index >= objectEnd) return false;
-
-    const property = readObjectPropertyName(body, index);
-    if (property) {
-      const afterName = skipTrivia(body, property.end);
-      if (body[afterName] === ':' && property.name === 'output') return true;
-    }
-
-    index = nextTopLevelEntry(body, index, objectEnd);
-  }
-
-  return false;
-}
-
-function readObjectPropertyName(
-  source: string,
-  start: number,
-): { end: number; name: string } | null {
-  const quote = source[start];
-  if (quote === '"' || quote === "'") {
-    const end = findStringEnd(source, start, quote);
-    if (end === -1) return null;
-    return { end: end + 1, name: source.slice(start + 1, end) };
-  }
-
-  const identifier = /^[A-Za-z_$][\w$]*/.exec(source.slice(start));
-  if (!identifier) return null;
-
-  return { end: start + identifier[0].length, name: identifier[0] };
 }
 
 function opaqueProjectionDiagnostics(
@@ -2526,87 +2504,6 @@ function splitTopLevelArgs(source: string): string[] {
 
   args.push(source.slice(start));
   return args.filter((arg) => arg.trim().length > 0);
-}
-
-function skipTrivia(source: string, start: number): number {
-  let index = start;
-
-  while (index < source.length) {
-    if (/\s/.test(source[index] ?? '')) {
-      index += 1;
-      continue;
-    }
-
-    if (source.startsWith('//', index)) {
-      const end = source.indexOf('\n', index + 2);
-      index = end === -1 ? source.length : end + 1;
-      continue;
-    }
-
-    if (source.startsWith('/*', index)) {
-      const end = source.indexOf('*/', index + 2);
-      index = end === -1 ? source.length : end + 2;
-      continue;
-    }
-
-    return index;
-  }
-
-  return index;
-}
-
-function nextTopLevelEntry(source: string, start: number, end: number): number {
-  let depth = 0;
-
-  for (let index = start; index < end; index += 1) {
-    const char = source[index];
-    if (char === '"' || char === "'" || char === '`') {
-      const stringEnd = findStringEnd(source, index, char);
-      index = stringEnd === -1 ? end : stringEnd;
-      continue;
-    }
-    if (source.startsWith('//', index)) {
-      const commentEnd = source.indexOf('\n', index + 2);
-      index = commentEnd === -1 ? end : commentEnd;
-      continue;
-    }
-    if (source.startsWith('/*', index)) {
-      const commentEnd = source.indexOf('*/', index + 2);
-      index = commentEnd === -1 ? end : commentEnd + 1;
-      continue;
-    }
-
-    if (char === '(' || char === '{' || char === '[') depth += 1;
-    if (char === ')' || char === '}' || char === ']') depth -= 1;
-    if (char === ',' && depth === 0) return index + 1;
-  }
-
-  return end;
-}
-
-function findStringEnd(source: string, start: number, quote: string): number {
-  for (let index = start + 1; index < source.length; index += 1) {
-    if (source[index] === '\\') {
-      index += 1;
-      continue;
-    }
-    if (source[index] === quote) return index;
-  }
-
-  return -1;
-}
-
-function findMatchingBrace(source: string, openBrace: number): number {
-  let depth = 0;
-
-  for (let index = openBrace; index < source.length; index += 1) {
-    const char = source[index];
-    if (char === '{') depth += 1;
-    if (char === '}') depth -= 1;
-    if (depth === 0) return index;
-  }
-
-  return -1;
 }
 
 function lineForIndex(source: string, index: number): number {
