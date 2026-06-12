@@ -76,6 +76,18 @@ export const commerceClientModuleHref = clientModules.put({
   version: 'commerce-r7',
 });
 
+export const commerceHomeRoute = route('/', {
+  i18n: commerceMessages,
+  meta: {
+    description: 'Browse products and checkout with verifiable cart state.',
+    title: 'Jiso Commerce',
+  },
+  page(_context, request: CommerceShellRequest) {
+    return `<div data-commerce-shell="cart">${renderCartPageBody(request.db, undefined, request)}</div>`;
+  },
+  stylesheets: commerceStylesheets,
+});
+
 export const commerceCartRoute = route('/cart', {
   i18n: commerceMessages,
   meta: {
@@ -106,6 +118,20 @@ export function createCommerceStaticExportShell(options: CommerceStaticExportShe
     clientModules,
     document: { lang: 'en-US' },
     routes: [
+      route('/', {
+        i18n: commerceMessages,
+        meta: {
+          description: 'Browse products and checkout with verifiable cart state.',
+          title: 'Jiso Commerce',
+        },
+        modulepreloads: [commerceClientModuleHref],
+        page() {
+          return `<div data-commerce-shell="cart">${renderCartPageBody(db, undefined, {
+            db,
+          })}</div>`;
+        },
+        stylesheets: commerceStylesheets,
+      }),
       route('/cart', {
         i18n: commerceMessages,
         meta: {
@@ -227,6 +253,7 @@ export function createCommerceAppShell(options: CommerceAppShellOptions = {}) {
       return routeValueToHtml(value);
     },
     routes: [
+      commerceHomeRoute,
       commerceCartRoute,
       commerceLoginRoute,
       commerceAdminRoute,

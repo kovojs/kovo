@@ -378,6 +378,16 @@ Scope: SPEC addition (proposed §9.5 "The request shell"), `@jiso/server` shell 
       `site/scripts/app-shell.test.mjs` proves the SSR module loads for
       `/scripts/app-shell.mjs` and `@jiso/server`, replay to
       `docs/installation/index.html`, and versioned `/c/` module copying.
+      Additional evidence 2026-06-12: the commerce app shell now exposes `/`
+      as a real request-shell document route, not just `/cart`, so the
+      reference app's default entry is served by the same SPEC §9.5
+      `createApp()`/Vite/Node path and is included in static replay as
+      `/index.html`. `examples/commerce/src/app-shell.test.ts` proves `/`
+      through Vite middleware, `node scripts/serve.mjs`, `vp run serve`,
+      `npm start`, direct `node:http`, `exportStaticApp()`, `vp run export`,
+      and `npm run static`; the command export summary now reports
+      `commerce-export/v1` with `html=3`, `client-modules=1`, `assets=1`,
+      and `diagnostics=0`.
       Additional evidence 2026-06-12: the docs-site app-shell test now proves
       the generated docs document is served directly through
       `createRequestHandler(app)` before static export, without double document

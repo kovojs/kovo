@@ -97,6 +97,12 @@ describe('commerce app shell HTTP entry', () => {
       expect(document.status, formatDevServerFailure(documentBody, devServerError)).toBe(200);
       expect(documentBody).toContain('data-commerce-shell="cart"');
 
+      const home = await fetch(`${origin}/`);
+      const homeBody = await home.text();
+      expect(home.status, formatDevServerFailure(homeBody, devServerError)).toBe(200);
+      expect(homeBody).toContain('data-commerce-shell="cart"');
+      expect(homeBody).toContain('action="/_m/cart/add"');
+
       const moduleResponse = await fetch(`${origin}${commerceClientModuleHref}`);
       const moduleBody = await moduleResponse.text();
       expect(moduleResponse.status, formatDevServerFailure(moduleBody, devServerError)).toBe(200);
@@ -224,6 +230,10 @@ describe('commerce app shell HTTP entry', () => {
         expect(documentBody).toContain('data-commerce-shell="cart"');
         expect(documentBody).toContain('action="/_m/cart/add"');
 
+        const homeBody = await fetchTextWhenReady(`${origin}/`, output);
+        expect(homeBody).toContain('data-commerce-shell="cart"');
+        expect(homeBody).toContain('action="/_m/cart/add"');
+
         const moduleBody = await fetchTextWhenReady(`${origin}${commerceClientModuleHref}`, output);
         expect(moduleBody).toContain('export function Commerce$markReady');
 
@@ -254,6 +264,10 @@ describe('commerce app shell HTTP entry', () => {
     const directDocument = await shell.requestHandler(new Request('https://commerce.test/cart'));
     expect(await directDocument.text()).toContain('data-commerce-shell="cart"');
     expect(directDocument.status).toBe(200);
+
+    const directHome = await shell.requestHandler(new Request('https://commerce.test/'));
+    expect(await directHome.text()).toContain('data-commerce-shell="cart"');
+    expect(directHome.status).toBe(200);
 
     server = createServer(shell.nodeHandler);
     await listen(server);
@@ -483,12 +497,18 @@ describe('commerce app shell HTTP entry', () => {
 
       expect(result.diagnostics).toEqual([]);
       expect(result.artifacts.map((artifact) => artifact.path)).toEqual([
+        '/index.html',
         '/cart/index.html',
         '/login/index.html',
       ]);
       expect(result.clientModules.map((artifact) => artifact.href)).toEqual([
         commerceClientModuleHref,
       ]);
+
+      const homeHtml = await readFile(path.join(outDir, 'index.html'), 'utf8');
+      expect(homeHtml).toContain('data-commerce-shell="cart"');
+      expect(homeHtml).toContain(`<link rel="modulepreload" href="${commerceClientModuleHref}">`);
+      expect(homeHtml).toContain('action="/_m/cart/add"');
 
       const cartHtml = await readFile(path.join(outDir, 'cart', 'index.html'), 'utf8');
       expect(cartHtml).toContain('data-commerce-shell="cart"');
@@ -524,10 +544,14 @@ describe('commerce app shell HTTP entry', () => {
 
         expect(result.status, output).toBe(0);
         expect(output).toContain('commerce-export/v1');
-        expect(output).toContain('html=2');
+        expect(output).toContain('html=3');
         expect(output).toContain('client-modules=1');
         expect(output).toContain('assets=1');
         expect(output).toContain('diagnostics=0');
+
+        const homeHtml = await readFile(path.join(outDir, 'index.html'), 'utf8');
+        expect(homeHtml).toContain('data-commerce-shell="cart"');
+        expect(homeHtml).toContain(`/c/commerce.client.js?v=commerce-r7`);
 
         const cartHtml = await readFile(path.join(outDir, 'cart', 'index.html'), 'utf8');
         expect(cartHtml).toContain('data-commerce-shell="cart"');
