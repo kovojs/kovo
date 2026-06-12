@@ -6,7 +6,12 @@ Scope: SPEC addition (proposed §9.5 "The request shell"), `@jiso/server` shell 
 ## Progress checklist
 
 - [x] S8 spike: serve the pinned wire fixtures over real HTTP through a prototype dispatch path (enhanced mutation, no-JS PRG, 422 fragment, typed read, `<fw-defer>` stream, `/c/` module load) before freezing the `createApp()` shape (decision-gate writeup). Evidence: `conformance/app-shell-spike/src/index.test.ts` and `docs/app-shell-s8-spike.md` prove the pinned fixture bodies/headers over `node:http`, deferred chunk boundaries, and a versioned `/c/` module load; R3 can proceed with the closed `Request -> Response` handler shape.
-- [ ] SPEC PR: §9.5 request shell — dispatch table, document assembly contract, `createApp()` config surface (including the §6.5 `sessionProvider` home), error shells, export semantics, and the FW228/FW229 diagnostics.
+- [x] SPEC PR: §9.5 request shell — dispatch table, document assembly contract, `createApp()` config surface (including the §6.5 `sessionProvider` home), error shells, export semantics, and the FW228/FW229 diagnostics.
+      Evidence 2026-06-11: `SPEC.md` now defines §9.5 Request shell with the closed
+      `createApp()` aggregate, web-standard `Request -> Response` handler currency, normative
+      dispatch order, static-first route matching, document assembly contract, error shells,
+      `sessionProvider` placement, static export semantics, and FW228/FW229 diagnostic table
+      rows. Same-session evidence: `pnpm exec vp check --fix SPEC.md` and `pnpm run check`.
 - [x] R1 route matcher + dispatch table (pure, no I/O). Evidence 2026-06-11: `packages/server/src/match.ts` and `packages/server/src/shell.ts` add no-I/O helpers for static-first route matching, raw params, trailing-slash 308 metadata, FW228-style ambiguity detection, and the printable reserved dispatch order; `packages/server/src/shell.test.ts` covers the slice.
 - [x] R2 document assembly (`renderDocument`, deferred-stream variant, error shells). Evidence
       2026-06-11: `packages/server/src/document.ts` composes `renderPageHints`, initial
