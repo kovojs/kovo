@@ -31,7 +31,7 @@ It keeps local runnability separate from the external evidence required by SPEC
 | 2026-06-12 | TBD      | SPEC §16 acceptance map      | Required Gates table in this document against `SPEC.md` section 16.                                    | Every SPEC §16 criterion has a row and a named evidence source or ledger.       | ready to run            |
 | 2026-06-12 | TBD      | Outside legibility study     | `docs/legibility-study.md` protocol, pending result rows, dated readiness ledger, and completion rule. | Runnable study packet exists; five outside-developer sessions are not recorded. | pending external study  |
 | 2026-06-12 | TBD      | Pre-launch external checks   | `docs/prelaunch-checklist.md` required checks and evidence ledgers.                                    | Trademark, domain, npm-scope, and linguistic evidence remain missing.           | pending external checks |
-| 2026-06-12 | Codex    | Local integration acceptance | `pnpm run acceptance` at commit `f55b1a3`.                                                             | check, test, browser, build, perf, conformance, and fw-check gates passed.      | passed local run        |
+| 2026-06-12 | Codex    | Local integration acceptance | `pnpm run acceptance` at commit `5e693a7`.                                                             | check, test, browser, build, perf, conformance, and fw-check gates passed.      | passed local run        |
 
 ## Acceptance Command Set
 
@@ -60,7 +60,7 @@ the intended v1 commit after external evidence is complete.
 
 | Date       | Commit            | Command               | Result  | Notes                                                                                                             |
 | ---------- | ----------------- | --------------------- | ------- | ----------------------------------------------------------------------------------------------------------------- |
-| 2026-06-12 | `f55b1a3`         | `pnpm run acceptance` | passed  | Local round9 integration run passed in terminal output: check, test, browser, build, perf, conformance, fw-check. |
+| 2026-06-12 | `5e693a7`         | `pnpm run acceptance` | passed  | Local round9 integration run passed in terminal output: check, test, browser, build, perf, conformance, fw-check. |
 | TBD        | TBD at freeze run | `pnpm run acceptance` | pending | Final clean-checkout freeze run still required after external legibility and pre-launch evidence.                 |
 
 ## Final Clean-Checkout Checklist
