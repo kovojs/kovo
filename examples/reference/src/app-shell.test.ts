@@ -1,5 +1,5 @@
 import { execFile } from 'node:child_process';
-import { mkdtemp, readdir, rm } from 'node:fs/promises';
+import { mkdtemp, readFile, readdir, rm } from 'node:fs/promises';
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import * as os from 'node:os';
@@ -89,19 +89,35 @@ describe('reference app shell HTTP entry', () => {
     }
   });
 
-  it('wires vp run export to FW229 diagnostics for the session-backed reference shell', async () => {
-    const result = await execFileResult(pnpmCommand(), ['exec', 'vp', 'run', 'export'], {
-      cwd: fileURLToPath(new URL('..', import.meta.url)),
-      timeout: 30000,
-    });
-    const output = `${result.stdout}\n${result.stderr}`;
+  it('wires vp run export to the public reference shell static output', async () => {
+    const referenceRoot = fileURLToPath(new URL('..', import.meta.url));
+    const distDir = path.join(referenceRoot, 'dist');
 
-    expect(result.status, output).toBe(1);
-    expect(output).toContain('reference-export/v1');
-    expect(output).toContain('ERROR FW229 route=/login');
-    expect(output).toContain('ERROR FW229 route=/account');
-    expect(output).toContain('ERROR FW229 route=/admin');
-    expect(output).toContain('sessionProvider');
+    await rm(distDir, { force: true, recursive: true });
+
+    try {
+      const result = await execFileResult(pnpmCommand(), ['exec', 'vp', 'run', 'export'], {
+        cwd: referenceRoot,
+        timeout: 30000,
+      });
+      const output = `${result.stdout}\n${result.stderr}`;
+
+      expect(result.status, output).toBe(0);
+      expect(output).toContain('reference-export/v1');
+      expect(output).toContain('html=1');
+      expect(output).toContain('client-modules=1');
+      expect(output).toContain('diagnostics=0');
+
+      const html = await readFile(path.join(distDir, 'index.html'), 'utf8');
+      expect(html).toContain('<title>Jiso Reference Public Shell</title>');
+      expect(html).toContain('data-reference-public-shell');
+      expect(html).toContain('/c/reference.client.js?v=reference-r7');
+
+      const clientModule = await readFile(path.join(distDir, 'c/reference.client.js'), 'utf8');
+      expect(clientModule).toContain('Reference$markReady');
+    } finally {
+      await rm(distDir, { force: true, recursive: true });
+    }
   });
 
   it('keeps reference static export failures from creating partial output', async () => {

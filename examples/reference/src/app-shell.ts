@@ -1,5 +1,6 @@
 import {
   createApp,
+  createMemoryVersionedClientModuleRegistry,
   createRequestHandler,
   route,
   toNodeHandler,
@@ -29,6 +30,21 @@ export interface ReferenceAppShellOptions {
 }
 
 export const referenceShellAuthCsrfId = 'reference-shell-login';
+const publicClientModules = createMemoryVersionedClientModuleRegistry();
+
+export const referencePublicClientModuleHref = publicClientModules.put({
+  path: '/c/reference.client.js',
+  source: [
+    'export function Reference$markReady(event) {',
+    '  const target = event.currentTarget instanceof HTMLElement ? event.currentTarget : event.target;',
+    '  const root = target instanceof HTMLElement ? target.closest("[data-reference-public-shell]") : null;',
+    '  const output = root ? root.querySelector("#reference-status") : null;',
+    '  if (output) output.textContent = "Reference shell interaction loaded from /c/.";',
+    '}',
+    '',
+  ].join('\n'),
+  version: 'reference-r7',
+});
 
 const shellReferenceAuthCsrf: CsrfValidationOptions<Request> = {
   field: referenceAuthCsrf.field,
@@ -37,6 +53,24 @@ const shellReferenceAuthCsrf: CsrfValidationOptions<Request> = {
     return referenceAuthCsrf.sessionId(request as ReferenceShellRequest);
   },
 };
+
+export const referencePublicRoute = route('/', {
+  meta: {
+    description: 'A public Jiso reference app shell exported through synthetic replay.',
+    title: 'Jiso Reference Public Shell',
+  },
+  modulepreloads: [referencePublicClientModuleHref],
+  page() {
+    return [
+      '<section data-reference-public-shell>',
+      '<h1>Jiso Reference App</h1>',
+      '<p>Public route exported by the shared request shell.</p>',
+      `<button type="button" on:click="${referencePublicClientModuleHref}#Reference$markReady">Check shell</button>`,
+      '<output id="reference-status">Waiting for client module.</output>',
+      '</section>',
+    ].join('');
+  },
+});
 
 export const referenceLoginRoute = route('/login', {
   meta: {
@@ -96,6 +130,24 @@ export function createReferenceAppShell(options: ReferenceAppShellOptions = {}) 
   };
 }
 
+export function createReferencePublicAppShell() {
+  const app = createApp({
+    clientModules: publicClientModules,
+    document: { lang: 'en-US' },
+    renderRoute(value) {
+      return `<main>${routeValueToHtml(value)}</main>`;
+    },
+    routes: [referencePublicRoute],
+  });
+  const requestHandler = createRequestHandler(app);
+
+  return {
+    app,
+    nodeHandler: toNodeHandler(requestHandler),
+    requestHandler,
+  };
+}
+
 function withReferenceRequestContext(handler: RequestHandler): RequestHandler {
   return (request) => handler(attachReferenceRequestContext(request));
 }
@@ -141,6 +193,7 @@ function authRedirectTo(value: unknown): string {
 }
 
 export const referenceAppShell = createReferenceAppShell();
+export const referencePublicAppShell = createReferencePublicAppShell();
 export const referenceRequestHandler = referenceAppShell.requestHandler;
 export const referenceNodeHandler = referenceAppShell.nodeHandler;
 

@@ -9,6 +9,7 @@ const defaultDistDir = path.join(referenceRoot, 'dist');
 export async function exportReferenceStaticApp({
   createViteServer = createServer,
   outDir = defaultDistDir,
+  publicOnly = false,
 } = {}) {
   const viteServer = await createViteServer({
     appType: 'custom',
@@ -28,17 +29,21 @@ export async function exportReferenceStaticApp({
       throw new Error('@jiso/server must export exportStaticApp.');
     }
 
-    const app = appShellModule.default ?? appShellModule.referenceAppShell?.app;
+    const app = publicOnly
+      ? appShellModule.referencePublicAppShell?.app
+      : (appShellModule.default ?? appShellModule.referenceAppShell?.app);
 
     if (!isJisoApp(app)) {
       throw new Error(
-        'src/app-shell.ts must export a Jiso app as default or referenceAppShell.app.',
+        publicOnly
+          ? 'src/app-shell.ts must export referencePublicAppShell.app for public export.'
+          : 'src/app-shell.ts must export a Jiso app as default or referenceAppShell.app.',
       );
     }
 
     // SPEC.md section 9.5: static export replays the same request shell and
     // refuses session-dependent routes with FW229 instead of writing HTML.
-    return await exportStaticApp(app, { outDir });
+    return await exportStaticApp(app, { outDir, htmlPathStyle: 'directory' });
   } finally {
     await viteServer.close();
   }
@@ -84,17 +89,23 @@ function parseCliOptions(args) {
   for (let index = 0; index < args.length; index += 1) {
     const arg = args[index];
 
-    if (arg !== '--out') {
-      throw new Error(`Unknown reference export option '${arg}'.`);
+    if (arg === '--public') {
+      options.publicOnly = true;
+      continue;
     }
 
-    const outDir = args[index + 1];
-    if (!outDir) {
-      throw new Error('Missing value for reference export option --out.');
+    if (arg === '--out') {
+      const outDir = args[index + 1];
+      if (!outDir) {
+        throw new Error('Missing value for reference export option --out.');
+      }
+
+      options.outDir = path.resolve(process.cwd(), outDir);
+      index += 1;
+      continue;
     }
 
-    options.outDir = path.resolve(process.cwd(), outDir);
-    index += 1;
+    throw new Error(`Unknown reference export option '${arg}'.`);
   }
 
   return options;

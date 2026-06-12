@@ -7,7 +7,7 @@ export default defineConfig({
   run: {
     tasks: {
       export: {
-        command: 'node scripts/export-static.mjs',
+        command: 'node scripts/export-static.mjs --public',
         input: [
           { pattern: 'scripts/export-static.mjs', base: 'workspace' },
           { pattern: 'src/**/*.ts', base: 'workspace' },

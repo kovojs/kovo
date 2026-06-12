@@ -352,6 +352,21 @@ Scope: SPEC addition (proposed §9.5 "The request shell"), `@jiso/server` shell 
       `pnpm exec vitest --run examples/reference/src/app.test.ts examples/reference/src/app-shell.test.ts`,
       `pnpm exec vitest --run packages/server/src/static-export.test.ts`, and
       `pnpm exec vp check examples/reference/scripts/export-static.mjs examples/reference/src/app-shell.test.ts plans/app-shell.md`.
+      Additional evidence 2026-06-12: the focused `examples/reference` app now
+      has a positive app-shell export consumer alongside the session-backed FW229
+      teaching path. `examples/reference/src/app-shell.ts` exports a public
+      session-free `referencePublicAppShell` with a versioned
+      `/c/reference.client.js?v=reference-r7` module, and
+      `examples/reference/scripts/export-static.mjs --public` replays that app
+      with `htmlPathStyle: 'directory'` for `vp run export`.
+      `examples/reference/src/app-shell.test.ts` proves `vp run export` writes
+      `dist/index.html` plus `dist/c/reference.client.js` with
+      `reference-export/v1` reporting one HTML artifact, one client module, and
+      zero diagnostics, while the default strict script still refuses the
+      session-backed shell before partial output. Same-session verification ran
+      `pnpm exec vitest --run examples/reference/src/app.test.ts examples/reference/src/app-shell.test.ts`,
+      `pnpm exec vp check examples/reference/src/app-shell.ts examples/reference/src/app-shell.test.ts examples/reference/scripts/export-static.mjs examples/reference/vite.config.ts plans/app-shell.md`,
+      and `git diff --check`.
 
 ## Background — the gap
 
