@@ -1,25 +1,23 @@
 ---
 title: Installation
-description: Prerequisites, scaffolding a project, and the commands you will run every day.
+description: Get a Jiso project on your machine and learn the handful of commands you'll run every day.
 order: 1
 ---
 
 # Installation
 
-> **Pre-release status.** Jiso is pre-v1 and nothing is published to npm yet. The scaffolder and
-> commands below describe the intended flow and work today _inside the
-> [jiso repository](https://github.com/jiso-sh/jiso)_ as workspace packages. Until packages are
-> published, clone the repo and work in a workspace member — the [Tutorial](/tutorial/) does
-> exactly that.
+Jiso is a compiler-first framework: you write TSX components, and the build turns them into
+self-describing HTML that needs almost no client runtime. This page gets a project running and
+introduces the commands you'll live in.
 
 ## Prerequisites
 
 - **Node.js 24+** — the toolchain targets current Node.
 - **pnpm 10+** — the workspace package manager.
-- **A TypeScript-strict disposition** — Jiso's correctness claims are claims about TypeScript
-  programs that stay inside the sound subset. The starter ships `strict` everything plus lint bans
-  on `any`, non-null assertions, and `as` casts in app code (SPEC §6.6). Those aren't style
-  preferences; the proof surface depends on them.
+- **TypeScript, strict** — Jiso's correctness guarantees are guarantees about TypeScript programs
+  that stay inside the sound subset. The starter ships `strict` everything plus lint bans on
+  `any`, non-null assertions, and `as` casts in app code. These aren't style preferences: the
+  static checks can only prove things about code that plays by these rules. SPEC §6.6
 
 ## Scaffold a project
 
@@ -29,7 +27,13 @@ cd my-app
 pnpm install
 ```
 
-The starter is intentionally small: one component, one route's worth of HTML, Tailwind wired
+> **One caveat before you copy-paste.** Jiso is pre-v1 and not yet published to npm. These
+> commands describe the intended flow, and they work today inside the
+> [jiso repository](https://github.com/jiso-sh/jiso) as workspace packages. Until packages are
+> published, clone the repo and work in a workspace member — the [Tutorial](/tutorial/) does
+> exactly that.
+
+The starter is deliberately small: one component, one route's worth of HTML, Tailwind wired
 through Vite+, and the graph-verification scripts that make the framework's checks part of your
 CI from day one.
 
@@ -46,10 +50,10 @@ CI from day one.
 
 Everything routes through [Vite+](https://viteplus.dev) (`vp`) as the single project entrypoint.
 
-`vp check` is the command to internalize. Jiso pushes application wiring — handler references,
-form fields, navigation targets, data-binding paths — into the type system and the compiler, so
-the error you would have found by clicking around in a browser shows up here instead, with a
-teaching message that cites the spec section it enforces.
+If you internalize one command, make it `vp check`. Jiso pushes application wiring — handler
+references, form fields, navigation targets, data-binding paths — into the type system and the
+compiler, so the error you would otherwise find by clicking around in a browser shows up here
+instead, with a teaching message that cites the spec section it enforces.
 
 ## Where to go next
 
