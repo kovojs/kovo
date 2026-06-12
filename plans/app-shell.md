@@ -482,6 +482,15 @@ Scope: SPEC addition (proposed §9.5 "The request shell"), `@jiso/server` shell 
       `/c/commerce.client.js?v=commerce-r7`, `/_q/cart`, and Vite-served
       `/src/styles.css` over real HTTP. Same-session verification ran
       `pnpm exec vitest --run examples/commerce/src/app-shell.test.ts`.
+      Additional evidence 2026-06-12: the commerce app-shell serve proof now
+      runs the same real HTTP assertions through both `node scripts/serve.mjs`
+      and the consumer-facing `vp run serve` Vite+ task, proving the package
+      task reaches the SPEC §9.5 request-shell middleware instead of only the
+      script entrypoint. `examples/commerce/src/app-shell.test.ts` reserves a
+      strict test port for both commands, verifies `/cart`,
+      `/c/commerce.client.js?v=commerce-r7`, `/_q/cart`, and `/src/styles.css`,
+      and terminates the spawned process groups. Same-session verification ran
+      `pnpm exec vitest --run examples/commerce/src/app-shell.test.ts`.
 
 ## Background — the gap
 

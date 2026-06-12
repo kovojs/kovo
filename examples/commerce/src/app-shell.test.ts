@@ -172,40 +172,39 @@ describe('commerce app shell HTTP entry', () => {
     }
   });
 
-  it('serves the app-shell surface through the consumer commerce serve command', async () => {
-    const commerceRoot = fileURLToPath(new URL('..', import.meta.url));
-    const port = await reservePort();
-    let serveProcess: ChildProcessWithoutNullStreams | undefined;
+  for (const serveCommand of commerceServeCommands()) {
+    it(`serves the app-shell surface through ${serveCommand.label}`, async () => {
+      const commerceRoot = fileURLToPath(new URL('..', import.meta.url));
+      const port = await reservePort();
+      let serveProcess: ChildProcessWithoutNullStreams | undefined;
 
-    try {
-      serveProcess = spawn(
-        process.execPath,
-        ['scripts/serve.mjs', '--host', '127.0.0.1', '--port', String(port), '--strictPort'],
-        {
+      try {
+        serveProcess = spawn(serveCommand.command, serveCommand.args(port), {
           cwd: commerceRoot,
+          detached: process.platform !== 'win32',
           env: { ...process.env, FORCE_COLOR: '0' },
-        },
-      );
-      const output = collectOutput(serveProcess);
-      const origin = `http://127.0.0.1:${port}`;
+        });
+        const output = collectOutput(serveProcess);
+        const origin = `http://127.0.0.1:${port}`;
 
-      const documentBody = await fetchTextWhenReady(`${origin}/cart`, output);
-      expect(output()).toContain('commerce-serve/v1');
-      expect(documentBody).toContain('data-commerce-shell="cart"');
-      expect(documentBody).toContain('action="/_m/cart/add"');
+        const documentBody = await fetchTextWhenReady(`${origin}/cart`, output);
+        expect(output()).toContain('commerce-serve/v1');
+        expect(documentBody).toContain('data-commerce-shell="cart"');
+        expect(documentBody).toContain('action="/_m/cart/add"');
 
-      const moduleBody = await fetchTextWhenReady(`${origin}${commerceClientModuleHref}`, output);
-      expect(moduleBody).toContain('export function Commerce$markReady');
+        const moduleBody = await fetchTextWhenReady(`${origin}${commerceClientModuleHref}`, output);
+        expect(moduleBody).toContain('export function Commerce$markReady');
 
-      const queryBody = await fetchTextWhenReady(`${origin}/_q/cart`, output);
-      expect(queryBody).toContain('<fw-query name="cart">{"count":0}</fw-query>');
+        const queryBody = await fetchTextWhenReady(`${origin}/_q/cart`, output);
+        expect(queryBody).toContain('<fw-query name="cart">{"count":0}</fw-query>');
 
-      const stylesheetBody = await fetchTextWhenReady(`${origin}/src/styles.css`, output);
-      expect(stylesheetBody).toContain('tailwindcss v');
-    } finally {
-      await stopProcess(serveProcess);
-    }
-  });
+        const stylesheetBody = await fetchTextWhenReady(`${origin}/src/styles.css`, output);
+        expect(stylesheetBody).toContain('tailwindcss v');
+      } finally {
+        await stopProcess(serveProcess);
+      }
+    });
+  }
 
   it('serves the commerce cart document, query endpoint, and client module over node:http', async () => {
     const errors: unknown[] = [];
@@ -614,6 +613,33 @@ function pnpmCommand(): string {
   return process.platform === 'win32' ? 'pnpm.cmd' : 'pnpm';
 }
 
+function commerceServeCommands(): Array<{
+  args(port: number): string[];
+  command: string;
+  label: string;
+}> {
+  const serveArgs = (port: number) => [
+    '--host',
+    '127.0.0.1',
+    '--port',
+    String(port),
+    '--strictPort',
+  ];
+
+  return [
+    {
+      args: (port) => ['scripts/serve.mjs', ...serveArgs(port)],
+      command: process.execPath,
+      label: 'node scripts/serve.mjs',
+    },
+    {
+      args: (port) => ['exec', 'vp', 'run', '--no-cache', 'serve', ...serveArgs(port)],
+      command: pnpmCommand(),
+      label: 'vp run serve',
+    },
+  ];
+}
+
 function collectOutput(child: ChildProcessWithoutNullStreams): () => string {
   let output = '';
   child.stdout.on('data', (chunk: Buffer) => {
@@ -670,14 +696,30 @@ async function stopProcess(child: ChildProcessWithoutNullStreams | undefined): P
   const exited = new Promise<void>((resolve) => {
     child.once('exit', () => resolve());
   });
-  child.kill('SIGTERM');
+  killProcessTree(child, 'SIGTERM');
 
   await Promise.race([
     exited,
     delay(5_000).then(() => {
-      if (child.exitCode === null && !child.killed) child.kill('SIGKILL');
+      if (child.exitCode === null && !child.killed) killProcessTree(child, 'SIGKILL');
     }),
   ]);
+}
+
+function killProcessTree(child: ChildProcessWithoutNullStreams, signal: NodeJS.Signals): void {
+  if (child.pid === undefined) return;
+
+  try {
+    if (process.platform !== 'win32') {
+      process.kill(-child.pid, signal);
+      return;
+    }
+  } catch (error) {
+    const code = (error as NodeJS.ErrnoException).code;
+    if (code !== 'ESRCH') throw error;
+  }
+
+  child.kill(signal);
 }
 
 function delay(ms: number): Promise<void> {
