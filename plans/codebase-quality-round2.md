@@ -1789,6 +1789,14 @@ land it first; don't fork it.
       `corepack pnpm exec vitest --run packages/server/src/endpoint.test.ts packages/server/src/app.test.ts packages/server/src/webhook.test.ts packages/server/src/index.test.ts`
       and
       `corepack pnpm exec vp check packages/server/src/index.ts packages/server/src/endpoint.ts packages/server/src/app.ts packages/server/src/webhook.ts packages/server/src/endpoint.test.ts`.
+      Additional evidence 2026-06-12: route meta helpers, query-derived meta declarations, and
+      server-rendered i18n catalog interpolation moved from `packages/server/src/index.ts` into
+      `packages/server/src/meta.ts`; `index.ts` now preserves only the public meta/i18n re-exports
+      while `packages/server/src/meta.test.ts` imports the extracted seam directly. Same-session
+      evidence:
+      `corepack pnpm exec vitest --run packages/server/src/meta.test.ts packages/server/src/route.test.ts packages/server/src/index.test.ts`,
+      `corepack pnpm exec vp check packages/server/src/index.ts packages/server/src/meta.ts packages/server/src/meta.test.ts plans/codebase-quality-round2.md`,
+      and `git diff --check`.
 - [ ] **LOW** — dead code (`matchShellDispatch` post-loop return shell.ts:161-166; rate-limit
       tail `return options.max > 0` index.ts:576); `matchRoute` recompiling all routes per call
       (match.ts:75-81 — cache `compileRoute`); `Transfer-Encoding: chunked` on a buffered string

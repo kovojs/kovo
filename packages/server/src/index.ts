@@ -10,7 +10,6 @@ import {
   type RequestLifecycleOptions,
 } from './guards.js';
 import { renderStylesheetLinks } from './hints.js';
-import type { I18nCatalog, RouteMeta, RouteMetaFactory } from './hints.js';
 import {
   renderFragmentWireHtml,
   renderQueryScript as renderQueryScriptHtml,
@@ -22,7 +21,6 @@ import {
   readQueryVersion,
   runQuery,
   type QueryDefinition,
-  type QueryResult,
   type RegisteredQueryDefinition,
 } from './query.js';
 import {
@@ -169,6 +167,7 @@ export type {
   StylesheetAsset,
   StylesheetManifestEntry,
 } from './hints.js';
+export { i18n, meta, metaFromQuery, t } from './meta.js';
 export type { QueryScriptRenderOptions } from './wire-html.js';
 export { mutationWireRequestFromHeaders, readMutationWireHeaders } from './mutation-wire.js';
 export type {
@@ -477,68 +476,11 @@ export function mutation<
   return { ...definition, key };
 }
 
-export function meta<const Meta extends RouteMeta>(definition: Meta): Meta {
-  return definition;
-}
-
-export function metaFromQuery<const Query extends QueryDefinition, const Meta extends RouteMeta>(
-  queryDefinition: Query,
-  derive: (value: QueryResult<Query>) => Meta,
-): RouteMetaFactory;
-export function metaFromQuery<
-  const Query extends { load?: (input: never) => unknown },
-  const Meta extends RouteMeta,
->(_query: Query, value: QueryResult<Query>, derive: (value: QueryResult<Query>) => Meta): Meta;
-export function metaFromQuery<
-  const Query extends { key?: string; load?: (input: never) => unknown },
-  const Meta extends RouteMeta,
->(
-  queryDefinition: Query,
-  valueOrDerive: QueryResult<Query> | ((value: QueryResult<Query>) => Meta),
-  maybeDerive?: (value: QueryResult<Query>) => Meta,
-): Meta | RouteMetaFactory {
-  if (typeof valueOrDerive === 'function') {
-    const key = queryDefinition.key;
-    const derive = valueOrDerive as (value: QueryResult<Query>) => Meta;
-    if (!key) throw new Error('metaFromQuery requires a query key for deferred meta');
-
-    return {
-      queries: [key],
-      resolve(values) {
-        const value = values[key] as QueryResult<Query>;
-        return derive(value);
-      },
-    };
-  }
-
-  if (!maybeDerive) throw new Error('metaFromQuery requires a derive function');
-  return maybeDerive(valueOrDerive);
-}
-
 export function errorBoundary<Renderer extends FragmentRenderer>(
   renderer: Renderer,
   boundary: ErrorBoundaryRenderer,
 ): Renderer & { errorBoundary: ErrorBoundaryRenderer } {
   return { ...renderer, errorBoundary: boundary };
-}
-
-export function i18n<const Messages extends Record<string, string>>(
-  locale: string,
-  messages: Messages,
-): I18nCatalog<Messages> {
-  return { locale, messages };
-}
-
-export function t<
-  Messages extends Record<string, string>,
-  Key extends Extract<keyof Messages, string>,
->(catalog: I18nCatalog<Messages>, key: Key, values: Record<string, string | number> = {}): string {
-  const message = catalog.messages[key];
-  if (message === undefined) throw new Error(`Missing i18n message: ${key}`);
-
-  return message.replace(/\{(?<name>[A-Za-z0-9_]+)\}/g, (match, name: string) =>
-    Object.hasOwn(values, name) ? String(values[name]) : match,
-  );
 }
 
 export async function runMutation<

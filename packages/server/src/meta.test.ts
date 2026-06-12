@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest';
 
-import { domain, i18n, meta, metaFromQuery, query, renderPageHints, t } from './index.js';
+import { renderPageHints } from './hints.js';
+import { i18n, meta, metaFromQuery, t } from './meta.js';
+import { domain } from './domain.js';
+import { query } from './query.js';
 
 describe('server route meta and i18n hints', () => {
   it('renders typed route meta with page hints', () => {
