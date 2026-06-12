@@ -1215,6 +1215,7 @@ describe('Better Auth pinned conformance', () => {
         ],
       },
       { name: 'haveIBeenPwned', plugins: [haveIBeenPwned()] },
+      { name: 'lastLoginMethod', plugins: [lastLoginMethod()] },
       { name: 'multiSession', plugins: [multiSession()] },
       { name: 'oauthPopup', plugins: [oauthPopup()] },
       { name: 'oAuthProxy', plugins: [oAuthProxy()] },
