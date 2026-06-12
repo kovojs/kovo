@@ -1,3 +1,4 @@
+import type { EndpointMethod, EndpointMount } from '@jiso/core';
 import {
   createMemoryVersionedClientModuleRegistry,
   renderVersionedClientModuleResponse,
@@ -22,13 +23,10 @@ import {
   type QueryEndpointRegistry,
   type RegisteredQueryDefinition,
 } from './query.js';
+import { runEndpoint, type EndpointDeclaration } from './endpoint.js';
 import {
   renderMutationEndpointResponse,
-  runEndpoint,
   type CsrfValidationOptions,
-  type EndpointDeclaration,
-  type EndpointMethod,
-  type EndpointMount,
   type FragmentRenderer,
   type MutationFail,
   type MutationDefinition,

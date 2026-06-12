@@ -1760,6 +1760,14 @@ land it first; don't fork it.
       `pnpm exec vitest --run packages/server/src/route.test.ts packages/server/src/route-response.test.ts packages/server/src/app.test.ts packages/server/src/index.test.ts`,
       `pnpm exec vp check packages/server/src/app.ts packages/server/src/index.ts packages/server/src/route.ts packages/server/src/route.test.ts packages/server/src/route-response.test.ts plans/codebase-quality-round2.md`,
       and `git diff --check`.
+      Additional evidence 2026-06-12: endpoint declaration/matching/run helpers moved from
+      `packages/server/src/index.ts` into `packages/server/src/endpoint.ts`; the duplicated raw
+      endpoint session-stripping proxy in `packages/server/src/webhook.ts` now reuses that module,
+      and `app.ts` imports the endpoint seam directly while `index.ts` preserves public re-exports.
+      Same-session evidence:
+      `corepack pnpm exec vitest --run packages/server/src/endpoint.test.ts packages/server/src/app.test.ts packages/server/src/webhook.test.ts packages/server/src/index.test.ts`
+      and
+      `corepack pnpm exec vp check packages/server/src/index.ts packages/server/src/endpoint.ts packages/server/src/app.ts packages/server/src/webhook.ts packages/server/src/endpoint.test.ts`.
 - [ ] **LOW** — dead code (`matchShellDispatch` post-loop return shell.ts:161-166; rate-limit
       tail `return options.max > 0` index.ts:576); `matchRoute` recompiling all routes per call
       (match.ts:75-81 — cache `compileRoute`); `Transfer-Encoding: chunked` on a buffered string

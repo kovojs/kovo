@@ -7,13 +7,16 @@ import type {
 import type {
   ChangeRecord,
   Domain,
-  EndpointDeclaration,
-  EndpointRequest,
   InferSchema,
   MaybePromise,
   MutationResponseHeaders,
   Schema,
 } from './index.js';
+import {
+  endpointRequestWithoutSession,
+  type EndpointDeclaration,
+  type EndpointRequest,
+} from './endpoint.js';
 import type { ServerResponseBase } from './response.js';
 
 export type WebhookFailureStatus = 400 | 401 | 422 | 429 | 500;
@@ -508,23 +511,6 @@ function webhookChangeHeader(changes: readonly ChangeRecord[]): string {
 
 function webhookReplayScope(name: string): string {
   return `webhook:${name}`;
-}
-
-function endpointRequestWithoutSession(request: Request): EndpointRequest {
-  if (!('session' in request)) return request as EndpointRequest;
-
-  return new Proxy(request, {
-    get(target, property) {
-      if (property === 'session') return undefined;
-
-      const value = Reflect.get(target, property, target) as unknown;
-      return typeof value === 'function' ? value.bind(target) : value;
-    },
-    has(target, property) {
-      if (property === 'session') return false;
-      return property in target;
-    },
-  }) as EndpointRequest;
 }
 
 function isPlainRecord(value: unknown): value is Record<string, unknown> {
