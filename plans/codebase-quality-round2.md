@@ -1369,6 +1369,10 @@ As each phase splits a source module, split its tests in the same commit.
       Additional evidence 2026-06-12: route schema/redirect and route page guard/notFound
       behavior moved from `packages/server/src/index.test.ts` into
       `packages/server/src/route.test.ts`.
+      Additional evidence 2026-06-12: mutation guard/session/rate-limit behavior moved from
+      `packages/server/src/index.test.ts` into `packages/server/src/guards.test.ts`, including
+      authed and role guards, typed session parsing/refinement, rate-limit buckets, and retry-after
+      propagation for enhanced and no-JS mutation responses.
       and `pnpm exec vitest --run packages/server/src/*.test.ts`.
 - [ ] runtime/index.test.ts (4,435 lines, mutation tests under "query store") → per-module
       files; `Fake*` classes to a shared `test-fixtures.ts`; direct unit tests for wire-parser,
