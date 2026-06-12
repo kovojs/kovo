@@ -87,6 +87,7 @@ const IGNORED_LOCAL_CALL_NAMES = new Set([
 const EXPORTED_CONST_DECLARATION_SOURCE = String.raw`(?:export\s+)?const\s+`;
 const VARIABLE_DECLARATION_SOURCE = String.raw`(?:export\s+)?(?:const|let|var)\s+`;
 const FW411_MESSAGE = 'Query read set includes an exempt table';
+const UNRESOLVED_READ_SOURCE_EXPRESSION = '__jisoUnresolvedReadSource';
 
 export type QueryShape =
   | 'array'
@@ -460,15 +461,8 @@ function projectTableNameForNode(
   node: Node,
   tableNamesBySymbol: ReadonlyMap<string, string>,
 ): string | undefined {
-  const direct = tableNamesBySymbol.get(resolvedSymbolKey(node.getSymbol()) ?? '');
-  if (direct) return direct;
-
-  for (const identifier of node.getDescendantsOfKind(SyntaxKind.Identifier)) {
-    const tableName = tableNamesBySymbol.get(resolvedSymbolKey(identifier.getSymbol()) ?? '');
-    if (tableName) return tableName;
-  }
-
-  return undefined;
+  if (!Node.isIdentifier(node)) return undefined;
+  return tableNamesBySymbol.get(resolvedSymbolKey(node.getSymbol()) ?? '');
 }
 
 export function extractQueryFactsFromSource(files: readonly SourceFileInput[]): QueryFact[] {
@@ -1997,29 +1991,50 @@ function isLikelyDrizzleReceiver(name: string): boolean {
 }
 
 function extractReadSources(source: string, operation: string): ExtractedReadSource[] {
+  const sourceFile = parseSourceFile(source);
+  const calls = sourceFile.getDescendantsOfKind(SyntaxKind.CallExpression);
   const sourceOperation =
-    operation === 'insert' && /\.select\s*\(/.test(source)
+    operation === 'insert' && calls.some((call) => propertyAccessCallName(call) === 'select')
       ? 'insert-select'
-      : operation === 'update' && /\.from\s*\(/.test(source)
+      : operation === 'update' && calls.some((call) => propertyAccessCallName(call) === 'from')
         ? 'update-from'
         : null;
   if (!sourceOperation) return [];
 
   const sources: ExtractedReadSource[] = [];
-  const sourcePattern =
-    /\.(?:from|join|innerJoin|leftJoin|rightJoin|fullJoin)\s*\(\s*(?<tableExpression>[A-Za-z_$][\w$]*|[^,)]+)\s*(?:,|\))/g;
 
-  for (const match of source.matchAll(sourcePattern)) {
-    const tableExpression = match.groups?.tableExpression?.trim();
-    if (!tableExpression) continue;
+  for (const call of calls) {
+    if (!isReadSourceCall(call)) continue;
+
+    const tableExpression = call.getArguments()[0]?.getText().trim();
 
     sources.push({
       operation: sourceOperation,
-      tableExpression,
+      tableExpression: tableExpression || UNRESOLVED_READ_SOURCE_EXPRESSION,
     });
   }
 
-  return sources;
+  // SPEC §10-§11: an opaque insert-select/update-from source is visible as FW406, not guessed.
+  return sources.length > 0
+    ? sources
+    : [{ operation: sourceOperation, tableExpression: UNRESOLVED_READ_SOURCE_EXPRESSION }];
+}
+
+function isReadSourceCall(call: CallExpression): boolean {
+  const name = propertyAccessCallName(call);
+  return (
+    name === 'from' ||
+    name === 'join' ||
+    name === 'innerJoin' ||
+    name === 'leftJoin' ||
+    name === 'rightJoin' ||
+    name === 'fullJoin'
+  );
+}
+
+function propertyAccessCallName(call: CallExpression): string | undefined {
+  const expression = call.getExpression();
+  return Node.isPropertyAccessExpression(expression) ? expression.getName() : undefined;
 }
 
 function statementEnd(source: string, start: number): number {

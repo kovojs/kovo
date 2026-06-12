@@ -2493,6 +2493,40 @@ export interface CommerceInvalidationSets {
     ]);
   });
 
+  it('marks project-mode computed table expressions as FW406 instead of resolving descendant tables', () => {
+    const graph = extractTouchGraphFromProject({
+      files: [
+        {
+          fileName: 'product.domain.ts',
+          source: [
+            'import type { PgDatabase } from "drizzle-orm/pg-core";',
+            '',
+            'export const products = pgTable("products", {}, jiso({ domain: "product", key: "id" }));',
+            '',
+            'export async function syncProduct(db: PgDatabase<any, any, any>) {',
+            '  await db.update(tableFor(products)).set({ reserved: true });',
+            '}',
+            '',
+          ].join('\n'),
+        },
+      ],
+    });
+
+    expect(graph).toEqual({
+      syncProduct: {
+        reads: [],
+        touches: [],
+        unresolved: [
+          {
+            code: 'FW406',
+            message: 'Statically un-analyzable write site; manual touches required.',
+            site: 'product.domain.ts:6',
+          },
+        ],
+      },
+    });
+  });
+
   it('marks unresolved insert-select source tables as FW406', () => {
     const graph = extractTouchGraphFromSource([
       {
@@ -2504,6 +2538,39 @@ export interface CommerceInvalidationSets {
             await db.insert(snapshots).select(db.select().from(tableFor("products")));
           }
         `,
+      },
+    ]);
+
+    expect(graph).toEqual({
+      importSnapshots: {
+        reads: [],
+        touches: [
+          { domain: 'snapshot', keys: null, site: 'product.domain.ts:5', via: 'product_snapshots' },
+        ],
+        unresolved: [
+          {
+            code: 'FW406',
+            message: 'Statically un-analyzable write site; manual touches required.',
+            site: 'product.domain.ts:5',
+          },
+        ],
+      },
+    });
+  });
+
+  it('does not fabricate insert-select read tables from string contents', () => {
+    const graph = extractTouchGraphFromSource([
+      {
+        fileName: 'product.domain.ts',
+        source: [
+          'export const products = pgTable("products", {}, jiso({ domain: "product", key: "id" }));',
+          'export const snapshots = pgTable("product_snapshots", {}, jiso({ domain: "snapshot", key: "productId" }));',
+          '',
+          'export async function importSnapshots(db) {',
+          '  await db.insert(snapshots).select(sql`select * from products where marker = ".from(products)"`);',
+          '}',
+          '',
+        ].join('\n'),
       },
     ]);
 
