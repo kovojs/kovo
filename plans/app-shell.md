@@ -375,7 +375,9 @@ Scope: SPEC addition (proposed §9.5 "The request shell"), `@jiso/server` shell 
       `examples/commerce/src/app-shell.test.ts` starts the commerce Vite
       middleware behind `node:http`, fetches `/cart`, `/c/commerce.client.js`,
       and `/_q/cart`, signs in through `/_m/auth/sign-in`, posts an enhanced
-      `/_m/cart/add` mutation, and verifies Vite still serves `/src/styles.css`.
+      `/_m/cart/add` mutation, posts a signed Stripe webhook to
+      `/webhooks/stripe` and verifies the persisted order plus `FW-Changes`,
+      and verifies Vite still serves `/src/styles.css`.
       Same-session verification ran
       `pnpm exec vitest --run examples/commerce/src/app-shell.test.ts`.
       Additional evidence 2026-06-12: the focused `examples/reference` auth

@@ -1,3 +1,4 @@
+import { createHmac } from 'node:crypto';
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { mkdtemp, readFile, rm } from 'node:fs/promises';
@@ -10,7 +11,13 @@ import { createServer as createViteServer } from 'vite';
 
 import { csrfToken, exportStaticApp, runMutation } from '@jiso/server';
 
-import { addToCart, commerceAuthCsrf, commerceCsrf, commerceSignIn } from './app.js';
+import {
+  addToCart,
+  commerceAuthCsrf,
+  commerceCsrf,
+  commercePaymentWebhookSecret,
+  commerceSignIn,
+} from './app.js';
 import {
   commerceClientModuleHref,
   createCommerceAppShell,
@@ -118,6 +125,42 @@ describe('commerce app shell HTTP entry', () => {
 
       expect(mutation.status, formatDevServerFailure(mutationBody, devServerError)).toBe(200);
       expect(mutationBody).toContain('<fw-fragment target="cart-badge">');
+
+      const webhookBody = JSON.stringify({
+        data: {
+          object: {
+            id: 'order-dev-http-1',
+            productId: 'p1',
+            quantity: 1,
+            total: 1499,
+            userId: 'u1',
+          },
+        },
+        id: 'evt_dev_http_1',
+        type: 'checkout.session.completed',
+      });
+      const webhook = await fetch(`${origin}/webhooks/stripe`, {
+        body: webhookBody,
+        headers: {
+          'Content-Type': 'application/json',
+          'stripe-signature': stripeHeader(webhookBody, commercePaymentWebhookSecret),
+        },
+        method: 'POST',
+      });
+      const webhookResponseBody = await webhook.text();
+
+      expect(webhook.status, formatDevServerFailure(webhookResponseBody, devServerError)).toBe(200);
+      expect(webhook.headers.get('fw-changes')).toBe(
+        '[{"domain":"order","keys":["order-dev-http-1"]}]',
+      );
+      expect(webhookResponseBody).toBe('ok');
+      expect(viteShell.commerceAppShell.db.orders).toContainEqual({
+        id: 'order-dev-http-1',
+        productId: 'p1',
+        qty: 1,
+        total: 1499,
+        userId: 'u1',
+      });
 
       const sourceAsset = await fetch(`${origin}/src/styles.css`);
       const sourceAssetBody = await sourceAsset.text();
@@ -434,6 +477,11 @@ function shellLoginCsrfRequest(db: ReturnType<typeof createCommerceAppShell>['db
 
 function cookiePair(setCookie: string): string {
   return setCookie.split(';')[0] ?? setCookie;
+}
+
+function stripeHeader(body: string, secret: string, timestamp = Math.floor(Date.now() / 1000)) {
+  const signature = createHmac('sha256', secret).update(`${timestamp}.${body}`).digest('hex');
+  return `t=${timestamp},v1=${signature}`;
 }
 
 function formatDevServerFailure(body: string, error: unknown): string {
