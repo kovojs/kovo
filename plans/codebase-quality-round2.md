@@ -1325,6 +1325,9 @@ As each phase splits a source module, split its tests in the same commit.
       `packages/server/src/index.test.ts` into `packages/server/src/deferred-stream.test.ts`,
       while the wire-fixture/live-server deferred checks remain in the monolith until their
       shared fixture helpers are extracted.
+      Additional evidence 2026-06-12: query endpoint/registry behavior moved from
+      `packages/server/src/index.test.ts` into `packages/server/src/query-endpoint.test.ts`;
+      the typed-read byte fixture remains in the monolith until shared wire helpers are extracted.
       and `pnpm exec vitest --run packages/server/src/*.test.ts`.
 - [ ] runtime/index.test.ts (4,435 lines, mutation tests under "query store") → per-module
       files; `Fake*` classes to a shared `test-fixtures.ts`; direct unit tests for wire-parser,
