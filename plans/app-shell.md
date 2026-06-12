@@ -344,6 +344,14 @@ Scope: SPEC addition (proposed §9.5 "The request shell"), `@jiso/server` shell 
       login/admin path, Vite-served `/src/app.ts`, and `vp run export` output
       containing `reference-export/v1` plus `/login`, `/account`, and `/admin`
       FW229 diagnostics.
+      Additional evidence 2026-06-12: the reference export script now accepts
+      `--out <dir>` for isolated adoption proofs, and
+      `examples/reference/src/app-shell.test.ts` runs the script against a temp
+      output directory to prove the SPEC §9.5 FW229 session-backed failure exits
+      before creating partial static-export files. Same-session verification ran
+      `pnpm exec vitest --run examples/reference/src/app.test.ts examples/reference/src/app-shell.test.ts`,
+      `pnpm exec vitest --run packages/server/src/static-export.test.ts`, and
+      `pnpm exec vp check examples/reference/scripts/export-static.mjs examples/reference/src/app-shell.test.ts plans/app-shell.md`.
 
 ## Background — the gap
 

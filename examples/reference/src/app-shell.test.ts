@@ -1,6 +1,9 @@
 import { execFile } from 'node:child_process';
+import { mkdtemp, readdir, rm } from 'node:fs/promises';
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http';
 import type { AddressInfo } from 'node:net';
+import * as os from 'node:os';
+import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { afterEach, describe, expect, it } from 'vitest';
@@ -99,6 +102,30 @@ describe('reference app shell HTTP entry', () => {
     expect(output).toContain('ERROR FW229 route=/account');
     expect(output).toContain('ERROR FW229 route=/admin');
     expect(output).toContain('sessionProvider');
+  });
+
+  it('keeps reference static export failures from creating partial output', async () => {
+    const tmpDir = await mkdtemp(path.join(os.tmpdir(), 'jiso-reference-export-'));
+    const outDir = path.join(tmpDir, 'dist');
+
+    try {
+      const result = await execFileResult(
+        process.execPath,
+        ['scripts/export-static.mjs', '--out', outDir],
+        {
+          cwd: fileURLToPath(new URL('..', import.meta.url)),
+          timeout: 30000,
+        },
+      );
+      const output = `${result.stdout}\n${result.stderr}`;
+
+      expect(result.status, output).toBe(1);
+      expect(output).toContain('reference-export/v1');
+      expect(output).toContain('ERROR FW229 route=/login');
+      await expect(readdir(outDir)).rejects.toThrow();
+    } finally {
+      await rm(tmpDir, { force: true, recursive: true });
+    }
   });
 
   it('serves auth routes and mutations through the shared request shell over HTTP', async () => {

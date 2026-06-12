@@ -45,8 +45,10 @@ export async function exportReferenceStaticApp({
 }
 
 if (isMainModule()) {
+  const cliOptions = parseCliOptions(process.argv.slice(2));
+
   try {
-    const result = await exportReferenceStaticApp();
+    const result = await exportReferenceStaticApp(cliOptions);
 
     process.stdout.write(
       [
@@ -74,6 +76,28 @@ if (isMainModule()) {
 
 function isMainModule() {
   return process.argv[1] === fileURLToPath(import.meta.url);
+}
+
+function parseCliOptions(args) {
+  const options = {};
+
+  for (let index = 0; index < args.length; index += 1) {
+    const arg = args[index];
+
+    if (arg !== '--out') {
+      throw new Error(`Unknown reference export option '${arg}'.`);
+    }
+
+    const outDir = args[index + 1];
+    if (!outDir) {
+      throw new Error('Missing value for reference export option --out.');
+    }
+
+    options.outDir = path.resolve(process.cwd(), outDir);
+    index += 1;
+  }
+
+  return options;
 }
 
 function isJisoApp(value) {
