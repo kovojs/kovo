@@ -5,8 +5,8 @@
 
 export async function copy(event) {
   const button = event.target.closest('button.code-copy');
-  const frame = button?.closest('.code-window');
-  const code = frame?.querySelector('pre')?.textContent;
+  const frame = button?.closest('.code-window, .cmd');
+  const code = frame?.querySelector('pre, code')?.textContent;
   if (!button || !code) return;
 
   try {

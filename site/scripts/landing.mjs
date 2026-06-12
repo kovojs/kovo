@@ -1,181 +1,217 @@
 /**
- * Landing page (plan W4): the fixed tagline, then three proof sections, each
- * backed by a W3-captured artifact — claims are toolchain output, not copy.
- * The hero's centerpiece is the FW227 teaching error, captured from the real
- * compiler on every build.
+ * Landing page (plan W4, redesigned): terminal-ledger composition — wordmark
+ * hero with the rename-cascade panel, the radio-driven "break it" pipeline
+ * (SPEC §7 L0: zero JavaScript), the agents/users split, and the ledger strip.
+ *
+ * Honesty note: the loader byte count comes from the W3 capture (measured
+ * from the shipping artifact every build). The cascade, FW402/FW223 panels,
+ * and the `BRAND_CLI check` framing are *designed illustrations* of the
+ * intended DX — FW227 is a real diagnostic today (SPEC §4.8); the cascade
+ * codes and code-frame presentation are aspirational and not claimed as
+ * live captures anywhere in the copy.
+ *
+ * The landing brands the framework as BRAND (display-only rename for now);
+ * packages, docs, and the spec keep the repo name until the rename lands.
  */
 
-const inlineCode = (text) =>
-  `<code class="rounded-md border border-slate-200 bg-slate-100 px-1.5 py-0.5 font-mono text-[0.85em] dark:border-slate-700 dark:bg-slate-800">${text}</code>`;
+const BRAND = 'Kovo';
+const BRAND_CAPS = BRAND.toUpperCase();
+const BRAND_CLI = BRAND.toLowerCase();
 
-const specChip = (anchor, label) => `<a class="spec-chip" href="/spec/#${anchor}">${label}</a>`;
+const NAV = [
+  { href: '/docs/installation/', label: 'Docs' },
+  { href: '/tutorial/', label: 'Tutorial' },
+  { href: '/guides/', label: 'Guides' },
+  { href: '/api/', label: 'API' },
+  { href: '/spec/', label: 'Spec' },
+];
 
-function proofSection({ artifact, body, eyebrow, flip, title }) {
-  return `<section class="border-t border-slate-900/10 py-24 dark:border-slate-50/10">
-    <div class="mx-auto grid max-w-7xl items-center gap-14 px-4 sm:px-6 lg:grid-cols-2 ${flip ? 'lg:[&>*:first-child]:order-2' : ''}">
-      <div>
-        <p class="mb-4"><span class="inline-flex rounded-full border border-jiso-600/30 bg-jiso-50 px-3 py-1 text-xs font-semibold tracking-widest text-jiso-700 uppercase dark:border-jiso-400/30 dark:bg-jiso-950 dark:text-jiso-300">${eyebrow}</span></p>
-        <h2 class="mb-5 text-3xl font-extrabold tracking-tight text-slate-900 sm:text-4xl dark:text-white">${title}</h2>
-        ${body}
+function landingHeader() {
+  return `<header>
+    <div class="bar">
+      <a href="/" class="logo"><span class="mark">&#9670;</span> ${BRAND_CAPS}</a>
+      <nav>${NAV.map((item) => `<a href="${item.href}">${item.label}</a>`).join('')}</nav>
+      <span class="right">
+        <button type="button" on:click="/c/search.js#open">&#8984;K</button>
+        <a href="https://github.com/jiso-sh/jiso" rel="external">GitHub</a>
+      </span>
+    </div>
+  </header>`;
+}
+
+function hero() {
+  return `<section class="hero">
+    <div>
+      <h1 class="stencil">${BRAND_CAPS}<span class="cursor">&#9646;</span></h1>
+      <p class="tagline">The web framework that <em>hands your agent the fix</em> <span class="dd">&mdash; database to DOM.</span></p>
+      <p class="sub">${BRAND} is built from the ground up so AI coding agents get a precise error and know <b>exactly what to fix</b>. And it's delightful for your users: pages are real HTML, <b>interactive at first paint</b>.</p>
+      <span class="nojs">&#10003; No JS required on load</span>
+      <div class="try">
+        <div class="cmd"><span><span class="dollar">$</span> <code>pnpm create ${BRAND_CLI} my-app</code></span><button type="button" class="code-copy" on:click="/c/code.js#copy">copy</button></div>
+        <a class="go" href="/tutorial/">Start the tutorial</a>
       </div>
-      <div class="min-w-0">${artifact}</div>
+    </div>
+    <div class="term">
+      <div class="term-head"><span>one rename, every layer caught</span><span>${BRAND_CLI} check</span></div>
+      <pre><span class="t-dim">$ git diff db/schema.ts</span>
+<span class="t-del">-  price: integer('price'),</span>
+<span class="t-add">+  priceCents: integer('price_cents'),</span>
+
+<span class="t-dim">$ ${BRAND_CLI} check</span>
+
+<span class="t-err">&#10007;</span> <span class="t-loc">server/queries/product.ts:14</span> <span class="badge b-query">QUERY</span>
+  projection reads dropped column <b>price</b>
+  <span class="t-fix">&rarr; select priceCents, or alias: price: products.priceCents</span>
+
+<span class="t-err">&#10007;</span> <span class="t-loc">src/product-card.tsx:13</span> <span class="badge b-bind">BINDING</span>
+  data-bind <b>"product.price"</b> has no source in the query
+  <span class="t-fix">&rarr; bind product.priceCents &mdash; format in a derive</span>
+
+<span class="t-err">&#10007;</span> <span class="t-loc">src/cart/checkout.tsx:31</span> <span class="badge b-form">FORM</span>
+  field <b>price</b> is not in the cart/add mutation schema
+
+<span class="t-err">&#10007;</span> <span class="t-loc">src/routes/sale.ts:8</span> <span class="badge b-route">ROUTE</span>
+  redirect builds <b>/sale?max=price</b> against a dropped param
+
+<div class="cascade-sum"><span><b>4 errors</b> &middot; 4 files &middot; each with its fix</span><span class="t-ok">0 guesses</span></div></pre>
     </div>
   </section>`;
 }
 
+function breakIt() {
+  return `<section class="breakit">
+    <p class="sec-label">How it works</p>
+    <h2 class="pipe-title">Build-time checks from backend to frontend</h2>
+    <p class="pipe-sub">Every layer below is checked against the next at build time. Don't take our word for it &mdash; break something:</p>
+
+    <input type="radio" name="brk" id="brk-col" checked />
+    <input type="radio" name="brk" id="brk-query" />
+    <input type="radio" name="brk" id="brk-bind" />
+
+    <div class="choices">
+      <label for="brk-col"><b>01</b> rename the column</label>
+      <label for="brk-query"><b>02</b> reshape the query</label>
+      <label for="brk-bind"><b>03</b> typo the binding</label>
+    </div>
+
+    <div class="pipe">
+      <div class="node node-1"><p class="nl">Database</p><pre>products = <span class="fn">table</span>({
+  details: <span class="hl">nullable</span>(json),
+  price: <span class="fn">integer</span>()
+})</pre></div>
+      <div class="link link-1"><span class="chk chk-ok">&#10003; typed</span><span class="chk chk-bad">&#10007; FW402</span><span class="wire"></span></div>
+      <div class="node node-2"><p class="nl">Server query</p><pre><span class="fn">query</span>(<span class="st">'product'</span>, {
+  reads: [product],
+  load: &hellip;  <span class="hl">&rarr; shape</span>
+})</pre></div>
+      <div class="link link-2"><span class="chk chk-ok">&#10003; typed</span><span class="chk chk-bad">&#10007; FW223</span><span class="wire"></span></div>
+      <div class="node node-3"><p class="nl">Client data</p><pre>&lt;script fw-query=<span class="st">"product"</span>&gt;
+{"price": <span class="hl">1299</span>}</pre></div>
+      <div class="link link-3"><span class="chk chk-ok">&#10003; typed</span><span class="chk chk-bad">&#10007; FW227</span><span class="wire"></span></div>
+      <div class="node node-4"><p class="nl">Rendered UI</p><pre>&lt;h2 data-bind=
+  <span class="st">"product.price"</span>&gt;</pre></div>
+    </div>
+
+    <div class="caught">
+      <div class="case case-col term">
+        <div class="term-head"><span>${BRAND_CLI} check &mdash; caught at the database &rarr; query junction</span></div>
+        <pre><span class="t-err">&#10007; FW402</span> &mdash; <b>query 'product' reads a column that no longer exists</b>
+
+  server/queries/product.ts:14 &mdash; <span class="t-loc">select(products.<span class="sq">price</span>)</span>
+  <span class="t-fix">&rarr; the column is now priceCents &mdash; select it, or alias: price: products.priceCents</span>
+  <span class="t-dim">every query is compiled against the live schema, so a rename can't reach production</span></pre>
+      </div>
+      <div class="case case-query term">
+        <div class="term-head"><span>${BRAND_CLI} check &mdash; caught at the query &rarr; client junction</span></div>
+        <pre><span class="t-err">&#10007; FW223</span> &mdash; <b>the page depends on data the query no longer ships</b>
+
+  src/product-card.tsx:13 &mdash; <span class="t-loc">data-bind="product.<span class="sq">price</span>"</span>
+  <span class="t-fix">&rarr; the projection now ships priceCents &mdash; update the binding, or restore the field</span>
+  <span class="t-dim">bindings are typed against the query's emitted shape, not against hope</span></pre>
+      </div>
+      <div class="case case-bind term">
+        <div class="term-head"><span>${BRAND_CLI} check &mdash; caught at the client &rarr; UI junction</span></div>
+        <pre><span class="t-err">&#10007; FW227</span> &mdash; <b>binding path 'product.pricee' does not exist</b>
+
+  src/product-card.tsx:13 &mdash; <span class="t-loc">data-bind="product.<span class="sq">pricee</span>"</span>
+  <span class="t-fix">&rarr; did you mean product.price?</span>
+  <span class="t-dim">the DOM is part of the type system: a typo in an attribute is a build error</span></pre>
+      </div>
+    </div>
+    <p class="breakit-foot"><span>this demo is plain HTML and CSS &mdash; radio buttons and :has(). <b>that's the point.</b></span><span>L0 on the interaction ladder</span></p>
+  </section>`;
+}
+
+function split() {
+  return `<section class="split">
+    <div class="half agents">
+      <p class="hl-label">For agents</p>
+      <h3>Errors worth reading</h3>
+      <p class="lead">Every diagnostic teaches: the line, the reason, the fixes &mdash; so the loop is <b>edit &rarr; check &rarr; fixed</b>, not edit &rarr; deploy &rarr; bug report. The behavior graph is queryable too: <code>${BRAND_CLI} explain mutation cart/add</code> answers "what refreshes?" with diffable output for CI.</p>
+      <div class="term">
+        <div class="term-head">$ ${BRAND_CLI} check</div>
+        <pre><span class="t-dim">13 &#9474;</span>  render: () =&gt; &lt;h2&gt;{product.<span class="sq">details.name</span>}&lt;/h2&gt;
+
+<span class="t-err">&#10007; FW227</span> &mdash; <b>product.details can be null here</b>
+  <span class="t-fix">fix 1</span>  {product.details<span class="t-ok">?.</span>name}
+  <span class="t-fix">fix 2</span>  make the projection non-null in the query
+
+<span class="t-ok">&#10003; caught in 0.4s &mdash; before anything ran</span></pre>
+      </div>
+    </div>
+
+    <div class="half users">
+      <p class="hl-label">For users</p>
+      <h3>No uncanny valley</h3>
+      <p class="lead">No hydration means no window where the page <b>looks ready but isn't</b>. A button works the moment it paints.</p>
+      <div class="timelines">
+        <div class="tl">
+          <p class="who"><span>Typical SPA</span><span class="bad">interactive at 3.2s</span></p>
+          <div class="track track-spa"><span class="seg s1"></span><span class="seg s2"></span><span class="seg s3"></span></div>
+          <p class="marks"><span>0ms paint</span><span class="warn">&#9888; looks ready, ignores clicks</span><span>3.2s</span></p>
+        </div>
+        <div class="tl">
+          <p class="who"><span>${BRAND}</span><span class="good">interactive at first paint</span></p>
+          <div class="track track-mpa"><span class="seg s1"></span><span class="seg s3"></span></div>
+          <p class="marks"><span>0ms paint</span><span class="ok">&#10003; every click works &mdash; tiny loader, handlers on demand</span></p>
+        </div>
+      </div>
+      <p class="users-note">With JavaScript off, every page still renders and every form still posts. <b>This site runs on ${BRAND} &mdash; try it.</b></p>
+    </div>
+  </section>`;
+}
+
+function ledgerStrip(loader) {
+  return `<p class="ledger-strip">
+    <span><span class="g">&#9679;</span> all build gates green</span><span class="sep">&#9474;</span>
+    <span>loader <b>${loader.gzipBytes.toLocaleString('en-US')} B</b> gzip &mdash; measured this build</span><span class="sep">&#9474;</span>
+    <span>TTI = first paint</span><span class="sep">&#9474;</span>
+    <span>JS-off: every page</span><span class="sep">&#9474;</span>
+    <span>fixpoint compile</span>
+    <a class="more" href="/guides/testing/">see how it's verified &rarr;</a>
+  </p>`;
+}
+
+function landingFooter() {
+  return `<footer class="l-footer">
+    <span>${BRAND} &mdash; interactive at first paint &middot; legible at every layer &middot; statically verifiable</span>
+    <span class="links">
+      <a href="/spec/">Spec</a>
+      <a href="/llms.txt">llms.txt</a>
+      <a href="https://github.com/jiso-sh/jiso" rel="external">GitHub</a>
+    </span>
+  </footer>`;
+}
+
 export function renderLanding(captures) {
-  const { loader } = captures;
-
-  const hero = `<section class="relative overflow-hidden">
-    <div class="pointer-events-none absolute inset-0 -z-10" aria-hidden="true">
-      <div class="absolute -top-44 right-[-12%] h-[36rem] w-[52rem] rounded-full bg-jiso-200/50 blur-3xl dark:bg-jiso-500/10"></div>
-      <div class="absolute top-40 left-[-18%] h-[28rem] w-[42rem] rounded-full bg-sky-200/40 blur-3xl dark:bg-sky-500/10"></div>
+  return `<div class="landing">
+    ${landingHeader()}
+    <div class="wrap">
+      ${hero()}
+      ${breakIt()}
+      ${split()}
+      ${ledgerStrip(captures.loader)}
+      ${landingFooter()}
     </div>
-    <div class="relative mx-auto grid max-w-7xl items-center gap-16 px-4 pt-20 pb-24 sm:px-6 lg:grid-cols-[1.05fr_1fr]">
-      <div>
-        <p class="mb-6 flex items-center gap-2 text-sm text-slate-600 dark:text-slate-400">
-          <span class="rounded-full border border-jiso-600/30 bg-jiso-50 px-2.5 py-0.5 text-xs font-semibold whitespace-nowrap text-jiso-700 dark:border-jiso-400/30 dark:bg-jiso-950 dark:text-jiso-300">Pre-v1</span>
-          Built in the open — every claim below is CI-checked.
-        </p>
-        <h1 class="text-4xl font-extrabold tracking-tight text-slate-900 sm:text-[3.4rem] sm:leading-[1.08] dark:text-white">
-          The TypeScript web framework where <span class="bg-gradient-to-r from-teal-600 to-sky-600 bg-clip-text text-transparent dark:from-teal-300 dark:to-sky-400">agents get build-time errors</span> and <span class="bg-gradient-to-r from-sky-600 to-teal-600 bg-clip-text text-transparent dark:from-sky-400 dark:to-teal-300">users get instant pages</span>.
-        </h1>
-        <p class="mt-6 max-w-xl text-lg leading-relaxed text-slate-600 dark:text-slate-400">
-          Every handler, navigation target, form field, and data dependency in a Jiso app is
-          provable by TypeScript plus static graph queries — and auditable by reading the page
-          source and the Network panel.
-        </p>
-        <div class="mt-9 flex flex-wrap items-center gap-4">
-          <a href="/docs/installation/" class="rounded-full bg-jiso-600 px-6 py-3 font-semibold text-white shadow-lg shadow-jiso-600/25 transition hover:bg-jiso-500">Get started</a>
-          <a href="/tutorial/" class="rounded-full border border-slate-300 px-6 py-3 font-semibold text-slate-700 transition hover:border-slate-400 dark:border-slate-700 dark:text-slate-200 dark:hover:border-slate-500">Start the tutorial</a>
-        </div>
-        <dl class="mt-12 flex flex-wrap gap-x-10 gap-y-4">
-          <div>
-            <dt class="text-xs font-medium tracking-wide text-slate-500 uppercase dark:text-slate-400">Always-loaded JS</dt>
-            <dd class="mt-1 font-mono text-2xl font-semibold text-slate-900 dark:text-white">${(loader.gzipBytes / 1024).toFixed(1)}<span class="text-base text-slate-500"> KB gz</span></dd>
-          </div>
-          <div>
-            <dt class="text-xs font-medium tracking-wide text-slate-500 uppercase dark:text-slate-400">Hydration</dt>
-            <dd class="mt-1 font-mono text-2xl font-semibold text-slate-900 dark:text-white">none</dd>
-          </div>
-          <div>
-            <dt class="text-xs font-medium tracking-wide text-slate-500 uppercase dark:text-slate-400">Time to interactive</dt>
-            <dd class="mt-1 font-mono text-2xl font-semibold text-slate-900 dark:text-white">= first paint</dd>
-          </div>
-        </dl>
-      </div>
-      <div class="relative min-w-0">
-        <div class="absolute -inset-6 rounded-3xl bg-gradient-to-br from-teal-500/15 to-sky-500/15 blur-2xl" aria-hidden="true"></div>
-        <div class="artifact-hero relative">${captures.teachingError}</div>
-        <p class="mt-4 text-center text-xs text-slate-500 dark:text-slate-400">Real compiler output — recaptured from the toolchain on every build of this site.</p>
-      </div>
-    </div>
-  </section>`;
-
-  const agents = proofSection({
-    eyebrow: 'For agents',
-    title: 'Your agent finds out at build time, not in production',
-    body: `<div class="space-y-4 text-slate-600 dark:text-slate-400">
-      <p>
-        An agent editing a Jiso app learns it broke something the same way ${inlineCode('tsc')}
-        reports a type error: before anything runs. Binding paths are checked against real query
-        shapes, links against the route table, form fields against mutation schemas. Rename a
-        route and every ${inlineCode('&lt;Link&gt;')}, GET form, and redirect goes red under
-        ${inlineCode('vp check')}. ${specChip('6-4', 'SPEC §6.4')}
-      </p>
-      <p>
-        Every diagnostic is a teaching error — what broke, why the spec requires it, and the
-        fixes. The capture in the hero above is one of them, produced by the real compiler when
-        this site was built.
-      </p>
-      <p>
-        The whole behavior graph is queryable, too. <a class="font-medium text-jiso-600 underline decoration-jiso-600/40 underline-offset-3 hover:decoration-jiso-600 dark:text-jiso-400" href="/guides/fw-explain/">fw explain</a>
-        answers &ldquo;what refreshes when this mutation commits?&rdquo; with stable, diffable
-        output an agent can assert on in CI.
-      </p>
-    </div>`,
-    artifact: captures.fwExplain,
-  });
-
-  const users = proofSection({
-    flip: true,
-    eyebrow: 'For users',
-    title: 'Pages are interactive the moment they paint',
-    body: `<div class="space-y-4 text-slate-600 dark:text-slate-400">
-      <p>
-        Jiso is a multi-page app with no client router and no hydration: the HTML the server
-        sends <em>is</em> the application. Time-to-interactive equals first contentful paint —
-        there is no gap to optimize, and CI proves it with an automated 100-navigation browser
-        gate. ${specChip('16', 'SPEC §16')}
-      </p>
-      <p>
-        The only JavaScript on every page is a ${loader.gzipBytes}-byte (gzipped)
-        event-delegation loader. Handler modules load on first interaction — and the number you
-        just read was measured from the shipping artifact when this page was built.
-        ${specChip('4-4', 'SPEC §4.4')}
-      </p>
-      <p>
-        Turn JavaScript off and every page still renders, every form still posts. The app
-        degrades to a working website, not a blank screen — this site is built with Jiso, so
-        try it. ${specChip('8', 'SPEC §8')}
-      </p>
-    </div>`,
-    artifact: `<figure class="artifact">
-      <figcaption class="artifact-title">measured at build time, from the shipping artifact</figcaption>
-      <pre class="artifact-body"><span class="tok-dim">$ node -e "gzipSync(jisoLoaderSource).byteLength"</span>
-
-<span class="tok-code">${loader.gzipBytes}</span> bytes gzipped <span class="tok-dim">(raw ${loader.rawBytes}B, budget ${loader.budget}B — pinned by packages/runtime tests)</span>
-
-<span class="tok-dim"># what it does: capture-phase event delegation,
-# url#export handler imports on first interaction,
-# query hydration, update plan, enhanced forms.
-# what it is not: a router, a renderer, a vdom.</span></pre>
-    </figure>`,
-  });
-
-  const developers = proofSection({
-    eyebrow: 'For developers',
-    title: 'Debug from the Network panel, not the framework source',
-    body: `<div class="space-y-4 text-slate-600 dark:text-slate-400">
-      <p>
-        The wire is the documentation. Mutations are named form POSTs; responses are readable
-        HTML fragments and query JSON. The trace on the right is the pinned wire fixture for
-        &ldquo;add to cart&rdquo; — exactly what the Network panel shows, byte-for-byte what CI
-        asserts. ${specChip('2', 'Constitution #4')}
-      </p>
-      <p>
-        View-source works. Handler refs are visible attributes
-        (${inlineCode('on:click="/c/cart.js#Cart$add"')}), dependencies are
-        ${inlineCode('fw-deps')} stamps, state is a JSON attribute. Names appear in HTML and
-        wire traffic, so they structurally cannot be minified away.
-      </p>
-      <p>
-        Replay a duplicate POST and ${inlineCode('FW-Idem')} answers from the idempotency log;
-        ${inlineCode('FW-Changes')} tells you exactly which domains a commit touched.
-        ${specChip('9-1', 'SPEC §9.1')}
-      </p>
-    </div>`,
-    artifact: captures.wireTrace,
-  });
-
-  const cta = `<section class="px-4 pb-24 sm:px-6">
-    <div class="relative mx-auto max-w-7xl overflow-hidden rounded-3xl bg-slate-950 px-6 py-20 text-center dark:border dark:border-slate-800">
-      <div class="pointer-events-none absolute inset-0" aria-hidden="true">
-        <div class="absolute -top-24 left-1/2 h-72 w-[40rem] -translate-x-1/2 rounded-full bg-jiso-500/20 blur-3xl"></div>
-      </div>
-      <div class="relative mx-auto max-w-2xl">
-        <h2 class="text-3xl font-extrabold tracking-tight text-white sm:text-4xl">Build something legible</h2>
-        <p class="mt-4 text-lg text-slate-300">
-          The tutorial builds a working e-commerce app in eight chapters — and every code block
-          in it compiles and tests in this repo&rsquo;s CI.
-        </p>
-        <div class="mt-9 flex flex-wrap justify-center gap-4">
-          <a href="/tutorial/" class="rounded-full bg-jiso-500 px-6 py-3 font-semibold text-white shadow-lg shadow-jiso-500/30 transition hover:bg-jiso-400">Start the tutorial</a>
-          <a href="/docs/installation/" class="rounded-full border border-slate-600 px-6 py-3 font-semibold text-slate-200 transition hover:border-slate-400">Read the docs</a>
-        </div>
-      </div>
-    </div>
-  </section>`;
-
-  return `${hero}${agents}${users}${developers}${cta}`;
+  </div>`;
 }

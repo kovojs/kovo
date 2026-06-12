@@ -199,7 +199,7 @@ const SEARCH_DIALOG = `<dialog id="site-search" class="search-dialog" aria-label
  * §16.1); islands (search, theme, copy) load on first interaction only. The
  * theme script also runs pre-paint so there is no light-mode flash.
  */
-export function renderDocument({ body, description, path, title }) {
+export function renderDocument({ body, chromeless = false, description, path, title }) {
   return `<!doctype html>
 <html lang="en">
   <head>
@@ -214,9 +214,9 @@ export function renderDocument({ body, description, path, title }) {
     <script>${jisoLoaderSource}</script>
   </head>
   <body class="bg-white font-sans text-slate-900 antialiased dark:bg-slate-950 dark:text-slate-100">
-    ${SiteHeader.definition.render({}, {}, { activePath: path })}
+    ${chromeless ? '' : SiteHeader.definition.render({}, {}, { activePath: path })}
     ${body}
-    ${SiteFooter.definition.render({}, {})}
+    ${chromeless ? '' : SiteFooter.definition.render({}, {})}
     ${SEARCH_DIALOG}
   </body>
 </html>

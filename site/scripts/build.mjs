@@ -231,16 +231,18 @@ async function main() {
     url: '/spec/',
   });
 
-  // Landing (W4).
+  // Landing (W4). Chromeless: the landing ships its own always-dark header
+  // and footer; the docs chrome (and the Jiso name) stay everywhere else.
   await writePage(
     '/',
     finishPage(
       renderDocument({
         body: renderLanding(captures),
+        chromeless: true,
         description:
-          'The TypeScript web framework where agents get build-time errors and users get instant pages.',
+          'The web framework that hands your agent the fix — database to DOM. Build-time checks from backend to frontend; pages interactive at first paint.',
         path: '/',
-        title: 'Jiso — agents get build-time errors, users get instant pages',
+        title: 'Kovo — the web framework that hands your agent the fix',
       }),
     ),
   );

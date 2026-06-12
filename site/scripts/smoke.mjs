@@ -64,8 +64,12 @@ try {
   const noJsPage = await noJs.newPage();
   await noJsPage.goto(`${origin}/`);
   check(
-    (await noJsPage.locator('h1').first().textContent())?.includes('agents get build-time errors'),
+    (await noJsPage.locator('h1').first().textContent())?.includes('KOVO'),
     'no-JS: landing hero renders',
+  );
+  check(
+    (await noJsPage.locator('.tagline').textContent())?.includes('hands your agent the fix'),
+    'no-JS: landing tagline renders',
   );
   await noJsPage.click('a[href="/docs/installation/"]');
   check(
