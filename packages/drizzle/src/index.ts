@@ -1006,12 +1006,10 @@ function selectShapeFromQueryBody(
   const objectEnd = findMatchingBrace(projection, 0);
   if (objectEnd === -1) return null;
 
-  return queryShapeFromObjectLiteral(
-    projection.slice(1, objectEnd),
-    '',
+  return queryShapeFromObjectLiteral(projection.slice(0, objectEnd + 1), {
     columnShapes,
-    nullableJoinTables(body),
-  );
+    nullableTables: nullableJoinTables(body),
+  });
 }
 
 function returnedSelectCall(body: string): RegExpExecArray | null {
@@ -1031,47 +1029,71 @@ function relationalQueryDiagnostics(body: string): TouchGraphDiagnostic[] {
   ];
 }
 
+interface QueryShapeContext {
+  columnShapes: Readonly<Record<string, QueryShape>>;
+  nullableTables: ReadonlySet<string>;
+  prefix?: string;
+}
+
 function queryShapeFromObjectLiteral(
   source: string,
-  prefix = '',
-  columnShapes: Readonly<Record<string, QueryShape>> = {},
-  nullableTables: ReadonlySet<string> = new Set(),
+  context: QueryShapeContext,
+): QueryShapeSelection {
+  return (
+    projectionExpressionFact(source, (node) => {
+      if (!ts.isObjectLiteralExpression(node)) return null;
+      return queryShapeFromObjectLiteralNode(node, context);
+    }) ?? emptyQueryShapeSelection()
+  );
+}
+
+function emptyQueryShapeSelection(): QueryShapeSelection {
+  return {
+    hasTablelessScalar: false,
+    opaquePaths: [],
+    scalarTables: new Set(),
+    shape: {},
+    unresolvedPaths: [],
+  };
+}
+
+function queryShapeFromObjectLiteralNode(
+  object: ts.ObjectLiteralExpression,
+  context: QueryShapeContext,
 ): QueryShapeSelection {
   const shape: Record<string, QueryShape> = {};
   let hasTablelessScalar = false;
   const opaquePaths: string[] = [];
   const scalarTables = new Set<string>();
   const unresolvedPaths: string[] = [];
+  const prefix = context.prefix ?? '';
 
-  for (const entry of splitTopLevelArgs(source)) {
-    const separator = entry.indexOf(':');
-    if (separator === -1) {
+  for (const property of object.properties) {
+    if (ts.isShorthandPropertyAssignment(property)) {
       // SPEC §10-§11: unsupported projection syntax stays visible instead of disappearing.
-      const shorthand = shorthandProjectionName(entry);
-      if (shorthand) unresolvedPaths.push(prefix ? `${prefix}.${shorthand}` : shorthand);
+      const shorthand = property.name.text;
+      unresolvedPaths.push(prefix ? `${prefix}.${shorthand}` : shorthand);
       continue;
     }
 
-    const key = entry
-      .slice(0, separator)
-      .trim()
-      .replace(/^["']|["']$/g, '');
+    if (!ts.isPropertyAssignment(property)) continue;
+
+    const key = projectionPropertyName(property.name);
     if (!key) continue;
 
-    const value = entry.slice(separator + 1).trim();
+    const valueNode = unwrappedExpression(property.initializer);
+    const value = valueNode.getText();
     const path = prefix ? `${prefix}.${key}` : key;
-    if (value.startsWith('{')) {
-      const nested = queryShapeFromObjectLiteral(
-        value.slice(1, findMatchingBrace(value, 0)),
-        path,
-        columnShapes,
-        nullableTables,
-      );
-      shape[key] = nullableNestedShape(nested, nullableTables) ?? nested.shape;
+    if (ts.isObjectLiteralExpression(valueNode)) {
+      const nested = queryShapeFromObjectLiteralNode(valueNode, {
+        ...context,
+        prefix: path,
+      });
+      shape[key] = nullableNestedShape(nested, context.nullableTables) ?? nested.shape;
       opaquePaths.push(...nested.opaquePaths);
       unresolvedPaths.push(...nested.unresolvedPaths);
     } else {
-      const scalarShape = scalarQueryShape(value, columnShapes, nullableTables);
+      const scalarShape = scalarQueryShape(value, context.columnShapes, context.nullableTables);
       if (scalarShape) {
         shape[key] = scalarShape;
       } else if (!isOpaqueProjection(value)) {
@@ -1090,8 +1112,11 @@ function queryShapeFromObjectLiteral(
   return { hasTablelessScalar, opaquePaths, shape, scalarTables, unresolvedPaths };
 }
 
-function shorthandProjectionName(entry: string): string | undefined {
-  return /^(?<name>[A-Za-z_$][\w$]*)$/.exec(entry.trim())?.groups?.name;
+function projectionPropertyName(name: ts.PropertyName): string | undefined {
+  if (ts.isIdentifier(name) || ts.isStringLiteral(name) || ts.isNumericLiteral(name)) {
+    return name.text;
+  }
+  return undefined;
 }
 
 function nullableNestedShape(

@@ -1020,6 +1020,14 @@ must be "FW406 unresolved," never "silently wrong."
       `pnpm exec vitest --run packages/drizzle/src/index.test.ts -t "typed sql projections|opaque query projections"`;
       `pnpm exec vitest --run packages/drizzle/src/index.test.ts`;
       `pnpm exec vitest --run conformance/drizzle-pin/src/index.test.ts`.
+      Additional evidence 2026-06-12: source-mode select projection shape extraction now walks a
+      parsed object literal instead of splitting projection text on top-level commas and the first
+      colon, so punctuation inside string-literal projection keys no longer fabricates alternate
+      query-shape keys or FW406 paths. Unresolved values keep actionable FW406 projection metadata
+      keyed by the real property name under SPEC §10-§11. Same-session evidence:
+      `pnpm exec vitest --run packages/drizzle/src/index.test.ts -t "projection facts|computed projections|typed sql projections|Drizzle selects"`;
+      `pnpm exec vitest --run packages/drizzle/src`;
+      `pnpm exec vitest --run conformance/drizzle-pin/src/index.test.ts`.
 - [ ] **HIGH — Cover the invisible read/write surfaces or mark them.** Relational query API
       (`db.query.users.findMany()`) matches neither read (:1138) nor write (:598) extraction;
       `db.execute(sql``)` is skipped by `extractExternalDbArgumentCalls` (:1820). Either

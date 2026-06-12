@@ -1152,6 +1152,51 @@ export interface CommerceInvalidationSets {
     ]);
   });
 
+  it('does not fabricate projection facts from punctuation inside string-literal keys', () => {
+    const facts = extractQueryFactsFromSource([
+      {
+        fileName: 'product.queries.ts',
+        source: `
+          export const products = pgTable("products", {
+            id: text("id").primaryKey(),
+            name: text("name").notNull(),
+          }, jiso({ domain: "product", key: "id" }));
+
+          export const productQuery = query("product", {
+            load(_input, db) {
+              return db.select({
+                "display:name,raw": products.name,
+                "unresolved:value,raw": compute(products.id),
+                id: products.id,
+              }).from(products);
+            },
+          });
+        `,
+      },
+    ]);
+
+    expect(facts).toEqual([
+      {
+        diagnostics: [
+          {
+            code: 'FW406',
+            message:
+              'Statically un-analyzable write site; manual touches required. Query projection product.unresolved:value,raw could not be resolved to a Drizzle column or typed sql<T> expression.',
+            severity: 'warn',
+            site: 'product.queries.ts:7',
+          },
+        ],
+        query: 'product',
+        reads: ['product'],
+        shape: {
+          'display:name,raw': 'string',
+          id: 'string',
+        },
+        site: 'product.queries.ts:7',
+      },
+    ]);
+  });
+
   it('does not infer typed sql projections from string contents', () => {
     const facts = extractQueryFactsFromSource([
       {
