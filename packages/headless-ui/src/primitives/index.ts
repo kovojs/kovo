@@ -254,6 +254,34 @@ export type {
   MeterPrimitiveAttributes,
 } from './meter.js';
 
+export {
+  decrementNumberFieldValue,
+  incrementNumberFieldValue,
+  numberFieldDecrementAttributes,
+  numberFieldDecrementClick,
+  numberFieldIncrementAttributes,
+  numberFieldIncrementClick,
+  numberFieldInput,
+  numberFieldInputAttributes,
+  numberFieldRootAttributes,
+  numberFieldValueFromString,
+  setNumberFieldValue,
+} from './number-field.js';
+export type {
+  NumberFieldButtonAttributeOptions,
+  NumberFieldButtonEvent,
+  NumberFieldChangeDetail,
+  NumberFieldChangeOptions,
+  NumberFieldChangeReason,
+  NumberFieldChangeResult,
+  NumberFieldInputAttributeOptions,
+  NumberFieldInputEvent,
+  NumberFieldPrimitiveAttributes,
+  NumberFieldRootAttributeOptions,
+  NumberFieldState,
+  NumberFieldValue,
+} from './number-field.js';
+
 export { progressRootAttributes, progressValueState } from './progress.js';
 export type {
   ProgressAttributeOptions,
