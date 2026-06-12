@@ -5,10 +5,14 @@ import {
   type MutationResult,
   type QueryDefinition,
   type Schema,
-  runMutation,
 } from '@jiso/server';
-import { createPageAssertion, type PageAssertion } from './page.js';
-import { createDbVerifier, diagnosticMessage } from './verifier.js';
+import {
+  executeHarnessMutation,
+  executeHarnessQuery,
+  loadHarnessPage,
+} from './harness-operations.js';
+import type { PageAssertion } from './page.js';
+import { createDbVerifier } from './verifier.js';
 import type { DbVerificationConfig, DbVerificationDiagnostic } from './verifier.js';
 
 export interface JisoTestContext<Db = unknown> {
@@ -71,75 +75,13 @@ export function createJisoTestHarness<Db>(
       input: unknown,
       execOptions?: JisoTestExecOptions<Request>,
     ) {
-      const request = {
-        ...options.request,
-        ...execOptions?.request,
-        db,
-      } as unknown as Request;
-
-      if (!verifier) {
-        const result = await runMutation(
-          mutation,
-          input,
-          request,
-          execOptions?.csrf === undefined ? {} : { csrf: execOptions.csrf },
-        );
-        return result;
-      }
-
-      const captured = await verifier.capture(async () => {
-        const result = await runMutation(
-          mutation,
-          input,
-          request,
-          execOptions?.csrf === undefined ? {} : { csrf: execOptions.csrf },
-        );
-        return result;
-      });
-      verifier.assertCoveredOperations(captured.observed, execOptions?.touchGraphKey);
-      const result = captured.result;
-      return result;
+      return executeHarnessMutation(mutation, input, db, options.request, verifier, execOptions);
     },
     async page(path) {
-      const page = options.pages?.[path];
-      if (!page) throw new Error(`Page fixture not found: ${path}`);
-
-      const html = typeof page === 'function' ? await page() : page;
-      return createPageAssertion(html);
+      return loadHarnessPage(options.pages, path);
     },
     async query(query, input) {
-      if (!query.load) throw new Error(`Query fixture has no loader: ${query.key}`);
-
-      const request = {
-        ...options.request,
-        db,
-      };
-      // SPEC.md §11.4: harness query execution uses the same wrapped DB seam
-      // as mutation execution, so read verification observes loader data access.
-      const loadContext = { db, request };
-      const load = () => query.load?.(input, loadContext);
-      const result = verifier
-        ? await verifier.capture(load).then((captured) => {
-            verifier.assertReadsCoveredOperations(
-              captured.observed,
-              query.reads.map((domain) => domain.key),
-            );
-            return captured.result;
-          })
-        : await load();
-      if (query.output) {
-        try {
-          query.output.parse(result);
-        } catch (error) {
-          throw new Error(
-            diagnosticMessage(
-              'FW410',
-              `${query.key} ${error instanceof Error ? error.message : String(error)}`,
-            ),
-          );
-        }
-      }
-      return result;
+      return executeHarnessQuery(query, input, db, options.request, verifier);
     },
     verificationDiagnostics(): readonly DbVerificationDiagnostic[] {
       return verifier?.diagnostics() ?? [];

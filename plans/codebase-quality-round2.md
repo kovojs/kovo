@@ -3266,6 +3266,16 @@ Verification: server vitest + wire fixtures byte-for-byte acceptance.
       `corepack pnpm exec vitest --run packages/test/src`,
       `corepack pnpm exec vp check packages/test/src/harness.ts packages/test/src/query-verifier.test.ts plans/codebase-quality-round2.md`,
       and `git diff --check`.
+      Additional evidence 2026-06-12: harness operation execution moved from
+      `packages/test/src/harness.ts` into `packages/test/src/harness-operations.ts`, leaving
+      `harness.ts` focused on context construction while the extracted module owns mutation
+      execution, page fixture loading, query loader read verification, and FW410 output
+      validation. `packages/test/src/harness-operations.test.ts` covers the direct seam for
+      mutation capture, query read assertion before output validation, and lazy page fixtures.
+      Same-session evidence:
+      `corepack pnpm exec vitest --run packages/test/src/harness-operations.test.ts packages/test/src/harness.test.ts packages/test/src/query-verifier.test.ts packages/test/src/harness-verifier.test.ts packages/test/src/page.test.ts`,
+      `corepack pnpm exec vp check packages/test/src/harness.ts packages/test/src/harness-operations.ts packages/test/src/harness-operations.test.ts`,
+      and `git diff --check`.
 - [ ] **MED — Commerce example: one source of truth.** `cartQuery.load` returns a constant while
       `loadCartQuery(db)` does the real read (app.ts:123-126 vs :280-284);
       `productGridQuery.load` conjures a fresh `createCommerceDb()` (:161); the committed
@@ -3891,6 +3901,14 @@ As each phase splits a source module, split its tests in the same commit.
       behavior remains there to split. Same-session evidence:
       `corepack pnpm exec vitest --run packages/test/src`,
       `corepack pnpm exec vp check packages/test/src/index.ts plans/codebase-quality-round2.md`,
+      and `git diff --check`.
+      Additional evidence 2026-06-12: harness operation coverage split out to
+      `packages/test/src/harness-operations.test.ts` alongside the new
+      `packages/test/src/harness-operations.ts` seam, so `harness.test.ts` remains focused on
+      public context construction and DB handle behavior while operation internals have direct
+      mutation/query/page tests. Same-session evidence:
+      `corepack pnpm exec vitest --run packages/test/src/harness-operations.test.ts packages/test/src/harness.test.ts packages/test/src/query-verifier.test.ts packages/test/src/harness-verifier.test.ts packages/test/src/page.test.ts`,
+      `corepack pnpm exec vp check packages/test/src/harness.ts packages/test/src/harness-operations.ts packages/test/src/harness-operations.test.ts`,
       and `git diff --check`.
       Additional evidence 2026-06-12: commerce source-truth graph acceptance split out of
       `examples/commerce/src/app.test.ts` into `examples/commerce/src/source-truth.test.ts`,
