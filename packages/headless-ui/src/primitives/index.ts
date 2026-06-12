@@ -128,6 +128,29 @@ export type {
   ProgressPrimitiveAttributes,
 } from './progress.js';
 
+export {
+  popoverBeforeToggle,
+  popoverContentAttributes,
+  popoverEscapeKeyDown,
+  popoverRootAttributes,
+  popoverTriggerAttributes,
+  popoverTriggerClick,
+  setPopoverOpen,
+  togglePopover,
+} from './popover.js';
+export type {
+  PopoverAttributeOptions,
+  PopoverBeforeToggleEvent,
+  PopoverChangeDetail,
+  PopoverChangeOptions,
+  PopoverChangeReason,
+  PopoverChangeResult,
+  PopoverEscapeEvent,
+  PopoverPrimitiveAttributes,
+  PopoverState,
+  PopoverTriggerEvent,
+} from './popover.js';
+
 export { separatorRootAttributes } from './separator.js';
 export type {
   SeparatorAttributeOptions,

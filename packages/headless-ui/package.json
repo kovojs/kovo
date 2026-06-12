@@ -13,6 +13,7 @@
     "./primitives/collapsible": "./src/primitives/collapsible.ts",
     "./primitives/disclosure": "./src/primitives/disclosure.ts",
     "./primitives/meter": "./src/primitives/meter.ts",
+    "./primitives/popover": "./src/primitives/popover.ts",
     "./primitives/progress": "./src/primitives/progress.ts",
     "./primitives/separator": "./src/primitives/separator.ts",
     "./primitives/switch": "./src/primitives/switch.ts",
