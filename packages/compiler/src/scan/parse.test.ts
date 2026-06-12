@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest';
 
-import { arrowFunctionParts, solePropertyAccessPath, stringLiteralArrayValues } from './parse.js';
+import {
+  arrowFunctionParts,
+  functionBodyPropertyAccessPaths,
+  solePropertyAccessPath,
+  stringLiteralArrayValues,
+} from './parse.js';
 
 describe('compiler scan parser helpers', () => {
   it('extracts one property access expression with optional receiver segments', () => {
@@ -14,6 +19,15 @@ describe('compiler scan parser helpers', () => {
   it('rejects non-sole property access expressions', () => {
     expect(solePropertyAccessPath('expression.tsx', 'cart.count + 1')).toBeNull();
     expect(solePropertyAccessPath('expression.tsx', 'count')).toBeNull();
+  });
+
+  it('extracts outer property access paths from function body source', () => {
+    expect(
+      functionBodyPropertyAccessPaths(
+        'handler-expression.ts',
+        'submit(item.id, cart.items?.length, state.count, "item.name")',
+      ),
+    ).toEqual(['item.id', 'cart.items?.length', 'state.count']);
   });
 
   it('extracts string literal array values from expression source', () => {

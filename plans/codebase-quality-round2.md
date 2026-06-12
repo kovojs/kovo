@@ -592,6 +592,14 @@ pipeline throws the tree away and communicates via mutated source text.
       evidence:
       `pnpm exec vitest --run packages/compiler/src/index.test.ts -t "handler captures|quoted commas|element params|element param types|string literal|typed zero-argument"` and
       `pnpm exec vp check packages/compiler/src/emit/client.ts packages/compiler/src/lower/handlers.ts plans/codebase-quality-round2.md`.
+      Additional evidence 2026-06-12: handler element-param discovery now reuses
+      `functionBodyPropertyAccessPaths` from the TypeScript scan front-end instead of carrying a
+      private property-access path walker in `lower/handlers.ts`; `scan/parse.test.ts` pins
+      function-body path extraction with optional receiver segments and string-literal immunity.
+      Same-session evidence:
+      `pnpm exec vitest --run packages/compiler/src/scan/parse.test.ts packages/compiler/src/handler-lowering.test.ts packages/compiler/src/index.test.ts packages/compiler/src/shared.test.ts`,
+      `pnpm exec vp check packages/compiler/src/scan/parse.ts packages/compiler/src/scan/parse.test.ts packages/compiler/src/lower/handlers.ts plans/codebase-quality-round2.md`,
+      and `git diff --check`.
 - [x] **HIGH — Kill the derive mega-regex.** validate/bindings.ts:215-216 silently drops any
       `derive()` export whose expression contains `;` in a string or unusual formatting — its
       stamps vanish from `collectQueryUpdatePlans` with no diagnostic. scan/parse.ts already

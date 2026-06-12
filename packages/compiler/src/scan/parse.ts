@@ -298,6 +298,21 @@ export function identifierReferences(fileName: string, source: string): string[]
 
 export function propertyAccessPaths(fileName: string, source: string): string[] {
   const sourceFile = parseExpressionSource(fileName, source);
+  return propertyAccessPathsFromSourceFile(sourceFile);
+}
+
+export function functionBodyPropertyAccessPaths(fileName: string, body: string): string[] {
+  const sourceFile = ts.createSourceFile(
+    fileName,
+    `function __jiso_scan__() {\n${body}\n}`,
+    ts.ScriptTarget.Latest,
+    true,
+    ts.ScriptKind.TS,
+  );
+  return propertyAccessPathsFromSourceFile(sourceFile);
+}
+
+function propertyAccessPathsFromSourceFile(sourceFile: ts.SourceFile): string[] {
   const paths: string[] = [];
 
   const visit = (node: ts.Node): void => {

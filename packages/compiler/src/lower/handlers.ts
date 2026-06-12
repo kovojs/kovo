@@ -3,7 +3,12 @@ import ts from 'typescript';
 
 import { diagnosticFor, type CompilerDiagnostic } from '../diagnostics.js';
 import { literalValue } from '../scan/object.js';
-import { identifierReferences, jsxElements, type ComponentModuleModel } from '../scan/parse.js';
+import {
+  functionBodyPropertyAccessPaths,
+  identifierReferences,
+  jsxElements,
+  type ComponentModuleModel,
+} from '../scan/parse.js';
 import { replaceExtension } from '../shared.js';
 import type {
   CompileComponentOptions,
@@ -392,24 +397,7 @@ function serializableMemberExpressions(expression: string): string[] {
 }
 
 function collectSerializableMemberExpressions(expression: string): string[] {
-  const sourceFile = handlerExpressionSourceFile(expression);
-  const members: string[] = [];
-
-  const visit = (node: ts.Node): void => {
-    if (
-      ts.isPropertyAccessExpression(node) &&
-      !(ts.isPropertyAccessExpression(node.parent) && node.parent.expression === node)
-    ) {
-      const path = propertyAccessPath(node);
-      if (path) members.push(path);
-      return;
-    }
-
-    ts.forEachChild(node, visit);
-  };
-
-  visit(sourceFile);
-  return members;
+  return functionBodyPropertyAccessPaths('handler-expression.ts', expression);
 }
 
 function handlerExpressionSourceFile(expression: string): ts.SourceFile {
@@ -420,21 +408,6 @@ function handlerExpressionSourceFile(expression: string): ts.SourceFile {
     true,
     ts.ScriptKind.TS,
   );
-}
-
-function propertyAccessPath(expression: ts.PropertyAccessExpression): string | null {
-  const segments: string[] = [expression.name.text];
-  let current: ts.Expression = expression.expression;
-
-  while (ts.isPropertyAccessExpression(current)) {
-    segments.unshift(current.name.text);
-    current = current.expression;
-  }
-
-  if (!ts.isIdentifier(current)) return null;
-
-  segments.unshift(current.text);
-  return segments.join('.');
 }
 
 function dedupeStrings(values: readonly string[]): string[] {
