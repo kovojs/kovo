@@ -1344,6 +1344,13 @@ index.test.ts:4227 while here — it weakens the byte-for-byte claim) + acceptan
       local copies for commerce form/error rendering. Same-session evidence:
       `pnpm exec vitest --run examples/commerce/src/app.test.ts` and
       `pnpm exec vp check examples/commerce/src/app.ts examples/commerce/src/app.test.ts examples/commerce/src/generated/graph.json examples/commerce/src/generated/touch-graph.ts plans/codebase-quality-round2.md`.
+      Additional evidence 2026-06-12: commerce CSRF secrets now flow through exported
+      `EXAMPLE_ONLY_COMMERCE_CSRF_SECRET` / `EXAMPLE_ONLY_COMMERCE_AUTH_CSRF_SECRET` constants
+      rather than inline production-looking literals, and `app.test.ts` asserts the exported CSRF
+      configs keep the `EXAMPLE_ONLY_` marker. Same-session evidence:
+      `corepack pnpm exec vitest --run examples/commerce/src/app.test.ts -t "marks demo-only CSRF secrets as example-only source"`,
+      `corepack pnpm exec vitest --run examples/commerce/src/app.test.ts`,
+      `corepack pnpm --filter @jiso/example-commerce run emit-graph`, and `git diff --check`.
 - [x] **MED — Typecheck the example and spikes.** `examples/commerce` and three of four
       conformance spikes sit outside every tsconfig (root includes only `packages/**`), so the
       registry-augmentation showcase (generated/touch-graph.ts:43-50) may never be

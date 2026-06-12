@@ -33,6 +33,8 @@ import {
   orderCsvRoute,
   paymentWebhook,
   productGridQuery,
+  EXAMPLE_ONLY_COMMERCE_AUTH_CSRF_SECRET,
+  EXAMPLE_ONLY_COMMERCE_CSRF_SECRET,
   renderCommercePageHints,
   renderAddToCartForm,
   renderAttachmentDownloadRoute,
@@ -286,6 +288,13 @@ function productGridInput(after: string | null, limit?: number): ProductGridInpu
 }
 
 describe('commerce example', () => {
+  it('marks demo-only CSRF secrets as example-only source', () => {
+    expect(commerceCsrf.secret).toBe(EXAMPLE_ONLY_COMMERCE_CSRF_SECRET);
+    expect(commerceAuthCsrf.secret).toBe(EXAMPLE_ONLY_COMMERCE_AUTH_CSRF_SECRET);
+    expect(commerceCsrf.secret).toMatch(/^EXAMPLE_ONLY_/);
+    expect(commerceAuthCsrf.secret).toMatch(/^EXAMPLE_ONLY_/);
+  });
+
   it('commits and rolls back commerce database transactions', async () => {
     const db = createCommerceDb();
 

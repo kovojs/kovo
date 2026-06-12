@@ -113,9 +113,12 @@ export const commerceSession = session(
   }),
 );
 
+export const EXAMPLE_ONLY_COMMERCE_CSRF_SECRET = 'EXAMPLE_ONLY_COMMERCE_CSRF_SECRET';
+export const EXAMPLE_ONLY_COMMERCE_AUTH_CSRF_SECRET = 'EXAMPLE_ONLY_COMMERCE_AUTH_CSRF_SECRET';
+
 export const commerceCsrf = {
   field: 'csrf',
-  secret: 'commerce-example-secret',
+  secret: EXAMPLE_ONLY_COMMERCE_CSRF_SECRET,
   sessionId(request: CommerceRequest) {
     return request.session?.id;
   },
@@ -123,7 +126,7 @@ export const commerceCsrf = {
 
 export const commerceAuthCsrf = {
   field: 'csrf',
-  secret: 'commerce-auth-example-secret',
+  secret: EXAMPLE_ONLY_COMMERCE_AUTH_CSRF_SECRET,
   sessionId(request: CommerceAuthRequest) {
     return request.session?.id ?? request.authCsrfId ?? undefined;
   },
