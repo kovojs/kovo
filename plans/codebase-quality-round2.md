@@ -2481,6 +2481,18 @@ params, relational API, `execute(sql)`, right/full joins, a string column named 
       `pnpm exec vitest --run packages/runtime/src`,
       `pnpm exec vp check packages/runtime/src/mutation-submit.ts packages/runtime/src/index.test.ts plans/codebase-quality-round2.md`,
       and `git diff --check`.
+      Additional bounded evidence 2026-06-12: `packages/runtime/src/apply-path.ts` now routes
+      optional-root runtime mutation application through one internal body applicator, so
+      store-only and DOM-backed `applyMutationResponseToRuntime` share query parsing, query
+      interposition, pre-apply hooks, malformed wire reporting, and optional fragment morphing
+      instead of branching through separate public entrypoints. `packages/runtime/src/mutation-response.test.ts`
+      pins the DOM-backed runtime helper carrying `applyQuery` and `beforeApplyQueries` while
+      applying fragments. Same-session evidence:
+      `corepack pnpm exec vitest --run packages/runtime/src/mutation-response.test.ts`,
+      `corepack pnpm exec vitest --run packages/runtime/src`,
+      `corepack pnpm --filter @jiso/runtime run check:inline-loader`,
+      `corepack pnpm exec vp check packages/runtime/src/apply-path.ts packages/runtime/src/mutation-response.test.ts plans/codebase-quality-round2.md`,
+      and `git diff --check`.
       Additional bounded evidence 2026-06-12: `packages/runtime/src/loader.ts` now owns
       `installJisoLoader`, loader options, default delegated events, query visible-return wiring,
       enhanced mutation broadcast setup, execution triggers, and disposal while

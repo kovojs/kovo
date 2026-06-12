@@ -340,14 +340,20 @@ describe('mutation response wire chunks', () => {
   it('routes runtime DOM apply through the shared mutation response helper', () => {
     const store = createQueryStore();
     const root = new FakeMorphRoot();
+    const beforeApplyQueries = vi.fn();
     const count = new FakeQueryBindingElement({ 'data-bind': 'cart.count' }, '0');
     root.bindings.push(count);
     root.targets.set('cart-badge', new FakeMorphTarget());
 
     const applied = applyMutationResponseToRuntime({
+      applyQuery(query) {
+        store.set(query.name, { count: (query.value as { count: number }).count + 20 }, query.key);
+        return { value: store.get(query.name, query.key) };
+      },
+      beforeApplyQueries,
       body: [
         '<fw-query name="cart">{"count":7}</fw-query>',
-        '<fw-fragment target="cart-badge"><cart-badge>7</cart-badge></fw-fragment>',
+        '<fw-fragment target="cart-badge"><cart-badge>27</cart-badge></fw-fragment>',
       ].join('\n'),
       root,
       store,
@@ -355,12 +361,13 @@ describe('mutation response wire chunks', () => {
 
     expect(applied).toEqual({
       appliedFragments: ['cart-badge'],
-      fragments: [{ html: '<cart-badge>7</cart-badge>', target: 'cart-badge' }],
+      fragments: [{ html: '<cart-badge>27</cart-badge>', target: 'cart-badge' }],
       queries: ['cart'],
     });
-    expect(store.get('cart')).toEqual({ count: 7 });
-    expect(count.textContent).toBe('7');
-    expect(root.targets.get('cart-badge')?.html).toBe('<cart-badge>7</cart-badge>');
+    expect(store.get('cart')).toEqual({ count: 27 });
+    expect(count.textContent).toBe('27');
+    expect(root.targets.get('cart-badge')?.html).toBe('<cart-badge>27</cart-badge>');
+    expect(beforeApplyQueries).toHaveBeenCalledWith([{ name: 'cart', value: { count: 7 } }]);
   });
 
   it('skips malformed mutation query chunks and continues applying valid chunks', () => {

@@ -97,22 +97,11 @@ export type ApplyMutationResponseToRuntimeOptions = Omit<
   root?: MorphRoot;
 };
 
-export function applyMutationResponseToRuntime(
-  options: ApplyMutationResponseToRuntimeOptions,
+interface ApplyMutationResponseBodyOptions extends ApplyMutationResponseToRuntimeOptions {}
+
+function applyMutationResponseBody(
+  options: ApplyMutationResponseBodyOptions,
 ): AppliedMutationResponseToRuntime {
-  if (!options.root) {
-    return applyMutationResponseToStore(options.store, options.body, options);
-  }
-
-  return applyMutationResponseToDom({
-    ...options,
-    root: options.root,
-  });
-}
-
-export function applyMutationResponseToDom(
-  options: ApplyMutationResponseToDomOptions,
-): AppliedMutationResponseToDom {
   let bindingIndex: QueryBindingIndex | undefined;
   const readBindingIndex = (root: QueryBindingRoot) => {
     bindingIndex ??= createQueryBindingIndex(root);
@@ -124,6 +113,7 @@ export function applyMutationResponseToDom(
     (queries) =>
       applyQueryChunksToStore(options.store, queries, {
         afterApplyQuery(query, planValue) {
+          if (!options.root) return;
           applyCompiledQueryUpdatePlanIfSupported(
             options.root,
             query.name,
@@ -138,6 +128,8 @@ export function applyMutationResponseToDom(
     options.beforeApplyQueries,
   );
 
+  if (!options.root) return applied;
+
   return {
     ...applied,
     appliedFragments: applyFragments(
@@ -147,6 +139,18 @@ export function applyMutationResponseToDom(
       options.islandSignalScope,
     ),
   };
+}
+
+export function applyMutationResponseToRuntime(
+  options: ApplyMutationResponseToRuntimeOptions,
+): AppliedMutationResponseToRuntime {
+  return applyMutationResponseBody(options);
+}
+
+export function applyMutationResponseToDom(
+  options: ApplyMutationResponseToDomOptions,
+): AppliedMutationResponseToDom {
+  return applyMutationResponseBody(options) as AppliedMutationResponseToDom;
 }
 
 export function applyDeferredStreamResponseToDom(options: {
