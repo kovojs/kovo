@@ -332,6 +332,18 @@ Scope: SPEC addition (proposed §9.5 "The request shell"), `@jiso/server` shell 
       clearing through `/_m/`. Same-session verification ran
       `pnpm exec vitest --run examples/reference/src/app.test.ts examples/reference/src/app-shell.test.ts`
       and `pnpm exec tsc -p examples/reference/tsconfig.json --noEmit`.
+      Additional evidence 2026-06-12: the focused `examples/reference` app now
+      has reference-owned Vite+ task wiring. `examples/reference/vite.config.ts`
+      installs a bounded dev middleware for `/login`, `/account`, `/admin`, and
+      `/_m/` while passing source modules through Vite, and exposes
+      `vp run export` through `examples/reference/scripts/export-static.mjs`.
+      The export task loads `src/app-shell.ts` and `@jiso/server` through Vite
+      SSR, then calls `exportStaticApp()` so the session-backed app reports the
+      SPEC §9.5 FW229 teaching diagnostics instead of writing static HTML.
+      `examples/reference/src/app-shell.test.ts` proves the Vite middleware
+      login/admin path, Vite-served `/src/app.ts`, and `vp run export` output
+      containing `reference-export/v1` plus `/login`, `/account`, and `/admin`
+      FW229 diagnostics.
 
 ## Background — the gap
 
