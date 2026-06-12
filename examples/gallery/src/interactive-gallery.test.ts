@@ -1,8 +1,10 @@
 import { execFileSync } from 'node:child_process';
-import { readFileSync } from 'node:fs';
+import { readdirSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import vm from 'node:vm';
 import { describe, expect, it } from 'vitest';
+
+import { interactiveGalleryDemos, renderInteractiveGalleryRoute } from './interactive-docs.js';
 
 const galleryRoot = resolve(import.meta.dirname, '..');
 
@@ -40,6 +42,34 @@ describe('compiled interactive gallery demos', () => {
       stdio: 'pipe',
     });
   }, 60_000);
+
+  it('wires every compiled interactive demo into the docs gallery route', () => {
+    const packageJson = JSON.parse(readFileSync(resolve(galleryRoot, 'package.json'), 'utf8')) as {
+      jiso?: { interactiveGallery?: { compiledDemos?: unknown } };
+    };
+    const manifestDemos = packageJson.jiso?.interactiveGallery?.compiledDemos;
+    const generatedDemos = readdirSync(resolve(galleryRoot, 'src/generated/interactive'))
+      .filter((fileName) => fileName.endsWith('-demo.tsx'))
+      .map((fileName) => fileName.replace(/\.tsx$/, ''))
+      .sort(compareStrings);
+    const docsDemos = interactiveGalleryDemos.map((demo) => demo.name).sort(compareStrings);
+
+    expect(
+      Array.isArray(manifestDemos) ? [...manifestDemos].map(String).sort(compareStrings) : [],
+    ).toEqual(generatedDemos);
+    expect(docsDemos).toEqual(generatedDemos);
+
+    const html = renderInteractiveGalleryRoute();
+    expect(html).toContain('data-gallery-route="/interactive"');
+    expect(html).toContain('data-demo-summary="compiled"');
+
+    for (const demo of generatedDemos) {
+      const componentName = demo.replace(/-demo$/, '');
+      expect(html).toContain(`href="#${demo}"`);
+      expect(html).toContain(`data-gallery-interactive="${componentName}"`);
+      expect(html).toContain(`/c/examples/gallery/src/generated/interactive/${demo}.client.js`);
+    }
+  });
 
   it('compiles stateful gallery demos into server TSX and client handler modules', () => {
     const accordion = readGenerated('accordion-demo.tsx');
@@ -1101,6 +1131,10 @@ describe('compiled interactive gallery demos', () => {
 
 function readGenerated(fileName: string): string {
   return readFileSync(resolve(galleryRoot, `src/generated/interactive/${fileName}`), 'utf8');
+}
+
+function compareStrings(left: string, right: string): number {
+  return left.localeCompare(right);
 }
 
 function evaluateClientModule(

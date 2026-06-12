@@ -26,3 +26,9 @@ export {
   type GalleryPrimitive,
   type GalleryRoute,
 } from './demo-fixtures.js';
+export {
+  interactiveGalleryDemos,
+  renderInteractiveGalleryRoute,
+  type InteractiveGalleryDemo,
+  type InteractiveGalleryDemoName,
+} from './interactive-docs.js';

@@ -1151,6 +1151,21 @@ jiso-dialog` resolves dashed wire names and prints provenance including package,
       `pnpm exec vp check examples/gallery/scripts/emit-interactive-gallery.mjs examples/gallery/src/interactive/hover-card-demo.tsx examples/gallery/src/interactive-gallery.test.ts examples/gallery/src/interactive-gallery.browser.test.ts examples/gallery/src/generated/interactive/hover-card-demo.tsx examples/gallery/src/generated/interactive/hover-card-demo.client.js plans/ui.md IMPLEMENT_v1.md`,
       and `git diff --check`. G6 remains open for docs deployment wiring and full
       gallery/conformance gates.
+      Additional evidence 2026-06-12: `examples/gallery/src/interactive-docs.tsx` wires every
+      checked-in compiled interactive demo into an exported `/interactive` gallery route,
+      `examples/gallery/package.json` records the complete generated demo manifest including
+      the hover-card/menu/command/toast demos, and
+      `examples/gallery/src/interactive-gallery.test.ts` now fails if the package manifest,
+      generated artifacts, or docs route drift apart. The rendered docs route is inspected for
+      each `data-gallery-interactive` section plus its generated client-module `on:*` refs, so
+      docs deployment wiring is no longer only implied by standalone tests. Same-session
+      evidence:
+      `pnpm --filter @jiso/example-gallery run emit:interactive-gallery -- --check`,
+      `pnpm --filter @jiso/example-gallery exec vitest --run src/interactive-gallery.test.ts`,
+      `pnpm --filter @jiso/example-gallery test`,
+      `pnpm --filter @jiso/example-gallery run test:browser`,
+      `pnpm exec vp check examples/gallery/package.json examples/gallery/src/index.ts examples/gallery/src/interactive-docs.tsx examples/gallery/src/interactive-gallery.test.ts plans/ui.md IMPLEMENT_v1.md`,
+      and `git diff --check`. G6 remains open for full gallery/conformance gates.
 
 ## Background
 
