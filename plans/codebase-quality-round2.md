@@ -1672,6 +1672,13 @@ As each phase splits a source module, split its tests in the same commit.
       `pnpm exec vp check packages/server/src/index.test.ts packages/server/src/wire-fixtures.test.ts plans/codebase-quality-round2.md`,
       and `git diff --check`. Full server test-suite sweep remains open here:
       `pnpm exec vitest --run packages/server/src/*.test.ts`.
+      Additional evidence 2026-06-12: manual invalidation/change-record typing and
+      `FW-Changes` header privacy/ASCII safety coverage moved from
+      `packages/server/src/index.test.ts` into `packages/server/src/change-record.test.ts`.
+      Same-session evidence:
+      `pnpm exec vitest --run packages/server/src/change-record.test.ts packages/server/src/index.test.ts`,
+      `pnpm exec vp check packages/server/src/change-record.test.ts packages/server/src/index.test.ts plans/codebase-quality-round2.md`,
+      and `git diff --check`.
 - [ ] runtime/index.test.ts (4,435 lines, mutation tests under "query store") → per-module
       files; `Fake*` classes to a shared `test-fixtures.ts`; direct unit tests for wire-parser,
       handlers, morph; replace counted-microtask flushing with a single `flush()` helper.
