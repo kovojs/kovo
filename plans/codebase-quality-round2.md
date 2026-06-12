@@ -2636,6 +2636,14 @@ land it first; don't fork it.
       `pnpm exec vitest --run packages/server/src/*.test.ts`,
       `pnpm exec vp check packages/server/src/document.ts packages/server/src/document-core.ts packages/server/src/document-diagnostics.ts packages/server/src/document.test.ts packages/server/src/shell.test.ts packages/server/src/response.test.ts plans/codebase-quality-round2.md`,
       and `git diff --check`.
+      Additional evidence 2026-06-12: the package public surface export list moved out of the
+      central `packages/server/src/index.ts` file into grouped public API barrels under
+      `packages/server/src/api/`; `index.ts` is now a four-line barrel that re-exports the app,
+      data/mutation, rendering/wire, and routing/HTTP groups while preserving the same explicit
+      external `@jiso/server` exports. Same-session evidence:
+      `pnpm exec vitest --run packages/server/src/*.test.ts`,
+      `pnpm exec vp check packages/server/src/index.ts packages/server/src/api/app.ts packages/server/src/api/data.ts packages/server/src/api/rendering.ts packages/server/src/api/routing.ts plans/codebase-quality-round2.md`,
+      and `git diff --check`.
 - [ ] **LOW — Close the server cleanup inventory with an acceptance sweep.** Historical audit
       targets were dead code (`matchShellDispatch` post-loop return shell.ts:161-166; rate-limit
       tail `return options.max > 0` index.ts:576); `matchRoute` recompiling all routes per call
