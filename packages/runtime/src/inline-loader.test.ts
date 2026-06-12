@@ -158,6 +158,9 @@ describe('inline loader source', () => {
       '  const minusComment = numeric-/* minus gap */-1;',
       '  const commentReturn = () => { return/* return gap */value; };',
       '  const commentRegex = /\\/\\/|\\/\\*/g;',
+      '  const spacedRegex = /left right\\/slash/g;',
+      '  const classSpaceRegex = /[ /#]+/g;',
+      '  const regexInstance = /left right/ instanceof RegExp;',
       '  const afterReturn = (candidate) => {',
       '    return /\\/\\/|\\/\\*/.test(candidate);',
       '  };',
@@ -165,6 +168,7 @@ describe('inline loader source', () => {
       '  return {',
       '    afterArrow: afterArrow(joined),',
       '    afterReturn: afterReturn(value),',
+      "    classSpaceRegex: classSpaceRegex.test(' /#'),",
       '    commentHits: value.match(commentRegex)?.length ?? 0,',
       '    commentReturn: commentReturn(),',
       '    joined,',
@@ -172,6 +176,8 @@ describe('inline loader source', () => {
       '    minusWhitespace,',
       '    plusComment,',
       '    plusWhitespace,',
+      '    regexInstance,',
+      "    spacedRegex: spacedRegex.test('left right/slash'),",
       '    stringLiteral,',
       '    templateLiteral,',
       '  };',
@@ -188,6 +194,9 @@ describe('inline loader source', () => {
     expect(minifiedSource).toContain('numeric+ +1');
     expect(minifiedSource).toContain('numeric- -1');
     expect(minifiedSource).toContain('return value');
+    expect(minifiedSource).toContain('/left right\\/slash/g');
+    expect(minifiedSource).toContain('/[ /#]+/g');
+    expect(minifiedSource).toContain('/left right/ instanceof RegExp');
     expect(minifiedSource).toContain("join('; ')");
     expect(minified(input)).toEqual(readable(input));
   });

@@ -239,6 +239,35 @@ export function emitInlineJisoLoaderModule(
 }
 
 function minifyInlineJavaScriptSource(source: string): string {
+  const sourceFile = parseInlineJavaScriptSource(source, 'Inline Jiso loader source');
+  assertNoTemplateInterpolation(sourceFile);
+  const printer = ts.createPrinter({ removeComments: true });
+  const printedSource = printer.printFile(sourceFile);
+  const printedSourceFile = parseInlineJavaScriptSource(
+    printedSource,
+    'Compiler-printed inline Jiso loader source',
+  );
+  const minifiedSource = compactInlineJavaScriptSource(printedSourceFile);
+  const minifiedSourceFile = parseInlineJavaScriptSource(
+    minifiedSource,
+    'Minified inline Jiso loader source',
+  );
+
+  const printedFingerprint = collectJavaScriptAstFingerprint(printedSourceFile);
+  const minifiedFingerprint = collectJavaScriptAstFingerprint(minifiedSourceFile);
+  if (!sameStringList(printedFingerprint, minifiedFingerprint)) {
+    throw new Error(
+      `Inline Jiso loader minifier changed the compiler-printed JavaScript AST.${formatSourceDifference(
+        printedFingerprint.join('\n'),
+        minifiedFingerprint.join('\n'),
+      )}`,
+    );
+  }
+
+  return minifiedSource;
+}
+
+function parseInlineJavaScriptSource(source: string, label: string): ts.SourceFile {
   const sourceFile = ts.createSourceFile(
     'inline-jiso-loader.js',
     source,
@@ -251,13 +280,46 @@ function minifyInlineJavaScriptSource(source: string): string {
       .parseDiagnostics ?? [];
   if (diagnostic) {
     const message = ts.flattenDiagnosticMessageText(diagnostic.messageText, '\n');
-    throw new Error(`Inline Jiso loader source is invalid JavaScript: ${message}`);
+    throw new Error(`${label} is invalid JavaScript: ${message}`);
   }
-  assertNoTemplateInterpolation(sourceFile);
 
-  return compactInlineJavaScriptSource(
-    ts.createPrinter({ removeComments: true }).printFile(sourceFile),
-  );
+  return sourceFile;
+}
+
+function collectJavaScriptAstFingerprint(sourceFile: ts.SourceFile): string[] {
+  const parts: string[] = [];
+  const visit = (node: ts.Node): void => {
+    const children = node.getChildren(sourceFile);
+    if (children.length === 0) {
+      parts.push(`${node.kind}:${node.getText(sourceFile)}`);
+      return;
+    }
+
+    parts.push(String(node.kind));
+    for (const child of children) visit(child);
+  };
+
+  visit(sourceFile);
+  return parts;
+}
+
+function sameStringList(left: readonly string[], right: readonly string[]): boolean {
+  if (left.length !== right.length) return false;
+  return left.every((value, index) => value === right[index]);
+}
+
+function formatSourceDifference(expected: string, actual: string): string {
+  const maxLength = Math.max(expected.length, actual.length);
+  let index = 0;
+  while (index < maxLength && expected[index] === actual[index]) index += 1;
+  if (index === maxLength) return '';
+
+  return [
+    '',
+    `First difference at offset ${index}.`,
+    `Expected: ${JSON.stringify(expected.slice(index, index + 80))}`,
+    `Actual: ${JSON.stringify(actual.slice(index, index + 80))}`,
+  ].join('\n');
 }
 
 function assertNoTemplateInterpolation(node: ts.Node): void {
@@ -270,7 +332,10 @@ function assertNoTemplateInterpolation(node: ts.Node): void {
   ts.forEachChild(node, assertNoTemplateInterpolation);
 }
 
-function compactInlineJavaScriptSource(source: string): string {
+function compactInlineJavaScriptSource(sourceFile: ts.SourceFile): string {
+  const source = sourceFile.text;
+  const regexSpans = collectRegularExpressionLiteralSpans(sourceFile);
+  let regexIndex = 0;
   let output = '';
   let previousToken: MinifiedToken | undefined;
   const scanner = ts.createScanner(
@@ -281,13 +346,53 @@ function compactInlineJavaScriptSource(source: string): string {
   );
 
   for (let kind = scanner.scan(); kind !== ts.SyntaxKind.EndOfFileToken; kind = scanner.scan()) {
-    const token = { kind, text: scanner.getTokenText() };
+    const tokenStart = scanner.getTokenPos();
+    while (regexIndex < regexSpans.length) {
+      const currentSpan = regexSpans[regexIndex];
+      if (currentSpan === undefined || currentSpan.end > tokenStart) break;
+      regexIndex += 1;
+    }
+    const regexSpan = regexSpans[regexIndex];
+    const token =
+      regexSpan?.start === tokenStart
+        ? {
+            kind: ts.SyntaxKind.RegularExpressionLiteral,
+            text: source.slice(regexSpan.start, regexSpan.end),
+          }
+        : { kind, text: scanner.getTokenText() };
     if (previousToken && needsTokenSeparator(previousToken, token)) output += ' ';
     output += token.text;
     previousToken = token;
+    if (regexSpan?.start === tokenStart) {
+      scanner.setTextPos(regexSpan.end);
+      regexIndex += 1;
+    }
   }
 
   return output;
+}
+
+interface SourceSpan {
+  end: number;
+  start: number;
+}
+
+function collectRegularExpressionLiteralSpans(sourceFile: ts.SourceFile): SourceSpan[] {
+  const spans: SourceSpan[] = [];
+  const visit = (node: ts.Node): void => {
+    if (ts.isRegularExpressionLiteral(node)) {
+      spans.push({
+        end: node.getEnd(),
+        start: node.getStart(sourceFile, false),
+      });
+      return;
+    }
+
+    ts.forEachChild(node, visit);
+  };
+
+  visit(sourceFile);
+  return spans.sort((left, right) => left.start - right.start);
 }
 
 interface MinifiedToken {
@@ -301,6 +406,12 @@ function needsTokenSeparator(previousToken: MinifiedToken, nextToken: MinifiedTo
     (previousToken.kind === ts.SyntaxKind.PlusToken ||
       previousToken.kind === ts.SyntaxKind.MinusToken) &&
     previousToken.kind === nextToken.kind
+  ) {
+    return true;
+  }
+  if (
+    previousToken.kind === ts.SyntaxKind.RegularExpressionLiteral &&
+    isWordLikeToken(nextToken.kind)
   ) {
     return true;
   }
