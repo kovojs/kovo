@@ -2256,6 +2256,32 @@ export interface CommerceInvalidationSets {
     });
   });
 
+  it('folds local helper summaries for domain-like helper names', () => {
+    const graph = extractTouchGraphFromSource([
+      {
+        fileName: 'cart.domain.ts',
+        source: `
+          export const cartItems = pgTable("cart_items", {}, jiso({ domain: "cart", key: "productId" }));
+
+          async function insert(db, productId) {
+            await db.insert(cartItems).values({ productId });
+          }
+
+          export async function addItem(db, productId) {
+            await insert(db, productId);
+          }
+        `,
+      },
+    ]);
+
+    expect(graph.addItem?.touches).toEqual([
+      { domain: 'cart', keys: null, site: 'cart.domain.ts:5', via: 'cart_items' },
+    ]);
+    expect(graph.insert?.touches).toEqual([
+      { domain: 'cart', keys: null, site: 'cart.domain.ts:5', via: 'cart_items' },
+    ]);
+  });
+
   it('dedupes recursive helper summaries at a fixed point', () => {
     const graph = extractTouchGraphFromSource([
       {

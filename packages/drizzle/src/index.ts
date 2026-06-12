@@ -69,18 +69,14 @@ export { deriveInvalidationRegistry, serializeInvalidationRegistry } from './inv
 const SOURCE_EXTRACTION_FILE_NAME = '__jiso_source.ts';
 const DEFAULT_DRIZZLE_RECEIVER_NAMES = new Set(['db', 'tx']);
 const IGNORED_LOCAL_CALL_NAMES = new Set([
-  'delete',
   'eq',
   'for',
   'function',
   'if',
-  'insert',
   'jiso',
   'pgTable',
   'return',
-  'select',
   'switch',
-  'update',
   'while',
 ]);
 const FW411_MESSAGE = 'Query read set includes an exempt table';

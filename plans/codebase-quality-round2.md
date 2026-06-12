@@ -1263,6 +1263,12 @@ must be "FW406 unresolved," never "silently wrong."
       extractions with conflicting same-name tables/shapes to prove no stale AST or file-id state
       leaks between calls. Same-session evidence:
       `pnpm exec vitest --run packages/drizzle/src/index.test.ts -t "does not leak source extraction state"`.
+      Additional bounded evidence 2026-06-12: `IGNORED_LOCAL_CALL_NAMES` no longer filters
+      domain-like helper names (`insert`, `update`, `delete`, `select`), so a user-authored
+      local helper named `insert()` now folds its write summary into callers instead of silently
+      disappearing. Same-session evidence:
+      `pnpm exec vitest --run packages/drizzle/src/index.test.ts -t "domain-like helper names"`
+      and `pnpm exec vp check packages/drizzle/src/index.ts packages/drizzle/src/index.test.ts plans/codebase-quality-round2.md`.
 
 Verification: drizzle vitest + conformance (`drizzle-pin` now exercising the real ORM); commerce
 touch-graph byte pin re-checked; adversarial corpus: braces/semicolons in strings, parenthesized
