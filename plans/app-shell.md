@@ -64,6 +64,13 @@ Scope: SPEC addition (proposed §9.5 "The request shell"), `@jiso/server` shell 
       `pnpm run check`, and `pnpm run check:fw` passing. Remaining R6 work: CLI/task wiring,
       `/c/` module and asset copying, and SPEC/compiler surfacing for the static-path
       enumeration field and session-dependence metadata.
+      Additional evidence 2026-06-11: `exportStaticApp(app, { outDir })` now harvests referenced
+      versioned `/c/` module URLs from exported HTML attributes and `Link` headers, replays those
+      module requests through the same `createRequestHandler(app)` path, and writes exact served
+      module bytes under `outDir/c/...`; tests cover handler-byte parity, unsafe encoded module
+      paths, and conflicting query versions for one output path. Same-session evidence:
+      `pnpm exec vitest --run packages/server/src/static-export.test.ts packages/server/src/app.test.ts`
+      and `pnpm run check`. Remaining R6 work: CLI/task wiring and general static asset copying.
 - [ ] R7 adoption: starter becomes a routed app served by `vp dev`; commerce runs end-to-end over HTTP; a jiso docs site ships from `vp run export` as the first outside consumer.
       Progress 2026-06-11: commerce is now TSX-authored ahead of the HTTP serve
       entry — `CartBadge`, `OrderHistory`, and `ProductGrid` are authored in
