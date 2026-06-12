@@ -19,8 +19,17 @@ export interface JisoVitePlugin {
 
 export type JisoViteDiagnosticReporter = (diagnostic: CompilerDiagnostic) => void;
 
+export interface JisoViteModuleDiagnosticReport {
+  diagnostics: readonly CompilerDiagnostic[];
+  fileName: string;
+  source: string;
+}
+
+export type JisoViteModuleDiagnosticReporter = (report: JisoViteModuleDiagnosticReport) => void;
+
 export interface JisoVitePluginOptions {
   onDiagnostic?: JisoViteDiagnosticReporter;
+  onModuleDiagnostics?: JisoViteModuleDiagnosticReporter;
 }
 
 export interface JisoViteDevServer {
@@ -85,6 +94,7 @@ export function createJisoVitePlugin(
       const fileName = viteComponentFileName(id, root);
       const result = compileComponentModule({ fileName, source });
       const diagnostics = result.diagnostics ?? [];
+      options.onModuleDiagnostics?.({ diagnostics, fileName, source });
       const errorDiagnostics = diagnostics.filter(
         (diagnostic) => diagnosticSeverity(diagnostic) === 'error',
       );

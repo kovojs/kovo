@@ -4,6 +4,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
   createApp,
+  createJisoAppShellDevDiagnosticLedger,
   createJisoAppShellBuild,
   createMemoryVersionedClientModuleRegistry,
   createRequestHandler,
@@ -233,6 +234,81 @@ describe('server app shell Vite plugin', () => {
         }),
         status: 200,
       });
+    } finally {
+      await new Promise<void>((resolve, reject) => {
+        server.close((error) => (error ? reject(error) : resolve()));
+      });
+    }
+  });
+
+  it('serves a diagnostic document for page routes that depend on a failed dev module', async () => {
+    const diagnostics = createJisoAppShellDevDiagnosticLedger();
+    diagnostics.recordModuleDiagnostics({
+      diagnostics: [
+        {
+          code: 'FW225',
+          fileName: 'src/components/cart.tsx',
+          length: 7,
+          message: 'JSX nesting violates the HTML content model.',
+          start: { column: 11, line: 2 },
+        },
+      ],
+      fileName: 'src/components/cart.tsx',
+      source: [
+        'export const Cart = component("cart", {',
+        '  render: () => <p><div /></p>',
+        '});',
+      ].join('\n'),
+    });
+    const cartRoute = route('/cart', {
+      modulepreloads: ['/c/src/components/cart.client.js?v=failed'],
+      page() {
+        return '<main>Cart</main>';
+      },
+    });
+    const plugin = jisoAppShellVitePlugin(createApp({ routes: [cartRoute] }), {
+      devDiagnostics: diagnostics,
+    });
+    const middlewares: JisoAppShellViteMiddleware[] = [];
+
+    plugin.configureServer({
+      middlewares: {
+        use(handler) {
+          middlewares.push(handler);
+        },
+      },
+    });
+
+    const server = createServer((request, response) => {
+      middlewares[0]?.(request, response, (error) => {
+        if (error) {
+          response.writeHead(500, { 'Content-Type': 'text/plain; charset=utf-8' });
+          response.end(error instanceof Error ? error.message : JSON.stringify(error));
+          return;
+        }
+
+        response.writeHead(418, { 'Content-Type': 'text/plain; charset=utf-8' });
+        response.end('next');
+      });
+    });
+    await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
+
+    try {
+      const response = await nodeFetch(
+        `http://127.0.0.1:${(server.address() as AddressInfo).port}/cart`,
+      );
+
+      expect(response).toMatchObject({
+        body: expect.stringContaining('<p class="jiso-diagnostic-code">FW225</p>'),
+        headers: expect.objectContaining({
+          'content-type': 'text/html; charset=utf-8',
+        }),
+        status: 500,
+      });
+      expect(response.body).toContain('<title>FW225 diagnostic</title>');
+      expect(response.body).toContain('src/components/cart.tsx:2:11');
+      expect(response.body).toContain('2 |   render: () =&gt; &lt;p&gt;&lt;div /&gt;&lt;/p&gt;');
+      expect(response.body).not.toContain('<main>Cart</main>');
     } finally {
       await new Promise<void>((resolve, reject) => {
         server.close((error) => (error ? reject(error) : resolve()));

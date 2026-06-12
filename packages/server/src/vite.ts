@@ -1,9 +1,13 @@
 import { createHash } from 'node:crypto';
 import type { IncomingMessage, ServerResponse } from 'node:http';
+import { diagnosticDefinitions } from '@jiso/core';
 import type { VersionedClientModuleInput } from './client-modules.js';
 import { createRequestHandler, type JisoApp, type RequestHandler } from './app.js';
+import { renderDiagnosticDocument, type DiagnosticDocumentDiagnostic } from './document.js';
 import type { PageHintOptions } from './hints.js';
-import { toNodeHandler } from './node.js';
+import { toNodeHandler, writeWebResponseToNode } from './node.js';
+import { routeResponseToWebResponse } from './response.js';
+import { matchShellDispatch } from './shell.js';
 
 export interface JisoAppShellVitePlugin {
   configureServer(server: JisoAppShellViteDevServer): void;
@@ -23,6 +27,29 @@ export type JisoAppShellViteMiddleware = (
 ) => void;
 
 export type JisoAppShellViteInput = JisoApp | RequestHandler;
+
+export interface JisoAppShellVitePluginOptions {
+  devDiagnostics?: JisoAppShellDevDiagnosticLedger;
+}
+
+export interface JisoAppShellDevModuleDiagnostics {
+  diagnostics: readonly DiagnosticDocumentDiagnostic[];
+  fileName: string;
+  moduleHrefs?: readonly string[];
+  source?: string;
+}
+
+export interface JisoAppShellDevDiagnosticRecord {
+  diagnostics: readonly DiagnosticDocumentDiagnostic[];
+  fileName: string;
+  moduleHrefs?: readonly string[];
+  source?: string;
+}
+
+export interface JisoAppShellDevDiagnosticLedger {
+  diagnosticsForModuleHref(href: string): JisoAppShellDevDiagnosticRecord | undefined;
+  recordModuleDiagnostics(record: JisoAppShellDevModuleDiagnostics): void;
+}
 
 export interface JisoAppShellViteManifestChunk {
   css?: readonly string[];
@@ -85,18 +112,139 @@ export interface JisoAppShellBuild {
   routeHints: readonly JisoAppShellRouteBuildHints[];
 }
 
-export function jisoAppShellVitePlugin(input: JisoAppShellViteInput): JisoAppShellVitePlugin {
+export function createJisoAppShellDevDiagnosticLedger(): JisoAppShellDevDiagnosticLedger {
+  const moduleRecords = new Map<string, JisoAppShellDevDiagnosticRecord>();
+  const hrefToFileName = new Map<string, string>();
+
+  return {
+    diagnosticsForModuleHref(href) {
+      const fileName = hrefToFileName.get(normalizedModuleHref(href));
+      return fileName === undefined ? undefined : moduleRecords.get(fileName);
+    },
+    recordModuleDiagnostics(record) {
+      const fileName = slashPath(record.fileName);
+      clearModuleRecord(fileName, moduleRecords, hrefToFileName);
+
+      if (!record.diagnostics.some(isErrorDiagnostic)) return;
+
+      const nextRecord: JisoAppShellDevDiagnosticRecord = {
+        diagnostics: record.diagnostics,
+        fileName,
+        ...(record.moduleHrefs === undefined ? {} : { moduleHrefs: record.moduleHrefs }),
+        ...(record.source === undefined ? {} : { source: record.source }),
+      };
+      moduleRecords.set(fileName, nextRecord);
+
+      for (const href of moduleDiagnosticHrefs(nextRecord)) {
+        hrefToFileName.set(normalizedModuleHref(href), fileName);
+      }
+    },
+  };
+}
+
+export function jisoAppShellVitePlugin(
+  input: JisoAppShellViteInput,
+  options: JisoAppShellVitePluginOptions = {},
+): JisoAppShellVitePlugin {
   const requestHandler = typeof input === 'function' ? input : createRequestHandler(input);
   const nodeHandler = toNodeHandler(requestHandler);
+  const app = typeof input === 'function' ? undefined : input;
 
   return {
     configureServer(server) {
       server.middlewares.use((request, response, next) => {
+        const diagnosticResponse = app
+          ? devPageDiagnosticResponse(app, request, options.devDiagnostics)
+          : undefined;
+        if (diagnosticResponse) {
+          Promise.resolve(
+            writeWebResponseToNode(
+              routeResponseToWebResponse(diagnosticResponse, { method: request.method ?? 'GET' }),
+              response,
+              request.method ?? 'GET',
+            ),
+          ).catch(next);
+          return;
+        }
+
         Promise.resolve(nodeHandler(request, response)).catch(next);
       });
     },
     name: 'jiso-app-shell',
   };
+}
+
+function devPageDiagnosticResponse(
+  app: JisoApp,
+  request: IncomingMessage,
+  diagnostics: JisoAppShellDevDiagnosticLedger | undefined,
+) {
+  if (!diagnostics) return undefined;
+
+  const url = new URL(request.url ?? '/', 'http://jiso.local');
+  const match = matchShellDispatch({
+    endpoints: app.endpoints,
+    ...(request.method === undefined ? {} : { method: request.method }),
+    pathname: url.pathname,
+    routes: app.routes,
+  });
+  if (match.kind !== 'route' || !match.methodAllowed) return undefined;
+
+  for (const href of match.route.modulepreloads ?? []) {
+    const record = diagnostics.diagnosticsForModuleHref(href);
+    if (!record) continue;
+
+    // SPEC §11.3: dev page requests depending on a failed module answer with
+    // the same server-rendered teaching diagnostic document, never a local policy.
+    return renderDiagnosticDocument({
+      diagnostics: record.diagnostics,
+      ...(record.source === undefined
+        ? {}
+        : { source: { fileName: record.fileName, source: record.source } }),
+    });
+  }
+
+  return undefined;
+}
+
+function clearModuleRecord(
+  fileName: string,
+  moduleRecords: Map<string, JisoAppShellDevDiagnosticRecord>,
+  hrefToFileName: Map<string, string>,
+): void {
+  const existing = moduleRecords.get(fileName);
+  moduleRecords.delete(fileName);
+  if (!existing) return;
+
+  for (const href of moduleDiagnosticHrefs(existing)) {
+    hrefToFileName.delete(normalizedModuleHref(href));
+  }
+}
+
+function moduleDiagnosticHrefs(record: JisoAppShellDevDiagnosticRecord): string[] {
+  return [
+    ...new Set([...clientModuleHrefsForSourceFile(record.fileName), ...(record.moduleHrefs ?? [])]),
+  ];
+}
+
+function clientModuleHrefsForSourceFile(fileName: string): string[] {
+  const normalized = slashPath(fileName).replace(/^\/+/, '');
+  const clientModule = normalized.replace(/\.[cm]?[jt]sx?$/, '.client.js');
+
+  return clientModule === normalized ? [] : [`/c/${clientModule}`];
+}
+
+function normalizedModuleHref(href: string): string {
+  const url = new URL(href, 'http://jiso.local');
+  return slashPath(url.pathname);
+}
+
+function isErrorDiagnostic(diagnostic: DiagnosticDocumentDiagnostic): boolean {
+  return diagnosticDefinitions[diagnostic.code].severity === 'error';
+}
+
+function slashPath(fileName: string): string {
+  return fileName.replaceAll('\\', '/');
 }
 
 export function jisoAppShellViteManifestHints(

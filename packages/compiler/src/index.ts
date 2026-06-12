@@ -59,6 +59,8 @@ export type {
   JisoViteDevServer,
   JisoViteDiagnosticReporter,
   JisoViteMiddleware,
+  JisoViteModuleDiagnosticReport,
+  JisoViteModuleDiagnosticReporter,
   JisoVitePlugin,
   JisoVitePluginOptions,
 } from './vite.js';

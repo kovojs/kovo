@@ -3937,25 +3937,29 @@ describe('jisoVitePlugin', () => {
   });
 
   it('throws registry-error diagnostics from the Vite transform with teaching text', () => {
-    const plugin = createJisoVitePlugin(() => ({
-      diagnostics: [
-        {
-          code: 'FW201',
-          fileName: 'src/bad.tsx',
-          help: [
-            'Would lower to: on:click="/c/src/bad.client.js#Bad$button_click"',
-            'Fixes: move the value into component/query state via ctx.',
-          ].join('\n'),
-          message: 'Closure captures unserializable value.',
-          severity: 'lint',
-          start: { line: 3, column: 12 },
-        },
-      ],
-      files: [
-        { kind: 'server', source: 'export function renderSource() {}' },
-        { kind: 'client', source: 'export const Bad$button_click = () => null;' },
-      ],
-    }));
+    const onModuleDiagnostics = vi.fn();
+    const plugin = createJisoVitePlugin(
+      () => ({
+        diagnostics: [
+          {
+            code: 'FW201',
+            fileName: 'src/bad.tsx',
+            help: [
+              'Would lower to: on:click="/c/src/bad.client.js#Bad$button_click"',
+              'Fixes: move the value into component/query state via ctx.',
+            ].join('\n'),
+            message: 'Closure captures unserializable value.',
+            severity: 'lint',
+            start: { line: 3, column: 12 },
+          },
+        ],
+        files: [
+          { kind: 'server', source: 'export function renderSource() {}' },
+          { kind: 'client', source: 'export const Bad$button_click = () => null;' },
+        ],
+      }),
+      { onModuleDiagnostics },
+    );
 
     let thrown: unknown;
     try {
@@ -3975,6 +3979,17 @@ describe('jisoVitePlugin', () => {
         ].join('\n'),
       ].join('\n\n'),
     );
+    expect(onModuleDiagnostics).toHaveBeenCalledWith({
+      diagnostics: [
+        expect.objectContaining({
+          code: 'FW201',
+          fileName: 'src/bad.tsx',
+          message: 'Closure captures unserializable value.',
+        }),
+      ],
+      fileName: 'src/bad.tsx',
+      source: 'component(',
+    });
   });
 
   it('reports warn, lint, and notice diagnostics without blocking the Vite transform', () => {

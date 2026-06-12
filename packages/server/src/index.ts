@@ -155,6 +155,7 @@ export type {
 export { nodeRequestToWebRequest, toNodeHandler, writeWebResponseToNode } from './node.js';
 export type { NodeHandlerOptions, NodeRequestHandler } from './node.js';
 export {
+  createJisoAppShellDevDiagnosticLedger,
   createJisoAppShellBuild,
   jisoAppShellViteManifestAssets,
   jisoAppShellViteManifestHints,
@@ -166,6 +167,9 @@ export type {
   JisoAppShellBuildOptions,
   JisoAppShellBuiltClientModule,
   JisoAppShellCompiledClientModule,
+  JisoAppShellDevDiagnosticLedger,
+  JisoAppShellDevDiagnosticRecord,
+  JisoAppShellDevModuleDiagnostics,
   JisoAppShellRouteBuildEntry,
   JisoAppShellRouteBuildHints,
   JisoAppShellViteDevServer,
@@ -175,6 +179,7 @@ export type {
   JisoAppShellViteManifestHintOptions,
   JisoAppShellViteMiddleware,
   JisoAppShellVitePlugin,
+  JisoAppShellVitePluginOptions,
 } from './vite.js';
 export { exportStaticApp, StaticExportError } from './static-export.js';
 export type {

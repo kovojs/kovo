@@ -30,9 +30,19 @@ content or severities (SPEC §11.3 owns those); `fw check`/`fw explain` semantic
 - [ ] E2 dev middleware: page/fragment/mutation requests against a module with `error`
       diagnostics answer with the diagnostic document (500), covering the requests a
       client-injected overlay cannot see (direct navigation, no-JS form posts, fragment fetches).
-      Gap 2026-06-12: current `jisoAppShellVitePlugin()` only delegates requests to the closed
-      app request handler and has no per-module compile diagnostic ledger or compiler-plugin hook
-      for failed app modules; leave E2 open until that ownership/API is designed.
+      Evidence 2026-06-12: page-route slice landed. `createJisoAppShellDevDiagnosticLedger()`
+      records per-module diagnostics keyed by compiler source file/client-module href and
+      `jisoAppShellVitePlugin(..., { devDiagnostics })` returns the E1
+      `renderDiagnosticDocument()` HTTP 500 before the app handler for matched page routes whose
+      `modulepreloads` depend on failed modules. `createJisoVitePlugin()` now reports each
+      component transform through `onModuleDiagnostics` before throwing on shared-registry
+      `error` diagnostics, so Vite overlay blocking and app-shell document rendering can share one
+      ledger. Same-session evidence:
+      `pnpm exec vitest --run packages/server/src/vite.test.ts`,
+      `pnpm exec vitest --run packages/compiler/src/index.test.ts --testNamePattern "jisoVitePlugin"`,
+      and
+      `pnpm exec vp check packages/server/src/vite.ts packages/server/src/index.ts packages/server/src/vite.test.ts packages/compiler/src/vite.ts packages/compiler/src/index.ts packages/compiler/src/index.test.ts plans/diagnostics.md`.
+      Gap: fragment and mutation request dependency mapping is still open, so E2 remains open.
 - [x] M1a `fw mcp`: stdio-compatible JSON-RPC line server exposing compile/check/explain as
       structured tools wrapping the existing public APIs — no second diagnostic channel.
 - [x] M1b SDK-backed MCP adapter using `@modelcontextprotocol/sdk` over stdio once the dependency
