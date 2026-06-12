@@ -2,11 +2,9 @@ import { describe, expect, it } from 'vitest';
 import { File } from 'node:buffer';
 import { createMemoryStorage, storageBodyToBytes } from '@jiso/core';
 
-import { mutation as defineMutation, runMutation } from './mutation.js';
+import { runMutation } from './mutation.js';
 import { s } from './schema.js';
-
-const mutation = ((key: string, definition: Parameters<typeof defineMutation>[1]) =>
-  defineMutation(key, { csrf: false, ...definition })) as typeof defineMutation;
+import { testMutation as mutation } from './test-fixtures.js';
 
 describe('server schemas', () => {
   it('keeps chained schema constraints immutable', () => {

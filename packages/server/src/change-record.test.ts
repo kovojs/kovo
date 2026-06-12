@@ -8,12 +8,10 @@ import {
   type ChangeRecord,
 } from './change-record.js';
 import { domain } from './domain.js';
-import { mutation as defineMutation, renderMutationResponse, runMutation } from './mutation.js';
+import { renderMutationResponse, runMutation } from './mutation.js';
 import { query } from './query.js';
 import { s } from './schema.js';
-
-const mutation = ((key: string, definition: Parameters<typeof defineMutation>[1]) =>
-  defineMutation(key, { csrf: false, ...definition })) as typeof defineMutation;
+import { testMutation as mutation } from './test-fixtures.js';
 
 describe('server change records', () => {
   it('derives inferred mutation touch keys from arg:path sources', () => {

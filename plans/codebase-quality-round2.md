@@ -2903,6 +2903,15 @@ As each phase splits a source module, split its tests in the same commit.
       `pnpm exec vitest --run packages/server/src/*.test.ts` passed 32 files / 215 tests.
       Remaining work in this item is any shared fixture helper extraction that still reduces
       duplication.
+      Additional evidence 2026-06-12: mutation-oriented server tests now share the CSRF-disabled
+      mutation wrapper through `packages/server/src/test-fixtures.ts`, and the repeated enhanced
+      cart mutation/query/fragment fixture used by `mutation-response.test.ts` and
+      `wire-fixtures.test.ts` moved into the same helper without reintroducing package-barrel
+      imports. Same-session evidence:
+      `corepack pnpm exec vitest --run packages/server/src/mutation-response.test.ts packages/server/src/wire-fixtures.test.ts packages/server/src/change-record.test.ts packages/server/src/guards.test.ts packages/server/src/replay.test.ts packages/server/src/mutation.test.ts packages/server/src/mutation-endpoint.test.ts packages/server/src/mutation-no-js.test.ts packages/server/src/schema.test.ts`,
+      `corepack pnpm exec vitest --run packages/server/src/*.test.ts`,
+      `corepack pnpm exec vp check packages/server/src/test-fixtures.ts packages/server/src/change-record.test.ts packages/server/src/guards.test.ts packages/server/src/mutation-endpoint.test.ts packages/server/src/mutation-no-js.test.ts packages/server/src/mutation-response.test.ts packages/server/src/mutation.test.ts packages/server/src/replay.test.ts packages/server/src/schema.test.ts packages/server/src/wire-fixtures.test.ts`,
+      and `git diff --check`.
 - [ ] runtime/index.test.ts (4,435 lines, mutation tests under "query store") → per-module
       files; `Fake*` classes to a shared `test-fixtures.ts`; direct unit tests for wire-parser,
       handlers, morph; replace counted-microtask flushing with a single `flush()` helper.

@@ -1,12 +1,10 @@
 import { describe, expect, it } from 'vitest';
 
 import { domain } from './domain.js';
-import { mutation as defineMutation, renderMutationEndpointResponse } from './mutation.js';
+import { renderMutationEndpointResponse } from './mutation.js';
 import { query } from './query.js';
 import { s } from './schema.js';
-
-const mutation = ((key: string, definition: Parameters<typeof defineMutation>[1]) =>
-  defineMutation(key, { csrf: false, ...definition })) as typeof defineMutation;
+import { testMutation as mutation } from './test-fixtures.js';
 
 describe('server mutation endpoint routing', () => {
   it('routes mutation endpoints without FW-Fragment through the no-JS POST redirect', async () => {

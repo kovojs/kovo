@@ -3,17 +3,10 @@ import { describe, expect, it } from 'vitest';
 import { invalidate } from './change-record.js';
 import { domain, tag } from './domain.js';
 import { guards } from './guards.js';
-import {
-  mutation as defineMutation,
-  renderMutationResponse,
-  renderNoJsMutationResponse,
-  runMutation,
-} from './mutation.js';
+import { renderMutationResponse, renderNoJsMutationResponse, runMutation } from './mutation.js';
 import { query } from './query.js';
 import { s } from './schema.js';
-
-const mutation = ((key: string, definition: Parameters<typeof defineMutation>[1]) =>
-  defineMutation(key, { csrf: false, ...definition })) as typeof defineMutation;
+import { testMutation as mutation } from './test-fixtures.js';
 
 describe('server mutation lifecycle', () => {
   it('returns typed validation failures from ctx.fail', async () => {

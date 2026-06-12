@@ -2,13 +2,11 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { csrfToken } from './csrf.js';
 import { domain } from './domain.js';
-import { mutation as defineMutation, renderMutationResponse } from './mutation.js';
+import { renderMutationResponse } from './mutation.js';
 import { query } from './query.js';
 import { createMemoryMutationReplayStore, type MutationReplayStore } from './replay.js';
 import { s } from './schema.js';
-
-const mutation = ((key: string, definition: Parameters<typeof defineMutation>[1]) =>
-  defineMutation(key, { csrf: false, ...definition })) as typeof defineMutation;
+import { testMutation as mutation } from './test-fixtures.js';
 
 function deferred<Value = void>(): {
   promise: Promise<Value>;

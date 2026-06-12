@@ -1,10 +1,8 @@
 import { describe, expect, it, vi } from 'vitest';
 
-import { mutation as defineMutation, renderNoJsMutationResponse } from './mutation.js';
+import { renderNoJsMutationResponse } from './mutation.js';
 import { s } from './schema.js';
-
-const mutation = ((key: string, definition: Parameters<typeof defineMutation>[1]) =>
-  defineMutation(key, { csrf: false, ...definition })) as typeof defineMutation;
+import { testMutation as mutation } from './test-fixtures.js';
 
 describe('no-JS mutation responses', () => {
   it('renders no-JS mutation success as POST-redirect-GET', async () => {

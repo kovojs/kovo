@@ -1,49 +1,29 @@
 import { describe, expect, it, vi } from 'vitest';
 
-import { errorBoundary, mutation as defineMutation, renderMutationResponse } from './mutation.js';
+import { errorBoundary, renderMutationResponse } from './mutation.js';
 import { domain } from './domain.js';
 import { query } from './query.js';
 import { s } from './schema.js';
-
-const mutation = ((key: string, definition: Parameters<typeof defineMutation>[1]) =>
-  defineMutation(key, { csrf: false, ...definition })) as typeof defineMutation;
+import {
+  cartMutationFragmentRenderers,
+  cartMutationTargets,
+  createCartMutationFixture,
+  testMutation as mutation,
+} from './test-fixtures.js';
 
 describe('server mutation primitives', () => {
   it('renders enhanced mutation responses as query and fragment chunks', async () => {
-    const cart = domain('cart');
-    const cartQuery = query('cart', {
+    const { addToCart } = createCartMutationFixture({
       instanceKey: (input) => `cart:${(input as { cartId?: string }).cartId ?? 'c1'}`,
-      load: () => ({ count: 1, items: [{ productId: 'p1', qty: 1, unitPrice: 1499 }] }),
-      reads: [cart],
       version: 7,
-    });
-    const addToCart = mutation('cart/add', {
-      input: s.object({ productId: s.string() }),
-      registry: {
-        queries: [cartQuery],
-        touches: [cart],
-      },
-      handler(input) {
-        return input;
-      },
     });
 
     await expect(
       renderMutationResponse(addToCart, {
-        fragmentRenderers: [
-          {
-            render: () =>
-              '<cart-badge fw-deps="cart"><button commandfor="cart-drawer" command="show-modal"><span data-bind="cart.count">1</span></button></cart-badge>',
-            target: 'cart-badge',
-          },
-          {
-            render: () => '<section fw-c="recommendations" fw-deps="product:p1"></section>',
-            target: 'recommendations',
-          },
-        ],
+        fragmentRenderers: cartMutationFragmentRenderers(),
         rawInput: { cartId: 'c1', productId: 'p1' },
         request: {},
-        targets: ['cart-badge', 'recommendations'],
+        targets: [...cartMutationTargets],
       }),
     ).resolves.toEqual({
       body: [

@@ -1,16 +1,9 @@
 import { describe, expect, it, vi } from 'vitest';
 
 import { guards, session } from './guards.js';
-import {
-  mutation as defineMutation,
-  renderMutationResponse,
-  renderNoJsMutationResponse,
-  runMutation,
-} from './mutation.js';
+import { renderMutationResponse, renderNoJsMutationResponse, runMutation } from './mutation.js';
 import { s } from './schema.js';
-
-const mutation = ((key: string, definition: Parameters<typeof defineMutation>[1]) =>
-  defineMutation(key, { csrf: false, ...definition })) as typeof defineMutation;
+import { testMutation as mutation } from './test-fixtures.js';
 
 describe('server guard and session primitives', () => {
   it('guards mutations by authenticated session user', async () => {

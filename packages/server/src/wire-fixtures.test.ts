@@ -5,7 +5,6 @@ import { createServer, type IncomingMessage, type ServerResponse } from 'node:ht
 import { renderDeferredStream } from './deferred-stream.js';
 import { domain } from './domain.js';
 import {
-  mutation as defineMutation,
   renderMutationEndpointResponse,
   renderMutationResponse,
   renderNoJsMutationResponse,
@@ -13,9 +12,13 @@ import {
 import { query, renderQueryEndpointResponse } from './query.js';
 import type { MutationResponseHeaderValue } from './response.js';
 import { s } from './schema.js';
-
-const mutation = ((key: string, definition: Parameters<typeof defineMutation>[1]) =>
-  defineMutation(key, { csrf: false, ...definition })) as typeof defineMutation;
+import {
+  cartMutationFragmentRenderers,
+  cartMutationTargets,
+  createCartMutationFixture,
+  createCartQueryFixture,
+  testMutation as mutation,
+} from './test-fixtures.js';
 
 describe('server wire fixture contracts', () => {
   it('matches the typed read wire fixture response byte-for-byte', async () => {
@@ -75,40 +78,17 @@ describe('server wire fixture contracts', () => {
   });
 
   it('matches the enhanced mutation wire fixture response byte-for-byte', async () => {
-    const cart = domain('cart');
-    const cartQuery = query('cart', {
+    const { addToCart } = createCartMutationFixture({
       instanceKey: 'cart:c1',
-      load: () => ({ count: 1, items: [{ productId: 'p1', qty: 1, unitPrice: 1499 }] }),
-      reads: [cart],
       version: 7,
-    });
-    const addToCart = mutation('cart/add', {
-      input: s.object({ productId: s.string() }),
-      registry: {
-        queries: [cartQuery],
-        touches: [cart],
-      },
-      handler(input) {
-        return input;
-      },
     });
 
     const response = await renderMutationResponse(addToCart, {
-      fragmentRenderers: [
-        {
-          render: () =>
-            '<cart-badge fw-deps="cart"><button commandfor="cart-drawer" command="show-modal"><span data-bind="cart.count">1</span></button></cart-badge>',
-          target: 'cart-badge',
-        },
-        {
-          render: () => '<section fw-c="recommendations" fw-deps="product:p1"></section>',
-          target: 'recommendations',
-        },
-      ],
+      fragmentRenderers: cartMutationFragmentRenderers(),
       idem: 'idem_01HX',
       rawInput: { productId: 'p1', quantity: 1 },
       request: {},
-      targets: ['cart-badge', 'recommendations'],
+      targets: [...cartMutationTargets],
     });
     const fixture = await readFile(
       new URL('../../../fixtures/wire/enhanced-mutation.http', import.meta.url),
@@ -119,11 +99,8 @@ describe('server wire fixture contracts', () => {
   });
 
   it('matches the P0 wire fixtures through a live HTTP server byte-for-byte', async () => {
-    const cart = domain('cart');
-    const cartQuery = query('cart', {
+    const { cart, cartQuery } = createCartQueryFixture({
       instanceKey: 'cart:c1',
-      load: () => ({ count: 1, items: [{ productId: 'p1', qty: 1, unitPrice: 1499 }] }),
-      reads: [cart],
       version: 7,
     });
     const addToCart = mutation('cart/add', {
@@ -155,17 +132,7 @@ describe('server wire fixture contracts', () => {
           enhancedAddToCart: async (headers, rawInput) =>
             renderMutationEndpointResponse(addToCart, {
               failureTarget: 'product-form:p1',
-              fragmentRenderers: [
-                {
-                  render: () =>
-                    '<cart-badge fw-deps="cart"><button commandfor="cart-drawer" command="show-modal"><span data-bind="cart.count">1</span></button></cart-badge>',
-                  target: 'cart-badge',
-                },
-                {
-                  render: () => '<section fw-c="recommendations" fw-deps="product:p1"></section>',
-                  target: 'recommendations',
-                },
-              ],
+              fragmentRenderers: cartMutationFragmentRenderers(),
               headers,
               rawInput,
               renderFailureFragment: (failure, failedRawInput) => {
