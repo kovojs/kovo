@@ -652,6 +652,16 @@ params, relational API, `execute(sql)`, right/full joins, a string column named 
       `pnpm exec vitest --run packages/runtime/src/index.test.ts -t "optimistic|mutation query chunks|enhanced mutations"`,
       `pnpm exec vitest --run packages/runtime/src/wire-parser.test.ts packages/runtime/src/index.test.ts`,
       and `pnpm exec vitest --config vitest.browser.config.ts --run packages/runtime/src/index.browser.test.ts`.
+      Additional evidence 2026-06-11: `parseMutationFailure` now uses shared quote-aware
+      `tagClose`/`readAttribute` element scanning for `<fw-error>` and `<output>` mutation
+      failures instead of local `[^>]*` regexes. `packages/runtime/src/index.test.ts` covers
+      enhanced mutation failure payloads where quoted attributes contain `>`, including
+      `fw-error`, declared `data-error-code`, and validation `data-error-path` outputs.
+      Same-session evidence:
+      `pnpm exec vitest --run packages/runtime/src/index.test.ts -t "mutation failures|validation output paths"`,
+      `pnpm exec vitest --run packages/runtime/src`,
+      `pnpm exec vp check packages/runtime/src/index.ts packages/runtime/src/index.test.ts`, and
+      `git diff --check`.
 - [x] **MED — Fix ambient-scope argument override in handlers.ts.**
       `abortRemovedIslandSignals(currentHtml, nextHtml, scope)` ignores its explicit `scope`
       whenever the module-level `activeIslandSignalScope` is set
