@@ -2816,6 +2816,13 @@ As each phase splits a source module, split its tests in the same commit.
       compile pipeline, view-transition, and render-equivalence groups. Same-session evidence:
       `pnpm exec vitest --run packages/compiler/src/execution-triggers.test.ts packages/compiler/src/index.test.ts -t "execution trigger|FW211|FW212"`
       and `pnpm exec vp check packages/compiler/src/execution-triggers.test.ts packages/compiler/src/index.test.ts plans/codebase-quality-round2.md`.
+      Additional evidence 2026-06-12: cross-document `viewTransitionName` lowering, static style
+      merge behavior, registry emission, and string/comment non-matches moved from
+      `packages/compiler/src/index.test.ts` into
+      `packages/compiler/src/view-transitions.test.ts`. The broad compiler split remains open for
+      remaining compile pipeline and render-equivalence groups. Same-session evidence:
+      `pnpm exec vitest --run packages/compiler/src/view-transitions.test.ts packages/compiler/src/index.test.ts -t "view transition"`
+      and `pnpm exec vp check packages/compiler/src/view-transitions.test.ts packages/compiler/src/index.test.ts plans/codebase-quality-round2.md`.
 - [ ] drizzle (one describe, 57 its, 68 inline pgTable fixtures, 3 module-shim copies) and
       test-package suites: same treatment; CLI tests get the temp-dir + stream-spy ritual
       (16 hand-copies) as one helper.
