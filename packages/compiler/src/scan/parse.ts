@@ -16,6 +16,7 @@ export interface MutationHandlerModel {
   bodyEnd: number;
   bodyPropertyAccesses: readonly PropertyAccessPathModel[];
   bodyStart: number;
+  paramNames: readonly (string | undefined)[];
   params: readonly string[];
   paramSpans: readonly SourceSpan[];
 }
@@ -569,6 +570,7 @@ function mutationHandlerModels(
               bodyEnd: property.body.getEnd(),
               bodyPropertyAccesses: propertyAccessPathModels(sourceFile, property.body),
               bodyStart: property.body.getStart(sourceFile),
+              paramNames: property.parameters.map((param) => parameterName(param.name)),
               params: property.parameters.map((param) =>
                 source.slice(param.getStart(sourceFile), param.getEnd()),
               ),
@@ -594,6 +596,7 @@ function mutationHandlerModels(
         bodyEnd: initializer.body.getEnd(),
         bodyPropertyAccesses: propertyAccessPathModels(sourceFile, initializer.body),
         bodyStart: initializer.body.getStart(sourceFile),
+        paramNames: initializer.parameters.map((param) => parameterName(param.name)),
         params: initializer.parameters.map((param) =>
           source.slice(param.getStart(sourceFile), param.getEnd()),
         ),
@@ -604,6 +607,21 @@ function mutationHandlerModels(
       },
     ];
   });
+}
+
+function parameterName(name: ts.BindingName): string | undefined {
+  if (ts.isIdentifier(name)) return name.text;
+  if (!ts.isObjectBindingPattern(name)) return undefined;
+  const element = name.elements[0];
+  if (
+    element &&
+    name.elements.length === 1 &&
+    ts.isIdentifier(element.name) &&
+    element.propertyName === undefined
+  ) {
+    return element.name.text;
+  }
+  return undefined;
 }
 
 function propertyAccessPathModels(

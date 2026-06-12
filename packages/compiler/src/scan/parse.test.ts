@@ -42,7 +42,7 @@ describe('compiler scan parser helpers', () => {
   it('records mutation handler property access paths with source spans', () => {
     const source = `
 export const save = mutation('cart/save', {
-  handler(input, request) {
+  handler(input: Input, request: Request) {
     const text = "request.db";
     return request.db.insert(input);
   },
@@ -57,6 +57,20 @@ export const save = mutation('cart/save', {
         start: source.indexOf('request.db.insert'),
       },
     ]);
+    expect(handler?.paramNames).toEqual(['input', 'request']);
+  });
+
+  it('records simple destructured mutation handler parameter names', () => {
+    const source = `
+export const save = mutation('cart/save', {
+  handler({ db }) {
+    return db.insert(input);
+  },
+});
+`;
+    const [handler] = mutationHandlers(parseComponentModule('cart.mutation.ts', source));
+
+    expect(handler?.paramNames).toEqual(['db']);
   });
 
   it('extracts string literal array values from expression source', () => {

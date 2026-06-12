@@ -129,12 +129,13 @@ export function validateDirectDbAccess(
   const diagnostics: CompilerDiagnostic[] = [];
 
   for (const handler of mutationHandlers(model)) {
-    const params = handler.params.map(readParameterName).filter(Boolean);
+    const params = handler.paramNames;
     const dbParamIndex = params.indexOf('db');
     const receivesDb = dbParamIndex !== -1;
     const requestParam = params.find(
       (param) =>
-        param === 'request' || /request$/i.test(param) || param === 'ctx' || param === 'context',
+        param !== undefined &&
+        (param === 'request' || /request$/i.test(param) || param === 'ctx' || param === 'context'),
     );
     const requestDb =
       requestParam === undefined
@@ -239,11 +240,6 @@ function fw311Diagnostic(
     ...diagnosticFor(fileName, 'FW311', source, start, span?.length),
     message: `${diagnosticDefinitions.FW311.message} ${fact.componentName} ${fact.query} ${fact.position}`,
   };
-}
-
-function readParameterName(param: string): string {
-  const withoutType = param.split(':')[0]?.trim() ?? '';
-  return withoutType.replace(/^[.{\s]+|[}\s]+$/g, '');
 }
 
 function eventPayloads(model: ComponentModuleModel): EventPayloadPath[] {

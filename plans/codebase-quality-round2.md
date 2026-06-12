@@ -853,6 +853,12 @@ pipeline throws the tree away and communicates via mutated source text.
       preserving the authored `request.db` diagnostic span. Same-session evidence:
       `pnpm exec vitest --run packages/compiler/src/scan/parse.test.ts packages/compiler/src/index.test.ts -t "FW330|mutation handler property access|direct db"` and
       `pnpm exec vp check packages/compiler/src/scan/parse.ts packages/compiler/src/scan/parse.test.ts packages/compiler/src/validate/component-contracts.ts packages/compiler/src/index.test.ts`.
+      Additional evidence 2026-06-12: mutation-handler parameter names now live on the parsed
+      `MutationHandlerModel`, including typed identifiers and simple destructured parameters, so
+      FW330 no longer normalizes handler parameters from source text before checking direct DB
+      access. Same-session evidence:
+      `pnpm exec vitest --run packages/compiler/src/scan/parse.test.ts packages/compiler/src/index.test.ts -t "FW330|mutation handler parameter|mutation handler property access|direct db"` and
+      `pnpm exec vp check packages/compiler/src/scan/parse.ts packages/compiler/src/scan/parse.test.ts packages/compiler/src/validate/component-contracts.ts packages/compiler/src/index.test.ts`.
 
 Verification: compiler vitest + fixpoint + the new adversarial corpus; `fw explain` snapshots
 re-pinned only where positions legitimately improve (drift fixes change line numbers — explain
