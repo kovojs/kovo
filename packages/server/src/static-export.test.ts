@@ -6,7 +6,7 @@ import { pathToFileURL } from 'node:url';
 import { describe, expect, it } from 'vitest';
 
 import { createApp, createRequestHandler } from './app.js';
-import { guards, route } from './index.js';
+import { createMemoryVersionedClientModuleRegistry, guards, route } from './index.js';
 import { exportStaticApp, StaticExportError } from './static-export.js';
 
 describe('server static export', () => {
@@ -33,6 +33,7 @@ describe('server static export', () => {
 
     const result = await exportStaticApp(app);
 
+    expect(result.clientModules).toEqual([]);
     expect(result.diagnostics).toEqual([]);
     expect(result.artifacts).toHaveLength(1);
     expect(result.artifacts[0]).toMatchObject({
@@ -61,6 +62,7 @@ describe('server static export', () => {
     const handled = await handler(new Request('https://jiso.local/'));
 
     expect(exported.artifacts[0]?.path).toBe('/index.html');
+    expect(exported.clientModules).toEqual([]);
     await expect(handled.text()).resolves.toBe(exported.artifacts[0]?.body);
     expect(exported.artifacts[0]?.body).toContain('<main data-url="/">from-page</main>');
     expect(exported.artifacts[0]?.body).toContain('installInlineJisoLoader');
@@ -85,6 +87,7 @@ describe('server static export', () => {
 
       const result = await exportStaticApp(app, { outDir: pathToFileURL(outDir) });
 
+      expect(result.clientModules).toEqual([]);
       expect(result.diagnostics).toEqual([]);
       expect(result.artifacts.map((artifact) => artifact.path)).toEqual([
         '/index.html',
@@ -97,6 +100,95 @@ describe('server static export', () => {
         result.artifacts[1]?.body,
       );
       expect(result.artifacts[1]?.body).toContain('<main data-route="/docs/intro">intro</main>');
+    } finally {
+      await rm(outDir, { force: true, recursive: true });
+    }
+  });
+
+  it('copies referenced versioned client modules through the same handler bytes', async () => {
+    const outDir = await mkdtemp(path.join(os.tmpdir(), 'jiso-static-export-'));
+    try {
+      const registry = createMemoryVersionedClientModuleRegistry();
+      const cartHref = registry.put({
+        path: '/c/cart.client.js',
+        source: 'export const cart = "build-1";',
+        version: 'cart-1',
+      });
+      const menuHref = registry.put({
+        path: '/c/menu.client.js',
+        source: 'export const menu = "build-1";',
+        version: 'menu-1',
+      });
+      const app = createApp({
+        clientModules: registry,
+        routes: [
+          route('/cart', {
+            modulepreloads: [cartHref],
+            page: () => `<main><button on:click="${menuHref}#Menu$open">Open menu</button></main>`,
+          }),
+        ],
+      });
+      const handler = createRequestHandler(app);
+
+      const result = await exportStaticApp(app, { outDir });
+
+      expect(result.clientModules.map((artifact) => artifact.href)).toEqual([
+        cartHref,
+        `${menuHref}#Menu$open`,
+      ]);
+      expect(result.clientModules.map((artifact) => artifact.path)).toEqual([
+        '/c/cart.client.js',
+        '/c/menu.client.js',
+      ]);
+
+      const cartResponse = await handler(new Request(`https://jiso.local${cartHref}`));
+      const menuResponse = await handler(new Request(`https://jiso.local${menuHref}`));
+      await expect(readFile(path.join(outDir, 'c/cart.client.js'), 'utf8')).resolves.toBe(
+        await cartResponse.text(),
+      );
+      await expect(readFile(path.join(outDir, 'c/menu.client.js'), 'utf8')).resolves.toBe(
+        await menuResponse.text(),
+      );
+    } finally {
+      await rm(outDir, { force: true, recursive: true });
+    }
+  });
+
+  it('refuses unsafe client module output paths', async () => {
+    const outDir = await mkdtemp(path.join(os.tmpdir(), 'jiso-static-export-'));
+    try {
+      const badHref = '/c/%2Fescape.client.js?v=v1';
+      const app = createApp({
+        clientModules: {
+          put() {
+            throw new Error('unused');
+          },
+          resolve() {
+            return {
+              body: 'export const unsafe = true;',
+              headers: { 'Content-Type': 'text/javascript; charset=utf-8' },
+              status: 200,
+            };
+          },
+        },
+        routes: [
+          route('/unsafe', {
+            modulepreloads: [badHref],
+            page: () => '<main>Unsafe module path</main>',
+          }),
+        ],
+      });
+
+      await expect(exportStaticApp(app, { outDir })).rejects.toMatchObject({
+        code: 'FW229',
+        diagnostics: [
+          {
+            code: 'FW229',
+            message: expect.stringContaining('unsafe client module path segment'),
+            routePath: '/c/%2Fescape.client.js',
+          },
+        ],
+      });
     } finally {
       await rm(outDir, { force: true, recursive: true });
     }
@@ -162,6 +254,7 @@ describe('server static export', () => {
 
     await expect(exportStaticApp(app, { onNonExportable: 'skip' })).resolves.toEqual({
       artifacts: [],
+      clientModules: [],
       diagnostics: [
         {
           code: 'FW229',
