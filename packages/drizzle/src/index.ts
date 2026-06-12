@@ -1991,17 +1991,19 @@ function extractReceiverExecuteCalls(
   receiverNames: ReadonlySet<string>,
 ): ExternalDbArgumentCall[] {
   const calls: ExternalDbArgumentCall[] = [];
-  const pattern = new RegExp(
-    `\\b(?<receiver>${IDENTIFIER_SOURCE})\\s*\\.\\s*(?<name>execute)\\s*\\(`,
-    'g',
-  );
+  // SPEC §10-§11: string/template text cannot fabricate unresolved touch-graph surfaces.
+  const { bodyOffset, sourceFile } = parseFunctionBodySource(source);
 
-  for (const match of source.matchAll(pattern)) {
-    const receiver = match.groups?.receiver;
-    const name = match.groups?.name;
-    if (!receiver || !receiverNames.has(receiver) || !name || match.index === undefined) continue;
+  for (const call of sourceFile.getDescendantsOfKind(SyntaxKind.CallExpression)) {
+    const expression = call.getExpression();
+    if (!Node.isPropertyAccessExpression(expression)) continue;
+    if (expression.getName() !== 'execute') continue;
 
-    calls.push({ index: match.index, name });
+    const receiver = expression.getExpression();
+    if (!Node.isIdentifier(receiver) || !receiverNames.has(receiver.getText())) continue;
+
+    const index = call.getStart() - bodyOffset;
+    if (index >= 0) calls.push({ index, name: 'execute' });
   }
 
   return calls;
@@ -2012,17 +2014,26 @@ function extractRelationalQueryCalls(
   receiverNames: ReadonlySet<string>,
 ): ExternalDbArgumentCall[] {
   const calls: ExternalDbArgumentCall[] = [];
-  const pattern = new RegExp(
-    `\\b(?<receiver>${IDENTIFIER_SOURCE})\\s*\\.\\s*query\\s*\\.\\s*${IDENTIFIER_SOURCE}\\s*\\.\\s*(?<method>findMany|findFirst)\\s*\\(`,
-    'g',
-  );
+  // SPEC §10-§11: string/template text cannot fabricate unresolved touch-graph surfaces.
+  const { bodyOffset, sourceFile } = parseFunctionBodySource(source);
 
-  for (const match of source.matchAll(pattern)) {
-    const receiver = match.groups?.receiver;
-    const method = match.groups?.method;
-    if (!receiver || !receiverNames.has(receiver) || !method || match.index === undefined) continue;
+  for (const call of sourceFile.getDescendantsOfKind(SyntaxKind.CallExpression)) {
+    const expression = call.getExpression();
+    if (!Node.isPropertyAccessExpression(expression)) continue;
+    const method = expression.getName();
+    if (method !== 'findMany' && method !== 'findFirst') continue;
 
-    calls.push({ index: match.index, name: `query.${method}` });
+    const tableAccess = expression.getExpression();
+    if (!Node.isPropertyAccessExpression(tableAccess)) continue;
+    const queryAccess = tableAccess.getExpression();
+    if (!Node.isPropertyAccessExpression(queryAccess) || queryAccess.getName() !== 'query') {
+      continue;
+    }
+    const receiver = queryAccess.getExpression();
+    if (!Node.isIdentifier(receiver) || !receiverNames.has(receiver.getText())) continue;
+
+    const index = call.getStart() - bodyOffset;
+    if (index >= 0) calls.push({ index, name: `query.${method}` });
   }
 
   return calls;

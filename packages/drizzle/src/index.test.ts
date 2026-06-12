@@ -2462,6 +2462,24 @@ export interface CommerceInvalidationSets {
     });
   });
 
+  it('does not mark unclassified Drizzle receiver calls from comments and strings', () => {
+    const graph = extractTouchGraphFromSource([
+      {
+        fileName: 'cart.domain.ts',
+        source: [
+          'export async function loadUsers(db) {',
+          '  // db.execute(sql`delete from users`);',
+          '  const raw = "db.execute(sql`delete from users`)";',
+          '  const relational = `db.query.users.findMany()`;',
+          '  return { raw, relational };',
+          '}',
+        ].join('\n'),
+      },
+    ]);
+
+    expect(graph).toEqual({});
+  });
+
   it('over-approximates local conditional table initializers', () => {
     const graph = extractTouchGraphFromSource([
       {
