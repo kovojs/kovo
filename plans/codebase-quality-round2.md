@@ -630,6 +630,16 @@ must be "FW406 unresolved," never "silently wrong."
       `pnpm exec vitest --run packages/drizzle/src/index.test.ts`,
       `pnpm exec vitest --run conformance/drizzle-pin/src/index.test.ts`, and
       `pnpm exec vp check packages/drizzle/src/index.ts packages/drizzle/src/index.test.ts plans/codebase-quality-round2.md`.
+      Additional evidence 2026-06-12: query read-domain extraction, exempt-table diagnostics,
+      relational query diagnostics, and join nullability now walk ts-morph `CallExpression` nodes
+      instead of regex-scanning query body text, so `.from(...)` and
+      `db.query.<table>.findMany(...)` text in comments/strings no longer fabricates query read
+      facts or FW406/FW411 diagnostics. Same-session evidence:
+      `pnpm exec vitest --run packages/drizzle/src/index.test.ts -t "right-joined|full-joined|query reads or relational diagnostics"`,
+      `pnpm exec vitest --run conformance/drizzle-pin/src/index.test.ts -t "right and full joins|AST query-read extraction"`,
+      `pnpm exec vitest --run packages/drizzle/src/index.test.ts`,
+      `pnpm exec vitest --run conformance/drizzle-pin/src/index.test.ts`, and
+      `pnpm exec vp check packages/drizzle/src/index.ts packages/drizzle/src/index.test.ts conformance/drizzle-pin/src/index.test.ts plans/codebase-quality-round2.md`.
 - [ ] **HIGH — Remove fact-fabricating heuristics; degrade to FW406.**
       Column type from projection-key name (`/(count|qty|...)$/i` → number, index.ts:993);
       receiver detection by parameter name (`/^(db|tx|...|client|...)$/`, :1856-1858);

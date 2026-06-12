@@ -943,7 +943,7 @@ function returnedSelectCall(body: string): RegExpExecArray | null {
 }
 
 function relationalQueryDiagnostics(body: string): TouchGraphDiagnostic[] {
-  if (!relationalQueryCallPattern().test(body)) return [];
+  if (queryRelationalTableExpressions(body).length === 0) return [];
 
   return [
     {
@@ -1063,15 +1063,12 @@ function nullableShape(shape: QueryShape): QueryShape {
 function nullableJoinTables(body: string): ReadonlySet<string> {
   const tables = new Set<string>();
   const relationTables: string[] = [];
-  const tableExpression = `${IDENTIFIER_SOURCE}(?:\\.${IDENTIFIER_SOURCE})?`;
-  const calls = new RegExp(
-    `\\.(?<operation>from|join|innerJoin|leftJoin|rightJoin|fullJoin)\\s*\\(\\s*(?<table>${tableExpression})`,
-    'g',
-  );
 
-  for (const match of body.matchAll(calls)) {
-    const operation = match.groups?.operation;
-    const table = match.groups?.table;
+  for (const call of queryBodyCallExpressions(body)) {
+    const operation = propertyAccessCallName(call);
+    if (!operation || !isJoinReadCallName(operation)) continue;
+
+    const table = staticExpressionPath(call.getArguments()[0]);
     if (!operation || !table) continue;
 
     if (operation === 'leftJoin') {
@@ -1234,19 +1231,70 @@ function exemptQueryReadDiagnostics(
 }
 
 function queryTableExpressions(body: string): string[] {
-  return [
-    ...body.matchAll(
-      /\.(?:from|innerJoin|leftJoin|rightJoin|fullJoin)\s*\(\s*(?<table>[A-Za-z_$][\w$]*(?:\.[A-Za-z_$][\w$]*)?)/g,
-    ),
-    ...body.matchAll(relationalQueryCallPattern()),
-  ].flatMap((match) => (match.groups?.table ? [match.groups.table] : []));
+  return [...queryJoinTableExpressions(body), ...queryRelationalTableExpressions(body)];
 }
 
-function relationalQueryCallPattern(): RegExp {
-  return new RegExp(
-    `\\b${IDENTIFIER_SOURCE}\\s*\\.\\s*query\\s*\\.\\s*(?<table>${IDENTIFIER_SOURCE})\\s*\\.\\s*(?:findMany|findFirst)\\s*\\(`,
-    'g',
+function queryJoinTableExpressions(body: string): string[] {
+  return queryBodyCallExpressions(body).flatMap((call) => {
+    const name = propertyAccessCallName(call);
+    if (!name || !isQueryReadCallName(name)) return [];
+
+    const table = staticExpressionPath(call.getArguments()[0]);
+    return table ? [table] : [];
+  });
+}
+
+function queryRelationalTableExpressions(body: string): string[] {
+  return queryBodyCallExpressions(body).flatMap((call) => {
+    const expression = call.getExpression();
+    if (!Node.isPropertyAccessExpression(expression)) return [];
+    if (expression.getName() !== 'findMany' && expression.getName() !== 'findFirst') return [];
+
+    const tableAccess = expression.getExpression();
+    if (!Node.isPropertyAccessExpression(tableAccess)) return [];
+    const queryAccess = tableAccess.getExpression();
+    if (!Node.isPropertyAccessExpression(queryAccess) || queryAccess.getName() !== 'query') {
+      return [];
+    }
+
+    return [tableAccess.getName()];
+  });
+}
+
+function queryBodyCallExpressions(body: string): CallExpression[] {
+  return parseSourceFile(`const __jisoQueryDefinition = ${body};`)
+    .getDescendantsOfKind(SyntaxKind.CallExpression)
+    .sort((left, right) => callSourceOrder(left) - callSourceOrder(right));
+}
+
+function callSourceOrder(call: CallExpression): number {
+  const expression = call.getExpression();
+  return Node.isPropertyAccessExpression(expression)
+    ? expression.getNameNode().getStart()
+    : call.getStart();
+}
+
+function isQueryReadCallName(name: string): boolean {
+  return (
+    name === 'from' ||
+    name === 'innerJoin' ||
+    name === 'leftJoin' ||
+    name === 'rightJoin' ||
+    name === 'fullJoin'
   );
+}
+
+function isJoinReadCallName(name: string): boolean {
+  return name === 'join' || isQueryReadCallName(name);
+}
+
+function staticExpressionPath(node: Node | undefined): string | undefined {
+  if (!node) return undefined;
+  if (Node.isIdentifier(node)) return node.getText();
+  if (!Node.isPropertyAccessExpression(node)) return undefined;
+
+  const base = staticExpressionPath(node.getExpression());
+  return base ? `${base}.${node.getName()}` : undefined;
 }
 
 function queryInstanceKey(

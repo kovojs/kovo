@@ -1193,6 +1193,38 @@ export interface CommerceInvalidationSets {
     ]);
   });
 
+  it('does not fabricate query reads or relational diagnostics from comments and strings', () => {
+    const facts = extractQueryFactsFromSource([
+      {
+        fileName: 'product.queries.ts',
+        source: `
+          export const auditLog = pgTable("audit_log", {}, jiso({ exempt: true }));
+          export const products = pgTable("products", { id: text("id").primaryKey(), name: text("name").notNull() }, jiso({ domain: "product", key: "id" }));
+
+          export const productQuery = query("product", {
+            load(_input, db) {
+              const fixture = ".from(auditLog) db.query.auditLog.findMany(";
+              // return db.query.auditLog.findMany({ where: eq(auditLog.productId, products.id) });
+              return db.select({ name: products.name }).from(products);
+            },
+          });
+        `,
+      },
+    ]);
+
+    expect(facts).toEqual([
+      {
+        query: 'product',
+        reads: ['product'],
+        shape: {
+          name: 'string',
+        },
+        site: 'product.queries.ts:5',
+      },
+    ]);
+    expect(diagnosticsForQueryFacts(facts)).toEqual([]);
+  });
+
   it('resolves imported table symbols in project query facts', () => {
     const facts = extractQueryFactsFromProject({
       files: [

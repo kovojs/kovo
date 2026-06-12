@@ -418,6 +418,43 @@ describe('Drizzle pinned subset conformance', () => {
     ]);
   });
 
+  it('pins AST query-read extraction against comment and string contents', () => {
+    const facts = extractQueryFactsFromProject({
+      files: [
+        {
+          fileName: 'conformance/drizzle-pin/src/product.queries.ts',
+          source: `
+            export const auditLog = pgTable('audit_log', {}, jiso({ exempt: true }));
+            export const products = pgTable('products', {
+              id: text('id').primaryKey(),
+              name: text('name').notNull(),
+            }, jiso({ domain: 'product', key: 'id' }));
+
+            export const productQuery = query('product', {
+              load(_input, db) {
+                const fixture = ".from(auditLog) db.query.auditLog.findMany(";
+                // return db.query.auditLog.findMany({ where: eq(auditLog.productId, products.id) });
+                return db.select({ name: products.name }).from(products);
+              },
+            });
+          `,
+        },
+      ],
+    });
+
+    expect(facts).toEqual([
+      {
+        query: 'product',
+        reads: ['product'],
+        shape: {
+          name: 'string',
+        },
+        site: 'conformance/drizzle-pin/src/product.queries.ts:8',
+      },
+    ]);
+    expect(diagnosticsForQueryFacts(facts)).toEqual([]);
+  });
+
   it('pins table annotations as the domain registry source', () => {
     const cartItems = annotatedTable('cart_items', jiso({ domain: 'cart', key: 'cartId' }));
     const products = annotatedTable('products', jiso({ domain: 'product', key: 'id' }));
