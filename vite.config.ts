@@ -132,7 +132,12 @@ export default defineConfig({
     '*.{js,jsx,ts,tsx,json,md,yml,yaml}': 'vp check --fix',
   },
   test: {
-    exclude: ['**/node_modules/**', '**/dist/**', '**/*.browser.test.ts'],
+    exclude: [
+      '**/node_modules/**',
+      '**/dist/**',
+      '**/*.browser.test.ts',
+      'packages/create-jiso/templates/**/*.test.ts',
+    ],
   },
   pack: {
     entry: ['packages/*/src/index.ts'],
