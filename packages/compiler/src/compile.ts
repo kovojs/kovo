@@ -11,7 +11,7 @@ import {
   versionHandlerLowering,
 } from './lower/handlers.js';
 import { lowerInlineAttributeDerives } from './lower/inline-derives.js';
-import { lowerNavigationHrefs, lowerNavigationLinks } from './lower/navigation.js';
+import { navigationHrefLowering, navigationLinkLowering } from './lower/navigation.js';
 import { platformBehaviorLowering } from './lower/platform.js';
 import { viewTransitionLowering } from './lower/view-transitions.js';
 import {
@@ -74,16 +74,18 @@ export function compileComponentModule(options: CompileComponentOptions): Compil
     platformLowering.replacements,
     parseComponentModuleModel,
   ).state;
-  const linksLoweredState = lowerComponentPipelineSource(
+  const linkLowering = navigationLinkLowering(platformState.source, platformState.model);
+  const linksLoweredState = lowerComponentPipelinePatches(
     platformState,
-    lowerNavigationLinks(platformState.source, platformState.model),
+    linkLowering.replacements,
     parseComponentModuleModel,
-  );
-  const navigationState = lowerComponentPipelineSource(
+  ).state;
+  const hrefLowering = navigationHrefLowering(linksLoweredState.source, linksLoweredState.model);
+  const navigationState = lowerComponentPipelinePatches(
     linksLoweredState,
-    lowerNavigationHrefs(linksLoweredState.source, linksLoweredState.model),
+    hrefLowering.replacements,
     parseComponentModuleModel,
-  );
+  ).state;
   const deriveLowering = lowerInlineAttributeDerives(
     navigationState.source,
     navigationState.model,

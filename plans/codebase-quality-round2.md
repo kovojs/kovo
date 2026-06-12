@@ -615,6 +615,14 @@ pipeline throws the tree away and communicates via mutated source text.
       `pnpm exec vitest --run packages/compiler/src/model-pipeline.test.ts packages/compiler/src/view-transitions.test.ts packages/compiler/src/platform-lowering.test.ts packages/compiler/src/compile-component.test.ts`
       and
       `pnpm exec vp check packages/compiler/src/model-pipeline.ts packages/compiler/src/model-pipeline.test.ts packages/compiler/src/compile.ts packages/compiler/src/lower/view-transitions.ts packages/compiler/src/lower/platform.ts`.
+      Additional evidence 2026-06-12: static `<Link>` and `href(...)` navigation lowering now
+      expose explicit `SourceReplacement` patch lists through `navigationLinkLowering()` and
+      `navigationHrefLowering()`, and `compile.ts` applies both through
+      `lowerComponentPipelinePatches` instead of passing rewritten navigation source through the
+      generic source handoff. Same-session evidence:
+      `pnpm exec vitest --run packages/compiler/src/navigation-lowering.test.ts packages/compiler/src/model-pipeline.test.ts packages/compiler/src/compile-component.test.ts`
+      and
+      `pnpm exec vp check packages/compiler/src/compile.ts packages/compiler/src/lower/navigation.ts packages/compiler/src/navigation-lowering.test.ts plans/codebase-quality-round2.md`.
       Partial evidence 2026-06-11: `serverRenderSource` now parses once after handler lowering
       with the author file name and stamps component identity, declared query deps, and initial
       state onto the render host through one in-memory tag update instead of reparsing for each

@@ -13,10 +13,21 @@ import {
 } from '../shared.js';
 
 export function lowerNavigationHrefs(source: string, model: ComponentModuleModel): string {
-  return lowerStaticHrefCallsAndAttributes(source, model);
+  return applySourceReplacements(source, navigationHrefLowering(source, model).replacements);
 }
 
 export function lowerNavigationLinks(source: string, model: ComponentModuleModel): string {
+  return applySourceReplacements(source, navigationLinkLowering(source, model).replacements);
+}
+
+export interface NavigationLowering {
+  replacements: SourceReplacement[];
+}
+
+export function navigationLinkLowering(
+  source: string,
+  model: ComponentModuleModel,
+): NavigationLowering {
   const replacements: SourceReplacement[] = [];
 
   for (const link of jsxElements(model).filter(
@@ -52,10 +63,13 @@ export function lowerNavigationLinks(source: string, model: ComponentModuleModel
     });
   }
 
-  return applySourceReplacements(source, replacements);
+  return { replacements };
 }
 
-function lowerStaticHrefCallsAndAttributes(source: string, model: ComponentModuleModel): string {
+export function navigationHrefLowering(
+  _source: string,
+  model: ComponentModuleModel,
+): NavigationLowering {
   const replacements: SourceReplacement[] = [];
   const staticHrefCalls = callExpressions(model)
     .filter((item) => item.name === 'href')
@@ -92,7 +106,7 @@ function lowerStaticHrefCallsAndAttributes(source: string, model: ComponentModul
     replacements.push({ end: call.end, replacement: JSON.stringify(lowered), start: call.start });
   }
 
-  return applySourceReplacements(source, replacements);
+  return { replacements };
 }
 
 function isWithinReplacement(call: { end: number; start: number }, replacement: SourceReplacement) {

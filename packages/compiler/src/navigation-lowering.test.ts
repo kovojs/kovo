@@ -1,8 +1,52 @@
 import { describe, expect, it } from 'vitest';
 
 import { assertFixpoint, compileComponentModule } from './index.js';
+import { navigationHrefLowering, navigationLinkLowering } from './lower/navigation.js';
+import { parseComponentModule } from './scan/parse.js';
 
 describe('navigation lowering', () => {
+  it('exposes static Link lowering as explicit source patches', () => {
+    const source = `
+export const ProductLinks = component('product-links', {
+  render: () => <Link to="/products/:id" params={{ id: 'p 1' }}>Product</Link>,
+});
+`;
+    const lowering = navigationLinkLowering(
+      source,
+      parseComponentModule('product-links.tsx', source),
+    );
+
+    expect(lowering.replacements).toEqual([
+      {
+        end: source.indexOf('</Link>') + '</Link>'.length,
+        replacement: '<a href="/products/p%201">Product</a>',
+        start: source.indexOf('<Link'),
+      },
+    ]);
+  });
+
+  it('exposes static href lowering as explicit source patches', () => {
+    const source = `
+export const ProductLinks = component('product-links', {
+  render: () => <a href={href('/products/:id', { params: { id: 'p1' } })}>Product</a>,
+});
+`;
+    const hrefStart = source.indexOf('href={href(');
+    const hrefEnd = source.indexOf(')}>Product') + ')}'.length;
+    const lowering = navigationHrefLowering(
+      source,
+      parseComponentModule('product-links.tsx', source),
+    );
+
+    expect(lowering.replacements).toEqual([
+      {
+        end: hrefEnd,
+        replacement: 'href="/products/p1"',
+        start: hrefStart,
+      },
+    ]);
+  });
+
   it('accepts literal navigation targets that match declared routes', () => {
     const result = compileComponentModule({
       fileName: 'product-links.tsx',
