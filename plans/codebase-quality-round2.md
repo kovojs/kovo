@@ -1017,6 +1017,14 @@ land it first; don't fork it.
       `pnpm exec vitest --run packages/server/src/index.test.ts packages/server/src/app.test.ts packages/server/src/webhook.test.ts`,
       `pnpm exec vp check packages/server/src/index.ts packages/server/src/schema.ts`, and
       `git diff --check`.
+      Partial evidence 2026-06-12: guard/session primitives, rate-limit guard state, lifecycle
+      session resolution, and HTTP guard-failure rendering moved from
+      `packages/server/src/index.ts` into `packages/server/src/guards.ts`; `index.ts` imports the
+      internal helpers and re-exports the public guard/session API to preserve package exports.
+      Same-session evidence:
+      `pnpm exec vitest --run packages/server/src/index.test.ts packages/server/src/app.test.ts`,
+      `pnpm exec vp check packages/server/src/index.ts packages/server/src/guards.ts plans/codebase-quality-round2.md`,
+      and `git diff --check`.
 - [ ] **LOW** — dead code (`matchShellDispatch` post-loop return shell.ts:161-166; rate-limit
       tail `return options.max > 0` index.ts:576); `matchRoute` recompiling all routes per call
       (match.ts:75-81 — cache `compileRoute`); `Transfer-Encoding: chunked` on a buffered string
