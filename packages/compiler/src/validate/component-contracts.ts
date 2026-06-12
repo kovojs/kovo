@@ -22,7 +22,6 @@ import type {
   QueryShapeWrapper,
   QueryUpdateCoverageFact,
 } from '../types.js';
-import { queryUpdateCoverageSpan } from './bindings.js';
 
 interface ComponentContractValidationOptions {
   fileName: string;
@@ -247,7 +246,7 @@ function fw311Diagnostic(
   source: string,
   fact: QueryUpdateCoverageFact,
 ): CompilerDiagnostic {
-  const span = queryUpdateCoverageSpan(fact);
+  const span = fact.sourceSpan;
   return {
     ...diagnosticFor(fileName, 'FW311', source, span?.start, span?.length),
     message: `${diagnosticDefinitions.FW311.message} ${fact.componentName} ${fact.query} ${fact.position}`,

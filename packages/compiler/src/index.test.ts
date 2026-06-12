@@ -2637,6 +2637,7 @@ export const CartBadge = component('cart-badge', {
         detail: 'query expression has no data-bind, renderOnce, fragment, or isomorphic status',
         position: 'expression',
         query: 'cart.discount',
+        sourceSpan: { length: 13, start: 314 },
         status: 'UNHANDLED',
       },
       {
@@ -2644,6 +2645,7 @@ export const CartBadge = component('cart-badge', {
         detail: 'query expression has no data-bind, renderOnce, fragment, or isomorphic status',
         position: 'expression',
         query: 'product.name',
+        sourceSpan: { length: 12, start: 368 },
         status: 'UNHANDLED',
       },
     ]);

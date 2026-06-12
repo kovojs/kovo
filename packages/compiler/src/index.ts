@@ -1,5 +1,6 @@
 import type { DiagnosticCode } from '@jiso/core';
 
+import { collectQueryUpdateCoverage, collectQueryUpdatePlans } from './analyze/query-updates.js';
 import { componentCssAssetForFile, emitCssModule, type ComponentCssAsset } from './css.js';
 import type { CompilerDiagnostic } from './diagnostics.js';
 import { emitClientModule } from './emit/client.js';
@@ -22,12 +23,7 @@ import {
   parseComponentModule as parseComponentModuleModel,
 } from './scan/parse.js';
 import { replaceExtension } from './shared.js';
-import {
-  collectQueryUpdateCoverage,
-  collectQueryUpdatePlans,
-  validateDataBindings,
-  validateStampExpressionDrift,
-} from './validate/bindings.js';
+import { validateDataBindings, validateStampExpressionDrift } from './validate/bindings.js';
 import {
   unhandledUpdateCoverageDiagnostics,
   validateDirectDbAccess,

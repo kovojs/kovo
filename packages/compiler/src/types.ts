@@ -48,6 +48,7 @@ export interface QueryUpdateCoverageFact {
   detail?: string;
   position: string;
   query: string;
+  sourceSpan?: { length: number; start: number };
   status: 'UNHANDLED' | 'fragment' | 'isomorphic' | 'plan' | 'renderOnce';
 }
 

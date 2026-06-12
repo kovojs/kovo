@@ -3,25 +3,17 @@ import { diagnosticDefinitions } from '@jiso/core';
 import { diagnosticFor, type CompilerDiagnostic } from '../diagnostics.js';
 import { dedupeBy } from '../shared.js';
 import {
-  callExpressions,
   componentOptionObjectKeys,
-  componentOptionSource,
   jsxElements,
-  jsxExpressions,
-  propertyAccessPaths,
   type ComponentModuleModel,
   type JsxElementModel,
 } from '../scan/parse.js';
 import type {
   CompileComponentOptions,
-  QueryDeriveFact,
   QueryShape,
   QueryShapeFact,
   QueryShapeWrapper,
-  QueryStampFact,
   QueryTemplateStampFact,
-  QueryUpdateCoverageFact,
-  QueryUpdatePlanFact,
 } from '../types.js';
 
 interface DataBindAttribute {
@@ -31,21 +23,10 @@ interface DataBindAttribute {
   path: string;
 }
 
-interface QueryPathExpressionFact {
-  end: number;
-  path: string;
-  start: number;
-}
-
 interface TemplateBody {
   offset: number;
   source: string;
 }
-
-const updateCoverageSpans = new WeakMap<
-  QueryUpdateCoverageFact,
-  { length: number; start: number }
->();
 
 export function validateDataBindings(
   source: string,
@@ -129,263 +110,6 @@ export function validateStampExpressionDrift(
     });
 }
 
-export function collectQueryUpdatePlans(
-  source: string,
-  model: ComponentModuleModel,
-  componentName: string,
-): QueryUpdatePlanFact[] {
-  const pathsByQuery = new Map<string, Set<string>>();
-  const derivesByQuery = new Map<string, QueryDeriveFact[]>();
-  const stampsByQuery = new Map<string, QueryStampFact[]>();
-  const listStampsByQuery = new Map<string, QueryTemplateStampFact[]>();
-
-  for (const { path } of dataBindAttributes(model)) {
-    if (path.startsWith('.')) continue;
-    const [query] = path.split('.');
-    if (!query) continue;
-
-    const paths = pathsByQuery.get(query) ?? new Set<string>();
-    paths.add(path);
-    pathsByQuery.set(query, paths);
-  }
-
-  for (const stamp of dataBindListStamps(source, model)) {
-    const [query] = stamp.list.split('.');
-    if (!query) continue;
-
-    const paths = pathsByQuery.get(query) ?? new Set<string>();
-    paths.add(stamp.list);
-    pathsByQuery.set(query, paths);
-    listStampsByQuery.set(query, [...(listStampsByQuery.get(query) ?? []), stamp]);
-  }
-
-  const deriveStamps = dataDeriveStamps(model, exportedDerives(model));
-
-  for (const derive of deriveStamps.derives) {
-    const derives = derivesByQuery.get(derive.input) ?? [];
-    derives.push(derive);
-    derivesByQuery.set(derive.input, derives);
-  }
-
-  for (const stamp of deriveStamps.stamps) {
-    const stamps = stampsByQuery.get(stamp.derive.input) ?? [];
-    stamps.push(stamp);
-    stampsByQuery.set(stamp.derive.input, stamps);
-  }
-
-  const queries = new Set([
-    ...pathsByQuery.keys(),
-    ...listStampsByQuery.keys(),
-    ...derivesByQuery.keys(),
-    ...stampsByQuery.keys(),
-  ]);
-
-  return [...queries]
-    .sort((left, right) => left.localeCompare(right))
-    .map((query) => ({
-      componentName,
-      ...(derivesByQuery.has(query)
-        ? {
-            derives: [...(derivesByQuery.get(query) ?? [])].sort((left, right) =>
-              left.name.localeCompare(right.name),
-            ),
-          }
-        : {}),
-      paths: [...(pathsByQuery.get(query) ?? [])].sort(),
-      query,
-      ...(stampsByQuery.has(query)
-        ? {
-            stamps: [...(stampsByQuery.get(query) ?? [])].sort((left, right) =>
-              left.attr.localeCompare(right.attr),
-            ),
-          }
-        : {}),
-      ...(listStampsByQuery.has(query)
-        ? {
-            templateStamps: [...(listStampsByQuery.get(query) ?? [])].sort((left, right) =>
-              left.list.localeCompare(right.list),
-            ),
-          }
-        : {}),
-    }));
-}
-
-function exportedDerives(
-  model: ComponentModuleModel,
-): Map<string, Omit<QueryDeriveFact, 'selector'>> {
-  const derives = new Map<string, Omit<QueryDeriveFact, 'selector'>>();
-
-  for (const call of callExpressions(model)) {
-    if (call.name !== 'derive' || !call.exportedConstName) continue;
-
-    const [inputArgument, deriveArgument] = call.arguments;
-    const input = deriveInputName(inputArgument);
-    const derive = deriveArrowParts(deriveArgument);
-    if (!input || !derive) continue;
-    const exportName = call.exportedConstName;
-
-    derives.set(exportName, {
-      exportName,
-      expression: derive.expression,
-      input,
-      name: exportName,
-      param: derive.param,
-    });
-  }
-
-  return derives;
-}
-
-function deriveInputName(argument: string | undefined): string | null {
-  const match = /^\[\s*(['"])([A-Za-z_$][\w$]*)\1\s*\]$/.exec(argument?.trim() ?? '');
-  return match?.[2] ?? null;
-}
-
-function deriveArrowParts(
-  argument: string | undefined,
-): { expression: string; param: string } | null {
-  const match = /^\(?\s*([A-Za-z_$][\w$]*)\s*\)?\s*=>\s*([\s\S]+)$/.exec(argument?.trim() ?? '');
-  if (!match?.[1] || !match[2]) return null;
-
-  return { expression: match[2].trim(), param: match[1] };
-}
-
-function dataDeriveStamps(
-  model: ComponentModuleModel,
-  derives: Map<string, Omit<QueryDeriveFact, 'selector'>>,
-): { derives: QueryDeriveFact[]; stamps: QueryStampFact[] } {
-  const deriveFacts: QueryDeriveFact[] = [];
-  const stampFacts: QueryStampFact[] = [];
-
-  for (const element of jsxElements(model)) {
-    const deriveAttribute = element.attributes.find(
-      (attribute) => attribute.name === 'data-derive' && attribute.value,
-    );
-    if (!deriveAttribute?.value) continue;
-
-    const attr = element.attributes.find(
-      (attribute) => attribute.name === 'data-derive-attr' && attribute.value,
-    )?.value;
-
-    const [input, name] = deriveAttribute.value.split('.');
-    if (!input || !name) continue;
-
-    const derive = derives.get(name);
-    if (!derive || derive.input !== input) continue;
-
-    const deriveFact = {
-      ...derive,
-      selector: `[data-derive="${input}.${name}"]`,
-    };
-
-    if (attr) {
-      stampFacts.push({
-        attr,
-        derive: deriveFact,
-        selector: deriveFact.selector,
-      });
-    } else {
-      deriveFacts.push(deriveFact);
-    }
-  }
-
-  return {
-    derives: deriveFacts,
-    stamps: stampFacts,
-  };
-}
-
-export function collectQueryUpdateCoverage(
-  source: string,
-  model: ComponentModuleModel,
-  options: CompileComponentOptions,
-  componentName: string,
-): QueryUpdateCoverageFact[] {
-  const facts: QueryUpdateCoverageFact[] = [];
-  const coveredPaths = new Set<string>();
-  const knownQueries = knownQueryNames(model, options);
-
-  for (const binding of dataBindAttributes(model).filter((item) => !item.path.startsWith('.'))) {
-    const path = binding.path;
-    const query = queryNameFromPath(path);
-    if (!query) continue;
-
-    facts.push({
-      componentName,
-      detail: binding.name,
-      position: binding.name === 'data-bind' ? 'binding' : 'attribute',
-      query: path,
-      status: 'plan',
-    });
-    coveredPaths.add(path);
-  }
-
-  for (const stamp of dataBindListStamps(source, model)) {
-    facts.push({
-      componentName,
-      detail: 'data-bind-list',
-      position: 'template',
-      query: stamp.list,
-      status: 'plan',
-    });
-    coveredPaths.add(stamp.list);
-  }
-
-  for (const path of renderOnceQueryPaths(model, knownQueries)) {
-    facts.push({
-      componentName,
-      detail: 'declared renderOnce',
-      position: 'expression',
-      query: path,
-      status: 'renderOnce',
-    });
-    coveredPaths.add(path);
-  }
-
-  if (componentOptionSource(model, 'isomorphic')?.trim() === 'true') {
-    for (const expression of jsxQueryExpressionPaths(model, knownQueries)) {
-      const path = expression.path;
-      if (coveredPaths.has(path)) continue;
-
-      facts.push({
-        componentName,
-        detail: 'declared isomorphic island',
-        position: 'expression',
-        query: path,
-        status: 'isomorphic',
-      });
-      coveredPaths.add(path);
-    }
-  }
-
-  for (const expression of jsxQueryExpressionPaths(model, knownQueries)) {
-    const path = expression.path;
-    if (coveredPaths.has(path)) continue;
-
-    const fact = withUpdateCoverageSpan(
-      {
-        componentName,
-        detail: 'query expression has no data-bind, renderOnce, fragment, or isomorphic status',
-        position: 'expression',
-        query: path,
-        status: 'UNHANDLED',
-      },
-      expression.start,
-      expression.end - expression.start,
-    );
-    facts.push(fact);
-    coveredPaths.add(path);
-  }
-
-  return dedupeBy(facts, updateCoverageKey);
-}
-
-export function queryUpdateCoverageSpan(
-  fact: QueryUpdateCoverageFact,
-): { length: number; start: number } | undefined {
-  return updateCoverageSpans.get(fact);
-}
-
 export function dataBindListTemplateBodies(
   source: string,
   model: ComponentModuleModel,
@@ -426,15 +150,6 @@ function soleWrappedQueryExpression(source: string): string | null {
   return match?.groups?.path ?? null;
 }
 
-function withUpdateCoverageSpan(
-  fact: QueryUpdateCoverageFact,
-  start: number,
-  length: number,
-): QueryUpdateCoverageFact {
-  updateCoverageSpans.set(fact, { length, start });
-  return fact;
-}
-
 function knownQueryNames(
   model: ComponentModuleModel,
   options: CompileComponentOptions,
@@ -454,57 +169,9 @@ function queryNameFromPath(path: string): string | null {
   return path.split('.', 1)[0] ?? null;
 }
 
-function renderOnceQueryPaths(
-  model: ComponentModuleModel,
-  knownQueries: ReadonlySet<string>,
-): string[] {
-  const paths: string[] = [];
-
-  for (const call of callExpressions(model).filter((item) => item.name === 'renderOnce')) {
-    paths.push(...queryPathsInExpression(call.arguments.join(', '), knownQueries));
-  }
-
-  return [...new Set(paths)];
-}
-
-function jsxQueryExpressionPaths(
-  model: ComponentModuleModel,
-  knownQueries: ReadonlySet<string>,
-): QueryPathExpressionFact[] {
-  return jsxExpressions(model)
-    .map((expression) => {
-      const path = soleQueryPathExpression(expression.expression);
-      return path === null
-        ? null
-        : {
-            end: expression.end,
-            path,
-            start: expression.start,
-          };
-    })
-    .filter((expression): expression is QueryPathExpressionFact => expression !== null)
-    .filter((expression) => queryPathUsesKnownQuery(expression.path, knownQueries));
-}
-
-function soleQueryPathExpression(expression: string): string | null {
-  return (
-    /^(?<path>[A-Za-z_$][\w$]*(?:\??\.[A-Za-z_$][\w$]*)+)$/.exec(expression)?.groups?.path ?? null
-  );
-}
-
-function queryPathsInExpression(expression: string, knownQueries: ReadonlySet<string>): string[] {
-  return propertyAccessPaths('expression.tsx', expression).filter((path) =>
-    queryPathUsesKnownQuery(path, knownQueries),
-  );
-}
-
 function queryPathUsesKnownQuery(path: string, knownQueries: ReadonlySet<string>): boolean {
   const query = queryNameFromPath(path);
   return query !== null && knownQueries.has(query);
-}
-
-function updateCoverageKey(fact: QueryUpdateCoverageFact): string {
-  return [fact.componentName, fact.query, fact.position, fact.status, fact.detail ?? ''].join('\0');
 }
 
 function dataBindAttributes(model: ComponentModuleModel): DataBindAttribute[] {

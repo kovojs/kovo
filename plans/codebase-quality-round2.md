@@ -408,6 +408,14 @@ pipeline throws the tree away and communicates via mutated source text.
       classification feed emit, not validation; positions travel through a module-global
       `WeakMap` (`updateCoverageSpans`, bindings.ts:45-48) read back in component-contracts.ts:271.
       An `analyze/` phase with explicit spans in its output kills the side channel.
+      Evidence 2026-06-11: `packages/compiler/src/analyze/query-updates.ts` now owns
+      `collectQueryUpdatePlans` and `collectQueryUpdateCoverage`; `packages/compiler/src/index.ts`
+      imports analysis from `analyze/` instead of `validate/`; `QueryUpdateCoverageFact` carries
+      optional `sourceSpan` data directly; `validate/component-contracts.ts` reads that explicit
+      fact span for FW311, and `validate/bindings.ts` no longer has `updateCoverageSpans` or
+      update-plan collection. Same-session evidence:
+      `pnpm exec vitest --run packages/compiler/src/index.test.ts` and
+      `pnpm exec vp check packages/compiler/src/analyze/query-updates.ts packages/compiler/src/index.test.ts packages/compiler/src/index.ts packages/compiler/src/types.ts packages/compiler/src/validate/bindings.ts packages/compiler/src/validate/component-contracts.ts`.
 - [ ] **MED — CSS host detection onto the model.** css.ts:211/:220/:238 grep the whole module
       with bare regexes (match inside comments/strings). The component option entries are already
       in the parsed model; `scan/text.ts:39`'s `findStringEnd` has no template-interpolation
