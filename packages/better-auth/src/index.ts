@@ -252,6 +252,16 @@ export interface BetterAuthPluginTableDegradation {
   table: string;
 }
 
+export interface BetterAuthSchemaSourceDeclarationDegradation {
+  callee: string;
+  diagnosticCode: 'FW406';
+  manualBridgeSteps: string[];
+  message: string;
+  physicalTable?: string;
+  reason: 'unrecognized-schema-table-declaration';
+  table: string;
+}
+
 export interface BetterAuthOAuthProviderSuccessorMetadataDegradation {
   attemptedImports: readonly string[];
   diagnosticCode: 'FW406';
@@ -320,6 +330,7 @@ export interface BetterAuthSchemaSourceAnnotationResult {
     name: 'jiso';
   };
   source: string;
+  unrecognizedSourceTables: BetterAuthSchemaSourceDeclarationDegradation[];
   validation: BetterAuthSchemaBridgeValidation;
 }
 
@@ -576,6 +587,12 @@ export function annotateBetterAuthSchemaSource(
   );
   const metadataTableByPhysicalName = betterAuthMetadataTableByPhysicalName(tables, schemaBridge);
   const sourceTables = findDrizzleTableCalls(source, options.tableFactories);
+  const unrecognizedSourceTables = unrecognizedBetterAuthSourceTableDeclarations(
+    findSchemaTableCallCandidates(source),
+    sourceTables,
+    metadataTables,
+    metadataTableByPhysicalName,
+  );
   const duplicateSourceTables = duplicateBetterAuthSourceTableNames(
     duplicateDrizzleTableNames(sourceTables),
     metadataTables,
@@ -645,6 +662,7 @@ export function annotateBetterAuthSchemaSource(
       name: 'jiso',
     },
     source: applyBetterAuthSchemaSourceReplacements(source, sourceReplacements),
+    unrecognizedSourceTables,
     validation,
   };
 }
@@ -1307,6 +1325,7 @@ function betterAuthPhysicalTableNameGroups(
 }
 
 interface DrizzleTableCall {
+  callee: string;
   closeParen: number;
   extraConfigText: null | string;
   tableName: string;
@@ -1345,6 +1364,60 @@ function duplicateBetterAuthSourceTableNames(
       return metadataTable === undefined ? false : metadataTables.has(metadataTable);
     }),
   );
+}
+
+function unrecognizedBetterAuthSourceTableDeclarations(
+  candidates: readonly DrizzleTableCall[],
+  recognizedCalls: readonly DrizzleTableCall[],
+  metadataTables: ReadonlySet<string>,
+  metadataTableByPhysicalName: ReadonlyMap<string, string>,
+): BetterAuthSchemaSourceDeclarationDegradation[] {
+  const recognizedPhysicalTables = new Set(recognizedCalls.map((call) => call.tableName));
+  const seen = new Set<string>();
+  const degradations: BetterAuthSchemaSourceDeclarationDegradation[] = [];
+
+  for (const candidate of candidates) {
+    if (recognizedPhysicalTables.has(candidate.tableName)) continue;
+
+    const table = metadataTableByPhysicalName.get(candidate.tableName);
+    if (table === undefined || !metadataTables.has(table)) continue;
+
+    const key = `${candidate.tableName}\0${candidate.callee}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+
+    degradations.push(unrecognizedSchemaTableDeclarationDegradation(table, candidate));
+  }
+
+  return degradations.sort((left, right) =>
+    left.table === right.table
+      ? left.callee.localeCompare(right.callee)
+      : left.table.localeCompare(right.table),
+  );
+}
+
+function unrecognizedSchemaTableDeclarationDegradation(
+  table: string,
+  call: DrizzleTableCall,
+): BetterAuthSchemaSourceDeclarationDegradation {
+  const physicalTable = call.tableName;
+
+  return {
+    callee: call.callee,
+    diagnosticCode: 'FW406',
+    manualBridgeSteps: [
+      `Import the Drizzle table factory that declares ${physicalTable}, or pass it through tableFactories when the factory is intentionally wrapped.`,
+      `Add the Better Auth jiso(...) annotation manually if ${call.callee} is not a Drizzle table factory.`,
+      'Keep observed writes FW406 until schema.ts and declared Better Auth API touches both cover the table under SPEC.md §11.2.',
+    ],
+    message: `${betterAuthTableLabel(
+      table,
+      physicalTable,
+    )} appears in schema.ts through unrecognized table factory ${call.callee}; the Better Auth adapter did not synthesize a schema annotation.`,
+    ...(physicalTable === table ? {} : { physicalTable }),
+    reason: 'unrecognized-schema-table-declaration',
+    table,
+  };
 }
 
 function betterAuthSchemaAnnotationCall(
@@ -1506,10 +1579,19 @@ function namedImportSpecifier(specifier: string): NamedImportSpecifier | null {
 
 function findDrizzleTableCalls(
   source: string,
-  factories: readonly string[] = ['mysqlTable', 'pgTable', 'sqliteTable'],
+  factories: readonly string[] = [],
 ): DrizzleTableCall[] {
-  const calls: DrizzleTableCall[] = [];
   const factoryCallees = drizzleTableFactoryCallees(source, factories);
+
+  return findSchemaTableCallCandidates(source).filter((call) =>
+    call.callee.includes('.')
+      ? factoryCallees.members.has(call.callee)
+      : factoryCallees.identifiers.has(call.callee),
+  );
+}
+
+function findSchemaTableCallCandidates(source: string): DrizzleTableCall[] {
+  const calls: DrizzleTableCall[] = [];
 
   for (let index = 0; index < source.length; index += 1) {
     if (
@@ -1527,15 +1609,11 @@ function findDrizzleTableCalls(
     if (identifier === null) continue;
 
     const memberCallee = readMemberCalleeBefore(source, identifier);
-    const isFactoryCallee =
-      memberCallee === null
-        ? factoryCallees.identifiers.has(identifier.value)
-        : factoryCallees.members.has(memberCallee);
-
-    if (!isFactoryCallee) continue;
+    const calleeStart = memberCallee?.start ?? identifier.start;
     if (memberCallee === null && isIdentifierCharacter(source[identifier.start - 1] ?? '')) {
       continue;
     }
+    if (!isLikelySchemaTableDeclaration(source, calleeStart)) continue;
 
     const openParen = skipWhitespace(source, identifier.end);
     if (source[openParen] !== '(') continue;
@@ -1548,6 +1626,7 @@ function findDrizzleTableCalls(
 
     if (tableName !== null) {
       calls.push({
+        callee: memberCallee?.value ?? identifier.value,
         closeParen,
         extraConfigText: args[2]?.text.trim() ?? null,
         tableName,
@@ -1570,8 +1649,6 @@ const drizzleTableFactoryByModule = {
   'drizzle-orm/pg-core': 'pgTable',
   'drizzle-orm/sqlite-core': 'sqliteTable',
 } as const;
-
-const defaultDrizzleTableFactories = new Set<string>(Object.values(drizzleTableFactoryByModule));
 
 function drizzleTableFactoryCallees(
   source: string,
@@ -1596,10 +1673,6 @@ function drizzleTableFactoryCallees(
     if (!isDrizzleCoreModule(moduleName)) continue;
 
     members.add(`${namespaceImport.localName}.${drizzleTableFactoryByModule[moduleName]}`);
-  }
-
-  for (const factory of defaultDrizzleTableFactories) {
-    identifiers.add(factory);
   }
 
   return { identifiers, members };
@@ -1631,7 +1704,7 @@ function readIdentifierAt(
 function readMemberCalleeBefore(
   source: string,
   property: { start: number; value: string },
-): string | null {
+): { start: number; value: string } | null {
   const dot = skipWhitespaceBackward(source, property.start - 1);
 
   if (source[dot] !== '.') return null;
@@ -1641,7 +1714,10 @@ function readMemberCalleeBefore(
 
   if (objectStart === null) return null;
 
-  return `${source.slice(objectStart, objectEnd)}.${property.value}`;
+  return {
+    start: objectStart,
+    value: `${source.slice(objectStart, objectEnd)}.${property.value}`,
+  };
 }
 
 function readIdentifierStartBefore(source: string, end: number): number | null {
@@ -1651,6 +1727,12 @@ function readIdentifierStartBefore(source: string, end: number): number | null {
   while (start > 0 && isIdentifierCharacter(source[start - 1])) start -= 1;
 
   return isIdentifierStart(source[start]) ? start : null;
+}
+
+function isLikelySchemaTableDeclaration(source: string, calleeStart: number): boolean {
+  const before = skipWhitespaceBackward(source, calleeStart - 1);
+
+  return source[before] === '=';
 }
 
 function isIdentifierStart(char: string | undefined): boolean {

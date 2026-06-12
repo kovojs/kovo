@@ -2089,6 +2089,68 @@ describe('Better Auth pinned conformance', () => {
     });
   });
 
+  it('reports real aliased plugin declarations through unrecognized schema factories', () => {
+    const { auth } = createRealAuth({
+      plugins: [
+        oidcProvider({
+          loginPage: '/login',
+          schema: {
+            oauthAccessToken: { modelName: 'auth_oauth_tokens' },
+            oauthApplication: { modelName: 'auth_oauth_apps' },
+            oauthConsent: { modelName: 'auth_oauth_consents' },
+          },
+        }),
+      ],
+    });
+    const tables = getAuthTables(auth.options);
+    const result = annotateBetterAuthSchemaSource(
+      [
+        "import { table } from './schema-kit';",
+        "export const authOauthApps = table('auth_oauth_apps', {});",
+      ].join('\n'),
+      tables,
+    );
+
+    expect(validateBetterAuthSchemaBridge(tables)).toMatchObject({
+      keyFieldMismatches: [],
+      pluginTableDegradations: [],
+      unbridgedTables: [],
+    });
+    expect(result.validation.ok).toBe(true);
+    expect(result.annotatedTables).toEqual([]);
+    expect(result.missingSourceTables).toEqual([
+      'account',
+      'auth_oauth_apps',
+      'auth_oauth_consents',
+      'auth_oauth_tokens',
+      'session',
+      'user',
+      'verification',
+    ]);
+    expect(result.unrecognizedSourceTables).toEqual([
+      {
+        callee: 'table',
+        diagnosticCode: 'FW406',
+        manualBridgeSteps: [
+          'Import the Drizzle table factory that declares auth_oauth_apps, or pass it through tableFactories when the factory is intentionally wrapped.',
+          'Add the Better Auth jiso(...) annotation manually if table is not a Drizzle table factory.',
+          'Keep observed writes FW406 until schema.ts and declared Better Auth API touches both cover the table under SPEC.md §11.2.',
+        ],
+        message:
+          'oauthApplication (physical auth_oauth_apps) appears in schema.ts through unrecognized table factory table; the Better Auth adapter did not synthesize a schema annotation.',
+        physicalTable: 'auth_oauth_apps',
+        reason: 'unrecognized-schema-table-declaration',
+        table: 'oauthApplication',
+      },
+    ]);
+    expect(result.source).toBe(
+      [
+        "import { table } from './schema-kit';",
+        "export const authOauthApps = table('auth_oauth_apps', {});",
+      ].join('\n'),
+    );
+  });
+
   it('mounts the real Better Auth handler as an audit-visible prefix endpoint', async () => {
     const { auth } = createRealAuth();
     const authEndpoint = mount('/api/auth', auth);

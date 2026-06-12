@@ -821,6 +821,46 @@ describe('credential mutation helpers', () => {
     expect(betterAuthTableDomain('webauthnCredential', schemaBridge)).toBe('auth');
   });
 
+  it('keeps recognized future plugin tables unbridged with FW406 degradation facts', () => {
+    const tables = {
+      account: authTable(['userId']),
+      session: authTable(['userId']),
+      user: authTable(),
+      verification: authTable(),
+      futureCredential: authTable(['credentialId', 'userId']),
+    };
+    const result = annotateBetterAuthSchemaSource(
+      [
+        "import { pgTable } from 'drizzle-orm/pg-core';",
+        "export const futureCredential = pgTable('futureCredential', {});",
+      ].join('\n'),
+      tables,
+    );
+
+    expect(result.validation.ok).toBe(false);
+    expect(result.validation.unbridgedTables).toEqual(['futureCredential']);
+    expect(result.validation.pluginTableDegradations).toEqual([
+      {
+        diagnosticCode: 'FW406',
+        fields: ['credentialId', 'id', 'userId'],
+        manualBridgeSteps: [
+          'Inspect futureCredential fields (credentialId, id, userId) and decide whether the app reads this table.',
+          "Likely app-visible ownership is jiso({ domain: 'auth', key: 'userId' }); confirm before adding the bridge, otherwise use jiso({ exempt: true }) with a rationale.",
+          'Add declared Better Auth API touches for writes that can mutate futureCredential; SPEC.md §11.2 keeps observed writes FW406 until declared coverage exists.',
+        ],
+        message:
+          'futureCredential is outside the blessed Better Auth schema bridge; add a schema.ts domain/exempt annotation and declared touches before relying on runtime coverage.',
+        reason: 'unsupported-plugin-table',
+        suggestedAnnotation: { domain: 'auth', key: 'userId' },
+        table: 'futureCredential',
+      },
+    ]);
+    expect(result.annotatedTables).toEqual([]);
+    expect(result.unrecognizedSourceTables).toEqual([]);
+    expect(result.source).toContain("pgTable('futureCredential', {})");
+    expect(result.source).not.toContain('jiso(');
+  });
+
   it('rejects schema bridge extensions that collide with blessed built-in tables', () => {
     const tables = {
       account: authTable(['userId']),
@@ -1006,6 +1046,59 @@ describe('credential mutation helpers', () => {
         user: 'id',
       },
     });
+  });
+
+  it('reports explicit plugin-table bridge declarations through unrecognized factories', () => {
+    const tables = {
+      account: authTable(['userId']),
+      passkeyCredential: authTable(['credentialId', 'userId'], 'auth_passkey_credentials'),
+      session: authTable(['userId']),
+      user: authTable(),
+      verification: authTable(),
+    };
+    const schemaBridge = {
+      passkeyCredential: { domain: 'auth', key: 'userId' },
+    } as const;
+    const result = annotateBetterAuthSchemaSource(
+      [
+        "import { table } from './local-schema-kit';",
+        "export const authPasskeyCredentials = table('auth_passkey_credentials', {});",
+      ].join('\n'),
+      tables,
+      { schemaBridge },
+    );
+
+    expect(result.validation.ok).toBe(true);
+    expect(result.annotatedTables).toEqual([]);
+    expect(result.missingSourceTables).toEqual([
+      'account',
+      'auth_passkey_credentials',
+      'session',
+      'user',
+      'verification',
+    ]);
+    expect(result.unrecognizedSourceTables).toEqual([
+      {
+        callee: 'table',
+        diagnosticCode: 'FW406',
+        manualBridgeSteps: [
+          'Import the Drizzle table factory that declares auth_passkey_credentials, or pass it through tableFactories when the factory is intentionally wrapped.',
+          'Add the Better Auth jiso(...) annotation manually if table is not a Drizzle table factory.',
+          'Keep observed writes FW406 until schema.ts and declared Better Auth API touches both cover the table under SPEC.md §11.2.',
+        ],
+        message:
+          'passkeyCredential (physical auth_passkey_credentials) appears in schema.ts through unrecognized table factory table; the Better Auth adapter did not synthesize a schema annotation.',
+        physicalTable: 'auth_passkey_credentials',
+        reason: 'unrecognized-schema-table-declaration',
+        table: 'passkeyCredential',
+      },
+    ]);
+    expect(result.source).toBe(
+      [
+        "import { table } from './local-schema-kit';",
+        "export const authPasskeyCredentials = table('auth_passkey_credentials', {});",
+      ].join('\n'),
+    );
   });
 
   it('uses Better Auth modelName aliases for schema.ts and P9 verifier table facts', () => {
@@ -1610,6 +1703,8 @@ describe('credential mutation helpers', () => {
   it('reports schema.ts tables it cannot safely annotate', () => {
     const result = annotateBetterAuthSchemaSource(
       [
+        "import { jiso } from '@jiso/drizzle';",
+        "import { pgTable } from 'drizzle-orm/pg-core';",
         'const auditConfig = () => [];',
         "export const user = pgTable('user', {}, jiso({ domain: 'user', key: 'id' }));",
         "export const session = pgTable('session', {}, auditConfig);",
@@ -1633,6 +1728,71 @@ describe('credential mutation helpers', () => {
       "export const account = pgTable('account', {}, jiso({ domain: 'auth', key: 'userId' }));",
     );
     expect(result.source).toContain("export const session = pgTable('session', {}, auditConfig);");
+  });
+
+  it('bounds schema.ts annotations to imported or explicit Drizzle table factories', () => {
+    const metadata = {
+      account: authTable(['userId']),
+      session: authTable(['userId']),
+      user: authTable(),
+      verification: authTable(),
+    };
+    const source = [
+      'const pgTable = makeLocalTableFactory();',
+      "export const user = pgTable('user', {});",
+    ].join('\n');
+    const result = annotateBetterAuthSchemaSource(source, metadata);
+    const explicit = annotateBetterAuthSchemaSource(source, metadata, {
+      tableFactories: ['pgTable'],
+    });
+
+    // SPEC.md §10.1 / §11.2: generated schema annotations become P9 table
+    // facts, so local helpers are surfaced instead of treated as Drizzle.
+    expect(result.annotatedTables).toEqual([]);
+    expect(result.missingSourceTables).toEqual(['account', 'session', 'user', 'verification']);
+    expect(result.unrecognizedSourceTables).toEqual([
+      {
+        callee: 'pgTable',
+        diagnosticCode: 'FW406',
+        manualBridgeSteps: [
+          'Import the Drizzle table factory that declares user, or pass it through tableFactories when the factory is intentionally wrapped.',
+          'Add the Better Auth jiso(...) annotation manually if pgTable is not a Drizzle table factory.',
+          'Keep observed writes FW406 until schema.ts and declared Better Auth API touches both cover the table under SPEC.md §11.2.',
+        ],
+        message:
+          'user appears in schema.ts through unrecognized table factory pgTable; the Better Auth adapter did not synthesize a schema annotation.',
+        reason: 'unrecognized-schema-table-declaration',
+        table: 'user',
+      },
+    ]);
+    expect(result.source).toBe(source);
+    expect(explicit.annotatedTables).toEqual(['user']);
+    expect(explicit.unrecognizedSourceTables).toEqual([]);
+    expect(explicit.source).toContain(
+      "export const user = pgTable('user', {}, jiso({ domain: 'user', key: 'id' }));",
+    );
+  });
+
+  it('does not report column builders as unrecognized schema table declarations', () => {
+    const result = annotateBetterAuthSchemaSource(
+      [
+        "import { jiso } from '@jiso/drizzle';",
+        "import { pgTable, text } from 'drizzle-orm/pg-core';",
+        "export const account = pgTable('account', {",
+        "  user: text('user'),",
+        '});',
+      ].join('\n'),
+      {
+        account: authTable(['userId']),
+        session: authTable(['userId']),
+        user: authTable(),
+        verification: authTable(),
+      },
+    );
+
+    expect(result.annotatedTables).toEqual(['account']);
+    expect(result.missingSourceTables).toEqual(['session', 'user', 'verification']);
+    expect(result.unrecognizedSourceTables).toEqual([]);
   });
 
   it('reports duplicate schema.ts table declarations without annotating ambiguous tables', () => {
@@ -1704,6 +1864,7 @@ describe('credential mutation helpers', () => {
     const aliased = annotateBetterAuthSchemaSource(
       [
         "import { jiso as markJiso } from '@jiso/drizzle';",
+        "import { pgTable } from 'drizzle-orm/pg-core';",
         "export const account = pgTable('account', {});",
       ].join('\n'),
       metadata,

@@ -410,6 +410,21 @@ tables)` now emits both logical and physical table facts for runtime SQL verific
       `pnpm exec tsc -p conformance/better-auth-pin/tsconfig.json --noEmit`,
       `pnpm exec vp check packages/better-auth/src/index.ts packages/better-auth/src/index.test.ts conformance/better-auth-pin/src/index.test.ts plans/auth.md IMPLEMENT_v1.md`,
       and `git diff --check`.
+      Partial evidence 2026-06-12: app `schema.ts` annotation is now explicitly bounded to
+      Drizzle table declarations recognized through imported `drizzle-orm/*-core` table
+      factories or caller-provided `tableFactories`. Unbridged future plugin tables still
+      degrade as FW406 unsupported-plugin metadata even when their source declaration is
+      recognizable, and explicitly bridged tables declared through unrecognized/local factories
+      now return `unrecognizedSourceTables` FW406 facts instead of synthesizing a fabricated
+      `jiso(...)` mapping. `packages/better-auth/src/index.test.ts` covers future-plugin
+      degradation, unrecognized local factories, and the explicit escape hatch for intentionally
+      wrapped factories; `conformance/better-auth-pin/src/index.test.ts` pins the same
+      unrecognized-factory behavior against real aliased `better-auth@1.6.17` OIDC-provider
+      metadata. Same-session evidence:
+      `pnpm exec vitest --run packages/better-auth/src/index.test.ts conformance/better-auth-pin/src/index.test.ts --reporter=dot`,
+      `pnpm exec tsc -p conformance/better-auth-pin/tsconfig.json --noEmit`,
+      `pnpm exec vp check packages/better-auth/src/index.ts packages/better-auth/src/index.test.ts conformance/better-auth-pin/src/index.test.ts plans/auth.md IMPLEMENT_v1.md`,
+      and `git diff --check`.
       Remaining gaps: plugin-generated tables outside the blessed organization/admin/two-factor/OIDC-provider/MCP/SIWE/JWT/device-authorization
       surface are still not mapped, the OAuth-provider successor package/table metadata is not
       installed or exportable from the pinned dependency set, and full app `schema.ts` generation
