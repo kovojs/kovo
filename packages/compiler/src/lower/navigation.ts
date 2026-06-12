@@ -6,7 +6,7 @@ import {
   type JsxElementModel,
 } from '../scan/parse.js';
 import { literalStringValue, parseLiteralObject, type StaticLiteralValue } from '../scan/object.js';
-import { escapeAttribute } from '../shared.js';
+import { escapeAttribute, removeJsxAttributes } from '../shared.js';
 
 export function lowerNavigationSugar(
   source: string,
@@ -175,22 +175,4 @@ function buildStaticHref(
 
 function jsxStaticAttributeValue(element: JsxElementModel, name: string): string | undefined {
   return element.attributes.find((attribute) => attribute.name === name)?.value;
-}
-
-function removeJsxAttribute(attributes: string, start: number, end: number): string {
-  let removeStart = start;
-  while (removeStart > 0 && /\s/.test(attributes[removeStart - 1] ?? '')) {
-    removeStart -= 1;
-  }
-
-  return `${attributes.slice(0, removeStart)}${attributes.slice(end)}`;
-}
-
-function removeJsxAttributes(
-  attributes: string,
-  ranges: readonly { end: number; start: number }[],
-): string {
-  return [...ranges]
-    .sort((left, right) => right.start - left.start)
-    .reduce((next, range) => removeJsxAttribute(next, range.start, range.end), attributes);
 }

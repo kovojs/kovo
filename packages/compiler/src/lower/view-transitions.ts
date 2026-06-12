@@ -4,7 +4,7 @@ import {
   type JsxAttributeModel,
   type JsxElementModel,
 } from '../scan/parse.js';
-import { escapeAttribute } from '../shared.js';
+import { escapeAttribute, removeJsxAttribute } from '../shared.js';
 
 interface ViewTransitionStamp {
   name: string;
@@ -52,15 +52,6 @@ export function lowerViewTransitions(
     source: nextSource,
     stamps,
   };
-}
-
-function removeJsxAttribute(attributes: string, start: number, end: number): string {
-  let removeStart = start;
-  while (removeStart > 0 && /\s/.test(attributes[removeStart - 1] ?? '')) {
-    removeStart -= 1;
-  }
-
-  return `${attributes.slice(0, removeStart)}${attributes.slice(end)}`;
 }
 
 function appendViewTransitionStyle(attributes: string, name: string): string {

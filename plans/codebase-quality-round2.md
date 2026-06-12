@@ -495,6 +495,11 @@ pipeline throws the tree away and communicates via mutated source text.
       implementations. Same-session evidence:
       `pnpm exec vitest --run packages/compiler/src/index.test.ts -t "data-bind|FW227|FW311|query update"` and
       `pnpm exec vp check packages/compiler/src/types.ts packages/compiler/src/validate/bindings.ts packages/compiler/src/validate/component-contracts.ts plans/codebase-quality-round2.md`.
+      Additional evidence 2026-06-12: `removeJsxAttribute(s)` now live in
+      `packages/compiler/src/shared.ts`; navigation and view-transition lowering import the
+      shared helper instead of carrying duplicate local copies. Same-session evidence:
+      `pnpm exec vitest --run packages/compiler/src/index.test.ts -t "navigation|view transition|Link"` and
+      `pnpm exec vp check packages/compiler/src/shared.ts packages/compiler/src/lower/navigation.ts packages/compiler/src/lower/view-transitions.ts plans/codebase-quality-round2.md`.
 - [x] **MED — Move analysis out of validate/.** `collectQueryUpdatePlans` and coverage
       classification feed emit, not validation; positions travel through a module-global
       `WeakMap` (`updateCoverageSpans`, bindings.ts:45-48) read back in component-contracts.ts:271.
