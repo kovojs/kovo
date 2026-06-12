@@ -1010,6 +1010,12 @@ params, relational API, `execute(sql)`, right/full joins, a string column named 
       `pnpm exec vitest --run packages/runtime/src/mutation-queue.test.ts packages/runtime/src/index.test.ts -t "mutation queue|optimistic enhanced submits with the same named queue|unqueued optimistic"`
       and
       `pnpm exec vp check packages/runtime/src/index.ts packages/runtime/src/index.test.ts packages/runtime/src/mutation-queue.ts packages/runtime/src/mutation-queue.test.ts`.
+      Partial evidence 2026-06-12: extracted `packages/runtime/src/optimism.ts` as the
+      subtractive seam for optimistic transform/rebase state and pagehide cleanup; `index.ts`
+      keeps public re-exports and enhanced-mutation integration wiring. Same-session evidence:
+      `pnpm exec vitest --run packages/runtime/src/index.test.ts -t "optimistic|pagehide|enhanced mutations"`,
+      `pnpm exec vp check packages/runtime/src/index.ts packages/runtime/src/optimism.ts`, and
+      `git diff --check`.
 - [ ] **LOW** — `hydratedQueries` frozen at install (index.ts:330-342): queries introduced by
       later mutations never become refetch-eligible — fix or document as SPEC-intended;
       `unescapeHtml` missing `&#39;`/`&apos;` (wire-parser.ts:162-168) — pin the server↔runtime
