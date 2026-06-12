@@ -9,7 +9,7 @@ Scope: a behavior-layer package (`packages/headless-ui`, published `@jiso/headle
 - [ ] F2 compiler: prefix enforcement + FW234; `fw explain component <prefixed>` prints the owning package. Evidence so far: compiler accepts explicit package prefix facts and emits FW234 for duplicate effective prefixes, malformed/missing prefixes, and non-`@jiso/*` `jiso-*` misuse; explicit effective-prefix aliases are covered as the collision escape hatch. Remaining: feed real package-discovery facts into app builds and add `fw explain component <prefixed>` provenance output.
       Additional evidence 2026-06-11: explicit `packageComponentPrefixes` facts now flow through
       the core explain graph schema and compiler `deriveAppGraph`; `fw explain component
-  jiso-dialog` resolves dashed wire names and prints provenance including package, declared
+jiso-dialog` resolves dashed wire names and prints provenance including package, declared
       prefix, effective prefix, and source. Covered by `packages/core/src/graph.test.ts`,
       `packages/compiler/src/index.test.ts`, and `packages/cli/src/index.test.ts`. Same-session
       evidence: `pnpm exec vitest --run packages/core/src/graph.test.ts packages/compiler/src/index.test.ts packages/cli/src/index.test.ts`
