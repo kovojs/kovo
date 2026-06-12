@@ -13,13 +13,13 @@ import type {
   CompileComponentOptions,
   QueryDeriveFact,
   QueryShape,
-  QueryShapeFact,
   QueryTemplateStampBindingPlaceholder,
   QueryStampFact,
   QueryTemplateStampFact,
   QueryUpdateCoverageFact,
   QueryUpdatePlanFact,
 } from '../types.js';
+import { queryShapesFromFacts } from '../types.js';
 
 interface DataBindAttribute {
   name: string;
@@ -299,10 +299,6 @@ function componentQueryShapes(options: CompileComponentOptions): Record<string, 
     options.queryShapes ??
     (options.queryShapeFacts ? queryShapesFromFacts(options.queryShapeFacts) : null)
   );
-}
-
-function queryShapesFromFacts(facts: readonly QueryShapeFact[]): Record<string, QueryShape> {
-  return Object.fromEntries(facts.map((fact) => [fact.query, fact.shape]));
 }
 
 function queryNameFromPath(path: string): string | null {

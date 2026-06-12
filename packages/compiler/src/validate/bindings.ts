@@ -11,10 +11,10 @@ import {
 import type {
   CompileComponentOptions,
   QueryShape,
-  QueryShapeFact,
   QueryShapeWrapper,
   QueryTemplateStampFact,
 } from '../types.js';
+import { queryShapesFromFacts } from '../types.js';
 
 interface DataBindAttribute {
   index: number;
@@ -329,10 +329,6 @@ function componentQueryShapes(options: CompileComponentOptions): Record<string, 
     options.queryShapes ??
     (options.queryShapeFacts ? queryShapesFromFacts(options.queryShapeFacts) : null)
   );
-}
-
-function queryShapesFromFacts(facts: readonly QueryShapeFact[]): Record<string, QueryShape> {
-  return Object.fromEntries(facts.map((fact) => [fact.query, fact.shape]));
 }
 
 function validatePathInQueryShapes(

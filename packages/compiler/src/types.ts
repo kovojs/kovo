@@ -87,3 +87,7 @@ export interface QueryShapeFact {
   shape: QueryShape;
   source: string;
 }
+
+export function queryShapesFromFacts(facts: readonly QueryShapeFact[]): Record<string, QueryShape> {
+  return Object.fromEntries(facts.map((fact) => [fact.query, fact.shape]));
+}

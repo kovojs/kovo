@@ -45,8 +45,6 @@ import { validateLiteralHrefs } from './validate/navigation.js';
 import { validatePackageComponentPrefixes } from './validate/package-prefixes.js';
 import type {
   CompileComponentOptions,
-  QueryShape,
-  QueryShapeFact,
   QueryUpdateCoverageFact,
   QueryUpdatePlanFact,
   RenderEquivalenceCheck,
@@ -97,6 +95,7 @@ export type {
   QueryUpdatePlanFact,
   RenderEquivalenceCheck,
 } from './types.js';
+export { queryShapesFromFacts } from './types.js';
 
 export interface EmittedFile {
   fileName: string;
@@ -313,10 +312,6 @@ export function assertRenderEquivalence(result: CompileResult): void {
       throw new Error(`Render equivalence failed for ${check.artifact}`);
     }
   }
-}
-
-export function queryShapesFromFacts(facts: readonly QueryShapeFact[]): Record<string, QueryShape> {
-  return Object.fromEntries(facts.map((fact) => [fact.query, fact.shape]));
 }
 
 export function collectMinifierReservedNames(

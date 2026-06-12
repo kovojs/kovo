@@ -489,7 +489,7 @@ pipeline throws the tree away and communicates via mutated source text.
       `CompileComponentOptions`, query/update/shape facts, and `RenderEquivalenceCheck`; the
       client emitter plus binding/navigation/component-contract validators import those types
       directly instead of depending on the index barrel or carrying private structural copies.
-- [ ] **MED — Move analysis out of validate/.** `collectQueryUpdatePlans` and coverage
+- [x] **MED — Move analysis out of validate/.** `collectQueryUpdatePlans` and coverage
       classification feed emit, not validation; positions travel through a module-global
       `WeakMap` (`updateCoverageSpans`, bindings.ts:45-48) read back in component-contracts.ts:271.
       An `analyze/` phase with explicit spans in its output kills the side channel.
@@ -501,6 +501,11 @@ pipeline throws the tree away and communicates via mutated source text.
       update-plan collection. Same-session evidence:
       `pnpm exec vitest --run packages/compiler/src/index.test.ts` and
       `pnpm exec vp check packages/compiler/src/analyze/query-updates.ts packages/compiler/src/index.test.ts packages/compiler/src/index.ts packages/compiler/src/types.ts packages/compiler/src/validate/bindings.ts packages/compiler/src/validate/component-contracts.ts`.
+      Additional evidence 2026-06-12: the last duplicated query-shape fact conversion helper
+      is centralized in `packages/compiler/src/types.ts`, and the analyzer plus validators
+      import it instead of carrying local copies. Same-session evidence:
+      `pnpm exec vitest --run packages/compiler/src/index.test.ts -t "data-bind|FW311|query update"` and
+      `pnpm exec vp check packages/compiler/src/types.ts packages/compiler/src/analyze/query-updates.ts packages/compiler/src/validate/bindings.ts packages/compiler/src/validate/component-contracts.ts packages/compiler/src/index.ts plans/codebase-quality-round2.md`.
 - [x] **MED — CSS host detection onto the model.** css.ts:211/:220/:238 grep the whole module
       with bare regexes (match inside comments/strings). The component option entries are already
       in the parsed model; `scan/text.ts:39`'s `findStringEnd` has no template-interpolation

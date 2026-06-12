@@ -22,6 +22,7 @@ import type {
   QueryShapeWrapper,
   QueryUpdateCoverageFact,
 } from '../types.js';
+import { queryShapesFromFacts } from '../types.js';
 
 interface ComponentContractValidationOptions {
   fileName: string;
@@ -235,10 +236,6 @@ function componentQueryShapes(
     options.queryShapes ??
     (options.queryShapeFacts ? queryShapesFromFacts(options.queryShapeFacts) : null)
   );
-}
-
-function queryShapesFromFacts(facts: readonly QueryShapeFact[]): Record<string, QueryShape> {
-  return Object.fromEntries(facts.map((fact) => [fact.query, fact.shape]));
 }
 
 function fw311Diagnostic(
