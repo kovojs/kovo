@@ -131,6 +131,12 @@ Do this first or pay it on every commit.
       Verification: `node --test --test-name-pattern "P10 starter wires graph assertions into CI" tests/fw-check.node.mjs`,
       `pnpm exec vp check tests/fw-check.node.mjs plans/codebase-quality-round2.md`, and
       `git diff --check`.
+      Partial evidence 2026-06-12: the P10 starter HTML/fixpoint tranche now parses
+      `packages/create-jiso/templates/index.html` element structure and compiles
+      `packages/create-jiso/templates/src/app.tsx` through `assertFixpoint` and
+      `assertRenderEquivalence` for SPEC §5.2 instead of matching the HTML comment/client-source
+      substring or parsing `app.fixpoint.test.ts` import names. Same-session evidence:
+      `node --test --test-name-pattern "P10 starter wires graph assertions into CI" tests/fw-check.node.mjs`.
       Partial evidence 2026-06-12: the P10 starter emit-graph tranche now runs
       `packages/create-jiso/templates/scripts/emit-graph.mjs` in an isolated temp template and
       asserts `emit-graph/v1` plus parsed graph equality instead of grepping the emitter import

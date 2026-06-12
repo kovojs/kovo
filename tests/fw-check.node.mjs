@@ -19,6 +19,7 @@ import {
   runMcpFallbackStdio,
 } from '../dist/cli/src/index.mjs';
 import {
+  assertFixpoint,
   assertRenderEquivalence,
   collectCssAssetManifest,
   collectMinifierReservedNames,
@@ -821,28 +822,6 @@ const executeStarterClientTemplate = async (source) => {
     loaderInstalls,
     queryStore,
   };
-};
-
-const importedNamesFrom = (source, specifier) => {
-  const names = new Set();
-  const importPattern = /import\s+([\s\S]*?)\s+from\s+['"]([^'"]+)['"]/g;
-
-  for (const match of source.matchAll(importPattern)) {
-    const [, clause, importSpecifier] = match;
-    if (importSpecifier !== specifier) continue;
-
-    const namedImportSnippet = clause.match(/\{([\s\S]*?)\}/)?.[1] ?? '';
-    for (const item of namedImportSnippet.split(',')) {
-      const name = item
-        .trim()
-        .replace(/^type\s+/, '')
-        .split(/\s+as\s+/)[0]
-        ?.trim();
-      if (name) names.add(name);
-    }
-  }
-
-  return [...names].sort((left, right) => left.localeCompare(right));
 };
 
 const interfaceMembersFromSource = (source, interfaceName) => {
@@ -3784,7 +3763,7 @@ void test('P10 starter wires graph assertions into CI', async () => {
     ciWorkflow,
     starterGraphSource,
     clientSource,
-    appFixpointTest,
+    appSource,
     stylesSource,
     indexHtml,
   ] = await Promise.all([
@@ -3793,7 +3772,7 @@ void test('P10 starter wires graph assertions into CI', async () => {
     readProjectFile('packages/create-jiso/templates/.github/workflows/ci.yml'),
     readProjectFile('packages/create-jiso/templates/graph.json'),
     readProjectFile('packages/create-jiso/templates/src/client.ts'),
-    readProjectFile('packages/create-jiso/templates/src/app.fixpoint.test.ts'),
+    readProjectFile('packages/create-jiso/templates/src/app.tsx'),
     readProjectFile('packages/create-jiso/templates/src/styles.css'),
     readProjectFile('packages/create-jiso/templates/index.html'),
   ]);
@@ -3907,11 +3886,12 @@ void test('P10 starter wires graph assertions into CI', async () => {
   assert.deepEqual(emittedGraph.graph, starterGraph);
   assert.equal(await runGraphAssertionsTemplateScript(), 'graph-assertions/v1\nOK\n');
 
-  assert.deepEqual(importedNamesFrom(appFixpointTest, '@jiso/compiler'), [
-    'assertFixpoint',
-    'assertRenderEquivalence',
-    'compileComponentModule',
-  ]);
+  const starterAppCompile = compileComponentModule({
+    fileName: 'src/app.tsx',
+    source: appSource,
+  });
+  assert.doesNotThrow(() => assertFixpoint(starterAppCompile));
+  assert.doesNotThrow(() => assertRenderEquivalence(starterAppCompile));
 
   const starterClient = await executeStarterClientTemplate(clientSource);
   assert.equal(starterClient.loaderInstalls.length, 1);
@@ -3986,6 +3966,19 @@ void test('P10 starter wires graph assertions into CI', async () => {
   ]);
   const htmlElements = parseHtmlElements(indexHtml);
   assert.deepEqual(
+    htmlElements.map((element) => element.tagName),
+    ['html', 'head', 'meta', 'meta', 'link', 'title', 'body'],
+  );
+  assert.deepEqual(htmlElements.find((element) => element.tagName === 'html')?.attributes, {
+    lang: 'en',
+  });
+  assert.deepEqual(
+    htmlElements
+      .filter((element) => element.tagName === 'meta')
+      .map((element) => element.attributes),
+    [{ charset: 'UTF-8' }, { content: 'width=device-width, initial-scale=1.0', name: 'viewport' }],
+  );
+  assert.deepEqual(
     htmlElements
       .filter((element) => element.tagName === 'link')
       .map((element) => element.attributes),
@@ -3997,8 +3990,6 @@ void test('P10 starter wires graph assertions into CI', async () => {
       .map((element) => element.attributes),
     [],
   );
-  assert.match(indexHtml, /Build-only Vite asset entry/);
-  assert.equal(indexHtml.includes('/src/client.ts'), false);
 
   execFileSync('pnpm', ['exec', 'vitest', '--run', 'packages/create-jiso/src/index.test.ts'], {
     cwd: new URL('..', import.meta.url),
