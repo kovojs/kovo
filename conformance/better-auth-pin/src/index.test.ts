@@ -757,6 +757,56 @@ describe('Better Auth pinned conformance', () => {
     );
   });
 
+  it('pins database-backed rate-limit metadata as an exempt schema bridge table', () => {
+    const { auth } = createRealAuth({
+      rateLimit: {
+        enabled: true,
+        storage: 'database',
+      },
+    });
+    const tables = getAuthTables(auth.options);
+    const result = annotateBetterAuthSchemaSource(
+      betterAuthSchemaSourceFixture(Object.keys(tables)),
+      tables,
+    );
+
+    expect(Object.keys(tables).sort()).toEqual([
+      'account',
+      'rateLimit',
+      'session',
+      'user',
+      'verification',
+    ]);
+    expect(Object.keys(requireAuthTable(tables, 'rateLimit').fields).sort()).toEqual([
+      'count',
+      'key',
+      'lastRequest',
+    ]);
+    expect(validateBetterAuthSchemaBridge(tables)).toEqual({
+      declaredTouchMismatches: [],
+      keyFieldMismatches: [],
+      missingTables: [],
+      ok: true,
+      pluginTableDegradations: [],
+      unbridgedTables: [],
+    });
+    expect(betterAuthSchemaBridge.rateLimit).toEqual({
+      exempt: true,
+      rationale:
+        'Better Auth database-backed rate-limit counters are adapter enforcement state; SPEC.md §10.1 forbids app queries from reading exempt tables.',
+    });
+    expect(result.annotatedTables).toEqual([
+      'account',
+      'rateLimit',
+      'session',
+      'user',
+      'verification',
+    ]);
+    expect(result.source).toContain(
+      "export const rateLimit = pgTable('rateLimit', {}, jiso({ exempt: true }));",
+    );
+  });
+
   it('maps a real Better Auth session through the Jiso session provider seam', async () => {
     const { auth } = createRealAuth();
     const signUp = await auth.api.signUpEmail({
@@ -1172,7 +1222,12 @@ describe('Better Auth pinned conformance', () => {
   });
 });
 
-function createRealAuth(options: { plugins?: Parameters<typeof betterAuth>[0]['plugins'] } = {}) {
+function createRealAuth(
+  options: {
+    plugins?: Parameters<typeof betterAuth>[0]['plugins'];
+    rateLimit?: Parameters<typeof betterAuth>[0]['rateLimit'];
+  } = {},
+) {
   const db: AuthDatabase = {
     account: [],
     session: [],
@@ -1189,6 +1244,7 @@ function createRealAuth(options: { plugins?: Parameters<typeof betterAuth>[0]['p
       enabled: true,
     },
     ...(options.plugins === undefined ? {} : { plugins: options.plugins }),
+    ...(options.rateLimit === undefined ? {} : { rateLimit: options.rateLimit }),
     secret: authSecret,
   });
 

@@ -183,6 +183,7 @@ export type BetterAuthOrganizationTable =
   | 'teamMember';
 export type BetterAuthOidcProviderTable = 'oauthAccessToken' | 'oauthApplication' | 'oauthConsent';
 export type BetterAuthJwtTable = 'jwks';
+export type BetterAuthRateLimitTable = 'rateLimit';
 export type BetterAuthSiweTable = 'walletAddress';
 export type BetterAuthTwoFactorTable = 'twoFactor';
 export type BetterAuthTable =
@@ -191,6 +192,7 @@ export type BetterAuthTable =
   | BetterAuthJwtTable
   | BetterAuthOidcProviderTable
   | BetterAuthOrganizationTable
+  | BetterAuthRateLimitTable
   | BetterAuthSiweTable
   | BetterAuthTwoFactorTable;
 
@@ -317,6 +319,11 @@ export const betterAuthSchemaBridge = {
   oauthConsent: { domain: 'auth', key: 'userId' },
   organization: { domain: 'organization', key: 'id' },
   organizationRole: { domain: 'organization', key: 'organizationId' },
+  rateLimit: {
+    exempt: true,
+    rationale:
+      'Better Auth database-backed rate-limit counters are adapter enforcement state; SPEC.md §10.1 forbids app queries from reading exempt tables.',
+  },
   session: { domain: 'auth', key: 'userId' },
   team: { domain: 'organization', key: 'organizationId' },
   teamMember: { domain: 'organization', key: 'teamId' },

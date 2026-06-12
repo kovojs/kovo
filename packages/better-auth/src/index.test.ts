@@ -344,6 +344,11 @@ describe('credential mutation helpers', () => {
       oauthConsent: { domain: 'auth', key: 'userId' },
       organization: { domain: 'organization', key: 'id' },
       organizationRole: { domain: 'organization', key: 'organizationId' },
+      rateLimit: {
+        exempt: true,
+        rationale:
+          'Better Auth database-backed rate-limit counters are adapter enforcement state; SPEC.md §10.1 forbids app queries from reading exempt tables.',
+      },
       session: { domain: 'auth', key: 'userId' },
       team: { domain: 'organization', key: 'organizationId' },
       teamMember: { domain: 'organization', key: 'teamId' },
@@ -428,7 +433,7 @@ describe('credential mutation helpers', () => {
         user: 'user',
         walletAddress: 'auth',
       },
-      exemptTables: ['deviceCode', 'jwks', 'verification'],
+      exemptTables: ['deviceCode', 'jwks', 'rateLimit', 'verification'],
       keyByTable: {
         account: 'userId',
         invitation: 'organizationId',
@@ -483,6 +488,7 @@ describe('credential mutation helpers', () => {
         oauthConsent: authTable(['userId']),
         organization: authTable(),
         organizationRole: authTable(['organizationId']),
+        rateLimit: authTable(['count', 'key', 'lastRequest']),
         session: authTable(['userId']),
         team: authTable(['organizationId']),
         teamMember: authTable(['teamId']),
@@ -908,6 +914,41 @@ describe('credential mutation helpers', () => {
         "  publicKey: text('public_key').notNull(),\n" +
         "  privateKey: text('private_key').notNull(),\n" +
         "  expiresAt: timestamp('expires_at'),\n" +
+        '}, jiso({ exempt: true }));',
+    );
+  });
+
+  it('materializes the database-backed rate-limit table as an exempt app schema.ts source fixture', () => {
+    const result = annotateBetterAuthSchemaSource(
+      [
+        "import { jiso } from '@jiso/drizzle';",
+        "import { integer, pgTable, text, timestamp } from 'drizzle-orm/pg-core';",
+        '',
+        "export const rateLimit = pgTable('rateLimit', {",
+        "  id: text('id').primaryKey(),",
+        "  key: text('key').notNull(),",
+        "  count: integer('count').notNull(),",
+        "  lastRequest: timestamp('last_request').notNull(),",
+        '});',
+        '',
+      ].join('\n'),
+      {
+        rateLimit: authTable(['count', 'key', 'lastRequest']),
+      },
+    );
+
+    expect(result.validation).toMatchObject({
+      keyFieldMismatches: [],
+      pluginTableDegradations: [],
+      unbridgedTables: [],
+    });
+    expect(result.annotatedTables).toEqual(['rateLimit']);
+    expect(result.source).toContain(
+      "export const rateLimit = pgTable('rateLimit', {\n" +
+        "  id: text('id').primaryKey(),\n" +
+        "  key: text('key').notNull(),\n" +
+        "  count: integer('count').notNull(),\n" +
+        "  lastRequest: timestamp('last_request').notNull(),\n" +
         '}, jiso({ exempt: true }));',
     );
   });
