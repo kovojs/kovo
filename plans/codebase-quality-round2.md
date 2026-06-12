@@ -185,6 +185,15 @@ Do this first or pay it on every commit.
       `node --test --test-name-pattern "P10 starter wires graph assertions into CI" tests/fw-check.node.mjs`,
       `pnpm exec vp check tests/fw-check.node.mjs plans/codebase-quality-round2.md`, and
       `git diff --check`.
+      Additional partial evidence 2026-06-12: the P10 starter/root Vite task tranche deleted the
+      bespoke `parseTemplateViteTasks` source parser from `tests/fw-check.node.mjs`, loads actual
+      Vite+ config objects through TypeScript transpilation with import stubs, and executes task
+      command sequences through `execFile` argv calls instead of `sh -c`. Same-session evidence:
+      `corepack pnpm exec vp run build`, `node --test --test-name-pattern "P10 starter wires graph assertions into CI|Conformance suites are an explicit gate" tests/fw-check.node.mjs`,
+      `corepack pnpm exec vitest --run packages/test/src/package-exports.test.ts packages/test/src/verifier.test.ts -t "package subpath exports|stable proxies|root query"`,
+      `corepack pnpm exec tsc -p examples/commerce/tsconfig.json --noEmit`,
+      `corepack pnpm exec vp check tests/fw-check.node.mjs plans/codebase-quality-round2.md`,
+      and `git diff --check`.
       Partial evidence 2026-06-12: the P10 forbidden browser architecture tranche now parses
       framework package sources with the TypeScript AST and asserts forbidden call/JSX constructs
       from structured nodes instead of grepping source text with regular expressions.
@@ -309,6 +318,13 @@ Do this first or pay it on every commit.
       fw-check slice in favor of executable command coverage plus the existing Drizzle package
       test. Same-session evidence:
       `node --test --test-name-pattern "Conformance suites are an explicit gate" tests/fw-check.node.mjs`.
+      Additional partial evidence 2026-06-12: the conformance gate now consumes the evaluated
+      root Vite+ task graph instead of a source parser, preserving the real `{ auto: true }`
+      input and executing parsed `pnpm --filter <package> test` command records without a shell.
+      Same-session evidence:
+      `node --test --test-name-pattern "P10 starter wires graph assertions into CI|Conformance suites are an explicit gate" tests/fw-check.node.mjs`,
+      `corepack pnpm exec vp check tests/fw-check.node.mjs plans/codebase-quality-round2.md`,
+      and `git diff --check`.
       Partial evidence 2026-06-11: the P1 render-equivalence tranche now imports the built
       compiler API, asserts `compileComponentModule` render-equivalence checks and
       `assertRenderEquivalence` failure behavior, then asserts the `ERROR RENDER_EQUIV` CLI

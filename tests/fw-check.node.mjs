@@ -299,87 +299,6 @@ const collectForbiddenBrowserArchitecture = (ts, fileName, source) => {
   return violations;
 };
 
-const parseTemplateViteTasks = (source) => {
-  const tasks = {};
-  let currentTask;
-  let currentArray;
-  let currentMultilineProperty;
-
-  for (const line of source.split('\n')) {
-    const indent = line.search(/\S|$/);
-    const trimmed = line.trim();
-
-    if (indent === 6) {
-      const taskMatch = /^'?([\w-]+)'?: \{$/.exec(trimmed);
-
-      if (taskMatch) {
-        currentTask = taskMatch[1];
-        currentArray = undefined;
-        currentMultilineProperty = undefined;
-        tasks[currentTask] = {};
-        continue;
-      }
-    }
-
-    if (!currentTask) continue;
-
-    if (indent === 8 && trimmed === '},') {
-      currentTask = undefined;
-      currentArray = undefined;
-      currentMultilineProperty = undefined;
-      continue;
-    }
-
-    if (currentMultilineProperty) {
-      const stringMatch = /^'([^']+)',?$/.exec(trimmed);
-      if (stringMatch) {
-        tasks[currentTask][currentMultilineProperty] = stringMatch[1];
-        currentMultilineProperty = undefined;
-        continue;
-      }
-    }
-
-    const multilinePropertyMatch = /^(command):$/.exec(trimmed);
-    if (multilinePropertyMatch) {
-      currentMultilineProperty = multilinePropertyMatch[1];
-      continue;
-    }
-
-    const commandMatch = /^command: '([^']+)',?$/.exec(trimmed);
-    if (commandMatch) {
-      tasks[currentTask].command = commandMatch[1];
-      continue;
-    }
-
-    const outputMatch = /^output: \[(.*)\],?$/.exec(trimmed);
-    if (outputMatch) {
-      tasks[currentTask].output = [...outputMatch[1].matchAll(/'([^']+)'/g)].map(
-        (match) => match[1],
-      );
-      continue;
-    }
-
-    const arrayMatch = /^(input): \[$/.exec(trimmed);
-    if (arrayMatch) {
-      currentArray = arrayMatch[1];
-      tasks[currentTask][currentArray] = [];
-      continue;
-    }
-
-    if (currentArray && trimmed === '],') {
-      currentArray = undefined;
-      continue;
-    }
-
-    const inputMatch = /^\{ pattern: '([^']+)', base: '([^']+)' \},?$/.exec(trimmed);
-    if (currentArray && inputMatch) {
-      tasks[currentTask][currentArray].push({ pattern: inputMatch[1], base: inputMatch[2] });
-    }
-  }
-
-  return tasks;
-};
-
 const parseWorkflowSteps = (source) => {
   const steps = [];
 
@@ -440,17 +359,34 @@ const parseNodeTaskCommand = (command) => {
 
 const parsePnpmFilterTestCommands = (command) => {
   assert.equal(typeof command, 'string', 'pnpm filter task command is present');
-  return command.split(' && ').map((entry) => {
-    const parts = entry.split(/\s+/);
-    assert.equal(parts.length, 4, `pnpm filter test command has four tokens: ${entry}`);
-    assert.equal(parts[0], 'pnpm');
-    assert.equal(parts[1], '--filter');
-    assert.equal(parts[3], 'test');
-    assert.equal(typeof parts[2], 'string');
-    assert.notEqual(parts[2].length, 0);
-    return { packageName: parts[2], script: 'test' };
+  return parseCommandSequence(command).map(({ args, executable, raw }) => {
+    assert.equal(executable, 'pnpm');
+    assert.equal(args.length, 3, `pnpm filter test command has three args: ${raw}`);
+    assert.equal(args[0], '--filter');
+    assert.equal(args[2], 'test');
+    assert.notEqual(args[1].length, 0);
+    return { argv: [executable, ...args], packageName: args[1], script: 'test' };
   });
 };
+
+const parseCommandSequence = (command) => {
+  assert.equal(typeof command, 'string', 'task command is present');
+  return command.split(' && ').map((raw) => {
+    const parts = raw.split(/\s+/).filter(Boolean);
+    assert.notEqual(parts.length, 0, `task command entry is not empty: ${raw}`);
+    assert.equal(
+      parts.every((part) => /^[./:@\w-]+$/.test(part)),
+      true,
+      `task command avoids shell syntax: ${raw}`,
+    );
+    return { args: parts.slice(1), executable: parts[0], raw };
+  });
+};
+
+const runCommandSequenceSync = (command, options) =>
+  parseCommandSequence(command)
+    .map(({ args, executable }) => execFileSync(executable, args, options))
+    .join('');
 
 const isLowerHex = (value) =>
   value.length > 0 && [...value].every((char) => '0123456789abcdef'.includes(char));
@@ -947,10 +883,10 @@ const typeScriptInterfaceMemberTypes = async (fileName, source, interfaceName) =
   );
 };
 
-const loadVitePlusConfig = async () => {
+const loadVitePlusConfig = async (configPath = 'vite.config.ts') => {
   const ts = await import('typescript');
   const module = { exports: {} };
-  const compiled = ts.transpileModule(await readProjectFile('vite.config.ts'), {
+  const compiled = ts.transpileModule(await readProjectFile(configPath), {
     compilerOptions: {
       module: ts.ModuleKind.CommonJS,
       target: ts.ScriptTarget.ES2022,
@@ -963,6 +899,12 @@ const loadVitePlusConfig = async () => {
     require(specifier) {
       if (specifier === 'vite-plus') {
         return { defineConfig: (config) => config };
+      }
+      if (specifier === '@tailwindcss/vite') {
+        const tailwindcss = () => ({ name: 'tailwindcss-test-stub' });
+        tailwindcss.default = tailwindcss;
+        tailwindcss.__esModule = true;
+        return tailwindcss;
       }
       assert.fail(`unexpected Vite+ config import ${specifier}`);
     },
@@ -1234,7 +1176,7 @@ process.exit(64);
     );
     await chmod(fakeFw, 0o755);
 
-    const output = execFileSync('sh', ['-c', command], {
+    const output = runCommandSequenceSync(command, {
       cwd: fixtureRoot,
       encoding: 'utf8',
       env: { ...process.env, CI: '1', PATH: `${fakeBin}:${process.env.PATH ?? ''}` },
@@ -1283,7 +1225,7 @@ process.stdout.write(\`pnpm-filter-test \${packageName}\\n\`);
     );
     await chmod(fakePnpm, 0o755);
 
-    const output = execFileSync('sh', ['-c', command], {
+    const output = runCommandSequenceSync(command, {
       cwd: new URL('..', import.meta.url),
       encoding: 'utf8',
       env: {
@@ -4246,7 +4188,6 @@ export const CartBadge = component('cart-badge', {
 void test('P10 starter wires graph assertions into CI', async () => {
   const [
     packageJsonSource,
-    viteConfigSource,
     ciWorkflow,
     starterGraphSource,
     clientSource,
@@ -4255,7 +4196,6 @@ void test('P10 starter wires graph assertions into CI', async () => {
     indexHtml,
   ] = await Promise.all([
     readProjectFile('packages/create-jiso/templates/package.json'),
-    readProjectFile('packages/create-jiso/templates/vite.config.ts'),
     readProjectFile('packages/create-jiso/templates/.github/workflows/ci.yml'),
     readProjectFile('packages/create-jiso/templates/graph.json'),
     readProjectFile('packages/create-jiso/templates/src/client.ts'),
@@ -4264,7 +4204,8 @@ void test('P10 starter wires graph assertions into CI', async () => {
     readProjectFile('packages/create-jiso/templates/index.html'),
   ]);
   const packageJson = JSON.parse(packageJsonSource);
-  const viteTasks = parseTemplateViteTasks(viteConfigSource);
+  const viteTasks = (await loadVitePlusConfig('packages/create-jiso/templates/vite.config.ts')).run
+    .tasks;
   const ciSteps = parseWorkflowSteps(ciWorkflow);
   const starterGraph = JSON.parse(starterGraphSource);
   const cartQueryExplain = fwExplain(starterGraph, { kind: 'query', target: 'cart' }).output;
@@ -6349,8 +6290,7 @@ void test('Conformance suites are an explicit gate', async () => {
     assert.ok(manifest.scripts?.test, `${directory} exposes an executable test script`);
   }
   const packageJson = JSON.parse(await readProjectFile('package.json'));
-  const viteConfig = await readProjectFile('vite.config.ts');
-  const viteTasks = parseTemplateViteTasks(viteConfig);
+  const viteTasks = (await loadVitePlusConfig()).run.tasks;
   const conformanceTaskName = parseRequiredVpTask('test:conformance', packageJson);
   const conformanceTask = viteTasks[conformanceTaskName];
   assert.ok(conformanceTask, `${conformanceTaskName} task is defined`);
@@ -6371,6 +6311,7 @@ void test('Conformance suites are an explicit gate', async () => {
     [...conformanceManifestsByName.keys()].toSorted((left, right) => left.localeCompare(right)),
   );
   assert.deepEqual(conformanceTask.input, [
+    { auto: true },
     { pattern: 'conformance/**/package.json', base: 'workspace' },
     { pattern: 'conformance/**/src/**/*.ts', base: 'workspace' },
     { pattern: 'conformance/**/docs/**', base: 'workspace' },
