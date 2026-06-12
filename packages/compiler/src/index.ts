@@ -1,12 +1,11 @@
 import type { DiagnosticCode } from '@jiso/core';
 
 import { collectQueryUpdateCoverage, collectQueryUpdatePlans } from './analyze/query-updates.js';
-import { componentCssAssetForFile, emitCssModule, type ComponentCssAsset } from './css.js';
-import type { CompilerDiagnostic } from './diagnostics.js';
+import { componentCssAssetForFile, emitCssModule } from './css.js';
 import { emitClientModule } from './emit/client.js';
 import { emitRegistryModule } from './emit/registry.js';
 import { emitServerModule, renderEquivalenceCheck, serverRenderSource } from './emit/server.js';
-import { componentGraphFact, findFragmentTargetFacts, type ComponentGraphFact } from './graph.js';
+import { componentGraphFact, findFragmentTargetFacts } from './graph.js';
 import {
   clientModuleUrl,
   clientModuleVersion,
@@ -15,7 +14,7 @@ import {
 } from './lower/handlers.js';
 import { lowerInlineAttributeDerives } from './lower/inline-derives.js';
 import { lowerNavigationSugar } from './lower/navigation.js';
-import { lowerPlatformBehaviors, type PlatformSubstitution } from './lower/platform.js';
+import { lowerPlatformBehaviors } from './lower/platform.js';
 import { lowerViewTransitions } from './lower/view-transitions.js';
 import {
   firstComponentModel,
@@ -26,12 +25,8 @@ import { replaceExtension } from './shared.js';
 import { isCompilerIrArtifact, validateAuthoringSurface } from './validate/authoring-surface.js';
 import { validatePackageComponentPrefixes } from './validate/package-prefixes.js';
 import { collectCompilerDiagnostics } from './validate/pipeline.js';
-import type {
-  CompileComponentOptions,
-  QueryUpdateCoverageFact,
-  QueryUpdatePlanFact,
-  RenderEquivalenceCheck,
-} from './types.js';
+import type { CompileComponentOptions, CompileResult, EmittedFile } from './types.js';
+import { createEmptyCompileResult } from './types.js';
 import { createJisoVitePlugin, type JisoVitePlugin, type JisoVitePluginOptions } from './vite.js';
 
 export type { DiagnosticCode };
@@ -69,6 +64,8 @@ export type {
 export { collectCssAssetManifest, dedupeCss, scopeComponentCss, selectCssAssets } from './css.js';
 export type {
   CompileComponentOptions,
+  CompileResult,
+  EmittedFile,
   PackageComponentPrefixFact,
   QueryDeriveFact,
   QueryShape,
@@ -79,46 +76,9 @@ export type {
   QueryUpdateCoverageFact,
   QueryUpdatePlanFact,
   RenderEquivalenceCheck,
+  ViewTransitionStamp,
 } from './types.js';
-export { queryShapesFromFacts } from './types.js';
-
-export interface EmittedFile {
-  fileName: string;
-  kind: 'client' | 'css' | 'registry' | 'server';
-  source: string;
-}
-
-export interface CompileResult {
-  componentGraphFacts: readonly ComponentGraphFact[];
-  cssAssets: readonly ComponentCssAsset[];
-  diagnostics: readonly CompilerDiagnostic[];
-  files: readonly EmittedFile[];
-  handlerExports: readonly string[];
-  platformSubstitutions: readonly PlatformSubstitution[];
-  queryUpdatePlans: readonly QueryUpdatePlanFact[];
-  renderEquivalenceChecks: readonly RenderEquivalenceCheck[];
-  updateCoverage: readonly QueryUpdateCoverageFact[];
-  viewTransitions: ViewTransitionStamp[];
-}
-
-export function createEmptyCompileResult(): CompileResult {
-  return {
-    componentGraphFacts: [],
-    cssAssets: [],
-    diagnostics: [],
-    files: [],
-    handlerExports: [],
-    platformSubstitutions: [],
-    queryUpdatePlans: [],
-    renderEquivalenceChecks: [],
-    updateCoverage: [],
-    viewTransitions: [],
-  };
-}
-
-export interface ViewTransitionStamp {
-  name: string;
-}
+export { createEmptyCompileResult, queryShapesFromFacts } from './types.js';
 
 const irHeader = '// @jiso-ir';
 

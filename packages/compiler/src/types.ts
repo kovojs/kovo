@@ -1,4 +1,7 @@
-import type { RegistryFacts } from './graph.js';
+import type { ComponentCssAsset } from './css.js';
+import type { CompilerDiagnostic } from './diagnostics.js';
+import type { ComponentGraphFact, RegistryFacts } from './graph.js';
+import type { PlatformSubstitution } from './lower/platform.js';
 
 export interface CompileComponentOptions {
   fileName: string;
@@ -8,6 +11,44 @@ export interface CompileComponentOptions {
   registryFacts?: RegistryFacts;
   source: string;
   sourceProvenance?: 'app' | 'compiler-emitted';
+}
+
+export interface EmittedFile {
+  fileName: string;
+  kind: 'client' | 'css' | 'registry' | 'server';
+  source: string;
+}
+
+export interface CompileResult {
+  componentGraphFacts: readonly ComponentGraphFact[];
+  cssAssets: readonly ComponentCssAsset[];
+  diagnostics: readonly CompilerDiagnostic[];
+  files: readonly EmittedFile[];
+  handlerExports: readonly string[];
+  platformSubstitutions: readonly PlatformSubstitution[];
+  queryUpdatePlans: readonly QueryUpdatePlanFact[];
+  renderEquivalenceChecks: readonly RenderEquivalenceCheck[];
+  updateCoverage: readonly QueryUpdateCoverageFact[];
+  viewTransitions: readonly ViewTransitionStamp[];
+}
+
+export function createEmptyCompileResult(): CompileResult {
+  return {
+    componentGraphFacts: [],
+    cssAssets: [],
+    diagnostics: [],
+    files: [],
+    handlerExports: [],
+    platformSubstitutions: [],
+    queryUpdatePlans: [],
+    renderEquivalenceChecks: [],
+    updateCoverage: [],
+    viewTransitions: [],
+  };
+}
+
+export interface ViewTransitionStamp {
+  name: string;
 }
 
 export interface PackageComponentPrefixFact {

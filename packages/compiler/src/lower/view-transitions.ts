@@ -5,10 +5,7 @@ import {
   type JsxElementModel,
 } from '../scan/parse.js';
 import { escapeAttribute, removeJsxAttribute } from '../shared.js';
-
-interface ViewTransitionStamp {
-  name: string;
-}
+import type { ViewTransitionStamp } from '../types.js';
 
 export function lowerViewTransitions(
   source: string,
