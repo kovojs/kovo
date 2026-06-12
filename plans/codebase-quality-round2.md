@@ -1142,6 +1142,18 @@ must be "FW406 unresolved," never "silently wrong."
       `pnpm exec vitest --run conformance/drizzle-pin/src/index.test.ts`,
       `pnpm exec vp check packages/drizzle/src/index.ts packages/drizzle/src/index.test.ts plans/codebase-quality-round2.md`,
       and `git diff --check`.
+      Additional evidence 2026-06-12: source-mode namespace and named table imports now scope
+      touch/query table and column-shape facts to the referenced relative source module instead
+      of treating any `import * as schema` or named import as proof for every same-named table
+      across the input set. `packages/drizzle/src/index.test.ts` covers same-identifier schema
+      files where the unrelated module and private namespace members must not fabricate extra
+      domains or projection shapes, preserving SPEC §10-§11's explicit static-fact contract.
+      Same-session evidence:
+      `pnpm exec vitest --run packages/drizzle/src/index.test.ts -t "namespace-imported"`,
+      `pnpm exec vitest --run packages/drizzle/src`,
+      `pnpm exec vitest --run conformance/drizzle-pin/src/index.test.ts`,
+      `pnpm exec vp check packages/drizzle/src/index.ts packages/drizzle/src/index.test.ts plans/codebase-quality-round2.md`,
+      and `git diff --check`.
       Additional evidence 2026-06-12: source-mode query definition discovery now walks ts-morph
       `VariableDeclaration` initializers instead of regex-scanning whole files for
       `query("...")`, so comments, strings, and templates containing exported query-like

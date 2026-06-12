@@ -141,6 +141,8 @@ export interface TouchGraphProjectOptions {
 
 interface ExtractedTable {
   annotation: JisoTableAnnotation & { name: string };
+  columns: Readonly<Record<string, QueryShape>>;
+  exported: boolean;
 }
 
 export function diagnosticsForQueryFacts(facts: readonly QueryFact[]): TouchGraphDiagnostic[] {
@@ -155,28 +157,19 @@ function extractTouchGraphFromPreparedFiles(
   files: readonly SourceFileInput[],
   functionsForFile: (file: SourceFileInput) => ExtractedFunction[],
 ): TouchGraph {
-  const tables = new Map<string, ExtractedTable[]>();
+  const sourceContext = sourceModuleContext(files);
   const unresolvedIdentifiers = new Set<string>();
   const graph: Record<string, TouchGraphEntry> = {};
 
   for (const file of files) {
-    for (const table of extractTables(file.source)) {
-      appendTable(tables, table.identifier, { annotation: table });
-    }
-  }
-  for (const file of files) {
-    for (const alias of importExportTableAliases(file.source)) {
-      appendTableEntries(tables, alias.local, tables.get(alias.imported) ?? []);
-    }
-  }
-  for (const file of files) {
-    for (const identifier of extractUnresolvedConditionalIdentifiers(file.source, tables)) {
+    const fileTables = tablesForFile(file, sourceContext);
+    for (const identifier of extractUnresolvedConditionalIdentifiers(file.source, fileTables)) {
       unresolvedIdentifiers.add(identifier);
     }
   }
 
   for (const file of files) {
-    const fileTables = tablesForFile(file.source, tables);
+    const fileTables = tablesForFile(file, sourceContext);
     const functions = functionsForFile(file);
     const functionsByName = new Map(functions.map((fn) => [fn.name, fn]));
     const localFunctionNames = new Set(functionsByName.keys());
@@ -520,28 +513,17 @@ function projectTableNameForNode(
 }
 
 export function extractQueryFactsFromSource(files: readonly SourceFileInput[]): QueryFact[] {
-  const tables = new Map<string, ExtractedTable[]>();
-  const sourceColumnShapes = sourceColumnShapesForFiles(files);
+  const sourceContext = sourceModuleContext(files);
   const facts: QueryFact[] = [];
 
   for (const file of files) {
-    for (const table of extractTables(file.source)) {
-      appendTable(tables, table.identifier, { annotation: table });
-    }
-  }
-  for (const file of files) {
-    for (const alias of importExportTableAliases(file.source)) {
-      appendTableEntries(tables, alias.local, tables.get(alias.imported) ?? []);
-    }
-  }
-
-  for (const file of files) {
+    const fileTables = tablesForFile(file, sourceContext);
     const columnShapes = {
-      ...sourceColumnShapesForFile(file.source, sourceColumnShapes),
+      ...sourceColumnShapesForTables(fileTables),
       ...file.columnShapes,
     };
     for (const query of extractQueryDefinitions(file.source, columnShapes)) {
-      const reads = queryReadDomains(query.tableExpressions, tables);
+      const reads = queryReadDomains(query.tableExpressions, fileTables);
       const site = `${file.fileName}:${lineForIndex(file.source, query.index)}`;
       const diagnostics = opaqueProjectionDiagnostics(
         query.query,
@@ -551,10 +533,10 @@ export function extractQueryFactsFromSource(files: readonly SourceFileInput[]): 
       )
         .concat(unresolvedProjectionDiagnostics(query.query, query.unresolvedPaths, site))
         .concat(query.diagnostics?.map((diagnostic) => ({ ...diagnostic, site })) ?? [])
-        .concat(exemptQueryReadDiagnostics(query.tableExpressions, tables, site));
+        .concat(exemptQueryReadDiagnostics(query.tableExpressions, fileTables, site));
       facts.push({
         ...(diagnostics.length > 0 ? { diagnostics } : {}),
-        ...queryInstanceKey(query.instanceKeyComparisons, tables),
+        ...queryInstanceKey(query.instanceKeyComparisons, fileTables),
         query: query.query,
         reads,
         shape: query.shape,
@@ -566,66 +548,16 @@ export function extractQueryFactsFromSource(files: readonly SourceFileInput[]): 
   return facts.sort((left, right) => left.query.localeCompare(right.query));
 }
 
-function sourceColumnShapesForFiles(
-  files: readonly SourceFileInput[],
-): ReadonlyMap<string, Readonly<Record<string, QueryShape>>> {
-  const shapes = new Map<string, Record<string, QueryShape>>();
-
-  for (const file of files) {
-    const declarations = variableDeclarationsFromSource(file.source);
-    const localShapes = new Map<string, Record<string, QueryShape>>();
-
-    for (const { identifier, table } of declarations) {
-      if (!table) continue;
-
-      const columns = table.columns;
-      if (Object.keys(columns).length === 0) continue;
-
-      const tableName = table.name;
-      localShapes.set(identifier, columns);
-      shapes.set(identifier, columns);
-      shapes.set(tableName, columns);
-    }
-
-    for (const declaration of declarations) {
-      if (localShapes.has(declaration.identifier)) continue;
-
-      for (const target of declaration.aliasTargets) {
-        const columns = localShapes.get(target);
-        if (!columns) continue;
-
-        localShapes.set(declaration.identifier, columns);
-        shapes.set(declaration.identifier, columns);
-      }
-    }
-  }
-
-  for (const file of files) {
-    for (const alias of importExportTableAliases(file.source)) {
-      const columns = shapes.get(alias.imported);
-      if (columns) shapes.set(alias.local, columns);
-    }
-  }
-
-  return shapes;
-}
-
-function sourceColumnShapesForFile(
-  source: string,
-  shapes: ReadonlyMap<string, Readonly<Record<string, QueryShape>>>,
+function sourceColumnShapesForTables(
+  tables: ReadonlyMap<string, readonly ExtractedTable[]>,
 ): Readonly<Record<string, QueryShape>> {
   const scoped: Record<string, QueryShape> = {};
 
-  for (const [identifier, columns] of shapes) {
-    for (const [column, shape] of Object.entries(columns)) {
-      scoped[`${identifier}.${column}`] = shape;
-    }
-  }
-
-  for (const namespace of namespaceImportAliases(source)) {
-    for (const [identifier, columns] of shapes) {
-      for (const [column, shape] of Object.entries(columns)) {
-        scoped[`${namespace}.${identifier}.${column}`] = shape;
+  for (const [identifier, entries] of tables) {
+    for (const table of entries) {
+      for (const [column, shape] of Object.entries(table.columns)) {
+        scoped[`${identifier}.${column}`] = shape;
+        scoped[`${table.annotation.name}.${column}`] = shape;
       }
     }
   }
@@ -933,6 +865,8 @@ function tableNameArgument(initializer: Node): string | undefined {
 }
 
 type ExtractedTableDeclaration = JisoTableAnnotation & {
+  columns: Readonly<Record<string, QueryShape>>;
+  exported: boolean;
   identifier: string;
   name: string;
 };
@@ -1798,10 +1732,12 @@ function extractTables(source: string): ExtractedTableDeclaration[] {
   const byIdentifier = new Map<string, ExtractedTableDeclaration[]>();
   const declarations = variableDeclarationsFromSource(source);
 
-  for (const { identifier, table: extractedTable } of declarations) {
+  for (const { exported, identifier, table: extractedTable } of declarations) {
     if (!extractedTable) continue;
     const table = {
       identifier,
+      columns: extractedTable.columns,
+      exported,
       name: extractedTable.name,
       ...extractedTable.annotation,
     };
@@ -1816,6 +1752,8 @@ function extractTables(source: string): ExtractedTableDeclaration[] {
       for (const table of byIdentifier.get(target) ?? []) {
         const alias = {
           identifier: declaration.identifier,
+          columns: table.columns,
+          exported: declaration.exported,
           name: table.name,
           ...copyTableAnnotation(table),
         };
@@ -1880,6 +1818,7 @@ function booleanPropertyFromObject(object: Node, name: string): boolean | undefi
 interface SourceVariableDeclaration {
   aliasTargets: readonly string[];
   conditionalTargets: readonly (string | undefined)[];
+  exported: boolean;
   identifier: string;
   table?: {
     annotation: JisoTableAnnotation;
@@ -1902,6 +1841,7 @@ function variableDeclarationsFromSource(source: string): SourceVariableDeclarati
         {
           aliasTargets: aliasTargetsFromInitializer(initializer),
           conditionalTargets: conditionalTargetsFromInitializer(initializer),
+          exported: variableDeclarationIsExported(declaration),
           identifier: name.getText(),
           ...(annotation
             ? {
@@ -1915,6 +1855,17 @@ function variableDeclarationsFromSource(source: string): SourceVariableDeclarati
         },
       ];
     }),
+  );
+}
+
+function variableDeclarationIsExported(
+  declaration: ReturnType<SourceFile['getVariableDeclarations']>[number],
+): boolean {
+  return (
+    declaration
+      .getVariableStatement()
+      ?.getModifiers()
+      .some((modifier) => modifier.getKind() === SyntaxKind.ExportKeyword) ?? false
   );
 }
 
@@ -1939,61 +1890,255 @@ function withParsedSourceFile<T>(source: string, visit: (sourceFile: SourceFile)
   }
 }
 
-function tablesForFile(
-  source: string,
-  tables: ReadonlyMap<string, readonly ExtractedTable[]>,
-): Map<string, ExtractedTable[]> {
-  const scoped = new Map([...tables].map(([identifier, entries]) => [identifier, [...entries]]));
+interface SourceModuleContext {
+  fileNames: ReadonlySet<string>;
+  filesByName: ReadonlyMap<string, SourceFileInput>;
+  tablesByFileName: ReadonlyMap<string, ReadonlyMap<string, readonly ExtractedTable[]>>;
+}
 
-  for (const namespace of namespaceImportAliases(source)) {
-    for (const [identifier, entries] of tables) {
-      appendTableEntries(scoped, `${namespace}.${identifier}`, entries);
+interface TableAlias {
+  imported: string;
+  local: string;
+  moduleSpecifier: string;
+}
+
+interface NamespaceImportAlias {
+  local: string;
+  moduleSpecifier: string;
+}
+
+function sourceModuleContext(files: readonly SourceFileInput[]): SourceModuleContext {
+  const tablesByFileName = new Map<string, Map<string, ExtractedTable[]>>();
+
+  for (const file of files) {
+    const tables = new Map<string, ExtractedTable[]>();
+    for (const table of extractTables(file.source)) {
+      appendTable(tables, table.identifier, {
+        annotation: table,
+        columns: table.columns,
+        exported: table.exported,
+      });
+    }
+    tablesByFileName.set(file.fileName, tables);
+  }
+
+  return {
+    fileNames: new Set(files.map((file) => file.fileName)),
+    filesByName: new Map(files.map((file) => [file.fileName, file])),
+    tablesByFileName,
+  };
+}
+
+function tablesForFile(
+  file: SourceFileInput,
+  context: SourceModuleContext,
+): Map<string, ExtractedTable[]> {
+  // SPEC §10-§11: imported table facts are proven from the referenced source module.
+  const scoped = cloneTableMap(context.tablesByFileName.get(file.fileName) ?? new Map());
+
+  for (const namespace of namespaceImportAliases(file.source)) {
+    const moduleFileName = resolveRelativeModuleFileName(
+      file.fileName,
+      namespace.moduleSpecifier,
+      context.fileNames,
+    );
+    if (!moduleFileName) continue;
+
+    for (const [identifier, entries] of exportedTablesForFile(moduleFileName, context)) {
+      appendTableEntries(scoped, `${namespace.local}.${identifier}`, entries);
     }
   }
-  for (const alias of importExportTableAliases(source)) {
-    appendTableEntries(scoped, alias.local, tables.get(alias.imported) ?? []);
+  for (const alias of importTableAliasesForSource(file.source)) {
+    const moduleFileName = resolveRelativeModuleFileName(
+      file.fileName,
+      alias.moduleSpecifier,
+      context.fileNames,
+    );
+    if (!moduleFileName) continue;
+
+    appendTableEntries(
+      scoped,
+      alias.local,
+      tableEntriesForExport(moduleFileName, alias.imported, context),
+    );
   }
 
   return scoped;
 }
 
-function namespaceImportAliases(source: string): string[] {
+function cloneTableMap(
+  tables: ReadonlyMap<string, readonly ExtractedTable[]>,
+): Map<string, ExtractedTable[]> {
+  return new Map([...tables].map(([identifier, entries]) => [identifier, [...entries]]));
+}
+
+function exportedTableMap(
+  tables: ReadonlyMap<string, readonly ExtractedTable[]>,
+): Map<string, ExtractedTable[]> {
+  const exported = new Map<string, ExtractedTable[]>();
+
+  for (const [identifier, entries] of tables) {
+    const tableExports = entries.filter((entry) => entry.exported);
+    if (tableExports.length > 0) exported.set(identifier, tableExports);
+  }
+
+  return exported;
+}
+
+function exportedTablesForFile(
+  fileName: string,
+  context: SourceModuleContext,
+  seen = new Set<string>(),
+): Map<string, ExtractedTable[]> {
+  if (seen.has(fileName)) return new Map();
+  seen.add(fileName);
+
+  const exported = exportedTableMap(context.tablesByFileName.get(fileName) ?? new Map());
+  const file = context.filesByName.get(fileName);
+  if (!file) return exported;
+
+  for (const alias of exportTableAliasesForSource(file.source)) {
+    const moduleFileName = resolveRelativeModuleFileName(
+      fileName,
+      alias.moduleSpecifier,
+      context.fileNames,
+    );
+    if (!moduleFileName) continue;
+
+    appendTableEntries(
+      exported,
+      alias.local,
+      tableEntriesForExport(moduleFileName, alias.imported, context, seen),
+    );
+  }
+
+  return exported;
+}
+
+function tableEntriesForExport(
+  fileName: string,
+  exportedName: string,
+  context: SourceModuleContext,
+  seen = new Set<string>(),
+): readonly ExtractedTable[] {
+  const local = context.tablesByFileName.get(fileName)?.get(exportedName);
+  const localExports = local?.filter((entry) => entry.exported) ?? [];
+  if (localExports.length > 0) return localExports;
+
+  const file = context.filesByName.get(fileName);
+  if (!file || seen.has(fileName)) return [];
+  seen.add(fileName);
+
+  for (const alias of exportTableAliasesForSource(file.source)) {
+    if (alias.local !== exportedName) continue;
+
+    const moduleFileName = resolveRelativeModuleFileName(
+      fileName,
+      alias.moduleSpecifier,
+      context.fileNames,
+    );
+    if (!moduleFileName) continue;
+
+    const entries = tableEntriesForExport(moduleFileName, alias.imported, context, seen);
+    if (entries.length > 0) return entries;
+  }
+
+  return [];
+}
+
+function resolveRelativeModuleFileName(
+  fromFileName: string,
+  moduleSpecifier: string,
+  fileNames: ReadonlySet<string>,
+): string | undefined {
+  if (!moduleSpecifier.startsWith('.')) return undefined;
+
+  const directory = fromFileName.includes('/')
+    ? fromFileName.slice(0, fromFileName.lastIndexOf('/'))
+    : '';
+  const base = normalizeModulePath(directory ? `${directory}/${moduleSpecifier}` : moduleSpecifier);
+  const candidates = [
+    base,
+    `${base}.ts`,
+    `${base}.tsx`,
+    `${base}.js`,
+    `${base}.jsx`,
+    `${base}/index.ts`,
+    `${base}/index.tsx`,
+    `${base}/index.js`,
+    `${base}/index.jsx`,
+  ];
+
+  return candidates.find((candidate) => fileNames.has(candidate));
+}
+
+function normalizeModulePath(path: string): string {
+  const parts: string[] = [];
+
+  for (const part of path.split('/')) {
+    if (!part || part === '.') continue;
+    if (part === '..') {
+      parts.pop();
+      continue;
+    }
+    parts.push(part);
+  }
+
+  return parts.join('/');
+}
+
+function namespaceImportAliases(source: string): NamespaceImportAlias[] {
   return withParsedSourceFile(source, (sourceFile) =>
-    sourceFile
-      .getImportDeclarations()
-      .flatMap((declaration) => declaration.getNamespaceImport()?.getText() ?? []),
+    sourceFile.getImportDeclarations().flatMap((declaration) => {
+      const local = declaration.getNamespaceImport()?.getText();
+      const moduleSpecifier = declaration.getModuleSpecifierValue();
+      return local ? [{ local, moduleSpecifier }] : [];
+    }),
   );
 }
 
-function importExportTableAliases(source: string): { imported: string; local: string }[] {
-  return withParsedSourceFile(source, (sourceFile) => [
-    ...importTableAliases(sourceFile),
-    ...exportTableAliases(sourceFile),
-  ]);
+function importTableAliasesForSource(source: string): TableAlias[] {
+  return withParsedSourceFile(source, importTableAliases);
 }
 
-function importTableAliases(sourceFile: SourceFile): { imported: string; local: string }[] {
-  const aliases: { imported: string; local: string }[] = [];
+function exportTableAliasesForSource(source: string): TableAlias[] {
+  return withParsedSourceFile(source, exportTableAliases);
+}
+
+function importTableAliases(sourceFile: SourceFile): TableAlias[] {
+  const aliases: TableAlias[] = [];
 
   for (const declaration of sourceFile.getImportDeclarations()) {
+    const moduleSpecifier = declaration.getModuleSpecifierValue();
     for (const specifier of declaration.getNamedImports()) {
       const alias = specifier.getAliasNode()?.getText();
       const imported = specifier.getNameNode().getText();
-      if (alias && alias !== imported) aliases.push({ imported, local: alias });
+      aliases.push({
+        imported,
+        local: alias && alias !== imported ? alias : imported,
+        moduleSpecifier,
+      });
     }
   }
 
   return aliases;
 }
 
-function exportTableAliases(sourceFile: SourceFile): { imported: string; local: string }[] {
-  const aliases: { imported: string; local: string }[] = [];
+function exportTableAliases(sourceFile: SourceFile): TableAlias[] {
+  const aliases: TableAlias[] = [];
 
   for (const declaration of sourceFile.getExportDeclarations()) {
+    const moduleSpecifier = declaration.getModuleSpecifierValue();
+    if (!moduleSpecifier) continue;
+
     for (const specifier of declaration.getNamedExports()) {
       const alias = specifier.getAliasNode()?.getText();
       const imported = specifier.getNameNode().getText();
-      if (alias && alias !== imported) aliases.push({ imported, local: alias });
+      aliases.push({
+        imported,
+        local: alias && alias !== imported ? alias : imported,
+        moduleSpecifier,
+      });
     }
   }
 

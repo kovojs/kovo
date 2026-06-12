@@ -928,6 +928,56 @@ export interface CommerceInvalidationSets {
     ]);
   });
 
+  it('scopes namespace-imported query tables to the referenced source module', () => {
+    const facts = extractQueryFactsFromSource([
+      {
+        fileName: 'cart.schema.ts',
+        source: `
+          export const products = pgTable("cart_products", {
+            id: text("id").primaryKey(),
+          }, jiso({ domain: "cart", key: "id" }));
+        `,
+      },
+      {
+        fileName: 'order.schema.ts',
+        source: `
+          export const products = pgTable("order_products", {
+            id: integer("id").primaryKey(),
+          }, jiso({ domain: "order", key: "id" }));
+        `,
+      },
+      {
+        fileName: 'cart.queries.ts',
+        source: `
+          import * as cartSchema from "./cart.schema";
+
+          export const cartProductQuery = query("cart/product", {
+            load(input, db) {
+              return db.select({
+                id: cartSchema.products.id,
+              }).from(cartSchema.products).where(eq(cartSchema.products.id, input.id));
+            },
+          });
+        `,
+      },
+    ]);
+
+    expect(facts).toEqual([
+      {
+        instanceKey: {
+          domain: 'cart',
+          key: 'arg:id',
+        },
+        query: 'cart/product',
+        reads: ['cart'],
+        shape: {
+          id: 'string',
+        },
+        site: 'cart.queries.ts:4',
+      },
+    ]);
+  });
+
   it('reports FW411 when a query read set includes an exempt table', () => {
     const facts = extractQueryFactsFromSource([
       {
@@ -2828,6 +2878,84 @@ export interface CommerceInvalidationSets {
           },
         ],
         unresolved: [],
+      },
+    });
+  });
+
+  it('does not resolve namespace-imported table identifiers from unrelated source modules', () => {
+    const graph = extractTouchGraphFromSource([
+      {
+        fileName: 'cart.schema.ts',
+        source: `
+          export const products = pgTable("cart_products", {}, jiso({ domain: "cart", key: "id" }));
+        `,
+      },
+      {
+        fileName: 'order.schema.ts',
+        source: `
+          export const products = pgTable("order_products", {}, jiso({ domain: "order", key: "id" }));
+        `,
+      },
+      {
+        fileName: 'cart.domain.ts',
+        source: `
+          import * as cartSchema from "./cart.schema";
+
+          export async function syncProduct(db, productId) {
+            await db.update(cartSchema.products).set({ reserved: true }).where(eq(cartSchema.products.id, productId));
+          }
+        `,
+      },
+    ]);
+
+    expect(graph).toEqual({
+      syncProduct: {
+        reads: [],
+        touches: [
+          {
+            domain: 'cart',
+            keys: 'arg:productId',
+            site: 'cart.domain.ts:5',
+            via: 'cart_products',
+          },
+        ],
+        unresolved: [],
+      },
+    });
+  });
+
+  it('does not resolve private table declarations through namespace imports', () => {
+    const graph = extractTouchGraphFromSource([
+      {
+        fileName: 'cart.schema.ts',
+        source: `
+          const hiddenProducts = pgTable("hidden_products", {}, jiso({ domain: "hidden", key: "id" }));
+          export const products = pgTable("products", {}, jiso({ domain: "product", key: "id" }));
+        `,
+      },
+      {
+        fileName: 'product.domain.ts',
+        source: `
+          import * as schema from "./cart.schema";
+
+          export async function syncProduct(db, productId) {
+            await db.update(schema.hiddenProducts).set({ reserved: true }).where(eq(schema.hiddenProducts.id, productId));
+          }
+        `,
+      },
+    ]);
+
+    expect(graph).toEqual({
+      syncProduct: {
+        reads: [],
+        touches: [],
+        unresolved: [
+          {
+            code: 'FW406',
+            message: 'Statically un-analyzable write site; manual touches required.',
+            site: 'product.domain.ts:5',
+          },
+        ],
       },
     });
   });
