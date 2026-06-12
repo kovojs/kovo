@@ -252,6 +252,13 @@ Do this first or pay it on every commit.
       through a regex shape check. Same-session evidence:
       `node --test --test-name-pattern "Conformance suites are an explicit gate" tests/fw-check.node.mjs`
       and `pnpm exec vp check tests/fw-check.node.mjs plans/codebase-quality-round2.md`.
+      Additional partial evidence 2026-06-12: the conformance Vite command assertion now parses
+      `pnpm --filter <package> test` entries into command records and asserts the package/script
+      semantics against discovered manifests instead of extracting package names with a command
+      regex. Same-session evidence:
+      `node --test --test-name-pattern "Conformance suites are an explicit gate" tests/fw-check.node.mjs`,
+      `pnpm exec vp check tests/fw-check.node.mjs plans/codebase-quality-round2.md`, and
+      `git diff --check`.
       Partial evidence 2026-06-11: the P1 render-equivalence tranche now imports the built
       compiler API, asserts `compileComponentModule` render-equivalence checks and
       `assertRenderEquivalence` failure behavior, then asserts the `ERROR RENDER_EQUIV` CLI

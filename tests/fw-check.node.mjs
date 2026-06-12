@@ -429,6 +429,20 @@ const parseNodeTaskCommand = (command) => {
   return { modulePath: match[1] };
 };
 
+const parsePnpmFilterTestCommands = (command) => {
+  assert.equal(typeof command, 'string', 'pnpm filter task command is present');
+  return command.split(' && ').map((entry) => {
+    const parts = entry.split(/\s+/);
+    assert.equal(parts.length, 4, `pnpm filter test command has four tokens: ${entry}`);
+    assert.equal(parts[0], 'pnpm');
+    assert.equal(parts[1], '--filter');
+    assert.equal(parts[3], 'test');
+    assert.equal(typeof parts[2], 'string');
+    assert.notEqual(parts[2].length, 0);
+    return { packageName: parts[2], script: 'test' };
+  });
+};
+
 const assertOrderedIncludes = (items, before, after) => {
   const beforeIndex = items.indexOf(before);
   const afterIndex = items.indexOf(after);
@@ -5910,19 +5924,18 @@ void test('Conformance suites are an explicit gate', async () => {
   const packageJson = JSON.parse(await readProjectFile('package.json'));
   const viteConfig = await readProjectFile('vite.config.ts');
   const viteTasks = parseTemplateViteTasks(viteConfig);
-  const conformanceTaskPackages = viteTasks.conformance.command
-    .split(' && ')
-    .map((command) => /^pnpm --filter ([^\s]+) test$/.exec(command))
-    .map((match) => match?.[1]);
+  const conformanceTaskCommands = parsePnpmFilterTestCommands(viteTasks.conformance.command);
   assert.equal(
-    conformanceTaskPackages.every((packageName) => packageName),
+    conformanceTaskCommands.every((entry) => entry.script === 'test'),
     true,
     'conformance task runs package tests through pnpm filters',
   );
   assert.equal(packageJson.scripts['test:conformance'], 'vp run conformance');
   assert.ok(packageJson.scripts.acceptance.split(' && ').includes('pnpm run test:conformance'));
   assert.deepEqual(
-    conformanceTaskPackages.toSorted((left, right) => left.localeCompare(right)),
+    conformanceTaskCommands
+      .map((entry) => entry.packageName)
+      .toSorted((left, right) => left.localeCompare(right)),
     [...conformanceManifestsByName.keys()].toSorted((left, right) => left.localeCompare(right)),
   );
   assert.deepEqual(viteTasks.conformance.input, [
