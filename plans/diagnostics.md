@@ -1,6 +1,6 @@
 # Diagnostics Surfacing — dev loop, build gate, and agent surface
 
-Status: not started; designed 2026-06-11
+Status: in progress; designed 2026-06-11
 Scope: how FW diagnostics reach humans and agents — the Vite dev transform, the build/static-export
 gate, dev-mode error documents, and an MCP surface. No new FW codes and no changes to diagnostic
 content or severities (SPEC §11.3 owns those); `fw check`/`fw explain` semantics and their frozen
@@ -8,8 +8,12 @@ content or severities (SPEC §11.3 owns those); `fw check`/`fw explain` semantic
 
 ## Progress checklist
 
-- [ ] SPEC PR: normative surfacing policy (severity → blocking behavior per surface) — likely a
-      short §5.2/§5.3 addition; behavior change, so SPEC text lands before or with V1.
+- [x] SPEC PR: normative surfacing policy (severity → blocking behavior per surface) landed.
+      Evidence 2026-06-12: SPEC §11.3 now makes shared `diagnosticDefinitions` the source of
+      severity, states that `error` blocks Vite dev transform, build, and static export, requires
+      dev teaching-error documents with HTTP 500 for failed-module page/fragment/mutation requests,
+      keeps `warn`/`lint`/`notice` non-blocking, and defines MCP as a structured rendering/query
+      surface over existing compile/check/explain diagnostics rather than a second channel.
 - [x] V1 Vite dev: `transform` fails on `error`-severity diagnostics with formatted teaching
       errors (`file:line:col`, message, help/fix menu), surfaced by Vite's overlay + terminal.
 - [x] V2 Vite dev: non-blocking channel for `warn`/`lint`/`notice` diagnostics.

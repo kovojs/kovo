@@ -981,6 +981,17 @@ Dev server and the test harness wrap `db`; every executed statement is parsed (`
 | FW410 | error      | Opaque query projection (`sql<T>`, raw SQL) — declared output schema required, shape runtime-verified (§10.2) |
 | FW411 | error      | Query read set includes an `exempt` table — exemption is write-side only (§10.1), runtime-verified (§11.2)    |
 
+The shared `diagnosticDefinitions` registry is the source of each diagnostic's severity; surfaces
+must not override severity or invent local blocking policies. A diagnostic with `error` severity
+blocks the Vite dev transform by throwing a teaching error rendered by Vite's overlay and terminal,
+blocks build and static export before output is written, and makes dev-mode page, fragment, or
+mutation requests that depend on the failed module return a server-rendered teaching-error
+document with HTTP 500. `warn`, `lint`, and `notice` diagnostics are non-blocking on dev transform,
+build, and static export; they may be summarized or streamed through the surface's non-blocking
+diagnostic channel, but they do not trigger dev teaching-error documents. MCP tools expose the same
+structured diagnostics (code, severity, message, help, and position when available) from the
+compile/check/explain APIs; MCP is a rendering/query surface, not a second diagnostic channel.
+
 ### 11.4 The verification surface (the Keppo contract)
 
 For a Jiso app, the following are checkable **without executing a browser**:
