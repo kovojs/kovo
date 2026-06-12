@@ -2640,6 +2640,13 @@ Verification: server vitest + wire fixtures byte-for-byte acceptance.
       `corepack pnpm exec vitest --run packages/test/src`,
       `corepack pnpm exec vp check packages/test/src/index.ts packages/test/src/harness.ts packages/test/src/harness.test.ts packages/test/src/test-case.ts packages/test/src/test-case.test.ts plans/codebase-quality-round2.md`,
       and `git diff --check`.
+      Additional evidence 2026-06-12: parser-specific fragment cases for quoted attributes,
+      nested same-tag targets, nested explicit `fw-fragment` elements, and non-target `fw-c` /
+      `fw-deps` stamps moved from harness-backed page assertions into
+      `packages/test/src/html-fragment.test.ts`; `page.test.ts` now covers the page assertion
+      wrapper and harness page path. Same-session evidence:
+      `corepack pnpm exec vitest --run packages/test/src/html-fragment.test.ts packages/test/src/page.test.ts`
+      and `corepack pnpm exec vitest --run packages/test/src`.
 - [ ] **MED — Commerce example: one source of truth.** `cartQuery.load` returns a constant while
       `loadCartQuery(db)` does the real read (app.ts:123-126 vs :280-284);
       `productGridQuery.load` conjures a fresh `createCommerceDb()` (:161); the committed
@@ -3178,6 +3185,14 @@ As each phase splits a source module, split its tests in the same commit.
       `corepack pnpm exec vitest --run packages/test/src/html-fragment.test.ts packages/test/src/page.test.ts`,
       `corepack pnpm exec vp check packages/test/src/html-fragment.test.ts packages/test/src/page.test.ts plans/codebase-quality-round2.md`,
       and `git diff --check`.
+      Additional evidence 2026-06-12: remaining parser edge cases for explicit fragment
+      attributes, nested explicit fragments, quoted angle brackets, quoted same-tag text,
+      nested same-tag targets, and rejected `fw-c` / `fw-deps` stamp matches moved from
+      `packages/test/src/page.test.ts` into `packages/test/src/html-fragment.test.ts`.
+      `page.test.ts` now covers only `createPageAssertion` and the harness-backed page path.
+      Same-session evidence:
+      `corepack pnpm exec vitest --run packages/test/src/html-fragment.test.ts packages/test/src/page.test.ts`
+      and `corepack pnpm exec vitest --run packages/test/src`.
       Additional evidence 2026-06-12: Drizzle runtime/static package-surface coverage moved from
       `packages/drizzle/src/index.test.ts` into `packages/drizzle/src/runtime-surface.test.ts`,
       leaving static extraction coverage in the Drizzle monolith. Same-session evidence:

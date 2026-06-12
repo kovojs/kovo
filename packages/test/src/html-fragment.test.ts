@@ -27,4 +27,58 @@ describe('@jiso/test html fragment seam', () => {
     );
     expect(fragmentHtml(html, 'missing-target')).toBe('');
   });
+
+  it('extracts explicitly wrapped fragments with normal HTML attribute variants', () => {
+    expect(
+      fragmentHtml(
+        "<fw-fragment strategy='morph' target='cart-badge'><cart-badge><span>1</span></cart-badge></fw-fragment>",
+        'cart-badge',
+      ),
+    ).toBe('<cart-badge><span>1</span></cart-badge>');
+  });
+
+  it('extracts explicitly wrapped fragments with nested fw-fragment children', () => {
+    expect(
+      fragmentHtml(
+        [
+          '<fw-fragment target="cart-badge">',
+          '<cart-badge><span>1</span><fw-fragment target="nested"><span>nested</span></fw-fragment></cart-badge>',
+          '</fw-fragment>',
+        ].join(''),
+        'cart-badge',
+      ),
+    ).toBe(
+      '<cart-badge><span>1</span><fw-fragment target="nested"><span>nested</span></fw-fragment></cart-badge>',
+    );
+  });
+
+  it('does not resolve fragments by fw-c stamps or same-tag fw-deps elements', () => {
+    const html =
+      '<section fw-c=\'cart-badge\'><span>1</span></section><cart-form fw-deps="cart"><button>Add</button></cart-form>';
+
+    expect(fragmentHtml(html, 'cart-badge')).toBe('');
+    expect(fragmentHtml(html, 'cart-form')).toBe('');
+    expect(fragmentHtml(html, 'missing-target')).toBe('');
+  });
+
+  it.each([
+    [
+      'opening attributes contain quoted angle brackets',
+      '<section id="cart-badge" data-label="1 > 0"><span>1</span><section>nested</section></section>',
+    ],
+    [
+      'same-tag text appears inside quoted attributes',
+      '<section id="cart-badge" data-template="<section>not real</section>"><span>1</span></section>',
+    ],
+    [
+      'id targets contain nested same-tag children',
+      '<section id="cart-badge"><section class="inner"><span>1</span></section><p>done</p></section>',
+    ],
+    [
+      'fw-fragment-target targets contain nested same-tag children',
+      '<article fw-fragment-target="cart-badge"><article class="inner"><span>1</span></article><p>done</p></article>',
+    ],
+  ])('extracts fragment targets when %s', (_name, html) => {
+    expect(fragmentHtml(html, 'cart-badge')).toBe(html);
+  });
 });
