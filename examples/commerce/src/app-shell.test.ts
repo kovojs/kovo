@@ -444,15 +444,17 @@ describe('commerce app shell HTTP entry', () => {
 
   it('wires vp run export to the public commerce shell static output', async () => {
     const commerceRoot = fileURLToPath(new URL('..', import.meta.url));
-    const distDir = path.join(commerceRoot, 'dist');
-
-    await rm(distDir, { force: true, recursive: true });
+    const outDir = await mkdtemp(path.join(os.tmpdir(), 'jiso-commerce-export-'));
 
     try {
-      const result = await execFileResult(pnpmCommand(), ['exec', 'vp', 'run', 'export'], {
-        cwd: commerceRoot,
-        timeout: 60000,
-      });
+      const result = await execFileResult(
+        pnpmCommand(),
+        ['exec', 'vp', 'run', '--no-cache', 'export', '--out', outDir],
+        {
+          cwd: commerceRoot,
+          timeout: 60000,
+        },
+      );
       const output = `${result.stdout}\n${result.stderr}`;
 
       expect(result.status, output).toBe(0);
@@ -462,22 +464,22 @@ describe('commerce app shell HTTP entry', () => {
       expect(output).toContain('assets=1');
       expect(output).toContain('diagnostics=0');
 
-      const cartHtml = await readFile(path.join(distDir, 'cart', 'index.html'), 'utf8');
+      const cartHtml = await readFile(path.join(outDir, 'cart', 'index.html'), 'utf8');
       expect(cartHtml).toContain('data-commerce-shell="cart"');
       expect(cartHtml).toContain('<link rel="stylesheet" href="/assets/tailwind.css">');
       expect(cartHtml).toContain(`/c/commerce.client.js?v=commerce-r7`);
 
-      const loginHtml = await readFile(path.join(distDir, 'login', 'index.html'), 'utf8');
+      const loginHtml = await readFile(path.join(outDir, 'login', 'index.html'), 'utf8');
       expect(loginHtml).toContain('<title>Jiso Commerce Sign In</title>');
       expect(loginHtml).toContain('action="/_m/auth/sign-in"');
 
-      const clientModule = await readFile(path.join(distDir, 'c', 'commerce.client.js'), 'utf8');
+      const clientModule = await readFile(path.join(outDir, 'c', 'commerce.client.js'), 'utf8');
       expect(clientModule).toContain('Commerce$markReady');
 
-      const stylesheet = await readFile(path.join(distDir, 'assets', 'tailwind.css'), 'utf8');
+      const stylesheet = await readFile(path.join(outDir, 'assets', 'tailwind.css'), 'utf8');
       expect(stylesheet).toContain('tailwindcss v');
     } finally {
-      await rm(distDir, { force: true, recursive: true });
+      await rm(outDir, { force: true, recursive: true });
     }
   });
 });
