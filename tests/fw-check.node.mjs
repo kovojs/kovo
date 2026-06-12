@@ -3292,7 +3292,7 @@ void test('D2 commerce validates keyed append and optimistic reorder', async () 
     store,
   });
 
-  assert.deepEqual(result.queries, ['reviews']);
+  assert.deepEqual(result.queries, ['reviews:product:p1']);
   assert.deepEqual(result.appliedFragments, ['reviews:p1']);
   assert.deepEqual(store.get('reviews'), undefined);
   assert.deepEqual(store.get('reviews', 'product:p1'), {
@@ -4684,7 +4684,7 @@ void test('P9 verification layer evidence remains represented', async () => {
     store: enhancedStore,
   });
   assert.deepEqual(enhancedResult.changes, [{ domain: 'cart', keys: ['c1'] }]);
-  assert.deepEqual(enhancedResult.queries, ['cart']);
+  assert.deepEqual(enhancedResult.queries, ['cart:c1']);
   assert.deepEqual(enhancedStore.get('cart', 'cart:c1'), { count: 2 });
   assert.deepEqual(broadcastEvents, [
     {
@@ -4776,7 +4776,7 @@ void test('P9 verification layer evidence remains represented', async () => {
     store: optimisticStore,
   });
   assert.deepEqual(optimisticResult.changes, [{ domain: 'product', keys: ['p1'] }]);
-  assert.deepEqual(optimisticResult.queries, ['reviews']);
+  assert.deepEqual(optimisticResult.queries, ['reviews:product:p1']);
   assert.deepEqual(optimisticStore.get('reviews', 'product:p1'), {
     items: [{ id: 'r1' }, { id: 'server' }],
   });
@@ -6395,7 +6395,7 @@ export const CartBadge = component('cart-badge', {
     fixtureApplied.chunks[0].fragments.map((fragment) => fragment.target),
     ['reviews:p1', 'recommendations:p1'],
   );
-  assert.deepEqual(fixtureApplied.queries, ['reviews', 'recommendations']);
+  assert.deepEqual(fixtureApplied.queries, ['reviews:product:p1', 'recommendations:product:p1']);
   assert.deepEqual(fixtureApplied.appliedFragments, ['reviews:p1', 'recommendations:p1']);
   assert.deepEqual(fixtureStore.get('reviews', 'product:p1'), {
     items: [{ id: 'r1', rating: 5 }],
