@@ -2807,6 +2807,16 @@ land it first; don't fork it.
       `pnpm exec vitest --run packages/server/src/*.test.ts`,
       `pnpm exec vp check packages/server/src/index.ts packages/server/src/api/app.ts packages/server/src/api/data.ts packages/server/src/api/rendering.ts packages/server/src/api/routing.ts plans/codebase-quality-round2.md`,
       and `git diff --check`.
+      Additional evidence 2026-06-12: app-shell Vite manifest parsing, route-entry validation,
+      hint extraction, stylesheet href extraction, and manifest dist-asset planning moved from
+      `packages/server/src/vite.ts` into `packages/server/src/vite-manifest.ts`; `vite.ts`
+      now keeps the public helper/type re-exports while its remaining responsibilities are
+      dev middleware plus build/export coordination. `packages/server/src/vite-manifest.test.ts`
+      covers the extracted manifest seam directly, and `packages/server/src/vite.test.ts`
+      still proves the re-exported API path through integration flows. Same-session evidence:
+      `corepack pnpm exec vitest --run packages/server/src/vite-manifest.test.ts packages/server/src/vite.test.ts`,
+      `corepack pnpm exec vp check packages/server/src/vite.ts packages/server/src/vite-manifest.ts packages/server/src/vite-manifest.test.ts plans/app-shell.md plans/codebase-quality-round2.md IMPLEMENT_v1.md`,
+      and `git diff --check`.
 - [ ] **LOW — Close the server cleanup inventory with an acceptance sweep.** Historical audit
       targets were dead code (`matchShellDispatch` post-loop return shell.ts:161-166; rate-limit
       tail `return options.max > 0` index.ts:576); `matchRoute` recompiling all routes per call

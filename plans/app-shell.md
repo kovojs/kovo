@@ -135,6 +135,17 @@ Scope: SPEC addition (proposed §9.5 "The request shell"), `@jiso/server` shell 
       `createRequestHandler()` while source assets and unrelated Vite requests
       pass to later middleware. `packages/server/src/vite.test.ts` proves the
       plugin passes `/src/styles.css` onward and still serves a matching route.
+      Additional evidence 2026-06-12: Vite manifest parsing, route-entry validation,
+      deterministic hint extraction, stylesheet href extraction, and dist asset
+      planning moved out of the app-shell plugin/build coordinator into
+      `packages/server/src/vite-manifest.ts`, while `packages/server/src/vite.ts`
+      preserves the existing public helper/type exports. `packages/server/src/vite-manifest.test.ts`
+      now covers that manifest seam directly, and the Vite integration suite continues to
+      prove the re-exported public API path through build/export/plugin flows. Same-session
+      verification ran
+      `corepack pnpm exec vitest --run packages/server/src/vite-manifest.test.ts packages/server/src/vite.test.ts`,
+      `corepack pnpm exec vp check packages/server/src/vite.ts packages/server/src/vite-manifest.ts packages/server/src/vite-manifest.test.ts plans/app-shell.md plans/codebase-quality-round2.md IMPLEMENT_v1.md`,
+      and `git diff --check`.
       Remaining R5 work: compiler/plugin build hooks must still supply real route-entry maps
       and compiled module sources from compiler facts, consume the asset/module plan in
       production package builds, and decide the final plugin hook ownership.
