@@ -83,6 +83,8 @@ export type {
 } from './lib/index.js';
 
 export {
+  checkboxRootAttributes,
+  checkboxTriggerClick,
   collapsibleContentAttributes,
   collapsibleRootAttributes,
   collapsibleTriggerAttributes,
@@ -96,9 +98,11 @@ export {
   progressRootAttributes,
   progressValueState,
   separatorRootAttributes,
+  setCheckboxChecked,
   setCollapsibleOpen,
   setDisclosureOpen,
   setTogglePressed,
+  toggleCheckbox,
   toggleCollapsible,
   toggleDisclosure,
   togglePressed,
@@ -106,6 +110,14 @@ export {
   toggleTriggerClick,
 } from './primitives/index.js';
 export type {
+  CheckboxChangeDetail,
+  CheckboxChangeOptions,
+  CheckboxChangeReason,
+  CheckboxChangeResult,
+  CheckboxCheckedState,
+  CheckboxPrimitiveAttributes,
+  CheckboxState,
+  CheckboxTriggerEvent,
   CollapsibleAttributeOptions,
   CollapsibleChangeDetail,
   CollapsibleChangeOptions,

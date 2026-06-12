@@ -1,4 +1,21 @@
 export {
+  checkboxRootAttributes,
+  checkboxTriggerClick,
+  setCheckboxChecked,
+  toggleCheckbox,
+} from './checkbox.js';
+export type {
+  CheckboxChangeDetail,
+  CheckboxChangeOptions,
+  CheckboxChangeReason,
+  CheckboxChangeResult,
+  CheckboxCheckedState,
+  CheckboxPrimitiveAttributes,
+  CheckboxState,
+  CheckboxTriggerEvent,
+} from './checkbox.js';
+
+export {
   collapsibleContentAttributes,
   collapsibleRootAttributes,
   collapsibleTriggerAttributes,
