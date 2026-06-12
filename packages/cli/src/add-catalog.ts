@@ -4,6 +4,27 @@ export interface VendoredUiComponent {
 }
 
 export const vendoredUiComponents = {
+  alert: {
+    fileName: 'alert.tsx',
+    source: [
+      "import { component } from '@jiso/core';",
+      '',
+      'export interface AlertProps {',
+      '  children?: string;',
+      '}',
+      '',
+      "export const Alert = component('alert', {",
+      '  render(props: AlertProps) {',
+      '    return (',
+      '      <div class="rounded-lg border border-neutral-200 bg-white px-4 py-3 text-sm text-neutral-950 shadow-sm" role="status">',
+      '        {props.children}',
+      '      </div>',
+      '    );',
+      '  },',
+      '});',
+      '',
+    ].join('\n'),
+  },
   badge: {
     fileName: 'badge.tsx',
     source: [
@@ -89,6 +110,29 @@ export const vendoredUiComponents = {
       '      <kbd class="inline-flex min-h-5 items-center rounded border border-neutral-300 bg-neutral-50 px-1.5 font-mono text-[0.75rem] font-medium text-neutral-900 shadow-sm">',
       '        {props.children}',
       '      </kbd>',
+      '    );',
+      '  },',
+      '});',
+      '',
+    ].join('\n'),
+  },
+  skeleton: {
+    fileName: 'skeleton.tsx',
+    source: [
+      "import { component } from '@jiso/core';",
+      '',
+      'export interface SkeletonProps {',
+      '  label?: string;',
+      '}',
+      '',
+      "export const Skeleton = component('skeleton', {",
+      '  render(props: SkeletonProps) {',
+      '    return (',
+      '      <div',
+      '        aria-label={props.label}',
+      '        aria-hidden={props.label ? undefined : "true"}',
+      '        class="h-4 w-full animate-pulse rounded-md bg-neutral-200"',
+      '      />',
       '    );',
       '  },',
       '});',

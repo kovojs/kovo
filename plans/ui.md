@@ -316,12 +316,21 @@ Behavior contracts (state attributes, ARIA, keyboard maps, change reasons) are p
     `pnpm exec vitest --run packages/cli/src/index.test.ts -t "fw add"`,
     `pnpm exec vp check packages/cli/src/add-catalog.ts packages/cli/src/index.ts packages/cli/src/index.test.ts plans/ui.md`,
     and `git diff --check`.
+  - Additional partial evidence 2026-06-12: `packages/cli/src/add-catalog.ts` now includes
+    pure-markup `alert` and `skeleton` TSX source in the `fw add` catalog, keeping the
+    available list sorted and vendored output TSX-only with no lowered `fw-c`/`data-bind`
+    stamps per SPEC §5.2. `packages/cli/src/index.test.ts` covers the expanded stable list,
+    copied `alert.tsx`/`skeleton.tsx` output, unknown-component output, idempotence, and
+    overwrite refusal. Same-session evidence:
+    `pnpm exec vitest --run packages/cli/src/index.test.ts -t "fw add"`,
+    `pnpm exec vp check packages/cli/src/add-catalog.ts packages/cli/src/index.test.ts plans/ui.md`,
+    and `git diff --check`.
   - Remaining before U2 can be checked complete: promote the extracted catalog into whatever
     distributable contract/package asset shape `@jiso/ui` needs, add styled wrappers that import
     `@jiso/headless-ui`, and run the vendored output through the same TSX authoring/FW235 gate as
     local app code.
   - Remaining before U3 can be checked complete: add the rest of the pure-markup set
-    (`alert`, `table`, `breadcrumb`, `skeleton`) and sheet/drawer styled dialog variants, then
+    (`table`, `breadcrumb`) and sheet/drawer styled dialog variants, then
     verify them through the gallery/conformance surface rather than only CLI copy tests.
 - **U3–U5 — components**, trailing each H-wave by one step; U3 also carries the pure-markup set that needs no behavior layer (button, badge, card, kbd, alert, table, breadcrumb, skeleton) and sheet/drawer as styled dialog variants.
 
