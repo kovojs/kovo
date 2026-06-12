@@ -666,6 +666,12 @@ pipeline throws the tree away and communicates via mutated source text.
       `pnpm exec vitest --run packages/compiler/src/query-coverage.test.ts packages/compiler/src/query-bindings.test.ts packages/compiler/src/stamps.test.ts`
       and
       `pnpm exec vp check packages/compiler/src/lower/inline-derives.ts packages/compiler/src/validate/bindings.ts`.
+      Additional evidence 2026-06-12: server render-host stamping now consumes the parsed
+      `JsxElementModel.openingSource` for the host opening tag before applying handler and
+      identity/dependency/state stamps, falling back to source slicing only if no parsed host
+      element is available. Same-session evidence:
+      `pnpm exec vitest --run packages/compiler/src/compile-component.test.ts packages/compiler/src/model-pipeline.test.ts packages/compiler/src/stamps.test.ts`
+      and `pnpm exec vp check packages/compiler/src/emit/server.ts`.
       Partial evidence 2026-06-11: `serverRenderSource` now parses once after handler lowering
       with the author file name and stamps component identity, declared query deps, and initial
       state onto the render host through one in-memory tag update instead of reparsing for each

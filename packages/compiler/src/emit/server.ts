@@ -109,13 +109,10 @@ function serverRenderPatches(
   }
 
   if (host) {
-    const tagSource = source.slice(host.start, host.end);
+    const hostElement = componentRenderHostElement(model);
+    const tagSource = hostElement?.openingSource ?? source.slice(host.start, host.end);
     const tagWithHandlers = replaceTagHandlerAttributes(tagSource, host.start, hostHandlers);
-    const stampedTag = stampRenderHostTag(
-      tagWithHandlers,
-      model,
-      componentRenderHostElement(model),
-    );
+    const stampedTag = stampRenderHostTag(tagWithHandlers, model, hostElement);
     if (stampedTag !== tagSource) {
       patches.push({ end: host.end, replacement: stampedTag, start: host.start });
     }
