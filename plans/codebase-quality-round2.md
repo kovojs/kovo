@@ -658,6 +658,13 @@ pipeline throws the tree away and communicates via mutated source text.
       `pnpm exec vitest --run packages/compiler/src/index.test.ts packages/compiler/src/package-prefixes.test.ts -t "registry metadata|component facts|package prefix|IDREF"`
       and
       `pnpm exec vp check packages/compiler/src/types.ts packages/compiler/src/graph.ts packages/compiler/src/emit/registry.ts packages/compiler/src/validate/markup.ts packages/compiler/src/index.ts plans/codebase-quality-round2.md`.
+      Additional evidence 2026-06-12: handler-lowering fact shapes (`HandlerLowering`,
+      `ElementParam`, and `ElementParamType`) now live in `packages/compiler/src/types.ts`;
+      handler lowering imports the canonical shapes, and client/server/registry emitters no
+      longer type-import handler facts from the lowering phase. Same-session evidence:
+      `pnpm exec vitest --run packages/compiler/src/index.test.ts -t "handler captures|element params|registry metadata|server file"`
+      and
+      `pnpm exec vp check packages/compiler/src/types.ts packages/compiler/src/lower/handlers.ts packages/compiler/src/emit/client.ts packages/compiler/src/emit/server.ts packages/compiler/src/emit/registry.ts plans/codebase-quality-round2.md`.
 - [x] **MED — Move analysis out of validate/.** `collectQueryUpdatePlans` and coverage
       classification feed emit, not validation; positions travel through a module-global
       `WeakMap` (`updateCoverageSpans`, bindings.ts:45-48) read back in component-contracts.ts:271.

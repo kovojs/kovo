@@ -5,27 +5,12 @@ import { diagnosticFor, type CompilerDiagnostic } from '../diagnostics.js';
 import { literalValue } from '../scan/object.js';
 import { identifierReferences, jsxElements, type ComponentModuleModel } from '../scan/parse.js';
 import { replaceExtension } from '../shared.js';
-import type { CompileComponentOptions } from '../types.js';
-
-export interface HandlerLowering {
-  exportName: string;
-  attributeName: string;
-  attributeEnd: number;
-  attributeStart: number;
-  attributeValue: string;
-  expression: string;
-  params: ElementParam[];
-  diagnostic?: CompilerDiagnostic;
-  diagnostics?: readonly CompilerDiagnostic[];
-}
-
-export interface ElementParam {
-  attributeName: string;
-  type: ElementParamType;
-  value: string;
-}
-
-type ElementParamType = 'boolean' | 'number' | 'string';
+import type {
+  CompileComponentOptions,
+  ElementParam,
+  ElementParamType,
+  HandlerLowering,
+} from '../types.js';
 
 export function lowerEventHandlers(
   options: CompileComponentOptions,

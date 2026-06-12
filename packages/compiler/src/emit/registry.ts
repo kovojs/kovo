@@ -1,10 +1,10 @@
 import type { ComponentCssAsset } from '../css.js';
 import { compilerIrHeader } from '../ir.js';
-import type { HandlerLowering } from '../lower/handlers.js';
 import type { PlatformSubstitution } from '../lower/platform.js';
 import { kebabCase } from '../shared.js';
 import type {
   FragmentTargetFact,
+  HandlerLowering,
   QueryUpdatePlanFact,
   RegistryFacts,
   RegistryTypeFacts,

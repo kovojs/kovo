@@ -82,6 +82,26 @@ export interface CompileResult {
   viewTransitions: readonly ViewTransitionStamp[];
 }
 
+export interface HandlerLowering {
+  exportName: string;
+  attributeName: string;
+  attributeEnd: number;
+  attributeStart: number;
+  attributeValue: string;
+  expression: string;
+  params: ElementParam[];
+  diagnostic?: CompilerDiagnostic;
+  diagnostics?: readonly CompilerDiagnostic[];
+}
+
+export interface ElementParam {
+  attributeName: string;
+  type: ElementParamType;
+  value: string;
+}
+
+export type ElementParamType = 'boolean' | 'number' | 'string';
+
 export function createEmptyCompileResult(): CompileResult {
   return {
     componentGraphFacts: [],

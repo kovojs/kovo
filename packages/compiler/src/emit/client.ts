@@ -1,9 +1,10 @@
 import ts from 'typescript';
 
 import { compilerIrHeader } from '../ir.js';
-import type { ElementParam, HandlerLowering } from '../lower/handlers.js';
 import { applySourceReplacements, dedupeBy, indent, type SourceReplacement } from '../shared.js';
 import type {
+  ElementParam,
+  HandlerLowering,
   QueryDeriveFact,
   QueryStampFact,
   QueryTemplateStampFact,
