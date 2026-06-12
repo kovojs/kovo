@@ -411,6 +411,9 @@ describe('runtime loader', () => {
     const formData = { kind: 'form-data' };
     const form = {
       action: '/_m/cart/add',
+      getAttribute(name: string) {
+        return name === 'data-enhance' ? '' : null;
+      },
       method: 'post',
     };
     const depElements = [
@@ -700,6 +703,9 @@ describe('runtime loader', () => {
     const attributes = new Map<string, string>();
     const form = {
       action: '/_m/cart/add',
+      getAttribute(name: string) {
+        return name === 'data-enhance' ? '' : null;
+      },
       method: 'post',
       setAttribute(name: string, value: string) {
         attributes.set(name, value);
