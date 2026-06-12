@@ -1,5 +1,4 @@
 import {
-  componentOptionObjectKeys,
   jsxElements,
   jsxExpressions,
   propertyAccessPaths,
@@ -7,6 +6,7 @@ import {
   type JsxAttributeModel,
   type JsxElementModel,
 } from '../scan/parse.js';
+import { knownQueryNames } from '../analyze/query-shapes.js';
 import {
   applySourceReplacements,
   escapeAttribute,
@@ -15,15 +15,12 @@ import {
   type SourceOffsetMap,
   type SourceReplacement,
 } from '../shared.js';
+import type { CompileComponentOptions } from '../types.js';
 
-interface InlineDeriveLoweringOptions {
-  fileName: string;
-  queryShapeFacts?: readonly { query: string }[];
-  queryShapes?: Record<string, unknown>;
-  registryFacts?: {
-    queries?: Record<string, unknown>;
-  };
-}
+type InlineDeriveLoweringOptions = Pick<
+  CompileComponentOptions,
+  'fileName' | 'queryShapeFacts' | 'queryShapes' | 'registryFacts'
+>;
 
 interface InlineAttributeDerive {
   attribute: JsxAttributeModel;
@@ -38,12 +35,7 @@ export function lowerInlineAttributeDerives(
   componentName: string,
   options: InlineDeriveLoweringOptions,
 ): { diagnosticSource: string; source: string; sourceOffsetMap: SourceOffsetMap } {
-  const knownQueries = new Set([
-    ...componentOptionObjectKeys(model, 'queries'),
-    ...Object.keys(options.registryFacts?.queries ?? {}),
-    ...Object.keys(options.queryShapes ?? {}),
-    ...(options.queryShapeFacts ?? []).map((fact) => fact.query),
-  ]);
+  const knownQueries = knownQueryNames(model, options);
   if (knownQueries.size === 0) {
     return {
       diagnosticSource: source,
