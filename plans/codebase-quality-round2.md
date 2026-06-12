@@ -123,6 +123,15 @@ Do this first or pay it on every commit.
       tags, and generated client bootstrap imports/object wiring, and executes
       `pnpm exec vitest --run packages/create-jiso/src/index.test.ts` for scaffold file count,
       Vite bin resolution, and generated CSS output coverage.
+      Partial evidence 2026-06-12: the P10 starter emit-graph tranche now runs
+      `packages/create-jiso/templates/scripts/emit-graph.mjs` in an isolated temp template and
+      asserts `emit-graph/v1` plus parsed graph equality instead of grepping the emitter import
+      or `graphDeclarations` object-key source. The starter template package now proves
+      `fw-check` and `graph-assertions` are Vite+ tasks only, avoiding package-script/task-name
+      conflicts while CI invokes them through `vp run`.
+      Same-session evidence:
+      `node --test --test-name-pattern "P10 starter wires graph assertions into CI" tests/fw-check.node.mjs`,
+      `pnpm run check:build`, and `git diff --check`.
       Partial evidence 2026-06-11: the P8 component/endpoints/unguarded/unscoped tranche now uses
       a synthetic graph and direct `fwExplain` assertions for handler captures, derives,
       execution triggers, attribute merges, endpoint listing, unguarded access, and owner-domain

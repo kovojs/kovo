@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { execFile, execFileSync } from 'node:child_process';
-import { chmod, mkdir, mkdtemp, readdir, readFile, rm, writeFile } from 'node:fs/promises';
+import { chmod, cp, mkdir, mkdtemp, readdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { test } from 'node:test';
@@ -675,6 +675,41 @@ process.stdout.write(output);
     });
   } finally {
     await rm(fakeBin, { force: true, recursive: true });
+  }
+};
+
+const runEmitGraphTemplateScript = async () => {
+  const projectRoot = fileURLToPath(new URL('..', import.meta.url));
+  const templateRoot = new URL('../packages/create-jiso/templates/', import.meta.url);
+  const fixtureRoot = await mkdtemp(join(tmpdir(), 'jiso-template-emit-graph-'));
+  const compilerShimRoot = join(fixtureRoot, 'node_modules/@jiso/compiler');
+
+  try {
+    await cp(templateRoot, fixtureRoot, { recursive: true });
+    await mkdir(compilerShimRoot, { recursive: true });
+    await writeFile(
+      join(compilerShimRoot, 'package.json'),
+      JSON.stringify({ type: 'module', exports: './index.mjs' }),
+      'utf8',
+    );
+    await writeFile(
+      join(compilerShimRoot, 'index.mjs'),
+      `export * from ${JSON.stringify(
+        pathToFileURL(join(projectRoot, 'dist/compiler/src/index.mjs')).href,
+      )};\n`,
+      'utf8',
+    );
+
+    const output = execFileSync('node', ['scripts/emit-graph.mjs'], {
+      cwd: fixtureRoot,
+      encoding: 'utf8',
+      env: { ...process.env, CI: '1' },
+    });
+    const graph = JSON.parse(await readFile(join(fixtureRoot, 'graph.json'), 'utf8'));
+
+    return { graph, output };
+  } finally {
+    await rm(fixtureRoot, { force: true, recursive: true });
   }
 };
 
@@ -3384,7 +3419,6 @@ void test('P10 starter wires graph assertions into CI', async () => {
     viteConfigSource,
     ciWorkflow,
     starterGraphSource,
-    emitGraphSource,
     clientSource,
     appFixpointTest,
     stylesSource,
@@ -3394,7 +3428,6 @@ void test('P10 starter wires graph assertions into CI', async () => {
     readProjectFile('packages/create-jiso/templates/vite.config.ts'),
     readProjectFile('packages/create-jiso/templates/.github/workflows/ci.yml'),
     readProjectFile('packages/create-jiso/templates/graph.json'),
-    readProjectFile('packages/create-jiso/templates/scripts/emit-graph.mjs'),
     readProjectFile('packages/create-jiso/templates/src/client.ts'),
     readProjectFile('packages/create-jiso/templates/src/app.fixpoint.test.ts'),
     readProjectFile('packages/create-jiso/templates/src/styles.css'),
@@ -3413,8 +3446,8 @@ void test('P10 starter wires graph assertions into CI', async () => {
   const cartPageExplain = fwExplain(starterGraph, { kind: 'page', target: '/cart' }).output;
 
   assert.equal(packageJson.scripts['emit-graph'], 'node scripts/emit-graph.mjs');
-  assert.equal(packageJson.scripts['fw-check'], 'vp run fw-check');
-  assert.equal(packageJson.scripts['graph-assertions'], 'vp run graph-assertions');
+  assert.equal(packageJson.scripts['fw-check'], undefined);
+  assert.equal(packageJson.scripts['graph-assertions'], undefined);
   assert.equal(packageJson.dependencies['@jiso/runtime'], 'workspace:*');
   assert.equal(packageJson.devDependencies['@jiso/compiler'], 'workspace:*');
   assert.equal(packageJson.devDependencies['@tailwindcss/vite'], '^4.1.0');
@@ -3505,19 +3538,9 @@ void test('P10 starter wires graph assertions into CI', async () => {
     ],
   );
 
-  assert.deepEqual(importedNamesFrom(emitGraphSource, '@jiso/compiler'), ['deriveAppGraph']);
-  assert.deepEqual(
-    [
-      ...new Set(
-        objectKeysFromSnippet(
-          balancedSnippetAfter(emitGraphSource, 'const graphDeclarations', '{', '}'),
-        ).filter((key) =>
-          ['components', 'mutations', 'optimistic', 'pages', 'queries', 'touchGraph'].includes(key),
-        ),
-      ),
-    ].sort((left, right) => left.localeCompare(right)),
-    ['components', 'mutations', 'optimistic', 'pages', 'queries', 'touchGraph'],
-  );
+  const emittedGraph = await runEmitGraphTemplateScript();
+  assert.equal(emittedGraph.output, 'emit-graph/v1\nOK\n');
+  assert.deepEqual(emittedGraph.graph, starterGraph);
   assert.equal(await runGraphAssertionsTemplateScript(), 'graph-assertions/v1\nOK\n');
 
   assert.deepEqual(importedNamesFrom(appFixpointTest, '@jiso/compiler'), [
