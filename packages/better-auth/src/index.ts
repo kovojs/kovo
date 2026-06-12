@@ -181,8 +181,45 @@ export interface BetterAuthDeclaredTableTouch {
   table: BetterAuthTable;
 }
 
+export type BetterAuthSchemaBridgeAnnotation =
+  | {
+      domain: BetterAuthTouchDomain;
+      key?: string;
+    }
+  | {
+      exempt: true;
+      rationale: string;
+    };
+
+export type BetterAuthSchemaBridge = Record<BetterAuthTable, BetterAuthSchemaBridgeAnnotation>;
+
+export interface BetterAuthSchemaBridgeValidation {
+  declaredTouchMismatches: string[];
+  missingTables: BetterAuthTable[];
+  ok: boolean;
+  unbridgedTables: string[];
+}
+
 export const betterAuthAuthDomain = domain('auth');
 export const betterAuthUserDomain = domain('user');
+
+// plans/auth.md B1: app-owned schema.ts tables stay visible to the touch graph.
+// User rows are intentionally not exempt; app queries commonly render names/avatars.
+export const betterAuthSchemaBridge = {
+  account: { domain: 'auth', key: 'userId' },
+  session: { domain: 'auth', key: 'userId' },
+  user: { domain: 'user', key: 'id' },
+  verification: {
+    exempt: true,
+    rationale: 'Better Auth email/token verification bookkeeping is not an app read surface.',
+  },
+} as const satisfies BetterAuthSchemaBridge;
+
+export function betterAuthTableDomain(table: BetterAuthTable): BetterAuthTouchDomain | null {
+  const bridge = betterAuthSchemaBridge[table];
+
+  return 'domain' in bridge ? bridge.domain : null;
+}
 
 // plans/auth.md B1/B6: better-auth writes are library-internal, so the blessed
 // wrappers carry declared table/domain touches until the P9 observed-write
@@ -205,6 +242,27 @@ export const betterAuthCredentialMutationTouches = {
   signOut: [betterAuthAuthDomain],
   signUpEmail: [betterAuthUserDomain, betterAuthAuthDomain],
 } as const satisfies Record<BetterAuthCredentialMutationApi, readonly Domain[]>;
+
+export function validateBetterAuthSchemaBridge(
+  tables: Record<string, unknown>,
+): BetterAuthSchemaBridgeValidation {
+  const bridgeTables = Object.keys(betterAuthSchemaBridge) as BetterAuthTable[];
+  const tableNames = new Set(Object.keys(tables));
+  const bridgeTableNames = new Set<string>(bridgeTables);
+  const missingTables = bridgeTables.filter((table) => !tableNames.has(table));
+  const unbridgedTables = [...tableNames].filter((table) => !bridgeTableNames.has(table)).sort();
+  const declaredTouchMismatches = declaredTableTouchMismatches();
+
+  return {
+    declaredTouchMismatches,
+    missingTables,
+    ok:
+      missingTables.length === 0 &&
+      unbridgedTables.length === 0 &&
+      declaredTouchMismatches.length === 0,
+    unbridgedTables,
+  };
+}
 
 export interface BetterAuthCredentialMutationValue<Status extends string> {
   redirectTo: string;
@@ -554,4 +612,27 @@ function mergeDomainTouches(
   }
 
   return [...merged.values()];
+}
+
+function declaredTableTouchMismatches(): string[] {
+  const mismatches: string[] = [];
+
+  for (const [api, touches] of Object.entries(betterAuthCredentialMutationDeclaredTableTouches)) {
+    for (const touch of touches) {
+      const domainForTable = betterAuthTableDomain(touch.table);
+
+      if (domainForTable === null) {
+        mismatches.push(`${api}.${touch.table} is declared touched but schema-bridge exempt`);
+        continue;
+      }
+
+      if (domainForTable !== touch.domain) {
+        mismatches.push(
+          `${api}.${touch.table} declares ${touch.domain} but schema bridge maps ${domainForTable}`,
+        );
+      }
+    }
+  }
+
+  return mismatches;
 }

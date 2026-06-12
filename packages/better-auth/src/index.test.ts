@@ -11,18 +11,24 @@ import { describe, expect, expectTypeOf, it } from 'vitest';
 import {
   activeOrganization,
   authed,
+  betterAuthCredentialMutationDeclaredTableTouches,
+  betterAuthCredentialMutationTouches,
+  betterAuthSchemaBridge,
   betterAuthSignInEmailMutation,
   betterAuthSignOutMutation,
   betterAuthSignUpEmailMutation,
   betterAuthSession,
+  betterAuthTableDomain,
   getBetterAuthSetCookie,
   isBetterAuthCredentialFailureError,
   mount,
   role,
+  validateBetterAuthSchemaBridge,
   type ActiveOrganizationRequest,
   type BetterAuthLike,
   type BetterAuthMountLike,
   type BetterAuthResponseLike,
+  type BetterAuthTable,
 } from './index.js';
 
 type AuthSession = {
@@ -305,6 +311,61 @@ describe('browser redirect protocol mount', () => {
 });
 
 describe('credential mutation helpers', () => {
+  it('exposes schema bridge annotations and keeps declared touches domain-aligned', () => {
+    expect(betterAuthSchemaBridge).toEqual({
+      account: { domain: 'auth', key: 'userId' },
+      session: { domain: 'auth', key: 'userId' },
+      user: { domain: 'user', key: 'id' },
+      verification: {
+        exempt: true,
+        rationale: 'Better Auth email/token verification bookkeeping is not an app read surface.',
+      },
+    });
+    expect(betterAuthTableDomain('user')).toBe('user');
+    expect(betterAuthTableDomain('verification')).toBe(null);
+    expect(
+      validateBetterAuthSchemaBridge({
+        account: {},
+        session: {},
+        user: {},
+        verification: {},
+      }),
+    ).toEqual({
+      declaredTouchMismatches: [],
+      missingTables: [],
+      ok: true,
+      unbridgedTables: [],
+    });
+
+    for (const [api, touches] of Object.entries(betterAuthCredentialMutationDeclaredTableTouches)) {
+      const declaredDomains = new Set(touches.map((touch) => touch.domain));
+      const registryDomains = betterAuthCredentialMutationTouches[
+        api as keyof typeof betterAuthCredentialMutationTouches
+      ].map((touch) => touch.key);
+
+      expect([...declaredDomains].sort()).toEqual(registryDomains.sort());
+      for (const touch of touches) {
+        expect(betterAuthTableDomain(touch.table)).toBe(touch.domain);
+      }
+    }
+  });
+
+  it('reports Better Auth table metadata that is missing or outside the bridge', () => {
+    expect(
+      validateBetterAuthSchemaBridge({
+        account: {},
+        session: {},
+        user: {},
+        webauthnCredential: {},
+      }),
+    ).toEqual({
+      declaredTouchMismatches: [],
+      missingTables: ['verification'] satisfies BetterAuthTable[],
+      ok: false,
+      unbridgedTables: ['webauthnCredential'],
+    });
+  });
+
   it('wraps signInEmail as an ordinary mutation and forwards Better Auth cookies', async () => {
     const auth = new FakeCredentialAuth();
     const headers = requestHeaders();

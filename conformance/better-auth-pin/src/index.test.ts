@@ -6,11 +6,13 @@ import { describe, expect, expectTypeOf, it } from 'vitest';
 import {
   betterAuthCredentialMutationDeclaredTableTouches,
   betterAuthCredentialMutationTouches,
+  betterAuthSchemaBridge,
   betterAuthSession,
   betterAuthSignInEmailMutation,
   betterAuthSignOutMutation,
   betterAuthSignUpEmailMutation,
   mount,
+  validateBetterAuthSchemaBridge,
   type BetterAuthLike,
   type BetterAuthSignInEmailLike,
   type BetterAuthSignOutLike,
@@ -100,6 +102,17 @@ describe('Better Auth pinned conformance', () => {
       'updatedAt',
       'value',
     ]);
+    expect(validateBetterAuthSchemaBridge(tables)).toEqual({
+      declaredTouchMismatches: [],
+      missingTables: [],
+      ok: true,
+      unbridgedTables: [],
+    });
+    expect(betterAuthSchemaBridge.user).toEqual({ domain: 'user', key: 'id' });
+    expect(betterAuthSchemaBridge.verification).toEqual({
+      exempt: true,
+      rationale: 'Better Auth email/token verification bookkeeping is not an app read surface.',
+    });
   });
 
   it('maps a real Better Auth session through the Jiso session provider seam', async () => {

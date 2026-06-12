@@ -12,6 +12,19 @@ Scope: SPEC additions (session population, guard-failure contract, mutation resp
 - [x] A3 mutation response-header channel (`ctx.setCookie` / header passthrough). Evidence: `packages/server/src/index.test.ts` covers enhanced Set-Cookie forwarding, no-JS PRG Set-Cookie forwarding, and no typed-failure leakage; focused server tests and `vp check` passed in `agent/auth-headers`.
 - [x] A4 `endpoint()` raw endpoint primitive with CSRF exemption + unguarded-audit enrollment.
 - [ ] B1 schema bridge: better-auth tables into `schema.ts` domains with declared touches.
+      Partial evidence 2026-06-12: `packages/better-auth/src/index.ts` now exports
+      `betterAuthSchemaBridge`, `betterAuthTableDomain`, and `validateBetterAuthSchemaBridge`
+      so the blessed adapter has explicit core-table `schema.ts` annotations (`user` -> `user`,
+      `account`/`session` -> `auth`, `verification` exempt with rationale) and validates that
+      credential declared table touches match their bridged domains. `packages/better-auth/src/index.test.ts`
+      covers the local bridge/touch invariants and missing/unbridged metadata reporting;
+      `conformance/better-auth-pin/src/index.test.ts` pins the bridge against real
+      `better-auth@1.6.17` `getAuthTables(auth.options)` output. Same-session evidence:
+      `pnpm exec vitest --run packages/better-auth/src/index.test.ts conformance/better-auth-pin/src/index.test.ts`
+      and `pnpm exec vp check packages/better-auth/src/index.ts packages/better-auth/src/index.test.ts conformance/better-auth-pin/src/index.test.ts plans/auth.md`.
+      Remaining gaps: plugin-generated tables are still not mapped, app `schema.ts` generation is
+      not exercised, and the declared table touches are not yet wired through the P9 wrapper as a
+      general observed-write verifier.
 - [x] B2 typed session mapper (`betterAuthSession(auth, map)`). Evidence: `packages/better-auth/src/index.ts` exports a dependency-light Better Auth-like `auth.api.getSession({ headers })` provider adapter that returns `null` for anonymous sessions per SPEC §6.5 and maps the inferred Better Auth `session`/`user` payload through an app-owned total mapper; `packages/better-auth/src/index.test.ts` covers runtime mapping, anonymous requests, and a `@ts-expect-error` totality check that dropped declared session fields fail under `vp check`.
 - [x] B3 guard bindings: `authed` / `role()` / org-scoping over the mapped session. Evidence: `packages/better-auth/src/index.ts` exports `authed()`, typed `role<Request>()`, and `activeOrganization()` guards over the mapped session while preserving SPEC §10.3 unauthenticated vs unauthorized guard failures; focused tests cover success/failure behavior and stale role-name type failures without requiring live Better Auth services.
 - [x] B4 ejectable credential mutations (sign-in / sign-up / sign-out) wrapping `auth.api`.
