@@ -376,6 +376,24 @@ Scope: SPEC addition (proposed §9.5 "The request shell"), `@jiso/server` shell 
       `pnpm exec vitest --run examples/reference/src/app.test.ts examples/reference/src/app-shell.test.ts`,
       `pnpm exec vp check examples/reference/src/app-shell.ts examples/reference/src/app-shell.test.ts examples/reference/scripts/export-static.mjs examples/reference/vite.config.ts plans/app-shell.md`,
       and `git diff --check`.
+      Additional evidence 2026-06-12: commerce now has a positive
+      static-export adoption proof for its explicitly public shell surface.
+      `examples/commerce/src/app-shell.ts` exports
+      `createCommerceStaticExportShell()` plus `commerceStaticExportApp`, a
+      session-free SPEC §9.5 app containing `/cart` and `/login` while keeping
+      the dynamic `commerceAppShell`/`commerceNodeHandler` serve surface
+      unchanged. `examples/commerce/src/app-shell.test.ts` first proves
+      `exportStaticApp(createCommerceAppShell().app)` still raises FW229 for
+      the session-backed dynamic shell, then exports the public shell with
+      `htmlPathStyle: 'directory'`, verifies `cart/index.html` and
+      `login/index.html`, and checks replayed copying of
+      `/c/commerce.client.js?v=commerce-r7` to the export output's
+      `c/commerce.client.js`.
+      Same-session verification ran
+      `pnpm exec vitest --run examples/commerce/src/app-shell.test.ts`,
+      `pnpm exec vitest --run examples/commerce`,
+      `pnpm exec vp check examples/commerce/src/app-shell.ts examples/commerce/src/app-shell.test.ts plans/app-shell.md`,
+      and `git diff --check`.
 
 ## Background — the gap
 

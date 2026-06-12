@@ -1,14 +1,21 @@
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http';
 import type { AddressInfo } from 'node:net';
+import { mkdtemp, readFile, rm } from 'node:fs/promises';
+import * as os from 'node:os';
+import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { afterEach, describe, expect, it } from 'vitest';
 import { createServer as createViteServer } from 'vite';
 
-import { csrfToken, runMutation } from '@jiso/server';
+import { csrfToken, exportStaticApp, runMutation } from '@jiso/server';
 
 import { addToCart, commerceAuthCsrf, commerceCsrf, commerceSignIn } from './app.js';
-import { commerceClientModuleHref, createCommerceAppShell } from './app-shell.js';
+import {
+  commerceClientModuleHref,
+  createCommerceAppShell,
+  createCommerceStaticExportShell,
+} from './app-shell.js';
 
 let server: Server | undefined;
 
@@ -341,6 +348,54 @@ describe('commerce app shell HTTP entry', () => {
     expect(logout.status).toBe(303);
     expect(logout.headers.get('location')).toBe('/login');
     expect(logout.headers.get('set-cookie')).toContain('Max-Age=0');
+  });
+
+  it('exports the public commerce shell while the dynamic session shell stays non-exportable', async () => {
+    await expect(exportStaticApp(createCommerceAppShell().app)).rejects.toMatchObject({
+      code: 'FW229',
+      diagnostics: expect.arrayContaining([
+        expect.objectContaining({
+          code: 'FW229',
+          routePath: '/cart',
+        }),
+      ]),
+    });
+
+    const outDir = await mkdtemp(path.join(os.tmpdir(), 'jiso-commerce-export-'));
+    try {
+      const shell = createCommerceStaticExportShell();
+      const result = await exportStaticApp(shell.app, {
+        htmlPathStyle: 'directory',
+        outDir,
+      });
+
+      expect(result.diagnostics).toEqual([]);
+      expect(result.artifacts.map((artifact) => artifact.path)).toEqual([
+        '/cart/index.html',
+        '/login/index.html',
+      ]);
+      expect(result.clientModules.map((artifact) => artifact.href)).toEqual([
+        commerceClientModuleHref,
+      ]);
+
+      const cartHtml = await readFile(path.join(outDir, 'cart', 'index.html'), 'utf8');
+      expect(cartHtml).toContain('data-commerce-shell="cart"');
+      expect(cartHtml).toContain('<link rel="stylesheet" href="/assets/tailwind.css">');
+      expect(cartHtml).toContain(`<link rel="modulepreload" href="${commerceClientModuleHref}">`);
+      expect(cartHtml).toContain('action="/_m/cart/add"');
+      expect(cartHtml).not.toContain('name="csrf"');
+
+      const loginHtml = await readFile(path.join(outDir, 'login', 'index.html'), 'utf8');
+      expect(loginHtml).toContain('action="/_m/auth/sign-in"');
+      expect(loginHtml).toContain('name="csrf"');
+
+      await expect(readFile(path.join(outDir, 'c', 'commerce.client.js'), 'utf8')).resolves.toBe(
+        result.clientModules[0]?.body,
+      );
+      expect(result.clientModules[0]?.body).toContain('Commerce$markReady');
+    } finally {
+      await rm(outDir, { force: true, recursive: true });
+    }
   });
 });
 

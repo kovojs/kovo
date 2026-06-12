@@ -50,6 +50,10 @@ export interface CommerceAppShellOptions {
   onError?: ServerErrorHandler;
 }
 
+export interface CommerceStaticExportShellOptions {
+  db?: CommerceDb;
+}
+
 const clientModules = createMemoryVersionedClientModuleRegistry();
 const shellCommerceAuthCsrf: CsrfValidationOptions<Request> = {
   field: commerceAuthCsrf.field,
@@ -95,6 +99,49 @@ export const commerceLoginRoute = route('/login', {
   },
   stylesheets: commerceStylesheets,
 });
+
+export function createCommerceStaticExportShell(options: CommerceStaticExportShellOptions = {}) {
+  const db = options.db ?? createCommerceDb();
+  const app = createApp({
+    clientModules,
+    document: { lang: 'en-US' },
+    routes: [
+      route('/cart', {
+        i18n: commerceMessages,
+        meta: {
+          description: 'Browse products and checkout with verifiable cart state.',
+          title: 'Jiso Commerce',
+        },
+        modulepreloads: [commerceClientModuleHref],
+        page() {
+          return `<div data-commerce-shell="cart">${renderCartPageBody(db, undefined, {
+            db,
+          })}</div>`;
+        },
+        stylesheets: commerceStylesheets,
+      }),
+      route('/login', {
+        meta: {
+          description: 'Sign in to the Jiso commerce reference app.',
+          title: 'Jiso Commerce Sign In',
+        },
+        page(_context, request) {
+          return `<main class="mx-auto max-w-md p-6">${renderCommerceLoginForm(
+            {
+              authCsrfId: 'commerce-shell-login',
+              db,
+              headers: request.headers,
+            },
+            { next: '/cart' },
+          )}</main>`;
+        },
+        stylesheets: commerceStylesheets,
+      }),
+    ],
+  });
+
+  return { app, db };
+}
 
 export function createCommerceAppShell(options: CommerceAppShellOptions = {}) {
   const db = options.db ?? createCommerceDb();
@@ -280,5 +327,7 @@ function escapeHtml(value: string): string {
 export const commerceAppShell = createCommerceAppShell();
 export const commerceRequestHandler = commerceAppShell.requestHandler;
 export const commerceNodeHandler = commerceAppShell.nodeHandler;
+export const commerceStaticExportShell = createCommerceStaticExportShell();
+export const commerceStaticExportApp = commerceStaticExportShell.app;
 
 export default commerceAppShell.app;
