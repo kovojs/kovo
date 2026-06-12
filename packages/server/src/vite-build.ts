@@ -105,6 +105,10 @@ export interface JisoAppShellViteStaticExportAssetOptions {
   distDir: string | URL;
 }
 
+export interface JisoAppShellViteBuildStaticExportAssetOptions extends JisoAppShellViteStaticExportAssetOptions {
+  assets?: readonly StaticExportAssetInput[];
+}
+
 export interface JisoAppShellViteManifestFileStaticExportAssetOptions extends JisoAppShellViteStaticExportAssetOptions {
   base?: string;
   manifestFile?: string | URL;
@@ -247,6 +251,16 @@ export async function jisoAppShellViteStaticExportAssetsFromManifestFile(
   );
 }
 
+export function jisoAppShellViteBuildStaticExportAssets(
+  build: Pick<JisoAppShellBuild, 'assets'>,
+  options: JisoAppShellViteBuildStaticExportAssetOptions,
+): StaticExportAssetInput[] {
+  return [
+    ...jisoAppShellViteStaticExportAssets(build.assets, { distDir: options.distDir }),
+    ...(options.assets ?? []),
+  ];
+}
+
 export async function exportJisoAppShellViteBuildFromManifestFile(
   options: JisoAppShellViteManifestFileBuildStaticExportOptions,
 ): Promise<StaticExportResult> {
@@ -294,13 +308,16 @@ export async function exportJisoAppShellViteBuild(
   build: JisoAppShellBuild,
   options: JisoAppShellViteBuildStaticExportOptions,
 ): Promise<StaticExportResult> {
-  const { assets = [], distDir, ...exportOptions } = options;
+  const { assets, distDir, ...exportOptions } = options;
 
   return exportStaticApp(build.app, {
     ...exportOptions,
     // SPEC §9.5: static export replays the built app shell, then copies the
     // immutable asset files referenced by the Vite manifest.
-    assets: [...jisoAppShellViteStaticExportAssets(build.assets, { distDir }), ...assets],
+    assets: jisoAppShellViteBuildStaticExportAssets(build, {
+      ...(assets === undefined ? {} : { assets }),
+      distDir,
+    }),
   });
 }
 
@@ -308,12 +325,15 @@ export async function staticExportInventoryForJisoAppShellViteBuild(
   build: JisoAppShellBuild,
   options: JisoAppShellViteBuildStaticExportInventoryOptions,
 ): Promise<StaticExportInventoryItem[]> {
-  const { assets = [], distDir, outDir: _outDir, ...exportOptions } = options;
+  const { assets, distDir, outDir: _outDir, ...exportOptions } = options;
   const result = await exportStaticApp(build.app, {
     ...exportOptions,
     // SPEC §9.5: dry-run task wiring inspects the exact built app shell,
     // manifest assets, and /c/ modules without selecting an output directory.
-    assets: [...jisoAppShellViteStaticExportAssets(build.assets, { distDir }), ...assets],
+    assets: jisoAppShellViteBuildStaticExportAssets(build, {
+      ...(assets === undefined ? {} : { assets }),
+      distDir,
+    }),
   });
 
   return staticExportInventory(result);

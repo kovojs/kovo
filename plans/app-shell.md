@@ -348,6 +348,18 @@ Scope: SPEC addition (proposed §9.5 "The request shell"), `@jiso/server` shell 
       `corepack pnpm exec tsc --noEmit --pretty false`,
       `corepack pnpm exec vp check packages/server/src/vite-build.ts packages/server/src/vite.ts packages/server/src/api/app-shell/vite.ts packages/server/src/vite-build.test.ts packages/server/src/api/app.test.ts plans/app-shell.md plans/codebase-quality-round2.md`,
       and `git diff --check`.
+      Additional evidence 2026-06-12: build-backed static export task wiring can now ask the
+      public Vite app-shell API for the complete `StaticExportAssetInput` list through
+      `jisoAppShellViteBuildStaticExportAssets()`, avoiding direct `build.assets` peeking while
+      preserving manifest asset order and appending caller-provided public assets. The existing
+      `exportJisoAppShellViteBuild()` and dry-run inventory helper now use that same planner.
+      `packages/server/src/vite-build.test.ts` proves the helper behavior, and
+      `packages/server/src/api/app.test.ts` proves root, aggregate app-shell, and
+      `@jiso/server/app-shell/vite` exports. Same-session verification ran
+      `corepack pnpm exec vitest --run packages/server/src/vite-build.test.ts packages/server/src/api/app.test.ts`,
+      `corepack pnpm exec tsc --noEmit --pretty false`,
+      `corepack pnpm exec vp check packages/server/src/vite-build.ts packages/server/src/vite.ts packages/server/src/api/app-shell/vite.ts packages/server/src/vite-build.test.ts packages/server/src/api/app.test.ts plans/app-shell.md`,
+      and `git diff --check`.
 - [ ] R7 adoption: starter becomes a routed app served by `vp dev`; commerce runs end-to-end over HTTP; a jiso docs site ships from `vp run export` as the first outside consumer.
       Progress 2026-06-11: commerce is now TSX-authored ahead of the HTTP serve
       entry — `CartBadge`, `OrderHistory`, and `ProductGrid` are authored in

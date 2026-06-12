@@ -9,6 +9,7 @@ import { route } from './route.js';
 import {
   createJisoAppShellViteBuild,
   exportJisoAppShellViteBuild,
+  jisoAppShellViteBuildStaticExportAssets,
   jisoAppShellViteManifestFile,
   jisoAppShellViteStaticExportAssetsFromManifestFile,
   staticExportInventoryForJisoAppShellViteBuildFromManifestFile,
@@ -193,6 +194,64 @@ describe('server app shell Vite build seam', () => {
         rm(distDir, { force: true, recursive: true }),
         rm(outDir, { force: true, recursive: true }),
       ]);
+    }
+  });
+
+  it('returns Vite build static export assets without exposing build internals', async () => {
+    const distDir = await mkdtemp(join(tmpdir(), 'jiso-vite-build-assets-dist-'));
+
+    try {
+      const build = createJisoAppShellViteBuild({
+        app: createApp({
+          routes: [
+            route('/cart', {
+              page() {
+                return '<main>Cart</main>';
+              },
+            }),
+          ],
+        }),
+        manifest: {
+          'src/cart.client.ts': {
+            css: ['assets/cart.css'],
+            file: 'assets/cart.js',
+          },
+        },
+        routeEntryMap: {
+          '/cart': 'src/cart.client.ts',
+        },
+      });
+
+      expect(
+        jisoAppShellViteBuildStaticExportAssets(build, {
+          assets: [
+            {
+              headers: { 'cache-control': 'public, max-age=60' },
+              path: '/robots.txt',
+              source: join(distDir, 'public/robots.txt'),
+            },
+          ],
+          distDir,
+        }),
+      ).toEqual([
+        {
+          contentType: 'text/css; charset=utf-8',
+          path: '/assets/cart.css',
+          source: join(distDir, 'assets/cart.css'),
+        },
+        {
+          contentType: 'text/javascript; charset=utf-8',
+          path: '/assets/cart.js',
+          source: join(distDir, 'assets/cart.js'),
+        },
+        {
+          headers: { 'cache-control': 'public, max-age=60' },
+          path: '/robots.txt',
+          source: join(distDir, 'public/robots.txt'),
+        },
+      ]);
+    } finally {
+      await rm(distDir, { force: true, recursive: true });
     }
   });
 
