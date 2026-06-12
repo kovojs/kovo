@@ -88,8 +88,13 @@ export async function exportSiteStaticApp({
 
 if (isMainModule()) {
   try {
-    await buildSiteStaticInputs();
-    const result = await exportSiteStaticApp();
+    const options = parseSiteExportArgs(process.argv.slice(2));
+
+    if (!options.skipBuild) {
+      await buildSiteStaticInputs();
+    }
+
+    const result = await exportSiteStaticApp(options);
 
     process.stdout.write(
       [
@@ -115,6 +120,57 @@ if (isMainModule()) {
 
 function isMainModule() {
   return process.argv[1] === fileURLToPath(import.meta.url);
+}
+
+function parseSiteExportArgs(args) {
+  const options = {};
+
+  for (let index = 0; index < args.length; index += 1) {
+    const arg = args[index];
+
+    if (arg === '--skip-build') {
+      options.skipBuild = true;
+      continue;
+    }
+
+    if (arg === '--css-dist-dir') {
+      options.cssDistDir = requireValue(args, index, arg);
+      index += 1;
+      continue;
+    }
+
+    if (arg === '--dist-dir') {
+      options.distDir = requireValue(args, index, arg);
+      index += 1;
+      continue;
+    }
+
+    if (arg === '--out') {
+      options.outDir = requireValue(args, index, arg);
+      index += 1;
+      continue;
+    }
+
+    if (arg === '--public-dir') {
+      options.publicDir = requireValue(args, index, arg);
+      index += 1;
+      continue;
+    }
+
+    throw new Error(`Unknown site export option '${arg}'.`);
+  }
+
+  return options;
+}
+
+function requireValue(args, index, flag) {
+  const value = args[index + 1];
+
+  if (value === undefined || value.startsWith('--')) {
+    throw new Error(`Missing value for ${flag}.`);
+  }
+
+  return path.resolve(process.cwd(), value);
 }
 
 function isStaticExportDiagnosticError(error) {

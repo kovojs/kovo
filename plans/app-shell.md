@@ -367,6 +367,16 @@ Scope: SPEC addition (proposed §9.5 "The request shell"), `@jiso/server` shell 
       `pnpm exec vitest --run site/scripts/app-shell.test.mjs` and
       `pnpm exec vp run export` from `site/` (`site-export/v1`, 31 HTML
       artifacts, 3 client modules, 0 diagnostics).
+      Additional evidence 2026-06-12: the docs-site export script now accepts
+      explicit `--css-dist-dir`, `--dist-dir`, `--public-dir`, and `--out`
+      paths plus `--skip-build` for command-level fixture tests, while leaving
+      the default `vp run export` task on the full docs build. `site/scripts/app-shell.test.mjs`
+      runs `node scripts/export-static.mjs --skip-build ... --out <tmp>` and
+      proves the CLI entry emits `site-export/v1`, writes pretty
+      `docs/installation/index.html`, copies the referenced versioned `/c/`
+      module, and copies the Vite CSS asset bytes through the shell-backed
+      static export path. Same-session verification ran
+      `pnpm exec vitest --run site/scripts/app-shell.test.mjs`.
       Additional evidence 2026-06-12: the commerce Vite dev middleware now
       claims the same bounded shell surface as the HTTP serve entry for R7
       adoption: document routes, guarded file/download routes, versioned `/c/`
