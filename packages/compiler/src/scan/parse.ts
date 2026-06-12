@@ -14,9 +14,16 @@ export interface ObjectLiteralEntry {
 export interface MutationHandlerModel {
   body: string;
   bodyEnd: number;
+  bodyPropertyAccesses: readonly PropertyAccessPathModel[];
   bodyStart: number;
   params: readonly string[];
   paramSpans: readonly SourceSpan[];
+}
+
+export interface PropertyAccessPathModel {
+  end: number;
+  path: string;
+  start: number;
 }
 
 export interface CallExpressionModel {
@@ -560,6 +567,7 @@ function mutationHandlerModels(
             {
               body: source.slice(property.body.getStart(sourceFile), property.body.getEnd()),
               bodyEnd: property.body.getEnd(),
+              bodyPropertyAccesses: propertyAccessPathModels(sourceFile, property.body),
               bodyStart: property.body.getStart(sourceFile),
               params: property.parameters.map((param) =>
                 source.slice(param.getStart(sourceFile), param.getEnd()),
@@ -584,6 +592,7 @@ function mutationHandlerModels(
       {
         body: source.slice(initializer.body.getStart(sourceFile), initializer.body.getEnd()),
         bodyEnd: initializer.body.getEnd(),
+        bodyPropertyAccesses: propertyAccessPathModels(sourceFile, initializer.body),
         bodyStart: initializer.body.getStart(sourceFile),
         params: initializer.parameters.map((param) =>
           source.slice(param.getStart(sourceFile), param.getEnd()),
@@ -595,6 +604,35 @@ function mutationHandlerModels(
       },
     ];
   });
+}
+
+function propertyAccessPathModels(
+  sourceFile: ts.SourceFile,
+  root: ts.Node,
+): PropertyAccessPathModel[] {
+  const paths: PropertyAccessPathModel[] = [];
+
+  const visit = (node: ts.Node): void => {
+    if (
+      ts.isPropertyAccessExpression(node) &&
+      !(ts.isPropertyAccessExpression(node.parent) && node.parent.expression === node)
+    ) {
+      const path = propertyAccessPath(node);
+      if (path) {
+        paths.push({
+          end: node.getEnd(),
+          path,
+          start: node.getStart(sourceFile),
+        });
+      }
+    }
+
+    ts.forEachChild(node, visit);
+  };
+
+  visit(root);
+
+  return paths;
 }
 
 function propertyNameText(name: ts.PropertyName): string | null {

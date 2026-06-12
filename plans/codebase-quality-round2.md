@@ -839,6 +839,13 @@ pipeline throws the tree away and communicates via mutated source text.
       `parseComponentModule` call. Same-session evidence:
       `pnpm exec vitest --run packages/compiler/src/index.test.ts` and
       `pnpm exec vp check packages/compiler/src/index.ts packages/compiler/src/graph.ts`.
+      Additional evidence 2026-06-12: mutation-handler scanning now records AST-derived
+      property-access facts with source spans, and FW330 direct-DB validation consumes those
+      facts instead of regex-matching handler body text. `index.test.ts` pins real mutation
+      handler string/template text such as `request.db.insert(...)` as non-diagnostic while
+      preserving the authored `request.db` diagnostic span. Same-session evidence:
+      `pnpm exec vitest --run packages/compiler/src/scan/parse.test.ts packages/compiler/src/index.test.ts -t "FW330|mutation handler property access|direct db"` and
+      `pnpm exec vp check packages/compiler/src/scan/parse.ts packages/compiler/src/scan/parse.test.ts packages/compiler/src/validate/component-contracts.ts packages/compiler/src/index.test.ts`.
 
 Verification: compiler vitest + fixpoint + the new adversarial corpus; `fw explain` snapshots
 re-pinned only where positions legitimately improve (drift fixes change line numbers — explain

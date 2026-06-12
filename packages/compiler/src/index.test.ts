@@ -3077,4 +3077,22 @@ export const addToCart = mutation('cart/add', {
 
     expect(result.diagnostics).toEqual([]);
   });
+
+  it('ignores direct-db-looking text inside real mutation handler strings', () => {
+    const result = compileComponentModule({
+      fileName: 'cart.mutation.ts',
+      source: `
+export const addToCart = mutation('cart/add', {
+  input: addToCartInput,
+  handler(input, request) {
+    const message = "request.db.insert(cartItems)";
+    const template = \`request.db.delete(cartItems)\`;
+    return cartDomain.addItem(input, request.session.user.id, message + template);
+  },
+});
+`,
+    });
+
+    expect(result.diagnostics).toEqual([]);
+  });
 });

@@ -3,6 +3,8 @@ import { describe, expect, it } from 'vitest';
 import {
   arrowFunctionParts,
   functionBodyPropertyAccessPaths,
+  mutationHandlers,
+  parseComponentModule,
   solePropertyAccessPath,
   soleWrappedPropertyAccessPath,
   stringLiteralArrayValues,
@@ -35,6 +37,26 @@ describe('compiler scan parser helpers', () => {
         'submit(item.id, cart.items?.length, state.count, "item.name")',
       ),
     ).toEqual(['item.id', 'cart.items?.length', 'state.count']);
+  });
+
+  it('records mutation handler property access paths with source spans', () => {
+    const source = `
+export const save = mutation('cart/save', {
+  handler(input, request) {
+    const text = "request.db";
+    return request.db.insert(input);
+  },
+});
+`;
+    const [handler] = mutationHandlers(parseComponentModule('cart.mutation.ts', source));
+
+    expect(handler?.bodyPropertyAccesses).toEqual([
+      {
+        end: source.indexOf('request.db.insert') + 'request.db.insert'.length,
+        path: 'request.db.insert',
+        start: source.indexOf('request.db.insert'),
+      },
+    ]);
   });
 
   it('extracts string literal array values from expression source', () => {

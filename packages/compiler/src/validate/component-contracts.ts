@@ -126,8 +126,6 @@ export function validateDirectDbAccess(
   model: ComponentModuleModel,
   fileName: string,
 ): CompilerDiagnostic[] {
-  if (!/\bmutation\s*\(/.test(source)) return [];
-
   const diagnostics: CompilerDiagnostic[] = [];
 
   for (const handler of mutationHandlers(model)) {
@@ -138,11 +136,13 @@ export function validateDirectDbAccess(
       (param) =>
         param === 'request' || /request$/i.test(param) || param === 'ctx' || param === 'context',
     );
-    const requestDb = requestParam
-      ? new RegExp(`\\b${escapeRegExp(requestParam)}\\.db\\b`).exec(handler.body)
-      : null;
-    const readsRequestDb =
-      requestParam !== undefined && requestDb !== null && requestDb.index !== undefined;
+    const requestDb =
+      requestParam === undefined
+        ? undefined
+        : handler.bodyPropertyAccesses.find(
+            (access) =>
+              access.path === `${requestParam}.db` || access.path.startsWith(`${requestParam}.db.`),
+          );
 
     if (receivesDb) {
       const span = handler.paramSpans[dbParamIndex];
@@ -158,9 +158,11 @@ export function validateDirectDbAccess(
       continue;
     }
 
-    if (readsRequestDb) {
-      const index = handler.bodyStart + (requestDb?.index ?? 0);
-      diagnostics.push(diagnosticFor(fileName, 'FW330', source, index, requestDb?.[0].length));
+    if (requestParam && requestDb) {
+      const requestDbPath = `${requestParam}.db`;
+      diagnostics.push(
+        diagnosticFor(fileName, 'FW330', source, requestDb.start, requestDbPath.length),
+      );
     }
   }
 
@@ -242,10 +244,6 @@ function fw311Diagnostic(
 function readParameterName(param: string): string {
   const withoutType = param.split(':')[0]?.trim() ?? '';
   return withoutType.replace(/^[.{\s]+|[}\s]+$/g, '');
-}
-
-function escapeRegExp(value: string): string {
-  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
 function eventPayloads(model: ComponentModuleModel): EventPayloadPath[] {
