@@ -796,6 +796,14 @@ must be "FW406 unresolved," never "silently wrong."
       The dependency-classification cleanup and `packages/test` phantom dependency remain open.
       Same-session evidence: `pnpm exec vitest --run packages/drizzle/src/index.test.ts` and
       `pnpm exec vitest --run conformance/drizzle-pin/src/index.test.ts`.
+      Additional evidence 2026-06-12: `packages/drizzle/package.json` moved `ts-morph` from
+      production `dependencies` to `devDependencies`, and `packages/drizzle/src/index.test.ts`
+      asserts the root runtime export remains extractor-free while package metadata keeps
+      `ts-morph` out of runtime dependencies. `packages/test/package.json` no longer declares the
+      phantom `@jiso/drizzle` dependency after `rg '@jiso/drizzle' packages/test/src` found no
+      imports. Same-session evidence: `pnpm exec vitest --run packages/drizzle/src/index.test.ts`,
+      `pnpm exec vitest --run conformance/drizzle-pin/src/index.test.ts`, and
+      `pnpm exec vp check packages/drizzle/package.json packages/drizzle/src/index.test.ts packages/test/package.json pnpm-lock.yaml plans/codebase-quality-round2.md`.
 - [ ] **LOW** — module-global mutable `sourceExtractionFileId` (:53); fresh ts-morph `Project`
       per `parseSourceFile` call with files re-parsed 3+× per pass (:1457); `IGNORED_LOCAL_CALL_NAMES`
       mixing JS keywords with domain names (:57-71 — a user helper named `insert` is silently

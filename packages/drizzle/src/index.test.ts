@@ -23,6 +23,7 @@ import {
 
 interface DrizzlePackageJson {
   dependencies?: Record<string, string>;
+  devDependencies?: Record<string, string>;
   exports?: Record<string, string>;
 }
 
@@ -53,7 +54,8 @@ describe('@jiso/drizzle touch graph helpers', () => {
       '.': './src/runtime.ts',
       './static': './src/index.ts',
     });
-    expect(packageJson.dependencies?.['ts-morph']).toBe('^28.0.0');
+    expect(packageJson.dependencies?.['ts-morph']).toBeUndefined();
+    expect(packageJson.devDependencies?.['ts-morph']).toBe('^28.0.0');
   });
 
   it('extracts writes and query facts through real drizzle-orm pgTable/select/update types', () => {

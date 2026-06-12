@@ -7,11 +7,11 @@
     "./static": "./src/index.ts"
   },
   "dependencies": {
-    "@jiso/core": "workspace:*",
-    "ts-morph": "^28.0.0"
+    "@jiso/core": "workspace:*"
   },
   "devDependencies": {
     "drizzle-orm": "0.45.2",
+    "ts-morph": "^28.0.0",
     "vitest": "4.1.8"
   },
   "peerDependencies": {
