@@ -6,7 +6,6 @@ import {
   componentOptionObjectKeys,
   componentOptionSource,
   firstComponentModel,
-  parseComponentModule as parseComponentModuleModel,
   type ComponentModuleModel,
 } from './scan/parse.js';
 import type { PackageComponentPrefixFact } from './validate/package-prefixes.js';
@@ -76,17 +75,16 @@ export function deriveAppGraph(options: CompileAppGraphOptions): CompileAppGraph
 }
 
 export function findFragmentTargetFacts(
-  source: string,
   componentName: string,
+  model: ComponentModuleModel,
 ): FragmentTargetFact[] {
-  const model = parseComponentModuleModel('component.tsx', source);
   const fragmentTarget = componentOptionSource(model, 'fragmentTarget');
   if (fragmentTarget !== 'true') return [];
 
   const explicitName = firstComponentModel(model)?.explicitName;
   return [
     {
-      propsType: fragmentTargetPropsType(source),
+      propsType: fragmentTargetPropsType(model),
       target: explicitName ?? kebabCase(componentName),
     },
   ];
@@ -142,9 +140,7 @@ function componentQueryNames(model: ComponentModuleModel): string[] {
   return componentOptionObjectKeys(model, 'queries');
 }
 
-function fragmentTargetPropsType(source: string): string {
-  const model = parseComponentModuleModel('component.tsx', source);
-
+function fragmentTargetPropsType(model: ComponentModuleModel): string {
   const props = componentOptionObjectEntries(model, 'props')
     .map((entry) => ({
       key: entry.key,

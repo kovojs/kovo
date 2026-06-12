@@ -220,7 +220,7 @@ export function compileComponentModule(options: CompileComponentOptions): Compil
     versionHandlerLowering(handler, options.fileName, clientHref),
   );
   const cssSource = emitCssModule(source, componentName, model);
-  const fragmentTargetFacts = findFragmentTargetFacts(source, componentName);
+  const fragmentTargetFacts = findFragmentTargetFacts(componentName, model);
   const fragmentTargets = fragmentTargetFacts.map((fact) => fact.target);
   const componentGraphFacts = [componentGraphFact(componentName, model, fragmentTargets)];
   const cssAssets = cssSource
