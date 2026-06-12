@@ -570,6 +570,16 @@ jiso-dialog` resolves dashed wire names and prints provenance including package,
       `pnpm --filter @jiso/example-gallery test`. G1 remains open for the many primitives
       and styled components not yet represented as gallery routes, and G2/G3/G4/G5 remain open.
 - [ ] G2 behavior-contract gates: keyboard/ARIA assertions per primitive (browser-free via `page()` + `fw explain` where possible; framework browser suite for focus/dismiss/top-layer).
+      Partial evidence 2026-06-12: `examples/gallery/src/behavior-contracts.test.ts`
+      adds a browser-free G2 fixture gate over the existing 17 rendered gallery routes. It
+      parses each route's SPEC §4.6-oriented behavior-contract table and pins the exact
+      `data-state`, keyboard, and change-reason rows, then asserts required native/ARIA
+      behavior snippets for the represented primitive and primitive-backed styled routes
+      (accordion, button, checkbox, dialog, field, meter, progress, radio-group, select,
+      separator, sheet, switch, tabs, toggle, and tooltip). Same-session evidence:
+      `pnpm --filter @jiso/example-gallery test`. G2 remains open for browser-backed
+      focus/dismiss/top-layer behavior, `fw explain` coverage, and routes/primitives not yet
+      represented in the gallery.
 - [ ] G3 axe checks per component state in the gallery.
 - [ ] G4 visual regression for `@jiso/ui`: shadcn-parity human review once, then self-baselined screenshots.
 - [ ] G5 merge fixtures: every primitive's attrs record × an author element → golden merged output (doubles as FW231/FW232 coverage).

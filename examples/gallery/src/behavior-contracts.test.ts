@@ -1,0 +1,233 @@
+import { describe, expect, it } from 'vitest';
+
+import { galleryFixtures, type GalleryRoute } from './demo-fixtures.js';
+
+interface ExpectedBehaviorContract {
+  changeReasons: string;
+  dataState: string;
+  keyboard: string;
+}
+
+const expectedBehaviorContracts = {
+  '/components/accordion': {
+    changeReasons: 'trigger-click, programmatic',
+    dataState: 'open, closed, disabled',
+    keyboard: 'Native button activation opens an item; group keyboard maps are primitive-owned',
+  },
+  '/components/badge': {
+    changeReasons: 'not stateful',
+    dataState: 'not emitted',
+    keyboard: 'No custom keyboard handling',
+  },
+  '/components/button': {
+    changeReasons: 'native click or form submit',
+    dataState: 'disabled via native attribute',
+    keyboard: 'Space or Enter activates the native button',
+  },
+  '/components/card': {
+    changeReasons: 'not stateful',
+    dataState: 'not emitted',
+    keyboard: 'No custom keyboard handling',
+  },
+  '/components/checkbox': {
+    changeReasons: 'trigger-click, programmatic',
+    dataState: 'checked, unchecked, indeterminate, disabled',
+    keyboard: 'Space toggles the native checkbox',
+  },
+  '/components/dialog': {
+    changeReasons: 'trigger-click, close-click, cancel-event, native-beforetoggle, programmatic',
+    dataState: 'open, closed',
+    keyboard: 'Escape closes the native dialog',
+  },
+  '/components/field': {
+    changeReasons: 'native form control changes',
+    dataState: 'invalid, required, disabled',
+    keyboard: 'Native field and fieldset semantics',
+  },
+  '/components/meter': {
+    changeReasons: 'value comes from app state',
+    dataState: 'optimum, suboptimum, even-less-good',
+    keyboard: 'No custom keyboard handling',
+  },
+  '/components/progress': {
+    changeReasons: 'value comes from app state',
+    dataState: 'loading, complete, indeterminate',
+    keyboard: 'No custom keyboard handling',
+  },
+  '/components/radio-group': {
+    changeReasons: 'item-click, keyboard, programmatic',
+    dataState: 'checked, unchecked, disabled',
+    keyboard: 'Arrow keys move over enabled radio items',
+  },
+  '/components/select': {
+    changeReasons: 'trigger-change, programmatic',
+    dataState: 'open, closed, checked, unchecked, disabled',
+    keyboard: 'Native select keyboard behavior',
+  },
+  '/components/separator': {
+    changeReasons: 'not stateful',
+    dataState: 'orientation only',
+    keyboard: 'No custom keyboard handling',
+  },
+  '/components/sheet': {
+    changeReasons: 'trigger-click, close-click, cancel-event, native-beforetoggle',
+    dataState: 'open, closed, disabled',
+    keyboard: 'Escape closes the native dialog',
+  },
+  '/components/switch': {
+    changeReasons: 'trigger-click, programmatic',
+    dataState: 'checked, unchecked, disabled',
+    keyboard: 'Space toggles the native checkbox',
+  },
+  '/components/tabs': {
+    changeReasons: 'trigger-click, keyboard, programmatic',
+    dataState: 'active, inactive, disabled',
+    keyboard: 'Arrow keys move focus; activation mode controls selection',
+  },
+  '/components/toggle': {
+    changeReasons: 'trigger-click, programmatic',
+    dataState: 'pressed, off, disabled',
+    keyboard: 'Space or Enter activates the native button',
+  },
+  '/components/tooltip': {
+    changeReasons:
+      'trigger-pointer-enter, trigger-pointer-leave, trigger-focus, trigger-blur, escape-key, programmatic',
+    dataState: 'open, closed, disabled',
+    keyboard: 'Escape closes an open tooltip',
+  },
+} as const satisfies Record<GalleryRoute['path'], ExpectedBehaviorContract>;
+
+const expectedBehaviorSnippets: Partial<Record<GalleryRoute['path'], readonly string[]>> = {
+  '/components/accordion': [
+    'aria-expanded="true"',
+    'aria-controls="gallery-accordion-shipping-panel"',
+    'aria-labelledby="gallery-accordion-shipping-trigger"',
+    'hidden id="gallery-accordion-billing-panel"',
+  ],
+  '/components/button': ['type="button"', 'disabled type="button"'],
+  '/components/checkbox': [
+    'type="checkbox"',
+    'required',
+    'aria-checked="mixed"',
+    'data-state="indeterminate"',
+    'disabled',
+  ],
+  '/components/dialog': [
+    'command="show-modal"',
+    'commandfor="gallery-dialog-content"',
+    'aria-labelledby="gallery-dialog-title"',
+    'aria-describedby="gallery-dialog-description"',
+    'open',
+  ],
+  '/components/field': [
+    'for="gallery-field-email"',
+    'aria-describedby="gallery-field-description gallery-field-error"',
+    'aria-invalid="true"',
+    'role="alert"',
+  ],
+  '/components/meter': [
+    '<meter',
+    'data-low="50"',
+    'data-high="90"',
+    'data-state="optimum"',
+    'data-state="suboptimum"',
+  ],
+  '/components/progress': [
+    '<progress',
+    'data-state="loading"',
+    'data-state="complete"',
+    'data-state="indeterminate"',
+  ],
+  '/components/radio-group': [
+    'role="radiogroup"',
+    'type="radio"',
+    'aria-checked="true"',
+    'tabIndex="0"',
+    'disabled tabIndex="-1"',
+  ],
+  '/components/select': [
+    '<select',
+    'aria-labelledby="gallery-select-label"',
+    'selected',
+    'disabled',
+  ],
+  '/components/separator': ['role="none"', 'role="separator"', 'aria-orientation="vertical"'],
+  '/components/sheet': [
+    'command="show-modal" commandfor="gallery-sheet"',
+    '<dialog aria-describedby="gallery-sheet-description"',
+    'id="gallery-sheet" open>',
+    'command="request-close" commandfor="gallery-sheet"',
+  ],
+  '/components/switch': ['role="switch"', 'type="checkbox"', 'aria-checked="true"', 'disabled'],
+  '/components/tabs': [
+    'role="tablist"',
+    'role="tab"',
+    'aria-selected="true"',
+    'aria-controls="gallery-tabs-overview-panel"',
+    'role="tabpanel"',
+    'disabled role="tab" tabIndex="-1"',
+  ],
+  '/components/toggle': [
+    'data-state="pressed"',
+    'aria-pressed="true"',
+    'data-state="off"',
+    'disabled',
+  ],
+  '/components/tooltip': [
+    'jiso-tooltip="gallery-tooltip-content"',
+    'aria-describedby="gallery-tooltip-content"',
+    'popover="manual"',
+    'role="tooltip"',
+  ],
+};
+
+describe('gallery behavior-contract gates', () => {
+  it('pins every rendered route to an exact browser-free behavior contract', () => {
+    for (const fixture of galleryFixtures()) {
+      expect(extractBehaviorContract(fixture.html), fixture.path).toEqual(
+        expectedBehaviorContracts[fixture.path],
+      );
+    }
+  });
+
+  it('pins represented primitive routes to required native and ARIA behavior snippets', () => {
+    for (const fixture of galleryFixtures()) {
+      const snippets = expectedBehaviorSnippets[fixture.path] ?? [];
+
+      for (const snippet of snippets) {
+        expect(fixture.html, `${fixture.path} should include ${snippet}`).toContain(snippet);
+      }
+    }
+  });
+});
+
+function extractBehaviorContract(html: string): ExpectedBehaviorContract {
+  const table = html.match(/<table data-gallery-contract>([\s\S]*?)<\/table>/)?.[1];
+
+  if (!table) {
+    throw new Error('Missing gallery behavior-contract table');
+  }
+
+  const rows = new Map<string, string>();
+  const rowPattern = /<tr>\s*<th scope="row">([^<]+)<\/th>\s*<td>([\s\S]*?)<\/td>\s*<\/tr>/g;
+  for (const match of table.matchAll(rowPattern)) {
+    const [, label, value] = match;
+    if (label && value) rows.set(label, value);
+  }
+
+  return {
+    changeReasons: requireContractRow(rows, 'change reasons'),
+    dataState: requireContractRow(rows, 'data-state'),
+    keyboard: requireContractRow(rows, 'keyboard'),
+  };
+}
+
+function requireContractRow(rows: ReadonlyMap<string, string>, label: string): string {
+  const value = rows.get(label);
+
+  if (value === undefined) {
+    throw new Error(`Missing gallery behavior-contract row: ${label}`);
+  }
+
+  return value;
+}
