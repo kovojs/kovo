@@ -445,6 +445,13 @@ pipeline throws the tree away and communicates via mutated source text.
       `pnpm exec vitest --run packages/compiler/src/index.test.ts -t "element param types|element params|handler captures|quoted commas|string literal"`,
       `pnpm exec vitest --run packages/compiler/src/index.test.ts`, and
       `pnpm exec vp check packages/compiler/src/lower/handlers.ts packages/compiler/src/index.test.ts`.
+      Additional evidence 2026-06-12: wrapper-call element param discovery now reads zero-arg
+      arrow call arguments from the TypeScript AST instead of using a custom argument splitter.
+      The old `splitArguments`/quoted-string/template skipping parser is removed from
+      `lower/handlers.ts`; the existing handler tests cover quoted commas, nested arguments, and
+      string/template literal text. Same-session evidence:
+      `pnpm exec vitest --run packages/compiler/src/index.test.ts -t "handler captures|quoted commas|element params|element param types|string literal"` and
+      `pnpm exec vp check packages/compiler/src/lower/handlers.ts packages/compiler/src/index.test.ts`.
       Additional evidence 2026-06-11: template-stamp client emission no longer regex-parses
       rendered template HTML to find `data-bind` placeholder text. `collectQueryUpdatePlans`
       records item-binding placeholder text from JSX element spans in `QueryTemplateStampFact`,

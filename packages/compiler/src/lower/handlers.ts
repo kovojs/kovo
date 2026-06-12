@@ -222,9 +222,9 @@ function fw201Diagnostic(
 }
 
 function extractElementParams(expression: string): ElementParam[] {
-  const callMatch = /^\(\)\s*=>\s*[A-Za-z_$][\w$]*\((?<args>.*)\)$/.exec(expression);
-  const expressions = callMatch?.groups?.args
-    ? splitArguments(callMatch.groups.args)
+  const callArguments = zeroArgArrowCallArguments(expression);
+  const expressions = callArguments
+    ? callArguments
         .map((arg) => arg.trim())
         .filter((arg) => arg.length > 0 && arg !== 'state')
         .flatMap((arg) => {
@@ -239,6 +239,35 @@ function extractElementParams(expression: string): ElementParam[] {
     type: inferElementParamType(expression, arg),
     value: `{${arg}}`,
   }));
+}
+
+function zeroArgArrowCallArguments(expression: string): string[] | null {
+  const sourceFile = ts.createSourceFile(
+    'handler-expression.ts',
+    `const __jiso_handler__ = ${expression};`,
+    ts.ScriptTarget.Latest,
+    true,
+    ts.ScriptKind.TS,
+  );
+  let callArguments: string[] | null = null;
+
+  const visit = (node: ts.Node): void => {
+    if (callArguments !== null) return;
+
+    if (
+      ts.isArrowFunction(node) &&
+      node.parameters.length === 0 &&
+      ts.isCallExpression(node.body)
+    ) {
+      callArguments = node.body.arguments.map((argument) => argument.getText(sourceFile));
+      return;
+    }
+
+    ts.forEachChild(node, visit);
+  };
+
+  visit(sourceFile);
+  return callArguments;
 }
 
 function inferElementParamType(expression: string, sourceExpression: string): ElementParamType {
@@ -425,59 +454,6 @@ function propertyAccessPath(expression: ts.PropertyAccessExpression): string | n
 
 function dedupeStrings(values: readonly string[]): string[] {
   return [...new Set(values)];
-}
-
-function splitArguments(args: string): string[] {
-  const parts: string[] = [];
-  let start = 0;
-  let depth = 0;
-
-  for (let index = 0; index < args.length; index += 1) {
-    const char = args[index];
-    if (char === '"' || char === "'") {
-      index = skipQuotedString(args, index, char);
-      continue;
-    }
-    if (char === '`') {
-      index = skipTemplateLiteral(args, index);
-      continue;
-    }
-    if (char === '(' || char === '[' || char === '{') depth += 1;
-    if (char === ')' || char === ']' || char === '}') depth -= 1;
-    if (char === ',' && depth === 0) {
-      parts.push(args.slice(start, index));
-      start = index + 1;
-    }
-  }
-
-  parts.push(args.slice(start));
-  return parts;
-}
-
-function skipQuotedString(source: string, start: number, quote: string): number {
-  for (let index = start + 1; index < source.length; index += 1) {
-    const char = source[index];
-    if (char === '\\') {
-      index += 1;
-      continue;
-    }
-    if (char === quote) return index;
-  }
-
-  return source.length - 1;
-}
-
-function skipTemplateLiteral(source: string, start: number): number {
-  for (let index = start + 1; index < source.length; index += 1) {
-    const char = source[index];
-    if (char === '\\') {
-      index += 1;
-      continue;
-    }
-    if (char === '`') return index;
-  }
-
-  return source.length - 1;
 }
 
 function paramNameForExpression(expression: string): string {
