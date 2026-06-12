@@ -568,6 +568,14 @@ pipeline throws the tree away and communicates via mutated source text.
       `pnpm exec vitest --run packages/compiler/src/index.test.ts -t "derive|data-bind|query update"`
       and
       `pnpm exec vp check packages/compiler/src/index.ts packages/compiler/src/lower/inline-derives.ts plans/codebase-quality-round2.md`.
+      Partial evidence 2026-06-12: `compile.ts` now threads source/model ownership through one
+      `ComponentPipelineState` transition helper instead of open-coding each post-lowering
+      `modelForSourceChange` handoff. The lowering passes are still source-returning, so the
+      broad span-patch pipeline item remains open, but the critical path now has one explicit
+      source/model transition seam for replacing per-pass string rewrites. Same-session
+      evidence:
+      `pnpm exec vitest --run packages/compiler/src/index.test.ts packages/compiler/src/model-pipeline.test.ts packages/compiler/src/navigation-lowering.test.ts packages/compiler/src/platform-lowering.test.ts`
+      and `pnpm exec vp check packages/compiler/src/compile.ts plans/codebase-quality-round2.md`.
       Partial evidence 2026-06-11: `serverRenderSource` now parses once after handler lowering
       with the author file name and stamps component identity, declared query deps, and initial
       state onto the render host through one in-memory tag update instead of reparsing for each

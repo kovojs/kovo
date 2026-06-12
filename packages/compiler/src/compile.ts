@@ -55,51 +55,34 @@ export function compileComponentModule(options: CompileComponentOptions): Compil
   const originalModel = parseComponentModuleModel(options.fileName, options.source);
   const authoringSurfaceDiagnostics = validateAuthoringSurface(options, originalModel);
   const componentName = inferComponentName(options.fileName, originalModel);
-  const viewTransitionLowering = lowerViewTransitions(options.source, originalModel);
-  const viewTransitionModel = modelForComponentSourceChange(
-    options.fileName,
-    options.source,
-    originalModel,
+  const originalState = componentPipelineState(options.fileName, options.source, originalModel);
+  const viewTransitionLowering = lowerViewTransitions(originalState.source, originalState.model);
+  const viewTransitionState = lowerComponentPipelineSource(
+    originalState,
     viewTransitionLowering.source,
   );
   const platformLowering = lowerPlatformBehaviors(
-    viewTransitionLowering.source,
-    viewTransitionModel,
+    viewTransitionState.source,
+    viewTransitionState.model,
   );
-  const platformModel = modelForComponentSourceChange(
-    options.fileName,
-    viewTransitionLowering.source,
-    viewTransitionModel,
-    platformLowering.source,
+  const platformState = lowerComponentPipelineSource(viewTransitionState, platformLowering.source);
+  const linksLoweredState = lowerComponentPipelineSource(
+    platformState,
+    lowerNavigationLinks(platformState.source, platformState.model),
   );
-  const linksLoweredSource = lowerNavigationLinks(platformLowering.source, platformModel);
-  const linksLoweredModel = modelForComponentSourceChange(
-    options.fileName,
-    platformLowering.source,
-    platformModel,
-    linksLoweredSource,
-  );
-  const navigationSource = lowerNavigationHrefs(linksLoweredSource, linksLoweredModel);
-  const navigationModel = modelForComponentSourceChange(
-    options.fileName,
-    linksLoweredSource,
-    linksLoweredModel,
-    navigationSource,
+  const navigationState = lowerComponentPipelineSource(
+    linksLoweredState,
+    lowerNavigationHrefs(linksLoweredState.source, linksLoweredState.model),
   );
   const deriveLowering = lowerInlineAttributeDerives(
-    navigationSource,
-    navigationModel,
+    navigationState.source,
+    navigationState.model,
     componentName,
     compileOptions,
   );
   const source = deriveLowering.source;
   const diagnosticSource = deriveLowering.diagnosticSource;
-  const model = modelForComponentSourceChange(
-    options.fileName,
-    navigationSource,
-    navigationModel,
-    source,
-  );
+  const model = lowerComponentPipelineSource(navigationState, source).model;
   const handlers = lowerEventHandlers({ ...compileOptions, source }, componentName, model);
   const queryUpdatePlans = collectQueryUpdatePlans(source, model, componentName);
   const updateCoverage = collectQueryUpdateCoverage(source, model, compileOptions, componentName);
@@ -184,6 +167,36 @@ function modelForComponentSourceChange(
     previousModel,
     previousSource,
   });
+}
+
+interface ComponentPipelineState {
+  fileName: string;
+  model: ComponentModuleModel;
+  source: string;
+}
+
+function componentPipelineState(
+  fileName: string,
+  source: string,
+  model: ComponentModuleModel,
+): ComponentPipelineState {
+  return { fileName, model, source };
+}
+
+function lowerComponentPipelineSource(
+  previous: ComponentPipelineState,
+  source: string,
+): ComponentPipelineState {
+  return {
+    fileName: previous.fileName,
+    model: modelForComponentSourceChange(
+      previous.fileName,
+      previous.source,
+      previous.model,
+      source,
+    ),
+    source,
+  };
 }
 
 export function assertFixpoint(result: CompileResult): void {
