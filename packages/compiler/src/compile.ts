@@ -19,6 +19,7 @@ import {
   inferComponentName,
   parseComponentModule as parseComponentModuleModel,
 } from './scan/parse.js';
+import { modelForSourceChange } from './model-pipeline.js';
 import {
   mergePackageComponentPrefixFacts,
   packageComponentPrefixesForModule,
@@ -54,7 +55,7 @@ export function compileComponentModule(options: CompileComponentOptions): Compil
   const originalModel = parseComponentModuleModel(options.fileName, options.source);
   const componentName = inferComponentName(options.fileName, originalModel);
   const viewTransitionLowering = lowerViewTransitions(options.source, originalModel);
-  const viewTransitionModel = modelForSourceChange(
+  const viewTransitionModel = modelForComponentSourceChange(
     options.fileName,
     options.source,
     originalModel,
@@ -64,21 +65,21 @@ export function compileComponentModule(options: CompileComponentOptions): Compil
     viewTransitionLowering.source,
     viewTransitionModel,
   );
-  const platformModel = modelForSourceChange(
+  const platformModel = modelForComponentSourceChange(
     options.fileName,
     viewTransitionLowering.source,
     viewTransitionModel,
     platformLowering.source,
   );
   const linksLoweredSource = lowerNavigationLinks(platformLowering.source, platformModel);
-  const linksLoweredModel = modelForSourceChange(
+  const linksLoweredModel = modelForComponentSourceChange(
     options.fileName,
     platformLowering.source,
     platformModel,
     linksLoweredSource,
   );
   const navigationSource = lowerNavigationHrefs(linksLoweredSource, linksLoweredModel);
-  const navigationModel = modelForSourceChange(
+  const navigationModel = modelForComponentSourceChange(
     options.fileName,
     linksLoweredSource,
     linksLoweredModel,
@@ -92,7 +93,12 @@ export function compileComponentModule(options: CompileComponentOptions): Compil
   );
   const source = deriveLowering.source;
   const diagnosticSource = deriveLowering.diagnosticSource;
-  const model = modelForSourceChange(options.fileName, navigationSource, navigationModel, source);
+  const model = modelForComponentSourceChange(
+    options.fileName,
+    navigationSource,
+    navigationModel,
+    source,
+  );
   const handlers = lowerEventHandlers({ ...compileOptions, source }, componentName, model);
   const queryUpdatePlans = collectQueryUpdatePlans(source, model, componentName);
   const updateCoverage = collectQueryUpdateCoverage(source, model, compileOptions, componentName);
@@ -164,15 +170,19 @@ export function compileComponentModule(options: CompileComponentOptions): Compil
   };
 }
 
-function modelForSourceChange(
+function modelForComponentSourceChange(
   fileName: string,
   previousSource: string,
   previousModel: ComponentModuleModel,
   nextSource: string,
 ): ComponentModuleModel {
-  return nextSource === previousSource
-    ? previousModel
-    : parseComponentModuleModel(fileName, nextSource);
+  return modelForSourceChange({
+    fileName,
+    nextSource,
+    parse: parseComponentModuleModel,
+    previousModel,
+    previousSource,
+  });
 }
 
 export function assertFixpoint(result: CompileResult): void {

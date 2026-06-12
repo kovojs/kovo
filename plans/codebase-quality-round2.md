@@ -776,6 +776,13 @@ pipeline throws the tree away and communicates via mutated source text.
       `pnpm exec vitest --run packages/compiler/src/index.test.ts packages/compiler/src/shared.test.ts packages/compiler/src/navigation-lowering.test.ts packages/compiler/src/platform-lowering.test.ts`,
       `pnpm exec vp check packages/compiler/src/compile.ts plans/codebase-quality-round2.md`,
       and `git diff --check`.
+      Additional evidence 2026-06-12: the source/model transition rule now lives in
+      `packages/compiler/src/model-pipeline.ts` with direct tests proving unchanged lowering
+      passes reuse the existing model and changed passes parse exactly once with the author file
+      name. `compile.ts` consumes that helper instead of relying on a private untested convention.
+      Same-session evidence:
+      `pnpm exec vitest --run packages/compiler/src/model-pipeline.test.ts packages/compiler/src/index.test.ts packages/compiler/src/navigation-lowering.test.ts -t "compiler model pipeline|navigation|Link|href"` and
+      `pnpm exec vp check packages/compiler/src/model-pipeline.ts packages/compiler/src/model-pipeline.test.ts packages/compiler/src/compile.ts`.
       and
       `pnpm exec vp check packages/compiler/src/index.ts packages/compiler/src/ir.ts packages/compiler/src/css.ts packages/compiler/src/emit/client.ts packages/compiler/src/emit/server.ts packages/compiler/src/emit/registry.ts packages/compiler/src/emit/bootstrap.ts packages/compiler/src/validate/authoring-surface.ts plans/codebase-quality-round2.md`.
       Additional evidence 2026-06-12: `packages/compiler/src/emit/registry.ts` now consumes
