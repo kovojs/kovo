@@ -6,7 +6,7 @@ import { pathToFileURL } from 'node:url';
 import { describe, expect, it } from 'vitest';
 
 import { createApp, createRequestHandler } from './app.js';
-import { createMemoryVersionedClientModuleRegistry, guards, route } from './index.js';
+import { createMemoryVersionedClientModuleRegistry, guards, respond, route } from './index.js';
 import { exportStaticApp, StaticExportError } from './static-export.js';
 
 describe('server static export', () => {
@@ -522,6 +522,47 @@ describe('server static export', () => {
           code: 'FW229',
           routePath: '/products/:id',
           message: expect.stringContaining('static-path metadata'),
+        },
+      ],
+    });
+  });
+
+  it('fails or skips loudly when replay proves a route is not an HTML document', async () => {
+    const app = createApp({
+      routes: [
+        route('/', {
+          page: () => '<main>Home</main>',
+        }),
+        route('/exports/orders.csv', {
+          page: () =>
+            respond.file('id,total\nord_1,42\n', {
+              contentType: 'text/csv; charset=utf-8',
+              filename: 'orders.csv',
+            }),
+        }),
+      ],
+    });
+
+    await expect(exportStaticApp(app)).rejects.toMatchObject({
+      code: 'FW229',
+      diagnostics: [
+        {
+          code: 'FW229',
+          routePath: '/exports/orders.csv',
+          message: expect.stringContaining(
+            "can only write successful HTML route documents; '/exports/orders.csv' returned status 200 with Content-Type 'text/csv; charset=utf-8'",
+          ),
+        },
+      ],
+    });
+
+    await expect(exportStaticApp(app, { onNonExportable: 'skip' })).resolves.toMatchObject({
+      artifacts: [{ path: '/index.html', status: 200 }],
+      diagnostics: [
+        {
+          code: 'FW229',
+          routePath: '/exports/orders.csv',
+          message: expect.stringContaining('Content-Type'),
         },
       ],
     });

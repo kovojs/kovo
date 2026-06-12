@@ -93,7 +93,7 @@ export async function exportStaticApp(
     throw new StaticExportError(blockingDiagnostics);
   }
 
-  const diagnostics = nonExportableRouteDiagnostics(app);
+  const diagnostics = [...nonExportableRouteDiagnostics(app)];
   if (diagnostics.length > 0 && options.onNonExportable !== 'skip') {
     throw new StaticExportError(diagnostics);
   }
@@ -105,9 +105,17 @@ export async function exportStaticApp(
   for (const route of app.routes) {
     if (diagnostics.some((diagnostic) => diagnostic.routePath === route.path)) continue;
 
-    artifacts.push(
-      await exportRouteArtifact(handler, route.path, origin, options.htmlPathStyle ?? 'flat'),
-    );
+    try {
+      artifacts.push(
+        await exportRouteArtifact(handler, route.path, origin, options.htmlPathStyle ?? 'flat'),
+      );
+    } catch (error) {
+      if (!(error instanceof StaticExportError) || options.onNonExportable !== 'skip') {
+        throw error;
+      }
+
+      diagnostics.push(...error.diagnostics);
+    }
   }
 
   const clientModules =

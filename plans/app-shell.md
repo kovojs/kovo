@@ -134,6 +134,16 @@ Scope: SPEC addition (proposed §9.5 "The request shell"), `@jiso/server` shell 
       `pnpm exec vitest --run packages/server/src/static-export.test.ts` and
       `pnpm exec vp check packages/server/src/static-export.ts packages/server/src/static-export.test.ts`.
       Remaining R6 work: Vite/task template wiring for real starter/docs apps.
+      Additional evidence 2026-06-12: replay-discovered non-HTML route outcomes now use the
+      same FW229 teaching path as preflight non-exportable routes. Strict export still refuses
+      a `respond.file()` route that replays to `text/csv`, while `onNonExportable: 'skip'`
+      records the route diagnostic and exports the remaining successful HTML documents, preserving
+      the SPEC §9.5 synthetic-request replay/L0-L1-only export boundary. `packages/server/src/static-export.test.ts`
+      covers both strict and skip behavior. Same-session verification ran
+      `pnpm exec vitest --run packages/server/src/static-export.test.ts`,
+      `pnpm exec vp check packages/server/src/static-export.ts packages/server/src/static-export.test.ts plans/app-shell.md`,
+      and `git diff --check`. R6 remains open for broader Vite/task template wiring and
+      end-consumer export integration.
 - [ ] R7 adoption: starter becomes a routed app served by `vp dev`; commerce runs end-to-end over HTTP; a jiso docs site ships from `vp run export` as the first outside consumer.
       Progress 2026-06-11: commerce is now TSX-authored ahead of the HTTP serve
       entry — `CartBadge`, `OrderHistory`, and `ProductGrid` are authored in
