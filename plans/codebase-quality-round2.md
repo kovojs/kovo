@@ -1224,6 +1224,15 @@ index.test.ts:4227 while here — it weakens the byte-for-byte claim) + acceptan
       helper directly. Same-session evidence: `pnpm exec vitest --run packages/test/src`,
       `pnpm exec vp check packages/test/src/verifier.ts packages/test/src/verifier-sql.ts packages/test/src/verifier-sql.test.ts plans/codebase-quality-round2.md`,
       and `git diff --check`.
+      Partial evidence 2026-06-12: query loader execution, query output schema FW410
+      diagnostics, read-side FW407/FW408/FW411 checks, raw SQL query reads, row keys, CTE
+      source reads, and non-string SQL pass-through coverage moved from
+      `packages/test/src/index.test.ts` into `packages/test/src/query-verifier.test.ts`.
+      Same-session evidence:
+      `pnpm exec vitest --run packages/test/src/query-verifier.test.ts packages/test/src/index.test.ts`,
+      `pnpm exec vitest --run packages/test/src`,
+      `pnpm exec vp check packages/test/src/index.test.ts packages/test/src/query-verifier.test.ts plans/codebase-quality-round2.md`,
+      and `git diff --check`.
 - [ ] **MED — Commerce example: one source of truth.** `cartQuery.load` returns a constant while
       `loadCartQuery(db)` does the real read (app.ts:123-126 vs :280-284);
       `productGridQuery.load` conjures a fresh `createCommerceDb()` (:161); the committed
