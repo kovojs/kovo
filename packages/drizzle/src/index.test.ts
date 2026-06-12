@@ -993,6 +993,48 @@ export interface CommerceInvalidationSets {
     ]);
   });
 
+  it('does not derive column nullability from comments or strings', () => {
+    const files = [
+      {
+        fileName: 'product.queries.ts',
+        source: `
+          export const products = pgTable("products", {
+            id: text("id").primaryKey(),
+            note: text("note", { enum: [".notNull("] }),
+            stock: integer("stock" /* .notNull( */),
+          }, jiso({ domain: "product", key: "id" }));
+
+          export const productQuery = query("product", {
+            load(_input, db) {
+              return db.select({
+                note: products.note,
+                stock: products.stock,
+              }).from(products);
+            },
+          });
+        `,
+      },
+    ];
+    const expectedShape = {
+      note: {
+        kind: 'nullable',
+        shape: 'string',
+      },
+      stock: {
+        kind: 'nullable',
+        shape: 'number',
+      },
+    };
+
+    for (const facts of [
+      extractQueryFactsFromSource(files),
+      extractQueryFactsFromProject({ files }),
+    ]) {
+      expect(facts).toHaveLength(1);
+      expect(facts[0]?.shape).toEqual(expectedShape);
+    }
+  });
+
   it('derives source query result shape from the returned select', () => {
     const facts = extractQueryFactsFromSource([
       {

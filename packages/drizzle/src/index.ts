@@ -81,6 +81,19 @@ const IGNORED_LOCAL_CALL_NAMES = new Set([
 ]);
 const FW411_MESSAGE = 'Query read set includes an exempt table';
 const UNRESOLVED_READ_SOURCE_EXPRESSION = '__jisoUnresolvedReadSource';
+const BOOLEAN_COLUMN_BUILDERS = new Set(['boolean']);
+const JSON_COLUMN_BUILDERS = new Set(['json', 'jsonb']);
+const NUMBER_COLUMN_BUILDERS = new Set([
+  'bigint',
+  'doublePrecision',
+  'integer',
+  'numeric',
+  'real',
+  'smallint',
+  'serial',
+  'bigserial',
+  'smallserial',
+]);
 
 export type QueryShape =
   | 'array'
@@ -762,7 +775,7 @@ function tableColumnShapes(initializer: Node): Record<string, QueryShape> {
     const name = propertyNameText(property.getNameNode());
     if (!name) continue;
 
-    shapes[name] = columnBuilderShape(property.getInitializer()?.getText() ?? '');
+    shapes[name] = columnBuilderShape(property.getInitializer());
   }
 
   return shapes;
@@ -792,29 +805,63 @@ function objectHasProperty(object: Node, name: string): boolean {
   });
 }
 
-function columnBuilderShape(source: string): QueryShape {
-  const builder = /^(?<name>[A-Za-z_$][\w$]*)\s*\(/.exec(source.trim())?.groups?.name;
+function columnBuilderShape(initializer: Node | undefined): QueryShape {
+  // SPEC §10-§11: column nullability is a parsed call-chain fact, not string contents.
+  const builder = columnBuilderName(initializer);
   if (!builder) return 'string';
 
   const baseShape = columnBuilderBaseShape(builder);
-  return columnBuilderIsNonNull(source) ? baseShape : nullableShape(baseShape);
+  return columnBuilderIsNonNull(initializer) ? baseShape : nullableShape(baseShape);
 }
 
 function columnBuilderBaseShape(builder: string): QueryShape {
-  if (/^(?:boolean)$/.test(builder)) return 'boolean';
-  if (
-    /^(?:bigint|doublePrecision|integer|numeric|real|smallint|serial|bigserial|smallserial)$/.test(
-      builder,
-    )
-  ) {
-    return 'number';
-  }
-  if (/^(?:json|jsonb)$/.test(builder)) return 'object';
+  if (BOOLEAN_COLUMN_BUILDERS.has(builder)) return 'boolean';
+  if (NUMBER_COLUMN_BUILDERS.has(builder)) return 'number';
+  if (JSON_COLUMN_BUILDERS.has(builder)) return 'object';
   return 'string';
 }
 
-function columnBuilderIsNonNull(source: string): boolean {
-  return /\.(?:notNull|primaryKey)\s*\(/.test(source);
+function columnBuilderName(initializer: Node | undefined): string | undefined {
+  if (!initializer) return undefined;
+  return columnBuilderNameFromExpression(
+    unwrappedTsExpression(initializer.compilerNode as ts.Expression),
+  );
+}
+
+function columnBuilderNameFromExpression(expression: ts.Expression): string | undefined {
+  const target = unwrappedTsExpression(expression);
+  if (!ts.isCallExpression(target)) return undefined;
+
+  const callee = unwrappedTsExpression(target.expression as ts.Expression);
+  if (ts.isIdentifier(callee)) return callee.text;
+  if (!ts.isPropertyAccessExpression(callee)) return undefined;
+
+  const base = unwrappedTsExpression(callee.expression);
+  return ts.isCallExpression(base) ? columnBuilderNameFromExpression(base) : undefined;
+}
+
+function columnBuilderIsNonNull(initializer: Node | undefined): boolean {
+  if (!initializer) return false;
+
+  for (const method of columnBuilderChainMethods(
+    unwrappedTsExpression(initializer.compilerNode as ts.Expression),
+  )) {
+    if (method === 'notNull' || method === 'primaryKey') return true;
+  }
+
+  return false;
+}
+
+function columnBuilderChainMethods(expression: ts.Expression): string[] {
+  const target = unwrappedTsExpression(expression);
+  if (!ts.isCallExpression(target)) return [];
+
+  const callee = unwrappedTsExpression(target.expression as ts.Expression);
+  if (!ts.isPropertyAccessExpression(callee)) return [];
+
+  const base = unwrappedTsExpression(callee.expression);
+  const methods = ts.isCallExpression(base) ? columnBuilderChainMethods(base) : [];
+  return [...methods, callee.name.text];
 }
 
 function columnShapesForFile(

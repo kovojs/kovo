@@ -482,6 +482,58 @@ describe('Drizzle pinned subset conformance', () => {
     ]);
   });
 
+  it('pins AST-backed column nullability against comment and string contents', () => {
+    expect(text('note', { enum: ['.notNull('] })).toBeDefined();
+
+    const facts = extractQueryFactsFromProject({
+      files: [
+        {
+          fileName: 'conformance/drizzle-pin/src/product.schema.ts',
+          source: `
+            export const products = pgTable('products', {
+              id: text('id').primaryKey(),
+              note: text('note', { enum: ['.notNull('] }),
+              stock: integer('stock' /* .notNull( */),
+            }, jiso({ domain: 'product', key: 'id' }));
+          `,
+        },
+        {
+          fileName: 'conformance/drizzle-pin/src/product.queries.ts',
+          source: `
+            import { products } from './product.schema';
+
+            export const productQuery = query('product', {
+              load(_input, db) {
+                return db.select({
+                  note: products.note,
+                  stock: products.stock,
+                }).from(products);
+              },
+            });
+          `,
+        },
+      ],
+    });
+
+    expect(facts).toEqual([
+      {
+        query: 'product',
+        reads: ['product'],
+        shape: {
+          note: {
+            kind: 'nullable',
+            shape: 'string',
+          },
+          stock: {
+            kind: 'nullable',
+            shape: 'number',
+          },
+        },
+        site: 'conformance/drizzle-pin/src/product.queries.ts:4',
+      },
+    ]);
+  });
+
   it('pins AST query-read extraction against comment and string contents', () => {
     const facts = extractQueryFactsFromProject({
       files: [
