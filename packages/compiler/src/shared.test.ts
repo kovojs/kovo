@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
   applySourceReplacements,
+  applySourceReplacementsWithOffsetMap,
   generatedOffsetToOriginal,
   sourceReplacementOffsetMap,
 } from './shared.js';
@@ -48,6 +49,22 @@ describe('compiler shared source replacements', () => {
     expect(generatedOffsetToOriginal(map, generatedDiscount)).toBe(
       original.indexOf('cart.discount'),
     );
+  });
+
+  it('returns patched source and offset map from the same source spans', () => {
+    const original = '<span>{cart.count}</span>';
+    const replacement = '<span data-bind="cart.count">{cart.count}</span>';
+    const prefix = 'export const Cart$count = derive(["cart"], (cart) => cart.count);\n\n';
+    const result = applySourceReplacementsWithOffsetMap(
+      original,
+      [{ end: original.length, replacement, start: 0 }],
+      prefix,
+    );
+
+    expect(result.source).toBe(`${prefix}${replacement}`);
+    expect(result.sourceOffsetMap.generatedLength).toBe(result.source.length);
+    expect(result.sourceOffsetMap.originalLength).toBe(original.length);
+    expect(generatedOffsetToOriginal(result.sourceOffsetMap, prefix.length)).toBeUndefined();
   });
 
   it('does not map generated replacement boundary offsets onto the previous segment', () => {

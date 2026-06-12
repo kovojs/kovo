@@ -51,6 +51,11 @@ export interface SourceOffsetMap {
   segments: readonly SourceOffsetSegment[];
 }
 
+export interface SourcePatchResult {
+  source: string;
+  sourceOffsetMap: SourceOffsetMap;
+}
+
 export function identitySourceOffsetMap(length: number): SourceOffsetMap {
   return {
     generatedLength: length,
@@ -178,6 +183,17 @@ export function applySourceReplacements(
   }
 
   return output;
+}
+
+export function applySourceReplacementsWithOffsetMap(
+  source: string,
+  replacements: readonly SourceReplacement[],
+  prefix = '',
+): SourcePatchResult {
+  return {
+    source: `${prefix}${applySourceReplacements(source, replacements)}`,
+    sourceOffsetMap: sourceReplacementOffsetMap(source.length, replacements, prefix.length),
+  };
 }
 
 export function removeJsxAttribute(attributes: string, start: number, end: number): string {

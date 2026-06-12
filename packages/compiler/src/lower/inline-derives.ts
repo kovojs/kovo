@@ -8,10 +8,9 @@ import {
 } from '../scan/parse.js';
 import { knownQueryNames } from '../analyze/query-shapes.js';
 import {
-  applySourceReplacements,
+  applySourceReplacementsWithOffsetMap,
   escapeAttribute,
   identitySourceOffsetMap,
-  sourceReplacementOffsetMap,
   type SourceOffsetMap,
   type SourceReplacement,
 } from '../shared.js';
@@ -108,13 +107,13 @@ export function lowerInlineAttributeDerives(
     };
   }
 
-  const lowered = applySourceReplacements(source, replacements);
   const prefix = `${deriveExports.join('\n')}\n\n`;
+  const patch = applySourceReplacementsWithOffsetMap(source, replacements, prefix);
 
   return {
     diagnosticSource: source,
-    source: `${prefix}${lowered}`,
-    sourceOffsetMap: sourceReplacementOffsetMap(source.length, replacements, prefix.length),
+    source: patch.source,
+    sourceOffsetMap: patch.sourceOffsetMap,
   };
 }
 

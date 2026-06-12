@@ -492,6 +492,14 @@ pipeline throws the tree away and communicates via mutated source text.
       shifted coordinates; `validateIdrefs`/`validateStampExpressionDrift` are already
       special-cased onto the original source (index.ts:216-220) — make that the rule, not the
       exception.
+      Partial evidence 2026-06-12: `shared.ts` now exposes
+      `applySourceReplacementsWithOffsetMap`, returning patched source and its offset map from
+      the same original span list; `lower/inline-derives.ts` uses that helper for the synthesized
+      derive-prefix lowering instead of separately applying replacements and reconstructing the
+      map. Same-session evidence:
+      `pnpm exec vitest --run packages/compiler/src/shared.test.ts packages/compiler/src/index.test.ts -t "inline attribute expressions|source replacements"`
+      and
+      `pnpm exec vp check packages/compiler/src/shared.ts packages/compiler/src/shared.test.ts packages/compiler/src/lower/inline-derives.ts plans/codebase-quality-round2.md`.
       Partial evidence 2026-06-11: `compileComponentModule` now passes its already-parsed
       `ComponentModuleModel` into `lowerEventHandlers`, and `lower/handlers.ts` walks that model
       instead of reparsing the lowered source with a fake filename for event-attribute discovery;
