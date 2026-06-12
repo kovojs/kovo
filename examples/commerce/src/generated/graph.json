@@ -58,6 +58,13 @@
       "key": "order/receipt",
       "session": "commerceSession",
       "writes": ["attachment"]
+    },
+    {
+      "guards": ["authed"],
+      "inputFields": [],
+      "key": "auth/sign-out",
+      "session": "commerceSession",
+      "writes": ["auth"]
     }
   ],
   "optimistic": [
@@ -84,6 +91,14 @@
     }
   ],
   "pages": [
+    {
+      "guards": ["role:admin"],
+      "modulepreloads": [],
+      "prefetch": false,
+      "queries": [],
+      "route": "/admin",
+      "stylesheets": ["/assets/tailwind.css"]
+    },
     {
       "i18n": ["en-US:cartLabel,productStock"],
       "meta": {
@@ -127,20 +142,20 @@
         {
           "domain": "cart",
           "keys": null,
-          "site": "examples/commerce/src/app.ts:238",
+          "site": "examples/commerce/src/app.ts:404",
           "via": "cart_items"
         },
         {
           "domain": "order",
           "keys": null,
-          "site": "examples/commerce/src/app.ts:243",
+          "site": "examples/commerce/src/app.ts:409",
           "via": "orders"
         },
         {
           "domain": "product",
           "keys": "arg:productId",
           "predicate": "eq",
-          "site": "examples/commerce/src/app.ts:250",
+          "site": "examples/commerce/src/app.ts:416",
           "via": "products"
         }
       ],
@@ -153,7 +168,7 @@
           "domain": "order",
           "keys": "arg:data.object.id",
           "predicate": "eq",
-          "site": "examples/commerce/src/app.ts:342",
+          "site": "examples/commerce/src/app.ts:508",
           "via": "orders"
         }
       ],
@@ -166,7 +181,7 @@
           "domain": "attachment",
           "keys": "arg:orderId",
           "predicate": "eq",
-          "site": "examples/commerce/src/app.ts:292",
+          "site": "examples/commerce/src/app.ts:458",
           "via": "attachments"
         }
       ],

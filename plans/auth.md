@@ -58,7 +58,20 @@ Scope: SPEC additions (session population, guard-failure contract, mutation resp
       dependencies linked. Same-session evidence:
       `pnpm exec vitest --run packages/create-jiso/src/index.test.ts` and
       `pnpm exec vp check packages/create-jiso/src/index.ts packages/create-jiso/src/index.test.ts packages/create-jiso/templates/src/auth.tsx packages/create-jiso/templates/package.json packages/create-jiso/templates/README.md`.
-      Reference-app adoption behind real `authed`/`role()` guards remains open.
+      Partial reference-app evidence 2026-06-12: `examples/commerce/src/app.ts` now imports
+      `@jiso/better-auth` and wires a commerce-local Better Auth-like surface through
+      `betterAuthSession`, `betterAuthSignInEmailMutation`, `betterAuthSignOutMutation`,
+      adapter `authed()`, and adapter `role('admin')`. Existing commerce mutations/routes now use
+      the adapter `authed()` guard, `commerceAdminRoute` exercises the server 303/403 role guard
+      contract, and the graph/audit metadata includes the guarded `auth/sign-out` mutation plus
+      `/admin` page. `examples/commerce/src/app.test.ts` covers no-JS sign-in cookie forwarding,
+      typed invalid credentials, sign-out cookie clearing, session-provider mapping from cookies,
+      and anonymous/member/admin outcomes for the admin route; `fwExplain(..., { unguarded: true })`
+      and `fwExplain(..., { unscoped: true })` still report `SUMMARY total=0`. Same-session
+      evidence: `pnpm exec vitest --run examples/commerce/src/app.test.ts`. Remaining gap:
+      commerce uses a deterministic Better Auth-like test surface rather than the pinned real
+      Better Auth package, and the anonymous sign-in mutation is not represented in the current
+      mutation guard audit vocabulary, so B7 remains open.
 
 ## Background — the gap
 

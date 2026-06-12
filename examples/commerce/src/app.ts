@@ -3,6 +3,7 @@ import type { OptimisticFor } from '@jiso/runtime';
 import {
   createMemoryMutationReplayStore,
   errorBoundary,
+  csrfField,
   csrfToken,
   guards,
   i18n,
@@ -24,6 +25,17 @@ import {
   type MutationWireHeaderSource,
   type StoredFileUpload,
 } from '@jiso/server';
+import {
+  authed as betterAuthAuthed,
+  betterAuthSession,
+  betterAuthSignInEmailMutation,
+  betterAuthSignOutMutation,
+  role as betterAuthRole,
+  type BetterAuthLike,
+  type BetterAuthResponseLike,
+  type BetterAuthSignInEmailLike,
+  type BetterAuthSignOutLike,
+} from '@jiso/better-auth';
 import type { FwExplainInput } from '@jiso/core';
 import { attachment, cart, order, product } from './domains.js';
 import { CartBadge } from './generated/cart-badge.js';
@@ -52,9 +64,42 @@ export interface CommerceDb {
   write(table: string, value: unknown): void;
 }
 
+export type CommerceRole = 'admin' | 'member';
+
+export interface CommerceSession {
+  id: string;
+  user: {
+    id: string;
+    roles?: readonly CommerceRole[];
+  };
+}
+
 export interface CommerceRequest {
   db: CommerceDb;
-  session?: { id?: string; user?: { id: string } | null } | null;
+  session?: CommerceSession | null;
+}
+
+export interface CommerceAuthRequest extends CommerceRequest {
+  authCsrfId?: string | null;
+  headers: Headers;
+}
+
+export interface CommerceBetterAuthSession {
+  id: string;
+}
+
+export interface CommerceBetterAuthUser {
+  email: string;
+  id: string;
+  roles: readonly CommerceRole[];
+}
+
+export type CommerceBetterAuth = BetterAuthLike<CommerceBetterAuthSession, CommerceBetterAuthUser> &
+  BetterAuthSignInEmailLike &
+  BetterAuthSignOutLike;
+
+export interface CommerceLoginFailureState {
+  code: 'INVALID_CREDENTIALS';
 }
 
 export const commerceSession = session(
@@ -73,6 +118,127 @@ export const commerceCsrf = {
     return request.session?.id;
   },
 };
+
+export const commerceAuthCsrf = {
+  field: 'csrf',
+  secret: 'commerce-auth-example-secret',
+  sessionId(request: CommerceAuthRequest) {
+    return request.session?.id ?? request.authCsrfId ?? undefined;
+  },
+};
+
+const commerceAuthCookieName = 'jiso_commerce_session';
+
+const commerceAuthUsers = new Map<
+  string,
+  CommerceBetterAuthUser & { name: string; password: string }
+>([
+  [
+    'ada@example.com',
+    {
+      email: 'ada@example.com',
+      id: 'u1',
+      name: 'Ada Lovelace',
+      password: 'correct',
+      roles: ['admin', 'member'],
+    },
+  ],
+  [
+    'grace@example.com',
+    {
+      email: 'grace@example.com',
+      id: 'u2',
+      name: 'Grace Hopper',
+      password: 'correct',
+      roles: ['member'],
+    },
+  ],
+]);
+
+export function createCommerceBetterAuth(): CommerceBetterAuth {
+  const sessionUserIds = new Map<string, string>();
+
+  return {
+    api: {
+      getSession(options) {
+        const token = readCookie(options.headers, commerceAuthCookieName);
+        const userId = token ? sessionUserIds.get(token) : undefined;
+        const user = userId
+          ? [...commerceAuthUsers.values()].find((candidate) => candidate.id === userId)
+          : undefined;
+
+        if (!token || !user) return null;
+
+        return {
+          session: { id: token },
+          user: {
+            email: user.email,
+            id: user.id,
+            roles: user.roles,
+          },
+        };
+      },
+      signInEmail(options) {
+        const user = commerceAuthUsers.get(options.body.email);
+        if (!user || user.password !== options.body.password) {
+          return commerceAuthResponse([], 401);
+        }
+
+        const token = `session-${user.id}`;
+        sessionUserIds.set(token, user.id);
+
+        return commerceAuthResponse([
+          `${commerceAuthCookieName}=${token}; Path=/; HttpOnly; SameSite=Lax`,
+        ]);
+      },
+      signOut(options) {
+        const token = readCookie(options.headers, commerceAuthCookieName);
+        if (token) sessionUserIds.delete(token);
+
+        return commerceAuthResponse([
+          `${commerceAuthCookieName}=; Path=/; Max-Age=0; HttpOnly; SameSite=Lax`,
+        ]);
+      },
+    },
+  };
+}
+
+export const commerceBetterAuth = createCommerceBetterAuth();
+
+export const commerceSessionProvider = commerceSession.provider(
+  betterAuthSession<
+    CommerceBetterAuthSession,
+    CommerceBetterAuthUser,
+    CommerceSession,
+    CommerceAuthRequest
+  >(commerceBetterAuth, ({ session: authSession, user }) => ({
+    id: authSession.id,
+    user: {
+      id: user.id,
+      roles: user.roles,
+    },
+  })),
+);
+
+export const commerceAdminGuard = betterAuthRole<CommerceAuthRequest>('admin');
+
+export const commerceSignIn = betterAuthSignInEmailMutation<'auth/sign-in', CommerceAuthRequest>(
+  commerceBetterAuth,
+  {
+    csrf: commerceAuthCsrf,
+    defaultRedirectTo: '/cart',
+  },
+);
+
+export const commerceSignOut = betterAuthSignOutMutation<
+  'auth/sign-out',
+  CommerceAuthRequest,
+  CommerceAuthRequest & { session: CommerceSession }
+>(commerceBetterAuth, {
+  csrf: commerceAuthCsrf,
+  defaultRedirectTo: '/login',
+  guard: betterAuthAuthed<CommerceAuthRequest>(),
+});
 
 export function createCommerceDb(): CommerceDb {
   const db: CommerceDb = {
@@ -218,7 +384,7 @@ export const addToCart = mutation('cart/add', {
     quantity: s.number().int().min(1).default(1),
   }),
   guard: guards.all(
-    guards.authed<CommerceRequest>(),
+    betterAuthAuthed<CommerceRequest>(),
     guards.rateLimit<CommerceRequest>({ max: 10, per: 'session' }),
   ),
   registry: {
@@ -278,7 +444,7 @@ export const uploadReceipt = mutation('order/receipt', {
     }),
   }),
   guard: guards.all(
-    guards.authed<CommerceRequest>(),
+    betterAuthAuthed<CommerceRequest>(),
     guards.rateLimit<CommerceRequest>({ max: 5, per: 'session' }),
   ),
   registry: {
@@ -357,7 +523,7 @@ export const paymentWebhook = webhook('payment/stripe', {
 });
 
 export const orderCsvRoute = route('/exports/orders.csv', {
-  guard: guards.authed<CommerceRequest>(),
+  guard: betterAuthAuthed<CommerceRequest>(),
   page(_context, request) {
     return respond.stream(ordersCsvStream(request.db.orders, request.session.user.id), {
       contentType: 'text/csv; charset=utf-8',
@@ -368,7 +534,7 @@ export const orderCsvRoute = route('/exports/orders.csv', {
 });
 
 export const attachmentDownloadRoute = route('/attachments/:id', {
-  guard: guards.authed<CommerceRequest>(),
+  guard: betterAuthAuthed<CommerceRequest>(),
   page(context, request) {
     const found = request.db.attachments.find(
       (item) => item.id === context.params.id && item.userId === request.session.user.id,
@@ -388,6 +554,14 @@ export const attachmentDownloadRoute = route('/attachments/:id', {
   },
 });
 
+export const commerceAdminRoute = route('/admin', {
+  guard: commerceAdminGuard,
+  page(_context, request: CommerceAuthRequest) {
+    const currentSession = commerceSession.parse(request);
+    return `admin:${currentSession.user.id}`;
+  },
+});
+
 export function renderOrderCsvRoute(request: CommerceRequest) {
   return renderRoutePageResponse(orderCsvRoute, {}, request);
 }
@@ -402,6 +576,20 @@ export function renderAttachmentDownloadRoute(
 
 export function runPaymentWebhook(request: Request & { db?: CommerceDb }) {
   return runWebhook(paymentWebhook, request);
+}
+
+export function renderCommerceAdminRoute(request: CommerceAuthRequest) {
+  return renderRoutePageResponse(
+    commerceAdminRoute,
+    {},
+    request,
+    (value) => `<main>${value}</main>`,
+    {
+      loginPath: '/login',
+      renderForbidden: () => '<main>Forbidden</main>',
+      sessionProvider: commerceSessionProvider,
+    },
+  );
 }
 
 export const commerceMessages = i18n('en-US', {
@@ -620,6 +808,71 @@ export function submitAddToCart(
   });
 }
 
+export function renderCommerceLoginForm(
+  request: CommerceAuthRequest,
+  options: { failure?: CommerceLoginFailureState; next?: string } = {},
+): string {
+  return [
+    '<form method="post" action="/_m/auth/sign-in" enhance data-mutation="auth/sign-in" class="grid gap-4 rounded border border-slate-200 bg-white p-6">',
+    csrfField(request, commerceAuthCsrf),
+    `<input type="hidden" name="next" value="${escapeAttribute(options.next ?? '/cart')}">`,
+    '<label class="grid gap-1 text-sm font-medium text-slate-700"><span>Email</span>',
+    '<input class="rounded border border-slate-300 px-3 py-2" name="email" type="email" autocomplete="email" required>',
+    '</label>',
+    '<label class="grid gap-1 text-sm font-medium text-slate-700"><span>Password</span>',
+    '<input class="rounded border border-slate-300 px-3 py-2" name="password" type="password" autocomplete="current-password" required>',
+    '</label>',
+    options.failure?.code === 'INVALID_CREDENTIALS'
+      ? '<output role="alert" data-error-code="INVALID_CREDENTIALS" class="text-sm text-red-700">Invalid email or password.</output>'
+      : '',
+    '<button class="rounded bg-slate-900 px-4 py-2 text-sm font-medium text-white" type="submit">Sign in</button>',
+    '</form>',
+  ].join('');
+}
+
+export function renderCommerceLogoutForm(request: CommerceAuthRequest): string {
+  return [
+    '<form method="post" action="/_m/auth/sign-out" enhance data-mutation="auth/sign-out" class="inline">',
+    csrfField(request, commerceAuthCsrf),
+    '<button class="text-sm font-medium text-slate-900" type="submit">Sign out</button>',
+    '</form>',
+  ].join('');
+}
+
+export function submitCommerceSignInNoJs(rawInput: unknown, request: CommerceAuthRequest) {
+  const next = nextFromRawInput(rawInput);
+
+  return renderMutationEndpointResponse(commerceSignIn, {
+    csrf: commerceAuthCsrf,
+    headers: {},
+    rawInput,
+    redirectTo: (result) => result.value.redirectTo,
+    renderFailurePage: (failure) => {
+      const failureState =
+        failure.error.code === 'INVALID_CREDENTIALS'
+          ? ({ failure: { code: 'INVALID_CREDENTIALS' } } as const)
+          : {};
+
+      return `<!doctype html><html><body>${renderCommerceLoginForm(request, {
+        ...failureState,
+        ...(next === undefined ? {} : { next }),
+      })}</body></html>`;
+    },
+    request,
+  });
+}
+
+export function submitCommerceSignOutNoJs(request: CommerceAuthRequest) {
+  return renderMutationEndpointResponse(commerceSignOut, {
+    csrf: commerceAuthCsrf,
+    headers: {},
+    rawInput: { csrf: csrfToken(request, commerceAuthCsrf) },
+    redirectTo: (result) => result.value.redirectTo,
+    request,
+    sessionProvider: commerceSessionProvider,
+  });
+}
+
 export function commerceCsrfInput(rawInput: unknown, request: CommerceRequest): unknown {
   return appendCommerceCsrf(rawInput, request);
 }
@@ -662,6 +915,36 @@ function productIdFromRawInput(rawInput: unknown): string | undefined {
   }
   const productId = rawInput.productId;
   return typeof productId === 'string' ? productId : undefined;
+}
+
+function nextFromRawInput(rawInput: unknown): string | undefined {
+  if (typeof rawInput !== 'object' || rawInput === null || !('next' in rawInput)) {
+    return undefined;
+  }
+  const next = rawInput.next;
+  return typeof next === 'string' ? next : undefined;
+}
+
+function readCookie(headers: Headers, name: string): string | undefined {
+  const cookie = headers.get('cookie');
+  if (!cookie) return undefined;
+
+  for (const part of cookie.split(';')) {
+    const [rawName, ...rawValue] = part.trim().split('=');
+    if (rawName === name) return rawValue.join('=');
+  }
+
+  return undefined;
+}
+
+function commerceAuthResponse(cookies: readonly string[], status = 204): BetterAuthResponseLike {
+  const headers = new Headers();
+
+  Object.defineProperty(headers, 'getSetCookie', {
+    value: () => [...cookies],
+  });
+
+  return { headers, status };
 }
 
 export const commerceGraph = {
@@ -725,6 +1008,13 @@ export const commerceGraph = {
       session: 'commerceSession',
       writes: ['attachment'],
     },
+    {
+      guards: ['authed'],
+      inputFields: [],
+      key: 'auth/sign-out',
+      session: 'commerceSession',
+      writes: ['auth'],
+    },
   ],
   optimistic: [
     { mutation: 'cart/add', query: 'cart', status: 'hand-written' },
@@ -733,6 +1023,14 @@ export const commerceGraph = {
   ],
   ownerDomains: [{ domain: 'attachment', owner: 'userId' }],
   pages: [
+    {
+      guards: ['role:admin'],
+      modulepreloads: [],
+      prefetch: false,
+      queries: [],
+      route: '/admin',
+      stylesheets: [...commerceStylesheets],
+    },
     {
       i18n: ['en-US:cartLabel,productStock'],
       meta: {

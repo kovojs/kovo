@@ -9,6 +9,7 @@
     "emit-graph": "node scripts/emit-graph.mjs"
   },
   "dependencies": {
+    "@jiso/better-auth": "workspace:*",
     "@jiso/core": "workspace:*",
     "@jiso/drizzle": "workspace:*",
     "@jiso/runtime": "workspace:*",

@@ -7,6 +7,7 @@ import { storageBodyToBytes } from '@jiso/core';
 import { createJisoTestHarness, propertyTest } from '@jiso/test';
 import type { TouchGraph } from '@jiso/drizzle';
 import { morphStructuralTree, type StructuralMorphNode } from '@jiso/runtime';
+import { csrfToken, runMutation } from '@jiso/server';
 import { fwCheck, fwExplain } from '../../../packages/cli/src/index.js';
 
 import {
@@ -17,7 +18,10 @@ import {
   commerceCsrf,
   commerceCsrfInput,
   commerceGraph,
+  commerceAuthCsrf,
   commercePageHints,
+  commerceSessionProvider,
+  commerceSignIn,
   commercePaymentWebhookSecret,
   commerceSession,
   commerceTouchGraph,
@@ -32,6 +36,9 @@ import {
   renderCommercePageHints,
   renderAddToCartForm,
   renderAttachmentDownloadRoute,
+  renderCommerceAdminRoute,
+  renderCommerceLoginForm,
+  renderCommerceLogoutForm,
   renderOrderHistory,
   renderOrderCsvRoute,
   renderCartPage,
@@ -41,6 +48,8 @@ import {
   renderReceiptUploadForm,
   submitAddToCart,
   submitAddToCartNoJs,
+  submitCommerceSignInNoJs,
+  submitCommerceSignOutNoJs,
   type AddToCartInput,
   type ProductGridInput,
   uploadReceipt,
@@ -197,6 +206,38 @@ function requestWithDb(
   }) as Request & { db: ReturnType<typeof createCommerceDb> };
   request.db = db;
   return request;
+}
+
+function commerceAuthRequest(cookie?: string, db = createCommerceDb()) {
+  const headers = new Headers({ 'user-agent': 'commerce-auth-test' });
+  if (cookie) headers.set('cookie', cookie);
+
+  return {
+    authCsrfId: 'login-csrf',
+    db,
+    headers,
+  };
+}
+
+function setCookieHeaders(response: { headers: Record<string, string | string[]> }): string[] {
+  return headerValues(response.headers, 'Set-Cookie');
+}
+
+function mutationSetCookieHeaders(result: {
+  responseHeaders?: Record<string, string | string[]>;
+}): string[] {
+  return headerValues(result.responseHeaders ?? {}, 'Set-Cookie');
+}
+
+function headerValues(headers: Record<string, string | string[]>, name: string): string[] {
+  const cookies = headers[name];
+  if (!cookies) return [];
+
+  return Array.isArray(cookies) ? cookies : [cookies];
+}
+
+function cookiePair(setCookie: string): string {
+  return setCookie.split(';')[0] ?? setCookie;
 }
 
 function fragmentTargetForQuery(query: string) {
@@ -482,6 +523,139 @@ describe('commerce example', () => {
     });
 
     expect(db.orders[0]?.userId).toBe('u1');
+  });
+
+  it('maps Better Auth cookies into the commerce session provider', async () => {
+    const request = commerceAuthRequest();
+    const signIn = await runMutation(
+      commerceSignIn,
+      {
+        csrf: csrfToken(request, commerceAuthCsrf),
+        email: 'ada@example.com',
+        password: 'correct',
+      },
+      request,
+      { csrf: commerceAuthCsrf },
+    );
+
+    expect(signIn).toMatchObject({
+      ok: true,
+      value: {
+        redirectTo: '/cart',
+        status: 'signed-in',
+      },
+    });
+    if (!signIn.ok) throw new Error('expected commerce sign-in to succeed');
+    const cookie = cookiePair(mutationSetCookieHeaders(signIn)[0] ?? '');
+
+    await expect(commerceSessionProvider(commerceAuthRequest(cookie))).resolves.toEqual({
+      id: 'session-u1',
+      user: {
+        id: 'u1',
+        roles: ['admin', 'member'],
+      },
+    });
+  });
+
+  it('runs commerce login and logout through Better Auth credential mutations', async () => {
+    const request = commerceAuthRequest();
+
+    expect(renderCommerceLoginForm(request, { next: '/admin' })).toContain(
+      'data-mutation="auth/sign-in"',
+    );
+    await expect(
+      submitCommerceSignInNoJs(
+        {
+          csrf: csrfToken(request, commerceAuthCsrf),
+          email: 'ada@example.com',
+          next: '/admin',
+          password: 'correct',
+        },
+        request,
+      ),
+    ).resolves.toMatchObject({
+      body: '',
+      headers: {
+        'Cache-Control': 'no-store',
+        Location: '/admin',
+        'Set-Cookie': ['jiso_commerce_session=session-u1; Path=/; HttpOnly; SameSite=Lax'],
+      },
+      status: 303,
+    });
+
+    await expect(
+      submitCommerceSignInNoJs(
+        {
+          csrf: csrfToken(request, commerceAuthCsrf),
+          email: 'ada@example.com',
+          password: 'wrong',
+        },
+        request,
+      ),
+    ).resolves.toMatchObject({
+      headers: { 'Content-Type': 'text/html; charset=utf-8' },
+      status: 422,
+    });
+
+    const authedRequest = {
+      ...commerceAuthRequest('jiso_commerce_session=session-u1'),
+      session: {
+        id: 'session-u1',
+        user: { id: 'u1', roles: ['admin', 'member'] as const },
+      },
+    };
+
+    expect(renderCommerceLogoutForm(authedRequest)).toContain('data-mutation="auth/sign-out"');
+    await expect(submitCommerceSignOutNoJs(authedRequest)).resolves.toMatchObject({
+      headers: {
+        'Cache-Control': 'no-store',
+        Location: '/login',
+        'Set-Cookie': ['jiso_commerce_session=; Path=/; Max-Age=0; HttpOnly; SameSite=Lax'],
+      },
+      status: 303,
+    });
+  });
+
+  it('renders commerce admin route through real authed and role guards', async () => {
+    await expect(renderCommerceAdminRoute(commerceAuthRequest())).resolves.toEqual({
+      body: '',
+      headers: { Location: '/login?next=%2Fadmin' },
+      status: 303,
+    });
+
+    const memberRequest = commerceAuthRequest();
+    const memberSignIn = await submitCommerceSignInNoJs(
+      {
+        csrf: csrfToken(memberRequest, commerceAuthCsrf),
+        email: 'grace@example.com',
+        password: 'correct',
+      },
+      memberRequest,
+    );
+    const memberCookie = cookiePair(setCookieHeaders(memberSignIn)[0] ?? '');
+
+    await expect(renderCommerceAdminRoute(commerceAuthRequest(memberCookie))).resolves.toEqual({
+      body: '<main>Forbidden</main>',
+      headers: { 'Content-Type': 'text/html; charset=utf-8' },
+      status: 403,
+    });
+
+    const adminRequest = commerceAuthRequest();
+    const adminSignIn = await submitCommerceSignInNoJs(
+      {
+        csrf: csrfToken(adminRequest, commerceAuthCsrf),
+        email: 'ada@example.com',
+        password: 'correct',
+      },
+      adminRequest,
+    );
+    const adminCookie = cookiePair(setCookieHeaders(adminSignIn)[0] ?? '');
+
+    await expect(renderCommerceAdminRoute(commerceAuthRequest(adminCookie))).resolves.toEqual({
+      body: '<main>admin:u1</main>',
+      headers: { 'Content-Type': 'text/html; charset=utf-8' },
+      status: 200,
+    });
   });
 
   it('predicts cart count with the hand-written addToCart optimistic transform', () => {
@@ -1240,6 +1414,11 @@ describe('commerce example', () => {
     // SPEC.md §10.4/§16.5: every mutation/query cell either has an explicit
     // optimistic status or is proven not to be invalidated by that mutation.
     expect(matrix).toEqual({
+      'auth/sign-out': {
+        cart: 'no-invalidation',
+        orderHistory: 'no-invalidation',
+        productGrid: 'no-invalidation',
+      },
       'cart/add': {
         cart: 'hand-written',
         orderHistory: 'await-fragment',

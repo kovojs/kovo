@@ -166,6 +166,13 @@ const graphDeclarations = {
       session: 'commerceSession',
       writes: ['attachment'],
     },
+    {
+      guards: ['authed'],
+      inputFields: [],
+      key: 'auth/sign-out',
+      session: 'commerceSession',
+      writes: ['auth'],
+    },
   ],
   optimistic: [
     { mutation: 'cart/add', query: 'cart', status: 'hand-written' },
@@ -174,6 +181,14 @@ const graphDeclarations = {
   ],
   ownerDomains: [{ domain: 'attachment', owner: 'userId' }],
   pages: [
+    {
+      guards: ['role:admin'],
+      modulepreloads: [],
+      prefetch: false,
+      queries: [],
+      route: '/admin',
+      stylesheets: ['/assets/tailwind.css'],
+    },
     {
       i18n: ['en-US:cartLabel,productStock'],
       meta: {
