@@ -13,7 +13,6 @@ import {
   componentStateReturnObjectKeys,
   jsxElementChildBody,
   mutationHandlers,
-  objectLiteralPropertyPaths,
   type ComponentModuleModel,
   type JsxElementChildBody,
   jsxElements,
@@ -230,13 +229,13 @@ function eventPayloads(model: ComponentModuleModel): EventPayloadPath[] {
   const payloads: EventPayloadPath[] = [];
 
   for (const call of callExpressions(model).filter((item) => item.name === 'emit')) {
-    const payload = call.arguments[1]?.trim();
-    if (!payload?.startsWith('{')) continue;
     const span = call.argumentSpans[1];
+    const paths = call.argumentObjectLiteralPaths[1] ?? [];
+    if (paths.length === 0) continue;
     if (!span) continue;
 
     payloads.push(
-      ...objectLiteralPropertyPaths('payload.tsx', payload).map((path) => ({
+      ...paths.map((path) => ({
         index: span.start,
         length: span.end - span.start,
         path,

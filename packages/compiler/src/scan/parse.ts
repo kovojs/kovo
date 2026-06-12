@@ -36,6 +36,7 @@ export interface DocumentElementActionModel {
 
 export interface CallExpressionModel {
   arguments: readonly string[];
+  argumentObjectLiteralPaths: readonly (readonly string[])[];
   argumentPropertyAccesses: readonly (readonly PropertyAccessPathModel[])[];
   argumentSpans: readonly SourceSpan[];
   end: number;
@@ -1143,6 +1144,9 @@ function callExpressionModel(
   return {
     arguments: node.arguments.map((argument) =>
       source.slice(argument.getStart(sourceFile), argument.getEnd()),
+    ),
+    argumentObjectLiteralPaths: node.arguments.map((argument) =>
+      ts.isObjectLiteralExpression(argument) ? objectLiteralPaths(argument) : [],
     ),
     argumentPropertyAccesses: node.arguments.map((argument) =>
       propertyAccessPathModels(sourceFile, argument),

@@ -795,6 +795,14 @@ pipeline throws the tree away and communicates via mutated source text.
       `pnpm exec vitest --run packages/compiler/src/scan/parse.test.ts packages/compiler/src/index.test.ts packages/compiler/src/shared.test.ts packages/compiler/src/model-pipeline.test.ts packages/compiler/src/handler-lowering.test.ts packages/compiler/src/navigation-lowering.test.ts packages/compiler/src/platform-lowering.test.ts`,
       `pnpm exec vp check packages/compiler/src/scan/parse.ts packages/compiler/src/scan/parse.test.ts packages/compiler/src/analyze/query-updates.ts packages/compiler/src/index.test.ts`,
       and `git diff --check`.
+      Additional evidence 2026-06-12: `scan/parse.ts` now records object-literal property
+      path facts for each call argument, and `validate/component-contracts.ts` consumes those
+      parser-owned facts for FW320 event-payload/query-overlap diagnostics instead of reparsing
+      the second `emit(...)` argument through `objectLiteralPropertyPaths()`. Same-session
+      evidence:
+      `pnpm exec vitest --run packages/compiler/src/scan/parse.test.ts packages/compiler/src/state-events.test.ts -t "call argument property access|event payload|FW320"`,
+      `pnpm exec vitest --run packages/compiler/src`, and
+      `pnpm exec vp check packages/compiler/src/scan/parse.ts packages/compiler/src/scan/parse.test.ts packages/compiler/src/validate/component-contracts.ts`.
 - [x] **HIGH — Retire regex rewriting of handler bodies.** emit/client.ts:89
       (`/\bstate\b/g → ctx.state` corrupts `log('state changed')`), :96 (member-expression
       substitution inside string literals), lower/handlers.ts:262 (harvests params from string

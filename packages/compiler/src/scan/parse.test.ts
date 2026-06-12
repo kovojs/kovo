@@ -299,7 +299,7 @@ export const CartShell = component('cart-shell', {
   it('records call argument property access facts', () => {
     const source = `
 export const CartBadge = component('cart-badge', {
-  render: () => <span>{renderOnce(format(cart.count), "cart.discount", product.name)}</span>,
+  render: () => <span>{renderOnce(format(cart.count), "cart.discount", product.name, { product: { unitPrice: product.unitPrice }, clientOnly })}</span>,
 });
 `;
     const renderOnce = callExpressions(parseComponentModule('cart-badge.tsx', source)).find(
@@ -310,10 +310,17 @@ export const CartBadge = component('cart-badge', {
       'format(cart.count)',
       '"cart.discount"',
       'product.name',
+      '{ product: { unitPrice: product.unitPrice }, clientOnly }',
     ]);
     expect(
       renderOnce?.argumentPropertyAccesses.map((paths) => paths.map((path) => path.path)),
-    ).toEqual([['cart.count'], [], ['product.name']]);
+    ).toEqual([['cart.count'], [], ['product.name'], ['product.unitPrice']]);
+    expect(renderOnce?.argumentObjectLiteralPaths).toEqual([
+      [],
+      [],
+      [],
+      ['product.unitPrice', 'clientOnly'],
+    ]);
   });
 
   it('extracts concise arrow function parts through the TypeScript parser', () => {
