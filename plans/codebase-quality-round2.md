@@ -1317,6 +1317,9 @@ As each phase splits a source module, split its tests in the same commit.
       `pnpm exec vitest --run packages/runtime/src/events.test.ts packages/runtime/src/index.test.ts`,
       `pnpm exec vp check packages/runtime/src/events.test.ts packages/runtime/src/index.test.ts plans/codebase-quality-round2.md`,
       and `git diff --check`.
+      Additional evidence 2026-06-12: query hydration and visible-return/refetch coverage moved
+      from `packages/runtime/src/index.test.ts` to `packages/runtime/src/query-store.test.ts`
+      with a focused local `FakeRoot`, leaving mutation DOM/query integration in the monolith.
 - [ ] compiler/index.test.ts (3,580 lines, zero per-module tests) → per-phase files; a
       `compileFixture()` helper returning files by kind; diagnostic assertions reference
       `diagnosticDefinitions[code].message` instead of pasted strings (today a one-word rewording
