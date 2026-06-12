@@ -1367,6 +1367,10 @@ As each phase splits a source module, split its tests in the same commit.
       Additional evidence 2026-06-12: query hydration and visible-return/refetch coverage moved
       from `packages/runtime/src/index.test.ts` to `packages/runtime/src/query-store.test.ts`
       with a focused local `FakeRoot`, leaving mutation DOM/query integration in the monolith.
+      Additional evidence 2026-06-12: mutation response wire-chunk coverage moved from
+      `packages/runtime/src/index.test.ts` to `packages/runtime/src/mutation-response.test.ts`,
+      preserving the query/fragment chunk, malformed chunk, nested fragment, and deferred-helper
+      assertions with local DOM fakes.
 - [ ] compiler/index.test.ts (3,580 lines, zero per-module tests) → per-phase files; a
       `compileFixture()` helper returning files by kind; diagnostic assertions reference
       `diagnosticDefinitions[code].message` instead of pasted strings (today a one-word rewording
