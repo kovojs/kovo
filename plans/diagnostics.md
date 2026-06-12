@@ -73,6 +73,16 @@ content or severities (SPEC §11.3 owns those); `fw check`/`fw explain` semantic
       proves both the enhanced fragment response and no-JS POST response return diagnostic HTTP
       500s before app dispatch. Same-session evidence:
       `pnpm exec vitest --run packages/server/src/vite-diagnostics.test.ts packages/server/src/vite.test.ts`.
+      Additional evidence 2026-06-12: `tests/fw-check.node.mjs` adds a behavioral D10 tranche
+      using public built APIs and shared SPEC §11.3 severities: a real FW201 component diagnostic
+      makes `jisoVitePlugin().transform()` throw a teaching error while the corrected component
+      transforms; a seeded FW201 static-export diagnostic rejects before `/index.html` is written
+      while a seeded FW210 lint diagnostic writes the export; and MCP `compile_component` returns
+      structured red/green `compile/v1` results without a second severity policy. Same-session
+      evidence:
+      `node --test --test-name-pattern "D10 seeded diagnostics gate" tests/fw-check.node.mjs`.
+      Gap: this tranche covers the Vite transform used by dev/build, but does not spawn a full
+      `vp build` fixture yet, so the broader gate remains open.
 
 ## Background
 

@@ -11,7 +11,7 @@ import { gzipSync } from 'node:zlib';
 
 import { missingBuildMessage } from '../scripts/fw-check.mjs';
 import { parseWireResponses } from './wire-transcript.mjs';
-import { fwCheck, fwExplain } from '../dist/cli/src/index.mjs';
+import { fwCheck, fwExplain, handleFwMcpRequest } from '../dist/cli/src/index.mjs';
 import {
   assertRenderEquivalence,
   collectMinifierReservedNames,
@@ -42,6 +42,7 @@ import {
 } from '../dist/runtime/src/index.mjs';
 import { createDbVerifier, createJisoTestHarness } from '../dist/test/src/index.mjs';
 import {
+  createApp,
   csrfField,
   csrfToken,
   domain,
@@ -70,6 +71,7 @@ import {
   s,
   stylesheetsForTargets,
   t,
+  exportStaticApp,
 } from '../dist/server/src/index.mjs';
 import { fragmentTarget, href, Link, redirect, route } from '../dist/core/src/index.mjs';
 
@@ -4518,6 +4520,127 @@ export const ProductCard = component('product-card', {
     nextCalls += 1;
   });
   assert.equal(nextCalls, 1);
+});
+
+void test('D10 seeded diagnostics gate Vite, static export, and MCP red-green surfaces', async () => {
+  const projectRoot = fileURLToPath(new URL('..', import.meta.url));
+  const fileName = 'routes/diagnostic-card.tsx';
+  const componentId = join(projectRoot, fileName);
+  const redSource = `
+import { component } from '@jiso/core';
+
+export const DiagnosticCard = component('diagnostic-card', {
+  render: () => <button onClick={() => window.alert('x')}>Add</button>,
+});
+`;
+  const greenSource = `
+import { component } from '@jiso/core';
+
+export const DiagnosticCard = component('diagnostic-card', {
+  render: () => <button>Add</button>,
+});
+`;
+
+  const plugin = jisoVitePlugin();
+  const greenTransform = plugin.transform(greenSource, componentId);
+  assert.ok(greenTransform);
+  assert.match(greenTransform.code, /diagnostic-card/);
+
+  assert.throws(
+    () => plugin.transform(redSource, componentId),
+    (error) => {
+      const message = String(error?.message ?? error);
+      assert.match(message, /Jiso Vite transform failed with 1 error diagnostic\./);
+      assert.match(message, /FW201 routes\/diagnostic-card\.tsx:5:25/);
+      assert.match(message, /Closure captures unserializable value\./);
+      assert.match(message, /Fixes: move the value into component\/query state via ctx/);
+      return true;
+    },
+  );
+
+  const outDir = await mkdtemp(join(tmpdir(), 'jiso-d10-export-'));
+  const app = createApp({
+    routes: [
+      serverRoute('/', {
+        page: () => '<main>D10 export green</main>',
+      }),
+    ],
+  });
+  const errorDiagnostic = {
+    code: 'FW201',
+    fileName,
+    help: diagnosticDefinitions.FW201.help,
+    message: diagnosticDefinitions.FW201.message,
+    start: { column: 25, line: 5 },
+  };
+  const lintDiagnostic = {
+    code: 'FW210',
+    fileName,
+    message: diagnosticDefinitions.FW210.message,
+    start: { column: 25, line: 5 },
+  };
+
+  try {
+    await assert.rejects(
+      exportStaticApp(app, { diagnostics: [errorDiagnostic], outDir }),
+      (error) => {
+        assert.equal(error?.name, 'StaticExportError');
+        assert.equal(error?.code, 'FW201');
+        assert.deepEqual(
+          error?.diagnostics?.map((diagnostic) => diagnostic.code),
+          ['FW201'],
+        );
+        assert.match(
+          String(error?.message ?? error),
+          /Static export refused error diagnostic FW201 at routes\/diagnostic-card\.tsx:5:25/,
+        );
+        return true;
+      },
+    );
+    await assert.rejects(readFile(join(outDir, 'index.html'), 'utf8'));
+
+    const exported = await exportStaticApp(app, { diagnostics: [lintDiagnostic], outDir });
+    assert.equal(exported.artifacts[0]?.path, '/index.html');
+    assert.equal(exported.diagnostics.length, 0);
+    assert.match(await readFile(join(outDir, 'index.html'), 'utf8'), /D10 export green/);
+  } finally {
+    await rm(outDir, { force: true, recursive: true });
+  }
+
+  const redMcp = await handleFwMcpRequest({
+    id: 'd10-red',
+    jsonrpc: '2.0',
+    method: 'tools/call',
+    params: {
+      arguments: { fileName, source: redSource },
+      name: 'compile_component',
+    },
+  });
+  assert.equal(redMcp.result.version, 'fw-mcp/v1');
+  assert.equal(redMcp.result.structuredContent.version, 'compile/v1');
+  assert.equal(redMcp.result.structuredContent.ok, false);
+  assert.deepEqual(
+    redMcp.result.structuredContent.diagnostics.map((diagnostic) => ({
+      code: diagnostic.code,
+      severity: diagnostic.severity,
+    })),
+    [
+      { code: 'FW210', severity: 'lint' },
+      { code: 'FW201', severity: 'error' },
+    ],
+  );
+
+  const greenMcp = await handleFwMcpRequest({
+    id: 'd10-green',
+    jsonrpc: '2.0',
+    method: 'tools/call',
+    params: {
+      arguments: { fileName, source: greenSource },
+      name: 'compile_component',
+    },
+  });
+  assert.equal(greenMcp.result.structuredContent.ok, true);
+  assert.deepEqual(greenMcp.result.structuredContent.diagnostics, []);
 });
 
 void test('P3 Drizzle query facts include select shapes and instance keys', async () => {
