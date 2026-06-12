@@ -5,11 +5,9 @@ import {
   errorBoundary,
   mutation as defineMutation,
   query,
-  route,
   renderMutationEndpointResponse,
   renderMutationResponse,
   renderQueryScript,
-  renderRoutePageResponse,
   s,
 } from './index.js';
 
@@ -17,55 +15,6 @@ const mutation = ((key: string, definition: Parameters<typeof defineMutation>[1]
   defineMutation(key, { csrf: false, ...definition })) as typeof defineMutation;
 
 describe('server mutation primitives', () => {
-  it('renders route page and renderer exceptions as stable 500 HTML', async () => {
-    const loadError = new Error('private route load detail');
-    const renderError = new Error('private render detail');
-    const onError = vi.fn();
-    const request = {};
-    const throwingPage = route('/products/:id', {
-      page() {
-        throw loadError;
-      },
-    });
-    const throwingRenderer = route('/cart', {
-      page() {
-        return 'cart';
-      },
-    });
-    const serverErrorResponse = {
-      body: 'Internal Server Error',
-      headers: { 'Content-Type': 'text/html; charset=utf-8' },
-      status: 500,
-    };
-
-    await expect(
-      renderRoutePageResponse(throwingPage, { params: { id: 'p1' } }, request, String, {
-        onError,
-      }),
-    ).resolves.toEqual(serverErrorResponse);
-    await expect(
-      renderRoutePageResponse(
-        throwingRenderer,
-        {},
-        request,
-        () => {
-          throw renderError;
-        },
-        { onError },
-      ),
-    ).resolves.toEqual(serverErrorResponse);
-    expect(onError).toHaveBeenCalledWith(loadError, {
-      operation: 'route-page',
-      request,
-      routePath: '/products/:id',
-    });
-    expect(onError).toHaveBeenCalledWith(renderError, {
-      operation: 'route-render',
-      request,
-      routePath: '/cart',
-    });
-  });
-
   it('routes mutation endpoints without FW-Fragment through the no-JS POST redirect', async () => {
     const addToCart = mutation('cart/add', {
       input: s.object({ productId: s.string() }),

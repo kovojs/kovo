@@ -1984,6 +1984,14 @@ land it first; don't fork it.
       `corepack pnpm exec vitest --run packages/server/src/meta.test.ts packages/server/src/route.test.ts packages/server/src/index.test.ts`,
       `corepack pnpm exec vp check packages/server/src/index.ts packages/server/src/meta.ts packages/server/src/meta.test.ts plans/codebase-quality-round2.md`,
       and `git diff --check`.
+      Additional evidence 2026-06-12: the route-page/route-render exception coverage for SPEC
+      §9.2 private 500 responses and `onError` diagnostics moved from
+      `packages/server/src/index.test.ts` into `packages/server/src/route.test.ts`, keeping the
+      extracted route seam tested beside its implementation while reducing the barrel test's
+      responsibilities. Same-session evidence:
+      `pnpm exec vitest --run packages/server/src/route.test.ts packages/server/src/index.test.ts`,
+      `pnpm exec vp check packages/server/src/route.test.ts packages/server/src/index.test.ts plans/codebase-quality-round2.md`,
+      and `git diff --check`.
       Additional evidence 2026-06-12: mutation declarations, execution, response rendering,
       replayed enhanced responses per `SPEC.md` §8.1 / §9.1, change-record headers, fragment
       rerendering, and legacy `renderQueryScript` delegation moved from

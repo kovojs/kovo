@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import { meta, redirect, renderPageHints, s } from './index.js';
 import {
@@ -111,6 +111,56 @@ describe('route primitives', () => {
       body: '<main>u1:p1:reviews</main>',
       headers: { 'Content-Type': 'text/html; charset=utf-8' },
       status: 200,
+    });
+  });
+
+  it('renders route page and renderer exceptions as stable 500 HTML', async () => {
+    const loadError = new Error('private route load detail');
+    const renderError = new Error('private render detail');
+    const onError = vi.fn();
+    const request = {};
+    const throwingPage = route('/products/:id', {
+      page() {
+        throw loadError;
+      },
+    });
+    const throwingRenderer = route('/cart', {
+      page() {
+        return 'cart';
+      },
+    });
+    // SPEC §9.2 keeps server exceptions private while preserving onError diagnostics.
+    const serverErrorResponse = {
+      body: 'Internal Server Error',
+      headers: { 'Content-Type': 'text/html; charset=utf-8' },
+      status: 500,
+    };
+
+    await expect(
+      renderRoutePageResponse(throwingPage, { params: { id: 'p1' } }, request, String, {
+        onError,
+      }),
+    ).resolves.toEqual(serverErrorResponse);
+    await expect(
+      renderRoutePageResponse(
+        throwingRenderer,
+        {},
+        request,
+        () => {
+          throw renderError;
+        },
+        { onError },
+      ),
+    ).resolves.toEqual(serverErrorResponse);
+    expect(onError).toHaveBeenCalledWith(loadError, {
+      operation: 'route-page',
+      request,
+      routePath: '/products/:id',
+    });
+    expect(onError).toHaveBeenCalledWith(renderError, {
+      operation: 'route-render',
+      request,
+      routePath: '/cart',
     });
   });
 });
