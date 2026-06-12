@@ -53,7 +53,7 @@ jiso-dialog` resolves dashed wire names and prints provenance including package,
       `pnpm exec vitest --run packages/headless-ui/src/platform-audit.test.ts packages/headless-ui/src/tooling/primitive-handler-lint.test.ts packages/headless-ui/src/tooling/lint-primitives.test.ts`,
       `pnpm --filter @jiso/headless-ui run lint:primitives`, and
       `pnpm exec vp check packages/headless-ui/package.json packages/headless-ui/src/index.ts packages/headless-ui/src/platform-audit.ts packages/headless-ui/src/platform-audit.test.ts`.
-- [ ] H0 shared lib: state-attributes, keyboard/menu navigation maps, typeahead, change-details (reason + `defaultPrevented` contract), positioning fallback.
+- [x] H0 shared lib: state-attributes, keyboard/menu navigation maps, typeahead, change-details (reason + `defaultPrevented` contract), positioning fallback.
       Partial evidence 2026-06-12: `packages/headless-ui/src/lib/` now exposes
       executable pure helpers for state/data attributes, cancelable change details,
       APG-style collection keyboard movement, and typeahead matching through the
@@ -70,8 +70,22 @@ jiso-dialog` resolves dashed wire names and prints provenance including package,
       `pnpm --filter @jiso/headless-ui exec vitest --run src/lib/positioning-fallback.test.ts src/lib/state-attributes.test.ts src/lib/change-details.test.ts src/lib/keyboard-navigation.test.ts src/lib/typeahead.test.ts src/platform-audit.test.ts src/tooling/primitive-handler-lint.test.ts src/tooling/lint-primitives.test.ts`,
       `pnpm --filter @jiso/headless-ui run lint:primitives`, and
       `pnpm exec vp check packages/headless-ui/src/lib/positioning-fallback.ts packages/headless-ui/src/lib/positioning-fallback.test.ts packages/headless-ui/src/lib/index.ts packages/headless-ui/src/index.ts plans/ui.md`.
-      Remaining: first primitive integration.
+      Additional evidence 2026-06-12: `src/primitives/disclosure.ts` is now a small L0
+      disclosure primitive integrated with the shared H0 helpers: `openState`,
+      `dataDisabled`, `mergeDataAttributes`, and cancelable change details. It exports
+      root/trigger/content attribute builders plus programmatic and trigger-click state
+      transitions through `@jiso/headless-ui`, `@jiso/headless-ui/primitives`, and
+      `@jiso/headless-ui/primitives/disclosure`. Same-session evidence:
+      `pnpm --filter @jiso/headless-ui exec vitest --run src/primitives/disclosure.test.ts src/lib/state-attributes.test.ts src/lib/change-details.test.ts src/lib/keyboard-navigation.test.ts src/lib/typeahead.test.ts src/lib/positioning-fallback.test.ts src/tooling/primitive-handler-lint.test.ts src/tooling/lint-primitives.test.ts src/platform-audit.test.ts`,
+      `pnpm --filter @jiso/headless-ui run lint:primitives`, and
+      `pnpm exec vp check packages/headless-ui/package.json packages/headless-ui/src/index.ts packages/headless-ui/src/primitives/index.ts packages/headless-ui/src/primitives/disclosure.ts packages/headless-ui/src/primitives/disclosure.test.ts plans/ui.md`.
 - [ ] H1 wave 1 primitives (L0-heavy): dialog, alert-dialog, popover, tooltip, hover-card, collapsible, accordion, separator, progress, meter, avatar, toggle, switch, checkbox.
+      Partial evidence 2026-06-12: disclosure is the first H1 L0 primitive with DOM-light
+      attribute builders, cancelable open-state transitions, the SPEC §4.6 primitive handler
+      no-op guard, package exports, and focused tests. Same-session evidence:
+      `pnpm --filter @jiso/headless-ui exec vitest --run src/primitives/disclosure.test.ts`,
+      `pnpm --filter @jiso/headless-ui run lint:primitives`, and
+      `pnpm exec vp check packages/headless-ui/package.json packages/headless-ui/src/index.ts packages/headless-ui/src/primitives/index.ts packages/headless-ui/src/primitives/disclosure.ts packages/headless-ui/src/primitives/disclosure.test.ts plans/ui.md`.
 - [ ] H2 wave 2 primitives (stateful L1 islands): tabs, radio-group, toggle-group, checkbox-group, toolbar, number-field, otp-field, scroll-area, field/fieldset as `form()` integration.
 - [ ] H3 wave 3 primitives (list-driven & isomorphic): select, combobox, autocomplete, dropdown-menu, context-menu, menubar, navigation-menu, slider, toast, command.
 - [ ] U1 token sheet + `cn()` + statically-analyzable variant helper (Tailwind-first, §13.1 discoverability rules).

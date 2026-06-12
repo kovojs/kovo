@@ -58,3 +58,22 @@ export type {
   TypeaheadMatchOptions,
   TypeaheadState,
 } from './lib/index.js';
+
+export {
+  disclosureContentAttributes,
+  disclosureRootAttributes,
+  disclosureTriggerAttributes,
+  disclosureTriggerClick,
+  setDisclosureOpen,
+  toggleDisclosure,
+} from './primitives/index.js';
+export type {
+  DisclosureAttributeOptions,
+  DisclosureChangeDetail,
+  DisclosureChangeOptions,
+  DisclosureChangeReason,
+  DisclosureChangeResult,
+  DisclosurePrimitiveAttributes,
+  DisclosureState,
+  DisclosureTriggerEvent,
+} from './primitives/index.js';

@@ -6,6 +6,8 @@
     ".": "./src/index.ts",
     "./lib": "./src/lib/index.ts",
     "./platform-audit": "./src/platform-audit.ts",
+    "./primitives": "./src/primitives/index.ts",
+    "./primitives/disclosure": "./src/primitives/disclosure.ts",
     "./tooling": "./src/tooling/index.ts"
   },
   "scripts": {
