@@ -87,6 +87,16 @@ jiso-dialog` resolves dashed wire names and prints provenance including package,
       `pnpm --filter @jiso/headless-ui exec vitest --run src/primitives/disclosure.test.ts`,
       `pnpm --filter @jiso/headless-ui run lint:primitives`, and
       `pnpm exec vp check packages/headless-ui/package.json packages/headless-ui/src/index.ts packages/headless-ui/src/primitives/index.ts packages/headless-ui/src/primitives/disclosure.ts packages/headless-ui/src/primitives/disclosure.test.ts plans/ui.md`.
+      Additional partial evidence 2026-06-12: `packages/headless-ui/src/primitives/collapsible.ts`
+      adds the H1 collapsible primitive as a native `<details>/<summary>`-oriented L0 helper:
+      root/trigger/content attribute builders, cancelable open-state transitions, the SPEC §4.6
+      primitive handler no-op guard, and prevention of native summary toggling when disabled or
+      canceled. It is exported through `@jiso/headless-ui`, `@jiso/headless-ui/primitives`, and
+      `@jiso/headless-ui/primitives/collapsible`. Same-session evidence:
+      `pnpm --filter @jiso/headless-ui exec vitest --run src/primitives/collapsible.test.ts src/primitives/disclosure.test.ts src/lib/state-attributes.test.ts src/lib/change-details.test.ts src/tooling/primitive-handler-lint.test.ts src/tooling/lint-primitives.test.ts`,
+      `pnpm --filter @jiso/headless-ui run lint:primitives`,
+      `pnpm exec vp check packages/headless-ui/package.json packages/headless-ui/src/index.ts packages/headless-ui/src/primitives/index.ts packages/headless-ui/src/primitives/collapsible.ts packages/headless-ui/src/primitives/collapsible.test.ts packages/headless-ui/src/tooling/lint-primitives.test.ts plans/ui.md`,
+      and `git diff --check`.
 - [ ] H2 wave 2 primitives (stateful L1 islands): tabs, radio-group, toggle-group, checkbox-group, toolbar, number-field, otp-field, scroll-area, field/fieldset as `form()` integration.
 - [ ] H3 wave 3 primitives (list-driven & isomorphic): select, combobox, autocomplete, dropdown-menu, context-menu, menubar, navigation-menu, slider, toast, command.
 - [ ] U1 token sheet + `cn()` + statically-analyzable variant helper (Tailwind-first, §13.1 discoverability rules).

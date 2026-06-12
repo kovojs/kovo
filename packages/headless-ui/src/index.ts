@@ -74,14 +74,28 @@ export type {
 } from './lib/index.js';
 
 export {
+  collapsibleContentAttributes,
+  collapsibleRootAttributes,
+  collapsibleTriggerAttributes,
+  collapsibleTriggerClick,
   disclosureContentAttributes,
   disclosureRootAttributes,
   disclosureTriggerAttributes,
   disclosureTriggerClick,
+  setCollapsibleOpen,
   setDisclosureOpen,
+  toggleCollapsible,
   toggleDisclosure,
 } from './primitives/index.js';
 export type {
+  CollapsibleAttributeOptions,
+  CollapsibleChangeDetail,
+  CollapsibleChangeOptions,
+  CollapsibleChangeReason,
+  CollapsibleChangeResult,
+  CollapsiblePrimitiveAttributes,
+  CollapsibleState,
+  CollapsibleTriggerEvent,
   DisclosureAttributeOptions,
   DisclosureChangeDetail,
   DisclosureChangeOptions,

@@ -15,6 +15,7 @@ describe('primitive handler lint CLI gate', () => {
     });
 
     expect(result.findings).toEqual([]);
+    expect(result.files.map((file) => file.path)).toContain('src/primitives/collapsible.ts');
     expect(result.files.map((file) => file.path)).toContain('src/primitives/disclosure.ts');
   });
 
