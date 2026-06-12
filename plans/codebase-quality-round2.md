@@ -1836,6 +1836,17 @@ params, relational API, `execute(sql)`, right/full joins, a string column named 
       `corepack pnpm exec vitest --run packages/runtime/src/loader-lifecycle.test.ts packages/runtime/src/index.test.ts -t "loader lifecycle|delegated loader failures|disposes loader listeners|execution trigger"`,
       `corepack pnpm exec vp check packages/runtime/src/index.ts packages/runtime/src/index.test.ts packages/runtime/src/loader-lifecycle.ts packages/runtime/src/loader-lifecycle.test.ts plans/codebase-quality-round2.md`,
       and `git diff --check`.
+      Additional bounded evidence 2026-06-12: extracted
+      `packages/runtime/src/mutation-failure.ts` as the subtractive enhanced-mutation failure
+      parser seam, so `packages/runtime/src/index.ts` delegates `createSubmitContext` failure
+      parsing instead of owning the shared wire-parser-backed `<fw-error>`/`<output>` reader.
+      `packages/runtime/src/mutation-failure.test.ts` pins JSON, declared output, validation
+      output, unknown fallback, and quoted `>` attribute behavior while
+      `packages/runtime/src/submit-context.test.ts` keeps the public context integration covered.
+      Same-session evidence:
+      `corepack pnpm exec vitest --run packages/runtime/src/mutation-failure.test.ts packages/runtime/src/submit-context.test.ts`,
+      `corepack pnpm exec vp check packages/runtime/src/index.ts packages/runtime/src/mutation-failure.ts packages/runtime/src/mutation-failure.test.ts packages/runtime/src/submit-context.test.ts plans/codebase-quality-round2.md`,
+      and `git diff --check`.
 - [ ] **LOW** — `hydratedQueries` frozen at install (index.ts:330-342): queries introduced by
       later mutations never become refetch-eligible — fix or document as SPEC-intended;
       `unescapeHtml` missing `&#39;`/`&apos;` (wire-parser.ts:162-168) — pin the server↔runtime
