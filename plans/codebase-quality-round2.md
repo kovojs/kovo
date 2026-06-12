@@ -1640,7 +1640,16 @@ As each phase splits a source module, split its tests in the same commit.
       `pnpm exec vitest --run packages/server/src/csrf.test.ts packages/server/src/index.test.ts -t "CSRF|csrf"`,
       `pnpm exec vitest --run packages/server/src/csrf.test.ts packages/server/src/index.test.ts`,
       and `pnpm exec vp check packages/server/src/csrf.test.ts packages/server/src/index.test.ts plans/codebase-quality-round2.md`.
-      and `pnpm exec vitest --run packages/server/src/*.test.ts`.
+      Additional evidence 2026-06-12: byte-for-byte wire fixture contract coverage moved from
+      `packages/server/src/index.test.ts` into `packages/server/src/wire-fixtures.test.ts`,
+      including typed-read, deferred stream, enhanced mutation, validation failure, no-JS PRG,
+      and live HTTP fixture replay checks plus the local transcript/live-server helpers.
+      Same-session evidence:
+      `pnpm exec vitest --run packages/server/src/wire-fixtures.test.ts`,
+      `pnpm exec vitest --run packages/server/src/index.test.ts -t "document-load hydration|typed validation failures|enhanced mutation responses by FW-Idem|POST-redirect-GET|schema validation failures"`,
+      `pnpm exec vp check packages/server/src/index.test.ts packages/server/src/wire-fixtures.test.ts plans/codebase-quality-round2.md`,
+      and `git diff --check`. Full server test-suite sweep remains open here:
+      `pnpm exec vitest --run packages/server/src/*.test.ts`.
 - [ ] runtime/index.test.ts (4,435 lines, mutation tests under "query store") → per-module
       files; `Fake*` classes to a shared `test-fixtures.ts`; direct unit tests for wire-parser,
       handlers, morph; replace counted-microtask flushing with a single `flush()` helper.
