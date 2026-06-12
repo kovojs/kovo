@@ -4,20 +4,15 @@ import type {
   EndpointMount,
   WebhookVerifier,
 } from '@jiso/core';
-import type {
-  ChangeRecord,
-  Domain,
-  InferSchema,
-  MaybePromise,
-  MutationResponseHeaders,
-  Schema,
-} from './index.js';
+import type { ChangeRecord } from './change-record.js';
+import type { Domain } from './domain.js';
 import {
   endpointRequestWithoutSession,
   type EndpointDeclaration,
   type EndpointRequest,
 } from './endpoint.js';
-import type { ServerResponseBase } from './response.js';
+import type { MutationResponseHeaders, ServerResponseBase } from './response.js';
+import type { InferSchema, MaybePromise, Schema } from './schema.js';
 
 export type WebhookFailureStatus = 400 | 401 | 422 | 429 | 500;
 export type WebhookSuccessStatus = 200;

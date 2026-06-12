@@ -2167,6 +2167,13 @@ land it first; don't fork it.
       `pnpm exec vitest --run packages/server/src/change-record.test.ts packages/server/src/index.test.ts`,
       `pnpm exec vp check packages/server/src/change-record.ts packages/server/src/change-record.test.ts packages/server/src/mutation.ts plans/codebase-quality-round2.md`,
       and `git diff --check`.
+      Additional evidence 2026-06-12: `packages/server/src/webhook.ts` no longer imports server
+      types through the package barrel; it imports change records, domains, response headers, and
+      schema types directly from their owning server modules, leaving `index.ts` as the external
+      public export surface rather than an internal dependency edge. Same-session evidence:
+      `corepack pnpm exec vitest --run packages/server/src/webhook.test.ts`,
+      `corepack pnpm exec vp check packages/server/src/webhook.ts plans/codebase-quality-round2.md`,
+      and `git diff --check`.
 - [ ] **LOW — Close the server cleanup inventory with an acceptance sweep.** Historical audit
       targets were dead code (`matchShellDispatch` post-loop return shell.ts:161-166; rate-limit
       tail `return options.max > 0` index.ts:576); `matchRoute` recompiling all routes per call
