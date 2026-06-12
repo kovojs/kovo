@@ -6,7 +6,7 @@ import {
   runMutation,
 } from '@jiso/server';
 import { createJisoTestHarness } from '@jiso/test';
-import { betterAuth, getAuthTables } from 'better-auth';
+import { betterAuth, getAuthTables, type BetterAuthPlugin } from 'better-auth';
 import { memoryAdapter } from 'better-auth/adapters/memory';
 import {
   admin,
@@ -2156,6 +2156,96 @@ describe('Better Auth pinned conformance', () => {
     expect(harness.verificationDiagnostics()).toEqual([]);
   });
 
+  it('degrades real future plugin schema tables with FW406 bridge suggestions', () => {
+    const { auth } = createRealAuth({
+      plugins: [futureWebAuthnPlugin()],
+    });
+    const tables = getAuthTables(auth.options);
+    const generated = generateBetterAuthSchemaSource(tables);
+
+    expect(Object.keys(tables).sort()).toEqual([
+      'account',
+      'session',
+      'user',
+      'verification',
+      'webauthnChallenge',
+      'webauthnCredential',
+    ]);
+    expect(requireAuthTable(tables, 'webauthnChallenge').modelName).toBe(
+      'auth_webauthn_challenges',
+    );
+    expect(Object.keys(requireAuthTable(tables, 'webauthnChallenge').fields).sort()).toEqual([
+      'challenge',
+      'expiresAt',
+    ]);
+    expect(requireAuthTable(tables, 'webauthnCredential').modelName).toBe(
+      'auth_webauthn_credentials',
+    );
+    expect(Object.keys(requireAuthTable(tables, 'webauthnCredential').fields).sort()).toEqual([
+      'credentialId',
+      'userId',
+    ]);
+
+    // SPEC.md §10.1 / §11.2: future Better Auth plugin tables are real
+    // metadata, but stay FW406 until schema annotations and declared touches
+    // are explicit. Protocol state gets an exempt suggestion; credentials get
+    // an auth-domain ownership suggestion.
+    expect(validateBetterAuthSchemaBridge(tables)).toEqual({
+      declaredTouchMismatches: [],
+      keyFieldMismatches: [],
+      missingTables: [],
+      ok: false,
+      pluginTableDegradations: [
+        {
+          diagnosticCode: 'FW406',
+          fields: ['challenge', 'expiresAt', 'id'],
+          manualBridgeSteps: [
+            'Inspect webauthnChallenge (physical auth_webauthn_challenges) fields (challenge, expiresAt, id) and decide whether the app reads this table.',
+            'Likely Better Auth protocol/bookkeeping state is jiso({ exempt: true }); confirm the app never queries it before adding the bridge.',
+            'Add declared Better Auth API touches for writes that can mutate webauthnChallenge; SPEC.md §11.2 keeps observed writes FW406 until declared coverage exists.',
+          ],
+          message:
+            'webauthnChallenge (physical auth_webauthn_challenges) is outside the blessed Better Auth schema bridge; add a schema.ts domain/exempt annotation and declared touches before relying on runtime coverage.',
+          physicalTable: 'auth_webauthn_challenges',
+          reason: 'unsupported-plugin-table',
+          suggestedAnnotation: {
+            exempt: true,
+            rationale:
+              'Better Auth plugin protocol/bookkeeping state is not an app read surface under SPEC.md §10.1.',
+          },
+          table: 'webauthnChallenge',
+        },
+        {
+          diagnosticCode: 'FW406',
+          fields: ['credentialId', 'id', 'userId'],
+          manualBridgeSteps: [
+            'Inspect webauthnCredential (physical auth_webauthn_credentials) fields (credentialId, id, userId) and decide whether the app reads this table.',
+            "Likely app-visible ownership is jiso({ domain: 'auth', key: 'userId' }); confirm before adding the bridge, otherwise use jiso({ exempt: true }) with a rationale.",
+            'Add declared Better Auth API touches for writes that can mutate webauthnCredential; SPEC.md §11.2 keeps observed writes FW406 until declared coverage exists.',
+          ],
+          message:
+            'webauthnCredential (physical auth_webauthn_credentials) is outside the blessed Better Auth schema bridge; add a schema.ts domain/exempt annotation and declared touches before relying on runtime coverage.',
+          physicalTable: 'auth_webauthn_credentials',
+          reason: 'unsupported-plugin-table',
+          suggestedAnnotation: { domain: 'auth', key: 'userId' },
+          table: 'webauthnCredential',
+        },
+      ],
+      unbridgedTables: ['webauthnChallenge', 'webauthnCredential'],
+    });
+    expect(generated.unsupportedPluginTables).toEqual(
+      validateBetterAuthSchemaBridge(tables).pluginTableDegradations,
+    );
+    expect(generated.generatedTables.map((table) => table.table)).toEqual([
+      'user',
+      'session',
+      'account',
+      'verification',
+    ]);
+    expect(generated.source).not.toContain('webauthnChallenge');
+    expect(generated.source).not.toContain('webauthnCredential');
+  });
+
   it('rejects bridge extension collisions against real Better Auth core tables', () => {
     const { auth } = createRealAuth();
     const tables = getAuthTables(auth.options);
@@ -2438,6 +2528,28 @@ function createRealAuth(
   });
 
   return { auth, db };
+}
+
+function futureWebAuthnPlugin(): BetterAuthPlugin {
+  return {
+    id: 'future-webauthn',
+    schema: {
+      webauthnChallenge: {
+        fields: {
+          challenge: { type: 'string' },
+          expiresAt: { type: 'date' },
+        },
+        modelName: 'auth_webauthn_challenges',
+      },
+      webauthnCredential: {
+        fields: {
+          credentialId: { type: 'string' },
+          userId: { type: 'string' },
+        },
+        modelName: 'auth_webauthn_credentials',
+      },
+    },
+  };
 }
 
 function betterAuthSchemaSourceFixture(tables: readonly string[]): string {

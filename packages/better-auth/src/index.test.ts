@@ -566,6 +566,7 @@ describe('credential mutation helpers', () => {
         account: authTable(['userId']),
         auditLog: authTable(['organizationId', 'actorUserId']),
         ephemeralChallenge: {},
+        webauthnChallenge: authTable(['challenge', 'expiresAt']),
         session: authTable(['userId']),
         user: authTable(),
         verification: authTable(),
@@ -598,6 +599,24 @@ describe('credential mutation helpers', () => {
         reason: 'unsupported-plugin-table',
         suggestedAnnotation: null,
         table: 'ephemeralChallenge',
+      },
+      {
+        diagnosticCode: 'FW406',
+        fields: ['challenge', 'expiresAt', 'id'],
+        manualBridgeSteps: [
+          'Inspect webauthnChallenge fields (challenge, expiresAt, id) and decide whether the app reads this table.',
+          'Likely Better Auth protocol/bookkeeping state is jiso({ exempt: true }); confirm the app never queries it before adding the bridge.',
+          'Add declared Better Auth API touches for writes that can mutate webauthnChallenge; SPEC.md §11.2 keeps observed writes FW406 until declared coverage exists.',
+        ],
+        message:
+          'webauthnChallenge is outside the blessed Better Auth schema bridge; add a schema.ts domain/exempt annotation and declared touches before relying on runtime coverage.',
+        reason: 'unsupported-plugin-table',
+        suggestedAnnotation: {
+          exempt: true,
+          rationale:
+            'Better Auth plugin protocol/bookkeeping state is not an app read surface under SPEC.md §10.1.',
+        },
+        table: 'webauthnChallenge',
       },
     ]);
   });

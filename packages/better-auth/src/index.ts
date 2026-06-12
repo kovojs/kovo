@@ -248,7 +248,7 @@ export interface BetterAuthPluginTableDegradation {
   message: string;
   physicalTable?: string;
   reason: 'unsupported-plugin-table';
-  suggestedAnnotation: BetterAuthSchemaBridgeDomainAnnotation | null;
+  suggestedAnnotation: BetterAuthSchemaBridgeAnnotation | null;
   table: string;
 }
 
@@ -271,7 +271,7 @@ export interface BetterAuthSchemaSourcePluginTableDegradation {
   physicalTable?: string;
   reason: 'unsupported-plugin-table-source';
   sourceFactory: 'recognized-drizzle-table' | 'unrecognized-table-factory';
-  suggestedAnnotation: BetterAuthSchemaBridgeDomainAnnotation | null;
+  suggestedAnnotation: BetterAuthSchemaBridgeAnnotation | null;
   table: string;
 }
 
@@ -1426,16 +1426,18 @@ function unsupportedPluginTableManualBridgeSteps(
   table: string,
   physicalTable: string,
   fields: Set<string> | null,
-  suggestedAnnotation: BetterAuthSchemaBridgeDomainAnnotation | null,
+  suggestedAnnotation: BetterAuthSchemaBridgeAnnotation | null,
 ): string[] {
   const fieldList =
     fields === null ? 'unavailable from Better Auth metadata' : [...fields].sort().join(', ');
   const annotationStep =
     suggestedAnnotation === null
       ? 'If it is app-visible, add a schema.ts jiso({ domain, key }) annotation; otherwise add jiso({ exempt: true }) with a rationale.'
-      : `Likely app-visible ownership is jiso(${formatBetterAuthSchemaDomainAnnotation(
-          suggestedAnnotation,
-        )}); confirm before adding the bridge, otherwise use jiso({ exempt: true }) with a rationale.`;
+      : 'domain' in suggestedAnnotation
+        ? `Likely app-visible ownership is jiso(${formatBetterAuthSchemaDomainAnnotation(
+            suggestedAnnotation,
+          )}); confirm before adding the bridge, otherwise use jiso({ exempt: true }) with a rationale.`
+        : 'Likely Better Auth protocol/bookkeeping state is jiso({ exempt: true }); confirm the app never queries it before adding the bridge.';
 
   return [
     `Inspect ${betterAuthTableLabel(
@@ -1453,14 +1455,51 @@ function betterAuthTableLabel(table: string, physicalTable: string): string {
 
 function suggestedUnsupportedPluginTableAnnotation(
   fields: Set<string> | null,
-): BetterAuthSchemaBridgeDomainAnnotation | null {
+): BetterAuthSchemaBridgeAnnotation | null {
   if (fields === null) return null;
+  if (isLikelyBetterAuthProtocolTable(fields)) {
+    return {
+      exempt: true,
+      rationale:
+        'Better Auth plugin protocol/bookkeeping state is not an app read surface under SPEC.md §10.1.',
+    };
+  }
   if (fields.has('organizationId')) return { domain: 'organization', key: 'organizationId' };
   if (fields.has('teamId')) return { domain: 'organization', key: 'teamId' };
   if (fields.has('userId')) return { domain: 'auth', key: 'userId' };
 
   return null;
 }
+
+function isLikelyBetterAuthProtocolTable(fields: ReadonlySet<string>): boolean {
+  const nonIdFields = [...fields].filter((field) => field !== 'id');
+
+  if (nonIdFields.length === 0) return false;
+  if (!nonIdFields.some((field) => protocolStateAnchorFields.has(field))) return false;
+
+  return nonIdFields.every((field) => protocolStateFields.has(field));
+}
+
+const protocolStateAnchorFields = new Set(['challenge', 'code', 'deviceCode', 'token', 'value']);
+
+const protocolStateFields = new Set([
+  'challenge',
+  'clientId',
+  'code',
+  'createdAt',
+  'deviceCode',
+  'expiresAt',
+  'identifier',
+  'lastPolledAt',
+  'pollingInterval',
+  'scope',
+  'status',
+  'token',
+  'updatedAt',
+  'userCode',
+  'userId',
+  'value',
+]);
 
 function formatBetterAuthSchemaDomainAnnotation(
   annotation: BetterAuthSchemaBridgeDomainAnnotation,
