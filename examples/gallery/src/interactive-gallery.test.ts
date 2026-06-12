@@ -25,7 +25,10 @@ describe('compiled interactive gallery demos', () => {
   it('compiles stateful gallery demos into server TSX and client handler modules', () => {
     const toggle = readGenerated('toggle-demo.tsx');
     const checkbox = readGenerated('checkbox-demo.tsx');
+    const collapsible = readGenerated('collapsible-demo.tsx');
     const disclosure = readGenerated('disclosure-demo.tsx');
+    const popover = readGenerated('popover-demo.tsx');
+    const switchDemo = readGenerated('switch-demo.tsx');
 
     expect(toggle).toContain('data-gallery-interactive="toggle"');
     expect(toggle).toContain('fw-state=\'{"pressed":false}\'');
@@ -44,12 +47,33 @@ describe('compiled interactive gallery demos', () => {
     expect(disclosure).toMatch(
       /on:click="\/c\/examples\/gallery\/src\/generated\/interactive\/disclosure-demo\.client\.js\?v=[0-9a-f]{8}#GalleryDisclosureDemo\$button_click"/,
     );
+
+    expect(collapsible).toContain('data-gallery-interactive="collapsible"');
+    expect(collapsible).toContain('fw-state=\'{"open":false}\'');
+    expect(collapsible).toMatch(
+      /on:click="\/c\/examples\/gallery\/src\/generated\/interactive\/collapsible-demo\.client\.js\?v=[0-9a-f]{8}#GalleryCollapsibleDemo\$summary_click"/,
+    );
+
+    expect(popover).toContain('data-gallery-interactive="popover"');
+    expect(popover).toContain('fw-state=\'{"open":false}\'');
+    expect(popover).toMatch(
+      /on:click="\/c\/examples\/gallery\/src\/generated\/interactive\/popover-demo\.client\.js\?v=[0-9a-f]{8}#GalleryPopoverDemo\$button_click"/,
+    );
+
+    expect(switchDemo).toContain('data-gallery-interactive="switch"');
+    expect(switchDemo).toContain('fw-state=\'{"checked":false}\'');
+    expect(switchDemo).toMatch(
+      /on:click="\/c\/examples\/gallery\/src\/generated\/interactive\/switch-demo\.client\.js\?v=[0-9a-f]{8}#GallerySwitchDemo\$input_click"/,
+    );
   });
 
   it('executes generated client behavior for the stateful demos', () => {
     const toggle = evaluateClientModule('toggle-demo.client.js');
     const checkbox = evaluateClientModule('checkbox-demo.client.js');
+    const collapsible = evaluateClientModule('collapsible-demo.client.js');
     const disclosure = evaluateClientModule('disclosure-demo.client.js');
+    const popover = evaluateClientModule('popover-demo.client.js');
+    const switchDemo = evaluateClientModule('switch-demo.client.js');
     const signal = new AbortController().signal;
 
     const toggleState = { pressed: false };
@@ -75,6 +99,30 @@ describe('compiled interactive gallery demos', () => {
       state: disclosureState,
     });
     expect(disclosureState).toEqual({ open: true });
+
+    const collapsibleState = { open: false };
+    clientHandler(collapsible, 'GalleryCollapsibleDemo$summary_click')(new Event('click'), {
+      params: {},
+      signal,
+      state: collapsibleState,
+    });
+    expect(collapsibleState).toEqual({ open: true });
+
+    const popoverState = { open: false };
+    clientHandler(popover, 'GalleryPopoverDemo$button_click')(new Event('click'), {
+      params: {},
+      signal,
+      state: popoverState,
+    });
+    expect(popoverState).toEqual({ open: true });
+
+    const switchState = { checked: false };
+    clientHandler(switchDemo, 'GallerySwitchDemo$input_click')(new Event('click'), {
+      params: {},
+      signal,
+      state: switchState,
+    });
+    expect(switchState).toEqual({ checked: true });
   });
 });
 

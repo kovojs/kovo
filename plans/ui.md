@@ -925,6 +925,19 @@ jiso-dialog` resolves dashed wire names and prints provenance including package,
       and `pnpm --filter @jiso/example-gallery run test:browser`. G6 remains open for
       browser-backed visible ARIA/`hidden` synchronization, top-layer/focus behavior, and
       coverage of every stateful primitive family.
+      Additional partial evidence 2026-06-12: the compiled interactive gallery now adds
+      app-authored switch, collapsible, and popover demos alongside the existing
+      toggle/checkbox/disclosure seed. The same emitter compiles all six through
+      `@jiso/compiler`, produces generated server/client artifacts with versioned
+      `on:*` refs, and the Chromium browser test installs the real `@jiso/runtime`
+      loader to assert generated click/keyboard handlers mutate `fw-state` while native
+      browser behavior moves visible state for switch `checked`, `<details open>`, and
+      `:popover-open`. Same-session evidence:
+      `pnpm --filter @jiso/example-gallery run emit:interactive-gallery -- --check`,
+      `pnpm --filter @jiso/example-gallery exec vitest --run src/interactive-gallery.test.ts`,
+      and `pnpm --filter @jiso/example-gallery run test:browser`. G6 remains open for
+      full stateful-family coverage plus ARIA/`hidden` rerender synchronization,
+      dialog/tooltip focus and dismiss behavior, and docs deployment wiring.
 
 ## Background
 

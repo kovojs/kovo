@@ -6,8 +6,17 @@ import { userEvent } from 'vitest/browser';
 import * as checkboxClient from './generated/interactive/checkbox-demo.client.js';
 import { GalleryCheckboxDemo } from './generated/interactive/checkbox-demo.js';
 // @ts-expect-error generated client modules are compiler artifacts without declarations.
+import * as collapsibleClient from './generated/interactive/collapsible-demo.client.js';
+import { GalleryCollapsibleDemo } from './generated/interactive/collapsible-demo.js';
+// @ts-expect-error generated client modules are compiler artifacts without declarations.
 import * as disclosureClient from './generated/interactive/disclosure-demo.client.js';
 import { GalleryDisclosureDemo } from './generated/interactive/disclosure-demo.js';
+// @ts-expect-error generated client modules are compiler artifacts without declarations.
+import * as popoverClient from './generated/interactive/popover-demo.client.js';
+import { GalleryPopoverDemo } from './generated/interactive/popover-demo.js';
+// @ts-expect-error generated client modules are compiler artifacts without declarations.
+import * as switchClient from './generated/interactive/switch-demo.client.js';
+import { GallerySwitchDemo } from './generated/interactive/switch-demo.js';
 // @ts-expect-error generated client modules are compiler artifacts without declarations.
 import * as toggleClient from './generated/interactive/toggle-demo.client.js';
 import { GalleryToggleDemo } from './generated/interactive/toggle-demo.js';
@@ -21,7 +30,10 @@ interface InteractiveDemoComponent {
 
 const generatedModules: Record<string, Record<string, unknown>> = {
   '/c/examples/gallery/src/generated/interactive/checkbox-demo.client.js': checkboxClient,
+  '/c/examples/gallery/src/generated/interactive/collapsible-demo.client.js': collapsibleClient,
   '/c/examples/gallery/src/generated/interactive/disclosure-demo.client.js': disclosureClient,
+  '/c/examples/gallery/src/generated/interactive/popover-demo.client.js': popoverClient,
+  '/c/examples/gallery/src/generated/interactive/switch-demo.client.js': switchClient,
   '/c/examples/gallery/src/generated/interactive/toggle-demo.client.js': toggleClient,
 };
 
@@ -107,6 +119,81 @@ describe('compiled interactive gallery demos in the browser', () => {
 
     await vi.waitFor(() => {
       expect(root.getAttribute('fw-state')).toBe('{"open":false}');
+    });
+  });
+
+  it('updates switch stamped state while native checked state moves in the browser', async () => {
+    const root = mountInteractiveDemo(GallerySwitchDemo);
+    const input = required(root.querySelector<HTMLInputElement>('input'));
+    installGeneratedGalleryLoader(root);
+
+    expect(root.getAttribute('fw-state')).toBe('{"checked":false}');
+    expect(input.getAttribute('role')).toBe('switch');
+    expect(input.checked).toBe(false);
+
+    input.click();
+
+    await vi.waitFor(() => {
+      expect(root.getAttribute('fw-state')).toBe('{"checked":true}');
+      expect(input.checked).toBe(true);
+    });
+
+    input.focus();
+    await userEvent.keyboard('{Space}');
+
+    await vi.waitFor(() => {
+      expect(root.getAttribute('fw-state')).toBe('{"checked":false}');
+      expect(input.checked).toBe(false);
+    });
+  });
+
+  it('updates collapsible stamped state while native details open state moves', async () => {
+    const root = mountInteractiveDemo(GalleryCollapsibleDemo) as HTMLDetailsElement;
+    const summary = required(root.querySelector<HTMLElement>('summary'));
+    const content = required(root.querySelector<HTMLElement>('#gallery-collapsible-content'));
+    installGeneratedGalleryLoader(root);
+
+    expect(root.open).toBe(false);
+    expect(summary.getAttribute('aria-expanded')).toBe('false');
+    expect(content.id).toBe('gallery-collapsible-content');
+
+    summary.click();
+
+    await vi.waitFor(() => {
+      expect(root.getAttribute('fw-state')).toBe('{"open":true}');
+      expect(root.open).toBe(true);
+    });
+
+    summary.focus();
+    await userEvent.keyboard('{Enter}');
+
+    await vi.waitFor(() => {
+      expect(root.getAttribute('fw-state')).toBe('{"open":false}');
+      expect(root.open).toBe(false);
+    });
+  });
+
+  it('updates popover stamped state while native top-layer state moves', async () => {
+    const root = mountInteractiveDemo(GalleryPopoverDemo);
+    const button = required(root.querySelector<HTMLButtonElement>('button'));
+    const content = required(root.querySelector<HTMLElement>('#gallery-popover-content'));
+    installGeneratedGalleryLoader(root);
+
+    expect(button.getAttribute('popovertarget')).toBe('gallery-popover-content');
+    expect(content.matches(':popover-open')).toBe(false);
+
+    button.click();
+
+    await vi.waitFor(() => {
+      expect(root.getAttribute('fw-state')).toBe('{"open":true}');
+      expect(content.matches(':popover-open')).toBe(true);
+    });
+
+    button.click();
+
+    await vi.waitFor(() => {
+      expect(root.getAttribute('fw-state')).toBe('{"open":false}');
+      expect(content.matches(':popover-open')).toBe(false);
     });
   });
 });

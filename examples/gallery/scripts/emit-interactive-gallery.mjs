@@ -23,7 +23,14 @@ const galleryRoot = resolve(scriptDir, '..');
 const repoRoot = resolve(galleryRoot, '../..');
 const checkOnly = process.argv.includes('--check');
 
-const demos = ['checkbox-demo', 'disclosure-demo', 'toggle-demo'];
+const demos = [
+  'checkbox-demo',
+  'collapsible-demo',
+  'disclosure-demo',
+  'popover-demo',
+  'switch-demo',
+  'toggle-demo',
+];
 
 for (const name of demos) {
   const sourcePath = resolve(galleryRoot, `src/interactive/${name}.tsx`);

@@ -24,7 +24,10 @@
     "interactiveGallery": {
       "compiledDemos": [
         "checkbox-demo",
+        "collapsible-demo",
         "disclosure-demo",
+        "popover-demo",
+        "switch-demo",
         "toggle-demo"
       ]
     }
