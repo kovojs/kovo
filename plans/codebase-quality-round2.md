@@ -2605,6 +2605,14 @@ As each phase splits a source module, split its tests in the same commit.
       update, and stamp coverage. Same-session evidence:
       `pnpm exec vitest --run packages/compiler/src/registry.test.ts packages/compiler/src/index.test.ts -t "registry|app graph|emits one server file"` and
       `pnpm exec vp check packages/compiler/src/registry.test.ts packages/compiler/src/index.test.ts plans/codebase-quality-round2.md`.
+      Additional evidence 2026-06-12: island-local state stamping/FW301 and event-payload FW320
+      coverage moved from `packages/compiler/src/index.test.ts` into
+      `packages/compiler/src/state-events.test.ts`, with expected FW301/FW320 messages and
+      severities keyed to `diagnosticDefinitions`. The broad compiler split remains open for the
+      remaining query-shape, stamp-drift, merge, and mutation-direct-db groups. Same-session
+      evidence:
+      `pnpm exec vitest --run packages/compiler/src/state-events.test.ts packages/compiler/src/index.test.ts -t "state|FW301|FW320|event payload|FW302"` and
+      `pnpm exec vp check packages/compiler/src/state-events.test.ts packages/compiler/src/index.test.ts plans/codebase-quality-round2.md`.
 - [ ] drizzle (one describe, 57 its, 68 inline pgTable fixtures, 3 module-shim copies) and
       test-package suites: same treatment; CLI tests get the temp-dir + stream-spy ritual
       (16 hand-copies) as one helper.
