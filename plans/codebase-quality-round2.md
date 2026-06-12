@@ -1243,6 +1243,15 @@ must be "FW406 unresolved," never "silently wrong."
       `pnpm exec vitest --run conformance/drizzle-pin/src/index.test.ts`,
       `pnpm exec vp check packages/drizzle/src/index.ts packages/drizzle/src/index.test.ts conformance/drizzle-pin/src/index.test.ts plans/codebase-quality-round2.md`,
       and `git diff --check`.
+      Additional evidence 2026-06-12: receiver-bound `refreshMaterializedView(...)` calls from
+      the pinned Drizzle Postgres API now share the ts-morph static-member unresolved-surface
+      scanner with raw `execute(...)`, so materialized-view refreshes are emitted as FW406
+      instead of silently vanishing while comment/string refresh text remains inert under SPEC
+      §10-§11. Same-session evidence:
+      `pnpm exec vitest --run packages/drizzle/src/index.test.ts -t "materialized-view refresh|unclassified Drizzle receiver calls"`,
+      `pnpm exec vitest --run conformance/drizzle-pin/src/index.test.ts -t "materialized-view refresh"`,
+      `pnpm exec vp check packages/drizzle/src/index.ts packages/drizzle/src/index.test.ts conformance/drizzle-pin/src/index.test.ts plans/codebase-quality-round2.md`,
+      and `git diff --check`.
 - [x] **MED — Make the drizzle-orm coupling real and tested.** The `>=0.45.2 <1` pin is
       decorative: drizzle-orm is never imported, absent from devDeps, and every project test
       fabricates a `declare module "drizzle-orm/pg-core"` shim (index.test.ts:1742, 1791, 1846).

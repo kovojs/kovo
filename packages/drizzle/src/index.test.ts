@@ -3294,6 +3294,35 @@ export interface CommerceInvalidationSets {
     });
   });
 
+  it('marks materialized-view refresh calls as FW406 instead of dropping the surface', () => {
+    const graph = extractTouchGraphFromSource([
+      {
+        fileName: 'catalog.domain.ts',
+        source: `
+          export const productSearch = pgMaterializedView("product_search", {});
+
+          export async function refreshCatalog(db) {
+            await db.refreshMaterializedView(productSearch);
+          }
+        `,
+      },
+    ]);
+
+    expect(graph).toEqual({
+      refreshCatalog: {
+        reads: [],
+        touches: [],
+        unresolved: [
+          {
+            code: 'FW406',
+            message: 'Statically un-analyzable write site; manual touches required.',
+            site: 'catalog.domain.ts:5',
+          },
+        ],
+      },
+    });
+  });
+
   it('marks static element-access raw and relational receiver calls as FW406', () => {
     const graph = extractTouchGraphFromSource([
       {
@@ -3365,9 +3394,11 @@ export interface CommerceInvalidationSets {
         source: [
           'export async function loadUsers(db) {',
           '  // db.execute(sql`delete from users`);',
+          '  // db.refreshMaterializedView(usersView);',
           '  const raw = "db.execute(sql`delete from users`)";',
+          '  const refresh = "db.refreshMaterializedView(usersView)";',
           '  const relational = `db.query.users.findMany()`;',
-          '  return { raw, relational };',
+          '  return { raw, refresh, relational };',
           '}',
         ].join('\n'),
       },

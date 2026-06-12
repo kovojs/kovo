@@ -94,6 +94,10 @@ const NUMBER_COLUMN_BUILDERS = new Set([
   'bigserial',
   'smallserial',
 ]);
+const UNCLASSIFIED_DRIZZLE_RECEIVER_MUTATION_METHODS = new Set([
+  'execute',
+  'refreshMaterializedView',
+]);
 
 export type QueryShape =
   | 'array'
@@ -2194,12 +2198,12 @@ function extractUnclassifiedDrizzleReceiverCalls(
   receiverNames: ReadonlySet<string>,
 ): ExternalDbArgumentCall[] {
   return [
-    ...extractReceiverExecuteCalls(source, receiverNames),
+    ...extractReceiverMutationCalls(source, receiverNames),
     ...extractRelationalQueryCalls(source, receiverNames),
   ];
 }
 
-function extractReceiverExecuteCalls(
+function extractReceiverMutationCalls(
   source: string,
   receiverNames: ReadonlySet<string>,
 ): ExternalDbArgumentCall[] {
@@ -2209,13 +2213,14 @@ function extractReceiverExecuteCalls(
 
     for (const call of sourceFile.getDescendantsOfKind(SyntaxKind.CallExpression)) {
       const expression = call.getExpression();
-      if (staticAccessName(expression) !== 'execute') continue;
+      const name = staticAccessName(expression);
+      if (!name || !UNCLASSIFIED_DRIZZLE_RECEIVER_MUTATION_METHODS.has(name)) continue;
 
       const receiver = staticAccessExpression(expression);
       if (!Node.isIdentifier(receiver) || !receiverNames.has(receiver.getText())) continue;
 
       const index = call.getStart() - bodyOffset;
-      if (index >= 0) calls.push({ index, name: 'execute' });
+      if (index >= 0) calls.push({ index, name });
     }
 
     return calls;
