@@ -255,6 +255,58 @@ describe('server app shell Vite build seam', () => {
     }
   });
 
+  it('rejects manifest and caller asset collisions during Vite export inventory planning', async () => {
+    const distDir = await mkdtemp(join(tmpdir(), 'jiso-vite-build-asset-collision-dist-'));
+
+    try {
+      const build = createJisoAppShellViteBuild({
+        app: createApp({
+          routes: [
+            route('/cart', {
+              page() {
+                return '<main>Cart</main>';
+              },
+            }),
+          ],
+        }),
+        manifest: {
+          'src/cart.client.ts': {
+            css: ['assets/cart.css'],
+            file: 'assets/cart.js',
+          },
+        },
+        routeEntryMap: {
+          '/cart': 'src/cart.client.ts',
+        },
+      });
+
+      await expect(
+        staticExportInventoryForJisoAppShellViteBuild(build, {
+          assets: [
+            {
+              path: '/assets/cart.css',
+              source: join(distDir, 'public/cart.css'),
+            },
+          ],
+          distDir,
+        }),
+      ).rejects.toMatchObject({
+        code: 'FW229',
+        diagnostics: [
+          {
+            code: 'FW229',
+            message: expect.stringContaining(
+              "static asset '/assets/cart.css' because it conflicts with static asset '/assets/cart.css'",
+            ),
+            routePath: '/assets/cart.css',
+          },
+        ],
+      });
+    } finally {
+      await rm(distDir, { force: true, recursive: true });
+    }
+  });
+
   it('returns manifest-file backed static export inventory without writing output', async () => {
     const distDir = await mkdtemp(join(tmpdir(), 'jiso-vite-build-manifest-inventory-dist-'));
     const outDir = await mkdtemp(join(tmpdir(), 'jiso-vite-build-manifest-inventory-export-'));

@@ -351,6 +351,32 @@ describe('server static export', () => {
     ]);
   });
 
+  it('rejects duplicate static asset paths during dry-run inventory planning', async () => {
+    const app = createApp({
+      routes: [route('/', { page: () => '<main>Home</main>' })],
+    });
+
+    await expect(
+      exportStaticApp(app, {
+        assets: [
+          { path: '/assets/app.css', source: '/workspace/dist/assets/app.css' },
+          { path: '/assets/app.css', source: '/workspace/public/app.css' },
+        ],
+      }),
+    ).rejects.toMatchObject({
+      code: 'FW229',
+      diagnostics: [
+        {
+          code: 'FW229',
+          message: expect.stringContaining(
+            "static asset '/assets/app.css' because it conflicts with static asset '/assets/app.css'",
+          ),
+          routePath: '/assets/app.css',
+        },
+      ],
+    });
+  });
+
   it('rejects unsafe static asset output paths before copying', async () => {
     const outDir = await mkdtemp(path.join(os.tmpdir(), 'jiso-static-export-'));
     const sourceDir = await mkdtemp(path.join(os.tmpdir(), 'jiso-static-assets-'));

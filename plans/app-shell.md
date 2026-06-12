@@ -360,6 +360,20 @@ Scope: SPEC addition (proposed §9.5 "The request shell"), `@jiso/server` shell 
       `corepack pnpm exec tsc --noEmit --pretty false`,
       `corepack pnpm exec vp check packages/server/src/vite-build.ts packages/server/src/vite.ts packages/server/src/api/app-shell/vite.ts packages/server/src/vite-build.test.ts packages/server/src/api/app.test.ts plans/app-shell.md`,
       and `git diff --check`.
+      Additional evidence 2026-06-12: static-export dry-runs now validate the same output target
+      plan as write exports before returning route/module/asset inventory, so duplicate public
+      static asset paths fail with FW229 even when no `outDir` is selected. This closes the
+      Vite bridge case where manifest-derived assets and caller-provided assets could both claim
+      one exported path during `staticExportInventoryForJisoAppShellViteBuild()` planning.
+      `packages/server/src/static-export.test.ts` proves duplicate dry-run assets fail without
+      filesystem source checks, and `packages/server/src/vite-build.test.ts` proves the
+      manifest-plus-caller collision through the public Vite build inventory helper. Same-session
+      verification ran
+      `corepack pnpm exec vitest --run packages/server/src/static-export.test.ts packages/server/src/vite-build.test.ts`,
+      `corepack pnpm exec vitest --run packages/server/src/vite.test.ts`,
+      `corepack pnpm exec tsc --noEmit --pretty false`,
+      `corepack pnpm exec vp check packages/server/src/static-export.ts packages/server/src/static-export.test.ts packages/server/src/vite-build.test.ts`,
+      and `git diff --check`.
 - [ ] R7 adoption: starter becomes a routed app served by `vp dev`; commerce runs end-to-end over HTTP; a jiso docs site ships from `vp run export` as the first outside consumer.
       Progress 2026-06-11: commerce is now TSX-authored ahead of the HTTP serve
       entry — `CartBadge`, `OrderHistory`, and `ProductGrid` are authored in

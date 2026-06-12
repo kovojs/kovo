@@ -99,6 +99,12 @@ export async function exportStaticApp(
     routeArtifacts: artifacts,
   });
   const assets = staticExportAssetArtifacts(options.assets ?? []);
+  assertStaticExportOutputPlan({
+    artifacts,
+    assets,
+    clientModules,
+    outDir: options.outDir ?? STATIC_EXPORT_DRY_RUN_ROOT,
+  });
 
   if (options.outDir !== undefined) {
     await writeStaticExportOutput({ artifacts, assets, clientModules, outDir: options.outDir });
@@ -106,6 +112,8 @@ export async function exportStaticApp(
 
   return { artifacts, assets, clientModules, diagnostics };
 }
+
+const STATIC_EXPORT_DRY_RUN_ROOT = '/__jiso_static_export_plan__';
 
 interface StaticExportOutputPlan {
   artifacts: readonly StaticExportArtifact[];
@@ -116,6 +124,24 @@ interface StaticExportOutputPlan {
 
 async function writeStaticExportOutput(plan: StaticExportOutputPlan): Promise<void> {
   const root = path.resolve(plan.outDir instanceof URL ? fileURLToPath(plan.outDir) : plan.outDir);
+  const writes = staticExportPlannedWrites(plan, root);
+
+  for (const artifact of plan.assets) {
+    await assertReadableStaticExportAssetSource(artifact);
+  }
+
+  await Promise.all(writes.map((write) => write.write()));
+}
+
+function assertStaticExportOutputPlan(plan: StaticExportOutputPlan): void {
+  const root = path.resolve(plan.outDir instanceof URL ? fileURLToPath(plan.outDir) : plan.outDir);
+  staticExportPlannedWrites(plan, root);
+}
+
+function staticExportPlannedWrites(
+  plan: Omit<StaticExportOutputPlan, 'outDir'>,
+  root: string,
+): StaticExportPlannedWrite[] {
   const writes: StaticExportPlannedWrite[] = [];
 
   for (const artifact of plan.artifacts) {
@@ -140,7 +166,6 @@ async function writeStaticExportOutput(plan: StaticExportOutputPlan): Promise<vo
 
   for (const artifact of plan.assets) {
     const targetPath = staticExportAssetTargetPath(root, artifact.path);
-    await assertReadableStaticExportAssetSource(artifact);
     writes.push({
       diagnosticPath: artifact.path,
       kind: 'static asset',
@@ -150,8 +175,7 @@ async function writeStaticExportOutput(plan: StaticExportOutputPlan): Promise<vo
   }
 
   assertNoStaticExportOutputConflicts(writes);
-
-  await Promise.all(writes.map((write) => write.write()));
+  return writes;
 }
 
 async function assertReadableStaticExportAssetSource(
