@@ -7,8 +7,8 @@ import type {
 } from '@jiso/server';
 import { runMutation } from '@jiso/server';
 import { createPageAssertion, type PageAssertion } from './page.js';
-import { diagnosticMessage } from './verifier.js';
-import type { ObservedDbOperation } from './verifier.js';
+import { diagnosticMessage } from './verifier-diagnostics.js';
+import type { ObservedDbOperation } from './verifier-observation.js';
 
 export interface HarnessOperationVerifier {
   assertCoveredOperations(observed: readonly ObservedDbOperation[], touchGraphKey?: string): void;

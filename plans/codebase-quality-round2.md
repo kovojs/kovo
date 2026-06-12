@@ -3571,6 +3571,17 @@ Verification: server vitest + wire fixtures byte-for-byte acceptance.
       `corepack pnpm exec vitest --run packages/test/src examples/commerce/src/source-truth.test.ts examples/commerce/src/app.test.ts -t "commerce source-truth graph acceptance|@jiso/test|commerce add-to-cart property"`,
       `rg -n "from '@jiso/test'|from \"@jiso/test\"|import\\('@jiso/test'\\)" packages/test examples/commerce conformance/better-auth-pin` now reports only the
       package export compatibility test, and `git diff --check`.
+      Additional evidence 2026-06-12: harness split modules now import diagnostics and
+      observation types from their owning seams instead of routing through
+      `packages/test/src/verifier.ts`; `@jiso/test/verifier-diagnostics` exports
+      `DiagnosticCode`, and `packages/test/src/index.ts` keeps the root type as a compatibility
+      re-export. `packages/test/src/package-exports.test.ts` pins the subpath/root type parity
+      while the root `@jiso/test` import remains isolated to package export compatibility.
+      Same-session evidence:
+      `corepack pnpm exec vitest --run packages/test/src/harness.test.ts packages/test/src/harness-operations.test.ts packages/test/src/package-exports.test.ts packages/test/src/verifier-diagnostics.test.ts`,
+      `corepack pnpm exec vitest --run examples/commerce/src/app.test.ts examples/commerce/src/source-truth.test.ts -t "commerce source-truth graph acceptance|@jiso/test|commerce add-to-cart property"`,
+      and
+      `rg -n "from '@jiso/test'|from \"@jiso/test\"|import\\('@jiso/test'\\)" packages/test examples/commerce conformance/better-auth-pin`.
       Additional evidence 2026-06-12: SQL observer-focused coverage moved from
       `packages/test/src/verifier-sql.test.ts` into `packages/test/src/sql-observer.test.ts`,
       keeping SPEC §11.2 unparseable SQL pass-through/no-fabricated-observation coverage,
@@ -4353,6 +4364,17 @@ As each phase splits a source module, split its tests in the same commit.
       `corepack pnpm exec vitest --run packages/test/src examples/commerce/src/source-truth.test.ts examples/commerce/src/app.test.ts -t "commerce source-truth graph acceptance|@jiso/test|commerce add-to-cart property"`,
       `rg -n "from '@jiso/test'|from \"@jiso/test\"|import\\('@jiso/test'\\)" packages/test examples/commerce conformance/better-auth-pin` now reports only the
       package export compatibility test, and `git diff --check`.
+      Additional evidence 2026-06-12: harness split internals no longer route diagnostic message
+      formatting or observation types through the verifier aggregator: `harness.ts` imports
+      diagnostic/config types from `verifier-diagnostics.ts` and `verifier-observation.ts`, and
+      `harness-operations.ts` imports `diagnosticMessage` / `ObservedDbOperation` from those
+      same owners. `@jiso/test/verifier-diagnostics` now carries the `DiagnosticCode` type
+      subpath so non-compatibility consumers do not need the root barrel for diagnostic typing.
+      Same-session evidence:
+      `corepack pnpm exec vitest --run packages/test/src/harness.test.ts packages/test/src/harness-operations.test.ts packages/test/src/package-exports.test.ts packages/test/src/verifier-diagnostics.test.ts`,
+      `corepack pnpm exec vitest --run examples/commerce/src/app.test.ts examples/commerce/src/source-truth.test.ts -t "commerce source-truth graph acceptance|@jiso/test|commerce add-to-cart property"`,
+      and
+      `rg -n "from '@jiso/test'|from \"@jiso/test\"|import\\('@jiso/test'\\)" packages/test examples/commerce conformance/better-auth-pin`.
       Additional evidence 2026-06-12: Drizzle runtime/static package-surface coverage moved from
       `packages/drizzle/src/index.test.ts` into `packages/drizzle/src/runtime-surface.test.ts`,
       leaving static extraction coverage in the Drizzle monolith. Same-session evidence:

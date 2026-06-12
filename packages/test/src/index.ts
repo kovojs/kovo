@@ -1,4 +1,4 @@
-export type { DiagnosticCode } from '@jiso/core';
+export type { DiagnosticCode } from './verifier-diagnostics.js';
 
 export { assertMutationError, propertyTest } from './assertions.js';
 export type {

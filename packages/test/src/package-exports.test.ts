@@ -35,7 +35,6 @@ import { observeSqlStatementIfString } from '@jiso/test/sql-observer';
 import { jisoTest, type JisoTestCase, type JisoTestRunner } from '@jiso/test/test-case';
 import {
   createDbVerifier,
-  diagnosticMessage,
   type DbObservationOptions,
   type DbVerificationConfig,
   type DbVerificationDiagnostic,
@@ -43,10 +42,13 @@ import {
   type ObservedDbOperation,
 } from '@jiso/test/verifier';
 import {
+  diagnosticMessage,
   diagnosticsForObservations,
+  type DiagnosticCode,
   type DbVerificationDiagnostic as DirectDbVerificationDiagnostic,
 } from '@jiso/test/verifier-diagnostics';
 import { parseSqlOperations, type ParsedSqlOperation } from '@jiso/test/verifier-sql';
+import type { DiagnosticCode as RootDiagnosticCode } from '@jiso/test';
 
 describe('@jiso/test package subpath exports', () => {
   it('resolves seam-specific public modules alongside the root barrel', () => {
@@ -85,6 +87,7 @@ describe('@jiso/test package subpath exports', () => {
     expectTypeOf<JisoTestExecOptions<JisoTestRequest<{ cart: string[] }>>>().toEqualTypeOf<
       HarnessMutationOptions<JisoTestRequest<{ cart: string[] }>>
     >();
+    expectTypeOf<DiagnosticCode>().toEqualTypeOf<RootDiagnosticCode>();
   });
 });
 

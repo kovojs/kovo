@@ -8,7 +8,8 @@ import {
 } from './harness-operations.js';
 import type { PageAssertion } from './page.js';
 import { createDbVerifier } from './verifier.js';
-import type { DbVerificationConfig, DbVerificationDiagnostic } from './verifier.js';
+import type { DbVerificationDiagnostic } from './verifier-diagnostics.js';
+import type { DbVerificationConfig } from './verifier-observation.js';
 
 export interface JisoTestContext<Db = unknown> {
   db: Db;

@@ -7,6 +7,8 @@ import {
 } from '@jiso/core';
 import type { DbVerificationConfig, ObservedDbOperation } from './verifier-observation.js';
 
+export type { DiagnosticCode } from '@jiso/core';
+
 export interface DbVerificationDiagnostic {
   branch?: string;
   code: DiagnosticCode;
