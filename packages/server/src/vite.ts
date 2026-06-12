@@ -49,6 +49,7 @@ export type JisoAppShellViteInput = JisoApp | RequestHandler;
 export interface JisoAppShellVitePluginOptions {
   build?: JisoAppShellVitePluginBuildOptions;
   devDiagnostics?: JisoAppShellDevDiagnosticLedger;
+  shouldHandleRequest?: (request: IncomingMessage, app: JisoApp) => boolean;
 }
 
 export interface JisoAppShellViteSsrDevPlugin {
@@ -278,6 +279,16 @@ export function jisoAppShellVitePlugin(
   return {
     configureServer(server) {
       server.middlewares.use((request, response, next) => {
+        if (app) {
+          const shouldHandle =
+            options.shouldHandleRequest?.(request, app) ??
+            shouldHandleJisoAppShellViteRequest(request, app);
+          if (!shouldHandle) {
+            next();
+            return;
+          }
+        }
+
         const diagnosticResponse = app
           ? devDiagnosticResponse(app, request, options.devDiagnostics)
           : undefined;
@@ -334,7 +345,7 @@ export function jisoAppShellViteSsrDevPlugin(
           const app = readJisoAppShellViteSsrApp(module, appExportName, moduleId);
           const shouldHandle =
             options.shouldHandleRequest?.(request, app) ??
-            shouldHandleJisoAppShellViteSsrRequest(request, app);
+            shouldHandleJisoAppShellViteRequest(request, app);
           if (!shouldHandle) {
             next();
             return;
@@ -360,6 +371,13 @@ export function jisoAppShellViteSsrDevPlugin(
 }
 
 export function shouldHandleJisoAppShellViteSsrRequest(
+  request: IncomingMessage,
+  app: JisoApp,
+): boolean {
+  return shouldHandleJisoAppShellViteRequest(request, app);
+}
+
+export function shouldHandleJisoAppShellViteRequest(
   request: IncomingMessage,
   app: JisoApp,
 ): boolean {

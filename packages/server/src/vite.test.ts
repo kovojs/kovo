@@ -896,7 +896,7 @@ describe('server app shell Vite plugin', () => {
     ).toThrow('App shell build asset must stay within the Vite output directory');
   });
 
-  it('registers dev middleware that serves through the app shell request handler', async () => {
+  it('registers dev middleware that serves shell requests and passes source assets onward', async () => {
     const productRoute = route('/products/:id', {
       meta: { title: 'Product' },
       page({ params }) {
@@ -929,6 +929,13 @@ describe('server app shell Vite plugin', () => {
     await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
 
     try {
+      await expect(
+        nodeFetch(`http://127.0.0.1:${(server.address() as AddressInfo).port}/src/styles.css`),
+      ).resolves.toMatchObject({
+        body: 'next',
+        status: 418,
+      });
+
       const response = await nodeFetch(
         `http://127.0.0.1:${(server.address() as AddressInfo).port}/products/p1`,
       );

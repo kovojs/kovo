@@ -45,6 +45,7 @@ export {
   jisoAppShellViteRouteEntries,
   jisoAppShellViteSsrDevPlugin,
   jisoAppShellViteStaticExportAssets,
+  shouldHandleJisoAppShellViteRequest,
   shouldHandleJisoAppShellViteSsrRequest,
   writeJisoAppShellViteBuildOutput,
 } from '../vite.js';

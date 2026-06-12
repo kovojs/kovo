@@ -129,6 +129,12 @@ Scope: SPEC addition (proposed §9.5 "The request shell"), `@jiso/server` shell 
       proves the SSR dev helper loads `/src/app-shell.ts` through Vite,
       passes non-shell source assets onward, and routes matching documents to
       the exported Node handler.
+      Additional evidence 2026-06-12: the direct `jisoAppShellVitePlugin(app)`
+      dev middleware now uses the same dispatch-table ownership predicate as the
+      SSR helper, so matched routes/reserved app-shell paths stay on
+      `createRequestHandler()` while source assets and unrelated Vite requests
+      pass to later middleware. `packages/server/src/vite.test.ts` proves the
+      plugin passes `/src/styles.css` onward and still serves a matching route.
       Remaining R5 work: compiler/plugin build hooks must still supply real route-entry maps
       and compiled module sources from compiler facts, consume the asset/module plan in
       production package builds, and decide the final plugin hook ownership.
