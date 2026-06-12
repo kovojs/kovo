@@ -1,9 +1,9 @@
 export {
   applyDeferredStreamResponseToDom,
+  applyMutationResponse,
   applyMutationResponseToRuntime,
   applyMutationResponseToDom,
   applyMutationResponseToStore,
-  applyMutationResponseToStore as applyMutationResponse,
 } from './apply-path.js';
 export type {
   AppliedDeferredStreamResponse,

@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 
 import { installJisoLoader, refetchQueries, type DelegatedEvent } from './index.js';
-import { createQueryStore, hydrateQueryScripts } from './query-store.js';
+import { applyQueryChunkToStore, createQueryStore, hydrateQueryScripts } from './query-store.js';
 
 class FakeRoot {
   listeners = new Map<string, (event: DelegatedEvent) => void | Promise<void>>();
@@ -75,6 +75,38 @@ describe('query store hydration and refetch', () => {
     expect(store.get('product')).toBeUndefined();
     expect(p1Plan).toHaveBeenCalledWith({ stock: 4 });
     expect(p2Plan).toHaveBeenCalledWith({ stock: 9 });
+  });
+
+  it('shares keyed store writes between hydration and mutation query chunks', () => {
+    const hydratedStore = createQueryStore();
+    const appliedStore = createQueryStore();
+    const hydratedPlan = vi.fn();
+    const appliedPlan = vi.fn();
+
+    hydratedStore.subscribe('product', hydratedPlan, 'p1');
+    appliedStore.subscribe('product', appliedPlan, 'p1');
+
+    const hydrated = hydrateQueryScripts(hydratedStore, [
+      {
+        getAttribute: (name) => (name === 'fw-query' ? 'product' : name === 'key' ? 'p1' : null),
+        textContent: '{"stock":4}',
+      },
+    ]);
+    const applied = applyQueryChunkToStore(appliedStore, {
+      key: 'p1',
+      name: 'product',
+      value: { stock: 4 },
+    });
+
+    // SPEC.md §9.4: hydrated scripts and later mutation/deferred query chunks
+    // must write the same keyed store slot and publish the same typed-read key.
+    expect(hydrated).toEqual(['product:p1']);
+    expect(applied).toEqual({ stock: 4 });
+    expect(hydratedStore.get('product', 'p1')).toEqual(appliedStore.get('product', 'p1'));
+    expect(hydratedStore.get('product')).toBeUndefined();
+    expect(appliedStore.get('product')).toBeUndefined();
+    expect(hydratedPlan).toHaveBeenCalledWith({ stock: 4 });
+    expect(appliedPlan).toHaveBeenCalledWith({ stock: 4 });
   });
 
   it('returns only successfully hydrated fw-query scripts', () => {

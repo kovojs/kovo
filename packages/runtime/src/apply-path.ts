@@ -1,4 +1,9 @@
-import { queryWireKey, type QueryStore } from './query-store.js';
+import {
+  applyQueryChunkToStore,
+  queryWireKey,
+  type QueryApplyInterposition,
+  type QueryStore,
+} from './query-store.js';
 import { definedProps } from './defined-props.js';
 import { applyFragments } from './morph.js';
 import type { MorphFragment, MorphRoot } from './morph.js';
@@ -27,7 +32,7 @@ export interface AppliedDeferredStreamResponse extends AppliedMutationResponse {
   chunks: AppliedMutationResponseToDom[];
 }
 
-export type ApplyQueryInterposition = (query: QueryChunk) => { value: unknown } | void;
+export type ApplyQueryInterposition = QueryApplyInterposition;
 
 export interface ApplyMutationResponseToStoreOptions {
   applyQuery?: ApplyQueryInterposition;
@@ -54,7 +59,7 @@ export function applyFragmentQueryBody(
   };
 }
 
-export function applyMutationResponseToStore(
+export function applyMutationResponse(
   store: QueryStore,
   body: string,
   options: ApplyMutationResponseToStoreOptions = {},
@@ -68,6 +73,8 @@ export function applyMutationResponseToStore(
     options.beforeApplyQueries,
   );
 }
+
+export const applyMutationResponseToStore = applyMutationResponse;
 
 export interface ApplyMutationResponseToDomOptions {
   applyQuery?: ApplyQueryInterposition;
@@ -176,18 +183,6 @@ export function applyDeferredStreamResponseToDom(options: {
     fragments: chunks.flatMap((chunk) => chunk.fragments),
     queries: chunks.flatMap((chunk) => chunk.queries),
   };
-}
-
-function applyQueryChunkToStore(
-  store: QueryStore,
-  query: QueryChunk,
-  interpose?: ApplyQueryInterposition,
-): unknown {
-  const interposed = interpose?.(query);
-  if (interposed) return interposed.value;
-
-  store.set(query.name, query.value, query.key);
-  return query.value;
 }
 
 function applyCompiledQueryUpdatePlanIfSupported(

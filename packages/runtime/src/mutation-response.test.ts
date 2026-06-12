@@ -8,6 +8,7 @@ import {
 } from './index.js';
 import {
   applyDeferredStreamResponseToDom as applyDeferredStreamResponseToDomFromApplyPath,
+  applyMutationResponse as applyMutationResponseFromApplyPath,
   applyMutationResponseToRuntime,
   applyMutationResponseToDom as applyMutationResponseToDomFromApplyPath,
   applyMutationResponseToStore,
@@ -137,6 +138,7 @@ describe('mutation response wire chunks', () => {
   });
 
   it('exports canonical mutation response helpers through the runtime barrel', () => {
+    expect(applyMutationResponse).toBe(applyMutationResponseFromApplyPath);
     expect(applyMutationResponse).toBe(applyMutationResponseToStore);
     expect(applyMutationResponseToDom).toBe(applyMutationResponseToDomFromApplyPath);
   });

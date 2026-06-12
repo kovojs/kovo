@@ -2,6 +2,7 @@ import { reportMalformedJson } from './error-policy.js';
 import type { RuntimeErrorReporter } from './error-policy.js';
 import { parseJsonValue } from './json.js';
 import type { TextContentElementLike } from './dom-like.js';
+import type { QueryChunk } from './wire-parser.js';
 
 export type QueryUpdatePlan<Value = unknown> = (value: Value) => void;
 
@@ -18,6 +19,8 @@ export interface QueryStore {
 export type QuerySnapshot = Map<string, unknown>;
 
 export interface QueryScriptLike extends TextContentElementLike {}
+
+export type QueryApplyInterposition = (query: QueryChunk) => { value: unknown } | void;
 
 export function createQueryStore(): QueryStore {
   const values = new Map<string, unknown>();
@@ -79,6 +82,18 @@ export function queryWireKey(name: string, key: string | undefined): string {
   return key.startsWith(`${name}:`) ? key : `${name}:${key}`;
 }
 
+export function applyQueryChunkToStore(
+  store: QueryStore,
+  query: QueryChunk,
+  interpose?: QueryApplyInterposition,
+): unknown {
+  const interposed = interpose?.(query);
+  if (interposed) return interposed.value;
+
+  store.set(query.name, query.value, query.key);
+  return query.value;
+}
+
 export function queryIdentityFromStoreKey(storeKey: string): { key?: string; name: string } {
   const separator = storeKey.indexOf('\0');
   if (separator === -1) return { name: storeKey };
@@ -102,8 +117,10 @@ export function hydrateQueryScripts(
       const key = script.getAttribute('key') ?? undefined;
       const parsed = parseJsonValue(script.textContent ?? 'null');
       if (parsed.ok) {
-        store.set(name, parsed.value, key);
-        hydrated.push(queryWireKey(name, key));
+        const query: QueryChunk =
+          key === undefined ? { name, value: parsed.value } : { key, name, value: parsed.value };
+        applyQueryChunkToStore(store, query);
+        hydrated.push(queryWireKey(query.name, query.key));
       } else {
         reportMalformedJson(options.onError, 'fw-query hydration', parsed.error);
       }

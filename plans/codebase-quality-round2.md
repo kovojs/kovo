@@ -2126,6 +2126,17 @@ params, relational API, `execute(sql)`, right/full joins, a string column named 
       `pnpm exec vitest --run packages/runtime/src/index.test.ts -t "BroadcastChannel|rebroadcast|syncs mutation responses"`,
       `pnpm exec vp check packages/runtime/src/apply-path.ts packages/runtime/src/index.ts packages/runtime/src/mutation-response.test.ts plans/codebase-quality-round2.md`,
       and `git diff --check`.
+      Additional bounded evidence 2026-06-12: `packages/runtime/src/apply-path.ts` now owns
+      canonical public `applyMutationResponse` directly instead of relying on a category-barrel
+      alias, while preserving `applyMutationResponseToStore` as the same function. The shared
+      keyed query store write moved to `packages/runtime/src/query-store.ts`, so store-only
+      mutation/deferred apply and initial `script[fw-query]` hydration use one helper before
+      reporting canonical typed-read keys under SPEC.md §9.4. `packages/runtime/src/query-store.test.ts`
+      and `packages/runtime/src/mutation-response.test.ts` pin keyed hydration/apply slot parity
+      plus barrel-to-owner function identity. Same-session evidence:
+      `pnpm exec vitest --run packages/runtime/src/query-store.test.ts packages/runtime/src/mutation-response.test.ts`,
+      `pnpm exec vp check packages/runtime/src/apply-path.ts packages/runtime/src/apply.ts packages/runtime/src/query-store.ts packages/runtime/src/query-store.test.ts packages/runtime/src/mutation-response.test.ts plans/codebase-quality-round2.md`,
+      and `git diff --check`.
       Additional bounded evidence 2026-06-12: `packages/runtime/src/apply-path.ts` now carries
       `applyQuery`, `beforeApplyQueries`, and `onError` through the store-only
       `applyMutationResponseToRuntime` branch, matching the DOM branch's shared
