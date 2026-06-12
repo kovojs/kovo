@@ -401,57 +401,46 @@ describe('create-jiso starter', () => {
     }
   });
 
-  it('serves the generated starter app-shell through the vp run serve task', async () => {
-    const tempParent = tmpdir();
-    mkdirSync(tempParent, { recursive: true });
-    const root = mkdtempSync(join(tempParent, 'create-jiso-vp-serve-'));
-    const port = await reservePort();
-    let serveServer: ChildProcessWithoutNullStreams | undefined;
+  for (const serveCommand of generatedStarterServeCommands()) {
+    it(`serves the generated starter app-shell through ${serveCommand.label}`, async () => {
+      const tempParent = tmpdir();
+      mkdirSync(tempParent, { recursive: true });
+      const root = mkdtempSync(join(tempParent, 'create-jiso-serve-'));
+      const port = await reservePort();
+      let serveServer: ChildProcessWithoutNullStreams | undefined;
 
-    try {
-      writeJisoProject(root, { name: 'Serve Task Proof' });
-      linkStarterBuildDependencies(root);
+      try {
+        writeJisoProject(root, { name: 'Serve Task Proof' });
+        linkStarterBuildDependencies(root);
 
-      serveServer = spawn(
-        vpCommand(),
-        [
-          'run',
-          '--no-cache',
-          'serve',
-          '--host',
-          '127.0.0.1',
-          '--port',
-          String(port),
-          '--strictPort',
-        ],
-        {
+        serveServer = spawn(serveCommand.command, serveCommand.args(port), {
           cwd: root,
           detached: process.platform !== 'win32',
           env: withGeneratedBinOnPath(root),
-        },
-      );
-      const output = collectOutput(serveServer);
-      const origin = `http://127.0.0.1:${port}`;
+        });
+        const output = collectOutput(serveServer);
+        const origin = `http://127.0.0.1:${port}`;
 
-      const documentBody = await fetchTextWhenReady(`${origin}/`, output);
-      expect(output()).toContain('starter-serve/v1');
-      expect(documentBody).toContain(
-        'on:click="/c/starter.client.js?v=starter-r7#Starter$announce"',
-      );
+        const documentBody = await fetchTextWhenReady(`${origin}/`, output);
+        expect(output()).toContain('starter-serve/v1');
+        expect(documentBody).toContain(
+          'on:click="/c/starter.client.js?v=starter-r7#Starter$announce"',
+        );
 
-      const moduleBody = await fetchTextWhenReady(
-        `${origin}/c/starter.client.js?v=starter-r7`,
-        output,
-      );
-      expect(moduleBody).toContain('export function Starter$announce');
+        const moduleBody = await fetchTextWhenReady(
+          `${origin}/c/starter.client.js?v=starter-r7`,
+          output,
+        );
+        expect(moduleBody).toContain('export function Starter$announce');
 
-      const sourceCss = await fetchTextWhenReady(`${origin}/src/styles.css`, output);
-      expect(sourceCss).toContain('tailwindcss v');
-    } finally {
-      await stopProcess(serveServer);
-      rmSync(root, { force: true, recursive: true });
-    }
-  }, 30000);
+        const sourceCss = await fetchTextWhenReady(`${origin}/src/styles.css`, output);
+        expect(sourceCss).toContain('tailwindcss v');
+      } finally {
+        await stopProcess(serveServer);
+        rmSync(root, { force: true, recursive: true });
+      }
+    }, 30000);
+  }
 
   it('runs the generated vp export task with the built stylesheet href', () => {
     const tempParent = tmpdir();
@@ -648,6 +637,37 @@ function withGeneratedBinOnPath(root: string): NodeJS.ProcessEnv {
 
 function vpCommand(): string {
   return process.platform === 'win32' ? 'vp.cmd' : 'vp';
+}
+
+function npmCommand(): string {
+  return process.platform === 'win32' ? 'npm.cmd' : 'npm';
+}
+
+function generatedStarterServeCommands(): Array<{
+  args(port: number): string[];
+  command: string;
+  label: string;
+}> {
+  const serveArgs = (port: number) => [
+    '--host',
+    '127.0.0.1',
+    '--port',
+    String(port),
+    '--strictPort',
+  ];
+
+  return [
+    {
+      args: (port) => ['run', '--no-cache', 'serve', ...serveArgs(port)],
+      command: vpCommand(),
+      label: 'vp run serve',
+    },
+    {
+      args: (port) => ['start', '--', ...serveArgs(port)],
+      command: npmCommand(),
+      label: 'npm start',
+    },
+  ];
 }
 
 async function reservePort(): Promise<number> {

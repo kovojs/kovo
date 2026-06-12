@@ -503,6 +503,13 @@ Scope: SPEC addition (proposed §9.5 "The request shell"), `@jiso/server` shell 
       `/c/starter.client.js?v=starter-r7`, and `/src/styles.css` over HTTP.
       Same-session verification ran
       `pnpm exec vitest --run packages/create-jiso/src/index.test.ts`.
+      Additional evidence 2026-06-12: the generated starter serve proof now
+      exercises both consumer serve aliases, `vp run serve` and `npm start`,
+      against fresh scaffolded projects. `packages/create-jiso/src/index.test.ts`
+      verifies each command prints `starter-serve/v1` and serves `/`,
+      `/c/starter.client.js?v=starter-r7`, and `/src/styles.css` through the
+      same app-shell-backed middleware stack. Same-session verification ran
+      `pnpm exec vitest --run packages/create-jiso/src/index.test.ts -t "serves the generated starter app-shell through"`.
 
 ## Background — the gap
 
