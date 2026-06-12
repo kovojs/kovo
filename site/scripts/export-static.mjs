@@ -1,4 +1,5 @@
 import { execFileSync } from 'node:child_process';
+import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -7,6 +8,7 @@ import { createServer } from 'vite-plus';
 const siteRoot = fileURLToPath(new URL('../', import.meta.url));
 const defaultDistDir = path.join(siteRoot, 'dist');
 const defaultPublicDir = path.join(siteRoot, 'public');
+const defaultCssDistDir = path.join(siteRoot, 'dist-css');
 
 export async function buildSiteStaticInputs() {
   execFileSync('pnpm', ['--dir', '..', 'exec', 'vp', 'run', 'build'], {
@@ -18,11 +20,13 @@ export async function buildSiteStaticInputs() {
 }
 
 export async function exportSiteStaticApp({
+  cssDistDir = defaultCssDistDir,
   createViteServer = createServer,
   distDir = defaultDistDir,
   outDir = defaultDistDir,
   publicDir = defaultPublicDir,
 } = {}) {
+  const manifest = JSON.parse(readFileSync(path.join(cssDistDir, '.vite/manifest.json'), 'utf8'));
   const viteServer = await createViteServer({
     appType: 'custom',
     logLevel: 'error',
@@ -38,7 +42,8 @@ export async function exportSiteStaticApp({
       viteServer.ssrLoadModule('@jiso/server'),
     ]);
     const { createSiteDistApp } = appShellModule;
-    const { exportStaticApp } = serverModule;
+    const { exportStaticApp, jisoAppShellViteManifestAssets, jisoAppShellViteStaticExportAssets } =
+      serverModule;
 
     if (typeof createSiteDistApp !== 'function') {
       throw new Error('scripts/app-shell.mjs must export createSiteDistApp.');
@@ -47,9 +52,30 @@ export async function exportSiteStaticApp({
     if (typeof exportStaticApp !== 'function') {
       throw new Error('@jiso/server must export exportStaticApp.');
     }
+    if (typeof jisoAppShellViteManifestAssets !== 'function') {
+      throw new Error('@jiso/server must export jisoAppShellViteManifestAssets.');
+    }
+    if (typeof jisoAppShellViteStaticExportAssets !== 'function') {
+      throw new Error('@jiso/server must export jisoAppShellViteStaticExportAssets.');
+    }
+
+    const manifestAssets = jisoAppShellViteManifestAssets(manifest);
+    const cssAssets = manifestAssets.filter((asset) => asset.file.endsWith('.css'));
+
+    if (cssAssets.length !== 1) {
+      throw new Error(
+        `Expected exactly one built site CSS asset in dist-css/.vite/manifest.json, found ${cssAssets.length}.`,
+      );
+    }
 
     const app = await createSiteDistApp({ distDir, publicDir, server: serverModule });
-    return await exportStaticApp(app, { htmlPathStyle: 'directory', outDir });
+    // SPEC.md section 9.5 static export owns the final static host bytes:
+    // replay route documents, copy versioned /c/ modules, and copy the Vite CSS.
+    return await exportStaticApp(app, {
+      assets: jisoAppShellViteStaticExportAssets(cssAssets, { distDir: cssDistDir }),
+      htmlPathStyle: 'directory',
+      outDir,
+    });
   } finally {
     if (previousDefaultApp === undefined) {
       delete process.env.JISO_SITE_APP_SHELL_DEFAULT;

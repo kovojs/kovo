@@ -105,13 +105,27 @@ describe('site app-shell export adoption', () => {
 
   it('loads the docs app shell and server package through Vite SSR for export', async () => {
     const root = await mkdtemp(path.join(tmpdir(), 'jiso-site-export-source-'));
+    const cssDistDir = path.join(root, 'dist-css');
     const distDir = path.join(root, 'dist-source');
     const publicDir = path.join(root, 'public');
     const outDir = path.join(root, 'dist-out');
     const loadedModuleIds = [];
 
+    await mkdir(path.join(cssDistDir, '.vite'), { recursive: true });
+    await mkdir(path.join(cssDistDir, 'assets'), { recursive: true });
     await mkdir(path.join(distDir, 'docs', 'installation'), { recursive: true });
     await mkdir(path.join(publicDir, 'c'), { recursive: true });
+    await writeFile(
+      path.join(cssDistDir, '.vite', 'manifest.json'),
+      JSON.stringify({
+        'src/styles.css': {
+          file: 'assets/site.css',
+          isEntry: true,
+          src: 'src/styles.css',
+        },
+      }),
+    );
+    await writeFile(path.join(cssDistDir, 'assets', 'site.css'), '.docs{color:rebeccapurple}\n');
     await writeFile(
       path.join(distDir, 'index.html'),
       '<!doctype html><html><body><button on:click="/c/search.js#open">Search</button></body></html>',
@@ -126,6 +140,7 @@ describe('site app-shell export adoption', () => {
     );
 
     const result = await exportSiteStaticApp({
+      cssDistDir,
       createViteServer: async () => ({
         async close() {},
         async ssrLoadModule(id) {
@@ -145,8 +160,12 @@ describe('site app-shell export adoption', () => {
       '/docs/installation/index.html',
       '/index.html',
     ]);
+    expect(result.assets.map((artifact) => artifact.path)).toEqual(['/assets/site.css']);
     await expect(readFile(path.join(outDir, 'index.html'), 'utf8')).resolves.toContain(
       '/c/search.js?v=site-r7-',
+    );
+    await expect(readFile(path.join(outDir, 'assets', 'site.css'), 'utf8')).resolves.toBe(
+      '.docs{color:rebeccapurple}\n',
     );
   });
 });

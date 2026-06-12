@@ -535,6 +535,15 @@ Scope: SPEC addition (proposed §9.5 "The request shell"), `@jiso/server` shell 
       `c/commerce.client.js` module, and the copied Vite CSS asset bytes.
       Same-session verification ran
       `pnpm exec vitest --run examples/commerce/src/app-shell.test.ts -t "public commerce shell static output"`.
+      Additional evidence 2026-06-12: the docs-site `vp run export` path now
+      enables a Vite CSS manifest and feeds the emitted `assets/site.css`
+      through `jisoAppShellViteStaticExportAssets()` into `exportStaticApp()`,
+      so the docs consumer proves SPEC §9.5 route replay, versioned `/c/`
+      module copying, and stylesheet asset copying in one export call.
+      `site/scripts/app-shell.test.mjs` builds a temp manifest-backed CSS
+      fixture and verifies `exportSiteStaticApp()` reports `/assets/site.css`
+      as a static-export asset and writes exact CSS bytes beside the pretty
+      `*/index.html` documents and copied `/c/` module.
 
 ## Background — the gap
 

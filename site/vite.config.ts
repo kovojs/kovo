@@ -3,6 +3,7 @@ import { defineConfig } from 'vite-plus';
 
 export default defineConfig({
   build: {
+    manifest: true,
     outDir: 'dist-css',
     rollupOptions: {
       input: {
