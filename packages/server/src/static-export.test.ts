@@ -136,6 +136,38 @@ describe('server static export', () => {
     }
   });
 
+  it('rejects invalid html path styles before replay or writes', async () => {
+    const outDir = await mkdtemp(path.join(os.tmpdir(), 'jiso-static-export-'));
+    try {
+      const app = createApp({
+        routes: [
+          route('/', {
+            page: () => '<main>Home</main>',
+          }),
+        ],
+      });
+
+      await expect(
+        exportStaticApp(app, {
+          htmlPathStyle: 'pretty' as unknown as 'flat',
+          outDir,
+        }),
+      ).rejects.toMatchObject({
+        code: 'FW229',
+        diagnostics: [
+          {
+            code: 'FW229',
+            message: expect.stringContaining("Expected 'flat' or 'directory'"),
+            routePath: 'htmlPathStyle',
+          },
+        ],
+      });
+      await expect(readFile(path.join(outDir, 'index.html'))).rejects.toThrow();
+    } finally {
+      await rm(outDir, { force: true, recursive: true });
+    }
+  });
+
   it('copies configured static assets with exact bytes and represented headers', async () => {
     const outDir = await mkdtemp(path.join(os.tmpdir(), 'jiso-static-export-'));
     const sourceDir = await mkdtemp(path.join(os.tmpdir(), 'jiso-static-assets-'));

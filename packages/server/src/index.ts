@@ -318,6 +318,7 @@ export type {
   StaticExportClientModuleArtifact,
   StaticExportCompileDiagnostic,
   StaticExportDiagnostic,
+  StaticExportHtmlPathStyle,
   StaticExportOptions,
   StaticExportResult,
 } from './static-export.js';

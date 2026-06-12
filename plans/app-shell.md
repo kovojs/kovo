@@ -152,6 +152,15 @@ Scope: SPEC addition (proposed §9.5 "The request shell"), `@jiso/server` shell 
       `pnpm exec vp check packages/server/src/static-export.ts packages/server/src/static-export.test.ts plans/app-shell.md`,
       and `git diff --check`. R6 remains open for broader Vite/task template wiring and
       end-consumer export integration.
+      Additional evidence 2026-06-12: `exportStaticApp()` now rejects unknown
+      `htmlPathStyle` values with FW229 before replaying routes or writing files,
+      making JS-authored export tasks fail loudly instead of silently falling
+      back to flat `.html` output. `packages/server/src/index.ts` exports the
+      `StaticExportHtmlPathStyle` public type for task authors. Same-session
+      verification ran `pnpm exec vitest --run packages/server/src/static-export.test.ts`
+      and `pnpm exec vitest --run site/scripts/app-shell.test.mjs`, proving the
+      server path-style guard and preserving the docs-site pretty-URL export
+      consumer. R6/R7 remain open for broader adoption cleanup.
 - [ ] R7 adoption: starter becomes a routed app served by `vp dev`; commerce runs end-to-end over HTTP; a jiso docs site ships from `vp run export` as the first outside consumer.
       Progress 2026-06-11: commerce is now TSX-authored ahead of the HTTP serve
       entry — `CartBadge`, `OrderHistory`, and `ProductGrid` are authored in

@@ -100,15 +100,14 @@ export async function exportStaticApp(
 
   const handler = createRequestHandler(app);
   const origin = options.origin ?? 'https://jiso.local';
+  const htmlPathStyle = staticExportHtmlPathStyle(options.htmlPathStyle);
   const artifacts: StaticExportArtifact[] = [];
 
   for (const route of app.routes) {
     if (diagnostics.some((diagnostic) => diagnostic.routePath === route.path)) continue;
 
     try {
-      artifacts.push(
-        await exportRouteArtifact(handler, route.path, origin, options.htmlPathStyle ?? 'flat'),
-      );
+      artifacts.push(await exportRouteArtifact(handler, route.path, origin, htmlPathStyle));
     } catch (error) {
       if (!(error instanceof StaticExportError) || options.onNonExportable !== 'skip') {
         throw error;
@@ -497,6 +496,22 @@ function nonExportableRouteDiagnostics(app: JisoApp): readonly StaticExportDiagn
 
 function staticExportDiagnostic(routePath: string, message: string): StaticExportDiagnostic {
   return { code: 'FW229', message, routePath };
+}
+
+function staticExportHtmlPathStyle(
+  style: StaticExportHtmlPathStyle | undefined,
+): StaticExportHtmlPathStyle {
+  if (style === undefined) return 'flat';
+  if (style === 'flat' || style === 'directory') return style;
+
+  throw new StaticExportError([
+    staticExportDiagnostic(
+      'htmlPathStyle',
+      `FW229 static export refused htmlPathStyle '${String(
+        style,
+      )}'. Expected 'flat' or 'directory'.`,
+    ),
+  ]);
 }
 
 function blockingStaticExportDiagnostics(
