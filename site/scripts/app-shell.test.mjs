@@ -35,19 +35,24 @@ describe('site app-shell export adoption', () => {
     );
 
     const app = await createSiteDistApp({ distDir, publicDir, server });
-    const result = await server.exportStaticApp(app, { outDir });
+    const result = await server.exportStaticApp(app, { htmlPathStyle: 'directory', outDir });
 
     const exportedIndex = await readFile(path.join(outDir, 'index.html'), 'utf8');
+    const exportedInstallation = await readFile(
+      path.join(outDir, 'docs', 'installation', 'index.html'),
+      'utf8',
+    );
     const exportedModule = await readFile(path.join(outDir, 'c', 'search.js'), 'utf8');
 
     expect(result.artifacts.map((artifact) => artifact.path)).toEqual([
-      '/docs/installation.html',
+      '/docs/installation/index.html',
       '/index.html',
     ]);
     expect(exportedIndex).toContain('<!doctype html>');
     expect(exportedIndex).not.toContain('<!doctype html><html lang=');
     expect(exportedIndex).toContain('/c/search.js?v=site-r7-');
     expect(exportedIndex).toContain('on:click="&#47;c/example-only.js#copy"');
+    expect(exportedInstallation).toContain('<h1>Installation</h1>');
     expect(result.clientModules).toHaveLength(1);
     expect(exportedModule).toBe(
       'export function open() { document.body.dataset.search = "open"; }\n',

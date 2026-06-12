@@ -53,10 +53,13 @@ export interface StaticExportCompileDiagnostic {
 export interface StaticExportOptions {
   assets?: readonly StaticExportAssetInput[];
   diagnostics?: readonly StaticExportCompileDiagnostic[];
+  htmlPathStyle?: StaticExportHtmlPathStyle;
   onNonExportable?: 'error' | 'skip';
   origin?: string;
   outDir?: string | URL;
 }
+
+export type StaticExportHtmlPathStyle = 'directory' | 'flat';
 
 export interface StaticExportResult {
   artifacts: readonly StaticExportArtifact[];
@@ -102,7 +105,9 @@ export async function exportStaticApp(
   for (const route of app.routes) {
     if (diagnostics.some((diagnostic) => diagnostic.routePath === route.path)) continue;
 
-    artifacts.push(await exportRouteArtifact(handler, route.path, origin));
+    artifacts.push(
+      await exportRouteArtifact(handler, route.path, origin, options.htmlPathStyle ?? 'flat'),
+    );
   }
 
   const clientModules =
@@ -322,6 +327,7 @@ async function exportRouteArtifact(
   handler: RequestHandler,
   routePath: string,
   origin: string,
+  htmlPathStyle: StaticExportHtmlPathStyle,
 ): Promise<StaticExportArtifact> {
   const pathname = normalizePathname(routePath).pathname;
   const response = await handler(new Request(new URL(pathname, origin), { method: 'GET' }));
@@ -339,7 +345,7 @@ async function exportRouteArtifact(
   return {
     body: await response.text(),
     headers: sortedHeaders(response.headers),
-    path: htmlArtifactPath(pathname),
+    path: htmlArtifactPath(pathname, htmlPathStyle),
     status: response.status,
   };
 }
@@ -513,8 +519,9 @@ function routeHasParams(path: string): boolean {
     .some((segment) => segment.startsWith(':') && segment.length > 1);
 }
 
-function htmlArtifactPath(pathname: string): string {
-  return pathname === '/' ? '/index.html' : `${pathname}.html`;
+function htmlArtifactPath(pathname: string, style: StaticExportHtmlPathStyle): string {
+  if (pathname === '/') return '/index.html';
+  return style === 'directory' ? `${pathname}/index.html` : `${pathname}.html`;
 }
 
 function sortedHeaders(headers: Headers): Record<string, string> {

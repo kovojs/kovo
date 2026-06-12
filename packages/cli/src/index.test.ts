@@ -249,6 +249,51 @@ describe('fw export', () => {
     }
   });
 
+  it('passes pretty URL output through to the server exporter', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'fw-export-cli-'));
+    const appPath = join(root, 'app.mjs');
+    const outDir = join(root, 'dist');
+    const stdout = vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
+    const stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+
+    try {
+      writeFileSync(
+        appPath,
+        [
+          'export default {',
+          '  clientModules: {',
+          "    put() { throw new Error('unused'); },",
+          "    resolve() { return { body: 'Not Found', headers: { 'Content-Type': 'text/plain; charset=utf-8' }, status: 404 }; },",
+          '  },',
+          '  document: {},',
+          '  endpoints: [],',
+          '  errorShells: {},',
+          '  mutations: [],',
+          '  queries: [],',
+          "  routes: [{ path: '/docs/intro', page: () => '<main data-pretty-export>Intro</main>' }],",
+          '};',
+          '',
+        ].join('\n'),
+        'utf8',
+      );
+
+      await expect(mainAsync(['export', appPath, '--out', outDir, '--pretty-urls'])).resolves.toBe(
+        0,
+      );
+
+      expect(stderr).not.toHaveBeenCalled();
+      const output = stdout.mock.calls.map(([chunk]) => String(chunk)).join('');
+      expect(output).toContain('HTML /docs/intro/index.html status=200 bytes=');
+      expect(readFileSync(join(outDir, 'docs', 'intro', 'index.html'), 'utf8')).toContain(
+        '<main data-pretty-export>Intro</main>',
+      );
+    } finally {
+      stdout.mockRestore();
+      stderr.mockRestore();
+      rmSync(root, { force: true, recursive: true });
+    }
+  });
+
   it('prints FW229 diagnostics for non-exportable app modules', async () => {
     const root = mkdtempSync(join(tmpdir(), 'fw-export-cli-'));
     const appPath = join(root, 'app.mjs');

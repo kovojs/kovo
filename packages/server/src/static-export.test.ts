@@ -105,6 +105,37 @@ describe('server static export', () => {
     }
   });
 
+  it('can export route documents as pretty directory index paths', async () => {
+    const outDir = await mkdtemp(path.join(os.tmpdir(), 'jiso-static-export-'));
+    try {
+      const app = createApp({
+        routes: [
+          route('/', {
+            page: () => '<main>Home</main>',
+          }),
+          route('/docs/intro', {
+            page: () => '<main>Intro</main>',
+          }),
+        ],
+      });
+
+      const result = await exportStaticApp(app, { htmlPathStyle: 'directory', outDir });
+
+      expect(result.artifacts.map((artifact) => artifact.path)).toEqual([
+        '/index.html',
+        '/docs/intro/index.html',
+      ]);
+      await expect(readFile(path.join(outDir, 'index.html'), 'utf8')).resolves.toContain(
+        '<main>Home</main>',
+      );
+      await expect(
+        readFile(path.join(outDir, 'docs', 'intro', 'index.html'), 'utf8'),
+      ).resolves.toContain('<main>Intro</main>');
+    } finally {
+      await rm(outDir, { force: true, recursive: true });
+    }
+  });
+
   it('copies configured static assets with exact bytes and represented headers', async () => {
     const outDir = await mkdtemp(path.join(os.tmpdir(), 'jiso-static-export-'));
     const sourceDir = await mkdtemp(path.join(os.tmpdir(), 'jiso-static-assets-'));

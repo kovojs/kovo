@@ -183,6 +183,13 @@ Scope: SPEC addition (proposed §9.5 "The request shell"), `@jiso/server` shell 
       the existing pretty `*/index.html` site output. R7 remains open until the
       main integration pass accepts that compatibility layer or lands server/CLI
       seams for package-source execution and pretty URL output.
+      Additional evidence 2026-06-12: `exportStaticApp()` now accepts
+      `htmlPathStyle: 'directory'`, and `fw export --pretty-urls` passes that
+      through so site export writes route documents as `*/index.html` instead of
+      parallel flat `*.html` files. `site/vite.config.ts` uses the flag for the
+      docs-site export task, and `site/scripts/app-shell.test.mjs` proves replay
+      of `/docs/installation` to `docs/installation/index.html` plus versioned
+      `/c/` module copying.
       Progress 2026-06-12: the create-jiso starter export task now builds Vite
       assets before static replay and loads `src/app-shell.ts` through Vite SSR
       with `JISO_STARTER_STYLESHEET_HREF` set to the emitted `/assets/*.css`
