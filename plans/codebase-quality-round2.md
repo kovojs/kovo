@@ -2757,6 +2757,14 @@ As each phase splits a source module, split its tests in the same commit.
       diagnostics, and remaining compile pipeline groups. Same-session evidence:
       `pnpm exec vitest --run packages/compiler/src/attribute-merge.test.ts packages/compiler/src/index.test.ts -t "FW231|FW232|FW233|attribute merge"`
       and `pnpm exec vp check packages/compiler/src/attribute-merge.test.ts packages/compiler/src/index.test.ts plans/codebase-quality-round2.md`.
+      Additional evidence 2026-06-12: ID/IDREF diagnostics FW221/FW224 and HTML content-model
+      diagnostics FW225 moved from `packages/compiler/src/index.test.ts` into
+      `packages/compiler/src/id-content-model.test.ts`, including package-prefixed behavior
+      IDREFs, duplicate/repeatable id handling, native table-row acceptance, and string/comment
+      non-matches. The broad compiler split remains open for residual FW226/FW302 checks and
+      remaining compile pipeline groups. Same-session evidence:
+      `pnpm exec vitest --run packages/compiler/src/id-content-model.test.ts packages/compiler/src/index.test.ts -t "IDREF|FW221|FW224|content-model|FW225"`
+      and `pnpm exec vp check packages/compiler/src/id-content-model.test.ts packages/compiler/src/index.test.ts plans/codebase-quality-round2.md`.
 - [ ] drizzle (one describe, 57 its, 68 inline pgTable fixtures, 3 module-shim copies) and
       test-package suites: same treatment; CLI tests get the temp-dir + stream-spy ritual
       (16 hand-copies) as one helper.
