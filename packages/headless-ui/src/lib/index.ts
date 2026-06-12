@@ -1,3 +1,18 @@
+export { cn } from './class-names.js';
+export type { ClassArray, ClassDictionary, ClassValue } from './class-names.js';
+
+export { defineVariants, variantClassNames } from './variants.js';
+export type {
+  VariantClass,
+  VariantCompound,
+  VariantDefinition,
+  VariantFn,
+  VariantGroups,
+  VariantOptions,
+  VariantSelection,
+  VariantValues,
+} from './variants.js';
+
 export {
   checkedState,
   dataDisabled,

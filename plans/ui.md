@@ -90,6 +90,16 @@ jiso-dialog` resolves dashed wire names and prints provenance including package,
 - [ ] H2 wave 2 primitives (stateful L1 islands): tabs, radio-group, toggle-group, checkbox-group, toolbar, number-field, otp-field, scroll-area, field/fieldset as `form()` integration.
 - [ ] H3 wave 3 primitives (list-driven & isomorphic): select, combobox, autocomplete, dropdown-menu, context-menu, menubar, navigation-menu, slider, toast, command.
 - [ ] U1 token sheet + `cn()` + statically-analyzable variant helper (Tailwind-first, §13.1 discoverability rules).
+      Partial evidence 2026-06-12: `packages/headless-ui/src/lib/class-names.ts`
+      adds a dependency-free `cn()` helper that normalizes explicit class inputs and stable-dedupes
+      class tokens, and `packages/headless-ui/src/lib/variants.ts` adds `defineVariants()` plus
+      `variantClassNames()` for selecting only statically declared class strings, with a comment
+      citing SPEC §13.1. The helpers are exported through `@jiso/headless-ui` and
+      `@jiso/headless-ui/lib`. Same-session evidence:
+      `pnpm --filter @jiso/headless-ui exec vitest --run src/lib/class-names.test.ts src/lib/variants.test.ts src/lib/foundation-exports.test.ts`,
+      `pnpm --filter @jiso/headless-ui run lint:primitives`, and
+      `pnpm exec vp check packages/headless-ui/src/lib/class-names.ts packages/headless-ui/src/lib/class-names.test.ts packages/headless-ui/src/lib/variants.ts packages/headless-ui/src/lib/variants.test.ts packages/headless-ui/src/lib/foundation-exports.test.ts packages/headless-ui/src/lib/index.ts packages/headless-ui/src/index.ts plans/ui.md`.
+      Remaining: token sheet.
 - [ ] U2 `fw add <component>` vendoring pipeline (source copied into the app; components register under app-local bare names).
 - [ ] U3 styled components trailing H1 + pure-markup set (button, badge, card, kbd, alert, table, breadcrumb, skeleton, sheet/drawer over dialog).
 - [ ] U4 styled components trailing H2.

@@ -18,11 +18,13 @@ export type {
 
 export {
   checkedState,
+  cn,
   createChangeDetail,
   dataDisabled,
   dataOrientation,
   dataState,
   defaultTypeaheadTimeoutMs,
+  defineVariants,
   dispatchCancelableChange,
   findTypeaheadMatch,
   computeFloatingPosition,
@@ -33,8 +35,12 @@ export {
   oppositePlacement,
   openState,
   pressedState,
+  variantClassNames,
 } from './lib/index.js';
 export type {
+  ClassArray,
+  ClassDictionary,
+  ClassValue,
   CollectionOrientation,
   FloatingOffset,
   FloatingOverflow,
@@ -57,6 +63,14 @@ export type {
   TypeaheadItem,
   TypeaheadMatchOptions,
   TypeaheadState,
+  VariantClass,
+  VariantCompound,
+  VariantDefinition,
+  VariantFn,
+  VariantGroups,
+  VariantOptions,
+  VariantSelection,
+  VariantValues,
 } from './lib/index.js';
 
 export {
