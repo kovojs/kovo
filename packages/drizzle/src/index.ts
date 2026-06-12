@@ -541,7 +541,7 @@ export function extractQueryFactsFromSource(files: readonly SourceFileInput[]): 
       ...file.columnShapes,
     };
     for (const query of extractQueryDefinitions(file.source, columnShapes)) {
-      const reads = queryReadDomains(query.body, tables);
+      const reads = queryReadDomains(query.tableExpressions, tables);
       const site = `${file.fileName}:${lineForIndex(file.source, query.index)}`;
       const diagnostics = opaqueProjectionDiagnostics(
         query.query,
@@ -551,10 +551,10 @@ export function extractQueryFactsFromSource(files: readonly SourceFileInput[]): 
       )
         .concat(unresolvedProjectionDiagnostics(query.query, query.unresolvedPaths, site))
         .concat(query.diagnostics?.map((diagnostic) => ({ ...diagnostic, site })) ?? [])
-        .concat(exemptQueryReadDiagnostics(query.body, tables, site));
+        .concat(exemptQueryReadDiagnostics(query.tableExpressions, tables, site));
       facts.push({
         ...(diagnostics.length > 0 ? { diagnostics } : {}),
-        ...queryInstanceKey(query.body, tables),
+        ...queryInstanceKey(query.instanceKeyComparisons, tables),
         query: query.query,
         reads,
         shape: query.shape,
@@ -946,14 +946,20 @@ interface ExtractedFunction {
 }
 
 interface ExtractedQueryDefinition {
-  body: string;
   diagnostics?: readonly TouchGraphDiagnostic[];
   hasOutputSchema: boolean;
   index: number;
+  instanceKeyComparisons: readonly QueryInstanceKeyComparison[];
   opaquePaths: readonly string[];
   query: string;
   shape: QueryShape;
+  tableExpressions: readonly string[];
   unresolvedPaths: readonly string[];
+}
+
+interface QueryInstanceKeyComparison {
+  left: string;
+  right: string;
 }
 
 interface ExtractedWriteCall {
@@ -1004,21 +1010,21 @@ function extractQueryDefinitions(
       }
 
       const query = queryArgument.getLiteralText();
-      const body = bodyArgument.getText();
       const selection = selectShapeFromQueryBody(bodyArgument, columnShapes);
-      const diagnostics = relationalQueryDiagnostics(body);
+      const diagnostics = relationalQueryDiagnostics(bodyArgument);
       if (!selection && diagnostics.length === 0) continue;
 
       definitions.push({
-        body,
         ...(selection?.diagnostics || diagnostics.length > 0
           ? { diagnostics: [...(selection?.diagnostics ?? []), ...diagnostics] }
           : {}),
         hasOutputSchema: objectHasProperty(bodyArgument, 'output'),
         index: declaration.getStart(),
+        instanceKeyComparisons: queryInstanceKeyComparisons(bodyArgument),
         opaquePaths: selection?.opaquePaths ?? [],
         query,
         shape: selection?.shape ?? {},
+        tableExpressions: queryTableExpressions(bodyArgument),
         unresolvedPaths: selection?.unresolvedPaths ?? [],
       });
     }
@@ -1066,7 +1072,7 @@ function selectShapeFromQueryBody(
 
   return queryShapeFromObjectLiteralNode(projection.compilerNode, {
     columnShapes,
-    nullableTables: nullableJoinTables(body.getText()),
+    nullableTables: nullableJoinTables(body),
   });
 }
 
@@ -1082,7 +1088,7 @@ function selectCallFromQueryBody(body: ObjectLiteralExpression): CallExpression 
   );
 }
 
-function relationalQueryDiagnostics(body: string): TouchGraphDiagnostic[] {
+function relationalQueryDiagnostics(body: ObjectLiteralExpression): TouchGraphDiagnostic[] {
   if (queryRelationalTableExpressions(body).length === 0) return [];
 
   return [
@@ -1204,7 +1210,7 @@ function nullableShape(shape: QueryShape): QueryShape {
   return { kind: 'nullable', shape };
 }
 
-function nullableJoinTables(body: string): ReadonlySet<string> {
+function nullableJoinTables(body: ObjectLiteralExpression): ReadonlySet<string> {
   const tables = new Set<string>();
   const relationTables: string[] = [];
 
@@ -1353,12 +1359,12 @@ function unresolvedProjectionDiagnostics(
 }
 
 function queryReadDomains(
-  body: string,
+  tableExpressions: readonly string[],
   tables: ReadonlyMap<string, readonly ExtractedTable[]>,
 ): string[] {
   const domains = new Set<string>();
 
-  for (const tableExpression of queryTableExpressions(body)) {
+  for (const tableExpression of tableExpressions) {
     for (const table of tables.get(tableExpression) ?? []) {
       if (!isDomainTableAnnotation(table.annotation)) continue;
       domains.add(table.annotation.domain);
@@ -1369,13 +1375,13 @@ function queryReadDomains(
 }
 
 function exemptQueryReadDiagnostics(
-  body: string,
+  tableExpressions: readonly string[],
   tables: ReadonlyMap<string, readonly ExtractedTable[]>,
   site: string,
 ): TouchGraphDiagnostic[] {
   const exemptTables = new Set<string>();
 
-  for (const tableExpression of queryTableExpressions(body)) {
+  for (const tableExpression of tableExpressions) {
     for (const table of tables.get(tableExpression) ?? []) {
       if (isExemptTableAnnotation(table.annotation)) exemptTables.add(table.annotation.name);
     }
@@ -1393,11 +1399,11 @@ function exemptQueryReadDiagnostics(
   ];
 }
 
-function queryTableExpressions(body: string): string[] {
+function queryTableExpressions(body: ObjectLiteralExpression): string[] {
   return [...queryJoinTableExpressions(body), ...queryRelationalTableExpressions(body)];
 }
 
-function queryJoinTableExpressions(body: string): string[] {
+function queryJoinTableExpressions(body: ObjectLiteralExpression): string[] {
   return queryBodyCallExpressions(body, (call) => {
     const name = propertyAccessCallName(call);
     if (!name || !isQueryReadCallName(name)) return [];
@@ -1407,7 +1413,7 @@ function queryJoinTableExpressions(body: string): string[] {
   });
 }
 
-function queryRelationalTableExpressions(body: string): string[] {
+function queryRelationalTableExpressions(body: ObjectLiteralExpression): string[] {
   return queryBodyCallExpressions(body, (call) => {
     const expression = call.getExpression();
     const method = staticAccessName(expression);
@@ -1426,15 +1432,13 @@ function queryRelationalTableExpressions(body: string): string[] {
 }
 
 function queryBodyCallExpressions<T>(
-  body: string,
+  body: ObjectLiteralExpression,
   extract: (call: CallExpression) => readonly T[],
 ): T[] {
-  return withParsedSourceFile(`const __jisoQueryDefinition = ${body};`, (sourceFile) =>
-    sourceFile
-      .getDescendantsOfKind(SyntaxKind.CallExpression)
-      .sort((left, right) => callSourceOrder(left) - callSourceOrder(right))
-      .flatMap(extract),
-  );
+  return body
+    .getDescendantsOfKind(SyntaxKind.CallExpression)
+    .sort((left, right) => callSourceOrder(left) - callSourceOrder(right))
+    .flatMap(extract);
 }
 
 function callSourceOrder(call: CallExpression): number {
@@ -1461,38 +1465,48 @@ function isJoinReadCallName(name: string): boolean {
 function staticExpressionPath(node: Node | undefined): string | undefined {
   if (!node) return undefined;
   if (Node.isIdentifier(node)) return node.getText();
-  if (!Node.isPropertyAccessExpression(node)) return undefined;
-
-  const base = staticExpressionPath(node.getExpression());
-  return base ? `${base}.${node.getName()}` : undefined;
+  if (Node.isPropertyAccessExpression(node)) {
+    const base = staticExpressionPath(node.getExpression());
+    return base ? `${base}.${node.getName()}` : undefined;
+  }
+  if (Node.isElementAccessExpression(node)) {
+    const base = staticExpressionPath(node.getExpression());
+    const name = staticAccessName(node);
+    return base && name ? `${base}.${name}` : undefined;
+  }
+  return undefined;
 }
 
 function queryInstanceKey(
-  body: string,
+  comparisons: readonly QueryInstanceKeyComparison[],
   tables: ReadonlyMap<string, readonly ExtractedTable[]>,
 ): Pick<QueryFact, 'instanceKey'> | null {
   // SPEC §10-§11: query keys must come from real predicates, not comment/string text.
-  return (
-    queryBodyCallExpressions(body, (call) => {
-      if (propertyAccessCallName(call) !== 'where') return [];
+  for (const comparison of comparisons) {
+    const instanceKey = queryInstanceKeyFromEqArgs(comparison.left, comparison.right, tables);
+    if (instanceKey) return instanceKey;
+  }
 
-      const predicate = call.getArguments()[0];
-      if (!predicate || !Node.isCallExpression(predicate)) return [];
+  return null;
+}
 
-      const expression = predicate.getExpression();
-      if (!Node.isIdentifier(expression) || expression.getText() !== 'eq') return [];
+function queryInstanceKeyComparisons(body: ObjectLiteralExpression): QueryInstanceKeyComparison[] {
+  return queryBodyCallExpressions(body, (call) => {
+    if (propertyAccessCallName(call) !== 'where') return [];
 
-      const [left, right] = predicate.getArguments();
-      if (!left || !right) return [];
+    const predicate = call.getArguments()[0];
+    if (!predicate || !Node.isCallExpression(predicate)) return [];
 
-      const instanceKey = queryInstanceKeyFromEqArgs(
-        left.getText().trim(),
-        right.getText().trim(),
-        tables,
-      );
-      return instanceKey ? [instanceKey] : [];
-    })[0] ?? null
-  );
+    const expression = predicate.getExpression();
+    if (!Node.isIdentifier(expression) || expression.getText() !== 'eq') return [];
+
+    const [left, right] = predicate.getArguments();
+    if (!left || !right) return [];
+
+    const leftPath = staticExpressionPath(left);
+    const rightPath = staticExpressionPath(right);
+    return leftPath && rightPath ? [{ left: leftPath, right: rightPath }] : [];
+  });
 }
 
 function queryInstanceKeyFromEqArgs(

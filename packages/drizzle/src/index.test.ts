@@ -891,6 +891,43 @@ export interface CommerceInvalidationSets {
     ]);
   });
 
+  it('extracts query instance keys from static element access predicates', () => {
+    const facts = extractQueryFactsFromSource([
+      {
+        fileName: 'cart.queries.ts',
+        source: `
+          export const cartItems = pgTable("cart_items", {
+            cartId: text("cart_id").notNull(),
+            qty: integer("qty").notNull(),
+          }, jiso({ domain: "cart", key: "cartId" }));
+
+          export const cartQuery = query("cart", {
+            load(input, db) {
+              return db.select({
+                qty: cartItems.qty,
+              }).from(cartItems).where(eq(cartItems["cartId"], input["cartId"]));
+            },
+          });
+        `,
+      },
+    ]);
+
+    expect(facts).toEqual([
+      {
+        instanceKey: {
+          domain: 'cart',
+          key: 'arg:cartId',
+        },
+        query: 'cart',
+        reads: ['cart'],
+        shape: {
+          qty: 'number',
+        },
+        site: 'cart.queries.ts:7',
+      },
+    ]);
+  });
+
   it('reports FW411 when a query read set includes an exempt table', () => {
     const facts = extractQueryFactsFromSource([
       {

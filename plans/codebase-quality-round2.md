@@ -1118,6 +1118,17 @@ must be "FW406 unresolved," never "silently wrong."
       `pnpm exec vitest --run conformance/drizzle-pin/src/index.test.ts`,
       `pnpm exec vp check packages/drizzle/src/index.ts packages/drizzle/src/index.test.ts plans/codebase-quality-round2.md`,
       and `git diff --check`.
+      Additional evidence 2026-06-12: source-mode query read-domain, relational-diagnostic,
+      join-nullability, and instance-key extraction now carries ts-morph query object facts
+      through `ExtractedQueryDefinition` instead of serializing the query object and reparsing it
+      with `queryBodyCallExpressions`. Static element-access predicate paths such as
+      `cartItems["cartId"]` / `input["cartId"]` now resolve through AST nodes under
+      SPEC §10-§11. Same-session evidence:
+      `pnpm exec vitest --run packages/drizzle/src/index.test.ts`,
+      `pnpm exec vitest --run packages/drizzle/src`,
+      `pnpm exec vitest --run conformance/drizzle-pin/src/index.test.ts`,
+      `pnpm exec vp check packages/drizzle/src/index.ts packages/drizzle/src/index.test.ts plans/codebase-quality-round2.md`,
+      and `git diff --check`.
       Additional evidence 2026-06-12: source-mode query output-schema detection now carries a
       ts-morph `ObjectLiteralExpression` fact from query definition extraction instead of
       scanning query object text with bespoke brace/comment/string helpers. The slice deleted
