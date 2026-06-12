@@ -327,6 +327,18 @@ jiso-dialog` resolves dashed wire names and prints provenance including package,
       `pnpm --filter @jiso/headless-ui run lint:primitives`,
       `pnpm exec vp check packages/headless-ui/package.json packages/headless-ui/src/index.ts packages/headless-ui/src/primitives/index.ts packages/headless-ui/src/primitives/number-field.ts packages/headless-ui/src/primitives/number-field.test.ts plans/ui.md`,
       and `git diff --check`. H2 remains open for otp-field, scroll-area, and full gates.
+      Additional partial evidence 2026-06-12: `packages/headless-ui/src/primitives/otp-field.ts`
+      adds the H2 otp-field primitive as a native-input-slot L1 helper: group root,
+      aggregate named input, visible slot input attribute builders, one-time-code autocomplete
+      wiring, normalized/paste-filled aggregate value transitions, focus movement helpers,
+      cancelable value changes, and guarded input/keydown/paste handlers following the
+      SPEC §4.6 primitive handler no-op contract. It is exported through
+      `@jiso/headless-ui`, `@jiso/headless-ui/primitives`, and
+      `@jiso/headless-ui/primitives/otp-field`. Same-session evidence:
+      `pnpm exec vitest --run packages/headless-ui/src/primitives/otp-field.test.ts packages/headless-ui/src/tooling/lint-primitives.test.ts packages/headless-ui/src/tooling/primitive-handler-lint.test.ts`,
+      `pnpm --filter @jiso/headless-ui run lint:primitives`,
+      `pnpm exec vp check packages/headless-ui/package.json packages/headless-ui/src/index.ts packages/headless-ui/src/primitives/index.ts packages/headless-ui/src/primitives/otp-field.ts packages/headless-ui/src/primitives/otp-field.test.ts plans/ui.md`,
+      and `git diff --check`. H2 remains open for scroll-area and full gates.
 - [ ] H3 wave 3 primitives (list-driven & isomorphic): select, combobox, autocomplete, dropdown-menu, context-menu, menubar, navigation-menu, slider, toast, command.
 - [x] U1 token sheet + `cn()` + statically-analyzable variant helper (Tailwind-first, §13.1 discoverability rules).
       Evidence 2026-06-12: `packages/headless-ui/src/lib/class-names.ts`

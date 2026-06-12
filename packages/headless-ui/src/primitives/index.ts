@@ -282,6 +282,37 @@ export type {
   NumberFieldValue,
 } from './number-field.js';
 
+export {
+  otpFieldComplete,
+  otpFieldHiddenInputAttributes,
+  otpFieldInput,
+  otpFieldInputAttributes,
+  otpFieldKeyDown,
+  otpFieldMoveFocus,
+  otpFieldPaste,
+  otpFieldRootAttributes,
+  otpFieldSlotValue,
+  otpFieldValueFromString,
+  setOtpFieldSlotValue,
+  setOtpFieldValue,
+} from './otp-field.js';
+export type {
+  OtpFieldChangeDetail,
+  OtpFieldChangeOptions,
+  OtpFieldChangeReason,
+  OtpFieldChangeResult,
+  OtpFieldHiddenInputAttributeOptions,
+  OtpFieldInputAttributeOptions,
+  OtpFieldInputEvent,
+  OtpFieldInputMode,
+  OtpFieldKeyboardEvent,
+  OtpFieldMoveResult,
+  OtpFieldPasteEvent,
+  OtpFieldPrimitiveAttributes,
+  OtpFieldRootAttributeOptions,
+  OtpFieldState,
+} from './otp-field.js';
+
 export { progressRootAttributes, progressValueState } from './progress.js';
 export type {
   ProgressAttributeOptions,

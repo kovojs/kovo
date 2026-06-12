@@ -19,6 +19,7 @@
     "./primitives/hover-card": "./src/primitives/hover-card.ts",
     "./primitives/meter": "./src/primitives/meter.ts",
     "./primitives/number-field": "./src/primitives/number-field.ts",
+    "./primitives/otp-field": "./src/primitives/otp-field.ts",
     "./primitives/popover": "./src/primitives/popover.ts",
     "./primitives/progress": "./src/primitives/progress.ts",
     "./primitives/radio-group": "./src/primitives/radio-group.ts",
