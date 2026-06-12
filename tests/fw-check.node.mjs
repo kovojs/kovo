@@ -4598,7 +4598,10 @@ export const DiagnosticCard = component('diagnostic-card', {
   const plugin = jisoVitePlugin();
   const greenTransform = plugin.transform(greenSource, componentId);
   assert.ok(greenTransform);
-  assert.match(greenTransform.code, /diagnostic-card/);
+  const greenButtons = parseHtmlElements(executeGeneratedServerRenderSource(greenTransform.code))
+    .filter((element) => element.tagName === 'button')
+    .map((element) => element.attributes);
+  assert.deepEqual(greenButtons, [{ 'fw-c': 'diagnostic-card' }]);
 
   assert.throws(
     () => plugin.transform(redSource, componentId),
@@ -4618,7 +4621,18 @@ export const DiagnosticCard = component('diagnostic-card', {
   });
   const lintTransform = lintPlugin.transform(lintSource, componentId);
   assert.ok(lintTransform);
-  assert.match(lintTransform.code, /diagnostic-card/);
+  const lintButtons = parseHtmlElements(executeGeneratedServerRenderSource(lintTransform.code))
+    .filter((element) => element.tagName === 'button')
+    .map((element) => element.attributes);
+  assert.equal(lintButtons.length, 1);
+  assert.equal(lintButtons[0]?.['fw-c'], 'diagnostic-card');
+  assert.equal(lintButtons[0]?.['data-p-ok'], '{response.ok}');
+  const lintHandlerUrl = new URL(lintButtons[0]?.['on:click'] ?? '', 'http://jiso.test');
+  assert.equal(lintHandlerUrl.pathname, '/c/routes/diagnostic-card.client.js');
+  const lintVersion = lintHandlerUrl.searchParams.get('v') ?? '';
+  assert.equal(lintVersion.length, 8);
+  assert.match(lintVersion, /^[\da-f]{8}$/);
+  assert.equal(lintHandlerUrl.hash, '#DiagnosticCard$button_click');
   assert.deepEqual(
     lintDiagnostics.map((diagnostic) => ({
       code: diagnostic.code,

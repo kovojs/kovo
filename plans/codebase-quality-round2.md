@@ -140,6 +140,11 @@ Do this first or pay it on every commit.
       with structured `diagnostics` and `verificationDiagnostics` facts for FW302/FW402/FW403/
       FW404/FW405/FW407/FW408/FW410/FW411 instead of grepping CLI implementation symbols or CLI
       test names.
+      Partial evidence 2026-06-12: the D10 Vite diagnostic transform tranche now executes the
+      built transformed server modules and asserts parsed rendered button attributes plus handler
+      URL facts instead of grepping transformed module source for `diagnostic-card`. Verification:
+      `pnpm run check:build`, `node --test --test-name-pattern "D10 seeded diagnostics gate Vite,
+      static export, and MCP red-green surfaces" tests/fw-check.node.mjs`, and `git diff --check`.
       Partial evidence 2026-06-11: the P9 `@jiso/test` harness tranche now imports the built
       harness APIs and exercises mutation execution/CSRF, write/read verification, PGlite raw
       handle and transaction proxying, exempt table behavior, nested SQL read/write extraction,
