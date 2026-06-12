@@ -2424,61 +2424,85 @@ function extractPredicateSummary(
   tableIdentifier: string,
   table: JisoDomainTableAnnotation,
 ): ExtractedPredicateSummary {
-  const predicate = wherePredicate(statement);
-  const key = predicate ? extractParameterizedKey(predicate, tableIdentifier, table) : undefined;
-  if (key) return { key };
-
-  return hasNonEqPredicate(predicate, tableIdentifier, table) ? { predicate: 'non-eq' } : {};
-}
-
-function wherePredicate(statement: string): string | undefined {
   // SPEC §10-§11: predicate text inside strings/comments must not fabricate row-key facts.
   return withParsedSourceFile(`${statement};`, (sourceFile) => {
     const whereCall = sourceFile
       .getDescendantsOfKind(SyntaxKind.CallExpression)
       .find((call) => propertyAccessCallName(call) === 'where');
+    const predicate = whereCall?.getArguments()[0];
+    if (!predicate) return {};
 
-    return whereCall?.getArguments()[0]?.getText().trim();
+    const key = extractParameterizedKey(predicate, tableIdentifier, table);
+    if (key) return { key };
+
+    return hasNonEqPredicate(predicate, tableIdentifier, table) ? { predicate: 'non-eq' } : {};
   });
 }
 
 function extractParameterizedKey(
-  predicate: string,
+  predicate: Node,
   tableIdentifier: string,
   table: JisoDomainTableAnnotation,
 ): string | undefined {
   if (!table.key) return undefined;
+  if (!Node.isCallExpression(predicate)) return undefined;
 
-  const match = /^eq\s*\(\s*(?<left>[^,]+?)\s*,\s*(?<right>[^)]+?)\s*\)$/.exec(predicate);
-  const left = match?.groups?.left?.trim();
-  const right = match?.groups?.right?.trim();
+  const expression = predicate.getExpression();
+  if (!Node.isIdentifier(expression) || expression.getText() !== 'eq') return undefined;
+
+  const [left, right] = predicate.getArguments();
   if (!left || !right) return undefined;
 
-  if (left === `${tableIdentifier}.${table.key}`) return argumentKey(right);
-  if (right === `${tableIdentifier}.${table.key}`) return argumentKey(left);
+  if (isTableKeyReference(left, tableIdentifier, table)) return argumentKey(right);
+  if (isTableKeyReference(right, tableIdentifier, table)) return argumentKey(left);
   return undefined;
 }
 
 function hasNonEqPredicate(
-  predicate: string | undefined,
+  predicate: Node,
   tableIdentifier: string,
   table: JisoDomainTableAnnotation,
 ): boolean {
   if (!table.key) return false;
 
-  if (!predicate || !predicate.includes(`${tableIdentifier}.${table.key}`)) return false;
-  if (/^eq\s*\(/.test(predicate)) return false;
-  return true;
+  return !isEqCall(predicate) && hasTableKeyReference(predicate, tableIdentifier, table);
 }
 
-function argumentKey(expression: string): string | undefined {
-  const member = /^(?<base>[A-Za-z_$][\w$]*)\.(?<property>[A-Za-z_$][\w$]*)$/.exec(expression);
-  if (member?.groups) {
-    if (member.groups.base !== 'input') return undefined;
-    return member.groups.property ? `arg:${member.groups.property}` : undefined;
-  }
+function isEqCall(node: Node): boolean {
+  if (!Node.isCallExpression(node)) return false;
 
-  return /^[A-Za-z_$][\w$]*$/.test(expression) ? `arg:${expression}` : undefined;
+  const expression = node.getExpression();
+  return Node.isIdentifier(expression) && expression.getText() === 'eq';
+}
+
+function hasTableKeyReference(
+  node: Node,
+  tableIdentifier: string,
+  table: JisoDomainTableAnnotation,
+): boolean {
+  if (isTableKeyReference(node, tableIdentifier, table)) return true;
+
+  return node
+    .getDescendants()
+    .some((descendant) => isTableKeyReference(descendant, tableIdentifier, table));
+}
+
+function isTableKeyReference(
+  node: Node,
+  tableIdentifier: string,
+  table: JisoDomainTableAnnotation,
+): boolean {
+  return staticExpressionPath(node) === `${tableIdentifier}.${table.key}`;
+}
+
+function argumentKey(expression: Node): string | undefined {
+  if (Node.isIdentifier(expression)) return `arg:${expression.getText()}`;
+  if (!Node.isPropertyAccessExpression(expression)) return undefined;
+
+  const base = expression.getExpression();
+  if (!Node.isIdentifier(base) || base.getText() !== 'input') return undefined;
+
+  return `arg:${expression.getName()}`;
 }
 
 function appendTable<Table>(tables: Map<string, Table[]>, identifier: string, table: Table): void {

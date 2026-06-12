@@ -1050,6 +1050,14 @@ must be "FW406 unresolved," never "silently wrong."
       `pnpm exec vitest --run packages/drizzle/src/index.test.ts`;
       `pnpm exec vitest --run conformance/drizzle-pin/src/index.test.ts`;
       `pnpm exec vp check packages/drizzle/src/index.ts packages/drizzle/src/index.test.ts plans/codebase-quality-round2.md`.
+      Additional evidence 2026-06-12: write predicate row-key and non-eq classification now
+      inspects parsed predicate AST nodes instead of string-matching predicate text, so
+      `sql.raw("products.id")` no longer fabricates `predicate: "non-eq"` touch facts under
+      SPEC §10-§11. Same-session evidence:
+      `pnpm exec vitest --run packages/drizzle/src/index.test.ts`;
+      `pnpm exec vitest --run conformance/drizzle-pin/src/index.test.ts`;
+      `pnpm exec vp check packages/drizzle/src/index.ts packages/drizzle/src/index.test.ts conformance/drizzle-pin/src/index.test.ts plans/codebase-quality-round2.md`;
+      and `git diff --check HEAD~1..HEAD`.
       Additional evidence 2026-06-12: source-mode receiver-name detection now treats only the
       canonical `db`/`tx` surface as proof, so broad parameter names such as `client`, `database`,
       and `writer` no longer fabricate write facts. Project mode carries checker-proven

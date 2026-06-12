@@ -2193,6 +2193,30 @@ export interface CommerceInvalidationSets {
     ]);
   });
 
+  it('does not fabricate non-eq predicate facts from string-contained column names', () => {
+    const graph = extractTouchGraphFromSource([
+      {
+        fileName: 'product.domain.ts',
+        source: `
+          export const products = pgTable("products", {}, jiso({ domain: "product", key: "id" }));
+
+          export async function scrubPredicate(db, productId) {
+            await db.update(products).set({ reserved: true }).where(gt(sql.raw("products.id"), productId));
+          }
+        `,
+      },
+    ]);
+
+    expect(graph).toEqual({
+      scrubPredicate: {
+        reads: [],
+        touches: [{ domain: 'product', keys: null, site: 'product.domain.ts:5', via: 'products' }],
+        unresolved: [],
+      },
+    });
+    expect(diagnosticsForTouchGraph(graph)).toEqual([]);
+  });
+
   it('does not borrow predicates from following semicolonless write statements', () => {
     const graph = extractTouchGraphFromSource([
       {

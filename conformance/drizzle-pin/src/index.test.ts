@@ -674,6 +674,40 @@ describe('Drizzle pinned subset conformance', () => {
     ]);
   });
 
+  it('pins AST-backed write predicate extraction without string-contained key facts', () => {
+    const graph = extractTouchGraphFromSource([
+      {
+        fileName: 'product.domain.ts',
+        source: [
+          'export const products = pgTable("products", {}, jiso({ domain: "product", key: "id" }));',
+          '',
+          'export async function scrubPredicate(db, productId) {',
+          '  await db.update(products).set({ reserved: true }).where(gt(sql.raw("products.id"), productId));',
+          '}',
+          '',
+        ].join('\n'),
+      },
+    ]);
+
+    expect(serializeTouchGraph(graph)).toBe(
+      [
+        'export const touchGraph = {',
+        '  "scrubPredicate": {',
+        '    touches: [',
+        '      { domain: "product", via: "products", site: "product.domain.ts:4", keys: null },',
+        '    ],',
+        '    reads: [',
+        '    ],',
+        '    unresolved: [',
+        '    ],',
+        '  },',
+        '} as const;',
+        '',
+      ].join('\n'),
+    );
+    expect(diagnosticsForTouchGraph(graph)).toEqual([]);
+  });
+
   it('pins local conditional table resolution as a safe over-approximation', () => {
     const graph = extractTouchGraphFromSource([
       {
