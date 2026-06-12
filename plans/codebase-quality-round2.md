@@ -713,6 +713,14 @@ pipeline throws the tree away and communicates via mutated source text.
       `pnpm exec vitest --run packages/compiler/src/scan/parse.test.ts packages/compiler/src/query-coverage.test.ts packages/compiler/src/query-update-plans.test.ts`
       and
       `pnpm exec vp check packages/compiler/src/scan/parse.ts packages/compiler/src/scan/parse.test.ts packages/compiler/src/lower/inline-derives.ts`.
+      Additional evidence 2026-06-12: JSX comment attachment for eager-trigger FW211
+      justifications is now parser-owned on `JsxCommentModel.attachedAttributeStart`, and
+      `validate/event-triggers.ts` consumes that model fact instead of slicing module source to
+      rediscover the lexical gap between a comment and the following attribute. Same-session
+      evidence:
+      `pnpm exec vitest --run packages/compiler/src/scan/parse.test.ts packages/compiler/src/execution-triggers.test.ts packages/compiler/src/index.test.ts -t "attached|execution trigger|FW211|FW212"`
+      and
+      `pnpm exec vp check packages/compiler/src/scan/parse.ts packages/compiler/src/scan/parse.test.ts packages/compiler/src/validate/event-triggers.ts plans/codebase-quality-round2.md`.
       Additional evidence 2026-06-12: static CSS scoping now derives the rendered host selector
       from `componentRenderHostElement(model).tag`, and `emitCssModule()` no longer accepts
       module source just to recover the opening tag name. Same-session evidence:

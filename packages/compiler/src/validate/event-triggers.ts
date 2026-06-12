@@ -1,12 +1,7 @@
 import { diagnosticDefinitions } from '@jiso/core';
 
 import { diagnosticFor, type CompilerDiagnostic } from '../diagnostics.js';
-import {
-  jsxComments,
-  jsxElements,
-  type ComponentModuleModel,
-  type JsxCommentModel,
-} from '../scan/parse.js';
+import { jsxComments, jsxElements, type ComponentModuleModel } from '../scan/parse.js';
 
 const declaredExecutionTriggers = new Set(['idle', 'load', 'visible']);
 
@@ -47,7 +42,7 @@ export function validateEventTriggerNames(
       return [eventTriggerDiagnostic(fileName, source, 'FW212', attribute)];
     }
 
-    if (attribute.name === 'load' && !hasFw211Justification(source, model, attribute.index)) {
+    if (attribute.name === 'load' && !hasFw211Justification(model, attribute.index)) {
       return [eventTriggerDiagnostic(fileName, source, 'FW211', attribute)];
     }
 
@@ -75,24 +70,10 @@ function isKnownEventOrTrigger(name: string): boolean {
   return declaredExecutionTriggers.has(name) || delegatedDomEvents.has(name);
 }
 
-function hasFw211Justification(
-  source: string,
-  model: ComponentModuleModel,
-  index: number,
-): boolean {
-  const comments = jsxComments(model)
-    .filter((comment) => comment.end <= index && comment.text.includes('FW211'))
-    .sort((left, right) => right.end - left.end);
-  const nearest = comments[0];
-  return nearest !== undefined && isAttachedJustificationGap(source, nearest, index);
-}
-
-function isAttachedJustificationGap(
-  source: string,
-  comment: JsxCommentModel,
-  attributeIndex: number,
-): boolean {
-  return /^[\s<>"'=/\w:.-]*$/.test(source.slice(comment.end, attributeIndex));
+function hasFw211Justification(model: ComponentModuleModel, index: number): boolean {
+  return jsxComments(model).some(
+    (comment) => comment.attachedAttributeStart === index && comment.text.includes('FW211'),
+  );
 }
 
 function eventTriggerDiagnostic(

@@ -265,6 +265,23 @@ export const CartActions = component('cart-actions', {
     });
   });
 
+  it('attaches JSX comments to the following attribute when no JSX content intervenes', () => {
+    const source = `
+export const ExecutionTriggers = component('execution-triggers', {
+  render: () => (
+    <section>
+      {/* FW211: intentionally eager. */}
+      <stock-ticker on:load="/c/ticker.client.js#Ticker$start"></stock-ticker>
+    </section>
+  ),
+});
+`;
+    const model = parseComponentModule('execution-triggers.tsx', source);
+    const [comment] = model.jsxComments;
+
+    expect(comment?.attachedAttributeStart).toBe(source.indexOf('on:load'));
+  });
+
   it('records handler property access boolean and number usage contexts', () => {
     const source = `
 export const CartActions = component('cart-actions', {

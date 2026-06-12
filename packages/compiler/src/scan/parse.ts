@@ -72,6 +72,7 @@ export interface JsxExpressionModel {
 }
 
 export interface JsxCommentModel {
+  attachedAttributeStart?: number;
   end: number;
   start: number;
   text: string;
@@ -220,10 +221,12 @@ export function parseComponentModule(fileName: string, source: string): Componen
 
   visit(sourceFile);
 
+  const attachedJsxComments = attachJsxCommentsToAttributes(source, jsxComments, jsxElements);
+
   return {
     calls,
     components,
-    jsxComments,
+    jsxComments: attachedJsxComments,
     jsxExpressions,
     jsxElements,
     mutationHandlers,
@@ -1259,6 +1262,33 @@ function jsxCommentModel(
     start,
     text,
   };
+}
+
+function attachJsxCommentsToAttributes(
+  source: string,
+  comments: readonly JsxCommentModel[],
+  elements: readonly JsxElementModel[],
+): JsxCommentModel[] {
+  const attributes = elements
+    .flatMap((element) => element.attributes)
+    .sort((left, right) => left.start - right.start);
+
+  return comments.map((comment) => {
+    const attribute = attributes.find(
+      (candidate) =>
+        candidate.start >= comment.end &&
+        isAttachedJsxCommentGap(source, comment.end, candidate.start),
+    );
+    return attribute ? { ...comment, attachedAttributeStart: attribute.start } : comment;
+  });
+}
+
+function isAttachedJsxCommentGap(
+  source: string,
+  commentEnd: number,
+  attributeStart: number,
+): boolean {
+  return /^[\s<>"'=/\w:.-]*$/.test(source.slice(commentEnd, attributeStart));
 }
 
 function jsxAttributeExpression(
