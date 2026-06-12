@@ -2859,6 +2859,15 @@ land it first; don't fork it.
       `corepack pnpm exec vitest --run packages/server/src/vite-manifest.test.ts packages/server/src/vite.test.ts`,
       `corepack pnpm exec vp check packages/server/src/vite.ts packages/server/src/vite-manifest.ts packages/server/src/vite-manifest.test.ts plans/app-shell.md plans/codebase-quality-round2.md IMPLEMENT_v1.md`,
       and `git diff --check`.
+      Additional evidence 2026-06-12: app-shell Vite production build/output/export helpers
+      moved from `packages/server/src/vite.ts` into `packages/server/src/vite-build.ts`;
+      `vite.ts` now preserves the public helper/type re-exports and owns only dev middleware,
+      SSR dev request ownership, diagnostics, and the bounded plugin `writeBundle` handoff into
+      the extracted build seam. `packages/server/src/vite-build.test.ts` covers the seam
+      directly for route-entry hints, compiled `/c/` file output, manifest-derived static export
+      asset inputs, exported HTML, and copied Vite dist bytes while `packages/server/src/vite.test.ts`
+      continues to cover the public `./vite.js` API path. Same-session evidence:
+      `corepack pnpm exec vitest --run packages/server/src/vite-build.test.ts packages/server/src/vite.test.ts packages/server/src/vite-manifest.test.ts`.
 - [ ] **LOW — Close the server cleanup inventory with an acceptance sweep.** Historical audit
       targets were dead code (`matchShellDispatch` post-loop return shell.ts:161-166; rate-limit
       tail `return options.max > 0` index.ts:576); `matchRoute` recompiling all routes per call

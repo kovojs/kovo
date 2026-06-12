@@ -146,6 +146,14 @@ Scope: SPEC addition (proposed §9.5 "The request shell"), `@jiso/server` shell 
       `corepack pnpm exec vitest --run packages/server/src/vite-manifest.test.ts packages/server/src/vite.test.ts`,
       `corepack pnpm exec vp check packages/server/src/vite.ts packages/server/src/vite-manifest.ts packages/server/src/vite-manifest.test.ts plans/app-shell.md plans/codebase-quality-round2.md IMPLEMENT_v1.md`,
       and `git diff --check`.
+      Additional evidence 2026-06-12: Vite production build/output/export ownership moved out
+      of the dev plugin coordinator into `packages/server/src/vite-build.ts`; `vite.ts`
+      now keeps the public re-export path plus dev middleware/plugin hook wiring, and the plugin
+      `writeBundle` hook calls the extracted build/output seam. `packages/server/src/vite-build.test.ts`
+      imports the seam directly and proves route-entry hints, compiled `/c/` output, manifest
+      static-export assets, and exported HTML/asset bytes; the existing Vite integration suite
+      still proves the public `./vite.js` API path. Same-session verification ran
+      `corepack pnpm exec vitest --run packages/server/src/vite-build.test.ts packages/server/src/vite.test.ts packages/server/src/vite-manifest.test.ts`.
       Remaining R5 work: compiler/plugin build hooks must still supply real route-entry maps
       and compiled module sources from compiler facts, consume the asset/module plan in
       production package builds, and decide the final plugin hook ownership.
