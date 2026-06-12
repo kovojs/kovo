@@ -6,13 +6,11 @@ import {
   componentExplicitNames,
   componentOptionObjectKeys,
   jsxElements,
-  parseComponentModule as parseComponentModuleModel,
   type ComponentModuleModel,
   type JsxAttributeModel,
   type JsxElementModel,
 } from '../scan/parse.js';
 import { dedupeBy, kebabCase, splitDepValue } from '../shared.js';
-import { dataBindListTemplateBodies } from './bindings.js';
 import type { PackageComponentPrefixFact } from './package-prefixes.js';
 
 interface IdrefValue {
@@ -68,7 +66,7 @@ export function validateStaticIds(
     seen.add(id.value);
   }
 
-  for (const id of repeatableLiteralIds(source, model)) {
+  for (const id of repeatableLiteralIds(model)) {
     diagnostics.push(fw224Diagnostic(fileName, source, `repeatable id="${id.value}"`, id));
   }
 
@@ -261,9 +259,24 @@ function literalIdValues(model: ComponentModuleModel, offset = 0): LiteralIdValu
   );
 }
 
-function repeatableLiteralIds(source: string, model: ComponentModuleModel): LiteralIdValue[] {
-  return dataBindListTemplateBodies(source, model).flatMap((body) =>
-    literalIdValues(parseComponentModuleModel('component.tsx', body.source), body.offset),
+function repeatableLiteralIds(model: ComponentModuleModel): LiteralIdValue[] {
+  const ids = literalIdValues(model);
+  const elements = jsxElements(model);
+  const repeatableTemplateSpans = elements
+    .filter((element) => jsxStaticAttributeValue(element, 'data-bind-list') !== undefined)
+    .flatMap((container) =>
+      elements.filter(
+        (element) =>
+          element.tag === 'template' &&
+          !element.selfClosing &&
+          isWithinElement(element, container) &&
+          hasJsxAttribute(element, 'fw-stamp'),
+      ),
+    )
+    .map((template) => ({ end: template.closingStart, start: template.openingEnd }));
+
+  return ids.filter((id) =>
+    repeatableTemplateSpans.some((span) => id.index >= span.start && id.index < span.end),
   );
 }
 
@@ -420,6 +433,10 @@ function jsxAttributes(model: ComponentModuleModel): JsxAttributeModel[] {
 
 function hasJsxAttribute(element: JsxElementModel, name: string): boolean {
   return element.attributes.some((attribute) => attribute.name === name);
+}
+
+function jsxStaticAttributeValue(element: JsxElementModel, name: string): string | undefined {
+  return element.attributes.find((attribute) => attribute.name === name)?.value;
 }
 
 function isWithinElement(candidate: JsxElementModel, container: JsxElementModel): boolean {
