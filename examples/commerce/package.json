@@ -23,6 +23,7 @@
   "devDependencies": {
     "@jiso/compiler": "workspace:*",
     "@tailwindcss/vite": "^4.3.0",
+    "fw": "workspace:*",
     "tailwindcss": "^4.3.0",
     "vite": "8.0.16",
     "vite-plus": "^0.1.24",

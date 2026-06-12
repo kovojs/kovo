@@ -3187,6 +3187,16 @@ Verification: server vitest + wire fixtures byte-for-byte acceptance.
       `corepack pnpm exec vitest --run examples/commerce/src/app.test.ts`,
       `corepack pnpm exec vp check examples/commerce/src/app.ts examples/commerce/src/app.test.ts examples/commerce/src/page-meta.ts examples/commerce/scripts/emit-graph.mjs plans/codebase-quality-round2.md`,
       and `git diff --check`.
+      Additional evidence 2026-06-12: commerce graph/source-truth acceptance moved from
+      `examples/commerce/src/app.test.ts` into `examples/commerce/src/source-truth.test.ts`,
+      and the example now depends on the workspace `fw` package instead of deep-importing the
+      CLI source for `fwCheck` / `fwExplain`. Same-session evidence:
+      `corepack pnpm exec vitest --run examples/commerce/src/source-truth.test.ts examples/commerce/src/app.test.ts -t "source-truth|loads declared commerce queries|verifies every declared query|resolves commerce route meta"`,
+      `corepack pnpm exec vitest --run examples/commerce/src/source-truth.test.ts examples/commerce/src/app.test.ts`,
+      `corepack pnpm run check:build`,
+      `node --test --test-name-pattern "P10 commerce invalidation is expressed through graph facts|P10 commerce graph assertions answer behavior mechanically|D2 commerce validates keyed append and optimistic reorder|D4 commerce adopt-dont-invent features stay represented|P4 commerce touch graph is a committed generated artifact" tests/fw-check.node.mjs`,
+      `corepack pnpm exec vp check examples/commerce/package.json examples/commerce/src/app.test.ts examples/commerce/src/source-truth.test.ts plans/codebase-quality-round2.md`,
+      and `git diff --check`.
 - [x] **MED — Typecheck the example and spikes.** `examples/commerce` and three of four
       conformance spikes sit outside every tsconfig (root includes only `packages/**`), so the
       registry-augmentation showcase (generated/touch-graph.ts:43-50) may never be
@@ -3713,6 +3723,15 @@ As each phase splits a source module, split its tests in the same commit.
       behavior remains there to split. Same-session evidence:
       `corepack pnpm exec vitest --run packages/test/src`,
       `corepack pnpm exec vp check packages/test/src/index.ts plans/codebase-quality-round2.md`,
+      and `git diff --check`.
+      Additional evidence 2026-06-12: commerce source-truth graph acceptance split out of
+      `examples/commerce/src/app.test.ts` into `examples/commerce/src/source-truth.test.ts`,
+      keeping `fwCheck` / `fwExplain` matrix assertions in a named source-truth suite while
+      `app.test.ts` remains focused on app behavior and generated component checks. Same-session
+      evidence:
+      `corepack pnpm exec vitest --run examples/commerce/src/source-truth.test.ts examples/commerce/src/app.test.ts -t "source-truth|loads declared commerce queries|verifies every declared query|resolves commerce route meta"`,
+      `corepack pnpm exec vitest --run examples/commerce/src/source-truth.test.ts examples/commerce/src/app.test.ts`,
+      `corepack pnpm exec vp check examples/commerce/package.json examples/commerce/src/app.test.ts examples/commerce/src/source-truth.test.ts plans/codebase-quality-round2.md`,
       and `git diff --check`.
       Additional evidence 2026-06-12: Drizzle runtime/static package-surface coverage moved from
       `packages/drizzle/src/index.test.ts` into `packages/drizzle/src/runtime-surface.test.ts`,
