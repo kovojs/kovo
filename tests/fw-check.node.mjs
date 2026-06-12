@@ -122,6 +122,38 @@ const readWireFixture = async (name) =>
 const readProjectFile = async (path) => readFile(new URL(`../${path}`, import.meta.url), 'utf8');
 const execFileAsync = promisify(execFile);
 
+const parseWireTranscript = (body) => {
+  const [titleBlock, rest] = body.split('\n>>> REQUEST\n');
+  assert.ok(titleBlock?.startsWith('### '), 'wire fixture starts with a scenario title');
+  assert.ok(rest, 'wire fixture includes a request transcript');
+
+  const [requestBlock, responseBlock] = rest.split('\n<<< RESPONSE\n');
+  assert.ok(requestBlock, 'wire fixture includes a request block');
+  assert.ok(responseBlock, 'wire fixture includes a response block');
+
+  return {
+    request: parseHttpBlock(requestBlock),
+    response: parseHttpBlock(responseBlock),
+    title: titleBlock.slice('### '.length).trim(),
+  };
+};
+
+const parseHttpBlock = (block) => {
+  const [head = '', ...bodyLines] = block.trimEnd().split('\n\n');
+  const [startLine = '', ...headerLines] = head.split('\n');
+  return {
+    body: bodyLines.join('\n\n'),
+    headers: Object.fromEntries(
+      headerLines.map((line) => {
+        const index = line.indexOf(':');
+        assert.notEqual(index, -1, `HTTP header contains a colon: ${line}`);
+        return [line.slice(0, index), line.slice(index + 1).trim()];
+      }),
+    ),
+    startLine,
+  };
+};
+
 const explainValue = (output, prefix) => {
   const line = output.split('\n').find((item) => item.startsWith(prefix));
   assert.ok(line, `explain output includes ${prefix}`);
@@ -966,18 +998,22 @@ void test('Phase 0 wire fixtures are present and explicit', async () => {
   ]);
 
   for (const name of fixtureNames.filter((entry) => entry.endsWith('.http'))) {
-    const body = await readWireFixture(name);
-    assert.match(body, /^### /m, `${name} names the scenario`);
-    assert.match(body, /^>>> REQUEST/m, `${name} includes a request transcript`);
-    assert.match(body, /^<<< RESPONSE/m, `${name} includes a response transcript`);
+    const transcript = parseWireTranscript(await readWireFixture(name));
+    assert.notEqual(transcript.title, '', `${name} names the scenario`);
+    assert.notEqual(transcript.request.startLine, '', `${name} includes a request transcript`);
+    assert.notEqual(transcript.response.startLine, '', `${name} includes a response transcript`);
   }
 
   for (const name of ['enhanced-mutation.http', 'validation-422-fragment.http']) {
-    const body = await readWireFixture(name);
-    assert.match(body, /^FW-Fragment: true$/m, `${name} declares enhanced fragment mode`);
-    assert.match(
-      body,
-      /^Accept: text\/vnd\.jiso\.fragment\+html$/m,
+    const transcript = parseWireTranscript(await readWireFixture(name));
+    assert.equal(
+      transcript.request.headers['FW-Fragment'],
+      'true',
+      `${name} declares enhanced fragment mode`,
+    );
+    assert.equal(
+      transcript.request.headers.Accept,
+      'text/vnd.jiso.fragment+html',
       `${name} requests fragment HTML`,
     );
   }

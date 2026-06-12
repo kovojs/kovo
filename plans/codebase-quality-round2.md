@@ -112,6 +112,11 @@ Do this first or pay it on every commit.
       `fwExplain` updates field into query-target entries instead of regex-matching substrings
       of the rendered updates line. Same-session evidence:
       `node --test --test-name-pattern "P10 commerce invalidation is expressed through graph facts|P10 commerce graph assertions answer behavior mechanically|P10 starter wires graph assertions into CI" tests/fw-check.node.mjs`.
+      Partial evidence 2026-06-12: the Phase 0 wire-fixture inventory tranche now parses each
+      `.http` transcript into title/request/response/header structures before asserting enhanced
+      fragment headers, replacing regex line matches while preserving the byte-for-byte fixture
+      body pins. Same-session evidence:
+      `node --test --test-name-pattern "Phase 0 wire fixtures are present and explicit|Phase 0 wire fixture response bodies match generated contracts byte-for-byte|Phase 0 wire fixture responses keep stable protocol metadata" tests/fw-check.node.mjs`.
       Partial evidence 2026-06-11: the P10 commerce graph assertion tranche now exercises
       `fwCheck`/`fwExplain` commerce behavior, FW310/FW311 warning rows, compiler-derived graph
       and registry facts, and generated invalidation facts directly instead of grepping CLI,
