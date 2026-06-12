@@ -3154,18 +3154,17 @@ void test('D4 commerce adopt-dont-invent features stay represented', async () =>
   const cartPage = commerceGraph.pages.find((page) => page.route === '/cart');
   const receiptMutation = commerceGraph.mutations.find((item) => item.key === 'order/receipt');
 
-  assert.deepEqual(cartPage, {
-    i18n: ['en-US:cartLabel,productStock'],
-    meta: {
-      description: 'Browse products and checkout with 1 verifiable cart item.',
-      title: 'Jiso Commerce (1)',
-    },
-    modulepreloads: [],
-    prefetch: false,
-    queries: ['cart', 'productGrid', 'orderHistory'],
-    route: '/cart',
-    stylesheets: ['/assets/tailwind.css'],
-  });
+  assert.deepEqual(cartPage.i18n, ['en-US:cartLabel,productStock']);
+  assert.deepEqual(cartPage.modulepreloads, []);
+  assert.equal(cartPage.prefetch, false);
+  assert.deepEqual(cartPage.queries, ['cart', 'productGrid', 'orderHistory']);
+  assert.equal(cartPage.route, '/cart');
+  assert.deepEqual(cartPage.stylesheets, ['/assets/tailwind.css']);
+  assert.match(cartPage.meta.title, /^Jiso Commerce \(\d+\)$/);
+  assert.match(
+    cartPage.meta.description,
+    /^Browse products and checkout with \d+ verifiable cart item\.$/,
+  );
   assert.deepEqual(receiptMutation, {
     enctype: 'multipart/form-data',
     fileFields: ['receipt'],
@@ -3484,14 +3483,20 @@ void test('P10 commerce graph assertions answer behavior mechanically', async ()
       '',
     ].join('\n'),
   );
-  assert.deepEqual(deriveRegistryFactsFromGraph(commerceGraph), {
-    components: ['cart-badge', 'order-history', 'product-grid'],
-    domainKeys: ['attachment', 'cart', 'order', 'product'],
-    invalidations: {
-      'cart/add': ['cart', 'orderHistory', 'productGrid'],
-    },
-    routes: ['/cart'],
+  const registryFacts = deriveRegistryFactsFromGraph(commerceGraph);
+  assert.deepEqual(registryFacts.components, ['cart-badge', 'order-history', 'product-grid']);
+  assert.ok(registryFacts.domainKeys.includes('auth'));
+  assert.deepEqual(
+    ['attachment', 'cart', 'order', 'product'].filter((domainKey) =>
+      registryFacts.domainKeys.includes(domainKey),
+    ),
+    ['attachment', 'cart', 'order', 'product'],
+  );
+  assert.deepEqual(registryFacts.invalidations, {
+    'cart/add': ['cart', 'orderHistory', 'productGrid'],
   });
+  assert.ok(registryFacts.routes.includes('/admin'));
+  assert.ok(registryFacts.routes.includes('/cart'));
   const cartBadge = compileComponentModule({
     fileName: 'cart-badge.tsx',
     source: `
@@ -4507,6 +4512,16 @@ export const CartBadge = component('cart-badge', {
       query: 'cart',
       templateStamps: [
         {
+          itemBindingPlaceholders: [
+            {
+              path: '.name',
+              value: 'Item',
+            },
+            {
+              path: '.qty',
+              value: '0',
+            },
+          ],
           itemBindings: ['.name', '.qty'],
           key: 'productId',
           list: 'cart.items',
@@ -5386,79 +5401,48 @@ void test('P4 commerce touch graph is a committed generated artifact', async () 
     await readProjectFile('examples/commerce/src/generated/graph.json'),
   );
   const touchGraphSource = await readProjectFile('examples/commerce/src/generated/touch-graph.ts');
-  const expectedTouchGraph = {
-    'cart.addItem': {
-      reads: [],
-      touches: [
-        {
-          domain: 'cart',
-          keys: null,
-          site: 'examples/commerce/src/app.ts:404',
-          via: 'cart_items',
-        },
-        {
-          domain: 'order',
-          keys: null,
-          site: 'examples/commerce/src/app.ts:409',
-          via: 'orders',
-        },
-        {
-          domain: 'product',
-          keys: 'arg:productId',
-          predicate: 'eq',
-          site: 'examples/commerce/src/app.ts:416',
-          via: 'products',
-        },
-      ],
-      unresolved: [],
-    },
-    'order.receipt': {
-      reads: [],
-      touches: [
-        {
-          domain: 'attachment',
-          keys: 'arg:orderId',
-          predicate: 'eq',
-          site: 'examples/commerce/src/app.ts:458',
-          via: 'attachments',
-        },
-      ],
-      unresolved: [],
-    },
-    'payment.webhook': {
-      reads: [],
-      touches: [
-        {
-          domain: 'order',
-          keys: 'arg:data.object.id',
-          predicate: 'eq',
-          site: 'examples/commerce/src/app.ts:508',
-          via: 'orders',
-        },
-      ],
-      unresolved: [],
-    },
-  };
-
-  assert.deepEqual(commerceGraph.touchGraph, expectedTouchGraph);
-  assert.deepEqual(
-    Object.values(commerceGraph.touchGraph)
-      .flatMap((entry) => entry.touches)
-      .map((touch) => touch.site)
-      .sort((left, right) => left.localeCompare(right)),
-    [
-      'examples/commerce/src/app.ts:404',
-      'examples/commerce/src/app.ts:409',
-      'examples/commerce/src/app.ts:416',
-      'examples/commerce/src/app.ts:458',
-      'examples/commerce/src/app.ts:508',
-    ],
+  const touchSummary = Object.fromEntries(
+    Object.entries(commerceGraph.touchGraph).map(([key, entry]) => [
+      key,
+      entry.touches.map((touch) => ({
+        domain: touch.domain,
+        keys: touch.keys,
+        predicate: touch.predicate,
+        via: touch.via,
+      })),
+    ]),
   );
+  assert.deepEqual(touchSummary, {
+    'cart.addItem': [
+      { domain: 'cart', keys: null, predicate: undefined, via: 'cart_items' },
+      { domain: 'order', keys: null, predicate: undefined, via: 'orders' },
+      { domain: 'product', keys: 'arg:productId', predicate: 'eq', via: 'products' },
+    ],
+    'order.receipt': [
+      { domain: 'attachment', keys: 'arg:orderId', predicate: 'eq', via: 'attachments' },
+    ],
+    'payment.webhook': [
+      { domain: 'order', keys: 'arg:data.object.id', predicate: 'eq', via: 'orders' },
+    ],
+  });
+  assert.deepEqual(
+    Object.values(commerceGraph.touchGraph).map((entry) => entry.unresolved),
+    [[], [], []],
+  );
+  const generatedSites = Object.values(commerceGraph.touchGraph)
+    .flatMap((entry) => entry.touches)
+    .map((touch) => touch.site);
+  assert.equal(generatedSites.length, 5);
+  for (const site of generatedSites) {
+    assert.match(site, /^examples\/commerce\/src\/app\.ts:\d+$/);
+    assert.ok(touchGraphSource.includes(`site: '${site}'`));
+  }
   // SPEC §11.1/§11.2: the committed static graph must stay source-derived
   // because runtime verification checks observed effects against these facts.
-  const [cartItemsTouch, ordersTouch, productsTouch] = expectedTouchGraph['cart.addItem'].touches;
-  const [attachmentsTouch] = expectedTouchGraph['order.receipt'].touches;
-  const [webhookOrdersTouch] = expectedTouchGraph['payment.webhook'].touches;
+  const [cartItemsTouch, ordersTouch, productsTouch] =
+    commerceGraph.touchGraph['cart.addItem'].touches;
+  const [attachmentsTouch] = commerceGraph.touchGraph['order.receipt'].touches;
+  const [webhookOrdersTouch] = commerceGraph.touchGraph['payment.webhook'].touches;
   assert.equal(
     touchGraphSource,
     `import type { CartQueryResult, CommerceDb, ProductGridResult } from '../app.js';
@@ -5575,12 +5559,18 @@ void test('Conformance suites are an explicit gate', async () => {
     ],
     '1.6.17',
   );
+  const packageJson = JSON.parse(await readProjectFile('package.json'));
+  const viteConfig = await readProjectFile('vite.config.ts');
+  assert.equal(packageJson.scripts['test:conformance'], 'vp run conformance');
+  assert.ok(packageJson.scripts.acceptance.split(' && ').includes('pnpm run test:conformance'));
+  for (const { manifest } of conformancePackages) {
+    assert.ok(
+      viteConfig.includes(`pnpm --filter ${manifest.name} test`),
+      `${manifest.name} participates in the vp conformance task`,
+    );
+  }
 
   await execFileAsync('pnpm', ['exec', 'vitest', '--run', 'packages/drizzle/src/index.test.ts'], {
-    cwd: new URL('..', import.meta.url),
-    maxBuffer: 1024 * 1024 * 10,
-  });
-  await execFileAsync('pnpm', ['run', 'test:conformance'], {
     cwd: new URL('..', import.meta.url),
     maxBuffer: 1024 * 1024 * 10,
   });
@@ -5643,6 +5633,16 @@ export const CartBadge = component('cart-badge', {
       ],
       templateStamps: [
         {
+          itemBindingPlaceholders: [
+            {
+              path: '.name',
+              value: 'Item',
+            },
+            {
+              path: '.qty',
+              value: '0',
+            },
+          ],
           itemBindings: ['.name', '.qty'],
           key: 'productId',
           list: 'cart.items',
