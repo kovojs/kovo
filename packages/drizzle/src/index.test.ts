@@ -1410,6 +1410,86 @@ export interface CommerceInvalidationSets {
     ]);
   });
 
+  it('does not leak project extraction state between repeated touch graph calls', () => {
+    const first = extractTouchGraphFromProject({
+      files: [
+        {
+          fileName: 'drizzle-types.d.ts',
+          source: `
+            declare module "drizzle-orm/pg-core" {
+              export class PgDatabase<TQueryResultHKT = unknown, TFullSchema = unknown, TSchema = unknown> {
+                update(table: unknown): { set(value: unknown): { where(value: unknown): Promise<void> } };
+              }
+            }
+          `,
+        },
+        {
+          fileName: 'schema.ts',
+          source: `
+            export const items = pgTable("cart_items", {}, jiso({ domain: "cart", key: "id" }));
+          `,
+        },
+        {
+          fileName: 'domain.ts',
+          source: [
+            'import type { PgDatabase } from "drizzle-orm/pg-core";',
+            'import { items } from "./schema";',
+            '',
+            'export async function save(writer: PgDatabase, id: string) {',
+            '  await writer.update(items).set({ id }).where(eq(items.id, id));',
+            '}',
+          ].join('\n'),
+        },
+      ],
+    });
+    const second = extractTouchGraphFromProject({
+      files: [
+        {
+          fileName: 'drizzle-types.d.ts',
+          source: `
+            declare module "drizzle-orm/pg-core" {
+              export class PgDatabase<TQueryResultHKT = unknown, TFullSchema = unknown, TSchema = unknown> {
+                update(table: unknown): { set(value: unknown): { where(value: unknown): Promise<void> } };
+              }
+            }
+          `,
+        },
+        {
+          fileName: 'schema.ts',
+          source: `
+            export const items = pgTable("order_items", {}, jiso({ domain: "order", key: "id" }));
+          `,
+        },
+        {
+          fileName: 'domain.ts',
+          source: [
+            'import type { PgDatabase } from "drizzle-orm/pg-core";',
+            'import { items } from "./schema";',
+            '',
+            'export async function save(writer: PgDatabase, id: string) {',
+            '  await writer.update(items).set({ id }).where(eq(items.id, id));',
+            '}',
+          ].join('\n'),
+        },
+      ],
+    });
+
+    expect(first).toEqual({
+      save: {
+        reads: [],
+        touches: [{ domain: 'cart', keys: 'arg:id', site: 'domain.ts:5', via: 'cart_items' }],
+        unresolved: [],
+      },
+    });
+    expect(second).toEqual({
+      save: {
+        reads: [],
+        touches: [{ domain: 'order', keys: 'arg:id', site: 'domain.ts:5', via: 'order_items' }],
+        unresolved: [],
+      },
+    });
+  });
+
   it('derives project query shapes from Drizzle column builders instead of selected aliases', () => {
     const facts = extractQueryFactsFromProject({
       files: [

@@ -215,15 +215,19 @@ function extractTouchGraphFromPreparedFiles(
 
 export function extractTouchGraphFromProject(options: TouchGraphProjectOptions): TouchGraph {
   const extraction = createProjectExtraction(options);
-  const files = sourceFilesWithProjectExtractionResolvedFromProject(extraction);
-  const projectWriteCalls = projectWriteCallsByFileName(extraction);
+  try {
+    const files = sourceFilesWithProjectExtractionResolvedFromProject(extraction);
+    const projectWriteCalls = projectWriteCallsByFileName(extraction);
 
-  return extractTouchGraphFromPreparedFiles(files, (file) =>
-    extractFunctions(file.source).map((fn) => {
-      const writeCalls = projectWriteCalls.get(file.fileName)?.get(fn.name);
-      return writeCalls ? { ...fn, writeCalls } : fn;
-    }),
-  );
+    return extractTouchGraphFromPreparedFiles(files, (file) =>
+      extractFunctions(file.source).map((fn) => {
+        const writeCalls = projectWriteCalls.get(file.fileName)?.get(fn.name);
+        return writeCalls ? { ...fn, writeCalls } : fn;
+      }),
+    );
+  } finally {
+    extraction.dispose();
+  }
 }
 
 export function extractQueryFactsFromProject(options: TouchGraphProjectOptions): QueryFact[] {
@@ -235,11 +239,17 @@ export function extractQueryFactsFromProject(options: TouchGraphProjectOptions):
 function sourceFilesWithProjectExtractionResolved(
   options: TouchGraphProjectOptions,
 ): SourceFileInput[] {
-  return sourceFilesWithProjectExtractionResolvedFromProject(createProjectExtraction(options));
+  const extraction = createProjectExtraction(options);
+  try {
+    return sourceFilesWithProjectExtractionResolvedFromProject(extraction);
+  } finally {
+    extraction.dispose();
+  }
 }
 
 interface ProjectExtraction {
   columnShapesByTable: ReadonlyMap<string, Readonly<Record<string, QueryShape>>>;
+  dispose: () => void;
   files: readonly SourceFileInput[];
   sourceFiles: readonly SourceFile[];
   tableNamesBySymbol: ReadonlyMap<string, string>;
@@ -267,6 +277,9 @@ function createProjectExtraction(options: TouchGraphProjectOptions): ProjectExtr
 
   return {
     columnShapesByTable,
+    dispose: () => {
+      for (const sourceFile of sourceFiles) sourceFile.forget();
+    },
     files: options.files,
     sourceFiles,
     tableNamesBySymbol,
@@ -519,13 +532,13 @@ function sourceColumnShapesForFiles(
     const declarations = variableDeclarationsFromSource(file.source);
     const localShapes = new Map<string, Record<string, QueryShape>>();
 
-    for (const { identifier, initializer } of declarations) {
-      if (!isAnnotatedTableInitializerNode(initializer)) continue;
+    for (const { identifier, table } of declarations) {
+      if (!table) continue;
 
-      const columns = tableColumnShapes(initializer);
+      const columns = table.columns;
       if (Object.keys(columns).length === 0) continue;
 
-      const tableName = tableNameArgument(initializer) ?? identifier;
+      const tableName = table.name;
       localShapes.set(identifier, columns);
       shapes.set(identifier, columns);
       shapes.set(tableName, columns);
@@ -534,7 +547,7 @@ function sourceColumnShapesForFiles(
     for (const declaration of declarations) {
       if (localShapes.has(declaration.identifier)) continue;
 
-      for (const target of aliasTargets(declaration.initializer.getText())) {
+      for (const target of aliasTargets(declaration.initializerText)) {
         const columns = localShapes.get(target);
         if (!columns) continue;
 
@@ -1062,13 +1075,15 @@ function nullableJoinTables(body: string): ReadonlySet<string> {
   const tables = new Set<string>();
   const relationTables: string[] = [];
 
-  for (const call of queryBodyCallExpressions(body)) {
+  for (const { operation, table } of queryBodyCallExpressions(body, (call) => {
     const operation = propertyAccessCallName(call);
-    if (!operation || !isJoinReadCallName(operation)) continue;
+    if (!operation || !isJoinReadCallName(operation)) return [];
 
     const table = staticExpressionPath(call.getArguments()[0]);
-    if (!operation || !table) continue;
+    if (!table) return [];
 
+    return [{ operation, table }];
+  })) {
     if (operation === 'leftJoin') {
       tables.add(table);
       relationTables.push(table);
@@ -1233,7 +1248,7 @@ function queryTableExpressions(body: string): string[] {
 }
 
 function queryJoinTableExpressions(body: string): string[] {
-  return queryBodyCallExpressions(body).flatMap((call) => {
+  return queryBodyCallExpressions(body, (call) => {
     const name = propertyAccessCallName(call);
     if (!name || !isQueryReadCallName(name)) return [];
 
@@ -1243,7 +1258,7 @@ function queryJoinTableExpressions(body: string): string[] {
 }
 
 function queryRelationalTableExpressions(body: string): string[] {
-  return queryBodyCallExpressions(body).flatMap((call) => {
+  return queryBodyCallExpressions(body, (call) => {
     const expression = call.getExpression();
     if (!Node.isPropertyAccessExpression(expression)) return [];
     if (expression.getName() !== 'findMany' && expression.getName() !== 'findFirst') return [];
@@ -1259,10 +1274,16 @@ function queryRelationalTableExpressions(body: string): string[] {
   });
 }
 
-function queryBodyCallExpressions(body: string): CallExpression[] {
-  return parseSourceFile(`const __jisoQueryDefinition = ${body};`)
-    .getDescendantsOfKind(SyntaxKind.CallExpression)
-    .sort((left, right) => callSourceOrder(left) - callSourceOrder(right));
+function queryBodyCallExpressions<T>(
+  body: string,
+  extract: (call: CallExpression) => readonly T[],
+): T[] {
+  return withParsedSourceFile(`const __jisoQueryDefinition = ${body};`, (sourceFile) =>
+    sourceFile
+      .getDescendantsOfKind(SyntaxKind.CallExpression)
+      .sort((left, right) => callSourceOrder(left) - callSourceOrder(right))
+      .flatMap(extract),
+  );
 }
 
 function callSourceOrder(call: CallExpression): number {
@@ -1503,16 +1524,12 @@ function extractTables(source: string): ExtractedTableDeclaration[] {
   const byIdentifier = new Map<string, ExtractedTableDeclaration[]>();
   const declarations = variableDeclarationsFromSource(source);
 
-  for (const { identifier, initializer } of declarations) {
-    if (!isAnnotatedTableInitializerNode(initializer)) continue;
-
-    const annotation = tableAnnotation(initializer);
-    if (!annotation) continue;
-
+  for (const { identifier, table: extractedTable } of declarations) {
+    if (!extractedTable) continue;
     const table = {
       identifier,
-      name: tableNameArgument(initializer) ?? identifier,
-      ...annotation,
+      name: extractedTable.name,
+      ...extractedTable.annotation,
     };
     tables.push(table);
     appendTable(byIdentifier, identifier, table);
@@ -1521,7 +1538,7 @@ function extractTables(source: string): ExtractedTableDeclaration[] {
   for (const declaration of declarations) {
     if ((byIdentifier.get(declaration.identifier)?.length ?? 0) > 0) continue;
 
-    for (const target of aliasTargets(declaration.initializer.getText())) {
+    for (const target of aliasTargets(declaration.initializerText)) {
       for (const table of byIdentifier.get(target) ?? []) {
         const alias = {
           identifier: declaration.identifier,
@@ -1586,21 +1603,46 @@ function booleanPropertyFromObject(object: Node, name: string): boolean | undefi
   return undefined;
 }
 
-function variableDeclarationsFromSource(
-  source: string,
-): { identifier: string; initializer: Node }[] {
-  return parseSourceFile(source)
-    .getVariableDeclarations()
-    .flatMap((declaration) => {
+interface SourceVariableDeclaration {
+  identifier: string;
+  initializerText: string;
+  table?: {
+    annotation: JisoTableAnnotation;
+    columns: Record<string, QueryShape>;
+    name: string;
+  };
+}
+
+function variableDeclarationsFromSource(source: string): SourceVariableDeclaration[] {
+  return withParsedSourceFile(source, (sourceFile) =>
+    sourceFile.getVariableDeclarations().flatMap((declaration) => {
       const name = declaration.getNameNode();
       const initializer = declaration.getInitializer();
       if (!initializer || !Node.isIdentifier(name)) return [];
 
-      return [{ identifier: name.getText(), initializer }];
-    });
+      const annotation = isAnnotatedTableInitializerNode(initializer)
+        ? tableAnnotation(initializer)
+        : null;
+      return [
+        {
+          identifier: name.getText(),
+          initializerText: initializer.getText(),
+          ...(annotation
+            ? {
+                table: {
+                  annotation,
+                  columns: tableColumnShapes(initializer),
+                  name: tableNameArgument(initializer) ?? name.getText(),
+                },
+              }
+            : {}),
+        },
+      ];
+    }),
+  );
 }
 
-function parseSourceFile(source: string): SourceFile {
+function withParsedSourceFile<T>(source: string, visit: (sourceFile: SourceFile) => T): T {
   const project = new Project({
     compilerOptions: {
       allowJs: false,
@@ -1612,8 +1654,13 @@ function parseSourceFile(source: string): SourceFile {
     },
     skipAddingFilesFromTsConfig: true,
   });
+  const sourceFile = project.createSourceFile(SOURCE_EXTRACTION_FILE_NAME, source);
 
-  return project.createSourceFile(SOURCE_EXTRACTION_FILE_NAME, source);
+  try {
+    return visit(sourceFile);
+  } finally {
+    sourceFile.forget();
+  }
 }
 
 function tablesForFile(
@@ -1691,7 +1738,7 @@ function extractUnresolvedConditionalIdentifiers(
   const unresolved: string[] = [];
 
   for (const declaration of variableDeclarationsFromSource(source)) {
-    const targets = conditionalBranches(declaration.initializer.getText());
+    const targets = conditionalBranches(declaration.initializerText);
     if (targets.length === 0) continue;
 
     const resolvedCount = targets.filter((target) => (tables.get(target)?.length ?? 0) > 0).length;
@@ -1714,12 +1761,11 @@ function conditionalBranches(initializer: string): string[] {
 }
 
 function extractFunctions(source: string): ExtractedFunction[] {
-  const sourceFile = parseSourceFile(source);
-  return [
+  return withParsedSourceFile(source, (sourceFile) => [
     ...extractFunctionDeclarations(sourceFile),
     ...extractVariableAssignedFunctions(sourceFile),
-    ...extractDomainWriteCallbacks(source),
-  ];
+    ...extractDomainWriteCallbacks(sourceFile),
+  ]);
 }
 
 function extractFunctionDeclarations(sourceFile: SourceFile): ExtractedFunction[] {
@@ -1752,9 +1798,8 @@ function extractVariableAssignedFunctions(sourceFile: SourceFile): ExtractedFunc
   return functions;
 }
 
-function extractDomainWriteCallbacks(source: string): ExtractedFunction[] {
+function extractDomainWriteCallbacks(sourceFile: SourceFile): ExtractedFunction[] {
   const callbacks: ExtractedFunction[] = [];
-  const sourceFile = parseSourceFile(source);
 
   for (const declaration of sourceFile.getVariableDeclarations()) {
     const domainName = declaration.getNameNode();
@@ -1856,43 +1901,46 @@ function extractDrizzleWriteCalls(
   source: string,
   receiverNames: ReadonlySet<string> = DEFAULT_DRIZZLE_RECEIVER_NAMES,
 ): ExtractedWriteCall[] {
-  const calls: ExtractedWriteCall[] = [];
   // SPEC §10-§11: source text in comments/strings must not fabricate touch-graph facts.
-  const { bodyOffset, sourceFile } = parseFunctionBodySource(source);
+  return withParsedFunctionBodySource(source, ({ bodyOffset, sourceFile }) => {
+    const calls: ExtractedWriteCall[] = [];
 
-  for (const call of sourceFile.getDescendantsOfKind(SyntaxKind.CallExpression)) {
-    if (!isDrizzleWriteCall(call)) continue;
+    for (const call of sourceFile.getDescendantsOfKind(SyntaxKind.CallExpression)) {
+      if (!isDrizzleWriteCall(call)) continue;
 
-    const expression = call.getExpression();
-    if (!Node.isPropertyAccessExpression(expression)) continue;
-    const receiver = expression.getExpression();
-    if (!Node.isIdentifier(receiver) || !receiverNames.has(receiver.getText())) continue;
+      const expression = call.getExpression();
+      if (!Node.isPropertyAccessExpression(expression)) continue;
+      const receiver = expression.getExpression();
+      if (!Node.isIdentifier(receiver) || !receiverNames.has(receiver.getText())) continue;
 
-    const chain = drizzleWriteChainRoot(call);
-    const operation = expression.getName();
-    const start = call.getStart() - bodyOffset;
-    const tableExpression = call.getArguments()[0]?.getText().trim();
-    if (start < 0 || !tableExpression) continue;
+      const chain = drizzleWriteChainRoot(call);
+      const operation = expression.getName();
+      const start = call.getStart() - bodyOffset;
+      const tableExpression = call.getArguments()[0]?.getText().trim();
+      if (start < 0 || !tableExpression) continue;
 
-    const statement = source.slice(chain.getStart() - bodyOffset, chain.getEnd() - bodyOffset);
-    calls.push({
-      index: start,
-      operation,
-      readSources: extractReadSources(statement, operation),
-      statement,
-      tableExpression,
-    });
-  }
+      const statement = source.slice(chain.getStart() - bodyOffset, chain.getEnd() - bodyOffset);
+      calls.push({
+        index: start,
+        operation,
+        readSources: extractReadSources(statement, operation),
+        statement,
+        tableExpression,
+      });
+    }
 
-  return calls;
+    return calls;
+  });
 }
 
-function parseFunctionBodySource(source: string): { bodyOffset: number; sourceFile: SourceFile } {
+function withParsedFunctionBodySource<T>(
+  source: string,
+  visit: (parsed: { bodyOffset: number; sourceFile: SourceFile }) => T,
+): T {
   const prefix = 'async function __jisoExtractedBody() {\n';
-  return {
-    bodyOffset: prefix.length,
-    sourceFile: parseSourceFile(`${prefix}${source}\n}`),
-  };
+  return withParsedSourceFile(`${prefix}${source}\n}`, (sourceFile) =>
+    visit({ bodyOffset: prefix.length, sourceFile }),
+  );
 }
 
 interface ExternalDbArgumentCall {
@@ -1905,28 +1953,31 @@ function extractExternalDbArgumentCalls(
   receiverNames: ReadonlySet<string>,
   localFunctionNames: ReadonlySet<string>,
 ): ExternalDbArgumentCall[] {
-  const calls: ExternalDbArgumentCall[] = [];
   // SPEC §10-§11: helper-call text in comments/strings/templates must not fabricate FW406 facts.
-  const { bodyOffset, sourceFile } = parseFunctionBodySource(source);
+  return withParsedFunctionBodySource(source, ({ bodyOffset, sourceFile }) => {
+    const calls: ExternalDbArgumentCall[] = [];
 
-  for (const call of sourceFile.getDescendantsOfKind(SyntaxKind.CallExpression)) {
-    const expression = call.getExpression();
-    if (!Node.isIdentifier(expression)) continue;
+    for (const call of sourceFile.getDescendantsOfKind(SyntaxKind.CallExpression)) {
+      const expression = call.getExpression();
+      if (!Node.isIdentifier(expression)) continue;
 
-    const name = expression.getText();
-    if (IGNORED_LOCAL_CALL_NAMES.has(name) || localFunctionNames.has(name)) continue;
+      const name = expression.getText();
+      if (IGNORED_LOCAL_CALL_NAMES.has(name) || localFunctionNames.has(name)) continue;
 
-    if (
-      !call.getArguments().some((arg) => Node.isIdentifier(arg) && receiverNames.has(arg.getText()))
-    ) {
-      continue;
+      if (
+        !call
+          .getArguments()
+          .some((arg) => Node.isIdentifier(arg) && receiverNames.has(arg.getText()))
+      ) {
+        continue;
+      }
+
+      const index = call.getStart() - bodyOffset;
+      if (index >= 0) calls.push({ index, name });
     }
 
-    const index = call.getStart() - bodyOffset;
-    if (index >= 0) calls.push({ index, name });
-  }
-
-  return calls;
+    return calls;
+  });
 }
 
 function extractUnclassifiedDrizzleReceiverCalls(
@@ -1943,53 +1994,55 @@ function extractReceiverExecuteCalls(
   source: string,
   receiverNames: ReadonlySet<string>,
 ): ExternalDbArgumentCall[] {
-  const calls: ExternalDbArgumentCall[] = [];
   // SPEC §10-§11: string/template text cannot fabricate unresolved touch-graph surfaces.
-  const { bodyOffset, sourceFile } = parseFunctionBodySource(source);
+  return withParsedFunctionBodySource(source, ({ bodyOffset, sourceFile }) => {
+    const calls: ExternalDbArgumentCall[] = [];
 
-  for (const call of sourceFile.getDescendantsOfKind(SyntaxKind.CallExpression)) {
-    const expression = call.getExpression();
-    if (!Node.isPropertyAccessExpression(expression)) continue;
-    if (expression.getName() !== 'execute') continue;
+    for (const call of sourceFile.getDescendantsOfKind(SyntaxKind.CallExpression)) {
+      const expression = call.getExpression();
+      if (!Node.isPropertyAccessExpression(expression)) continue;
+      if (expression.getName() !== 'execute') continue;
 
-    const receiver = expression.getExpression();
-    if (!Node.isIdentifier(receiver) || !receiverNames.has(receiver.getText())) continue;
+      const receiver = expression.getExpression();
+      if (!Node.isIdentifier(receiver) || !receiverNames.has(receiver.getText())) continue;
 
-    const index = call.getStart() - bodyOffset;
-    if (index >= 0) calls.push({ index, name: 'execute' });
-  }
+      const index = call.getStart() - bodyOffset;
+      if (index >= 0) calls.push({ index, name: 'execute' });
+    }
 
-  return calls;
+    return calls;
+  });
 }
 
 function extractRelationalQueryCalls(
   source: string,
   receiverNames: ReadonlySet<string>,
 ): ExternalDbArgumentCall[] {
-  const calls: ExternalDbArgumentCall[] = [];
   // SPEC §10-§11: string/template text cannot fabricate unresolved touch-graph surfaces.
-  const { bodyOffset, sourceFile } = parseFunctionBodySource(source);
+  return withParsedFunctionBodySource(source, ({ bodyOffset, sourceFile }) => {
+    const calls: ExternalDbArgumentCall[] = [];
 
-  for (const call of sourceFile.getDescendantsOfKind(SyntaxKind.CallExpression)) {
-    const expression = call.getExpression();
-    if (!Node.isPropertyAccessExpression(expression)) continue;
-    const method = expression.getName();
-    if (method !== 'findMany' && method !== 'findFirst') continue;
+    for (const call of sourceFile.getDescendantsOfKind(SyntaxKind.CallExpression)) {
+      const expression = call.getExpression();
+      if (!Node.isPropertyAccessExpression(expression)) continue;
+      const method = expression.getName();
+      if (method !== 'findMany' && method !== 'findFirst') continue;
 
-    const tableAccess = expression.getExpression();
-    if (!Node.isPropertyAccessExpression(tableAccess)) continue;
-    const queryAccess = tableAccess.getExpression();
-    if (!Node.isPropertyAccessExpression(queryAccess) || queryAccess.getName() !== 'query') {
-      continue;
+      const tableAccess = expression.getExpression();
+      if (!Node.isPropertyAccessExpression(tableAccess)) continue;
+      const queryAccess = tableAccess.getExpression();
+      if (!Node.isPropertyAccessExpression(queryAccess) || queryAccess.getName() !== 'query') {
+        continue;
+      }
+      const receiver = queryAccess.getExpression();
+      if (!Node.isIdentifier(receiver) || !receiverNames.has(receiver.getText())) continue;
+
+      const index = call.getStart() - bodyOffset;
+      if (index >= 0) calls.push({ index, name: `query.${method}` });
     }
-    const receiver = queryAccess.getExpression();
-    if (!Node.isIdentifier(receiver) || !receiverNames.has(receiver.getText())) continue;
 
-    const index = call.getStart() - bodyOffset;
-    if (index >= 0) calls.push({ index, name: `query.${method}` });
-  }
-
-  return calls;
+    return calls;
+  });
 }
 
 function drizzleReceiverNames(params: string, body = ''): Set<string> {
@@ -2014,24 +2067,25 @@ function drizzleReceiverNames(params: string, body = ''): Set<string> {
 }
 
 function destructuredDrizzleReceiverAliases(body: string): string[] {
-  const aliases: string[] = [];
   // SPEC §10-§11: receiver aliases in comments/strings must not fabricate FW406 surfaces.
-  const { sourceFile } = parseFunctionBodySource(body);
+  return withParsedFunctionBodySource(body, ({ sourceFile }) => {
+    const aliases: string[] = [];
 
-  for (const declaration of sourceFile.getDescendantsOfKind(SyntaxKind.VariableDeclaration)) {
-    const nameNode = declaration.getNameNode();
-    if (!Node.isObjectBindingPattern(nameNode)) continue;
+    for (const declaration of sourceFile.getDescendantsOfKind(SyntaxKind.VariableDeclaration)) {
+      const nameNode = declaration.getNameNode();
+      if (!Node.isObjectBindingPattern(nameNode)) continue;
 
-    for (const element of nameNode.getElements()) {
-      const propertyName = element.getPropertyNameNode()?.getText();
-      if (propertyName !== 'db' && propertyName !== 'tx') continue;
+      for (const element of nameNode.getElements()) {
+        const propertyName = element.getPropertyNameNode()?.getText();
+        if (propertyName !== 'db' && propertyName !== 'tx') continue;
 
-      const alias = element.getNameNode();
-      if (Node.isIdentifier(alias)) aliases.push(alias.getText());
+        const alias = element.getNameNode();
+        if (Node.isIdentifier(alias)) aliases.push(alias.getText());
+      }
     }
-  }
 
-  return aliases;
+    return aliases;
+  });
 }
 
 function isLikelyDrizzleReceiver(name: string): boolean {
@@ -2039,33 +2093,34 @@ function isLikelyDrizzleReceiver(name: string): boolean {
 }
 
 function extractReadSources(source: string, operation: string): ExtractedReadSource[] {
-  const sourceFile = parseSourceFile(source);
-  const calls = sourceFile.getDescendantsOfKind(SyntaxKind.CallExpression);
-  const sourceOperation =
-    operation === 'insert' && calls.some((call) => propertyAccessCallName(call) === 'select')
-      ? 'insert-select'
-      : operation === 'update' && calls.some((call) => propertyAccessCallName(call) === 'from')
-        ? 'update-from'
-        : null;
-  if (!sourceOperation) return [];
+  return withParsedSourceFile(source, (sourceFile) => {
+    const calls = sourceFile.getDescendantsOfKind(SyntaxKind.CallExpression);
+    const sourceOperation =
+      operation === 'insert' && calls.some((call) => propertyAccessCallName(call) === 'select')
+        ? 'insert-select'
+        : operation === 'update' && calls.some((call) => propertyAccessCallName(call) === 'from')
+          ? 'update-from'
+          : null;
+    if (!sourceOperation) return [];
 
-  const sources: ExtractedReadSource[] = [];
+    const sources: ExtractedReadSource[] = [];
 
-  for (const call of calls) {
-    if (!isReadSourceCall(call)) continue;
+    for (const call of calls) {
+      if (!isReadSourceCall(call)) continue;
 
-    const tableExpression = call.getArguments()[0]?.getText().trim();
+      const tableExpression = call.getArguments()[0]?.getText().trim();
 
-    sources.push({
-      operation: sourceOperation,
-      tableExpression: tableExpression || UNRESOLVED_READ_SOURCE_EXPRESSION,
-    });
-  }
+      sources.push({
+        operation: sourceOperation,
+        tableExpression: tableExpression || UNRESOLVED_READ_SOURCE_EXPRESSION,
+      });
+    }
 
-  // SPEC §10-§11: an opaque insert-select/update-from source is visible as FW406, not guessed.
-  return sources.length > 0
-    ? sources
-    : [{ operation: sourceOperation, tableExpression: UNRESOLVED_READ_SOURCE_EXPRESSION }];
+    // SPEC §10-§11: an opaque insert-select/update-from source is visible as FW406, not guessed.
+    return sources.length > 0
+      ? sources
+      : [{ operation: sourceOperation, tableExpression: UNRESOLVED_READ_SOURCE_EXPRESSION }];
+  });
 }
 
 function isReadSourceCall(call: CallExpression): boolean {
@@ -2099,12 +2154,13 @@ function extractPredicateSummary(
 
 function wherePredicate(statement: string): string | undefined {
   // SPEC §10-§11: predicate text inside strings/comments must not fabricate row-key facts.
-  const sourceFile = parseSourceFile(`${statement};`);
-  const whereCall = sourceFile
-    .getDescendantsOfKind(SyntaxKind.CallExpression)
-    .find((call) => propertyAccessCallName(call) === 'where');
+  return withParsedSourceFile(`${statement};`, (sourceFile) => {
+    const whereCall = sourceFile
+      .getDescendantsOfKind(SyntaxKind.CallExpression)
+      .find((call) => propertyAccessCallName(call) === 'where');
 
-  return whereCall?.getArguments()[0]?.getText().trim();
+    return whereCall?.getArguments()[0]?.getText().trim();
+  });
 }
 
 function extractParameterizedKey(
