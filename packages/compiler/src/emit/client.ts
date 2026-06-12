@@ -49,7 +49,7 @@ function emitHandlerBody(handler: HandlerLowering): string {
     return `return ${handler.expression}(event, ctx);`;
   }
 
-  const arrowBody = arrowFunctionBody(handler.expression);
+  const arrowBody = handler.arrowBody ?? arrowFunctionBody(handler.expression);
   if (!arrowBody) return '// unsupported handler expression was preserved as a diagnostic surface';
   if (arrowBody.kind === 'block') {
     return lowerHandlerExpression(arrowBody.source, handler.params);

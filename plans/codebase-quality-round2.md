@@ -456,6 +456,14 @@ pipeline throws the tree away and communicates via mutated source text.
       model explicitly. Same-session evidence:
       `pnpm exec vitest --run packages/compiler/src/index.test.ts` and
       `pnpm exec vp check packages/compiler/src/lower/handlers.ts packages/compiler/src/index.ts`.
+      Partial evidence 2026-06-12: `scan/parse.ts` now records zero-argument JSX arrow
+      attribute body facts, body property accesses, call arguments, and references on the
+      `JsxAttributeModel`; `lower/handlers.ts` consumes those parsed facts for handler capture
+      diagnostics and element-param discovery, and `emit/client.ts` consumes the parsed arrow
+      body instead of reparsing handler attribute text. Same-session evidence:
+      `pnpm exec vitest --run packages/compiler/src/scan/parse.test.ts packages/compiler/src/handler-lowering.test.ts`,
+      `pnpm exec vp check packages/compiler/src/scan/parse.ts packages/compiler/src/scan/parse.test.ts packages/compiler/src/lower/handlers.ts packages/compiler/src/emit/client.ts packages/compiler/src/types.ts`,
+      and `git diff --check`.
       Partial evidence 2026-06-11: `findFragmentTargetFacts` now consumes the existing
       `ComponentModuleModel` from `compileComponentModule`, including props-type extraction, so
       fragment-target graph facts no longer reparse lowered source with fake `component.tsx`

@@ -8,6 +8,7 @@ import {
   identifierReferences,
   jsxElements,
   type ComponentModuleModel,
+  type ZeroArgArrowModel,
 } from '../scan/parse.js';
 import { replaceExtension } from '../shared.js';
 import type {
@@ -28,7 +29,9 @@ export function lowerEventHandlers(
   for (const eventAttribute of eventAttributes(model)) {
     const { attributeEnd, attributeStart, event, expression, tag } = eventAttribute;
     const namedHandler = /^[A-Za-z_$][\w$]*$/.test(expression);
-    const params = namedHandler ? [] : extractElementParams(expression);
+    const params = namedHandler
+      ? []
+      : extractElementParams(expression, eventAttribute.zeroArgArrow);
     const eventName = event.toLowerCase();
     const exportName = namedHandler
       ? `${componentName}$${expression}`
@@ -41,7 +44,7 @@ export function lowerEventHandlers(
       );
     }
 
-    if (capturesUnserializableValue(expression)) {
+    if (capturesUnserializableValue(expression, eventAttribute.zeroArgArrow?.references)) {
       diagnostics.push(
         fw201Diagnostic(options.fileName, options.source, attributeStart, {
           attributeName: `on:${eventName}`,
@@ -58,6 +61,14 @@ export function lowerEventHandlers(
       attributeEnd,
       attributeStart,
       attributeValue: `${clientModuleUrl(options.fileName)}#${exportName}`,
+      ...(eventAttribute.zeroArgArrow
+        ? {
+            arrowBody: {
+              kind: eventAttribute.zeroArgArrow.bodyKind,
+              source: eventAttribute.zeroArgArrow.body,
+            },
+          }
+        : {}),
       ...(primaryDiagnostic ? { diagnostic: primaryDiagnostic, diagnostics } : {}),
       expression,
       exportName,
@@ -126,6 +137,7 @@ function eventAttributes(model: ComponentModuleModel): Array<{
   event: string;
   expression: string;
   tag: string;
+  zeroArgArrow?: ZeroArgArrowModel;
 }> {
   const attributes: Array<{
     attributeEnd: number;
@@ -133,6 +145,7 @@ function eventAttributes(model: ComponentModuleModel): Array<{
     event: string;
     expression: string;
     tag: string;
+    zeroArgArrow?: ZeroArgArrowModel;
   }> = [];
 
   for (const element of jsxElements(model)) {
@@ -145,6 +158,7 @@ function eventAttributes(model: ComponentModuleModel): Array<{
         event,
         expression: attribute.expression,
         tag: element.tag,
+        ...(attribute.zeroArgArrow ? { zeroArgArrow: attribute.zeroArgArrow } : {}),
       });
     }
   }
@@ -170,8 +184,13 @@ function uniqueAnonymousHandlerName(
   return count === 1 ? base : `${base}_${count}`;
 }
 
-export function capturesUnserializableValue(expression: string): boolean {
-  const references = new Set(identifierReferences('expression.tsx', expression));
+export function capturesUnserializableValue(
+  expression: string,
+  parsedReferences?: readonly string[],
+): boolean {
+  const references = new Set(
+    parsedReferences ?? identifierReferences('expression.tsx', expression),
+  );
   return ['window', 'document', 'db', 'request', 'response', 'Date', 'Map', 'Set'].some((name) =>
     references.has(name),
   );
@@ -201,8 +220,11 @@ function fw201Diagnostic(
   };
 }
 
-function extractElementParams(expression: string): ElementParam[] {
-  const callArguments = zeroArgArrowCallArguments(expression);
+function extractElementParams(
+  expression: string,
+  zeroArgArrow?: ZeroArgArrowModel,
+): ElementParam[] {
+  const callArguments = zeroArgArrow?.callArguments ?? zeroArgArrowCallArguments(expression);
   const expressions = callArguments
     ? callArguments
         .map((arg) => arg.trim())
@@ -212,7 +234,7 @@ function extractElementParams(expression: string): ElementParam[] {
           const members = serializableMemberExpressions(arg);
           return members.length > 0 ? members : [arg];
         })
-    : serializableMemberExpressions(expression);
+    : serializableMemberExpressions(expression, zeroArgArrow);
 
   return dedupeStrings(expressions).map((arg) => ({
     attributeName: `data-p-${paramNameForExpression(arg)}`,
@@ -376,8 +398,11 @@ function isNumericLiteral(node: ts.Node, sourceFile: ts.SourceFile): boolean {
   return /^-?\d(?:\d|\.)*$/.test(node.getText(sourceFile));
 }
 
-function serializableMemberExpressions(expression: string): string[] {
-  return collectSerializableMemberExpressions(expression).filter(
+function serializableMemberExpressions(
+  expression: string,
+  zeroArgArrow?: ZeroArgArrowModel,
+): string[] {
+  return collectSerializableMemberExpressions(expression, zeroArgArrow).filter(
     (member) =>
       !member.startsWith('state.') &&
       !member.startsWith('ctx.') &&
@@ -386,7 +411,12 @@ function serializableMemberExpressions(expression: string): string[] {
   );
 }
 
-function collectSerializableMemberExpressions(expression: string): string[] {
+function collectSerializableMemberExpressions(
+  expression: string,
+  zeroArgArrow?: ZeroArgArrowModel,
+): string[] {
+  if (zeroArgArrow) return zeroArgArrow.bodyPropertyAccesses.map((access) => access.path);
+
   return functionBodyPropertyAccessPaths('handler-expression.ts', expression);
 }
 

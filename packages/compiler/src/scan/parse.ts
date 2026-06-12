@@ -67,6 +67,7 @@ export interface JsxAttributeModel {
   name: string;
   start: number;
   value?: string;
+  zeroArgArrow?: ZeroArgArrowModel;
 }
 
 export interface JsxElementModel {
@@ -77,6 +78,16 @@ export interface JsxElementModel {
   selfClosing: boolean;
   start: number;
   tag: string;
+}
+
+export interface ZeroArgArrowModel {
+  body: string;
+  bodyEnd: number;
+  bodyKind: 'block' | 'expression';
+  bodyPropertyAccesses: readonly PropertyAccessPathModel[];
+  bodyStart: number;
+  callArguments?: readonly string[];
+  references: readonly string[];
 }
 
 export interface ComponentModel {
@@ -906,7 +917,12 @@ function jsxAttributeExpression(
   sourceFile: ts.SourceFile,
   source: string,
   attribute: ts.JsxAttribute,
-): { expression: string; expressionEnd: number; expressionStart: number } | null {
+): {
+  expression: string;
+  expressionEnd: number;
+  expressionStart: number;
+  zeroArgArrow?: ZeroArgArrowModel;
+} | null {
   const initializer = attribute.initializer;
   if (!initializer || !ts.isJsxExpression(initializer) || !initializer.expression) return null;
 
@@ -916,7 +932,56 @@ function jsxAttributeExpression(
     expression: source.slice(expressionStart, expressionEnd).trim(),
     expressionEnd,
     expressionStart,
+    ...zeroArgArrowModel(sourceFile, source, initializer.expression),
   };
+}
+
+function zeroArgArrowModel(
+  sourceFile: ts.SourceFile,
+  source: string,
+  expression: ts.Expression,
+): { zeroArgArrow: ZeroArgArrowModel } | {} {
+  if (!ts.isArrowFunction(expression) || expression.parameters.length > 0) return {};
+
+  const body = expression.body;
+  const bodyStart = ts.isBlock(body) ? body.getStart(sourceFile) + 1 : body.getStart(sourceFile);
+  const bodyEnd = ts.isBlock(body) ? body.getEnd() - 1 : body.getEnd();
+  const bodySource = source.slice(bodyStart, bodyEnd).trim();
+  const callArguments =
+    !ts.isBlock(body) && ts.isCallExpression(body)
+      ? body.arguments.map((argument) =>
+          source.slice(argument.getStart(sourceFile), argument.getEnd()),
+        )
+      : undefined;
+
+  return {
+    zeroArgArrow: {
+      body: bodySource,
+      bodyEnd,
+      bodyKind: ts.isBlock(body) ? 'block' : 'expression',
+      bodyPropertyAccesses: propertyAccessPathModels(sourceFile, body),
+      bodyStart,
+      ...(callArguments === undefined ? {} : { callArguments }),
+      references: referenceIdentifiers(body),
+    },
+  };
+}
+
+function referenceIdentifiers(root: ts.Node): string[] {
+  const declared = new Set<string>();
+  const referenced: string[] = [];
+
+  const visit = (node: ts.Node): void => {
+    if (ts.isIdentifier(node)) {
+      if (isDeclaredIdentifier(node)) declared.add(node.text);
+      if (isReferenceIdentifier(node)) referenced.push(node.text);
+    }
+
+    ts.forEachChild(node, visit);
+  };
+
+  visit(root);
+  return referenced.filter((name) => !declared.has(name));
 }
 
 function arrowObjectPatternKeys(

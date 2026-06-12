@@ -88,10 +88,16 @@ export interface HandlerLowering {
   attributeEnd: number;
   attributeStart: number;
   attributeValue: string;
+  arrowBody?: HandlerArrowBody;
   expression: string;
   params: ElementParam[];
   diagnostic?: CompilerDiagnostic;
   diagnostics?: readonly CompilerDiagnostic[];
+}
+
+export interface HandlerArrowBody {
+  kind: 'block' | 'expression';
+  source: string;
 }
 
 export interface ElementParam {

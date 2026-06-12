@@ -4,6 +4,7 @@ import {
   arrowFunctionParts,
   documentElementActionFromZeroArgArrow,
   functionBodyPropertyAccessPaths,
+  jsxElements,
   mutationHandlers,
   parseComponentModule,
   solePropertyAccessPath,
@@ -81,6 +82,38 @@ export const save = mutation('cart/save', {
       'productGrid',
     ]);
     expect(stringLiteralArrayValues('expression.tsx', '[cart]')).toBeNull();
+  });
+
+  it('records zero-argument JSX arrow attribute body facts', () => {
+    const source = `
+export const CartActions = component('cart-actions', {
+  render: () => (
+    <button onClick={() => { log('item.id'); state.count += item.quantity; }}>Add</button>
+  ),
+});
+`;
+    const [button] = jsxElements(parseComponentModule('cart-actions.tsx', source));
+    const click = button?.attributes.find((attribute) => attribute.name === 'onClick');
+
+    expect(click?.zeroArgArrow).toEqual({
+      body: "log('item.id'); state.count += item.quantity;",
+      bodyEnd: source.indexOf(' }}>Add') + 1,
+      bodyKind: 'block',
+      bodyPropertyAccesses: [
+        {
+          end: source.indexOf('state.count') + 'state.count'.length,
+          path: 'state.count',
+          start: source.indexOf('state.count'),
+        },
+        {
+          end: source.indexOf('item.quantity') + 'item.quantity'.length,
+          path: 'item.quantity',
+          start: source.indexOf('item.quantity'),
+        },
+      ],
+      bodyStart: source.indexOf(" log('item.id');"),
+      references: ['log', 'state', 'item'],
+    });
   });
 
   it('extracts concise arrow function parts through the TypeScript parser', () => {
