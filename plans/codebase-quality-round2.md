@@ -879,6 +879,15 @@ land it first; don't fork it.
       Same-session evidence:
       `pnpm exec vitest --run packages/server/src/shell.test.ts packages/server/src/index.test.ts`
       and `pnpm exec vp check packages/server/src/index.ts packages/server/src/shell.ts`.
+      Additional evidence 2026-06-12: cookie validation/serialization moved from
+      `packages/server/src/index.ts` into `packages/server/src/cookies.ts`, preserving the
+      `CookieOptions` public type export through `index.ts`; `packages/server/src/cookies.test.ts`
+      covers structured `Set-Cookie` serialization plus raw/structured rejection branches for
+      empty raw values, control characters, bad names, semicolon values, non-integer `Max-Age`,
+      and invalid paths. Same-session evidence:
+      `pnpm exec vitest --run packages/server/src/cookies.test.ts packages/server/src/index.test.ts`
+      and
+      `pnpm exec vp check --fix packages/server/src/index.ts packages/server/src/cookies.ts packages/server/src/cookies.test.ts`.
 
 Verification: server vitest + wire fixtures byte-for-byte (remove the newline fudge at
 index.test.ts:4227 while here — it weakens the byte-for-byte claim) + acceptance.
