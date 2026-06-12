@@ -11,6 +11,10 @@ import type {
   QueryUpdatePlanFact,
 } from '../types.js';
 
+export interface HandlerExpressionLowering {
+  replacements: SourceReplacement[];
+}
+
 export function emitClientModule(
   handlers: HandlerLowering[],
   queryUpdatePlans: readonly QueryUpdatePlanFact[],
@@ -98,6 +102,16 @@ function arrowFunctionBody(
 }
 
 function lowerHandlerExpression(expression: string, params: readonly ElementParam[]): string {
+  return applySourceReplacements(
+    expression,
+    handlerExpressionLowering(expression, params).replacements,
+  );
+}
+
+export function handlerExpressionLowering(
+  expression: string,
+  params: readonly ElementParam[],
+): HandlerExpressionLowering {
   const replacements: SourceReplacement[] = [];
   const sourceFile = ts.createSourceFile(
     'handler-expression.ts',
@@ -145,7 +159,7 @@ function lowerHandlerExpression(expression: string, params: readonly ElementPara
 
   visit(sourceFile);
 
-  return applySourceReplacements(expression, replacements);
+  return { replacements };
 }
 
 function isSerializableExpressionNode(node: ts.Node): boolean {

@@ -819,6 +819,15 @@ pipeline throws the tree away and communicates via mutated source text.
       `pnpm exec vitest --run packages/compiler/src/scan/parse.test.ts packages/compiler/src/handler-lowering.test.ts -t "handler property access|element param types|AST usage contexts|string literal comparisons"`,
       `pnpm exec vp check --fix packages/compiler/src/scan/parse.ts packages/compiler/src/lower/handlers.ts`,
       and `git diff --check`.
+      Additional evidence 2026-06-12: `emit/client.ts` now exposes
+      `handlerExpressionLowering(expression, params).replacements`, so client handler body
+      rewriting is available as explicit AST-derived `SourceReplacement` patch data before the
+      existing emitter compatibility path applies it. `handler-lowering.test.ts` pins the exact
+      source spans for `state` and element-param rewrites while preserving string-literal text.
+      Same-session evidence:
+      `pnpm exec vitest --run packages/compiler/src/handler-lowering.test.ts`,
+      `pnpm exec vitest --run packages/compiler/src`, and
+      `pnpm exec vp check --fix packages/compiler/src/emit/client.ts packages/compiler/src/handler-lowering.test.ts`.
 - [x] **HIGH — Kill the derive mega-regex.** validate/bindings.ts:215-216 silently drops any
       `derive()` export whose expression contains `;` in a string or unusual formatting — its
       stamps vanish from `collectQueryUpdatePlans` with no diagnostic. scan/parse.ts already
