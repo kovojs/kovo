@@ -159,6 +159,15 @@ Do this first or pay it on every commit.
       URL facts instead of grepping transformed module source for `diagnostic-card`. Verification:
       `pnpm run check:build`, `node --test --test-name-pattern "D10 seeded diagnostics gate Vite,
       static export, and MCP red-green surfaces" tests/fw-check.node.mjs`, and `git diff --check`.
+      Partial evidence 2026-06-12: the D10 static-export tranche now parses generated HTML
+      element attributes and checks API artifact/file body agreement for `exportStaticApp` and
+      `fw export`, instead of regex-matching generated HTML text.
+      Same-session evidence:
+      `corepack pnpm run check:build`,
+      `node --test --test-name-pattern "D10 seeded diagnostics gate Vite, static export, and MCP
+      red-green surfaces" tests/fw-check.node.mjs`,
+      `corepack pnpm exec vp check tests/fw-check.node.mjs plans/codebase-quality-round2.md`,
+      and `git diff --check`.
       Partial evidence 2026-06-11: the P9 `@jiso/test` harness tranche now imports the built
       harness APIs and exercises mutation execution/CSRF, write/read verification, PGlite raw
       handle and transaction proxying, exempt table behavior, nested SQL read/write extraction,

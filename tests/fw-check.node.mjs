@@ -407,6 +407,16 @@ const parseHtmlElements = (source) => {
   return elements;
 };
 
+const assertHtmlMainMarker = (source, marker, message) => {
+  assert.equal(
+    parseHtmlElements(source).find((element) => element.tagName === 'main')?.attributes[
+      'data-fw-check-export'
+    ],
+    marker,
+    message,
+  );
+};
+
 const normalizeMarkdownCell = (value) =>
   value
     .replace(/`([^`]+)`/g, '$1')
@@ -5004,7 +5014,7 @@ export default {
   const app = createApp({
     routes: [
       serverRoute('/', {
-        page: () => '<main>D10 export green</main>',
+        page: () => '<main data-fw-check-export="api"></main>',
       }),
     ],
   });
@@ -5044,7 +5054,9 @@ export default {
     const exported = await exportStaticApp(app, { diagnostics: [lintDiagnostic], outDir });
     assert.equal(exported.artifacts[0]?.path, '/index.html');
     assert.equal(exported.diagnostics.length, 0);
-    assert.match(await readFile(join(outDir, 'index.html'), 'utf8'), /D10 export green/);
+    const exportedHtml = await readFile(join(outDir, 'index.html'), 'utf8');
+    assert.equal(exported.artifacts[0]?.body, exportedHtml);
+    assertHtmlMainMarker(exportedHtml, 'api', 'static export writes the rendered main marker');
   } finally {
     await rm(outDir, { force: true, recursive: true });
   }
@@ -5064,7 +5076,7 @@ export const diagnostics = ${JSON.stringify(diagnostics, null, 2)};
 export default createApp({
   routes: [
     serverRoute('/', {
-      page: () => '<main>D10 fw export green</main>',
+      page: () => '<main data-fw-check-export="cli"></main>',
     }),
   ],
 });
@@ -5089,7 +5101,11 @@ export default createApp({
     assert.match(greenExport.stdout, /fw-export\/v1/);
     assert.match(greenExport.stdout, /HTML \/index\.html status=200 bytes=/);
     assert.match(greenExport.stdout, /SUMMARY html=1 clientModules=0 diagnostics=0/);
-    assert.match(await readFile(join(cliGreenOutDir, 'index.html'), 'utf8'), /D10 fw export green/);
+    assertHtmlMainMarker(
+      await readFile(join(cliGreenOutDir, 'index.html'), 'utf8'),
+      'cli',
+      'fw export writes the rendered main marker',
+    );
   } finally {
     await rm(cliFixtureRoot, { force: true, recursive: true });
   }
