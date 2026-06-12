@@ -330,6 +330,49 @@ export const CartActions = component('cart-actions', {
     expect(clientSource).not.toContain('ctx.params.id');
   });
 
+  it('does not infer element param types from string literal comparisons', () => {
+    const result = compileComponentModule({
+      fileName: 'components/cart/cart-actions.tsx',
+      source: `
+import { component } from '@jiso/core';
+
+export const CartActions = component('cart-actions', {
+  render: () => (
+    <button onClick={() => track(item.quantity, 'item.quantity > 0')}>Add</button>
+  ),
+});
+`,
+    });
+
+    const serverSource = result.files[0]?.source ?? '';
+    const clientSource = result.files[1]?.source ?? '';
+
+    expect(serverSource).toContain('data-p-quantity="{item.quantity}"');
+    expect(serverSource).not.toContain('fw-param-types="quantity:number"');
+    expect(clientSource).toContain("return track(ctx.params.quantity, 'item.quantity > 0');");
+  });
+
+  it('infers element param types from AST usage contexts', () => {
+    const result = compileComponentModule({
+      fileName: 'components/cart/cart-actions.tsx',
+      source: `
+import { component } from '@jiso/core';
+
+export const CartActions = component('cart-actions', {
+  render: () => (
+    <button onClick={() => track(item.quantity > 0, !item.selected)}>Add</button>
+  ),
+});
+`,
+    });
+
+    const serverSource = result.files[0]?.source ?? '';
+
+    expect(serverSource).toContain('data-p-quantity="{item.quantity}"');
+    expect(serverSource).toContain('data-p-selected="{item.selected}"');
+    expect(serverSource).toContain('fw-param-types="quantity:number,selected:boolean"');
+  });
+
   it('ignores event handler text inside strings and comments', () => {
     const result = compileComponentModule({
       fileName: 'components/cart/cart-actions.tsx',

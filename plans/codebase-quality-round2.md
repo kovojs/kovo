@@ -438,6 +438,13 @@ pipeline throws the tree away and communicates via mutated source text.
       `pnpm exec vitest --run packages/compiler/src/index.test.ts -t "element params|handler captures|quoted commas|string literal text"`,
       `pnpm exec vitest --run packages/compiler/src/index.test.ts`, and
       `pnpm exec vp check packages/compiler/src/lower/handlers.ts packages/compiler/src/index.test.ts`.
+      Additional evidence 2026-06-11: element-param boolean/number type inference now uses AST
+      parent-context checks instead of regexes over the whole handler expression, so numeric- or
+      boolean-looking text inside strings cannot change `fw-param-types`; real comparison and
+      boolean contexts still infer typed params. Same-session evidence:
+      `pnpm exec vitest --run packages/compiler/src/index.test.ts -t "element param types|element params|handler captures|quoted commas|string literal"`,
+      `pnpm exec vitest --run packages/compiler/src/index.test.ts`, and
+      `pnpm exec vp check packages/compiler/src/lower/handlers.ts packages/compiler/src/index.test.ts`.
 - [ ] **HIGH — Kill the derive mega-regex.** validate/bindings.ts:215-216 silently drops any
       `derive()` export whose expression contains `;` in a string or unusual formatting — its
       stamps vanish from `collectQueryUpdatePlans` with no diagnostic. scan/parse.ts already

@@ -242,34 +242,129 @@ function extractElementParams(expression: string): ElementParam[] {
 }
 
 function inferElementParamType(expression: string, sourceExpression: string): ElementParamType {
-  const ref = sourceExpressionRef(sourceExpression);
-  if (usedAsBoolean(expression, ref)) return 'boolean';
-  if (usedAsNumber(expression, ref)) return 'number';
+  if (usedAsBoolean(expression, sourceExpression)) return 'boolean';
+  if (usedAsNumber(expression, sourceExpression)) return 'number';
 
   return 'string';
 }
 
-function sourceExpressionRef(sourceExpression: string): string {
-  return `(?<![\\w$])${escapeRegExp(sourceExpression)}(?![\\w$])`;
+function usedAsBoolean(expression: string, sourceExpression: string): boolean {
+  return expressionUsesParam(expression, sourceExpression, (node, sourceFile) => {
+    const parent = node.parent;
+
+    if (ts.isPrefixUnaryExpression(parent) && parent.operator === ts.SyntaxKind.ExclamationToken) {
+      return parent.operand === node;
+    }
+
+    if (ts.isConditionalExpression(parent) && parent.condition === node) return true;
+    if (ts.isIfStatement(parent) && parent.expression === node) return true;
+    if (ts.isWhileStatement(parent) && parent.expression === node) return true;
+    if (ts.isDoStatement(parent) && parent.expression === node) return true;
+
+    if (!ts.isBinaryExpression(parent)) return false;
+
+    if (
+      parent.operatorToken.kind === ts.SyntaxKind.AmpersandAmpersandToken ||
+      parent.operatorToken.kind === ts.SyntaxKind.BarBarToken
+    ) {
+      return parent.left === node || parent.right === node;
+    }
+
+    return (
+      isEqualityOperator(parent.operatorToken.kind) &&
+      ((parent.left === node && isBooleanLiteral(parent.right, sourceFile)) ||
+        (parent.right === node && isBooleanLiteral(parent.left, sourceFile)))
+    );
+  });
 }
 
-function usedAsBoolean(expression: string, ref: string): boolean {
+function usedAsNumber(expression: string, sourceExpression: string): boolean {
+  return expressionUsesParam(expression, sourceExpression, (node, sourceFile) => {
+    const parent = node.parent;
+    if (!ts.isBinaryExpression(parent)) return false;
+
+    if (
+      isArithmeticOperator(parent.operatorToken.kind) ||
+      isArithmeticAssignmentOperator(parent.operatorToken.kind)
+    ) {
+      return parent.left === node || parent.right === node;
+    }
+
+    return (
+      (isEqualityOperator(parent.operatorToken.kind) ||
+        isOrderingOperator(parent.operatorToken.kind)) &&
+      ((parent.left === node && isNumericLiteral(parent.right, sourceFile)) ||
+        (parent.right === node && isNumericLiteral(parent.left, sourceFile)))
+    );
+  });
+}
+
+function expressionUsesParam(
+  expression: string,
+  sourceExpression: string,
+  predicate: (node: ts.Node, sourceFile: ts.SourceFile) => boolean,
+): boolean {
+  const sourceFile = handlerExpressionSourceFile(expression);
+  let matched = false;
+
+  const visit = (node: ts.Node): void => {
+    if (matched) return;
+    if (node.getText(sourceFile) === sourceExpression && predicate(node, sourceFile)) {
+      matched = true;
+      return;
+    }
+
+    ts.forEachChild(node, visit);
+  };
+
+  visit(sourceFile);
+  return matched;
+}
+
+function isEqualityOperator(kind: ts.SyntaxKind): boolean {
   return (
-    new RegExp(`!\\s*${ref}`).test(expression) ||
-    new RegExp(`${ref}\\s*(?:\\?|&&|\\|\\|)`).test(expression) ||
-    new RegExp(`(?:&&|\\|\\|)\\s*${ref}`).test(expression) ||
-    new RegExp(`${ref}\\s*(?:===|!==|==|!=)\\s*(?:true|false)\\b`).test(expression) ||
-    new RegExp(`(?:true|false)\\s*(?:===|!==|==|!=)\\s*${ref}`).test(expression)
+    kind === ts.SyntaxKind.EqualsEqualsEqualsToken ||
+    kind === ts.SyntaxKind.ExclamationEqualsEqualsToken ||
+    kind === ts.SyntaxKind.EqualsEqualsToken ||
+    kind === ts.SyntaxKind.ExclamationEqualsToken
   );
 }
 
-function usedAsNumber(expression: string, ref: string): boolean {
+function isOrderingOperator(kind: ts.SyntaxKind): boolean {
   return (
-    new RegExp(`(?:[+\\-*/%]=|[-*/%])\\s*${ref}`).test(expression) ||
-    new RegExp(`${ref}\\s*(?:[-*/%]|[+\\-*/%]=)`).test(expression) ||
-    new RegExp(`${ref}\\s*(?:===|!==|==|!=|[<>]=?)\\s*-?\\d`).test(expression) ||
-    new RegExp(`-?\\d(?:\\.\\d+)?\\s*(?:===|!==|==|!=|[<>]=?)\\s*${ref}`).test(expression)
+    kind === ts.SyntaxKind.LessThanToken ||
+    kind === ts.SyntaxKind.LessThanEqualsToken ||
+    kind === ts.SyntaxKind.GreaterThanToken ||
+    kind === ts.SyntaxKind.GreaterThanEqualsToken
   );
+}
+
+function isArithmeticOperator(kind: ts.SyntaxKind): boolean {
+  return (
+    kind === ts.SyntaxKind.MinusToken ||
+    kind === ts.SyntaxKind.AsteriskToken ||
+    kind === ts.SyntaxKind.SlashToken ||
+    kind === ts.SyntaxKind.PercentToken
+  );
+}
+
+function isArithmeticAssignmentOperator(kind: ts.SyntaxKind): boolean {
+  return (
+    kind === ts.SyntaxKind.PlusEqualsToken ||
+    kind === ts.SyntaxKind.MinusEqualsToken ||
+    kind === ts.SyntaxKind.AsteriskEqualsToken ||
+    kind === ts.SyntaxKind.SlashEqualsToken ||
+    kind === ts.SyntaxKind.PercentEqualsToken
+  );
+}
+
+function isBooleanLiteral(node: ts.Node, sourceFile: ts.SourceFile): boolean {
+  const text = node.getText(sourceFile);
+  return text === 'true' || text === 'false';
+}
+
+function isNumericLiteral(node: ts.Node, sourceFile: ts.SourceFile): boolean {
+  return /^-?\d(?:\d|\.)*$/.test(node.getText(sourceFile));
 }
 
 function serializableMemberExpressions(expression: string): string[] {
@@ -283,13 +378,7 @@ function serializableMemberExpressions(expression: string): string[] {
 }
 
 function collectSerializableMemberExpressions(expression: string): string[] {
-  const sourceFile = ts.createSourceFile(
-    'handler-expression.ts',
-    `function __jiso_handler__() {\n${expression}\n}`,
-    ts.ScriptTarget.Latest,
-    true,
-    ts.ScriptKind.TS,
-  );
+  const sourceFile = handlerExpressionSourceFile(expression);
   const members: string[] = [];
 
   const visit = (node: ts.Node): void => {
@@ -307,6 +396,16 @@ function collectSerializableMemberExpressions(expression: string): string[] {
 
   visit(sourceFile);
   return members;
+}
+
+function handlerExpressionSourceFile(expression: string): ts.SourceFile {
+  return ts.createSourceFile(
+    'handler-expression.ts',
+    `function __jiso_handler__() {\n${expression}\n}`,
+    ts.ScriptTarget.Latest,
+    true,
+    ts.ScriptKind.TS,
+  );
 }
 
 function propertyAccessPath(expression: ts.PropertyAccessExpression): string | null {
@@ -398,8 +497,4 @@ function paramNameFromAttribute(attributeName: string): string {
   return attributeName
     .replace(/^data-p-/, '')
     .replace(/-([a-z0-9])/g, (_, char: string) => char.toUpperCase());
-}
-
-function escapeRegExp(value: string): string {
-  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
