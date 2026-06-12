@@ -368,6 +368,10 @@ tests/fw-check.node.mjs` passed.
       instead of grepping broad doc prose. Verification: focused `node --test
       --test-name-pattern "P10 normative docs|P10 legibility|P10 v1 acceptance|pre-launch
       checklist" tests/fw-check.node.mjs` passed.
+      Partial evidence 2026-06-12: the P10 pre-launch ledger-honesty tranche records a dated
+      local audit row for the required pre-launch evidence sections and keeps the external
+      trademark/domain/npm-scope/linguistic rows pending; `tests/fw-check.node.mjs` now asserts
+      that distinction instead of accepting only the presence of the checklist headings.
 - [x] **Make create-jiso templates real files** (`create-jiso/src/index.ts:63-473`, ~470 lines of
       escaped template literals including a CI workflow and double-escaped regexes inside
       `.mjs`-in-string). Move to a `templates/` directory copied at scaffold time with `{{name}}`

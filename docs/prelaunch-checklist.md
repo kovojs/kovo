@@ -22,10 +22,11 @@ Last checklist audit: 2026-06-12.
 This ledger records the pre-launch checklist state without treating missing
 external evidence as completion.
 
-| Date       | Reviewer | Scope checked                                                                                  | Result                                                                                                | Status  |
-| ---------- | -------- | ---------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------- | ------- |
-| 2026-06-12 | TBD      | Required P10 checks: trademark screen, `jiso.dev`, `@jiso` npm scope, and linguistic screen.   | All four required evidence ledgers exist; none contains completion evidence.                          | pending |
-| 2026-06-12 | TBD      | Local runnable references in `docs/v1-acceptance.md` and the repository `pnpm run acceptance`. | Local acceptance command is documented separately; it cannot replace external launch-readiness proof. | pending |
+| Date       | Reviewer | Scope checked                                                                                  | Result                                                                                                | Status                                  |
+| ---------- | -------- | ---------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------- | --------------------------------------- |
+| 2026-06-12 | TBD      | Required P10 checks: trademark screen, `jiso.dev`, `@jiso` npm scope, and linguistic screen.   | All four required evidence ledgers exist; none contains completion evidence.                          | pending                                 |
+| 2026-06-12 | TBD      | Local runnable references in `docs/v1-acceptance.md` and the repository `pnpm run acceptance`. | Local acceptance command is documented separately; it cannot replace external launch-readiness proof. | pending                                 |
+| 2026-06-12 | Codex    | Ledger honesty audit of every required pre-launch evidence section.                            | Required sections are present and each section keeps the absence of external evidence explicit.       | packet ready; external evidence pending |
 
 ## Runnable Local Checklist
 

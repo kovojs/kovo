@@ -26,12 +26,13 @@ This audit records the state of the acceptance evidence packet on 2026-06-12.
 It keeps local runnability separate from the external evidence required by SPEC
 §16.2 and the Phase 10 pre-launch checklist.
 
-| Date       | Reviewer | Area                         | Evidence inspected                                                                                     | Result                                                                          | Status                  |
-| ---------- | -------- | ---------------------------- | ------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------- | ----------------------- |
-| 2026-06-12 | TBD      | SPEC §16 acceptance map      | Required Gates table in this document against `SPEC.md` section 16.                                    | Every SPEC §16 criterion has a row and a named evidence source or ledger.       | ready to run            |
-| 2026-06-12 | TBD      | Outside legibility study     | `docs/legibility-study.md` protocol, pending result rows, dated readiness ledger, and completion rule. | Runnable study packet exists; five outside-developer sessions are not recorded. | pending external study  |
-| 2026-06-12 | TBD      | Pre-launch external checks   | `docs/prelaunch-checklist.md` required checks and evidence ledgers.                                    | Trademark, domain, npm-scope, and linguistic evidence remain missing.           | pending external checks |
-| 2026-06-12 | Codex    | Local integration acceptance | `pnpm run acceptance` at commit `5e693a7`.                                                             | check, test, browser, build, perf, conformance, and fw-check gates passed.      | passed local run        |
+| Date       | Reviewer | Area                         | Evidence inspected                                                                                     | Result                                                                          | Status                                  |
+| ---------- | -------- | ---------------------------- | ------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------- | --------------------------------------- |
+| 2026-06-12 | TBD      | SPEC §16 acceptance map      | Required Gates table in this document against `SPEC.md` section 16.                                    | Every SPEC §16 criterion has a row and a named evidence source or ledger.       | ready to run                            |
+| 2026-06-12 | TBD      | Outside legibility study     | `docs/legibility-study.md` protocol, pending result rows, dated readiness ledger, and completion rule. | Runnable study packet exists; five outside-developer sessions are not recorded. | pending external study                  |
+| 2026-06-12 | TBD      | Pre-launch external checks   | `docs/prelaunch-checklist.md` required checks and evidence ledgers.                                    | Trademark, domain, npm-scope, and linguistic evidence remain missing.           | pending external checks                 |
+| 2026-06-12 | Codex    | Local integration acceptance | `pnpm run acceptance` at commit `5e693a7`.                                                             | check, test, browser, build, perf, conformance, and fw-check gates passed.      | passed local run                        |
+| 2026-06-12 | Codex    | Pre-launch ledger honesty    | `docs/prelaunch-checklist.md` Dated Audit Ledger plus the four required evidence ledger sections.      | Evidence packet is reviewable; external launch evidence is still absent.        | packet ready; external evidence pending |
 
 ## Acceptance Command Set
 

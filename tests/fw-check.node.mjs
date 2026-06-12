@@ -1158,6 +1158,7 @@ void test('P10 v1 acceptance ledger tracks every freeze criterion', async () => 
   ).map((item) => item.split(':')[0]);
   const gateRows = parseMarkdownTable(markdownSection(ledger, 'Required Gates'));
   const gatesByCriterion = new Map(gateRows.map((row) => [row['SPEC §16 criterion'], row]));
+  const auditRows = parseMarkdownTable(markdownSection(ledger, 'Dated Ledger Audit'));
   const freezeRule = normalizeMarkdownCell(markdownSection(ledger, 'Freeze Rule'));
 
   assert.ok(
@@ -1192,11 +1193,28 @@ void test('P10 v1 acceptance ledger tracks every freeze criterion', async () => 
     freezeRule.includes('docs/prelaunch-checklist.md'),
     'freeze rule requires pre-launch evidence',
   );
+  assert.ok(
+    auditRows.some(
+      (row) =>
+        row.Area === 'Pre-launch ledger honesty' &&
+        row['Evidence inspected'].includes('docs/prelaunch-checklist.md Dated Audit Ledger') &&
+        row.Result.includes('external launch evidence is still absent') &&
+        row.Status === 'packet ready; external evidence pending',
+    ),
+    'acceptance ledger records the pre-launch packet audit without claiming completion',
+  );
 });
 
 void test('pre-launch checklist is tracked explicitly', async () => {
   const checklist = await readProjectFile('docs/prelaunch-checklist.md');
   const requiredChecks = parseMarkdownTable(markdownSection(checklist, 'Required Checks'));
+  const auditRows = parseMarkdownTable(markdownSection(checklist, 'Dated Audit Ledger'));
+  const evidenceLedgers = [
+    parseMarkdownTable(markdownSection(checklist, 'Trademark Evidence Ledger'))[0],
+    parseMarkdownTable(markdownSection(checklist, 'Domain Evidence Ledger'))[0],
+    parseMarkdownTable(markdownSection(checklist, 'npm Scope Evidence Ledger'))[0],
+    parseMarkdownTable(markdownSection(checklist, 'Linguistic Evidence Ledger'))[0],
+  ];
   const completionRule = normalizeMarkdownCell(markdownSection(checklist, 'Completion Rule'));
 
   assert.ok(
@@ -1228,6 +1246,27 @@ void test('pre-launch checklist is tracked explicitly', async () => {
   assert.equal(
     parseMarkdownTable(markdownSection(checklist, 'npm Scope Evidence Ledger'))[0].Scope,
     '@jiso',
+  );
+  assert.ok(
+    auditRows.some(
+      (row) =>
+        row.Reviewer === 'Codex' &&
+        row['Scope checked'] ===
+          'Ledger honesty audit of every required pre-launch evidence section.' &&
+        row.Result.includes('absence of external evidence explicit') &&
+        row.Status === 'packet ready; external evidence pending',
+    ),
+    'pre-launch checklist has a dated packet audit that remains externally pending',
+  );
+  assert.deepEqual(
+    evidenceLedgers.map((row) => row.Status),
+    ['pending', 'pending', 'pending', 'pending'],
+  );
+  assert.ok(
+    evidenceLedgers.every((row) =>
+      Object.values(row).some((value) => /No .* evidence recorded|No npm organization/.test(value)),
+    ),
+    'each external pre-launch ledger names its missing evidence instead of implying completion',
   );
   assert.ok(completionRule.includes('no ledger row remains pending'));
   assert.ok(completionRule.includes('docs/v1-acceptance.md'));
