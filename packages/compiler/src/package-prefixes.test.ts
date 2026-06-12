@@ -1,3 +1,7 @@
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+
 import { diagnosticDefinitions } from '@jiso/core';
 import { describe, expect, it } from 'vitest';
 
@@ -56,6 +60,84 @@ describe('package component prefixes', () => {
     });
 
     expect(result.diagnostics).toEqual([]);
+  });
+
+  it('discovers imported package prefixes from real package manifests', () => {
+    const root = mkdtempSync(join(tmpdir(), 'jiso-prefix-discovery-'));
+
+    try {
+      writePackageManifest(root, '@acme/primitives', {
+        jiso: { prefix: 'acme-' },
+        name: '@acme/primitives',
+      });
+      writePackageManifest(root, '@other/acme-widgets', {
+        jiso: { prefix: 'acme-' },
+        name: '@other/acme-widgets',
+      });
+
+      const result = compileComponentModule({
+        fileName,
+        packagePrefixDiscoveryRoot: root,
+        source: `
+import { component } from '@jiso/core';
+import { Dialog } from '@acme/primitives/dialog';
+import '@other/acme-widgets';
+
+export const Shell = component('shell', {
+  render: () => <section></section>,
+});
+`,
+      });
+
+      expect(result.diagnostics).toEqual([
+        expect.objectContaining({
+          code: 'FW234',
+          message: `${fw234.message} Effective package prefix "acme-" is claimed by @acme/primitives and @other/acme-widgets.`,
+          severity: fw234.severity,
+        }),
+      ]);
+    } finally {
+      rmSync(root, { force: true, recursive: true });
+    }
+  });
+
+  it('merges explicit effective-prefix aliases with discovered package manifests', () => {
+    const root = mkdtempSync(join(tmpdir(), 'jiso-prefix-alias-'));
+
+    try {
+      writePackageManifest(root, '@acme/primitives', {
+        jiso: { prefix: 'acme-' },
+        name: '@acme/primitives',
+      });
+      writePackageManifest(root, '@other/acme-widgets', {
+        jiso: { prefix: 'acme-' },
+        name: '@other/acme-widgets',
+      });
+
+      const result = compileComponentModule({
+        fileName,
+        packageComponentPrefixes: [
+          {
+            effectivePrefix: 'other-acme-',
+            packageName: '@other/acme-widgets',
+          },
+        ],
+        packagePrefixDiscoveryRoot: root,
+        source: `
+import { component } from '@jiso/core';
+import '@acme/primitives';
+import '@other/acme-widgets';
+
+export const Shell = component('shell', {
+  render: () => <section></section>,
+});
+`,
+      });
+
+      expect(result.diagnostics).toEqual([]);
+    } finally {
+      rmSync(root, { force: true, recursive: true });
+    }
   });
 
   it('carries explicit package prefix facts into the app explain graph', () => {
@@ -145,3 +227,13 @@ describe('package component prefixes', () => {
     ]);
   });
 });
+
+function writePackageManifest(
+  root: string,
+  packageName: string,
+  manifest: Record<string, unknown>,
+): void {
+  const dir = join(root, 'node_modules', ...packageName.split('/'));
+  mkdirSync(dir, { recursive: true });
+  writeFileSync(join(dir, 'package.json'), `${JSON.stringify(manifest)}\n`, 'utf8');
+}

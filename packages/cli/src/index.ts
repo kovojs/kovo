@@ -132,6 +132,7 @@ export async function mainAsync(args: readonly string[] = process.argv.slice(2))
 export interface CompileComponentV1Input {
   fileName: string;
   packageComponentPrefixes?: CompileComponentOptions['packageComponentPrefixes'];
+  packagePrefixDiscoveryRoot?: CompileComponentOptions['packagePrefixDiscoveryRoot'];
   queryShapeFacts?: readonly QueryShapeFact[];
   queryShapes?: Record<string, QueryShape>;
   registryFacts?: CompileComponentOptions['registryFacts'];
@@ -245,6 +246,9 @@ function compileComponentOptions(input: CompileComponentV1Input): CompileCompone
     ...(input.packageComponentPrefixes === undefined
       ? {}
       : { packageComponentPrefixes: input.packageComponentPrefixes }),
+    ...(input.packagePrefixDiscoveryRoot === undefined
+      ? {}
+      : { packagePrefixDiscoveryRoot: input.packagePrefixDiscoveryRoot }),
     ...(input.queryShapeFacts === undefined ? {} : { queryShapeFacts: input.queryShapeFacts }),
     ...(input.queryShapes === undefined ? {} : { queryShapes: input.queryShapes }),
     ...(input.registryFacts === undefined ? {} : { registryFacts: input.registryFacts }),
@@ -442,6 +446,7 @@ function listMcpTools(): {
           properties: {
             fileName: { type: 'string' },
             packageComponentPrefixes: { type: 'array' },
+            packagePrefixDiscoveryRoot: { type: 'string' },
             queryShapeFacts: { type: 'array' },
             queryShapes: { type: 'object' },
             registryFacts: { type: 'object' },
@@ -548,6 +553,9 @@ function assertCompileComponentV1Input(args: unknown): CompileComponentV1Input {
   if (Array.isArray(args.packageComponentPrefixes)) {
     input.packageComponentPrefixes =
       args.packageComponentPrefixes as CompileComponentV1Input['packageComponentPrefixes'];
+  }
+  if (typeof args.packagePrefixDiscoveryRoot === 'string') {
+    input.packagePrefixDiscoveryRoot = args.packagePrefixDiscoveryRoot;
   }
   if (Array.isArray(args.queryShapeFacts)) {
     input.queryShapeFacts = args.queryShapeFacts as readonly QueryShapeFact[];

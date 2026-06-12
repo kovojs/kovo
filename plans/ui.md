@@ -1,19 +1,19 @@
 # UI libraries — `@jiso/headless-ui` + vendored `@jiso/ui` + gallery (D7)
 
-Status: design agreed 2026-06-11; F1 SPEC text landed; F2 compiler-side prefix fact enforcement started
+Status: design agreed 2026-06-11; F1 SPEC text landed; F2 compiler/Vite/CLI prefix discovery landed
 Scope: a behavior-layer package (`packages/headless-ui`, published `@jiso/headless-ui`), a vendored styled layer (`@jiso/ui`, distributed as source via `fw add`), a gallery app in this workspace (`examples/gallery`) that is also the conformance/a11y/visual test surface, and the small framework seams they require (package prefix registration, behavior-attribute namespace, primitive-author lint). Referenced from `IMPLEMENT_v1.md` as workstream **D7**.
 
 ## Progress checklist
 
 - [x] F1 SPEC text: package prefix registration (manifest field, app-wide uniqueness, alias escape, `jiso-` reserved for `@jiso/*`), behavior-attribute namespace implications, FW234 teaching error. Evidence: SPEC §6.1.1 defines the manifest field, effective-prefix uniqueness, alias escape, `jiso-*` reservation, `fw-c`/CSS/behavior-attribute implications, and FW234 example; SPEC §4.6 now uses `jiso-tooltip`; SPEC §11.3 lists FW234.
-- [ ] F2 compiler: prefix enforcement + FW234; `fw explain component <prefixed>` prints the owning package. Evidence so far: compiler accepts explicit package prefix facts and emits FW234 for duplicate effective prefixes, malformed/missing prefixes, and non-`@jiso/*` `jiso-*` misuse; explicit effective-prefix aliases are covered as the collision escape hatch. Remaining: feed real package-discovery facts into app builds and add `fw explain component <prefixed>` provenance output.
+- [x] F2 compiler: prefix enforcement + FW234; `fw explain component <prefixed>` prints the owning package. Evidence so far: compiler accepts explicit package prefix facts and emits FW234 for duplicate effective prefixes, malformed/missing prefixes, and non-`@jiso/*` `jiso-*` misuse; explicit effective-prefix aliases are covered as the collision escape hatch.
       Additional evidence 2026-06-11: explicit `packageComponentPrefixes` facts now flow through
       the core explain graph schema and compiler `deriveAppGraph`; `fw explain component
 jiso-dialog` resolves dashed wire names and prints provenance including package, declared
       prefix, effective prefix, and source. Covered by `packages/core/src/graph.test.ts`,
       `packages/compiler/src/index.test.ts`, and `packages/cli/src/index.test.ts`. Same-session
       evidence: `pnpm exec vitest --run packages/core/src/graph.test.ts packages/compiler/src/index.test.ts packages/cli/src/index.test.ts`
-      and `pnpm run check`. Remaining: feed real package-discovery facts into app builds.
+      and `pnpm run check`.
       Additional evidence 2026-06-11: `@jiso/core` now exports
       `packageComponentPrefixFactFromPackageManifest()`, which derives package-prefix facts from
       real `package.json` metadata including the new `packages/headless-ui/package.json`
@@ -22,7 +22,14 @@ jiso-dialog` resolves dashed wire names and prints provenance including package,
       `pnpm exec vitest --run packages/core/src/package-prefix.test.ts packages/headless-ui/src/tooling/primitive-handler-lint.test.ts`
       and
       `pnpm exec vp check packages/core/src/package-prefix.ts packages/core/src/package-prefix.test.ts packages/core/src/index.ts packages/headless-ui/src/index.ts packages/headless-ui/src/tooling/index.ts packages/headless-ui/src/tooling/primitive-handler-lint.ts packages/headless-ui/src/tooling/primitive-handler-lint.test.ts packages/headless-ui/package.json pnpm-lock.yaml`.
-      Remaining: feed those discovered facts into app/compiler/Vite build flow.
+      Additional evidence 2026-06-12: `packages/compiler/src/package-prefixes.ts` discovers
+      package prefix facts from static imported package manifests, merges explicit aliases, and
+      feeds the combined facts through `compileComponentModule`; `packages/compiler/src/vite.ts`
+      supplies the Vite app root for package manifest lookup; `packages/cli/src/index.ts` exposes
+      `packagePrefixDiscoveryRoot` on the compile/v1 surface. Same-session evidence:
+      `pnpm exec vitest --run packages/compiler/src/package-prefixes.test.ts packages/compiler/src/vite.test.ts packages/cli/src/index.test.ts`,
+      `pnpm exec vp check packages/compiler/src/package-prefixes.ts packages/compiler/src/package-prefixes.test.ts packages/compiler/src/index.ts packages/compiler/src/types.ts packages/compiler/src/vite.ts packages/compiler/src/vite.test.ts packages/cli/src/index.ts packages/cli/src/index.test.ts`,
+      and `git diff --check`.
 - [x] F3 behavior-attribute namespace: `fw-*` stays framework-reserved; package behaviors ride the package prefix (`jiso-tooltip="id"`), wired through FW221 IDREF validation. Evidence: `packages/compiler/src/validate/package-prefixes.ts` rejects package `fw-*` prefixes with FW234 per SPEC §6.1.1, `packages/compiler/src/validate/markup.ts` feeds package-declared IDREF behavior attributes through FW221, and `packages/compiler/src/index.test.ts` covers valid/missing package-prefixed behavior IDREFs plus `fw-*` reservation.
 - [x] F4 primitive-author lint: chained handlers contractually no-op on `event.defaultPrevented` (lives in `@jiso/headless-ui` tooling, not the loader).
       Partial evidence 2026-06-11: `packages/headless-ui/src/tooling/primitive-handler-lint.ts`

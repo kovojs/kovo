@@ -8,6 +8,7 @@ import { replaceExtension } from './shared.js';
 export interface CompileComponentOptions {
   fileName: string;
   packageComponentPrefixes?: readonly PackageComponentPrefixFact[];
+  packagePrefixDiscoveryRoot?: string;
   queryShapeFacts?: readonly QueryShapeFact[];
   queryShapes?: Record<string, QueryShape>;
   registryFacts?: RegistryFacts;

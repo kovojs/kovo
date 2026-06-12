@@ -4,6 +4,7 @@ import { diagnosticDefinitions } from '@jiso/core';
 
 import type { CompilerDiagnostic } from './diagnostics.js';
 import { clientModuleUrl, clientModuleVersion } from './lower/handlers.js';
+import type { PackageComponentPrefixFact } from './types.js';
 
 export interface JisoVitePlugin {
   configureServer?: (server: JisoViteDevServer) => void;
@@ -30,6 +31,7 @@ export type JisoViteModuleDiagnosticReporter = (report: JisoViteModuleDiagnostic
 export interface JisoVitePluginOptions {
   onDiagnostic?: JisoViteDiagnosticReporter;
   onModuleDiagnostics?: JisoViteModuleDiagnosticReporter;
+  packageComponentPrefixes?: readonly PackageComponentPrefixFact[];
 }
 
 export interface JisoViteDevServer {
@@ -53,6 +55,8 @@ export type JisoViteMiddleware = (
 
 interface ViteCompileOptions {
   fileName: string;
+  packageComponentPrefixes?: readonly PackageComponentPrefixFact[];
+  packagePrefixDiscoveryRoot?: string;
   source: string;
 }
 
@@ -92,7 +96,14 @@ export function createJisoVitePlugin(
       if (!/\.[cm]?tsx?$/.test(id) || !source.includes('component(')) return null;
 
       const fileName = viteComponentFileName(id, root);
-      const result = compileComponentModule({ fileName, source });
+      const result = compileComponentModule({
+        fileName,
+        ...(options.packageComponentPrefixes === undefined
+          ? {}
+          : { packageComponentPrefixes: options.packageComponentPrefixes }),
+        packagePrefixDiscoveryRoot: root,
+        source,
+      });
       const diagnostics = result.diagnostics ?? [];
       options.onModuleDiagnostics?.({ diagnostics, fileName, source });
       const errorDiagnostics = diagnostics.filter(

@@ -465,6 +465,50 @@ describe('compile/v1 and fw mcp', () => {
     expect(corrected.diagnostics).toEqual([]);
   });
 
+  it('feeds discovered package prefix facts through compile/v1', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'jiso-cli-prefix-'));
+
+    try {
+      writePackageManifest(root, '@acme/primitives', {
+        jiso: { prefix: 'acme-' },
+        name: '@acme/primitives',
+      });
+      writePackageManifest(root, '@other/widgets', {
+        jiso: { prefix: 'acme-' },
+        name: '@other/widgets',
+      });
+
+      await expect(
+        compileComponentV1({
+          fileName: 'src/shell.tsx',
+          packagePrefixDiscoveryRoot: root,
+          source: `
+import { component } from '@jiso/core';
+import '@acme/primitives';
+import '@other/widgets';
+
+export const Shell = component('shell', {
+  render: () => <section></section>,
+});
+`,
+        }),
+      ).resolves.toMatchObject({
+        diagnostics: [
+          {
+            code: 'FW234',
+            fileName: 'src/shell.tsx',
+            message:
+              'Package component prefix registration conflict or reservation violation. Effective package prefix "acme-" is claimed by @acme/primitives and @other/widgets.',
+            severity: 'error',
+          },
+        ],
+        ok: false,
+      });
+    } finally {
+      rmSync(root, { force: true, recursive: true });
+    }
+  });
+
   it('exposes MCP-style tool listing and structured compile results over JSON-RPC objects', async () => {
     await expect(handleFwMcpRequest({ id: 1, jsonrpc: '2.0', method: 'tools/list' })).resolves
       .toMatchInlineSnapshot(`
@@ -490,6 +534,9 @@ describe('compile/v1 and fw mcp', () => {
                     },
                     "packageComponentPrefixes": {
                       "type": "array",
+                    },
+                    "packagePrefixDiscoveryRoot": {
+                      "type": "string",
                     },
                     "queryShapeFacts": {
                       "type": "array",
@@ -785,6 +832,16 @@ describe('compile/v1 and fw mcp', () => {
     });
   });
 });
+
+function writePackageManifest(
+  root: string,
+  packageName: string,
+  manifest: Record<string, unknown>,
+): void {
+  const dir = join(root, 'node_modules', ...packageName.split('/'));
+  mkdirSync(dir, { recursive: true });
+  writeFileSync(join(dir, 'package.json'), `${JSON.stringify(manifest)}\n`, 'utf8');
+}
 
 describe('fw check', () => {
   it('emits stable OK output for an empty semantic graph', () => {

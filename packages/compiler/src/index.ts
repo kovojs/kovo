@@ -20,6 +20,10 @@ import {
   inferComponentName,
   parseComponentModule as parseComponentModuleModel,
 } from './scan/parse.js';
+import {
+  mergePackageComponentPrefixFacts,
+  packageComponentPrefixesForModule,
+} from './package-prefixes.js';
 import { isCompilerIrArtifact, validateAuthoringSurface } from './validate/authoring-surface.js';
 import { validatePackageComponentPrefixes } from './validate/package-prefixes.js';
 import { collectCompilerDiagnostics } from './validate/pipeline.js';
@@ -77,6 +81,11 @@ export type {
 export { createEmptyCompileResult, queryShapesFromFacts } from './types.js';
 
 export function compileComponentModule(options: CompileComponentOptions): CompileResult {
+  const packageComponentPrefixes = mergePackageComponentPrefixFacts(
+    packageComponentPrefixesForModule(options),
+    options.packageComponentPrefixes,
+  );
+  const compileOptions = { ...options, packageComponentPrefixes };
   const authoringSurfaceDiagnostics = validateAuthoringSurface(options);
 
   if (isCompilerIrArtifact(options.source)) {
@@ -117,7 +126,7 @@ export function compileComponentModule(options: CompileComponentOptions): Compil
     navigationLowering.source,
     navigationLowering.model,
     componentName,
-    options,
+    compileOptions,
   );
   const source = deriveLowering.source;
   const diagnosticSource = deriveLowering.diagnosticSource;
@@ -125,17 +134,17 @@ export function compileComponentModule(options: CompileComponentOptions): Compil
     source === navigationLowering.source
       ? navigationLowering.model
       : parseComponentModuleModel(options.fileName, source);
-  const handlers = lowerEventHandlers({ ...options, source }, componentName, model);
+  const handlers = lowerEventHandlers({ ...compileOptions, source }, componentName, model);
   const queryUpdatePlans = collectQueryUpdatePlans(source, model, componentName);
-  const updateCoverage = collectQueryUpdateCoverage(source, model, options, componentName);
+  const updateCoverage = collectQueryUpdateCoverage(source, model, compileOptions, componentName);
   const packagePrefixDiagnostics = validatePackageComponentPrefixes(
-    options.packageComponentPrefixes,
+    compileOptions.packageComponentPrefixes,
     options.fileName,
   );
   const validationDiagnostics = collectCompilerDiagnostics({
     componentName,
     model,
-    options,
+    options: compileOptions,
     originalModel,
     diagnosticSource,
     source,

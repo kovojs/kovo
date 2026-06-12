@@ -1,3 +1,7 @@
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+
 import { diagnosticDefinitions } from '@jiso/core';
 import { describe, expect, it, vi } from 'vitest';
 
@@ -227,6 +231,48 @@ describe('jisoVitePlugin', () => {
     expect(res.body).toContain('export const CartBadge$button_click');
   });
 
+  it('feeds discovered package prefix facts into the Vite transform', () => {
+    const root = mkdtempSync(join(tmpdir(), 'jiso-vite-prefix-'));
+
+    try {
+      writePackageManifest(root, '@acme/primitives', {
+        jiso: { prefix: 'dupe-' },
+        name: '@acme/primitives',
+      });
+      writePackageManifest(root, '@other/widgets', {
+        jiso: { prefix: 'dupe-' },
+        name: '@other/widgets',
+      });
+
+      const plugin = jisoVitePlugin();
+      plugin.configureServer?.({
+        config: { root },
+        middlewares: {
+          use() {},
+        },
+      });
+
+      expect(() =>
+        plugin.transform?.(
+          `
+import { component } from '@jiso/core';
+import '@acme/primitives';
+import '@other/widgets/menu';
+
+export const Shell = component('shell', {
+  render: () => <section></section>,
+});
+`,
+          join(root, 'src/shell.tsx'),
+        ),
+      ).toThrow(
+        'Package component prefix registration conflict or reservation violation. Effective package prefix "dupe-" is claimed by @acme/primitives and @other/widgets.',
+      );
+    } finally {
+      rmSync(root, { force: true, recursive: true });
+    }
+  });
+
   it('retains old versioned client modules after a newer transform', () => {
     const plugin = jisoVitePlugin();
     const middlewares: JisoViteMiddleware[] = [];
@@ -289,3 +335,13 @@ export const CartBadge = component('cart-badge', {
     expect(res.end).not.toHaveBeenCalled();
   });
 });
+
+function writePackageManifest(
+  root: string,
+  packageName: string,
+  manifest: Record<string, unknown>,
+): void {
+  const dir = join(root, 'node_modules', ...packageName.split('/'));
+  mkdirSync(dir, { recursive: true });
+  writeFileSync(join(dir, 'package.json'), `${JSON.stringify(manifest)}\n`, 'utf8');
+}
