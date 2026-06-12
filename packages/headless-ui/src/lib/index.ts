@@ -24,3 +24,16 @@ export type {
 
 export { defaultTypeaheadTimeoutMs, findTypeaheadMatch, nextTypeaheadState } from './typeahead.js';
 export type { TypeaheadItem, TypeaheadMatchOptions, TypeaheadState } from './typeahead.js';
+
+export { computeFloatingPosition, oppositePlacement } from './positioning-fallback.js';
+export type {
+  FloatingOffset,
+  FloatingOverflow,
+  FloatingPlacement,
+  FloatingPlacementAlign,
+  FloatingPlacementSide,
+  FloatingPosition,
+  FloatingPositionOptions,
+  FloatingRect,
+  FloatingSize,
+} from './positioning-fallback.js';

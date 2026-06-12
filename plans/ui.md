@@ -61,6 +61,16 @@ jiso-dialog` resolves dashed wire names and prints provenance including package,
       `pnpm exec vitest --run packages/headless-ui/src/lib/state-attributes.test.ts packages/headless-ui/src/lib/change-details.test.ts packages/headless-ui/src/lib/keyboard-navigation.test.ts packages/headless-ui/src/lib/typeahead.test.ts packages/headless-ui/src/platform-audit.test.ts packages/headless-ui/src/tooling/primitive-handler-lint.test.ts packages/headless-ui/src/tooling/lint-primitives.test.ts`
       and `pnpm --filter @jiso/headless-ui run lint:primitives`. Remaining:
       positioning fallback scaffolding and first primitive integration.
+      Additional partial evidence 2026-06-12: `packages/headless-ui/src/lib/positioning-fallback.ts`
+      adds a DOM-free bounded floating-position helper for popover/menu-style primitives,
+      covering placement, offsets, viewport collision scoring, automatic opposite-side flip,
+      explicit fallback ordering, shift into padded bounds, RTL start/end alignment, and residual
+      overflow reporting. It is exported through `@jiso/headless-ui` and
+      `@jiso/headless-ui/lib`. Same-session evidence:
+      `pnpm --filter @jiso/headless-ui exec vitest --run src/lib/positioning-fallback.test.ts src/lib/state-attributes.test.ts src/lib/change-details.test.ts src/lib/keyboard-navigation.test.ts src/lib/typeahead.test.ts src/platform-audit.test.ts src/tooling/primitive-handler-lint.test.ts src/tooling/lint-primitives.test.ts`,
+      `pnpm --filter @jiso/headless-ui run lint:primitives`, and
+      `pnpm exec vp check packages/headless-ui/src/lib/positioning-fallback.ts packages/headless-ui/src/lib/positioning-fallback.test.ts packages/headless-ui/src/lib/index.ts packages/headless-ui/src/index.ts plans/ui.md`.
+      Remaining: first primitive integration.
 - [ ] H1 wave 1 primitives (L0-heavy): dialog, alert-dialog, popover, tooltip, hover-card, collapsible, accordion, separator, progress, meter, avatar, toggle, switch, checkbox.
 - [ ] H2 wave 2 primitives (stateful L1 islands): tabs, radio-group, toggle-group, checkbox-group, toolbar, number-field, otp-field, scroll-area, field/fieldset as `form()` integration.
 - [ ] H3 wave 3 primitives (list-driven & isomorphic): select, combobox, autocomplete, dropdown-menu, context-menu, menubar, navigation-menu, slider, toast, command.
