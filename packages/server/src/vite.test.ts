@@ -1,19 +1,26 @@
+import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { request as httpRequest, createServer } from 'node:http';
 import type { AddressInfo } from 'node:net';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 import {
   createApp,
   createJisoAppShellDevDiagnosticLedger,
   createJisoAppShellBuild,
+  createJisoAppShellViteBuild,
   createMemoryVersionedClientModuleRegistry,
   createRequestHandler,
+  exportStaticApp,
   jisoAppShellViteManifestAssets,
   jisoAppShellViteManifestHints,
   jisoAppShellVitePlugin,
   jisoAppShellViteRouteEntries,
+  jisoAppShellViteStaticExportAssets,
   route,
   type JisoAppShellViteMiddleware,
+  writeJisoAppShellViteBuildOutput,
 } from './index.js';
 
 describe('server app shell Vite plugin', () => {
@@ -216,6 +223,64 @@ describe('server app shell Vite plugin', () => {
     await expect(moduleResponse.text()).resolves.toBe('export const cart = 1;');
   });
 
+  it('wires a route-entry map through the Vite build helper before route hints are applied', async () => {
+    const accountRoute = route('/account', {
+      page() {
+        return '<main>Account</main>';
+      },
+    });
+    const build = createJisoAppShellViteBuild({
+      app: createApp({ routes: [accountRoute] }),
+      manifest: {
+        '_shared.js': {
+          file: 'assets/shared.js',
+        },
+        'src/account.client.ts': {
+          css: ['assets/account.css'],
+          file: 'assets/account.js',
+          imports: ['_shared.js'],
+        },
+      },
+      routeEntryMap: {
+        '/account': 'src/account.client.ts',
+      },
+    });
+
+    expect(build.routeHints).toEqual([
+      {
+        hints: {
+          modulepreloads: ['/assets/account.js', '/assets/shared.js'],
+          stylesheets: ['/assets/account.css'],
+        },
+        routePath: '/account',
+      },
+    ]);
+
+    const response = await createRequestHandler(build.app)(
+      new Request('https://example.test/account'),
+    );
+
+    expect(response.headers.get('link')).toBe(
+      '</assets/account.css>; rel=preload; as=style, </assets/account.js>; rel=modulepreload, </assets/shared.js>; rel=modulepreload',
+    );
+  });
+
+  it('rejects stale route-entry maps through the Vite build helper', () => {
+    expect(() =>
+      createJisoAppShellViteBuild({
+        app: createApp({ routes: [route('/cart', {})] }),
+        manifest: {
+          'src/account.client.ts': {
+            file: 'assets/account.js',
+          },
+        },
+        routeEntryMap: {
+          '/account': 'src/account.client.ts',
+        },
+      }),
+    ).toThrow('App shell route build entry does not match an app route: /account');
+  });
+
   it('applies Vite base paths to build route hints and asset planning', () => {
     const build = createJisoAppShellBuild({
       app: createApp({ routes: [route('/cart', {})] }),
@@ -242,6 +307,114 @@ describe('server app shell Vite plugin', () => {
       { file: 'assets/cart.css', href: '/shop/assets/cart.css', path: '/shop/assets/cart.css' },
       { file: 'assets/cart.js', href: '/shop/assets/cart.js', path: '/shop/assets/cart.js' },
     ]);
+  });
+
+  it('turns Vite build asset plans into static-export copy inputs', async () => {
+    const distDir = await mkdtemp(join(tmpdir(), 'jiso-vite-dist-'));
+    const outDir = await mkdtemp(join(tmpdir(), 'jiso-vite-export-'));
+
+    try {
+      await mkdir(join(distDir, 'assets'), { recursive: true });
+      await writeFile(join(distDir, 'assets/cart.css'), '.cart{color:oklch(50% 0.1 180)}');
+      await writeFile(join(distDir, 'assets/cart.js'), 'export const cart = true;');
+
+      const build = createJisoAppShellViteBuild({
+        app: createApp({
+          routes: [
+            route('/cart', {
+              page() {
+                return '<main>Cart</main>';
+              },
+            }),
+          ],
+        }),
+        manifest: {
+          'src/cart.client.ts': {
+            css: ['assets/cart.css'],
+            file: 'assets/cart.js',
+          },
+        },
+        routeEntryMap: {
+          '/cart': 'src/cart.client.ts',
+        },
+      });
+      const assets = jisoAppShellViteStaticExportAssets(build.assets, { distDir });
+
+      expect(assets).toEqual([
+        {
+          contentType: 'text/css; charset=utf-8',
+          path: '/assets/cart.css',
+          source: join(distDir, 'assets/cart.css'),
+        },
+        {
+          contentType: 'text/javascript; charset=utf-8',
+          path: '/assets/cart.js',
+          source: join(distDir, 'assets/cart.js'),
+        },
+      ]);
+
+      const result = await exportStaticApp(build.app, { assets, outDir });
+
+      expect(result.assets).toEqual([
+        {
+          headers: { 'content-type': 'text/css; charset=utf-8' },
+          path: '/assets/cart.css',
+          source: join(distDir, 'assets/cart.css'),
+          status: 200,
+        },
+        {
+          headers: { 'content-type': 'text/javascript; charset=utf-8' },
+          path: '/assets/cart.js',
+          source: join(distDir, 'assets/cart.js'),
+          status: 200,
+        },
+      ]);
+      await expect(readFile(join(outDir, 'assets/cart.css'), 'utf8')).resolves.toBe(
+        '.cart{color:oklch(50% 0.1 180)}',
+      );
+      await expect(readFile(join(outDir, 'assets/cart.js'), 'utf8')).resolves.toBe(
+        'export const cart = true;',
+      );
+    } finally {
+      await Promise.all([
+        rm(distDir, { force: true, recursive: true }),
+        rm(outDir, { force: true, recursive: true }),
+      ]);
+    }
+  });
+
+  it('emits compiled app-shell client modules into the Vite output tree', async () => {
+    const outDir = await mkdtemp(join(tmpdir(), 'jiso-vite-client-modules-'));
+
+    try {
+      const build = createJisoAppShellViteBuild({
+        app: createApp({ routes: [route('/', {})] }),
+        clientModules: [
+          {
+            path: '/c/cart.client.js',
+            source: 'export const cart = true;',
+            version: 'cart-v1',
+          },
+        ],
+      });
+
+      await expect(writeJisoAppShellViteBuildOutput(build, { outDir })).resolves.toEqual({
+        clientModules: [
+          {
+            file: 'c/cart.client.js',
+            href: '/c/cart.client.js?v=cart-v1',
+            path: '/c/cart.client.js',
+            source: 'export const cart = true;',
+            version: 'cart-v1',
+          },
+        ],
+      });
+      await expect(readFile(join(outDir, 'c/cart.client.js'), 'utf8')).resolves.toBe(
+        'export const cart = true;',
+      );
+    } finally {
+      await rm(outDir, { force: true, recursive: true });
+    }
   });
 
   it('rejects unsafe Vite output asset paths before they can be copied', () => {

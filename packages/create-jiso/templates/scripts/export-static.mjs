@@ -1,28 +1,15 @@
 import { execFileSync } from 'node:child_process';
-import { readdirSync } from 'node:fs';
+import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 import { createServer } from 'vite';
 
 execFileSync('vp', ['build'], { stdio: 'inherit' });
 
-const assetsDir = join(process.cwd(), 'dist', 'assets');
-const cssAssets = readdirSync(assetsDir)
-  .filter((file) => file.endsWith('.css'))
-  .sort((left, right) => left.localeCompare(right));
-const builtCssAssets = cssAssets.map((file) => ({
-  contentType: 'text/css; charset=utf-8',
-  path: `/assets/${file}`,
-  source: join(assetsDir, file),
-}));
+const manifest = JSON.parse(readFileSync(join(process.cwd(), 'dist/.vite/manifest.json'), 'utf8'));
 
-if (cssAssets.length !== 1) {
-  throw new Error(
-    `Expected exactly one built CSS asset in dist/assets, found ${cssAssets.length}.`,
-  );
-}
-
-process.env.JISO_STARTER_STYLESHEET_HREF = `/assets/${cssAssets[0]}`;
+let result;
+let cssAssets;
 
 const server = await createServer({
   appType: 'custom',
@@ -30,24 +17,45 @@ const server = await createServer({
   server: { middlewareMode: true },
 });
 
-let result;
 try {
-  const [appModule, serverModule] = await Promise.all([
-    server.ssrLoadModule('/src/app-shell.ts'),
-    server.ssrLoadModule('@jiso/server'),
-  ]);
+  const serverModule = await server.ssrLoadModule('@jiso/server');
+  const { exportStaticApp, jisoAppShellViteManifestAssets, jisoAppShellViteStaticExportAssets } =
+    serverModule;
+
+  if (typeof exportStaticApp !== 'function') {
+    throw new Error('@jiso/server must export exportStaticApp.');
+  }
+  if (typeof jisoAppShellViteManifestAssets !== 'function') {
+    throw new Error('@jiso/server must export jisoAppShellViteManifestAssets.');
+  }
+  if (typeof jisoAppShellViteStaticExportAssets !== 'function') {
+    throw new Error('@jiso/server must export jisoAppShellViteStaticExportAssets.');
+  }
+
+  const manifestAssets = jisoAppShellViteManifestAssets(manifest);
+  cssAssets = manifestAssets.filter((asset) => asset.file.endsWith('.css'));
+
+  if (cssAssets.length !== 1) {
+    throw new Error(
+      `Expected exactly one built CSS asset in dist/.vite/manifest.json, found ${cssAssets.length}.`,
+    );
+  }
+
+  process.env.JISO_STARTER_STYLESHEET_HREF = cssAssets[0].href;
+
+  const appModule = await server.ssrLoadModule('/src/app-shell.ts');
   const app = appModule.default ?? appModule.app;
-  const { exportStaticApp } = serverModule;
 
   if (!isJisoApp(app)) {
     throw new Error('src/app-shell.ts must export a Jiso app as default or named app.');
   }
 
-  if (typeof exportStaticApp !== 'function') {
-    throw new Error('@jiso/server must export exportStaticApp.');
-  }
-
-  result = await exportStaticApp(app, { assets: builtCssAssets, outDir: 'dist' });
+  // SPEC.md section 9.5 static export copies the Vite build artifact represented
+  // by the same manifest href that the exported document links.
+  result = await exportStaticApp(app, {
+    assets: jisoAppShellViteStaticExportAssets(cssAssets, { distDir: 'dist' }),
+    outDir: 'dist',
+  });
 } catch (error) {
   if (!isStaticExportDiagnosticError(error)) {
     throw error;

@@ -1,5 +1,8 @@
 import { createHash } from 'node:crypto';
+import { mkdir, writeFile } from 'node:fs/promises';
 import type { IncomingMessage, ServerResponse } from 'node:http';
+import * as path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { diagnosticDefinitions } from '@jiso/core';
 import type { VersionedClientModuleInput } from './client-modules.js';
 import { createRequestHandler, type JisoApp, type RequestHandler } from './app.js';
@@ -8,6 +11,7 @@ import type { PageHintOptions } from './hints.js';
 import { toNodeHandler, writeWebResponseToNode } from './node.js';
 import { readHeader, routeResponseToWebResponse, type RoutePageResponse } from './response.js';
 import { matchShellDispatch } from './shell.js';
+import type { StaticExportAssetInput } from './static-export.js';
 import { renderFragmentWireHtml } from './wire-html.js';
 
 export interface JisoAppShellVitePlugin {
@@ -93,6 +97,14 @@ export interface JisoAppShellBuildOptions {
   routeEntries?: readonly JisoAppShellRouteBuildEntry[];
 }
 
+export interface JisoAppShellViteBuildOptions extends Omit<
+  JisoAppShellBuildOptions,
+  'routeEntries'
+> {
+  routeEntries?: never;
+  routeEntryMap?: JisoAppShellRouteEntryMap;
+}
+
 export interface JisoAppShellBuiltClientModule {
   contentType?: string;
   file: string;
@@ -118,6 +130,18 @@ export interface JisoAppShellBuild {
   assets: readonly JisoAppShellBuildAsset[];
   clientModules: readonly JisoAppShellBuiltClientModule[];
   routeHints: readonly JisoAppShellRouteBuildHints[];
+}
+
+export interface JisoAppShellViteStaticExportAssetOptions {
+  distDir: string | URL;
+}
+
+export interface JisoAppShellViteBuildOutputOptions {
+  outDir: string | URL;
+}
+
+export interface JisoAppShellViteBuildOutput {
+  clientModules: readonly JisoAppShellBuiltClientModule[];
 }
 
 export function createJisoAppShellDevDiagnosticLedger(): JisoAppShellDevDiagnosticLedger {
@@ -391,6 +415,58 @@ export function createJisoAppShellBuild(options: JisoAppShellBuildOptions): Jiso
   return { app, assets, clientModules, routeHints };
 }
 
+export function createJisoAppShellViteBuild(
+  options: JisoAppShellViteBuildOptions,
+): JisoAppShellBuild {
+  const routeEntries =
+    options.routeEntryMap === undefined
+      ? undefined
+      : jisoAppShellViteRouteEntries(options.routeEntryMap, {
+          ...(options.manifest === undefined ? {} : { manifest: options.manifest }),
+          routes: options.app.routes,
+        });
+
+  return createJisoAppShellBuild({
+    app: options.app,
+    ...(options.base === undefined ? {} : { base: options.base }),
+    ...(options.clientModules === undefined ? {} : { clientModules: options.clientModules }),
+    ...(options.manifest === undefined ? {} : { manifest: options.manifest }),
+    ...(routeEntries === undefined ? {} : { routeEntries }),
+  });
+}
+
+export function jisoAppShellViteStaticExportAssets(
+  assets: readonly JisoAppShellBuildAsset[],
+  options: JisoAppShellViteStaticExportAssetOptions,
+): StaticExportAssetInput[] {
+  return assets.map((asset) => {
+    const contentType = viteAssetContentType(asset.file);
+
+    return {
+      ...(contentType === undefined ? {} : { contentType }),
+      path: asset.path,
+      source: viteDistSourcePath(options.distDir, asset.file),
+    };
+  });
+}
+
+export async function writeJisoAppShellViteBuildOutput(
+  build: Pick<JisoAppShellBuild, 'clientModules'>,
+  options: JisoAppShellViteBuildOutputOptions,
+): Promise<JisoAppShellViteBuildOutput> {
+  const root = resolvedFileSystemPath(options.outDir);
+
+  for (const module of build.clientModules) {
+    // SPEC §9.5: production app-shell builds publish immutable /c/ client modules
+    // as files a static host can retain by versioned URL.
+    const targetPath = viteDistSourcePath(root, module.file);
+    await mkdir(path.dirname(targetPath), { recursive: true });
+    await writeFile(targetPath, module.source, 'utf8');
+  }
+
+  return { clientModules: build.clientModules };
+}
+
 export function jisoAppShellViteManifestAssets(
   manifest: JisoAppShellViteManifest,
   options: JisoAppShellViteManifestHintOptions = {},
@@ -525,6 +601,36 @@ function normalizedDistFile(file: string): string {
   }
 
   return segments.join('/');
+}
+
+function viteDistSourcePath(distDir: string | URL, file: string): string {
+  const root = resolvedFileSystemPath(distDir);
+  const targetPath = path.resolve(root, normalizedDistFile(file));
+  if (targetPath === root || targetPath.startsWith(`${root}${path.sep}`)) return targetPath;
+
+  throw new Error(`App shell build asset must stay within the Vite output directory: ${file}`);
+}
+
+function resolvedFileSystemPath(value: string | URL): string {
+  return path.resolve(value instanceof URL ? fileURLToPath(value) : value);
+}
+
+function viteAssetContentType(file: string): string | undefined {
+  const extension = path.extname(file).toLowerCase();
+
+  switch (extension) {
+    case '.css':
+      return 'text/css; charset=utf-8';
+    case '.js':
+    case '.mjs':
+      return 'text/javascript; charset=utf-8';
+    case '.json':
+      return 'application/json; charset=utf-8';
+    case '.svg':
+      return 'image/svg+xml';
+    default:
+      return undefined;
+  }
 }
 
 function isSafeDistFileSegment(segment: string): boolean {

@@ -5,6 +5,9 @@ import { defineConfig } from 'vite-plus';
 
 export default defineConfig({
   plugins: [tailwindcss(), starterAppShellDevPlugin()],
+  build: {
+    manifest: true,
+  },
   lint: {
     options: {
       typeAware: true,

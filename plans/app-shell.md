@@ -66,9 +66,19 @@ Scope: SPEC addition (proposed §9.5 "The request shell"), `@jiso/server` shell 
       `pnpm exec vitest --run packages/server/src/vite.test.ts`,
       `pnpm exec vp check packages/server/src/vite.ts packages/server/src/vite.test.ts packages/server/src/index.ts plans/app-shell.md`,
       and `git diff --check`.
-      Remaining R5 work: compiler/plugin build hooks must still call the route-entry mapping helper,
-      supply compiled module sources, consume the asset/module plan, and perform dist-file
-      emission/copying; this helper intentionally does not infer those facts.
+      Additional evidence 2026-06-12: `createJisoAppShellViteBuild()` now connects the
+      shared route-entry mapping helper to the Vite build helper surface, validating
+      route-entry maps against app routes and the Vite manifest before applying route
+      hints. `writeJisoAppShellViteBuildOutput()` emits compiled `/c/` modules into a
+      Vite output tree, and `jisoAppShellViteStaticExportAssets()` adapts manifest asset
+      plans into `exportStaticApp({ assets })` copy inputs. `packages/server/src/vite.test.ts`
+      proves route-entry-map hint wiring through a handler response, stale-map rejection,
+      static-export asset byte copying, and compiled `/c/` file emission. Same-session
+      verification ran `pnpm exec vitest --run packages/server/src/vite.test.ts` and
+      `pnpm exec vitest --run packages/create-jiso/src/index.test.ts -t "scaffolds real template files|runs the generated vp export task"`.
+      Remaining R5 work: compiler/plugin build hooks must still supply real route-entry maps
+      and compiled module sources from compiler facts, consume the asset/module plan in
+      production package builds, and decide the final plugin hook ownership.
 - [ ] R6 static export: synthetic-request replay to `.html` files with the L0/L1-only constraint and teaching errors for non-exportable routes.
       Progress 2026-06-11: `packages/server/src/static-export.ts` adds the production-shaped
       `exportStaticApp()` foundation, replaying eligible static GET routes through
@@ -251,6 +261,14 @@ Scope: SPEC addition (proposed §9.5 "The request shell"), `@jiso/server` shell 
       exported document href, copied CSS bytes, and copied `/c/` module. Same-session
       verification ran `pnpm exec vitest --run packages/create-jiso/src/index.test.ts`
       and `pnpm exec vp check packages/create-jiso/src/index.test.ts packages/create-jiso/templates/scripts/export-static.mjs packages/create-jiso/templates/README.md packages/create-jiso/templates/docs/deployment.md plans/app-shell.md`.
+      Additional evidence 2026-06-12: the create-jiso starter export task now enables
+      Vite manifest output, reads `dist/.vite/manifest.json`, derives the built
+      stylesheet href through `jisoAppShellViteManifestAssets()`, and passes
+      `jisoAppShellViteStaticExportAssets()` output to `exportStaticApp({ assets })`.
+      This ties the generated starter export task to the same server-owned Vite
+      asset plan used by R5 while preserving the `starter-export/v1` `assets=1`
+      proof. Same-session verification:
+      `pnpm exec vitest --run packages/create-jiso/src/index.test.ts -t "scaffolds real template files|runs the generated vp export task"`.
       Additional evidence 2026-06-12: the docs-site export task now uses
       `site/scripts/export-static.mjs` instead of invoking the built
       `dist/cli` export command. The site-owned task still runs the root package

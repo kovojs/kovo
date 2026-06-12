@@ -211,15 +211,19 @@ describe('create-jiso starter', () => {
       );
       const viteConfig = readFileSync(join(root, 'vite.config.ts'), 'utf8');
       expect(viteConfig).toContain('starterAppShellDevPlugin()');
+      expect(viteConfig).toContain('manifest: true');
       expect(viteConfig).toContain("ssrLoadModule('/src/app-shell.ts')");
       expect(viteConfig).toContain('node scripts/export-static.mjs');
       expect(viteConfig).toContain("pathname === '/'");
       expect(viteConfig).toContain("pathname.startsWith('/c/')");
       const exportStaticScript = readFileSync(join(root, 'scripts/export-static.mjs'), 'utf8');
       expect(exportStaticScript).toContain("execFileSync('vp', ['build']");
+      expect(exportStaticScript).toContain(
+        "readFileSync(join(process.cwd(), 'dist/.vite/manifest.json')",
+      );
       expect(exportStaticScript).toContain("ssrLoadModule('/src/app-shell.ts')");
       expect(exportStaticScript).toContain(
-        'exportStaticApp(app, { assets: builtCssAssets, outDir:',
+        'jisoAppShellViteStaticExportAssets(cssAssets, { distDir:',
       );
       expect(exportStaticScript).toContain('JISO_STARTER_STYLESHEET_HREF');
       expect(exportStaticScript).toContain('isStaticExportDiagnosticError');

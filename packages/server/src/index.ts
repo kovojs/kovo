@@ -253,10 +253,13 @@ export type { NodeHandlerOptions, NodeRequestHandler } from './node.js';
 export {
   createJisoAppShellDevDiagnosticLedger,
   createJisoAppShellBuild,
+  createJisoAppShellViteBuild,
   jisoAppShellViteManifestAssets,
   jisoAppShellViteManifestHints,
   jisoAppShellVitePlugin,
   jisoAppShellViteRouteEntries,
+  jisoAppShellViteStaticExportAssets,
+  writeJisoAppShellViteBuildOutput,
 } from './vite.js';
 export type {
   JisoAppShellBuild,
@@ -268,8 +271,11 @@ export type {
   JisoAppShellDevDiagnosticRecord,
   JisoAppShellDevModuleDiagnostics,
   JisoAppShellRouteBuildEntry,
-  JisoAppShellRouteEntryMap,
   JisoAppShellRouteBuildHints,
+  JisoAppShellRouteEntryMap,
+  JisoAppShellViteBuildOptions,
+  JisoAppShellViteBuildOutput,
+  JisoAppShellViteBuildOutputOptions,
   JisoAppShellViteDevServer,
   JisoAppShellViteInput,
   JisoAppShellViteManifest,
@@ -279,6 +285,7 @@ export type {
   JisoAppShellVitePlugin,
   JisoAppShellVitePluginOptions,
   JisoAppShellViteRouteEntryOptions,
+  JisoAppShellViteStaticExportAssetOptions,
 } from './vite.js';
 export { exportStaticApp, StaticExportError } from './static-export.js';
 export type {
