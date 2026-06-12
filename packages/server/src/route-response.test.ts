@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
-import { renderRoutePageResponse, respond, route } from './index.js';
+import { respond } from './response.js';
+import { renderRoutePageResponse, route } from './route.js';
 
 describe('route responses', () => {
   it('renders route file and stream outcomes without passing through the HTML renderer', async () => {

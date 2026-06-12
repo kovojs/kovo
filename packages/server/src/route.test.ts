@@ -1,16 +1,13 @@
 import { describe, expect, it } from 'vitest';
 
+import { meta, redirect, renderPageHints, s } from './index.js';
 import {
-  meta,
   notFound,
   parseRouteRequest,
-  redirect,
-  renderPageHints,
   renderRoutePageResponse,
   route,
   runRoutePage,
-  s,
-} from './index.js';
+} from './route.js';
 
 describe('route primitives', () => {
   it('declares route schemas, route-owned hints, and typed PRG redirects', async () => {

@@ -1705,6 +1705,14 @@ land it first; don't fork it.
       `pnpm exec vitest --run packages/server/src/route-response.test.ts packages/server/src/response.test.ts packages/server/src/query-endpoint.test.ts packages/server/src/index.test.ts`,
       `pnpm exec vp check packages/server/src/index.ts packages/server/src/query.ts packages/server/src/response.ts`,
       and `git diff --check`.
+      Additional evidence 2026-06-12: route declaration types, route request parsing,
+      not-found outcomes, guarded page execution, route page response rendering, and the route
+      current-URL helper moved from `packages/server/src/index.ts` into
+      `packages/server/src/route.ts`; `app.ts` imports the extracted route seam directly while
+      `index.ts` preserves the public re-exports. Same-session evidence:
+      `pnpm exec vitest --run packages/server/src/route.test.ts packages/server/src/route-response.test.ts packages/server/src/app.test.ts packages/server/src/index.test.ts`,
+      `pnpm exec vp check packages/server/src/app.ts packages/server/src/index.ts packages/server/src/route.ts packages/server/src/route.test.ts packages/server/src/route-response.test.ts plans/codebase-quality-round2.md`,
+      and `git diff --check`.
 - [ ] **LOW** — dead code (`matchShellDispatch` post-loop return shell.ts:161-166; rate-limit
       tail `return options.max > 0` index.ts:576); `matchRoute` recompiling all routes per call
       (match.ts:75-81 — cache `compileRoute`); `Transfer-Encoding: chunked` on a buffered string

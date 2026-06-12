@@ -15,6 +15,7 @@ import {
   routeResponseToWebResponse,
   type RoutePageResponse,
 } from './response.js';
+import { renderRoutePageResponse, type RouteDeclaration, type RouteRequestInput } from './route.js';
 import {
   renderQueryRegistryEndpointResponse,
   type QueryEndpointRequest,
@@ -23,7 +24,6 @@ import {
 } from './query.js';
 import {
   renderMutationEndpointResponse,
-  renderRoutePageResponse,
   runEndpoint,
   type CsrfValidationOptions,
   type EndpointDeclaration,
@@ -35,8 +35,6 @@ import {
   type MutationResponseHeaders,
   type MutationReplayStore,
   type MutationSuccess,
-  type RouteDeclaration,
-  type RouteRequestInput,
   type Schema,
   type SessionProvider,
 } from './index.js';
