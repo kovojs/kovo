@@ -52,9 +52,20 @@ Scope: SPEC additions (session population, guard-failure contract, mutation resp
       evidence: `pnpm exec vitest --run packages/better-auth/src/index.test.ts conformance/better-auth-pin/src/index.test.ts --reporter=dot`,
       `pnpm exec tsc -p conformance/better-auth-pin/tsconfig.json --noEmit`, and
       `pnpm exec vp check packages/better-auth/src/index.ts packages/better-auth/src/index.test.ts conformance/better-auth-pin/src/index.test.ts plans/auth.md`.
+      Partial evidence 2026-06-12: `packages/better-auth/src/index.ts` now materializes the
+      adapter's declared credential table touches as P9 verifier facts via
+      `betterAuthCredentialMutationTouchGraph` and `betterAuthDbVerificationConfig`, derived from
+      the schema bridge and exported default mutation keys. `packages/better-auth/src/index.test.ts`
+      pins the generated touch graph/config shape, and `conformance/better-auth-pin/src/index.test.ts`
+      runs the wrapped sign-up/sign-in/sign-out credential mutations through `@jiso/test`
+      `createJisoTestHarness`, proving observed Better Auth-like writes to `user`, `account`, and
+      `session` satisfy the declared touch graph with `verificationDiagnostics()` empty. Same-session
+      evidence:
+      `pnpm exec vitest --run packages/better-auth/src/index.test.ts conformance/better-auth-pin/src/index.test.ts --reporter=dot`,
+      `pnpm exec tsc -p conformance/better-auth-pin/tsconfig.json --noEmit`, and
+      `pnpm exec vp check packages/better-auth/src/index.ts packages/better-auth/src/index.test.ts conformance/better-auth-pin/src/index.test.ts conformance/better-auth-pin/package.json plans/auth.md pnpm-lock.yaml`.
       Remaining gaps: plugin-generated tables outside the blessed organization/admin surface are
-      still not mapped, app `schema.ts` generation is not exercised, and the declared table touches
-      are not yet wired through the P9 wrapper as a general observed-write verifier.
+      still not mapped, and app `schema.ts` generation is not exercised.
 - [x] B2 typed session mapper (`betterAuthSession(auth, map)`). Evidence: `packages/better-auth/src/index.ts` exports a dependency-light Better Auth-like `auth.api.getSession({ headers })` provider adapter that returns `null` for anonymous sessions per SPEC §6.5 and maps the inferred Better Auth `session`/`user` payload through an app-owned total mapper; `packages/better-auth/src/index.test.ts` covers runtime mapping, anonymous requests, and a `@ts-expect-error` totality check that dropped declared session fields fail under `vp check`.
 - [x] B3 guard bindings: `authed` / `role()` / org-scoping over the mapped session. Evidence: `packages/better-auth/src/index.ts` exports `authed()`, typed `role<Request>()`, and `activeOrganization()` guards over the mapped session while preserving SPEC §10.3 unauthenticated vs unauthorized guard failures; focused tests cover success/failure behavior and stale role-name type failures without requiring live Better Auth services.
 - [x] B4 ejectable credential mutations (sign-in / sign-up / sign-out) wrapping `auth.api`.

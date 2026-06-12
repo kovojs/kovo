@@ -217,6 +217,30 @@ export interface BetterAuthPluginTableDegradation {
   table: string;
 }
 
+export interface BetterAuthTouchGraphSite {
+  branch?: string;
+  domain: BetterAuthTouchDomain;
+  keys: null | string;
+  predicate?: 'eq' | 'non-eq';
+  site: string;
+  via: BetterAuthTable;
+}
+
+export interface BetterAuthTouchGraphEntry {
+  touches: readonly BetterAuthTouchGraphSite[];
+  unresolved: readonly [];
+}
+
+export type BetterAuthCredentialMutationTouchGraph = Readonly<
+  Record<string, BetterAuthTouchGraphEntry>
+>;
+
+export interface BetterAuthDbVerificationConfig {
+  domainByTable: Partial<Record<BetterAuthTable, BetterAuthTouchDomain>>;
+  exemptTables: readonly BetterAuthTable[];
+  keyByTable: Partial<Record<BetterAuthTable, string>>;
+}
+
 export const betterAuthAuthDomain = domain('auth');
 export const betterAuthOrganizationDomain = domain('organization');
 export const betterAuthUserDomain = domain('user');
@@ -273,6 +297,70 @@ export const betterAuthCredentialMutationTouches = {
   signOut: [betterAuthAuthDomain],
   signUpEmail: [betterAuthUserDomain, betterAuthAuthDomain],
 } as const satisfies Record<BetterAuthCredentialMutationApi, readonly Domain[]>;
+
+export const betterAuthCredentialMutationDefaultKeys = {
+  signInEmail: 'auth/sign-in',
+  signOut: 'auth/sign-out',
+  signUpEmail: 'auth/sign-up',
+} as const satisfies Record<BetterAuthCredentialMutationApi, string>;
+
+// plans/auth.md B1 / SPEC.md §11.2: declared Better Auth table touches are
+// materialized as verifier facts so library-internal writes can be checked by
+// P9 observed-write instrumentation.
+export const betterAuthCredentialMutationTouchGraph =
+  createBetterAuthCredentialMutationTouchGraph();
+
+export const betterAuthDbVerificationConfig = createBetterAuthDbVerificationConfig();
+
+export function createBetterAuthCredentialMutationTouchGraph(
+  keys: Partial<Record<BetterAuthCredentialMutationApi, string>> = {},
+): BetterAuthCredentialMutationTouchGraph {
+  return Object.fromEntries(
+    (
+      Object.entries(betterAuthCredentialMutationDeclaredTableTouches) as [
+        BetterAuthCredentialMutationApi,
+        readonly BetterAuthDeclaredTableTouch[],
+      ][]
+    ).map(([api, touches]) => [
+      keys[api] ?? betterAuthCredentialMutationDefaultKeys[api],
+      {
+        touches: touches.map((touch) => ({
+          domain: touch.domain,
+          // Better Auth owns the SQL; the P9 bridge verifies domain/table coverage
+          // without pretending row-key predicates are available at this boundary.
+          keys: null,
+          site: `@jiso/better-auth:${api}`,
+          via: touch.table,
+        })),
+        unresolved: [],
+      },
+    ]),
+  );
+}
+
+export function createBetterAuthDbVerificationConfig(): BetterAuthDbVerificationConfig {
+  const domainByTable: Partial<Record<BetterAuthTable, BetterAuthTouchDomain>> = {};
+  const exemptTables: BetterAuthTable[] = [];
+  const keyByTable: Partial<Record<BetterAuthTable, string>> = {};
+
+  for (const [table, annotation] of Object.entries(betterAuthSchemaBridge) as [
+    BetterAuthTable,
+    BetterAuthSchemaBridgeAnnotation,
+  ][]) {
+    if ('domain' in annotation) {
+      domainByTable[table] = annotation.domain;
+      if (annotation.key !== undefined) keyByTable[table] = annotation.key;
+    } else {
+      exemptTables.push(table);
+    }
+  }
+
+  return {
+    domainByTable,
+    exemptTables,
+    keyByTable,
+  };
+}
 
 export function validateBetterAuthSchemaBridge(
   tables: Record<string, unknown>,

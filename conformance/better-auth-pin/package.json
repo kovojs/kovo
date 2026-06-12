@@ -8,7 +8,8 @@
   },
   "dependencies": {
     "@jiso/better-auth": "workspace:*",
-    "@jiso/server": "workspace:*"
+    "@jiso/server": "workspace:*",
+    "@jiso/test": "workspace:*"
   },
   "devDependencies": {
     "better-auth": "1.6.17",

@@ -11,8 +11,11 @@ import { describe, expect, expectTypeOf, it } from 'vitest';
 import {
   activeOrganization,
   authed,
+  betterAuthCredentialMutationDefaultKeys,
   betterAuthCredentialMutationDeclaredTableTouches,
+  betterAuthCredentialMutationTouchGraph,
   betterAuthCredentialMutationTouches,
+  betterAuthDbVerificationConfig,
   betterAuthOrganizationDomain,
   betterAuthSchemaBridge,
   betterAuthSignInEmailMutation,
@@ -338,6 +341,83 @@ describe('credential mutation helpers', () => {
     expect(betterAuthTableDomain('user')).toBe('user');
     expect(betterAuthTableDomain('organization')).toBe('organization');
     expect(betterAuthTableDomain('verification')).toBe(null);
+    expect(betterAuthCredentialMutationDefaultKeys).toEqual({
+      signInEmail: 'auth/sign-in',
+      signOut: 'auth/sign-out',
+      signUpEmail: 'auth/sign-up',
+    });
+    expect(betterAuthCredentialMutationTouchGraph).toEqual({
+      'auth/sign-in': {
+        touches: [
+          {
+            domain: 'auth',
+            keys: null,
+            site: '@jiso/better-auth:signInEmail',
+            via: 'session',
+          },
+        ],
+        unresolved: [],
+      },
+      'auth/sign-out': {
+        touches: [
+          {
+            domain: 'auth',
+            keys: null,
+            site: '@jiso/better-auth:signOut',
+            via: 'session',
+          },
+        ],
+        unresolved: [],
+      },
+      'auth/sign-up': {
+        touches: [
+          {
+            domain: 'user',
+            keys: null,
+            site: '@jiso/better-auth:signUpEmail',
+            via: 'user',
+          },
+          {
+            domain: 'auth',
+            keys: null,
+            site: '@jiso/better-auth:signUpEmail',
+            via: 'account',
+          },
+          {
+            domain: 'auth',
+            keys: null,
+            site: '@jiso/better-auth:signUpEmail',
+            via: 'session',
+          },
+        ],
+        unresolved: [],
+      },
+    });
+    expect(betterAuthDbVerificationConfig).toEqual({
+      domainByTable: {
+        account: 'auth',
+        invitation: 'organization',
+        member: 'organization',
+        organization: 'organization',
+        organizationRole: 'organization',
+        session: 'auth',
+        team: 'organization',
+        teamMember: 'organization',
+        user: 'user',
+      },
+      exemptTables: ['verification'],
+      keyByTable: {
+        account: 'userId',
+        invitation: 'organizationId',
+        member: 'organizationId',
+        organization: 'id',
+        organizationRole: 'organizationId',
+        session: 'userId',
+        team: 'organizationId',
+        teamMember: 'teamId',
+        user: 'id',
+      },
+    });
     expect(
       validateBetterAuthSchemaBridge({
         account: authTable(['userId']),

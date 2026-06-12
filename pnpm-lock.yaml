@@ -53,6 +53,9 @@ importers:
       '@jiso/server':
         specifier: workspace:*
         version: link:../../packages/server
+      '@jiso/test':
+        specifier: workspace:*
+        version: link:../../packages/test
     devDependencies:
       better-auth:
         specifier: 1.6.17

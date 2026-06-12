@@ -5,6 +5,7 @@ import {
   runEndpoint,
   runMutation,
 } from '@jiso/server';
+import { createJisoTestHarness } from '@jiso/test';
 import { betterAuth, getAuthTables } from 'better-auth';
 import { memoryAdapter } from 'better-auth/adapters/memory';
 import { admin, organization, twoFactor } from 'better-auth/plugins';
@@ -13,7 +14,9 @@ import { describe, expect, expectTypeOf, it } from 'vitest';
 import {
   authed,
   betterAuthCredentialMutationDeclaredTableTouches,
+  betterAuthCredentialMutationTouchGraph,
   betterAuthCredentialMutationTouches,
+  betterAuthDbVerificationConfig,
   betterAuthSchemaBridge,
   betterAuthSession,
   betterAuthSignInEmailMutation,
@@ -24,6 +27,7 @@ import {
   validateBetterAuthSchemaBridge,
   type BetterAuthLike,
   type BetterAuthCoreTable,
+  type BetterAuthResponseLike,
   type BetterAuthSignInEmailLike,
   type BetterAuthSignOutLike,
   type BetterAuthSignUpEmailLike,
@@ -51,6 +55,16 @@ interface ReferenceSession {
 interface ReferenceRequest {
   headers: Headers;
   session?: ReferenceSession | null;
+}
+
+interface AuthVerifierDb {
+  writes: { table: BetterAuthTable; value: unknown }[];
+  write(table: BetterAuthTable, value: unknown): void;
+}
+
+interface AuthVerifierRequest {
+  db: AuthVerifierDb;
+  headers: Headers;
 }
 
 const authSecret = '0123456789abcdef0123456789abcdef';
@@ -594,6 +608,85 @@ describe('Better Auth pinned conformance', () => {
     });
   });
 
+  it('verifies adapter credential wrappers through the P9 observed-write harness', async () => {
+    const harness = createJisoTestHarness<AuthVerifierDb>({
+      db: createAuthVerifierDb(),
+      request: {
+        headers: requestHeaders(),
+      },
+      touchGraph: betterAuthCredentialMutationTouchGraph,
+      verification: betterAuthDbVerificationConfig,
+    });
+    const auth = new ObservedCredentialAuth(harness.db);
+    const signUp = betterAuthSignUpEmailMutation<'auth/sign-up', AuthVerifierRequest>(auth, {
+      csrf: false,
+    });
+    const signIn = betterAuthSignInEmailMutation<'auth/sign-in', AuthVerifierRequest>(auth, {
+      csrf: false,
+    });
+    const signOut = betterAuthSignOutMutation<'auth/sign-out', AuthVerifierRequest>(auth, {
+      csrf: false,
+    });
+
+    await expect(
+      harness.exec(
+        signUp,
+        {
+          email: 'verified@example.com',
+          name: 'Verified User',
+          password,
+        },
+        { touchGraphKey: 'auth/sign-up' },
+      ),
+    ).resolves.toMatchObject({
+      ok: true,
+      responseHeaders: {
+        'Set-Cookie': ['better-auth.session_token=verified-sign-up; Path=/; HttpOnly'],
+      },
+      value: {
+        status: 'signed-up',
+      },
+    });
+    await expect(
+      harness.exec(
+        signIn,
+        {
+          email: 'verified@example.com',
+          password,
+        },
+        { touchGraphKey: 'auth/sign-in' },
+      ),
+    ).resolves.toMatchObject({
+      ok: true,
+      responseHeaders: {
+        'Set-Cookie': ['better-auth.session_token=verified-sign-in; Path=/; HttpOnly'],
+      },
+      value: {
+        status: 'signed-in',
+      },
+    });
+    await expect(
+      harness.exec(signOut, {}, { touchGraphKey: 'auth/sign-out' }),
+    ).resolves.toMatchObject({
+      ok: true,
+      responseHeaders: {
+        'Set-Cookie': ['better-auth.session_token=; Path=/; Max-Age=0; HttpOnly'],
+      },
+      value: {
+        status: 'signed-out',
+      },
+    });
+
+    expect(harness.db.writes.map((write) => write.table)).toEqual([
+      'user',
+      'account',
+      'session',
+      'session',
+      'session',
+    ]);
+    expect(harness.verificationDiagnostics()).toEqual([]);
+  });
+
   it('mounts the real Better Auth handler as an audit-visible prefix endpoint', async () => {
     const { auth } = createRealAuth();
     const authEndpoint = mount('/api/auth', auth);
@@ -646,6 +739,43 @@ function createRealAuth(options: { plugins?: Parameters<typeof betterAuth>[0]['p
   return { auth, db };
 }
 
+class ObservedCredentialAuth
+  implements BetterAuthSignInEmailLike, BetterAuthSignOutLike, BetterAuthSignUpEmailLike
+{
+  readonly api = {
+    signInEmail: async (): Promise<BetterAuthResponseLike> => {
+      this.db.write('session', { action: 'signInEmail' });
+
+      return responseWithCookies(['better-auth.session_token=verified-sign-in; Path=/; HttpOnly']);
+    },
+    signOut: async (): Promise<BetterAuthResponseLike> => {
+      this.db.write('session', { action: 'signOut' });
+
+      return responseWithCookies(['better-auth.session_token=; Path=/; Max-Age=0; HttpOnly']);
+    },
+    signUpEmail: async (): Promise<BetterAuthResponseLike> => {
+      this.db.write('user', { action: 'signUpEmail' });
+      this.db.write('account', { action: 'signUpEmail' });
+      this.db.write('session', { action: 'signUpEmail' });
+
+      return responseWithCookies(['better-auth.session_token=verified-sign-up; Path=/; HttpOnly']);
+    },
+  };
+
+  constructor(private readonly db: AuthVerifierDb) {}
+}
+
+function createAuthVerifierDb(): AuthVerifierDb {
+  const writes: { table: BetterAuthTable; value: unknown }[] = [];
+
+  return {
+    writes,
+    write(table, value) {
+      writes.push({ table, value });
+    },
+  };
+}
+
 function requestHeaders(cookie?: string): Headers {
   const headers = new Headers({
     origin: 'https://example.test',
@@ -665,6 +795,16 @@ function responseCookies(cookies: string[] | string | undefined): string {
 
 function sessionCookie(response: { headers: Headers }): string {
   return responseCookies(response.headers.getSetCookie());
+}
+
+function responseWithCookies(cookies: readonly string[], status = 204): BetterAuthResponseLike {
+  const headers = new Headers();
+
+  Object.defineProperty(headers, 'getSetCookie', {
+    value: () => [...cookies],
+  });
+
+  return { headers, status };
 }
 
 async function expectObservedTables(
