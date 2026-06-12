@@ -2,7 +2,7 @@ import ts from 'typescript';
 
 import { compilerIrHeader } from '../ir.js';
 import type { ElementParam, HandlerLowering } from '../lower/handlers.js';
-import { dedupeBy, indent } from '../shared.js';
+import { applySourceReplacements, dedupeBy, indent, type SourceReplacement } from '../shared.js';
 import type {
   QueryDeriveFact,
   QueryStampFact,
@@ -97,7 +97,7 @@ function arrowFunctionBody(
 }
 
 function lowerHandlerExpression(expression: string, params: readonly ElementParam[]): string {
-  const replacements: Array<{ end: number; start: number; value: string }> = [];
+  const replacements: SourceReplacement[] = [];
   const sourceFile = ts.createSourceFile(
     'handler-expression.ts',
     `function __jiso_handler__() {\n${expression}\n}`,
@@ -123,8 +123,8 @@ function lowerHandlerExpression(expression: string, params: readonly ElementPara
       ) {
         replacements.push({
           end: node.getEnd() - offset,
+          replacement: `ctx.params.${paramNameFromAttribute(param.attributeName)}`,
           start: node.getStart(sourceFile) - offset,
-          value: `ctx.params.${paramNameFromAttribute(param.attributeName)}`,
         });
         return;
       }
@@ -133,8 +133,8 @@ function lowerHandlerExpression(expression: string, params: readonly ElementPara
     if (ts.isIdentifier(node) && node.text === 'state' && !isPropertyName(node)) {
       replacements.push({
         end: node.getEnd() - offset,
+        replacement: 'ctx.state',
         start: node.getStart(sourceFile) - offset,
-        value: 'ctx.state',
       });
       return;
     }
@@ -144,7 +144,7 @@ function lowerHandlerExpression(expression: string, params: readonly ElementPara
 
   visit(sourceFile);
 
-  return applyReplacements(expression, replacements);
+  return applySourceReplacements(expression, replacements);
 }
 
 function isSerializableExpressionNode(node: ts.Node): boolean {
@@ -184,25 +184,6 @@ function hasReplacementAncestor(
   }
 
   return false;
-}
-
-function applyReplacements(
-  source: string,
-  replacements: readonly { end: number; start: number; value: string }[],
-): string {
-  const filtered = replacements
-    .filter((replacement) => replacement.start >= 0 && replacement.end >= replacement.start)
-    .sort((left, right) => right.start - left.start || right.end - left.end);
-  let output = source;
-  let lastStart = Number.POSITIVE_INFINITY;
-
-  for (const replacement of filtered) {
-    if (replacement.end > lastStart) continue;
-    output = `${output.slice(0, replacement.start)}${replacement.value}${output.slice(replacement.end)}`;
-    lastStart = replacement.start;
-  }
-
-  return output;
 }
 
 function paramNameFromAttribute(attributeName: string): string {

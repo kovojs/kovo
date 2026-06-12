@@ -452,6 +452,10 @@ pipeline throws the tree away and communicates via mutated source text.
       `packages/compiler/src/lower/navigation.ts` now emits source-span replacements and applies
       them through the shared overlap-checked patch helper instead of mutating an output string
       inside the traversal.
+      Additional evidence 2026-06-12: client handler expression lowering in
+      `packages/compiler/src/emit/client.ts` now emits canonical `SourceReplacement` patches and
+      applies them through the shared overlap/out-of-range checked helper instead of a local
+      silent source-splice loop.
 - [x] **HIGH — Retire regex rewriting of handler bodies.** emit/client.ts:89
       (`/\bstate\b/g → ctx.state` corrupts `log('state changed')`), :96 (member-expression
       substitution inside string literals), lower/handlers.ts:262 (harvests params from string
