@@ -648,6 +648,13 @@ pipeline throws the tree away and communicates via mutated source text.
       authoring-surface validation import the canonical JS/CSS header constants instead of
       duplicating `@jiso-ir` strings or passing them through `index.ts`. Same-session evidence:
       `pnpm exec vitest --run packages/compiler/src/index.test.ts -t "ir|FW235|server file|registry metadata|CSS"`
+      Additional evidence 2026-06-12: compile orchestration and proof helpers now live in
+      `packages/compiler/src/compile.ts`; `packages/compiler/src/index.ts` imports the compiler
+      only to wire `jisoVitePlugin` and otherwise acts as a public export surface. Same-session
+      evidence:
+      `pnpm exec vitest --run packages/compiler/src/index.test.ts packages/compiler/src/shared.test.ts packages/compiler/src/package-prefixes.test.ts packages/compiler/src/vite.test.ts`,
+      `pnpm exec vp check packages/compiler/src/compile.ts packages/compiler/src/index.ts plans/codebase-quality-round2.md`,
+      and `git diff --check`.
       and
       `pnpm exec vp check packages/compiler/src/index.ts packages/compiler/src/ir.ts packages/compiler/src/css.ts packages/compiler/src/emit/client.ts packages/compiler/src/emit/server.ts packages/compiler/src/emit/registry.ts packages/compiler/src/emit/bootstrap.ts packages/compiler/src/validate/authoring-surface.ts plans/codebase-quality-round2.md`.
       Additional evidence 2026-06-12: `packages/compiler/src/emit/registry.ts` now consumes
