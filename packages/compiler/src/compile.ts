@@ -2,7 +2,7 @@ import { collectQueryUpdateCoverage, collectQueryUpdatePlans } from './analyze/q
 import { componentCssAssetForFile, emitCssModule } from './css.js';
 import { emitClientModule } from './emit/client.js';
 import { emitRegistryModule } from './emit/registry.js';
-import { emitServerModule, renderEquivalenceCheck, serverRenderSource } from './emit/server.js';
+import { emitServerModule, renderEquivalenceCheck, serverRenderLowering } from './emit/server.js';
 import { componentGraphFact, findFragmentTargetFacts } from './graph.js';
 import {
   clientModuleUrl,
@@ -28,6 +28,7 @@ import { validatePackageComponentPrefixes } from './validate/package-prefixes.js
 import { collectCompilerDiagnostics } from './validate/pipeline.js';
 import type { CompileComponentOptions, CompileResult } from './types.js';
 import { compileArtifactFileNames, createEmptyCompileResult, emittedFileKind } from './types.js';
+import { applySourceReplacements } from './shared.js';
 
 export function compileComponentModule(options: CompileComponentOptions): CompileResult {
   const packageComponentPrefixes = mergePackageComponentPrefixFacts(
@@ -128,7 +129,8 @@ export function compileComponentModule(options: CompileComponentOptions): Compil
   const cssAssets = cssSource
     ? [componentCssAssetForFile(fileNames.css, componentName, fragmentTargets, {}, cssSource)]
     : [];
-  const serverRenderedSource = serverRenderSource(source, versionedHandlers, model);
+  const serverRender = serverRenderLowering(source, versionedHandlers, model);
+  const serverRenderedSource = applySourceReplacements(source, serverRender.replacements);
   const serverSource = emitServerModule(serverRenderedSource);
   const registrySource = emitRegistryModule({
     clientFileName: fileNames.client,

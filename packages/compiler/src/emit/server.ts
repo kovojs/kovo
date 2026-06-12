@@ -23,6 +23,10 @@ import {
   type RenderEquivalenceCheck,
 } from '../types.js';
 
+export interface ServerRenderLowering {
+  replacements: SourceReplacement[];
+}
+
 export function emitServerModule(renderedSource: string): string {
   return `${compilerIrHeader}
 export function renderSource() {
@@ -36,7 +40,18 @@ export function serverRenderSource(
   handlers: readonly HandlerLowering[],
   model: ComponentModuleModel,
 ): string {
-  return applyServerRenderPatches(source, handlers, model);
+  return applySourceReplacements(
+    source,
+    serverRenderLowering(source, handlers, model).replacements,
+  );
+}
+
+export function serverRenderLowering(
+  source: string,
+  handlers: readonly HandlerLowering[],
+  model: ComponentModuleModel,
+): ServerRenderLowering {
+  return { replacements: serverRenderPatches(source, handlers, model) };
 }
 
 export function renderEquivalenceCheck(
@@ -82,11 +97,11 @@ function executableRenderSource(serverSource: string): string | null {
 ;renderSource();`;
 }
 
-function applyServerRenderPatches(
+function serverRenderPatches(
   source: string,
   handlers: readonly HandlerLowering[],
   model: ComponentModuleModel,
-): string {
+): SourceReplacement[] {
   const host = componentRenderHost(model);
   const patches: SourceReplacement[] = [];
   const hostHandlers = host
@@ -117,7 +132,7 @@ function applyServerRenderPatches(
     }
   }
 
-  return applySourceReplacements(source, patches);
+  return patches;
 }
 
 function replaceTagHandlerAttributes(

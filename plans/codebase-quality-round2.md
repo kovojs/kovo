@@ -633,6 +633,15 @@ pipeline throws the tree away and communicates via mutated source text.
       `pnpm exec vitest --run packages/compiler/src/model-pipeline.test.ts packages/compiler/src/query-coverage.test.ts`,
       `pnpm exec vitest --run packages/compiler/src`, and
       `pnpm exec vp check --fix packages/compiler/src/model-pipeline.ts packages/compiler/src/model-pipeline.test.ts packages/compiler/src/compile.ts packages/compiler/src/lower/inline-derives.ts`.
+      Additional evidence 2026-06-12: server render lowering now exposes
+      `serverRenderLowering(...).replacements`, and `compile.ts` applies those server-render
+      patches explicitly before emitting the server module. The compatibility
+      `serverRenderSource()` wrapper remains for direct callers, but the compile path no longer
+      hides server render source rewriting behind an emitter-local apply step. Same-session
+      evidence:
+      `pnpm exec vitest --run packages/compiler/src/compile-component.test.ts packages/compiler/src/model-pipeline.test.ts`,
+      `pnpm exec vitest --run packages/compiler/src`, and
+      `pnpm exec vp check packages/compiler/src/compile.ts packages/compiler/src/emit/server.ts plans/codebase-quality-round2.md`.
       Partial evidence 2026-06-11: `serverRenderSource` now parses once after handler lowering
       with the author file name and stamps component identity, declared query deps, and initial
       state onto the render host through one in-memory tag update instead of reparsing for each
