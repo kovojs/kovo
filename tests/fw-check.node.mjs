@@ -4570,6 +4570,13 @@ export const DiagnosticCard = component('diagnostic-card', {
   render: () => <button>Add</button>,
 });
 `;
+  const lintSource = `
+import { component } from '@jiso/core';
+
+export const DiagnosticCard = component('diagnostic-card', {
+  render: () => <button onClick={() => { const response = { ok: true }; return response.ok; }}>Check</button>,
+});
+`;
 
   const plugin = jisoVitePlugin();
   const greenTransform = plugin.transform(greenSource, componentId);
@@ -4586,6 +4593,22 @@ export const DiagnosticCard = component('diagnostic-card', {
       assert.match(message, /Fixes: move the value into component\/query state via ctx/);
       return true;
     },
+  );
+
+  const lintDiagnostics = [];
+  const lintPlugin = jisoVitePlugin({
+    onDiagnostic: (diagnostic) => lintDiagnostics.push(diagnostic),
+  });
+  const lintTransform = lintPlugin.transform(lintSource, componentId);
+  assert.ok(lintTransform);
+  assert.match(lintTransform.code, /diagnostic-card/);
+  assert.deepEqual(
+    lintDiagnostics.map((diagnostic) => ({
+      code: diagnostic.code,
+      fileName: diagnostic.fileName,
+      severity: diagnostic.severity,
+    })),
+    [{ code: 'FW210', fileName, severity: 'lint' }],
   );
 
   const buildFixtureRoot = await mkdtemp(join(projectRoot, 'examples/d10-vp-build-'));
