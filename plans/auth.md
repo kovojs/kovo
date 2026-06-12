@@ -425,6 +425,21 @@ tables)` now emits both logical and physical table facts for runtime SQL verific
       `pnpm exec tsc -p conformance/better-auth-pin/tsconfig.json --noEmit`,
       `pnpm exec vp check packages/better-auth/src/index.ts packages/better-auth/src/index.test.ts conformance/better-auth-pin/src/index.test.ts plans/auth.md IMPLEMENT_v1.md`,
       and `git diff --check`.
+      Partial evidence 2026-06-12: unsupported/future Better Auth plugin metadata now flows
+      through generated schema-source results as `unsupportedSourceTables` FW406 facts when an
+      app `schema.ts` declares the table, including recognized Drizzle declarations and
+      unrecognized local factory declarations with Better Auth `modelName` physical aliases.
+      The adapter still leaves those declarations unannotated unless a caller supplies an
+      explicit `schemaBridge` entry, so suggested ownership can no longer be confused with a
+      generated mapping. The unavailable OAuth-provider successor degradation now carries
+      explicit `tableMetadata: null` and `schemaBridge: null` fields. `packages/better-auth/src/index.test.ts`
+      covers recognized and aliased future-plugin source declarations, and
+      `conformance/better-auth-pin/src/index.test.ts` pins the null successor metadata/bridge
+      payload against the real `better-auth@1.6.17` dependency set. Same-session evidence:
+      `pnpm exec vitest --run packages/better-auth/src/index.test.ts conformance/better-auth-pin/src/index.test.ts --reporter=dot`,
+      `pnpm exec tsc -p conformance/better-auth-pin/tsconfig.json --noEmit`,
+      `pnpm exec vp check packages/better-auth/src/index.ts packages/better-auth/src/index.test.ts conformance/better-auth-pin/src/index.test.ts plans/auth.md IMPLEMENT_v1.md`,
+      and `git diff --check`.
       Remaining gaps: plugin-generated tables outside the blessed organization/admin/two-factor/OIDC-provider/MCP/SIWE/JWT/device-authorization
       surface are still not mapped, the OAuth-provider successor package/table metadata is not
       installed or exportable from the pinned dependency set, and full app `schema.ts` generation

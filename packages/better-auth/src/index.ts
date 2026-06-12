@@ -262,6 +262,19 @@ export interface BetterAuthSchemaSourceDeclarationDegradation {
   table: string;
 }
 
+export interface BetterAuthSchemaSourcePluginTableDegradation {
+  callee: string;
+  diagnosticCode: 'FW406';
+  fields: string[] | null;
+  manualBridgeSteps: string[];
+  message: string;
+  physicalTable?: string;
+  reason: 'unsupported-plugin-table-source';
+  sourceFactory: 'recognized-drizzle-table' | 'unrecognized-table-factory';
+  suggestedAnnotation: BetterAuthSchemaBridgeDomainAnnotation | null;
+  table: string;
+}
+
 export interface BetterAuthOAuthProviderSuccessorMetadataDegradation {
   attemptedImports: readonly string[];
   diagnosticCode: 'FW406';
@@ -270,6 +283,8 @@ export interface BetterAuthOAuthProviderSuccessorMetadataDegradation {
   message: string;
   packageName: '@better-auth/oauth-provider';
   reason: 'oauth-provider-successor-metadata-unavailable';
+  schemaBridge: null;
+  tableMetadata: null;
 }
 
 export interface BetterAuthTouchGraphSite {
@@ -330,6 +345,7 @@ export interface BetterAuthSchemaSourceAnnotationResult {
     name: 'jiso';
   };
   source: string;
+  unsupportedSourceTables: BetterAuthSchemaSourcePluginTableDegradation[];
   unrecognizedSourceTables: BetterAuthSchemaSourceDeclarationDegradation[];
   validation: BetterAuthSchemaBridgeValidation;
 }
@@ -458,6 +474,8 @@ export function betterAuthOAuthProviderSuccessorMetadataDegradation(
       '@better-auth/oauth-provider metadata is not available from the pinned Better Auth dependency set; successor OAuth-provider writes remain FW406 until a real metadata path is pinned.',
     packageName: '@better-auth/oauth-provider',
     reason: 'oauth-provider-successor-metadata-unavailable',
+    schemaBridge: null,
+    tableMetadata: null,
   };
 }
 
@@ -586,12 +604,19 @@ export function annotateBetterAuthSchemaSource(
     Object.keys(tables).filter((table) => isBetterAuthSchemaTable(table, schemaBridge)),
   );
   const metadataTableByPhysicalName = betterAuthMetadataTableByPhysicalName(tables, schemaBridge);
+  const sourceTableCandidates = findSchemaTableCallCandidates(source);
   const sourceTables = findDrizzleTableCalls(source, options.tableFactories);
   const unrecognizedSourceTables = unrecognizedBetterAuthSourceTableDeclarations(
-    findSchemaTableCallCandidates(source),
+    sourceTableCandidates,
     sourceTables,
     metadataTables,
     metadataTableByPhysicalName,
+  );
+  const unsupportedSourceTables = unsupportedBetterAuthSourceTableDeclarations(
+    sourceTableCandidates,
+    sourceTables,
+    validation.pluginTableDegradations,
+    tables,
   );
   const duplicateSourceTables = duplicateBetterAuthSourceTableNames(
     duplicateDrizzleTableNames(sourceTables),
@@ -662,6 +687,7 @@ export function annotateBetterAuthSchemaSource(
       name: 'jiso',
     },
     source: applyBetterAuthSchemaSourceReplacements(source, sourceReplacements),
+    unsupportedSourceTables,
     unrecognizedSourceTables,
     validation,
   };
@@ -1394,6 +1420,92 @@ function unrecognizedBetterAuthSourceTableDeclarations(
       ? left.callee.localeCompare(right.callee)
       : left.table.localeCompare(right.table),
   );
+}
+
+function unsupportedBetterAuthSourceTableDeclarations(
+  candidates: readonly DrizzleTableCall[],
+  recognizedCalls: readonly DrizzleTableCall[],
+  pluginTableDegradations: readonly BetterAuthPluginTableDegradation[],
+  tables: Record<string, unknown>,
+): BetterAuthSchemaSourcePluginTableDegradation[] {
+  const recognizedSourceCalls = new Set(
+    recognizedCalls.map((call) => sourceTableDeclarationKey(call.tableName, call.callee)),
+  );
+  const degradationsByPhysicalName = new Map<string, BetterAuthPluginTableDegradation[]>();
+  const seen = new Set<string>();
+  const degradations: BetterAuthSchemaSourcePluginTableDegradation[] = [];
+
+  for (const degradation of pluginTableDegradations) {
+    const physicalTable = betterAuthPhysicalTableName(degradation.table, tables[degradation.table]);
+    const tableDegradations = degradationsByPhysicalName.get(physicalTable) ?? [];
+    tableDegradations.push(degradation);
+    degradationsByPhysicalName.set(physicalTable, tableDegradations);
+  }
+
+  for (const candidate of candidates) {
+    const tableDegradations = degradationsByPhysicalName.get(candidate.tableName);
+    if (tableDegradations === undefined) continue;
+
+    const sourceFactory = recognizedSourceCalls.has(
+      sourceTableDeclarationKey(candidate.tableName, candidate.callee),
+    )
+      ? 'recognized-drizzle-table'
+      : 'unrecognized-table-factory';
+
+    for (const degradation of tableDegradations) {
+      const key = `${candidate.tableName}\0${candidate.callee}\0${degradation.table}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+
+      degradations.push(
+        unsupportedSchemaSourcePluginTableDegradation(degradation, candidate, sourceFactory),
+      );
+    }
+  }
+
+  return degradations.sort((left, right) =>
+    left.table === right.table
+      ? left.callee.localeCompare(right.callee)
+      : left.table.localeCompare(right.table),
+  );
+}
+
+function sourceTableDeclarationKey(tableName: string, callee: string): string {
+  return `${tableName}\0${callee}`;
+}
+
+function unsupportedSchemaSourcePluginTableDegradation(
+  degradation: BetterAuthPluginTableDegradation,
+  call: DrizzleTableCall,
+  sourceFactory: BetterAuthSchemaSourcePluginTableDegradation['sourceFactory'],
+): BetterAuthSchemaSourcePluginTableDegradation {
+  const physicalTable = call.tableName;
+  const factoryLabel =
+    sourceFactory === 'recognized-drizzle-table'
+      ? `recognized Drizzle table factory ${call.callee}`
+      : `unrecognized table factory ${call.callee}`;
+
+  return {
+    callee: call.callee,
+    diagnosticCode: 'FW406',
+    fields: degradation.fields,
+    manualBridgeSteps: [
+      `${betterAuthTableLabel(
+        degradation.table,
+        physicalTable,
+      )} appears in schema.ts through ${factoryLabel}; the Better Auth adapter left it unannotated because it is outside the blessed schema bridge.`,
+      ...degradation.manualBridgeSteps,
+    ],
+    message: `${betterAuthTableLabel(
+      degradation.table,
+      physicalTable,
+    )} appears in schema.ts but is outside the blessed Better Auth schema bridge; the adapter did not synthesize a fabricated mapping.`,
+    ...(physicalTable === degradation.table ? {} : { physicalTable }),
+    reason: 'unsupported-plugin-table-source',
+    sourceFactory,
+    suggestedAnnotation: degradation.suggestedAnnotation,
+    table: degradation.table,
+  };
 }
 
 function unrecognizedSchemaTableDeclarationDegradation(

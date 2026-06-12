@@ -640,6 +640,8 @@ describe('credential mutation helpers', () => {
         '@better-auth/oauth-provider metadata is not available from the pinned Better Auth dependency set; successor OAuth-provider writes remain FW406 until a real metadata path is pinned.',
       packageName: '@better-auth/oauth-provider',
       reason: 'oauth-provider-successor-metadata-unavailable',
+      schemaBridge: null,
+      tableMetadata: null,
     });
   });
 
@@ -857,8 +859,78 @@ describe('credential mutation helpers', () => {
     ]);
     expect(result.annotatedTables).toEqual([]);
     expect(result.unrecognizedSourceTables).toEqual([]);
+    expect(result.unsupportedSourceTables).toEqual([
+      {
+        callee: 'pgTable',
+        diagnosticCode: 'FW406',
+        fields: ['credentialId', 'id', 'userId'],
+        manualBridgeSteps: [
+          'futureCredential appears in schema.ts through recognized Drizzle table factory pgTable; the Better Auth adapter left it unannotated because it is outside the blessed schema bridge.',
+          'Inspect futureCredential fields (credentialId, id, userId) and decide whether the app reads this table.',
+          "Likely app-visible ownership is jiso({ domain: 'auth', key: 'userId' }); confirm before adding the bridge, otherwise use jiso({ exempt: true }) with a rationale.",
+          'Add declared Better Auth API touches for writes that can mutate futureCredential; SPEC.md §11.2 keeps observed writes FW406 until declared coverage exists.',
+        ],
+        message:
+          'futureCredential appears in schema.ts but is outside the blessed Better Auth schema bridge; the adapter did not synthesize a fabricated mapping.',
+        reason: 'unsupported-plugin-table-source',
+        sourceFactory: 'recognized-drizzle-table',
+        suggestedAnnotation: { domain: 'auth', key: 'userId' },
+        table: 'futureCredential',
+      },
+    ]);
     expect(result.source).toContain("pgTable('futureCredential', {})");
     expect(result.source).not.toContain('jiso(');
+  });
+
+  it('reports aliased future plugin source declarations without fabricating mappings', () => {
+    const tables = {
+      account: authTable(['userId']),
+      futureCredential: authTable(['credentialId', 'userId'], 'auth_future_credentials'),
+      session: authTable(['userId']),
+      user: authTable(),
+      verification: authTable(),
+    };
+    const result = annotateBetterAuthSchemaSource(
+      [
+        "import { table } from './schema-kit';",
+        "export const futureCredential = table('auth_future_credentials', {});",
+      ].join('\n'),
+      tables,
+    );
+
+    // SPEC.md §11.2: unsupported Better Auth metadata is an FW406 fact until
+    // schema.ts annotations and declared touches are explicit.
+    expect(result.validation.ok).toBe(false);
+    expect(result.validation.unbridgedTables).toEqual(['futureCredential']);
+    expect(result.annotatedTables).toEqual([]);
+    expect(result.missingSourceTables).toEqual(['account', 'session', 'user', 'verification']);
+    expect(result.unrecognizedSourceTables).toEqual([]);
+    expect(result.unsupportedSourceTables).toEqual([
+      {
+        callee: 'table',
+        diagnosticCode: 'FW406',
+        fields: ['credentialId', 'id', 'userId'],
+        manualBridgeSteps: [
+          'futureCredential (physical auth_future_credentials) appears in schema.ts through unrecognized table factory table; the Better Auth adapter left it unannotated because it is outside the blessed schema bridge.',
+          'Inspect futureCredential (physical auth_future_credentials) fields (credentialId, id, userId) and decide whether the app reads this table.',
+          "Likely app-visible ownership is jiso({ domain: 'auth', key: 'userId' }); confirm before adding the bridge, otherwise use jiso({ exempt: true }) with a rationale.",
+          'Add declared Better Auth API touches for writes that can mutate futureCredential; SPEC.md §11.2 keeps observed writes FW406 until declared coverage exists.',
+        ],
+        message:
+          'futureCredential (physical auth_future_credentials) appears in schema.ts but is outside the blessed Better Auth schema bridge; the adapter did not synthesize a fabricated mapping.',
+        physicalTable: 'auth_future_credentials',
+        reason: 'unsupported-plugin-table-source',
+        sourceFactory: 'unrecognized-table-factory',
+        suggestedAnnotation: { domain: 'auth', key: 'userId' },
+        table: 'futureCredential',
+      },
+    ]);
+    expect(result.source).toBe(
+      [
+        "import { table } from './schema-kit';",
+        "export const futureCredential = table('auth_future_credentials', {});",
+      ].join('\n'),
+    );
   });
 
   it('rejects schema bridge extensions that collide with blessed built-in tables', () => {

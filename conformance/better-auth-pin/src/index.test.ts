@@ -1122,6 +1122,8 @@ describe('Better Auth pinned conformance', () => {
         '@better-auth/oauth-provider metadata is not available from the pinned Better Auth dependency set; successor OAuth-provider writes remain FW406 until a real metadata path is pinned.',
       packageName: '@better-auth/oauth-provider',
       reason: 'oauth-provider-successor-metadata-unavailable',
+      schemaBridge: null,
+      tableMetadata: null,
     });
   });
 
