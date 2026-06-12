@@ -23,6 +23,7 @@ export interface MutationHandlerModel {
 
 export interface PropertyAccessPathModel {
   end: number;
+  inferredType?: 'boolean' | 'number';
   path: string;
   start: number;
 }
@@ -752,6 +753,7 @@ function propertyAccessPathModels(
       if (path) {
         paths.push({
           end: node.getEnd(),
+          ...propertyAccessInferredType(sourceFile, node),
           path,
           start: node.getStart(sourceFile),
         });
@@ -764,6 +766,109 @@ function propertyAccessPathModels(
   visit(root);
 
   return paths;
+}
+
+function propertyAccessInferredType(
+  sourceFile: ts.SourceFile,
+  node: ts.PropertyAccessExpression,
+): { inferredType: 'boolean' | 'number' } | {} {
+  if (isBooleanUsage(node, sourceFile)) return { inferredType: 'boolean' };
+  if (isNumberUsage(node, sourceFile)) return { inferredType: 'number' };
+
+  return {};
+}
+
+function isBooleanUsage(node: ts.Node, sourceFile: ts.SourceFile): boolean {
+  const parent = node.parent;
+
+  if (ts.isPrefixUnaryExpression(parent) && parent.operator === ts.SyntaxKind.ExclamationToken) {
+    return parent.operand === node;
+  }
+
+  if (ts.isConditionalExpression(parent) && parent.condition === node) return true;
+  if (ts.isIfStatement(parent) && parent.expression === node) return true;
+  if (ts.isWhileStatement(parent) && parent.expression === node) return true;
+  if (ts.isDoStatement(parent) && parent.expression === node) return true;
+
+  if (!ts.isBinaryExpression(parent)) return false;
+
+  if (
+    parent.operatorToken.kind === ts.SyntaxKind.AmpersandAmpersandToken ||
+    parent.operatorToken.kind === ts.SyntaxKind.BarBarToken
+  ) {
+    return parent.left === node || parent.right === node;
+  }
+
+  return (
+    isEqualityOperator(parent.operatorToken.kind) &&
+    ((parent.left === node && isBooleanLiteral(parent.right, sourceFile)) ||
+      (parent.right === node && isBooleanLiteral(parent.left, sourceFile)))
+  );
+}
+
+function isNumberUsage(node: ts.Node, sourceFile: ts.SourceFile): boolean {
+  const parent = node.parent;
+  if (!ts.isBinaryExpression(parent)) return false;
+
+  if (
+    isArithmeticOperator(parent.operatorToken.kind) ||
+    isArithmeticAssignmentOperator(parent.operatorToken.kind)
+  ) {
+    return parent.left === node || parent.right === node;
+  }
+
+  return (
+    (isEqualityOperator(parent.operatorToken.kind) ||
+      isOrderingOperator(parent.operatorToken.kind)) &&
+    ((parent.left === node && isNumericLiteral(parent.right, sourceFile)) ||
+      (parent.right === node && isNumericLiteral(parent.left, sourceFile)))
+  );
+}
+
+function isEqualityOperator(kind: ts.SyntaxKind): boolean {
+  return (
+    kind === ts.SyntaxKind.EqualsEqualsEqualsToken ||
+    kind === ts.SyntaxKind.ExclamationEqualsEqualsToken ||
+    kind === ts.SyntaxKind.EqualsEqualsToken ||
+    kind === ts.SyntaxKind.ExclamationEqualsToken
+  );
+}
+
+function isOrderingOperator(kind: ts.SyntaxKind): boolean {
+  return (
+    kind === ts.SyntaxKind.LessThanToken ||
+    kind === ts.SyntaxKind.LessThanEqualsToken ||
+    kind === ts.SyntaxKind.GreaterThanToken ||
+    kind === ts.SyntaxKind.GreaterThanEqualsToken
+  );
+}
+
+function isArithmeticOperator(kind: ts.SyntaxKind): boolean {
+  return (
+    kind === ts.SyntaxKind.MinusToken ||
+    kind === ts.SyntaxKind.AsteriskToken ||
+    kind === ts.SyntaxKind.SlashToken ||
+    kind === ts.SyntaxKind.PercentToken
+  );
+}
+
+function isArithmeticAssignmentOperator(kind: ts.SyntaxKind): boolean {
+  return (
+    kind === ts.SyntaxKind.PlusEqualsToken ||
+    kind === ts.SyntaxKind.MinusEqualsToken ||
+    kind === ts.SyntaxKind.AsteriskEqualsToken ||
+    kind === ts.SyntaxKind.SlashEqualsToken ||
+    kind === ts.SyntaxKind.PercentEqualsToken
+  );
+}
+
+function isBooleanLiteral(node: ts.Node, sourceFile: ts.SourceFile): boolean {
+  const text = node.getText(sourceFile);
+  return text === 'true' || text === 'false';
+}
+
+function isNumericLiteral(node: ts.Node, sourceFile: ts.SourceFile): boolean {
+  return /^-?\d(?:\d|\.)*$/.test(node.getText(sourceFile));
 }
 
 function propertyNameText(name: ts.PropertyName): string | null {

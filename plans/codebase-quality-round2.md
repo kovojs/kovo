@@ -473,6 +473,18 @@ pipeline throws the tree away and communicates via mutated source text.
       `pnpm exec vitest --run packages/compiler/src/scan/parse.test.ts packages/compiler/src/handler-lowering.test.ts`,
       `pnpm exec vp check packages/compiler/src/scan/parse.ts packages/compiler/src/scan/parse.test.ts packages/compiler/src/lower/handlers.ts packages/compiler/src/emit/client.ts packages/compiler/src/types.ts`,
       and `git diff --check`.
+      Additional partial evidence 2026-06-12: zero-argument JSX arrow body
+      `PropertyAccessPathModel` facts now carry parser-derived boolean/number usage
+      classifications, and `lower/handlers.ts` consumes those facts for `fw-param-types`
+      before falling back to the legacy expression reparse path. `scan/parse.test.ts` pins
+      numeric, boolean, and string/default contexts, and `handler-lowering.test.ts` keeps the
+      emitted coercion behavior stable. A current `rg` audit shows no production
+      `parseComponentModule()` call sites outside `compile.ts` and the parser module; the
+      remaining open work is the broader string-to-string lowering pipeline and offset-map
+      consolidation. Same-session evidence:
+      `pnpm exec vitest --run packages/compiler/src/scan/parse.test.ts packages/compiler/src/handler-lowering.test.ts`,
+      `pnpm exec vp check packages/compiler/src/scan/parse.ts packages/compiler/src/scan/parse.test.ts packages/compiler/src/lower/handlers.ts`,
+      and `git diff --check`.
       Partial evidence 2026-06-11: `findFragmentTargetFacts` now consumes the existing
       `ComponentModuleModel` from `compileComponentModule`, including props-type extraction, so
       fragment-target graph facts no longer reparse lowered source with fake `component.tsx`

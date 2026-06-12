@@ -102,11 +102,13 @@ export const CartActions = component('cart-actions', {
       bodyPropertyAccesses: [
         {
           end: source.indexOf('state.count') + 'state.count'.length,
+          inferredType: 'number',
           path: 'state.count',
           start: source.indexOf('state.count'),
         },
         {
           end: source.indexOf('item.quantity') + 'item.quantity'.length,
+          inferredType: 'number',
           path: 'item.quantity',
           start: source.indexOf('item.quantity'),
         },
@@ -114,6 +116,38 @@ export const CartActions = component('cart-actions', {
       bodyStart: source.indexOf(" log('item.id');"),
       references: ['log', 'state', 'item'],
     });
+  });
+
+  it('records handler property access boolean and number usage contexts', () => {
+    const source = `
+export const CartActions = component('cart-actions', {
+  render: () => (
+    <button onClick={() => track(item.quantity > 0, !item.selected, item.name)}>Add</button>
+  ),
+});
+`;
+    const [button] = jsxElements(parseComponentModule('cart-actions.tsx', source));
+    const click = button?.attributes.find((attribute) => attribute.name === 'onClick');
+
+    expect(click?.zeroArgArrow?.bodyPropertyAccesses).toEqual([
+      {
+        end: source.indexOf('item.quantity') + 'item.quantity'.length,
+        inferredType: 'number',
+        path: 'item.quantity',
+        start: source.indexOf('item.quantity'),
+      },
+      {
+        end: source.indexOf('item.selected') + 'item.selected'.length,
+        inferredType: 'boolean',
+        path: 'item.selected',
+        start: source.indexOf('item.selected'),
+      },
+      {
+        end: source.indexOf('item.name') + 'item.name'.length,
+        path: 'item.name',
+        start: source.indexOf('item.name'),
+      },
+    ]);
   });
 
   it('extracts concise arrow function parts through the TypeScript parser', () => {

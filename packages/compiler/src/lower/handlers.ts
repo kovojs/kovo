@@ -238,7 +238,7 @@ function extractElementParams(
 
   return dedupeStrings(expressions).map((arg) => ({
     attributeName: `data-p-${paramNameForExpression(arg)}`,
-    type: inferElementParamType(expression, arg),
+    type: inferElementParamType(expression, arg, zeroArgArrow),
     value: `{${arg}}`,
   }));
 }
@@ -272,7 +272,15 @@ function zeroArgArrowCallArguments(expression: string): string[] | null {
   return callArguments;
 }
 
-function inferElementParamType(expression: string, sourceExpression: string): ElementParamType {
+function inferElementParamType(
+  expression: string,
+  sourceExpression: string,
+  zeroArgArrow?: ZeroArgArrowModel,
+): ElementParamType {
+  const parsedType = zeroArgArrow?.bodyPropertyAccesses.find(
+    (access) => access.path === sourceExpression && access.inferredType !== undefined,
+  )?.inferredType;
+  if (parsedType) return parsedType;
   if (usedAsBoolean(expression, sourceExpression)) return 'boolean';
   if (usedAsNumber(expression, sourceExpression)) return 'number';
 
