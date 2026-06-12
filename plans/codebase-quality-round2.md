@@ -899,6 +899,14 @@ pipeline throws the tree away and communicates via mutated source text.
       `pnpm exec vitest --run packages/compiler/src/scan/parse.test.ts packages/compiler/src/index.test.ts packages/compiler/src/shared.test.ts packages/compiler/src/navigation-lowering.test.ts packages/compiler/src/platform-lowering.test.ts`,
       `pnpm exec vp check packages/compiler/src/scan/parse.ts packages/compiler/src/scan/parse.test.ts packages/compiler/src/analyze/query-updates.ts`,
       and `git diff --check`.
+      Additional evidence 2026-06-12: `scan/parse.ts` now records string-literal array values
+      and concise arrow-function parts for each call argument, and `analyze/query-updates.ts`
+      consumes those parser-owned `derive(...)` argument facts instead of reparsing exported
+      derive argument text through `stringLiteralArrayValues()` / `arrowFunctionParts()`.
+      Same-session evidence:
+      `pnpm exec vitest --run packages/compiler/src/scan/parse.test.ts packages/compiler/src/query-update-plans.test.ts packages/compiler/src/query-coverage.test.ts -t "call argument property access|named derives|semicolons|derive"`,
+      `pnpm exec vitest --run packages/compiler/src`, and
+      `pnpm exec vp check packages/compiler/src/scan/parse.ts packages/compiler/src/scan/parse.test.ts packages/compiler/src/analyze/query-updates.ts`.
 - [x] **MED — Extract `src/types.ts`; break the layering inversion.** Canonical fact types live
       in index.ts, which imports every phase; phases import back (bindings.ts:15-25, emit/server.ts:10,
       lower/handlers.ts:7), and three modules dodge the cycle with diverging private structural

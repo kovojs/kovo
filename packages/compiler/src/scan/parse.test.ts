@@ -301,9 +301,13 @@ export const CartShell = component('cart-shell', {
 export const CartBadge = component('cart-badge', {
   render: () => <span>{renderOnce(format(cart.count), "cart.discount", product.name, { product: { unitPrice: product.unitPrice }, clientOnly })}</span>,
 });
+export const CartBadge$isEmpty = derive(["cart"], (cart: Cart) => cart.count === 0);
 `;
     const renderOnce = callExpressions(parseComponentModule('cart-badge.tsx', source)).find(
       (call) => call.name === 'renderOnce',
+    );
+    const derive = callExpressions(parseComponentModule('cart-badge.tsx', source)).find(
+      (call) => call.name === 'derive',
     );
 
     expect(renderOnce?.arguments).toEqual([
@@ -320,6 +324,11 @@ export const CartBadge = component('cart-badge', {
       [],
       [],
       ['product.unitPrice', 'clientOnly'],
+    ]);
+    expect(derive?.argumentStringLiteralArrayValues).toEqual([['cart'], null]);
+    expect(derive?.argumentArrowFunctionParts).toEqual([
+      null,
+      { expression: 'cart.count === 0', param: 'cart' },
     ]);
   });
 

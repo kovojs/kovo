@@ -36,13 +36,20 @@ export interface DocumentElementActionModel {
 
 export interface CallExpressionModel {
   arguments: readonly string[];
+  argumentArrowFunctionParts: readonly (ArrowFunctionPartsModel | null)[];
   argumentObjectLiteralPaths: readonly (readonly string[])[];
   argumentPropertyAccesses: readonly (readonly PropertyAccessPathModel[])[];
   argumentSpans: readonly SourceSpan[];
+  argumentStringLiteralArrayValues: readonly (readonly string[] | null)[];
   end: number;
   exportedConstName?: string;
   name: string;
   start: number;
+}
+
+export interface ArrowFunctionPartsModel {
+  expression: string;
+  param: string;
 }
 
 export interface SourceSpan {
@@ -445,10 +452,23 @@ export function soleWrappedPropertyAccessPath(fileName: string, source: string):
 export function stringLiteralArrayValues(fileName: string, source: string): string[] | null {
   const sourceFile = parseExpressionSource(fileName, source);
   const initializer = firstVariableInitializer(sourceFile);
-  if (!initializer || !ts.isArrayLiteralExpression(initializer)) return null;
+  return initializer ? stringLiteralArrayValuesFromExpression(initializer) : null;
+}
+
+export function arrowFunctionParts(
+  fileName: string,
+  source: string,
+): ArrowFunctionPartsModel | null {
+  const sourceFile = parseExpressionSource(fileName, source);
+  const initializer = firstVariableInitializer(sourceFile);
+  return initializer ? arrowFunctionPartsFromExpression(sourceFile, initializer) : null;
+}
+
+function stringLiteralArrayValuesFromExpression(expression: ts.Expression): string[] | null {
+  if (!ts.isArrayLiteralExpression(expression)) return null;
 
   const values: string[] = [];
-  for (const element of initializer.elements) {
+  for (const element of expression.elements) {
     if (!ts.isStringLiteralLike(element)) return null;
     values.push(element.text);
   }
@@ -456,20 +476,18 @@ export function stringLiteralArrayValues(fileName: string, source: string): stri
   return values;
 }
 
-export function arrowFunctionParts(
-  fileName: string,
-  source: string,
-): { expression: string; param: string } | null {
-  const sourceFile = parseExpressionSource(fileName, source);
-  const initializer = firstVariableInitializer(sourceFile);
-  if (!initializer || !ts.isArrowFunction(initializer)) return null;
+function arrowFunctionPartsFromExpression(
+  sourceFile: ts.SourceFile,
+  expression: ts.Expression,
+): ArrowFunctionPartsModel | null {
+  if (!ts.isArrowFunction(expression)) return null;
 
-  const param = initializer.parameters[0];
-  if (!param || initializer.parameters.length !== 1 || !ts.isIdentifier(param.name)) return null;
-  if (ts.isBlock(initializer.body)) return null;
+  const param = expression.parameters[0];
+  if (!param || expression.parameters.length !== 1 || !ts.isIdentifier(param.name)) return null;
+  if (ts.isBlock(expression.body)) return null;
 
   return {
-    expression: initializer.body.getText(sourceFile).trim(),
+    expression: expression.body.getText(sourceFile).trim(),
     param: param.name.text,
   };
 }
@@ -1145,6 +1163,9 @@ function callExpressionModel(
     arguments: node.arguments.map((argument) =>
       source.slice(argument.getStart(sourceFile), argument.getEnd()),
     ),
+    argumentArrowFunctionParts: node.arguments.map((argument) =>
+      arrowFunctionPartsFromExpression(sourceFile, argument),
+    ),
     argumentObjectLiteralPaths: node.arguments.map((argument) =>
       ts.isObjectLiteralExpression(argument) ? objectLiteralPaths(argument) : [],
     ),
@@ -1155,6 +1176,9 @@ function callExpressionModel(
       end: argument.getEnd(),
       start: argument.getStart(sourceFile),
     })),
+    argumentStringLiteralArrayValues: node.arguments.map((argument) =>
+      stringLiteralArrayValuesFromExpression(argument),
+    ),
     end: node.getEnd(),
     ...exportedConstInitializerName(node),
     name: node.expression.getText(sourceFile),

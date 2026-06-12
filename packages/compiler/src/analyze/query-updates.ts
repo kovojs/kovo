@@ -1,13 +1,11 @@
 import { dedupeBy } from '../shared.js';
 import { knownQueryNames, queryNameFromPath, queryPathUsesKnownQuery } from './query-shapes.js';
 import {
-  arrowFunctionParts,
   callExpressions,
   componentOptionSource,
   jsxElementChildBody,
   jsxElements,
   jsxExpressions,
-  stringLiteralArrayValues,
   type ComponentModuleModel,
   type JsxElementModel,
 } from '../scan/parse.js';
@@ -202,9 +200,8 @@ function exportedDerives(
   for (const call of callExpressions(model)) {
     if (call.name !== 'derive' || !call.exportedConstName) continue;
 
-    const [inputArgument, deriveArgument] = call.arguments;
-    const input = deriveInputName(inputArgument);
-    const derive = deriveArrowParts(deriveArgument);
+    const input = deriveInputName(call.argumentStringLiteralArrayValues[0]);
+    const derive = call.argumentArrowFunctionParts[1];
     if (!input || !derive) continue;
     const exportName = call.exportedConstName;
 
@@ -220,16 +217,9 @@ function exportedDerives(
   return derives;
 }
 
-function deriveInputName(argument: string | undefined): string | null {
-  const values = argument ? stringLiteralArrayValues('derive-input.tsx', argument) : null;
+function deriveInputName(values: readonly string[] | null | undefined): string | null {
   const [input] = values ?? [];
   return values?.length === 1 && input ? input : null;
-}
-
-function deriveArrowParts(
-  argument: string | undefined,
-): { expression: string; param: string } | null {
-  return argument ? arrowFunctionParts('derive-arrow.tsx', argument) : null;
 }
 
 function dataDeriveStamps(
