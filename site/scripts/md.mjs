@@ -84,9 +84,22 @@ const specCitation = {
   renderer(token) {
     const anchor = token.section.replaceAll('.', '-');
     const label = `${token.prefix ? 'SPEC ' : ''}§${token.section}`;
-    return `<a href="/spec/#${anchor}">${label}</a>`;
+    return `<a class="spec-chip" href="/spec/#${anchor}">${label}</a>`;
   },
 };
+
+/** Code blocks render as designed windows: title bar (optional
+ * `title="..."` in the fence info string), language badge, copy button.
+ * The copy button is a Jiso island — no JS loads until first click. */
+function codeWindow({ highlighted, language, title }) {
+  const bar = [
+    '<span class="code-window-dots"><span></span><span></span><span></span></span>',
+    title ? `<span class="code-window-title">${escapeHtml(title)}</span>` : '',
+    language === 'txt' ? '' : `<span class="code-window-lang">${language}</span>`,
+    '<button type="button" class="code-copy" on:click="/c/code.js#copy">Copy</button>',
+  ].join('');
+  return `<figure class="code-window"><div class="code-window-bar">${bar}</div>${highlighted}</figure>`;
+}
 
 function plainText(tokens, collected = []) {
   for (const token of tokens ?? []) {
@@ -117,12 +130,15 @@ export async function renderMarkdown(body, { anchorStyle = 'slug' } = {}) {
   marked.use({
     renderer: {
       code({ text, lang }) {
-        const language = SHIKI_LANGS.includes(lang) ? lang : 'txt';
+        const info = (lang ?? '').trim();
+        const [first = '', ...rest] = info.split(/\s+/);
+        const language = SHIKI_LANGS.includes(first) ? first : 'txt';
+        const title = /title="([^"]*)"/.exec(rest.join(' '))?.[1] ?? '';
         const highlighted =
           language === 'txt'
             ? `<pre class="shiki"><code>${escapeHtml(text)}</code></pre>`
             : shiki.codeToHtml(text, { lang: language, theme: SHIKI_THEME });
-        return highlighted;
+        return codeWindow({ highlighted, language, title });
       },
       heading({ tokens, depth, raw }) {
         const inline = this.parser.parseInline(tokens);

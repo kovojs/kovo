@@ -1,14 +1,21 @@
 /**
  * Landing page (plan W4): the fixed tagline, then three proof sections, each
  * backed by a W3-captured artifact — claims are toolchain output, not copy.
+ * The hero's centerpiece is the FW227 teaching error, captured from the real
+ * compiler on every build.
  */
 
+const inlineCode = (text) =>
+  `<code class="rounded-md border border-slate-200 bg-slate-100 px-1.5 py-0.5 font-mono text-[0.85em] dark:border-slate-700 dark:bg-slate-800">${text}</code>`;
+
+const specChip = (anchor, label) => `<a class="spec-chip" href="/spec/#${anchor}">${label}</a>`;
+
 function proofSection({ artifact, body, eyebrow, flip, title }) {
-  return `<section class="border-t border-slate-200 py-20">
-    <div class="mx-auto grid max-w-7xl items-center gap-12 px-4 sm:px-6 lg:grid-cols-2 ${flip ? 'lg:[&>*:first-child]:order-2' : ''}">
+  return `<section class="border-t border-slate-900/10 py-24 dark:border-slate-50/10">
+    <div class="mx-auto grid max-w-7xl items-center gap-14 px-4 sm:px-6 lg:grid-cols-2 ${flip ? 'lg:[&>*:first-child]:order-2' : ''}">
       <div>
-        <p class="mb-2 text-sm font-semibold tracking-wide text-jiso-accent-dark uppercase">${eyebrow}</p>
-        <h2 class="mb-4 text-3xl font-bold tracking-tight text-jiso-ink">${title}</h2>
+        <p class="mb-4"><span class="inline-flex rounded-full border border-jiso-600/30 bg-jiso-50 px-3 py-1 text-xs font-semibold tracking-widest text-jiso-700 uppercase dark:border-jiso-400/30 dark:bg-jiso-950 dark:text-jiso-300">${eyebrow}</span></p>
+        <h2 class="mb-5 text-3xl font-extrabold tracking-tight text-slate-900 sm:text-4xl dark:text-white">${title}</h2>
         ${body}
       </div>
       <div class="min-w-0">${artifact}</div>
@@ -20,69 +27,97 @@ export function renderLanding(captures) {
   const { loader } = captures;
 
   const hero = `<section class="relative overflow-hidden">
-    <div class="pointer-events-none absolute inset-0 bg-[radial-gradient(60rem_30rem_at_70%_-10%,#e6f4f4,transparent)]"></div>
-    <div class="relative mx-auto max-w-7xl px-4 pt-24 pb-20 sm:px-6">
-      <h1 class="max-w-3xl text-4xl font-extrabold tracking-tight text-jiso-ink sm:text-5xl">
-        The TypeScript web framework where <span class="text-jiso-accent-dark">agents get build-time errors</span> and <span class="text-jiso-accent-dark">users get instant pages</span>.
-      </h1>
-      <p class="mt-6 max-w-2xl text-lg text-slate-600">
-        Every handler wiring, navigation target, form field, and data dependency in a Jiso app is
-        provable by TypeScript plus static graph queries — and auditable by reading the page source
-        and the Network panel.
-      </p>
-      <div class="mt-8 flex flex-wrap items-center gap-4">
-        <a href="/docs/installation/" class="rounded-lg bg-jiso-accent-dark px-5 py-2.5 font-semibold text-white hover:bg-jiso-accent">Get started</a>
-        <code class="rounded-lg border border-slate-200 bg-slate-50 px-4 py-2.5 font-mono text-sm text-slate-700">$ pnpm create jiso my-app</code>
+    <div class="pointer-events-none absolute inset-0 -z-10" aria-hidden="true">
+      <div class="absolute -top-44 right-[-12%] h-[36rem] w-[52rem] rounded-full bg-jiso-200/50 blur-3xl dark:bg-jiso-500/10"></div>
+      <div class="absolute top-40 left-[-18%] h-[28rem] w-[42rem] rounded-full bg-sky-200/40 blur-3xl dark:bg-sky-500/10"></div>
+    </div>
+    <div class="relative mx-auto grid max-w-7xl items-center gap-16 px-4 pt-20 pb-24 sm:px-6 lg:grid-cols-[1.05fr_1fr]">
+      <div>
+        <p class="mb-6 flex items-center gap-2 text-sm text-slate-600 dark:text-slate-400">
+          <span class="rounded-full border border-jiso-600/30 bg-jiso-50 px-2.5 py-0.5 text-xs font-semibold text-jiso-700 dark:border-jiso-400/30 dark:bg-jiso-950 dark:text-jiso-300">Pre-v1</span>
+          Built in the open — every claim below is CI-checked.
+        </p>
+        <h1 class="text-4xl font-extrabold tracking-tight text-slate-900 sm:text-[3.4rem] sm:leading-[1.08] dark:text-white">
+          The TypeScript web framework where <span class="bg-gradient-to-r from-teal-600 to-sky-600 bg-clip-text text-transparent dark:from-teal-300 dark:to-sky-400">agents get build-time errors</span> and <span class="bg-gradient-to-r from-sky-600 to-teal-600 bg-clip-text text-transparent dark:from-sky-400 dark:to-teal-300">users get instant pages</span>.
+        </h1>
+        <p class="mt-6 max-w-xl text-lg leading-relaxed text-slate-600 dark:text-slate-400">
+          Every handler, navigation target, form field, and data dependency in a Jiso app is
+          provable by TypeScript plus static graph queries — and auditable by reading the page
+          source and the Network panel.
+        </p>
+        <div class="mt-9 flex flex-wrap items-center gap-4">
+          <a href="/docs/installation/" class="rounded-full bg-jiso-600 px-6 py-3 font-semibold text-white shadow-lg shadow-jiso-600/25 transition hover:bg-jiso-500">Get started</a>
+          <a href="/tutorial/" class="rounded-full border border-slate-300 px-6 py-3 font-semibold text-slate-700 transition hover:border-slate-400 dark:border-slate-700 dark:text-slate-200 dark:hover:border-slate-500">Start the tutorial</a>
+        </div>
+        <dl class="mt-12 flex flex-wrap gap-x-10 gap-y-4">
+          <div>
+            <dt class="text-xs font-medium tracking-wide text-slate-500 uppercase dark:text-slate-400">Always-loaded JS</dt>
+            <dd class="mt-1 font-mono text-2xl font-semibold text-slate-900 dark:text-white">${(loader.gzipBytes / 1024).toFixed(1)}<span class="text-base text-slate-500"> KB gz</span></dd>
+          </div>
+          <div>
+            <dt class="text-xs font-medium tracking-wide text-slate-500 uppercase dark:text-slate-400">Hydration</dt>
+            <dd class="mt-1 font-mono text-2xl font-semibold text-slate-900 dark:text-white">none</dd>
+          </div>
+          <div>
+            <dt class="text-xs font-medium tracking-wide text-slate-500 uppercase dark:text-slate-400">Time to interactive</dt>
+            <dd class="mt-1 font-mono text-2xl font-semibold text-slate-900 dark:text-white">= first paint</dd>
+          </div>
+        </dl>
       </div>
-      <p class="mt-6 text-sm text-slate-500">
-        Server-rendered MPA &middot; zero hydration &middot; ${loader.gzipBytes} bytes of always-loaded JS (gzipped, budget ${loader.budget})
-      </p>
+      <div class="relative min-w-0">
+        <div class="absolute -inset-6 rounded-3xl bg-gradient-to-br from-teal-500/15 to-sky-500/15 blur-2xl" aria-hidden="true"></div>
+        <div class="artifact-hero relative">${captures.teachingError}</div>
+        <p class="mt-4 text-center text-xs text-slate-500 dark:text-slate-400">Real compiler output — recaptured from the toolchain on every build of this site.</p>
+      </div>
     </div>
   </section>`;
 
   const agents = proofSection({
     eyebrow: 'For agents',
-    title: 'Agents get build-time errors',
-    body: `<div class="space-y-4 text-slate-600">
+    title: 'Your agent finds out at build time, not in production',
+    body: `<div class="space-y-4 text-slate-600 dark:text-slate-400">
       <p>
-        An agent editing a Jiso app finds out it broke something the same way <code class="rounded bg-slate-100 px-1 font-mono text-sm">tsc</code> reports a type error:
-        before anything runs. Binding paths are checked against real query shapes, links against the
-        route table, form fields against mutation schemas — rename a route and every
-        <code class="rounded bg-slate-100 px-1 font-mono text-sm">&lt;Link&gt;</code>, GET form, and redirect goes red under
-        <code class="rounded bg-slate-100 px-1 font-mono text-sm">vp check</code> (<a class="text-jiso-accent-dark underline" href="/spec/#6-4">SPEC §6.4</a>).
+        An agent editing a Jiso app learns it broke something the same way ${inlineCode('tsc')}
+        reports a type error: before anything runs. Binding paths are checked against real query
+        shapes, links against the route table, form fields against mutation schemas. Rename a
+        route and every ${inlineCode('&lt;Link&gt;')}, GET form, and redirect goes red under
+        ${inlineCode('vp check')}. ${specChip('6-4', 'SPEC §6.4')}
       </p>
       <p>
-        Every diagnostic is a teaching error: what broke, why the spec requires it, and the fixes.
-        This capture is real compiler output, regenerated on every build of this site.
+        Every diagnostic is a teaching error — what broke, why the spec requires it, and the
+        fixes. The capture in the hero above is one of them, produced by the real compiler when
+        this site was built.
       </p>
       <p>
-        And the whole behavior graph is queryable: <a class="text-jiso-accent-dark underline" href="/guides/fw-explain/">fw explain</a>
-        answers "what refreshes when this mutation commits?" with stable, diffable output an agent can assert on in CI.
+        The whole behavior graph is queryable, too. <a class="font-medium text-jiso-600 underline decoration-jiso-600/40 underline-offset-3 hover:decoration-jiso-600 dark:text-jiso-400" href="/guides/fw-explain/">fw explain</a>
+        answers &ldquo;what refreshes when this mutation commits?&rdquo; with stable, diffable
+        output an agent can assert on in CI.
       </p>
     </div>`,
-    artifact: `${captures.teachingError}<div class="mt-6">${captures.fwExplain}</div>`,
+    artifact: captures.fwExplain,
   });
 
   const users = proofSection({
     flip: true,
     eyebrow: 'For users',
-    title: 'Users get instant pages',
-    body: `<div class="space-y-4 text-slate-600">
+    title: 'Pages are interactive the moment they paint',
+    body: `<div class="space-y-4 text-slate-600 dark:text-slate-400">
       <p>
-        Jiso is a multi-page app with no client router and no hydration: the HTML the server sends
-        is the application, interactive at first paint. Time-to-interactive <em>is</em> first
-        contentful paint — there is no gap to optimize, which CI proves with an automated
-        100-navigation browser gate (<a class="text-jiso-accent-dark underline" href="/spec/#16">SPEC §16</a>).
+        Jiso is a multi-page app with no client router and no hydration: the HTML the server
+        sends <em>is</em> the application. Time-to-interactive equals first contentful paint —
+        there is no gap to optimize, and CI proves it with an automated 100-navigation browser
+        gate. ${specChip('16', 'SPEC §16')}
       </p>
       <p>
-        The only always-loaded JavaScript is a ${loader.gzipBytes}-byte (gzipped) event-delegation
-        loader (<a class="text-jiso-accent-dark underline" href="/spec/#4-4">SPEC §4.4</a>). Handler modules load on first
-        interaction — the number you see above is measured from the shipping artifact at build time.
+        The only JavaScript on every page is a ${loader.gzipBytes}-byte (gzipped)
+        event-delegation loader. Handler modules load on first interaction — and the number you
+        just read was measured from the shipping artifact when this page was built.
+        ${specChip('4-4', 'SPEC §4.4')}
       </p>
       <p>
-        With JavaScript disabled, every page still renders and every form still posts: the MPA
-        degrades to a working website, not a blank screen
-        (<a class="text-jiso-accent-dark underline" href="/spec/#8">SPEC §8</a>). This site is built with Jiso — turn JS off and keep browsing.
+        Turn JavaScript off and every page still renders, every form still posts. The app
+        degrades to a working website, not a blank screen — this site is built with Jiso, so
+        try it. ${specChip('8', 'SPEC §8')}
       </p>
     </div>`,
     artifact: `<figure class="artifact">
@@ -100,40 +135,44 @@ export function renderLanding(captures) {
 
   const developers = proofSection({
     eyebrow: 'For developers',
-    title: 'Developers get a great debugging experience',
-    body: `<div class="space-y-4 text-slate-600">
+    title: 'Debug from the Network panel, not the framework source',
+    body: `<div class="space-y-4 text-slate-600 dark:text-slate-400">
       <p>
-        The wire is the documentation (<a class="text-jiso-accent-dark underline" href="/spec/#2">Constitution #4</a>).
-        Mutations are named form POSTs; responses are readable HTML fragments and query JSON. The
-        trace on the right is the pinned wire fixture for "add to cart" — what you'd actually see
-        in the Network panel, byte-for-byte what CI asserts.
+        The wire is the documentation. Mutations are named form POSTs; responses are readable
+        HTML fragments and query JSON. The trace on the right is the pinned wire fixture for
+        &ldquo;add to cart&rdquo; — exactly what the Network panel shows, byte-for-byte what CI
+        asserts. ${specChip('2', 'Constitution #4')}
       </p>
       <p>
-        View-source works: handler refs are visible attributes
-        (<code class="rounded bg-slate-100 px-1 font-mono text-sm">on:click="/c/cart.js#Cart$add"</code>), dependencies are
-        <code class="rounded bg-slate-100 px-1 font-mono text-sm">fw-deps</code> stamps, state is a JSON attribute. Names appear in
-        HTML and wire traffic, so they structurally cannot be minified away — debugging never
-        requires decompiling the framework.
+        View-source works. Handler refs are visible attributes
+        (${inlineCode('on:click="/c/cart.js#Cart$add"')}), dependencies are
+        ${inlineCode('fw-deps')} stamps, state is a JSON attribute. Names appear in HTML and
+        wire traffic, so they structurally cannot be minified away.
       </p>
       <p>
-        Replay a duplicate POST and <code class="rounded bg-slate-100 px-1 font-mono text-sm">FW-Idem</code> answers from the
-        idempotency log; <code class="rounded bg-slate-100 px-1 font-mono text-sm">FW-Changes</code> tells you exactly which
-        domains a commit touched (<a class="text-jiso-accent-dark underline" href="/spec/#9-1">SPEC §9.1</a>).
+        Replay a duplicate POST and ${inlineCode('FW-Idem')} answers from the idempotency log;
+        ${inlineCode('FW-Changes')} tells you exactly which domains a commit touched.
+        ${specChip('9-1', 'SPEC §9.1')}
       </p>
     </div>`,
     artifact: captures.wireTrace,
   });
 
-  const cta = `<section class="border-t border-slate-200 bg-jiso-terminal py-20 text-center">
-    <div class="mx-auto max-w-2xl px-4">
-      <h2 class="text-3xl font-bold tracking-tight text-white">Build something legible</h2>
-      <p class="mt-4 text-slate-300">
-        Start with the tutorial — it builds a working e-commerce app step by step, and every step
-        compiles and tests in this repo's CI.
-      </p>
-      <div class="mt-8 flex justify-center gap-4">
-        <a href="/tutorial/" class="rounded-lg bg-jiso-accent px-5 py-2.5 font-semibold text-white hover:bg-jiso-accent-dark">Start the tutorial</a>
-        <a href="/docs/installation/" class="rounded-lg border border-slate-600 px-5 py-2.5 font-semibold text-slate-200 hover:border-slate-400">Read the docs</a>
+  const cta = `<section class="px-4 pb-24 sm:px-6">
+    <div class="relative mx-auto max-w-7xl overflow-hidden rounded-3xl bg-slate-950 px-6 py-20 text-center dark:border dark:border-slate-800">
+      <div class="pointer-events-none absolute inset-0" aria-hidden="true">
+        <div class="absolute -top-24 left-1/2 h-72 w-[40rem] -translate-x-1/2 rounded-full bg-jiso-500/20 blur-3xl"></div>
+      </div>
+      <div class="relative mx-auto max-w-2xl">
+        <h2 class="text-3xl font-extrabold tracking-tight text-white sm:text-4xl">Build something legible</h2>
+        <p class="mt-4 text-lg text-slate-300">
+          The tutorial builds a working e-commerce app in eight chapters — and every code block
+          in it compiles and tests in this repo&rsquo;s CI.
+        </p>
+        <div class="mt-9 flex flex-wrap justify-center gap-4">
+          <a href="/tutorial/" class="rounded-full bg-jiso-500 px-6 py-3 font-semibold text-white shadow-lg shadow-jiso-500/30 transition hover:bg-jiso-400">Start the tutorial</a>
+          <a href="/docs/installation/" class="rounded-full border border-slate-600 px-6 py-3 font-semibold text-slate-200 transition hover:border-slate-400">Read the docs</a>
+        </div>
       </div>
     </div>
   </section>`;

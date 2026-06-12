@@ -5,7 +5,7 @@ import { fileURLToPath } from 'node:url';
 
 import { generateApiReference } from './api-ref.mjs';
 import { captureAll } from './capture.mjs';
-import { renderDocument, renderDocsPage } from './chrome.mjs';
+import { renderDocument, renderDocsPage, renderSectionIndex } from './chrome.mjs';
 import { renderLanding } from './landing.mjs';
 import { parseFrontmatter, renderMarkdown } from './md.mjs';
 import { loadTutorialSnippets, substituteSnippets } from '../tutorial/extract-snippets.mjs';
@@ -61,16 +61,6 @@ async function writePage(urlPath, html) {
   const target = path.join(outDir, urlPath.replace(/^\//, ''), 'index.html');
   await mkdir(path.dirname(target), { recursive: true });
   await writeFile(target, html, 'utf8');
-}
-
-function sectionIndexBody(section) {
-  return [
-    `# ${section.title}`,
-    '',
-    ...section.pages.map(
-      (page) => `- [${page.title}](${page.url})${page.description ? ` — ${page.description}` : ''}`,
-    ),
-  ].join('\n');
 }
 
 /** Content pages can embed build-time captures with {{capture:name}} — the
@@ -155,13 +145,16 @@ async function main() {
   const searchIndex = [];
 
   for (const section of sections) {
-    const indexBody = sectionIndexBody(section);
-    const rendered = await renderMarkdown(indexBody);
     await writePage(
       `/${section.key}/`,
       finishPage(
         renderDocument({
-          body: renderDocsPage({ activePath: `/${section.key}/`, groups, html: rendered.html }),
+          body: renderDocsPage({
+            activePath: `/${section.key}/`,
+            groups,
+            html: renderSectionIndex(section),
+            prose: false,
+          }),
           description: `${section.title} — Jiso documentation`,
           path: `/${section.key}/`,
           title: `${section.title} · Jiso`,
@@ -182,7 +175,9 @@ async function main() {
           renderDocument({
             body: renderDocsPage({
               activePath: page.url,
+              eyebrow: section.title,
               groups,
+              headings,
               html,
               next: next && { title: next.title, url: next.url },
               prev: prev && { title: prev.title, url: prev.url },
@@ -214,8 +209,8 @@ async function main() {
     '/spec/',
     finishPage(
       renderDocument({
-        body: `<div class="mx-auto max-w-7xl px-4 py-10 sm:px-6">
-        <p class="mb-8 max-w-3xl rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+        body: `<div class="mx-auto max-w-7xl px-4 py-12 sm:px-6">
+        <p class="mb-10 max-w-3xl rounded-xl border border-amber-300/60 bg-amber-50 px-4 py-3 text-sm text-amber-900 dark:border-amber-400/30 dark:bg-amber-400/10 dark:text-amber-200">
           This is the normative specification, rendered verbatim from
           <a class="underline" href="https://github.com/jiso-sh/jiso/blob/main/SPEC.md" rel="external">SPEC.md</a>
           at build time. The docs explain; the spec decides.
@@ -281,10 +276,15 @@ async function main() {
   await writeFile(
     path.join(outDir, '404.html'),
     renderDocument({
-      body: `<main class="mx-auto grid min-h-[50vh] max-w-3xl place-items-center px-6">
+      body: `<main class="mx-auto grid min-h-[60vh] max-w-3xl place-items-center px-6">
         <div class="text-center">
-          <h1 class="text-3xl font-bold">Page not found</h1>
-          <p class="mt-4 text-slate-600">Try the <a class="text-jiso-accent-dark underline" href="/docs/installation/">docs</a> or <a class="text-jiso-accent-dark underline" href="/">the landing page</a>.</p>
+          <p class="font-mono text-sm font-semibold text-jiso-600 dark:text-jiso-400">404</p>
+          <h1 class="mt-2 text-4xl font-extrabold tracking-tight text-slate-900 dark:text-white">Page not found</h1>
+          <p class="mt-4 text-slate-600 dark:text-slate-400">No route declares this path &mdash; in a Jiso app, <code class="font-mono text-sm">vp check</code> would have caught that link.</p>
+          <div class="mt-8 flex justify-center gap-4 text-sm font-semibold">
+            <a class="rounded-full bg-jiso-600 px-5 py-2.5 text-white transition hover:bg-jiso-500" href="/docs/installation/">Read the docs</a>
+            <a class="rounded-full border border-slate-300 px-5 py-2.5 text-slate-700 transition hover:border-slate-400 dark:border-slate-700 dark:text-slate-200 dark:hover:border-slate-500" href="/">Go home</a>
+          </div>
         </div>
       </main>`,
       description: 'Page not found',
