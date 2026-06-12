@@ -453,6 +453,25 @@ export interface CommerceInvalidationSets {
     });
   });
 
+  it('does not fabricate source-mode writes from comments and strings', () => {
+    const graph = extractTouchGraphFromSource([
+      {
+        fileName: 'product.domain.ts',
+        source: `
+          export const products = pgTable("products", {}, jiso({ domain: "product", key: "id" }));
+
+          export async function describeWrite(db) {
+            const fixture = "await db.update(products).set({ reserved: true })";
+            // await db.delete(products);
+            return fixture;
+          }
+        `,
+      },
+    ]);
+
+    expect(graph).toEqual({});
+  });
+
   it('omits write-side-only exempt table writes from the touch graph', () => {
     const graph = extractTouchGraphFromSource([
       {

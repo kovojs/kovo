@@ -1861,31 +1861,42 @@ function extractDrizzleWriteCalls(
   receiverNames: ReadonlySet<string> = DEFAULT_DRIZZLE_RECEIVER_NAMES,
 ): ExtractedWriteCall[] {
   const calls: ExtractedWriteCall[] = [];
-  const callPattern = new RegExp(
-    `(?<receiver>${IDENTIFIER_SOURCE})\\s*\\.\\s*(?<operation>insert|update|delete)\\s*\\(\\s*(?<tableExpression>[^)]+?)\\s*\\)`,
-    'g',
-  );
+  // SPEC §10-§11: source text in comments/strings must not fabricate touch-graph facts.
+  const { bodyOffset, sourceFile } = parseFunctionBodySource(source);
 
-  for (const match of source.matchAll(callPattern)) {
-    const groups = match.groups;
-    if (!groups || match.index === undefined) continue;
+  for (const call of sourceFile.getDescendantsOfKind(SyntaxKind.CallExpression)) {
+    if (!isDrizzleWriteCall(call)) continue;
 
-    const receiver = groups.receiver;
-    const operation = groups.operation;
-    const tableExpression = groups.tableExpression;
-    if (!receiver || !receiverNames.has(receiver) || !operation || !tableExpression) continue;
-    const statement = source.slice(match.index, statementEnd(source, match.index));
+    const expression = call.getExpression();
+    if (!Node.isPropertyAccessExpression(expression)) continue;
+    const receiver = expression.getExpression();
+    if (!Node.isIdentifier(receiver) || !receiverNames.has(receiver.getText())) continue;
 
+    const chain = drizzleWriteChainRoot(call);
+    const operation = expression.getName();
+    const start = call.getStart() - bodyOffset;
+    const tableExpression = call.getArguments()[0]?.getText().trim();
+    if (start < 0 || !tableExpression) continue;
+
+    const statement = source.slice(chain.getStart() - bodyOffset, chain.getEnd() - bodyOffset);
     calls.push({
-      index: match.index,
+      index: start,
       operation,
       readSources: extractReadSources(statement, operation),
       statement,
-      tableExpression: tableExpression.trim(),
+      tableExpression,
     });
   }
 
   return calls;
+}
+
+function parseFunctionBodySource(source: string): { bodyOffset: number; sourceFile: SourceFile } {
+  const prefix = 'async function __jisoExtractedBody() {\n';
+  return {
+    bodyOffset: prefix.length,
+    sourceFile: parseSourceFile(`${prefix}${source}\n}`),
+  };
 }
 
 interface ExternalDbArgumentCall {
