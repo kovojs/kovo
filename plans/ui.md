@@ -1135,6 +1135,22 @@ jiso-dialog` resolves dashed wire names and prints provenance including package,
       `pnpm exec vp check examples/gallery/src/interactive/dialog-demo.tsx examples/gallery/src/interactive/alert-dialog-demo.tsx examples/gallery/src/interactive/popover-demo.tsx examples/gallery/src/interactive-gallery.test.ts examples/gallery/src/interactive-gallery.browser.test.ts examples/gallery/src/generated/interactive/dialog-demo.tsx examples/gallery/src/generated/interactive/dialog-demo.client.js examples/gallery/src/generated/interactive/alert-dialog-demo.tsx examples/gallery/src/generated/interactive/alert-dialog-demo.client.js examples/gallery/src/generated/interactive/popover-demo.tsx examples/gallery/src/generated/interactive/popover-demo.client.js plans/ui.md IMPLEMENT_v1.md`,
       and `git diff --check`. G6 remains open for docs deployment wiring and full
       gallery/conformance gates.
+      Additional evidence 2026-06-12: `examples/gallery/src/interactive/hover-card-demo.tsx`
+      adds a TSX-authored hover-card to the compiled interactive gallery. The emitter now
+      keeps the checked-in `hover-card-demo.tsx` lowered artifact and generated client module
+      in sync with versioned `on:focus`, pointer, blur, and Escape handler refs. Static tests
+      inspect the generated refs and execute the generated client handlers; the Chromium
+      browser test mounts the generated demo through the real runtime loader and verifies
+      browser-visible package-prefixed `jiso-hover-card` wiring, `aria-expanded`, hidden/
+      `data-state`/output synchronization, and native manual-popover show/hide state.
+      Same-session evidence:
+      `pnpm --filter @jiso/example-gallery run emit:interactive-gallery -- --check`,
+      `pnpm --filter @jiso/example-gallery exec vitest --run src/interactive-gallery.test.ts`,
+      `pnpm --filter @jiso/example-gallery run test:browser`,
+      `pnpm --filter @jiso/headless-ui exec vitest --run src/primitives/hover-card.test.ts src/tooling/lint-primitives.test.ts src/tooling/primitive-handler-lint.test.ts`,
+      `pnpm exec vp check examples/gallery/scripts/emit-interactive-gallery.mjs examples/gallery/src/interactive/hover-card-demo.tsx examples/gallery/src/interactive-gallery.test.ts examples/gallery/src/interactive-gallery.browser.test.ts examples/gallery/src/generated/interactive/hover-card-demo.tsx examples/gallery/src/generated/interactive/hover-card-demo.client.js plans/ui.md IMPLEMENT_v1.md`,
+      and `git diff --check`. G6 remains open for docs deployment wiring and full
+      gallery/conformance gates.
 
 ## Background
 

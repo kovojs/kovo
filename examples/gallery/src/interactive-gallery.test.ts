@@ -55,6 +55,7 @@ describe('compiled interactive gallery demos', () => {
     const disclosure = readGenerated('disclosure-demo.tsx');
     const dialog = readGenerated('dialog-demo.tsx');
     const dropdownMenu = readGenerated('dropdown-menu-demo.tsx');
+    const hoverCard = readGenerated('hover-card-demo.tsx');
     const menubar = readGenerated('menubar-demo.tsx');
     const navigationMenu = readGenerated('navigation-menu-demo.tsx');
     const numberField = readGenerated('number-field-demo.tsx');
@@ -206,6 +207,19 @@ describe('compiled interactive gallery demos', () => {
     );
     expect(dropdownMenu).toMatch(
       /on:keydown="\/c\/examples\/gallery\/src\/generated\/interactive\/dropdown-menu-demo\.client\.js\?v=[0-9a-f]{8}#GalleryDropdownMenuDemo\$div_keydown"/,
+    );
+
+    expect(hoverCard).toContain('data-gallery-interactive="hover-card"');
+    expect(hoverCard).toContain('fw-state=\'{"open":false}\'');
+    expect(hoverCard).toContain('hoverCardTriggerAttributes({ contentId, open: state.open })');
+    expect(hoverCard).toMatch(
+      /on:focus="\/c\/examples\/gallery\/src\/generated\/interactive\/hover-card-demo\.client\.js\?v=[0-9a-f]{8}#GalleryHoverCardDemo\$a_focus"/,
+    );
+    expect(hoverCard).toMatch(
+      /on:pointerenter="\/c\/examples\/gallery\/src\/generated\/interactive\/hover-card-demo\.client\.js\?v=[0-9a-f]{8}#GalleryHoverCardDemo\$a_pointerenter"/,
+    );
+    expect(hoverCard).toMatch(
+      /on:keydown="\/c\/examples\/gallery\/src\/generated\/interactive\/hover-card-demo\.client\.js\?v=[0-9a-f]{8}#GalleryHoverCardDemo\$a_keydown"/,
     );
 
     expect(menubar).toContain('data-gallery-interactive="menubar"');
@@ -362,6 +376,7 @@ describe('compiled interactive gallery demos', () => {
     const disclosure = evaluateClientModule('disclosure-demo.client.js');
     const dialog = evaluateClientModule('dialog-demo.client.js');
     const dropdownMenu = evaluateClientModule('dropdown-menu-demo.client.js');
+    const hoverCard = evaluateClientModule('hover-card-demo.client.js');
     const menubar = evaluateClientModule('menubar-demo.client.js');
     const navigationMenu = evaluateClientModule('navigation-menu-demo.client.js');
     const numberField = evaluateClientModule('number-field-demo.client.js');
@@ -612,6 +627,29 @@ describe('compiled interactive gallery demos', () => {
       state: dropdownMenuState,
     });
     expect(dropdownMenuState).toEqual({ highlightedValue: 'rename', open: false, value: 'rename' });
+
+    const hoverCardState = { open: false };
+    clientHandler(hoverCard, 'GalleryHoverCardDemo$a_pointerenter')(new Event('pointerenter'), {
+      params: {},
+      signal,
+      state: hoverCardState,
+    });
+    expect(hoverCardState).toEqual({ open: true });
+    clientHandler(hoverCard, 'GalleryHoverCardDemo$a_keydown')(
+      Object.assign(new Event('keydown'), { key: 'Escape' }),
+      {
+        params: {},
+        signal,
+        state: hoverCardState,
+      },
+    );
+    expect(hoverCardState).toEqual({ open: false });
+    clientHandler(hoverCard, 'GalleryHoverCardDemo$a_focus')(new Event('focus'), {
+      params: {},
+      signal,
+      state: hoverCardState,
+    });
+    expect(hoverCardState).toEqual({ open: true });
 
     const menubarState = { activeValue: 'file', openValue: '', value: 'new' };
     clientHandler(menubar, 'GalleryMenubarDemo$section_keydown')(new Event('keydown'), {
