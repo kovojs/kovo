@@ -1,5 +1,6 @@
 import { diagnosticDefinitions } from '@jiso/core';
 import type { EventDefinition, JsonValue } from '@jiso/core';
+import { reportRuntimeContextError } from './error-policy.js';
 
 export interface DelegatedEvent {
   preventDefault?: () => void;
@@ -93,7 +94,7 @@ export function createEventBus<
       const event = { name, payload };
       for (const listener of listeners.get(name) ?? []) {
         void Promise.resolve(listener(event)).catch((error) => {
-          options.onError?.(error, { event, phase: 'event-listener' });
+          reportRuntimeContextError(options.onError, error, { event, phase: 'event-listener' });
         });
       }
     },

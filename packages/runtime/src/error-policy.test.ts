@@ -1,6 +1,10 @@
 import { describe, expect, it, vi } from 'vitest';
 
-import { reportMalformedJson, reportRuntimeError } from './error-policy.js';
+import {
+  reportMalformedJson,
+  reportRuntimeContextError,
+  reportRuntimeError,
+} from './error-policy.js';
 
 describe('runtime error policy', () => {
   it('routes malformed wire JSON through one reporter seam', () => {
@@ -17,5 +21,16 @@ describe('runtime error policy', () => {
 
   it('keeps reporter delivery optional for tolerant parse paths', () => {
     expect(() => reportRuntimeError(undefined, new Error('ignored'))).not.toThrow();
+  });
+
+  it('routes loader and event failures through one contextual error hook', () => {
+    const onError = vi.fn();
+    const error = new Error('handler failed');
+    const event = { target: null, type: 'click' };
+
+    // SPEC.md §4.4: the loader owns delegated handler and hydration diagnostics.
+    reportRuntimeContextError(onError, error, { event, phase: 'delegated-event' });
+
+    expect(onError).toHaveBeenCalledWith(error, { event, phase: 'delegated-event' });
   });
 });

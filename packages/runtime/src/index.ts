@@ -1,5 +1,6 @@
 export type { DiagnosticCode } from '@jiso/core';
 import type { Form, FormFailure, FormInput, JsonValue } from '@jiso/core';
+import { reportRuntimeContextError } from './error-policy.js';
 import { parseJsonValue } from './json.js';
 import { queryStoreKey } from './query-store.js';
 import type { QueryScriptLike, QueryStore } from './query-store.js';
@@ -244,7 +245,7 @@ export function installJisoLoader(options: JisoLoaderOptions): JisoLoader {
   const enhancedMutations = enhancedMutationSetup?.options;
   const queryVisibleReturn = installQueryVisibleReturnRefetch({
     onError(error) {
-      options.onError?.(error, { phase: 'query-hydration' });
+      reportRuntimeContextError(options.onError, error, { phase: 'query-hydration' });
     },
     ...definedProps({
       queryRefetch: options.queryRefetch,
@@ -276,7 +277,7 @@ export function installJisoLoader(options: JisoLoaderOptions): JisoLoader {
           }
           await dispatchDelegatedEvent(event, options.importModule, islandSignalScope);
         } catch (error) {
-          options.onError?.(error, {
+          reportRuntimeContextError(options.onError, error, {
             event,
             phase: enhancedSubmit ? 'enhanced-mutation' : 'delegated-event',
           });
@@ -411,7 +412,7 @@ function dispatchExecutionTrigger(
   islandSignalScope: IslandSignalScope,
 ): void {
   void dispatchDelegatedEvent(event, options.importModule, islandSignalScope).catch((error) => {
-    options.onError?.(error, { event, phase: 'execution-trigger' });
+    reportRuntimeContextError(options.onError, error, { event, phase: 'execution-trigger' });
   });
 }
 
