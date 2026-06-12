@@ -1,12 +1,11 @@
 import { runInNewContext } from 'node:vm';
 
 import { compilerIrHeader } from '../ir.js';
-import { parseLiteralObject } from '../scan/object.js';
 import {
   componentOptionObjectKeys,
   componentRenderHost,
   componentRenderHostElement,
-  componentStateReturnObject,
+  componentStateReturnObjectModel,
   firstComponentModel,
   type ComponentModuleModel,
   type JsxAttributeModel,
@@ -266,11 +265,8 @@ function mergeDepValues(existing: readonly string[], declared: readonly string[]
 }
 
 function staticStateJson(model: ComponentModuleModel): string | null {
-  const stateObject = componentStateReturnObject(model);
-  if (!stateObject) return null;
-
-  const parsed = parseLiteralObject(stateObject);
-  return parsed ? JSON.stringify(parsed) : null;
+  const stateObject = componentStateReturnObjectModel(model);
+  return stateObject?.staticValue ? JSON.stringify(stateObject.staticValue) : null;
 }
 
 function templateLiteral(value: string): string {

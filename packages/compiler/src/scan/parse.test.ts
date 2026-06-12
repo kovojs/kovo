@@ -91,6 +91,35 @@ export const CartBadge = component('cart-badge', {
     ]);
   });
 
+  it('records static literal state return values', () => {
+    const source = `
+export const CartBadge = component('cart-badge', {
+  state: () => ({ label: "it's ready", count: -2, open: false, meta: { empty: null } }),
+  render: () => <cart-badge>Ready</cart-badge>,
+});
+`;
+    const [component] = parseComponentModule('cart-badge.tsx', source).components;
+
+    expect(component?.stateReturnObject?.staticValue).toEqual({
+      count: -2,
+      label: "it's ready",
+      meta: { empty: null },
+      open: false,
+    });
+  });
+
+  it('leaves non-static state return values unstamped in the model', () => {
+    const source = `
+export const CartBadge = component('cart-badge', {
+  state: () => ({ now: Date.now() }),
+  render: () => <cart-badge>Ready</cart-badge>,
+});
+`;
+    const [component] = parseComponentModule('cart-badge.tsx', source).components;
+
+    expect(component?.stateReturnObject?.staticValue).toBeUndefined();
+  });
+
   it('records first HTML tag names for exported renderSource returns', () => {
     const source = `
 export function renderSource() {

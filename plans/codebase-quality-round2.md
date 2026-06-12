@@ -803,6 +803,14 @@ pipeline throws the tree away and communicates via mutated source text.
       `pnpm exec vitest --run packages/compiler/src/scan/parse.test.ts packages/compiler/src/state-events.test.ts -t "call argument property access|event payload|FW320"`,
       `pnpm exec vitest --run packages/compiler/src`, and
       `pnpm exec vp check packages/compiler/src/scan/parse.ts packages/compiler/src/scan/parse.test.ts packages/compiler/src/validate/component-contracts.ts`.
+      Additional evidence 2026-06-12: `scan/parse.ts` now records parser-owned static literal
+      values for component `state: () => ({ ... })` return objects, including nested objects,
+      negative numbers, booleans, strings, and nulls. `emit/server.ts` consumes that model fact
+      for `fw-state` stamping instead of reparsing the state object source with the
+      string-scanner `parseLiteralObject()`. Same-session evidence:
+      `pnpm exec vitest --run packages/compiler/src/scan/parse.test.ts packages/compiler/src/state-events.test.ts -t "static literal state|non-static state|stamps static island-local state|preserves apostrophes"`,
+      `pnpm exec vitest --run packages/compiler/src`, and
+      `pnpm exec vp check packages/compiler/src/scan/parse.ts packages/compiler/src/scan/parse.test.ts packages/compiler/src/emit/server.ts`.
 - [x] **HIGH — Retire regex rewriting of handler bodies.** emit/client.ts:89
       (`/\bstate\b/g → ctx.state` corrupts `log('state changed')`), :96 (member-expression
       substitution inside string literals), lower/handlers.ts:262 (harvests params from string

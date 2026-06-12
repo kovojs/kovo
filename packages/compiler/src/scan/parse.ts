@@ -1,5 +1,7 @@
 import ts from 'typescript';
 
+import type { StaticLiteralValue } from './object.js';
+
 export interface ComponentOptionEntry {
   key: string;
   objectEntries?: readonly ObjectLiteralEntry[];
@@ -134,6 +136,7 @@ export interface RenderInputModel {
 export interface StateReturnObjectModel {
   end: number;
   entries: readonly ObjectLiteralEntry[];
+  staticValue?: Record<string, StaticLiteralValue>;
   source: string;
   start: number;
 }
@@ -1410,7 +1413,57 @@ function arrowReturnObjectSource(
   return {
     end,
     entries: objectLiteralEntries(sourceFile, source, body),
+    ...stateReturnStaticValue(body),
     source: source.slice(start, end),
     start,
   };
+}
+
+function stateReturnStaticValue(
+  expression: ts.ObjectLiteralExpression,
+): { staticValue: Record<string, StaticLiteralValue> } | {} {
+  const value = staticObjectLiteralValue(expression);
+  return value ? { staticValue: value } : {};
+}
+
+function staticObjectLiteralValue(
+  expression: ts.ObjectLiteralExpression,
+): Record<string, StaticLiteralValue> | null {
+  const value: Record<string, StaticLiteralValue> = {};
+
+  for (const property of expression.properties) {
+    if (!ts.isPropertyAssignment(property)) return null;
+
+    const key = propertyNameText(property.name);
+    if (!key) return null;
+
+    const literal = staticLiteralValue(property.initializer);
+    if (literal === undefined) return null;
+    value[key] = literal;
+  }
+
+  return value;
+}
+
+function staticLiteralValue(expression: ts.Expression): StaticLiteralValue | undefined {
+  const unwrapped = unwrapExpression(expression);
+
+  if (ts.isStringLiteralLike(unwrapped) || ts.isNoSubstitutionTemplateLiteral(unwrapped)) {
+    return unwrapped.text;
+  }
+
+  if (ts.isNumericLiteral(unwrapped)) return Number(unwrapped.text);
+  if (
+    ts.isPrefixUnaryExpression(unwrapped) &&
+    unwrapped.operator === ts.SyntaxKind.MinusToken &&
+    ts.isNumericLiteral(unwrapped.operand)
+  ) {
+    return -Number(unwrapped.operand.text);
+  }
+
+  if (unwrapped.kind === ts.SyntaxKind.TrueKeyword) return true;
+  if (unwrapped.kind === ts.SyntaxKind.FalseKeyword) return false;
+  if (unwrapped.kind === ts.SyntaxKind.NullKeyword) return null;
+
+  return ts.isObjectLiteralExpression(unwrapped) ? staticObjectLiteralValue(unwrapped) : undefined;
 }
