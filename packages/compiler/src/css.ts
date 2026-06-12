@@ -1,5 +1,9 @@
 import { findMatchingToken, findStringEnd } from './scan/text.js';
-import { firstComponentModel, type ComponentModuleModel } from './scan/parse.js';
+import {
+  componentRenderHostElement,
+  firstComponentModel,
+  type ComponentModuleModel,
+} from './scan/parse.js';
 import { cssIrHeader } from './ir.js';
 import { escapeAttribute, indent, kebabCase } from './shared.js';
 
@@ -110,15 +114,11 @@ export function componentCssAssetForFile(
   };
 }
 
-export function emitCssModule(
-  source: string,
-  componentName: string,
-  model: ComponentModuleModel,
-): string | null {
+export function emitCssModule(componentName: string, model: ComponentModuleModel): string | null {
   const css = extractStaticComponentCss(model);
   if (!css) return null;
 
-  const scopedCss = scopeComponentCss(componentHostSelector(source, componentName, model), css);
+  const scopedCss = scopeComponentCss(componentHostSelector(componentName, model), css);
 
   return `${cssIrHeader}\n/* @jiso-scope-fallback */\n${formatFallbackCss(scopedCss.fallback)}\n\n${scopedCss.scoped}`;
 }
@@ -228,21 +228,11 @@ function extractStaticCssTemplate(value: string): string | null {
   return css.includes('${') ? null : css;
 }
 
-function componentHostSelector(
-  source: string,
-  componentName: string,
-  model: ComponentModuleModel,
-): string {
+function componentHostSelector(componentName: string, model: ComponentModuleModel): string {
   const component = firstComponentModel(model);
   const explicitName = component?.explicitName;
   const hostName = explicitName ?? kebabCase(componentName);
-  const renderedHost = component?.renderHost
-    ? openingTagName(source.slice(component.renderHost.start, component.renderHost.end))
-    : null;
+  const renderedHost = componentRenderHostElement(model)?.tag ?? null;
 
   return renderedHost === hostName ? hostName : `[fw-c="${escapeAttribute(hostName)}"]`;
-}
-
-function openingTagName(source: string): string | null {
-  return /^<(?<name>[A-Za-z][\w:-]*)/.exec(source)?.groups?.name ?? null;
 }

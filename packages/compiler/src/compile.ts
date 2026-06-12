@@ -122,7 +122,7 @@ export function compileComponentModule(options: CompileComponentOptions): Compil
   const versionedHandlers = handlers.map((handler) =>
     versionHandlerLowering(handler, options.fileName, clientHref),
   );
-  const cssSource = emitCssModule(source, componentName, model);
+  const cssSource = emitCssModule(componentName, model);
   const fragmentTargetFacts = findFragmentTargetFacts(componentName, model);
   const fragmentTargets = fragmentTargetFacts.map((fact) => fact.target);
   const componentGraphFacts = [componentGraphFact(componentName, model, fragmentTargets)];

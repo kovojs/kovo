@@ -696,6 +696,11 @@ pipeline throws the tree away and communicates via mutated source text.
       `pnpm exec vitest --run packages/compiler/src/scan/parse.test.ts packages/compiler/src/query-coverage.test.ts packages/compiler/src/query-update-plans.test.ts`
       and
       `pnpm exec vp check packages/compiler/src/scan/parse.ts packages/compiler/src/scan/parse.test.ts packages/compiler/src/lower/inline-derives.ts`.
+      Additional evidence 2026-06-12: static CSS scoping now derives the rendered host selector
+      from `componentRenderHostElement(model).tag`, and `emitCssModule()` no longer accepts
+      module source just to recover the opening tag name. Same-session evidence:
+      `pnpm exec vitest --run packages/compiler/src/css.test.ts packages/compiler/src/compile-component.test.ts`
+      and `pnpm exec vp check packages/compiler/src/css.ts packages/compiler/src/compile.ts`.
       Partial evidence 2026-06-11: `serverRenderSource` now parses once after handler lowering
       with the author file name and stamps component identity, declared query deps, and initial
       state onto the render host through one in-memory tag update instead of reparsing for each
