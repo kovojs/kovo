@@ -1076,7 +1076,7 @@ function hasNamedImportLocal(source: string, moduleName: string, localName: stri
     if (stringLiteralValue(namedImport.moduleText) !== moduleName) continue;
 
     for (const specifier of namedImport.specifiersText.split(',')) {
-      if (namedImportLocalName(specifier.trim()) === localName) return true;
+      if (namedImportSpecifier(specifier.trim())?.local === localName) return true;
     }
   }
 
@@ -1115,19 +1115,50 @@ function findNamedImports(source: string): NamedImportMatch[] {
   return imports;
 }
 
+interface NamespaceImportMatch {
+  localName: string;
+  moduleText: string;
+}
+
+function findNamespaceImports(source: string): NamespaceImportMatch[] {
+  const imports: NamespaceImportMatch[] = [];
+  const importPattern =
+    /import\s+\*\s+as\s+(?<local>[A-Za-z_$][0-9A-Za-z_$]*)\s+from\s*(?<module>['"][^'"]+['"])/g;
+
+  for (const match of source.matchAll(importPattern)) {
+    imports.push({
+      localName: match.groups?.local ?? '',
+      moduleText: match.groups?.module ?? '',
+    });
+  }
+
+  return imports;
+}
+
 function findFirstImport(source: string): number {
   const match = /^[ \t]*import\s/m.exec(source);
 
   return match?.index ?? 0;
 }
 
-function namedImportLocalName(specifier: string): string | null {
+interface NamedImportSpecifier {
+  imported: string;
+  local: string;
+}
+
+function namedImportSpecifier(specifier: string): NamedImportSpecifier | null {
   const match =
     /^(?<imported>[A-Za-z_$][0-9A-Za-z_$]*)(?:\s+as\s+(?<local>[A-Za-z_$][0-9A-Za-z_$]*))?$/.exec(
       specifier,
     );
 
-  return match?.groups?.local ?? match?.groups?.imported ?? null;
+  const imported = match?.groups?.imported;
+  if (!imported) return null;
+
+  return {
+    imported,
+    local: match.groups?.local ?? imported,
+  };
 }
 
 function findDrizzleTableCalls(
@@ -1135,7 +1166,7 @@ function findDrizzleTableCalls(
   factories: readonly string[] = ['mysqlTable', 'pgTable', 'sqliteTable'],
 ): DrizzleTableCall[] {
   const calls: DrizzleTableCall[] = [];
-  const factoryNames = new Set(factories);
+  const factoryCallees = drizzleTableFactoryCallees(source, factories);
 
   for (let index = 0; index < source.length; index += 1) {
     if (
@@ -1150,9 +1181,18 @@ function findDrizzleTableCalls(
 
     const identifier = readIdentifierAt(source, index);
 
-    if (identifier === null || !factoryNames.has(identifier.value)) continue;
-    if (isIdentifierCharacter(source[identifier.start - 1] ?? '')) continue;
-    if (source[identifier.start - 1] === '.') continue;
+    if (identifier === null) continue;
+
+    const memberCallee = readMemberCalleeBefore(source, identifier);
+    const isFactoryCallee =
+      memberCallee === null
+        ? factoryCallees.identifiers.has(identifier.value)
+        : factoryCallees.members.has(memberCallee);
+
+    if (!isFactoryCallee) continue;
+    if (memberCallee === null && isIdentifierCharacter(source[identifier.start - 1] ?? '')) {
+      continue;
+    }
 
     const openParen = skipWhitespace(source, identifier.end);
     if (source[openParen] !== '(') continue;
@@ -1177,6 +1217,57 @@ function findDrizzleTableCalls(
   return calls;
 }
 
+interface DrizzleTableFactoryCallees {
+  identifiers: Set<string>;
+  members: Set<string>;
+}
+
+const drizzleTableFactoryByModule = {
+  'drizzle-orm/mysql-core': 'mysqlTable',
+  'drizzle-orm/pg-core': 'pgTable',
+  'drizzle-orm/sqlite-core': 'sqliteTable',
+} as const;
+
+const defaultDrizzleTableFactories = new Set<string>(Object.values(drizzleTableFactoryByModule));
+
+function drizzleTableFactoryCallees(
+  source: string,
+  factories: readonly string[],
+): DrizzleTableFactoryCallees {
+  const identifiers = new Set(factories.filter((factory) => !factory.includes('.')));
+  const members = new Set(factories.filter((factory) => factory.includes('.')));
+
+  for (const namedImport of findNamedImports(source)) {
+    const moduleName = stringLiteralValue(namedImport.moduleText);
+    if (!isDrizzleCoreModule(moduleName)) continue;
+
+    const moduleFactory = drizzleTableFactoryByModule[moduleName];
+    for (const specifierText of namedImport.specifiersText.split(',')) {
+      const specifier = namedImportSpecifier(specifierText.trim());
+      if (specifier?.imported === moduleFactory) identifiers.add(specifier.local);
+    }
+  }
+
+  for (const namespaceImport of findNamespaceImports(source)) {
+    const moduleName = stringLiteralValue(namespaceImport.moduleText);
+    if (!isDrizzleCoreModule(moduleName)) continue;
+
+    members.add(`${namespaceImport.localName}.${drizzleTableFactoryByModule[moduleName]}`);
+  }
+
+  for (const factory of defaultDrizzleTableFactories) {
+    identifiers.add(factory);
+  }
+
+  return { identifiers, members };
+}
+
+function isDrizzleCoreModule(
+  moduleName: string | null,
+): moduleName is keyof typeof drizzleTableFactoryByModule {
+  return moduleName !== null && moduleName in drizzleTableFactoryByModule;
+}
+
 function readIdentifierAt(
   source: string,
   index: number,
@@ -1194,6 +1285,31 @@ function readIdentifierAt(
   };
 }
 
+function readMemberCalleeBefore(
+  source: string,
+  property: { start: number; value: string },
+): string | null {
+  const dot = skipWhitespaceBackward(source, property.start - 1);
+
+  if (source[dot] !== '.') return null;
+
+  const objectEnd = skipWhitespaceBackward(source, dot - 1) + 1;
+  const objectStart = readIdentifierStartBefore(source, objectEnd);
+
+  if (objectStart === null) return null;
+
+  return `${source.slice(objectStart, objectEnd)}.${property.value}`;
+}
+
+function readIdentifierStartBefore(source: string, end: number): number | null {
+  if (!isIdentifierCharacter(source[end - 1] ?? '')) return null;
+
+  let start = end - 1;
+  while (start > 0 && isIdentifierCharacter(source[start - 1])) start -= 1;
+
+  return isIdentifierStart(source[start]) ? start : null;
+}
+
 function isIdentifierStart(char: string | undefined): boolean {
   return char !== undefined && /[A-Za-z_$]/.test(char);
 }
@@ -1206,6 +1322,14 @@ function skipWhitespace(source: string, index: number): number {
   let next = index;
 
   while (/\s/.test(source[next] ?? '')) next += 1;
+
+  return next;
+}
+
+function skipWhitespaceBackward(source: string, index: number): number {
+  let next = index;
+
+  while (next >= 0 && /\s/.test(source[next] ?? '')) next -= 1;
 
   return next;
 }

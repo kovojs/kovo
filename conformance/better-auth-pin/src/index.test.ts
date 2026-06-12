@@ -350,6 +350,64 @@ describe('Better Auth pinned conformance', () => {
     );
   });
 
+  it('materializes real Better Auth metadata when schema.ts aliases Drizzle table factories', () => {
+    const { auth } = createRealAuth({
+      plugins: [
+        admin(),
+        organization({
+          dynamicAccessControl: { enabled: true },
+          teams: { enabled: true },
+        }),
+      ],
+    });
+    const tables = getAuthTables(auth.options);
+    const tableNames = Object.keys(tables).sort();
+    const source = [
+      "import { jiso } from '@jiso/drizzle';",
+      "import { pgTable as authPgTable } from 'drizzle-orm/pg-core';",
+      "import * as sqlite from 'drizzle-orm/sqlite-core';",
+      '',
+      ...tableNames.map((table, index) =>
+        index % 2 === 0
+          ? `export const ${table} = authPgTable('${table}', {});`
+          : `export const ${table} = sqlite.sqliteTable('${table}', {});`,
+      ),
+      '',
+    ].join('\n');
+    const result = annotateBetterAuthSchemaSource(source, tables);
+
+    expect(result.validation).toEqual({
+      declaredTouchMismatches: [],
+      keyFieldMismatches: [],
+      missingTables: [],
+      ok: true,
+      pluginTableDegradations: [],
+      unbridgedTables: [],
+    });
+    expect(result.annotatedTables).toEqual([
+      'account',
+      'invitation',
+      'member',
+      'organization',
+      'organizationRole',
+      'session',
+      'team',
+      'teamMember',
+      'user',
+      'verification',
+    ]);
+    expect(result.missingSourceTables).toEqual([]);
+    expect(result.source).toContain(
+      "export const account = authPgTable('account', {}, jiso({ domain: 'auth', key: 'userId' }));",
+    );
+    expect(result.source).toContain(
+      "export const invitation = sqlite.sqliteTable('invitation', {}, jiso({ domain: 'organization', key: 'organizationId' }));",
+    );
+    expect(result.source).toContain(
+      "export const verification = sqlite.sqliteTable('verification', {}, jiso({ exempt: true }));",
+    );
+  });
+
   it('pins two-factor plugin table metadata used by the schema bridge', () => {
     const { auth } = createRealAuth({
       plugins: [twoFactor()],

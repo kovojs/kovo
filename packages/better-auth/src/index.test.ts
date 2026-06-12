@@ -1055,6 +1055,46 @@ describe('credential mutation helpers', () => {
     );
   });
 
+  it('infers aliased and namespace Drizzle table factories when annotating schema.ts', () => {
+    const metadata = {
+      account: authTable(['userId']),
+      session: authTable(['userId']),
+      user: authTable(),
+      verification: authTable(),
+    };
+    const result = annotateBetterAuthSchemaSource(
+      [
+        "import { pgTable as authPgTable } from 'drizzle-orm/pg-core';",
+        "import * as sqlite from 'drizzle-orm/sqlite-core';",
+        '',
+        "export const user = authPgTable('user', {});",
+        "export const session = sqlite.sqliteTable('session', {});",
+        "export const account = authPgTable('account', {});",
+        "export const verification = sqlite.sqliteTable('verification', {});",
+      ].join('\n'),
+      metadata,
+    );
+
+    // SPEC.md §14: generated app schema annotations must not miss Better
+    // Auth tables just because Drizzle table factories were imported safely.
+    expect(result.validation.ok).toBe(true);
+    expect(result.annotatedTables).toEqual(['account', 'session', 'user', 'verification']);
+    expect(result.missingSourceTables).toEqual([]);
+    expect(result.importNote).toMatchObject({
+      insertedImport: true,
+      localName: 'jiso',
+    });
+    expect(result.source).toContain(
+      "export const user = authPgTable('user', {}, jiso({ domain: 'user', key: 'id' }));",
+    );
+    expect(result.source).toContain(
+      "export const session = sqlite.sqliteTable('session', {}, jiso({ domain: 'auth', key: 'userId' }));",
+    );
+    expect(result.source).toContain(
+      "export const verification = sqlite.sqliteTable('verification', {}, jiso({ exempt: true }));",
+    );
+  });
+
   it('wraps signInEmail as an ordinary mutation and forwards Better Auth cookies', async () => {
     const auth = new FakeCredentialAuth();
     const headers = requestHeaders();
