@@ -3,7 +3,7 @@ import { execFileSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 
 import type { TouchGraph } from '@jiso/drizzle';
-import { createJisoTestHarness } from '@jiso/test';
+import { createJisoTestHarness } from '@jiso/test/harness';
 import { fwCheck, fwExplain } from 'fw';
 
 import {

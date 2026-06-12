@@ -4130,6 +4130,14 @@ As each phase splits a source module, split its tests in the same commit.
       `examples/commerce/src/graph.ts`, leaving `source-truth.test.ts` to exercise the shared
       graph seam directly while `app.test.ts` remains on app behavior. Same-session evidence:
       `corepack pnpm exec vitest --run examples/commerce/src/source-truth.test.ts`.
+      Additional evidence 2026-06-12: the commerce acceptance tests now consume the public
+      `@jiso/test/assertions` and `@jiso/test/harness` subpaths instead of routing harness and
+      property-test helpers through the root `@jiso/test` barrel, proving the package subpath
+      split against a real Phase 6/7 consumer. Same-session evidence:
+      `corepack pnpm exec vitest --run examples/commerce/src/app.test.ts examples/commerce/src/source-truth.test.ts`,
+      `corepack pnpm exec vitest --run packages/test/src/package-exports.test.ts`,
+      `corepack pnpm exec vp check examples/commerce/src/app.test.ts examples/commerce/src/source-truth.test.ts plans/codebase-quality-round2.md`,
+      and `git diff --check`.
       Additional evidence 2026-06-12: Drizzle runtime/static package-surface coverage moved from
       `packages/drizzle/src/index.test.ts` into `packages/drizzle/src/runtime-surface.test.ts`,
       leaving static extraction coverage in the Drizzle monolith. Same-session evidence:

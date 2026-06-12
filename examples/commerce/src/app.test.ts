@@ -4,7 +4,8 @@ import { createHmac } from 'node:crypto';
 import { readFileSync, rmSync } from 'node:fs';
 
 import { storageBodyToBytes } from '@jiso/core';
-import { createJisoTestHarness, propertyTest } from '@jiso/test';
+import { propertyTest } from '@jiso/test/assertions';
+import { createJisoTestHarness } from '@jiso/test/harness';
 import type { TouchGraph } from '@jiso/drizzle';
 import { morphStructuralTree, type StructuralMorphNode } from '@jiso/runtime';
 import { csrfToken, runMutation } from '@jiso/server';
