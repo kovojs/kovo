@@ -354,6 +354,7 @@ describe('create-jiso starter', () => {
         ['dev', '--host', '127.0.0.1', '--port', String(port), '--strictPort'],
         {
           cwd: root,
+          detached: process.platform !== 'win32',
           env: withRepoBinOnPath(),
         },
       );
@@ -609,20 +610,40 @@ async function fetchTextWhenReady(url: string, output: () => string): Promise<st
   throw new Error(`Timed out fetching ${url}: ${cause}\n${output()}`);
 }
 
-async function stopProcess(process: ChildProcessWithoutNullStreams | undefined): Promise<void> {
-  if (!process || process.exitCode !== null) return;
+async function stopProcess(
+  childProcess: ChildProcessWithoutNullStreams | undefined,
+): Promise<void> {
+  if (!childProcess || childProcess.exitCode !== null) return;
 
   await new Promise<void>((resolve, reject) => {
     const timer = setTimeout(() => {
-      process.kill('SIGKILL');
+      killProcessTree(childProcess, 'SIGKILL');
       reject(new Error('Timed out stopping generated vp dev process.'));
     }, 5_000);
-    process.once('exit', () => {
+    childProcess.once('exit', () => {
       clearTimeout(timer);
       resolve();
     });
-    process.kill('SIGTERM');
+    killProcessTree(childProcess, 'SIGTERM');
   });
+}
+
+function killProcessTree(
+  childProcess: ChildProcessWithoutNullStreams,
+  signal: NodeJS.Signals,
+): void {
+  if (childProcess.pid === undefined) return;
+  try {
+    if (process.platform !== 'win32') {
+      process.kill(-childProcess.pid, signal);
+      return;
+    }
+  } catch (error) {
+    const code = (error as NodeJS.ErrnoException).code;
+    if (code !== 'ESRCH') throw error;
+  }
+
+  childProcess.kill(signal);
 }
 
 function resolveDependencyRoot(packageName: string): string {
