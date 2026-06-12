@@ -58,6 +58,12 @@ content or severities (SPEC §11.3 owns those); `fw check`/`fw explain` semantic
       generate→compile→repair loop works before a file touches disk.
 - [ ] Gate wiring: seeded-diagnostic fixtures prove each surface red/green behaviorally (per the
       round-2 Phase 1 rule: behavior, never source-text grepping).
+      Evidence 2026-06-12: page-route dev middleware gate now has a focused red/green test in
+      `packages/server/src/vite-diagnostics.test.ts`: a seeded FW225 error diagnostic returns the
+      E1 diagnostic document with HTTP 500 for a matching page modulepreload, then a same-module
+      FW210 lint diagnostic clears the ledger and the app route returns HTTP 200. Same-session
+      evidence: `pnpm exec vitest --run packages/server/src/vite-diagnostics.test.ts`.
+      Gap: fragment/mutation seeded gates still wait on the E2 dependency mapping seam.
 
 ## Background
 
