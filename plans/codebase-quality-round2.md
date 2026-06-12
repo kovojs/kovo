@@ -2850,6 +2850,14 @@ As each phase splits a source module, split its tests in the same commit.
       pipeline and render-equivalence groups. Same-session evidence:
       `pnpm exec vitest --run packages/compiler/src/handler-lowering.test.ts packages/compiler/src/index.test.ts -t "minifier|FW201|FW210|serializability|anonymous handlers"`
       and `pnpm exec vp check packages/compiler/src/handler-lowering.test.ts packages/compiler/src/index.test.ts plans/codebase-quality-round2.md`.
+      Additional evidence 2026-06-12: the remaining compile-component smoke, emitted-file,
+      CSS artifact, render-equivalence, fixpoint, FW235 provenance, and empty-registry tests moved
+      from `packages/compiler/src/index.test.ts` to
+      `packages/compiler/src/compile-component.test.ts`; `packages/compiler/src/index.test.ts`
+      no longer exists. This closes the zero-per-module-test monolith shape, while the separate
+      Phase 2 IR architecture items remain open. Same-session evidence:
+      `pnpm exec vitest --run packages/compiler/src/compile-component.test.ts` and
+      `pnpm exec vp check packages/compiler/src/compile-component.test.ts plans/codebase-quality-round2.md`.
 - [ ] drizzle (one describe, 57 its, 68 inline pgTable fixtures, 3 module-shim copies) and
       test-package suites: same treatment; CLI tests get the temp-dir + stream-spy ritual
       (16 hand-copies) as one helper.
