@@ -79,7 +79,7 @@ Scope: SPEC additions (session population, guard-failure contract, mutation resp
       `pnpm exec vitest --run packages/better-auth/src/index.test.ts conformance/better-auth-pin/src/index.test.ts`,
       and
       `pnpm exec vp check packages/better-auth/src/index.ts conformance/better-auth-pin/src/index.test.ts conformance/better-auth-pin/package.json conformance/better-auth-pin/tsconfig.json vite.config.ts tests/fw-check.node.mjs pnpm-lock.yaml`.
-- [ ] B7 starter login recipe + reference-app adoption behind real `authed`/`role()` guards.
+- [x] B7 starter login recipe + reference-app adoption behind real `authed`/`role()` guards.
       Partial evidence 2026-06-11: `packages/create-jiso/templates/src/auth.tsx` ships an
       ejectable Better Auth starter recipe using `betterAuthSession`,
       `betterAuthSignInEmailMutation`, `betterAuthSignOutMutation`, `authed`, and `role()`.
@@ -153,8 +153,8 @@ Scope: SPEC additions (session population, guard-failure contract, mutation resp
       `pnpm exec vitest --run examples/reference/src/app.test.ts`,
       `pnpm exec tsc -p examples/reference/tsconfig.json --noEmit`, and
       `pnpm exec vp check --fix examples/reference/src/app.ts examples/reference/src/app.test.ts examples/reference/package.json examples/reference/tsconfig.json plans/auth.md IMPLEMENT_v1.md pnpm-lock.yaml`.
-      Remaining gap: B7 remains open until the reference app is represented in the graph/audit
-      vocabulary and passes the unguarded/unscoped audits with authenticated flows.
+      Remaining gap at that point: B7 remained open until the reference app was represented in
+      the graph/audit vocabulary and passed the unguarded/unscoped audits with authenticated flows.
       Partial graph/audit evidence 2026-06-12: `examples/reference/src/app.ts` now exports a
       typed `referenceGraph` for the authenticated reference surfaces: guarded `/account`,
       `role:admin` `/admin`, and guarded `auth/sign-out`, plus session-scoped `user` owner-domain
@@ -165,9 +165,19 @@ Scope: SPEC additions (session population, guard-failure contract, mutation resp
       `pnpm exec vitest --run examples/reference/src/app.test.ts`,
       `pnpm exec tsc -p examples/reference/tsconfig.json --noEmit`, and
       `pnpm exec vp check --fix examples/reference/src/app.ts examples/reference/src/app.test.ts examples/reference/package.json examples/reference/tsconfig.json pnpm-lock.yaml`.
-      Remaining gap: the public credential sign-in mutation still has no first-class
-      audit vocabulary for intentionally anonymous auth entrypoints, so B7 stays open rather
-      than pretending the full credential flow is audit-represented.
+      Completion evidence 2026-06-12: mutation graph facts now support an explicit `auth`
+      declaration for intentionally public credential entrypoints. `packages/core/src/graph.ts`
+      exposes `MutationExplain.auth`, `packages/cli/src/index.ts` prints it in mutation explain
+      output and treats it as an auth declaration for `fw explain --unguarded`, and
+      `packages/cli/src/index.test.ts` covers a `custom:better-auth-credential` sign-in mutation
+      that explains with `auth:` while producing `SUMMARY total=0` for unguarded audit.
+      `examples/reference/src/app.ts` now includes `auth/sign-in` in `referenceGraph` with that
+      declaration, so the same graph represents the real Better Auth sign-in route, guarded
+      sign-out mutation, guarded `/account`, and `role:admin` `/admin`; the reference tests prove
+      `fwCheck`, `fwExplain` page/mutation output, and unguarded/unscoped audit cleanliness.
+      Same-session evidence:
+      `pnpm exec vitest --run packages/cli/src/index.test.ts -t "mutation auth declarations|unguarded mutations" examples/reference/src/app.test.ts packages/core/src/graph.test.ts` and
+      `pnpm exec vp check packages/core/src/graph.ts packages/cli/src/index.ts packages/cli/src/index.test.ts examples/reference/src/app.ts examples/reference/src/app.test.ts examples/reference/package.json examples/reference/tsconfig.json IMPLEMENT_v1.md plans/auth.md pnpm-lock.yaml`.
 
 ## Background — the gap
 

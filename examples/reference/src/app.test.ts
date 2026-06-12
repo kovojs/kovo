@@ -62,6 +62,22 @@ describe('reference auth adoption', () => {
         '',
       ].join('\n'),
     });
+    expect(fwExplain(referenceGraph, { kind: 'mutation', target: 'auth/sign-in' })).toEqual({
+      exitCode: 0,
+      output: [
+        'fw-explain/v1',
+        'MUTATION auth/sign-in',
+        'guards: -',
+        'auth: custom:better-auth-credential',
+        'session: referenceSession',
+        'input-fields: email,password,next',
+        'writes: auth',
+        'invalidates: auth',
+        'manual-invalidates: -',
+        'updates: -',
+        '',
+      ].join('\n'),
+    });
     expect(fwExplain(referenceGraph, { unguarded: true })).toEqual({
       exitCode: 0,
       output: 'fw-explain/v1\nUNGUARDED\nSUMMARY total=0\n',

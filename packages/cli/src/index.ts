@@ -1241,6 +1241,7 @@ export function fwExplain(input: FwExplainInput, options: FwExplainOptions): FwC
 
     lines.push(`MUTATION ${mutation.key}`);
     lines.push(`guards: ${list(mutation.guards)}`);
+    if (mutation.auth) lines.push(`auth: ${mutation.auth}`);
     if (mutation.session) lines.push(`session: ${mutation.session}`);
     if (mutation.enctype) lines.push(`enctype: ${mutation.enctype}`);
     if (mutation.inputFields) lines.push(`input-fields: ${list(mutation.inputFields)}`);
@@ -1826,14 +1827,17 @@ function unguardedAccesses(input: FwExplainInput): UnguardedAccessFact[] {
         name: endpointName(endpoint),
       })),
     ...(input.mutations ?? [])
-      .filter((mutation) => !hasAuthGuard(mutation.guards ?? []))
+      .filter((mutation) => !hasMutationAuth(mutation))
       .map((mutation) => ({
         detail: [
           `guards=${list(mutation.guards)}`,
+          mutation.auth === undefined ? '' : `auth=${mutationAuth(mutation)}`,
           `writes=${list(mutation.writes)}`,
           `invalidates=${list(mutation.invalidates)}`,
           `manual-invalidates=${list(mutation.manualInvalidates)}`,
-        ].join(' '),
+        ]
+          .filter(Boolean)
+          .join(' '),
         kind: 'mutation' as const,
         name: mutation.key,
       })),
@@ -1888,6 +1892,15 @@ function compareUnguardedAccess(left: UnguardedAccessFact, right: UnguardedAcces
 
 function hasAuthGuard(guards: readonly string[]): boolean {
   return guards.some((guard) => guard === 'authed' || guard.startsWith('role:'));
+}
+
+function hasMutationAuth(mutation: MutationExplain): boolean {
+  if (hasAuthGuard(mutation.guards ?? [])) return true;
+  return mutationAuth(mutation) !== 'none';
+}
+
+function mutationAuth(mutation: MutationExplain): string {
+  return mutation.auth ?? 'none';
 }
 
 function hasEndpointAuth(endpoint: EndpointExplain): boolean {

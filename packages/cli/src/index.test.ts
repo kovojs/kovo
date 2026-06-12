@@ -2357,6 +2357,40 @@ describe('fw explain', () => {
     `);
   });
 
+  it('treats mutation auth declarations as guarded audit facts', () => {
+    const input = {
+      mutations: [
+        {
+          auth: 'custom:better-auth-credential',
+          invalidates: ['auth'],
+          inputFields: ['email', 'password', 'next'],
+          key: 'auth/sign-in',
+          writes: ['auth'],
+        },
+      ],
+    };
+
+    expect(fwExplain(input, { kind: 'mutation', target: 'auth/sign-in' })).toEqual({
+      exitCode: 0,
+      output: [
+        'fw-explain/v1',
+        'MUTATION auth/sign-in',
+        'guards: -',
+        'auth: custom:better-auth-credential',
+        'input-fields: email,password,next',
+        'writes: auth',
+        'invalidates: auth',
+        'manual-invalidates: -',
+        'updates: -',
+        '',
+      ].join('\n'),
+    });
+    expect(fwExplain(input, { unguarded: true })).toEqual({
+      exitCode: 0,
+      output: 'fw-explain/v1\nUNGUARDED\nSUMMARY total=0\n',
+    });
+  });
+
   it('audits unguarded queries and pages with stable explain output', () => {
     const result = fwExplain(
       {

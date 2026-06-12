@@ -200,6 +200,14 @@ export const referenceSignOut = referenceAuth.signOut;
 export const referenceGraph = {
   mutations: [
     {
+      auth: 'custom:better-auth-credential',
+      invalidates: ['auth'],
+      inputFields: ['email', 'password', 'next'],
+      key: 'auth/sign-in',
+      session: 'referenceSession',
+      writes: ['auth'],
+    },
+    {
       guards: ['authed'],
       invalidates: ['auth'],
       inputFields: [],

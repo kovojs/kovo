@@ -120,6 +120,7 @@ export interface PlatformSubstitutionExplain {
 }
 
 export interface MutationExplain {
+  auth?: string;
   enctype?: 'application/x-www-form-urlencoded' | 'multipart/form-data';
   fileFields?: readonly string[];
   guards?: readonly string[];
