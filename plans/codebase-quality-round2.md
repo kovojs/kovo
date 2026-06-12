@@ -986,6 +986,13 @@ land it first; don't fork it.
       conventions while passing through: the `'arg:path'` micro-DSL (index.ts:2715-2734), the
       `${domain}:${key}` instance-key convention (:2784), the duck-probed session scope
       (:3020-3052 → reuse `SessionRequestLike`), the duplicated `'https://jiso.local'` origin.
+      Partial evidence 2026-06-12: schema primitives, validation errors, file schemas, async
+      schema parsing, and form/query entry normalization moved from `packages/server/src/index.ts`
+      into `packages/server/src/schema.ts`; `index.ts` now imports those helpers and re-exports
+      the public schema API to preserve package exports. Same-session evidence:
+      `pnpm exec vitest --run packages/server/src/index.test.ts packages/server/src/app.test.ts packages/server/src/webhook.test.ts`,
+      `pnpm exec vp check packages/server/src/index.ts packages/server/src/schema.ts`, and
+      `git diff --check`.
 - [ ] **LOW** — dead code (`matchShellDispatch` post-loop return shell.ts:161-166; rate-limit
       tail `return options.max > 0` index.ts:576); `matchRoute` recompiling all routes per call
       (match.ts:75-81 — cache `compileRoute`); `Transfer-Encoding: chunked` on a buffered string
