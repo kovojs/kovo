@@ -1,7 +1,7 @@
 import { dedupeBy } from '../shared.js';
+import { knownQueryNames, queryNameFromPath, queryPathUsesKnownQuery } from './query-shapes.js';
 import {
   callExpressions,
-  componentOptionObjectKeys,
   componentOptionSource,
   jsxElements,
   jsxExpressions,
@@ -12,14 +12,12 @@ import {
 import type {
   CompileComponentOptions,
   QueryDeriveFact,
-  QueryShape,
   QueryTemplateStampBindingPlaceholder,
   QueryStampFact,
   QueryTemplateStampFact,
   QueryUpdateCoverageFact,
   QueryUpdatePlanFact,
 } from '../types.js';
-import { queryShapesFromFacts } from '../types.js';
 
 interface DataBindAttribute {
   name: string;
@@ -279,32 +277,6 @@ function dataDeriveStamps(
   };
 }
 
-function knownQueryNames(
-  model: ComponentModuleModel,
-  options: CompileComponentOptions,
-): Set<string> {
-  return new Set([
-    ...componentQueryNames(model),
-    ...Object.keys(options.registryFacts?.queries ?? {}),
-    ...Object.keys(componentQueryShapes(options) ?? {}),
-  ]);
-}
-
-function componentQueryNames(model: ComponentModuleModel): string[] {
-  return componentOptionObjectKeys(model, 'queries');
-}
-
-function componentQueryShapes(options: CompileComponentOptions): Record<string, QueryShape> | null {
-  return (
-    options.queryShapes ??
-    (options.queryShapeFacts ? queryShapesFromFacts(options.queryShapeFacts) : null)
-  );
-}
-
-function queryNameFromPath(path: string): string | null {
-  return path.split('.', 1)[0] ?? null;
-}
-
 function renderOnceQueryPaths(
   model: ComponentModuleModel,
   knownQueries: ReadonlySet<string>,
@@ -347,11 +319,6 @@ function queryPathsInExpression(expression: string, knownQueries: ReadonlySet<st
   return propertyAccessPaths('expression.tsx', expression).filter((path) =>
     queryPathUsesKnownQuery(path, knownQueries),
   );
-}
-
-function queryPathUsesKnownQuery(path: string, knownQueries: ReadonlySet<string>): boolean {
-  const query = queryNameFromPath(path);
-  return query !== null && knownQueries.has(query);
 }
 
 function updateCoverageKey(fact: QueryUpdateCoverageFact): string {

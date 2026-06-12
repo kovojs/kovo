@@ -2,20 +2,19 @@ import { diagnosticDefinitions } from '@jiso/core';
 
 import { diagnosticFor, type CompilerDiagnostic } from '../diagnostics.js';
 import { dedupeBy } from '../shared.js';
+import { jsxElements, type ComponentModuleModel, type JsxElementModel } from '../scan/parse.js';
 import {
-  componentOptionObjectKeys,
-  jsxElements,
-  type ComponentModuleModel,
-  type JsxElementModel,
-} from '../scan/parse.js';
+  componentQueryShapes,
+  knownQueryNames,
+  parseBindingPath,
+  queryPathUsesKnownQuery,
+  queryShapeAtPath,
+  requiredPathSegment,
+  validatePathInQueryShapes,
+  validatePathInShape,
+} from '../analyze/query-shapes.js';
 import type { CompileComponentOptions, QueryShape, QueryTemplateStampFact } from '../types.js';
-import {
-  isArrayQueryShape,
-  isQueryShapeObject,
-  isQueryShapeWrapper,
-  queryShapesFromFacts,
-  unwrapQueryShape,
-} from '../types.js';
+import { isArrayQueryShape } from '../types.js';
 
 interface DataBindAttribute {
   index: number;
@@ -149,30 +148,6 @@ function soleWrappedQueryExpression(source: string): string | null {
     source,
   );
   return match?.groups?.path ?? null;
-}
-
-function knownQueryNames(
-  model: ComponentModuleModel,
-  options: CompileComponentOptions,
-): Set<string> {
-  return new Set([
-    ...componentQueryNames(model),
-    ...Object.keys(options.registryFacts?.queries ?? {}),
-    ...Object.keys(componentQueryShapes(options) ?? {}),
-  ]);
-}
-
-function componentQueryNames(model: ComponentModuleModel): string[] {
-  return componentOptionObjectKeys(model, 'queries');
-}
-
-function queryNameFromPath(path: string): string | null {
-  return path.split('.', 1)[0] ?? null;
-}
-
-function queryPathUsesKnownQuery(path: string, knownQueries: ReadonlySet<string>): boolean {
-  const query = queryNameFromPath(path);
-  return query !== null && knownQueries.has(query);
 }
 
 function dataBindAttributes(model: ComponentModuleModel): DataBindAttribute[] {
@@ -312,86 +287,6 @@ function validateListStampInQueryShapes(
   }
 
   return { exists: true };
-}
-
-function queryShapeAtPath(shape: QueryShape, segments: readonly BindingPathSegment[]): QueryShape {
-  const current = unwrapQueryShape(shape);
-  if (segments.length === 0) return current;
-  if (isArrayQueryShape(current)) return queryShapeAtPath(current[0] ?? 'object', segments);
-  if (!isQueryShapeObject(current)) return 'object';
-
-  const [head, ...tail] = segments;
-  if (!head) return current;
-  return queryShapeAtPath(current[head.name] ?? 'object', tail);
-}
-
-function componentQueryShapes(options: CompileComponentOptions): Record<string, QueryShape> | null {
-  return (
-    options.queryShapes ??
-    (options.queryShapeFacts ? queryShapesFromFacts(options.queryShapeFacts) : null)
-  );
-}
-
-function validatePathInQueryShapes(
-  path: string,
-  queryShapes: Record<string, QueryShape>,
-): PathShapeValidation {
-  const [querySegment, ...segments] = parseBindingPath(path);
-  const queryName = querySegment?.name;
-  if (!queryName) return { exists: false };
-
-  const shape = queryShapes[queryName];
-  if (!shape || segments.length === 0) return { exists: Boolean(shape) };
-
-  return validatePathInShape(shape, segments);
-}
-
-function validatePathInShape(
-  shape: QueryShape,
-  segments: readonly BindingPathSegment[],
-): PathShapeValidation {
-  const current = unwrapQueryShape(shape);
-  if (segments.length === 0) return { exists: true };
-
-  if (isArrayQueryShape(current)) {
-    const itemShape = current[0];
-    return itemShape === undefined ? { exists: false } : validatePathInShape(itemShape, segments);
-  }
-
-  if (!isQueryShapeObject(current)) return { exists: false };
-
-  const [head, ...tail] = segments;
-  if (!head || !(head.name in current)) return { exists: false };
-
-  const child = current[head.name] ?? 'object';
-  const nullableTraversal = tail.length > 0 && isQueryShapeWrapper(child) && !head.optional;
-  if (nullableTraversal) {
-    const childValidation = validatePathInShape(child, tail);
-    return childValidation.exists
-      ? { exists: true, nullableTraversal: { segment: head.name } }
-      : { exists: false };
-  }
-
-  return validatePathInShape(child, tail);
-}
-
-interface BindingPathSegment {
-  name: string;
-  optional: boolean;
-}
-
-function parseBindingPath(path: string): BindingPathSegment[] {
-  return path
-    .split('.')
-    .filter((segment) => segment !== '')
-    .map((segment) => ({
-      name: segment.endsWith('?') ? segment.slice(0, -1) : segment,
-      optional: segment.endsWith('?'),
-    }));
-}
-
-function requiredPathSegment(name: string): BindingPathSegment {
-  return { name, optional: false };
 }
 
 function nullableItemBindingDiagnostics(

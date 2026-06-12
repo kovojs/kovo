@@ -1,6 +1,7 @@
 import { diagnosticDefinitions } from '@jiso/core';
 
 import { diagnosticFor, type CompilerDiagnostic } from '../diagnostics.js';
+import { componentQueryShapes, queryShapePaths } from '../analyze/query-shapes.js';
 import { capturesUnserializableValue } from '../lower/handlers.js';
 import {
   callExpressions,
@@ -17,12 +18,6 @@ import {
 } from '../scan/parse.js';
 import { dedupeBy, generatedOffsetToOriginal, type SourceOffsetMap } from '../shared.js';
 import type { QueryShape, QueryShapeFact, QueryUpdateCoverageFact } from '../types.js';
-import {
-  isArrayQueryShape,
-  isQueryShapeObject,
-  queryShapesFromFacts,
-  unwrapQueryShape,
-} from '../types.js';
 
 interface ComponentContractValidationOptions {
   fileName: string;
@@ -230,15 +225,6 @@ function fw230Diagnostic(
   };
 }
 
-function componentQueryShapes(
-  options: ComponentContractValidationOptions,
-): Record<string, QueryShape> | null {
-  return (
-    options.queryShapes ??
-    (options.queryShapeFacts ? queryShapesFromFacts(options.queryShapeFacts) : null)
-  );
-}
-
 function fw311Diagnostic(
   fileName: string,
   source: string,
@@ -281,28 +267,6 @@ function eventPayloads(model: ComponentModuleModel): EventPayloadPath[] {
   }
 
   return payloads;
-}
-
-function queryShapePaths(queryShapes: Record<string, QueryShape>): string[] {
-  return Object.entries(queryShapes).flatMap(([queryName, shape]) => [
-    queryName,
-    ...queryShapeChildPaths(shape).flatMap((path) => [`${queryName}.${path}`, path]),
-  ]);
-}
-
-function queryShapeChildPaths(shape: QueryShape): string[] {
-  const current = unwrapQueryShape(shape);
-  if (isArrayQueryShape(current)) {
-    const itemShape = current[0];
-    return itemShape === undefined ? [] : queryShapeChildPaths(itemShape);
-  }
-
-  if (!isQueryShapeObject(current)) return [];
-
-  return Object.entries(current).flatMap(([key, child]) => [
-    key,
-    ...queryShapeChildPaths(child ?? 'object').map((path) => `${key}.${path}`),
-  ]);
 }
 
 function stateKeyHasQueryPrefix(stateKey: string, queryName: string): boolean {
