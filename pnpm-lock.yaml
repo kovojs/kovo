@@ -132,9 +132,15 @@ importers:
 
   examples/gallery:
     dependencies:
+      '@jiso/core':
+        specifier: workspace:*
+        version: link:../../packages/core
       '@jiso/headless-ui':
         specifier: workspace:*
         version: link:../../packages/headless-ui
+      '@jiso/runtime':
+        specifier: workspace:*
+        version: link:../../packages/runtime
       '@jiso/server':
         specifier: workspace:*
         version: link:../../packages/server
@@ -142,6 +148,9 @@ importers:
         specifier: workspace:*
         version: link:../../packages/ui
     devDependencies:
+      '@jiso/compiler':
+        specifier: workspace:*
+        version: link:../../packages/compiler
       typescript:
         specifier: ^6.0.3
         version: 6.0.3

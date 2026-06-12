@@ -4,15 +4,28 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "emit:interactive-gallery": "node scripts/emit-interactive-gallery.mjs",
     "test": "vitest --run"
   },
   "dependencies": {
+    "@jiso/core": "workspace:*",
     "@jiso/headless-ui": "workspace:*",
+    "@jiso/runtime": "workspace:*",
     "@jiso/server": "workspace:*",
     "@jiso/ui": "workspace:*"
   },
   "devDependencies": {
+    "@jiso/compiler": "workspace:*",
     "typescript": "^6.0.3",
     "vitest": "4.1.8"
+  },
+  "jiso": {
+    "interactiveGallery": {
+      "compiledDemos": [
+        "checkbox-demo",
+        "disclosure-demo",
+        "toggle-demo"
+      ]
+    }
   }
 }

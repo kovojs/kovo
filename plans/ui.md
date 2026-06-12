@@ -899,6 +899,19 @@ jiso-dialog` resolves dashed wire names and prints provenance including package,
       inspection that docs output includes the generated handler module references.
       This gate is separate from G1 because `renderGalleryRoute()` fixture HTML can
       correctly expose primitive attributes while remaining non-interactive.
+      Partial evidence 2026-06-12: `examples/gallery/src/interactive/` now contains
+      app-authored TSX demos for toggle, checkbox, and disclosure; `examples/gallery/scripts/emit-interactive-gallery.mjs`
+      compiles them through `@jiso/compiler`, asserts no hand-authored stamps, allows
+      only FW210 naming lints, and runs fixpoint plus render-equivalence gates before
+      writing lowered TSX and generated client modules under `examples/gallery/src/generated/interactive/`.
+      `examples/gallery/src/interactive-gallery.test.ts` checks the generated artifacts
+      are fresh, statically inspects `fw-c`/`fw-state` and versioned `on:click`
+      handler refs, and executes the generated client handler bodies to prove state
+      transitions for the three demos. Same-session evidence:
+      `pnpm --filter @jiso/example-gallery run emit:interactive-gallery` and
+      `pnpm --filter @jiso/example-gallery exec vitest --run src/interactive-gallery.test.ts`.
+      G6 remains open because this is not browser-backed and does not cover every
+      stateful primitive family or keyboard/top-layer behavior.
 
 ## Background
 
