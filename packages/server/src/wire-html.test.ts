@@ -1,8 +1,23 @@
 import { describe, expect, it } from 'vitest';
 
-import { renderFragmentWireHtml } from './wire-html.js';
+import { renderFragmentWireHtml, renderQueryScript } from './wire-html.js';
 
 describe('server wire html emitters', () => {
+  it('renders initial query scripts for document-load hydration', () => {
+    expect(
+      renderQueryScript({
+        key: 'cart:c1',
+        name: 'cart',
+        value: {
+          html: '</script><script>alert(1)</script>',
+          items: [{ productId: 'p1', qty: 1 }],
+        },
+      }),
+    ).toBe(
+      '<script type="application/json" fw-query="cart" key="cart:c1">{"html":"\\u003c/script>\\u003cscript>alert(1)\\u003c/script>","items":[{"productId":"p1","qty":1}]}</script>',
+    );
+  });
+
   it('renders fw-fragment wrappers with escaped wire attributes and raw html content', () => {
     expect(
       renderFragmentWireHtml({
