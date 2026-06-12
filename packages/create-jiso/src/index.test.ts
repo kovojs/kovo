@@ -27,6 +27,7 @@ describe('create-jiso starter', () => {
       '.github/workflows/ci.yml',
       'README.md',
       'graph.json',
+      'scripts/export-static.mjs',
       'scripts/emit-graph.mjs',
       'scripts/graph-assertions.mjs',
       'docs/graph-assertions.md',
@@ -80,12 +81,13 @@ describe('create-jiso starter', () => {
         '@types/node': '^25.0.0',
         fw: 'workspace:*',
         tailwindcss: '^4.1.0',
+        vite: '^8.0.16',
       });
       expect(packageJson.scripts).toMatchObject({
+        check: 'vp check',
+        dev: 'vp dev',
         'emit-graph': 'node scripts/emit-graph.mjs',
-        export: 'vp run export',
-        'fw-check': 'vp run fw-check',
-        'graph-assertions': 'vp run graph-assertions',
+        test: 'vp test',
       });
 
       const graph = JSON.parse(readFileSync(join(root, 'graph.json'), 'utf8')) as FwExplainInput;
@@ -207,8 +209,13 @@ describe('create-jiso starter', () => {
       const viteConfig = readFileSync(join(root, 'vite.config.ts'), 'utf8');
       expect(viteConfig).toContain('starterAppShellDevPlugin()');
       expect(viteConfig).toContain("ssrLoadModule('/src/app-shell.ts')");
-      expect(viteConfig).toContain('fw export ./src/app-shell.ts --out dist');
+      expect(viteConfig).toContain('node scripts/export-static.mjs');
       expect(viteConfig).toContain("pathname === '/'");
+      const exportStaticScript = readFileSync(join(root, 'scripts/export-static.mjs'), 'utf8');
+      expect(exportStaticScript).toContain("execFileSync('vp', ['build']");
+      expect(exportStaticScript).toContain("ssrLoadModule('/src/app-shell.ts')");
+      expect(exportStaticScript).toContain('exportStaticApp(app, { outDir:');
+      expect(exportStaticScript).toContain('JISO_STARTER_STYLESHEET_HREF');
     } finally {
       rmSync(root, { force: true, recursive: true });
     }
@@ -325,6 +332,38 @@ describe('create-jiso starter', () => {
     }
   });
 
+  it('runs the generated vp export task with the built stylesheet href', () => {
+    const tempParent = tmpdir();
+    mkdirSync(tempParent, { recursive: true });
+    const root = mkdtempSync(join(tempParent, 'create-jiso-export-task-'));
+
+    try {
+      writeJisoProject(root, { name: 'Export Task Proof' });
+      linkStarterBuildDependencies(root);
+
+      execFileSync(resolveBin('vp'), ['run', 'export'], {
+        cwd: root,
+        env: withRepoBinOnPath(),
+        stdio: 'pipe',
+      });
+
+      const distIndex = readFileSync(join(root, 'dist/index.html'), 'utf8');
+      const cssFile = readdirSync(join(root, 'dist/assets')).find((file) => file.endsWith('.css'));
+
+      expect(cssFile).toBeTypeOf('string');
+      expect(distIndex).toContain(`href="/assets/${cssFile}"`);
+      expect(distIndex).not.toContain('/src/styles.css');
+      expect(readFileSync(join(root, 'dist/assets', cssFile ?? ''), 'utf8')).toContain(
+        '.text-jiso-accent',
+      );
+      expect(readFileSync(join(root, 'dist/c/starter.client.js'), 'utf8')).toContain(
+        'Starter$announce',
+      );
+    } finally {
+      rmSync(root, { force: true, recursive: true });
+    }
+  });
+
   it('creates a new target directory from the CLI and derives the package name', () => {
     const parent = mkdtempSync(join(tmpdir(), 'create-jiso-cli-'));
     const root = join(parent, 'Hello CLI');
@@ -332,7 +371,7 @@ describe('create-jiso starter', () => {
 
     try {
       expect(main([root])).toBe(0);
-      expect(stdout).toHaveBeenCalledWith(`create-jiso: wrote 18 files to ${root}\n`);
+      expect(stdout).toHaveBeenCalledWith(`create-jiso: wrote 19 files to ${root}\n`);
       expect(JSON.parse(readFileSync(join(root, 'package.json'), 'utf8'))).toMatchObject({
         name: 'hello-cli',
       });
@@ -404,10 +443,13 @@ describe('create-jiso starter', () => {
 
 function linkStarterBuildDependencies(root: string): void {
   const nodeModules = join(root, 'node_modules');
+  const nodeModulesBin = join(nodeModules, '.bin');
   mkdirSync(join(nodeModules, '@jiso'), { recursive: true });
   mkdirSync(join(nodeModules, '@tailwindcss'), { recursive: true });
   mkdirSync(join(nodeModules, '@types'), { recursive: true });
+  mkdirSync(nodeModulesBin, { recursive: true });
 
+  symlinkSync(resolveBin('vp'), join(nodeModulesBin, 'vp'));
   symlinkSync(resolveDependencyRoot('@types/node'), join(nodeModules, '@types/node'));
   symlinkSync(resolveDependencyRoot('@tailwindcss/vite'), join(nodeModules, '@tailwindcss/vite'));
   symlinkSync(resolveDependencyRoot('@jiso/better-auth'), join(nodeModules, '@jiso/better-auth'));
@@ -415,9 +457,18 @@ function linkStarterBuildDependencies(root: string): void {
   symlinkSync(resolveDependencyRoot('@jiso/core'), join(nodeModules, '@jiso/core'));
   symlinkSync(resolveDependencyRoot('@jiso/runtime'), join(nodeModules, '@jiso/runtime'));
   symlinkSync(resolveDependencyRoot('@jiso/server'), join(nodeModules, '@jiso/server'));
+  symlinkSync(resolveDependencyRoot('fw'), join(nodeModules, 'fw'));
   symlinkSync(resolveDependencyRoot('tailwindcss'), join(nodeModules, 'tailwindcss'));
+  symlinkSync(resolveDependencyRoot('vite'), join(nodeModules, 'vite'));
   symlinkSync(resolveDependencyRoot('vitest'), join(nodeModules, 'vitest'));
   symlinkSync(resolveDependencyRoot('vite-plus'), join(nodeModules, 'vite-plus'));
+}
+
+function withRepoBinOnPath(): NodeJS.ProcessEnv {
+  return {
+    ...process.env,
+    PATH: [join(process.cwd(), 'node_modules/.bin'), process.env.PATH ?? ''].join(':'),
+  };
 }
 
 function resolveDependencyRoot(packageName: string): string {
@@ -435,6 +486,13 @@ function resolveDependencyRoot(packageName: string): string {
       packageName.slice('@jiso/'.length),
       'package.json',
     );
+    if (existsSync(workspacePackageJson)) {
+      return realpathSync(dirname(workspacePackageJson));
+    }
+  }
+
+  if (packageName === 'fw') {
+    const workspacePackageJson = join(process.cwd(), 'packages/cli/package.json');
     if (existsSync(workspacePackageJson)) {
       return realpathSync(dirname(workspacePackageJson));
     }

@@ -28,8 +28,10 @@ export default defineConfig({
         output: ['dist/**'],
       },
       export: {
-        command: 'fw export ./src/app-shell.ts --out dist',
+        command: 'node scripts/export-static.mjs',
         input: [
+          { pattern: 'index.html', base: 'workspace' },
+          { pattern: 'scripts/export-static.mjs', base: 'workspace' },
           { pattern: 'src/**/*', base: 'workspace' },
           { pattern: 'vite.config.ts', base: 'workspace' },
         ],

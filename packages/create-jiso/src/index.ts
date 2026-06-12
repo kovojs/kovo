@@ -30,6 +30,7 @@ const templateFiles = [
   '.github/workflows/ci.yml',
   'README.md',
   'graph.json',
+  'scripts/export-static.mjs',
   'scripts/emit-graph.mjs',
   'scripts/graph-assertions.mjs',
   'docs/graph-assertions.md',

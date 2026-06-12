@@ -8,6 +8,7 @@ import {
 import { App } from './app.js';
 
 const clientModules = createMemoryVersionedClientModuleRegistry();
+const starterStylesheetHref = process.env.JISO_STARTER_STYLESHEET_HREF ?? '/src/styles.css';
 
 export const starterClientModuleHref = clientModules.put({
   path: '/c/starter.client.js',
@@ -36,7 +37,7 @@ export const homeRoute = route('/', {
   page() {
     return App.definition.render();
   },
-  stylesheets: ['/src/styles.css'],
+  stylesheets: [starterStylesheetHref],
 });
 
 export const app = createApp({

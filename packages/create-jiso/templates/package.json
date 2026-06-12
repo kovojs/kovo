@@ -6,10 +6,7 @@
     "check": "vp check",
     "dev": "vp dev",
     "emit-graph": "node scripts/emit-graph.mjs",
-    "export": "vp run export",
-    "test": "vp test",
-    "fw-check": "vp run fw-check",
-    "graph-assertions": "vp run graph-assertions"
+    "test": "vp test"
   },
   "dependencies": {
     "@jiso/better-auth": "workspace:*",
@@ -25,6 +22,7 @@
     "fw": "workspace:*",
     "tailwindcss": "^4.1.0",
     "typescript": "^6.0.0",
+    "vite": "^8.0.16",
     "vite-plus": "^0.1.24",
     "vitest": "^4.1.8"
   }

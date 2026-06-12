@@ -183,6 +183,22 @@ Scope: SPEC addition (proposed §9.5 "The request shell"), `@jiso/server` shell 
       the existing pretty `*/index.html` site output. R7 remains open until the
       main integration pass accepts that compatibility layer or lands server/CLI
       seams for package-source execution and pretty URL output.
+      Progress 2026-06-12: the create-jiso starter export task now builds Vite
+      assets before static replay and loads `src/app-shell.ts` through Vite SSR
+      with `JISO_STARTER_STYLESHEET_HREF` set to the emitted `/assets/*.css`
+      file. This removes the generated package-script/task-name conflict around
+      `vp run export`, keeps dev on `/src/styles.css`, and makes exported
+      `dist/index.html` reference the built Tailwind CSS while preserving the
+      app-shell `/c/` module copy. Evidence:
+      `packages/create-jiso/templates/scripts/export-static.mjs`,
+      `packages/create-jiso/templates/vite.config.ts`, and
+      `packages/create-jiso/templates/src/app-shell.ts`; same-session
+      verification ran
+      `PATH=/Users/mini/jiso-agent-app-shell-r7-20260612k/node_modules/.bin:$PATH vitest --run packages/create-jiso/src/index.test.ts`,
+      whose generated-project proof executes `vp run export` and checks
+      `dist/index.html`, `dist/assets/*.css`, and `dist/c/starter.client.js`.
+      R6/R7 remain open for non-starter adoption and broader export asset/task
+      integration.
 
 ## Background — the gap
 
