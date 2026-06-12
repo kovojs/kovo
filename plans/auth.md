@@ -85,6 +85,16 @@ Scope: SPEC additions (session population, guard-failure contract, mutation resp
       silently accepted. Same-session evidence:
       `pnpm exec vitest --run packages/better-auth/src/index.test.ts conformance/better-auth-pin/src/index.test.ts --reporter=dot`
       and `pnpm exec tsc -p conformance/better-auth-pin/tsconfig.json --noEmit`.
+      Partial evidence 2026-06-12: the real Better Auth `twoFactor()` pin now also covers
+      OTP and backup-code provider options, proving those provider configurations keep the
+      same `twoFactor` table fields and `userId` auth-domain bridge instead of adding
+      plugin tables or changing B1 ownership. `conformance/better-auth-pin/src/index.test.ts`
+      verifies clean validation and generated `schema.ts` annotations from
+      `better-auth@1.6.17` metadata. Same-session evidence:
+      `pnpm exec vitest --run packages/better-auth/src/index.test.ts conformance/better-auth-pin/src/index.test.ts --reporter=dot`,
+      `pnpm exec tsc -p conformance/better-auth-pin/tsconfig.json --noEmit`,
+      `pnpm exec vp check conformance/better-auth-pin/src/index.test.ts plans/auth.md`,
+      and `git diff --check`.
       Partial evidence 2026-06-12: the bridge now recognizes the real Better Auth
       `deviceAuthorization({ schema: {} })` plugin `deviceCode` table as exempt
       redirect/device-flow protocol state, matching SPEC §10.1's rule that pure Better

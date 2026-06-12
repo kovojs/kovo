@@ -480,6 +480,58 @@ describe('Better Auth pinned conformance', () => {
     );
   });
 
+  it('pins two-factor OTP and backup-code provider metadata under the same table bridge', () => {
+    const { auth } = createRealAuth({
+      plugins: [
+        twoFactor({
+          backupCodeOptions: {
+            storeBackupCodes: 'plain',
+          },
+          otpOptions: {
+            sendOTP: async () => {},
+          },
+        }),
+      ],
+    });
+    const tables = getAuthTables(auth.options);
+    const result = annotateBetterAuthSchemaSource(
+      betterAuthSchemaSourceFixture(Object.keys(tables)),
+      tables,
+    );
+
+    expect(Object.keys(tables).sort()).toEqual([
+      'account',
+      'session',
+      'twoFactor',
+      'user',
+      'verification',
+    ]);
+    expect(Object.keys(requireAuthTable(tables, 'twoFactor').fields).sort()).toEqual([
+      'backupCodes',
+      'secret',
+      'userId',
+      'verified',
+    ]);
+    expect(validateBetterAuthSchemaBridge(tables)).toEqual({
+      declaredTouchMismatches: [],
+      keyFieldMismatches: [],
+      missingTables: [],
+      ok: true,
+      pluginTableDegradations: [],
+      unbridgedTables: [],
+    });
+    expect(result.annotatedTables).toEqual([
+      'account',
+      'session',
+      'twoFactor',
+      'user',
+      'verification',
+    ]);
+    expect(result.source).toContain(
+      "export const twoFactor = pgTable('twoFactor', {}, jiso({ domain: 'auth', key: 'userId' }));",
+    );
+  });
+
   it('pins device-authorization code metadata as an exempt schema bridge table', () => {
     const { auth } = createRealAuth({
       plugins: [deviceAuthorization({ schema: {} })],
