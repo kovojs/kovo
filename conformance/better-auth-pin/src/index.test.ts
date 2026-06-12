@@ -544,11 +544,15 @@ describe('Better Auth pinned conformance', () => {
     });
   });
 
-  it('degrades non-bridged real plugin table metadata with FW406 bridge diagnostics', () => {
+  it('pins JWT plugin signing-key metadata as an exempt schema bridge table', () => {
     const { auth } = createRealAuth({
       plugins: [jwt()],
     });
     const tables = getAuthTables(auth.options);
+    const result = annotateBetterAuthSchemaSource(
+      betterAuthSchemaSourceFixture(Object.keys(tables)),
+      tables,
+    );
 
     expect(Object.keys(tables).sort()).toEqual([
       'account',
@@ -567,24 +571,19 @@ describe('Better Auth pinned conformance', () => {
       declaredTouchMismatches: [],
       keyFieldMismatches: [],
       missingTables: [],
-      ok: false,
-      pluginTableDegradations: [
-        {
-          diagnosticCode: 'FW406',
-          fields: ['createdAt', 'expiresAt', 'id', 'privateKey', 'publicKey'],
-          manualBridgeSteps: [
-            'Inspect jwks fields (createdAt, expiresAt, id, privateKey, publicKey) and decide whether the app reads this table.',
-            'If it is app-visible, add a schema.ts jiso({ domain, key }) annotation; otherwise add jiso({ exempt: true }) with a rationale.',
-            'Add declared Better Auth API touches for writes that can mutate jwks; SPEC.md §11.2 keeps observed writes FW406 until declared coverage exists.',
-          ],
-          message:
-            'jwks is outside the blessed Better Auth schema bridge; add a schema.ts domain/exempt annotation and declared touches before relying on runtime coverage.',
-          reason: 'unsupported-plugin-table',
-          table: 'jwks',
-        },
-      ],
-      unbridgedTables: ['jwks'],
+      ok: true,
+      pluginTableDegradations: [],
+      unbridgedTables: [],
     });
+    expect(betterAuthSchemaBridge.jwks).toEqual({
+      exempt: true,
+      rationale:
+        'Better Auth JWT signing-key material is adapter bookkeeping; SPEC.md §10.1 forbids app queries from reading exempt tables.',
+    });
+    expect(result.annotatedTables).toEqual(['account', 'jwks', 'session', 'user', 'verification']);
+    expect(result.source).toContain(
+      "export const jwks = pgTable('jwks', {}, jiso({ exempt: true }));",
+    );
   });
 
   it('maps a real Better Auth session through the Jiso session provider seam', async () => {

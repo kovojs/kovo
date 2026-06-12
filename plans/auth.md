@@ -80,9 +80,9 @@ Scope: SPEC additions (session population, guard-failure contract, mutation resp
       Partial evidence 2026-06-12: the bridge now maps Better Auth's `twoFactor` plugin table
       to the `auth` domain keyed by `userId`, and `annotateBetterAuthSchemaSource` materializes
       the matching app `schema.ts` annotation. `validateBetterAuthSchemaBridge` now labels
-      unsupported plugin-table degradations with `FW406`, and the pinned conformance suite proves
-      real `jwt()` metadata degrades `jwks` with fields and an actionable manual coverage message
-      rather than being silently accepted. Same-session evidence:
+      unsupported plugin-table degradations with `FW406`, and local fixtures prove unsupported
+      plugin metadata reports fields and an actionable manual coverage message rather than being
+      silently accepted. Same-session evidence:
       `pnpm exec vitest --run packages/better-auth/src/index.test.ts conformance/better-auth-pin/src/index.test.ts --reporter=dot`
       and `pnpm exec tsc -p conformance/better-auth-pin/tsconfig.json --noEmit`.
       Partial evidence 2026-06-12: unsupported Better Auth plugin table degradation payloads now
@@ -91,8 +91,8 @@ Scope: SPEC additions (session population, guard-failure contract, mutation resp
       `schema.ts` annotation results also report whether the required `@jiso/drizzle` `jiso`
       import is already present, including aliased annotation callees. `packages/better-auth/src/index.test.ts`
       covers a local unsupported plugin table and default/aliased import-note cases, while
-      `conformance/better-auth-pin/src/index.test.ts` pins the real `jwt()` `jwks` FW406 manual
-      bridge steps and real schema-annotation import notes from `better-auth@1.6.17`. Same-session
+      `conformance/better-auth-pin/src/index.test.ts` pins real schema-annotation import notes
+      from `better-auth@1.6.17`. Same-session
       evidence:
       `pnpm exec vitest --run packages/better-auth/src/index.test.ts conformance/better-auth-pin/src/index.test.ts --reporter=dot`,
       `pnpm exec tsc -p conformance/better-auth-pin/tsconfig.json --noEmit`, and
@@ -141,7 +141,17 @@ Scope: SPEC additions (session population, guard-failure contract, mutation resp
       generated annotations are clean. Same-session evidence:
       `pnpm exec vitest --run packages/better-auth/src/index.test.ts conformance/better-auth-pin/src/index.test.ts --reporter=dot`
       and `pnpm exec tsc -p conformance/better-auth-pin/tsconfig.json --noEmit`.
-      Remaining gaps: plugin-generated tables outside the blessed organization/admin/two-factor/OIDC-provider/SIWE
+      Partial evidence 2026-06-12: the bridge now treats the real Better Auth `jwt()` plugin
+      `jwks` table as exempt signing-key bookkeeping, matching SPEC §10.1's write-side-only
+      exemption rule for tables the app must not query. `packages/better-auth/src/index.test.ts`
+      covers local bridge/config invariants and generated `schema.ts` annotations for `jwks`;
+      `conformance/better-auth-pin/src/index.test.ts` pins real `better-auth@1.6.17` JWT
+      table/field metadata and verifies validation plus generated annotations are clean.
+      Same-session evidence:
+      `pnpm exec vitest --run packages/better-auth/src/index.test.ts conformance/better-auth-pin/src/index.test.ts --reporter=dot`,
+      `pnpm exec tsc -p conformance/better-auth-pin/tsconfig.json --noEmit`, and
+      `pnpm exec vp check packages/better-auth/src/index.ts packages/better-auth/src/index.test.ts conformance/better-auth-pin/src/index.test.ts plans/auth.md`.
+      Remaining gaps: plugin-generated tables outside the blessed organization/admin/two-factor/OIDC-provider/SIWE/JWT
       surface are still not mapped, the OAuth-provider successor package/table metadata is not
       installed or exportable from the pinned dependency set, and full app `schema.ts` generation remains
       bounded to recognized Drizzle table declarations.

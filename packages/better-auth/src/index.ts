@@ -181,10 +181,12 @@ export type BetterAuthOrganizationTable =
   | 'team'
   | 'teamMember';
 export type BetterAuthOidcProviderTable = 'oauthAccessToken' | 'oauthApplication' | 'oauthConsent';
+export type BetterAuthJwtTable = 'jwks';
 export type BetterAuthSiweTable = 'walletAddress';
 export type BetterAuthTwoFactorTable = 'twoFactor';
 export type BetterAuthTable =
   | BetterAuthCoreTable
+  | BetterAuthJwtTable
   | BetterAuthOidcProviderTable
   | BetterAuthOrganizationTable
   | BetterAuthSiweTable
@@ -297,6 +299,11 @@ export const betterAuthUserDomain = domain('user');
 export const betterAuthSchemaBridge = {
   account: { domain: 'auth', key: 'userId' },
   invitation: { domain: 'organization', key: 'organizationId' },
+  jwks: {
+    exempt: true,
+    rationale:
+      'Better Auth JWT signing-key material is adapter bookkeeping; SPEC.md §10.1 forbids app queries from reading exempt tables.',
+  },
   member: { domain: 'organization', key: 'organizationId' },
   oauthAccessToken: { domain: 'auth', key: 'userId' },
   oauthApplication: { domain: 'auth', key: 'userId' },

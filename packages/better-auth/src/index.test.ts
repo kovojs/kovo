@@ -328,6 +328,11 @@ describe('credential mutation helpers', () => {
     expect(betterAuthSchemaBridge).toEqual({
       account: { domain: 'auth', key: 'userId' },
       invitation: { domain: 'organization', key: 'organizationId' },
+      jwks: {
+        exempt: true,
+        rationale:
+          'Better Auth JWT signing-key material is adapter bookkeeping; SPEC.md §10.1 forbids app queries from reading exempt tables.',
+      },
       member: { domain: 'organization', key: 'organizationId' },
       oauthAccessToken: { domain: 'auth', key: 'userId' },
       oauthApplication: { domain: 'auth', key: 'userId' },
@@ -418,7 +423,7 @@ describe('credential mutation helpers', () => {
         user: 'user',
         walletAddress: 'auth',
       },
-      exemptTables: ['verification'],
+      exemptTables: ['jwks', 'verification'],
       keyByTable: {
         account: 'userId',
         invitation: 'organizationId',
@@ -455,6 +460,7 @@ describe('credential mutation helpers', () => {
       validateBetterAuthSchemaBridge({
         account: authTable(['userId']),
         invitation: authTable(['organizationId']),
+        jwks: authTable(['privateKey', 'publicKey']),
         member: authTable(['organizationId']),
         oauthAccessToken: authTable(['userId']),
         oauthApplication: authTable(['userId']),
@@ -738,6 +744,41 @@ describe('credential mutation helpers', () => {
         "  userId: text('user_id').notNull(),\n" +
         "  address: text('address').notNull(),\n" +
         "}, jiso({ domain: 'auth', key: 'userId' }));",
+    );
+  });
+
+  it('materializes the JWT signing-key table as an exempt app schema.ts source fixture', () => {
+    const result = annotateBetterAuthSchemaSource(
+      [
+        "import { jiso } from '@jiso/drizzle';",
+        "import { pgTable, text, timestamp } from 'drizzle-orm/pg-core';",
+        '',
+        "export const jwks = pgTable('jwks', {",
+        "  id: text('id').primaryKey(),",
+        "  publicKey: text('public_key').notNull(),",
+        "  privateKey: text('private_key').notNull(),",
+        "  expiresAt: timestamp('expires_at'),",
+        '});',
+        '',
+      ].join('\n'),
+      {
+        jwks: authTable(['createdAt', 'expiresAt', 'privateKey', 'publicKey']),
+      },
+    );
+
+    expect(result.validation).toMatchObject({
+      keyFieldMismatches: [],
+      pluginTableDegradations: [],
+      unbridgedTables: [],
+    });
+    expect(result.annotatedTables).toEqual(['jwks']);
+    expect(result.source).toContain(
+      "export const jwks = pgTable('jwks', {\n" +
+        "  id: text('id').primaryKey(),\n" +
+        "  publicKey: text('public_key').notNull(),\n" +
+        "  privateKey: text('private_key').notNull(),\n" +
+        "  expiresAt: timestamp('expires_at'),\n" +
+        '}, jiso({ exempt: true }));',
     );
   });
 
