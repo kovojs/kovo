@@ -12,7 +12,12 @@ import {
   installInlineJisoLoader,
   jisoLoaderSource,
 } from './inline-loader.js';
-import { createInlineJisoLoaderSource as createPublicInlineJisoLoaderSource } from './index.js';
+import {
+  createInlineJisoLoaderSource as createPublicInlineJisoLoaderSource,
+  createQueryStore,
+  submitEnhancedMutation,
+  type EnhancedMutationFetchOptions,
+} from './index.js';
 
 type InlineSourceInstall = (
   importModule: (url: string) => Promise<Record<string, unknown>>,
@@ -50,6 +55,29 @@ class InlineTriggerElement {
 
   setAttribute(name: string, value: string): void {
     this.attrs[name] = value;
+  }
+}
+
+class InlineParityRoot {
+  deps: { deps?: string; id?: string; target?: string }[] = [];
+
+  findFragmentTarget(): null {
+    return null;
+  }
+
+  querySelectorAll(
+    selector: string,
+  ): Iterable<{ getAttribute(name: string): string | null; id?: string }> {
+    if (selector !== '[fw-deps]') return [];
+
+    return this.deps.map((dep) => ({
+      getAttribute(name: string) {
+        if (name === 'fw-fragment-target') return dep.target ?? null;
+        if (name === 'fw-deps') return dep.deps ?? null;
+        return null;
+      },
+      ...(dep.id ? { id: dep.id } : {}),
+    }));
   }
 }
 
@@ -247,6 +275,147 @@ describe('inline loader source', () => {
           delete globalRecord.__jisoInlineImport;
         } else {
           globalRecord.__jisoInlineImport = originals.importModule;
+        }
+      }
+    },
+  );
+
+  it.each(inlineSourceInstallCases)(
+    'keeps enhanced form request targets in parity with modular submit through %s',
+    async (_name, installSource) => {
+      // SPEC.md §4.4: enhanced form headers are part of the always-loaded loader contract.
+      const formData = { kind: 'form-data' };
+      const form = { action: '/_m/cart/add', method: 'post' };
+      const targetDeps = [
+        { deps: 'cart', id: 'cart-badge' },
+        { deps: 'cart', id: 'cart-badge' },
+        { deps: 'inventory, stock', id: 'inventory-panel', target: 'inventory' },
+        { deps: 'debug', id: 'empty-fragment-target-fallback', target: '' },
+        { deps: '', id: 'standalone-target' },
+      ];
+      const modularRoot = new InlineParityRoot();
+      const modularFetch = vi.fn(async (_url: string, _options: EnhancedMutationFetchOptions) => ({
+        headers: {
+          get() {
+            return null;
+          },
+        },
+        async text() {
+          return '';
+        },
+      }));
+      modularRoot.deps = targetDeps;
+
+      await submitEnhancedMutation({
+        fetch: modularFetch,
+        form,
+        formData,
+        idem: 'idem_form_parity',
+        root: modularRoot,
+        store: createQueryStore(),
+      });
+
+      const globalRecord = globalThis as unknown as Record<string, unknown>;
+      const cryptoDescriptor = Object.getOwnPropertyDescriptor(globalThis, 'crypto');
+      const originals = {
+        DOMParser: globalRecord.DOMParser,
+        FormData: globalRecord.FormData,
+        addEventListener: globalRecord.addEventListener,
+        document: globalRecord.document,
+        fetch: globalRecord.fetch,
+        importModule: globalRecord.__jisoInlineImport,
+      };
+      const listeners = new Map<string, (event: unknown) => void>();
+      const preventDefault = vi.fn();
+      const inlineFetch = vi.fn(async (_url: string, _options: EnhancedMutationFetchOptions) => ({
+        async text() {
+          return '';
+        },
+      }));
+
+      try {
+        Object.defineProperty(globalThis, 'crypto', {
+          configurable: true,
+          value: { randomUUID: () => 'idem_form_parity' },
+        });
+        globalRecord.DOMParser = class DOMParser {
+          parseFromString() {
+            return {
+              querySelectorAll() {
+                return [];
+              },
+            };
+          }
+        };
+        globalRecord.FormData = function FormData() {
+          return formData;
+        };
+        globalRecord.addEventListener = (type: string, listener: (event: unknown) => void) => {
+          listeners.set(type, listener);
+        };
+        globalRecord.document = {
+          getElementById() {
+            return null;
+          },
+          querySelector() {
+            return null;
+          },
+          querySelectorAll(selector: string) {
+            if (selector !== '[fw-deps]') return [];
+            return targetDeps.map((dep) => ({
+              getAttribute(name: string) {
+                if (name === 'fw-deps') return dep.deps;
+                if (name === 'fw-fragment-target') return dep.target ?? null;
+                return null;
+              },
+              id: dep.id,
+            }));
+          },
+        };
+        globalRecord.fetch = inlineFetch;
+
+        installSource(
+          vi.fn(async () => ({})),
+          globalRecord,
+        );
+        listeners.get('submit')?.({
+          preventDefault,
+          target: {
+            closest(selector: string) {
+              return selector === 'form[enhance],form[data-enhance],form[data-mutation]'
+                ? form
+                : null;
+            },
+          },
+          type: 'submit',
+        });
+        await Promise.resolve();
+        await Promise.resolve();
+        await new Promise((resolve) => setTimeout(resolve, 0));
+
+        expect(preventDefault).toHaveBeenCalledTimes(1);
+        const inlineRequest = inlineFetch.mock.calls[0];
+        expect(inlineRequest).toEqual(modularFetch.mock.calls[0]);
+        expect(inlineRequest?.[1].headers['FW-Targets']).toBe(
+          'cart-badge=cart; inventory=inventory stock; standalone-target',
+        );
+      } finally {
+        Object.assign(globalRecord, {
+          DOMParser: originals.DOMParser,
+          FormData: originals.FormData,
+          addEventListener: originals.addEventListener,
+          document: originals.document,
+          fetch: originals.fetch,
+        });
+        if (originals.importModule === undefined) {
+          delete globalRecord.__jisoInlineImport;
+        } else {
+          globalRecord.__jisoInlineImport = originals.importModule;
+        }
+        if (cryptoDescriptor) {
+          Object.defineProperty(globalThis, 'crypto', cryptoDescriptor);
+        } else {
+          delete (globalThis as unknown as { crypto?: unknown }).crypto;
         }
       }
     },
