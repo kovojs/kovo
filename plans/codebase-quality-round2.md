@@ -1608,6 +1608,14 @@ params, relational API, `execute(sql)`, right/full joins, a string column named 
       `pnpm exec vitest --run packages/runtime/src/index.test.ts -t "inline response application|inline delegated"`
       and
       `pnpm exec vp check packages/runtime/src/index.test.ts plans/codebase-quality-round2.md`.
+      Additional bounded evidence 2026-06-12: moved that inline response-application parity
+      harness into `packages/runtime/src/inline-loader.test.ts`, colocating generated/extracted
+      source parity with the inline-loader suite while preserving the `applyMutationResponseToDom`
+      comparison for keyed `fw-query`, unkeyed query, replace fragment, and append fragment
+      effects. Same-session evidence:
+      `pnpm exec vitest --run packages/runtime/src/inline-loader.test.ts packages/runtime/src/index.test.ts -t "inline response application|inline delegated|enhanced form request targets"`,
+      `pnpm exec vp check packages/runtime/src/inline-loader.test.ts packages/runtime/src/index.test.ts plans/codebase-quality-round2.md`,
+      and `git diff --check`.
       Additional bounded evidence 2026-06-12: `packages/runtime/src/inline-loader.ts`
       now dedupes live `FW-Targets` in the shipped inline collector, matching the modular
       `submitEnhancedMutation` target collection semantics while preserving order and the
@@ -2732,6 +2740,14 @@ As each phase splits a source module, split its tests in the same commit.
       `submitEnhancedMutation` with a local fake dependency root. Same-session evidence:
       `corepack pnpm exec vitest --run packages/runtime/src/inline-loader.test.ts packages/runtime/src/index.test.ts`,
       `corepack pnpm exec vp check packages/runtime/src/inline-loader.test.ts packages/runtime/src/index.test.ts plans/codebase-quality-round2.md`,
+      and `git diff --check`.
+      Additional evidence 2026-06-12: inline-loader response-application parity moved from
+      `packages/runtime/src/index.test.ts` to `packages/runtime/src/inline-loader.test.ts`,
+      preserving the modular `applyMutationResponseToDom` comparison for keyed `fw-query`,
+      unkeyed query, replace fragment, and append fragment effects while reducing the monolith.
+      Same-session evidence:
+      `pnpm exec vitest --run packages/runtime/src/inline-loader.test.ts packages/runtime/src/index.test.ts -t "inline response application|inline delegated|enhanced form request targets"`,
+      `pnpm exec vp check packages/runtime/src/inline-loader.test.ts packages/runtime/src/index.test.ts plans/codebase-quality-round2.md`,
       and `git diff --check`.
 - [ ] compiler/index.test.ts (3,580 lines, zero per-module tests) → per-phase files; a
       `compileFixture()` helper returning files by kind; diagnostic assertions reference
