@@ -83,7 +83,6 @@ const IGNORED_LOCAL_CALL_NAMES = new Set([
   'update',
   'while',
 ]);
-const EXPORTED_CONST_DECLARATION_SOURCE = String.raw`(?:export\s+)?const\s+`;
 const FW411_MESSAGE = 'Query read set includes an exempt table';
 const UNRESOLVED_READ_SOURCE_EXPRESSION = '__jisoUnresolvedReadSource';
 
@@ -922,41 +921,45 @@ function extractQueryDefinitions(
   source: string,
   columnShapes: Readonly<Record<string, QueryShape>> = {},
 ): ExtractedQueryDefinition[] {
-  const definitions: ExtractedQueryDefinition[] = [];
-  const pattern = new RegExp(
-    `${EXPORTED_CONST_DECLARATION_SOURCE}${IDENTIFIER_SOURCE}\\s*=\\s*query\\s*\\(\\s*["'](?<query>[^"']+)["']\\s*,`,
-    'g',
-  );
+  return withParsedSourceFile(source, (sourceFile) => {
+    const definitions: ExtractedQueryDefinition[] = [];
 
-  for (const match of source.matchAll(pattern)) {
-    const query = match.groups?.query;
-    if (!query) continue;
+    for (const declaration of sourceFile.getVariableDeclarations()) {
+      const statement = declaration.getVariableStatement();
+      if (!statement || statement.getDeclarationKind() !== 'const') continue;
 
-    const objectStart = source.indexOf('{', match.index + match[0].length);
-    if (objectStart === -1) continue;
+      const initializer = declaration.getInitializer();
+      if (!initializer || !Node.isCallExpression(initializer)) continue;
 
-    const objectEnd = findMatchingBrace(source, objectStart);
-    if (objectEnd === -1) continue;
+      const expression = initializer.getExpression();
+      if (!Node.isIdentifier(expression) || expression.getText() !== 'query') continue;
 
-    const body = source.slice(objectStart, objectEnd + 1);
-    const selection = selectShapeFromQueryBody(body, columnShapes);
-    const diagnostics = relationalQueryDiagnostics(body);
-    if (!selection && diagnostics.length === 0) continue;
+      const [queryArgument, bodyArgument] = initializer.getArguments();
+      if (!Node.isStringLiteral(queryArgument) || !Node.isObjectLiteralExpression(bodyArgument)) {
+        continue;
+      }
 
-    definitions.push({
-      body,
-      ...(selection?.diagnostics || diagnostics.length > 0
-        ? { diagnostics: [...(selection?.diagnostics ?? []), ...diagnostics] }
-        : {}),
-      index: match.index,
-      opaquePaths: selection?.opaquePaths ?? [],
-      query,
-      shape: selection?.shape ?? {},
-      unresolvedPaths: selection?.unresolvedPaths ?? [],
-    });
-  }
+      const query = queryArgument.getLiteralText();
+      const body = bodyArgument.getText();
+      const selection = selectShapeFromQueryBody(body, columnShapes);
+      const diagnostics = relationalQueryDiagnostics(body);
+      if (!selection && diagnostics.length === 0) continue;
 
-  return definitions;
+      definitions.push({
+        body,
+        ...(selection?.diagnostics || diagnostics.length > 0
+          ? { diagnostics: [...(selection?.diagnostics ?? []), ...diagnostics] }
+          : {}),
+        index: declaration.getStart(),
+        opaquePaths: selection?.opaquePaths ?? [],
+        query,
+        shape: selection?.shape ?? {},
+        unresolvedPaths: selection?.unresolvedPaths ?? [],
+      });
+    }
+
+    return definitions;
+  });
 }
 
 interface QueryShapeSelection {

@@ -1387,6 +1387,26 @@ export interface CommerceInvalidationSets {
     expect(diagnosticsForQueryFacts(facts)).toEqual([]);
   });
 
+  it('does not discover query definitions from comments strings or templates', () => {
+    const facts = extractQueryFactsFromSource([
+      {
+        fileName: 'audit.queries.ts',
+        source: [
+          'export const auditLog = pgTable("audit_log", { message: text("message").notNull() }, jiso({ domain: "audit", key: "id" }));',
+          '',
+          '// export const commentedQuery = query("commented", { load(_input, db) { return db.select({ message: auditLog.message }).from(auditLog); } });',
+          'const quoted = \'export const quotedQuery = query("quoted", { load(_input, db) { return db.select({ message: auditLog.message }).from(auditLog); } });\';',
+          'const templated = `export const templatedQuery = query("templated", { load(_input, db) { return db.select({ message: auditLog.message }).from(auditLog); } });`;',
+          'export const keepModule = { quoted, templated };',
+          '',
+        ].join('\n'),
+      },
+    ]);
+
+    expect(facts).toEqual([]);
+    expect(diagnosticsForQueryFacts(facts)).toEqual([]);
+  });
+
   it('resolves imported table symbols in project query facts', () => {
     const facts = extractQueryFactsFromProject({
       files: [
