@@ -989,6 +989,12 @@ index.test.ts:4227 while here — it weakens the byte-for-byte claim) + acceptan
       `pnpm exec vitest --run packages/test/src/index.test.ts packages/test/src/page.test.ts`
       and
       `pnpm exec vp check packages/test/src/index.ts packages/test/src/pglite.ts packages/test/src/verifier.ts`.
+      Partial evidence 2026-06-12: verifier diagnostic checks and structured FW403/FW405
+      records moved from `packages/test/src/verifier.ts` into
+      `packages/test/src/verifier-diagnostics.ts`; `verifier.ts` now keeps DB proxying,
+      observation, and SQL parsing while preserving existing exports. Same-session evidence:
+      `pnpm exec vitest --run packages/test/src` and
+      `pnpm exec vp check packages/test/src/index.ts packages/test/src/verifier.ts packages/test/src/verifier-diagnostics.ts packages/test/src/verifier-diagnostics.test.ts plans/codebase-quality-round2.md`.
 - [ ] **MED — Commerce example: one source of truth.** `cartQuery.load` returns a constant while
       `loadCartQuery(db)` does the real read (app.ts:123-126 vs :280-284);
       `productGridQuery.load` conjures a fresh `createCommerceDb()` (:161); the committed
