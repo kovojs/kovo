@@ -15,11 +15,10 @@ import { lowerNavigationHrefs, lowerNavigationLinks } from './lower/navigation.j
 import { lowerPlatformBehaviors } from './lower/platform.js';
 import { lowerViewTransitions } from './lower/view-transitions.js';
 import {
-  type ComponentModuleModel,
   inferComponentName,
   parseComponentModule as parseComponentModuleModel,
 } from './scan/parse.js';
-import { modelForSourceChange } from './model-pipeline.js';
+import { componentPipelineState, lowerComponentPipelineSource } from './model-pipeline.js';
 import {
   mergePackageComponentPrefixFacts,
   packageComponentPrefixesForModule,
@@ -60,19 +59,26 @@ export function compileComponentModule(options: CompileComponentOptions): Compil
   const viewTransitionState = lowerComponentPipelineSource(
     originalState,
     viewTransitionLowering.source,
+    parseComponentModuleModel,
   );
   const platformLowering = lowerPlatformBehaviors(
     viewTransitionState.source,
     viewTransitionState.model,
   );
-  const platformState = lowerComponentPipelineSource(viewTransitionState, platformLowering.source);
+  const platformState = lowerComponentPipelineSource(
+    viewTransitionState,
+    platformLowering.source,
+    parseComponentModuleModel,
+  );
   const linksLoweredState = lowerComponentPipelineSource(
     platformState,
     lowerNavigationLinks(platformState.source, platformState.model),
+    parseComponentModuleModel,
   );
   const navigationState = lowerComponentPipelineSource(
     linksLoweredState,
     lowerNavigationHrefs(linksLoweredState.source, linksLoweredState.model),
+    parseComponentModuleModel,
   );
   const deriveLowering = lowerInlineAttributeDerives(
     navigationState.source,
@@ -82,7 +88,11 @@ export function compileComponentModule(options: CompileComponentOptions): Compil
   );
   const source = deriveLowering.source;
   const diagnosticSource = deriveLowering.diagnosticSource;
-  const model = lowerComponentPipelineSource(navigationState, source).model;
+  const model = lowerComponentPipelineSource(
+    navigationState,
+    source,
+    parseComponentModuleModel,
+  ).model;
   const handlers = lowerEventHandlers({ ...compileOptions, source }, componentName, model);
   const queryUpdatePlans = collectQueryUpdatePlans(source, model, componentName);
   const updateCoverage = collectQueryUpdateCoverage(source, model, compileOptions, componentName);
@@ -151,51 +161,6 @@ export function compileComponentModule(options: CompileComponentOptions): Compil
     ],
     updateCoverage,
     viewTransitions: viewTransitionLowering.stamps,
-  };
-}
-
-function modelForComponentSourceChange(
-  fileName: string,
-  previousSource: string,
-  previousModel: ComponentModuleModel,
-  nextSource: string,
-): ComponentModuleModel {
-  return modelForSourceChange({
-    fileName,
-    nextSource,
-    parse: parseComponentModuleModel,
-    previousModel,
-    previousSource,
-  });
-}
-
-interface ComponentPipelineState {
-  fileName: string;
-  model: ComponentModuleModel;
-  source: string;
-}
-
-function componentPipelineState(
-  fileName: string,
-  source: string,
-  model: ComponentModuleModel,
-): ComponentPipelineState {
-  return { fileName, model, source };
-}
-
-function lowerComponentPipelineSource(
-  previous: ComponentPipelineState,
-  source: string,
-): ComponentPipelineState {
-  return {
-    fileName: previous.fileName,
-    model: modelForComponentSourceChange(
-      previous.fileName,
-      previous.source,
-      previous.model,
-      source,
-    ),
-    source,
   };
 }
 
