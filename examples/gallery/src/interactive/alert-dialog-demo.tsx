@@ -26,6 +26,9 @@ export const GalleryAlertDialogDemo = component('gallery-alert-dialog-demo', {
         {...alertDialogRootAttributes({ open: state.open })}
         class="grid gap-2"
         data-gallery-interactive="alert-dialog"
+        onKeyDown={() => {
+          state.open = false;
+        }}
       >
         <button
           {...alertDialogTriggerAttributes({ contentId, open: state.open })}
@@ -42,6 +45,9 @@ export const GalleryAlertDialogDemo = component('gallery-alert-dialog-demo', {
             open: state.open,
             titleId,
           })}
+          onCancel={() => {
+            state.open = false;
+          }}
         >
           <h2 id={titleId}>Delete workspace?</h2>
           <p id={descriptionId}>This removes the shared gallery workspace for every member.</p>

@@ -25,6 +25,9 @@ export const GalleryDialogDemo = component('gallery-dialog-demo', {
         {...dialogRootAttributes({ open: state.open })}
         class="grid gap-2"
         data-gallery-interactive="dialog"
+        onKeyDown={() => {
+          state.open = false;
+        }}
       >
         <button
           {...dialogTriggerAttributes({ contentId, open: state.open })}
@@ -36,6 +39,9 @@ export const GalleryDialogDemo = component('gallery-dialog-demo', {
         </button>
         <dialog
           {...dialogContentAttributes({ contentId, descriptionId, open: state.open, titleId })}
+          onCancel={() => {
+            state.open = false;
+          }}
         >
           <h2 id={titleId}>Cart review</h2>
           <p id={descriptionId}>Confirm the current cart before checkout.</p>

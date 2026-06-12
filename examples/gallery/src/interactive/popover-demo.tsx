@@ -22,6 +22,9 @@ export const GalleryPopoverDemo = component('gallery-popover-demo', {
         {...popoverRootAttributes({ open: state.open })}
         class="grid gap-2"
         data-gallery-interactive="popover"
+        onKeyDown={() => {
+          state.open = false;
+        }}
       >
         <button
           {...popoverTriggerAttributes({ contentId, open: state.open })}

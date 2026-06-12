@@ -89,6 +89,12 @@ describe('compiled interactive gallery demos', () => {
       /on:click="\/c\/examples\/gallery\/src\/generated\/interactive\/alert-dialog-demo\.client\.js\?v=[0-9a-f]{8}#GalleryAlertDialogDemo\$button_click"/,
     );
     expect(alertDialog).toMatch(
+      /on:cancel="\/c\/examples\/gallery\/src\/generated\/interactive\/alert-dialog-demo\.client\.js\?v=[0-9a-f]{8}#GalleryAlertDialogDemo\$dialog_cancel"/,
+    );
+    expect(alertDialog).toMatch(
+      /on:keydown="\/c\/examples\/gallery\/src\/generated\/interactive\/alert-dialog-demo\.client\.js\?v=[0-9a-f]{8}#GalleryAlertDialogDemo\$section_keydown"/,
+    );
+    expect(alertDialog).toMatch(
       /on:click="\/c\/examples\/gallery\/src\/generated\/interactive\/alert-dialog-demo\.client\.js\?v=[0-9a-f]{8}#GalleryAlertDialogDemo\$button_click_2"/,
     );
     expect(alertDialog).toMatch(
@@ -181,6 +187,12 @@ describe('compiled interactive gallery demos', () => {
       /on:click="\/c\/examples\/gallery\/src\/generated\/interactive\/dialog-demo\.client\.js\?v=[0-9a-f]{8}#GalleryDialogDemo\$button_click"/,
     );
     expect(dialog).toMatch(
+      /on:cancel="\/c\/examples\/gallery\/src\/generated\/interactive\/dialog-demo\.client\.js\?v=[0-9a-f]{8}#GalleryDialogDemo\$dialog_cancel"/,
+    );
+    expect(dialog).toMatch(
+      /on:keydown="\/c\/examples\/gallery\/src\/generated\/interactive\/dialog-demo\.client\.js\?v=[0-9a-f]{8}#GalleryDialogDemo\$section_keydown"/,
+    );
+    expect(dialog).toMatch(
       /on:click="\/c\/examples\/gallery\/src\/generated\/interactive\/dialog-demo\.client\.js\?v=[0-9a-f]{8}#GalleryDialogDemo\$button_click_2"/,
     );
 
@@ -245,6 +257,9 @@ describe('compiled interactive gallery demos', () => {
 
     expect(popover).toContain('data-gallery-interactive="popover"');
     expect(popover).toContain('fw-state=\'{"open":false}\'');
+    expect(popover).toMatch(
+      /on:keydown="\/c\/examples\/gallery\/src\/generated\/interactive\/popover-demo\.client\.js\?v=[0-9a-f]{8}#GalleryPopoverDemo\$section_keydown"/,
+    );
     expect(popover).toMatch(
       /on:click="\/c\/examples\/gallery\/src\/generated\/interactive\/popover-demo\.client\.js\?v=[0-9a-f]{8}#GalleryPopoverDemo\$button_click"/,
     );
@@ -378,6 +393,20 @@ describe('compiled interactive gallery demos', () => {
       state: alertDialogState,
     });
     expect(alertDialogState).toEqual({ open: true });
+    clientHandler(alertDialog, 'GalleryAlertDialogDemo$dialog_cancel')(new Event('cancel'), {
+      params: {},
+      signal,
+      state: alertDialogState,
+    });
+    expect(alertDialogState).toEqual({ open: false });
+    alertDialogState.open = true;
+    clientHandler(alertDialog, 'GalleryAlertDialogDemo$section_keydown')(new Event('keydown'), {
+      params: {},
+      signal,
+      state: alertDialogState,
+    });
+    expect(alertDialogState).toEqual({ open: false });
+    alertDialogState.open = true;
     clientHandler(alertDialog, 'GalleryAlertDialogDemo$button_click_2')(new Event('click'), {
       params: {},
       signal,
@@ -545,6 +574,20 @@ describe('compiled interactive gallery demos', () => {
       state: dialogState,
     });
     expect(dialogState).toEqual({ open: true });
+    clientHandler(dialog, 'GalleryDialogDemo$dialog_cancel')(new Event('cancel'), {
+      params: {},
+      signal,
+      state: dialogState,
+    });
+    expect(dialogState).toEqual({ open: false });
+    dialogState.open = true;
+    clientHandler(dialog, 'GalleryDialogDemo$section_keydown')(new Event('keydown'), {
+      params: {},
+      signal,
+      state: dialogState,
+    });
+    expect(dialogState).toEqual({ open: false });
+    dialogState.open = true;
     clientHandler(dialog, 'GalleryDialogDemo$button_click_2')(new Event('click'), {
       params: {},
       signal,
@@ -654,6 +697,12 @@ describe('compiled interactive gallery demos', () => {
       state: popoverState,
     });
     expect(popoverState).toEqual({ open: true });
+    clientHandler(popover, 'GalleryPopoverDemo$section_keydown')(new Event('keydown'), {
+      params: {},
+      signal,
+      state: popoverState,
+    });
+    expect(popoverState).toEqual({ open: false });
 
     const radioGroupState = { value: 'email' };
     clientHandler(radioGroup, 'GalleryRadioGroupDemo$section_keydown')(new Event('keydown'), {

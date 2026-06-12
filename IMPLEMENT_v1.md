@@ -185,6 +185,21 @@ Audited against the repository on 2026-06-11. Checkmarks mean the behavior, API,
       `pnpm --filter @jiso/headless-ui run lint:primitives`,
       `pnpm exec vp check examples/gallery/package.json examples/gallery/scripts/emit-interactive-gallery.mjs examples/gallery/src/interactive/select-demo.tsx examples/gallery/src/interactive/combobox-demo.tsx examples/gallery/src/interactive/autocomplete-demo.tsx examples/gallery/src/interactive-gallery.test.ts examples/gallery/src/interactive-gallery.browser.test.ts examples/gallery/src/generated/interactive/select-demo.tsx examples/gallery/src/generated/interactive/select-demo.client.js examples/gallery/src/generated/interactive/combobox-demo.tsx examples/gallery/src/generated/interactive/combobox-demo.client.js examples/gallery/src/generated/interactive/autocomplete-demo.tsx examples/gallery/src/generated/interactive/autocomplete-demo.client.js plans/ui.md IMPLEMENT_v1.md`,
       and `git diff --check`.
+      Additional evidence 2026-06-12: `examples/gallery/src/interactive/` extends the
+      existing app-authored dialog, alert-dialog, and popover demos with native-dismiss/
+      top-layer generated refs. Dialog and alert-dialog now compile root `on:keydown`
+      refs plus dialog `on:cancel` refs, and popover compiles a root `on:keydown` ref;
+      static tests inspect and execute those generated client handlers. The Chromium
+      browser test mounts the generated demos through the real runtime loader and verifies
+      browser-visible native `<dialog>`/popover top-layer open and close state. Same-session
+      evidence:
+      `pnpm --filter @jiso/example-gallery run emit:interactive-gallery -- --check`,
+      `pnpm --filter @jiso/example-gallery exec vitest --run src/interactive-gallery.test.ts`,
+      `pnpm --filter @jiso/example-gallery run test:browser`,
+      `pnpm --filter @jiso/headless-ui exec vitest --run src/primitives/dialog.test.ts src/primitives/alert-dialog.test.ts src/primitives/popover.test.ts src/tooling/lint-primitives.test.ts src/tooling/primitive-handler-lint.test.ts`,
+      `pnpm --filter @jiso/headless-ui run lint:primitives`,
+      `pnpm exec vp check examples/gallery/src/interactive/dialog-demo.tsx examples/gallery/src/interactive/alert-dialog-demo.tsx examples/gallery/src/interactive/popover-demo.tsx examples/gallery/src/interactive-gallery.test.ts examples/gallery/src/interactive-gallery.browser.test.ts examples/gallery/src/generated/interactive/dialog-demo.tsx examples/gallery/src/generated/interactive/dialog-demo.client.js examples/gallery/src/generated/interactive/alert-dialog-demo.tsx examples/gallery/src/generated/interactive/alert-dialog-demo.client.js examples/gallery/src/generated/interactive/popover-demo.tsx examples/gallery/src/generated/interactive/popover-demo.client.js plans/ui.md IMPLEMENT_v1.md`,
+      and `git diff --check`.
       Additional evidence 2026-06-12: `examples/gallery/src/merge-fixtures.test.tsx`
       adds richer rendered G5 family goldens for scroll-area, select, command, dialog,
       fieldset, and toast attrs that were previously covered only by the exported-builder

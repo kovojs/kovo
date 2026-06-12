@@ -241,6 +241,25 @@ describe('compiled interactive gallery demos in the browser', () => {
       expect(dialog.open).toBe(true);
     });
 
+    const escapeDialog = required(
+      root.querySelector<HTMLDialogElement>('#gallery-interactive-alert-dialog-content'),
+    );
+    if (escapeDialog.open) escapeDialog.close();
+
+    await vi.waitFor(() => {
+      expect(
+        required(root.querySelector<HTMLDialogElement>('#gallery-interactive-alert-dialog-content'))
+          .open,
+      ).toBe(false);
+    });
+
+    trigger.click();
+
+    await vi.waitFor(() => {
+      expect(root.getAttribute('fw-state')).toBe('{"open":true}');
+      expect(dialog.open).toBe(true);
+    });
+
     action.click();
 
     await vi.waitFor(() => {
@@ -681,6 +700,22 @@ describe('compiled interactive gallery demos in the browser', () => {
       expect(root.getAttribute('fw-state')).toBe('{"open":false}');
       expect(dialog.open).toBe(false);
     });
+
+    trigger.click();
+
+    await vi.waitFor(() => {
+      expect(root.getAttribute('fw-state')).toBe('{"open":true}');
+      expect(dialog.open).toBe(true);
+    });
+
+    const escapeDialog = required(root.querySelector<HTMLDialogElement>('#gallery-dialog-content'));
+    if (escapeDialog.open) escapeDialog.close();
+
+    await vi.waitFor(() => {
+      expect(required(root.querySelector<HTMLDialogElement>('#gallery-dialog-content')).open).toBe(
+        false,
+      );
+    });
   });
 
   it('updates switch stamped state while native checked state moves in the browser', async () => {
@@ -755,6 +790,26 @@ describe('compiled interactive gallery demos in the browser', () => {
     await vi.waitFor(() => {
       expect(root.getAttribute('fw-state')).toBe('{"open":false}');
       expect(content.matches(':popover-open')).toBe(false);
+    });
+
+    button.click();
+
+    await vi.waitFor(() => {
+      expect(root.getAttribute('fw-state')).toBe('{"open":true}');
+      expect(content.matches(':popover-open')).toBe(true);
+    });
+
+    const escapeContent = required(root.querySelector<HTMLElement>('#gallery-popover-content'));
+    if (escapeContent.matches(':popover-open')) {
+      escapeContent.hidePopover();
+    }
+
+    await vi.waitFor(() => {
+      expect(
+        required(root.querySelector<HTMLElement>('#gallery-popover-content')).matches(
+          ':popover-open',
+        ),
+      ).toBe(false);
     });
   });
 

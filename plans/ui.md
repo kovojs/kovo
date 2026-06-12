@@ -751,6 +751,21 @@ jiso-dialog` resolves dashed wire names and prints provenance including package,
       and `git diff --check`. G2 remains open for full browser-backed focus/dismiss/top-layer
       behavior, `fw explain` coverage, and routes/primitives not yet represented in static
       gallery fixtures.
+      Additional partial evidence 2026-06-12: the compiled interactive gallery now extends
+      the dialog, alert-dialog, and popover demos with generated native-dismiss/top-layer
+      refs: dialog and alert-dialog emit `on:cancel` handlers plus root `on:keydown`
+      handlers, and popover emits a root `on:keydown` handler. Static tests inspect those
+      checked-in generated refs and execute the generated client handlers; the Chromium
+      browser test verifies native `<dialog>` and popover top-layer state opens and then
+      closes through browser APIs after the generated runtime has mounted the demos.
+      Same-session evidence:
+      `pnpm --filter @jiso/example-gallery exec vitest --run src/interactive-gallery.test.ts`,
+      `pnpm --filter @jiso/example-gallery run test:browser`,
+      `pnpm --filter @jiso/headless-ui exec vitest --run src/primitives/dialog.test.ts src/primitives/alert-dialog.test.ts src/primitives/popover.test.ts src/tooling/lint-primitives.test.ts src/tooling/primitive-handler-lint.test.ts`,
+      `pnpm --filter @jiso/headless-ui run lint:primitives`,
+      `pnpm exec vp check examples/gallery/src/interactive/dialog-demo.tsx examples/gallery/src/interactive/alert-dialog-demo.tsx examples/gallery/src/interactive/popover-demo.tsx examples/gallery/src/interactive-gallery.test.ts examples/gallery/src/interactive-gallery.browser.test.ts examples/gallery/src/generated/interactive/dialog-demo.tsx examples/gallery/src/generated/interactive/dialog-demo.client.js examples/gallery/src/generated/interactive/alert-dialog-demo.tsx examples/gallery/src/generated/interactive/alert-dialog-demo.client.js examples/gallery/src/generated/interactive/popover-demo.tsx examples/gallery/src/generated/interactive/popover-demo.client.js plans/ui.md IMPLEMENT_v1.md`,
+      and `git diff --check`. G2 remains open for `fw explain` coverage and full
+      gallery/conformance gates.
 - [ ] G3 axe checks per component state in the gallery.
 - [ ] G4 visual regression for `@jiso/ui`: shadcn-parity human review once, then self-baselined screenshots.
 - [ ] G5 merge fixtures: every primitive's attrs record × an author element → golden merged output (doubles as FW231/FW232 coverage).
@@ -1103,6 +1118,21 @@ jiso-dialog` resolves dashed wire names and prints provenance including package,
       `pnpm --filter @jiso/headless-ui exec vitest --run src/primitives/dropdown-menu.test.ts src/primitives/context-menu.test.ts src/primitives/menubar.test.ts src/primitives/navigation-menu.test.ts src/primitives/command.test.ts src/primitives/toast.test.ts src/tooling/lint-primitives.test.ts src/tooling/primitive-handler-lint.test.ts`,
       `pnpm --filter @jiso/headless-ui run lint:primitives`,
       `pnpm exec vp check examples/gallery/package.json examples/gallery/scripts/emit-interactive-gallery.mjs examples/gallery/src/interactive/dropdown-menu-demo.tsx examples/gallery/src/interactive/context-menu-demo.tsx examples/gallery/src/interactive/menubar-demo.tsx examples/gallery/src/interactive/navigation-menu-demo.tsx examples/gallery/src/interactive/command-demo.tsx examples/gallery/src/interactive/toast-demo.tsx examples/gallery/src/interactive-gallery.test.ts examples/gallery/src/interactive-gallery.browser.test.ts examples/gallery/src/generated/interactive/dropdown-menu-demo.tsx examples/gallery/src/generated/interactive/dropdown-menu-demo.client.js examples/gallery/src/generated/interactive/context-menu-demo.tsx examples/gallery/src/generated/interactive/context-menu-demo.client.js examples/gallery/src/generated/interactive/menubar-demo.tsx examples/gallery/src/generated/interactive/menubar-demo.client.js examples/gallery/src/generated/interactive/navigation-menu-demo.tsx examples/gallery/src/generated/interactive/navigation-menu-demo.client.js examples/gallery/src/generated/interactive/command-demo.tsx examples/gallery/src/generated/interactive/command-demo.client.js examples/gallery/src/generated/interactive/toast-demo.tsx examples/gallery/src/generated/interactive/toast-demo.client.js plans/ui.md IMPLEMENT_v1.md`,
+      and `git diff --check`. G6 remains open for docs deployment wiring and full
+      gallery/conformance gates.
+      Additional partial evidence 2026-06-12: the compiled interactive gallery extends
+      existing dialog, alert-dialog, and popover demos with native-dismiss/top-layer
+      generated refs. Dialog and alert-dialog now compile root `on:keydown` refs and
+      dialog `on:cancel` refs; popover compiles a root `on:keydown` ref. Static tests
+      inspect and execute the generated handlers, and the Chromium browser test verifies
+      browser-visible native top-layer open/close state for these primitives after the
+      real runtime loader has mounted the generated demos. Same-session evidence:
+      `pnpm --filter @jiso/example-gallery run emit:interactive-gallery -- --check`,
+      `pnpm --filter @jiso/example-gallery exec vitest --run src/interactive-gallery.test.ts`,
+      `pnpm --filter @jiso/example-gallery run test:browser`,
+      `pnpm --filter @jiso/headless-ui exec vitest --run src/primitives/dialog.test.ts src/primitives/alert-dialog.test.ts src/primitives/popover.test.ts src/tooling/lint-primitives.test.ts src/tooling/primitive-handler-lint.test.ts`,
+      `pnpm --filter @jiso/headless-ui run lint:primitives`,
+      `pnpm exec vp check examples/gallery/src/interactive/dialog-demo.tsx examples/gallery/src/interactive/alert-dialog-demo.tsx examples/gallery/src/interactive/popover-demo.tsx examples/gallery/src/interactive-gallery.test.ts examples/gallery/src/interactive-gallery.browser.test.ts examples/gallery/src/generated/interactive/dialog-demo.tsx examples/gallery/src/generated/interactive/dialog-demo.client.js examples/gallery/src/generated/interactive/alert-dialog-demo.tsx examples/gallery/src/generated/interactive/alert-dialog-demo.client.js examples/gallery/src/generated/interactive/popover-demo.tsx examples/gallery/src/generated/interactive/popover-demo.client.js plans/ui.md IMPLEMENT_v1.md`,
       and `git diff --check`. G6 remains open for docs deployment wiring and full
       gallery/conformance gates.
 

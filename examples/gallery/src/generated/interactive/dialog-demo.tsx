@@ -26,23 +26,25 @@ export const GalleryDialogDemo = component('gallery-dialog-demo', {
         {...dialogRootAttributes({ open: state.open })}
         class="grid gap-2"
         data-gallery-interactive="dialog"
+        on:keydown="/c/examples/gallery/src/generated/interactive/dialog-demo.client.js?v=a25003fc#GalleryDialogDemo$section_keydown"
         fw-c="gallery-dialog-demo"
         fw-state='{"open":false}'
       >
         <button
           {...dialogTriggerAttributes({ contentId, open: state.open })}
-          on:click="/c/examples/gallery/src/generated/interactive/dialog-demo.client.js?v=c8fd7e9e#GalleryDialogDemo$button_click"
+          on:click="/c/examples/gallery/src/generated/interactive/dialog-demo.client.js?v=a25003fc#GalleryDialogDemo$button_click"
         >
           Review cart
         </button>
         <dialog
           {...dialogContentAttributes({ contentId, descriptionId, open: state.open, titleId })}
+          on:cancel="/c/examples/gallery/src/generated/interactive/dialog-demo.client.js?v=a25003fc#GalleryDialogDemo$dialog_cancel"
         >
           <h2 id={titleId}>Cart review</h2>
           <p id={descriptionId}>Confirm the current cart before checkout.</p>
           <button
             {...dialogCloseAttributes({ contentId, open: state.open })}
-            on:click="/c/examples/gallery/src/generated/interactive/dialog-demo.client.js?v=c8fd7e9e#GalleryDialogDemo$button_click_2"
+            on:click="/c/examples/gallery/src/generated/interactive/dialog-demo.client.js?v=a25003fc#GalleryDialogDemo$button_click_2"
           >
             Close review
           </button>
