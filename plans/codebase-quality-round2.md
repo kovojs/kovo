@@ -1739,6 +1739,15 @@ params, relational API, `execute(sql)`, right/full joins, a string column named 
       `pnpm exec vitest --run packages/runtime/src/mutation-targets.test.ts packages/runtime/src/index.test.ts -t "mutation targets|FW-Targets|enhanced mutations"`,
       `pnpm exec vp check packages/runtime/src/index.ts packages/runtime/src/mutation-targets.ts packages/runtime/src/mutation-targets.test.ts plans/codebase-quality-round2.md`,
       and `git diff --check`.
+      Additional bounded evidence 2026-06-12: extracted
+      `packages/runtime/src/broadcast.ts` as the subtractive same-user mutation broadcast seam;
+      `packages/runtime/src/index.ts` now imports and re-exports that surface while default
+      broadcast installation stays in loader orchestration. `packages/runtime/src/broadcast.test.ts`
+      pins sanitized change publication, mutation-wire replay through the shared apply path,
+      invalid-message rejection, and channel close behavior. Same-session evidence:
+      `corepack pnpm exec vitest --run packages/runtime/src/broadcast.test.ts packages/runtime/src/index.test.ts -t "BroadcastChannel|rebroadcast|syncs mutation responses|mutation broadcast"`,
+      `corepack pnpm exec vp check packages/runtime/src/index.ts packages/runtime/src/broadcast.ts packages/runtime/src/broadcast.test.ts plans/codebase-quality-round2.md`,
+      and `git diff --check`.
 - [ ] **LOW** — `hydratedQueries` frozen at install (index.ts:330-342): queries introduced by
       later mutations never become refetch-eligible — fix or document as SPEC-intended;
       `unescapeHtml` missing `&#39;`/`&apos;` (wire-parser.ts:162-168) — pin the server↔runtime

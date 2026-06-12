@@ -4,11 +4,7 @@ import { reportRuntimeContextError } from './error-policy.js';
 import { parseJsonValue } from './json.js';
 import { queryStoreKey } from './query-store.js';
 import type { QueryScriptLike, QueryStore } from './query-store.js';
-import {
-  applyDeferredChunkToDom,
-  applyMutationResponseToDom,
-  applyMutationResponseToRuntime,
-} from './apply-path.js';
+import { applyDeferredChunkToDom, applyMutationResponseToDom } from './apply-path.js';
 import type {
   AppliedMutationResponse,
   AppliedMutationResponseToDom,
@@ -23,11 +19,9 @@ import {
 import type { ImportHandlerModule, IslandSignalScope } from './handlers.js';
 import type { MorphFragment, MorphRoot } from './morph.js';
 import { MutationQueue } from './mutation-queue.js';
-import {
-  isMutationBroadcastMessage,
-  readMutationChangeHeader,
-  sanitizeMutationChangeRecord,
-} from './mutation-response.js';
+import { installMutationBroadcast } from './broadcast.js';
+import type { BroadcastLike, MutationBroadcast } from './broadcast.js';
+import { readMutationChangeHeader } from './mutation-response.js';
 import { readLiveTargets } from './mutation-targets.js';
 import type { TargetCollectorRoot } from './mutation-targets.js';
 import type { CompiledQueryUpdatePlans } from './query-bindings.js';
@@ -125,6 +119,12 @@ export type { FragmentChunk, QueryChunk } from './wire-parser.js';
 export type { TargetCollectorRoot } from './mutation-targets.js';
 export { MutationQueue } from './mutation-queue.js';
 export type { MutationTask } from './mutation-queue.js';
+export { installMutationBroadcast } from './broadcast.js';
+export type {
+  BroadcastLike,
+  InstallMutationBroadcastOptions,
+  MutationBroadcast,
+} from './broadcast.js';
 export {
   applyOptimisticTransforms,
   installPagehideOptimismCleanup,
@@ -1086,64 +1086,6 @@ function stampEnhancedMutationPending(
   }
 
   return stampPendingQueries(options.pendingRoot, options.pendingQueries, pending);
-}
-
-export interface BroadcastLike {
-  close?: () => void;
-  onmessage: ((event: { data: unknown }) => void) | null;
-  postMessage(message: unknown): void;
-}
-
-export interface MutationBroadcast {
-  close(): void;
-  publish(body: string, changes?: readonly MutationChangeRecord[]): void;
-}
-
-export function installMutationBroadcast(options: {
-  channel: BroadcastLike;
-  morph?: MorphFragment;
-  onChanges?: (changes: readonly MutationChangeRecord[]) => void;
-  queryPlans?: CompiledQueryUpdatePlans;
-  root?: MorphRoot;
-  store: QueryStore;
-}): MutationBroadcast {
-  options.channel.onmessage = (event) => {
-    if (!isMutationBroadcastMessage(event.data)) return;
-    const changes = event.data.changes.flatMap((change) => {
-      const sanitized = sanitizeMutationChangeRecord(change);
-      return sanitized ? [sanitized] : [];
-    });
-
-    applyMutationResponseToRuntime({
-      body: event.data.body,
-      ...definedProps({
-        morph: options.morph,
-        queryPlans: options.queryPlans,
-        root: options.root,
-      }),
-      store: options.store,
-    });
-    if (changes.length > 0) {
-      options.onChanges?.(changes);
-    }
-  };
-
-  return {
-    close() {
-      options.channel.onmessage = null;
-      options.channel.close?.();
-    },
-    publish(body: string, changes: readonly MutationChangeRecord[] = []) {
-      options.channel.postMessage({
-        body,
-        changes: changes.flatMap((change) => {
-          const sanitized = sanitizeMutationChangeRecord(change);
-          return sanitized ? [sanitized] : [];
-        }),
-        type: 'jiso:mutation-response',
-      });
-    },
-  };
 }
 
 async function fetchEnhancedMutation(
