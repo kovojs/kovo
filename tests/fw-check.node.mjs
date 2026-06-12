@@ -128,6 +128,24 @@ const explainValue = (output, prefix) => {
   return line.slice(prefix.length);
 };
 
+const explainLines = (output, prefix) =>
+  output
+    .split('\n')
+    .filter((line) => line.startsWith(prefix))
+    .map((line) => line.slice(prefix.length));
+
+const explainSummary = (output, prefix) => {
+  const [summary] = explainLines(output, prefix);
+  assert.ok(summary, `explain output includes ${prefix}`);
+  return Object.fromEntries(
+    summary.split(/\s+/).map((entry) => {
+      const [key, value] = entry.split('=');
+      assert.ok(key && value !== undefined, `summary entry is key=value: ${entry}`);
+      return [key, value];
+    }),
+  );
+};
+
 const runCliCommand = async (args) => {
   let stdout = '';
   let stderr = '';
@@ -3657,7 +3675,7 @@ void test('P10 commerce graph assertions answer behavior mechanically', async ()
     explainValue(cartAddExplain, 'updates: '),
     /orderHistory->component:OrderHistory,page:\/cart/,
   );
-  assert.match(cartAddExplain, /^OPTIMISTIC-SUMMARY .*UNHANDLED=0$/m);
+  assert.equal(explainSummary(cartAddExplain, 'OPTIMISTIC-SUMMARY ').UNHANDLED, '0');
   assert.equal(explainValue(uploadReceiptExplain, 'file-fields: '), 'receipt');
   assert.equal(explainValue(uploadReceiptExplain, 'invalidates: '), '-');
   assert.equal(
@@ -3842,8 +3860,8 @@ void test('P10 starter wires graph assertions into CI', async () => {
     explainValue(cartAddExplain, 'updates: '),
     'cart->component:CartBadge,component:CartPanel,page:/cart',
   );
-  assert.match(cartAddExplain, /^OPTIMISTIC cart await-fragment$/m);
-  assert.match(cartAddExplain, /^OPTIMISTIC-SUMMARY .*UNHANDLED=0$/m);
+  assert.deepEqual(explainLines(cartAddExplain, 'OPTIMISTIC '), ['cart await-fragment']);
+  assert.equal(explainSummary(cartAddExplain, 'OPTIMISTIC-SUMMARY ').UNHANDLED, '0');
   assert.equal(
     explainValue(cartPageExplain, 'meta: '),
     'title=Jiso Starter Cart description=Starter cart backed by query data. image=-',

@@ -104,6 +104,10 @@ Do this first or pay it on every commit.
       `tests/fw-check.node.mjs` now parses `examples/commerce/src/generated/graph.json` and
       asserts `fwCheck`/`fwExplain` behavior directly instead of grepping commerce test names,
       touch-graph literals, or property-case counts. The wider source-text ledger remains open.
+      Partial evidence 2026-06-12: the commerce/starter optimistic-output tranche now parses
+      `fwExplain` optimistic lines and summary key/value fields through shared helpers instead
+      of regex-matching `OPTIMISTIC` and `OPTIMISTIC-SUMMARY` text. Same-session evidence:
+      `node --test --test-name-pattern "P10 commerce graph assertions answer behavior mechanically|P10 starter wires graph assertions into CI" tests/fw-check.node.mjs`.
       Partial evidence 2026-06-11: the P10 commerce graph assertion tranche now exercises
       `fwCheck`/`fwExplain` commerce behavior, FW310/FW311 warning rows, compiler-derived graph
       and registry facts, and generated invalidation facts directly instead of grepping CLI,
