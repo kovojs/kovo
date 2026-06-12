@@ -7,7 +7,6 @@ import {
   componentRenderHost,
   componentStateReturnObject,
   firstComponentModel,
-  parseComponentModule,
   type ComponentModuleModel,
 } from '../scan/parse.js';
 import { escapeAttribute, splitDepValue } from '../shared.js';
@@ -26,11 +25,9 @@ export function renderSource() {
 export function serverRenderSource(
   source: string,
   handlers: readonly HandlerLowering[],
-  fileName: string,
+  model: ComponentModuleModel,
 ): string {
-  const loweredSource = replaceHandlerAttributes(source, handlers);
-  const model = parseComponentModule(fileName, loweredSource);
-  return stampRenderHost(loweredSource, model);
+  return applyServerRenderPatches(source, handlers, model);
 }
 
 export function renderEquivalenceCheck(
@@ -76,36 +73,74 @@ function executableRenderSource(serverSource: string): string | null {
 ;renderSource();`;
 }
 
-function replaceHandlerAttributes(source: string, handlers: readonly HandlerLowering[]): string {
+function applyServerRenderPatches(
+  source: string,
+  handlers: readonly HandlerLowering[],
+  model: ComponentModuleModel,
+): string {
+  const host = componentRenderHost(model);
+  const patches: Array<{ start: number; end: number; replacement: string }> = [];
+  const hostHandlers = host
+    ? handlers.filter(
+        (handler) => handler.attributeStart >= host.start && handler.attributeEnd <= host.end,
+      )
+    : [];
+
+  for (const handler of handlers) {
+    if (hostHandlers.includes(handler)) continue;
+    patches.push({
+      end: handler.attributeEnd,
+      replacement: handlerAttributeReplacement(handler),
+      start: handler.attributeStart,
+    });
+  }
+
+  if (host) {
+    const tagSource = source.slice(host.start, host.end);
+    const tagWithHandlers = replaceTagHandlerAttributes(tagSource, host.start, hostHandlers);
+    const stampedTag = stampRenderHostTag(tagWithHandlers, model);
+    if (stampedTag !== tagSource) {
+      patches.push({ end: host.end, replacement: stampedTag, start: host.start });
+    }
+  }
+
+  return patches
+    .sort((left, right) => right.start - left.start)
+    .reduce(
+      (next, patch) => `${next.slice(0, patch.start)}${patch.replacement}${next.slice(patch.end)}`,
+      source,
+    );
+}
+
+function replaceTagHandlerAttributes(
+  tagSource: string,
+  tagStart: number,
+  handlers: readonly HandlerLowering[],
+): string {
   return [...handlers]
     .sort((left, right) => right.attributeStart - left.attributeStart)
     .reduce((next, handler) => {
-      const replacement = [
-        `${handler.attributeName}="${handler.attributeValue}"`,
-        emitElementParamTypes(handler.params),
-        ...handler.params.map(
-          (param) => `${param.attributeName}="${escapeAttribute(param.value)}"`,
-        ),
-      ]
-        .filter(Boolean)
-        .join(' ');
-
-      return `${next.slice(0, handler.attributeStart)}${replacement}${next.slice(handler.attributeEnd)}`;
-    }, source);
+      const start = handler.attributeStart - tagStart;
+      const end = handler.attributeEnd - tagStart;
+      return `${next.slice(0, start)}${handlerAttributeReplacement(handler)}${next.slice(end)}`;
+    }, tagSource);
 }
 
-function stampRenderHost(source: string, model: ComponentModuleModel): string {
-  const tag = componentRenderHost(model);
-  if (!tag) return source;
+function handlerAttributeReplacement(handler: HandlerLowering): string {
+  return [
+    `${handler.attributeName}="${handler.attributeValue}"`,
+    emitElementParamTypes(handler.params),
+    ...handler.params.map((param) => `${param.attributeName}="${escapeAttribute(param.value)}"`),
+  ]
+    .filter(Boolean)
+    .join(' ');
+}
 
-  const tagSource = source.slice(tag.start, tag.end);
-  const stampedTag = stampInitialState(
+function stampRenderHostTag(tagSource: string, model: ComponentModuleModel): string {
+  return stampInitialState(
     stampDeclaredQueryDeps(stampComponentIdentity(tagSource, model), model),
     model,
   );
-  if (stampedTag === tagSource) return source;
-
-  return `${source.slice(0, tag.start)}${stampedTag}${source.slice(tag.end)}`;
 }
 
 // SPEC.md §4.2: component identity is the fw-c stamp. The compiler omits it

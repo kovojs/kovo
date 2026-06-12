@@ -1,8 +1,9 @@
 # Codebase Quality Remediation Plan — Round 2
 
 Status: not started; findings audited against the repository on 2026-06-11
-Companions: `plans/codebase-quality.md` (round 1, largely executed), `plans/improve-compiler.md`
-(compiler plan — Phase 2 here supersedes its remaining cleanup items with an architecture change).
+Companions: `plans/codebase-quality.md` (round 1, largely executed), the archived
+`plans/improve-compiler.md` entry in `plans/archive.md` (compiler plan — Phase 2 here
+supersedes its remaining cleanup items with an architecture change).
 Source: whole-repo quality review (2026-06-11), five parallel package audits: server, runtime,
 compiler/core, drizzle/test/better-auth, cli/create-jiso/examples/conformance/repo-hygiene.
 
@@ -354,7 +355,7 @@ catch a seeded regression: mutate a fixture graph and confirm red). Commit per i
 
 ## Phase 2 — Compiler: make the model the IR
 
-Supersedes the remaining cleanup items in `plans/improve-compiler.md`. The parser migration was
+Supersedes the remaining cleanup items from the archived `plans/improve-compiler.md`. The parser migration was
 real (`scan/parse.ts` is a clean TS-AST front-end); the architecture migration was not — the
 pipeline throws the tree away and communicates via mutated source text.
 
@@ -413,6 +414,12 @@ pipeline throws the tree away and communicates via mutated source text.
       file name. Same-session evidence: `pnpm exec vitest --run packages/compiler/src/index.test.ts`
       and
       `pnpm exec vp check packages/compiler/src/index.ts packages/compiler/src/lower/view-transitions.ts packages/compiler/src/lower/platform.ts`.
+      Partial evidence 2026-06-11: `serverRenderSource` now consumes the caller-owned
+      `ComponentModuleModel` and applies handler attribute rewrites plus render-host stamping in
+      one descending patch pass, removing its hidden post-handler parse while preserving native
+      host stamps and versioned handler attributes. Same-session evidence:
+      `pnpm exec vitest --run packages/compiler/src/index.test.ts` and
+      `pnpm exec vp check packages/compiler/src/index.ts packages/compiler/src/emit/server.ts`.
 - [ ] **HIGH — Retire regex rewriting of handler bodies.** emit/client.ts:89
       (`/\bstate\b/g → ctx.state` corrupts `log('state changed')`), :96 (member-expression
       substitution inside string literals), lower/handlers.ts:262 (harvests params from string
