@@ -20,6 +20,7 @@ import {
 } from '../dist/cli/src/index.mjs';
 import {
   assertRenderEquivalence,
+  collectCssAssetManifest,
   collectMinifierReservedNames,
   compileComponentModule,
   deriveAppGraph,
@@ -450,6 +451,15 @@ const parseMarkdownNumberedList = (source) =>
 
 const numberedListTitles = (source) =>
   parseMarkdownNumberedList(source).map((item) => normalizeMarkdownCell(item.split('.')[0]));
+
+const markdownLeadingTitle = (value) =>
+  normalizeMarkdownCell(value.replaceAll('**', '').split('.')[0]);
+
+const canonicalDocRuleTitle = (title) =>
+  title
+    .replace('Local code must not require global knowledge', 'No global knowledge at local sites')
+    .replace('One-to-one file mapping', '1:1 file mapping')
+    .replace('Platform behavior emission', 'Platform-behavior emission');
 
 const parseMarkdownFields = (source) => {
   const fields = new Map();
@@ -1058,9 +1068,23 @@ void test('Phase 0 wire fixture responses keep stable protocol metadata', async 
 });
 
 void test('SSE remains a v2 backlog fixture, not a v1 wire contract', async () => {
-  const body = await readFile(new URL('../fixtures/wire/README.md', import.meta.url), 'utf8');
+  const fixtureNames = await readdir(new URL('../fixtures/wire/', import.meta.url));
+  const fixtureBodies = await Promise.all(
+    fixtureNames
+      .filter((name) => name.endsWith('.http'))
+      .map(async (name) => [name, await readWireFixture(name)]),
+  );
 
-  assert.match(body, /SSE.*v2 backlog/i);
+  assert.deepEqual(
+    fixtureNames.filter((name) => name.endsWith('.http') && /sse|live|event/i.test(name)),
+    [],
+  );
+  assert.deepEqual(
+    fixtureBodies
+      .filter(([, body]) => /text\/event-stream|event:/i.test(body))
+      .map(([name]) => name),
+    [],
+  );
 });
 
 void test('P10 constitution rejects forbidden browser architecture in framework code', async () => {
@@ -1108,17 +1132,38 @@ void test('P10 normative docs cover the constitution and compiler hard rules', a
   const constitution = await readProjectFile('docs/constitution.md');
   const compilerRules = await readProjectFile('docs/compiler-hard-rules.md');
   const spec = await readProjectFile('SPEC.md');
-  const compilerRuleItems = parseMarkdownNumberedList(compilerRules);
-  const cssContract = spec
-    .split('\n')
-    .find((line) => normalizeMarkdownCell(line).startsWith('13.1 CSS.'));
-
-  assert.ok(
-    normalizeMarkdownCell(markdownSection(constitution, 'Jiso Constitution')).includes(
-      'SPEC.md is the source of truth',
-    ),
-    'constitution names SPEC.md as the source of truth',
+  const constitutionRows = parseMarkdownTable(
+    markdownSection(spec, '2. The Constitution (Design Tests)'),
   );
+  const specHardRuleTitles = numberedListTitles(
+    markdownSection(spec, '5.2 Hard rules (normative)'),
+  ).map(canonicalDocRuleTitle);
+  const compilerRuleTitles = numberedListTitles(compilerRules).map(canonicalDocRuleTitle);
+  const compilerRuleItems = parseMarkdownNumberedList(compilerRules);
+  const cssContractHeadings = markdownSection(spec, '13. Open Design Areas (named, not hand-waved)')
+    .split('\n')
+    .map((line) => /^\*\*(\d+\.\d+) (.+?)[.:]\*\*/.exec(line))
+    .filter(Boolean)
+    .map((match) => ({ number: match[1], title: match[2] }));
+  const behaviorFixture = compileComponentModule({
+    fileName: 'components/docs/doc-card.tsx',
+    source: `
+import { component } from '@jiso/core';
+
+function choose() {}
+
+export const DocCard = component('doc-card', {
+  fragmentTarget: true,
+  css: \`
+    .title { color: teal; }
+  \`,
+  render: () => <doc-card><button onClick={choose}>Choose</button><span class="title">Ready</span></doc-card>,
+});
+`,
+  });
+  const cssSource = behaviorFixture.files.find((file) => file.kind === 'css')?.source ?? '';
+  const cssManifest = collectCssAssetManifest(behaviorFixture, { baseHref: '/_jiso/' });
+
   assert.deepEqual(numberedListTitles(constitution), [
     'Legibility is load-bearing',
     'Local code must not require global knowledge',
@@ -1126,46 +1171,48 @@ void test('P10 normative docs cover the constitution and compiler hard rules', a
     'The wire is the documentation',
     'Server truth always wins',
   ]);
-  assert.ok(
-    normalizeMarkdownCell(markdownSection(compilerRules, 'Compiler Hard Rules')).includes(
-      'SPEC.md section 5.2 is normative',
-    ),
-    'compiler hard rules cite the normative SPEC section',
+  assert.deepEqual(
+    constitutionRows.map((row) => row['#']),
+    ['1', '2', '3', '4', '5'],
   );
   assert.deepEqual(
-    compilerRuleItems.map((item) => normalizeMarkdownCell(item.split('.')[0])),
-    [
-      'Source-derived names',
-      'One-to-one file mapping',
-      'Fixpoint invariant',
-      'Platform behavior emission',
-      'Teaching errors',
-      'TSX-only authoring',
-    ],
+    constitutionRows.map((row) => markdownLeadingTitle(row.Test)),
+    numberedListTitles(constitution).map(canonicalDocRuleTitle),
   );
-  assert.ok(
-    compilerRuleItems
-      .find((item) => item.startsWith('Source-derived names.'))
-      .includes('capture channels (ctx, element-params, module-scope)'),
-    'source-derived rule keeps handler capture-channel coverage',
+  assert.deepEqual(compilerRuleTitles, [
+    'Source-derived names',
+    '1:1 file mapping',
+    'Fixpoint invariant',
+    'Platform-behavior emission',
+    'Teaching errors',
+    'TSX-only authoring',
+  ]);
+  assert.deepEqual(
+    compilerRuleTitles,
+    specHardRuleTitles.filter((title) => title !== 'Registry atomicity'),
   );
-  assert.ok(
-    compilerRuleItems
-      .find((item) => item.startsWith('Fixpoint invariant.'))
-      .includes('render-equivalence gate'),
-    'fixpoint rule keeps render-equivalence coverage',
+  assert.equal(
+    compilerRuleItems.length,
+    compilerRuleTitles.length,
+    'compiler hard rules expose one numbered item per parsed title',
   );
-  assert.ok(cssContract, 'SPEC section 13.1 CSS contract exists');
-  assert.ok(cssContract.includes('Tailwind-first'), 'SPEC CSS contract keeps Tailwind v1 stance');
-  assert.ok(
-    cssContract.includes('dynamic classes must be safelisted explicitly'),
-    'SPEC CSS contract keeps dynamic-class safelisting',
-  );
-  assert.ok(cssContract.includes('@source inline("...")'), 'SPEC CSS contract cites safelists');
-  assert.ok(cssContract.includes('@scope'), 'SPEC CSS contract requires scoped component CSS');
-  assert.ok(
-    !cssContract.includes('needs a design pass before v1 freeze'),
-    'SPEC CSS contract is no longer a pre-freeze placeholder',
+  assert.deepEqual(cssContractHeadings, [
+    { number: '13.1', title: 'CSS' },
+    { number: '13.2', title: 'Lists at scale' },
+    { number: '13.3', title: 'Streaming details' },
+    { number: '13.4', title: 'Persistent cross-navigation elements' },
+    { number: '13.5', title: "Adopt-don't-invent list" },
+  ]);
+  assert.deepEqual(behaviorFixture.handlerExports, ['DocCard$choose']);
+  assert.doesNotThrow(() => assertRenderEquivalence(behaviorFixture));
+  assert.equal(cssManifest.stylesheets[0]?.href, '/_jiso/components/docs/doc-card.css');
+  assert.deepEqual(cssManifest.stylesheets[0]?.fragmentTargets, ['doc-card']);
+  assert.deepEqual(
+    cssSource
+      .split('\n')
+      .filter((line) => line.includes('@scope'))
+      .map((line) => line.trim()),
+    ['@scope (doc-card) to (:scope [fw-c]) {'],
   );
 });
 

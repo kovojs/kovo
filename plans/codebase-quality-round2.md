@@ -151,6 +151,12 @@ Do this first or pay it on every commit.
       `docs/prelaunch-checklist.md` tables/fields for pending study rows, acceptance audit
       statuses, runnable checklist rows, and final clean-checkout gates instead of checking
       completion-rule or section-intro prose substrings in `tests/fw-check.node.mjs`.
+      Partial evidence 2026-06-12: the wire-SSE/docs-normative tranche now asserts fixture
+      inventory/body structure, SPEC constitution table rows, SPEC §5.2 hard-rule alignment,
+      compiler handler naming, render-equivalence behavior, and compiler CSS asset/scoping
+      artifacts instead of regex-matching README, docs, or SPEC prose snippets. Verification:
+      `node --test --test-name-pattern "SSE remains a v2 backlog fixture|P10 normative docs cover
+      the constitution and compiler hard rules" tests/fw-check.node.mjs`.
       Partial evidence 2026-06-11: the P8 component/endpoints/unguarded/unscoped tranche now uses
       a synthetic graph and direct `fwExplain` assertions for handler captures, derives,
       execution triggers, attribute merges, endpoint listing, unguarded access, and owner-domain
