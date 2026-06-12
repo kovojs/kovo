@@ -2633,7 +2633,7 @@ async function fetchWireFixture(
     const body = await response.text();
 
     responses.push({
-      body: body.endsWith('\n') || !expected.body.endsWith('\n') ? body : `${body}\n`,
+      body,
       headers: Object.fromEntries(
         Object.keys(expected.headers).map((name) => [name, response.headers.get(name) ?? '']),
       ),
@@ -2684,7 +2684,7 @@ function normalizeWireResponse(
   reason: string,
 ): { body: string; headers: Record<string, string>; statusLine: string } {
   return {
-    body: `${response.body}\n`,
+    body: response.body,
     headers: Object.fromEntries(
       Object.entries(response.headers).map(([name, value]) => [
         name.toLowerCase(),
@@ -2717,7 +2717,8 @@ function readFixtureResponses(
     const headerText =
       headerEnd === -1 ? responseBlock.trimEnd() : responseBlock.slice(0, headerEnd);
     const [statusLine = '', ...headerLines] = headerText.split('\n');
-    const body = headerEnd === -1 ? '' : responseBlock.slice(headerEnd + 2);
+    const body =
+      headerEnd === -1 ? '' : trimFixtureResponseBody(responseBlock.slice(headerEnd + 2));
     const headers = Object.fromEntries(
       headerLines.map((line) => {
         const separator = line.indexOf(':');
@@ -2729,4 +2730,10 @@ function readFixtureResponses(
     responses.push({ body, headers, statusLine });
     cursor = nextRequestStart === -1 ? fixture.length : nextRequestStart + 1;
   }
+}
+
+function trimFixtureResponseBody(body: string): string {
+  if (body.endsWith('\r\n')) return body.slice(0, -2);
+  if (body.endsWith('\n')) return body.slice(0, -1);
+  return body;
 }

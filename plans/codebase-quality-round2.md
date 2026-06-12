@@ -1296,6 +1296,11 @@ land it first; don't fork it.
       branches. Same-session evidence:
       `pnpm exec vitest --run packages/server/src/index.test.ts -t "query-derived meta"` and
       `pnpm exec vp check packages/server/src/index.test.ts plans/codebase-quality-round2.md`.
+      Additional evidence 2026-06-12: the server wire-fixture helpers now compare exact
+      `SPEC.md` §9.1 wire bodies without appending synthetic trailing newlines to live HTTP or
+      direct renderer responses. Same-session evidence:
+      `pnpm exec vitest --run packages/server/src/index.test.ts -t "byte-for-byte|P0 wire fixtures|POST redirect"`
+      and `pnpm exec vitest --run packages/server/src/index.test.ts`.
 
 Verification: server vitest + wire fixtures byte-for-byte (remove the newline fudge at
 index.test.ts:4227 while here — it weakens the byte-for-byte claim) + acceptance.
