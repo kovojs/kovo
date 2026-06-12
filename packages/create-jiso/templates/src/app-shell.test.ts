@@ -1,8 +1,12 @@
 import { mkdtemp, readFile, rm } from 'node:fs/promises';
+import { createServer as createHttpServer } from 'node:http';
+import type { IncomingMessage, ServerResponse } from 'node:http';
+import type { AddressInfo } from 'node:net';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 import { exportStaticApp } from '@jiso/server';
+import { createServer as createViteServer } from 'vite';
 import { describe, expect, it } from 'vitest';
 
 import app, { starterClientModuleHref, starterRequestHandler } from './app-shell.js';
@@ -49,4 +53,82 @@ describe('starter app shell', () => {
       await rm(outDir, { force: true, recursive: true });
     }
   });
+
+  it('serves app-shell documents and /c/ modules through the Vite dev middleware', async () => {
+    const vite = await createViteServer({
+      appType: 'custom',
+      logLevel: 'error',
+      server: { middlewareMode: true },
+    });
+    let devServerError: unknown;
+    vite.middlewares.use(
+      (
+        error: unknown,
+        _request: IncomingMessage,
+        _response: ServerResponse,
+        next: (error?: unknown) => void,
+      ) => {
+        devServerError = error;
+        next(error);
+      },
+    );
+    const httpServer = createHttpServer(vite.middlewares);
+
+    try {
+      await expect(vite.ssrLoadModule('/src/app-shell.ts')).resolves.toMatchObject({
+        starterNodeHandler: expect.any(Function),
+      });
+
+      await new Promise<void>((resolve, reject) => {
+        httpServer.once('error', reject);
+        httpServer.listen(0, '127.0.0.1', () => {
+          httpServer.off('error', reject);
+          resolve();
+        });
+      });
+
+      const address = httpServer.address() as AddressInfo;
+      const origin = `http://127.0.0.1:${address.port}`;
+      const documentResponse = await fetch(`${origin}/`);
+      const documentBody = await documentResponse.text();
+
+      expect(documentResponse.status, formatDevServerFailure(documentBody, devServerError)).toBe(
+        200,
+      );
+      expect(documentResponse.headers.get('content-type')).toContain('text/html');
+      expect(documentBody).toContain(`on:click="${starterClientModuleHref}#Starter$announce"`);
+
+      const moduleResponse = await fetch(`${origin}${starterClientModuleHref}`);
+      const moduleBody = await moduleResponse.text();
+
+      expect(moduleResponse.status, formatDevServerFailure(moduleBody, devServerError)).toBe(200);
+      expect(moduleBody).toContain('export function Starter$announce');
+
+      const sourceAssetResponse = await fetch(`${origin}/src/styles.css`);
+      const sourceAssetBody = await sourceAssetResponse.text();
+
+      expect(
+        sourceAssetResponse.status,
+        formatDevServerFailure(sourceAssetBody, devServerError),
+      ).toBe(200);
+      expect(sourceAssetBody).toContain('tailwindcss v');
+    } finally {
+      await new Promise<void>((resolve, reject) => {
+        if (!httpServer.listening) {
+          resolve();
+          return;
+        }
+        httpServer.close((error) => (error ? reject(error) : resolve()));
+      });
+      await vite.close();
+    }
+  });
 });
+
+function formatDevServerFailure(body: string, error: unknown): string {
+  if (error instanceof Error) {
+    return `${error.stack ?? error.message}\n\n${body}`;
+  }
+
+  return body;
+}

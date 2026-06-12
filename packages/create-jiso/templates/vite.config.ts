@@ -72,25 +72,23 @@ interface StarterDevServer {
 }
 
 interface StarterDevPlugin {
-  configureServer(server: StarterDevServer): () => void;
+  configureServer(server: StarterDevServer): void;
   name: string;
 }
 
 function starterAppShellDevPlugin(): StarterDevPlugin {
   return {
     configureServer(server) {
-      return () => {
-        server.middlewares.use((request, response, next) => {
-          if (!isStarterDocumentRequest(request)) {
-            next();
-            return;
-          }
+      server.middlewares.use((request, response, next) => {
+        if (!isStarterDocumentRequest(request)) {
+          next();
+          return;
+        }
 
-          Promise.resolve(loadStarterNodeHandler(server))
-            .then((starterNodeHandler) => starterNodeHandler(request, response, next))
-            .catch(next);
-        });
-      };
+        Promise.resolve(loadStarterNodeHandler(server))
+          .then((starterNodeHandler) => starterNodeHandler(request, response, next))
+          .catch(next);
+      });
     },
     name: 'jiso-starter-app-shell-dev',
   };
@@ -112,5 +110,5 @@ function isStarterDocumentRequest(request: IncomingMessage): boolean {
   if (!request.url) return false;
 
   const pathname = new URL(request.url, 'http://jiso.local').pathname;
-  return pathname === '/';
+  return pathname === '/' || pathname.startsWith('/c/');
 }

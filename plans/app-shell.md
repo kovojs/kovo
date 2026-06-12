@@ -199,6 +199,16 @@ Scope: SPEC addition (proposed §9.5 "The request shell"), `@jiso/server` shell 
       `dist/index.html`, `dist/assets/*.css`, and `dist/c/starter.client.js`.
       R6/R7 remain open for non-starter adoption and broader export asset/task
       integration.
+      Additional evidence 2026-06-12: the create-jiso starter dev middleware now
+      claims both `/` and versioned `/c/` module requests before Vite's HTML
+      fallback while still passing source assets such as `/src/styles.css` to
+      Vite. `packages/create-jiso/templates/src/app-shell.test.ts` starts the
+      generated Vite middleware behind `node:http` and fetches the routed
+      document, `/c/starter.client.js?v=starter-r7`, and `/src/styles.css`;
+      `packages/create-jiso/templates/src/app-shell.ts` keeps the dev path on the
+      shared request handler and suppresses only optional early hints so Node 24
+      does not reject combined final `Link` headers. Same-session verification
+      ran `pnpm exec vitest --run packages/create-jiso/src/index.test.ts`.
 
 ## Background — the gap
 

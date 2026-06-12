@@ -180,7 +180,8 @@ describe('create-jiso starter', () => {
       const appShellSource = readFileSync(join(root, 'src/app-shell.ts'), 'utf8');
       expect(appShellSource).toContain("route('/',");
       expect(appShellSource).toContain('createRequestHandler(app)');
-      expect(appShellSource).toContain('toNodeHandler(starterRequestHandler)');
+      expect(appShellSource).toContain('nodeRequestToWebRequest(nodeRequest)');
+      expect(appShellSource).toContain('writeWebResponseToNode(response, nodeResponse');
       expect(appShellSource).toContain("path: '/c/starter.client.js'");
       expect(appShellSource).toContain("version: 'starter-r7'");
       expect(readFileSync(join(root, 'src/app-shell.test.ts'), 'utf8')).toContain(
@@ -211,6 +212,7 @@ describe('create-jiso starter', () => {
       expect(viteConfig).toContain("ssrLoadModule('/src/app-shell.ts')");
       expect(viteConfig).toContain('node scripts/export-static.mjs');
       expect(viteConfig).toContain("pathname === '/'");
+      expect(viteConfig).toContain("pathname.startsWith('/c/')");
       const exportStaticScript = readFileSync(join(root, 'scripts/export-static.mjs'), 'utf8');
       expect(exportStaticScript).toContain("execFileSync('vp', ['build']");
       expect(exportStaticScript).toContain("ssrLoadModule('/src/app-shell.ts')");
