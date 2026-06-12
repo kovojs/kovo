@@ -2575,6 +2575,13 @@ As each phase splits a source module, split its tests in the same commit.
       `corepack pnpm exec vitest --run packages/compiler/src/fragment-targets.test.ts packages/compiler/src/index.test.ts`,
       `corepack pnpm exec vp check packages/compiler/src/fragment-targets.test.ts packages/compiler/src/index.test.ts plans/codebase-quality-round2.md`,
       and `git diff --check`.
+      Additional evidence 2026-06-12: explicit registry fact emission, graph-to-registry
+      derivation, and app graph component derivation coverage moved from
+      `packages/compiler/src/index.test.ts` into `packages/compiler/src/registry.test.ts`. The
+      broad compiler split remains open for the remaining compile pipeline, diagnostics, query
+      update, and stamp coverage. Same-session evidence:
+      `pnpm exec vitest --run packages/compiler/src/registry.test.ts packages/compiler/src/index.test.ts -t "registry|app graph|emits one server file"` and
+      `pnpm exec vp check packages/compiler/src/registry.test.ts packages/compiler/src/index.test.ts plans/codebase-quality-round2.md`.
 - [ ] drizzle (one describe, 57 its, 68 inline pgTable fixtures, 3 module-shim copies) and
       test-package suites: same treatment; CLI tests get the temp-dir + stream-spy ritual
       (16 hand-copies) as one helper.
