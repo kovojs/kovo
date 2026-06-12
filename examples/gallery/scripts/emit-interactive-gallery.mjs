@@ -27,6 +27,7 @@ const demos = [
   'checkbox-demo',
   'collapsible-demo',
   'disclosure-demo',
+  'dialog-demo',
   'number-field-demo',
   'popover-demo',
   'switch-demo',

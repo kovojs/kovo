@@ -97,6 +97,19 @@ Audited against the repository on 2026-06-11. Checkmarks mean the behavior, API,
       `pnpm --filter @jiso/example-gallery run test:browser`,
       `pnpm --filter @jiso/headless-ui exec vitest --run src/primitives/tabs.test.ts src/primitives/number-field.test.ts src/tooling/lint-primitives.test.ts src/tooling/primitive-handler-lint.test.ts`,
       and `pnpm --filter @jiso/headless-ui run lint:primitives`.
+      Additional evidence 2026-06-12: `examples/gallery/src/interactive/` adds an
+      app-authored dialog demo to the compiled interactive gallery, bringing the checked-in
+      generated server/client artifact set to nine demos. Static tests inspect the generated
+      versioned dialog `on:*` refs and execute both generated open/close handlers; the Chromium
+      browser test installs the real `@jiso/runtime` loader and proves generated `fw-state`
+      movement alongside native `commandfor`/`command` dialog open, focus-inside, and close
+      behavior. Same-session evidence:
+      `pnpm --filter @jiso/example-gallery run emit:interactive-gallery -- --check`,
+      `pnpm --filter @jiso/example-gallery exec vitest --run src/interactive-gallery.test.ts`,
+      `pnpm --filter @jiso/example-gallery test`,
+      `pnpm --filter @jiso/example-gallery run test:browser`,
+      `pnpm --filter @jiso/headless-ui exec vitest --run src/primitives/dialog.test.ts src/tooling/lint-primitives.test.ts src/tooling/primitive-handler-lint.test.ts`,
+      and `pnpm --filter @jiso/headless-ui run lint:primitives`.
 - [ ] D8 app shell (request dispatch, document assembly, node adapter, Vite+ plugin, static export) is planned in `plans/app-shell.md`; design agreed 2026-06-11 (lives in `@jiso/server`, web-standard `Request → Response`, closed dispatch table with no middleware, L0/L1-only static export); SPEC §9.5 and S8/R1/R2/R3/R4 are implemented, R5 has dev middleware and manifest/build planning helpers, R6 static export writes HTML, `/c/` modules, and configured static assets, R7 starter adoption is partially proven, commerce now has a shell-backed HTTP document/query/module serve entry, shared-shell `/_m/` mutation dispatch is proven by commerce enhanced/no-JS HTTP tests, and the docs site ships through `vp run export`; the flat-HTML compatibility layer is no longer the default export path, while R7 remains open for any remaining starter/serve adoption gaps.
       Evidence 2026-06-12: the create-jiso starter template and commerce Vite configs now
       late-load the shared `jisoAppShellViteSsrDevPlugin()` through Vite SSR, replacing

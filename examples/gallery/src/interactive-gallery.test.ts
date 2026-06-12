@@ -27,6 +27,7 @@ describe('compiled interactive gallery demos', () => {
     const checkbox = readGenerated('checkbox-demo.tsx');
     const collapsible = readGenerated('collapsible-demo.tsx');
     const disclosure = readGenerated('disclosure-demo.tsx');
+    const dialog = readGenerated('dialog-demo.tsx');
     const numberField = readGenerated('number-field-demo.tsx');
     const popover = readGenerated('popover-demo.tsx');
     const switchDemo = readGenerated('switch-demo.tsx');
@@ -48,6 +49,17 @@ describe('compiled interactive gallery demos', () => {
     expect(disclosure).toContain('fw-state=\'{"open":false}\'');
     expect(disclosure).toMatch(
       /on:click="\/c\/examples\/gallery\/src\/generated\/interactive\/disclosure-demo\.client\.js\?v=[0-9a-f]{8}#GalleryDisclosureDemo\$button_click"/,
+    );
+
+    expect(dialog).toContain('data-gallery-interactive="dialog"');
+    expect(dialog).toContain('fw-state=\'{"open":false}\'');
+    expect(dialog).toContain('dialogTriggerAttributes({ contentId, open: state.open })');
+    expect(dialog).toContain('dialogCloseAttributes({ contentId, open: state.open })');
+    expect(dialog).toMatch(
+      /on:click="\/c\/examples\/gallery\/src\/generated\/interactive\/dialog-demo\.client\.js\?v=[0-9a-f]{8}#GalleryDialogDemo\$button_click"/,
+    );
+    expect(dialog).toMatch(
+      /on:click="\/c\/examples\/gallery\/src\/generated\/interactive\/dialog-demo\.client\.js\?v=[0-9a-f]{8}#GalleryDialogDemo\$button_click_2"/,
     );
 
     expect(numberField).toContain('data-gallery-interactive="number-field"');
@@ -92,6 +104,7 @@ describe('compiled interactive gallery demos', () => {
     const checkbox = evaluateClientModule('checkbox-demo.client.js');
     const collapsible = evaluateClientModule('collapsible-demo.client.js');
     const disclosure = evaluateClientModule('disclosure-demo.client.js');
+    const dialog = evaluateClientModule('dialog-demo.client.js');
     const numberField = evaluateClientModule('number-field-demo.client.js');
     const popover = evaluateClientModule('popover-demo.client.js');
     const switchDemo = evaluateClientModule('switch-demo.client.js');
@@ -121,6 +134,20 @@ describe('compiled interactive gallery demos', () => {
       state: disclosureState,
     });
     expect(disclosureState).toEqual({ open: true });
+
+    const dialogState = { open: false };
+    clientHandler(dialog, 'GalleryDialogDemo$button_click')(new Event('click'), {
+      params: {},
+      signal,
+      state: dialogState,
+    });
+    expect(dialogState).toEqual({ open: true });
+    clientHandler(dialog, 'GalleryDialogDemo$button_click_2')(new Event('click'), {
+      params: {},
+      signal,
+      state: dialogState,
+    });
+    expect(dialogState).toEqual({ open: false });
 
     const numberFieldState = { value: 2 };
     clientHandler(numberField, 'GalleryNumberFieldDemo$button_click_2')(new Event('click'), {

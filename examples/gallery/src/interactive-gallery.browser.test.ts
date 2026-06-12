@@ -12,6 +12,9 @@ import { GalleryCollapsibleDemo } from './generated/interactive/collapsible-demo
 import * as disclosureClient from './generated/interactive/disclosure-demo.client.js';
 import { GalleryDisclosureDemo } from './generated/interactive/disclosure-demo.js';
 // @ts-expect-error generated client modules are compiler artifacts without declarations.
+import * as dialogClient from './generated/interactive/dialog-demo.client.js';
+import { GalleryDialogDemo } from './generated/interactive/dialog-demo.js';
+// @ts-expect-error generated client modules are compiler artifacts without declarations.
 import * as numberFieldClient from './generated/interactive/number-field-demo.client.js';
 import { GalleryNumberFieldDemo } from './generated/interactive/number-field-demo.js';
 // @ts-expect-error generated client modules are compiler artifacts without declarations.
@@ -38,6 +41,7 @@ const generatedModules: Record<string, Record<string, unknown>> = {
   '/c/examples/gallery/src/generated/interactive/checkbox-demo.client.js': checkboxClient,
   '/c/examples/gallery/src/generated/interactive/collapsible-demo.client.js': collapsibleClient,
   '/c/examples/gallery/src/generated/interactive/disclosure-demo.client.js': disclosureClient,
+  '/c/examples/gallery/src/generated/interactive/dialog-demo.client.js': dialogClient,
   '/c/examples/gallery/src/generated/interactive/number-field-demo.client.js': numberFieldClient,
   '/c/examples/gallery/src/generated/interactive/popover-demo.client.js': popoverClient,
   '/c/examples/gallery/src/generated/interactive/switch-demo.client.js': switchClient,
@@ -157,6 +161,46 @@ describe('compiled interactive gallery demos in the browser', () => {
 
     await vi.waitFor(() => {
       expect(root.getAttribute('fw-state')).toBe('{"value":2}');
+    });
+  });
+
+  it('opens and closes a native dialog through generated handlers and invoker attributes', async () => {
+    const root = mountInteractiveDemo(GalleryDialogDemo);
+    const trigger = required(root.querySelector<HTMLButtonElement>('button[command="show-modal"]'));
+    const dialog = required(root.querySelector<HTMLDialogElement>('#gallery-dialog-content'));
+    const close = required(
+      dialog.querySelector<HTMLButtonElement>('button[command="request-close"]'),
+    );
+    const output = required(root.querySelector<HTMLOutputElement>('[data-demo-state="open"]'));
+    const { imports } = installGeneratedGalleryLoader(root);
+
+    expect(root.getAttribute('fw-state')).toBe('{"open":false}');
+    expect(trigger.getAttribute('aria-expanded')).toBe('false');
+    expect(trigger.getAttribute('aria-controls')).toBe('gallery-dialog-content');
+    expect(dialog.open).toBe(false);
+    expect(dialog.getAttribute('aria-labelledby')).toBe('gallery-dialog-title');
+    expect(dialog.getAttribute('aria-describedby')).toBe('gallery-dialog-description');
+    expect(output.textContent).toBe('closed');
+
+    trigger.click();
+
+    await vi.waitFor(() => {
+      expect(imports).toEqual([
+        '/c/examples/gallery/src/generated/interactive/dialog-demo.client.js',
+      ]);
+      expect(root.getAttribute('fw-state')).toBe('{"open":true}');
+      expect(dialog.open).toBe(true);
+    });
+
+    await vi.waitFor(() => {
+      expect(dialog.contains(document.activeElement)).toBe(true);
+    });
+
+    close.click();
+
+    await vi.waitFor(() => {
+      expect(root.getAttribute('fw-state')).toBe('{"open":false}');
+      expect(dialog.open).toBe(false);
     });
   });
 

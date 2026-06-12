@@ -958,6 +958,24 @@ jiso-dialog` resolves dashed wire names and prints provenance including package,
       visible ARIA/`hidden` rerender synchronization after generated handler state changes,
       broader keyboard delegation in the browser loader path, dialog/tooltip focus-dismiss
       behavior, and docs deployment wiring.
+      Additional partial evidence 2026-06-12: the compiled interactive gallery now adds an
+      app-authored dialog demo, bringing the generated interactive set to nine demos.
+      `examples/gallery/src/interactive/dialog-demo.tsx` keeps the source TSX-authored per
+      SPEC §5.2 while composing the H1 dialog attrs builders; the emitter commits the lowered
+      TSX and generated client module with versioned `on:click` refs for open and close.
+      Static tests inspect the generated dialog artifact and execute both generated handlers,
+      while the Chromium browser test installs the real `@jiso/runtime` loader and proves the
+      generated handler mutates stamped `fw-state` while native `commandfor`/`command` dialog
+      behavior opens the `<dialog>`, moves focus inside it, and closes it through the dialog
+      close command. Same-session evidence:
+      `pnpm --filter @jiso/example-gallery run emit:interactive-gallery -- --check`,
+      `pnpm --filter @jiso/example-gallery exec vitest --run src/interactive-gallery.test.ts`,
+      `pnpm --filter @jiso/example-gallery test`,
+      `pnpm --filter @jiso/example-gallery run test:browser`,
+      `pnpm --filter @jiso/headless-ui exec vitest --run src/primitives/dialog.test.ts src/tooling/lint-primitives.test.ts src/tooling/primitive-handler-lint.test.ts`,
+      and `pnpm --filter @jiso/headless-ui run lint:primitives`. G6 remains open for
+      live ARIA/`hidden` rerender synchronization from spread-derived primitive attrs,
+      tooltip behavior, remaining stateful-family coverage, and docs deployment wiring.
 
 ## Background
 
