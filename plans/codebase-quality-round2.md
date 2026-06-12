@@ -1237,6 +1237,15 @@ index.test.ts:4227 while here — it weakens the byte-for-byte claim) + acceptan
       `pnpm exec vitest --run packages/test/src`,
       `pnpm exec vp check packages/test/src/index.test.ts packages/test/src/query-verifier.test.ts plans/codebase-quality-round2.md`,
       and `git diff --check`.
+      Additional evidence 2026-06-12: mutation write-domain verification, executed graph-entry
+      scoping, explicit harness touch graph keys, scoped FW406 coverage, current-exec write
+      observation scoping, and unmapped table failures moved from
+      `packages/test/src/index.test.ts` into `packages/test/src/mutation-verifier.test.ts`.
+      Same-session evidence:
+      `pnpm exec vitest --run packages/test/src/mutation-verifier.test.ts packages/test/src/index.test.ts`,
+      `pnpm exec vitest --run packages/test/src`,
+      `pnpm exec vp check packages/test/src/index.test.ts packages/test/src/mutation-verifier.test.ts plans/codebase-quality-round2.md`,
+      and `git diff --check`.
 - [ ] **MED — Commerce example: one source of truth.** `cartQuery.load` returns a constant while
       `loadCartQuery(db)` does the real read (app.ts:123-126 vs :280-284);
       `productGridQuery.load` conjures a fresh `createCommerceDb()` (:161); the committed
