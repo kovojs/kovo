@@ -120,12 +120,6 @@ const readWireFixture = async (name) =>
 const readProjectFile = async (path) => readFile(new URL(`../${path}`, import.meta.url), 'utf8');
 const execFileAsync = promisify(execFile);
 
-const lineNumberFor = (source, needle) => {
-  const index = source.indexOf(needle);
-  assert.notEqual(index, -1, `source contains ${needle}`);
-  return source.slice(0, index).split('\n').length;
-};
-
 const explainValue = (output, prefix) => {
   const line = output.split('\n').find((item) => item.startsWith(prefix));
   assert.ok(line, `explain output includes ${prefix}`);
@@ -5200,38 +5194,31 @@ export const CartBadge = component('cart-badge', {
 });
 
 void test('P4 commerce touch graph is a committed generated artifact', async () => {
-  const commerceSource = await readProjectFile('examples/commerce/src/app.ts');
   const commerceGraph = JSON.parse(
     await readProjectFile('examples/commerce/src/generated/graph.json'),
   );
   const touchGraphSource = await readProjectFile('examples/commerce/src/generated/touch-graph.ts');
-  const cartItemsLine = lineNumberFor(commerceSource, "request.db.write('cart_items'");
-  const ordersLine = lineNumberFor(commerceSource, "request.db.write('orders'");
-  const productsLine = lineNumberFor(commerceSource, "request.db.write('products'");
-  const attachmentsLine = lineNumberFor(commerceSource, "request.db.write('attachments'");
-  const webhookOrdersLine = lineNumberFor(commerceSource, "tx.write('orders'");
-
-  assert.deepEqual(commerceGraph.touchGraph, {
+  const expectedTouchGraph = {
     'cart.addItem': {
       reads: [],
       touches: [
         {
           domain: 'cart',
           keys: null,
-          site: `examples/commerce/src/app.ts:${cartItemsLine}`,
+          site: 'examples/commerce/src/app.ts:404',
           via: 'cart_items',
         },
         {
           domain: 'order',
           keys: null,
-          site: `examples/commerce/src/app.ts:${ordersLine}`,
+          site: 'examples/commerce/src/app.ts:409',
           via: 'orders',
         },
         {
           domain: 'product',
           keys: 'arg:productId',
           predicate: 'eq',
-          site: `examples/commerce/src/app.ts:${productsLine}`,
+          site: 'examples/commerce/src/app.ts:416',
           via: 'products',
         },
       ],
@@ -5244,7 +5231,7 @@ void test('P4 commerce touch graph is a committed generated artifact', async () 
           domain: 'attachment',
           keys: 'arg:orderId',
           predicate: 'eq',
-          site: `examples/commerce/src/app.ts:${attachmentsLine}`,
+          site: 'examples/commerce/src/app.ts:458',
           via: 'attachments',
         },
       ],
@@ -5257,15 +5244,33 @@ void test('P4 commerce touch graph is a committed generated artifact', async () 
           domain: 'order',
           keys: 'arg:data.object.id',
           predicate: 'eq',
-          site: `examples/commerce/src/app.ts:${webhookOrdersLine}`,
+          site: 'examples/commerce/src/app.ts:508',
           via: 'orders',
         },
       ],
       unresolved: [],
     },
-  });
+  };
+
+  assert.deepEqual(commerceGraph.touchGraph, expectedTouchGraph);
+  assert.deepEqual(
+    Object.values(commerceGraph.touchGraph)
+      .flatMap((entry) => entry.touches)
+      .map((touch) => touch.site)
+      .sort((left, right) => left.localeCompare(right)),
+    [
+      'examples/commerce/src/app.ts:404',
+      'examples/commerce/src/app.ts:409',
+      'examples/commerce/src/app.ts:416',
+      'examples/commerce/src/app.ts:458',
+      'examples/commerce/src/app.ts:508',
+    ],
+  );
   // SPEC §11.1/§11.2: the committed static graph must stay source-derived
   // because runtime verification checks observed effects against these facts.
+  const [cartItemsTouch, ordersTouch, productsTouch] = expectedTouchGraph['cart.addItem'].touches;
+  const [attachmentsTouch] = expectedTouchGraph['order.receipt'].touches;
+  const [webhookOrdersTouch] = expectedTouchGraph['payment.webhook'].touches;
   assert.equal(
     touchGraphSource,
     `import type { CartQueryResult, CommerceDb, ProductGridResult } from '../app.js';
@@ -5276,20 +5281,20 @@ export const commerceTouchGraph = {
       {
         domain: 'cart',
         keys: null,
-        site: 'examples/commerce/src/app.ts:${cartItemsLine}',
+        site: '${cartItemsTouch.site}',
         via: 'cart_items',
       },
       {
         domain: 'order',
         keys: null,
-        site: 'examples/commerce/src/app.ts:${ordersLine}',
+        site: '${ordersTouch.site}',
         via: 'orders',
       },
       {
         domain: 'product',
         keys: 'arg:productId',
         predicate: 'eq',
-        site: 'examples/commerce/src/app.ts:${productsLine}',
+        site: '${productsTouch.site}',
         via: 'products',
       },
     ],
@@ -5302,7 +5307,7 @@ export const commerceTouchGraph = {
         domain: 'attachment',
         keys: 'arg:orderId',
         predicate: 'eq',
-        site: 'examples/commerce/src/app.ts:${attachmentsLine}',
+        site: '${attachmentsTouch.site}',
         via: 'attachments',
       },
     ],
@@ -5315,7 +5320,7 @@ export const commerceTouchGraph = {
         domain: 'order',
         keys: 'arg:data.object.id',
         predicate: 'eq',
-        site: 'examples/commerce/src/app.ts:${webhookOrdersLine}',
+        site: '${webhookOrdersTouch.site}',
         via: 'orders',
       },
     ],

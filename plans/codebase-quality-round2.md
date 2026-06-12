@@ -112,6 +112,10 @@ Do this first or pay it on every commit.
       the committed commerce graph artifact and asserts `cart/add` mutation invalidation facts,
       `fwExplain` `manual-invalidates: -`, and consumer update output instead of grepping
       `examples/commerce/src/app.ts` for `invalidate(`.
+      Partial evidence 2026-06-12: the P4 commerce touch graph committed-artifact tranche no
+      longer scans `examples/commerce/src/app.ts` for write-call line numbers; it asserts the
+      parsed `examples/commerce/src/generated/graph.json` touch facts and keeps the allowed
+      generated `touch-graph.ts` byte pin tied to those parsed artifact facts.
       Partial evidence 2026-06-11: the `P10 starter wires graph assertions into CI` tranche now
       parses `packages/create-jiso/templates/package.json` and `graph.json`, asserts starter
       graph structure, exercises the real template graph through `fwCheck`/`fwExplain`, evaluates
