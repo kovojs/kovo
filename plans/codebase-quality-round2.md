@@ -520,6 +520,13 @@ pipeline throws the tree away and communicates via mutated source text.
       validator module. Same-session evidence:
       `pnpm exec vitest --run packages/compiler/src/index.test.ts -t "package prefix|FW234|IDREF"` and
       `pnpm exec vp check packages/compiler/src/types.ts packages/compiler/src/graph.ts packages/compiler/src/validate/markup.ts packages/compiler/src/validate/package-prefixes.ts packages/compiler/src/index.ts plans/codebase-quality-round2.md`.
+      Additional evidence 2026-06-12: the compiler validation registry now lives in
+      `packages/compiler/src/validate/pipeline.ts`; `packages/compiler/src/index.ts` delegates
+      diagnostic collection through that module instead of importing every validator seam
+      directly. Same-session evidence:
+      `pnpm exec vitest --run packages/compiler/src/index.test.ts packages/compiler/src/package-prefixes.test.ts`
+      and
+      `pnpm exec vp check packages/compiler/src/index.ts packages/compiler/src/validate/pipeline.ts`.
 - [x] **MED — Move analysis out of validate/.** `collectQueryUpdatePlans` and coverage
       classification feed emit, not validation; positions travel through a module-global
       `WeakMap` (`updateCoverageSpans`, bindings.ts:45-48) read back in component-contracts.ts:271.
