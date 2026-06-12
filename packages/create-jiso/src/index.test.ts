@@ -165,6 +165,7 @@ describe('create-jiso starter', () => {
       expect(readFileSync(join(root, 'docs/graph-assertions.md'), 'utf8')).toContain(
         'SPEC.md section 11.4.3',
       );
+      expect(readFileSync(join(root, 'README.md'), 'utf8')).toContain('starter-export/v1');
       expect(readFileSync(join(root, 'docs/deployment.md'), 'utf8')).toContain(
         'SPEC.md section 9.3',
       );
@@ -218,6 +219,8 @@ describe('create-jiso starter', () => {
       expect(exportStaticScript).toContain("ssrLoadModule('/src/app-shell.ts')");
       expect(exportStaticScript).toContain('exportStaticApp(app, { outDir:');
       expect(exportStaticScript).toContain('JISO_STARTER_STYLESHEET_HREF');
+      expect(exportStaticScript).toContain('isStaticExportDiagnosticError');
+      expect(exportStaticScript).toContain('starter-export/v1');
     } finally {
       rmSync(root, { force: true, recursive: true });
     }
@@ -360,6 +363,48 @@ describe('create-jiso starter', () => {
       );
       expect(readFileSync(join(root, 'dist/c/starter.client.js'), 'utf8')).toContain(
         'Starter$announce',
+      );
+    } finally {
+      rmSync(root, { force: true, recursive: true });
+    }
+  });
+
+  it('formats generated export task diagnostics when a starter route is not exportable', () => {
+    const tempParent = tmpdir();
+    mkdirSync(tempParent, { recursive: true });
+    const root = mkdtempSync(join(tempParent, 'create-jiso-export-diagnostic-'));
+
+    try {
+      writeJisoProject(root, { name: 'Export Diagnostic Proof' });
+      linkStarterBuildDependencies(root);
+
+      const appShellPath = join(root, 'src/app-shell.ts');
+      const appShell = readFileSync(appShellPath, 'utf8');
+      writeFileSync(
+        appShellPath,
+        appShell.replace(
+          "export const homeRoute = route('/', {\n",
+          "export const homeRoute = route('/', {\n  guard: () => true,\n",
+        ),
+        'utf8',
+      );
+
+      let exportError: unknown;
+      try {
+        execFileSync(resolveBin('vp'), ['run', 'export'], {
+          cwd: root,
+          env: withRepoBinOnPath(),
+          stdio: 'pipe',
+        });
+      } catch (error) {
+        exportError = error;
+      }
+
+      expect(exportError).toMatchObject({ status: 1 });
+      const stderr = (exportError as { stderr?: unknown }).stderr;
+      expect(Buffer.isBuffer(stderr)).toBe(true);
+      expect((stderr as Buffer).toString('utf8')).toContain(
+        "starter-export/v1\nERROR FW229 route=/ FW229 static export cannot export guarded route '/'",
       );
     } finally {
       rmSync(root, { force: true, recursive: true });

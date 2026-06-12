@@ -216,6 +216,16 @@ Scope: SPEC addition (proposed §9.5 "The request shell"), `@jiso/server` shell 
       shared request handler and suppresses only optional early hints so Node 24
       does not reject combined final `Link` headers. Same-session verification
       ran `pnpm exec vitest --run packages/create-jiso/src/index.test.ts`.
+      Additional evidence 2026-06-12: the create-jiso starter export task now
+      formats static-export diagnostics as stable `starter-export/v1` lines and
+      exits nonzero when a generated starter route becomes non-exportable, so
+      R6/R7 adopters get the SPEC §9.5 FW229 teaching path instead of an
+      ambiguous task failure. `packages/create-jiso/templates/scripts/export-static.mjs`
+      handles `StaticExportError`-shaped diagnostics, `packages/create-jiso/templates/README.md`
+      documents the generated task behavior, and `packages/create-jiso/src/index.test.ts`
+      mutates a generated project route to guarded/non-exportable and verifies
+      `vp run export` returns status 1 with `ERROR FW229 route=/`. Same-session
+      verification ran `pnpm exec vitest --run packages/create-jiso/src/index.test.ts`.
 
 ## Background — the gap
 

@@ -25,6 +25,7 @@ const server = await createServer({
   server: { middlewareMode: true },
 });
 
+let result;
 try {
   const [appModule, serverModule] = await Promise.all([
     server.ssrLoadModule('/src/app-shell.ts'),
@@ -41,18 +42,38 @@ try {
     throw new Error('@jiso/server must export exportStaticApp.');
   }
 
-  const result = await exportStaticApp(app, { outDir: 'dist' });
+  result = await exportStaticApp(app, { outDir: 'dist' });
+} catch (error) {
+  if (!isStaticExportDiagnosticError(error)) {
+    throw error;
+  }
+
+  process.stderr.write(
+    ['starter-export/v1', ...formatStaticExportDiagnostics(error.diagnostics, 'ERROR'), ''].join(
+      '\n',
+    ),
+  );
+  process.exitCode = 1;
+} finally {
+  await server.close();
+}
+
+if (result) {
+  for (const diagnostic of result.diagnostics) {
+    process.stderr.write(`${formatStaticExportDiagnostic(diagnostic, 'WARN')}\n`);
+    process.exitCode = 1;
+  }
+
   process.stdout.write(
     [
       'starter-export/v1',
       `html=${result.artifacts.length}`,
       `client-modules=${result.clientModules.length}`,
       `assets=${cssAssets.length}`,
+      `diagnostics=${result.diagnostics.length}`,
       '',
     ].join('\n'),
   );
-} finally {
-  await server.close();
 }
 
 function isJisoApp(value) {
@@ -62,4 +83,37 @@ function isJisoApp(value) {
     Array.isArray(value.routes) &&
     typeof value.clientModules?.resolve === 'function'
   );
+}
+
+function isStaticExportDiagnosticError(error) {
+  return (
+    typeof error === 'object' &&
+    error !== null &&
+    Array.isArray(error.diagnostics) &&
+    error.diagnostics.every(isStaticExportDiagnostic)
+  );
+}
+
+function isStaticExportDiagnostic(value) {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    typeof value.code === 'string' &&
+    typeof value.message === 'string' &&
+    typeof value.routePath === 'string'
+  );
+}
+
+function formatStaticExportDiagnostics(diagnostics, severity) {
+  return diagnostics.map((diagnostic) => formatStaticExportDiagnostic(diagnostic, severity));
+}
+
+function formatStaticExportDiagnostic(diagnostic, severity) {
+  return `${severity} ${diagnostic.code} route=${diagnostic.routePath} ${stableText(
+    diagnostic.message,
+  )}`;
+}
+
+function stableText(value) {
+  return String(value).replace(/\s+/g, ' ').trim();
 }
