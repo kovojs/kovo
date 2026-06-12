@@ -1056,6 +1056,16 @@ params, relational API, `execute(sql)`, right/full joins, a string column named 
       `pnpm exec vitest --run packages/runtime/src/mutation-queue.test.ts packages/runtime/src/index.test.ts -t "mutation queue|optimistic enhanced submits with the same named queue|unqueued optimistic"`
       and
       `pnpm exec vp check packages/runtime/src/index.ts packages/runtime/src/index.test.ts packages/runtime/src/mutation-queue.ts packages/runtime/src/mutation-queue.test.ts`.
+      Partial evidence 2026-06-12: extracted `packages/runtime/src/query-bindings.ts` as the
+      subtractive query-binding seam for DOM-light `data-bind`, compiled derives, attribute
+      stamps, template stamps, and the query-binding root capability guard; `index.ts` keeps the
+      public re-export and only imports the helper needed by mutation/deferred DOM apply.
+      `packages/runtime/src/query-bindings.test.ts` pins the extracted seam with DOM-shaped
+      ArrayLike attributes, compiled-plan ordering, template-stamp reconciliation, and root
+      detection. Same-session evidence:
+      `pnpm exec vitest --run packages/runtime/src/query-bindings.test.ts packages/runtime/src/index.test.ts -t "query binding|data-bind|compiled query update plans|template stamps|mutation query chunks|deferred|apply"`
+      and
+      `pnpm exec vp check packages/runtime/src/index.ts packages/runtime/src/query-bindings.ts packages/runtime/src/query-bindings.test.ts`.
       Partial evidence 2026-06-12: extracted `packages/runtime/src/optimism.ts` as the
       subtractive seam for optimistic transform/rebase state and pagehide cleanup; `index.ts`
       keeps public re-exports and enhanced-mutation integration wiring. Same-session evidence:
