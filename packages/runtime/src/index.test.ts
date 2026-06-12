@@ -333,12 +333,12 @@ function keyedListRow(key: string, text: string): StructuralMorphNode {
   };
 }
 
-type InlineDelegatedInstaller = (
+type InlineLoaderInstaller = (
   importModule: (url: string) => Promise<Record<string, unknown>>,
   globalRecord: Record<string, unknown>,
 ) => void;
 
-const inlineDelegatedLoaderCases: readonly [string, InlineDelegatedInstaller][] = [
+const inlineLoaderCases: readonly [string, InlineLoaderInstaller][] = [
   [
     'generated bootstrap source',
     (importModule, globalRecord) => {
@@ -352,7 +352,7 @@ const inlineDelegatedLoaderCases: readonly [string, InlineDelegatedInstaller][] 
 async function dispatchInlineDelegatedClick(
   element: unknown,
   importModule: (url: string) => Promise<Record<string, unknown>>,
-  installLoader: InlineDelegatedInstaller,
+  installLoader: InlineLoaderInstaller,
 ): Promise<void> {
   const globalRecord = globalThis as unknown as Record<string, unknown>;
   const originals = {
@@ -571,199 +571,219 @@ describe('runtime loader', () => {
     }
   });
 
-  it('keeps inline response application in parity with the modular DOM apply path', async () => {
-    // SPEC.md §4.4: the bootstrap may stay tiny, but its wire effects must match the runtime path.
-    const body = [
-      '<fw-query name="cart" key="cart:c1">{"count":1}</fw-query>',
-      '<fw-query name="productGrid">{"products":[{"id":"p1"}]}</fw-query>',
-      '<fw-fragment target="cart-badge"><cart-badge>1</cart-badge></fw-fragment>',
-      '<fw-fragment target="cart-list" mode="append"><li>p1</li></fw-fragment>',
-    ].join('');
-    const modularTargets = new Map([
-      [
-        'cart-badge',
-        {
-          html: '',
-          replaceWithHtml(html: string) {
-            this.html = html;
-          },
-        },
-      ],
-      [
-        'cart-list',
-        {
-          html: '<li>existing</li>',
-          appendHtml(html: string) {
-            this.html += html;
-          },
-          replaceWithHtml(html: string) {
-            this.html = html;
-          },
-        },
-      ],
-    ]);
-    const store = createQueryStore();
-    const modularResult = applyMutationResponseToDom({
-      body,
-      root: {
-        findFragmentTarget(target: string) {
-          return modularTargets.get(target) ?? null;
-        },
-      },
-      store,
-    });
-
-    const globalRecord = globalThis as unknown as Record<string, unknown>;
-    const originals = {
-      CustomEvent: globalRecord.CustomEvent,
-      DOMParser: globalRecord.DOMParser,
-      FormData: globalRecord.FormData,
-      addEventListener: globalRecord.addEventListener,
-      dispatchEvent: globalRecord.dispatchEvent,
-      document: globalRecord.document,
-      fetch: globalRecord.fetch,
-    };
-    const listeners = new Map<string, (event: unknown) => void>();
-    const dispatched: Array<{ detail?: { body?: string; key?: string; name?: string } }> = [];
-    interface InlineParityTarget {
-      html?: string;
-      innerHTML?: string;
-      insertAdjacentHTML?(position: string, html: string): void;
-    }
-
-    const inlineTargets = new Map<string, InlineParityTarget>([
-      ['cart-badge', { innerHTML: '' }],
-      [
-        'cart-list',
-        {
-          html: '<li>existing</li>',
-          insertAdjacentHTML(_position: string, html: string) {
-            this.html += html;
-          },
-        },
-      ],
-    ]);
-
-    try {
-      globalRecord.CustomEvent = class CustomEvent {
-        constructor(
-          readonly type: string,
-          readonly init?: { detail?: unknown },
-        ) {}
-
-        get detail(): unknown {
-          return this.init?.detail;
-        }
-      };
-      globalRecord.DOMParser = class DOMParser {
-        parseFromString(source: string) {
-          const queryElements = [
-            ...source.matchAll(/<fw-query\b([^>]*)>([\s\S]*?)<\/fw-query>/g),
-          ].map((match) => {
-            const attributes = match[1] ?? '';
-            return {
-              getAttribute(name: string) {
-                if (name === 'name') return /name="([^"]+)"/.exec(attributes)?.[1] ?? null;
-                if (name === 'key') return /key="([^"]+)"/.exec(attributes)?.[1] ?? null;
-                return null;
-              },
-              textContent: match[2],
-            };
-          });
-          const fragmentElements = [
-            ...source.matchAll(/<fw-fragment\b([^>]*)>([\s\S]*?)<\/fw-fragment>/g),
-          ].map((match) => {
-            const attributes = match[1] ?? '';
-            return {
-              getAttribute(name: string) {
-                if (name === 'target') return /target="([^"]+)"/.exec(attributes)?.[1] ?? null;
-                if (name === 'mode') return /mode="([^"]+)"/.exec(attributes)?.[1] ?? null;
-                return null;
-              },
-              innerHTML: match[2],
-            };
-          });
-
-          return {
-            querySelectorAll(selector: string) {
-              if (selector === 'fw-query') return queryElements;
-              if (selector === 'fw-fragment') return fragmentElements;
-              return [];
+  it.each(inlineLoaderCases)(
+    'keeps inline response application in parity with the modular DOM apply path through %s',
+    async (_name, installLoader) => {
+      // SPEC.md §4.4: the bootstrap may stay tiny, but its wire effects must match the runtime path.
+      const body = [
+        '<fw-query name="cart" key="cart:c1">{"count":1}</fw-query>',
+        '<fw-query name="productGrid">{"products":[{"id":"p1"}]}</fw-query>',
+        '<fw-fragment target="cart-badge"><cart-badge>1</cart-badge></fw-fragment>',
+        '<fw-fragment target="cart-list" mode="append"><li>p1</li></fw-fragment>',
+      ].join('');
+      const modularTargets = new Map([
+        [
+          'cart-badge',
+          {
+            html: '',
+            replaceWithHtml(html: string) {
+              this.html = html;
             },
-          };
-        }
-      };
-      globalRecord.FormData = function FormData() {
-        return {};
-      };
-      globalRecord.addEventListener = (type: string, listener: (event: unknown) => void) => {
-        listeners.set(type, listener);
-      };
-      globalRecord.dispatchEvent = (event: { detail?: unknown }) => {
-        dispatched.push(event as { detail?: { body?: string; key?: string; name?: string } });
-        return true;
-      };
-      globalRecord.document = {
-        getElementById(id: string) {
-          return inlineTargets.get(id) ?? null;
-        },
-        querySelector() {
-          return null;
-        },
-        querySelectorAll(selector: string) {
-          return selector === '[fw-deps]' ? [] : [];
-        },
-      };
-      globalRecord.fetch = vi.fn(async () => ({
-        async text() {
-          return body;
-        },
-      }));
-
-      runInThisContext(jisoLoaderSource);
-      listeners.get('submit')?.({
-        preventDefault: vi.fn(),
-        target: {
-          closest(selector: string) {
-            return selector === 'form[enhance],form[data-enhance],form[data-mutation]'
-              ? { action: '/_m/cart/add', method: 'post' }
-              : null;
+          },
+        ],
+        [
+          'cart-list',
+          {
+            html: '<li>existing</li>',
+            appendHtml(html: string) {
+              this.html += html;
+            },
+            replaceWithHtml(html: string) {
+              this.html = html;
+            },
+          },
+        ],
+      ]);
+      const store = createQueryStore();
+      const modularResult = applyMutationResponseToDom({
+        body,
+        root: {
+          findFragmentTarget(target: string) {
+            return modularTargets.get(target) ?? null;
           },
         },
-        type: 'submit',
+        store,
       });
-      await Promise.resolve();
-      await Promise.resolve();
-      await new Promise((resolve) => setTimeout(resolve, 0));
 
-      expect(
-        dispatched.map((event) => ({
-          key: event.detail?.key,
-          name: event.detail?.name,
-          value: JSON.parse(event.detail?.body ?? 'null'),
-        })),
-      ).toEqual([
-        { key: 'cart:c1', name: 'cart', value: store.get('cart', 'cart:c1') },
-        { key: undefined, name: 'productGrid', value: store.get('productGrid') },
-      ]);
-      expect(inlineTargets.get('cart-badge')?.innerHTML).toBe(
-        modularTargets.get('cart-badge')?.html,
-      );
-      expect(inlineTargets.get('cart-list')?.html).toBe(modularTargets.get('cart-list')?.html);
-      expect(modularResult).toEqual({
-        appliedFragments: ['cart-badge', 'cart-list'],
-        fragments: [
-          { html: '<cart-badge>1</cart-badge>', target: 'cart-badge' },
-          { html: '<li>p1</li>', mode: 'append', target: 'cart-list' },
+      const globalRecord = globalThis as unknown as Record<string, unknown>;
+      const originals = {
+        CustomEvent: globalRecord.CustomEvent,
+        DOMParser: globalRecord.DOMParser,
+        FormData: globalRecord.FormData,
+        addEventListener: globalRecord.addEventListener,
+        dispatchEvent: globalRecord.dispatchEvent,
+        document: globalRecord.document,
+        fetch: globalRecord.fetch,
+        importModule: globalRecord.__jisoInlineImport,
+      };
+      const listeners = new Map<string, (event: unknown) => void>();
+      const dispatched: Array<{ detail?: { body?: string; key?: string; name?: string } }> = [];
+      interface InlineParityTarget {
+        html?: string;
+        innerHTML?: string;
+        insertAdjacentHTML?(position: string, html: string): void;
+      }
+
+      const inlineTargets = new Map<string, InlineParityTarget>([
+        ['cart-badge', { innerHTML: '' }],
+        [
+          'cart-list',
+          {
+            html: '<li>existing</li>',
+            insertAdjacentHTML(_position: string, html: string) {
+              this.html += html;
+            },
+          },
         ],
-        queries: ['cart', 'productGrid'],
-      });
-    } finally {
-      Object.assign(globalRecord, originals);
-    }
-  });
+      ]);
 
-  it.each(inlineDelegatedLoaderCases)(
+      try {
+        globalRecord.CustomEvent = class CustomEvent {
+          constructor(
+            readonly type: string,
+            readonly init?: { detail?: unknown },
+          ) {}
+
+          get detail(): unknown {
+            return this.init?.detail;
+          }
+        };
+        globalRecord.DOMParser = class DOMParser {
+          parseFromString(source: string) {
+            const queryElements = [
+              ...source.matchAll(/<fw-query\b([^>]*)>([\s\S]*?)<\/fw-query>/g),
+            ].map((match) => {
+              const attributes = match[1] ?? '';
+              return {
+                getAttribute(name: string) {
+                  if (name === 'name') return /name="([^"]+)"/.exec(attributes)?.[1] ?? null;
+                  if (name === 'key') return /key="([^"]+)"/.exec(attributes)?.[1] ?? null;
+                  return null;
+                },
+                textContent: match[2],
+              };
+            });
+            const fragmentElements = [
+              ...source.matchAll(/<fw-fragment\b([^>]*)>([\s\S]*?)<\/fw-fragment>/g),
+            ].map((match) => {
+              const attributes = match[1] ?? '';
+              return {
+                getAttribute(name: string) {
+                  if (name === 'target') return /target="([^"]+)"/.exec(attributes)?.[1] ?? null;
+                  if (name === 'mode') return /mode="([^"]+)"/.exec(attributes)?.[1] ?? null;
+                  return null;
+                },
+                innerHTML: match[2],
+              };
+            });
+
+            return {
+              querySelectorAll(selector: string) {
+                if (selector === 'fw-query') return queryElements;
+                if (selector === 'fw-fragment') return fragmentElements;
+                return [];
+              },
+            };
+          }
+        };
+        globalRecord.FormData = function FormData() {
+          return {};
+        };
+        globalRecord.addEventListener = (type: string, listener: (event: unknown) => void) => {
+          listeners.set(type, listener);
+        };
+        globalRecord.dispatchEvent = (event: { detail?: unknown }) => {
+          dispatched.push(event as { detail?: { body?: string; key?: string; name?: string } });
+          return true;
+        };
+        globalRecord.document = {
+          getElementById(id: string) {
+            return inlineTargets.get(id) ?? null;
+          },
+          querySelector() {
+            return null;
+          },
+          querySelectorAll(selector: string) {
+            return selector === '[fw-deps]' ? [] : [];
+          },
+        };
+        globalRecord.fetch = vi.fn(async () => ({
+          async text() {
+            return body;
+          },
+        }));
+
+        installLoader(
+          vi.fn(async () => ({})),
+          globalRecord,
+        );
+        listeners.get('submit')?.({
+          preventDefault: vi.fn(),
+          target: {
+            closest(selector: string) {
+              return selector === 'form[enhance],form[data-enhance],form[data-mutation]'
+                ? { action: '/_m/cart/add', method: 'post' }
+                : null;
+            },
+          },
+          type: 'submit',
+        });
+        await Promise.resolve();
+        await Promise.resolve();
+        await new Promise((resolve) => setTimeout(resolve, 0));
+
+        expect(
+          dispatched.map((event) => ({
+            key: event.detail?.key,
+            name: event.detail?.name,
+            value: JSON.parse(event.detail?.body ?? 'null'),
+          })),
+        ).toEqual([
+          { key: 'cart:c1', name: 'cart', value: store.get('cart', 'cart:c1') },
+          { key: undefined, name: 'productGrid', value: store.get('productGrid') },
+        ]);
+        expect(inlineTargets.get('cart-badge')?.innerHTML).toBe(
+          modularTargets.get('cart-badge')?.html,
+        );
+        expect(inlineTargets.get('cart-list')?.html).toBe(modularTargets.get('cart-list')?.html);
+        expect(modularResult).toEqual({
+          appliedFragments: ['cart-badge', 'cart-list'],
+          fragments: [
+            { html: '<cart-badge>1</cart-badge>', target: 'cart-badge' },
+            { html: '<li>p1</li>', mode: 'append', target: 'cart-list' },
+          ],
+          queries: ['cart', 'productGrid'],
+        });
+      } finally {
+        Object.assign(globalRecord, {
+          CustomEvent: originals.CustomEvent,
+          DOMParser: originals.DOMParser,
+          FormData: originals.FormData,
+          addEventListener: originals.addEventListener,
+          dispatchEvent: originals.dispatchEvent,
+          document: originals.document,
+          fetch: originals.fetch,
+        });
+        if (originals.importModule === undefined) {
+          delete globalRecord.__jisoInlineImport;
+        } else {
+          globalRecord.__jisoInlineImport = originals.importModule;
+        }
+      }
+    },
+  );
+
+  it.each(inlineLoaderCases)(
     'keeps inline delegated params and state in parity through %s',
     async (_name, installLoader) => {
       // SPEC.md §4.4: delegated handler semantics must not drift between the inline and modular loaders.
@@ -852,7 +872,7 @@ describe('runtime loader', () => {
     },
   );
 
-  it.each(inlineDelegatedLoaderCases)(
+  it.each(inlineLoaderCases)(
     'keeps inline delegated error messages in parity through %s',
     async (_name, installLoader) => {
       // SPEC.md §4.4: handler resolution failures are part of the shipped loader contract.

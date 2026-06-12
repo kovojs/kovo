@@ -993,6 +993,14 @@ params, relational API, `execute(sql)`, right/full joins, a string column named 
       `pnpm exec vitest --run packages/runtime/src/inline-loader.test.ts packages/runtime/src/index.test.ts`
       and
       `pnpm exec vp check packages/runtime/src/inline-loader.test.ts plans/codebase-quality-round2.md`.
+      Additional bounded evidence 2026-06-12: `packages/runtime/src/index.test.ts`
+      now runs the inline response-application parity harness through both generated bootstrap
+      source and the extracted installer source, comparing keyed query events plus replace/append
+      fragment effects against `applyMutationResponseToDom` under the `SPEC.md` section 4.4
+      loader contract. Same-session evidence:
+      `pnpm exec vitest --run packages/runtime/src/index.test.ts -t "inline response application|inline delegated"`
+      and
+      `pnpm exec vp check packages/runtime/src/index.test.ts plans/codebase-quality-round2.md`.
 - [x] **HIGH — Ship the DOM morph.** The only real keyed DOM morph (focus/selection/scroll
       capture-restore) lives in index.browser.test.ts:12-182; every consumer must rewrite it, and
       the flagship browser test substantially tests its own test code. Promote to a
