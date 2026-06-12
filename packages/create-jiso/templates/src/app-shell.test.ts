@@ -104,6 +104,30 @@ describe('starter app shell', () => {
       expect(moduleResponse.status, formatDevServerFailure(moduleBody, devServerError)).toBe(200);
       expect(moduleBody).toContain('export function Starter$announce');
 
+      const headDocumentResponse = await fetch(`${origin}/`, { method: 'HEAD' });
+      const headDocumentBody = await headDocumentResponse.text();
+
+      expect(
+        headDocumentResponse.status,
+        formatDevServerFailure(headDocumentBody, devServerError),
+      ).toBe(200);
+      expect(headDocumentResponse.headers.get('content-type')).toContain('text/html');
+      expect(headDocumentBody).toBe('');
+
+      const headModuleResponse = await fetch(`${origin}${starterClientModuleHref}`, {
+        method: 'HEAD',
+      });
+      const headModuleBody = await headModuleResponse.text();
+
+      expect(
+        headModuleResponse.status,
+        formatDevServerFailure(headModuleBody, devServerError),
+      ).toBe(200);
+      expect(headModuleResponse.headers.get('cache-control')).toBe(
+        'public, max-age=31536000, immutable',
+      );
+      expect(headModuleBody).toBe('');
+
       const sourceAssetResponse = await fetch(`${origin}/src/styles.css`);
       const sourceAssetBody = await sourceAssetResponse.text();
 

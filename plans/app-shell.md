@@ -307,6 +307,16 @@ Scope: SPEC addition (proposed §9.5 "The request shell"), `@jiso/server` shell 
       asset plan used by R5 while preserving the `starter-export/v1` `assets=1`
       proof. Same-session verification:
       `pnpm exec vitest --run packages/create-jiso/src/index.test.ts -t "scaffolds real template files|runs the generated vp export task"`.
+      Additional evidence 2026-06-12: the create-jiso starter template now proves
+      the Vite dev middleware claims `HEAD /` and `HEAD /c/starter.client.js?v=starter-r7`
+      through the app-shell node handler with empty bodies while preserving the
+      routed document/content headers, and still passes `/src/styles.css` to Vite.
+      `packages/create-jiso/templates/src/app-shell.test.ts` contains the
+      template-local proof, and `packages/create-jiso/templates/README.md`
+      now describes both routed document and versioned `/c/` module delegation.
+      Same-session verification ran
+      `pnpm exec vitest --run packages/create-jiso/src/index.test.ts -t "runs the generated starter app-shell request and export proof"` and
+      `pnpm exec vp check packages/create-jiso/src/index.test.ts packages/create-jiso/templates/src/app-shell.test.ts packages/create-jiso/templates/README.md plans/app-shell.md`.
       Additional evidence 2026-06-12: the docs-site export task now uses
       `site/scripts/export-static.mjs` instead of invoking the built
       `dist/cli` export command. The site-owned task still runs the root package
