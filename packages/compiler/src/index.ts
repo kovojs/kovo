@@ -20,12 +20,11 @@ import {
   inferComponentName,
   parseComponentModule as parseComponentModuleModel,
 } from './scan/parse.js';
-import { replaceExtension } from './shared.js';
 import { isCompilerIrArtifact, validateAuthoringSurface } from './validate/authoring-surface.js';
 import { validatePackageComponentPrefixes } from './validate/package-prefixes.js';
 import { collectCompilerDiagnostics } from './validate/pipeline.js';
 import type { CompileComponentOptions, CompileResult } from './types.js';
-import { createEmptyCompileResult, emittedFileKind } from './types.js';
+import { compileArtifactFileNames, createEmptyCompileResult, emittedFileKind } from './types.js';
 import { createJisoVitePlugin, type JisoVitePlugin, type JisoVitePluginOptions } from './vite.js';
 
 export type { DiagnosticCode };
@@ -62,6 +61,7 @@ export type {
 } from './css.js';
 export { collectCssAssetManifest, dedupeCss, scopeComponentCss, selectCssAssets } from './css.js';
 export type {
+  CompileArtifactFileNames,
   CompileComponentOptions,
   CompileResult,
   EmittedFile,
@@ -144,10 +144,7 @@ export function compileComponentModule(options: CompileComponentOptions): Compil
     source,
     updateCoverage,
   });
-  const clientFileName = replaceExtension(options.fileName, '.client.js');
-  const cssFileName = replaceExtension(options.fileName, '.css');
-  const serverFileName = replaceExtension(options.fileName, '.server.js');
-  const registryFileName = 'generated/registries.d.ts';
+  const fileNames = compileArtifactFileNames(options.fileName);
 
   const clientSource = emitClientModule(handlers, queryUpdatePlans, componentName, irHeader);
   const clientHref = clientModuleUrl(options.fileName, clientModuleVersion(clientSource));
@@ -159,12 +156,12 @@ export function compileComponentModule(options: CompileComponentOptions): Compil
   const fragmentTargets = fragmentTargetFacts.map((fact) => fact.target);
   const componentGraphFacts = [componentGraphFact(componentName, model, fragmentTargets)];
   const cssAssets = cssSource
-    ? [componentCssAssetForFile(cssFileName, componentName, fragmentTargets, {}, cssSource)]
+    ? [componentCssAssetForFile(fileNames.css, componentName, fragmentTargets, {}, cssSource)]
     : [];
   const serverRenderedSource = serverRenderSource(source, versionedHandlers, model);
   const serverSource = emitServerModule(serverRenderedSource);
   const registrySource = emitRegistryModule({
-    clientFileName,
+    clientFileName: fileNames.client,
     cssAssets,
     componentName,
     fragmentTargetFacts,
@@ -184,17 +181,17 @@ export function compileComponentModule(options: CompileComponentOptions): Compil
       ...validationDiagnostics,
     ],
     files: [
-      { fileName: serverFileName, kind: 'server', source: serverSource },
-      { fileName: clientFileName, kind: 'client', source: clientSource },
-      ...(cssSource ? [{ fileName: cssFileName, kind: 'css' as const, source: cssSource }] : []),
-      { fileName: registryFileName, kind: 'registry', source: registrySource },
+      { fileName: fileNames.server, kind: 'server', source: serverSource },
+      { fileName: fileNames.client, kind: 'client', source: clientSource },
+      ...(cssSource ? [{ fileName: fileNames.css, kind: 'css' as const, source: cssSource }] : []),
+      { fileName: fileNames.registry, kind: 'registry', source: registrySource },
     ],
     handlerExports: versionedHandlers.map((handler) => handler.exportName),
     cssAssets,
     platformSubstitutions: platformLowering.substitutions,
     queryUpdatePlans,
     renderEquivalenceChecks: [
-      renderEquivalenceCheck(serverFileName, serverRenderedSource, serverSource),
+      renderEquivalenceCheck(fileNames.server, serverRenderedSource, serverSource),
     ],
     updateCoverage,
     viewTransitions: viewTransitionLowering.stamps,

@@ -2,6 +2,7 @@ import type { ComponentCssAsset } from './css.js';
 import type { CompilerDiagnostic } from './diagnostics.js';
 import type { ComponentGraphFact, RegistryFacts } from './graph.js';
 import type { PlatformSubstitution } from './lower/platform.js';
+import { replaceExtension } from './shared.js';
 
 export interface CompileComponentOptions {
   fileName: string;
@@ -17,6 +18,13 @@ export interface EmittedFile {
   fileName: string;
   kind: 'client' | 'css' | 'registry' | 'server';
   source: string;
+}
+
+export interface CompileArtifactFileNames {
+  client: string;
+  css: string;
+  registry: string;
+  server: string;
 }
 
 export interface CompileResult {
@@ -52,6 +60,15 @@ export function emittedFileKind(fileName: string): EmittedFile['kind'] {
   if (fileName.endsWith('.css')) return 'css';
   if (fileName.endsWith('.server.js')) return 'server';
   return 'registry';
+}
+
+export function compileArtifactFileNames(fileName: string): CompileArtifactFileNames {
+  return {
+    client: replaceExtension(fileName, '.client.js'),
+    css: replaceExtension(fileName, '.css'),
+    registry: 'generated/registries.d.ts',
+    server: replaceExtension(fileName, '.server.js'),
+  };
 }
 
 export interface ViewTransitionStamp {
