@@ -1441,6 +1441,13 @@ must be "FW406 unresolved," never "silently wrong."
       `pnpm exec vitest --run conformance/drizzle-pin/src/index.test.ts`,
       `pnpm exec vp check packages/drizzle/src/index.ts packages/drizzle/src/index.test.ts plans/codebase-quality-round2.md`,
       and `git diff --check`.
+      Additional evidence 2026-06-12: project-mode transaction callback receiver aliases now
+      carry ts-morph symbol keys alongside their legacy receiver names before write extraction,
+      so same-name callback parameters in unrelated lexical scopes no longer fabricate Drizzle
+      write touches under SPEC §10-§11. Package and pinned conformance coverage exercise real
+      transaction writes plus shadowed same-name fake receivers. Same-session evidence:
+      `pnpm exec vitest --run packages/drizzle/src/index.test.ts -t "project transaction callback receiver aliases"`,
+      `pnpm exec vitest --run conformance/drizzle-pin/src/index.test.ts -t "project transaction aliases"`.
 - [x] **MED — Make the drizzle-orm coupling real and tested.** The `>=0.45.2 <1` pin is
       decorative: drizzle-orm is never imported, absent from devDeps, and every project test
       fabricates a `declare module "drizzle-orm/pg-core"` shim (index.test.ts:1742, 1791, 1846).

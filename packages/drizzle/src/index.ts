@@ -333,14 +333,14 @@ function projectFunctionExtractionsByFileName(
       const body = fn.getBody();
       if (!name || !body) continue;
 
-      const receiverNames = projectDrizzleReceiverNames(fn);
+      const receivers = projectDrizzleReceivers(fn);
       extractionsByFunction.set(name, {
-        receiverNames,
+        receiverNames: [...receivers.names],
         writeCalls: extractProjectDrizzleWriteCalls(
           body,
           file,
           extraction.tableNamesBySymbol,
-          new Set(receiverNames),
+          receivers,
         ),
       });
     }
@@ -352,27 +352,27 @@ function projectFunctionExtractionsByFileName(
       if (!Node.isArrowFunction(initializer) && !Node.isFunctionExpression(initializer)) continue;
 
       const body = initializer.getBody();
-      const receiverNames = projectDrizzleReceiverNames(initializer);
+      const receivers = projectDrizzleReceivers(initializer);
       extractionsByFunction.set(name.getText(), {
-        receiverNames,
+        receiverNames: [...receivers.names],
         writeCalls: extractProjectDrizzleWriteCalls(
           body,
           file,
           extraction.tableNamesBySymbol,
-          new Set(receiverNames),
+          receivers,
         ),
       });
     }
 
     for (const [name, callback] of projectDomainWriteCallbacks(sourceFile)) {
-      const receiverNames = projectDrizzleReceiverNames(callback.fn);
+      const receivers = projectDrizzleReceivers(callback.fn);
       extractionsByFunction.set(name, {
-        receiverNames,
+        receiverNames: [...receivers.names],
         writeCalls: extractProjectDrizzleWriteCalls(
           callback.body,
           file,
           extraction.tableNamesBySymbol,
-          new Set(receiverNames),
+          receivers,
         ),
       });
     }
@@ -386,6 +386,11 @@ function projectFunctionExtractionsByFileName(
 interface ProjectFunctionExtraction {
   receiverNames: readonly string[];
   writeCalls: readonly ExtractedWriteCall[];
+}
+
+interface ProjectDrizzleReceivers {
+  names: ReadonlySet<string>;
+  symbolKeys: ReadonlySet<string>;
 }
 
 function projectDomainWriteCallbacks(
@@ -422,25 +427,32 @@ function projectDomainWriteCallbacks(
   return callbacks;
 }
 
-function projectDrizzleReceiverNames(callback: Node): string[] {
+function projectDrizzleReceivers(callback: Node): ProjectDrizzleReceivers {
   if (
     !Node.isArrowFunction(callback) &&
     !Node.isFunctionDeclaration(callback) &&
     !Node.isFunctionExpression(callback)
   ) {
-    return [];
+    return { names: new Set(), symbolKeys: new Set() };
   }
 
   const names = new Set<string>();
+  const symbolKeys = new Set<string>();
   for (const param of callback.getParameters()) {
     const name = param.getNameNode();
-    if (Node.isIdentifier(name) && isDrizzleReceiver(name)) names.add(name.getText());
+    if (!Node.isIdentifier(name) || !isDrizzleReceiver(name)) continue;
+    names.add(name.getText());
+    const symbolKey = resolvedSymbolKey(name.getSymbol());
+    if (symbolKey) symbolKeys.add(symbolKey);
   }
-  appendProjectTransactionReceiverAliases(callback, names);
-  return [...names];
+  appendProjectTransactionReceiverAliases(callback, { names, symbolKeys });
+  return { names, symbolKeys };
 }
 
-function appendProjectTransactionReceiverAliases(callback: Node, names: Set<string>): void {
+function appendProjectTransactionReceiverAliases(
+  callback: Node,
+  receivers: { names: Set<string>; symbolKeys: Set<string> },
+): void {
   // SPEC §10-§11: transaction callback aliases are proven from typed receiver call sites.
   let changed = true;
 
@@ -452,7 +464,7 @@ function appendProjectTransactionReceiverAliases(callback: Node, names: Set<stri
       if (staticAccessName(expression) !== 'transaction') continue;
 
       const receiver = staticAccessExpression(expression);
-      if (!Node.isIdentifier(receiver) || !names.has(receiver.getText())) continue;
+      if (!isProjectDrizzleReceiverIdentifier(receiver, receivers)) continue;
 
       const transactionCallback = call
         .getArguments()
@@ -466,9 +478,15 @@ function appendProjectTransactionReceiverAliases(callback: Node, names: Set<stri
       }
 
       const alias = transactionCallback.getParameters()[0]?.getNameNode();
-      if (!Node.isIdentifier(alias) || names.has(alias.getText())) continue;
+      if (!Node.isIdentifier(alias)) continue;
 
-      names.add(alias.getText());
+      const symbolKey = resolvedSymbolKey(alias.getSymbol());
+      if (symbolKey ? receivers.symbolKeys.has(symbolKey) : receivers.names.has(alias.getText())) {
+        continue;
+      }
+
+      receivers.names.add(alias.getText());
+      if (symbolKey) receivers.symbolKeys.add(symbolKey);
       changed = true;
     }
   }
@@ -478,7 +496,7 @@ function extractProjectDrizzleWriteCalls(
   body: Node,
   file: SourceFileInput,
   tableNamesBySymbol: ReadonlyMap<string, string>,
-  receiverNames: ReadonlySet<string>,
+  receivers: ProjectDrizzleReceivers,
 ): ExtractedWriteCall[] {
   const calls: ExtractedWriteCall[] = [];
 
@@ -488,10 +506,7 @@ function extractProjectDrizzleWriteCalls(
     const expression = call.getExpression();
     if (!Node.isPropertyAccessExpression(expression)) continue;
     const receiver = expression.getExpression();
-    if (
-      !isDrizzleReceiver(receiver) &&
-      !(Node.isIdentifier(receiver) && receiverNames.has(receiver.getText()))
-    ) {
+    if (!isDrizzleReceiver(receiver) && !isProjectDrizzleReceiverIdentifier(receiver, receivers)) {
       continue;
     }
 
@@ -520,6 +535,18 @@ function extractProjectDrizzleWriteCalls(
   }
 
   return calls;
+}
+
+function isProjectDrizzleReceiverIdentifier(
+  node: Node | undefined,
+  receivers: { names: ReadonlySet<string>; symbolKeys: ReadonlySet<string> },
+): boolean {
+  if (!node || !Node.isIdentifier(node)) return false;
+
+  const symbolKey = resolvedSymbolKey(node.getSymbol());
+  if (symbolKey) return receivers.symbolKeys.has(symbolKey);
+
+  return receivers.names.has(node.getText());
 }
 
 function drizzleWriteChainRoot(call: CallExpression): Node {

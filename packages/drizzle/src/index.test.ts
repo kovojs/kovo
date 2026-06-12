@@ -3422,17 +3422,24 @@ export interface CommerceInvalidationSets {
 
             interface FakeDb {
               insert(table: unknown): { values(value: unknown): Promise<void> };
+              update(table: unknown): { set(value: unknown): Promise<void> };
               transaction<T>(callback: (tx: FakeDb) => Promise<T>): Promise<T>;
             }
 
             export const cartItems = pgTable("cart_items", {}, jiso({ domain: "cart", key: "productId" }));
 
-            export async function addItem(db: PgDatabase, fake: FakeDb, productId: string) {
+            export async function addItem(db: PgDatabase, fake: FakeDb, queue: FakeDb[], productId: string) {
               await db.transaction(async (writer) => {
                 await writer.insert(cartItems).values({ productId });
+                queue.forEach(async (writer) => {
+                  await writer.update(cartItems).set({ productId });
+                });
               });
               await fake.transaction(async (shadow) => {
                 await shadow.insert(cartItems).values({ productId });
+              });
+              queue.forEach(async (writer) => {
+                await writer.update(cartItems).set({ productId });
               });
             }
           `,
@@ -3447,7 +3454,7 @@ export interface CommerceInvalidationSets {
           {
             domain: 'cart',
             keys: null,
-            site: 'cart.domain.ts:13',
+            site: 'cart.domain.ts:14',
             via: 'cart_items',
           },
         ],

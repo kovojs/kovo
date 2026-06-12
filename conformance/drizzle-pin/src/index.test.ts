@@ -307,6 +307,53 @@ describe('Drizzle pinned subset conformance', () => {
     });
   });
 
+  it('pins project transaction aliases without leaking same-name callback receivers', () => {
+    const graph = extractTouchGraphFromProject({
+      files: [
+        {
+          fileName: 'conformance/drizzle-pin/src/cart.domain.ts',
+          source: [
+            "import type { PgDatabase } from 'drizzle-orm/pg-core';",
+            '',
+            'interface FakeDb {',
+            '  update(table: unknown): { set(value: unknown): Promise<void> };',
+            '}',
+            '',
+            "export const cartItems = pgTable('cart_items', {}, jiso({ domain: 'cart', key: 'productId' }));",
+            '',
+            'export async function addItem(db: PgDatabase<any, any, any>, queue: FakeDb[], productId: string) {',
+            '  await db.transaction(async (writer) => {',
+            '    await writer.insert(cartItems).values({ productId });',
+            '    queue.forEach(async (writer) => {',
+            '      await writer.update(cartItems).set({ productId });',
+            '    });',
+            '  });',
+            '  queue.forEach(async (writer) => {',
+            '    await writer.update(cartItems).set({ productId });',
+            '  });',
+            '}',
+            '',
+          ].join('\n'),
+        },
+      ],
+    });
+
+    expect(graph).toEqual({
+      addItem: {
+        reads: [],
+        touches: [
+          {
+            domain: 'cart',
+            keys: null,
+            site: 'conformance/drizzle-pin/src/cart.domain.ts:11',
+            via: 'cart_items',
+          },
+        ],
+        unresolved: [],
+      },
+    });
+  });
+
   it('pins source transaction callback receiver aliases for write extraction', () => {
     const graph = extractTouchGraphFromSource([
       {
