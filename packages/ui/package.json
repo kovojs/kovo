@@ -1,0 +1,23 @@
+{
+  "name": "@jiso/ui",
+  "version": "0.0.0",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.tsx",
+    "./badge": "./src/badge.tsx",
+    "./button": "./src/button.tsx",
+    "./card": "./src/card.tsx",
+    "./sheet": "./src/sheet.tsx"
+  },
+  "dependencies": {
+    "@jiso/core": "workspace:*",
+    "@jiso/headless-ui": "workspace:*",
+    "@jiso/server": "workspace:*"
+  },
+  "devDependencies": {
+    "vitest": "4.1.8"
+  },
+  "jiso": {
+    "vendoredSource": true
+  }
+}

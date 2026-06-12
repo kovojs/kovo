@@ -516,7 +516,25 @@ jiso-dialog` resolves dashed wire names and prints provenance including package,
       `pnpm exec vp check packages/headless-ui/src/lib/token-sheet.ts packages/headless-ui/src/lib/token-sheet.test.ts packages/headless-ui/src/lib/class-names.ts packages/headless-ui/src/lib/class-names.test.ts packages/headless-ui/src/lib/variants.ts packages/headless-ui/src/lib/variants.test.ts packages/headless-ui/src/lib/foundation-exports.test.ts packages/headless-ui/src/lib/index.ts packages/headless-ui/src/index.ts plans/ui.md`,
       and `git diff --check`.
 - [ ] U2 `fw add <component>` vendoring pipeline (source copied into the app; components register under app-local bare names).
+      Partial package evidence 2026-06-12: `packages/ui/package.json` introduces the
+      source-only `@jiso/ui` workspace package with TSX exports for button, badge, card,
+      and sheet, plus package tests asserting the component sources contain TSX component
+      definitions and no lowered `fw-c`, `data-bind`, or `@jiso-ir` artifacts per SPEC
+      §5.2. Same-session evidence:
+      `pnpm --filter @jiso/ui exec vitest --run`,
+      `pnpm exec vp check packages/ui/package.json packages/ui/tsconfig.json packages/ui/src/index.tsx packages/ui/src/button.tsx packages/ui/src/badge.tsx packages/ui/src/card.tsx packages/ui/src/sheet.tsx packages/ui/src/index.test.tsx pnpm-lock.yaml plans/ui.md`,
+      and `git diff --check`. U2 remains open because `fw add` still needs to consume this
+      package-shaped catalog and run vendored output through the FW235/TSX authoring gate.
 - [ ] U3 styled components trailing H1 + pure-markup set (button, badge, card, kbd, alert, table, breadcrumb, skeleton, sheet/drawer over dialog).
+      Partial package evidence 2026-06-12: `packages/ui/src/button.tsx`,
+      `packages/ui/src/badge.tsx`, and `packages/ui/src/card.tsx` add the first pure-markup
+      styled wrappers using the U1 `cn()`/`defineVariants()` helpers from
+      `@jiso/headless-ui`; `packages/ui/src/sheet.tsx` adds a bounded H1 styled wrapper
+      over the headless dialog attribute builders. Same-session evidence:
+      `pnpm --filter @jiso/ui exec vitest --run`,
+      `pnpm exec vp check packages/ui/package.json packages/ui/tsconfig.json packages/ui/src/index.tsx packages/ui/src/button.tsx packages/ui/src/badge.tsx packages/ui/src/card.tsx packages/ui/src/sheet.tsx packages/ui/src/index.test.tsx pnpm-lock.yaml plans/ui.md`,
+      and `git diff --check`. U3 remains open for kbd/alert/table/breadcrumb/skeleton,
+      drawer variants, and gallery/conformance verification.
 - [ ] U4 styled components trailing H2.
 - [ ] U5 styled components trailing H3.
 - [ ] G1 `examples/gallery` app: one route per component; demos double as test fixtures.
@@ -602,6 +620,14 @@ Behavior contracts (state attributes, ARIA, keyboard maps, change reasons) are p
     `pnpm exec vitest --run packages/cli/src/index.test.ts -t "fw add"`,
     `pnpm exec vp check packages/cli/src/add-catalog.ts packages/cli/src/index.test.ts plans/ui.md`,
     and `git diff --check`.
+  - Additional partial evidence 2026-06-12: `packages/ui` now provides a package-shaped,
+    source-only `@jiso/ui` foundation with TSX exports for `Button`, `Badge`, `Card`, and
+    `Sheet`. The package manifest marks the source as vendored, depends only on workspace
+    Jiso packages, and the focused package tests assert no lowered IR markers are present
+    in the component sources per SPEC §5.2. Same-session evidence:
+    `pnpm --filter @jiso/ui exec vitest --run`,
+    `pnpm exec vp check packages/ui/package.json packages/ui/tsconfig.json packages/ui/src/index.tsx packages/ui/src/button.tsx packages/ui/src/badge.tsx packages/ui/src/card.tsx packages/ui/src/sheet.tsx packages/ui/src/index.test.tsx pnpm-lock.yaml plans/ui.md`,
+    and `git diff --check`.
   - Remaining before U2 can be checked complete: promote the extracted catalog into whatever
     distributable contract/package asset shape `@jiso/ui` needs, add styled wrappers that import
     `@jiso/headless-ui`, and run the vendored output through the same TSX authoring/FW235 gate as
@@ -610,6 +636,15 @@ Behavior contracts (state attributes, ARIA, keyboard maps, change reasons) are p
     (`table`, `breadcrumb`) and sheet/drawer styled dialog variants, then
     verify them through the gallery/conformance surface rather than only CLI copy tests.
 - **U3–U5 — components**, trailing each H-wave by one step; U3 also carries the pure-markup set that needs no behavior layer (button, badge, card, kbd, alert, table, breadcrumb, skeleton) and sheet/drawer as styled dialog variants.
+  - Partial U3 package evidence 2026-06-12: `packages/ui/src/button.tsx`,
+    `packages/ui/src/badge.tsx`, and `packages/ui/src/card.tsx` add the first pure-markup
+    styled wrappers, while `packages/ui/src/sheet.tsx` composes the existing
+    `@jiso/headless-ui` dialog attribute builders for trigger/content/close wiring.
+    Same-session evidence:
+    `pnpm --filter @jiso/ui exec vitest --run`,
+    `pnpm exec vp check packages/ui/package.json packages/ui/tsconfig.json packages/ui/src/index.tsx packages/ui/src/button.tsx packages/ui/src/badge.tsx packages/ui/src/card.tsx packages/ui/src/sheet.tsx packages/ui/src/index.test.tsx pnpm-lock.yaml plans/ui.md`,
+    and `git diff --check`. This does not complete U3; kbd/alert/table/breadcrumb/skeleton,
+    drawer variants, and gallery/conformance coverage remain.
 
 ## G-track — gallery (`examples/gallery`)
 
