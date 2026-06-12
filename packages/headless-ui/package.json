@@ -14,6 +14,7 @@
     "./primitives/checkbox": "./src/primitives/checkbox.ts",
     "./primitives/checkbox-group": "./src/primitives/checkbox-group.ts",
     "./primitives/combobox": "./src/primitives/combobox.ts",
+    "./primitives/command": "./src/primitives/command.ts",
     "./primitives/collapsible": "./src/primitives/collapsible.ts",
     "./primitives/context-menu": "./src/primitives/context-menu.ts",
     "./primitives/dialog": "./src/primitives/dialog.ts",

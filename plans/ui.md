@@ -488,6 +488,21 @@ jiso-dialog` resolves dashed wire names and prints provenance including package,
       `pnpm --filter @jiso/headless-ui run lint:primitives`,
       `pnpm exec vp check packages/headless-ui/package.json packages/headless-ui/src/index.ts packages/headless-ui/src/primitives/index.ts packages/headless-ui/src/primitives/toast.ts packages/headless-ui/src/primitives/toast.test.ts plans/ui.md`,
       and `git diff --check`. H3 remains open for command and full gates.
+      Additional partial evidence 2026-06-12:
+      `packages/headless-ui/src/primitives/command.ts` adds the remaining H3 command primitive
+      as the planned command = combobox x dialog composition: native `<dialog>` invoker-command
+      trigger/content/close attributes, combobox-style input/listbox/item ARIA wiring, keyword
+      filtering over list-driven command items, active/selected/empty state attributes,
+      cancelable open/input/value transitions, shared vertical keyboard movement, and guarded
+      trigger/close/cancel/beforetoggle/input/item/keyboard handlers following the SPEC §4.6
+      primitive handler no-op contract. It is exported through `@jiso/headless-ui`,
+      `@jiso/headless-ui/primitives`, and `@jiso/headless-ui/primitives/command`.
+      Same-session evidence:
+      `pnpm --filter @jiso/headless-ui exec vitest --run src/primitives/command.test.ts src/primitives/dialog.test.ts src/primitives/combobox.test.ts src/lib/keyboard-navigation.test.ts src/lib/change-details.test.ts`,
+      `pnpm --filter @jiso/headless-ui run lint:primitives`,
+      `pnpm exec vp check packages/headless-ui/package.json packages/headless-ui/src/index.ts packages/headless-ui/src/primitives/index.ts packages/headless-ui/src/primitives/command.ts packages/headless-ui/src/primitives/command.test.ts plans/ui.md`,
+      and `git diff --check`. The H3 primitive list is now implemented; H3 remains open for
+      full gates outside this bounded command slice.
 - [x] U1 token sheet + `cn()` + statically-analyzable variant helper (Tailwind-first, §13.1 discoverability rules).
       Evidence 2026-06-12: `packages/headless-ui/src/lib/class-names.ts`
       provides the dependency-free `cn()` helper, `packages/headless-ui/src/lib/variants.ts`
