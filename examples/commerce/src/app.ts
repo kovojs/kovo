@@ -37,16 +37,17 @@ import {
   type BetterAuthSignInEmailLike,
   type BetterAuthSignOutLike,
 } from '@jiso/better-auth';
-import type { FwExplainInput } from '@jiso/core';
 import { attachment, cart, order, product } from './domains.js';
 import { CartBadge } from './generated/cart-badge.js';
 import { OrderHistory } from './generated/order-history.js';
 import * as productGridComponent from './generated/product-grid.js';
 import { commerceTouchGraph } from './generated/touch-graph.js';
+import { commerceStylesheets, createCommerceGraph } from './graph.js';
 import { commerceCartPageMeta } from './page-meta.js';
 import { cartQuery, orderHistoryQuery, productGridQuery } from './queries.js';
 
 export { commerceTouchGraph } from './generated/touch-graph.js';
+export { commerceStylesheets } from './graph.js';
 export { commerceCartPageMeta } from './page-meta.js';
 
 export interface CommerceDb {
@@ -363,8 +364,6 @@ export interface AddToCartFailureState {
   failure: AddToCartFailure;
   productId?: string;
 }
-
-export const commerceStylesheets = ['/assets/tailwind.css'] as const;
 
 export function loadProductGrid(db: CommerceDb, input: ProductGridInput = {}): ProductGridResult {
   const limit = input.limit ?? 2;
@@ -966,114 +965,7 @@ function commerceAuthResponse(cookies: readonly string[], status = 204): BetterA
   return { headers, status };
 }
 
-export const commerceGraph = {
-  components: [
-    {
-      fragments: ['cart-badge'],
-      name: 'CartBadge',
-      queries: ['cart'],
-    },
-    {
-      fragments: ['product-grid'],
-      name: 'ProductGrid',
-      queries: ['productGrid'],
-    },
-    {
-      fragments: ['order-history'],
-      name: 'OrderHistory',
-      queries: ['orderHistory'],
-    },
-  ],
-  endpoints: [
-    {
-      auth: 'verifier:stripe:v1:hmac-sha256',
-      csrf: 'exempt',
-      csrfJustification: 'payment/stripe webhook verifier stripe:v1:hmac-sha256',
-      method: 'POST',
-      name: 'payment/stripe',
-      path: '/webhooks/stripe',
-      writes: ['order'],
-    },
-    {
-      auth: 'authed',
-      csrf: 'checked',
-      method: 'GET',
-      name: 'orders/export',
-      path: '/exports/orders.csv',
-    },
-    {
-      auth: 'authed',
-      csrf: 'checked',
-      method: 'GET',
-      name: 'attachments/download',
-      path: '/attachments/:id',
-    },
-  ],
-  mutations: [
-    {
-      guards: ['authed', 'rateLimit:session'],
-      invalidates: ['cart', 'product', 'order'],
-      inputFields: ['productId', 'quantity'],
-      key: 'cart/add',
-      session: 'commerceSession',
-      writes: ['cart', 'product', 'order'],
-    },
-    {
-      enctype: 'multipart/form-data',
-      fileFields: ['receipt'],
-      guards: ['authed', 'rateLimit:session'],
-      inputFields: ['orderId', 'receipt'],
-      key: 'order/receipt',
-      session: 'commerceSession',
-      writes: ['attachment'],
-    },
-    {
-      guards: ['authed'],
-      inputFields: [],
-      key: 'auth/sign-out',
-      session: 'commerceSession',
-      writes: ['auth'],
-    },
-  ],
-  optimistic: [
-    { mutation: 'cart/add', query: 'cart', status: 'hand-written' },
-    { mutation: 'cart/add', query: 'productGrid', status: 'await-fragment' },
-    { mutation: 'cart/add', query: 'orderHistory', status: 'await-fragment' },
-  ],
-  ownerDomains: [{ domain: 'attachment', owner: 'userId' }],
-  pages: [
-    {
-      guards: ['role:admin'],
-      modulepreloads: [],
-      prefetch: false,
-      queries: [],
-      route: '/admin',
-      stylesheets: [...commerceStylesheets],
-    },
-    {
-      i18n: ['en-US:cartLabel,productStock'],
-      meta: commerceCartPageMeta(loadCartQuery(createCommerceDb())),
-      modulepreloads: [],
-      prefetch: false,
-      queries: ['cart', 'productGrid', 'orderHistory'],
-      route: '/cart',
-      stylesheets: [...commerceStylesheets],
-    },
-  ],
-  queries: [
-    { domains: ['cart'], query: 'cart' },
-    { domains: ['product'], query: 'productGrid' },
-    { domains: ['order'], query: 'orderHistory' },
-  ],
-  scopeAudits: [
-    {
-      detail: 'attachment download filters id plus session user',
-      domain: 'attachment',
-      kind: 'query',
-      name: 'attachments/download',
-      scope: 'session',
-      site: 'examples/commerce/src/app.ts:attachmentDownloadRoute',
-    },
-  ],
-  touchGraph: commerceTouchGraph,
-} satisfies FwExplainInput;
+export const commerceGraph = createCommerceGraph(
+  loadCartQuery(createCommerceDb()),
+  commerceTouchGraph,
+);

@@ -3489,6 +3489,15 @@ Verification: server vitest + wire fixtures byte-for-byte acceptance.
       `corepack pnpm exec vitest --run examples/commerce/src/source-truth.test.ts`,
       `corepack pnpm exec vp check packages/test/src/query-verifier.test.ts examples/commerce/src/source-truth.test.ts plans/codebase-quality-round2.md`,
       and `git diff --check`.
+      Additional evidence 2026-06-12: commerce graph declarations now live in
+      `examples/commerce/src/graph.ts`, and both runtime `commerceGraph` plus
+      `scripts/emit-graph.mjs` consume `createCommerceGraph(...)` instead of duplicating the
+      page/mutation/query/source metadata. The emitter also serializes the computed
+      `commerceTouchGraph` into `generated/touch-graph.ts` from the one in-memory touch graph
+      object, avoiding a second hand-written generated TS literal. Same-session evidence:
+      `corepack pnpm --filter @jiso/example-commerce run emit-graph -- --check`,
+      `corepack pnpm exec vitest --run examples/commerce/src/source-truth.test.ts`, and
+      `corepack pnpm exec vp check examples/commerce/src/app.ts examples/commerce/src/graph.ts examples/commerce/src/source-truth.test.ts examples/commerce/scripts/emit-graph.mjs examples/commerce/src/generated/graph.json examples/commerce/src/generated/touch-graph.ts plans/codebase-quality-round2.md`.
 - [x] **MED — Typecheck the example and spikes.** `examples/commerce` and three of four
       conformance spikes sit outside every tsconfig (root includes only `packages/**`), so the
       registry-augmentation showcase (generated/touch-graph.ts:43-50) may never be
@@ -4067,6 +4076,10 @@ As each phase splits a source module, split its tests in the same commit.
       `corepack pnpm exec vitest --run examples/commerce/src/source-truth.test.ts`,
       `corepack pnpm exec vp check packages/test/src/query-verifier.test.ts examples/commerce/src/source-truth.test.ts plans/codebase-quality-round2.md`,
       and `git diff --check`.
+      Additional evidence 2026-06-12: commerce graph source-truth helpers moved into
+      `examples/commerce/src/graph.ts`, leaving `source-truth.test.ts` to exercise the shared
+      graph seam directly while `app.test.ts` remains on app behavior. Same-session evidence:
+      `corepack pnpm exec vitest --run examples/commerce/src/source-truth.test.ts`.
       Additional evidence 2026-06-12: Drizzle runtime/static package-surface coverage moved from
       `packages/drizzle/src/index.test.ts` into `packages/drizzle/src/runtime-surface.test.ts`,
       leaving static extraction coverage in the Drizzle monolith. Same-session evidence:

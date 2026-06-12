@@ -1,57 +1,57 @@
 import type { CartQueryResult, CommerceDb, ProductGridResult } from '../app.js';
 
 export const commerceTouchGraph = {
-  'cart.addItem': {
-    touches: [
+  "cart.addItem": {
+    "touches": [
       {
-        domain: 'cart',
-        keys: null,
-        site: 'examples/commerce/src/app.ts:413',
-        via: 'cart_items',
+        "domain": "cart",
+        "keys": null,
+        "site": "examples/commerce/src/app.ts:412",
+        "via": "cart_items"
       },
       {
-        domain: 'order',
-        keys: null,
-        site: 'examples/commerce/src/app.ts:418',
-        via: 'orders',
+        "domain": "order",
+        "keys": null,
+        "site": "examples/commerce/src/app.ts:417",
+        "via": "orders"
       },
       {
-        domain: 'product',
-        keys: 'arg:productId',
-        predicate: 'eq',
-        site: 'examples/commerce/src/app.ts:425',
-        via: 'products',
-      },
+        "domain": "product",
+        "keys": "arg:productId",
+        "predicate": "eq",
+        "site": "examples/commerce/src/app.ts:424",
+        "via": "products"
+      }
     ],
-    reads: [],
-    unresolved: [],
+    "reads": [],
+    "unresolved": []
   },
-  'order.receipt': {
-    touches: [
+  "payment.webhook": {
+    "touches": [
       {
-        domain: 'attachment',
-        keys: 'arg:orderId',
-        predicate: 'eq',
-        site: 'examples/commerce/src/app.ts:467',
-        via: 'attachments',
-      },
+        "domain": "order",
+        "keys": "arg:data.object.id",
+        "predicate": "eq",
+        "site": "examples/commerce/src/app.ts:516",
+        "via": "orders"
+      }
     ],
-    reads: [],
-    unresolved: [],
+    "reads": [],
+    "unresolved": []
   },
-  'payment.webhook': {
-    touches: [
+  "order.receipt": {
+    "touches": [
       {
-        domain: 'order',
-        keys: 'arg:data.object.id',
-        predicate: 'eq',
-        site: 'examples/commerce/src/app.ts:517',
-        via: 'orders',
-      },
+        "domain": "attachment",
+        "keys": "arg:orderId",
+        "predicate": "eq",
+        "site": "examples/commerce/src/app.ts:466",
+        "via": "attachments"
+      }
     ],
-    reads: [],
-    unresolved: [],
-  },
+    "reads": [],
+    "unresolved": []
+  }
 } as const;
 
 export const commerceInvalidationSets = {

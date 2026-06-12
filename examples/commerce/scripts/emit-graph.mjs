@@ -18,7 +18,7 @@ registerHooks({
 const { deriveAppGraph } = await import('@jiso/compiler/graph');
 const { deriveInvalidationRegistry, serializeInvalidationRegistry } =
   await import('@jiso/drizzle/static');
-const { commerceCartPageMeta } = await import('../src/page-meta.js');
+const { createCommerceGraph } = await import('../src/graph.js');
 
 const scriptDir = dirname(fileURLToPath(import.meta.url));
 const commerceRoot = resolve(scriptDir, '..');
@@ -108,129 +108,17 @@ const commerceTouchGraph = {
   },
 };
 
-const graphDeclarations = {
-  components: [
-    {
-      fragments: ['cart-badge'],
-      name: 'CartBadge',
-      queries: ['cart'],
-    },
-    {
-      fragments: ['product-grid'],
-      name: 'ProductGrid',
-      queries: ['productGrid'],
-    },
-    {
-      fragments: ['order-history'],
-      name: 'OrderHistory',
-      queries: ['orderHistory'],
-    },
-  ],
-  endpoints: [
-    {
-      auth: 'verifier:stripe:v1:hmac-sha256',
-      csrf: 'exempt',
-      csrfJustification: 'payment/stripe webhook verifier stripe:v1:hmac-sha256',
-      method: 'POST',
-      name: 'payment/stripe',
-      path: '/webhooks/stripe',
-      writes: ['order'],
-    },
-    {
-      auth: 'authed',
-      csrf: 'checked',
-      method: 'GET',
-      name: 'orders/export',
-      path: '/exports/orders.csv',
-    },
-    {
-      auth: 'authed',
-      csrf: 'checked',
-      method: 'GET',
-      name: 'attachments/download',
-      path: '/attachments/:id',
-    },
-  ],
-  mutations: [
-    {
-      guards: ['authed', 'rateLimit:session'],
-      invalidates: ['cart', 'product', 'order'],
-      inputFields: ['productId', 'quantity'],
-      key: 'cart/add',
-      session: 'commerceSession',
-      writes: ['cart', 'product', 'order'],
-    },
-    {
-      enctype: 'multipart/form-data',
-      fileFields: ['receipt'],
-      guards: ['authed', 'rateLimit:session'],
-      inputFields: ['orderId', 'receipt'],
-      key: 'order/receipt',
-      session: 'commerceSession',
-      writes: ['attachment'],
-    },
-    {
-      guards: ['authed'],
-      inputFields: [],
-      key: 'auth/sign-out',
-      session: 'commerceSession',
-      writes: ['auth'],
-    },
-  ],
-  optimistic: [
-    { mutation: 'cart/add', query: 'cart', status: 'hand-written' },
-    { mutation: 'cart/add', query: 'productGrid', status: 'await-fragment' },
-    { mutation: 'cart/add', query: 'orderHistory', status: 'await-fragment' },
-  ],
-  ownerDomains: [{ domain: 'attachment', owner: 'userId' }],
-  pages: [
-    {
-      guards: ['role:admin'],
-      modulepreloads: [],
-      prefetch: false,
-      queries: [],
-      route: '/admin',
-      stylesheets: ['/assets/tailwind.css'],
-    },
-    {
-      i18n: ['en-US:cartLabel,productStock'],
-      meta: commerceCartPageMeta(starterCart),
-      modulepreloads: [],
-      prefetch: false,
-      queries: ['cart', 'productGrid', 'orderHistory'],
-      route: '/cart',
-      stylesheets: ['/assets/tailwind.css'],
-    },
-  ],
-  queries: [
-    { domains: ['cart'], query: 'cart' },
-    { domains: ['product'], query: 'productGrid' },
-    { domains: ['order'], query: 'orderHistory' },
-  ],
-  scopeAudits: [
-    {
-      detail: 'attachment download filters id plus session user',
-      domain: 'attachment',
-      kind: 'query',
-      name: 'attachments/download',
-      scope: 'session',
-      site: 'examples/commerce/src/app.ts:attachmentDownloadRoute',
-    },
-  ],
-};
+const commerceGraph = createCommerceGraph(starterCart, commerceTouchGraph);
 
 const { graph } = deriveAppGraph({
-  graph: {
-    ...graphDeclarations,
-    touchGraph: commerceTouchGraph,
-  },
+  graph: commerceGraph,
 });
 const commerceInvalidationRegistry = deriveInvalidationRegistry({
   mutations: [
     { mutation: 'cart/add', touchGraphKey: 'cart.addItem' },
     { mutation: 'order/receipt', touchGraphKey: 'order.receipt' },
   ],
-  queries: graphDeclarations.queries,
+  queries: commerceGraph.queries,
   touchGraph: commerceTouchGraph,
 });
 
@@ -244,59 +132,7 @@ const commerceInvalidationRegistrySource = serializeInvalidationRegistry(
 );
 const touchGraphSource = `import type { CartQueryResult, CommerceDb, ProductGridResult } from '../app.js';
 
-export const commerceTouchGraph = {
-  'cart.addItem': {
-    touches: [
-      {
-        domain: 'cart',
-        keys: null,
-        site: '${commerceTouchGraph['cart.addItem'].touches[0].site}',
-        via: 'cart_items',
-      },
-      {
-        domain: 'order',
-        keys: null,
-        site: '${commerceTouchGraph['cart.addItem'].touches[1].site}',
-        via: 'orders',
-      },
-      {
-        domain: 'product',
-        keys: 'arg:productId',
-        predicate: 'eq',
-        site: '${commerceTouchGraph['cart.addItem'].touches[2].site}',
-        via: 'products',
-      },
-    ],
-    reads: [],
-    unresolved: [],
-  },
-  'order.receipt': {
-    touches: [
-      {
-        domain: 'attachment',
-        keys: 'arg:orderId',
-        predicate: 'eq',
-        site: '${commerceTouchGraph['order.receipt'].touches[0].site}',
-        via: 'attachments',
-      },
-    ],
-    reads: [],
-    unresolved: [],
-  },
-  'payment.webhook': {
-    touches: [
-      {
-        domain: 'order',
-        keys: 'arg:data.object.id',
-        predicate: 'eq',
-        site: '${commerceTouchGraph['payment.webhook'].touches[0].site}',
-        via: 'orders',
-      },
-    ],
-    reads: [],
-    unresolved: [],
-  },
-} as const;
+export const commerceTouchGraph = ${formatJson(commerceTouchGraph)} as const;
 
 ${commerceInvalidationRegistrySource}
 declare module '@jiso/core' {

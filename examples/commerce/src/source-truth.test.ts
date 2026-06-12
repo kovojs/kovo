@@ -20,6 +20,7 @@ import {
   submitAddToCart,
   uploadReceipt,
 } from './app.js';
+import { createCommerceGraph } from './graph.js';
 
 function commerceFile(name: string, type: string, size: number) {
   return {
@@ -145,8 +146,10 @@ describe('commerce source-truth graph acceptance', () => {
     const paymentOrdersLine = lineNumberFor(commerceSource, "tx.write('orders'");
 
     expect(emitGraphScript).toContain("await import('@jiso/compiler/graph');");
+    expect(emitGraphScript).toContain("await import('../src/graph.js');");
     expect(emitGraphScript).not.toContain('const deriveAppGraph = ({ graph }) => ({ graph })');
     expect(graphArtifact).toEqual(commerceGraph);
+    expect(createCommerceGraph(starterCart, commerceTouchGraph)).toEqual(commerceGraph);
     expect(cartPageGraph(graphArtifact).meta).toEqual(cartMeta);
     expect(cartPageGraph(commerceGraph).meta).toEqual(cartMeta);
     expect(renderCommercePageHints(starterCart).html).toContain(`<title>${cartMeta.title}</title>`);
