@@ -2696,6 +2696,14 @@ As each phase splits a source module, split its tests in the same commit.
       Same-session evidence:
       `pnpm exec vitest --run packages/compiler/src/query-update-plans.test.ts packages/compiler/src/index.test.ts -t "query update plans|named derives|semicolons"`
       and `pnpm exec vp check packages/compiler/src/query-update-plans.test.ts packages/compiler/src/index.test.ts plans/codebase-quality-round2.md`.
+      Additional evidence 2026-06-12: inline derive stamp lowering, FW311 update coverage,
+      renderOnce/isomorphic classifications, template-stamp placeholder extraction, and app
+      bootstrap query-plan wiring moved from `packages/compiler/src/index.test.ts` into
+      `packages/compiler/src/query-coverage.test.ts`. The broad compiler split remains open for
+      residual stamp drift, attribute merge, ID/content-model diagnostics, and remaining compile
+      pipeline groups. Same-session evidence:
+      `pnpm exec vitest --run packages/compiler/src/query-coverage.test.ts packages/compiler/src/index.test.ts -t "inline attribute|query-dependent|FW311|template stamp|renderOnce|bootstrap|isomorphic|string"`
+      and `pnpm exec vp check packages/compiler/src/query-coverage.test.ts packages/compiler/src/index.test.ts plans/codebase-quality-round2.md`.
 - [ ] drizzle (one describe, 57 its, 68 inline pgTable fixtures, 3 module-shim copies) and
       test-package suites: same treatment; CLI tests get the temp-dir + stream-spy ritual
       (16 hand-copies) as one helper.
