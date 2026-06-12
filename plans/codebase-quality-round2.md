@@ -3173,6 +3173,14 @@ land it first; don't fork it.
       and `jisoAppShellViteManifestStylesheetHrefFromFile()`, while `vite.ts` and
       `api/app.ts` preserve the public `@jiso/server` re-export path. Same-session evidence:
       `corepack pnpm exec vitest --run packages/server/src/vite-manifest.test.ts packages/server/src/vite-build.test.ts packages/server/src/vite.test.ts`.
+      Additional evidence 2026-06-12: the static-export coordinator now returns dry-run
+      `/c/` client-module artifacts and configured static asset metadata before an `outDir`
+      is selected, keeping JS-authored export tasks on the public `exportStaticApp()` /
+      `@jiso/server/app-shell/static-export` surface instead of reaching into replay or asset
+      helpers for inventory. Filesystem source checks and copies still happen only for write
+      exports. Same-session evidence:
+      `corepack pnpm exec vitest --run packages/server/src/static-export.test.ts` and
+      `corepack pnpm exec vitest --run packages/server/src/static-replay.test.ts packages/server/src/static-export.test.ts packages/server/src/vite-build.test.ts packages/server/src/vite.test.ts packages/server/src/api/app.test.ts`.
 - [ ] **LOW — Close the server cleanup inventory with an acceptance sweep.** Historical audit
       targets were dead code (`matchShellDispatch` post-loop return shell.ts:161-166; rate-limit
       tail `return options.max > 0` index.ts:576); `matchRoute` recompiling all routes per call

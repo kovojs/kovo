@@ -296,6 +296,16 @@ Scope: SPEC addition (proposed §9.5 "The request shell"), `@jiso/server` shell 
       direct replay diagnostic, and `packages/server/src/static-export.test.ts` proves the
       coordinator leaves `outDir` unwritten on that failure. Same-session verification ran
       `corepack pnpm exec vitest --run packages/server/src/static-replay.test.ts packages/server/src/static-export.test.ts`.
+      Additional evidence 2026-06-12: `exportStaticApp()` now discovers referenced `/c/`
+      client module artifacts and returns configured static asset metadata even when no
+      `outDir` is supplied, so JS-authored dry-run export tasks exercise the same SPEC §9.5
+      replay/asset inventory surface before choosing where to write files. Filesystem source
+      checks and copies remain gated on `outDir`. `packages/server/src/static-export.test.ts`
+      covers asset metadata and client-module discovery without an output directory, and the
+      adjacent replay/Vite/API suites preserve the write-path and package-subpath behavior.
+      Same-session verification ran
+      `corepack pnpm exec vitest --run packages/server/src/static-export.test.ts` and
+      `corepack pnpm exec vitest --run packages/server/src/static-replay.test.ts packages/server/src/static-export.test.ts packages/server/src/vite-build.test.ts packages/server/src/vite.test.ts packages/server/src/api/app.test.ts`.
 - [ ] R7 adoption: starter becomes a routed app served by `vp dev`; commerce runs end-to-end over HTTP; a jiso docs site ships from `vp run export` as the first outside consumer.
       Progress 2026-06-11: commerce is now TSX-authored ahead of the HTTP serve
       entry — `CartBadge`, `OrderHistory`, and `ProductGrid` are authored in

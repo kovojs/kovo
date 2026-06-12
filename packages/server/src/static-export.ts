@@ -91,16 +91,12 @@ export async function exportStaticApp(
     }
   }
 
-  const clientModules =
-    options.outDir === undefined
-      ? []
-      : await replayStaticExportClientModuleArtifacts({
-          handler,
-          origin,
-          routeArtifacts: artifacts,
-        });
-  const assets =
-    options.outDir === undefined ? [] : staticExportAssetArtifacts(options.assets ?? []);
+  const clientModules = await replayStaticExportClientModuleArtifacts({
+    handler,
+    origin,
+    routeArtifacts: artifacts,
+  });
+  const assets = staticExportAssetArtifacts(options.assets ?? []);
 
   if (options.outDir !== undefined) {
     await writeStaticExportOutput({ artifacts, assets, clientModules, outDir: options.outDir });

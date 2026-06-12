@@ -231,6 +231,69 @@ describe('server static export', () => {
     }
   });
 
+  it('returns configured static asset metadata without requiring an output directory', async () => {
+    const app = createApp({
+      routes: [
+        route('/', {
+          stylesheets: ['/assets/app.css'],
+          page: () => '<main>Home</main>',
+        }),
+      ],
+    });
+
+    const result = await exportStaticApp(app, {
+      assets: [
+        {
+          contentType: 'text/css; charset=utf-8',
+          path: '/assets/app.css',
+          source: '/workspace/dist/assets/app.css',
+        },
+      ],
+    });
+
+    expect(result.assets).toEqual([
+      {
+        headers: { 'content-type': 'text/css; charset=utf-8' },
+        path: '/assets/app.css',
+        source: '/workspace/dist/assets/app.css',
+        status: 200,
+      },
+    ]);
+    expect(result.artifacts.map((artifact) => artifact.path)).toEqual(['/index.html']);
+  });
+
+  it('discovers referenced client modules without requiring an output directory', async () => {
+    const registry = createMemoryVersionedClientModuleRegistry();
+    const cartHref = registry.put({
+      path: '/c/cart.client.js',
+      source: 'export const cart = "dry-run";',
+      version: 'cart-dry-run',
+    });
+    const app = createApp({
+      clientModules: registry,
+      routes: [
+        route('/cart', {
+          page: () => `<main><button on:click="${cartHref}#Cart$add">Add</button></main>`,
+        }),
+      ],
+    });
+
+    const result = await exportStaticApp(app);
+
+    expect(result.clientModules).toEqual([
+      {
+        body: 'export const cart = "dry-run";',
+        headers: {
+          'cache-control': 'public, max-age=31536000, immutable',
+          'content-type': 'text/javascript; charset=utf-8',
+        },
+        href: `${cartHref}#Cart$add`,
+        path: '/c/cart.client.js',
+        status: 200,
+      },
+    ]);
+  });
+
   it('rejects unsafe static asset output paths before copying', async () => {
     const outDir = await mkdtemp(path.join(os.tmpdir(), 'jiso-static-export-'));
     const sourceDir = await mkdtemp(path.join(os.tmpdir(), 'jiso-static-assets-'));
