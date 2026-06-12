@@ -172,6 +172,12 @@ export const betterAuthCredentialMutationErrors = {
 
 export type BetterAuthCredentialMutationApi = 'signInEmail' | 'signOut' | 'signUpEmail';
 
+const betterAuthCredentialMutationApis = [
+  'signInEmail',
+  'signOut',
+  'signUpEmail',
+] as const satisfies readonly BetterAuthCredentialMutationApi[];
+
 export type BetterAuthCoreTable = 'account' | 'session' | 'user' | 'verification';
 export type BetterAuthDeviceAuthorizationTable = 'deviceCode';
 export type BetterAuthOrganizationTable =
@@ -222,6 +228,13 @@ export interface BetterAuthSchemaBridgeValidation {
   ok: boolean;
   pluginTableDegradations: BetterAuthPluginTableDegradation[];
   unbridgedTables: string[];
+}
+
+export interface BetterAuthSchemaBridgeValidationOptions {
+  credentialMutationDeclaredTableTouches?: Partial<
+    Record<BetterAuthCredentialMutationApi, readonly BetterAuthDeclaredTableTouch[]>
+  >;
+  credentialMutationTouches?: Partial<Record<BetterAuthCredentialMutationApi, readonly Domain[]>>;
 }
 
 export interface BetterAuthPluginTableDegradation {
@@ -465,13 +478,14 @@ export function createBetterAuthDbVerificationConfig(): BetterAuthDbVerification
 
 export function validateBetterAuthSchemaBridge(
   tables: Record<string, unknown>,
+  options: BetterAuthSchemaBridgeValidationOptions = {},
 ): BetterAuthSchemaBridgeValidation {
   const bridgeTables = Object.keys(betterAuthSchemaBridge) as BetterAuthTable[];
   const tableNames = new Set(Object.keys(tables));
   const bridgeTableNames = new Set<string>(bridgeTables);
   const missingTables = betterAuthRequiredCoreTables.filter((table) => !tableNames.has(table));
   const unbridgedTables = [...tableNames].filter((table) => !bridgeTableNames.has(table)).sort();
-  const declaredTouchMismatches = declaredTableTouchMismatches();
+  const declaredTouchMismatches = declaredTableTouchMismatches(options);
   const keyFieldMismatches = schemaBridgeKeyFieldMismatches(tables);
   const pluginTableDegradations = unbridgedTables.map((table) =>
     unsupportedPluginTableDegradation(table, tables[table]),
@@ -910,10 +924,20 @@ function mergeDomainTouches(
   return [...merged.values()];
 }
 
-function declaredTableTouchMismatches(): string[] {
+function declaredTableTouchMismatches(
+  options: BetterAuthSchemaBridgeValidationOptions = {},
+): string[] {
   const mismatches: string[] = [];
 
-  for (const [api, touches] of Object.entries(betterAuthCredentialMutationDeclaredTableTouches)) {
+  for (const api of betterAuthCredentialMutationApis) {
+    const touches =
+      options.credentialMutationDeclaredTableTouches?.[api] ??
+      betterAuthCredentialMutationDeclaredTableTouches[api];
+    const mutationTouchDomains = (
+      options.credentialMutationTouches?.[api] ?? betterAuthCredentialMutationTouches[api]
+    ).map((touch) => touch.key);
+    const declaredTouchDomains = touches.map((touch) => touch.domain);
+
     for (const touch of touches) {
       const domainForTable = betterAuthTableDomain(touch.table);
 
@@ -928,9 +952,32 @@ function declaredTableTouchMismatches(): string[] {
         );
       }
     }
+
+    if (!sameSortedValues(declaredTouchDomains, mutationTouchDomains)) {
+      mismatches.push(
+        `${api} mutation registry domains ${formatDomainList(
+          mutationTouchDomains,
+        )} do not match declared table-touch domains ${formatDomainList(declaredTouchDomains)}`,
+      );
+    }
   }
 
-  return mismatches;
+  return mismatches.sort();
+}
+
+function sameSortedValues(left: readonly string[], right: readonly string[]): boolean {
+  const leftValues = [...new Set(left)].sort();
+  const rightValues = [...new Set(right)].sort();
+
+  if (leftValues.length !== rightValues.length) return false;
+
+  return leftValues.every((value, index) => value === rightValues[index]);
+}
+
+function formatDomainList(values: readonly string[]): string {
+  const uniqueValues = [...new Set(values)].sort();
+
+  return uniqueValues.length === 0 ? '[]' : `[${uniqueValues.join(', ')}]`;
 }
 
 function schemaBridgeKeyFieldMismatches(tables: Record<string, unknown>): string[] {

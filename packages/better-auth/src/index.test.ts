@@ -12,6 +12,7 @@ import {
   activeOrganization,
   annotateBetterAuthSchemaSource,
   authed,
+  betterAuthAuthDomain,
   betterAuthCredentialMutationDefaultKeys,
   betterAuthCredentialMutationDeclaredTableTouches,
   betterAuthCredentialMutationTouchGraph,
@@ -581,6 +582,33 @@ describe('credential mutation helpers', () => {
       keyFieldMismatches: [
         'account.userId is a schema-bridge key but Better Auth table metadata does not expose that field',
       ],
+      missingTables: [],
+      ok: false,
+      pluginTableDegradations: [],
+      unbridgedTables: [],
+    });
+  });
+
+  it('reports mutation registry touches that drift from declared table touches', () => {
+    expect(
+      validateBetterAuthSchemaBridge(
+        {
+          account: authTable(['userId']),
+          session: authTable(['userId']),
+          user: authTable(),
+          verification: authTable(),
+        },
+        {
+          credentialMutationTouches: {
+            signUpEmail: [betterAuthAuthDomain],
+          },
+        },
+      ),
+    ).toEqual({
+      declaredTouchMismatches: [
+        'signUpEmail mutation registry domains [auth] do not match declared table-touch domains [auth, user]',
+      ],
+      keyFieldMismatches: [],
       missingTables: [],
       ok: false,
       pluginTableDegradations: [],

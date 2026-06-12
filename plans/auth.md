@@ -267,6 +267,14 @@ Scope: SPEC additions (session population, guard-failure contract, mutation resp
       `pnpm exec tsc -p conformance/better-auth-pin/tsconfig.json --noEmit`,
       `pnpm exec vp check packages/better-auth/src/index.ts packages/better-auth/src/index.test.ts conformance/better-auth-pin/src/index.test.ts plans/auth.md`,
       and `git diff --check`.
+      Partial evidence 2026-06-12: `validateBetterAuthSchemaBridge` now also validates the
+      wrapped credential mutation registry domains against the adapter's declared table touches,
+      so a wrapper that keeps `auth/sign-up` touching only `auth` while declared Better Auth
+      writes include `user` reports `ok: false` under the B1 bridge validation path.
+      `packages/better-auth/src/index.test.ts` covers the injectable drift fixture, and the
+      pinned conformance suite remains clean against the default declared touches. Same-session
+      evidence:
+      `pnpm exec vitest --run packages/better-auth/src/index.test.ts conformance/better-auth-pin/src/index.test.ts --reporter=dot`.
       Remaining gaps: plugin-generated tables outside the blessed organization/admin/two-factor/OIDC-provider/MCP/SIWE/JWT/device-authorization
       surface are still not mapped, the OAuth-provider successor package/table metadata is not
       installed or exportable from the pinned dependency set, and full app `schema.ts` generation
