@@ -1,10 +1,10 @@
 import assert from 'node:assert/strict';
 import { execFile, execFileSync } from 'node:child_process';
-import { chmod, mkdtemp, readdir, readFile, rm, writeFile } from 'node:fs/promises';
+import { chmod, mkdir, mkdtemp, readdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { test } from 'node:test';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { promisify } from 'node:util';
 import { runInNewContext } from 'node:vm';
 import { gzipSync } from 'node:zlib';
@@ -4557,6 +4557,69 @@ export const DiagnosticCard = component('diagnostic-card', {
       return true;
     },
   );
+
+  const buildFixtureRoot = await mkdtemp(join(projectRoot, 'examples/d10-vp-build-'));
+  const buildFixtureSourcePath = join(buildFixtureRoot, fileName);
+  const buildFixtureEntrypoint = `
+import './routes/diagnostic-card';
+
+document.querySelector('#app')!.textContent = 'D10 build green';
+`;
+
+  try {
+    await mkdir(join(buildFixtureRoot, 'routes'), { recursive: true });
+    await writeFile(
+      join(buildFixtureRoot, 'package.json'),
+      JSON.stringify({ name: 'jiso-d10-vp-build-fixture', private: true, type: 'module' }),
+      'utf8',
+    );
+    await writeFile(
+      join(buildFixtureRoot, 'index.html'),
+      '<!doctype html><div id="app"></div><script type="module" src="/main.tsx"></script>\n',
+      'utf8',
+    );
+    await writeFile(
+      join(buildFixtureRoot, 'vite.config.mjs'),
+      `
+import { jisoVitePlugin } from ${JSON.stringify(
+        pathToFileURL(join(projectRoot, 'dist/compiler/src/index.mjs')).href,
+      )};
+
+export default {
+  plugins: [Object.assign(jisoVitePlugin(), { enforce: 'pre' })],
+  resolve: {
+    alias: {
+      '@jiso/core': ${JSON.stringify(join(projectRoot, 'dist/core/src/index.mjs'))},
+    },
+  },
+};
+`,
+      'utf8',
+    );
+    await writeFile(join(buildFixtureRoot, 'main.tsx'), buildFixtureEntrypoint, 'utf8');
+    await writeFile(buildFixtureSourcePath, redSource, 'utf8');
+
+    await assert.rejects(
+      execFileAsync(join(projectRoot, 'node_modules/.bin/vp'), ['build'], {
+        cwd: buildFixtureRoot,
+      }),
+      (error) => {
+        const output = `${error?.stdout ?? ''}\n${error?.stderr ?? ''}\n${error?.message ?? ''}`;
+        assert.match(output, /Jiso Vite transform failed with 1 error diagnostic\./);
+        assert.match(output, /FW201 routes\/diagnostic-card\.tsx:5:25/);
+        assert.match(output, /Closure captures unserializable value\./);
+        return true;
+      },
+    );
+
+    await writeFile(buildFixtureSourcePath, greenSource, 'utf8');
+    const greenBuild = await execFileAsync(join(projectRoot, 'node_modules/.bin/vp'), ['build'], {
+      cwd: buildFixtureRoot,
+    });
+    assert.match(`${greenBuild.stdout}\n${greenBuild.stderr}`, /built in|✓ built/);
+  } finally {
+    await rm(buildFixtureRoot, { force: true, recursive: true });
+  }
 
   const outDir = await mkdtemp(join(tmpdir(), 'jiso-d10-export-'));
   const app = createApp({

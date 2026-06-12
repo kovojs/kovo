@@ -81,8 +81,14 @@ content or severities (SPEC §11.3 owns those); `fw check`/`fw explain` semantic
       structured red/green `compile/v1` results without a second severity policy. Same-session
       evidence:
       `node --test --test-name-pattern "D10 seeded diagnostics gate" tests/fw-check.node.mjs`.
-      Gap: this tranche covers the Vite transform used by dev/build, but does not spawn a full
-      `vp build` fixture yet, so the broader gate remains open.
+      Additional evidence 2026-06-12: the same D10 tranche now writes a temporary workspace
+      fixture under `examples/*`, runs the real `vp build` command against a Vite config using
+      `jisoVitePlugin()`, proves the FW201 error diagnostic fails the build with the teaching
+      message, then rewrites the component green and proves the build completes. Same-session
+      evidence:
+      `node --test --test-name-pattern "D10 seeded diagnostics gate" tests/fw-check.node.mjs`.
+      Gap: this strengthens the full `vp build` fixture path for the Vite build surface, but the
+      broader gate remains open until every required surface has red/green command-level coverage.
 
 ## Background
 
