@@ -2551,6 +2551,61 @@ export interface CommerceInvalidationSets {
     });
   });
 
+  it('extracts read source tables from write call AST without reparsing statement text', () => {
+    const graph = extractTouchGraphFromSource([
+      {
+        fileName: 'product.domain.ts',
+        source: [
+          'export const products = pgTable("products", {}, jiso({ domain: "product", key: "id" }));',
+          'export const prices = pgTable("prices", {}, jiso({ domain: "price", key: "productId" }));',
+          'export const snapshots = pgTable("product_snapshots", {}, jiso({ domain: "snapshot", key: "productId" }));',
+          '',
+          'export async function syncSnapshots(db, productId) {',
+          '  await db["insert"](snapshots).select(db.select().from(products).where(gt(sql.raw(".from(prices)"), 0)));',
+          '  await db["update"](products).set({ price: prices.amount }).from(prices).where(eq(products.id, productId));',
+          '}',
+          '',
+        ].join('\n'),
+      },
+    ]);
+
+    expect(graph).toEqual({
+      syncSnapshots: {
+        reads: [
+          {
+            domain: 'price',
+            keys: null,
+            site: 'product.domain.ts:7',
+            source: 'update-from',
+            via: 'prices',
+          },
+          {
+            domain: 'product',
+            keys: null,
+            site: 'product.domain.ts:6',
+            source: 'insert-select',
+            via: 'products',
+          },
+        ],
+        touches: [
+          {
+            domain: 'product',
+            keys: 'arg:productId',
+            site: 'product.domain.ts:7',
+            via: 'products',
+          },
+          {
+            domain: 'snapshot',
+            keys: null,
+            site: 'product.domain.ts:6',
+            via: 'product_snapshots',
+          },
+        ],
+        unresolved: [],
+      },
+    });
+  });
+
   it('folds local helper writes and reads into caller summaries', () => {
     const graph = extractTouchGraphFromSource([
       {
@@ -3729,6 +3784,77 @@ export interface CommerceInvalidationSets {
             keys: 'arg:productId',
             site: 'cart.domain.ts:12',
             via: 'cart_items',
+          },
+        ],
+        unresolved: [],
+      },
+    });
+  });
+
+  it('resolves project insert-select and update-from read sources from write call AST', () => {
+    const graph = extractTouchGraphFromProject({
+      files: [
+        {
+          fileName: 'drizzle-types.d.ts',
+          source: `
+            declare module "drizzle-orm/pg-core" {
+              export class PgDatabase<TQueryResultHKT = unknown, TFullSchema = unknown, TSchema = unknown> {
+                insert(table: unknown): { select(value: unknown): Promise<void> };
+                select(): { from(table: unknown): { where(value: unknown): Promise<void> } };
+                update(table: unknown): { set(value: unknown): { from(table: unknown): { where(value: unknown): Promise<void> } } };
+              }
+            }
+          `,
+        },
+        {
+          fileName: 'product.domain.ts',
+          source: [
+            'import type { PgDatabase } from "drizzle-orm/pg-core";',
+            '',
+            'export const products = pgTable("products", {}, jiso({ domain: "product", key: "id" }));',
+            'export const prices = pgTable("prices", {}, jiso({ domain: "price", key: "productId" }));',
+            'export const snapshots = pgTable("product_snapshots", {}, jiso({ domain: "snapshot", key: "productId" }));',
+            '',
+            'export async function syncSnapshots(db: PgDatabase, productId: string) {',
+            '  await db.insert(snapshots).select(db.select().from(products).where(gt(sql.raw(".from(prices)"), 0)));',
+            '  await db.update(products).set({ price: prices.amount }).from(prices).where(eq(products.id, productId));',
+            '}',
+            '',
+          ].join('\n'),
+        },
+      ],
+    });
+
+    expect(graph).toEqual({
+      syncSnapshots: {
+        reads: [
+          {
+            domain: 'price',
+            keys: null,
+            site: 'product.domain.ts:9',
+            source: 'update-from',
+            via: 'prices',
+          },
+          {
+            domain: 'product',
+            keys: null,
+            site: 'product.domain.ts:8',
+            source: 'insert-select',
+            via: 'products',
+          },
+        ],
+        touches: [
+          {
+            domain: 'product',
+            keys: 'arg:productId',
+            site: 'product.domain.ts:9',
+            via: 'products',
+          },
+          {
+            domain: 'snapshot',
+            keys: null,
+            site: 'product.domain.ts:8',
+            via: 'product_snapshots',
           },
         ],
         unresolved: [],

@@ -575,6 +575,66 @@ describe('Drizzle pinned subset conformance', () => {
     });
   });
 
+  it('pins real Drizzle project read sources from write call AST', () => {
+    const graph = extractTouchGraphFromProject({
+      files: [
+        {
+          fileName: 'conformance/drizzle-pin/src/product.domain.ts',
+          source: [
+            "import { eq, gt, sql } from 'drizzle-orm';",
+            "import type { PgDatabase } from 'drizzle-orm/pg-core';",
+            '',
+            "export const products = pgTable('products', {}, jiso({ domain: 'product', key: 'id' }));",
+            "export const prices = pgTable('prices', {}, jiso({ domain: 'price', key: 'productId' }));",
+            "export const snapshots = pgTable('product_snapshots', {}, jiso({ domain: 'snapshot', key: 'productId' }));",
+            '',
+            'export async function syncSnapshots(db: PgDatabase<any, any, any>, productId: string) {',
+            "  await db.insert(snapshots).select(db.select().from(products).where(gt(sql.raw('.from(prices)'), 0)));",
+            '  await db.update(products).set({ price: prices.productId }).from(prices).where(eq(products.id, productId));',
+            '}',
+            '',
+          ].join('\n'),
+        },
+      ],
+    });
+
+    expect(graph).toEqual({
+      syncSnapshots: {
+        reads: [
+          {
+            domain: 'price',
+            keys: null,
+            site: 'conformance/drizzle-pin/src/product.domain.ts:10',
+            source: 'update-from',
+            via: 'prices',
+          },
+          {
+            domain: 'product',
+            keys: null,
+            site: 'conformance/drizzle-pin/src/product.domain.ts:9',
+            source: 'insert-select',
+            via: 'products',
+          },
+        ],
+        touches: [
+          {
+            domain: 'product',
+            keys: 'arg:productId',
+            site: 'conformance/drizzle-pin/src/product.domain.ts:10',
+            via: 'products',
+          },
+          {
+            domain: 'snapshot',
+            keys: null,
+            site: 'conformance/drizzle-pin/src/product.domain.ts:9',
+            via: 'product_snapshots',
+          },
+        ],
+        unresolved: [],
+      },
+    });
+  });
+
   it('pins project query facts for the real Drizzle Postgres subset', () => {
     expect(sql<number>`count(*)`).toBeDefined();
 

@@ -566,7 +566,12 @@ function extractProjectDrizzleWriteCalls(
     calls.push({
       index: 0,
       operation,
-      readSources: extractReadSources(statement, operation),
+      readSources: extractReadSourcesFromWriteChain(chain, operation, (node) =>
+        (
+          projectTableNameForNode(node, tableNamesBySymbol) ??
+          sourceWithProjectTableIdentifiersResolved(node, file.source, tableNamesBySymbol)
+        ).trim(),
+      ),
       site: `${file.fileName}:${lineForIndex(file.source, call.getStart())}`,
       statement,
       tableExpression: tableExpression.trim(),
@@ -2604,7 +2609,9 @@ function extractDrizzleWriteCalls(
       calls.push({
         index: start,
         operation,
-        readSources: extractReadSources(statement, operation),
+        readSources: extractReadSourcesFromWriteChain(chain, operation, (node) =>
+          node.getText().trim(),
+        ),
         statement,
         tableExpression,
       });
@@ -2874,35 +2881,41 @@ function isLikelyDrizzleReceiver(name: string): boolean {
   return /^(db|tx)$/.test(name);
 }
 
-function extractReadSources(source: string, operation: string): ExtractedReadSource[] {
-  return withParsedSourceFile(source, (sourceFile) => {
-    const calls = sourceFile.getDescendantsOfKind(SyntaxKind.CallExpression);
-    const sourceOperation =
-      operation === 'insert' && calls.some((call) => propertyAccessCallName(call) === 'select')
-        ? 'insert-select'
-        : operation === 'update' && calls.some((call) => propertyAccessCallName(call) === 'from')
-          ? 'update-from'
-          : null;
-    if (!sourceOperation) return [];
+function extractReadSourcesFromWriteChain(
+  chain: Node,
+  operation: string,
+  tableExpressionText: (node: Node) => string,
+): ExtractedReadSource[] {
+  const calls = [
+    ...(Node.isCallExpression(chain) ? [chain] : []),
+    ...chain.getDescendantsOfKind(SyntaxKind.CallExpression),
+  ];
+  const sourceOperation =
+    operation === 'insert' && calls.some((call) => propertyAccessCallName(call) === 'select')
+      ? 'insert-select'
+      : operation === 'update' && calls.some((call) => propertyAccessCallName(call) === 'from')
+        ? 'update-from'
+        : null;
+  if (!sourceOperation) return [];
 
-    const sources: ExtractedReadSource[] = [];
+  const sources: ExtractedReadSource[] = [];
 
-    for (const call of calls) {
-      if (!isReadSourceCall(call)) continue;
+  for (const call of calls) {
+    if (!isReadSourceCall(call)) continue;
 
-      const tableExpression = call.getArguments()[0]?.getText().trim();
+    const tableArgument = call.getArguments()[0];
+    const tableExpression = tableArgument ? tableExpressionText(tableArgument) : '';
 
-      sources.push({
-        operation: sourceOperation,
-        tableExpression: tableExpression || UNRESOLVED_READ_SOURCE_EXPRESSION,
-      });
-    }
+    sources.push({
+      operation: sourceOperation,
+      tableExpression: tableExpression || UNRESOLVED_READ_SOURCE_EXPRESSION,
+    });
+  }
 
-    // SPEC §10-§11: an opaque insert-select/update-from source is visible as FW406, not guessed.
-    return sources.length > 0
-      ? sources
-      : [{ operation: sourceOperation, tableExpression: UNRESOLVED_READ_SOURCE_EXPRESSION }];
-  });
+  // SPEC §10-§11: an opaque insert-select/update-from source is visible as FW406, not guessed.
+  return sources.length > 0
+    ? sources
+    : [{ operation: sourceOperation, tableExpression: UNRESOLVED_READ_SOURCE_EXPRESSION }];
 }
 
 function isReadSourceCall(call: CallExpression): boolean {

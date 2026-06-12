@@ -1295,6 +1295,18 @@ must be "FW406 unresolved," never "silently wrong."
       `pnpm exec vitest --run conformance/drizzle-pin/src/index.test.ts`,
       `pnpm exec vp check packages/drizzle/src/index.ts packages/drizzle/src/index.test.ts conformance/drizzle-pin/src/index.test.ts plans/codebase-quality-round2.md`,
       and `git diff --check`.
+      Additional evidence 2026-06-12: source/project insert-select and update-from read-source
+      extraction now walks the original ts-morph write-call chain instead of serializing the
+      write statement and reparsing it through a separate source helper. Project mode resolves
+      read-source table arguments through the same table-symbol map used for write targets, so
+      table facts stay aligned with the synthetic project source while string contents such as
+      `".from(prices)"` remain inert under SPEC §10-§11. Same-session evidence:
+      `pnpm exec vitest --run packages/drizzle/src/index.test.ts -t "read source tables from write call AST|project insert-select and update-from read sources|direct insert-select and update-from"`,
+      `pnpm exec vitest --run conformance/drizzle-pin/src/index.test.ts -t "real Drizzle project read sources|direct table source extraction"`,
+      `pnpm exec vitest --run packages/drizzle/src/index.test.ts`,
+      `pnpm exec vitest --run conformance/drizzle-pin/src/index.test.ts`,
+      `pnpm exec vp check packages/drizzle/src/index.ts packages/drizzle/src/index.test.ts conformance/drizzle-pin/src/index.test.ts plans/codebase-quality-round2.md`,
+      and `git diff --check`.
 
 - [ ] **HIGH — Remove fact-fabricating heuristics; degrade to FW406.**
       Column type from projection-key name (`/(count|qty|...)$/i` → number, index.ts:993);
