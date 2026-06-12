@@ -92,6 +92,12 @@ content or severities (SPEC §11.3 owns those); `fw check`/`fw explain` semantic
       with `fw-export/v1` error output before `/index.html` is written, while FW210 completes
       with `fw-export/v1` summary output and writes `/index.html`. Same-session evidence:
       `node --test --test-name-pattern "D10 seeded diagnostics gate" tests/fw-check.node.mjs`.
+      Additional evidence 2026-06-12: the same D10 tranche now drives the built CLI MCP
+      newline-delimited stdio protocol via `runMcpFallbackStdio()`, sending red and green
+      `compile_component` requests over the command framing and proving the returned
+      `fw-mcp/v1`/`compile/v1` structured results preserve shared SPEC §11.3 severities
+      (`FW201` error plus `FW210` lint, then no diagnostics). Same-session evidence:
+      `node --test --test-name-pattern "D10 seeded diagnostics gate" tests/fw-check.node.mjs`.
       Gap: this strengthens the full `vp build` fixture path for the Vite build surface, but the
       broader gate remains open until every required surface has red/green command-level coverage.
 

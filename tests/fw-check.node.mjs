@@ -11,7 +11,13 @@ import { gzipSync } from 'node:zlib';
 
 import { missingBuildMessage } from '../scripts/fw-check.mjs';
 import { parseWireResponses } from './wire-transcript.mjs';
-import { fwCheck, fwExplain, handleFwMcpRequest, mainAsync } from '../dist/cli/src/index.mjs';
+import {
+  fwCheck,
+  fwExplain,
+  handleFwMcpRequest,
+  mainAsync,
+  runMcpFallbackStdio,
+} from '../dist/cli/src/index.mjs';
 import {
   assertRenderEquivalence,
   collectMinifierReservedNames,
@@ -4773,6 +4779,50 @@ export default createApp({
   });
   assert.equal(greenMcp.result.structuredContent.ok, true);
   assert.deepEqual(greenMcp.result.structuredContent.diagnostics, []);
+
+  const mcpStdioChunks = [];
+  const mcpStdioRequests = [redSource, greenSource]
+    .map((source, index) =>
+      JSON.stringify({
+        id: `d10-stdio-${index}`,
+        jsonrpc: '2.0',
+        method: 'tools/call',
+        params: {
+          arguments: { fileName, source },
+          name: 'compile_component',
+        },
+      }),
+    )
+    .join('\n');
+  await runMcpFallbackStdio(
+    (async function* mcpInput() {
+      yield `${mcpStdioRequests}\n`;
+    })(),
+    { write: (chunk) => mcpStdioChunks.push(chunk) },
+  );
+  const [redMcpStdio, greenMcpStdio] = mcpStdioChunks
+    .join('')
+    .trim()
+    .split(/\r?\n/)
+    .map((line) => JSON.parse(line));
+
+  assert.equal(redMcpStdio.result.version, 'fw-mcp/v1');
+  assert.equal(redMcpStdio.result.structuredContent.version, 'compile/v1');
+  assert.equal(redMcpStdio.result.structuredContent.ok, false);
+  assert.deepEqual(
+    redMcpStdio.result.structuredContent.diagnostics.map((diagnostic) => ({
+      code: diagnostic.code,
+      severity: diagnostic.severity,
+    })),
+    [
+      { code: 'FW210', severity: 'lint' },
+      { code: 'FW201', severity: 'error' },
+    ],
+  );
+  assert.equal(greenMcpStdio.result.version, 'fw-mcp/v1');
+  assert.equal(greenMcpStdio.result.structuredContent.version, 'compile/v1');
+  assert.equal(greenMcpStdio.result.structuredContent.ok, true);
+  assert.deepEqual(greenMcpStdio.result.structuredContent.diagnostics, []);
 });
 
 void test('P3 Drizzle query facts include select shapes and instance keys', async () => {
