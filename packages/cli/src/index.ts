@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 export type { DiagnosticCode } from '@jiso/core';
 import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
 import {
@@ -29,6 +30,7 @@ import {
   type UpdateCoverageFact,
   type VerificationDiagnosticFact,
 } from '@jiso/core';
+import type { JisoApp } from '@jiso/server';
 
 export type { FwCheckInput, FwExplainInput } from '@jiso/core';
 
@@ -59,8 +61,12 @@ const auditOutputVersion = 'fw-audit/v1';
 
 export function main(args: readonly string[] = process.argv.slice(2)): number {
   if (args.length === 0) {
-    process.stdout.write('fw: explain, check, audit\n');
+    process.stdout.write('fw: explain, check, audit, export\n');
     return 0;
+  }
+
+  if (args[0] === 'export') {
+    throw new Error('fw export is asynchronous; call mainAsync() instead.');
   }
 
   if (args[0] === 'check') {
@@ -89,9 +95,17 @@ export function main(args: readonly string[] = process.argv.slice(2)): number {
   }
 
   process.stderr.write(
-    `fw: unknown command ${stableValue(args[0])}. expected explain, check, or audit.\n`,
+    `fw: unknown command ${stableValue(args[0])}. expected explain, check, audit, or export.\n`,
   );
   return 1;
+}
+
+export async function mainAsync(args: readonly string[] = process.argv.slice(2)): Promise<number> {
+  if (args[0] !== 'export') return main(args);
+
+  const parsed = parseExportArgs(args.slice(1));
+  if (!parsed.ok) return writeUsageError(parsed.message);
+  return writeCommandResult(await runExportCommand(parsed.options));
 }
 
 function runGraphCommand(
@@ -112,6 +126,207 @@ function writeCommandResult(result: CliCommandResult): 0 | 1 {
   const stream = result.exitCode === 0 ? process.stdout : process.stderr;
   stream.write(result.output);
   return result.exitCode;
+}
+
+interface FwExportOptions {
+  appModulePath: string;
+  onNonExportable?: 'error' | 'skip';
+  origin?: string;
+  outDir: string;
+}
+
+type ExportArgParseResult = { ok: true; options: FwExportOptions } | { message: string; ok: false };
+
+function parseExportArgs(args: readonly string[]): ExportArgParseResult {
+  let appModulePath: string | undefined;
+  let origin: string | undefined;
+  let outDir = 'dist';
+  let onNonExportable: 'error' | 'skip' | undefined;
+
+  for (let index = 0; index < args.length; index += 1) {
+    const arg = args[index];
+    if (!arg) continue;
+
+    if (arg === '--help' || arg === '-h') {
+      return { message: exportUsage(), ok: false };
+    }
+
+    if (arg === '--out') {
+      const value = args[index + 1];
+      if (!value) return { message: 'fw: export --out requires a directory.\n', ok: false };
+      outDir = value;
+      index += 1;
+      continue;
+    }
+
+    if (arg.startsWith('--out=')) {
+      outDir = arg.slice('--out='.length);
+      if (!outDir) return { message: 'fw: export --out requires a directory.\n', ok: false };
+      continue;
+    }
+
+    if (arg === '--origin') {
+      const value = args[index + 1];
+      if (!value) return { message: 'fw: export --origin requires a URL.\n', ok: false };
+      origin = value;
+      index += 1;
+      continue;
+    }
+
+    if (arg.startsWith('--origin=')) {
+      origin = arg.slice('--origin='.length);
+      if (!origin) return { message: 'fw: export --origin requires a URL.\n', ok: false };
+      continue;
+    }
+
+    if (arg === '--skip-non-exportable') {
+      onNonExportable = 'skip';
+      continue;
+    }
+
+    if (arg.startsWith('-')) {
+      return {
+        message: `fw: unknown export option ${stableValue(arg)}.\n${exportUsage()}`,
+        ok: false,
+      };
+    }
+
+    if (appModulePath) {
+      return { message: `fw: export accepts one app module path.\n${exportUsage()}`, ok: false };
+    }
+
+    appModulePath = arg;
+  }
+
+  if (!appModulePath)
+    return { message: `fw: export requires an app module path.\n${exportUsage()}`, ok: false };
+
+  return {
+    ok: true,
+    options: {
+      appModulePath,
+      ...(onNonExportable === undefined ? {} : { onNonExportable }),
+      ...(origin === undefined ? {} : { origin }),
+      outDir,
+    },
+  };
+}
+
+function exportUsage(): string {
+  return [
+    'usage: fw export <app-module> [--out <dir>] [--origin <url>] [--skip-non-exportable]',
+    '',
+  ].join('\n');
+}
+
+async function runExportCommand(options: FwExportOptions): Promise<CliCommandResult> {
+  try {
+    const [{ exportStaticApp }, appModule] = await Promise.all([
+      import('@jiso/server'),
+      import(pathToFileURL(resolve(options.appModulePath)).href),
+    ]);
+    const app = appFromModule(appModule, options.appModulePath);
+    const result = await exportStaticApp(app, {
+      ...(options.onNonExportable === undefined
+        ? {}
+        : { onNonExportable: options.onNonExportable }),
+      ...(options.origin === undefined ? {} : { origin: options.origin }),
+      outDir: options.outDir,
+    });
+
+    return fwExportResult(result, options);
+  } catch (error) {
+    return exportErrorResult(error);
+  }
+}
+
+function appFromModule(module: unknown, source: string): JisoApp {
+  if (typeof module === 'object' && module !== null) {
+    const exports = module as { app?: unknown; default?: unknown };
+    const app = exports.default ?? exports.app;
+    if (isJisoApp(app)) return app;
+  }
+
+  throw new Error(`fw export expected ${source} to export a Jiso app as default or named 'app'.`);
+}
+
+function isJisoApp(value: unknown): value is JisoApp {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    Array.isArray((value as { routes?: unknown }).routes) &&
+    Array.isArray((value as { endpoints?: unknown }).endpoints) &&
+    Array.isArray((value as { mutations?: unknown }).mutations) &&
+    Array.isArray((value as { queries?: unknown }).queries) &&
+    typeof (value as { clientModules?: { resolve?: unknown } }).clientModules?.resolve ===
+      'function'
+  );
+}
+
+function fwExportResult(
+  result: Awaited<ReturnType<(typeof import('@jiso/server'))['exportStaticApp']>>,
+  options: FwExportOptions,
+): FwCheckResult {
+  const lines = ['fw-export/v1'];
+
+  for (const artifact of result.artifacts) {
+    lines.push(
+      `HTML ${artifact.path} status=${artifact.status} bytes=${byteLength(artifact.body)}`,
+    );
+  }
+
+  for (const artifact of result.clientModules) {
+    lines.push(
+      `CLIENT-MODULE ${artifact.path} href=${JSON.stringify(artifact.href)} status=${artifact.status} bytes=${byteLength(artifact.body)}`,
+    );
+  }
+
+  for (const diagnostic of result.diagnostics) {
+    lines.push(
+      `WARN ${diagnostic.code} route=${diagnostic.routePath} ${stableText(diagnostic.message)}`,
+    );
+  }
+
+  lines.push(
+    `SUMMARY html=${result.artifacts.length} clientModules=${result.clientModules.length} diagnostics=${result.diagnostics.length} outDir=${JSON.stringify(options.outDir)}`,
+  );
+
+  return { exitCode: result.diagnostics.length > 0 ? 1 : 0, output: `${lines.join('\n')}\n` };
+}
+
+function byteLength(value: string): number {
+  return Buffer.byteLength(value, 'utf8');
+}
+
+function exportErrorResult(error: unknown): CliCommandResult {
+  if (isStaticExportDiagnosticError(error)) {
+    return {
+      error: [
+        'fw-export/v1',
+        ...error.diagnostics.map(
+          (diagnostic) =>
+            `ERROR ${diagnostic.code} route=${diagnostic.routePath} ${stableText(diagnostic.message)}`,
+        ),
+      ].join('\n'),
+      exitCode: 1,
+    };
+  }
+
+  return {
+    error: `fw: export failed: ${error instanceof Error ? error.message : String(error)}`,
+    exitCode: 1,
+  };
+}
+
+function isStaticExportDiagnosticError(error: unknown): error is {
+  diagnostics: readonly { code: 'FW229'; message: string; routePath: string }[];
+} {
+  return (
+    typeof error === 'object' &&
+    error !== null &&
+    (error as { code?: unknown }).code === 'FW229' &&
+    Array.isArray((error as { diagnostics?: unknown }).diagnostics)
+  );
 }
 
 interface InputReadError {
@@ -1324,5 +1539,7 @@ function normalizePath(path: string): string {
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
-  process.exitCode = main();
+  void mainAsync().then((exitCode) => {
+    process.exitCode = exitCode;
+  });
 }

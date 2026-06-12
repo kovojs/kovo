@@ -1,11 +1,99 @@
 import { execFileSync } from 'node:child_process';
-import { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 import { describe, expect, it, vi } from 'vitest';
 
-import { fwAudit, fwCheck, fwExplain, main } from './index.js';
+import { fwAudit, fwCheck, fwExplain, main, mainAsync } from './index.js';
+
+describe('fw export', () => {
+  it('loads an app module and writes static HTML artifacts through the server exporter', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'fw-export-cli-'));
+    const appPath = join(root, 'app.mjs');
+    const outDir = join(root, 'dist');
+    const stdout = vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
+    const stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+
+    try {
+      writeFileSync(
+        appPath,
+        [
+          'export default {',
+          '  clientModules: {',
+          "    put() { throw new Error('unused'); },",
+          "    resolve() { return { body: 'Not Found', headers: { 'Content-Type': 'text/plain; charset=utf-8' }, status: 404 }; },",
+          '  },',
+          '  document: {},',
+          '  endpoints: [],',
+          '  errorShells: {},',
+          '  mutations: [],',
+          '  queries: [],',
+          "  routes: [{ path: '/', page: () => '<main data-export-cli>CLI export</main>' }],",
+          '};',
+          '',
+        ].join('\n'),
+        'utf8',
+      );
+
+      await expect(mainAsync(['export', appPath, '--out', outDir])).resolves.toBe(0);
+
+      expect(stderr).not.toHaveBeenCalled();
+      const output = stdout.mock.calls.map(([chunk]) => String(chunk)).join('');
+      expect(output).toContain('fw-export/v1\nHTML /index.html status=200 bytes=');
+      expect(output).toContain(
+        `SUMMARY html=1 clientModules=0 diagnostics=0 outDir=${JSON.stringify(outDir)}\n`,
+      );
+      expect(readFileSync(join(outDir, 'index.html'), 'utf8')).toContain(
+        '<main data-export-cli>CLI export</main>',
+      );
+    } finally {
+      stdout.mockRestore();
+      stderr.mockRestore();
+      rmSync(root, { force: true, recursive: true });
+    }
+  });
+
+  it('prints FW229 diagnostics for non-exportable app modules', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'fw-export-cli-'));
+    const appPath = join(root, 'app.mjs');
+    const stdout = vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
+    const stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+
+    try {
+      writeFileSync(
+        appPath,
+        [
+          'export const app = {',
+          '  clientModules: {',
+          "    put() { throw new Error('unused'); },",
+          "    resolve() { return { body: 'Not Found', headers: { 'Content-Type': 'text/plain; charset=utf-8' }, status: 404 }; },",
+          '  },',
+          '  document: {},',
+          '  endpoints: [],',
+          '  errorShells: {},',
+          '  mutations: [],',
+          '  queries: [],',
+          "  routes: [{ path: '/products/:id', page: () => '<main>Product</main>' }],",
+          '};',
+          '',
+        ].join('\n'),
+        'utf8',
+      );
+
+      await expect(mainAsync(['export', appPath, '--out', join(root, 'dist')])).resolves.toBe(1);
+
+      expect(stdout).not.toHaveBeenCalled();
+      const output = stderr.mock.calls.map(([chunk]) => String(chunk)).join('');
+      expect(output).toContain('fw-export/v1\nERROR FW229 route=/products/:id');
+      expect(output).toContain('static-path metadata');
+    } finally {
+      stdout.mockRestore();
+      stderr.mockRestore();
+      rmSync(root, { force: true, recursive: true });
+    }
+  });
+});
 
 describe('fw check', () => {
   it('emits stable OK output for an empty semantic graph', () => {
@@ -941,7 +1029,9 @@ describe('fw check', () => {
       stderrWrite.mockRestore();
     }
 
-    expect(output).toBe('fw: unknown command "compile". expected explain, check, or audit.\n');
+    expect(output).toBe(
+      'fw: unknown command "compile". expected explain, check, audit, or export.\n',
+    );
   });
 
   it('runs as a CLI entrypoint when the script path contains spaces', () => {
@@ -975,7 +1065,7 @@ describe('fw check', () => {
         stdio: ['ignore', 'pipe', 'pipe'],
       });
 
-      expect(output).toBe('fw: explain, check, audit\n');
+      expect(output).toBe('fw: explain, check, audit, export\n');
     } finally {
       rmSync(parent, { force: true, recursive: true });
     }
