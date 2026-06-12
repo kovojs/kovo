@@ -335,6 +335,7 @@ function projectFunctionExtractionsByFileName(
 
       const receivers = projectDrizzleReceivers(fn);
       extractionsByFunction.set(name, {
+        unresolvedCalls: [],
         receiverNames: [...receivers.names],
         writeCalls: extractProjectDrizzleWriteCalls(
           body,
@@ -354,6 +355,7 @@ function projectFunctionExtractionsByFileName(
       const body = initializer.getBody();
       const receivers = projectDrizzleReceivers(initializer);
       extractionsByFunction.set(name.getText(), {
+        unresolvedCalls: [],
         receiverNames: [...receivers.names],
         writeCalls: extractProjectDrizzleWriteCalls(
           body,
@@ -367,6 +369,7 @@ function projectFunctionExtractionsByFileName(
     for (const [name, callback] of projectDomainWriteCallbacks(sourceFile)) {
       const receivers = projectDrizzleReceivers(callback.fn);
       extractionsByFunction.set(name, {
+        unresolvedCalls: [],
         receiverNames: [...receivers.names],
         writeCalls: extractProjectDrizzleWriteCalls(
           callback.body,
@@ -377,6 +380,41 @@ function projectFunctionExtractionsByFileName(
       });
     }
 
+    const localFunctionNames = new Set(extractionsByFunction.keys());
+    for (const fn of sourceFile.getFunctions()) {
+      const name = fn.getName();
+      const body = fn.getBody();
+      const extraction = name ? extractionsByFunction.get(name) : undefined;
+      if (!body || !extraction) continue;
+      extraction.unresolvedCalls = extractProjectUnresolvedCalls(
+        body,
+        projectDrizzleReceivers(fn),
+        localFunctionNames,
+      );
+    }
+    for (const declaration of sourceFile.getVariableDeclarations()) {
+      const name = declaration.getNameNode();
+      const initializer = declaration.getInitializer();
+      if (!Node.isIdentifier(name) || !initializer) continue;
+      if (!Node.isArrowFunction(initializer) && !Node.isFunctionExpression(initializer)) continue;
+      const extraction = extractionsByFunction.get(name.getText());
+      if (!extraction) continue;
+      extraction.unresolvedCalls = extractProjectUnresolvedCalls(
+        initializer.getBody(),
+        projectDrizzleReceivers(initializer),
+        localFunctionNames,
+      );
+    }
+    for (const [name, callback] of projectDomainWriteCallbacks(sourceFile)) {
+      const extraction = extractionsByFunction.get(name);
+      if (!extraction) continue;
+      extraction.unresolvedCalls = extractProjectUnresolvedCalls(
+        callback.body,
+        projectDrizzleReceivers(callback.fn),
+        localFunctionNames,
+      );
+    }
+
     extractionsByFile.set(file.fileName, extractionsByFunction);
   });
 
@@ -384,6 +422,7 @@ function projectFunctionExtractionsByFileName(
 }
 
 interface ProjectFunctionExtraction {
+  unresolvedCalls: readonly ExternalDbArgumentCall[];
   receiverNames: readonly string[];
   writeCalls: readonly ExtractedWriteCall[];
 }
@@ -535,6 +574,85 @@ function extractProjectDrizzleWriteCalls(
   }
 
   return calls;
+}
+
+function extractProjectUnresolvedCalls(
+  body: Node,
+  receivers: ProjectDrizzleReceivers,
+  localFunctionNames: ReadonlySet<string>,
+): ExternalDbArgumentCall[] {
+  // SPEC §10-§11: project-mode unresolved surfaces must be tied to typed Drizzle receivers.
+  return [
+    ...extractProjectExternalDbArgumentCalls(body, receivers, localFunctionNames),
+    ...extractProjectUnclassifiedDrizzleReceiverCalls(body, receivers),
+  ];
+}
+
+function extractProjectExternalDbArgumentCalls(
+  body: Node,
+  receivers: ProjectDrizzleReceivers,
+  localFunctionNames: ReadonlySet<string>,
+): ExternalDbArgumentCall[] {
+  const calls: ExternalDbArgumentCall[] = [];
+  const bodyStart = bodySourceStart(body);
+
+  for (const call of body.getDescendantsOfKind(SyntaxKind.CallExpression)) {
+    const expression = call.getExpression();
+    if (!Node.isIdentifier(expression)) continue;
+
+    const name = expression.getText();
+    if (IGNORED_LOCAL_CALL_NAMES.has(name) || localFunctionNames.has(name)) continue;
+    if (!call.getArguments().some((arg) => isProjectDrizzleReceiverIdentifier(arg, receivers))) {
+      continue;
+    }
+
+    calls.push({ index: call.getStart() - bodyStart, name });
+  }
+
+  return calls;
+}
+
+function extractProjectUnclassifiedDrizzleReceiverCalls(
+  body: Node,
+  receivers: ProjectDrizzleReceivers,
+): ExternalDbArgumentCall[] {
+  const calls: ExternalDbArgumentCall[] = [];
+  const bodyStart = bodySourceStart(body);
+
+  for (const call of body.getDescendantsOfKind(SyntaxKind.CallExpression)) {
+    const expression = call.getExpression();
+    const name = staticAccessName(expression);
+    if (!name) continue;
+
+    const surface = projectUnclassifiedCallSurface(expression, name);
+    if (!surface || !isProjectDrizzleReceiverIdentifier(surface.receiver, receivers)) continue;
+
+    calls.push({ index: call.getStart() - bodyStart, name: surface.name });
+  }
+
+  return calls;
+}
+
+function projectUnclassifiedCallSurface(
+  expression: Node,
+  name: string,
+): { name: string; receiver: Node } | undefined {
+  if (UNCLASSIFIED_DRIZZLE_RECEIVER_MUTATION_METHODS.has(name)) {
+    const receiver = staticAccessExpression(expression);
+    return receiver ? { name, receiver } : undefined;
+  }
+  if (name !== 'findMany' && name !== 'findFirst') return undefined;
+
+  const tableAccess = staticAccessExpression(expression);
+  if (!tableAccess || !staticAccessName(tableAccess)) return undefined;
+  const queryAccess = staticAccessExpression(tableAccess);
+  if (!queryAccess || staticAccessName(queryAccess) !== 'query') return undefined;
+  const receiver = staticAccessExpression(queryAccess);
+  return receiver ? { name: `query.${name}`, receiver } : undefined;
+}
+
+function bodySourceStart(body: Node): number {
+  return Node.isBlock(body) ? body.getStart() + 1 : body.getStart();
 }
 
 function isProjectDrizzleReceiverIdentifier(
@@ -972,6 +1090,7 @@ interface ExtractedFunction {
   bodyStart: number;
   name: string;
   receiverNames?: readonly string[];
+  unresolvedCalls?: readonly ExternalDbArgumentCall[];
   writeCalls?: readonly ExtractedWriteCall[];
 }
 
@@ -1768,13 +1887,11 @@ function directSummaryForFunction(
     });
   }
 
-  for (const call of extractExternalDbArgumentCalls(fn.body, receiverNames, localFunctionNames)) {
-    unresolved.push({
-      operation: call.name,
-      site: `${file.fileName}:${lineForIndex(file.source, fn.bodyStart + call.index)}`,
-    });
-  }
-  for (const call of extractUnclassifiedDrizzleReceiverCalls(fn.body, receiverNames)) {
+  const unresolvedCalls = fn.unresolvedCalls ?? [
+    ...extractExternalDbArgumentCalls(fn.body, receiverNames, localFunctionNames),
+    ...extractUnclassifiedDrizzleReceiverCalls(fn.body, receiverNames),
+  ];
+  for (const call of unresolvedCalls) {
     unresolved.push({
       operation: call.name,
       site: `${file.fileName}:${lineForIndex(file.source, fn.bodyStart + call.index)}`,

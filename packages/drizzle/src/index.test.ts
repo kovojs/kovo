@@ -3401,6 +3401,86 @@ export interface CommerceInvalidationSets {
     });
   });
 
+  it('marks project unresolved helper surfaces only for typed Drizzle receiver symbols', () => {
+    const graph = extractTouchGraphFromProject({
+      files: [
+        {
+          fileName: 'drizzle-types.d.ts',
+          source: [
+            'declare module "drizzle-orm/pg-core" {',
+            '  export class PgDatabase<TQueryResultHKT = unknown, TFullSchema = unknown, TSchema = unknown> {',
+            '    $count(table: unknown): Promise<number>;',
+            '    execute(query: unknown): Promise<void>;',
+            '    query: any;',
+            '  }',
+            '}',
+          ].join('\n'),
+        },
+        {
+          fileName: 'cart.domain.ts',
+          source: [
+            'import type { PgDatabase } from "drizzle-orm/pg-core";',
+            '',
+            'interface FakeDb {',
+            '  $count(table: unknown): Promise<number>;',
+            '  execute(query: unknown): Promise<void>;',
+            '  query: any;',
+            '}',
+            '',
+            'export const cartItems = pgTable("cart_items", {}, jiso({ domain: "cart", key: "id" }));',
+            '',
+            'declare const sendAudit: (receiver: unknown) => Promise<void>;',
+            '',
+            'export async function reconcile(db: PgDatabase, fake: FakeDb) {',
+            '  await db.execute(sql`delete from cart_items`);',
+            '  await fake.execute(sql`delete from cart_items`);',
+            '  await sendAudit(db);',
+            '  await sendAudit(fake);',
+            '  await db.$count(cartItems);',
+            '  await fake.$count(cartItems);',
+            '  await db.query.cartItems.findMany();',
+            '  await fake.query.cartItems.findMany();',
+            '}',
+            '',
+            'export async function shadowed(db: FakeDb) {',
+            '  await db.execute(sql`delete from cart_items`);',
+            '  await sendAudit(db);',
+            '}',
+          ].join('\n'),
+        },
+      ],
+    });
+
+    expect(graph).toEqual({
+      reconcile: {
+        reads: [],
+        touches: [],
+        unresolved: [
+          {
+            code: 'FW406',
+            message: 'Statically un-analyzable write site; manual touches required.',
+            site: 'cart.domain.ts:16',
+          },
+          {
+            code: 'FW406',
+            message: 'Statically un-analyzable write site; manual touches required.',
+            site: 'cart.domain.ts:14',
+          },
+          {
+            code: 'FW406',
+            message: 'Statically un-analyzable write site; manual touches required.',
+            site: 'cart.domain.ts:18',
+          },
+          {
+            code: 'FW406',
+            message: 'Statically un-analyzable write site; manual touches required.',
+            site: 'cart.domain.ts:19',
+          },
+        ],
+      },
+    });
+  });
+
   it('uses project transaction callback receiver aliases from typed Drizzle origins', () => {
     const graph = extractTouchGraphFromProject({
       files: [

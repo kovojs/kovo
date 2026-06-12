@@ -1455,6 +1455,13 @@ must be "FW406 unresolved," never "silently wrong."
       transaction writes plus shadowed same-name fake receivers. Same-session evidence:
       `pnpm exec vitest --run packages/drizzle/src/index.test.ts -t "project transaction callback receiver aliases"`,
       `pnpm exec vitest --run conformance/drizzle-pin/src/index.test.ts -t "project transaction aliases"`.
+      Additional evidence 2026-06-12: project-mode FW406 unresolved helper/receiver surfaces now
+      come from ts-morph call expressions checked against typed Drizzle receiver symbols instead
+      of reparsing project callbacks with receiver-name lists. The regression pins external
+      helper calls, raw `execute`, `$count`, and relational query calls on the typed receiver
+      while same-shaped fake receivers and a shadowed `db: FakeDb` helper remain inert under
+      SPEC §10-§11. Same-session evidence:
+      `pnpm exec vitest --run packages/drizzle/src/index.test.ts -t "project unresolved helper surfaces"`.
 - [x] **MED — Make the drizzle-orm coupling real and tested.** The `>=0.45.2 <1` pin is
       decorative: drizzle-orm is never imported, absent from devDeps, and every project test
       fabricates a `declare module "drizzle-orm/pg-core"` shim (index.test.ts:1742, 1791, 1846).
