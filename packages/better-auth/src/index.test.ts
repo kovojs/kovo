@@ -22,13 +22,16 @@ import {
   createBetterAuthDbVerificationConfig,
   betterAuthOAuthProviderSuccessorImportPaths,
   betterAuthOAuthProviderSuccessorMetadataDegradation,
+  betterAuthPasskeyPluginMetadataImportPaths,
   betterAuthOrganizationDomain,
+  betterAuthSsoPluginMetadataImportPaths,
   betterAuthSchemaBridge,
   betterAuthSignInEmailMutation,
   betterAuthSignOutMutation,
   betterAuthSignUpEmailMutation,
   betterAuthSession,
   betterAuthTableDomain,
+  betterAuthUnavailablePluginMetadataDegradation,
   getBetterAuthSetCookie,
   isBetterAuthCredentialFailureError,
   mount,
@@ -643,6 +646,38 @@ describe('credential mutation helpers', () => {
       schemaBridge: null,
       tableMetadata: null,
     });
+  });
+
+  it('reports unavailable plugin metadata without fabricating schema mappings', () => {
+    expect(
+      betterAuthUnavailablePluginMetadataDegradation({
+        attemptedImports: betterAuthSsoPluginMetadataImportPaths,
+        packageName: 'better-auth/plugins/sso',
+        pluginName: 'sso',
+      }),
+    ).toEqual({
+      attemptedImports: betterAuthSsoPluginMetadataImportPaths,
+      diagnosticCode: 'FW406',
+      manualBridgeSteps: [
+        'Install a Better Auth sso plugin package/export and inspect getAuthTables(auth.options) with that plugin enabled.',
+        'If the plugin exposes app-visible tables, add schema.ts jiso({ domain, key }) annotations and declared Better Auth API touches before relying on runtime coverage.',
+        'If the plugin exposes only protocol/bookkeeping tables, add jiso({ exempt: true }) annotations with a SPEC.md §10.1 rationale and pin the metadata in conformance.',
+      ],
+      message:
+        'better-auth/plugins/sso metadata is not available from the pinned Better Auth dependency set; sso writes remain FW406 until real table metadata is pinned.',
+      packageName: 'better-auth/plugins/sso',
+      pluginName: 'sso',
+      reason: 'plugin-metadata-unavailable',
+      schemaBridge: null,
+      tableMetadata: null,
+    });
+    expect(
+      betterAuthUnavailablePluginMetadataDegradation({
+        attemptedImports: betterAuthPasskeyPluginMetadataImportPaths,
+        packageName: 'better-auth/plugins/passkey',
+        pluginName: 'passkey',
+      }).schemaBridge,
+    ).toBe(null);
   });
 
   it('reports bridged domain keys that drift from Better Auth table metadata', () => {

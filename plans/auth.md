@@ -440,6 +440,20 @@ tables)` now emits both logical and physical table facts for runtime SQL verific
       `pnpm exec tsc -p conformance/better-auth-pin/tsconfig.json --noEmit`,
       `pnpm exec vp check packages/better-auth/src/index.ts packages/better-auth/src/index.test.ts conformance/better-auth-pin/src/index.test.ts plans/auth.md IMPLEMENT_v1.md`,
       and `git diff --check`.
+      Partial evidence 2026-06-12: unavailable plugin metadata now has a reusable FW406
+      degradation path instead of being handled only by the deprecated OIDC-provider successor
+      case. `packages/better-auth/src/index.ts` exports
+      `betterAuthUnavailablePluginMetadataDegradation()` plus pinned SSO/passkey import paths,
+      preserving `tableMetadata: null` and `schemaBridge: null` until real
+      `getAuthTables(auth.options)` output exists. `packages/better-auth/src/index.test.ts`
+      covers the structured degradation payload, and
+      `conformance/better-auth-pin/src/index.test.ts` proves the attempted SSO/passkey package
+      and subpath imports are unavailable in the real `better-auth@1.6.17` dependency set.
+      Same-session evidence:
+      `pnpm exec vitest --run packages/better-auth/src/index.test.ts conformance/better-auth-pin/src/index.test.ts --reporter=dot`,
+      `pnpm exec tsc -p conformance/better-auth-pin/tsconfig.json --noEmit`,
+      `pnpm exec vp check packages/better-auth/src/index.ts packages/better-auth/src/index.test.ts conformance/better-auth-pin/src/index.test.ts plans/auth.md IMPLEMENT_v1.md`,
+      and `git diff --check`.
       Remaining gaps: plugin-generated tables outside the blessed organization/admin/two-factor/OIDC-provider/MCP/SIWE/JWT/device-authorization
       surface are still not mapped, the OAuth-provider successor package/table metadata is not
       installed or exportable from the pinned dependency set, and full app `schema.ts` generation

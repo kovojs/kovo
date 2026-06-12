@@ -58,11 +58,14 @@ import {
   createBetterAuthDbVerificationConfig,
   betterAuthOAuthProviderSuccessorImportPaths,
   betterAuthOAuthProviderSuccessorMetadataDegradation,
+  betterAuthPasskeyPluginMetadataImportPaths,
   betterAuthSchemaBridge,
   betterAuthSession,
   betterAuthSignInEmailMutation,
   betterAuthSignOutMutation,
   betterAuthSignUpEmailMutation,
+  betterAuthSsoPluginMetadataImportPaths,
+  betterAuthUnavailablePluginMetadataDegradation,
   mount,
   role,
   validateBetterAuthSchemaBridge,
@@ -1125,6 +1128,67 @@ describe('Better Auth pinned conformance', () => {
       schemaBridge: null,
       tableMetadata: null,
     });
+  });
+
+  it('pins SSO and passkey metadata absence as FW406 bridge degradations', async () => {
+    const dynamicImport = (specifier: string): Promise<unknown> => import(specifier);
+    const unavailablePluginCases = [
+      {
+        expectedMessages: [
+          '"./plugins/sso" is not exported',
+          '"./sso" is not exported',
+          "Cannot find package '@better-auth/sso'",
+        ],
+        imports: betterAuthSsoPluginMetadataImportPaths,
+        packageName: 'better-auth/plugins/sso',
+        pluginName: 'sso',
+      },
+      {
+        expectedMessages: [
+          '"./plugins/passkey" is not exported',
+          '"./passkey" is not exported',
+          "Cannot find package '@better-auth/passkey'",
+        ],
+        imports: betterAuthPasskeyPluginMetadataImportPaths,
+        packageName: 'better-auth/plugins/passkey',
+        pluginName: 'passkey',
+      },
+    ] as const;
+
+    for (const pluginCase of unavailablePluginCases) {
+      const importResults = await Promise.allSettled(pluginCase.imports.map(dynamicImport));
+
+      expect(
+        importResults.map((result) => result.status),
+        pluginCase.pluginName,
+      ).toEqual(['rejected', 'rejected', 'rejected']);
+      expect(
+        importResults.map((result) => importResultMessage(result)),
+        pluginCase.pluginName,
+      ).toEqual(pluginCase.expectedMessages.map((message) => expect.stringContaining(message)));
+      expect(
+        betterAuthUnavailablePluginMetadataDegradation({
+          attemptedImports: pluginCase.imports,
+          packageName: pluginCase.packageName,
+          pluginName: pluginCase.pluginName,
+        }),
+        pluginCase.pluginName,
+      ).toEqual({
+        attemptedImports: pluginCase.imports,
+        diagnosticCode: 'FW406',
+        manualBridgeSteps: [
+          `Install a Better Auth ${pluginCase.pluginName} plugin package/export and inspect getAuthTables(auth.options) with that plugin enabled.`,
+          'If the plugin exposes app-visible tables, add schema.ts jiso({ domain, key }) annotations and declared Better Auth API touches before relying on runtime coverage.',
+          'If the plugin exposes only protocol/bookkeeping tables, add jiso({ exempt: true }) annotations with a SPEC.md §10.1 rationale and pin the metadata in conformance.',
+        ],
+        message: `${pluginCase.packageName} metadata is not available from the pinned Better Auth dependency set; ${pluginCase.pluginName} writes remain FW406 until real table metadata is pinned.`,
+        packageName: pluginCase.packageName,
+        pluginName: pluginCase.pluginName,
+        reason: 'plugin-metadata-unavailable',
+        schemaBridge: null,
+        tableMetadata: null,
+      });
+    }
   });
 
   it('pins JWT plugin signing-key metadata as an exempt schema bridge table', () => {

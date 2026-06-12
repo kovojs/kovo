@@ -287,6 +287,18 @@ export interface BetterAuthOAuthProviderSuccessorMetadataDegradation {
   tableMetadata: null;
 }
 
+export interface BetterAuthUnavailablePluginMetadataDegradation {
+  attemptedImports: readonly string[];
+  diagnosticCode: 'FW406';
+  manualBridgeSteps: string[];
+  message: string;
+  packageName: string;
+  pluginName: string;
+  reason: 'plugin-metadata-unavailable';
+  schemaBridge: null;
+  tableMetadata: null;
+}
+
 export interface BetterAuthTouchGraphSite {
   branch?: string;
   domain: BetterAuthTouchDomain;
@@ -455,6 +467,18 @@ export const betterAuthOAuthProviderSuccessorImportPaths = [
   'better-auth/plugins/oauth-provider',
 ] as const;
 
+export const betterAuthSsoPluginMetadataImportPaths = [
+  'better-auth/plugins/sso',
+  'better-auth/sso',
+  '@better-auth/sso',
+] as const;
+
+export const betterAuthPasskeyPluginMetadataImportPaths = [
+  'better-auth/plugins/passkey',
+  'better-auth/passkey',
+  '@better-auth/passkey',
+] as const;
+
 // Better Auth 1.6.17 deprecates `oidcProvider()` in favor of the successor
 // package. SPEC.md §11.2 keeps successor-owned writes FW406 until its real
 // table metadata and declared touches are pinned.
@@ -474,6 +498,31 @@ export function betterAuthOAuthProviderSuccessorMetadataDegradation(
       '@better-auth/oauth-provider metadata is not available from the pinned Better Auth dependency set; successor OAuth-provider writes remain FW406 until a real metadata path is pinned.',
     packageName: '@better-auth/oauth-provider',
     reason: 'oauth-provider-successor-metadata-unavailable',
+    schemaBridge: null,
+    tableMetadata: null,
+  };
+}
+
+// SPEC.md §11.2: plugin writes whose real Better Auth metadata is unavailable
+// cannot be represented by inferred table mappings. Keep them as FW406 facts
+// until getAuthTables(auth.options) can be pinned for the installed package.
+export function betterAuthUnavailablePluginMetadataDegradation(options: {
+  attemptedImports: readonly string[];
+  packageName: string;
+  pluginName: string;
+}): BetterAuthUnavailablePluginMetadataDegradation {
+  return {
+    attemptedImports: options.attemptedImports,
+    diagnosticCode: 'FW406',
+    manualBridgeSteps: [
+      `Install a Better Auth ${options.pluginName} plugin package/export and inspect getAuthTables(auth.options) with that plugin enabled.`,
+      'If the plugin exposes app-visible tables, add schema.ts jiso({ domain, key }) annotations and declared Better Auth API touches before relying on runtime coverage.',
+      'If the plugin exposes only protocol/bookkeeping tables, add jiso({ exempt: true }) annotations with a SPEC.md §10.1 rationale and pin the metadata in conformance.',
+    ],
+    message: `${options.packageName} metadata is not available from the pinned Better Auth dependency set; ${options.pluginName} writes remain FW406 until real table metadata is pinned.`,
+    packageName: options.packageName,
+    pluginName: options.pluginName,
+    reason: 'plugin-metadata-unavailable',
     schemaBridge: null,
     tableMetadata: null,
   };
