@@ -1,5 +1,6 @@
 export {
   applyDeferredStreamResponseToDom,
+  applyDeferredStreamResponseToRuntime,
   applyMutationResponse,
   applyMutationResponseToRuntime,
   applyMutationResponseToDom,
@@ -7,10 +8,15 @@ export {
 } from './apply-path.js';
 export type {
   AppliedDeferredStreamResponse,
+  AppliedDeferredStreamResponseToDom,
+  AppliedDeferredStreamResponseToRuntime,
+  AppliedDeferredStreamResponseToRuntimeStore,
   AppliedMutationResponse,
   AppliedMutationResponseToDom,
   AppliedMutationResponseToRuntime,
   ApplyDeferredStreamResponseToDomOptions,
+  ApplyDeferredStreamResponseToRuntimeOptions,
+  ApplyDeferredStreamResponseToRuntimeStoreOptions,
   ApplyMutationResponseToDomOptions,
   ApplyMutationResponseToRuntimeOptions,
   ApplyMutationResponseToRuntimeStoreOptions,

@@ -2401,6 +2401,19 @@ params, relational API, `execute(sql)`, right/full joins, a string column named 
       `pnpm --filter @jiso/runtime run check:inline-loader`,
       `pnpm exec vp check packages/runtime/src/apply-path.ts packages/runtime/src/apply.ts packages/runtime/src/mutation-response.test.ts plans/codebase-quality-round2.md`,
       and `git diff --check`.
+      Additional bounded evidence 2026-06-12: `packages/runtime/src/apply-path.ts` now exposes
+      `applyDeferredStreamResponseToRuntime` overloads that reuse the same mutation response
+      runtime applicator for rootless store forwarding and DOM-root stream application, while the
+      existing `applyDeferredStreamResponseToDom` API delegates through that shared runtime path.
+      `packages/runtime/src/apply.ts` re-exports the runtime deferred-stream helper and option/result
+      types. `packages/runtime/src/mutation-response.test.ts` pins the public barrel export and
+      verifies rootless deferred streams keep `applyQuery`/`beforeApplyQueries` hooks, aggregate
+      keyed/unkeyed chunks, and skip DOM morphing when no root is present under SPEC.md §9.1.
+      Same-session evidence:
+      `corepack pnpm exec vitest --run packages/runtime/src/mutation-response.test.ts`,
+      `corepack pnpm --filter @jiso/runtime run check:inline-loader`,
+      `corepack pnpm exec vp check packages/runtime/src/apply-path.ts packages/runtime/src/apply.ts packages/runtime/src/mutation-response.test.ts plans/codebase-quality-round2.md`,
+      and `git diff --check`.
 - [x] **HIGH — Ship the DOM morph.** The only real keyed DOM morph (focus/selection/scroll
       capture-restore) lives in index.browser.test.ts:12-182; every consumer must rewrite it, and
       the flagship browser test substantially tests its own test code. Promote to a

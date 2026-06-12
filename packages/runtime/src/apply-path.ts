@@ -26,11 +26,6 @@ export interface AppliedMutationResponse {
   queries: string[];
 }
 
-export interface AppliedDeferredStreamResponse extends AppliedMutationResponse {
-  appliedFragments: string[];
-  chunks: AppliedMutationResponseToDom[];
-}
-
 export type ApplyQueryInterposition = QueryApplyInterposition;
 
 export interface ApplyMutationResponseToStoreOptions {
@@ -175,25 +170,57 @@ export function applyMutationResponseToDom(
   return applyMutationResponseBody(options);
 }
 
-export interface ApplyDeferredStreamResponseToDomOptions {
-  applyQuery?: ApplyQueryInterposition;
-  beforeApplyQueries?: (queries: readonly QueryChunk[]) => void;
+export type AppliedDeferredStreamResponseToDom = AppliedMutationResponseToDom & {
+  chunks: AppliedMutationResponseToDom[];
+};
+
+export type AppliedDeferredStreamResponseToRuntimeStore = AppliedMutationResponse & {
+  chunks: AppliedMutationResponse[];
+};
+
+export type AppliedDeferredStreamResponseToRuntime =
+  | AppliedDeferredStreamResponseToRuntimeStore
+  | AppliedDeferredStreamResponseToDom;
+
+export type AppliedDeferredStreamResponse = AppliedDeferredStreamResponseToDom;
+
+interface ApplyDeferredStreamResponseToRuntimeBaseOptions extends Omit<
+  ApplyMutationResponseToRuntimeOptions,
+  'body'
+> {
   body: string;
   boundary?: string;
-  islandSignalScope?: IslandSignalScope;
-  morph?: MorphFragment;
-  onError?: (error: unknown) => void;
-  queryPlans?: CompiledQueryUpdatePlans;
-  root: MorphRoot;
-  store: QueryStore;
 }
 
-export function applyDeferredStreamResponseToDom(
-  options: ApplyDeferredStreamResponseToDomOptions,
-): AppliedDeferredStreamResponse {
+export type ApplyDeferredStreamResponseToRuntimeStoreOptions =
+  ApplyDeferredStreamResponseToRuntimeBaseOptions & {
+    root?: undefined;
+  };
+
+export type ApplyDeferredStreamResponseToRuntimeOptions =
+  ApplyDeferredStreamResponseToRuntimeBaseOptions & {
+    root?: MorphRoot | undefined;
+  };
+
+export interface ApplyDeferredStreamResponseToDomOptions extends ApplyDeferredStreamResponseToRuntimeBaseOptions {
+  root: MorphRoot;
+}
+
+export function applyDeferredStreamResponseToRuntime(
+  options: ApplyDeferredStreamResponseToRuntimeOptions & { root: MorphRoot },
+): AppliedDeferredStreamResponseToDom;
+export function applyDeferredStreamResponseToRuntime(
+  options: ApplyDeferredStreamResponseToRuntimeOptions & { root?: undefined },
+): AppliedDeferredStreamResponseToRuntimeStore;
+export function applyDeferredStreamResponseToRuntime(
+  options: ApplyDeferredStreamResponseToRuntimeOptions,
+): AppliedDeferredStreamResponseToRuntime;
+export function applyDeferredStreamResponseToRuntime(
+  options: ApplyDeferredStreamResponseToRuntimeOptions,
+): AppliedDeferredStreamResponseToRuntime {
   const chunks = deferredStreamChunks(options.body, options.boundary ?? 'jiso-boundary').map(
     (body) =>
-      applyMutationResponseToDom({
+      applyMutationResponseToRuntime({
         body,
         ...definedProps({
           applyQuery: options.applyQuery,
@@ -203,17 +230,30 @@ export function applyDeferredStreamResponseToDom(
           onError: options.onError,
           queryPlans: options.queryPlans,
         }),
-        root: options.root,
+        ...definedProps({ root: options.root }),
         store: options.store,
       }),
   );
 
-  return {
-    appliedFragments: chunks.flatMap((chunk) => chunk.appliedFragments),
+  const applied = {
     chunks,
     fragments: chunks.flatMap((chunk) => chunk.fragments),
     queries: chunks.flatMap((chunk) => chunk.queries),
   };
+  if (!options.root) return applied;
+
+  return {
+    ...applied,
+    appliedFragments: chunks.flatMap((chunk) =>
+      'appliedFragments' in chunk ? chunk.appliedFragments : [],
+    ),
+  };
+}
+
+export function applyDeferredStreamResponseToDom(
+  options: ApplyDeferredStreamResponseToDomOptions,
+): AppliedDeferredStreamResponseToDom {
+  return applyDeferredStreamResponseToRuntime(options);
 }
 
 function applyCompiledQueryUpdatePlanIfSupported(

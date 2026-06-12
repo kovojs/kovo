@@ -2,12 +2,14 @@ import { describe, expect, it, vi } from 'vitest';
 
 import {
   applyDeferredStreamResponseToDom,
+  applyDeferredStreamResponseToRuntime,
   applyMutationResponse,
   applyMutationResponseToDom,
   createQueryStore,
 } from './index.js';
 import {
   applyDeferredStreamResponseToDom as applyDeferredStreamResponseToDomFromApplyPath,
+  applyDeferredStreamResponseToRuntime as applyDeferredStreamResponseToRuntimeFromApplyPath,
   applyMutationResponse as applyMutationResponseFromApplyPath,
   applyMutationResponseToRuntime,
   applyMutationResponseToDom as applyMutationResponseToDomFromApplyPath,
@@ -145,6 +147,9 @@ describe('mutation response wire chunks', () => {
 
   it('exports deferred stream response apply through the shared apply path', () => {
     expect(applyDeferredStreamResponseToDom).toBe(applyDeferredStreamResponseToDomFromApplyPath);
+    expect(applyDeferredStreamResponseToRuntime).toBe(
+      applyDeferredStreamResponseToRuntimeFromApplyPath,
+    );
 
     const store = createQueryStore();
     const root = new FakeMorphRoot();
@@ -218,6 +223,60 @@ describe('mutation response wire chunks', () => {
     expect(observed).toEqual(['11', '12']);
     expect(store.get('cart')).toEqual({ count: 11 });
     expect(store.get('cart', 'cart:primary')).toEqual({ count: 12 });
+    expect(beforeApplyQueries).toHaveBeenNthCalledWith(1, [{ name: 'cart', value: { count: 1 } }]);
+    expect(beforeApplyQueries).toHaveBeenNthCalledWith(2, [
+      { key: 'cart:primary', name: 'cart', value: { count: 2 } },
+    ]);
+  });
+
+  it('keeps rootless deferred streams on the hook-aware runtime apply path', () => {
+    const store = createQueryStore();
+    const beforeApplyQueries = vi.fn();
+    const morph = vi.fn();
+
+    // SPEC.md §9.1: deferred stream chunks reuse mutation response wire
+    // vocabulary, so rootless stream forwarding still applies query truth.
+    const applied = applyDeferredStreamResponseToRuntime({
+      applyQuery(query) {
+        store.set(query.name, { count: (query.value as { count: number }).count + 5 }, query.key);
+        return { value: store.get(query.name, query.key) };
+      },
+      beforeApplyQueries,
+      body: [
+        '--jiso-boundary',
+        '<fw-query name="cart">{"count":1}</fw-query>',
+        '<fw-fragment target="cart-badge"><span>badge</span></fw-fragment>',
+        '--jiso-boundary',
+        '<fw-query name="cart" key="cart:primary">{"count":2}</fw-query>',
+        '<fw-fragment target="cart-total"><span>total</span></fw-fragment>',
+        '--jiso-boundary--',
+      ].join('\n'),
+      morph,
+      root: undefined,
+      store,
+    });
+
+    expect(applied).toEqual({
+      chunks: [
+        {
+          fragments: [{ html: '<span>badge</span>', target: 'cart-badge' }],
+          queries: ['cart'],
+        },
+        {
+          fragments: [{ html: '<span>total</span>', target: 'cart-total' }],
+          queries: ['cart:primary'],
+        },
+      ],
+      fragments: [
+        { html: '<span>badge</span>', target: 'cart-badge' },
+        { html: '<span>total</span>', target: 'cart-total' },
+      ],
+      queries: ['cart', 'cart:primary'],
+    });
+    expect('appliedFragments' in applied).toBe(false);
+    expect(store.get('cart')).toEqual({ count: 6 });
+    expect(store.get('cart', 'cart:primary')).toEqual({ count: 7 });
+    expect(morph).not.toHaveBeenCalled();
     expect(beforeApplyQueries).toHaveBeenNthCalledWith(1, [{ name: 'cart', value: { count: 1 } }]);
     expect(beforeApplyQueries).toHaveBeenNthCalledWith(2, [
       { key: 'cart:primary', name: 'cart', value: { count: 2 } },
