@@ -1748,6 +1748,15 @@ params, relational API, `execute(sql)`, right/full joins, a string column named 
       `corepack pnpm exec vitest --run packages/runtime/src/mutation-response.test.ts packages/runtime/src/index.test.ts -t "deferred|apply"`,
       `corepack pnpm exec vp check packages/runtime/src/index.ts packages/runtime/src/apply-path.ts packages/runtime/src/mutation-response.test.ts plans/codebase-quality-round2.md`,
       and `git diff --check`.
+      Additional bounded evidence 2026-06-12: `packages/runtime/src/loader.ts` now owns
+      `installJisoLoader`, loader options, default delegated events, query visible-return wiring,
+      enhanced mutation broadcast setup, execution triggers, and disposal while
+      `packages/runtime/src/index.ts` preserves only the public loader re-export. `loader.test.ts`
+      pins the barrel export to the extracted owner and verifies delegated event dispatch plus
+      listener disposal under SPEC.md section 4.4. Same-session evidence:
+      `corepack pnpm exec vitest --run packages/runtime/src/loader.test.ts packages/runtime/src/index.test.ts`,
+      `corepack pnpm exec vp check packages/runtime/src/index.ts packages/runtime/src/loader.ts packages/runtime/src/loader.test.ts plans/codebase-quality-round2.md`,
+      and `git diff --check`.
 - [x] **MED — Fix ambient-scope argument override in handlers.ts.**
       `abortRemovedIslandSignals(currentHtml, nextHtml, scope)` ignores its explicit `scope`
       whenever the module-level `activeIslandSignalScope` is set
