@@ -3,11 +3,17 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { userEvent } from 'vitest/browser';
 
 // @ts-expect-error generated client modules are compiler artifacts without declarations.
+import * as accordionClient from './generated/interactive/accordion-demo.client.js';
+import { GalleryAccordionDemo } from './generated/interactive/accordion-demo.js';
+// @ts-expect-error generated client modules are compiler artifacts without declarations.
 import * as alertDialogClient from './generated/interactive/alert-dialog-demo.client.js';
 import { GalleryAlertDialogDemo } from './generated/interactive/alert-dialog-demo.js';
 // @ts-expect-error generated client modules are compiler artifacts without declarations.
 import * as checkboxClient from './generated/interactive/checkbox-demo.client.js';
 import { GalleryCheckboxDemo } from './generated/interactive/checkbox-demo.js';
+// @ts-expect-error generated client modules are compiler artifacts without declarations.
+import * as checkboxGroupClient from './generated/interactive/checkbox-group-demo.client.js';
+import { GalleryCheckboxGroupDemo } from './generated/interactive/checkbox-group-demo.js';
 // @ts-expect-error generated client modules are compiler artifacts without declarations.
 import * as collapsibleClient from './generated/interactive/collapsible-demo.client.js';
 import { GalleryCollapsibleDemo } from './generated/interactive/collapsible-demo.js';
@@ -24,6 +30,12 @@ import { GalleryNumberFieldDemo } from './generated/interactive/number-field-dem
 import * as popoverClient from './generated/interactive/popover-demo.client.js';
 import { GalleryPopoverDemo } from './generated/interactive/popover-demo.js';
 // @ts-expect-error generated client modules are compiler artifacts without declarations.
+import * as radioGroupClient from './generated/interactive/radio-group-demo.client.js';
+import { GalleryRadioGroupDemo } from './generated/interactive/radio-group-demo.js';
+// @ts-expect-error generated client modules are compiler artifacts without declarations.
+import * as sliderClient from './generated/interactive/slider-demo.client.js';
+import { GallerySliderDemo } from './generated/interactive/slider-demo.js';
+// @ts-expect-error generated client modules are compiler artifacts without declarations.
 import * as switchClient from './generated/interactive/switch-demo.client.js';
 import { GallerySwitchDemo } from './generated/interactive/switch-demo.js';
 // @ts-expect-error generated client modules are compiler artifacts without declarations.
@@ -32,6 +44,9 @@ import { GalleryTabsDemo } from './generated/interactive/tabs-demo.js';
 // @ts-expect-error generated client modules are compiler artifacts without declarations.
 import * as toggleClient from './generated/interactive/toggle-demo.client.js';
 import { GalleryToggleDemo } from './generated/interactive/toggle-demo.js';
+// @ts-expect-error generated client modules are compiler artifacts without declarations.
+import * as toggleGroupClient from './generated/interactive/toggle-group-demo.client.js';
+import { GalleryToggleGroupDemo } from './generated/interactive/toggle-group-demo.js';
 // @ts-expect-error generated client modules are compiler artifacts without declarations.
 import * as tooltipClient from './generated/interactive/tooltip-demo.client.js';
 import { GalleryTooltipDemo } from './generated/interactive/tooltip-demo.js';
@@ -44,16 +59,22 @@ interface InteractiveDemoComponent {
 }
 
 const generatedModules: Record<string, Record<string, unknown>> = {
+  '/c/examples/gallery/src/generated/interactive/accordion-demo.client.js': accordionClient,
   '/c/examples/gallery/src/generated/interactive/alert-dialog-demo.client.js': alertDialogClient,
   '/c/examples/gallery/src/generated/interactive/checkbox-demo.client.js': checkboxClient,
+  '/c/examples/gallery/src/generated/interactive/checkbox-group-demo.client.js':
+    checkboxGroupClient,
   '/c/examples/gallery/src/generated/interactive/collapsible-demo.client.js': collapsibleClient,
   '/c/examples/gallery/src/generated/interactive/disclosure-demo.client.js': disclosureClient,
   '/c/examples/gallery/src/generated/interactive/dialog-demo.client.js': dialogClient,
   '/c/examples/gallery/src/generated/interactive/number-field-demo.client.js': numberFieldClient,
   '/c/examples/gallery/src/generated/interactive/popover-demo.client.js': popoverClient,
+  '/c/examples/gallery/src/generated/interactive/radio-group-demo.client.js': radioGroupClient,
+  '/c/examples/gallery/src/generated/interactive/slider-demo.client.js': sliderClient,
   '/c/examples/gallery/src/generated/interactive/switch-demo.client.js': switchClient,
   '/c/examples/gallery/src/generated/interactive/tabs-demo.client.js': tabsClient,
   '/c/examples/gallery/src/generated/interactive/toggle-demo.client.js': toggleClient,
+  '/c/examples/gallery/src/generated/interactive/toggle-group-demo.client.js': toggleGroupClient,
   '/c/examples/gallery/src/generated/interactive/tooltip-demo.client.js': tooltipClient,
 };
 
@@ -62,6 +83,63 @@ afterEach(() => {
 });
 
 describe('compiled interactive gallery demos in the browser', () => {
+  it('updates accordion ARIA and panel visibility through generated handlers', async () => {
+    const root = mountInteractiveDemo(GalleryAccordionDemo);
+    const shipping = required(
+      root.querySelector<HTMLButtonElement>('#gallery-accordion-shipping-trigger'),
+    );
+    const billing = required(
+      root.querySelector<HTMLButtonElement>('#gallery-accordion-billing-trigger'),
+    );
+    const shippingPanel = required(
+      root.querySelector<HTMLElement>('#gallery-accordion-shipping-content'),
+    );
+    const billingPanel = required(
+      root.querySelector<HTMLElement>('#gallery-accordion-billing-content'),
+    );
+    const output = required(
+      root.querySelector<HTMLOutputElement>('[data-demo-state="accordion-value"]'),
+    );
+    const { imports } = installGeneratedGalleryLoader(root);
+
+    expect(root.getAttribute('fw-state')).toBe('{"value":"shipping"}');
+    expect(shipping.getAttribute('aria-expanded')).toBe('true');
+    expect(shippingPanel.hidden).toBe(false);
+    expect(billing.getAttribute('aria-expanded')).toBe('false');
+    expect(billingPanel.hidden).toBe(true);
+    expect(output.textContent).toBe('shipping');
+
+    billing.click();
+
+    await vi.waitFor(() => {
+      const currentShipping = required(
+        root.querySelector<HTMLButtonElement>('#gallery-accordion-shipping-trigger'),
+      );
+      const currentBilling = required(
+        root.querySelector<HTMLButtonElement>('#gallery-accordion-billing-trigger'),
+      );
+      const currentShippingPanel = required(
+        root.querySelector<HTMLElement>('#gallery-accordion-shipping-content'),
+      );
+      const currentBillingPanel = required(
+        root.querySelector<HTMLElement>('#gallery-accordion-billing-content'),
+      );
+      const currentOutput = required(
+        root.querySelector<HTMLOutputElement>('[data-demo-state="accordion-value"]'),
+      );
+
+      expect(imports).toEqual([
+        '/c/examples/gallery/src/generated/interactive/accordion-demo.client.js',
+      ]);
+      expect(root.getAttribute('fw-state')).toBe('{"value":"billing"}');
+      expect(currentShipping.getAttribute('aria-expanded')).toBe('false');
+      expect(currentShippingPanel.hidden).toBe(true);
+      expect(currentBilling.getAttribute('aria-expanded')).toBe('true');
+      expect(currentBillingPanel.hidden).toBe(false);
+      expect(currentOutput.textContent).toBe('billing');
+    });
+  });
+
   it('opens and resolves a native alert dialog through generated handlers', async () => {
     const root = mountInteractiveDemo(GalleryAlertDialogDemo);
     const trigger = required(root.querySelector<HTMLButtonElement>('button[command="show-modal"]'));
@@ -177,6 +255,65 @@ describe('compiled interactive gallery demos in the browser', () => {
     await vi.waitFor(() => {
       expect(root.getAttribute('fw-state')).toBe('{"checked":false}');
       expect(input.checked).toBe(false);
+    });
+  });
+
+  it('updates checkbox-group ARIA, roving tabindex, and native checked state', async () => {
+    const root = mountInteractiveDemo(GalleryCheckboxGroupDemo);
+    const updates = required(
+      root.querySelector<HTMLInputElement>('#gallery-checkbox-group-updates'),
+    );
+    const billing = required(
+      root.querySelector<HTMLInputElement>('#gallery-checkbox-group-billing'),
+    );
+    installGeneratedGalleryLoader(root, { events: ['click', 'input', 'change', 'keydown'] });
+
+    expect(root.getAttribute('role')).toBe('group');
+    expect(root.getAttribute('aria-labelledby')).toBe('gallery-checkbox-group-label');
+    expect(root.getAttribute('fw-state')).toBe('{"activeValue":"updates","value":"updates"}');
+    expect(updates.name).toBe('gallery-notifications');
+    expect(updates.checked).toBe(true);
+    expect(updates.getAttribute('aria-checked')).toBe('true');
+    expect(updates.tabIndex).toBe(0);
+    expect(billing.checked).toBe(false);
+    expect(billing.getAttribute('aria-checked')).toBe('false');
+    expect(billing.tabIndex).toBe(-1);
+
+    root.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, key: 'ArrowRight' }));
+
+    await vi.waitFor(() => {
+      const currentUpdates = required(
+        root.querySelector<HTMLInputElement>('#gallery-checkbox-group-updates'),
+      );
+      const currentBilling = required(
+        root.querySelector<HTMLInputElement>('#gallery-checkbox-group-billing'),
+      );
+
+      expect(root.getAttribute('fw-state')).toBe('{"activeValue":"billing","value":"updates"}');
+      expect(currentUpdates.tabIndex).toBe(-1);
+      expect(currentBilling.tabIndex).toBe(0);
+    });
+
+    required(root.querySelector<HTMLInputElement>('#gallery-checkbox-group-billing')).click();
+
+    await vi.waitFor(() => {
+      const currentUpdates = required(
+        root.querySelector<HTMLInputElement>('#gallery-checkbox-group-updates'),
+      );
+      const currentBilling = required(
+        root.querySelector<HTMLInputElement>('#gallery-checkbox-group-billing'),
+      );
+      const currentOutput = required(
+        root.querySelector<HTMLOutputElement>('[data-demo-state="checkbox-group-value"]'),
+      );
+
+      expect(root.getAttribute('fw-state')).toBe(
+        '{"activeValue":"billing","value":"updates,billing"}',
+      );
+      expect(currentUpdates.checked).toBe(true);
+      expect(currentBilling.checked).toBe(true);
+      expect(currentBilling.getAttribute('aria-checked')).toBe('true');
+      expect(currentOutput.textContent).toBe('updates,billing');
     });
   });
 
@@ -351,6 +488,92 @@ describe('compiled interactive gallery demos in the browser', () => {
     });
   });
 
+  it('updates radio-group selection from keyboard and native radio clicks', async () => {
+    const root = mountInteractiveDemo(GalleryRadioGroupDemo);
+    const email = required(root.querySelector<HTMLInputElement>('#gallery-radio-email'));
+    const sms = required(root.querySelector<HTMLInputElement>('#gallery-radio-sms'));
+    const { imports } = installGeneratedGalleryLoader(root, {
+      events: ['click', 'input', 'change', 'keydown'],
+    });
+
+    expect(root.getAttribute('role')).toBe('radiogroup');
+    expect(root.getAttribute('aria-required')).toBe('true');
+    expect(root.getAttribute('fw-state')).toBe('{"value":"email"}');
+    expect(email.name).toBe('gallery-contact-channel');
+    expect(email.required).toBe(true);
+    expect(email.checked).toBe(true);
+    expect(email.tabIndex).toBe(0);
+    expect(sms.checked).toBe(false);
+    expect(sms.tabIndex).toBe(-1);
+
+    root.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, key: 'ArrowRight' }));
+
+    await vi.waitFor(() => {
+      const currentEmail = required(root.querySelector<HTMLInputElement>('#gallery-radio-email'));
+      const currentSms = required(root.querySelector<HTMLInputElement>('#gallery-radio-sms'));
+      const currentOutput = required(
+        root.querySelector<HTMLOutputElement>('[data-demo-state="radio-value"]'),
+      );
+
+      expect(imports.at(-1)).toBe(
+        '/c/examples/gallery/src/generated/interactive/radio-group-demo.client.js',
+      );
+      expect(root.getAttribute('fw-state')).toBe('{"value":"sms"}');
+      expect(currentEmail.checked).toBe(false);
+      expect(currentEmail.tabIndex).toBe(-1);
+      expect(currentSms.checked).toBe(true);
+      expect(currentSms.tabIndex).toBe(0);
+      expect(currentOutput.textContent).toBe('sms');
+    });
+
+    required(root.querySelector<HTMLInputElement>('#gallery-radio-email')).click();
+
+    await vi.waitFor(() => {
+      const currentEmail = required(root.querySelector<HTMLInputElement>('#gallery-radio-email'));
+      const currentSms = required(root.querySelector<HTMLInputElement>('#gallery-radio-sms'));
+
+      expect(root.getAttribute('fw-state')).toBe('{"value":"email"}');
+      expect(currentEmail.checked).toBe(true);
+      expect(currentSms.checked).toBe(false);
+    });
+  });
+
+  it('updates slider stamped state while the native range input moves', async () => {
+    const root = mountInteractiveDemo(GallerySliderDemo);
+    const input = required(root.querySelector<HTMLInputElement>('#gallery-slider-input'));
+    const range = required(root.querySelector<HTMLElement>('[data-part="range"]'));
+    const output = required(
+      root.querySelector<HTMLOutputElement>('[data-demo-state="slider-value"]'),
+    );
+    installGeneratedGalleryLoader(root);
+
+    expect(root.getAttribute('fw-state')).toBe('{"value":25}');
+    expect(root.getAttribute('data-value')).toBe('25');
+    expect(input.type).toBe('range');
+    expect(input.name).toBe('gallery-completion');
+    expect(input.value).toBe('25');
+    expect(input.getAttribute('aria-valuetext')).toBe('25 percent');
+    expect(range.getAttribute('data-value-ratio')).toBe('0.25');
+    expect(output.textContent).toBe('25');
+
+    input.value = '75';
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+
+    await vi.waitFor(() => {
+      const currentInput = required(root.querySelector<HTMLInputElement>('#gallery-slider-input'));
+      const currentRange = required(root.querySelector<HTMLElement>('[data-part="range"]'));
+      const currentOutput = required(
+        root.querySelector<HTMLOutputElement>('[data-demo-state="slider-value"]'),
+      );
+
+      expect(root.getAttribute('fw-state')).toBe('{"value":75}');
+      expect(currentInput.value).toBe('75');
+      expect(currentInput.getAttribute('aria-valuetext')).toBe('75 percent');
+      expect(currentRange.getAttribute('data-value-ratio')).toBe('0.75');
+      expect(currentOutput.textContent).toBe('75');
+    });
+  });
+
   it('updates tabs stamped state from generated click handlers', async () => {
     const root = mountInteractiveDemo(GalleryTabsDemo);
     const overview = required(
@@ -378,6 +601,54 @@ describe('compiled interactive gallery demos in the browser', () => {
         '/c/examples/gallery/src/generated/interactive/tabs-demo.client.js',
       ]);
       expect(root.getAttribute('fw-state')).toBe('{"value":"details"}');
+    });
+  });
+
+  it('updates toggle-group pressed state and roving tabindex through generated handlers', async () => {
+    const root = mountInteractiveDemo(GalleryToggleGroupDemo);
+    const bold = required(root.querySelector<HTMLButtonElement>('#gallery-toggle-group-bold'));
+    const italic = required(root.querySelector<HTMLButtonElement>('#gallery-toggle-group-italic'));
+    installGeneratedGalleryLoader(root, { events: ['click', 'input', 'change', 'keydown'] });
+
+    expect(root.getAttribute('role')).toBe('group');
+    expect(root.getAttribute('fw-state')).toBe('{"activeValue":"bold","value":"bold"}');
+    expect(bold.getAttribute('aria-pressed')).toBe('true');
+    expect(bold.tabIndex).toBe(0);
+    expect(italic.getAttribute('aria-pressed')).toBe('false');
+    expect(italic.tabIndex).toBe(-1);
+
+    root.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, key: 'ArrowRight' }));
+
+    await vi.waitFor(() => {
+      const currentBold = required(
+        root.querySelector<HTMLButtonElement>('#gallery-toggle-group-bold'),
+      );
+      const currentItalic = required(
+        root.querySelector<HTMLButtonElement>('#gallery-toggle-group-italic'),
+      );
+
+      expect(root.getAttribute('fw-state')).toBe('{"activeValue":"italic","value":"bold"}');
+      expect(currentBold.tabIndex).toBe(-1);
+      expect(currentItalic.tabIndex).toBe(0);
+    });
+
+    required(root.querySelector<HTMLButtonElement>('#gallery-toggle-group-italic')).click();
+
+    await vi.waitFor(() => {
+      const currentBold = required(
+        root.querySelector<HTMLButtonElement>('#gallery-toggle-group-bold'),
+      );
+      const currentItalic = required(
+        root.querySelector<HTMLButtonElement>('#gallery-toggle-group-italic'),
+      );
+      const currentOutput = required(
+        root.querySelector<HTMLOutputElement>('[data-demo-state="toggle-group-value"]'),
+      );
+
+      expect(root.getAttribute('fw-state')).toBe('{"activeValue":"italic","value":"bold,italic"}');
+      expect(currentBold.getAttribute('aria-pressed')).toBe('true');
+      expect(currentItalic.getAttribute('aria-pressed')).toBe('true');
+      expect(currentOutput.textContent).toBe('bold,italic');
     });
   });
 

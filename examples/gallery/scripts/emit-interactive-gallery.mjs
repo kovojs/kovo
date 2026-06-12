@@ -24,16 +24,21 @@ const repoRoot = resolve(galleryRoot, '../..');
 const checkOnly = process.argv.includes('--check');
 
 const demos = [
+  'accordion-demo',
   'alert-dialog-demo',
   'checkbox-demo',
+  'checkbox-group-demo',
   'collapsible-demo',
   'disclosure-demo',
   'dialog-demo',
   'number-field-demo',
   'popover-demo',
+  'radio-group-demo',
+  'slider-demo',
   'switch-demo',
   'tabs-demo',
   'toggle-demo',
+  'toggle-group-demo',
   'tooltip-demo',
 ];
 

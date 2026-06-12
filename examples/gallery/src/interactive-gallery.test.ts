@@ -23,17 +23,32 @@ describe('compiled interactive gallery demos', () => {
   }, 20_000);
 
   it('compiles stateful gallery demos into server TSX and client handler modules', () => {
+    const accordion = readGenerated('accordion-demo.tsx');
     const alertDialog = readGenerated('alert-dialog-demo.tsx');
     const toggle = readGenerated('toggle-demo.tsx');
     const checkbox = readGenerated('checkbox-demo.tsx');
+    const checkboxGroup = readGenerated('checkbox-group-demo.tsx');
     const collapsible = readGenerated('collapsible-demo.tsx');
     const disclosure = readGenerated('disclosure-demo.tsx');
     const dialog = readGenerated('dialog-demo.tsx');
     const numberField = readGenerated('number-field-demo.tsx');
     const popover = readGenerated('popover-demo.tsx');
+    const radioGroup = readGenerated('radio-group-demo.tsx');
+    const slider = readGenerated('slider-demo.tsx');
     const switchDemo = readGenerated('switch-demo.tsx');
     const tabs = readGenerated('tabs-demo.tsx');
     const tooltip = readGenerated('tooltip-demo.tsx');
+    const toggleGroup = readGenerated('toggle-group-demo.tsx');
+
+    expect(accordion).toContain('data-gallery-interactive="accordion"');
+    expect(accordion).toContain('fw-state=\'{"value":"shipping"}\'');
+    expect(accordion).toContain('accordionTriggerAttributes({');
+    expect(accordion).toMatch(
+      /on:click="\/c\/examples\/gallery\/src\/generated\/interactive\/accordion-demo\.client\.js\?v=[0-9a-f]{8}#GalleryAccordionDemo\$button_click"/,
+    );
+    expect(accordion).toMatch(
+      /on:click="\/c\/examples\/gallery\/src\/generated\/interactive\/accordion-demo\.client\.js\?v=[0-9a-f]{8}#GalleryAccordionDemo\$button_click_2"/,
+    );
 
     expect(alertDialog).toContain('data-gallery-interactive="alert-dialog"');
     expect(alertDialog).toContain('fw-state=\'{"open":false}\'');
@@ -60,6 +75,16 @@ describe('compiled interactive gallery demos', () => {
     expect(checkbox).toContain('fw-state=\'{"checked":"indeterminate"}\'');
     expect(checkbox).toMatch(
       /on:click="\/c\/examples\/gallery\/src\/generated\/interactive\/checkbox-demo\.client\.js\?v=[0-9a-f]{8}#GalleryCheckboxDemo\$input_click"/,
+    );
+
+    expect(checkboxGroup).toContain('data-gallery-interactive="checkbox-group"');
+    expect(checkboxGroup).toContain('fw-state=\'{"activeValue":"updates","value":"updates"}\'');
+    expect(checkboxGroup).toContain('checkboxGroupControlAttributes({');
+    expect(checkboxGroup).toMatch(
+      /on:keydown="\/c\/examples\/gallery\/src\/generated\/interactive\/checkbox-group-demo\.client\.js\?v=[0-9a-f]{8}#GalleryCheckboxGroupDemo\$section_keydown"/,
+    );
+    expect(checkboxGroup).toMatch(
+      /on:click="\/c\/examples\/gallery\/src\/generated\/interactive\/checkbox-group-demo\.client\.js\?v=[0-9a-f]{8}#GalleryCheckboxGroupDemo\$input_click_2"/,
     );
 
     expect(disclosure).toContain('data-gallery-interactive="disclosure"');
@@ -100,6 +125,23 @@ describe('compiled interactive gallery demos', () => {
       /on:click="\/c\/examples\/gallery\/src\/generated\/interactive\/popover-demo\.client\.js\?v=[0-9a-f]{8}#GalleryPopoverDemo\$button_click"/,
     );
 
+    expect(radioGroup).toContain('data-gallery-interactive="radio-group"');
+    expect(radioGroup).toContain('fw-state=\'{"value":"email"}\'');
+    expect(radioGroup).toContain('radioGroupRadioAttributes({');
+    expect(radioGroup).toMatch(
+      /on:keydown="\/c\/examples\/gallery\/src\/generated\/interactive\/radio-group-demo\.client\.js\?v=[0-9a-f]{8}#GalleryRadioGroupDemo\$section_keydown"/,
+    );
+    expect(radioGroup).toMatch(
+      /on:click="\/c\/examples\/gallery\/src\/generated\/interactive\/radio-group-demo\.client\.js\?v=[0-9a-f]{8}#GalleryRadioGroupDemo\$input_click_2"/,
+    );
+
+    expect(slider).toContain('data-gallery-interactive="slider"');
+    expect(slider).toContain('fw-state=\'{"value":25}\'');
+    expect(slider).toContain('sliderInputAttributes(sliderState)');
+    expect(slider).toMatch(
+      /on:input="\/c\/examples\/gallery\/src\/generated\/interactive\/slider-demo\.client\.js\?v=[0-9a-f]{8}#GallerySliderDemo\$input_input"/,
+    );
+
     expect(switchDemo).toContain('data-gallery-interactive="switch"');
     expect(switchDemo).toContain('fw-state=\'{"checked":false}\'');
     expect(switchDemo).toMatch(
@@ -127,21 +169,44 @@ describe('compiled interactive gallery demos', () => {
     expect(tooltip).toMatch(
       /on:keydown="\/c\/examples\/gallery\/src\/generated\/interactive\/tooltip-demo\.client\.js\?v=[0-9a-f]{8}#GalleryTooltipDemo\$button_keydown"/,
     );
+
+    expect(toggleGroup).toContain('data-gallery-interactive="toggle-group"');
+    expect(toggleGroup).toContain('fw-state=\'{"activeValue":"bold","value":"bold"}\'');
+    expect(toggleGroup).toContain('toggleGroupButtonAttributes({');
+    expect(toggleGroup).toMatch(
+      /on:keydown="\/c\/examples\/gallery\/src\/generated\/interactive\/toggle-group-demo\.client\.js\?v=[0-9a-f]{8}#GalleryToggleGroupDemo\$section_keydown"/,
+    );
+    expect(toggleGroup).toMatch(
+      /on:click="\/c\/examples\/gallery\/src\/generated\/interactive\/toggle-group-demo\.client\.js\?v=[0-9a-f]{8}#GalleryToggleGroupDemo\$button_click_2"/,
+    );
   });
 
   it('executes generated client behavior for the stateful demos', () => {
+    const accordion = evaluateClientModule('accordion-demo.client.js');
     const alertDialog = evaluateClientModule('alert-dialog-demo.client.js');
     const toggle = evaluateClientModule('toggle-demo.client.js');
     const checkbox = evaluateClientModule('checkbox-demo.client.js');
+    const checkboxGroup = evaluateClientModule('checkbox-group-demo.client.js');
     const collapsible = evaluateClientModule('collapsible-demo.client.js');
     const disclosure = evaluateClientModule('disclosure-demo.client.js');
     const dialog = evaluateClientModule('dialog-demo.client.js');
     const numberField = evaluateClientModule('number-field-demo.client.js');
     const popover = evaluateClientModule('popover-demo.client.js');
+    const radioGroup = evaluateClientModule('radio-group-demo.client.js');
+    const slider = evaluateClientModule('slider-demo.client.js');
     const switchDemo = evaluateClientModule('switch-demo.client.js');
     const tabs = evaluateClientModule('tabs-demo.client.js');
     const tooltip = evaluateClientModule('tooltip-demo.client.js');
+    const toggleGroup = evaluateClientModule('toggle-group-demo.client.js');
     const signal = new AbortController().signal;
+
+    const accordionState = { value: 'shipping' };
+    clientHandler(accordion, 'GalleryAccordionDemo$button_click_2')(new Event('click'), {
+      params: {},
+      signal,
+      state: accordionState,
+    });
+    expect(accordionState).toEqual({ value: 'billing' });
 
     const alertDialogState = { open: false };
     clientHandler(alertDialog, 'GalleryAlertDialogDemo$button_click')(new Event('click'), {
@@ -183,6 +248,23 @@ describe('compiled interactive gallery demos', () => {
       state: checkboxState,
     });
     expect(checkboxState).toEqual({ checked: true });
+
+    const checkboxGroupState = { activeValue: 'updates', value: 'updates' };
+    clientHandler(checkboxGroup, 'GalleryCheckboxGroupDemo$section_keydown')(new Event('keydown'), {
+      params: {},
+      signal,
+      state: checkboxGroupState,
+    });
+    expect(checkboxGroupState).toEqual({ activeValue: 'billing', value: 'updates' });
+    clientHandler(checkboxGroup, 'GalleryCheckboxGroupDemo$input_click_2')(new Event('click'), {
+      params: {},
+      signal,
+      state: checkboxGroupState,
+    });
+    expect(checkboxGroupState).toEqual({
+      activeValue: 'billing',
+      value: 'updates,billing',
+    });
 
     const disclosureState = { open: false };
     clientHandler(disclosure, 'GalleryDisclosureDemo$button_click')(new Event('click'), {
@@ -236,6 +318,28 @@ describe('compiled interactive gallery demos', () => {
     });
     expect(popoverState).toEqual({ open: true });
 
+    const radioGroupState = { value: 'email' };
+    clientHandler(radioGroup, 'GalleryRadioGroupDemo$section_keydown')(new Event('keydown'), {
+      params: {},
+      signal,
+      state: radioGroupState,
+    });
+    expect(radioGroupState).toEqual({ value: 'sms' });
+    clientHandler(radioGroup, 'GalleryRadioGroupDemo$input_click')(new Event('click'), {
+      params: {},
+      signal,
+      state: radioGroupState,
+    });
+    expect(radioGroupState).toEqual({ value: 'email' });
+
+    const sliderState = { value: 25 };
+    clientHandler(slider, 'GallerySliderDemo$input_input')(new Event('input'), {
+      params: {},
+      signal,
+      state: sliderState,
+    });
+    expect(sliderState).toEqual({ value: 75 });
+
     const switchState = { checked: false };
     clientHandler(switchDemo, 'GallerySwitchDemo$input_click')(new Event('click'), {
       params: {},
@@ -274,6 +378,20 @@ describe('compiled interactive gallery demos', () => {
       },
     );
     expect(tooltipState).toEqual({ open: false });
+
+    const toggleGroupState = { activeValue: 'bold', value: 'bold' };
+    clientHandler(toggleGroup, 'GalleryToggleGroupDemo$section_keydown')(new Event('keydown'), {
+      params: {},
+      signal,
+      state: toggleGroupState,
+    });
+    expect(toggleGroupState).toEqual({ activeValue: 'italic', value: 'bold' });
+    clientHandler(toggleGroup, 'GalleryToggleGroupDemo$button_click_2')(new Event('click'), {
+      params: {},
+      signal,
+      state: toggleGroupState,
+    });
+    expect(toggleGroupState).toEqual({ activeValue: 'italic', value: 'bold,italic' });
   });
 });
 

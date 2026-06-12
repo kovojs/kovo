@@ -1011,6 +1011,23 @@ jiso-dialog` resolves dashed wire names and prints provenance including package,
       and `git diff --check`. G6 remains open for every remaining stateful-family compiled
       demo, broader live rerender synchronization, docs deployment wiring, and full
       gallery/conformance gates.
+      Additional partial evidence 2026-06-12: the compiled interactive gallery now adds
+      app-authored TSX demos for accordion, checkbox-group, radio-group, slider, and
+      toggle-group. `examples/gallery/scripts/emit-interactive-gallery.mjs` emits checked-in
+      generated server/client artifacts for those families under
+      `examples/gallery/src/generated/interactive/`; `examples/gallery/src/interactive-gallery.test.ts`
+      statically asserts the generated `fw-state`, versioned `on:*` refs, and client
+      handlers; `examples/gallery/src/interactive-gallery.browser.test.ts` mounts the
+      generated components through the real runtime loader and proves click/keyboard-driven
+      `fw-state` movement plus visible ARIA, roving tabindex, native checked/range behavior,
+      and output synchronization. Same-session evidence:
+      `pnpm --filter @jiso/example-gallery run emit:interactive-gallery -- --check`,
+      `pnpm --filter @jiso/example-gallery exec vitest --run src/interactive-gallery.test.ts`,
+      `pnpm --filter @jiso/example-gallery test`,
+      `pnpm --filter @jiso/example-gallery run test:browser`,
+      `pnpm exec vp check examples/gallery/package.json examples/gallery/scripts/emit-interactive-gallery.mjs examples/gallery/src/interactive/accordion-demo.tsx examples/gallery/src/interactive/checkbox-group-demo.tsx examples/gallery/src/interactive/radio-group-demo.tsx examples/gallery/src/interactive/slider-demo.tsx examples/gallery/src/interactive/toggle-group-demo.tsx examples/gallery/src/interactive-gallery.test.ts examples/gallery/src/interactive-gallery.browser.test.ts examples/gallery/src/generated/interactive/accordion-demo.tsx examples/gallery/src/generated/interactive/accordion-demo.client.js examples/gallery/src/generated/interactive/checkbox-group-demo.tsx examples/gallery/src/generated/interactive/checkbox-group-demo.client.js examples/gallery/src/generated/interactive/radio-group-demo.tsx examples/gallery/src/generated/interactive/radio-group-demo.client.js examples/gallery/src/generated/interactive/slider-demo.tsx examples/gallery/src/generated/interactive/slider-demo.client.js examples/gallery/src/generated/interactive/toggle-group-demo.tsx examples/gallery/src/generated/interactive/toggle-group-demo.client.js plans/ui.md IMPLEMENT_v1.md`,
+      and `git diff --check`. G6 remains open for remaining stateful-family compiled demos,
+      docs deployment wiring, and full gallery/conformance gates.
 
 ## Background
 
