@@ -740,6 +740,13 @@ params, relational API, `execute(sql)`, right/full joins, a string column named 
       `pnpm exec vitest --run packages/runtime/src`,
       `pnpm exec vp check packages/runtime/src/index.ts packages/runtime/src/index.test.ts`, and
       `git diff --check`.
+      Additional bounded evidence 2026-06-12: `packages/runtime/src/apply-path.ts` now owns the
+      shared mutation/deferred query+fragment body application helper and store-only apply path;
+      `packages/runtime/src/index.ts` routes public store and DOM mutation apply APIs through that
+      helper while preserving the existing optimistic interposition hook. Same-session evidence:
+      `pnpm exec vitest --run packages/runtime/src/index.test.ts -t "optimistic|mutation query chunks|enhanced mutations|deferred|apply"`
+      and
+      `pnpm exec vp check packages/runtime/src/index.ts packages/runtime/src/apply-path.ts plans/codebase-quality-round2.md`.
 - [x] **MED — Fix ambient-scope argument override in handlers.ts.**
       `abortRemovedIslandSignals(currentHtml, nextHtml, scope)` ignores its explicit `scope`
       whenever the module-level `activeIslandSignalScope` is set
@@ -779,6 +786,13 @@ params, relational API, `execute(sql)`, right/full joins, a string column named 
       (index.ts:1885-1910 — the `Object.entries` arm exists only for `FakeQueryPlanElement`;
       give the fake a real ArrayLike `attributes` instead). Collapse the alias export pairs
       (`applyDeferredChunk`/`applyDeferredChunkToDom`).
+      Partial evidence 2026-06-12: extracted `packages/runtime/src/apply-path.ts` as a first
+      subtractive runtime seam for mutation/deferred apply body parsing and store application;
+      `index.ts` still owns DOM apply, enhanced mutation orchestration, query bindings, aliases,
+      and public barrel exports, so the broad split remains open. Same-session evidence:
+      `pnpm exec vitest --run packages/runtime/src/index.test.ts -t "optimistic|mutation query chunks|enhanced mutations|deferred|apply"`
+      and
+      `pnpm exec vp check packages/runtime/src/index.ts packages/runtime/src/apply-path.ts plans/codebase-quality-round2.md`.
 - [ ] **LOW** — `hydratedQueries` frozen at install (index.ts:330-342): queries introduced by
       later mutations never become refetch-eligible — fix or document as SPEC-intended;
       `unescapeHtml` missing `&#39;`/`&apos;` (wire-parser.ts:162-168) — pin the server↔runtime

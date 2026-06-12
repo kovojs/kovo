@@ -10,6 +10,8 @@ import type {
 import { malformedJsonError, parseJsonValue } from './json.js';
 import { hydrateQueryScripts, queryIdentityFromStoreKey, queryStoreKey } from './query-store.js';
 import type { QueryScriptLike, QuerySnapshot, QueryStore } from './query-store.js';
+import { applyFragmentQueryBody, applyMutationResponseToStore } from './apply-path.js';
+import type { AppliedMutationResponse } from './apply-path.js';
 import {
   abortIslandSignalScope,
   createIslandSignalScope,
@@ -19,15 +21,8 @@ import {
 import type { ImportHandlerModule, IslandSignalScope } from './handlers.js';
 import { applyFragments } from './morph.js';
 import type { MorphFragment, MorphRoot } from './morph.js';
-import {
-  deferredStreamChunks,
-  readAttribute,
-  readFragmentChunks,
-  readQueryChunks,
-  tagClose,
-  unescapeHtml,
-} from './wire-parser.js';
-import type { FragmentChunk, QueryChunk } from './wire-parser.js';
+import { deferredStreamChunks, readAttribute, tagClose, unescapeHtml } from './wire-parser.js';
+import type { QueryChunk } from './wire-parser.js';
 import type { DelegatedEvent, EventElementLike, RuntimeErrorContext } from './events.js';
 export * from './events.js';
 export {
@@ -47,6 +42,7 @@ export type {
   ImportHandlerModule,
   IslandSignalScope,
 } from './handlers.js';
+export type { AppliedMutationResponse } from './apply-path.js';
 export {
   applyFragments,
   DomMorphRoot,
@@ -889,11 +885,6 @@ export async function refetchQueries(
   return applied;
 }
 
-export interface AppliedMutationResponse {
-  fragments: FragmentChunk[];
-  queries: string[];
-}
-
 export interface AppliedDeferredStreamResponse extends AppliedMutationResponse {
   appliedFragments: string[];
   chunks: Array<AppliedMutationResponse & { appliedFragments: string[] }>;
@@ -1251,9 +1242,7 @@ function parseOutputPayload(content: string): JsonValue {
 }
 
 export function applyMutationResponse(store: QueryStore, body: string): AppliedMutationResponse {
-  return applyFragmentQueryBody(body, (name, value, key) => {
-    store.set(name, value, key);
-  });
+  return applyMutationResponseToStore(store, body);
 }
 
 export const applyDeferredChunk: typeof applyMutationResponse = applyMutationResponse;
@@ -1277,18 +1266,17 @@ export function applyMutationResponseToDom(
 ): AppliedMutationResponseToDom {
   const applied = applyFragmentQueryBody(
     options.body,
-    (name, value, key) => {
-      const query = { ...(key === undefined ? {} : { key }), name, value };
+    (query) => {
       const queryResult = options.applyQuery?.(query);
-      const planValue = queryResult ? queryResult.value : value;
+      const planValue = queryResult ? queryResult.value : query.value;
       if (!queryResult) {
-        options.store.set(name, value, key);
+        options.store.set(query.name, query.value, query.key);
       }
       applyCompiledQueryUpdatePlanIfSupported(
         options.root,
-        name,
+        query.name,
         planValue,
-        options.queryPlans?.[name],
+        options.queryPlans?.[query.name],
       );
     },
     options.onError,
@@ -1742,25 +1730,6 @@ export function installMutationBroadcast(options: {
         type: 'jiso:mutation-response',
       });
     },
-  };
-}
-
-function applyFragmentQueryBody(
-  body: string,
-  applyQuery: (name: string, value: unknown, key: string | undefined) => void,
-  onError?: (error: unknown) => void,
-  beforeApplyQueries?: (queries: readonly QueryChunk[]) => void,
-): AppliedMutationResponse {
-  const queryChunks = readQueryChunks(body, onError);
-  beforeApplyQueries?.(queryChunks);
-
-  for (const query of queryChunks) {
-    applyQuery(query.name, query.value, query.key);
-  }
-
-  return {
-    fragments: readFragmentChunks(body, onError),
-    queries: queryChunks.map((query) => query.name),
   };
 }
 
