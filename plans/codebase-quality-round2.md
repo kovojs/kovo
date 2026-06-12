@@ -1415,6 +1415,18 @@ params, relational API, `execute(sql)`, right/full joins, a string column named 
       `pnpm --filter @jiso/runtime run check:inline-loader`,
       `pnpm exec vitest --run packages/runtime/src/inline-loader.test.ts`, and
       `pnpm exec vp check packages/runtime/src/inline-loader-build.ts packages/runtime/src/inline-loader.test.ts packages/runtime/package.json plans/codebase-quality-round2.md`.
+      Additional bounded evidence 2026-06-12: `packages/runtime/src/inline-loader-build.ts`
+      now deletes the bespoke character scanner for inline-loader minification and delegates
+      tokenization/comment removal to the TypeScript scanner already used in this repo, while
+      preserving the checked-in shipped installer byte-for-byte through
+      `pnpm --filter @jiso/runtime run check:inline-loader`. `packages/runtime/src/inline-loader.test.ts`
+      keeps string/comment/regex parity coverage and now fails closed for unsupported template
+      interpolation instead of allowing a silent rewrite. Root build-task integration remains
+      open. Same-session evidence:
+      `pnpm --filter @jiso/runtime run check:inline-loader`,
+      `pnpm exec vitest --run packages/runtime/src/inline-loader.test.ts packages/runtime/src/index.test.ts`,
+      `pnpm exec vp check packages/runtime/src/inline-loader-build.ts packages/runtime/src/inline-loader.test.ts plans/codebase-quality-round2.md`,
+      and `git diff --check`.
 - [x] **HIGH — Ship the DOM morph.** The only real keyed DOM morph (focus/selection/scroll
       capture-restore) lives in index.browser.test.ts:12-182; every consumer must rewrite it, and
       the flagship browser test substantially tests its own test code. Promote to a

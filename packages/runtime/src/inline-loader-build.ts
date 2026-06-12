@@ -1,5 +1,6 @@
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
+import ts from 'typescript';
 
 export const inlineJisoLoaderInstallerReadableSource = String.raw`
 /* SPEC.md §4.4: this is the always-loaded bootstrap source. */
@@ -236,211 +237,64 @@ export function emitInlineJisoLoaderModule(
 
 function minifyInlineJavaScriptSource(source: string): string {
   let output = '';
-  let index = 0;
-  let previousToken = '';
+  let previousToken: MinifiedToken | undefined;
+  const scanner = ts.createScanner(
+    ts.ScriptTarget.Latest,
+    true,
+    ts.LanguageVariant.Standard,
+    source,
+  );
 
-  while (index < source.length) {
-    const char = source[index]!;
-    const next = source[index + 1];
-
-    if (isWhitespace(char)) {
-      const nextToken = readNextTokenStart(source, index + 1);
-      if (needsSeparator(previousToken, nextToken)) {
-        output += ' ';
-        previousToken = ' ';
-      }
-      index += 1;
-      continue;
+  for (let kind = scanner.scan(); kind !== ts.SyntaxKind.EndOfFileToken; kind = scanner.scan()) {
+    const token = { kind, text: scanner.getTokenText() };
+    if (isTemplateSubstitutionToken(token.kind)) {
+      throw new Error(
+        'Inline Jiso loader source cannot use template interpolation; keep the bootstrap literal-safe.',
+      );
     }
-
-    if (char === '/' && next === '/') {
-      const end = skipLineComment(source, index + 2);
-      const nextToken = readNextTokenStart(source, end);
-      if (needsSeparator(previousToken, nextToken)) {
-        output += ' ';
-        previousToken = ' ';
-      }
-      index = end;
-      continue;
-    }
-
-    if (char === '/' && next === '*') {
-      const end = skipBlockComment(source, index + 2);
-      const nextToken = readNextTokenStart(source, end);
-      if (needsSeparator(previousToken, nextToken)) {
-        output += ' ';
-        previousToken = ' ';
-      }
-      index = end;
-      continue;
-    }
-
-    if (char === '"' || char === "'" || char === '`') {
-      const literal = readQuotedLiteral(source, index, char);
-      output += literal.value;
-      previousToken = literal.value.at(-1) ?? previousToken;
-      index = literal.end;
-      continue;
-    }
-
-    if (char === '/' && startsRegexLiteral(previousToken)) {
-      const literal = readRegexLiteral(source, index);
-      output += literal.value;
-      previousToken = literal.value.at(-1) ?? previousToken;
-      index = literal.end;
-      continue;
-    }
-
-    if (isIdentifierStart(char)) {
-      const identifier = readIdentifier(source, index);
-      output += identifier.value;
-      previousToken = identifier.value;
-      index = identifier.end;
-      continue;
-    }
-
-    output += char;
-    previousToken = char;
-    index += 1;
+    if (previousToken && needsTokenSeparator(previousToken, token)) output += ' ';
+    output += token.text;
+    previousToken = token;
   }
 
-  return output.trim();
+  return output;
 }
 
-function readNextTokenStart(source: string, start: number): string {
-  let index = start;
+interface MinifiedToken {
+  kind: ts.SyntaxKind;
+  text: string;
+}
 
-  while (index < source.length) {
-    const char = source[index]!;
-    const next = source[index + 1];
-
-    if (isWhitespace(char)) {
-      index += 1;
-      continue;
-    }
-
-    if (char === '/' && next === '/') {
-      index = skipLineComment(source, index + 2);
-      continue;
-    }
-
-    if (char === '/' && next === '*') {
-      index = skipBlockComment(source, index + 2);
-      continue;
-    }
-
-    return char;
+function needsTokenSeparator(previousToken: MinifiedToken, nextToken: MinifiedToken): boolean {
+  if (isWordLikeToken(previousToken.kind) && isWordLikeToken(nextToken.kind)) return true;
+  if (
+    (previousToken.kind === ts.SyntaxKind.PlusToken ||
+      previousToken.kind === ts.SyntaxKind.MinusToken) &&
+    previousToken.kind === nextToken.kind
+  ) {
+    return true;
   }
-
-  return '';
-}
-
-function readQuotedLiteral(
-  source: string,
-  start: number,
-  quote: '"' | "'" | '`',
-): { value: string; end: number } {
-  let index = start + 1;
-  let escaped = false;
-
-  while (index < source.length) {
-    const char = source[index]!;
-    if (escaped) {
-      escaped = false;
-    } else if (char === '\\') {
-      escaped = true;
-    } else if (char === quote) {
-      return { value: source.slice(start, index + 1), end: index + 1 };
-    }
-    index += 1;
-  }
-
-  throw new Error('Unterminated inline loader string literal.');
-}
-
-function readRegexLiteral(source: string, start: number): { value: string; end: number } {
-  let index = start + 1;
-  let escaped = false;
-  let inCharacterClass = false;
-
-  while (index < source.length) {
-    const char = source[index]!;
-    if (escaped) {
-      escaped = false;
-    } else if (char === '\\') {
-      escaped = true;
-    } else if (char === '[') {
-      inCharacterClass = true;
-    } else if (char === ']') {
-      inCharacterClass = false;
-    } else if (char === '/' && !inCharacterClass) {
-      index += 1;
-      while (/[a-z]/i.test(source[index] ?? '')) index += 1;
-      return { value: source.slice(start, index), end: index };
-    }
-    index += 1;
-  }
-
-  throw new Error('Unterminated inline loader regex literal.');
-}
-
-function readIdentifier(source: string, start: number): { value: string; end: number } {
-  let index = start + 1;
-
-  while (isIdentifierPart(source[index] ?? '')) index += 1;
-
-  return { value: source.slice(start, index), end: index };
-}
-
-function skipLineComment(source: string, start: number): number {
-  const lineEnd = source.indexOf('\n', start);
-  return lineEnd === -1 ? source.length : lineEnd + 1;
-}
-
-function skipBlockComment(source: string, start: number): number {
-  const commentEnd = source.indexOf('*/', start);
-  return commentEnd === -1 ? source.length : commentEnd + 2;
-}
-
-function startsRegexLiteral(previousToken: string): boolean {
   return (
-    previousToken === '' ||
-    '([{=,:?!&|;>'.includes(previousToken) ||
-    regexPrefixKeywords.has(previousToken)
+    previousToken.kind === ts.SyntaxKind.SlashToken && nextToken.kind === ts.SyntaxKind.SlashToken
   );
 }
 
-function needsSeparator(previousToken: string, nextToken: string): boolean {
-  if (!previousToken || !nextToken) return false;
-  if (isIdentifierPart(previousToken) && isIdentifierPart(nextToken)) return true;
-  if ((previousToken === '+' || previousToken === '-') && previousToken === nextToken) return true;
-  return previousToken === '/' && nextToken === '/';
+function isWordLikeToken(kind: ts.SyntaxKind): boolean {
+  return (
+    kind === ts.SyntaxKind.Identifier ||
+    kind === ts.SyntaxKind.PrivateIdentifier ||
+    kind === ts.SyntaxKind.NumericLiteral ||
+    kind === ts.SyntaxKind.BigIntLiteral ||
+    (kind >= ts.SyntaxKind.FirstKeyword && kind <= ts.SyntaxKind.LastKeyword)
+  );
 }
 
-const regexPrefixKeywords = new Set([
-  'case',
-  'delete',
-  'else',
-  'in',
-  'instanceof',
-  'of',
-  'return',
-  'throw',
-  'typeof',
-  'void',
-  'yield',
-]);
-
-function isIdentifierStart(char: string): boolean {
-  return /[$A-Z_a-z]/.test(char);
-}
-
-function isIdentifierPart(char: string): boolean {
-  return /[$\w]/.test(char);
-}
-
-function isWhitespace(char: string): boolean {
-  return /\s/.test(char);
+function isTemplateSubstitutionToken(kind: ts.SyntaxKind): boolean {
+  return (
+    kind === ts.SyntaxKind.TemplateHead ||
+    kind === ts.SyntaxKind.TemplateMiddle ||
+    kind === ts.SyntaxKind.TemplateTail
+  );
 }
 
 function inlineJavaScriptTemplateLiteral(value: string): string {

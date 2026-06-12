@@ -146,6 +146,15 @@ describe('inline loader source', () => {
     expect(minified(input)).toEqual(readable(input));
   });
 
+  it('rejects template interpolation instead of silently rewriting it', () => {
+    // SPEC.md §4.4: inline-loader generation must fail closed on unsupported source syntax.
+    expect(() =>
+      buildInlineJisoLoaderInstallerSource(
+        ['function unsupportedTemplate(value) {', '  return `loader ${value}`;', '}'].join('\n'),
+      ),
+    ).toThrow('template interpolation');
+  });
+
   it('wraps the extracted installer source as the public bootstrap source', () => {
     // SPEC.md §4.4: the generated bootstrap is the always-loaded runtime path.
     expect(jisoLoaderSource).toBe(`(${inlineJisoLoaderInstallerSource})((url)=>import(url));`);
