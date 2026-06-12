@@ -461,6 +461,20 @@ jiso-dialog` resolves dashed wire names and prints provenance including package,
       `pnpm exec vp check packages/headless-ui/package.json packages/headless-ui/src/index.ts packages/headless-ui/src/primitives/index.ts packages/headless-ui/src/primitives/navigation-menu.ts packages/headless-ui/src/primitives/navigation-menu.test.ts plans/ui.md`,
       and `git diff --check HEAD~1..HEAD`. H3 remains open for slider, toast,
       command, and full gates.
+      Additional partial evidence 2026-06-12:
+      `packages/headless-ui/src/primitives/slider.ts` adds the H3 slider primitive
+      as a native `<input type="range">`-oriented helper: root/input/track/range/thumb
+      attribute builders, real `name`/`required`/`disabled`/`min`/`max`/`step`
+      form-control attributes per SPEC §6.3, horizontal/vertical orientation data attrs,
+      normalized clamped value state, decorative part data attrs for styled wrappers,
+      cancelable value transitions, and a guarded input handler following the SPEC
+      §4.6 primitive handler no-op contract. It is exported through `@jiso/headless-ui`,
+      `@jiso/headless-ui/primitives`, and `@jiso/headless-ui/primitives/slider`.
+      Same-session evidence:
+      `pnpm --filter @jiso/headless-ui exec vitest --run src/primitives/slider.test.ts src/primitives/number-field.test.ts src/lib/change-details.test.ts src/tooling/primitive-handler-lint.test.ts src/tooling/lint-primitives.test.ts`,
+      `pnpm --filter @jiso/headless-ui run lint:primitives`,
+      `pnpm exec vp check packages/headless-ui/package.json packages/headless-ui/src/index.ts packages/headless-ui/src/primitives/index.ts packages/headless-ui/src/primitives/slider.ts packages/headless-ui/src/primitives/slider.test.ts`,
+      and `git diff --check`. H3 remains open for toast, command, and full gates.
 - [x] U1 token sheet + `cn()` + statically-analyzable variant helper (Tailwind-first, §13.1 discoverability rules).
       Evidence 2026-06-12: `packages/headless-ui/src/lib/class-names.ts`
       provides the dependency-free `cn()` helper, `packages/headless-ui/src/lib/variants.ts`

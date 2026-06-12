@@ -32,6 +32,7 @@
     "./primitives/scroll-area": "./src/primitives/scroll-area.ts",
     "./primitives/select": "./src/primitives/select.ts",
     "./primitives/separator": "./src/primitives/separator.ts",
+    "./primitives/slider": "./src/primitives/slider.ts",
     "./primitives/switch": "./src/primitives/switch.ts",
     "./primitives/tabs": "./src/primitives/tabs.ts",
     "./primitives/tooltip": "./src/primitives/tooltip.ts",

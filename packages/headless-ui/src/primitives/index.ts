@@ -696,6 +696,32 @@ export type {
 } from './select.js';
 
 export {
+  setSliderValue,
+  sliderInput,
+  sliderInputAttributes,
+  sliderRangeAttributes,
+  sliderRootAttributes,
+  sliderThumbAttributes,
+  sliderTrackAttributes,
+  sliderValueFromString,
+  sliderValueState,
+} from './slider.js';
+export type {
+  SliderChangeDetail,
+  SliderChangeOptions,
+  SliderChangeReason,
+  SliderChangeResult,
+  SliderComputedState,
+  SliderInputAttributeOptions,
+  SliderInputEvent,
+  SliderOrientation,
+  SliderPartAttributeOptions,
+  SliderPrimitiveAttributes,
+  SliderRootAttributeOptions,
+  SliderState,
+} from './slider.js';
+
+export {
   setTabsValue,
   tabsItemSelected,
   tabsKeyDown,
