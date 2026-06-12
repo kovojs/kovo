@@ -2546,6 +2546,13 @@ As each phase splits a source module, split its tests in the same commit.
       `corepack pnpm exec vitest --run packages/server/src/mutation-endpoint.test.ts packages/server/src/wire-html.test.ts packages/server/src/index.test.ts`,
       `corepack pnpm exec vp check packages/server/src/index.test.ts packages/server/src/mutation-endpoint.test.ts packages/server/src/wire-html.test.ts plans/codebase-quality-round2.md`,
       and `git diff --check`.
+      Additional evidence 2026-06-12: the final mutation-response-focused suite moved from
+      `packages/server/src/index.test.ts` into `packages/server/src/mutation-response.test.ts`,
+      and the test now imports the extracted `mutation`, `domain`, `query`, and `schema` modules
+      directly instead of the package barrel. Same-session evidence:
+      `corepack pnpm exec vitest --run packages/server/src/mutation-response.test.ts`,
+      `corepack pnpm exec vp check packages/server/src/mutation-response.test.ts plans/codebase-quality-round2.md`,
+      and `git diff --check`.
 - [ ] runtime/index.test.ts (4,435 lines, mutation tests under "query store") → per-module
       files; `Fake*` classes to a shared `test-fixtures.ts`; direct unit tests for wire-parser,
       handlers, morph; replace counted-microtask flushing with a single `flush()` helper.
