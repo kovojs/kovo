@@ -21,6 +21,10 @@ import {
   fieldsetLegendAttributes,
   fieldsetRootAttributes,
   meterRootAttributes,
+  numberFieldDecrementAttributes,
+  numberFieldIncrementAttributes,
+  numberFieldInputAttributes,
+  numberFieldRootAttributes,
   progressRootAttributes,
   radioGroupItemAttributes,
   radioGroupLabelAttributes,
@@ -55,6 +59,7 @@ export type GalleryComponent =
   | 'dialog'
   | 'field'
   | 'meter'
+  | 'number-field'
   | 'progress'
   | 'radio-group'
   | 'select'
@@ -135,6 +140,12 @@ export const galleryRoutes: readonly GalleryRoute[] = Object.freeze([
     path: '/components/meter',
     render: () => MeterDemo(),
     title: 'Meter',
+  },
+  {
+    component: 'number-field',
+    path: '/components/number-field',
+    render: () => NumberFieldDemo(),
+    title: 'Number Field',
   },
   {
     component: 'progress',
@@ -550,6 +561,80 @@ export function MeterDemo(): string {
         changeReasons: 'value comes from app state',
         dataState: 'optimum, suboptimum, even-less-good',
         keyboard: 'No custom keyboard handling',
+      })}
+    </section>
+  );
+}
+
+export function NumberFieldDemo(): string {
+  const quantity = {
+    invalid: true,
+    max: 10,
+    min: 0,
+    name: 'gallery-quantity',
+    required: true,
+    step: 2,
+    value: 2,
+  };
+
+  return (
+    <section
+      {...numberFieldRootAttributes({ ...quantity, id: 'gallery-number-field' })}
+      data-gallery-demo="number-field"
+    >
+      <p data-demo-summary="no-js">
+        Number field preserves a native number input while step buttons expose primitive-owned
+        actions.
+      </p>
+      <label id="gallery-number-field-label" for="gallery-number-field-input">
+        Quantity
+      </label>
+      <div>
+        <button
+          {...numberFieldDecrementAttributes({
+            ...quantity,
+            id: 'gallery-number-field-decrement',
+            inputId: 'gallery-number-field-input',
+            label: 'Decrease quantity',
+          })}
+        >
+          -
+        </button>
+        <input
+          {...numberFieldInputAttributes({
+            ...quantity,
+            descriptionId: 'gallery-number-field-description',
+            errorId: 'gallery-number-field-error',
+            id: 'gallery-number-field-input',
+            labelledBy: 'gallery-number-field-label',
+          })}
+        />
+        <button
+          {...numberFieldIncrementAttributes({
+            ...quantity,
+            id: 'gallery-number-field-increment',
+            inputId: 'gallery-number-field-input',
+            label: 'Increase quantity',
+          })}
+        >
+          +
+        </button>
+      </div>
+      <p id="gallery-number-field-description">Choose an even quantity.</p>
+      <p id="gallery-number-field-error">Quantity must be available in stock.</p>
+      <button
+        {...numberFieldDecrementAttributes({
+          min: 0,
+          value: 0,
+        })}
+        data-fixture-state="disabled-boundary"
+      >
+        At minimum
+      </button>
+      {renderBehaviorContract({
+        changeReasons: 'input, increment, decrement, programmatic',
+        dataState: 'invalid, required, disabled',
+        keyboard: 'Native number input keyboard plus primitive step buttons',
       })}
     </section>
   );

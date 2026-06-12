@@ -17,6 +17,7 @@ const expectedRoutes = [
   '/components/dialog',
   '/components/field',
   '/components/meter',
+  '/components/number-field',
   '/components/progress',
   '/components/radio-group',
   '/components/select',
@@ -139,6 +140,31 @@ describe('gallery demo fixtures', () => {
     expect(meter.html).toContain('data-state="optimum"');
     expect(meter.html).toContain('data-state="suboptimum"');
     expect(meter.html).toContain('aria-valuetext="84 percent quality score"');
+  });
+
+  it('renders number-field fixture with native number input and stepper wiring', () => {
+    const numberField = findFixture('/components/number-field');
+
+    expect(numberField.html).toContain('data-gallery-demo="number-field"');
+    expect(numberField.html).toContain('id="gallery-number-field"');
+    expect(numberField.html).toContain('for="gallery-number-field-input"');
+    expect(numberField.html).toContain('type="number"');
+    expect(numberField.html).toContain('name="gallery-quantity"');
+    expect(numberField.html).toContain('required');
+    expect(numberField.html).toContain('min="0"');
+    expect(numberField.html).toContain('max="10"');
+    expect(numberField.html).toContain('step="2"');
+    expect(numberField.html).toContain('value="2"');
+    expect(numberField.html).toContain(
+      'aria-describedby="gallery-number-field-description gallery-number-field-error"',
+    );
+    expect(numberField.html).toContain('aria-invalid="true"');
+    expect(numberField.html).toContain('aria-controls="gallery-number-field-input"');
+    expect(numberField.html).toContain('data-action="decrement"');
+    expect(numberField.html).toContain('data-action="increment"');
+    expect(numberField.html).toContain('data-fixture-state="disabled-boundary"');
+    expect(numberField.html).toContain('data-disabled');
+    expect(numberField.html).toContain('disabled type="button"');
   });
 
   it('renders toggle fixture states through headless-ui attributes', () => {

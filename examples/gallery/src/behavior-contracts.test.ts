@@ -54,6 +54,11 @@ const expectedBehaviorContracts = {
     dataState: 'optimum, suboptimum, even-less-good',
     keyboard: 'No custom keyboard handling',
   },
+  '/components/number-field': {
+    changeReasons: 'input, increment, decrement, programmatic',
+    dataState: 'invalid, required, disabled',
+    keyboard: 'Native number input keyboard plus primitive step buttons',
+  },
   '/components/progress': {
     changeReasons: 'value comes from app state',
     dataState: 'loading, complete, indeterminate',
@@ -145,6 +150,16 @@ const expectedBehaviorSnippets: Partial<Record<GalleryRoute['path'], readonly st
     'data-high="90"',
     'data-state="optimum"',
     'data-state="suboptimum"',
+  ],
+  '/components/number-field': [
+    'type="number"',
+    'name="gallery-quantity"',
+    'aria-describedby="gallery-number-field-description gallery-number-field-error"',
+    'aria-invalid="true"',
+    'aria-controls="gallery-number-field-input"',
+    'data-action="decrement"',
+    'data-action="increment"',
+    'disabled type="button"',
   ],
   '/components/progress': [
     '<progress',

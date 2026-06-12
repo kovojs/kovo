@@ -327,6 +327,16 @@ jiso-dialog` resolves dashed wire names and prints provenance including package,
       `pnpm --filter @jiso/headless-ui run lint:primitives`,
       `pnpm exec vp check packages/headless-ui/package.json packages/headless-ui/src/index.ts packages/headless-ui/src/primitives/index.ts packages/headless-ui/src/primitives/number-field.ts packages/headless-ui/src/primitives/number-field.test.ts plans/ui.md`,
       and `git diff --check`. H2 remains open for otp-field, scroll-area, and full gates.
+      Additional gallery evidence 2026-06-12: `examples/gallery` now covers the H2
+      number-field primitive with a route fixture that imports the current
+      `@jiso/headless-ui` number-field attribute builders, renders a native named
+      `<input type="number">` with min/max/step/required/invalid wiring, stepper controls,
+      boundary disabled state, no-JS summary, and a behavior-contract table. Same-session
+      evidence:
+      `pnpm --filter @jiso/example-gallery test`,
+      `pnpm --filter @jiso/headless-ui exec vitest --run src/primitives/number-field.test.ts src/tooling/lint-primitives.test.ts src/tooling/primitive-handler-lint.test.ts`,
+      and `pnpm --filter @jiso/headless-ui run lint:primitives`. H2 remains open for full
+      gates.
       Additional partial evidence 2026-06-12: `packages/headless-ui/src/primitives/otp-field.ts`
       adds the H2 otp-field primitive as a native-input-slot L1 helper: group root,
       aggregate named input, visible slot input attribute builders, one-time-code autocomplete
@@ -575,6 +585,13 @@ jiso-dialog` resolves dashed wire names and prints provenance including package,
       and pins loading/loaded/error route output in the fixture tests. Same-session
       evidence: `pnpm --filter @jiso/example-gallery test`. G1 remains open for the
       remaining unrepresented primitives and styled components.
+      Additional partial evidence 2026-06-12: `examples/gallery` adds a number-field route
+      fixture that imports the current `@jiso/headless-ui` number-field attribute builders,
+      renders TSX-authored native number input and stepper markup, and pins route/nav coverage,
+      no-JS summary, native form-control attributes, ARIA description/error wiring, and disabled
+      boundary output in fixture tests. Same-session evidence:
+      `pnpm --filter @jiso/example-gallery test`. G1 remains open for the remaining
+      unrepresented primitives and styled components.
 - [ ] G2 behavior-contract gates: keyboard/ARIA assertions per primitive (browser-free via `page()` + `fw explain` where possible; framework browser suite for focus/dismiss/top-layer).
       Partial evidence 2026-06-12: `examples/gallery/src/behavior-contracts.test.ts`
       adds a browser-free G2 fixture gate over the existing 17 rendered gallery routes. It
@@ -591,6 +608,13 @@ jiso-dialog` resolves dashed wire names and prints provenance including package,
       delay, hidden loaded fallback, and hidden errored image output. Same-session evidence:
       `pnpm --filter @jiso/example-gallery test`. G2 remains open for browser-backed
       checks, `fw explain` coverage, and unrepresented routes/primitives.
+      Additional partial evidence 2026-06-12: the browser-free G2 fixture gate now covers
+      the number-field route's exact behavior-contract rows (`input`, `increment`,
+      `decrement`, `programmatic` reasons), native number input attributes, invalid/required
+      ARIA wiring, stepper `aria-controls`, increment/decrement action attributes, and disabled
+      boundary button output. Same-session evidence:
+      `pnpm --filter @jiso/example-gallery test`. G2 remains open for browser-backed checks,
+      `fw explain` coverage, and unrepresented routes/primitives.
 - [ ] G3 axe checks per component state in the gallery.
 - [ ] G4 visual regression for `@jiso/ui`: shadcn-parity human review once, then self-baselined screenshots.
 - [ ] G5 merge fixtures: every primitive's attrs record × an author element → golden merged output (doubles as FW231/FW232 coverage).
