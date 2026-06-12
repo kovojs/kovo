@@ -825,6 +825,7 @@ void test('P10 normative docs cover the constitution and compiler hard rules', a
       'Fixpoint invariant',
       'Platform behavior emission',
       'Teaching errors',
+      'TSX-only authoring',
     ],
   );
   assert.ok(
@@ -1767,6 +1768,7 @@ export const CartBadge = component('cart-badge', {
       detail: 'query expression has no data-bind, renderOnce, fragment, or isomorphic status',
       position: 'expression',
       query: 'cart.discount',
+      sourceSpan: { length: 13, start: 355 },
       status: 'UNHANDLED',
     },
     {
@@ -1774,6 +1776,7 @@ export const CartBadge = component('cart-badge', {
       detail: 'query expression has no data-bind, renderOnce, fragment, or isomorphic status',
       position: 'expression',
       query: 'product.name',
+      sourceSpan: { length: 12, start: 409 },
       status: 'UNHANDLED',
     },
   ]);
