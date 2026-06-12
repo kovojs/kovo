@@ -398,6 +398,15 @@ const parsePnpmRunScript = (command) => {
   return match?.[1];
 };
 
+const parsePnpmRunScripts = (command) => {
+  assert.equal(typeof command, 'string', 'pnpm run script list is present');
+  return command.split(' && ').map((entry) => {
+    const scriptName = parsePnpmRunScript(entry);
+    assert.ok(scriptName, `pnpm run script entry is structured: ${entry}`);
+    return scriptName;
+  });
+};
+
 const parseVpRunCommand = (command) => {
   const match = /^vp run ([\w-]+)$/.exec(command);
   return match?.[1];
@@ -5924,21 +5933,26 @@ void test('Conformance suites are an explicit gate', async () => {
   const packageJson = JSON.parse(await readProjectFile('package.json'));
   const viteConfig = await readProjectFile('vite.config.ts');
   const viteTasks = parseTemplateViteTasks(viteConfig);
-  const conformanceTaskCommands = parsePnpmFilterTestCommands(viteTasks.conformance.command);
+  const conformanceTaskName = parseRequiredVpTask('test:conformance', packageJson);
+  const conformanceTask = viteTasks[conformanceTaskName];
+  assert.ok(conformanceTask, `${conformanceTaskName} task is defined`);
+  const conformanceTaskCommands = parsePnpmFilterTestCommands(conformanceTask.command);
   assert.equal(
     conformanceTaskCommands.every((entry) => entry.script === 'test'),
     true,
     'conformance task runs package tests through pnpm filters',
   );
-  assert.equal(packageJson.scripts['test:conformance'], 'vp run conformance');
-  assert.ok(packageJson.scripts.acceptance.split(' && ').includes('pnpm run test:conformance'));
+  assert.equal(
+    parsePnpmRunScripts(packageJson.scripts.acceptance).includes('test:conformance'),
+    true,
+  );
   assert.deepEqual(
     conformanceTaskCommands
       .map((entry) => entry.packageName)
       .toSorted((left, right) => left.localeCompare(right)),
     [...conformanceManifestsByName.keys()].toSorted((left, right) => left.localeCompare(right)),
   );
-  assert.deepEqual(viteTasks.conformance.input, [
+  assert.deepEqual(conformanceTask.input, [
     { pattern: 'conformance/**/package.json', base: 'workspace' },
     { pattern: 'conformance/**/src/**/*.ts', base: 'workspace' },
     { pattern: 'conformance/**/docs/**', base: 'workspace' },
@@ -6506,7 +6520,7 @@ export const CartTotal = component('cart-total', {
 void test('framework-owned browser suite is wired into acceptance', async () => {
   const packageJson = JSON.parse(await readProjectFile('package.json'));
   const ciWorkflow = await readProjectFile('.github/workflows/ci.yml');
-  const acceptanceScripts = packageJson.scripts.acceptance.split(' && ').map(parsePnpmRunScript);
+  const acceptanceScripts = parsePnpmRunScripts(packageJson.scripts.acceptance);
   const ciTaskNames = parseWorkflowSteps(ciWorkflow)
     .map((step) => parseVpRunCommand(step.run ?? ''))
     .filter(Boolean);
@@ -6542,7 +6556,7 @@ void test('framework-owned browser suite is wired into acceptance', async () => 
 void test('P10 perf acceptance is wired through Playwright and CDP', async () => {
   const packageJson = JSON.parse(await readProjectFile('package.json'));
   const ciWorkflow = await readProjectFile('.github/workflows/ci.yml');
-  const acceptanceScripts = packageJson.scripts.acceptance.split(' && ').map(parsePnpmRunScript);
+  const acceptanceScripts = parsePnpmRunScripts(packageJson.scripts.acceptance);
   const ciTaskNames = parseWorkflowSteps(ciWorkflow)
     .map((step) => parseVpRunCommand(step.run ?? ''))
     .filter(Boolean);

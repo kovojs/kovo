@@ -259,6 +259,13 @@ Do this first or pay it on every commit.
       `node --test --test-name-pattern "Conformance suites are an explicit gate" tests/fw-check.node.mjs`,
       `pnpm exec vp check tests/fw-check.node.mjs plans/codebase-quality-round2.md`, and
       `git diff --check`.
+      Additional partial evidence 2026-06-12: the conformance acceptance wiring now follows the
+      `test:conformance` package script through the Vite+ task graph and parses the root
+      `acceptance` script into `pnpm run <script>` command records instead of comparing literal
+      package-script fragments. Same-session evidence:
+      `node --test --test-name-pattern "Conformance suites are an explicit gate" tests/fw-check.node.mjs`,
+      `pnpm exec vp check tests/fw-check.node.mjs plans/codebase-quality-round2.md`, and
+      `git diff --check`.
       Partial evidence 2026-06-11: the P1 render-equivalence tranche now imports the built
       compiler API, asserts `compileComponentModule` render-equivalence checks and
       `assertRenderEquivalence` failure behavior, then asserts the `ERROR RENDER_EQUIV` CLI
