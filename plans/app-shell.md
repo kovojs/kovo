@@ -129,6 +129,24 @@ Scope: SPEC addition (proposed §9.5 "The request shell"), `@jiso/server` shell 
       `pnpm exec vp check packages/create-jiso/src/index.ts packages/create-jiso/src/index.test.ts packages/create-jiso/templates/README.md packages/create-jiso/templates/docs/deployment.md packages/create-jiso/templates/package.json packages/create-jiso/templates/src/app.tsx packages/create-jiso/templates/src/app-shell.ts packages/create-jiso/templates/src/app-shell.test.ts packages/create-jiso/templates/src/styles.css packages/create-jiso/templates/vite.config.ts`.
       The broader R7 commerce HTTP serve entry and docs-site export consumer remain
       open.
+      Progress 2026-06-12: commerce now has a shell-backed HTTP serve entry for
+      the low-conflict document/query/module slice. `examples/commerce/src/app-shell.ts`
+      creates a `createApp()` aggregate for `/cart`, `/login`, `/admin`, guarded
+      file/stream routes, `/_q/` query registry entries, the Stripe webhook endpoint,
+      and a versioned `/c/commerce.client.js?v=commerce-r7` module; it attaches the
+      example DB/auth request context before delegating to `createRequestHandler()`
+      and exports `commerceNodeHandler` for the dev server. `examples/commerce/vite.config.ts`
+      now installs a commerce-local dev middleware that loads that handler for
+      document routes while leaving source/assets to Vite. Evidence:
+      `examples/commerce/src/app-shell.test.ts` serves the cart document, `/_q/cart`,
+      and `/c/commerce.client.js?v=commerce-r7` over `node:http`; same-session
+      verification ran `pnpm exec vitest --run examples/commerce/src/app-shell.test.ts`,
+      `pnpm exec vitest --run examples/commerce`, and
+      `pnpm exec vp check examples/commerce/src/app.ts examples/commerce/src/app-shell.ts examples/commerce/src/app-shell.test.ts examples/commerce/vite.config.ts`.
+      Remaining R7 commerce work: the shared app shell still does not dispatch
+      `/_m/` mutations, so the enhanced/no-JS commerce mutation round-trip over the
+      `createApp()` handler remains open; docs-site `vp run export` adoption also
+      remains open.
 
 ## Background — the gap
 

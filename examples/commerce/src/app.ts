@@ -735,9 +735,17 @@ export function renderCartPage(
   request?: CommerceRequest,
 ): string {
   const pageHints = renderCommercePageHints(loadCartQuery(db));
+  return `<html><head>${pageHints.html}</head><body class="min-h-dvh bg-slate-50 p-6">${renderCartPageBody(db, addToCartFailure, request)}</body></html>`;
+}
+
+export function renderCartPageBody(
+  db = createCommerceDb(),
+  addToCartFailure?: AddToCartFailureState,
+  request?: CommerceRequest,
+): string {
   const cartBadge = CartBadge.definition.render({ cart: loadCartQuery(db) });
   const productGrid = renderProductGridWithFailure(loadProductGrid(db), addToCartFailure, request);
-  return `<html><head>${pageHints.html}</head><body class="min-h-dvh bg-slate-50 p-6"><main class="mx-auto max-w-4xl"><fw-fragment target="cart-badge">${cartBadge}</fw-fragment><fw-fragment target="product-grid">${productGrid}</fw-fragment><fw-fragment target="order-history">${renderOrderHistory(db)}${renderReceiptUploadForm()}</fw-fragment></main></body></html>`;
+  return `<main class="mx-auto max-w-4xl"><fw-fragment target="cart-badge">${cartBadge}</fw-fragment><fw-fragment target="product-grid">${productGrid}</fw-fragment><fw-fragment target="order-history">${renderOrderHistory(db)}${renderReceiptUploadForm()}</fw-fragment></main>`;
 }
 
 function renderProductGridWithFailure(

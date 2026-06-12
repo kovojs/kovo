@@ -1,3 +1,5 @@
+import type { IncomingMessage, ServerResponse } from 'node:http';
+
 import tailwindcss from '@tailwindcss/vite';
 import { defineConfig } from 'vite-plus';
 
@@ -13,5 +15,62 @@ export default defineConfig({
       },
     },
   },
-  plugins: [tailwindcss()],
+  plugins: [tailwindcss(), commerceAppShellDevPlugin()],
 });
+
+type DevMiddleware = (
+  request: IncomingMessage,
+  response: ServerResponse,
+  next: (error?: unknown) => void,
+) => void;
+
+interface CommerceDevServer {
+  middlewares: {
+    use(handler: DevMiddleware): void;
+  };
+  ssrLoadModule(id: string): Promise<Record<string, unknown>>;
+}
+
+interface CommerceDevPlugin {
+  configureServer(server: CommerceDevServer): () => void;
+  name: string;
+}
+
+function commerceAppShellDevPlugin(): CommerceDevPlugin {
+  return {
+    configureServer(server) {
+      return () => {
+        server.middlewares.use((request, response, next) => {
+          if (!isCommerceDocumentRequest(request)) {
+            next();
+            return;
+          }
+
+          Promise.resolve(loadCommerceNodeHandler(server))
+            .then((commerceNodeHandler) => commerceNodeHandler(request, response, next))
+            .catch(next);
+        });
+      };
+    },
+    name: 'jiso-commerce-app-shell-dev',
+  };
+}
+
+async function loadCommerceNodeHandler(server: CommerceDevServer): Promise<DevMiddleware> {
+  const module = await server.ssrLoadModule('/src/app-shell.ts');
+  const commerceNodeHandler = module.commerceNodeHandler;
+
+  if (typeof commerceNodeHandler !== 'function') {
+    throw new Error('src/app-shell.ts must export commerceNodeHandler.');
+  }
+
+  return commerceNodeHandler as DevMiddleware;
+}
+
+function isCommerceDocumentRequest(request: IncomingMessage): boolean {
+  if (request.method !== 'GET' && request.method !== 'HEAD') return false;
+  if (!request.url) return false;
+
+  const pathname = new URL(request.url, 'http://jiso.local').pathname;
+  return pathname === '/cart' || pathname === '/login' || pathname === '/admin';
+}
