@@ -84,9 +84,9 @@ export type {
   ScopeComponentCssOptions,
 } from './css.js';
 export { collectCssAssetManifest, dedupeCss, scopeComponentCss, selectCssAssets } from './css.js';
-export type { PackageComponentPrefixFact } from './validate/package-prefixes.js';
 export type {
   CompileComponentOptions,
+  PackageComponentPrefixFact,
   QueryDeriveFact,
   QueryShape,
   QueryShapeFact,

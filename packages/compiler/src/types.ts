@@ -1,5 +1,4 @@
 import type { RegistryFacts } from './graph.js';
-import type { PackageComponentPrefixFact } from './validate/package-prefixes.js';
 
 export interface CompileComponentOptions {
   fileName: string;
@@ -9,6 +8,13 @@ export interface CompileComponentOptions {
   registryFacts?: RegistryFacts;
   source: string;
   sourceProvenance?: 'app' | 'compiler-emitted';
+}
+
+export interface PackageComponentPrefixFact {
+  idrefBehaviorAttributes?: readonly string[];
+  effectivePrefix?: string;
+  packageName: string;
+  prefix?: string | null;
 }
 
 export interface QueryUpdatePlanFact {

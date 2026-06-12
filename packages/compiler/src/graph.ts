@@ -8,7 +8,7 @@ import {
   firstComponentModel,
   type ComponentModuleModel,
 } from './scan/parse.js';
-import type { PackageComponentPrefixFact } from './validate/package-prefixes.js';
+import type { PackageComponentPrefixFact } from './types.js';
 
 export type ComponentGraphFact = Pick<ComponentExplain, 'fragments' | 'name' | 'queries'>;
 

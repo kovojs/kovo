@@ -11,7 +11,7 @@ import {
   type JsxElementModel,
 } from '../scan/parse.js';
 import { dedupeBy, kebabCase, splitDepValue } from '../shared.js';
-import type { PackageComponentPrefixFact } from './package-prefixes.js';
+import type { PackageComponentPrefixFact } from '../types.js';
 
 interface IdrefValue {
   index: number;

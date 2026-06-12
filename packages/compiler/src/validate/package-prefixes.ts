@@ -1,13 +1,7 @@
 import { diagnosticDefinitions } from '@jiso/core';
 
 import type { CompilerDiagnostic } from '../diagnostics.js';
-
-export interface PackageComponentPrefixFact {
-  idrefBehaviorAttributes?: readonly string[];
-  effectivePrefix?: string;
-  packageName: string;
-  prefix?: string | null;
-}
+import type { PackageComponentPrefixFact } from '../types.js';
 
 interface RegisteredPackagePrefix {
   fact: PackageComponentPrefixFact;
