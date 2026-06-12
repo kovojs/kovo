@@ -79,8 +79,6 @@ export type {
 } from './types.js';
 export { createEmptyCompileResult, queryShapesFromFacts } from './types.js';
 
-const irHeader = '// @jiso-ir';
-
 export function compileComponentModule(options: CompileComponentOptions): CompileResult {
   const authoringSurfaceDiagnostics = validateAuthoringSurface(options);
 
@@ -146,7 +144,7 @@ export function compileComponentModule(options: CompileComponentOptions): Compil
   });
   const fileNames = compileArtifactFileNames(options.fileName);
 
-  const clientSource = emitClientModule(handlers, queryUpdatePlans, componentName, irHeader);
+  const clientSource = emitClientModule(handlers, queryUpdatePlans, componentName);
   const clientHref = clientModuleUrl(options.fileName, clientModuleVersion(clientSource));
   const versionedHandlers = handlers.map((handler) =>
     versionHandlerLowering(handler, options.fileName, clientHref),

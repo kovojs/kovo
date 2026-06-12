@@ -1,8 +1,7 @@
 import { findMatchingToken, findStringEnd } from './scan/text.js';
 import { firstComponentModel, type ComponentModuleModel } from './scan/parse.js';
+import { cssIrHeader } from './ir.js';
 import { escapeAttribute, indent, kebabCase } from './shared.js';
-
-const cssIrHeader = '/* @jiso-ir */';
 
 export interface CssAsset {
   criticalCss?: string;

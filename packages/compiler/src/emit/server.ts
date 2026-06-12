@@ -1,5 +1,6 @@
 import { runInNewContext } from 'node:vm';
 
+import { compilerIrHeader } from '../ir.js';
 import { emitElementParamTypes, type HandlerLowering } from '../lower/handlers.js';
 import { parseLiteralObject } from '../scan/object.js';
 import {
@@ -12,10 +13,8 @@ import {
 import { escapeAttribute, splitDepValue } from '../shared.js';
 import type { RenderEquivalenceCheck } from '../types.js';
 
-const irHeader = '// @jiso-ir';
-
 export function emitServerModule(renderedSource: string): string {
-  return `${irHeader}
+  return `${compilerIrHeader}
 export function renderSource() {
   return ${templateLiteral(renderedSource)};
 }
@@ -63,7 +62,7 @@ function executableRenderSource(serverSource: string): string | null {
   if (exportIndex < 0) return null;
 
   const prelude = serverSource.slice(0, exportIndex).trim();
-  if (prelude !== irHeader) return null;
+  if (prelude !== compilerIrHeader) return null;
 
   // SPEC 5.2.3 requires render(src) to equal render(compile(src)); execute the emitted
   // renderSource body instead of re-reading its template literal as inert text.

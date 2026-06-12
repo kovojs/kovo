@@ -1,8 +1,7 @@
 import type { ComponentCssAsset } from '../css.js';
 import type { RegistryFacts, RegistryTypeFacts } from '../graph.js';
+import { compilerIrHeader } from '../ir.js';
 import { kebabCase } from '../shared.js';
-
-const irHeader = '// @jiso-ir';
 
 interface RegistryHandler {
   exportName: string;
@@ -72,7 +71,7 @@ export function emitRegistryModule(options: EmitRegistryModuleOptions): string {
   const invalidationSetLines = invalidationSetFactLines(options.registryFacts?.invalidations);
   const domainKey = registryDomainKey(options.registryFacts?.domainKeys);
 
-  return `${irHeader}
+  return `${compilerIrHeader}
 export interface HandlerModules {
 ${handlerModuleLine}
 }

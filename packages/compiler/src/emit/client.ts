@@ -1,5 +1,6 @@
 import ts from 'typescript';
 
+import { compilerIrHeader } from '../ir.js';
 import type { ElementParam, HandlerLowering } from '../lower/handlers.js';
 import { dedupeBy, indent } from '../shared.js';
 import type {
@@ -13,7 +14,6 @@ export function emitClientModule(
   handlers: HandlerLowering[],
   queryUpdatePlans: readonly QueryUpdatePlanFact[],
   componentName: string,
-  irHeader: string,
 ): string {
   const imports = [
     ...(queryUpdatePlans.length > 0 ? ['applyCompiledQueryUpdatePlan'] : []),
@@ -37,7 +37,7 @@ export function emitClientModule(
   const queryPlanExport = emitQueryUpdatePlanExport(componentName, queryUpdatePlans);
   const exports = [handlerExports, queryPlanExport].filter(Boolean).join('\n\n');
 
-  return `${irHeader}
+  return `${compilerIrHeader}
 ${importLine}${exports || '// no client handlers emitted'}
 `;
 }

@@ -1,4 +1,4 @@
-const irHeader = '// @jiso-ir';
+import { compilerIrHeader } from '../ir.js';
 
 export interface QueryPlanBootstrapInput {
   exportName: string;
@@ -31,7 +31,7 @@ export function emitQueryPlanBootstrapModule(
   return {
     fileName,
     kind: 'client',
-    source: `${irHeader}
+    source: `${compilerIrHeader}
 import { applyDeferredStreamResponseToDom, createQueryStore, installJisoLoader } from '@jiso/runtime';
 ${imports ? `${imports}\n` : ''}
 const store = createQueryStore();

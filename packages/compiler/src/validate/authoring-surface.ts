@@ -2,10 +2,8 @@ import { diagnosticDefinitions } from '@jiso/core';
 import ts from 'typescript';
 
 import { diagnosticFor, type CompilerDiagnostic } from '../diagnostics.js';
+import { compilerIrHeader, cssIrHeader } from '../ir.js';
 import type { CompileComponentOptions } from '../types.js';
-
-const irHeader = '// @jiso-ir';
-const cssIrHeader = '/* @jiso-ir */';
 
 interface StringRender {
   length: number;
@@ -22,7 +20,9 @@ export function validateAuthoringSurface(options: CompileComponentOptions): Comp
         fileName: options.fileName,
         source: options.source,
         start: 0,
-        length: options.source.startsWith(irHeader) ? irHeader.length : cssIrHeader.length,
+        length: options.source.startsWith(compilerIrHeader)
+          ? compilerIrHeader.length
+          : cssIrHeader.length,
         stringSource: options.source,
       }),
     ];
@@ -40,7 +40,7 @@ export function validateAuthoringSurface(options: CompileComponentOptions): Comp
 }
 
 export function isCompilerIrArtifact(source: string): boolean {
-  return source.startsWith(irHeader) || source.startsWith(cssIrHeader);
+  return source.startsWith(compilerIrHeader) || source.startsWith(cssIrHeader);
 }
 
 function stringRenderedComponents(fileName: string, source: string): StringRender[] {
