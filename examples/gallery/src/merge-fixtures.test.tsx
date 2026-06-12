@@ -26,6 +26,11 @@ import {
   comboboxOptionAttributes,
   dialogContentAttributes,
   dialogTriggerAttributes,
+  dropdownMenuContentAttributes,
+  dropdownMenuGroupAttributes,
+  dropdownMenuItemAttributes,
+  dropdownMenuSeparatorAttributes,
+  dropdownMenuTriggerAttributes,
   fieldControlAttributes,
   fieldLabelAttributes,
   fieldRootAttributes,
@@ -345,6 +350,143 @@ describe('gallery G5 primitive merge fixtures', () => {
       </section>,
     ).toBe(
       '<section data-gallery-merge="command"><input data-state="open" aria-autocomplete="list" aria-expanded="true" role="searchbox" type="text" value="author query" aria-activedescendant="author-command-option" aria-controls="gallery-command-listbox" aria-describedby="gallery-command-description" id="gallery-command-input" aria-labelledby="gallery-command-label" placeholder="Run a command" class="command-input text-sm"><div data-state="open" role="menu" id="author-command-listbox" aria-labelledby="gallery-command-label" class="command-listbox max-h-72"><div data-state="active" data-selected="" data-highlighted="" aria-selected="false" role="menuitem" tabIndex="-1" id="gallery-command-option-1" label="Settings" value="settings" class="command-item px-2">Settings</div></div></section>',
+    );
+  });
+
+  it('renders a golden dropdown-menu merge with menu roles and item overrides', () => {
+    const state = {
+      highlightedValue: 'profile',
+      items: [
+        { label: 'Profile', value: 'profile' },
+        { disabled: true, label: 'Billing', value: 'billing' },
+      ],
+      open: true,
+    };
+    const trigger = mergePrimitiveAttrs(
+      {
+        ...dropdownMenuTriggerAttributes({
+          ...state,
+          contentId: 'gallery-dropdown-content',
+          id: 'gallery-dropdown-trigger',
+        }),
+        class: 'dropdown-trigger',
+      },
+      {
+        'aria-controls': 'author-dropdown-content',
+        'aria-expanded': 'false',
+        class: 'dropdown-trigger px-2',
+        type: 'submit',
+      },
+    );
+    const content = mergePrimitiveAttrs(
+      {
+        ...dropdownMenuContentAttributes({
+          ...state,
+          id: 'gallery-dropdown-content',
+          labelledBy: 'gallery-dropdown-trigger',
+        }),
+        class: 'dropdown-content',
+      },
+      {
+        class: 'dropdown-content shadow',
+        id: 'author-dropdown-content',
+        role: 'listbox',
+      },
+    );
+    const group = mergePrimitiveAttrs(
+      {
+        ...dropdownMenuGroupAttributes({
+          ...state,
+          id: 'gallery-dropdown-group',
+          labelledBy: 'gallery-dropdown-group-label',
+        }),
+      },
+      {
+        'aria-labelledby': 'author-dropdown-group-label',
+        class: 'dropdown-group',
+        role: 'presentation',
+      },
+    );
+    const item = mergePrimitiveAttrs(
+      {
+        ...dropdownMenuItemAttributes({
+          ...state,
+          id: 'gallery-dropdown-profile',
+          itemLabel: 'Profile',
+          itemValue: 'profile',
+        }),
+        class: 'dropdown-item',
+      },
+      {
+        'aria-disabled': 'true',
+        class: 'dropdown-item font-medium',
+        role: 'option',
+        tabIndex: 5,
+        value: 'author-profile',
+      },
+    );
+    const separator = mergePrimitiveAttrs(
+      dropdownMenuSeparatorAttributes({ id: 'gallery-dropdown-separator' }),
+      { role: 'none' },
+    );
+
+    expect(trigger.diagnostics).toEqual([
+      {
+        attr: 'aria-expanded',
+        code: 'FW232',
+        message: 'Author override of primitive ARIA/role attribute per SPEC.md section 4.6',
+      },
+      {
+        attr: 'aria-controls',
+        code: 'FW231',
+        message: 'Unmergeable primitive IDREF conflict per SPEC.md section 4.6',
+      },
+    ]);
+    expect(content.diagnostics).toEqual([
+      {
+        attr: 'role',
+        code: 'FW232',
+        message: 'Author override of primitive ARIA/role attribute per SPEC.md section 4.6',
+      },
+    ]);
+    expect(group.diagnostics).toEqual([
+      {
+        attr: 'role',
+        code: 'FW232',
+        message: 'Author override of primitive ARIA/role attribute per SPEC.md section 4.6',
+      },
+      {
+        attr: 'aria-labelledby',
+        code: 'FW231',
+        message: 'Unmergeable primitive IDREF conflict per SPEC.md section 4.6',
+      },
+    ]);
+    expect(item.diagnostics).toEqual([
+      {
+        attr: 'role',
+        code: 'FW232',
+        message: 'Author override of primitive ARIA/role attribute per SPEC.md section 4.6',
+      },
+    ]);
+    expect(separator.diagnostics).toEqual([
+      {
+        attr: 'role',
+        code: 'FW232',
+        message: 'Author override of primitive ARIA/role attribute per SPEC.md section 4.6',
+      },
+    ]);
+    expect(
+      <section data-gallery-merge="dropdown-menu">
+        <button {...trigger.attrs}>Account</button>
+        <div {...content.attrs}>
+          <div {...group.attrs}>
+            <div {...item.attrs}>Profile</div>
+          </div>
+          <div {...separator.attrs}></div>
+        </div>
+      </section>,
+    ).toBe(
+      '<section data-gallery-merge="dropdown-menu"><button data-state="open" aria-expanded="false" aria-haspopup="menu" type="submit" aria-controls="author-dropdown-content" id="gallery-dropdown-trigger" class="dropdown-trigger px-2">Account</button><div data-state="open" role="listbox" tabIndex="-1" id="author-dropdown-content" aria-labelledby="gallery-dropdown-trigger" class="dropdown-content shadow"><div data-state="open" role="presentation" id="gallery-dropdown-group" aria-labelledby="author-dropdown-group-label" class="dropdown-group"><div data-state="active" data-highlighted="" role="option" tabIndex="5" id="gallery-dropdown-profile" label="Profile" value="author-profile" class="dropdown-item font-medium" aria-disabled="true">Profile</div></div><div role="none" id="gallery-dropdown-separator"></div></div></section>',
     );
   });
 
