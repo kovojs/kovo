@@ -781,6 +781,14 @@ land it first; don't fork it.
       scoped replay, and render-failure replay tests. Verified with
       `pnpm exec vitest --run packages/server/src`, `pnpm run check`, and `pnpm run check:fw`
       after `pnpm run check:build` produced the required `dist/` artifacts.
+      Additional evidence 2026-06-11: replay store/context/read/reserve/commit choreography now
+      lives in `packages/server/src/replay.ts`; `index.ts` imports the helpers and preserves the
+      public `createMemoryMutationReplayStore`/type exports while removing the inlined replay
+      implementation block. The TTL/entry-count replay store test moved from `index.test.ts` to
+      `replay.test.ts`. Same-session evidence:
+      `pnpm exec vp check packages/server/src/index.ts packages/server/src/index.test.ts packages/server/src/replay.ts packages/server/src/replay.test.ts`,
+      `pnpm exec vitest --run packages/server/src/replay.test.ts packages/server/src/index.test.ts`,
+      and `pnpm exec vitest --run packages/server/src/*.test.ts`.
 - [x] **MED — Unify the eight `{body, headers, status}` response types** behind one base; one
       case-insensitive header utility (today: `readHeader` index.ts:3091 fully case-insensitive
       vs document.ts:137 two-casings vs `findResponseHeaderName` index.ts:2397).
@@ -949,6 +957,12 @@ As each phase splits a source module, split its tests in the same commit.
 - [ ] server/index.test.ts (4,323 lines, one misnamed describe) → per-module files; shared
       fixture factory for the 22 re-declared `domain('cart')` setups; `match.ts` gets its own
       test file; document tests move out of shell.test.ts.
+      Partial evidence 2026-06-11: replay store behavior moved from `packages/server/src/index.test.ts`
+      to `packages/server/src/replay.test.ts` alongside the new `replay.ts` extraction, reducing
+      the server monolith while preserving public exports through `index.ts`. Same-session
+      evidence:
+      `pnpm exec vitest --run packages/server/src/replay.test.ts packages/server/src/index.test.ts`
+      and `pnpm exec vitest --run packages/server/src/*.test.ts`.
 - [ ] runtime/index.test.ts (4,435 lines, mutation tests under "query store") → per-module
       files; `Fake*` classes to a shared `test-fixtures.ts`; direct unit tests for wire-parser,
       handlers, morph; replace counted-microtask flushing with a single `flush()` helper.
