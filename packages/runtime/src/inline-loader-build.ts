@@ -175,6 +175,8 @@ export function buildInlineJisoLoaderModuleSource(
   const installerSource = buildInlineJisoLoaderInstallerSource(source);
 
   return `${[
+    '// @ts-nocheck',
+    '// Generated from the SPEC.md §4.4 readable inline bootstrap by inline-loader-build.ts.',
     "import type { ImportHandlerModule } from './handlers.js';",
     '',
     'export type InlineImportHandlerModule = ImportHandlerModule;',
@@ -185,14 +187,15 @@ export function buildInlineJisoLoaderModuleSource(
       installerSource,
     )};`,
     '',
-    'function readInlineJisoLoaderInstaller(): (importModule: InlineImportHandlerModule) => void {',
-    '  return (0, eval)(`(${inlineJisoLoaderInstallerSource})`) as (',
+    '// prettier-ignore',
+    'const inlineJisoLoaderInstaller = (',
+    `  ${installerSource}`,
+    ') as (',
     '    importModule: InlineImportHandlerModule,',
     '  ) => void;',
-    '}',
     '',
     'export function installInlineJisoLoader(importModule: InlineImportHandlerModule): void {',
-    '  readInlineJisoLoaderInstaller()(importModule);',
+    '  inlineJisoLoaderInstaller(importModule);',
     '}',
     '',
     'export function createInlineJisoLoaderSource(',

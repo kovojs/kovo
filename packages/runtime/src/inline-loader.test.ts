@@ -112,15 +112,21 @@ describe('inline loader source', () => {
 
   it('emits the checked-in runtime module from the readable inline loader source', () => {
     // SPEC.md §4.4: build-time emission must keep the shipped bootstrap tied to readable source.
-    expect(buildInlineJisoLoaderModuleSource()).toBe(
-      readFileSync(new URL('./inline-loader.ts', import.meta.url), 'utf8'),
-    );
+    const moduleSource = buildInlineJisoLoaderModuleSource();
+
+    expect(moduleSource).toBe(readFileSync(new URL('./inline-loader.ts', import.meta.url), 'utf8'));
+    expect(moduleSource).toContain('const inlineJisoLoaderInstaller = (');
+    expect(moduleSource).toContain('inlineJisoLoaderInstaller(importModule);');
+    expect(moduleSource).not.toContain('eval');
   });
 
   it('wires runtime package build and check scripts through inline loader generation', () => {
     // SPEC.md §4.4: package-level build/check must fail before a stale inline loader ships.
     const manifest = JSON.parse(
       readFileSync(new URL('../package.json', import.meta.url), 'utf8'),
+    ) as { scripts?: Record<string, string> };
+    const rootManifest = JSON.parse(
+      readFileSync(new URL('../../../package.json', import.meta.url), 'utf8'),
     ) as { scripts?: Record<string, string> };
 
     expect(manifest.scripts?.build).toBe('pnpm run build:inline-loader');
@@ -131,6 +137,11 @@ describe('inline loader source', () => {
     expect(manifest.scripts?.['check:inline-loader']).toBe(
       'node --experimental-strip-types src/inline-loader-build.ts --check',
     );
+    expect(rootManifest.scripts?.['check:inline-loader']).toBe(
+      'pnpm --filter @jiso/runtime run check:inline-loader',
+    );
+    expect(rootManifest.scripts?.check).toContain('pnpm run check:inline-loader');
+    expect(rootManifest.scripts?.['check:build']).toContain('pnpm run check:inline-loader');
   });
 
   it('keeps string, comment, and regex hazards in parity through the source helper', () => {

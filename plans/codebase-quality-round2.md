@@ -2257,6 +2257,21 @@ provided values are preserved while `undefined` is dropped. Same-session evidenc
 `pnpm --filter @jiso/runtime run check:inline-loader`,
 `pnpm exec vp check packages/runtime/src/defined-props.ts packages/runtime/src/defined-props.test.ts packages/runtime/src/loader.ts packages/runtime/src/mutation-submit.ts packages/runtime/src/apply-path.ts packages/runtime/src/broadcast.ts packages/runtime/src/mutation-response.ts packages/runtime/src/query-refetch.ts`,
 and `git diff --check`.
+Additional bounded evidence 2026-06-12: `packages/runtime/src/inline-loader-build.ts` now
+generates a direct `inlineJisoLoaderInstaller` function in the checked-in runtime module, so
+`installInlineJisoLoader` no longer reconstructs the installer through a runtime `eval` fallback;
+`packages/runtime/src/inline-loader.ts` remains generated from the readable SPEC §4.4 bootstrap
+source, and `packages/runtime/src/inline-loader.test.ts` pins the no-`eval` generated shape plus
+root `check:inline-loader`/`check:build` script wiring. Same-session evidence:
+`pnpm --filter @jiso/runtime run build:inline-loader`,
+`pnpm --filter @jiso/runtime run check:inline-loader`,
+`pnpm exec vitest --run packages/runtime/src/inline-loader.test.ts`,
+`pnpm exec vitest --run packages/runtime/src`,
+`pnpm exec vitest --config vitest.browser.config.ts --run packages/runtime/src/index.browser.test.ts`,
+`pnpm run check:inline-loader`,
+`pnpm run check:build`,
+`pnpm exec vp check package.json packages/runtime/src/inline-loader-build.ts packages/runtime/src/inline-loader.ts packages/runtime/src/inline-loader.test.ts plans/codebase-quality-round2.md`,
+and `git diff --check`.
 
 ## Phase 5 — Server: finish the extraction subtractively
 
