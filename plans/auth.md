@@ -326,6 +326,20 @@ Scope: SPEC additions (session population, guard-failure contract, mutation resp
       `pnpm exec vitest --run conformance/better-auth-pin/src/index.test.ts`,
       `pnpm exec tsc -p conformance/better-auth-pin/tsconfig.json --noEmit`, and
       `pnpm exec vp check packages/better-auth/src/index.ts packages/better-auth/src/index.test.ts plans/auth.md`.
+      Partial evidence 2026-06-12: explicit plugin-table bridge extensions now flow through
+      the P9 runtime verification path, not only validation and generated `schema.ts`
+      annotations. `createBetterAuthDbVerificationConfig(schemaBridge)` materializes extended
+      domain/exempt/key facts, and the touch-graph factory can emit a focused declared-touch
+      graph for an ejectable wrapper that mutates an app-declared plugin table such as
+      `webauthnCredential`. `packages/better-auth/src/index.test.ts` covers the extended
+      validation/config/touch-graph facts, and `conformance/better-auth-pin/src/index.test.ts`
+      drives the generated facts through `createJisoTestHarness`, proving observed writes to
+      `session` plus an explicitly bridged plugin table satisfy P9 coverage with no
+      diagnostics. Same-session evidence:
+      `pnpm exec vitest --run packages/better-auth/src/index.test.ts conformance/better-auth-pin/src/index.test.ts --reporter=dot`,
+      `pnpm exec tsc -p conformance/better-auth-pin/tsconfig.json --noEmit`,
+      `pnpm exec vp check packages/better-auth/src/index.ts packages/better-auth/src/index.test.ts conformance/better-auth-pin/src/index.test.ts plans/auth.md`, and
+      `git diff --check`.
       Remaining gaps: plugin-generated tables outside the blessed organization/admin/two-factor/OIDC-provider/MCP/SIWE/JWT/device-authorization
       surface are still not mapped, the OAuth-provider successor package/table metadata is not
       installed or exportable from the pinned dependency set, and full app `schema.ts` generation

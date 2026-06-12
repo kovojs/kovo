@@ -54,6 +54,8 @@ import {
   betterAuthCredentialMutationTouchGraph,
   betterAuthCredentialMutationTouches,
   betterAuthDbVerificationConfig,
+  createBetterAuthCredentialMutationTouchGraph,
+  createBetterAuthDbVerificationConfig,
   betterAuthOAuthProviderSuccessorImportPaths,
   betterAuthOAuthProviderSuccessorMetadataDegradation,
   betterAuthSchemaBridge,
@@ -1703,6 +1705,78 @@ describe('Better Auth pinned conformance', () => {
     expect(harness.verificationDiagnostics()).toEqual([]);
   });
 
+  it('verifies explicit plugin-table bridge extensions through the P9 harness', async () => {
+    const schemaBridge = {
+      webauthnChallenge: {
+        exempt: true,
+        rationale: 'Better Auth WebAuthn challenges are protocol state, not app query state.',
+      },
+      webauthnCredential: { domain: 'auth', key: 'userId' },
+    } as const;
+    const declaredTouches = {
+      signInEmail: [
+        { domain: 'auth', table: 'session' },
+        { domain: 'auth', table: 'webauthnCredential' },
+      ],
+    } as const;
+    type PluginVerifierDb = {
+      writes: { table: string; value: unknown }[];
+      write(table: string, value: unknown): void;
+    };
+    type PluginVerifierRequest = {
+      db: PluginVerifierDb;
+      headers: Headers;
+    };
+    const harness = createJisoTestHarness<PluginVerifierDb>({
+      db: {
+        writes: [],
+        write(table, value) {
+          this.writes.push({ table, value });
+        },
+      },
+      request: {
+        headers: requestHeaders(),
+      },
+      touchGraph: createBetterAuthCredentialMutationTouchGraph({
+        apis: ['signInEmail'],
+        credentialMutationDeclaredTableTouches: declaredTouches,
+        keys: { signInEmail: 'auth/passkey-sign-in' },
+      }),
+      verification: createBetterAuthDbVerificationConfig(schemaBridge),
+    });
+    const signIn = betterAuthSignInEmailMutation<'auth/passkey-sign-in', PluginVerifierRequest>(
+      new ObservedPluginCredentialAuth(harness.db),
+      {
+        csrf: false,
+        key: 'auth/passkey-sign-in',
+      },
+    );
+
+    await expect(
+      harness.exec(
+        signIn,
+        {
+          email: 'verified-passkey@example.com',
+          password,
+        },
+        { touchGraphKey: 'auth/passkey-sign-in' },
+      ),
+    ).resolves.toMatchObject({
+      ok: true,
+      responseHeaders: {
+        'Set-Cookie': ['better-auth.session_token=verified-plugin-sign-in; Path=/; HttpOnly'],
+      },
+      value: {
+        status: 'signed-in',
+      },
+    });
+    expect(harness.db.writes.map((write) => write.table)).toEqual([
+      'session',
+      'webauthnCredential',
+    ]);
+    expect(harness.verificationDiagnostics()).toEqual([]);
+  });
+
   it('mounts the real Better Auth handler as an audit-visible prefix endpoint', async () => {
     const { auth } = createRealAuth();
     const authEndpoint = mount('/api/auth', auth);
@@ -1795,6 +1869,21 @@ class ObservedCredentialAuth
   };
 
   constructor(private readonly db: AuthVerifierDb) {}
+}
+
+class ObservedPluginCredentialAuth implements BetterAuthSignInEmailLike {
+  readonly api = {
+    signInEmail: async (): Promise<BetterAuthResponseLike> => {
+      this.db.write('session', { action: 'signInEmail' });
+      this.db.write('webauthnCredential', { action: 'signInEmail' });
+
+      return responseWithCookies([
+        'better-auth.session_token=verified-plugin-sign-in; Path=/; HttpOnly',
+      ]);
+    },
+  };
+
+  constructor(private readonly db: { write(table: string, value: unknown): void }) {}
 }
 
 function createAuthVerifierDb(): AuthVerifierDb {

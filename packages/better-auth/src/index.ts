@@ -280,9 +280,17 @@ export type BetterAuthCredentialMutationTouchGraph = Readonly<
 >;
 
 export interface BetterAuthDbVerificationConfig {
-  domainByTable: Partial<Record<BetterAuthTable, BetterAuthTouchDomain>>;
-  exemptTables: readonly BetterAuthTable[];
-  keyByTable: Partial<Record<BetterAuthTable, string>>;
+  domainByTable: Record<string, BetterAuthTouchDomain>;
+  exemptTables: readonly string[];
+  keyByTable: Record<string, string>;
+}
+
+export interface BetterAuthCredentialMutationTouchGraphOptions {
+  apis?: readonly BetterAuthCredentialMutationApi[];
+  credentialMutationDeclaredTableTouches?: Partial<
+    Record<BetterAuthCredentialMutationApi, readonly BetterAuthDeclaredTableTouch[]>
+  >;
+  keys?: Partial<Record<BetterAuthCredentialMutationApi, string>>;
 }
 
 export interface BetterAuthSchemaSourceAnnotationOptions {
@@ -441,18 +449,33 @@ export function betterAuthOAuthProviderSuccessorMetadataDegradation(
 }
 
 export function createBetterAuthCredentialMutationTouchGraph(
-  keys: Partial<Record<BetterAuthCredentialMutationApi, string>> = {},
+  keys?: Partial<Record<BetterAuthCredentialMutationApi, string>>,
+): BetterAuthCredentialMutationTouchGraph;
+export function createBetterAuthCredentialMutationTouchGraph(
+  options?: BetterAuthCredentialMutationTouchGraphOptions,
+): BetterAuthCredentialMutationTouchGraph;
+export function createBetterAuthCredentialMutationTouchGraph(
+  options:
+    | BetterAuthCredentialMutationTouchGraphOptions
+    | Partial<Record<BetterAuthCredentialMutationApi, string>> = {},
 ): BetterAuthCredentialMutationTouchGraph {
+  const keyOverrides = isBetterAuthCredentialMutationTouchGraphOptions(options)
+    ? (options.keys ?? {})
+    : options;
+  const declaredTableTouches = isBetterAuthCredentialMutationTouchGraphOptions(options)
+    ? options.credentialMutationDeclaredTableTouches
+    : undefined;
+  const apis = isBetterAuthCredentialMutationTouchGraphOptions(options)
+    ? (options.apis ?? betterAuthCredentialMutationApis)
+    : betterAuthCredentialMutationApis;
+
   return Object.fromEntries(
-    (
-      Object.entries(betterAuthCredentialMutationDeclaredTableTouches) as [
-        BetterAuthCredentialMutationApi,
-        readonly BetterAuthDeclaredTableTouch[],
-      ][]
-    ).map(([api, touches]) => [
-      keys[api] ?? betterAuthCredentialMutationDefaultKeys[api],
+    apis.map((api) => [
+      keyOverrides[api] ?? betterAuthCredentialMutationDefaultKeys[api],
       {
-        touches: touches.map((touch) => ({
+        touches: (
+          declaredTableTouches?.[api] ?? betterAuthCredentialMutationDeclaredTableTouches[api]
+        ).map((touch) => ({
           domain: touch.domain,
           // Better Auth owns the SQL; the P9 bridge verifies domain/table coverage
           // without pretending row-key predicates are available at this boundary.
@@ -466,15 +489,14 @@ export function createBetterAuthCredentialMutationTouchGraph(
   );
 }
 
-export function createBetterAuthDbVerificationConfig(): BetterAuthDbVerificationConfig {
-  const domainByTable: Partial<Record<BetterAuthTable, BetterAuthTouchDomain>> = {};
-  const exemptTables: BetterAuthTable[] = [];
-  const keyByTable: Partial<Record<BetterAuthTable, string>> = {};
+export function createBetterAuthDbVerificationConfig(
+  schemaBridge: BetterAuthSchemaBridgeExtensions = {},
+): BetterAuthDbVerificationConfig {
+  const domainByTable: Record<string, BetterAuthTouchDomain> = {};
+  const exemptTables: string[] = [];
+  const keyByTable: Record<string, string> = {};
 
-  for (const [table, annotation] of Object.entries(betterAuthSchemaBridge) as [
-    BetterAuthTable,
-    BetterAuthSchemaBridgeAnnotation,
-  ][]) {
+  for (const [table, annotation] of Object.entries(createBetterAuthSchemaBridge(schemaBridge))) {
     if ('domain' in annotation) {
       domainByTable[table] = annotation.domain;
       if (annotation.key !== undefined) keyByTable[table] = annotation.key;
@@ -948,6 +970,14 @@ function mergeDomainTouches(
   }
 
   return [...merged.values()];
+}
+
+function isBetterAuthCredentialMutationTouchGraphOptions(
+  value:
+    | BetterAuthCredentialMutationTouchGraphOptions
+    | Partial<Record<BetterAuthCredentialMutationApi, string>>,
+): value is BetterAuthCredentialMutationTouchGraphOptions {
+  return 'apis' in value || 'credentialMutationDeclaredTableTouches' in value || 'keys' in value;
 }
 
 function declaredTableTouchMismatches(

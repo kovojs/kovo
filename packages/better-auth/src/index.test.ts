@@ -18,6 +18,8 @@ import {
   betterAuthCredentialMutationTouchGraph,
   betterAuthCredentialMutationTouches,
   betterAuthDbVerificationConfig,
+  createBetterAuthCredentialMutationTouchGraph,
+  createBetterAuthDbVerificationConfig,
   betterAuthOAuthProviderSuccessorImportPaths,
   betterAuthOAuthProviderSuccessorMetadataDegradation,
   betterAuthOrganizationDomain,
@@ -767,6 +769,84 @@ describe('credential mutation helpers', () => {
     });
     expect(betterAuthTableDomain('webauthnCredential')).toBe(null);
     expect(betterAuthTableDomain('webauthnCredential', schemaBridge)).toBe('auth');
+  });
+
+  it('materializes explicit plugin-table extensions into P9 verifier facts', () => {
+    const tables = {
+      account: authTable(['userId']),
+      session: authTable(['userId']),
+      user: authTable(),
+      verification: authTable(),
+      webauthnCredential: authTable(['credentialId', 'userId']),
+      webauthnChallenge: authTable(['challenge', 'expiresAt']),
+    };
+    const schemaBridge = {
+      webauthnChallenge: {
+        exempt: true,
+        rationale: 'Better Auth WebAuthn challenges are protocol state, not app query state.',
+      },
+      webauthnCredential: { domain: 'auth', key: 'userId' },
+    } as const;
+    const declaredTouches = {
+      signInEmail: [
+        { domain: 'auth', table: 'session' },
+        { domain: 'auth', table: 'webauthnCredential' },
+      ],
+    } as const;
+
+    expect(
+      validateBetterAuthSchemaBridge(tables, {
+        credentialMutationDeclaredTableTouches: declaredTouches,
+        schemaBridge,
+      }),
+    ).toEqual({
+      declaredTouchMismatches: [],
+      keyFieldMismatches: [],
+      missingTables: [],
+      ok: true,
+      pluginTableDegradations: [],
+      unbridgedTables: [],
+    });
+    expect(
+      createBetterAuthCredentialMutationTouchGraph({
+        apis: ['signInEmail'],
+        credentialMutationDeclaredTableTouches: declaredTouches,
+        keys: { signInEmail: 'auth/passkey-sign-in' },
+      }),
+    ).toMatchObject({
+      'auth/passkey-sign-in': {
+        touches: [
+          {
+            domain: 'auth',
+            keys: null,
+            site: '@jiso/better-auth:signInEmail',
+            via: 'session',
+          },
+          {
+            domain: 'auth',
+            keys: null,
+            site: '@jiso/better-auth:signInEmail',
+            via: 'webauthnCredential',
+          },
+        ],
+        unresolved: [],
+      },
+    });
+    expect(createBetterAuthDbVerificationConfig(schemaBridge)).toMatchObject({
+      domainByTable: {
+        account: 'auth',
+        session: 'auth',
+        user: 'user',
+        webauthnCredential: 'auth',
+      },
+      exemptTables: expect.arrayContaining(['verification', 'webauthnChallenge']),
+      keyByTable: {
+        account: 'userId',
+        session: 'userId',
+        user: 'id',
+        webauthnCredential: 'userId',
+      },
+    });
   });
 
   it('materializes Jiso annotations into an app schema.ts source fixture', () => {
