@@ -527,6 +527,14 @@ Scope: SPEC addition (proposed §9.5 "The request shell"), `@jiso/server` shell 
       and `/src/styles.css` through the generated middleware stack. Same-session
       verification ran `pnpm exec vitest --run packages/create-jiso/src/index.test.ts`
       and `pnpm exec vitest --run examples/commerce/src/app-shell.test.ts -t "app-shell surface through|vp run export"`.
+      Additional evidence 2026-06-12: the commerce static-export adoption proof
+      now exercises both consumer export commands, `vp run export` and
+      `npm run static`, against isolated output directories. The shared proof
+      checks the `commerce-export/v1` summary, pretty `cart/index.html` and
+      `login/index.html` route documents, the replayed
+      `c/commerce.client.js` module, and the copied Vite CSS asset bytes.
+      Same-session verification ran
+      `pnpm exec vitest --run examples/commerce/src/app-shell.test.ts -t "public commerce shell static output"`.
 
 ## Background — the gap
 
