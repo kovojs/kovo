@@ -246,6 +246,7 @@ export interface BetterAuthPluginTableDegradation {
   fields: string[] | null;
   manualBridgeSteps: string[];
   message: string;
+  physicalTable?: string;
   reason: 'unsupported-plugin-table';
   suggestedAnnotation: BetterAuthSchemaBridgeDomainAnnotation | null;
   table: string;
@@ -1154,6 +1155,7 @@ function unsupportedPluginTableDegradation(
   metadata: unknown,
 ): BetterAuthPluginTableDegradation {
   const fieldNames = betterAuthTableFieldNames(metadata);
+  const physicalTable = betterAuthPhysicalTableName(table, metadata);
   const suggestedAnnotation = suggestedUnsupportedPluginTableAnnotation(fieldNames);
 
   return {
@@ -1161,10 +1163,15 @@ function unsupportedPluginTableDegradation(
     fields: fieldNames === null ? null : [...fieldNames].sort(),
     manualBridgeSteps: unsupportedPluginTableManualBridgeSteps(
       table,
+      physicalTable,
       fieldNames,
       suggestedAnnotation,
     ),
-    message: `${table} is outside the blessed Better Auth schema bridge; add a schema.ts domain/exempt annotation and declared touches before relying on runtime coverage.`,
+    message: `${betterAuthTableLabel(
+      table,
+      physicalTable,
+    )} is outside the blessed Better Auth schema bridge; add a schema.ts domain/exempt annotation and declared touches before relying on runtime coverage.`,
+    ...(physicalTable === table ? {} : { physicalTable }),
     reason: 'unsupported-plugin-table',
     suggestedAnnotation,
     table,
@@ -1173,6 +1180,7 @@ function unsupportedPluginTableDegradation(
 
 function unsupportedPluginTableManualBridgeSteps(
   table: string,
+  physicalTable: string,
   fields: Set<string> | null,
   suggestedAnnotation: BetterAuthSchemaBridgeDomainAnnotation | null,
 ): string[] {
@@ -1186,10 +1194,17 @@ function unsupportedPluginTableManualBridgeSteps(
         )}); confirm before adding the bridge, otherwise use jiso({ exempt: true }) with a rationale.`;
 
   return [
-    `Inspect ${table} fields (${fieldList}) and decide whether the app reads this table.`,
+    `Inspect ${betterAuthTableLabel(
+      table,
+      physicalTable,
+    )} fields (${fieldList}) and decide whether the app reads this table.`,
     annotationStep,
     `Add declared Better Auth API touches for writes that can mutate ${table}; SPEC.md §11.2 keeps observed writes FW406 until declared coverage exists.`,
   ];
+}
+
+function betterAuthTableLabel(table: string, physicalTable: string): string {
+  return physicalTable === table ? table : `${table} (physical ${physicalTable})`;
 }
 
 function suggestedUnsupportedPluginTableAnnotation(

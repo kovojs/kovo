@@ -598,6 +598,34 @@ describe('credential mutation helpers', () => {
     ]);
   });
 
+  it('reports unsupported plugin-table physical aliases in FW406 diagnostics', () => {
+    expect(
+      validateBetterAuthSchemaBridge({
+        account: authTable(['userId']),
+        passkeyCredential: authTable(['credentialId', 'userId'], 'auth_passkey_credentials'),
+        session: authTable(['userId']),
+        user: authTable(),
+        verification: authTable(),
+      }).pluginTableDegradations,
+    ).toEqual([
+      {
+        diagnosticCode: 'FW406',
+        fields: ['credentialId', 'id', 'userId'],
+        manualBridgeSteps: [
+          'Inspect passkeyCredential (physical auth_passkey_credentials) fields (credentialId, id, userId) and decide whether the app reads this table.',
+          "Likely app-visible ownership is jiso({ domain: 'auth', key: 'userId' }); confirm before adding the bridge, otherwise use jiso({ exempt: true }) with a rationale.",
+          'Add declared Better Auth API touches for writes that can mutate passkeyCredential; SPEC.md §11.2 keeps observed writes FW406 until declared coverage exists.',
+        ],
+        message:
+          'passkeyCredential (physical auth_passkey_credentials) is outside the blessed Better Auth schema bridge; add a schema.ts domain/exempt annotation and declared touches before relying on runtime coverage.',
+        physicalTable: 'auth_passkey_credentials',
+        reason: 'unsupported-plugin-table',
+        suggestedAnnotation: { domain: 'auth', key: 'userId' },
+        table: 'passkeyCredential',
+      },
+    ]);
+  });
+
   it('reports absent successor OAuth-provider metadata as an FW406 degradation', () => {
     expect(betterAuthOAuthProviderSuccessorMetadataDegradation()).toEqual({
       attemptedImports: betterAuthOAuthProviderSuccessorImportPaths,
@@ -912,6 +940,70 @@ describe('credential mutation helpers', () => {
         session: 'userId',
         user: 'id',
         webauthnCredential: 'userId',
+      },
+    });
+  });
+
+  it('materializes explicit plugin-table extension aliases into schema and verifier facts', () => {
+    const tables = {
+      account: authTable(['userId']),
+      passkeyCredential: authTable(['credentialId', 'userId'], 'auth_passkey_credentials'),
+      session: authTable(['userId']),
+      user: authTable(),
+      verification: authTable(),
+    };
+    const schemaBridge = {
+      passkeyCredential: { domain: 'auth', key: 'userId' },
+    } as const;
+    const result = annotateBetterAuthSchemaSource(
+      [
+        "import { jiso } from '@jiso/drizzle';",
+        "import { pgTable, text } from 'drizzle-orm/pg-core';",
+        '',
+        "export const authPasskeyCredentials = pgTable('auth_passkey_credentials', {",
+        "  id: text('id').primaryKey(),",
+        "  credentialId: text('credential_id').notNull(),",
+        "  userId: text('user_id').notNull(),",
+        '});',
+        '',
+      ].join('\n'),
+      tables,
+      { schemaBridge },
+    );
+
+    // SPEC.md §10.1 / §11.2: extension bridges follow Better Auth modelName
+    // aliases exactly like blessed built-in table mappings.
+    expect(validateBetterAuthSchemaBridge(tables, { schemaBridge })).toEqual({
+      declaredTouchMismatches: [],
+      keyFieldMismatches: [],
+      missingTables: [],
+      ok: true,
+      pluginTableDegradations: [],
+      unbridgedTables: [],
+    });
+    expect(result.annotatedTables).toEqual(['auth_passkey_credentials']);
+    expect(result.missingSourceTables).toEqual(['account', 'session', 'user', 'verification']);
+    expect(result.source).toContain(
+      "export const authPasskeyCredentials = pgTable('auth_passkey_credentials', {\n" +
+        "  id: text('id').primaryKey(),\n" +
+        "  credentialId: text('credential_id').notNull(),\n" +
+        "  userId: text('user_id').notNull(),\n" +
+        "}, jiso({ domain: 'auth', key: 'userId' }));",
+    );
+    expect(createBetterAuthDbVerificationConfig(schemaBridge, tables)).toMatchObject({
+      domainByTable: {
+        account: 'auth',
+        auth_passkey_credentials: 'auth',
+        passkeyCredential: 'auth',
+        session: 'auth',
+        user: 'user',
+      },
+      keyByTable: {
+        account: 'userId',
+        auth_passkey_credentials: 'userId',
+        passkeyCredential: 'userId',
+        session: 'userId',
+        user: 'id',
       },
     });
   });

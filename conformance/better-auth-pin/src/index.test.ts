@@ -1882,6 +1882,10 @@ describe('Better Auth pinned conformance', () => {
   });
 
   it('verifies explicit plugin-table bridge extensions through the P9 harness', async () => {
+    const tables = {
+      webauthnChallenge: authTable(['challenge', 'expiresAt'], 'auth_webauthn_challenges'),
+      webauthnCredential: authTable(['credentialId', 'userId'], 'auth_webauthn_credentials'),
+    };
     const schemaBridge = {
       webauthnChallenge: {
         exempt: true,
@@ -1918,10 +1922,10 @@ describe('Better Auth pinned conformance', () => {
         credentialMutationDeclaredTableTouches: declaredTouches,
         keys: { signInEmail: 'auth/passkey-sign-in' },
       }),
-      verification: createBetterAuthDbVerificationConfig(schemaBridge),
+      verification: createBetterAuthDbVerificationConfig(schemaBridge, tables),
     });
     const signIn = betterAuthSignInEmailMutation<'auth/passkey-sign-in', PluginVerifierRequest>(
-      new ObservedPluginCredentialAuth(harness.db),
+      new ObservedPluginCredentialAuth(harness.db, 'auth_webauthn_credentials'),
       {
         csrf: false,
         key: 'auth/passkey-sign-in',
@@ -1948,7 +1952,7 @@ describe('Better Auth pinned conformance', () => {
     });
     expect(harness.db.writes.map((write) => write.table)).toEqual([
       'session',
-      'webauthnCredential',
+      'auth_webauthn_credentials',
     ]);
     expect(harness.verificationDiagnostics()).toEqual([]);
   });
@@ -2161,6 +2165,13 @@ function betterAuthSchemaSourceFixture(tables: readonly string[]): string {
   ].join('\n');
 }
 
+function authTable(fields: readonly string[] = [], modelName?: string) {
+  return {
+    fields: Object.fromEntries(fields.map((field) => [field, {}])),
+    ...(modelName === undefined ? {} : { modelName }),
+  };
+}
+
 class ObservedCredentialAuth
   implements BetterAuthSignInEmailLike, BetterAuthSignOutLike, BetterAuthSignUpEmailLike
 {
@@ -2191,7 +2202,7 @@ class ObservedPluginCredentialAuth implements BetterAuthSignInEmailLike {
   readonly api = {
     signInEmail: async (): Promise<BetterAuthResponseLike> => {
       this.db.write('session', { action: 'signInEmail' });
-      this.db.write('webauthnCredential', { action: 'signInEmail' });
+      this.db.write(this.pluginTable, { action: 'signInEmail' });
 
       return responseWithCookies([
         'better-auth.session_token=verified-plugin-sign-in; Path=/; HttpOnly',
@@ -2199,7 +2210,10 @@ class ObservedPluginCredentialAuth implements BetterAuthSignInEmailLike {
     },
   };
 
-  constructor(private readonly db: { write(table: string, value: unknown): void }) {}
+  constructor(
+    private readonly db: { write(table: string, value: unknown): void },
+    private readonly pluginTable = 'webauthnCredential',
+  ) {}
 }
 
 function createAuthVerifierDb(): AuthVerifierDb {
