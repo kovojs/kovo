@@ -4472,19 +4472,17 @@ export const ProductCard = component('product-card', {
   assert.ok(transformed);
   assert.equal(transformed.map, null);
 
-  const handlerHref = transformed.code.match(
-    /on:click="(\/c\/routes\/products\/product-card\.client\.js\?v=([0-9a-f]{8})#ProductCard\$button_click)"/,
+  const buttons = parseHtmlElements(executeGeneratedServerRenderSource(transformed.code)).filter(
+    (element) => element.tagName === 'button',
   );
-  assert.ok(handlerHref);
-  assert.equal(
-    transformed.code.includes('export const ProductCard$button_click'),
-    false,
-    'server output references the emitted client module instead of inlining the handler',
-  );
+  assert.equal(buttons.length, 1);
+  assert.equal(buttons[0]?.attributes['data-p-id'], '{product.id}');
+  const handlerRef = buttons[0]?.attributes['on:click'] ?? '';
+  const handlerUrl = new URL(handlerRef, 'http://jiso.test');
+  assert.equal(handlerUrl.pathname, '/c/routes/products/product-card.client.js');
+  assert.match(handlerUrl.searchParams.get('v') ?? '', /^[0-9a-f]{8}$/);
 
-  const [, clientHandlerHref = '', version = ''] = handlerHref;
-  const clientModuleHref = clientHandlerHref.split('#')[0] ?? '';
-  const [clientPath = ''] = clientModuleHref.split('?');
+  const version = handlerUrl.searchParams.get('v') ?? '';
   const headers = new Map();
   let body = '';
   let nextCalls = 0;
@@ -4497,16 +4495,26 @@ export const ProductCard = component('product-card', {
     },
   };
 
-  middleware({ url: `${clientPath}?cache=1&v=${version}` }, response, () => {
+  middleware({ url: `${handlerUrl.pathname}?cache=1&v=${version}` }, response, () => {
     nextCalls += 1;
   });
 
   assert.equal(nextCalls, 0);
   assert.equal(response.statusCode, 200);
   assert.equal(headers.get('Content-Type'), 'text/javascript');
-  assert.match(body, /export const ProductCard\$button_click = handler/);
+  const cartEvents = [];
+  const clientExports = executeGeneratedClientModule(body, {
+    addToCart(id) {
+      cartEvents.push(id);
+      return `added:${id}`;
+    },
+  });
+  const handlerName = handlerUrl.hash.slice(1);
+  assert.equal(typeof clientExports[handlerName], 'function');
+  assert.equal(clientExports[handlerName]('click', { params: { id: 'p1' } }), 'added:p1');
+  assert.deepEqual(cartEvents, ['p1']);
 
-  middleware({ url: `${clientPath}?v=00000000` }, response, () => {
+  middleware({ url: `${handlerUrl.pathname}?v=00000000` }, response, () => {
     nextCalls += 1;
   });
   assert.equal(nextCalls, 1);

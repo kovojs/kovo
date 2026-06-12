@@ -174,6 +174,11 @@ Do this first or pay it on every commit.
       `scripts/prod-emit-check.mjs` and exercises the built `jisoVitePlugin` transform plus dev
       middleware roundtrip for SPEC §5 source-derived handler URLs and 1:1 client/server output
       instead of grepping compiler, Vite plugin, Vite task, or test-name source.
+      Partial evidence 2026-06-12: the same S1 production-build tranche now parses the rendered
+      server output, fetches the emitted client module through the Vite middleware, executes the
+      generated module, and invokes the exported handler instead of regex-matching the transformed
+      or served module source. Verification: `node --test --test-name-pattern
+      "S1 production build" tests/fw-check.node.mjs`.
       Partial evidence 2026-06-11: the P1 IDREF tranche now imports built core/compiler APIs and
       asserts `diagnosticDefinitions.FW221` plus `compileComponentModule` accept/fail diagnostics
       for literal `for`, `aria-describedby`, and `popovertarget` IDREFs instead of grepping core
