@@ -1150,6 +1150,13 @@ As each phase splits a source module, split its tests in the same commit.
       `compileFixture()` helper returning files by kind; diagnostic assertions reference
       `diagnosticDefinitions[code].message` instead of pasted strings (today a one-word rewording
       breaks dozens of tests).
+      Partial evidence 2026-06-12: package-prefix diagnostics and graph coverage moved from
+      `packages/compiler/src/index.test.ts` into `packages/compiler/src/package-prefixes.test.ts`,
+      with FW234 message/severity assertions keyed to `diagnosticDefinitions.FW234` while retaining
+      a compile-path alias acceptance check. Same-session evidence:
+      `pnpm exec vitest --run packages/compiler/src/package-prefixes.test.ts packages/compiler/src/index.test.ts`,
+      `pnpm exec vp check packages/compiler/src/package-prefixes.test.ts packages/compiler/src/index.test.ts plans/codebase-quality-round2.md`,
+      and `git diff --check`.
 - [ ] drizzle (one describe, 57 its, 68 inline pgTable fixtures, 3 module-shim copies) and
       test-package suites: same treatment; CLI tests get the temp-dir + stream-spy ritual
       (16 hand-copies) as one helper.
