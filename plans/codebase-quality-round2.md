@@ -310,6 +310,13 @@ tests/fw-check.node.mjs` passed.
       of grepping config or perf-script source names. Verification: focused
       `node --test --test-name-pattern "framework-owned browser suite|P10 perf acceptance"
       tests/fw-check.node.mjs` passed.
+      Partial evidence 2026-06-12: the browser/perf acceptance wiring tranche now derives Vite+
+      task names from `package.json`, parses CI task order, parses Vitest/Node task commands into
+      config/module facts, and imports the configured acceptance metadata/perf runner entrypoint
+      instead of asserting whole command literals. Verification:
+      `node --test --test-name-pattern "framework-owned browser suite|P10 perf acceptance"
+      tests/fw-check.node.mjs`, `pnpm exec vp check tests/fw-check.node.mjs
+      plans/codebase-quality-round2.md`, and `git diff --check`.
       Partial evidence 2026-06-11: the D2 keyed-commerce tranche now parses the committed
       commerce graph and asserts product/order fragment and optimism facts, then exercises built
       runtime/server APIs for keyed morph identity, keyed query-instance reruns, keyed enhanced

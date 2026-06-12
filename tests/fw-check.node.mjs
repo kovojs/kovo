@@ -336,6 +336,50 @@ const parseWorkflowSteps = (source) => {
   return steps;
 };
 
+const parsePnpmRunScript = (command) => {
+  const match = /^pnpm run ([\w:-]+)$/.exec(command);
+  return match?.[1];
+};
+
+const parseVpRunCommand = (command) => {
+  const match = /^vp run ([\w-]+)$/.exec(command);
+  return match?.[1];
+};
+
+const parseRequiredVpTask = (scriptName, packageJson) => {
+  const command = packageJson.scripts?.[scriptName];
+  assert.equal(typeof command, 'string', `${scriptName} script exists`);
+  const taskName = parseVpRunCommand(command);
+  assert.ok(taskName, `${scriptName} delegates to a Vite+ task`);
+  return taskName;
+};
+
+const parseVitestTaskCommand = (command) => {
+  assert.equal(typeof command, 'string', 'Vitest task command is present');
+  const parts = command.split(/\s+/);
+  assert.equal(parts[0], 'vitest');
+  assert.equal(parts.includes('--run'), true);
+  const configIndex = parts.indexOf('--config');
+  assert.notEqual(configIndex, -1);
+  assert.ok(parts[configIndex + 1], 'Vitest task names a config file');
+  return { configPath: parts[configIndex + 1] };
+};
+
+const parseNodeTaskCommand = (command) => {
+  assert.equal(typeof command, 'string', 'Node task command is present');
+  const match = /^node ([^\s]+)$/.exec(command);
+  assert.ok(match, 'Node task runs a single module entrypoint');
+  return { modulePath: match[1] };
+};
+
+const assertOrderedIncludes = (items, before, after) => {
+  const beforeIndex = items.indexOf(before);
+  const afterIndex = items.indexOf(after);
+  assert.notEqual(beforeIndex, -1, `${before} is present`);
+  assert.notEqual(afterIndex, -1, `${after} is present`);
+  assert.ok(beforeIndex < afterIndex, `${before} precedes ${after}`);
+};
+
 const parseCssSourceDirectives = (source) =>
   source
     .split('\n')
@@ -6143,27 +6187,33 @@ export const CartTotal = component('cart-total', {
 });
 
 void test('framework-owned browser suite is wired into acceptance', async () => {
-  const { browserSuiteAcceptance } = await import('./browser-acceptance.mjs');
   const packageJson = JSON.parse(await readProjectFile('package.json'));
   const ciWorkflow = await readProjectFile('.github/workflows/ci.yml');
   const viteConfig = await readProjectFile('vite.config.ts');
-  const ciSteps = parseWorkflowSteps(ciWorkflow).map((step) => step.run ?? step.uses);
+  const acceptanceScripts = packageJson.scripts.acceptance.split(' && ').map(parsePnpmRunScript);
+  const ciTaskNames = parseWorkflowSteps(ciWorkflow)
+    .map((step) => parseVpRunCommand(step.run ?? ''))
+    .filter(Boolean);
   const tasks = parseTemplateViteTasks(viteConfig);
-
-  assert.equal(
-    packageJson.scripts.acceptance.split(' && ').includes('pnpm run test:browser'),
-    true,
+  const browserTaskName = parseRequiredVpTask('test:browser', packageJson);
+  const browserTask = tasks[browserTaskName];
+  assert.ok(browserTask, `${browserTaskName} task is defined`);
+  const { configPath } = parseVitestTaskCommand(browserTask.command);
+  const browserAcceptanceInput = browserTask.input.find((entry) =>
+    entry.pattern.endsWith('/browser-acceptance.mjs'),
   );
-  assert.equal(packageJson.scripts['test:browser'], 'vp run browser');
-  assert.equal(ciSteps.includes('vp run browser'), true);
-  assert.deepEqual(tasks.browser, {
-    command: 'vitest --config vitest.browser.config.ts --run',
-    input: [
-      { base: 'workspace', pattern: 'vitest.browser.config.ts' },
-      { base: 'workspace', pattern: 'tests/browser-acceptance.mjs' },
-      { base: 'workspace', pattern: 'packages/runtime/src/**/*.browser.test.ts' },
-    ],
-  });
+  assert.ok(browserAcceptanceInput, `${browserTaskName} task watches browser acceptance metadata`);
+  const { browserSuiteAcceptance } = await import(
+    new URL(`../${browserAcceptanceInput.pattern}`, import.meta.url).href
+  );
+
+  assert.equal(acceptanceScripts.includes('test:browser'), true);
+  assert.equal(ciTaskNames.includes(browserTaskName), true);
+  assert.deepEqual(browserTask.input, [
+    { base: 'workspace', pattern: configPath },
+    { base: 'workspace', pattern: browserAcceptanceInput.pattern },
+    { base: 'workspace', pattern: browserSuiteAcceptance.include[0] },
+  ]);
   assert.deepEqual(browserSuiteAcceptance, {
     browser: 'chromium',
     headless: true,
@@ -6173,33 +6223,32 @@ void test('framework-owned browser suite is wired into acceptance', async () => 
 });
 
 void test('P10 perf acceptance is wired through Playwright and CDP', async () => {
-  const { p10PerfAcceptance } = await import('./p10-perf.node.mjs');
   const packageJson = JSON.parse(await readProjectFile('package.json'));
   const ciWorkflow = await readProjectFile('.github/workflows/ci.yml');
   const viteConfig = await readProjectFile('vite.config.ts');
-  const acceptanceSteps = packageJson.scripts.acceptance.split(' && ');
-  const ciSteps = parseWorkflowSteps(ciWorkflow).map((step) => step.run ?? step.uses);
+  const acceptanceScripts = packageJson.scripts.acceptance.split(' && ').map(parsePnpmRunScript);
+  const ciTaskNames = parseWorkflowSteps(ciWorkflow)
+    .map((step) => parseVpRunCommand(step.run ?? ''))
+    .filter(Boolean);
   const tasks = parseTemplateViteTasks(viteConfig);
+  const perfTaskName = parseRequiredVpTask('test:p10-perf', packageJson);
+  const perfTask = tasks[perfTaskName];
+  assert.ok(perfTask, `${perfTaskName} task is defined`);
+  const { modulePath } = parseNodeTaskCommand(perfTask.command);
+  const { p10PerfAcceptance, runP10PerfAcceptance } = await import(
+    new URL(`../${modulePath}`, import.meta.url).href
+  );
 
-  assert.equal(acceptanceSteps.includes('pnpm run test:p10-perf'), true);
-  assert.equal(packageJson.scripts['test:p10-perf'], 'vp run p10-perf');
-  assert.ok(
-    acceptanceSteps.indexOf('pnpm run check:build') <
-      acceptanceSteps.indexOf('pnpm run test:p10-perf'),
-  );
-  assert.ok(
-    acceptanceSteps.indexOf('pnpm run test:p10-perf') <
-      acceptanceSteps.indexOf('pnpm run check:fw'),
-  );
-  assert.ok(ciSteps.indexOf('vp run build') < ciSteps.indexOf('vp run p10-perf'));
-  assert.ok(ciSteps.indexOf('vp run p10-perf') < ciSteps.indexOf('vp run fw-check'));
-  assert.deepEqual(tasks['p10-perf'], {
-    command: 'node tests/p10-perf.node.mjs',
-    input: [
-      { base: 'workspace', pattern: 'tests/p10-perf.node.mjs' },
-      { base: 'workspace', pattern: 'dist/**' },
-    ],
-  });
+  assert.equal(typeof runP10PerfAcceptance, 'function');
+  assert.equal(acceptanceScripts.includes('test:p10-perf'), true);
+  assertOrderedIncludes(acceptanceScripts, 'check:build', 'test:p10-perf');
+  assertOrderedIncludes(acceptanceScripts, 'test:p10-perf', 'check:fw');
+  assertOrderedIncludes(ciTaskNames, 'build', perfTaskName);
+  assertOrderedIncludes(ciTaskNames, perfTaskName, 'fw-check');
+  assert.deepEqual(perfTask.input, [
+    { base: 'workspace', pattern: modulePath },
+    { base: 'workspace', pattern: 'dist/**' },
+  ]);
   assert.deepEqual(p10PerfAcceptance, {
     browser: 'chromium',
     cdpMethods: ['HeapProfiler.collectGarbage', 'Runtime.getHeapUsage'],
