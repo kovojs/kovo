@@ -3,8 +3,16 @@ import type { Form, FormFailure, FormInput, JsonValue } from '@jiso/core';
 import { parseJsonValue } from './json.js';
 import { hydrateQueryScripts, queryStoreKey } from './query-store.js';
 import type { QueryScriptLike, QueryStore } from './query-store.js';
-import { applyFragmentQueryBody, applyMutationResponseToStore } from './apply-path.js';
-import type { AppliedMutationResponse } from './apply-path.js';
+import {
+  applyDeferredChunkToDom,
+  applyMutationResponseToDom,
+  applyMutationResponseToStore,
+} from './apply-path.js';
+import type {
+  AppliedMutationResponse,
+  AppliedMutationResponseToDom,
+  ApplyMutationResponseToDomOptions,
+} from './apply-path.js';
 import {
   abortIslandSignalScope,
   createIslandSignalScope,
@@ -12,7 +20,6 @@ import {
   dispatchDelegatedEvent,
 } from './handlers.js';
 import type { ImportHandlerModule, IslandSignalScope } from './handlers.js';
-import { applyFragments } from './morph.js';
 import type { MorphFragment, MorphRoot } from './morph.js';
 import { MutationQueue } from './mutation-queue.js';
 import {
@@ -20,8 +27,7 @@ import {
   readMutationChangeHeader,
   sanitizeMutationChangeRecord,
 } from './mutation-response.js';
-import { applyCompiledQueryUpdatePlan, supportsQueryBindings } from './query-bindings.js';
-import type { CompiledQueryUpdatePlan, CompiledQueryUpdatePlans } from './query-bindings.js';
+import type { CompiledQueryUpdatePlans } from './query-bindings.js';
 import {
   installPagehideOptimismCleanup,
   optimisticChangeFromInput,
@@ -50,7 +56,12 @@ export type {
   ImportHandlerModule,
   IslandSignalScope,
 } from './handlers.js';
-export type { AppliedMutationResponse } from './apply-path.js';
+export { applyDeferredChunkToDom, applyMutationResponseToDom } from './apply-path.js';
+export type {
+  AppliedMutationResponse,
+  AppliedMutationResponseToDom,
+  ApplyMutationResponseToDomOptions,
+} from './apply-path.js';
 export {
   applyFragments,
   DomMorphRoot,
@@ -943,56 +954,6 @@ export function applyMutationResponse(store: QueryStore, body: string): AppliedM
 
 export const applyDeferredChunk: typeof applyMutationResponse = applyMutationResponse;
 
-export interface ApplyMutationResponseToDomOptions {
-  applyQuery?: (query: QueryChunk) => { value: unknown } | void;
-  beforeApplyQueries?: (queries: readonly QueryChunk[]) => void;
-  body: string;
-  islandSignalScope?: IslandSignalScope;
-  morph?: MorphFragment;
-  onError?: (error: unknown) => void;
-  queryPlans?: CompiledQueryUpdatePlans;
-  root: MorphRoot;
-  store: QueryStore;
-}
-
-export type AppliedMutationResponseToDom = AppliedMutationResponse & { appliedFragments: string[] };
-
-export function applyMutationResponseToDom(
-  options: ApplyMutationResponseToDomOptions,
-): AppliedMutationResponseToDom {
-  const applied = applyFragmentQueryBody(
-    options.body,
-    (query) => {
-      const queryResult = options.applyQuery?.(query);
-      const planValue = queryResult ? queryResult.value : query.value;
-      if (!queryResult) {
-        options.store.set(query.name, query.value, query.key);
-      }
-      applyCompiledQueryUpdatePlanIfSupported(
-        options.root,
-        query.name,
-        planValue,
-        options.queryPlans?.[query.name],
-      );
-    },
-    options.onError,
-    options.beforeApplyQueries,
-  );
-
-  return {
-    ...applied,
-    appliedFragments: applyFragments(
-      options.root,
-      applied.fragments,
-      options.morph,
-      options.islandSignalScope,
-    ),
-  };
-}
-
-export const applyDeferredChunkToDom: typeof applyMutationResponseToDom =
-  applyMutationResponseToDom;
-
 type MutationDomApplyHooks = Pick<
   ApplyMutationResponseToDomOptions,
   'applyQuery' | 'beforeApplyQueries'
@@ -1351,16 +1312,6 @@ async function fetchEnhancedMutation(
 
 function isFailedMutationResponse(response: EnhancedMutationResponseLike): boolean {
   return response.ok === false || (response.status !== undefined && response.status >= 400);
-}
-
-function applyCompiledQueryUpdatePlanIfSupported(
-  root: MorphRoot,
-  queryName: string,
-  value: unknown,
-  plan: CompiledQueryUpdatePlan | undefined,
-): void {
-  if (!supportsQueryBindings(root)) return;
-  applyCompiledQueryUpdatePlan(root, queryName, value, plan);
 }
 
 function readLiveTargets(root: TargetCollectorRoot): string[] {

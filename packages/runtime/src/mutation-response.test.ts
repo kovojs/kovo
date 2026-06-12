@@ -33,11 +33,39 @@ class FakeMorphTarget {
   }
 }
 
+class FakeQueryBindingElement {
+  textContent: string | null;
+
+  constructor(
+    private readonly attrs: Record<string, string>,
+    textContent = '',
+  ) {
+    this.textContent = textContent;
+  }
+
+  getAttribute(name: string): string | null {
+    return this.attrs[name] ?? null;
+  }
+}
+
 class FakeMorphRoot {
+  bindings: FakeQueryBindingElement[] = [];
   targets = new Map<string, FakeMorphTarget>();
 
   findFragmentTarget(target: string): FakeMorphTarget | null {
     return this.targets.get(target) ?? null;
+  }
+
+  querySelectorAll(selector: string): FakeQueryBindingElement[] {
+    if (selector === '[data-bind]') {
+      return this.bindings.filter((element) => element.getAttribute('data-bind'));
+    }
+    if (selector.startsWith('[data-derive="')) {
+      const value = selector.slice('[data-derive="'.length, -2);
+      return this.bindings.filter((element) => element.getAttribute('data-derive') === value);
+    }
+
+    return [];
   }
 }
 
@@ -188,6 +216,54 @@ describe('mutation response wire chunks', () => {
     });
     expect(onError).toHaveBeenCalledWith(expect.any(Error));
     expect(String(onError.mock.calls[0]?.[0].message)).toContain('Malformed fw-fragment chunk');
+  });
+
+  it('applies interposed query values through compiled plans before morphing fragments', () => {
+    const store = createQueryStore();
+    const root = new FakeMorphRoot();
+    const count = new FakeQueryBindingElement({ 'data-bind': 'cart.count' }, '0');
+    const summary = new FakeQueryBindingElement({ 'data-derive': 'cart.summary' });
+    const observed: string[] = [];
+    root.bindings.push(count, summary);
+    root.targets.set('cart-badge', new FakeMorphTarget());
+
+    const applied = applyMutationResponseToDom({
+      applyQuery(query) {
+        store.set(query.name, { count: (query.value as { count: number }).count + 10 }, query.key);
+        return { value: store.get(query.name, query.key) };
+      },
+      body: [
+        '<fw-query name="cart">{"count":5}</fw-query>',
+        '<fw-fragment target="cart-badge"><cart-badge>ready</cart-badge></fw-fragment>',
+      ].join('\n'),
+      morph(target, html) {
+        observed.push(`${count.textContent}:${summary.textContent}`);
+        target.replaceWithHtml(html);
+      },
+      queryPlans: {
+        cart: {
+          derives: [
+            {
+              name: 'summary',
+              select: (value) => `${(value as { count: number }).count} items`,
+            },
+          ],
+        },
+      },
+      root,
+      store,
+    });
+
+    expect(applied).toEqual({
+      appliedFragments: ['cart-badge'],
+      fragments: [{ html: '<cart-badge>ready</cart-badge>', target: 'cart-badge' }],
+      queries: ['cart'],
+    });
+    expect(store.get('cart')).toEqual({ count: 15 });
+    expect(count.textContent).toBe('15');
+    expect(summary.textContent).toBe('15 items');
+    expect(observed).toEqual(['15:15 items']);
+    expect(root.targets.get('cart-badge')?.html).toBe('<cart-badge>ready</cart-badge>');
   });
 
   it('reports malformed FW-Changes headers through the mutation response error hook', () => {

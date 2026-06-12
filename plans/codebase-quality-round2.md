@@ -1056,6 +1056,15 @@ params, relational API, `execute(sql)`, right/full joins, a string column named 
       `pnpm exec vitest --run packages/runtime/src/index.test.ts -t "optimistic|mutation query chunks|enhanced mutations|deferred|apply"`
       and
       `pnpm exec vp check packages/runtime/src/index.ts packages/runtime/src/apply-path.ts plans/codebase-quality-round2.md`.
+      Additional bounded evidence 2026-06-12: `packages/runtime/src/apply-path.ts` now owns
+      the exported DOM mutation/deferred apply path, including the query interposition hook,
+      compiled query plan bridge, and fragment morph application; `packages/runtime/src/index.ts`
+      imports and re-exports those apply APIs while retaining only enhanced mutation orchestration.
+      `packages/runtime/src/mutation-response.test.ts` covers interposed query values flowing
+      through compiled plans before fragment morphing. Same-session evidence:
+      `pnpm exec vitest --run packages/runtime/src/mutation-response.test.ts`,
+      `pnpm exec vp check packages/runtime/src/index.ts packages/runtime/src/apply-path.ts packages/runtime/src/mutation-response.test.ts plans/codebase-quality-round2.md`,
+      and `git diff --check`.
 - [x] **MED — Fix ambient-scope argument override in handlers.ts.**
       `abortRemovedIslandSignals(currentHtml, nextHtml, scope)` ignores its explicit `scope`
       whenever the module-level `activeIslandSignalScope` is set
