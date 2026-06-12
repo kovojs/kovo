@@ -24,7 +24,15 @@ Scope: SPEC additions (session population, guard-failure contract, mutation resp
       Same-session evidence: `pnpm exec vitest run packages/better-auth/src/index.test.ts`,
       `pnpm exec vp check packages/better-auth/src/index.ts packages/better-auth/src/index.test.ts`,
       `pnpm exec tsc --noEmit`, and `pnpm run check`.
-- [ ] B5 `mount()` for browser-redirect protocols (OAuth callbacks, SAML ACS, magic links).
+- [x] B5 `mount()` for browser-redirect protocols (OAuth callbacks, SAML ACS, magic links).
+      Evidence 2026-06-11: `packages/better-auth/src/index.ts` exports `mount()` for Better
+      Auth-like redirect/callback handlers, returning a prefix `endpoint()` with CSRF exemption,
+      audit-visible auth metadata, optional method narrowing, and no ambient session surface.
+      `packages/better-auth/src/index.test.ts` covers Better Auth-owned GET/POST redirect
+      protocol paths, direct handler mounting, custom audit metadata, prefix matching, method
+      narrowing, and stripped request session state. Same-session evidence:
+      `pnpm exec vitest run packages/better-auth/src/index.test.ts` and
+      `pnpm exec vp check packages/better-auth/src/index.ts packages/better-auth/src/index.test.ts`.
 - [ ] B6 pinned better-auth conformance suite in CI.
 - [ ] B7 starter login recipe + reference-app adoption behind real `authed`/`role()` guards.
 
