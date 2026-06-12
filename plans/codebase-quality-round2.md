@@ -431,6 +431,13 @@ pipeline throws the tree away and communicates via mutated source text.
       string/template literal text is not rewritten. `lower/handlers.ts` now skips quoted and
       template strings while splitting wrapper-call arguments. `packages/compiler/src/index.test.ts`
       covers literal `state`/member-looking text and quoted commas in handler arguments.
+      Additional evidence 2026-06-11: `lower/handlers.ts` now discovers serializable element
+      member params with a TypeScript AST walk over the handler expression body instead of
+      regex-scanning text, so string-literal text such as `"item.id"` no longer fabricates
+      `data-p-*` params. Same-session evidence:
+      `pnpm exec vitest --run packages/compiler/src/index.test.ts -t "element params|handler captures|quoted commas|string literal text"`,
+      `pnpm exec vitest --run packages/compiler/src/index.test.ts`, and
+      `pnpm exec vp check packages/compiler/src/lower/handlers.ts packages/compiler/src/index.test.ts`.
 - [ ] **HIGH — Kill the derive mega-regex.** validate/bindings.ts:215-216 silently drops any
       `derive()` export whose expression contains `;` in a string or unusual formatting — its
       stamps vanish from `collectQueryUpdatePlans` with no diagnostic. scan/parse.ts already

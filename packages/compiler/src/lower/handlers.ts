@@ -1,4 +1,5 @@
 import { diagnosticDefinitions } from '@jiso/core';
+import ts from 'typescript';
 
 import { diagnosticFor, type CompilerDiagnostic } from '../diagnostics.js';
 import { literalValue } from '../scan/object.js';
@@ -272,15 +273,55 @@ function usedAsNumber(expression: string, ref: string): boolean {
 }
 
 function serializableMemberExpressions(expression: string): string[] {
-  const members = expression.match(/\b[A-Za-z_$][\w$]*(?:\.[A-Za-z_$][\w$]*)+/g) ?? [];
-
-  return members.filter(
+  return collectSerializableMemberExpressions(expression).filter(
     (member) =>
       !member.startsWith('state.') &&
       !member.startsWith('ctx.') &&
       !member.startsWith('document.') &&
       !member.startsWith('window.'),
   );
+}
+
+function collectSerializableMemberExpressions(expression: string): string[] {
+  const sourceFile = ts.createSourceFile(
+    'handler-expression.ts',
+    `function __jiso_handler__() {\n${expression}\n}`,
+    ts.ScriptTarget.Latest,
+    true,
+    ts.ScriptKind.TS,
+  );
+  const members: string[] = [];
+
+  const visit = (node: ts.Node): void => {
+    if (
+      ts.isPropertyAccessExpression(node) &&
+      !(ts.isPropertyAccessExpression(node.parent) && node.parent.expression === node)
+    ) {
+      const path = propertyAccessPath(node);
+      if (path) members.push(path);
+      return;
+    }
+
+    ts.forEachChild(node, visit);
+  };
+
+  visit(sourceFile);
+  return members;
+}
+
+function propertyAccessPath(expression: ts.PropertyAccessExpression): string | null {
+  const segments: string[] = [expression.name.text];
+  let current: ts.Expression = expression.expression;
+
+  while (ts.isPropertyAccessExpression(current)) {
+    segments.unshift(current.name.text);
+    current = current.expression;
+  }
+
+  if (!ts.isIdentifier(current)) return null;
+
+  segments.unshift(current.text);
+  return segments.join('.');
 }
 
 function dedupeStrings(values: readonly string[]): string[] {

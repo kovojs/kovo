@@ -308,6 +308,28 @@ export const CartActions = component('cart-actions', {
     );
   });
 
+  it('does not extract element params from string literal text', () => {
+    const result = compileComponentModule({
+      fileName: 'components/cart/cart-actions.tsx',
+      source: `
+import { component } from '@jiso/core';
+
+export const CartActions = component('cart-actions', {
+  render: () => (
+    <button onClick={() => log('item.id stays text')}>Add</button>
+  ),
+});
+`,
+    });
+
+    const serverSource = result.files[0]?.source ?? '';
+    const clientSource = result.files[1]?.source ?? '';
+
+    expect(serverSource).not.toContain('data-p-id=');
+    expect(clientSource).toContain("return log('item.id stays text');");
+    expect(clientSource).not.toContain('ctx.params.id');
+  });
+
   it('ignores event handler text inside strings and comments', () => {
     const result = compileComponentModule({
       fileName: 'components/cart/cart-actions.tsx',
