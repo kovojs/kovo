@@ -1,10 +1,8 @@
 import { diagnosticDefinitions } from '@jiso/core';
-import ts from 'typescript';
 
 import { diagnosticFor, type CompilerDiagnostic } from '../diagnostics.js';
 import {
   jsxElements,
-  expressionUsageType,
   type ComponentModuleModel,
   type PropertyAccessPathModel,
   type ZeroArgArrowModel,
@@ -265,13 +263,12 @@ function extractElementParams(
 
   return dedupeStrings(expressions).map((arg) => ({
     attributeName: `data-p-${paramNameForExpression(arg)}`,
-    type: inferElementParamType(expression, arg, zeroArgArrow, parsedPropertyAccesses),
+    type: inferElementParamType(arg, zeroArgArrow, parsedPropertyAccesses),
     value: `{${arg}}`,
   }));
 }
 
 function inferElementParamType(
-  expression: string,
   sourceExpression: string,
   zeroArgArrow?: ZeroArgArrowModel,
   parsedPropertyAccesses?: readonly PropertyAccessPathModel[],
@@ -281,49 +278,8 @@ function inferElementParamType(
     (access) => access.path === sourceExpression && access.inferredType !== undefined,
   )?.inferredType;
   if (parsedType) return parsedType;
-  if (parsedPropertyAccesses) return 'string';
-  if (usedAsBoolean(expression, sourceExpression)) return 'boolean';
-  if (usedAsNumber(expression, sourceExpression)) return 'number';
 
   return 'string';
-}
-
-function usedAsBoolean(expression: string, sourceExpression: string): boolean {
-  return expressionUsesParam(
-    expression,
-    sourceExpression,
-    (node, sourceFile) => expressionUsageType(sourceFile, node) === 'boolean',
-  );
-}
-
-function usedAsNumber(expression: string, sourceExpression: string): boolean {
-  return expressionUsesParam(
-    expression,
-    sourceExpression,
-    (node, sourceFile) => expressionUsageType(sourceFile, node) === 'number',
-  );
-}
-
-function expressionUsesParam(
-  expression: string,
-  sourceExpression: string,
-  predicate: (node: ts.Node, sourceFile: ts.SourceFile) => boolean,
-): boolean {
-  const sourceFile = handlerExpressionSourceFile(expression);
-  let matched = false;
-
-  const visit = (node: ts.Node): void => {
-    if (matched) return;
-    if (node.getText(sourceFile) === sourceExpression && predicate(node, sourceFile)) {
-      matched = true;
-      return;
-    }
-
-    ts.forEachChild(node, visit);
-  };
-
-  visit(sourceFile);
-  return matched;
 }
 
 function serializableMemberExpressions(
@@ -352,16 +308,6 @@ function collectSerializableMemberExpressions(
   if (parsedPropertyAccesses) return parsedPropertyAccesses.map((access) => access.path);
 
   return [];
-}
-
-function handlerExpressionSourceFile(expression: string): ts.SourceFile {
-  return ts.createSourceFile(
-    'handler-expression.ts',
-    `function __jiso_handler__() {\n${expression}\n}`,
-    ts.ScriptTarget.Latest,
-    true,
-    ts.ScriptKind.TS,
-  );
 }
 
 function dedupeStrings(values: readonly string[]): string[] {

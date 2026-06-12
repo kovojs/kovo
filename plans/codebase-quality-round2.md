@@ -92,6 +92,9 @@ Closed evidence so far:
   component contracts, authoring surface, CSS host selector, and render-host stamping.
 - Handler lowering uses parser-owned zero-arg arrow body facts for parameter and `state` rewrites
   before falling back to the legacy handler-expression reparse path.
+- Handler parameter type inference now relies on parser-owned `PropertyAccessPathModel`
+  classifications only; `lower/handlers.ts` no longer imports TypeScript or reparses handler
+  expressions.
 - Client emission no longer reparses `handler.expression` to rediscover zero-arg arrow bodies;
   emitted handler bodies come from the parser-owned `HandlerArrowBody` payload.
 - IR authoring-surface diagnostics use header detection only; tag-specific FW235 help comes from
@@ -112,6 +115,7 @@ Recent gates:
 - `pnpm exec vitest --run packages/compiler/src/scan/parse.test.ts packages/compiler/src/handler-lowering.test.ts packages/compiler/src/compile-component.test.ts`
 - `pnpm exec vitest --run packages/compiler/src/compile-component.test.ts -t "FW235|authoring|compiler IR"`
 - `pnpm exec vitest --run packages/compiler/src/handler-lowering.test.ts packages/compiler/src/compile-component.test.ts packages/compiler/src/vite.test.ts`
+- `pnpm exec vitest --run packages/compiler/src/scan/parse.test.ts packages/compiler/src/handler-lowering.test.ts packages/compiler/src/compile-component.test.ts`
 - `pnpm exec vp check packages/compiler/src/scan/parse.ts packages/compiler/src/scan/parse.test.ts packages/compiler/src/lower/handlers.ts packages/compiler/src/emit/client.ts packages/compiler/src/types.ts plans/codebase-quality-round2.md`
 - `git diff --check`
 
