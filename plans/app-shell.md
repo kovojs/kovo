@@ -93,6 +93,16 @@ Scope: SPEC addition (proposed §9.5 "The request shell"), `@jiso/server` shell 
       `pnpm exec vp check packages/cli/src/index.ts packages/cli/src/index.test.ts packages/cli/package.json pnpm-lock.yaml`.
       Remaining R6 work: Vite/task template wiring for real starter/docs apps and general static
       asset copying.
+      Additional evidence 2026-06-11: `exportStaticApp(app, { outDir, assets })` now copies
+      configured static assets with exact filesystem bytes, returns asset artifacts with sorted
+      represented headers/content type metadata, rejects unsafe/empty asset output paths and
+      duplicate or generated-output conflicts with FW229, and validates the whole output plan
+      before writing to avoid partial exports. `packages/server/src/static-export.test.ts` covers
+      byte parity, nested assets, URL sources, unsafe paths, generated HTML conflicts, duplicate
+      assets, and no-partial-write behavior. Same-session evidence:
+      `pnpm exec vitest --run packages/server/src/static-export.test.ts` and
+      `pnpm exec vp check packages/server/src/static-export.ts packages/server/src/static-export.test.ts`.
+      Remaining R6 work: Vite/task template wiring for real starter/docs apps.
 - [ ] R7 adoption: starter becomes a routed app served by `vp dev`; commerce runs end-to-end over HTTP; a jiso docs site ships from `vp run export` as the first outside consumer.
       Progress 2026-06-11: commerce is now TSX-authored ahead of the HTTP serve
       entry — `CartBadge`, `OrderHistory`, and `ProductGrid` are authored in

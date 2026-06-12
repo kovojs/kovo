@@ -33,7 +33,19 @@ Scope: SPEC additions (session population, guard-failure contract, mutation resp
       narrowing, and stripped request session state. Same-session evidence:
       `pnpm exec vitest run packages/better-auth/src/index.test.ts` and
       `pnpm exec vp check packages/better-auth/src/index.ts packages/better-auth/src/index.test.ts`.
-- [ ] B6 pinned better-auth conformance suite in CI.
+- [x] B6 pinned better-auth conformance suite in CI.
+      Evidence 2026-06-11: `conformance/better-auth-pin` pins `better-auth@1.6.17` and
+      exercises the real Better Auth `auth.api.getSession`/`signInEmail`/`signUpEmail`/`signOut`
+      and handler surfaces, table metadata through `getAuthTables`, session mapping through
+      `betterAuthSession`, credential mutation cookie forwarding and `INVALID_CREDENTIALS`
+      mapping, `mount()` prefix routing over the real handler, and declared table/domain touches
+      against observed memory-adapter writes. `vite.config.ts` includes the suite in
+      `vp run conformance` and `typecheck-examples`; `tests/fw-check.node.mjs` structurally
+      asserts the conformance wiring. Same-session evidence:
+      `pnpm exec tsc -p conformance/better-auth-pin/tsconfig.json --noEmit`,
+      `pnpm exec vitest --run packages/better-auth/src/index.test.ts conformance/better-auth-pin/src/index.test.ts`,
+      and
+      `pnpm exec vp check packages/better-auth/src/index.ts conformance/better-auth-pin/src/index.test.ts conformance/better-auth-pin/package.json conformance/better-auth-pin/tsconfig.json vite.config.ts tests/fw-check.node.mjs pnpm-lock.yaml`.
 - [ ] B7 starter login recipe + reference-app adoption behind real `authed`/`role()` guards.
 
 ## Background — the gap

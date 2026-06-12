@@ -24,7 +24,7 @@ jiso-dialog` resolves dashed wire names and prints provenance including package,
       `pnpm exec vp check packages/core/src/package-prefix.ts packages/core/src/package-prefix.test.ts packages/core/src/index.ts packages/headless-ui/src/index.ts packages/headless-ui/src/tooling/index.ts packages/headless-ui/src/tooling/primitive-handler-lint.ts packages/headless-ui/src/tooling/primitive-handler-lint.test.ts packages/headless-ui/package.json pnpm-lock.yaml`.
       Remaining: feed those discovered facts into app/compiler/Vite build flow.
 - [x] F3 behavior-attribute namespace: `fw-*` stays framework-reserved; package behaviors ride the package prefix (`jiso-tooltip="id"`), wired through FW221 IDREF validation. Evidence: `packages/compiler/src/validate/package-prefixes.ts` rejects package `fw-*` prefixes with FW234 per SPEC §6.1.1, `packages/compiler/src/validate/markup.ts` feeds package-declared IDREF behavior attributes through FW221, and `packages/compiler/src/index.test.ts` covers valid/missing package-prefixed behavior IDREFs plus `fw-*` reservation.
-- [ ] F4 primitive-author lint: chained handlers contractually no-op on `event.defaultPrevented` (lives in `@jiso/headless-ui` tooling, not the loader).
+- [x] F4 primitive-author lint: chained handlers contractually no-op on `event.defaultPrevented` (lives in `@jiso/headless-ui` tooling, not the loader).
       Partial evidence 2026-06-11: `packages/headless-ui/src/tooling/primitive-handler-lint.ts`
       provides a dependency-light tooling API that scans marked primitive handlers and reports
       `JISO_HUI001` when they do not begin by no-oping on the first event parameter's
@@ -34,7 +34,15 @@ jiso-dialog` resolves dashed wire names and prints provenance including package,
       `pnpm exec vitest --run packages/core/src/package-prefix.test.ts packages/headless-ui/src/tooling/primitive-handler-lint.test.ts`
       and
       `pnpm exec vp check packages/core/src/package-prefix.ts packages/core/src/package-prefix.test.ts packages/core/src/index.ts packages/headless-ui/src/index.ts packages/headless-ui/src/tooling/index.ts packages/headless-ui/src/tooling/primitive-handler-lint.ts packages/headless-ui/src/tooling/primitive-handler-lint.test.ts packages/headless-ui/package.json pnpm-lock.yaml`.
-      Remaining: wire the lint API as a package script/CLI gate over real primitive source.
+      Additional evidence 2026-06-11: `packages/headless-ui` now exposes a `lint:primitives`
+      package script over `src/tooling/lint-primitives.ts`, recursively scans real
+      `src/**/*.ts(x)` sources, and fails on marked primitive handlers that do not begin with
+      the `event.defaultPrevented` no-op. `src/primitives/disclosure.ts` is the first real
+      primitive source fixture, and `src/tooling/lint-primitives.test.ts` covers pass/fail CLI
+      behavior plus the real package source scan. Same-session evidence:
+      `pnpm --filter @jiso/headless-ui exec vitest --run src/tooling/primitive-handler-lint.test.ts src/tooling/lint-primitives.test.ts`,
+      `pnpm --filter @jiso/headless-ui run lint:primitives`, and
+      `pnpm exec vp check packages/headless-ui/package.json packages/headless-ui/src/primitives/disclosure.ts packages/headless-ui/src/tooling/index.ts packages/headless-ui/src/tooling/lint-primitives.ts packages/headless-ui/src/tooling/lint-primitives.test.ts`.
 - [ ] F5 platform audit: CSS anchor positioning + `@starting-style`/`transition-behavior: allow-discrete` coverage check; lazy-loaded floating fallback module decided.
 - [ ] H0 shared lib: state-attributes, keyboard/menu navigation maps, typeahead, change-details (reason + `defaultPrevented` contract), positioning fallback.
 - [ ] H1 wave 1 primitives (L0-heavy): dialog, alert-dialog, popover, tooltip, hover-card, collapsible, accordion, separator, progress, meter, avatar, toggle, switch, checkbox.
