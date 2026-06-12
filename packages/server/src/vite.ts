@@ -573,7 +573,18 @@ export function jisoAppShellViteManifestFromBundle(
       ? manifestAsset.source
       : Buffer.from(manifestAsset.source).toString('utf8');
 
-  return JSON.parse(source) as JisoAppShellViteManifest;
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(source);
+  } catch (error) {
+    throw new Error(
+      `App shell Vite build manifest must be valid JSON: ${
+        error instanceof Error ? error.message : String(error)
+      }`,
+    );
+  }
+
+  return jisoAppShellViteManifestFromUnknown(parsed);
 }
 
 function buildRouteHints(
@@ -733,6 +744,81 @@ function viteAssetContentType(file: string): string | undefined {
     default:
       return undefined;
   }
+}
+
+function jisoAppShellViteManifestFromUnknown(value: unknown): JisoAppShellViteManifest {
+  if (!isRecord(value)) {
+    throw new Error('App shell Vite build manifest must be a JSON object.');
+  }
+
+  const manifest: JisoAppShellViteManifest = {};
+  for (const [entry, rawChunk] of Object.entries(value)) {
+    if (!isRecord(rawChunk)) {
+      throw new Error(`App shell Vite build manifest entry '${entry}' must be a JSON object.`);
+    }
+
+    const chunk: JisoAppShellViteManifestChunk = {};
+    const file = optionalManifestString(rawChunk, entry, 'file');
+    const src = optionalManifestString(rawChunk, entry, 'src');
+    const css = optionalManifestStringArray(rawChunk, entry, 'css');
+    const imports = optionalManifestStringArray(rawChunk, entry, 'imports');
+    const isEntry = optionalManifestBoolean(rawChunk, entry, 'isEntry');
+
+    if (file !== undefined) chunk.file = file;
+    if (src !== undefined) chunk.src = src;
+    if (css !== undefined) chunk.css = css;
+    if (imports !== undefined) chunk.imports = imports;
+    if (isEntry !== undefined) chunk.isEntry = isEntry;
+    manifest[entry] = chunk;
+  }
+
+  return manifest;
+}
+
+function optionalManifestString(
+  chunk: Record<string, unknown>,
+  entry: string,
+  field: string,
+): string | undefined {
+  const value = chunk[field];
+  if (value === undefined) return undefined;
+  if (typeof value === 'string') return value;
+
+  throw new Error(
+    `App shell Vite build manifest entry '${entry}' field '${field}' must be a string.`,
+  );
+}
+
+function optionalManifestStringArray(
+  chunk: Record<string, unknown>,
+  entry: string,
+  field: string,
+): readonly string[] | undefined {
+  const value = chunk[field];
+  if (value === undefined) return undefined;
+  if (Array.isArray(value) && value.every((item) => typeof item === 'string')) return value;
+
+  throw new Error(
+    `App shell Vite build manifest entry '${entry}' field '${field}' must be an array of strings.`,
+  );
+}
+
+function optionalManifestBoolean(
+  chunk: Record<string, unknown>,
+  entry: string,
+  field: string,
+): boolean | undefined {
+  const value = chunk[field];
+  if (value === undefined) return undefined;
+  if (typeof value === 'boolean') return value;
+
+  throw new Error(
+    `App shell Vite build manifest entry '${entry}' field '${field}' must be a boolean.`,
+  );
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
 function isSafeDistFileSegment(segment: string): boolean {

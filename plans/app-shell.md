@@ -95,6 +95,16 @@ Scope: SPEC addition (proposed §9.5 "The request shell"), `@jiso/server` shell 
       proves the plugin `writeBundle` callback receives CSS/JS `StaticExportAssetInput`
       values rooted in the Vite output directory alongside emitted `/c/` modules.
       Same-session verification ran `pnpm exec vitest --run packages/server/src/vite.test.ts`.
+      Additional evidence 2026-06-12: `jisoAppShellViteManifestFromBundle()` now validates the
+      emitted `.vite/manifest.json` bundle asset before route-entry maps, manifest hints, or
+      static-export asset plans consume it, rejecting invalid JSON, non-object manifests, and
+      malformed chunk fields with app-shell build errors. `packages/server/src/vite.test.ts`
+      proves the direct parser failures and the `createJisoAppShellViteBuildFromBundle()`
+      integration path for malformed manifest CSS arrays. Same-session verification ran
+      `pnpm exec vitest --run packages/server/src/vite.test.ts`,
+      `pnpm exec vitest --run packages/server/src/vite.test.ts packages/server/src/static-export.test.ts`,
+      `pnpm exec vp check packages/server/src/vite.ts packages/server/src/vite.test.ts plans/app-shell.md`,
+      and `git diff --check`.
       Remaining R5 work: compiler/plugin build hooks must still supply real route-entry maps
       and compiled module sources from compiler facts, consume the asset/module plan in
       production package builds, and decide the final plugin hook ownership.

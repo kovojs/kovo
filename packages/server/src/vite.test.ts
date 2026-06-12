@@ -326,6 +326,51 @@ describe('server app shell Vite plugin', () => {
     );
   });
 
+  it('rejects malformed Vite output bundle manifests before app-shell build wiring', () => {
+    expect(() =>
+      jisoAppShellViteManifestFromBundle({
+        '.vite/manifest.json': {
+          fileName: '.vite/manifest.json',
+          source: '{',
+          type: 'asset',
+        },
+      }),
+    ).toThrow('App shell Vite build manifest must be valid JSON');
+
+    expect(() =>
+      jisoAppShellViteManifestFromBundle({
+        '.vite/manifest.json': {
+          fileName: '.vite/manifest.json',
+          source: JSON.stringify([]),
+          type: 'asset',
+        },
+      }),
+    ).toThrow('App shell Vite build manifest must be a JSON object.');
+
+    expect(() =>
+      createJisoAppShellViteBuildFromBundle({
+        app: createApp({ routes: [route('/cart', {})] }),
+        bundle: {
+          '.vite/manifest.json': {
+            fileName: '.vite/manifest.json',
+            source: JSON.stringify({
+              'src/cart.client.ts': {
+                css: ['assets/cart.css', 42],
+                file: 'assets/cart.js',
+              },
+            }),
+            type: 'asset',
+          },
+        },
+        routeEntryMap: {
+          '/cart': 'src/cart.client.ts',
+        },
+      }),
+    ).toThrow(
+      "App shell Vite build manifest entry 'src/cart.client.ts' field 'css' must be an array of strings.",
+    );
+  });
+
   it('applies Vite base paths to build route hints and asset planning', () => {
     const build = createJisoAppShellBuild({
       app: createApp({ routes: [route('/cart', {})] }),
