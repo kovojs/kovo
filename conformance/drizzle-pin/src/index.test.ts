@@ -1762,6 +1762,57 @@ describe('Drizzle pinned subset conformance', () => {
     ]);
   });
 
+  it('pins real Drizzle query-loader transaction aliases as explicit FW406 surfaces', () => {
+    const facts = extractQueryFactsFromProject({
+      files: [
+        {
+          fileName: 'conformance/drizzle-pin/src/user.queries.ts',
+          source: `
+            import type { PgDatabase } from 'drizzle-orm/pg-core';
+
+            export const users = pgTable('users', {
+              id: text('id').primaryKey(),
+            }, jiso({ domain: 'user', key: 'id' }));
+
+            export const usersQuery = query('users/transaction-write', {
+              async load(_input, db: PgDatabase<any, any, any>) {
+                await db.transaction(async (tx) => {
+                  await tx.update(users).set({ id: 'u1' });
+                });
+                return [];
+              },
+            });
+          `,
+        },
+      ],
+    });
+
+    expect(facts).toEqual([
+      {
+        diagnostics: [
+          {
+            code: 'FW406',
+            message:
+              'Statically un-analyzable write site; manual touches required. Query uses unclassified Drizzle receiver call db.transaction().',
+            severity: 'warn',
+            site: 'conformance/drizzle-pin/src/user.queries.ts:8',
+          },
+          {
+            code: 'FW406',
+            message:
+              'Statically un-analyzable write site; manual touches required. Query uses unclassified Drizzle receiver call tx.update().',
+            severity: 'warn',
+            site: 'conformance/drizzle-pin/src/user.queries.ts:8',
+          },
+        ],
+        query: 'users/transaction-write',
+        reads: [],
+        shape: {},
+        site: 'conformance/drizzle-pin/src/user.queries.ts:8',
+      },
+    ]);
+  });
+
   it('pins static element-access relational reads as explicit FW406 facts', () => {
     const facts = extractQueryFactsFromProject({
       files: [

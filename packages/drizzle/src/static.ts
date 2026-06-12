@@ -1573,6 +1573,7 @@ function extractProjectQueryDefinitions(
   return extractQueryDefinitionsFromSourceFile(sourceFile, {
     ...(options.columnShapes ? { columnShapes: options.columnShapes } : {}),
     readTableIdentifier: resolveTableIdentifier,
+    receiverMode: 'project',
     relationalTableName: (name) => options.tableNamesByIdentifier.get(name),
   });
 }
@@ -1580,6 +1581,7 @@ function extractProjectQueryDefinitions(
 interface QueryDefinitionOptions {
   columnShapes?: Readonly<Record<string, QueryShape>>;
   readTableIdentifier?: (node: Node) => string | undefined;
+  receiverMode?: 'project' | 'source';
   relationalTableName?: (name: string) => string | undefined;
 }
 
@@ -1606,7 +1608,10 @@ function extractQueryDefinitionsFromSourceFile(
     }
 
     const query = queryArgument.getLiteralText();
-    const receiverNames = queryCallbackReceiverNames(bodyArgument);
+    const receiverNames = queryCallbackReceiverNames(
+      bodyArgument,
+      options.receiverMode ?? 'source',
+    );
     const selection = selectShapeFromQueryBody(bodyArgument, receiverNames, options.columnShapes);
     const readResolutionOptions: QueryReadResolutionOptions = {
       ...(options.readTableIdentifier ? { readTableIdentifier: options.readTableIdentifier } : {}),
@@ -1721,32 +1726,83 @@ function isSelectQueryCallName(name: string | undefined): boolean {
   return name !== undefined && DRIZZLE_SELECT_QUERY_METHODS.has(name);
 }
 
-function queryCallbackReceiverNames(body: ObjectLiteralExpression): ReadonlySet<string> {
-  const names = new Set(DEFAULT_DRIZZLE_RECEIVER_NAMES);
+function queryCallbackReceiverNames(
+  body: ObjectLiteralExpression,
+  mode: 'project' | 'source',
+): ReadonlySet<string> {
+  const names = new Set(mode === 'source' ? DEFAULT_DRIZZLE_RECEIVER_NAMES : []);
 
   for (const property of body.getProperties()) {
-    const parameters = queryCallbackParameters(property.compilerNode);
-    const receiver = bindingIdentifierText(parameters?.[1]?.name);
-    if (receiver) names.add(receiver);
+    const callback = queryCallbackFunction(property);
+    if (!callback) continue;
+
+    const receiverParameter = queryCallbackParameterNodes(callback)[1];
+    const receiver = receiverParameter?.getNameNode();
+    if (!receiverParameter || !Node.isIdentifier(receiver)) continue;
+    if (mode === 'project' && !isProjectQueryReceiverParameter(receiverParameter, receiver)) {
+      continue;
+    }
+
+    names.add(receiver.getText());
   }
 
+  appendQueryTransactionReceiverAliases(body, names);
   return names;
 }
 
-function queryCallbackParameters(
-  property: ts.ObjectLiteralElementLike,
-): ts.NodeArray<ts.ParameterDeclaration> | undefined {
-  if (ts.isMethodDeclaration(property)) return property.parameters;
-  if (!ts.isPropertyAssignment(property)) return undefined;
+function queryCallbackParameterNodes(callback: Node): ParameterDeclaration[] {
+  if (
+    Node.isArrowFunction(callback) ||
+    Node.isFunctionExpression(callback) ||
+    Node.isMethodDeclaration(callback)
+  ) {
+    return callback.getParameters();
+  }
 
-  const initializer = unwrappedTsExpression(property.initializer);
-  return ts.isArrowFunction(initializer) || ts.isFunctionExpression(initializer)
-    ? initializer.parameters
-    : undefined;
+  return [];
 }
 
-function bindingIdentifierText(name: ts.BindingName | undefined): string | undefined {
-  return name && ts.isIdentifier(name) ? name.text : undefined;
+function isProjectQueryReceiverParameter(parameter: ParameterDeclaration, receiver: Node): boolean {
+  // SPEC §10-§11: project-mode query loaders should not fabricate Drizzle facts from a lookalike
+  // parameter named `db`; an explicit non-Drizzle type is an unsupported receiver, not proof.
+  return !parameter.getTypeNode() || isDrizzleReceiver(receiver);
+}
+
+function appendQueryTransactionReceiverAliases(
+  body: ObjectLiteralExpression,
+  receiverNames: Set<string>,
+): void {
+  // SPEC §10-§11: callback-local transaction aliases remain visible query-loader surfaces when
+  // they originate from a proven Drizzle receiver.
+  let changed = true;
+
+  while (changed) {
+    changed = false;
+
+    for (const call of queryExecutableCallExpressions(body)) {
+      if (staticAccessName(call.getExpression()) !== 'transaction') continue;
+
+      const receiver = staticAccessExpression(call.getExpression());
+      if (!Node.isIdentifier(receiver) || !receiverNames.has(receiver.getText())) continue;
+
+      const transactionCallback = call
+        .getArguments()
+        .find((argument) => Node.isArrowFunction(argument) || Node.isFunctionExpression(argument));
+      if (
+        !transactionCallback ||
+        (!Node.isArrowFunction(transactionCallback) &&
+          !Node.isFunctionExpression(transactionCallback))
+      ) {
+        continue;
+      }
+
+      const alias = transactionCallback.getParameters()[0]?.getNameNode();
+      if (!Node.isIdentifier(alias) || receiverNames.has(alias.getText())) continue;
+
+      receiverNames.add(alias.getText());
+      changed = true;
+    }
+  }
 }
 
 function relationalQueryDiagnostics(
@@ -1782,7 +1838,7 @@ function unclassifiedQueryReceiverDiagnostics(
     return [
       {
         code: 'FW406' as const,
-        message: `${diagnosticDefinitions.FW406.message} Query uses unclassified Drizzle receiver call db.${name}().`,
+        message: `${diagnosticDefinitions.FW406.message} Query uses unclassified Drizzle receiver call ${receiver.getText()}.${name}().`,
         severity: diagnosticDefinitions.FW406.severity,
         site: '',
       },

@@ -2264,6 +2264,35 @@ export interface CommerceInvalidationSets {
     ]);
   });
 
+  it('does not fabricate project query facts from explicitly typed non-Drizzle receivers', () => {
+    const facts = extractQueryFactsFromProject({
+      files: [
+        {
+          fileName: 'product.queries.ts',
+          source: `
+            interface FakeDb {
+              select(projection: unknown): { from(table: unknown): unknown };
+              update(table: unknown): unknown;
+            }
+
+            export const products = pgTable("products", {
+              id: text("id").primaryKey(),
+            }, jiso({ domain: "product", key: "id" }));
+
+            export const productQuery = query("product/fake-db", {
+              load(_input, db: FakeDb) {
+                db.update(products);
+                return db.select({ id: products.id }).from(products);
+              },
+            });
+          `,
+        },
+      ],
+    });
+
+    expect(facts).toEqual([]);
+  });
+
   it('marks query-loader helpers receiving db as FW406 instead of dropping the query fact', () => {
     const facts = extractQueryFactsFromProject({
       files: [

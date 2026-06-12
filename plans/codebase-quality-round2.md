@@ -140,6 +140,8 @@ Closed evidence so far:
 - Project touch/query helper summaries build function facts from ts-morph project nodes directly;
   `pnpm exec vitest --run packages/drizzle/src` and
   `pnpm exec vitest --run conformance/drizzle-pin` pass.
+- Project query-loader receiver extraction excludes explicitly typed non-Drizzle receiver
+  lookalikes and carries transaction callback aliases into FW406 diagnostics.
 
 Open:
 
