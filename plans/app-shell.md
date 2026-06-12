@@ -510,6 +510,18 @@ Scope: SPEC addition (proposed §9.5 "The request shell"), `@jiso/server` shell 
       `/c/starter.client.js?v=starter-r7`, and `/src/styles.css` through the
       same app-shell-backed middleware stack. Same-session verification ran
       `pnpm exec vitest --run packages/create-jiso/src/index.test.ts -t "serves the generated starter app-shell through"`.
+      Additional evidence 2026-06-12: the generated starter now exposes
+      `npm run static` as a package-script alias for the existing
+      `vp run export` task, and the starter docs name the consumer aliases for
+      both static export and HTTP serve. `packages/create-jiso/src/index.test.ts`
+      proves `vp run export` and `npm run static` each build the Vite CSS asset,
+      replay the app-shell route into `dist/index.html`, copy the versioned
+      `/c/starter.client.js` module, and report `starter-export/v1`; the same
+      suite now also proves `vp run serve`, `npm run serve`, and `npm start`
+      each print `starter-serve/v1` and serve `/`, the versioned `/c/` module,
+      and `/src/styles.css` through the generated middleware stack. Same-session
+      verification ran `pnpm exec vitest --run packages/create-jiso/src/index.test.ts`
+      and `pnpm exec vitest --run examples/commerce/src/app-shell.test.ts -t "app-shell surface through|vp run export"`.
 
 ## Background — the gap
 

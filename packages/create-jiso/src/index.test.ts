@@ -91,6 +91,7 @@ describe('create-jiso starter', () => {
         'emit-graph': 'node scripts/emit-graph.mjs',
         serve: 'node scripts/serve.mjs',
         start: 'node scripts/serve.mjs',
+        static: 'vp run export',
         test: 'vp test',
       });
 
@@ -169,7 +170,10 @@ describe('create-jiso starter', () => {
       expect(readFileSync(join(root, 'docs/graph-assertions.md'), 'utf8')).toContain(
         'SPEC.md section 11.4.3',
       );
-      expect(readFileSync(join(root, 'README.md'), 'utf8')).toContain('starter-export/v1');
+      const readme = readFileSync(join(root, 'README.md'), 'utf8');
+      expect(readme).toContain('starter-export/v1');
+      expect(readme).toContain('npm run static');
+      expect(readme).toContain('npm run serve');
       expect(readFileSync(join(root, 'docs/deployment.md'), 'utf8')).toContain(
         'SPEC.md section 9.3',
       );
@@ -442,42 +446,48 @@ describe('create-jiso starter', () => {
     }, 30000);
   }
 
-  it('runs the generated vp export task with the built stylesheet href', () => {
-    const tempParent = tmpdir();
-    mkdirSync(tempParent, { recursive: true });
-    const root = mkdtempSync(join(tempParent, 'create-jiso-export-task-'));
+  for (const exportCommand of generatedStarterExportCommands()) {
+    it(`runs ${exportCommand.label} with the built stylesheet href`, () => {
+      const tempParent = tmpdir();
+      mkdirSync(tempParent, { recursive: true });
+      const root = mkdtempSync(join(tempParent, 'create-jiso-export-task-'));
 
-    try {
-      writeJisoProject(root, { name: 'Export Task Proof' });
-      linkStarterBuildDependencies(root);
+      try {
+        writeJisoProject(root, { name: 'Export Task Proof' });
+        linkStarterBuildDependencies(root);
 
-      const output = execFileSync(resolveBin('vp'), ['run', 'export'], {
-        cwd: root,
-        encoding: 'utf8',
-        env: withRepoBinOnPath(),
-        stdio: 'pipe',
-      });
+        const output = execFileSync(exportCommand.command, exportCommand.args, {
+          cwd: root,
+          encoding: 'utf8',
+          env: withGeneratedBinOnPath(root),
+          stdio: 'pipe',
+        });
 
-      const distIndex = readFileSync(join(root, 'dist/index.html'), 'utf8');
-      const cssFile = readdirSync(join(root, 'dist/assets')).find((file) => file.endsWith('.css'));
+        const distIndex = readFileSync(join(root, 'dist/index.html'), 'utf8');
+        const cssFile = readdirSync(join(root, 'dist/assets')).find((file) =>
+          file.endsWith('.css'),
+        );
 
-      expect(cssFile).toBeTypeOf('string');
-      expect(output).toContain('starter-export/v1\nhtml=1\nclient-modules=1\nassets=1\n');
-      expect(distIndex).toContain(`href="/assets/${cssFile}"`);
-      expect(distIndex).toContain('on:click="/c/starter.client.js?v=starter-r7#Starter$announce"');
-      expect(distIndex).not.toContain('/src/styles.css');
-      expect(distIndex).not.toContain('/src/client.ts');
-      expect(distIndex).not.toContain('Build-only Vite asset entry');
-      expect(readFileSync(join(root, 'dist/assets', cssFile ?? ''), 'utf8')).toContain(
-        '.text-jiso-accent',
-      );
-      expect(readFileSync(join(root, 'dist/c/starter.client.js'), 'utf8')).toContain(
-        'Starter$announce',
-      );
-    } finally {
-      rmSync(root, { force: true, recursive: true });
-    }
-  });
+        expect(cssFile).toBeTypeOf('string');
+        expect(output).toContain('starter-export/v1\nhtml=1\nclient-modules=1\nassets=1\n');
+        expect(distIndex).toContain(`href="/assets/${cssFile}"`);
+        expect(distIndex).toContain(
+          'on:click="/c/starter.client.js?v=starter-r7#Starter$announce"',
+        );
+        expect(distIndex).not.toContain('/src/styles.css');
+        expect(distIndex).not.toContain('/src/client.ts');
+        expect(distIndex).not.toContain('Build-only Vite asset entry');
+        expect(readFileSync(join(root, 'dist/assets', cssFile ?? ''), 'utf8')).toContain(
+          '.text-jiso-accent',
+        );
+        expect(readFileSync(join(root, 'dist/c/starter.client.js'), 'utf8')).toContain(
+          'Starter$announce',
+        );
+      } finally {
+        rmSync(root, { force: true, recursive: true });
+      }
+    });
+  }
 
   it('formats generated export task diagnostics when a starter route is not exportable', () => {
     const tempParent = tmpdir();
@@ -663,9 +673,33 @@ function generatedStarterServeCommands(): Array<{
       label: 'vp run serve',
     },
     {
+      args: (port) => ['run', 'serve', '--', ...serveArgs(port)],
+      command: npmCommand(),
+      label: 'npm run serve',
+    },
+    {
       args: (port) => ['start', '--', ...serveArgs(port)],
       command: npmCommand(),
       label: 'npm start',
+    },
+  ];
+}
+
+function generatedStarterExportCommands(): Array<{
+  args: string[];
+  command: string;
+  label: string;
+}> {
+  return [
+    {
+      args: ['run', 'export'],
+      command: vpCommand(),
+      label: 'vp run export',
+    },
+    {
+      args: ['run', 'static'],
+      command: npmCommand(),
+      label: 'npm run static',
     },
   ];
 }
