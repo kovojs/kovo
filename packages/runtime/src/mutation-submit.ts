@@ -6,6 +6,7 @@ import type {
   AppliedMutationResponseToDom,
   ApplyMutationResponseToDomOptions,
 } from './apply-path.js';
+import { definedProps } from './defined-props.js';
 import type { DelegatedEvent, EventElementLike } from './events.js';
 import { reportRuntimeError, reportRuntimeTargetError } from './error-policy.js';
 import type { IslandSignalScope } from './handlers.js';
@@ -25,19 +26,6 @@ import { readDeps, stampPendingQueries } from './pending.js';
 import type { PendingRoot } from './pending.js';
 import { parseMutationFailure } from './mutation-failure.js';
 import type { QueryChunk } from './wire-parser.js';
-
-type DefinedProps<Props extends object> = {
-  [Key in keyof Props]?: Exclude<Props[Key], undefined>;
-};
-
-function definedProps<Props extends object>(props: Props): DefinedProps<Props> {
-  return Object.fromEntries(
-    Object.entries(props).filter((entry) => {
-      const [, value] = entry;
-      return value !== undefined;
-    }),
-  ) as DefinedProps<Props>;
-}
 
 export interface EnhancedMutationLoaderOptions {
   broadcast?: MutationBroadcast;
@@ -570,7 +558,7 @@ async function fetchEnhancedMutation(
     },
     keepalive: true,
     method: (options.form.method ?? 'post').toUpperCase(),
-    ...(options.onUploadProgress ? { onUploadProgress: options.onUploadProgress } : {}),
+    ...definedProps({ onUploadProgress: options.onUploadProgress }),
   });
   const changes = readMutationChangeHeader(response, options.onError);
 

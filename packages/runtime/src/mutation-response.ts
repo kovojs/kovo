@@ -1,3 +1,4 @@
+import { definedProps } from './defined-props.js';
 import { reportMalformedJson } from './error-policy.js';
 import type { RuntimeErrorReporter } from './error-policy.js';
 import { parseJsonValue } from './json.js';
@@ -64,7 +65,7 @@ export function sanitizeMutationChangeRecord(value: unknown): MutationChangeReco
 
   return {
     domain: value.domain,
-    ...(keys === undefined ? {} : { keys }),
+    ...definedProps({ keys }),
   };
 }
 

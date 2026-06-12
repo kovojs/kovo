@@ -1,4 +1,5 @@
 import type { QueryStore } from './query-store.js';
+import { definedProps } from './defined-props.js';
 import { applyFragments } from './morph.js';
 import type { MorphFragment, MorphRoot } from './morph.js';
 import { applyCompiledQueryUpdatePlan, supportsQueryBindings } from './query-bindings.js';
@@ -150,12 +151,12 @@ export function applyDeferredStreamResponseToDom(options: {
     (body) =>
       applyDeferredChunkToDom({
         body,
-        ...(options.islandSignalScope === undefined
-          ? {}
-          : { islandSignalScope: options.islandSignalScope }),
-        ...(options.morph === undefined ? {} : { morph: options.morph }),
-        ...(options.onError === undefined ? {} : { onError: options.onError }),
-        ...(options.queryPlans === undefined ? {} : { queryPlans: options.queryPlans }),
+        ...definedProps({
+          islandSignalScope: options.islandSignalScope,
+          morph: options.morph,
+          onError: options.onError,
+          queryPlans: options.queryPlans,
+        }),
         root: options.root,
         store: options.store,
       }),

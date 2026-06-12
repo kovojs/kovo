@@ -1,4 +1,5 @@
 import { applyMutationResponseToRuntime } from './apply-path.js';
+import { definedProps } from './defined-props.js';
 import type { CompiledQueryUpdatePlans } from './query-bindings.js';
 import type { MorphFragment, MorphRoot } from './morph.js';
 import { isMutationBroadcastMessage, sanitizeMutationChangeRecord } from './mutation-response.js';
@@ -45,8 +46,10 @@ export function withDefaultMutationBroadcast<Options extends DefaultMutationBroa
   try {
     const broadcast = installMutationBroadcast({
       channel: new globalThis.BroadcastChannel('jiso:mutation-response') as BroadcastLike,
-      ...(options.morph ? { morph: options.morph } : {}),
-      ...(options.queryPlans ? { queryPlans: options.queryPlans } : {}),
+      ...definedProps({
+        morph: options.morph,
+        queryPlans: options.queryPlans,
+      }),
       root: options.root,
       store: options.store,
     });
@@ -78,9 +81,11 @@ export function installMutationBroadcast(
     // through the shared runtime apply path as the submitting tab.
     applyMutationResponseToRuntime({
       body: event.data.body,
-      ...(options.morph ? { morph: options.morph } : {}),
-      ...(options.queryPlans ? { queryPlans: options.queryPlans } : {}),
-      ...(options.root ? { root: options.root } : {}),
+      ...definedProps({
+        morph: options.morph,
+        queryPlans: options.queryPlans,
+        root: options.root,
+      }),
       store: options.store,
     });
     if (changes.length > 0) {

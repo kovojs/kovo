@@ -1,5 +1,6 @@
 import { applyMutationResponseToStore } from './apply-path.js';
 import type { AppliedMutationResponse } from './apply-path.js';
+import { definedProps } from './defined-props.js';
 import type { ListenerTargetLike, VisibilityStateLike } from './dom-like.js';
 import { reportRuntimeError } from './error-policy.js';
 import { hydrateQueryScripts } from './query-store.js';
@@ -146,7 +147,7 @@ export function installQueryVisibleReturnRefetch(
       const onError = options.queryRefetch.onError ?? options.onError;
       const applied = await refetchQueries({
         ...options.queryRefetch,
-        ...(onError ? { onError } : {}),
+        ...definedProps({ onError }),
         queries,
         queryStore: options.queryStore,
       });
@@ -208,7 +209,7 @@ export async function refetchQueries(
         applyMutationResponseToStore(
           options.queryStore,
           await response.text(),
-          options.onError ? { onError: options.onError } : undefined,
+          definedProps({ onError: options.onError }),
         ),
       );
     } catch (error) {

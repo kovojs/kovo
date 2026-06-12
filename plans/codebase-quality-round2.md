@@ -2229,6 +2229,17 @@ mutation DOM-apply bridge. The remaining optional-spread sites are lower-risk se
 objects or await later module splits. Same-session evidence:
 `pnpm exec vitest --run packages/runtime/src/index.test.ts -t "enhanced|deferred|broadcast|submit context"` and
 `pnpm exec vp check packages/runtime/src/index.ts plans/codebase-quality-round2.md`.
+Additional bounded evidence 2026-06-12: `packages/runtime/src/defined-props.ts` now owns the
+undefined-only optional runtime prop helper used by loader installation, enhanced mutation
+submit/apply, deferred apply, mutation broadcast replay, mutation change sanitization, and
+visible-return refetch wiring; `packages/runtime/src/defined-props.test.ts` pins that falsy
+provided values are preserved while `undefined` is dropped. Same-session evidence:
+`pnpm exec vitest --run packages/runtime/src/defined-props.test.ts packages/runtime/src/broadcast.test.ts packages/runtime/src/mutation-response.test.ts packages/runtime/src/query-refetch.test.ts packages/runtime/src/submit-context.test.ts packages/runtime/src/loader.test.ts packages/runtime/src/loader-lifecycle.test.ts`,
+`pnpm exec vitest --run packages/runtime/src`,
+`pnpm exec vitest --config vitest.browser.config.ts --run packages/runtime/src/index.browser.test.ts`,
+`pnpm --filter @jiso/runtime run check:inline-loader`,
+`pnpm exec vp check packages/runtime/src/defined-props.ts packages/runtime/src/defined-props.test.ts packages/runtime/src/loader.ts packages/runtime/src/mutation-submit.ts packages/runtime/src/apply-path.ts packages/runtime/src/broadcast.ts packages/runtime/src/mutation-response.ts packages/runtime/src/query-refetch.ts`,
+and `git diff --check`.
 
 ## Phase 5 — Server: finish the extraction subtractively
 

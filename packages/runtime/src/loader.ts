@@ -1,4 +1,5 @@
 import { withDefaultMutationBroadcast } from './broadcast.js';
+import { definedProps } from './defined-props.js';
 import { reportRuntimeContextError } from './error-policy.js';
 import type { RuntimeErrorContext } from './events.js';
 import {
@@ -19,19 +20,6 @@ import { installPagehideOptimismCleanup } from './optimism.js';
 import { installQueryVisibleReturnRefetch } from './query-refetch.js';
 import type { QueryRefetchOptions } from './query-refetch.js';
 import type { QueryScriptLike, QueryStore } from './query-store.js';
-
-type DefinedProps<Props extends object> = {
-  [Key in keyof Props]?: Exclude<Props[Key], undefined>;
-};
-
-function definedProps<Props extends object>(props: Props): DefinedProps<Props> {
-  return Object.fromEntries(
-    Object.entries(props).filter((entry) => {
-      const [, value] = entry;
-      return value !== undefined;
-    }),
-  ) as DefinedProps<Props>;
-}
 
 export interface JisoLoaderOptions {
   discardPendingOptimism?: () => readonly string[] | void;
