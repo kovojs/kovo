@@ -41,6 +41,7 @@ import {
   phoneNumber,
   siwe,
   slack,
+  testUtils,
   twoFactor,
   username,
 } from 'better-auth/plugins';
@@ -1219,6 +1220,14 @@ describe('Better Auth pinned conformance', () => {
       { name: 'oAuthProxy', plugins: [oAuthProxy()] },
       { name: 'oneTap', plugins: [oneTap({ clientId: 'google-client' })] },
       { name: 'openAPI', plugins: [openAPI()] },
+      {
+        name: 'testUtils',
+        plugins: [
+          testUtils() as unknown as NonNullable<
+            Parameters<typeof betterAuth>[0]['plugins']
+          >[number],
+        ],
+      },
     ];
 
     for (const pluginCase of pluginCases) {
