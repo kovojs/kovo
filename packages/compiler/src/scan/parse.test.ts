@@ -190,6 +190,40 @@ export const CartActions = component('cart-actions', {
     ]);
   });
 
+  it('records JSX attribute and child expression property access facts', () => {
+    const source = `
+export const CartBadge = component('cart-badge', {
+  render: () => (
+    <cart-badge>
+      <button disabled={cart.count === 0}>Checkout</button>
+      <span>{cart.count}</span>
+      <output>{cart.count + 1}</output>
+      <p>{"cart.count"}</p>
+    </cart-badge>
+  ),
+});
+`;
+    const elements = jsxElements(parseComponentModule('cart-badge.tsx', source));
+    const button = elements.find((element) => element.tag === 'button');
+    const disabled = button?.attributes.find((attribute) => attribute.name === 'disabled');
+    const expressions = parseComponentModule('cart-badge.tsx', source).jsxExpressions;
+
+    expect(disabled?.expressionPropertyAccesses).toEqual([
+      {
+        end: source.indexOf('cart.count') + 'cart.count'.length,
+        inferredType: 'number',
+        path: 'cart.count',
+        start: source.indexOf('cart.count'),
+      },
+    ]);
+    expect(expressions.map((expression) => expression.solePropertyAccessPath ?? null)).toEqual([
+      null,
+      'cart.count',
+      null,
+      null,
+    ]);
+  });
+
   it('extracts concise arrow function parts through the TypeScript parser', () => {
     expect(arrowFunctionParts('expression.tsx', '(cart: Cart) => cart.count + ";"')).toEqual({
       expression: 'cart.count + ";"',

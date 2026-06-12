@@ -615,6 +615,17 @@ pipeline throws the tree away and communicates via mutated source text.
       `pnpm exec vitest --run packages/compiler/src/scan/parse.test.ts packages/compiler/src/index.test.ts -t "render host|fw-deps|query dependencies|parsed component render host"`,
       `pnpm exec vp check --fix packages/compiler/src/scan/parse.ts packages/compiler/src/scan/parse.test.ts packages/compiler/src/emit/server.ts`,
       and `git diff --check`.
+      Additional evidence 2026-06-12: `scan/parse.ts` now records parser-owned
+      property-access facts on JSX attribute expressions and JSX child expressions, and
+      inline-derive lowering consumes those facts instead of reparsing attribute, sole-text, and
+      mixed-text expression snippets through `propertyAccessPaths()` / `solePropertyAccessPath()`
+      helpers. `scan/parse.test.ts` pins the JSX expression facts, and `index.test.ts` proves
+      string literals containing `cart.count` no longer fabricate attribute derives or text
+      binding stamps while real `{cart.count}` still lowers to `data-bind`. Same-session
+      evidence:
+      `pnpm exec vitest --run packages/compiler/src/scan/parse.test.ts packages/compiler/src/index.test.ts -t "JSX attribute and child expression property access|does not derive query stamps|inline attribute expressions|sole text-child query expressions|mixed text query expressions"`,
+      `pnpm exec vp check packages/compiler/src/scan/parse.ts packages/compiler/src/scan/parse.test.ts packages/compiler/src/lower/inline-derives.ts packages/compiler/src/index.test.ts`,
+      and `git diff --check`.
 - [x] **HIGH — Retire regex rewriting of handler bodies.** emit/client.ts:89
       (`/\bstate\b/g → ctx.state` corrupts `log('state changed')`), :96 (member-expression
       substitution inside string literals), lower/handlers.ts:262 (harvests params from string

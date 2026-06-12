@@ -1,12 +1,10 @@
 import {
   jsxElements,
   jsxExpressions,
-  propertyAccessPaths,
-  solePropertyAccessPath,
-  soleWrappedPropertyAccessPath,
   type ComponentModuleModel,
   type JsxAttributeModel,
   type JsxElementModel,
+  type JsxExpressionModel,
 } from '../scan/parse.js';
 import { knownQueryNames } from '../analyze/query-shapes.js';
 import {
@@ -81,7 +79,7 @@ export function lowerInlineAttributeDerives(
   }
 
   for (const element of jsxElements(model)) {
-    const binding = inlineTextBinding(element, source, knownQueries);
+    const binding = inlineTextBinding(element, source, model, knownQueries);
     if (!binding) continue;
 
     replacements.push({
@@ -129,10 +127,9 @@ function inlineAttributeDerive(
   if (attribute.expression === undefined) return null;
   if (shouldSkipInlineAttributeDerive(attribute.name)) return null;
 
-  const paths = propertyAccessPaths('attribute-expression.tsx', attribute.expression);
   const queryRoots = new Set(
-    paths
-      .map((path) => path.split('.', 1)[0])
+    (attribute.expressionPropertyAccesses ?? [])
+      .map((path) => path.path.split('.', 1)[0])
       .filter((query): query is string => query !== undefined && knownQueries.has(query)),
   );
   if (queryRoots.size !== 1) return null;
@@ -165,13 +162,16 @@ function shouldSkipInlineAttributeDerive(name: string): boolean {
 function inlineTextBinding(
   element: JsxElementModel,
   source: string,
+  model: ComponentModuleModel,
   knownQueries: ReadonlySet<string>,
 ): string | null {
   if (element.selfClosing) return null;
   if (element.attributes.some((attribute) => isBindingAttributeName(attribute.name))) return null;
 
-  const content = source.slice(element.openingEnd, element.closingStart);
-  const expression = soleWrappedPropertyAccessPath('inline-text-expression.tsx', content);
+  const content = source.slice(element.openingEnd, element.closingStart).trim();
+  if (!content.startsWith('{') || !content.endsWith('}')) return null;
+
+  const expression = soleJsxExpressionForElement(element, model)?.solePropertyAccessPath ?? null;
   if (!expression) return null;
 
   const query = expression.split('.', 1)[0];
@@ -179,19 +179,19 @@ function inlineTextBinding(
 }
 
 function inlineMixedTextBinding(
-  expression: { end: number; expression: string; start: number },
+  expression: JsxExpressionModel,
   model: ComponentModuleModel,
   source: string,
   knownQueries: ReadonlySet<string>,
 ): { end: number; path: string; start: number } | null {
-  const path = soleKnownQueryPath(expression.expression, knownQueries);
+  const path = soleKnownQueryPath(expression, knownQueries);
   if (!path) return null;
   if (isJsxAttributeExpression(expression, model)) return null;
 
   const element = innermostContainingElement(expression, model);
   if (!element) return null;
   if (element.attributes.some((attribute) => isBindingAttributeName(attribute.name))) return null;
-  if (inlineTextBinding(element, source, knownQueries) !== null) return null;
+  if (inlineTextBinding(element, source, model, knownQueries) !== null) return null;
 
   const start = source.lastIndexOf('{', expression.start);
   const end = source.indexOf('}', expression.end);
@@ -202,12 +202,26 @@ function inlineMixedTextBinding(
   return { end: end + 1, path, start };
 }
 
-function soleKnownQueryPath(expression: string, knownQueries: ReadonlySet<string>): string | null {
-  const path = solePropertyAccessPath('inline-expression.tsx', expression);
+function soleKnownQueryPath(
+  expression: JsxExpressionModel,
+  knownQueries: ReadonlySet<string>,
+): string | null {
+  const path = expression.solePropertyAccessPath ?? null;
   if (!path) return null;
 
   const query = path.split('.', 1)[0];
   return query && knownQueries.has(query) ? path : null;
+}
+
+function soleJsxExpressionForElement(
+  element: JsxElementModel,
+  model: ComponentModuleModel,
+): JsxExpressionModel | null {
+  const expressions = jsxExpressions(model).filter(
+    (expression) =>
+      expression.start >= element.openingEnd && expression.end <= element.closingStart,
+  );
+  return expressions.length === 1 ? (expressions[0] ?? null) : null;
 }
 
 function isJsxAttributeExpression(

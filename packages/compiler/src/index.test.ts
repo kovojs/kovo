@@ -1748,6 +1748,40 @@ export const CartBadge = component('cart-badge', {
     expect(() => assertFixpoint(result)).not.toThrow();
   });
 
+  it('does not derive query stamps from string literals inside inline expressions', () => {
+    const result = compileComponentModule({
+      fileName: 'cart-badge.tsx',
+      queryShapes: { cart: { count: 'number' } },
+      source: `
+export const CartBadge = component('cart-badge', {
+  queries: { cart: {} },
+  render: () => (
+    <cart-badge>
+      <button title={"cart.count"}>Checkout</button>
+      <span>{"cart.count"}</span>
+      <output>{cart.count}</output>
+    </cart-badge>
+  ),
+});
+`,
+    });
+    const serverSource = result.files[0]?.source ?? '';
+
+    expect(serverSource).toContain('<button title={"cart.count"}>Checkout</button>');
+    expect(serverSource).toContain('<span>{"cart.count"}</span>');
+    expect(serverSource).toContain('<output data-bind="cart.count">{cart.count}</output>');
+    expect(serverSource).not.toContain('button_title_derive');
+    expect(result.queryUpdatePlans).toEqual([
+      {
+        componentName: 'CartBadge',
+        paths: ['cart.count'],
+        query: 'cart',
+      },
+    ]);
+    expect(result.diagnostics).toEqual([]);
+    expect(() => assertFixpoint(result)).not.toThrow();
+  });
+
   it('derives data-bind stamps for sole text-child query expressions', () => {
     const result = compileComponentModule({
       fileName: 'cart-badge.tsx',

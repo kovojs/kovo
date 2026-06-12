@@ -51,6 +51,8 @@ export interface SourceSpan {
 export interface JsxExpressionModel {
   end: number;
   expression: string;
+  propertyAccesses: readonly PropertyAccessPathModel[];
+  solePropertyAccessPath?: string;
   start: number;
 }
 
@@ -64,6 +66,7 @@ export interface JsxAttributeModel {
   end: number;
   expression?: string;
   expressionEnd?: number;
+  expressionPropertyAccesses?: readonly PropertyAccessPathModel[];
   expressionStart?: number;
   name: string;
   start: number;
@@ -1091,9 +1094,12 @@ function jsxExpressionModel(
 ): JsxExpressionModel {
   const start = expression.getStart(sourceFile);
   const end = expression.getEnd();
+  const solePath = solePropertyAccessPathFromExpression(expression);
   return {
     end,
     expression: source.slice(start, end).trim(),
+    propertyAccesses: propertyAccessPathModels(sourceFile, expression),
+    ...(solePath ? { solePropertyAccessPath: solePath } : {}),
     start,
   };
 }
@@ -1122,6 +1128,7 @@ function jsxAttributeExpression(
 ): {
   expression: string;
   expressionEnd: number;
+  expressionPropertyAccesses: readonly PropertyAccessPathModel[];
   expressionStart: number;
   zeroArgArrow?: ZeroArgArrowModel;
 } | null {
@@ -1133,9 +1140,15 @@ function jsxAttributeExpression(
   return {
     expression: source.slice(expressionStart, expressionEnd).trim(),
     expressionEnd,
+    expressionPropertyAccesses: propertyAccessPathModels(sourceFile, initializer.expression),
     expressionStart,
     ...zeroArgArrowModel(sourceFile, source, initializer.expression),
   };
+}
+
+function solePropertyAccessPathFromExpression(expression: ts.Expression): string | null {
+  const unwrapped = unwrapExpression(expression);
+  return ts.isPropertyAccessExpression(unwrapped) ? propertyAccessPath(unwrapped) : null;
 }
 
 function zeroArgArrowModel(
