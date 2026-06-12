@@ -41,7 +41,7 @@ export default defineConfig({
           { pattern: 'packages/*/package.json', base: 'workspace' },
           { pattern: 'pnpm-lock.yaml', base: 'workspace' },
           { pattern: 'scripts/prod-emit-check.mjs', base: 'workspace' },
-          { pattern: 'packages/compiler/src/**', base: 'workspace' },
+          { pattern: 'packages/*/src/**', base: 'workspace' },
         ],
       },
       browser: {
