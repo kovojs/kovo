@@ -26,6 +26,38 @@ export type {
 } from './accordion.js';
 
 export {
+  alertDialogActionAttributes,
+  alertDialogActionClick,
+  alertDialogBeforeToggle,
+  alertDialogCancel,
+  alertDialogCancelAttributes,
+  alertDialogCancelClick,
+  alertDialogContentAttributes,
+  alertDialogRootAttributes,
+  alertDialogTriggerAttributes,
+  alertDialogTriggerClick,
+  setAlertDialogOpen,
+  toggleAlertDialog,
+} from './alert-dialog.js';
+export type {
+  AlertDialogActionAttributeOptions,
+  AlertDialogActionEvent,
+  AlertDialogActionIntent,
+  AlertDialogAttributeOptions,
+  AlertDialogBeforeToggleEvent,
+  AlertDialogCancelAttributeOptions,
+  AlertDialogCancelButtonEvent,
+  AlertDialogCancelEvent,
+  AlertDialogChangeDetail,
+  AlertDialogChangeOptions,
+  AlertDialogChangeReason,
+  AlertDialogChangeResult,
+  AlertDialogPrimitiveAttributes,
+  AlertDialogState,
+  AlertDialogTriggerEvent,
+} from './alert-dialog.js';
+
+export {
   avatarFallbackAttributes,
   avatarImageAttributes,
   avatarImageState,

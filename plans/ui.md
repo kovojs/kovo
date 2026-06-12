@@ -80,7 +80,7 @@ jiso-dialog` resolves dashed wire names and prints provenance including package,
       `pnpm exec vp check packages/headless-ui/package.json packages/headless-ui/src/index.ts packages/headless-ui/src/primitives/index.ts packages/headless-ui/src/primitives/disclosure.ts packages/headless-ui/src/primitives/disclosure.test.ts plans/ui.md`.
       This completes the H0 shared-lib prerequisite; H1 remains open for the remaining
       wave 1 primitive set.
-- [ ] H1 wave 1 primitives (L0-heavy): dialog, alert-dialog, popover, tooltip, hover-card, collapsible, accordion, separator, progress, meter, avatar, toggle, switch, checkbox.
+- [x] H1 wave 1 primitives (L0-heavy): dialog, alert-dialog, popover, tooltip, hover-card, collapsible, accordion, separator, progress, meter, avatar, toggle, switch, checkbox.
       Partial evidence 2026-06-12: disclosure is the first H1 L0 primitive with DOM-light
       attribute builders, cancelable open-state transitions, the SPEC §4.6 primitive handler
       no-op guard, package exports, and focused tests. Same-session evidence:
@@ -220,6 +220,20 @@ jiso-dialog` resolves dashed wire names and prints provenance including package,
       `pnpm --filter @jiso/headless-ui run lint:primitives`,
       `pnpm exec vp check packages/headless-ui/package.json packages/headless-ui/src/index.ts packages/headless-ui/src/primitives/index.ts packages/headless-ui/src/primitives/dialog.ts packages/headless-ui/src/primitives/dialog.test.ts plans/ui.md`,
       and `git diff --check`.
+      Additional evidence 2026-06-12: `packages/headless-ui/src/primitives/alert-dialog.ts`
+      completes the remaining H1 primitive as a native `<dialog>`/invoker-command L0 helper:
+      root/trigger/content/cancel/action attribute builders, `role="alertdialog"` plus
+      `aria-modal` and IDREF label/description helpers, cancel/action intent attributes for
+      destructive confirmation surfaces, cancelable open-state transitions, and guarded
+      trigger/cancel/action/cancel-event/beforetoggle handlers following the SPEC §4.6
+      primitive handler no-op contract. It is exported through `@jiso/headless-ui`,
+      `@jiso/headless-ui/primitives`, and `@jiso/headless-ui/primitives/alert-dialog`.
+      Same-session evidence:
+      `pnpm --filter @jiso/headless-ui exec vitest --run src/primitives/alert-dialog.test.ts`,
+      `pnpm --filter @jiso/headless-ui run lint:primitives`,
+      `pnpm exec vp check packages/headless-ui/package.json packages/headless-ui/src/index.ts packages/headless-ui/src/primitives/index.ts packages/headless-ui/src/primitives/alert-dialog.ts packages/headless-ui/src/primitives/alert-dialog.test.ts plans/ui.md`,
+      and `git diff --check`. Caveat: this completes the DOM-light H1 helper slice; styled
+      `@jiso/ui` wrappers and gallery conformance remain tracked by U3+ and the gallery gates.
 - [ ] H2 wave 2 primitives (stateful L1 islands): tabs, radio-group, toggle-group, checkbox-group, toolbar, number-field, otp-field, scroll-area, field/fieldset as `form()` integration.
 - [ ] H3 wave 3 primitives (list-driven & isomorphic): select, combobox, autocomplete, dropdown-menu, context-menu, menubar, navigation-menu, slider, toast, command.
 - [x] U1 token sheet + `cn()` + statically-analyzable variant helper (Tailwind-first, §13.1 discoverability rules).
