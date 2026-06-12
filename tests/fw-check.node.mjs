@@ -4762,6 +4762,38 @@ export const CartRow = component('cart-row', {
   assert.doesNotMatch(registrySource, /'cart-row': unknown;/);
 });
 
+void test('D9 FW235 fails fw-check for app-authored lowered IR component modules', async () => {
+  const result = compileComponentModule({
+    fileName: 'cart-badge.tsx',
+    source: `
+export const CartBadge = component('cart-badge', {
+  queries: { cart: cartQuery },
+  render: ({ cart }) => \`<cart-badge fw-deps="cart"><span data-bind="cart.count">\${cart.count}</span></cart-badge>\`,
+});
+`,
+  });
+  const diagnostic = result.diagnostics.find((entry) => entry.code === 'FW235');
+  assert.ok(diagnostic);
+
+  assert.deepEqual(
+    fwCheck({
+      diagnostics: [
+        {
+          code: diagnostic.code,
+          message: diagnostic.message,
+          site: diagnostic.fileName,
+          start: diagnostic.start,
+        },
+      ],
+    }),
+    {
+      exitCode: 1,
+      output:
+        'fw-check/v1\nERROR FW235 cart-badge.tsx:4:25 App source hand-authors lowered IR/string-rendered components; write TSX and let the compiler emit IR.\n',
+    },
+  );
+});
+
 void test('P4 commerce touch graph is a committed generated artifact', async () => {
   const commerceSource = await readProjectFile('examples/commerce/src/app.ts');
   const commerceGraph = JSON.parse(

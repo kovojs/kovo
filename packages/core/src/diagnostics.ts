@@ -18,6 +18,7 @@ export type DiagnosticCode =
   | 'FW232'
   | 'FW233'
   | 'FW234'
+  | 'FW235'
   | 'FW301'
   | 'FW302'
   | 'FW303'
@@ -169,6 +170,13 @@ export const diagnosticDefinitions = {
     help: 'SPEC §6.1.1 requires lowercase, dash-terminated, app-wide unique package component prefixes; jiso-* is reserved for @jiso/* packages.',
     severity: 'error',
     message: 'Package component prefix registration conflict or reservation violation.',
+  },
+  FW235: {
+    code: 'FW235',
+    help: 'SPEC §5.2: TSX is the sole app-authoring surface. Write JSX with typed expressions and let the compiler emit renderSource(), fw-c, fw-deps, and data-bind.',
+    severity: 'error',
+    message:
+      'App source hand-authors lowered IR/string-rendered components; write TSX and let the compiler emit IR.',
   },
   FW301: {
     code: 'FW301',

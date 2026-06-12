@@ -979,6 +979,51 @@ export const CartBadge = component('cart-badge', {
     expect(() => assertFixpoint(result)).not.toThrow();
   });
 
+  it('reports FW235 for app-authored string-rendered component modules', () => {
+    const result = compileComponentModule({
+      fileName: 'cart-badge.tsx',
+      source: `
+export const CartBadge = component('cart-badge', {
+  queries: { cart: cartQuery },
+  render: ({ cart }) => \`<cart-badge fw-deps="cart"><span data-bind="cart.count">\${cart.count}</span></cart-badge>\`,
+});
+`,
+    });
+
+    expect(result.diagnostics).toEqual([
+      {
+        code: 'FW235',
+        fileName: 'cart-badge.tsx',
+        help: [
+          'SPEC §5.2: TSX is the sole app-authoring surface. Write JSX with typed expressions and let the compiler emit renderSource(), fw-c, fw-deps, and data-bind.',
+          'TSX equivalent direction: render with JSX, for example `render: (...) => (<cart-badge>...</cart-badge>)`, and use typed expressions such as `{cart.count}` instead of data-bind strings.',
+        ].join('\n'),
+        length: 91,
+        message:
+          'App source hand-authors lowered IR/string-rendered components; write TSX and let the compiler emit IR.',
+        severity: 'error',
+        start: { column: 25, line: 4 },
+      },
+    ]);
+  });
+
+  it('keeps compiler-emitted IR accepted through explicit fixpoint provenance', () => {
+    const emitted = compileComponentModule({
+      fileName: 'cart-badge.tsx',
+      source: cartBadgeSource,
+    }).files.find((file) => file.kind === 'server');
+
+    expect(emitted).toBeDefined();
+    const recompiled = compileComponentModule({
+      fileName: emitted?.fileName ?? 'cart-badge.server.js',
+      source: emitted?.source ?? '',
+      sourceProvenance: 'compiler-emitted',
+    });
+
+    expect(recompiled.diagnostics).toEqual([]);
+    expect(recompiled.files).toEqual([emitted]);
+  });
+
   it('lowers provable dialog behavior to platform attributes instead of client handlers', () => {
     const result = compileComponentModule({
       fileName: 'cart-button.tsx',

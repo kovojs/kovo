@@ -8,6 +8,7 @@ export interface CompileComponentOptions {
   queryShapes?: Record<string, QueryShape>;
   registryFacts?: RegistryFacts;
   source: string;
+  sourceProvenance?: 'app' | 'compiler-emitted';
 }
 
 export interface QueryUpdatePlanFact {

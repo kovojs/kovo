@@ -44,6 +44,7 @@ import {
   validateResidualStamps,
   validateStaticIds,
 } from './validate/markup.js';
+import { isCompilerIrArtifact, validateAuthoringSurface } from './validate/authoring-surface.js';
 import { validateLiteralHrefs } from './validate/navigation.js';
 import { validatePackageComponentPrefixes } from './validate/package-prefixes.js';
 import type {
@@ -145,7 +146,6 @@ interface ValidatorContext {
 type CompilerValidator = (context: ValidatorContext) => readonly CompilerDiagnostic[];
 
 const irHeader = '// @jiso-ir';
-const cssIrHeader = '/* @jiso-ir */';
 
 const compilerValidators: readonly CompilerValidator[] = [
   ({ model, options, source }) => validateServerFactsInLocalState(source, model, options.fileName),
@@ -175,9 +175,12 @@ const compilerValidators: readonly CompilerValidator[] = [
 ];
 
 export function compileComponentModule(options: CompileComponentOptions): CompileResult {
-  if (isIr(options.source)) {
+  const authoringSurfaceDiagnostics = validateAuthoringSurface(options);
+
+  if (isCompilerIrArtifact(options.source)) {
     return {
       ...createEmptyCompileResult(),
+      diagnostics: authoringSurfaceDiagnostics,
       files: [
         {
           fileName: options.fileName,
@@ -244,6 +247,7 @@ export function compileComponentModule(options: CompileComponentOptions): Compil
   return {
     componentGraphFacts,
     diagnostics: [
+      ...authoringSurfaceDiagnostics,
       ...versionedHandlers.flatMap((handler) => handler.diagnostics ?? []),
       ...packagePrefixDiagnostics,
       ...validationDiagnostics,
@@ -268,7 +272,7 @@ export function compileComponentModule(options: CompileComponentOptions): Compil
 
 export function assertFixpoint(result: CompileResult): void {
   for (const file of result.files) {
-    const recompiled = compileComponentModule(file);
+    const recompiled = compileComponentModule({ ...file, sourceProvenance: 'compiler-emitted' });
     const sameFile =
       recompiled.files.length === 1 &&
       recompiled.files[0]?.fileName === file.fileName &&
@@ -315,10 +319,6 @@ function emittedFileKind(fileName: string): EmittedFile['kind'] {
   if (fileName.endsWith('.css')) return 'css';
   if (fileName.endsWith('.server.js')) return 'server';
   return 'registry';
-}
-
-function isIr(source: string): boolean {
-  return source.startsWith(irHeader) || source.startsWith(cssIrHeader);
 }
 
 function inferComponentName(
