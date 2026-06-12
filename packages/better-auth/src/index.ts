@@ -254,6 +254,7 @@ export interface BetterAuthSchemaSourceAnnotationOptions {
 
 export interface BetterAuthSchemaSourceImportNote {
   hasRequiredImport: boolean;
+  insertedImport: boolean;
   localName: string;
   shouldAddRequiredImport: boolean;
   suggestedImport: string;
@@ -466,6 +467,10 @@ export function annotateBetterAuthSchemaSource(
     .filter((table): table is BetterAuthTable => isBetterAuthTable(table))
     .filter((table) => !sourceTableNames.has(table))
     .sort();
+  const insertedImport = annotatedTables.length > 0 && !hasRequiredImport;
+  const sourceReplacements = insertedImport
+    ? [...replacements, betterAuthSchemaImportReplacement(source, annotationCallee)]
+    : replacements;
 
   return {
     alreadyAnnotatedTables: sortedBetterAuthTables(alreadyAnnotatedTables),
@@ -473,8 +478,9 @@ export function annotateBetterAuthSchemaSource(
     existingExtraConfigTables: [...new Set(existingExtraConfigTables)].sort(),
     importNote: {
       hasRequiredImport,
+      insertedImport,
       localName: annotationCallee,
-      shouldAddRequiredImport: annotatedTables.length > 0 && !hasRequiredImport,
+      shouldAddRequiredImport: false,
       suggestedImport: betterAuthSchemaImportStatement(annotationCallee),
     },
     missingSourceTables,
@@ -482,7 +488,7 @@ export function annotateBetterAuthSchemaSource(
       module: '@jiso/drizzle',
       name: 'jiso',
     },
-    source: applyBetterAuthSchemaSourceReplacements(source, replacements),
+    source: applyBetterAuthSchemaSourceReplacements(source, sourceReplacements),
     validation,
   };
 }
@@ -969,18 +975,83 @@ function betterAuthSchemaImportStatement(localName: string): string {
   return `import { ${specifier} } from '@jiso/drizzle';`;
 }
 
+function betterAuthSchemaImportReplacement(
+  source: string,
+  localName: string,
+): { end: number; start: number; value: string } {
+  const jisoDrizzleImport = findNamedImportFromModule(source, '@jiso/drizzle');
+  const specifier = localName === 'jiso' ? 'jiso' : `jiso as ${localName}`;
+
+  if (jisoDrizzleImport !== null) {
+    const existingSpecifiers = jisoDrizzleImport.specifiersText.trim();
+    const specifiers =
+      existingSpecifiers.length === 0 ? specifier : `${existingSpecifiers}, ${specifier}`;
+
+    return {
+      end: jisoDrizzleImport.specifiersEnd,
+      start: jisoDrizzleImport.specifiersStart,
+      value: ` ${specifiers} `,
+    };
+  }
+
+  const firstImport = findFirstImport(source);
+  const statement = `${betterAuthSchemaImportStatement(localName)}\n`;
+
+  return {
+    end: firstImport,
+    start: firstImport,
+    value: statement,
+  };
+}
+
 function hasNamedImportLocal(source: string, moduleName: string, localName: string): boolean {
-  const importPattern = /import\s*\{(?<specifiers>[^}]+)\}\s*from\s*(?<module>['"][^'"]+['"])/g;
+  for (const namedImport of findNamedImports(source)) {
+    if (stringLiteralValue(namedImport.moduleText) !== moduleName) continue;
 
-  for (const match of source.matchAll(importPattern)) {
-    if (stringLiteralValue(match.groups?.module ?? '') !== moduleName) continue;
-
-    for (const specifier of (match.groups?.specifiers ?? '').split(',')) {
+    for (const specifier of namedImport.specifiersText.split(',')) {
       if (namedImportLocalName(specifier.trim()) === localName) return true;
     }
   }
 
   return false;
+}
+
+interface NamedImportMatch {
+  moduleText: string;
+  specifiersEnd: number;
+  specifiersStart: number;
+  specifiersText: string;
+}
+
+function findNamedImportFromModule(source: string, moduleName: string): NamedImportMatch | null {
+  for (const namedImport of findNamedImports(source)) {
+    if (stringLiteralValue(namedImport.moduleText) === moduleName) return namedImport;
+  }
+
+  return null;
+}
+
+function findNamedImports(source: string): NamedImportMatch[] {
+  const imports: NamedImportMatch[] = [];
+  const importPattern = /import\s*\{(?<specifiers>[^}]+)\}\s*from\s*(?<module>['"][^'"]+['"])/g;
+
+  for (const match of source.matchAll(importPattern)) {
+    const openBrace = match[0].indexOf('{');
+    imports.push({
+      moduleText: match.groups?.module ?? '',
+      specifiersEnd: match.index + match[0].indexOf('}'),
+      specifiersStart: match.index + openBrace + 1,
+      specifiersText: match.groups?.specifiers ?? '',
+    });
+  }
+
+  return imports;
+}
+
+function findFirstImport(source: string): number {
+  const match = /^[ \t]*import\s/m.exec(source);
+
+  return match?.index ?? 0;
 }
 
 function namedImportLocalName(specifier: string): string | null {

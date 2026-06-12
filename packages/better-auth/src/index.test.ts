@@ -562,6 +562,7 @@ describe('credential mutation helpers', () => {
     expect(result.validation.ok).toBe(true);
     expect(result.importNote).toEqual({
       hasRequiredImport: true,
+      insertedImport: false,
       localName: 'jiso',
       shouldAddRequiredImport: false,
       suggestedImport: "import { jiso } from '@jiso/drizzle';",
@@ -669,10 +670,18 @@ describe('credential mutation helpers', () => {
 
     expect(result.importNote).toEqual({
       hasRequiredImport: false,
+      insertedImport: true,
       localName: 'jiso',
-      shouldAddRequiredImport: true,
+      shouldAddRequiredImport: false,
       suggestedImport: "import { jiso } from '@jiso/drizzle';",
     });
+    expect(result.source).toBe(
+      [
+        "import { jiso } from '@jiso/drizzle';",
+        "import { pgTable } from 'drizzle-orm/pg-core';",
+        "export const account = pgTable('account', {}, jiso({ domain: 'auth', key: 'userId' }));",
+      ].join('\n'),
+    );
 
     const aliased = annotateBetterAuthSchemaSource(
       [
@@ -685,12 +694,37 @@ describe('credential mutation helpers', () => {
 
     expect(aliased.importNote).toEqual({
       hasRequiredImport: true,
+      insertedImport: false,
       localName: 'markJiso',
       shouldAddRequiredImport: false,
       suggestedImport: "import { jiso as markJiso } from '@jiso/drizzle';",
     });
     expect(aliased.source).toContain(
       "export const account = pgTable('account', {}, markJiso({ domain: 'auth', key: 'userId' }));",
+    );
+
+    const existingJisoModuleImport = annotateBetterAuthSchemaSource(
+      [
+        "import { domain } from '@jiso/drizzle';",
+        "import { pgTable } from 'drizzle-orm/pg-core';",
+        "export const account = pgTable('account', {});",
+      ].join('\n'),
+      metadata,
+    );
+
+    expect(existingJisoModuleImport.importNote).toEqual({
+      hasRequiredImport: false,
+      insertedImport: true,
+      localName: 'jiso',
+      shouldAddRequiredImport: false,
+      suggestedImport: "import { jiso } from '@jiso/drizzle';",
+    });
+    expect(existingJisoModuleImport.source).toBe(
+      [
+        "import { domain, jiso } from '@jiso/drizzle';",
+        "import { pgTable } from 'drizzle-orm/pg-core';",
+        "export const account = pgTable('account', {}, jiso({ domain: 'auth', key: 'userId' }));",
+      ].join('\n'),
     );
   });
 

@@ -303,6 +303,7 @@ describe('Better Auth pinned conformance', () => {
     ]);
     expect(result.importNote).toEqual({
       hasRequiredImport: true,
+      insertedImport: false,
       localName: 'jiso',
       shouldAddRequiredImport: false,
       suggestedImport: "import { jiso } from '@jiso/drizzle';",
