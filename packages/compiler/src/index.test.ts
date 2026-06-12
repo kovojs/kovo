@@ -872,6 +872,26 @@ export const CartBadge = component('cart-badge', {
     expect(() => assertFixpoint(result)).not.toThrow();
   });
 
+  it('does not discover component CSS from css-looking render text', () => {
+    const result = compileComponentModule({
+      fileName: 'components/cart/cart-badge.tsx',
+      source: `
+import { component } from '@jiso/core';
+
+export const CartBadge = component('cart-badge', {
+  render: () => {
+    const sample = 'css: \`button { color: red; }\`';
+    // styles: \`a { color: blue; }\`
+    return <cart-badge>{sample}</cart-badge>;
+  },
+});
+`,
+    });
+
+    expect(result.files.some((file) => file.fileName.endsWith('.css'))).toBe(false);
+    expect(result.cssAssets).toEqual([]);
+  });
+
   it('emits empty registry fact surfaces when no facts are provided', () => {
     const result = compileComponentModule({
       fileName: 'components/cart/cart-badge.tsx',

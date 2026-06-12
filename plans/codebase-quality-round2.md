@@ -494,6 +494,13 @@ pipeline throws the tree away and communicates via mutated source text.
       scanner remains only as a fallback. `packages/compiler/src/index.test.ts` covers an
       adversarial render body with tag text in a string/comment and proves CSS scopes to the
       returned JSX host instead.
+      Additional evidence 2026-06-12: the model-less source scanner fallback is removed from
+      `emitCssModule`; CSS options, explicit component names, and render hosts now come from
+      `ComponentModuleModel` on the compile path. `packages/compiler/src/index.test.ts` covers
+      `css:`/`styles:` text inside render strings/comments and proves it does not emit a CSS
+      artifact. Same-session evidence:
+      `pnpm exec vitest --run packages/compiler/src/index.test.ts -t "CSS|css-looking"` and
+      `pnpm exec vp check packages/compiler/src/css.ts packages/compiler/src/index.test.ts`.
 - [x] **MED — Make the render-equivalence gate real.** emit/server.ts:28-41 compares
       `serverRenderSource(...)` against itself round-tripped through its own escaper — it can
       only fail if the escape pair disagrees. Execute the emitted server module's render against

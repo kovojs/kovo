@@ -114,9 +114,9 @@ export function componentCssAssetForFile(
 export function emitCssModule(
   source: string,
   componentName: string,
-  model?: ComponentModuleModel,
+  model: ComponentModuleModel,
 ): string | null {
-  const css = extractStaticComponentCss(source, model);
+  const css = extractStaticComponentCss(model);
   if (!css) return null;
 
   const scopedCss = scopeComponentCss(componentHostSelector(source, componentName, model), css);
@@ -209,19 +209,13 @@ function selectorExclusion(nestedHostSelectors: readonly string[]): string {
     .join('');
 }
 
-function extractStaticComponentCss(source: string, model?: ComponentModuleModel): string | null {
-  const cssOption = model
-    ? firstComponentModel(model)?.options.find(
-        (option) => option.key === 'css' || option.key === 'styles',
-      )
-    : null;
+function extractStaticComponentCss(model: ComponentModuleModel): string | null {
+  const cssOption = firstComponentModel(model)?.options.find(
+    (option) => option.key === 'css' || option.key === 'styles',
+  );
   if (cssOption) return extractStaticCssTemplate(cssOption.value);
 
-  const match = /\b(?:css|styles)\s*:\s*`/g.exec(source);
-  if (!match) return null;
-  const templateStart = match.index + match[0].lastIndexOf('`');
-
-  return extractStaticCssTemplate(source.slice(templateStart));
+  return null;
 }
 
 function extractStaticCssTemplate(value: string): string | null {
@@ -238,61 +232,18 @@ function extractStaticCssTemplate(value: string): string | null {
 function componentHostSelector(
   source: string,
   componentName: string,
-  model?: ComponentModuleModel,
+  model: ComponentModuleModel,
 ): string {
-  const component = model ? firstComponentModel(model) : null;
-  const explicitName =
-    component?.explicitName ?? /component\(\s*['"]([^'"]+)['"]/.exec(source)?.[1];
+  const component = firstComponentModel(model);
+  const explicitName = component?.explicitName;
   const hostName = explicitName ?? kebabCase(componentName);
   const renderedHost = component?.renderHost
     ? openingTagName(source.slice(component.renderHost.start, component.renderHost.end))
-    : firstRenderedTagName(source);
+    : null;
 
   return renderedHost === hostName ? hostName : `[fw-c="${escapeAttribute(hostName)}"]`;
 }
 
-function firstRenderedTagName(source: string): string | null {
-  const tag = findFirstRenderedOpeningTag(source);
-  if (!tag) return null;
-
-  return openingTagName(source.slice(tag.start, tag.end + 1));
-}
-
 function openingTagName(source: string): string | null {
   return /^<(?<name>[A-Za-z][\w:-]*)/.exec(source)?.groups?.name ?? null;
-}
-
-function findFirstRenderedOpeningTag(source: string): { end: number; start: number } | null {
-  const renderMatch = /\brender\s*:/.exec(source);
-  if (!renderMatch) return null;
-
-  const tagMatch = /<[A-Za-z][\w:-]*\b/.exec(source.slice(renderMatch.index));
-  if (!tagMatch) return null;
-
-  const tagStart = renderMatch.index + tagMatch.index;
-  const tagEnd = findOpeningTagEnd(source, tagStart);
-  if (tagEnd === -1) return null;
-
-  return { end: tagEnd, start: tagStart };
-}
-
-function findOpeningTagEnd(source: string, start: number): number {
-  for (let index = start; index < source.length; index += 1) {
-    const char = source[index];
-    if (char === '"' || char === "'" || char === '`') {
-      const end = findStringEnd(source, index, char);
-      index = end === -1 ? source.length : end;
-      continue;
-    }
-
-    if (char === '{') {
-      const end = findMatchingToken(source, index, '{', '}');
-      index = end === -1 ? source.length : end;
-      continue;
-    }
-
-    if (char === '>') return index;
-  }
-
-  return -1;
 }
