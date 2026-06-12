@@ -257,6 +257,12 @@ Scope: SPEC addition (proposed §9.5 "The request shell"), `@jiso/server` shell 
       direct replay boundary, and the existing static-export/Vite suites continue
       to prove the integrated export path. Same-session verification ran
       `corepack pnpm exec vitest --run packages/server/src/static-replay.test.ts packages/server/src/static-export.test.ts packages/server/src/vite-build.test.ts packages/server/src/vite.test.ts`.
+      Additional evidence 2026-06-12: `exportStaticApp({ outDir, assets })` now validates
+      configured static asset source files while planning output, before writing replayed HTML,
+      `/c/` modules, or copied assets. Missing asset sources fail through FW229 teaching errors
+      and leave generated output unwritten, preserving the SPEC §9.5 static-export constraint
+      that export tasks produce a complete replayed output set or fail loudly. Same-session
+      verification ran `corepack pnpm exec vitest --run packages/server/src/static-export.test.ts`.
 - [ ] R7 adoption: starter becomes a routed app served by `vp dev`; commerce runs end-to-end over HTTP; a jiso docs site ships from `vp run export` as the first outside consumer.
       Progress 2026-06-11: commerce is now TSX-authored ahead of the HTTP serve
       entry — `CartBadge`, `OrderHistory`, and `ProductGrid` are authored in

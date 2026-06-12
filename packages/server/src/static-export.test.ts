@@ -336,6 +336,38 @@ describe('server static export', () => {
     }
   });
 
+  it('rejects unreadable static asset sources before writing generated files', async () => {
+    const outDir = await mkdtemp(path.join(os.tmpdir(), 'jiso-static-export-'));
+    const sourceDir = await mkdtemp(path.join(os.tmpdir(), 'jiso-static-assets-'));
+    try {
+      const missingSource = path.join(sourceDir, 'missing.css');
+      const app = createApp({
+        routes: [route('/', { page: () => '<main>Home</main>' })],
+      });
+
+      await expect(
+        exportStaticApp(app, {
+          assets: [{ path: '/assets/missing.css', source: missingSource }],
+          outDir,
+        }),
+      ).rejects.toMatchObject({
+        code: 'FW229',
+        diagnostics: [
+          {
+            code: 'FW229',
+            message: expect.stringContaining('is not a readable file'),
+            routePath: '/assets/missing.css',
+          },
+        ],
+      });
+      await expect(readFile(path.join(outDir, 'index.html'))).rejects.toThrow();
+      await expect(readFile(path.join(outDir, 'assets', 'missing.css'))).rejects.toThrow();
+    } finally {
+      await rm(outDir, { force: true, recursive: true });
+      await rm(sourceDir, { force: true, recursive: true });
+    }
+  });
+
   it('refuses error diagnostics before replaying or writing export files', async () => {
     const outDir = await mkdtemp(path.join(os.tmpdir(), 'jiso-static-export-'));
     try {

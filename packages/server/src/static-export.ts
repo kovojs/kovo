@@ -1,4 +1,5 @@
-import { copyFile, mkdir, writeFile } from 'node:fs/promises';
+import { constants as fsConstants } from 'node:fs';
+import { access, copyFile, mkdir, stat, writeFile } from 'node:fs/promises';
 import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -141,6 +142,7 @@ async function writeStaticExportOutput(plan: StaticExportOutputPlan): Promise<vo
 
   for (const artifact of plan.assets) {
     const targetPath = staticExportAssetTargetPath(root, artifact.path);
+    await assertReadableStaticExportAssetSource(artifact);
     writes.push({
       diagnosticPath: artifact.path,
       kind: 'static asset',
@@ -152,6 +154,42 @@ async function writeStaticExportOutput(plan: StaticExportOutputPlan): Promise<vo
   assertNoStaticExportOutputConflicts(writes);
 
   await Promise.all(writes.map((write) => write.write()));
+}
+
+async function assertReadableStaticExportAssetSource(
+  artifact: StaticExportAssetArtifact,
+): Promise<void> {
+  let sourceStat: Awaited<ReturnType<typeof stat>>;
+  try {
+    sourceStat = await stat(artifact.source);
+  } catch {
+    throw new StaticExportError([
+      staticExportDiagnostic(
+        artifact.path,
+        `FW229 static export cannot copy static asset '${artifact.path}' because source '${artifact.source}' is not a readable file.`,
+      ),
+    ]);
+  }
+
+  if (!sourceStat.isFile()) {
+    throw new StaticExportError([
+      staticExportDiagnostic(
+        artifact.path,
+        `FW229 static export cannot copy static asset '${artifact.path}' because source '${artifact.source}' is not a file.`,
+      ),
+    ]);
+  }
+
+  try {
+    await access(artifact.source, fsConstants.R_OK);
+  } catch {
+    throw new StaticExportError([
+      staticExportDiagnostic(
+        artifact.path,
+        `FW229 static export cannot copy static asset '${artifact.path}' because source '${artifact.source}' is not a readable file.`,
+      ),
+    ]);
+  }
 }
 
 async function writeTextStaticExportFile(body: string, targetPath: string): Promise<void> {
