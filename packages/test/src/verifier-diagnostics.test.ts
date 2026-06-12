@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
+import { diagnosticsForObservations } from '@jiso/test/verifier-diagnostics';
 import { expectedDiagnosticMessage } from './test-fixtures.js';
-import { diagnosticsForObservations } from './verifier-diagnostics.js';
 
 describe('@jiso/test verifier diagnostics', () => {
   it('reports unobserved conditional branches before unobserved domains', () => {

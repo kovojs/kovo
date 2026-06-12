@@ -6,7 +6,7 @@ import {
   executeHarnessQuery,
   loadHarnessPage,
   type HarnessOperationVerifier,
-} from './harness-operations.js';
+} from '@jiso/test/harness-operations';
 import { createFakeDb, expectedDiagnostic, type FakeDb } from './test-fixtures.js';
 import type { ObservedDbOperation } from './verifier.js';
 

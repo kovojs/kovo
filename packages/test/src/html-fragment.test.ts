@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { fragmentHtml } from './html-fragment.js';
+import { fragmentHtml } from '@jiso/test/html-fragment';
 
 describe('@jiso/test html fragment seam', () => {
   it('extracts explicit fragments without constructing a harness page assertion', () => {

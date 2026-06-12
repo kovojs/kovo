@@ -5,10 +5,13 @@
   "exports": {
     ".": "./src/index.ts",
     "./assertions": "./src/assertions.ts",
+    "./harness-operations": "./src/harness-operations.ts",
     "./harness": "./src/harness.ts",
+    "./html-fragment": "./src/html-fragment.ts",
     "./page": "./src/page.ts",
     "./pglite": "./src/pglite.ts",
     "./test-case": "./src/test-case.ts",
+    "./verifier-diagnostics": "./src/verifier-diagnostics.ts",
     "./verifier": "./src/verifier.ts"
   },
   "dependencies": {

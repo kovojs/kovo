@@ -3449,6 +3449,17 @@ Verification: server vitest + wire fixtures byte-for-byte acceptance.
       `corepack pnpm exec vitest --run packages/test/src`,
       `corepack pnpm exec vp check packages/test/src/harness-verifier.test.ts plans/codebase-quality-round2.md`,
       and `git diff --check`.
+      Additional evidence 2026-06-12: the split harness/verifier helper modules are now package
+      subpaths instead of source-only seams. `packages/test/package.json` exposes
+      `@jiso/test/html-fragment`, `@jiso/test/harness-operations`, and
+      `@jiso/test/verifier-diagnostics`; `packages/test/src/package-exports.test.ts` pins their
+      runtime helpers and types, and the owning seam tests import those package subpaths instead
+      of source-relative modules. Same-session evidence:
+      `corepack pnpm exec vitest --run packages/test/src/package-exports.test.ts packages/test/src/html-fragment.test.ts packages/test/src/harness-operations.test.ts packages/test/src/verifier-diagnostics.test.ts`,
+      `corepack pnpm exec vitest --run packages/test/src`,
+      `corepack pnpm exec vitest --run examples/commerce/src/app.test.ts examples/commerce/src/source-truth.test.ts`,
+      `corepack pnpm exec vp check packages/test/package.json packages/test/src/package-exports.test.ts packages/test/src/html-fragment.test.ts packages/test/src/harness-operations.test.ts packages/test/src/verifier-diagnostics.test.ts plans/codebase-quality-round2.md`,
+      and `git diff --check`.
       Additional evidence 2026-06-12: SQL observer-focused coverage moved from
       `packages/test/src/verifier-sql.test.ts` into `packages/test/src/sql-observer.test.ts`,
       keeping SPEC §11.2 unparseable SQL pass-through/no-fabricated-observation coverage,
@@ -4205,6 +4216,16 @@ As each phase splits a source module, split its tests in the same commit.
       the only root-barrel consumer so it can keep pinning public export parity. Same-session
       evidence:
       `pnpm exec vitest --run packages/test/src/*.test.ts examples/commerce/src/*.test.ts`.
+      Additional evidence 2026-06-12: the package's lower-level split seams now have package
+      subpaths and package-path test coverage: `@jiso/test/html-fragment`,
+      `@jiso/test/harness-operations`, and `@jiso/test/verifier-diagnostics` are exported from
+      `packages/test/package.json`, covered by `package-exports.test.ts`, and imported by their
+      owning seam tests instead of source-relative module paths. Same-session evidence:
+      `corepack pnpm exec vitest --run packages/test/src/package-exports.test.ts packages/test/src/html-fragment.test.ts packages/test/src/harness-operations.test.ts packages/test/src/verifier-diagnostics.test.ts`,
+      `corepack pnpm exec vitest --run packages/test/src`,
+      `corepack pnpm exec vitest --run examples/commerce/src/app.test.ts examples/commerce/src/source-truth.test.ts`,
+      `corepack pnpm exec vp check packages/test/package.json packages/test/src/package-exports.test.ts packages/test/src/html-fragment.test.ts packages/test/src/harness-operations.test.ts packages/test/src/verifier-diagnostics.test.ts plans/codebase-quality-round2.md`,
+      and `git diff --check`.
       Additional evidence 2026-06-12: Drizzle runtime/static package-surface coverage moved from
       `packages/drizzle/src/index.test.ts` into `packages/drizzle/src/runtime-surface.test.ts`,
       leaving static extraction coverage in the Drizzle monolith. Same-session evidence:
