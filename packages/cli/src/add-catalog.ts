@@ -4,6 +4,27 @@ export interface VendoredUiComponent {
 }
 
 export const vendoredUiComponents = {
+  badge: {
+    fileName: 'badge.tsx',
+    source: [
+      "import { component } from '@jiso/core';",
+      '',
+      'export interface BadgeProps {',
+      '  children?: string;',
+      '}',
+      '',
+      "export const Badge = component('badge', {",
+      '  render(props: BadgeProps) {',
+      '    return (',
+      '      <span class="inline-flex items-center rounded-md border border-neutral-200 bg-neutral-100 px-2 py-0.5 text-xs font-medium text-neutral-900">',
+      '        {props.children}',
+      '      </span>',
+      '    );',
+      '  },',
+      '});',
+      '',
+    ].join('\n'),
+  },
   button: {
     fileName: 'button.tsx',
     source: [
@@ -47,6 +68,27 @@ export const vendoredUiComponents = {
       '      <section class="rounded-lg border border-neutral-200 bg-white p-4 shadow-sm">',
       '        {props.children}',
       '      </section>',
+      '    );',
+      '  },',
+      '});',
+      '',
+    ].join('\n'),
+  },
+  kbd: {
+    fileName: 'kbd.tsx',
+    source: [
+      "import { component } from '@jiso/core';",
+      '',
+      'export interface KbdProps {',
+      '  children?: string;',
+      '}',
+      '',
+      "export const Kbd = component('kbd', {",
+      '  render(props: KbdProps) {',
+      '    return (',
+      '      <kbd class="inline-flex min-h-5 items-center rounded border border-neutral-300 bg-neutral-50 px-1.5 font-mono text-[0.75rem] font-medium text-neutral-900 shadow-sm">',
+      '        {props.children}',
+      '      </kbd>',
       '    );',
       '  },',
       '});',

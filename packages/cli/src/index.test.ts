@@ -46,7 +46,7 @@ class MemoryMcpTransport implements Transport {
 
 describe('fw add', () => {
   it('keeps the vendored UI catalog as TSX source components', () => {
-    expect(availableAddComponents()).toBe('button, card');
+    expect(availableAddComponents()).toBe('badge, button, card, kbd');
 
     for (const [name, entry] of Object.entries(vendoredUiComponents)) {
       expect(entry.fileName).toBe(`${name}.tsx`);
@@ -57,34 +57,46 @@ describe('fw add', () => {
     }
   });
 
-  it('vendors button and card as TSX app source', () => {
+  it('vendors pure-markup components as TSX app source', () => {
     const root = mkdtempSync(join(tmpdir(), 'fw-add-cli-'));
     const outDir = join(root, 'src/components/ui');
     const stdout = vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
     const stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
 
     try {
-      expect(main(['add', 'button', 'card', '--out', outDir])).toBe(0);
+      expect(main(['add', 'badge', 'button', 'card', 'kbd', '--out', outDir])).toBe(0);
 
       expect(stderr).not.toHaveBeenCalled();
       const output = stdout.mock.calls.map(([chunk]) => String(chunk)).join('');
       expect(output).toContain('fw-add/v1\n');
+      expect(output).toContain(
+        `ADD badge path=${JSON.stringify(join(outDir, 'badge.tsx'))} source=tsx`,
+      );
       expect(output).toContain(
         `ADD button path=${JSON.stringify(join(outDir, 'button.tsx'))} source=tsx`,
       );
       expect(output).toContain(
         `ADD card path=${JSON.stringify(join(outDir, 'card.tsx'))} source=tsx`,
       );
+      expect(output).toContain(
+        `ADD kbd path=${JSON.stringify(join(outDir, 'kbd.tsx'))} source=tsx`,
+      );
 
+      const badge = readFileSync(join(outDir, 'badge.tsx'), 'utf8');
       const button = readFileSync(join(outDir, 'button.tsx'), 'utf8');
       const card = readFileSync(join(outDir, 'card.tsx'), 'utf8');
+      const kbd = readFileSync(join(outDir, 'kbd.tsx'), 'utf8');
+      expect(badge).toContain("export const Badge = component('badge'");
+      expect(badge).toContain('<span');
       expect(button).toContain("import { component } from '@jiso/core';");
       expect(button).toContain("export const Button = component('button'");
       expect(button).toContain('<button');
       expect(card).toContain("export const Card = component('card'");
       expect(card).toContain('<section');
-      expect(`${button}\n${card}`).not.toContain('fw-c=');
-      expect(`${button}\n${card}`).not.toContain('data-bind=');
+      expect(kbd).toContain("export const Kbd = component('kbd'");
+      expect(kbd).toContain('<kbd');
+      expect(`${badge}\n${button}\n${card}\n${kbd}`).not.toContain('fw-c=');
+      expect(`${badge}\n${button}\n${card}\n${kbd}`).not.toContain('data-bind=');
     } finally {
       stdout.mockRestore();
       stderr.mockRestore();
@@ -124,7 +136,7 @@ describe('fw add', () => {
 
       expect(stdout).not.toHaveBeenCalled();
       expect(stderr.mock.calls.map(([chunk]) => String(chunk)).join('')).toBe(
-        'fw: unknown component "dialog". available: button, card.\n',
+        'fw: unknown component "dialog". available: badge, button, card, kbd.\n',
       );
     } finally {
       stdout.mockRestore();
