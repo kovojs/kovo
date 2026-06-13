@@ -2998,8 +2998,10 @@ function queryBodyObjectLiteralFromNode(
     if (body) return body;
   }
 
-  const type = expression.getType();
-  return type.isAny() || type.isUnknown() ? { unresolved: true } : undefined;
+  // SPEC §10.4: non-literal query option factories can hide executable Postgres loader work.
+  // When ts-morph cannot resolve the object to a static declaration, keep the surface visible as
+  // FW406 instead of accepting a typed-but-invisible query body.
+  return { unresolved: true };
 }
 
 function queryBodyObjectLiteralFromDeclaration(
@@ -5522,8 +5524,9 @@ function domainWriteObjectFromNode(
     if (body) return body;
   }
 
-  const type = expression.getType();
-  return type.isAny() || type.isUnknown() ? { unresolved: true } : undefined;
+  // SPEC §10.4: a typed domain-action factory can still hide mutation callbacks from static
+  // extraction. Unresolved non-literal action objects must therefore degrade to FW406.
+  return { unresolved: true };
 }
 
 function domainWriteObjectFromDeclaration(

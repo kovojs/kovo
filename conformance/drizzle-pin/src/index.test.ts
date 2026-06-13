@@ -7732,6 +7732,62 @@ describe('Drizzle pinned subset conformance', () => {
     });
   });
 
+  it('pins typed real Drizzle query/domain factories as FW406 when callbacks are invisible', () => {
+    const files = [
+      {
+        fileName: 'conformance/drizzle-pin/src/users.domain.ts',
+        source: [
+          "import type { PgDatabase } from 'drizzle-orm/pg-core';",
+          "import { pgTable, text } from 'drizzle-orm/pg-core';",
+          '',
+          "export const users = pgTable('users', {",
+          "  id: text('id').primaryKey(),",
+          "}, jiso({ domain: 'user', key: 'id' }));",
+          '',
+          'declare function makeActions(): { add: ReturnType<typeof write> };',
+          'declare function makeQueryOptions(): {',
+          '  load(input: unknown, db: PgDatabase<any, any, any>): Promise<void>;',
+          '};',
+          '',
+          'export const userDomain = domain(makeActions());',
+          '',
+          "export const userQuery = query('user/factory-loader', makeQueryOptions());",
+        ].join('\n'),
+      },
+    ];
+
+    expect(extractTouchGraphFromProject({ files })).toEqual({
+      'userDomain.<spread>': {
+        reads: [],
+        touches: [],
+        unresolved: [
+          {
+            code: 'FW406',
+            message: 'Statically un-analyzable write site; manual touches required.',
+            site: 'conformance/drizzle-pin/src/users.domain.ts:13',
+          },
+        ],
+      },
+    });
+    expect(extractQueryFactsFromProject({ files })).toEqual([
+      {
+        diagnostics: [
+          {
+            code: 'FW406',
+            message:
+              'Statically un-analyzable write site; manual touches required. Query load callback could not be statically resolved.',
+            severity: 'warn',
+            site: 'conformance/drizzle-pin/src/users.domain.ts:15',
+          },
+        ],
+        query: 'user/factory-loader',
+        reads: [],
+        shape: {},
+        site: 'conformance/drizzle-pin/src/users.domain.ts:15',
+      },
+    ]);
+  });
+
   it('pins table annotations as the domain registry source', () => {
     const cartItems = annotatedTable('cart_items', jiso({ domain: 'cart', key: 'cartId' }));
     const products = annotatedTable('products', jiso({ domain: 'product', key: 'id' }));

@@ -12349,6 +12349,51 @@ export interface CommerceInvalidationSets {
     ]);
   });
 
+  it('marks typed project query/domain factories as FW406 when callbacks are not statically visible', () => {
+    const files = [
+      pgDatabaseTypes([
+        'select(value?: unknown): { from(table: unknown): Promise<void> };',
+        'update(table: unknown): { set(value: unknown): Promise<void> };',
+      ]),
+      {
+        fileName: 'product.domain.ts',
+        source: [
+          'import type { PgDatabase } from "drizzle-orm/pg-core";',
+          '',
+          'export const products = pgTable("products", {',
+          '  id: text("id").primaryKey(),',
+          '}, jiso({ domain: "product", key: "id" }));',
+          '',
+          'declare function makeActions(): { add: ReturnType<typeof write> };',
+          'declare function makeQueryOptions(): {',
+          '  load(input: unknown, db: PgDatabase<any, any, any>): Promise<void>;',
+          '};',
+          '',
+          'export const productDomain = domain(makeActions());',
+          '',
+          'export const productQuery = query("product/factory-loader", makeQueryOptions());',
+        ].join('\n'),
+      },
+    ];
+
+    expect(extractTouchGraphFromProject({ files })).toEqual({
+      'productDomain.<spread>': {
+        reads: [],
+        touches: [],
+        unresolved: [
+          {
+            code: 'FW406',
+            message: 'Statically un-analyzable write site; manual touches required.',
+            site: 'product.domain.ts:12',
+          },
+        ],
+      },
+    });
+    expect(extractQueryFactsFromProject({ files })).toEqual([
+      unresolvedQueryLoadFact('product/factory-loader', 'product.domain.ts:14'),
+    ]);
+  });
+
   it('keeps wrapped opaque domain actions visible as FW406', () => {
     const graph = extractTouchGraphFromSource([
       {

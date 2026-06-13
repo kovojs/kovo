@@ -804,6 +804,17 @@ conformance/drizzle-pin/src/index.test.ts plans/codebase-quality-round2.md`, and
       disappearing. `packages/drizzle/src/index.test.ts` covers source/project behavior and
       `conformance/drizzle-pin/src/index.test.ts` pins the project surface against real
       `drizzle-orm` Postgres receiver types.
+      Evidence 2026-06-13 round283 worker B: typed non-literal factory calls such as
+      `query(name, makeQueryOptions())` and `domain(makeActions())` now remain visible as FW406
+      instead of disappearing when ts-morph cannot resolve the loader/action object to a static
+      declaration. `packages/drizzle/src/static.ts` keeps unresolved option/action objects as
+      diagnostics, while `packages/drizzle/src/index.test.ts` and
+      `conformance/drizzle-pin/src/index.test.ts` pin package and real `drizzle-orm` Postgres
+      surfaces. Verified by
+      `pnpm exec vitest --run packages/drizzle/src/index.test.ts packages/drizzle/src/runtime-surface.test.ts`,
+      `pnpm exec vitest --run conformance/drizzle-pin/src/index.test.ts`, exact
+      `pnpm exec vp check packages/drizzle/src/static.ts packages/drizzle/src/index.test.ts conformance/drizzle-pin/src/index.test.ts plans/codebase-quality-round2.md`,
+      and `git diff --check`.
       Evidence 2026-06-13 round262: source-mode indirect query loaders such as
       `query(name, configAlias)`, `query(name, { load })`, `load: loaders.member`, static
       element-access members, and object/nested spread callback containers now degrade to FW406
