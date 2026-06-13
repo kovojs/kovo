@@ -1,5 +1,6 @@
 import { compilerIrHeader } from '../ir.js';
 import { applySourceReplacements, dedupeBy, indent, type SourceReplacement } from '../shared.js';
+import { elementParamNameFromAttribute } from '../types.js';
 import type {
   ElementParam,
   HandlerArrowBody,
@@ -83,7 +84,7 @@ function handlerArrowBodyLowering(
     if (param) {
       replacements.push({
         end: access.end,
-        replacement: `ctx.params.${paramNameFromAttribute(param.attributeName)}`,
+        replacement: `ctx.params.${elementParamNameFromAttribute(param.attributeName)}`,
         start: access.start,
       });
       continue;
@@ -124,12 +125,6 @@ function dedupeHandlerReplacements(
   return dedupeBy(replacements, (replacement) =>
     [replacement.start, replacement.end, replacement.replacement].join(':'),
   );
-}
-
-function paramNameFromAttribute(attributeName: string): string {
-  return attributeName
-    .replace(/^data-p-/, '')
-    .replace(/-([a-z0-9])/g, (_, char: string) => char.toUpperCase());
 }
 
 function emitQueryUpdatePlanExport(

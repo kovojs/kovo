@@ -114,6 +114,8 @@ Closed evidence so far:
   applying source replacements in `compile.ts`.
 - Package-prefix discovery now consumes module specifier facts from the primary
   `ComponentModuleModel`; `package-prefixes.ts` no longer reparses TSX source.
+- Client handler rewrites and server param-type emission now share one element-param attribute
+  name normalizer instead of duplicating `data-p-*` lowering logic.
 
 Open:
 
@@ -130,6 +132,8 @@ Recent gates:
 - `pnpm exec vitest --run packages/compiler/src/scan/parse.test.ts packages/compiler/src/handler-lowering.test.ts packages/compiler/src/compile-component.test.ts packages/compiler/src/vite.test.ts`
 - `pnpm exec vitest --run packages/compiler/src/scan/parse.test.ts packages/compiler/src/package-prefixes.test.ts packages/compiler/src/compile-component.test.ts packages/compiler/src/vite.test.ts`
 - `pnpm exec vp check packages/compiler/src/compile.ts packages/compiler/src/package-prefixes.ts packages/compiler/src/scan/parse.ts packages/compiler/src/scan/parse.test.ts plans/codebase-quality-round2.md`
+- `pnpm exec vitest --run packages/compiler/src/handler-lowering.test.ts packages/compiler/src/compile-component.test.ts`
+- `pnpm exec vp check packages/compiler/src/emit/client.ts packages/compiler/src/types.ts`
 - `pnpm run check`
 - `git diff --check`
 

@@ -133,7 +133,7 @@ export function emitElementParamTypes(params: readonly ElementParam[]): string {
   return `fw-param-types="${entries}"`;
 }
 
-function elementParamNameFromAttribute(attributeName: string): string {
+export function elementParamNameFromAttribute(attributeName: string): string {
   return attributeName
     .replace(/^data-p-/, '')
     .replace(/-([a-z0-9])/g, (_, char: string) => char.toUpperCase());
