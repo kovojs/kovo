@@ -693,7 +693,8 @@ parity.
 Loader-level `applyQuery` interposition now threads through enhanced mutation submit responses and
 default BroadcastChannel replay, so loader-installed mutation transports share the same decoded
 query apply hook as initial hydration, inline query events, visible-return hydration, and typed-read
-refetch.
+refetch. Enhanced-mutation-specific `applyQuery` hooks are also pinned ahead of the broader loader
+hook for default BroadcastChannel replay.
 
 - [x] Audit for any remaining internal compatibility-style apply wrappers after `applyFragmentQueryBody`
       deletion.
@@ -795,6 +796,13 @@ check packages/runtime/src/inline-loader.test.ts
 packages/runtime/src/inline-loader-enhanced-submit.test.ts
 packages/runtime/src/inline-loader-test-utils.ts plans/codebase-quality-round2.md`; `git diff
 --check`.
+      Evidence 2026-06-13 round267: loader query-apply interposition coverage now pins that
+      enhanced-mutation `applyQuery` overrides the broader loader hook for default
+      BroadcastChannel replay, matching direct enhanced submit hook precedence under SPEC.md §9.2.
+      Verified by `pnpm exec vitest --run
+      packages/runtime/src/loader-query-apply-interposition.test.ts
+      packages/runtime/src/broadcast.test.ts` and `pnpm --filter @jiso/runtime run
+      check:inline-loader`.
       Evidence 2026-06-13: inline response-apply parity moved from
       `packages/runtime/src/inline-loader.test.ts` into
       `packages/runtime/src/inline-loader-response-apply.test.ts`, leaving the broad inline-loader

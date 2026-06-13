@@ -194,4 +194,62 @@ describe('loader query apply interposition', () => {
       globalThis.BroadcastChannel = originalBroadcastChannel;
     }
   });
+
+  it('keeps enhanced mutation apply hooks ahead of the loader hook for default broadcast replay', () => {
+    const originalBroadcastChannel = globalThis.BroadcastChannel;
+    const channels: FakeBroadcastChannel[] = [];
+    class TestBroadcastChannel extends FakeBroadcastChannel {
+      constructor() {
+        super();
+        channels.push(this);
+      }
+    }
+    globalThis.BroadcastChannel = TestBroadcastChannel as never;
+
+    try {
+      const loaderRoot = new FakeRoot();
+      const mutationRoot = new FakeMorphRoot();
+      const store = createQueryStore();
+      const count = new FakeQueryBindingElement('cart.count', { textContent: '0' });
+      const loaderApplyQuery = vi.fn((query) => {
+        store.set(query.name, { count: -1 }, query.key);
+        return { value: store.get(query.name, query.key) };
+      });
+      const enhancedApplyQuery = vi.fn((query) => {
+        store.set(query.name, { count: Number(query.value.count) + 20 }, query.key);
+        return { value: store.get(query.name, query.key) };
+      });
+      mutationRoot.bindings.push(count);
+
+      installJisoLoader({
+        applyQuery: loaderApplyQuery,
+        enhancedMutations: {
+          applyQuery: enhancedApplyQuery,
+          fetch: vi.fn(),
+          root: mutationRoot,
+          store,
+        },
+        importModule: vi.fn(),
+        root: loaderRoot,
+      });
+
+      channels[0]?.onmessage?.({
+        data: {
+          body: '<fw-query name="cart">{"count":4}</fw-query>',
+          changes: [],
+          type: 'jiso:mutation-response',
+        },
+      });
+
+      // SPEC.md §9.2: broadcast replay is part of the enhanced mutation
+      // transport, so an enhanced-mutation apply hook must override the broader
+      // loader hook just like direct enhanced submits do.
+      expect(enhancedApplyQuery).toHaveBeenCalledWith({ name: 'cart', value: { count: 4 } });
+      expect(loaderApplyQuery).not.toHaveBeenCalled();
+      expect(store.get('cart')).toEqual({ count: 24 });
+      expect(count.textContent).toBe('24');
+    } finally {
+      globalThis.BroadcastChannel = originalBroadcastChannel;
+    }
+  });
 });
