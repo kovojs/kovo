@@ -291,6 +291,55 @@ describe('Drizzle pinned subset conformance', () => {
     expect(diagnosticsForQueryFacts(facts)).toHaveLength(1);
   });
 
+  it('pins query-loader receiver symbols without shadowed lookalike facts', () => {
+    const facts = extractQueryFactsFromProject({
+      files: [
+        {
+          fileName: 'conformance/drizzle-pin/src/product.queries.ts',
+          source: `
+            import { sql } from 'drizzle-orm';
+            import type { PgDatabase } from 'drizzle-orm/pg-core';
+
+            interface FakeDb {
+              execute(query: unknown): Promise<void>;
+              select(value?: unknown): { from(table: unknown): Promise<unknown[]> };
+            }
+
+            export const auditLog = pgTable('audit_log', {
+              id: text('id').primaryKey(),
+            }, jiso({ exempt: true }));
+            export const products = pgTable('products', {
+              id: text('id').primaryKey(),
+            }, jiso({ domain: 'product', key: 'id' }));
+
+            export const productQuery = query('product/shadowed-db', {
+              async load(_input, db: PgDatabase<any, any, any>, fake: FakeDb) {
+                {
+                  const db = fake;
+                  await db.execute(sql\`select * from audit_log\`);
+                  await db.select({ id: auditLog.id }).from(auditLog);
+                }
+                return db.select({ id: products.id }).from(products);
+              },
+            });
+          `,
+        },
+      ],
+    });
+
+    expect(facts).toEqual([
+      {
+        query: 'product/shadowed-db',
+        reads: ['product'],
+        shape: {
+          id: 'string',
+        },
+        site: 'conformance/drizzle-pin/src/product.queries.ts:17',
+      },
+    ]);
+    expect(diagnosticsForQueryFacts(facts)).toEqual([]);
+  });
+
   it('pins local query-loader helper reads under real Drizzle imports', () => {
     const facts = extractQueryFactsFromProject({
       files: [

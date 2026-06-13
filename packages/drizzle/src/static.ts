@@ -504,6 +504,11 @@ interface ProjectDrizzleReceivers {
   symbolKeys: ReadonlySet<string>;
 }
 
+interface QueryReceiverReferences {
+  names: ReadonlySet<string>;
+  symbolKeys: ReadonlySet<string>;
+}
+
 function projectDomainWriteCallbacks(
   sourceFile: SourceFile,
 ): Map<string, { body: Node; fn: Node; key: string; name: string }> {
@@ -1665,22 +1670,30 @@ function extractQueryDefinitionsFromSourceFile(
     }
 
     const query = queryArgument.getLiteralText();
-    const receiverNames = queryCallbackReceiverNames(
+    const receiverReferences = queryCallbackReceiverReferences(
       bodyArgument,
       options.receiverMode ?? 'source',
     );
-    const selection = selectShapeFromQueryBody(bodyArgument, receiverNames, options.columnShapes);
+    const selection = selectShapeFromQueryBody(
+      bodyArgument,
+      receiverReferences,
+      options.columnShapes,
+    );
     const readResolutionOptions: QueryReadResolutionOptions = {
       ...(options.readTableIdentifier ? { readTableIdentifier: options.readTableIdentifier } : {}),
       ...(options.relationalTableName ? { relationalTableName: options.relationalTableName } : {}),
     };
     const diagnostics = [
-      ...relationalQueryDiagnostics(bodyArgument, receiverNames),
-      ...unclassifiedQueryReceiverDiagnostics(bodyArgument, receiverNames),
-      ...externalQueryHelperDiagnostics(bodyArgument, receiverNames, localFunctionKeys),
-      ...unresolvedQueryReadDiagnostics(bodyArgument, receiverNames, readResolutionOptions),
+      ...relationalQueryDiagnostics(bodyArgument, receiverReferences),
+      ...unclassifiedQueryReceiverDiagnostics(bodyArgument, receiverReferences),
+      ...externalQueryHelperDiagnostics(bodyArgument, receiverReferences, localFunctionKeys),
+      ...unresolvedQueryReadDiagnostics(bodyArgument, receiverReferences, readResolutionOptions),
     ];
-    const localHelperCalls = queryLocalHelperCalls(bodyArgument, receiverNames, localFunctionKeys);
+    const localHelperCalls = queryLocalHelperCalls(
+      bodyArgument,
+      receiverReferences,
+      localFunctionKeys,
+    );
     if (!selection && diagnostics.length === 0 && localHelperCalls.length === 0) continue;
 
     definitions.push({
@@ -1692,14 +1705,18 @@ function extractQueryDefinitionsFromSourceFile(
       index: declaration.getStart(),
       instanceKeyComparisons: queryInstanceKeyComparisons(
         bodyArgument,
-        receiverNames,
+        receiverReferences,
         options.readTableIdentifier,
       ),
       localHelperCalls,
       opaquePaths: selection?.opaquePaths ?? [],
       query,
       shape: selection?.shape ?? {},
-      tableExpressions: queryTableExpressions(bodyArgument, receiverNames, readResolutionOptions),
+      tableExpressions: queryTableExpressions(
+        bodyArgument,
+        receiverReferences,
+        readResolutionOptions,
+      ),
       unresolvedPaths: selection?.unresolvedPaths ?? [],
     });
   }
@@ -1718,10 +1735,10 @@ interface QueryShapeSelection {
 
 function selectShapeFromQueryBody(
   body: ObjectLiteralExpression,
-  receiverNames: ReadonlySet<string>,
+  receiverReferences: QueryReceiverReferences,
   columnShapes: Readonly<Record<string, QueryShape>> = {},
 ): QueryShapeSelection | null {
-  const selectCall = selectCallFromQueryBody(body, receiverNames);
+  const selectCall = selectCallFromQueryBody(body, receiverReferences);
   if (!selectCall) return null;
 
   const projection = selectProjectionArgument(selectCall);
@@ -1747,7 +1764,7 @@ function selectShapeFromQueryBody(
 
   return queryShapeFromObjectLiteralNode(projection.compilerNode, {
     columnShapes,
-    nullableTables: nullableJoinTables(body, receiverNames),
+    nullableTables: nullableJoinTables(body, receiverReferences),
   });
 }
 
@@ -1762,11 +1779,11 @@ function selectCallDisplayName(call: CallExpression): string {
 
 function selectCallFromQueryBody(
   body: ObjectLiteralExpression,
-  receiverNames: ReadonlySet<string>,
+  receiverReferences: QueryReceiverReferences,
 ): CallExpression | undefined {
   const selectCalls = queryBodyCallExpressions(body, (call) =>
     isSelectQueryCallName(staticAccessName(call.getExpression())) &&
-    isQueryCallOnReceiver(call, receiverNames)
+    isQueryCallOnReceiver(call, receiverReferences)
       ? [call]
       : [],
   );
@@ -1781,11 +1798,12 @@ function isSelectQueryCallName(name: string | undefined): boolean {
   return name !== undefined && DRIZZLE_SELECT_QUERY_METHODS.has(name);
 }
 
-function queryCallbackReceiverNames(
+function queryCallbackReceiverReferences(
   body: ObjectLiteralExpression,
   mode: 'project' | 'source',
-): ReadonlySet<string> {
+): QueryReceiverReferences {
   const names = new Set(mode === 'source' ? DEFAULT_DRIZZLE_RECEIVER_NAMES : []);
+  const symbolKeys = new Set<string>();
 
   for (const property of body.getProperties()) {
     const callback = queryCallbackFunction(property);
@@ -1799,10 +1817,13 @@ function queryCallbackReceiverNames(
     }
 
     names.add(receiver.getText());
+    const symbolKey = resolvedSymbolKey(receiver.getSymbol());
+    if (symbolKey) symbolKeys.add(symbolKey);
   }
 
-  appendQueryTransactionReceiverAliases(body, names);
-  return names;
+  const references = { names, symbolKeys };
+  appendQueryTransactionReceiverAliases(body, references);
+  return references;
 }
 
 function queryCallbackParameterNodes(callback: Node): ParameterDeclaration[] {
@@ -1825,7 +1846,7 @@ function isProjectQueryReceiverParameter(parameter: ParameterDeclaration, receiv
 
 function appendQueryTransactionReceiverAliases(
   body: ObjectLiteralExpression,
-  receiverNames: Set<string>,
+  receiverReferences: { names: Set<string>; symbolKeys: Set<string> },
 ): void {
   // SPEC §10-§11: callback-local transaction aliases remain visible query-loader surfaces when
   // they originate from a proven Drizzle receiver.
@@ -1838,7 +1859,7 @@ function appendQueryTransactionReceiverAliases(
       if (staticAccessName(call.getExpression()) !== 'transaction') continue;
 
       const receiver = staticAccessExpression(call.getExpression());
-      if (!Node.isIdentifier(receiver) || !receiverNames.has(receiver.getText())) continue;
+      if (!isQueryReceiverIdentifier(receiver, receiverReferences)) continue;
 
       const transactionCallback = call
         .getArguments()
@@ -1852,19 +1873,37 @@ function appendQueryTransactionReceiverAliases(
       }
 
       const alias = transactionCallback.getParameters()[0]?.getNameNode();
-      if (!Node.isIdentifier(alias) || receiverNames.has(alias.getText())) continue;
+      if (!Node.isIdentifier(alias) || isQueryReceiverIdentifier(alias, receiverReferences)) {
+        continue;
+      }
 
-      receiverNames.add(alias.getText());
+      receiverReferences.names.add(alias.getText());
+      const symbolKey = resolvedSymbolKey(alias.getSymbol());
+      if (symbolKey) receiverReferences.symbolKeys.add(symbolKey);
       changed = true;
     }
   }
 }
 
+function isQueryReceiverIdentifier(
+  node: Node | undefined,
+  receiverReferences: QueryReceiverReferences,
+): boolean {
+  if (!node || !Node.isIdentifier(node)) return false;
+
+  const symbolKey = resolvedSymbolKey(node.getSymbol());
+  if (receiverReferences.symbolKeys.size > 0 && symbolKey) {
+    return receiverReferences.symbolKeys.has(symbolKey);
+  }
+
+  return receiverReferences.names.has(node.getText());
+}
+
 function relationalQueryDiagnostics(
   body: ObjectLiteralExpression,
-  receiverNames: ReadonlySet<string>,
+  receiverReferences: QueryReceiverReferences,
 ): TouchGraphDiagnostic[] {
-  if (queryRelationalTableExpressions(body, receiverNames).length === 0) return [];
+  if (queryRelationalTableExpressions(body, receiverReferences).length === 0) return [];
 
   return [
     {
@@ -1878,7 +1917,7 @@ function relationalQueryDiagnostics(
 
 function unclassifiedQueryReceiverDiagnostics(
   body: ObjectLiteralExpression,
-  receiverNames: ReadonlySet<string>,
+  receiverReferences: QueryReceiverReferences,
 ): TouchGraphDiagnostic[] {
   // SPEC §10.2/§11.1: query loaders may not hide raw SQL, writes, transactions, or other
   // unclassified Drizzle receiver work under an empty fact set.
@@ -1888,7 +1927,8 @@ function unclassifiedQueryReceiverDiagnostics(
     if (!name || isSelectQueryCallName(name)) return [];
 
     const receiver = staticAccessExpression(expression);
-    if (!Node.isIdentifier(receiver) || !receiverNames.has(receiver.getText())) return [];
+    if (!isQueryReceiverIdentifier(receiver, receiverReferences)) return [];
+    if (!Node.isIdentifier(receiver)) return [];
 
     return [
       {
@@ -1903,7 +1943,7 @@ function unclassifiedQueryReceiverDiagnostics(
 
 function externalQueryHelperDiagnostics(
   body: ObjectLiteralExpression,
-  receiverNames: ReadonlySet<string>,
+  receiverReferences: QueryReceiverReferences,
   localFunctionKeys: ReadonlySet<string>,
 ): TouchGraphDiagnostic[] {
   // SPEC §11.1: helpers that receive the query loader's Drizzle receiver are an explicit FW406
@@ -1916,7 +1956,7 @@ function externalQueryHelperDiagnostics(
     if (IGNORED_LOCAL_CALL_NAMES.has(name)) return [];
     if (localFunctionKeyForIdentifier(expression, localFunctionKeys)) return [];
 
-    const receiverName = queryHelperReceiverArgumentName(call, receiverNames);
+    const receiverName = queryHelperReceiverArgumentName(call, receiverReferences);
     if (!receiverName) return [];
 
     return [
@@ -1932,7 +1972,7 @@ function externalQueryHelperDiagnostics(
 
 function queryLocalHelperCalls(
   body: ObjectLiteralExpression,
-  receiverNames: ReadonlySet<string>,
+  receiverReferences: QueryReceiverReferences,
   localFunctionKeys: ReadonlySet<string>,
 ): string[] {
   const calls: string[] = [];
@@ -1940,7 +1980,7 @@ function queryLocalHelperCalls(
   for (const call of queryExecutableCallExpressions(body)) {
     const expression = call.getExpression();
     if (!Node.isIdentifier(expression)) continue;
-    if (!queryHelperReceiverArgumentName(call, receiverNames)) continue;
+    if (!queryHelperReceiverArgumentName(call, receiverReferences)) continue;
 
     const key = localFunctionKeyForIdentifier(expression, localFunctionKeys);
     if (key) calls.push(key);
@@ -1980,10 +2020,10 @@ function queryCallbackFunction(node: Node): Node | undefined {
 
 function queryHelperReceiverArgumentName(
   call: CallExpression,
-  receiverNames: ReadonlySet<string>,
+  receiverReferences: QueryReceiverReferences,
 ): string | undefined {
   for (const argument of call.getArguments()) {
-    const receiverName = queryHelperArgumentReceiverName(argument, receiverNames);
+    const receiverName = queryHelperArgumentReceiverName(argument, receiverReferences);
     if (receiverName) return receiverName;
   }
 
@@ -1992,11 +2032,11 @@ function queryHelperReceiverArgumentName(
 
 function queryHelperArgumentReceiverName(
   argument: Node,
-  receiverNames: ReadonlySet<string>,
+  receiverReferences: QueryReceiverReferences,
 ): string | undefined {
-  if (!Node.isIdentifier(argument)) return undefined;
-  const name = argument.getText();
-  return receiverNames.has(name) ? name : undefined;
+  return isQueryReceiverIdentifier(argument, receiverReferences) && Node.isIdentifier(argument)
+    ? argument.getText()
+    : undefined;
 }
 
 interface QueryShapeContext {
@@ -2110,7 +2150,7 @@ function nullableShape(shape: QueryShape): QueryShape {
 
 function nullableJoinTables(
   body: ObjectLiteralExpression,
-  receiverNames: ReadonlySet<string>,
+  receiverReferences: QueryReceiverReferences,
 ): ReadonlySet<string> {
   const tables = new Set<string>();
   const relationTables: string[] = [];
@@ -2118,7 +2158,7 @@ function nullableJoinTables(
   for (const { operation, table } of queryBodyCallExpressions(body, (call) => {
     const operation = propertyAccessCallName(call);
     if (!operation || !isJoinReadCallName(operation)) return [];
-    if (!isQueryCallOnReceiver(call, receiverNames)) return [];
+    if (!isQueryCallOnReceiver(call, receiverReferences)) return [];
 
     const table = staticExpressionPath(call.getArguments()[0]);
     if (!table) return [];
@@ -2307,12 +2347,12 @@ function exemptQueryReadDiagnostics(
 
 function queryTableExpressions(
   body: ObjectLiteralExpression,
-  receiverNames: ReadonlySet<string>,
+  receiverReferences: QueryReceiverReferences,
   options: QueryReadResolutionOptions = {},
 ): string[] {
   return [
-    ...queryJoinTableExpressions(body, receiverNames, options.readTableIdentifier),
-    ...queryRelationalTableExpressions(body, receiverNames, options.relationalTableName),
+    ...queryJoinTableExpressions(body, receiverReferences, options.readTableIdentifier),
+    ...queryRelationalTableExpressions(body, receiverReferences, options.relationalTableName),
   ];
 }
 
@@ -2323,13 +2363,13 @@ interface QueryReadResolutionOptions {
 
 function queryJoinTableExpressions(
   body: ObjectLiteralExpression,
-  receiverNames: ReadonlySet<string>,
+  receiverReferences: QueryReceiverReferences,
   readTableIdentifier?: (node: Node) => string | undefined,
 ): string[] {
   return queryBodyCallExpressions(body, (call) => {
     const name = propertyAccessCallName(call);
     if (!name || !isQueryReadCallName(name)) return [];
-    if (!isQueryCallOnReceiver(call, receiverNames)) return [];
+    if (!isQueryCallOnReceiver(call, receiverReferences)) return [];
 
     const table = staticExpressionPath(call.getArguments()[0], readTableIdentifier);
     return table ? [table] : [];
@@ -2338,7 +2378,7 @@ function queryJoinTableExpressions(
 
 function queryRelationalTableExpressions(
   body: ObjectLiteralExpression,
-  receiverNames: ReadonlySet<string>,
+  receiverReferences: QueryReceiverReferences,
   relationalTableName?: (name: string) => string | undefined,
 ): string[] {
   return queryBodyCallExpressions(body, (call) => {
@@ -2355,7 +2395,7 @@ function queryRelationalTableExpressions(
     if (!queryAccess || staticAccessName(queryAccess) !== 'query') return [];
     const receiver = staticAccessExpression(queryAccess);
     // SPEC §10-§11: non-DB objects must not fabricate relational read/FW406 facts.
-    if (!Node.isIdentifier(receiver) || !receiverNames.has(receiver.getText())) return [];
+    if (!isQueryReceiverIdentifier(receiver, receiverReferences)) return [];
 
     const resolvedTable = relationalTableName ? relationalTableName(table) : table;
     return resolvedTable ? [resolvedTable] : [];
@@ -2364,13 +2404,13 @@ function queryRelationalTableExpressions(
 
 function unresolvedQueryReadDiagnostics(
   body: ObjectLiteralExpression,
-  receiverNames: ReadonlySet<string>,
+  receiverReferences: QueryReceiverReferences,
   options: QueryReadResolutionOptions = {},
 ): TouchGraphDiagnostic[] {
   const diagnostics: TouchGraphDiagnostic[] = queryBodyCallExpressions(body, (call) => {
     const name = propertyAccessCallName(call);
     if (!name || !isQueryReadCallName(name)) return [];
-    if (!isQueryCallOnReceiver(call, receiverNames)) return [];
+    if (!isQueryCallOnReceiver(call, receiverReferences)) return [];
 
     const tableArgument = call.getArguments()[0];
     if (staticExpressionPath(tableArgument, options.readTableIdentifier)) return [];
@@ -2386,14 +2426,18 @@ function unresolvedQueryReadDiagnostics(
   });
 
   diagnostics.push(
-    ...unresolvedRelationalQueryReadDiagnostics(body, receiverNames, options.relationalTableName),
+    ...unresolvedRelationalQueryReadDiagnostics(
+      body,
+      receiverReferences,
+      options.relationalTableName,
+    ),
   );
   return diagnostics;
 }
 
 function unresolvedRelationalQueryReadDiagnostics(
   body: ObjectLiteralExpression,
-  receiverNames: ReadonlySet<string>,
+  receiverReferences: QueryReceiverReferences,
   relationalTableName?: (name: string) => string | undefined,
 ): TouchGraphDiagnostic[] {
   return queryBodyCallExpressions(body, (call) => {
@@ -2409,7 +2453,7 @@ function unresolvedRelationalQueryReadDiagnostics(
     const queryAccess = staticAccessExpression(tableAccess);
     if (!queryAccess || staticAccessName(queryAccess) !== 'query') return [];
     const receiver = staticAccessExpression(queryAccess);
-    if (!Node.isIdentifier(receiver) || !receiverNames.has(receiver.getText())) return [];
+    if (!isQueryReceiverIdentifier(receiver, receiverReferences)) return [];
 
     return [
       {
@@ -2434,10 +2478,13 @@ function queryBodyCallExpressions<T>(
     .flatMap(extract);
 }
 
-function isQueryCallOnReceiver(call: CallExpression, receiverNames: ReadonlySet<string>): boolean {
+function isQueryCallOnReceiver(
+  call: CallExpression,
+  receiverReferences: QueryReceiverReferences,
+): boolean {
   // SPEC §11.1: read facts must originate from the Drizzle receiver, not lookalike builders.
   const receiver = queryCallChainReceiver(call);
-  return Node.isIdentifier(receiver) && receiverNames.has(receiver.getText());
+  return isQueryReceiverIdentifier(receiver, receiverReferences);
 }
 
 function queryCallChainReceiver(call: CallExpression): Node | undefined {
@@ -2535,12 +2582,12 @@ function queryInstanceKey(
 
 function queryInstanceKeyComparisons(
   body: ObjectLiteralExpression,
-  receiverNames: ReadonlySet<string>,
+  receiverReferences: QueryReceiverReferences,
   readTableIdentifier?: (node: Node) => string | undefined,
 ): QueryInstanceKeyComparison[] {
   return queryBodyCallExpressions(body, (call) => {
     if (propertyAccessCallName(call) !== 'where') return [];
-    if (!isQueryCallOnReceiver(call, receiverNames)) return [];
+    if (!isQueryCallOnReceiver(call, receiverReferences)) return [];
 
     const predicate = call.getArguments()[0];
     if (!predicate || !Node.isCallExpression(predicate)) return [];

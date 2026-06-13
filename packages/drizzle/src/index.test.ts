@@ -2293,6 +2293,59 @@ export interface CommerceInvalidationSets {
     expect(facts).toEqual([]);
   });
 
+  it('does not fabricate project query facts from shadowed receiver names', () => {
+    const facts = extractQueryFactsFromProject({
+      files: [
+        pgDatabaseTypes([
+          'execute(query: unknown): Promise<void>;',
+          'select(value?: unknown): { from(table: unknown): Promise<unknown[]> };',
+        ]),
+        {
+          fileName: 'product.queries.ts',
+          source: [
+            'import { sql } from "drizzle-orm";',
+            'import type { PgDatabase } from "drizzle-orm/pg-core";',
+            '',
+            'interface FakeDb {',
+            '  execute(query: unknown): Promise<void>;',
+            '  select(value?: unknown): { from(table: unknown): Promise<unknown[]> };',
+            '}',
+            '',
+            'export const auditLog = pgTable("audit_log", {',
+            '  id: text("id").primaryKey(),',
+            '}, jiso({ exempt: true }));',
+            'export const products = pgTable("products", {',
+            '  id: text("id").primaryKey(),',
+            '}, jiso({ domain: "product", key: "id" }));',
+            '',
+            'export const productQuery = query("product/shadowed-db", {',
+            '  async load(_input, db: PgDatabase, fake: FakeDb) {',
+            '    {',
+            '      const db = fake;',
+            '      await db.execute(sql`select * from audit_log`);',
+            '      await db.select({ id: auditLog.id }).from(auditLog);',
+            '    }',
+            '    return db.select({ id: products.id }).from(products);',
+            '  },',
+            '});',
+          ].join('\n'),
+        },
+      ],
+    });
+
+    expect(facts).toEqual([
+      {
+        query: 'product/shadowed-db',
+        reads: ['product'],
+        shape: {
+          id: 'string',
+        },
+        site: 'product.queries.ts:16',
+      },
+    ]);
+    expect(diagnosticsForQueryFacts(facts)).toEqual([]);
+  });
+
   it('marks query-loader helpers receiving db as FW406 instead of dropping the query fact', () => {
     const facts = extractQueryFactsFromProject({
       files: [

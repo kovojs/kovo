@@ -174,6 +174,12 @@ Closed evidence so far:
   `packages/drizzle/src/static.ts`, `packages/drizzle/src/index.test.ts`,
   `conformance/drizzle-pin/src/index.test.ts`, `pnpm exec vitest --run packages/drizzle/src`, and
   `pnpm exec vitest --run conformance/drizzle-pin`.
+- Project query-loader receiver matching now uses ts-morph receiver/transaction-alias symbols, so
+  shadowed lookalike `db` bindings no longer fabricate read, exempt-read, or raw-execute FW406
+  facts while the real loader receiver still contributes query facts. Evidence:
+  `packages/drizzle/src/static.ts`, `packages/drizzle/src/index.test.ts`,
+  `conformance/drizzle-pin/src/index.test.ts`, `pnpm exec vitest --run packages/drizzle/src`, and
+  `pnpm exec vitest --run conformance/drizzle-pin`.
 
 Open:
 
