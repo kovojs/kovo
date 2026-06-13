@@ -39,6 +39,9 @@ import { GalleryDialogDemo } from './generated/interactive/dialog-demo.js';
 import * as dropdownMenuClient from './generated/interactive/dropdown-menu-demo.client.js';
 import { GalleryDropdownMenuDemo } from './generated/interactive/dropdown-menu-demo.js';
 // @ts-expect-error generated client modules are compiler artifacts without declarations.
+import * as fieldClient from './generated/interactive/field-demo.client.js';
+import { GalleryFieldDemo } from './generated/interactive/field-demo.js';
+// @ts-expect-error generated client modules are compiler artifacts without declarations.
 import * as hoverCardClient from './generated/interactive/hover-card-demo.client.js';
 import { GalleryHoverCardDemo } from './generated/interactive/hover-card-demo.js';
 // @ts-expect-error generated client modules are compiler artifacts without declarations.
@@ -117,6 +120,7 @@ const generatedModules: Record<string, Record<string, unknown>> = {
   '/c/examples/gallery/src/generated/interactive/disclosure-demo.client.js': disclosureClient,
   '/c/examples/gallery/src/generated/interactive/dialog-demo.client.js': dialogClient,
   '/c/examples/gallery/src/generated/interactive/dropdown-menu-demo.client.js': dropdownMenuClient,
+  '/c/examples/gallery/src/generated/interactive/field-demo.client.js': fieldClient,
   '/c/examples/gallery/src/generated/interactive/hover-card-demo.client.js': hoverCardClient,
   '/c/examples/gallery/src/generated/interactive/menubar-demo.client.js': menubarClient,
   '/c/examples/gallery/src/generated/interactive/meter-demo.client.js': meterClient,
@@ -623,6 +627,121 @@ describe('compiled interactive gallery demos in the browser', () => {
 
     await vi.waitFor(() => {
       expect(root.getAttribute('fw-state')).toBe('{"value":2}');
+    });
+  });
+
+  it('updates field IDREF, native select, and fieldset state through generated handlers', async () => {
+    const root = mountInteractiveDemo(GalleryFieldDemo);
+    const email = required(
+      root.querySelector<HTMLInputElement>('#gallery-interactive-field-email-input'),
+    );
+    const emailError = required(
+      root.querySelector<HTMLElement>('#gallery-interactive-field-email-error'),
+    );
+    const emailOutput = required(
+      root.querySelector<HTMLOutputElement>('[data-demo-state="field-email"]'),
+    );
+    const plan = required(
+      root.querySelector<HTMLSelectElement>('#gallery-interactive-field-plan-select'),
+    );
+    const planOutput = required(
+      root.querySelector<HTMLOutputElement>('[data-demo-state="field-plan"]'),
+    );
+    const fieldset = required(
+      root.querySelector<HTMLFieldSetElement>('#gallery-interactive-fieldset'),
+    );
+    const shippingToggle = required(
+      root.querySelector<HTMLInputElement>('input[name="gallery-shipping-disabled"]'),
+    );
+    const { imports } = installGeneratedGalleryLoader(root, {
+      events: ['input', 'change', 'click'],
+    });
+
+    expect(root.getAttribute('fw-state')).toBe(
+      '{"email":"ada@example","invalid":true,"plan":"team","shippingDisabled":false}',
+    );
+    expect(email.name).toBe('gallery-email');
+    expect(email.required).toBe(true);
+    expect(email.value).toBe('ada@example');
+    expect(email.getAttribute('aria-describedby')).toBe(
+      'gallery-interactive-field-email-description gallery-interactive-field-email-error',
+    );
+    expect(email.getAttribute('aria-invalid')).toBe('true');
+    expect(emailError.getAttribute('role')).toBe('alert');
+    expect(emailError.hidden).toBe(false);
+    expect(emailOutput.textContent).toBe('ada@example');
+    expect(plan.name).toBe('gallery-plan');
+    expect(plan.required).toBe(true);
+    expect(plan.value).toBe('team');
+    expect(planOutput.textContent).toBe('team');
+    expect(fieldset.getAttribute('aria-describedby')).toBe(
+      'gallery-interactive-fieldset-description',
+    );
+    expect(fieldset.disabled).toBe(false);
+
+    email.dispatchEvent(new Event('input', { bubbles: true }));
+
+    await vi.waitFor(() => {
+      const currentEmail = required(
+        root.querySelector<HTMLInputElement>('#gallery-interactive-field-email-input'),
+      );
+      const currentError = required(
+        root.querySelector<HTMLElement>('#gallery-interactive-field-email-error'),
+      );
+      const currentOutput = required(
+        root.querySelector<HTMLOutputElement>('[data-demo-state="field-email"]'),
+      );
+
+      expect(imports.at(-1)).toBe(
+        '/c/examples/gallery/src/generated/interactive/field-demo.client.js',
+      );
+      expect(root.getAttribute('fw-state')).toBe(
+        '{"email":"ada@jiso.dev","invalid":false,"plan":"team","shippingDisabled":false}',
+      );
+      expect(currentEmail.value).toBe('ada@jiso.dev');
+      expect(currentEmail.getAttribute('aria-describedby')).toBe(
+        'gallery-interactive-field-email-description',
+      );
+      expect(currentEmail.hasAttribute('aria-invalid')).toBe(false);
+      expect(currentError.hidden).toBe(true);
+      expect(currentOutput.textContent).toBe('ada@jiso.dev');
+    });
+
+    required(
+      root.querySelector<HTMLSelectElement>('#gallery-interactive-field-plan-select'),
+    ).dispatchEvent(new Event('change', { bubbles: true }));
+
+    await vi.waitFor(() => {
+      const currentPlan = required(
+        root.querySelector<HTMLSelectElement>('#gallery-interactive-field-plan-select'),
+      );
+      const currentOutput = required(
+        root.querySelector<HTMLOutputElement>('[data-demo-state="field-plan"]'),
+      );
+
+      expect(root.getAttribute('fw-state')).toBe(
+        '{"email":"ada@jiso.dev","invalid":false,"plan":"enterprise","shippingDisabled":false}',
+      );
+      expect(currentPlan.value).toBe('enterprise');
+      expect(currentOutput.textContent).toBe('enterprise');
+    });
+
+    shippingToggle.click();
+
+    await vi.waitFor(() => {
+      const currentFieldset = required(
+        root.querySelector<HTMLFieldSetElement>('#gallery-interactive-fieldset'),
+      );
+      const currentToggle = required(
+        root.querySelector<HTMLInputElement>('input[name="gallery-shipping-disabled"]'),
+      );
+
+      expect(root.getAttribute('fw-state')).toBe(
+        '{"email":"ada@jiso.dev","invalid":false,"plan":"enterprise","shippingDisabled":true}',
+      );
+      expect(currentFieldset.disabled).toBe(true);
+      expect(currentFieldset.getAttribute('data-disabled')).toBe('');
+      expect(currentToggle.checked).toBe(true);
     });
   });
 

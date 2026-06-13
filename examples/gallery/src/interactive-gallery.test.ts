@@ -78,7 +78,7 @@ describe('compiled interactive gallery demos', () => {
     rmSync(distDir, { force: true, recursive: true });
 
     try {
-      const output = execFileSync('pnpm', ['exec', 'vp', 'run', 'export'], {
+      const output = execFileSync('pnpm', ['exec', 'vp', 'run', '--no-cache', 'export'], {
         cwd: galleryRoot,
         encoding: 'utf8',
         stdio: 'pipe',
@@ -158,6 +158,7 @@ describe('compiled interactive gallery demos', () => {
     const disclosure = readGenerated('disclosure-demo.tsx');
     const dialog = readGenerated('dialog-demo.tsx');
     const dropdownMenu = readGenerated('dropdown-menu-demo.tsx');
+    const field = readGenerated('field-demo.tsx');
     const hoverCard = readGenerated('hover-card-demo.tsx');
     const menubar = readGenerated('menubar-demo.tsx');
     const meter = readGenerated('meter-demo.tsx');
@@ -313,6 +314,22 @@ describe('compiled interactive gallery demos', () => {
     );
     expect(dropdownMenu).toMatch(
       /on:keydown="\/c\/examples\/gallery\/src\/generated\/interactive\/dropdown-menu-demo\.client\.js\?v=[0-9a-f]{8}#GalleryDropdownMenuDemo\$div_keydown"/,
+    );
+
+    expect(field).toContain('data-gallery-interactive="field"');
+    expect(field).toContain(
+      'fw-state=\'{"email":"ada@example","invalid":true,"plan":"team","shippingDisabled":false}\'',
+    );
+    expect(field).toContain('fieldControlAttributes({');
+    expect(field).toContain('fieldsetRootAttributes({');
+    expect(field).toMatch(
+      /on:input="\/c\/examples\/gallery\/src\/generated\/interactive\/field-demo\.client\.js\?v=[0-9a-f]{8}#GalleryFieldDemo\$input_input"/,
+    );
+    expect(field).toMatch(
+      /on:change="\/c\/examples\/gallery\/src\/generated\/interactive\/field-demo\.client\.js\?v=[0-9a-f]{8}#GalleryFieldDemo\$select_change"/,
+    );
+    expect(field).toMatch(
+      /on:click="\/c\/examples\/gallery\/src\/generated\/interactive\/field-demo\.client\.js\?v=[0-9a-f]{8}#GalleryFieldDemo\$input_click"/,
     );
 
     expect(hoverCard).toContain('data-gallery-interactive="hover-card"');
@@ -509,6 +526,7 @@ describe('compiled interactive gallery demos', () => {
     const disclosure = evaluateClientModule('disclosure-demo.client.js');
     const dialog = evaluateClientModule('dialog-demo.client.js');
     const dropdownMenu = evaluateClientModule('dropdown-menu-demo.client.js');
+    const field = evaluateClientModule('field-demo.client.js');
     const hoverCard = evaluateClientModule('hover-card-demo.client.js');
     const menubar = evaluateClientModule('menubar-demo.client.js');
     const meter = evaluateClientModule('meter-demo.client.js');
@@ -843,6 +861,46 @@ describe('compiled interactive gallery demos', () => {
       state: numberFieldState,
     });
     expect(numberFieldState).toEqual({ value: 2 });
+
+    const fieldState = {
+      email: 'ada@example',
+      invalid: true,
+      plan: 'team',
+      shippingDisabled: false,
+    };
+    clientHandler(field, 'GalleryFieldDemo$input_input')(new Event('input'), {
+      params: {},
+      signal,
+      state: fieldState,
+    });
+    expect(fieldState).toEqual({
+      email: 'ada@jiso.dev',
+      invalid: false,
+      plan: 'team',
+      shippingDisabled: false,
+    });
+    clientHandler(field, 'GalleryFieldDemo$select_change')(new Event('change'), {
+      params: {},
+      signal,
+      state: fieldState,
+    });
+    expect(fieldState).toEqual({
+      email: 'ada@jiso.dev',
+      invalid: false,
+      plan: 'enterprise',
+      shippingDisabled: false,
+    });
+    clientHandler(field, 'GalleryFieldDemo$input_click')(new Event('click'), {
+      params: {},
+      signal,
+      state: fieldState,
+    });
+    expect(fieldState).toEqual({
+      email: 'ada@jiso.dev',
+      invalid: false,
+      plan: 'enterprise',
+      shippingDisabled: true,
+    });
 
     const otpFieldState = { activeSlot: 2, value: '12' };
     clientHandler(otpField, 'GalleryOtpFieldDemo$input_input')(new Event('input'), {

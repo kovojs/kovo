@@ -11,6 +11,7 @@ import { GalleryContextMenuDemo } from './generated/interactive/context-menu-dem
 import { GalleryDialogDemo } from './generated/interactive/dialog-demo.js';
 import { GalleryDisclosureDemo } from './generated/interactive/disclosure-demo.js';
 import { GalleryDropdownMenuDemo } from './generated/interactive/dropdown-menu-demo.js';
+import { GalleryFieldDemo } from './generated/interactive/field-demo.js';
 import { GalleryHoverCardDemo } from './generated/interactive/hover-card-demo.js';
 import { GalleryMenubarDemo } from './generated/interactive/menubar-demo.js';
 import { GalleryMeterDemo } from './generated/interactive/meter-demo.js';
@@ -97,6 +98,11 @@ export const interactiveGalleryDemos = Object.freeze([
     name: 'dropdown-menu-demo',
     render: renderInteractiveDemo(GalleryDropdownMenuDemo),
     title: 'Dropdown Menu',
+  },
+  {
+    name: 'field-demo',
+    render: renderInteractiveDemo(GalleryFieldDemo),
+    title: 'Field',
   },
   {
     name: 'hover-card-demo',

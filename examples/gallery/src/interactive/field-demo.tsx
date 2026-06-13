@@ -1,0 +1,232 @@
+/** @jsxImportSource @jiso/server */
+import { component } from '@jiso/core';
+import {
+  fieldControlAttributes,
+  fieldDescriptionAttributes,
+  fieldErrorAttributes,
+  fieldLabelAttributes,
+  fieldRootAttributes,
+  fieldsetLegendAttributes,
+  fieldsetRootAttributes,
+} from '@jiso/headless-ui/primitives';
+
+export interface GalleryFieldDemoState {
+  email: string;
+  invalid: boolean;
+  plan: string;
+  shippingDisabled: boolean;
+}
+
+// SPEC.md section 5.2: this interactive docs example stays TSX-authored; the
+// generated artifacts prove the gallery path is compiled through Jiso.
+export const GalleryFieldDemo = component('gallery-field-demo', {
+  state: () => ({
+    email: 'ada@example',
+    invalid: true,
+    plan: 'team',
+    shippingDisabled: false,
+  }),
+  render: (_queries: Record<string, never>, state: GalleryFieldDemoState) => {
+    const emailFieldState = {
+      invalid: state.invalid,
+      required: true,
+    };
+    const fieldsetState = {
+      disabled: state.shippingDisabled,
+      required: true,
+    };
+
+    return (
+      <form data-gallery-interactive="field">
+        <div
+          {...fieldRootAttributes({ ...emailFieldState, id: 'gallery-interactive-field-email' })}
+          class="grid gap-2"
+        >
+          <label
+            {...fieldLabelAttributes({
+              ...emailFieldState,
+              controlId: 'gallery-interactive-field-email-input',
+              id: 'gallery-interactive-field-email-label',
+            })}
+          >
+            Email
+          </label>
+          <input
+            {...fieldControlAttributes({
+              ...emailFieldState,
+              descriptionId: 'gallery-interactive-field-email-description',
+              errorId: 'gallery-interactive-field-email-error',
+              id: 'gallery-interactive-field-email-input',
+              name: 'gallery-email',
+            })}
+            type="email"
+            value={state.email}
+            onInput={() => {
+              state.email = 'ada@jiso.dev';
+              state.invalid = false;
+              const doc = Reflect['get'](globalThis, 'document');
+              const input = doc
+                ? Object(doc)['getElementById']?.call(doc, 'gallery-interactive-field-email-input')
+                : undefined;
+              const error = doc
+                ? Object(doc)['getElementById']?.call(doc, 'gallery-interactive-field-email-error')
+                : undefined;
+              const output = doc
+                ? Object(doc)['querySelector']?.call(doc, '[data-demo-state="field-email"]')
+                : undefined;
+
+              if (input) {
+                input['value'] = state.email;
+                Object(input)['setAttribute']?.call(
+                  input,
+                  'aria-describedby',
+                  'gallery-interactive-field-email-description',
+                );
+                Object(input)['removeAttribute']?.call(input, 'aria-invalid');
+                Object(input)['removeAttribute']?.call(input, 'data-invalid');
+              }
+              if (error) error['hidden'] = true;
+              if (output) output['textContent'] = state.email;
+            }}
+          />
+          <p
+            {...fieldDescriptionAttributes({
+              id: 'gallery-interactive-field-email-description',
+              required: true,
+            })}
+          >
+            Use a reachable address for receipts.
+          </p>
+          <p
+            {...fieldErrorAttributes({
+              id: 'gallery-interactive-field-email-error',
+              visible: state.invalid,
+            })}
+          >
+            Enter a complete email address.
+          </p>
+          <output data-demo-state="field-email">{state.email}</output>
+        </div>
+
+        <div {...fieldRootAttributes({ id: 'gallery-interactive-field-profile' })}>
+          <label
+            {...fieldLabelAttributes({
+              controlId: 'gallery-interactive-field-bio',
+              id: 'gallery-interactive-field-bio-label',
+            })}
+          >
+            Bio
+          </label>
+          <textarea
+            {...fieldControlAttributes({
+              descriptionId: 'gallery-interactive-field-bio-description',
+              id: 'gallery-interactive-field-bio',
+              name: 'gallery-bio',
+            })}
+            rows={2}
+          >
+            Frontend systems lead.
+          </textarea>
+          <p {...fieldDescriptionAttributes({ id: 'gallery-interactive-field-bio-description' })}>
+            Short public profile summary.
+          </p>
+        </div>
+
+        <div {...fieldRootAttributes({ id: 'gallery-interactive-field-plan' })}>
+          <label
+            {...fieldLabelAttributes({
+              controlId: 'gallery-interactive-field-plan-select',
+              id: 'gallery-interactive-field-plan-label',
+            })}
+          >
+            Plan
+          </label>
+          <select
+            {...fieldControlAttributes({
+              descriptionId: 'gallery-interactive-field-plan-description',
+              id: 'gallery-interactive-field-plan-select',
+              name: 'gallery-plan',
+              required: true,
+            })}
+            value={state.plan}
+            onChange={() => {
+              state.plan = state.plan === 'team' ? 'enterprise' : 'team';
+              const doc = Reflect['get'](globalThis, 'document');
+              const select = doc
+                ? Object(doc)['getElementById']?.call(doc, 'gallery-interactive-field-plan-select')
+                : undefined;
+              const output = doc
+                ? Object(doc)['querySelector']?.call(doc, '[data-demo-state="field-plan"]')
+                : undefined;
+
+              if (select) select['value'] = state.plan;
+              if (output) output['textContent'] = state.plan;
+            }}
+          >
+            <option value="team" selected={state.plan === 'team'}>
+              Team
+            </option>
+            <option value="enterprise" selected={state.plan === 'enterprise'}>
+              Enterprise
+            </option>
+          </select>
+          <p {...fieldDescriptionAttributes({ id: 'gallery-interactive-field-plan-description' })}>
+            Native select remains the submitted control.
+          </p>
+          <output data-demo-state="field-plan">{state.plan}</output>
+        </div>
+
+        <fieldset
+          {...fieldsetRootAttributes({
+            ...fieldsetState,
+            descriptionId: 'gallery-interactive-fieldset-description',
+            id: 'gallery-interactive-fieldset',
+          })}
+        >
+          <legend
+            {...fieldsetLegendAttributes({
+              id: 'gallery-interactive-fieldset-legend',
+              required: true,
+            })}
+          >
+            Shipping options
+          </legend>
+          <p {...fieldDescriptionAttributes({ id: 'gallery-interactive-fieldset-description' })}>
+            Grouped controls inherit native fieldset disabled behavior.
+          </p>
+          <label>
+            <input
+              name="gallery-shipping-disabled"
+              type="checkbox"
+              checked={state.shippingDisabled}
+              onClick={() => {
+                state.shippingDisabled = !state.shippingDisabled;
+                const doc = Reflect['get'](globalThis, 'document');
+                const fieldset = doc
+                  ? Object(doc)['getElementById']?.call(doc, 'gallery-interactive-fieldset')
+                  : undefined;
+                const checkbox = doc
+                  ? Object(doc)['querySelector']?.call(
+                      doc,
+                      'input[name="gallery-shipping-disabled"]',
+                    )
+                  : undefined;
+
+                if (fieldset) {
+                  fieldset['disabled'] = state.shippingDisabled;
+                  if (state.shippingDisabled) {
+                    Object(fieldset)['setAttribute']?.call(fieldset, 'data-disabled', '');
+                  } else {
+                    Object(fieldset)['removeAttribute']?.call(fieldset, 'data-disabled');
+                  }
+                }
+                if (checkbox) checkbox['checked'] = state.shippingDisabled;
+              }}
+            />
+            Disable shipping group
+          </label>
+        </fieldset>
+      </form>
+    );
+  },
+});

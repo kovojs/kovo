@@ -36,6 +36,7 @@ const demos = [
   'disclosure-demo',
   'dialog-demo',
   'dropdown-menu-demo',
+  'field-demo',
   'hover-card-demo',
   'menubar-demo',
   'meter-demo',

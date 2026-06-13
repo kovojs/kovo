@@ -77,6 +77,9 @@ Implemented areas:
 - Field/fieldset integration now includes styled input, textarea, and select controls over the
   shared native field IDREF contract, with `/components/field` static gallery coverage proving
   label, description, error, option, and fieldset wiring.
+- Field/fieldset now has compiled interactive gallery coverage proving native input validity
+  IDREF updates, native select state, generated client module export/version wiring, and fieldset
+  disabled state through app-authored TSX lowered into checked-in artifacts.
 - H3 menu/navigation typeahead now handles repeated printable keys as one-key cycling search, so
   dropdown-menu, context-menu, menubar, and navigation-menu skip disabled items while cycling
   between same-prefix enabled items.
@@ -146,6 +149,13 @@ Recent gates:
 - `pnpm --filter @jiso/example-gallery test`
 - `pnpm exec vitest --run packages/cli/src/index.test.ts -t "vendored UI catalog|refuses unknown components|vendors package-synchronized|compiles vendored catalog"`
 - `pnpm exec vp check packages/ui/src/field.tsx packages/ui/src/index.tsx packages/ui/src/index.test.tsx examples/gallery/src/demo-fixtures.tsx examples/gallery/src/demo-fixtures.test.ts examples/gallery/src/behavior-contracts.test.ts`
+- `pnpm --filter @jiso/headless-ui exec vitest --run`
+- `pnpm --filter @jiso/headless-ui run lint:primitives`
+- `pnpm --filter @jiso/ui exec vitest --run`
+- `pnpm --filter @jiso/example-gallery test`
+- `pnpm --filter @jiso/example-gallery run test:browser`
+- `pnpm exec vp check examples/gallery/package.json examples/gallery/scripts/emit-interactive-gallery.mjs examples/gallery/src/interactive-docs.tsx examples/gallery/src/interactive/field-demo.tsx examples/gallery/src/generated/interactive/field-demo.tsx examples/gallery/src/generated/interactive/field-demo.client.js examples/gallery/src/interactive-gallery.test.ts examples/gallery/src/interactive-gallery.browser.test.ts plans/ui.md IMPLEMENT_v1.md plans/codebase-quality-round2.md`
+- `git diff --check`
 
 ## Open Work
 
@@ -162,8 +172,8 @@ H2:
 - Toolbar now has a styled vendorable wrapper, static gallery route, behavior-contract snippets,
   and catalog sync; broader H2 remains open for other H2 families.
 - Field/fieldset now covers styled native input, textarea, and select controls plus fieldset
-  grouping; keep future work tied to `form()` integration rather than a standalone styled-only
-  surface.
+  grouping, plus compiled interactive gallery coverage for validity and native group state; keep
+  future work tied to `form()` integration rather than a standalone styled-only surface.
 
 H3:
 
