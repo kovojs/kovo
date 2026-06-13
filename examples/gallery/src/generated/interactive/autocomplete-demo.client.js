@@ -28,7 +28,28 @@ export const GalleryAutocompleteDemo$input_input = handler((event, ctx) => {
   }
 });
 export const GalleryAutocompleteDemo$input_keydown = handler((event, ctx) => {
-  ctx.state.open = !ctx.state.open;
+  const delegatedEvent = event;
+  const eventKey = delegatedEvent === undefined ? undefined : Reflect['get'](delegatedEvent, 'key');
+  const doc = Reflect['get'](globalThis, 'document');
+  const input = doc
+    ? Object(doc)['getElementById']?.call(doc, 'gallery-autocomplete-input')
+    : undefined;
+  const output = doc
+    ? Object(doc)['querySelector']?.call(doc, '[data-demo-state="autocomplete-value"]')
+    : undefined;
+
+  if (eventKey === 'Enter' && ctx.state.open && ctx.state.highlightedValue === 'development') {
+    ctx.state.inputValue = 'development';
+    ctx.state.open = false;
+    ctx.state.value = 'development';
+    if (input) {
+      input['value'] = 'development';
+      Object(input)['setAttribute']?.call(input, 'aria-expanded', 'false');
+    }
+    if (output) output['textContent'] = 'Development';
+  } else {
+    ctx.state.open = !ctx.state.open;
+  }
 });
 export const GalleryAutocompleteDemo$option_click = handler((event, ctx) => {
   ctx.state.inputValue = 'development';

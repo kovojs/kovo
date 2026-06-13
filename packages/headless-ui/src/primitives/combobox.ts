@@ -126,7 +126,10 @@ export type ComboboxInputEvent = Event & {
 };
 export type ComboboxOptionEvent = Event;
 export type ComboboxKeyboardEvent = Event & { readonly key: string };
-export type ComboboxKeyboardResult = ComboboxMoveResult | ComboboxOpenChangeResult;
+export type ComboboxKeyboardResult =
+  | ComboboxMoveResult
+  | ComboboxOpenChangeResult
+  | ComboboxOptionSelectResult;
 
 export function comboboxOptionSelected(options: ComboboxOptionAttributeOptions): boolean {
   return options.value === options.itemValue;
@@ -269,8 +272,20 @@ export function selectComboboxOption(
     };
   }
 
+  const openResult = setComboboxOpen(state, false, 'option-select', options);
+  if (openResult.detail?.defaultPrevented === true) {
+    return {
+      open: openResult,
+      value: {
+        changed: false,
+        ...(valueResult.detail === undefined ? {} : { detail: valueResult.detail }),
+        value: state.value,
+      },
+    };
+  }
+
   return {
-    open: setComboboxOpen(state, false, 'option-select', options),
+    open: openResult,
     value: valueResult,
   };
 }
@@ -396,6 +411,12 @@ export function comboboxKeyDown(
   options: ComboboxChangeOptions = {},
 ): ComboboxKeyboardResult | undefined {
   if (event.defaultPrevented) return;
+
+  if (event.key === 'Enter' && state.open === true && state.highlightedValue !== undefined) {
+    const result = selectComboboxOption(state, state.highlightedValue, options);
+    if (result.value.changed) event.preventDefault();
+    return result;
+  }
 
   if (event.key === 'Escape') {
     const result = setComboboxOpen(state, false, 'escape-key', options);

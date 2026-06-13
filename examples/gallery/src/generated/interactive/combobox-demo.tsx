@@ -58,8 +58,8 @@ export const GalleryComboboxDemo = component('gallery-combobox-demo', {
             labelledBy: 'gallery-combobox-label',
           })}
           id="gallery-combobox-input"
-          on:input="/c/examples/gallery/src/generated/interactive/combobox-demo.client.js?v=053f7fa5#GalleryComboboxDemo$input_input"
-          on:keydown="/c/examples/gallery/src/generated/interactive/combobox-demo.client.js?v=053f7fa5#GalleryComboboxDemo$input_keydown"
+          on:input="/c/examples/gallery/src/generated/interactive/combobox-demo.client.js?v=c7e37cfc#GalleryComboboxDemo$input_input"
+          on:keydown="/c/examples/gallery/src/generated/interactive/combobox-demo.client.js?v=c7e37cfc#GalleryComboboxDemo$input_keydown"
         />
         <div
           {...comboboxListboxAttributes({
@@ -75,7 +75,7 @@ export const GalleryComboboxDemo = component('gallery-combobox-demo', {
               itemLabel: 'Austin',
               itemValue: 'austin',
             })}
-            on:click="/c/examples/gallery/src/generated/interactive/combobox-demo.client.js?v=053f7fa5#GalleryComboboxDemo$button_click"
+            on:click="/c/examples/gallery/src/generated/interactive/combobox-demo.client.js?v=c7e37cfc#GalleryComboboxDemo$button_click"
           >
             Austin
           </button>
@@ -96,7 +96,7 @@ export const GalleryComboboxDemo = component('gallery-combobox-demo', {
               id: 'gallery-combobox-listbox-option-2',
               itemValue: 'chicago',
             })}
-            on:click="/c/examples/gallery/src/generated/interactive/combobox-demo.client.js?v=053f7fa5#GalleryComboboxDemo$button_click_2"
+            on:click="/c/examples/gallery/src/generated/interactive/combobox-demo.client.js?v=c7e37cfc#GalleryComboboxDemo$button_click_2"
           >
             Chicago city
           </button>

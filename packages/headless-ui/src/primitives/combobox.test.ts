@@ -409,6 +409,72 @@ describe('headless-ui combobox primitive', () => {
       highlightedValue: 'chicago',
     });
     expect(moveEvent.defaultPrevented).toBe(true);
+
+    const enterEvent = comboboxKeyEvent('Enter');
+    expect(
+      comboboxKeyDown(
+        enterEvent,
+        {
+          highlightedValue: 'chicago',
+          items: cityItems,
+          open: true,
+          value: 'austin',
+        },
+        {
+          onValueChange(detail) {
+            reasons.push(`${detail.reason}:${detail.value}`);
+          },
+        },
+      ),
+    ).toMatchObject({
+      open: { changed: true, open: false },
+      value: { changed: true, value: 'chicago' },
+    });
+    expect(enterEvent.defaultPrevented).toBe(true);
+    expect(reasons).toContain('option-select:chicago');
+  });
+
+  it('restores selected value when option-select close is canceled', () => {
+    const result = selectComboboxOption(
+      { highlightedValue: 'chicago', open: true, value: 'austin' },
+      'chicago',
+      {
+        onOpenChange(detail) {
+          detail.preventDefault();
+        },
+      },
+    );
+
+    expect(result).toMatchObject({
+      open: {
+        changed: false,
+        detail: expect.objectContaining({ defaultPrevented: true }),
+        open: true,
+      },
+      value: { changed: false, value: 'austin' },
+    });
+
+    const event = comboboxKeyEvent('Enter');
+    const keyResult = comboboxKeyDown(
+      event,
+      {
+        highlightedValue: 'chicago',
+        items: cityItems,
+        open: true,
+        value: 'austin',
+      },
+      {
+        onOpenChange(detail) {
+          detail.preventDefault();
+        },
+      },
+    );
+
+    expect(keyResult).toMatchObject({
+      open: { changed: false, open: true },
+      value: { changed: false, value: 'austin' },
+    });
+    expect(event.defaultPrevented).toBe(false);
   });
 
   it('returns frozen attribute records and exposes option helpers', () => {

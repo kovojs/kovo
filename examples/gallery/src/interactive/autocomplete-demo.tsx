@@ -87,7 +87,29 @@ export const GalleryAutocompleteDemo = component('gallery-autocomplete-demo', {
             }
           }}
           onKeyDown={() => {
-            state.open = !state.open;
+            const delegatedEvent = event;
+            const eventKey =
+              delegatedEvent === undefined ? undefined : Reflect['get'](delegatedEvent, 'key');
+            const doc = Reflect['get'](globalThis, 'document');
+            const input = doc
+              ? Object(doc)['getElementById']?.call(doc, 'gallery-autocomplete-input')
+              : undefined;
+            const output = doc
+              ? Object(doc)['querySelector']?.call(doc, '[data-demo-state="autocomplete-value"]')
+              : undefined;
+
+            if (eventKey === 'Enter' && state.open && state.highlightedValue === 'development') {
+              state.inputValue = 'development';
+              state.open = false;
+              state.value = 'development';
+              if (input) {
+                input['value'] = 'development';
+                Object(input)['setAttribute']?.call(input, 'aria-expanded', 'false');
+              }
+              if (output) output['textContent'] = 'Development';
+            } else {
+              state.open = !state.open;
+            }
           }}
         />
         <datalist

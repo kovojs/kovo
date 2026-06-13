@@ -55,6 +55,9 @@ commands. Use `- [ ]` for open actionable work and `- [x]` only for fully verifi
       Enter/Space trigger activation. Slider now snaps explicit step values before exposing state
       or committing input/programmatic changes, restores rejected native input values, and proves
       delegated gallery input handling through refreshed generated artifacts and a browser test.
+      Combobox and autocomplete now select highlighted options from Enter keydown, restore previous
+      value/input state when option-select follow-up changes are canceled, and prove generated
+      keydown handlers through browser-backed gallery tests.
 
 ## Open Work
 
@@ -88,6 +91,13 @@ commands. Use `- [ ]` for open actionable work and `- [x]` only for fully verifi
 - [ ] Close remaining state, focus, menu, and canceled-change restoration gaps for select,
       combobox, autocomplete, dropdown-menu, context-menu, menubar, navigation-menu, slider, toast,
       and command with primitive tests plus gallery evidence where user-visible.
+      Evidence 2026-06-13: `packages/headless-ui/src/primitives/combobox.ts` and
+      `packages/headless-ui/src/primitives/autocomplete.ts` select the highlighted option on Enter
+      through the same cancelable option-select path as click; their tests cover keyboard
+      selection and value/input restoration when close or input follow-up changes are canceled.
+      `examples/gallery/src/interactive/{combobox,autocomplete}-demo.tsx` and refreshed generated
+      artifacts prove delegated keydown handlers, with static and browser gallery tests covering
+      the generated behavior.
 - [ ] Keep vendored source app-authored TSX: no `@jiso/ui` self-imports, no hand-authored lowered
       IR, no `fw-c=`, and no `data-bind=` in vendored component source.
 - [ ] Keep CLI add-catalog tests synchronized with `packages/ui/package.json` exports and resolve
@@ -143,6 +153,14 @@ commands. Use `- [ ]` for open actionable work and `- [x]` only for fully verifi
       `pnpm exec vitest --run examples/gallery/src/interactive-gallery.test.ts examples/gallery/src/behavior-contracts.test.ts examples/gallery/src/demo-fixtures.test.ts`;
       `(cd examples/gallery && pnpm exec vitest --config vitest.browser.config.ts --run src/interactive-gallery.browser.test.ts -t slider)`;
       exact `pnpm exec vp check packages/headless-ui/src/primitives/slider.ts packages/headless-ui/src/primitives/slider.test.ts examples/gallery/src/interactive/slider-demo.tsx examples/gallery/src/generated/interactive/slider-demo.tsx examples/gallery/src/generated/interactive/slider-demo.client.js examples/gallery/src/interactive-gallery.test.ts examples/gallery/src/interactive-gallery.browser.test.ts plans/ui.md plans/codebase-quality-round2.md`;
+      `git diff --check`.
+- [x] Combobox/autocomplete Enter selection slice:
+      `pnpm exec vitest --run packages/headless-ui/src/primitives/combobox.test.ts packages/headless-ui/src/primitives/autocomplete.test.ts`;
+      `pnpm exec vitest --run packages/ui/src/index.test.tsx -t "combobox|autocomplete"`;
+      `pnpm --filter @jiso/example-gallery run emit:interactive-gallery`;
+      `pnpm exec vitest --run examples/gallery/src/interactive-gallery.test.ts examples/gallery/src/behavior-contracts.test.ts examples/gallery/src/demo-fixtures.test.ts`;
+      `(cd examples/gallery && pnpm exec vitest --config vitest.browser.config.ts --run src/interactive-gallery.browser.test.ts -t "combobox|autocomplete")`;
+      exact `pnpm exec vp check packages/headless-ui/src/primitives/combobox.ts packages/headless-ui/src/primitives/combobox.test.ts packages/headless-ui/src/primitives/autocomplete.ts packages/headless-ui/src/primitives/autocomplete.test.ts examples/gallery/src/interactive/combobox-demo.tsx examples/gallery/src/interactive/autocomplete-demo.tsx examples/gallery/src/generated/interactive/combobox-demo.tsx examples/gallery/src/generated/interactive/combobox-demo.client.js examples/gallery/src/generated/interactive/autocomplete-demo.tsx examples/gallery/src/generated/interactive/autocomplete-demo.client.js examples/gallery/src/interactive-gallery.test.ts examples/gallery/src/interactive-gallery.browser.test.ts plans/ui.md plans/codebase-quality-round2.md`;
       `git diff --check`.
 - [x] Field native form ownership slice:
       `pnpm exec vitest --run packages/headless-ui/src/primitives/field.test.ts`;

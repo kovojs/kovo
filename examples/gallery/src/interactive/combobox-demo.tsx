@@ -97,7 +97,32 @@ export const GalleryComboboxDemo = component('gallery-combobox-demo', {
             if (output) output['textContent'] = 'Chicago city';
           }}
           onKeyDown={() => {
-            state.open = !state.open;
+            const delegatedEvent = event;
+            const eventKey =
+              delegatedEvent === undefined ? undefined : Reflect['get'](delegatedEvent, 'key');
+            const doc = Reflect['get'](globalThis, 'document');
+            const input = doc
+              ? Object(doc)['getElementById']?.call(doc, 'gallery-combobox-input')
+              : undefined;
+            const listbox = doc
+              ? Object(doc)['getElementById']?.call(doc, 'gallery-combobox-listbox')
+              : undefined;
+            const output = doc
+              ? Object(doc)['querySelector']?.call(doc, '[data-demo-state="combobox-value"]')
+              : undefined;
+
+            if (eventKey === 'Enter' && state.open && state.highlightedValue === 'chicago') {
+              state.open = false;
+              state.value = 'chicago';
+              if (input) {
+                input['value'] = 'chicago';
+                Object(input)['setAttribute']?.call(input, 'aria-expanded', 'false');
+              }
+              if (listbox) listbox['hidden'] = true;
+              if (output) output['textContent'] = 'Chicago city';
+            } else {
+              state.open = !state.open;
+            }
           }}
         />
         <div

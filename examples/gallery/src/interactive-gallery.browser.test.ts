@@ -343,7 +343,9 @@ describe('compiled interactive gallery demos in the browser', () => {
     const output = required(
       root.querySelector<HTMLOutputElement>('[data-demo-state="combobox-value"]'),
     );
-    const { imports } = installGeneratedGalleryLoader(root, { events: ['click', 'input'] });
+    const { imports } = installGeneratedGalleryLoader(root, {
+      events: ['click', 'input', 'keydown'],
+    });
 
     expect(root.getAttribute('fw-state')).toBe(
       '{"highlightedValue":"austin","open":false,"value":"austin"}',
@@ -388,6 +390,28 @@ describe('compiled interactive gallery demos in the browser', () => {
       expect(currentOutput.textContent).toBe('Chicago city');
     });
 
+    required(root.querySelector<HTMLInputElement>('#gallery-combobox-input')).dispatchEvent(
+      new KeyboardEvent('keydown', { bubbles: true, key: 'Enter' }),
+    );
+
+    await vi.waitFor(() => {
+      const currentInput = required(
+        root.querySelector<HTMLInputElement>('#gallery-combobox-input'),
+      );
+      const currentListbox = required(root.querySelector<HTMLElement>('#gallery-combobox-listbox'));
+      const currentOutput = required(
+        root.querySelector<HTMLOutputElement>('[data-demo-state="combobox-value"]'),
+      );
+
+      expect(root.getAttribute('fw-state')).toBe(
+        '{"highlightedValue":"chicago","open":false,"value":"chicago"}',
+      );
+      expect(currentInput.getAttribute('aria-expanded')).toBe('false');
+      expect(currentInput.value).toBe('chicago');
+      expect(currentListbox.hidden).toBe(true);
+      expect(currentOutput.textContent).toBe('Chicago city');
+    });
+
     required(root.querySelector<HTMLButtonElement>('#gallery-combobox-listbox-option-0')).click();
 
     await vi.waitFor(() => {
@@ -411,7 +435,7 @@ describe('compiled interactive gallery demos in the browser', () => {
       root.querySelector<HTMLOutputElement>('[data-demo-state="autocomplete-value"]'),
     );
     const { imports } = installGeneratedGalleryLoader(root, {
-      events: ['click', 'input'],
+      events: ['click', 'input', 'keydown'],
     });
 
     expect(root.getAttribute('fw-state')).toBe(
@@ -447,6 +471,26 @@ describe('compiled interactive gallery demos in the browser', () => {
       expect(currentInput.value).toBe('dev');
       expect(currentDevelopment.value).toBe('development');
       expect(currentDevelopment.getAttribute('data-highlighted')).toBe('');
+    });
+
+    required(root.querySelector<HTMLInputElement>('#gallery-autocomplete-input')).dispatchEvent(
+      new KeyboardEvent('keydown', { bubbles: true, key: 'Enter' }),
+    );
+
+    await vi.waitFor(() => {
+      const currentInput = required(
+        root.querySelector<HTMLInputElement>('#gallery-autocomplete-input'),
+      );
+      const currentOutput = required(
+        root.querySelector<HTMLOutputElement>('[data-demo-state="autocomplete-value"]'),
+      );
+
+      expect(root.getAttribute('fw-state')).toBe(
+        '{"highlightedValue":"development","inputValue":"development","open":false,"value":"development"}',
+      );
+      expect(currentInput.getAttribute('aria-expanded')).toBe('false');
+      expect(currentInput.value).toBe('development');
+      expect(currentOutput.textContent).toBe('Development');
     });
 
     required(

@@ -219,6 +219,9 @@ describe('compiled interactive gallery demos', () => {
       /on:input="\/c\/examples\/gallery\/src\/generated\/interactive\/autocomplete-demo\.client\.js\?v=[0-9a-f]{8}#GalleryAutocompleteDemo\$input_input"/,
     );
     expect(autocomplete).toMatch(
+      /on:keydown="\/c\/examples\/gallery\/src\/generated\/interactive\/autocomplete-demo\.client\.js\?v=[0-9a-f]{8}#GalleryAutocompleteDemo\$input_keydown"/,
+    );
+    expect(autocomplete).toMatch(
       /on:click="\/c\/examples\/gallery\/src\/generated\/interactive\/autocomplete-demo\.client\.js\?v=[0-9a-f]{8}#GalleryAutocompleteDemo\$option_click"/,
     );
 
@@ -252,6 +255,9 @@ describe('compiled interactive gallery demos', () => {
     expect(combobox).toContain('comboboxListboxAttributes({');
     expect(combobox).toMatch(
       /on:input="\/c\/examples\/gallery\/src\/generated\/interactive\/combobox-demo\.client\.js\?v=[0-9a-f]{8}#GalleryComboboxDemo\$input_input"/,
+    );
+    expect(combobox).toMatch(
+      /on:keydown="\/c\/examples\/gallery\/src\/generated\/interactive\/combobox-demo\.client\.js\?v=[0-9a-f]{8}#GalleryComboboxDemo\$input_keydown"/,
     );
     expect(combobox).toMatch(
       /on:click="\/c\/examples\/gallery\/src\/generated\/interactive\/combobox-demo\.client\.js\?v=[0-9a-f]{8}#GalleryComboboxDemo\$button_click"/,
@@ -626,6 +632,17 @@ describe('compiled interactive gallery demos', () => {
       open: true,
       value: 'design',
     });
+    clientHandler(autocomplete, 'GalleryAutocompleteDemo$input_keydown')(keyEvent('Enter'), {
+      params: {},
+      signal,
+      state: autocompleteState,
+    });
+    expect(autocompleteState).toEqual({
+      highlightedValue: 'development',
+      inputValue: 'development',
+      open: false,
+      value: 'development',
+    });
     clientHandler(autocomplete, 'GalleryAutocompleteDemo$option_click')(new Event('click'), {
       params: { value: 'development' },
       signal,
@@ -678,6 +695,12 @@ describe('compiled interactive gallery demos', () => {
       state: comboboxState,
     });
     expect(comboboxState).toEqual({ highlightedValue: 'chicago', open: true, value: 'chicago' });
+    clientHandler(combobox, 'GalleryComboboxDemo$input_keydown')(keyEvent('Enter'), {
+      params: {},
+      signal,
+      state: comboboxState,
+    });
+    expect(comboboxState).toEqual({ highlightedValue: 'chicago', open: false, value: 'chicago' });
     clientHandler(combobox, 'GalleryComboboxDemo$button_click')(new Event('click'), {
       params: { value: 'austin' },
       signal,
@@ -1515,6 +1538,12 @@ function clientHandler(exports: ClientExports, name: string): ClientExports[stri
 function inputEvent(value: string): Event {
   const event = new Event('input', { bubbles: true, cancelable: true });
   Object.defineProperty(event, 'target', { value: { value } });
+  return event;
+}
+
+function keyEvent(key: string): Event {
+  const event = new Event('keydown');
+  Object.defineProperty(event, 'key', { value: key });
   return event;
 }
 

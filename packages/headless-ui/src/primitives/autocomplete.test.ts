@@ -427,6 +427,97 @@ describe('headless-ui autocomplete primitive', () => {
       highlightedValue: 'chicago',
     });
     expect(moveEvent.defaultPrevented).toBe(true);
+
+    const enterEvent = autocompleteKeyEvent('Enter');
+    expect(
+      autocompleteKeyDown(
+        enterEvent,
+        {
+          highlightedValue: 'chicago',
+          inputValue: 'chi',
+          items: cityItems,
+          open: true,
+          value: 'austin',
+        },
+        {
+          onValueChange(detail) {
+            reasons.push(`${detail.reason}:${detail.value}`);
+          },
+        },
+      ),
+    ).toMatchObject({
+      inputValue: { changed: true, inputValue: 'chicago' },
+      open: { changed: true, open: false },
+      value: { changed: true, value: 'chicago' },
+    });
+    expect(enterEvent.defaultPrevented).toBe(true);
+    expect(reasons).toContain('option-select:chicago');
+  });
+
+  it('restores selected value and input when option-select follow-up changes are canceled', () => {
+    const inputCanceled = selectAutocompleteOption(
+      { highlightedValue: 'chicago', inputValue: 'chi', open: true, value: 'austin' },
+      'chicago',
+      {
+        onInputValueChange(detail) {
+          detail.preventDefault();
+        },
+      },
+    );
+
+    expect(inputCanceled).toMatchObject({
+      inputValue: {
+        changed: false,
+        detail: expect.objectContaining({ defaultPrevented: true }),
+        inputValue: 'chi',
+      },
+      open: { changed: false, open: true },
+      value: { changed: false, value: 'austin' },
+    });
+
+    const closeCanceled = selectAutocompleteOption(
+      { highlightedValue: 'chicago', inputValue: 'chi', open: true, value: 'austin' },
+      'chicago',
+      {
+        onOpenChange(detail) {
+          detail.preventDefault();
+        },
+      },
+    );
+
+    expect(closeCanceled).toMatchObject({
+      inputValue: { changed: false, inputValue: 'chi' },
+      open: {
+        changed: false,
+        detail: expect.objectContaining({ defaultPrevented: true }),
+        open: true,
+      },
+      value: { changed: false, value: 'austin' },
+    });
+
+    const event = autocompleteKeyEvent('Enter');
+    const keyResult = autocompleteKeyDown(
+      event,
+      {
+        highlightedValue: 'chicago',
+        inputValue: 'chi',
+        items: cityItems,
+        open: true,
+        value: 'austin',
+      },
+      {
+        onOpenChange(detail) {
+          detail.preventDefault();
+        },
+      },
+    );
+
+    expect(keyResult).toMatchObject({
+      inputValue: { changed: false, inputValue: 'chi' },
+      open: { changed: false, open: true },
+      value: { changed: false, value: 'austin' },
+    });
+    expect(event.defaultPrevented).toBe(false);
   });
 
   it('returns frozen attribute records and exposes option helpers', () => {

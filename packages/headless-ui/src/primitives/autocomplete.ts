@@ -145,7 +145,10 @@ export type AutocompleteInputEvent = Event & {
 };
 export type AutocompleteOptionEvent = Event;
 export type AutocompleteKeyboardEvent = Event & { readonly key: string };
-export type AutocompleteKeyboardResult = AutocompleteMoveResult | AutocompleteOpenChangeResult;
+export type AutocompleteKeyboardResult =
+  | AutocompleteMoveResult
+  | AutocompleteOpenChangeResult
+  | AutocompleteOptionSelectResult;
 
 export function autocompleteOptionSelected(options: AutocompleteOptionAttributeOptions): boolean {
   return options.value === options.itemValue;
@@ -327,10 +330,38 @@ export function selectAutocompleteOption(
     'option-select',
     options,
   );
+  if (inputResult.detail?.defaultPrevented === true) {
+    return {
+      inputValue: inputResult,
+      open: { changed: false, open: state.open === true },
+      value: {
+        changed: false,
+        ...(valueResult.detail === undefined ? {} : { detail: valueResult.detail }),
+        value: state.value,
+      },
+    };
+  }
+
+  const openResult = setAutocompleteOpen(state, false, 'option-select', options);
+  if (openResult.detail?.defaultPrevented === true) {
+    return {
+      inputValue: {
+        changed: false,
+        ...(inputResult.detail === undefined ? {} : { detail: inputResult.detail }),
+        inputValue: state.inputValue ?? state.value ?? '',
+      },
+      open: openResult,
+      value: {
+        changed: false,
+        ...(valueResult.detail === undefined ? {} : { detail: valueResult.detail }),
+        value: state.value,
+      },
+    };
+  }
 
   return {
     inputValue: inputResult,
-    open: setAutocompleteOpen(state, false, 'option-select', options),
+    open: openResult,
     value: valueResult,
   };
 }
@@ -458,6 +489,12 @@ export function autocompleteKeyDown(
   options: AutocompleteChangeOptions = {},
 ): AutocompleteKeyboardResult | undefined {
   if (event.defaultPrevented) return;
+
+  if (event.key === 'Enter' && state.open === true && state.highlightedValue !== undefined) {
+    const result = selectAutocompleteOption(state, state.highlightedValue, options);
+    if (result.value.changed) event.preventDefault();
+    return result;
+  }
 
   if (event.key === 'Escape') {
     const result = setAutocompleteOpen(state, false, 'escape-key', options);
