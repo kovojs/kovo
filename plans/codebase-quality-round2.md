@@ -29,6 +29,12 @@ with same-session file/test evidence.
       diagnostics, subtracting both from `packages/server/src/static-replay.ts`. Same-session
       evidence: `pnpm exec vitest --run packages/server/src packages/create-jiso/src/index.test.ts`
       and `pnpm exec tsc --noEmit --pretty false`.
+      Round92 evidence 2026-06-13: `packages/server/src/static-export-output.ts` owns
+      static export asset normalization, output target/path validation, conflict diagnostics,
+      source readability checks, and write execution, subtracting output mechanics from
+      `packages/server/src/static-export.ts`. Same-session evidence:
+      `pnpm exec vitest --run packages/server/src packages/create-jiso/src/index.test.ts`
+      and `pnpm exec tsc --noEmit --pretty false`.
 - [ ] Phase 6 verification harness and commerce honesty: `@jiso/test` seams sound; verifier proxy
       SQL assumptions removed; commerce source/dependency story honest.
 - [ ] Phase 7 test-suite restructuring: monolith tests split along module seams; shared fixtures;

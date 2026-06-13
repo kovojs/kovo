@@ -206,6 +206,18 @@ Round91 app-shell static replay request/client-module evidence:
 - `pnpm exec vitest --run packages/server/src packages/create-jiso/src/index.test.ts`
 - `pnpm exec tsc --noEmit --pretty false`
 
+Round92 app-shell static export output boundary evidence:
+
+- `packages/server/src/static-export-output.ts` now owns static export asset normalization,
+  directory target planning, output path safety, conflict diagnostics, source readability checks,
+  and write execution, leaving `static-export.ts` to orchestrate SPEC §9.5 route replay,
+  `/c/` module replay, asset planning, and optional writes.
+- `packages/server/src/static-export-output.test.ts` pins dry-run planning, unsafe target
+  rejection, duplicate output diagnostics, and all-or-nothing source validation before writes.
+- `pnpm exec vitest --run packages/server/src/static-export-output.test.ts packages/server/src/static-export.test.ts packages/server/src/api/app.test.ts`
+- `pnpm exec vitest --run packages/server/src packages/create-jiso/src/index.test.ts`
+- `pnpm exec tsc --noEmit --pretty false`
+
 ## Open Work
 
 R6:
