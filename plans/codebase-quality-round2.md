@@ -1053,6 +1053,9 @@ Low-level wire element scanning and HTML entity helpers now live in
 `packages/runtime/src/wire-response-scanner.ts`, so `packages/runtime/src/wire-parser.ts` owns only
 decoded query/body readers while handler-context, mutation-failure, deferred stream filtering, and
 the extracted inline-loader parser closure share the same scanner module.
+Enhanced failure output parsing now also classifies declared and validation `<output>` chunks from
+one shared scanner projection, preserving declared-over-validation form semantics without a second
+output parser pass.
 Fragment element projection also lives in `packages/runtime/src/wire-response-scanner.ts`, so the
 modular decoded mutation-body parser and extracted inline response parser no longer carry separate
 `fw-fragment` element-to-chunk decoders.
@@ -1141,6 +1144,15 @@ packages/runtime/src/inline-loader-artifact-minifier.test.ts`, full runtime
 packages/runtime/src/wire-response-scanner.ts packages/runtime/src/wire-parser.ts
 packages/runtime/src/wire-parser.test.ts plans/codebase-quality-round2.md`; and
       `git diff --check`.
+      Evidence 2026-06-13 round284 worker C:
+      `packages/runtime/src/mutation-failure.ts` now reads all failure `<output>` chunks once
+      through `readElementChunks` and classifies declared/validation failures from that scanner
+      projection, preserving SPEC.md §9.2 declared-failure priority while deleting the duplicated
+      declared-vs-validation output parser passes. Verified by focused
+      `pnpm exec vitest --run packages/runtime/src/mutation-failure.test.ts
+packages/runtime/src/submit-context.test.ts`, full runtime
+      `pnpm exec vitest --run packages/runtime/src`, and
+      `pnpm run check:inline-loader`.
       Evidence 2026-06-13 round281: `packages/runtime/src/apply-mutation-response.ts` renamed the
       rooted decoded apply result to `AppliedMutationResponseWithRoot`, and
       `packages/runtime/src/mutation-response-dom.ts`, `packages/runtime/src/apply-deferred-stream.ts`,
@@ -2644,6 +2656,10 @@ Focused gates since that broad run:
   `pnpm exec vitest --config vitest.browser.config.ts --run packages/runtime/src/index.browser.test.ts`;
   `pnpm --filter @jiso/runtime run check:inline-loader`;
   `pnpm exec tsc --noEmit --pretty false`.
+- Runtime failure output parser closure:
+  `pnpm exec vitest --run packages/runtime/src/mutation-failure.test.ts packages/runtime/src/submit-context.test.ts`;
+  `pnpm exec vitest --run packages/runtime/src`;
+  `pnpm run check:inline-loader`.
 - Harness fixture parser-seam slice:
   `pnpm exec vitest --run packages/test/src/command-fixtures.test.ts packages/test/src/diagnostic-output-fixtures.test.ts packages/test/src/generated-module-fixtures.test.ts packages/test/src/package-exports.test.ts`;
   `pnpm run check:build`;

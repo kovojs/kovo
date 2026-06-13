@@ -20,6 +20,16 @@ describe('mutation failure parser', () => {
     ).toEqual({ code: 'OUT_OF_STOCK', data: { availableQuantity: 0 } });
   });
 
+  it('keeps declared output failures ahead of earlier validation output chunks', () => {
+    // SPEC.md §9.2: response-body failure outputs share one scanner projection,
+    // but typed form errors still prefer declared failures over field maps.
+    expect(
+      parseMutationFailure(
+        '<output data-error-path="quantity">Expected number &gt;= 1</output><fw-fragment target="error"><output data-debug="quantity > stock" data-error-code="OUT_OF_STOCK">{"availableQuantity":0}</output></fw-fragment>',
+      ),
+    ).toEqual({ code: 'OUT_OF_STOCK', data: { availableQuantity: 0 } });
+  });
+
   it('collects validation output paths and unescapes field messages', () => {
     expect(
       parseMutationFailure(

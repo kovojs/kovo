@@ -2,6 +2,7 @@ import type { JsonValue } from '@jiso/core';
 
 import { parseJsonValue } from './json.js';
 import { readAttribute, readElementChunks, unescapeHtml } from './wire-response-scanner.js';
+import type { ElementChunk } from './wire-response-scanner.js';
 
 export function parseMutationFailure(body: string): JsonValue {
   // SPEC.md §9.2: enhanced form failures travel as mutation wire HTML, so
@@ -9,11 +10,8 @@ export function parseMutationFailure(body: string): JsonValue {
   const errorChunk = readElementChunks(body, 'fw-error')[0];
   if (errorChunk) return parseJsonOrUnknown(unescapeHtml(errorChunk.content));
 
-  const declaredFailure = parseDeclaredFailureOutput(body);
-  if (declaredFailure) return declaredFailure;
-
-  const validationFailure = parseValidationFailureOutput(body);
-  if (validationFailure) return validationFailure;
+  const outputFailure = parseFailureOutputChunks(readElementChunks(body, 'output'));
+  if (outputFailure) return outputFailure;
 
   return parseJsonOrUnknown(body);
 }
@@ -25,30 +23,29 @@ function parseJsonOrUnknown(raw: string): JsonValue {
   return { body: raw, code: 'unknown' };
 }
 
-function parseDeclaredFailureOutput(body: string): JsonValue | null {
-  for (const output of readElementChunks(body, 'output')) {
-    const code = readAttribute(output.attrs, 'data-error-code');
-    if (!code) continue;
-
-    return {
-      code,
-      data: parseOutputPayload(output.content),
-    };
-  }
-
-  return null;
-}
-
-function parseValidationFailureOutput(body: string): JsonValue | null {
+function parseFailureOutputChunks(outputs: readonly ElementChunk[]): JsonValue | null {
   const fields: Record<string, string> = {};
+  let declaredFailure: JsonValue | null = null;
 
-  for (const output of readElementChunks(body, 'output')) {
+  // SPEC.md §9.2: enhanced form failures are rendered as response-body HTML.
+  // Keep all output classification on the shared wire element scanner, then
+  // preserve the form contract that declared failures beat validation fields.
+  for (const output of outputs) {
+    const code = readAttribute(output.attrs, 'data-error-code');
+    if (code && declaredFailure === null) {
+      declaredFailure = {
+        code,
+        data: parseOutputPayload(output.content),
+      };
+    }
+
     const path = readAttribute(output.attrs, 'data-error-path');
     if (!path) continue;
 
     fields[path] = unescapeHtml(output.content).trim();
   }
 
+  if (declaredFailure) return declaredFailure;
   return Object.keys(fields).length > 0 ? { code: 'VALIDATION', fields } : null;
 }
 
