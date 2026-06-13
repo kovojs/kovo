@@ -2343,6 +2343,12 @@ Latest evidence:
   `pnpm exec tsc --noEmit --pretty false`;
   exact `pnpm exec vp check packages/server/src/app-guards.ts packages/server/src/api/app-shell/core.ts packages/server/src/vite-dev.ts packages/server/src/api/app.test.ts examples/commerce/scripts/export-static.mjs examples/commerce/src/app-shell.test.ts packages/create-jiso/templates/scripts/export-static.mjs packages/create-jiso/src/index.test.ts plans/app-shell.md plans/codebase-quality-round2.md`;
   `git diff --check`.
+- Round287 app-shell public subpath value boundary:
+  `packages/server/src/api/app.test.ts` now asserts exact runtime value-key lists for
+  `@jiso/server/app-shell/client-modules`, `core`, `node`, `static-export`, and `vite`, so SPEC
+  §9.5 R5/R6/R7 public consumers cannot regain aggregate compatibility helpers or unreviewed
+  public values without a focused API failure.
+  `pnpm exec vitest --run packages/server/src/api/app.test.ts`;
 
 - Round251 commerce HTTP/static adoption:
   `pnpm exec vitest --run examples/commerce/src/app-shell.test.ts`;

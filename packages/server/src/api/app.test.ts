@@ -31,6 +31,10 @@ function aggregateValueKeys(...modules: readonly Record<string, unknown>[]): str
   return [...new Set(modules.flatMap((module) => Object.keys(module)))].sort();
 }
 
+function moduleValueKeys(module: Record<string, unknown>): string[] {
+  return Object.keys(module).sort();
+}
+
 describe('server app-shell public API barrels', () => {
   it('keeps app-shell helpers on subpaths while root preserves SPEC §9.5 built-harness entries', () => {
     const publicValues = publicApi as Record<string, unknown>;
@@ -108,6 +112,74 @@ describe('server app-shell public API barrels', () => {
   });
 
   it('exposes the split app-shell package subpaths for R5/R6/R7 consumers', () => {
+    // SPEC.md §9.5 keeps request-shell extension points declared and printable; the public
+    // app-shell subpaths stay focused so Vite, static export, and outside adoption paths do not
+    // regain an aggregate compatibility surface by accident.
+    expect(moduleValueKeys(packageClientModulesApi)).toEqual([
+      'createMemoryVersionedClientModuleRegistry',
+      'renderVersionedClientModuleResponse',
+      'versionedClientModuleHref',
+    ]);
+    expect(moduleValueKeys(packageCoreApi)).toEqual([
+      'createApp',
+      'createRequestHandler',
+      'isJisoApp',
+      'respond',
+      'route',
+    ]);
+    expect(moduleValueKeys(packageNodeApi)).toEqual([
+      'nodeRequestToWebRequest',
+      'toNodeHandler',
+      'writeWebResponseToNode',
+    ]);
+    expect(moduleValueKeys(packageStaticExportApi)).toEqual([
+      'StaticExportError',
+      'assertStaticExportManifestMatchesResult',
+      'assertStaticExportManifestUsesDirectoryIndexDocuments',
+      'exportStaticApp',
+      'formatStaticExportDiagnostic',
+      'formatStaticExportDiagnostics',
+      'isStaticExportDiagnostic',
+      'isStaticExportDiagnosticError',
+      'staticExportInventory',
+      'staticExportManifest',
+      'staticExportOutputPlan',
+    ]);
+    expect(moduleValueKeys(packageViteApi)).toEqual([
+      'createJisoAppShellDevDiagnosticLedger',
+      'createJisoAppShellViteBuild',
+      'createJisoAppShellViteBuildFromBundle',
+      'createJisoAppShellViteBuildFromManifestFile',
+      'exportJisoAppShellViteBuild',
+      'exportJisoAppShellViteBuildFromManifestFile',
+      'exportJisoAppShellViteBuildWithManifest',
+      'exportJisoAppShellViteBuildWithManifestFromManifestFile',
+      'jisoAppShellViteBuildStaticExportAssets',
+      'jisoAppShellViteManifestAssets',
+      'jisoAppShellViteManifestAssetsFromFile',
+      'jisoAppShellViteManifestFile',
+      'jisoAppShellViteManifestFromBundle',
+      'jisoAppShellViteManifestFromFile',
+      'jisoAppShellViteManifestHints',
+      'jisoAppShellViteManifestStylesheetHref',
+      'jisoAppShellViteManifestStylesheetHrefFromFile',
+      'jisoAppShellViteOutputDir',
+      'jisoAppShellVitePlugin',
+      'jisoAppShellViteRouteEntries',
+      'jisoAppShellViteSsrDevPlugin',
+      'jisoAppShellViteStaticExportAssets',
+      'jisoAppShellViteStaticExportAssetsFromManifestFile',
+      'renderJisoAppShellViteDevDiagnosticResponse',
+      'shouldHandleJisoAppShellViteRequest',
+      'shouldHandleJisoAppShellViteSsrRequest',
+      'staticExportInventoryForJisoAppShellViteBuild',
+      'staticExportInventoryForJisoAppShellViteBuildFromManifestFile',
+      'staticExportManifestForJisoAppShellViteBuild',
+      'staticExportManifestForJisoAppShellViteBuildFromManifestFile',
+      'writeJisoAppShellViteBuildOutput',
+      'writeJisoAppShellVitePluginBuild',
+    ]);
+
     expect(packageCoreApi.createApp).toBe(coreApi.createApp);
     expect(packageCoreApi.isJisoApp).toBe(coreApi.isJisoApp);
     expect(packageCoreApi.route).toBe(routeApi.route);

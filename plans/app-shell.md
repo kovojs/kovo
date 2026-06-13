@@ -149,6 +149,14 @@ Round286 app aggregate client-module guard evidence:
   `pnpm exec vp check packages/server/src/app-guards.ts packages/server/src/api/app.test.ts packages/create-jiso/templates/src/app-shell.test.ts packages/create-jiso/src/index.test.ts examples/commerce/src/app-shell.test.ts site/scripts/app-shell.test.mjs plans/app-shell.md plans/codebase-quality-round2.md`;
   `git diff --check`.
 
+Round287 app-shell public subpath value boundary evidence:
+
+- `packages/server/src/api/app.test.ts` now pins the exact runtime value keys for every focused
+  `@jiso/server/app-shell/*` subpath, keeping SPEC §9.5 R5/R6/R7 consumers on the declared
+  client-modules, core, node, static-export, and Vite surfaces and catching accidental aggregate
+  compatibility helper drift.
+- `pnpm exec vitest --run packages/server/src/api/app.test.ts`
+
 Round278 docs-site app-shell boundary evidence:
 
 - `packages/server/src/api/app-shell/core.ts` forwards `route()` and `respond` for app
