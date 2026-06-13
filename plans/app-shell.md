@@ -118,12 +118,22 @@ Round86 server public export manifest evidence:
 - `pnpm exec vitest --run packages/server/src/static-export.test.ts packages/server/src/vite-build.test.ts packages/server/src/api/app.test.ts`
 - `pnpm exec tsc --noEmit --pretty false`
 
+Round86b app-shell consumer manifest evidence:
+
+- Starter and docs-site export tasks now call
+  `staticExportManifestForJisoAppShellViteBuildFromManifestFile()` before write export, so their
+  task output proves the same public manifest-backed route document, `/c/` module, and Vite asset
+  counts that SPEC §9.5 static replay would publish.
+- `pnpm exec vitest --run packages/create-jiso/src/index.test.ts -t "scaffolds real template files|runs vp run export with the built stylesheet href|runs npm run static with the built stylesheet href|formats generated export task diagnostics"`
+- `pnpm exec vitest --run site/scripts/app-shell.test.mjs`
+
 ## Open Work
 
 R6:
 
-- Adopt or assert the public static export manifest in the remaining starter/docs export-task
-  consumers; commerce L0/L1 public output is already covered by the Round85 evidence above.
+- Keep the checklist open until a same-session sweep proves replay, L0/L1 constraints, and
+  manifest consumer adoption together; Round86b covers starter/docs manifest consumers, while
+  commerce L0/L1 public output is already covered by the Round85 evidence above.
 
 R7:
 

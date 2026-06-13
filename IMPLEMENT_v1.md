@@ -313,6 +313,10 @@ packages/runtime/src/broadcast.ts packages/runtime/src/query-store.test.ts`.
       `pnpm exec vitest --run packages/create-jiso/src/index.test.ts -t "runs the generated starter app-shell request and export proof|scaffolds real template files"`,
       `pnpm exec vitest --run examples/commerce/src/app-shell.test.ts -t "public commerce shell static output|vp run export|documents the commerce app-shell"`,
       and `pnpm exec vitest --run site/scripts/app-shell.test.mjs`.
+      Evidence 2026-06-12: the create-jiso starter and docs-site export scripts now also call
+      `staticExportManifestForJisoAppShellViteBuildFromManifestFile()` before write export, so
+      their task output proves public manifest route-document, `/c/` module, and Vite asset
+      counts through the same SPEC §9.5 dry-run helper used by server tests.
       Evidence 2026-06-12: the commerce app shell now serves `/` through the same
       SPEC §9.5 `createApp()` request shell as `/cart`, includes `/index.html` in
       public static replay, and keeps `/c/commerce.client.js` plus the Vite CSS asset

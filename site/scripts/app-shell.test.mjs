@@ -116,6 +116,7 @@ describe('site app-shell export adoption', () => {
     const publicDir = path.join(root, 'public');
     const outDir = path.join(root, 'dist-out');
     const loadedModuleIds = [];
+    const staticExportManifestFiles = [];
     const stylesheetManifestFiles = [];
     const exportScript = await readFile(path.join(siteRoot, 'scripts/export-static.mjs'), 'utf8');
 
@@ -166,6 +167,12 @@ describe('site app-shell export adoption', () => {
               async jisoAppShellViteManifestStylesheetHrefsFromFile() {
                 throw new Error('docs export must use the server-owned singular stylesheet helper');
               },
+              async staticExportManifestForJisoAppShellViteBuildFromManifestFile(options) {
+                staticExportManifestFiles.push(options.manifestFile);
+                return await server.staticExportManifestForJisoAppShellViteBuildFromManifestFile(
+                  options,
+                );
+              },
             };
           }
           if (id === '/scripts/app-shell.mjs') return { createSiteDistApp };
@@ -180,16 +187,23 @@ describe('site app-shell export adoption', () => {
     expect(exportScript).toContain('formatStaticExportDiagnostics');
     expect(exportScript).toContain('isStaticExportDiagnosticError');
     expect(exportScript).toContain('jisoAppShellViteManifestStylesheetHrefFromFile');
+    expect(exportScript).toContain('staticExportManifestForJisoAppShellViteBuildFromManifestFile');
     expect(exportScript).not.toContain('function formatStaticExportDiagnostic');
     expect(exportScript).not.toContain('function isStaticExportDiagnostic');
     expect(exportScript).not.toContain('jisoAppShellViteManifestStylesheetHrefsFromFile');
     expect(loadedModuleIds).toEqual(['/scripts/app-shell.mjs', '@jiso/server']);
     expect(stylesheetManifestFiles).toEqual([path.join(cssDistDir, '.vite/manifest.json')]);
+    expect(staticExportManifestFiles).toEqual([path.join(cssDistDir, '.vite/manifest.json')]);
     expect(result.artifacts.map((artifact) => artifact.path)).toEqual([
       '/docs/installation/index.html',
       '/index.html',
     ]);
+    expect(result.manifest.routeDocuments.map((artifact) => artifact.path)).toEqual([
+      '/docs/installation/index.html',
+      '/index.html',
+    ]);
     expect(result.assets.map((artifact) => artifact.path)).toEqual(['/assets/site.css']);
+    expect(result.manifest.assets.map((artifact) => artifact.path)).toEqual(['/assets/site.css']);
     await expect(readFile(path.join(outDir, 'index.html'), 'utf8')).resolves.toContain(
       '/c/search.js?v=site-r7-',
     );
@@ -250,7 +264,19 @@ describe('site app-shell export adoption', () => {
       { cwd: siteRoot },
     );
 
-    expect(stdout).toBe('site-export/v1\nhtml=2\nclient-modules=1\nassets=1\ndiagnostics=0\n');
+    expect(stdout).toBe(
+      [
+        'site-export/v1',
+        'html=2',
+        'client-modules=1',
+        'assets=1',
+        'manifest-html=2',
+        'manifest-client-modules=1',
+        'manifest-assets=1',
+        'diagnostics=0',
+        '',
+      ].join('\n'),
+    );
     await expect(readFile(path.join(outDir, 'index.html'), 'utf8')).resolves.toContain(
       '/assets/site.css',
     );

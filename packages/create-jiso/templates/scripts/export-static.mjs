@@ -13,6 +13,8 @@ let formatStaticExportDiagnostic;
 let formatStaticExportDiagnostics;
 let isStaticExportDiagnosticError;
 let jisoAppShellViteManifestStylesheetHrefFromFile;
+let manifest;
+let staticExportManifestForJisoAppShellViteBuildFromManifestFile;
 
 const server = await createServer({
   appType: 'custom',
@@ -28,6 +30,7 @@ try {
     formatStaticExportDiagnostics,
     isStaticExportDiagnosticError,
     jisoAppShellViteManifestStylesheetHrefFromFile,
+    staticExportManifestForJisoAppShellViteBuildFromManifestFile,
   } = serverModule);
 
   if (typeof exportJisoAppShellViteBuildFromManifestFile !== 'function') {
@@ -45,6 +48,11 @@ try {
   if (typeof jisoAppShellViteManifestStylesheetHrefFromFile !== 'function') {
     throw new Error('@jiso/server must export jisoAppShellViteManifestStylesheetHrefFromFile.');
   }
+  if (typeof staticExportManifestForJisoAppShellViteBuildFromManifestFile !== 'function') {
+    throw new Error(
+      '@jiso/server must export staticExportManifestForJisoAppShellViteBuildFromManifestFile.',
+    );
+  }
 
   process.env.JISO_STARTER_STYLESHEET_HREF =
     await jisoAppShellViteManifestStylesheetHrefFromFile(manifestFile);
@@ -58,6 +66,11 @@ try {
 
   // SPEC.md section 9.5 static export replays the app shell and copies the Vite
   // manifest assets through the public app-shell export bridge.
+  manifest = await staticExportManifestForJisoAppShellViteBuildFromManifestFile({
+    app,
+    distDir: 'dist',
+    manifestFile,
+  });
   result = await exportJisoAppShellViteBuildFromManifestFile({
     app,
     distDir: 'dist',
@@ -94,6 +107,9 @@ if (result) {
       `html=${result.artifacts.length}`,
       `client-modules=${result.clientModules.length}`,
       `assets=${result.assets.length}`,
+      `manifest-html=${manifest?.routeDocuments.length ?? 0}`,
+      `manifest-client-modules=${manifest?.clientModules.length ?? 0}`,
+      `manifest-assets=${manifest?.assets.length ?? 0}`,
       `diagnostics=${result.diagnostics.length}`,
       '',
     ].join('\n'),

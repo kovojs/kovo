@@ -47,6 +47,7 @@ export async function exportSiteStaticApp({
       formatStaticExportDiagnostics,
       isStaticExportDiagnosticError,
       jisoAppShellViteManifestStylesheetHrefFromFile,
+      staticExportManifestForJisoAppShellViteBuildFromManifestFile,
     } = serverModule;
 
     if (typeof createSiteDistApp !== 'function') {
@@ -65,20 +66,32 @@ export async function exportSiteStaticApp({
     if (typeof jisoAppShellViteManifestStylesheetHrefFromFile !== 'function') {
       throw new Error('@jiso/server must export jisoAppShellViteManifestStylesheetHrefFromFile.');
     }
+    if (typeof staticExportManifestForJisoAppShellViteBuildFromManifestFile !== 'function') {
+      throw new Error(
+        '@jiso/server must export staticExportManifestForJisoAppShellViteBuildFromManifestFile.',
+      );
+    }
     staticExportTaskHelpers = { formatStaticExportDiagnostics, isStaticExportDiagnosticError };
 
     await jisoAppShellViteManifestStylesheetHrefFromFile(manifestFile);
 
     const app = await createSiteDistApp({ distDir, publicDir, server: serverModule });
+    const manifest = await staticExportManifestForJisoAppShellViteBuildFromManifestFile({
+      app,
+      distDir: cssDistDir,
+      manifestFile,
+    });
     // SPEC.md section 9.5 static export owns the final static host bytes:
     // replay route documents, copy versioned /c/ modules, and copy the Vite
     // manifest assets through the public app-shell export bridge.
-    return await exportJisoAppShellViteBuildFromManifestFile({
+    const result = await exportJisoAppShellViteBuildFromManifestFile({
       app,
       distDir: cssDistDir,
       manifestFile,
       outDir,
     });
+
+    return { ...result, manifest };
   } finally {
     if (previousDefaultApp === undefined) {
       delete process.env.JISO_SITE_APP_SHELL_DEFAULT;
@@ -105,6 +118,9 @@ if (isMainModule()) {
         `html=${result.artifacts.length}`,
         `client-modules=${result.clientModules.length}`,
         `assets=${result.assets.length}`,
+        `manifest-html=${result.manifest?.routeDocuments.length ?? 0}`,
+        `manifest-client-modules=${result.manifest?.clientModules.length ?? 0}`,
+        `manifest-assets=${result.manifest?.assets.length ?? 0}`,
         `diagnostics=${result.diagnostics.length}`,
         '',
       ].join('\n'),

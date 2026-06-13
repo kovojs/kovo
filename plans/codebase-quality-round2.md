@@ -331,6 +331,9 @@ Closed evidence so far:
 - Server static export now exposes a public manifest object for directory-index route documents,
   `/c/` modules, and copied static assets, with Vite manifest-file dry-run helpers proving the
   same manifest-backed asset set as write export.
+- Starter and docs-site export tasks now consume the public Vite manifest-file static export
+  manifest helper before write export, so generated task output proves the public manifest counts
+  for route documents, `/c/` modules, and copied Vite assets.
 
 Open:
 
@@ -374,6 +377,8 @@ Recent gates:
 - `git diff --check`
 - `pnpm exec vitest --run packages/server/src/static-export.test.ts packages/server/src/vite-build.test.ts packages/server/src/api/app.test.ts`
 - `pnpm exec tsc --noEmit --pretty false`
+- `pnpm exec vitest --run packages/create-jiso/src/index.test.ts -t "scaffolds real template files|runs vp run export with the built stylesheet href|runs npm run static with the built stylesheet href|formats generated export task diagnostics"`
+- `pnpm exec vitest --run site/scripts/app-shell.test.mjs`
 
 ## Phase 6 - Verification Harness And Commerce
 

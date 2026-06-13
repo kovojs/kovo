@@ -238,6 +238,9 @@ describe('create-jiso starter', () => {
       expect(exportStaticScript).toContain('formatStaticExportDiagnostics');
       expect(exportStaticScript).toContain("ssrLoadModule('/src/app-shell.ts')");
       expect(exportStaticScript).toContain('exportJisoAppShellViteBuildFromManifestFile');
+      expect(exportStaticScript).toContain(
+        'staticExportManifestForJisoAppShellViteBuildFromManifestFile',
+      );
       expect(exportStaticScript).toContain('JISO_STARTER_STYLESHEET_HREF');
       expect(exportStaticScript).toContain('isStaticExportDiagnosticError');
       expect(exportStaticScript).toContain('starter-export/v1');
@@ -476,6 +479,7 @@ describe('create-jiso starter', () => {
 
         expect(cssFile).toBeTypeOf('string');
         expect(output).toContain('starter-export/v1\nhtml=1\nclient-modules=1\nassets=1\n');
+        expect(output).toContain('manifest-html=1\nmanifest-client-modules=1\nmanifest-assets=1\n');
         expect(distIndex).toContain(`href="/assets/${cssFile}"`);
         expect(distIndex).toContain(
           'on:click="/c/starter.client.js?v=starter-r7#Starter$announce"',
