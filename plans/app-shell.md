@@ -1104,3 +1104,16 @@ Round266 app-shell dynamic app guard cleanup evidence:
 - `pnpm exec tsc --noEmit --pretty false`
 - `pnpm exec vp check packages/server/src/app-guards.ts packages/server/src/api/app-shell/core.ts packages/server/src/vite-dev.ts packages/server/src/api/app.test.ts examples/commerce/scripts/export-static.mjs examples/commerce/src/app-shell.test.ts packages/create-jiso/templates/scripts/export-static.mjs packages/create-jiso/src/index.test.ts plans/app-shell.md plans/codebase-quality-round2.md`
 - `git diff --check`
+
+Round268 docs-site optional client-module directory cleanup evidence:
+
+- `site/scripts/app-shell.mjs` now treats an absent `public/c` directory as an empty docs-site
+  client-module registry while keeping SPEC §9.5 route document replay intact, so docs static
+  export no longer requires a placeholder client-module directory for pure HTML docs output.
+- `site/scripts/app-shell.test.mjs` proves manifest-backed docs export succeeds without
+  `public/c`, writes route documents, and publishes no `/c/` artifacts.
+- `pnpm exec vitest --run site/scripts/app-shell.test.mjs`
+- `pnpm exec vitest --run packages/server/src/api/app.test.ts site/scripts/app-shell.test.mjs examples/commerce/src/app-shell.test.ts packages/create-jiso/src/index.test.ts -t "server app-shell public API barrels|site app-shell export adoption|documents the commerce app-shell dev, serve, and export command matrix|public commerce shell static output|vp run export|npm run static|scaffolds real template files|runs the generated starter app-shell request and export proof|runs vp run export with the built stylesheet href|runs npm run static with the built stylesheet href|formats generated export task diagnostics"`
+- `pnpm exec tsc --noEmit --pretty false`
+- `pnpm exec vp check site/scripts/app-shell.mjs site/scripts/app-shell.test.mjs plans/app-shell.md plans/codebase-quality-round2.md`
+- `git diff --check`

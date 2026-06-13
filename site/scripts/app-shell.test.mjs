@@ -130,6 +130,43 @@ describe('site app-shell export adoption', () => {
     );
   });
 
+  it('exports docs HTML when the public client module directory is absent', async () => {
+    const root = await mkdtemp(path.join(tmpdir(), 'jiso-site-export-no-client-modules-'));
+    const distDir = path.join(root, 'dist-source');
+    const publicDir = path.join(root, 'public');
+    const outDir = path.join(root, 'dist-out');
+
+    await mkdir(path.join(distDir, 'docs', 'installation'), { recursive: true });
+    await writeFile(
+      path.join(distDir, 'index.html'),
+      '<!doctype html><html><body><h1>Home</h1></body></html>',
+    );
+    await writeFile(
+      path.join(distDir, 'docs', 'installation', 'index.html'),
+      '<!doctype html><html><body><h1>Installation</h1></body></html>',
+    );
+    await writeFile(
+      path.join(distDir, '.jiso-site-routes.json'),
+      `${JSON.stringify({ routes: ['/', '/docs/installation'] })}\n`,
+    );
+
+    const serverApi = { ...server, ...serverAppShellClientModules, ...serverAppShellCore };
+    const app = await createSiteDistApp({ distDir, publicDir, server: serverApi });
+    const result = await server.exportStaticApp(app, { outDir });
+
+    expect(result.artifacts.map((artifact) => artifact.path)).toEqual([
+      '/index.html',
+      '/docs/installation/index.html',
+    ]);
+    expect(result.clientModules).toEqual([]);
+    await expect(readFile(path.join(outDir, 'index.html'), 'utf8')).resolves.toContain(
+      '<h1>Home</h1>',
+    );
+    await expect(
+      readFile(path.join(outDir, 'docs', 'installation', 'index.html'), 'utf8'),
+    ).resolves.toContain('<h1>Installation</h1>');
+  });
+
   it('loads the docs app shell and server package through Vite SSR for export', async () => {
     const root = await mkdtemp(path.join(tmpdir(), 'jiso-site-export-source-'));
     const cssDistDir = path.join(root, 'dist-css');

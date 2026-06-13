@@ -89,6 +89,8 @@ function registerPublicClientModules(clientModules, publicDir) {
   const clientDir = path.join(publicDir, 'c');
   const hrefs = new Map();
 
+  if (!existsSync(clientDir)) return hrefs;
+
   for (const entry of sortedDirectoryEntries(clientDir)) {
     if (!entry.name.endsWith('.js')) continue;
 
