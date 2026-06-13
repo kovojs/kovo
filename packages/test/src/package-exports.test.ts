@@ -55,12 +55,21 @@ import {
   type FwExportSummary,
 } from '@jiso/test/fw-export-fixtures';
 import {
+  fwExplainEndpointFacts,
   fwExplainField,
+  fwExplainListField,
+  fwExplainOptimisticStatuses,
   fwExplainRecords,
+  fwExplainScopeAuditFacts,
   fwExplainSummary,
+  fwExplainUpdateConsumerMap,
+  fwExplainUpdateConsumers,
   fwExplainUpdateTargets,
   parseFwExplainOutput,
+  type FwExplainEndpointFact,
   type FwExplainOutput,
+  type FwExplainScopeAuditFact,
+  type FwExplainUpdateConsumerFact,
 } from '@jiso/test/fw-explain-fixtures';
 import {
   executeGeneratedBootstrapModule,
@@ -380,8 +389,19 @@ describe('@jiso/test package subpath exports', () => {
     expect(parseFwExplainOutput).toBeTypeOf('function');
     expect(fwExplainField('fw-explain/v1\nQUERY cart\nreads: cart\n', 'reads')).toBe('cart');
     expect(
+      fwExplainListField(
+        'fw-explain/v1\nMUTATION cart/add\ninput-fields: productId,quantity\n',
+        'input-fields',
+      ),
+    ).toEqual(['productId', 'quantity']);
+    expect(
       fwExplainRecords('fw-explain/v1\nMUTATION cart/add\nOPTIMISTIC cart plan\n', 'OPTIMISTIC'),
     ).toEqual(['cart plan']);
+    expect(
+      fwExplainOptimisticStatuses(
+        'fw-explain/v1\nMUTATION cart/add\nOPTIMISTIC cart await-fragment\n',
+      ),
+    ).toEqual({ cart: 'await-fragment' });
     expect(
       fwExplainSummary(
         'fw-explain/v1\nMUTATION cart/add\nOPTIMISTIC-SUMMARY total=1 UNHANDLED=0\n',
@@ -393,6 +413,52 @@ describe('@jiso/test package subpath exports', () => {
         'fw-explain/v1\nMUTATION cart/add\nupdates: cart->page:/cart; product->page:/products\n',
       ),
     ).toEqual(['cart->page:/cart', 'product->page:/products']);
+    expect(fwExplainUpdateTargets('fw-explain/v1\nMUTATION cart/add\nupdates: -\n')).toEqual([]);
+    expect(
+      fwExplainUpdateConsumers(
+        'fw-explain/v1\nMUTATION cart/add\nupdates: cart->component:CartBadge,page:/cart\n',
+      ),
+    ).toEqual([{ consumers: ['component:CartBadge', 'page:/cart'], query: 'cart' }]);
+    expect(
+      Object.fromEntries(
+        fwExplainUpdateConsumerMap('fw-explain/v1\nMUTATION cart/add\nupdates: cart->page:/cart\n'),
+      ),
+    ).toEqual({ cart: ['page:/cart'] });
+    expect(
+      fwExplainEndpointFacts(
+        [
+          'fw-explain/v1',
+          'ENDPOINTS',
+          'ENDPOINT orders/export method=GET path=/exports/orders.csv mount=exact auth=authed csrf=checked writes=-',
+          '',
+        ].join('\n'),
+      ),
+    ).toEqual([
+      {
+        auth: 'authed',
+        csrf: 'checked',
+        endpoint: 'orders/export',
+        method: 'GET',
+        mount: 'exact',
+        path: '/exports/orders.csv',
+        writes: [],
+      },
+    ]);
+    expect(
+      fwExplainScopeAuditFacts(
+        'fw-explain/v1\nUNSCOPED\nUNSCOPED QUERY cart domain=cart scope=unscoped site=src/app.ts:1 missing tenant filter\n',
+        'UNSCOPED',
+      ),
+    ).toEqual([
+      {
+        domain: 'cart',
+        reason: 'missing tenant filter',
+        scope: 'unscoped',
+        site: 'src/app.ts:1',
+        target: 'cart',
+        targetKind: 'QUERY',
+      },
+    ]);
     expect(assertTypeScriptProgramHasNoDiagnostics).toBeTypeOf('function');
     expect(typeScriptInterfaceMemberTypes).toBeTypeOf('function');
     expect(
@@ -469,7 +535,10 @@ type _PublicSubpathTypes = [
   DiagnosticHelpFact,
   DiagnosticOutputFact,
   ViteDiagnosticMessageFacts,
+  FwExplainEndpointFact,
   FwExplainOutput,
+  FwExplainScopeAuditFact,
+  FwExplainUpdateConsumerFact,
   FwExportError,
   FwExportHtmlArtifact,
   FwExportOutput,

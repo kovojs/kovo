@@ -6,6 +6,17 @@ import { fileURLToPath } from 'node:url';
 import type { TouchGraph } from '@jiso/drizzle';
 import { createJisoTestHarness } from '@jiso/test/harness';
 import {
+  fwExplainEndpointFacts,
+  fwExplainField,
+  fwExplainListField,
+  fwExplainOptimisticStatuses,
+  fwExplainScopeAuditFacts,
+  fwExplainSummary,
+  fwExplainUpdateConsumerMap,
+  fwExplainUpdateConsumers,
+  parseFwExplainOutput,
+} from '@jiso/test/fw-explain-fixtures';
+import {
   fwFragmentFacts,
   fwQueryFacts,
   htmlDocumentFacts,
@@ -41,53 +52,6 @@ function commerceFile(name: string, type: string, size: number) {
   };
 }
 
-function explainLine(output: string, prefix: string) {
-  const line = output.split('\n').find((item) => item.startsWith(prefix));
-
-  if (!line) {
-    throw new Error(`Missing fw explain line: ${prefix}`);
-  }
-
-  return line.slice(prefix.length);
-}
-
-function explainList(value: string) {
-  return value === '-' ? [] : value.split(',');
-}
-
-function mutationUpdateConsumers(output: string) {
-  const updates = explainLine(output, 'updates: ');
-
-  if (updates === '-') {
-    return new Map<string, string[]>();
-  }
-
-  const result = new Map<string, string[]>();
-  for (const entry of updates.split('; ')) {
-    const [query, consumers = ''] = entry.split('->');
-    if (!query) {
-      throw new Error(`Malformed fw explain update entry: ${entry}`);
-    }
-
-    result.set(query, explainList(consumers));
-  }
-
-  return result;
-}
-
-function optimisticStatuses(output: string) {
-  return new Map(
-    output
-      .split('\n')
-      .filter((line) => line.startsWith('OPTIMISTIC '))
-      .map((line) => {
-        const [, query, status] = line.split(' ');
-
-        return [query, status] as const;
-      }),
-  );
-}
-
 function fragmentTargetForQuery(query: string) {
   const component = commerceGraph.components.find((item) => item.queries.includes(query));
   const fragment = component?.fragments[0];
@@ -104,7 +68,7 @@ function invalidatedByQueries() {
     commerceGraph.queries.map((query) => {
       const explanation = fwExplain(commerceGraph, { kind: 'query', target: query.query });
 
-      return [query.query, explainList(explainLine(explanation.output, 'invalidated-by: '))];
+      return [query.query, fwExplainListField(explanation.output, 'invalidated-by')];
     }),
   );
 }
@@ -211,155 +175,218 @@ describe('commerce source-truth graph acceptance', () => {
       exitCode: 0,
       output: 'fw-check/v1\nOK\n',
     });
-    expect(fwCheck(commerceGraph).output).not.toContain('FW310');
+    const cartAddExplain = fwExplain(commerceGraph, {
+      kind: 'mutation',
+      optimistic: true,
+      target: 'cart/add',
+    });
+    const receiptExplain = fwExplain(commerceGraph, {
+      kind: 'mutation',
+      target: 'order/receipt',
+    });
+    const receiptOptimisticExplain = fwExplain(commerceGraph, {
+      kind: 'mutation',
+      optimistic: true,
+      target: 'order/receipt',
+    });
 
-    expect(
-      fwExplain(commerceGraph, { kind: 'mutation', optimistic: true, target: 'cart/add' }),
-    ).toEqual({
-      exitCode: 0,
-      output: [
-        'fw-explain/v1',
-        'MUTATION cart/add',
-        'guards: authed,rateLimit:session',
-        'session: commerceSession',
-        'input-fields: productId,quantity',
-        'writes: cart,product,order',
-        'invalidates: cart,product,order',
-        'manual-invalidates: -',
-        'updates: cart->component:CartBadge,page:/cart; orderHistory->component:OrderHistory,page:/cart; productGrid->component:ProductGrid,page:/cart',
-        'OPTIMISTIC cart hand-written',
-        'OPTIMISTIC productGrid await-fragment',
-        'OPTIMISTIC orderHistory await-fragment',
-        'OPTIMISTIC-SUMMARY total=3 hand-written=1 await-fragment=2 UNHANDLED=0',
-        '',
-      ].join('\n'),
+    expect(cartAddExplain.exitCode).toBe(0);
+    expect(parseFwExplainOutput(cartAddExplain.output).subject).toBe('MUTATION cart/add');
+    expect(fwExplainListField(cartAddExplain.output, 'guards')).toEqual([
+      'authed',
+      'rateLimit:session',
+    ]);
+    expect(fwExplainField(cartAddExplain.output, 'session')).toBe('commerceSession');
+    expect(fwExplainListField(cartAddExplain.output, 'input-fields')).toEqual([
+      'productId',
+      'quantity',
+    ]);
+    expect(fwExplainListField(cartAddExplain.output, 'writes')).toEqual([
+      'cart',
+      'product',
+      'order',
+    ]);
+    expect(fwExplainListField(cartAddExplain.output, 'invalidates')).toEqual([
+      'cart',
+      'product',
+      'order',
+    ]);
+    expect(fwExplainListField(cartAddExplain.output, 'manual-invalidates')).toEqual([]);
+    expect(fwExplainUpdateConsumers(cartAddExplain.output)).toEqual([
+      { consumers: ['component:CartBadge', 'page:/cart'], query: 'cart' },
+      { consumers: ['component:OrderHistory', 'page:/cart'], query: 'orderHistory' },
+      { consumers: ['component:ProductGrid', 'page:/cart'], query: 'productGrid' },
+    ]);
+    expect(fwExplainOptimisticStatuses(cartAddExplain.output)).toEqual({
+      cart: 'hand-written',
+      orderHistory: 'await-fragment',
+      productGrid: 'await-fragment',
     });
-    expect(fwExplain(commerceGraph, { kind: 'mutation', target: 'order/receipt' })).toEqual({
-      exitCode: 0,
-      output: [
-        'fw-explain/v1',
-        'MUTATION order/receipt',
-        'guards: authed,rateLimit:session',
-        'session: commerceSession',
-        'enctype: multipart/form-data',
-        'input-fields: orderId,receipt',
-        'file-fields: receipt',
-        'writes: attachment',
-        'invalidates: -',
-        'manual-invalidates: -',
-        'updates: -',
-        '',
-      ].join('\n'),
+    expect(fwExplainSummary(cartAddExplain.output, 'OPTIMISTIC-SUMMARY')).toEqual({
+      UNHANDLED: '0',
+      'await-fragment': '2',
+      'hand-written': '1',
+      total: '3',
     });
-    expect(
-      fwExplain(commerceGraph, { kind: 'mutation', optimistic: true, target: 'order/receipt' }),
-    ).toEqual({
-      exitCode: 0,
-      output: [
-        'fw-explain/v1',
-        'MUTATION order/receipt',
-        'guards: authed,rateLimit:session',
-        'session: commerceSession',
-        'enctype: multipart/form-data',
-        'input-fields: orderId,receipt',
-        'file-fields: receipt',
-        'writes: attachment',
-        'invalidates: -',
-        'manual-invalidates: -',
-        'updates: -',
-        'OPTIMISTIC-SUMMARY total=0 hand-written=0 await-fragment=0 UNHANDLED=0',
-        '',
-      ].join('\n'),
+
+    expect(receiptExplain.exitCode).toBe(0);
+    expect(parseFwExplainOutput(receiptExplain.output).subject).toBe('MUTATION order/receipt');
+    expect(fwExplainListField(receiptExplain.output, 'guards')).toEqual([
+      'authed',
+      'rateLimit:session',
+    ]);
+    expect(fwExplainField(receiptExplain.output, 'session')).toBe('commerceSession');
+    expect(fwExplainField(receiptExplain.output, 'enctype')).toBe('multipart/form-data');
+    expect(fwExplainListField(receiptExplain.output, 'input-fields')).toEqual([
+      'orderId',
+      'receipt',
+    ]);
+    expect(fwExplainListField(receiptExplain.output, 'file-fields')).toEqual(['receipt']);
+    expect(fwExplainListField(receiptExplain.output, 'writes')).toEqual(['attachment']);
+    expect(fwExplainListField(receiptExplain.output, 'invalidates')).toEqual([]);
+    expect(fwExplainListField(receiptExplain.output, 'manual-invalidates')).toEqual([]);
+    expect(fwExplainUpdateConsumers(receiptExplain.output)).toEqual([]);
+    expect(fwExplainSummary(receiptOptimisticExplain.output, 'OPTIMISTIC-SUMMARY')).toEqual({
+      UNHANDLED: '0',
+      'await-fragment': '0',
+      'hand-written': '0',
+      total: '0',
     });
-    expect(fwExplain(commerceGraph, { kind: 'query', target: 'cart' })).toEqual({
-      exitCode: 0,
-      output:
-        'fw-explain/v1\nQUERY cart\nreads: cart\nconsumers: component:CartBadge,page:/cart\ninvalidated-by: cart/add\ndomain-writes: cart.addItem\n',
-    });
-    expect(fwExplain(commerceGraph, { kind: 'query', target: 'productGrid' })).toEqual({
-      exitCode: 0,
-      output:
-        'fw-explain/v1\nQUERY productGrid\nreads: product\nconsumers: component:ProductGrid,page:/cart\ninvalidated-by: cart/add\ndomain-writes: cart.addItem\n',
-    });
-    expect(fwExplain(commerceGraph, { kind: 'query', target: 'orderHistory' })).toEqual({
-      exitCode: 0,
-      output:
-        'fw-explain/v1\nQUERY orderHistory\nreads: order\nconsumers: component:OrderHistory,page:/cart\ninvalidated-by: cart/add\ndomain-writes: cart.addItem,payment.webhook\n',
-    });
-    expect(fwExplain(commerceGraph, { kind: 'page', target: '/cart' })).toEqual({
-      exitCode: 0,
-      output: [
-        'fw-explain/v1',
-        'PAGE /cart',
-        'prefetch: false',
-        'meta: title=Jiso Commerce (0) description=Browse products and checkout with 0 verifiable cart item. image=-',
-        'i18n: en-US:cartLabel,productStock',
-        'modulepreloads: -',
-        'stylesheets: /assets/tailwind.css',
-        'queries: cart,productGrid,orderHistory',
-        'view-transitions: -',
-        '',
-      ].join('\n'),
-    });
-    expect(fwExplain(commerceGraph, { unguarded: true })).toEqual({
-      exitCode: 0,
-      output: 'fw-explain/v1\nUNGUARDED\nSUMMARY total=0\n',
-    });
-    expect(fwExplain(commerceGraph, { endpoints: true })).toEqual({
-      exitCode: 0,
-      output: [
-        'fw-explain/v1',
-        'ENDPOINTS',
-        'ENDPOINT attachments/download method=GET path=/attachments/:id mount=exact auth=authed csrf=checked writes=-',
-        'ENDPOINT orders/export method=GET path=/exports/orders.csv mount=exact auth=authed csrf=checked writes=-',
-        'ENDPOINT payment/stripe method=POST path=/webhooks/stripe mount=exact auth=verifier:stripe:v1:hmac-sha256 csrf=exempt:payment/stripe webhook verifier stripe:v1:hmac-sha256 writes=order',
-        'SUMMARY total=3',
-        '',
-      ].join('\n'),
-    });
-    expect(fwExplain(commerceGraph, { unscoped: true })).toEqual({
-      exitCode: 0,
-      output: 'fw-explain/v1\nUNSCOPED\nSUMMARY total=0\n',
-    });
-    expect(
-      fwExplain(
-        {
-          ...commerceGraph,
-          scopeAudits: commerceGraph.scopeAudits.map((fact, index) =>
-            index === 0
-              ? {
-                  ...fact,
-                  scope: 'unscoped',
-                  site: 'examples/commerce/src/app.ts:deliberately-unscoped-download',
-                }
-              : fact,
-          ),
-        },
-        { unscoped: true },
-      ),
-    ).toEqual({
-      exitCode: 0,
-      output: [
-        'fw-explain/v1',
-        'UNSCOPED',
-        'UNSCOPED QUERY attachments/download domain=attachment scope=unscoped site=examples/commerce/src/app.ts:deliberately-unscoped-download attachment download filters id plus session user',
-        'SUMMARY total=1',
-        '',
-      ].join('\n'),
-    });
+
+    const queryExplainExpectations = {
+      cart: {
+        consumers: ['component:CartBadge', 'page:/cart'],
+        domainWrites: ['cart.addItem'],
+        reads: ['cart'],
+      },
+      orderHistory: {
+        consumers: ['component:OrderHistory', 'page:/cart'],
+        domainWrites: ['cart.addItem', 'payment.webhook'],
+        reads: ['order'],
+      },
+      productGrid: {
+        consumers: ['component:ProductGrid', 'page:/cart'],
+        domainWrites: ['cart.addItem'],
+        reads: ['product'],
+      },
+    };
+    for (const [query, expected] of Object.entries(queryExplainExpectations)) {
+      const explanation = fwExplain(commerceGraph, { kind: 'query', target: query });
+
+      expect(explanation.exitCode).toBe(0);
+      expect(parseFwExplainOutput(explanation.output).subject).toBe(`QUERY ${query}`);
+      expect(fwExplainListField(explanation.output, 'reads')).toEqual(expected.reads);
+      expect(fwExplainListField(explanation.output, 'consumers')).toEqual(expected.consumers);
+      expect(fwExplainListField(explanation.output, 'invalidated-by')).toEqual(['cart/add']);
+      expect(fwExplainListField(explanation.output, 'domain-writes')).toEqual(
+        expected.domainWrites,
+      );
+    }
+
+    const pageExplain = fwExplain(commerceGraph, { kind: 'page', target: '/cart' });
+    expect(pageExplain.exitCode).toBe(0);
+    expect(parseFwExplainOutput(pageExplain.output).subject).toBe('PAGE /cart');
+    expect(fwExplainField(pageExplain.output, 'prefetch')).toBe('false');
+    expect(fwExplainField(pageExplain.output, 'meta')).toBe(
+      'title=Jiso Commerce (0) description=Browse products and checkout with 0 verifiable cart item. image=-',
+    );
+    expect(fwExplainListField(pageExplain.output, 'i18n')).toEqual([
+      'en-US:cartLabel',
+      'productStock',
+    ]);
+    expect(fwExplainListField(pageExplain.output, 'modulepreloads')).toEqual([]);
+    expect(fwExplainListField(pageExplain.output, 'stylesheets')).toEqual(['/assets/tailwind.css']);
+    expect(fwExplainListField(pageExplain.output, 'queries')).toEqual([
+      'cart',
+      'productGrid',
+      'orderHistory',
+    ]);
+    expect(fwExplainListField(pageExplain.output, 'view-transitions')).toEqual([]);
+
+    const unguardedExplain = fwExplain(commerceGraph, { unguarded: true });
+    expect(unguardedExplain.exitCode).toBe(0);
+    expect(parseFwExplainOutput(unguardedExplain.output).subject).toBe('UNGUARDED');
+    expect(fwExplainSummary(unguardedExplain.output, 'SUMMARY')).toEqual({ total: '0' });
+
+    const endpointsExplain = fwExplain(commerceGraph, { endpoints: true });
+    expect(endpointsExplain.exitCode).toBe(0);
+    expect(parseFwExplainOutput(endpointsExplain.output).subject).toBe('ENDPOINTS');
+    expect(fwExplainEndpointFacts(endpointsExplain.output)).toEqual([
+      {
+        auth: 'authed',
+        csrf: 'checked',
+        endpoint: 'attachments/download',
+        method: 'GET',
+        mount: 'exact',
+        path: '/attachments/:id',
+        writes: [],
+      },
+      {
+        auth: 'authed',
+        csrf: 'checked',
+        endpoint: 'orders/export',
+        method: 'GET',
+        mount: 'exact',
+        path: '/exports/orders.csv',
+        writes: [],
+      },
+      {
+        auth: 'verifier:stripe:v1:hmac-sha256',
+        csrf: 'exempt:payment/stripe webhook verifier stripe:v1:hmac-sha256',
+        endpoint: 'payment/stripe',
+        method: 'POST',
+        mount: 'exact',
+        path: '/webhooks/stripe',
+        writes: ['order'],
+      },
+    ]);
+    expect(fwExplainSummary(endpointsExplain.output, 'SUMMARY')).toEqual({ total: '3' });
+
+    const unscopedExplain = fwExplain(commerceGraph, { unscoped: true });
+    expect(unscopedExplain.exitCode).toBe(0);
+    expect(parseFwExplainOutput(unscopedExplain.output).subject).toBe('UNSCOPED');
+    expect(fwExplainSummary(unscopedExplain.output, 'SUMMARY')).toEqual({ total: '0' });
+
+    const unscopedAuditExplain = fwExplain(
+      {
+        ...commerceGraph,
+        scopeAudits: commerceGraph.scopeAudits.map((fact, index) =>
+          index === 0
+            ? {
+                ...fact,
+                scope: 'unscoped',
+                site: 'examples/commerce/src/app.ts:deliberately-unscoped-download',
+              }
+            : fact,
+        ),
+      },
+      { unscoped: true },
+    );
+    expect(unscopedAuditExplain.exitCode).toBe(0);
+    expect(fwExplainScopeAuditFacts(unscopedAuditExplain.output, 'UNSCOPED')).toEqual([
+      {
+        domain: 'attachment',
+        reason: 'attachment download filters id plus session user',
+        scope: 'unscoped',
+        site: 'examples/commerce/src/app.ts:deliberately-unscoped-download',
+        target: 'attachments/download',
+        targetKind: 'QUERY',
+      },
+    ]);
+    expect(fwExplainSummary(unscopedAuditExplain.output, 'SUMMARY')).toEqual({ total: '1' });
   });
 
   it('answers cart/add update intent mechanically from fw explain output', () => {
     const mutation = fwExplain(commerceGraph, { kind: 'mutation', target: 'cart/add' });
     const page = fwExplain(commerceGraph, { kind: 'page', target: '/cart' });
-    const updates = mutationUpdateConsumers(mutation.output);
-    const pageQueries = explainList(explainLine(page.output, 'queries: '));
+    const updates = fwExplainUpdateConsumerMap(mutation.output);
+    const pageQueries = fwExplainListField(page.output, 'queries');
 
     expect(pageQueries).toEqual(['cart', 'productGrid', 'orderHistory']);
 
     for (const query of pageQueries) {
       const queryExplain = fwExplain(commerceGraph, { kind: 'query', target: query });
-      const consumers = explainList(explainLine(queryExplain.output, 'consumers: '));
+      const consumers = fwExplainListField(queryExplain.output, 'consumers');
       const componentConsumers = consumers.filter((consumer) => consumer.startsWith('component:'));
 
       expect(updates.get(query)).toEqual(expect.arrayContaining(componentConsumers));
@@ -408,8 +435,8 @@ describe('commerce source-truth graph acceptance', () => {
         optimistic: true,
         target: mutation.key,
       });
-      const statuses = optimisticStatuses(explanation.output);
-      const affectedQueries = [...mutationUpdateConsumers(explanation.output).keys()];
+      const statuses = fwExplainOptimisticStatuses(explanation.output);
+      const affectedQueries = [...fwExplainUpdateConsumerMap(explanation.output).keys()];
       const mutationMatrix: Record<string, string> = {};
       matrix[mutation.key] = mutationMatrix;
 
@@ -419,15 +446,15 @@ describe('commerce source-truth graph acceptance', () => {
 
         expect(queryInvalidators.includes(mutation.key)).toBe(invalidated);
         if (invalidated) {
-          expect(statuses.get(query.query)).toBeDefined();
-          expect(statuses.get(query.query)).not.toBe('UNHANDLED');
-          mutationMatrix[query.query] = statuses.get(query.query) ?? 'missing';
+          expect(statuses[query.query]).toBeDefined();
+          expect(statuses[query.query]).not.toBe('UNHANDLED');
+          mutationMatrix[query.query] = statuses[query.query] ?? 'missing';
         } else {
-          expect(statuses.get(query.query)).toBeUndefined();
+          expect(statuses[query.query]).toBeUndefined();
           mutationMatrix[query.query] = 'no-invalidation';
         }
       }
-      expect(explainLine(explanation.output, 'OPTIMISTIC-SUMMARY ')).toContain('UNHANDLED=0');
+      expect(fwExplainSummary(explanation.output, 'OPTIMISTIC-SUMMARY').UNHANDLED).toBe('0');
     }
 
     // SPEC.md §10.4/§16.5: every mutation/query cell either has an explicit
@@ -462,11 +489,11 @@ describe('commerce source-truth graph acceptance', () => {
       optimistic: true,
       target: 'order/receipt',
     });
-    const affectedQueries = [...mutationUpdateConsumers(addToCartExplanation.output).keys()];
+    const affectedQueries = [...fwExplainUpdateConsumerMap(addToCartExplanation.output).keys()];
     const uploadReceiptAffectedQueries = [
-      ...mutationUpdateConsumers(uploadReceiptExplanation.output).keys(),
+      ...fwExplainUpdateConsumerMap(uploadReceiptExplanation.output).keys(),
     ];
-    const statuses = optimisticStatuses(addToCartExplanation.output);
+    const statuses = fwExplainOptimisticStatuses(addToCartExplanation.output);
     const db = createCommerceDb();
     const harness = createJisoTestHarness({
       db,
@@ -502,14 +529,14 @@ describe('commerce source-truth graph acceptance', () => {
 
     // SPEC.md §10.4/§11.2: every invalidated query pair must have an explicit
     // optimistic status, and executed writes must stay within the static graph.
-    expect(Object.fromEntries(statuses)).toEqual({
+    expect(statuses).toEqual({
       cart: 'hand-written',
       orderHistory: 'await-fragment',
       productGrid: 'await-fragment',
     });
     expect(uploadReceiptAffectedQueries).toEqual([]);
-    expect(explainLine(uploadReceiptExplanation.output, 'invalidates: ')).toBe('-');
-    expect(explainLine(uploadReceiptExplanation.output, 'updates: ')).toBe('-');
+    expect(fwExplainListField(uploadReceiptExplanation.output, 'invalidates')).toEqual([]);
+    expect(fwExplainUpdateConsumers(uploadReceiptExplanation.output)).toEqual([]);
     await expect(
       harness.exec(
         addToCart,

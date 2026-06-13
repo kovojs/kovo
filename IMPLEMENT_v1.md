@@ -567,6 +567,14 @@ vitest.browser.config.ts --run packages/runtime/src/index.browser.test.ts`, and
       commerce/starter graph-answerability gates instead of local prefix slicing. Same-session
       evidence: `pnpm exec vitest --run packages/test/src`, `pnpm exec vp run build`, and
       `node --test --test-name-pattern "P10 commerce invalidation is expressed through graph facts|P10 commerce graph assertions answer behavior mechanically|P10 starter wires graph assertions into CI|P4 commerce touch graph is a committed generated artifact|P1 fragment targets emit typed registry facts|S1 production build proves the compiler 1:1 emit contract" tests/fw-check.node.mjs`.
+      Additional evidence 2026-06-13: `@jiso/test/fw-explain-fixtures`
+      now owns list fields, optimistic status maps, update-consumer facts, endpoint facts, and
+      unscoped/unguarded audit facts for SPEC §5.3 output assertions. Commerce source-truth and
+      `fw-check` gates consume those facts instead of raw sentinels, local `fw-explain` parsers,
+      and generated-output string snapshots. Same-session evidence:
+      `pnpm exec vitest --run packages/test/src/fw-explain-fixtures.test.ts packages/test/src/package-exports.test.ts`,
+      `pnpm exec vitest --run examples/commerce/src/source-truth.test.ts`, `pnpm run check:build`,
+      and `node --test --test-name-pattern "P10 commerce invalidation is expressed through graph facts|P10 commerce graph assertions answer behavior mechanically|P10 starter wires graph assertions into CI|P4 commerce touch graph is a committed generated artifact" tests/fw-check.node.mjs`.
 - [x] P9 `@jiso/test` has pglite-backed harnessing, static-vs-observed write/read verification, FW402/FW403/FW404/FW405/FW407/FW408/FW410 diagnostics, raw pglite interception, and structural optimistic property checks.
       Additional evidence 2026-06-13: `@jiso/test/typescript-fixtures`
       now owns reusable virtual TypeScript program diagnostics and interface-member type facts

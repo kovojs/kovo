@@ -64,9 +64,10 @@ import {
 import { viteDiagnosticMessageFacts } from '../packages/test/src/diagnostic-output-fixtures.ts';
 import {
   fwExplainField,
-  fwExplainRecords,
+  fwExplainListField,
+  fwExplainOptimisticStatuses,
   fwExplainSummary,
-  fwExplainUpdateTargets,
+  fwExplainUpdateConsumers,
 } from '../packages/test/src/fw-explain-fixtures.ts';
 import { parseFwExportOutput } from '../packages/test/src/fw-export-fixtures.ts';
 import {
@@ -482,11 +483,11 @@ void test('P10 commerce invalidation is expressed through graph facts', async ()
       writes: ['cart', 'product', 'order'],
     },
   );
-  assert.equal(fwExplainField(cartAddExplain, 'manual-invalidates'), '-');
-  assert.deepEqual(fwExplainUpdateTargets(cartAddExplain), [
-    'cart->component:CartBadge,page:/cart',
-    'orderHistory->component:OrderHistory,page:/cart',
-    'productGrid->component:ProductGrid,page:/cart',
+  assert.deepEqual(fwExplainListField(cartAddExplain, 'manual-invalidates'), []);
+  assert.deepEqual(fwExplainUpdateConsumers(cartAddExplain), [
+    { consumers: ['component:CartBadge', 'page:/cart'], query: 'cart' },
+    { consumers: ['component:OrderHistory', 'page:/cart'], query: 'orderHistory' },
+    { consumers: ['component:ProductGrid', 'page:/cart'], query: 'productGrid' },
   ]);
 });
 
@@ -3067,21 +3068,29 @@ void test('P10 commerce graph assertions answer behavior mechanically', async ()
   }).output;
 
   assert.deepEqual(fwCheck(commerceGraph), { exitCode: 0, output: 'fw-check/v1\nOK\n' });
-  assert.equal(fwExplainField(cartQueryExplain, 'consumers'), 'component:CartBadge,page:/cart');
-  assert.equal(fwExplainField(cartQueryExplain, 'invalidated-by'), 'cart/add');
-  assert.equal(fwExplainField(cartQueryExplain, 'domain-writes'), 'cart.addItem');
-  assert.equal(fwExplainField(cartAddExplain, 'session'), 'commerceSession');
-  assert.equal(fwExplainField(cartAddExplain, 'input-fields'), 'productId,quantity');
-  assert.equal(fwExplainField(cartAddExplain, 'writes'), 'cart,product,order');
-  assert.equal(fwExplainField(cartAddExplain, 'invalidates'), 'cart,product,order');
-  assert.deepEqual(fwExplainUpdateTargets(cartAddExplain), [
-    'cart->component:CartBadge,page:/cart',
-    'orderHistory->component:OrderHistory,page:/cart',
-    'productGrid->component:ProductGrid,page:/cart',
+  assert.deepEqual(fwExplainListField(cartQueryExplain, 'consumers'), [
+    'component:CartBadge',
+    'page:/cart',
   ]);
+  assert.deepEqual(fwExplainListField(cartQueryExplain, 'invalidated-by'), ['cart/add']);
+  assert.deepEqual(fwExplainListField(cartQueryExplain, 'domain-writes'), ['cart.addItem']);
+  assert.equal(fwExplainField(cartAddExplain, 'session'), 'commerceSession');
+  assert.deepEqual(fwExplainListField(cartAddExplain, 'input-fields'), ['productId', 'quantity']);
+  assert.deepEqual(fwExplainListField(cartAddExplain, 'writes'), ['cart', 'product', 'order']);
+  assert.deepEqual(fwExplainListField(cartAddExplain, 'invalidates'), ['cart', 'product', 'order']);
+  assert.deepEqual(fwExplainUpdateConsumers(cartAddExplain), [
+    { consumers: ['component:CartBadge', 'page:/cart'], query: 'cart' },
+    { consumers: ['component:OrderHistory', 'page:/cart'], query: 'orderHistory' },
+    { consumers: ['component:ProductGrid', 'page:/cart'], query: 'productGrid' },
+  ]);
+  assert.deepEqual(fwExplainOptimisticStatuses(cartAddExplain), {
+    cart: 'hand-written',
+    orderHistory: 'await-fragment',
+    productGrid: 'await-fragment',
+  });
   assert.equal(fwExplainSummary(cartAddExplain, 'OPTIMISTIC-SUMMARY').UNHANDLED, '0');
-  assert.equal(fwExplainField(uploadReceiptExplain, 'file-fields'), 'receipt');
-  assert.equal(fwExplainField(uploadReceiptExplain, 'invalidates'), '-');
+  assert.deepEqual(fwExplainListField(uploadReceiptExplain, 'file-fields'), ['receipt']);
+  assert.deepEqual(fwExplainListField(uploadReceiptExplain, 'invalidates'), []);
   assert.equal(
     diagnosticDefinitions.FW310.message,
     'Invalidated query lacks optimistic transform.',
@@ -3273,26 +3282,27 @@ void test('P10 starter wires graph assertions into CI', async () => {
   assert.deepEqual(starterGraph.touchGraph?.['cart.addItem']?.touches, [
     { domain: 'cart', keys: null, site: 'src/cart.ts:12', via: 'cart_items' },
   ]);
-  assert.equal(
-    fwExplainField(cartQueryExplain, 'consumers'),
-    'component:CartBadge,component:CartPanel,page:/cart',
-  );
-  assert.equal(fwExplainField(cartQueryExplain, 'invalidated-by'), 'cart/add');
-  assert.equal(fwExplainField(cartQueryExplain, 'domain-writes'), 'cart.addItem');
-  assert.equal(fwExplainField(cartAddExplain, 'session'), 'starterSession');
-  assert.equal(fwExplainField(cartAddExplain, 'input-fields'), 'productId,quantity');
-  assert.deepEqual(fwExplainUpdateTargets(cartAddExplain), [
-    'cart->component:CartBadge,component:CartPanel,page:/cart',
+  assert.deepEqual(fwExplainListField(cartQueryExplain, 'consumers'), [
+    'component:CartBadge',
+    'component:CartPanel',
+    'page:/cart',
   ]);
-  assert.deepEqual(fwExplainRecords(cartAddExplain, 'OPTIMISTIC'), ['cart await-fragment']);
+  assert.deepEqual(fwExplainListField(cartQueryExplain, 'invalidated-by'), ['cart/add']);
+  assert.deepEqual(fwExplainListField(cartQueryExplain, 'domain-writes'), ['cart.addItem']);
+  assert.equal(fwExplainField(cartAddExplain, 'session'), 'starterSession');
+  assert.deepEqual(fwExplainListField(cartAddExplain, 'input-fields'), ['productId', 'quantity']);
+  assert.deepEqual(fwExplainUpdateConsumers(cartAddExplain), [
+    { consumers: ['component:CartBadge', 'component:CartPanel', 'page:/cart'], query: 'cart' },
+  ]);
+  assert.deepEqual(fwExplainOptimisticStatuses(cartAddExplain), { cart: 'await-fragment' });
   assert.equal(fwExplainSummary(cartAddExplain, 'OPTIMISTIC-SUMMARY').UNHANDLED, '0');
   assert.equal(
     fwExplainField(cartPageExplain, 'meta'),
     'title=Jiso Starter Cart description=Starter cart backed by query data. image=-',
   );
-  assert.equal(fwExplainField(cartPageExplain, 'i18n'), 'en-US:cartTitle');
-  assert.equal(fwExplainField(cartPageExplain, 'queries'), 'cart');
-  assert.equal(fwExplainField(cartPageExplain, 'stylesheets'), '/src/styles.css');
+  assert.deepEqual(fwExplainListField(cartPageExplain, 'i18n'), ['en-US:cartTitle']);
+  assert.deepEqual(fwExplainListField(cartPageExplain, 'queries'), ['cart']);
+  assert.deepEqual(fwExplainListField(cartPageExplain, 'stylesheets'), ['/src/styles.css']);
 
   assert.deepEqual(
     {
@@ -5327,12 +5337,12 @@ void test('P4 commerce touch graph is a committed generated artifact', async () 
   // SPEC §11.1/§11.2: the committed static graph must stay source-derived
   // because runtime verification checks observed effects against these facts.
   assert.deepEqual(fwCheck(commerceGraph), { exitCode: 0, output: 'fw-check/v1\nOK\n' });
-  assert.equal(
-    fwExplainField(
+  assert.deepEqual(
+    fwExplainListField(
       fwExplain(commerceGraph, { kind: 'query', target: 'cart' }).output,
       'domain-writes',
     ),
-    'cart.addItem',
+    ['cart.addItem'],
   );
   assert.deepEqual(deriveRegistryFactsFromGraph(commerceGraph).invalidations, {
     'cart/add': ['cart', 'orderHistory', 'productGrid'],

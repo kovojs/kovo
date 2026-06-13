@@ -46,6 +46,9 @@ Current state:
   template, fw-explain, TypeScript, wire, and touch-graph provenance.
 - Recent harness work added `@jiso/test/touch-graph-fixtures`, source-site line resolution, and
   commerce touch-graph provenance checks that resolve generated sites back to real source lines.
+- Shared `fw-explain` fixtures now cover list fields, optimistic statuses, update consumers,
+  endpoint facts, and scope-audit facts; selected commerce and `fw-check` gates consume those
+  facts instead of raw sentinel/string snapshots.
 - Integration fix: `fw-check` now uses the canonical
   `applyDeferredStreamResponseToRuntime` API after runtime compatibility export deletion.
 
@@ -60,10 +63,11 @@ Open:
 
 Latest focused evidence:
 
-- `pnpm exec vitest --run packages/test/src/source-fixtures.test.ts packages/test/src/touch-graph-fixtures.test.ts packages/test/src/package-exports.test.ts examples/commerce/src/source-truth.test.ts`
+- `pnpm exec vitest --run packages/test/src/fw-explain-fixtures.test.ts packages/test/src/package-exports.test.ts`
+- `pnpm exec vitest --run examples/commerce/src/source-truth.test.ts`
 - `pnpm run check:build`
-- `node --test --test-name-pattern "P4 commerce touch graph|P10 commerce graph assertions" tests/fw-check.node.mjs`
-- `pnpm exec vp check packages/test/package.json packages/test/src/source-fixtures.ts packages/test/src/source-fixtures.test.ts packages/test/src/touch-graph-fixtures.ts packages/test/src/touch-graph-fixtures.test.ts packages/test/src/package-exports.test.ts examples/commerce/src/source-truth.test.ts tests/fw-check.node.mjs IMPLEMENT_v1.md plans/codebase-quality-round2.md`
+- `node --test --test-name-pattern "P10 commerce invalidation is expressed through graph facts|P10 commerce graph assertions answer behavior mechanically|P10 starter wires graph assertions into CI|P4 commerce touch graph is a committed generated artifact" tests/fw-check.node.mjs`
+- `pnpm exec vp check packages/test/src/fw-explain-fixtures.ts packages/test/src/fw-explain-fixtures.test.ts packages/test/src/package-exports.test.ts tests/fw-check.node.mjs examples/commerce/src/source-truth.test.ts IMPLEMENT_v1.md plans/codebase-quality-round2.md`
 - `git diff --check`
 
 ## Phase 2 - Compiler IR
@@ -206,6 +210,8 @@ Current state:
   output, source-site provenance, and app-shell command/export behavior.
 - `@jiso/test` includes reusable fixture seams for generated modules, fw-explain, TypeScript,
   source/project facts, commands, starter templates, wire, static export, and touch graphs.
+- Commerce source-truth no longer owns local `fw-explain` parsing helpers for the currently
+  covered graph/update/scope facts.
 - Verifier proxy SQL coverage handles string SQL and structured `{ text }`/`{ sql }` statement
   objects for current gates.
 
