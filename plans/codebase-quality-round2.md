@@ -154,8 +154,8 @@ parser/apply helpers. Runtime test coverage has moved out of `index.test.ts` int
 query/apply/loader/optimism/morph/delegated-handler integration tests; the broad barrel test is now
 focused on public loader installation smoke only, while loader query hydration, enhanced mutations,
 and disposal live in dedicated runtime tests. Inline readable/minified/generated/extracted loader
-parity coverage now owns inline enhanced-form, delegated handler, and handler-error behavior in
-`inline-loader.test.ts`.
+parity coverage now owns parser-helper extraction in `inline-loader-parser-parity.test.ts` and
+inline enhanced-form, delegated handler, and handler-error behavior in `inline-loader.test.ts`.
 Enhanced submit, broadcast replay, deferred stream chunks, DOM apply, and store-only apply now parse
 transport mutation bodies first and call `applyMutationResponseChunksToRuntime` as the single
 decoded query/fragment apply primitive; the internal `applyMutationResponseBodyToRuntime`
@@ -165,7 +165,19 @@ DOM bindings through `queryPlans` on the shared runtime apply path.
 
 - [x] Audit for any remaining internal compatibility-style apply wrappers after `applyFragmentQueryBody`
       deletion.
-- [ ] Keep inline-loader readable/minified output mechanically tied to canonical parser helpers.
+- [x] Keep inline-loader readable/minified output mechanically tied to canonical parser helpers.
+      Evidence 2026-06-13: `packages/runtime/src/inline-loader-build.ts` generates
+      `inlineJisoLoaderInstallerReadableSource` through
+      `buildInlineJisoLoaderInstallerReadableSource(inlineWireParserReadableSource)`, where
+      `inlineWireParserReadableSource` is extracted from `wire-parser.ts`. New
+      `packages/runtime/src/inline-loader-parser-parity.test.ts` owns readable generation,
+      helper-closure extraction, readable/minified parser embed drift failures, and rejection of
+      non-self-contained helper dependencies. Verified by `pnpm exec vitest --run
+packages/runtime/src/inline-loader-build.test.ts
+packages/runtime/src/inline-loader-parser-parity.test.ts
+packages/runtime/src/inline-loader.test.ts
+packages/runtime/src/inline-js-minifier.test.ts` and
+      `pnpm --filter @jiso/runtime run check:inline-loader`.
 - [ ] Continue splitting large runtime tests along apply/query/loader/minifier seams.
       Evidence 2026-06-13: `packages/runtime/src/index.test.ts` now owns only public barrel
       loader smoke. `packages/runtime/src/loader-query-hydration.test.ts`,
@@ -176,6 +188,11 @@ DOM bindings through `queryPlans` on the shared runtime apply path.
 packages/runtime/src/loader-query-hydration.test.ts
 packages/runtime/src/loader-enhanced-mutation.test.ts
 packages/runtime/src/loader-disposal.test.ts`.
+      Evidence 2026-06-13: inline parser/helper parity coverage moved from
+      `packages/runtime/src/inline-loader-build.test.ts` into
+      `packages/runtime/src/inline-loader-parser-parity.test.ts`; the build test now stays focused
+      on generated module/package-script/budget behavior. Verified by the focused inline-loader
+      vitest command listed under parser-helper evidence.
 - [x] Split browser query hydration and inline query-event coverage out of
       `packages/runtime/src/index.browser.test.ts`.
       Evidence: `packages/runtime/src/query-hydration.browser.test.ts` covers inserted
@@ -186,6 +203,10 @@ packages/runtime/src/loader-disposal.test.ts`.
       `pnpm exec vitest --config vitest.browser.config.ts --run`; files:
       `packages/runtime/src/index.browser.test.ts` and
       `packages/runtime/src/query-hydration.browser.test.ts`.
+      Evidence 2026-06-13: browser runtime checks passed after readable loader parser-generation
+      and parser-parity test split. Command: `pnpm exec vitest --config
+vitest.browser.config.ts --run packages/runtime/src/index.browser.test.ts
+packages/runtime/src/query-hydration.browser.test.ts`.
 
 Latest evidence:
 

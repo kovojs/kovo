@@ -14,7 +14,13 @@ export const inlineJisoLoaderGzipByteBudget = 4096;
 
 export const inlineWireParserReadableSource = readInlineWireParserReadableSource();
 
-export const inlineJisoLoaderInstallerReadableSource = String.raw`
+export const inlineJisoLoaderInstallerReadableSource =
+  buildInlineJisoLoaderInstallerReadableSource();
+
+export function buildInlineJisoLoaderInstallerReadableSource(
+  wireParserReadableSource = inlineWireParserReadableSource,
+): string {
+  return String.raw`
 /* SPEC.md §4.4: this is the always-loaded bootstrap source. */
 function installInlineJisoLoader(importModule) {
   const events = ['click', 'submit', 'input', 'change'];
@@ -49,7 +55,7 @@ function installInlineJisoLoader(importModule) {
   ];
   const findFragmentTarget = (target) =>
     doc.getElementById(target) ?? doc.querySelector('[fw-fragment-target="' + target + '"]');
-  ${inlineWireParserReadableSource}
+  ${wireParserReadableSource}
   const applyFragment = (fragment) => {
     const target = readAttribute(fragment.attrs, 'target');
     const element = target && findFragmentTarget(target);
@@ -164,6 +170,7 @@ function installInlineJisoLoader(importModule) {
   }
 }
 `;
+}
 
 export function buildInlineJisoLoaderInstallerSource(
   source = inlineJisoLoaderInstallerReadableSource,

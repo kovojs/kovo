@@ -90,7 +90,7 @@ the v1 completion state.
 
 - [ ] Phase 4 runtime hardening: finish the runtime apply/loader cleanup in
       `plans/codebase-quality-round2.md`.
-- [ ] Runtime: keep inline-loader readable/minified output mechanically tied to canonical parser
+- [x] Runtime: keep inline-loader readable/minified output mechanically tied to canonical parser
       helpers.
 - [ ] Runtime: finish splitting broad runtime tests along apply/query/loader/minifier seams.
 - [ ] Runtime: re-run browser runtime tests after each apply or loader surface change.

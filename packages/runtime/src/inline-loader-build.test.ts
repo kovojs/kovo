@@ -5,16 +5,13 @@ import { gzipSync } from 'node:zlib';
 import { describe, expect, it } from 'vitest';
 
 import {
-  assertInlineJisoLoaderInstallerWireParserParity,
   assertInlineJisoLoaderModuleArtifactParity,
-  assertMinifiedInlineJisoLoaderInstallerWireParserParity,
   buildInlineJisoLoaderModuleSource,
+  buildInlineJisoLoaderInstallerReadableSource,
   buildInlineJisoLoaderInstallerSource,
   emitInlineJisoLoaderModule,
-  extractInlineWireParserReadableSource,
   inlineJisoLoaderGzipByteBudget,
   inlineJisoLoaderInstallerReadableSource,
-  inlineWireParserReadableSource,
 } from './inline-loader-build.js';
 import {
   createInlineJisoLoaderSource,
@@ -41,130 +38,12 @@ function createOversizedInlineLoaderSource(): string {
 describe('inline loader build source', () => {
   it('pins the shipped minified installer to the deterministic source helper', () => {
     // SPEC.md §4.4: drift checks must compare the shipped bootstrap to readable source.
+    expect(inlineJisoLoaderInstallerReadableSource).toBe(
+      buildInlineJisoLoaderInstallerReadableSource(),
+    );
     expect(inlineJisoLoaderInstallerReadableSource).toContain('\nfunction installInlineJisoLoader');
     expect(inlineJisoLoaderInstallerReadableSource).toContain("join('; ')");
-    expect(inlineJisoLoaderInstallerReadableSource).toContain(inlineWireParserReadableSource);
-    expect(inlineWireParserReadableSource).toContain('function readElementChunks(');
-    expect(inlineWireParserReadableSource).not.toContain('export function');
     expect(buildInlineJisoLoaderInstallerSource()).toBe(inlineJisoLoaderInstallerSource);
-  });
-
-  it('extracts the inline wire parser dependency closure from the modular parser', () => {
-    // SPEC.md §4.4/§9.1: the inline bootstrap scans the same query/fragment
-    // chunks as the modular runtime, so parser helper drift must fail at build time.
-    const source = [
-      'export function readElementChunks(body) {',
-      '  return matchingElementEnd(body) + readAttribute("", "target");',
-      '}',
-      'function matchingElementEnd(body) {',
-      '  return tagClose(body) + escapeRegExp(body);',
-      '}',
-      'function tagClose(source) {',
-      '  return source.length;',
-      '}',
-      'function escapeRegExp(value) {',
-      '  return value.replace(/[.*+?^${}()|[\\]\\\\]/g, "\\\\$&");',
-      '}',
-      'export function readAttribute(attrs, name) {',
-      '  return unescapeHtml(attrs + name);',
-      '}',
-      'function unescapeHtml(value) {',
-      '  return value.replaceAll("&amp;", "&");',
-      '}',
-      'function unusedHelper() {',
-      '  return "unused";',
-      '}',
-    ].join('\n');
-
-    const extracted = extractInlineWireParserReadableSource(source);
-
-    expect(extracted).toMatch(
-      /^function tagClose\(source\).*function escapeRegExp\(value\).*function matchingElementEnd\(body\).*function unescapeHtml\(value\).*function readAttribute\(attrs, name\).*function readElementChunks\(body\)/s,
-    );
-    expect(extracted).not.toContain('unusedHelper');
-    expect(extracted).not.toContain('export function');
-  });
-
-  it('checks readable and minified inline parser embeds against the modular parser', () => {
-    // SPEC.md §4.4/§9.1: inline response scanning is allowed to be tiny, but
-    // build-time checks must keep it byte-tied to the modular wire parser.
-    const canonicalParser = [
-      'export function readElementChunks(body) {',
-      '  return readAttribute("", "target") + body;',
-      '}',
-      'export function readAttribute(attrs, name) {',
-      '  return attrs + name;',
-      '}',
-    ].join('\n');
-    const canonicalReadable = extractInlineWireParserReadableSource(canonicalParser);
-    const readableInstaller = [
-      'function installInlineJisoLoader(importModule) {',
-      canonicalReadable,
-      '  return readElementChunks("body");',
-      '}',
-    ].join('\n');
-    const minifiedInstaller = buildInlineJisoLoaderInstallerSource(readableInstaller);
-
-    expect(() =>
-      assertInlineJisoLoaderInstallerWireParserParity(readableInstaller, canonicalParser),
-    ).not.toThrow();
-    expect(() =>
-      assertMinifiedInlineJisoLoaderInstallerWireParserParity(minifiedInstaller, canonicalParser),
-    ).not.toThrow();
-    expect(() =>
-      assertInlineJisoLoaderInstallerWireParserParity(
-        readableInstaller.replace('return attrs + name;', 'return name + attrs;'),
-        canonicalParser,
-      ),
-    ).toThrow('canonical wire parser helper closure exactly once; found 0');
-    expect(() =>
-      assertMinifiedInlineJisoLoaderInstallerWireParserParity(
-        minifiedInstaller.replace('return attrs+name', 'return name+attrs'),
-        canonicalParser,
-      ),
-    ).toThrow('canonical minified wire parser helper closure exactly once; found 0');
-  });
-
-  it('rejects inline wire parser helpers that reach outside the function closure', () => {
-    // SPEC.md §4.4: the inline parser extractor is intentionally narrow; new
-    // helper dependencies must be self-contained before they enter the bootstrap.
-    const functionLocalSource = [
-      'const hiddenHelper = (value) => value;',
-      'export function readElementChunks(body) {',
-      '  return hiddenHelper(body);',
-      '}',
-      'export function readAttribute(attrs) {',
-      '  return attrs;',
-      '}',
-    ].join('\n');
-    const importedHelperSource = [
-      'import { parseJsonValue } from "./json.js";',
-      'export function readElementChunks(body) {',
-      '  return readAttribute("", "target") + body;',
-      '}',
-      'export function readAttribute(attrs) {',
-      '  return parseJsonValue(attrs).value;',
-      '}',
-    ].join('\n');
-    const topLevelValueSource = [
-      'const attributePattern = /target/;',
-      'export function readElementChunks(body) {',
-      '  return readAttribute("", "target") + body;',
-      '}',
-      'export function readAttribute(attrs) {',
-      '  return attributePattern.test(attrs) ? attrs : null;',
-      '}',
-    ].join('\n');
-
-    expect(() => extractInlineWireParserReadableSource(functionLocalSource)).toThrow(
-      'references top-level binding hiddenHelper',
-    );
-    expect(() => extractInlineWireParserReadableSource(importedHelperSource)).toThrow(
-      'references top-level binding parseJsonValue',
-    );
-    expect(() => extractInlineWireParserReadableSource(topLevelValueSource)).toThrow(
-      'references top-level binding attributePattern',
-    );
   });
 
   it('emits the checked-in runtime module from the readable inline loader source', () => {
