@@ -142,9 +142,12 @@ import {
   htmlElementFacts,
   htmlFormActions,
   htmlFormFacts,
+  htmlFormFieldsByName,
   htmlFormFields,
   htmlJsonScriptFacts,
   htmlKeyFacts,
+  htmlKeyTextMap,
+  htmlKeyValues,
   htmlLinkHrefs,
   htmlTextContent,
 } from '@jiso/test/html-fragment';
@@ -315,9 +318,16 @@ describe('@jiso/test package subpath exports', () => {
         'quantity',
       ),
     ).toMatchObject([{ name: 'quantity', value: '2' }]);
+    expect(
+      htmlFormFieldsByName(htmlFormFacts('<form><input name="productId" value="p1"></form>')[0]),
+    ).toMatchObject({ productId: { value: 'p1' } });
     expect(htmlKeyFacts('<li fw-key="order-1"><span>Order</span></li>', 'order-1')).toMatchObject([
       { key: 'order-1', text: 'Order' },
     ]);
+    expect(htmlKeyValues('<li fw-key="order-1">Order</li>')).toEqual(['order-1']);
+    expect(htmlKeyTextMap('<li fw-key="order-1"><span>Order</span></li>')).toEqual({
+      'order-1': 'Order',
+    });
     expect(htmlTextContent('<p>Cart &amp; checkout</p>')).toBe('Cart & checkout');
     expect(markdownSection('# Docs\n\n## Gates\nReady\n## Next', 'Gates')).toBe('Ready');
     expect(markdownTableRows('| A | B |\n| --- | --- |\n| `one` | **two** |')).toEqual([

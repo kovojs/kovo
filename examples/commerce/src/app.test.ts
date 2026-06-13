@@ -11,8 +11,10 @@ import {
   fwQueryFacts,
   htmlDocumentFacts,
   htmlElementFacts,
+  htmlFormFieldsByName,
   htmlFormFacts,
-  htmlKeyFacts,
+  htmlKeyTextMap,
+  htmlKeyValues,
   htmlTextContent,
 } from '@jiso/test/html-fragment';
 import type { TouchGraph } from '@jiso/drizzle';
@@ -218,20 +220,6 @@ function productGridInput(after: string | null, limit?: number): ProductGridInpu
   };
 }
 
-function formFieldsByName(
-  form: ReturnType<typeof htmlFormFacts>[number] | undefined,
-): Record<string, ReturnType<typeof htmlFormFacts>[number]['fields'][number]> {
-  return Object.fromEntries((form?.fields ?? []).map((field) => [field.name, field]));
-}
-
-function htmlKeys(html: string): string[] {
-  return htmlKeyFacts(html).map((fact) => fact.key);
-}
-
-function htmlKeyTextsByKey(html: string): Record<string, string> {
-  return Object.fromEntries(htmlKeyFacts(html).map((fact) => [fact.key, fact.text]));
-}
-
 describe('commerce example', () => {
   it('marks demo-only CSRF secrets as example-only source', () => {
     expect(commerceCsrf.secret).toBe(EXAMPLE_ONLY_COMMERCE_CSRF_SECRET);
@@ -404,14 +392,14 @@ describe('commerce example', () => {
     const firstPage = loadProductGrid(db, { limit: 2 });
     const secondPage = loadProductGrid(db, productGridInput(firstPage.nextCursor, 2));
 
-    expect(htmlKeys(renderProductGrid(firstPage))).toEqual(['p1', 'p2']);
+    expect(htmlKeyValues(renderProductGrid(firstPage))).toEqual(['p1', 'p2']);
     expect(
       htmlElementFacts(renderProductGrid(firstPage), {
         attrs: { href: '/products?after=p2' },
         tag: 'a',
       }),
     ).toHaveLength(1);
-    expect(htmlKeys(renderProductGrid(secondPage))).toEqual(['p3']);
+    expect(htmlKeyValues(renderProductGrid(secondPage))).toEqual(['p3']);
 
     const appendFragment = renderProductGridPageFragment(
       db,
@@ -421,7 +409,7 @@ describe('commerce example', () => {
     expect(fwFragmentFacts(appendFragment, 'product-grid')).toMatchObject([
       { attrs: { mode: 'append', target: 'product-grid' } },
     ]);
-    expect(htmlKeys(appendFragment)).toEqual(['p3']);
+    expect(htmlKeyValues(appendFragment)).toEqual(['p3']);
     expect(htmlElementFacts(appendFragment, { attrs: { 'fw-c': 'product-grid' } })).toHaveLength(0);
 
     await addToCart.handler(
@@ -437,7 +425,7 @@ describe('commerce example', () => {
       },
     );
 
-    expect(htmlKeyTextsByKey(renderOrderHistory(db))).toMatchObject({
+    expect(htmlKeyTextMap(renderOrderHistory(db))).toMatchObject({
       'order-1': 'p1 x 2 - 2998',
     });
   });
@@ -458,7 +446,7 @@ describe('commerce example', () => {
     );
     const thirdProduct = appendedGrid.children?.[2];
 
-    expect(htmlKeys(renderProductGrid(firstPage))).toEqual(['p1', 'p2']);
+    expect(htmlKeyValues(renderProductGrid(firstPage))).toEqual(['p1', 'p2']);
     expect(
       fwFragmentFacts(
         renderProductGridPageFragment(db, productGridInput(firstPage.nextCursor)),
@@ -504,7 +492,7 @@ describe('commerce example', () => {
       keyedListNode('order-history', ['order-1', 'order-draft']),
     );
 
-    expect(htmlKeys(renderOrderHistory(db))).toContain('order-1');
+    expect(htmlKeyValues(renderOrderHistory(db))).toContain('order-1');
     expect(reconciledHistory.children?.[0]?.key).toBe('order-1');
     expect(reconciledHistory.children?.[1]).toBe(optimisticOrder);
     expect(reconciledHistory.children?.[1]?.browserState).toEqual({
@@ -729,7 +717,7 @@ describe('commerce example', () => {
     const form = renderAddToCartForm({ id: 'p1', stock: 5 });
     const html = renderCartPage();
     const [addForm] = htmlFormFacts(form);
-    const fieldsByName = formFieldsByName(addForm);
+    const fieldsByName = htmlFormFieldsByName(addForm);
 
     expect(addForm).toMatchObject({
       action: '/_m/cart/add',
@@ -752,7 +740,7 @@ describe('commerce example', () => {
     const form = renderReceiptUploadForm('order-1');
     const html = renderCartPage();
     const [uploadForm] = htmlFormFacts(form);
-    const fieldsByName = formFieldsByName(uploadForm);
+    const fieldsByName = htmlFormFieldsByName(uploadForm);
 
     expect(uploadForm).toMatchObject({
       action: '/_m/order/receipt',
@@ -1010,7 +998,7 @@ describe('commerce example', () => {
     });
 
     expect(htmlTextContent(renderCartPage(db))).toContain('3 in stock');
-    expect(htmlKeys(renderOrderHistory(db))).toContain('order-1');
+    expect(htmlKeyValues(renderOrderHistory(db))).toContain('order-1');
   });
 
   it('handles enhanced addToCart through the same endpoint as fragment wire', async () => {
@@ -1064,7 +1052,7 @@ describe('commerce example', () => {
       '/assets/tailwind.css',
       '/assets/tailwind.css',
     ]);
-    expect(htmlKeys(response.body)).toContain('order-2');
+    expect(htmlKeyValues(response.body)).toContain('order-2');
     expect(transactions).toBe(2);
   });
 
@@ -1138,7 +1126,7 @@ describe('commerce example', () => {
       }),
     ).toHaveLength(1);
     expect(htmlTextContent(response.body)).toContain('Only 2 available.');
-    expect(htmlKeys(renderOrderHistory(db))).not.toContain('order-1');
+    expect(htmlKeyValues(renderOrderHistory(db))).not.toContain('order-1');
   });
 
   it('handles enhanced addToCart failures as a rerendered form fragment', async () => {
@@ -1184,7 +1172,7 @@ describe('commerce example', () => {
       }),
     ).toHaveLength(1);
     expect(htmlTextContent(formFragment?.innerHtml ?? '')).toContain('Only 2 available.');
-    expect(htmlKeys(renderOrderHistory(db))).not.toContain('order-1');
+    expect(htmlKeyValues(renderOrderHistory(db))).not.toContain('order-1');
   });
 
   it('renders Tailwind-first stylesheet hints and static utility classes', () => {

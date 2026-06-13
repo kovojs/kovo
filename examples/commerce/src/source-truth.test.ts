@@ -30,7 +30,7 @@ import {
   fwFragmentFacts,
   fwQueryFacts,
   htmlDocumentFacts,
-  htmlKeyFacts,
+  htmlKeyValues,
 } from '@jiso/test/html-fragment';
 import { touchGraphProvenanceFact } from '@jiso/test/touch-graph-fixtures';
 import { fwCheck, fwExplain } from 'fw';
@@ -581,6 +581,6 @@ describe('commerce source-truth graph acceptance', () => {
         .map((query) => graphFragmentTargetForQuery(commerceGraph, query))
         .sort((a, b) => a.localeCompare(b)),
     );
-    expect(htmlKeyFacts(response.body).map((key) => key.key)).toContain('order-2');
+    expect(htmlKeyValues(response.body)).toContain('order-2');
   });
 });

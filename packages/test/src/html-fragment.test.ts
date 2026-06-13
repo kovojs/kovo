@@ -9,9 +9,12 @@ import {
   htmlElementFacts,
   htmlFormActions,
   htmlFormFacts,
+  htmlFormFieldsByName,
   htmlFormFields,
   htmlJsonScriptFacts,
   htmlKeyFacts,
+  htmlKeyTextMap,
+  htmlKeyValues,
   htmlLinkHrefs,
   htmlTextContent,
 } from '@jiso/test/html-fragment';
@@ -360,19 +363,27 @@ describe('@jiso/test html fragment seam', () => {
         'quantity',
       ),
     ).toMatchObject([{ name: 'quantity', value: '2' }]);
+    expect(
+      htmlFormFieldsByName(
+        htmlFormFacts(
+          '<form><input name="productId" value="p1"><input name="quantity" value="2"></form>',
+        )[0],
+      ),
+    ).toMatchObject({
+      productId: { value: 'p1' },
+      quantity: { value: '2' },
+    });
   });
 
   it('returns keyed framework element facts with normalized text', () => {
-    expect(
-      htmlKeyFacts(
-        [
-          '<section>',
-          '<article fw-key="p1"><h2>Coffee &amp; mug</h2><span>3 in stock</span></article>',
-          '<article fw-key="p2"><span>Tea</span><span>&#36;25</span></article>',
-          '</section>',
-        ].join(''),
-      ),
-    ).toMatchObject([
+    const html = [
+      '<section>',
+      '<article fw-key="p1"><h2>Coffee &amp; mug</h2><span>3 in stock</span></article>',
+      '<article fw-key="p2"><span>Tea</span><span>&#36;25</span></article>',
+      '</section>',
+    ].join('');
+
+    expect(htmlKeyFacts(html)).toMatchObject([
       {
         key: 'p1',
         tag: 'article',
@@ -387,6 +398,11 @@ describe('@jiso/test html fragment seam', () => {
     expect(htmlKeyFacts('<li fw-key="order-1">Order</li>', 'order-1')).toMatchObject([
       { key: 'order-1', text: 'Order' },
     ]);
+    expect(htmlKeyValues(html)).toEqual(['p1', 'p2']);
+    expect(htmlKeyTextMap(html)).toEqual({
+      p1: 'Coffee & mug3 in stock',
+      p2: 'Tea$25',
+    });
   });
 
   it('normalizes HTML text content outside raw markup assertions', () => {

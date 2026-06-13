@@ -41,7 +41,8 @@ risks. Check a box only when the exact item is closed with same-session file and
 Current state: `tests/fw-check.node.mjs` now consumes shared `@jiso/test` fixtures for HTML
 fragments, generated modules, command/Vite facts, markdown/source facts, MCP, static export,
 starter templates, `fw-explain`, TypeScript, wire, touch-graph provenance, graph facts, and
-structured `fw-check/v1` result facts.
+structured `fw-check/v1` result facts. Shared `@jiso/test/html-fragment` now owns form-field maps
+and keyed-element projections for commerce app/source-truth tests.
 
 - [ ] Search for remaining custom parsers, raw source membership checks, and generated-artifact
       projections in `tests/fw-check.node.mjs`.
@@ -58,6 +59,10 @@ Latest evidence:
 - `pnpm run check:build`
 - targeted `node --test --test-name-pattern ... tests/fw-check.node.mjs`
 - exact `pnpm exec vp check ... tests/fw-check.node.mjs examples/commerce/src/source-truth.test.ts IMPLEMENT_v1.md plans/codebase-quality-round2.md`
+- `pnpm exec vitest --run packages/test/src/html-fragment.test.ts packages/test/src/package-exports.test.ts`
+- `pnpm exec vitest --run examples/commerce/src/app.test.ts examples/commerce/src/source-truth.test.ts`
+- targeted `node --test --test-name-pattern "P10 commerce graph assertions answer behavior mechanically|P10 commerce invalidation is expressed through graph facts|P4 commerce touch graph is a committed generated artifact" tests/fw-check.node.mjs`
+- exact `pnpm exec vp check packages/test/src/html-fragment.ts packages/test/src/html-fragment.test.ts packages/test/src/package-exports.test.ts examples/commerce/src/app.test.ts examples/commerce/src/source-truth.test.ts IMPLEMENT_v1.md plans/codebase-quality-round2.md`
 - `git diff --check`
 
 ## Phase 2 - Compiler IR
@@ -159,7 +164,10 @@ Current state: commerce source-truth tests use shared structured facts for graph
 query/fragment/key output, source-site provenance, app-shell command/export behavior, and
 `fw-explain` query/mutation/page assertions. `@jiso/test` owns reusable fixture seams for generated
 modules, fw-explain, TypeScript, fw-check output, source/project facts, commands, starter templates,
-wire, static export, touch graphs, and graph invalidation/consumer facts.
+wire, static export, touch graphs, graph invalidation/consumer facts, and reusable HTML fragment
+field/key projections. Commerce app/source-truth tests no longer own local form-field or
+keyed-element projection helpers for currently covered no-JS form, list identity, and enhanced
+fragment assertions.
 
 - [ ] Remove remaining commerce-local fixture parsing that belongs in `@jiso/test`.
 - [ ] Make opaque adapter objects either observable or explicitly documented as unobserved.
@@ -172,6 +180,11 @@ Latest evidence:
 - `pnpm exec vitest --run packages/test/src/fw-check-fixtures.test.ts packages/test/src/package-exports.test.ts`
 - targeted `node --test --test-name-pattern ... tests/fw-check.node.mjs`
 - `pnpm run check:build`
+- `pnpm exec vitest --run packages/test/src/html-fragment.test.ts packages/test/src/package-exports.test.ts`
+- `pnpm exec vitest --run examples/commerce/src/app.test.ts examples/commerce/src/source-truth.test.ts`
+- `node --test --test-name-pattern "P10 commerce graph assertions answer behavior mechanically|P10 commerce invalidation is expressed through graph facts|P4 commerce touch graph is a committed generated artifact" tests/fw-check.node.mjs`
+- exact `pnpm exec vp check packages/test/src/html-fragment.ts packages/test/src/html-fragment.test.ts packages/test/src/package-exports.test.ts examples/commerce/src/app.test.ts examples/commerce/src/source-truth.test.ts IMPLEMENT_v1.md plans/codebase-quality-round2.md`
+- `git diff --check`
 
 ## Phase 7 - Test Restructuring
 
@@ -179,7 +192,8 @@ Current state: runtime, server static export, compiler shared/model-pipeline, an
 fixture tests have been split out of monoliths along module seams. Runtime query/apply/broadcast,
 enhanced-submit, and delegated handler integration coverage now lives in focused runtime tests.
 `tests/fw-check.node.mjs` is still large but increasingly delegates mechanics to package fixtures
-and structured facts.
+and structured facts. Commerce app tests now consume shared `@jiso/test/html-fragment` form and
+keyed-element projections instead of local helpers.
 
 - [ ] When touching a monolith test, move reusable mechanics into package fixtures or focused tests.
 - [ ] Prefer structured assertions and shared fixtures over source-text or output-substring ledgers.

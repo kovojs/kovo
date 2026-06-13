@@ -249,6 +249,12 @@ export function htmlFormFields(html: string, name?: string): HtmlFormFieldFact[]
     .filter((field) => name === undefined || field.name === name);
 }
 
+export function htmlFormFieldsByName(
+  form: HtmlFormFact | undefined,
+): Record<string, HtmlFormFieldFact> {
+  return Object.fromEntries((form?.fields ?? []).map((field) => [field.name, field]));
+}
+
 export function htmlKeyFacts(html: string, key?: string): HtmlKeyFact[] {
   return htmlElementFacts(html)
     .filter((element) => element.attrs['fw-key'] !== undefined)
@@ -261,6 +267,14 @@ export function htmlKeyFacts(html: string, key?: string): HtmlKeyFact[] {
       text: htmlTextContent(element.innerHtml),
     }))
     .filter((fact) => key === undefined || fact.key === key);
+}
+
+export function htmlKeyValues(html: string): string[] {
+  return htmlKeyFacts(html).map((fact) => fact.key);
+}
+
+export function htmlKeyTextMap(html: string): Record<string, string> {
+  return Object.fromEntries(htmlKeyFacts(html).map((fact) => [fact.key, fact.text]));
 }
 
 export function htmlTextContent(html: string): string {
