@@ -1,0 +1,61 @@
+import { gzipSync } from 'node:zlib';
+import { describe, expect, it } from 'vitest';
+
+import { inlineJisoLoaderGzipByteBudget } from './inline-loader-build.js';
+import { inlineJisoLoaderInstallerSource, jisoLoaderSource } from './inline-loader.js';
+import { createInlineJisoLoaderSource as createPublicInlineJisoLoaderSource } from './index.js';
+
+describe('inline loader minified artifact', () => {
+  it('wraps the extracted installer source as the public bootstrap source', () => {
+    // SPEC.md §4.4: the generated bootstrap is the always-loaded runtime path.
+    expect(jisoLoaderSource).toBe(`(${inlineJisoLoaderInstallerSource})((url)=>import(url));`);
+    expect(createPublicInlineJisoLoaderSource()).toBe(jisoLoaderSource);
+    expect(gzipSync(jisoLoaderSource).byteLength).toBeLessThanOrEqual(
+      inlineJisoLoaderGzipByteBudget,
+    );
+    expect(jisoLoaderSource).toBe(jisoLoaderSource.trim());
+    expect(jisoLoaderSource).not.toMatch(/\n|\s{2,}/);
+    expect(jisoLoaderSource).toMatch(
+      /^\(function installInlineJisoLoader\(importModule\)\{.*\}\)\(\(url\)=>import\(url\)\);$/,
+    );
+  });
+
+  it('keeps minified wire-contract tokens pinned in the extracted installer', () => {
+    // SPEC.md §4.4/§9.1: inline and modular loaders must not drift on query/fragment wire effects.
+    expect(inlineJisoLoaderInstallerSource).toBe(inlineJisoLoaderInstallerSource.trim());
+    expect(inlineJisoLoaderInstallerSource).not.toMatch(/\n|\s{2,}/);
+    expect(inlineJisoLoaderInstallerSource).toContain("join('; ')");
+    expect(inlineJisoLoaderInstallerSource).toContain('[...new Set(');
+    expect(inlineJisoLoaderInstallerSource).toContain('function tagClose(');
+    expect(inlineJisoLoaderInstallerSource).toContain(
+      'function readMutationResponseElementChunks(',
+    );
+    expect(inlineJisoLoaderInstallerSource).toContain(
+      'function readInlineMutationResponseBodyChunks(',
+    );
+    expect(inlineJisoLoaderInstallerSource).toContain('function applyInlineMutationResponseBody(');
+    expect(inlineJisoLoaderInstallerSource).toContain(
+      'function applyInlineMutationResponseChunks(',
+    );
+    expect(inlineJisoLoaderInstallerSource).toContain('function applyInlineFragment(');
+    expect(inlineJisoLoaderInstallerSource).toContain(
+      'const dispatchQuery=(query)=>{dispatchEvent(new CustomEvent',
+    );
+    expect(inlineJisoLoaderInstallerSource).toContain(
+      'applyInlineMutationResponseBody(body,{dispatchQuery,findFragmentTarget,readBody:readInlineMutationResponseBodyChunks,});',
+    );
+    expect(inlineJisoLoaderInstallerSource).not.toContain('readChunks(');
+    expect(inlineJisoLoaderInstallerSource).not.toContain('applyResponseChunks');
+    expect(inlineJisoLoaderInstallerSource).not.toContain("readAttribute(query.attrs,'name')");
+    expect(inlineJisoLoaderInstallerSource).toContain(
+      'detail:{attrs:query.attrs,content:query.content}',
+    );
+    expect(inlineJisoLoaderInstallerSource).not.toContain('queryBody');
+    expect(inlineJisoLoaderInstallerSource).toContain(
+      "element.getAttribute('fw-fragment-target')??element.id",
+    );
+    expect(inlineJisoLoaderInstallerSource).toContain("getAttribute('fw-param-types')");
+    expect(inlineJisoLoaderInstallerSource).not.toContain('DOMParser');
+    expect(inlineJisoLoaderInstallerSource).not.toContain('Math.random');
+  });
+});

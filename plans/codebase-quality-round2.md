@@ -723,8 +723,9 @@ query/apply/loader/optimism/morph/delegated-handler integration tests; the broad
 focused on public loader installation smoke only, while loader query hydration, enhanced mutations,
 visible-return refetch, and disposal live in dedicated runtime tests. Inline readable/minified/generated/extracted loader
 parity coverage now owns parser-helper extraction in `inline-loader-parser-parity.test.ts` and
-inline enhanced-submit behavior in `inline-loader-enhanced-submit.test.ts`, leaving delegated
-handler, trigger, and response-apply parity in `inline-loader.test.ts`.
+inline enhanced-submit behavior in `inline-loader-enhanced-submit.test.ts`; delegated handler,
+trigger, response-apply, and minified artifact coverage now live in focused owner suites, leaving
+`inline-loader.test.ts` focused on source installation smoke.
 Enhanced submit, broadcast replay, deferred stream chunks, DOM apply, and store-only apply now parse
 transport mutation bodies first and call `applyMutationResponseChunksToRuntime` as the single
 decoded query/fragment apply primitive; the internal `applyMutationResponseBodyToRuntime`
@@ -1183,6 +1184,16 @@ packages/runtime/src/query-store.test.ts packages/runtime/src/loader-visible-ret
       artifact-wide response suite still covers readable, minified, generated-bootstrap, and
       extracted installer sources. Verified by focused runtime and full runtime commands listed in
       Latest evidence.
+      Evidence 2026-06-13 round271: delegated handler parity moved from
+      `packages/runtime/src/inline-loader.test.ts` into
+      `packages/runtime/src/inline-loader-delegated.test.ts`, leaving the broad inline-loader source
+      suite focused on generated import-expression installation. Minified shipped-artifact pins
+      moved from `packages/runtime/src/inline-loader-build.test.ts` into
+      `packages/runtime/src/inline-loader-artifact-minifier.test.ts`, leaving build coverage focused
+      on readable/module emission, package scripts, syntax rejection, gzip budget rejection, and
+      custom bootstrap expression trimming. Verified by focused inline-loader/minifier tests, full
+      runtime tests, inline-loader generation check, TypeScript, browser runtime tests, targeted
+      `vp check`, and `git diff --check` commands listed in Latest evidence.
 - [x] Split browser query hydration and inline query-event coverage out of
       `packages/runtime/src/index.browser.test.ts`.
       Evidence: `packages/runtime/src/query-hydration.browser.test.ts` covers inserted
@@ -1255,6 +1266,9 @@ packages/runtime/src/index.browser.test.ts packages/runtime/src/query-hydration.
       Evidence 2026-06-13 round265: browser runtime checks passed after the minified inline
       response apply parity split. Command: `pnpm exec vitest --run --config
       vitest.browser.config.ts packages/runtime/src/**/*.browser.test.ts`.
+      Evidence 2026-06-13 round271: browser runtime checks passed after the inline delegated
+      handler and minified artifact test ownership split. Command: `pnpm exec vitest --run --config
+      vitest.browser.config.ts packages/runtime/src/**/*.browser.test.ts`.
 
 Latest evidence:
 
@@ -1324,6 +1338,14 @@ packages/runtime/src/wire-parser.test.ts plans/codebase-quality-round2.md`;
   `pnpm --filter @jiso/runtime run check:inline-loader`;
   `pnpm exec vitest --run --config vitest.browser.config.ts packages/runtime/src/**/*.browser.test.ts`;
   exact `pnpm exec vp check packages/runtime/src/inline-loader-response-apply.test.ts packages/runtime/src/inline-loader-minified-response-apply.test.ts packages/runtime/src/inline-loader-response-apply-fixture.ts packages/runtime/src/inline-loader-test-utils.ts plans/codebase-quality-round2.md`;
+  `git diff --check`.
+- Round271 inline-loader delegated/minified artifact test ownership:
+  `pnpm exec vitest --run packages/runtime/src/inline-loader.test.ts packages/runtime/src/inline-loader-delegated.test.ts packages/runtime/src/inline-loader-artifact-minifier.test.ts packages/runtime/src/inline-loader-build.test.ts packages/runtime/src/inline-loader-response-apply.test.ts packages/runtime/src/inline-loader-parser-parity.test.ts packages/runtime/src/inline-js-minifier.test.ts`;
+  `pnpm exec vitest --run packages/runtime/src`;
+  `pnpm --filter @jiso/runtime run check:inline-loader`;
+  `pnpm exec vitest --run --config vitest.browser.config.ts packages/runtime/src/**/*.browser.test.ts`;
+  `pnpm exec tsc --noEmit --pretty false`;
+  exact `pnpm exec vp check packages/runtime/src/inline-loader.test.ts packages/runtime/src/inline-loader-delegated.test.ts packages/runtime/src/inline-loader-build.test.ts packages/runtime/src/inline-loader-artifact-minifier.test.ts plans/codebase-quality-round2.md`;
   `git diff --check`.
 
 ## Phase 5 - Server And App Shell

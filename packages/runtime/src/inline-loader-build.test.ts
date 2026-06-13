@@ -13,12 +13,7 @@ import {
   inlineJisoLoaderGzipByteBudget,
   inlineJisoLoaderInstallerReadableSource,
 } from './inline-loader-build.js';
-import {
-  createInlineJisoLoaderSource,
-  inlineJisoLoaderInstallerSource,
-  jisoLoaderSource,
-} from './inline-loader.js';
-import { createInlineJisoLoaderSource as createPublicInlineJisoLoaderSource } from './index.js';
+import { createInlineJisoLoaderSource, inlineJisoLoaderInstallerSource } from './inline-loader.js';
 
 function createOversizedInlineLoaderSource(): string {
   let state = 0x12345678;
@@ -122,20 +117,6 @@ describe('inline loader build source', () => {
     );
   });
 
-  it('wraps the extracted installer source as the public bootstrap source', () => {
-    // SPEC.md §4.4: the generated bootstrap is the always-loaded runtime path.
-    expect(jisoLoaderSource).toBe(`(${inlineJisoLoaderInstallerSource})((url)=>import(url));`);
-    expect(createPublicInlineJisoLoaderSource()).toBe(jisoLoaderSource);
-    expect(gzipSync(jisoLoaderSource).byteLength).toBeLessThanOrEqual(
-      inlineJisoLoaderGzipByteBudget,
-    );
-    expect(jisoLoaderSource).toBe(jisoLoaderSource.trim());
-    expect(jisoLoaderSource).not.toMatch(/\n|\s{2,}/);
-    expect(jisoLoaderSource).toMatch(
-      /^\(function installInlineJisoLoader\(importModule\)\{.*\}\)\(\(url\)=>import\(url\)\);$/,
-    );
-  });
-
   it('rejects generated inline loader modules that exceed the gzip budget', () => {
     // SPEC.md §4.4: the package build/check path enforces the always-loaded 4KB bootstrap budget.
     const source = createOversizedInlineLoaderSource();
@@ -146,45 +127,6 @@ describe('inline loader build source', () => {
     expect(() => buildInlineJisoLoaderModuleSource(source)).toThrow(
       'exceeds SPEC.md §4.4 gzip budget',
     );
-  });
-
-  it('keeps minified wire-contract tokens pinned in the extracted installer', () => {
-    // SPEC.md §4.4: inline and modular loaders must not drift on query/fragment wire effects.
-    expect(inlineJisoLoaderInstallerSource).toBe(inlineJisoLoaderInstallerSource.trim());
-    expect(inlineJisoLoaderInstallerSource).not.toMatch(/\n|\s{2,}/);
-    expect(inlineJisoLoaderInstallerSource).toContain("join('; ')");
-    expect(inlineJisoLoaderInstallerSource).toContain('[...new Set(');
-    expect(inlineJisoLoaderInstallerSource).toContain('function tagClose(');
-    expect(inlineJisoLoaderInstallerSource).toContain(
-      'function readMutationResponseElementChunks(',
-    );
-    expect(inlineJisoLoaderInstallerSource).toContain(
-      'function readInlineMutationResponseBodyChunks(',
-    );
-    expect(inlineJisoLoaderInstallerSource).toContain('function applyInlineMutationResponseBody(');
-    expect(inlineJisoLoaderInstallerSource).toContain(
-      'function applyInlineMutationResponseChunks(',
-    );
-    expect(inlineJisoLoaderInstallerSource).toContain('function applyInlineFragment(');
-    expect(inlineJisoLoaderInstallerSource).toContain(
-      'const dispatchQuery=(query)=>{dispatchEvent(new CustomEvent',
-    );
-    expect(inlineJisoLoaderInstallerSource).toContain(
-      'applyInlineMutationResponseBody(body,{dispatchQuery,findFragmentTarget,readBody:readInlineMutationResponseBodyChunks,});',
-    );
-    expect(inlineJisoLoaderInstallerSource).not.toContain('readChunks(');
-    expect(inlineJisoLoaderInstallerSource).not.toContain('applyResponseChunks');
-    expect(inlineJisoLoaderInstallerSource).not.toContain("readAttribute(query.attrs,'name')");
-    expect(inlineJisoLoaderInstallerSource).toContain(
-      'detail:{attrs:query.attrs,content:query.content}',
-    );
-    expect(inlineJisoLoaderInstallerSource).not.toContain('queryBody');
-    expect(inlineJisoLoaderInstallerSource).toContain(
-      "element.getAttribute('fw-fragment-target')??element.id",
-    );
-    expect(inlineJisoLoaderInstallerSource).toContain("getAttribute('fw-param-types')");
-    expect(inlineJisoLoaderInstallerSource).not.toContain('DOMParser');
-    expect(inlineJisoLoaderInstallerSource).not.toContain('Math.random');
   });
 
   it('trims custom import expressions in generated public bootstrap source', () => {
