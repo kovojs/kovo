@@ -454,12 +454,16 @@ function projectFunctionExtractionsByFileName(
           : undefined;
       if (!body || !extraction) continue;
       const receivers = projectDrizzleReceivers(fn);
+      const carrierSymbolKeys = receiverCarrierSymbolKeysForBody(body, (node) =>
+        isProjectDrizzleReceiverIdentifier(node, receivers),
+      );
       extraction.localCalls = extractLocalFunctionCallsFromBody(
         body,
         localFunctionNames,
         extractionsByFunction,
         (argument) =>
-          isProjectDrizzleReceiverIdentifier(argument, receivers) || isDrizzleReceiver(argument),
+          projectReceiverReferenceInArgument(argument, receivers, carrierSymbolKeys) !==
+            undefined || isDrizzleReceiver(argument),
       );
       extraction.unresolvedCalls = extractProjectUnresolvedCalls(
         body,
@@ -478,12 +482,16 @@ function projectFunctionExtractionsByFileName(
       );
       if (!extraction) continue;
       const receivers = projectDrizzleReceivers(initializer);
+      const carrierSymbolKeys = receiverCarrierSymbolKeysForBody(initializer.getBody(), (node) =>
+        isProjectDrizzleReceiverIdentifier(node, receivers),
+      );
       extraction.localCalls = extractLocalFunctionCallsFromBody(
         initializer.getBody(),
         localFunctionNames,
         extractionsByFunction,
         (argument) =>
-          isProjectDrizzleReceiverIdentifier(argument, receivers) || isDrizzleReceiver(argument),
+          projectReceiverReferenceInArgument(argument, receivers, carrierSymbolKeys) !==
+            undefined || isDrizzleReceiver(argument),
       );
       extraction.unresolvedCalls = extractProjectUnresolvedCalls(
         initializer.getBody(),
@@ -496,12 +504,16 @@ function projectFunctionExtractionsByFileName(
       const extraction = extractionsByFunction.get(callback.key);
       if (!extraction) continue;
       const receivers = projectDrizzleReceivers(callback.fn);
+      const carrierSymbolKeys = receiverCarrierSymbolKeysForBody(callback.body, (node) =>
+        isProjectDrizzleReceiverIdentifier(node, receivers),
+      );
       extraction.localCalls = extractLocalFunctionCallsFromBody(
         callback.body,
         localFunctionNames,
         extractionsByFunction,
         (argument) =>
-          isProjectDrizzleReceiverIdentifier(argument, receivers) || isDrizzleReceiver(argument),
+          projectReceiverReferenceInArgument(argument, receivers, carrierSymbolKeys) !==
+            undefined || isDrizzleReceiver(argument),
       );
       extraction.unresolvedCalls = extractProjectUnresolvedCalls(
         callback.body,
@@ -2269,6 +2281,7 @@ function queryLocalHelperCalls(
 ): string[] {
   const calls: string[] = [];
   const localFunctionKeys = new Set(localFunctionsByKey.keys());
+  const carrierSymbolKeys = queryReceiverCarrierSymbolKeys(body, receiverReferences);
 
   for (const call of queryExecutableCallExpressions(body)) {
     const expression = call.getExpression();
@@ -2279,8 +2292,12 @@ function queryLocalHelperCalls(
     const requirements = localFunctionsByKey.get(key) ?? [];
     if (requirements.length === 0) continue;
     if (
-      !localFunctionCallSatisfiesReceiverRequirements(call, requirements, (argument) =>
-        isQueryReceiverIdentifier(argument, receiverReferences),
+      !localFunctionCallSatisfiesReceiverRequirements(
+        call,
+        requirements,
+        (argument) =>
+          queryReceiverReferenceInArgument(argument, receiverReferences, carrierSymbolKeys) !==
+          undefined,
       )
     ) {
       continue;
@@ -2315,8 +2332,12 @@ function opaqueLocalQueryHelperDiagnostics(
     const requirements = localFunctionsByKey.get(key) ?? [];
     if (
       requirements.length > 0 &&
-      localFunctionCallSatisfiesReceiverRequirements(call, requirements, (argument) =>
-        isQueryReceiverIdentifier(argument, receiverReferences),
+      localFunctionCallSatisfiesReceiverRequirements(
+        call,
+        requirements,
+        (argument) =>
+          queryReceiverReferenceInArgument(argument, receiverReferences, carrierSymbolKeys) !==
+          undefined,
       )
     ) {
       return [];

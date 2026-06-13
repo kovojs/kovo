@@ -993,6 +993,45 @@ describe('Drizzle pinned subset conformance', () => {
     expect(diagnosticsForQueryFacts(facts)).toEqual([]);
   });
 
+  it('pins local query-loader helper carrier reads under real Drizzle imports', () => {
+    const facts = extractQueryFactsFromProject({
+      files: [
+        {
+          fileName: 'conformance/drizzle-pin/src/product.queries.ts',
+          source: [
+            "import type { PgDatabase } from 'drizzle-orm/pg-core';",
+            '',
+            "export const products = pgTable('products', {",
+            "  id: text('id').primaryKey(),",
+            "  name: text('name').notNull(),",
+            "}, jiso({ domain: 'product', key: 'id' }));",
+            '',
+            'function loadProducts({ db }: { db: PgDatabase<any, any, any> }) {',
+            '  return db.select({ name: products.name }).from(products);',
+            '}',
+            '',
+            "export const productQuery = query('product/local-carrier-helper', {",
+            '  load(_input, db: PgDatabase<any, any, any>) {',
+            '    const context = { db };',
+            '    return loadProducts(context);',
+            '  },',
+            '});',
+          ].join('\n'),
+        },
+      ],
+    });
+
+    expect(facts).toEqual([
+      {
+        query: 'product/local-carrier-helper',
+        reads: ['product'],
+        shape: {},
+        site: 'conformance/drizzle-pin/src/product.queries.ts:12',
+      },
+    ]);
+    expect(diagnosticsForQueryFacts(facts)).toEqual([]);
+  });
+
   it('pins pgTable(name, cols, jiso({...})) as the real Drizzle extra config integration point', () => {
     const cartItems = pgTable(
       'cart_items',

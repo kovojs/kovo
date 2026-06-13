@@ -2990,6 +2990,45 @@ export interface CommerceInvalidationSets {
     expect(diagnosticsForQueryFacts(facts)).toEqual([]);
   });
 
+  it('folds local query-loader helper reads through typed receiver carriers', () => {
+    const facts = extractQueryFactsFromProject({
+      files: [
+        {
+          fileName: 'product.queries.ts',
+          source: [
+            'import type { PgDatabase } from "drizzle-orm/pg-core";',
+            '',
+            'export const products = pgTable("products", {',
+            '  id: text("id").primaryKey(),',
+            '  name: text("name").notNull(),',
+            '}, jiso({ domain: "product", key: "id" }));',
+            '',
+            'function loadProducts({ db }: { db: PgDatabase<any, any, any> }) {',
+            '  return db.select({ name: products.name }).from(products);',
+            '}',
+            '',
+            'export const productQuery = query("product/helper-carrier-local", {',
+            '  load(_input, db: PgDatabase<any, any, any>) {',
+            '    const context = { db };',
+            '    return loadProducts(context);',
+            '  },',
+            '});',
+          ].join('\n'),
+        },
+      ],
+    });
+
+    expect(facts).toEqual([
+      {
+        query: 'product/helper-carrier-local',
+        reads: ['product'],
+        shape: {},
+        site: 'product.queries.ts:12',
+      },
+    ]);
+    expect(diagnosticsForQueryFacts(facts)).toEqual([]);
+  });
+
   it('marks local query-loader helper writes as FW406', () => {
     const facts = extractQueryFactsFromProject({
       files: [
@@ -4172,6 +4211,45 @@ export interface CommerceInvalidationSets {
     expect(graph.auditItem).toEqual({
       reads: [],
       touches: [{ domain: 'audit', keys: null, site: 'cart.domain.ts:16', via: 'audit_log' }],
+      unresolved: [],
+    });
+  });
+
+  it('folds project local helper summaries through typed receiver carriers', () => {
+    const graph = extractTouchGraphFromProject({
+      files: [
+        {
+          fileName: 'cart.domain.ts',
+          source: [
+            'import type { PgDatabase } from "drizzle-orm/pg-core";',
+            'export const cartItems = pgTable("cart_items", {}, jiso({ domain: "cart", key: "productId" }));',
+            'export const auditLog = pgTable("audit_log", {}, jiso({ domain: "audit", key: "productId" }));',
+            '',
+            'export async function addItem(db: PgDatabase<any, any, any>, productId: string) {',
+            '  async function writeAudit({ db: writer }: { db: PgDatabase<any, any, any> }) {',
+            '    await writer.insert(auditLog).values({ productId });',
+            '  }',
+            '',
+            '  const context = { db };',
+            '  await writeAudit(context);',
+            '  await db.insert(cartItems).values({ productId });',
+            '}',
+          ].join('\n'),
+        },
+      ],
+    });
+
+    expect(graph.addItem).toEqual({
+      reads: [],
+      touches: [
+        { domain: 'audit', keys: null, site: 'cart.domain.ts:7', via: 'audit_log' },
+        { domain: 'cart', keys: null, site: 'cart.domain.ts:12', via: 'cart_items' },
+      ],
+      unresolved: [],
+    });
+    expect(graph.writeAudit).toEqual({
+      reads: [],
+      touches: [{ domain: 'audit', keys: null, site: 'cart.domain.ts:7', via: 'audit_log' }],
       unresolved: [],
     });
   });
