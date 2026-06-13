@@ -41,6 +41,29 @@ export interface NormativeDocsGateFact {
   handlerExports: readonly string[];
 }
 
+export interface AcceptanceLedgerRunFact {
+  command: string;
+  commit: string;
+  result: string;
+}
+
+export interface V1AcceptanceLedgerGateFact {
+  auditRows: MarkdownTableRow[];
+  auditStatuses: Record<string, string>;
+  cleanCheckoutStatuses: string[];
+  externalAuditPendingCount: number;
+  gateCriteria: string[];
+  gateCriteriaMatchSpec: boolean;
+  gateEvidenceArtifacts: Record<string, string | undefined>;
+  gateStatuses: Record<string, string | undefined>;
+  localAcceptanceAuditPending: boolean;
+  localAcceptanceAuditRunCount: number;
+  passedAcceptanceRunCount: number;
+  pendingFreezeRunCount: number;
+  runFacts: AcceptanceLedgerRunFact[];
+  specGateCriteria: string[];
+}
+
 export function normalizeMarkdownCell(value: string): string {
   return value
     .replace(/`([^`]+)`/g, '$1')
@@ -170,6 +193,14 @@ export function markdownTableRows(source: string): MarkdownTableRow[] {
   });
 }
 
+function markdownRequiredTableCell(row: MarkdownTableRow, name: string): string {
+  const value = row[name];
+  if (value === undefined) {
+    throw new Error(`Markdown table row contains ${name}`);
+  }
+  return value;
+}
+
 function generatedCssScopeRuleFacts(
   files: readonly { kind: string; source: string }[],
 ): NormativeDocsGateFact['cssScopeRules'] {
@@ -240,5 +271,79 @@ export const DocCard = component('doc-card', {
     ),
     constitutionTableNumbers: constitutionRows.map((row) => row['#'] ?? ''),
     renderEquivalenceAsserted: true,
+  };
+}
+
+export function v1AcceptanceLedgerGateFact(options: {
+  ledger: string;
+  spec: string;
+}): V1AcceptanceLedgerGateFact {
+  const specCriteria = markdownNumberedListItems(
+    markdownSection(options.spec, '16. Success Criteria (v1)'),
+  ).map((item) => item.split(':')[0] ?? '');
+  const gateRows = markdownTableRows(markdownSection(options.ledger, 'Required Gates'));
+  const gatesByCriterion = new Map(
+    gateRows.map((row) => [markdownRequiredTableCell(row, 'SPEC §16 criterion'), row]),
+  );
+  const auditRows = markdownTableRows(markdownSection(options.ledger, 'Dated Ledger Audit'));
+  const acceptanceRunRows = markdownTableRows(
+    markdownSection(options.ledger, 'Acceptance Command Set'),
+  );
+  const cleanCheckoutRows = markdownTableRows(
+    markdownSection(options.ledger, 'Final Clean-Checkout Checklist'),
+  );
+  const auditStatuses = Object.fromEntries(
+    auditRows.map((row) => [
+      markdownRequiredTableCell(row, 'Area'),
+      markdownRequiredTableCell(row, 'Status'),
+    ]),
+  );
+  const specGateCriteria = specCriteria
+    .map((criterion, index) => `16.${index + 1} ${criterion.replace(/ holds$/, '')}`)
+    .concat('Pre-launch');
+  const gateCriteria = [...gatesByCriterion.keys()];
+
+  return {
+    auditRows,
+    auditStatuses,
+    cleanCheckoutStatuses: cleanCheckoutRows.map((row) => markdownRequiredTableCell(row, 'Status')),
+    externalAuditPendingCount: auditRows.filter((row) =>
+      markdownRequiredTableCell(row, 'Status').startsWith('pending'),
+    ).length,
+    gateCriteria,
+    gateCriteriaMatchSpec:
+      gateCriteria.length === specGateCriteria.length &&
+      gateCriteria.every((criterion, index) => criterion === specGateCriteria[index]),
+    gateEvidenceArtifacts: Object.fromEntries(
+      [...gatesByCriterion].map(([criterion, row]) => [
+        criterion,
+        row['Current evidence artifact'],
+      ]),
+    ),
+    gateStatuses: Object.fromEntries(
+      [...gatesByCriterion].map(([criterion, row]) => [criterion, row.Status]),
+    ),
+    localAcceptanceAuditPending: auditRows.some(
+      (row) =>
+        markdownRequiredTableCell(row, 'Area') === 'Local integration acceptance' &&
+        markdownRequiredTableCell(row, 'Status') === 'pending',
+    ),
+    localAcceptanceAuditRunCount: auditRows.filter(
+      (row) => markdownRequiredTableCell(row, 'Status') === 'passed local run',
+    ).length,
+    passedAcceptanceRunCount: acceptanceRunRows.filter(
+      (row) => markdownRequiredTableCell(row, 'Result') === 'passed',
+    ).length,
+    pendingFreezeRunCount: acceptanceRunRows.filter(
+      (row) =>
+        markdownRequiredTableCell(row, 'Result') === 'pending' &&
+        markdownRequiredTableCell(row, 'Commit') === 'TBD at freeze run',
+    ).length,
+    runFacts: acceptanceRunRows.map((row) => ({
+      command: markdownRequiredTableCell(row, 'Command'),
+      commit: markdownRequiredTableCell(row, 'Commit'),
+      result: markdownRequiredTableCell(row, 'Result'),
+    })),
+    specGateCriteria,
   };
 }

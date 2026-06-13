@@ -12,6 +12,7 @@ import {
   markdownSection,
   markdownTableRows,
   normalizeMarkdownCell,
+  v1AcceptanceLedgerGateFact,
 } from './markdown-fixtures.js';
 
 describe('@jiso/test markdown fixture seam', () => {
@@ -208,5 +209,72 @@ describe('@jiso/test markdown fixture seam', () => {
       renderEquivalenceAsserted: true,
     });
     expect(calls).toEqual(['compile:components/docs/doc-card.tsx:true', 'render:DocCard$choose']);
+  });
+
+  it('projects the v1 acceptance ledger without caller-side table stitching', () => {
+    expect(
+      v1AcceptanceLedgerGateFact({
+        ledger: [
+          '# v1 Acceptance',
+          '## Required Gates',
+          '| SPEC §16 criterion | Status | Current evidence artifact |',
+          '| --- | --- | --- |',
+          '| 16.1 Framework | passed | build output |',
+          '| 16.2 Legibility | pending external study | study ledger |',
+          '| Pre-launch | pending external checks | checklist |',
+          '## Acceptance Command Set',
+          '| Command | Commit | Result |',
+          '| --- | --- | --- |',
+          '| pnpm run acceptance | abc1234 | passed |',
+          '| pnpm run acceptance | TBD at freeze run | pending |',
+          '## Dated Ledger Audit',
+          '| Area | Status |',
+          '| --- | --- |',
+          '| Local integration acceptance | passed local run |',
+          '| Outside legibility study | pending external study |',
+          '| Pre-launch external checks | pending external checks |',
+          '## Final Clean-Checkout Checklist',
+          '| Check | Status |',
+          '| --- | --- |',
+          '| build | pending |',
+          '| fw-check | pending |',
+        ].join('\n'),
+        spec: [
+          '# SPEC',
+          '## 16. Success Criteria (v1)',
+          '1. Framework holds: built.',
+          '2. Legibility holds: studied.',
+        ].join('\n'),
+      }),
+    ).toMatchObject({
+      auditStatuses: {
+        'Local integration acceptance': 'passed local run',
+        'Outside legibility study': 'pending external study',
+        'Pre-launch external checks': 'pending external checks',
+      },
+      cleanCheckoutStatuses: ['pending', 'pending'],
+      externalAuditPendingCount: 2,
+      gateCriteria: ['16.1 Framework', '16.2 Legibility', 'Pre-launch'],
+      gateCriteriaMatchSpec: true,
+      gateEvidenceArtifacts: {
+        '16.1 Framework': 'build output',
+        '16.2 Legibility': 'study ledger',
+        'Pre-launch': 'checklist',
+      },
+      gateStatuses: {
+        '16.1 Framework': 'passed',
+        '16.2 Legibility': 'pending external study',
+        'Pre-launch': 'pending external checks',
+      },
+      localAcceptanceAuditPending: false,
+      localAcceptanceAuditRunCount: 1,
+      passedAcceptanceRunCount: 1,
+      pendingFreezeRunCount: 1,
+      runFacts: [
+        { command: 'pnpm run acceptance', commit: 'abc1234', result: 'passed' },
+        { command: 'pnpm run acceptance', commit: 'TBD at freeze run', result: 'pending' },
+      ],
+      specGateCriteria: ['16.1 Framework', '16.2 Legibility', 'Pre-launch'],
+    });
   });
 });

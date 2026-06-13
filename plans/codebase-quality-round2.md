@@ -124,6 +124,9 @@ fw-check case no longer reads those project files locally.
 Shared runtime fixtures now own the keyed morph and fragment-application behavior projection used by
 the P5 fw-check gate, so the monolith no longer builds that fake structural tree, fragment target,
 and query-store fixture inline.
+Shared markdown fixtures now own the v1 acceptance ledger projection for SPEC §16 criterion
+coverage, evidence artifacts, audit statuses, acceptance runs, and clean-checkout status facts, so
+the P10 fw-check gate no longer stitches those markdown tables locally.
 
 - [ ] Search for remaining custom parsers, raw source membership checks, and generated-artifact
       projections in `tests/fw-check.node.mjs`.
@@ -157,6 +160,12 @@ Latest evidence:
   `pnpm run check:build`;
   targeted `node --test --test-name-pattern "P10 normative docs cover the constitution and compiler hard rules" tests/fw-check.node.mjs`;
   exact `pnpm exec vp check packages/test/src/markdown-fixtures.ts packages/test/src/markdown-fixtures.test.ts packages/test/src/package-exports.test.ts tests/fw-check.node.mjs plans/codebase-quality-round2.md`;
+  `git diff --check`.
+- P10 v1 acceptance ledger fixture slice:
+  `pnpm exec vitest --run packages/test/src/markdown-fixtures.test.ts packages/test/src/package-exports.test.ts`;
+  `pnpm run check:build`;
+  targeted `node --test --test-name-pattern "P10 v1 acceptance ledger tracks every freeze criterion" tests/fw-check.node.mjs`;
+  exact `pnpm exec vp check packages/test/src/markdown-fixtures.ts packages/test/src/markdown-fixtures.test.ts packages/test/src/package-exports.test.ts tests/fw-check.node.mjs`;
   `git diff --check`.
 - Phase 4 inline query batch apply slice:
   `pnpm exec vitest --run packages/runtime/src/query-events.test.ts packages/runtime/src/inline-loader-response-apply.test.ts packages/runtime/src/inline-loader-artifact-minifier.test.ts packages/runtime/src/inline-loader-build.test.ts`;

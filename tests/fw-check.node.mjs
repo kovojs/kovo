@@ -118,10 +118,10 @@ import {
 } from '../packages/test/src/html-fragment.ts';
 import {
   markdownFields,
-  markdownNumberedListItems,
   normativeDocsGateFact,
   markdownSection,
   markdownTableRows,
+  v1AcceptanceLedgerGateFact,
 } from '../packages/test/src/markdown-fixtures.ts';
 import { mcpCompileResponseFacts } from '../packages/test/src/mcp-fixtures.ts';
 import {
@@ -653,56 +653,35 @@ void test('P10 legibility study packet is ready but not claimed complete', async
 void test('P10 v1 acceptance ledger tracks every freeze criterion', async () => {
   const ledger = await readProjectFile('docs/v1-acceptance.md');
   const spec = await readProjectFile('SPEC.md');
-  const specCriteria = markdownNumberedListItems(
-    markdownSection(spec, '16. Success Criteria (v1)'),
-  ).map((item) => item.split(':')[0]);
-  const gateRows = markdownTableRows(markdownSection(ledger, 'Required Gates'));
-  const gatesByCriterion = new Map(gateRows.map((row) => [row['SPEC §16 criterion'], row]));
-  const auditRows = markdownTableRows(markdownSection(ledger, 'Dated Ledger Audit'));
-  const acceptanceRunRows = markdownTableRows(markdownSection(ledger, 'Acceptance Command Set'));
-  const cleanCheckoutRows = markdownTableRows(
-    markdownSection(ledger, 'Final Clean-Checkout Checklist'),
-  );
-  const auditStatuses = Object.fromEntries(auditRows.map((row) => [row.Area, row.Status]));
+  const fact = v1AcceptanceLedgerGateFact({ ledger, spec });
 
-  assert.deepEqual(
-    [...gatesByCriterion.keys()],
-    specCriteria
-      .map((criterion, index) => `16.${index + 1} ${criterion.replace(/ holds$/, '')}`)
-      .concat('Pre-launch'),
-  );
+  assert.deepEqual(fact.gateCriteria, fact.specGateCriteria);
+  assert.equal(fact.gateCriteriaMatchSpec, true);
   assert.equal(
-    gatesByCriterion.get('16.5 Coverage')['Current evidence artifact'],
+    fact.gateEvidenceArtifacts['16.5 Coverage'],
     'Commerce matrix assertions in examples/commerce/src/app.test.ts and fw check optimistic output.',
   );
   assert.equal(
-    gatesByCriterion.get('16.6 Navigation typed')['Current evidence artifact'],
+    fact.gateEvidenceArtifacts['16.6 Navigation typed'],
     'Commerce route/link/redirect checks plus route-rename proof in packages/runtime/src/index.test.ts.',
   );
   assert.equal(
-    gatesByCriterion.get('16.8 Update coverage')['Current evidence artifact'],
+    fact.gateEvidenceArtifacts['16.8 Update coverage'],
     'FW311/update-coverage graph assertions and fw check coverage output.',
   );
-  assert.equal(gatesByCriterion.get('16.2 Legibility').Status, 'pending external study');
-  assert.equal(gatesByCriterion.get('Pre-launch').Status, 'pending external checks');
-  assert.deepEqual(
-    acceptanceRunRows.map((row) => ({
-      command: row.Command,
-      commit: row.Commit,
-      result: row.Result,
-    })),
-    [
-      { command: 'pnpm run acceptance', commit: '5e693a7', result: 'passed' },
-      { command: 'pnpm run acceptance', commit: '036e494', result: 'passed' },
-      { command: 'pnpm run acceptance', commit: 'ec876f5', result: 'passed' },
-      { command: 'pnpm run acceptance', commit: 'TBD at freeze run', result: 'pending' },
-    ],
-  );
+  assert.equal(fact.gateStatuses['16.2 Legibility'], 'pending external study');
+  assert.equal(fact.gateStatuses['Pre-launch'], 'pending external checks');
+  assert.deepEqual(fact.runFacts, [
+    { command: 'pnpm run acceptance', commit: '5e693a7', result: 'passed' },
+    { command: 'pnpm run acceptance', commit: '036e494', result: 'passed' },
+    { command: 'pnpm run acceptance', commit: 'ec876f5', result: 'passed' },
+    { command: 'pnpm run acceptance', commit: 'TBD at freeze run', result: 'pending' },
+  ]);
   assert.deepEqual(
     {
-      legibility: auditStatuses['Outside legibility study'],
-      prelaunch: auditStatuses['Pre-launch external checks'],
-      prelaunchHonesty: auditStatuses['Pre-launch ledger honesty'],
+      legibility: fact.auditStatuses['Outside legibility study'],
+      prelaunch: fact.auditStatuses['Pre-launch external checks'],
+      prelaunchHonesty: fact.auditStatuses['Pre-launch ledger honesty'],
     },
     {
       legibility: 'pending external study',
@@ -710,38 +689,32 @@ void test('P10 v1 acceptance ledger tracks every freeze criterion', async () => 
       prelaunchHonesty: 'packet ready; external evidence pending',
     },
   );
-  assert.ok(acceptanceRunRows.length >= 4);
+  assert.ok(fact.runFacts.length >= 4);
+  assert.equal(fact.passedAcceptanceRunCount, fact.runFacts.length - 1);
+  assert.equal(fact.pendingFreezeRunCount, 1);
   assert.equal(
-    acceptanceRunRows.slice(0, -1).every((row) => row.Result === 'passed'),
-    true,
-  );
-  assert.equal(
-    acceptanceRunRows.filter(
-      (row) => row.Result === 'pending' && row.Commit === 'TBD at freeze run',
-    ).length,
-    1,
-  );
-  assert.equal(
-    auditRows.filter((row) => row.Status === 'passed local run').length,
-    acceptanceRunRows.filter((row) => row.Result === 'passed').length,
+    fact.localAcceptanceAuditRunCount,
+    fact.passedAcceptanceRunCount,
     'each passed local acceptance row has a matching dated audit row',
   );
   assert.equal(
-    auditRows.filter((row) => row.Status.startsWith('pending')).length,
+    fact.externalAuditPendingCount,
     2,
     'only the external-evidence blockers are pending audit rows',
   );
   assert.equal(
-    auditRows.some(
-      (row) => row.Area === 'Local integration acceptance' && row.Status === 'pending',
-    ),
+    fact.localAcceptanceAuditPending,
     false,
     'the pending final clean-checkout run is not claimed as a dated audit row',
   );
-  assert.deepEqual(
-    cleanCheckoutRows.map((row) => row.Status),
-    ['pending', 'pending', 'pending', 'pending', 'pending', 'pending'],
-  );
+  assert.deepEqual(fact.cleanCheckoutStatuses, [
+    'pending',
+    'pending',
+    'pending',
+    'pending',
+    'pending',
+    'pending',
+  ]);
 });
 
 void test('pre-launch checklist is tracked explicitly', async () => {

@@ -264,10 +264,12 @@ import {
   markdownSection,
   markdownTableRows,
   normalizeMarkdownCell,
+  v1AcceptanceLedgerGateFact,
   type MarkdownBoldSectionHeading,
   type MarkdownFields,
   type MarkdownTableRow,
   type NormativeDocsGateFact,
+  type V1AcceptanceLedgerGateFact,
 } from '@jiso/test/markdown-fixtures';
 import {
   mcpCompileResponseFacts,
@@ -580,9 +582,15 @@ describe('@jiso/test package subpath exports', () => {
       { number: '13.1', title: 'CSS' },
     ]);
     expect(normativeDocsGateFact).toBeTypeOf('function');
+    expect(v1AcceptanceLedgerGateFact).toBeTypeOf('function');
     expectTypeOf<NormativeDocsGateFact>().toMatchTypeOf<{
       compilerRuleTitles: string[];
       renderEquivalenceAsserted: boolean;
+    }>();
+    expectTypeOf<V1AcceptanceLedgerGateFact>().toMatchTypeOf<{
+      gateCriteria: string[];
+      gateCriteriaMatchSpec: boolean;
+      runFacts: Array<{ command: string; commit: string; result: string }>;
     }>();
     expect(
       mcpCompileResponseFacts(
