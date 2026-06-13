@@ -211,6 +211,14 @@ Latest evidence:
   `serverCommerceStylesheetBehaviorFact()` as the public fixture seam for SPEC §13.5/§16.5
   commerce fragment stylesheet hints, and `tests/fw-check.node.mjs` asserts that structured fact
   instead of local stylesheet manifest, deferred-stream HTML, and failure-fragment mechanics.
+- Phase 5 Vite writer public boundary slice:
+  `pnpm exec vitest --run packages/server/src/api/app.test.ts packages/server/src/vite.test.ts`;
+  `pnpm exec tsc --noEmit --pretty false`;
+  `pnpm exec vp check packages/server/src/api/app-shell/vite.ts packages/server/src/api/app.test.ts packages/server/src/vite.test.ts plans/app-shell.md plans/codebase-quality-round2.md`;
+  `git diff --check`. Evidence: `packages/server/src/api/app-shell/vite.ts` no longer exports
+  raw Vite build-output or plugin-hook writer helpers from the focused public Vite subpath, while
+  `packages/server/src/api/app.test.ts` pins the removed values and plugin-hook context/result
+  type aliases absent under SPEC §9.5.
 - Phase 5 Vite build-output type alias removal slice:
   `pnpm exec vitest --run packages/server/src/api/app.test.ts`;
   `pnpm exec tsc --noEmit --pretty false`;

@@ -9,10 +9,7 @@ export {
   createJisoAppShellViteBuildFromBundle,
   createJisoAppShellViteBuildFromManifestFile,
 } from '../../vite-build.js';
-export {
-  jisoAppShellViteOutputDir,
-  writeJisoAppShellViteBuildOutput,
-} from '../../vite-build-output.js';
+export { jisoAppShellViteOutputDir } from '../../vite-build-output.js';
 export {
   jisoAppShellViteManifestFile,
   jisoAppShellViteBuildStaticExportAssets,
@@ -42,7 +39,6 @@ export {
   jisoAppShellViteRouteEntries,
 } from '../../vite-manifest.js';
 export { jisoAppShellVitePlugin } from '../../vite-plugin.js';
-export { writeJisoAppShellVitePluginBuild } from '../../vite-plugin-build.js';
 export type {
   JisoAppShellBuildAsset,
   JisoAppShellRouteBuildEntry,
@@ -94,7 +90,3 @@ export type {
   JisoAppShellViteMiddleware,
 } from '../../vite-dev.js';
 export type { JisoAppShellVitePlugin, JisoAppShellVitePluginOptions } from '../../vite-plugin.js';
-export type {
-  JisoAppShellVitePluginBuildContext,
-  JisoAppShellVitePluginBuildResult,
-} from '../../vite-plugin-build.js';

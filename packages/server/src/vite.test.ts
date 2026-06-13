@@ -30,8 +30,8 @@ import {
   type JisoAppShellBuild,
   type JisoAppShellViteBuildOutput,
   type JisoAppShellViteMiddleware,
-  writeJisoAppShellViteBuildOutput,
 } from './api/app-shell/vite.js';
+import { writeJisoAppShellViteBuildOutput } from './vite-build-output.js';
 import { jisoAppShellVitePlugin as splitJisoAppShellVitePlugin } from './vite-plugin.js';
 
 describe('server app shell Vite plugin', () => {

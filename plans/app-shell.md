@@ -146,6 +146,21 @@ Implemented areas:
   versioned client-module registry, or Node adapter handler option aliases; those types remain
   available from the focused SPEC §9.5 app-shell subpaths while root keeps the built acceptance
   harness value entries and CLI-used app/export diagnostic types.
+- The focused `@jiso/server/app-shell/vite` public subpath no longer forwards raw Vite build-output
+  or plugin-hook writer helpers; outside SPEC §9.5 consumers stay on the build/export bridge while
+  server internals keep the hook implementation path private.
+
+Round341 Vite writer public boundary evidence:
+
+- `packages/server/src/api/app-shell/vite.ts` removes `writeJisoAppShellViteBuildOutput()` and
+  `writeJisoAppShellVitePluginBuild()` from the focused public Vite subpath while preserving the
+  higher-level build/export bridge.
+- `packages/server/src/api/app.test.ts` pins the removed value exports and plugin-hook
+  context/result type aliases as absent under SPEC §9.5.
+- `pnpm exec vitest --run packages/server/src/api/app.test.ts packages/server/src/vite.test.ts`
+- `pnpm exec tsc --noEmit --pretty false`
+- `pnpm exec vp check packages/server/src/api/app-shell/vite.ts packages/server/src/api/app.test.ts packages/server/src/vite.test.ts plans/app-shell.md plans/codebase-quality-round2.md`
+- `git diff --check`
 
 Round336 root app-shell type alias removal evidence:
 

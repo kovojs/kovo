@@ -77,6 +77,16 @@ type RemovedViteClientModuleOutputPlanItem = vt.JisoAppShellViteClientModuleOutp
 // eslint-disable-next-line no-unused-vars -- compile-time removal assertion only.
 type RemovedViteBuildOutputStaticExportOptions = vt.JisoAppShellViteBuildOutputStaticExportOptions;
 
+// @ts-expect-error SPEC.md §9.5: plugin-hook build contexts stay internal to the Vite plugin
+// bridge, not an outside app-shell/Vite consumer alias.
+// eslint-disable-next-line no-unused-vars -- compile-time removal assertion only.
+type RemovedVitePluginBuildContext = vt.JisoAppShellVitePluginBuildContext;
+
+// @ts-expect-error SPEC.md §9.5: plugin-hook build results stay internal to the Vite plugin
+// bridge, not an outside app-shell/Vite consumer alias.
+// eslint-disable-next-line no-unused-vars -- compile-time removal assertion only.
+type RemovedVitePluginBuildResult = vt.JisoAppShellVitePluginBuildResult;
+
 function aggregateValueKeys(...modules: readonly Record<string, unknown>[]): string[] {
   return [...new Set(modules.flatMap((module) => Object.keys(module)))].sort();
 }
@@ -225,8 +235,6 @@ describe('server app-shell public API barrels', () => {
       'staticExportInventoryForJisoAppShellViteBuildFromManifestFile',
       'staticExportManifestForJisoAppShellViteBuild',
       'staticExportManifestForJisoAppShellViteBuildFromManifestFile',
-      'writeJisoAppShellViteBuildOutput',
-      'writeJisoAppShellVitePluginBuild',
     ]);
 
     expect(packageCoreApi.createApp).toBe(coreApi.createApp);
@@ -262,9 +270,8 @@ describe('server app-shell public API barrels', () => {
     expect(packageViteApi.createJisoAppShellViteBuild).toBe(viteApi.createJisoAppShellViteBuild);
     expect(packageViteApi).not.toHaveProperty('createJisoAppShellBuild');
     expect(packageViteApi).not.toHaveProperty('JisoAppShellViteInput');
-    expect(packageViteApi.writeJisoAppShellVitePluginBuild).toBe(
-      viteApi.writeJisoAppShellVitePluginBuild,
-    );
+    expect(packageViteApi).not.toHaveProperty('writeJisoAppShellViteBuildOutput');
+    expect(packageViteApi).not.toHaveProperty('writeJisoAppShellVitePluginBuild');
     expect(packageViteApi.exportJisoAppShellViteBuild).toBe(viteApi.exportJisoAppShellViteBuild);
     expect(viteApi.exportJisoAppShellViteBuild).toBe(
       viteStaticExportBuildApi.exportJisoAppShellViteBuild,
