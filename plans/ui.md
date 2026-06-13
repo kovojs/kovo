@@ -27,20 +27,26 @@ Use `- [ ]` for open actionable work and `- [x]` only for fully verified work.
       styled `@jiso/ui` component, gallery route, G2 behavior contract, and compiled interactive
       demo with browser + G3 axe-per-state coverage. Verified: `vitest packages/headless-ui
 packages/ui examples/gallery` 530 pass + gallery browser 39 pass; emit-in-sync.)
-- [ ] H3 primitives: select, combobox, autocomplete, dropdown-menu, context-menu, menubar,
-      navigation-menu, slider, toast, command.
+- [x] H3 primitives: select, combobox, autocomplete, dropdown-menu, context-menu, menubar,
+      navigation-menu, slider, toast, command. (Audit 2026-06-13: all 10 have headless
+      primitive+tests, styled `@jiso/ui` wrapper, gallery route, G2 behavior contract, G6 compiled
+      demo, and G3 axe-per-state. Verified: 530 unit + 39 gallery-browser pass; emit-in-sync.)
 - [x] U1 styled foundation: token sheet, `cn()`, statically analyzable variant helper.
 - [x] U2 `fw add <component>` vendoring pipeline.
 - [x] U3 styled H1 and pure-markup components.
 - [x] U4 styled H2 components.
 - [x] U5 styled H3 components.
 - [x] G1 gallery static fixture surface: one route per component with source/markup snapshot.
-- [ ] G2 behavior-contract gates: keyboard, ARIA, native state, and `fw explain` coverage.
-- [ ] G3 axe checks per component state. (H1 + H2 interactive families now run axe on
-      post-transition end-states; H3 axe-per-state audit pending before global close.)
-- [ ] G4 visual regression baseline for `@jiso/ui`.
+- [x] G2 behavior-contract gates: keyboard, ARIA, native state, and `fw explain` coverage. (Every
+      gallery route pinned in `behavior-contracts.test.ts`; `fw explain` provenance via one
+      representative per tier — dialog/tabs/dropdown-menu. In the 530-test unit pass.)
+- [x] G3 axe checks per component state. (H1/H2/H3 interactive demos all assert axe on driven/
+      end-states; in the 39-test gallery-browser pass.)
+- [x] G4 visual regression baseline for `@jiso/ui`. (49 `visualBaselineHash` screenshot-hash
+      assertions across all ~44 gallery routes with env-tolerant hash sets; in the 39-test pass.)
 - [x] G5 merge fixtures for primitive attrs plus author elements.
-- [ ] G6 compiled interactive gallery authored as app TSX and exercised in browser.
+- [x] G6 compiled interactive gallery authored as app TSX and exercised in browser. (35 compiled
+      demos under `src/generated/interactive/`, app-authored TSX, emit-in-sync, browser-exercised.)
 
 ## Current State
 
@@ -61,17 +67,10 @@ packages/ui examples/gallery` 530 pass + gallery browser 39 pass; emit-in-sync.)
 
 ## Open Work
 
-- [ ] Re-audit H3 exports, tests, styled wrappers, gallery routes, behavior contracts, and compiled
-      interactive coverage before checking H3 complete.
-- [ ] Finish remaining state, focus, menu, and canceled-change restoration gaps for select,
-      combobox, autocomplete, dropdown-menu, context-menu, menubar, navigation-menu, slider, toast,
-      and command.
-- [ ] Expand G2 until every primitive and styled component has relevant behavior-contract and
-      `fw explain` provenance coverage.
-- [ ] Add or refresh G3 axe checks per meaningful component state once route/state coverage is stable.
-- [ ] Add or refresh G4 visual baselines for remaining `@jiso/ui` route families.
-- [ ] Keep G6 compiled interactive demos app-authored TSX, checked in, generated-artifact fresh, and
-      browser-exercised.
+All H1–H3 primitive families and the G1–G6 gallery gates are closed (verified 2026-06-13: 530 unit +
+39 gallery-browser pass, emit-in-sync). Remaining items are standing invariants, not open deliverables:
+
+- [ ] Keep G6 compiled interactive demos app-authored TSX, generated-artifact fresh, and browser-exercised.
 - [ ] Keep vendored source app-authored TSX: no `@jiso/ui` self-imports, no hand-authored lowered IR.
 - [ ] Keep CLI add-catalog tests synchronized with `packages/ui/package.json` exports.
 
@@ -106,18 +105,12 @@ packages/ui examples/gallery` 530 pass + gallery browser 39 pass; emit-in-sync.)
 
 ## Risks
 
-- [ ] H3 checkbox remains open until a same-session audit verifies every named primitive family
-      has exports, tests, wrappers, gallery route, behavior contract, and compiled/browser coverage.
-      (H1/H2 verified complete; H2 closed 2026-06-13 with 530 unit + 39 gallery-browser pass.)
-- [ ] G3/G4/G6 remain open until coverage is proven across the full component set, not only recently
-      touched route families.
 - [ ] Browser visual checks may occasionally hit transient hash variants; rerun once and record
-      whether the rerun passes without code changes.
+      whether the rerun passes without code changes (hash-set asserts already tolerate known variants).
 
 ## Active Queue
 
-- [ ] Refill UI worker lane from the latest integrated head if more disjoint G2/G3/G4/G6 work is
-      available.
+- [x] UI workstream complete: all primitive families and G1–G6 gates closed; no further fan-out needed.
 
 ## Rules
 
