@@ -116,8 +116,9 @@ narrowed. Visible-return hydration, typed-read refetch, mutation responses, defe
 query events, enhanced submit, broadcast, and hydrated query scripts increasingly share canonical
 parser/apply helpers. Runtime test coverage has started moving out of `index.test.ts` into focused
 query/apply/loader/optimism/morph/delegated-handler integration tests; the broad barrel test is now
-focused on loader installation, inline parity, query hydration, enhanced mutation bridge, and
-disposal smoke coverage.
+focused on loader installation, query hydration, enhanced mutation bridge, and disposal smoke
+coverage. Inline readable/minified/generated/extracted loader parity coverage now owns inline
+enhanced-form, delegated handler, and handler-error behavior in `inline-loader.test.ts`.
 
 - [x] Audit for any remaining internal compatibility-style apply wrappers after `applyFragmentQueryBody`
       deletion.
@@ -128,6 +129,7 @@ disposal smoke coverage.
 Latest evidence:
 
 - `pnpm exec vitest --run packages/runtime/src/index.test.ts packages/runtime/src/delegated-runtime-integration.test.ts`
+- `pnpm exec vitest --run packages/runtime/src/inline-loader.test.ts packages/runtime/src/index.test.ts`
 - `pnpm exec vitest --run packages/runtime/src`
 - `pnpm exec vitest --config vitest.browser.config.ts --run packages/runtime/src/index.browser.test.ts`
 - `pnpm --filter @jiso/runtime run check:inline-loader`
