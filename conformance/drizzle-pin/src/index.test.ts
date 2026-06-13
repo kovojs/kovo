@@ -1507,6 +1507,89 @@ describe('Drizzle pinned subset conformance', () => {
     ]);
   });
 
+  it('pins tuple-indexed static callback configs under real Drizzle Postgres receiver types', () => {
+    const files = [
+      {
+        fileName: 'conformance/drizzle-pin/src/product.domain.ts',
+        source: [
+          "import type { PgDatabase } from 'drizzle-orm/pg-core';",
+          '',
+          "export const products = pgTable('products', {",
+          "  id: text('id').primaryKey(),",
+          "  stock: integer('stock').notNull(),",
+          "}, jiso({ domain: 'product', key: 'id' }));",
+          '',
+          'function addItem(db: PgDatabase<any, any, any>, productId: string) {',
+          '  db.update(products).set({ stock: 1 }).where(eq(products.id, productId));',
+          '}',
+          '',
+          'function loadProducts(_input: unknown, db: PgDatabase<any, any, any>) {',
+          '  return db.select({ id: products.id, stock: products.stock }).from(products);',
+          '}',
+          '',
+          'const callbackTuples = [[addItem], [{ loadProducts }]] as const;',
+          'const actionConfigs = [{ add: write(callbackTuples[0][0]) }] as const;',
+          'const queryConfigs = [{ load: callbackTuples[1][0].loadProducts }] as const;',
+          '',
+          'export const productDomain = domain(actionConfigs[0]);',
+          '',
+          "export const productQuery = query('product/tuple-indexed-config', queryConfigs[0]);",
+        ].join('\n'),
+      },
+    ];
+
+    expect(extractTouchGraphFromProject({ files })).toEqual({
+      addItem: {
+        reads: [],
+        touches: [
+          {
+            domain: 'product',
+            keys: 'arg:productId',
+            site: 'conformance/drizzle-pin/src/product.domain.ts:9',
+            via: 'products',
+          },
+        ],
+        unresolved: [],
+      },
+      loadProducts: {
+        reads: [
+          {
+            domain: 'product',
+            keys: null,
+            site: 'conformance/drizzle-pin/src/product.domain.ts:13',
+            source: 'select',
+            via: 'products',
+          },
+        ],
+        touches: [],
+        unresolved: [],
+      },
+      'productDomain.add': {
+        reads: [],
+        touches: [
+          {
+            domain: 'product',
+            keys: 'arg:productId',
+            site: 'conformance/drizzle-pin/src/product.domain.ts:9',
+            via: 'products',
+          },
+        ],
+        unresolved: [],
+      },
+    });
+    expect(extractQueryFactsFromProject({ files })).toEqual([
+      {
+        query: 'product/tuple-indexed-config',
+        reads: ['product'],
+        shape: {
+          id: 'string',
+          stock: 'number',
+        },
+        site: 'conformance/drizzle-pin/src/product.domain.ts:22',
+      },
+    ]);
+  });
+
   it('pins unresolved dynamic callback references as FW406 under real Drizzle imports', () => {
     const files = [
       {

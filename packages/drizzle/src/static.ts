@@ -2940,6 +2940,12 @@ function queryBodyObjectLiteralFromNode(
     return { unresolved: true };
   }
 
+  const literalReference = staticLiteralReferenceFromExpression(expression, seen);
+  if (literalReference && literalReference !== expression) {
+    const body = queryBodyObjectLiteralFromNode(literalReference, seen, mode);
+    if (body) return body;
+  }
+
   const key = `${expression.getSourceFile().getFilePath()}:${expression.getStart()}`;
   if (seen.has(key)) return { unresolved: true };
   seen.add(key);
@@ -3080,6 +3086,15 @@ function queryLoadCallbackFromSpreadExpression(
     return resolution.unresolvedNodes.length > 0 ? { kind: 'unresolved' } : { kind: 'none' };
   }
 
+  const literalReference = staticLiteralReferenceFromExpression(expression);
+  if (literalReference && literalReference !== expression) {
+    return queryLoadCallbackFromSpreadExpression(
+      unwrappedStaticExpressionNode(literalReference),
+      location,
+      mode,
+    );
+  }
+
   const loadSymbol = symbolForStaticTypePath(expression, ['load'], location);
   if (!loadSymbol) {
     const type = expression.getType();
@@ -3153,6 +3168,11 @@ function queryCallbackExpressionResolution(
   }
 
   if (mode === 'source') return { kind: 'unresolved' };
+
+  const literalReference = staticLiteralReferenceFromExpression(expression);
+  if (literalReference && literalReference !== expression) {
+    return queryCallbackExpressionResolution(unwrappedStaticExpressionNode(literalReference), mode);
+  }
 
   const callback = referencedQueryCallbackFunction(expression);
   return callback
@@ -3367,6 +3387,33 @@ function staticLiteralContainerExpression(
   }
 
   return undefined;
+}
+
+function staticLiteralReferenceFromExpression(
+  node: Node,
+  seen: Set<string> = new Set(),
+): Node | undefined {
+  const access = staticAccessSegments(node);
+  if (!access || access.path.length === 0) return undefined;
+
+  const container = staticLiteralContainerExpression(access.root, seen);
+  return container ? callbackReferenceFromStaticLiteralPath(container, access.path) : undefined;
+}
+
+function staticAccessSegments(node: Node): { path: string[]; root: Node } | undefined {
+  const expression = unwrappedStaticExpressionNode(node);
+  if (Node.isIdentifier(expression) || Node.isThisExpression(expression)) {
+    return { path: [], root: expression };
+  }
+  if (!Node.isPropertyAccessExpression(expression) && !Node.isElementAccessExpression(expression)) {
+    return undefined;
+  }
+
+  const owner = staticAccessSegments(expression.getExpression());
+  const member = staticAccessName(expression);
+  if (!owner || !member) return undefined;
+
+  return { path: [...owner.path, member], root: owner.root };
 }
 
 function staticLiteralContainerInitializer(declaration: Node): Node | undefined {
@@ -5380,6 +5427,12 @@ function domainWriteObjectFromNode(
   const expression = unwrappedStaticExpressionNode(node);
   if (Node.isObjectLiteralExpression(expression)) return { body: expression, unresolved: false };
 
+  const literalReference = staticLiteralReferenceFromExpression(expression, seen);
+  if (literalReference && literalReference !== expression) {
+    const body = domainWriteObjectFromNode(literalReference, seen);
+    if (body) return body;
+  }
+
   const key = `${expression.getSourceFile().getFilePath()}:${expression.getStart()}`;
   if (seen.has(key)) return { unresolved: true };
   seen.add(key);
@@ -5582,6 +5635,14 @@ function domainWritePropertiesFromExpression(
     return domainWriteProperties(expression, seen);
   }
 
+  const literalReference = staticLiteralReferenceFromExpression(expression, seen);
+  if (literalReference && literalReference !== expression) {
+    return domainWritePropertiesFromExpression(
+      unwrappedStaticExpressionNode(literalReference),
+      seen,
+    );
+  }
+
   const key = resolvedSymbolKey(expression.getSymbol()) ?? expression.getText();
   if (seen.has(key)) return [];
   seen.add(key);
@@ -5719,6 +5780,11 @@ function writeActionCallbackResolution(
   if (seen.has(key)) return { callbacks: [], unresolved: true };
   seen.add(key);
 
+  const literalReference = staticLiteralReferenceFromExpression(expression, seen);
+  if (literalReference && literalReference !== expression) {
+    return writeActionCallbackResolution(unwrappedStaticExpressionNode(literalReference), seen);
+  }
+
   for (const declaration of symbolForCallbackReference(expression)?.getDeclarations() ?? []) {
     const referenced = writeActionCallbackFromDeclaration(declaration, seen);
     if (referenced) return { callbacks: [referenced], unresolved: false };
@@ -5758,6 +5824,10 @@ function writeActionCallbackFromDeclaration(
 function writeCallbackArgumentFunction(argument: Node): Node | null {
   const expression = unwrappedStaticExpressionNode(argument);
   if (Node.isArrowFunction(expression) || Node.isFunctionExpression(expression)) return expression;
+  const literalReference = staticLiteralReferenceFromExpression(expression);
+  if (literalReference && literalReference !== expression) {
+    return writeCallbackArgumentFunction(literalReference);
+  }
   return referencedWriteCallbackFunction(expression) ?? null;
 }
 

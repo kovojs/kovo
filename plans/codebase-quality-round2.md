@@ -836,6 +836,12 @@ conformance/drizzle-pin/src/index.test.ts plans/codebase-quality-round2.md`; and
       while keeping the opaque branch visible as FW406. `packages/drizzle/src/index.test.ts` and
       `conformance/drizzle-pin/src/index.test.ts` pin package and real `drizzle-orm` Postgres
       receiver behavior.
+      Evidence 2026-06-13 round279: tuple-indexed static containers such as
+      `query(name, queryConfigs[0])`, `domain(actionConfigs[0])`,
+      `load: callbackTuples[1][0].loadProducts`, and `write(callbackTuples[0][0])` now resolve
+      through static literal/project facts instead of degrading to FW406. `packages/drizzle/src/index.test.ts`
+      and `conformance/drizzle-pin/src/index.test.ts` pin package and real `drizzle-orm` Postgres
+      receiver behavior.
 - [x] Keep SQLite conformance deferred to late hardening; focus v1 on Postgres behavior.
       Evidence: `packages/drizzle/src/drizzle-surface.ts`, `packages/drizzle/src/static.ts`,
       `packages/drizzle/src/index.test.ts`, and `conformance/drizzle-pin/src/index.test.ts` pin the
@@ -844,6 +850,11 @@ conformance/drizzle-pin/src/index.test.ts plans/codebase-quality-round2.md`; and
 Latest evidence:
 
 - round278 direct conditional loader/action member slice:
+  `pnpm exec vitest --run packages/drizzle/src`;
+  `pnpm --filter @jiso/conformance-drizzle-pin test`;
+  exact `pnpm exec vp check packages/drizzle/src/static.ts packages/drizzle/src/index.test.ts conformance/drizzle-pin/src/index.test.ts plans/codebase-quality-round2.md`;
+  `git diff --check`.
+- round279 tuple-indexed static callback/config container slice:
   `pnpm exec vitest --run packages/drizzle/src`;
   `pnpm --filter @jiso/conformance-drizzle-pin test`;
   exact `pnpm exec vp check packages/drizzle/src/static.ts packages/drizzle/src/index.test.ts conformance/drizzle-pin/src/index.test.ts plans/codebase-quality-round2.md`;
