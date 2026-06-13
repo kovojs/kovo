@@ -7762,6 +7762,53 @@ export interface CommerceInvalidationSets {
     });
   });
 
+  it('marks typed source domain action spread members as FW406 when no write callback is proven', () => {
+    const graph = extractTouchGraphFromSource([
+      {
+        fileName: 'cart.domain.ts',
+        source: [
+          'export const cartItems = pgTable("cart_items", {}, jiso({ domain: "cart", key: "productId" }));',
+          '',
+          'function addItem(db, productId) {',
+          '  return db.insert(cartItems).values({ productId });',
+          '}',
+          '',
+          'const typedActions: { addItem: typeof addItem } = { addItem };',
+          '',
+          'export const cart = domain({',
+          '  ...typedActions,',
+          '});',
+        ].join('\n'),
+      },
+    ]);
+
+    expect(graph).toEqual({
+      addItem: {
+        reads: [],
+        touches: [
+          {
+            domain: 'cart',
+            keys: null,
+            site: 'cart.domain.ts:4',
+            via: 'cart_items',
+          },
+        ],
+        unresolved: [],
+      },
+      'cart.addItem': {
+        reads: [],
+        touches: [],
+        unresolved: [
+          {
+            code: 'FW406',
+            message: 'Statically un-analyzable write site; manual touches required.',
+            site: 'cart.domain.ts:7',
+          },
+        ],
+      },
+    });
+  });
+
   it('extracts source write callbacks through nested static object aliases', () => {
     const graph = extractTouchGraphFromSource([
       {
@@ -8013,6 +8060,44 @@ export interface CommerceInvalidationSets {
             code: 'FW406',
             message: 'Statically un-analyzable write site; manual touches required.',
             site: 'cart.domain.ts:13',
+          },
+        ],
+      },
+    });
+  });
+
+  it('marks typed project domain action spread members as FW406 when no write callback is proven', () => {
+    const graph = extractTouchGraphFromProject({
+      files: [
+        pgDatabaseTypes(['insert(table: unknown): { values(value: unknown): Promise<void> };']),
+        {
+          fileName: 'cart.domain.ts',
+          source: [
+            'import type { PgDatabase } from "drizzle-orm/pg-core";',
+            '',
+            'export const cartItems = pgTable("cart_items", {}, jiso({ domain: "cart", key: "productId" }));',
+            '',
+            'declare const externalActions: {',
+            '  addItem(db: PgDatabase, productId: string): Promise<void>;',
+            '};',
+            '',
+            'export const cart = domain({',
+            '  ...externalActions,',
+            '});',
+          ].join('\n'),
+        },
+      ],
+    });
+
+    expect(graph).toEqual({
+      'cart.addItem': {
+        reads: [],
+        touches: [],
+        unresolved: [
+          {
+            code: 'FW406',
+            message: 'Statically un-analyzable write site; manual touches required.',
+            site: 'cart.domain.ts:6',
           },
         ],
       },

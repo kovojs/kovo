@@ -590,6 +590,15 @@ conformance/drizzle-pin/src/index.test.ts plans/codebase-quality-round2.md`, and
       `packages/drizzle/src/index.test.ts` covers query-loader and mutation/function member
       surfaces, and `conformance/drizzle-pin/src/index.test.ts` pins source-mode behavior with
       real `drizzle-orm` imports.
+      Evidence 2026-06-13 round264: typed domain action spreads whose members cannot be proven as
+      `write(...)` callbacks now remain visible as named FW406 mutation graph entries instead of
+      disappearing behind spread syntax. `packages/drizzle/src/index.test.ts` covers source and
+      project typed spread members, and `conformance/drizzle-pin/src/index.test.ts` pins the
+      project surface against real `drizzle-orm` Postgres receiver types. Verified by
+      `pnpm exec vitest --run packages/drizzle/src`,
+      `pnpm --filter @jiso/conformance-drizzle-pin test`,
+      exact `pnpm exec vp check packages/drizzle/src/static.ts packages/drizzle/src/index.test.ts conformance/drizzle-pin/src/index.test.ts plans/codebase-quality-round2.md`,
+      and `git diff --check`.
 - [x] Keep SQLite conformance deferred to late hardening; focus v1 on Postgres behavior.
       Evidence: `packages/drizzle/src/drizzle-surface.ts`, `packages/drizzle/src/static.ts`,
       `packages/drizzle/src/index.test.ts`, and `conformance/drizzle-pin/src/index.test.ts` pin the

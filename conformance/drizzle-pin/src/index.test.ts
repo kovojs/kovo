@@ -1501,6 +1501,45 @@ describe('Drizzle pinned subset conformance', () => {
     });
   });
 
+  it('pins typed domain action spread members as FW406 under real Drizzle imports', () => {
+    const graph = extractTouchGraphFromProject({
+      files: [
+        {
+          fileName: 'conformance/drizzle-pin/src/product.domain.ts',
+          source: [
+            "import type { PgDatabase } from 'drizzle-orm/pg-core';",
+            '',
+            "export const products = pgTable('products', {",
+            "  id: text('id').primaryKey(),",
+            "}, jiso({ domain: 'product', key: 'id' }));",
+            '',
+            'declare const externalActions: {',
+            '  addItem(db: PgDatabase<any, any, any>, productId: string): Promise<void>;',
+            '};',
+            '',
+            'export const productDomain = domain({',
+            '  ...externalActions,',
+            '});',
+          ].join('\n'),
+        },
+      ],
+    });
+
+    expect(graph).toEqual({
+      'productDomain.addItem': {
+        reads: [],
+        touches: [],
+        unresolved: [
+          {
+            code: 'FW406',
+            message: 'Statically un-analyzable write site; manual touches required.',
+            site: 'conformance/drizzle-pin/src/product.domain.ts:8',
+          },
+        ],
+      },
+    });
+  });
+
   it('pins nested destructuring assignment receiver aliases under real Drizzle imports', () => {
     const files = [
       {

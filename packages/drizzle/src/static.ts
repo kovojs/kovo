@@ -5015,8 +5015,8 @@ function unresolvedDomainWriteCallbacks(file: SourceFileInput): { name: string; 
 
       for (const spread of unresolvedDomainWriteSpreads(domainObject.body)) {
         unresolved.push({
-          name: `${domainName.getText()}.${UNRESOLVED_DOMAIN_WRITE_SPREAD_MEMBER}`,
-          site: `${file.fileName}:${lineForIndex(file.source, spread.getStart())}`,
+          name: `${domainName.getText()}.${spread.memberName}`,
+          site: `${file.fileName}:${lineForIndex(file.source, spread.siteNode.getStart())}`,
         });
       }
 
@@ -5106,8 +5106,15 @@ function domainWriteObjectFromDeclaration(
   return undefined;
 }
 
-function unresolvedDomainWriteSpreads(object: ObjectLiteralExpression): Node[] {
-  const unresolved: Node[] = [];
+interface UnresolvedDomainWriteSpread {
+  memberName: string;
+  siteNode: Node;
+}
+
+function unresolvedDomainWriteSpreads(
+  object: ObjectLiteralExpression,
+): UnresolvedDomainWriteSpread[] {
+  const unresolved: UnresolvedDomainWriteSpread[] = [];
 
   for (const property of object.getProperties()) {
     if (!Node.isSpreadAssignment(property)) continue;
@@ -5115,9 +5122,29 @@ function unresolvedDomainWriteSpreads(object: ObjectLiteralExpression): Node[] {
     // must stay visible as FW406 instead of disappearing from the mutation graph.
     const expression = unwrappedStaticExpressionNode(property.getExpression());
     const spreadProperties = domainWritePropertiesFromSpread(property, new Set());
+    const resolvedMembers = new Set(
+      spreadProperties.map((spreadProperty) => spreadProperty.memberName),
+    );
     const type = expression.getType();
     if (spreadProperties.length === 0 && (type.isAny() || type.isUnknown())) {
-      unresolved.push(property);
+      unresolved.push({
+        memberName: UNRESOLVED_DOMAIN_WRITE_SPREAD_MEMBER,
+        siteNode: property,
+      });
+      continue;
+    }
+
+    for (const symbol of type.getProperties()) {
+      const memberName = symbol.getName();
+      if (resolvedMembers.has(memberName)) continue;
+      const declarations = symbol.getDeclarations();
+      if (
+        declarations.every(
+          (declaration) => !domainWritePropertyFromDeclaration(memberName, declaration, new Set()),
+        )
+      ) {
+        unresolved.push({ memberName, siteNode: declarations[0] ?? property });
+      }
     }
   }
 
