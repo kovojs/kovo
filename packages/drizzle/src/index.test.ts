@@ -12182,6 +12182,173 @@ export interface CommerceInvalidationSets {
     ]);
   });
 
+  it('extracts project query loaders and domain actions through static computed keys', () => {
+    const files = [
+      pgDatabaseTypes([
+        'select(value?: unknown): { from(table: unknown): Promise<void> };',
+        'update(table: unknown): { set(value: unknown): { where(value: unknown): Promise<void> } };',
+      ]),
+      {
+        fileName: 'product.domain.ts',
+        source: [
+          'import { eq } from "drizzle-orm";',
+          'import type { PgDatabase } from "drizzle-orm/pg-core";',
+          '',
+          'export const products = pgTable("products", {',
+          '  id: text("id").primaryKey(),',
+          '}, jiso({ domain: "product", key: "id" }));',
+          '',
+          'const loadKey = "load";',
+          'const addKey = "add";',
+          'const keyBag = { restock: "restock" } as const;',
+          '',
+          'function addItem(db: PgDatabase<any, any, any>, productId: string) {',
+          '  return db.update(products).set({ id: productId }).where(eq(products.id, productId));',
+          '}',
+          '',
+          'export const productDomain = domain({',
+          '  [addKey]: write(addItem),',
+          '  [keyBag.restock]: write(addItem),',
+          '});',
+          '',
+          'export const productQuery = query("product/static-computed-loader", {',
+          '  [loadKey](_input: unknown, db: PgDatabase<any, any, any>) {',
+          '    return db.select({ id: products.id }).from(products);',
+          '  },',
+          '});',
+        ].join('\n'),
+      },
+    ];
+
+    expect(extractTouchGraphFromProject({ files })).toEqual({
+      addItem: {
+        reads: [],
+        touches: [
+          {
+            domain: 'product',
+            keys: 'arg:productId',
+            site: 'product.domain.ts:13',
+            via: 'products',
+          },
+        ],
+        unresolved: [],
+      },
+      'productDomain.add': {
+        reads: [],
+        touches: [
+          {
+            domain: 'product',
+            keys: 'arg:productId',
+            site: 'product.domain.ts:13',
+            via: 'products',
+          },
+        ],
+        unresolved: [],
+      },
+      'productDomain.restock': {
+        reads: [],
+        touches: [
+          {
+            domain: 'product',
+            keys: 'arg:productId',
+            site: 'product.domain.ts:13',
+            via: 'products',
+          },
+        ],
+        unresolved: [],
+      },
+    });
+    expect(extractQueryFactsFromProject({ files })).toEqual([
+      {
+        query: 'product/static-computed-loader',
+        reads: ['product'],
+        shape: {
+          id: 'string',
+        },
+        site: 'product.domain.ts:21',
+      },
+    ]);
+  });
+
+  it('marks unresolved computed query loaders and domain actions as FW406', () => {
+    const files = [
+      pgDatabaseTypes([
+        'select(value?: unknown): { from(table: unknown): Promise<void> };',
+        'update(table: unknown): { set(value: unknown): Promise<void> };',
+      ]),
+      {
+        fileName: 'product.domain.ts',
+        source: [
+          'import type { PgDatabase } from "drizzle-orm/pg-core";',
+          '',
+          'export const products = pgTable("products", {',
+          '  id: text("id").primaryKey(),',
+          '}, jiso({ domain: "product", key: "id" }));',
+          '',
+          'declare const actionKey: string;',
+          'declare const loadKey: string;',
+          '',
+          'function addItem(db: PgDatabase<any, any, any>) {',
+          '  return db.update(products).set({});',
+          '}',
+          '',
+          'export const productDomain = domain({',
+          '  [actionKey]: write(addItem),',
+          '});',
+          '',
+          'export const productQuery = query("product/unresolved-computed-loader", {',
+          '  [loadKey](_input: unknown, db: PgDatabase<any, any, any>) {',
+          '    return db.select({ id: products.id }).from(products);',
+          '  },',
+          '});',
+        ].join('\n'),
+      },
+    ];
+
+    expect(extractTouchGraphFromProject({ files })).toEqual({
+      addItem: {
+        reads: [],
+        touches: [
+          {
+            domain: 'product',
+            keys: null,
+            site: 'product.domain.ts:11',
+            via: 'products',
+          },
+        ],
+        unresolved: [],
+      },
+      'productDomain.<computed>': {
+        reads: [],
+        touches: [],
+        unresolved: [
+          {
+            code: 'FW406',
+            message: 'Statically un-analyzable write site; manual touches required.',
+            site: 'product.domain.ts:15',
+          },
+        ],
+      },
+    });
+    expect(extractQueryFactsFromProject({ files })).toEqual([
+      {
+        diagnostics: [
+          {
+            code: 'FW406',
+            message:
+              'Statically un-analyzable write site; manual touches required. Query load callback could not be statically resolved.',
+            severity: 'warn',
+            site: 'product.domain.ts:18',
+          },
+        ],
+        query: 'product/unresolved-computed-loader',
+        reads: [],
+        shape: {},
+        site: 'product.domain.ts:18',
+      },
+    ]);
+  });
+
   it('keeps wrapped opaque domain actions visible as FW406', () => {
     const graph = extractTouchGraphFromSource([
       {

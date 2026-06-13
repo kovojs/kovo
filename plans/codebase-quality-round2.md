@@ -577,7 +577,9 @@ Shorthand query loaders now resolve through ts-morph symbols instead of disappea
 otherwise unresolved query-loader and domain-write callback references now degrade to FW406 instead
 of dropping the executable surface. V1 proof remains Postgres-only; SQLite/MySQL conformance is
 deferred to late hardening. Tuple-destructured callback containers now resolve through static
-literal aliases and binding-element facts for project query loaders and domain writes.
+literal aliases and binding-element facts for project query loaders and domain writes. Static
+computed callback/action keys resolve only on executable Drizzle surfaces; unresolved computed
+loader/action keys remain visible as FW406.
 
 - [ ] Delete remaining bespoke lexer/compat extraction paths where ts-morph facts can replace them.
 - [ ] Cover or degrade remaining invisible source/project query-loader and mutation surfaces.
@@ -870,6 +872,19 @@ conformance/drizzle-pin/src/index.test.ts plans/codebase-quality-round2.md`; and
       through static literal/project facts instead of degrading to FW406. `packages/drizzle/src/index.test.ts`
       and `conformance/drizzle-pin/src/index.test.ts` pin package and real `drizzle-orm` Postgres
       receiver behavior.
+      Evidence 2026-06-13 round282: executable computed property names such as
+      `{ [loadKey](...) {} }`, `{ [addKey]: write(addItem) }`, and `{ [keyBag.restock]: ... }`
+      now resolve through static literal facts for query-loader and domain-action surfaces without
+      making computed `output` schemas authoritative; unresolved computed loader/action keys degrade
+      to FW406 as `Query load callback could not be statically resolved` and
+      `domainName.<computed>`. `packages/drizzle/src/index.test.ts` and
+      `conformance/drizzle-pin/src/index.test.ts` pin package and real `drizzle-orm` Postgres
+      receiver behavior. Verified by
+      `pnpm exec vitest --run packages/drizzle/src/index.test.ts conformance/drizzle-pin/src/index.test.ts`,
+      `pnpm exec vitest --run packages/drizzle/src`,
+      `pnpm --filter @jiso/conformance-drizzle-pin test`, exact
+      `pnpm exec vp check packages/drizzle/src/static.ts packages/drizzle/src/index.test.ts conformance/drizzle-pin/src/index.test.ts plans/codebase-quality-round2.md`,
+      and `git diff --check`.
 - [x] Keep SQLite conformance deferred to late hardening; focus v1 on Postgres behavior.
       Evidence: `packages/drizzle/src/drizzle-surface.ts`, `packages/drizzle/src/static.ts`,
       `packages/drizzle/src/index.test.ts`, and `conformance/drizzle-pin/src/index.test.ts` pin the

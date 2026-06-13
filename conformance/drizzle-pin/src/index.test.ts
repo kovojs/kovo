@@ -1682,6 +1682,164 @@ describe('Drizzle pinned subset conformance', () => {
     ]);
   });
 
+  it('pins static computed query loaders and domain actions under real Drizzle imports', () => {
+    const files = [
+      {
+        fileName: 'conformance/drizzle-pin/src/product.domain.ts',
+        source: [
+          "import type { PgDatabase } from 'drizzle-orm/pg-core';",
+          '',
+          "export const products = pgTable('products', {",
+          "  id: text('id').primaryKey(),",
+          "}, jiso({ domain: 'product', key: 'id' }));",
+          '',
+          "const loadKey = 'load';",
+          "const addKey = 'add';",
+          "const keyBag = { restock: 'restock' } as const;",
+          '',
+          'function addItem(db: PgDatabase<any, any, any>, productId: string) {',
+          '  db.update(products).set({ id: productId }).where(eq(products.id, productId));',
+          '}',
+          '',
+          'export const productDomain = domain({',
+          '  [addKey]: write(addItem),',
+          '  [keyBag.restock]: write(addItem),',
+          '});',
+          '',
+          "export const productQuery = query('product/static-computed-loader', {",
+          '  [loadKey](_input: unknown, db: PgDatabase<any, any, any>) {',
+          '    return db.select({ id: products.id }).from(products);',
+          '  },',
+          '});',
+        ].join('\n'),
+      },
+    ];
+
+    expect(extractTouchGraphFromProject({ files })).toEqual({
+      addItem: {
+        reads: [],
+        touches: [
+          {
+            domain: 'product',
+            keys: 'arg:productId',
+            site: 'conformance/drizzle-pin/src/product.domain.ts:12',
+            via: 'products',
+          },
+        ],
+        unresolved: [],
+      },
+      'productDomain.add': {
+        reads: [],
+        touches: [
+          {
+            domain: 'product',
+            keys: 'arg:productId',
+            site: 'conformance/drizzle-pin/src/product.domain.ts:12',
+            via: 'products',
+          },
+        ],
+        unresolved: [],
+      },
+      'productDomain.restock': {
+        reads: [],
+        touches: [
+          {
+            domain: 'product',
+            keys: 'arg:productId',
+            site: 'conformance/drizzle-pin/src/product.domain.ts:12',
+            via: 'products',
+          },
+        ],
+        unresolved: [],
+      },
+    });
+    expect(extractQueryFactsFromProject({ files })).toEqual([
+      {
+        query: 'product/static-computed-loader',
+        reads: ['product'],
+        shape: {
+          id: 'string',
+        },
+        site: 'conformance/drizzle-pin/src/product.domain.ts:20',
+      },
+    ]);
+  });
+
+  it('pins unresolved computed query loaders and domain actions as FW406 under real Drizzle imports', () => {
+    const files = [
+      {
+        fileName: 'conformance/drizzle-pin/src/product.domain.ts',
+        source: [
+          "import type { PgDatabase } from 'drizzle-orm/pg-core';",
+          '',
+          "export const products = pgTable('products', {",
+          "  id: text('id').primaryKey(),",
+          "}, jiso({ domain: 'product', key: 'id' }));",
+          '',
+          'declare const actionKey: string;',
+          'declare const loadKey: string;',
+          '',
+          'function addItem(db: PgDatabase<any, any, any>) {',
+          '  db.update(products).set({});',
+          '}',
+          '',
+          'export const productDomain = domain({',
+          '  [actionKey]: write(addItem),',
+          '});',
+          '',
+          "export const productQuery = query('product/unresolved-computed-loader', {",
+          '  [loadKey](_input: unknown, db: PgDatabase<any, any, any>) {',
+          '    return db.select({ id: products.id }).from(products);',
+          '  },',
+          '});',
+        ].join('\n'),
+      },
+    ];
+
+    expect(extractTouchGraphFromProject({ files })).toEqual({
+      addItem: {
+        reads: [],
+        touches: [
+          {
+            domain: 'product',
+            keys: null,
+            site: 'conformance/drizzle-pin/src/product.domain.ts:11',
+            via: 'products',
+          },
+        ],
+        unresolved: [],
+      },
+      'productDomain.<computed>': {
+        reads: [],
+        touches: [],
+        unresolved: [
+          {
+            code: 'FW406',
+            message: 'Statically un-analyzable write site; manual touches required.',
+            site: 'conformance/drizzle-pin/src/product.domain.ts:15',
+          },
+        ],
+      },
+    });
+    expect(extractQueryFactsFromProject({ files })).toEqual([
+      {
+        diagnostics: [
+          {
+            code: 'FW406',
+            message:
+              'Statically un-analyzable write site; manual touches required. Query load callback could not be statically resolved.',
+            severity: 'warn',
+            site: 'conformance/drizzle-pin/src/product.domain.ts:18',
+          },
+        ],
+        query: 'product/unresolved-computed-loader',
+        reads: [],
+        shape: {},
+        site: 'conformance/drizzle-pin/src/product.domain.ts:18',
+      },
+    ]);
+  });
+
   it('pins opaque domain action spreads as FW406 under real Drizzle imports', () => {
     const files = [
       {

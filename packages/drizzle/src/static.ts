@@ -109,6 +109,7 @@ const CLASSIFIED_DRIZZLE_RECEIVER_METHODS = new Set([
   'update',
 ]);
 const COMPUTED_DRIZZLE_RECEIVER_METHOD = '<computed>';
+const UNRESOLVED_DOMAIN_WRITE_COMPUTED_MEMBER = '<computed>';
 const UNRESOLVED_DOMAIN_WRITE_SPREAD_MEMBER = '<spread>';
 
 export type QueryShape =
@@ -1940,7 +1941,7 @@ function tableColumnShapes(initializer: Node): Record<string, QueryShape> {
   return shapes;
 }
 
-function propertyNameText(name: Node): string | undefined {
+function propertyNameText(name: Node, resolveStaticComputed = false): string | undefined {
   if (Node.isIdentifier(name) || Node.isStringLiteral(name) || Node.isNumericLiteral(name)) {
     return name.getText().replace(/^["']|["']$/g, '');
   }
@@ -1952,6 +1953,48 @@ function propertyNameText(name: Node): string | undefined {
     }
     if (ts.isNumericLiteral(expression)) return expression.text;
   }
+  if (!resolveStaticComputed) return undefined;
+  const expression = computedPropertyNameExpression(name);
+  const staticText = expression ? staticPropertyNameExpressionText(expression) : undefined;
+  if (staticText) return staticText;
+  return undefined;
+}
+
+function computedPropertyNameExpression(name: Node): Node | undefined {
+  if (!ts.isComputedPropertyName(name.compilerNode)) return undefined;
+
+  return name.getChildren().find((child) => {
+    const kind = child.getKind();
+    return kind !== SyntaxKind.OpenBracketToken && kind !== SyntaxKind.CloseBracketToken;
+  });
+}
+
+function staticPropertyNameExpressionText(
+  expression: Node,
+  seen: Set<string> = new Set(),
+): string | undefined {
+  const node = unwrappedStaticExpressionNode(expression);
+  if (Node.isStringLiteral(node) || Node.isNumericLiteral(node)) {
+    return node.getLiteralText();
+  }
+  if (Node.isNoSubstitutionTemplateLiteral(node)) return node.getLiteralText();
+
+  const staticReference = staticLiteralReferenceFromExpression(node);
+  if (staticReference && staticReference !== node) {
+    return staticPropertyNameExpressionText(staticReference, seen);
+  }
+
+  const key = `${node.getSourceFile().getFilePath()}:${node.getStart()}`;
+  if (seen.has(key)) return undefined;
+  seen.add(key);
+
+  for (const declaration of symbolForCallbackReference(node)?.getDeclarations() ?? []) {
+    const initializer = staticLiteralContainerInitializer(declaration);
+    if (!initializer) continue;
+    const text = staticPropertyNameExpressionText(initializer, seen);
+    if (text) return text;
+  }
+
   return undefined;
 }
 
@@ -3021,7 +3064,13 @@ function queryLoadCallbackResolution(
       continue;
     }
 
-    if (!queryCallbackPropertyIsLoad(property)) continue;
+    if (!queryCallbackPropertyIsLoad(property)) {
+      if (queryCallbackPropertyMayHideLoad(property, mode)) {
+        callbacks = [];
+        unresolvedNode = property;
+      }
+      continue;
+    }
     const propertyResolution = queryCallbackPropertyResolution(property, mode);
     if (propertyResolution.kind === 'found') {
       callbacks = propertyResolution.callbacks;
@@ -3117,7 +3166,30 @@ function queryCallbackPropertyIsLoad(node: Node): boolean {
   ) {
     return false;
   }
-  return propertyNameText(node.getNameNode()) === 'load';
+  return propertyNameText(node.getNameNode(), true) === 'load';
+}
+
+function queryCallbackPropertyMayHideLoad(node: Node, mode: 'project' | 'source'): boolean {
+  if (
+    !Node.isMethodDeclaration(node) &&
+    !Node.isPropertyAssignment(node) &&
+    !Node.isShorthandPropertyAssignment(node)
+  ) {
+    return false;
+  }
+  const name = node.getNameNode();
+  if (!computedPropertyNameExpression(name) || propertyNameText(name, true)) return false;
+
+  if (Node.isMethodDeclaration(node)) return true;
+  if (Node.isShorthandPropertyAssignment(node)) return true;
+
+  const initializer = node.getInitializer();
+  if (!initializer) return false;
+  const expression = unwrappedStaticExpressionNode(initializer);
+  if (Node.isArrowFunction(expression) || Node.isFunctionExpression(expression)) return true;
+  if (mode === 'source') return true;
+
+  return referencedQueryCallbackFunction(expression) !== undefined;
 }
 
 function queryCallbackPropertyResolution(
@@ -3440,7 +3512,7 @@ function objectLiteralStaticPropertyReference(
     if (!Node.isPropertyAssignment(property) && !Node.isShorthandPropertyAssignment(property)) {
       continue;
     }
-    if (propertyNameText(property.getNameNode()) !== name) continue;
+    if (propertyNameText(property.getNameNode(), true) !== name) continue;
     if (Node.isShorthandPropertyAssignment(property)) return property.getNameNode();
     return property.getInitializer();
   }
@@ -5372,6 +5444,14 @@ function unresolvedDomainWriteCallbacks(
       }
       if (!domainObject.body) continue;
 
+      for (const computed of unresolvedComputedDomainWriteProperties(domainObject.body)) {
+        unresolved.push({
+          mergeWithExact: false,
+          name: `${domainName.getText()}.${UNRESOLVED_DOMAIN_WRITE_COMPUTED_MEMBER}`,
+          site: `${file.fileName}:${lineForIndex(file.source, computed.siteNode.getStart())}`,
+        });
+      }
+
       for (const spread of unresolvedDomainWriteSpreads(domainObject.body)) {
         unresolved.push({
           mergeWithExact: false,
@@ -5482,6 +5562,28 @@ function domainWriteObjectFromDeclaration(
   return undefined;
 }
 
+function unresolvedComputedDomainWriteProperties(
+  object: ObjectLiteralExpression,
+): { siteNode: Node }[] {
+  const unresolved: { siteNode: Node }[] = [];
+
+  for (const property of object.getProperties()) {
+    if (
+      !Node.isMethodDeclaration(property) &&
+      !Node.isPropertyAssignment(property) &&
+      !Node.isShorthandPropertyAssignment(property)
+    ) {
+      continue;
+    }
+    const name = property.getNameNode();
+    if (!computedPropertyNameExpression(name) || propertyNameText(name, true)) continue;
+
+    unresolved.push({ siteNode: property });
+  }
+
+  return unresolved;
+}
+
 interface UnresolvedDomainWriteSpread {
   memberName: string;
   siteNode: Node;
@@ -5564,7 +5666,7 @@ function domainWriteProperties(
     }
 
     if (Node.isMethodDeclaration(property)) {
-      const memberName = propertyNameText(property.getNameNode());
+      const memberName = propertyNameText(property.getNameNode(), true);
       if (!memberName) continue;
 
       properties.set(memberName, {
@@ -5576,7 +5678,7 @@ function domainWriteProperties(
     }
 
     if (Node.isShorthandPropertyAssignment(property)) {
-      const memberName = propertyNameText(property.getNameNode());
+      const memberName = propertyNameText(property.getNameNode(), true);
       if (!memberName) continue;
 
       properties.set(
@@ -5591,7 +5693,7 @@ function domainWriteProperties(
     }
 
     if (!Node.isPropertyAssignment(property)) continue;
-    const memberName = propertyNameText(property.getNameNode());
+    const memberName = propertyNameText(property.getNameNode(), true);
     if (!memberName) continue;
 
     properties.set(memberName, {
@@ -5712,7 +5814,7 @@ function domainWritePropertyFromShorthandAssignment(
 ): DomainWriteProperty | undefined {
   if (!Node.isShorthandPropertyAssignment(declaration)) return undefined;
 
-  const memberName = propertyNameText(declaration.getNameNode());
+  const memberName = propertyNameText(declaration.getNameNode(), true);
   if (!memberName) return undefined;
 
   for (const referencedDeclaration of symbolForCallbackReference(
