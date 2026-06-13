@@ -200,6 +200,15 @@ fw-check monolith no longer rebuilds those server/HTML mechanics inline.
 
 Latest evidence:
 
+- Phase 5 Vite output helper public boundary slice:
+  `pnpm exec vitest --run packages/server/src/api/app.test.ts`;
+  `pnpm exec vitest --run examples/commerce/src/app-shell.test.ts packages/create-jiso/src/index.test.ts`;
+  `pnpm exec tsc --noEmit --pretty false`;
+  `pnpm exec vp check packages/server/src/api/app-shell/vite.ts packages/server/src/api/app.test.ts plans/app-shell.md plans/codebase-quality-round2.md`;
+  `git diff --check`. Evidence: `packages/server/src/api/app-shell/vite.ts` no longer exports
+  `jisoAppShellViteOutputDir()` or Vite output-option aliases from the focused public Vite
+  subpath, while `packages/server/src/api/app.test.ts` pins those SPEC §9.5 plugin-writer
+  plumbing names absent and starter/commerce adoption tests keep resolving the public Vite bridge.
 - Phase 1/6/7 D1 commerce stylesheet fixture slice:
   `pnpm exec vitest --run packages/test/src/server-fixtures.test.ts packages/test/src/package-exports.test.ts`;
   `node --test --test-name-pattern "D1 commerce enhanced fragments" tests/fw-check.node.mjs`;

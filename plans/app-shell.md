@@ -149,6 +149,22 @@ Implemented areas:
 - The focused `@jiso/server/app-shell/vite` public subpath no longer forwards raw Vite build-output
   or plugin-hook writer helpers; outside SPEC §9.5 consumers stay on the build/export bridge while
   server internals keep the hook implementation path private.
+- The focused `@jiso/server/app-shell/vite` public subpath no longer forwards Vite hook
+  output-dir helpers or output-option aliases; those remain internal plugin writer plumbing while
+  outside SPEC §9.5 consumers use the Vite build/export bridge.
+
+Round346 Vite output helper public boundary evidence:
+
+- `packages/server/src/api/app-shell/vite.ts` removes `jisoAppShellViteOutputDir()` and its
+  output-option aliases from the focused public Vite subpath while preserving the build/export
+  bridge and `JisoAppShellViteBuildOutput` callback payload type.
+- `packages/server/src/api/app.test.ts` pins the removed value export and option aliases absent
+  under SPEC §9.5, while starter/commerce adoption tests keep loading the public Vite subpath.
+- `pnpm exec vitest --run packages/server/src/api/app.test.ts`
+- `pnpm exec vitest --run examples/commerce/src/app-shell.test.ts packages/create-jiso/src/index.test.ts`
+- `pnpm exec tsc --noEmit --pretty false`
+- `pnpm exec vp check packages/server/src/api/app-shell/vite.ts packages/server/src/api/app.test.ts plans/app-shell.md plans/codebase-quality-round2.md`
+- `git diff --check`
 
 Round341 Vite writer public boundary evidence:
 

@@ -87,6 +87,16 @@ type RemovedVitePluginBuildContext = vt.JisoAppShellVitePluginBuildContext;
 // eslint-disable-next-line no-unused-vars -- compile-time removal assertion only.
 type RemovedVitePluginBuildResult = vt.JisoAppShellVitePluginBuildResult;
 
+// @ts-expect-error SPEC.md §9.5: Vite hook output-option plumbing stays internal to the plugin
+// writer; outside app-shell/Vite consumers use the build/export bridge.
+// eslint-disable-next-line no-unused-vars -- compile-time removal assertion only.
+type RemovedViteBuildOutputOptions = vt.JisoAppShellViteBuildOutputOptions;
+
+// @ts-expect-error SPEC.md §9.5: raw Vite output.dir/file projection is plugin hook plumbing,
+// not a public app-shell/Vite consumer contract.
+// eslint-disable-next-line no-unused-vars -- compile-time removal assertion only.
+type RemovedViteOutputOptions = vt.JisoAppShellViteOutputOptions;
+
 function aggregateValueKeys(...modules: readonly Record<string, unknown>[]): string[] {
   return [...new Set(modules.flatMap((module) => Object.keys(module)))].sort();
 }
@@ -224,7 +234,6 @@ describe('server app-shell public API barrels', () => {
       'jisoAppShellViteManifestHints',
       'jisoAppShellViteManifestStylesheetHref',
       'jisoAppShellViteManifestStylesheetHrefFromFile',
-      'jisoAppShellViteOutputDir',
       'jisoAppShellVitePlugin',
       'jisoAppShellViteRouteEntries',
       'jisoAppShellViteStaticExportAssets',
@@ -272,6 +281,7 @@ describe('server app-shell public API barrels', () => {
     expect(packageViteApi).not.toHaveProperty('JisoAppShellViteInput');
     expect(packageViteApi).not.toHaveProperty('writeJisoAppShellViteBuildOutput');
     expect(packageViteApi).not.toHaveProperty('writeJisoAppShellVitePluginBuild');
+    expect(packageViteApi).not.toHaveProperty('jisoAppShellViteOutputDir');
     expect(packageViteApi.exportJisoAppShellViteBuild).toBe(viteApi.exportJisoAppShellViteBuild);
     expect(viteApi.exportJisoAppShellViteBuild).toBe(
       viteStaticExportBuildApi.exportJisoAppShellViteBuild,
