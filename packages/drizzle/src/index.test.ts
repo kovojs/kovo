@@ -2673,6 +2673,62 @@ export interface CommerceInvalidationSets {
     ]);
   });
 
+  it('extracts project query loaders from static external config objects and degrades unresolved configs', () => {
+    const facts = extractQueryFactsFromProject({
+      files: [
+        pgDatabaseTypes(['select(value?: unknown): { from(table: unknown): Promise<unknown[]> };']),
+        {
+          fileName: 'product.queries.ts',
+          source: [
+            'import type { PgDatabase } from "drizzle-orm/pg-core";',
+            '',
+            'export const products = pgTable("products", {',
+            '  id: text("id").primaryKey(),',
+            '  stock: integer("stock").notNull(),',
+            '}, jiso({ domain: "product", key: "id" }));',
+            '',
+            'function loadProducts(_input: unknown, db: PgDatabase<any, any, any>) {',
+            '  return db.select({ id: products.id, stock: products.stock }).from(products);',
+            '}',
+            '',
+            'declare const dynamicConfig: any;',
+            'const baseConfig = { load: loadProducts };',
+            'const configAlias = baseConfig;',
+            'export const configQuery = query("product/project-external-config-loader", configAlias);',
+            'export const dynamicQuery = query("product/project-dynamic-config-loader", dynamicConfig);',
+          ].join('\n'),
+        },
+      ],
+    });
+
+    expect(facts).toEqual([
+      {
+        diagnostics: [
+          {
+            code: 'FW406',
+            message:
+              'Statically un-analyzable write site; manual touches required. Query load callback could not be statically resolved.',
+            severity: 'warn',
+            site: 'product.queries.ts:16',
+          },
+        ],
+        query: 'product/project-dynamic-config-loader',
+        reads: [],
+        shape: {},
+        site: 'product.queries.ts:16',
+      },
+      {
+        query: 'product/project-external-config-loader',
+        reads: ['product'],
+        shape: {
+          id: 'string',
+          stock: 'number',
+        },
+        site: 'product.queries.ts:15',
+      },
+    ]);
+  });
+
   it('extracts project domain actions from static config spreads and degrades unresolved callbacks', () => {
     const graph = extractTouchGraphFromProject({
       files: [
@@ -9809,6 +9865,54 @@ export interface CommerceInvalidationSets {
           id: 'string',
         },
         site: 'user.queries.ts:11',
+      },
+    ]);
+  });
+
+  it('extracts source query loaders from static external config objects and degrades unresolved configs', () => {
+    const facts = extractQueryFactsFromSource([
+      {
+        fileName: 'user.queries.ts',
+        source: [
+          'export const users = pgTable("users", { id: text("id").primaryKey(), stock: integer("stock").notNull() }, jiso({ domain: "user", key: "id" }));',
+          '',
+          'function loadUsers(_input, db) {',
+          '  return db.select({ id: users.id, stock: users.stock }).from(users);',
+          '}',
+          '',
+          'declare const dynamicConfig: any;',
+          'const baseConfig = { load: loadUsers };',
+          'const configAlias = baseConfig;',
+          'export const configQuery = query("users/source-external-config-loader", configAlias);',
+          'export const dynamicQuery = query("users/source-dynamic-config-loader", dynamicConfig);',
+        ].join('\n'),
+      },
+    ]);
+
+    expect(facts).toEqual([
+      {
+        diagnostics: [
+          {
+            code: 'FW406',
+            message:
+              'Statically un-analyzable write site; manual touches required. Query load callback could not be statically resolved.',
+            severity: 'warn',
+            site: 'user.queries.ts:11',
+          },
+        ],
+        query: 'users/source-dynamic-config-loader',
+        reads: [],
+        shape: {},
+        site: 'user.queries.ts:11',
+      },
+      {
+        query: 'users/source-external-config-loader',
+        reads: ['user'],
+        shape: {
+          id: 'string',
+          stock: 'number',
+        },
+        site: 'user.queries.ts:10',
       },
     ]);
   });

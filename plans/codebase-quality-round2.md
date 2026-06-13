@@ -509,6 +509,14 @@ conformance/drizzle-pin/src/index.test.ts plans/codebase-quality-round2.md`, and
       `write(...)` callbacks. `packages/drizzle/src/index.test.ts` pins source behavior and
       `conformance/drizzle-pin/src/index.test.ts` pins the same surface against real `drizzle-orm`
       Postgres receiver types.
+      Evidence 2026-06-13 round259: external query options such as `query(name, configAlias)` now
+      resolve static object aliases through ts-morph symbols, while unresolved external configs
+      such as `query(name, dynamicConfig)` degrade to FW406 instead of disappearing.
+      `packages/drizzle/src/index.test.ts` covers source/project behavior and
+      `conformance/drizzle-pin/src/index.test.ts` pins the project surface against real
+      `drizzle-orm` Postgres receiver types. Verified by
+      `pnpm exec vitest --run packages/drizzle/src` and
+      `pnpm exec vitest --run conformance/drizzle-pin`.
 - [x] Keep SQLite conformance deferred to late hardening; focus v1 on Postgres behavior.
       Evidence: `packages/drizzle/src/drizzle-surface.ts`, `packages/drizzle/src/static.ts`,
       `packages/drizzle/src/index.test.ts`, and `conformance/drizzle-pin/src/index.test.ts` pin the

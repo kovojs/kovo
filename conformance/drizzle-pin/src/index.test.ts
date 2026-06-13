@@ -2645,6 +2645,61 @@ describe('Drizzle pinned subset conformance', () => {
     ]);
   });
 
+  it('pins external query-loader config objects under real Drizzle imports', () => {
+    const facts = extractQueryFactsFromProject({
+      files: [
+        {
+          fileName: 'conformance/drizzle-pin/src/product.queries.ts',
+          source: [
+            "import type { PgDatabase } from 'drizzle-orm/pg-core';",
+            '',
+            "export const products = pgTable('products', {",
+            "  id: text('id').primaryKey(),",
+            "  stock: integer('stock').notNull(),",
+            "}, jiso({ domain: 'product', key: 'id' }));",
+            '',
+            'function loadProducts(_input: unknown, db: PgDatabase<any, any, any>) {',
+            '  return db.select({ id: products.id, stock: products.stock }).from(products);',
+            '}',
+            '',
+            'declare const dynamicConfig: any;',
+            'const baseConfig = { load: loadProducts };',
+            'const configAlias = baseConfig;',
+            "export const configQuery = query('product/external-config-loader', configAlias);",
+            "export const dynamicQuery = query('product/dynamic-config-loader', dynamicConfig);",
+          ].join('\n'),
+        },
+      ],
+    });
+
+    expect(facts).toEqual([
+      {
+        diagnostics: [
+          {
+            code: 'FW406',
+            message:
+              'Statically un-analyzable write site; manual touches required. Query load callback could not be statically resolved.',
+            severity: 'warn',
+            site: 'conformance/drizzle-pin/src/product.queries.ts:16',
+          },
+        ],
+        query: 'product/dynamic-config-loader',
+        reads: [],
+        shape: {},
+        site: 'conformance/drizzle-pin/src/product.queries.ts:16',
+      },
+      {
+        query: 'product/external-config-loader',
+        reads: ['product'],
+        shape: {
+          id: 'string',
+          stock: 'number',
+        },
+        site: 'conformance/drizzle-pin/src/product.queries.ts:15',
+      },
+    ]);
+  });
+
   it('pins pgTable(name, cols, jiso({...})) as the real Drizzle extra config integration point', () => {
     const cartItems = pgTable(
       'cart_items',

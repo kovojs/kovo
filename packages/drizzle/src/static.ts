@@ -2176,24 +2176,45 @@ function extractQueryDefinitionsFromSourceFile(
     if (!Node.isIdentifier(expression) || expression.getText() !== 'query') continue;
 
     const [queryArgument, bodyArgument] = initializer.getArguments();
-    if (!Node.isStringLiteral(queryArgument) || !Node.isObjectLiteralExpression(bodyArgument)) {
+    if (!Node.isStringLiteral(queryArgument)) {
       continue;
     }
 
     const query = queryArgument.getLiteralText();
+    const bodyResolution = queryBodyObjectLiteral(bodyArgument);
+    if (!bodyResolution.body) {
+      if (bodyResolution.unresolved) {
+        definitions.push({
+          diagnostics: [unresolvedQueryLoadCallbackDiagnostic()],
+          hasOutputSchema: false,
+          hasSelection: false,
+          index: declaration.getStart(),
+          instanceKeyComparisons: [],
+          localHelperCalls: [],
+          opaquePaths: [],
+          query,
+          shape: {},
+          tableExpressions: [],
+          unresolvedPaths: [],
+        });
+      }
+      continue;
+    }
+
+    const bodyObject = bodyResolution.body;
     const sourceDestructuredReceiverReferences =
       (options.receiverMode ?? 'source') === 'source'
-        ? sourceQueryDestructuredReceiverNames(bodyArgument)
+        ? sourceQueryDestructuredReceiverNames(bodyObject)
         : { names: new Set<string>(), projectContainers: false, symbolKeys: new Set<string>() };
     const receiverReferences = queryCallbackReceiverReferences(
-      bodyArgument,
+      bodyObject,
       options.receiverMode ?? 'source',
     );
     const localFunctionsByKey =
       options.localFunctionReceiverParameters ??
       localFunctionReceiverParametersFromSourceFile(sourceFile);
     const selection = selectShapeFromQueryBody(
-      bodyArgument,
+      bodyObject,
       receiverReferences,
       options.columnShapes,
     );
@@ -2202,27 +2223,27 @@ function extractQueryDefinitionsFromSourceFile(
       ...(options.relationalTableName ? { relationalTableName: options.relationalTableName } : {}),
     };
     const diagnostics = [
-      ...unresolvedQueryCallbackDiagnostics(bodyArgument),
-      ...relationalQueryDiagnostics(bodyArgument, receiverReferences),
-      ...unclassifiedQueryReceiverDiagnostics(bodyArgument, receiverReferences),
-      ...receiverMethodAliasQueryDiagnostics(bodyArgument, receiverReferences),
-      ...externalQueryHelperDiagnostics(bodyArgument, receiverReferences, localFunctionKeys),
-      ...opaqueLocalQueryHelperDiagnostics(bodyArgument, receiverReferences, localFunctionsByKey),
-      ...unresolvedQueryReadDiagnostics(bodyArgument, receiverReferences, readResolutionOptions),
+      ...unresolvedQueryCallbackDiagnostics(bodyObject),
+      ...relationalQueryDiagnostics(bodyObject, receiverReferences),
+      ...unclassifiedQueryReceiverDiagnostics(bodyObject, receiverReferences),
+      ...receiverMethodAliasQueryDiagnostics(bodyObject, receiverReferences),
+      ...externalQueryHelperDiagnostics(bodyObject, receiverReferences, localFunctionKeys),
+      ...opaqueLocalQueryHelperDiagnostics(bodyObject, receiverReferences, localFunctionsByKey),
+      ...unresolvedQueryReadDiagnostics(bodyObject, receiverReferences, readResolutionOptions),
       ...((options.receiverMode ?? 'source') === 'source'
-        ? ambientSourceQueryReceiverDiagnostics(bodyArgument, localFunctionKeys)
+        ? ambientSourceQueryReceiverDiagnostics(bodyObject, localFunctionKeys)
         : []),
       ...((options.receiverMode ?? 'source') === 'source'
-        ? sourceQueryReceiverAliasDiagnostics(bodyArgument, receiverReferences, localFunctionKeys)
+        ? sourceQueryReceiverAliasDiagnostics(bodyObject, receiverReferences, localFunctionKeys)
         : []),
       ...sourceDestructuredQueryReceiverDiagnostics(
-        bodyArgument,
+        bodyObject,
         localFunctionKeys,
         sourceDestructuredReceiverReferences,
       ),
     ];
     const localHelperCalls = queryLocalHelperCalls(
-      bodyArgument,
+      bodyObject,
       receiverReferences,
       localFunctionsByKey,
     );
@@ -2232,11 +2253,11 @@ function extractQueryDefinitionsFromSourceFile(
       ...(selection?.diagnostics || diagnostics.length > 0
         ? { diagnostics: [...(selection?.diagnostics ?? []), ...diagnostics] }
         : {}),
-      hasOutputSchema: objectHasProperty(bodyArgument, 'output'),
+      hasOutputSchema: objectHasProperty(bodyObject, 'output'),
       hasSelection: selection !== null,
       index: declaration.getStart(),
       instanceKeyComparisons: queryInstanceKeyComparisons(
-        bodyArgument,
+        bodyObject,
         receiverReferences,
         options.readTableIdentifier,
       ),
@@ -2245,7 +2266,7 @@ function extractQueryDefinitionsFromSourceFile(
       query,
       shape: selection?.shape ?? {},
       tableExpressions: queryTableExpressions(
-        bodyArgument,
+        bodyObject,
         receiverReferences,
         readResolutionOptions,
       ),
@@ -2721,6 +2742,74 @@ interface QueryLoadCallbackResolution {
   unresolvedNodes: Node[];
 }
 
+interface QueryBodyObjectResolution {
+  body?: ObjectLiteralExpression;
+  unresolved: boolean;
+}
+
+function queryBodyObjectLiteral(argument: Node | undefined): QueryBodyObjectResolution {
+  if (!argument) return { unresolved: true };
+  return queryBodyObjectLiteralFromNode(argument, new Set()) ?? { unresolved: true };
+}
+
+function queryBodyObjectLiteralFromNode(
+  node: Node,
+  seen: Set<string>,
+): QueryBodyObjectResolution | undefined {
+  // SPEC §10.2/§11.1: query option objects are executable loader surfaces; unresolved external
+  // configs stay visible as FW406 rather than disappearing from query facts.
+  const expression = unwrappedStaticExpressionNode(node);
+  if (Node.isObjectLiteralExpression(expression)) return { body: expression, unresolved: false };
+
+  const key = `${expression.getSourceFile().getFilePath()}:${expression.getStart()}`;
+  if (seen.has(key)) return { unresolved: true };
+  seen.add(key);
+
+  for (const declaration of symbolForCallbackReference(expression)?.getDeclarations() ?? []) {
+    const body = queryBodyObjectLiteralFromDeclaration(declaration, seen);
+    if (body) return body;
+  }
+
+  const type = expression.getType();
+  return type.isAny() || type.isUnknown() ? { unresolved: true } : undefined;
+}
+
+function queryBodyObjectLiteralFromDeclaration(
+  declaration: Node,
+  seen: Set<string>,
+): QueryBodyObjectResolution | undefined {
+  if (Node.isVariableDeclaration(declaration)) {
+    const initializer = declaration.getInitializer();
+    return initializer ? queryBodyObjectLiteralFromNode(initializer, seen) : undefined;
+  }
+
+  if (Node.isPropertyAssignment(declaration)) {
+    const initializer = declaration.getInitializer();
+    return initializer ? queryBodyObjectLiteralFromNode(initializer, seen) : undefined;
+  }
+
+  if (Node.isShorthandPropertyAssignment(declaration)) {
+    return queryBodyObjectLiteralFromNode(declaration.getNameNode(), seen);
+  }
+
+  if (Node.isIdentifier(declaration)) {
+    const parent = declaration.getParent();
+    if (Node.isVariableDeclaration(parent) && parent.getNameNode() === declaration) {
+      const initializer = parent.getInitializer();
+      return initializer ? queryBodyObjectLiteralFromNode(initializer, seen) : undefined;
+    }
+    if (Node.isPropertyAssignment(parent) && parent.getNameNode() === declaration) {
+      const initializer = parent.getInitializer();
+      return initializer ? queryBodyObjectLiteralFromNode(initializer, seen) : undefined;
+    }
+    if (Node.isShorthandPropertyAssignment(parent) && parent.getNameNode() === declaration) {
+      return queryBodyObjectLiteralFromNode(parent.getNameNode(), seen);
+    }
+  }
+
+  return undefined;
+}
+
 type QueryLoadSpreadResolution =
   | { kind: 'found'; callback: Node }
   | { kind: 'none' }
@@ -2800,15 +2889,19 @@ function unresolvedQueryCallbackDiagnostics(body: ObjectLiteralExpression): Touc
   const unresolvedNodes = queryLoadCallbackResolution(body).unresolvedNodes;
 
   for (let index = 0; index < unresolvedNodes.length; index++) {
-    diagnostics.push({
-      code: 'FW406',
-      message: `${diagnosticDefinitions.FW406.message} Query load callback could not be statically resolved.`,
-      severity: diagnosticDefinitions.FW406.severity,
-      site: '',
-    });
+    diagnostics.push(unresolvedQueryLoadCallbackDiagnostic());
   }
 
   return diagnostics;
+}
+
+function unresolvedQueryLoadCallbackDiagnostic(): TouchGraphDiagnostic {
+  return {
+    code: 'FW406',
+    message: `${diagnosticDefinitions.FW406.message} Query load callback could not be statically resolved.`,
+    severity: diagnosticDefinitions.FW406.severity,
+    site: '',
+  };
 }
 
 function referencedQueryCallbackFunction(identifier: Node): Node | undefined {
