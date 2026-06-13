@@ -2994,7 +2994,7 @@ function queryBodyObjectLiteralFromDeclaration(
 }
 
 type QueryLoadSpreadResolution =
-  | { kind: 'found'; callback: Node }
+  | { kind: 'found'; callbacks: Node[]; unresolved: boolean }
   | { kind: 'none' }
   | { kind: 'unresolved' };
 
@@ -3002,17 +3002,17 @@ function queryLoadCallbackResolution(
   body: ObjectLiteralExpression,
   mode: 'project' | 'source' = 'source',
 ): QueryLoadCallbackResolution {
-  let callback: Node | undefined;
+  let callbacks: Node[] = [];
   let unresolvedNode: Node | undefined;
 
   for (const property of body.getProperties()) {
     if (Node.isSpreadAssignment(property)) {
       const resolution = queryLoadCallbackFromSpread(property, mode);
       if (resolution.kind === 'found') {
-        callback = resolution.callback;
-        unresolvedNode = undefined;
+        callbacks = resolution.callbacks;
+        unresolvedNode = resolution.unresolved ? property : undefined;
       } else if (resolution.kind === 'unresolved') {
-        callback = undefined;
+        callbacks = [];
         unresolvedNode = property;
       }
       continue;
@@ -3021,16 +3021,16 @@ function queryLoadCallbackResolution(
     if (!queryCallbackPropertyIsLoad(property)) continue;
     const propertyCallback = queryCallbackFunction(property, mode);
     if (propertyCallback) {
-      callback = propertyCallback;
+      callbacks = [propertyCallback];
       unresolvedNode = undefined;
     } else {
-      callback = undefined;
+      callbacks = [];
       unresolvedNode = property;
     }
   }
 
   return {
-    callbacks: callback ? [callback] : [],
+    callbacks,
     unresolvedNodes: unresolvedNode ? [unresolvedNode] : [],
   };
 }
@@ -3042,14 +3042,45 @@ function queryLoadCallbackFromSpread(
   if (!Node.isSpreadAssignment(property)) return { kind: 'none' };
   if (mode === 'source') return { kind: 'unresolved' };
 
-  const expression = unwrappedStaticExpressionNode(property.getExpression());
+  return queryLoadCallbackFromSpreadExpression(
+    unwrappedStaticExpressionNode(property.getExpression()),
+    property,
+    mode,
+  );
+}
+
+function queryLoadCallbackFromSpreadExpression(
+  expression: Node,
+  location: Node,
+  mode: 'project' | 'source',
+): QueryLoadSpreadResolution {
+  if (Node.isConditionalExpression(expression)) {
+    // SPEC §10.2/§11.1: conditional option spreads are executable loader surfaces. Static
+    // branches contribute exact callbacks; opaque branches remain FW406 instead of disappearing.
+    const branches = [expression.getWhenTrue(), expression.getWhenFalse()].map((branch) =>
+      queryLoadCallbackFromSpreadExpression(unwrappedStaticExpressionNode(branch), location, mode),
+    );
+    const callbacks = branches.flatMap((branch) =>
+      branch.kind === 'found' ? branch.callbacks : [],
+    );
+    const unresolved = branches.some((branch) => branch.kind === 'unresolved');
+    if (callbacks.length > 0) return { kind: 'found', callbacks, unresolved };
+    return unresolved ? { kind: 'unresolved' } : { kind: 'none' };
+  }
+
   if (Node.isObjectLiteralExpression(expression)) {
     const resolution = queryLoadCallbackResolution(expression, mode);
-    if (resolution.callbacks[0]) return { kind: 'found', callback: resolution.callbacks[0] };
+    if (resolution.callbacks.length > 0) {
+      return {
+        kind: 'found',
+        callbacks: resolution.callbacks,
+        unresolved: resolution.unresolvedNodes.length > 0,
+      };
+    }
     return resolution.unresolvedNodes.length > 0 ? { kind: 'unresolved' } : { kind: 'none' };
   }
 
-  const loadSymbol = symbolForStaticTypePath(expression, ['load'], property);
+  const loadSymbol = symbolForStaticTypePath(expression, ['load'], location);
   if (!loadSymbol) {
     const type = expression.getType();
     return type.isAny() || type.isUnknown() ? { kind: 'unresolved' } : { kind: 'none' };
@@ -3057,7 +3088,7 @@ function queryLoadCallbackFromSpread(
 
   for (const declaration of loadSymbol.getDeclarations()) {
     const callback = callbackFunctionFromDeclaration(declaration);
-    if (callback) return { kind: 'found', callback };
+    if (callback) return { kind: 'found', callbacks: [callback], unresolved: false };
   }
 
   return { kind: 'unresolved' };
@@ -5239,7 +5270,18 @@ function unresolvedDomainWriteSpreads(
       spreadProperties.map((spreadProperty) => spreadProperty.memberName),
     );
     const type = expression.getType();
-    if (spreadProperties.length === 0 && (type.isAny() || type.isUnknown())) {
+    const hasUnresolvedBranch = domainWriteSpreadHasUnresolvedBranch(expression);
+    if (hasUnresolvedBranch) {
+      unresolved.push({
+        memberName: UNRESOLVED_DOMAIN_WRITE_SPREAD_MEMBER,
+        siteNode: property,
+      });
+    }
+    if (
+      !hasUnresolvedBranch &&
+      spreadProperties.length === 0 &&
+      (type.isAny() || type.isUnknown())
+    ) {
       unresolved.push({
         memberName: UNRESOLVED_DOMAIN_WRITE_SPREAD_MEMBER,
         siteNode: property,
@@ -5262,6 +5304,17 @@ function unresolvedDomainWriteSpreads(
   }
 
   return unresolved;
+}
+
+function domainWriteSpreadHasUnresolvedBranch(expression: Node): boolean {
+  if (!Node.isConditionalExpression(expression)) {
+    const type = expression.getType();
+    return type.isAny() || type.isUnknown();
+  }
+
+  return [expression.getWhenTrue(), expression.getWhenFalse()].some((branch) =>
+    domainWriteSpreadHasUnresolvedBranch(unwrappedStaticExpressionNode(branch)),
+  );
 }
 
 function domainWriteProperties(
@@ -5296,6 +5349,29 @@ function domainWritePropertiesFromSpread(property: Node, seen: Set<string>): Dom
   if (!Node.isSpreadAssignment(property)) return [];
 
   const expression = unwrappedStaticExpressionNode(property.getExpression());
+  if (Node.isConditionalExpression(expression)) {
+    // SPEC §10-§11: conditional action spreads are mutation surfaces. Each static branch is
+    // resolved through ts-morph symbols; unresolved branches are reported by
+    // `unresolvedDomainWriteSpreads` instead of fabricated here.
+    return [
+      ...domainWritePropertiesFromExpression(
+        unwrappedStaticExpressionNode(expression.getWhenTrue()),
+        seen,
+      ),
+      ...domainWritePropertiesFromExpression(
+        unwrappedStaticExpressionNode(expression.getWhenFalse()),
+        seen,
+      ),
+    ];
+  }
+
+  return domainWritePropertiesFromExpression(expression, seen);
+}
+
+function domainWritePropertiesFromExpression(
+  expression: Node,
+  seen: Set<string>,
+): DomainWriteProperty[] {
   if (Node.isObjectLiteralExpression(expression)) {
     return domainWriteProperties(expression, seen);
   }

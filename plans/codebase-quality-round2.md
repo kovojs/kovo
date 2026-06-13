@@ -702,6 +702,16 @@ conformance/drizzle-pin/src/index.test.ts plans/codebase-quality-round2.md`, and
       `pnpm exec vitest --run conformance/drizzle-pin/src/index.test.ts`, exact
       `pnpm exec vp check packages/drizzle/src/static.ts packages/drizzle/src/index.test.ts packages/drizzle/src/runtime-surface.test.ts conformance/drizzle-pin/src/index.test.ts plans/codebase-quality-round2.md`,
       and `git diff --check`.
+      Evidence 2026-06-13 round272: conditional config/action spreads now preserve static
+      ts-morph callback facts while keeping opaque branches visible as FW406: project
+      `query(..., { ...(flag ? dynamicConfig : staticConfig) })` folds the proven loader read and
+      warns on the dynamic branch, while `domain({ ...(flag ? dynamicActions : staticActions) })`
+      extracts proven `write(...)` touches and emits `domainName.<spread>` for the opaque branch.
+      `packages/drizzle/src/index.test.ts` covers package query-loader and source mutation
+      behavior, and `conformance/drizzle-pin/src/index.test.ts` pins the same surfaces against real
+      `drizzle-orm` Postgres receiver types. Verified by
+      `pnpm exec vitest --run packages/drizzle/src/index.test.ts` and
+      `pnpm exec vitest --run conformance/drizzle-pin/src/index.test.ts`.
 - [x] Keep SQLite conformance deferred to late hardening; focus v1 on Postgres behavior.
       Evidence: `packages/drizzle/src/drizzle-surface.ts`, `packages/drizzle/src/static.ts`,
       `packages/drizzle/src/index.test.ts`, and `conformance/drizzle-pin/src/index.test.ts` pin the
@@ -709,6 +719,8 @@ conformance/drizzle-pin/src/index.test.ts plans/codebase-quality-round2.md`, and
 
 Latest evidence:
 
+- `pnpm exec vitest --run packages/drizzle/src/index.test.ts`
+- `pnpm exec vitest --run conformance/drizzle-pin/src/index.test.ts`
 - `pnpm exec vitest --run packages/drizzle/src/index.test.ts`
 - `pnpm --filter @jiso/conformance-drizzle-pin test`
 - exact `pnpm exec vp check packages/drizzle/src/static.ts packages/drizzle/src/index.test.ts conformance/drizzle-pin/src/index.test.ts plans/codebase-quality-round2.md`

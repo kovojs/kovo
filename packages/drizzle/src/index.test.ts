@@ -2691,6 +2691,58 @@ export interface CommerceInvalidationSets {
     ]);
   });
 
+  it('extracts project query loaders from conditional config spreads and degrades opaque branches', () => {
+    const facts = extractQueryFactsFromProject({
+      files: [
+        pgDatabaseTypes(['select(value?: unknown): { from(table: unknown): Promise<unknown[]> };']),
+        {
+          fileName: 'product.queries.ts',
+          source: [
+            'import type { PgDatabase } from "drizzle-orm/pg-core";',
+            '',
+            'export const products = pgTable("products", {',
+            '  id: text("id").primaryKey(),',
+            '  stock: integer("stock").notNull(),',
+            '}, jiso({ domain: "product", key: "id" }));',
+            '',
+            'function loadProducts(_input: unknown, db: PgDatabase<any, any, any>) {',
+            '  return db.select({ id: products.id, stock: products.stock }).from(products);',
+            '}',
+            '',
+            'declare const useDynamic: boolean;',
+            'declare const dynamicConfig: any;',
+            'const staticConfig = { load: loadProducts };',
+            '',
+            'export const productQuery = query("product/project-conditional-config-spread-loader", {',
+            '  ...(useDynamic ? dynamicConfig : staticConfig),',
+            '});',
+          ].join('\n'),
+        },
+      ],
+    });
+
+    expect(facts).toEqual([
+      {
+        diagnostics: [
+          {
+            code: 'FW406',
+            message:
+              'Statically un-analyzable write site; manual touches required. Query load callback could not be statically resolved.',
+            severity: 'warn',
+            site: 'product.queries.ts:16',
+          },
+        ],
+        query: 'product/project-conditional-config-spread-loader',
+        reads: ['product'],
+        shape: {
+          id: 'string',
+          stock: 'number',
+        },
+        site: 'product.queries.ts:16',
+      },
+    ]);
+  });
+
   it('extracts project query loaders from static external config objects and degrades unresolved configs', () => {
     const facts = extractQueryFactsFromProject({
       files: [
@@ -8262,6 +8314,67 @@ export interface CommerceInvalidationSets {
             domain: 'cart',
             keys: null,
             site: 'cart.domain.ts:5',
+            via: 'cart_items',
+          },
+        ],
+        unresolved: [],
+      },
+    });
+  });
+
+  it('marks opaque conditional source domain action spread branches as FW406', () => {
+    const graph = extractTouchGraphFromSource([
+      {
+        fileName: 'cart.domain.ts',
+        source: [
+          'export const cartItems = pgTable("cart_items", {}, jiso({ domain: "cart", key: "productId" }));',
+          '',
+          'function addItem(db, productId) {',
+          '  return db.insert(cartItems).values({ productId });',
+          '}',
+          '',
+          'declare const useDynamic: boolean;',
+          'declare const dynamicActions: any;',
+          'const staticActions = { addItem: write(addItem) };',
+          '',
+          'export const cart = domain({',
+          '  ...(useDynamic ? dynamicActions : staticActions),',
+          '});',
+        ].join('\n'),
+      },
+    ]);
+
+    expect(graph).toEqual({
+      'cart.<spread>': {
+        reads: [],
+        touches: [],
+        unresolved: [
+          {
+            code: 'FW406',
+            message: 'Statically un-analyzable write site; manual touches required.',
+            site: 'cart.domain.ts:12',
+          },
+        ],
+      },
+      'cart.addItem': {
+        reads: [],
+        touches: [
+          {
+            domain: 'cart',
+            keys: null,
+            site: 'cart.domain.ts:4',
+            via: 'cart_items',
+          },
+        ],
+        unresolved: [],
+      },
+      addItem: {
+        reads: [],
+        touches: [
+          {
+            domain: 'cart',
+            keys: null,
+            site: 'cart.domain.ts:4',
             via: 'cart_items',
           },
         ],
