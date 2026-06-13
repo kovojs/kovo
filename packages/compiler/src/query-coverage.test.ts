@@ -63,6 +63,28 @@ export const CartBadge = component('cart-badge', {
     expect(() => assertFixpoint(result)).not.toThrow();
   });
 
+  it('does not lower event handler expressions into inline query derives', () => {
+    const result = compileComponentModule({
+      fileName: 'cart-badge.tsx',
+      source: `
+export const CartBadge = component('cart-badge', {
+  queries: { cart: {} },
+  render: () => (
+    <cart-badge>
+      <button onClick={() => track(cart.count)}>Checkout</button>
+    </cart-badge>
+  ),
+});
+`,
+    });
+    const serverSource = result.files[0]?.source ?? '';
+
+    expect(serverSource).toContain('on:click=');
+    expect(serverSource).toContain('data-p-count="{cart.count}"');
+    expect(serverSource).not.toContain('data-derive=');
+    expect(result.queryUpdatePlans).toEqual([]);
+  });
+
   it('does not derive query stamps from string literals inside inline expressions', () => {
     const result = compileComponentModule({
       fileName: 'cart-badge.tsx',

@@ -119,7 +119,7 @@ function inlineAttributeDerive(
   knownQueries: ReadonlySet<string>,
 ): InlineAttributeDerive | null {
   if (attribute.expression === undefined) return null;
-  if (shouldSkipInlineAttributeDerive(attribute.name)) return null;
+  if (shouldSkipInlineAttributeDerive(attribute)) return null;
 
   const queryRoots = new Set(
     (attribute.expressionPropertyAccesses ?? [])
@@ -139,17 +139,18 @@ function inlineAttributeDerive(
   };
 }
 
-function shouldSkipInlineAttributeDerive(name: string): boolean {
+function shouldSkipInlineAttributeDerive(attribute: JsxAttributeModel): boolean {
+  const { name } = attribute;
   return (
+    attribute.domEventName !== undefined ||
+    attribute.executionTriggerName !== undefined ||
     name === 'className' ||
     name === 'data-derive' ||
     name === 'data-derive-attr' ||
     name === 'data-bind' ||
     name.startsWith('data-bind:') ||
     name.startsWith('data-p-') ||
-    name.startsWith('fw-') ||
-    name.startsWith('on') ||
-    name.startsWith('on:')
+    name.startsWith('fw-')
   );
 }
 
