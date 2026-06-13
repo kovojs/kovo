@@ -320,6 +320,14 @@ Latest evidence:
   covering `domain({ add })` and renamed aliases without source-name compatibility extraction;
   `packages/drizzle/src/index.test.ts` and `conformance/drizzle-pin/src/index.test.ts` pin the
   surface with real Postgres Drizzle fixtures.
+- UI/gallery H1/native toggle static visual-baseline and checkbox form-owner slice:
+  `pnpm exec vitest --run packages/ui/src/index.test.tsx examples/gallery/src/demo-fixtures.test.ts`;
+  `(cd examples/gallery && pnpm exec vitest --config vitest.browser.config.ts --run src/interactive-gallery.browser.test.ts -t "representative styled static gallery routes")`;
+  exact `pnpm exec vp check packages/ui/src/checkbox.tsx packages/ui/src/index.test.tsx examples/gallery/src/demo-fixtures.tsx examples/gallery/src/demo-fixtures.test.ts examples/gallery/src/interactive-gallery.browser.test.ts plans/ui.md plans/codebase-quality-round2.md`;
+  `git diff --check`. Evidence: `packages/ui/src/checkbox.tsx` preserves external native `form`
+  ownership on styled checkboxes per SPEC §3.1 light-DOM/native-form fallback, while raw static
+  fixtures and Chromium geometry/hash baselines now cover accordion, alert, alert-dialog,
+  checkbox, collapsible, dialog, disclosure, switch, and toggle routes.
 - UI/gallery simple styled visual-baseline and button form-owner slice:
   `pnpm exec vitest --run packages/ui/src/index.test.tsx examples/gallery/src/demo-fixtures.test.ts`;
   `(cd examples/gallery && pnpm exec vitest --config vitest.browser.config.ts --run src/interactive-gallery.browser.test.ts -t "representative styled static gallery routes")`;

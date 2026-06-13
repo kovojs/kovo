@@ -730,6 +730,7 @@ describe('@jiso/ui styled package foundation', () => {
     const checkbox = Checkbox.definition.render({
       checked: 'indeterminate',
       children: 'Some permissions',
+      form: 'permissions-form',
       name: 'permissions',
       required: true,
       value: 'partial',
@@ -749,6 +750,7 @@ describe('@jiso/ui styled package foundation', () => {
 
     expect(checkbox).toContain('data-state="indeterminate"');
     expect(checkbox).toContain('aria-checked="mixed"');
+    expect(checkbox).toContain('form="permissions-form" name="permissions"');
     expect(checkbox).toContain('required type="checkbox" value="partial"');
     expect(checkbox).toContain('Some permissions</label>');
     expect(switchControl).toContain('data-state="checked"');

@@ -100,16 +100,23 @@ import { GalleryToastDemo } from './generated/interactive/toast-demo.js';
 // @ts-expect-error generated client modules are compiler artifacts without declarations.
 import * as tooltipClient from './generated/interactive/tooltip-demo.client.js';
 import { GalleryTooltipDemo } from './generated/interactive/tooltip-demo.js';
+import accordionStaticRouteHtml from './visual-fixtures/accordion.html.txt?raw';
+import alertStaticRouteHtml from './visual-fixtures/alert.html.txt?raw';
+import alertDialogStaticRouteHtml from './visual-fixtures/alert-dialog.html.txt?raw';
 import autocompleteStaticRouteHtml from './visual-fixtures/autocomplete.html.txt?raw';
 import avatarStaticRouteHtml from './visual-fixtures/avatar.html.txt?raw';
 import badgeStaticRouteHtml from './visual-fixtures/badge.html.txt?raw';
 import breadcrumbStaticRouteHtml from './visual-fixtures/breadcrumb.html.txt?raw';
 import buttonStaticRouteHtml from './visual-fixtures/button.html.txt?raw';
 import cardStaticRouteHtml from './visual-fixtures/card.html.txt?raw';
+import checkboxStaticRouteHtml from './visual-fixtures/checkbox.html.txt?raw';
 import checkboxGroupStaticRouteHtml from './visual-fixtures/checkbox-group.html.txt?raw';
+import collapsibleStaticRouteHtml from './visual-fixtures/collapsible.html.txt?raw';
 import comboboxStaticRouteHtml from './visual-fixtures/combobox.html.txt?raw';
 import commandStaticRouteHtml from './visual-fixtures/command.html.txt?raw';
 import contextMenuStaticRouteHtml from './visual-fixtures/context-menu.html.txt?raw';
+import dialogStaticRouteHtml from './visual-fixtures/dialog.html.txt?raw';
+import disclosureStaticRouteHtml from './visual-fixtures/disclosure.html.txt?raw';
 import drawerStaticRouteHtml from './visual-fixtures/drawer.html.txt?raw';
 import dropdownMenuStaticRouteHtml from './visual-fixtures/dropdown-menu.html.txt?raw';
 import fieldStaticRouteHtml from './visual-fixtures/field.html.txt?raw';
@@ -129,9 +136,11 @@ import separatorStaticRouteHtml from './visual-fixtures/separator.html.txt?raw';
 import sheetStaticRouteHtml from './visual-fixtures/sheet.html.txt?raw';
 import sliderStaticRouteHtml from './visual-fixtures/slider.html.txt?raw';
 import skeletonStaticRouteHtml from './visual-fixtures/skeleton.html.txt?raw';
+import switchStaticRouteHtml from './visual-fixtures/switch.html.txt?raw';
 import tableStaticRouteHtml from './visual-fixtures/table.html.txt?raw';
 import tabsStaticRouteHtml from './visual-fixtures/tabs.html.txt?raw';
 import toastStaticRouteHtml from './visual-fixtures/toast.html.txt?raw';
+import toggleStaticRouteHtml from './visual-fixtures/toggle.html.txt?raw';
 import tooltipStaticRouteHtml from './visual-fixtures/tooltip.html.txt?raw';
 import { renderInteractiveGalleryRoute } from './interactive-docs.js';
 
@@ -143,16 +152,23 @@ interface InteractiveDemoComponent {
 }
 
 type StaticVisualFixturePath =
+  | '/components/accordion'
+  | '/components/alert'
+  | '/components/alert-dialog'
   | '/components/autocomplete'
   | '/components/avatar'
   | '/components/badge'
   | '/components/breadcrumb'
   | '/components/button'
   | '/components/card'
+  | '/components/checkbox'
   | '/components/checkbox-group'
+  | '/components/collapsible'
   | '/components/combobox'
   | '/components/command'
   | '/components/context-menu'
+  | '/components/dialog'
+  | '/components/disclosure'
   | '/components/drawer'
   | '/components/dropdown-menu'
   | '/components/field'
@@ -172,22 +188,31 @@ type StaticVisualFixturePath =
   | '/components/sheet'
   | '/components/slider'
   | '/components/skeleton'
+  | '/components/switch'
   | '/components/table'
   | '/components/tabs'
   | '/components/toast'
+  | '/components/toggle'
   | '/components/tooltip';
 
 const staticVisualFixtureHtml: Record<StaticVisualFixturePath, string> = {
+  '/components/accordion': accordionStaticRouteHtml,
+  '/components/alert': alertStaticRouteHtml,
+  '/components/alert-dialog': alertDialogStaticRouteHtml,
   '/components/autocomplete': autocompleteStaticRouteHtml,
   '/components/avatar': avatarStaticRouteHtml,
   '/components/badge': badgeStaticRouteHtml,
   '/components/breadcrumb': breadcrumbStaticRouteHtml,
   '/components/button': buttonStaticRouteHtml,
   '/components/card': cardStaticRouteHtml,
+  '/components/checkbox': checkboxStaticRouteHtml,
   '/components/checkbox-group': checkboxGroupStaticRouteHtml,
+  '/components/collapsible': collapsibleStaticRouteHtml,
   '/components/combobox': comboboxStaticRouteHtml,
   '/components/command': commandStaticRouteHtml,
   '/components/context-menu': contextMenuStaticRouteHtml,
+  '/components/dialog': dialogStaticRouteHtml,
+  '/components/disclosure': disclosureStaticRouteHtml,
   '/components/drawer': drawerStaticRouteHtml,
   '/components/dropdown-menu': dropdownMenuStaticRouteHtml,
   '/components/field': fieldStaticRouteHtml,
@@ -207,9 +232,11 @@ const staticVisualFixtureHtml: Record<StaticVisualFixturePath, string> = {
   '/components/sheet': sheetStaticRouteHtml,
   '/components/slider': sliderStaticRouteHtml,
   '/components/skeleton': skeletonStaticRouteHtml,
+  '/components/switch': switchStaticRouteHtml,
   '/components/table': tableStaticRouteHtml,
   '/components/tabs': tabsStaticRouteHtml,
   '/components/toast': toastStaticRouteHtml,
+  '/components/toggle': toggleStaticRouteHtml,
   '/components/tooltip': tooltipStaticRouteHtml,
 };
 
@@ -580,6 +607,62 @@ describe('compiled interactive gallery demos in the browser', () => {
     expect(await visualBaselineHash(progressRoute)).toBe('4c10b845');
     expect(await visualBaselineHash(scrollAreaRoute)).toBe('c3e213c2');
     expect(await visualBaselineHash(separatorRoute)).toBe('75cba077');
+
+    const accordionRoute = mountStaticGalleryRoute('/components/accordion');
+    const alertRoute = mountStaticGalleryRoute('/components/alert');
+    const alertDialogRoute = mountStaticGalleryRoute('/components/alert-dialog');
+    const checkboxRoute = mountStaticGalleryRoute('/components/checkbox');
+    const collapsibleRoute = mountStaticGalleryRoute('/components/collapsible');
+    const dialogRoute = mountStaticGalleryRoute('/components/dialog');
+    const disclosureRoute = mountStaticGalleryRoute('/components/disclosure');
+    const switchRoute = mountStaticGalleryRoute('/components/switch');
+    const toggleRoute = mountStaticGalleryRoute('/components/toggle');
+
+    expect(visualGeometry(accordionRoute)).toEqual({
+      height: 595,
+      width: 860,
+    });
+    expect(visualGeometry(alertRoute)).toEqual({
+      height: 552,
+      width: 860,
+    });
+    expect(visualGeometry(alertDialogRoute)).toEqual({
+      height: 503,
+      width: 860,
+    });
+    expect(visualGeometry(checkboxRoute)).toEqual({
+      height: 502,
+      width: 860,
+    });
+    expect(visualGeometry(collapsibleRoute)).toEqual({
+      height: 541,
+      width: 860,
+    });
+    expect(visualGeometry(dialogRoute)).toEqual({
+      height: 503,
+      width: 860,
+    });
+    expect(visualGeometry(disclosureRoute)).toEqual({
+      height: 523,
+      width: 860,
+    });
+    expect(visualGeometry(switchRoute)).toEqual({
+      height: 502,
+      width: 860,
+    });
+    expect(visualGeometry(toggleRoute)).toEqual({
+      height: 519,
+      width: 860,
+    });
+    expect(await visualBaselineHash(accordionRoute)).toBe('22704a32');
+    expect(await visualBaselineHash(alertRoute)).toBe('0de1166f');
+    expect(await visualBaselineHash(alertDialogRoute)).toBe('38a73445');
+    expect(await visualBaselineHash(checkboxRoute)).toBe('acf6aad0');
+    expect(await visualBaselineHash(collapsibleRoute)).toBe('6bd00d65');
+    expect(await visualBaselineHash(dialogRoute)).toBe('cd8996f0');
+    expect(await visualBaselineHash(disclosureRoute)).toBe('0653d48e');
+    expect(await visualBaselineHash(switchRoute)).toBe('14372e1a');
+    expect(await visualBaselineHash(toggleRoute)).toBe('d9dab2de');
   });
 
   it('updates accordion ARIA and panel visibility through generated handlers', async () => {

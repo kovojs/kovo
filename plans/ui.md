@@ -201,6 +201,15 @@ commands. Use `- [ ]` for open actionable work and `- [x]` only for fully verifi
       native light-DOM semantics from SPEC §3.1; raw route fixtures are synchronized against
       `renderGalleryRoute()`, and the Chromium visual gate asserts deterministic route geometry
       plus screenshot hashes `4bc833e5`, `fa0430d8`, `4c10b845`, `c3e213c2`, and `75cba077`.
+      Evidence 2026-06-13: the static visual baseline now covers the H1/native toggle route
+      family: accordion, alert, alert-dialog, checkbox, collapsible, dialog, disclosure, switch,
+      and toggle. Accordion, alert-dialog, and dialog static routes now render the styled
+      `@jiso/ui` wrapper surface while preserving native light-DOM semantics from SPEC §3.1;
+      checkbox now preserves external native `form` ownership through the styled wrapper and
+      static gallery route. Raw route fixtures are synchronized against `renderGalleryRoute()`,
+      and the Chromium visual gate asserts deterministic route geometry plus screenshot hashes
+      `22704a32`, `0de1166f`, `38a73445`, `acf6aad0`, `6bd00d65`, `cd8996f0`, `0653d48e`,
+      `14372e1a`, and `d9dab2de`.
 - [x] Close remaining field/fieldset behavior gaps with primitive tests tied to `form()`
       integration and native validity semantics.
       Evidence 2026-06-13: `packages/headless-ui/src/primitives/field.ts` and
@@ -302,6 +311,11 @@ commands. Use `- [ ]` for open actionable work and `- [x]` only for fully verifi
 
 ## Latest Gates
 
+- [x] H1/native toggle static visual-baseline and checkbox form-owner slice:
+      `pnpm exec vitest --run packages/ui/src/index.test.tsx examples/gallery/src/demo-fixtures.test.ts`;
+      `(cd examples/gallery && pnpm exec vitest --config vitest.browser.config.ts --run src/interactive-gallery.browser.test.ts -t "representative styled static gallery routes")`;
+      exact `pnpm exec vp check packages/ui/src/checkbox.tsx packages/ui/src/index.test.tsx examples/gallery/src/demo-fixtures.tsx examples/gallery/src/demo-fixtures.test.ts examples/gallery/src/interactive-gallery.browser.test.ts plans/ui.md plans/codebase-quality-round2.md`;
+      `git diff --check`.
 - [x] Native status/display static visual-baseline slice:
       `pnpm exec vitest --run packages/ui/src/index.test.tsx examples/gallery/src/demo-fixtures.test.ts`;
       `pnpm exec tsc -p examples/gallery/tsconfig.json --noEmit`;

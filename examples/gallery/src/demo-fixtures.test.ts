@@ -92,16 +92,23 @@ describe('gallery demo fixtures', () => {
 
   it('keeps static visual fixture HTML synchronized with rendered styled routes', () => {
     for (const [path, fileName] of [
+      ['/components/accordion', 'accordion.html.txt'],
+      ['/components/alert', 'alert.html.txt'],
+      ['/components/alert-dialog', 'alert-dialog.html.txt'],
       ['/components/autocomplete', 'autocomplete.html.txt'],
       ['/components/avatar', 'avatar.html.txt'],
       ['/components/badge', 'badge.html.txt'],
       ['/components/breadcrumb', 'breadcrumb.html.txt'],
       ['/components/button', 'button.html.txt'],
       ['/components/card', 'card.html.txt'],
+      ['/components/checkbox', 'checkbox.html.txt'],
       ['/components/checkbox-group', 'checkbox-group.html.txt'],
+      ['/components/collapsible', 'collapsible.html.txt'],
       ['/components/combobox', 'combobox.html.txt'],
       ['/components/command', 'command.html.txt'],
       ['/components/context-menu', 'context-menu.html.txt'],
+      ['/components/dialog', 'dialog.html.txt'],
+      ['/components/disclosure', 'disclosure.html.txt'],
       ['/components/drawer', 'drawer.html.txt'],
       ['/components/dropdown-menu', 'dropdown-menu.html.txt'],
       ['/components/field', 'field.html.txt'],
@@ -122,8 +129,10 @@ describe('gallery demo fixtures', () => {
       ['/components/sheet', 'sheet.html.txt'],
       ['/components/slider', 'slider.html.txt'],
       ['/components/skeleton', 'skeleton.html.txt'],
+      ['/components/switch', 'switch.html.txt'],
       ['/components/table', 'table.html.txt'],
       ['/components/toast', 'toast.html.txt'],
+      ['/components/toggle', 'toggle.html.txt'],
       ['/components/tooltip', 'tooltip.html.txt'],
     ] as const) {
       const route = galleryRoutes.find((candidate) => candidate.path === path);
@@ -210,6 +219,8 @@ describe('gallery demo fixtures', () => {
     const checkbox = findFixture('/components/checkbox');
 
     expect(checkbox.html).toContain('type="checkbox"');
+    expect(checkbox.html).toContain('id="gallery-checkbox-form"');
+    expect(checkbox.html).toContain('form="gallery-checkbox-form"');
     expect(checkbox.html).toContain('name="gallery-consent"');
     expect(checkbox.html).toContain('required');
     expect(checkbox.html).toContain('data-state="checked"');

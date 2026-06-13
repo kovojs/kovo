@@ -1,23 +1,17 @@
 /** @jsxImportSource @jiso/server */
-import {
-  accordionContentAttributes,
-  accordionHeaderAttributes,
-  accordionItemAttributes,
-  accordionRootAttributes,
-  accordionTriggerAttributes,
-  alertDialogActionAttributes,
-  alertDialogCancelAttributes,
-  alertDialogContentAttributes,
-  alertDialogRootAttributes,
-  alertDialogTriggerAttributes,
-  dialogCloseAttributes,
-  dialogContentAttributes,
-  dialogRootAttributes,
-  dialogTriggerAttributes,
-  tabsRootAttributes,
-} from '@jiso/headless-ui/primitives';
+import { tabsRootAttributes } from '@jiso/headless-ui/primitives';
 import {
   Alert,
+  Accordion,
+  AccordionContent,
+  AccordionHeader,
+  AccordionItem,
+  AccordionTrigger,
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogTrigger,
   Autocomplete,
   AutocompleteInput,
   AutocompleteList,
@@ -60,6 +54,10 @@ import {
   ContextMenuItem,
   ContextMenuTrigger,
   Drawer,
+  Dialog,
+  DialogClose,
+  DialogContent,
+  DialogTrigger,
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
@@ -523,53 +521,56 @@ export function AccordionDemo(): string {
   const billing = { ...state, itemValue: 'billing' };
 
   return (
-    <section {...accordionRootAttributes(state)} data-gallery-demo="accordion">
+    <section data-gallery-demo="accordion">
       <p data-demo-summary="no-js">
         Accordion keeps each item addressable with native-friendly open and hidden attributes.
       </p>
-      <div {...accordionItemAttributes(shipping)}>
-        <h3 {...accordionHeaderAttributes({ ...shipping, level: 3 })}>
-          <button
-            {...accordionTriggerAttributes({
+      <div data-ui-demo="accordion">
+        {Accordion.definition.render({
+          ...state,
+          children:
+            AccordionItem.definition.render({
               ...shipping,
-              contentId: 'gallery-accordion-shipping-panel',
-              triggerId: 'gallery-accordion-shipping-trigger',
-            })}
-          >
-            Shipping
-          </button>
-        </h3>
-        <div
-          {...accordionContentAttributes({
-            ...shipping,
-            contentId: 'gallery-accordion-shipping-panel',
-            triggerId: 'gallery-accordion-shipping-trigger',
-          })}
-        >
-          Ships from the nearest warehouse.
-        </div>
-      </div>
-      <div {...accordionItemAttributes(billing)}>
-        <h3 {...accordionHeaderAttributes({ ...billing, level: 3 })}>
-          <button
-            {...accordionTriggerAttributes({
+              children:
+                AccordionHeader.definition.render({
+                  ...shipping,
+                  children: AccordionTrigger.definition.render({
+                    ...shipping,
+                    children: 'Shipping',
+                    contentId: 'gallery-accordion-shipping-panel',
+                    triggerId: 'gallery-accordion-shipping-trigger',
+                  }),
+                  level: 3,
+                }) +
+                AccordionContent.definition.render({
+                  ...shipping,
+                  children: 'Ships from the nearest warehouse.',
+                  contentId: 'gallery-accordion-shipping-panel',
+                  triggerId: 'gallery-accordion-shipping-trigger',
+                }),
+            }) +
+            AccordionItem.definition.render({
               ...billing,
-              contentId: 'gallery-accordion-billing-panel',
-              triggerId: 'gallery-accordion-billing-trigger',
-            })}
-          >
-            Billing
-          </button>
-        </h3>
-        <div
-          {...accordionContentAttributes({
-            ...billing,
-            contentId: 'gallery-accordion-billing-panel',
-            triggerId: 'gallery-accordion-billing-trigger',
-          })}
-        >
-          Invoices remain available after checkout.
-        </div>
+              children:
+                AccordionHeader.definition.render({
+                  ...billing,
+                  children: AccordionTrigger.definition.render({
+                    ...billing,
+                    children: 'Billing',
+                    contentId: 'gallery-accordion-billing-panel',
+                    triggerId: 'gallery-accordion-billing-trigger',
+                  }),
+                  level: 3,
+                }) +
+                AccordionContent.definition.render({
+                  ...billing,
+                  children: 'Invoices remain available after checkout.',
+                  contentId: 'gallery-accordion-billing-panel',
+                  triggerId: 'gallery-accordion-billing-trigger',
+                }),
+            }),
+          id: 'gallery-accordion',
+        })}
       </div>
       {renderBehaviorContract({
         changeReasons: 'trigger-click, programmatic',
@@ -674,21 +675,37 @@ export function AlertDialogDemo(): string {
   };
 
   return (
-    <section {...alertDialogRootAttributes(state)} data-gallery-demo="alert-dialog">
+    <section data-gallery-demo="alert-dialog">
       <p data-demo-summary="no-js">
         Alert dialog keeps destructive confirmation controls wired to a native dialog element.
       </p>
-      <button {...alertDialogTriggerAttributes({ ...state, open: false })}>Delete project</button>
-      <dialog {...alertDialogContentAttributes(state)}>
-        <h2 id="gallery-alert-dialog-title">Delete production project?</h2>
-        <p id="gallery-alert-dialog-description">
-          This action removes deploy tokens and cannot be undone.
-        </p>
-        <button {...alertDialogCancelAttributes({ ...state, autoFocus: true })}>Cancel</button>
-        <button {...alertDialogActionAttributes({ ...state, intent: 'destructive' })}>
-          Delete
-        </button>
-      </dialog>
+      <div data-ui-demo="alert-dialog">
+        {AlertDialog.definition.render({
+          ...state,
+          children:
+            AlertDialogTrigger.definition.render({
+              ...state,
+              children: 'Delete project',
+              open: false,
+            }) +
+            AlertDialogContent.definition.render({
+              ...state,
+              children:
+                '<h2 id="gallery-alert-dialog-title">Delete production project?</h2><p id="gallery-alert-dialog-description">This action removes deploy tokens and cannot be undone.</p>' +
+                AlertDialogCancel.definition.render({
+                  ...state,
+                  autoFocus: true,
+                  children: 'Cancel',
+                }) +
+                AlertDialogAction.definition.render({
+                  ...state,
+                  children: 'Delete',
+                  intent: 'destructive',
+                }),
+            }),
+          id: 'gallery-alert-dialog',
+        })}
+      </div>
       {renderBehaviorContract({
         changeReasons:
           'trigger-click, cancel-click, action-click, cancel-event, native-beforetoggle, programmatic',
@@ -873,11 +890,13 @@ export function CheckboxDemo(): string {
       <p data-demo-summary="no-js">
         Checkbox preserves real checkbox controls for form submission and validation.
       </p>
+      <form id="gallery-checkbox-form" data-gallery-form="checkbox" />
       <div data-ui-demo="checkbox">
         <span data-fixture-state="checked">
           {Checkbox.definition.render({
             checked: true,
             children: 'Accept terms',
+            form: 'gallery-checkbox-form',
             name: 'gallery-consent',
             required: true,
             value: 'accepted',
@@ -1241,34 +1260,42 @@ export function ContextMenuDemo(): string {
 }
 
 export function DialogDemo(): string {
-  const root = dialogRootAttributes({ open: true });
-  const trigger = dialogTriggerAttributes({
+  const root = { open: true };
+  const trigger = {
     contentId: 'gallery-dialog-content',
     open: false,
-  });
-  const content = dialogContentAttributes({
+  };
+  const content = {
     contentId: 'gallery-dialog-content',
     descriptionId: 'gallery-dialog-description',
     open: true,
     titleId: 'gallery-dialog-title',
-  });
-  const close = dialogCloseAttributes({
+  };
+  const close = {
     contentId: 'gallery-dialog-content',
     open: true,
-  });
+  };
 
   return (
-    <section {...root} data-gallery-demo="dialog">
+    <section data-gallery-demo="dialog">
       <p data-demo-summary="no-js">
         Native dialog invoker commands keep the open and close controls meaningful without client
         JavaScript.
       </p>
-      <button {...trigger}>Open preview</button>
-      <dialog {...content}>
-        <h2 id="gallery-dialog-title">Publish gallery changes</h2>
-        <p id="gallery-dialog-description">Review the demo route before publishing.</p>
-        <button {...close}>Close</button>
-      </dialog>
+      <div data-ui-demo="dialog">
+        {Dialog.definition.render({
+          ...root,
+          children:
+            DialogTrigger.definition.render({ ...trigger, children: 'Open preview' }) +
+            DialogContent.definition.render({
+              ...content,
+              children:
+                '<h2 id="gallery-dialog-title">Publish gallery changes</h2><p id="gallery-dialog-description">Review the demo route before publishing.</p>' +
+                DialogClose.definition.render({ ...close, children: 'Close' }),
+            }),
+          id: 'gallery-dialog',
+        })}
+      </div>
       {renderBehaviorContract({
         changeReasons:
           'trigger-click, close-click, cancel-event, native-beforetoggle, programmatic',

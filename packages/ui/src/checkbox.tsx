@@ -13,6 +13,7 @@ export interface CheckboxProps {
   children?: string;
   class?: ClassValue;
   disabled?: boolean;
+  form?: string;
   inputClass?: ClassValue;
   name?: string;
   required?: boolean;
@@ -55,6 +56,7 @@ export const Checkbox = component('checkbox', {
           data-disabled={attrs['data-disabled']}
           data-state={attrs['data-state']}
           disabled={attrs.disabled}
+          form={props.form}
           name={attrs.name}
           required={attrs.required}
           type={attrs.type}
