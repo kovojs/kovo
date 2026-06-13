@@ -92,6 +92,7 @@ describe('gallery demo fixtures', () => {
 
   it('keeps static visual fixture HTML synchronized with rendered styled routes', () => {
     for (const [path, fileName] of [
+      ['/components/command', 'command.html.txt'],
       ['/components/tabs', 'tabs.html.txt'],
       ['/components/select', 'select.html.txt'],
       ['/components/table', 'table.html.txt'],

@@ -100,6 +100,7 @@ import { GalleryToastDemo } from './generated/interactive/toast-demo.js';
 // @ts-expect-error generated client modules are compiler artifacts without declarations.
 import * as tooltipClient from './generated/interactive/tooltip-demo.client.js';
 import { GalleryTooltipDemo } from './generated/interactive/tooltip-demo.js';
+import commandStaticRouteHtml from './visual-fixtures/command.html.txt?raw';
 import selectStaticRouteHtml from './visual-fixtures/select.html.txt?raw';
 import tableStaticRouteHtml from './visual-fixtures/table.html.txt?raw';
 import tabsStaticRouteHtml from './visual-fixtures/tabs.html.txt?raw';
@@ -112,9 +113,14 @@ interface InteractiveDemoComponent {
   };
 }
 
-type StaticVisualFixturePath = '/components/select' | '/components/table' | '/components/tabs';
+type StaticVisualFixturePath =
+  | '/components/command'
+  | '/components/select'
+  | '/components/table'
+  | '/components/tabs';
 
 const staticVisualFixtureHtml: Record<StaticVisualFixturePath, string> = {
+  '/components/command': commandStaticRouteHtml,
   '/components/select': selectStaticRouteHtml,
   '/components/table': tableStaticRouteHtml,
   '/components/tabs': tabsStaticRouteHtml,
@@ -271,6 +277,7 @@ describe('compiled interactive gallery demos in the browser', () => {
     const tabsRoute = mountStaticGalleryRoute('/components/tabs');
     const selectRoute = mountStaticGalleryRoute('/components/select');
     const tableRoute = mountStaticGalleryRoute('/components/table');
+    const commandRoute = mountStaticGalleryRoute('/components/command');
 
     expect(visualGeometry(tabsRoute)).toEqual({
       height: 539,
@@ -284,10 +291,15 @@ describe('compiled interactive gallery demos in the browser', () => {
       height: 591,
       width: 860,
     });
+    expect(visualGeometry(commandRoute)).toEqual({
+      height: 512,
+      width: 860,
+    });
 
     expect(await visualBaselineHash(tabsRoute)).toBe('9044926b');
     expect(await visualBaselineHash(selectRoute)).toBe('e0f770a7');
     expect(await visualBaselineHash(tableRoute)).toBe('09f0362a');
+    expect(await visualBaselineHash(commandRoute)).toBe('d46c4bd3');
   });
 
   it('updates accordion ARIA and panel visibility through generated handlers', async () => {
