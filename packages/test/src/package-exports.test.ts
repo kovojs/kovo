@@ -325,11 +325,14 @@ import {
 } from '@jiso/test/runtime-fixtures';
 import {
   serverCommerceAdoptDontInventBehaviorFact,
+  serverCommerceStylesheetBehaviorFact,
   serverCommerceTransactionBehaviorFact,
   serverDataPlaneBehaviorFact,
   serverMutationLifecycleBehaviorFact,
   type ServerCommerceAdoptDontInventBehaviorFact,
   type ServerCommerceAdoptDontInventRuntime,
+  type ServerCommerceStylesheetBehaviorFact,
+  type ServerCommerceStylesheetRuntime,
   type ServerCommerceTransactionBehaviorFact,
   type ServerDataPlaneBehaviorFact,
   type ServerDataPlaneRuntime,
@@ -484,6 +487,7 @@ describe('@jiso/test package subpath exports', () => {
     expect(serverMutationLifecycleBehaviorFact).toBeTypeOf('function');
     expect(serverDataPlaneBehaviorFact).toBeTypeOf('function');
     expect(serverCommerceTransactionBehaviorFact).toBeTypeOf('function');
+    expect(serverCommerceStylesheetBehaviorFact).toBeTypeOf('function');
     expect(serverCommerceAdoptDontInventBehaviorFact).toBeTypeOf('function');
     expect(headerValues({ 'Set-Cookie': 'sid=1; Path=/' }, 'set-cookie')).toEqual([
       'sid=1; Path=/',
@@ -530,6 +534,14 @@ describe('@jiso/test package subpath exports', () => {
     }>();
     expectTypeOf<ServerCommerceTransactionBehaviorFact>().toMatchTypeOf<{
       failed: { db: Record<string, unknown>; result: Record<string, unknown> };
+    }>();
+    expectTypeOf<ServerCommerceStylesheetBehaviorFact>().toMatchTypeOf<{
+      deferred: { tags: string[] };
+      selectedStylesheets: Array<Record<string, unknown>>;
+    }>();
+    expectTypeOf<ServerCommerceStylesheetRuntime>().toMatchTypeOf<{
+      renderDeferredStream: (...args: any[]) => unknown;
+      stylesheetsForTargets: (...args: any[]) => Array<Record<string, unknown>>;
     }>();
     expectTypeOf<ServerCommerceAdoptDontInventBehaviorFact>().toMatchTypeOf<{
       graph: { cartPage: Record<string, unknown>; receiptMutation: Record<string, unknown> };

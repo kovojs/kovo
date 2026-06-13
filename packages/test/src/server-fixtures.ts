@@ -1,3 +1,5 @@
+import { htmlElementFacts } from './html-fragment.ts';
+
 export interface ServerMutationLifecycleRuntime {
   domain(name: string): unknown;
   mutation(key: string, config: Record<string, unknown>): unknown;
@@ -32,6 +34,16 @@ export interface ServerCommerceAdoptDontInventRuntime {
   submitEnhancedMutation: any;
   t: any;
   s: any;
+}
+
+export interface ServerCommerceStylesheetRuntime {
+  domain(name: string): unknown;
+  mutation(key: string, config: Record<string, unknown>): unknown;
+  renderDeferredStream(...args: any[]): { body: string };
+  renderMutationEndpointResponse(...args: any[]): Promise<any>;
+  renderPageHints(...args: any[]): any;
+  s: any;
+  stylesheetsForTargets(...args: any[]): any[];
 }
 
 export interface ServerDataPlaneRuntime extends ServerMutationLifecycleRuntime {
@@ -114,6 +126,18 @@ export interface ServerCommerceAdoptDontInventBehaviorFact {
     result: Record<string, unknown>;
     stored: Record<string, unknown> | undefined;
   };
+}
+
+export interface ServerCommerceStylesheetBehaviorFact {
+  deferred: {
+    fragmentAttrs: Record<string, string> | undefined;
+    linkAttrs: Record<string, string> | undefined;
+    sectionAttrs: Record<string, string> | undefined;
+    tags: string[];
+  };
+  failure: Record<string, unknown>;
+  pageHints: Record<string, unknown>;
+  selectedStylesheets: Array<Record<string, unknown>>;
 }
 
 export async function serverMutationLifecycleBehaviorFact(
@@ -385,6 +409,79 @@ export async function serverCommerceTransactionBehaviorFact(
       db: successfulDb,
       result: successful,
     },
+  };
+}
+
+export async function serverCommerceStylesheetBehaviorFact(
+  runtime: ServerCommerceStylesheetRuntime,
+): Promise<ServerCommerceStylesheetBehaviorFact> {
+  // SPEC.md §13.5/§16.5: commerce fragments prove platform stylesheet hints, not app-local wiring.
+  const stylesheetManifest = [
+    {
+      criticalCss: 'cart-badge { color: teal; }</style> cart-badge { display: block; }',
+      fragmentTargets: ['cart-badge'],
+      href: '/assets/tailwind.css',
+    },
+    {
+      fragmentTargets: ['recommendations'],
+      href: '/assets/recommendations.css',
+      preload: false,
+    },
+  ];
+  const selectedStylesheets = runtime.stylesheetsForTargets(stylesheetManifest, ['cart-badge']);
+  const pageHints = runtime.renderPageHints({
+    stylesheets: runtime.stylesheetsForTargets(stylesheetManifest),
+  });
+  const deferred = runtime.renderDeferredStream({
+    chunks: [
+      {
+        fragments: [
+          {
+            html: '<section class="border-slate-200">Ready</section>',
+            stylesheets: runtime.stylesheetsForTargets(stylesheetManifest, ['recommendations']),
+            target: 'recommendations',
+          },
+        ],
+      },
+    ],
+    shell: '<!doctype html><main><fw-defer target="recommendations"></fw-defer></main>',
+  });
+  const deferredElements = htmlElementFacts(deferred.body);
+  const cart = runtime.domain('cart');
+  const addToCart = runtime.mutation('cart/add', {
+    csrf: false,
+    errors: {
+      OUT_OF_STOCK: runtime.s.object({ availableQuantity: runtime.s.number().int().min(0) }),
+    },
+    handler(
+      _input: unknown,
+      _request: unknown,
+      context: { fail(code: string, payload: unknown): unknown },
+    ) {
+      return context.fail('OUT_OF_STOCK', { availableQuantity: 0 });
+    },
+    input: runtime.s.object({ productId: runtime.s.string() }),
+    registry: { touches: [cart] },
+  });
+
+  return {
+    deferred: {
+      fragmentAttrs: deferredElements.find((element) => element.tag === 'fw-fragment')?.attrs,
+      linkAttrs: deferredElements.find((element) => element.tag === 'link')?.attrs,
+      sectionAttrs: deferredElements.find((element) => element.tag === 'section')?.attrs,
+      tags: deferredElements.map((element) => element.tag),
+    },
+    failure: await runtime.renderMutationEndpointResponse(addToCart, {
+      failureStylesheets: ['/assets/tailwind.css'],
+      failureTarget: 'product-form:p2',
+      headers: { 'FW-Fragment': 'true' },
+      rawInput: { productId: 'p2' },
+      renderFailureFragment: () =>
+        '<form class="border-slate-200"><output role="alert">Only 0 left.</output></form>',
+      request: {},
+    }),
+    pageHints,
+    selectedStylesheets,
   };
 }
 

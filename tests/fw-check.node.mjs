@@ -98,10 +98,7 @@ import {
   graphMutationUpdateConsumers,
   graphOptimisticStatusMatrix,
 } from '../packages/test/src/graph-fixtures.ts';
-import {
-  documentQueryScriptBehaviorFact,
-  htmlElementFacts,
-} from '../packages/test/src/html-fragment.ts';
+import { documentQueryScriptBehaviorFact } from '../packages/test/src/html-fragment.ts';
 import {
   legibilityStudyGateFact,
   normativeDocsGateFact,
@@ -133,6 +130,7 @@ import {
 } from '../packages/test/src/runtime-fixtures.ts';
 import {
   serverCommerceAdoptDontInventBehaviorFact,
+  serverCommerceStylesheetBehaviorFact,
   serverCommerceTransactionBehaviorFact,
   serverDataPlaneBehaviorFact,
   serverMutationLifecycleBehaviorFact,
@@ -266,6 +264,14 @@ const serverCommerceAdoptDontInventRuntime = {
   session,
   submitEnhancedMutation,
   t,
+};
+
+const serverCommerceStylesheetRuntime = {
+  ...serverMutationRuntime,
+  renderDeferredStream,
+  renderMutationEndpointResponse,
+  renderPageHints,
+  stylesheetsForTargets,
 };
 
 const loadProjectVitePlusConfig = async (configPath = 'vite.config.ts') =>
@@ -1719,94 +1725,34 @@ void test('P3 commerce mutation runs through the transaction lifecycle', async (
 });
 
 void test('D1 commerce enhanced fragments carry Tailwind stylesheet hints', async () => {
-  const stylesheetManifest = [
-    {
-      criticalCss: 'cart-badge { color: teal; }</style> cart-badge { display: block; }',
-      fragmentTargets: ['cart-badge'],
-      href: '/assets/tailwind.css',
+  assert.deepEqual(await serverCommerceStylesheetBehaviorFact(serverCommerceStylesheetRuntime), {
+    deferred: {
+      fragmentAttrs: { target: 'recommendations' },
+      linkAttrs: {
+        href: '/assets/recommendations.css',
+        rel: 'stylesheet',
+      },
+      sectionAttrs: { class: 'border-slate-200' },
+      tags: ['main', 'fw-defer', 'fw-fragment', 'link', 'section'],
     },
-    {
-      fragmentTargets: ['recommendations'],
-      href: '/assets/recommendations.css',
-      preload: false,
+    failure: {
+      body: '<fw-fragment target="product-form:p2"><link rel="stylesheet" href="/assets/tailwind.css"><form class="border-slate-200"><output role="alert">Only 0 left.</output></form></fw-fragment>',
+      headers: { 'Content-Type': 'text/vnd.jiso.fragment+html; charset=utf-8' },
+      status: 422,
     },
-  ];
-
-  assert.deepEqual(stylesheetsForTargets(stylesheetManifest, ['cart-badge']), [
-    {
-      criticalCss: 'cart-badge { color: teal; }</style> cart-badge { display: block; }',
-      fragmentTargets: ['cart-badge'],
-      href: '/assets/tailwind.css',
+    pageHints: {
+      earlyHints: {
+        Link: '</assets/tailwind.css>; rel=preload; as=style',
+      },
+      html: '<style data-jiso-critical-href="/assets/tailwind.css">cart-badge { color: teal; }<\\/style> cart-badge { display: block; }</style><link rel="stylesheet" href="/assets/tailwind.css"><link rel="stylesheet" href="/assets/recommendations.css">',
     },
-  ]);
-
-  const pageHints = renderPageHints({
-    stylesheets: stylesheetsForTargets(stylesheetManifest),
-  });
-  assert.equal(
-    pageHints.html,
-    '<style data-jiso-critical-href="/assets/tailwind.css">cart-badge { color: teal; }<\\/style> cart-badge { display: block; }</style><link rel="stylesheet" href="/assets/tailwind.css"><link rel="stylesheet" href="/assets/recommendations.css">',
-  );
-  assert.deepEqual(pageHints.earlyHints, {
-    Link: '</assets/tailwind.css>; rel=preload; as=style',
-  });
-
-  const deferred = renderDeferredStream({
-    chunks: [
+    selectedStylesheets: [
       {
-        fragments: [
-          {
-            html: '<section class="border-slate-200">Ready</section>',
-            stylesheets: stylesheetsForTargets(stylesheetManifest, ['recommendations']),
-            target: 'recommendations',
-          },
-        ],
+        criticalCss: 'cart-badge { color: teal; }</style> cart-badge { display: block; }',
+        fragmentTargets: ['cart-badge'],
+        href: '/assets/tailwind.css',
       },
     ],
-    shell: '<!doctype html><main><fw-defer target="recommendations"></fw-defer></main>',
-  });
-  const deferredElements = htmlElementFacts(deferred.body);
-  assert.deepEqual(
-    deferredElements.map((element) => element.tag),
-    ['main', 'fw-defer', 'fw-fragment', 'link', 'section'],
-  );
-  assert.deepEqual(deferredElements.find((element) => element.tag === 'fw-fragment')?.attrs, {
-    target: 'recommendations',
-  });
-  assert.deepEqual(deferredElements.find((element) => element.tag === 'link')?.attrs, {
-    href: '/assets/recommendations.css',
-    rel: 'stylesheet',
-  });
-  assert.deepEqual(deferredElements.find((element) => element.tag === 'section')?.attrs, {
-    class: 'border-slate-200',
-  });
-
-  const cart = domain('cart');
-  const addToCart = mutation('cart/add', {
-    csrf: false,
-    errors: {
-      OUT_OF_STOCK: s.object({ availableQuantity: s.number().int().min(0) }),
-    },
-    handler(_input, _request, context) {
-      return context.fail('OUT_OF_STOCK', { availableQuantity: 0 });
-    },
-    input: s.object({ productId: s.string() }),
-    registry: { touches: [cart] },
-  });
-  const failure = await renderMutationEndpointResponse(addToCart, {
-    failureStylesheets: ['/assets/tailwind.css'],
-    failureTarget: 'product-form:p2',
-    headers: { 'FW-Fragment': 'true' },
-    rawInput: { productId: 'p2' },
-    renderFailureFragment: () =>
-      '<form class="border-slate-200"><output role="alert">Only 0 left.</output></form>',
-    request: {},
-  });
-
-  assert.deepEqual(failure, {
-    body: '<fw-fragment target="product-form:p2"><link rel="stylesheet" href="/assets/tailwind.css"><form class="border-slate-200"><output role="alert">Only 0 left.</output></form></fw-fragment>',
-    headers: { 'Content-Type': 'text/vnd.jiso.fragment+html; charset=utf-8' },
-    status: 422,
   });
 });
 

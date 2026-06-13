@@ -186,6 +186,9 @@ Shared server fixtures now own the D4 commerce adopt-dont-invent behavior projec
 page/mutation facts, route meta/i18n, guards/session, file-storage mutation upload progress, and
 fragment error-boundary responses, so the fw-check monolith no longer rebuilds that commerce
 mechanic inline.
+Shared server fixtures now also own the D1 commerce stylesheet-hint behavior projection for target
+stylesheet filtering, page hints, deferred fragment links, and mutation failure fragments, so the
+fw-check monolith no longer rebuilds those server/HTML mechanics inline.
 
 - [ ] Search for remaining custom parsers, raw source membership checks, and generated-artifact
       projections in `tests/fw-check.node.mjs`.
@@ -197,6 +200,17 @@ mechanic inline.
 
 Latest evidence:
 
+- Phase 1/6/7 D1 commerce stylesheet fixture slice:
+  `pnpm exec vitest --run packages/test/src/server-fixtures.test.ts packages/test/src/package-exports.test.ts`;
+  `node --test --test-name-pattern "D1 commerce enhanced fragments" tests/fw-check.node.mjs`;
+  `pnpm exec vitest --run examples/commerce/src/app.test.ts examples/commerce/src/source-truth.test.ts`;
+  `pnpm run check:build`;
+  `pnpm exec tsc --noEmit --pretty false`;
+  `pnpm exec vp check packages/test/src/server-fixtures.ts packages/test/src/server-fixtures.test.ts packages/test/src/package-exports.test.ts tests/fw-check.node.mjs plans/codebase-quality-round2.md`;
+  `git diff --check`. Evidence: `packages/test/src/server-fixtures.ts` exposes
+  `serverCommerceStylesheetBehaviorFact()` as the public fixture seam for SPEC §13.5/§16.5
+  commerce fragment stylesheet hints, and `tests/fw-check.node.mjs` asserts that structured fact
+  instead of local stylesheet manifest, deferred-stream HTML, and failure-fragment mechanics.
 - Phase 5 Vite build-output type alias removal slice:
   `pnpm exec vitest --run packages/server/src/api/app.test.ts`;
   `pnpm exec tsc --noEmit --pretty false`;

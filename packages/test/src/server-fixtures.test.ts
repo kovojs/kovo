@@ -10,6 +10,7 @@ import {
   mutation,
   notFound,
   query,
+  renderDeferredStream,
   renderMutationEndpointResponse,
   renderMutationResponse,
   renderPageHints,
@@ -22,12 +23,14 @@ import {
   runRoutePage,
   session,
   s,
+  stylesheetsForTargets,
   t,
 } from '@jiso/server';
 import { createQueryStore, submitEnhancedMutation } from '../../runtime/src/index.ts';
 
 import {
   serverCommerceAdoptDontInventBehaviorFact,
+  serverCommerceStylesheetBehaviorFact,
   serverCommerceTransactionBehaviorFact,
   serverDataPlaneBehaviorFact,
   serverMutationLifecycleBehaviorFact,
@@ -67,6 +70,14 @@ const commerceRuntime = {
   session,
   submitEnhancedMutation,
   t,
+};
+
+const commerceStylesheetRuntime = {
+  ...mutationRuntime,
+  renderDeferredStream,
+  renderMutationEndpointResponse,
+  renderPageHints,
+  stylesheetsForTargets,
 };
 
 describe('@jiso/test server fixture facts', () => {
@@ -192,6 +203,38 @@ describe('@jiso/test server fixture facts', () => {
           value: { count: 1 },
         },
       },
+    });
+  });
+
+  it('projects commerce stylesheet hints through public server APIs', async () => {
+    await expect(serverCommerceStylesheetBehaviorFact(commerceStylesheetRuntime)).resolves.toEqual({
+      deferred: {
+        fragmentAttrs: { target: 'recommendations' },
+        linkAttrs: {
+          href: '/assets/recommendations.css',
+          rel: 'stylesheet',
+        },
+        sectionAttrs: { class: 'border-slate-200' },
+        tags: ['main', 'fw-defer', 'fw-fragment', 'link', 'section'],
+      },
+      failure: {
+        body: '<fw-fragment target="product-form:p2"><link rel="stylesheet" href="/assets/tailwind.css"><form class="border-slate-200"><output role="alert">Only 0 left.</output></form></fw-fragment>',
+        headers: { 'Content-Type': 'text/vnd.jiso.fragment+html; charset=utf-8' },
+        status: 422,
+      },
+      pageHints: {
+        earlyHints: {
+          Link: '</assets/tailwind.css>; rel=preload; as=style',
+        },
+        html: '<style data-jiso-critical-href="/assets/tailwind.css">cart-badge { color: teal; }<\\/style> cart-badge { display: block; }</style><link rel="stylesheet" href="/assets/tailwind.css"><link rel="stylesheet" href="/assets/recommendations.css">',
+      },
+      selectedStylesheets: [
+        {
+          criticalCss: 'cart-badge { color: teal; }</style> cart-badge { display: block; }',
+          fragmentTargets: ['cart-badge'],
+          href: '/assets/tailwind.css',
+        },
+      ],
     });
   });
 
