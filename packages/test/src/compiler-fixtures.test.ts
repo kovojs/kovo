@@ -7,6 +7,7 @@ import {
   compilerGeneratedQueryShapeFact,
   compilerQueryUpdatePlanFacts,
   compilerUpdateCoverageFacts,
+  compilerValidationBehaviorFact,
 } from './compiler-fixtures.js';
 
 describe('@jiso/test compiler fixture facts', () => {
@@ -366,5 +367,174 @@ describe('@jiso/test compiler fixture facts', () => {
           'Binding path traverses a nullable segment without ?. product.review.rating (segment: review)',
       },
     ]);
+  });
+
+  it('owns reusable compiler validation fixture assembly for fw-check', () => {
+    const compiled: Array<{ fileName: string; hasCartRowRegistry: boolean; source: string }> = [];
+    const fact = compilerValidationBehaviorFact({
+      compileComponentModule({ fileName, registryFacts, source }) {
+        compiled.push({
+          fileName,
+          hasCartRowRegistry: registryFacts?.components?.includes('cart-row') ?? false,
+          source,
+        });
+
+        if (source.includes('missing-label')) {
+          return {
+            diagnostics: [
+              {
+                code: 'FW221',
+                fileName,
+                message: 'IDREF references an id not present in component scope. missing-label',
+                severity: 'error',
+              },
+              {
+                code: 'FW221',
+                fileName,
+                message: 'IDREF references an id not present in component scope. missing-help',
+                severity: 'error',
+              },
+              {
+                code: 'FW221',
+                fileName,
+                message: 'IDREF references an id not present in component scope. missing-popover',
+                severity: 'error',
+              },
+            ],
+          };
+        }
+
+        if (source.includes('id="cart-title"')) {
+          return {
+            diagnostics: [
+              {
+                code: 'FW224',
+                fileName,
+                message:
+                  'Static id appears in a repeatable component or duplicate page composition. duplicate id="cart-title"',
+                severity: 'error',
+              },
+            ],
+          };
+        }
+
+        if (source.includes('id="cart-row"')) {
+          return {
+            diagnostics: [
+              {
+                code: 'FW224',
+                fileName,
+                message:
+                  'Static id appears in a repeatable component or duplicate page composition. repeatable id="cart-row"',
+                severity: 'error',
+              },
+            ],
+          };
+        }
+
+        if (source.includes('Parser closes the paragraph')) {
+          return {
+            diagnostics: [
+              {
+                code: 'FW225',
+                fileName,
+                message:
+                  'JSX nesting violates the HTML content model. <div> cannot appear inside <p>',
+                severity: 'error',
+              },
+              {
+                code: 'FW225',
+                fileName,
+                message:
+                  'JSX nesting violates the HTML content model. <tr> must be inside a table section or table',
+                severity: 'error',
+              },
+            ],
+          };
+        }
+
+        if (source.includes('on:media')) {
+          return {
+            diagnostics: [
+              {
+                code: 'FW211',
+                fileName,
+                message: 'on:load eager trigger requires a justification comment. on:load',
+                severity: 'lint',
+              },
+              {
+                code: 'FW212',
+                fileName,
+                message: 'Unknown on:* event or execution trigger name. on:media',
+                severity: 'lint',
+              },
+            ],
+          };
+        }
+
+        if (source.includes('unknown-component')) {
+          return {
+            diagnostics: [
+              {
+                code: 'FW226',
+                fileName,
+                message:
+                  'fw-deps or fw-c names an unknown query instance or component. fw-c="unknown-component"',
+                severity: 'error',
+              },
+              {
+                code: 'FW226',
+                fileName,
+                message:
+                  'fw-deps or fw-c names an unknown query instance or component. fw-deps="missingQuery:p1"',
+                severity: 'error',
+              },
+            ],
+          };
+        }
+
+        return { diagnostics: [] };
+      },
+      diagnosticDefinitions: {
+        FW211: { message: 'on:load eager trigger requires a justification comment.' },
+        FW212: { message: 'Unknown on:* event or execution trigger name.' },
+        FW221: { message: 'IDREF references an id not present in component scope.' },
+        FW224: {
+          message: 'Static id appears in a repeatable component or duplicate page composition.',
+        },
+        FW225: { message: 'JSX nesting violates the HTML content model.' },
+        FW226: { message: 'fw-deps or fw-c names an unknown query instance or component.' },
+      },
+    });
+
+    expect(compiled).toHaveLength(10);
+    expect(compiled.map(({ fileName }) => fileName)).toEqual([
+      'components/cart/cart-search.tsx',
+      'components/cart/cart-search.tsx',
+      'components/cart/cart-shell.tsx',
+      'components/cart/cart-list.tsx',
+      'components/cart/cart-table.tsx',
+      'components/cart/cart-shell.tsx',
+      'components/execution-triggers.tsx',
+      'components/execution-triggers.tsx',
+      'components/recommendations.tsx',
+      'components/recommendations.tsx',
+    ]);
+    expect(compiled.filter(({ hasCartRowRegistry }) => hasCartRowRegistry)).toHaveLength(1);
+    expect(fact.validIdrefDiagnostics).toEqual([]);
+    expect(fact.validContentModelDiagnostics).toEqual([]);
+    expect(fact.validExecutionTriggerDiagnostics).toEqual([]);
+    expect(fact.validResidualStampDiagnostics).toEqual([]);
+    expect(fact.invalidIdrefDiagnostics).toHaveLength(3);
+    expect(fact.invalidStaticIdDiagnostics.map((diagnostic) => diagnostic.code)).toEqual([
+      'FW224',
+      'FW224',
+    ]);
+    expect(fact.invalidContentModelDiagnostics).toHaveLength(2);
+    expect(fact.invalidExecutionTriggerDiagnostics.map((diagnostic) => diagnostic.code)).toEqual([
+      'FW211',
+      'FW212',
+    ]);
+    expect(fact.invalidResidualStampDiagnostics).toHaveLength(2);
   });
 });

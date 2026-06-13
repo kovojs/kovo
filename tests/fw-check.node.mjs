@@ -58,6 +58,7 @@ import {
   compilerDiagnosticFacts,
   compilerQueryUpdatePlanFacts,
   compilerUpdateCoverageFacts,
+  compilerValidationBehaviorFact,
 } from '../packages/test/src/compiler-fixtures.ts';
 import { viteLoweredEventDiagnosticFact } from '../packages/test/src/diagnostic-output-fixtures.ts';
 import {
@@ -845,324 +846,100 @@ export const ProductCard = component('product-card', {
   );
 });
 
-void test('P1 compiler validates component-scoped IDREFs', async () => {
-  assert.equal(
-    diagnosticDefinitions.FW221.message,
-    'IDREF references an id not present in component scope.',
-  );
-  assert.deepEqual(
-    compileComponentModule({
+void test('P1 compiler validation facts come from reusable fixture behavior', async () => {
+  const fact = compilerValidationBehaviorFact({
+    compileComponentModule,
+    diagnosticDefinitions,
+  });
+
+  assert.deepEqual(fact.diagnostics, {
+    FW211: 'on:load eager trigger requires a justification comment.',
+    FW212: 'Unknown on:* event or execution trigger name.',
+    FW221: 'IDREF references an id not present in component scope.',
+    FW224: 'Static id appears in a repeatable component or duplicate page composition.',
+    FW225: 'JSX nesting violates the HTML content model.',
+    FW226: 'fw-deps or fw-c names an unknown query instance or component.',
+  });
+  assert.deepEqual(fact.validIdrefDiagnostics, []);
+  assert.deepEqual(fact.validContentModelDiagnostics, []);
+  assert.deepEqual(fact.validExecutionTriggerDiagnostics, []);
+  assert.deepEqual(fact.validResidualStampDiagnostics, []);
+  assert.deepEqual(fact.invalidIdrefDiagnostics, [
+    {
+      code: 'FW221',
       fileName: 'components/cart/cart-search.tsx',
-      source: `
-import { component } from '@jiso/core';
-
-export const CartSearch = component('cart-search', {
-  render: () => (
-    <section>
-      <label for="cart-query">Search</label>
-      <input id="cart-query" aria-describedby="cart-help" />
-      <p id="cart-help">Help</p>
-    </section>
-  ),
-});
-`,
-    }).diagnostics,
-    [],
-  );
-  assert.deepEqual(
-    compilerDiagnosticFacts(
-      compileComponentModule({
-        fileName: 'components/cart/cart-search.tsx',
-        source: `
-import { component } from '@jiso/core';
-
-export const CartSearch = component('cart-search', {
-  render: () => (
-    <section>
-      <label for="missing-label">Search</label>
-      <input id="cart-query" aria-describedby="cart-help missing-help" />
-      <p id="cart-help">Help</p>
-      <button popovertarget="missing-popover">Filters</button>
-    </section>
-  ),
-});
-`,
-      }).diagnostics,
-      ['FW221'],
-    ),
-    [
-      {
-        code: 'FW221',
-        fileName: 'components/cart/cart-search.tsx',
-        message: `${diagnosticDefinitions.FW221.message} missing-label`,
-        severity: 'error',
-      },
-      {
-        code: 'FW221',
-        fileName: 'components/cart/cart-search.tsx',
-        message: `${diagnosticDefinitions.FW221.message} missing-help`,
-        severity: 'error',
-      },
-      {
-        code: 'FW221',
-        fileName: 'components/cart/cart-search.tsx',
-        message: `${diagnosticDefinitions.FW221.message} missing-popover`,
-        severity: 'error',
-      },
-    ],
-  );
-});
-
-void test('P1 compiler validates static id uniqueness', async () => {
-  assert.equal(
-    diagnosticDefinitions.FW224.message,
-    'Static id appears in a repeatable component or duplicate page composition.',
-  );
-  assert.deepEqual(
-    compilerDiagnosticFacts(
-      compileComponentModule({
-        fileName: 'components/cart/cart-shell.tsx',
-        source: `
-import { component } from '@jiso/core';
-
-export const CartShell = component('cart-shell', {
-  render: () => (
-    <section>
-      <h2 id="cart-title">Cart</h2>
-      <output id="cart-title">2 items</output>
-    </section>
-  ),
-});
-`,
-      }).diagnostics,
-      ['FW224'],
-    ),
-    [
-      {
-        code: 'FW224',
-        fileName: 'components/cart/cart-shell.tsx',
-        message: `${diagnosticDefinitions.FW224.message} duplicate id="cart-title"`,
-        severity: 'error',
-      },
-    ],
-  );
-  assert.deepEqual(
-    compilerDiagnosticFacts(
-      compileComponentModule({
-        fileName: 'components/cart/cart-list.tsx',
-        source: `
-import { component } from '@jiso/core';
-
-export const CartList = component('cart-list', {
-  render: () => (
-    <ul data-bind-list="cart.items" fw-key="productId">
-      <template fw-stamp>
-        <li id="cart-row"><span data-bind=".name">Mug</span></li>
-      </template>
-    </ul>
-  ),
-});
-`,
-      }).diagnostics,
-      ['FW224'],
-    ),
-    [
-      {
-        code: 'FW224',
-        fileName: 'components/cart/cart-list.tsx',
-        message: `${diagnosticDefinitions.FW224.message} repeatable id="cart-row"`,
-        severity: 'error',
-      },
-    ],
-  );
-});
-
-void test('P1 compiler validates HTML content-model parser stability', async () => {
-  assert.equal(diagnosticDefinitions.FW225.message, 'JSX nesting violates the HTML content model.');
-  assert.deepEqual(
-    compileComponentModule({
-      fileName: 'components/cart/cart-table.tsx',
-      registryFacts: {
-        components: ['cart-row'],
-      },
-      source: `
-import { component } from '@jiso/core';
-
-export const CartTable = component('cart-table', {
-  render: () => (
-    <table>
-      <tbody>
-        <tr fw-c="cart-row">
-          <td>Cart row</td>
-        </tr>
-      </tbody>
-    </table>
-  ),
-});
-`,
-    }).diagnostics,
-    [],
-  );
-  assert.deepEqual(
-    compilerDiagnosticFacts(
-      compileComponentModule({
-        fileName: 'components/cart/cart-shell.tsx',
-        source: `
-import { component } from '@jiso/core';
-
-export const CartShell = component('cart-shell', {
-  render: () => (
-    <section>
-      <p>
-        Cart intro
-        <div>Parser closes the paragraph before this div.</div>
-      </p>
-      <tr>
-        <td>Detached row</td>
-      </tr>
-    </section>
-  ),
-});
-`,
-      }).diagnostics,
-      ['FW225'],
-    ),
-    [
-      {
-        code: 'FW225',
-        fileName: 'components/cart/cart-shell.tsx',
-        message: `${diagnosticDefinitions.FW225.message} <div> cannot appear inside <p>`,
-        severity: 'error',
-      },
-      {
-        code: 'FW225',
-        fileName: 'components/cart/cart-shell.tsx',
-        message: `${diagnosticDefinitions.FW225.message} <tr> must be inside a table section or table`,
-        severity: 'error',
-      },
-    ],
-  );
-});
-
-void test('P1 compiler validates declared execution trigger names', async () => {
-  assert.equal(
-    diagnosticDefinitions.FW211.message,
-    'on:load eager trigger requires a justification comment.',
-  );
-  assert.equal(
-    diagnosticDefinitions.FW212.message,
-    'Unknown on:* event or execution trigger name.',
-  );
-  assert.deepEqual(
-    compileComponentModule({
+      message: `${diagnosticDefinitions.FW221.message} missing-label`,
+      severity: 'error',
+    },
+    {
+      code: 'FW221',
+      fileName: 'components/cart/cart-search.tsx',
+      message: `${diagnosticDefinitions.FW221.message} missing-help`,
+      severity: 'error',
+    },
+    {
+      code: 'FW221',
+      fileName: 'components/cart/cart-search.tsx',
+      message: `${diagnosticDefinitions.FW221.message} missing-popover`,
+      severity: 'error',
+    },
+  ]);
+  assert.deepEqual(fact.invalidStaticIdDiagnostics, [
+    {
+      code: 'FW224',
+      fileName: 'components/cart/cart-shell.tsx',
+      message: `${diagnosticDefinitions.FW224.message} duplicate id="cart-title"`,
+      severity: 'error',
+    },
+    {
+      code: 'FW224',
+      fileName: 'components/cart/cart-list.tsx',
+      message: `${diagnosticDefinitions.FW224.message} repeatable id="cart-row"`,
+      severity: 'error',
+    },
+  ]);
+  assert.deepEqual(fact.invalidContentModelDiagnostics, [
+    {
+      code: 'FW225',
+      fileName: 'components/cart/cart-shell.tsx',
+      message: `${diagnosticDefinitions.FW225.message} <div> cannot appear inside <p>`,
+      severity: 'error',
+    },
+    {
+      code: 'FW225',
+      fileName: 'components/cart/cart-shell.tsx',
+      message: `${diagnosticDefinitions.FW225.message} <tr> must be inside a table section or table`,
+      severity: 'error',
+    },
+  ]);
+  assert.deepEqual(fact.invalidExecutionTriggerDiagnostics, [
+    {
+      code: 'FW211',
       fileName: 'components/execution-triggers.tsx',
-      source: `
-import { component } from '@jiso/core';
-
-export const ExecutionTriggers = component('execution-triggers', {
-  render: () => (
-    <section>
-      <button on:click="/c/cart.client.js#Cart$add">Add</button>
-      <search-index on:idle="/c/search.client.js#Search$warm"></search-index>
-      <sales-chart on:visible="/c/chart.client.js#SalesChart$mount"></sales-chart>
-      {/* FW211: stock ticker intentionally starts at parse for market-open pages. */}
-      <stock-ticker on:load="/c/ticker.client.js#Ticker$start"></stock-ticker>
-    </section>
-  ),
-});
-`,
-    }).diagnostics,
-    [],
-  );
-  assert.deepEqual(
-    compilerDiagnosticFacts(
-      compileComponentModule({
-        fileName: 'components/execution-triggers.tsx',
-        source: `
-import { component } from '@jiso/core';
-
-export const ExecutionTriggers = component('execution-triggers', {
-  render: () => (
-    <section>
-      <stock-ticker on:load="/c/ticker.client.js#Ticker$start"></stock-ticker>
-      <video-player on:media="/c/video.client.js#Video$mount"></video-player>
-    </section>
-  ),
-});
-`,
-      }).diagnostics,
-      ['FW211', 'FW212'],
-    ),
-    [
-      {
-        code: 'FW211',
-        fileName: 'components/execution-triggers.tsx',
-        message: `${diagnosticDefinitions.FW211.message} on:load`,
-        severity: 'lint',
-      },
-      {
-        code: 'FW212',
-        fileName: 'components/execution-triggers.tsx',
-        message: `${diagnosticDefinitions.FW212.message} on:media`,
-        severity: 'lint',
-      },
-    ],
-  );
-});
-
-void test('P1 compiler validates residual fw-c and fw-deps stamps', async () => {
-  assert.equal(
-    diagnosticDefinitions.FW226.message,
-    'fw-deps or fw-c names an unknown query instance or component.',
-  );
-  assert.deepEqual(
-    compileComponentModule({
+      message: `${diagnosticDefinitions.FW211.message} on:load`,
+      severity: 'lint',
+    },
+    {
+      code: 'FW212',
+      fileName: 'components/execution-triggers.tsx',
+      message: `${diagnosticDefinitions.FW212.message} on:media`,
+      severity: 'lint',
+    },
+  ]);
+  assert.deepEqual(fact.invalidResidualStampDiagnostics, [
+    {
+      code: 'FW226',
       fileName: 'components/recommendations.tsx',
-      source: `
-import { component } from '@jiso/core';
-
-export const Recommendations = component('recommendations', {
-  queries: { cart: cartQuery },
-  render: ({ cart }) => (
-    <section fw-c="recommendations" fw-deps="cart">{cart.count}</section>
-  ),
-});
-`,
-    }).diagnostics,
-    [],
-  );
-  assert.deepEqual(
-    compilerDiagnosticFacts(
-      compileComponentModule({
-        fileName: 'components/recommendations.tsx',
-        source: `
-import { component } from '@jiso/core';
-
-export const Recommendations = component('recommendations', {
-  queries: { cart: cartQuery },
-  render: ({ cart }) => (
-    <section fw-c="unknown-component" fw-deps="cart missingQuery:p1">{cart.count}</section>
-  ),
-});
-`,
-      }).diagnostics,
-      ['FW226'],
-    ),
-    [
-      {
-        code: 'FW226',
-        fileName: 'components/recommendations.tsx',
-        message: `${diagnosticDefinitions.FW226.message} fw-c="unknown-component"`,
-        severity: 'error',
-      },
-      {
-        code: 'FW226',
-        fileName: 'components/recommendations.tsx',
-        message: `${diagnosticDefinitions.FW226.message} fw-deps="missingQuery:p1"`,
-        severity: 'error',
-      },
-    ],
-  );
+      message: `${diagnosticDefinitions.FW226.message} fw-c="unknown-component"`,
+      severity: 'error',
+    },
+    {
+      code: 'FW226',
+      fileName: 'components/recommendations.tsx',
+      message: `${diagnosticDefinitions.FW226.message} fw-deps="missingQuery:p1"`,
+      severity: 'error',
+    },
+  ]);
 });
 
 void test('P1 compiler emits FW311 update coverage facts', async () => {

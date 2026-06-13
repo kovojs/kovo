@@ -171,6 +171,28 @@ export interface CompilerDataBindBehaviorOptions {
   queryShapesFromFacts(facts: readonly CompilerQueryShapeFact[]): unknown;
 }
 
+export interface CompilerValidationDiagnosticDefinitions {
+  FW211: { message: string };
+  FW212: { message: string };
+  FW221: { message: string };
+  FW224: { message: string };
+  FW225: { message: string };
+  FW226: { message: string };
+}
+
+export interface CompilerValidationCompileResult {
+  diagnostics: readonly CompilerDiagnosticLike[];
+}
+
+export interface CompilerValidationBehaviorOptions {
+  compileComponentModule(options: {
+    fileName: string;
+    registryFacts?: { components?: readonly string[] };
+    source: string;
+  }): CompilerValidationCompileResult;
+  diagnosticDefinitions: CompilerValidationDiagnosticDefinitions;
+}
+
 export interface CompilerDataBindBehaviorFact {
   diagnostics: {
     FW227Help: string;
@@ -185,6 +207,19 @@ export interface CompilerDataBindBehaviorFact {
   unsafeNullablePathDiagnostics: CompilerDiagnosticMessageFact[];
   validCartBindingDiagnostics: CompilerDiagnosticMessageFact[];
   validCartBindingPlans: CompilerQueryUpdatePlanFact[];
+}
+
+export interface CompilerValidationBehaviorFact {
+  diagnostics: Record<keyof CompilerValidationDiagnosticDefinitions, string>;
+  invalidContentModelDiagnostics: CompilerDiagnosticFact[];
+  invalidExecutionTriggerDiagnostics: CompilerDiagnosticFact[];
+  invalidIdrefDiagnostics: CompilerDiagnosticFact[];
+  invalidResidualStampDiagnostics: CompilerDiagnosticFact[];
+  invalidStaticIdDiagnostics: CompilerDiagnosticFact[];
+  validContentModelDiagnostics: CompilerDiagnosticFact[];
+  validExecutionTriggerDiagnostics: CompilerDiagnosticFact[];
+  validIdrefDiagnostics: CompilerDiagnosticFact[];
+  validResidualStampDiagnostics: CompilerDiagnosticFact[];
 }
 
 export function compilerDiagnosticFacts(
@@ -417,5 +452,213 @@ export const ProductCard = component('product-card', {
     unsafeNullablePathDiagnostics: compilerDiagnosticMessageFacts(unsafeNullablePath.diagnostics),
     validCartBindingDiagnostics: compilerDiagnosticMessageFacts(validCartBindings.diagnostics),
     validCartBindingPlans: compilerQueryUpdatePlanFacts(validCartBindings.queryUpdatePlans),
+  };
+}
+
+export function compilerValidationBehaviorFact(
+  options: CompilerValidationBehaviorOptions,
+): CompilerValidationBehaviorFact {
+  const validIdrefs = options.compileComponentModule({
+    fileName: 'components/cart/cart-search.tsx',
+    source: `
+import { component } from '@jiso/core';
+
+export const CartSearch = component('cart-search', {
+  render: () => (
+    <section>
+      <label for="cart-query">Search</label>
+      <input id="cart-query" aria-describedby="cart-help" />
+      <p id="cart-help">Help</p>
+    </section>
+  ),
+});
+`,
+  });
+
+  const invalidIdrefs = options.compileComponentModule({
+    fileName: 'components/cart/cart-search.tsx',
+    source: `
+import { component } from '@jiso/core';
+
+export const CartSearch = component('cart-search', {
+  render: () => (
+    <section>
+      <label for="missing-label">Search</label>
+      <input id="cart-query" aria-describedby="cart-help missing-help" />
+      <p id="cart-help">Help</p>
+      <button popovertarget="missing-popover">Filters</button>
+    </section>
+  ),
+});
+`,
+  });
+
+  const duplicateStaticId = options.compileComponentModule({
+    fileName: 'components/cart/cart-shell.tsx',
+    source: `
+import { component } from '@jiso/core';
+
+export const CartShell = component('cart-shell', {
+  render: () => (
+    <section>
+      <h2 id="cart-title">Cart</h2>
+      <output id="cart-title">2 items</output>
+    </section>
+  ),
+});
+`,
+  });
+
+  const repeatableStaticId = options.compileComponentModule({
+    fileName: 'components/cart/cart-list.tsx',
+    source: `
+import { component } from '@jiso/core';
+
+export const CartList = component('cart-list', {
+  render: () => (
+    <ul data-bind-list="cart.items" fw-key="productId">
+      <template fw-stamp>
+        <li id="cart-row"><span data-bind=".name">Mug</span></li>
+      </template>
+    </ul>
+  ),
+});
+`,
+  });
+
+  const validContentModel = options.compileComponentModule({
+    fileName: 'components/cart/cart-table.tsx',
+    registryFacts: {
+      components: ['cart-row'],
+    },
+    source: `
+import { component } from '@jiso/core';
+
+export const CartTable = component('cart-table', {
+  render: () => (
+    <table>
+      <tbody>
+        <tr fw-c="cart-row">
+          <td>Cart row</td>
+        </tr>
+      </tbody>
+    </table>
+  ),
+});
+`,
+  });
+
+  const invalidContentModel = options.compileComponentModule({
+    fileName: 'components/cart/cart-shell.tsx',
+    source: `
+import { component } from '@jiso/core';
+
+export const CartShell = component('cart-shell', {
+  render: () => (
+    <section>
+      <p>
+        Cart intro
+        <div>Parser closes the paragraph before this div.</div>
+      </p>
+      <tr>
+        <td>Detached row</td>
+      </tr>
+    </section>
+  ),
+});
+`,
+  });
+
+  const validExecutionTriggers = options.compileComponentModule({
+    fileName: 'components/execution-triggers.tsx',
+    source: `
+import { component } from '@jiso/core';
+
+export const ExecutionTriggers = component('execution-triggers', {
+  render: () => (
+    <section>
+      <button on:click="/c/cart.client.js#Cart$add">Add</button>
+      <search-index on:idle="/c/search.client.js#Search$warm"></search-index>
+      <sales-chart on:visible="/c/chart.client.js#SalesChart$mount"></sales-chart>
+      {/* FW211: stock ticker intentionally starts at parse for market-open pages. */}
+      <stock-ticker on:load="/c/ticker.client.js#Ticker$start"></stock-ticker>
+    </section>
+  ),
+});
+`,
+  });
+
+  const invalidExecutionTriggers = options.compileComponentModule({
+    fileName: 'components/execution-triggers.tsx',
+    source: `
+import { component } from '@jiso/core';
+
+export const ExecutionTriggers = component('execution-triggers', {
+  render: () => (
+    <section>
+      <stock-ticker on:load="/c/ticker.client.js#Ticker$start"></stock-ticker>
+      <video-player on:media="/c/video.client.js#Video$mount"></video-player>
+    </section>
+  ),
+});
+`,
+  });
+
+  const validResidualStamp = options.compileComponentModule({
+    fileName: 'components/recommendations.tsx',
+    source: `
+import { component } from '@jiso/core';
+
+export const Recommendations = component('recommendations', {
+  queries: { cart: cartQuery },
+  render: ({ cart }) => (
+    <section fw-c="recommendations" fw-deps="cart">{cart.count}</section>
+  ),
+});
+`,
+  });
+
+  const invalidResidualStamp = options.compileComponentModule({
+    fileName: 'components/recommendations.tsx',
+    source: `
+import { component } from '@jiso/core';
+
+export const Recommendations = component('recommendations', {
+  queries: { cart: cartQuery },
+  render: ({ cart }) => (
+    <section fw-c="unknown-component" fw-deps="cart missingQuery:p1">{cart.count}</section>
+  ),
+});
+`,
+  });
+
+  return {
+    diagnostics: {
+      FW211: options.diagnosticDefinitions.FW211.message,
+      FW212: options.diagnosticDefinitions.FW212.message,
+      FW221: options.diagnosticDefinitions.FW221.message,
+      FW224: options.diagnosticDefinitions.FW224.message,
+      FW225: options.diagnosticDefinitions.FW225.message,
+      FW226: options.diagnosticDefinitions.FW226.message,
+    },
+    invalidContentModelDiagnostics: compilerDiagnosticFacts(invalidContentModel.diagnostics, [
+      'FW225',
+    ]),
+    invalidExecutionTriggerDiagnostics: compilerDiagnosticFacts(
+      invalidExecutionTriggers.diagnostics,
+      ['FW211', 'FW212'],
+    ),
+    invalidIdrefDiagnostics: compilerDiagnosticFacts(invalidIdrefs.diagnostics, ['FW221']),
+    invalidResidualStampDiagnostics: compilerDiagnosticFacts(invalidResidualStamp.diagnostics, [
+      'FW226',
+    ]),
+    invalidStaticIdDiagnostics: [
+      ...compilerDiagnosticFacts(duplicateStaticId.diagnostics, ['FW224']),
+      ...compilerDiagnosticFacts(repeatableStaticId.diagnostics, ['FW224']),
+    ],
+    validContentModelDiagnostics: compilerDiagnosticFacts(validContentModel.diagnostics),
+    validExecutionTriggerDiagnostics: compilerDiagnosticFacts(validExecutionTriggers.diagnostics),
+    validIdrefDiagnostics: compilerDiagnosticFacts(validIdrefs.diagnostics),
+    validResidualStampDiagnostics: compilerDiagnosticFacts(validResidualStamp.diagnostics),
   };
 }

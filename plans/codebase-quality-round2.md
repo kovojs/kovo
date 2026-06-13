@@ -161,7 +161,9 @@ and exported main-marker checks, so the monolith no longer creates export temp p
 generated export artifacts inline. Shared compiler fixtures now own the P5 data-bind generated
 query-shape fixture assembly, nullable-path diagnostics, and D3 derive/stamp query-plan
 projection, so those fw-check cases no longer keep reusable TSX source assembly or raw compiler
-offset fields in the monolith.
+offset fields in the monolith. Shared compiler fixtures now also own the P1 validation fixture
+assembly for IDREF, static-id, content-model, execution-trigger, and residual `fw-c`/`fw-deps`
+checks, so the monolith asserts public diagnostic facts without rebuilding those TSX sources inline.
 
 - [ ] Search for remaining custom parsers, raw source membership checks, and generated-artifact
       projections in `tests/fw-check.node.mjs`.
@@ -203,6 +205,17 @@ Latest evidence:
   `compilerQueryUpdatePlanFacts()` strips D3 derive/stamp source-span and template offset fields;
   `tests/fw-check.node.mjs` asserts those public fixture facts instead of assembling local TSX
   sources or comparing raw compiler artifact internals.
+- Phase 1/7 P1 compiler validation fixture closure:
+  `pnpm exec vitest --run packages/test/src/compiler-fixtures.test.ts packages/test/src/package-exports.test.ts`;
+  `node --test --test-name-pattern "P1 compiler validation" tests/fw-check.node.mjs`;
+  `pnpm run check:build`;
+  `pnpm run check:fw`;
+  `pnpm exec vp check`;
+  `git diff --check`.
+  Evidence: `packages/test/src/compiler-fixtures.ts` now owns the reusable P1 compiler validation
+  TSX source assembly for IDREF, static-id, content-model, execution-trigger, and residual
+  `fw-c`/`fw-deps` checks; `tests/fw-check.node.mjs` asserts the resulting structured diagnostic
+  facts rather than locally compiling each fixture source.
 - Phase 5 static export client-module snapshot conflict slice:
   `pnpm exec vitest --run packages/server/src/static-export-document-client-modules.test.ts packages/server/src/static-export.test.ts`;
   `pnpm exec tsc --noEmit --pretty false`. Evidence:
