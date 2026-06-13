@@ -1,9 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 
-import {
-  applyMutationResponseChunksToRuntime,
-  type ApplyMutationResponseChunksToRuntimeOptions,
-} from './apply-mutation-response.js';
+import { applyMutationResponseBodyToRuntime } from './apply-mutation-response.js';
 import { createQueryStore } from './index.js';
 import {
   FakeMorphRoot,
@@ -11,22 +8,6 @@ import {
   FakeQueryBindingElement,
   FakeQueryPlanElement,
 } from './runtime-test-fakes.js';
-import { readMutationResponseBodyChunks } from './wire-parser.js';
-
-function applyDecodedMutationResponseBody(
-  options: ApplyMutationResponseChunksToRuntimeOptions & { body: string; root: FakeMorphRoot },
-) {
-  const { body, onError, ...applyOptions } = options;
-
-  // SPEC.md §9.1: DOM response tests parse transport bodies at the boundary,
-  // then enter the same decoded query/fragment runtime apply primitive as
-  // enhanced submit, broadcast replay, and deferred stream chunks.
-  const chunks = readMutationResponseBodyChunks(body, onError);
-  if (onError) {
-    return applyMutationResponseChunksToRuntime(chunks, { ...applyOptions, onError });
-  }
-  return applyMutationResponseChunksToRuntime(chunks, applyOptions);
-}
 
 describe('mutation response DOM apply', () => {
   it('keeps store-only and DOM apply on the same keyed query path', () => {
@@ -39,11 +20,8 @@ describe('mutation response DOM apply', () => {
     ].join('');
 
     // SPEC.md §9.1: mutation responses carry query patches and fragment patches together.
-    const storeOnlyApplied = applyMutationResponseChunksToRuntime(
-      readMutationResponseBodyChunks(body),
-      { store: storeOnly },
-    );
-    const domApplied = applyDecodedMutationResponseBody({ body, root, store: domStore });
+    const storeOnlyApplied = applyMutationResponseBodyToRuntime({ body, store: storeOnly });
+    const domApplied = applyMutationResponseBodyToRuntime({ body, root, store: domStore });
 
     expect(domStore.get('cart', 'cart:c1')).toEqual(storeOnly.get('cart', 'cart:c1'));
     expect(domApplied.queries).toEqual(storeOnlyApplied.queries);
@@ -65,7 +43,7 @@ describe('mutation response DOM apply', () => {
 
     // SPEC.md §9.1 mutation bodies may carry multiple query chunks before any
     // fragment morphing; those chunks should share one §4.8 binding index.
-    const applied = applyDecodedMutationResponseBody({
+    const applied = applyMutationResponseBodyToRuntime({
       body: [
         '<fw-query name="cart">{"label":"Cart ready"}</fw-query>',
         '<fw-query name="product">{"label":"Product ready"}</fw-query>',
@@ -88,7 +66,7 @@ describe('mutation response DOM apply', () => {
     const product = new FakeQueryBindingElement('product.name', { textContent: 'Coffee' });
     root.bindings.push(count, total, product);
 
-    const result = applyDecodedMutationResponseBody({
+    const result = applyMutationResponseBodyToRuntime({
       body: '<fw-query name="cart">{"count":2,"total":2998}</fw-query>',
       root,
       store,
@@ -115,7 +93,7 @@ describe('mutation response DOM apply', () => {
     root.planElements.push(summary, host);
     root.targets.set('cart-badge', new FakeMorphTarget());
 
-    applyDecodedMutationResponseBody({
+    applyMutationResponseBodyToRuntime({
       body: [
         '<fw-query name="cart">{"count":5}</fw-query>',
         '<fw-fragment target="cart-badge"><cart-badge>Ready</cart-badge></fw-fragment>',
@@ -156,7 +134,7 @@ describe('mutation response DOM apply', () => {
     const onError = vi.fn();
     root.targets.set('cart-badge', new FakeMorphTarget());
 
-    const applied = applyDecodedMutationResponseBody({
+    const applied = applyMutationResponseBodyToRuntime({
       body: [
         '<fw-query name="cart">{</fw-query>',
         '<fw-query name="inventory">{"available":true}</fw-query>',
@@ -181,7 +159,7 @@ describe('mutation response DOM apply', () => {
     root.targets.set('cart-badge', new FakeMorphTarget());
 
     // SPEC section 9.1 defines fw-fragment as mutation response wire vocabulary.
-    const applied = applyDecodedMutationResponseBody({
+    const applied = applyMutationResponseBodyToRuntime({
       body: [
         '<fw-query name="cart">{"count":3}</fw-query>',
         '<fw-fragment target="cart-badge"><cart-badge>3</cart-badge></fw-fragment>',
@@ -212,7 +190,7 @@ describe('mutation response DOM apply', () => {
     root.bindings.push(count, summary);
     root.targets.set('cart-badge', new FakeMorphTarget());
 
-    const applied = applyDecodedMutationResponseBody({
+    const applied = applyMutationResponseBodyToRuntime({
       applyQuery(query) {
         store.set(query.name, { count: (query.value as { count: number }).count + 10 }, query.key);
         return { value: store.get(query.name, query.key) };

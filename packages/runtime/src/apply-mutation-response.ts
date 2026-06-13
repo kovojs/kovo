@@ -5,6 +5,7 @@ import { applyFragments } from './morph.js';
 import type { MorphFragment, MorphRoot } from './morph.js';
 import type { CompiledQueryUpdatePlans } from './query-bindings.js';
 import type { MutationResponseBodyChunks, QueryChunk } from './wire-parser.js';
+import { readMutationResponseBodyChunks } from './wire-parser.js';
 import type { FragmentChunk } from './wire-response-scanner.js';
 import type { IslandSignalScope } from './handler-context.js';
 
@@ -24,6 +25,11 @@ export interface ApplyMutationResponseChunksToRuntimeOptions {
   root?: MorphRoot | undefined;
   store: QueryStore;
 }
+
+export type ApplyMutationResponseBodyToRuntimeOptions =
+  ApplyMutationResponseChunksToRuntimeOptions & {
+    body: string;
+  };
 
 export type AppliedMutationResponseWithRoot = AppliedMutationResponse & {
   appliedFragments: string[];
@@ -73,4 +79,26 @@ export function applyMutationResponseChunksToRuntime(
       options.islandSignalScope,
     ),
   };
+}
+
+export function applyMutationResponseBodyToRuntime(
+  options: ApplyMutationResponseBodyToRuntimeOptions & { root: MorphRoot },
+): AppliedMutationResponseWithRoot;
+export function applyMutationResponseBodyToRuntime(
+  options: ApplyMutationResponseBodyToRuntimeOptions & { root?: undefined },
+): AppliedMutationResponse;
+export function applyMutationResponseBodyToRuntime(
+  options: ApplyMutationResponseBodyToRuntimeOptions,
+): AppliedMutationResponse | AppliedMutationResponseWithRoot;
+export function applyMutationResponseBodyToRuntime(
+  options: ApplyMutationResponseBodyToRuntimeOptions,
+): AppliedMutationResponse | AppliedMutationResponseWithRoot {
+  const { body, ...applyOptions } = options;
+
+  // SPEC.md §9.1: mutation-body transport callers share the parser/apply seam
+  // so enhanced submit, broadcast replay, and deferred chunks cannot drift.
+  return applyMutationResponseChunksToRuntime(
+    readMutationResponseBodyChunks(body, options.onError),
+    applyOptions,
+  );
 }

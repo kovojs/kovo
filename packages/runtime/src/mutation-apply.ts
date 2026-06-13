@@ -1,5 +1,5 @@
 import {
-  applyMutationResponseChunksToRuntime,
+  applyMutationResponseBodyToRuntime,
   type AppliedMutationResponse,
 } from './apply-mutation-response.js';
 import { definedProps } from './defined-props.js';
@@ -12,7 +12,6 @@ import type { CompiledQueryUpdatePlans } from './query-bindings.js';
 import type { QueryApplyInterposition } from './query-apply.js';
 import type { QueryStore } from './query-store.js';
 import type { QueryChunk } from './wire-parser.js';
-import { readMutationResponseBodyChunks } from './wire-parser.js';
 
 export interface EnhancedMutationRuntimeApplyOptions {
   applyQuery?: QueryApplyInterposition;
@@ -45,21 +44,19 @@ export function applyFetchedEnhancedMutationResponseToRuntime(
   // SPEC.md §9.1/§9.2: enhanced submit, validation failure fragments, and
   // same-user broadcast all parse mutation bodies before entering the canonical
   // decoded chunk apply path.
-  const applied = applyMutationResponseChunksToRuntime(
-    readMutationResponseBodyChunks(fetched.body, options.onError),
-    {
-      ...definedProps({
-        applyQuery: hooks.applyQuery ?? options.applyQuery,
-        beforeApplyQueries: hooks.beforeApplyQueries,
-        islandSignalScope: options.islandSignalScope,
-        morph: options.morph,
-        onError: options.onError,
-        queryPlans: options.queryPlans,
-      }),
-      root: options.root,
-      store: options.store,
-    },
-  );
+  const applied = applyMutationResponseBodyToRuntime({
+    ...definedProps({
+      applyQuery: hooks.applyQuery ?? options.applyQuery,
+      beforeApplyQueries: hooks.beforeApplyQueries,
+      islandSignalScope: options.islandSignalScope,
+      morph: options.morph,
+      onError: options.onError,
+      queryPlans: options.queryPlans,
+    }),
+    body: fetched.body,
+    root: options.root,
+    store: options.store,
+  });
   publishSuccessfulMutation(options, fetched);
 
   return {

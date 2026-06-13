@@ -4012,12 +4012,17 @@ Focused gates since that broad run:
   `git diff --check`. Evidence: the SPEC §5.2 app-authored popover TSX now emits a visible
   `data-demo-state="popover-open"` marker, self-contained generated click/Escape handlers, and
   browser-backed native popover open/close plus non-Escape no-op checks.
-- Runtime body apply closure:
-  `pnpm exec vitest --run packages/runtime/src/mutation-response.test.ts packages/runtime/src/mutation-apply.test.ts packages/runtime/src/apply-deferred-stream.test.ts packages/runtime/src/broadcast.test.ts`;
-  `pnpm exec vitest --run packages/runtime/src`;
-  `pnpm exec vitest --config vitest.browser.config.ts --run packages/runtime/src/index.browser.test.ts`;
-  `pnpm --filter @jiso/runtime run check:inline-loader`;
-  `pnpm exec tsc --noEmit --pretty false`.
+- [x] Runtime body apply closure.
+      Evidence: added `applyMutationResponseBodyToRuntime()` as the internal body-string parser/apply
+      seam in `packages/runtime/src/apply-mutation-response.ts`; `packages/runtime/src/mutation-apply.ts`,
+      `packages/runtime/src/broadcast.ts`, and `packages/runtime/src/apply-deferred-stream.ts` now use
+      it instead of local body parsing, while DOM body tests call the same helper directly. Verified by:
+      `pnpm exec vitest --run packages/runtime/src/mutation-response.test.ts packages/runtime/src/mutation-apply.test.ts packages/runtime/src/apply-deferred-stream.test.ts packages/runtime/src/broadcast.test.ts`;
+      `pnpm exec vitest --run packages/runtime/src/mutation-response-apply.test.ts packages/runtime/src/mutation-response-dom.test.ts packages/runtime/src/mutation-apply.test.ts packages/runtime/src/apply-deferred-stream.test.ts packages/runtime/src/broadcast.test.ts`;
+      `pnpm exec vitest --run packages/runtime/src`;
+      `pnpm exec vitest --config vitest.browser.config.ts --run packages/runtime/src/mutation-response-dom.browser.test.ts`;
+      `pnpm exec vitest --config vitest.browser.config.ts --run packages/runtime/src/**/*.browser.test.ts`;
+      `pnpm exec tsc --noEmit --pretty false`.
 - Runtime failure output parser closure:
   `pnpm exec vitest --run packages/runtime/src/mutation-failure.test.ts packages/runtime/src/submit-context.test.ts`;
   `pnpm exec vitest --run packages/runtime/src`;

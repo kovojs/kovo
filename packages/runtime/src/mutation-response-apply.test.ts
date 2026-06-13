@@ -1,6 +1,9 @@
 import { describe, expect, it, vi } from 'vitest';
 
-import { applyMutationResponseChunksToRuntime } from './apply-mutation-response.js';
+import {
+  applyMutationResponseBodyToRuntime,
+  applyMutationResponseChunksToRuntime,
+} from './apply-mutation-response.js';
 import { createQueryStore } from './index.js';
 import { FakeMorphRoot, FakeMorphTarget, FakeQueryBindingElement } from './runtime-test-fakes.js';
 import { readMutationResponseBodyChunks } from './wire-parser.js';
@@ -98,12 +101,13 @@ describe('decoded mutation response apply', () => {
     // SPEC.md §9.1: store-only mutation responses and runtime apply consume the
     // same fw-query wire chunks, so interposed values must not drift by entrypoint.
     const body = '<fw-query name="cart" key="cart:c1">{"count":6}</fw-query>';
-    const applied = applyMutationResponseChunksToRuntime(readMutationResponseBodyChunks(body), {
+    const applied = applyMutationResponseBodyToRuntime({
       applyQuery(query) {
         store.set(query.name, { count: (query.value as { count: number }).count + 10 }, query.key);
         return { value: store.get(query.name, query.key) };
       },
       beforeApplyQueries,
+      body,
       store,
     });
 
@@ -124,7 +128,8 @@ describe('decoded mutation response apply', () => {
       '<fw-query name="cart">{"count":8}</fw-query>',
       '<fw-fragment target="cart-badge"><cart-badge>8</cart-badge></fw-fragment>',
     ].join('\n');
-    const applied = applyMutationResponseChunksToRuntime(readMutationResponseBodyChunks(body), {
+    const applied = applyMutationResponseBodyToRuntime({
+      body,
       morph,
       queryPlans: {
         cart: {
@@ -158,7 +163,8 @@ describe('decoded mutation response apply', () => {
       '<fw-query name="cart">{"count":9}</fw-query>',
       '<fw-fragment target="cart-badge"><cart-badge>9</cart-badge></fw-fragment>',
     ].join('\n');
-    const applied = applyMutationResponseChunksToRuntime(readMutationResponseBodyChunks(body), {
+    const applied = applyMutationResponseBodyToRuntime({
+      body,
       morph,
       queryPlans: { cart: { bindings: true } },
       queryRoot,
@@ -183,23 +189,19 @@ describe('decoded mutation response apply', () => {
     root.targets.set('cart-badge', new FakeMorphTarget());
 
     const hookError = new Error('cart hook drift');
-    const applied = applyMutationResponseChunksToRuntime(
-      readMutationResponseBodyChunks(
-        [
-          '<fw-query name="cart">{"count":1}</fw-query>',
-          '<fw-query name="cart">{"count":2}</fw-query>',
-          '<fw-fragment target="cart-badge"><cart-badge>2</cart-badge></fw-fragment>',
-        ].join(''),
-      ),
-      {
-        applyQuery(query) {
-          if ((query.value as { count: number }).count === 1) throw hookError;
-        },
-        onError,
-        root,
-        store,
+    const applied = applyMutationResponseBodyToRuntime({
+      applyQuery(query) {
+        if ((query.value as { count: number }).count === 1) throw hookError;
       },
-    );
+      body: [
+        '<fw-query name="cart">{"count":1}</fw-query>',
+        '<fw-query name="cart">{"count":2}</fw-query>',
+        '<fw-fragment target="cart-badge"><cart-badge>2</cart-badge></fw-fragment>',
+      ].join(''),
+      onError,
+      root,
+      store,
+    });
 
     // SPEC.md §9.1/§9.4: mutation response queries use the same decoded runtime
     // apply primitive as hydration and typed reads, so a bad hook reports
