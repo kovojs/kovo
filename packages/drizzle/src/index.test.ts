@@ -6431,6 +6431,58 @@ export interface CommerceInvalidationSets {
     });
   });
 
+  it('keeps resolved write read sources when the source-mode write target is opaque', () => {
+    const graph = extractTouchGraphFromSource([
+      {
+        fileName: 'catalog.domain.ts',
+        source: [
+          'export const products = pgTable("products", {}, jiso({ domain: "product", key: "id" }));',
+          'export const vendors = pgTable("vendors", {}, jiso({ domain: "vendor", key: "id" }));',
+          '',
+          'export async function syncCatalog(db) {',
+          '  await db.insert(tableFor("snapshots")).select(db.select().from(products));',
+          '  await db.update(tableFor("snapshots")).set({ refreshed: true }).from(vendors);',
+          '}',
+          '',
+        ].join('\n'),
+      },
+    ]);
+
+    expect(graph).toEqual({
+      syncCatalog: {
+        reads: [
+          {
+            domain: 'product',
+            keys: null,
+            site: 'catalog.domain.ts:5',
+            source: 'insert-select',
+            via: 'products',
+          },
+          {
+            domain: 'vendor',
+            keys: null,
+            site: 'catalog.domain.ts:6',
+            source: 'update-from',
+            via: 'vendors',
+          },
+        ],
+        touches: [],
+        unresolved: [
+          {
+            code: 'FW406',
+            message: 'Statically un-analyzable write site; manual touches required.',
+            site: 'catalog.domain.ts:5',
+          },
+          {
+            code: 'FW406',
+            message: 'Statically un-analyzable write site; manual touches required.',
+            site: 'catalog.domain.ts:6',
+          },
+        ],
+      },
+    });
+  });
+
   it('marks unresolved insert-select source tables as FW406', () => {
     const graph = extractTouchGraphFromSource([
       {

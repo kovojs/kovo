@@ -2299,6 +2299,65 @@ describe('Drizzle pinned subset conformance', () => {
     ]);
   });
 
+  it('pins resolved write read sources when real Drizzle write targets are opaque', () => {
+    const graph = extractTouchGraphFromProject({
+      files: [
+        {
+          fileName: 'conformance/drizzle-pin/src/catalog.domain.ts',
+          source: [
+            "import type { PgDatabase } from 'drizzle-orm/pg-core';",
+            "import { pgTable, text } from 'drizzle-orm/pg-core';",
+            '',
+            "export const products = pgTable('products', { id: text('id') }, jiso({ domain: 'product', key: 'id' }));",
+            "export const vendors = pgTable('vendors', { id: text('id') }, jiso({ domain: 'vendor', key: 'id' }));",
+            '',
+            'function tableFor<T>(table: T): T { return table; }',
+            '',
+            'export async function syncCatalog(db: PgDatabase<any, any, any>) {',
+            '  await db.insert(tableFor(products)).select(db.select().from(products));',
+            '  await db.update(tableFor(products)).set({ refreshed: true }).from(vendors);',
+            '}',
+            '',
+          ].join('\n'),
+        },
+      ],
+    });
+
+    expect(graph).toEqual({
+      syncCatalog: {
+        reads: [
+          {
+            domain: 'product',
+            keys: null,
+            site: 'conformance/drizzle-pin/src/catalog.domain.ts:10',
+            source: 'insert-select',
+            via: 'products',
+          },
+          {
+            domain: 'vendor',
+            keys: null,
+            site: 'conformance/drizzle-pin/src/catalog.domain.ts:11',
+            source: 'update-from',
+            via: 'vendors',
+          },
+        ],
+        touches: [],
+        unresolved: [
+          {
+            code: 'FW406',
+            message: 'Statically un-analyzable write site; manual touches required.',
+            site: 'conformance/drizzle-pin/src/catalog.domain.ts:10',
+          },
+          {
+            code: 'FW406',
+            message: 'Statically un-analyzable write site; manual touches required.',
+            site: 'conformance/drizzle-pin/src/catalog.domain.ts:11',
+          },
+        ],
+      },
+    });
+  });
+
   it('pins real Drizzle raw query execute as an explicit FW406 read surface', () => {
     expect(sql`select * from users`).toBeDefined();
 

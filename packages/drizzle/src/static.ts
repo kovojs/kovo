@@ -2956,6 +2956,8 @@ function directSummaryForFunction(
       call.site ?? `${file.fileName}:${lineForIndex(file.source, fn.bodyStart + call.index)}`;
     const resolvedTables = tables.get(call.tableExpression) ?? [];
 
+    appendReadSourceSummaries(reads, unresolved, call, site, tables, unresolvedIdentifiers);
+
     if (resolvedTables.length > 0) {
       for (const table of resolvedTables) {
         if (isExemptTableAnnotation(table.annotation)) continue;
@@ -2970,38 +2972,6 @@ function directSummaryForFunction(
           table: table.annotation,
           ...(writePredicate.predicate ? { predicate: writePredicate.predicate } : {}),
           ...(writePredicate.key ? { writeKey: writePredicate.key } : {}),
-        });
-      }
-      for (const readSource of call.readSources) {
-        const readTables = tables.get(readSource.tableExpression) ?? [];
-        if (readTables.length > 0) {
-          for (const readTable of readTables) {
-            if (isExemptTableAnnotation(readTable.annotation)) continue;
-            const readPredicate = predicateSummaryFromFacts(
-              call.predicateFacts,
-              readSource.tableExpression,
-              readTable.annotation,
-            );
-            reads.push({
-              operation: readSource.operation,
-              ...(readPredicate.predicate ? { predicate: readPredicate.predicate } : {}),
-              ...(readPredicate.key ? { readKey: readPredicate.key } : {}),
-              site,
-              table: readTable.annotation,
-            });
-          }
-          if (unresolvedIdentifiers.has(readSource.tableExpression)) {
-            unresolved.push({
-              operation: readSource.operation,
-              site,
-            });
-          }
-          continue;
-        }
-
-        unresolved.push({
-          operation: readSource.operation,
-          site,
         });
       }
       if (unresolvedIdentifiers.has(call.tableExpression)) {
@@ -3027,6 +2997,50 @@ function directSummaryForFunction(
   }
 
   return { reads, unresolved, writes };
+}
+
+function appendReadSourceSummaries(
+  reads: ReadSummaryInput[],
+  unresolved: UnresolvedSummaryInput[],
+  call: ExtractedWriteCall,
+  site: string,
+  tables: ReadonlyMap<string, readonly ExtractedTable[]>,
+  unresolvedIdentifiers: ReadonlySet<string>,
+): void {
+  // SPEC §11.1: insert-select/update-from reads are independently visible even when the write
+  // target itself is opaque and must degrade to FW406.
+  for (const readSource of call.readSources) {
+    const readTables = tables.get(readSource.tableExpression) ?? [];
+    if (readTables.length > 0) {
+      for (const readTable of readTables) {
+        if (isExemptTableAnnotation(readTable.annotation)) continue;
+        const readPredicate = predicateSummaryFromFacts(
+          call.predicateFacts,
+          readSource.tableExpression,
+          readTable.annotation,
+        );
+        reads.push({
+          operation: readSource.operation,
+          ...(readPredicate.predicate ? { predicate: readPredicate.predicate } : {}),
+          ...(readPredicate.key ? { readKey: readPredicate.key } : {}),
+          site,
+          table: readTable.annotation,
+        });
+      }
+      if (unresolvedIdentifiers.has(readSource.tableExpression)) {
+        unresolved.push({
+          operation: readSource.operation,
+          site,
+        });
+      }
+      continue;
+    }
+
+    unresolved.push({
+      operation: readSource.operation,
+      site,
+    });
+  }
 }
 
 function functionTouchSummariesForFile(

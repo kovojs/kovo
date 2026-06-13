@@ -301,6 +301,11 @@ Closed evidence so far:
   Evidence: `packages/drizzle/src/static.ts`, `packages/drizzle/src/index.test.ts`,
   `conformance/drizzle-pin/src/index.test.ts`, `pnpm exec vitest --run packages/drizzle/src`,
   and `pnpm exec vitest --run conformance/drizzle-pin`.
+- Write-chain `insert(...).select(...)` and `update(...).from(...)` read sources now remain
+  visible even when the write target is opaque and degrades to FW406. Evidence:
+  `packages/drizzle/src/static.ts`, `packages/drizzle/src/index.test.ts`,
+  `conformance/drizzle-pin/src/index.test.ts`, `pnpm exec vitest --run packages/drizzle/src`,
+  and `pnpm exec vitest --run conformance/drizzle-pin`.
 
 Open:
 
@@ -313,7 +318,7 @@ Recent gates:
 
 - `pnpm exec vitest --run packages/drizzle/src`
 - `pnpm exec vitest --run conformance/drizzle-pin`
-- `pnpm exec vp check packages/drizzle/src/static.ts packages/drizzle/src/index.test.ts conformance/drizzle-pin/src/index.test.ts plans/codebase-quality-round2.md`
+- `pnpm exec vp check packages/drizzle/src/static.ts packages/drizzle/src/index.test.ts conformance/drizzle-pin/src/index.test.ts IMPLEMENT_v1.md plans/codebase-quality-round2.md`
 - `pnpm run test:conformance`
 
 ## Phase 4 - Runtime
