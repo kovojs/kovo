@@ -21,11 +21,15 @@ export interface CommandItem {
 
 export interface CommandState {
   disabled?: boolean;
+  form?: string;
   highlightedValue?: string;
   inputValue?: string;
+  invalid?: boolean;
   items?: readonly CommandItem[];
+  name?: string;
   open?: boolean;
   placeholder?: string;
+  required?: boolean;
   value?: string;
 }
 
@@ -50,6 +54,7 @@ export interface CommandCloseAttributeOptions extends CommandState {
 }
 
 export interface CommandInputAttributeOptions extends CommandState {
+  autocomplete?: string;
   descriptionId?: string;
   id?: string;
   labelledBy?: string;
@@ -218,10 +223,13 @@ export function commandInputAttributes(
 ): CommandPrimitiveAttributes {
   const activeDescendant = commandActiveDescendant(options);
 
+  // SPEC.md §6.3: form() typing validates real named controls; command keeps
+  // its native text input as the submitted search/query control.
   return Object.freeze({
     ...commandDataAttributes(options),
     'aria-autocomplete': 'list',
     'aria-expanded': String(options.open === true),
+    autocomplete: options.autocomplete ?? 'off',
     role: 'combobox',
     type: 'text',
     value: options.inputValue ?? '',
@@ -230,8 +238,12 @@ export function commandInputAttributes(
     ...(options.descriptionId === undefined ? {} : { 'aria-describedby': options.descriptionId }),
     ...(options.id === undefined ? {} : { id: options.id }),
     ...(options.labelledBy === undefined ? {} : { 'aria-labelledby': options.labelledBy }),
+    ...(options.invalid === true ? { 'aria-invalid': 'true' } : {}),
     disabled: options.disabled === true,
+    ...(options.form === undefined ? {} : { form: options.form }),
+    ...(options.name === undefined ? {} : { name: options.name }),
     ...(options.placeholder === undefined ? {} : { placeholder: options.placeholder }),
+    ...(options.required === true ? { required: true } : {}),
   });
 }
 
@@ -588,6 +600,8 @@ function commandDataAttributes(state: CommandState): PrimitiveDataAttributes {
   return mergeDataAttributes(
     openState(state.open === true),
     dataDisabled(state.disabled === true),
+    state.invalid === true ? { 'data-invalid': '' } : undefined,
+    state.required === true ? { 'data-required': '' } : undefined,
     commandInputDataAttributes(state),
   );
 }

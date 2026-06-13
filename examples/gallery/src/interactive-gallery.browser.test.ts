@@ -1950,6 +1950,7 @@ describe('compiled interactive gallery demos in the browser', () => {
     const dialog = required(
       commandRoot.querySelector<HTMLDialogElement>('#gallery-command-dialog'),
     );
+    const form = required(commandRoot.querySelector<HTMLFormElement>('#gallery-command-form'));
     const input = required(commandRoot.querySelector<HTMLInputElement>('#gallery-command-input'));
     const invite = required(
       commandRoot.querySelector<HTMLButtonElement>('#gallery-command-listbox-item-1'),
@@ -1971,6 +1972,10 @@ describe('compiled interactive gallery demos in the browser', () => {
     expect(dialog.open).toBe(false);
     expect(input.getAttribute('role')).toBe('combobox');
     expect(input.getAttribute('aria-expanded')).toBe('false');
+    expect(input.form).toBe(form);
+    expect(input.name).toBe('gallery-command-query');
+    expect(input.required).toBe(true);
+    expect(new FormData(form).get('gallery-command-query')).toBe('');
     expect(commandInput.textContent).toBe('empty');
 
     trigger.click();
@@ -1994,6 +1999,7 @@ describe('compiled interactive gallery demos in the browser', () => {
       expect(input.value).toBe('invite');
       expect(input.getAttribute('aria-activedescendant')).toBe('gallery-command-listbox-item-1');
       expect(invite.getAttribute('aria-selected')).toBe('true');
+      expect(new FormData(form).get('gallery-command-query')).toBe('invite');
       expect(commandInput.textContent).toBe('invite');
     });
 

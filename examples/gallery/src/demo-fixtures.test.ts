@@ -270,6 +270,9 @@ describe('gallery demo fixtures', () => {
     expect(command.html).toContain('command="show-modal" commandfor="gallery-command-dialog"');
     expect(command.html).toContain('aria-modal="true"');
     expect(command.html).toContain('role="combobox"');
+    expect(command.html).toContain('form="gallery-command-form"');
+    expect(command.html).toContain('name="gallery-command-query"');
+    expect(command.html).toContain('required');
     expect(command.html).toContain('aria-activedescendant="gallery-command-listbox-item-1"');
     expect(command.html).toContain('role="listbox"');
     expect(command.html).toContain('aria-selected="true"');

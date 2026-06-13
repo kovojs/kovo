@@ -46,12 +46,15 @@ export const GalleryCommandDemo = component('gallery-command-demo', {
     const contentId = 'gallery-command-dialog';
     const listboxId = 'gallery-command-listbox';
     const commandState = {
+      form: 'gallery-command-form',
       highlightedValue: state.highlightedValue,
       inputValue: state.inputValue,
       items: commandItems,
       listboxId,
+      name: 'gallery-command-query',
       open: state.open,
       placeholder: 'Type a command',
+      required: true,
       value: state.value,
     };
 
@@ -63,6 +66,7 @@ export const GalleryCommandDemo = component('gallery-command-demo', {
         fw-c="gallery-command-demo"
         fw-state='{"highlightedValue":"dashboard","inputValue":"","lastKeyAction":"idle","open":false,"value":"dashboard"}'
       >
+        <form id="gallery-command-form" data-gallery-form="command"></form>
         <button
           {...commandTriggerAttributes({ ...commandState, contentId })}
           id="gallery-command-trigger"

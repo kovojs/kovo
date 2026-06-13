@@ -218,7 +218,11 @@ commands. Use `- [ ]` for open actionable work and `- [x]` only for fully verifi
       assert generated-handler value changes update `FormData` for the external form. Evidence
       2026-06-13: `commandKeyDown()` now prevents default for canceled Enter selection and
       canceled Escape close paths; the compiled command gallery records a canceled Enter action
-      through refreshed generated artifacts and Chromium-backed DOM/state assertions.
+      through refreshed generated artifacts and Chromium-backed DOM/state assertions. Evidence
+      2026-06-13: command input now preserves native `autocomplete`, `form`, `name`, `required`,
+      and invalid state through headless/styled wrappers; static fixtures and refreshed compiled
+      command artifacts prove the authored TSX, while Chromium-backed gallery tests assert the
+      external `FormData` value moves from empty to `invite` through the generated input handler.
 - [ ] Keep vendored source app-authored TSX: no `@jiso/ui` self-imports, no hand-authored lowered
       IR, no `fw-c=`, and no `data-bind=` in vendored component source.
 - [ ] Keep CLI add-catalog tests synchronized with `packages/ui/package.json` exports and resolve
@@ -237,6 +241,13 @@ commands. Use `- [ ]` for open actionable work and `- [x]` only for fully verifi
       `pnpm exec vitest --run examples/gallery/src/interactive-gallery.test.ts examples/gallery/src/demo-fixtures.test.ts examples/gallery/src/behavior-contracts.test.ts`;
       `(cd examples/gallery && pnpm exec vitest --config vitest.browser.config.ts --run src/interactive-gallery.browser.test.ts)`;
       exact `pnpm exec vp check packages/headless-ui/src/primitives/checkbox.ts packages/headless-ui/src/primitives/checkbox.test.ts packages/headless-ui/src/primitives/index.ts packages/headless-ui/src/index.ts examples/gallery/src/interactive/checkbox-demo.tsx examples/gallery/src/generated/interactive/checkbox-demo.tsx examples/gallery/src/generated/interactive/checkbox-demo.client.js examples/gallery/src/interactive-gallery.browser.test.ts plans/ui.md`;
+      `git diff --check`.
+- [x] Command native input form-owner closure slice:
+      `pnpm exec vitest --run packages/headless-ui/src/primitives/command.test.ts`;
+      `pnpm exec vitest --run packages/ui/src/index.test.tsx -t command`;
+      `pnpm --filter @jiso/example-gallery run emit:interactive-gallery`;
+      `pnpm exec vitest --run examples/gallery/src/interactive-gallery.test.ts examples/gallery/src/demo-fixtures.test.ts examples/gallery/src/behavior-contracts.test.ts`;
+      `(cd examples/gallery && pnpm exec vitest --config vitest.browser.config.ts --run src/interactive-gallery.browser.test.ts)`;
       `git diff --check`.
 - [x] Compiled gallery no-exception axe closure slice:
       `pnpm exec vitest --run packages/headless-ui/src/primitives/combobox.test.ts`;

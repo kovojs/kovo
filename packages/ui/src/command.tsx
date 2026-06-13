@@ -18,11 +18,15 @@ import {
 
 export interface CommandStateProps {
   disabled?: boolean;
+  form?: string;
   highlightedValue?: string;
   inputValue?: string;
+  invalid?: boolean;
   items?: readonly HeadlessCommandItem[];
+  name?: string;
   open?: boolean;
   placeholder?: string;
+  required?: boolean;
   value?: string;
 }
 
@@ -55,6 +59,7 @@ export interface CommandCloseProps extends CommandStateProps {
 }
 
 export interface CommandInputProps extends CommandStateProps {
+  autocomplete?: string;
   class?: ClassValue;
   descriptionId?: string;
   id?: string;
@@ -152,6 +157,8 @@ export const Command = component('command', {
       <div
         class={cn(commandClassNames(), props.class)}
         data-disabled={attrs['data-disabled']}
+        data-invalid={attrs['data-invalid']}
+        data-required={attrs['data-required']}
         data-state={attrs['data-state']}
         id={attrs.id}
       >
@@ -220,6 +227,7 @@ export const CommandDialog = component('command-dialog', {
 export const CommandInput = component('command-input', {
   render(props: CommandInputProps) {
     const attrs = commandInputAttributes({
+      ...(props.autocomplete === undefined ? {} : { autocomplete: props.autocomplete }),
       ...toCommandState(props),
       ...(props.descriptionId === undefined ? {} : { descriptionId: props.descriptionId }),
       ...(props.id === undefined ? {} : { id: props.id }),
@@ -234,13 +242,20 @@ export const CommandInput = component('command-input', {
         aria-controls={attrs['aria-controls']}
         aria-describedby={attrs['aria-describedby']}
         aria-expanded={attrs['aria-expanded']}
+        aria-invalid={attrs['aria-invalid']}
         aria-labelledby={attrs['aria-labelledby']}
+        autocomplete={attrs.autocomplete}
         class={cn(commandInputClassNames(), props.class)}
         data-disabled={attrs['data-disabled']}
+        data-invalid={attrs['data-invalid']}
+        data-required={attrs['data-required']}
         data-state={attrs['data-state']}
         disabled={attrs.disabled}
+        form={attrs.form}
         id={attrs.id}
+        name={attrs.name}
         placeholder={attrs.placeholder}
+        required={attrs.required}
         role={attrs.role}
         type={attrs.type}
         value={attrs.value}
@@ -359,12 +374,16 @@ export const CommandValue = component('command-value', {
 function toCommandState(props: CommandStateProps & { id?: string }) {
   return {
     ...(props.disabled === undefined ? {} : { disabled: props.disabled }),
+    ...(props.form === undefined ? {} : { form: props.form }),
     ...(props.highlightedValue === undefined ? {} : { highlightedValue: props.highlightedValue }),
     ...(props.id === undefined ? {} : { id: props.id }),
     ...(props.inputValue === undefined ? {} : { inputValue: props.inputValue }),
+    ...(props.invalid === undefined ? {} : { invalid: props.invalid }),
     ...(props.items === undefined ? {} : { items: props.items }),
+    ...(props.name === undefined ? {} : { name: props.name }),
     ...(props.open === undefined ? {} : { open: props.open }),
     ...(props.placeholder === undefined ? {} : { placeholder: props.placeholder }),
+    ...(props.required === undefined ? {} : { required: props.required }),
     ...(props.value === undefined ? {} : { value: props.value }),
   };
 }

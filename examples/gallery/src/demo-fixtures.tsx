@@ -1076,11 +1076,14 @@ export function CommandDemo(): string {
     { disabled: true, label: 'Delete project', value: 'delete' },
   ];
   const state = {
+    form: 'gallery-command-form',
     highlightedValue: 'invite',
     inputValue: '',
     items,
+    name: 'gallery-command-query',
     open: true,
     placeholder: 'Type a command',
+    required: true,
     value: 'invite',
   };
 
@@ -1090,6 +1093,7 @@ export function CommandDemo(): string {
         Command keeps a native dialog invoker with combobox/listbox semantics for command search.
       </p>
       <div data-ui-demo="command">
+        <form id="gallery-command-form"></form>
         {Command.definition.render({
           ...state,
           children: (

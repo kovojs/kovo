@@ -1706,11 +1706,15 @@ describe('@jiso/ui styled package foundation', () => {
       { disabled: true, label: 'Delete project', value: 'delete' },
     ];
     const state = {
+      form: 'command-form',
       highlightedValue: 'invite',
       inputValue: '',
+      invalid: true,
       items,
+      name: 'command-query',
       open: true,
       placeholder: 'Type a command',
+      required: true,
       value: 'invite',
     };
     const command = Command.definition.render({
@@ -1766,7 +1770,9 @@ describe('@jiso/ui styled package foundation', () => {
     expect(command).toContain('command="show-modal" commandfor="command-dialog"');
     expect(command).toContain('aria-modal="true"');
     expect(command).toContain('id="command-dialog" open');
-    expect(command).toContain('role="combobox" type="text" value=""');
+    expect(command).toContain('form="command-form" id="command-input" name="command-query"');
+    expect(command).toContain('aria-invalid="true"');
+    expect(command).toContain('required role="combobox" type="text" value=""');
     expect(command).toContain('aria-activedescendant="command-listbox-item-1"');
     expect(command).toContain('role="listbox"');
     expect(command).toContain('aria-selected="true"');
