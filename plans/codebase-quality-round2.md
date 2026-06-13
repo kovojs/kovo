@@ -90,6 +90,9 @@ Closed evidence so far:
 - `tests/fw-check.node.mjs` no longer owns local markdown table/section/field/list, Tailwind
   `@source`, or generated source-site parsers; docs/readiness, starter template, and commerce graph
   checks consume `@jiso/test/markdown-fixtures` and `@jiso/test/source-fixtures` seams.
+- `tests/fw-check.node.mjs` no longer owns the TypeScript AST scanner for forbidden browser
+  architecture facts; the SPEC.md §2 constitution gate consumes structured
+  `@jiso/test/source-fixtures` facts pinned by `packages/test/src/source-fixtures.test.ts`.
 
 Open:
 
@@ -125,6 +128,11 @@ Recent gates:
 - `pnpm exec vitest --run packages/test/src`
 - `pnpm exec vp run build`
 - `node --test --test-name-pattern "P10 normative docs cover the constitution and compiler hard rules|P10 legibility study packet is ready but not claimed complete|P10 v1 acceptance ledger tracks every freeze criterion|pre-launch checklist is tracked explicitly|P10 starter wires graph assertions into CI|P4 commerce touch graph is a committed generated artifact" tests/fw-check.node.mjs`
+- `pnpm exec vitest --run packages/test/src`
+- `pnpm exec vp run build`
+- `node --test --test-name-pattern "P10 constitution rejects forbidden browser architecture in framework code" tests/fw-check.node.mjs`
+- `pnpm exec vp check packages/test/src/source-fixtures.ts packages/test/src/source-fixtures.test.ts packages/test/src/package-exports.test.ts tests/fw-check.node.mjs plans/codebase-quality-round2.md`
+- `git diff --check`
 
 ## Phase 2 - Compiler IR
 
@@ -617,6 +625,9 @@ Closed evidence so far:
 - `@jiso/test/source-fixtures` exposes structured Tailwind `@source` directive and generated
   source-site facts; package export tests pin the subpath seam, `fw-check` uses it for starter CSS
   and commerce graph line facts, and the P4 graph gate still proves SPEC.md §11.1 graph behavior.
+- `@jiso/test/source-fixtures` also exposes structured forbidden-browser-architecture facts;
+  package export tests pin the subpath seam, and the P10 constitution gate now consumes those facts
+  instead of a local `fw-check` TypeScript parser.
 
 Open:
 
@@ -661,6 +672,11 @@ Recent gates:
 - `pnpm exec vitest --run packages/test/src`
 - `pnpm exec vp run build`
 - `node --test --test-name-pattern "P10 normative docs cover the constitution and compiler hard rules|P10 legibility study packet is ready but not claimed complete|P10 v1 acceptance ledger tracks every freeze criterion|pre-launch checklist is tracked explicitly|P10 starter wires graph assertions into CI|P4 commerce touch graph is a committed generated artifact" tests/fw-check.node.mjs`
+- `pnpm exec vitest --run packages/test/src`
+- `pnpm exec vp run build`
+- `node --test --test-name-pattern "P10 constitution rejects forbidden browser architecture in framework code" tests/fw-check.node.mjs`
+- `pnpm exec vp check packages/test/src/source-fixtures.ts packages/test/src/source-fixtures.test.ts packages/test/src/package-exports.test.ts tests/fw-check.node.mjs plans/codebase-quality-round2.md`
+- `git diff --check`
 
 ## Phase 7 - Test Restructuring
 
@@ -697,6 +713,10 @@ Closed evidence so far:
 - `packages/test/src/markdown-fixtures.ts` and `packages/test/src/source-fixtures.ts` now own
   reusable markdown ledger, Tailwind `@source`, and generated source-site fixture facts; focused
   package tests and package export tests pin the seams consumed by `fw-check`.
+- `packages/test/src/source-fixtures.ts` now owns the reusable forbidden-browser-architecture
+  scanner fixture; `packages/test/src/source-fixtures.test.ts`,
+  `packages/test/src/package-exports.test.ts`, and the targeted P10 `fw-check` node test pin the
+  seam.
 
 Open:
 

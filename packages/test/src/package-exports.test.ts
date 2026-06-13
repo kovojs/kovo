@@ -74,7 +74,9 @@ import { createPageAssertion, type PageAssertion } from '@jiso/test/page';
 import { createPgliteTestDb, type PgliteTestDb } from '@jiso/test/pglite';
 import {
   cssSourceDirectives,
+  forbiddenBrowserArchitectureFacts,
   projectSourceSiteFact,
+  type ForbiddenBrowserArchitectureFact,
   type ProjectSourceSiteFact,
 } from '@jiso/test/source-fixtures';
 import {
@@ -185,6 +187,7 @@ describe('@jiso/test package subpath exports', () => {
     expect(markdownLeadingTitle('**One.** Details')).toBe('One');
     expect(normalizeMarkdownCell('`one` **two**')).toBe('one two');
     expect(cssSourceDirectives('@source "../index.html";')).toEqual(['"../index.html"']);
+    expect(forbiddenBrowserArchitectureFacts).toBeTypeOf('function');
     expect(projectSourceSiteFact('examples/commerce/src/app.ts:7')).toEqual({
       line: 7,
       path: 'examples/commerce/src/app.ts',
@@ -252,6 +255,7 @@ type _PublicSubpathTypes = [
   PnpmFilterTestCommand,
   VitestTaskCommand,
   WorkflowStepCommand,
+  ForbiddenBrowserArchitectureFact,
   JisoTestContext<{ cart: string[] }>,
   JisoTestExecOptions<JisoTestRequest<{ cart: string[] }>>,
   JisoTestHarnessOptions<{ cart: string[] }>,
