@@ -325,6 +325,20 @@ Round101 app-shell static replay response evidence:
 - `pnpm exec vp check packages/server/src/static-export-response.ts packages/server/src/static-export-response.test.ts packages/server/src/static-export-types.ts packages/server/src/static-replay.ts packages/server/src/static-export-client-modules.ts plans/app-shell.md plans/codebase-quality-round2.md IMPLEMENT_v1.md`
 - `git diff --check`
 
+Round102 app-shell app/document boundary evidence:
+
+- `packages/server/src/app-document.ts` now owns app route document assembly, app-configured
+  error-shell rendering, stable no-internals fallback documents, and the shared request URL
+  snapshot used by app request diagnostics (SPEC §9.2/§9.5).
+- `packages/server/src/app-mutation-request.ts` now owns app mutation request body/session
+  preparation and mutation response option setup, leaving `app-request.ts` focused on the
+  normative SPEC §9.5 dispatch order.
+- `pnpm exec vitest --run packages/server/src/app-document.test.ts packages/server/src/app-mutation-request.test.ts packages/server/src/app.test.ts packages/server/src/static-export.test.ts packages/server/src/static-replay.test.ts packages/server/src/static-export-client-modules.test.ts packages/server/src/vite-build.test.ts packages/server/src/vite.test.ts`
+- `pnpm exec vitest --run packages/server/src`
+- `pnpm exec tsc --noEmit --pretty false`
+- `pnpm exec vp check packages/server/src/app-request.ts packages/server/src/app-document.ts packages/server/src/app-document.test.ts packages/server/src/app-mutation-request.ts packages/server/src/app-mutation-request.test.ts IMPLEMENT_v1.md plans/app-shell.md plans/codebase-quality-round2.md`
+- `git diff --check`
+
 ## Open Work
 
 R6:
