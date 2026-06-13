@@ -1448,6 +1448,21 @@ function bodySourceStart(body: Node): number {
   return Node.isBlock(body) ? body.getStart() + 1 : body.getStart();
 }
 
+function singleReturnExpression(declaration: Node): Node | undefined {
+  if (!Node.isGetAccessorDeclaration(declaration)) return undefined;
+
+  const body = declaration.getBody();
+  if (!body || !Node.isBlock(body)) return undefined;
+
+  const statements = body.getStatements();
+  if (statements.length !== 1) return undefined;
+
+  const statement = statements[0];
+  if (!statement || !Node.isReturnStatement(statement)) return undefined;
+
+  return statement.getExpression();
+}
+
 function callExpressionsInNode(body: Node): CallExpression[] {
   return [
     ...(Node.isCallExpression(body) ? [body] : []),
@@ -3096,6 +3111,11 @@ function queryBodyObjectLiteralFromDeclaration(
     return initializer ? queryBodyObjectLiteralFromNode(initializer, seen, mode) : undefined;
   }
 
+  if (Node.isGetAccessorDeclaration(declaration)) {
+    const expression = singleReturnExpression(declaration);
+    return expression ? queryBodyObjectLiteralFromNode(expression, seen, mode) : undefined;
+  }
+
   if (Node.isPropertyAssignment(declaration)) {
     const initializer = declaration.getInitializer();
     return initializer ? queryBodyObjectLiteralFromNode(initializer, seen, mode) : undefined;
@@ -3383,6 +3403,8 @@ function callbackFunctionFromDeclaration(
     return callbackFunctionFromVariable(declaration, seen);
   if (Node.isPropertyDeclaration(declaration))
     return callbackFunctionFromPropertyDeclaration(declaration, seen);
+  if (Node.isGetAccessorDeclaration(declaration))
+    return callbackFunctionFromGetAccessorDeclaration(declaration, seen);
   if (Node.isBindingElement(declaration))
     return callbackFunctionFromBindingElement(declaration, seen);
   if (Node.isPropertyAssignment(declaration))
@@ -3436,6 +3458,20 @@ function callbackFunctionFromPropertyDeclaration(
   const expression = unwrappedStaticExpressionNode(initializer);
   if (Node.isArrowFunction(expression) || Node.isFunctionExpression(expression)) return expression;
   return callbackFunctionFromReference(expression, seen);
+}
+
+function callbackFunctionFromGetAccessorDeclaration(
+  declaration: Node,
+  seen: Set<string>,
+): Node | undefined {
+  if (!Node.isGetAccessorDeclaration(declaration)) return undefined;
+
+  const expression = singleReturnExpression(declaration);
+  if (!expression) return undefined;
+
+  const returned = unwrappedStaticExpressionNode(expression);
+  if (Node.isArrowFunction(returned) || Node.isFunctionExpression(returned)) return returned;
+  return callbackFunctionFromReference(returned, seen);
 }
 
 function callbackFunctionFromBindingElement(
@@ -3611,6 +3647,7 @@ function staticLiteralContainerInitializer(declaration: Node): Node | undefined 
   ) {
     return declaration.getInitializer();
   }
+  if (Node.isGetAccessorDeclaration(declaration)) return singleReturnExpression(declaration);
   if (Node.isIdentifier(declaration)) {
     const parent = declaration.getParent();
     if (
@@ -5656,6 +5693,11 @@ function domainWriteObjectFromDeclaration(
     return initializer ? domainWriteObjectFromNode(initializer, seen) : undefined;
   }
 
+  if (Node.isGetAccessorDeclaration(declaration)) {
+    const expression = singleReturnExpression(declaration);
+    return expression ? domainWriteObjectFromNode(expression, seen) : undefined;
+  }
+
   if (Node.isPropertyAssignment(declaration)) {
     const initializer = declaration.getInitializer();
     return initializer ? domainWriteObjectFromNode(initializer, seen) : undefined;
@@ -5917,6 +5959,19 @@ function domainWritePropertyFromDeclaration(
     };
   }
 
+  if (Node.isGetAccessorDeclaration(declaration)) {
+    const name = declaration.getNameNode();
+    const expression = singleReturnExpression(declaration);
+    if (!expression) return undefined;
+    if (!writeActionCallbackFunction(expression, seen)) return undefined;
+
+    return {
+      initializer: expression,
+      keyNode: name,
+      memberName,
+    };
+  }
+
   if (Node.isPropertyAssignment(declaration)) {
     return {
       initializer: declaration.getInitializer(),
@@ -6039,6 +6094,10 @@ function writeActionCallbackFromDeclaration(
 
   if (Node.isPropertyDeclaration(declaration)) {
     return writeActionCallbackFunction(declaration.getInitializer(), seen);
+  }
+
+  if (Node.isGetAccessorDeclaration(declaration)) {
+    return writeActionCallbackFunction(singleReturnExpression(declaration), seen);
   }
 
   if (Node.isShorthandPropertyAssignment(declaration)) {

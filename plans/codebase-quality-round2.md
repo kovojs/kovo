@@ -175,6 +175,14 @@ Latest evidence:
   creating Vite dev/build/export handlers, and `packages/server/src/vite.test.ts` proves runtime
   JavaScript callers cannot pass raw request handlers or partial compatibility shells into the
   SPEC §9.5 Vite plugin boundary.
+- Phase 3 Drizzle static accessor callback closure slice:
+  `pnpm exec vitest --run packages/drizzle/src/index.test.ts conformance/drizzle-pin/src/index.test.ts -t "static (property|accessor)"`;
+  `pnpm exec vitest --run packages/drizzle/src/index.test.ts conformance/drizzle-pin/src/index.test.ts packages/drizzle/src/runtime-surface.test.ts`.
+  Evidence: `packages/drizzle/src/static.ts` now resolves class static accessor return
+  expressions through the same ts-morph project declaration path used for static callback
+  properties, covering visible Postgres query-loader option objects, loader callbacks, domain
+  action objects, and `write(...)` mutation callbacks while non-single-return/opaque accessors
+  continue to degrade through the existing FW406 unresolved paths.
 - Phase 5 plugin-time Vite static-export option guard slice:
   `pnpm exec vitest --run packages/server/src/vite-static-export-options.test.ts packages/server/src/vite-plugin-build.test.ts`;
   `pnpm exec vitest --run packages/create-jiso/src/index.test.ts -t "scaffolds real template files|runs the generated starter app-shell request and export proof"`;
