@@ -2793,6 +2793,58 @@ export interface CommerceInvalidationSets {
     ]);
   });
 
+  it('extracts project query loaders from conditional option objects and degrades opaque branches', () => {
+    const facts = extractQueryFactsFromProject({
+      files: [
+        pgDatabaseTypes(['select(value?: unknown): { from(table: unknown): Promise<unknown[]> };']),
+        {
+          fileName: 'product.queries.ts',
+          source: [
+            'import type { PgDatabase } from "drizzle-orm/pg-core";',
+            '',
+            'export const products = pgTable("products", {',
+            '  id: text("id").primaryKey(),',
+            '  stock: integer("stock").notNull(),',
+            '}, jiso({ domain: "product", key: "id" }));',
+            '',
+            'function loadProducts(_input: unknown, db: PgDatabase<any, any, any>) {',
+            '  return db.select({ id: products.id, stock: products.stock }).from(products);',
+            '}',
+            '',
+            'declare const useDynamic: boolean;',
+            'declare const dynamicConfig: any;',
+            'const staticConfig = { load: loadProducts };',
+            '',
+            'export const productQuery = query("product/project-conditional-options-loader",',
+            '  useDynamic ? dynamicConfig : staticConfig,',
+            ');',
+          ].join('\n'),
+        },
+      ],
+    });
+
+    expect(facts).toEqual([
+      {
+        diagnostics: [
+          {
+            code: 'FW406',
+            message:
+              'Statically un-analyzable write site; manual touches required. Query load callback could not be statically resolved.',
+            severity: 'warn',
+            site: 'product.queries.ts:16',
+          },
+        ],
+        query: 'product/project-conditional-options-loader',
+        reads: ['product'],
+        shape: {
+          id: 'string',
+          stock: 'number',
+        },
+        site: 'product.queries.ts:16',
+      },
+    ]);
+  });
+
   it('extracts project query loaders from direct conditional load members', () => {
     const facts = extractQueryFactsFromProject({
       files: [

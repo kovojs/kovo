@@ -2498,6 +2498,7 @@ function extractQueryDefinitionsFromSourceFile(
       ...(options.relationalTableName ? { relationalTableName: options.relationalTableName } : {}),
     };
     const diagnostics = [
+      ...(bodyResolution.unresolved ? [unresolvedQueryLoadCallbackDiagnostic()] : []),
       ...unresolvedQueryCallbackDiagnostics(bodyObject, receiverMode),
       ...relationalQueryDiagnostics(bodyObject, receiverReferences),
       ...unclassifiedQueryReceiverDiagnostics(bodyObject, receiverReferences),
@@ -3072,6 +3073,30 @@ function queryBodyObjectLiteralFromNode(
   const expression = unwrappedStaticExpressionNode(node);
   if (Node.isObjectLiteralExpression(expression)) return { body: expression, unresolved: false };
   if (mode === 'source') {
+    return { unresolved: true };
+  }
+
+  if (Node.isConditionalExpression(expression)) {
+    // SPEC §10.2/§11.1: whole query option conditionals are executable loader surfaces.
+    // Keep the statically visible branch exact, but retain FW406 for opaque sibling branches.
+    const branches = [expression.getWhenTrue(), expression.getWhenFalse()]
+      .map((branch) =>
+        queryBodyObjectLiteralFromNode(unwrappedStaticExpressionNode(branch), new Set(seen), mode),
+      )
+      .filter((branch): branch is QueryBodyObjectResolution => branch !== undefined);
+    const bodies = branches.flatMap((branch) => (branch.body ? [branch.body] : []));
+    const unresolved = branches.length < 2 || branches.some((branch) => branch.unresolved);
+
+    if (bodies.length === 0) return unresolved ? { unresolved: true } : undefined;
+
+    const uniqueBodies = new Map(
+      bodies.map((body) => [`${body.getSourceFile().getFilePath()}:${body.getStart()}`, body]),
+    );
+    if (uniqueBodies.size === 1) {
+      const [body] = bodies;
+      return body ? { body, unresolved } : { unresolved: true };
+    }
+
     return { unresolved: true };
   }
 

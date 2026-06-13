@@ -4015,6 +4015,57 @@ describe('Drizzle pinned subset conformance', () => {
     ]);
   });
 
+  it('pins conditional query-loader option objects under real Drizzle imports', () => {
+    const facts = extractQueryFactsFromProject({
+      files: [
+        {
+          fileName: 'conformance/drizzle-pin/src/product.queries.ts',
+          source: [
+            "import type { PgDatabase } from 'drizzle-orm/pg-core';",
+            '',
+            "export const products = pgTable('products', {",
+            "  id: text('id').primaryKey(),",
+            "  stock: integer('stock').notNull(),",
+            "}, jiso({ domain: 'product', key: 'id' }));",
+            '',
+            'function loadProducts(_input: unknown, db: PgDatabase<any, any, any>) {',
+            '  return db.select({ id: products.id, stock: products.stock }).from(products);',
+            '}',
+            '',
+            'declare const useDynamic: boolean;',
+            'declare const dynamicConfig: any;',
+            'const staticConfig = { load: loadProducts };',
+            '',
+            "export const productQuery = query('product/conditional-options-loader',",
+            '  useDynamic ? dynamicConfig : staticConfig,',
+            ');',
+          ].join('\n'),
+        },
+      ],
+    });
+
+    expect(facts).toEqual([
+      {
+        diagnostics: [
+          {
+            code: 'FW406',
+            message:
+              'Statically un-analyzable write site; manual touches required. Query load callback could not be statically resolved.',
+            severity: 'warn',
+            site: 'conformance/drizzle-pin/src/product.queries.ts:16',
+          },
+        ],
+        query: 'product/conditional-options-loader',
+        reads: ['product'],
+        shape: {
+          id: 'string',
+          stock: 'number',
+        },
+        site: 'conformance/drizzle-pin/src/product.queries.ts:16',
+      },
+    ]);
+  });
+
   it('pins direct conditional query-loader load members under real Drizzle imports', () => {
     const facts = extractQueryFactsFromProject({
       files: [

@@ -896,6 +896,14 @@ duplicate parenthesis-only projection logic.
       same surfaces against real `drizzle-orm` Postgres receiver types. Verified by
       `pnpm exec vitest --run packages/drizzle/src` and
       `pnpm exec vitest --run conformance/drizzle-pin`.
+      Evidence 2026-06-13 round290: `packages/drizzle/src/static.ts` now resolves whole
+      conditional project query option objects when one branch is a statically visible loader
+      config, while retaining FW406 for opaque sibling branches per SPEC §10.2/§11.1;
+      `packages/drizzle/src/index.test.ts` covers the package fixture and
+      `conformance/drizzle-pin/src/index.test.ts` pins the same surface against real
+      `drizzle-orm` Postgres receiver types. Verified by
+      `pnpm exec vitest --run packages/drizzle/src/index.test.ts conformance/drizzle-pin/src/index.test.ts -t "conditional (query-loader )?option objects|conditional options"` and
+      `pnpm exec vitest --run packages/drizzle/src/index.test.ts conformance/drizzle-pin/src/index.test.ts packages/drizzle/src/runtime-surface.test.ts`.
       Evidence 2026-06-13: static element-access callback references such as
       `load: loaders["loadProducts"]` and `write(callbacks["addItem"])` are covered as real
       executable callback surfaces instead of invisible aliases; `packages/drizzle/src/index.test.ts`
