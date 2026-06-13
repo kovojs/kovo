@@ -269,6 +269,9 @@ describe('compiled interactive gallery demos', () => {
       /on:input="\/c\/examples\/gallery\/src\/generated\/interactive\/command-demo\.client\.js\?v=[0-9a-f]{8}#GalleryCommandDemo\$input_input"/,
     );
     expect(command).toMatch(
+      /on:keydown="\/c\/examples\/gallery\/src\/generated\/interactive\/command-demo\.client\.js\?v=[0-9a-f]{8}#GalleryCommandDemo\$input_keydown"/,
+    );
+    expect(command).toMatch(
       /on:click="\/c\/examples\/gallery\/src\/generated\/interactive\/command-demo\.client\.js\?v=[0-9a-f]{8}#GalleryCommandDemo\$button_click_2"/,
     );
 
@@ -710,6 +713,18 @@ describe('compiled interactive gallery demos', () => {
       open: true,
       value: 'dashboard',
     });
+    clientHandler(command, 'GalleryCommandDemo$input_keydown')(new Event('keydown'), {
+      params: {},
+      signal,
+      state: commandState,
+    });
+    expect(commandState).toEqual({
+      highlightedValue: 'invite',
+      inputValue: 'invite',
+      open: false,
+      value: 'invite',
+    });
+    commandState.open = true;
     clientHandler(command, 'GalleryCommandDemo$button_click_2')(new Event('click'), {
       params: {},
       signal,
@@ -1343,12 +1358,22 @@ describe('compiled interactive gallery demos', () => {
         'true',
       );
       expect(selector(document, '[data-demo-state="command-input"]').textContent).toBe('invite');
-      clientHandler(command, 'GalleryCommandDemo$button_click_2')(new Event('click'), {
+      clientHandler(command, 'GalleryCommandDemo$input_keydown')(new Event('keydown'), {
         params: {},
         signal,
         state: commandState,
       });
       expect(element(document, 'gallery-command-dialog').closeCalls).toBe(1);
+      expect(selector(document, '[data-demo-state="command-value"]').textContent).toBe(
+        'Invite teammate',
+      );
+      commandState.open = true;
+      clientHandler(command, 'GalleryCommandDemo$button_click_2')(new Event('click'), {
+        params: {},
+        signal,
+        state: commandState,
+      });
+      expect(element(document, 'gallery-command-dialog').closeCalls).toBe(2);
       expect(selector(document, '[data-demo-state="command-value"]').textContent).toBe(
         'Invite teammate',
       );

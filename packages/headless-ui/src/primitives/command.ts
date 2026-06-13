@@ -376,8 +376,21 @@ export function selectCommandItem(
     };
   }
 
+  const openResult = setCommandOpen(state, false, 'item-select', options);
+  if (!openResult.changed) {
+    return {
+      open: openResult,
+      selected: false,
+      value: {
+        changed: false,
+        ...(valueResult.detail === undefined ? {} : { detail: valueResult.detail }),
+        value: state.value,
+      },
+    };
+  }
+
   return {
-    open: setCommandOpen(state, false, 'item-select', options),
+    open: openResult,
     selected: true,
     value: valueResult,
   };

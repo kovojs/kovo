@@ -73,7 +73,9 @@ commands. Use `- [ ]` for open actionable work and `- [x]` only for fully verifi
       exports, generated-client DOM refs, and compiled/browser interactive gallery keydown
       selection. Select now omits inactive native boolean attributes while preserving active
       `selected`/`disabled` option state through headless records, styled markup, static gallery
-      fixtures, and browser-backed compiled gallery output.
+      fixtures, and browser-backed compiled gallery output. Command item selection now restores
+      previous value state when dialog close is canceled, and the compiled interactive command demo
+      covers keydown selection/close through refreshed generated artifacts and a browser test.
 - [ ] Close remaining state, focus, menu, and canceled-change restoration gaps for select,
       combobox, autocomplete, dropdown-menu, context-menu, menubar, navigation-menu, slider, toast,
       and command with primitive tests plus gallery evidence where user-visible.
@@ -117,6 +119,13 @@ commands. Use `- [ ]` for open actionable work and `- [x]` only for fully verifi
       `pnpm exec vitest --run examples/gallery/src/demo-fixtures.test.ts examples/gallery/src/behavior-contracts.test.ts examples/gallery/src/interactive-gallery.test.ts`;
       `(cd examples/gallery && pnpm exec vitest --config vitest.browser.config.ts --run src/interactive-gallery.browser.test.ts -t select)`;
       exact `pnpm exec vp check packages/headless-ui/src/primitives/select.ts packages/headless-ui/src/primitives/select.test.ts packages/ui/src/index.test.tsx examples/gallery/src/demo-fixtures.test.ts examples/gallery/src/interactive-gallery.browser.test.ts plans/ui.md plans/codebase-quality-round2.md IMPLEMENT_v1.md`;
+      `git diff --check`.
+- [x] Command canceled-close and compiled keydown slice:
+      `pnpm exec vitest --run packages/headless-ui/src/primitives/command.test.ts`;
+      `pnpm --filter @jiso/example-gallery run emit:interactive-gallery`;
+      `pnpm exec vitest --run examples/gallery/src/interactive-gallery.test.ts examples/gallery/src/behavior-contracts.test.ts examples/gallery/src/demo-fixtures.test.ts`;
+      `(cd examples/gallery && pnpm exec vitest --config vitest.browser.config.ts --run src/interactive-gallery.browser.test.ts -t command)`;
+      exact `pnpm exec vp check packages/headless-ui/src/primitives/command.ts packages/headless-ui/src/primitives/command.test.ts examples/gallery/src/interactive/command-demo.tsx examples/gallery/src/generated/interactive/command-demo.tsx examples/gallery/src/generated/interactive/command-demo.client.js examples/gallery/src/interactive-gallery.test.ts examples/gallery/src/interactive-gallery.browser.test.ts plans/ui.md plans/codebase-quality-round2.md IMPLEMENT_v1.md`;
       `git diff --check`.
 - [x] Broad gate after `0cac62d`: `pnpm run check` passed with 782 formatted files, 682
       lint/typechecked files, and 7 typechecked example/conformance projects.

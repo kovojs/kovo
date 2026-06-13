@@ -308,6 +308,37 @@ describe('headless-ui command primitive', () => {
     expect(seen).toEqual(['value:item-click:publish', 'open:item-select:false']);
   });
 
+  it('keeps previous value when item selection cannot close the command dialog', () => {
+    const seen: string[] = [];
+    const result = selectCommandItem(
+      { items: commandItems, open: true, value: 'open-file' },
+      'publish',
+      'item-click',
+      {
+        onOpenChange(detail) {
+          seen.push(`open:${detail.reason}:${detail.value}`);
+          detail.preventDefault();
+        },
+        onValueChange(detail) {
+          seen.push(`value:${detail.reason}:${detail.value}`);
+        },
+      },
+    );
+
+    expect(result.selected).toBe(false);
+    expect(result.value).toMatchObject({
+      changed: false,
+      detail: expect.objectContaining({ reason: 'item-click', value: 'publish' }),
+      value: 'open-file',
+    });
+    expect(result.open).toMatchObject({
+      changed: false,
+      detail: expect.objectContaining({ defaultPrevented: true, reason: 'item-select' }),
+      open: true,
+    });
+    expect(seen).toEqual(['value:item-click:publish', 'open:item-select:false']);
+  });
+
   it('moves over filtered enabled items with shared keyboard navigation', () => {
     expect(commandMove({ items: commandItems }, 'ArrowDown')).toEqual({
       highlightedIndex: 0,
@@ -409,6 +440,22 @@ describe('headless-ui command primitive', () => {
     );
     expect(canceledItemResult?.selected).toBe(false);
     expect(canceledItemEvent.defaultPrevented).toBe(true);
+
+    const canceledCloseEvent = commandKeyEvent('Enter');
+    const canceledCloseResult = commandKeyDown(
+      canceledCloseEvent,
+      { highlightedValue: 'publish', items: commandItems, open: true, value: 'open-file' },
+      {
+        onOpenChange(detail) {
+          detail.preventDefault();
+        },
+      },
+    );
+    expect(canceledCloseResult).toMatchObject({
+      selected: false,
+      value: expect.objectContaining({ changed: false, value: 'open-file' }),
+    });
+    expect(canceledCloseEvent.defaultPrevented).toBe(false);
 
     const enterEvent = commandKeyEvent('Enter');
     const enterResult = commandKeyDown(enterEvent, {

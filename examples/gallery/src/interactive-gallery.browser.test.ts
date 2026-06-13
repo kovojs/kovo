@@ -1645,6 +1645,25 @@ describe('compiled interactive gallery demos in the browser', () => {
       expect(commandInput.textContent).toBe('invite');
     });
 
+    input.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, key: 'Enter' }));
+
+    await vi.waitFor(() => {
+      expect(commandRoot.getAttribute('fw-state')).toBe(
+        '{"highlightedValue":"invite","inputValue":"invite","open":false,"value":"invite"}',
+      );
+      expect(dialog.open).toBe(false);
+      expect(commandValue.textContent).toBe('Invite teammate');
+    });
+
+    trigger.click();
+
+    await vi.waitFor(() => {
+      expect(commandRoot.getAttribute('fw-state')).toBe(
+        '{"highlightedValue":"invite","inputValue":"invite","open":true,"value":"invite"}',
+      );
+      expect(dialog.open).toBe(true);
+    });
+
     invite.click();
 
     await vi.waitFor(() => {

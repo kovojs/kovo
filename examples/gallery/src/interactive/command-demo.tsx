@@ -104,7 +104,23 @@ export const GalleryCommandDemo = component('gallery-command-demo', {
               if (output) output['textContent'] = 'invite';
             }}
             onKeyDown={() => {
+              state.open = false;
               state.value = state.highlightedValue;
+              const doc = Reflect['get'](globalThis, 'document');
+              const dialog = doc
+                ? Object(doc)['getElementById']?.call(doc, 'gallery-command-dialog')
+                : undefined;
+              const output = doc
+                ? Object(doc)['querySelector']?.call(doc, '[data-demo-state="command-value"]')
+                : undefined;
+              if (dialog) Object(dialog)['close']?.call(dialog);
+              if (output) {
+                if (state.highlightedValue === 'invite') {
+                  output['textContent'] = 'Invite teammate';
+                } else {
+                  output['textContent'] = 'Open dashboard';
+                }
+              }
             }}
           />
           <div {...commandListboxAttributes({ ...commandState, id: listboxId })}>

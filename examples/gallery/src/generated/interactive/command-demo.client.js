@@ -28,7 +28,23 @@ export const GalleryCommandDemo$input_input = handler((event, ctx) => {
   if (output) output['textContent'] = 'invite';
 });
 export const GalleryCommandDemo$input_keydown = handler((event, ctx) => {
+  ctx.state.open = false;
   ctx.state.value = ctx.state.highlightedValue;
+  const doc = Reflect['get'](globalThis, 'document');
+  const dialog = doc
+    ? Object(doc)['getElementById']?.call(doc, 'gallery-command-dialog')
+    : undefined;
+  const output = doc
+    ? Object(doc)['querySelector']?.call(doc, '[data-demo-state="command-value"]')
+    : undefined;
+  if (dialog) Object(dialog)['close']?.call(dialog);
+  if (output) {
+    if (ctx.state.highlightedValue === 'invite') {
+      output['textContent'] = 'Invite teammate';
+    } else {
+      output['textContent'] = 'Open dashboard';
+    }
+  }
 });
 export const GalleryCommandDemo$button_click_2 = handler((event, ctx) => {
   ctx.state.open = false;

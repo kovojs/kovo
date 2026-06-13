@@ -59,7 +59,7 @@ export const GalleryCommandDemo = component('gallery-command-demo', {
         <button
           {...commandTriggerAttributes({ ...commandState, contentId })}
           id="gallery-command-trigger"
-          on:click="/c/examples/gallery/src/generated/interactive/command-demo.client.js?v=7bc0e286#GalleryCommandDemo$button_click"
+          on:click="/c/examples/gallery/src/generated/interactive/command-demo.client.js?v=7385888d#GalleryCommandDemo$button_click"
         >
           Open command
         </button>
@@ -79,8 +79,8 @@ export const GalleryCommandDemo = component('gallery-command-demo', {
               id: 'gallery-command-input',
               labelledBy: 'gallery-command-title',
             })}
-            on:input="/c/examples/gallery/src/generated/interactive/command-demo.client.js?v=7bc0e286#GalleryCommandDemo$input_input"
-            on:keydown="/c/examples/gallery/src/generated/interactive/command-demo.client.js?v=7bc0e286#GalleryCommandDemo$input_keydown"
+            on:input="/c/examples/gallery/src/generated/interactive/command-demo.client.js?v=7385888d#GalleryCommandDemo$input_input"
+            on:keydown="/c/examples/gallery/src/generated/interactive/command-demo.client.js?v=7385888d#GalleryCommandDemo$input_keydown"
           />
           <div {...commandListboxAttributes({ ...commandState, id: listboxId })}>
             <button
@@ -100,7 +100,7 @@ export const GalleryCommandDemo = component('gallery-command-demo', {
                 itemLabel: 'Invite teammate',
                 itemValue: 'invite',
               })}
-              on:click="/c/examples/gallery/src/generated/interactive/command-demo.client.js?v=7bc0e286#GalleryCommandDemo$button_click_2"
+              on:click="/c/examples/gallery/src/generated/interactive/command-demo.client.js?v=7385888d#GalleryCommandDemo$button_click_2"
             >
               Invite teammate
             </button>
@@ -118,7 +118,7 @@ export const GalleryCommandDemo = component('gallery-command-demo', {
           </div>
           <button
             {...commandCloseAttributes({ ...commandState, contentId })}
-            on:click="/c/examples/gallery/src/generated/interactive/command-demo.client.js?v=7bc0e286#GalleryCommandDemo$button_click_3"
+            on:click="/c/examples/gallery/src/generated/interactive/command-demo.client.js?v=7385888d#GalleryCommandDemo$button_click_3"
           >
             Close
           </button>
