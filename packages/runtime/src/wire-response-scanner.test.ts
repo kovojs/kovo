@@ -2,22 +2,24 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { readMutationResponseBodyChunks } from './wire-parser.js';
 import {
-  readAttribute,
   readElementChunks,
   readFragmentChunksFromElements,
   readInlineMutationResponseBodyChunks,
   readMutationResponseElementChunks,
-  unescapeHtml,
 } from './wire-response-scanner.js';
+import { readAttribute, unescapeHtml } from './wire-html.js';
 
 describe('wire response scanner', () => {
-  it('keeps single fragment element projection private', async () => {
+  it('keeps low-level HTML scanner helpers behind the chunk-reader surface', async () => {
     const scannerModule = await import('./wire-response-scanner.js');
 
     // SPEC.md §4.4/§9.1: modular and inline response paths share the decoded
-    // body readers; single-element fragment projection is an implementation
-    // detail of that scanner, not a compatibility API.
+    // body readers; low-level HTML token helpers and single-element fragment
+    // projection are implementation details, not compatibility APIs.
+    expect(Object.hasOwn(scannerModule, 'readAttribute')).toBe(false);
     expect(Object.hasOwn(scannerModule, 'readFragmentElementChunk')).toBe(false);
+    expect(Object.hasOwn(scannerModule, 'tagClose')).toBe(false);
+    expect(Object.hasOwn(scannerModule, 'unescapeHtml')).toBe(false);
     expect(scannerModule.readFragmentChunksFromElements).toBe(readFragmentChunksFromElements);
   });
 

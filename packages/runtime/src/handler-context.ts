@@ -1,7 +1,7 @@
 import type { JsonValue } from '@jiso/core';
 import { domAttributes } from './dom-like.js';
 import type { EventElementLike } from './events.js';
-import { readAttribute, tagClose } from './wire-response-scanner.js';
+import { readAttribute, tagClose } from './wire-html.js';
 
 export type ElementParamValue = string | number | boolean;
 

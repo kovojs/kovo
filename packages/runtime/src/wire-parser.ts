@@ -2,13 +2,12 @@ import { reportMalformedJson, reportRuntimeError } from './error-policy.js';
 import type { RuntimeErrorReporter } from './error-policy.js';
 import { parseJsonValue } from './json.js';
 import {
-  readAttribute,
   readElementChunks,
   readFragmentChunksFromElements,
   readMutationResponseElementChunks,
-  unescapeHtml,
 } from './wire-response-scanner.js';
 import type { FragmentChunk } from './wire-response-scanner.js';
+import { readAttribute, unescapeHtml } from './wire-html.js';
 
 export interface QueryChunk {
   key?: string;

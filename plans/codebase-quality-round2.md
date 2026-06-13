@@ -363,6 +363,18 @@ Latest evidence:
   keeping the separator private and deleting the duplicated `serializeLiveTargets` and
   `serializeLiveTargetEntries` helper exports; focused runtime tests prove the one-read snapshot,
   fetch-path header/metadata parity, and inline-loader enhanced-submit target parity.
+- Phase 4 wire scanner compatibility export deletion slice:
+  `pnpm exec vitest --run packages/runtime/src/wire-response-scanner.test.ts packages/runtime/src/wire-parser.test.ts packages/runtime/src/inline-loader-parser-parity.test.ts packages/runtime/src/inline-loader-artifact-minifier.test.ts packages/runtime/src/inline-loader-build.test.ts`;
+  `pnpm exec vitest --run packages/runtime/src/handler-context.test.ts packages/runtime/src/mutation-failure.test.ts packages/runtime/src/mutation-response-apply.test.ts packages/runtime/src/mutation-response-wire-apply.test.ts`;
+  `pnpm exec vitest --run packages/runtime/src`;
+  `pnpm --filter @jiso/runtime run check:inline-loader`;
+  `pnpm exec tsc --noEmit --pretty false`;
+  `pnpm exec vp check packages/runtime/src/wire-html.ts packages/runtime/src/wire-response-scanner.ts packages/runtime/src/wire-response-scanner.test.ts packages/runtime/src/wire-parser.ts packages/runtime/src/mutation-failure.ts packages/runtime/src/handler-context.ts packages/runtime/src/inline-loader-build.ts plans/codebase-quality-round2.md`;
+  `git diff --check`. Evidence: `packages/runtime/src/wire-response-scanner.ts` no longer
+  exports low-level `readAttribute`, `tagClose`, or `unescapeHtml` compatibility helpers; shared
+  HTML token/entity parsing lives in `packages/runtime/src/wire-html.ts`, and
+  `packages/runtime/src/inline-loader-build.ts` includes that helper source when proving SPEC
+  §4.4/§9.1 inline-loader parser/minifier parity.
 - Phase 1/6/7 D2 commerce keyed optimism fixture slice:
   `pnpm exec vitest --run packages/test/src/runtime-fixtures.test.ts`;
   `pnpm run check:build`;

@@ -13,6 +13,7 @@ const inlineResponseApplySourcePath = fileURLToPath(
 const responseFragmentApplySourcePath = fileURLToPath(
   new URL('./response-fragment-apply.ts', import.meta.url),
 );
+const wireHtmlSourcePath = fileURLToPath(new URL('./wire-html.ts', import.meta.url));
 const wireResponseScannerSourcePath = fileURLToPath(
   new URL('./wire-response-scanner.ts', import.meta.url),
 );
@@ -34,7 +35,7 @@ const inlineHelperSpecs = {
     rootFunctionNames: ['readInlineMutationResponseBodyChunks'],
     sourceFileName: 'wire-response-scanner.ts',
     sourcePath: wireResponseScannerSourcePath,
-    sourcePaths: [wireResponseScannerSourcePath],
+    sourcePaths: [wireHtmlSourcePath, wireResponseScannerSourcePath],
   },
 } as const;
 

@@ -1,8 +1,9 @@
 import type { JsonValue } from '@jiso/core';
 
 import { parseJsonValue } from './json.js';
-import { readAttribute, readElementChunks, unescapeHtml } from './wire-response-scanner.js';
+import { readElementChunks } from './wire-response-scanner.js';
 import type { ElementChunk } from './wire-response-scanner.js';
+import { readAttribute, unescapeHtml } from './wire-html.js';
 
 export function parseMutationFailure(body: string): JsonValue {
   // SPEC.md §9.2: enhanced form failures travel as mutation wire HTML, so
