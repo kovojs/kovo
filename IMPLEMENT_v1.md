@@ -456,6 +456,12 @@ plans/app-shell.md plans/codebase-quality-round2.md`, and `git diff --check`.
       `pnpm exec vitest --run packages/server/src`, `pnpm exec tsc --noEmit --pretty false`,
       `pnpm exec vp check packages/server/src/vite-client-module-output.ts packages/server/src/vite-build-output.ts packages/server/src/vite-build.test.ts packages/server/src/index.ts packages/server/src/api/app.test.ts IMPLEMENT_v1.md plans/app-shell.md plans/codebase-quality-round2.md`,
       and `git diff --check`.
+      Additional evidence 2026-06-13: the create-jiso starter static preview now serves exported
+      `dist` files for `GET` and `HEAD` only, returns `Content-Length` for exported
+      HTML/assets/modules, and rejects unsupported methods with `405`/`Allow: GET, HEAD` instead
+      of falling back to Vite source files or dynamic app routes. Same-session evidence:
+      `pnpm exec vitest --run packages/create-jiso/src/index.test.ts -t "runs .* with the built stylesheet href|scaffolds real template files"`
+      and `pnpm exec vitest --run packages/server/src/api/app.test.ts packages/server/src/static-export.test.ts packages/server/src/vite-build.test.ts`.
 - [x] P3 planned audits and static route/query guard guarantees are represented at v1 scale.
       Evidence 2026-06-11: `tests/fw-check.node.mjs` now executes `fwCheck()`
       against a graph with removed mutation, route, and query guards and pins the

@@ -262,6 +262,8 @@ describe('create-jiso starter', () => {
       expect(previewStaticScript).toContain('createStarterStaticPreviewServer');
       expect(previewStaticScript).toContain('starter-static-preview/v1');
       expect(previewStaticScript).toContain('Static export directory not found');
+      expect(previewStaticScript).toContain("method !== 'GET' && method !== 'HEAD'");
+      expect(previewStaticScript).toContain("'content-length': statSync(filePath).size");
       const serveScript = readFileSync(join(root, 'scripts/serve.mjs'), 'utf8');
       expect(serveScript).toContain('createStarterServeServer');
       expect(serveScript).toContain('configFile: fileURLToPath(new URL');
@@ -548,6 +550,23 @@ describe('create-jiso starter', () => {
           previewOutput,
         );
         expect(previewClientModule).toContain('Starter$announce');
+
+        const headDocument = await fetch(`${origin}/`, { method: 'HEAD' });
+        expect(headDocument.status).toBe(200);
+        expect(headDocument.headers.get('content-type')).toContain('text/html');
+        expect(headDocument.headers.get('content-length')).toBe(String(distIndex.length));
+        await expect(headDocument.text()).resolves.toBe('');
+
+        const headClientModule = await fetch(`${origin}/c/starter.client.js?v=starter-r7`, {
+          method: 'HEAD',
+        });
+        expect(headClientModule.status).toBe(200);
+        expect(headClientModule.headers.get('content-type')).toContain('text/javascript');
+        await expect(headClientModule.text()).resolves.toBe('');
+
+        const mutationFallback = await fetch(`${origin}/_m/cart/add`, { method: 'POST' });
+        expect(mutationFallback.status).toBe(405);
+        expect(mutationFallback.headers.get('allow')).toBe('GET, HEAD');
 
         const sourceFallback = await fetch(`${origin}/src/styles.css`);
         expect(sourceFallback.status).toBe(404);

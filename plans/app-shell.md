@@ -642,3 +642,13 @@ Round171 app-shell static export diagnostic seam evidence:
 - `pnpm exec tsc --noEmit --pretty false`
 - `pnpm exec vp check packages/server/src/static-export-diagnostics.ts packages/server/src/static-export-types.ts packages/server/src/static-export.ts packages/server/src/static-export-diagnostics.test.ts packages/server/src/static-export.test.ts packages/server/src/api/app.test.ts IMPLEMENT_v1.md plans/app-shell.md plans/codebase-quality-round2.md`
 - `git diff --check`
+
+Round181 starter static preview method-boundary evidence:
+
+- The create-jiso starter static preview now serves exported `dist` files for `GET` and `HEAD`
+  only, returns `Content-Length` for exported HTML/assets/modules, and rejects unsupported methods
+  with `405`/`Allow: GET, HEAD` instead of falling back to source or dynamic app routes.
+- Generated starter export tests now prove `vp run preview-static` answers `HEAD /`, `HEAD /c/*`,
+  and rejects a mutation-style `POST /_m/*` after SPEC §9.5 static export.
+- `pnpm exec vitest --run packages/create-jiso/src/index.test.ts -t "runs .* with the built stylesheet href|scaffolds real template files"`
+- `pnpm exec vitest --run packages/server/src/api/app.test.ts packages/server/src/static-export.test.ts packages/server/src/vite-build.test.ts`

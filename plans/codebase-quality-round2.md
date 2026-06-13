@@ -196,7 +196,9 @@ mutation request handling, and SPEC §9.5 dispatch branches have been split into
 Static export diagnostics have a focused owner for compile-diagnostic blocking, FW229 formatting,
 type guards, and `StaticExportError`, leaving static-export types for artifact/manifest shapes.
 The create-jiso starter imports app-shell dev/export/static-export helpers from public subpaths and
-includes a static preview task that serves exported `dist` output without Vite source fallback.
+includes a static preview task that serves exported `dist` output without Vite source fallback;
+the preview serves exported files for `GET`/`HEAD` only and rejects unsupported methods before any
+dynamic app route fallback.
 Vite app-shell build output now returns the same compiled `/c/` module output plan that its staged
 writer commits, giving plugin `onBuild` consumers one observable target plan for build/static-export
 adoption. Vite plugin `writeBundle` build/static-export execution now lives in a focused helper
@@ -239,6 +241,8 @@ Latest evidence:
 - `pnpm exec tsc --noEmit --pretty false`
 - `pnpm exec vp check packages/server/src/static-export-diagnostics.ts packages/server/src/static-export-types.ts packages/server/src/static-export.ts packages/server/src/static-export-diagnostics.test.ts packages/server/src/static-export.test.ts packages/server/src/api/app.test.ts IMPLEMENT_v1.md plans/app-shell.md plans/codebase-quality-round2.md`
 - `git diff --check`
+- `pnpm exec vitest --run packages/create-jiso/src/index.test.ts -t "runs .* with the built stylesheet href|scaffolds real template files"`
+- `pnpm exec vitest --run packages/server/src/api/app.test.ts packages/server/src/static-export.test.ts packages/server/src/vite-build.test.ts`
 
 ## Phase 6 - Verification Harness And Commerce
 

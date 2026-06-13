@@ -12,7 +12,7 @@ export async function createStarterStaticPreviewServer({
   strictPort = false,
 } = {}) {
   const server = createNodeServer((request, response) => {
-    serveStaticExportFile(request.url ?? '/', response);
+    serveStaticExportFile(request.url ?? '/', request.method ?? 'GET', response);
   });
 
   await listen(server, { host, port, strictPort });
@@ -47,10 +47,19 @@ if (isMainModule()) {
   });
 }
 
-function serveStaticExportFile(rawUrl, response) {
+function serveStaticExportFile(rawUrl, method, response) {
   if (!existsSync(staticRoot)) {
     response.writeHead(404, { 'content-type': 'text/plain; charset=utf-8' });
     response.end('Static export directory not found. Run npm run static first.\n');
+    return;
+  }
+
+  if (method !== 'GET' && method !== 'HEAD') {
+    response.writeHead(405, {
+      allow: 'GET, HEAD',
+      'content-type': 'text/plain; charset=utf-8',
+    });
+    response.end('Method not allowed for static export preview.\n');
     return;
   }
 
@@ -91,7 +100,14 @@ function serveStaticExportFile(rawUrl, response) {
     return;
   }
 
-  response.writeHead(200, { 'content-type': contentType(filePath) });
+  response.writeHead(200, {
+    'content-length': statSync(filePath).size,
+    'content-type': contentType(filePath),
+  });
+  if (method === 'HEAD') {
+    response.end();
+    return;
+  }
   response.end(readFileSync(filePath));
 }
 
