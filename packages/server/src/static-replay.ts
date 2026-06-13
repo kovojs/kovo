@@ -2,7 +2,10 @@ import type { RequestHandler } from './app.js';
 import { normalizePathname } from './match.js';
 import { replayStaticExportRequest } from './static-export-request.js';
 import { readStaticExportRouteDocumentResponse } from './static-export-response.js';
-import { collectStaticExportServerEndpointRefs } from './static-export-document.js';
+import {
+  collectStaticExportServerEndpointRefs,
+  staticExportRouteDocumentArtifactPath,
+} from './static-export-document.js';
 import {
   StaticExportError,
   staticExportDiagnostic,
@@ -36,7 +39,7 @@ export async function replayStaticExportRouteArtifact({
 
   return {
     ...replayed,
-    path: htmlArtifactPath(pathname, htmlPathStyle),
+    path: staticExportRouteDocumentArtifactPath(pathname, htmlPathStyle),
   };
 }
 
@@ -59,9 +62,4 @@ function assertStaticExportRouteDocumentL0L1({
   );
 
   if (diagnostics.length > 0) throw new StaticExportError(diagnostics);
-}
-
-function htmlArtifactPath(pathname: string, style: StaticExportHtmlPathStyle): string {
-  if (pathname === '/') return '/index.html';
-  return style === 'directory' ? `${pathname}/index.html` : `${pathname}.html`;
 }

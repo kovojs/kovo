@@ -103,4 +103,33 @@ describe('server static export replay', () => {
       '/c/menu.client.js?v=2',
     ]);
   });
+
+  it('reads static document refs from unquoted attributes and decoded entities', () => {
+    const exportOrigin = 'https://shop.example.test';
+    const routeArtifacts = [
+      {
+        body: [
+          '<main>',
+          '<form ACTION=/_m/cart/add><button>add</button></form>',
+          '<a HREF=&#x2f;_q&#x2f;cart?args=1>Refresh</a>',
+          '<button on:click=&#47;c&#47;cart.client.js?v=1#Cart$add>Client add</button>',
+          '<span data-invalid=&#9999999999;>Ignored</span>',
+          '</main>',
+        ].join(''),
+        headers: {},
+        path: '/cart/index.html',
+        status: 200,
+      },
+    ];
+
+    expect(
+      collectStaticExportServerEndpointRefs(routeArtifacts[0]?.body ?? '', exportOrigin),
+    ).toEqual([
+      { name: 'action', path: '/_m/cart/add', phase: 'mutation', value: '/_m/cart/add' },
+      { name: 'href', path: '/_q/cart', phase: 'query', value: '/_q/cart?args=1' },
+    ]);
+    expect(collectStaticExportClientModuleHrefs(routeArtifacts, exportOrigin)).toEqual([
+      '/c/cart.client.js?v=1#Cart$add',
+    ]);
+  });
 });

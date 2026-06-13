@@ -353,6 +353,19 @@ Round103 app-shell static export replay boundary evidence:
 - `pnpm exec vp check packages/server/src/static-export.ts packages/server/src/static-export-replay.ts packages/server/src/static-export-replay.test.ts plans/app-shell.md plans/codebase-quality-round2.md IMPLEMENT_v1.md`
 - `git diff --check`
 
+Round104 app-shell static document inspection evidence:
+
+- `packages/server/src/static-export-document.ts` now owns SPEC §9.5 static-export document
+  inspection with a server-side scanner for quoted, unquoted, uppercase, and entity-decoded
+  attributes, plus route document artifact path selection.
+- `packages/server/src/static-replay.ts` delegates artifact path selection to that document
+  boundary and stays focused on synthetic request replay plus L0/L1 validation.
+- `pnpm exec vitest --run packages/server/src/static-replay.test.ts packages/server/src/static-export-client-modules.test.ts packages/server/src/static-export.test.ts`
+- `pnpm exec vitest --run packages/server/src`
+- `pnpm exec tsc --noEmit --pretty false`
+- `pnpm exec vp check packages/server/src/static-export-document.ts packages/server/src/static-replay.ts packages/server/src/static-replay.test.ts IMPLEMENT_v1.md plans/app-shell.md plans/codebase-quality-round2.md`
+- `git diff --check`
+
 ## Open Work
 
 R6:
