@@ -12,6 +12,10 @@ export interface ProjectSourceSiteSummaryFact {
   paths: string[];
 }
 
+export interface ProjectSourceLineFact extends ProjectSourceSiteFact {
+  sourceLine: string;
+}
+
 export interface ProjectFileTreeOptions {
   directory: string;
   include?: (path: string) => boolean;
@@ -94,6 +98,31 @@ export function projectSourceSiteSummaryFact(
       left.localeCompare(right),
     ),
   };
+}
+
+export async function projectSourceLineFacts(
+  rootPath: string,
+  sites: readonly string[],
+): Promise<ProjectSourceLineFact[]> {
+  const sourceByPath = new Map<string, string[]>();
+  const facts: ProjectSourceLineFact[] = [];
+
+  for (const site of projectSourceSiteFacts(sites)) {
+    let lines = sourceByPath.get(site.path);
+    if (!lines) {
+      lines = (await readFile(join(rootPath, site.path), 'utf8')).split('\n');
+      sourceByPath.set(site.path, lines);
+    }
+
+    const sourceLine = lines[site.line - 1];
+    if (sourceLine === undefined) {
+      throw new Error(`Project source site resolves to a source line: ${site.path}:${site.line}`);
+    }
+
+    facts.push({ ...site, sourceLine: sourceLine.trim() });
+  }
+
+  return facts;
 }
 
 export async function projectDirectoryNames(options: ProjectFileTreeOptions): Promise<string[]> {

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { execFileSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 
 import type { TouchGraph } from '@jiso/drizzle';
 import { createJisoTestHarness } from '@jiso/test/harness';
@@ -10,6 +11,7 @@ import {
   htmlDocumentFacts,
   htmlKeyFacts,
 } from '@jiso/test/html-fragment';
+import { touchGraphSummaryFacts } from '@jiso/test/touch-graph-fixtures';
 import { fwCheck, fwExplain } from 'fw';
 
 import {
@@ -113,38 +115,10 @@ function cartPageGraph(graph: { pages?: { route?: string; meta?: unknown }[] }) 
   return page;
 }
 
-function assertCommerceSite(site: string) {
-  const separator = site.lastIndexOf(':');
-  expect(separator, `site includes a line number: ${site}`).toBeGreaterThan(0);
-  expect(site.slice(0, separator)).toBe('examples/commerce/src/app.ts');
-  expect(Number.isInteger(Number(site.slice(separator + 1)))).toBe(true);
-  expect(Number(site.slice(separator + 1))).toBeGreaterThan(0);
-}
-
-function normalizeTouchGraphSites(touchGraph: typeof commerceTouchGraph) {
-  return Object.fromEntries(
-    Object.entries(touchGraph).map(([key, entry]) => [
-      key,
-      {
-        reads: entry.reads,
-        touches: entry.touches.map((touch) => {
-          assertCommerceSite(touch.site);
-          return {
-            domain: touch.domain,
-            keys: touch.keys,
-            predicate: 'predicate' in touch ? touch.predicate : undefined,
-            site: 'examples/commerce/src/app.ts:<line>',
-            via: touch.via,
-          };
-        }),
-        unresolved: entry.unresolved,
-      },
-    ]),
-  );
-}
+const projectRootPath = fileURLToPath(new URL('../../..', import.meta.url));
 
 describe('commerce source-truth graph acceptance', () => {
-  it('ships graph facts for fw check and explain acceptance', () => {
+  it('ships graph facts for fw check and explain acceptance', async () => {
     execFileSync('node', ['examples/commerce/scripts/emit-graph.mjs', '--check'], {
       stdio: 'pipe',
     });
@@ -173,7 +147,7 @@ describe('commerce source-truth graph acceptance', () => {
     expect(fwCheck(graphArtifact).output).toBe('fw-check/v1\nOK\n');
     expect(addToCart.registry?.touches).toBeUndefined();
     expect(addToCart.registry?.inferredTouches).toEqual(commerceTouchGraph['cart.addItem'].touches);
-    expect(normalizeTouchGraphSites(commerceTouchGraph)).toEqual({
+    await expect(touchGraphSummaryFacts(projectRootPath, commerceTouchGraph)).resolves.toEqual({
       'cart.addItem': {
         reads: [],
         touches: [
@@ -181,21 +155,24 @@ describe('commerce source-truth graph acceptance', () => {
             domain: 'cart',
             keys: null,
             predicate: undefined,
-            site: 'examples/commerce/src/app.ts:<line>',
+            sitePath: 'examples/commerce/src/app.ts',
+            sourceLineIncludesVia: true,
             via: 'cart_items',
           },
           {
             domain: 'order',
             keys: null,
             predicate: undefined,
-            site: 'examples/commerce/src/app.ts:<line>',
+            sitePath: 'examples/commerce/src/app.ts',
+            sourceLineIncludesVia: true,
             via: 'orders',
           },
           {
             domain: 'product',
             keys: 'arg:productId',
             predicate: 'eq',
-            site: 'examples/commerce/src/app.ts:<line>',
+            sitePath: 'examples/commerce/src/app.ts',
+            sourceLineIncludesVia: true,
             via: 'products',
           },
         ],
@@ -208,7 +185,8 @@ describe('commerce source-truth graph acceptance', () => {
             domain: 'attachment',
             keys: 'arg:orderId',
             predicate: 'eq',
-            site: 'examples/commerce/src/app.ts:<line>',
+            sitePath: 'examples/commerce/src/app.ts',
+            sourceLineIncludesVia: true,
             via: 'attachments',
           },
         ],
@@ -221,7 +199,8 @@ describe('commerce source-truth graph acceptance', () => {
             domain: 'order',
             keys: 'arg:data.object.id',
             predicate: 'eq',
-            site: 'examples/commerce/src/app.ts:<line>',
+            sitePath: 'examples/commerce/src/app.ts',
+            sourceLineIncludesVia: true,
             via: 'orders',
           },
         ],

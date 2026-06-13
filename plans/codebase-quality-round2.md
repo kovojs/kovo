@@ -23,6 +23,20 @@ with same-session file/test evidence.
 packages/test/src/html-fragment.test.ts`, `node --test --test-name-pattern
 'P3 server renders initial query scripts|P4 commerce touch graph|D3 deferred stream responses'
 tests/fw-check.node.mjs`, and `pnpm run check:build`.
+      Round112 harness evidence 2026-06-13: `@jiso/test/touch-graph-fixtures` now owns
+      generated touch-graph source-provenance facts, resolving cited source lines and checking
+      the line contains the cited `via` table/source instead of normalizing every site to
+      `<line>` or projecting generated artifacts by hand. Same-session evidence:
+      `pnpm exec vitest --run packages/test/src/source-fixtures.test.ts
+packages/test/src/touch-graph-fixtures.test.ts packages/test/src/package-exports.test.ts
+examples/commerce/src/source-truth.test.ts`, `pnpm run check:build`, and
+      `node --test --test-name-pattern
+'P4 commerce touch graph|P10 commerce graph assertions' tests/fw-check.node.mjs`, plus
+      `pnpm exec vp check packages/test/package.json packages/test/src/source-fixtures.ts
+packages/test/src/source-fixtures.test.ts packages/test/src/touch-graph-fixtures.ts
+packages/test/src/touch-graph-fixtures.test.ts packages/test/src/package-exports.test.ts
+examples/commerce/src/source-truth.test.ts tests/fw-check.node.mjs IMPLEMENT_v1.md
+plans/codebase-quality-round2.md` and `git diff --check`.
 - [ ] Phase 2 compiler IR: single parse, span-patch lowering with offset map, validators consume
       the model; regex/source-string lowerers and validator reparses retired.
 - [ ] Phase 3 Drizzle extraction: ts-morph/project facts end-to-end; bespoke lexers deleted;
@@ -1271,6 +1285,10 @@ Closed evidence so far:
 - `@jiso/test/source-fixtures` exposes structured Tailwind `@source` directive and generated
   source-site facts; package export tests pin the subpath seam, `fw-check` uses it for starter CSS
   and commerce graph line facts, and the P4 graph gate still proves SPEC.md §11.1 graph behavior.
+- `@jiso/test/touch-graph-fixtures` exposes structured touch-graph source-provenance facts;
+  package export tests pin the subpath seam, commerce source-truth tests and `fw-check` now
+  resolve generated touch sites against source lines and check each line cites the expected `via`
+  table/source instead of trusting positive line numbers alone.
 - `@jiso/test/source-fixtures` also exposes structured forbidden-browser-architecture facts;
   package export tests pin the subpath seam, and the P10 constitution gate now consumes those facts
   instead of a local `fw-check` TypeScript parser.
@@ -1361,6 +1379,11 @@ Recent gates:
 - `node --test --test-name-pattern "P10 starter wires graph assertions into CI|Conformance suites are an explicit gate" tests/fw-check.node.mjs`
 - `pnpm exec vp check packages/test/package.json packages/test/src/starter-template-fixtures.ts packages/test/src/starter-template-fixtures.test.ts packages/test/src/package-exports.test.ts tests/fw-check.node.mjs IMPLEMENT_v1.md plans/codebase-quality-round2.md`
 - `git diff --check`
+- `pnpm exec vitest --run packages/test/src/source-fixtures.test.ts packages/test/src/touch-graph-fixtures.test.ts packages/test/src/package-exports.test.ts examples/commerce/src/source-truth.test.ts`
+- `pnpm run check:build`
+- `node --test --test-name-pattern "P4 commerce touch graph|P10 commerce graph assertions" tests/fw-check.node.mjs`
+- `pnpm exec vp check packages/test/package.json packages/test/src/source-fixtures.ts packages/test/src/source-fixtures.test.ts packages/test/src/touch-graph-fixtures.ts packages/test/src/touch-graph-fixtures.test.ts packages/test/src/package-exports.test.ts examples/commerce/src/source-truth.test.ts tests/fw-check.node.mjs IMPLEMENT_v1.md plans/codebase-quality-round2.md`
+- `git diff --check`
 
 ## Phase 7 - Test Restructuring
 
@@ -1401,6 +1424,9 @@ Closed evidence so far:
   scanner fixture; `packages/test/src/source-fixtures.test.ts`,
   `packages/test/src/package-exports.test.ts`, and the targeted P10 `fw-check` node test pin the
   seam.
+- `packages/test/src/touch-graph-fixtures.ts` now owns reusable generated touch-graph
+  source-provenance facts; focused package tests, package export tests, commerce source-truth
+  tests, and targeted `fw-check` node tests pin the seam.
 - `packages/test/src/wire-fixtures.ts` now owns reusable wire fixture parsing; focused
   `wire-fixtures.test.ts`, package export tests, and targeted Phase 0 `fw-check` node tests pin the
   seam.

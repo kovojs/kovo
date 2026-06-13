@@ -21,6 +21,7 @@
     "./starter-template-fixtures": "./src/starter-template-fixtures.ts",
     "./sql-observer": "./src/sql-observer.ts",
     "./test-case": "./src/test-case.ts",
+    "./touch-graph-fixtures": "./src/touch-graph-fixtures.ts",
     "./typescript-fixtures": "./src/typescript-fixtures.ts",
     "./verifier-diagnostics": "./src/verifier-diagnostics.ts",
     "./verifier-sql": "./src/verifier-sql.ts",

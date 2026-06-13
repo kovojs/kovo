@@ -132,11 +132,13 @@ import {
   projectFilePaths,
   projectFileSources,
   projectJsonFile,
+  projectSourceLineFacts,
   projectSourceSiteFact,
   type CssScopeRuleFact,
   type ForbiddenBrowserArchitectureFact,
   type ProjectFileSourceFact,
   type ProjectFileTreeOptions,
+  type ProjectSourceLineFact,
   type ProjectSourceSiteFact,
 } from '@jiso/test/source-fixtures';
 import {
@@ -158,6 +160,12 @@ import {
   sqlStatementText,
 } from '@jiso/test/sql-observer';
 import { jisoTest, type JisoTestCase, type JisoTestRunner } from '@jiso/test/test-case';
+import {
+  touchGraphSourceFacts,
+  touchGraphSummaryFacts,
+  type TouchGraphSourceFact,
+  type TouchGraphSummaryEntryFact,
+} from '@jiso/test/touch-graph-fixtures';
 import {
   assertTypeScriptProgramHasNoDiagnostics,
   type TypeScriptInterfaceMemberTypes,
@@ -307,10 +315,13 @@ describe('@jiso/test package subpath exports', () => {
     expect(projectFilePaths).toBeTypeOf('function');
     expect(projectFileSources).toBeTypeOf('function');
     expect(projectJsonFile).toBeTypeOf('function');
+    expect(projectSourceLineFacts).toBeTypeOf('function');
     expect(projectSourceSiteFact('examples/commerce/src/app.ts:7')).toEqual({
       line: 7,
       path: 'examples/commerce/src/app.ts',
     });
+    expect(touchGraphSourceFacts).toBeTypeOf('function');
+    expect(touchGraphSummaryFacts).toBeTypeOf('function');
     expect(
       viteDiagnosticMessageFacts(
         [
@@ -483,7 +494,10 @@ type _PublicSubpathTypes = [
   McpCompileResponseFact,
   McpJsonRpcResponseFact,
   CssScopeRuleFact,
+  ProjectSourceLineFact,
   ProjectSourceSiteFact,
+  TouchGraphSourceFact,
+  TouchGraphSummaryEntryFact,
   StarterClientTemplateFixture,
   StarterTemplateFacts,
   StarterTemplateIndexHtmlFacts,

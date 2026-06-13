@@ -106,6 +106,7 @@ import {
   projectJsonFile,
   projectSourceSiteSummaryFact,
 } from '../packages/test/src/source-fixtures.ts';
+import { touchGraphSummaryFacts } from '../packages/test/src/touch-graph-fixtures.ts';
 import {
   executeStarterClientTemplate,
   loadStarterTemplateFacts,
@@ -5255,34 +5256,66 @@ void test('P4 commerce touch graph is a committed generated artifact', async () 
     },
     { stderr: '', stdout: '' },
   );
-  const touchSummary = Object.fromEntries(
-    Object.entries(commerceGraph.touchGraph).map(([key, entry]) => [
-      key,
-      entry.touches.map((touch) => ({
-        domain: touch.domain,
-        keys: touch.keys,
-        predicate: touch.predicate,
-        via: touch.via,
-      })),
-    ]),
-  );
-  assert.deepEqual(touchSummary, {
-    'cart.addItem': [
-      { domain: 'cart', keys: null, predicate: undefined, via: 'cart_items' },
-      { domain: 'order', keys: null, predicate: undefined, via: 'orders' },
-      { domain: 'product', keys: 'arg:productId', predicate: 'eq', via: 'products' },
-    ],
-    'order.receipt': [
-      { domain: 'attachment', keys: 'arg:orderId', predicate: 'eq', via: 'attachments' },
-    ],
-    'payment.webhook': [
-      { domain: 'order', keys: 'arg:data.object.id', predicate: 'eq', via: 'orders' },
-    ],
+  assert.deepEqual(await touchGraphSummaryFacts(projectRootPath, commerceGraph.touchGraph), {
+    'cart.addItem': {
+      reads: [],
+      touches: [
+        {
+          domain: 'cart',
+          keys: null,
+          predicate: undefined,
+          sitePath: 'examples/commerce/src/app.ts',
+          sourceLineIncludesVia: true,
+          via: 'cart_items',
+        },
+        {
+          domain: 'order',
+          keys: null,
+          predicate: undefined,
+          sitePath: 'examples/commerce/src/app.ts',
+          sourceLineIncludesVia: true,
+          via: 'orders',
+        },
+        {
+          domain: 'product',
+          keys: 'arg:productId',
+          predicate: 'eq',
+          sitePath: 'examples/commerce/src/app.ts',
+          sourceLineIncludesVia: true,
+          via: 'products',
+        },
+      ],
+      unresolved: [],
+    },
+    'payment.webhook': {
+      reads: [],
+      touches: [
+        {
+          domain: 'order',
+          keys: 'arg:data.object.id',
+          predicate: 'eq',
+          sitePath: 'examples/commerce/src/app.ts',
+          sourceLineIncludesVia: true,
+          via: 'orders',
+        },
+      ],
+      unresolved: [],
+    },
+    'order.receipt': {
+      reads: [],
+      touches: [
+        {
+          domain: 'attachment',
+          keys: 'arg:orderId',
+          predicate: 'eq',
+          sitePath: 'examples/commerce/src/app.ts',
+          sourceLineIncludesVia: true,
+          via: 'attachments',
+        },
+      ],
+      unresolved: [],
+    },
   });
-  assert.deepEqual(
-    Object.values(commerceGraph.touchGraph).map((entry) => entry.unresolved),
-    [[], [], []],
-  );
   const generatedSites = Object.values(commerceGraph.touchGraph)
     .flatMap((entry) => entry.touches)
     .map((touch) => touch.site);

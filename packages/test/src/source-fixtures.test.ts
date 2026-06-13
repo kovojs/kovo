@@ -13,6 +13,7 @@ import {
   projectFilePaths,
   projectFileSources,
   projectJsonFile,
+  projectSourceLineFacts,
   projectSourceSiteFact,
   projectSourceSiteFacts,
   projectSourceSiteSummaryFact,
@@ -84,6 +85,30 @@ describe('@jiso/test source fixture seam', () => {
       linesArePositive: true,
       paths: ['examples/commerce/src/app.ts', 'examples/commerce/src/cart.ts'],
     });
+  });
+
+  it('resolves source-site lines without pinning callers to raw line parsing', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'jiso-test-source-lines-'));
+    try {
+      await mkdir(join(root, 'src'), { recursive: true });
+      await writeFile(
+        join(root, 'src/cart.ts'),
+        ['const cart = domain("cart");', 'db.write("cart_items", item);', ''].join('\n'),
+      );
+
+      await expect(projectSourceLineFacts(root, ['src/cart.ts:2'])).resolves.toEqual([
+        {
+          line: 2,
+          path: 'src/cart.ts',
+          sourceLine: 'db.write("cart_items", item);',
+        },
+      ]);
+      await expect(projectSourceLineFacts(root, ['src/cart.ts:4'])).rejects.toThrow(
+        'Project source site resolves to a source line: src/cart.ts:4',
+      );
+    } finally {
+      await rm(root, { force: true, recursive: true });
+    }
   });
 
   it('loads structured project file and package-directory facts for fw-check gates', async () => {
