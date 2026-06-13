@@ -63,6 +63,10 @@ describe('inline loader minified artifact', () => {
     expect(inlineJisoLoaderInstallerSource).toContain(
       'applyInlineMutationResponseChunks(readInlineMutationResponseBodyChunks(body),{dispatchQueries,findFragmentTarget,});',
     );
+    expect(inlineJisoLoaderInstallerSource).toContain(
+      'const appliedFragments=[];for(const fragment of chunks.fragments)',
+    );
+    expect(inlineJisoLoaderInstallerSource).toContain('return appliedFragments;');
     expect(inlineJisoLoaderInstallerSource).not.toContain('applyResponseChunks');
     expect(inlineJisoLoaderInstallerSource).toContain(
       'detail:{queries:queries.map((query)=>({attrs:query.attrs,content:query.content}))}',

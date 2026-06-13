@@ -45,6 +45,8 @@ describe('inline loader response apply source', () => {
     expect(inlineResponseApplyReadableSource).toContain('function applyResponseFragment(');
     expect(inlineResponseApplyReadableSource).toContain('function appendInlineFragment(');
     expect(inlineResponseApplyReadableSource).toContain('function replaceInlineFragment(');
+    expect(inlineResponseApplyReadableSource).toContain('const appliedFragments = [];');
+    expect(inlineResponseApplyReadableSource).toContain('return appliedFragments;');
     expect(inlineResponseApplyReadableSource).not.toContain('export function');
     expect(alternateReadable).toContain(alternateReadableApply);
     expect(alternateReadable).not.toContain(inlineResponseApplyReadableSource);
@@ -60,16 +62,21 @@ describe('inline loader response apply source', () => {
     const canonicalApply = [
       'export function applyInlineMutationResponseChunks(chunks, options) {',
       '  options.dispatchQueries(chunks.queries);',
-      '  chunks.fragments.forEach((fragment) => applyInlineFragment(fragment, options.findFragmentTarget));',
+      '  const appliedFragments = [];',
+      '  for (const fragment of chunks.fragments) {',
+      '    if (applyInlineFragment(fragment, options.findFragmentTarget)) appliedFragments.push(fragment.target);',
+      '  }',
+      '  return appliedFragments;',
       '}',
       'function applyInlineFragment(fragment, findFragmentTarget) {',
       '  const element = findFragmentTarget(fragment.target);',
-      '  if (!element) return;',
+      '  if (!element) return false;',
       '  if (fragment.mode === "append") {',
       '    element.insertAdjacentHTML("beforeend", fragment.html);',
       '  } else {',
       '    element.innerHTML = fragment.html;',
       '  }',
+      '  return true;',
       '}',
     ].join('\n');
     const canonicalReadable = extractInlineResponseApplyReadableSource(canonicalApply);
@@ -82,6 +89,7 @@ describe('inline loader response apply source', () => {
     expect(canonicalReadable).toMatch(
       /^function applyInlineFragment\(fragment, findFragmentTarget\).*function applyInlineMutationResponseChunks\(chunks, options\)/s,
     );
+    expect(canonicalReadable).toContain('return appliedFragments;');
     expect(() =>
       assertInlineJisoLoaderInstallerResponseApplyParity(readableInstaller, canonicalApply),
     ).not.toThrow();
@@ -152,11 +160,12 @@ describe('inline loader response apply source', () => {
       ],
     ]);
 
-    applyInlineMutationResponseChunks(
+    const appliedFragments = applyInlineMutationResponseChunks(
       {
         fragments: [
           { html: '<p>replace</p>', target: 'replace-target' },
           { html: '<li>new</li>', mode: 'append', target: 'append-target' },
+          { html: '<p>ignored</p>', target: 'missing-target' },
         ],
         queries: [{ attrs: ' name="cart"', content: 'decoded query', end: 0, start: 0 }],
       },
@@ -173,7 +182,47 @@ describe('inline loader response apply source', () => {
     expect(dispatched).toEqual([
       [{ attrs: ' name="cart"', content: 'decoded query', end: 0, start: 0 }],
     ]);
+    expect(appliedFragments).toEqual(['replace-target', 'append-target']);
     expect(targets.get('replace-target')?.innerHTML).toBe('<p>replace</p>');
     expect(targets.get('append-target')?.html).toBe('<li>existing</li><li>new</li>');
+  });
+
+  it('rejects inline response apply helpers that reach outside the function closure', () => {
+    // SPEC.md §4.4/§9.1: response apply extraction follows the same closed
+    // helper rule as parser extraction, so minified inline apply cannot grow
+    // hidden module-level dependencies.
+    const topLevelHelperSource = [
+      'const applyTarget = (target, html) => { target.innerHTML = html; };',
+      'export function applyInlineMutationResponseChunks(chunks, options) {',
+      '  options.dispatchQueries(chunks.queries);',
+      '  chunks.fragments.forEach((fragment) => applyInlineFragment(fragment, options.findFragmentTarget));',
+      '}',
+      'function applyInlineFragment(fragment, findFragmentTarget) {',
+      '  const element = findFragmentTarget(fragment.target);',
+      '  if (element) applyTarget(element, fragment.html);',
+      '}',
+    ].join('\n');
+    const importedHelperSource = [
+      'import { applyResponseFragment } from "./inline-response-apply.js";',
+      'export function applyInlineMutationResponseChunks(chunks, options) {',
+      '  chunks.fragments.forEach((fragment) => applyResponseFragment(fragment, options));',
+      '}',
+    ].join('\n');
+    const parameterInitializerSource = [
+      'const defaultChunks = () => ({ fragments: [], queries: [] });',
+      'export function applyInlineMutationResponseChunks(chunks = defaultChunks(), options) {',
+      '  options.dispatchQueries(chunks.queries);',
+      '}',
+    ].join('\n');
+
+    expect(() => extractInlineResponseApplyReadableSource(topLevelHelperSource)).toThrow(
+      'references top-level binding applyTarget',
+    );
+    expect(() => extractInlineResponseApplyReadableSource(importedHelperSource)).toThrow(
+      'references top-level binding applyResponseFragment',
+    );
+    expect(() => extractInlineResponseApplyReadableSource(parameterInitializerSource)).toThrow(
+      'references top-level binding defaultChunks',
+    );
   });
 });

@@ -992,6 +992,26 @@ packages/runtime/src/inline-js-minifier.test.ts` and
       packages/runtime/src/mutation-response-dom.test.ts packages/runtime/src/morph.test.ts`;
       full runtime `pnpm exec vitest --run packages/runtime/src`; and inline generation
       `pnpm --filter @jiso/runtime run check:inline-loader`.
+      Evidence 2026-06-13 round279: inline decoded response apply now returns the applied fragment
+      target list from `applyInlineMutationResponseChunks`, matching modular DOM apply's
+      `appliedFragments` parity while preserving ignored missing targets. The generated/minified
+      inline loader artifact was regenerated and pins the returned applied-fragment path; response
+      apply extraction now has owner-suite coverage for rejecting imports, top-level helper values,
+      and default-parameter module state. Verified by focused runtime tests `pnpm exec vitest --run
+      packages/runtime/src/inline-loader-response-apply.test.ts
+      packages/runtime/src/inline-loader-artifact-minifier.test.ts
+      packages/runtime/src/inline-loader-parser-parity.test.ts
+      packages/runtime/src/inline-loader-build.test.ts packages/runtime/src/inline-js-minifier.test.ts
+      packages/runtime/src/mutation-response-dom.test.ts packages/runtime/src/morph.test.ts`, full
+      runtime `pnpm exec vitest --run packages/runtime/src`, browser runtime `pnpm exec vitest
+      --run --config vitest.browser.config.ts packages/runtime/src/**/*.browser.test.ts`, exact
+      `pnpm exec vp check packages/runtime/src/inline-response-apply.ts
+      packages/runtime/src/inline-loader.ts
+      packages/runtime/src/inline-loader-response-apply.test.ts
+      packages/runtime/src/inline-loader-artifact-minifier.test.ts
+      packages/runtime/src/query-hydration.browser.test.ts plans/codebase-quality-round2.md`,
+      TypeScript `pnpm exec tsc --noEmit --pretty false`, `git diff --check`, and inline
+      generation `pnpm --filter @jiso/runtime run check:inline-loader`.
       Evidence 2026-06-13 round270: inline enhanced-response application now extracts both sides of
       the inline parser/apply boundary from runtime-owned source. `packages/runtime/src/wire-parser.ts`
       still owns `readInlineMutationResponseBodyChunks`, while

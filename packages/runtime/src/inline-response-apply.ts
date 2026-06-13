@@ -23,18 +23,21 @@ export interface ResponseFragmentApplyOptions<Target> {
 export function applyInlineMutationResponseChunks(
   chunks: InlineMutationResponseBodyChunks,
   options: InlineMutationResponseApplyOptions,
-): void {
+): string[] {
   // SPEC.md §4.4/§9.1: the generated inline loader applies already-decoded
   // mutation response chunks through this runtime-owned helper closure, not a
   // forked inline-only query/fragment apply path.
   options.dispatchQueries(chunks.queries);
-  chunks.fragments.forEach((fragment) =>
-    applyResponseFragment(fragment, {
+  const appliedFragments: string[] = [];
+  for (const fragment of chunks.fragments) {
+    const wasApplied = applyResponseFragment(fragment, {
       appendFragment: appendInlineFragment,
       findFragmentTarget: (target) => options.findFragmentTarget(target),
       replaceFragment: replaceInlineFragment,
-    }),
-  );
+    });
+    if (wasApplied) appliedFragments.push(fragment.target);
+  }
+  return appliedFragments;
 }
 
 export function applyResponseFragment<Target>(
