@@ -31,6 +31,7 @@
     "./verifier-diagnostics": "./src/verifier-diagnostics.ts",
     "./verifier-sql": "./src/verifier-sql.ts",
     "./verifier": "./src/verifier.ts",
+    "./vite-fixtures": "./src/vite-fixtures.ts",
     "./wire-fixtures": "./src/wire-fixtures.ts"
   },
   "dependencies": {

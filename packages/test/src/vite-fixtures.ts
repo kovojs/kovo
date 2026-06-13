@@ -1,0 +1,290 @@
+import { execFile } from 'node:child_process';
+import { mkdir, mkdtemp, readdir, rm, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { promisify } from 'node:util';
+
+import {
+  generatedHandlerReferenceFact,
+  generatedHandlerReferenceSummaryFact,
+  generatedRenderedElementFactsFromSource,
+} from './generated-module-fixtures.ts';
+
+import type {
+  GeneratedHandlerReferenceFact,
+  GeneratedHandlerReferenceSummaryFact,
+  GeneratedRenderedElementFact,
+} from './generated-module-fixtures.ts';
+
+const execFileAsync = promisify(execFile);
+
+export interface ViteTransformResultLike {
+  code: string;
+  map?: unknown;
+}
+
+export interface VitePluginLike {
+  configureServer?: (server: {
+    config: { root: string };
+    middlewares: { use(handler: ViteMiddlewareLike): void };
+  }) => void;
+  name?: string;
+  transform?: (source: string, id: string) => ViteTransformResultLike | null | undefined;
+}
+
+export type ViteMiddlewareLike = (
+  request: { url?: string },
+  response: {
+    end(value: string): void;
+    setHeader(name: string, value: string): void;
+    statusCode?: number;
+  },
+  next: () => void,
+) => void;
+
+export interface VitePluginMiddlewareFact {
+  middleware: ViteMiddlewareLike;
+  pluginName: string;
+}
+
+export interface ViteTransformElementFact {
+  elements: GeneratedRenderedElementFact[];
+  mapIsNull: boolean;
+}
+
+export interface ViteHandlerTransformFact extends ViteTransformElementFact {
+  handlerReference: GeneratedHandlerReferenceFact;
+  handlerSummary: GeneratedHandlerReferenceSummaryFact;
+}
+
+export interface ViteGeneratedHandlerMiddlewareFact {
+  body: string;
+  contentType: string | undefined;
+  handlerName: string;
+  invocationResult: unknown;
+  nextCallsAfterHit: number;
+  nextCallsAfterStale: number;
+  statusCode: number | undefined;
+}
+
+export interface ViteRedGreenBuildFixtureOptions {
+  coreAlias: string;
+  entrypoint: string;
+  fileName: string;
+  fixtureParent?: string;
+  fixturePrefix?: string;
+  greenSource: string;
+  packageName?: string;
+  projectRoot: string;
+  redSource: string;
+  vitePluginImportUrl: string;
+  vpExecutable: string;
+}
+
+export interface ViteRedGreenBuildFixtureFact {
+  greenDistEntries: string[];
+  redOutput: string;
+}
+
+export function vitePluginMiddlewareFact(
+  plugin: VitePluginLike,
+  options: { root: string },
+): VitePluginMiddlewareFact {
+  let middleware: ViteMiddlewareLike | undefined;
+  plugin.configureServer?.({
+    config: { root: options.root },
+    middlewares: {
+      use(handler) {
+        middleware = handler;
+      },
+    },
+  });
+
+  if (!middleware) {
+    throw new Error('Vite plugin registered middleware');
+  }
+
+  return {
+    middleware,
+    pluginName: plugin.name ?? '',
+  };
+}
+
+export function viteTransformElementFact(
+  plugin: VitePluginLike,
+  options: { id: string; selector?: { tag?: string }; source: string },
+): ViteTransformElementFact {
+  const transformed = plugin.transform?.(options.source, options.id);
+  if (!transformed) {
+    throw new Error('Vite plugin transformed component source');
+  }
+
+  return {
+    elements: generatedRenderedElementFactsFromSource(transformed.code, options.selector),
+    mapIsNull: transformed.map === null,
+  };
+}
+
+export function viteHandlerTransformFact(
+  plugin: VitePluginLike,
+  options: {
+    expectedElementCount?: number;
+    handlerAttribute?: string;
+    id: string;
+    selector?: { tag?: string };
+    source: string;
+  },
+): ViteHandlerTransformFact {
+  const transformFact = viteTransformElementFact(plugin, options);
+  const expectedElementCount = options.expectedElementCount ?? 1;
+  if (transformFact.elements.length !== expectedElementCount) {
+    throw new Error(
+      `Expected ${expectedElementCount} generated element(s); found ${transformFact.elements.length}`,
+    );
+  }
+
+  const handlerAttribute = options.handlerAttribute ?? 'on:click';
+  const handlerRef = transformFact.elements[0]?.attrs[handlerAttribute] ?? '';
+
+  return {
+    ...transformFact,
+    handlerReference: generatedHandlerReferenceFact(handlerRef),
+    handlerSummary: generatedHandlerReferenceSummaryFact(handlerRef),
+  };
+}
+
+export function viteGeneratedHandlerMiddlewareFact(options: {
+  context?: Record<string, unknown>;
+  executeClientModule: (
+    source: string,
+    options: { context?: Record<string, unknown>; runtime: Record<string, unknown> },
+  ) => Record<string, unknown>;
+  handlerReference: GeneratedHandlerReferenceFact;
+  invocation: { ctx: unknown; event: unknown };
+  middleware: ViteMiddlewareLike;
+  runtime: Record<string, unknown>;
+}): ViteGeneratedHandlerMiddlewareFact {
+  const headers = new Map<string, string>();
+  let body = '';
+  let nextCalls = 0;
+  const response: {
+    end(value: string): void;
+    setHeader(name: string, value: string): void;
+    statusCode?: number;
+  } = {
+    setHeader(name: string, value: string) {
+      headers.set(name, value);
+    },
+    end(value: string) {
+      body = value;
+    },
+  };
+
+  options.middleware({ url: options.handlerReference.requestPath }, response, () => {
+    nextCalls += 1;
+  });
+  const nextCallsAfterHit = nextCalls;
+  const executeOptions: { context?: Record<string, unknown>; runtime: Record<string, unknown> } = {
+    runtime: options.runtime,
+  };
+  if (options.context !== undefined) executeOptions.context = options.context;
+  const clientExports = options.executeClientModule(body, executeOptions);
+  const handlerExport = clientExports[options.handlerReference.handlerName];
+  if (typeof handlerExport !== 'function') {
+    throw new Error(`Generated client export is callable: ${options.handlerReference.handlerName}`);
+  }
+  const invocationResult = handlerExport(options.invocation.event, options.invocation.ctx);
+
+  options.middleware({ url: options.handlerReference.staleVersionRequestPath }, response, () => {
+    nextCalls += 1;
+  });
+
+  return {
+    body,
+    contentType: headers.get('Content-Type'),
+    handlerName: options.handlerReference.handlerName,
+    invocationResult,
+    nextCallsAfterHit,
+    nextCallsAfterStale: nextCalls,
+    statusCode: response.statusCode,
+  };
+}
+
+export async function viteRedGreenBuildFixtureFact(
+  options: ViteRedGreenBuildFixtureOptions,
+): Promise<ViteRedGreenBuildFixtureFact> {
+  const fixtureRoot = await mkdtemp(
+    join(options.fixtureParent ?? tmpdir(), options.fixturePrefix ?? 'jiso-vite-build-'),
+  );
+  const sourcePath = join(fixtureRoot, options.fileName);
+
+  try {
+    await mkdir(join(fixtureRoot, 'routes'), { recursive: true });
+    await writeFile(
+      join(fixtureRoot, 'package.json'),
+      JSON.stringify({
+        name: options.packageName ?? 'jiso-vite-build-fixture',
+        private: true,
+        type: 'module',
+      }),
+      'utf8',
+    );
+    await writeFile(
+      join(fixtureRoot, 'index.html'),
+      '<!doctype html><div id="app"></div><script type="module" src="/main.tsx"></script>\n',
+      'utf8',
+    );
+    await writeFile(
+      join(fixtureRoot, 'vite.config.mjs'),
+      [
+        `import { jisoVitePlugin } from ${JSON.stringify(options.vitePluginImportUrl)};`,
+        '',
+        'export default {',
+        "  plugins: [Object.assign(jisoVitePlugin(), { enforce: 'pre' })],",
+        '  resolve: {',
+        '    alias: {',
+        `      '@jiso/core': ${JSON.stringify(options.coreAlias)},`,
+        '    },',
+        '  },',
+        '};',
+        '',
+      ].join('\n'),
+      'utf8',
+    );
+    await writeFile(join(fixtureRoot, 'main.tsx'), options.entrypoint, 'utf8');
+    await writeFile(sourcePath, options.redSource, 'utf8');
+
+    let redOutput = '';
+    try {
+      await execFileAsync(options.vpExecutable, ['build'], { cwd: fixtureRoot });
+      throw new Error('Expected red Vite build fixture to fail');
+    } catch (error) {
+      redOutput = commandErrorOutput(error);
+    }
+
+    await writeFile(sourcePath, options.greenSource, 'utf8');
+    await execFileAsync(options.vpExecutable, ['build'], { cwd: fixtureRoot });
+    const greenDistEntries = (await readdir(join(fixtureRoot, 'dist'))).toSorted((left, right) =>
+      left.localeCompare(right),
+    );
+
+    return { greenDistEntries, redOutput };
+  } finally {
+    await rm(fixtureRoot, { force: true, recursive: true });
+  }
+}
+
+function commandErrorOutput(error: unknown): string {
+  const result = error as { message?: unknown; stderr?: unknown; stdout?: unknown };
+  return [result.stdout, result.stderr, result.message].map(commandOutputPart).join('\n');
+}
+
+function commandOutputPart(value: unknown): string {
+  if (typeof value === 'string') return value;
+  if (value === undefined || value === null) return '';
+  if (typeof value === 'number' || typeof value === 'boolean' || typeof value === 'bigint') {
+    return value.toString();
+  }
+  if (value instanceof Error) return value.message;
+  return JSON.stringify(value);
+}

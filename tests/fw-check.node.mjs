@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { execFile, execFileSync } from 'node:child_process';
-import { mkdir, mkdtemp, readdir, readFile, rm, writeFile } from 'node:fs/promises';
+import { mkdtemp, readdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { test } from 'node:test';
@@ -84,10 +84,7 @@ import {
   executeInlineEnhancedFormLoaderFixture,
   generatedClientExportTypeFacts,
   generatedArtifactSource,
-  generatedHandlerReferenceFact,
-  generatedHandlerReferenceSummaryFact,
   generatedRenderedElementFactsFromArtifact,
-  generatedRenderedElementFactsFromSource,
   GeneratedFixtureElement,
   GeneratedFixtureMorphRoot,
   GeneratedFixtureMorphTarget,
@@ -148,6 +145,13 @@ import {
   typeScriptInterfaceMemberTypes,
 } from '../packages/test/src/typescript-fixtures.ts';
 import { loaderSmokeBehaviorFact } from '../packages/test/src/runtime-fixtures.ts';
+import {
+  viteGeneratedHandlerMiddlewareFact,
+  viteHandlerTransformFact,
+  vitePluginMiddlewareFact,
+  viteRedGreenBuildFixtureFact,
+  viteTransformElementFact,
+} from '../packages/test/src/vite-fixtures.ts';
 import { parseWireFixture, parseWireResponses } from '../packages/test/src/wire-fixtures.ts';
 import { createApp } from '../dist/server/src/api/app-shell/core.mjs';
 import {
@@ -4356,20 +4360,13 @@ void test('S1 production build proves the compiler 1:1 emit contract', async () 
   assert.deepEqual(commandOutputLines(prodEmit.stdout), ['prod-emit-check/v1', 'OK']);
 
   const plugin = jisoVitePlugin();
-  let middleware;
-  plugin.configureServer?.({
-    config: { root: projectRoot },
-    middlewares: {
-      use(handler) {
-        middleware = handler;
-      },
-    },
-  });
-  assert.equal(plugin.name, 'jiso');
-  assert.equal(typeof middleware, 'function');
+  const middlewareFact = vitePluginMiddlewareFact(plugin, { root: projectRoot });
+  assert.equal(middlewareFact.pluginName, 'jiso');
 
-  const transformed = plugin.transform(
-    `
+  const handlerTransform = viteHandlerTransformFact(plugin, {
+    id: join(projectRoot, 'routes/products/product-card.tsx'),
+    selector: { tag: 'button' },
+    source: `
 import { component } from '@jiso/core';
 
 export const ProductCard = component('product-card', {
@@ -4380,61 +4377,34 @@ export const ProductCard = component('product-card', {
   ),
 });
 `,
-    join(projectRoot, 'routes/products/product-card.tsx'),
-  );
-  assert.ok(transformed);
-  assert.equal(transformed.map, null);
-
-  const buttons = generatedRenderedElementFactsFromSource(transformed.code, { tag: 'button' });
-  assert.equal(buttons.length, 1);
-  assert.equal(buttons[0]?.attrs['data-p-id'], '{product.id}');
-  const handlerRef = buttons[0]?.attrs['on:click'] ?? '';
-  const handlerReference = generatedHandlerReferenceFact(handlerRef);
-  assert.deepEqual(generatedHandlerReferenceSummaryFact(handlerRef), {
+  });
+  assert.equal(handlerTransform.mapIsNull, true);
+  assert.equal(handlerTransform.elements[0]?.attrs['data-p-id'], '{product.id}');
+  assert.deepEqual(handlerTransform.handlerSummary, {
     handlerName: 'ProductCard$button_click',
     modulePath: '/c/routes/products/product-card.client.js',
     versionShape: 'lower-hex-8',
   });
-  const headers = new Map();
-  let body = '';
-  let nextCalls = 0;
-  const response = {
-    setHeader(name, value) {
-      headers.set(name, value);
-    },
-    end(value) {
-      body = value;
-    },
-  };
-
-  middleware({ url: handlerReference.requestPath }, response, () => {
-    nextCalls += 1;
-  });
-
-  assert.equal(nextCalls, 0);
-  assert.equal(response.statusCode, 200);
-  assert.equal(headers.get('Content-Type'), 'text/javascript');
   const cartEvents = [];
-  const clientExports = executeGeneratedClientModule(body, {
+  const middlewareResult = viteGeneratedHandlerMiddlewareFact({
     context: {
       addToCart(id) {
         cartEvents.push(id);
         return `added:${id}`;
       },
     },
+    executeClientModule: executeGeneratedClientModule,
+    handlerReference: handlerTransform.handlerReference,
+    invocation: { ctx: { params: { id: 'p1' } }, event: 'click' },
+    middleware: middlewareFact.middleware,
     runtime: generatedModuleRuntime,
   });
-  assert.equal(typeof clientExports[handlerReference.handlerName], 'function');
-  assert.equal(
-    clientExports[handlerReference.handlerName]('click', { params: { id: 'p1' } }),
-    'added:p1',
-  );
+  assert.equal(middlewareResult.nextCallsAfterHit, 0);
+  assert.equal(middlewareResult.statusCode, 200);
+  assert.equal(middlewareResult.contentType, 'text/javascript');
+  assert.equal(middlewareResult.invocationResult, 'added:p1');
   assert.deepEqual(cartEvents, ['p1']);
-
-  middleware({ url: handlerReference.staleVersionRequestPath }, response, () => {
-    nextCalls += 1;
-  });
-  assert.equal(nextCalls, 1);
+  assert.equal(middlewareResult.nextCallsAfterStale, 1);
 });
 
 void test('D10 seeded diagnostics gate Vite, static export, and MCP red-green surfaces', async () => {
@@ -4497,11 +4467,13 @@ export const DiagnosticCard = component('diagnostic-card', {
   const expectedStaticExportCliError = expectedStaticExportError.replaceAll('\n', ' ');
 
   const plugin = jisoVitePlugin();
-  const greenTransform = plugin.transform(greenSource, componentId);
-  assert.ok(greenTransform);
-  const greenButtons = generatedRenderedElementFactsFromSource(greenTransform.code, {
-    tag: 'button',
-  }).map((element) => element.attrs);
+  const greenTransform = viteTransformElementFact(plugin, {
+    id: componentId,
+    selector: { tag: 'button' },
+    source: greenSource,
+  });
+  const greenButtons = greenTransform.elements.map((element) => element.attrs);
+  assert.equal(greenTransform.mapIsNull, true);
   assert.deepEqual(greenButtons, [{ 'fw-c': 'diagnostic-card' }]);
 
   assert.throws(
@@ -4516,15 +4488,17 @@ export const DiagnosticCard = component('diagnostic-card', {
   const lintPlugin = jisoVitePlugin({
     onDiagnostic: (diagnostic) => lintDiagnostics.push(diagnostic),
   });
-  const lintTransform = lintPlugin.transform(lintSource, componentId);
-  assert.ok(lintTransform);
-  const lintButtons = generatedRenderedElementFactsFromSource(lintTransform.code, {
-    tag: 'button',
-  }).map((element) => element.attrs);
+  const lintTransform = viteHandlerTransformFact(lintPlugin, {
+    id: componentId,
+    selector: { tag: 'button' },
+    source: lintSource,
+  });
+  const lintButtons = lintTransform.elements.map((element) => element.attrs);
+  assert.equal(lintTransform.mapIsNull, true);
   assert.equal(lintButtons.length, 1);
   assert.equal(lintButtons[0]?.['fw-c'], 'diagnostic-card');
   assert.equal(lintButtons[0]?.['data-p-ok'], '{response.ok}');
-  assert.deepEqual(generatedHandlerReferenceSummaryFact(lintButtons[0]?.['on:click'] ?? ''), {
+  assert.deepEqual(lintTransform.handlerSummary, {
     handlerName: 'DiagnosticCard$button_click',
     modulePath: '/c/routes/diagnostic-card.client.js',
     versionShape: 'lower-hex-8',
@@ -4538,71 +4512,25 @@ export const DiagnosticCard = component('diagnostic-card', {
     [{ code: 'FW210', fileName, severity: 'lint' }],
   );
 
-  const buildFixtureRoot = await mkdtemp(join(projectRoot, 'examples/d10-vp-build-'));
-  const buildFixtureSourcePath = join(buildFixtureRoot, fileName);
-  const buildFixtureEntrypoint = `
+  const buildFixture = await viteRedGreenBuildFixtureFact({
+    coreAlias: join(projectRoot, 'dist/core/src/index.mjs'),
+    entrypoint: `
 import './routes/diagnostic-card';
 
 document.querySelector('#app')!.textContent = 'D10 build green';
-`;
-
-  try {
-    await mkdir(join(buildFixtureRoot, 'routes'), { recursive: true });
-    await writeFile(
-      join(buildFixtureRoot, 'package.json'),
-      JSON.stringify({ name: 'jiso-d10-vp-build-fixture', private: true, type: 'module' }),
-      'utf8',
-    );
-    await writeFile(
-      join(buildFixtureRoot, 'index.html'),
-      '<!doctype html><div id="app"></div><script type="module" src="/main.tsx"></script>\n',
-      'utf8',
-    );
-    await writeFile(
-      join(buildFixtureRoot, 'vite.config.mjs'),
-      `
-import { jisoVitePlugin } from ${JSON.stringify(
-        pathToFileURL(join(projectRoot, 'dist/compiler/src/index.mjs')).href,
-      )};
-
-export default {
-  plugins: [Object.assign(jisoVitePlugin(), { enforce: 'pre' })],
-  resolve: {
-    alias: {
-      '@jiso/core': ${JSON.stringify(join(projectRoot, 'dist/core/src/index.mjs'))},
-    },
-  },
-};
 `,
-      'utf8',
-    );
-    await writeFile(join(buildFixtureRoot, 'main.tsx'), buildFixtureEntrypoint, 'utf8');
-    await writeFile(buildFixtureSourcePath, redSource, 'utf8');
-
-    await assert.rejects(
-      execFileAsync(join(projectRoot, 'node_modules/.bin/vp'), ['build'], {
-        cwd: buildFixtureRoot,
-      }),
-      (error) => {
-        const output = `${error?.stdout ?? ''}\n${error?.stderr ?? ''}\n${error?.message ?? ''}`;
-        assertRedTransformMessage(output);
-        return true;
-      },
-    );
-
-    await writeFile(buildFixtureSourcePath, greenSource, 'utf8');
-    await execFileAsync(join(projectRoot, 'node_modules/.bin/vp'), ['build'], {
-      cwd: buildFixtureRoot,
-    });
-    assert.deepEqual(
-      (await readdir(join(buildFixtureRoot, 'dist'))).toSorted((left, right) =>
-        left.localeCompare(right),
-      ),
-      ['assets', 'index.html'],
-    );
-  } finally {
-    await rm(buildFixtureRoot, { force: true, recursive: true });
-  }
+    fileName,
+    fixtureParent: join(projectRoot, 'examples'),
+    fixturePrefix: 'd10-vp-build-',
+    greenSource,
+    packageName: 'jiso-d10-vp-build-fixture',
+    projectRoot,
+    redSource,
+    vitePluginImportUrl: pathToFileURL(join(projectRoot, 'dist/compiler/src/index.mjs')).href,
+    vpExecutable: join(projectRoot, 'node_modules/.bin/vp'),
+  });
+  assertRedTransformMessage(buildFixture.redOutput);
+  assert.deepEqual(buildFixture.greenDistEntries, ['assets', 'index.html']);
 
   const outDir = await mkdtemp(join(tmpdir(), 'jiso-d10-export-'));
   const app = createApp({

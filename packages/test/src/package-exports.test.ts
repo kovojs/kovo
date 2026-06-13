@@ -304,6 +304,19 @@ import {
 } from '@jiso/test/verifier-diagnostics';
 import { parseSqlOperations, type ParsedSqlOperation } from '@jiso/test/verifier-sql';
 import {
+  viteGeneratedHandlerMiddlewareFact,
+  viteHandlerTransformFact,
+  vitePluginMiddlewareFact,
+  viteRedGreenBuildFixtureFact,
+  viteTransformElementFact,
+  type ViteGeneratedHandlerMiddlewareFact,
+  type ViteHandlerTransformFact,
+  type VitePluginLike,
+  type VitePluginMiddlewareFact,
+  type ViteRedGreenBuildFixtureFact,
+  type ViteTransformElementFact,
+} from '@jiso/test/vite-fixtures';
+import {
   parseWireFixture,
   parseWireResponses,
   type WireFixture,
@@ -577,6 +590,11 @@ describe('@jiso/test package subpath exports', () => {
         table: 'cart_items',
       },
     ]);
+    expect(vitePluginMiddlewareFact).toBeTypeOf('function');
+    expect(viteTransformElementFact).toBeTypeOf('function');
+    expect(viteHandlerTransformFact).toBeTypeOf('function');
+    expect(viteGeneratedHandlerMiddlewareFact).toBeTypeOf('function');
+    expect(viteRedGreenBuildFixtureFact).toBeTypeOf('function');
     expect(commandSequence('vp run fw-check')).toMatchObject([
       { args: ['run', 'fw-check'], executable: 'vp' },
     ]);
@@ -1026,4 +1044,10 @@ type _PublicSubpathTypes = [
   DirectDbVerificationDiagnostic,
   DbVerifier,
   ObservedDbOperation,
+  ViteGeneratedHandlerMiddlewareFact,
+  ViteHandlerTransformFact,
+  VitePluginLike,
+  VitePluginMiddlewareFact,
+  ViteRedGreenBuildFixtureFact,
+  ViteTransformElementFact,
 ];

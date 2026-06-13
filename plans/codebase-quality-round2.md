@@ -63,6 +63,9 @@ keeps a local DOMParser/FormData/fetch VM harness.
 Shared runtime fixtures now own the loader smoke fake-root, visibility observer, refetch, and
 template-stamp mechanics used by the P2 fw-check gate, so the monolith asserts a structured public
 runtime behavior fact instead of rebuilding that harness locally.
+Shared Vite fixtures now own plugin middleware capture, generated transform element/handler
+projections, generated-handler middleware smoke behavior, and red/green build temp-project
+mechanics for the S1 and D10 fw-check cases.
 
 - [ ] Search for remaining custom parsers, raw source membership checks, and generated-artifact
       projections in `tests/fw-check.node.mjs`.
@@ -147,6 +150,12 @@ Latest evidence:
   `pnpm run check:build`;
   `node --test --test-name-pattern "P2 loader smoke evidence is asserted through runtime behavior" tests/fw-check.node.mjs`;
   exact `pnpm exec vp check packages/test/src/runtime-fixtures.ts packages/test/src/runtime-fixtures.test.ts packages/test/src/package-exports.test.ts packages/test/package.json tests/fw-check.node.mjs plans/codebase-quality-round2.md`;
+  `git diff --check`.
+- Vite harness fixture slice:
+  `pnpm exec vitest --run packages/test/src/vite-fixtures.test.ts packages/test/src/package-exports.test.ts`;
+  `pnpm run check:build`;
+  `node --test --test-name-pattern "S1 production build proves the compiler 1:1 emit contract|D10 seeded diagnostics gate Vite, static export, and MCP red-green surfaces" tests/fw-check.node.mjs`;
+  exact `pnpm exec vp check packages/test/src/vite-fixtures.ts packages/test/src/vite-fixtures.test.ts packages/test/src/package-exports.test.ts packages/test/package.json tests/fw-check.node.mjs plans/codebase-quality-round2.md`;
   `git diff --check`.
 
 ## Phase 2 - Compiler IR
