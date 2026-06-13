@@ -766,6 +766,8 @@ lowerers consume structured tag spans, slash-spacing, child-body, and expression
 The terminal server-render emit patch helper now exposes only patched source; offset maps remain
 limited to model-changing passes and diagnostics instead of an unused emit-only compatibility
 contract.
+The terminal emit patch helper now returns the patched source string directly instead of a one-field
+compatibility result wrapper.
 Template stamp item placeholders now carry template-relative parser spans, so generated client
 query-plan renderers assemble HTML from model-derived segments instead of emitting runtime
 `html.replace(...)` source-string patching.
@@ -820,6 +822,11 @@ packages/compiler/src/model-pipeline.test.ts packages/compiler/src/compile-compo
   `pnpm exec tsc --noEmit --pretty false`; exact `pnpm exec vp check
 packages/compiler/src/model-pipeline.ts packages/compiler/src/model-pipeline.test.ts
 plans/codebase-quality-round2.md`; `git diff --check`.
+- Emit-only patch result wrapper deletion: `pnpm exec vitest --run
+packages/compiler/src/model-pipeline.test.ts packages/compiler/src/compile-component.test.ts`;
+  `pnpm exec tsc --noEmit --pretty false`; exact `pnpm exec vp check
+packages/compiler/src/model-pipeline.ts packages/compiler/src/model-pipeline.test.ts
+packages/compiler/src/compile.ts plans/codebase-quality-round2.md`; `git diff --check`.
 - Pre-derive lowering reparse reduction: `pnpm exec vitest --run
 packages/compiler/src/view-transitions.test.ts packages/compiler/src/platform-lowering.test.ts
 packages/compiler/src/navigation-lowering.test.ts packages/compiler/src/compile-component.test.ts

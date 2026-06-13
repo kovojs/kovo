@@ -20,10 +20,6 @@ interface ComponentPipelinePatchOptions {
   prefix?: string;
 }
 
-export interface ComponentPipelineEmitPatchResult {
-  source: string;
-}
-
 export function componentPipelineState<Model>(
   fileName: string,
   source: string,
@@ -58,8 +54,6 @@ export function applyComponentPipelineEmitPatches(
   previous: Pick<ComponentPipelineState<unknown>, 'source'>,
   replacements: readonly SourceReplacement[],
   options: ComponentPipelinePatchOptions = {},
-): ComponentPipelineEmitPatchResult {
-  return {
-    source: `${options.prefix ?? ''}${applySourceReplacements(previous.source, replacements)}`,
-  };
+): string {
+  return `${options.prefix ?? ''}${applySourceReplacements(previous.source, replacements)}`;
 }

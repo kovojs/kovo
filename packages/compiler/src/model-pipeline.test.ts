@@ -169,7 +169,7 @@ describe('compiler model pipeline', () => {
       },
     ]);
 
-    expect(lowered.source).toBe(
+    expect(lowered).toBe(
       'export const CartBadge = component({ render: () => <button on:click="/c/cart-badge.client.js#CartBadge$button_click">Save</button> });',
     );
   });
