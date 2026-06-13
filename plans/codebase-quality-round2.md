@@ -424,6 +424,15 @@ packages/runtime/src/inline-js-minifier.test.ts packages/runtime/src/wire-parser
   `pnpm exec vitest --config vitest.browser.config.ts --run
 packages/runtime/src/index.browser.test.ts`, and `pnpm --filter @jiso/runtime run
 check:inline-loader`.
+- Inline-loader minifier parity is closed beyond artifact and budget checks: the minifier now
+  rejects TypeScript-only syntax that the TypeScript parser accepts in JS mode before it can ship
+  as inline browser script text, and regex-literal/division boundaries are spaced explicitly so
+  minified token hazards stay readable and deterministic (SPEC.md §4.4). Same-session evidence:
+  `pnpm exec vitest --run packages/runtime/src`, `pnpm exec vitest --config
+vitest.browser.config.ts --run packages/runtime/src/index.browser.test.ts`,
+  `pnpm --filter @jiso/runtime run check:inline-loader`, and `pnpm exec vp check
+packages/runtime/src/inline-js-minifier.ts packages/runtime/src/inline-js-minifier.test.ts
+IMPLEMENT_v1.md plans/codebase-quality-round2.md`.
 - Runtime apply path split now keeps `apply-path.ts` as the stable facade while moving mutation
   response and deferred-stream application into `apply-mutation-response.ts` and
   `apply-deferred-stream.ts`; `mutation-response.test.ts` proves direct split-module exports still
@@ -538,7 +547,6 @@ IMPLEMENT_v1.md plans/codebase-quality-round2.md`.
 
 Open:
 
-- Decide whether any inline-loader minifier gaps remain after artifact-parity and budget checking.
 - Complete subtractive runtime split of the remaining high-churn root module areas.
 - Expand browser/runtime gates where shared wire parsing can affect hydrated query behavior.
 

@@ -21,6 +21,7 @@ describe('inline JavaScript minifier', () => {
       '  const numericKeywordBoundary = 1 in { 1: true };',
       '  const slashRegexBoundary = 4 / /2/.source.length;',
       '  const regexSlashRegexBoundary = /left/.source.length / /right/.source.length;',
+      '  const regexDivisionBoundary = /left/ / numeric;',
       '  const commentRegex = /\\/\\/|\\/\\*/g;',
       '  const spacedRegex = /left right\\/slash/g;',
       '  const classSpaceRegex = /[ /#]+/g;',
@@ -44,6 +45,7 @@ describe('inline JavaScript minifier', () => {
       '    plusComment,',
       '    plusWhitespace,',
       '    regexInstance,',
+      '    regexDivisionBoundary,',
       '    regexPlusRegex,',
       '    regexSlashRegexBoundary,',
       '    slashRegexBoundary,',
@@ -68,6 +70,7 @@ describe('inline JavaScript minifier', () => {
     expect(minifiedSource).toContain('1 in{1:true}');
     expect(minifiedSource).toContain('4/ /2/.source.length');
     expect(minifiedSource).toContain('/left/.source.length/ /right/.source.length');
+    expect(minifiedSource).toContain('/left/ /numeric');
     expect(minifiedSource).toContain('/left right\\/slash/g');
     expect(minifiedSource).toContain('/[ /#]+/g');
     expect(minifiedSource).toContain('/left right/ instanceof RegExp');
@@ -85,6 +88,23 @@ describe('inline JavaScript minifier', () => {
     ).toThrow('template interpolation');
     expect(() => minifyInlineJavaScriptSource('function invalidInlineLoader(')).toThrow(
       'invalid JavaScript',
+    );
+  });
+
+  it('rejects TypeScript-only syntax that the TypeScript parser accepts in JS mode', () => {
+    // SPEC.md §4.4 ships the bootstrap as inline browser JavaScript, so build-time
+    // parsing must reject TS-only syntax instead of preserving invalid script text.
+    expect(() =>
+      minifyInlineJavaScriptSource('function typed(value: string) { return value; }'),
+    ).toThrow('TypeScript-only syntax');
+    expect(() => minifyInlineJavaScriptSource('const value = input as string;')).toThrow(
+      'TypeScript-only syntax',
+    );
+    expect(() => minifyInlineJavaScriptSource('interface InlineOnly { value: string }')).toThrow(
+      'interface declaration',
+    );
+    expect(() => minifyInlineJavaScriptSource('enum InlineOnly { Value }')).toThrow(
+      'enum declaration',
     );
   });
 });

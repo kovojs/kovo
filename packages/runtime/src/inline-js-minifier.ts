@@ -2,6 +2,7 @@ import ts from 'typescript';
 
 export function minifyInlineJavaScriptSource(source: string): string {
   const sourceFile = parseInlineJavaScriptSource(source, 'Inline JavaScript source');
+  assertPlainJavaScriptSource(sourceFile);
   assertNoTemplateInterpolation(sourceFile);
   const printer = ts.createPrinter({ removeComments: true });
   const printedSource = printer.printFile(sourceFile);
@@ -111,6 +112,61 @@ function assertNoTemplateInterpolation(node: ts.Node): void {
   ts.forEachChild(node, assertNoTemplateInterpolation);
 }
 
+function assertPlainJavaScriptSource(sourceFile: ts.SourceFile): void {
+  const visit = (node: ts.Node): void => {
+    const typeScriptSyntax = typeScriptOnlySyntaxLabel(node);
+    if (typeScriptSyntax) {
+      const position = sourceFile.getLineAndCharacterOfPosition(node.getStart(sourceFile, false));
+      throw new Error(
+        `Inline JavaScript source cannot use TypeScript-only syntax (${typeScriptSyntax}) at ${position.line + 1}:${position.character + 1}.`,
+      );
+    }
+
+    ts.forEachChild(node, visit);
+  };
+
+  visit(sourceFile);
+}
+
+function typeScriptOnlySyntaxLabel(node: ts.Node): string | undefined {
+  if (ts.isAsExpression(node)) return 'as expression';
+  if (ts.isEnumDeclaration(node)) return 'enum declaration';
+  if (ts.isImportEqualsDeclaration(node)) return 'import equals declaration';
+  if (ts.isInterfaceDeclaration(node)) return 'interface declaration';
+  if (ts.isModuleDeclaration(node)) return 'namespace/module declaration';
+  if (ts.isNonNullExpression(node)) return 'non-null assertion';
+  if (ts.isSatisfiesExpression(node)) return 'satisfies expression';
+  if (ts.isTypeAliasDeclaration(node)) return 'type alias declaration';
+  if (ts.isTypeAssertionExpression(node)) return 'type assertion';
+  if (ts.isTypeNode(node)) return 'type annotation';
+  if (ts.isHeritageClause(node) && node.token === ts.SyntaxKind.ImplementsKeyword) {
+    return 'implements clause';
+  }
+  if (ts.canHaveModifiers(node)) {
+    const modifier = ts
+      .getModifiers(node)
+      ?.find((candidate) => typeScriptOnlyModifierKinds.has(candidate.kind));
+    if (modifier) return `modifier ${ts.SyntaxKind[modifier.kind]}`;
+  }
+  if (ts.isImportDeclaration(node) && node.importClause?.isTypeOnly) return 'type-only import';
+  if (ts.isExportDeclaration(node) && node.isTypeOnly) return 'type-only export';
+  if (ts.isImportSpecifier(node) && node.isTypeOnly) return 'type-only import';
+  if (ts.isExportSpecifier(node) && node.isTypeOnly) return 'type-only export';
+
+  return undefined;
+}
+
+const typeScriptOnlyModifierKinds = new Set<ts.SyntaxKind>([
+  ts.SyntaxKind.AbstractKeyword,
+  ts.SyntaxKind.AccessorKeyword,
+  ts.SyntaxKind.DeclareKeyword,
+  ts.SyntaxKind.OverrideKeyword,
+  ts.SyntaxKind.PrivateKeyword,
+  ts.SyntaxKind.ProtectedKeyword,
+  ts.SyntaxKind.PublicKeyword,
+  ts.SyntaxKind.ReadonlyKeyword,
+]);
+
 function compactInlineJavaScriptSource(sourceFile: ts.SourceFile): string {
   const tokens = collectMinifiedTokens(sourceFile);
 
@@ -208,6 +264,13 @@ function needsTokenSeparator(previousToken: MinifiedToken, nextToken: MinifiedTo
   if (
     previousToken.kind === ts.SyntaxKind.RegularExpressionLiteral &&
     startsWithIdentifierPart(nextToken.text)
+  ) {
+    return true;
+  }
+  if (
+    previousToken.kind === ts.SyntaxKind.RegularExpressionLiteral &&
+    (nextToken.kind === ts.SyntaxKind.SlashToken ||
+      nextToken.kind === ts.SyntaxKind.SlashEqualsToken)
   ) {
     return true;
   }
