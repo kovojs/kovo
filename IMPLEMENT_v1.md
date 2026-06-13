@@ -246,6 +246,17 @@ packages/create-jiso/src/index.test.ts` and `pnpm exec tsc --noEmit --pretty fal
       Same-session evidence:
       `pnpm exec vitest --run packages/server/src/static-export-output.test.ts packages/server/src/static-export.test.ts packages/server/src/vite-build.test.ts`
       and `pnpm exec tsc --noEmit --pretty false`.
+      Additional evidence 2026-06-13: static export output target planning now lives in
+      `packages/server/src/static-export-output-targets.ts`, which owns SPEC §9.5 path
+      containment, URL-segment validation, and FW229 same-target diagnostics for route documents,
+      immutable `/c/` modules, and copied static assets, leaving
+      `packages/server/src/static-export-output.ts` focused on source validation, staging, and
+      commit orchestration. Same-session evidence:
+      `pnpm exec vitest --run packages/server/src/static-export-output-targets.test.ts packages/server/src/static-export-output.test.ts`,
+      `pnpm exec vitest --run packages/server/src/static-export-output-targets.test.ts packages/server/src/static-export-output.test.ts packages/server/src/static-export.test.ts`,
+      `pnpm exec tsc --noEmit --pretty false`,
+      `pnpm exec vp check packages/server/src/static-export-output-targets.ts packages/server/src/static-export-output-targets.test.ts packages/server/src/static-export-output.ts packages/server/src/static-export-output.test.ts packages/server/src/static-export.ts IMPLEMENT_v1.md plans/app-shell.md plans/codebase-quality-round2.md`,
+      and `git diff --check`.
       Additional evidence 2026-06-13: Vite app-shell build output now stages helper-owned
       compiled `/c/` module writes under the Vite output root and validates duplicate/directory
       targets before committing, so rejected client-module output does not leave earlier module

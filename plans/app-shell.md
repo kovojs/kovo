@@ -608,3 +608,17 @@ Round160 app-shell Vite plugin build boundary evidence:
   subpath barrels.
 - `pnpm exec vitest --run packages/server/src/vite-plugin-build.test.ts packages/server/src/vite.test.ts packages/server/src/api/app.test.ts`
 - `pnpm exec tsc --noEmit --pretty false`
+
+Round163 app-shell static export output target evidence:
+
+- `packages/server/src/static-export-output-targets.ts` now owns SPEC §9.5 static export output
+  target planning, path containment, URL-segment validation, and same-target FW229 diagnostics for
+  route documents, immutable `/c/` modules, and copied static assets.
+- `packages/server/src/static-export-output.ts` keeps source readability checks, staging, and
+  commit orchestration, re-exporting the existing public output-plan types without duplicating
+  target-path rules.
+- `pnpm exec vitest --run packages/server/src/static-export-output-targets.test.ts packages/server/src/static-export-output.test.ts`
+- `pnpm exec vitest --run packages/server/src/static-export-output-targets.test.ts packages/server/src/static-export-output.test.ts packages/server/src/static-export.test.ts`
+- `pnpm exec tsc --noEmit --pretty false`
+- `pnpm exec vp check packages/server/src/static-export-output-targets.ts packages/server/src/static-export-output-targets.test.ts packages/server/src/static-export-output.ts packages/server/src/static-export-output.test.ts packages/server/src/static-export.ts IMPLEMENT_v1.md plans/app-shell.md plans/codebase-quality-round2.md`
+- `git diff --check`

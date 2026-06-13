@@ -14,6 +14,12 @@ import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import {
+  staticExportOutputTargets,
+  type StaticExportOutputPlanItem,
+  type StaticExportOutputPlanItemKind,
+  type StaticExportOutputTarget,
+} from './static-export-output-targets.js';
+import {
   StaticExportError,
   sortedHeaders,
   staticExportDiagnostic,
@@ -25,13 +31,7 @@ import {
 
 export const STATIC_EXPORT_DRY_RUN_ROOT = '/__jiso_static_export_plan__';
 
-export type StaticExportOutputPlanItemKind = 'client-module' | 'route-document' | 'static-asset';
-
-export interface StaticExportOutputPlanItem {
-  kind: StaticExportOutputPlanItemKind;
-  path: string;
-  targetPath: string;
-}
+export type { StaticExportOutputPlanItem, StaticExportOutputPlanItemKind };
 
 export interface StaticExportOutputPlanOptions {
   outDir: string | URL;
@@ -116,43 +116,36 @@ function staticExportPlannedWrites(
   plan: StaticExportOutputArtifacts,
   root: string,
 ): StaticExportPlannedWrite[] {
-  const writes: StaticExportPlannedWrite[] = [];
+  return staticExportOutputTargets(plan, root).map((target) =>
+    staticExportPlannedWrite(plan, target),
+  );
+}
 
-  for (const artifact of plan.artifacts) {
-    const targetPath = staticExportArtifactTargetPath(root, artifact.path);
-    writes.push({
-      diagnosticPath: artifact.path,
-      itemKind: 'route-document',
-      kind: 'route document',
-      targetPath,
+function staticExportPlannedWrite(
+  plan: StaticExportOutputArtifacts,
+  target: StaticExportOutputTarget,
+): StaticExportPlannedWrite {
+  if (target.itemKind === 'route-document') {
+    const artifact = plan.artifacts[target.itemIndex]!;
+    return {
+      ...target,
       write: async (writePath) => writeTextStaticExportFile(artifact.body, writePath),
-    });
+    };
   }
 
-  for (const artifact of plan.clientModules) {
-    const targetPath = staticExportClientModuleTargetPath(root, artifact.path);
-    writes.push({
-      diagnosticPath: artifact.path,
-      itemKind: 'client-module',
-      kind: 'client module',
-      targetPath,
+  if (target.itemKind === 'client-module') {
+    const artifact = plan.clientModules[target.itemIndex]!;
+    return {
+      ...target,
       write: async (writePath) => writeTextStaticExportFile(artifact.body, writePath),
-    });
+    };
   }
 
-  for (const artifact of plan.assets) {
-    const targetPath = staticExportAssetTargetPath(root, artifact.path);
-    writes.push({
-      diagnosticPath: artifact.path,
-      itemKind: 'static-asset',
-      kind: 'static asset',
-      targetPath,
-      write: async (writePath) => copyStaticExportAsset(artifact.source, writePath),
-    });
-  }
-
-  assertNoStaticExportOutputConflicts(writes);
-  return writes;
+  const artifact = plan.assets[target.itemIndex]!;
+  return {
+    ...target,
+    write: async (writePath) => copyStaticExportAsset(artifact.source, writePath),
+  };
 }
 
 async function assertReadableStaticExportAssetSource(
@@ -201,7 +194,7 @@ async function copyStaticExportAsset(source: string, targetPath: string): Promis
   await copyFile(source, targetPath);
 }
 
-interface StaticExportPlannedWrite {
+interface StaticExportPlannedWrite extends StaticExportOutputTarget {
   diagnosticPath: string;
   itemKind: StaticExportOutputPlanItemKind;
   kind: string;
@@ -289,74 +282,6 @@ async function commitStaticExportStagedOutput(
   }
 }
 
-function assertNoStaticExportOutputConflicts(writes: readonly StaticExportPlannedWrite[]): void {
-  const seen = new Map<string, StaticExportPlannedWrite>();
-
-  for (const write of writes) {
-    const existing = seen.get(write.targetPath);
-    if (existing) {
-      throw new StaticExportError([
-        staticExportDiagnostic(
-          write.diagnosticPath,
-          `FW229 static export cannot write ${write.kind} '${write.diagnosticPath}' because it conflicts with ${existing.kind} '${existing.diagnosticPath}'.`,
-        ),
-      ]);
-    }
-
-    seen.set(write.targetPath, write);
-  }
-}
-
-function staticExportArtifactTargetPath(root: string, artifactPath: string): string {
-  const targetPath = path.resolve(root, artifactPath.replace(/^\/+/, ''));
-  if (targetPath === root || targetPath.startsWith(`${root}${path.sep}`)) return targetPath;
-
-  throw new StaticExportError([
-    staticExportDiagnostic(
-      artifactPath,
-      `FW229 static export refused to write '${artifactPath}' outside the configured output directory.`,
-    ),
-  ]);
-}
-
-function staticExportClientModuleTargetPath(root: string, modulePath: string): string {
-  const segments = modulePath.split('/').filter(Boolean).map(decodeClientModulePathSegment);
-  const targetPath = path.resolve(root, ...segments);
-  if (targetPath === root || targetPath.startsWith(`${root}${path.sep}`)) return targetPath;
-
-  throw new StaticExportError([
-    staticExportDiagnostic(
-      modulePath,
-      `FW229 static export refused to write client module '${modulePath}' outside the configured output directory.`,
-    ),
-  ]);
-}
-
-function decodeClientModulePathSegment(segment: string): string {
-  let decoded: string;
-  try {
-    decoded = decodeURIComponent(segment);
-  } catch {
-    throw new StaticExportError([
-      staticExportDiagnostic(
-        `/c/${segment}`,
-        `FW229 static export cannot write client module path segment '${segment}' because it is not valid URL encoding.`,
-      ),
-    ]);
-  }
-
-  if (decoded === '.' || decoded === '..' || decoded.includes('/') || decoded.includes('\\')) {
-    throw new StaticExportError([
-      staticExportDiagnostic(
-        `/c/${segment}`,
-        `FW229 static export refused unsafe client module path segment '${segment}'.`,
-      ),
-    ]);
-  }
-
-  return decoded;
-}
-
 function staticExportAssetHeaders(asset: StaticExportAssetInput): Headers {
   const headers = new Headers(asset.headers);
   if (asset.contentType !== undefined) headers.set('content-type', asset.contentType);
@@ -365,51 +290,4 @@ function staticExportAssetHeaders(asset: StaticExportAssetInput): Headers {
 
 function staticExportSourcePath(source: string | URL): string {
   return source instanceof URL ? fileURLToPath(source) : source;
-}
-
-function staticExportAssetTargetPath(root: string, assetPath: string): string {
-  const segments = assetPath.split('/').filter(Boolean).map(decodeStaticExportAssetPathSegment);
-  if (segments.length === 0) {
-    throw new StaticExportError([
-      staticExportDiagnostic(
-        assetPath,
-        `FW229 static export refused static asset '${assetPath}' because it does not name an output file.`,
-      ),
-    ]);
-  }
-
-  const targetPath = path.resolve(root, ...segments);
-  if (targetPath === root || targetPath.startsWith(`${root}${path.sep}`)) return targetPath;
-
-  throw new StaticExportError([
-    staticExportDiagnostic(
-      assetPath,
-      `FW229 static export refused to write static asset '${assetPath}' outside the configured output directory.`,
-    ),
-  ]);
-}
-
-function decodeStaticExportAssetPathSegment(segment: string): string {
-  let decoded: string;
-  try {
-    decoded = decodeURIComponent(segment);
-  } catch {
-    throw new StaticExportError([
-      staticExportDiagnostic(
-        segment,
-        `FW229 static export cannot write static asset path segment '${segment}' because it is not valid URL encoding.`,
-      ),
-    ]);
-  }
-
-  if (decoded === '.' || decoded === '..' || decoded.includes('/') || decoded.includes('\\')) {
-    throw new StaticExportError([
-      staticExportDiagnostic(
-        segment,
-        `FW229 static export refused unsafe static asset path segment '${segment}'.`,
-      ),
-    ]);
-  }
-
-  return decoded;
 }

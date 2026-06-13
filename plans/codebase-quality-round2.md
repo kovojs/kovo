@@ -153,15 +153,16 @@ Latest evidence:
 
 ## Phase 5 - Server And App Shell
 
-Current state: static export output, asset planning, Vite build output, request construction,
-document/client-module replay, app request document assembly, mutation request handling, and SPEC
-§9.5 dispatch branches have been split into focused modules. The create-jiso starter imports
-app-shell dev/export/static-export helpers from public subpaths and includes a static preview task
-that serves exported `dist` output without Vite source fallback. Vite app-shell build output now
-returns the same compiled `/c/` module output plan that its staged writer commits, giving plugin
-`onBuild` consumers one observable target plan for build/static-export adoption. Vite plugin
-`writeBundle` build/static-export execution now lives in a focused helper exported from the public
-app-shell Vite subpath, leaving the plugin module focused on middleware and hook delegation.
+Current state: static export output target planning, output staging, asset planning, Vite build
+output, request construction, document/client-module replay, app request document assembly,
+mutation request handling, and SPEC §9.5 dispatch branches have been split into focused modules.
+The create-jiso starter imports app-shell dev/export/static-export helpers from public subpaths and
+includes a static preview task that serves exported `dist` output without Vite source fallback.
+Vite app-shell build output now returns the same compiled `/c/` module output plan that its staged
+writer commits, giving plugin `onBuild` consumers one observable target plan for build/static-export
+adoption. Vite plugin `writeBundle` build/static-export execution now lives in a focused helper
+exported from the public app-shell Vite subpath, leaving the plugin module focused on middleware
+and hook delegation.
 
 - [ ] Continue subtractive extraction until `packages/server/src/index.ts`, Vite, static export,
       replay, document, and app boundaries are small and obvious.
@@ -177,6 +178,11 @@ Latest evidence:
 - `pnpm exec vitest --run packages/server/src/vite-build.test.ts packages/server/src/vite.test.ts`
 - `pnpm exec tsc --noEmit --pretty false`
 - `pnpm exec vp check packages/server/src/vite-client-module-output.ts packages/server/src/vite-build-output.ts packages/server/src/api/app-shell/vite.ts packages/server/src/vite-build.test.ts packages/server/src/vite.test.ts plans/app-shell.md plans/codebase-quality-round2.md`
+- `git diff --check`
+- `pnpm exec vitest --run packages/server/src/static-export-output-targets.test.ts packages/server/src/static-export-output.test.ts`
+- `pnpm exec vitest --run packages/server/src/static-export-output-targets.test.ts packages/server/src/static-export-output.test.ts packages/server/src/static-export.test.ts`
+- `pnpm exec tsc --noEmit --pretty false`
+- `pnpm exec vp check packages/server/src/static-export-output-targets.ts packages/server/src/static-export-output-targets.test.ts packages/server/src/static-export-output.ts packages/server/src/static-export-output.test.ts packages/server/src/static-export.ts IMPLEMENT_v1.md plans/app-shell.md plans/codebase-quality-round2.md`
 - `git diff --check`
 - `pnpm exec vitest --run packages/server/src`
 - `pnpm exec vitest --run packages/create-jiso/src/index.test.ts`
