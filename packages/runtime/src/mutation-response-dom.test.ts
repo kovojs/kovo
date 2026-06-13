@@ -11,6 +11,11 @@ import {
 } from './runtime-test-fakes.js';
 import { readMutationResponseBodyChunks } from './wire-parser.js';
 
+// @ts-expect-error SPEC.md §9.1: mutation response DOM parsing returns the
+// root-aware decoded runtime result type instead of the old compatibility name.
+// eslint-disable-next-line no-unused-vars -- compile-time removal assertion only.
+type RemovedMutationDomResult = import('./mutation-response-dom.js').AppliedMutationResponseToDom;
+
 describe('mutation response DOM apply', () => {
   it('keeps store-only and DOM apply on the same keyed query path', () => {
     const storeOnly = createQueryStore();

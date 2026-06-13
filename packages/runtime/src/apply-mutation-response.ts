@@ -24,14 +24,14 @@ export interface ApplyMutationResponseChunksToRuntimeOptions {
   store: QueryStore;
 }
 
-export type AppliedMutationResponseToDom = AppliedMutationResponse & {
+export type AppliedMutationResponseWithRoot = AppliedMutationResponse & {
   appliedFragments: string[];
 };
 
 export function applyMutationResponseChunksToRuntime(
   chunks: MutationResponseBodyChunks,
   options: ApplyMutationResponseChunksToRuntimeOptions & { root: MorphRoot },
-): AppliedMutationResponseToDom;
+): AppliedMutationResponseWithRoot;
 export function applyMutationResponseChunksToRuntime(
   chunks: MutationResponseBodyChunks,
   options: ApplyMutationResponseChunksToRuntimeOptions & { root?: undefined },
@@ -39,11 +39,11 @@ export function applyMutationResponseChunksToRuntime(
 export function applyMutationResponseChunksToRuntime(
   chunks: MutationResponseBodyChunks,
   options: ApplyMutationResponseChunksToRuntimeOptions,
-): AppliedMutationResponse | AppliedMutationResponseToDom;
+): AppliedMutationResponse | AppliedMutationResponseWithRoot;
 export function applyMutationResponseChunksToRuntime(
   chunks: MutationResponseBodyChunks,
   options: ApplyMutationResponseChunksToRuntimeOptions,
-): AppliedMutationResponse | AppliedMutationResponseToDom {
+): AppliedMutationResponse | AppliedMutationResponseWithRoot {
   // SPEC.md §9.1: mutation, deferred, broadcast, and typed-read responses all
   // converge here after their transport-specific parser has decoded wire chunks.
   options.beforeApplyQueries?.(chunks.queries);

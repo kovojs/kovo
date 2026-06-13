@@ -4,12 +4,12 @@ import { deferredStreamChunks, readMutationResponseBodyChunks } from './wire-par
 import {
   applyMutationResponseChunksToRuntime,
   type AppliedMutationResponse,
-  type AppliedMutationResponseToDom,
+  type AppliedMutationResponseWithRoot,
   type ApplyMutationResponseChunksToRuntimeOptions,
 } from './apply-mutation-response.js';
 
-export type AppliedDeferredStreamResponseWithRoot = AppliedMutationResponseToDom & {
-  chunks: AppliedMutationResponseToDom[];
+export type AppliedDeferredStreamResponseWithRoot = AppliedMutationResponseWithRoot & {
+  chunks: AppliedMutationResponseWithRoot[];
 };
 
 export type AppliedDeferredStreamResponseToRuntime =

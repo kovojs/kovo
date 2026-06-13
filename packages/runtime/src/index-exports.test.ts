@@ -61,6 +61,10 @@ import { refetchQueries } from './query-refetch.js';
 import { createQueryStore } from './query-store.js';
 import { derive } from './derive.js';
 
+// @ts-expect-error SPEC.md §9.1: rooted decoded apply results use the root-aware runtime name.
+// eslint-disable-next-line no-unused-vars -- compile-time removal assertion only.
+type RemovedMutationDomResult = import('./index.js').AppliedMutationResponseToDom;
+
 describe('runtime root exports', () => {
   it('exports loader and handler modules directly from their canonical implementations', () => {
     // SPEC.md §4.4/§4.7: the public runtime loader surface composes the same
@@ -122,6 +126,7 @@ describe('runtime root exports', () => {
     expect(Object.hasOwn(runtime, 'applyMutationResponseChunksToRuntime')).toBe(false);
     expect(Object.hasOwn(runtime, 'applyMutationResponseToStore')).toBe(false);
     expect(Object.hasOwn(runtime, 'applyMutationResponseToRuntime')).toBe(false);
+    expect(Object.hasOwn(runtime, 'AppliedMutationResponseToDom')).toBe(false);
   });
 
   it('exports query modules directly from their split implementations', () => {

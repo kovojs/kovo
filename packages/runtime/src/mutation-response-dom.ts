@@ -1,6 +1,6 @@
 import {
   applyMutationResponseChunksToRuntime,
-  type AppliedMutationResponseToDom,
+  type AppliedMutationResponseWithRoot,
   type ApplyMutationResponseChunksToRuntimeOptions,
 } from './apply-mutation-response.js';
 import type { MorphRoot } from './morph.js';
@@ -11,11 +11,9 @@ export interface ApplyMutationResponseToDomOptions extends ApplyMutationResponse
   root: MorphRoot;
 }
 
-export type { AppliedMutationResponseToDom };
-
 export function applyMutationResponseToDom(
   options: ApplyMutationResponseToDomOptions,
-): AppliedMutationResponseToDom {
+): AppliedMutationResponseWithRoot {
   // SPEC.md §9.1: DOM mutation responses parse transport bodies before
   // entering the shared decoded query/fragment runtime apply primitive.
   const { body, ...applyOptions } = options;

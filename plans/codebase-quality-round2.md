@@ -945,6 +945,9 @@ lives in `packages/runtime/src/mutation-response-dom.browser.test.ts`.
 Deferred stream runtime result types no longer carry the old `*ToDom` compatibility name; rooted
 stream apply is named as root-aware runtime apply, while rootless stream parsing/apply coverage now
 lives in its own focused owner suite.
+Mutation response decoded runtime apply now uses `AppliedMutationResponseWithRoot` for root-aware
+results, so deferred stream aggregation and DOM response parsing no longer depend on the old
+`AppliedMutationResponseToDom` compatibility type/export.
 
 - [x] Normalize canonical query instance wire identities at the shared runtime parser boundary.
       Evidence 2026-06-13 round276: `packages/runtime/src/wire-parser.ts` now decodes
@@ -968,6 +971,17 @@ packages/runtime/src/query-hydration.browser.test.ts`, and
       `pnpm --filter @jiso/runtime run check:inline-loader`. Formatting/lint/type evidence:
       targeted `pnpm exec vp check`, `pnpm exec tsc --noEmit --pretty false`, and
       `git diff --check`.
+      Evidence 2026-06-13 round281: `packages/runtime/src/apply-mutation-response.ts` renamed the
+      rooted decoded apply result to `AppliedMutationResponseWithRoot`, and
+      `packages/runtime/src/mutation-response-dom.ts`, `packages/runtime/src/apply-deferred-stream.ts`,
+      and `packages/runtime/src/index.ts` no longer re-export or consume
+      `AppliedMutationResponseToDom`. Verified by focused runtime tests `pnpm exec vitest --run
+packages/runtime/src/mutation-response-dom.test.ts
+packages/runtime/src/mutation-response-apply.test.ts
+packages/runtime/src/apply-deferred-stream.test.ts
+packages/runtime/src/apply-deferred-stream-rootless.test.ts
+packages/runtime/src/index-exports.test.ts` and TypeScript
+      `pnpm exec tsc --noEmit --pretty false`.
 - [x] Keep inline-loader readable/minified output mechanically tied to canonical parser helpers.
       Evidence 2026-06-13: `packages/runtime/src/inline-loader-build.ts` generates
       `inlineJisoLoaderInstallerReadableSource` through
