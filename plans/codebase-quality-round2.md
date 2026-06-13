@@ -358,6 +358,18 @@ packages/runtime/src/loader-disposal.test.ts
 packages/runtime/src/delegated-runtime-integration.test.ts` and `pnpm exec vitest --run
 packages/runtime/src/pending.test.ts packages/runtime/src/mutation-submit.test.ts
 packages/runtime/src/mutation-optimistic.test.ts`.
+      Evidence 2026-06-13: duplicate local loader root/element/form fakes were deleted from
+      `packages/runtime/src/loader.test.ts`, `packages/runtime/src/loader-lifecycle.test.ts`, and
+      `packages/runtime/src/mutation-form.test.ts`; shared
+      `packages/runtime/src/runtime-test-fakes.ts` now owns default empty elements, exact-optional
+      form method typing, progress children, and native-submit state for loader/form helper suites.
+      Verified by `pnpm exec vitest --run packages/runtime/src/loader.test.ts
+packages/runtime/src/loader-lifecycle.test.ts packages/runtime/src/mutation-form.test.ts
+packages/runtime/src/loader-enhanced-mutation.test.ts
+packages/runtime/src/delegated-runtime-integration.test.ts` and `pnpm exec vp check
+packages/runtime/src/runtime-test-fakes.ts packages/runtime/src/loader.test.ts
+packages/runtime/src/loader-lifecycle.test.ts packages/runtime/src/mutation-form.test.ts
+plans/codebase-quality-round2.md`.
 - [x] Split browser query hydration and inline query-event coverage out of
       `packages/runtime/src/index.browser.test.ts`.
       Evidence: `packages/runtime/src/query-hydration.browser.test.ts` covers inserted

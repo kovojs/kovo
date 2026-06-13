@@ -39,7 +39,7 @@ export interface QueryScript {
 export class FakeElement implements EventElementLike {
   attributes: { name: string; value: string }[];
 
-  constructor(attributes: Record<string, string>) {
+  constructor(attributes: Record<string, string> = {}) {
     this.attributes = Object.entries(attributes).map(([name, value]) => ({ name, value }));
   }
 
@@ -68,17 +68,24 @@ export class FakeElement implements EventElementLike {
 
 export class FakeFormElement extends FakeElement {
   action: string;
-  method: string | undefined;
+  method?: string;
   progressElements: FakeElement[] = [];
+  submitted = false;
 
   constructor(attributes: Record<string, string>, options: { action: string; method?: string }) {
     super(attributes);
     this.action = options.action;
-    this.method = options.method;
+    if (options.method !== undefined) {
+      this.method = options.method;
+    }
   }
 
   querySelectorAll(selector: string): Iterable<FakeElement> {
     return selector === '[fw-upload-progress]' ? this.progressElements : [];
+  }
+
+  submit(): void {
+    this.submitted = true;
   }
 }
 

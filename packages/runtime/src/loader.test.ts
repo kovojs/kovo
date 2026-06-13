@@ -1,56 +1,8 @@
 import { describe, expect, it, vi } from 'vitest';
 
-import type { DelegatedEvent, EventElementLike } from './events.js';
 import { installJisoLoader as installJisoLoaderFromBarrel } from './index.js';
 import { installJisoLoader } from './loader.js';
-import type { LoaderRoot } from './loader-lifecycle.js';
-
-class FakeRoot implements LoaderRoot {
-  readonly listeners = new Map<string, (event: DelegatedEvent) => void | Promise<void>>();
-
-  addEventListener(
-    type: string,
-    listener: (event: DelegatedEvent) => void | Promise<void>,
-    _options?: { capture?: boolean },
-  ): void {
-    this.listeners.set(type, listener);
-  }
-
-  removeEventListener(
-    type: string,
-    listener: (event: DelegatedEvent) => void | Promise<void>,
-    _options?: { capture?: boolean },
-  ): void {
-    if (this.listeners.get(type) === listener) {
-      this.listeners.delete(type);
-    }
-  }
-
-  querySelectorAll(): Iterable<EventElementLike> {
-    return [];
-  }
-}
-
-class FakeElement implements EventElementLike {
-  readonly attributes: { name: string; value: string }[];
-
-  constructor(private readonly attrs: Record<string, string>) {
-    this.attributes = Object.entries(attrs).map(([name, value]) => ({ name, value }));
-  }
-
-  closest(selector: string): FakeElement | null {
-    const delegated = /^\[on\\:(.+)\]$/.exec(selector)?.[1];
-    return delegated && this.attrs[`on:${delegated}`] ? this : null;
-  }
-
-  getAttribute(name: string): string | null {
-    return this.attrs[name] ?? null;
-  }
-
-  setAttribute(name: string, value: string): void {
-    this.attrs[name] = value;
-  }
-}
+import { FakeElement, FakeRoot } from './runtime-test-fakes.js';
 
 describe('runtime loader module', () => {
   it('keeps the barrel export wired to the extracted loader owner', async () => {

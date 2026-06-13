@@ -2,38 +2,11 @@ import { describe, expect, it, vi } from 'vitest';
 
 import {
   closestEnhancedMutationForm,
-  enhancedMutationFormSelector,
   fallbackEnhancedMutationSubmit,
   isEnhancedForm,
   updateUploadProgressElements,
 } from './mutation-form.js';
-
-class FakeElement {
-  action = '/_m/cart/add';
-  readonly children: FakeElement[] = [];
-
-  constructor(private readonly attrs: Record<string, string | null> = {}) {}
-
-  closest(selector: string): FakeElement | null {
-    return selector === enhancedMutationFormSelector ? this : null;
-  }
-
-  getAttribute(name: string): string | null {
-    return this.attrs[name] ?? null;
-  }
-
-  querySelectorAll(selector: string): Iterable<FakeElement> {
-    return selector === '[fw-upload-progress]' ? this.children : [];
-  }
-
-  removeAttribute(name: string): void {
-    delete this.attrs[name];
-  }
-
-  setAttribute(name: string, value: string): void {
-    this.attrs[name] = value;
-  }
-}
+import { FakeElement, FakeFormElement } from './runtime-test-fakes.js';
 
 describe('enhanced mutation form helpers', () => {
   it('resolves only declared enhanced mutation forms from the shared selector', () => {
@@ -51,22 +24,27 @@ describe('enhanced mutation form helpers', () => {
 
   it('falls back to native submit or visible form error attributes', () => {
     const submit = vi.fn();
-    const nativeForm = new FakeElement({ 'data-mutation': 'cart/add' });
+    const nativeForm = new FakeFormElement(
+      { 'data-mutation': 'cart/add' },
+      { action: '/_m/cart/add' },
+    );
     Object.assign(nativeForm, { submit });
 
     fallbackEnhancedMutationSubmit(nativeForm);
     expect(submit).toHaveBeenCalledTimes(1);
 
-    const syntheticForm = new FakeElement({ 'data-mutation': 'cart/add' });
+    const syntheticForm = Object.assign(new FakeElement({ 'data-mutation': 'cart/add' }), {
+      action: '/_m/cart/add',
+    });
     fallbackEnhancedMutationSubmit(syntheticForm);
     expect(syntheticForm.getAttribute('data-error-code')).toBe('NETWORK_ERROR');
     expect(syntheticForm.getAttribute('fw-error')).toBe('');
   });
 
   it('stamps upload progress without preserving stale indeterminate values', () => {
-    const form = new FakeElement({ 'data-mutation': 'cart/add' });
+    const form = new FakeFormElement({ 'data-mutation': 'cart/add' }, { action: '/_m/cart/add' });
     const progress = new FakeElement({ value: '0' });
-    form.children.push(progress);
+    form.progressElements.push(progress);
 
     updateUploadProgressElements(form, { loaded: 4, total: 8 });
     expect(progress.getAttribute('max')).toBe('100');

@@ -1,6 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
 
-import type { DelegatedEvent, EventElementLike } from './events.js';
 import { createIslandSignalScope } from './handler-context.js';
 import {
   addLoaderListener,
@@ -8,87 +7,7 @@ import {
   installExecutionTriggers,
 } from './loader-lifecycle.js';
 import { createQueryStore } from './query-store.js';
-
-class FakeRoot {
-  listeners = new Map<string, (event: DelegatedEvent) => void | Promise<void>>();
-  elements = new Map<string, FakeElement[]>();
-
-  addEventListener(
-    type: string,
-    listener: (event: DelegatedEvent) => void | Promise<void>,
-    _options?: { capture?: boolean },
-  ): void {
-    this.listeners.set(type, listener);
-  }
-
-  removeEventListener(
-    type: string,
-    listener: (event: DelegatedEvent) => void | Promise<void>,
-    _options?: { capture?: boolean },
-  ): void {
-    if (this.listeners.get(type) === listener) {
-      this.listeners.delete(type);
-    }
-  }
-
-  querySelectorAll(selector: string): Iterable<FakeElement> {
-    return this.elements.get(selector) ?? [];
-  }
-
-  findFragmentTarget(_target: string): null {
-    return null;
-  }
-}
-
-class FakeElement implements EventElementLike {
-  readonly attributes: { name: string; value: string }[];
-  readonly action: string;
-  readonly method?: string;
-  submitted = false;
-
-  constructor(private readonly attrs: Record<string, string>) {
-    this.attributes = Object.entries(attrs).map(([name, value]) => ({ name, value }));
-    this.action = attrs.action ?? '/_m/test';
-    if (attrs.method !== undefined) {
-      this.method = attrs.method;
-    }
-  }
-
-  get id(): string | undefined {
-    return this.attrs.id;
-  }
-
-  closest(selector: string): FakeElement | null {
-    const trigger = /^\[on\\:(.+)\]$/.exec(selector)?.[1];
-    if (trigger && Object.hasOwn(this.attrs, `on:${trigger}`)) return this;
-    if (
-      selector === 'form[enhance],form[data-enhance],form[data-mutation]' &&
-      (this.getAttribute('enhance') !== null ||
-        this.getAttribute('data-enhance') !== null ||
-        this.getAttribute('data-mutation') !== null)
-    ) {
-      return this;
-    }
-
-    return null;
-  }
-
-  getAttribute(name: string): string | null {
-    return this.attrs[name] ?? null;
-  }
-
-  querySelectorAll(): Iterable<FakeElement> {
-    return [];
-  }
-
-  setAttribute(name: string, value: string): void {
-    this.attrs[name] = value;
-  }
-
-  submit(): void {
-    this.submitted = true;
-  }
-}
+import { FakeElement, FakeFormElement, FakeRoot } from './runtime-test-fakes.js';
 
 describe('loader lifecycle', () => {
   it('registers loader listeners with matching disposer options', () => {
@@ -132,12 +51,16 @@ describe('loader lifecycle', () => {
   it('intercepts enhanced submits without falling through to delegated handlers', async () => {
     // SPEC.md section 9.1: enhanced mutations own submitted forms before normal on:* dispatch.
     const root = new FakeRoot();
-    const form = new FakeElement({
-      action: '/_m/cart/add',
-      enhance: '',
-      method: 'post',
-      'on:submit': '/c/cart.js#submit',
-    });
+    const form = new FakeFormElement(
+      {
+        enhance: '',
+        'on:submit': '/c/cart.js#submit',
+      },
+      {
+        action: '/_m/cart/add',
+        method: 'post',
+      },
+    );
     const fetchError = new Error('offline');
     const fetch = vi.fn(async () => {
       throw fetchError;
