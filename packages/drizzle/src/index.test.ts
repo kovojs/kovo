@@ -10162,11 +10162,38 @@ export interface CommerceInvalidationSets {
             via: 'products',
           },
         ],
-        unresolved: [],
+        unresolved: [
+          {
+            code: 'FW406',
+            message: 'Statically un-analyzable write site; manual touches required.',
+            site: 'product.domain.ts:17',
+          },
+          {
+            code: 'FW406',
+            message: 'Statically un-analyzable write site; manual touches required.',
+            site: 'product.domain.ts:18',
+          },
+        ],
       },
     });
     expect(extractQueryFactsFromProject({ files })).toEqual([
       {
+        diagnostics: [
+          {
+            code: 'FW406',
+            message:
+              'Statically un-analyzable write site; manual touches required. Query uses project Drizzle receiver container surface readerRest.select().',
+            severity: 'warn',
+            site: 'product.domain.ts:22',
+          },
+          {
+            code: 'FW406',
+            message:
+              'Statically un-analyzable write site; manual touches required. Query uses project Drizzle receiver container surface objectRest.select().',
+            severity: 'warn',
+            site: 'product.domain.ts:22',
+          },
+        ],
         query: 'product/rest-receiver',
         reads: ['product'],
         shape: {

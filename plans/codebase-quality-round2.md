@@ -460,6 +460,16 @@ Latest evidence:
   initializers through ts-morph branch symbols, over-approximates resolved write/read branches,
   and keeps opaque sibling branches visible as FW406 per SPEC §11.1; package tests and
   `conformance/drizzle-pin/src/index.test.ts` prove the behavior against real Drizzle imports.
+- Phase 3 Drizzle project receiver-container surface slice:
+  `pnpm exec vitest --run packages/drizzle/src/index.test.ts conformance/drizzle-pin/src/index.test.ts`;
+  `pnpm exec tsc --noEmit --pretty false`;
+  `pnpm exec vp check packages/drizzle/src/static.ts packages/drizzle/src/index.test.ts conformance/drizzle-pin/src/index.test.ts plans/codebase-quality-round2.md`;
+  `git diff --check`.
+  Evidence: `packages/drizzle/src/static.ts` now degrades direct project-mode calls on typed
+  containers that contain a pinned Postgres Drizzle receiver to FW406 instead of treating rest
+  containers as empty; `packages/drizzle/src/index.test.ts` and
+  `conformance/drizzle-pin/src/index.test.ts` prove rest-container write/query surfaces degrade
+  while exact member/index receiver access still contributes table facts per SPEC §11.1.
 - Phase 1/6/7 commerce graph behavior fixture slice:
   `pnpm exec vitest --run packages/test/src/graph-fixtures.test.ts packages/test/src/package-exports.test.ts`;
   `pnpm exec vitest --run examples/commerce/src/source-truth.test.ts --testNamePattern "answers the full commerce mutation-query matrix"`;

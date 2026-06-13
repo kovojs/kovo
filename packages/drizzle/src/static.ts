@@ -1397,6 +1397,7 @@ function extractProjectUnresolvedCalls(
       (node) => isProjectDrizzleReceiverIdentifier(node, receivers),
     ),
     ...extractProjectUnclassifiedDrizzleReceiverCalls(body, receivers),
+    ...extractProjectDrizzleReceiverContainerCalls(body),
   ];
 }
 
@@ -1457,6 +1458,29 @@ function extractProjectUnclassifiedDrizzleReceiverCalls(
   }
 
   return calls;
+}
+
+function extractProjectDrizzleReceiverContainerCalls(body: Node): ExternalDbArgumentCall[] {
+  const calls: ExternalDbArgumentCall[] = [];
+  const bodyStart = bodySourceStart(body);
+
+  for (const call of touchBodyCallExpressions(body)) {
+    const surface = directDrizzleReceiverCallSurface(call);
+    if (!surface) continue;
+    if (!isProjectDrizzleReceiverContainerCallReceiver(surface.receiver)) continue;
+
+    calls.push({ index: call.getStart() - bodyStart, name: surface.name });
+  }
+
+  return calls;
+}
+
+function isProjectDrizzleReceiverContainerCallReceiver(node: Node): boolean {
+  // SPEC §11.1: project-mode containers that merely contain a Drizzle receiver are opaque
+  // surfaces. Exact facts require a proven receiver member such as `context.db`.
+  if (isProjectDrizzleReceiverMemberExpression(node)) return false;
+  if (isDrizzleReceiver(node)) return false;
+  return isProjectDrizzleReceiverContainerExpression(node);
 }
 
 function projectUnclassifiedCallSurface(
@@ -2804,6 +2828,7 @@ function extractQueryDefinitionsFromSourceFile(
       ...unresolvedQueryCallbackDiagnostics(bodyObject, receiverMode),
       ...relationalQueryDiagnostics(bodyObject, receiverReferences),
       ...unclassifiedQueryReceiverDiagnostics(bodyObject, receiverReferences),
+      ...projectQueryReceiverContainerDiagnostics(bodyObject, receiverReferences),
       ...receiverMethodAliasQueryDiagnostics(bodyObject, receiverReferences),
       ...externalQueryHelperDiagnostics(bodyObject, receiverReferences, localFunctionKeys),
       ...opaqueLocalQueryHelperDiagnostics(bodyObject, receiverReferences, localFunctionsByKey),
@@ -3091,6 +3116,36 @@ function unclassifiedQueryReceiverDiagnostics(
       {
         code: 'FW406' as const,
         message: `${diagnosticDefinitions.FW406.message} Query uses unclassified Drizzle receiver call ${surface.displayName ?? `${surface.receiver.getText()}.${surface.name}`}().`,
+        severity: diagnosticDefinitions.FW406.severity,
+        site: '',
+      },
+    ];
+  });
+}
+
+function projectQueryReceiverContainerDiagnostics(
+  body: ObjectLiteralExpression,
+  receiverReferences: QueryReceiverReferences,
+): TouchGraphDiagnostic[] {
+  if (receiverReferences.projectContainers !== true) return [];
+
+  return queryBodyCallExpressions(body, 'project', (call) => {
+    if (
+      boundReceiverMethodAccessName(call, (node) =>
+        isQueryReceiverIdentifier(node, receiverReferences),
+      )
+    ) {
+      return [];
+    }
+
+    const surface = directDrizzleReceiverCallSurface(call);
+    if (!surface) return [];
+    if (!isProjectDrizzleReceiverContainerCallReceiver(surface.receiver)) return [];
+
+    return [
+      {
+        code: 'FW406' as const,
+        message: `${diagnosticDefinitions.FW406.message} Query uses project Drizzle receiver container surface ${surface.receiver.getText()}.${surface.name}().`,
         severity: diagnosticDefinitions.FW406.severity,
         site: '',
       },
