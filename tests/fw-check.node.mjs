@@ -86,14 +86,14 @@ import {
   executeGeneratedClientModule,
   executeInlineEnhancedFormLoaderFixture,
   assertGeneratedRegistryConsumerTypes,
+  generatedBootstrapDeferredBehaviorFact,
   generatedClientExportTypeFacts,
+  generatedQueryUpdatePlanBehaviorFact,
+  generatedServerDeferredBehaviorFact,
+  generatedWireDeferredBehaviorFact,
   generatedArtifactSource,
   generatedRegistryInterfaceMemberTypes,
   generatedRenderedElementFactsFromArtifact,
-  GeneratedFixtureElement,
-  GeneratedFixtureMorphRoot,
-  GeneratedFixtureMorphTarget,
-  GeneratedFixtureTemplateStampHost,
 } from '../packages/test/src/generated-module-fixtures.ts';
 import {
   graphComponentTargetFacts,
@@ -108,10 +108,8 @@ import {
 } from '../packages/test/src/graph-fixtures.ts';
 import {
   fwQueryFacts,
-  fwResponseBodyFact,
   htmlDocumentRegions,
   htmlElementFacts,
-  htmlLinkHrefs,
 } from '../packages/test/src/html-fragment.ts';
 import {
   markdownBoldSectionHeadings,
@@ -5198,16 +5196,19 @@ export const CartBadge = component('cart-badge', {
           itemBindingPlaceholders: [
             {
               path: '.name',
+              readPath: 'name',
               value: 'Item',
             },
             {
               path: '.qty',
+              readPath: 'qty',
               value: '0',
             },
           ],
           itemBindings: ['.name', '.qty'],
           key: 'productId',
           list: 'cart.items',
+          listReadPath: 'items',
           selector: '[data-bind-list="cart.items"]',
           template:
             '<li><span data-bind=".qty">0</span> x <span data-bind=".name">Item</span></li>',
@@ -5216,160 +5217,66 @@ export const CartBadge = component('cart-badge', {
     },
   ]);
 
-  const clientExports = executeGeneratedClientArtifact(compiled.files, {
-    runtime: generatedModuleRuntime,
-  });
-  const countBinding = new GeneratedFixtureElement(
-    { 'data-bind': 'cart.count' },
-    { textContent: '0' },
-  );
-  const emptyButton = new GeneratedFixtureElement({
-    'data-bind:hidden': 'cart.empty',
-    hidden: 'true',
-  });
-  const namedDerive = new GeneratedFixtureElement(
-    { 'data-derive': 'cart.CartBadge$isEmpty' },
-    { textContent: 'true' },
-  );
-  const disabledStamp = new GeneratedFixtureElement({
-    'data-derive': 'cart.CartBadge$button_disabled_derive',
-    disabled: 'true',
-  });
-  const itemStamp = new GeneratedFixtureTemplateStampHost({ 'data-bind-list': 'cart.items' });
-  const compiledRoot = new GeneratedFixtureMorphRoot();
-  compiledRoot.bindings.push(countBinding);
-  compiledRoot.elements.push(emptyButton, namedDerive, disabledStamp, itemStamp);
-
   assert.deepEqual(
-    clientExports.CartBadge$queryUpdatePlans.cart(compiledRoot, {
-      count: 2,
-      empty: false,
-      items: [
-        { name: 'Coffee', productId: 'p1', qty: 1 },
-        { name: 'Tea', productId: 'p2', qty: 3 },
-      ],
+    generatedQueryUpdatePlanBehaviorFact(compiled.files, {
+      applyCompiledQueryUpdatePlan,
+      executeClientArtifact: executeGeneratedClientArtifact,
+      runtime: generatedModuleRuntime,
     }),
     {
-      bindings: ['cart.count', 'cart.empty'],
-      derives: ['CartBadge$isEmpty'],
-      stamps: ['disabled'],
-      templateStamps: ['[data-bind-list="cart.items"]'],
+      appliedPlan: {
+        bindings: ['cart.count', 'cart.empty'],
+        derives: ['CartBadge$isEmpty'],
+        stamps: ['disabled'],
+        templateStamps: ['[data-bind-list="cart.items"]'],
+      },
+      bindingText: '2',
+      booleanAttributes: {
+        disabled: 'false',
+        hidden: 'false',
+      },
+      deriveText: 'false',
+      orderedApply: {
+        order: ['derive-after-binding:6', 'stamp-after-derive:items:1'],
+        stampValue: 'true',
+      },
+      templateItems: [
+        {
+          html: '<li><span data-bind=".qty">1</span> x <span data-bind=".name">Coffee</span></li>',
+          key: 'p1',
+        },
+        {
+          html: '<li><span data-bind=".qty">3</span> x <span data-bind=".name">Tea</span></li>',
+          key: 'p2',
+        },
+      ],
     },
   );
-  assert.equal(countBinding.textContent, '2');
-  assert.equal(emptyButton.getAttribute('hidden'), 'false');
-  assert.equal(namedDerive.textContent, 'false');
-  assert.equal(disabledStamp.getAttribute('disabled'), 'false');
+
   assert.deepEqual(
-    itemStamp.items.map(({ html, key }) => ({ html, key })),
-    [
+    generatedBootstrapDeferredBehaviorFact(
+      compiled.files,
       {
-        html: '<li><span data-bind=".qty">1</span> x <span data-bind=".name">Coffee</span></li>',
-        key: 'p1',
+        emitQueryPlanBootstrapModule,
+        executeBootstrapModule: executeGeneratedBootstrapModule,
+        executeClientArtifact: executeGeneratedClientArtifact,
+        runtime: generatedModuleRuntime,
       },
-      {
-        html: '<li><span data-bind=".qty">3</span> x <span data-bind=".name">Tea</span></li>',
-        key: 'p2',
+      generatedBootstrapRuntime,
+    ),
+    {
+      appliedFragments: ['cart-badge'],
+      bootstrapCallCount: 1,
+      deferredApplicationCount: 0,
+      enhancedMutationStoreMatches: true,
+      fragmentHtmlByTarget: {
+        'cart-badge': '<cart-badge><span data-bind="cart.count">9</span></cart-badge>',
       },
-    ],
-  );
-
-  const order = [];
-  const orderedRoot = new GeneratedFixtureMorphRoot();
-  const orderedBinding = new GeneratedFixtureElement(
-    { 'data-bind': 'cart.count' },
-    { textContent: 'stale' },
-  );
-  const orderedDerive = new GeneratedFixtureElement(
-    { 'data-derive': 'cart.summary' },
-    { textContent: 'stale' },
-  );
-  const orderedStamp = new GeneratedFixtureElement({ 'data-derive': 'cart.disabled' });
-  orderedRoot.bindings.push(orderedBinding);
-  orderedRoot.elements.push(orderedDerive, orderedStamp);
-  applyCompiledQueryUpdatePlan(
-    orderedRoot,
-    'cart',
-    { count: 6, disabled: true, items: [1] },
-    {
-      derives: [
-        {
-          name: 'summary',
-          select(value) {
-            order.push(`derive-after-binding:${orderedBinding.textContent}`);
-            return `items:${value.items.length}`;
-          },
-          selector: '[data-derive="cart.summary"]',
-        },
-      ],
-      stamps: [
-        {
-          attr: 'disabled',
-          select(value) {
-            order.push(`stamp-after-derive:${orderedDerive.textContent}`);
-            return value.disabled;
-          },
-          selector: '[data-derive="cart.disabled"]',
-        },
-      ],
-    },
-  );
-  assert.deepEqual(order, ['derive-after-binding:6', 'stamp-after-derive:items:1']);
-  assert.equal(orderedStamp.getAttribute('disabled'), 'true');
-
-  const bootstrap = emitQueryPlanBootstrapModule([
-    {
-      exportName: 'CartBadge$queryUpdatePlans',
-      importPath: '../components/cart-badge.client.js',
-    },
-  ]);
-  const bootstrapRoot = new GeneratedFixtureMorphRoot();
-  bootstrapRoot.targets.set('cart-badge', new GeneratedFixtureMorphTarget());
-  bootstrapRoot.bindings.push(
-    new GeneratedFixtureElement({ 'data-bind': 'cart.count' }, { textContent: '0' }),
-  );
-  const bootstrapRuntime = executeGeneratedBootstrapModule(
-    bootstrap.source,
-    {
-      '../components/cart-badge.client.js': {
-        CartBadge$queryUpdatePlans: clientExports.CartBadge$queryUpdatePlans,
+      queryPlanStoreMatches: true,
+      updatedBindings: {
+        'cart.count': '9',
       },
     },
-    generatedBootstrapRuntime,
-  );
-  assert.equal(bootstrapRuntime.calls.length, 1);
-  assert.equal(bootstrapRuntime.calls[0].queryStore, bootstrapRuntime.store);
-  assert.equal(
-    bootstrapRuntime.calls[0].enhancedMutations.queryPlans.cart,
-    clientExports.CartBadge$queryUpdatePlans.cart,
-  );
-  assert.equal(bootstrapRuntime.calls[0].enhancedMutations.store, bootstrapRuntime.store);
-  const deferredApplyResult = bootstrapRuntime.deferredApplications.length;
-  assert.equal(deferredApplyResult, 0);
-  const bootstrapApplyRuntime = executeGeneratedBootstrapModule(
-    bootstrap.source,
-    {
-      '../components/cart-badge.client.js': {
-        CartBadge$queryUpdatePlans: clientExports.CartBadge$queryUpdatePlans,
-      },
-    },
-    generatedBootstrapRuntime,
-  );
-  const applyResult = bootstrapApplyRuntime.exports.applyJisoDeferredStreamResponse(
-    [
-      '<!doctype html><main><fw-defer target="cart-badge"></fw-defer></main>',
-      '--jiso-boundary',
-      '<fw-query name="cart">{"count":9,"empty":false,"items":[]}</fw-query>',
-      '<fw-fragment target="cart-badge"><cart-badge><span data-bind="cart.count">9</span></cart-badge></fw-fragment>',
-      '--jiso-boundary--',
-    ].join('\n'),
-    { root: bootstrapRoot },
-  );
-  assert.equal(applyResult.appliedFragments[0], 'cart-badge');
-  assert.equal(bootstrapRoot.bindings[0].textContent, '9');
-  assert.equal(
-    bootstrapRoot.targets.get('cart-badge').html,
-    '<cart-badge><span data-bind="cart.count">9</span></cart-badge>',
   );
 
   assert.deepEqual(
@@ -5389,108 +5296,56 @@ export const CartBadge = component('cart-badge', {
     },
   );
 
-  const serverStream = renderDeferredStream({
-    boundary: 'gate-boundary',
-    chunks: [
-      {
-        fragments: [
+  assert.deepEqual(
+    generatedServerDeferredBehaviorFact({
+      applyDeferredStreamResponseToRuntime,
+      createQueryStore,
+      renderDeferredStream,
+    }),
+    {
+      appliedFragments: ['reviews', 'summary', 'reviews'],
+      chunkFragments: [
+        [{ html: '<article>B</article>', mode: 'append', target: 'reviews' }],
+        [
+          { html: '<section>Replace</section>', target: 'summary' },
           { html: '<article>A</article>', mode: 'append', target: 'reviews' },
-          { html: '<section>Replace</section>', priority: 'high', target: 'summary' },
         ],
-        queries: [{ name: 'reviews', value: { items: ['A'] } }],
-      },
-      {
-        fragments: [{ html: '<article>B</article>', mode: 'append', target: 'reviews' }],
-        priority: 'high',
-        queries: [{ name: 'reviews', value: { items: ['A', 'B'] } }],
-      },
-    ],
-    closeHtml: '',
-    shell: '<!doctype html><main><fw-defer target="reviews"></fw-defer></main>',
-  });
-  const serverRoot = new GeneratedFixtureMorphRoot();
-  serverRoot.targets.set('reviews', new GeneratedFixtureMorphTarget('<article>Initial</article>'));
-  serverRoot.targets.set('summary', new GeneratedFixtureMorphTarget('<section>Old</section>'));
-  const serverStore = createQueryStore();
-  const serverApplied = applyDeferredStreamResponseToRuntime({
-    body: serverStream.body,
-    boundary: 'gate-boundary',
-    root: serverRoot,
-    store: serverStore,
-  });
-  assert.deepEqual(
-    serverApplied.chunks.map((chunk) => chunk.queries),
-    [['reviews'], ['reviews']],
-  );
-  assert.deepEqual(
-    serverApplied.chunks.map((chunk) => chunk.fragments),
-    [
-      [{ html: '<article>B</article>', mode: 'append', target: 'reviews' }],
-      [
-        { html: '<section>Replace</section>', target: 'summary' },
-        { html: '<article>A</article>', mode: 'append', target: 'reviews' },
       ],
-    ],
-  );
-  assert.deepEqual(serverApplied.appliedFragments, ['reviews', 'summary', 'reviews']);
-  assert.deepEqual(serverStore.get('reviews'), { items: ['A'] });
-  assert.equal(
-    serverRoot.targets.get('reviews').html,
-    '<article>Initial</article><article>B</article><article>A</article>',
-  );
-  assert.equal(serverRoot.targets.get('summary').html, '<section>Replace</section>');
-
-  const fixtureBody = parseWireResponses(await readWireFixture('defer-stream.http'))[0].body;
-  const fixtureResponse = fwResponseBodyFact(fixtureBody);
-  const fixtureRoot = new GeneratedFixtureMorphRoot();
-  fixtureRoot.targets.set('reviews:p1', new GeneratedFixtureMorphTarget());
-  fixtureRoot.targets.set('recommendations:p1', new GeneratedFixtureMorphTarget());
-  const fixtureStore = createQueryStore();
-  const fixtureApplied = applyDeferredStreamResponseToRuntime({
-    body: fixtureBody,
-    queryPlans: {
-      reviews(root, value) {
-        return applyCompiledQueryUpdatePlan(root, 'reviews', value, { bindings: true });
+      chunkQueries: [['reviews'], ['reviews']],
+      fragmentHtmlByTarget: {
+        reviews: '<article>Initial</article><article>B</article><article>A</article>',
+        summary: '<section>Replace</section>',
       },
-      recommendations(root, value) {
-        return applyCompiledQueryUpdatePlan(root, 'recommendations', value, { bindings: true });
+      storeValues: {
+        reviews: { items: ['A'] },
       },
     },
-    root: fixtureRoot,
-    store: fixtureStore,
-  });
-  assert.equal(fixtureApplied.chunks.length, 1);
-  const reviewsTargetBlocks = htmlElementFacts(fixtureRoot.targets.get('reviews:p1').html, {
-    tag: 'article',
-  });
-  assert.deepEqual(fixtureResponse.queryNames, ['reviews', 'recommendations']);
-  assert.deepEqual(fixtureResponse.fragmentTargets, ['reviews:p1', 'recommendations:p1']);
-  assert.deepEqual(fixtureResponse.stylesheetHrefsByTarget, {
-    'recommendations:p1': [],
-    'reviews:p1': ['/assets/reviews.css'],
-  });
-  assert.deepEqual(
-    fixtureApplied.chunks[0].fragments.map((fragment) => fragment.target),
-    ['reviews:p1', 'recommendations:p1'],
   );
-  assert.deepEqual(fixtureApplied.queries, ['reviews:product:p1', 'recommendations:product:p1']);
-  assert.deepEqual(fixtureApplied.appliedFragments, ['reviews:p1', 'recommendations:p1']);
-  assert.deepEqual(fixtureStore.get('reviews', 'product:p1'), {
-    items: [{ id: 'r1', rating: 5 }],
-  });
-  assert.deepEqual(fixtureStore.get('recommendations', 'product:p1'), {
-    items: [{ id: 'rec-1' }],
-  });
-  assert.deepEqual(htmlLinkHrefs(fixtureRoot.targets.get('reviews:p1').html), [
-    '/assets/reviews.css',
-  ]);
+
+  const fixtureBody = parseWireResponses(await readWireFixture('defer-stream.http'))[0].body;
   assert.deepEqual(
-    reviewsTargetBlocks.map((element) => ({
-      attrs: element.attrs,
-      innerHtml: element.innerHtml,
-      tag: element.tag,
-    })),
-    [{ attrs: { 'fw-key': 'r1' }, innerHtml: '5', tag: 'article' }],
+    generatedWireDeferredBehaviorFact(fixtureBody, {
+      applyCompiledQueryUpdatePlan,
+      applyDeferredStreamResponseToRuntime,
+      createQueryStore,
+    }),
+    {
+      appliedFragments: ['reviews:p1', 'recommendations:p1'],
+      chunkFragmentTargets: [['reviews:p1', 'recommendations:p1']],
+      fragmentHtmlFactsByTarget: {
+        'reviews:p1': [{ attrs: { 'fw-key': 'r1' }, innerHtml: '5', tag: 'article' }],
+      },
+      fragmentTargets: ['reviews:p1', 'recommendations:p1'],
+      queryNames: ['reviews', 'recommendations'],
+      storeValues: {
+        recommendations: { items: [{ id: 'rec-1' }] },
+        reviews: { items: [{ id: 'r1', rating: 5 }] },
+      },
+      stylesheetHrefsByTarget: {
+        'recommendations:p1': [],
+        'reviews:p1': ['/assets/reviews.css'],
+      },
+    },
   );
 });
 

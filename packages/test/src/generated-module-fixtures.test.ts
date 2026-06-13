@@ -7,9 +7,13 @@ import {
   executeGeneratedServerRenderArtifact,
   executeGeneratedServerRenderSource,
   executeInlineEnhancedFormLoaderFixture,
+  generatedBootstrapDeferredBehaviorFact,
   assertGeneratedRegistryConsumerTypes,
   generatedClientExportTypeFacts,
   generatedComponentSourceFacts,
+  generatedQueryUpdatePlanBehaviorFact,
+  generatedServerDeferredBehaviorFact,
+  generatedWireDeferredBehaviorFact,
   generatedArtifactFile,
   generatedArtifactSource,
   generatedHandlerReferenceFact,
@@ -255,6 +259,289 @@ export function renderSource() {
     ).resolves.toEqual({
       cart: '{ count: number; }',
       'product-image': 'unknown',
+    });
+  });
+
+  it('projects generated query-plan application behavior into structured facts', () => {
+    type FakeElement = {
+      getAttribute(name: string): string | null;
+      setAttribute(name: string, value: string): void;
+      textContent: string | null;
+    };
+    type FakeRoot = {
+      bindings: FakeElement[];
+      elements: Array<FakeElement & { reconcileTemplateStamp?: (items: unknown[]) => void }>;
+      querySelectorAll(selector: string): FakeElement[];
+    };
+    type FakeCart = {
+      count: number;
+      empty: boolean;
+      items: Array<{ name: string; productId: string; qty: number }>;
+    };
+    const applyCompiledQueryUpdatePlan = (
+      rawRoot: unknown,
+      queryName: string,
+      rawValue: unknown,
+      rawPlan: unknown,
+    ) => {
+      const root = rawRoot as FakeRoot;
+      const value = rawValue as { count: number; disabled: boolean; items: unknown[] };
+      const plan = rawPlan as {
+        derives?: Array<{
+          select(value: { count: number; disabled: boolean; items: unknown[] }): unknown;
+          selector: string;
+        }>;
+        stamps?: Array<{
+          attr: string;
+          select(value: { count: number; disabled: boolean; items: unknown[] }): unknown;
+          selector: string;
+        }>;
+      };
+      for (const binding of root.querySelectorAll('[data-bind]')) {
+        if (binding.getAttribute('data-bind') === `${queryName}.count`) {
+          binding.textContent = String(value.count);
+        }
+      }
+      for (const derive of plan.derives ?? []) {
+        for (const element of root.querySelectorAll(derive.selector)) {
+          element.textContent = String(derive.select(value));
+        }
+      }
+      for (const stamp of plan.stamps ?? []) {
+        for (const element of root.querySelectorAll(stamp.selector)) {
+          element.setAttribute(stamp.attr, String(stamp.select(value)));
+        }
+      }
+      return { bindings: [`${queryName}.count`] };
+    };
+
+    expect(
+      generatedQueryUpdatePlanBehaviorFact([{ kind: 'client', source: '' }], {
+        applyCompiledQueryUpdatePlan,
+        executeClientArtifact: () => ({
+          CartBadge$queryUpdatePlans: {
+            cart(root: FakeRoot, cart: FakeCart) {
+              root.bindings[0]!.textContent = String(cart.count);
+              root.elements[0]!.setAttribute('hidden', String(cart.empty));
+              root.elements[1]!.textContent = String(cart.count === 0);
+              root.elements[2]!.setAttribute('disabled', String(cart.count === 0));
+              root.elements[3]!.reconcileTemplateStamp?.(
+                cart.items.map((item) => ({
+                  html: `<li><span data-bind=".qty">${item.qty}</span> x <span data-bind=".name">${item.name}</span></li>`,
+                  key: item.productId,
+                })),
+              );
+              return {
+                bindings: ['cart.count', 'cart.empty'],
+                derives: ['CartBadge$isEmpty'],
+                stamps: ['disabled'],
+                templateStamps: ['[data-bind-list="cart.items"]'],
+              };
+            },
+          },
+        }),
+        runtime: {},
+      }),
+    ).toEqual({
+      appliedPlan: {
+        bindings: ['cart.count', 'cart.empty'],
+        derives: ['CartBadge$isEmpty'],
+        stamps: ['disabled'],
+        templateStamps: ['[data-bind-list="cart.items"]'],
+      },
+      bindingText: '2',
+      booleanAttributes: { disabled: 'false', hidden: 'false' },
+      deriveText: 'false',
+      orderedApply: {
+        order: ['derive-after-binding:6', 'stamp-after-derive:items:1'],
+        stampValue: 'true',
+      },
+      templateItems: [
+        {
+          html: '<li><span data-bind=".qty">1</span> x <span data-bind=".name">Coffee</span></li>',
+          key: 'p1',
+        },
+        {
+          html: '<li><span data-bind=".qty">3</span> x <span data-bind=".name">Tea</span></li>',
+          key: 'p2',
+        },
+      ],
+    });
+  });
+
+  it('projects generated bootstrap deferred application into structured facts', () => {
+    const store = {};
+    const bootstrapRuntime = {
+      applyDeferredStreamResponseToDom(options: unknown) {
+        const { body, root } = options as {
+          body: string;
+          root: {
+            bindings: Array<{ textContent: string | null }>;
+            targets: Map<string, { replaceWithHtml(html: string): void }>;
+          };
+        };
+        root.bindings[0]!.textContent = '9';
+        root.targets
+          .get('cart-badge')!
+          .replaceWithHtml('<cart-badge><span data-bind="cart.count">9</span></cart-badge>');
+        return { appliedFragments: body.includes('cart-badge') ? ['cart-badge'] : [] };
+      },
+      createQueryStore() {
+        return store;
+      },
+      installJisoLoader() {
+        return { dispose() {}, events: ['click'] };
+      },
+    };
+
+    expect(
+      generatedBootstrapDeferredBehaviorFact(
+        [{ kind: 'client', source: '' }],
+        {
+          emitQueryPlanBootstrapModule: () => ({
+            source: `
+import { installJisoLoader, createQueryStore, applyDeferredStreamResponseToDom } from '@jiso/runtime';
+import { CartBadge$queryUpdatePlans } from '../components/cart-badge.client.js';
+const queryStore = createQueryStore();
+installJisoLoader({ queryStore, enhancedMutations: { queryPlans: CartBadge$queryUpdatePlans, store: queryStore } });
+export function applyJisoDeferredStreamResponse(body, options) {
+  return applyDeferredStreamResponseToDom({ body, root: options.root });
+}
+`,
+          }),
+          executeBootstrapModule: executeGeneratedBootstrapModule,
+          executeClientArtifact: () => ({
+            CartBadge$queryUpdatePlans: { cart: () => ({ bindings: ['cart.count'] }) },
+          }),
+          runtime: {},
+        },
+        bootstrapRuntime as never,
+      ),
+    ).toEqual({
+      appliedFragments: ['cart-badge'],
+      bootstrapCallCount: 1,
+      deferredApplicationCount: 0,
+      enhancedMutationStoreMatches: true,
+      fragmentHtmlByTarget: {
+        'cart-badge': '<cart-badge><span data-bind="cart.count">9</span></cart-badge>',
+      },
+      queryPlanStoreMatches: true,
+      updatedBindings: { 'cart.count': '9' },
+    });
+  });
+
+  it('projects server deferred stream application into structured facts', () => {
+    const values: Record<string, unknown> = {};
+    expect(
+      generatedServerDeferredBehaviorFact({
+        applyDeferredStreamResponseToRuntime({ root }) {
+          root.targets
+            .get('reviews')!
+            .replaceWithHtml('<article>Initial</article><article>B</article><article>A</article>');
+          root.targets.get('summary')!.replaceWithHtml('<section>Replace</section>');
+          values.reviews = { items: ['A'] };
+          return {
+            appliedFragments: ['reviews', 'summary', 'reviews'],
+            chunks: [
+              {
+                fragments: [{ html: '<article>B</article>', mode: 'append', target: 'reviews' }],
+                queries: ['reviews'],
+              },
+              {
+                fragments: [
+                  { html: '<section>Replace</section>', target: 'summary' },
+                  { html: '<article>A</article>', mode: 'append', target: 'reviews' },
+                ],
+                queries: ['reviews'],
+              },
+            ],
+            queries: ['reviews'],
+          };
+        },
+        createQueryStore: () => ({
+          get(name: string) {
+            return values[name];
+          },
+        }),
+        renderDeferredStream: () => ({ body: 'deferred-body' }),
+      }),
+    ).toEqual({
+      appliedFragments: ['reviews', 'summary', 'reviews'],
+      chunkFragments: [
+        [{ html: '<article>B</article>', mode: 'append', target: 'reviews' }],
+        [
+          { html: '<section>Replace</section>', target: 'summary' },
+          { html: '<article>A</article>', mode: 'append', target: 'reviews' },
+        ],
+      ],
+      chunkQueries: [['reviews'], ['reviews']],
+      fragmentHtmlByTarget: {
+        reviews: '<article>Initial</article><article>B</article><article>A</article>',
+        summary: '<section>Replace</section>',
+      },
+      storeValues: { reviews: { items: ['A'] } },
+    });
+  });
+
+  it('projects wire deferred stream application into structured facts', () => {
+    const body = [
+      '<fw-query name="reviews" key="product:p1">{"items":[{"id":"r1","rating":5}]}</fw-query>',
+      '<fw-query name="recommendations" key="product:p1">{"items":[{"id":"rec-1"}]}</fw-query>',
+      '<fw-fragment target="reviews:p1"><link rel="stylesheet" href="/assets/reviews.css"><article fw-key="r1">5</article></fw-fragment>',
+      '<fw-fragment target="recommendations:p1"><section>Rec</section></fw-fragment>',
+    ].join('');
+    const values = new Map<string, unknown>();
+
+    expect(
+      generatedWireDeferredBehaviorFact(body, {
+        applyCompiledQueryUpdatePlan: () => ({ bindings: [] }),
+        applyDeferredStreamResponseToRuntime({ root, store }) {
+          root.targets
+            .get('reviews:p1')!
+            .replaceWithHtml(
+              '<link rel="stylesheet" href="/assets/reviews.css"><article fw-key="r1">5</article>',
+            );
+          const writableStore = store as unknown as {
+            set(name: string, key: string, value: unknown): void;
+          };
+          writableStore.set('reviews', 'product:p1', { items: [{ id: 'r1', rating: 5 }] });
+          writableStore.set('recommendations', 'product:p1', { items: [{ id: 'rec-1' }] });
+          return {
+            appliedFragments: ['reviews:p1', 'recommendations:p1'],
+            chunks: [
+              {
+                fragments: [{ html: '<article fw-key="r1">5</article>', target: 'reviews:p1' }],
+                queries: ['reviews', 'recommendations'],
+              },
+            ],
+            queries: ['reviews:product:p1', 'recommendations:product:p1'],
+          };
+        },
+        createQueryStore: () => ({
+          get(name: string, key?: string) {
+            return values.get(`${name}:${key}`);
+          },
+          set(name: string, key: string, value: unknown) {
+            values.set(`${name}:${key}`, value);
+          },
+        }),
+      }),
+    ).toEqual({
+      appliedFragments: ['reviews:p1', 'recommendations:p1'],
+      chunkFragmentTargets: [['reviews:p1']],
+      fragmentHtmlFactsByTarget: {
+        'reviews:p1': [{ attrs: { 'fw-key': 'r1' }, innerHtml: '5', tag: 'article' }],
+      },
+      fragmentTargets: ['reviews:p1', 'recommendations:p1'],
+      queryNames: ['reviews', 'recommendations'],
+      storeValues: {
+        recommendations: { items: [{ id: 'rec-1' }] },
+        reviews: { items: [{ id: 'r1', rating: 5 }] },
+      },
+      stylesheetHrefsByTarget: {
+        'recommendations:p1': [],
+        'reviews:p1': ['/assets/reviews.css'],
+      },
     });
   });
 

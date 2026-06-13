@@ -125,10 +125,14 @@ import {
   executeGeneratedClientModule,
   executeGeneratedServerRenderSource,
   executeInlineEnhancedFormLoaderFixture,
+  generatedBootstrapDeferredBehaviorFact,
   generatedClientExportTypeFacts,
   generatedComponentSourceFacts,
   generatedHandlerReferenceFact,
   generatedHandlerReferenceSummaryFact,
+  generatedQueryUpdatePlanBehaviorFact,
+  generatedServerDeferredBehaviorFact,
+  generatedWireDeferredBehaviorFact,
   generatedRegistryInterfaceMemberTypes,
   generatedRenderedElementFactsFromArtifact,
   generatedRenderedElementFactsFromSource,
@@ -489,6 +493,10 @@ describe('@jiso/test package subpath exports', () => {
       },
     ]);
     expect(mcpJsonRpcResponseFacts).toBeTypeOf('function');
+    expect(generatedQueryUpdatePlanBehaviorFact).toBeTypeOf('function');
+    expect(generatedBootstrapDeferredBehaviorFact).toBeTypeOf('function');
+    expect(generatedServerDeferredBehaviorFact).toBeTypeOf('function');
+    expect(generatedWireDeferredBehaviorFact).toBeTypeOf('function');
     expect(cssSourceDirectives('@source "../index.html";')).toEqual(['"../index.html"']);
     expect(cssScopeRules('@scope (doc-card) to (:scope [fw-c]) {')).toEqual([
       { limit: ':scope [fw-c]', raw: '@scope (doc-card) to (:scope [fw-c]) {', scope: 'doc-card' },

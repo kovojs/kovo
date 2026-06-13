@@ -2,7 +2,12 @@ import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { runInNewContext } from 'node:vm';
 
-import { htmlElementFacts, type HtmlElementSelector } from './html-fragment.ts';
+import {
+  fwResponseBodyFact,
+  htmlElementFacts,
+  htmlLinkHrefs,
+  type HtmlElementSelector,
+} from './html-fragment.ts';
 import type { AssertTypeScriptProgramOptions } from './typescript-fixtures.ts';
 
 export interface GeneratedArtifactFile {
@@ -171,6 +176,99 @@ export interface ExecuteGeneratedBootstrapModuleResult {
   documentRoot: GeneratedFixtureMorphRoot;
   exports: Record<string, unknown>;
   store: unknown;
+}
+
+export interface GeneratedQueryUpdatePlanRuntime {
+  applyCompiledQueryUpdatePlan: (
+    root: unknown,
+    queryName: string,
+    value: unknown,
+    plan: unknown,
+  ) => {
+    bindings?: string[];
+    derives?: string[];
+    stamps?: string[];
+    templateStamps?: string[];
+  };
+  applyDeferredStreamResponseToRuntime: (options: {
+    body: string;
+    boundary?: string;
+    queryPlans?: Record<string, (root: unknown, value: unknown) => unknown>;
+    root: GeneratedFixtureMorphRoot;
+    store: { get(name: string, key?: string): unknown };
+  }) => {
+    appliedFragments: string[];
+    chunks: Array<{
+      fragments: Array<{ html: string; mode?: string; target: string }>;
+      queries: string[];
+    }>;
+    queries: string[];
+  };
+  createQueryStore: () => { get(name: string, key?: string): unknown };
+  emitQueryPlanBootstrapModule: (plans: Array<{ exportName: string; importPath: string }>) => {
+    source: string;
+  };
+  executeClientArtifact: (
+    files: readonly GeneratedArtifactFile[],
+    options: ExecuteGeneratedClientModuleOptions,
+  ) => Record<string, unknown>;
+  executeBootstrapModule: typeof executeGeneratedBootstrapModule;
+  renderDeferredStream: (options: unknown) => { body: string };
+  runtime: GeneratedRuntimeModule;
+}
+
+export interface GeneratedQueryUpdatePlanBehaviorFact {
+  appliedPlan: {
+    bindings: string[];
+    derives: string[];
+    stamps: string[];
+    templateStamps: string[];
+  };
+  bindingText: string | null;
+  booleanAttributes: {
+    disabled: string | null;
+    hidden: string | null;
+  };
+  deriveText: string | null;
+  orderedApply: {
+    order: string[];
+    stampValue: string | null;
+  };
+  templateItems: Array<{
+    html: string;
+    key: unknown;
+  }>;
+}
+
+export interface GeneratedBootstrapDeferredBehaviorFact {
+  appliedFragments: string[];
+  bootstrapCallCount: number;
+  deferredApplicationCount: number;
+  enhancedMutationStoreMatches: boolean;
+  fragmentHtmlByTarget: Record<string, string>;
+  queryPlanStoreMatches: boolean;
+  updatedBindings: Record<string, string | null>;
+}
+
+export interface GeneratedServerDeferredBehaviorFact {
+  appliedFragments: string[];
+  chunkFragments: Array<Array<{ html: string; mode?: string; target: string }>>;
+  chunkQueries: string[][];
+  fragmentHtmlByTarget: Record<string, string>;
+  storeValues: Record<string, unknown>;
+}
+
+export interface GeneratedWireDeferredBehaviorFact {
+  appliedFragments: string[];
+  chunkFragmentTargets: string[][];
+  fragmentHtmlFactsByTarget: Record<
+    string,
+    Array<{ attrs: Record<string, string>; innerHtml: string; tag: string }>
+  >;
+  fragmentTargets: string[];
+  queryNames: string[];
+  storeValues: Record<string, unknown>;
+  stylesheetHrefsByTarget: Record<string, string[]>;
 }
 
 export interface InlineEnhancedFormLoaderFact {
@@ -355,6 +453,298 @@ export function generatedClientExportTypeFacts(
   names: readonly string[],
 ): Record<string, string> {
   return Object.fromEntries(names.map((name) => [name, typeof exports[name]]));
+}
+
+export function generatedQueryUpdatePlanBehaviorFact(
+  files: readonly GeneratedArtifactFile[],
+  runtime: Pick<
+    GeneratedQueryUpdatePlanRuntime,
+    'applyCompiledQueryUpdatePlan' | 'executeClientArtifact' | 'runtime'
+  >,
+): GeneratedQueryUpdatePlanBehaviorFact {
+  // SPEC.md §4.4/§4.8: generated query plans are executed by walking
+  // self-describing DOM stamps instead of inspecting generated source text.
+  const clientExports = runtime.executeClientArtifact(files, { runtime: runtime.runtime });
+  const cartPlans = clientExports.CartBadge$queryUpdatePlans as {
+    cart: (
+      root: GeneratedFixtureMorphRoot,
+      value: unknown,
+    ) => GeneratedQueryUpdatePlanBehaviorFact['appliedPlan'];
+  };
+  const countBinding = new GeneratedFixtureElement(
+    { 'data-bind': 'cart.count' },
+    { textContent: '0' },
+  );
+  const emptyButton = new GeneratedFixtureElement({
+    'data-bind:hidden': 'cart.empty',
+    hidden: 'true',
+  });
+  const namedDerive = new GeneratedFixtureElement(
+    { 'data-derive': 'cart.CartBadge$isEmpty' },
+    { textContent: 'true' },
+  );
+  const disabledStamp = new GeneratedFixtureElement({
+    'data-derive': 'cart.CartBadge$button_disabled_derive',
+    disabled: 'true',
+  });
+  const itemStamp = new GeneratedFixtureTemplateStampHost({ 'data-bind-list': 'cart.items' });
+  const root = new GeneratedFixtureMorphRoot();
+  root.bindings.push(countBinding);
+  root.elements.push(emptyButton, namedDerive, disabledStamp, itemStamp);
+
+  const appliedPlan = cartPlans.cart(root, {
+    count: 2,
+    empty: false,
+    items: [
+      { name: 'Coffee', productId: 'p1', qty: 1 },
+      { name: 'Tea', productId: 'p2', qty: 3 },
+    ],
+  });
+
+  const order: string[] = [];
+  const orderedRoot = new GeneratedFixtureMorphRoot();
+  const orderedBinding = new GeneratedFixtureElement(
+    { 'data-bind': 'cart.count' },
+    { textContent: 'stale' },
+  );
+  const orderedDerive = new GeneratedFixtureElement(
+    { 'data-derive': 'cart.summary' },
+    { textContent: 'stale' },
+  );
+  const orderedStamp = new GeneratedFixtureElement({ 'data-derive': 'cart.disabled' });
+  orderedRoot.bindings.push(orderedBinding);
+  orderedRoot.elements.push(orderedDerive, orderedStamp);
+  runtime.applyCompiledQueryUpdatePlan(
+    orderedRoot,
+    'cart',
+    { count: 6, disabled: true, items: [1] },
+    {
+      derives: [
+        {
+          name: 'summary',
+          select(value: { items: unknown[] }) {
+            order.push(`derive-after-binding:${orderedBinding.textContent}`);
+            return `items:${value.items.length}`;
+          },
+          selector: '[data-derive="cart.summary"]',
+        },
+      ],
+      stamps: [
+        {
+          attr: 'disabled',
+          select(value: { disabled: boolean }) {
+            order.push(`stamp-after-derive:${orderedDerive.textContent}`);
+            return value.disabled;
+          },
+          selector: '[data-derive="cart.disabled"]',
+        },
+      ],
+    },
+  );
+
+  return {
+    appliedPlan,
+    bindingText: countBinding.textContent,
+    booleanAttributes: {
+      disabled: disabledStamp.getAttribute('disabled'),
+      hidden: emptyButton.getAttribute('hidden'),
+    },
+    deriveText: namedDerive.textContent,
+    orderedApply: {
+      order,
+      stampValue: orderedStamp.getAttribute('disabled'),
+    },
+    templateItems: itemStamp.items.map(({ html, key }) => ({ html, key })),
+  };
+}
+
+export function generatedBootstrapDeferredBehaviorFact(
+  files: readonly GeneratedArtifactFile[],
+  runtime: Pick<
+    GeneratedQueryUpdatePlanRuntime,
+    'emitQueryPlanBootstrapModule' | 'executeBootstrapModule' | 'executeClientArtifact' | 'runtime'
+  >,
+  bootstrapRuntime: Required<
+    Pick<
+      GeneratedRuntimeModule,
+      'applyDeferredStreamResponseToDom' | 'createQueryStore' | 'installJisoLoader'
+    >
+  >,
+): GeneratedBootstrapDeferredBehaviorFact {
+  // SPEC.md §4.4/§8: generated bootstrap modules wire query plans into the
+  // loader and expose deferred stream application as public behavior.
+  const clientExports = runtime.executeClientArtifact(files, { runtime: runtime.runtime });
+  const queryUpdatePlans = clientExports.CartBadge$queryUpdatePlans as {
+    cart: (root: unknown, value: unknown) => unknown;
+  };
+  const bootstrap = runtime.emitQueryPlanBootstrapModule([
+    {
+      exportName: 'CartBadge$queryUpdatePlans',
+      importPath: '../components/cart-badge.client.js',
+    },
+  ]);
+  const installed = runtime.executeBootstrapModule(
+    bootstrap.source,
+    {
+      '../components/cart-badge.client.js': {
+        CartBadge$queryUpdatePlans: queryUpdatePlans,
+      },
+    },
+    bootstrapRuntime,
+  );
+  const installCall = installed.calls[0] as {
+    enhancedMutations?: { queryPlans?: Record<string, unknown>; store?: unknown };
+    queryStore?: unknown;
+  };
+  const applyRoot = new GeneratedFixtureMorphRoot();
+  applyRoot.targets.set('cart-badge', new GeneratedFixtureMorphTarget());
+  applyRoot.bindings.push(
+    new GeneratedFixtureElement({ 'data-bind': 'cart.count' }, { textContent: '0' }),
+  );
+  const applyingRuntime = runtime.executeBootstrapModule(
+    bootstrap.source,
+    {
+      '../components/cart-badge.client.js': {
+        CartBadge$queryUpdatePlans: queryUpdatePlans,
+      },
+    },
+    bootstrapRuntime,
+  );
+  const applyDeferredStreamResponse = applyingRuntime.exports.applyJisoDeferredStreamResponse as (
+    body: string,
+    options: { root: GeneratedFixtureMorphRoot },
+  ) => { appliedFragments: string[] };
+  const applyResult = applyDeferredStreamResponse(
+    [
+      '<!doctype html><main><fw-defer target="cart-badge"></fw-defer></main>',
+      '--jiso-boundary',
+      '<fw-query name="cart">{"count":9,"empty":false,"items":[]}</fw-query>',
+      '<fw-fragment target="cart-badge"><cart-badge><span data-bind="cart.count">9</span></cart-badge></fw-fragment>',
+      '--jiso-boundary--',
+    ].join('\n'),
+    { root: applyRoot },
+  ) as { appliedFragments: string[] };
+
+  return {
+    appliedFragments: applyResult.appliedFragments,
+    bootstrapCallCount: installed.calls.length,
+    deferredApplicationCount: installed.deferredApplications.length,
+    enhancedMutationStoreMatches: installCall.enhancedMutations?.store === installed.store,
+    fragmentHtmlByTarget: {
+      'cart-badge': applyRoot.targets.get('cart-badge')?.html ?? '',
+    },
+    queryPlanStoreMatches: installCall.queryStore === installed.store,
+    updatedBindings: {
+      'cart.count': applyRoot.bindings[0]?.textContent ?? null,
+    },
+  };
+}
+
+export function generatedServerDeferredBehaviorFact(
+  runtime: Pick<
+    GeneratedQueryUpdatePlanRuntime,
+    'applyDeferredStreamResponseToRuntime' | 'createQueryStore' | 'renderDeferredStream'
+  >,
+): GeneratedServerDeferredBehaviorFact {
+  // SPEC.md §8/§9.1: deferred stream chunks are sorted, applied, and stored
+  // through the same fragment/query wire vocabulary as mutation responses.
+  const serverStream = runtime.renderDeferredStream({
+    boundary: 'gate-boundary',
+    chunks: [
+      {
+        fragments: [
+          { html: '<article>A</article>', mode: 'append', target: 'reviews' },
+          { html: '<section>Replace</section>', priority: 'high', target: 'summary' },
+        ],
+        queries: [{ name: 'reviews', value: { items: ['A'] } }],
+      },
+      {
+        fragments: [{ html: '<article>B</article>', mode: 'append', target: 'reviews' }],
+        priority: 'high',
+        queries: [{ name: 'reviews', value: { items: ['A', 'B'] } }],
+      },
+    ],
+    closeHtml: '',
+    shell: '<!doctype html><main><fw-defer target="reviews"></fw-defer></main>',
+  });
+  const root = new GeneratedFixtureMorphRoot();
+  root.targets.set('reviews', new GeneratedFixtureMorphTarget('<article>Initial</article>'));
+  root.targets.set('summary', new GeneratedFixtureMorphTarget('<section>Old</section>'));
+  const store = runtime.createQueryStore();
+  const applied = runtime.applyDeferredStreamResponseToRuntime({
+    body: serverStream.body,
+    boundary: 'gate-boundary',
+    root,
+    store,
+  });
+
+  return {
+    appliedFragments: applied.appliedFragments,
+    chunkFragments: applied.chunks.map((chunk) => chunk.fragments),
+    chunkQueries: applied.chunks.map((chunk) => chunk.queries),
+    fragmentHtmlByTarget: {
+      reviews: root.targets.get('reviews')?.html ?? '',
+      summary: root.targets.get('summary')?.html ?? '',
+    },
+    storeValues: {
+      reviews: store.get('reviews'),
+    },
+  };
+}
+
+export function generatedWireDeferredBehaviorFact(
+  body: string,
+  runtime: Pick<
+    GeneratedQueryUpdatePlanRuntime,
+    'applyCompiledQueryUpdatePlan' | 'applyDeferredStreamResponseToRuntime' | 'createQueryStore'
+  >,
+): GeneratedWireDeferredBehaviorFact {
+  const response = fwResponseBodyFact(body);
+  const root = new GeneratedFixtureMorphRoot();
+  root.targets.set('reviews:p1', new GeneratedFixtureMorphTarget());
+  root.targets.set('recommendations:p1', new GeneratedFixtureMorphTarget());
+  const store = runtime.createQueryStore();
+  const applied = runtime.applyDeferredStreamResponseToRuntime({
+    body,
+    queryPlans: {
+      reviews(planRoot, value) {
+        return runtime.applyCompiledQueryUpdatePlan(planRoot, 'reviews', value, { bindings: true });
+      },
+      recommendations(planRoot, value) {
+        return runtime.applyCompiledQueryUpdatePlan(planRoot, 'recommendations', value, {
+          bindings: true,
+        });
+      },
+    },
+    root,
+    store,
+  });
+
+  return {
+    appliedFragments: applied.appliedFragments,
+    chunkFragmentTargets: applied.chunks.map((chunk) =>
+      chunk.fragments.map((fragment) => fragment.target),
+    ),
+    fragmentHtmlFactsByTarget: {
+      'reviews:p1': htmlElementFacts(root.targets.get('reviews:p1')?.html ?? '', {
+        tag: 'article',
+      }).map((element) => ({
+        attrs: element.attrs,
+        innerHtml: element.innerHtml,
+        tag: element.tag,
+      })),
+    },
+    fragmentTargets: response.fragmentTargets,
+    queryNames: response.queryNames,
+    storeValues: {
+      recommendations: store.get('recommendations', 'product:p1'),
+      reviews: store.get('reviews', 'product:p1'),
+    },
+    stylesheetHrefsByTarget: {
+      ...response.stylesheetHrefsByTarget,
+      'reviews:p1': htmlLinkHrefs(root.targets.get('reviews:p1')?.html ?? ''),
+    },
+  };
 }
 
 export async function generatedRegistryInterfaceMemberTypes(
