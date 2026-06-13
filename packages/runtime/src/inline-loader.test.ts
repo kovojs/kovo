@@ -248,6 +248,7 @@ describe('inline loader source', () => {
       "readElementChunks(body,'fw-fragment',{nested:true})",
     );
     expect(inlineJisoLoaderInstallerSource).not.toContain('readChunks(');
+    expect(inlineJisoLoaderInstallerSource).not.toContain("readAttribute(query.attrs,'name')");
     expect(inlineJisoLoaderInstallerSource).toContain(
       'detail:{attrs:query.attrs,content:query.content}',
     );
@@ -543,6 +544,16 @@ describe('inline loader source', () => {
           applyInlineQueryEventToRuntime(event, { store: inlineStore }),
         );
 
+        // SPEC.md §4.4/§9.1: the inline bootstrap only scans wire chunks; the
+        // runtime parser owns query-name validation and JSON decoding.
+        expect(dispatched.map((event) => event.detail)).toEqual([
+          { attrs: ' name="cart" key="cart:c1"', content: '{"count":1}' },
+          { attrs: ' name="productGrid"', content: '{"products":[{"id":"p1"}]}' },
+          { attrs: ' name="product" key="product&gt;p1"', content: '{&quot;stock&quot;:7}' },
+          { attrs: ' name="malformed"', content: '{' },
+          { attrs: ' name="empty"', content: '' },
+          { attrs: '', content: '{"ignored":true}' },
+        ]);
         expect(inlineQueries).toEqual(modularResult.queries);
         expect(inlineStore.get('cart', 'cart:c1')).toEqual(store.get('cart', 'cart:c1'));
         expect(inlineStore.get('productGrid')).toEqual(store.get('productGrid'));

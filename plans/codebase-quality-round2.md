@@ -42,6 +42,16 @@ with same-session file/test evidence.
       pnpm exec vitest --config vitest.browser.config.ts --run packages/runtime/src/index.browser.test.ts
       pnpm --filter @jiso/runtime run check:inline-loader
       ```
+      Round101 evidence 2026-06-13: the inline bootstrap no longer pre-validates `<fw-query>`
+      names before dispatching `jiso:query`; it hands every scanned `{ attrs, content }` chunk to
+      `query-events.ts`, so canonical runtime wire parsing owns missing-name and malformed-JSON
+      handling. Same-session evidence:
+
+      ```text
+      pnpm exec vitest --run packages/runtime/src
+      pnpm exec vitest --config vitest.browser.config.ts --run packages/runtime/src/index.browser.test.ts
+      pnpm --filter @jiso/runtime run check:inline-loader
+      ```
 
 - [ ] Phase 5 server: document/app extraction finished subtractively; one wire-html emitter;
       one `onError` diagnostic seam; replay choreography and response types unified.
@@ -660,9 +670,8 @@ packages/runtime/src/index.browser.test.ts IMPLEMENT_v1.md plans/codebase-qualit
 - Inline query events now carry pre-split `fw-query` wire chunks (`attrs`/`content`) from the
   generated bootstrap into `query-events.ts`, and `wire-parser.ts` owns the reusable
   `readQueryElementChunk` decoder used by both full response bodies and inline hydration. This
-  removes the inline-only `JSON.parse` preflight and the empty-query `null` fallback while keeping
-  old `body`/`name`/`key` event details normalized through the same parser for deploy skew
-  (SPEC.md §6.6/§9.1/§9.4). Same-session evidence: `pnpm exec vitest --run
+  removes the inline-only `JSON.parse` preflight, the empty-query `null` fallback, and legacy
+  `body`/`name`/`key` event details (SPEC.md §6.6/§9.1/§9.4). Same-session evidence: `pnpm exec vitest --run
 packages/runtime/src`, `pnpm exec vitest --config vitest.browser.config.ts --run
 packages/runtime/src/index.browser.test.ts`, `pnpm --filter @jiso/runtime run
 check:inline-loader`, and `pnpm exec vp check packages/runtime/src/wire-parser.ts
@@ -670,6 +679,14 @@ packages/runtime/src/query-events.ts packages/runtime/src/inline-loader-build.ts
 packages/runtime/src/inline-loader.ts packages/runtime/src/query-store.test.ts
 packages/runtime/src/wire-parser.test.ts packages/runtime/src/inline-loader.test.ts
 packages/runtime/src/index.test.ts IMPLEMENT_v1.md plans/codebase-quality-round2.md`.
+- Inline-loader query response dispatch no longer performs its own `name` attribute gate: the
+  generated bootstrap now dispatches every scanned `fw-query` chunk as `{ attrs, content }`, and
+  focused parity coverage proves nameless, empty, malformed, keyed, and escaped chunks all flow
+  through the same `query-events.ts` plus `wire-parser.ts` path used by modular mutation response
+  application (SPEC.md §4.4/§9.1/§9.4). Same-session evidence: `pnpm exec vitest --run
+packages/runtime/src`, `pnpm exec vitest --config vitest.browser.config.ts --run
+packages/runtime/src/index.browser.test.ts`, and `pnpm --filter @jiso/runtime run
+check:inline-loader`.
 - Visible-return hydration no longer accepts a caller-provided `queryScripts` callback: the
   visible-return installer scans the root through `queryScriptsFromRoot`, and inline
   `jiso:query` hydration reports applied query keys back into the same visible-return ledger used
