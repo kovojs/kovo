@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  applyModelPatchPass,
   applyTerminalEmitPatches,
   componentPipelineState,
-  lowerComponentPipelinePatches,
 } from './model-pipeline.js';
 
 describe('compiler model pipeline', () => {
@@ -16,7 +16,7 @@ describe('compiler model pipeline', () => {
     );
     const parses: string[] = [];
 
-    const lowered = lowerComponentPipelinePatches(state, [], (fileName, source) => {
+    const lowered = applyModelPatchPass(state, [], (fileName, source) => {
       parses.push(`${fileName}:${source}`);
       return { spans: ['reparsed'] };
     });
@@ -41,7 +41,7 @@ describe('compiler model pipeline', () => {
     );
     const parses: string[] = [];
 
-    const lowered = lowerComponentPipelinePatches(
+    const lowered = applyModelPatchPass(
       state,
       [
         {
@@ -74,7 +74,7 @@ describe('compiler model pipeline', () => {
     );
     const parses: string[] = [];
 
-    const lowered = lowerComponentPipelinePatches(
+    const lowered = applyModelPatchPass(
       state,
       [
         {
@@ -119,7 +119,7 @@ describe('compiler model pipeline', () => {
       'export const CartBadge$button_disabled_derive = derive(["cart"], (cart) => cart.empty);\n\n';
     const parses: string[] = [];
     const attributeStart = state.source.indexOf('disabled={cart.empty}');
-    const lowered = lowerComponentPipelinePatches(
+    const lowered = applyModelPatchPass(
       state,
       [
         {

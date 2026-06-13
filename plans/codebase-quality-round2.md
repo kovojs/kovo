@@ -950,6 +950,8 @@ The terminal emit patch helper no longer accepts model-patch prefix options; gen
 remain confined to the model-changing pass that reparses and carries offset maps.
 The terminal emit patch helper is now named for terminal emit patches at its compile call site,
 leaving `lowerComponentPipelinePatches` as the only model-pipeline mutation helper.
+The model-changing source patch helper is now named `applyModelPatchPass`, leaving the compile path
+with explicit model-patch and terminal-emit patch stages instead of lowering-sequence terminology.
 Static navigation lowerers now return source-patch arrays directly instead of one-field
 compatibility result wrappers.
 Server-render lowering now returns source-patch arrays directly instead of a one-field
@@ -970,6 +972,11 @@ now applies parser-derived handler source replacements directly.
 
 Latest evidence:
 
+- Model patch pass helper naming boundary: `pnpm exec vitest --run
+packages/compiler/src/model-pipeline.test.ts packages/compiler/src/compile-component.test.ts
+packages/compiler/src/stamps.test.ts`; `pnpm exec tsc --noEmit --pretty false`; exact
+  `pnpm exec vp check packages/compiler/src/compile.ts packages/compiler/src/model-pipeline.ts
+packages/compiler/src/model-pipeline.test.ts plans/codebase-quality-round2.md`; `git diff --check`.
 - Terminal emit helper naming boundary: `pnpm exec vitest --run
 packages/compiler/src/model-pipeline.test.ts packages/compiler/src/compile-component.test.ts
 packages/compiler/src/stamps.test.ts`; `pnpm exec tsc --noEmit --pretty false`; exact

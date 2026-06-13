@@ -19,9 +19,9 @@ import {
   parseComponentModule as parseComponentModuleModel,
 } from './scan/parse.js';
 import {
+  applyModelPatchPass,
   applyTerminalEmitPatches,
   componentPipelineState,
-  lowerComponentPipelinePatches,
 } from './model-pipeline.js';
 import {
   mergePackageComponentPrefixFacts,
@@ -67,7 +67,7 @@ export function compileComponentModule(options: CompileComponentOptions): Compil
     componentName,
     compileOptions,
   );
-  const modelPatch = lowerComponentPipelinePatches(
+  const modelPatch = applyModelPatchPass(
     originalState,
     [
       ...viewTransitions.replacements,

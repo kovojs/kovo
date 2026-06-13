@@ -28,7 +28,7 @@ export function componentPipelineState<Model>(
   return { fileName, model, source };
 }
 
-export function lowerComponentPipelinePatches<Model>(
+export function applyModelPatchPass<Model>(
   previous: ComponentPipelineState<Model>,
   replacements: readonly SourceReplacement[],
   parse: (fileName: string, source: string) => Model,
