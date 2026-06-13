@@ -193,9 +193,9 @@ emission no longer derives list reads by splitting `query.path` strings.
 JSX event attributes now carry normalized DOM event and execution-trigger names as parser facts, so
 handler lowering, platform lowering, inline derive skipping, and event-trigger validation no longer
 derive those names from raw attribute text.
-Data-bind path classification is centralized into analysis facts, so plan collection, coverage, and
-template placeholder extraction consume query/relative-read facts instead of reparsing each binding
-at every use site.
+Data-bind path classification is centralized into analysis/validator facts, so plan collection,
+coverage, template placeholder extraction, and binding validation consume query/relative-read facts
+instead of reparsing each binding at every use site.
 
 - [ ] Remove remaining compatibility fallback reparses where parser facts are sufficient.
 - [ ] Audit production `createSourceFile`, `getText`, `indexOf`, `slice`, and regex usage; keep
@@ -238,6 +238,8 @@ Latest evidence:
 - exact `pnpm exec vp check packages/compiler/src/lower/inline-derives.ts packages/compiler/src/query-coverage.test.ts plans/codebase-quality-round2.md`
 - `pnpm exec vitest --run packages/compiler/src/query-update-plans.test.ts packages/compiler/src/query-coverage.test.ts packages/compiler/src/query-bindings.test.ts packages/compiler/src/compile-component.test.ts`
 - exact `pnpm exec vp check packages/compiler/src/analyze/query-updates.ts packages/compiler/src/query-update-plans.test.ts packages/compiler/src/query-coverage.test.ts plans/codebase-quality-round2.md`
+- `pnpm exec vitest --run packages/compiler/src/query-bindings.test.ts packages/compiler/src/query-update-plans.test.ts packages/compiler/src/query-coverage.test.ts packages/compiler/src/compile-component.test.ts`
+- exact `pnpm exec vp check packages/compiler/src/validate/bindings.ts packages/compiler/src/query-bindings.test.ts plans/codebase-quality-round2.md`
 - `git diff --check`
 
 ## Phase 3 - Drizzle Extraction

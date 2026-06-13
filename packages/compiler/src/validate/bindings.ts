@@ -15,6 +15,7 @@ import {
   knownQueryNames,
   listItemShapeAtBindingPath,
   parseBindingPath,
+  queryNameFromPath,
   queryPathUsesKnownQuery,
   relativeBindingPath,
   validateListBindingInQueryShapes,
@@ -28,6 +29,8 @@ interface DataBindAttribute {
   length: number;
   name: string;
   path: string;
+  query: string | null;
+  relativeReadPath: string | null;
 }
 
 interface TemplateBody {
@@ -48,7 +51,7 @@ export function validateDataBindings(
   const bindingAttributes = dataBindAttributes(model);
 
   const bindingDiagnostics = bindingAttributes
-    .filter((binding) => !binding.path.startsWith('.'))
+    .filter((binding) => binding.query !== null)
     .flatMap((binding) => {
       const result = validatePathInQueryShapes(binding.path, queryShapes);
       if (!result.exists) {
@@ -155,12 +158,7 @@ function dataBindAttributes(model: ComponentModuleModel): DataBindAttribute[] {
         attribute.value !== undefined &&
         attribute.value !== '',
     )
-    .map((attribute) => ({
-      index: attribute.start,
-      length: attribute.end - attribute.start,
-      name: attribute.name,
-      path: attribute.value ?? '',
-    }));
+    .map((attribute) => dataBindAttributeFact(attribute.name, attribute.value ?? '', attribute));
 }
 
 function dataBindListAttributes(model: ComponentModuleModel): DataBindAttribute[] {
@@ -171,12 +169,22 @@ function dataBindListAttributes(model: ComponentModuleModel): DataBindAttribute[
         attribute.value !== undefined &&
         attribute.value !== '',
     )
-    .map((attribute) => ({
-      index: attribute.start,
-      length: attribute.end - attribute.start,
-      name: attribute.name,
-      path: attribute.value ?? '',
-    }));
+    .map((attribute) => dataBindAttributeFact(attribute.name, attribute.value ?? '', attribute));
+}
+
+function dataBindAttributeFact(
+  name: string,
+  path: string,
+  attribute: { end: number; start: number },
+): DataBindAttribute {
+  return {
+    index: attribute.start,
+    length: attribute.end - attribute.start,
+    name,
+    path,
+    query: path.startsWith('.') ? null : queryNameFromPath(path),
+    relativeReadPath: path.startsWith('.') ? relativeBindingPath(path) : null,
+  };
 }
 
 function templateStamp(
@@ -221,8 +229,8 @@ function nullableItemBindingDiagnostics(
     );
 
     for (const container of containers) {
-      for (const binding of bindingAttributes.filter((candidate) =>
-        candidate.path.startsWith('.'),
+      for (const binding of bindingAttributes.filter(
+        (candidate) => candidate.relativeReadPath !== null,
       )) {
         const element = elements.find((candidate) =>
           candidate.attributes.some(
@@ -234,7 +242,7 @@ function nullableItemBindingDiagnostics(
 
         const result = validatePathInShape(
           itemShape,
-          parseBindingPath(relativeBindingPath(binding.path)),
+          parseBindingPath(binding.relativeReadPath ?? ''),
         );
         if (result.exists && result.nullableTraversal) {
           diagnostics.push(fw227Diagnostic(source, fileName, binding, result.nullableTraversal));
