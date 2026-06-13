@@ -32,20 +32,10 @@ export type AppliedMutationResponseToDom = AppliedMutationResponse & {
   appliedFragments: string[];
 };
 
-export type AppliedMutationResponseToRuntime =
-  | AppliedMutationResponse
-  | AppliedMutationResponseToDom;
-
-type ApplyMutationResponseToRuntimeBaseOptions = Omit<ApplyMutationResponseToDomOptions, 'root'>;
-
-export type ApplyMutationResponseToRuntimeOptions = ApplyMutationResponseToRuntimeBaseOptions & {
-  root?: MorphRoot | undefined;
-};
-
 type ApplyMutationResponseChunksToRuntimeBaseOptions = Omit<
-  ApplyMutationResponseToRuntimeOptions,
-  'body'
->;
+  ApplyMutationResponseToDomOptions,
+  'body' | 'root'
+> & { root?: MorphRoot | undefined };
 
 export type ApplyMutationResponseChunksToRuntimeOptions =
   ApplyMutationResponseChunksToRuntimeBaseOptions;
@@ -61,11 +51,11 @@ export function applyMutationResponseChunksToRuntime(
 export function applyMutationResponseChunksToRuntime(
   chunks: MutationResponseBodyChunks,
   options: ApplyMutationResponseChunksToRuntimeOptions,
-): AppliedMutationResponseToRuntime;
+): AppliedMutationResponse | AppliedMutationResponseToDom;
 export function applyMutationResponseChunksToRuntime(
   chunks: MutationResponseBodyChunks,
   options: ApplyMutationResponseChunksToRuntimeOptions,
-): AppliedMutationResponseToRuntime {
+): AppliedMutationResponse | AppliedMutationResponseToDom {
   // SPEC.md §9.1: mutation, deferred, broadcast, and typed-read responses all
   // converge here after their transport-specific parser has decoded wire chunks.
   options.beforeApplyQueries?.(chunks.queries);
@@ -95,27 +85,12 @@ export function applyMutationResponseChunksToRuntime(
   };
 }
 
-export function applyMutationResponseToRuntime(
-  options: ApplyMutationResponseToRuntimeOptions & { root: MorphRoot },
-): AppliedMutationResponseToDom;
-export function applyMutationResponseToRuntime(
-  options: ApplyMutationResponseToRuntimeOptions & { root?: undefined },
-): AppliedMutationResponse;
-export function applyMutationResponseToRuntime(
-  options: ApplyMutationResponseToRuntimeOptions,
-): AppliedMutationResponseToRuntime;
-export function applyMutationResponseToRuntime(
-  options: ApplyMutationResponseToRuntimeOptions,
-): AppliedMutationResponseToRuntime {
+export function applyMutationResponseToDom(
+  options: ApplyMutationResponseToDomOptions,
+): AppliedMutationResponseToDom {
   const { body, ...applyOptions } = options;
   return applyMutationResponseChunksToRuntime(
     readMutationResponseBodyChunks(body, options.onError),
     applyOptions,
   );
-}
-
-export function applyMutationResponseToDom(
-  options: ApplyMutationResponseToDomOptions,
-): AppliedMutationResponseToDom {
-  return applyMutationResponseToRuntime(options);
 }

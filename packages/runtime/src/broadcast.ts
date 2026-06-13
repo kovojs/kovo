@@ -1,10 +1,11 @@
-import { applyMutationResponseToRuntime } from './apply-mutation-response.js';
+import { applyMutationResponseChunksToRuntime } from './apply-mutation-response.js';
 import { definedProps } from './defined-props.js';
 import type { CompiledQueryUpdatePlans } from './query-bindings.js';
 import type { MorphFragment, MorphRoot } from './morph.js';
 import { isMutationBroadcastMessage, sanitizeMutationChangeRecord } from './mutation-response.js';
 import type { QueryStore } from './query-store.js';
 import type { MutationChangeRecord } from './optimism.js';
+import { readMutationResponseBodyChunks } from './wire-parser.js';
 
 export interface BroadcastLike {
   close?: () => void;
@@ -82,15 +83,17 @@ export function installMutationBroadcast(
 
     // SPEC.md §9.2: same-user tab sync consumes the same mutation wire body
     // through the shared runtime apply path as the submitting tab.
-    const applied = applyMutationResponseToRuntime({
-      body: event.data.body,
-      ...definedProps({
-        morph: options.morph,
-        queryPlans: options.queryPlans,
-        root: options.root,
-      }),
-      store: options.store,
-    });
+    const applied = applyMutationResponseChunksToRuntime(
+      readMutationResponseBodyChunks(event.data.body),
+      {
+        ...definedProps({
+          morph: options.morph,
+          queryPlans: options.queryPlans,
+          root: options.root,
+        }),
+        store: options.store,
+      },
+    );
     options.onAppliedQueries?.(applied.queries);
     if (changes.length > 0) {
       options.onChanges?.(changes);

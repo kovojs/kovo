@@ -180,10 +180,13 @@ Current state:
 - Decoded mutation response chunks now converge on `applyMutationResponseChunksToRuntime`;
   mutation/deferred transports parse query+fragment bodies first, while typed-read refetch parses
   only `<fw-query>` chunks before the shared apply primitive (SPEC §9.1/§9.4).
+- The internal body-based `applyMutationResponseToRuntime` wrapper was deleted; enhanced mutation
+  submit and broadcast now decode mutation bodies with `readMutationResponseBodyChunks` before
+  calling `applyMutationResponseChunksToRuntime` directly (SPEC §9.1/§9.2).
 
 Open:
 
-- [ ] Audit for any remaining internal compatibility-style apply wrappers after `applyFragmentQueryBody`
+- [x] Audit for any remaining internal compatibility-style apply wrappers after `applyFragmentQueryBody`
       deletion.
 - [ ] Keep inline-loader readable/minified output mechanically tied to canonical parser helpers.
 - [ ] Continue splitting large runtime tests along apply/query/loader/minifier seams.
@@ -196,7 +199,8 @@ Latest focused evidence:
 - `pnpm exec vitest --config vitest.browser.config.ts --run packages/runtime/src/index.browser.test.ts`
 - `pnpm --filter @jiso/runtime run check:inline-loader`
 - `pnpm exec tsc --noEmit --pretty false`
-- `pnpm exec vp check packages/runtime/src/apply-mutation-response.ts packages/runtime/src/apply-deferred-stream.ts packages/runtime/src/query-refetch.ts packages/runtime/src/mutation-response.test.ts packages/runtime/src/query-refetch.test.ts packages/runtime/src/index-exports.test.ts IMPLEMENT_v1.md plans/codebase-quality-round2.md`
+- `rg -n "applyMutationResponseToRuntime|ApplyMutationResponseToRuntime|AppliedMutationResponseToRuntime" packages/runtime/src --glob '!*.test.ts'`
+- `pnpm exec vp check packages/runtime/src/apply-mutation-response.ts packages/runtime/src/broadcast.ts packages/runtime/src/mutation-apply.ts packages/runtime/src/mutation-response.test.ts packages/runtime/src/index.test.ts IMPLEMENT_v1.md plans/codebase-quality-round2.md`
 - `git diff --check`
 
 ## Phase 5 - Server And App Shell

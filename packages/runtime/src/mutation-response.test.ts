@@ -5,7 +5,6 @@ import * as runtime from './index.js';
 import {
   applyMutationResponseChunksToRuntime,
   applyMutationResponseToDom as applyMutationResponseToDomFromMutationModule,
-  applyMutationResponseToRuntime,
 } from './apply-mutation-response.js';
 import {
   createMutationIdem,
@@ -13,6 +12,7 @@ import {
   readMutationChangeHeader,
   sanitizeMutationChangeRecord,
 } from './mutation-response.js';
+import { readMutationResponseBodyChunks } from './wire-parser.js';
 
 class FakeMorphTarget {
   html: string;
@@ -94,11 +94,11 @@ describe('mutation response wire chunks', () => {
     const plan = vi.fn();
 
     store.subscribe('cart', plan);
-    const applied = applyMutationResponseToRuntime({
-      body: [
-        '<fw-query name="cart">{"count":3}</fw-query>',
-        '<fw-fragment target="cart-badge"><cart-badge>3</cart-badge></fw-fragment>',
-      ].join('\n'),
+    const body = [
+      '<fw-query name="cart">{"count":3}</fw-query>',
+      '<fw-fragment target="cart-badge"><cart-badge>3</cart-badge></fw-fragment>',
+    ].join('\n');
+    const applied = applyMutationResponseChunksToRuntime(readMutationResponseBodyChunks(body), {
       store,
     });
 
@@ -115,10 +115,10 @@ describe('mutation response wire chunks', () => {
     const plan = vi.fn();
 
     store.subscribe('product', plan, 'p1');
-    const applied = applyMutationResponseToRuntime({
-      body: '<fw-query name="product" key="p1">{"stock":4}</fw-query>',
-      store,
-    });
+    const applied = applyMutationResponseChunksToRuntime(
+      readMutationResponseBodyChunks('<fw-query name="product" key="p1">{"stock":4}</fw-query>'),
+      { store },
+    );
 
     // SPEC.md §9.4: query instance keys are the shared currency for store, wire,
     // optimistic transforms, and refetch-on-focus typed reads.
@@ -140,21 +140,23 @@ describe('mutation response wire chunks', () => {
   it('accepts escaped JSON from text/html-compatible fw-query chunks', () => {
     const store = createQueryStore();
 
-    applyMutationResponseToRuntime({
-      body: '<fw-query name="cart">{&quot;count&quot;:4,&quot;label&quot;:&quot;Alice&#39;s &amp; Bob&apos;s&quot;}</fw-query>',
-      store,
-    });
+    applyMutationResponseChunksToRuntime(
+      readMutationResponseBodyChunks(
+        '<fw-query name="cart">{&quot;count&quot;:4,&quot;label&quot;:&quot;Alice&#39;s &amp; Bob&apos;s&quot;}</fw-query>',
+      ),
+      { store },
+    );
 
     expect(store.get('cart')).toEqual({ count: 4, label: "Alice's & Bob's" });
   });
 
   it('accepts single-quoted chunk attributes', () => {
     const store = createQueryStore();
-    const applied = applyMutationResponseToRuntime({
-      body: [
-        "<fw-query name='cart' key='cart:c1'>{\"count\":4}</fw-query>",
-        "<fw-fragment target='cart-list' mode='append'><li>p1</li></fw-fragment>",
-      ].join(''),
+    const body = [
+      "<fw-query name='cart' key='cart:c1'>{\"count\":4}</fw-query>",
+      "<fw-fragment target='cart-list' mode='append'><li>p1</li></fw-fragment>",
+    ].join('');
+    const applied = applyMutationResponseChunksToRuntime(readMutationResponseBodyChunks(body), {
       store,
     });
 
@@ -167,10 +169,12 @@ describe('mutation response wire chunks', () => {
 
   it('keeps quoted query attribute tag closers on the store apply path', () => {
     const store = createQueryStore();
-    const applied = applyMutationResponseToRuntime({
-      body: '<fw-query name="product" key="product>p1">{"stock":7}</fw-query>',
-      store,
-    });
+    const applied = applyMutationResponseChunksToRuntime(
+      readMutationResponseBodyChunks(
+        '<fw-query name="product" key="product>p1">{"stock":7}</fw-query>',
+      ),
+      { store },
+    );
 
     // SPEC.md §9.4: keyed query chunks must hydrate the same instance key that
     // inline DOM parsing exposes from the wire attribute.
@@ -191,7 +195,10 @@ describe('mutation response wire chunks', () => {
     ].join('');
 
     // SPEC.md §9.1: mutation responses carry query patches and fragment patches together.
-    const storeOnlyApplied = applyMutationResponseToRuntime({ body, store: storeOnly });
+    const storeOnlyApplied = applyMutationResponseChunksToRuntime(
+      readMutationResponseBodyChunks(body),
+      { store: storeOnly },
+    );
     const domApplied = applyMutationResponseToDom({ body, root, store: domStore });
 
     expect(domStore.get('cart', 'cart:c1')).toEqual(storeOnly.get('cart', 'cart:c1'));
@@ -243,13 +250,13 @@ describe('mutation response wire chunks', () => {
 
     // SPEC.md §9.1: store-only mutation responses and runtime apply consume the
     // same fw-query wire chunks, so interposed values must not drift by entrypoint.
-    const applied = applyMutationResponseToRuntime({
+    const body = '<fw-query name="cart" key="cart:c1">{"count":6}</fw-query>';
+    const applied = applyMutationResponseChunksToRuntime(readMutationResponseBodyChunks(body), {
       applyQuery(query) {
         store.set(query.name, { count: (query.value as { count: number }).count + 10 }, query.key);
         return { value: store.get(query.name, query.key) };
       },
       beforeApplyQueries,
-      body: '<fw-query name="cart" key="cart:c1">{"count":6}</fw-query>',
       store,
     });
 
@@ -295,10 +302,10 @@ describe('mutation response wire chunks', () => {
     const plan = vi.fn();
 
     store.subscribe('cart', plan);
-    const applied = applyMutationResponseToRuntime({
-      body: '<fw-query name="cart">{"count":6}</fw-query>',
-      store,
-    });
+    const applied = applyMutationResponseChunksToRuntime(
+      readMutationResponseBodyChunks('<fw-query name="cart">{"count":6}</fw-query>'),
+      { store },
+    );
 
     expect(applied).toEqual({ fragments: [], queries: ['cart'] });
     expect(store.get('cart')).toEqual({ count: 6 });
@@ -311,13 +318,13 @@ describe('mutation response wire chunks', () => {
 
     // SPEC.md §9.1: fw-query chunks are the mutation response vocabulary on
     // every runtime apply path, including store-only multi-tab sync.
-    const applied = applyMutationResponseToRuntime({
+    const body = '<fw-query name="cart" key="cart:c1">{"count":6}</fw-query>';
+    const applied = applyMutationResponseChunksToRuntime(readMutationResponseBodyChunks(body), {
       applyQuery(query) {
         store.set(query.name, { count: (query.value as { count: number }).count + 10 }, query.key);
         return { value: store.get(query.name, query.key) };
       },
       beforeApplyQueries,
-      body: '<fw-query name="cart" key="cart:c1">{"count":6}</fw-query>',
       store,
     });
 
@@ -334,11 +341,11 @@ describe('mutation response wire chunks', () => {
 
     // SPEC.md §9.1: mutation response bodies use one wire vocabulary, but
     // fragment morphing only belongs to runtime callers with an actual root.
-    const applied = applyMutationResponseToRuntime({
-      body: [
-        '<fw-query name="cart">{"count":8}</fw-query>',
-        '<fw-fragment target="cart-badge"><cart-badge>8</cart-badge></fw-fragment>',
-      ].join('\n'),
+    const body = [
+      '<fw-query name="cart">{"count":8}</fw-query>',
+      '<fw-fragment target="cart-badge"><cart-badge>8</cart-badge></fw-fragment>',
+    ].join('\n');
+    const applied = applyMutationResponseChunksToRuntime(readMutationResponseBodyChunks(body), {
       morph,
       queryPlans: {
         cart: {
@@ -368,11 +375,11 @@ describe('mutation response wire chunks', () => {
     // SPEC.md §4.4/§9.1: typed reads and rootless runtime apply can refresh
     // query-bound DOM from the shared mutation vocabulary without requiring a
     // morph root for returned fragments.
-    const applied = applyMutationResponseToRuntime({
-      body: [
-        '<fw-query name="cart">{"count":9}</fw-query>',
-        '<fw-fragment target="cart-badge"><cart-badge>9</cart-badge></fw-fragment>',
-      ].join('\n'),
+    const body = [
+      '<fw-query name="cart">{"count":9}</fw-query>',
+      '<fw-fragment target="cart-badge"><cart-badge>9</cart-badge></fw-fragment>',
+    ].join('\n');
+    const applied = applyMutationResponseChunksToRuntime(readMutationResponseBodyChunks(body), {
       morph,
       queryPlans: { cart: { bindings: true } },
       queryRoot,
@@ -394,15 +401,15 @@ describe('mutation response wire chunks', () => {
 
     // SPEC.md §9.1 keeps query and fragment chunks in one response body; the
     // store-only runtime path should still parse both through the shared reader.
-    const applied = applyMutationResponseToRuntime({
-      body: [
-        '<fw-query name="cart">{</fw-query>',
-        '<fw-query name="inventory">{"available":true}</fw-query>',
-        '<fw-fragment target="cart-badge"><cart-badge>Ready</cart-badge>',
-      ].join('\n'),
-      onError,
-      store,
-    });
+    const body = [
+      '<fw-query name="cart">{</fw-query>',
+      '<fw-query name="inventory">{"available":true}</fw-query>',
+      '<fw-fragment target="cart-badge"><cart-badge>Ready</cart-badge>',
+    ].join('\n');
+    const applied = applyMutationResponseChunksToRuntime(
+      readMutationResponseBodyChunks(body, onError),
+      { onError, store },
+    );
 
     expect(applied).toEqual({
       fragments: [],
@@ -425,16 +432,16 @@ describe('mutation response wire chunks', () => {
     root.bindings.push(count);
     root.targets.set('cart-badge', new FakeMorphTarget());
 
-    const applied = applyMutationResponseToRuntime({
+    const body = [
+      '<fw-query name="cart">{"count":7}</fw-query>',
+      '<fw-fragment target="cart-badge"><cart-badge>27</cart-badge></fw-fragment>',
+    ].join('\n');
+    const applied = applyMutationResponseChunksToRuntime(readMutationResponseBodyChunks(body), {
       applyQuery(query) {
         store.set(query.name, { count: (query.value as { count: number }).count + 20 }, query.key);
         return { value: store.get(query.name, query.key) };
       },
       beforeApplyQueries,
-      body: [
-        '<fw-query name="cart">{"count":7}</fw-query>',
-        '<fw-fragment target="cart-badge"><cart-badge>27</cart-badge></fw-fragment>',
-      ].join('\n'),
       root,
       store,
     });
@@ -452,12 +459,12 @@ describe('mutation response wire chunks', () => {
 
   it('skips malformed mutation query chunks and continues applying valid chunks', () => {
     const store = createQueryStore();
-    const applied = applyMutationResponseToRuntime({
-      body: [
-        '<fw-query name="cart">{</fw-query>',
-        '<fw-query name="inventory">{"available":true}</fw-query>',
-        '<fw-fragment target="cart-badge"><cart-badge>Ready</cart-badge></fw-fragment>',
-      ].join('\n'),
+    const body = [
+      '<fw-query name="cart">{</fw-query>',
+      '<fw-query name="inventory">{"available":true}</fw-query>',
+      '<fw-fragment target="cart-badge"><cart-badge>Ready</cart-badge></fw-fragment>',
+    ].join('\n');
+    const applied = applyMutationResponseChunksToRuntime(readMutationResponseBodyChunks(body), {
       store,
     });
 
@@ -471,12 +478,12 @@ describe('mutation response wire chunks', () => {
 
   it('keeps nested fw-fragment children inside their parent fragment chunk', () => {
     const store = createQueryStore();
-    const applied = applyMutationResponseToRuntime({
-      body: [
-        '<fw-fragment target="cart-badge">',
-        '<cart-badge><span>1</span><fw-fragment target="nested"><span>nested</span></fw-fragment></cart-badge>',
-        '</fw-fragment>',
-      ].join(''),
+    const body = [
+      '<fw-fragment target="cart-badge">',
+      '<cart-badge><span>1</span><fw-fragment target="nested"><span>nested</span></fw-fragment></cart-badge>',
+      '</fw-fragment>',
+    ].join('');
+    const applied = applyMutationResponseChunksToRuntime(readMutationResponseBodyChunks(body), {
       store,
     });
 
