@@ -10,6 +10,7 @@ export function minifyInlineJavaScriptSource(source: string): string {
     printedSource,
     'Compiler-printed inline JavaScript source',
   );
+  assertPrintedInlineJavaScriptParity(sourceFile, printedSourceFile);
   const minifiedSource = compactInlineJavaScriptSource(printedSourceFile);
   const minifiedSourceFile = parseInlineJavaScriptSource(
     minifiedSource,
@@ -41,6 +42,24 @@ export function minifyInlineJavaScriptSource(source: string): string {
   }
 
   return minifiedSource;
+}
+
+function assertPrintedInlineJavaScriptParity(
+  sourceFile: ts.SourceFile,
+  printedSourceFile: ts.SourceFile,
+): void {
+  // SPEC.md §4.4: build-time minification must keep the readable bootstrap and
+  // generated bootstrap as the same parsed program before byte compaction.
+  const sourceFingerprint = collectJavaScriptSyntaxFingerprint(sourceFile);
+  const printedFingerprint = collectJavaScriptSyntaxFingerprint(printedSourceFile);
+  if (sameStringList(sourceFingerprint, printedFingerprint)) return;
+
+  throw new Error(
+    `Inline JavaScript printer changed the readable source parse.${formatSourceDifference(
+      sourceFingerprint.join('\n'),
+      printedFingerprint.join('\n'),
+    )}`,
+  );
 }
 
 function parseInlineJavaScriptSource(source: string, label: string): ts.SourceFile {
@@ -77,6 +96,17 @@ function collectJavaScriptAstFingerprint(sourceFile: ts.SourceFile): string[] {
 
     parts.push(String(node.kind));
     for (const child of children) visit(child);
+  };
+
+  visit(sourceFile);
+  return parts;
+}
+
+function collectJavaScriptSyntaxFingerprint(sourceFile: ts.SourceFile): string[] {
+  const parts: string[] = [];
+  const visit = (node: ts.Node): void => {
+    parts.push(ts.SyntaxKind[node.kind] ?? String(node.kind));
+    ts.forEachChild(node, visit);
   };
 
   visit(sourceFile);

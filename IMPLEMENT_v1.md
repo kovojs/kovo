@@ -96,9 +96,25 @@ packages/runtime/src/mutation-response.test.ts packages/runtime/src/index-export
       `pnpm exec vitest --run packages/runtime/src`, `pnpm exec vitest --config
 vitest.browser.config.ts --run packages/runtime/src/index.browser.test.ts`,
       `pnpm --filter @jiso/runtime run check:inline-loader`, `pnpm exec tsc --noEmit --pretty
-false`, `pnpm exec vp check packages/runtime/src/apply-mutation-response.ts
+      false`, `pnpm exec vp check packages/runtime/src/apply-mutation-response.ts
 packages/runtime/src/inline-loader-build.ts packages/runtime/src/inline-loader.test.ts
 IMPLEMENT_v1.md plans/codebase-quality-round2.md`, and `git diff --check`.
+      Additional evidence 2026-06-13: `packages/runtime/src/apply-mutation-response.ts` deleted
+      the store-first `applyMutationResponse` compatibility wrapper, `packages/runtime/src/index.ts`
+      no longer exports `applyMutationResponse`/`applyMutationResponseToRuntime` values or their
+      compatibility option/result types, and `packages/runtime/src/inline-js-minifier.ts` now
+      checks readable-to-printed parse parity before compaction (SPEC §4.4/§9.1). Same-session
+      evidence: `pnpm exec vitest --run packages/runtime/src/inline-js-minifier.test.ts
+packages/runtime/src/inline-loader.test.ts packages/runtime/src/mutation-response.test.ts
+packages/runtime/src/index-exports.test.ts`, `pnpm exec vitest --run packages/runtime/src`,
+      `pnpm exec vitest --config vitest.browser.config.ts --run
+packages/runtime/src/index.browser.test.ts`, `pnpm --filter @jiso/runtime run
+check:inline-loader`, `pnpm exec tsc --noEmit --pretty false`, `pnpm exec vp check
+packages/runtime/src/apply-mutation-response.ts packages/runtime/src/index.ts
+packages/runtime/src/index-exports.test.ts packages/runtime/src/index.test.ts
+packages/runtime/src/inline-js-minifier.ts packages/runtime/src/inline-js-minifier.test.ts
+packages/runtime/src/mutation-response.test.ts IMPLEMENT_v1.md
+plans/codebase-quality-round2.md`, and `git diff --check`.
       Additional evidence 2026-06-13: `packages/runtime/src/wire-parser.ts` now parses hydrated
       query scripts and wire `<fw-query>` chunks through one query payload helper, while
       `packages/runtime/src/query-apply.test.ts` owns the focused hydration/apply coverage split

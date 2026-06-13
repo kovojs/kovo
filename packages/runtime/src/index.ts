@@ -5,18 +5,10 @@ export type {
   AppliedDeferredStreamResponseToRuntime,
   ApplyDeferredStreamResponseToRuntimeOptions,
 } from './apply-deferred-stream.js';
-export {
-  applyMutationResponse,
-  applyMutationResponseToDom,
-  applyMutationResponseToRuntime,
-} from './apply-mutation-response.js';
+export { applyMutationResponseToDom } from './apply-mutation-response.js';
 export type {
-  AppliedMutationResponse,
   AppliedMutationResponseToDom,
-  AppliedMutationResponseToRuntime,
-  ApplyMutationResponseOptions,
   ApplyMutationResponseToDomOptions,
-  ApplyMutationResponseToRuntimeOptions,
   ApplyQueryInterposition,
 } from './apply-mutation-response.js';
 export * from './events.js';

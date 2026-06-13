@@ -1,15 +1,10 @@
 import { describe, expect, it, vi } from 'vitest';
 
+import { applyMutationResponseToDom, createQueryStore } from './index.js';
+import * as runtime from './index.js';
 import {
-  applyMutationResponse,
-  applyMutationResponseToDom,
-  applyMutationResponseToRuntime,
-  createQueryStore,
-} from './index.js';
-import {
-  applyMutationResponse as applyMutationResponseFromMutationModule,
   applyMutationResponseToDom as applyMutationResponseToDomFromMutationModule,
-  applyMutationResponseToRuntime as applyMutationResponseToRuntimeFromMutationModule,
+  applyMutationResponseToRuntime,
 } from './apply-mutation-response.js';
 import {
   createMutationIdem,
@@ -98,13 +93,13 @@ describe('mutation response wire chunks', () => {
     const plan = vi.fn();
 
     store.subscribe('cart', plan);
-    const applied = applyMutationResponse(
-      store,
-      [
+    const applied = applyMutationResponseToRuntime({
+      body: [
         '<fw-query name="cart">{"count":3}</fw-query>',
         '<fw-fragment target="cart-badge"><cart-badge>3</cart-badge></fw-fragment>',
       ].join('\n'),
-    );
+      store,
+    });
 
     expect(store.get('cart')).toEqual({ count: 3 });
     expect(plan).toHaveBeenCalledWith({ count: 3 });
@@ -119,10 +114,10 @@ describe('mutation response wire chunks', () => {
     const plan = vi.fn();
 
     store.subscribe('product', plan, 'p1');
-    const applied = applyMutationResponse(
+    const applied = applyMutationResponseToRuntime({
+      body: '<fw-query name="product" key="p1">{"stock":4}</fw-query>',
       store,
-      '<fw-query name="product" key="p1">{"stock":4}</fw-query>',
-    );
+    });
 
     // SPEC.md §9.4: query instance keys are the shared currency for store, wire,
     // optimistic transforms, and refetch-on-focus typed reads.
@@ -135,32 +130,32 @@ describe('mutation response wire chunks', () => {
     });
   });
 
-  it('exports canonical mutation response helpers through the runtime barrel', () => {
-    expect(applyMutationResponse).toBe(applyMutationResponseFromMutationModule);
+  it('exports only the DOM mutation response helper through the runtime barrel', () => {
+    expect(Object.hasOwn(runtime, 'applyMutationResponse')).toBe(false);
     expect(applyMutationResponseToDom).toBe(applyMutationResponseToDomFromMutationModule);
-    expect(applyMutationResponseToRuntime).toBe(applyMutationResponseToRuntimeFromMutationModule);
+    expect(Object.hasOwn(runtime, 'applyMutationResponseToRuntime')).toBe(false);
   });
 
   it('accepts escaped JSON from text/html-compatible fw-query chunks', () => {
     const store = createQueryStore();
 
-    applyMutationResponse(
+    applyMutationResponseToRuntime({
+      body: '<fw-query name="cart">{&quot;count&quot;:4,&quot;label&quot;:&quot;Alice&#39;s &amp; Bob&apos;s&quot;}</fw-query>',
       store,
-      '<fw-query name="cart">{&quot;count&quot;:4,&quot;label&quot;:&quot;Alice&#39;s &amp; Bob&apos;s&quot;}</fw-query>',
-    );
+    });
 
     expect(store.get('cart')).toEqual({ count: 4, label: "Alice's & Bob's" });
   });
 
   it('accepts single-quoted chunk attributes', () => {
     const store = createQueryStore();
-    const applied = applyMutationResponse(
-      store,
-      [
+    const applied = applyMutationResponseToRuntime({
+      body: [
         "<fw-query name='cart' key='cart:c1'>{\"count\":4}</fw-query>",
         "<fw-fragment target='cart-list' mode='append'><li>p1</li></fw-fragment>",
       ].join(''),
-    );
+      store,
+    });
 
     expect(store.get('cart', 'cart:c1')).toEqual({ count: 4 });
     expect(applied).toEqual({
@@ -171,10 +166,10 @@ describe('mutation response wire chunks', () => {
 
   it('keeps quoted query attribute tag closers on the store apply path', () => {
     const store = createQueryStore();
-    const applied = applyMutationResponse(
+    const applied = applyMutationResponseToRuntime({
+      body: '<fw-query name="product" key="product>p1">{"stock":7}</fw-query>',
       store,
-      '<fw-query name="product" key="product>p1">{"stock":7}</fw-query>',
-    );
+    });
 
     // SPEC.md §9.4: keyed query chunks must hydrate the same instance key that
     // inline DOM parsing exposes from the wire attribute.
@@ -195,7 +190,7 @@ describe('mutation response wire chunks', () => {
     ].join('');
 
     // SPEC.md §9.1: mutation responses carry query patches and fragment patches together.
-    const storeOnlyApplied = applyMutationResponse(storeOnly, body);
+    const storeOnlyApplied = applyMutationResponseToRuntime({ body, store: storeOnly });
     const domApplied = applyMutationResponseToDom({ body, root, store: domStore });
 
     expect(domStore.get('cart', 'cart:c1')).toEqual(storeOnly.get('cart', 'cart:c1'));
@@ -209,21 +204,15 @@ describe('mutation response wire chunks', () => {
 
     // SPEC.md §9.1: store-only mutation responses and runtime apply consume the
     // same fw-query wire chunks, so interposed values must not drift by entrypoint.
-    const applied = applyMutationResponse(
-      store,
-      '<fw-query name="cart" key="cart:c1">{"count":6}</fw-query>',
-      {
-        applyQuery(query) {
-          store.set(
-            query.name,
-            { count: (query.value as { count: number }).count + 10 },
-            query.key,
-          );
-          return { value: store.get(query.name, query.key) };
-        },
-        beforeApplyQueries,
+    const applied = applyMutationResponseToRuntime({
+      applyQuery(query) {
+        store.set(query.name, { count: (query.value as { count: number }).count + 10 }, query.key);
+        return { value: store.get(query.name, query.key) };
       },
-    );
+      beforeApplyQueries,
+      body: '<fw-query name="cart" key="cart:c1">{"count":6}</fw-query>',
+      store,
+    });
 
     expect(applied).toEqual({ fragments: [], queries: ['cart:c1'] });
     expect(store.get('cart', 'cart:c1')).toEqual({ count: 16 });
@@ -424,14 +413,14 @@ describe('mutation response wire chunks', () => {
 
   it('skips malformed mutation query chunks and continues applying valid chunks', () => {
     const store = createQueryStore();
-    const applied = applyMutationResponse(
-      store,
-      [
+    const applied = applyMutationResponseToRuntime({
+      body: [
         '<fw-query name="cart">{</fw-query>',
         '<fw-query name="inventory">{"available":true}</fw-query>',
         '<fw-fragment target="cart-badge"><cart-badge>Ready</cart-badge></fw-fragment>',
       ].join('\n'),
-    );
+      store,
+    });
 
     expect(store.get('cart')).toBeUndefined();
     expect(store.get('inventory')).toEqual({ available: true });
@@ -443,14 +432,14 @@ describe('mutation response wire chunks', () => {
 
   it('keeps nested fw-fragment children inside their parent fragment chunk', () => {
     const store = createQueryStore();
-    const applied = applyMutationResponse(
-      store,
-      [
+    const applied = applyMutationResponseToRuntime({
+      body: [
         '<fw-fragment target="cart-badge">',
         '<cart-badge><span>1</span><fw-fragment target="nested"><span>nested</span></fw-fragment></cart-badge>',
         '</fw-fragment>',
       ].join(''),
-    );
+      store,
+    });
 
     expect(applied).toEqual({
       fragments: [

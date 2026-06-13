@@ -107,4 +107,26 @@ describe('inline JavaScript minifier', () => {
       'enum declaration',
     );
   });
+
+  it('keeps readable and printed inline JavaScript parse shapes in parity before compaction', () => {
+    // SPEC.md §4.4: the readable bootstrap, compiler-printed source, and
+    // minified source must remain the same parsed program at build time.
+    const source = [
+      'function readableParity(input) {',
+      '  const output = []',
+      '  // ASI and comments are allowed, but must not change the parsed program.',
+      '  output.push(input?.value ?? "fallback")',
+      '  return output.join("; ")',
+      '}',
+    ].join('\n');
+    const minifiedSource = minifyInlineJavaScriptSource(source);
+    const readable = runInThisContext(`(${source})`) as (input?: { value?: string }) => string;
+    const minified = runInThisContext(`(${minifiedSource})`) as (input?: {
+      value?: string;
+    }) => string;
+
+    expect(minified({ value: 'ready' })).toBe(readable({ value: 'ready' }));
+    expect(minified(undefined)).toBe(readable(undefined));
+    expect(minifiedSource).not.toContain('ASI and comments');
+  });
 });

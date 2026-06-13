@@ -15,28 +15,6 @@ export interface AppliedMutationResponse {
 
 export type ApplyQueryInterposition = QueryApplyInterposition;
 
-export interface ApplyMutationResponseOptions {
-  applyQuery?: ApplyQueryInterposition;
-  beforeApplyQueries?: (queries: readonly QueryChunk[]) => void;
-  onError?: (error: unknown) => void;
-}
-
-export function applyMutationResponse(
-  store: QueryStore,
-  body: string,
-  options: ApplyMutationResponseOptions = {},
-): AppliedMutationResponse {
-  return applyMutationResponseBody({
-    body,
-    ...definedProps({
-      applyQuery: options.applyQuery,
-      beforeApplyQueries: options.beforeApplyQueries,
-      onError: options.onError,
-    }),
-    store,
-  });
-}
-
 export interface ApplyMutationResponseToDomOptions {
   applyQuery?: ApplyQueryInterposition;
   beforeApplyQueries?: (queries: readonly QueryChunk[]) => void;

@@ -8,7 +8,6 @@ import {
   applyCompiledQueryUpdatePlan,
   applyOptimisticTransforms,
   abortRemovedIslandSignals,
-  applyMutationResponse,
   applyMutationResponseToDom,
   applyQueryBindings,
   createInlineJisoLoaderSource,
@@ -33,6 +32,7 @@ import {
   type OptimisticFor,
   type StructuralMorphNode,
 } from './index.js';
+import { applyMutationResponseToRuntime } from './apply-mutation-response.js';
 import { abortIslandSignalScope, createIslandSignalScope } from './handler-context.js';
 
 declare module '@jiso/core' {
@@ -2192,13 +2192,13 @@ describe('query store', () => {
     const plan = vi.fn();
     store.subscribe('reviews', plan, 'product:p1');
 
-    const applied = applyMutationResponse(
-      store,
-      [
+    const applied = applyMutationResponseToRuntime({
+      body: [
         '<fw-query name="reviews" key="product:p1">{"items":[{"id":"r1","rating":5}]}</fw-query>',
         '<fw-fragment target="reviews:p1"><section fw-c="reviews">Ready</section></fw-fragment>',
       ].join('\n'),
-    );
+      store,
+    });
 
     expect(store.get('reviews')).toBeUndefined();
     expect(store.get('reviews', 'product:p1')).toEqual({ items: [{ id: 'r1', rating: 5 }] });
@@ -2211,14 +2211,14 @@ describe('query store', () => {
 
   it('skips malformed deferred query chunks while applying valid fragments', () => {
     const store = createQueryStore();
-    const applied = applyMutationResponse(
-      store,
-      [
+    const applied = applyMutationResponseToRuntime({
+      body: [
         '<fw-query name="reviews">{</fw-query>',
         '<fw-query name="recommendations">{"items":[{"id":"p2"}]}</fw-query>',
         '<fw-fragment target="reviews:p1"><section>Ready</section></fw-fragment>',
       ].join('\n'),
-    );
+      store,
+    });
 
     expect(store.get('reviews')).toBeUndefined();
     expect(store.get('recommendations')).toEqual({ items: [{ id: 'p2' }] });
@@ -2238,13 +2238,13 @@ describe('query store', () => {
     store.subscribe('reviews', p2Plan, 'product:p2');
     store.subscribe('reviews', unkeyedPlan);
 
-    applyMutationResponse(
-      store,
-      [
+    applyMutationResponseToRuntime({
+      body: [
         '<fw-query name="reviews" key="product:p1">{"items":[{"id":"r1"}]}</fw-query>',
         '<fw-query name="reviews" key="product:p2">{"items":[{"id":"r2"}]}</fw-query>',
       ].join('\n'),
-    );
+      store,
+    });
 
     expect(store.get('reviews')).toBeUndefined();
     expect(store.get('reviews', 'product:p1')).toEqual({ items: [{ id: 'r1' }] });
