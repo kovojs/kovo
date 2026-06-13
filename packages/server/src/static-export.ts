@@ -1,18 +1,15 @@
 import { diagnosticDefinitions } from '@jiso/core';
 
-import { createRequestHandler, type JisoApp } from './app.js';
-import { replayStaticExportClientModuleArtifacts } from './static-export-client-modules.js';
+import type { JisoApp } from './app.js';
 import {
   createStaticExportOutputPlan,
   STATIC_EXPORT_DRY_RUN_ROOT,
   staticExportAssetArtifacts,
   writeStaticExportOutput,
 } from './static-export-output.js';
-import { replayStaticExportRouteArtifact } from './static-replay.js';
-import { staticExportRoutePlan } from './static-export-route-plan.js';
+import { replayStaticExportApp } from './static-export-replay.js';
 import {
   StaticExportError,
-  staticExportDiagnostic,
   type StaticExportArtifact,
   type StaticExportAssetArtifact,
   type StaticExportAssetInput,
@@ -76,48 +73,17 @@ export async function exportStaticApp(
     throw new StaticExportError(blockingDiagnostics);
   }
 
-  const routePlan = staticExportRoutePlan(app);
-  const diagnostics = [...routePlan.diagnostics];
-  if (diagnostics.length > 0 && options.onNonExportable !== 'skip') {
-    throw new StaticExportError(diagnostics);
-  }
-
-  const handler = createRequestHandler(app);
-  const origin = options.origin ?? 'https://jiso.local';
-  const htmlPathStyle = staticExportHtmlPathStyle(options.htmlPathStyle);
-  const artifacts: StaticExportArtifact[] = [];
-
-  for (const routeTarget of routePlan.targets) {
-    if (diagnostics.some((diagnostic) => diagnostic.routePath === routeTarget.routePath)) continue;
-
-    try {
-      artifacts.push(
-        await replayStaticExportRouteArtifact({
-          handler,
-          htmlPathStyle,
-          origin,
-          routePath: routeTarget.path,
-        }),
-      );
-    } catch (error) {
-      if (!(error instanceof StaticExportError) || options.onNonExportable !== 'skip') {
-        throw error;
-      }
-
-      diagnostics.push(...error.diagnostics);
-    }
-  }
-
-  const clientModules = await replayStaticExportClientModuleArtifacts({
-    handler,
-    origin,
-    routeArtifacts: artifacts,
+  const replay = await replayStaticExportApp({
+    app,
+    ...(options.htmlPathStyle === undefined ? {} : { htmlPathStyle: options.htmlPathStyle }),
+    ...(options.onNonExportable === undefined ? {} : { onNonExportable: options.onNonExportable }),
+    ...(options.origin === undefined ? {} : { origin: options.origin }),
   });
   const assets = staticExportAssetArtifacts(options.assets ?? []);
   const outputPlan = createStaticExportOutputPlan({
-    artifacts,
+    artifacts: replay.artifacts,
     assets,
-    clientModules,
+    clientModules: replay.clientModules,
     outDir: options.outDir ?? STATIC_EXPORT_DRY_RUN_ROOT,
   });
 
@@ -125,23 +91,12 @@ export async function exportStaticApp(
     await writeStaticExportOutput(outputPlan);
   }
 
-  return { artifacts, assets, clientModules, diagnostics };
-}
-
-function staticExportHtmlPathStyle(
-  style: StaticExportHtmlPathStyle | undefined,
-): StaticExportHtmlPathStyle {
-  if (style === undefined) return 'directory';
-  if (style === 'flat' || style === 'directory') return style;
-
-  throw new StaticExportError([
-    staticExportDiagnostic(
-      'htmlPathStyle',
-      `FW229 static export refused htmlPathStyle '${String(
-        style,
-      )}'. Expected 'flat' or 'directory'.`,
-    ),
-  ]);
+  return {
+    artifacts: replay.artifacts,
+    assets,
+    clientModules: replay.clientModules,
+    diagnostics: replay.diagnostics,
+  };
 }
 
 function blockingStaticExportDiagnostics(
