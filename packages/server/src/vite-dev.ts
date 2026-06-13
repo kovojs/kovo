@@ -30,6 +30,11 @@ export interface JisoAppShellViteSsrDevPlugin {
 
 export interface JisoAppShellViteSsrDevPluginOptions {
   appExportName?: string;
+  /**
+   * Defaults to true. Set to false when a dev middleware stack cannot safely
+   * relay 103 Early Hints but should still keep the final Link header.
+   */
+  earlyHints?: boolean;
   moduleId?: string;
   name?: string;
   /**
@@ -112,6 +117,7 @@ export function jisoAppShellViteSsrDevPlugin(
           return readJisoAppShellViteSsrNodeHandler(
             module,
             app,
+            options,
             options.nodeHandlerExportName,
             moduleId,
           )(request, response, next);
@@ -274,6 +280,7 @@ function readJisoAppShellViteSsrApp(
 function readJisoAppShellViteSsrNodeHandler(
   module: Record<string, unknown>,
   app: JisoApp,
+  options: JisoAppShellViteSsrDevPluginOptions,
   exportName: string | undefined,
   moduleId: string,
 ): JisoAppShellViteMiddleware {
@@ -284,7 +291,9 @@ function readJisoAppShellViteSsrNodeHandler(
     throw new Error(`${moduleId} must export ${exportName} as a Node app-shell handler.`);
   }
 
-  const nodeHandler = toNodeHandler(createRequestHandler(app));
+  const nodeOptions =
+    options.earlyHints === undefined ? undefined : { earlyHints: options.earlyHints };
+  const nodeHandler = toNodeHandler(createRequestHandler(app), nodeOptions);
   return (request, response) => nodeHandler(request, response);
 }
 

@@ -18,12 +18,18 @@ import * as appApi from './app.js';
 import type {
   JisoApp as PublicJisoApp,
   JisoAppShellBuild as PublicJisoAppShellBuild,
+  NodeHandlerOptions as PublicNodeHandlerOptions,
   StaticExportOptions as PublicStaticExportOptions,
   StaticExportOutputPlanOptions as PublicStaticExportOutputPlanOptions,
   VersionedClientModuleRegistry as PublicVersionedClientModuleRegistry,
+  WriteWebResponseToNodeOptions as PublicWriteWebResponseToNodeOptions,
 } from '../index.js';
 import type { VersionedClientModuleRegistry as ClientModulesVersionedClientModuleRegistry } from './app-shell/client-modules.js';
 import type { JisoApp as CoreJisoApp } from './app-shell/core.js';
+import type {
+  NodeHandlerOptions as NodeNodeHandlerOptions,
+  WriteWebResponseToNodeOptions as NodeWriteWebResponseToNodeOptions,
+} from './app-shell/node.js';
 import type {
   StaticExportOptions as StaticExportStaticExportOptions,
   StaticExportOutputPlanOptions as StaticExportStaticExportOutputPlanOptions,
@@ -132,6 +138,8 @@ describe('server app-shell public API barrels', () => {
       PublicVersionedClientModuleRegistry extends ClientModulesVersionedClientModuleRegistry
         ? true
         : false,
+      PublicNodeHandlerOptions extends NodeNodeHandlerOptions ? true : false,
+      PublicWriteWebResponseToNodeOptions extends NodeWriteWebResponseToNodeOptions ? true : false,
     ];
 
     const publicAppShellTypesStayAssignable: PublicAppShellTypesStayAssignable = [
@@ -140,9 +148,11 @@ describe('server app-shell public API barrels', () => {
       true,
       true,
       true,
+      true,
+      true,
     ];
 
-    expect(publicAppShellTypesStayAssignable).toEqual([true, true, true, true, true]);
+    expect(publicAppShellTypesStayAssignable).toEqual([true, true, true, true, true, true, true]);
   });
 
   it('exposes the split app-shell package subpaths for R5/R6/R7 consumers', () => {

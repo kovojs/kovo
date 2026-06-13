@@ -435,6 +435,21 @@ packages/runtime/src/mutation-submit.ts`.
       verification:
       `pnpm exec vitest --run packages/server/src/static-export.test.ts packages/server/src/vite-build.test.ts packages/server/src/api/app.test.ts`
       and `pnpm exec tsc --noEmit --pretty false`.
+      Evidence 2026-06-12: the server node adapter now has a shared `earlyHints: false`
+      option for middleware stacks that need to keep final `Link` headers without relaying
+      103 responses, and the SSR Vite dev plugin threads that option through its default
+      loaded-app `Request -> Response` adapter. The create-jiso starter no longer exports a
+      starter-specific Node handler; generated `vp dev`, `vp run serve`, `npm run serve`,
+      and `npm start` load the default exported Jiso app through the public app-shell dev
+      plugin, while static export keeps the manifest-backed replay path. Focused
+      verification:
+      `pnpm exec vitest --run packages/server/src/node.test.ts packages/server/src/vite-dev.test.ts packages/server/src/api/app.test.ts`
+      and
+      `pnpm exec vitest --run packages/create-jiso/src/index.test.ts -t "scaffolds real template files|typechecks the generated auth recipe|runs the generated starter app-shell request and export proof|serves the generated starter app-shell through|runs .* with the built stylesheet href|formats generated export task diagnostics"`;
+      final gates:
+      `pnpm exec tsc --noEmit --pretty false`,
+      `pnpm exec vp check IMPLEMENT_v1.md packages/create-jiso/src/index.test.ts packages/create-jiso/templates/README.md packages/create-jiso/templates/docs/deployment.md packages/create-jiso/templates/src/app-shell.test.ts packages/create-jiso/templates/src/app-shell.ts packages/create-jiso/templates/vite.config.ts packages/server/src/api/app-shell/node.ts packages/server/src/api/app.test.ts packages/server/src/node.test.ts packages/server/src/node.ts packages/server/src/vite-dev.test.ts packages/server/src/vite-dev.ts plans/app-shell.md plans/codebase-quality-round2.md`,
+      and `git diff --check`.
 - [x] D9 TSX-only authoring (commerce TSX migration, FW235 error diagnostic, Constitution #3 payoff rewording, FW226 demotion) is archived in `plans/archive.md` under deleted `plans/block-ir.md`; commerce is TSX-authored, SPEC §5.2/FW235 text is landed, FW235 is implemented at error severity with compiler-emitted provenance exemption, and starter/docs/agent TSX-only constraints are recorded and tested.
 - [x] D10 diagnostics surfacing (blocking Vite dev transform, dev teaching-error documents, `fw mcp` agent surface) is planned in `plans/diagnostics.md`; design agreed 2026-06-11 (severity decided once on shared `diagnosticDefinitions`, surfaces only render; `error` blocks transform/build with no last-good serving; server-rendered dev error documents over the D8 R5 middleware; MCP wraps existing compile/check/explain APIs, stdio-first); SPEC §11.3 surfacing text, V1/V2 Vite transform diagnostics, V3 static-export refusal, E1 dev diagnostic document renderer, E2 page/enhanced-mutation/no-JS middleware failed-module integration, M1a stdio `fw mcp`, M1b SDK-backed MCP lifecycle, M2 `compile/v1` contract, and seeded red/green gate wiring are implemented. Evidence 2026-06-12: `node --test --test-name-pattern "D10 seeded diagnostics gate" tests/fw-check.node.mjs` covers Vite transform/lint callback, `vp build`, static export API, `fw export`, MCP object dispatch, and fallback MCP stdio; `pnpm exec vitest --run packages/server/src/vite-diagnostics.test.ts` covers dev page/enhanced-mutation/no-JS teaching documents.
 - [ ] P10 v1 acceptance ledger is wired with concrete dated doc ledgers for the outside legibility study and prelaunch checks; docs freeze, actual outside study results, external launch evidence, and final clean-checkout acceptance run remain open.

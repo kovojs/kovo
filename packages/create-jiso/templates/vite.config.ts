@@ -91,8 +91,8 @@ function starterSharedAppShellDevPlugin(): StarterDevPlugin {
       }
 
       const sharedPlugin = sharedPluginFactory({
+        earlyHints: false,
         name: 'jiso-starter-app-shell-dev',
-        nodeHandlerExportName: 'starterNodeHandler',
       }) as { configureServer(server: StarterDevServer): void | DevPostHook };
 
       return sharedPlugin.configureServer(server);

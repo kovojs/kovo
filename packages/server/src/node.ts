@@ -4,7 +4,12 @@ import type { ReadableStream as NodeReadableStream } from 'node:stream/web';
 import type { RequestHandler } from './app.js';
 
 export interface NodeHandlerOptions {
+  earlyHints?: boolean;
   origin?: string | ((request: IncomingMessage) => string);
+}
+
+export interface WriteWebResponseToNodeOptions {
+  earlyHints?: boolean;
 }
 
 export type NodeRequestHandler = (
@@ -22,7 +27,10 @@ export function toNodeHandler(
     try {
       const request = nodeRequestToWebRequest(nodeRequest, options);
       const response = await handler(request);
-      await writeWebResponseToNode(response, nodeResponse, request.method);
+      const writeOptions =
+        options.earlyHints === undefined ? undefined : { earlyHints: options.earlyHints };
+
+      await writeWebResponseToNode(response, nodeResponse, request.method, writeOptions);
     } catch {
       if (!nodeResponse.headersSent) {
         nodeResponse.writeHead(500, { 'Content-Type': 'text/plain; charset=utf-8' });
@@ -56,11 +64,16 @@ export async function writeWebResponseToNode(
   response: Response,
   nodeResponse: ServerResponse,
   method = 'GET',
+  options: WriteWebResponseToNodeOptions = {},
 ): Promise<void> {
   const headers = responseHeadersToNodeHeaders(response.headers);
   const earlyHints = response.headers.get('Link');
 
-  if (earlyHints && typeof nodeResponse.writeEarlyHints === 'function') {
+  if (
+    options.earlyHints !== false &&
+    earlyHints &&
+    typeof nodeResponse.writeEarlyHints === 'function'
+  ) {
     nodeResponse.writeEarlyHints({ link: earlyHints });
   }
 

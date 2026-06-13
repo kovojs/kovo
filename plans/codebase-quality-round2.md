@@ -398,6 +398,9 @@ Closed evidence so far:
 - Server static export now exposes the public `staticExportOutputPlan()` target planner, and
   write export reuses the same planned-write object that dry-run validation builds for route
   documents, `/c/` modules, and static assets.
+- Node adapter Early Hints control is now a server-owned option shared by `toNodeHandler()` and
+  SSR Vite dev middleware, so create-jiso dev/serve no longer needs a starter-specific Node
+  handler to adapt the SPEC §9.5 request shell.
 
 Open:
 
@@ -446,6 +449,11 @@ Recent gates:
 - `pnpm exec vitest --run packages/server/src/static-export.test.ts packages/server/src/api/app.test.ts`
 - `pnpm exec tsc --noEmit --pretty false`
 - `pnpm exec vp check packages/server/src/static-export.ts packages/server/src/static-export.test.ts packages/server/src/api/app-shell/static-export.ts packages/server/src/api/app.test.ts plans/app-shell.md plans/codebase-quality-round2.md`
+- `git diff --check`
+- `pnpm exec vitest --run packages/server/src/node.test.ts packages/server/src/vite-dev.test.ts packages/server/src/api/app.test.ts`
+- `pnpm exec vitest --run packages/create-jiso/src/index.test.ts -t "scaffolds real template files|typechecks the generated auth recipe|runs the generated starter app-shell request and export proof|serves the generated starter app-shell through|runs .* with the built stylesheet href|formats generated export task diagnostics"`
+- `pnpm exec tsc --noEmit --pretty false`
+- `pnpm exec vp check IMPLEMENT_v1.md packages/create-jiso/src/index.test.ts packages/create-jiso/templates/README.md packages/create-jiso/templates/docs/deployment.md packages/create-jiso/templates/src/app-shell.test.ts packages/create-jiso/templates/src/app-shell.ts packages/create-jiso/templates/vite.config.ts packages/server/src/api/app-shell/node.ts packages/server/src/api/app.test.ts packages/server/src/node.test.ts packages/server/src/node.ts packages/server/src/vite-dev.test.ts packages/server/src/vite-dev.ts plans/app-shell.md plans/codebase-quality-round2.md`
 - `git diff --check`
 
 ## Phase 6 - Verification Harness And Commerce

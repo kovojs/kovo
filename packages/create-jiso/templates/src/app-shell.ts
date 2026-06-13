@@ -2,11 +2,8 @@ import {
   createApp,
   createMemoryVersionedClientModuleRegistry,
   createRequestHandler,
-  nodeRequestToWebRequest,
   route,
-  writeWebResponseToNode,
 } from '@jiso/server';
-import type { IncomingMessage, ServerResponse } from 'node:http';
 import { App } from './app.js';
 
 const clientModules = createMemoryVersionedClientModuleRegistry();
@@ -49,35 +46,4 @@ export const app = createApp({
 });
 
 export const starterRequestHandler = createRequestHandler(app);
-export async function starterNodeHandler(
-  nodeRequest: IncomingMessage,
-  nodeResponse: ServerResponse,
-  next?: (error?: unknown) => void,
-): Promise<void> {
-  try {
-    const request = nodeRequestToWebRequest(nodeRequest);
-    const response = await starterRequestHandler(request);
-    const writeEarlyHints = nodeResponse.writeEarlyHints;
-    // SPEC.md section 9.5 uses one request shell for dev and export. The starter
-    // dev middleware keeps final Link headers while suppressing optional early
-    // hints so Node-version differences cannot break vp dev.
-    nodeResponse.writeEarlyHints = ((_hints: unknown, callback?: () => void) => {
-      callback?.();
-    }) as ServerResponse['writeEarlyHints'];
-
-    try {
-      await writeWebResponseToNode(response, nodeResponse, request.method);
-    } finally {
-      nodeResponse.writeEarlyHints = writeEarlyHints;
-    }
-  } catch (error) {
-    if (next) {
-      next(error);
-      return;
-    }
-
-    throw error;
-  }
-}
-
 export default app;

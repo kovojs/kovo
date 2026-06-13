@@ -137,6 +137,22 @@ Round86c app-shell static export output-plan evidence:
 - `pnpm exec vp check packages/server/src/static-export.ts packages/server/src/static-export.test.ts packages/server/src/api/app-shell/static-export.ts packages/server/src/api/app.test.ts plans/app-shell.md plans/codebase-quality-round2.md`
 - `git diff --check`
 
+Round86d app-shell dev/serve boundary evidence:
+
+- `@jiso/server` node/http adapters now expose an Early Hints suppression option that preserves
+  final `Link` headers for middleware stacks that cannot safely relay 103 responses, and
+  `jisoAppShellViteSsrDevPlugin()` threads that option through the default loaded-app
+  `Request -> Response` adapter.
+- The create-jiso starter no longer exports a starter-specific Node handler for dev/serve.
+  Generated `vp dev`, `vp run serve`, `npm run serve`, and `npm start` load the default exported
+  Jiso app through the public app-shell dev plugin, while static export keeps the manifest-backed
+  replay path.
+- `pnpm exec vitest --run packages/server/src/node.test.ts packages/server/src/vite-dev.test.ts packages/server/src/api/app.test.ts`
+- `pnpm exec vitest --run packages/create-jiso/src/index.test.ts -t "scaffolds real template files|typechecks the generated auth recipe|runs the generated starter app-shell request and export proof|serves the generated starter app-shell through|runs .* with the built stylesheet href|formats generated export task diagnostics"`
+- `pnpm exec tsc --noEmit --pretty false`
+- `pnpm exec vp check IMPLEMENT_v1.md packages/create-jiso/src/index.test.ts packages/create-jiso/templates/README.md packages/create-jiso/templates/docs/deployment.md packages/create-jiso/templates/src/app-shell.test.ts packages/create-jiso/templates/src/app-shell.ts packages/create-jiso/templates/vite.config.ts packages/server/src/api/app-shell/node.ts packages/server/src/api/app.test.ts packages/server/src/node.test.ts packages/server/src/node.ts packages/server/src/vite-dev.test.ts packages/server/src/vite-dev.ts plans/app-shell.md plans/codebase-quality-round2.md`
+- `git diff --check`
+
 ## Open Work
 
 R6:
@@ -147,11 +163,12 @@ R6:
 
 R7:
 
-- Move starter to routed app-shell dev/export tasks.
 - Move commerce over HTTP rather than package-internal shortcuts where user-facing examples are
   concerned.
 - Keep docs-site export as the first outside consumer; remaining work is broader launch/readiness
   evidence outside the critical implementation path.
+- Starter routed app-shell `vp dev`, serve, and export adoption is covered by Round86d; keep R7
+  open for the remaining commerce/docs launch-readiness sweep.
 
 Quality constraints:
 

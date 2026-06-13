@@ -75,9 +75,12 @@ describe('starter app shell', () => {
     const httpServer = createHttpServer(vite.middlewares);
 
     try {
-      await expect(vite.ssrLoadModule('/src/app-shell.ts')).resolves.toMatchObject({
-        starterNodeHandler: expect.any(Function),
+      const appShellModule = await vite.ssrLoadModule('/src/app-shell.ts');
+      expect(appShellModule).toMatchObject({
+        default: expect.objectContaining({ routes: [expect.objectContaining({ path: '/' })] }),
+        starterRequestHandler: expect.any(Function),
       });
+      expect(appShellModule).not.toHaveProperty('starterNodeHandler');
 
       await new Promise<void>((resolve, reject) => {
         httpServer.once('error', reject);

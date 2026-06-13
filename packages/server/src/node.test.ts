@@ -61,6 +61,36 @@ describe('server node adapter', () => {
       await server.close();
     }
   });
+
+  it('can suppress early hints while preserving final Link headers', async () => {
+    const server = await serveWithNode(
+      toNodeHandler(
+        async () =>
+          new Response('asset-linked', {
+            headers: {
+              'Content-Type': 'text/plain; charset=utf-8',
+              Link: '</app.css>; rel=preload; as=style',
+            },
+          }),
+        { earlyHints: false },
+      ),
+    );
+
+    try {
+      const response = await server.fetch('/linked');
+
+      expect(response).toMatchObject({
+        body: 'asset-linked',
+        earlyHints: [],
+        headers: expect.objectContaining({
+          link: '</app.css>; rel=preload; as=style',
+        }),
+        status: 200,
+      });
+    } finally {
+      await server.close();
+    }
+  });
 });
 
 interface NodeTestResponse {

@@ -189,10 +189,11 @@ describe('create-jiso starter', () => {
       const appShellSource = readFileSync(join(root, 'src/app-shell.ts'), 'utf8');
       expect(appShellSource).toContain("route('/',");
       expect(appShellSource).toContain('createRequestHandler(app)');
-      expect(appShellSource).toContain('nodeRequestToWebRequest(nodeRequest)');
-      expect(appShellSource).toContain('writeWebResponseToNode(response, nodeResponse');
       expect(appShellSource).toContain("path: '/c/starter.client.js'");
       expect(appShellSource).toContain("version: 'starter-r7'");
+      expect(appShellSource).not.toContain('starterNodeHandler');
+      expect(appShellSource).not.toContain('nodeRequestToWebRequest');
+      expect(appShellSource).not.toContain('writeWebResponseToNode');
       expect(readFileSync(join(root, 'src/app-shell.test.ts'), 'utf8')).toContain(
         'SPEC.md section 9.5',
       );
@@ -223,8 +224,9 @@ describe('create-jiso starter', () => {
       expect(viteConfig).toContain('starterSharedAppShellDevPlugin()');
       expect(viteConfig).toContain("server.ssrLoadModule('@jiso/server')");
       expect(viteConfig).toContain('jisoAppShellViteSsrDevPlugin');
+      expect(viteConfig).toContain('earlyHints: false');
       expect(viteConfig).toContain("name: 'jiso-starter-app-shell-dev'");
-      expect(viteConfig).toContain("nodeHandlerExportName: 'starterNodeHandler'");
+      expect(viteConfig).not.toContain('nodeHandlerExportName');
       expect(viteConfig).toContain('manifest: true');
       expect(viteConfig).toContain('node scripts/export-static.mjs');
       expect(viteConfig).not.toContain("pathname === '/'");
