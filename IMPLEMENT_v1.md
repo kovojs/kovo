@@ -78,6 +78,15 @@ packages/runtime/src/broadcast.ts packages/runtime/src/query-store.test.ts`.
       `fw-c`, `id`, and `fw-fragment-target` live-DOM vocabulary used by `FW-Targets`
       and inline response application (SPEC §9.1), with selector-special query
       instance ids covered in `packages/runtime/src/index.browser.test.ts`.
+      Evidence 2026-06-12: inline enhanced-form response parsing now embeds helper declarations
+      extracted from `packages/runtime/src/wire-parser.ts` during `build:inline-loader` and
+      `check:inline-loader`, so the checked-in bootstrap uses the canonical `readElementChunks`
+      scanner instead of a separate `readChunks` parser while keeping the SPEC §4.4 gzip budget.
+      Same-session evidence: `pnpm exec vitest --run packages/runtime/src/inline-loader.test.ts
+packages/runtime/src/inline-js-minifier.test.ts packages/runtime/src/wire-parser.test.ts`,
+      `pnpm exec vitest --config vitest.browser.config.ts --run
+packages/runtime/src/index.browser.test.ts`, and `pnpm --filter @jiso/runtime run
+check:inline-loader`.
 - [x] P5 byte-for-byte live-server fixture exit is covered; runtime acceptance now proves form field and navigation route renames fail under `vp check` (`packages/runtime/src/index.test.ts`, SPEC §6.2/§6.3/§6.4/§16.6).
 - [x] FW227 nullable binding paths (SPEC §4.8, §6.2): optional-segment (`?.`) path grammar lowered by the compiler (P1), shared empty-rendering semantics in server renderer and loader/stamps (P2/P5), null-aware path typing against inferred query shapes with the leftJoin-nullability proof under `vp check` (P5), and a golden teaching error.
       Evidence 2026-06-11: `packages/compiler/src/query-bindings.test.ts` covers optional

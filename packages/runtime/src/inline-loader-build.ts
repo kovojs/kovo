@@ -5,6 +5,19 @@ import ts from 'typescript';
 
 import { minifyInlineJavaScriptSource } from './inline-js-minifier.ts';
 
+const inlineJisoLoaderModulePath = fileURLToPath(new URL('./inline-loader.ts', import.meta.url));
+const wireParserSourcePath = fileURLToPath(new URL('./wire-parser.ts', import.meta.url));
+const inlineWireParserFunctionNames = [
+  'escapeRegExp',
+  'tagClose',
+  'matchingElementEnd',
+  'readElementChunks',
+  'readAttribute',
+  'unescapeHtml',
+] as const;
+
+export const inlineWireParserReadableSource = readInlineWireParserReadableSource();
+
 export const inlineJisoLoaderInstallerReadableSource = String.raw`
 /* SPEC.md §4.4: this is the always-loaded bootstrap source. */
 function installInlineJisoLoader(importModule) {
@@ -40,85 +53,7 @@ function installInlineJisoLoader(importModule) {
   ];
   const findFragmentTarget = (target) =>
     doc.getElementById(target) ?? doc.querySelector('[fw-fragment-target="' + target + '"]');
-  const unescapeHtml = (value) =>
-    value
-      .replaceAll('&#39;', "'")
-      .replaceAll('&apos;', "'")
-      .replaceAll('&quot;', '"')
-      .replaceAll('&gt;', '>')
-      .replaceAll('&lt;', '<')
-      .replaceAll('&amp;', '&');
-  const tagClose = (source, start) => {
-    let quote;
-    for (let index = start; index < source.length; index += 1) {
-      const char = source[index];
-      if (quote) {
-        if (char === quote) quote = undefined;
-        continue;
-      }
-      if (char === '"' || char === "'") {
-        quote = char;
-        continue;
-      }
-      if (char === '>') return index;
-    }
-  };
-  const readAttribute = (attrs, name) => {
-    const match = new RegExp(
-      '(?:^|\\s)' +
-        name +
-        "(?=\\s|=|$|/)(?:\\s*=\\s*(?:\"([^\"]*)\"|'([^']*)'|([^\\s\"'=<>\\x60]+)))?(?=\\s|$|/|>)",
-      'i',
-    ).exec(attrs);
-    return unescapeHtml((match && (match[1] ?? match[2] ?? match[3])) || '') || null;
-  };
-  const matchingElementEnd = (body, tagName, start, openingEnd, nested) => {
-    if (!nested) {
-      const closingTag = new RegExp('</' + tagName + '\\s*>', 'gi');
-      closingTag.lastIndex = openingEnd + 1;
-      const match = closingTag.exec(body);
-      return match && { closeStart: match.index, end: match.index + match[0].length };
-    }
-    const elementTag = new RegExp('</?' + tagName + '\\b', 'gi');
-    elementTag.lastIndex = start;
-    let depth = 0;
-    for (let match = elementTag.exec(body); match; match = elementTag.exec(body)) {
-      const close = tagClose(body, match.index + match[0].length);
-      if (close === undefined) return null;
-      if (match[0].startsWith('</')) {
-        depth -= 1;
-        if (depth === 0) return { closeStart: match.index, end: close + 1 };
-      } else if (!/\/\s*>$/.test(body.slice(match.index, close + 1))) {
-        depth += 1;
-      }
-      elementTag.lastIndex = close + 1;
-    }
-    return null;
-  };
-  const readChunks = (body, tagName, nested) => {
-    const chunks = [];
-    const tag = new RegExp('</?' + tagName + '\\b', 'gi');
-    let offset = 0;
-    while (offset < body.length) {
-      tag.lastIndex = offset;
-      const match = tag.exec(body);
-      if (!match) break;
-      if (match[0].startsWith('</')) {
-        offset = match.index + match[0].length;
-        continue;
-      }
-      const openingEnd = tagClose(body, match.index + match[0].length);
-      if (openingEnd === undefined) break;
-      const end = matchingElementEnd(body, tagName, match.index, openingEnd, nested);
-      if (!end) break;
-      chunks.push({
-        attrs: body.slice(match.index + match[0].length, openingEnd),
-        content: body.slice(openingEnd + 1, end.closeStart),
-      });
-      offset = end.end;
-    }
-    return chunks;
-  };
+  ${inlineWireParserReadableSource}
   const applyFragment = (fragment) => {
     const target = readAttribute(fragment.attrs, 'target');
     const element = target && findFragmentTarget(target);
@@ -130,7 +65,7 @@ function installInlineJisoLoader(importModule) {
     }
   };
   const applyResponseBody = (body) => {
-    readChunks(body, 'fw-query', false).forEach((query) => {
+    readElementChunks(body, 'fw-query').forEach((query) => {
       const name = readAttribute(query.attrs, 'name');
       const queryBody = unescapeHtml(query.content || 'null');
       if (!name) return;
@@ -149,7 +84,7 @@ function installInlineJisoLoader(importModule) {
         }),
       );
     });
-    readChunks(body, 'fw-fragment', true).forEach(applyFragment);
+    readElementChunks(body, 'fw-fragment', { nested: true }).forEach(applyFragment);
   };
   const fallbackSubmit = (form) => {
     if (typeof form.submit === 'function') {
@@ -261,8 +196,6 @@ export interface EmitInlineJisoLoaderModuleResult {
   targetPath: string;
 }
 
-const inlineJisoLoaderModulePath = fileURLToPath(new URL('./inline-loader.ts', import.meta.url));
-
 export function buildInlineJisoLoaderModuleSource(
   source = inlineJisoLoaderInstallerReadableSource,
 ): string {
@@ -308,6 +241,49 @@ export function buildInlineJisoLoaderModuleSource(
   assertInlineJisoLoaderModuleArtifactParity(moduleSource, 'Generated inline Jiso loader module');
 
   return moduleSource;
+}
+
+function readInlineWireParserReadableSource(): string {
+  const source = readFileSync(wireParserSourcePath, 'utf8');
+  const sourceFile = ts.createSourceFile(
+    'wire-parser.ts',
+    source,
+    ts.ScriptTarget.Latest,
+    true,
+    ts.ScriptKind.TS,
+  );
+  const declarations = new Map<string, string>();
+
+  for (const statement of sourceFile.statements) {
+    if (!ts.isFunctionDeclaration(statement) || !statement.name) continue;
+    if (!(inlineWireParserFunctionNames as readonly string[]).includes(statement.name.text)) {
+      continue;
+    }
+
+    declarations.set(
+      statement.name.text,
+      statement.getText(sourceFile).replace(/^export\s+function/, 'function'),
+    );
+  }
+
+  const missing = inlineWireParserFunctionNames.filter((name) => !declarations.has(name));
+  if (missing.length > 0) {
+    throw new Error(
+      `Inline Jiso loader wire parser source is missing helper(s): ${missing.join(', ')}`,
+    );
+  }
+
+  const helperSource = inlineWireParserFunctionNames
+    .map((name) => declarations.get(name))
+    .join('\n\n');
+  const transpiled = ts.transpileModule(helperSource, {
+    compilerOptions: {
+      module: ts.ModuleKind.None,
+      target: ts.ScriptTarget.ESNext,
+    },
+  }).outputText;
+
+  return transpiled.replace(/^"use strict";\s*/, '').trim();
 }
 
 export function assertInlineJisoLoaderModuleArtifactParity(

@@ -262,6 +262,15 @@ Closed evidence so far:
 - Inline-loader `--check` now parses the checked-in generated module and fails when the exported
   source literal drifts from the executable installer artifact, with tests mutating only one
   embedded artifact to prove the check.
+- Inline-loader response parsing now embeds helper declarations extracted from the canonical
+  `wire-parser.ts` implementation at build/check time instead of maintaining a standalone
+  `readChunks` scanner; the generated artifact calls `readElementChunks` for query and fragment
+  response chunks while preserving the SPEC.md §4.4 gzip budget. Same-session evidence:
+  `pnpm exec vitest --run packages/runtime/src/inline-loader.test.ts
+packages/runtime/src/inline-js-minifier.test.ts packages/runtime/src/wire-parser.test.ts`,
+  `pnpm exec vitest --config vitest.browser.config.ts --run
+packages/runtime/src/index.browser.test.ts`, and `pnpm --filter @jiso/runtime run
+check:inline-loader`.
 - Runtime apply path split now keeps `apply-path.ts` as the stable facade while moving mutation
   response and deferred-stream application into `apply-mutation-response.ts` and
   `apply-deferred-stream.ts`; `mutation-response.test.ts` proves direct split-module exports still
@@ -310,6 +319,9 @@ Recent gates:
 - `pnpm exec vitest --run packages/runtime/src/mutation-response.test.ts packages/runtime/src/index.test.ts`
 - `pnpm exec vitest --config vitest.browser.config.ts --run packages/runtime/src/index.browser.test.ts`
 - `pnpm exec vp check packages/runtime/src/fragment-targets.ts packages/runtime/src/morph.ts packages/runtime/src/index.browser.test.ts plans/codebase-quality-round2.md IMPLEMENT_v1.md`
+- `pnpm exec vitest --run packages/runtime/src/inline-loader.test.ts packages/runtime/src/inline-js-minifier.test.ts packages/runtime/src/wire-parser.test.ts`
+- `pnpm exec vitest --config vitest.browser.config.ts --run packages/runtime/src/index.browser.test.ts`
+- `pnpm --filter @jiso/runtime run check:inline-loader`
 - `git diff --check`
 
 ## Phase 5 - Server

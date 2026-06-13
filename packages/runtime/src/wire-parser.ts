@@ -151,7 +151,7 @@ export function readElementChunks(
   options: ReadElementChunksOptions = {},
 ): ElementChunk[] {
   const chunks: ElementChunk[] = [];
-  const tag = new RegExp(`</?${escapeRegExp(tagName)}\\b`, 'gi');
+  const tag = new RegExp('</?' + escapeRegExp(tagName) + '\\b', 'gi');
   let offset = 0;
 
   while (offset < body.length) {
@@ -195,13 +195,13 @@ function matchingElementEnd(
   nested: boolean,
 ): { closeStart: number; end: number } | null {
   if (!nested) {
-    const closingTag = new RegExp(`</${escapeRegExp(tagName)}\\s*>`, 'gi');
+    const closingTag = new RegExp('</' + escapeRegExp(tagName) + '\\s*>', 'gi');
     closingTag.lastIndex = openingEnd + 1;
     const match = closingTag.exec(body);
     return match ? { closeStart: match.index, end: match.index + match[0].length } : null;
   }
 
-  const elementTag = new RegExp(`</?${escapeRegExp(tagName)}\\b`, 'gi');
+  const elementTag = new RegExp('</?' + escapeRegExp(tagName) + '\\b', 'gi');
   elementTag.lastIndex = start;
   let depth = 0;
 
@@ -251,14 +251,13 @@ export function tagClose(source: string, start: number): number | undefined {
 export function readAttribute(attrs: string, name: string): string | null {
   const escapedName = name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   const pattern = new RegExp(
-    `(?:^|\\s)${escapedName}(?=\\s|=|$|/)(?:\\s*=\\s*(?:"(?<double>[^"]*)"|'(?<single>[^']*)'|(?<bare>[^\\s"'=<>\`]+)))?(?=\\s|$|/|>)`,
+    '(?:^|\\s)' +
+      escapedName +
+      '(?=\\s|=|$|/)(?:\\s*=\\s*(?:"([^"]*)"|\'([^\']*)\'|([^\\s"\'=<>\\x60]+)))?(?=\\s|$|/|>)',
     'i',
   );
   const match = pattern.exec(attrs);
-  return (
-    unescapeHtml(match?.groups?.double ?? match?.groups?.single ?? match?.groups?.bare ?? '') ||
-    null
-  );
+  return unescapeHtml((match && (match[1] ?? match[2] ?? match[3])) || '') || null;
 }
 
 export function unescapeHtml(value: string): string {

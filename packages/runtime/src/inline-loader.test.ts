@@ -11,6 +11,7 @@ import {
   buildInlineJisoLoaderInstallerSource,
   emitInlineJisoLoaderModule,
   inlineJisoLoaderInstallerReadableSource,
+  inlineWireParserReadableSource,
 } from './inline-loader-build.js';
 import {
   createInlineJisoLoaderSource,
@@ -111,6 +112,9 @@ describe('inline loader source', () => {
     // SPEC.md §4.4: drift checks must compare the shipped bootstrap to readable source.
     expect(inlineJisoLoaderInstallerReadableSource).toContain('\nfunction installInlineJisoLoader');
     expect(inlineJisoLoaderInstallerReadableSource).toContain("join('; ')");
+    expect(inlineJisoLoaderInstallerReadableSource).toContain(inlineWireParserReadableSource);
+    expect(inlineWireParserReadableSource).toContain('function readElementChunks(');
+    expect(inlineWireParserReadableSource).not.toContain('export function');
     expect(buildInlineJisoLoaderInstallerSource()).toBe(inlineJisoLoaderInstallerSource);
   });
 
@@ -208,8 +212,11 @@ describe('inline loader source', () => {
     expect(inlineJisoLoaderInstallerSource).not.toMatch(/\n|\s{2,}/);
     expect(inlineJisoLoaderInstallerSource).toContain("join('; ')");
     expect(inlineJisoLoaderInstallerSource).toContain('[...new Set(');
-    expect(inlineJisoLoaderInstallerSource).toContain('const tagClose=');
-    expect(inlineJisoLoaderInstallerSource).toContain("readChunks(body,'fw-fragment',true)");
+    expect(inlineJisoLoaderInstallerSource).toContain('function tagClose(');
+    expect(inlineJisoLoaderInstallerSource).toContain(
+      "readElementChunks(body,'fw-fragment',{nested:true})",
+    );
+    expect(inlineJisoLoaderInstallerSource).not.toContain('readChunks(');
     expect(inlineJisoLoaderInstallerSource).toContain(
       "key:readAttribute(query.attrs,'key')??undefined",
     );
