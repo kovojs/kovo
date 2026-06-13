@@ -226,6 +226,8 @@ Closed evidence so far:
 - Ordered source-patch lowerings now compose their `SourceOffsetMap`s back to the original TSX
   source, so diagnostics after multiple parse-requiring passes are not limited to the final-pass
   offset map.
+- Compiler validation now composes navigation/platform/view offset maps with inline-derive prefix
+  maps and reports FW311 against the original author source after both lowering phases.
 
 Open:
 
@@ -257,6 +259,8 @@ Recent gates:
 - `git diff --check`
 - `pnpm exec vitest --run packages/compiler/src/model-pipeline.test.ts packages/compiler/src/compile-component.test.ts packages/compiler/src/navigation-lowering.test.ts packages/compiler/src/platform-lowering.test.ts packages/compiler/src/view-transitions.test.ts`
 - `pnpm exec vp check packages/compiler/src/shared.ts packages/compiler/src/model-pipeline.ts packages/compiler/src/model-pipeline.test.ts`
+- `pnpm exec vitest --run packages/compiler/src/query-coverage.test.ts packages/compiler/src/model-pipeline.test.ts packages/compiler/src/compile-component.test.ts packages/compiler/src/navigation-lowering.test.ts`
+- `pnpm exec vp check packages/compiler/src/compile.ts packages/compiler/src/query-coverage.test.ts`
 
 ## Phase 3 - Drizzle Extraction
 

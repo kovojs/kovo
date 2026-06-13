@@ -31,6 +31,7 @@ import {
 import { isCompilerIrArtifact, validateAuthoringSurface } from './validate/authoring-surface.js';
 import { validatePackageComponentPrefixes } from './validate/package-prefixes.js';
 import { collectCompilerDiagnostics } from './validate/pipeline.js';
+import { composeSourceOffsetMaps } from './shared.js';
 import type { CompileComponentOptions, CompileResult } from './types.js';
 import { compileArtifactFileNames, createEmptyCompileResult, emittedFileKind } from './types.js';
 
@@ -87,7 +88,11 @@ export function compileComponentModule(options: CompileComponentOptions): Compil
     { prefix: deriveLowering.prefix },
   );
   const source = derivePatch.state.source;
-  const diagnosticSource = navigationState.source;
+  const diagnosticSource = options.source;
+  const validationOffsetMap = composeSourceOffsetMaps(
+    navigationPatch.sourceOffsetMap,
+    derivePatch.sourceOffsetMap,
+  );
   const model = derivePatch.state.model;
   const handlers = lowerEventHandlers({ ...compileOptions, source }, componentName, model);
   const queryUpdatePlans = collectQueryUpdatePlans(model, componentName);
@@ -103,7 +108,7 @@ export function compileComponentModule(options: CompileComponentOptions): Compil
     originalModel,
     diagnosticSource,
     source,
-    sourceOffsetMap: derivePatch.sourceOffsetMap,
+    sourceOffsetMap: validationOffsetMap,
     updateCoverage,
   });
   const fileNames = compileArtifactFileNames(options.fileName);
