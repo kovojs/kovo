@@ -232,6 +232,12 @@ Closed evidence so far:
   `packages/drizzle/src/static.ts`, `packages/drizzle/src/index.test.ts`,
   `conformance/drizzle-pin/src/index.test.ts`, `pnpm exec vitest --run packages/drizzle/src`,
   and `pnpm exec vitest --run conformance/drizzle-pin`.
+- Closure-local helper summaries now fold into callers only when helper receiver parameters are
+  supplied by proven Drizzle receiver arguments; calls that pass fake/lookalike receivers no longer
+  fabricate parent touch facts while the helper's isolated summary remains visible. Evidence:
+  `packages/drizzle/src/static.ts`, `packages/drizzle/src/index.test.ts`,
+  `conformance/drizzle-pin/src/index.test.ts`, `pnpm exec vitest --run packages/drizzle/src`,
+  and `pnpm exec vitest --run conformance/drizzle-pin`.
 
 Open:
 

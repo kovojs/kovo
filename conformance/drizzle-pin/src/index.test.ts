@@ -1225,6 +1225,60 @@ describe('Drizzle pinned subset conformance', () => {
     });
   });
 
+  it('pins project closure-local helper folding to proven receiver arguments', () => {
+    const graph = extractTouchGraphFromProject({
+      files: [
+        {
+          fileName: 'conformance/drizzle-pin/src/cart.domain.ts',
+          source: [
+            "import type { PgDatabase } from 'drizzle-orm/pg-core';",
+            '',
+            'interface FakeDb {',
+            '  insert(table: unknown): { values(value: unknown): Promise<void> };',
+            '}',
+            '',
+            "export const cartItems = pgTable('cart_items', {}, jiso({ domain: 'cart', key: 'productId' }));",
+            "export const auditLog = pgTable('audit_log', {}, jiso({ domain: 'audit', key: 'productId' }));",
+            '',
+            'export async function addItem(db: PgDatabase<any, any, any>, fake: FakeDb, productId: string) {',
+            '  async function writeAudit(writer: PgDatabase<any, any, any>) {',
+            '    await writer.insert(auditLog).values({ productId });',
+            '  }',
+            '  await writeAudit(fake);',
+            '  await db.insert(cartItems).values({ productId });',
+            '}',
+            '',
+          ].join('\n'),
+        },
+      ],
+    });
+
+    expect(graph.addItem).toEqual({
+      reads: [],
+      touches: [
+        {
+          domain: 'cart',
+          keys: null,
+          site: 'conformance/drizzle-pin/src/cart.domain.ts:15',
+          via: 'cart_items',
+        },
+      ],
+      unresolved: [],
+    });
+    expect(graph.writeAudit).toEqual({
+      reads: [],
+      touches: [
+        {
+          domain: 'audit',
+          keys: null,
+          site: 'conformance/drizzle-pin/src/cart.domain.ts:12',
+          via: 'audit_log',
+        },
+      ],
+      unresolved: [],
+    });
+  });
+
   it('pins real Drizzle receiver types inside domain write callbacks', () => {
     const graph = extractTouchGraphFromProject({
       files: [

@@ -3618,6 +3618,78 @@ export interface CommerceInvalidationSets {
     });
   });
 
+  it('does not fold closure-local helper summaries when the call omits a source receiver', () => {
+    const graph = extractTouchGraphFromSource([
+      {
+        fileName: 'cart.domain.ts',
+        source: [
+          'export const cartItems = pgTable("cart_items", {}, jiso({ domain: "cart", key: "productId" }));',
+          'export const auditLog = pgTable("audit_log", {}, jiso({ domain: "audit", key: "productId" }));',
+          '',
+          'export async function addItem(db, fake, productId) {',
+          '  async function writeAudit(db) {',
+          '    await db.insert(auditLog).values({ productId });',
+          '  }',
+          '  await writeAudit(fake);',
+          '  await db.insert(cartItems).values({ productId });',
+          '}',
+          '',
+        ].join('\n'),
+      },
+    ]);
+
+    expect(graph.addItem).toEqual({
+      reads: [],
+      touches: [{ domain: 'cart', keys: null, site: 'cart.domain.ts:9', via: 'cart_items' }],
+      unresolved: [],
+    });
+    expect(graph.writeAudit).toEqual({
+      reads: [],
+      touches: [{ domain: 'audit', keys: null, site: 'cart.domain.ts:6', via: 'audit_log' }],
+      unresolved: [],
+    });
+  });
+
+  it('does not fold project closure-local helper summaries when the call omits a typed receiver', () => {
+    const graph = extractTouchGraphFromProject({
+      files: [
+        {
+          fileName: 'cart.domain.ts',
+          source: [
+            'import type { PgDatabase } from "drizzle-orm/pg-core";',
+            '',
+            'interface FakeDb {',
+            '  insert(table: unknown): { values(value: unknown): Promise<void> };',
+            '}',
+            '',
+            'export const cartItems = pgTable("cart_items", {}, jiso({ domain: "cart", key: "productId" }));',
+            'export const auditLog = pgTable("audit_log", {}, jiso({ domain: "audit", key: "productId" }));',
+            '',
+            'export async function addItem(db: PgDatabase<any, any, any>, fake: FakeDb, productId: string) {',
+            '  async function writeAudit(writer: PgDatabase<any, any, any>) {',
+            '    await writer.insert(auditLog).values({ productId });',
+            '  }',
+            '  await writeAudit(fake);',
+            '  await db.insert(cartItems).values({ productId });',
+            '}',
+            '',
+          ].join('\n'),
+        },
+      ],
+    });
+
+    expect(graph.addItem).toEqual({
+      reads: [],
+      touches: [{ domain: 'cart', keys: null, site: 'cart.domain.ts:15', via: 'cart_items' }],
+      unresolved: [],
+    });
+    expect(graph.writeAudit).toEqual({
+      reads: [],
+      touches: [{ domain: 'audit', keys: null, site: 'cart.domain.ts:12', via: 'audit_log' }],
+      unresolved: [],
+    });
+  });
+
   it('dedupes recursive helper summaries at a fixed point', () => {
     const graph = extractTouchGraphFromSource([
       {

@@ -356,6 +356,7 @@ function projectFunctionExtractionsByFileName(
         ],
         unresolvedCalls: [],
         receiverNames: [...receivers.names],
+        receiverParameters: projectReceiverParameterRequirements(fn),
         writeCalls: extractProjectDrizzleWriteCalls(
           body,
           file,
@@ -393,6 +394,7 @@ function projectFunctionExtractionsByFileName(
         ],
         unresolvedCalls: [],
         receiverNames: [...receivers.names],
+        receiverParameters: projectReceiverParameterRequirements(initializer),
         writeCalls: extractProjectDrizzleWriteCalls(
           body,
           file,
@@ -427,6 +429,7 @@ function projectFunctionExtractionsByFileName(
         ],
         unresolvedCalls: [],
         receiverNames: [...receivers.names],
+        receiverParameters: projectReceiverParameterRequirements(callback.fn),
         writeCalls: extractProjectDrizzleWriteCalls(
           callback.body,
           file,
@@ -447,7 +450,14 @@ function projectFunctionExtractionsByFileName(
           ? extractionsByFunction.get(extractedFunctionKey(name, fn, nameNode))
           : undefined;
       if (!body || !extraction) continue;
-      extraction.localCalls = extractLocalFunctionCallsFromBody(body, localFunctionNames);
+      extraction.localCalls = extractLocalFunctionCallsFromBody(
+        body,
+        localFunctionNames,
+        extractionsByFunction,
+        (argument) =>
+          isProjectDrizzleReceiverIdentifier(argument, projectDrizzleReceivers(fn)) ||
+          isDrizzleReceiver(argument),
+      );
       extraction.unresolvedCalls = extractProjectUnresolvedCalls(
         body,
         projectDrizzleReceivers(fn),
@@ -466,6 +476,10 @@ function projectFunctionExtractionsByFileName(
       extraction.localCalls = extractLocalFunctionCallsFromBody(
         initializer.getBody(),
         localFunctionNames,
+        extractionsByFunction,
+        (argument) =>
+          isProjectDrizzleReceiverIdentifier(argument, projectDrizzleReceivers(initializer)) ||
+          isDrizzleReceiver(argument),
       );
       extraction.unresolvedCalls = extractProjectUnresolvedCalls(
         initializer.getBody(),
@@ -476,7 +490,14 @@ function projectFunctionExtractionsByFileName(
     for (const callback of projectDomainWriteCallbacks(sourceFile).values()) {
       const extraction = extractionsByFunction.get(callback.key);
       if (!extraction) continue;
-      extraction.localCalls = extractLocalFunctionCallsFromBody(callback.body, localFunctionNames);
+      extraction.localCalls = extractLocalFunctionCallsFromBody(
+        callback.body,
+        localFunctionNames,
+        extractionsByFunction,
+        (argument) =>
+          isProjectDrizzleReceiverIdentifier(argument, projectDrizzleReceivers(callback.fn)) ||
+          isDrizzleReceiver(argument),
+      );
       extraction.unresolvedCalls = extractProjectUnresolvedCalls(
         callback.body,
         projectDrizzleReceivers(callback.fn),
@@ -563,6 +584,25 @@ function projectDrizzleReceivers(callback: Node): ProjectDrizzleReceivers {
   appendProjectDrizzleReceiverBindingsFromBody(functionBody(callback), { names, symbolKeys });
   appendProjectTransactionReceiverAliases(callback, { names, symbolKeys });
   return { names, symbolKeys };
+}
+
+function projectReceiverParameterRequirements(callback: Node): ReceiverParameterRequirement[] {
+  if (
+    !Node.isArrowFunction(callback) &&
+    !Node.isFunctionDeclaration(callback) &&
+    !Node.isFunctionExpression(callback)
+  ) {
+    return [];
+  }
+
+  return callback.getParameters().flatMap((parameter, index) => {
+    const names = new Set<string>();
+    const symbolKeys = new Set<string>();
+    appendProjectDrizzleReceiverBinding(parameter.getNameNode(), names, symbolKeys);
+    return names.size > 0 || symbolKeys.size > 0
+      ? [{ index, names: [...names], symbolKeys: [...symbolKeys] }]
+      : [];
+  });
 }
 
 function appendProjectDrizzleReceiverBinding(
@@ -1572,6 +1612,7 @@ interface ExtractedFunction {
   name: string;
   readCalls: readonly ExtractedReadCall[];
   receiverNames: readonly string[];
+  receiverParameters: readonly ReceiverParameterRequirement[];
   unresolvedCalls: readonly ExternalDbArgumentCall[];
   writeCalls: readonly ExtractedWriteCall[];
 }
@@ -1583,6 +1624,12 @@ type ParsedExtractedFunction = Omit<
   bodyNode: Node;
   callback: Node;
 };
+
+interface ReceiverParameterRequirement {
+  index: number;
+  names: readonly string[];
+  symbolKeys: readonly string[];
+}
 
 interface ExtractedQueryDefinition {
   diagnostics?: readonly TouchGraphDiagnostic[];
@@ -3616,6 +3663,7 @@ function extractFunctions(file: SourceFileInput): ExtractedFunction[] {
       ...extractDomainWriteCallbacks(sourceFile),
     ];
     const localFunctionKeys = new Set(functions.map((fn) => fn.key));
+    const functionsByKey = new Map(functions.map((fn) => [fn.key, fn]));
 
     return functions.map((fn): ExtractedFunction => {
       const receiverNames = new Set(fn.receiverNames ?? sourceDrizzleReceiverNames(fn.callback));
@@ -3623,7 +3671,12 @@ function extractFunctions(file: SourceFileInput): ExtractedFunction[] {
 
       return {
         ...extracted,
-        localCalls: extractLocalFunctionCallsFromBody(bodyNode, localFunctionKeys),
+        localCalls: extractLocalFunctionCallsFromBody(
+          bodyNode,
+          localFunctionKeys,
+          functionsByKey,
+          (argument) => isSourceDrizzleReceiverIdentifier(argument, receiverNames),
+        ),
         readCalls: [
           ...extractSelectReadCallsFromBody(bodyNode, receiverNames),
           ...extractRelationalReadCallsFromBody(bodyNode, receiverNames),
@@ -3744,6 +3797,7 @@ function extractedFunctionFromCallback(
     key,
     name,
     receiverNames: sourceDrizzleReceiverNames(callback),
+    receiverParameters: sourceReceiverParameterRequirements(callback),
   };
 }
 
@@ -3771,6 +3825,8 @@ function functionBody(callback: Node): Node {
 function extractLocalFunctionCallsFromBody(
   body: Node,
   localFunctionKeys: ReadonlySet<string>,
+  localFunctionsByKey: ReadonlyMap<string, Pick<ExtractedFunction, 'receiverParameters'>>,
+  isReceiverArgument: (argument: Node) => boolean,
 ): string[] {
   const calls: string[] = [];
 
@@ -3782,10 +3838,34 @@ function extractLocalFunctionCallsFromBody(
     if (IGNORED_LOCAL_CALL_NAMES.has(name)) continue;
 
     const key = localFunctionKeyForIdentifier(expression, localFunctionKeys);
+    if (
+      key &&
+      !localFunctionCallSatisfiesReceiverRequirements(
+        call,
+        localFunctionsByKey.get(key)?.receiverParameters ?? [],
+        isReceiverArgument,
+      )
+    ) {
+      continue;
+    }
     if (key && localFunctionKeys.has(key)) calls.push(key);
   }
 
   return [...new Set(calls)];
+}
+
+function localFunctionCallSatisfiesReceiverRequirements(
+  call: CallExpression,
+  requirements: readonly ReceiverParameterRequirement[],
+  isReceiverArgument: (argument: Node) => boolean,
+): boolean {
+  if (requirements.length === 0) return true;
+
+  const args = call.getArguments();
+  return requirements.every((requirement) => {
+    const argument = args[requirement.index];
+    return argument ? isReceiverArgument(argument) : false;
+  });
 }
 
 function extractDrizzleWriteCallsFromBody(
@@ -4090,6 +4170,22 @@ function sourceDrizzleReceiverNames(callback: Node): string[] {
   }
 
   return [...names];
+}
+
+function sourceReceiverParameterRequirements(callback: Node): ReceiverParameterRequirement[] {
+  if (
+    !Node.isArrowFunction(callback) &&
+    !Node.isFunctionDeclaration(callback) &&
+    !Node.isFunctionExpression(callback)
+  ) {
+    return [];
+  }
+
+  return callback.getParameters().flatMap((parameter, index) => {
+    const names = new Set<string>();
+    appendSourceReceiverBindingNames(parameter.getNameNode(), names);
+    return names.size > 0 ? [{ index, names: [...names], symbolKeys: [] }] : [];
+  });
 }
 
 function appendSourceReceiverBindingNames(name: Node, names: Set<string>): void {
