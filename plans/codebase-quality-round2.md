@@ -293,6 +293,7 @@ Latest focused evidence:
 - `pnpm exec tsc --noEmit --pretty false`
 - `pnpm exec vp check packages/server/src/static-export-document.ts packages/server/src/static-export-document-refs.ts packages/server/src/static-export-client-module-artifacts.ts packages/server/src/static-export-replay.ts packages/server/src/static-replay.test.ts packages/server/src/static-export-client-modules.test.ts IMPLEMENT_v1.md plans/app-shell.md plans/codebase-quality-round2.md`
 - `git diff --check`
+- `pnpm exec vitest --run packages/server/src/wire-html.test.ts packages/server/src/mutation-response.test.ts packages/server/src/deferred-stream.test.ts`
 
 ## Phase 6 - Verification Harness And Commerce
 

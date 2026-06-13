@@ -32,6 +32,22 @@ describe('server wire html emitters', () => {
     );
   });
 
+  it('prepends stylesheet links inside fragment wire payloads', () => {
+    expect(
+      renderFragmentWireHtml({
+        html: '<cart-drawer>Ready</cart-drawer>',
+        stylesheets: [
+          '/assets/cart-drawer.css',
+          { href: '/assets/theme.css?mode=screen&print=1' },
+          '/assets/cart-drawer.css',
+        ],
+        target: 'cart-drawer',
+      }),
+    ).toBe(
+      '<fw-fragment target="cart-drawer"><link rel="stylesheet" href="/assets/cart-drawer.css"><link rel="stylesheet" href="/assets/theme.css?mode=screen&amp;print=1"><cart-drawer>Ready</cart-drawer></fw-fragment>',
+    );
+  });
+
   it('omits replace mode because it is the default fragment wire behavior', () => {
     expect(
       renderFragmentWireHtml({

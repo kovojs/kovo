@@ -1,4 +1,3 @@
-import { renderStylesheetLinks } from './hints.js';
 import type { StylesheetAsset } from './hints.js';
 import type { ServerResponseBase } from './response.js';
 import { renderFragmentWireHtml, renderQueryWireHtml } from './wire-html.js';
@@ -58,12 +57,11 @@ export function renderDeferredStream(options: DeferredStreamOptions): DeferredSt
 }
 
 function renderDeferredFragmentChunk(fragment: DeferredFragmentChunk): string {
-  const stylesheets = renderStylesheetLinks(fragment.stylesheets ?? []);
-
   return renderFragmentWireHtml({
-    html: `${stylesheets}${fragment.html}`,
+    html: fragment.html,
     mode: fragment.mode,
     priority: fragment.priority,
+    stylesheets: fragment.stylesheets,
     target: fragment.target,
   });
 }

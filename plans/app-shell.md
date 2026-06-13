@@ -543,3 +543,12 @@ Round137 starter static-host export evidence:
 - `pnpm exec vitest --run packages/create-jiso/src/index.test.ts`
 - `pnpm exec tsc --noEmit --pretty false`
 - `pnpm exec vp check packages/create-jiso/src/index.ts packages/create-jiso/src/index.test.ts packages/create-jiso/templates/package.json packages/create-jiso/templates/vite.config.ts packages/create-jiso/templates/scripts/preview-static.mjs packages/create-jiso/templates/README.md packages/create-jiso/templates/docs/deployment.md plans/app-shell.md plans/codebase-quality-round2.md IMPLEMENT_v1.md`
+
+Round142 app-shell wire-html emitter evidence:
+
+- `packages/server/src/wire-html.ts` now owns stylesheet-link prepending for
+  `<fw-fragment>` payloads, so mutation responses and deferred stream fragments share one
+  SPEC §9.5 fragment wire-html emitter instead of composing stylesheet HTML at each producer.
+- `packages/server/src/wire-html.test.ts` pins fragment stylesheet dedupe and href escaping at
+  the emitter boundary while existing mutation/deferred tests prove byte-compatible output.
+- `pnpm exec vitest --run packages/server/src/wire-html.test.ts packages/server/src/mutation-response.test.ts packages/server/src/deferred-stream.test.ts`

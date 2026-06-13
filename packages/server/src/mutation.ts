@@ -17,7 +17,6 @@ import {
   type Guard,
   type RequestLifecycleOptions,
 } from './guards.js';
-import { renderStylesheetLinks } from './hints.js';
 import { renderFragmentWireHtml, renderQueryWireHtml } from './wire-html.js';
 import {
   readQueryInstanceKey,
@@ -716,8 +715,9 @@ async function renderFragmentChunks(
     try {
       chunks.push(
         renderFragmentWireHtml({
-          html: `${renderStylesheetLinks(renderer.stylesheets ?? [])}${await renderer.render(input)}`,
+          html: await renderer.render(input),
           mode: renderer.mode,
+          stylesheets: renderer.stylesheets,
           target: renderer.target,
         }),
       );
@@ -728,7 +728,8 @@ async function renderFragmentChunks(
       chunks.push(
         renderFragmentWireHtml({
           errorBoundary: renderer.target,
-          html: `${renderStylesheetLinks(renderer.stylesheets ?? [])}${await renderer.errorBoundary.render(error, input)}`,
+          html: await renderer.errorBoundary.render(error, input),
+          stylesheets: renderer.stylesheets,
           target,
         }),
       );
@@ -748,7 +749,8 @@ async function renderFailureFragment<Request>(
     : renderDefaultFailureFragmentContent(failure);
 
   return renderFragmentWireHtml({
-    html: `${renderStylesheetLinks(wireRequest.failureStylesheets ?? [])}${html}`,
+    html,
+    stylesheets: wireRequest.failureStylesheets,
     target,
   });
 }
@@ -770,7 +772,8 @@ function renderMutationServerErrorFragment<Request>(
   const target = wireRequest.failureTarget ?? wireRequest.targets?.[0] ?? 'error';
 
   return renderFragmentWireHtml({
-    html: `${renderStylesheetLinks(wireRequest.failureStylesheets ?? [])}<output role="alert" data-error-code="SERVER_ERROR">Internal Server Error</output>`,
+    html: '<output role="alert" data-error-code="SERVER_ERROR">Internal Server Error</output>',
+    stylesheets: wireRequest.failureStylesheets,
     target,
   });
 }

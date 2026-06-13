@@ -1,4 +1,5 @@
 import { escapeAttribute, escapeHtml, escapeScriptJson } from './html.js';
+import { renderStylesheetLinks, type StylesheetAsset } from './hints.js';
 
 export interface QueryWireRenderOptions {
   key?: string | undefined;
@@ -18,6 +19,7 @@ export interface FragmentWireRenderOptions {
   html: string;
   mode?: 'append' | 'replace' | undefined;
   priority?: number | string | undefined;
+  stylesheets?: readonly (string | StylesheetAsset)[] | undefined;
   target: string;
 }
 
@@ -46,5 +48,7 @@ export function renderFragmentWireHtml(options: FragmentWireRenderOptions): stri
       ? ''
       : ` error-boundary="${escapeAttribute(options.errorBoundary)}"`;
 
-  return `<fw-fragment target="${escapeAttribute(options.target)}"${modeAttribute}${priorityAttribute}${errorBoundaryAttribute}>${options.html}</fw-fragment>`;
+  const html = `${renderStylesheetLinks(options.stylesheets ?? [])}${options.html}`;
+
+  return `<fw-fragment target="${escapeAttribute(options.target)}"${modeAttribute}${priorityAttribute}${errorBoundaryAttribute}>${html}</fw-fragment>`;
 }
