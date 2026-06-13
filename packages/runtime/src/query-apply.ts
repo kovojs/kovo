@@ -30,12 +30,12 @@ export interface QueryScriptHydrationLedger {
   ): readonly string[];
 }
 
-export interface ApplyQueryChunksToStoreOptions {
+interface ApplyQueryChunksOptions {
   afterApplyQuery?: (query: QueryChunk, value: unknown) => void;
   applyQuery?: QueryApplyInterposition;
 }
 
-export interface ApplyQueryChunksToRuntimeOptions extends ApplyQueryChunksToStoreOptions {
+export interface ApplyQueryChunksToRuntimeOptions extends ApplyQueryChunksOptions {
   queryPlans?: CompiledQueryUpdatePlans;
   root?: unknown;
 }
@@ -44,7 +44,7 @@ export interface QueryScriptHydrationOptions extends ApplyQueryChunksToRuntimeOp
   onError?: RuntimeErrorReporter;
 }
 
-export function applyQueryChunkToStore(
+function applyQueryChunk(
   store: QueryStore,
   query: QueryChunk,
   interpose?: QueryApplyInterposition,
@@ -56,15 +56,15 @@ export function applyQueryChunkToStore(
   return query.value;
 }
 
-export function applyQueryChunksToStore(
+function applyQueryChunks(
   store: QueryStore,
   queries: readonly QueryChunk[],
-  options: ApplyQueryChunksToStoreOptions = {},
+  options: ApplyQueryChunksOptions = {},
 ): readonly string[] {
   const applied: string[] = [];
 
   for (const query of queries) {
-    const value = applyQueryChunkToStore(store, query, options.applyQuery);
+    const value = applyQueryChunk(store, query, options.applyQuery);
     options.afterApplyQuery?.(query, value);
     applied.push(queryWireKey(query.name, query.key));
   }
@@ -79,7 +79,7 @@ export function applyQueryChunksToRuntime(
 ): readonly string[] {
   const readBindingIndex = createLazyBindingIndexReader();
 
-  return applyQueryChunksToStore(store, queries, {
+  return applyQueryChunks(store, queries, {
     afterApplyQuery(query, value) {
       applyCompiledQueryUpdatePlanIfSupported(
         options.root,

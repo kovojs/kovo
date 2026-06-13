@@ -2,8 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { installJisoLoader, type DelegatedEvent } from './index.js';
 import {
-  applyQueryChunksToStore,
-  applyQueryChunkToStore,
+  applyQueryChunksToRuntime,
   createQueryScriptHydrationLedger,
   hydrateQueryScripts,
   queryScriptsFromRoot,
@@ -178,16 +177,18 @@ describe('query store hydration and refetch', () => {
         textContent: '{"stock":4}',
       },
     ]);
-    const applied = applyQueryChunkToStore(appliedStore, {
-      key: 'p1',
-      name: 'product',
-      value: { stock: 4 },
-    });
+    const applied = applyQueryChunksToRuntime(appliedStore, [
+      {
+        key: 'p1',
+        name: 'product',
+        value: { stock: 4 },
+      },
+    ]);
 
     // SPEC.md §9.4: hydrated scripts and later mutation/deferred query chunks
     // must write the same keyed store slot and publish the same typed-read key.
     expect(hydrated).toEqual(['product:p1']);
-    expect(applied).toEqual({ stock: 4 });
+    expect(applied).toEqual(['product:p1']);
     expect(hydratedStore.get('product', 'p1')).toEqual(appliedStore.get('product', 'p1'));
     expect(hydratedStore.get('product')).toBeUndefined();
     expect(appliedStore.get('product')).toBeUndefined();
@@ -268,7 +269,7 @@ describe('query store hydration and refetch', () => {
     expect([...queryScriptsFromRoot({})]).toEqual([]);
   });
 
-  it('applies query chunks in one canonical batch with interposed values', () => {
+  it('applies query chunks through one canonical runtime batch with interposed values', () => {
     const store = createQueryStore();
     const cartPlan = vi.fn();
     const productPlan = vi.fn();
@@ -277,7 +278,7 @@ describe('query store hydration and refetch', () => {
     store.subscribe('cart', cartPlan);
     store.subscribe('product', productPlan, 'p1');
 
-    const applied = applyQueryChunksToStore(
+    const applied = applyQueryChunksToRuntime(
       store,
       [
         { name: 'cart', value: { count: 1 } },

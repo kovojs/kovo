@@ -144,5 +144,7 @@ describe('runtime root exports', () => {
     expect(runtime.refetchQueries).toBe(refetchQueries);
     expect(runtime.createQueryStore).toBe(createQueryStore);
     expect(runtime.derive).toBe(derive);
+    expect(Object.hasOwn(runtime, 'applyQueryChunkToStore')).toBe(false);
+    expect(Object.hasOwn(runtime, 'applyQueryChunksToStore')).toBe(false);
   });
 });

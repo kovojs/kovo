@@ -15,7 +15,7 @@ export interface AppliedMutationResponse {
 
 export type ApplyQueryInterposition = QueryApplyInterposition;
 
-export interface ApplyMutationResponseToStoreOptions {
+export interface ApplyMutationResponseOptions {
   applyQuery?: ApplyQueryInterposition;
   beforeApplyQueries?: (queries: readonly QueryChunk[]) => void;
   onError?: (error: unknown) => void;
@@ -39,7 +39,7 @@ export function applyFragmentQueryBody(
 export function applyMutationResponse(
   store: QueryStore,
   body: string,
-  options: ApplyMutationResponseToStoreOptions = {},
+  options: ApplyMutationResponseOptions = {},
 ): AppliedMutationResponse {
   return applyMutationResponseBody({
     body,
