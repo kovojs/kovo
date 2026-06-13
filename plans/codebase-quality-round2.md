@@ -158,6 +158,21 @@ conformance/drizzle-pin/src/index.test.ts IMPLEMENT_v1.md plans/codebase-quality
       pnpm exec vp check packages/runtime/src/index.ts packages/runtime/src/index-exports.test.ts packages/runtime/src/apply-mutation-response.ts packages/runtime/src/query-refetch.ts IMPLEMENT_v1.md plans/codebase-quality-round2.md
       git diff --check
       ```
+      Round108 evidence 2026-06-13: visible-return typed read refetch now applies `/_q/`
+      response bodies through `applyMutationResponseToRuntime` instead of importing the
+      private mutation body parser, and runtime query-plan roots are separated from fragment
+      morph roots so rootless typed reads can still refresh bindings through the canonical
+      mutation/query apply path. The root barrel now explicitly exports deferred stream
+      entrypoints instead of wildcard-exporting the deferred module. Same-session evidence:
+
+      ```text
+      pnpm exec vitest --run packages/runtime/src/query-refetch.test.ts packages/runtime/src/mutation-response.test.ts packages/runtime/src/apply-deferred-stream.test.ts packages/runtime/src/index-exports.test.ts
+      pnpm exec vitest --run packages/runtime/src
+      pnpm exec vitest --config vitest.browser.config.ts --run packages/runtime/src/index.browser.test.ts
+      pnpm --filter @jiso/runtime run check:inline-loader
+      pnpm exec vp check packages/runtime/src/apply-mutation-response.ts packages/runtime/src/query-refetch.ts packages/runtime/src/apply-deferred-stream.ts packages/runtime/src/index.ts packages/runtime/src/mutation-response.test.ts packages/runtime/src/query-refetch.test.ts packages/runtime/src/index-exports.test.ts IMPLEMENT_v1.md plans/codebase-quality-round2.md
+      git diff --check
+      ```
 
 - [ ] Phase 5 server: document/app extraction finished subtractively; one wire-html emitter;
       one `onError` diagnostic seam; replay choreography and response types unified.

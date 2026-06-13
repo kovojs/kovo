@@ -1,5 +1,15 @@
 export type { DiagnosticCode } from '@jiso/core';
-export * from './apply-deferred-stream.js';
+export {
+  applyDeferredStreamResponseToDom,
+  applyDeferredStreamResponseToRuntime,
+} from './apply-deferred-stream.js';
+export type {
+  AppliedDeferredStreamResponse,
+  AppliedDeferredStreamResponseToDom,
+  AppliedDeferredStreamResponseToRuntime,
+  ApplyDeferredStreamResponseToDomOptions,
+  ApplyDeferredStreamResponseToRuntimeOptions,
+} from './apply-deferred-stream.js';
 export {
   applyMutationResponse,
   applyMutationResponseToDom,
@@ -12,7 +22,6 @@ export type {
   ApplyMutationResponseOptions,
   ApplyMutationResponseToDomOptions,
   ApplyMutationResponseToRuntimeOptions,
-  ApplyMutationResponseToRuntimeStoreOptions,
   ApplyQueryInterposition,
 } from './apply-mutation-response.js';
 export * from './events.js';

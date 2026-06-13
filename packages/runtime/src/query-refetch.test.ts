@@ -376,7 +376,10 @@ describe('query refetch', () => {
       status: 200,
       text: async () =>
         url === '/_q/cart'
-          ? '<fw-query name="cart">{"count":2}</fw-query>'
+          ? [
+              '<fw-query name="cart">{"count":2}</fw-query>',
+              '<fw-fragment target="cart-badge"><cart-badge>2</cart-badge></fw-fragment>',
+            ].join('')
           : '<fw-query name="reviews">{"total":5}</fw-query>',
     }));
 
@@ -392,7 +395,10 @@ describe('query refetch', () => {
         root,
       }),
     ).resolves.toEqual([
-      { fragments: [], queries: ['cart'] },
+      {
+        fragments: [{ html: '<cart-badge>2</cart-badge>', target: 'cart-badge' }],
+        queries: ['cart'],
+      },
       { fragments: [], queries: ['reviews'] },
     ]);
 

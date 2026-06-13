@@ -330,6 +330,36 @@ describe('mutation response wire chunks', () => {
     expect(morph).not.toHaveBeenCalled();
   });
 
+  it('applies runtime query plans through queryRoot without enabling fragment morphing', () => {
+    const store = createQueryStore();
+    const queryRoot = new FakeMorphRoot();
+    const count = new FakeQueryBindingElement({ 'data-bind': 'cart.count' }, '0');
+    const morph = vi.fn();
+    queryRoot.bindings.push(count);
+
+    // SPEC.md §4.4/§9.1: typed reads and rootless runtime apply can refresh
+    // query-bound DOM from the shared mutation vocabulary without requiring a
+    // morph root for returned fragments.
+    const applied = applyMutationResponseToRuntime({
+      body: [
+        '<fw-query name="cart">{"count":9}</fw-query>',
+        '<fw-fragment target="cart-badge"><cart-badge>9</cart-badge></fw-fragment>',
+      ].join('\n'),
+      morph,
+      queryPlans: { cart: { bindings: true } },
+      queryRoot,
+      store,
+    });
+
+    expect(applied).toEqual({
+      fragments: [{ html: '<cart-badge>9</cart-badge>', target: 'cart-badge' }],
+      queries: ['cart'],
+    });
+    expect('appliedFragments' in applied).toBe(false);
+    expect(count.textContent).toBe('9');
+    expect(morph).not.toHaveBeenCalled();
+  });
+
   it('reports malformed chunks on the runtime store-only apply path', () => {
     const store = createQueryStore();
     const onError = vi.fn();

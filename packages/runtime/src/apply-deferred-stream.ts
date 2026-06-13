@@ -66,6 +66,7 @@ export function applyDeferredStreamResponseToRuntime(
           islandSignalScope: options.islandSignalScope,
           morph: options.morph,
           onError: options.onError,
+          queryRoot: options.queryRoot,
           queryPlans: options.queryPlans,
         }),
         ...definedProps({ root: options.root }),

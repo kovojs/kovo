@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest';
 
 import * as runtime from './index.js';
+import {
+  applyDeferredStreamResponseToDom,
+  applyDeferredStreamResponseToRuntime,
+} from './apply-deferred-stream.js';
 import { createEventBus } from './events.js';
 import {
   abortRemovedIslandSignals,
@@ -104,6 +108,8 @@ describe('runtime root exports', () => {
   it('exports mutation modules directly from their split implementations', () => {
     // SPEC.md §9.1/§9.2/§10.4: mutation submit, response apply, broadcast,
     // pending, and optimism stay split while the root package remains stable.
+    expect(runtime.applyDeferredStreamResponseToDom).toBe(applyDeferredStreamResponseToDom);
+    expect(runtime.applyDeferredStreamResponseToRuntime).toBe(applyDeferredStreamResponseToRuntime);
     expect(runtime.installMutationBroadcast).toBe(installMutationBroadcast);
     expect(runtime.applyEnhancedMutationResponseBodyToDom).toBe(
       applyEnhancedMutationResponseBodyToDom,

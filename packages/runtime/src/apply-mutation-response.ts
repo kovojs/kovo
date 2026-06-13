@@ -21,7 +21,7 @@ export interface ApplyMutationResponseOptions {
   onError?: (error: unknown) => void;
 }
 
-export function applyFragmentQueryBody(
+function applyFragmentQueryBody(
   body: string,
   applyQueries: (queries: readonly QueryChunk[]) => readonly string[],
   onError?: (error: unknown) => void,
@@ -59,6 +59,7 @@ export interface ApplyMutationResponseToDomOptions {
   islandSignalScope?: IslandSignalScope;
   morph?: MorphFragment;
   onError?: (error: unknown) => void;
+  queryRoot?: unknown;
   queryPlans?: CompiledQueryUpdatePlans;
   root: MorphRoot;
   store: QueryStore;
@@ -73,11 +74,6 @@ export type AppliedMutationResponseToRuntime =
   | AppliedMutationResponseToDom;
 
 type ApplyMutationResponseToRuntimeBaseOptions = Omit<ApplyMutationResponseToDomOptions, 'root'>;
-
-export type ApplyMutationResponseToRuntimeStoreOptions =
-  ApplyMutationResponseToRuntimeBaseOptions & {
-    root?: undefined;
-  };
 
 export type ApplyMutationResponseToRuntimeOptions = ApplyMutationResponseToRuntimeBaseOptions & {
   root?: MorphRoot | undefined;
@@ -102,7 +98,7 @@ function applyMutationResponseBody(
         ...definedProps({
           applyQuery: options.applyQuery,
           queryPlans: options.queryPlans,
-          root: options.root,
+          root: options.queryRoot ?? options.root,
         }),
       }),
     options.onError,
