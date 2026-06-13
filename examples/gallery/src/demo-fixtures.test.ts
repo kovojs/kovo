@@ -92,7 +92,9 @@ describe('gallery demo fixtures', () => {
 
   it('keeps static visual fixture HTML synchronized with rendered styled routes', () => {
     for (const [path, fileName] of [
+      ['/components/autocomplete', 'autocomplete.html.txt'],
       ['/components/checkbox-group', 'checkbox-group.html.txt'],
+      ['/components/combobox', 'combobox.html.txt'],
       ['/components/command', 'command.html.txt'],
       ['/components/context-menu', 'context-menu.html.txt'],
       ['/components/dropdown-menu', 'dropdown-menu.html.txt'],

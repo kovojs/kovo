@@ -100,7 +100,9 @@ import { GalleryToastDemo } from './generated/interactive/toast-demo.js';
 // @ts-expect-error generated client modules are compiler artifacts without declarations.
 import * as tooltipClient from './generated/interactive/tooltip-demo.client.js';
 import { GalleryTooltipDemo } from './generated/interactive/tooltip-demo.js';
+import autocompleteStaticRouteHtml from './visual-fixtures/autocomplete.html.txt?raw';
 import checkboxGroupStaticRouteHtml from './visual-fixtures/checkbox-group.html.txt?raw';
+import comboboxStaticRouteHtml from './visual-fixtures/combobox.html.txt?raw';
 import commandStaticRouteHtml from './visual-fixtures/command.html.txt?raw';
 import contextMenuStaticRouteHtml from './visual-fixtures/context-menu.html.txt?raw';
 import dropdownMenuStaticRouteHtml from './visual-fixtures/dropdown-menu.html.txt?raw';
@@ -127,7 +129,9 @@ interface InteractiveDemoComponent {
 }
 
 type StaticVisualFixturePath =
+  | '/components/autocomplete'
   | '/components/checkbox-group'
+  | '/components/combobox'
   | '/components/command'
   | '/components/context-menu'
   | '/components/dropdown-menu'
@@ -146,7 +150,9 @@ type StaticVisualFixturePath =
   | '/components/tooltip';
 
 const staticVisualFixtureHtml: Record<StaticVisualFixturePath, string> = {
+  '/components/autocomplete': autocompleteStaticRouteHtml,
   '/components/checkbox-group': checkboxGroupStaticRouteHtml,
+  '/components/combobox': comboboxStaticRouteHtml,
   '/components/command': commandStaticRouteHtml,
   '/components/context-menu': contextMenuStaticRouteHtml,
   '/components/dropdown-menu': dropdownMenuStaticRouteHtml,
@@ -419,6 +425,21 @@ describe('compiled interactive gallery demos in the browser', () => {
     expect(await visualBaselineHash(hoverCardRoute)).toBe('5e6e6eb4');
     expect(await visualBaselineHash(popoverRoute)).toBe('cf798fae');
     expect(await visualBaselineHash(tooltipRoute)).toBe('fcf88f35');
+
+    const autocompleteRoute = mountStaticGalleryRoute('/components/autocomplete');
+    const comboboxRoute = mountStaticGalleryRoute('/components/combobox');
+
+    expect(visualGeometry(autocompleteRoute)).toEqual({
+      height: 585,
+      width: 860,
+    });
+    expect(visualGeometry(comboboxRoute)).toEqual({
+      height: 674,
+      width: 860,
+    });
+
+    expect(await visualBaselineHash(autocompleteRoute)).toBe('b23aee53');
+    expect(await visualBaselineHash(comboboxRoute)).toBe('38d910c8');
   });
 
   it('updates accordion ARIA and panel visibility through generated handlers', async () => {

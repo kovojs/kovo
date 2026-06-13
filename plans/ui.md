@@ -170,6 +170,10 @@ commands. Use `- [ ]` for open actionable work and `- [x]` only for fully verifi
       `@jiso/ui` wrapper surface, the raw route fixtures are synchronized against
       `renderGalleryRoute()`, and the Chromium browser gate asserts deterministic route geometry
       plus screenshot hashes `5e6e6eb4`, `cf798fae`, and `fcf88f35`.
+      Evidence 2026-06-13: the static visual baseline now covers the H3 autocomplete and combobox
+      input route family. Their raw route fixtures are synchronized against `renderGalleryRoute()`,
+      and the Chromium browser gate asserts deterministic route geometry plus screenshot hashes
+      `b23aee53` and `38d910c8`.
 - [x] Close remaining field/fieldset behavior gaps with primitive tests tied to `form()`
       integration and native validity semantics.
       Evidence 2026-06-13: `packages/headless-ui/src/primitives/field.ts` and
@@ -273,6 +277,12 @@ commands. Use `- [ ]` for open actionable work and `- [x]` only for fully verifi
       `(cd examples/gallery && pnpm exec vitest --config vitest.browser.config.ts --run src/interactive-gallery.browser.test.ts -t "representative styled static")`;
       exact `pnpm exec vp check packages/headless-ui/src/primitives/toast.ts packages/headless-ui/src/primitives/toast.test.ts packages/ui/src/toast.tsx packages/ui/src/index.test.tsx examples/gallery/src/demo-fixtures.tsx examples/gallery/src/demo-fixtures.test.ts examples/gallery/src/interactive-gallery.browser.test.ts examples/gallery/src/visual-fixtures/toast.html.txt plans/ui.md`;
       `git diff --check`.
+- [x] H3 autocomplete/combobox static visual-baseline slice:
+      `pnpm exec vitest --run examples/gallery/src/demo-fixtures.test.ts -t "static visual fixture"`;
+      `(cd examples/gallery && pnpm exec vitest --config vitest.browser.config.ts --run src/interactive-gallery.browser.test.ts -t "representative styled static")`;
+      exact `pnpm exec vp check examples/gallery/src/demo-fixtures.test.ts examples/gallery/src/interactive-gallery.browser.test.ts examples/gallery/src/visual-fixtures/autocomplete.html.txt examples/gallery/src/visual-fixtures/combobox.html.txt plans/ui.md`;
+      `git diff --check`;
+      `git diff --cached --check`.
 - [x] H3 menu/navigation styled static visual-baseline slice:
       `pnpm exec vitest --run examples/gallery/src/demo-fixtures.test.ts -t "static visual fixture"`;
       `(cd examples/gallery && pnpm exec vitest --config vitest.browser.config.ts --run src/interactive-gallery.browser.test.ts -t "representative styled static")`;
