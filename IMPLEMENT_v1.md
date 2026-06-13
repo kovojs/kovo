@@ -57,6 +57,12 @@ Audited against the repository on 2026-06-11. Checkmarks mean the behavior, API,
       invisible instead of fabricating facts. Same-session evidence:
       `pnpm exec vitest --run packages/drizzle/src` and
       `pnpm exec vitest --run conformance/drizzle-pin`.
+      Additional evidence 2026-06-12: executable body-local receiver aliases in project-mode
+      function and query-loader extraction are accepted only from ts-morph Drizzle binding types,
+      and the source-mode body-local destructuring compatibility path was deleted so local
+      `{ db }`/`{ tx }` lookalikes no longer fabricate receiver aliases. Same-session evidence:
+      `pnpm exec vitest --run packages/drizzle/src` and
+      `pnpm exec vitest --run conformance/drizzle-pin`.
 - [x] P4 generated touch-graph workflow is frozen: `@jiso/drizzle` derives/serializes v1 invalidation registries, the commerce generator emits `commerceInvalidationSets` plus `@jiso/core` registry augmentation, and `fw-check` pins the generated artifact byte-for-byte.
 - [x] P5 has enhanced mutation/deferred fragments, DOM morphing, query patch application, typed read refetch, template stamps, isomorphic/update-coverage statuses, Tailwind stylesheet hints, and runtime/browser tests for morph survival and fragment parsing.
       Evidence 2026-06-12: `packages/runtime/src/query-store.ts` was narrowed to query

@@ -4758,6 +4758,76 @@ export interface CommerceInvalidationSets {
     ]);
   });
 
+  it('uses project typed body-local receiver aliases without fake context fabrication', () => {
+    const files = [
+      pgDatabaseTypes([
+        'select(value?: unknown): { from(table: unknown): Promise<unknown[]> };',
+        'update(table: unknown): { set(value: unknown): { where(value: unknown): Promise<void> } };',
+      ]),
+      {
+        fileName: 'product.domain.ts',
+        source: [
+          'import type { PgDatabase } from "drizzle-orm/pg-core";',
+          '',
+          'interface FakeDb {',
+          '  select(value?: unknown): { from(table: unknown): Promise<unknown[]> };',
+          '  update(table: unknown): { set(value: unknown): Promise<void> };',
+          '}',
+          'interface FakeContext { db: FakeDb }',
+          'interface DrizzleContext { db: PgDatabase }',
+          '',
+          'export const products = pgTable("products", {',
+          '  id: text("id").primaryKey(),',
+          '  stock: integer("stock").notNull(),',
+          '}, jiso({ domain: "product", key: "id" }));',
+          '',
+          'export async function syncProduct(context: DrizzleContext, fake: FakeContext, productId: string) {',
+          '  const { db: writer } = context;',
+          '  const { db: fakeWriter } = fake;',
+          '  await writer.update(products).set({ stock: 1 }).where(eq(products.id, productId));',
+          '  await fakeWriter.update(products).set({ stock: 2 });',
+          '}',
+          '',
+          'export const productQuery = query("product/body-local-alias", {',
+          '  load(_input, context: DrizzleContext, fake: FakeContext) {',
+          '    const { db: reader } = context;',
+          '    const { db: fakeReader } = fake;',
+          '    fakeReader.select({ id: products.id }).from(products);',
+          '    return reader.select({ id: products.id, stock: products.stock }).from(products);',
+          '  },',
+          '});',
+          '',
+        ].join('\n'),
+      },
+    ];
+
+    expect(extractTouchGraphFromProject({ files })).toEqual({
+      syncProduct: {
+        reads: [],
+        touches: [
+          {
+            domain: 'product',
+            keys: 'arg:productId',
+            site: 'product.domain.ts:18',
+            via: 'products',
+          },
+        ],
+        unresolved: [],
+      },
+    });
+    expect(extractQueryFactsFromProject({ files })).toEqual([
+      {
+        query: 'product/body-local-alias',
+        reads: ['product'],
+        shape: {
+          id: 'string',
+          stock: 'number',
+        },
+        site: 'product.domain.ts:22',
+      },
+    ]);
+  });
+
   it('resolves imported table symbols instead of same-name tables from other modules', () => {
     const graph = extractTouchGraphFromProject({
       files: [
@@ -5105,7 +5175,7 @@ export interface CommerceInvalidationSets {
     });
   });
 
-  it('recognizes destructured Drizzle receiver aliases', () => {
+  it('does not infer source body-local destructured receiver aliases', () => {
     const graph = extractTouchGraphFromSource([
       {
         fileName: 'cart.domain.ts',
@@ -5120,20 +5190,7 @@ export interface CommerceInvalidationSets {
       },
     ]);
 
-    expect(graph).toEqual({
-      addItem: {
-        reads: [],
-        touches: [
-          {
-            domain: 'cart',
-            keys: 'arg:productId',
-            site: 'cart.domain.ts:6',
-            via: 'cart_items',
-          },
-        ],
-        unresolved: [],
-      },
-    });
+    expect(graph).toEqual({});
   });
 
   it('does not recognize destructured Drizzle receiver aliases from comments and strings', () => {

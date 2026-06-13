@@ -220,6 +220,12 @@ Closed evidence so far:
   facts. Evidence: `packages/drizzle/src/static.ts`, `packages/drizzle/src/index.test.ts`,
   `conformance/drizzle-pin/src/index.test.ts`, `pnpm exec vitest --run packages/drizzle/src`,
   and `pnpm exec vitest --run conformance/drizzle-pin`.
+- Project-mode executable body-local receiver aliases now come from ts-morph Drizzle binding types
+  for functions and query loaders, while source-mode body-local destructuring no longer fabricates
+  receiver aliases from `{ db }`/`{ tx }` names. Fake context lookalikes stay invisible. Evidence:
+  `packages/drizzle/src/static.ts`, `packages/drizzle/src/index.test.ts`,
+  `conformance/drizzle-pin/src/index.test.ts`, `pnpm exec vitest --run packages/drizzle/src`,
+  and `pnpm exec vitest --run conformance/drizzle-pin`.
 
 Open:
 

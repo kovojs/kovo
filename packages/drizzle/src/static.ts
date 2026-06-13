@@ -560,6 +560,7 @@ function projectDrizzleReceivers(callback: Node): ProjectDrizzleReceivers {
   for (const param of callback.getParameters()) {
     appendProjectDrizzleReceiverBinding(param.getNameNode(), names, symbolKeys);
   }
+  appendProjectDrizzleReceiverBindingsFromBody(functionBody(callback), { names, symbolKeys });
   appendProjectTransactionReceiverAliases(callback, { names, symbolKeys });
   return { names, symbolKeys };
 }
@@ -582,6 +583,21 @@ function appendProjectDrizzleReceiverBinding(
 
   for (const element of name.getElements()) {
     appendProjectDrizzleReceiverBinding(element.getNameNode(), names, symbolKeys);
+  }
+}
+
+function appendProjectDrizzleReceiverBindingsFromBody(
+  body: Node,
+  receivers: { names: Set<string>; symbolKeys: Set<string> },
+): void {
+  // SPEC §11.1: body-local receiver aliases are accepted only when their binding type resolves to
+  // Drizzle; untyped source-mode destructuring is not proof.
+  for (const declaration of touchBodyVariableDeclarations(body)) {
+    appendProjectDrizzleReceiverBinding(
+      declaration.getNameNode(),
+      receivers.names,
+      receivers.symbolKeys,
+    );
   }
 }
 
@@ -877,13 +893,21 @@ function callExpressionsInNode(body: Node): CallExpression[] {
 }
 
 function touchBodyCallExpressions(body: Node): CallExpression[] {
-  return callExpressionsInNode(body).filter((call) => isTouchBodyCallExpression(call, body));
+  return callExpressionsInNode(body).filter((call) => isTouchBodyNode(call, body));
 }
 
-function isTouchBodyCallExpression(call: CallExpression, body: Node): boolean {
-  if (call === body) return true;
+function touchBodyVariableDeclarations(
+  body: Node,
+): ReturnType<SourceFile['getVariableDeclarations']> {
+  return body
+    .getDescendantsOfKind(SyntaxKind.VariableDeclaration)
+    .filter((declaration) => isTouchBodyNode(declaration, body));
+}
 
-  for (const ancestor of call.getAncestors()) {
+function isTouchBodyNode(node: Node, body: Node): boolean {
+  if (node === body) return true;
+
+  for (const ancestor of node.getAncestors()) {
     if (ancestor === body) return true;
     if (!isFunctionLikeNode(ancestor)) continue;
     if (!isInlineTransactionCallback(ancestor)) return false;
@@ -1830,6 +1854,10 @@ function queryCallbackReceiverReferences(
     const receiver = receiverParameter?.getNameNode();
     if (!receiverParameter || !receiver) continue;
     appendQueryReceiverParameterReferences(receiverParameter, receiver, mode, names, symbolKeys);
+
+    if (mode === 'project') {
+      appendProjectDrizzleReceiverBindingsFromBody(functionBody(callback), { names, symbolKeys });
+    }
   }
 
   const references = { names, symbolKeys };
@@ -4061,10 +4089,6 @@ function sourceDrizzleReceiverNames(callback: Node): string[] {
     }
   }
 
-  for (const alias of destructuredDrizzleReceiverAliasesFromBody(functionBody(callback))) {
-    names.add(alias);
-  }
-
   return [...names];
 }
 
@@ -4088,25 +4112,6 @@ function appendSourceReceiverBindingNames(name: Node, names: Set<string>): void 
     if (propertyName !== 'db' && propertyName !== 'tx') continue;
     if (Node.isIdentifier(binding)) names.add(binding.getText());
   }
-}
-
-function destructuredDrizzleReceiverAliasesFromBody(body: Node): string[] {
-  const aliases: string[] = [];
-
-  for (const declaration of body.getDescendantsOfKind(SyntaxKind.VariableDeclaration)) {
-    const nameNode = declaration.getNameNode();
-    if (!Node.isObjectBindingPattern(nameNode)) continue;
-
-    for (const element of nameNode.getElements()) {
-      const propertyName = element.getPropertyNameNode()?.getText();
-      if (propertyName !== 'db' && propertyName !== 'tx') continue;
-
-      const alias = element.getNameNode();
-      if (Node.isIdentifier(alias)) aliases.push(alias.getText());
-    }
-  }
-
-  return aliases;
 }
 
 function isLikelyDrizzleReceiver(name: string): boolean {
