@@ -245,6 +245,9 @@ Current state:
   aggregate `vite.ts`.
 - The create-jiso starter imports app-shell dev/export/static-export helpers from
   `@jiso/server/app-shell/*` subpaths instead of relying on the root aggregate for R5/R6/R7 tasks.
+- The create-jiso starter now has a generated `preview-static` task that serves only the
+  SPEC §9.5 static-export `dist` output and proves the exported document, built stylesheet, and
+  versioned `/c/` module without Vite source fallback.
 
 Open:
 
@@ -257,6 +260,12 @@ Open:
 
 Latest focused evidence:
 
+- `pnpm exec vitest --run packages/server/src/api/app.test.ts`
+- `pnpm exec vitest --run packages/create-jiso/src/index.test.ts -t "scaffolds real template files|runs .* with the built stylesheet href"`
+- `pnpm exec vitest --run packages/server/src`
+- `pnpm exec vitest --run packages/create-jiso/src/index.test.ts`
+- `pnpm exec tsc --noEmit --pretty false`
+- `pnpm exec vp check packages/create-jiso/src/index.ts packages/create-jiso/src/index.test.ts packages/create-jiso/templates/package.json packages/create-jiso/templates/vite.config.ts packages/create-jiso/templates/scripts/preview-static.mjs packages/create-jiso/templates/README.md packages/create-jiso/templates/docs/deployment.md plans/app-shell.md plans/codebase-quality-round2.md IMPLEMENT_v1.md`
 - `pnpm exec vitest --run packages/server/src/api/app.test.ts packages/create-jiso/src/index.test.ts -t "server app-shell public API barrels|scaffolds real template files|typechecks the generated auth recipe|runs the generated starter app-shell request and export proof|serves the generated starter app-shell through the vp dev task|runs .* with the built stylesheet href|formats generated export task diagnostics"`
 - `pnpm exec vitest --run packages/server/src packages/create-jiso/src/index.test.ts`
 - `pnpm exec vitest --run packages/server/src`

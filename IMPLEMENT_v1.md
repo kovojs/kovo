@@ -1555,7 +1555,7 @@ All §5.3 subcommands with **stable, diffable output** (snapshot-tested — agen
 
 ## Phase 10 — Reference app completion, starter, docs, v1 acceptance
 
-Commerce app reaches the full Appendix A surface plus D2/D4 features; `create-jiso` starter (Vite+ scaffold, root `vite.config.ts` with Oxlint/Oxfmt/type-aware lint defaults, fixpoint CI test, graph-assertion recipes, deployment doc stating the stateless-server guarantee, §9.3); docs with the §2 constitution and §5.2 hard rules as normative pages. Then run §16 acceptance explicitly:
+Commerce app reaches the full Appendix A surface plus D2/D4 features; `create-jiso` starter (Vite+ scaffold, root `vite.config.ts` with Oxlint/Oxfmt/type-aware lint defaults, fixpoint CI test, graph-assertion recipes, deployment doc stating the stateless-server guarantee, static preview for exported `dist` output, §9.3); docs with the §2 constitution and §5.2 hard rules as normative pages. Then run §16 acceptance explicitly:
 
 1. **Perf:** TTI ≡ FCP; <50ms perceived prerendered nav on routes that opt in; zero memory growth across 100 navigations (automated).
 2. **Legibility:** the devtools usability study (§16.2) run with ≥5 outside developers — scheduled, not aspirational.

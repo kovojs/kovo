@@ -29,6 +29,7 @@ describe('create-jiso starter', () => {
       'README.md',
       'graph.json',
       'scripts/export-static.mjs',
+      'scripts/preview-static.mjs',
       'scripts/serve.mjs',
       'scripts/emit-graph.mjs',
       'scripts/graph-assertions.mjs',
@@ -89,6 +90,7 @@ describe('create-jiso starter', () => {
         check: 'vp check',
         dev: 'vp dev',
         'emit-graph': 'node scripts/emit-graph.mjs',
+        'preview:static': 'node scripts/preview-static.mjs',
         serve: 'node scripts/serve.mjs',
         start: 'node scripts/serve.mjs',
         static: 'vp run export',
@@ -172,6 +174,7 @@ describe('create-jiso starter', () => {
       );
       const readme = readFileSync(join(root, 'README.md'), 'utf8');
       expect(readme).toContain('starter-export/v1');
+      expect(readme).toContain('starter-static-preview/v1');
       expect(readme).toContain('npm run static');
       expect(readme).toContain('npm run serve');
       expect(readFileSync(join(root, 'docs/deployment.md'), 'utf8')).toContain(
@@ -255,6 +258,10 @@ describe('create-jiso starter', () => {
       expect(exportStaticScript).not.toContain('function formatStaticExportDiagnostic');
       expect(exportStaticScript).not.toContain('function isStaticExportDiagnostic');
       expect(exportStaticScript).not.toContain('htmlPathStyle');
+      const previewStaticScript = readFileSync(join(root, 'scripts/preview-static.mjs'), 'utf8');
+      expect(previewStaticScript).toContain('createStarterStaticPreviewServer');
+      expect(previewStaticScript).toContain('starter-static-preview/v1');
+      expect(previewStaticScript).toContain('Static export directory not found');
       const serveScript = readFileSync(join(root, 'scripts/serve.mjs'), 'utf8');
       expect(serveScript).toContain('createStarterServeServer');
       expect(serveScript).toContain('configFile: fileURLToPath(new URL');
@@ -464,10 +471,12 @@ describe('create-jiso starter', () => {
   }
 
   for (const exportCommand of generatedStarterExportCommands()) {
-    it(`runs ${exportCommand.label} with the built stylesheet href`, () => {
+    it(`runs ${exportCommand.label} with the built stylesheet href`, async () => {
       const tempParent = tmpdir();
       mkdirSync(tempParent, { recursive: true });
       const root = mkdtempSync(join(tempParent, 'create-jiso-export-task-'));
+      const port = await reservePort();
+      let staticPreviewServer: ChildProcessWithoutNullStreams | undefined;
 
       try {
         writeJisoProject(root, { name: 'Export Task Proof' });
@@ -501,10 +510,52 @@ describe('create-jiso starter', () => {
         expect(readFileSync(join(root, 'dist/c/starter.client.js'), 'utf8')).toContain(
           'Starter$announce',
         );
+
+        staticPreviewServer = spawn(
+          vpCommand(),
+          [
+            'run',
+            '--no-cache',
+            'preview-static',
+            '--host',
+            '127.0.0.1',
+            '--port',
+            String(port),
+            '--strictPort',
+          ],
+          {
+            cwd: root,
+            detached: process.platform !== 'win32',
+            env: withGeneratedBinOnPath(root),
+          },
+        );
+        const previewOutput = collectOutput(staticPreviewServer);
+        const origin = `http://127.0.0.1:${port}`;
+        const previewDocument = await fetchTextWhenReady(`${origin}/`, previewOutput);
+
+        expect(previewOutput()).toContain('starter-static-preview/v1');
+        expect(previewDocument).toContain(`href="/assets/${cssFile}"`);
+        expect(previewDocument).toContain(
+          'on:click="/c/starter.client.js?v=starter-r7#Starter$announce"',
+        );
+        expect(previewDocument).not.toContain('/src/styles.css');
+
+        const previewCss = await fetchTextWhenReady(`${origin}/assets/${cssFile}`, previewOutput);
+        expect(previewCss).toContain('.text-jiso-accent');
+
+        const previewClientModule = await fetchTextWhenReady(
+          `${origin}/c/starter.client.js?v=starter-r7`,
+          previewOutput,
+        );
+        expect(previewClientModule).toContain('Starter$announce');
+
+        const sourceFallback = await fetch(`${origin}/src/styles.css`);
+        expect(sourceFallback.status).toBe(404);
       } finally {
+        await stopProcess(staticPreviewServer);
         rmSync(root, { force: true, recursive: true });
       }
-    });
+    }, 30000);
   }
 
   it('formats generated export task diagnostics when a starter route is not exportable', () => {
@@ -556,7 +607,7 @@ describe('create-jiso starter', () => {
 
     try {
       expect(main([root])).toBe(0);
-      expect(stdout).toHaveBeenCalledWith(`create-jiso: wrote 20 files to ${root}\n`);
+      expect(stdout).toHaveBeenCalledWith(`create-jiso: wrote 21 files to ${root}\n`);
       expect(JSON.parse(readFileSync(join(root, 'package.json'), 'utf8'))).toMatchObject({
         name: 'hello-cli',
       });

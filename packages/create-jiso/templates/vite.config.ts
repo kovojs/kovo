@@ -40,6 +40,13 @@ export default defineConfig({
         ],
         output: ['dist/**'],
       },
+      'preview-static': {
+        command: 'node scripts/preview-static.mjs',
+        input: [
+          { pattern: 'dist/**', base: 'workspace' },
+          { pattern: 'scripts/preview-static.mjs', base: 'workspace' },
+        ],
+      },
       'fw-check': {
         command: 'node scripts/emit-graph.mjs && fw check graph.json',
         input: [

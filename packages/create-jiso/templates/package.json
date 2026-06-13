@@ -6,6 +6,7 @@
     "check": "vp check",
     "dev": "vp dev",
     "emit-graph": "node scripts/emit-graph.mjs",
+    "preview:static": "node scripts/preview-static.mjs",
     "serve": "node scripts/serve.mjs",
     "start": "node scripts/serve.mjs",
     "static": "vp run export",

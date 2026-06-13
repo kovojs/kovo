@@ -528,3 +528,18 @@ Round131 starter app-shell subpath adoption evidence:
 - `pnpm exec tsc --noEmit --pretty false`
 - `pnpm exec vp check packages/server/src/index.ts packages/server/src/api/app.test.ts packages/create-jiso/src/index.test.ts packages/create-jiso/templates/src/app-shell.ts packages/create-jiso/templates/src/app-shell.test.ts packages/create-jiso/templates/vite.config.ts packages/create-jiso/templates/scripts/export-static.mjs IMPLEMENT_v1.md plans/app-shell.md plans/codebase-quality-round2.md`
 - `git diff --check`
+
+Round137 starter static-host export evidence:
+
+- The create-jiso starter now ships `scripts/preview-static.mjs` plus a Vite+ `preview-static`
+  task that serves only the exported `dist` tree, so local static-host checks cannot fall back to
+  Vite source assets after SPEC §9.5 app-shell replay/export.
+- Generated starter export tests now run `vp run export` and `npm run static`, then spawn
+  `vp run preview-static` against the output and prove `/`, the built stylesheet, and the
+  versioned `/c/` module are served from `dist` while `/src/styles.css` returns 404.
+- `pnpm exec vitest --run packages/server/src/api/app.test.ts`
+- `pnpm exec vitest --run packages/create-jiso/src/index.test.ts -t "scaffolds real template files|runs .* with the built stylesheet href"`
+- `pnpm exec vitest --run packages/server/src`
+- `pnpm exec vitest --run packages/create-jiso/src/index.test.ts`
+- `pnpm exec tsc --noEmit --pretty false`
+- `pnpm exec vp check packages/create-jiso/src/index.ts packages/create-jiso/src/index.test.ts packages/create-jiso/templates/package.json packages/create-jiso/templates/vite.config.ts packages/create-jiso/templates/scripts/preview-static.mjs packages/create-jiso/templates/README.md packages/create-jiso/templates/docs/deployment.md plans/app-shell.md plans/codebase-quality-round2.md IMPLEMENT_v1.md`

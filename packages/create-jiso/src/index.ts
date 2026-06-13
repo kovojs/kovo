@@ -31,6 +31,7 @@ const templateFiles = [
   'README.md',
   'graph.json',
   'scripts/export-static.mjs',
+  'scripts/preview-static.mjs',
   'scripts/serve.mjs',
   'scripts/emit-graph.mjs',
   'scripts/graph-assertions.mjs',
