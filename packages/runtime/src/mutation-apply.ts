@@ -10,10 +10,12 @@ import { isFailedMutationResponse, type FetchedEnhancedMutation } from './mutati
 import type { ApplyMutationResponseToDomOptions } from './mutation-response-dom.js';
 import type { MutationChangeRecord } from './optimism.js';
 import type { CompiledQueryUpdatePlans } from './query-bindings.js';
+import type { QueryApplyInterposition } from './query-apply.js';
 import type { QueryStore } from './query-store.js';
 import { readMutationResponseBodyChunks } from './wire-parser.js';
 
 export interface EnhancedMutationDomApplyOptions {
+  applyQuery?: QueryApplyInterposition;
   broadcast?: MutationBroadcast;
   islandSignalScope?: IslandSignalScope;
   morph?: MorphFragment;
@@ -47,7 +49,7 @@ export function applyFetchedEnhancedMutationResponseToDom(
     readMutationResponseBodyChunks(fetched.body, options.onError),
     {
       ...definedProps({
-        applyQuery: hooks.applyQuery,
+        applyQuery: hooks.applyQuery ?? options.applyQuery,
         beforeApplyQueries: hooks.beforeApplyQueries,
         islandSignalScope: options.islandSignalScope,
         morph: options.morph,

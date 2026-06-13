@@ -640,6 +640,10 @@ Query script hydration helpers now remain internal to the loader/visible-return 
 root `@jiso/runtime` exports; `query-apply.test.ts` covers decoded chunk application while
 `query-script-hydration.test.ts` owns script parsing, ledger replay, retry, and hydration/apply
 parity.
+Loader-level `applyQuery` interposition now threads through enhanced mutation submit responses and
+default BroadcastChannel replay, so loader-installed mutation transports share the same decoded
+query apply hook as initial hydration, inline query events, visible-return hydration, and typed-read
+refetch.
 
 - [x] Audit for any remaining internal compatibility-style apply wrappers after `applyFragmentQueryBody`
       deletion.
@@ -1006,6 +1010,14 @@ packages/runtime/src/query-store.test.ts packages/runtime/src/loader-visible-ret
       boundary, and `packages/runtime/src/query-hydration.browser.test.ts` pins the browser inline
       hydration path. Verified by the focused runtime, full runtime, browser runtime, TypeScript,
       inline-loader, exact `vp check`, and `git diff --check` commands listed in Latest evidence.
+      Evidence 2026-06-13 round264: `packages/runtime/src/loader.ts` now forwards loader-level
+      `applyQuery` into `enhancedMutations`, `packages/runtime/src/mutation-submit.ts` and
+      `packages/runtime/src/mutation-apply.ts` thread it through enhanced submit response apply,
+      and `packages/runtime/src/broadcast.ts` threads it through default BroadcastChannel replay.
+      `packages/runtime/src/loader-query-apply-interposition.test.ts` pins enhanced-submit and
+      broadcast replay interposition before DOM binding/morph effects. Verified by focused runtime,
+      full runtime, inline-loader, browser runtime, exact `vp check`, and `git diff --check`
+      commands listed in Latest evidence.
 - [x] Split browser query hydration and inline query-event coverage out of
       `packages/runtime/src/index.browser.test.ts`.
       Evidence: `packages/runtime/src/query-hydration.browser.test.ts` covers inserted
@@ -1072,6 +1084,9 @@ packages/runtime/src/index.browser.test.ts packages/runtime/src/query-hydration.
       `applyQuery` hook was threaded through browser inline hydration. Command: `pnpm exec vitest
       --config vitest.browser.config.ts --run packages/runtime/src/index.browser.test.ts
       packages/runtime/src/query-hydration.browser.test.ts`.
+      Evidence 2026-06-13 round264: browser runtime checks passed after loader-level `applyQuery`
+      was threaded through enhanced submit and default broadcast replay. Command: `pnpm exec vitest
+      --run --config vitest.browser.config.ts packages/runtime/src/**/*.browser.test.ts`.
 
 Latest evidence:
 
@@ -1126,9 +1141,15 @@ packages/runtime/src/wire-parser.test.ts plans/codebase-quality-round2.md`;
   `pnpm exec vitest --config vitest.browser.config.ts --run packages/runtime/src/index.browser.test.ts packages/runtime/src/query-hydration.browser.test.ts`;
   `pnpm exec tsc --noEmit --pretty false`;
   `pnpm --filter @jiso/runtime run check:inline-loader`;
-  exact `pnpm exec vp check packages/runtime/src/loader.ts packages/runtime/src/query-visible-return.ts packages/runtime/src/query-refetch.ts packages/runtime/src/loader-query-apply-interposition.test.ts packages/runtime/src/query-hydration.browser.test.ts plans/codebase-quality-round2.md`;
+  exact `pnpm exec vp check packages/runtime/src/loader.ts packages/runtime/src/loader-query-apply-interposition.test.ts packages/runtime/src/query-visible-return.ts packages/runtime/src/query-refetch.ts packages/runtime/src/query-events.ts packages/runtime/src/query-script-hydration.ts packages/runtime/src/query-hydration.browser.test.ts plans/codebase-quality-round2.md`;
   `git diff --check`.
-- `git diff --check`
+- Round264 loader mutation apply interposition:
+  `pnpm exec vitest --run packages/runtime/src/loader-query-apply-interposition.test.ts packages/runtime/src/mutation-apply.test.ts packages/runtime/src/mutation-submit.test.ts packages/runtime/src/broadcast.test.ts`;
+  `pnpm exec vitest --run packages/runtime/src`;
+  `pnpm --filter @jiso/runtime run check:inline-loader`;
+  `pnpm exec vitest --run --config vitest.browser.config.ts packages/runtime/src/**/*.browser.test.ts`;
+  exact `pnpm exec vp check packages/runtime/src/loader.ts packages/runtime/src/broadcast.ts packages/runtime/src/mutation-submit.ts packages/runtime/src/mutation-apply.ts packages/runtime/src/loader-query-apply-interposition.test.ts plans/codebase-quality-round2.md`;
+  `git diff --check`.
 
 ## Phase 5 - Server And App Shell
 

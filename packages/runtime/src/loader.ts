@@ -67,6 +67,9 @@ export function installJisoLoader(options: JisoLoaderOptions): JisoLoader {
   const enhancedMutationSetup = options.enhancedMutations
     ? withDefaultMutationBroadcast({
         ...options.enhancedMutations,
+        ...definedProps({
+          applyQuery: options.enhancedMutations.applyQuery ?? options.applyQuery,
+        }),
         onAppliedQueries(queries) {
           queryVisibleReturn.rememberAppliedQueries(queries);
         },

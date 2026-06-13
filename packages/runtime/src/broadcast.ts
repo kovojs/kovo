@@ -3,6 +3,7 @@ import { definedProps } from './defined-props.js';
 import type { CompiledQueryUpdatePlans } from './query-bindings.js';
 import type { MorphFragment, MorphRoot } from './morph.js';
 import { isMutationBroadcastMessage, sanitizeMutationChangeRecord } from './mutation-response.js';
+import type { QueryApplyInterposition } from './query-apply.js';
 import type { QueryStore } from './query-store.js';
 import type { MutationChangeRecord } from './optimism.js';
 import { readMutationResponseBodyChunks } from './wire-parser.js';
@@ -19,6 +20,7 @@ export interface MutationBroadcast {
 }
 
 export interface InstallMutationBroadcastOptions {
+  applyQuery?: QueryApplyInterposition;
   channel: BroadcastLike;
   morph?: MorphFragment;
   onChanges?: (changes: readonly MutationChangeRecord[]) => void;
@@ -29,6 +31,7 @@ export interface InstallMutationBroadcastOptions {
 }
 
 export interface DefaultMutationBroadcastOptions {
+  applyQuery?: QueryApplyInterposition;
   broadcast?: MutationBroadcast;
   morph?: MorphFragment;
   onAppliedQueries?: (queries: readonly string[]) => void;
@@ -50,6 +53,7 @@ export function withDefaultMutationBroadcast<Options extends DefaultMutationBroa
     const broadcast = installMutationBroadcast({
       channel: new globalThis.BroadcastChannel('jiso:mutation-response') as BroadcastLike,
       ...definedProps({
+        applyQuery: options.applyQuery,
         morph: options.morph,
         onAppliedQueries: options.onAppliedQueries,
         queryPlans: options.queryPlans,
@@ -87,6 +91,7 @@ export function installMutationBroadcast(
       readMutationResponseBodyChunks(event.data.body),
       {
         ...definedProps({
+          applyQuery: options.applyQuery,
           morph: options.morph,
           queryPlans: options.queryPlans,
           root: options.root,

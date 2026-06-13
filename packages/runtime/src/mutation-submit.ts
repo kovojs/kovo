@@ -23,6 +23,7 @@ import {
   type EnhancedMutationAppliedResult,
 } from './mutation-apply.js';
 import type { CompiledQueryUpdatePlans } from './query-bindings.js';
+import type { QueryApplyInterposition } from './query-apply.js';
 import type { QueryStore } from './query-store.js';
 import { readDeps, stampPendingQueries } from './pending.js';
 import type { PendingRoot } from './pending.js';
@@ -37,6 +38,7 @@ export type {
 export type { EnhancedFormElementLike } from './mutation-form.js';
 
 export interface EnhancedMutationLoaderOptions {
+  applyQuery?: QueryApplyInterposition;
   broadcast?: MutationBroadcast;
   fetch: EnhancedMutationFetch;
   formData?: (form: EnhancedFormElementLike) => unknown;
@@ -90,6 +92,7 @@ export async function dispatchEnhancedFormSubmit(
         options.onUploadProgress?.(progress, form);
       },
       ...definedProps({
+        applyQuery: options.applyQuery,
         broadcast: options.broadcast,
         idem: options.idem?.(),
         morph: options.morph,
@@ -121,6 +124,7 @@ export function isEnhancedSubmitEvent(
 }
 
 export interface EnhancedMutationSubmitOptions {
+  applyQuery?: QueryApplyInterposition;
   broadcast?: MutationBroadcast;
   fetch: EnhancedMutationFetch;
   form: EnhancedFormLike;
