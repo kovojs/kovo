@@ -2599,6 +2599,16 @@ constructor internal to the server build owner; public consumers use the Vite-sp
 
 Latest evidence:
 
+- Static export output root boundary:
+  `pnpm exec vitest --run packages/server/src/static-export-output.test.ts packages/server/src/static-export.test.ts`;
+  `pnpm exec tsc --noEmit --pretty false`; exact `pnpm exec vp check
+packages/server/src/static-export-output.ts packages/server/src/static-export-output.test.ts
+packages/server/src/static-export.ts packages/server/src/static-export.test.ts plans/app-shell.md
+plans/codebase-quality-round2.md`; `git diff --check`.
+  Evidence: `packages/server/src/static-export-output.ts` now shares a
+  `staticExportOutputRoot()` guard that accepts filesystem paths and `file:` URLs but rejects
+  non-file URL output directories with FW229, and `packages/server/src/static-export.ts` calls the
+  guard before SPEC §9.5 synthetic replay so invalid output roots fail before route rendering.
 - Round276 built-root P10 boundary:
   `packages/server/src/index.ts` forwards the focused client-module registry constructor and
   node/http adapter needed by `tests/p10-perf.node.mjs` from the built root, and

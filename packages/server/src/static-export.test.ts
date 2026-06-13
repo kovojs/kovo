@@ -160,6 +160,38 @@ describe('server static export', () => {
     }
   });
 
+  it('rejects non-file URL output directories before replay', async () => {
+    let rendered = false;
+    const app = createApp({
+      routes: [
+        route('/', {
+          page: () => {
+            rendered = true;
+            return '<main>Home</main>';
+          },
+        }),
+      ],
+    });
+
+    await expect(
+      exportStaticApp(app, {
+        outDir: new URL('https://static.example.test/export/'),
+      }),
+    ).rejects.toMatchObject({
+      code: 'FW229',
+      diagnostics: [
+        {
+          code: 'FW229',
+          message: expect.stringContaining(
+            'SPEC §9.5 static export output directories must be filesystem paths or file: URLs',
+          ),
+          routePath: 'outDir',
+        },
+      ],
+    });
+    expect(rendered).toBe(false);
+  });
+
   it('rejects invalid static export origins before replay or writes', async () => {
     const outDir = await mkdtemp(path.join(os.tmpdir(), 'jiso-static-export-'));
     let rendered = false;

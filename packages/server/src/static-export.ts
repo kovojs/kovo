@@ -3,6 +3,7 @@ import {
   createStaticExportOutputPlan,
   STATIC_EXPORT_DRY_RUN_ROOT,
   staticExportAssetArtifacts,
+  staticExportOutputRoot,
   writeStaticExportOutput,
 } from './static-export-output.js';
 import { replayStaticExportApp } from './static-export-replay.js';
@@ -19,6 +20,7 @@ export async function exportStaticApp(
 ): Promise<StaticExportResult> {
   assertStaticExportCompileDiagnostics(options.diagnostics ?? []);
   assertNoStaticExportHtmlPathStyleOption(options);
+  if (options.outDir !== undefined) staticExportOutputRoot(options.outDir);
 
   const assets = staticExportAssetArtifacts(options.assets ?? []);
   const replay = await replayStaticExportApp({

@@ -73,10 +73,25 @@ export function staticExportOutputPlan(
 export function createStaticExportOutputPlan(
   plan: StaticExportOutputPlanInput,
 ): StaticExportOutputPlan {
-  const root = path.resolve(plan.outDir instanceof URL ? fileURLToPath(plan.outDir) : plan.outDir);
+  const root = staticExportOutputRoot(plan.outDir);
   const writes = staticExportPlannedWrites(plan, root);
 
   return { ...plan, root, writes };
+}
+
+export function staticExportOutputRoot(outDir: string | URL): string {
+  if (outDir instanceof URL) {
+    if (outDir.protocol === 'file:') return path.resolve(fileURLToPath(outDir));
+
+    throw new StaticExportError([
+      staticExportDiagnostic(
+        'outDir',
+        `FW229 static export cannot write to '${outDir.href}'. SPEC §9.5 static export output directories must be filesystem paths or file: URLs.`,
+      ),
+    ]);
+  }
+
+  return path.resolve(outDir);
 }
 
 export async function writeStaticExportOutput(plan: StaticExportOutputPlan): Promise<void> {

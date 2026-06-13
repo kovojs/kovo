@@ -179,6 +179,24 @@ describe('server static export output boundary', () => {
     ).toThrow(/Static asset sources must be filesystem paths or file: URLs/);
   });
 
+  it('rejects non-file URL output directories at the public output-plan boundary', () => {
+    expect(() =>
+      createStaticExportOutputPlan({
+        artifacts: [
+          {
+            body: '<!doctype html><main>Home</main>',
+            headers: {},
+            path: '/index.html',
+            status: 200,
+          },
+        ],
+        assets: [],
+        clientModules: [],
+        outDir: new URL('https://static.example.test/export/'),
+      }),
+    ).toThrow(/SPEC §9\.5 static export output directories must be filesystem paths or file: URLs/);
+  });
+
   it('validates final output targets before committing staged files', async () => {
     const outDir = await mkdtemp(path.join(os.tmpdir(), 'jiso-static-export-output-commit-'));
     const sourceDir = await mkdtemp(path.join(os.tmpdir(), 'jiso-static-export-output-source-'));

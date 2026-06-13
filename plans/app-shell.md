@@ -218,6 +218,15 @@ Round296 static export manifest inventory directory-index evidence:
   can accept directory-index evidence.
 - `packages/server/src/vite-static-export-result.test.ts` proves a stale flat `/about.html`
   route-document inventory entry fails even when `routeDocuments` itself is directory-index clean.
+
+Round303 static export output root boundary evidence:
+
+- `packages/server/src/static-export-output.ts` now resolves output roots through a shared
+  `staticExportOutputRoot()` guard that accepts filesystem paths and `file:` URLs but rejects
+  non-file URL output directories with FW229.
+- `packages/server/src/static-export-output.test.ts` proves direct output planning rejects
+  `https:` output roots, and `packages/server/src/static-export.test.ts` proves `exportStaticApp()`
+  rejects the same invalid output root before route replay.
 - `pnpm exec vitest --run packages/server/src/vite-static-export-result.test.ts packages/server/src/static-export.test.ts packages/server/src/api/app.test.ts`
 - `pnpm exec tsc --noEmit --pretty false`
 - `pnpm exec vp check packages/server/src/static-export-result.ts packages/server/src/vite-static-export-result.test.ts plans/app-shell.md plans/codebase-quality-round2.md`
