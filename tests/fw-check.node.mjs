@@ -140,6 +140,11 @@ import {
   optimismCleanupBehaviorFact,
 } from '../packages/test/src/runtime-fixtures.ts';
 import {
+  serverCommerceTransactionBehaviorFact,
+  serverDataPlaneBehaviorFact,
+  serverMutationLifecycleBehaviorFact,
+} from '../packages/test/src/server-fixtures.ts';
+import {
   viteHandlerTransformFact,
   viteProductionEmitContractFact,
   viteRedGreenBuildFixtureFact,
@@ -232,6 +237,28 @@ const generatedModuleRuntime = {
 const generatedBootstrapRuntime = {
   ...generatedModuleRuntime,
   installJisoLoader() {},
+};
+
+const serverMutationRuntime = {
+  domain,
+  mutation,
+  query,
+  renderMutationResponse,
+  runMutation,
+  s,
+};
+
+const serverDataPlaneRuntime = {
+  ...serverMutationRuntime,
+  csrfField,
+  csrfToken,
+  notFound,
+  renderQueryEndpointResponse,
+  renderQueryRegistryEndpointResponse,
+  renderRoutePageResponse,
+  route: serverRoute,
+  runQuery,
+  runRoutePage,
 };
 
 const loadProjectVitePlusConfig = async (configPath = 'vite.config.ts') =>
@@ -1336,91 +1363,19 @@ void test('P3 typed routes validate navigation targets', async () => {
 });
 
 void test('P3 mutation lifecycle includes an explicit transaction boundary', async () => {
-  const transactionEvents = [];
-  const transactional = mutation('cart/add', {
-    csrf: false,
-    guard(request) {
-      transactionEvents.push(`guard:${request.user}`);
-      return request.user === 'u1';
+  assert.deepEqual(await serverMutationLifecycleBehaviorFact(serverMutationRuntime), {
+    failedTransaction: {
+      events: ['begin', 'handler', 'rollback'],
+      result: {
+        error: {
+          code: 'OUT_OF_STOCK',
+          payload: { availableQuantity: 0 },
+        },
+        ok: false,
+        status: 422,
+      },
     },
-    input: s.object({ productId: s.string() }),
-    async transaction(request, run) {
-      transactionEvents.push(`begin:${request.tx === true ? 'tx' : 'plain'}`);
-      const value = await run({ ...request, tx: true });
-      transactionEvents.push('commit');
-      return value;
-    },
-    handler(input, request) {
-      transactionEvents.push(`handler:${request.tx === true ? 'tx' : 'plain'}`);
-      return input.productId;
-    },
-  });
-
-  assert.deepEqual(await runMutation(transactional, { productId: 'p1' }, { user: 'u1' }), {
-    changes: [],
-    ok: true,
-    rerunQueries: [],
-    value: 'p1',
-  });
-  assert.deepEqual(transactionEvents, ['guard:u1', 'begin:plain', 'handler:tx', 'commit']);
-
-  const rollbackEvents = [];
-  const failing = mutation('cart/fail', {
-    csrf: false,
-    errors: {
-      OUT_OF_STOCK: s.object({ availableQuantity: s.number().int().min(0) }),
-    },
-    input: s.object({ productId: s.string() }),
-    async transaction(request, run) {
-      rollbackEvents.push('begin');
-      try {
-        return await run(request);
-      } catch (error) {
-        rollbackEvents.push('rollback');
-        throw error;
-      }
-    },
-    handler(_input, _request, context) {
-      rollbackEvents.push('handler');
-      return context.fail('OUT_OF_STOCK', { availableQuantity: 0 });
-    },
-  });
-  assert.deepEqual(await runMutation(failing, { productId: 'p1' }, {}), {
-    error: {
-      code: 'OUT_OF_STOCK',
-      payload: { availableQuantity: 0 },
-    },
-    ok: false,
-    status: 422,
-  });
-  assert.deepEqual(rollbackEvents, ['begin', 'handler', 'rollback']);
-
-  const cart = domain('cart');
-  const cartQuery = query('cart', {
-    instanceKey: () => 'cart:c1',
-    load(_input, context) {
-      return { cartId: context.request.session.cartId };
-    },
-    reads: [cart],
-  });
-  const addToCart = mutation('cart/add', {
-    csrf: false,
-    input: s.object({ productId: s.string() }),
-    registry: {
-      queries: [cartQuery],
-      touches: [cart],
-    },
-    handler(input, request) {
-      return `${request.session.cartId}:${input.productId}`;
-    },
-  });
-  assert.deepEqual(
-    await renderMutationResponse(addToCart, {
-      fragment: true,
-      rawInput: { productId: 'p1' },
-      request: { session: { cartId: 'c1' } },
-    }),
-    {
+    fragmentResponse: {
       body: '<fw-query name="cart" key="cart:c1">{"cartId":"c1"}</fw-query>',
       headers: {
         'Content-Type': 'text/vnd.jiso.fragment+html; charset=utf-8',
@@ -1428,131 +1383,87 @@ void test('P3 mutation lifecycle includes an explicit transaction boundary', asy
       },
       status: 200,
     },
-  );
+    successfulTransaction: {
+      events: ['guard:u1', 'begin:plain', 'handler:tx', 'commit'],
+      result: {
+        changes: [],
+        ok: true,
+        rerunQueries: [],
+        value: 'p1',
+      },
+    },
+  });
 });
 
 void test('P3 server data-plane APIs stay exported and covered', async () => {
-  const product = domain('product');
-  const productQuery = query('productDetail', {
-    args: s.object({ id: s.string(), max: s.number().int().default(10) }),
-    guard: (request) => request.session?.userId === 'u1',
-    instanceKey: (input) => `product:${input.id}`,
-    load(input, { request }) {
-      return { id: input.id, max: input.max, userId: request.session?.userId };
-    },
-    reads: [product],
-    version: (input) => input.max,
-  });
+  const fact = await serverDataPlaneBehaviorFact(serverDataPlaneRuntime);
 
-  assert.deepEqual(await runQuery(productQuery, { id: 'p1' }, { session: { userId: 'u1' } }), {
-    input: { id: 'p1', max: 10 },
-    ok: true,
-    value: { id: 'p1', max: 10, userId: 'u1' },
-  });
-  assert.deepEqual(await runQuery(productQuery, {}, { session: { userId: 'u1' } }), {
-    error: {
-      code: 'VALIDATION',
-      payload: { issues: [{ message: 'Expected string', path: ['id'] }] },
-    },
-    ok: false,
-    status: 422,
-  });
-  assert.deepEqual(await runQuery(productQuery, { id: 'p1' }, { session: null }), {
-    error: { code: 'UNAUTHORIZED', payload: {} },
-    ok: false,
-    status: 422,
-  });
-  assert.deepEqual(
-    await renderQueryEndpointResponse(productQuery, {
-      request: { session: { userId: 'u1' } },
-      search: new URLSearchParams([
-        ['id', 'p1'],
-        ['max', '3'],
-      ]),
-    }),
-    {
-      body: '<fw-query name="product:p1" version="3">{"id":"p1","max":3,"userId":"u1"}</fw-query>',
+  assert.deepEqual(fact.query, {
+    endpoint: {
+      body:
+        '<fw-query name="product:p1" version="3">' + '{"id":"p1","max":3,"userId":"u1"}</fw-query>',
       headers: { 'Content-Type': 'text/html; charset=utf-8' },
       status: 200,
     },
-  );
-  assert.deepEqual(
-    await renderQueryRegistryEndpointResponse({ queries: [productQuery] }, 'missing', {
-      request: {},
-    }),
-    {
+    invalidInput: {
+      error: {
+        code: 'VALIDATION',
+        payload: { issues: [{ message: 'Expected string', path: ['id'] }] },
+      },
+      ok: false,
+      status: 422,
+    },
+    missingRegistryQuery: {
       body: 'Not Found',
       headers: { 'Content-Type': 'text/plain; charset=utf-8' },
       status: 404,
     },
-  );
-
-  const productRoute = serverRoute('/products/:id', {
-    guard: (request) => request.session?.userId === 'u1',
-    page(context, request) {
-      if (context.params.id === 'missing') return notFound();
-      return `${request.session.userId}:${context.params.id}:${context.search.tab}`;
-    },
-    params: s.object({ id: s.string() }),
-    search: s.object({ tab: s.string() }),
-  });
-  assert.deepEqual(
-    await runRoutePage(
-      productRoute,
-      { params: { id: 'p1' }, search: { tab: 'details' } },
-      { session: { userId: 'u1' } },
-    ),
-    {
+    success: {
+      input: { id: 'p1', max: 10 },
       ok: true,
-      value: 'u1:p1:details',
+      value: { id: 'p1', max: 10, userId: 'u1' },
     },
-  );
-  assert.deepEqual(
-    await renderRoutePageResponse(
-      productRoute,
-      { params: { id: 'missing' }, search: { tab: 'details' } },
-      { session: { userId: 'u1' } },
-    ),
-    {
+    unauthorized: {
+      error: { code: 'UNAUTHORIZED', payload: {} },
+      ok: false,
+      status: 422,
+    },
+  });
+  assert.deepEqual(fact.route, {
+    notFound: {
       body: 'Not Found',
       headers: { 'Content-Type': 'text/html; charset=utf-8' },
       status: 404,
     },
+    success: {
+      ok: true,
+      value: 'u1:p1:details',
+    },
+  });
+  assert.match(fact.csrf.field, /^<input type="hidden" name="csrf" value="[A-Za-z0-9+/=_-]+">$/);
+  assert.deepEqual(
+    {
+      guardCallsAfterFailure: fact.csrf.guardCallsAfterFailure,
+      guardCallsAfterSuccess: fact.csrf.guardCallsAfterSuccess,
+      missingToken: fact.csrf.missingToken,
+      success: fact.csrf.success,
+    },
+    {
+      guardCallsAfterFailure: 1,
+      guardCallsAfterSuccess: 1,
+      missingToken: {
+        error: { code: 'CSRF', payload: {} },
+        ok: false,
+        status: 422,
+      },
+      success: {
+        changes: [],
+        ok: true,
+        rerunQueries: [],
+        value: 'p1',
+      },
+    },
   );
-
-  const request = { session: { id: 's1' } };
-  const csrf = {
-    field: 'csrf',
-    secret: 'test-secret',
-    sessionId: (candidate) => candidate.session.id,
-  };
-  let guardCalls = 0;
-  const addToCart = mutation('cart/add', {
-    csrf,
-    guard() {
-      guardCalls += 1;
-      return true;
-    },
-    input: s.object({ productId: s.string() }),
-    handler(input) {
-      return input.productId;
-    },
-  });
-  const token = csrfToken(request, csrf);
-  assert.equal(csrfField(request, csrf), `<input type="hidden" name="csrf" value="${token}">`);
-  assert.deepEqual(await runMutation(addToCart, { csrf: token, productId: 'p1' }, request), {
-    changes: [],
-    ok: true,
-    rerunQueries: [],
-    value: 'p1',
-  });
-  assert.equal(guardCalls, 1);
-  assert.deepEqual(await runMutation(addToCart, { productId: 'p1' }, request), {
-    error: { code: 'CSRF', payload: {} },
-    ok: false,
-    status: 422,
-  });
-  assert.equal(guardCalls, 1);
 });
 
 void test('P3 route and query guard removal is mechanically audited by fw check', () => {
@@ -1861,68 +1772,33 @@ void test('P6 navigation bfcache optimism cleanup acceptance is represented', as
 });
 
 void test('P3 commerce mutation runs through the transaction lifecycle', async () => {
-  const createTransactionalDb = () => {
-    const db = {
-      commits: 0,
-      items: [],
-      rollbacks: 0,
-      async transaction(run) {
-        const draft = { items: this.items.map((item) => ({ ...item })) };
-        try {
-          const result = await run(draft);
-          this.items = draft.items;
-          this.commits += 1;
-          return result;
-        } catch (error) {
-          this.rollbacks += 1;
-          throw error;
-        }
+  assert.deepEqual(await serverCommerceTransactionBehaviorFact(serverMutationRuntime), {
+    failed: {
+      db: {
+        commits: 1,
+        items: [{ productId: 'p1', qty: 2 }],
+        rollbacks: 1,
       },
-    };
-    return db;
-  };
-
-  const addToCart = mutation('cart/add', {
-    csrf: false,
-    errors: {
-      OUT_OF_STOCK: s.object({ availableQuantity: s.number().int().min(0) }),
+      result: {
+        error: { code: 'OUT_OF_STOCK', payload: { availableQuantity: 5 } },
+        ok: false,
+        status: 422,
+      },
     },
-    handler(input, request, context) {
-      if (input.quantity > 5) {
-        return context.fail('OUT_OF_STOCK', { availableQuantity: 5 });
-      }
-
-      request.db.items.push({ productId: input.productId, qty: input.quantity });
-      return { count: request.db.items.length };
-    },
-    input: s.object({
-      productId: s.string(),
-      quantity: s.number().int().min(1),
-    }),
-    transaction(request, run) {
-      return request.db.transaction((db) => run({ ...request, db }));
+    successful: {
+      db: {
+        commits: 1,
+        items: [{ productId: 'p1', qty: 2 }],
+        rollbacks: 0,
+      },
+      result: {
+        changes: [],
+        ok: true,
+        rerunQueries: [],
+        value: { count: 1 },
+      },
     },
   });
-
-  const db = createTransactionalDb();
-  assert.deepEqual(await runMutation(addToCart, { productId: 'p1', quantity: 2 }, { db }), {
-    changes: [],
-    ok: true,
-    rerunQueries: [],
-    value: { count: 1 },
-  });
-  assert.deepEqual(db.items, [{ productId: 'p1', qty: 2 }]);
-  assert.equal(db.commits, 1);
-  assert.equal(db.rollbacks, 0);
-
-  assert.deepEqual(await runMutation(addToCart, { productId: 'p2', quantity: 99 }, { db }), {
-    error: { code: 'OUT_OF_STOCK', payload: { availableQuantity: 5 } },
-    ok: false,
-    status: 422,
-  });
-  assert.deepEqual(db.items, [{ productId: 'p1', qty: 2 }]);
-  assert.equal(db.commits, 1);
-  assert.equal(db.rollbacks, 1);
 });
 
 void test('D1 commerce enhanced fragments carry Tailwind stylesheet hints', async () => {

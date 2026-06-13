@@ -170,6 +170,10 @@ assertions, and FW220 residual href/action diagnostics.
 Shared compiler fixtures now own the D9 FW235 app-authored lowered-IR fixture, including SPEC §5.2
 context, compiler diagnostic projection, and `fw-check/v1` output projection, so the monolith no
 longer assembles that lowered string-render source or diagnostic-to-fw-check mapping inline.
+Shared server fixtures now own the P3 mutation lifecycle, server data-plane, CSRF, fragment
+response, and commerce transaction rollback fixture mechanics, so `tests/fw-check.node.mjs`
+asserts structured public server behavior facts instead of rebuilding those mutation/query/route
+fixtures inline.
 
 - [ ] Search for remaining custom parsers, raw source membership checks, and generated-artifact
       projections in `tests/fw-check.node.mjs`.
@@ -225,6 +229,18 @@ Latest evidence:
   compiler FW235 diagnostic projection, and `fw-check/v1` assertion facts; `tests/fw-check.node.mjs`
   asserts that public fixture fact instead of assembling lowered string-render source and
   diagnostic-to-fw-check mapping inline.
+- Phase 1/6/7 P3 server fixture closure:
+  `pnpm exec vitest --run packages/test/src/server-fixtures.test.ts packages/test/src/package-exports.test.ts`;
+  `pnpm exec tsc --noEmit --pretty false`;
+  `pnpm run check:build`;
+  `node --test --test-name-pattern "P3 (mutation lifecycle includes an explicit transaction boundary|server data-plane APIs stay exported and covered|commerce mutation runs through the transaction lifecycle)" tests/fw-check.node.mjs`;
+  `pnpm exec vp check packages/test/src/server-fixtures.ts packages/test/src/server-fixtures.test.ts packages/test/src/package-exports.test.ts packages/test/package.json tests/fw-check.node.mjs plans/codebase-quality-round2.md`;
+  `git diff --check`.
+  Evidence: `packages/test/src/server-fixtures.ts` now exposes
+  `serverMutationLifecycleBehaviorFact()`, `serverDataPlaneBehaviorFact()`, and
+  `serverCommerceTransactionBehaviorFact()` for SPEC §6.3/§6.4/§9.3 public server behavior;
+  `tests/fw-check.node.mjs` asserts those facts instead of assembling mutation/query/route/CSRF
+  fixture mechanics inline.
 - Phase 5 Vite SSR dev node-handler boundary slice:
   `pnpm exec vitest --run packages/server/src/vite-dev.test.ts packages/server/src/vite.test.ts`;
   `pnpm exec tsc --noEmit --pretty false`;

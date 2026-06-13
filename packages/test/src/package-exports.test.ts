@@ -318,6 +318,16 @@ import {
   type OptimismCleanupRuntime,
 } from '@jiso/test/runtime-fixtures';
 import {
+  serverCommerceTransactionBehaviorFact,
+  serverDataPlaneBehaviorFact,
+  serverMutationLifecycleBehaviorFact,
+  type ServerCommerceTransactionBehaviorFact,
+  type ServerDataPlaneBehaviorFact,
+  type ServerDataPlaneRuntime,
+  type ServerMutationLifecycleBehaviorFact,
+  type ServerMutationLifecycleRuntime,
+} from '@jiso/test/server-fixtures';
+import {
   cssScopeRules,
   cssSourceDirectives,
   drizzleQueryBehaviorSourceFixtures,
@@ -462,6 +472,9 @@ describe('@jiso/test package subpath exports', () => {
     expect(loaderSmokeBehaviorFact).toBeTypeOf('function');
     expect(morphFragmentBehaviorFact).toBeTypeOf('function');
     expect(optimismCleanupBehaviorFact).toBeTypeOf('function');
+    expect(serverMutationLifecycleBehaviorFact).toBeTypeOf('function');
+    expect(serverDataPlaneBehaviorFact).toBeTypeOf('function');
+    expect(serverCommerceTransactionBehaviorFact).toBeTypeOf('function');
     expect(headerValues({ 'Set-Cookie': 'sid=1; Path=/' }, 'set-cookie')).toEqual([
       'sid=1; Path=/',
     ]);
@@ -492,6 +505,21 @@ describe('@jiso/test package subpath exports', () => {
     }>();
     expectTypeOf<EnhancedMutationRuntime>().toMatchTypeOf<{
       submitEnhancedMutation: (options: unknown) => Promise<unknown>;
+    }>();
+    expectTypeOf<ServerMutationLifecycleBehaviorFact>().toMatchTypeOf<{
+      fragmentResponse: Record<string, unknown>;
+    }>();
+    expectTypeOf<ServerMutationLifecycleRuntime>().toMatchTypeOf<{
+      runMutation: (...args: any[]) => Promise<Record<string, unknown>>;
+    }>();
+    expectTypeOf<ServerDataPlaneBehaviorFact>().toMatchTypeOf<{
+      csrf: { guardCallsAfterFailure: number; guardCallsAfterSuccess: number };
+    }>();
+    expectTypeOf<ServerDataPlaneRuntime>().toMatchTypeOf<{
+      runQuery: (...args: any[]) => Promise<Record<string, unknown>>;
+    }>();
+    expectTypeOf<ServerCommerceTransactionBehaviorFact>().toMatchTypeOf<{
+      failed: { db: Record<string, unknown>; result: Record<string, unknown> };
     }>();
     expectTypeOf<VerificationLayerBehaviorFact>().toMatchTypeOf<{
       failures: Record<string, string>;
