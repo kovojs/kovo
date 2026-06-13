@@ -82,7 +82,9 @@ commands. Use `- [ ]` for open actionable work and `- [x]` only for fully verifi
       artifacts and browser tests prove roving tabindex plus DOM focus movement. Number-field
       native form ownership and generated direct input handling are covered by headless/styled
       tests, static gallery contracts, refreshed generated artifacts, and browser-backed
-      `FormData` checks for input and stepper paths.
+      `FormData` checks for input and stepper paths. Radio-group native form ownership is covered
+      by headless/styled tests, static gallery contracts, refreshed generated artifacts, and a
+      browser-backed `FormData` check across generated keyboard and click selection paths.
 - [x] Close remaining field/fieldset behavior gaps with primitive tests tied to `form()`
       integration and native validity semantics.
       Evidence 2026-06-13: `packages/headless-ui/src/primitives/field.ts` and
@@ -221,6 +223,14 @@ commands. Use `- [ ]` for open actionable work and `- [x]` only for fully verifi
       `pnpm exec vitest --run examples/gallery/src/demo-fixtures.test.ts examples/gallery/src/behavior-contracts.test.ts examples/gallery/src/interactive-gallery.test.ts`;
       `(cd examples/gallery && pnpm exec vitest --config vitest.browser.config.ts --run src/interactive-gallery.browser.test.ts -t field)`;
       exact `pnpm exec vp check packages/headless-ui/src/primitives/field.ts packages/headless-ui/src/primitives/field.test.ts packages/ui/src/field.tsx packages/ui/src/index.test.tsx examples/gallery/src/demo-fixtures.tsx examples/gallery/src/demo-fixtures.test.ts examples/gallery/src/behavior-contracts.test.ts examples/gallery/src/interactive/field-demo.tsx examples/gallery/src/generated/interactive/field-demo.tsx examples/gallery/src/interactive-gallery.browser.test.ts plans/ui.md`;
+      `git diff --check`.
+- [x] Radio-group native form ownership slice:
+      `pnpm exec vitest --run packages/headless-ui/src/primitives/radio-group.test.ts`;
+      `pnpm exec vitest --run packages/ui/src/index.test.tsx -t radio-group`;
+      `pnpm --filter @jiso/example-gallery run emit:interactive-gallery`;
+      `pnpm exec vitest --run examples/gallery/src/demo-fixtures.test.ts examples/gallery/src/behavior-contracts.test.ts examples/gallery/src/interactive-gallery.test.ts`;
+      `(cd examples/gallery && pnpm exec vitest --config vitest.browser.config.ts --run src/interactive-gallery.browser.test.ts -t radio-group)`;
+      exact `pnpm exec vp check packages/headless-ui/src/primitives/radio-group.ts packages/headless-ui/src/primitives/radio-group.test.ts packages/ui/src/radio-group.tsx packages/ui/src/index.test.tsx examples/gallery/src/demo-fixtures.tsx examples/gallery/src/demo-fixtures.test.ts examples/gallery/src/behavior-contracts.test.ts examples/gallery/src/interactive/radio-group-demo.tsx examples/gallery/src/generated/interactive/radio-group-demo.tsx examples/gallery/src/interactive-gallery.test.ts examples/gallery/src/interactive-gallery.browser.test.ts plans/ui.md plans/codebase-quality-round2.md`;
       `git diff --check`.
 - [x] Broad gate after `0cac62d`: `pnpm run check` passed with 782 formatted files, 682
       lint/typechecked files, and 7 typechecked example/conformance projects.

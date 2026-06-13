@@ -21,6 +21,7 @@ export interface RadioGroupItem {
 export interface RadioGroupState {
   dir?: TextDirection;
   disabled?: boolean;
+  form?: string;
   invalid?: boolean;
   items?: readonly RadioGroupItem[];
   loop?: boolean;
@@ -141,6 +142,7 @@ export function radioGroupRadioAttributes(
     type: 'radio',
     value: options.itemValue,
     ...(options.controlId === undefined ? {} : { id: options.controlId }),
+    ...(options.form === undefined ? {} : { form: options.form }),
     ...(options.name === undefined ? {} : { name: options.name }),
     ...(options.required === true ? { required: true } : {}),
   });

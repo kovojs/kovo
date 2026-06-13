@@ -65,6 +65,7 @@ describe('headless-ui radio-group primitive', () => {
 
   it('builds item, radio input, and label attributes around native radio controls', () => {
     const state = {
+      form: 'checkout-form',
       items: shippingItems,
       name: 'shipping',
       required: true,
@@ -88,6 +89,7 @@ describe('headless-ui radio-group primitive', () => {
       checked: true,
       'data-state': 'checked',
       disabled: false,
+      form: 'checkout-form',
       id: 'standard-radio',
       name: 'shipping',
       required: true,
@@ -106,6 +108,7 @@ describe('headless-ui radio-group primitive', () => {
       'data-disabled': '',
       'data-state': 'unchecked',
       disabled: true,
+      form: 'checkout-form',
       name: 'shipping',
       required: true,
       tabIndex: -1,

@@ -465,13 +465,17 @@ describe('gallery demo fixtures', () => {
 
     expect(radioGroup.html).toContain('role="radiogroup"');
     expect(radioGroup.html).toContain('aria-describedby="gallery-radio-description"');
+    expect(radioGroup.html).toContain('id="gallery-radio-form" data-gallery-form="radio-group"');
+    expect(radioGroup.html).toContain('form="gallery-radio-form"');
     expect(radioGroup.html).toContain('name="gallery-shipping-speed"');
     expect(radioGroup.html).toContain('type="radio"');
     expect(radioGroup.html).toContain('aria-checked="true"');
     expect(radioGroup.html).toContain('tabIndex="0"');
     expect(radioGroup.html).toContain('data-state="checked"');
     expect(radioGroup.html).toContain('value="freight"');
-    expect(radioGroup.html).toContain('disabled id="gallery-radio-freight"');
+    expect(radioGroup.html).toContain(
+      'disabled form="gallery-radio-form" id="gallery-radio-freight"',
+    );
     expect(radioGroup.html).toContain('tabIndex="-1" type="radio" value="freight"');
   });
 

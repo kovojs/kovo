@@ -1996,6 +1996,7 @@ export function RadioGroupDemo(): string {
   const items = [{ value: 'standard' }, { value: 'express' }, { disabled: true, value: 'freight' }];
   const state = {
     descriptionId: 'gallery-radio-description',
+    form: 'gallery-radio-form',
     items,
     name: 'gallery-shipping-speed',
     required: true,
@@ -2004,6 +2005,7 @@ export function RadioGroupDemo(): string {
 
   return (
     <section data-gallery-demo="radio-group">
+      <form id="gallery-radio-form" data-gallery-form="radio-group" />
       <p data-demo-summary="no-js">
         Radio group keeps native radio inputs while adding roving-focus attributes.
       </p>

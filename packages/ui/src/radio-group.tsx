@@ -18,6 +18,7 @@ export interface RadioGroupStateProps {
   dir?: TextDirection;
   disabled?: boolean;
   errorId?: string;
+  form?: string;
   invalid?: boolean;
   items?: readonly HeadlessRadioGroupItem[];
   loop?: boolean;
@@ -90,6 +91,7 @@ export const RadioGroup = component('radio-group', {
       ...(props.dir === undefined ? {} : { dir: props.dir }),
       ...(props.disabled === undefined ? {} : { disabled: props.disabled }),
       ...(props.errorId === undefined ? {} : { errorId: props.errorId }),
+      ...(props.form === undefined ? {} : { form: props.form }),
       ...(props.id === undefined ? {} : { id: props.id }),
       ...(props.invalid === undefined ? {} : { invalid: props.invalid }),
       ...(props.items === undefined ? {} : { items: props.items }),
@@ -127,6 +129,7 @@ export const RadioGroupItem = component('radio-group-item', {
     const attrs = radioGroupItemAttributes({
       ...(props.dir === undefined ? {} : { dir: props.dir }),
       ...(props.disabled === undefined ? {} : { disabled: props.disabled }),
+      ...(props.form === undefined ? {} : { form: props.form }),
       ...(props.id === undefined ? {} : { id: props.id }),
       ...(props.invalid === undefined ? {} : { invalid: props.invalid }),
       ...(props.itemDisabled === undefined ? {} : { itemDisabled: props.itemDisabled }),
@@ -157,6 +160,7 @@ export const RadioGroupRadio = component('radio-group-radio', {
     const attrs = radioGroupRadioAttributes({
       ...(props.dir === undefined ? {} : { dir: props.dir }),
       ...(props.disabled === undefined ? {} : { disabled: props.disabled }),
+      ...(props.form === undefined ? {} : { form: props.form }),
       ...(props.invalid === undefined ? {} : { invalid: props.invalid }),
       ...(props.itemDisabled === undefined ? {} : { itemDisabled: props.itemDisabled }),
       ...(props.items === undefined ? {} : { items: props.items }),
@@ -177,6 +181,7 @@ export const RadioGroupRadio = component('radio-group-radio', {
         data-disabled={attrs['data-disabled']}
         data-state={attrs['data-state']}
         disabled={attrs.disabled}
+        form={attrs.form}
         id={attrs.id}
         name={attrs.name}
         required={attrs.required}
@@ -193,6 +198,7 @@ export const RadioGroupLabel = component('radio-group-label', {
     const attrs = radioGroupLabelAttributes({
       ...(props.dir === undefined ? {} : { dir: props.dir }),
       ...(props.disabled === undefined ? {} : { disabled: props.disabled }),
+      ...(props.form === undefined ? {} : { form: props.form }),
       ...(props.id === undefined ? {} : { id: props.id }),
       ...(props.invalid === undefined ? {} : { invalid: props.invalid }),
       ...(props.itemDisabled === undefined ? {} : { itemDisabled: props.itemDisabled }),

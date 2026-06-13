@@ -1060,6 +1060,7 @@ describe('compiled interactive gallery demos in the browser', () => {
     const email = required(root.querySelector<HTMLInputElement>('#gallery-radio-email'));
     const phone = required(root.querySelector<HTMLInputElement>('#gallery-radio-phone'));
     const sms = required(root.querySelector<HTMLInputElement>('#gallery-radio-sms'));
+    const form = required(root.querySelector<HTMLFormElement>('#gallery-radio-form'));
     const { imports } = installGeneratedGalleryLoader(root, {
       events: ['click', 'input', 'change', 'keydown'],
     });
@@ -1067,7 +1068,9 @@ describe('compiled interactive gallery demos in the browser', () => {
     expect(root.getAttribute('role')).toBe('radiogroup');
     expect(root.getAttribute('aria-required')).toBe('true');
     expect(root.getAttribute('fw-state')).toBe('{"value":"email"}');
+    expect(form.dataset.galleryForm).toBe('radio-group');
     expect(email.name).toBe('gallery-contact-channel');
+    expect(email.form).toBe(form);
     expect(email.required).toBe(true);
     expect(email.checked).toBe(true);
     expect(email.tabIndex).toBe(0);
@@ -1076,6 +1079,7 @@ describe('compiled interactive gallery demos in the browser', () => {
     expect(phone.tabIndex).toBe(-1);
     expect(phone.getAttribute('data-disabled')).toBe('');
     expect(sms.checked).toBe(false);
+    expect(new FormData(form).get('gallery-contact-channel')).toBe('email');
     expect(sms.tabIndex).toBe(-1);
 
     root.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, key: 'ArrowRight' }));
@@ -1084,6 +1088,7 @@ describe('compiled interactive gallery demos in the browser', () => {
       const currentEmail = required(root.querySelector<HTMLInputElement>('#gallery-radio-email'));
       const currentPhone = required(root.querySelector<HTMLInputElement>('#gallery-radio-phone'));
       const currentSms = required(root.querySelector<HTMLInputElement>('#gallery-radio-sms'));
+      const currentForm = required(root.querySelector<HTMLFormElement>('#gallery-radio-form'));
       const currentOutput = required(
         root.querySelector<HTMLOutputElement>('[data-demo-state="radio-value"]'),
       );
@@ -1098,6 +1103,7 @@ describe('compiled interactive gallery demos in the browser', () => {
       expect(currentPhone.tabIndex).toBe(-1);
       expect(currentSms.checked).toBe(true);
       expect(currentSms.tabIndex).toBe(0);
+      expect(new FormData(currentForm).get('gallery-contact-channel')).toBe('sms');
       expect(currentOutput.textContent).toBe('sms');
     });
 
@@ -1106,10 +1112,12 @@ describe('compiled interactive gallery demos in the browser', () => {
     await vi.waitFor(() => {
       const currentEmail = required(root.querySelector<HTMLInputElement>('#gallery-radio-email'));
       const currentSms = required(root.querySelector<HTMLInputElement>('#gallery-radio-sms'));
+      const currentForm = required(root.querySelector<HTMLFormElement>('#gallery-radio-form'));
 
       expect(root.getAttribute('fw-state')).toBe('{"value":"email"}');
       expect(currentEmail.checked).toBe(true);
       expect(currentSms.checked).toBe(false);
+      expect(new FormData(currentForm).get('gallery-contact-channel')).toBe('email');
     });
   });
 

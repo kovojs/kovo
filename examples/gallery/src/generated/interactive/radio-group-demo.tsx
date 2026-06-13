@@ -24,6 +24,7 @@ export const GalleryRadioGroupDemo = component('gallery-radio-group-demo', {
   state: () => ({ value: 'email' }),
   render: (_queries: Record<string, never>, state: GalleryRadioGroupDemoState) => {
     const groupState = {
+      form: 'gallery-radio-form',
       items: radioItems,
       name: 'gallery-contact-channel',
       required: true,
@@ -45,6 +46,7 @@ export const GalleryRadioGroupDemo = component('gallery-radio-group-demo', {
         fw-c="gallery-radio-group-demo"
         fw-state='{"value":"email"}'
       >
+        <form id="gallery-radio-form" data-gallery-form="radio-group" />
         <h3 id="gallery-radio-group-label">Contact channel</h3>
         <div {...radioGroupItemAttributes(emailState)} class="inline-flex items-center gap-2">
           <input

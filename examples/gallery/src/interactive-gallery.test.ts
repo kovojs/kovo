@@ -449,6 +449,8 @@ describe('compiled interactive gallery demos', () => {
     );
 
     expect(radioGroup).toContain('data-gallery-interactive="radio-group"');
+    expect(radioGroup).toContain('id="gallery-radio-form" data-gallery-form="radio-group"');
+    expect(radioGroup).toContain("form: 'gallery-radio-form'");
     expect(radioGroup).toContain('fw-state=\'{"value":"email"}\'');
     expect(radioGroup).toContain('radioGroupRadioAttributes({');
     expect(radioGroup).toMatch(

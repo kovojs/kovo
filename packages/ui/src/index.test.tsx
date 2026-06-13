@@ -652,6 +652,7 @@ describe('@jiso/ui styled package foundation', () => {
     ];
     const state = {
       descriptionId: 'shipping-help',
+      form: 'checkout-form',
       items,
       name: 'shipping-speed',
       required: true,
@@ -695,10 +696,11 @@ describe('@jiso/ui styled package foundation', () => {
     expect(root).toContain('role="radiogroup"');
     expect(item).toContain('data-state="checked"');
     expect(radio).toContain('aria-checked="true" checked');
-    expect(radio).toContain('id="shipping-express" name="shipping-speed" required');
+    expect(radio).toContain('form="checkout-form" id="shipping-express"');
+    expect(radio).toContain('name="shipping-speed" required');
     expect(radio).toContain('tabIndex="0" type="radio" value="express"');
     expect(disabledRadio).toContain('data-disabled=""');
-    expect(disabledRadio).toContain('disabled id="shipping-freight"');
+    expect(disabledRadio).toContain('disabled form="checkout-form" id="shipping-freight"');
     expect(disabledRadio).toContain('tabIndex="-1" type="radio" value="freight"');
     expect(label).toContain('for="shipping-express"');
     expect(radioGroupItemClasses.join(' ')).toContain('data-[disabled]:opacity-50');
