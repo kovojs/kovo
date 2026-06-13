@@ -230,8 +230,8 @@ Open:
 
 Latest broad gate:
 
-- `pnpm run check` passed after the mini-wave through `c1d9b5f` (`cf11855`, `f5b0ef1`,
-  `1bb0787`, `c1d9b5f`): 764 formatted files, 666 lint/typechecked files, and
+- `pnpm run check` passed after the mini-wave through `37cc7e3` (`e6aca91`, `3df0672`,
+  `37cc7e3`): 768 formatted files, 670 lint/typechecked files, and
   7 typechecked example/conformance projects.
 
 Focused gates since that broad run:
