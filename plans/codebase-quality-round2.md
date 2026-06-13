@@ -791,6 +791,12 @@ packages/runtime/src/inline-loader-enhanced-submit.test.ts
 packages/runtime/src/inline-loader-parser-parity.test.ts
 packages/runtime/src/inline-loader-build.test.ts
 packages/runtime/src/inline-js-minifier.test.ts`.
+      Evidence 2026-06-13 round266: the minified inline response-apply follow-up is now folded
+      into `packages/runtime/src/inline-loader-response-apply.test.ts`; the response-apply owner
+      suite checks freshly minified source compactness and executes the shared readable/minified/
+      generated/extracted installer parity matrix, so the standalone minified response-apply test
+      file was deleted. Verified by focused inline response/apply and minifier tests, browser
+      runtime checks, targeted `vp check`, and `git diff --check`.
       Evidence 2026-06-13 round256: query script hydration coverage moved from
       `packages/runtime/src/query-apply.test.ts` into
       `packages/runtime/src/query-script-hydration.test.ts`, leaving `query-apply.test.ts` focused
