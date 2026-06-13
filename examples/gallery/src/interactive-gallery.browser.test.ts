@@ -101,6 +101,7 @@ import { GalleryToastDemo } from './generated/interactive/toast-demo.js';
 import * as tooltipClient from './generated/interactive/tooltip-demo.client.js';
 import { GalleryTooltipDemo } from './generated/interactive/tooltip-demo.js';
 import autocompleteStaticRouteHtml from './visual-fixtures/autocomplete.html.txt?raw';
+import avatarStaticRouteHtml from './visual-fixtures/avatar.html.txt?raw';
 import badgeStaticRouteHtml from './visual-fixtures/badge.html.txt?raw';
 import breadcrumbStaticRouteHtml from './visual-fixtures/breadcrumb.html.txt?raw';
 import buttonStaticRouteHtml from './visual-fixtures/button.html.txt?raw';
@@ -115,12 +116,16 @@ import fieldStaticRouteHtml from './visual-fixtures/field.html.txt?raw';
 import hoverCardStaticRouteHtml from './visual-fixtures/hover-card.html.txt?raw';
 import kbdStaticRouteHtml from './visual-fixtures/kbd.html.txt?raw';
 import menubarStaticRouteHtml from './visual-fixtures/menubar.html.txt?raw';
+import meterStaticRouteHtml from './visual-fixtures/meter.html.txt?raw';
 import navigationMenuStaticRouteHtml from './visual-fixtures/navigation-menu.html.txt?raw';
 import numberFieldStaticRouteHtml from './visual-fixtures/number-field.html.txt?raw';
 import otpFieldStaticRouteHtml from './visual-fixtures/otp-field.html.txt?raw';
 import popoverStaticRouteHtml from './visual-fixtures/popover.html.txt?raw';
+import progressStaticRouteHtml from './visual-fixtures/progress.html.txt?raw';
 import radioGroupStaticRouteHtml from './visual-fixtures/radio-group.html.txt?raw';
+import scrollAreaStaticRouteHtml from './visual-fixtures/scroll-area.html.txt?raw';
 import selectStaticRouteHtml from './visual-fixtures/select.html.txt?raw';
+import separatorStaticRouteHtml from './visual-fixtures/separator.html.txt?raw';
 import sheetStaticRouteHtml from './visual-fixtures/sheet.html.txt?raw';
 import sliderStaticRouteHtml from './visual-fixtures/slider.html.txt?raw';
 import skeletonStaticRouteHtml from './visual-fixtures/skeleton.html.txt?raw';
@@ -139,6 +144,7 @@ interface InteractiveDemoComponent {
 
 type StaticVisualFixturePath =
   | '/components/autocomplete'
+  | '/components/avatar'
   | '/components/badge'
   | '/components/breadcrumb'
   | '/components/button'
@@ -153,12 +159,16 @@ type StaticVisualFixturePath =
   | '/components/hover-card'
   | '/components/kbd'
   | '/components/menubar'
+  | '/components/meter'
   | '/components/navigation-menu'
   | '/components/number-field'
   | '/components/otp-field'
   | '/components/popover'
+  | '/components/progress'
   | '/components/radio-group'
+  | '/components/scroll-area'
   | '/components/select'
+  | '/components/separator'
   | '/components/sheet'
   | '/components/slider'
   | '/components/skeleton'
@@ -169,6 +179,7 @@ type StaticVisualFixturePath =
 
 const staticVisualFixtureHtml: Record<StaticVisualFixturePath, string> = {
   '/components/autocomplete': autocompleteStaticRouteHtml,
+  '/components/avatar': avatarStaticRouteHtml,
   '/components/badge': badgeStaticRouteHtml,
   '/components/breadcrumb': breadcrumbStaticRouteHtml,
   '/components/button': buttonStaticRouteHtml,
@@ -183,12 +194,16 @@ const staticVisualFixtureHtml: Record<StaticVisualFixturePath, string> = {
   '/components/hover-card': hoverCardStaticRouteHtml,
   '/components/kbd': kbdStaticRouteHtml,
   '/components/menubar': menubarStaticRouteHtml,
+  '/components/meter': meterStaticRouteHtml,
   '/components/navigation-menu': navigationMenuStaticRouteHtml,
   '/components/number-field': numberFieldStaticRouteHtml,
   '/components/otp-field': otpFieldStaticRouteHtml,
   '/components/popover': popoverStaticRouteHtml,
+  '/components/progress': progressStaticRouteHtml,
   '/components/radio-group': radioGroupStaticRouteHtml,
+  '/components/scroll-area': scrollAreaStaticRouteHtml,
   '/components/select': selectStaticRouteHtml,
+  '/components/separator': separatorStaticRouteHtml,
   '/components/sheet': sheetStaticRouteHtml,
   '/components/slider': sliderStaticRouteHtml,
   '/components/skeleton': skeletonStaticRouteHtml,
@@ -533,6 +548,38 @@ describe('compiled interactive gallery demos in the browser', () => {
       width: 860,
     });
     expect(await visualBaselineHash(fieldRoute)).toBe('d1dab468');
+
+    const avatarRoute = mountStaticGalleryRoute('/components/avatar');
+    const meterRoute = mountStaticGalleryRoute('/components/meter');
+    const progressRoute = mountStaticGalleryRoute('/components/progress');
+    const scrollAreaRoute = mountStaticGalleryRoute('/components/scroll-area');
+    const separatorRoute = mountStaticGalleryRoute('/components/separator');
+
+    expect(visualGeometry(avatarRoute)).toEqual({
+      height: 491,
+      width: 860,
+    });
+    expect(visualGeometry(meterRoute)).toEqual({
+      height: 491,
+      width: 860,
+    });
+    expect(visualGeometry(progressRoute)).toEqual({
+      height: 491,
+      width: 860,
+    });
+    expect(visualGeometry(scrollAreaRoute)).toEqual({
+      height: 692,
+      width: 860,
+    });
+    expect(visualGeometry(separatorRoute)).toEqual({
+      height: 511,
+      width: 860,
+    });
+    expect(await visualBaselineHash(avatarRoute)).toBe('4bc833e5');
+    expect(await visualBaselineHash(meterRoute)).toBe('fa0430d8');
+    expect(await visualBaselineHash(progressRoute)).toBe('4c10b845');
+    expect(await visualBaselineHash(scrollAreaRoute)).toBe('c3e213c2');
+    expect(await visualBaselineHash(separatorRoute)).toBe('75cba077');
   });
 
   it('updates accordion ARIA and panel visibility through generated handlers', async () => {
@@ -2714,6 +2761,25 @@ function installVisualBaselineStyles(): void {
       min-height: 14px;
       border-radius: 999px;
       background: #dbeafe;
+    }
+
+    [data-gallery-route^="/components/"] progress {
+      appearance: none;
+      height: 14px;
+      border: 0;
+      border-radius: 999px;
+      background: #e2e8f0;
+      color: #2563eb;
+    }
+
+    [data-gallery-route^="/components/"] progress::-webkit-progress-bar {
+      border-radius: 999px;
+      background: #e2e8f0;
+    }
+
+    [data-gallery-route^="/components/"] progress::-webkit-progress-value {
+      border-radius: 999px;
+      background: #2563eb;
     }
 
     output {

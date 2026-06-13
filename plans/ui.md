@@ -195,6 +195,12 @@ commands. Use `- [ ]` for open actionable work and `- [x]` only for fully verifi
       authored option wrappers, `examples/gallery/src/visual-fixtures/field.html.txt` is
       synchronized against `renderGalleryRoute()`, and the Chromium visual gate asserts
       deterministic `860x874` geometry plus hash `d1dab468`.
+      Evidence 2026-06-13: the static visual baseline now covers the native status/display route
+      family: avatar, meter, progress, scroll-area, and separator. Avatar, meter, progress, and
+      separator static routes now render the styled `@jiso/ui` wrapper surface while preserving
+      native light-DOM semantics from SPEC §3.1; raw route fixtures are synchronized against
+      `renderGalleryRoute()`, and the Chromium visual gate asserts deterministic route geometry
+      plus screenshot hashes `4bc833e5`, `fa0430d8`, `4c10b845`, `c3e213c2`, and `75cba077`.
 - [x] Close remaining field/fieldset behavior gaps with primitive tests tied to `form()`
       integration and native validity semantics.
       Evidence 2026-06-13: `packages/headless-ui/src/primitives/field.ts` and
@@ -296,6 +302,12 @@ commands. Use `- [ ]` for open actionable work and `- [x]` only for fully verifi
 
 ## Latest Gates
 
+- [x] Native status/display static visual-baseline slice:
+      `pnpm exec vitest --run packages/ui/src/index.test.tsx examples/gallery/src/demo-fixtures.test.ts`;
+      `pnpm exec tsc -p examples/gallery/tsconfig.json --noEmit`;
+      `(cd examples/gallery && pnpm exec vitest --config vitest.browser.config.ts --run src/interactive-gallery.browser.test.ts -t "representative styled static gallery routes")`;
+      exact `pnpm exec vp check examples/gallery/src/demo-fixtures.tsx examples/gallery/src/demo-fixtures.test.ts examples/gallery/src/interactive-gallery.browser.test.ts examples/gallery/src/visual-fixtures/avatar.html.txt examples/gallery/src/visual-fixtures/meter.html.txt examples/gallery/src/visual-fixtures/progress.html.txt examples/gallery/src/visual-fixtures/scroll-area.html.txt examples/gallery/src/visual-fixtures/separator.html.txt plans/ui.md plans/codebase-quality-round2.md`;
+      `git diff --check`.
 - [x] Simple styled static visual-baseline and button form-owner slice:
       `pnpm exec vitest --run packages/ui/src/index.test.tsx examples/gallery/src/demo-fixtures.test.ts`;
       `(cd examples/gallery && pnpm exec vitest --config vitest.browser.config.ts --run src/interactive-gallery.browser.test.ts -t "representative styled static gallery routes")`;

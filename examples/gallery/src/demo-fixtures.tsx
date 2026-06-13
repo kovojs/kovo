@@ -10,16 +10,10 @@ import {
   alertDialogContentAttributes,
   alertDialogRootAttributes,
   alertDialogTriggerAttributes,
-  avatarFallbackAttributes,
-  avatarImageAttributes,
-  avatarRootAttributes,
   dialogCloseAttributes,
   dialogContentAttributes,
   dialogRootAttributes,
   dialogTriggerAttributes,
-  meterRootAttributes,
-  progressRootAttributes,
-  separatorRootAttributes,
   tabsRootAttributes,
 } from '@jiso/headless-ui/primitives';
 import {
@@ -29,6 +23,9 @@ import {
   AutocompleteList,
   AutocompleteOption,
   AutocompleteValue,
+  Avatar,
+  AvatarFallback,
+  AvatarImage,
   Badge,
   Breadcrumb,
   BreadcrumbItem,
@@ -87,6 +84,7 @@ import {
   Menubar,
   MenubarItem,
   MenubarSubmenu,
+  Meter,
   NavigationMenu,
   NavigationMenuContent,
   NavigationMenuItem,
@@ -106,6 +104,7 @@ import {
   Popover,
   PopoverContent,
   PopoverTrigger,
+  Progress,
   RadioGroup,
   RadioGroupItem,
   RadioGroupLabel,
@@ -120,6 +119,7 @@ import {
   SelectItem,
   SelectTrigger,
   SelectValue,
+  Separator,
   Sheet,
   Skeleton,
   Slider,
@@ -600,25 +600,33 @@ export function AvatarDemo(): string {
         Avatar keeps native image loading visible and leaves initials fallback markup in the
         document.
       </p>
-      <div {...avatarRootAttributes({ ...loading, label: 'Ada Lovelace avatar' })}>
-        <img
-          {...avatarImageAttributes({
-            ...loading,
-            alt: 'Ada Lovelace',
-            loading: 'lazy',
-            sizes: '40px',
-            srcSet: '/avatars/ada@2x.png 2x',
-          })}
-        />
-        <span {...avatarFallbackAttributes({ ...loading, delayMs: 250 })}>AL</span>
-      </div>
-      <div {...avatarRootAttributes({ ...loaded, label: 'Grace Hopper avatar' })}>
-        <img {...avatarImageAttributes({ ...loaded, alt: 'Grace Hopper' })} />
-        <span {...avatarFallbackAttributes(loaded)}>GH</span>
-      </div>
-      <div {...avatarRootAttributes({ ...error, label: 'Fallback avatar' })}>
-        <img {...avatarImageAttributes({ ...error, alt: '' })} />
-        <span {...avatarFallbackAttributes(error)}>?</span>
+      <div data-ui-demo="avatar">
+        {Avatar.definition.render({
+          ...loading,
+          children:
+            AvatarImage.definition.render({
+              ...loading,
+              alt: 'Ada Lovelace',
+              loading: 'lazy',
+              sizes: '40px',
+              srcSet: '/avatars/ada@2x.png 2x',
+            }) + AvatarFallback.definition.render({ ...loading, children: 'AL', delayMs: 250 }),
+          label: 'Ada Lovelace avatar',
+        })}
+        {Avatar.definition.render({
+          ...loaded,
+          children:
+            AvatarImage.definition.render({ ...loaded, alt: 'Grace Hopper' }) +
+            AvatarFallback.definition.render({ ...loaded, children: 'GH' }),
+          label: 'Grace Hopper avatar',
+        })}
+        {Avatar.definition.render({
+          ...error,
+          children:
+            AvatarImage.definition.render({ ...error, alt: '' }) +
+            AvatarFallback.definition.render({ ...error, children: '?' }),
+          label: 'Fallback avatar',
+        })}
       </div>
       {renderBehaviorContract({
         changeReasons: 'image-load, image-error, programmatic',
@@ -1728,24 +1736,31 @@ export function NavigationMenuDemo(): string {
 }
 
 export function MeterDemo(): string {
-  const optimum = meterRootAttributes({
-    high: 90,
-    low: 50,
-    max: 100,
-    min: 0,
-    optimum: 80,
-    value: 84,
-    valueText: '84 percent quality score',
-  });
-  const suboptimum = meterRootAttributes({ high: 90, low: 50, max: 100, optimum: 80, value: 42 });
-
   return (
     <section data-gallery-demo="meter">
       <p data-demo-summary="no-js">
         Meter uses the native meter element and exposes threshold data for styling.
       </p>
-      <meter {...optimum}>84%</meter>
-      <meter {...suboptimum}>42%</meter>
+      <div data-ui-demo="meter">
+        {Meter.definition.render({
+          children: '84%',
+          high: 90,
+          low: 50,
+          max: 100,
+          min: 0,
+          optimum: 80,
+          value: 84,
+          valueText: '84 percent quality score',
+        })}
+        {Meter.definition.render({
+          children: '42%',
+          high: 90,
+          low: 50,
+          max: 100,
+          optimum: 80,
+          value: 42,
+        })}
+      </div>
       {renderBehaviorContract({
         changeReasons: 'value comes from app state',
         dataState: 'optimum, suboptimum, even-less-good',
@@ -2241,11 +2256,16 @@ export function SeparatorDemo(): string {
       <p data-demo-summary="no-js">
         Separator emits decorative and semantic separator variants with orientation data.
       </p>
-      <hr {...separatorRootAttributes()} data-fixture-state="decorative" />
-      <div
-        {...separatorRootAttributes({ decorative: false, orientation: 'vertical' })}
-        data-fixture-state="semantic"
-      />
+      <div class="grid gap-4" data-ui-demo="separator">
+        <span data-fixture-state="decorative">
+          {Separator.definition.render({ class: 'h-px w-64' })}
+        </span>
+        <span class="flex h-16 items-stretch gap-4" data-fixture-state="semantic">
+          <span>Before</span>
+          {Separator.definition.render({ decorative: false, orientation: 'vertical' })}
+          <span>After</span>
+        </span>
+      </div>
       {renderBehaviorContract({
         changeReasons: 'not stateful',
         dataState: 'orientation only',
@@ -2621,22 +2641,21 @@ export function PopoverDemo(): string {
 }
 
 export function ProgressDemo(): string {
-  const loading = progressRootAttributes({
-    max: 100,
-    value: 42,
-    valueText: '42 of 100 tasks complete',
-  });
-  const complete = progressRootAttributes({ max: 100, value: 100 });
-  const indeterminate = progressRootAttributes({ max: 100, value: null });
-
   return (
     <section data-gallery-demo="progress">
       <p data-demo-summary="no-js">
         Progress uses the native progress element for determinate and indeterminate states.
       </p>
-      <progress {...loading}>42%</progress>
-      <progress {...complete}>100%</progress>
-      <progress {...indeterminate}>Loading</progress>
+      <div data-ui-demo="progress">
+        {Progress.definition.render({
+          children: '42%',
+          max: 100,
+          value: 42,
+          valueText: '42 of 100 tasks complete',
+        })}
+        {Progress.definition.render({ children: '100%', max: 100, value: 100 })}
+        {Progress.definition.render({ children: 'Loading', max: 100, value: null })}
+      </div>
       {renderBehaviorContract({
         changeReasons: 'value comes from app state',
         dataState: 'loading, complete, indeterminate',
