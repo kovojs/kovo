@@ -6596,6 +6596,88 @@ export interface CommerceInvalidationSets {
     ]);
   });
 
+  it('uses project tuple receiver aliases from typed contexts', () => {
+    const files = [
+      pgDatabaseTypes([
+        'select(value?: unknown): { from(table: unknown): Promise<unknown[]> };',
+        'update(table: unknown): { set(value: unknown): { where(value: unknown): Promise<void> } };',
+      ]),
+      {
+        fileName: 'product.domain.ts',
+        source: [
+          'import type { PgDatabase } from "drizzle-orm/pg-core";',
+          '',
+          'interface FakeDb {',
+          '  select(value?: unknown): { from(table: unknown): Promise<unknown[]> };',
+          '  update(table: unknown): { set(value: unknown): Promise<void> };',
+          '}',
+          'interface DrizzleContext { receivers: [PgDatabase, FakeDb]; nested: { tuple: [FakeDb, PgDatabase] } }',
+          'interface FakeContext { receivers: [FakeDb, FakeDb] }',
+          '',
+          'export const products = pgTable("products", {',
+          '  id: text("id").primaryKey(),',
+          '  stock: integer("stock").notNull(),',
+          '}, jiso({ domain: "product", key: "id" }));',
+          '',
+          'export async function syncProduct(context: DrizzleContext, fake: FakeContext, productId: string) {',
+          '  const [writer] = context.receivers;',
+          '  let assignedWriter;',
+          '  [, assignedWriter] = context.nested.tuple;',
+          '  const [fakeWriter] = fake.receivers;',
+          '  await writer.update(products).set({ stock: 1 }).where(eq(products.id, productId));',
+          '  await assignedWriter.update(products).set({ stock: 2 }).where(eq(products.id, productId));',
+          '  await fakeWriter.update(products).set({ stock: 3 });',
+          '}',
+          '',
+          'export const productQuery = query("product/tuple-receiver", {',
+          '  load(_input, context: DrizzleContext, fake: FakeContext) {',
+          '    const [reader] = context.receivers;',
+          '    let assignedReader;',
+          '    [, assignedReader] = context.nested.tuple;',
+          '    const [fakeReader] = fake.receivers;',
+          '    fakeReader.select({ id: products.id }).from(products);',
+          '    assignedReader.select({ id: products.id }).from(products);',
+          '    return reader.select({ id: products.id, stock: products.stock }).from(products);',
+          '  },',
+          '});',
+          '',
+        ].join('\n'),
+      },
+    ];
+
+    expect(extractTouchGraphFromProject({ files })).toEqual({
+      syncProduct: {
+        reads: [],
+        touches: [
+          {
+            domain: 'product',
+            keys: 'arg:productId',
+            site: 'product.domain.ts:20',
+            via: 'products',
+          },
+          {
+            domain: 'product',
+            keys: 'arg:productId',
+            site: 'product.domain.ts:21',
+            via: 'products',
+          },
+        ],
+        unresolved: [],
+      },
+    });
+    expect(extractQueryFactsFromProject({ files })).toEqual([
+      {
+        query: 'product/tuple-receiver',
+        reads: ['product'],
+        shape: {
+          id: 'string',
+          stock: 'number',
+        },
+        site: 'product.domain.ts:25',
+      },
+    ]);
+  });
+
   it('resolves imported table symbols instead of same-name tables from other modules', () => {
     const graph = extractTouchGraphFromProject({
       files: [
@@ -7257,6 +7339,55 @@ export interface CommerceInvalidationSets {
     ]);
   });
 
+  it('marks source array carrier destructuring aliases as FW406', () => {
+    const graph = extractTouchGraphFromSource([
+      {
+        fileName: 'cart.domain.ts',
+        source: [
+          'export const users = pgTable("users", {}, jiso({ domain: "user", key: "id" }));',
+          '',
+          'export async function syncUsers(db, fake) {',
+          '  const carrier = [db, fake];',
+          '  const nested = [[fake, db]];',
+          '  const [writer, fakeWriter] = carrier;',
+          '  let assignedWriter;',
+          '  [assignedWriter] = carrier;',
+          '  const [[ignoredFake, nestedWriter]] = nested;',
+          '  await writer.update(users).set({});',
+          '  await assignedWriter.select().from(users);',
+          '  await nestedWriter.execute("select 1");',
+          '  await fakeWriter.update(users).set({});',
+          '  await ignoredFake.execute("select 1");',
+          '}',
+        ].join('\n'),
+      },
+    ]);
+
+    expect(graph).toEqual({
+      syncUsers: {
+        reads: [],
+        touches: [],
+        unresolved: [
+          {
+            code: 'FW406',
+            message: 'Statically un-analyzable write site; manual touches required.',
+            site: 'cart.domain.ts:10',
+          },
+          {
+            code: 'FW406',
+            message: 'Statically un-analyzable write site; manual touches required.',
+            site: 'cart.domain.ts:11',
+          },
+          {
+            code: 'FW406',
+            message: 'Statically un-analyzable write site; manual touches required.',
+            site: 'cart.domain.ts:12',
+          },
+        ],
+      },
+    });
+  });
+
   it('marks source spread-copied receiver carriers as FW406 without overridden fake facts', () => {
     const graph = extractTouchGraphFromSource([
       {
@@ -7598,6 +7729,66 @@ export interface CommerceInvalidationSets {
           },
         ],
         query: 'users/source-nested-carrier',
+        reads: [],
+        shape: {},
+        site: 'user.queries.ts:3',
+      },
+    ]);
+  });
+
+  it('marks source query-loader array receiver carriers as FW406', () => {
+    const facts = extractQueryFactsFromSource([
+      {
+        fileName: 'user.queries.ts',
+        source: [
+          'export const users = pgTable("users", { id: text("id").primaryKey() }, jiso({ domain: "user", key: "id" }));',
+          '',
+          'export const usersQuery = query("users/source-array-carrier", {',
+          '  load(_input, db, fake) {',
+          '    const carrier = [db, fake];',
+          '    const nested = [[fake, db]];',
+          '    const [reader, fakeReader] = carrier;',
+          '    let assignedReader;',
+          '    [assignedReader] = carrier;',
+          '    const [[ignoredFake, nestedReader]] = nested;',
+          '    reader.select({ id: users.id }).from(users);',
+          '    assignedReader.execute("select 1");',
+          '    nestedReader.select({ id: users.id }).from(users);',
+          '    fakeReader.select({ id: users.id }).from(users);',
+          '    ignoredFake.execute("select 1");',
+          '    return [];',
+          '  },',
+          '});',
+        ].join('\n'),
+      },
+    ]);
+
+    expect(facts).toEqual([
+      {
+        diagnostics: [
+          {
+            code: 'FW406',
+            message:
+              'Statically un-analyzable write site; manual touches required. Query uses source-mode Drizzle receiver alias surface select() without project type proof.',
+            severity: 'warn',
+            site: 'user.queries.ts:3',
+          },
+          {
+            code: 'FW406',
+            message:
+              'Statically un-analyzable write site; manual touches required. Query uses source-mode Drizzle receiver alias surface execute() without project type proof.',
+            severity: 'warn',
+            site: 'user.queries.ts:3',
+          },
+          {
+            code: 'FW406',
+            message:
+              'Statically un-analyzable write site; manual touches required. Query uses source-mode Drizzle receiver alias surface select() without project type proof.',
+            severity: 'warn',
+            site: 'user.queries.ts:3',
+          },
+        ],
+        query: 'users/source-array-carrier',
         reads: [],
         shape: {},
         site: 'user.queries.ts:3',

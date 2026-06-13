@@ -90,8 +90,10 @@ Latest evidence:
 
 Current state: direct Drizzle/project extraction is backed by ts-morph where proven. A broad set of
 indirect receiver, carrier, destructuring, nested destructuring, detached method, helper handoff, and
-quoted property surfaces now degrade to FW406 instead of fabricating exact facts. V1 proof is
-Postgres-only; SQLite/MySQL conformance is deferred to late hardening.
+quoted property surfaces now degrade to FW406 instead of fabricating exact facts. Project tuple
+receiver aliases now use ts-morph tuple/array element type facts for exact Postgres receiver proof,
+while source-mode array receiver carriers degrade destructured and assigned aliases to FW406. V1
+proof remains Postgres-only; SQLite/MySQL conformance is deferred to late hardening.
 
 - [ ] Delete remaining bespoke lexer/compat extraction paths where ts-morph facts can replace them.
 - [ ] Cover or degrade remaining invisible source/project query-loader and mutation surfaces.
@@ -104,7 +106,7 @@ Latest evidence:
 
 - `pnpm exec vitest --run packages/drizzle/src`
 - `pnpm exec vitest --run conformance/drizzle-pin`
-- exact `pnpm exec vp check packages/drizzle/src/drizzle-surface.ts packages/drizzle/src/static.ts packages/drizzle/src/index.test.ts conformance/drizzle-pin/src/index.test.ts IMPLEMENT_v1.md plans/codebase-quality-round2.md`
+- exact `pnpm exec vp check packages/drizzle/src/static.ts packages/drizzle/src/index.test.ts conformance/drizzle-pin/src/index.test.ts IMPLEMENT_v1.md plans/codebase-quality-round2.md`
 - `git diff --check`
 
 ## Phase 4 - Runtime

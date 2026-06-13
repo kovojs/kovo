@@ -638,6 +638,13 @@ function appendProjectDrizzleReceiverBinding(
     return;
   }
 
+  if (Node.isArrayBindingPattern(name)) {
+    for (const element of name.getElements()) {
+      if (!Node.isBindingElement(element)) continue;
+      appendProjectDrizzleReceiverBinding(element.getNameNode(), names, symbolKeys);
+    }
+    return;
+  }
   if (!Node.isObjectBindingPattern(name)) return;
 
   for (const element of name.getElements()) {
@@ -700,6 +707,10 @@ function appendProjectDrizzleReceiverAssignmentAliases(
       appendProjectDrizzleReceiverObjectAssignmentAliases(left, right, receivers);
       continue;
     }
+    if (Node.isArrayLiteralExpression(left)) {
+      appendProjectDrizzleReceiverArrayAssignmentAliases(left, right, receivers);
+      continue;
+    }
 
     if (!Node.isIdentifier(left)) continue;
     if (!isProjectDrizzleReceiverIdentifier(right, receivers)) continue;
@@ -721,6 +732,63 @@ function appendProjectDrizzleReceiverObjectAssignmentAliases(
     source.getType(),
     receivers,
   );
+}
+
+function appendProjectDrizzleReceiverArrayAssignmentAliases(
+  assignment: Node,
+  source: Node,
+  receivers: { names: Set<string>; symbolKeys: Set<string> },
+): void {
+  // SPEC §10-§11: tuple destructuring assignment is exact only when ts-morph proves the element
+  // type is a Postgres Drizzle database receiver.
+  if (!Node.isArrayLiteralExpression(assignment)) return;
+  appendProjectDrizzleReceiverArrayAssignmentAliasesForType(
+    assignment,
+    source,
+    source.getType(),
+    receivers,
+  );
+}
+
+function appendProjectDrizzleReceiverArrayAssignmentAliasesForType(
+  assignment: Node,
+  location: Node,
+  sourceType: MorphType,
+  receivers: { names: Set<string>; symbolKeys: Set<string> },
+): void {
+  if (!Node.isArrayLiteralExpression(assignment)) return;
+
+  assignment.getElements().forEach((element, index) => {
+    const target = unwrappedStaticExpressionNode(element);
+    const elementType = projectArrayElementType(sourceType, index);
+    if (!elementType) return;
+
+    if (Node.isIdentifier(target)) {
+      if (!isDrizzleDatabaseTypeText(elementType.getText(location))) return;
+
+      appendProjectDrizzleReceiverAliasIdentifier(target, receivers);
+      return;
+    }
+
+    if (Node.isObjectLiteralExpression(target)) {
+      appendProjectDrizzleReceiverObjectAssignmentAliasesForType(
+        target,
+        location,
+        elementType,
+        receivers,
+      );
+      return;
+    }
+
+    if (Node.isArrayLiteralExpression(target)) {
+      appendProjectDrizzleReceiverArrayAssignmentAliasesForType(
+        target,
+        location,
+        elementType,
+        receivers,
+      );
+    }
+  });
 }
 
 function appendProjectDrizzleReceiverObjectAssignmentAliasesForType(
@@ -763,6 +831,10 @@ function projectObjectPropertyType(
   propertyName: string,
 ): MorphType | undefined {
   return sourceType.getProperty(propertyName)?.getTypeAtLocation(location);
+}
+
+function projectArrayElementType(sourceType: MorphType, index: number): MorphType | undefined {
+  return sourceType.getTupleElements()[index] ?? sourceType.getArrayElementType();
 }
 
 function appendProjectDrizzleReceiverAliasIdentifier(
@@ -4833,7 +4905,7 @@ function sourceReceiverAliasReferencesForBody(
       if (!initializer) continue;
 
       const references = { carrierProperties, names, symbolKeys };
-      if (Node.isObjectBindingPattern(binding)) {
+      if (Node.isObjectBindingPattern(binding) || Node.isArrayBindingPattern(binding)) {
         appendSourceReceiverAliasesFromCarrierBinding(binding, initializer, references);
         continue;
       }
@@ -4861,6 +4933,10 @@ function sourceReceiverAliasReferencesForBody(
         appendSourceReceiverAliasesFromCarrierAssignment(left, expression.getRight(), references);
         continue;
       }
+      if (Node.isArrayLiteralExpression(left)) {
+        appendSourceReceiverAliasesFromCarrierAssignment(left, expression.getRight(), references);
+        continue;
+      }
 
       if (!Node.isIdentifier(left)) continue;
 
@@ -4879,7 +4955,7 @@ function sourceReceiverAliasReferencesForBody(
 }
 
 function appendSourceReceiverAliasesFromCarrierAssignment(
-  assignment: ObjectLiteralExpression,
+  assignment: Node,
   initializer: Node,
   references: {
     carrierProperties: ReadonlyMap<string, ReadonlySet<string>>;
@@ -4896,6 +4972,17 @@ function appendSourceReceiverAliasesFromCarrierAssignment(
   const carrierProperties = symbolKey ? references.carrierProperties.get(symbolKey) : undefined;
   if (!carrierProperties) return;
 
+  if (Node.isArrayLiteralExpression(assignment)) {
+    appendSourceReceiverAliasesFromArrayCarrierAssignment(
+      assignment,
+      carrierProperties,
+      references,
+    );
+    return;
+  }
+
+  if (!Node.isObjectLiteralExpression(assignment)) return;
+
   for (const property of assignment.getProperties()) {
     const propertyName = objectAssignmentPropertyName(property);
     if (!propertyName) continue;
@@ -4911,25 +4998,18 @@ function appendSourceReceiverAliasesFromCarrierAssignment(
     const nestedProperties = receiverCarrierNestedProperties(carrierProperties, propertyName);
     if (nestedProperties.size === 0) continue;
 
-    if (Node.isObjectLiteralExpression(target)) {
+    if (Node.isObjectLiteralExpression(target) || Node.isArrayLiteralExpression(target)) {
       appendSourceReceiverAliasesFromNestedCarrierAssignment(target, nestedProperties, references);
       continue;
     }
 
     if (!Node.isIdentifier(target)) continue;
-
-    const targetSymbolKey = resolvedSymbolKey(symbolForIdentifierReference(target));
-    if (!targetSymbolKey) continue;
-
-    const properties = carrierPropertiesForSymbol(references.carrierProperties, targetSymbolKey);
-    for (const nestedProperty of nestedProperties) {
-      properties.add(nestedProperty);
-    }
+    appendSourceReceiverCarrierPropertiesForTarget(target, nestedProperties, references);
   }
 }
 
-function appendSourceReceiverAliasesFromNestedCarrierAssignment(
-  assignment: ObjectLiteralExpression,
+function appendSourceReceiverAliasesFromArrayCarrierAssignment(
+  assignment: Node,
   carrierProperties: ReadonlySet<string>,
   references: {
     carrierProperties: ReadonlyMap<string, ReadonlySet<string>>;
@@ -4937,6 +5017,49 @@ function appendSourceReceiverAliasesFromNestedCarrierAssignment(
     symbolKeys: Set<string>;
   },
 ): void {
+  if (!Node.isArrayLiteralExpression(assignment)) return;
+
+  assignment.getElements().forEach((element, index) => {
+    const propertyName = String(index);
+    const target = unwrappedStaticExpressionNode(element);
+
+    if (carrierProperties.has(propertyName)) {
+      appendSourceDestructuredReceiverIdentifier(target, references.names, references.symbolKeys);
+      return;
+    }
+
+    const nestedProperties = receiverCarrierNestedProperties(carrierProperties, propertyName);
+    if (nestedProperties.size === 0) return;
+
+    if (Node.isObjectLiteralExpression(target) || Node.isArrayLiteralExpression(target)) {
+      appendSourceReceiverAliasesFromNestedCarrierAssignment(target, nestedProperties, references);
+      return;
+    }
+
+    if (!Node.isIdentifier(target)) return;
+    appendSourceReceiverCarrierPropertiesForTarget(target, nestedProperties, references);
+  });
+}
+
+function appendSourceReceiverAliasesFromNestedCarrierAssignment(
+  assignment: Node,
+  carrierProperties: ReadonlySet<string>,
+  references: {
+    carrierProperties: ReadonlyMap<string, ReadonlySet<string>>;
+    names: Set<string>;
+    symbolKeys: Set<string>;
+  },
+): void {
+  if (Node.isArrayLiteralExpression(assignment)) {
+    appendSourceReceiverAliasesFromArrayCarrierAssignment(
+      assignment,
+      carrierProperties,
+      references,
+    );
+    return;
+  }
+  if (!Node.isObjectLiteralExpression(assignment)) return;
+
   for (const property of assignment.getProperties()) {
     const propertyName = objectAssignmentPropertyName(property);
     if (!propertyName) continue;
@@ -4952,20 +5075,31 @@ function appendSourceReceiverAliasesFromNestedCarrierAssignment(
     const nestedProperties = receiverCarrierNestedProperties(carrierProperties, propertyName);
     if (nestedProperties.size === 0) continue;
 
-    if (Node.isObjectLiteralExpression(target)) {
+    if (Node.isObjectLiteralExpression(target) || Node.isArrayLiteralExpression(target)) {
       appendSourceReceiverAliasesFromNestedCarrierAssignment(target, nestedProperties, references);
       continue;
     }
 
     if (!Node.isIdentifier(target)) continue;
+    appendSourceReceiverCarrierPropertiesForTarget(target, nestedProperties, references);
+  }
+}
 
-    const targetSymbolKey = resolvedSymbolKey(symbolForIdentifierReference(target));
-    if (!targetSymbolKey) continue;
+function appendSourceReceiverCarrierPropertiesForTarget(
+  target: Node,
+  nestedProperties: ReadonlySet<string>,
+  references: {
+    carrierProperties: ReadonlyMap<string, ReadonlySet<string>>;
+  },
+): void {
+  if (!Node.isIdentifier(target)) return;
 
-    const properties = carrierPropertiesForSymbol(references.carrierProperties, targetSymbolKey);
-    for (const nestedProperty of nestedProperties) {
-      properties.add(nestedProperty);
-    }
+  const targetSymbolKey = resolvedSymbolKey(symbolForIdentifierReference(target));
+  if (!targetSymbolKey) return;
+
+  const properties = carrierPropertiesForSymbol(references.carrierProperties, targetSymbolKey);
+  for (const nestedProperty of nestedProperties) {
+    properties.add(nestedProperty);
   }
 }
 
@@ -4978,14 +5112,19 @@ function appendSourceReceiverAliasesFromCarrierBinding(
     symbolKeys: Set<string>;
   },
 ): void {
-  if (!Node.isObjectBindingPattern(binding)) return;
-
   const expression = unwrappedStaticExpressionNode(initializer);
   if (!Node.isIdentifier(expression)) return;
 
   const symbolKey = resolvedSymbolKey(symbolForIdentifierReference(expression));
   const carrierProperties = symbolKey ? references.carrierProperties.get(symbolKey) : undefined;
   if (!carrierProperties) return;
+
+  if (Node.isArrayBindingPattern(binding)) {
+    appendSourceReceiverAliasesFromArrayCarrierBinding(binding, carrierProperties, references);
+    return;
+  }
+
+  if (!Node.isObjectBindingPattern(binding)) return;
 
   for (const element of binding.getElements()) {
     const propertyName = propertyNameText(element.getPropertyNameNode() ?? element.getNameNode());
@@ -5000,21 +5139,48 @@ function appendSourceReceiverAliasesFromCarrierBinding(
     const nestedProperties = receiverCarrierNestedProperties(carrierProperties, propertyName);
     if (nestedProperties.size === 0) continue;
 
-    if (Node.isObjectBindingPattern(name)) {
+    if (Node.isObjectBindingPattern(name) || Node.isArrayBindingPattern(name)) {
       appendSourceReceiverAliasesFromNestedCarrierBinding(name, nestedProperties, references);
       continue;
     }
 
     if (!Node.isIdentifier(name)) continue;
-
-    const bindingSymbolKey = resolvedSymbolKey(name.getSymbol());
-    if (!bindingSymbolKey) continue;
-
-    const properties = carrierPropertiesForSymbol(references.carrierProperties, bindingSymbolKey);
-    for (const nestedProperty of nestedProperties) {
-      properties.add(nestedProperty);
-    }
+    appendSourceReceiverCarrierPropertiesForTarget(name, nestedProperties, references);
   }
+}
+
+function appendSourceReceiverAliasesFromArrayCarrierBinding(
+  binding: Node,
+  carrierProperties: ReadonlySet<string>,
+  references: {
+    carrierProperties: ReadonlyMap<string, ReadonlySet<string>>;
+    names: Set<string>;
+    symbolKeys: Set<string>;
+  },
+): void {
+  if (!Node.isArrayBindingPattern(binding)) return;
+
+  binding.getElements().forEach((element, index) => {
+    if (!Node.isBindingElement(element)) return;
+
+    const propertyName = String(index);
+    const name = element.getNameNode();
+    if (carrierProperties.has(propertyName)) {
+      appendSourceDestructuredReceiverIdentifier(name, references.names, references.symbolKeys);
+      return;
+    }
+
+    const nestedProperties = receiverCarrierNestedProperties(carrierProperties, propertyName);
+    if (nestedProperties.size === 0) return;
+
+    if (Node.isObjectBindingPattern(name) || Node.isArrayBindingPattern(name)) {
+      appendSourceReceiverAliasesFromNestedCarrierBinding(name, nestedProperties, references);
+      return;
+    }
+
+    if (!Node.isIdentifier(name)) return;
+    appendSourceReceiverCarrierPropertiesForTarget(name, nestedProperties, references);
+  });
 }
 
 function appendSourceReceiverAliasesFromNestedCarrierBinding(
@@ -5026,6 +5192,10 @@ function appendSourceReceiverAliasesFromNestedCarrierBinding(
     symbolKeys: Set<string>;
   },
 ): void {
+  if (Node.isArrayBindingPattern(binding)) {
+    appendSourceReceiverAliasesFromArrayCarrierBinding(binding, carrierProperties, references);
+    return;
+  }
   if (!Node.isObjectBindingPattern(binding)) return;
 
   for (const element of binding.getElements()) {
@@ -5041,20 +5211,37 @@ function appendSourceReceiverAliasesFromNestedCarrierBinding(
     const nestedProperties = receiverCarrierNestedProperties(carrierProperties, propertyName);
     if (nestedProperties.size === 0) continue;
 
-    if (Node.isObjectBindingPattern(name)) {
+    if (Node.isObjectBindingPattern(name) || Node.isArrayBindingPattern(name)) {
       appendSourceReceiverAliasesFromNestedCarrierBinding(name, nestedProperties, references);
       continue;
     }
 
     if (!Node.isIdentifier(name)) continue;
+    appendSourceReceiverCarrierPropertiesForTarget(name, nestedProperties, references);
+  }
+}
 
-    const bindingSymbolKey = resolvedSymbolKey(name.getSymbol());
-    if (!bindingSymbolKey) continue;
+function appendSourceReceiverCarrierPropertiesFromArrayLiteral(
+  binding: Node,
+  array: Node,
+  references: SourceReceiverAliasReferences,
+  isBaseReceiverIdentifier: (node: Node | undefined) => boolean,
+): void {
+  if (!Node.isIdentifier(binding) || !Node.isArrayLiteralExpression(array)) return;
 
-    const properties = carrierPropertiesForSymbol(references.carrierProperties, bindingSymbolKey);
-    for (const nestedProperty of nestedProperties) {
-      properties.add(nestedProperty);
-    }
+  const bindingSymbolKey = resolvedSymbolKey(binding.getSymbol());
+  if (!bindingSymbolKey) return;
+
+  const receiverProperties = receiverCarrierPropertiesFromArrayLiteral(
+    array,
+    references,
+    isBaseReceiverIdentifier,
+  );
+  if (receiverProperties.size === 0) return;
+
+  const properties = carrierPropertiesForSymbol(references.carrierProperties, bindingSymbolKey);
+  for (const property of receiverProperties) {
+    properties.add(property);
   }
 }
 
@@ -5103,6 +5290,15 @@ function appendSourceReceiverCarrierProperties(
   if (!Node.isIdentifier(binding)) return;
 
   const expression = unwrappedStaticExpressionNode(initializer);
+  if (Node.isArrayLiteralExpression(expression)) {
+    appendSourceReceiverCarrierPropertiesFromArrayLiteral(
+      binding,
+      expression,
+      references,
+      isBaseReceiverIdentifier,
+    );
+    return;
+  }
   if (!Node.isObjectLiteralExpression(expression)) return;
 
   const bindingSymbolKey = resolvedSymbolKey(binding.getSymbol());
@@ -5156,6 +5352,30 @@ function receiverCarrierPropertiesFromObjectLiteral(
       properties.add(path);
     }
   }
+
+  return properties;
+}
+
+function receiverCarrierPropertiesFromArrayLiteral(
+  array: Node,
+  references: SourceReceiverAliasReferences,
+  isBaseReceiverIdentifier: (node: Node | undefined) => boolean,
+): ReadonlySet<string> {
+  if (!Node.isArrayLiteralExpression(array)) return new Set();
+
+  const properties = new Set<string>();
+  array.getElements().forEach((element, index) => {
+    const propertyName = String(index);
+    removeReceiverCarrierPropertyPath(properties, propertyName);
+    for (const path of receiverCarrierPathsForValue(
+      propertyName,
+      element,
+      references,
+      isBaseReceiverIdentifier,
+    )) {
+      properties.add(path);
+    }
+  });
 
   return properties;
 }
@@ -5226,6 +5446,18 @@ function receiverCarrierPathsForValue(
     for (const path of prefixedReceiverCarrierProperties(
       propertyName,
       receiverCarrierPropertiesFromObjectLiteral(
+        expression,
+        references as SourceReceiverAliasReferences,
+        isBaseReceiverIdentifier,
+      ),
+    )) {
+      paths.add(path);
+    }
+  }
+  if (Node.isArrayLiteralExpression(expression)) {
+    for (const path of prefixedReceiverCarrierProperties(
+      propertyName,
+      receiverCarrierPropertiesFromArrayLiteral(
         expression,
         references as SourceReceiverAliasReferences,
         isBaseReceiverIdentifier,
@@ -6229,6 +6461,7 @@ function staticAccessName(node: Node): string | undefined {
   if (Node.isStringLiteral(argument) || Node.isNoSubstitutionTemplateLiteral(argument)) {
     return argument.getLiteralText();
   }
+  if (Node.isNumericLiteral(argument)) return argument.getText();
   return undefined;
 }
 
