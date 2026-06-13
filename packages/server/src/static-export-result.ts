@@ -96,11 +96,17 @@ export function assertStaticExportManifestMatchesResult(
 // SPEC §9.5: static export publishes route documents as directory-index HTML
 // so static hosts do not depend on flat `.html` rewrite compatibility.
 export function assertStaticExportManifestUsesDirectoryIndexDocuments(
-  manifest: Pick<StaticExportManifest, 'routeDocuments'>,
+  manifest: Pick<StaticExportManifest, 'files' | 'routeDocuments'>,
 ): void {
-  const flatDocuments = manifest.routeDocuments
-    .map((document) => document.path)
-    .filter((path) => !isDirectoryIndexDocumentPath(path));
+  const documentPaths = [
+    ...manifest.routeDocuments.map((document) => document.path),
+    ...manifest.files
+      .filter((file) => file.kind === 'route-document')
+      .map((document) => document.path),
+  ];
+  const flatDocuments = [...new Set(documentPaths)].filter(
+    (path) => !isDirectoryIndexDocumentPath(path),
+  );
 
   if (flatDocuments.length === 0) return;
 

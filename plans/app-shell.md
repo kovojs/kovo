@@ -211,6 +211,18 @@ Round295 static export asset source boundary evidence:
 - `pnpm exec vp check packages/server/src/static-export-output.ts packages/server/src/static-export-output.test.ts packages/server/src/static-export.ts packages/server/src/static-export.test.ts plans/app-shell.md plans/codebase-quality-round2.md`
 - `git diff --check`
 
+Round296 static export manifest inventory directory-index evidence:
+
+- `packages/server/src/static-export-result.ts` now validates route-document entries in both the
+  public manifest `routeDocuments` list and the `files` inventory before SPEC §9.5 export tasks
+  can accept directory-index evidence.
+- `packages/server/src/vite-static-export-result.test.ts` proves a stale flat `/about.html`
+  route-document inventory entry fails even when `routeDocuments` itself is directory-index clean.
+- `pnpm exec vitest --run packages/server/src/vite-static-export-result.test.ts packages/server/src/static-export.test.ts packages/server/src/api/app.test.ts`
+- `pnpm exec tsc --noEmit --pretty false`
+- `pnpm exec vp check packages/server/src/static-export-result.ts packages/server/src/vite-static-export-result.test.ts plans/app-shell.md plans/codebase-quality-round2.md`
+- `git diff --check`
+
 Round287c Vite plugin closed-app runtime guard evidence:
 
 - `packages/server/src/vite-plugin.ts` now rejects non-`createApp()` aggregates before creating the

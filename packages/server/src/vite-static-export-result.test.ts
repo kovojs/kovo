@@ -95,4 +95,25 @@ describe('server app shell Vite static export result boundary', () => {
       }),
     ).rejects.toThrow('non-directory-index route documents');
   });
+
+  it('rejects stale flat route-document inventory entries in public manifests', () => {
+    const manifest = staticExportManifest(staticExportResult('/about/index.html'));
+
+    expect(() =>
+      assertStaticExportManifestUsesDirectoryIndexDocuments({
+        ...manifest,
+        files: [
+          ...manifest.files,
+          {
+            headers: { 'content-type': 'text/html; charset=utf-8' },
+            kind: 'route-document',
+            path: '/about.html',
+            status: 200,
+          },
+        ],
+      }),
+    ).toThrow(
+      'Static export manifest contains non-directory-index route documents. Invalid route documents: /about.html. SPEC §9.5 exports route documents as directory-index HTML.',
+    );
+  });
 });

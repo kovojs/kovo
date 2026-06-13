@@ -175,6 +175,15 @@ checks, so the monolith asserts public diagnostic facts without rebuilding those
 
 Latest evidence:
 
+- Phase 5 static export manifest inventory directory-index slice:
+  `pnpm exec vitest --run packages/server/src/vite-static-export-result.test.ts packages/server/src/static-export.test.ts packages/server/src/api/app.test.ts`;
+  `pnpm exec tsc --noEmit --pretty false`;
+  `pnpm exec vp check packages/server/src/static-export-result.ts packages/server/src/vite-static-export-result.test.ts plans/app-shell.md plans/codebase-quality-round2.md`;
+  `git diff --check`.
+  Evidence: `packages/server/src/static-export-result.ts` now treats public manifest `files`
+  route-document inventory entries as part of the SPEC §9.5 directory-index document contract, and
+  `packages/server/src/vite-static-export-result.test.ts` proves a stale flat inventory route
+  document is rejected before export-task manifest evidence is accepted.
 - Phase 5 static export asset source boundary slice:
   `pnpm exec vitest --run packages/server/src/static-export-output.test.ts packages/server/src/static-export.test.ts`;
   `pnpm exec tsc --noEmit --pretty false`;
