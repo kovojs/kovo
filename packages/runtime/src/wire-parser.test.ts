@@ -10,6 +10,7 @@ import {
 import {
   readAttribute,
   readElementChunks,
+  readFragmentChunksFromElements,
   readInlineMutationResponseBodyChunks,
   readMutationResponseElementChunks,
   unescapeHtml,
@@ -349,6 +350,30 @@ describe('wire parser HTML entity handling', () => {
       { html: '<li>new</li>', mode: 'append', target: 'cart-list' },
       { html: '<span>$7</span>', target: 'cart-total' },
     ]);
+  });
+
+  it('shares fragment element projection across modular and inline response readers', () => {
+    const elements = [
+      { attrs: ' target="cart&gt;badge"', content: '<cart-badge>1</cart-badge>' },
+      { attrs: ' target="cart-list" mode="append"', content: '<li>p1</li>' },
+      { attrs: ' mode="append"', content: '<li>missing target</li>' },
+    ];
+    const body = elements
+      .map((chunk) => `<fw-fragment${chunk.attrs}>${chunk.content}</fw-fragment>`)
+      .join('');
+
+    // SPEC.md §4.4/§9.1: the extracted inline parser and modular mutation-body
+    // parser share the scanner-owned fragment projection after element scanning.
+    expect(readFragmentChunksFromElements(elements)).toEqual([
+      { html: '<cart-badge>1</cart-badge>', target: 'cart>badge' },
+      { html: '<li>p1</li>', mode: 'append', target: 'cart-list' },
+    ]);
+    expect(readInlineMutationResponseBodyChunks(body).fragments).toEqual(
+      readMutationResponseBodyChunks(body).fragments,
+    );
+    expect(readMutationResponseBodyChunks(body).fragments).toEqual(
+      readFragmentChunksFromElements(readMutationResponseElementChunks(body).fragments),
+    );
   });
 
   it('keeps nested fw-fragment chunks inside the parent fragment content', () => {

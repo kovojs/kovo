@@ -4,6 +4,7 @@ import { parseJsonValue } from './json.js';
 import {
   readAttribute,
   readElementChunks,
+  readFragmentChunksFromElements,
   readMutationResponseElementChunks,
   unescapeHtml,
 } from './wire-response-scanner.js';
@@ -206,33 +207,6 @@ export function readMutationResponseBodyChunks(
 
 function malformedQueryError(reason: string): Error {
   return new Error(`Malformed fw-query chunk: ${reason}`);
-}
-
-function readFragmentElementChunk(chunk: {
-  attrs: string;
-  content: string;
-}): FragmentChunk | undefined {
-  const target = readAttribute(chunk.attrs, 'target');
-  if (!target) return undefined;
-
-  return {
-    html: chunk.content,
-    ...(readAttribute(chunk.attrs, 'mode') === 'append' ? { mode: 'append' } : {}),
-    target,
-  };
-}
-
-function readFragmentChunksFromElements(
-  chunks: Iterable<{ attrs: string; content: string }>,
-): FragmentChunk[] {
-  const fragments: FragmentChunk[] = [];
-
-  for (const chunk of chunks) {
-    const fragment = readFragmentElementChunk(chunk);
-    if (fragment) fragments.push(fragment);
-  }
-
-  return fragments;
 }
 
 function malformedFragmentError(reason: string): Error {

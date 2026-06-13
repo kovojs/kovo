@@ -1011,6 +1011,9 @@ Low-level wire element scanning and HTML entity helpers now live in
 `packages/runtime/src/wire-response-scanner.ts`, so `packages/runtime/src/wire-parser.ts` owns only
 decoded query/body readers while handler-context, mutation-failure, deferred stream filtering, and
 the extracted inline-loader parser closure share the same scanner module.
+Fragment element projection also lives in `packages/runtime/src/wire-response-scanner.ts`, so the
+modular decoded mutation-body parser and extracted inline response parser no longer carry separate
+`fw-fragment` element-to-chunk decoders.
 Query script hydration helpers now remain internal to the loader/visible-return modules instead of
 root `@jiso/runtime` exports; `query-apply.test.ts` covers decoded chunk application while
 `query-script-hydration.test.ts` owns script parsing, ledger replay, retry, and hydration/apply
@@ -1080,6 +1083,21 @@ packages/runtime/src/wire-response-scanner.ts packages/runtime/src/wire-parser.t
 packages/runtime/src/wire-parser.test.ts packages/runtime/src/inline-loader-build.ts
 packages/runtime/src/inline-response-apply.ts packages/runtime/src/handler-context.ts
 packages/runtime/src/mutation-failure.ts plans/codebase-quality-round2.md`, and
+      `git diff --check`.
+      Evidence 2026-06-13 round283 worker C: `packages/runtime/src/wire-response-scanner.ts` now
+      exports the scanner-owned fragment element projection used by
+      `readInlineMutationResponseBodyChunks`, and `packages/runtime/src/wire-parser.ts` imports that
+      projection instead of carrying a duplicated modular parser copy.
+      `packages/runtime/src/wire-parser.test.ts` pins parity across scanner projection, inline
+      response body projection, and decoded mutation response body parsing for SPEC.md §4.4/§9.1.
+      Verified by focused `pnpm exec vitest --run packages/runtime/src/wire-parser.test.ts
+packages/runtime/src/inline-loader-parser-parity.test.ts
+packages/runtime/src/inline-loader-response-apply.test.ts
+packages/runtime/src/inline-loader-artifact-minifier.test.ts`, full runtime
+      `pnpm exec vitest --run packages/runtime/src`, and inline generation
+      `pnpm run check:inline-loader`; exact `pnpm exec vp check
+packages/runtime/src/wire-response-scanner.ts packages/runtime/src/wire-parser.ts
+packages/runtime/src/wire-parser.test.ts plans/codebase-quality-round2.md`; and
       `git diff --check`.
       Evidence 2026-06-13 round281: `packages/runtime/src/apply-mutation-response.ts` renamed the
       rooted decoded apply result to `AppliedMutationResponseWithRoot`, and
