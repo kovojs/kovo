@@ -1,4 +1,4 @@
-import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { pathToFileURL } from 'node:url';
@@ -165,6 +165,62 @@ describe('server static export output boundary', () => {
       await expect(readFile(path.join(outDir, 'index.html'))).rejects.toThrow();
     } finally {
       await rm(outDir, { force: true, recursive: true });
+    }
+  });
+
+  it('validates final output targets before committing staged files', async () => {
+    const outDir = await mkdtemp(path.join(os.tmpdir(), 'jiso-static-export-output-commit-'));
+    const sourceDir = await mkdtemp(path.join(os.tmpdir(), 'jiso-static-export-output-source-'));
+    try {
+      const cssSource = path.join(sourceDir, 'app.css');
+      await writeFile(cssSource, 'body { color: black; }\n', 'utf8');
+      await mkdir(path.join(outDir, 'assets', 'app.css'), { recursive: true });
+
+      const plan = createStaticExportOutputPlan({
+        artifacts: [
+          {
+            body: '<!doctype html><main>Home</main>',
+            headers: {},
+            path: '/index.html',
+            status: 200,
+          },
+        ],
+        assets: [
+          {
+            headers: {},
+            path: '/assets/app.css',
+            source: cssSource,
+            status: 200,
+          },
+        ],
+        clientModules: [
+          {
+            body: 'export const app = true;',
+            headers: {},
+            href: '/c/app.client.js?v=app',
+            path: '/c/app.client.js',
+            status: 200,
+          },
+        ],
+        outDir,
+      });
+
+      await expect(writeStaticExportOutput(plan)).rejects.toMatchObject({
+        code: 'FW229',
+        diagnostics: [
+          {
+            code: 'FW229',
+            message: expect.stringContaining("target '"),
+            routePath: '/assets/app.css',
+          },
+        ],
+      });
+      await expect(readFile(path.join(outDir, 'index.html'))).rejects.toThrow();
+      await expect(readFile(path.join(outDir, 'c', 'app.client.js'))).rejects.toThrow();
+      await expect(readFile(path.join(outDir, 'assets', 'app.css'))).rejects.toThrow();
+    } finally {
+      await rm(outDir, { force: true, recursive: true });
+      await rm(sourceDir, { force: true, recursive: true });
     }
   });
 });

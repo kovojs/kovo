@@ -1,5 +1,15 @@
 import { constants as fsConstants } from 'node:fs';
-import { access, copyFile, mkdir, stat, writeFile } from 'node:fs/promises';
+import {
+  access,
+  copyFile,
+  lstat,
+  mkdir,
+  mkdtemp,
+  rename,
+  rm,
+  stat,
+  writeFile,
+} from 'node:fs/promises';
 import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -75,7 +85,20 @@ export async function writeStaticExportOutput(plan: StaticExportOutputPlan): Pro
     await assertReadableStaticExportAssetSource(artifact);
   }
 
-  await Promise.all(plan.writes.map((write) => write.write()));
+  await assertWritableStaticExportTargets(plan);
+  if (plan.writes.length === 0) return;
+
+  const stagingRoot = await createStaticExportStagingRoot(plan.root);
+  try {
+    await Promise.all(
+      plan.writes.map((write) =>
+        write.write(staticExportStagedTargetPath(plan.root, stagingRoot, write.targetPath)),
+      ),
+    );
+    await commitStaticExportStagedOutput(plan, stagingRoot);
+  } finally {
+    await rm(stagingRoot, { force: true, recursive: true });
+  }
 }
 
 export function staticExportAssetArtifacts(
@@ -102,7 +125,7 @@ function staticExportPlannedWrites(
       itemKind: 'route-document',
       kind: 'route document',
       targetPath,
-      write: async () => writeTextStaticExportFile(artifact.body, targetPath),
+      write: async (writePath) => writeTextStaticExportFile(artifact.body, writePath),
     });
   }
 
@@ -113,7 +136,7 @@ function staticExportPlannedWrites(
       itemKind: 'client-module',
       kind: 'client module',
       targetPath,
-      write: async () => writeTextStaticExportFile(artifact.body, targetPath),
+      write: async (writePath) => writeTextStaticExportFile(artifact.body, writePath),
     });
   }
 
@@ -124,7 +147,7 @@ function staticExportPlannedWrites(
       itemKind: 'static-asset',
       kind: 'static asset',
       targetPath,
-      write: async () => copyStaticExportAsset(artifact.source, targetPath),
+      write: async (writePath) => copyStaticExportAsset(artifact.source, writePath),
     });
   }
 
@@ -183,7 +206,87 @@ interface StaticExportPlannedWrite {
   itemKind: StaticExportOutputPlanItemKind;
   kind: string;
   targetPath: string;
-  write(): Promise<void>;
+  write(writePath: string): Promise<void>;
+}
+
+async function assertWritableStaticExportTargets(plan: StaticExportOutputPlan): Promise<void> {
+  for (const write of plan.writes) {
+    await assertStaticExportTargetParentDirectories(plan.root, write);
+    await assertStaticExportTargetIsNotDirectory(write);
+  }
+}
+
+async function assertStaticExportTargetParentDirectories(
+  root: string,
+  write: StaticExportPlannedWrite,
+): Promise<void> {
+  const relativeDirectory = path.relative(root, path.dirname(write.targetPath));
+  const segments = relativeDirectory === '' ? [] : relativeDirectory.split(path.sep);
+  let current = root;
+
+  for (const segment of segments) {
+    current = path.join(current, segment);
+
+    let targetStat: Awaited<ReturnType<typeof lstat>>;
+    try {
+      targetStat = await lstat(current);
+    } catch {
+      continue;
+    }
+
+    if (!targetStat.isDirectory()) {
+      throw new StaticExportError([
+        staticExportDiagnostic(
+          write.diagnosticPath,
+          `FW229 static export cannot write ${write.kind} '${write.diagnosticPath}' because output parent '${current}' is not a directory.`,
+        ),
+      ]);
+    }
+  }
+}
+
+async function assertStaticExportTargetIsNotDirectory(
+  write: StaticExportPlannedWrite,
+): Promise<void> {
+  let targetStat: Awaited<ReturnType<typeof lstat>>;
+  try {
+    targetStat = await lstat(write.targetPath);
+  } catch {
+    return;
+  }
+
+  if (!targetStat.isDirectory()) return;
+
+  throw new StaticExportError([
+    staticExportDiagnostic(
+      write.diagnosticPath,
+      `FW229 static export cannot write ${write.kind} '${write.diagnosticPath}' because target '${write.targetPath}' is a directory.`,
+    ),
+  ]);
+}
+
+async function createStaticExportStagingRoot(root: string): Promise<string> {
+  await mkdir(path.dirname(root), { recursive: true });
+  return await mkdtemp(path.join(path.dirname(root), '.jiso-static-export-'));
+}
+
+function staticExportStagedTargetPath(
+  root: string,
+  stagingRoot: string,
+  targetPath: string,
+): string {
+  return path.join(stagingRoot, path.relative(root, targetPath));
+}
+
+async function commitStaticExportStagedOutput(
+  plan: StaticExportOutputPlan,
+  stagingRoot: string,
+): Promise<void> {
+  for (const write of plan.writes) {
+    const stagedPath = staticExportStagedTargetPath(plan.root, stagingRoot, write.targetPath);
+    await mkdir(path.dirname(write.targetPath), { recursive: true });
+    await rename(stagedPath, write.targetPath);
+  }
 }
 
 function assertNoStaticExportOutputConflicts(writes: readonly StaticExportPlannedWrite[]): void {

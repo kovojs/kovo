@@ -278,6 +278,17 @@ Round97 app-shell Vite output atomicity evidence:
 - `pnpm exec vp check packages/server/src/vite-build-output.ts packages/server/src/vite-build.test.ts plans/app-shell.md plans/codebase-quality-round2.md IMPLEMENT_v1.md`
 - `git diff --check`
 
+Round98 app-shell static export output atomicity evidence:
+
+- `writeStaticExportOutput()` now stages route documents, immutable `/c/` modules, and copied
+  static assets before committing them into the configured output directory, and validates final
+  output targets before staging so a late FW229 target conflict leaves no partial route/module
+  files behind (SPEC §9.5).
+- `packages/server/src/static-export-output.test.ts` pins a directory-at-file-target rejection
+  with no committed route document or `/c/` module.
+- `pnpm exec vitest --run packages/server/src/static-export-output.test.ts packages/server/src/static-export.test.ts packages/server/src/vite-build.test.ts`
+- `pnpm exec tsc --noEmit --pretty false`
+
 ## Open Work
 
 R6:

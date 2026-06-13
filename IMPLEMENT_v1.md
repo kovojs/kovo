@@ -107,6 +107,13 @@ packages/create-jiso/src/index.test.ts` and `pnpm exec tsc --noEmit --pretty fal
       and `pnpm exec tsc --noEmit --pretty false`; targeted evidence:
       `pnpm exec vp check packages/server/src/vite-build-output.ts packages/server/src/vite-build.test.ts plans/app-shell.md plans/codebase-quality-round2.md IMPLEMENT_v1.md`
       and `git diff --check`.
+      Additional evidence 2026-06-13: static export output writes now stage route documents,
+      immutable `/c/` modules, and copied static assets before committing them into the
+      configured output directory, with final target validation before staging so FW229 output
+      target conflicts do not leave partial route/module files behind (SPEC §9.5).
+      Same-session evidence:
+      `pnpm exec vitest --run packages/server/src/static-export-output.test.ts packages/server/src/static-export.test.ts packages/server/src/vite-build.test.ts`
+      and `pnpm exec tsc --noEmit --pretty false`.
 - [x] P3 planned audits and static route/query guard guarantees are represented at v1 scale.
       Evidence 2026-06-11: `tests/fw-check.node.mjs` now executes `fwCheck()`
       against a graph with removed mutation, route, and query guards and pins the

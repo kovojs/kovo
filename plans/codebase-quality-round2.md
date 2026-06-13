@@ -780,6 +780,13 @@ Closed evidence so far:
   `packages/server/src/vite-static-export-options.test.ts`,
   `pnpm exec vitest --run packages/server/src/vite-static-export-options.test.ts packages/server/src/vite-build.test.ts packages/server/src/vite.test.ts`,
   and `pnpm exec tsc --noEmit --pretty false`.
+- Static export output writes now stage route documents, immutable `/c/` modules, and copied
+  static assets before committing them into the configured output directory, with final target
+  validation before staging so FW229 output target conflicts do not leave partial route/module
+  files behind. Evidence: `packages/server/src/static-export-output.ts`,
+  `packages/server/src/static-export-output.test.ts`,
+  `pnpm exec vitest --run packages/server/src/static-export-output.test.ts packages/server/src/static-export.test.ts packages/server/src/vite-build.test.ts`,
+  and `pnpm exec tsc --noEmit --pretty false`.
 
 Open:
 
