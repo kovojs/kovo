@@ -234,6 +234,7 @@ import {
   type HeaderRecord,
 } from '@jiso/test/headers';
 import {
+  documentQueryScriptBehaviorFact,
   fragmentHtml,
   fwFragmentFacts,
   fwQueryFacts,
@@ -254,6 +255,7 @@ import {
   htmlLinkHrefs,
   htmlMainMarkerFact,
   htmlTextContent,
+  type DocumentQueryScriptBehaviorFact,
 } from '@jiso/test/html-fragment';
 import {
   markdownBoldSectionHeadings,
@@ -520,6 +522,21 @@ describe('@jiso/test package subpath exports', () => {
       attribute: 'data-fw-check-export',
       mainCount: 1,
       marker: 'api',
+    });
+    expect(
+      documentQueryScriptBehaviorFact(
+        '<html><head><script type="application/json" fw-query="cart">{"count":1}</script></head><body><main></main></body></html>',
+        {
+          queryName: 'cart',
+          renderedDocumentQueryScript:
+            '<script type="application/json" fw-query="cart">{"count":1}</script>',
+          renderedQueryScript:
+            '<script type="application/json" fw-query="cart">{"count":1}</script>',
+        },
+      ),
+    ).toMatchObject({
+      bodyElements: [{ tag: 'main' }],
+      documentQueryScripts: [{ rawJson: '{"count":1}' }],
     });
     expect(
       htmlJsonScriptFacts('<script type="application/json" data-id="cart">{"count":1}</script>', {
@@ -1483,6 +1500,7 @@ type _PublicSubpathTypes = [
   FwCheckOkAssertionFact,
   FwCheckOutput,
   FwCheckResultFact,
+  DocumentQueryScriptBehaviorFact,
   GraphInvalidationMatrix,
   GraphQueryConsumerFact,
   ForbiddenBrowserArchitectureFact,

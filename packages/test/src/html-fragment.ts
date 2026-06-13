@@ -78,6 +78,15 @@ export interface FwResponseBodyFact {
   stylesheetHrefsByTarget: Record<string, string[]>;
 }
 
+export interface DocumentQueryScriptBehaviorFact {
+  bodyElements: HtmlElementFact[];
+  bodyQueryScripts: Array<Pick<FwQueryFact, 'attrs' | 'rawJson'>>;
+  documentQueryScripts: Array<Pick<FwQueryFact, 'attrs' | 'rawJson'>>;
+  headQueryScripts: Array<Pick<FwQueryFact, 'attrs' | 'rawJson'>>;
+  renderedDocumentQueryScript: string;
+  renderedQueryScript: string;
+}
+
 export function htmlElementCount(html: string, selector: HtmlElementSelector = {}): number {
   return htmlElementFacts(html, selector).length;
 }
@@ -272,6 +281,29 @@ export function fwQueryJsonValues(html: string, name: string): unknown[] {
   return fwResponseBodyFact(html).queryJsonByName[name] ?? [];
 }
 
+export function documentQueryScriptBehaviorFact(
+  renderedDocument: string,
+  options: {
+    queryName: string;
+    renderedDocumentQueryScript: string;
+    renderedQueryScript: string;
+  },
+): DocumentQueryScriptBehaviorFact {
+  const documentRegions = htmlDocumentRegions(renderedDocument);
+  const documentQueryScripts = fwQueryFacts(renderedDocument, options.queryName);
+  const bodyQueryScripts = fwQueryFacts(documentRegions.body.innerHtml, options.queryName);
+  const headQueryScripts = fwQueryFacts(documentRegions.head.innerHtml, options.queryName);
+
+  return {
+    bodyElements: htmlElementFacts(documentRegions.body.innerHtml),
+    bodyQueryScripts: compactQueryScriptFacts(bodyQueryScripts),
+    documentQueryScripts: compactQueryScriptFacts(documentQueryScripts),
+    headQueryScripts: compactQueryScriptFacts(headQueryScripts),
+    renderedDocumentQueryScript: options.renderedDocumentQueryScript,
+    renderedQueryScript: options.renderedQueryScript,
+  };
+}
+
 export function htmlFormFacts(html: string): HtmlFormFact[] {
   return htmlElementFacts(html, { tag: 'form' }).map((form) => ({
     action: form.attrs.action ?? '',
@@ -340,6 +372,15 @@ function groupQueryJsonByName(queries: FwQueryFact[]): Record<string, unknown[]>
   }
 
   return grouped;
+}
+
+function compactQueryScriptFacts(
+  queries: FwQueryFact[],
+): Array<Pick<FwQueryFact, 'attrs' | 'rawJson'>> {
+  return queries.map((query) => ({
+    attrs: query.attrs,
+    rawJson: query.rawJson,
+  }));
 }
 
 export function htmlTextContent(html: string): string {

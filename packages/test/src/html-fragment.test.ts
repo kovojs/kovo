@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  documentQueryScriptBehaviorFact,
   fragmentHtml,
   fwFragmentFacts,
   fwQueryFacts,
@@ -218,6 +219,49 @@ describe('@jiso/test html fragment seam', () => {
     expect(() => htmlDocumentRegions('<main>Fragment</main>')).toThrow(
       'Expected one html/head/body document region; found html=0 head=0 body=0',
     );
+  });
+
+  it('projects document query-script behavior without local fw-check HTML mechanics', () => {
+    const queryScript =
+      '<script type="application/json" fw-query="cart" key="cart:c1">{"html":"\\u003c/script>"}</script>';
+    const document = [
+      '<!doctype html><html><head>',
+      queryScript,
+      '</head><body><main></main></body></html>',
+    ].join('');
+
+    expect(
+      documentQueryScriptBehaviorFact(document, {
+        queryName: 'cart',
+        renderedDocumentQueryScript: queryScript,
+        renderedQueryScript: queryScript,
+      }),
+    ).toEqual({
+      bodyElements: [{ attrs: {}, html: '<main></main>', innerHtml: '', tag: 'main' }],
+      bodyQueryScripts: [],
+      documentQueryScripts: [
+        {
+          attrs: {
+            'fw-query': 'cart',
+            key: 'cart:c1',
+            type: 'application/json',
+          },
+          rawJson: '{"html":"\\u003c/script>"}',
+        },
+      ],
+      headQueryScripts: [
+        {
+          attrs: {
+            'fw-query': 'cart',
+            key: 'cart:c1',
+            type: 'application/json',
+          },
+          rawJson: '{"html":"\\u003c/script>"}',
+        },
+      ],
+      renderedDocumentQueryScript: queryScript,
+      renderedQueryScript: queryScript,
+    });
   });
 
   it('projects static export main marker facts without local fw-check HTML mechanics', () => {

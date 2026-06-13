@@ -143,6 +143,9 @@ markdown tables inline.
 Shared wire fixtures now own sorted `.http` fixture source loading, the intentionally byte-for-byte
 generated response body pins, and named response-body selection, so the Phase 0 and D3 fw-check
 wire cases no longer keep fixture directory reads or generated wire pin maps in the monolith.
+Shared HTML fragment fixtures now also own document query-script behavior projection for the P3
+fw-check server hydration gate, including head/body query script placement and body element facts,
+so the monolith no longer assembles those document-region/query-script projections inline.
 
 - [ ] Search for remaining custom parsers, raw source membership checks, and generated-artifact
       projections in `tests/fw-check.node.mjs`.
@@ -162,6 +165,15 @@ Latest evidence:
   `site/scripts/app-shell.mjs` now validates the focused SPEC §9.5 docs server API before binding
   routes, and `site/scripts/app-shell.test.mjs` proves incomplete injection fails before export
   replay while the docs static export adoption path remains green.
+- P3 document query-script HTML fixture slice:
+  `pnpm exec vitest --run packages/test/src/html-fragment.test.ts packages/test/src/package-exports.test.ts`;
+  `pnpm run check:build`;
+  targeted `node --test --test-name-pattern "P3 server renders initial query scripts for document-load hydration" tests/fw-check.node.mjs`;
+  exact `pnpm exec vp check packages/test/src/html-fragment.ts packages/test/src/html-fragment.test.ts packages/test/src/package-exports.test.ts tests/fw-check.node.mjs plans/codebase-quality-round2.md`;
+  `git diff --check`. Evidence: `packages/test/src/html-fragment.ts` exposes
+  `documentQueryScriptBehaviorFact()` as a public fixture projection for rendered query scripts,
+  head/body placement, and body element facts; `tests/fw-check.node.mjs` consumes that fact instead
+  of locally stitching document regions, `fw-query` facts, and body element projections.
 - Wire fixture package seam slice:
   `pnpm exec vitest --run packages/test/src/wire-fixtures.test.ts packages/test/src/package-exports.test.ts`;
   `pnpm run check:build`;

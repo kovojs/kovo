@@ -110,8 +110,7 @@ import {
   graphTouchGraphKeys,
 } from '../packages/test/src/graph-fixtures.ts';
 import {
-  fwQueryFacts,
-  htmlDocumentRegions,
+  documentQueryScriptBehaviorFact,
   htmlElementFacts,
   htmlMainMarkerFact,
 } from '../packages/test/src/html-fragment.ts';
@@ -780,19 +779,16 @@ void test('P3 server renders initial query scripts for document-load hydration',
     body: '<main></main>',
     queries: [query],
   });
-  const documentRegions = htmlDocumentRegions(document.html);
-  const documentQueryScripts = fwQueryFacts(document.html, 'cart');
-  const headQueryScripts = fwQueryFacts(documentRegions.head.innerHtml, 'cart');
-  const bodyElements = htmlElementFacts(documentRegions.body.innerHtml);
+  const fact = documentQueryScriptBehaviorFact(document.html, {
+    queryName: 'cart',
+    renderedDocumentQueryScript: renderDocumentQueryScript(query),
+    renderedQueryScript: renderQueryScript(query),
+  });
 
-  assert.equal(renderQueryScript(query), queryScript);
-  assert.equal(renderDocumentQueryScript(query), queryScript);
-  assert.deepEqual(
-    headQueryScripts.map((script) => ({
-      attrs: script.attrs,
-      rawJson: script.rawJson,
-    })),
-    [
+  assert.deepEqual(fact, {
+    bodyElements: [{ attrs: {}, html: '<main></main>', innerHtml: '', tag: 'main' }],
+    bodyQueryScripts: [],
+    documentQueryScripts: [
       {
         attrs: {
           'fw-query': 'cart',
@@ -802,14 +798,18 @@ void test('P3 server renders initial query scripts for document-load hydration',
         rawJson: '{"html":"\\u003c/script>"}',
       },
     ],
-  );
-  assert.deepEqual(bodyElements, [
-    { attrs: {}, html: '<main></main>', innerHtml: '', tag: 'main' },
-  ]);
-  assert.deepEqual(documentQueryScripts[0]?.attrs, {
-    'fw-query': 'cart',
-    key: 'cart:c1',
-    type: 'application/json',
+    headQueryScripts: [
+      {
+        attrs: {
+          'fw-query': 'cart',
+          key: 'cart:c1',
+          type: 'application/json',
+        },
+        rawJson: '{"html":"\\u003c/script>"}',
+      },
+    ],
+    renderedDocumentQueryScript: queryScript,
+    renderedQueryScript: queryScript,
   });
 });
 
