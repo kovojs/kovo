@@ -80,6 +80,9 @@ import {
   TabsPanel,
   TabsTrigger,
   Toggle,
+  ToggleGroup,
+  ToggleGroupButton,
+  ToggleGroupItem,
 } from '@jiso/ui';
 
 export type GalleryComponent =
@@ -110,6 +113,7 @@ export type GalleryComponent =
   | 'table'
   | 'tabs'
   | 'toggle'
+  | 'toggle-group'
   | 'tooltip';
 
 export type GalleryPrimitive = GalleryComponent;
@@ -290,6 +294,12 @@ export const galleryRoutes: readonly GalleryRoute[] = Object.freeze([
     path: '/components/toggle',
     render: () => ToggleDemo(),
     title: 'Toggle',
+  },
+  {
+    component: 'toggle-group',
+    path: '/components/toggle-group',
+    render: () => ToggleGroupDemo(),
+    title: 'Toggle Group',
   },
   {
     component: 'tooltip',
@@ -937,6 +947,53 @@ export function ToggleDemo(): string {
         changeReasons: 'trigger-click, programmatic',
         dataState: 'pressed, off, disabled',
         keyboard: 'Space or Enter activates the native button',
+      })}
+    </section>
+  );
+}
+
+export function ToggleGroupDemo(): string {
+  const items = [{ value: 'bold' }, { value: 'italic' }, { disabled: true, value: 'strike' }];
+  const state = {
+    activeValue: 'bold',
+    items,
+    type: 'multiple' as const,
+    value: ['bold'] as const,
+  };
+
+  return (
+    <section data-gallery-demo="toggle-group">
+      <p data-demo-summary="no-js">
+        Toggle group keeps formatting controls as native pressed buttons with roving tabindex.
+      </p>
+      <h2 id="gallery-toggle-group-label">Formatting</h2>
+      <p id="gallery-toggle-group-description">Choose one or more text styles.</p>
+      <div data-ui-demo="toggle-group">
+        {ToggleGroup.definition.render({
+          ...state,
+          children: items
+            .map((item) =>
+              ToggleGroupItem.definition.render({
+                ...state,
+                children: ToggleGroupButton.definition.render({
+                  ...state,
+                  children: item.value,
+                  id: `gallery-toggle-group-${item.value}`,
+                  itemValue: item.value,
+                }),
+                id: `gallery-toggle-group-${item.value}-item`,
+                itemValue: item.value,
+              }),
+            )
+            .join(''),
+          descriptionId: 'gallery-toggle-group-description',
+          labelledBy: 'gallery-toggle-group-label',
+        })}
+      </div>
+      {renderBehaviorContract({
+        changeReasons: 'item-click, keyboard, programmatic',
+        dataState: 'pressed, off, disabled',
+        keyboard: 'Arrow keys move focus over enabled toggle buttons',
       })}
     </section>
   );

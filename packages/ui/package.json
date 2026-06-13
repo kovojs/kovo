@@ -18,7 +18,8 @@
     "./switch": "./src/switch.tsx",
     "./table": "./src/table.tsx",
     "./tabs": "./src/tabs.tsx",
-    "./toggle": "./src/toggle.tsx"
+    "./toggle": "./src/toggle.tsx",
+    "./toggle-group": "./src/toggle-group.tsx"
   },
   "dependencies": {
     "@jiso/core": "workspace:*",

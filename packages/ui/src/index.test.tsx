@@ -34,6 +34,9 @@ import {
   TabsPanel,
   TabsTrigger,
   Toggle,
+  ToggleGroup,
+  ToggleGroupButton,
+  ToggleGroupItem,
   breadcrumbClasses,
   buttonClasses,
   checkboxClasses,
@@ -49,6 +52,9 @@ import {
   switchClasses,
   tableClasses,
   toggleClasses,
+  toggleGroupButtonClasses,
+  toggleGroupClasses,
+  toggleGroupItemClasses,
 } from './index.js';
 
 const sourceDir = dirname(fileURLToPath(import.meta.url));
@@ -70,6 +76,7 @@ describe('@jiso/ui styled package foundation', () => {
     expect(RadioGroup.name).toBe('radio-group');
     expect(Tabs.name).toBe('tabs');
     expect(Toggle.name).toBe('toggle');
+    expect(ToggleGroup.name).toBe('toggle-group');
 
     expect(
       Button.definition.render({
@@ -119,6 +126,7 @@ describe('@jiso/ui styled package foundation', () => {
     expect(switchClasses.join(' ')).toContain('inline-flex items-center gap-2');
     expect(tabsClasses.join(' ')).toContain('w-full text-neutral-950');
     expect(toggleClasses.join(' ')).toContain('data-[state=pressed]:bg-neutral-950');
+    expect(toggleGroupClasses.join(' ')).toContain('data-[orientation=vertical]:flex-col');
   });
 
   it('wraps the headless radio-group primitive as styled native radios', () => {
@@ -213,6 +221,57 @@ describe('@jiso/ui styled package foundation', () => {
     expect(toggle).toContain('data-state="pressed"');
     expect(toggle).toContain('aria-pressed="true"');
     expect(toggle).toContain('border-transparent bg-neutral-100');
+  });
+
+  it('wraps the headless toggle-group primitive as styled roving buttons', () => {
+    const items = [{ value: 'bold' }, { value: 'italic' }, { disabled: true, value: 'strike' }];
+    const state = {
+      activeValue: 'bold',
+      items,
+      type: 'multiple' as const,
+      value: ['bold'] as const,
+    };
+
+    const root = ToggleGroup.definition.render({
+      ...state,
+      children: 'format controls',
+      descriptionId: 'format-help',
+      id: 'formatting',
+      labelledBy: 'format-label',
+      orientation: 'vertical',
+    });
+    const item = ToggleGroupItem.definition.render({
+      ...state,
+      children: 'bold button',
+      id: 'bold-item',
+      itemValue: 'bold',
+    });
+    const button = ToggleGroupButton.definition.render({
+      ...state,
+      children: 'Bold',
+      id: 'bold-button',
+      itemValue: 'bold',
+    });
+    const disabledButton = ToggleGroupButton.definition.render({
+      ...state,
+      children: 'Strike',
+      itemValue: 'strike',
+    });
+
+    expect(ToggleGroupItem.name).toBe('toggle-group-item');
+    expect(ToggleGroupButton.name).toBe('toggle-group-button');
+    expect(root).toContain('aria-describedby="format-help"');
+    expect(root).toContain('aria-labelledby="format-label"');
+    expect(root).toContain('data-orientation="vertical" id="formatting" role="group"');
+    expect(item).toContain('data-state="pressed" id="bold-item"');
+    expect(button).toContain('aria-pressed="true"');
+    expect(button).toContain('data-state="pressed"');
+    expect(button).toContain('id="bold-button" tabIndex="0" type="button" value="bold"');
+    expect(disabledButton).toContain('aria-pressed="false"');
+    expect(disabledButton).toContain('data-disabled="" data-state="off" disabled');
+    expect(disabledButton).toContain('tabIndex="-1" type="button" value="strike"');
+    expect(toggleGroupItemClasses.join(' ')).toContain('data-[disabled]:opacity-50');
+    expect(toggleGroupButtonClasses.join(' ')).toContain('data-[state=pressed]:bg-white');
   });
 
   it('exports table primitives as styled semantic markup', () => {
@@ -384,6 +443,7 @@ describe('@jiso/ui styled package foundation', () => {
       'table.tsx',
       'tabs.tsx',
       'toggle.tsx',
+      'toggle-group.tsx',
     ]
       .map(readSource)
       .join('\n');

@@ -145,6 +145,11 @@ const expectedBehaviorContracts = {
     dataState: 'pressed, off, disabled',
     keyboard: 'Space or Enter activates the native button',
   },
+  '/components/toggle-group': {
+    changeReasons: 'item-click, keyboard, programmatic',
+    dataState: 'pressed, off, disabled',
+    keyboard: 'Arrow keys move focus over enabled toggle buttons',
+  },
   '/components/tooltip': {
     changeReasons:
       'trigger-pointer-enter, trigger-pointer-leave, trigger-focus, trigger-blur, escape-key, programmatic',
@@ -321,6 +326,16 @@ const expectedBehaviorSnippets: Partial<Record<GalleryRoute['path'], readonly st
     'aria-pressed="true"',
     'data-state="off"',
     'disabled',
+  ],
+  '/components/toggle-group': [
+    'role="group"',
+    'aria-labelledby="gallery-toggle-group-label"',
+    'aria-describedby="gallery-toggle-group-description"',
+    'data-state="pressed"',
+    'aria-pressed="true"',
+    'tabIndex="0" type="button" value="bold"',
+    'data-disabled="" data-state="off" disabled',
+    'tabIndex="-1" type="button" value="strike"',
   ],
   '/components/tooltip': [
     'jiso-tooltip="gallery-tooltip-content"',

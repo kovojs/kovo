@@ -35,6 +35,7 @@ const expectedRoutes = [
   '/components/table',
   '/components/tabs',
   '/components/toggle',
+  '/components/toggle-group',
   '/components/tooltip',
 ] as const satisfies readonly GalleryRoute['path'][];
 
@@ -235,6 +236,24 @@ describe('gallery demo fixtures', () => {
     expect(toggle.html).toContain('disabled');
   });
 
+  it('renders toggle-group fixture with grouped pressed buttons and roving attributes', () => {
+    const toggleGroup = findFixture('/components/toggle-group');
+
+    expect(toggleGroup.html).toContain('data-gallery-demo="toggle-group"');
+    expect(toggleGroup.html).toContain('data-ui-demo="toggle-group"');
+    expect(toggleGroup.html).toContain('role="group"');
+    expect(toggleGroup.html).toContain('aria-labelledby="gallery-toggle-group-label"');
+    expect(toggleGroup.html).toContain('aria-describedby="gallery-toggle-group-description"');
+    expect(toggleGroup.html).toContain('data-state="pressed"');
+    expect(toggleGroup.html).toContain('aria-pressed="true"');
+    expect(toggleGroup.html).toContain('id="gallery-toggle-group-bold"');
+    expect(toggleGroup.html).toContain('tabIndex="0" type="button" value="bold"');
+    expect(toggleGroup.html).toContain('data-state="off"');
+    expect(toggleGroup.html).toContain('id="gallery-toggle-group-strike"');
+    expect(toggleGroup.html).toContain('data-disabled="" data-state="off" disabled');
+    expect(toggleGroup.html).toContain('tabIndex="-1" type="button" value="strike"');
+  });
+
   it('renders radio-group fixture with native radio inputs and roving attributes', () => {
     const radioGroup = findFixture('/components/radio-group');
 
@@ -357,6 +376,7 @@ describe('gallery demo fixtures', () => {
     const skeleton = findFixture('/components/skeleton');
     const table = findFixture('/components/table');
     const tabs = findFixture('/components/tabs');
+    const toggleGroup = findFixture('/components/toggle-group');
 
     expect(alert.html).toContain('data-ui-demo="alert"');
     expect(alert.html).toContain('role="status"');
@@ -415,6 +435,11 @@ describe('gallery demo fixtures', () => {
     expect(tabs.html).toContain('rounded-md border border-neutral-200 bg-neutral-100');
     expect(tabs.html).toContain('data-[state=active]:bg-white');
     expect(tabs.html).toContain('overview content');
+
+    expect(toggleGroup.html).toContain('data-ui-demo="toggle-group"');
+    expect(toggleGroup.html).toContain('rounded-md border border-neutral-200 bg-neutral-100');
+    expect(toggleGroup.html).toContain('data-[state=pressed]:bg-white');
+    expect(toggleGroup.html).toContain('gallery-toggle-group-bold');
   });
 });
 

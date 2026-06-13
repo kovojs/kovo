@@ -48,7 +48,7 @@ class MemoryMcpTransport implements Transport {
 describe('fw add', () => {
   it('keeps the vendored UI catalog synchronized with @jiso/ui package source', () => {
     expect(availableAddComponents()).toBe(
-      'alert, badge, breadcrumb, button, card, checkbox, drawer, kbd, radio-group, sheet, skeleton, switch, table, tabs, toggle',
+      'alert, badge, breadcrumb, button, card, checkbox, drawer, kbd, radio-group, sheet, skeleton, switch, table, tabs, toggle, toggle-group',
     );
 
     const manifest = JSON.parse(
@@ -119,6 +119,7 @@ describe('fw add', () => {
           'switch',
           'table',
           'toggle',
+          'toggle-group',
           '--out',
           outDir,
         ]),
@@ -166,6 +167,9 @@ describe('fw add', () => {
       expect(output).toContain(
         `ADD toggle path=${JSON.stringify(join(outDir, 'toggle.tsx'))} source=tsx`,
       );
+      expect(output).toContain(
+        `ADD toggle-group path=${JSON.stringify(join(outDir, 'toggle-group.tsx'))} source=tsx`,
+      );
 
       const alert = readFileSync(join(outDir, 'alert.tsx'), 'utf8');
       const badge = readFileSync(join(outDir, 'badge.tsx'), 'utf8');
@@ -180,6 +184,7 @@ describe('fw add', () => {
       const switchSource = readFileSync(join(outDir, 'switch.tsx'), 'utf8');
       const table = readFileSync(join(outDir, 'table.tsx'), 'utf8');
       const toggle = readFileSync(join(outDir, 'toggle.tsx'), 'utf8');
+      const toggleGroup = readFileSync(join(outDir, 'toggle-group.tsx'), 'utf8');
       expect(alert).toContain("export const Alert = component('alert'");
       expect(alert).toContain('export const alertClassNames = defineVariants');
       expect(badge).toContain("export const Badge = component('badge'");
@@ -207,6 +212,8 @@ describe('fw add', () => {
       expect(table).toContain("export const TableHead = component('table-head'");
       expect(toggle).toContain("export const Toggle = component('toggle'");
       expect(toggle).toContain('export const toggleClassNames = defineVariants');
+      expect(toggleGroup).toContain("export const ToggleGroup = component('toggle-group'");
+      expect(toggleGroup).toContain('export const toggleGroupClassNames = defineVariants');
       const vendoredSource = [
         alert,
         badge,
@@ -221,6 +228,7 @@ describe('fw add', () => {
         switchSource,
         table,
         toggle,
+        toggleGroup,
       ].join('\n');
       expect(vendoredSource).not.toContain('@jiso/ui');
       expect(vendoredSource).not.toContain('fw-c=');
@@ -264,7 +272,7 @@ describe('fw add', () => {
 
       expect(stdout).not.toHaveBeenCalled();
       expect(stderr.mock.calls.map(([chunk]) => String(chunk)).join('')).toBe(
-        'fw: unknown component "dialog". available: alert, badge, breadcrumb, button, card, checkbox, drawer, kbd, radio-group, sheet, skeleton, switch, table, tabs, toggle.\n',
+        'fw: unknown component "dialog". available: alert, badge, breadcrumb, button, card, checkbox, drawer, kbd, radio-group, sheet, skeleton, switch, table, tabs, toggle, toggle-group.\n',
       );
     } finally {
       stdout.mockRestore();

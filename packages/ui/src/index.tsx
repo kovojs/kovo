@@ -104,3 +104,20 @@ export type {
 } from './tabs.js';
 export { Toggle, toggleClassNames, toggleClasses } from './toggle.js';
 export type { ToggleProps, ToggleVariant } from './toggle.js';
+export {
+  ToggleGroup,
+  ToggleGroupButton,
+  ToggleGroupItem,
+  toggleGroupButtonClassNames,
+  toggleGroupButtonClasses,
+  toggleGroupClassNames,
+  toggleGroupClasses,
+  toggleGroupItemClassNames,
+  toggleGroupItemClasses,
+} from './toggle-group.js';
+export type {
+  ToggleGroupButtonProps,
+  ToggleGroupItemProps,
+  ToggleGroupProps,
+  ToggleGroupStateProps,
+} from './toggle-group.js';
