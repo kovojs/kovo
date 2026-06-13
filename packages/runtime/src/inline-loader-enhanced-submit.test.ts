@@ -174,6 +174,7 @@ describe('inline loader enhanced submit source', () => {
         { deps: 'inventory, stock', id: 'inventory-panel', target: 'inventory' },
         { deps: 'debug', id: 'empty-fragment-target-fallback', target: '' },
         { deps: '', id: 'standalone-target' },
+        { component: 'cart-summary', deps: 'cart summary' },
       ];
       const modularRoot = new InlineParityRoot();
       const modularFetch = vi.fn(async (_url: string, _options: EnhancedMutationFetchOptions) => ({
@@ -244,6 +245,7 @@ describe('inline loader enhanced submit source', () => {
               getAttribute(name: string) {
                 if (name === 'fw-deps') return dep.deps;
                 if (name === 'fw-fragment-target') return dep.target ?? null;
+                if (name === 'fw-c') return dep.component ?? null;
                 return null;
               },
               id: dep.id,
@@ -275,7 +277,7 @@ describe('inline loader enhanced submit source', () => {
         const inlineRequest = inlineFetch.mock.calls[0];
         expect(inlineRequest).toEqual(modularFetch.mock.calls[0]);
         expect(inlineRequest?.[1].headers['FW-Targets']).toBe(
-          'cart-badge=cart; inventory=inventory stock; standalone-target',
+          'cart-badge=cart; inventory=inventory stock; standalone-target; cart-summary=cart summary',
         );
       } finally {
         Object.assign(globalRecord, {

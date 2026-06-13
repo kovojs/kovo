@@ -106,7 +106,7 @@ export class InlineTriggerElement {
 }
 
 export class InlineParityRoot {
-  deps: { deps?: string; id?: string; target?: string }[] = [];
+  deps: { component?: string; deps?: string; id?: string; target?: string }[] = [];
 
   findFragmentTarget(): null {
     return null;
@@ -121,6 +121,7 @@ export class InlineParityRoot {
       getAttribute(name: string) {
         if (name === 'fw-fragment-target') return dep.target ?? null;
         if (name === 'fw-deps') return dep.deps ?? null;
+        if (name === 'fw-c') return dep.component ?? null;
         return null;
       },
       ...(dep.id ? { id: dep.id } : {}),

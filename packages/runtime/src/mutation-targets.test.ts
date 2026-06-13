@@ -47,17 +47,20 @@ describe('mutation targets', () => {
         'fw-deps': ' , ',
         'fw-fragment-target': 'empty-deps',
       }),
+      new FakeTargetElement({ 'fw-c': 'cart-summary', 'fw-deps': 'cart summary' }),
       new FakeTargetElement({ 'fw-deps': 'ignored' }),
     ]);
 
-    // SPEC.md §9.1: enhanced mutations send FW-Targets from live fw-deps DOM stamps.
+    // SPEC.md §9.1: enhanced mutations send FW-Targets from live fw-deps DOM
+    // stamps, including component stamps when no explicit target/id exists.
     expect(readLiveTargets(root)).toEqual([
       'cart-badge=cart',
       'inventory=inventory stock',
       'empty-deps',
+      'cart-summary=cart summary',
     ]);
     expect(serializeLiveTargets(root)).toBe(
-      'cart-badge=cart; inventory=inventory stock; empty-deps',
+      'cart-badge=cart; inventory=inventory stock; empty-deps; cart-summary=cart summary',
     );
   });
 });

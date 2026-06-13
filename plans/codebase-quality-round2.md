@@ -1507,6 +1507,28 @@ packages/runtime/src/apply-mutation-response.ts
 packages/runtime/src/mutation-response-apply.test.ts
 packages/runtime/src/mutation-response-dom.browser.test.ts plans/codebase-quality-round2.md`, and
       `git diff --check`.
+- [x] Keep component-stamp fragment targets in parity across enhanced submit headers and inline apply.
+      Evidence 2026-06-13 round293 runtime: `packages/runtime/src/mutation-targets.ts` and the
+      generated inline loader now fall back from `fw-fragment-target`/`id` to `fw-c` when collecting
+      SPEC.md §9.1 `FW-Targets`, and inline fragment apply resolves `[fw-c]` before id/explicit
+      target to match `packages/runtime/src/fragment-targets.ts`. Verified by focused
+      `pnpm exec vitest --run packages/runtime/src/mutation-targets.test.ts
+packages/runtime/src/inline-loader-enhanced-submit.test.ts
+packages/runtime/src/inline-loader-response-apply.test.ts
+packages/runtime/src/inline-loader-artifact-minifier.test.ts
+packages/runtime/src/mutation-response-dom.browser.test.ts`, inline-loader parity
+      `pnpm run check:inline-loader`, browser DOM
+      `pnpm exec vitest --config vitest.browser.config.ts --run
+packages/runtime/src/mutation-response-dom.browser.test.ts`, exact `pnpm exec vp check
+packages/runtime/src/mutation-targets.ts packages/runtime/src/mutation-targets.test.ts
+packages/runtime/src/inline-loader-build.ts packages/runtime/src/inline-loader.ts
+packages/runtime/src/inline-loader-test-utils.ts
+packages/runtime/src/inline-loader-enhanced-submit.test.ts
+packages/runtime/src/inline-loader-response-apply-fixture.ts
+packages/runtime/src/inline-loader-response-apply.test.ts
+packages/runtime/src/inline-loader-artifact-minifier.test.ts
+packages/runtime/src/mutation-response-dom.browser.test.ts plans/codebase-quality-round2.md`, and
+      `git diff --check`.
 - [x] Audit for any remaining internal compatibility-style apply wrappers after `applyFragmentQueryBody`
       deletion.
       Evidence 2026-06-13 round259: `packages/runtime/src/wire-parser.ts` deleted the unused

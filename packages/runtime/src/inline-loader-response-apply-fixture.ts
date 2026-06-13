@@ -24,6 +24,7 @@ export async function expectInlineResponseApplyParity(
     '<fw-query>{"ignored":true}</fw-query>',
     '<fw-fragment target="cart-badge"><cart-badge>1<fw-fragment target="nested"><span>nested</span></fw-fragment></cart-badge></fw-fragment>',
     '<fw-fragment target="cart-list" mode="append"><li>p1</li></fw-fragment>',
+    '<fw-fragment target="cart-summary"><section fw-c="cart-summary">summary</section></fw-fragment>',
   ].join('');
   const modularTargets = new Map([
     [
@@ -42,6 +43,15 @@ export async function expectInlineResponseApplyParity(
         appendHtml(html: string) {
           this.html += html;
         },
+        replaceWithHtml(html: string) {
+          this.html = html;
+        },
+      },
+    ],
+    [
+      'cart-summary',
+      {
+        html: '',
         replaceWithHtml(html: string) {
           this.html = html;
         },
@@ -89,6 +99,7 @@ export async function expectInlineResponseApplyParity(
         },
       },
     ],
+    ['cart-summary', { innerHTML: '' }],
   ]);
 
   try {
@@ -118,9 +129,13 @@ export async function expectInlineResponseApplyParity(
     };
     globalRecord.document = {
       getElementById(id: string) {
+        if (id === 'cart-summary') return null;
         return inlineTargets.get(id) ?? null;
       },
-      querySelector() {
+      querySelector(selector: string) {
+        if (selector === '[fw-c="cart-summary"]') {
+          return inlineTargets.get('cart-summary') ?? null;
+        }
         return null;
       },
       querySelectorAll(selector: string) {
@@ -181,14 +196,21 @@ export async function expectInlineResponseApplyParity(
     expect(inlineStore.get('product', 'product>p1')).toEqual(store.get('product', 'product>p1'));
     expect(inlineTargets.get('cart-badge')?.innerHTML).toBe(modularTargets.get('cart-badge')?.html);
     expect(inlineTargets.get('cart-list')?.html).toBe(modularTargets.get('cart-list')?.html);
+    expect(inlineTargets.get('cart-summary')?.innerHTML).toBe(
+      modularTargets.get('cart-summary')?.html,
+    );
     expect(modularResult).toEqual({
-      appliedFragments: ['cart-badge', 'cart-list'],
+      appliedFragments: ['cart-badge', 'cart-list', 'cart-summary'],
       fragments: [
         {
           html: '<cart-badge>1<fw-fragment target="nested"><span>nested</span></fw-fragment></cart-badge>',
           target: 'cart-badge',
         },
         { html: '<li>p1</li>', mode: 'append', target: 'cart-list' },
+        {
+          html: '<section fw-c="cart-summary">summary</section>',
+          target: 'cart-summary',
+        },
       ],
       queries: ['cart:c1', 'productGrid', 'product:product>p1'],
     });

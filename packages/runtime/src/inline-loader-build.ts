@@ -79,14 +79,17 @@ function installInlineJisoLoader(importModule) {
       [...doc.querySelectorAll('[fw-deps]')]
         .map((element) => {
           const deps = readDeps(element.getAttribute('fw-deps'));
-          const target = element.getAttribute('fw-fragment-target') ?? element.id;
+          const target =
+            element.getAttribute('fw-fragment-target') ?? element.id ?? element.getAttribute('fw-c');
           return target && (deps.length > 0 ? target + '=' + deps.join(' ') : target);
         })
         .filter(Boolean)
     )
   ];
   const findFragmentTarget = (target) =>
-    doc.getElementById(target) ?? doc.querySelector('[fw-fragment-target="' + target + '"]');
+    doc.querySelector('[fw-c="' + target + '"]') ??
+    doc.getElementById(target) ??
+    doc.querySelector('[fw-fragment-target="' + target + '"]');
   ${wireParserReadableSource}
   ${responseApplyReadableSource}
   const dispatchQueryEvent = (type, init) => {

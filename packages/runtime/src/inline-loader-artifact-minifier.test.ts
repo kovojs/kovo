@@ -37,7 +37,10 @@ describe('inline loader minified artifact', () => {
     expect(inlineJisoLoaderInstallerSource).not.toContain("readAttribute(query.attrs,'name')");
     expect(inlineJisoLoaderInstallerSource).not.toContain('queryBody');
     expect(inlineJisoLoaderInstallerSource).toContain(
-      "element.getAttribute('fw-fragment-target')??element.id",
+      "element.getAttribute('fw-fragment-target')??element.id??element.getAttribute('fw-c')",
+    );
+    expect(inlineJisoLoaderInstallerSource).toContain(
+      "const findFragmentTarget=(target)=>doc.querySelector('[fw-c=\"'+target+'\"]')??doc.getElementById(target)??doc.querySelector('[fw-fragment-target=\"'+target+'\"]');",
     );
     expect(inlineJisoLoaderInstallerSource).toContain("getAttribute('fw-param-types')");
     expect(inlineJisoLoaderInstallerSource).not.toContain('DOMParser');
