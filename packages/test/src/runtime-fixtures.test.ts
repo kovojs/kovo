@@ -299,7 +299,7 @@ describe('@jiso/test runtime fixture facts', () => {
     });
   });
 
-  it('projects keyed morph and fragment behavior without keeping fake DOM mechanics in fw-check', () => {
+  it('projects keyed morph and fragment behavior without keeping fake DOM mechanics in fw-check', async () => {
     const values = new Map<string, unknown>();
     const runtime: MorphFragmentRuntime = {
       applyMutationResponseToDom(options) {
@@ -348,7 +348,7 @@ describe('@jiso/test runtime fixture facts', () => {
       },
     };
 
-    expect(morphFragmentBehaviorFact(runtime)).toEqual({
+    await expect(morphFragmentBehaviorFact(runtime)).resolves.toEqual({
       appliedFragments: ['products'],
       ignoredMissingTarget: true,
       keyedIdentity: {

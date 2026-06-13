@@ -15,6 +15,11 @@ import {
   type PropertyTestResult,
 } from '@jiso/test/assertions';
 import {
+  commerceMutationQueryAcceptanceFact,
+  type CommerceMutationQueryAcceptanceFact,
+  type CommerceMutationQueryAcceptanceOptions,
+} from '@jiso/test/commerce-fixtures';
+import {
   assertOrderedItems,
   browserSuiteAcceptanceGateFact,
   browserSuiteAcceptanceModulePath,
@@ -480,6 +485,7 @@ describe('@jiso/test package subpath exports', () => {
     expect(createDbVerifier).toBe(rootCreateDbVerifier);
     expect(createVerificationFakeDb().read('cart_items')).toEqual([]);
     expect(verificationLayerBehaviorFact).toBeTypeOf('function');
+    expect(commerceMutationQueryAcceptanceFact).toBeTypeOf('function');
     expect(enhancedMutationBehaviorFact).toBeTypeOf('function');
     expect(loaderSmokeBehaviorFact).toBeTypeOf('function');
     expect(morphFragmentBehaviorFact).toBeTypeOf('function');
@@ -556,6 +562,14 @@ describe('@jiso/test package subpath exports', () => {
     expectTypeOf<VerificationLayerRuntime>().toMatchTypeOf<{
       createDbVerifier: (...args: any[]) => unknown;
     }>();
+    expectTypeOf<CommerceMutationQueryAcceptanceFact>().toMatchTypeOf<{
+      addToCart: { updateQueries: string[] };
+      fragmentResponse: { expectedFragmentTargets: string[] };
+      uploadReceipt: { invalidates: string[] };
+    }>();
+    expectTypeOf<CommerceMutationQueryAcceptanceOptions<unknown, { components: [] }>>()
+      .toHaveProperty('fwExplain')
+      .toMatchTypeOf<unknown>();
   });
 
   it('keeps subpath-only helpers available through their owning modules', () => {

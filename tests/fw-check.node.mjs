@@ -30,7 +30,6 @@ import { diagnosticDefinitions } from '../dist/core/src/index.mjs';
 import {
   applyCompiledQueryUpdatePlan,
   applyDeferredStreamResponseToRuntime,
-  applyFetchedEnhancedMutationResponseToDom,
   createQueryStore,
   derive,
   installPagehideOptimismCleanup,
@@ -1535,20 +1534,23 @@ void test('P3 route and query guard removal is mechanically audited by fw check'
   );
 });
 
-void test('P5 morph evidence preserves keyed identity and applies fragments', () => {
+void test('P5 morph evidence preserves keyed identity and applies fragments', async () => {
   assert.deepEqual(
-    morphFragmentBehaviorFact({
+    await morphFragmentBehaviorFact({
       applyMutationResponseToDom({ body, root, store }) {
-        return applyFetchedEnhancedMutationResponseToDom(
-          { root, store },
-          {
-            body,
-            changes: [],
-            idem: 'fw-check-morph-fixture',
-            response: new Response('', { status: 200 }),
-            targets: [],
+        return submitEnhancedMutation({
+          fetch: async () => new Response(body, { status: 200 }),
+          form: { action: '/_m/fw-check-morph', method: 'post' },
+          formData: new FormData(),
+          idem: 'fw-check-morph-fixture',
+          root: {
+            ...root,
+            querySelectorAll() {
+              return [];
+            },
           },
-        );
+          store,
+        });
       },
       createQueryStore,
       morphStructuralTree,

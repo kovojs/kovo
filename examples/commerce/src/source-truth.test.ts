@@ -3,30 +3,27 @@ import { fileURLToPath } from 'node:url';
 import { join } from 'node:path';
 
 import { compileComponentModule, deriveAppGraph } from '@jiso/compiler';
-import type { TouchGraph } from '@jiso/drizzle';
-import { createJisoTestHarness } from '@jiso/test/harness';
+import { commerceMutationQueryAcceptanceFact } from '@jiso/test/commerce-fixtures';
 import {
   fwExplainEndpointAssertionFact,
   fwExplainListField,
   fwExplainMutationAssertionFact,
-  fwExplainOptimisticStatuses,
   fwExplainPageAssertionFact,
   fwExplainQueryAssertionFact,
   fwExplainScopeAuditAssertionFact,
   fwExplainUpdateConsumerMap,
-  fwExplainUpdateConsumers,
 } from '@jiso/test/fw-explain-fixtures';
 import { fwCheckOkAssertionFact } from '@jiso/test/fw-check-fixtures';
 import {
   commerceGraphBehaviorFact,
   generatedGraphArtifactAcceptanceProjectFact,
-  graphFragmentTargetForQuery,
   graphMutationUpdateConsumers,
   graphOptimisticStatusMatrix,
   graphPageFact,
   graphStaticBehaviorFact,
 } from '@jiso/test/graph-fixtures';
-import { fwResponseBodyFact, htmlDocumentFacts } from '@jiso/test/html-fragment';
+import { createJisoTestHarness } from '@jiso/test/harness';
+import { htmlDocumentFacts } from '@jiso/test/html-fragment';
 import { fwCheck, fwExplain } from 'fw';
 
 import {
@@ -396,94 +393,35 @@ describe('commerce source-truth graph acceptance', () => {
   });
 
   it('accepts the commerce mutation-query matrix through static graph, verifier, and enhanced wire', async () => {
-    const addToCartExplanation = fwExplain(commerceGraph, {
-      kind: 'mutation',
-      optimistic: true,
-      target: 'cart/add',
-    });
-    const uploadReceiptExplanation = fwExplain(commerceGraph, {
-      kind: 'mutation',
-      optimistic: true,
-      target: 'order/receipt',
-    });
-    const affectedQueries = [...fwExplainUpdateConsumerMap(addToCartExplanation.output).keys()];
-    const uploadReceiptAffectedQueries = [
-      ...fwExplainUpdateConsumerMap(uploadReceiptExplanation.output).keys(),
-    ];
-    const statuses = fwExplainOptimisticStatuses(addToCartExplanation.output);
-    const db = createCommerceDb();
-    const harness = createJisoTestHarness({
-      db,
-      request: {
-        session: { id: 's-commerce-acceptance', user: { id: 'u1' } },
-      },
-      touchGraph: { 'cart.addItem': commerceTouchGraph['cart.addItem'] } as unknown as TouchGraph,
-      verification: {
-        domainByTable: {
-          cart_items: 'cart',
-          orders: 'order',
-          products: 'product',
-        },
-      },
-    });
-    const verifiedDb = harness.dbHandle();
-    verifiedDb.transaction = (run) => run(verifiedDb);
-    const receiptHarness = createJisoTestHarness({
-      db: createCommerceDb(),
-      request: {
-        session: { id: 's-commerce-receipt', user: { id: 'u1' } },
-      },
-      touchGraph: { 'order.receipt': commerceTouchGraph['order.receipt'] } as unknown as TouchGraph,
-      verification: {
-        domainByTable: {
-          attachments: 'attachment',
-          cart_items: 'cart',
-          orders: 'order',
-          products: 'product',
-        },
-      },
+    const fact = await commerceMutationQueryAcceptanceFact({
+      addToCart,
+      commerceCsrf,
+      commerceCsrfInput,
+      commerceTouchGraph,
+      createDb: createCommerceDb,
+      fwExplain,
+      graph: commerceGraph,
+      receiptFile: commerceFile('receipt.pdf', 'application/pdf', 2048),
+      submitAddToCart,
+      uploadReceipt,
     });
 
     // SPEC.md §10.4/§11.2: every invalidated query pair must have an explicit
     // optimistic status, and executed writes must stay within the static graph.
-    expect(statuses).toEqual({
+    expect(fact.optimisticStatuses).toEqual({
       cart: 'hand-written',
       orderHistory: 'await-fragment',
       productGrid: 'await-fragment',
     });
-    expect(uploadReceiptAffectedQueries).toEqual([]);
-    expect(fwExplainListField(uploadReceiptExplanation.output, 'invalidates')).toEqual([]);
-    expect(fwExplainUpdateConsumers(uploadReceiptExplanation.output)).toEqual([]);
-    await expect(
-      harness.exec(
-        addToCart,
-        commerceCsrfInput(
-          { productId: 'p1', quantity: 2 },
-          { db: verifiedDb, session: { id: 's-commerce-acceptance', user: { id: 'u1' } } },
-        ),
-        { touchGraphKey: 'cart.addItem' },
-      ),
-    ).resolves.toMatchObject({
+    expect(fact.uploadReceipt.updateQueries).toEqual([]);
+    expect(fact.uploadReceipt.invalidates).toEqual([]);
+    expect(fact.uploadReceipt.updateConsumers).toEqual([]);
+    expect(fact.addToCart.result).toMatchObject({
       ok: true,
-      rerunQueries: expect.arrayContaining(affectedQueries),
+      rerunQueries: expect.arrayContaining(fact.addToCart.updateQueries),
     });
-    expect(harness.verificationDiagnostics()).toEqual([]);
-    await expect(
-      receiptHarness.exec(
-        uploadReceipt,
-        commerceCsrfInput(
-          {
-            orderId: 'order-1',
-            receipt: commerceFile('receipt.pdf', 'application/pdf', 2048),
-          },
-          {
-            db: receiptHarness.dbHandle(),
-            session: { id: 's-commerce-receipt', user: { id: 'u1' } },
-          },
-        ),
-        { csrf: commerceCsrf, touchGraphKey: 'order.receipt' },
-      ),
-    ).resolves.toMatchObject({
+    expect(fact.addToCart.diagnostics).toEqual([]);
+    expect(fact.uploadReceipt.result).toMatchObject({
       ok: true,
       value: {
         attachmentId: 'attachment-1',
@@ -493,34 +431,17 @@ describe('commerce source-truth graph acceptance', () => {
         uploadedBy: 'u1',
       },
     });
-    expect(receiptHarness.verificationDiagnostics()).toEqual([]);
-
-    const response = await submitAddToCart(
-      { productId: 'p2', quantity: 1 },
-      { db: verifiedDb, session: { id: 's-commerce-acceptance-2', user: { id: 'u1' } } },
-      {
-        'FW-Fragment': 'true',
-        'FW-Targets': affectedQueries
-          .map((query) => graphFragmentTargetForQuery(commerceGraph, query))
-          .join(','),
-      },
-    );
-    const responseFact = fwResponseBodyFact(response.body);
-
-    expect(response).toMatchObject({
+    expect(fact.uploadReceipt.diagnostics).toEqual([]);
+    expect(fact.fragmentResponse).toMatchObject({
       headers: {
         'Content-Type': 'text/vnd.jiso.fragment+html; charset=utf-8',
       },
       status: 200,
     });
-    expect(responseFact.queryNames.sort((a, b) => a.localeCompare(b))).toEqual(
-      [...affectedQueries].sort((a, b) => a.localeCompare(b)),
+    expect(fact.fragmentResponse.queryNames).toEqual(fact.addToCart.updateQueries.toSorted());
+    expect(fact.fragmentResponse.fragmentTargets).toEqual(
+      fact.fragmentResponse.expectedFragmentTargets,
     );
-    expect(responseFact.fragmentTargets.sort((a, b) => a.localeCompare(b))).toEqual(
-      affectedQueries
-        .map((query) => graphFragmentTargetForQuery(commerceGraph, query))
-        .sort((a, b) => a.localeCompare(b)),
-    );
-    expect(responseFact.keyValues).toContain('order-2');
+    expect(fact.fragmentResponse.keyValues).toContain('order-2');
   });
 });

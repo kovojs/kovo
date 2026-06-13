@@ -71,9 +71,7 @@ export interface MorphFragmentRuntime {
       get(name: string, key?: string): unknown;
       set(name: string, value: unknown, key?: string): void;
     };
-  }) => {
-    appliedFragments: string[];
-  };
+  }) => { appliedFragments: string[] } | Promise<{ appliedFragments: string[] }>;
   createQueryStore: () => {
     get(name: string, key?: string): unknown;
     set(name: string, value: unknown, key?: string): void;
@@ -393,9 +391,9 @@ export async function loaderSmokeBehaviorFact(
   };
 }
 
-export function morphFragmentBehaviorFact(
+export async function morphFragmentBehaviorFact(
   runtime: MorphFragmentRuntime,
-): MorphFragmentBehaviorFact {
+): Promise<MorphFragmentBehaviorFact> {
   // SPEC.md §4.4/§9.3: server-owned query and fragment responses must update
   // the client tree while preserving keyed browser state.
   interface FixtureMorphNode {
@@ -461,7 +459,7 @@ export function morphFragmentBehaviorFact(
     },
   };
   const store = runtime.createQueryStore();
-  const result = runtime.applyMutationResponseToDom({
+  const result = await runtime.applyMutationResponseToDom({
     body: [
       '<fw-query name="productGrid" key="category:all">{"count":2}</fw-query>',
       '<fw-fragment target="products" mode="append"><article fw-key="p2">New</article></fw-fragment>',

@@ -189,6 +189,10 @@ mechanic inline.
 Shared server fixtures now also own the D1 commerce stylesheet-hint behavior projection for target
 stylesheet filtering, page hints, deferred fragment links, and mutation failure fragments, so the
 fw-check monolith no longer rebuilds those server/HTML mechanics inline.
+Shared commerce fixtures now own the commerce mutation-query acceptance projection for
+`fw-explain` optimistic update intent, public harness mutation execution, verifier diagnostics,
+receipt upload execution, and enhanced fragment response facts, so the commerce source-truth test
+asserts one public `@jiso/test` behavior fact instead of rebuilding those mechanics inline.
 
 - [ ] Search for remaining custom parsers, raw source membership checks, and generated-artifact
       projections in `tests/fw-check.node.mjs`.
@@ -200,6 +204,18 @@ fw-check monolith no longer rebuilds those server/HTML mechanics inline.
 
 Latest evidence:
 
+- Phase 6/7 commerce mutation-query acceptance fixture slice:
+  `pnpm exec vitest --run packages/test/src/commerce-fixtures.test.ts packages/test/src/package-exports.test.ts examples/commerce/src/source-truth.test.ts`;
+  `pnpm run check:build`;
+  `node --test --test-name-pattern "P10 commerce graph assertions answer behavior mechanically|P4 commerce touch graph" tests/fw-check.node.mjs`;
+  `pnpm exec tsc --noEmit --pretty false`;
+  `pnpm exec vp check packages/test/src/commerce-fixtures.ts packages/test/src/commerce-fixtures.test.ts packages/test/src/package-exports.test.ts packages/test/package.json examples/commerce/src/source-truth.test.ts plans/codebase-quality-round2.md`;
+  `git diff --check`. Evidence: `packages/test/src/commerce-fixtures.ts`
+  exposes `commerceMutationQueryAcceptanceFact()` as the public fixture seam for SPEC
+  §10.4/§11.2/§16.5 commerce mutation/query acceptance, and
+  `examples/commerce/src/source-truth.test.ts` now asserts that structured fact instead of local
+  fw-explain parsing, harness execution, verifier, receipt upload, and fragment response
+  mechanics.
 - UI G1 static route source/markup closure slice:
   `pnpm exec vitest --run examples/gallery/src/demo-fixtures.test.ts`;
   `pnpm exec tsc --noEmit --pretty false`;
