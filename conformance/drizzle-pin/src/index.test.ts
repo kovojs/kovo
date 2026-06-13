@@ -7390,6 +7390,50 @@ describe('Drizzle pinned subset conformance', () => {
     ]);
   });
 
+  it('pins real Postgres with() query-builder chains without fake unclassified diagnostics', () => {
+    const facts = extractQueryFactsFromProject({
+      files: [
+        {
+          fileName: 'conformance/drizzle-pin/src/product.queries.ts',
+          source: `
+            import { pgTable, text, type PgDatabase } from 'drizzle-orm/pg-core';
+
+            export const products = pgTable('products', {
+              id: text('id').primaryKey(),
+            }, jiso({ domain: 'product', key: 'id' }));
+
+            export const productQuery = query('product/with-read', {
+              load(_input, db: PgDatabase) {
+                const active = db.$with('active_products').as(db.select({ id: products.id }).from(products));
+                return db.with(active).select({ id: products.id }).from(products);
+              },
+            });
+          `,
+        },
+      ],
+    });
+
+    expect(facts).toEqual([
+      {
+        diagnostics: [
+          {
+            code: 'FW406',
+            message:
+              'Statically un-analyzable write site; manual touches required. Query uses unclassified Drizzle receiver call db.$with().',
+            severity: 'warn',
+            site: 'conformance/drizzle-pin/src/product.queries.ts:8',
+          },
+        ],
+        query: 'product/with-read',
+        reads: ['product'],
+        shape: {
+          id: 'string',
+        },
+        site: 'conformance/drizzle-pin/src/product.queries.ts:8',
+      },
+    ]);
+  });
+
   it('pins namespace-imported project query projections against real Drizzle tables', () => {
     const facts = extractQueryFactsFromProject({
       files: [

@@ -109,6 +109,7 @@ const CLASSIFIED_DRIZZLE_RECEIVER_METHODS = new Set([
   'insert',
   'transaction',
   'update',
+  'with',
 ]);
 const COMPUTED_DRIZZLE_RECEIVER_METHOD = '<computed>';
 const UNRESOLVED_DOMAIN_WRITE_COMPUTED_MEMBER = '<computed>';
@@ -3137,7 +3138,7 @@ function unclassifiedQueryReceiverDiagnostics(
     }
 
     const surface = directDrizzleReceiverCallSurface(call);
-    if (!surface || isSelectQueryCallName(surface.name)) return [];
+    if (!surface || isSelectQueryCallName(surface.name) || surface.name === 'with') return [];
 
     if (!isQueryReceiverIdentifier(surface.receiver, receiverReferences)) return [];
 

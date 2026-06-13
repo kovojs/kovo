@@ -4005,6 +4005,50 @@ export interface CommerceInvalidationSets {
     ]);
   });
 
+  it('keeps project query-loader reads through Postgres with() select chains', () => {
+    const facts = extractQueryFactsFromProject({
+      files: [
+        {
+          fileName: 'product.queries.ts',
+          source: [
+            'import { pgTable, text, type PgDatabase } from "drizzle-orm/pg-core";',
+            '',
+            'export const products = pgTable("products", {',
+            '  id: text("id").primaryKey(),',
+            '}, jiso({ domain: "product", key: "id" }));',
+            '',
+            'export const productQuery = query("product/with-read", {',
+            '  load(_input, db: PgDatabase) {',
+            '    const active = db.$with("active_products").as(db.select({ id: products.id }).from(products));',
+            '    return db.with(active).select({ id: products.id }).from(products);',
+            '  },',
+            '});',
+          ].join('\n'),
+        },
+      ],
+    });
+
+    expect(facts).toEqual([
+      {
+        diagnostics: [
+          {
+            code: 'FW406',
+            message:
+              'Statically un-analyzable write site; manual touches required. Query uses unclassified Drizzle receiver call db.$with().',
+            severity: 'warn',
+            site: 'product.queries.ts:7',
+          },
+        ],
+        query: 'product/with-read',
+        reads: ['product'],
+        shape: {
+          id: 'string',
+        },
+        site: 'product.queries.ts:7',
+      },
+    ]);
+  });
+
   it('uses project query-loader detached receiver method symbols without name fallback', () => {
     const facts = extractQueryFactsFromProject({
       files: [
@@ -7485,13 +7529,6 @@ export interface CommerceInvalidationSets {
             code: 'FW406',
             message:
               'Statically un-analyzable write site; manual touches required. Query uses unclassified Drizzle receiver call db.$with().',
-            severity: 'warn',
-            site: 'product.queries.ts:7',
-          },
-          {
-            code: 'FW406',
-            message:
-              'Statically un-analyzable write site; manual touches required. Query uses unclassified Drizzle receiver call db.with().',
             severity: 'warn',
             site: 'product.queries.ts:7',
           },

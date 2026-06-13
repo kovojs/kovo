@@ -125,6 +125,10 @@ Latest evidence:
       and FW406 degradation for unresolved helpers/receiver execution.
 - [x] Project-mode receiver containers and rest destructuring degrade unsafe typed containers to
       FW406 while exact receiver member/index access still contributes real facts.
+- [x] Postgres project query-loader `db.with(...).select().from(...)` chains keep exact read facts
+      without a fake unclassified `db.with()` FW406; `$with` CTE-builder surfaces remain visible.
+      Verified with focused/full Drizzle package tests, pinned Drizzle conformance, root `tsc`,
+      conformance `tsc`, and `git diff --check`.
 
 ## Phase 4 - Runtime
 
