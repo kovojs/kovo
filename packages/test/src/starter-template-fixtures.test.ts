@@ -11,6 +11,7 @@ import {
   runStarterTemplateEmitGraph,
   runStarterTemplateGraphAssertions,
   runStarterTemplateViteTaskCommand,
+  starterClientTemplateBehaviorFact,
   starterTemplateDevDependencyCoverage,
   starterTemplateFacts,
 } from '@jiso/test/starter-template-fixtures';
@@ -149,6 +150,7 @@ describe('@jiso/test starter template fixtures', () => {
 import { applyDeferredStreamResponseToDom, createQueryStore, installJisoLoader } from '@jiso/runtime';
 
 const store = createQueryStore();
+const queryPlans = {};
 const root = {
   findFragmentTarget(target) {
     const element = document.getElementById(target) ?? document.querySelector('[fw-fragment-target="' + CSS.escape(target) + '"]');
@@ -168,7 +170,7 @@ installJisoLoader({
   queryStore: store,
   enhancedMutations: {
     fetch: (url, options) => fetch(url, options),
-    queryPlans: {},
+    queryPlans,
     root,
     store,
   },
@@ -214,6 +216,78 @@ export function applyJisoDeferredStreamResponse(body) {
     expect(fixture.deferredApplications).toMatchObject([
       { body: '<fw-fragment></fw-fragment>', root: loaderOptions.enhancedMutations.root },
     ]);
+  });
+
+  it('projects starter browser client behavior into fw-check facts', async () => {
+    await expect(
+      starterClientTemplateBehaviorFact(`
+import { applyDeferredStreamResponseToDom, createQueryStore, installJisoLoader } from '@jiso/runtime';
+
+const store = createQueryStore();
+const queryPlans = {};
+const root = {
+  findFragmentTarget(target) {
+    const element = document.getElementById(target) ?? document.querySelector('[fw-fragment-target="' + CSS.escape(target) + '"]');
+    return element ? {
+      appendHtml(html) { element.insertAdjacentHTML('beforeend', html); },
+      readHtml() { return element.innerHTML; },
+      replaceWithHtml(html) { element.innerHTML = html; },
+    } : null;
+  },
+  querySelectorAll(selector) {
+    return document.querySelectorAll(selector);
+  },
+};
+
+installJisoLoader({
+  root: document,
+  queryStore: store,
+  enhancedMutations: {
+    fetch: (url, options) => fetch(url, options),
+    queryPlans,
+    root,
+    store,
+  },
+  importModule: (path) => import(path),
+});
+
+export function applyJisoDeferredStreamResponse(body, options = {}) {
+  return applyDeferredStreamResponseToDom({ body, root, store, queryPlans, ...options });
+}
+`),
+    ).resolves.toEqual({
+      appendedHtml: [['beforeend', '<li>p1</li>']],
+      deferredApplication: {
+        body: '<fw-fragment></fw-fragment>',
+        boundary: 'starter-boundary',
+        morph: 'structural',
+        queryPlansMatch: true,
+        rootMatches: true,
+        storeMatches: true,
+      },
+      deferredApplied: true,
+      fetchCall: {
+        body: 'productId=p1',
+        headers: { Accept: 'text/vnd.jiso.fragment+html' },
+        keepalive: true,
+        method: 'POST',
+        url: '/_m/cart/add',
+      },
+      fetchOk: true,
+      fragmentHtml: {
+        afterReplace: '<cart-badge>1</cart-badge>',
+        beforeReplace: '<cart-badge>0</cart-badge>',
+      },
+      loader: {
+        enhancedMutationStoreMatches: true,
+        hasEnhancedFetch: true,
+        hasImportModule: true,
+        queryPlansType: 'object',
+        queryStoreMatches: true,
+        rootMatches: true,
+      },
+      loaderInstallCount: 1,
+    });
   });
 
   it('runs starter template graph tasks in a copied fixture with compiler and fw shims', async () => {

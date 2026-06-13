@@ -382,9 +382,70 @@ export interface StarterClientTemplateFixture {
   queryStore: unknown;
 }
 
+export interface StarterClientTemplateBehaviorFact {
+  appendedHtml: Array<[position: string, html: string]>;
+  deferredApplication: {
+    body: unknown;
+    boundary: unknown;
+    morph: unknown;
+    queryPlansMatch: boolean;
+    rootMatches: boolean;
+    storeMatches: boolean;
+  };
+  deferredApplied: unknown;
+  fetchCall: {
+    body: unknown;
+    headers: Record<string, unknown>;
+    keepalive: unknown;
+    method: unknown;
+    url: unknown;
+  };
+  fetchOk: unknown;
+  fragmentHtml: {
+    afterReplace: string | null;
+    beforeReplace: string | null;
+  };
+  loader: {
+    enhancedMutationStoreMatches: boolean;
+    hasEnhancedFetch: boolean;
+    hasImportModule: boolean;
+    queryPlansType: string;
+    queryStoreMatches: boolean;
+    rootMatches: boolean;
+  };
+  loaderInstallCount: number;
+}
+
 interface StarterClientElement {
   innerHTML: string;
   insertAdjacentHTML(position: string, html: string): void;
+}
+
+interface StarterClientLoaderOptions {
+  enhancedMutations?: {
+    fetch?: (url: string, options: Record<string, unknown>) => { ok?: unknown };
+    queryPlans?: unknown;
+    root?: {
+      findFragmentTarget(target: string): {
+        appendHtml(html: string): void;
+        readHtml(): string;
+        replaceWithHtml(html: string): void;
+      } | null;
+    };
+    store?: unknown;
+  };
+  importModule?: unknown;
+  queryStore?: unknown;
+  root?: unknown;
+}
+
+interface StarterDeferredApplication {
+  body?: unknown;
+  boundary?: unknown;
+  morph?: unknown;
+  queryPlans?: unknown;
+  root?: unknown;
+  store?: unknown;
 }
 
 export async function executeStarterClientTemplate(
@@ -465,5 +526,74 @@ export async function executeStarterClientTemplate(
     fetchCalls,
     loaderInstalls,
     queryStore,
+  };
+}
+
+export async function starterClientTemplateBehaviorFact(
+  source: string,
+): Promise<StarterClientTemplateBehaviorFact> {
+  // SPEC.md §5.2: app-authored starter code stays TSX/JS source; this fixture
+  // executes the template and exposes public loader/deferred behavior facts.
+  const fixture = await executeStarterClientTemplate(source);
+  const loaderOptions = fixture.loaderInstalls[0] as StarterClientLoaderOptions | undefined;
+  const enhancedMutations = loaderOptions?.enhancedMutations;
+  const mutationRoot = enhancedMutations?.root;
+  const fragmentTarget = mutationRoot?.findFragmentTarget('cart-badge') ?? null;
+  const beforeReplace = fragmentTarget?.readHtml() ?? null;
+  fragmentTarget?.replaceWithHtml('<cart-badge>1</cart-badge>');
+  const afterReplace = fragmentTarget?.readHtml() ?? null;
+  mutationRoot?.findFragmentTarget('cart-list')?.appendHtml('<li>p1</li>');
+
+  const fetchResult = enhancedMutations?.fetch?.('/_m/cart/add', {
+    body: 'productId=p1',
+    headers: { Accept: 'text/vnd.jiso.fragment+html' },
+    keepalive: true,
+    method: 'POST',
+  });
+  const [fetchUrl, fetchOptions = {}] = fixture.fetchCalls[0] ?? [];
+  const deferredResult = (
+    fixture.exports.applyJisoDeferredStreamResponse as
+      | ((body: string, options: Record<string, unknown>) => { applied?: unknown })
+      | undefined
+  )?.('<fw-fragment></fw-fragment>', {
+    boundary: 'starter-boundary',
+    morph: 'structural',
+  });
+  const deferredApplication = fixture.deferredApplications[0] as
+    | StarterDeferredApplication
+    | undefined;
+
+  return {
+    appendedHtml: fixture.appendCalls,
+    deferredApplication: {
+      body: deferredApplication?.body,
+      boundary: deferredApplication?.boundary,
+      morph: deferredApplication?.morph,
+      queryPlansMatch: deferredApplication?.queryPlans === enhancedMutations?.queryPlans,
+      rootMatches: deferredApplication?.root === mutationRoot,
+      storeMatches: deferredApplication?.store === fixture.queryStore,
+    },
+    deferredApplied: deferredResult?.applied,
+    fetchCall: {
+      body: fetchOptions.body,
+      headers: { ...(fetchOptions.headers as Record<string, unknown> | undefined) },
+      keepalive: fetchOptions.keepalive,
+      method: fetchOptions.method,
+      url: fetchUrl,
+    },
+    fetchOk: fetchResult?.ok,
+    fragmentHtml: {
+      afterReplace,
+      beforeReplace,
+    },
+    loader: {
+      enhancedMutationStoreMatches: enhancedMutations?.store === fixture.queryStore,
+      hasEnhancedFetch: typeof enhancedMutations?.fetch === 'function',
+      hasImportModule: typeof loaderOptions?.importModule === 'function',
+      queryPlansType: typeof enhancedMutations?.queryPlans,
+      queryStoreMatches: loaderOptions?.queryStore === fixture.queryStore,
+      rootMatches: loaderOptions?.root === fixture.documentRoot,
+    },
+    loaderInstallCount: fixture.loaderInstalls.length,
   };
 }

@@ -76,6 +76,9 @@ application, and wire deferred-stream projection facts for the D3 fw-check gate,
 longer builds those reusable fake DOM/runtime mechanics inline. Shared generated-module fixtures
 now also own minifier handler export invocation, typed data-param coercion, and render-equivalence
 behavior projections used by the P1 fw-check generated-module gates.
+Shared starter-template fixtures now own starter browser client loader/fetch/fragment/deferred
+behavior projections for the P10 starter fw-check gate, so the monolith no longer replays those
+fake document/runtime mechanics inline.
 
 - [ ] Search for remaining custom parsers, raw source membership checks, and generated-artifact
       projections in `tests/fw-check.node.mjs`.
@@ -181,6 +184,12 @@ Latest evidence:
   `pnpm run check:build`;
   targeted `node --test --test-name-pattern "D3 deferred stream responses are consumed by the runtime" tests/fw-check.node.mjs`;
   exact `pnpm exec vp check --fix packages/test/src/generated-module-fixtures.ts packages/test/src/generated-module-fixtures.test.ts packages/test/src/package-exports.test.ts tests/fw-check.node.mjs plans/codebase-quality-round2.md`;
+  `git diff --check`.
+- Starter browser client fixture slice:
+  `pnpm exec vitest --run packages/test/src/starter-template-fixtures.test.ts packages/test/src/package-exports.test.ts`;
+  `pnpm run check:build`;
+  targeted `node --test --test-name-pattern "P10 starter wires graph assertions into CI" tests/fw-check.node.mjs`;
+  exact `pnpm exec vp check packages/test/src/starter-template-fixtures.ts packages/test/src/starter-template-fixtures.test.ts packages/test/src/package-exports.test.ts tests/fw-check.node.mjs plans/codebase-quality-round2.md`;
   `git diff --check`.
 
 ## Phase 2 - Compiler IR

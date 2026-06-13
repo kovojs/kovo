@@ -137,12 +137,12 @@ import {
 } from '../packages/test/src/source-fixtures.ts';
 import { touchGraphProvenanceFact } from '../packages/test/src/touch-graph-fixtures.ts';
 import {
-  executeStarterClientTemplate,
   loadStarterTemplateFacts,
   runPnpmFilterTaskCommand,
   runStarterTemplateEmitGraph,
   runStarterTemplateGraphAssertions,
   runStarterTemplateViteTaskCommand,
+  starterClientTemplateBehaviorFact,
   starterTemplateDevDependencyCoverage,
 } from '../packages/test/src/starter-template-fixtures.ts';
 import { loaderSmokeBehaviorFact } from '../packages/test/src/runtime-fixtures.ts';
@@ -3243,71 +3243,39 @@ void test('P10 starter wires graph assertions into CI', async () => {
   assert.doesNotThrow(() => assertFixpoint(starterAppCompile));
   assert.doesNotThrow(() => assertRenderEquivalence(starterAppCompile));
 
-  const starterClient = await executeStarterClientTemplate(clientSource);
-  assert.equal(starterClient.loaderInstalls.length, 1);
-  const loaderOptions = starterClient.loaderInstalls[0];
-  assert.equal(typeof loaderOptions.importModule, 'function');
-  assert.equal(loaderOptions.root, starterClient.documentRoot);
-  assert.equal(loaderOptions.queryStore, starterClient.queryStore);
-  assert.equal(loaderOptions.enhancedMutations.store, starterClient.queryStore);
-  assert.equal(typeof loaderOptions.enhancedMutations.fetch, 'function');
-  assert.equal(typeof loaderOptions.enhancedMutations.queryPlans, 'object');
-  const fragmentTarget = loaderOptions.enhancedMutations.root.findFragmentTarget('cart-badge');
-  assert.equal(fragmentTarget.readHtml(), '<cart-badge>0</cart-badge>');
-  fragmentTarget.replaceWithHtml('<cart-badge>1</cart-badge>');
-  assert.equal(fragmentTarget.readHtml(), '<cart-badge>1</cart-badge>');
-  loaderOptions.enhancedMutations.root.findFragmentTarget('cart-list').appendHtml('<li>p1</li>');
-  assert.deepEqual(starterClient.appendCalls, [['beforeend', '<li>p1</li>']]);
-  assert.equal(
-    loaderOptions.enhancedMutations.fetch('/_m/cart/add', {
-      body: 'productId=p1',
-      headers: { Accept: 'text/vnd.jiso.fragment+html' },
-      keepalive: true,
-      method: 'POST',
-    }).ok,
-    true,
-  );
-  assert.equal(starterClient.fetchCalls.length, 1);
-  const [[fetchUrl, fetchOptions]] = starterClient.fetchCalls;
-  assert.equal(fetchUrl, '/_m/cart/add');
-  assert.deepEqual(
-    {
-      body: fetchOptions.body,
-      headers: { ...fetchOptions.headers },
-      keepalive: fetchOptions.keepalive,
-      method: fetchOptions.method,
-    },
-    {
-      body: 'productId=p1',
-      headers: { Accept: 'text/vnd.jiso.fragment+html' },
-      keepalive: true,
-      method: 'POST',
-    },
-  );
-  assert.equal(
-    starterClient.exports.applyJisoDeferredStreamResponse('<fw-fragment></fw-fragment>', {
-      boundary: 'starter-boundary',
-      morph: 'structural',
-    }).applied,
-    true,
-  );
-  assert.equal(starterClient.deferredApplications.length, 1);
-  const [deferredApplication] = starterClient.deferredApplications;
-  assert.deepEqual(
-    {
-      body: deferredApplication.body,
-      boundary: deferredApplication.boundary,
-      morph: deferredApplication.morph,
-    },
-    {
+  assert.deepEqual(await starterClientTemplateBehaviorFact(clientSource), {
+    appendedHtml: [['beforeend', '<li>p1</li>']],
+    deferredApplication: {
       body: '<fw-fragment></fw-fragment>',
       boundary: 'starter-boundary',
       morph: 'structural',
+      queryPlansMatch: true,
+      rootMatches: true,
+      storeMatches: true,
     },
-  );
-  assert.equal(deferredApplication.queryPlans, loaderOptions.enhancedMutations.queryPlans);
-  assert.equal(deferredApplication.root, loaderOptions.enhancedMutations.root);
-  assert.equal(deferredApplication.store, starterClient.queryStore);
+    deferredApplied: true,
+    fetchCall: {
+      body: 'productId=p1',
+      headers: { Accept: 'text/vnd.jiso.fragment+html' },
+      keepalive: true,
+      method: 'POST',
+      url: '/_m/cart/add',
+    },
+    fetchOk: true,
+    fragmentHtml: {
+      afterReplace: '<cart-badge>1</cart-badge>',
+      beforeReplace: '<cart-badge>0</cart-badge>',
+    },
+    loader: {
+      enhancedMutationStoreMatches: true,
+      hasEnhancedFetch: true,
+      hasImportModule: true,
+      queryPlansType: 'object',
+      queryStoreMatches: true,
+      rootMatches: true,
+    },
+    loaderInstallCount: 1,
+  });
 
   assert.deepEqual(starterFacts.cssDirectives, [
     '"../index.html"',
