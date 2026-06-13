@@ -1428,6 +1428,9 @@ Vite app-shell export tasks that need both write output and manifest evidence no
 `exportJisoAppShellViteBuildWithManifest()` or its manifest-file variant, so the public Vite
 subpath owns the dry-run manifest/write-export consistency check for starter, commerce, and docs
 adoption instead of each consumer hand-wiring duplicate calls.
+The Vite static-export result proof now lives in `packages/server/src/vite-static-export-result.ts`:
+that boundary converts dry-run replay to a manifest, runs the write replay, and asserts both
+surfaces match, leaving `vite-static-export.ts` as the build/manifest-file public facade.
 Static export inventory/manifest projection now lives in `packages/server/src/static-export-result.ts`
 and response-header snapshots in `static-export-headers.ts`, leaving `static-export-types.ts` as a
 type/contract module while the app-shell static-export public subpath forwards from the focused
@@ -1469,6 +1472,19 @@ public app exports instead of falling back to stale named-app or shell-object co
 
 Latest evidence:
 
+- Round272 Vite static-export result boundary:
+  `packages/server/src/vite-static-export-result.ts` owns the dry-run manifest/write-result
+  consistency assertion for SPEC §9.5 Vite export tasks, with
+  `packages/server/src/vite-static-export.ts` delegating the public combined export helper to that
+  boundary and the app-shell Vite subpath preserving the existing result type.
+  `pnpm exec vitest --run packages/server/src/vite-static-export-result.test.ts packages/server/src/vite-build.test.ts packages/server/src/api/app.test.ts`;
+  `pnpm exec vitest --run packages/server/src/vite-static-export-options.test.ts`;
+  `pnpm exec vitest --run packages/create-jiso/src/index.test.ts -t "scaffolds real template files|runs vp run export with the built stylesheet href|runs npm run static with the built stylesheet href|formats generated export task diagnostics"`;
+  `pnpm exec vitest --run examples/commerce/src/app-shell.test.ts -t "documents the commerce app-shell|public commerce shell static output|vp run export|npm run static"`;
+  `pnpm exec vitest --run site/scripts/app-shell.test.mjs`;
+  `pnpm exec tsc --noEmit --pretty false`;
+  exact `pnpm exec vp check packages/server/src/vite-static-export-result.ts packages/server/src/vite-static-export-result.test.ts packages/server/src/vite-static-export.ts packages/server/src/api/app-shell/vite.ts plans/app-shell.md plans/codebase-quality-round2.md`;
+  `git diff --check`.
 - Round271 Vite export result/manifest bridge:
   `packages/server/src/vite-static-export.ts` added the public combined export/manifest helper and
   the app-shell Vite subpath forwards it; starter, commerce, and docs export scripts consume that

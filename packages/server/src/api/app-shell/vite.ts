@@ -83,8 +83,8 @@ export type {
   JisoAppShellVitePluginStaticExportOptions,
   JisoAppShellViteManifestFileBuildStaticExportInventoryOptions,
   JisoAppShellViteManifestFileBuildStaticExportOptions,
-  JisoAppShellViteStaticExportWithManifestResult,
 } from '../../vite-static-export.js';
+export type { JisoAppShellViteStaticExportWithManifestResult } from '../../vite-static-export-result.js';
 export type { JisoAppShellViteBuildOutputStaticExportOptions } from '../../vite-static-export-options.js';
 export type {
   JisoAppShellDevDiagnosticLedger,

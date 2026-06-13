@@ -72,9 +72,27 @@ Implemented areas:
   app-shell Vite bridge for SPEC §9.5 export-task consumers that need both the written export result
   and the matching dry-run manifest; starter, commerce, and docs export scripts use this bridge
   instead of hand-wiring separate manifest and write-export calls.
+- `vite-static-export-result.ts` owns the SPEC §9.5 Vite export-task proof that a dry-run manifest
+  and written static-host result match, leaving `vite-static-export.ts` as the public facade over
+  build/manifest-file export entry points.
 - `isJisoApp()` now rejects dynamic app-shell module exports that are missing the closed
   `createApp()` aggregate's document/error-shell owners, and starter/commerce export tasks no
   longer fall back to stale named-app or shell-object compatibility aliases.
+
+Round272 Vite static-export result boundary evidence:
+
+- `packages/server/src/vite-static-export-result.ts` now owns the dry-run manifest plus write-result
+  consistency check for SPEC §9.5 Vite export tasks; `vite-static-export.ts` delegates the public
+  `exportJisoAppShellViteBuildWithManifest()` bridge to that boundary while the app-shell Vite
+  subpath keeps the existing result type available.
+- `pnpm exec vitest --run packages/server/src/vite-static-export-result.test.ts packages/server/src/vite-build.test.ts packages/server/src/api/app.test.ts`
+- `pnpm exec vitest --run packages/server/src/vite-static-export-options.test.ts`
+- `pnpm exec vitest --run packages/create-jiso/src/index.test.ts -t "scaffolds real template files|runs vp run export with the built stylesheet href|runs npm run static with the built stylesheet href|formats generated export task diagnostics"`
+- `pnpm exec vitest --run examples/commerce/src/app-shell.test.ts -t "documents the commerce app-shell|public commerce shell static output|vp run export|npm run static"`
+- `pnpm exec vitest --run site/scripts/app-shell.test.mjs`
+- `pnpm exec tsc --noEmit --pretty false`
+- `pnpm exec vp check packages/server/src/vite-static-export-result.ts packages/server/src/vite-static-export-result.test.ts packages/server/src/vite-static-export.ts packages/server/src/api/app-shell/vite.ts plans/app-shell.md plans/codebase-quality-round2.md`
+- `git diff --check`
 
 Round271 Vite export result/manifest bridge evidence:
 

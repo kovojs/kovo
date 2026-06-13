@@ -1,14 +1,14 @@
 import { exportStaticApp } from './static-export.js';
-import {
-  assertStaticExportManifestMatchesResult,
-  staticExportInventory,
-  staticExportManifest,
-} from './static-export-result.js';
+import { staticExportInventory, staticExportManifest } from './static-export-result.js';
 import type {
   StaticExportInventoryItem,
   StaticExportManifest,
   StaticExportResult,
 } from './static-export-types.js';
+import {
+  jisoAppShellViteStaticExportWithManifest,
+  type JisoAppShellViteStaticExportWithManifestResult,
+} from './vite-static-export-result.js';
 import type { JisoAppShellBuild } from './vite-build.js';
 import {
   createJisoAppShellViteStaticExportBuildFromManifestFile,
@@ -29,11 +29,7 @@ export type {
   JisoAppShellViteManifestFileBuildStaticExportOptions,
   JisoAppShellVitePluginStaticExportOptions,
 } from './vite-static-export-options.js';
-
-export interface JisoAppShellViteStaticExportWithManifestResult {
-  manifest: StaticExportManifest;
-  result: StaticExportResult;
-}
+export type { JisoAppShellViteStaticExportWithManifestResult } from './vite-static-export-result.js';
 
 export async function exportJisoAppShellViteBuildFromManifestFile(
   options: JisoAppShellViteManifestFileBuildStaticExportOptions,
@@ -90,16 +86,17 @@ export async function exportJisoAppShellViteBuildWithManifest(
   build: JisoAppShellBuild,
   options: JisoAppShellViteBuildStaticExportOptions,
 ): Promise<JisoAppShellViteStaticExportWithManifestResult> {
-  // SPEC §9.5: consumer export tasks need one public bridge that proves the
-  // dry-run manifest and written static host bytes describe the same replay.
-  const manifest = await staticExportManifestForJisoAppShellViteBuild(
-    build,
-    jisoAppShellViteBuildStaticExportManifestOptions(options),
-  );
-  const result = await exportJisoAppShellViteBuild(build, options);
-  assertStaticExportManifestMatchesResult(result, manifest);
-
-  return { manifest, result };
+  return await jisoAppShellViteStaticExportWithManifest({
+    dryRun() {
+      return staticExportDryRunResultForJisoAppShellViteBuild(
+        build,
+        jisoAppShellViteBuildStaticExportManifestOptions(options),
+      );
+    },
+    write() {
+      return exportJisoAppShellViteBuild(build, options);
+    },
+  });
 }
 
 export async function staticExportInventoryForJisoAppShellViteBuild(
