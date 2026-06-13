@@ -526,7 +526,7 @@ Open:
 
 Latest known broad results from 2026-06-12:
 
-- `pnpm run check` passed after the integrated round86 runtime/app-shell/Drizzle wave.
-- `pnpm run test` passed: 178 files, 1838 tests.
+- `pnpm run check` passed after the integrated round86 runtime submit-context split.
+- `pnpm run test` passed: 178 files, 1839 tests.
 - `pnpm run test:browser` passed: Chromium runtime browser suite, 10 tests.
 - `pnpm run test:conformance` passed, including Drizzle pinned conformance at 60 tests.
