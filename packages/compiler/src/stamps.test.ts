@@ -1,8 +1,41 @@
 import { describe, expect, it } from 'vitest';
 
 import { assertFixpoint, assertRenderEquivalence, compileComponentModule } from './index.js';
+import { serverRenderLowering } from './emit/server.js';
+import { parseComponentModule } from './scan/parse.js';
 
 describe('compiler stamps', () => {
+  it('exposes server host stamps as parsed source patches', () => {
+    const source = `
+export const Recommendations = component('recommendations', {
+  queries: { cart: cartQuery },
+  state: () => ({ open: true }),
+  render: ({ cart }) => (
+    <section class="card" fw-deps='product:p1'>
+      {renderOnce(cart.count)}
+    </section>
+  ),
+});
+`;
+    const model = parseComponentModule('recommendations.tsx', source);
+    const lowering = serverRenderLowering([], model);
+    const fwDepsStart = source.indexOf("fw-deps='product:p1'");
+    const insertPosition = source.indexOf('>', fwDepsStart);
+
+    expect(lowering.replacements).toEqual([
+      {
+        end: fwDepsStart + "fw-deps='product:p1'".length,
+        replacement: 'fw-deps="product:p1 cart"',
+        start: fwDepsStart,
+      },
+      {
+        end: insertPosition,
+        replacement: ' fw-c="recommendations" fw-state="{&quot;open&quot;:true}"',
+        start: insertPosition,
+      },
+    ]);
+  });
+
   it('stamps rendered component markup with declared query dependencies', () => {
     const result = compileComponentModule({
       fileName: 'cart-badge.tsx',

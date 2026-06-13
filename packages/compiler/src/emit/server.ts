@@ -10,14 +10,7 @@ import {
   type ComponentModuleModel,
   type JsxElementModel,
 } from '../scan/parse.js';
-import {
-  applySourceReplacements,
-  escapeAttribute,
-  insertOpeningTagAttribute,
-  replaceOpeningTagAttribute,
-  splitDepValue,
-  type SourceReplacement,
-} from '../shared.js';
+import { escapeAttribute, splitDepValue, type SourceReplacement } from '../shared.js';
 import {
   emitElementParamTypes,
   type HandlerLowering,
@@ -111,30 +104,19 @@ function serverRenderPatches(
     const hostElement = componentRenderHostElement(model);
     if (!hostElement) return patches;
 
-    const tagSource = hostElement.openingSource;
-    const tagWithHandlers = replaceTagHandlerAttributes(tagSource, host.start, hostHandlers);
-    const stampedTag = stampRenderHostTag(tagWithHandlers, model, hostElement);
-    if (stampedTag !== tagSource) {
-      patches.push({ end: host.end, replacement: stampedTag, start: host.start });
-    }
+    patches.push(...hostHandlers.map(handlerSourceReplacement));
+    patches.push(...renderHostStampPatches(model, hostElement));
   }
 
   return patches;
 }
 
-function replaceTagHandlerAttributes(
-  tagSource: string,
-  tagStart: number,
-  handlers: readonly HandlerLowering[],
-): string {
-  return applySourceReplacements(
-    tagSource,
-    handlers.map((handler) => ({
-      end: handler.attributeEnd - tagStart,
-      replacement: handlerAttributeReplacement(handler),
-      start: handler.attributeStart - tagStart,
-    })),
-  );
+function handlerSourceReplacement(handler: HandlerLowering): SourceReplacement {
+  return {
+    end: handler.attributeEnd,
+    replacement: handlerAttributeReplacement(handler),
+    start: handler.attributeStart,
+  };
 }
 
 function handlerAttributeReplacement(handler: HandlerLowering): string {
@@ -147,77 +129,75 @@ function handlerAttributeReplacement(handler: HandlerLowering): string {
     .join(' ');
 }
 
-function stampRenderHostTag(
-  tagSource: string,
+function renderHostStampPatches(
   model: ComponentModuleModel,
-  hostElement: JsxElementModel | null,
-): string {
-  return stampInitialState(
-    stampDeclaredQueryDeps(
-      stampComponentIdentity(tagSource, model, hostElement),
-      model,
-      hostElement,
-    ),
-    model,
-    hostElement,
-  );
+  hostElement: JsxElementModel,
+): SourceReplacement[] {
+  const patches: SourceReplacement[] = [];
+  const insertedAttributes: string[] = [];
+  const componentIdentity = componentIdentityStamp(model, hostElement);
+  const declaredQueryDeps = declaredQueryDepsStamp(model, hostElement);
+  const stateJson = staticStateJson(model);
+
+  if (componentIdentity) insertedAttributes.push(componentIdentity);
+
+  if (declaredQueryDeps) {
+    const existing = hostElement.attributes.find((attribute) => attribute.name === 'fw-deps');
+    if (existing) {
+      patches.push({
+        end: existing.end,
+        replacement: declaredQueryDeps,
+        start: existing.start,
+      });
+    } else {
+      insertedAttributes.push(declaredQueryDeps);
+    }
+  }
+
+  if (stateJson) insertedAttributes.push(`fw-state="${escapeAttribute(stateJson)}"`);
+
+  if (insertedAttributes.length > 0) {
+    const insertion = openingTagAttributeInsertion(hostElement, insertedAttributes);
+    patches.push({
+      end: insertion.position,
+      replacement: insertion.replacement,
+      start: insertion.position,
+    });
+  }
+
+  return patches;
 }
 
 // SPEC.md §4.2: component identity is the fw-c stamp. The compiler omits it
 // when the host tag already spells the component name (dashed tags are inert
 // sugar) and emits it explicitly on native hosts (`<tr fw-c="cart-row">`), so
 // authored sugar never hand-writes the stamp (§4.8 residual-string rule).
-function stampComponentIdentity(
-  tagSource: string,
+function componentIdentityStamp(
   model: ComponentModuleModel,
-  hostElement: JsxElementModel | null,
-): string {
+  hostElement: JsxElementModel,
+): string | null {
   const componentName = firstComponentModel(model)?.explicitName;
-  if (!componentName) return tagSource;
+  if (!componentName) return null;
 
-  const tagName = hostElement?.tag;
-  if (!tagName || tagName !== tagName.toLowerCase()) return tagSource;
-  if (tagName === componentName || tagName.includes('-')) return tagSource;
-  if (hostElement?.attributes.some((attribute) => attribute.name === 'fw-c')) return tagSource;
+  const tagName = hostElement.tag;
+  if (tagName !== tagName.toLowerCase()) return null;
+  if (tagName === componentName || tagName.includes('-')) return null;
+  if (hostElement.attributes.some((attribute) => attribute.name === 'fw-c')) return null;
 
-  return insertOpeningTagAttribute(tagSource, hostElement, 'fw-c', componentName);
+  return `fw-c="${escapeAttribute(componentName)}"`;
 }
 
-function stampDeclaredQueryDeps(
-  tagSource: string,
+function declaredQueryDepsStamp(
   model: ComponentModuleModel,
-  hostElement: JsxElementModel | null,
-): string {
+  hostElement: JsxElementModel,
+): string | null {
   const deps = componentOptionObjectKeys(model, 'queries');
-  if (deps.length === 0) return tagSource;
+  if (deps.length === 0) return null;
 
-  return stampOpeningTagDeps(tagSource, hostElement, deps);
-}
-
-function stampInitialState(
-  tagSource: string,
-  model: ComponentModuleModel,
-  hostElement: JsxElementModel | null,
-): string {
-  const stateJson = staticStateJson(model);
-  return stateJson
-    ? insertOpeningTagAttribute(tagSource, hostElement, 'fw-state', stateJson)
-    : tagSource;
-}
-
-function stampOpeningTagDeps(
-  tagSource: string,
-  hostElement: JsxElementModel | null,
-  deps: readonly string[],
-): string {
-  const existing = hostElement?.attributes.find((attribute) => attribute.name === 'fw-deps');
+  const existing = hostElement.attributes.find((attribute) => attribute.name === 'fw-deps');
   const existingDeps = splitDepValue(existing?.value ?? '');
   const depValue = mergeDepValues(existingDeps, deps).join(' ');
-  if (hostElement && existing) {
-    return replaceOpeningTagAttribute(tagSource, hostElement, existing, 'fw-deps', depValue);
-  }
-
-  return insertOpeningTagAttribute(tagSource, hostElement, 'fw-deps', depValue);
+  return `fw-deps="${escapeAttribute(depValue)}"`;
 }
 
 function mergeDepValues(existing: readonly string[], declared: readonly string[]): string[] {
@@ -227,6 +207,23 @@ function mergeDepValues(existing: readonly string[], declared: readonly string[]
 function staticStateJson(model: ComponentModuleModel): string | null {
   const stateObject = componentStateReturnObjectModel(model);
   return stateObject?.staticValue ? JSON.stringify(stateObject.staticValue) : null;
+}
+
+function openingTagAttributeInsertion(
+  hostElement: JsxElementModel,
+  attributes: readonly string[],
+): { position: number; replacement: string } {
+  const attributeSource = attributes.join(' ');
+  if (!hostElement.selfClosing) {
+    return { position: hostElement.openingEnd - 1, replacement: ` ${attributeSource}` };
+  }
+
+  const position = hostElement.openingEnd - 2;
+  const hasSpaceBeforeSlash = /\s/.test(hostElement.openingSource.at(-3) ?? '');
+  return {
+    position,
+    replacement: hasSpaceBeforeSlash ? `${attributeSource} ` : ` ${attributeSource} `,
+  };
 }
 
 function templateLiteral(value: string): string {

@@ -30,6 +30,11 @@ Audited against the repository on 2026-06-11. Checkmarks mean the behavior, API,
       tag name instead of reconstructing the whole element body from `childSource`. Same-session
       evidence: `pnpm exec vitest --run packages/compiler/src/navigation-lowering.test.ts
 packages/compiler/src/model-pipeline.test.ts packages/compiler/src/compile-component.test.ts`.
+      Additional evidence 2026-06-13: server render host stamping now emits parsed source patches
+      for handler attrs, existing `fw-deps`, and inserted `fw-c`/`fw-state` rather than rebuilding
+      the entire host opening tag. Same-session evidence: `pnpm exec vitest --run
+packages/compiler/src/stamps.test.ts packages/compiler/src/compile-component.test.ts
+packages/compiler/src/view-transitions.test.ts packages/compiler/src/navigation-lowering.test.ts`.
       Additional evidence 2026-06-11: handler lowering/FW201-FW210 event attribute analysis
       now lives in `packages/compiler/src/lower/handlers.ts`, server IR emission and
       render-equivalence stamping now live in `packages/compiler/src/emit/server.ts`, and
