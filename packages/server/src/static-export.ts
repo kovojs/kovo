@@ -6,18 +6,8 @@ import {
   writeStaticExportOutput,
 } from './static-export-output.js';
 import { replayStaticExportApp } from './static-export-replay.js';
-import {
-  assertStaticExportCompileDiagnostics,
-  type StaticExportCompileDiagnostic,
-  type StaticExportDiagnostic,
-} from './static-export-diagnostics.js';
-import {
-  type StaticExportArtifact,
-  type StaticExportAssetArtifact,
-  type StaticExportAssetInput,
-  type StaticExportClientModuleArtifact,
-  type StaticExportHtmlPathStyle,
-} from './static-export-types.js';
+import { assertStaticExportCompileDiagnostics } from './static-export-diagnostics.js';
+import { type StaticExportOptions, type StaticExportResult } from './static-export-types.js';
 
 export {
   StaticExportError,
@@ -43,6 +33,8 @@ export type {
   StaticExportManifestAsset,
   StaticExportManifestClientModule,
   StaticExportManifestRouteDocument,
+  StaticExportOptions,
+  StaticExportResult,
 } from './static-export-types.js';
 export { staticExportOutputPlan } from './static-export-output.js';
 export type {
@@ -50,22 +42,6 @@ export type {
   StaticExportOutputPlanItemKind,
   StaticExportOutputPlanOptions,
 } from './static-export-output.js';
-
-export interface StaticExportOptions {
-  assets?: readonly StaticExportAssetInput[];
-  diagnostics?: readonly StaticExportCompileDiagnostic[];
-  htmlPathStyle?: StaticExportHtmlPathStyle;
-  onNonExportable?: 'error' | 'skip';
-  origin?: string;
-  outDir?: string | URL;
-}
-
-export interface StaticExportResult {
-  artifacts: readonly StaticExportArtifact[];
-  assets: readonly StaticExportAssetArtifact[];
-  clientModules: readonly StaticExportClientModuleArtifact[];
-  diagnostics: readonly StaticExportDiagnostic[];
-}
 
 export async function exportStaticApp(
   app: JisoApp,

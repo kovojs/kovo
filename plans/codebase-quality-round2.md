@@ -381,6 +381,9 @@ observable through module behavior.
 The `@jiso/server/app-shell/static-export` subpath now forwards diagnostics, manifest/inventory,
 and output-plan helpers from their split owners instead of routing those names through the
 aggregate `static-export.ts` facade.
+Static export option/result contracts now live with the artifact/manifest types in
+`static-export-types.ts`, so Vite build/static-export helpers no longer import type-only
+contracts through the `static-export.ts` orchestrator facade.
 Vite app-shell build output now returns the same compiled `/c/` module output plan that its staged
 writer commits, giving plugin `onBuild` consumers one observable target plan for build/static-export
 adoption. Vite plugin `writeBundle` build/static-export execution now lives in a focused helper
@@ -401,6 +404,11 @@ Latest evidence:
 - `pnpm exec vitest --run packages/server/src/api/app.test.ts`
 - `pnpm exec vitest --run packages/server/src`
 - `pnpm exec tsc --noEmit --pretty false`
+- `pnpm exec vitest --run packages/server/src/api/app.test.ts packages/server/src/static-export.test.ts packages/server/src/vite-static-export-options.test.ts packages/server/src/vite-build.test.ts packages/server/src/vite.test.ts`
+- `pnpm exec vitest --run packages/server/src`
+- `pnpm exec tsc --noEmit --pretty false`
+- `pnpm exec vp check packages/server/src/static-export-types.ts packages/server/src/static-export.ts packages/server/src/api/app-shell/static-export.ts packages/server/src/vite-build-assets.ts packages/server/src/vite-build-output.ts packages/server/src/vite-static-export-options.ts packages/server/src/vite-static-export.ts packages/server/src/api/app.test.ts plans/app-shell.md plans/codebase-quality-round2.md`
+- `git diff --check`
 - `pnpm exec vitest --run packages/server/src/vite-static-export-options.test.ts packages/server/src/vite-build.test.ts packages/server/src/vite-plugin-build.test.ts`
 - `pnpm exec vp check packages/server/src/vite-static-export-options.ts packages/server/src/vite-static-export-options.test.ts packages/server/src/vite-build.test.ts IMPLEMENT_v1.md plans/app-shell.md plans/codebase-quality-round2.md`
 - `git diff --check`

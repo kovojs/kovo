@@ -19,6 +19,8 @@ export type {
   StaticExportManifestAsset,
   StaticExportManifestClientModule,
   StaticExportManifestRouteDocument,
+  StaticExportOptions,
+  StaticExportResult,
 } from '../../static-export-types.js';
 export type {
   StaticExportOutputPlanItem,
@@ -30,4 +32,3 @@ export type {
   StaticExportDiagnostic,
   StaticExportDiagnosticSeverity,
 } from '../../static-export-diagnostics.js';
-export type { StaticExportOptions, StaticExportResult } from '../../static-export.js';

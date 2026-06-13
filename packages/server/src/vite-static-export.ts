@@ -1,11 +1,11 @@
+import { exportStaticApp } from './static-export.js';
 import {
-  exportStaticApp,
   staticExportInventory,
   staticExportManifest,
   type StaticExportInventoryItem,
   type StaticExportManifest,
   type StaticExportResult,
-} from './static-export.js';
+} from './static-export-types.js';
 import type { JisoAppShellBuild } from './vite-build.js';
 import {
   createJisoAppShellViteStaticExportBuildFromManifestFile,

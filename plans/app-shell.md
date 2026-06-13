@@ -42,6 +42,9 @@ Implemented areas:
 - `static-export.ts` performs static export with output target validation for write and dry-run
   plans; duplicate asset paths fail with FW229. Param routes export only through explicit
   `staticPaths` concrete URL enumeration.
+- `static-export-types.ts` owns export artifact/manifest shapes plus static export option/result
+  contracts, leaving Vite build/export helpers independent of the `static-export.ts` orchestrator
+  facade for type-only dependencies.
 - `static-export-document.ts` owns synthetic route-document replay, artifact path selection, and
   SPEC §9.5 L0/L1 endpoint rejection for exported no-JS documents; it also discovers same-origin
   full-URL `/c/` module refs from route HTML and `Link` headers, preserving SPEC §4.3's full
@@ -75,6 +78,11 @@ Recent gates:
 - `pnpm exec vitest --run packages/server/src/vite-build.test.ts packages/server/src/api/app.test.ts`
 - `pnpm exec tsc --noEmit --pretty false`
 - `pnpm exec vp check packages/server/src/static-export.ts packages/server/src/static-export.test.ts packages/server/src/vite-build.test.ts plans/app-shell.md`
+- `git diff --check`
+- `pnpm exec vitest --run packages/server/src/api/app.test.ts packages/server/src/static-export.test.ts packages/server/src/vite-static-export-options.test.ts packages/server/src/vite-build.test.ts packages/server/src/vite.test.ts`
+- `pnpm exec vitest --run packages/server/src`
+- `pnpm exec tsc --noEmit --pretty false`
+- `pnpm exec vp check packages/server/src/static-export-types.ts packages/server/src/static-export.ts packages/server/src/api/app-shell/static-export.ts packages/server/src/vite-build-assets.ts packages/server/src/vite-build-output.ts packages/server/src/vite-static-export-options.ts packages/server/src/vite-static-export.ts packages/server/src/api/app.test.ts plans/app-shell.md plans/codebase-quality-round2.md`
 - `git diff --check`
 
 Round79 slice evidence:

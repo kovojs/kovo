@@ -1,7 +1,7 @@
 import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import type { StaticExportAssetInput } from './static-export.js';
+import type { StaticExportAssetInput } from './static-export-types.js';
 import {
   jisoAppShellViteManifestAssets,
   jisoAppShellViteManifestFromFile,

@@ -2,7 +2,7 @@ import * as path from 'node:path';
 
 import type { JisoAppShellBuild, JisoAppShellBuiltClientModule } from './vite-build.js';
 import { jisoAppShellViteStaticExportAssets, resolvedFileSystemPath } from './vite-build-assets.js';
-import type { StaticExportAssetInput, StaticExportResult } from './static-export.js';
+import type { StaticExportAssetInput, StaticExportResult } from './static-export-types.js';
 import {
   exportJisoAppShellViteBuild,
   type JisoAppShellViteBuildStaticExportOptions,

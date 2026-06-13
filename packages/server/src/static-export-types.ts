@@ -78,6 +78,22 @@ export interface StaticExportManifestAsset {
 
 export type StaticExportHtmlPathStyle = 'directory' | 'flat';
 
+export interface StaticExportOptions {
+  assets?: readonly StaticExportAssetInput[];
+  diagnostics?: readonly import('./static-export-diagnostics.js').StaticExportCompileDiagnostic[];
+  htmlPathStyle?: StaticExportHtmlPathStyle;
+  onNonExportable?: 'error' | 'skip';
+  origin?: string;
+  outDir?: string | URL;
+}
+
+export interface StaticExportResult {
+  artifacts: readonly StaticExportArtifact[];
+  assets: readonly StaticExportAssetArtifact[];
+  clientModules: readonly StaticExportClientModuleArtifact[];
+  diagnostics: readonly import('./static-export-diagnostics.js').StaticExportDiagnostic[];
+}
+
 // SPEC §9.5: dry-run export task wiring inspects the same route/module/asset set
 // that a write export would publish, without reaching into replay internals.
 export function staticExportInventory(result: {

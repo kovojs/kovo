@@ -1,5 +1,5 @@
 import type { JisoApp } from './app.js';
-import type { StaticExportAssetInput, StaticExportOptions } from './static-export.js';
+import type { StaticExportAssetInput, StaticExportOptions } from './static-export-types.js';
 import { StaticExportError, staticExportDiagnostic } from './static-export-diagnostics.js';
 import {
   createJisoAppShellViteBuildFromManifestFile,
