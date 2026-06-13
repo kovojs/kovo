@@ -263,9 +263,19 @@ export function selectMenubarItem(
     };
   }
 
+  const openResult = setMenubarOpenValue(state, undefined, 'item-select', options);
+  if (!openResult.changed) {
+    return {
+      detail,
+      open: openResult,
+      selected: false,
+      value,
+    };
+  }
+
   return {
     detail,
-    open: setMenubarOpenValue(state, undefined, 'item-select', options),
+    open: openResult,
     selected: true,
     value,
   };

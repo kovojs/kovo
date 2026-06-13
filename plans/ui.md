@@ -136,7 +136,10 @@ commands. Use `- [ ]` for open actionable work and `- [x]` only for fully verifi
       covers keydown selection/close through refreshed generated artifacts and a browser test.
       Select's compiled interactive gallery handler now reads the native change target instead of
       toggling synthetic state and restores the previous native value when a disabled option change
-      is attempted.
+      is attempted. Dropdown-menu, context-menu, and menubar selection now restore unselected state
+      when the required item-select close transition is canceled, with context-menu anchor point
+      preservation covered by primitive tests and existing compiled gallery browser route checks
+      rerun for dropdown/context and menubar.
 - [ ] Close remaining state, focus, menu, and canceled-change restoration gaps for select,
       combobox, autocomplete, dropdown-menu, context-menu, menubar, navigation-menu, slider, toast,
       and command with primitive tests plus gallery evidence where user-visible.
@@ -150,7 +153,12 @@ commands. Use `- [ ]` for open actionable work and `- [x]` only for fully verifi
       now restores disabled option changes through app-authored TSX; refreshed generated artifacts,
       `examples/gallery/src/interactive-gallery.test.ts`, and
       `examples/gallery/src/interactive-gallery.browser.test.ts` prove state and native `<select>`
-      restoration in generated/client and Chromium-backed paths.
+      restoration in generated/client and Chromium-backed paths. Evidence 2026-06-13:
+      `selectDropdownMenuItem()`, `selectContextMenuItem()`, and `selectMenubarItem()` now report
+      `selected: false` and preserve the previous open state when their follow-up item-select
+      close change is canceled; context-menu also preserves its previous anchor point. Verified by
+      focused headless tests, styled wrapper smoke coverage, static/generated gallery contracts,
+      and browser route tests for generated dropdown/context menu and menubar demos.
 - [ ] Keep vendored source app-authored TSX: no `@jiso/ui` self-imports, no hand-authored lowered
       IR, no `fw-c=`, and no `data-bind=` in vendored component source.
 - [ ] Keep CLI add-catalog tests synchronized with `packages/ui/package.json` exports and resolve
@@ -186,6 +194,13 @@ commands. Use `- [ ]` for open actionable work and `- [x]` only for fully verifi
       `pnpm exec vitest --run packages/ui/src/index.test.tsx -t select`;
       `(cd examples/gallery && pnpm exec vitest --config vitest.browser.config.ts --run src/interactive-gallery.browser.test.ts -t select)`;
       exact `pnpm exec vp check examples/gallery/src/interactive/select-demo.tsx examples/gallery/src/generated/interactive/select-demo.tsx examples/gallery/src/generated/interactive/select-demo.client.js examples/gallery/src/interactive-gallery.test.ts examples/gallery/src/interactive-gallery.browser.test.ts plans/ui.md`;
+      `git diff --check`.
+- [x] Menu-family item-select close restoration slice:
+      `pnpm exec vitest --run packages/headless-ui/src/primitives/dropdown-menu.test.ts packages/headless-ui/src/primitives/context-menu.test.ts packages/headless-ui/src/primitives/menubar.test.ts`;
+      `pnpm exec vitest --run packages/ui/src/index.test.tsx -t "dropdown-menu|context-menu|menubar"`;
+      `pnpm exec vitest --run examples/gallery/src/interactive-gallery.test.ts examples/gallery/src/behavior-contracts.test.ts examples/gallery/src/demo-fixtures.test.ts`;
+      `(cd examples/gallery && pnpm exec vitest --config vitest.browser.config.ts --run src/interactive-gallery.browser.test.ts -t "opens and selects from generated dropdown and context menu handlers|updates generated menubar and navigation-menu roving/open state")`;
+      exact `pnpm exec vp check packages/headless-ui/src/primitives/dropdown-menu.ts packages/headless-ui/src/primitives/dropdown-menu.test.ts packages/headless-ui/src/primitives/context-menu.ts packages/headless-ui/src/primitives/context-menu.test.ts packages/headless-ui/src/primitives/menubar.ts packages/headless-ui/src/primitives/menubar.test.ts plans/ui.md`;
       `git diff --check`.
 - [x] Compiled gallery axe and accessibility contract slice:
       `pnpm exec vitest --run packages/headless-ui/src/primitives/context-menu.test.ts packages/headless-ui/src/primitives/otp-field.test.ts packages/headless-ui/src/primitives/toast.test.ts packages/ui/src/index.test.tsx -t "context-menu|otp-field|toast"`;

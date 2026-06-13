@@ -246,9 +246,19 @@ export function selectDropdownMenuItem(
     };
   }
 
+  const openResult = setDropdownMenuOpen(state, false, 'item-select', options);
+  if (!openResult.changed) {
+    return {
+      detail,
+      open: openResult,
+      selected: false,
+      value,
+    };
+  }
+
   return {
     detail,
-    open: setDropdownMenuOpen(state, false, 'item-select', options),
+    open: openResult,
     selected: true,
     value,
   };

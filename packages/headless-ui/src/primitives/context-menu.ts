@@ -291,9 +291,19 @@ export function selectContextMenuItem(
     };
   }
 
+  const openResult = setContextMenuOpen(state, false, 'item-select', options);
+  if (!openResult.changed) {
+    return {
+      detail,
+      open: openResult,
+      selected: false,
+      value,
+    };
+  }
+
   return {
     detail,
-    open: setContextMenuOpen(state, false, 'item-select', options),
+    open: openResult,
     selected: true,
     value,
   };

@@ -198,6 +198,34 @@ describe('headless-ui menubar primitive', () => {
     expect(selectResult.detail?.defaultPrevented).toBe(true);
   });
 
+  it('restores selection when the item-select close change is prevented', () => {
+    const seen: string[] = [];
+    const selectResult = selectMenubarItem(
+      { items: menubarItems, openValue: 'file' },
+      'save',
+      'item-click',
+      {
+        onOpenChange(detail) {
+          seen.push(`open:${detail.reason}:${detail.value}`);
+          if (detail.reason === 'item-select') detail.preventDefault();
+        },
+        onSelect(detail) {
+          seen.push(`select:${detail.reason}:${detail.value}`);
+        },
+      },
+    );
+
+    expect(selectResult.selected).toBe(false);
+    expect(selectResult.value).toBe('save');
+    expect(selectResult.detail?.defaultPrevented).toBe(false);
+    expect(selectResult.open).toMatchObject({
+      changed: false,
+      detail: expect.objectContaining({ defaultPrevented: true, reason: 'item-select' }),
+      openValue: 'file',
+    });
+    expect(seen).toEqual(['select:item-click:save', 'open:item-select:undefined']);
+  });
+
   it('does not dispatch changes for disabled, item-disabled, or unchanged states', () => {
     let callCount = 0;
     const options = {

@@ -222,6 +222,35 @@ describe('headless-ui context-menu primitive', () => {
     expect(selectResult.detail?.defaultPrevented).toBe(true);
   });
 
+  it('restores selection and anchor point when the item-select close change is prevented', () => {
+    const seen: string[] = [];
+    const selectResult = selectContextMenuItem(
+      { items: menuItems, open: true, point: { x: 8, y: 13 } },
+      'paste-plain',
+      'item-click',
+      {
+        onOpenChange(detail) {
+          seen.push(`open:${detail.reason}:${detail.value}`);
+          if (detail.reason === 'item-select') detail.preventDefault();
+        },
+        onSelect(detail) {
+          seen.push(`select:${detail.reason}:${detail.value}`);
+        },
+      },
+    );
+
+    expect(selectResult.selected).toBe(false);
+    expect(selectResult.value).toBe('paste-plain');
+    expect(selectResult.detail?.defaultPrevented).toBe(false);
+    expect(selectResult.open).toMatchObject({
+      changed: false,
+      detail: expect.objectContaining({ defaultPrevented: true, reason: 'item-select' }),
+      open: true,
+      point: { x: 8, y: 13 },
+    });
+    expect(seen).toEqual(['select:item-click:paste-plain', 'open:item-select:false']);
+  });
+
   it('does not dispatch changes for disabled, item-disabled, or unchanged states', () => {
     let callCount = 0;
     const options = {
