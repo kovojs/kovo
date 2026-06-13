@@ -219,6 +219,15 @@ Latest evidence:
   raw Vite build-output or plugin-hook writer helpers from the focused public Vite subpath, while
   `packages/server/src/api/app.test.ts` pins the removed values and plugin-hook context/result
   type aliases absent under SPEC §9.5.
+- UI/gallery H3 search/selection source-fixture slice:
+  `pnpm exec vitest --run examples/gallery/src/demo-fixtures.test.ts`;
+  `(cd examples/gallery && pnpm exec vitest --config vitest.browser.config.ts --run src/interactive-gallery.browser.test.ts -t "representative styled static gallery routes")`;
+  `pnpm exec tsc --noEmit --pretty false`;
+  `pnpm exec vp check examples/gallery/src/demo-fixtures.test.ts examples/gallery/src/interactive-gallery.browser.test.ts plans/ui.md plans/codebase-quality-round2.md`;
+  `git diff --check`. Evidence: `examples/gallery/src/demo-fixtures.test.ts` now pins structured
+  source facts for autocomplete, combobox, command, and select gallery routes, including styled
+  render calls, native form hooks, behavior-contract text, and absence of SPEC §5.2 lowered or
+  generated markers.
 - Phase 5 Vite build-output type alias removal slice:
   `pnpm exec vitest --run packages/server/src/api/app.test.ts`;
   `pnpm exec tsc --noEmit --pretty false`;

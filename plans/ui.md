@@ -332,11 +332,21 @@ commands. Use `- [ ]` for open actionable work and `- [x]` only for fully verifi
       catalog fixture drift whenever new UI subpaths are exported.
 - [ ] Expand G1/G2 until every primitive and styled component has a static route, source/markup
       snapshot, relevant behavior contract, and provenance coverage.
+      Evidence 2026-06-13: the H3 search/selection route family now has structured authored
+      source snapshot facts for autocomplete, combobox, command, and select in
+      `examples/gallery/src/demo-fixtures.test.ts`, pinning styled wrapper render calls, native
+      form hooks, behavior-contract text, and absence of SPEC §5.2 lowered/generated markers.
 - [ ] Keep G6 compiled interactive demos app-authored TSX, checked in, generated-artifact fresh,
       and browser-tested when behavior changes.
 
 ## Latest Gates
 
+- [x] H3 search/selection source-fixture slice:
+      `pnpm exec vitest --run examples/gallery/src/demo-fixtures.test.ts`;
+      `(cd examples/gallery && pnpm exec vitest --config vitest.browser.config.ts --run src/interactive-gallery.browser.test.ts -t "representative styled static gallery routes")`;
+      `pnpm exec tsc --noEmit --pretty false`;
+      exact `pnpm exec vp check examples/gallery/src/demo-fixtures.test.ts examples/gallery/src/interactive-gallery.browser.test.ts plans/ui.md plans/codebase-quality-round2.md`;
+      `git diff --check`.
 - [x] Styled checkbox/switch description and static form-owner slice:
       `pnpm exec vitest --run examples/gallery/src/demo-fixtures.test.ts packages/ui/src/index.test.tsx`;
       `(cd examples/gallery && pnpm exec vitest --config vitest.browser.config.ts --run src/interactive-gallery.browser.test.ts -t "preserves styled checkbox and switch native form ownership in static routes")`;

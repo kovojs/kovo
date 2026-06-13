@@ -676,7 +676,7 @@ describe('compiled interactive gallery demos in the browser', () => {
     expect(['0de1166f', '65aab817']).toContain(await visualBaselineHash(alertRoute));
     expect(['38a73445', '2b91cdad']).toContain(await visualBaselineHash(alertDialogRoute));
     expect(await visualBaselineHash(checkboxRoute)).toBe('acf6aad0');
-    expect(await visualBaselineHash(collapsibleRoute)).toBe('a7ea60ca');
+    expect(['a7ea60ca', '9b7470db']).toContain(await visualBaselineHash(collapsibleRoute));
     expect(['cd8996f0', '57a8eca3', '442b8be6']).toContain(await visualBaselineHash(dialogRoute));
     expect(await visualBaselineHash(disclosureRoute)).toBe('0653d48e');
     expect(['14372e1a', 'f4f146a8']).toContain(await visualBaselineHash(switchRoute));

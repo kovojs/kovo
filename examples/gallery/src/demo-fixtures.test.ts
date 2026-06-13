@@ -144,6 +144,122 @@ describe('gallery demo fixtures', () => {
     }
   });
 
+  it('keeps H3 search and selection routes pinned to authored styled source fixtures', () => {
+    const moduleSource = readFileSync(new URL('./demo-fixtures.tsx', import.meta.url), 'utf8');
+
+    // SPEC.md §5.2 keeps app components authored as TSX/JSX source; these source facts pin the
+    // styled H3 search/selection gallery routes without accepting lowered IR or generated stamps.
+    expect(
+      h3SearchSelectionSourceFixtures.map((fixture) => {
+        const source = extractDemoSource(moduleSource, fixture.functionName);
+
+        return {
+          contractSnippets: fixture.contractSnippets.filter((snippet) => source.includes(snippet)),
+          forbiddenMarkers: forbiddenAuthoredSourceMarkers.filter((marker) =>
+            source.includes(marker),
+          ),
+          formSnippets: fixture.formSnippets.filter((snippet) => source.includes(snippet)),
+          functionName: fixture.functionName,
+          route: fixture.route,
+          routeMarker: source.includes(`data-gallery-demo="${fixture.component}"`),
+          styledRenderCalls: fixture.styledRenderCalls.filter((name) =>
+            source.includes(`${name}.definition.render`),
+          ),
+        };
+      }),
+    ).toEqual([
+      {
+        contractSnippets: [
+          'input, option-select, typeahead, programmatic',
+          'Arrow keys open and move over enabled suggestions; Escape closes suggestions',
+        ],
+        forbiddenMarkers: [],
+        formSnippets: [
+          "form: 'gallery-autocomplete-form'",
+          "name: 'gallery-plan-search'",
+          '<form id="gallery-autocomplete-form" data-gallery-form="autocomplete" />',
+        ],
+        functionName: 'AutocompleteDemo',
+        route: '/components/autocomplete',
+        routeMarker: true,
+        styledRenderCalls: [
+          'Autocomplete',
+          'AutocompleteInput',
+          'AutocompleteList',
+          'AutocompleteOption',
+          'AutocompleteValue',
+        ],
+      },
+      {
+        contractSnippets: [
+          'input, option-select, arrow-key, escape-key, typeahead, programmatic',
+          'Arrow keys open and move over enabled options; Escape closes the listbox',
+        ],
+        forbiddenMarkers: [],
+        formSnippets: [
+          "form: 'gallery-combobox-form'",
+          "name: 'gallery-assignee'",
+          '<form id="gallery-combobox-form" data-gallery-form="combobox" />',
+        ],
+        functionName: 'ComboboxDemo',
+        route: '/components/combobox',
+        routeMarker: true,
+        styledRenderCalls: [
+          'Combobox',
+          'ComboboxInput',
+          'ComboboxListbox',
+          'ComboboxOption',
+          'ComboboxValue',
+        ],
+      },
+      {
+        contractSnippets: [
+          'trigger-click, input, item-click, enter-key, escape-key, close-click, cancel-event, native-beforetoggle, programmatic',
+          'Arrow keys move command options; Enter selects; Escape closes the dialog',
+        ],
+        forbiddenMarkers: [],
+        formSnippets: [
+          "form: 'gallery-command-form'",
+          "name: 'gallery-command-query'",
+          '<form id="gallery-command-form"></form>',
+        ],
+        functionName: 'CommandDemo',
+        route: '/components/command',
+        routeMarker: true,
+        styledRenderCalls: [
+          'Command',
+          'CommandTrigger',
+          'CommandDialog',
+          'CommandInput',
+          'CommandListbox',
+          'CommandItem',
+          'CommandEmpty',
+          'CommandClose',
+          'CommandValue',
+        ],
+      },
+      {
+        contractSnippets: ['trigger-change, programmatic', 'Native select keyboard behavior'],
+        forbiddenMarkers: [],
+        formSnippets: [
+          "form: 'gallery-select-form'",
+          "name: 'gallery-plan'",
+          '<form id="gallery-select-form" method="post" action="/gallery/select" />',
+        ],
+        functionName: 'SelectDemo',
+        route: '/components/select',
+        routeMarker: true,
+        styledRenderCalls: [
+          'Select',
+          'SelectTrigger',
+          'SelectContent',
+          'SelectItem',
+          'SelectValue',
+        ],
+      },
+    ]);
+  });
+
   it('renders accordion fixture with item, trigger, and panel wiring', () => {
     const accordion = findFixture('/components/accordion');
 
@@ -934,4 +1050,99 @@ function findFixture(path: (typeof galleryRoutes)[number]['path']) {
 
 function readVisualFixture(fileName: string): string {
   return readFileSync(new URL(`./visual-fixtures/${fileName}`, import.meta.url), 'utf8');
+}
+
+const forbiddenAuthoredSourceMarkers = ['fw-c=', 'data-bind=', '__fw', 'generated/interactive'];
+
+const h3SearchSelectionSourceFixtures = [
+  {
+    component: 'autocomplete',
+    contractSnippets: [
+      'input, option-select, typeahead, programmatic',
+      'Arrow keys open and move over enabled suggestions; Escape closes suggestions',
+    ],
+    formSnippets: [
+      "form: 'gallery-autocomplete-form'",
+      "name: 'gallery-plan-search'",
+      '<form id="gallery-autocomplete-form" data-gallery-form="autocomplete" />',
+    ],
+    functionName: 'AutocompleteDemo',
+    route: '/components/autocomplete',
+    styledRenderCalls: [
+      'Autocomplete',
+      'AutocompleteInput',
+      'AutocompleteList',
+      'AutocompleteOption',
+      'AutocompleteValue',
+    ],
+  },
+  {
+    component: 'combobox',
+    contractSnippets: [
+      'input, option-select, arrow-key, escape-key, typeahead, programmatic',
+      'Arrow keys open and move over enabled options; Escape closes the listbox',
+    ],
+    formSnippets: [
+      "form: 'gallery-combobox-form'",
+      "name: 'gallery-assignee'",
+      '<form id="gallery-combobox-form" data-gallery-form="combobox" />',
+    ],
+    functionName: 'ComboboxDemo',
+    route: '/components/combobox',
+    styledRenderCalls: [
+      'Combobox',
+      'ComboboxInput',
+      'ComboboxListbox',
+      'ComboboxOption',
+      'ComboboxValue',
+    ],
+  },
+  {
+    component: 'command',
+    contractSnippets: [
+      'trigger-click, input, item-click, enter-key, escape-key, close-click, cancel-event, native-beforetoggle, programmatic',
+      'Arrow keys move command options; Enter selects; Escape closes the dialog',
+    ],
+    formSnippets: [
+      "form: 'gallery-command-form'",
+      "name: 'gallery-command-query'",
+      '<form id="gallery-command-form"></form>',
+    ],
+    functionName: 'CommandDemo',
+    route: '/components/command',
+    styledRenderCalls: [
+      'Command',
+      'CommandTrigger',
+      'CommandDialog',
+      'CommandInput',
+      'CommandListbox',
+      'CommandItem',
+      'CommandEmpty',
+      'CommandClose',
+      'CommandValue',
+    ],
+  },
+  {
+    component: 'select',
+    contractSnippets: ['trigger-change, programmatic', 'Native select keyboard behavior'],
+    formSnippets: [
+      "form: 'gallery-select-form'",
+      "name: 'gallery-plan'",
+      '<form id="gallery-select-form" method="post" action="/gallery/select" />',
+    ],
+    functionName: 'SelectDemo',
+    route: '/components/select',
+    styledRenderCalls: ['Select', 'SelectTrigger', 'SelectContent', 'SelectItem', 'SelectValue'],
+  },
+] as const;
+
+function extractDemoSource(moduleSource: string, functionName: string): string {
+  const start = moduleSource.indexOf(`export function ${functionName}(): string {`);
+
+  if (start === -1) {
+    throw new Error(`Missing demo source for ${functionName}`);
+  }
+
+  const next = moduleSource.indexOf('\nexport function ', start + 1);
+  return moduleSource.slice(start, next === -1 ? moduleSource.length : next);
 }
