@@ -87,13 +87,13 @@ import {
   executeInlineEnhancedFormLoaderFixture,
   assertGeneratedRegistryConsumerTypes,
   generatedBootstrapDeferredBehaviorFact,
+  generatedCssScopeRulesFromArtifact,
   generatedMinifierNamePreservationBehaviorFact,
   generatedQueryUpdatePlanBehaviorFact,
   generatedRenderEquivalenceBehaviorFact,
   generatedServerDeferredBehaviorFact,
   generatedTypedDataParamCoercionBehaviorFact,
   generatedWireDeferredBehaviorFact,
-  generatedArtifactSource,
   generatedRegistryInterfaceMemberTypes,
   generatedRenderedElementFactsFromArtifact,
 } from '../packages/test/src/generated-module-fixtures.ts';
@@ -125,7 +125,6 @@ import {
 } from '../packages/test/src/markdown-fixtures.ts';
 import { mcpCompileResponseFacts } from '../packages/test/src/mcp-fixtures.ts';
 import {
-  cssScopeRules,
   drizzleQueryBehaviorSourceFixtures,
   forbiddenBrowserArchitectureFacts,
   projectQueryBehaviorFacts,
@@ -563,7 +562,6 @@ export const DocCard = component('doc-card', {
 });
 `,
   });
-  const cssSource = generatedArtifactSource(behaviorFixture.files, 'css');
   const cssManifest = collectCssAssetManifest(behaviorFixture, { baseHref: '/_jiso/' });
 
   assert.deepEqual(markdownNumberedListTitles(constitution), [
@@ -611,7 +609,7 @@ export const DocCard = component('doc-card', {
   assert.doesNotThrow(() => assertRenderEquivalence(behaviorFixture));
   assert.equal(cssManifest.stylesheets[0]?.href, '/_jiso/components/docs/doc-card.css');
   assert.deepEqual(cssManifest.stylesheets[0]?.fragmentTargets, ['doc-card']);
-  assert.deepEqual(cssScopeRules(cssSource), [
+  assert.deepEqual(generatedCssScopeRulesFromArtifact(behaviorFixture.files), [
     { limit: ':scope [fw-c]', raw: '@scope (doc-card) to (:scope [fw-c]) {', scope: 'doc-card' },
   ]);
 });

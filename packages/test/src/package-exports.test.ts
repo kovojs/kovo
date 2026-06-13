@@ -129,6 +129,7 @@ import {
   generatedClientExportTypeFacts,
   generatedComponentSourceFileFacts,
   generatedComponentSourceFacts,
+  generatedCssScopeRulesFromArtifact,
   generatedHandlerReferenceFact,
   generatedHandlerReferenceSummaryFact,
   generatedMinifierNamePreservationBehaviorFact,
@@ -973,6 +974,17 @@ describe('@jiso/test package subpath exports', () => {
         { kind: 'server', source: "export function renderSource() { return '<main></main>'; }" },
       ]),
     ).toEqual([{ attrs: {}, innerHtml: '', tag: 'main' }]);
+    expect(
+      generatedCssScopeRulesFromArtifact([
+        { kind: 'css', source: '@scope (doc-card) to (:scope [fw-c]) {' },
+      ]),
+    ).toEqual([
+      {
+        limit: ':scope [fw-c]',
+        raw: '@scope (doc-card) to (:scope [fw-c]) {',
+        scope: 'doc-card',
+      },
+    ]);
     expect(generatedClientExportTypeFacts({ Cart$click: () => undefined }, ['Cart$click'])).toEqual(
       {
         Cart$click: 'function',

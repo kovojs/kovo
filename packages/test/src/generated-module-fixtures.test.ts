@@ -12,6 +12,7 @@ import {
   generatedClientExportTypeFacts,
   generatedComponentSourceFacts,
   generatedComponentSourceFileFacts,
+  generatedCssScopeRulesFromArtifact,
   generatedMinifierNamePreservationBehaviorFact,
   generatedQueryUpdatePlanBehaviorFact,
   generatedRenderEquivalenceBehaviorFact,
@@ -54,6 +55,24 @@ describe('@jiso/test generated module fixtures', () => {
         'client',
       ),
     ).toThrow('Expected one generated client artifact; found 2');
+  });
+
+  it('projects generated CSS scope rules from the generated artifact', () => {
+    expect(
+      generatedCssScopeRulesFromArtifact([
+        { kind: 'server', source: 'export function renderSource() { return ""; }' },
+        {
+          kind: 'css',
+          source: `
+@scope (doc-card) to (:scope [fw-c]) {
+  .title { color: teal; }
+}
+`,
+        },
+      ]),
+    ).toEqual([
+      { limit: ':scope [fw-c]', raw: '@scope (doc-card) to (:scope [fw-c]) {', scope: 'doc-card' },
+    ]);
   });
 
   it('summarizes authored and generated component source facts', () => {

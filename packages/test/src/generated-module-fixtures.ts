@@ -9,6 +9,7 @@ import {
   htmlLinkHrefs,
   type HtmlElementSelector,
 } from './html-fragment.ts';
+import { cssScopeRules, type CssScopeRuleFact } from './source-fixtures.ts';
 import type { AssertTypeScriptProgramOptions } from './typescript-fixtures.ts';
 
 export interface GeneratedArtifactFile {
@@ -87,6 +88,12 @@ export function generatedArtifactSource(
   kind: string,
 ): string {
   return generatedArtifactFile(files, kind).source;
+}
+
+export function generatedCssScopeRulesFromArtifact(
+  files: readonly GeneratedArtifactFile[],
+): CssScopeRuleFact[] {
+  return cssScopeRules(generatedArtifactSource(files, 'css'));
 }
 
 export class GeneratedFixtureMorphTarget {

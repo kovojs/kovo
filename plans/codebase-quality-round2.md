@@ -79,6 +79,9 @@ behavior projections used by the P1 fw-check generated-module gates.
 Shared starter-template fixtures now own starter browser client loader/fetch/fragment/deferred
 behavior projections for the P10 starter fw-check gate, so the monolith no longer replays those
 fake document/runtime mechanics inline.
+Shared generated-module fixtures now own generated CSS artifact scope-rule projection for the P10
+normative-docs fw-check gate, so the monolith no longer extracts generated CSS source and parses
+scope rules locally.
 
 - [ ] Search for remaining custom parsers, raw source membership checks, and generated-artifact
       projections in `tests/fw-check.node.mjs`.
@@ -190,6 +193,12 @@ Latest evidence:
   `pnpm run check:build`;
   targeted `node --test --test-name-pattern "P10 starter wires graph assertions into CI" tests/fw-check.node.mjs`;
   exact `pnpm exec vp check packages/test/src/starter-template-fixtures.ts packages/test/src/starter-template-fixtures.test.ts packages/test/src/package-exports.test.ts tests/fw-check.node.mjs plans/codebase-quality-round2.md`;
+  `git diff --check`.
+- Generated CSS artifact projection slice:
+  `pnpm exec vitest --run packages/test/src/generated-module-fixtures.test.ts packages/test/src/package-exports.test.ts`;
+  `pnpm run check:build`;
+  targeted `node --test --test-name-pattern "P10 normative docs cover the constitution and compiler hard rules" tests/fw-check.node.mjs`;
+  exact `pnpm exec vp check packages/test/src/generated-module-fixtures.ts packages/test/src/generated-module-fixtures.test.ts packages/test/src/package-exports.test.ts tests/fw-check.node.mjs plans/codebase-quality-round2.md`;
   `git diff --check`.
 
 ## Phase 2 - Compiler IR
