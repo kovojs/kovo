@@ -23,6 +23,22 @@ export interface HtmlElementSelector {
   tag?: string;
 }
 
+export interface HtmlJsonScriptFact {
+  attrs: Record<string, string>;
+  html: string;
+  json: unknown;
+  rawJson: string;
+}
+
+export interface HtmlDocumentFact {
+  bodyAttrs: Record<string, string>;
+  jsonScripts: HtmlJsonScriptFact[];
+  links: HtmlElementFact[];
+  metas: HtmlElementFact[];
+  text: string;
+  title: string;
+}
+
 export interface FwQueryFact {
   attrs: Record<string, string>;
   html: string;
@@ -108,6 +124,32 @@ export function htmlElementFacts(
   }
 
   return facts;
+}
+
+export function htmlJsonScriptFacts(
+  html: string,
+  attrs: Record<string, string | true> = { type: 'application/json' },
+): HtmlJsonScriptFact[] {
+  return htmlElementFacts(html, { attrs, tag: 'script' }).map((element) => ({
+    attrs: element.attrs,
+    html: element.html,
+    json: JSON.parse(element.innerHtml),
+    rawJson: element.innerHtml,
+  }));
+}
+
+export function htmlDocumentFacts(html: string): HtmlDocumentFact {
+  const body = htmlElementFacts(html, { tag: 'body' })[0];
+  const title = htmlElementFacts(html, { tag: 'title' })[0]?.innerHtml ?? '';
+
+  return {
+    bodyAttrs: body?.attrs ?? {},
+    jsonScripts: htmlJsonScriptFacts(html),
+    links: htmlElementFacts(html, { tag: 'link' }),
+    metas: htmlElementFacts(html, { tag: 'meta' }),
+    text: htmlTextContent(body?.innerHtml ?? html),
+    title: htmlTextContent(title),
+  };
 }
 
 export function fwQueryFacts(html: string, name?: string): FwQueryFact[] {

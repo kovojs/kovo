@@ -9,6 +9,7 @@ import { createJisoTestHarness } from '@jiso/test/harness';
 import {
   fwFragmentFacts,
   fwQueryFacts,
+  htmlDocumentFacts,
   htmlElementFacts,
   htmlFormFacts,
   htmlKeyFacts,
@@ -1188,35 +1189,38 @@ describe('commerce example', () => {
 
   it('renders Tailwind-first stylesheet hints and static utility classes', () => {
     const cartPage = renderCartPage();
+    const pageHints = htmlDocumentFacts(commercePageHints.html);
+    const cartDocument = htmlDocumentFacts(cartPage);
 
     expect(commerceMessageCatalog).toEqual({
       cartLabel: 'Cart',
       productStock: '{count} in stock',
     });
-    expect(commercePageHints).toEqual({
-      earlyHints: {
-        Link: '</assets/tailwind.css>; rel=preload; as=style',
-      },
-      html: '<title>Jiso Commerce (0)</title><meta name="description" content="Browse products and checkout with 0 verifiable cart item."><meta property="og:description" content="Browse products and checkout with 0 verifiable cart item."><script type="application/json" fw-i18n locale="en-US">{"cartLabel":"Cart","productStock":"{count} in stock"}</script><link rel="stylesheet" href="/assets/tailwind.css">',
+    expect(commercePageHints.earlyHints).toEqual({
+      Link: '</assets/tailwind.css>; rel=preload; as=style',
     });
-    expect(htmlElementFacts(commercePageHints.html, { tag: 'title' })[0]?.innerHtml).toBe(
-      'Jiso Commerce (0)',
+    expect(pageHints.title).toBe('Jiso Commerce (0)');
+    expect(pageHints.metas).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          attrs: expect.objectContaining({
+            content: 'Browse products and checkout with 0 verifiable cart item.',
+            name: 'description',
+          }),
+        }),
+        expect.objectContaining({
+          attrs: expect.objectContaining({
+            content: 'Browse products and checkout with 0 verifiable cart item.',
+            property: 'og:description',
+          }),
+        }),
+      ]),
     );
-    expect(
-      htmlElementFacts(commercePageHints.html, {
-        attrs: { 'fw-i18n': true, locale: 'en-US', type: 'application/json' },
-        tag: 'script',
-      }).map((script) => JSON.parse(script.innerHtml)),
-    ).toEqual([commerceMessageCatalog]);
-    expect(
-      htmlElementFacts(cartPage, {
-        attrs: { href: '/assets/tailwind.css', rel: 'stylesheet' },
-        tag: 'link',
-      }),
-    ).toHaveLength(1);
-    expect(htmlElementFacts(cartPage, { tag: 'body' })[0]?.attrs.class).toBe(
-      'min-h-dvh bg-slate-50 p-6',
-    );
+    expect(pageHints.jsonScripts.map((script) => script.json)).toEqual([commerceMessageCatalog]);
+    expect(pageHints.links).toMatchObject([
+      { attrs: { href: '/assets/tailwind.css', rel: 'stylesheet' }, tag: 'link' },
+    ]);
+    expect(cartDocument.bodyAttrs.class).toBe('min-h-dvh bg-slate-50 p-6');
     expect(
       htmlElementFacts(cartPage, {
         attrs: { class: 'rounded bg-teal-600 px-2 py-0.5 text-white' },
@@ -1231,10 +1235,10 @@ describe('commerce example', () => {
     db.write('cart_items', { productId: 'p2', qty: 2, unitPrice: 2599 });
 
     expect(loadCartQuery(db)).toEqual({ count: 5 });
-    expect(
-      htmlElementFacts(renderCommercePageHints(loadCartQuery(db)).html, { tag: 'title' }),
-    ).toMatchObject([{ innerHtml: 'Jiso Commerce (5)' }]);
-    expect(htmlElementFacts(renderCartPage(db), { tag: 'meta' })).toEqual(
+    expect(htmlDocumentFacts(renderCommercePageHints(loadCartQuery(db)).html).title).toBe(
+      'Jiso Commerce (5)',
+    );
+    expect(htmlDocumentFacts(renderCartPage(db)).metas).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
           attrs: expect.objectContaining({

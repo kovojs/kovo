@@ -4,6 +4,12 @@ import { readFileSync } from 'node:fs';
 
 import type { TouchGraph } from '@jiso/drizzle';
 import { createJisoTestHarness } from '@jiso/test/harness';
+import {
+  fwFragmentFacts,
+  fwQueryFacts,
+  htmlDocumentFacts,
+  htmlKeyFacts,
+} from '@jiso/test/html-fragment';
 import { fwCheck, fwExplain } from 'fw';
 
 import {
@@ -80,17 +86,6 @@ function optimisticStatuses(output: string) {
   );
 }
 
-function queryChunkNames(html: string) {
-  return [...html.matchAll(/<fw-query name="([^"]+)">/g)].map((match) => {
-    const name = match[1];
-    if (!name) {
-      throw new Error(`Malformed fw-query chunk: ${match[0]}`);
-    }
-
-    return name;
-  });
-}
-
 function fragmentTargetForQuery(query: string) {
   const component = commerceGraph.components.find((item) => item.queries.includes(query));
   const fragment = component?.fragments[0];
@@ -158,14 +153,22 @@ describe('commerce source-truth graph acceptance', () => {
     );
     const starterCart = loadCartQuery(createCommerceDb());
     const cartMeta = commerceCartPageMeta(starterCart);
+    const pageHints = htmlDocumentFacts(renderCommercePageHints(starterCart).html);
 
     expect(graphArtifact).toEqual(commerceGraph);
     expect(createCommerceGraph(starterCart, commerceTouchGraph)).toEqual(commerceGraph);
     expect(cartPageGraph(graphArtifact).meta).toEqual(cartMeta);
     expect(cartPageGraph(commerceGraph).meta).toEqual(cartMeta);
-    expect(renderCommercePageHints(starterCart).html).toContain(`<title>${cartMeta.title}</title>`);
-    expect(renderCommercePageHints(starterCart).html).toContain(
-      `<meta name="description" content="${cartMeta.description}">`,
+    expect(pageHints.title).toBe(cartMeta.title);
+    expect(pageHints.metas).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          attrs: expect.objectContaining({
+            content: cartMeta.description,
+            name: 'description',
+          }),
+        }),
+      ]),
     );
     expect(fwCheck(graphArtifact).output).toBe('fw-check/v1\nOK\n');
     expect(addToCart.registry?.touches).toBeUndefined();
@@ -584,12 +587,16 @@ describe('commerce source-truth graph acceptance', () => {
       },
       status: 200,
     });
-    expect(queryChunkNames(response.body).sort((a, b) => a.localeCompare(b))).toEqual(
-      [...affectedQueries].sort((a, b) => a.localeCompare(b)),
-    );
-    for (const query of affectedQueries) {
-      expect(response.body).toContain(`<fw-fragment target="${fragmentTargetForQuery(query)}">`);
-    }
-    expect(response.body).toContain('fw-key="order-2"');
+    expect(
+      fwQueryFacts(response.body)
+        .map((query) => query.name)
+        .sort((a, b) => a.localeCompare(b)),
+    ).toEqual([...affectedQueries].sort((a, b) => a.localeCompare(b)));
+    expect(
+      fwFragmentFacts(response.body)
+        .map((fragment) => fragment.target)
+        .sort((a, b) => a.localeCompare(b)),
+    ).toEqual(affectedQueries.map(fragmentTargetForQuery).sort((a, b) => a.localeCompare(b)));
+    expect(htmlKeyFacts(response.body).map((key) => key.key)).toContain('order-2');
   });
 });

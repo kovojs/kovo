@@ -70,6 +70,9 @@ Closed evidence so far:
   `@jiso/test/html-fragment` element facts instead of parsing `vite.config.ts`/`app.ts` source.
 - `tests/fw-check.node.mjs` no longer owns its local regex/index-based HTML element/block parser;
   its compatibility helpers delegate to the shared `@jiso/test/html-fragment` element-fact seam.
+- `examples/commerce/src/source-truth.test.ts` now verifies page hints and enhanced mutation wire
+  output with `htmlDocumentFacts`, `fwQueryFacts`, `fwFragmentFacts`, and `htmlKeyFacts` instead
+  of local `<fw-query>` regex parsing or raw fragment/key substring membership.
 - The inline loader enhanced-form evidence now uses an internally consistent enhanced-form fixture
   (`closest()` selector match plus `getAttribute('enhance')`), so the assertion proves submit
   behavior against the loader's public form-detection contract instead of a stale test double.
@@ -89,6 +92,8 @@ Recent gates:
 - `pnpm exec vitest --run examples/commerce/src/source-truth.test.ts`
 - `pnpm exec vitest --run examples/commerce/src/app.test.ts examples/commerce/src/app-shell.test.ts`
 - `node --test --test-name-pattern "P3 server renders initial query scripts|D3 deferred stream responses are consumed by the runtime|P4 commerce touch graph is a committed generated artifact|P10 commerce graph assertions answer behavior mechanically|D1 commerce enhanced fragments carry Tailwind stylesheet hints" tests/fw-check.node.mjs`
+- `pnpm exec vp run build`
+- `node --test --test-name-pattern "P4 commerce touch graph is a committed generated artifact|P10 commerce graph assertions answer behavior mechanically" tests/fw-check.node.mjs`
 - `pnpm exec vp check tests/fw-check.node.mjs plans/codebase-quality-round2.md`
 - `git diff --check`
 
@@ -413,6 +418,10 @@ Closed evidence so far:
 - `@jiso/test/html-fragment` exposes structured `htmlKeyFacts` and `htmlTextContent`; package
   export tests pin the subpath seam, and commerce list/fragment tests assert framework keys,
   selected text, and route meta through shared facts instead of raw HTML membership.
+- `@jiso/test/html-fragment` exposes structured `htmlDocumentFacts` and `htmlJsonScriptFacts`;
+  package export tests pin the subpath seam, commerce source-truth/page-hints tests assert title,
+  meta, stylesheet, JSON script, body, and static-login text facts through shared helpers, and
+  app-shell tests no longer read `scripts/export-static.mjs` source for helper membership.
 - Commerce app-shell dev plugin delegation is exercised through exported Vite config seams with a
   fake server module, keeping the local app-shell workflow out of source-text assertions.
 - `@jiso/test` verifier tests share `createVerifiedFakeHarness()` and `deferred()` fixtures, and
@@ -430,6 +439,9 @@ Recent gates:
 - `pnpm exec vitest --run packages/test/src/sql-observer.test.ts packages/test/src/query-verifier.test.ts packages/test/src/package-exports.test.ts`
 - `pnpm exec vitest --run packages/test/src`
 - `pnpm exec vitest --run packages/test/src/html-fragment.test.ts packages/test/src/package-exports.test.ts`
+- `pnpm exec vitest --run examples/commerce/src/source-truth.test.ts`
+- `pnpm exec vitest --run examples/commerce/src/app.test.ts -t "renders Tailwind-first stylesheet hints and static utility classes|resolves commerce route meta from loaded cart query data"`
+- `pnpm exec vitest --run examples/commerce/src/app-shell.test.ts -t "documents the commerce app-shell dev, serve, and export command matrix|dispatches shell login and logout mutations before guarded admin routes|exports the public commerce shell while the dynamic session shell stays non-exportable|wires vp run export to the public commerce shell static output|wires npm run static to the public commerce shell static output"`
 - `pnpm exec vitest --run examples/commerce/src/app.test.ts examples/commerce/src/app-shell.test.ts`
 - `pnpm exec tsc -p examples/commerce/tsconfig.json --noEmit --pretty false`
 - `pnpm exec vp check packages/test/src/html-fragment.ts packages/test/src/html-fragment.test.ts packages/test/src/package-exports.test.ts examples/commerce/src/app.test.ts examples/commerce/src/app-shell.test.ts tests/fw-check.node.mjs plans/codebase-quality-round2.md`

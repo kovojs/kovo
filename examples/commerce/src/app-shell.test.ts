@@ -14,6 +14,7 @@ import { csrfToken, exportStaticApp, runMutation } from '@jiso/server';
 import {
   fwFragmentFacts,
   fwQueryFacts,
+  htmlDocumentFacts,
   htmlElementFacts,
   htmlFormFacts,
 } from '@jiso/test/html-fragment';
@@ -46,10 +47,6 @@ describe('commerce app shell HTTP entry', () => {
   it('documents the commerce app-shell dev, serve, and export command matrix', async () => {
     const commerceRoot = fileURLToPath(new URL('..', import.meta.url));
     const packageJson = JSON.parse(await readFile(path.join(commerceRoot, 'package.json'), 'utf8'));
-    const exportScript = await readFile(
-      path.join(commerceRoot, 'scripts/export-static.mjs'),
-      'utf8',
-    );
     const viteConfig = commerceViteConfig as {
       plugins?: Array<{ name?: string }>;
       run?: { tasks?: Record<string, { command?: string }> };
@@ -65,12 +62,6 @@ describe('commerce app shell HTTP entry', () => {
     ).toBe(true);
     expect(viteConfig.run?.tasks?.serve?.command).toBe('node scripts/serve.mjs');
     expect(viteConfig.run?.tasks?.export?.command).toBe('node scripts/export-static.mjs');
-    expect(exportScript).toContain('jisoAppShellViteManifestStylesheetHrefFromFile');
-    expect(exportScript).toContain('formatStaticExportDiagnostic');
-    expect(exportScript).toContain('isStaticExportDiagnosticError');
-    expect(exportScript).not.toContain('jisoAppShellViteManifestStylesheetHrefsFromFile');
-    expect(exportScript).not.toContain('function formatStaticExportDiagnostic');
-    expect(exportScript).not.toContain('function isStaticExportDiagnostic');
     expect(commerceServeCommands().map((command) => command.label)).toEqual([
       'node scripts/serve.mjs',
       'vp run serve',
@@ -459,8 +450,13 @@ describe('commerce app shell HTTP entry', () => {
     const failedBody = await failedLogin.text();
 
     expect(failedLogin.status, failedBody).toBe(422);
-    expect(failedBody).toContain('data-error-code="INVALID_CREDENTIALS"');
-    expect(failedBody).toContain('name="next" value="/admin"');
+    expect(
+      htmlElementFacts(failedBody, {
+        attrs: { 'data-error-code': 'INVALID_CREDENTIALS' },
+        tag: 'output',
+      }),
+    ).toHaveLength(1);
+    expect(formFields(failedBody, 'next')).toMatchObject([{ name: 'next', value: '/admin' }]);
 
     const memberLoginForm = new URLSearchParams();
     memberLoginForm.set('csrf', csrfToken(shellLoginCsrfRequest(shell.db), commerceAuthCsrf));
@@ -510,9 +506,13 @@ describe('commerce app shell HTTP entry', () => {
     const adminBody = await admin.text();
 
     expect(admin.status, adminBody).toBe(200);
-    expect(adminBody).toContain('<main>admin:u1');
-    expect(adminBody).toContain('action="/_m/auth/sign-out"');
-    expect(adminBody).toContain('data-mutation="auth/sign-out"');
+    expect(htmlDocumentFacts(adminBody).text).toContain('admin:u1');
+    expect(htmlFormFacts(adminBody)).toMatchObject([
+      {
+        action: '/_m/auth/sign-out',
+        attrs: expect.objectContaining({ 'data-mutation': 'auth/sign-out' }),
+      },
+    ]);
 
     const logoutForm = new URLSearchParams();
     logoutForm.set(
@@ -579,7 +579,9 @@ describe('commerce app shell HTTP entry', () => {
       expect(formFields(cartHtml, 'csrf')).toEqual([]);
 
       const loginHtml = await readFile(path.join(outDir, 'login', 'index.html'), 'utf8');
-      expect(loginHtml).toContain('Sign in is available on the dynamic commerce server.');
+      expect(htmlDocumentFacts(loginHtml).text).toContain(
+        'Sign in is available on the dynamic commerce server.',
+      );
       expect(formActions(loginHtml)).not.toContain('/_m/auth/sign-in');
       expect(formFields(loginHtml, 'csrf')).toHaveLength(0);
 
@@ -621,8 +623,10 @@ describe('commerce app shell HTTP entry', () => {
         expect(modulePreloadHrefs(cartHtml)).toEqual([commerceClientModuleHref]);
 
         const loginHtml = await readFile(path.join(outDir, 'login', 'index.html'), 'utf8');
-        expect(loginHtml).toContain('<title>Jiso Commerce Sign In</title>');
-        expect(loginHtml).toContain('Sign in is available on the dynamic commerce server.');
+        expect(htmlDocumentFacts(loginHtml).title).toBe('Jiso Commerce Sign In');
+        expect(htmlDocumentFacts(loginHtml).text).toContain(
+          'Sign in is available on the dynamic commerce server.',
+        );
         expect(formActions(loginHtml)).not.toContain('/_m/auth/sign-in');
 
         const clientModule = await readFile(path.join(outDir, 'c', 'commerce.client.js'), 'utf8');

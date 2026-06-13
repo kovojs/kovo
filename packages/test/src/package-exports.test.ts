@@ -32,8 +32,10 @@ import {
   fragmentHtml,
   fwFragmentFacts,
   fwQueryFacts,
+  htmlDocumentFacts,
   htmlElementFacts,
   htmlFormFacts,
+  htmlJsonScriptFacts,
   htmlKeyFacts,
   htmlTextContent,
 } from '@jiso/test/html-fragment';
@@ -82,6 +84,21 @@ describe('@jiso/test package subpath exports', () => {
     expect(
       htmlElementFacts('<a href="/cart">Cart</a>', { attrs: { href: '/cart' }, tag: 'a' }),
     ).toMatchObject([{ innerHtml: 'Cart', tag: 'a' }]);
+    expect(
+      htmlDocumentFacts(
+        '<html><head><title>Cart</title><script type="application/json">{"count":1}</script></head><body class="page">Ready</body></html>',
+      ),
+    ).toMatchObject({
+      bodyAttrs: { class: 'page' },
+      jsonScripts: [{ json: { count: 1 } }],
+      text: 'Ready',
+      title: 'Cart',
+    });
+    expect(
+      htmlJsonScriptFacts('<script type="application/json" data-id="cart">{"count":1}</script>', {
+        'data-id': 'cart',
+      }),
+    ).toMatchObject([{ json: { count: 1 }, rawJson: '{"count":1}' }]);
     expect(fwQueryFacts('<fw-query name="cart">{"count":1}</fw-query>', 'cart')).toMatchObject([
       { json: { count: 1 }, name: 'cart' },
     ]);

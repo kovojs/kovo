@@ -4,8 +4,10 @@ import {
   fragmentHtml,
   fwFragmentFacts,
   fwQueryFacts,
+  htmlDocumentFacts,
   htmlElementFacts,
   htmlFormFacts,
+  htmlJsonScriptFacts,
   htmlKeyFacts,
   htmlTextContent,
 } from '@jiso/test/html-fragment';
@@ -131,6 +133,39 @@ describe('@jiso/test html fragment seam', () => {
         innerHtml: '',
         tag: 'link',
       },
+    ]);
+  });
+
+  it('returns document-level facts for metadata, links, JSON scripts, and visible text', () => {
+    const html = [
+      '<!doctype html><html lang="en"><head>',
+      '<title>Cart &amp; Checkout</title>',
+      '<meta name="description" content="Ready cart">',
+      '<link rel="modulepreload" href="/c/app.js">',
+      '<link rel="stylesheet" href="/assets/tailwind.css">',
+      '<script type="application/json" fw-i18n locale="en-US">{"cartLabel":"Cart"}</script>',
+      '</head><body class="min-h-dvh"><main>Sign in <strong>ready</strong></main></body></html>',
+    ].join('');
+
+    expect(htmlDocumentFacts(html)).toMatchObject({
+      bodyAttrs: { class: 'min-h-dvh' },
+      jsonScripts: [
+        {
+          attrs: { 'fw-i18n': '', locale: 'en-US', type: 'application/json' },
+          json: { cartLabel: 'Cart' },
+          rawJson: '{"cartLabel":"Cart"}',
+        },
+      ],
+      links: [
+        { attrs: { href: '/c/app.js', rel: 'modulepreload' }, tag: 'link' },
+        { attrs: { href: '/assets/tailwind.css', rel: 'stylesheet' }, tag: 'link' },
+      ],
+      metas: [{ attrs: { content: 'Ready cart', name: 'description' }, tag: 'meta' }],
+      text: 'Sign in ready',
+      title: 'Cart & Checkout',
+    });
+    expect(htmlJsonScriptFacts(html, { 'fw-i18n': true }).map((script) => script.json)).toEqual([
+      { cartLabel: 'Cart' },
     ]);
   });
 
