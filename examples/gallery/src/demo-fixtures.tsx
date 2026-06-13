@@ -2361,11 +2361,13 @@ export function SwitchDemo(): string {
   return (
     <section data-gallery-demo="switch">
       <p data-demo-summary="no-js">Switch renders a native checkbox with switch semantics.</p>
+      <form id="gallery-switch-form" data-gallery-form="switch" />
       <div data-ui-demo="switch">
         <span data-fixture-state="checked">
           {Switch.definition.render({
             checked: true,
             children: 'Notifications',
+            form: 'gallery-switch-form',
             name: 'gallery-notifications',
             value: 'enabled',
           })}

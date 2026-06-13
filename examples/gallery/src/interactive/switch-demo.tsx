@@ -13,6 +13,7 @@ export const GallerySwitchDemo = component('gallery-switch-demo', {
   render: (_queries: Record<string, never>, state: GallerySwitchDemoState) => {
     const attrs = switchRootAttributes({
       checked: state.checked,
+      form: 'gallery-switch-form',
       name: 'gallery-notifications',
       value: 'enabled',
     });

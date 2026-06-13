@@ -181,7 +181,7 @@ describe('compiled interactive gallery demos in the browser', () => {
     );
 
     expect(visualGeometry(route)).toEqual({
-      height: 5401,
+      height: 5442,
       width: 820,
     });
     expect(visualGeometry(switchDemo)).toEqual({
@@ -193,9 +193,9 @@ describe('compiled interactive gallery demos in the browser', () => {
       width: 780,
     });
 
-    expect(await visualBaselineHash(route)).toBe('148b8b61');
-    expect(await visualBaselineHash(switchDemo)).toBe('3538153f');
-    expect(await visualBaselineHash(menuDemo)).toBe('94604e9e');
+    expect(await visualBaselineHash(route)).toBe('4cc3e6a7');
+    expect(await visualBaselineHash(switchDemo)).toBe('1dc30a6d');
+    expect(await visualBaselineHash(menuDemo)).toBe('b19a1055');
   });
 
   it('updates accordion ARIA and panel visibility through generated handlers', async () => {
@@ -1055,19 +1055,27 @@ describe('compiled interactive gallery demos in the browser', () => {
   });
 
   it('updates switch stamped state while native checked state moves in the browser', async () => {
+    const form = document.createElement('form');
+    form.id = 'gallery-switch-form';
+    form.dataset.galleryForm = 'switch';
+    document.body.append(form);
+
     const root = mountInteractiveDemo(GallerySwitchDemo);
     const input = required(root.querySelector<HTMLInputElement>('input'));
     installGeneratedGalleryLoader(root);
 
     expect(root.getAttribute('fw-state')).toBe('{"checked":false}');
+    expect(input.form).toBe(form);
     expect(input.getAttribute('role')).toBe('switch');
     expect(input.checked).toBe(false);
+    expect(new FormData(form).get('gallery-notifications')).toBeNull();
 
     input.click();
 
     await vi.waitFor(() => {
       expect(root.getAttribute('fw-state')).toBe('{"checked":true}');
       expect(input.checked).toBe(true);
+      expect(new FormData(form).get('gallery-notifications')).toBe('enabled');
     });
 
     input.focus();
@@ -1076,6 +1084,7 @@ describe('compiled interactive gallery demos in the browser', () => {
     await vi.waitFor(() => {
       expect(root.getAttribute('fw-state')).toBe('{"checked":false}');
       expect(input.checked).toBe(false);
+      expect(new FormData(form).get('gallery-notifications')).toBeNull();
     });
   });
 

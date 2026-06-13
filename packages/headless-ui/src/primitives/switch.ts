@@ -14,6 +14,7 @@ export type SwitchChangeDetail = PrimitiveChangeDetail<SwitchChangeReason, boole
 export interface SwitchState {
   checked: boolean;
   disabled?: boolean;
+  form?: string;
   name?: string;
   required?: boolean;
   value?: string;
@@ -40,6 +41,9 @@ export function switchRootAttributes(state: SwitchState): SwitchPrimitiveAttribu
     'aria-checked': String(state.checked),
     checked: state.checked,
     disabled: state.disabled === true,
+    // SPEC.md §6.3: form() typing validates real named controls; switch keeps
+    // a native checkbox as the submitted control, including external form owners.
+    ...(state.form === undefined ? {} : { form: state.form }),
     ...(state.name === undefined ? {} : { name: state.name }),
     role: 'switch',
     ...(state.required === true ? { required: true } : {}),

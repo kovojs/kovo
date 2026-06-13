@@ -722,6 +722,7 @@ describe('@jiso/ui styled package foundation', () => {
     const switchControl = Switch.definition.render({
       checked: true,
       children: 'Notifications',
+      form: 'preferences-form',
       name: 'notifications',
       value: 'enabled',
     });
@@ -737,6 +738,7 @@ describe('@jiso/ui styled package foundation', () => {
     expect(checkbox).toContain('Some permissions</label>');
     expect(switchControl).toContain('data-state="checked"');
     expect(switchControl).toContain('aria-checked="true" checked');
+    expect(switchControl).toContain('form="preferences-form" name="notifications"');
     expect(switchControl).toContain('role="switch" type="checkbox" value="enabled"');
     expect(toggle).toContain('data-state="pressed"');
     expect(toggle).toContain('aria-pressed="true"');

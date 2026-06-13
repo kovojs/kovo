@@ -38,11 +38,20 @@ describe('headless-ui switch primitive', () => {
   });
 
   it('keeps required form-control semantics on the native control', () => {
-    expect(switchRootAttributes({ checked: false, required: true })).toEqual({
+    expect(
+      switchRootAttributes({
+        checked: false,
+        form: 'preferences-form',
+        name: 'notifications',
+        required: true,
+      }),
+    ).toEqual({
       'aria-checked': 'false',
       checked: false,
       'data-state': 'unchecked',
       disabled: false,
+      form: 'preferences-form',
+      name: 'notifications',
       required: true,
       role: 'switch',
       type: 'checkbox',

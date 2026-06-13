@@ -7,6 +7,7 @@ export interface SwitchProps {
   children?: string;
   class?: ClassValue;
   disabled?: boolean;
+  form?: string;
   inputClass?: ClassValue;
   name?: string;
   required?: boolean;
@@ -31,6 +32,7 @@ export const Switch = component('switch', {
     const attrs = switchRootAttributes({
       checked: props.checked ?? false,
       ...(props.disabled === undefined ? {} : { disabled: props.disabled }),
+      ...(props.form === undefined ? {} : { form: props.form }),
       ...(props.name === undefined ? {} : { name: props.name }),
       ...(props.required === undefined ? {} : { required: props.required }),
       ...(props.value === undefined ? {} : { value: props.value }),
@@ -49,6 +51,7 @@ export const Switch = component('switch', {
           data-disabled={attrs['data-disabled']}
           data-state={attrs['data-state']}
           disabled={attrs.disabled}
+          form={attrs.form}
           name={attrs.name}
           required={attrs.required}
           role={attrs.role}

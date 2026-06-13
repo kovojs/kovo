@@ -64,6 +64,9 @@ commands. Use `- [ ]` for open actionable work and `- [x]` only for fully verifi
       generated artifacts and a browser-backed focus assertion. Field/fieldset integration now
       exposes native fieldset `name`, keeps the disable toggle in the first legend, and proves
       browser `FormData` inclusion/omission for grouped controls as fieldset disabled state changes.
+      Switch now preserves native checkbox external `form` ownership through headless/styled
+      wrappers, static fixture coverage, refreshed generated artifacts, and browser-backed
+      `FormData` checks.
       Number-field now preserves native input `form` ownership through headless/styled wrappers and
       proves generated direct input plus stepper updates keep browser `FormData` current.
       Toggle-group keydown no longer traps disabled, empty, or fully disabled collections, and the
@@ -207,6 +210,14 @@ commands. Use `- [ ]` for open actionable work and `- [x]` only for fully verifi
 
 ## Latest Gates
 
+- [x] Switch native external form ownership slice:
+      `pnpm exec vitest --run packages/headless-ui/src/primitives/switch.test.ts`;
+      `pnpm exec vitest --run packages/ui/src/index.test.tsx`;
+      `pnpm --filter @jiso/example-gallery run emit:interactive-gallery`;
+      `pnpm exec vitest --run examples/gallery/src/interactive-gallery.test.ts examples/gallery/src/behavior-contracts.test.ts examples/gallery/src/demo-fixtures.test.ts`;
+      `(cd examples/gallery && pnpm exec vitest --config vitest.browser.config.ts --run src/interactive-gallery.browser.test.ts)`;
+      exact `pnpm exec vp check packages/headless-ui/src/primitives/switch.ts packages/headless-ui/src/primitives/switch.test.ts packages/ui/src/switch.tsx packages/ui/src/index.test.tsx examples/gallery/src/demo-fixtures.tsx examples/gallery/src/demo-fixtures.test.ts examples/gallery/src/interactive/switch-demo.tsx examples/gallery/src/generated/interactive/switch-demo.tsx examples/gallery/src/generated/interactive/switch-demo.client.js examples/gallery/src/interactive-gallery.test.ts examples/gallery/src/interactive-gallery.browser.test.ts plans/ui.md`;
+      `git diff --check`.
 - [x] Command canceled keyboard default-prevention slice:
       `pnpm exec vitest --run packages/headless-ui/src/primitives/command.test.ts`;
       `pnpm exec vitest --run packages/ui/src/index.test.tsx -t command`;
