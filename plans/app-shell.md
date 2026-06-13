@@ -34,13 +34,18 @@ Implemented areas:
 - `node.ts` adapts web requests/responses to `node:http` and emits Early Hints from `Link`.
 - `vite.ts` exposes app-shell Vite plugin/build helpers, route-entry mapping, manifest
   validation, manifest-derived hints/assets, compiled `/c/` module emission, manifest-file
-  export helpers, and build static-export asset planning.
+  export helpers, build static-export asset planning, and plugin `writeBundle` static export
+  wiring over the same Vite build helper.
 - `static-export.ts` performs static export with output target validation for write and dry-run
   plans; duplicate asset paths fail with FW229. Param routes export only through explicit
   `staticPaths` concrete URL enumeration.
 
 Recent gates:
 
+- `pnpm exec vitest --run packages/server/src/vite.test.ts packages/server/src/vite-build.test.ts`
+- `pnpm exec tsc --noEmit --pretty false`
+- `pnpm exec vp check packages/server/src/vite.ts packages/server/src/vite-build.ts packages/server/src/vite.test.ts packages/server/src/api/app-shell/vite.ts plans/app-shell.md plans/codebase-quality-round2.md`
+- `git diff --check`
 - `pnpm exec vitest --run packages/server/src/static-export.test.ts packages/server/src/vite-build.test.ts packages/server/src/vite.test.ts`
 - `pnpm exec vitest --run packages/server/src/vite-build.test.ts packages/server/src/api/app.test.ts`
 - `pnpm exec tsc --noEmit --pretty false`
@@ -58,14 +63,16 @@ Round79 slice evidence:
 
 R5:
 
-- Finish Vite+ dev/build closure against the same request handler.
+- Finish Vite+ dev/build closure against the same request handler; plugin `writeBundle` now
+  emits compiled `/c/` modules and can run static export from the built app shell.
 - Keep manifest-derived stylesheet/modulepreload hints and compiled client module registry in one
   helper path.
 - Avoid app-shell plugin code that re-derives static export assets outside the public planner.
 
 R6:
 
-- Wire Vite build outputs into static export tasks used by starter/docs.
+- Wire Vite build outputs into static export tasks used by starter/docs; server plugin wiring is
+  covered, adoption task wiring remains open.
 - Prove directory-index HTML output, manifest asset copying, duplicate target rejection, and
   L0/L1-only constraints through focused tests.
 - Keep dry-run and write export validation equivalent.

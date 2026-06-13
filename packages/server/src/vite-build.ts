@@ -78,6 +78,7 @@ export interface JisoAppShellVitePluginBuildOptions extends Omit<
 > {
   onBuild?(build: JisoAppShellBuild, output: JisoAppShellViteBuildOutput): void | Promise<void>;
   outDir?: string | URL;
+  staticExport?: JisoAppShellVitePluginStaticExportOptions | false;
 }
 
 export interface JisoAppShellBuiltClientModule {
@@ -120,7 +121,15 @@ export interface JisoAppShellViteBuildOutputOptions {
 
 export interface JisoAppShellViteBuildOutput {
   clientModules: readonly JisoAppShellBuiltClientModule[];
+  staticExport?: StaticExportResult;
   staticExportAssets: readonly StaticExportAssetInput[];
+}
+
+export interface JisoAppShellVitePluginStaticExportOptions extends Omit<
+  JisoAppShellViteBuildStaticExportOptions,
+  'distDir'
+> {
+  distDir?: never;
 }
 
 export interface JisoAppShellViteBuildStaticExportOptions extends Omit<

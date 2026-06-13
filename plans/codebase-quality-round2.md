@@ -205,6 +205,8 @@ Closed evidence so far:
   export inventory, and dry-run export target validation have landed.
 - Server static export now validates dry-run target plans the same way as write exports; duplicate
   asset paths produce FW229 even without `outDir`.
+- Vite plugin `writeBundle` can now run static export from the built app shell while reusing the
+  same manifest asset planner and synthetic request replay path.
 
 Open:
 
@@ -215,6 +217,10 @@ Open:
 
 Recent gates:
 
+- `pnpm exec vitest --run packages/server/src/vite.test.ts packages/server/src/vite-build.test.ts`
+- `pnpm exec tsc --noEmit --pretty false`
+- `pnpm exec vp check packages/server/src/vite.ts packages/server/src/vite-build.ts packages/server/src/vite.test.ts packages/server/src/api/app-shell/vite.ts plans/app-shell.md plans/codebase-quality-round2.md`
+- `git diff --check`
 - `pnpm exec vitest --run packages/server/src/static-export.test.ts packages/server/src/vite-build.test.ts packages/server/src/vite.test.ts`
 - `pnpm exec tsc --noEmit --pretty false`
 - `pnpm exec vp check packages/server/src/static-export.ts packages/server/src/static-export.test.ts packages/server/src/vite-build.test.ts plans/app-shell.md`

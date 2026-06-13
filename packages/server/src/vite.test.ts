@@ -886,6 +886,124 @@ describe('server app shell Vite plugin', () => {
     }
   });
 
+  it('runs app-shell static export from the Vite plugin writeBundle hook', async () => {
+    const outDir = await mkdtemp(join(tmpdir(), 'jiso-vite-plugin-build-export-dist-'));
+    const exportDir = await mkdtemp(join(tmpdir(), 'jiso-vite-plugin-build-export-out-'));
+    const outputs: JisoAppShellViteBuildOutput[] = [];
+
+    try {
+      await mkdir(join(outDir, 'assets'), { recursive: true });
+      await writeFile(join(outDir, 'assets/cart.css'), '.cart{display:grid}');
+      await writeFile(join(outDir, 'assets/cart.js'), 'export const cartAsset = true;');
+
+      const plugin = jisoAppShellVitePlugin(
+        createApp({
+          routes: [
+            route('/cart', {
+              page() {
+                return [
+                  '<main class="cart">Cart',
+                  '<button on:click="/c/cart.client.js?v=cart-v1#Cart$add">Add</button>',
+                  '</main>',
+                ].join('');
+              },
+            }),
+          ],
+        }),
+        {
+          build: {
+            clientModules: [
+              {
+                path: '/c/cart.client.js',
+                source: 'export const cartClient = true;',
+                version: 'cart-v1',
+              },
+            ],
+            onBuild(_build, output) {
+              outputs.push(output);
+            },
+            routeEntryMap: {
+              '/cart': 'src/cart.client.ts',
+            },
+            staticExport: {
+              outDir: exportDir,
+            },
+          },
+        },
+      );
+
+      await plugin.writeBundle?.(
+        { dir: outDir },
+        {
+          '.vite/manifest.json': {
+            fileName: '.vite/manifest.json',
+            source: JSON.stringify({
+              'src/cart.client.ts': {
+                css: ['assets/cart.css'],
+                file: 'assets/cart.js',
+              },
+            }),
+            type: 'asset',
+          },
+        },
+      );
+
+      expect(outputs).toHaveLength(1);
+      expect(outputs[0]?.staticExport?.artifacts.map((artifact) => artifact.path)).toEqual([
+        '/cart/index.html',
+      ]);
+      expect(outputs[0]?.staticExport?.clientModules).toEqual([
+        {
+          body: 'export const cartClient = true;',
+          headers: {
+            'cache-control': 'public, max-age=31536000, immutable',
+            'content-type': 'text/javascript; charset=utf-8',
+          },
+          href: '/c/cart.client.js?v=cart-v1#Cart$add',
+          path: '/c/cart.client.js',
+          status: 200,
+        },
+      ]);
+      expect(outputs[0]?.staticExport?.assets).toEqual([
+        {
+          headers: { 'content-type': 'text/css; charset=utf-8' },
+          path: '/assets/cart.css',
+          source: join(outDir, 'assets/cart.css'),
+          status: 200,
+        },
+        {
+          headers: { 'content-type': 'text/javascript; charset=utf-8' },
+          path: '/assets/cart.js',
+          source: join(outDir, 'assets/cart.js'),
+          status: 200,
+        },
+      ]);
+      await expect(readFile(join(outDir, 'c/cart.client.js'), 'utf8')).resolves.toBe(
+        'export const cartClient = true;',
+      );
+      await expect(readFile(join(exportDir, 'cart/index.html'), 'utf8')).resolves.toContain(
+        '<link rel="stylesheet" href="/assets/cart.css">',
+      );
+      await expect(readFile(join(exportDir, 'cart/index.html'), 'utf8')).resolves.toContain(
+        '<button on:click="/c/cart.client.js?v=cart-v1#Cart$add">Add</button>',
+      );
+      await expect(readFile(join(exportDir, 'c/cart.client.js'), 'utf8')).resolves.toBe(
+        'export const cartClient = true;',
+      );
+      await expect(readFile(join(exportDir, 'assets/cart.css'), 'utf8')).resolves.toBe(
+        '.cart{display:grid}',
+      );
+      await expect(readFile(join(exportDir, 'assets/cart.js'), 'utf8')).resolves.toBe(
+        'export const cartAsset = true;',
+      );
+    } finally {
+      await Promise.all([
+        rm(outDir, { force: true, recursive: true }),
+        rm(exportDir, { force: true, recursive: true }),
+      ]);
+    }
+  });
+
   it('rejects unsafe Vite output asset paths before they can be copied', () => {
     expect(() =>
       jisoAppShellViteManifestAssets({

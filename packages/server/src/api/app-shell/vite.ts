@@ -64,6 +64,7 @@ export type {
   JisoAppShellVitePlugin,
   JisoAppShellVitePluginBuildOptions,
   JisoAppShellVitePluginOptions,
+  JisoAppShellVitePluginStaticExportOptions,
   JisoAppShellViteRouteEntryOptions,
   JisoAppShellViteSsrDevPlugin,
   JisoAppShellViteSsrDevPluginOptions,
