@@ -60,12 +60,14 @@ import {
   compilerDiagnosticMessageFacts,
   compilerDiagnosticFacts,
   compilerGeneratedQueryShapeFact,
+  compilerLoweredIrFwCheckBehaviorFact,
   compilerQueryUpdatePlanFacts,
   compilerUpdateCoverageFacts,
   type CompilerDataBindBehaviorFact,
   type CompilerDeriveFact,
   type CompilerDiagnosticFact,
   type CompilerDiagnosticMessageFact,
+  type CompilerLoweredIrFwCheckBehaviorFact,
   type CompilerQueryUpdatePlanFact,
   type CompilerQueryShapeFact,
   type CompilerStampFact,
@@ -876,6 +878,27 @@ describe('@jiso/test package subpath exports', () => {
       queryShapes: ['cart'],
     });
     expect(
+      compilerLoweredIrFwCheckBehaviorFact({
+        compileComponentModule: () => ({
+          diagnostics: [
+            {
+              code: 'FW235',
+              fileName: 'cart-badge.tsx',
+              message: 'lowered IR is not app source',
+              severity: 'error',
+            },
+          ],
+        }),
+        fwCheck: () => ({
+          exitCode: 1,
+          output: 'fw-check/v1\nERROR FW235 cart-badge.tsx lowered IR is not app source\n',
+        }),
+      }),
+    ).toMatchObject({
+      fwCheck: { exitCode: 1, status: 'issues' },
+      specSection: 'SPEC §5.2',
+    });
+    expect(
       compilerUpdateCoverageFacts([
         { componentName: 'CartBadge', position: 'text', query: 'cart.count', status: 'plan' },
       ]),
@@ -886,6 +909,9 @@ describe('@jiso/test package subpath exports', () => {
     expectTypeOf<CompilerDeriveFact>().toHaveProperty('selector').toEqualTypeOf<string>();
     expectTypeOf<CompilerDiagnosticFact>().toHaveProperty('code').toEqualTypeOf<string>();
     expectTypeOf<CompilerDiagnosticMessageFact>().toHaveProperty('message').toEqualTypeOf<string>();
+    expectTypeOf<CompilerLoweredIrFwCheckBehaviorFact>()
+      .toHaveProperty('specSection')
+      .toEqualTypeOf<'SPEC §5.2'>();
     expectTypeOf<CompilerQueryShapeFact>().toHaveProperty('source').toEqualTypeOf<string>();
     expectTypeOf<CompilerStampFact>().toHaveProperty('derive').toEqualTypeOf<CompilerDeriveFact>();
     expectTypeOf<CompilerUpdateCoverageFact>().toHaveProperty('component').toEqualTypeOf<string>();

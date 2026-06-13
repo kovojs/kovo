@@ -5,6 +5,7 @@ import {
   compilerDiagnosticFacts,
   compilerDiagnosticMessageFacts,
   compilerGeneratedQueryShapeFact,
+  compilerLoweredIrFwCheckBehaviorFact,
   compilerQueryUpdatePlanFacts,
   compilerUpdateCoverageFacts,
   compilerValidationBehaviorFact,
@@ -536,5 +537,79 @@ describe('@jiso/test compiler fixture facts', () => {
       'FW212',
     ]);
     expect(fact.invalidResidualStampDiagnostics).toHaveLength(2);
+  });
+
+  it('projects app-authored lowered IR through compiler and fw-check facts', () => {
+    const compiledSources: string[] = [];
+    const fact = compilerLoweredIrFwCheckBehaviorFact({
+      compileComponentModule({ fileName, source }) {
+        compiledSources.push(`${fileName}:${source.includes('data-bind="cart.count"')}`);
+
+        return {
+          diagnostics: [
+            {
+              code: 'FW235',
+              fileName,
+              message:
+                'App source hand-authors lowered IR/string-rendered components; write TSX and let the compiler emit IR.',
+              severity: 'error',
+              start: { column: 25, line: 4 },
+            },
+          ],
+        };
+      },
+      fwCheck({ diagnostics }) {
+        const diagnostic = diagnostics[0];
+
+        return {
+          exitCode: 1,
+          output: `fw-check/v1\nERROR ${diagnostic?.code} ${diagnostic?.site}:4:25 ${diagnostic?.message}\n`,
+        };
+      },
+    });
+
+    expect(compiledSources).toEqual(['cart-badge.tsx:true']);
+    expect(fact).toEqual({
+      compilerDiagnostics: [
+        {
+          code: 'FW235',
+          fileName: 'cart-badge.tsx',
+          message:
+            'App source hand-authors lowered IR/string-rendered components; write TSX and let the compiler emit IR.',
+          severity: 'error',
+        },
+      ],
+      fwCheck: {
+        coverage: [],
+        diagnostics: [
+          {
+            code: 'FW235',
+            message:
+              'App source hand-authors lowered IR/string-rendered components; write TSX and let the compiler emit IR.',
+            properties: {},
+            severity: 'ERROR',
+            target: 'cart-badge.tsx:4:25',
+          },
+        ],
+        exitCode: 1,
+        status: 'issues',
+        version: 'fw-check/v1',
+      },
+      sourceFileName: 'cart-badge.tsx',
+      specSection: 'SPEC §5.2',
+    });
+  });
+
+  it('fails loudly when the lowered IR fixture stops producing FW235', () => {
+    expect(() =>
+      compilerLoweredIrFwCheckBehaviorFact({
+        compileComponentModule() {
+          return { diagnostics: [] };
+        },
+        fwCheck() {
+          return { exitCode: 0, output: 'fw-check/v1\nOK\n' };
+        },
+      }),
+    ).toThrow('Expected exactly one FW235 diagnostic; found 0');
   });
 });

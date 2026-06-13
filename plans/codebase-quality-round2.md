@@ -167,6 +167,9 @@ checks, so the monolith asserts public diagnostic facts without rebuilding those
 Shared generated-module fixtures now own the P3 typed-route navigation fixture, including SPEC
 §6.4 core route helper outputs, generated anchor href projection, RouteRegistry consumer type
 assertions, and FW220 residual href/action diagnostics.
+Shared compiler fixtures now own the D9 FW235 app-authored lowered-IR fixture, including SPEC §5.2
+context, compiler diagnostic projection, and `fw-check/v1` output projection, so the monolith no
+longer assembles that lowered string-render source or diagnostic-to-fw-check mapping inline.
 
 - [ ] Search for remaining custom parsers, raw source membership checks, and generated-artifact
       projections in `tests/fw-check.node.mjs`.
@@ -194,6 +197,17 @@ Latest evidence:
   `packages/runtime/src/inline-loader.ts` installer against canonical `ImportHandlerModule`
   directly instead of the duplicated `InlineImportHandlerModule` alias, and
   `packages/runtime/src/index.ts` no longer re-exports that compatibility type.
+- Phase 1/6/7 D9 lowered-IR fw-check fixture closure:
+  `pnpm exec vitest --run packages/test/src/compiler-fixtures.test.ts packages/test/src/package-exports.test.ts`;
+  `pnpm run check:build`;
+  `node --test --test-name-pattern "D9 FW235" tests/fw-check.node.mjs`;
+  `pnpm exec vp check packages/test/src/compiler-fixtures.ts packages/test/src/compiler-fixtures.test.ts packages/test/src/package-exports.test.ts tests/fw-check.node.mjs plans/codebase-quality-round2.md`;
+  `git diff --check`;
+  `pnpm run check:fw`. Evidence: `packages/test/src/compiler-fixtures.ts` now exposes
+  `compilerLoweredIrFwCheckBehaviorFact()` for SPEC §5.2 app-authored lowered-IR rejection,
+  compiler FW235 diagnostic projection, and `fw-check/v1` assertion facts; `tests/fw-check.node.mjs`
+  asserts that public fixture fact instead of assembling lowered string-render source and
+  diagnostic-to-fw-check mapping inline.
 - Phase 5 Vite SSR dev node-handler boundary slice:
   `pnpm exec vitest --run packages/server/src/vite-dev.test.ts packages/server/src/vite.test.ts`;
   `pnpm exec tsc --noEmit --pretty false`;

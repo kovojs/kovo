@@ -1,9 +1,16 @@
+import {
+  fwCheckAssertionFact,
+  type FwCheckAssertionFact,
+  type FwCheckResultLike,
+} from './fw-check-fixtures.ts';
+
 export interface CompilerDiagnosticLike {
   code: string;
   fileName?: string;
   help?: string;
   message: string;
   severity: string;
+  start?: unknown;
   [field: string]: unknown;
 }
 
@@ -193,6 +200,25 @@ export interface CompilerValidationBehaviorOptions {
   diagnosticDefinitions: CompilerValidationDiagnosticDefinitions;
 }
 
+export interface CompilerLoweredIrFwCheckCompileResult {
+  diagnostics: readonly CompilerDiagnosticLike[];
+}
+
+export interface CompilerLoweredIrFwCheckBehaviorOptions {
+  compileComponentModule(options: {
+    fileName: string;
+    source: string;
+  }): CompilerLoweredIrFwCheckCompileResult;
+  fwCheck(input: {
+    diagnostics: readonly {
+      code: string;
+      message: string;
+      site?: string;
+      start?: unknown;
+    }[];
+  }): FwCheckResultLike;
+}
+
 export interface CompilerDataBindBehaviorFact {
   diagnostics: {
     FW227Help: string;
@@ -220,6 +246,13 @@ export interface CompilerValidationBehaviorFact {
   validExecutionTriggerDiagnostics: CompilerDiagnosticFact[];
   validIdrefDiagnostics: CompilerDiagnosticFact[];
   validResidualStampDiagnostics: CompilerDiagnosticFact[];
+}
+
+export interface CompilerLoweredIrFwCheckBehaviorFact {
+  compilerDiagnostics: CompilerDiagnosticFact[];
+  fwCheck: FwCheckAssertionFact;
+  sourceFileName: string;
+  specSection: 'SPEC §5.2';
 }
 
 export function compilerDiagnosticFacts(
@@ -660,5 +693,41 @@ export const Recommendations = component('recommendations', {
     validExecutionTriggerDiagnostics: compilerDiagnosticFacts(validExecutionTriggers.diagnostics),
     validIdrefDiagnostics: compilerDiagnosticFacts(validIdrefs.diagnostics),
     validResidualStampDiagnostics: compilerDiagnosticFacts(validResidualStamp.diagnostics),
+  };
+}
+
+export function compilerLoweredIrFwCheckBehaviorFact(
+  options: CompilerLoweredIrFwCheckBehaviorOptions,
+): CompilerLoweredIrFwCheckBehaviorFact {
+  const sourceFileName = 'cart-badge.tsx';
+  const result = options.compileComponentModule({
+    fileName: sourceFileName,
+    source: `
+export const CartBadge = component('cart-badge', {
+  queries: { cart: cartQuery },
+  render: ({ cart }) => \`<cart-badge fw-deps="cart"><span data-bind="cart.count">\${cart.count}</span></cart-badge>\`,
+});
+`,
+  });
+  const diagnostics = result.diagnostics.filter((entry) => entry.code === 'FW235');
+
+  if (diagnostics.length !== 1) {
+    throw new Error(`Expected exactly one FW235 diagnostic; found ${diagnostics.length}`);
+  }
+
+  return {
+    compilerDiagnostics: compilerDiagnosticFacts(diagnostics),
+    fwCheck: fwCheckAssertionFact(
+      options.fwCheck({
+        diagnostics: diagnostics.map((diagnostic) => ({
+          code: diagnostic.code,
+          message: diagnostic.message,
+          ...(diagnostic.fileName === undefined ? {} : { site: diagnostic.fileName }),
+          ...(diagnostic.start === undefined ? {} : { start: diagnostic.start }),
+        })),
+      }),
+    ),
+    sourceFileName,
+    specSection: 'SPEC §5.2',
   };
 }

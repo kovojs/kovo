@@ -28,9 +28,9 @@ import {
 } from '../dist/compiler/src/index.mjs';
 import { diagnosticDefinitions } from '../dist/core/src/index.mjs';
 import {
-  applyMutationResponseToDom,
   applyCompiledQueryUpdatePlan,
   applyDeferredStreamResponseToRuntime,
+  applyFetchedEnhancedMutationResponseToDom,
   createQueryStore,
   derive,
   installPagehideOptimismCleanup,
@@ -56,6 +56,7 @@ import {
 import {
   compilerDataBindBehaviorFact,
   compilerDiagnosticFacts,
+  compilerLoweredIrFwCheckBehaviorFact,
   compilerQueryUpdatePlanFacts,
   compilerUpdateCoverageFacts,
   compilerValidationBehaviorFact,
@@ -1613,7 +1614,18 @@ void test('P3 route and query guard removal is mechanically audited by fw check'
 void test('P5 morph evidence preserves keyed identity and applies fragments', () => {
   assert.deepEqual(
     morphFragmentBehaviorFact({
-      applyMutationResponseToDom,
+      applyMutationResponseToDom({ body, root, store }) {
+        return applyFetchedEnhancedMutationResponseToDom(
+          { root, store },
+          {
+            body,
+            changes: [],
+            idem: 'fw-check-morph-fixture',
+            response: new Response('', { status: 200 }),
+            targets: [],
+          },
+        );
+      },
       createQueryStore,
       morphStructuralTree,
     }),
@@ -3833,48 +3845,37 @@ fragmentTarget('cart-row', { rowId: 'row-1', sku: 'sku-1' });
 });
 
 void test('D9 FW235 fails fw-check for app-authored lowered IR component modules', async () => {
-  const result = compileComponentModule({
-    fileName: 'cart-badge.tsx',
-    source: `
-export const CartBadge = component('cart-badge', {
-  queries: { cart: cartQuery },
-  render: ({ cart }) => \`<cart-badge fw-deps="cart"><span data-bind="cart.count">\${cart.count}</span></cart-badge>\`,
-});
-`,
-  });
-  const diagnostic = result.diagnostics.find((entry) => entry.code === 'FW235');
-  assert.ok(diagnostic);
+  const fact = compilerLoweredIrFwCheckBehaviorFact({ compileComponentModule, fwCheck });
 
-  assert.deepEqual(
-    fwCheckAssertionFact(
-      fwCheck({
-        diagnostics: [
-          {
-            code: diagnostic.code,
-            message: diagnostic.message,
-            site: diagnostic.fileName,
-            start: diagnostic.start,
-          },
-        ],
-      }),
-    ),
+  assert.equal(fact.specSection, 'SPEC §5.2');
+  assert.deepEqual(fact.compilerDiagnostics, [
     {
-      coverage: [],
-      diagnostics: [
-        {
-          code: 'FW235',
-          message:
-            'App source hand-authors lowered IR/string-rendered components; write TSX and let the compiler emit IR.',
-          properties: {},
-          severity: 'ERROR',
-          target: 'cart-badge.tsx:4:25',
-        },
-      ],
-      exitCode: 1,
-      status: 'issues',
-      version: 'fw-check/v1',
+      code: 'FW235',
+      fileName: 'cart-badge.tsx',
+      help:
+        'SPEC §5.2: TSX is the sole app-authoring surface. Write JSX with typed expressions and let the compiler emit renderSource(), fw-c, fw-deps, and data-bind.\n' +
+        'TSX equivalent direction: render with JSX, for example `render: (...) => (<cart-badge>...</cart-badge>)`, and use typed expressions such as `{cart.count}` instead of data-bind strings.',
+      message:
+        'App source hand-authors lowered IR/string-rendered components; write TSX and let the compiler emit IR.',
+      severity: 'error',
     },
-  );
+  ]);
+  assert.deepEqual(fact.fwCheck, {
+    coverage: [],
+    diagnostics: [
+      {
+        code: 'FW235',
+        message:
+          'App source hand-authors lowered IR/string-rendered components; write TSX and let the compiler emit IR.',
+        properties: {},
+        severity: 'ERROR',
+        target: 'cart-badge.tsx:4:25',
+      },
+    ],
+    exitCode: 1,
+    status: 'issues',
+    version: 'fw-check/v1',
+  });
 });
 
 void test('P4 commerce touch graph is a committed generated artifact', async () => {
