@@ -12,6 +12,7 @@ import {
 } from '../scan/parse.js';
 import {
   componentQueryShapes,
+  isRelativeBindingPath,
   knownQueryNames,
   listItemShapeAtBindingPath,
   parseBindingPath,
@@ -182,8 +183,8 @@ function dataBindAttributeFact(
     length: attribute.end - attribute.start,
     name,
     path,
-    query: path.startsWith('.') ? null : queryNameFromPath(path),
-    relativeReadPath: path.startsWith('.') ? relativeBindingPath(path) : null,
+    query: isRelativeBindingPath(path) ? null : queryNameFromPath(path),
+    relativeReadPath: isRelativeBindingPath(path) ? relativeBindingPath(path) : null,
   };
 }
 

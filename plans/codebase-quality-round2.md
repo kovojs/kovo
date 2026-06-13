@@ -216,6 +216,8 @@ Inline derive lowering now uses shared query-path helpers for query-root checks 
 string splitting.
 Data-derive stamp analysis now uses the shared binding-path parser instead of local `split('.')`
 handling.
+Relative binding detection is centralized in query-shape helpers and reused by query update
+analysis plus data-bind validation.
 
 - [ ] Remove remaining compatibility fallback reparses where parser facts are sufficient.
 - [ ] Audit production `createSourceFile`, `getText`, `indexOf`, `slice`, and regex usage; keep
@@ -247,6 +249,13 @@ packages/compiler/src/query-update-plans.test.ts packages/compiler/src/query-cov
 packages/compiler/src/compile-component.test.ts`; `pnpm exec tsc --noEmit --pretty false`;
   exact `pnpm exec vp check packages/compiler/src/analyze/query-updates.ts
 packages/compiler/src/query-update-plans.test.ts packages/compiler/src/query-coverage.test.ts
+plans/codebase-quality-round2.md`; `git diff --check`.
+- Relative binding helper reuse: `pnpm exec vitest --run
+packages/compiler/src/query-bindings.test.ts packages/compiler/src/query-update-plans.test.ts
+packages/compiler/src/query-coverage.test.ts packages/compiler/src/compile-component.test.ts`;
+  `pnpm exec tsc --noEmit --pretty false`; exact `pnpm exec vp check
+packages/compiler/src/analyze/query-shapes.ts packages/compiler/src/analyze/query-updates.ts
+packages/compiler/src/validate/bindings.ts packages/compiler/src/query-bindings.test.ts
 plans/codebase-quality-round2.md`; `git diff --check`.
 - `pnpm exec vitest --run packages/compiler/src/shared.test.ts packages/compiler/src/navigation-lowering.test.ts packages/compiler/src/view-transitions.test.ts`
 - `pnpm exec vitest --run packages/compiler/src/navigation-lowering.test.ts packages/compiler/src/compile-component.test.ts`

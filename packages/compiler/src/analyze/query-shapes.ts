@@ -190,7 +190,11 @@ export function requiredPathSegment(name: string): BindingPathSegment {
 }
 
 export function relativeBindingPath(path: string): string {
-  return path.startsWith('.') ? path.slice(1) : path;
+  return isRelativeBindingPath(path) ? path.slice(1) : path;
+}
+
+export function isRelativeBindingPath(path: string): boolean {
+  return path.startsWith('.');
 }
 
 function queryShapeChildPaths(shape: QueryShape): string[] {

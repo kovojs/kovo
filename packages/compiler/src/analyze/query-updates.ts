@@ -1,6 +1,7 @@
 import { dedupeBy } from '../shared.js';
 import {
   knownQueryNames,
+  isRelativeBindingPath,
   parseBindingPath,
   queryNameFromPath,
   queryPathUsesKnownQuery,
@@ -330,8 +331,8 @@ function dataBindAttributeFact(name: string, path: string): DataBindAttribute {
   return {
     name,
     path,
-    query: path.startsWith('.') ? null : queryNameFromPath(path),
-    relativeReadPath: path.startsWith('.') ? relativeBindingPath(path) : null,
+    query: isRelativeBindingPath(path) ? null : queryNameFromPath(path),
+    relativeReadPath: isRelativeBindingPath(path) ? relativeBindingPath(path) : null,
   };
 }
 
