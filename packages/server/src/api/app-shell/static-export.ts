@@ -6,7 +6,7 @@ export {
   isStaticExportDiagnosticError,
   StaticExportError,
 } from '../../static-export-diagnostics.js';
-export { staticExportInventory, staticExportManifest } from '../../static-export-types.js';
+export { staticExportInventory, staticExportManifest } from '../../static-export-result.js';
 export { staticExportOutputPlan } from '../../static-export-output.js';
 export type {
   StaticExportArtifact,

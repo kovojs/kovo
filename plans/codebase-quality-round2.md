@@ -860,6 +860,10 @@ Vite build-output static-export option projection now also lives in
 `packages/server/src/vite-static-export-options.ts`, so plugin-time output writes, direct Vite
 export, and inventory/manifest helpers share the same SPEC §9.5 asset/option owner while
 `vite-build-output.ts` consumes the projected write plan.
+Static export inventory/manifest projection now lives in `packages/server/src/static-export-result.ts`
+and response-header snapshots in `static-export-headers.ts`, leaving `static-export-types.ts` as a
+type/contract module while the app-shell static-export public subpath forwards from the focused
+result owner.
 
 - [ ] Continue subtractive extraction until `packages/server/src/index.ts`, Vite, static export,
       replay, document, and app boundaries are small and obvious.
@@ -877,6 +881,11 @@ Latest evidence:
   `pnpm run check:build`;
   exact `pnpm exec vp check packages/server/src/static-export-document.ts packages/server/src/static-export-document.test.ts plans/app-shell.md plans/codebase-quality-round2.md`;
   `git diff --check`.
+- Round253 static-export result boundary:
+  `pnpm exec vitest --run packages/server/src/static-export.test.ts packages/server/src/static-export-output.test.ts packages/server/src/static-export-replay.test.ts packages/server/src/vite-build.test.ts packages/server/src/api/app.test.ts`;
+  `pnpm exec tsc --noEmit --pretty false`;
+  `pnpm run check:build`;
+  exact `pnpm exec vp check packages/server/src/static-export-headers.ts packages/server/src/static-export-result.ts packages/server/src/static-export-types.ts packages/server/src/static-export-document.ts packages/server/src/static-export-output.ts packages/server/src/vite-static-export.ts packages/server/src/static-export.test.ts packages/server/src/vite-build.test.ts packages/server/src/api/app-shell/static-export.ts packages/server/src/api/app.test.ts plans/app-shell.md plans/codebase-quality-round2.md IMPLEMENT_v1.md`.
 
 - Round251 commerce HTTP/static adoption:
   `pnpm exec vitest --run examples/commerce/src/app-shell.test.ts`;

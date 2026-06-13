@@ -10,8 +10,8 @@ import {
   type StaticExportClientModuleArtifact,
   type StaticExportHtmlPathStyle,
   type StaticExportResponseSnapshot,
-  sortedHeaders,
 } from './static-export-types.js';
+import { sortedHeaders } from './static-export-headers.js';
 
 export interface StaticExportRouteDocumentReplayOptions {
   handler: RequestHandler;

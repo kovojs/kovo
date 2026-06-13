@@ -6,7 +6,7 @@ import { describe, expect, it } from 'vitest';
 
 import { createApp } from './app.js';
 import { route } from './route.js';
-import { staticExportManifest } from './static-export-types.js';
+import { staticExportManifest } from './static-export-result.js';
 import { createJisoAppShellViteBuild } from './vite-build.js';
 import {
   jisoAppShellViteOutputDir,

@@ -21,7 +21,7 @@ import * as routingApi from './routing.js';
 import * as staticExportDiagnosticsApi from '../static-export-diagnostics.js';
 import * as staticExportOrchestratorApi from '../static-export.js';
 import * as staticExportOutputApi from '../static-export-output.js';
-import * as staticExportTypesApi from '../static-export-types.js';
+import * as staticExportResultApi from '../static-export-result.js';
 import * as wireHtmlApi from '../wire-html.js';
 
 function aggregateValueKeys(...modules: readonly Record<string, unknown>[]): string[] {
@@ -86,8 +86,8 @@ describe('server app-shell public API barrels', () => {
     );
     expect(appShellApi.toNodeHandler).toBe(nodeApi.toNodeHandler);
     expect(appShellApi.exportStaticApp).toBe(staticExportApi.exportStaticApp);
-    expect(appShellApi.staticExportInventory).toBe(staticExportTypesApi.staticExportInventory);
-    expect(appShellApi.staticExportManifest).toBe(staticExportTypesApi.staticExportManifest);
+    expect(appShellApi.staticExportInventory).toBe(staticExportResultApi.staticExportInventory);
+    expect(appShellApi.staticExportManifest).toBe(staticExportResultApi.staticExportManifest);
     expect(appShellApi.staticExportOutputPlan).toBe(staticExportOutputApi.staticExportOutputPlan);
     expect(appShellApi.formatStaticExportDiagnostics).toBe(
       staticExportDiagnosticsApi.formatStaticExportDiagnostics,
@@ -134,10 +134,10 @@ describe('server app-shell public API barrels', () => {
     expect(packageNodeApi.toNodeHandler).toBe(nodeApi.toNodeHandler);
     expect(packageStaticExportApi.exportStaticApp).toBe(staticExportApi.exportStaticApp);
     expect(packageStaticExportApi.staticExportInventory).toBe(
-      staticExportTypesApi.staticExportInventory,
+      staticExportResultApi.staticExportInventory,
     );
     expect(packageStaticExportApi.staticExportManifest).toBe(
-      staticExportTypesApi.staticExportManifest,
+      staticExportResultApi.staticExportManifest,
     );
     expect(packageStaticExportApi.staticExportOutputPlan).toBe(
       staticExportOutputApi.staticExportOutputPlan,
@@ -185,9 +185,11 @@ describe('server app-shell public API barrels', () => {
     expect(packageAppShellApi.writeWebResponseToNode).toBe(nodeApi.writeWebResponseToNode);
     expect(packageAppShellApi.StaticExportError).toBe(staticExportDiagnosticsApi.StaticExportError);
     expect(packageAppShellApi.staticExportInventory).toBe(
-      staticExportTypesApi.staticExportInventory,
+      staticExportResultApi.staticExportInventory,
     );
-    expect(packageAppShellApi.staticExportManifest).toBe(staticExportTypesApi.staticExportManifest);
+    expect(packageAppShellApi.staticExportManifest).toBe(
+      staticExportResultApi.staticExportManifest,
+    );
     expect(packageAppShellApi.staticExportOutputPlan).toBe(
       staticExportOutputApi.staticExportOutputPlan,
     );

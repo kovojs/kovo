@@ -19,7 +19,7 @@ import {
   StaticExportError,
 } from './static-export-diagnostics.js';
 import { staticExportOutputPlan } from './static-export-output.js';
-import { staticExportInventory, staticExportManifest } from './static-export-types.js';
+import { staticExportInventory, staticExportManifest } from './static-export-result.js';
 
 describe('server static export', () => {
   it('exports a simple route through the app request handler to an html artifact', async () => {

@@ -897,3 +897,16 @@ Round252 static document replay contraction evidence:
 - `pnpm run check:build`
 - `pnpm exec vp check packages/server/src/static-export-document.ts packages/server/src/static-export-document.test.ts plans/app-shell.md plans/codebase-quality-round2.md`
 - `git diff --check`
+
+Round253 static-export result boundary evidence:
+
+- `packages/server/src/static-export-result.ts` now owns SPEC §9.5 static export inventory and
+  manifest projections, while `static-export-headers.ts` owns response-header snapshots. The
+  `static-export-types.ts` module is back to artifact, manifest, option, and result contracts only.
+- Vite static-export helpers and the public `@jiso/server/app-shell/static-export` subpath now
+  forward inventory/manifest values from the focused result owner; public API tests pin that
+  boundary.
+- `pnpm exec vitest --run packages/server/src/static-export.test.ts packages/server/src/static-export-output.test.ts packages/server/src/static-export-replay.test.ts packages/server/src/vite-build.test.ts packages/server/src/api/app.test.ts`
+- `pnpm exec tsc --noEmit --pretty false`
+- `pnpm run check:build`
+- `pnpm exec vp check packages/server/src/static-export-headers.ts packages/server/src/static-export-result.ts packages/server/src/static-export-types.ts packages/server/src/static-export-document.ts packages/server/src/static-export-output.ts packages/server/src/vite-static-export.ts packages/server/src/static-export.test.ts packages/server/src/vite-build.test.ts packages/server/src/api/app-shell/static-export.ts packages/server/src/api/app.test.ts plans/app-shell.md plans/codebase-quality-round2.md IMPLEMENT_v1.md`

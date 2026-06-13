@@ -20,8 +20,8 @@ import {
   type StaticExportOutputTarget,
 } from './static-export-output-targets.js';
 import { StaticExportError, staticExportDiagnostic } from './static-export-diagnostics.js';
+import { sortedHeaders } from './static-export-headers.js';
 import {
-  sortedHeaders,
   type StaticExportArtifact,
   type StaticExportAssetArtifact,
   type StaticExportAssetInput,
