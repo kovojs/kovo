@@ -2461,6 +2461,47 @@ export interface CommerceInvalidationSets {
     expect(diagnosticsForQueryFacts(facts)).toEqual([]);
   });
 
+  it('extracts project member-referenced query-loader functions through typed receiver symbols', () => {
+    const facts = extractQueryFactsFromProject({
+      files: [
+        {
+          fileName: 'product.queries.ts',
+          source: [
+            'import type { PgDatabase } from "drizzle-orm/pg-core";',
+            '',
+            'export const products = pgTable("products", {',
+            '  id: text("id").primaryKey(),',
+            '  stock: integer("stock").notNull(),',
+            '}, jiso({ domain: "product", key: "id" }));',
+            '',
+            'const loaders = {',
+            '  product(_input: unknown, db: PgDatabase<any, any, any>) {',
+            '    return db.select({ id: products.id, stock: products.stock }).from(products);',
+            '  },',
+            '};',
+            '',
+            'export const productQuery = query("product/member-loader", {',
+            '  load: loaders.product,',
+            '});',
+          ].join('\n'),
+        },
+      ],
+    });
+
+    expect(facts).toEqual([
+      {
+        query: 'product/member-loader',
+        reads: ['product'],
+        shape: {
+          id: 'string',
+          stock: 'number',
+        },
+        site: 'product.queries.ts:14',
+      },
+    ]);
+    expect(diagnosticsForQueryFacts(facts)).toEqual([]);
+  });
+
   it('does not fabricate project query facts from untyped shorthand query-loader receivers', () => {
     const facts = extractQueryFactsFromProject({
       files: [
@@ -5194,6 +5235,42 @@ export interface CommerceInvalidationSets {
     });
   });
 
+  it('extracts member-referenced source write callbacks from domain authoring surfaces', () => {
+    const graph = extractTouchGraphFromSource([
+      {
+        fileName: 'cart.domain.ts',
+        source: [
+          'export const cartItems = pgTable("cart_items", {}, jiso({ domain: "cart", key: "productId" }));',
+          '',
+          'const callbacks = {',
+          '  addItem(db, productId) {',
+          '    return db.insert(cartItems).values({ productId });',
+          '  },',
+          '};',
+          '',
+          'export const cart = domain({',
+          '  addItem: write(callbacks.addItem),',
+          '});',
+        ].join('\n'),
+      },
+    ]);
+
+    expect(graph).toEqual({
+      'cart.addItem': {
+        reads: [],
+        touches: [
+          {
+            domain: 'cart',
+            keys: null,
+            site: 'cart.domain.ts:5',
+            via: 'cart_items',
+          },
+        ],
+        unresolved: [],
+      },
+    });
+  });
+
   it('extracts configured write callbacks and folds local helper summaries', () => {
     const graph = extractTouchGraphFromSource([
       {
@@ -6396,6 +6473,53 @@ export interface CommerceInvalidationSets {
             domain: 'cart',
             keys: null,
             site: 'cart.domain.ts:10',
+            via: 'cart_items',
+          },
+        ],
+        unresolved: [],
+      },
+    });
+  });
+
+  it('extracts member-referenced project write callbacks from typed receiver symbols', () => {
+    const graph = extractTouchGraphFromProject({
+      files: [
+        pgDatabaseTypes(['insert(table: unknown): { values(value: unknown): Promise<void> };']),
+        {
+          fileName: 'cart.domain.ts',
+          source: [
+            'import type { PgDatabase } from "drizzle-orm/pg-core";',
+            '',
+            'interface FakeDb {',
+            '  insert(table: unknown): { values(value: unknown): Promise<void> };',
+            '}',
+            '',
+            'export const cartItems = pgTable("cart_items", {}, jiso({ domain: "cart", key: "productId" }));',
+            '',
+            'const callbacks = {',
+            '  addItem(writer: PgDatabase, db: FakeDb, productId: string) {',
+            '    writer.insert(cartItems).values({ productId });',
+            '    db.insert(cartItems).values({ productId });',
+            '  },',
+            '};',
+            '',
+            'export const cart = domain({',
+            '  addItem: write(callbacks.addItem),',
+            '});',
+            '',
+          ].join('\n'),
+        },
+      ],
+    });
+
+    expect(graph).toEqual({
+      'cart.addItem': {
+        reads: [],
+        touches: [
+          {
+            domain: 'cart',
+            keys: null,
+            site: 'cart.domain.ts:11',
             via: 'cart_items',
           },
         ],

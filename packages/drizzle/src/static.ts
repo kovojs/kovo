@@ -590,7 +590,8 @@ function projectDrizzleReceivers(callback: Node): ProjectDrizzleReceivers {
   if (
     !Node.isArrowFunction(callback) &&
     !Node.isFunctionDeclaration(callback) &&
-    !Node.isFunctionExpression(callback)
+    !Node.isFunctionExpression(callback) &&
+    !Node.isMethodDeclaration(callback)
   ) {
     return { names: new Set(), symbolKeys: new Set() };
   }
@@ -609,7 +610,8 @@ function projectReceiverParameterRequirements(callback: Node): ReceiverParameter
   if (
     !Node.isArrowFunction(callback) &&
     !Node.isFunctionDeclaration(callback) &&
-    !Node.isFunctionExpression(callback)
+    !Node.isFunctionExpression(callback) &&
+    !Node.isMethodDeclaration(callback)
   ) {
     return [];
   }
@@ -2632,9 +2634,8 @@ function queryCallbackFunction(node: Node): Node | undefined {
   const initializer = node.getInitializer();
   if (!initializer) return undefined;
   const expression = unwrappedStaticExpressionNode(initializer);
-  return Node.isArrowFunction(expression) || Node.isFunctionExpression(expression)
-    ? expression
-    : undefined;
+  if (Node.isArrowFunction(expression) || Node.isFunctionExpression(expression)) return expression;
+  return referencedQueryCallbackFunction(expression);
 }
 
 function queryCallbackPropertyIsLoad(node: Node): boolean {
@@ -2649,27 +2650,31 @@ function queryCallbackPropertyIsLoad(node: Node): boolean {
 }
 
 function referencedQueryCallbackFunction(identifier: Node): Node | undefined {
-  if (!Node.isIdentifier(identifier)) return undefined;
-
-  const symbol = symbolForIdentifierReference(identifier);
+  const symbol = symbolForCallbackReference(identifier);
   for (const declaration of symbol?.getDeclarations() ?? []) {
     const callback = callbackFunctionFromDeclaration(declaration);
     if (callback) return callback;
   }
 
-  return undefined;
+  return localObjectMemberCallbackFunction(identifier);
 }
 
 function callbackFunctionFromDeclaration(declaration: Node): Node | undefined {
   if (Node.isFunctionDeclaration(declaration) && declaration.getNameNode()) return declaration;
+  if (Node.isMethodDeclaration(declaration)) return declaration;
   if (Node.isVariableDeclaration(declaration)) return callbackFunctionFromVariable(declaration);
+  if (Node.isPropertyAssignment(declaration)) return callbackFunctionFromProperty(declaration);
 
   if (!Node.isIdentifier(declaration)) return undefined;
 
   const parent = declaration.getParent();
   if (Node.isFunctionDeclaration(parent) && parent.getNameNode() === declaration) return parent;
+  if (Node.isMethodDeclaration(parent) && parent.getNameNode() === declaration) return parent;
   if (Node.isVariableDeclaration(parent) && parent.getNameNode() === declaration) {
     return callbackFunctionFromVariable(parent);
+  }
+  if (Node.isPropertyAssignment(parent) && parent.getNameNode() === declaration) {
+    return callbackFunctionFromProperty(parent);
   }
 
   return undefined;
@@ -2685,6 +2690,70 @@ function callbackFunctionFromVariable(
   return Node.isArrowFunction(expression) || Node.isFunctionExpression(expression)
     ? expression
     : undefined;
+}
+
+function callbackFunctionFromProperty(declaration: Node): Node | undefined {
+  if (!Node.isPropertyAssignment(declaration)) return undefined;
+
+  const initializer = declaration.getInitializer();
+  if (!initializer) return undefined;
+
+  const expression = unwrappedStaticExpressionNode(initializer);
+  return Node.isArrowFunction(expression) || Node.isFunctionExpression(expression)
+    ? expression
+    : undefined;
+}
+
+function symbolForCallbackReference(node: Node): MorphSymbol | undefined {
+  if (Node.isIdentifier(node)) return symbolForIdentifierReference(node);
+  if (Node.isPropertyAccessExpression(node)) return node.getNameNode().getSymbol();
+  if (Node.isElementAccessExpression(node)) return node.getSymbol();
+  return undefined;
+}
+
+function localObjectMemberCallbackFunction(node: Node): Node | undefined {
+  const member = staticAccessName(node);
+  const receiver = staticAccessExpression(node);
+  if (!member || !receiver || !Node.isIdentifier(receiver)) return undefined;
+
+  const symbol = symbolForIdentifierReference(receiver);
+  const declaredVariable = receiver
+    .getSourceFile()
+    .getVariableDeclarations()
+    .find((declaration) => declaration.getNameNode().getText() === receiver.getText());
+  const declarations = [
+    ...(symbol?.getDeclarations() ?? []),
+    ...(declaredVariable ? [declaredVariable] : []),
+  ];
+
+  for (const declaration of declarations) {
+    const variable = Node.isIdentifier(declaration)
+      ? declaration.getFirstAncestorByKind(SyntaxKind.VariableDeclaration)
+      : Node.isVariableDeclaration(declaration)
+        ? declaration
+        : undefined;
+    const initializer = variable?.getInitializer();
+    if (!initializer) continue;
+
+    const expression = unwrappedStaticExpressionNode(initializer);
+    if (!Node.isObjectLiteralExpression(expression)) continue;
+
+    for (const property of expression.getProperties()) {
+      if (
+        !Node.isMethodDeclaration(property) &&
+        !Node.isPropertyAssignment(property) &&
+        !Node.isShorthandPropertyAssignment(property)
+      ) {
+        continue;
+      }
+      if (propertyNameText(property.getNameNode()) !== member) continue;
+
+      const callback = callbackFunctionFromDeclaration(property);
+      if (callback) return callback;
+    }
+  }
+
+  return undefined;
 }
 
 function queryHelperReceiverArgumentName(
@@ -4474,14 +4543,11 @@ function writeCallbackFunction(
 function writeCallbackArgumentFunction(argument: Node): Node | null {
   const expression = unwrappedStaticExpressionNode(argument);
   if (Node.isArrowFunction(expression) || Node.isFunctionExpression(expression)) return expression;
-  if (Node.isIdentifier(expression)) return referencedWriteCallbackFunction(expression) ?? null;
-  return null;
+  return referencedWriteCallbackFunction(expression) ?? null;
 }
 
 function referencedWriteCallbackFunction(identifier: Node): Node | undefined {
-  if (!Node.isIdentifier(identifier)) return undefined;
-
-  const symbol = symbolForIdentifierReference(identifier);
+  const symbol = symbolForCallbackReference(identifier);
   for (const declaration of symbol?.getDeclarations() ?? []) {
     // SPEC §10-§11: mutation touch facts must come from an executable local callback body; cross
     // module references require their own file-scoped table/site context instead of source fallback.
@@ -4491,7 +4557,7 @@ function referencedWriteCallbackFunction(identifier: Node): Node | undefined {
     if (callback) return callback;
   }
 
-  return undefined;
+  return localObjectMemberCallbackFunction(identifier);
 }
 
 function extractedFunctionFromCallback(
@@ -6369,7 +6435,8 @@ function sourceDrizzleReceiverNames(callback: Node): string[] {
   if (
     Node.isArrowFunction(callback) ||
     Node.isFunctionDeclaration(callback) ||
-    Node.isFunctionExpression(callback)
+    Node.isFunctionExpression(callback) ||
+    Node.isMethodDeclaration(callback)
   ) {
     for (const param of callback.getParameters()) {
       appendSourceReceiverBindingNames(param.getNameNode(), names);
@@ -6385,7 +6452,8 @@ function sourceDestructuredReceiverReferences(callback: Node): QueryReceiverRefe
   if (
     Node.isArrowFunction(callback) ||
     Node.isFunctionDeclaration(callback) ||
-    Node.isFunctionExpression(callback)
+    Node.isFunctionExpression(callback) ||
+    Node.isMethodDeclaration(callback)
   ) {
     for (const param of callback.getParameters()) {
       appendSourceDestructuredReceiverBinding(param.getNameNode(), names, symbolKeys);
@@ -6399,7 +6467,8 @@ function sourceReceiverParameterRequirements(callback: Node): ReceiverParameterR
   if (
     !Node.isArrowFunction(callback) &&
     !Node.isFunctionDeclaration(callback) &&
-    !Node.isFunctionExpression(callback)
+    !Node.isFunctionExpression(callback) &&
+    !Node.isMethodDeclaration(callback)
   ) {
     return [];
   }

@@ -548,6 +548,16 @@ plans/app-shell.md plans/codebase-quality-round2.md`, and `git diff --check`.
       callbacks, and fake/untyped non-fabrication. Same-session evidence:
       `pnpm exec vitest --run packages/drizzle/src` and
       `pnpm exec vitest --run conformance/drizzle-pin`.
+      Additional evidence 2026-06-13: static member-referenced callbacks such as
+      `load: loaders.product` and `write(callbacks.addItem)` now resolve to parsed callback
+      declarations, including object-method receiver parameters, so typed project query loaders
+      and source/project domain writes no longer disappear under member indirection (SPEC
+      §10.2, §10.3, §11.1). Package and real `drizzle-orm` conformance tests pin the behavior.
+      Same-session evidence: `pnpm exec vitest --run packages/drizzle/src`,
+      `pnpm exec vitest --run conformance/drizzle-pin`,
+      `pnpm exec vp check packages/drizzle/src/static.ts packages/drizzle/src/index.test.ts
+      conformance/drizzle-pin/src/index.test.ts IMPLEMENT_v1.md
+      plans/codebase-quality-round2.md`, and `git diff --check`.
       Additional evidence 2026-06-13: helper handoffs through assigned receiver carrier variables
       such as `let context; context = { db }` now degrade to FW406 in source/project touch
       extraction and query-loader diagnostics, while assigned fake/lookalike carriers remain

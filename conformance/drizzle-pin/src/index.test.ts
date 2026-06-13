@@ -1429,6 +1429,47 @@ describe('Drizzle pinned subset conformance', () => {
     expect(diagnosticsForQueryFacts(facts)).toEqual([]);
   });
 
+  it('pins member-referenced query-loader functions under real Drizzle imports', () => {
+    const facts = extractQueryFactsFromProject({
+      files: [
+        {
+          fileName: 'conformance/drizzle-pin/src/product.queries.ts',
+          source: [
+            "import type { PgDatabase } from 'drizzle-orm/pg-core';",
+            '',
+            "export const products = pgTable('products', {",
+            "  id: text('id').primaryKey(),",
+            "  name: text('name').notNull(),",
+            "}, jiso({ domain: 'product', key: 'id' }));",
+            '',
+            'const loaders = {',
+            '  product(_input: unknown, db: PgDatabase<any, any, any>) {',
+            '    return db.select({ id: products.id, name: products.name }).from(products);',
+            '  },',
+            '};',
+            '',
+            "export const productQuery = query('product/member-loader', {",
+            '  load: loaders.product,',
+            '});',
+          ].join('\n'),
+        },
+      ],
+    });
+
+    expect(facts).toEqual([
+      {
+        query: 'product/member-loader',
+        reads: ['product'],
+        shape: {
+          id: 'string',
+          name: 'string',
+        },
+        site: 'conformance/drizzle-pin/src/product.queries.ts:14',
+      },
+    ]);
+    expect(diagnosticsForQueryFacts(facts)).toEqual([]);
+  });
+
   it('pins pgTable(name, cols, jiso({...})) as the real Drizzle extra config integration point', () => {
     const cartItems = pgTable(
       'cart_items',
@@ -2861,6 +2902,52 @@ describe('Drizzle pinned subset conformance', () => {
             domain: 'cart',
             keys: null,
             site: 'conformance/drizzle-pin/src/cart.domain.ts:10',
+            via: 'cart_items',
+          },
+        ],
+        unresolved: [],
+      },
+    });
+  });
+
+  it('pins member-referenced domain write callbacks with real Drizzle receiver types', () => {
+    const graph = extractTouchGraphFromProject({
+      files: [
+        {
+          fileName: 'conformance/drizzle-pin/src/cart.domain.ts',
+          source: [
+            "import type { PgDatabase } from 'drizzle-orm/pg-core';",
+            '',
+            'interface FakeDb {',
+            '  insert(table: unknown): { values(value: unknown): Promise<void> };',
+            '}',
+            '',
+            "export const cartItems = pgTable('cart_items', {}, jiso({ domain: 'cart', key: 'productId' }));",
+            '',
+            'const callbacks = {',
+            '  addItem(writer: PgDatabase<any, any, any>, db: FakeDb, productId: string) {',
+            '    writer.insert(cartItems).values({ productId });',
+            '    db.insert(cartItems).values({ productId });',
+            '  },',
+            '};',
+            '',
+            'export const cart = domain({',
+            '  addItem: write(callbacks.addItem),',
+            '});',
+            '',
+          ].join('\n'),
+        },
+      ],
+    });
+
+    expect(graph).toEqual({
+      'cart.addItem': {
+        reads: [],
+        touches: [
+          {
+            domain: 'cart',
+            keys: null,
+            site: 'conformance/drizzle-pin/src/cart.domain.ts:11',
             via: 'cart_items',
           },
         ],

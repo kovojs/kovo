@@ -120,6 +120,11 @@ remains Postgres-only; SQLite/MySQL conformance is deferred to late hardening.
       covers source referenced write callbacks, typed project callbacks, and untyped project
       non-fabrication; `conformance/drizzle-pin/src/index.test.ts` pins real `drizzle-orm`
       referenced domain write callbacks.
+      Evidence 2026-06-13: `packages/drizzle/src/static.ts` resolves static member-referenced
+      callbacks such as `load: loaders.product` and `write(callbacks.addItem)` through parsed
+      callback declarations; `packages/drizzle/src/index.test.ts` covers project query loaders plus
+      source/project domain write callbacks; `conformance/drizzle-pin/src/index.test.ts` pins the
+      same surfaces against real `drizzle-orm` Postgres receiver types.
 - [x] Keep SQLite conformance deferred to late hardening; focus v1 on Postgres behavior.
       Evidence: `packages/drizzle/src/drizzle-surface.ts`, `packages/drizzle/src/static.ts`,
       `packages/drizzle/src/index.test.ts`, and `conformance/drizzle-pin/src/index.test.ts` pin the
