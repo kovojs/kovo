@@ -4803,6 +4803,8 @@ describe('Drizzle pinned subset conformance', () => {
             "  await carrier.fake.execute('select 1');",
             '  await carrier.fake.update(users).set({});',
             '  await carrier.fake.query.users.findMany();',
+            '  await audit({ db: carrier.db });',
+            '  await audit({ db: carrier.fake });',
             '}',
           ].join('\n'),
         },
@@ -4829,6 +4831,11 @@ describe('Drizzle pinned subset conformance', () => {
           },
         ],
         unresolved: [
+          {
+            code: 'FW406',
+            message: 'Statically un-analyzable write site; manual touches required.',
+            site: 'conformance/drizzle-pin/src/users.domain.ts:22',
+          },
           {
             code: 'FW406',
             message: 'Statically un-analyzable write site; manual touches required.',

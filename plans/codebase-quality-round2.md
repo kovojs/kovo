@@ -150,6 +150,12 @@ remains Postgres-only; SQLite/MySQL conformance is deferred to late hardening.
       table declaration/import/namespace-export symbols; `packages/drizzle/src/index.test.ts` pins
       namespace-imported relational query tables, and `conformance/drizzle-pin/src/index.test.ts`
       pins real `drizzle-orm` relational query facts despite loader-local shadows.
+      Evidence 2026-06-13: `packages/drizzle/src/static.ts` removed project carrier-member
+      fallback diagnostics built from source-mode property paths; project unresolved/helper and
+      detached-method surfaces now rely on ts-morph-proven Drizzle member expressions such as
+      `carrier.db`, while fake sibling members remain ignored. `packages/drizzle/src/index.test.ts`
+      and `conformance/drizzle-pin/src/index.test.ts` pin helper-container FW406 degradation for
+      typed member handoff against package and real `drizzle-orm` Postgres receivers.
 - [x] Keep SQLite conformance deferred to late hardening; focus v1 on Postgres behavior.
       Evidence: `packages/drizzle/src/drizzle-surface.ts`, `packages/drizzle/src/static.ts`,
       `packages/drizzle/src/index.test.ts`, and `conformance/drizzle-pin/src/index.test.ts` pin the

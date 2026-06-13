@@ -1002,37 +1002,23 @@ function extractProjectUnresolvedCalls(
   const carrierSymbolKeys = receiverCarrierSymbolKeysForBody(body, (node) =>
     isProjectDrizzleReceiverIdentifier(node, receivers),
   );
-  const carrierReferences = sourceReceiverAliasReferencesForBody(body, (node) =>
-    isProjectDrizzleReceiverIdentifier(node, receivers),
-  );
   return [
     ...extractProjectExternalDbArgumentCalls(
       body,
       receivers,
       localFunctionNames,
       carrierSymbolKeys,
-      carrierReferences,
     ),
     ...extractOpaqueLocalHelperReceiverCallsFromBody(
       body,
       localFunctionNames,
       localFunctionsByKey,
       (argument) => isProjectDrizzleReceiverIdentifier(argument, receivers),
-      (argument) =>
-        projectReceiverReferenceInArgument(
-          argument,
-          receivers,
-          carrierSymbolKeys,
-          carrierReferences,
-        ),
+      (argument) => projectReceiverReferenceInArgument(argument, receivers, carrierSymbolKeys),
     ),
-    ...extractReceiverMethodAliasCallsFromBody(
-      body,
-      receiverOrCarrierMemberPredicateForBody(body, (node) =>
-        isProjectDrizzleReceiverIdentifier(node, receivers),
-      ),
+    ...extractReceiverMethodAliasCallsFromBody(body, (node) =>
+      isProjectDrizzleReceiverIdentifier(node, receivers),
     ),
-    ...extractProjectCarrierMemberReceiverCallsFromBody(body, receivers),
     ...extractProjectUnclassifiedDrizzleReceiverCalls(body, receivers),
   ];
 }
@@ -1043,10 +1029,6 @@ function extractProjectExternalDbArgumentCalls(
   localFunctionNames: ReadonlySet<string>,
   carrierSymbolKeys: ReadonlySet<string> = receiverCarrierSymbolKeysForBody(body, (node) =>
     isProjectDrizzleReceiverIdentifier(node, receivers),
-  ),
-  carrierReferences: SourceReceiverAliasReferences = sourceReceiverAliasReferencesForBody(
-    body,
-    (node) => isProjectDrizzleReceiverIdentifier(node, receivers),
   ),
 ): ExternalDbArgumentCall[] {
   const calls: ExternalDbArgumentCall[] = [];
@@ -1075,9 +1057,7 @@ function extractProjectExternalDbArgumentCalls(
     if (
       !call
         .getArguments()
-        .some((arg) =>
-          projectReceiverReferenceInArgument(arg, receivers, carrierSymbolKeys, carrierReferences),
-        )
+        .some((arg) => projectReceiverReferenceInArgument(arg, receivers, carrierSymbolKeys))
     ) {
       continue;
     }
@@ -1103,30 +1083,6 @@ function extractProjectUnclassifiedDrizzleReceiverCalls(
   }
 
   return calls;
-}
-
-function extractProjectCarrierMemberReceiverCallsFromBody(
-  body: Node,
-  receivers: ProjectDrizzleReceivers,
-  bodyOffset = bodySourceStart(body),
-): ExternalDbArgumentCall[] {
-  const references = sourceReceiverAliasReferencesForBody(body, (node) =>
-    isProjectDrizzleReceiverIdentifier(node, receivers),
-  );
-  const calls: ExternalDbArgumentCall[] = [];
-
-  for (const call of touchBodyCallExpressions(body)) {
-    const surface = sourceReceiverCallSurface(
-      call,
-      (node) =>
-        isSourceReceiverCarrierMemberExpression(node, references) &&
-        !isProjectDrizzleReceiverMemberExpression(node),
-      bodyOffset,
-    );
-    if (surface) calls.push(surface);
-  }
-
-  return dedupeExternalDbArgumentCalls(calls);
 }
 
 function projectUnclassifiedCallSurface(
@@ -2132,14 +2088,7 @@ function extractQueryDefinitionsFromSourceFile(
     const diagnostics = [
       ...relationalQueryDiagnostics(bodyArgument, receiverReferences),
       ...unclassifiedQueryReceiverDiagnostics(bodyArgument, receiverReferences),
-      ...((options.receiverMode ?? 'source') === 'project'
-        ? projectCarrierMemberQueryReceiverDiagnostics(bodyArgument, receiverReferences)
-        : []),
-      ...receiverMethodAliasQueryDiagnostics(
-        bodyArgument,
-        receiverReferences,
-        options.receiverMode ?? 'source',
-      ),
+      ...receiverMethodAliasQueryDiagnostics(bodyArgument, receiverReferences),
       ...externalQueryHelperDiagnostics(bodyArgument, receiverReferences, localFunctionKeys),
       ...opaqueLocalQueryHelperDiagnostics(bodyArgument, receiverReferences, localFunctionsByKey),
       ...unresolvedQueryReadDiagnostics(bodyArgument, receiverReferences, readResolutionOptions),
@@ -2423,25 +2372,6 @@ function unclassifiedQueryReceiverDiagnostics(
   });
 }
 
-function projectCarrierMemberQueryReceiverDiagnostics(
-  body: ObjectLiteralExpression,
-  receiverReferences: QueryReceiverReferences,
-): TouchGraphDiagnostic[] {
-  // SPEC §11.1: project carrier members are typed proof that some Drizzle work is reachable, but
-  // not enough static proof to derive precise table facts through the carrier boundary.
-  return queryCallbackBodies(body).flatMap((callbackBody) =>
-    extractProjectCarrierMemberReceiverCallsFromBody(callbackBody, {
-      names: receiverReferences.names,
-      symbolKeys: receiverReferences.symbolKeys,
-    }).map((call) => ({
-      code: 'FW406' as const,
-      message: `${diagnosticDefinitions.FW406.message} Query uses Drizzle receiver carrier surface ${call.name}().`,
-      severity: diagnosticDefinitions.FW406.severity,
-      site: '',
-    })),
-  );
-}
-
 function externalQueryHelperDiagnostics(
   body: ObjectLiteralExpression,
   receiverReferences: QueryReceiverReferences,
@@ -2582,14 +2512,8 @@ function opaqueLocalQueryHelperDiagnostics(
 function receiverMethodAliasQueryDiagnostics(
   body: ObjectLiteralExpression,
   receiverReferences: QueryReceiverReferences,
-  mode: 'project' | 'source',
 ): TouchGraphDiagnostic[] {
-  const isReceiverIdentifier =
-    mode === 'project'
-      ? receiverOrCarrierMemberPredicateForBody(body, (node) =>
-          isQueryReceiverIdentifier(node, receiverReferences),
-        )
-      : (node: Node) => isQueryReceiverIdentifier(node, receiverReferences);
+  const isReceiverIdentifier = (node: Node) => isQueryReceiverIdentifier(node, receiverReferences);
 
   return queryCallbackBodies(body).flatMap((callbackBody) =>
     extractReceiverMethodAliasCallsFromBody(callbackBody, isReceiverIdentifier).map((call) => ({
@@ -5442,19 +5366,6 @@ function sourceReceiverReferenceSize(
   );
 }
 
-function receiverOrCarrierMemberPredicateForBody(
-  body: Node,
-  isBaseReceiverIdentifier: (node: Node | undefined) => boolean,
-): (node: Node) => boolean {
-  // SPEC §11.1: receiver carriers prove only properties initialized from a proven Drizzle
-  // receiver; sibling lookalike properties stay invisible.
-  const references = sourceReceiverAliasReferencesForBody(body, isBaseReceiverIdentifier);
-  return (node: Node) =>
-    isBaseReceiverIdentifier(node) ||
-    isSourceReceiverAliasIdentifier(node, references) ||
-    isSourceReceiverCarrierMemberExpression(node, references);
-}
-
 function isSourceReceiverAliasExpression(
   node: Node,
   isBaseReceiverIdentifier: (node: Node | undefined) => boolean,
@@ -6071,15 +5982,12 @@ function projectReceiverReferenceInArgument(
   argument: Node,
   receivers: ProjectDrizzleReceivers,
   carrierSymbolKeys: ReadonlySet<string> = new Set(),
-  carrierReferences?: SourceReceiverAliasReferences,
 ): Node | undefined {
   return receiverReferenceInArgument(
     argument,
     (node) => isProjectDrizzleReceiverIdentifier(node, receivers),
     carrierSymbolKeys,
-    carrierReferences
-      ? (node) => isSourceReceiverCarrierMemberExpression(node, carrierReferences)
-      : undefined,
+    isProjectDrizzleReceiverMemberExpression,
   );
 }
 

@@ -6328,6 +6328,8 @@ export interface CommerceInvalidationSets {
             '  await execute("select 1");',
             '  await audit(nested);',
             '  await audit(nested.inner.db);',
+            '  await audit({ db: nested.inner.db });',
+            '  await audit({ db: overwritten.inner.db });',
             '  await overwritten.inner.db.execute("select 1");',
             '  await overwritten.inner.db.update(users).set({});',
             '  await overwritten.inner.db.query.users.findMany();',
@@ -6366,6 +6368,11 @@ export interface CommerceInvalidationSets {
             code: 'FW406',
             message: 'Statically un-analyzable write site; manual touches required.',
             site: 'cart.domain.ts:21',
+          },
+          {
+            code: 'FW406',
+            message: 'Statically un-analyzable write site; manual touches required.',
+            site: 'cart.domain.ts:22',
           },
           {
             code: 'FW406',
