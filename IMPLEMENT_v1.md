@@ -1,56 +1,56 @@
-# Jiso v1 Remaining Work
+# Jiso v1 Checklist
 
-`SPEC.md` is the behavior source of truth. This file tracks only what still blocks v1. Keep detailed
-evidence and sub-checklists in the active plan files.
+`SPEC.md` is the behavior source of truth. This file tracks only v1 blockers; keep detailed evidence
+in the active plan files.
 
-## Fixed Decisions
+## Decisions
 
-- Use Vite Plus (`vp ...`, `https://viteplus.dev/`) as the workspace check/build/test orchestrator,
-  including configured oxlint/oxfmt and `@typescript/native-preview` static checking.
-- v1 blesses `@jiso/drizzle` Postgres. SQLite/MySQL conformance is late-hardening work.
-- App-authored code stays TSX/JSX. Lowered IR, generated stamps, emitted modules, and source patches
-  are generated artifacts to verify, not app-authored source.
+- Vite Plus (`vp ...`, `https://viteplus.dev/`) is the workspace orchestrator, with oxlint/oxfmt and
+  `@typescript/native-preview` static checking.
+- v1 blesses `@jiso/drizzle` Postgres. SQLite/MySQL conformance is deferred to late hardening.
+- App-authored code is TSX/JSX. Lowered IR, stamps, emitted modules, and source patches are generated
+  artifacts.
 
-## Active Plans
+## Plan Ledgers
 
-- `plans/codebase-quality-round2.md`: compiler, Drizzle, runtime, server, harness, test structure.
-- `plans/ui.md`: headless primitives, wrappers, gallery, UI conformance.
+- `plans/codebase-quality-round2.md`: compiler, Drizzle, runtime, server, harness, tests.
+- `plans/ui.md`: primitives, wrappers, gallery, UI conformance.
 - `plans/app-shell.md`: request shell, Vite build/dev/export, static export, adoption.
 
-## Remaining Blockers
+## Blockers
 
-- [ ] Close compiler Phase 2.
-  - [ ] Remove compatibility reparses where model/parser facts are sufficient.
-  - [ ] Retire unjustified source-string lowerers/validators.
-  - [ ] Prove source patches and offset maps are the lowering contract.
-- [ ] Close quality and harness cleanup.
-  - [ ] Replace fragile generated-source assertions with behavior checks or structured `@jiso/test`
-        fixtures, except intentional wire pins.
-  - [ ] Move reusable monolith-test mechanics into package fixtures.
-- [ ] Close Drizzle Postgres support.
-  - [ ] Delete bespoke extraction paths replaced by ts-morph/project facts.
-  - [ ] Cover or FW406-degrade remaining invisible loader/mutation surfaces.
-- [ ] Close runtime support.
-  - [ ] Finish inline-loader minifier/apply-path unification.
-  - [ ] Split broad runtime tests across apply, query, loader, and minifier boundaries.
-- [ ] Close server and app-shell support.
-  - [ ] Finish subtractive extraction across root exports, Vite, static export, replay, document, and
-        app boundaries.
-  - [ ] Prove Vite build/static export/adoption across server, starter, commerce, and docs.
-  - [ ] Remove pinned compatibility modules and aliases once replacements are proven.
-- [ ] Close UI support.
-  - [ ] Finish remaining primitive exports, behavior contracts, wrappers, gallery routes, and
-        compiled demos.
-  - [ ] Close state, focus, form/validity, canceled-change restoration, axe, and visual baseline gaps.
+- [ ] Compiler Phase 2 is closed.
+  - [ ] Compatibility reparses are removed where parser/model facts are sufficient.
+  - [ ] Unjustified source-string lowerers and validators are retired.
+  - [ ] Source patches and offset maps are proven as the lowering contract.
+- [ ] Quality/harness cleanup is closed.
+  - [ ] Fragile generated-source assertions are replaced with behavior checks or structured
+        `@jiso/test` fixtures, except intentional wire pins.
+  - [ ] Reusable monolith-test mechanics live in package fixtures.
+- [ ] Drizzle Postgres support is closed.
+  - [ ] Bespoke extraction paths replaced by ts-morph/project facts are deleted.
+  - [ ] Remaining invisible loader/mutation surfaces are covered or FW406-degraded.
+- [ ] Runtime support is closed.
+  - [ ] Inline-loader minifier/apply paths are unified.
+  - [ ] Broad runtime tests are split across apply, query, loader, and minifier boundaries.
+- [ ] Server/app-shell support is closed.
+  - [ ] Subtractive extraction is complete across root exports, Vite, static export, replay,
+        document, and app boundaries.
+  - [ ] Vite build/static export/adoption is proven across server, starter, commerce, and docs.
+  - [ ] Pinned compatibility modules and aliases are removed after replacements are proven.
+- [ ] UI support is closed.
+  - [ ] Remaining primitive exports, behavior contracts, wrappers, gallery routes, and compiled demos
+        are complete.
+  - [ ] State, focus, form/validity, canceled-change restoration, axe, and visual baseline gaps are
+        closed.
 
-## Release Gate
+## Final Gates
 
-- [ ] Active plans have no open v1-blocking checklist items.
-- [ ] Final clean-checkout gates pass:
-  - [ ] `pnpm run check`
-  - [ ] `pnpm run test`
-  - [ ] `pnpm run test:browser`
-  - [ ] `pnpm run test:conformance`
-  - [ ] `pnpm run check:build`
-  - [ ] `pnpm run check:fw`
-- [ ] Any conflict between `SPEC.md` and implementation behavior is resolved before release.
+- [ ] Active plan ledgers have no open v1-blocking items.
+- [ ] Clean checkout passes `pnpm run check`.
+- [ ] Clean checkout passes `pnpm run test`.
+- [ ] Clean checkout passes `pnpm run test:browser`.
+- [ ] Clean checkout passes `pnpm run test:conformance`.
+- [ ] Clean checkout passes `pnpm run check:build`.
+- [ ] Clean checkout passes `pnpm run check:fw`.
+- [ ] No unresolved `SPEC.md`/implementation behavior conflicts remain.
