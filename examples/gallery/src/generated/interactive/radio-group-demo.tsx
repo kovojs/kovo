@@ -35,14 +35,14 @@ export const GalleryRadioGroupDemo = component('gallery-radio-group-demo', {
     const smsState = { ...groupState, itemValue: 'sms' };
 
     return (
-      <section
+      <div
         {...radioGroupRootAttributes({
           ...groupState,
           labelledBy: 'gallery-radio-group-label',
         })}
         class="grid gap-2"
         data-gallery-interactive="radio-group"
-        on:keydown="/c/examples/gallery/src/generated/interactive/radio-group-demo.client.js?v=2fa0e4bf#GalleryRadioGroupDemo$section_keydown"
+        on:keydown="/c/examples/gallery/src/generated/interactive/radio-group-demo.client.js?v=3411a457#GalleryRadioGroupDemo$div_keydown"
         fw-c="gallery-radio-group-demo"
         fw-state='{"value":"email"}'
       >
@@ -51,7 +51,7 @@ export const GalleryRadioGroupDemo = component('gallery-radio-group-demo', {
         <div {...radioGroupItemAttributes(emailState)} class="inline-flex items-center gap-2">
           <input
             {...radioGroupRadioAttributes({ ...emailState, controlId: 'gallery-radio-email' })}
-            on:click="/c/examples/gallery/src/generated/interactive/radio-group-demo.client.js?v=2fa0e4bf#GalleryRadioGroupDemo$input_click"
+            on:click="/c/examples/gallery/src/generated/interactive/radio-group-demo.client.js?v=3411a457#GalleryRadioGroupDemo$input_click"
           />
           <label
             {...radioGroupLabelAttributes({ ...emailState, controlId: 'gallery-radio-email' })}
@@ -72,14 +72,14 @@ export const GalleryRadioGroupDemo = component('gallery-radio-group-demo', {
         <div {...radioGroupItemAttributes(smsState)} class="inline-flex items-center gap-2">
           <input
             {...radioGroupRadioAttributes({ ...smsState, controlId: 'gallery-radio-sms' })}
-            on:click="/c/examples/gallery/src/generated/interactive/radio-group-demo.client.js?v=2fa0e4bf#GalleryRadioGroupDemo$input_click_2"
+            on:click="/c/examples/gallery/src/generated/interactive/radio-group-demo.client.js?v=3411a457#GalleryRadioGroupDemo$input_click_2"
           />
           <label {...radioGroupLabelAttributes({ ...smsState, controlId: 'gallery-radio-sms' })}>
             SMS
           </label>
         </div>
         <output data-demo-state="radio-value">{state.value}</output>
-      </section>
+      </div>
     );
   },
 });

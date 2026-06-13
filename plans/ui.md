@@ -137,6 +137,11 @@ commands. Use `- [ ]` for open actionable work and `- [x]` only for fully verifi
       a deterministic Chromium visual-baseline scaffold for the compiled interactive route plus
       switch and dropdown-menu representative states, asserting viewport geometry and stable
       screenshot hashes without committing binary screenshots.
+      Evidence 2026-06-13: combobox inputs now relate to popup listboxes with `aria-controls`
+      without the native datalist `list` attribute, and generated radio-group/toolbar demos render
+      role-bearing roots on neutral `div` hosts. The compiled route axe gate now runs with no
+      disabled rules, and a browser-backed state axe test covers generated dropdown open, command
+      dialog open, field invalid/error, and toast live-region states.
 - [x] Close remaining field/fieldset behavior gaps with primitive tests tied to `form()`
       integration and native validity semantics.
       Evidence 2026-06-13: `packages/headless-ui/src/primitives/field.ts` and
@@ -232,6 +237,14 @@ commands. Use `- [ ]` for open actionable work and `- [x]` only for fully verifi
       `pnpm exec vitest --run examples/gallery/src/interactive-gallery.test.ts examples/gallery/src/demo-fixtures.test.ts examples/gallery/src/behavior-contracts.test.ts`;
       `(cd examples/gallery && pnpm exec vitest --config vitest.browser.config.ts --run src/interactive-gallery.browser.test.ts)`;
       exact `pnpm exec vp check packages/headless-ui/src/primitives/checkbox.ts packages/headless-ui/src/primitives/checkbox.test.ts packages/headless-ui/src/primitives/index.ts packages/headless-ui/src/index.ts examples/gallery/src/interactive/checkbox-demo.tsx examples/gallery/src/generated/interactive/checkbox-demo.tsx examples/gallery/src/generated/interactive/checkbox-demo.client.js examples/gallery/src/interactive-gallery.browser.test.ts plans/ui.md`;
+      `git diff --check`.
+- [x] Compiled gallery no-exception axe closure slice:
+      `pnpm exec vitest --run packages/headless-ui/src/primitives/combobox.test.ts`;
+      `pnpm exec vitest --run packages/ui/src/index.test.tsx -t combobox`;
+      `pnpm --filter @jiso/example-gallery run emit:interactive-gallery`;
+      `pnpm exec vitest --run examples/gallery/src/interactive-gallery.test.ts examples/gallery/src/demo-fixtures.test.ts examples/gallery/src/behavior-contracts.test.ts`;
+      `(cd examples/gallery && pnpm exec vitest --config vitest.browser.config.ts --run src/interactive-gallery.browser.test.ts)`;
+      exact `pnpm exec vp check packages/headless-ui/src/primitives/combobox.ts packages/headless-ui/src/primitives/combobox.test.ts packages/ui/src/index.test.tsx examples/gallery/src/demo-fixtures.test.ts examples/gallery/src/interactive/radio-group-demo.tsx examples/gallery/src/interactive/toolbar-demo.tsx examples/gallery/src/generated/interactive/radio-group-demo.tsx examples/gallery/src/generated/interactive/radio-group-demo.client.js examples/gallery/src/generated/interactive/toolbar-demo.tsx examples/gallery/src/generated/interactive/toolbar-demo.client.js examples/gallery/src/interactive-gallery.test.ts examples/gallery/src/interactive-gallery.browser.test.ts plans/ui.md`;
       `git diff --check`.
 - [x] Menubar compiled axe structure slice:
       `pnpm exec vitest --run packages/headless-ui/src/primitives/menubar.test.ts`;

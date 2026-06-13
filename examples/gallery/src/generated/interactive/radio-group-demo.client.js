@@ -1,7 +1,7 @@
 // @jiso-ir
 import { handler } from '@jiso/runtime';
 
-export const GalleryRadioGroupDemo$section_keydown = handler((event, ctx) => {
+export const GalleryRadioGroupDemo$div_keydown = handler((event, ctx) => {
   ctx.state.value = ctx.state.value === 'email' ? 'sms' : 'email';
   const doc = Reflect['get'](globalThis, 'document');
   const email = doc ? Object(doc)['getElementById']?.call(doc, 'gallery-radio-email') : undefined;

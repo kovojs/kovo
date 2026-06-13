@@ -212,6 +212,7 @@ describe('gallery demo fixtures', () => {
     expect(combobox.html).toContain('aria-expanded="true"');
     expect(combobox.html).toContain('aria-controls="gallery-combobox-listbox"');
     expect(combobox.html).toContain('aria-activedescendant="gallery-combobox-listbox-option-1"');
+    expect(combobox.html).not.toContain('list="gallery-combobox-listbox"');
     expect(combobox.html).toContain('id="gallery-combobox-form"');
     expect(combobox.html).toContain('form="gallery-combobox-form"');
     expect(combobox.html).toContain('name="gallery-assignee"');

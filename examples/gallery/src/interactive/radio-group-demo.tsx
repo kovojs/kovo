@@ -34,7 +34,7 @@ export const GalleryRadioGroupDemo = component('gallery-radio-group-demo', {
     const smsState = { ...groupState, itemValue: 'sms' };
 
     return (
-      <section
+      <div
         {...radioGroupRootAttributes({
           ...groupState,
           labelledBy: 'gallery-radio-group-label',
@@ -156,7 +156,7 @@ export const GalleryRadioGroupDemo = component('gallery-radio-group-demo', {
           </label>
         </div>
         <output data-demo-state="radio-value">{state.value}</output>
-      </section>
+      </div>
     );
   },
 });

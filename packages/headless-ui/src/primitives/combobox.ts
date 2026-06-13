@@ -172,9 +172,7 @@ export function comboboxInputAttributes(
     type: 'text',
     value: options.value ?? '',
     ...(activeDescendant === undefined ? {} : { 'aria-activedescendant': activeDescendant }),
-    ...(options.listboxId === undefined
-      ? {}
-      : { 'aria-controls': options.listboxId, list: options.listboxId }),
+    ...(options.listboxId === undefined ? {} : { 'aria-controls': options.listboxId }),
     ...(options.id === undefined ? {} : { id: options.id }),
     ...(options.labelledBy === undefined ? {} : { 'aria-labelledby': options.labelledBy }),
     ...(describedBy === '' ? {} : { 'aria-describedby': describedBy }),

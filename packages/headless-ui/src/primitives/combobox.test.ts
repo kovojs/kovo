@@ -94,7 +94,6 @@ describe('headless-ui combobox primitive', () => {
       disabled: false,
       form: 'city-form',
       id: 'city',
-      list: 'city-list',
       name: 'city',
       placeholder: 'Choose city',
       required: true,

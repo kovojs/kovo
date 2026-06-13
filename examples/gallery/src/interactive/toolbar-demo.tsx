@@ -32,7 +32,7 @@ export const GalleryToolbarDemo = component('gallery-toolbar-demo', {
     const linkState = { ...rootState, itemValue: 'link' };
 
     return (
-      <section
+      <div
         {...toolbarRootAttributes(rootState)}
         class="grid gap-2"
         data-gallery-interactive="toolbar"
@@ -185,7 +185,7 @@ export const GalleryToolbarDemo = component('gallery-toolbar-demo', {
         </div>
         <output data-demo-state="toolbar-active">{state.activeValue}</output>
         <output data-demo-state="toolbar-pressed">{state.pressedValue || 'none'}</output>
-      </section>
+      </div>
     );
   },
 });

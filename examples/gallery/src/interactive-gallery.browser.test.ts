@@ -155,13 +155,66 @@ describe('compiled interactive gallery demos in the browser', () => {
     const host = document.createElement('div');
     host.innerHTML = renderInteractiveGalleryRoute();
     document.body.append(host);
-    applyRouteCheckboxIndeterminate(host);
 
-    const results = await axe.run(host, {
-      rules: interactiveGalleryAxeRules,
+    await expectNoAxeViolations(host);
+  });
+
+  it('has no axe violations in representative generated interactive states', async () => {
+    const dropdownRoot = mountInteractiveDemo(GalleryDropdownMenuDemo);
+    const dropdownTrigger = required(
+      dropdownRoot.querySelector<HTMLButtonElement>('#gallery-dropdown-menu-trigger'),
+    );
+    const dropdownContent = required(
+      dropdownRoot.querySelector<HTMLElement>('#gallery-dropdown-menu-content'),
+    );
+    installGeneratedGalleryLoader(dropdownRoot, { events: ['click', 'keydown'] });
+
+    dropdownTrigger.click();
+
+    await vi.waitFor(() => {
+      expect(dropdownContent.hidden).toBe(false);
+      expect(dropdownTrigger.getAttribute('aria-expanded')).toBe('true');
     });
 
-    expect(formatAxeViolations(results.violations)).toEqual([]);
+    await expectNoAxeViolations(dropdownRoot);
+
+    const commandRoot = mountInteractiveDemo(GalleryCommandDemo);
+    const commandTrigger = required(
+      commandRoot.querySelector<HTMLButtonElement>('#gallery-command-trigger'),
+    );
+    const commandDialog = required(
+      commandRoot.querySelector<HTMLDialogElement>('#gallery-command-dialog'),
+    );
+    installGeneratedGalleryLoader(commandRoot, { events: ['click', 'input', 'keydown'] });
+
+    commandTrigger.click();
+
+    await vi.waitFor(() => {
+      expect(commandDialog.open).toBe(true);
+    });
+
+    await expectNoAxeViolations(commandRoot);
+
+    const fieldRoot = mountInteractiveDemo(GalleryFieldDemo);
+    const email = required(
+      fieldRoot.querySelector<HTMLInputElement>('#gallery-interactive-field-email-input'),
+    );
+    const error = required(
+      fieldRoot.querySelector<HTMLElement>('#gallery-interactive-field-email-error'),
+    );
+
+    expect(email.getAttribute('aria-invalid')).toBe('true');
+    expect(error.hidden).toBe(false);
+
+    await expectNoAxeViolations(fieldRoot);
+
+    const toastRoot = mountInteractiveDemo(GalleryToastDemo);
+    const toast = required(toastRoot.querySelector<HTMLElement>('#gallery-toast'));
+
+    expect(toast.hidden).toBe(false);
+    expect(toast.getAttribute('aria-live')).toBe('polite');
+
+    await expectNoAxeViolations(toastRoot);
   });
 
   it('keeps stable visual baselines for the compiled route and representative states', async () => {
@@ -2327,19 +2380,20 @@ function installVisualBaselineStyles(): void {
   document.head.append(style);
 }
 
-const interactiveGalleryAxeRules = {
-  // Axe's role table lags current APG/browser practice for input-backed combobox
-  // demos and role-bearing section roots. Focused browser tests below assert the
-  // exact ARIA contracts for those primitives.
-  'aria-allowed-role': { enabled: false },
-} as const;
-
 function applyRouteCheckboxIndeterminate(root: ParentNode): void {
   for (const input of root.querySelectorAll<HTMLInputElement>(
     'input[type="checkbox"][data-state="indeterminate"]',
   )) {
     applyCheckboxIndeterminate(input, 'indeterminate');
   }
+}
+
+async function expectNoAxeViolations(root: HTMLElement): Promise<void> {
+  applyRouteCheckboxIndeterminate(root);
+
+  const results = await axe.run(root);
+
+  expect(formatAxeViolations(results.violations)).toEqual([]);
 }
 
 function formatAxeViolations(violations: axe.Result[]): string[] {

@@ -1,7 +1,7 @@
 // @jiso-ir
 import { handler } from '@jiso/runtime';
 
-export const GalleryToolbarDemo$section_keydown = handler((event, ctx) => {
+export const GalleryToolbarDemo$div_keydown = handler((event, ctx) => {
   ctx.state.activeValue = ctx.state.activeValue === 'bold' ? 'link' : 'bold';
   const doc = Reflect['get'](globalThis, 'document');
   const bold = doc ? Object(doc)['getElementById']?.call(doc, 'gallery-toolbar-bold') : undefined;

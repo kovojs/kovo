@@ -468,7 +468,7 @@ describe('compiled interactive gallery demos', () => {
     expect(radioGroup).toContain('fw-state=\'{"value":"email"}\'');
     expect(radioGroup).toContain('radioGroupRadioAttributes({');
     expect(radioGroup).toMatch(
-      /on:keydown="\/c\/examples\/gallery\/src\/generated\/interactive\/radio-group-demo\.client\.js\?v=[0-9a-f]{8}#GalleryRadioGroupDemo\$section_keydown"/,
+      /on:keydown="\/c\/examples\/gallery\/src\/generated\/interactive\/radio-group-demo\.client\.js\?v=[0-9a-f]{8}#GalleryRadioGroupDemo\$div_keydown"/,
     );
     expect(radioGroup).toMatch(
       /on:click="\/c\/examples\/gallery\/src\/generated\/interactive\/radio-group-demo\.client\.js\?v=[0-9a-f]{8}#GalleryRadioGroupDemo\$input_click_2"/,
@@ -521,7 +521,7 @@ describe('compiled interactive gallery demos', () => {
     expect(toolbar).toContain('fw-state=\'{"activeValue":"bold","pressedValue":"bold"}\'');
     expect(toolbar).toContain('toolbarButtonAttributes({');
     expect(toolbar).toMatch(
-      /on:keydown="\/c\/examples\/gallery\/src\/generated\/interactive\/toolbar-demo\.client\.js\?v=[0-9a-f]{8}#GalleryToolbarDemo\$section_keydown"/,
+      /on:keydown="\/c\/examples\/gallery\/src\/generated\/interactive\/toolbar-demo\.client\.js\?v=[0-9a-f]{8}#GalleryToolbarDemo\$div_keydown"/,
     );
     expect(toolbar).toMatch(
       /on:click="\/c\/examples\/gallery\/src\/generated\/interactive\/toolbar-demo\.client\.js\?v=[0-9a-f]{8}#GalleryToolbarDemo\$button_click_2"/,
@@ -1134,7 +1134,7 @@ describe('compiled interactive gallery demos', () => {
     expect(progressState).toEqual({ value: null });
 
     const radioGroupState = { value: 'email' };
-    clientHandler(radioGroup, 'GalleryRadioGroupDemo$section_keydown')(new Event('keydown'), {
+    clientHandler(radioGroup, 'GalleryRadioGroupDemo$div_keydown')(new Event('keydown'), {
       params: {},
       signal,
       state: radioGroupState,
@@ -1208,19 +1208,19 @@ describe('compiled interactive gallery demos', () => {
     expect(tabsState).toEqual({ activeValue: 'overview', value: 'overview' });
 
     const toolbarState = { activeValue: 'bold', pressedValue: 'bold' };
-    clientHandler(toolbar, 'GalleryToolbarDemo$section_keydown')(new Event('keydown'), {
+    clientHandler(toolbar, 'GalleryToolbarDemo$div_keydown')(new Event('keydown'), {
       params: {},
       signal,
       state: toolbarState,
     });
     expect(toolbarState).toEqual({ activeValue: 'link', pressedValue: 'bold' });
-    clientHandler(toolbar, 'GalleryToolbarDemo$section_keydown')(new Event('keydown'), {
+    clientHandler(toolbar, 'GalleryToolbarDemo$div_keydown')(new Event('keydown'), {
       params: {},
       signal,
       state: toolbarState,
     });
     expect(toolbarState).toEqual({ activeValue: 'bold', pressedValue: 'bold' });
-    clientHandler(toolbar, 'GalleryToolbarDemo$section_keydown')(new Event('keydown'), {
+    clientHandler(toolbar, 'GalleryToolbarDemo$div_keydown')(new Event('keydown'), {
       params: {},
       signal,
       state: toolbarState,
@@ -1342,7 +1342,7 @@ describe('compiled interactive gallery demos', () => {
 
       const radioGroup = evaluateClientModule('radio-group-demo.client.js', { document });
       const radioState = { value: 'email' };
-      clientHandler(radioGroup, 'GalleryRadioGroupDemo$section_keydown')(new Event('keydown'), {
+      clientHandler(radioGroup, 'GalleryRadioGroupDemo$div_keydown')(new Event('keydown'), {
         params: {},
         signal,
         state: radioState,
@@ -1569,7 +1569,7 @@ describe('compiled interactive gallery demos', () => {
 
       const toolbar = evaluateClientModule('toolbar-demo.client.js', { document });
       const toolbarState = { activeValue: 'bold', pressedValue: 'bold' };
-      clientHandler(toolbar, 'GalleryToolbarDemo$section_keydown')(new Event('keydown'), {
+      clientHandler(toolbar, 'GalleryToolbarDemo$div_keydown')(new Event('keydown'), {
         params: {},
         signal,
         state: toolbarState,

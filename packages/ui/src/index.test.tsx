@@ -1315,7 +1315,7 @@ describe('@jiso/ui styled package foundation', () => {
     expect(input).toContain('aria-controls="assignee-listbox"');
     expect(input).toContain('aria-expanded="true"');
     expect(input).toContain('form="assignee-form"');
-    expect(input).toContain('list="assignee-listbox"');
+    expect(input).not.toContain('list="assignee-listbox"');
     expect(input).toContain('role="combobox" type="text" value="ada"');
     expect(listbox).toContain('role="listbox"');
     expect(listbox).toContain('data-state="open" id="assignee-listbox"');

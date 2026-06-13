@@ -33,11 +33,11 @@ export const GalleryToolbarDemo = component('gallery-toolbar-demo', {
     const linkState = { ...rootState, itemValue: 'link' };
 
     return (
-      <section
+      <div
         {...toolbarRootAttributes(rootState)}
         class="grid gap-2"
         data-gallery-interactive="toolbar"
-        on:keydown="/c/examples/gallery/src/generated/interactive/toolbar-demo.client.js?v=20c357f0#GalleryToolbarDemo$section_keydown"
+        on:keydown="/c/examples/gallery/src/generated/interactive/toolbar-demo.client.js?v=ea2e3d70#GalleryToolbarDemo$div_keydown"
         fw-c="gallery-toolbar-demo"
         fw-state='{"activeValue":"bold","pressedValue":"bold"}'
       >
@@ -49,7 +49,7 @@ export const GalleryToolbarDemo = component('gallery-toolbar-demo', {
                 id: 'gallery-toolbar-bold',
                 pressed: state.pressedValue === 'bold',
               })}
-              on:click="/c/examples/gallery/src/generated/interactive/toolbar-demo.client.js?v=20c357f0#GalleryToolbarDemo$button_click"
+              on:click="/c/examples/gallery/src/generated/interactive/toolbar-demo.client.js?v=ea2e3d70#GalleryToolbarDemo$button_click"
             >
               Bold
             </button>
@@ -72,7 +72,7 @@ export const GalleryToolbarDemo = component('gallery-toolbar-demo', {
                 id: 'gallery-toolbar-link',
                 pressed: state.pressedValue === 'link',
               })}
-              on:click="/c/examples/gallery/src/generated/interactive/toolbar-demo.client.js?v=20c357f0#GalleryToolbarDemo$button_click_2"
+              on:click="/c/examples/gallery/src/generated/interactive/toolbar-demo.client.js?v=ea2e3d70#GalleryToolbarDemo$button_click_2"
             >
               Link
             </button>
@@ -80,7 +80,7 @@ export const GalleryToolbarDemo = component('gallery-toolbar-demo', {
         </div>
         <output data-demo-state="toolbar-active">{state.activeValue}</output>
         <output data-demo-state="toolbar-pressed">{state.pressedValue || 'none'}</output>
-      </section>
+      </div>
     );
   },
 });
