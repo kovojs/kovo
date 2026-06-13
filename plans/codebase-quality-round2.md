@@ -339,8 +339,9 @@ Open:
 
 Latest broad gate:
 
-- `pnpm run check` passed after the Round134/131/132 integration wave through `4b81f3e`: inline
-  loader check, 776 formatted files, 678 lint/typechecked files, and 7 typechecked
+- `pnpm run check` passed after the compiler/Round133/Round135/Round136/Round137 integration
+  wave through `d29049c`: inline loader check, 778 formatted files, 679 lint/typechecked
+  files, and 7 typechecked example/conformance projects.
   example/conformance projects.
 
 Focused gates since that broad run:
@@ -375,6 +376,17 @@ Focused gates since that broad run:
   tests, full server suite, `tsc`, exact `vp check`, and `git diff --check` passed in Round131.
 - Drizzle: Postgres-only v1 proof, package suite, pinned conformance, exact `vp check`, and
   `git diff --check` passed in Round132.
+- Compiler: parsed `<Link>` tag navigation lowering, navigation/compile component tests, exact
+  `vp check`, and `git diff --check` passed in the main worktree.
+- Harness: rawless `fw-check` assertion fixture cluster, package/commerce tests, targeted
+  `fw-check`, `check:build`, exact `vp check`, and `git diff --check` passed in Round133.
+- Runtime: inline-loader parser extraction hardening and test split, full runtime suite, browser
+  runtime, inline-loader check, `tsc`, exact `vp check`, and `git diff --check` passed in
+  Round135.
+- UI: OTP native state/form-control semantics, headless/UI/gallery tests, primitive lint, exact
+  `vp check`, and `git diff --check` passed in Round136.
+- Server/app-shell: generated starter static preview proof, server/create-jiso tests, `tsc`, exact
+  `vp check`, and `git diff --check` passed in Round137.
 
 Stale but useful broad references:
 
