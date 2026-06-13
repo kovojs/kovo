@@ -3,6 +3,7 @@ import type { ListenerTargetLike, VisibilityStateLike } from './dom-like.js';
 import { reportRuntimeError } from './error-policy.js';
 import { createQueryScriptHydrationLedger, queryScriptsFromRoot } from './query-apply.js';
 import type { QueryScriptRootLike } from './query-apply.js';
+import type { CompiledQueryUpdatePlans } from './query-bindings.js';
 import { refetchQueries } from './query-refetch.js';
 import type { QueryRefetchOptions } from './query-refetch.js';
 import type { QueryStore } from './query-store.js';
@@ -17,6 +18,7 @@ export interface QueryVisibleReturnRefetchRoot
 
 export interface QueryVisibleReturnRefetchOptions {
   onError?: (error: unknown) => void;
+  queryPlans?: CompiledQueryUpdatePlans;
   queryRefetch?: QueryRefetchOptions;
   queryStore?: QueryStore;
   refetchOnFocus?: (queries: readonly string[]) => void | Promise<void>;
@@ -64,7 +66,12 @@ export function installQueryVisibleReturnRefetch(
 ): InstalledQueryVisibleReturnRefetch {
   const ledger = createRefetchQueryLedger();
   const hydrationLedger = options.queryStore
-    ? createQueryScriptHydrationLedger(options.queryStore)
+    ? createQueryScriptHydrationLedger(options.queryStore, {
+        ...definedProps({
+          queryPlans: options.queryPlans,
+          root: options.root,
+        }),
+      })
     : undefined;
 
   const hydrateNewQueryScripts = () => {
@@ -115,6 +122,10 @@ export function installQueryVisibleReturnRefetch(
       const applied = await refetchQueries({
         ...options.queryRefetch,
         ...definedProps({ onError }),
+        ...definedProps({
+          queryPlans: options.queryPlans,
+          root: options.root,
+        }),
         queries,
         queryStore: options.queryStore,
       });

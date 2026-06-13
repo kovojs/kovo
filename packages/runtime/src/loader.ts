@@ -53,6 +53,7 @@ export function installJisoLoader(options: JisoLoaderOptions): JisoLoader {
       reportRuntimeContextError(options.onError, error, { phase: 'query-hydration' });
     },
     ...definedProps({
+      queryPlans: options.queryPlans ?? options.enhancedMutations?.queryPlans,
       queryRefetch: options.queryRefetch,
       queryStore: options.queryStore,
       refetchOnFocus: options.refetchOnFocus,

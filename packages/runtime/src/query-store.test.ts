@@ -11,6 +11,7 @@ import {
 import { createQueryStore } from './query-store.js';
 
 class FakeRoot {
+  bindings: QueryBinding[] = [];
   listeners = new Map<string, (event: DelegatedEvent) => void | Promise<void>>();
   scripts: QueryScript[] = [];
   visibilityState: 'hidden' | 'visible' = 'visible';
@@ -28,12 +29,21 @@ class FakeRoot {
     }
   }
 
-  querySelectorAll(selector: string): Iterable<QueryScript> {
-    return selector === 'script[fw-query]' ? this.scripts : [];
+  querySelectorAll(selector: string): Iterable<QueryScript | QueryBinding> {
+    if (selector === 'script[fw-query]') return this.scripts;
+    if (selector === '[data-bind]') return this.bindings;
+    if (selector === '*') return [];
+
+    return [];
   }
 }
 
 interface QueryScript {
+  getAttribute(name: string): string | null;
+  textContent: string | null;
+}
+
+interface QueryBinding {
   getAttribute(name: string): string | null;
   textContent: string | null;
 }
@@ -564,6 +574,14 @@ describe('query store hydration and refetch', () => {
     const cartPlan = vi.fn();
     const reviewsPlan = vi.fn();
     const refetchOnFocus = vi.fn();
+    const cartBinding = {
+      textContent: '',
+      getAttribute: (name: string) => (name === 'data-bind' ? 'cart.count' : null),
+    };
+    const reviewsBinding = {
+      textContent: '',
+      getAttribute: (name: string) => (name === 'data-bind' ? 'reviews.total' : null),
+    };
     const fetch = vi.fn(async (url: string) => ({
       status: 200,
       text: async () =>
@@ -578,11 +596,13 @@ describe('query store hydration and refetch', () => {
         textContent: '{"count":1}',
       },
     ];
+    root.bindings = [cartBinding, reviewsBinding];
     store.subscribe('cart', cartPlan);
     store.subscribe('reviews', reviewsPlan);
 
     installJisoLoader({
       importModule: vi.fn(),
+      queryPlans: { cart: { bindings: true }, reviews: { bindings: true } },
       queryRefetch: { fetch },
       queryStore: store,
       refetchOnFocus,
@@ -591,6 +611,8 @@ describe('query store hydration and refetch', () => {
 
     expect(store.get('cart')).toEqual({ count: 1 });
     expect(store.get('reviews')).toBeUndefined();
+    expect(cartBinding.textContent).toBe('1');
+    expect(reviewsBinding.textContent).toBe('');
 
     root.scripts.push({
       getAttribute: (name) => (name === 'fw-query' ? 'reviews' : null),
@@ -612,6 +634,8 @@ describe('query store hydration and refetch', () => {
     });
     expect(store.get('cart')).toEqual({ count: 2 });
     expect(store.get('reviews')).toEqual({ total: 7 });
+    expect(cartBinding.textContent).toBe('2');
+    expect(reviewsBinding.textContent).toBe('7');
     expect(cartPlan).toHaveBeenLastCalledWith({ count: 2 });
     expect(reviewsPlan).toHaveBeenNthCalledWith(1, { total: 5 });
     expect(reviewsPlan).toHaveBeenNthCalledWith(2, { total: 7 });

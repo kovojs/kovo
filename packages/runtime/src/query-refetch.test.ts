@@ -8,6 +8,7 @@ import {
 } from './query-visible-return.js';
 
 class FakeVisibleReturnRoot {
+  bindings: QueryBinding[] = [];
   listeners = new Map<string, (event: unknown) => void | Promise<void>>();
   scripts: QueryScript[] = [];
   visibilityState: 'hidden' | 'visible' = 'visible';
@@ -22,12 +23,21 @@ class FakeVisibleReturnRoot {
     }
   }
 
-  querySelectorAll(selector: string): Iterable<QueryScript> {
-    return selector === 'script[fw-query]' ? this.scripts : [];
+  querySelectorAll(selector: string): Iterable<QueryScript | QueryBinding> {
+    if (selector === 'script[fw-query]') return this.scripts;
+    if (selector === '[data-bind]') return this.bindings;
+    if (selector === '*') return [];
+
+    return [];
   }
 }
 
 interface QueryScript {
+  getAttribute(name: string): string | null;
+  textContent: string | null;
+}
+
+interface QueryBinding {
   getAttribute(name: string): string | null;
   textContent: string | null;
 }
@@ -49,6 +59,10 @@ describe('query refetch', () => {
     const root = new FakeVisibleReturnRoot();
     const store = createQueryStore();
     const plan = vi.fn();
+    const binding = {
+      textContent: '',
+      getAttribute: (name: string) => (name === 'data-bind' ? 'cart.count' : null),
+    };
 
     root.scripts = [
       {
@@ -56,16 +70,20 @@ describe('query refetch', () => {
         textContent: '{"count":1}',
       },
     ];
+    root.bindings = [binding];
     store.subscribe('cart', plan);
 
     const lifecycle = installQueryVisibleReturnRefetch({
+      queryPlans: { cart: { bindings: true } },
       queryStore: store,
       root,
     });
 
     // SPEC.md §4.4/§9.4: query script hydration is loader lifecycle work even
-    // when visible-return typed reads are not configured.
+    // when visible-return typed reads are not configured, and hydration uses
+    // the same compiled query update plan path as mutation/query refetch.
     expect(store.get('cart')).toEqual({ count: 1 });
+    expect(binding.textContent).toBe('1');
     expect(plan).toHaveBeenCalledWith({ count: 1 });
     expect(root.listeners.has('visibilitychange')).toBe(false);
 
@@ -79,6 +97,14 @@ describe('query refetch', () => {
     const root = new FakeVisibleReturnRoot();
     const store = createQueryStore();
     const refetchOnFocus = vi.fn();
+    const cartBinding = {
+      textContent: '',
+      getAttribute: (name: string) => (name === 'data-bind' ? 'cart.count' : null),
+    };
+    const reviewsBinding = {
+      textContent: '',
+      getAttribute: (name: string) => (name === 'data-bind' ? 'reviews.total' : null),
+    };
     let resolveFetchText: ((body: string) => void) | undefined;
     const fetchText = new Promise<string>((resolve) => {
       resolveFetchText = resolve;
@@ -94,8 +120,10 @@ describe('query refetch', () => {
         textContent: '{"count":1}',
       },
     ];
+    root.bindings = [cartBinding, reviewsBinding];
 
     const refetch = installQueryVisibleReturnRefetch({
+      queryPlans: { cart: { bindings: true }, reviews: { bindings: true } },
       queryRefetch: { fetch },
       queryStore: store,
       refetchOnFocus,
@@ -120,6 +148,8 @@ describe('query refetch', () => {
 
     expect(store.get('cart')).toEqual({ count: 2 });
     expect(store.get('reviews')).toEqual({ total: 3 });
+    expect(cartBinding.textContent).toBe('2');
+    expect(reviewsBinding.textContent).toBe('3');
 
     refetch.dispose();
     expect(root.listeners.has('visibilitychange')).toBe(false);
@@ -327,6 +357,21 @@ describe('query refetch', () => {
     const store = createQueryStore();
     const cartPlan = vi.fn();
     const reviewsPlan = vi.fn();
+    const cartBinding = {
+      textContent: '',
+      getAttribute: (name: string) => (name === 'data-bind' ? 'cart.count' : null),
+    };
+    const reviewsBinding = {
+      textContent: '',
+      getAttribute: (name: string) => (name === 'data-bind' ? 'reviews.total' : null),
+    };
+    const root = {
+      querySelectorAll(selector: string) {
+        if (selector === '[data-bind]') return [cartBinding, reviewsBinding];
+        if (selector === '*') return [];
+        return [];
+      },
+    };
     const fetch = vi.fn(async (url: string) => ({
       status: 200,
       text: async () =>
@@ -341,8 +386,10 @@ describe('query refetch', () => {
     await expect(
       refetchQueries({
         fetch,
+        queryPlans: { cart: { bindings: true }, reviews: { bindings: true } },
         queries: ['cart', 'reviews'],
         queryStore: store,
+        root,
       }),
     ).resolves.toEqual([
       { fragments: [], queries: ['cart'] },
@@ -359,6 +406,8 @@ describe('query refetch', () => {
     });
     expect(store.get('cart')).toEqual({ count: 2 });
     expect(store.get('reviews')).toEqual({ total: 5 });
+    expect(cartBinding.textContent).toBe('2');
+    expect(reviewsBinding.textContent).toBe('5');
     expect(cartPlan).toHaveBeenLastCalledWith({ count: 2 });
     expect(reviewsPlan).toHaveBeenLastCalledWith({ total: 5 });
   });

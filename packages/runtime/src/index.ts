@@ -141,6 +141,7 @@ export {
 export type {
   ApplyQueryChunksToRuntimeOptions,
   QueryScriptHydrationLedger,
+  QueryScriptHydrationOptions,
   QueryScriptLike,
   QueryScriptRootLike,
 } from './query-apply.js';
@@ -157,6 +158,7 @@ export type {
 } from './query-events.js';
 export { refetchQueries } from './query-refetch.js';
 export type {
+  RefetchQueriesOptions,
   QueryRefetchFetch,
   QueryRefetchOptions,
   QueryRefetchResponse,

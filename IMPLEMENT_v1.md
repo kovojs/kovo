@@ -60,6 +60,14 @@ plans/codebase-quality-round2.md`.
       Same-session evidence: `pnpm exec vitest --run packages/runtime/src` and
       `pnpm exec vitest --config vitest.browser.config.ts --run
 packages/runtime/src/index.browser.test.ts`.
+      Additional evidence 2026-06-13: visible-return hydration and typed-read refetch now use
+      `packages/runtime/src/query-apply.ts` `applyQueryChunksToRuntime`, so loader
+      `queryPlans` update DOM bindings for initial `script[fw-query]`, later discovered query
+      scripts, and `/_q/` responses instead of drifting from store-only writes (SPEC §4.4/§9.4).
+      Same-session evidence: `pnpm exec vitest --run packages/runtime/src`,
+      `pnpm exec vitest --config vitest.browser.config.ts --run
+packages/runtime/src/index.browser.test.ts`, and
+      `pnpm --filter @jiso/runtime run check:inline-loader`.
 - [x] P2 exit demo/smoke is proven by a standalone browser L0+L1 smoke covering tabs, dialog, filter island, declared visible trigger, and zero handler imports before interaction/trigger.
 - [x] P3 server/core have `domain`, `query`, `mutation`, `route`, typed `href`/`Link`/`redirect`, typed sessions, CSRF issuance/validation, FormData coercion, guards/rate limits, mutation replay, query endpoints, rerun query fragments, and commerce app usage.
       Additional evidence 2026-06-13: SPEC §9.5 static replay request construction now lives in

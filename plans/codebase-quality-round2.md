@@ -57,6 +57,17 @@ with same-session file/test evidence.
       pnpm exec vitest --config vitest.browser.config.ts --run packages/runtime/src/index.browser.test.ts
       pnpm --filter @jiso/runtime run check:inline-loader
       ```
+      Round102 evidence 2026-06-13: visible-return hydration and typed-read refetch now pass
+      through the same `applyQueryChunksToRuntime` path as mutation/query events, so loader
+      `queryPlans` update DOM bindings for initial scripts, later inserted scripts, and `/_q/`
+      responses instead of updating only `QueryStore`. Same-session evidence:
+
+      ```text
+      pnpm exec vitest --run packages/runtime/src
+      pnpm exec vitest --config vitest.browser.config.ts --run packages/runtime/src/index.browser.test.ts
+      pnpm --filter @jiso/runtime run check:inline-loader
+      pnpm exec vp check packages/runtime/src/query-apply.ts packages/runtime/src/query-refetch.ts packages/runtime/src/query-visible-return.ts packages/runtime/src/loader.ts packages/runtime/src/index.ts packages/runtime/src/query-refetch.test.ts packages/runtime/src/query-store.test.ts plans/codebase-quality-round2.md IMPLEMENT_v1.md
+      ```
 
 - [ ] Phase 5 server: document/app extraction finished subtractively; one wire-html emitter;
       one `onError` diagnostic seam; replay choreography and response types unified.

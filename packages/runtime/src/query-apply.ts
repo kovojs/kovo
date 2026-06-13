@@ -26,7 +26,7 @@ export type QueryApplyInterposition = (query: QueryChunk) => { value: unknown } 
 export interface QueryScriptHydrationLedger {
   hydrate(
     scripts: Iterable<QueryScriptLike>,
-    options?: { onError?: RuntimeErrorReporter },
+    options?: QueryScriptHydrationOptions,
   ): readonly string[];
 }
 
@@ -38,6 +38,10 @@ export interface ApplyQueryChunksToStoreOptions {
 export interface ApplyQueryChunksToRuntimeOptions extends ApplyQueryChunksToStoreOptions {
   queryPlans?: CompiledQueryUpdatePlans;
   root?: unknown;
+}
+
+export interface QueryScriptHydrationOptions extends ApplyQueryChunksToRuntimeOptions {
+  onError?: RuntimeErrorReporter;
 }
 
 export function applyQueryChunkToStore(
@@ -93,31 +97,55 @@ export function applyQueryChunksToRuntime(
 export function hydrateQueryScripts(
   store: QueryStore,
   scripts: Iterable<QueryScriptLike>,
-  options: { onError?: RuntimeErrorReporter } = {},
+  options: QueryScriptHydrationOptions = {},
 ): readonly string[] {
   // SPEC.md §9.1/§9.4: initial hydration uses the same batched query chunk
   // application path as mutation responses, deferred streams, and typed reads.
-  return applyQueryChunksToStore(store, readQueryScriptChunks(scripts, options.onError));
+  return applyQueryChunksToRuntime(store, readQueryScriptChunks(scripts, options.onError), {
+    ...definedProps({
+      afterApplyQuery: options.afterApplyQuery,
+      applyQuery: options.applyQuery,
+      queryPlans: options.queryPlans,
+      root: options.root,
+    }),
+  });
 }
 
 export function queryScriptsFromRoot(root: QueryScriptRootLike): Iterable<QueryScriptLike> {
   return (root.querySelectorAll?.('script[fw-query]') ?? []) as Iterable<QueryScriptLike>;
 }
 
-export function createQueryScriptHydrationLedger(store: QueryStore): QueryScriptHydrationLedger {
+export function createQueryScriptHydrationLedger(
+  store: QueryStore,
+  options: QueryScriptHydrationOptions = {},
+): QueryScriptHydrationLedger {
   const seen = new Set<QueryScriptLike>();
 
   return {
     hydrate(
       scripts: Iterable<QueryScriptLike>,
-      options: { onError?: RuntimeErrorReporter } = {},
+      hydrationOptions: QueryScriptHydrationOptions = {},
     ): readonly string[] {
       const hydrated: string[] = [];
 
       for (const script of scripts) {
         if (seen.has(script)) continue;
 
-        const applied = hydrateQueryScripts(store, [script], options);
+        const applied = hydrateQueryScripts(store, [script], {
+          ...definedProps({
+            afterApplyQuery: options.afterApplyQuery,
+            applyQuery: options.applyQuery,
+            queryPlans: options.queryPlans,
+            root: options.root,
+          }),
+          ...definedProps({
+            afterApplyQuery: hydrationOptions.afterApplyQuery,
+            applyQuery: hydrationOptions.applyQuery,
+            onError: hydrationOptions.onError,
+            queryPlans: hydrationOptions.queryPlans,
+            root: hydrationOptions.root,
+          }),
+        });
         if (applied.length === 0) continue;
 
         seen.add(script);
