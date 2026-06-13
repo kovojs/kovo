@@ -152,6 +152,9 @@ Current state:
   carrier members to FW406.
 - Project local helper summaries now fold through typed `{ db }` receiver carriers for both
   write summaries and query-loader reads, while unknown/external carrier handoffs stay FW406.
+- Project destructuring assignment from typed context properties now uses ts-morph property type
+  facts for exact receiver aliases, while source-mode destructuring assignment from receiver
+  carriers degrades later mutation/query-loader surfaces to FW406.
 - Fake/lookalike receivers and overwritten carrier members remain invisible.
 - V1 project receiver proof is Postgres-only: the broad `drizzle-orm` package-declaration
   fallback and SQLite/MySQL database type compatibility names were removed, and deferred

@@ -1324,6 +1324,75 @@ describe('Drizzle pinned subset conformance', () => {
     ]);
   });
 
+  it('pins destructuring assignment Drizzle receiver aliases with real imports', () => {
+    const files = [
+      {
+        fileName: 'conformance/drizzle-pin/src/product.domain.ts',
+        source: `
+            import type { PgDatabase } from 'drizzle-orm/pg-core';
+
+            interface FakeDb {
+              select(value?: unknown): { from(table: unknown): Promise<unknown[]> };
+              update(table: unknown): { set(value: unknown): Promise<void> };
+            }
+            interface FakeContext { db: FakeDb }
+            interface DrizzleContext { db: PgDatabase<any, any, any> }
+
+            export const products = pgTable('products', {
+              id: text('id').primaryKey(),
+              stock: integer('stock').notNull(),
+            }, jiso({ domain: 'product', key: 'id' }));
+
+            export async function restock(context: DrizzleContext, fake: FakeContext, productId: string) {
+              let writer;
+              ({ db: writer } = context);
+              let fakeWriter;
+              ({ db: fakeWriter } = fake);
+              await writer.update(products).set({ stock: 1 }).where(eq(products.id, productId));
+              await fakeWriter.update(products).set({ stock: 0 });
+            }
+
+            export const productQuery = query('product/destructuring-assignment-alias', {
+              load(_input, context: DrizzleContext, fake: FakeContext) {
+                let reader;
+                ({ db: reader } = context);
+                let fakeReader;
+                ({ db: fakeReader } = fake);
+                fakeReader.select({ id: products.id }).from(products);
+                return reader.select({ id: products.id, stock: products.stock }).from(products);
+              },
+            });
+          `,
+      },
+    ];
+
+    expect(extractTouchGraphFromProject({ files })).toEqual({
+      restock: {
+        reads: [],
+        touches: [
+          {
+            domain: 'product',
+            keys: 'arg:productId',
+            site: 'conformance/drizzle-pin/src/product.domain.ts:21',
+            via: 'products',
+          },
+        ],
+        unresolved: [],
+      },
+    });
+    expect(extractQueryFactsFromProject({ files })).toEqual([
+      {
+        query: 'product/destructuring-assignment-alias',
+        reads: ['product'],
+        shape: {
+          id: 'string',
+          stock: 'number',
+        },
+        site: 'conformance/drizzle-pin/src/product.domain.ts:25',
+      },
+    ]);
+  });
+
   it('pins namespace-imported project write targets with real Drizzle tables', () => {
     const graph = extractTouchGraphFromProject({
       files: [
@@ -1636,6 +1705,52 @@ describe('Drizzle pinned subset conformance', () => {
             code: 'FW406',
             message: 'Statically un-analyzable write site; manual touches required.',
             site: 'conformance/drizzle-pin/src/users.domain.ts:14',
+          },
+        ],
+      },
+    });
+  });
+
+  it('pins source destructuring assignment receiver aliases as FW406 under real Drizzle imports', () => {
+    expect(sql`select 1`).toBeDefined();
+
+    const graph = extractTouchGraphFromSource([
+      {
+        fileName: 'conformance/drizzle-pin/src/users.domain.ts',
+        source: [
+          "import { sql } from 'drizzle-orm';",
+          "import { pgTable, text } from 'drizzle-orm/pg-core';",
+          '',
+          "export const users = pgTable('users', { id: text('id').primaryKey() }, jiso({ domain: 'user', key: 'id' }));",
+          '',
+          'export async function syncUsers(db, fake) {',
+          '  const context = { db, fake };',
+          '  let writer;',
+          '  ({ db: writer } = context);',
+          '  let fakeWriter;',
+          '  ({ fake: fakeWriter } = context);',
+          '  await writer.execute(sql`select 1`);',
+          "  await writer.update(users).set({ id: 'u1' });",
+          "  await fakeWriter.update(users).set({ id: 'fake' });",
+          '}',
+        ].join('\n'),
+      },
+    ]);
+
+    expect(graph).toEqual({
+      syncUsers: {
+        reads: [],
+        touches: [],
+        unresolved: [
+          {
+            code: 'FW406',
+            message: 'Statically un-analyzable write site; manual touches required.',
+            site: 'conformance/drizzle-pin/src/users.domain.ts:12',
+          },
+          {
+            code: 'FW406',
+            message: 'Statically un-analyzable write site; manual touches required.',
+            site: 'conformance/drizzle-pin/src/users.domain.ts:13',
           },
         ],
       },

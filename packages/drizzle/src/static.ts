@@ -694,13 +694,44 @@ function appendProjectDrizzleReceiverAssignmentAliases(
     if (expression.getOperatorToken().getKind() !== SyntaxKind.EqualsToken) continue;
 
     const left = unwrappedStaticExpressionNode(expression.getLeft());
-    if (!Node.isIdentifier(left)) continue;
-
     const right = unwrappedStaticExpressionNode(expression.getRight());
+    if (Node.isObjectLiteralExpression(left)) {
+      appendProjectDrizzleReceiverObjectAssignmentAliases(left, right, receivers);
+      continue;
+    }
+
+    if (!Node.isIdentifier(left)) continue;
     if (!isProjectDrizzleReceiverIdentifier(right, receivers)) continue;
 
     appendProjectDrizzleReceiverAliasIdentifier(left, receivers);
   }
+}
+
+function appendProjectDrizzleReceiverObjectAssignmentAliases(
+  assignment: ObjectLiteralExpression,
+  source: Node,
+  receivers: { names: Set<string>; symbolKeys: Set<string> },
+): void {
+  // SPEC §10-§11: destructuring assignment from a typed context is project proof when the
+  // assigned property type is a Postgres Drizzle database receiver.
+  for (const property of assignment.getProperties()) {
+    const propertyName = objectAssignmentPropertyName(property);
+    if (!propertyName) continue;
+
+    const target = objectAssignmentTargetNode(property);
+    if (!target) continue;
+
+    if (!Node.isIdentifier(target)) continue;
+    if (!projectObjectPropertyIsDrizzleReceiver(source, propertyName)) continue;
+
+    appendProjectDrizzleReceiverAliasIdentifier(target, receivers);
+  }
+}
+
+function projectObjectPropertyIsDrizzleReceiver(source: Node, propertyName: string): boolean {
+  const property = source.getType().getProperty(propertyName);
+  const typeText = property?.getTypeAtLocation(source).getText(source);
+  return typeText ? isDrizzleDatabaseTypeText(typeText) : false;
 }
 
 function appendProjectDrizzleReceiverAliasIdentifier(
@@ -1567,6 +1598,24 @@ function propertyNameText(name: Node): string | undefined {
     if (ts.isNumericLiteral(expression)) return expression.text;
   }
   return undefined;
+}
+
+function objectAssignmentTargetNode(
+  property: ReturnType<ObjectLiteralExpression['getProperties']>[number],
+): Node | undefined {
+  if (Node.isShorthandPropertyAssignment(property)) return property.getNameNode();
+  if (!Node.isPropertyAssignment(property)) return undefined;
+  const initializer = property.getInitializer();
+  return initializer ? unwrappedStaticExpressionNode(initializer) : undefined;
+}
+
+function objectAssignmentPropertyName(
+  property: ReturnType<ObjectLiteralExpression['getProperties']>[number],
+): string | undefined {
+  if (!Node.isShorthandPropertyAssignment(property) && !Node.isPropertyAssignment(property)) {
+    return undefined;
+  }
+  return propertyNameText(property.getNameNode());
 }
 
 function objectHasProperty(object: Node, name: string): boolean {
@@ -4776,9 +4825,14 @@ function sourceReceiverAliasReferencesForBody(
       if (expression.getOperatorToken().getKind() !== SyntaxKind.EqualsToken) continue;
 
       const left = unwrappedStaticExpressionNode(expression.getLeft());
+      const references = { carrierProperties, names, symbolKeys };
+      if (Node.isObjectLiteralExpression(left)) {
+        appendSourceReceiverAliasesFromCarrierAssignment(left, expression.getRight(), references);
+        continue;
+      }
+
       if (!Node.isIdentifier(left)) continue;
 
-      const references = { carrierProperties, names, symbolKeys };
       const right = expression.getRight();
       if (isSourceReceiverAliasExpression(right, isBaseReceiverIdentifier, references)) {
         appendSourceDestructuredReceiverIdentifier(left, names, symbolKeys);
@@ -4791,6 +4845,51 @@ function sourceReceiverAliasReferencesForBody(
   }
 
   return { carrierProperties, names, symbolKeys };
+}
+
+function appendSourceReceiverAliasesFromCarrierAssignment(
+  assignment: ObjectLiteralExpression,
+  initializer: Node,
+  references: {
+    carrierProperties: ReadonlyMap<string, ReadonlySet<string>>;
+    names: Set<string>;
+    symbolKeys: Set<string>;
+  },
+): void {
+  // SPEC §11.1: source-mode destructuring assignment from a known carrier is still not exact
+  // receiver proof, but later receiver work through the assigned aliases must stay visible.
+  const expression = unwrappedStaticExpressionNode(initializer);
+  if (!Node.isIdentifier(expression)) return;
+
+  const symbolKey = resolvedSymbolKey(symbolForIdentifierReference(expression));
+  const carrierProperties = symbolKey ? references.carrierProperties.get(symbolKey) : undefined;
+  if (!carrierProperties) return;
+
+  for (const property of assignment.getProperties()) {
+    const propertyName = objectAssignmentPropertyName(property);
+    if (!propertyName) continue;
+
+    const target = objectAssignmentTargetNode(property);
+    if (!target) continue;
+
+    if (carrierProperties.has(propertyName)) {
+      appendSourceDestructuredReceiverIdentifier(target, references.names, references.symbolKeys);
+      continue;
+    }
+
+    if (!Node.isIdentifier(target)) continue;
+
+    const nestedProperties = receiverCarrierNestedProperties(carrierProperties, propertyName);
+    if (nestedProperties.size === 0) continue;
+
+    const targetSymbolKey = resolvedSymbolKey(symbolForIdentifierReference(target));
+    if (!targetSymbolKey) continue;
+
+    const properties = carrierPropertiesForSymbol(references.carrierProperties, targetSymbolKey);
+    for (const nestedProperty of nestedProperties) {
+      properties.add(nestedProperty);
+    }
+  }
 }
 
 function appendSourceReceiverAliasesFromCarrierBinding(
