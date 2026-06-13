@@ -134,22 +134,27 @@ Current state:
 - Runtime root exports are explicit rather than wildcarding internal parser/apply helpers.
 - Inline-loader generation validates helper closure and minifier/parser parity against modular
   runtime helpers.
+- The remaining internal `applyFragmentQueryBody` wrapper was removed; canonical mutation runtime
+  apply decodes and applies body chunks directly.
+- Readable and minified inline loader builds now have parser parity checks against the canonical
+  `wire-parser.ts` helper closure.
 
 Open:
 
-- Finish deleting remaining internal compatibility-style apply wrappers.
+- Audit for any remaining internal compatibility-style apply wrappers after `applyFragmentQueryBody`
+  deletion.
 - Keep inline-loader readable/minified output mechanically tied to canonical parser helpers.
 - Continue splitting large runtime tests along apply/query/loader/minifier seams.
 - Re-run browser runtime tests after each apply/loader surface change.
 
 Latest focused evidence:
 
-- `pnpm exec vitest --run packages/runtime/src/apply-deferred-stream.test.ts packages/runtime/src/mutation-apply.test.ts packages/runtime/src/index-exports.test.ts`
+- `pnpm exec vitest --run packages/runtime/src/inline-loader.test.ts packages/runtime/src/inline-js-minifier.test.ts packages/runtime/src/wire-parser.test.ts packages/runtime/src/mutation-response.test.ts packages/runtime/src/index-exports.test.ts`
 - `pnpm exec vitest --run packages/runtime/src`
 - `pnpm exec vitest --config vitest.browser.config.ts --run packages/runtime/src/index.browser.test.ts`
 - `pnpm --filter @jiso/runtime run check:inline-loader`
 - `pnpm exec tsc --noEmit --pretty false`
-- `pnpm exec vp check packages/runtime/src/apply-deferred-stream.ts packages/runtime/src/apply-deferred-stream.test.ts packages/runtime/src/mutation-apply.ts packages/runtime/src/index.ts packages/runtime/src/index-exports.test.ts packages/runtime/src/index.test.ts IMPLEMENT_v1.md plans/codebase-quality-round2.md`
+- `pnpm exec vp check packages/runtime/src/apply-mutation-response.ts packages/runtime/src/inline-loader-build.ts packages/runtime/src/inline-loader.test.ts IMPLEMENT_v1.md plans/codebase-quality-round2.md`
 - `git diff --check`
 
 ## Phase 5 - Server And App Shell
@@ -246,7 +251,6 @@ Stale but useful broad references:
 
 ## Integration Queue
 
-- Runtime worker `round113` produced `d108ac1`; integrate next with runtime focused gates.
 - UI worker `round100` has conflicting handoff SHAs and showed a dirty `IMPLEMENT_v1.md` locally;
   inspect before cherry-picking, then integrate the intended committed slice only.
 - Keep five active worker lanes by refilling integrated lanes from the latest main `HEAD`.

@@ -21,21 +21,6 @@ export interface ApplyMutationResponseOptions {
   onError?: (error: unknown) => void;
 }
 
-function applyFragmentQueryBody(
-  body: string,
-  applyQueries: (queries: readonly QueryChunk[]) => readonly string[],
-  onError?: (error: unknown) => void,
-  beforeApplyQueries?: (queries: readonly QueryChunk[]) => void,
-): AppliedMutationResponse {
-  const chunks = readMutationResponseBodyChunks(body, onError);
-  beforeApplyQueries?.(chunks.queries);
-
-  return {
-    fragments: chunks.fragments,
-    queries: [...applyQueries(chunks.queries)],
-  };
-}
-
 export function applyMutationResponse(
   store: QueryStore,
   body: string,
@@ -91,19 +76,20 @@ function applyMutationResponseBody(
 function applyMutationResponseBody(
   options: ApplyMutationResponseToRuntimeOptions,
 ): AppliedMutationResponseToRuntime {
-  const applied = applyFragmentQueryBody(
-    options.body,
-    (queries) =>
-      applyQueryChunksToRuntime(options.store, queries, {
+  const chunks = readMutationResponseBodyChunks(options.body, options.onError);
+  options.beforeApplyQueries?.(chunks.queries);
+  const applied: AppliedMutationResponse = {
+    fragments: chunks.fragments,
+    queries: [
+      ...applyQueryChunksToRuntime(options.store, chunks.queries, {
         ...definedProps({
           applyQuery: options.applyQuery,
           queryPlans: options.queryPlans,
           root: options.queryRoot ?? options.root,
         }),
       }),
-    options.onError,
-    options.beforeApplyQueries,
-  );
+    ],
+  };
 
   if (!options.root) return applied;
 

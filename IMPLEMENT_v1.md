@@ -84,6 +84,21 @@ packages/runtime/src/apply-deferred-stream.test.ts packages/runtime/src/mutation
 packages/runtime/src/index.ts packages/runtime/src/index-exports.test.ts
 packages/runtime/src/index.test.ts IMPLEMENT_v1.md plans/codebase-quality-round2.md`
       and `git diff --check`.
+      Additional evidence 2026-06-13: `packages/runtime/src/apply-mutation-response.ts` now
+      applies decoded mutation response bodies directly in the canonical runtime apply function
+      after deleting the internal `applyFragmentQueryBody` wrapper, and
+      `packages/runtime/src/inline-loader-build.ts` checks readable plus minified inline
+      wire-parser embeds against the canonical `packages/runtime/src/wire-parser.ts` helper
+      closure during `build:inline-loader`/`check:inline-loader` (SPEC §4.4/§9.1). Same-session
+      evidence: `pnpm exec vitest --run packages/runtime/src/inline-loader.test.ts
+packages/runtime/src/inline-js-minifier.test.ts packages/runtime/src/wire-parser.test.ts
+packages/runtime/src/mutation-response.test.ts packages/runtime/src/index-exports.test.ts`,
+      `pnpm exec vitest --run packages/runtime/src`, `pnpm exec vitest --config
+vitest.browser.config.ts --run packages/runtime/src/index.browser.test.ts`,
+      `pnpm --filter @jiso/runtime run check:inline-loader`, `pnpm exec tsc --noEmit --pretty
+false`, `pnpm exec vp check packages/runtime/src/apply-mutation-response.ts
+packages/runtime/src/inline-loader-build.ts packages/runtime/src/inline-loader.test.ts
+IMPLEMENT_v1.md plans/codebase-quality-round2.md`, and `git diff --check`.
 - [x] P2 exit demo/smoke is proven by a standalone browser L0+L1 smoke covering tabs, dialog, filter island, declared visible trigger, and zero handler imports before interaction/trigger.
 - [x] P3 server/core have `domain`, `query`, `mutation`, `route`, typed `href`/`Link`/`redirect`, typed sessions, CSRF issuance/validation, FormData coercion, guards/rate limits, mutation replay, query endpoints, rerun query fragments, and commerce app usage.
       Additional evidence 2026-06-13: SPEC §9.5 static replay request construction now lives in

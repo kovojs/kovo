@@ -168,7 +168,10 @@ function installInlineJisoLoader(importModule) {
 export function buildInlineJisoLoaderInstallerSource(
   source = inlineJisoLoaderInstallerReadableSource,
 ): string {
-  return minifyInlineJavaScriptSource(source);
+  assertDefaultInlineJisoLoaderInstallerWireParserParity(source);
+  const installerSource = minifyInlineJavaScriptSource(source);
+  assertDefaultMinifiedInlineJisoLoaderInstallerWireParserParity(source, installerSource);
+  return installerSource;
 }
 
 export interface EmitInlineJisoLoaderModuleOptions {
@@ -305,6 +308,65 @@ export function extractInlineWireParserReadableSource(
   }).outputText;
 
   return transpiled.replace(/^"use strict";\s*/, '').trim();
+}
+
+export function assertInlineJisoLoaderInstallerWireParserParity(
+  installerSource: string,
+  wireParserSource: string = readFileSync(wireParserSourcePath, 'utf8'),
+): void {
+  const expected = extractInlineWireParserReadableSource(wireParserSource);
+  const count = countSubstring(installerSource, expected);
+
+  if (count !== 1) {
+    throw new Error(
+      `Inline Jiso loader readable source must embed the canonical wire parser helper closure exactly once; found ${count}.`,
+    );
+  }
+}
+
+export function assertMinifiedInlineJisoLoaderInstallerWireParserParity(
+  installerSource: string,
+  wireParserSource: string = readFileSync(wireParserSourcePath, 'utf8'),
+): void {
+  const expected = minifyInlineJavaScriptSource(
+    extractInlineWireParserReadableSource(wireParserSource),
+  );
+  const count = countSubstring(installerSource, expected);
+
+  if (count !== 1) {
+    throw new Error(
+      `Inline Jiso loader minified source must embed the canonical minified wire parser helper closure exactly once; found ${count}.`,
+    );
+  }
+}
+
+function assertDefaultInlineJisoLoaderInstallerWireParserParity(source: string): void {
+  if (source !== inlineJisoLoaderInstallerReadableSource) return;
+  assertInlineJisoLoaderInstallerWireParserParity(source);
+}
+
+function assertDefaultMinifiedInlineJisoLoaderInstallerWireParserParity(
+  readableSource: string,
+  installerSource: string,
+): void {
+  if (readableSource !== inlineJisoLoaderInstallerReadableSource) return;
+  assertMinifiedInlineJisoLoaderInstallerWireParserParity(installerSource);
+}
+
+function countSubstring(source: string, expected: string): number {
+  if (!expected) return 0;
+
+  let count = 0;
+  let offset = 0;
+  while (offset < source.length) {
+    const index = source.indexOf(expected, offset);
+    if (index === -1) return count;
+
+    count += 1;
+    offset = index + expected.length;
+  }
+
+  return count;
 }
 
 function collectInlineWireParserDependencyClosure(

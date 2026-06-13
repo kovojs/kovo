@@ -6,7 +6,9 @@ import { gzipSync } from 'node:zlib';
 import { describe, expect, it, vi } from 'vitest';
 
 import {
+  assertInlineJisoLoaderInstallerWireParserParity,
   assertInlineJisoLoaderModuleArtifactParity,
+  assertMinifiedInlineJisoLoaderInstallerWireParserParity,
   buildInlineJisoLoaderModuleSource,
   buildInlineJisoLoaderInstallerSource,
   emitInlineJisoLoaderModule,
@@ -170,6 +172,46 @@ describe('inline loader source', () => {
     );
     expect(extracted).not.toContain('unusedHelper');
     expect(extracted).not.toContain('export function');
+  });
+
+  it('checks readable and minified inline parser embeds against the modular parser', () => {
+    // SPEC.md §4.4/§9.1: inline response scanning is allowed to be tiny, but
+    // build-time checks must keep it byte-tied to the modular wire parser.
+    const canonicalParser = [
+      'export function readElementChunks(body) {',
+      '  return readAttribute("", "target") + body;',
+      '}',
+      'export function readAttribute(attrs, name) {',
+      '  return attrs + name;',
+      '}',
+    ].join('\n');
+    const canonicalReadable = extractInlineWireParserReadableSource(canonicalParser);
+    const readableInstaller = [
+      'function installInlineJisoLoader(importModule) {',
+      canonicalReadable,
+      '  return readElementChunks("body");',
+      '}',
+    ].join('\n');
+    const minifiedInstaller = buildInlineJisoLoaderInstallerSource(readableInstaller);
+
+    expect(() =>
+      assertInlineJisoLoaderInstallerWireParserParity(readableInstaller, canonicalParser),
+    ).not.toThrow();
+    expect(() =>
+      assertMinifiedInlineJisoLoaderInstallerWireParserParity(minifiedInstaller, canonicalParser),
+    ).not.toThrow();
+    expect(() =>
+      assertInlineJisoLoaderInstallerWireParserParity(
+        readableInstaller.replace('return attrs + name;', 'return name + attrs;'),
+        canonicalParser,
+      ),
+    ).toThrow('canonical wire parser helper closure exactly once; found 0');
+    expect(() =>
+      assertMinifiedInlineJisoLoaderInstallerWireParserParity(
+        minifiedInstaller.replace('return attrs+name', 'return name+attrs'),
+        canonicalParser,
+      ),
+    ).toThrow('canonical minified wire parser helper closure exactly once; found 0');
   });
 
   it('rejects inline wire parser helpers hidden behind function-valued locals', () => {
