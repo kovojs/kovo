@@ -118,6 +118,9 @@ no longer defines that fake DOM/mutation root harness inline.
 Shared command fixtures now own browser-suite and P10 perf acceptance-gate projections, including
 Vite+ task input facts, CI/acceptance membership, ordering, and acceptance module shapes, so the
 P10 fw-check cases no longer rebuild that gate mechanic locally.
+Shared command fixtures now also own browser-suite project-root fixture assembly, including package
+manifest, CI workflow, Vite+ config, and acceptance module import, so the P10 browser acceptance
+fw-check case no longer reads those project files locally.
 
 - [ ] Search for remaining custom parsers, raw source membership checks, and generated-artifact
       projections in `tests/fw-check.node.mjs`.
@@ -156,6 +159,12 @@ Latest evidence:
   is blocked before fixture assertions by outside-ownership server export state:
   `TypeError: createMemoryVersionedClientModuleRegistry is not a function` from
   `tests/p10-perf.node.mjs`.
+- P10 browser acceptance project fixture assembly slice:
+  `pnpm exec vitest --run packages/test/src/command-fixtures.test.ts packages/test/src/package-exports.test.ts`;
+  `pnpm run check:build`;
+  targeted `node --test --test-name-pattern "framework-owned browser suite is wired into acceptance" tests/fw-check.node.mjs`;
+  exact `pnpm exec vp check packages/test/src/command-fixtures.ts packages/test/src/command-fixtures.test.ts packages/test/src/package-exports.test.ts tests/fw-check.node.mjs`;
+  `git diff --check`.
 - Enhanced mutation runtime fixture slice:
   `pnpm exec vitest --run packages/test/src/runtime-fixtures.test.ts packages/test/src/package-exports.test.ts`;
   `pnpm run check:build`;

@@ -18,6 +18,7 @@ import {
   assertOrderedItems,
   browserSuiteAcceptanceGateFact,
   browserSuiteAcceptanceModulePath,
+  browserSuiteAcceptanceProjectFact,
   commandOutputLines,
   commandSequence,
   commandSequenceWithoutLast,
@@ -1085,6 +1086,7 @@ describe('@jiso/test package subpath exports', () => {
     expect(() => assertOrderedItems(['build', 'fw-check'], 'build', 'fw-check')).not.toThrow();
     expect(browserSuiteAcceptanceGateFact).toBeTypeOf('function');
     expect(browserSuiteAcceptanceModulePath).toBeTypeOf('function');
+    expect(browserSuiteAcceptanceProjectFact).toBeTypeOf('function');
     expect(conformanceGateFacts).toBeTypeOf('function');
     expectTypeOf<ConformanceGateFacts>().toHaveProperty('taskName').toEqualTypeOf<string>();
     expect(loadVitePlusConfig).toBeTypeOf('function');

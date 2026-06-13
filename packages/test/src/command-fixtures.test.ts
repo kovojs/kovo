@@ -1,9 +1,13 @@
 import { describe, expect, it } from 'vitest';
+import { mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises';
+import { join } from 'node:path';
+import { tmpdir } from 'node:os';
 
 import {
   assertOrderedItems,
   browserSuiteAcceptanceGateFact,
   browserSuiteAcceptanceModulePath,
+  browserSuiteAcceptanceProjectFact,
   commandOutputLines,
   commandSequence,
   commandSequenceWithoutLast,
@@ -283,6 +287,80 @@ describe('@jiso/test command fixtures', () => {
         },
       }),
     ).toBe('scripts/browser-acceptance.mjs');
+  });
+
+  it('loads browser suite acceptance wiring from a project root fixture', async () => {
+    const rootPath = await mkdtemp(join(tmpdir(), 'jiso-browser-acceptance-'));
+
+    try {
+      await mkdir(join(rootPath, '.github/workflows'), { recursive: true });
+      await mkdir(join(rootPath, 'tests'), { recursive: true });
+      await writeFile(
+        join(rootPath, 'package.json'),
+        JSON.stringify({
+          scripts: {
+            acceptance: 'pnpm run check:build && pnpm run test:browser && pnpm run check:fw',
+            'test:browser': 'vp run browser',
+          },
+        }),
+      );
+      await writeFile(
+        join(rootPath, '.github/workflows/ci.yml'),
+        ['steps:', '  - run: vp run build', '  - run: vp run browser'].join('\n'),
+      );
+      await writeFile(
+        join(rootPath, 'vite.config.ts'),
+        [
+          "import { defineConfig } from 'vite-plus';",
+          'export default defineConfig({',
+          '  run: {',
+          '    tasks: {',
+          '      browser: {',
+          "        command: 'vitest --run --config vitest.browser.config.ts',",
+          '        input: [',
+          '          { auto: true },',
+          "          { base: 'workspace', pattern: 'vitest.browser.config.ts' },",
+          "          { base: 'workspace', pattern: 'tests/browser-acceptance.mjs' },",
+          '        ],',
+          '      },',
+          '    },',
+          '  },',
+          '});',
+        ].join('\n'),
+      );
+      await writeFile(
+        join(rootPath, 'tests/browser-acceptance.mjs'),
+        [
+          'export const browserSuiteAcceptance = {',
+          "  browser: 'chromium',",
+          '  headless: true,',
+          "  include: ['packages/runtime/src/**/*.browser.test.ts'],",
+          "  providerPackage: '@vitest/browser-playwright',",
+          '};',
+        ].join('\n'),
+      );
+
+      await expect(browserSuiteAcceptanceProjectFact({ rootPath })).resolves.toEqual({
+        acceptance: {
+          browser: 'chromium',
+          headless: true,
+          include: ['packages/runtime/src/**/*.browser.test.ts'],
+          providerPackage: '@vitest/browser-playwright',
+        },
+        inputFacts: [
+          { auto: true },
+          { base: 'workspace', pattern: 'vitest.browser.config.ts' },
+          { base: 'workspace', pattern: 'tests/browser-acceptance.mjs' },
+          { base: 'workspace', pattern: 'packages/runtime/src/**/*.browser.test.ts' },
+        ],
+        presentInAcceptance: true,
+        presentInCi: true,
+        scriptName: 'test:browser',
+        taskName: 'browser',
+      });
+    } finally {
+      await rm(rootPath, { force: true, recursive: true });
+    }
   });
 
   it('projects P10 perf acceptance wiring and ordering as a reusable gate fact', () => {

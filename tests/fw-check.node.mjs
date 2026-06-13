@@ -47,8 +47,7 @@ import {
 } from '../dist/runtime/src/index.mjs';
 import { createDbVerifier, createJisoTestHarness } from '../dist/test/src/index.mjs';
 import {
-  browserSuiteAcceptanceGateFact,
-  browserSuiteAcceptanceModulePath,
+  browserSuiteAcceptanceProjectFact,
   commandOutputLines,
   commandSequenceWithoutLast,
   conformanceGateFacts,
@@ -5197,40 +5196,24 @@ export const CartTotal = component('cart-total', {
 });
 
 void test('framework-owned browser suite is wired into acceptance', async () => {
-  const packageJson = await projectJsonFile(projectRootPath, 'package.json');
-  const ciWorkflow = await readProjectFile('.github/workflows/ci.yml');
-  const viteConfig = await loadProjectVitePlusConfig();
-  const browserAcceptancePattern = browserSuiteAcceptanceModulePath({ packageJson, viteConfig });
-  const { browserSuiteAcceptance } = await import(
-    new URL(`../${browserAcceptancePattern}`, import.meta.url).href
-  );
-
-  assert.deepEqual(
-    browserSuiteAcceptanceGateFact({
-      acceptance: browserSuiteAcceptance,
-      ciWorkflowSource: ciWorkflow,
-      packageJson,
-      viteConfig,
-    }),
-    {
-      acceptance: {
-        browser: 'chromium',
-        headless: true,
-        include: ['packages/runtime/src/**/*.browser.test.ts'],
-        providerPackage: '@vitest/browser-playwright',
-      },
-      inputFacts: [
-        { auto: true },
-        { base: 'workspace', pattern: 'vitest.browser.config.ts' },
-        { base: 'workspace', pattern: browserAcceptancePattern },
-        { base: 'workspace', pattern: 'packages/runtime/src/**/*.browser.test.ts' },
-      ],
-      presentInAcceptance: true,
-      presentInCi: true,
-      scriptName: 'test:browser',
-      taskName: 'browser',
+  assert.deepEqual(await browserSuiteAcceptanceProjectFact({ rootPath: projectRootPath }), {
+    acceptance: {
+      browser: 'chromium',
+      headless: true,
+      include: ['packages/runtime/src/**/*.browser.test.ts'],
+      providerPackage: '@vitest/browser-playwright',
     },
-  );
+    inputFacts: [
+      { auto: true },
+      { base: 'workspace', pattern: 'vitest.browser.config.ts' },
+      { base: 'workspace', pattern: 'tests/browser-acceptance.mjs' },
+      { base: 'workspace', pattern: 'packages/runtime/src/**/*.browser.test.ts' },
+    ],
+    presentInAcceptance: true,
+    presentInCi: true,
+    scriptName: 'test:browser',
+    taskName: 'browser',
+  });
 });
 
 void test('P10 perf acceptance is wired through Playwright and CDP', async () => {
