@@ -150,6 +150,10 @@ wire cases no longer keep fixture directory reads or generated wire pin maps in 
 Shared HTML fragment fixtures now also own document query-script behavior projection for the P3
 fw-check server hydration gate, including head/body query script placement and body element facts,
 so the monolith no longer assembles those document-region/query-script projections inline.
+Shared fw-export fixtures now own D10 static export red/green mechanics for API and CLI paths,
+including temp app-module generation, emitted artifact presence, structured CLI output projection,
+and exported main-marker checks, so the monolith no longer creates export temp projects or reads
+generated export artifacts inline.
 
 - [ ] Search for remaining custom parsers, raw source membership checks, and generated-artifact
       projections in `tests/fw-check.node.mjs`.
@@ -198,6 +202,16 @@ Latest evidence:
   `documentQueryScriptBehaviorFact()` as a public fixture projection for rendered query scripts,
   head/body placement, and body element facts; `tests/fw-check.node.mjs` consumes that fact instead
   of locally stitching document regions, `fw-query` facts, and body element projections.
+- D10 static export fixture closure slice:
+  `pnpm exec vitest --run packages/test/src/fw-export-fixtures.test.ts packages/test/src/package-exports.test.ts`;
+  `pnpm run check:build`;
+  targeted `node --test --test-name-pattern "D10" tests/fw-check.node.mjs`.
+  Evidence: `packages/test/src/fw-export-fixtures.ts` exposes
+  `fwExportStaticBehaviorFact()` as a public fixture for static export API rejection,
+  lint-only artifact emission, CLI red/green module generation, structured `fw-export/v1`
+  projection, and exported main-marker checks; `tests/fw-check.node.mjs` now asserts that
+  structured fact instead of managing export temp directories or reading generated artifacts
+  inline.
 - Wire fixture package seam slice:
   `pnpm exec vitest --run packages/test/src/wire-fixtures.test.ts packages/test/src/package-exports.test.ts`;
   `pnpm run check:build`;

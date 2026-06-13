@@ -78,6 +78,7 @@ import {
 } from '@jiso/test/diagnostic-output-fixtures';
 import {
   fwExportCliResultFact,
+  fwExportStaticBehaviorFact,
   parseFwExportOutput,
   type FwExportCliArtifactFact,
   type FwExportCliResultFact,
@@ -85,6 +86,9 @@ import {
   type FwExportError,
   type FwExportHtmlArtifact,
   type FwExportOutput,
+  type FwExportStaticBehaviorFact,
+  type FwExportStaticBehaviorOptions,
+  type FwExportStaticDiagnosticLike,
   type FwExportSummary,
 } from '@jiso/test/fw-export-fixtures';
 import {
@@ -1201,6 +1205,7 @@ describe('@jiso/test package subpath exports', () => {
       html: [{ bytesArePositive: true, path: '/index.html', status: 200 }],
       outputStream: 'stdout',
     });
+    expect(fwExportStaticBehaviorFact).toBeTypeOf('function');
     expect(parseFwCheckOutput('fw-check/v1\nOK\n')).toMatchObject({ status: 'ok' });
     expect(fwCheckResultFact({ exitCode: 0, output: 'fw-check/v1\nOK\n' })).toMatchObject({
       exitCode: 0,
@@ -1495,6 +1500,9 @@ type _PublicSubpathTypes = [
   FwExportError,
   FwExportHtmlArtifact,
   FwExportOutput,
+  FwExportStaticBehaviorFact,
+  FwExportStaticBehaviorOptions,
+  FwExportStaticDiagnosticLike,
   FwExportSummary,
   FwCheckAssertionFact,
   FwCheckCoverageAssertionFact,

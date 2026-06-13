@@ -1,7 +1,6 @@
 import assert from 'node:assert/strict';
 import { execFile, execFileSync } from 'node:child_process';
-import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
+import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { test } from 'node:test';
 import { fileURLToPath, pathToFileURL } from 'node:url';
@@ -79,7 +78,7 @@ import {
   fwCheckDiagnosticAssertionFacts,
   fwCheckOkAssertionFact,
 } from '../packages/test/src/fw-check-fixtures.ts';
-import { fwExportCliResultFact } from '../packages/test/src/fw-export-fixtures.ts';
+import { fwExportStaticBehaviorFact } from '../packages/test/src/fw-export-fixtures.ts';
 import {
   executeGeneratedClientArtifact,
   executeGeneratedBootstrapModule,
@@ -111,7 +110,6 @@ import {
 import {
   documentQueryScriptBehaviorFact,
   htmlElementFacts,
-  htmlMainMarkerFact,
 } from '../packages/test/src/html-fragment.ts';
 import {
   legibilityStudyGateFact,
@@ -3923,14 +3921,6 @@ document.querySelector('#app')!.textContent = 'D10 build green';
   assertRedTransformMessage(buildFixture.redOutput);
   assert.deepEqual(buildFixture.greenDistEntries, ['assets', 'index.html']);
 
-  const outDir = await mkdtemp(join(tmpdir(), 'jiso-d10-export-'));
-  const app = createApp({
-    routes: [
-      serverRoute('/', {
-        page: () => '<main data-fw-check-export="api"></main>',
-      }),
-    ],
-  });
   const errorDiagnostic = {
     code: 'FW201',
     fileName,
@@ -3945,109 +3935,74 @@ document.querySelector('#app')!.textContent = 'D10 build green';
     start: { column: 25, line: 5 },
   };
 
-  try {
-    await assert.rejects(
-      exportStaticApp(app, { diagnostics: [errorDiagnostic], outDir }),
-      (error) => {
-        assert.equal(error?.name, 'StaticExportError');
-        assert.equal(error?.code, 'FW201');
-        assert.deepEqual(
-          error?.diagnostics?.map((diagnostic) => diagnostic.code),
-          ['FW201'],
-        );
-        assert.equal(String(error?.message ?? error), expectedStaticExportError);
-        return true;
-      },
-    );
-    await assert.rejects(readFile(join(outDir, 'index.html'), 'utf8'));
-
-    const exported = await exportStaticApp(app, { diagnostics: [lintDiagnostic], outDir });
-    assert.equal(exported.artifacts[0]?.path, '/index.html');
-    assert.equal(exported.diagnostics.length, 0);
-    const exportedHtml = await readFile(join(outDir, 'index.html'), 'utf8');
-    assert.equal(exported.artifacts[0]?.body, exportedHtml);
-    assert.deepEqual(
-      htmlMainMarkerFact(exportedHtml),
-      {
+  const exportBehavior = await fwExportStaticBehaviorFact({
+    appCoreModuleUrl: pathToFileURL(join(projectRoot, 'dist/server/src/api/app-shell/core.mjs'))
+      .href,
+    createApp,
+    errorDiagnostic,
+    expectedStaticExportCliError,
+    expectedStaticExportError,
+    exportStaticApp,
+    fixturePrefix: 'jiso-d10-fw-export-',
+    lintDiagnostic,
+    runCliCommand,
+    serverModuleUrl: pathToFileURL(join(projectRoot, 'dist/server/src/index.mjs')).href,
+    serverRoute,
+  });
+  assert.match(exportBehavior.cli.green.summary?.outDir ?? '', /^".*green-out"$/);
+  assert.deepEqual(exportBehavior, {
+    api: {
+      greenArtifactBodyMatchesDisk: true,
+      greenArtifactDiagnostics: 0,
+      greenArtifactPath: '/index.html',
+      greenMarker: {
         attribute: 'data-fw-check-export',
         mainCount: 1,
         marker: 'api',
       },
-      'static export writes the rendered main marker',
-    );
-  } finally {
-    await rm(outDir, { force: true, recursive: true });
-  }
-
-  const cliFixtureRoot = await mkdtemp(join(tmpdir(), 'jiso-d10-fw-export-'));
-  const cliRedOutDir = join(cliFixtureRoot, 'red-out');
-  const cliGreenOutDir = join(cliFixtureRoot, 'green-out');
-  const cliRedModule = join(cliFixtureRoot, 'red-app.mjs');
-  const cliGreenModule = join(cliFixtureRoot, 'green-app.mjs');
-  const cliAppModuleSource = (diagnostics) => `
-import { route as serverRoute } from ${JSON.stringify(
-    pathToFileURL(join(projectRoot, 'dist/server/src/index.mjs')).href,
-  )};
-import { createApp } from ${JSON.stringify(
-    pathToFileURL(join(projectRoot, 'dist/server/src/api/app-shell/core.mjs')).href,
-  )};
-
-export const diagnostics = ${JSON.stringify(diagnostics, null, 2)};
-
-export default createApp({
-  routes: [
-    serverRoute('/', {
-      page: () => '<main data-fw-check-export="cli"></main>',
-    }),
-  ],
-});
-`;
-
-  try {
-    await writeFile(cliRedModule, cliAppModuleSource([errorDiagnostic]), 'utf8');
-    const redExport = await runCliCommand(['export', cliRedModule, '--out', cliRedOutDir]);
-    assert.deepEqual(fwExportCliResultFact(redExport), {
-      errors: [
-        {
-          code: 'FW201',
-          message: expectedStaticExportCliError,
-          route: fileName,
-        },
-      ],
-      exitCode: 1,
-      html: [],
-      outputStream: 'stderr',
-      version: 'fw-export/v1',
-    });
-    await assert.rejects(readFile(join(cliRedOutDir, 'index.html'), 'utf8'));
-
-    await writeFile(cliGreenModule, cliAppModuleSource([lintDiagnostic]), 'utf8');
-    const greenExport = await runCliCommand(['export', cliGreenModule, '--out', cliGreenOutDir]);
-    assert.deepEqual(fwExportCliResultFact(greenExport), {
-      errors: [],
-      exitCode: 0,
-      html: [{ bytesArePositive: true, path: '/index.html', status: 200 }],
-      outputStream: 'stdout',
-      summary: {
-        clientModules: '0',
-        diagnostics: '0',
-        html: '1',
-        outDir: JSON.stringify(cliGreenOutDir),
+      redArtifactWritten: false,
+      redError: {
+        code: 'FW201',
+        diagnosticCodes: ['FW201'],
+        message: expectedStaticExportError,
+        name: 'StaticExportError',
       },
-      version: 'fw-export/v1',
-    });
-    assert.deepEqual(
-      htmlMainMarkerFact(await readFile(join(cliGreenOutDir, 'index.html'), 'utf8')),
-      {
+    },
+    cli: {
+      green: {
+        errors: [],
+        exitCode: 0,
+        html: [{ bytesArePositive: true, path: '/index.html', status: 200 }],
+        outputStream: 'stdout',
+        summary: {
+          clientModules: '0',
+          diagnostics: '0',
+          html: '1',
+          outDir: exportBehavior.cli.green.summary?.outDir,
+        },
+        version: 'fw-export/v1',
+      },
+      greenMarker: {
         attribute: 'data-fw-check-export',
         mainCount: 1,
         marker: 'cli',
       },
-      'fw export writes the rendered main marker',
-    );
-  } finally {
-    await rm(cliFixtureRoot, { force: true, recursive: true });
-  }
+      red: {
+        errors: [
+          {
+            code: 'FW201',
+            message: expectedStaticExportCliError,
+            route: fileName,
+          },
+        ],
+        exitCode: 1,
+        html: [],
+        outputStream: 'stderr',
+        version: 'fw-export/v1',
+      },
+      redArtifactWritten: false,
+    },
+  });
 
   const redMcp = await handleFwMcpRequest({
     id: 'd10-red',
