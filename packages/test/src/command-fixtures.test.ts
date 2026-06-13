@@ -21,6 +21,7 @@ import {
   p10PerfAcceptanceModulePath,
   p10PerfAcceptanceProjectFact,
   requiredVpRunTaskName,
+  runCapturedCliCommand,
   vitePlusAcceptanceTaskFacts,
   vitePlusTaskInputFacts,
   vitePlusTaskInputPatternEndingWith,
@@ -98,6 +99,44 @@ describe('@jiso/test command fixtures', () => {
       'OK',
     ]);
     expect(commandOutputLines('')).toEqual([]);
+  });
+
+  it('captures CLI main stdout and stderr with stream restoration', async () => {
+    const originalStdoutWrite = Reflect.get(process.stdout, 'write');
+    const originalStderrWrite = Reflect.get(process.stderr, 'write');
+
+    await expect(
+      runCapturedCliCommand(
+        async (args) => {
+          process.stdout.write(`args=${args.join(',')}\n`);
+          process.stderr.write('diagnostic\n');
+          return 7;
+        },
+        ['check', 'fixture'],
+      ),
+    ).resolves.toEqual({
+      exitCode: 7,
+      stderr: 'diagnostic\n',
+      stdout: 'args=check,fixture\n',
+    });
+
+    expect(Reflect.get(process.stdout, 'write')).toBe(originalStdoutWrite);
+    expect(Reflect.get(process.stderr, 'write')).toBe(originalStderrWrite);
+  });
+
+  it('restores CLI streams when the injected main throws', async () => {
+    const originalStdoutWrite = Reflect.get(process.stdout, 'write');
+    const originalStderrWrite = Reflect.get(process.stderr, 'write');
+
+    await expect(
+      runCapturedCliCommand(async () => {
+        process.stdout.write('before throw\n');
+        throw new Error('boom');
+      }, []),
+    ).rejects.toThrow('boom');
+
+    expect(Reflect.get(process.stdout, 'write')).toBe(originalStdoutWrite);
+    expect(Reflect.get(process.stderr, 'write')).toBe(originalStderrWrite);
   });
 
   it('extracts task-specific command facts used by framework gates', () => {

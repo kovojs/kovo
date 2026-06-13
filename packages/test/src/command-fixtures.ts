@@ -12,6 +12,14 @@ export interface CommandInvocation {
   raw: string;
 }
 
+export interface CapturedCliCommandResult {
+  exitCode: number;
+  stderr: string;
+  stdout: string;
+}
+
+export type CliMainCommand = (args: readonly string[]) => number | Promise<number>;
+
 export interface PnpmFilterTestCommand {
   argv: readonly string[];
   packageName: string;
@@ -217,6 +225,35 @@ export function assertOrderedItems(items: readonly string[], before: string, aft
 export function commandOutputLines(output: string): string[] {
   const normalized = output.trimEnd();
   return normalized.length === 0 ? [] : normalized.split(/\r?\n/);
+}
+
+export async function runCapturedCliCommand(
+  main: CliMainCommand,
+  args: readonly string[],
+): Promise<CapturedCliCommandResult> {
+  // SPEC.md §17.4: gate checks should inspect deterministic command effects
+  // through structured observations instead of ad hoc stdout/stderr patching.
+  let stdout = '';
+  let stderr = '';
+  const originalStdoutWrite = Reflect.get(process.stdout, 'write') as typeof process.stdout.write;
+  const originalStderrWrite = Reflect.get(process.stderr, 'write') as typeof process.stderr.write;
+
+  process.stdout.write = ((chunk: unknown) => {
+    stdout += String(chunk);
+    return true;
+  }) as typeof process.stdout.write;
+  process.stderr.write = ((chunk: unknown) => {
+    stderr += String(chunk);
+    return true;
+  }) as typeof process.stderr.write;
+
+  try {
+    const exitCode = await main(args);
+    return { exitCode, stderr, stdout };
+  } finally {
+    process.stdout.write = originalStdoutWrite;
+    process.stderr.write = originalStderrWrite;
+  }
 }
 
 export function vitePlusAcceptanceTaskFacts(options: {

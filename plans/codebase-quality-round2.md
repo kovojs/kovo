@@ -197,6 +197,9 @@ Shared commerce fixtures now also own commerce update-intent coverage, paginated
 execution, verifier diagnostics, and deterministic file fixture mechanics, so commerce
 source-truth tests no longer rebuild `fw-explain` consumer maps, local harness query setup, or
 receipt-file doubles inline.
+Shared command fixtures now own CLI main stdout/stderr capture with stream restoration, so the D10
+fw-check static-export gate injects the CLI entrypoint through a public `@jiso/test` fixture
+instead of patching process streams inside the monolith.
 
 - [ ] Search for remaining custom parsers, raw source membership checks, and generated-artifact
       projections in `tests/fw-check.node.mjs`.
@@ -208,6 +211,14 @@ receipt-file doubles inline.
 
 Latest evidence:
 
+- CLI capture command fixture slice:
+  `pnpm exec vitest --run packages/test/src/command-fixtures.test.ts packages/test/src/package-exports.test.ts`;
+  `pnpm run check:build`;
+  targeted `node --test --test-name-pattern "D10 seeded diagnostics gate Vite, static export, and MCP red-green surfaces" tests/fw-check.node.mjs`;
+  `pnpm exec vitest --run examples/commerce/src/source-truth.test.ts`;
+  `pnpm exec tsc --noEmit --pretty false`;
+  exact `pnpm exec vp check packages/test/src/command-fixtures.ts packages/test/src/command-fixtures.test.ts packages/test/src/package-exports.test.ts tests/fw-check.node.mjs plans/codebase-quality-round2.md`;
+  `git diff --check`.
 - Broad mini-wave gate after runtime/app-shell/harness/Drizzle/UI integrations:
   `pnpm run check`; `pnpm run test`; `pnpm run test:browser`;
   `pnpm run test:conformance`; `pnpm run check:build`. Evidence: main worktree through
@@ -3623,6 +3634,9 @@ Shared verification fixtures now own the P9 verification-layer behavior fact use
 `tests/fw-check.node.mjs`, covering CSRF, harness mutation/query verification, DB verifier
 diagnostics, structured SQL observation, and Pglite wrapped mutations through a public
 `@jiso/test/verification-fixtures` seam.
+Shared command fixtures now own reusable CLI main stdout/stderr capture and restoration for
+dist-backed harness checks, so D10 static-export behavior is observed through a public
+`@jiso/test` command fixture instead of local stream monkey-patching in `tests/fw-check.node.mjs`.
 
 - [ ] Remove remaining commerce-local fixture parsing that belongs in `@jiso/test`.
 - [ ] Make opaque adapter objects either observable or explicitly documented as unobserved.
@@ -3631,6 +3645,14 @@ diagnostics, structured SQL observation, and Pglite wrapped mutations through a 
 
 Latest evidence:
 
+- CLI capture command fixture slice:
+  `pnpm exec vitest --run packages/test/src/command-fixtures.test.ts packages/test/src/package-exports.test.ts`;
+  `pnpm run check:build`;
+  targeted `node --test --test-name-pattern "D10 seeded diagnostics gate Vite, static export, and MCP red-green surfaces" tests/fw-check.node.mjs`;
+  `pnpm exec vitest --run examples/commerce/src/source-truth.test.ts`;
+  `pnpm exec tsc --noEmit --pretty false`;
+  exact `pnpm exec vp check packages/test/src/command-fixtures.ts packages/test/src/command-fixtures.test.ts packages/test/src/package-exports.test.ts tests/fw-check.node.mjs plans/codebase-quality-round2.md`;
+  `git diff --check`.
 - Verification-layer fixture slice:
   `pnpm exec vitest --run packages/test/src/verification-fixtures.test.ts packages/test/src/package-exports.test.ts`;
   `pnpm run check:build`;
@@ -3757,6 +3779,9 @@ instead of defining fake DB, verifier, assertion, SQL, and Pglite mechanics insi
 The P9 enhanced mutation verification gate now consumes `@jiso/test/runtime-fixtures` behavior facts instead of
 defining fake DOM roots, broadcast capture, malformed header capture, and optimistic pending
 element mechanics inside `tests/fw-check.node.mjs`.
+The D10 static export gate now consumes public `@jiso/test/command-fixtures` CLI stdout/stderr
+capture and restoration mechanics instead of keeping process stream patching inline in
+`tests/fw-check.node.mjs`.
 
 - [ ] When touching a monolith test, move reusable mechanics into package fixtures or focused tests.
 - [ ] Prefer structured assertions and shared fixtures over source-text or output-substring ledgers.
@@ -3764,6 +3789,14 @@ element mechanics inside `tests/fw-check.node.mjs`.
 
 Latest evidence:
 
+- CLI capture command fixture slice:
+  `pnpm exec vitest --run packages/test/src/command-fixtures.test.ts packages/test/src/package-exports.test.ts`;
+  `pnpm run check:build`;
+  targeted `node --test --test-name-pattern "D10 seeded diagnostics gate Vite, static export, and MCP red-green surfaces" tests/fw-check.node.mjs`;
+  `pnpm exec vitest --run examples/commerce/src/source-truth.test.ts`;
+  `pnpm exec tsc --noEmit --pretty false`;
+  exact `pnpm exec vp check packages/test/src/command-fixtures.ts packages/test/src/command-fixtures.test.ts packages/test/src/package-exports.test.ts tests/fw-check.node.mjs plans/codebase-quality-round2.md`;
+  `git diff --check`.
 - Enhanced mutation runtime fixture slice:
   `pnpm exec vitest --run packages/test/src/runtime-fixtures.test.ts packages/test/src/package-exports.test.ts`;
   `pnpm run check:build`;

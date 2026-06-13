@@ -51,6 +51,7 @@ import {
   conformanceGateFacts,
   loadVitePlusConfig,
   p10PerfAcceptanceProjectFact,
+  runCapturedCliCommand,
 } from '../packages/test/src/command-fixtures.ts';
 import {
   compilerDataBindBehaviorFact,
@@ -191,29 +192,7 @@ const loadProjectWireFixtureSources = () =>
   loadWireFixtureSources(new URL('../fixtures/wire/', import.meta.url));
 const execFileAsync = promisify(execFile);
 
-const runCliCommand = async (args) => {
-  let stdout = '';
-  let stderr = '';
-  const originalStdoutWrite = process.stdout.write.bind(process.stdout);
-  const originalStderrWrite = process.stderr.write.bind(process.stderr);
-
-  process.stdout.write = function writeStdout(chunk) {
-    stdout += String(chunk);
-    return true;
-  };
-  process.stderr.write = function writeStderr(chunk) {
-    stderr += String(chunk);
-    return true;
-  };
-
-  try {
-    const exitCode = await mainAsync(args);
-    return { exitCode, stderr, stdout };
-  } finally {
-    process.stdout.write = originalStdoutWrite;
-    process.stderr.write = originalStderrWrite;
-  }
-};
+const runCliCommand = (args) => runCapturedCliCommand(mainAsync, args);
 
 const generatedModuleRuntime = {
   applyCompiledQueryUpdatePlan,

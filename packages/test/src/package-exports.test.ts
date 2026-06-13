@@ -43,6 +43,7 @@ import {
   p10PerfAcceptanceModulePath,
   p10PerfAcceptanceProjectFact,
   requiredVpRunTaskName,
+  runCapturedCliCommand,
   runCommandSequenceSync,
   vitePlusAcceptanceTaskFacts,
   vitePlusTaskInputFacts,
@@ -53,6 +54,8 @@ import {
   workflowStepCommands,
   type BrowserSuiteAcceptanceGateFact,
   type BrowserSuiteAcceptanceShape,
+  type CapturedCliCommandResult,
+  type CliMainCommand,
   type ConformanceGateFacts,
   type CommandInvocation,
   type NodeTaskCommand,
@@ -1607,6 +1610,7 @@ describe('@jiso/test package subpath exports', () => {
       { contentTypes: ['text/html; charset=utf-8'], name: 'cart-read.http' },
     ]);
     expect(wireFixturesWithContentType(wireSources, 'text/event-stream')).toEqual([]);
+    expect(runCapturedCliCommand).toBeTypeOf('function');
     expect(runCommandSequenceSync).toBeTypeOf('function');
   });
 
@@ -1624,6 +1628,8 @@ type _PublicSubpathTypes = [
   PropertyTestResult,
   BrowserSuiteAcceptanceGateFact,
   BrowserSuiteAcceptanceShape,
+  CapturedCliCommandResult,
+  CliMainCommand,
   CommandInvocation,
   NodeTaskCommand,
   P10PerfAcceptanceGateFact,
