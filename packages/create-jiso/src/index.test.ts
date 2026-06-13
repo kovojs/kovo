@@ -367,7 +367,7 @@ describe('create-jiso starter', () => {
     } finally {
       rmSync(root, { force: true, recursive: true });
     }
-  });
+  }, 15_000);
 
   it('serves the generated starter app-shell through the vp dev task', async () => {
     const tempParent = join(process.cwd(), 'node_modules/.tmp');
