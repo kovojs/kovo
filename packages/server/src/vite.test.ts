@@ -807,6 +807,63 @@ describe('server app shell Vite plugin', () => {
     }
   });
 
+  it('rejects non-file Vite distDir URLs before manifest-file export replay', async () => {
+    const distDir = await mkdtemp(join(tmpdir(), 'jiso-vite-bad-dist-url-manifest-'));
+    const outDir = await mkdtemp(join(tmpdir(), 'jiso-vite-bad-dist-url-export-'));
+    let rendered = false;
+
+    try {
+      await mkdir(join(distDir, '.vite'), { recursive: true });
+      const manifestFile = join(distDir, '.vite/manifest.json');
+      await writeFile(
+        manifestFile,
+        JSON.stringify({
+          'src/cart.client.ts': {
+            css: ['assets/cart.css'],
+            file: 'assets/cart.js',
+          },
+        }),
+      );
+
+      await expect(
+        exportJisoAppShellViteBuildFromManifestFile({
+          app: createApp({
+            routes: [
+              route('/cart', {
+                page() {
+                  rendered = true;
+                  return '<main class="cart">Cart</main>';
+                },
+              }),
+            ],
+          }),
+          distDir: new URL('https://cdn.example/dist/'),
+          manifestFile,
+          outDir,
+          routeEntryMap: {
+            '/cart': 'src/cart.client.ts',
+          },
+        }),
+      ).rejects.toMatchObject({
+        code: 'FW229',
+        diagnostics: [
+          {
+            code: 'FW229',
+            routePath: 'vite-distDir',
+          },
+        ],
+      });
+
+      expect(rendered).toBe(false);
+      await expect(readFile(join(outDir, 'cart', 'index.html'), 'utf8')).rejects.toThrow();
+    } finally {
+      await Promise.all([
+        rm(distDir, { force: true, recursive: true }),
+        rm(outDir, { force: true, recursive: true }),
+      ]);
+    }
+  });
+
   it('emits compiled app-shell client modules into the Vite output tree', async () => {
     const outDir = await mkdtemp(join(tmpdir(), 'jiso-vite-client-modules-'));
 

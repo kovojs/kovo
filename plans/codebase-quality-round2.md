@@ -178,6 +178,14 @@ assertions, and FW220 residual href/action diagnostics.
 
 Latest evidence:
 
+- Phase 5 Vite static-export dist root boundary slice:
+  `pnpm exec vitest --run packages/server/src/vite-build.test.ts packages/server/src/vite.test.ts`;
+  `pnpm exec tsc --noEmit --pretty false`;
+  `pnpm exec vp check packages/server/src/vite-build-assets.ts packages/server/src/vite-build.test.ts packages/server/src/vite.test.ts plans/app-shell.md plans/codebase-quality-round2.md`;
+  `git diff --check`.
+  Evidence: `packages/server/src/vite-build-assets.ts` now rejects non-`file:` URL Vite
+  filesystem roots with FW229, and focused server tests prove invalid `distDir` values fail before
+  manifest-backed asset planning, route rendering, or output writes.
 - Phase 5 Vite SSR dev node-handler boundary slice:
   `pnpm exec vitest --run packages/server/src/vite-dev.test.ts packages/server/src/vite.test.ts`;
   `pnpm exec tsc --noEmit --pretty false`;

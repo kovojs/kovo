@@ -116,6 +116,21 @@ Implemented areas:
 - The public Vite plugin now applies the shared closed-app aggregate guard at runtime, so
   JavaScript callers cannot pass a raw request handler or partial compatibility shell into the
   SPEC §9.5 dev/build/export replay boundary.
+- Vite app-shell filesystem roots now reject non-`file:` URL `distDir` values with FW229 before
+  manifest-backed asset planning, route replay, or static-host writes.
+
+Round305 Vite static-export dist root boundary evidence:
+
+- `packages/server/src/vite-build-assets.ts` now routes Vite filesystem roots through a FW229
+  guard that accepts paths and `file:` URLs while rejecting non-file URL `distDir` values before
+  SPEC §9.5 asset copy planning.
+- `packages/server/src/vite-build.test.ts` proves manifest-file asset planning rejects an
+  `https:` Vite `distDir`, and `packages/server/src/vite.test.ts` proves manifest-file static
+  export rejects the same invalid root before route rendering or output writes.
+- `pnpm exec vitest --run packages/server/src/vite-build.test.ts packages/server/src/vite.test.ts`
+- `pnpm exec tsc --noEmit --pretty false`
+- `pnpm exec vp check packages/server/src/vite-build-assets.ts packages/server/src/vite-build.test.ts packages/server/src/vite.test.ts plans/app-shell.md plans/codebase-quality-round2.md`
+- `git diff --check`
 
 Round288 Vite dev client-module request boundary evidence:
 

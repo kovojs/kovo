@@ -875,4 +875,42 @@ describe('server app shell Vite build seam', () => {
       ]);
     }
   });
+
+  it('rejects non-file Vite distDir URLs before static asset planning', async () => {
+    const distDir = await mkdtemp(join(tmpdir(), 'jiso-vite-build-bad-dist-url-'));
+
+    try {
+      await mkdir(join(distDir, '.vite'), { recursive: true });
+      const manifestFile = jisoAppShellViteManifestFile(distDir);
+      await writeFile(
+        manifestFile,
+        JSON.stringify({
+          'src/catalog.client.ts': {
+            css: ['assets/catalog.css'],
+            file: 'assets/catalog.js',
+          },
+        }),
+      );
+
+      await expect(
+        jisoAppShellViteStaticExportAssetsFromManifestFile({
+          distDir: new URL('https://cdn.example/dist/'),
+          manifestFile,
+        }),
+      ).rejects.toMatchObject({
+        code: 'FW229',
+        diagnostics: [
+          {
+            code: 'FW229',
+            message: expect.stringContaining(
+              'Vite app-shell filesystem roots must be filesystem paths or file: URLs',
+            ),
+            routePath: 'vite-distDir',
+          },
+        ],
+      });
+    } finally {
+      await rm(distDir, { force: true, recursive: true });
+    }
+  });
 });

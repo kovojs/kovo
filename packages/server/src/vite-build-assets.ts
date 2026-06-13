@@ -1,6 +1,7 @@
 import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+import { StaticExportError, staticExportDiagnostic } from './static-export-diagnostics.js';
 import type { StaticExportAssetInput } from './static-export-types.js';
 import {
   jisoAppShellViteManifestAssets,
@@ -67,7 +68,18 @@ export function jisoAppShellViteManifestFile(distDir: string | URL): string {
 }
 
 export function resolvedFileSystemPath(value: string | URL): string {
-  return path.resolve(value instanceof URL ? fileURLToPath(value) : value);
+  if (value instanceof URL) {
+    if (value.protocol === 'file:') return path.resolve(fileURLToPath(value));
+
+    throw new StaticExportError([
+      staticExportDiagnostic(
+        'vite-distDir',
+        `FW229 Vite app-shell filesystem roots must be filesystem paths or file: URLs, received '${value.href}'. SPEC §9.5 static export copies Vite assets from a local output directory.`,
+      ),
+    ]);
+  }
+
+  return path.resolve(value);
 }
 
 export function viteDistSourcePath(distDir: string | URL, file: string): string {
