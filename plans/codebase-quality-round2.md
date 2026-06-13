@@ -186,6 +186,14 @@ Latest evidence:
   Evidence: `packages/server/src/vite-build-assets.ts` now rejects non-`file:` URL Vite
   filesystem roots with FW229, and focused server tests prove invalid `distDir` values fail before
   manifest-backed asset planning, route rendering, or output writes.
+- Phase 4 inline-loader import type alias removal slice:
+  `pnpm exec vitest --run packages/runtime/src/inline-loader-build.test.ts packages/runtime/src/index-exports.test.ts packages/runtime/src/inline-loader-artifact-minifier.test.ts`;
+  `pnpm --filter @jiso/runtime run check:inline-loader`;
+  `pnpm exec tsc --noEmit --pretty false`.
+  Evidence: `packages/runtime/src/inline-loader-build.ts` now emits the generated
+  `packages/runtime/src/inline-loader.ts` installer against canonical `ImportHandlerModule`
+  directly instead of the duplicated `InlineImportHandlerModule` alias, and
+  `packages/runtime/src/index.ts` no longer re-exports that compatibility type.
 - Phase 5 Vite SSR dev node-handler boundary slice:
   `pnpm exec vitest --run packages/server/src/vite-dev.test.ts packages/server/src/vite.test.ts`;
   `pnpm exec tsc --noEmit --pretty false`;

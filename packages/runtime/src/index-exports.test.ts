@@ -69,6 +69,11 @@ type RemovedMutationDomResult = import('./index.js').AppliedMutationResponseToDo
 // eslint-disable-next-line no-unused-vars -- compile-time removal assertion only.
 type RemovedMutationResponseToDom = typeof import('./index.js').applyMutationResponseToDom;
 
+// @ts-expect-error SPEC.md §4.4: inline loader imports use the canonical handler module type,
+// not a root runtime compatibility alias.
+// eslint-disable-next-line no-unused-vars -- compile-time removal assertion only.
+type RemovedInlineImportHandlerModule = import('./index.js').InlineImportHandlerModule;
+
 describe('runtime root exports', () => {
   it('exports loader and handler modules directly from their canonical implementations', () => {
     // SPEC.md §4.4/§4.7: the public runtime loader surface composes the same

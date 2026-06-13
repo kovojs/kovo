@@ -20,7 +20,6 @@ export {
   installInlineJisoLoader,
   jisoLoaderSource,
 } from './inline-loader.js';
-export type { InlineImportHandlerModule } from './inline-loader.js';
 export type {
   LoaderLifecycleTarget,
   LoaderRoot,

@@ -49,6 +49,8 @@ describe('inline loader build source', () => {
     expect(moduleSource).toBe(readFileSync(new URL('./inline-loader.ts', import.meta.url), 'utf8'));
     expect(moduleSource).toContain('const inlineJisoLoaderInstaller = (');
     expect(moduleSource).toContain('inlineJisoLoaderInstaller(importModule);');
+    expect(moduleSource).toContain('importModule: ImportHandlerModule,');
+    expect(moduleSource).not.toContain('InlineImportHandlerModule');
     expect(moduleSource).not.toContain('eval');
   });
 
