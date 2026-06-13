@@ -1362,10 +1362,15 @@ export function FieldDemo(): string {
               })}
               {FieldControl.definition.render({
                 ...fieldState,
+                autoComplete: 'email',
                 descriptionId: 'gallery-field-description',
                 errorId: 'gallery-field-error',
                 id: 'gallery-field-email',
+                inputMode: 'email',
+                maxLength: 80,
+                minLength: 3,
                 name: 'email',
+                pattern: '.+@example\\.com',
                 placeholder: 'ada@example.com',
                 type: 'email',
               })}
@@ -1390,9 +1395,11 @@ export function FieldDemo(): string {
                 id: 'gallery-field-bio-label',
               })}
               {FieldTextarea.definition.render({
+                autoComplete: 'off',
                 children: 'Prefers changelog emails and release candidate previews.',
                 descriptionId: 'gallery-field-bio-description',
                 id: 'gallery-field-bio',
+                maxLength: 240,
                 name: 'bio',
                 rows: 3,
               })}

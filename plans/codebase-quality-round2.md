@@ -207,8 +207,8 @@ Focused gates since that broad run:
 - Drizzle: Postgres-only v1 proof, destructuring/nested/quoted receiver degradation, package
   suite, pinned conformance, exact `vp check`, and `git diff --check`.
 - UI/gallery: native-state fixes for number-field, checkbox-group, OTP, scroll-area, and
-  field/fieldset, with headless/UI/gallery tests, primitive lint, exact `vp check`, and
-  `git diff --check`.
+  field/fieldset native constraint/autofill attrs, with headless/UI/gallery tests, primitive lint,
+  exact `vp check`, and `git diff --check`.
 
 Stale but useful broad references:
 

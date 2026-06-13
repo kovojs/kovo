@@ -33,22 +33,31 @@ export interface FieldLabelProps extends FieldStateProps {
 }
 
 export interface FieldControlProps extends FieldStateProps {
+  autoComplete?: string;
   class?: ClassValue;
   descriptionId?: string;
   errorId?: string;
   id?: string;
+  inputMode?: string;
+  maxLength?: number;
+  minLength?: number;
   name?: string;
+  pattern?: string;
   placeholder?: string;
   type?: string;
   value?: string;
 }
 
 export interface FieldTextareaProps extends FieldStateProps {
+  autoComplete?: string;
   children?: string;
   class?: ClassValue;
   descriptionId?: string;
   errorId?: string;
   id?: string;
+  inputMode?: string;
+  maxLength?: number;
+  minLength?: number;
   name?: string;
   placeholder?: string;
   rows?: number;
@@ -191,12 +200,17 @@ export const FieldLabel = component('field-label', {
 export const FieldControl = component('field-control', {
   render(props: FieldControlProps) {
     const attrs = fieldControlAttributes({
+      ...(props.autoComplete === undefined ? {} : { autoComplete: props.autoComplete }),
       ...(props.descriptionId === undefined ? {} : { descriptionId: props.descriptionId }),
       ...(props.disabled === undefined ? {} : { disabled: props.disabled }),
       ...(props.errorId === undefined ? {} : { errorId: props.errorId }),
       ...(props.id === undefined ? {} : { id: props.id }),
+      ...(props.inputMode === undefined ? {} : { inputMode: props.inputMode }),
       ...(props.invalid === undefined ? {} : { invalid: props.invalid }),
+      ...(props.maxLength === undefined ? {} : { maxLength: props.maxLength }),
+      ...(props.minLength === undefined ? {} : { minLength: props.minLength }),
       ...(props.name === undefined ? {} : { name: props.name }),
+      ...(props.pattern === undefined ? {} : { pattern: props.pattern }),
       ...(props.required === undefined ? {} : { required: props.required }),
     });
 
@@ -204,13 +218,18 @@ export const FieldControl = component('field-control', {
       <input
         aria-describedby={attrs['aria-describedby']}
         aria-invalid={attrs['aria-invalid']}
+        autoComplete={attrs.autoComplete}
         class={cn(fieldControlClassNames(), props.class)}
         data-disabled={attrs['data-disabled']}
         data-invalid={attrs['data-invalid']}
         data-required={attrs['data-required']}
         disabled={attrs.disabled}
         id={attrs.id}
+        inputMode={attrs.inputMode}
+        maxLength={attrs.maxLength}
+        minLength={attrs.minLength}
         name={attrs.name}
+        pattern={attrs.pattern}
         placeholder={props.placeholder}
         required={attrs.required}
         type={props.type ?? 'text'}
@@ -223,11 +242,15 @@ export const FieldControl = component('field-control', {
 export const FieldTextarea = component('field-textarea', {
   render(props: FieldTextareaProps) {
     const attrs = fieldControlAttributes({
+      ...(props.autoComplete === undefined ? {} : { autoComplete: props.autoComplete }),
       ...(props.descriptionId === undefined ? {} : { descriptionId: props.descriptionId }),
       ...(props.disabled === undefined ? {} : { disabled: props.disabled }),
       ...(props.errorId === undefined ? {} : { errorId: props.errorId }),
       ...(props.id === undefined ? {} : { id: props.id }),
+      ...(props.inputMode === undefined ? {} : { inputMode: props.inputMode }),
       ...(props.invalid === undefined ? {} : { invalid: props.invalid }),
+      ...(props.maxLength === undefined ? {} : { maxLength: props.maxLength }),
+      ...(props.minLength === undefined ? {} : { minLength: props.minLength }),
       ...(props.name === undefined ? {} : { name: props.name }),
       ...(props.required === undefined ? {} : { required: props.required }),
     });
@@ -236,12 +259,16 @@ export const FieldTextarea = component('field-textarea', {
       <textarea
         aria-describedby={attrs['aria-describedby']}
         aria-invalid={attrs['aria-invalid']}
+        autoComplete={attrs.autoComplete}
         class={cn(fieldTextareaClassNames(), props.class)}
         data-disabled={attrs['data-disabled']}
         data-invalid={attrs['data-invalid']}
         data-required={attrs['data-required']}
         disabled={attrs.disabled}
         id={attrs.id}
+        inputMode={attrs.inputMode}
+        maxLength={attrs.maxLength}
+        minLength={attrs.minLength}
         name={attrs.name}
         placeholder={props.placeholder}
         required={attrs.required}

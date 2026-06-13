@@ -1058,17 +1058,24 @@ describe('@jiso/ui styled package foundation', () => {
     });
     const control = FieldControl.definition.render({
       ...state,
+      autoComplete: 'email',
       descriptionId: 'email-description',
       errorId: 'email-error',
       id: 'email',
+      inputMode: 'email',
+      maxLength: 80,
+      minLength: 3,
       name: 'email',
+      pattern: '.+@example\\.com',
       placeholder: 'ada@example.com',
       type: 'email',
       value: 'ada@example.com',
     });
     const textarea = FieldTextarea.definition.render({
+      autoComplete: 'off',
       descriptionId: 'bio-description',
       id: 'bio',
+      maxLength: 240,
       name: 'bio',
       placeholder: 'Short bio',
       rows: 4,
@@ -1113,13 +1120,24 @@ describe('@jiso/ui styled package foundation', () => {
     expect(label).toContain('for="email" id="email-label"');
     expect(control).toContain('aria-describedby="email-description email-error"');
     expect(control).toContain('aria-invalid="true"');
+    expect(control).toContain('autoComplete="email"');
+    expect(control).toContain('inputMode="email"');
+    expect(control).toContain('maxLength="80"');
+    expect(control).toContain('minLength="3"');
+    expect(control).toContain('pattern=".+@example\\.com"');
     expect(control).toContain('placeholder="ada@example.com"');
-    expect(control).toContain('id="email" name="email"');
+    expect(control).toContain('id="email"');
+    expect(control).toContain('name="email"');
     expect(control).toContain('required type="email"');
     expect(control).toContain('value="ada@example.com"');
     expect(control).not.toMatch(/\sdisabled(?:\s|>|=)/);
     expect(textarea).toContain('<textarea aria-describedby="bio-description"');
-    expect(textarea).toContain('id="bio" name="bio" placeholder="Short bio" rows="4"');
+    expect(textarea).toContain('autoComplete="off"');
+    expect(textarea).toContain('id="bio"');
+    expect(textarea).toContain('name="bio"');
+    expect(textarea).toContain('placeholder="Short bio"');
+    expect(textarea).toContain('rows="4"');
+    expect(textarea).toContain('maxLength="240"');
     expect(textarea).not.toMatch(/\sdisabled(?:\s|>|=)/);
     expect(select).toContain('<select aria-describedby="plan-description"');
     expect(select).toContain('id="plan" name="plan" required value="team"');

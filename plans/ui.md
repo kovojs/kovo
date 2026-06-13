@@ -68,10 +68,11 @@ H2:
       `/components/scroll-area` static attrs are covered by headless/UI/gallery tests.
 - [ ] Close remaining field/fieldset behavior gaps with focused primitive tests rather than
       styled-only evidence.
-      Current evidence: field control and fieldset helpers omit inactive native `disabled`
-      booleans while preserving active disabled state, and `/components/field` renders a disabled
-      native fieldset containing a named control.
-- [ ] Keep future field/fieldset work tied to `form()` integration and native validity semantics.
+      Evidence: field controls omit inactive native `disabled` booleans, preserve active disabled
+      state, forward native constraint/autofill attributes (`autoComplete`, `inputMode`,
+      `maxLength`, `minLength`, `pattern`), and `/components/field` renders those named-control
+      validity hints for email/profile controls.
+- [ ] Keep field/fieldset future work tied to `form()` integration and native validity semantics.
 
 H3:
 
@@ -105,13 +106,14 @@ Gallery:
 
 Latest integrated UI slice:
 
+- `pnpm install`
 - `pnpm exec vitest --run packages/headless-ui/src/primitives/field.test.ts`
-- `pnpm exec vitest --run packages/ui/src/index.test.tsx`
-- `pnpm exec vitest --run examples/gallery/src/demo-fixtures.test.ts examples/gallery/src/behavior-contracts.test.ts`
+- `pnpm exec vitest --run packages/ui/src/index.test.tsx -t field`
+- `pnpm exec vitest --run examples/gallery/src/demo-fixtures.test.ts examples/gallery/src/behavior-contracts.test.ts -t field`
 - `pnpm --filter @jiso/headless-ui exec vitest --run`
 - `pnpm --filter @jiso/headless-ui run lint:primitives`
 - `pnpm --filter @jiso/ui exec vitest --run`
-- exact `pnpm exec vp check packages/headless-ui/src/primitives/field.ts packages/headless-ui/src/primitives/field.test.ts packages/ui/src/index.test.tsx examples/gallery/src/demo-fixtures.tsx examples/gallery/src/demo-fixtures.test.ts examples/gallery/src/behavior-contracts.test.ts IMPLEMENT_v1.md plans/ui.md plans/codebase-quality-round2.md`
+- exact `pnpm exec vp check packages/headless-ui/src/primitives/field.ts packages/headless-ui/src/primitives/field.test.ts packages/ui/src/field.tsx packages/ui/src/index.test.tsx examples/gallery/src/demo-fixtures.tsx examples/gallery/src/demo-fixtures.test.ts examples/gallery/src/behavior-contracts.test.ts IMPLEMENT_v1.md plans/ui.md plans/codebase-quality-round2.md`
 - `git diff --check`
 
 Latest broad gate:

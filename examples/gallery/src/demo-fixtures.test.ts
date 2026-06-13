@@ -310,6 +310,11 @@ describe('gallery demo fixtures', () => {
 
     expect(field.html).toContain('for="gallery-field-email"');
     expect(field.html).toContain('name="email"');
+    expect(field.html).toContain('autoComplete="email"');
+    expect(field.html).toContain('inputMode="email"');
+    expect(field.html).toContain('maxLength="80"');
+    expect(field.html).toContain('minLength="3"');
+    expect(field.html).toContain('pattern=".+@example\\.com"');
     expect(field.html).toContain('placeholder="ada@example.com"');
     expect(field.html).toContain(
       'aria-describedby="gallery-field-description gallery-field-error"',
@@ -318,7 +323,11 @@ describe('gallery demo fixtures', () => {
     expect(field.html).toContain('role="alert"');
     expect(field.html).toContain('for="gallery-field-bio"');
     expect(field.html).toContain('<textarea aria-describedby="gallery-field-bio-description"');
-    expect(field.html).toContain('id="gallery-field-bio" name="bio" rows="3"');
+    expect(field.html).toContain('autoComplete="off"');
+    expect(field.html).toContain('maxLength="240"');
+    expect(field.html).toContain('id="gallery-field-bio"');
+    expect(field.html).toContain('name="bio"');
+    expect(field.html).toContain('rows="3"');
     expect(field.html).toContain('for="gallery-field-plan"');
     expect(field.html).toContain('<select aria-describedby="gallery-field-plan-description"');
     expect(field.html).toContain('id="gallery-field-plan" name="plan" required value="team"');

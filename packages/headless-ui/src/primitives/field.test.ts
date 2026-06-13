@@ -53,20 +53,30 @@ describe('headless-ui field primitive', () => {
   it('wires a native named control for typed form integration', () => {
     expect(
       fieldControlAttributes({
+        autoComplete: 'email',
         descriptionId: 'email-help',
         errorId: 'email-error',
         id: 'email',
+        inputMode: 'email',
         invalid: true,
+        maxLength: 80,
+        minLength: 3,
         name: 'email',
+        pattern: '.+@example\\.com',
         required: true,
       }),
     ).toEqual({
       'aria-describedby': 'email-help email-error',
       'aria-invalid': 'true',
+      autoComplete: 'email',
       'data-invalid': '',
       'data-required': '',
       id: 'email',
+      inputMode: 'email',
+      maxLength: 80,
+      minLength: 3,
       name: 'email',
+      pattern: '.+@example\\.com',
       required: true,
     });
   });

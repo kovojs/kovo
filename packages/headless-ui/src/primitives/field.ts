@@ -8,9 +8,14 @@ export interface FieldAttributeOptions {
 }
 
 export interface FieldControlAttributeOptions extends FieldAttributeOptions {
+  autoComplete?: string;
   descriptionId?: string;
   errorId?: string;
+  inputMode?: string;
+  maxLength?: number;
+  minLength?: number;
   name?: string;
+  pattern?: string;
 }
 
 export interface FieldLabelAttributeOptions extends FieldAttributeOptions {
@@ -27,7 +32,7 @@ export interface FieldsetAttributeOptions extends FieldAttributeOptions {
 }
 
 export type FieldPrimitiveAttributes = PrimitiveDataAttributes &
-  Readonly<Record<string, boolean | string>>;
+  Readonly<Record<string, boolean | number | string>>;
 
 export function fieldRootAttributes(options: FieldAttributeOptions = {}): FieldPrimitiveAttributes {
   return Object.freeze({
@@ -58,8 +63,13 @@ export function fieldControlAttributes(
     ...(describedBy === '' ? {} : { 'aria-describedby': describedBy }),
     ...(options.invalid === true ? { 'aria-invalid': 'true' } : {}),
     ...(options.disabled === true ? { disabled: true } : {}),
+    ...(options.autoComplete === undefined ? {} : { autoComplete: options.autoComplete }),
     ...(options.id === undefined ? {} : { id: options.id }),
+    ...(options.inputMode === undefined ? {} : { inputMode: options.inputMode }),
+    ...(options.maxLength === undefined ? {} : { maxLength: options.maxLength }),
+    ...(options.minLength === undefined ? {} : { minLength: options.minLength }),
     ...(options.name === undefined ? {} : { name: options.name }),
+    ...(options.pattern === undefined ? {} : { pattern: options.pattern }),
     ...(options.required === true ? { required: true } : {}),
   });
 }
