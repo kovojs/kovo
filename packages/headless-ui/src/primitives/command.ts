@@ -142,7 +142,7 @@ export type CommandCloseEvent = Event;
 export type CommandCancelEvent = Event;
 export type CommandItemEvent = Event;
 export type CommandInputEvent = Event & {
-  readonly currentTarget: EventTarget & { readonly value?: string };
+  readonly currentTarget: EventTarget & { value?: string };
 };
 export type CommandKeyboardEvent = Event & { readonly key: string };
 export type CommandBeforeToggleEvent = Event &
@@ -507,6 +507,7 @@ export function commandInput(
 
   const result = setCommandInputValue(state, event.currentTarget.value ?? '', 'input', options);
   if (!result.changed) {
+    event.currentTarget.value = result.inputValue;
     event.preventDefault();
   }
 

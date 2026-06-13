@@ -370,6 +370,33 @@ describe('headless-ui command primitive', () => {
       inputValue: 'publish',
     });
 
+    const disabledInputEvent = commandInputEvent('delete');
+    const disabledInputResult = commandInput(disabledInputEvent, {
+      disabled: true,
+      inputValue: 'open',
+    });
+    expect(disabledInputResult).toEqual({ changed: false, inputValue: 'open' });
+    expect(disabledInputEvent.currentTarget.value).toBe('open');
+    expect(disabledInputEvent.defaultPrevented).toBe(true);
+
+    const canceledInputEvent = commandInputEvent('close');
+    const canceledInputResult = commandInput(
+      canceledInputEvent,
+      { inputValue: 'open' },
+      {
+        onInputChange(detail) {
+          detail.preventDefault();
+        },
+      },
+    );
+    expect(canceledInputResult).toMatchObject({
+      changed: false,
+      detail: expect.objectContaining({ defaultPrevented: true }),
+      inputValue: 'open',
+    });
+    expect(canceledInputEvent.currentTarget.value).toBe('open');
+    expect(canceledInputEvent.defaultPrevented).toBe(true);
+
     const canceledItemEvent = new Event('click', { cancelable: true });
     const canceledItemResult = commandItemClick(
       canceledItemEvent,
@@ -475,7 +502,7 @@ describe('headless-ui command primitive', () => {
 });
 
 function commandInputEvent(value: string): Event & {
-  readonly currentTarget: EventTarget & { readonly value?: string };
+  readonly currentTarget: EventTarget & { value?: string };
 } {
   const event = new Event('input', { cancelable: true }) as Event & {
     currentTarget: EventTarget & { value?: string };

@@ -284,9 +284,9 @@ Focused gates since that broad run:
 - Server/app-shell: Vite client-module output owner split, root app-shell subpath export split,
   focused Vite/static tests, full server suite, `tsc`, exact `vp check`, and `git diff --check`
   passed in Round124.
-- UI/gallery: toolbar primitive/UI tests, headless primitive lint, gallery generated-artifact
-  check, gallery unit/browser suites, exact `vp check`, and `git diff --check` passed through
-  `2a1917d`.
+- UI/gallery: H3 autocomplete, combobox, command, and otp-field reset behavior tests, full
+  headless-ui tests, primitive lint, UI package tests, focused gallery tests, exact `vp check`,
+  and `git diff --check` passed in Round119.
 
 Stale but useful broad references:
 

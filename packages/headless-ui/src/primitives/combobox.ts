@@ -122,7 +122,7 @@ export type ComboboxPrimitiveAttributes = PrimitiveDataAttributes &
   Readonly<Record<string, boolean | number | string>>;
 
 export type ComboboxInputEvent = Event & {
-  readonly currentTarget: EventTarget & { readonly value?: string };
+  readonly currentTarget: EventTarget & { value?: string };
 };
 export type ComboboxOptionEvent = Event;
 export type ComboboxKeyboardEvent = Event & { readonly key: string };
@@ -356,6 +356,7 @@ export function comboboxInput(
 
   const result = setComboboxValue(state, event.currentTarget.value, 'input', options);
   if (!result.changed) {
+    event.currentTarget.value = result.value ?? '';
     event.preventDefault();
   }
 

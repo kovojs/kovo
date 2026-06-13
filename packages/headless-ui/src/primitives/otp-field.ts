@@ -69,7 +69,7 @@ export type OtpFieldPrimitiveAttributes = PrimitiveDataAttributes &
   Readonly<Record<string, boolean | number | string>>;
 
 export type OtpFieldInputEvent = Event & {
-  readonly currentTarget: { readonly value: string } | null;
+  readonly currentTarget: { value: string } | null;
 };
 export type OtpFieldKeyboardEvent = Event & { readonly key: string };
 export type OtpFieldPasteEvent = Event & {
@@ -233,6 +233,10 @@ export function otpFieldInput(
     options,
   );
   if (!result.changed) {
+    event.currentTarget.value = otpFieldSlotValue(
+      { ...state, value: result.value },
+      state.slotIndex,
+    );
     event.preventDefault();
   }
 

@@ -141,7 +141,7 @@ export type AutocompletePrimitiveAttributes = PrimitiveDataAttributes &
   Readonly<Record<string, boolean | number | string>>;
 
 export type AutocompleteInputEvent = Event & {
-  readonly currentTarget: EventTarget & { readonly value?: string };
+  readonly currentTarget: EventTarget & { value?: string };
 };
 export type AutocompleteOptionEvent = Event;
 export type AutocompleteKeyboardEvent = Event & { readonly key: string };
@@ -418,6 +418,7 @@ export function autocompleteInput(
     options,
   );
   if (!result.changed) {
+    event.currentTarget.value = result.inputValue;
     event.preventDefault();
   }
 

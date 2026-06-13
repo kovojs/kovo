@@ -309,6 +309,16 @@ describe('headless-ui otp-field primitive', () => {
         },
       },
     );
+    const canceledInputEvent = otpInputEvent('9');
+    const canceledInputResult = otpFieldInput(
+      canceledInputEvent,
+      { length: 4, slotIndex: 1, value: '1234' },
+      {
+        onValueChange(detail) {
+          detail.preventDefault();
+        },
+      },
+    );
 
     expect(inputResult).toMatchObject({ changed: true, focusIndex: 1, value: '5' });
     expect(deleteResult).toMatchObject({ changed: true, focusIndex: 0, value: '' });
@@ -322,6 +332,14 @@ describe('headless-ui otp-field primitive', () => {
       value: '1234',
     });
     expect(pasteEvent.defaultPrevented).toBe(true);
+    expect(canceledInputResult).toMatchObject({
+      changed: false,
+      detail: expect.objectContaining({ defaultPrevented: true }),
+      focusIndex: 2,
+      value: '1234',
+    });
+    expect(canceledInputEvent.currentTarget?.value).toBe('2');
+    expect(canceledInputEvent.defaultPrevented).toBe(true);
     expect(reasons).toEqual(['input', 'delete', 'paste']);
   });
 
@@ -361,7 +379,7 @@ describe('headless-ui otp-field primitive', () => {
 });
 
 function otpInputEvent(value: string): Event & {
-  readonly currentTarget: { readonly value: string } | null;
+  readonly currentTarget: { value: string } | null;
 } {
   const event = new Event('input', { cancelable: true }) as Event & {
     currentTarget: { value: string } | null;

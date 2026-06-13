@@ -350,7 +350,26 @@ describe('headless-ui combobox primitive', () => {
     const disabledEvent = comboboxInputEvent('chicago');
     const disabledResult = comboboxInput(disabledEvent, { disabled: true, value: 'austin' });
     expect(disabledResult).toEqual({ changed: false, value: 'austin' });
+    expect(disabledEvent.currentTarget.value).toBe('austin');
     expect(disabledEvent.defaultPrevented).toBe(true);
+
+    const canceledInputEvent = comboboxInputEvent('denver');
+    const canceledInputResult = comboboxInput(
+      canceledInputEvent,
+      { value: 'austin' },
+      {
+        onValueChange(detail) {
+          detail.preventDefault();
+        },
+      },
+    );
+    expect(canceledInputResult).toMatchObject({
+      changed: false,
+      detail: expect.objectContaining({ defaultPrevented: true }),
+      value: 'austin',
+    });
+    expect(canceledInputEvent.currentTarget.value).toBe('austin');
+    expect(canceledInputEvent.defaultPrevented).toBe(true);
 
     const canceledEvent = new Event('click', { cancelable: true });
     const canceledResult = comboboxOptionClick(
@@ -424,7 +443,7 @@ describe('headless-ui combobox primitive', () => {
 });
 
 function comboboxInputEvent(value: string): Event & {
-  readonly currentTarget: EventTarget & { readonly value?: string };
+  readonly currentTarget: EventTarget & { value?: string };
 } {
   const event = new Event('input', { cancelable: true }) as Event & {
     currentTarget: EventTarget & { value?: string };

@@ -363,7 +363,26 @@ describe('headless-ui autocomplete primitive', () => {
       inputValue: 'austin',
     });
     expect(disabledResult).toEqual({ changed: false, inputValue: 'austin' });
+    expect(disabledEvent.currentTarget.value).toBe('austin');
     expect(disabledEvent.defaultPrevented).toBe(true);
+
+    const canceledInputEvent = autocompleteInputEvent('denver');
+    const canceledInputResult = autocompleteInput(
+      canceledInputEvent,
+      { inputValue: 'austin' },
+      {
+        onInputValueChange(detail) {
+          detail.preventDefault();
+        },
+      },
+    );
+    expect(canceledInputResult).toMatchObject({
+      changed: false,
+      detail: expect.objectContaining({ defaultPrevented: true }),
+      inputValue: 'austin',
+    });
+    expect(canceledInputEvent.currentTarget.value).toBe('austin');
+    expect(canceledInputEvent.defaultPrevented).toBe(true);
 
     const canceledEvent = new Event('click', { cancelable: true });
     const canceledResult = autocompleteOptionClick(
@@ -444,7 +463,7 @@ describe('headless-ui autocomplete primitive', () => {
 });
 
 function autocompleteInputEvent(value: string): Event & {
-  readonly currentTarget: EventTarget & { readonly value?: string };
+  readonly currentTarget: EventTarget & { value?: string };
 } {
   const event = new Event('input', { cancelable: true }) as Event & {
     currentTarget: EventTarget & { value?: string };

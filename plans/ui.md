@@ -63,8 +63,8 @@ risks. Do not append long historical command lists.
 - H3 command preserves stable option ids across filtering so `aria-activedescendant` remains
   aligned with rendered option ids.
 - Native value-backed primitive handlers for select, number-field, slider, toolbar, tabs,
-  radio-group, toggle-group, and toast have focused interactive or unit coverage for recent state
-  synchronization fixes.
+  radio-group, toggle-group, toast, autocomplete, combobox, command, and otp-field have focused
+  interactive or unit coverage for recent state synchronization fixes.
 
 ## Open Work
 
@@ -109,24 +109,18 @@ Gallery:
 
 Latest integrated UI slice:
 
-- `pnpm exec vitest --run packages/headless-ui/src/primitives/toolbar.test.ts packages/ui/src/index.test.tsx`
+- `pnpm exec vitest --run packages/headless-ui/src/primitives/autocomplete.test.ts packages/headless-ui/src/primitives/combobox.test.ts packages/headless-ui/src/primitives/command.test.ts packages/headless-ui/src/primitives/otp-field.test.ts`
+- `pnpm --filter @jiso/headless-ui exec vitest --run`
 - `pnpm --filter @jiso/headless-ui run lint:primitives`
 - `pnpm --filter @jiso/ui exec vitest --run`
-- `pnpm --filter @jiso/example-gallery exec node scripts/emit-interactive-gallery.mjs --check`
-- `pnpm --filter @jiso/example-gallery exec vitest --run src/interactive-gallery.test.ts src/demo-fixtures.test.ts`
-- `pnpm --filter @jiso/example-gallery run test:browser`
-- `pnpm exec vp check packages/headless-ui/src/primitives/toolbar.ts packages/headless-ui/src/primitives/toolbar.test.ts packages/ui/src/toolbar.tsx examples/gallery/src/interactive/radio-group-demo.tsx examples/gallery/src/interactive/tabs-demo.tsx examples/gallery/src/interactive/toggle-group-demo.tsx examples/gallery/src/interactive/toolbar-demo.tsx examples/gallery/src/interactive/toast-demo.tsx examples/gallery/src/interactive-gallery.test.ts examples/gallery/src/interactive-gallery.browser.test.ts examples/gallery/src/merge-fixtures.test.tsx IMPLEMENT_v1.md plans/ui.md plans/codebase-quality-round2.md`
+- `pnpm --filter @jiso/example-gallery exec vitest --run src/interactive-gallery.test.ts src/behavior-contracts.test.ts`
+- `pnpm exec vp check packages/headless-ui/src/primitives/autocomplete.ts packages/headless-ui/src/primitives/autocomplete.test.ts packages/headless-ui/src/primitives/combobox.ts packages/headless-ui/src/primitives/combobox.test.ts packages/headless-ui/src/primitives/command.ts packages/headless-ui/src/primitives/command.test.ts packages/headless-ui/src/primitives/otp-field.ts packages/headless-ui/src/primitives/otp-field.test.ts IMPLEMENT_v1.md plans/ui.md plans/codebase-quality-round2.md`
 - `git diff --check`
 
 Latest broad gate:
 
 - `pnpm run check` passed after `37cc7e3` with 768 formatted files, 670 lint/typechecked files,
   and 7 typechecked example/conformance projects.
-
-## Integration Queue
-
-- [ ] UI worker `round119` produced `9960956` for H3 input reset primitive gaps; integrate with
-      focused headless/UI/gallery gates before updating this ledger.
 
 ## Rules
 
