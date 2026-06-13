@@ -4176,6 +4176,109 @@ export interface CommerceInvalidationSets {
     });
   });
 
+  it('resolves project Drizzle alias table symbols for writes, reads, and query shapes', () => {
+    const files = [
+      {
+        fileName: 'packages/drizzle/src/product.domain.ts',
+        source: [
+          'import { eq } from "drizzle-orm";',
+          'import { alias, integer, pgTable, text, type PgDatabase } from "drizzle-orm/pg-core";',
+          '',
+          'export const products = pgTable("products", {',
+          '  id: text("id").primaryKey(),',
+          '  stock: integer("stock").notNull(),',
+          '}, jiso({ domain: "product", key: "id" }));',
+          'const productAlias = alias(products, "p");',
+          '',
+          'export async function syncProduct(db: PgDatabase<any, any, any>, productId: string) {',
+          '  await db.update(productAlias).set({ stock: 1 }).where(eq(productAlias.id, productId));',
+          '  await db.select({ stock: productAlias.stock }).from(productAlias);',
+          '}',
+          '',
+          'export const productQuery = query("product/alias", {',
+          '  load(input, db: PgDatabase<any, any, any>) {',
+          '    return db.select({ stock: productAlias.stock }).from(productAlias).where(eq(productAlias.id, input.id));',
+          '  },',
+          '});',
+          '',
+        ].join('\n'),
+      },
+    ];
+
+    expect(extractTouchGraphFromProject({ files })).toEqual({
+      syncProduct: {
+        reads: [
+          {
+            domain: 'product',
+            keys: null,
+            site: 'packages/drizzle/src/product.domain.ts:12',
+            source: 'select',
+            via: 'products',
+          },
+        ],
+        touches: [
+          {
+            domain: 'product',
+            keys: 'arg:productId',
+            site: 'packages/drizzle/src/product.domain.ts:11',
+            via: 'products',
+          },
+        ],
+        unresolved: [],
+      },
+    });
+    expect(extractQueryFactsFromProject({ files })).toEqual([
+      {
+        instanceKey: {
+          domain: 'product',
+          key: 'arg:id',
+        },
+        query: 'product/alias',
+        reads: ['product'],
+        shape: {
+          stock: 'number',
+        },
+        site: 'packages/drizzle/src/product.domain.ts:15',
+      },
+    ]);
+  });
+
+  it('does not fabricate project alias table facts from local alias helpers', () => {
+    const graph = extractTouchGraphFromProject({
+      files: [
+        {
+          fileName: 'product.domain.ts',
+          source: [
+            'import type { PgDatabase } from "drizzle-orm/pg-core";',
+            '',
+            'export const products = pgTable("products", {}, jiso({ domain: "product", key: "id" }));',
+            'function alias<T>(table: T): T { return table; }',
+            'const productAlias = alias(products);',
+            '',
+            'export async function syncProduct(db: PgDatabase<any, any, any>) {',
+            '  await db.update(productAlias).set({ stock: 1 });',
+            '}',
+            '',
+          ].join('\n'),
+        },
+      ],
+    });
+
+    expect(graph).toEqual({
+      syncProduct: {
+        reads: [],
+        touches: [],
+        unresolved: [
+          {
+            code: 'FW406',
+            message: 'Statically un-analyzable write site; manual touches required.',
+            site: 'product.domain.ts:8',
+          },
+        ],
+      },
+    });
+  });
+
   it('marks project raw execute only for typed Drizzle receiver origins', () => {
     const graph = extractTouchGraphFromProject({
       files: [

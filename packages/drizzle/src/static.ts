@@ -1213,7 +1213,64 @@ function projectTableNamesBySymbol(
     }
   }
 
+  appendProjectAliasTableNames(sourceFiles, namesBySymbol);
   return namesBySymbol;
+}
+
+function appendProjectAliasTableNames(
+  sourceFiles: readonly SourceFile[],
+  namesBySymbol: Map<string, string>,
+): void {
+  // SPEC §10-§11: project-mode aliases preserve the resolved Drizzle table symbol instead of
+  // reusing the source-mode alias-name compatibility path.
+  let changed = true;
+  while (changed) {
+    changed = false;
+
+    for (const sourceFile of sourceFiles) {
+      for (const declaration of sourceFile.getVariableDeclarations()) {
+        const aliasSymbolKey = resolvedSymbolKey(declaration.getNameNode().getSymbol());
+        if (!aliasSymbolKey || namesBySymbol.has(aliasSymbolKey)) continue;
+
+        const tableName = projectAliasTargetTableName(declaration.getInitializer(), namesBySymbol);
+        if (!tableName) continue;
+
+        namesBySymbol.set(aliasSymbolKey, tableName);
+        changed = true;
+      }
+    }
+  }
+}
+
+function projectAliasTargetTableName(
+  initializer: Node | undefined,
+  tableNamesBySymbol: ReadonlyMap<string, string>,
+): string | undefined {
+  if (!initializer) return undefined;
+
+  const expression = unwrappedStaticExpressionNode(initializer);
+  if (!Node.isCallExpression(expression)) return undefined;
+  if (!isProjectDrizzleAliasCall(expression)) return undefined;
+
+  const target = expression.getArguments()[0];
+  return target ? projectTableNameForNode(target, tableNamesBySymbol) : undefined;
+}
+
+function isProjectDrizzleAliasCall(call: CallExpression): boolean {
+  const expression = call.getExpression();
+  if (!Node.isIdentifier(expression) || expression.getText() !== 'alias') return false;
+
+  const symbol = expression.getSymbol()?.getAliasedSymbol() ?? expression.getSymbol();
+  return (
+    symbol?.getDeclarations().some((declaration) => isDrizzleOrmDeclaration(declaration)) ?? false
+  );
+}
+
+function isDrizzleOrmDeclaration(declaration: Node): boolean {
+  if (declaration.getSourceFile().getFilePath().includes('drizzle-orm')) return true;
+
+  const importDeclaration = declaration.getFirstAncestorByKind(SyntaxKind.ImportDeclaration);
+  return importDeclaration?.getModuleSpecifierValue().startsWith('drizzle-orm') ?? false;
 }
 
 function projectColumnShapesByTable(

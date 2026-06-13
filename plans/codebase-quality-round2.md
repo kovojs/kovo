@@ -158,6 +158,12 @@ Closed evidence so far:
   helper regression coverage, `conformance/drizzle-pin/src/index.test.ts` real `drizzle-orm`
   pin, `pnpm exec vitest --run packages/drizzle/src`, and
   `pnpm exec vitest --run conformance/drizzle-pin`.
+- Project-mode `drizzle-orm` `alias()` declarations resolve through ts-morph import/declaration
+  symbols to the original table identity for writes, reads, query shapes, and instance keys; local
+  helper functions named `alias` degrade to FW406. Evidence: `packages/drizzle/src/static.ts`,
+  `packages/drizzle/src/index.test.ts`, `conformance/drizzle-pin/src/index.test.ts`,
+  `pnpm exec vitest --run packages/drizzle/src`, and
+  `pnpm exec vitest --run conformance/drizzle-pin`.
 
 Open:
 

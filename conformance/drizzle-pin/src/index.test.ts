@@ -1164,6 +1164,73 @@ describe('Drizzle pinned subset conformance', () => {
     });
   });
 
+  it('pins real Drizzle alias tables as project touch and query facts', () => {
+    const files = [
+      {
+        fileName: 'conformance/drizzle-pin/src/product.domain.ts',
+        source: [
+          "import { eq } from 'drizzle-orm';",
+          "import { alias, integer, pgTable, text, type PgDatabase } from 'drizzle-orm/pg-core';",
+          '',
+          "export const products = pgTable('products', {",
+          "  id: text('id').primaryKey(),",
+          "  stock: integer('stock').notNull(),",
+          "}, jiso({ domain: 'product', key: 'id' }));",
+          "const productAlias = alias(products, 'p');",
+          '',
+          'export async function syncProduct(db: PgDatabase<any, any, any>, productId: string) {',
+          '  await db.update(productAlias).set({ stock: 1 }).where(eq(productAlias.id, productId));',
+          '  await db.select({ stock: productAlias.stock }).from(productAlias);',
+          '}',
+          '',
+          "export const productQuery = query('product/alias', {",
+          '  load(input, db: PgDatabase<any, any, any>) {',
+          '    return db.select({ stock: productAlias.stock }).from(productAlias).where(eq(productAlias.id, input.id));',
+          '  },',
+          '});',
+          '',
+        ].join('\n'),
+      },
+    ];
+
+    expect(extractTouchGraphFromProject({ files })).toEqual({
+      syncProduct: {
+        reads: [
+          {
+            domain: 'product',
+            keys: null,
+            site: 'conformance/drizzle-pin/src/product.domain.ts:12',
+            source: 'select',
+            via: 'products',
+          },
+        ],
+        touches: [
+          {
+            domain: 'product',
+            keys: 'arg:productId',
+            site: 'conformance/drizzle-pin/src/product.domain.ts:11',
+            via: 'products',
+          },
+        ],
+        unresolved: [],
+      },
+    });
+    expect(extractQueryFactsFromProject({ files })).toEqual([
+      {
+        instanceKey: {
+          domain: 'product',
+          key: 'arg:id',
+        },
+        query: 'product/alias',
+        reads: ['product'],
+        shape: {
+          stock: 'number',
+        },
+        site: 'conformance/drizzle-pin/src/product.domain.ts:15',
+      },
+    ]);
+  });
+
   it('pins project relational query API calls as static read surfaces', () => {
     const graph = extractTouchGraphFromProject({
       files: [
