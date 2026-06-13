@@ -1,7 +1,8 @@
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { diagnosticDefinitions } from '@jiso/core';
-import type { JisoApp } from './app.js';
+import { createRequestHandler, type JisoApp } from './app.js';
 import { renderDiagnosticDocument, type DiagnosticDocumentDiagnostic } from './document.js';
+import { toNodeHandler } from './node.js';
 import { readHeader, type RoutePageResponse } from './response.js';
 import { matchShellDispatch } from './shell.js';
 import { renderFragmentWireHtml } from './wire-html.js';
@@ -31,6 +32,10 @@ export interface JisoAppShellViteSsrDevPluginOptions {
   appExportName?: string;
   moduleId?: string;
   name?: string;
+  /**
+   * When omitted, dev serving adapts the loaded app through the same
+   * Request -> Response shell that SPEC §9.5 uses for build/export replay.
+   */
   nodeHandlerExportName?: string;
   order?: 'pre' | 'post';
   shouldHandleRequest?: (request: IncomingMessage, app: JisoApp) => boolean;
@@ -90,7 +95,6 @@ export function jisoAppShellViteSsrDevPlugin(
 ): JisoAppShellViteSsrDevPlugin {
   const moduleId = options.moduleId ?? '/src/app-shell.ts';
   const appExportName = options.appExportName ?? 'default';
-  const nodeHandlerExportName = options.nodeHandlerExportName ?? 'nodeHandler';
 
   const install = (server: JisoAppShellViteSsrDevServer) => {
     server.middlewares.use((request, response, next) => {
@@ -105,11 +109,12 @@ export function jisoAppShellViteSsrDevPlugin(
             return;
           }
 
-          return readJisoAppShellViteSsrNodeHandler(module, nodeHandlerExportName, moduleId)(
-            request,
-            response,
-            next,
-          );
+          return readJisoAppShellViteSsrNodeHandler(
+            module,
+            app,
+            options.nodeHandlerExportName,
+            moduleId,
+          )(request, response, next);
         })
         .catch(next);
     });
@@ -268,13 +273,19 @@ function readJisoAppShellViteSsrApp(
 
 function readJisoAppShellViteSsrNodeHandler(
   module: Record<string, unknown>,
-  exportName: string,
+  app: JisoApp,
+  exportName: string | undefined,
   moduleId: string,
 ): JisoAppShellViteMiddleware {
-  const handler = module[exportName];
-  if (typeof handler === 'function') return handler as JisoAppShellViteMiddleware;
+  if (exportName !== undefined) {
+    const handler = module[exportName];
+    if (typeof handler === 'function') return handler as JisoAppShellViteMiddleware;
 
-  throw new Error(`${moduleId} must export ${exportName} as a Node app-shell handler.`);
+    throw new Error(`${moduleId} must export ${exportName} as a Node app-shell handler.`);
+  }
+
+  const nodeHandler = toNodeHandler(createRequestHandler(app));
+  return (request, response) => nodeHandler(request, response);
 }
 
 function isJisoApp(value: unknown): value is JisoApp {

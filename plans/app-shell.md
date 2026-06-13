@@ -15,7 +15,7 @@ work, and proving commands.
 - [x] R2 document assembly, deferred-stream variant, error shells.
 - [x] R3 `createApp()` aggregate and `createRequestHandler(app)` over `Request -> Response`.
 - [x] R4 node:http adapter including Early Hints; perf proof migrated to the adapter.
-- [ ] R5 Vite+ plugin: dev middleware over the same handler plus build wiring.
+- [x] R5 Vite+ plugin: dev middleware over the same handler plus build wiring.
 - [ ] R6 static export: synthetic-request replay to directory-index HTML with L0/L1 constraints
       and teaching errors for non-exportable routes.
 - [ ] R7 adoption: starter served by `vp dev`, commerce over HTTP, docs site exported as an
@@ -35,13 +35,19 @@ Implemented areas:
 - `vite.ts` exposes app-shell Vite plugin/build helpers, route-entry mapping, manifest
   validation, manifest-derived hints/assets, compiled `/c/` module emission, manifest-file
   export helpers, build static-export asset planning, and plugin `writeBundle` static export
-  wiring over the same Vite build helper.
+  wiring over the same Vite build helper. `vite-dev.ts` now defaults SSR dev middleware to the
+  loaded app's SPEC §9.5 `Request -> Response` handler while keeping explicit node-handler
+  exports available for apps that add request context at the adapter edge.
 - `static-export.ts` performs static export with output target validation for write and dry-run
   plans; duplicate asset paths fail with FW229. Param routes export only through explicit
   `staticPaths` concrete URL enumeration.
 
 Recent gates:
 
+- `pnpm exec vitest --run packages/server/src/vite.test.ts packages/server/src/vite-dev.test.ts`
+- `pnpm exec tsc --noEmit --pretty false`
+- `pnpm exec vp check packages/server/src/vite-dev.ts packages/server/src/vite.test.ts plans/app-shell.md plans/codebase-quality-round2.md`
+- `git diff --check`
 - `pnpm exec vitest --run packages/server/src/vite.test.ts packages/server/src/vite-build.test.ts`
 - `pnpm exec tsc --noEmit --pretty false`
 - `pnpm exec vp check packages/server/src/vite.ts packages/server/src/vite-build.ts packages/server/src/vite.test.ts packages/server/src/api/app-shell/vite.ts plans/app-shell.md plans/codebase-quality-round2.md`
@@ -60,14 +66,6 @@ Round79 slice evidence:
 - `git diff --check`
 
 ## Open Work
-
-R5:
-
-- Finish Vite+ dev/build closure against the same request handler; plugin `writeBundle` now
-  emits compiled `/c/` modules and can run static export from the built app shell.
-- Keep manifest-derived stylesheet/modulepreload hints and compiled client module registry in one
-  helper path.
-- Avoid app-shell plugin code that re-derives static export assets outside the public planner.
 
 R6:
 

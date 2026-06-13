@@ -1138,6 +1138,119 @@ describe('server app shell Vite plugin', () => {
     }
   });
 
+  it('registers SSR dev middleware that derives the node handler from the loaded app shell', async () => {
+    const registry = createMemoryVersionedClientModuleRegistry();
+    const clientHref = registry.put({
+      path: '/c/product.client.js',
+      source: 'export const product = true;',
+      version: 'product-v1',
+    });
+    const productRoute = route('/products/:id', {
+      modulepreloads: [clientHref],
+      page({ params }) {
+        return `<main>${params.id}</main>`;
+      },
+    });
+    const app = createApp({ clientModules: registry, routes: [productRoute] });
+    const plugin = jisoAppShellViteSsrDevPlugin();
+    const middlewares: JisoAppShellViteMiddleware[] = [];
+    let moduleLoads = 0;
+
+    plugin.configureServer({
+      middlewares: {
+        use(handler) {
+          middlewares.push(handler);
+        },
+      },
+      async ssrLoadModule(id) {
+        moduleLoads += 1;
+        expect(id).toBe('/src/app-shell.ts');
+        return { default: app };
+      },
+    });
+
+    const server = createServer((request, response) => {
+      middlewares[0]?.(request, response, (error) => {
+        if (error) {
+          response.writeHead(500, { 'Content-Type': 'text/plain; charset=utf-8' });
+          response.end(error instanceof Error ? error.message : JSON.stringify(error));
+          return;
+        }
+
+        response.writeHead(418, { 'Content-Type': 'text/plain; charset=utf-8' });
+        response.end('next');
+      });
+    });
+    await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
+
+    try {
+      const origin = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
+      await expect(nodeFetch(`${origin}/src/styles.css`)).resolves.toMatchObject({
+        body: 'next',
+        status: 418,
+      });
+      await expect(nodeFetch(`${origin}/products/p1`)).resolves.toMatchObject({
+        body: expect.stringContaining('<main>p1</main>'),
+        headers: expect.objectContaining({
+          link: `</c/product.client.js?v=product-v1>; rel=modulepreload`,
+        }),
+        status: 200,
+      });
+      await expect(nodeFetch(`${origin}${clientHref}`)).resolves.toMatchObject({
+        body: 'export const product = true;',
+        headers: expect.objectContaining({
+          'cache-control': 'public, max-age=31536000, immutable',
+        }),
+        status: 200,
+      });
+      expect(moduleLoads).toBe(3);
+    } finally {
+      await new Promise<void>((resolve, reject) => {
+        server.close((error) => (error ? reject(error) : resolve()));
+      });
+    }
+  });
+
+  it('keeps explicit SSR dev node handler exports strict', async () => {
+    const app = createApp({ routes: [route('/cart', {})] });
+    const plugin = jisoAppShellViteSsrDevPlugin({
+      nodeHandlerExportName: 'commerceNodeHandler',
+    });
+    const middlewares: JisoAppShellViteMiddleware[] = [];
+
+    plugin.configureServer({
+      middlewares: {
+        use(handler) {
+          middlewares.push(handler);
+        },
+      },
+      async ssrLoadModule() {
+        return { default: app };
+      },
+    });
+
+    const server = createServer((request, response) => {
+      middlewares[0]?.(request, response, (error) => {
+        response.writeHead(error ? 500 : 418, { 'Content-Type': 'text/plain; charset=utf-8' });
+        response.end(error instanceof Error ? error.message : 'next');
+      });
+    });
+    await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
+
+    try {
+      await expect(
+        nodeFetch(`http://127.0.0.1:${(server.address() as AddressInfo).port}/cart`),
+      ).resolves.toMatchObject({
+        body: '/src/app-shell.ts must export commerceNodeHandler as a Node app-shell handler.',
+        status: 500,
+      });
+    } finally {
+      await new Promise<void>((resolve, reject) => {
+        server.close((error) => (error ? reject(error) : resolve()));
+      });
+    }
+  });
+
   it('serves a diagnostic document for page routes that depend on a failed dev module', async () => {
     const diagnostics = createJisoAppShellDevDiagnosticLedger();
     diagnostics.recordModuleDiagnostics({
