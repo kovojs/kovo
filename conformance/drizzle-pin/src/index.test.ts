@@ -405,6 +405,77 @@ describe('Drizzle pinned subset conformance', () => {
     });
   });
 
+  it('pins inline object-member local helpers under real Drizzle Postgres receiver types', () => {
+    const files = [
+      {
+        fileName: 'conformance/drizzle-pin/src/product.domain.ts',
+        source: [
+          "import type { PgDatabase } from 'drizzle-orm/pg-core';",
+          '',
+          'interface FakeDb {',
+          '  select(value?: unknown): { from(table: unknown): Promise<unknown[]> };',
+          '  update(table: unknown): { set(value: unknown): Promise<void> };',
+          '}',
+          '',
+          "export const products = pgTable('products', {",
+          "  id: text('id').primaryKey(),",
+          "  stock: integer('stock').notNull(),",
+          "}, jiso({ domain: 'product', key: 'id' }));",
+          '',
+          'const helpers = {',
+          '  loadProducts(db: PgDatabase<any, any, any>) {',
+          '    return db.select({ id: products.id, stock: products.stock }).from(products);',
+          '  },',
+          '  touchProduct: async (db: PgDatabase<any, any, any>) => {',
+          '    await db.update(products).set({ stock: 1 });',
+          '  },',
+          '  fakeLoad(fake: FakeDb) {',
+          '    return fake.select({ id: products.id }).from(products);',
+          '  },',
+          '  fakeTouch: async (fake: FakeDb) => {',
+          '    await fake.update(products).set({ stock: 2 });',
+          '  },',
+          '};',
+          '',
+          "export const productQuery = query('product/inline-member-local-helper', {",
+          '  load(_input, db: PgDatabase<any, any, any>, fake: FakeDb) {',
+          '    helpers.fakeLoad(fake);',
+          '    return helpers.loadProducts(db);',
+          '  },',
+          '});',
+          '',
+          'export async function syncProduct(db: PgDatabase<any, any, any>, fake: FakeDb) {',
+          '  await helpers.fakeTouch(fake);',
+          '  await helpers.touchProduct(db);',
+          '}',
+        ].join('\n'),
+      },
+    ];
+
+    expect(extractQueryFactsFromProject({ files })).toEqual([
+      {
+        query: 'product/inline-member-local-helper',
+        reads: ['product'],
+        shape: {},
+        site: 'conformance/drizzle-pin/src/product.domain.ts:28',
+      },
+    ]);
+    expect(extractTouchGraphFromProject({ files })).toEqual({
+      syncProduct: {
+        reads: [],
+        touches: [
+          {
+            domain: 'product',
+            keys: null,
+            site: 'conformance/drizzle-pin/src/product.domain.ts:18',
+            via: 'products',
+          },
+        ],
+        unresolved: [],
+      },
+    });
+  });
+
   it('pins containerized Drizzle receiver helper handoffs as FW406 under real Drizzle imports', () => {
     const facts = extractQueryFactsFromProject({
       files: [

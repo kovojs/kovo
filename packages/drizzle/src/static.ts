@@ -190,6 +190,8 @@ function extractTouchGraphFromPreparedFiles(
     );
 
     for (const fn of functions) {
+      if (fn.summaryOnly) continue;
+
       const { reads, unresolved, writes } = summaries.get(fn.key) ?? {
         reads: [],
         unresolved: [],
@@ -334,6 +336,7 @@ function projectFunctionExtractionsByFileName(
       sourceFile,
       extraction.tableNamesBySymbol,
     );
+    const objectCallbacks = projectObjectLiteralCallbacks(sourceFile);
 
     for (const fn of sourceFile.getDescendantsOfKind(SyntaxKind.FunctionDeclaration)) {
       const name = fn.getName();
@@ -401,6 +404,42 @@ function projectFunctionExtractionsByFileName(
         receiverParameters: projectReceiverParameterRequirements(initializer),
         writeCalls: extractProjectDrizzleWriteCalls(
           body,
+          file,
+          extraction.tableNamesBySymbol,
+          namespaceTableNames,
+          receivers,
+        ),
+      });
+    }
+
+    for (const callback of objectCallbacks) {
+      const receivers = projectDrizzleReceivers(callback.fn);
+      extractionsByFunction.set(callback.key, {
+        bodyStart: bodySourceStart(callback.body),
+        key: callback.key,
+        localCalls: [],
+        name: callback.name,
+        readCalls: [
+          ...extractProjectSelectReadCalls(
+            callback.body,
+            file,
+            receivers,
+            extraction.tableNamesBySymbol,
+            namespaceTableNames,
+          ),
+          ...extractProjectRelationalReadCalls(
+            callback.body,
+            file,
+            receivers,
+            relationalTableNames,
+          ),
+        ],
+        receiverNames: [...receivers.names],
+        receiverParameters: projectReceiverParameterRequirements(callback.fn),
+        summaryOnly: true,
+        unresolvedCalls: [],
+        writeCalls: extractProjectDrizzleWriteCalls(
+          callback.body,
           file,
           extraction.tableNamesBySymbol,
           namespaceTableNames,
@@ -523,6 +562,28 @@ function projectFunctionExtractionsByFileName(
         extractionsByFunction,
       );
     }
+    for (const callback of objectCallbacks) {
+      const extraction = extractionsByFunction.get(callback.key);
+      if (!extraction) continue;
+      const receivers = projectDrizzleReceivers(callback.fn);
+      const carrierSymbolKeys = receiverCarrierSymbolKeysForBody(callback.body, (node) =>
+        isProjectDrizzleReceiverIdentifier(node, receivers),
+      );
+      extraction.localCalls = extractLocalFunctionCallsFromBody(
+        callback.body,
+        localFunctionNames,
+        extractionsByFunction,
+        (argument) =>
+          projectReceiverReferenceInArgument(argument, receivers, carrierSymbolKeys) !==
+            undefined || isDrizzleReceiver(argument),
+      );
+      extraction.unresolvedCalls = extractProjectUnresolvedCalls(
+        callback.body,
+        receivers,
+        localFunctionNames,
+        extractionsByFunction,
+      );
+    }
 
     extractionsByFile.set(file.fileName, extractionsByFunction);
   });
@@ -579,6 +640,46 @@ function projectDomainWriteCallbacks(
         body: functionBody(callback),
         fn: callback,
         key: extractedFunctionKey(name, callback, property.getNameNode()),
+        name,
+      });
+    }
+  }
+
+  return callbacks;
+}
+
+function projectObjectLiteralCallbacks(
+  sourceFile: SourceFile,
+): { body: Node; fn: Node; key: string; name: string }[] {
+  const callbacks: { body: Node; fn: Node; key: string; name: string }[] = [];
+
+  for (const object of sourceFile.getDescendantsOfKind(SyntaxKind.ObjectLiteralExpression)) {
+    for (const property of object.getProperties()) {
+      if (Node.isMethodDeclaration(property)) {
+        const name = propertyNameText(property.getNameNode());
+        if (!name) continue;
+
+        callbacks.push({
+          body: functionBody(property),
+          fn: property,
+          key: extractedFunctionKey(name, property, property.getNameNode()),
+          name,
+        });
+        continue;
+      }
+
+      if (!Node.isPropertyAssignment(property)) continue;
+      const name = propertyNameText(property.getNameNode());
+      const initializer = property.getInitializer();
+      if (!name || !initializer) continue;
+
+      const expression = unwrappedStaticExpressionNode(initializer);
+      if (!Node.isArrowFunction(expression) && !Node.isFunctionExpression(expression)) continue;
+
+      callbacks.push({
+        body: functionBody(expression),
+        fn: expression,
+        key: extractedFunctionKey(name, expression, property.getNameNode()),
         name,
       });
     }
@@ -1913,6 +2014,7 @@ interface ExtractedFunction {
   readCalls: readonly ExtractedReadCall[];
   receiverNames: readonly string[];
   receiverParameters: readonly ReceiverParameterRequirement[];
+  summaryOnly?: boolean;
   unresolvedCalls: readonly ExternalDbArgumentCall[];
   writeCalls: readonly ExtractedWriteCall[];
 }
@@ -4352,6 +4454,7 @@ function extractFunctions(file: SourceFileInput): ExtractedFunction[] {
     const functions = [
       ...extractFunctionDeclarations(sourceFile),
       ...extractVariableAssignedFunctions(sourceFile),
+      ...extractObjectLiteralCallbackFunctions(sourceFile),
       ...extractDomainWriteCallbacks(sourceFile),
     ];
     const localFunctionKeys = new Set(functions.map((fn) => fn.key));
@@ -4415,6 +4518,7 @@ function localFunctionKeysFromSourceFile(sourceFile: SourceFile): ReadonlySet<st
   const functions = [
     ...extractFunctionDeclarations(sourceFile),
     ...extractVariableAssignedFunctions(sourceFile),
+    ...extractObjectLiteralCallbackFunctions(sourceFile),
   ];
   return new Set(functions.map((fn) => fn.key));
 }
@@ -4425,6 +4529,7 @@ function localFunctionReceiverParametersFromSourceFile(
   return functionReceiverParametersByKey([
     ...extractFunctionDeclarations(sourceFile),
     ...extractVariableAssignedFunctions(sourceFile),
+    ...extractObjectLiteralCallbackFunctions(sourceFile),
   ]);
 }
 
@@ -4459,6 +4564,42 @@ function extractVariableAssignedFunctions(sourceFile: SourceFile): ParsedExtract
     if (!Node.isArrowFunction(initializer) && !Node.isFunctionExpression(initializer)) continue;
 
     functions.push(extractedFunctionFromCallback(name.getText(), initializer, name));
+  }
+
+  return functions;
+}
+
+function extractObjectLiteralCallbackFunctions(sourceFile: SourceFile): ParsedExtractedFunction[] {
+  const functions: ParsedExtractedFunction[] = [];
+
+  for (const object of sourceFile.getDescendantsOfKind(SyntaxKind.ObjectLiteralExpression)) {
+    for (const property of object.getProperties()) {
+      if (Node.isMethodDeclaration(property)) {
+        const name = propertyNameText(property.getNameNode());
+        if (!name) continue;
+
+        functions.push(
+          extractedFunctionFromCallback(name, property, property.getNameNode(), {
+            summaryOnly: true,
+          }),
+        );
+        continue;
+      }
+
+      if (!Node.isPropertyAssignment(property)) continue;
+      const name = propertyNameText(property.getNameNode());
+      const initializer = property.getInitializer();
+      if (!name || !initializer) continue;
+
+      const expression = unwrappedStaticExpressionNode(initializer);
+      if (!Node.isArrowFunction(expression) && !Node.isFunctionExpression(expression)) continue;
+
+      functions.push(
+        extractedFunctionFromCallback(name, expression, property.getNameNode(), {
+          summaryOnly: true,
+        }),
+      );
+    }
   }
 
   return functions;
@@ -4536,6 +4677,7 @@ function extractedFunctionFromCallback(
   name: string,
   callback: Node,
   keyNode: Node = callback,
+  options: { summaryOnly?: boolean } = {},
 ): ParsedExtractedFunction {
   const body = functionBody(callback);
   const bodyStart = Node.isBlock(body) ? body.getStart() + 1 : body.getStart();
@@ -4549,6 +4691,7 @@ function extractedFunctionFromCallback(
     name,
     receiverNames: sourceDrizzleReceiverNames(callback),
     receiverParameters: sourceReceiverParameterRequirements(callback),
+    ...(options.summaryOnly ? { summaryOnly: true } : {}),
   };
 }
 
@@ -4813,6 +4956,11 @@ function localFunctionKeyForCallback(callback: Node): string | undefined {
     return name && nameNode ? extractedFunctionKey(name, callback, nameNode) : undefined;
   }
 
+  if (Node.isMethodDeclaration(callback)) {
+    const name = propertyNameText(callback.getNameNode());
+    return name ? extractedFunctionKey(name, callback, callback.getNameNode()) : undefined;
+  }
+
   if (Node.isArrowFunction(callback) || Node.isFunctionExpression(callback)) {
     const parent = callback.getParent();
     if (Node.isVariableDeclaration(parent)) {
@@ -4820,6 +4968,10 @@ function localFunctionKeyForCallback(callback: Node): string | undefined {
       return Node.isIdentifier(name)
         ? extractedFunctionKey(name.getText(), callback, name)
         : undefined;
+    }
+    if (Node.isPropertyAssignment(parent)) {
+      const name = propertyNameText(parent.getNameNode());
+      return name ? extractedFunctionKey(name, callback, parent.getNameNode()) : undefined;
     }
   }
 
@@ -4847,6 +4999,13 @@ function localFunctionKeyForDeclaration(declaration: Node): string | undefined {
       ) {
         return extractedFunctionKey(declaration.getText(), initializer, declaration);
       }
+    }
+    if (Node.isMethodDeclaration(parent) && parent.getNameNode() === declaration) {
+      return extractedFunctionKey(declaration.getText(), parent, declaration);
+    }
+    if (Node.isPropertyAssignment(parent) && parent.getNameNode() === declaration) {
+      const callback = callbackFunctionFromProperty(parent, new Set());
+      return callback ? localFunctionKeyForCallback(callback) : undefined;
     }
   }
 

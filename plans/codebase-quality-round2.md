@@ -358,6 +358,13 @@ conformance/drizzle-pin/src/index.test.ts plans/codebase-quality-round2.md`, and
       against package and real `drizzle-orm` Postgres receiver types. Verified by
       `pnpm exec vitest --run packages/drizzle/src` and
       `pnpm exec vitest --run conformance/drizzle-pin`.
+      Evidence 2026-06-13 round250: inline object-literal helper members are summary-only
+      ts-morph callback facts for local helper propagation, so project query loaders and domain
+      writes fold exact read/touch summaries through `helpers.load(db)`/`helpers.touch(db)` without
+      emitting helper members as public graph entries; `packages/drizzle/src/index.test.ts` and
+      `conformance/drizzle-pin/src/index.test.ts` pin the package and real `drizzle-orm`
+      Postgres receiver surfaces. Verified by `pnpm exec vitest --run packages/drizzle/src` and
+      `pnpm exec vitest --run conformance/drizzle-pin`.
 - [x] Keep SQLite conformance deferred to late hardening; focus v1 on Postgres behavior.
       Evidence: `packages/drizzle/src/drizzle-surface.ts`, `packages/drizzle/src/static.ts`,
       `packages/drizzle/src/index.test.ts`, and `conformance/drizzle-pin/src/index.test.ts` pin the

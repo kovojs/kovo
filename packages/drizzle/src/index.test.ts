@@ -7820,6 +7820,81 @@ export interface CommerceInvalidationSets {
     });
   });
 
+  it('uses project inline object-member local helpers from typed receiver symbols', () => {
+    const files = [
+      pgDatabaseTypes([
+        'select(value?: unknown): { from(table: unknown): Promise<unknown[]> };',
+        'update(table: unknown): { set(value: unknown): Promise<void> };',
+      ]),
+      {
+        fileName: 'product.domain.ts',
+        source: [
+          'import type { PgDatabase } from "drizzle-orm/pg-core";',
+          '',
+          'interface FakeDb {',
+          '  select(value?: unknown): { from(table: unknown): Promise<unknown[]> };',
+          '  update(table: unknown): { set(value: unknown): Promise<void> };',
+          '}',
+          '',
+          'export const products = pgTable("products", {',
+          '  id: text("id").primaryKey(),',
+          '  stock: integer("stock").notNull(),',
+          '}, jiso({ domain: "product", key: "id" }));',
+          '',
+          'const helpers = {',
+          '  loadProducts(db: PgDatabase) {',
+          '    return db.select({ id: products.id, stock: products.stock }).from(products);',
+          '  },',
+          '  touchProduct: async (db: PgDatabase) => {',
+          '    await db.update(products).set({ stock: 1 });',
+          '  },',
+          '  fakeLoad(fake: FakeDb) {',
+          '    return fake.select({ id: products.id }).from(products);',
+          '  },',
+          '  fakeTouch: async (fake: FakeDb) => {',
+          '    await fake.update(products).set({ stock: 2 });',
+          '  },',
+          '};',
+          '',
+          'export const productQuery = query("product/inline-member-local-helper", {',
+          '  load(_input, db: PgDatabase, fake: FakeDb) {',
+          '    helpers.fakeLoad(fake);',
+          '    return helpers.loadProducts(db);',
+          '  },',
+          '});',
+          '',
+          'export async function syncProduct(db: PgDatabase, fake: FakeDb) {',
+          '  await helpers.fakeTouch(fake);',
+          '  await helpers.touchProduct(db);',
+          '}',
+        ].join('\n'),
+      },
+    ];
+
+    expect(extractQueryFactsFromProject({ files })).toEqual([
+      {
+        query: 'product/inline-member-local-helper',
+        reads: ['product'],
+        shape: {},
+        site: 'product.domain.ts:28',
+      },
+    ]);
+    expect(extractTouchGraphFromProject({ files })).toEqual({
+      syncProduct: {
+        reads: [],
+        touches: [
+          {
+            domain: 'product',
+            keys: null,
+            site: 'product.domain.ts:18',
+            via: 'products',
+          },
+        ],
+        unresolved: [],
+      },
+    });
+  });
+
   it('uses project assignment receiver aliases without fake context fabrication', () => {
     const files = [
       pgDatabaseTypes([
